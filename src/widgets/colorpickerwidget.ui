@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ColorPickerWidget</class>
+ <widget class="QWidget" name="ColorPickerWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>114</width>
+    <height>26</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QWidget#ColorPickerWidget {
+background-color: rgb(57, 57, 57);
+border-radius: 15px;
+
+}
+
+</string>
+  </property>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scene>
+    <backgroundcolor r="50" g="50" b="50" a="255"/>
+    <world name="World" visible="true">
+        <data showgrid="true" skytexture="../textures/skies/chiricahua_plaza/GravelPlaza_4k.jpg" skytype="equirectangular"/>
+        <transform>
+            <pos x="0" y="0" z="0"/>
+            <rot x="0" y="0" z="0"/>
+            <scale x="1" y="1" z="1"/>
+        </transform>
+        <transformanimation>
+            <pos/>
+            <rot/>
+            <scale/>
+        </transformanimation>
+        <children>
+            <usercamera name="ViewPoint" visible="true">
+                <data/>
+                <transform>
+                    <pos x="0" y="0" z="0"/>
+                    <rot x="0" y="0" z="0"/>
+                    <scale x="1" y="1" z="1"/>
+                </transform>
+                <transformanimation>
+                    <pos/>
+                    <rot/>
+                    <scale/>
+                </transformanimation>
+                <children/>
+            </usercamera>
+            <cube name="Ground" visible="true">
+                <data/>
+                <transform>
+                    <pos x="0" y="3" z="0"/>
+                    <rot x="0" y="0" z="0"/>
+                    <scale x="25" y="0.43" z="22.79"/>
+                </transform>
+                <material type="default">
+                    <ambient r="12" g="12" b="12" a="255"/>
+                    <diffuse r="179" g="179" b="179" a="255"/>
+                    <specular r="2" g="2" b="2" a="255"/>
+                    <shininess value="150"/>
+                    <alpha value="0"/>
+                </material>
+                <transformanimation>
+                    <pos/>
+                    <rot/>
+                    <scale/>
+                </transformanimation>
+                <children/>
+            </cube>
+            <mesh name="StanfordDragon" visible="true">
+                <data mesh="../models/extras/StanfordDragon.obj"/>
+                <transform>
+                    <pos x="0" y="3.26" z="0"/>
+                    <rot x="0" y="0" z="0"/>
+                    <scale x="1" y="1" z="1"/>
+                </transform>
+                <material type="reflection">
+                    <ambient r="0" g="0" b="0" a="255"/>
+                    <diffuse r="0" g="0" b="0" a="255"/>
+                    <specular r="0" g="0" b="0" a="255"/>
+                    <shininess value="0"/>
+                    <alpha value="0"/>
+                    <diffusemap value="../textures/skies/chiricahua_plaza/GravelPlaza_2k.jpg"/>
+                </material>
+                <transformanimation>
+                    <pos/>
+                    <rot/>
+                    <scale/>
+                </transformanimation>
+                <children/>
+            </mesh>
+            <light name="PointLight" visible="true">
+                <data/>
+                <transform>
+                    <pos x="0" y="15.21" z="0"/>
+                    <rot x="0" y="0" z="0"/>
+                    <scale x="1" y="1" z="1"/>
+                </transform>
+                <material type="default">
+                    <ambient r="12" g="12" b="12" a="255"/>
+                    <diffuse r="179" g="179" b="179" a="255"/>
+                    <specular r="2" g="2" b="2" a="255"/>
+                    <shininess value="150"/>
+                    <alpha value="0"/>
+                </material>
+                <transformanimation>
+                    <pos/>
+                    <rot/>
+                    <scale/>
+                </transformanimation>
+                <children/>
+            </light>
+        </children>
+    </world>
+</scene>

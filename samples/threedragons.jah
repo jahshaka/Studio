@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scene>
+    <backgroundcolor r="50" g="50" b="50" a="255"/>
+    <fogstart value="200"/>
+    <fogend value="500"/>
+    <fogcolor r="200" g="200" b="200" a="255"/>
+    <fogenabled value="true"/>
+    <world name="World" visible="true">
+        <data showgrid="false" skytexture=":/assets/skies/default.png" skytype="equirectangular"/>
+        <transform>
+            <pos x="0" y="0" z="0"/>
+            <rot x="0" y="0" z="0"/>
+            <scale x="1" y="1" z="1"/>
+        </transform>
+        <transformanimation>
+            <pos/>
+            <rot/>
+            <scale/>
+        </transformanimation>
+        <children>
+            <usercamera name="ViewPoint" visible="true">
+                <data/>
+                <transform>
+                    <pos x="0" y="6.77148" z="14.4561"/>
+                    <rot x="180" y="0" z="0"/>
+                    <scale x="1" y="1" z="1"/>
+                </transform>
+                <transformanimation>
+                    <pos/>
+                    <rot/>
+                    <scale/>
+                </transformanimation>
+                <children/>
+            </usercamera>
+            <mesh name="StanfordDragon" visible="true">
+                <data mesh="../models/extras/StanfordDragon.obj"/>
+                <transform>
+                    <pos x="0" y="3.26172" z="0"/>
+                    <rot x="78.95" y="0" z="0"/>
+                    <scale x="1" y="1.07" z="1"/>
+                </transform>
+                <material>
+                    <ambient r="0" g="0" b="0" a="255"/>
+                    <diffuse r="255" g="255" b="255" a="255"/>
+                    <specular r="255" g="255" b="255" a="255"/>
+                    <shininess value="0"/>
+                    <normalintensity value="1"/>
+                    <reflectioninfluence value="0"/>
+                    <texturescale value="1"/>
+                </material>
+                <transformanimation>
+                    <pos/>
+                    <rot/>
+                    <scale/>
+                </transformanimation>
+                <children/>
+            </mesh>
+            <mesh name="StanfordDragon" visible="true">
+                <data mesh="../models/extras/StanfordDragon.obj"/>
+                <transform>
+                    <pos x="2.54102" y="3.26172" z="0"/>
+                    <rot x="124.56" y="1.75" z="0"/>
+                    <scale x="1" y="1.07" z="1"/>
+                </transform>
+                <material>
+                    <ambient r="0" g="0" b="0" a="255"/>
+                    <diffuse r="255" g="255" b="255" a="255"/>
+                    <specular r="255" g="255" b="255" a="255"/>
+                    <shininess value="0"/>
+                    <normalintensity value="1"/>
+                    <reflectioninfluence value="0"/>
+                    <texturescale value="1"/>
+                </material>
+                <transformanimation>
+                    <pos/>
+                    <rot/>
+                    <scale/>
+                </transformanimation>
+                <children/>
+            </mesh>
+            <mesh name="StanfordDragon" visible="true">
+                <data mesh="../models/extras/StanfordDragon.obj"/>
+                <transform>
+                    <pos x="-2.84375" y="3.26172" z="0"/>
+                    <rot x="43.86" y="0" z="-1.75"/>
+                    <scale x="1" y="1.07" z="1"/>
+                </transform>
+                <material>
+                    <ambient r="0" g="0" b="0" a="255"/>
+                    <diffuse r="255" g="255" b="255" a="255"/>
+                    <specular r="255" g="255" b="255" a="255"/>
+                    <shininess value="0"/>
+                    <normalintensity value="1"/>
+                    <reflectioninfluence value="0"/>
+                    <texturescale value="1"/>
+                </material>
+                <transformanimation>
+                    <pos/>
+                    <rot/>
+                    <scale/>
+                </transformanimation>
+                <children/>
+            </mesh>
+            <light name="PointLight" visible="true">
+                <data lighttype="point"/>
+                <transform>
+                    <pos x="0" y="9.76758" z="0"/>
+                    <rot x="0" y="0" z="0"/>
+                    <scale x="1" y="1" z="1"/>
+                </transform>
+                <material>
+                    <ambient r="0" g="0" b="0" a="255"/>
+                    <diffuse r="255" g="255" b="255" a="255"/>
+                    <specular r="255" g="255" b="255" a="255"/>
+                    <shininess value="0"/>
+                    <normalintensity value="1"/>
+                    <reflectioninfluence value="0"/>
+                    <texturescale value="1"/>
+                </material>
+                <transformanimation>
+                    <pos/>
+                    <rot/>
+                    <scale/>
+                </transformanimation>
+                <children/>
+            </light>
+            <cube name="Cube" visible="true">
+                <data/>
+                <transform>
+                    <pos x="0" y="3" z="0"/>
+                    <rot x="0" y="0" z="0"/>
+                    <scale x="8" y="0.51" z="8"/>
+                </transform>
+                <material>
+                    <ambient r="0" g="0" b="0" a="255"/>
+                    <diffuse r="255" g="255" b="255" a="255"/>
+                    <specular r="255" g="255" b="255" a="255"/>
+                    <shininess value="0"/>
+                    <normalintensity value="1"/>
+                    <reflectioninfluence value="0"/>
+                    <texturescale value="1"/>
+                </material>
+                <transformanimation>
+                    <pos/>
+                    <rot/>
+                    <scale/>
+                </transformanimation>
+                <children/>
+            </cube>
+        </children>
+    </world>
+</scene>
