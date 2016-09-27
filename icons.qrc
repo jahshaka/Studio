@@ -1,51 +1,51 @@
 <RCC>
     <qresource prefix="/">
-        <file>icons/light.svg</file>
-        <file>icons/sceneobject.svg</file>
-        <file>icons/people.svg</file>
-        <file>icons/world.svg</file>
-        <file>icons/play.svg</file>
-        <file>icons/stop.svg</file>
-        <file>icons/square.svg</file>
-        <file>icons/jahplayer-icon.png</file>
-        <file>icons/end.svg</file>
-        <file>icons/fastforward.svg</file>
-        <file>icons/fastreverse.svg</file>
-        <file>icons/jahplayer-logo.jpg</file>
-        <file>icons/reverse.svg</file>
-        <file>icons/start.svg</file>
-        <file>icons/matrix.png</file>
-        <file>icons/grid.png</file>
-        <file>icons/logo01.png</file>
-        <file>icons/logo02.png</file>
-        <file>icons/logo03.svg</file>
-        <file>icons/add.svg</file>
-        <file>icons/cancel.svg</file>
-        <file>icons/educational-video.svg</file>
-        <file>icons/translate-arrow.svg</file>
-        <file>icons/expand-arrows.svg</file>
-        <file>icons/rotate-to-right.svg</file>
-        <file>icons/close tree icon.svg</file>
-        <file>icons/open tree icon.svg</file>
-        <file>icons/responsive-website-design-on-monitor-screen.svg</file>
-        <file>icons/document.svg</file>
-        <file>icons/businessman-talking-about-data-analysis.svg</file>
-        <file>icons/photo-camera.svg</file>
-        <file>icons/video-camera.svg</file>
-        <file>icons/redo.svg</file>
-        <file>icons/undo.svg</file>
-        <file>icons/upload-folder.svg</file>
-        <file>icons/folder-settings-button (1).svg</file>
-        <file>icons/folder-settings-button.svg</file>
-        <file>icons/open-file-button.svg</file>
-        <file>icons/file-in-folder.svg</file>
-        <file>icons/save-file-button.svg</file>
-        <file>icons/add-folder-button.svg</file>
-        <file>icons/keyboard-right-arrow-button.svg</file>
-        <file>icons/expand-button.svg</file>
-        <file>icons/up-arrow.svg</file>
-        <file>icons/down-arrow.svg</file>
-        <file>icons/tranlate arrow.svg</file>
-        <file>icons/color-palette.svg</file>
+        <file>app/icons/add.svg</file>
+        <file>app/icons/add-folder-button.svg</file>
+        <file>app/icons/businessman-talking-about-data-analysis.svg</file>
+        <file>app/icons/cancel.svg</file>
+        <file>app/icons/close tree icon.svg</file>
+        <file>app/icons/color-palette.svg</file>
+        <file>app/icons/document.svg</file>
+        <file>app/icons/down-arrow.svg</file>
+        <file>app/icons/educational-video.svg</file>
+        <file>app/icons/end.svg</file>
+        <file>app/icons/expand-arrows.svg</file>
+        <file>app/icons/expand-button.svg</file>
+        <file>app/icons/fastforward.svg</file>
+        <file>app/icons/fastreverse.svg</file>
+        <file>app/icons/file-in-folder.svg</file>
+        <file>app/icons/folder-settings-button (1).svg</file>
+        <file>app/icons/folder-settings-button.svg</file>
+        <file>app/icons/grid.png</file>
+        <file>app/icons/jahplayer-icon.png</file>
+        <file>app/icons/jahplayer-logo.jpg</file>
+        <file>app/icons/keyboard-right-arrow-button.svg</file>
+        <file>app/icons/light.svg</file>
+        <file>app/icons/logo01.png</file>
+        <file>app/icons/logo02.png</file>
+        <file>app/icons/logo03.svg</file>
+        <file>app/icons/matrix.png</file>
+        <file>app/icons/open tree icon.svg</file>
+        <file>app/icons/open-file-button.svg</file>
+        <file>app/icons/people.svg</file>
+        <file>app/icons/photo-camera.svg</file>
+        <file>app/icons/play.svg</file>
+        <file>app/icons/redo.svg</file>
+        <file>app/icons/responsive-website-design-on-monitor-screen.svg</file>
+        <file>app/icons/reverse.svg</file>
+        <file>app/icons/rotate-to-right.svg</file>
+        <file>app/icons/save-file-button.svg</file>
+        <file>app/icons/sceneobject.svg</file>
+        <file>app/icons/square.svg</file>
+        <file>app/icons/start.svg</file>
+        <file>app/icons/stop.svg</file>
+        <file>app/icons/tranlate arrow.svg</file>
+        <file>app/icons/translate-arrow.svg</file>
+        <file>app/icons/undo.svg</file>
+        <file>app/icons/up-arrow.svg</file>
+        <file>app/icons/upload-folder.svg</file>
+        <file>app/icons/video-camera.svg</file>
+        <file>app/icons/world.svg</file>
     </qresource>
 </RCC>

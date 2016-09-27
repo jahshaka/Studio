@@ -1,24 +1,24 @@
 <RCC>
     <qresource prefix="/">
-        <file>materials/shiny_red.png</file>
-        <file>materials/info_graphic.png</file>
-        <file>materials/abstractpattern.png</file>
-        <file>materials/agedbrickwall.png</file>
-        <file>materials/ancientfloorbrick.png</file>
-        <file>materials/artisticpattern.png</file>
-        <file>materials/bamboo.png</file>
-        <file>materials/barkwood.png</file>
-        <file>materials/brickwall.png</file>
-        <file>materials/chboard.png</file>
-        <file>materials/floralpattern.png</file>
-        <file>materials/grass.png</file>
-        <file>materials/greenpattern.png</file>
-        <file>materials/groundboard.png</file>
-        <file>materials/oldtile.png</file>
-        <file>materials/plaid.png</file>
-        <file>materials/purpleswirls.png</file>
-        <file>materials/redbrickwall.png</file>
-        <file>materials/rustediron.png</file>
-        <file>materials/wallpattern.png</file>
+        <file>app/materials/abstractpattern.png</file>
+        <file>app/materials/agedbrickwall.png</file>
+        <file>app/materials/ancientfloorbrick.png</file>
+        <file>app/materials/artisticpattern.png</file>
+        <file>app/materials/bamboo.png</file>
+        <file>app/materials/barkwood.png</file>
+        <file>app/materials/brickwall.png</file>
+        <file>app/materials/chboard.png</file>
+        <file>app/materials/floralpattern.png</file>
+        <file>app/materials/grass.png</file>
+        <file>app/materials/greenpattern.png</file>
+        <file>app/materials/groundboard.png</file>
+        <file>app/materials/info_graphic.png</file>
+        <file>app/materials/oldtile.png</file>
+        <file>app/materials/plaid.png</file>
+        <file>app/materials/purpleswirls.png</file>
+        <file>app/materials/redbrickwall.png</file>
+        <file>app/materials/rustediron.png</file>
+        <file>app/materials/shiny_red.png</file>
+        <file>app/materials/wallpattern.png</file>
     </qresource>
 </RCC>
