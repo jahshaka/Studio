@@ -1293,7 +1293,7 @@ QTabBar::tab {
      <widget class="QWidget" name="Presets">
       <attribute name="icon">
        <iconset resource="../icons.qrc">
-        <normaloff>:/icons/people.svg</normaloff>:/icons/people.svg</iconset>
+        <normaloff>:/app/icons/people.svg</normaloff>:/app/icons/people.svg</iconset>
       </attribute>
       <attribute name="title">
        <string>Presets</string>

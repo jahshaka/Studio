@@ -174,7 +174,7 @@ border-style: inset;
               </property>
               <property name="icon">
                <iconset resource="../../icons.qrc">
-                <normaloff>:/icons/world.svg</normaloff>:/icons/world.svg</iconset>
+                <normaloff>:/app/icons/world.svg</normaloff>:/app/icons/world.svg</iconset>
               </property>
               <property name="iconSize">
                <size>
@@ -212,7 +212,7 @@ border-style: inset;
               </property>
               <property name="icon">
                <iconset resource="../../icons.qrc">
-                <normaloff>:/icons/educational-video.svg</normaloff>:/icons/educational-video.svg</iconset>
+                <normaloff>:/app/icons/educational-video.svg</normaloff>:/app/icons/educational-video.svg</iconset>
               </property>
               <property name="iconSize">
                <size>
