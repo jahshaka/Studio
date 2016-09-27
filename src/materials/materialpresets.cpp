@@ -21,7 +21,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //abstract pattern
     mat = MaterialPreset();
     mat.name = "Abstract Art";
-    mat.icon = "qrc:/app/materials/abstractpattern.png";
+    mat.icon = ":/app/materials/abstractpattern.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/Abstract Pattern.jpg";
@@ -38,7 +38,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Aged Brick Wall
     mat = MaterialPreset();
     mat.name = "Aged Brkwall";
-    mat.icon = "qrc:/app/materials/agedbrickwall.png";
+    mat.icon = ":/app/materials/agedbrickwall.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/Age Brick Wall.jpg";
@@ -55,7 +55,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Ancient Floor Brick
     mat = MaterialPreset();
     mat.name = "Floor Brick";
-    mat.icon = "qrc:/app/materials/ancientfloorbrick.png";
+    mat.icon = ":/app/materials/ancientfloorbrick.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "assets/textures/Ancient Floor Brick.jpg";
@@ -72,7 +72,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Artistic Pattern
     mat = MaterialPreset();
     mat.name = "Art Pattern";
-    mat.icon = "qrc:/app/materials/artisticpattern.png";
+    mat.icon = ":/app/materials/artisticpattern.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/Artistic Pattern.png";
@@ -89,7 +89,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Bamboo
     mat = MaterialPreset();
     mat.name = "Bamboo";
-    mat.icon = "qrc:/app/materials/bamboo.png";
+    mat.icon = ":/app/materials/bamboo.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/bamboo.jpg";
@@ -106,7 +106,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Bark Wood
     mat = MaterialPreset();
     mat.name = "Bark Wood";
-    mat.icon = "qrc:/app/materials/barkwood.png";
+    mat.icon = ":/app/materials/barkwood.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/bark_wood.jpg";
@@ -123,7 +123,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Brick Wall
     mat = MaterialPreset();
     mat.name = "Brick Wall";
-    mat.icon = "qrc:/app/materials/brickwall.png";
+    mat.icon = ":/app/materials/brickwall.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/brick_wall.jpg";
@@ -140,7 +140,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Chessboard
     mat = MaterialPreset();
     mat.name = "Chessboard";
-    mat.icon = "qrc:/app/materials/chboard.png";
+    mat.icon = ":/app/materials/chboard.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/chboard.png";
@@ -157,7 +157,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Floral
     mat = MaterialPreset();
     mat.name = "Floral Pattern";
-    mat.icon = "qrc:/app/materials/floralpattern.png";
+    mat.icon = ":/app/materials/floralpattern.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/floral.jpg";
@@ -174,7 +174,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Grass
     mat = MaterialPreset();
     mat.name = "Grass";
-    mat.icon = "qrc:/app/materials/grass.png";
+    mat.icon = ":/app/materials/grass.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/Grass.png";
@@ -191,7 +191,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Green Pattern
     mat = MaterialPreset();
     mat.name = "Green Art";
-    mat.icon = "qrc:/app/materials/greenpattern.png";
+    mat.icon = ":/app/materials/greenpattern.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/Prawny Pattern.png";
@@ -208,7 +208,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Ground Board
     mat = MaterialPreset();
     mat.name = "Board";
-    mat.icon = "qrc:/app/materials/groundboard.png";
+    mat.icon = ":/app/materials/groundboard.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/ground board.jpg";
@@ -225,7 +225,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Info Graphic
     mat = MaterialPreset();
     mat.name = "Info Graphic";
-    mat.icon = "qrc:/app/materials/info_graphic.png";
+    mat.icon = ":/app/materials/info_graphic.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/info_graphic.jpg";
@@ -242,7 +242,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Old Tile
     mat = MaterialPreset();
     mat.name = "Old Tile";
-    mat.icon = "qrc:/app/materials/oldtile.png";
+    mat.icon = ":/app/materials/oldtile.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/old_tile.png";
@@ -259,7 +259,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Plaid
     mat = MaterialPreset();
     mat.name = "Plaid";
-    mat.icon = "qrc:/app/materials/plaid.png";
+    mat.icon = ":/app/materials/plaid.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/plaid.jpg";
@@ -276,7 +276,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Purple Swirl
     mat = MaterialPreset();
     mat.name = "Purple Swirl";
-    mat.icon = "qrc:/app/materials/purpleswirls.png";
+    mat.icon = ":/app/materials/purpleswirls.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/Purple Swirls Pattern.jpg";
@@ -293,7 +293,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Red Brick Wall
     mat = MaterialPreset();
     mat.name = "Red Brkwall";
-    mat.icon = "qrc:/app/materials/redbrickwall.png";
+    mat.icon = ":/app/materials/redbrickwall.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/Red Brick Wall.jpg";
@@ -310,7 +310,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Rusted Iron
     mat = MaterialPreset();
     mat.name = "Rusted Iron";
-    mat.icon = "qrc:/app/materials/rustediron.png";
+    mat.icon = ":/app/materials/rustediron.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/rusted iron.jpg";
@@ -326,7 +326,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
 
     //shiny red
     mat.name = "Shiny Red";
-    mat.icon = "qrc:/app/materials/shiny_red.png";
+    mat.icon = ":/app/materials/shiny_red.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,0,0);
     mat.diffuseTexture = "";
@@ -343,7 +343,7 @@ QList<MaterialPreset> MaterialPreset::getDefaultPresets()
     //Wall Pattern
     mat = MaterialPreset();
     mat.name = "Stonewall";
-    mat.icon = "qrc:/app/materials/wallpattern.png";
+    mat.icon = ":/app/materials/wallpattern.png";
     mat.ambientColor = QColor(0,0,0);
     mat.diffuseColor = QColor(255,255,255);
     mat.diffuseTexture = "app/content/textures/wall-pattern.jpg";

@@ -46,13 +46,13 @@ WorldLayerWidget::WorldLayerWidget(QWidget *parent) :
     listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
 
 
-    addPresetSky("assets/skies/default.png");
-    addPresetSky("assets/skies/vp_sky_v2_002.jpg");
-    addPresetSky("assets/skies/vp_sky_v2_032.jpg");
-    addPresetSky("assets/skies/vp_sky_v2_033.jpg");
-    addPresetSky("assets/skies/vp_sky_v3_007.jpg");
-    addPresetSky("assets/skies/vp_sky_v3_015.jpg");
-    addPresetSky("assets/skies/vp_sky_v3_047.jpg");
+    addPresetSky("app/content/skies/default.png");
+    addPresetSky("app/content/skies/vp_sky_v2_002.jpg");
+    addPresetSky("app/content/skies/vp_sky_v2_032.jpg");
+    addPresetSky("app/content/skies/vp_sky_v2_033.jpg");
+    addPresetSky("app/content/skies/vp_sky_v3_007.jpg");
+    addPresetSky("app/content/skies/vp_sky_v3_015.jpg");
+    addPresetSky("app/content/skies/vp_sky_v3_047.jpg");
 
 
     ui->fogStart->setValueRange(0,500);
