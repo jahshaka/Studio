@@ -1,14 +1,10 @@
 <RCC>
     <qresource prefix="/">
-        <file>images/logo.png</file>
-        <file>images/splash.png</file>
-        <file>images/splash01.png</file>
-        <file>images/sidepanelimage.jpg</file>
-        <file>images/splash.svg</file>
-        <file>images/sidepanelimage_info.jpg</file>
-        <file>images/3D-Planet-Earth-Wallpaper-HD-Widescreen.jpg</file>
-        <file>images/3D-Wallpaper-9-610x381.jpg</file>
-        <file>images/computer-hd-wallpaper-1366x768-3D.jpg</file>
-        <file>images/splash screen v2.jpg</file>
+        <file>app/images/logo.png</file>
+        <file>app/images/sidepanelimage.jpg</file>
+        <file>app/images/sidepanelimage_info.jpg</file>
+        <file>app/images/splash screen v2.jpg</file>
+        <file>app/images/splash.png</file>
+        <file>app/images/splash.svg</file>
     </qresource>
 </RCC>

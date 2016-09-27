@@ -59,7 +59,7 @@ void SceneManager::createFakeSky()
 
     Qt3DExtras::QSkyboxEntity* sky = new Qt3DExtras::QSkyboxEntity(skyParent);
     sky->setExtension(".png");
-    sky->setBaseName(QUrl::fromLocalFile(":assets/textures/skies/clear/").toString());
+    //sky->setBaseName(QUrl::fromLocalFile(":assets/textures/skies/clear/").toString());
     sky->addComponent(skyTransform);
 }
 

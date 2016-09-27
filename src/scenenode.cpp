@@ -467,10 +467,10 @@ LightNode::LightNode(Qt3DCore::QEntity* entity,LightType type):
     auto bill = new Billboard();
     auto mat = new BillboardMaterial();
 
-    auto tex = new Qt3DRender::QTextureLoader();
+    //auto tex = new Qt3DRender::QTextureLoader();
     //tex->setSource(QUrl::fromLocalFile(":/assets/textures/bulb.png"));
-    tex->setSource(QUrl::fromLocalFile("assets/textures/bulb.png"));
-    mat->setTexture(tex);
+    //tex->setSource(QUrl::fromLocalFile(":/app/content/textures/bulb.png"));
+    //mat->setTexture(TextureHelper::loadTexture(":/app/content/textures/bulb.png"));
 
     this->entity->addComponent(bill);
     this->entity->addComponent(mat);
@@ -1119,7 +1119,7 @@ UserCameraNode::UserCameraNode(Qt3DCore::QEntity* entity):
 
     auto blue = new Qt3DExtras::QDiffuseMapMaterial();
     blue->setAmbient(QColor::fromRgbF(1.0f,1.0f,1.0f));
-    //blue->diffuse()->addTextureImage(TextureHelper::loadTexture(":/app/models/head.png"));
+    blue->diffuse()->addTextureImage(TextureHelper::loadTexture(":/app/models/head.png"));
     headEnt->addComponent(blue);
 
     //body
