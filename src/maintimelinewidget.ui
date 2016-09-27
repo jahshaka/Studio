@@ -185,7 +185,7 @@ padding: 2px 2px 2px 2px;
             <string/>
            </property>
            <property name="icon">
-            <iconset resource="../icons.qrc">
+            <iconset>
              <normaloff>:/icons/start.svg</normaloff>:/icons/start.svg</iconset>
            </property>
            <property name="iconSize">
@@ -232,7 +232,7 @@ padding: 2px 2px 2px 2px;
             <string/>
            </property>
            <property name="icon">
-            <iconset resource="../icons.qrc">
+            <iconset>
              <normaloff>:/icons/fastreverse.svg</normaloff>:/icons/fastreverse.svg</iconset>
            </property>
            <property name="iconSize">
@@ -279,7 +279,7 @@ padding: 2px 2px 2px 2px;
             <string/>
            </property>
            <property name="icon">
-            <iconset resource="../icons.qrc">
+            <iconset>
              <normaloff>:/icons/reverse.svg</normaloff>:/icons/reverse.svg</iconset>
            </property>
            <property name="iconSize">
@@ -326,7 +326,7 @@ padding: 2px 2px 2px 2px;
             <string/>
            </property>
            <property name="icon">
-            <iconset resource="../icons.qrc">
+            <iconset>
              <normaloff>:/icons/stop.svg</normaloff>:/icons/stop.svg</iconset>
            </property>
            <property name="iconSize">
@@ -373,7 +373,7 @@ padding: 2px 2px 2px 2px;
             <string/>
            </property>
            <property name="icon">
-            <iconset resource="../icons.qrc">
+            <iconset>
              <normaloff>:/icons/play.svg</normaloff>:/icons/play.svg</iconset>
            </property>
            <property name="iconSize">
@@ -420,7 +420,7 @@ padding: 2px 2px 2px 2px;
             <string/>
            </property>
            <property name="icon">
-            <iconset resource="../icons.qrc">
+            <iconset>
              <normaloff>:/icons/fastforward.svg</normaloff>:/icons/fastforward.svg</iconset>
            </property>
            <property name="iconSize">
@@ -461,7 +461,7 @@ padding: 2px 2px 2px 2px;
             <string/>
            </property>
            <property name="icon">
-            <iconset resource="../icons.qrc">
+            <iconset>
              <normaloff>:/icons/end.svg</normaloff>:/icons/end.svg</iconset>
            </property>
            <property name="iconSize">
@@ -545,7 +545,7 @@ QToolTip { color: #ffffff; background-color: #2a82da; border: 1px solid white; }
            </property>
            <property name="icon">
             <iconset resource="../icons.qrc">
-             <normaloff>:/icons/tranlate arrow.svg</normaloff>:/icons/tranlate arrow.svg</iconset>
+             <normaloff>:/app/icons/tranlate arrow.svg</normaloff>:/app/icons/tranlate arrow.svg</iconset>
            </property>
           </widget>
          </item>
@@ -584,7 +584,7 @@ QToolTip { color: #ffffff; background-color: #2a82da; border: 1px solid white; }
            </property>
            <property name="icon">
             <iconset resource="../icons.qrc">
-             <normaloff>:/icons/rotate-to-right.svg</normaloff>:/icons/rotate-to-right.svg</iconset>
+             <normaloff>:/app/icons/rotate-to-right.svg</normaloff>:/app/icons/rotate-to-right.svg</iconset>
            </property>
           </widget>
          </item>
@@ -623,7 +623,7 @@ QToolTip { color: #ffffff; background-color: #2a82da; border: 1px solid white; }
            </property>
            <property name="icon">
             <iconset resource="../icons.qrc">
-             <normaloff>:/icons/expand-arrows.svg</normaloff>:/icons/expand-arrows.svg</iconset>
+             <normaloff>:/app/icons/expand-arrows.svg</normaloff>:/app/icons/expand-arrows.svg</iconset>
            </property>
           </widget>
          </item>

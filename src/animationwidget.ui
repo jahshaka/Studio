@@ -224,7 +224,6 @@ border: 1px solid #1e1e1e;
                 <verstretch>0</verstretch>
                </sizepolicy>
               </property>
-              <zorder>loopAnim</zorder>
              </widget>
             </item>
            </layout>
@@ -401,7 +400,7 @@ border-style: inset;
                    </property>
                    <property name="icon">
                     <iconset resource="../icons.qrc">
-                     <normaloff>:/icons/stop.svg</normaloff>:/icons/stop.svg</iconset>
+                     <normaloff>:/app/icons/stop.svg</normaloff>:/app/icons/stop.svg</iconset>
                    </property>
                    <property name="iconSize">
                     <size>
@@ -452,7 +451,7 @@ border-style: inset;
                    </property>
                    <property name="icon">
                     <iconset resource="../icons.qrc">
-                     <normaloff>:/icons/play.svg</normaloff>:/icons/play.svg</iconset>
+                     <normaloff>:/app/icons/play.svg</normaloff>:/app/icons/play.svg</iconset>
                    </property>
                    <property name="iconSize">
                     <size>
