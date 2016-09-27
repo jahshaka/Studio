@@ -47,5 +47,6 @@
         <file>app/icons/upload-folder.svg</file>
         <file>app/icons/video-camera.svg</file>
         <file>app/icons/world.svg</file>
+        <file>app/icons/bulb.png</file>
     </qresource>
 </RCC>

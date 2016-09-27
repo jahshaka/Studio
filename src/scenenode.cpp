@@ -469,8 +469,8 @@ LightNode::LightNode(Qt3DCore::QEntity* entity,LightType type):
 
     //auto tex = new Qt3DRender::QTextureLoader();
     //tex->setSource(QUrl::fromLocalFile(":/assets/textures/bulb.png"));
-    //tex->setSource(QUrl::fromLocalFile(":/app/content/textures/bulb.png"));
-    //mat->setTexture(TextureHelper::loadTexture(":/app/content/textures/bulb.png"));
+    //tex->setSource(QUrl::fromLocalFile(":/app/icons/bulb.png"));
+    mat->setTexture(TextureHelper::loadTexture(":/app/icons/bulb.png"));
 
     this->entity->addComponent(bill);
     this->entity->addComponent(mat);
