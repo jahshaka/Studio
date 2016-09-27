@@ -480,7 +480,8 @@ void MainWindow::saveScene()
 
 void MainWindow::saveSceneAs()
 {
-    auto filename = QFileDialog::getSaveFileName(this,"Save Scene","","Jashaka Scene (*.jah)");
+    QString dir = QApplication::applicationDirPath()+"/scenes/";
+    auto filename = QFileDialog::getSaveFileName(this,"Save Scene",dir,"Jashaka Scene (*.jah)");
     auto exp = new SceneParser();
     exp->saveScene(filename,scene);
 
@@ -492,7 +493,8 @@ void MainWindow::saveSceneAs()
 
 void MainWindow::loadScene()
 {
-    auto filename = QFileDialog::getOpenFileName(this,"Open Scene File","","Jashaka Scene (*.jah)");
+    QString dir = QApplication::applicationDirPath()+"/scenes/";
+    auto filename = QFileDialog::getOpenFileName(this,"Open Scene File",dir,"Jashaka Scene (*.jah)");
 
     if(filename.isEmpty() || filename.isNull())
         return;
@@ -1014,7 +1016,9 @@ void MainWindow::addDirectionalLight()
 
 void MainWindow::addMesh()
 {
-    auto filename = QFileDialog::getOpenFileName();
+    QString dir = QApplication::applicationDirPath()+"/assets/models/";
+    //qDebug()<<dir;
+    auto filename = QFileDialog::getOpenFileName(this,"Load Mesh",dir,"Obj Model (*.obj)");
     auto nodeName = QFileInfo(filename).baseName();
     if(filename.isEmpty())
         return;
