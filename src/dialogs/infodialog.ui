@@ -63,7 +63,7 @@
      </property>
      <property name="styleSheet">
       <string notr="true">background-color: rgb(36, 36, 36);
-background-image: url(&quot;:/images/sidepanelimage_info.jpg&quot;);
+background-image: url(:/app/images/sidepanelimage_info.jpg);
 background-repeat: no-repeat;</string>
      </property>
     </widget>
