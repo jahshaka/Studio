@@ -23,8 +23,8 @@ GizmoEffect::GizmoEffect()
 
     //shader
     auto shader = new Qt3DRender::QShaderProgram();
-    shader->setVertexShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/assets/shaders/gizmo.vert"))));
-    shader->setFragmentShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/assets/shaders/gizmo.frag"))));
+    shader->setVertexShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/app/shaders/gizmo.vert"))));
+    shader->setFragmentShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/app/shaders/gizmo.frag"))));
     //shader->setVertexShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/gizmo.vert"))));
     //shader->setFragmentShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/gizmo.frag"))));
 

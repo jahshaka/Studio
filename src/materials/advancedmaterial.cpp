@@ -23,8 +23,8 @@ AdvanceEffect::AdvanceEffect()
 
     //shader
     auto shader = new Qt3DRender::QShaderProgram();
-    shader->setVertexShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/assets/shaders/advanced.vert"))));
-    shader->setFragmentShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/assets/shaders/advanced.frag"))));
+    shader->setVertexShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/app/shaders/advanced.vert"))));
+    shader->setFragmentShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/app/shaders/advanced.frag"))));
     //shader->setVertexShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/advanced.vert"))));
     //shader->setFragmentShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/advanced.frag"))));
 

@@ -26,8 +26,8 @@ FlatShadedEffect::FlatShadedEffect()
     auto shader = new Qt3DRender::QShaderProgram();
     //shader->setVertexShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/assets/shaders/flat.vert"))));
     //shader->setFragmentShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/assets/shaders/flat.frag"))));
-    shader->setVertexShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/flat.vert"))));
-    shader->setFragmentShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/flat.frag"))));
+    shader->setVertexShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("qrc:/app/shaders/flat.vert"))));
+    shader->setFragmentShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("qrc:/app/shaders/flat.frag"))));
 
     //criteria for using this shader
     auto filterKey = new Qt3DRender::QFilterKey();

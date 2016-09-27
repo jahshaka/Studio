@@ -202,12 +202,17 @@ RESOURCES += \
     shaders.qrc \
     icons.qrc \
     images.qrc \
-    materials.qrc
+    materials.qrc \
+    models.qrc
 
 win32: RC_ICONS = icon.ico
 
 install_assets.path = $$OUT_PWD/assets
 install_assets.files = assets/*
 
+install_content.path = $$OUT_PWD/app/content
+install_content.files = app/content/*
+
 INSTALLS += \
-    install_assets
+    install_assets \
+    install_content

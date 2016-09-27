@@ -19,7 +19,7 @@ For more information see the LICENSE file
 AdvancedTranslationGizmo::AdvancedTranslationGizmo(AdvancedTransformGizmo* gizmo)
 {
     this->gizmo = gizmo;
-    const QString path = ":/assets/models/advancedgizmo/trans_arrow.obj";
+    const QString path = ":/app/models/trans_arrow.obj";
     //const QString path = "assets/models/advancedgizmo/trans_arrow.obj";
 
     //X

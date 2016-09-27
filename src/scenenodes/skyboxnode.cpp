@@ -28,8 +28,8 @@ EquiRectSkyMaterial::EquiRectSkyMaterial()
     tech->graphicsApiFilter()->setProfile(Qt3DRender::QGraphicsApiFilter::CoreProfile);
 
     auto shader = new Qt3DRender::QShaderProgram();
-    shader->setVertexShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/assets/shaders/equisky.vert"))));
-    shader->setFragmentShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/assets/shaders/equisky.frag"))));
+    shader->setVertexShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/app/shaders/equisky.vert"))));
+    shader->setFragmentShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/app/shaders/equisky.frag"))));
 
     auto filterKey = new Qt3DRender::QFilterKey();
     filterKey->setName("renderingStyle");

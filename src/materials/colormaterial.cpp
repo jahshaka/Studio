@@ -24,8 +24,8 @@ ColorEffect::ColorEffect()
     auto shader = new Qt3DRender::QShaderProgram();
     //shader->setVertexShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/assets/shaders/color.vert"))));
     //shader->setFragmentShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/assets/shaders/color.frag"))));
-    shader->setVertexShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/color.vert"))));
-    shader->setFragmentShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/color.frag"))));
+    shader->setVertexShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral(":/app/shaders/color.vert"))));
+    shader->setFragmentShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral(":/app/shaders/color.frag"))));
 
     auto filterKey = new Qt3DRender::QFilterKey();
     filterKey->setName("renderingStyle");

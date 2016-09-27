@@ -1109,7 +1109,7 @@ UserCameraNode::UserCameraNode(Qt3DCore::QEntity* entity):
 
     auto mesh = new Qt3DRender::QMesh(entity);
     //mesh->setSource(QUrl("qrc:/assets/models/head.obj"));
-    mesh->setSource(QUrl::fromLocalFile("assets/models/head.obj"));
+    mesh->setSource(QUrl::fromLocalFile(":/app/models/head.obj"));
     headEnt->addComponent(mesh);
 
     auto headTrans = new Qt3DCore::QTransform();
@@ -1119,7 +1119,7 @@ UserCameraNode::UserCameraNode(Qt3DCore::QEntity* entity):
 
     auto blue = new Qt3DExtras::QDiffuseMapMaterial();
     blue->setAmbient(QColor::fromRgbF(1.0f,1.0f,1.0f));
-    blue->diffuse()->addTextureImage(TextureHelper::loadTexture("assets/models/head.png"));
+    //blue->diffuse()->addTextureImage(TextureHelper::loadTexture(":/app/models/head.png"));
     headEnt->addComponent(blue);
 
     //body

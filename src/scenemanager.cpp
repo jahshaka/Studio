@@ -187,12 +187,12 @@ SceneManager* SceneManager::createDefaultMatrixScene(Qt3DCore::QEntity* rootEnti
     //ground
     auto plane = EndlessPlaneNode::createEndlessPlane("ground");
     //plane->setTexture(":/assets/textures/defaultgrid.png");
-    plane->setTexture("assets/textures/defaultgrid.png");
+    plane->setTexture("app/content/textures/defaultgrid.png");
     worldNode->addChild(plane);
 
     //sky
     //worldNode->getSky()->setTexture(":/assets/skies/default.png");
-    worldNode->getSky()->setTexture("assets/skies/default.png");
+    worldNode->getSky()->setTexture("app/content/skies/default.png");
 
     //directional light
     auto light = LightNode::createLight("Sun",LightType::Directional);

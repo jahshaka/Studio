@@ -25,8 +25,8 @@ BillboardEffect::BillboardEffect()
     auto shader = new Qt3DRender::QShaderProgram();
     //shader->setVertexShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/billboard.vert"))));
     //shader->setFragmentShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/billboard.frag"))));
-    shader->setVertexShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/assets/shaders/billboard.vert"))));
-    shader->setFragmentShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/assets/shaders/billboard.frag"))));
+    shader->setVertexShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/app/shaders/billboard.vert"))));
+    shader->setFragmentShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/app/shaders/billboard.frag"))));
 
     auto filterKey = new Qt3DRender::QFilterKey();
     filterKey->setName("renderingStyle");
