@@ -32,7 +32,7 @@
    <string>Dialog</string>
   </property>
   <property name="windowIcon">
-   <iconset resource="../../icons.qrc">
+   <iconset>
     <normaloff>:/icons/logo03.svg</normaloff>:/icons/logo03.svg</iconset>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
@@ -53,7 +53,7 @@
         </size>
        </property>
        <property name="styleSheet">
-        <string notr="true">background-image: url(:/images/sidepanelimage.jpg);
+        <string notr="true">background-image: url(:/app/images/sidepanelimage_info.jpg);
 background-repeat: no-repeat;</string>
        </property>
       </widget>
@@ -807,8 +807,6 @@ color: rgb(115, 115, 115);
    </item>
   </layout>
  </widget>
- <resources>
-  <include location="../../icons.qrc"/>
- </resources>
+ <resources/>
  <connections/>
 </ui>
