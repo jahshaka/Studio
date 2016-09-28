@@ -1,7 +1,7 @@
 /**************************************************************************
 This file is part of JahshakaVR, VR Authoring Toolkit
 http://www.jahshaka.com
-Copyright (c) 2016  GPLv3 Karsten Becker <jahshaka@gmail.com>
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
 
 This is free software: you may copy, redistribute
 and/or modify it under the terms of the GPLv3 License
@@ -9,7 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "../materials.h"
+#include "materials.h"
 #include "billboardmaterial.h"
 
 //BILLBOARD MATERIAL
@@ -23,8 +23,6 @@ BillboardEffect::BillboardEffect()
 
     //shader
     auto shader = new Qt3DRender::QShaderProgram();
-    //shader->setVertexShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/billboard.vert"))));
-    //shader->setFragmentShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/billboard.frag"))));
     shader->setVertexShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/app/shaders/billboard.vert"))));
     shader->setFragmentShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/app/shaders/billboard.frag"))));
 
@@ -32,11 +30,6 @@ BillboardEffect::BillboardEffect()
     filterKey->setName("renderingStyle");
     filterKey->setValue("forward");
     tech->addFilterKey(filterKey);
-
-    //criteria for using this shader
-    //auto criterion = new Qt3DRender::QAnnotation();
-    //criterion->setName("renderingStyle");
-    //criterion->setValue("forward");
 
     auto pass = new Qt3DRender::QRenderPass();
     //pass->addAnnotation(criterion);
@@ -49,11 +42,6 @@ BillboardEffect::BillboardEffect()
 
     auto blendEquation = new Qt3DRender::QBlendEquation();
     blendEquation->setBlendFunction(Qt3DRender::QBlendEquation::Add);
-
-    //two-sided rendering
-    //auto cull = new Qt3DRender::QCullFace();
-    //cull->setMode(Qt3DRender::QCullFace::CullingMode::FrontAndBack);
-    //pass->addRenderState(cull);
 
     tech->addRenderPass(pass);
     addTechnique(tech);

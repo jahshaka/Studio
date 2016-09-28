@@ -607,13 +607,13 @@ QMenu::item:selected {
   <customwidget>
    <class>MainTimelineWidget</class>
    <extends>QWidget</extends>
-   <header location="global">src/maintimelinewidget.h</header>
+   <header location="global">src/widgets/maintimelinewidget.h</header>
    <container>1</container>
   </customwidget>
   <customwidget>
    <class>LayerTreeWidget</class>
    <extends>QTreeWidget</extends>
-   <header location="global">src/layertreewidget.h</header>
+   <header location="global">src/widgets/layertreewidget.h</header>
   </customwidget>
  </customwidgets>
  <resources>

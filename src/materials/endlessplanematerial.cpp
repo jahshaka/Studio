@@ -1,7 +1,7 @@
 /**************************************************************************
 This file is part of JahshakaVR, VR Authoring Toolkit
 http://www.jahshaka.com
-Copyright (c) 2016  GPLv3 Karsten Becker <jahshaka@gmail.com>
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
 
 This is free software: you may copy, redistribute
 and/or modify it under the terms of the GPLv3 License
@@ -9,7 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "../materials.h"
+#include "materials.h"
 #include "endlessplanematerial.h"
 #include "../helpers/texturehelper.h"
 
@@ -29,13 +29,10 @@ EndlessPlaneEffect::EndlessPlaneEffect()
 
     //shader
     auto shader = new Qt3DRender::QShaderProgram();
-    //shader->setVertexShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/assets/shaders/endless_plane.vert"))));
-    //shader->setFragmentShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/assets/shaders/endless_plane.frag"))));
     shader->setVertexShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/endless_plane.vert"))));
     shader->setFragmentShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/endless_plane.frag"))));
 
     auto pass = new Qt3DRender::QRenderPass();
-    //pass->addAnnotation(criterion);
     pass->setShaderProgram(shader);
 
     tech->addRenderPass(pass);

@@ -1,7 +1,7 @@
 /**************************************************************************
 This file is part of JahshakaVR, VR Authoring Toolkit
 http://www.jahshaka.com
-Copyright (c) 2016  GPLv3 Karsten Becker <jahshaka@gmail.com>
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
 
 This is free software: you may copy, redistribute
 and/or modify it under the terms of the GPLv3 License
@@ -15,10 +15,7 @@ For more information see the LICENSE file
 #include <QStyleFactory>
 #include <QSplashScreen>
 #include "dialogs/infodialog.h"
-#include "settingsmanager.h"
-
-//qt3d presentation
-//https://prezi.com/u-ewejoqxqj2/qt3d-20/
+#include "core/settingsmanager.h"
 
 int main(int argc, char *argv[])
 {
@@ -29,7 +26,6 @@ int main(int argc, char *argv[])
     QApplication::setDesktopSettingsAware(false);
 
     //https://gist.github.com/skyrpex/5547015
-
     a.setStyle(QStyleFactory::create("fusion"));
     QPalette palette;
     palette.setColor(QPalette::Window, QColor(83, 83, 83));

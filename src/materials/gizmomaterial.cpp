@@ -1,7 +1,7 @@
  /**************************************************************************
 This file is part of JahshakaVR, VR Authoring Toolkit
 http://www.jahshaka.com
-Copyright (c) 2016  GPLv3 Karsten Becker <jahshaka@gmail.com>
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
 
 This is free software: you may copy, redistribute
 and/or modify it under the terms of the GPLv3 License
@@ -9,7 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "../materials.h"
+#include "materials.h"
 #include "gizmomaterial.h"
 
 //GIZMO MATERIAL
@@ -25,8 +25,6 @@ GizmoEffect::GizmoEffect()
     auto shader = new Qt3DRender::QShaderProgram();
     shader->setVertexShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/app/shaders/gizmo.vert"))));
     shader->setFragmentShaderCode(shader->loadSource(QUrl(QStringLiteral("qrc:/app/shaders/gizmo.frag"))));
-    //shader->setVertexShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/gizmo.vert"))));
-    //shader->setFragmentShaderCode(shader->loadSource(QUrl::fromLocalFile(QStringLiteral("assets/shaders/gizmo.frag"))));
 
     auto filterKey = new Qt3DRender::QFilterKey();
     filterKey->setName("renderingStyle");

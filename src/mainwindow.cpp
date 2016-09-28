@@ -1,7 +1,7 @@
 /**************************************************************************
 This file is part of JahshakaVR, VR Authoring Toolkit
 http://www.jahshaka.com
-Copyright (c) 2016  GPLv3 Karsten Becker <jahshaka@gmail.com>
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
 
 This is free software: you may copy, redistribute
 and/or modify it under the terms of the GPLv3 License
@@ -65,42 +65,42 @@ For more information see the LICENSE file
 #include <math.h>
 #include <QDesktopServices>
 
-#include "loadmeshdialog.h"
+#include "dialogs/loadmeshdialog.h"
 
-#include "scenemanager.h"
-#include "scenenode.h"
-#include "surfaceview.h"
-#include "nodekeyframeanimation.h"
-#include "nodekeyframe.h"
+#include "scenegraph/scenemanager.h"
+#include "scenegraph/scenenodes.h"
+#include "core/surfaceview.h"
+#include "core/nodekeyframeanimation.h"
+#include "core/nodekeyframe.h"
 #include "globals.h"
 //#include "editorcameracontroller.h"
 
-#include "transformwidget.h"
-#include "lightlayerwidget.h"
-#include "modellayerwidget.h"
-#include "toruslayerwidget.h"
-#include "spherelayerwidget.h"
-#include "animationwidget.h"
-#include "texturedplanelayerwidget.h"
-#include "worldlayerwidget.h"
-#include "endlessplanelayerwidget.h"
+#include "widgets/transformwidget.h"
+#include "widgets/lightlayerwidget.h"
+#include "widgets/modellayerwidget.h"
+#include "widgets/toruslayerwidget.h"
+#include "widgets/spherelayerwidget.h"
+#include "widgets/animationwidget.h"
+#include "widgets/texturedplanelayerwidget.h"
+#include "widgets/worldlayerwidget.h"
+#include "widgets/endlessplanelayerwidget.h"
 
-#include "materialwidget.h"
-#include "sceneparser.h"
+#include "widgets/materialwidget.h"
+#include "core/sceneparser.h"
 //#include "transformgizmo.h"
-#include "advancedtransformgizmo.h"
+#include "editor/gizmos/advancedtransformgizmo.h"
 #include "dialogs/renamelayerdialog.h"
-#include "layertreewidget.h"
-#include "project.h"
+#include "widgets/layertreewidget.h"
+#include "core/project.h"
 
-#include "editorcameracontroller.h"
-#include "settingsmanager.h"
+#include "editor/editorcameracontroller.h"
+#include "core/settingsmanager.h"
 #include "dialogs/preferencesdialog.h"
 #include "dialogs/licensedialog.h"
 #include "dialogs/aboutdialog.h"
 
-#include "materials.h"
-#include "jahrenderer.h"
+#include "materials/materials.h"
+#include "core/jahrenderer.h"
 #include "helpers/collisionhelper.h"
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -109,7 +109,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::NewMainWindow)
 {
     ui->setupUi(this);
-    this->setWindowTitle("Jahshaka VR 1.0.0");
+    this->setWindowTitle("Jahshaka VR");
 
     settings = SettingsManager::getDefaultManager();
     prefsDialog = new PreferencesDialog(settings);

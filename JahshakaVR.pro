@@ -1,7 +1,7 @@
 #**************************************************************************
 #This file is part of JahshakaVR, VR Authoring Toolkit
 #http://www.jahshaka.com
-#Copyright (c) 2016  GPLv3 Karsten Becker <jahshaka@gmail.com>
+#Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
 #
 #This is free software: you may copy, redistribute
 #and/or modify it under the terms of the GPLv3 License
@@ -35,156 +35,137 @@ TEMPLATE = app
 
 SOURCES += src/main.cpp\
         src/mainwindow.cpp \
-    src/scenemanager.cpp \
-    src/surfaceview.cpp \
-    src/scenenode.cpp \
-    src/nodekeyframeanimation.cpp \
-    src/globals.cpp \
-    src/modellayerwidget.cpp \
-    src/lightlayerwidget.cpp \
-    src/toruslayerwidget.cpp \
-    src/spherelayerwidget.cpp \
-    src/materialwidget.cpp \
-    src/loadmeshdialog.cpp \
-    src/sceneparser.cpp \
-    src/animationwidget.cpp \
-    src/materialproxy.cpp \
-    src/texturedplanelayerwidget.cpp \
-    src/maintimelinewidget.cpp \
-    src/worldlayerwidget.cpp \
-    src/endlessplanelayerwidget.cpp \
-    src/linestrip.cpp \
-    src/transformgizmo.cpp \
-    src/billboard.cpp \
-    src/keyframelabelwidget.cpp \
-    src/keyframewidget.cpp \
-    src/materials.cpp \
-    src/timelinewidget.cpp \
-    src/dialogs/renamelayerdialog.cpp \
-    src/lcdslider.cpp \
-    src/materials/gizmomaterial.cpp \
-    src/linerenderer.cpp \
     src/materials/flatshadedmaterial.cpp \
     src/materials/colormaterial.cpp \
     src/materials/endlessplanematerial.cpp \
     src/materials/billboardmaterial.cpp \
-    src/advancedtransformgizmo.cpp \
-    src/scenenodes/skyboxnode.cpp \
     src/materials/reflectivematerial.cpp \
     src/materials/refractivematerial.cpp \
-    src/gridentity.cpp \
-    src/gridrenderer.cpp \
     src/widgets/colorvaluewidget.cpp \
     src/widgets/colorpickerwidget.cpp \
-    src/project.cpp \
-    src/transformwidget.cpp \
     src/dialogs/preferencesdialog.cpp \
     src/dialogs/aboutdialog.cpp \
     src/dialogs/licensedialog.cpp \
-    src/particlesystem.cpp \
     src/materials/advancedmaterial.cpp \
-    src/jahrenderer.cpp \
-    src/editorcameracontroller.cpp \
     src/dialogs/preferences/worldsettings.cpp \
-    src/gizmo/translationgizmo.cpp \
-    src/gizmo/scalegizmo.cpp \
-    src/gizmo/rotationgizmo.cpp \
+    src/materials/materialpresets.cpp \
+    src/dialogs/loadmeshdialog.cpp \
+    src/materials/materialproxy.cpp \
+    src/materials/materials.cpp \
+    src/widgets/animationwidget.cpp \
+    src/widgets/endlessplanelayerwidget.cpp \
+    src/widgets/keyframelabelwidget.cpp \
+    src/widgets/keyframewidget.cpp \
+    src/widgets/lcdslider.cpp \
+    src/widgets/lightlayerwidget.cpp \
+    src/widgets/maintimelinewidget.cpp \
+    src/widgets/materialwidget.cpp \
+    src/widgets/modellayerwidget.cpp \
+    src/widgets/spherelayerwidget.cpp \
+    src/widgets/texturedplanelayerwidget.cpp \
+    src/widgets/timelinewidget.cpp \
+    src/widgets/toruslayerwidget.cpp \
+    src/widgets/transformwidget.cpp \
+    src/widgets/worldlayerwidget.cpp \
+    src/core/jahrenderer.cpp \
+    src/core/nodekeyframeanimation.cpp \
+    src/core/project.cpp \
+    src/core/sceneparser.cpp \
+    src/core/settingsmanager.cpp \
+    src/core/surfaceview.cpp \
+    src/editor/editorcameracontroller.cpp \
+    src/scenegraph/scenemanager.cpp \
+    src/scenegraph/scenenodes.cpp \
+    src/scenegraph/skyboxnode.cpp \
+    src/geometry/billboard.cpp \
+    src/geometry/gridentity.cpp \
+    src/geometry/gridrenderer.cpp \
+    src/geometry/linerenderer.cpp \
+    src/geometry/linestrip.cpp \
+    src/editor/gizmos/advancedtransformgizmo.cpp \
+    src/editor/gizmos/rotationgizmo.cpp \
+    src/editor/gizmos/scalegizmo.cpp \
+    src/editor/gizmos/transformgizmo.cpp \
+    src/editor/gizmos/translationgizmo.cpp \
     src/dialogs/infodialog.cpp \
-    src/settingsmanager.cpp \
-    src/materials/materialpresets.cpp
-    src/dialogs/infodialog.cpp
+    src/globals.cpp \
+    src/dialogs/renamelayerdialog.cpp \
+    src/materials/gizmomaterial.cpp
 
 HEADERS  += src/mainwindow.h \
-    src/scenemanager.h \
-    src/surfaceview.h \
-    src/nodekeyframe.h \
-    src/scenenode.h \
-    src/nodekeyframeanimation.h \
-    src/globals.h \
-    src/keyframeanimation.h \
-    src/editorcameracontroller.h \
-    src/scenenodetransformui.h \
-    src/keyframes.h \
-    src/modellayerwidget.h \
-    src/lightlayerwidget.h \
-    src/toruslayerwidget.h \
-    src/spherelayerwidget.h \
-    src/materialwidget.h \
-    src/loadmeshdialog.h \
-    src/sceneparser.h \
-    src/animationwidget.h \
-    src/keyframewidget.h \
-    src/timelinewidget.h \
-    src/keyframelabelwidget.h \
-    src/materialproxy.h \
-    src/texturedplanelayerwidget.h \
-    src/maintimelinewidget.h \
-    src/worldlayerwidget.h \
-    src/materials.h \
-    src/endlessplane.h \
-    src/endlessplanelayerwidget.h \
-    src/linestrip.h \
-    src/transformgizmo.h \
-    src/skies.h \
-    src/billboard.h \
-    src/scenenodes/lightnode.h \
-    src/scenenodes/torusnode.h \
     src/dialogs/renamelayerdialog.h \
-    src/layertreewidget.h \
-    src/lcdslider.h \
     src/materials/gizmomaterial.h \
-    src/linerenderer.h \
     src/materials/flatshadedmaterial.h \
     src/materials/colormaterial.h \
     src/materials/endlessplanematerial.h \
     src/materials/billboardmaterial.h \
-    src/advancedtransformgizmo.h \
     src/materials/reflectivematerial.h \
-    src/scenenodes/skyboxnode.h \
     src/materials/refractivematerial.h \
-    src/gridrenderer.h \
-    src/gridentity.h \
     src/widgets/colorvaluewidget.h \
     src/widgets/colorpickerwidget.h \
-    src/project.h \
-    src/transformwidget.h \
     src/helpers/texturehelper.h \
     src/helpers/settingshelper.h \
-    src/settingsmanager.h \
     src/dialogs/preferencesdialog.h \
     src/dialogs/aboutdialog.h \
     src/dialogs/licensedialog.h \
-    src/particlesystem.h \
     src/materials/advancematerial.h \
-    src/jahrenderer.h \
-    src/gizmobase.h \
     src/dialogs/preferences/worldsettings.h \
     src/helpers/collisionhelper.h \
-    src/gizmo/translationgizmo.h \
-    src/gizmo/gizmotransform.h \
-    src/gizmo/scalegizmo.h \
-    src/gizmo/rotationgizmo.h \
     src/dialogs/infodialog.h \
-    src/materials/materialpresets.h
-	src/dialogs/infodialog.h
+    src/materials/materialpresets.h \
+    src/dialogs/loadmeshdialog.h \
+    src/materials/materialproxy.h \
+    src/materials/materials.h \
+    src/widgets/animationwidget.h \
+    src/widgets/endlessplanelayerwidget.h \
+    src/widgets/keyframelabelwidget.h \
+    src/widgets/keyframewidget.h \
+    src/widgets/layertreewidget.h \
+    src/widgets/lcdslider.h \
+    src/widgets/lightlayerwidget.h \
+    src/widgets/maintimelinewidget.h \
+    src/widgets/materialwidget.h \
+    src/widgets/modellayerwidget.h \
+    src/widgets/scenenodetransformui.h \
+    src/widgets/spherelayerwidget.h \
+    src/widgets/texturedplanelayerwidget.h \
+    src/widgets/timelinewidget.h \
+    src/widgets/toruslayerwidget.h \
+    src/widgets/transformwidget.h \
+    src/widgets/worldlayerwidget.h \
+    src/core/jahrenderer.h \
+    src/core/keyframeanimation.h \
+    src/core/keyframes.h \
+    src/core/nodekeyframe.h \
+    src/core/nodekeyframeanimation.h \
+    src/core/project.h \
+    src/core/sceneparser.h \
+    src/core/settingsmanager.h \
+    src/core/surfaceview.h \
+    src/editor/editorcameracontroller.h \
+    src/scenegraph/lightnode.h \
+    src/scenegraph/scenemanager.h \
+    src/scenegraph/scenenodes.h \
+    src/scenegraph/skyboxnode.h \
+    src/scenegraph/torusnode.h \
+    src/geometry/billboard.h \
+    src/geometry/endlessplane.h \
+    src/geometry/gridentity.h \
+    src/geometry/gridrenderer.h \
+    src/geometry/linerenderer.h \
+    src/geometry/linestrip.h \
+    src/editor/gizmos/advancedtransformgizmo.h \
+    src/editor/gizmos/gizmobase.h \
+    src/editor/gizmos/gizmotransform.h \
+    src/editor/gizmos/rotationgizmo.h \
+    src/editor/gizmos/scalegizmo.h \
+    src/editor/gizmos/transformgizmo.h \
+    src/editor/gizmos/translationgizmo.h \
+	src/dialogs/infodialog.h \
+    src/globals.h
 
-FORMS    += src/mainwindow.ui \
-    src/namedvalueslider.ui \
-    src/transformsliders.ui \
-    src/modellayerwidget.ui \
-    src/lightlayerwidget.ui \
-    src/toruslayerwidget.ui \
-    src/spherelayerwidget.ui \
-    src/materialwidget.ui \
-    src/loadmeshdialog.ui \
-    src/animationwidget.ui \
-    src/texturedplanelayerwidget.ui \
-    src/maintimelinewidget.ui \
-    src/worldlayerwidget.ui \
-    src/endlessplanelayerwidget.ui \
-    src/newmainwindow.ui \
+FORMS    += \
     src/dialogs/renamelayerdialog.ui \
-    src/lcdslider.ui \
     src/widgets/colorvaluewidget.ui \
     src/widgets/colorpickerwidget.ui \
     src/dialogs/preferencesdialog.ui \
@@ -192,9 +173,23 @@ FORMS    += src/mainwindow.ui \
     src/dialogs/licensedialog.ui \
     src/dialogs/preferences/worldsettings.ui \
     src/dialogs/infodialog.ui \
-    src/newlcdslider.ui
-    src/newlcdslider.ui
-    src/dialogs/infodialog.ui
+    src/dialogs/loadmeshdialog.ui \
+    src/widgets/animationwidget.ui \
+    src/widgets/endlessplanelayerwidget.ui \
+    src/widgets/lcdslider.ui \
+    src/widgets/lightlayerwidget.ui \
+    src/widgets/maintimelinewidget.ui \
+    src/widgets/materialwidget.ui \
+    src/widgets/modellayerwidget.ui \
+    src/widgets/namedvalueslider.ui \
+    src/widgets/newlcdslider.ui \
+    src/widgets/spherelayerwidget.ui \
+    src/widgets/texturedplanelayerwidget.ui \
+    src/widgets/toruslayerwidget.ui \
+    src/widgets/transformsliders.ui \
+    src/widgets/worldlayerwidget.ui \
+    src/dialogs/infodialog.ui \
+    src/newmainwindow.ui
 
 DISTFILES +=
 

@@ -1,7 +1,7 @@
 /**************************************************************************
 This file is part of JahshakaVR, VR Authoring Toolkit
 http://www.jahshaka.com
-Copyright (c) 2016  GPLv3 Karsten Becker <jahshaka@gmail.com>
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
 
 This is free software: you may copy, redistribute
 and/or modify it under the terms of the GPLv3 License
@@ -75,7 +75,7 @@ struct Light {
 uniform Light lights[MAX_LIGHTS];
 uniform int lightCount;
 
-//shamelessly ripped from qt3d's source
+//used from qt3d's source
 //https://github.com/qt/qt3d/blob/5.7/src/extras/shaders/gl3/light.inc.frag
 void adsModel(const in vec3 worldPos,
               const in vec3 worldNormal,
@@ -146,7 +146,7 @@ void adsModel(const in vec3 worldPos,
     }
 }
 
-//shamelessly ripped from qt3d's source
+//used from qt3d's source
 //https://github.com/qt/qt3d/blob/5.7/src/extras/shaders/gl3/light.inc.frag
 void adsModelNormalMapped(const in vec3 worldPos,
                           const in vec3 tsNormal,
