@@ -14,8 +14,8 @@
    <string>JahshakaVR</string>
   </property>
   <property name="windowIcon">
-   <iconset>
-    <normaloff>:/icons/logo03.svg</normaloff>:/icons/logo03.svg</iconset>
+   <iconset resource="../icons.qrc">
+    <normaloff>:/app/icons/logo03.svg</normaloff>:/app/icons/logo03.svg</iconset>
   </property>
   <property name="windowOpacity">
    <double>1.000000000000000</double>
