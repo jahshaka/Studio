@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <Qt3DCore/QEntity>
 #include <Qt3DCore/QTransform>
 #include "scenenodes.h"
+#include "../helpers/texturehelper.h"
 
 
 EquiRectSkyMaterial::EquiRectSkyMaterial()
@@ -65,10 +66,11 @@ EquiRectSkyMaterial::EquiRectSkyMaterial()
 void EquiRectSkyMaterial::setTexture(QString skyTexture)
 {
     this->clearTexture();
-    auto tex = new Qt3DRender::QTextureImage();
-    tex->setSource(QUrl::fromLocalFile(skyTexture));
-\
-    texture->addTextureImage(tex);
+    //auto tex = new Qt3DRender::QTextureImage();
+    //tex->setSource(QUrl::fromLocalFile(skyTexture));
+    auto tex = TextureHelper::loadTexture(skyTexture);
+    if(tex!=nullptr)
+        texture->addTextureImage(tex);
     //texParam->setValue(QVariant::fromValue(static_cast<Qt3DRender::QAbstractTexture*>(tex)));
 }
 

@@ -198,7 +198,8 @@ RESOURCES += \
     icons.qrc \
     images.qrc \
     materials.qrc \
-    models.qrc
+    models.qrc \
+    textures.qrc
 
 win32: RC_ICONS = icon.ico
 

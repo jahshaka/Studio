@@ -511,122 +511,6 @@ padding: 2px 2px 2px 2px;
          <property name="bottomMargin">
           <number>0</number>
          </property>
-         <item>
-          <widget class="QPushButton" name="translation">
-           <property name="minimumSize">
-            <size>
-             <width>60</width>
-             <height>30</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>60</width>
-             <height>30</height>
-            </size>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">QPushButton
-{
-background-color: rgb(71, 71, 71);
-border-radius:2px;
-border: 1px solid  rgb(223, 223, 223);
-color: rgb(255, 255, 255);
-}
-QPushButton:hover
-{
-background-color: rgb(223, 223, 223);
-}
-
-QToolTip { color: #ffffff; background-color: #2a82da; border: 1px solid white; }</string>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-           <property name="icon">
-            <iconset resource="../icons.qrc">
-             <normaloff>:/app/icons/tranlate arrow.svg</normaloff>:/app/icons/tranlate arrow.svg</iconset>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="rotation">
-           <property name="minimumSize">
-            <size>
-             <width>60</width>
-             <height>30</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>60</width>
-             <height>30</height>
-            </size>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">QPushButton
-{
-background-color: rgb(71, 71, 71);
-border-radius:2px;
-border: 1px solid  rgb(223, 223, 223);
-color: rgb(255, 255, 255);
-}
-QPushButton:hover
-{
-background-color: rgb(223, 223, 223);
-border: 2px solid  rgb(223, 223, 223);
-color: rgb(115, 115, 115);
-}
-QToolTip { color: #ffffff; background-color: #2a82da; border: 1px solid white; }</string>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-           <property name="icon">
-            <iconset resource="../icons.qrc">
-             <normaloff>:/app/icons/rotate-to-right.svg</normaloff>:/app/icons/rotate-to-right.svg</iconset>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="scale">
-           <property name="minimumSize">
-            <size>
-             <width>60</width>
-             <height>30</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>60</width>
-             <height>30</height>
-            </size>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">QPushButton
-{
-background-color: rgb(71, 71, 71);
-border-radius:2px;
-border: 1px solid  rgb(223, 223, 223);
-color: rgb(255, 255, 255);
-}
-QPushButton:hover
-{
-background-color: rgb(223, 223, 223);
-border: 2px solid  rgb(223, 223, 223);
-color: rgb(115, 115, 115);
-}
-QToolTip { color: #ffffff; background-color: #2a82da; border: 1px solid white; }</string>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-           <property name="icon">
-            <iconset resource="../icons.qrc">
-             <normaloff>:/app/icons/expand-arrows.svg</normaloff>:/app/icons/expand-arrows.svg</iconset>
-           </property>
-          </widget>
-         </item>
         </layout>
        </widget>
       </item>
@@ -708,8 +592,6 @@ border-bottom: 1px solid #383838;
    <container>1</container>
   </customwidget>
  </customwidgets>
- <resources>
-  <include location="../icons.qrc"/>
- </resources>
+ <resources/>
  <connections/>
 </ui>

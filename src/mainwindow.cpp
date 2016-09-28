@@ -981,37 +981,37 @@ void MainWindow::populateTree(QStandardItem* treeNode,SceneNode* sceneNode)
 
 void MainWindow::addCube()
 {
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,SceneNode::createCube("Cube"),false,QIcon(":icons/sceneobject.svg"));
+    addSceneNodeToSelectedTreeItem(ui->sceneTree,SceneNode::createCube("Cube"),false,QIcon(":app/icons/sceneobject.svg"));
 }
 
 void MainWindow::addTorus()
 {
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,TorusNode::createTorus("Torus"),false,QIcon(":icons/sceneobject.svg"));
+    addSceneNodeToSelectedTreeItem(ui->sceneTree,TorusNode::createTorus("Torus"),false,QIcon(":app/icons/sceneobject.svg"));
 }
 
 void MainWindow::addSphere()
 {
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,SphereNode::createSphere("Sphere"),false,QIcon(":icons/sceneobject.svg"));
+    addSceneNodeToSelectedTreeItem(ui->sceneTree,SphereNode::createSphere("Sphere"),false,QIcon(":app/icons/sceneobject.svg"));
 }
 
 void MainWindow::addCylinder()
 {
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,CylinderNode::createCylinder("Cylinder"),false,QIcon(":icons/sceneobject.svg"));
+    addSceneNodeToSelectedTreeItem(ui->sceneTree,CylinderNode::createCylinder("Cylinder"),false,QIcon(":app/icons/sceneobject.svg"));
 }
 
 void MainWindow::addPointLight()
 {
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,LightNode::createLight("PointLight",LightType::Point),true,QIcon(":icons/light.svg"));
+    addSceneNodeToSelectedTreeItem(ui->sceneTree,LightNode::createLight("PointLight",LightType::Point),true,QIcon(":app/icons/light.svg"));
 }
 
 void MainWindow::addSpotLight()
 {
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,LightNode::createLight("SpotLight",LightType::SpotLight),true,QIcon(":icons/light.svg"));
+    addSceneNodeToSelectedTreeItem(ui->sceneTree,LightNode::createLight("SpotLight",LightType::SpotLight),true,QIcon(":app/icons/light.svg"));
 }
 
 void MainWindow::addDirectionalLight()
 {
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,LightNode::createLight("DirectionalLight",LightType::Directional),true,QIcon(":icons/light.svg"));
+    addSceneNodeToSelectedTreeItem(ui->sceneTree,LightNode::createLight("DirectionalLight",LightType::Directional),true,QIcon(":app/icons/light.svg"));
 }
 
 void MainWindow::addMesh()
@@ -1040,7 +1040,7 @@ void MainWindow::addTexturedPlane()
 {
     auto node = TexturedPlaneNode::createTexturedPlane("Textured Plane");
     //node->setTexture(path);
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,node,false,QIcon(":icons/square.svg"));
+    addSceneNodeToSelectedTreeItem(ui->sceneTree,node,false,QIcon(":app/icons/square.svg"));
 }
 
 void MainWindow::addSceneNodeToSelectedTreeItem(QTreeWidget* sceneTree,SceneNode* newNode,bool addToSelected,QIcon icon)
@@ -1352,13 +1352,13 @@ QIcon MainWindow::getIconFromSceneNodeType(SceneNodeType type)
         case SceneNodeType::Mesh:
         case SceneNodeType::Sphere:
         case SceneNodeType::Torus:
-            return QIcon(":icons/sceneobject.svg");
+            return QIcon(":app/icons/sceneobject.svg");
         case SceneNodeType::Light:
-            return QIcon(":icons/light.svg");
+            return QIcon(":app/icons/light.svg");
         case SceneNodeType::World:
-            return QIcon(":icons/world.svg");
+            return QIcon(":app/icons/world.svg");
         case SceneNodeType::UserCamera:
-            return QIcon(":icons/people.svg");
+            return QIcon(":app/icons/people.svg");
     default:
         return QIcon();
     }

@@ -13,23 +13,29 @@ For more information see the LICENSE file
 #define TEXTUREHELPERS_H
 
 #include <QTextureImage>
+#include <QFileInfo>
 
 class TextureHelper
 {
 public:
     /**
      * loads a texture image given the @fileName
-     * returns nullptr if the filename is empty
+     * returns nullptr if the filename is empty or if the file doesnt exist
      */
     static Qt3DRender::QTextureImage* loadTexture(QString fileName)
     {
         if(fileName.isEmpty())
             return nullptr;
 
-        auto img = new Qt3DRender::QTextureImage();
-        img->setSource(QUrl::fromLocalFile(fileName));
-        return img;
+        QFileInfo fileInfo(fileName);
+        if(fileInfo.exists() && fileInfo.isFile())
+        {
+            auto img = new Qt3DRender::QTextureImage();
+            img->setSource(QUrl::fromLocalFile(fileName));
+            return img;
+        }
 
+        return nullptr;
     }
 
     /**

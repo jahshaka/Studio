@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>app/content/textures/defaultgrid.png</file>
+        <file>app/content/skies/default.png</file>
+    </qresource>
+</RCC>
