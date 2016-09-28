@@ -1222,7 +1222,7 @@ void MainWindow::entityPicked(Qt3DRender::QPickEvent* event)
         {
 
             //DO NOTHING
-            qDebug()<<"gizmo interrupted picking!";
+            //qDebug()<<"gizmo interrupted picking!";
         }
         else
         {

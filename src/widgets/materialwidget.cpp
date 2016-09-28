@@ -229,7 +229,7 @@ void MaterialWidget::setSpecular(QColor col)
 //slots
 void MaterialWidget::changeDiffuseMap()
 {
-    auto file = QFileDialog::getOpenFileName();
+    auto file = loadTexture();
     if(file.isEmpty() || file.isNull())
         return;
 
@@ -240,7 +240,7 @@ void MaterialWidget::changeDiffuseMap()
 
 void MaterialWidget::changeNormalMap()
 {
-    auto file = QFileDialog::getOpenFileName();
+    auto file = loadTexture();
     if(file.isEmpty() || file.isNull())
         return;
 
@@ -251,7 +251,7 @@ void MaterialWidget::changeNormalMap()
 
 void MaterialWidget::changeSpecularMap()
 {
-    auto file = QFileDialog::getOpenFileName();
+    auto file = loadTexture();
     if(file.isEmpty() || file.isNull())
         return;
 
@@ -262,7 +262,7 @@ void MaterialWidget::changeSpecularMap()
 
 void MaterialWidget::changeReflectionMap()
 {
-    auto file = QFileDialog::getOpenFileName();
+    auto file = loadTexture();
     if(file.isEmpty() || file.isNull())
         return;
 
@@ -338,5 +338,11 @@ void MaterialWidget::materialPresetChanged(QListWidgetItem* item)
 
     //todo: apply preset
     updateUI(material);
+}
+
+QString MaterialWidget::loadTexture()
+{
+    QString dir = QApplication::applicationDirPath()+"/assets/textures/";
+    return QFileDialog::getOpenFileName(this,"Open Texture File",dir,"Image Files (*.png *.jpg *.bmp)");
 }
 

@@ -112,7 +112,6 @@ private slots:
     void changeTextureScale(int val);
 
     void materialPresetChanged(QListWidgetItem* item);
-
 private:
 
     /// \brief Sets label's image from specified file
@@ -130,6 +129,8 @@ private:
     void updateUI(AdvanceMaterial* material);
 
     void addPreset(MaterialPreset preset);
+
+    QString loadTexture();
 
     Ui::MaterialWidget *ui;
 
