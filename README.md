@@ -9,8 +9,8 @@ JahshakaVR brings you the future of immersive digital content creation with the 
  - A powerful effects system
 
 ## Screenshots
-![](https://github.com/jahshaka/v3/blob/master/screenshots/dragons.jpg?raw=true)
-![](https://github.com/jahshaka/v3/blob/master/screenshots/blank.jpg?raw=true)
+![](http://www.jahshakavr.com/wp-content/uploads/2016/09/screenshot.jpg)
+![](http://www.jahshakavr.com/wp-content/uploads/2016/09/blank.jpg)
 
 ## Binary Release
 .. add link here ...
