@@ -3,6 +3,10 @@ JahshakaVR brings you the future of immersive digital content creation with the 
 
 **official website:** http://www.jahshakavr.com/
 
+**reddit channel:** https://www.reddit.com/r/jahshaka/
+
+**pre-release:** https://github.com/jahshaka/VR/releases
+
 ## Features:
  - VR via the Oculus Rift
  - Build and share your scenes with the world
@@ -11,9 +15,6 @@ JahshakaVR brings you the future of immersive digital content creation with the 
 ## Screenshots
 ![](http://www.jahshakavr.com/wp-content/uploads/2016/09/screenshot.jpg)
 ![](http://www.jahshakavr.com/wp-content/uploads/2016/09/blank.jpg)
-
-## Binary Release
-.. add link here ...
 
 ## Building From Source
 ###Dependencies:
