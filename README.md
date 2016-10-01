@@ -50,7 +50,7 @@ Royalty-free images from [Pixabay](https://pixabay.com/)
 
 ## License(GPLv3)
     http://www.jahshaka.com
-    Copyright (c) 2016 Karsten Becker <jahshaka@gmail.com>
+    Copyright (c) 2016 Jahshaka LLC <coders@jahshaka.com>
 
     This is free software: you may copy, redistribute
     and/or modify it under the terms of the GPLv3 License
