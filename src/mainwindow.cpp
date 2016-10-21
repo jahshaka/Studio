@@ -697,6 +697,7 @@ void MainWindow::setupPropertyUi()
 
 void MainWindow::setupPropertyTabs(SceneNode* node)
 {
+    /*
     auto tabs = ui->tabWidget;
     auto prevTab = tabs->currentWidget();
     tabs->clear();
@@ -773,6 +774,8 @@ void MainWindow::setupPropertyTabs(SceneNode* node)
             break;
         }
     }
+
+    */
 }
 
 /* TORUS */
@@ -1200,7 +1203,7 @@ void MainWindow::deleteNode()
     //sceneNodes.remove(node->getEntity()->id());
     sceneTreeItems.remove(node->getEntity()->id());
 
-    ui->tabWidget->clear();
+    //ui->tabWidget->clear();
 
 }
 

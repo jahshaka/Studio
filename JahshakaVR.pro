@@ -90,7 +90,8 @@ SOURCES += src/main.cpp\
     src/dialogs/infodialog.cpp \
     src/globals.cpp \
     src/dialogs/renamelayerdialog.cpp \
-    src/materials/gizmomaterial.cpp
+    src/materials/gizmomaterial.cpp \
+    src/widgets/materialsets.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -162,7 +163,8 @@ HEADERS  += src/mainwindow.h \
     src/editor/gizmos/transformgizmo.h \
     src/editor/gizmos/translationgizmo.h \
 	src/dialogs/infodialog.h \
-    src/globals.h
+    src/globals.h \
+    src/widgets/materialsets.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -189,7 +191,8 @@ FORMS    += \
     src/widgets/transformsliders.ui \
     src/widgets/worldlayerwidget.ui \
     src/dialogs/infodialog.ui \
-    src/newmainwindow.ui
+    src/newmainwindow.ui \
+    src/widgets/materialsets.ui
 
 DISTFILES +=
 

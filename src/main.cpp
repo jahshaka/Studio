@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
     //https://gist.github.com/skyrpex/5547015
     a.setStyle(QStyleFactory::create("fusion"));
     QPalette palette;
-    palette.setColor(QPalette::Window, QColor(83, 83, 83));
+    palette.setColor(QPalette::Window, QColor(48, 48, 48));
     palette.setColor(QPalette::WindowText, Qt::white);
     palette.setColor(QPalette::Base, QColor(64, 64, 64));
     palette.setColor(QPalette::AlternateBase, QColor(53,53,53));

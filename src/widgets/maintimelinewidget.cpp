@@ -24,6 +24,9 @@ MainTimelineWidget::MainTimelineWidget(QWidget *parent) :
     timer = new QTimer(this);
     connect(timer,SIGNAL(timeout()),this,SLOT(updateTime()));
     ui->setupUi(this);
+    ui->timeline->hide();
+    ui->timeEnd->hide();
+    ui->timeStart->hide();
 
     elapsedTimer = new QElapsedTimer();
 
