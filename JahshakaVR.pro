@@ -19,9 +19,7 @@ QT  +=  3dcore 3drender 3dinput 3dquick 3dlogic 3dextras
 QT       += core gui
 
 
-#needed for c++11 support
-#http://stackoverflow.com/questions/16948382/how-to-enable-c11-in-qt-creator
-QMAKE_CXXFLAGS += -std=c++11
+CONFIG += c++14
 
 #needed to fix resource compilation error in visual studio
 #http://stackoverflow.com/questions/28426240/qt-compiler-is-out-of-heap-space
@@ -212,3 +210,5 @@ install_content.files = app/content/*
 INSTALLS += \
     install_assets \
     install_content
+
+include(jah3d/jah3d.pri)

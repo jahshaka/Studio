@@ -14,7 +14,3 @@ For more information see the LICENSE file
 
 float Globals::animFrameTime = 0;
 Project* Globals::project = Project::createNew();
-
-Qt3DRender::QLayer* RenderLayers::defaultLayer = nullptr;
-Qt3DRender::QLayer* RenderLayers::billboardLayer = nullptr;
-Qt3DRender::QLayer* RenderLayers::gizmoLayer = nullptr;

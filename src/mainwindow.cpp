@@ -1048,36 +1048,6 @@ void MainWindow::addSceneNodeToSelectedTreeItem(QTreeWidget* sceneTree,SceneNode
     QTreeWidgetItem* item = nullptr;
     SceneNode* parentNode = nullptr;
 
-    /*
-    if(addToSelected)
-    {
-        //an item must be selected
-        auto items = sceneTree->selectedItems();
-
-        //todo: if item size is 0, add to root. no items have been selected as yet.
-        if(items.size()==0)
-        {
-            item = ui->sceneTree->invisibleRootItem()->child(0);
-            parentNode = scene->getRootNode();
-        }
-        else
-        {
-            item = items[0];
-            parentNode = (SceneNode*)item->data(1,Qt::UserRole).value<void*>();
-        }
-        //lights cannot have children
-        if(parentNode->sceneNodeType==SceneNodeType::Light)
-            return;
-    }
-    else
-    {
-        //use rootnode instead
-        parentNode = scene->getRootNode();
-        //item = ui->sceneTree->invisibleRootItem();
-        item = ui->sceneTree->invisibleRootItem()->child(0);
-    }
-    */
-
     parentNode = scene->getRootNode();
     item = ui->sceneTree->invisibleRootItem()->child(0);
 
@@ -1085,9 +1055,6 @@ void MainWindow::addSceneNodeToSelectedTreeItem(QTreeWidget* sceneTree,SceneNode
     newNode->pos.setY(3);
     newNode->_updateTransform();
     auto newNodeEnt = newNode->getEntity();
-
-    //add QObjectPicker
-    //makeSceneNodePickable(newNode);
 
     //tree node
     auto newItem = new QTreeWidgetItem();

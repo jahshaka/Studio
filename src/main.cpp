@@ -19,8 +19,8 @@ For more information see the LICENSE file
 
 int main(int argc, char *argv[])
 {
-    QApplication a(argc, argv);
-    a.setWindowIcon(QIcon(":/images/logo.png"));
+    QApplication app(argc, argv);
+    app.setWindowIcon(QIcon("qrc:/images/logo.png"));
 
     QGuiApplication::setAttribute(Qt::AA_DisableHighDpiScaling);
     QApplication::setDesktopSettingsAware(false);
@@ -47,18 +47,18 @@ int main(int argc, char *argv[])
     palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(135, 135, 135));
     a.setPalette(palette);
 
-    QSplashScreen *splash = new QSplashScreen;
-    splash->setPixmap(QPixmap(":/images/splash screen v2.jpg"));
-    splash->show();
+    //splah screen
+    QSplashScreen splash;
+    splash.setPixmap(QPixmap("qrc:/images/splashv2.jpg"));
+    splash.show();
 
-    MainWindow w;
-    //w.show();
-    w.showMaximized();
+    //draw main window maximized
+    MainWindow window;
+    window.showMaximized();
     splash->hide();
-    delete splash;
 
+    //show info dialog is settings stipulate so
     auto settings = w.getSettingsManager();
-
     if(settings->getValue("show_info_dialog_on_start",QVariant::fromValue(true)).value<bool>() == true)
     {
         InfoDialog dialog;
