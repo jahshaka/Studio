@@ -3,8 +3,8 @@
         <file>app/images/logo.png</file>
         <file>app/images/sidepanelimage.jpg</file>
         <file>app/images/sidepanelimage_info.jpg</file>
-        <file>app/images/splash screen v2.jpg</file>
         <file>app/images/splash.png</file>
         <file>app/images/splash.svg</file>
+        <file>app/images/splashv2.jpg</file>
     </qresource>
 </RCC>

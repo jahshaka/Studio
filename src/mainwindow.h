@@ -15,7 +15,6 @@ For more information see the LICENSE file
 #include <QMainWindow>
 #include <QModelIndex>
 #include "scenegraph/scenemanager.h"
-#include <Qt3DRender/QCamera>
 #include <QDropEvent>
 #include <QMimeData>
 #include "editor/gizmos/advancedtransformgizmo.h"
@@ -27,30 +26,6 @@ class NewMainWindow;
 }
 
 class SurfaceView;
-
-namespace Qt3DCore{
-    class QEntity;
-    class QAspectEngine;
-}
-
-namespace Qt3DRender
-{
-    class QLayerFilter;
-    class QRenderSurfaceSelector;
-    class QRenderSettings;
-    class QPickEvent;
-}
-
-namespace Qt3DExtras
-{
-    class QForwardRenderer;
-}
-
-namespace Qt3DInput
-{
-    class QMouseEvent;
-    class QInputSettings;
-}
 
 class QStandardItem;
 class QStandardItemModel;
@@ -214,23 +189,9 @@ private slots:
 private:
     Ui::NewMainWindow *ui;
     SurfaceView* surface;
-    Qt3DCore::QEntity* rootEntity;
-    Qt3DCore::QAspectEngine* engine;
     QStandardItemModel* treeModel;
-    Qt3DInput::QInputAspect *input;
     QWidget *container;
-    Qt3DRender::QCamera* editorCam;
     EditorCameraController* camControl;
-
-    JahRenderer* jahRenderer;
-    Qt3DExtras::QForwardRenderer* forwardRenderer;
-    Qt3DRender::QRenderSurfaceSelector* renderSurfaceSelector;
-    Qt3DRender::QLayerFilter* sceneLayerFilter;
-    Qt3DRender::QLayerFilter* billboardLayerFilter;
-    Qt3DRender::QLayerFilter* gizmoLayerFilter;
-
-    Qt3DRender::QRenderSettings* renderSettings;
-    Qt3DInput::QInputSettings* inputSettings;
 
     SceneManager* scene;
 
@@ -256,10 +217,6 @@ private:
     QPoint mousePressPos;
     QPoint mouseReleasePos;
     QPoint mousePos;
-
-    //QMap<Qt3DCore::QNodeId, SceneNode*> sceneNodes;
-    //this map must be in sync with the treewidget
-    QMap<Qt3DCore::QNodeId, QTreeWidgetItem*> sceneTreeItems;
 
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;

@@ -15,41 +15,6 @@ For more information see the LICENSE file
 
 #include <qwindow.h>
 #include <qsurface.h>
-#include <Qt3DRender/qcamera.h>
-#include <Qt3DCore/qentity.h>
-#include <Qt3DRender/qcameralens.h>
-
-
-#include <Qt3DInput/QInputAspect>
-#include <Qt3DInput/QActionInput>
-#include <Qt3DInput/QLogicalDevice>
-#include <Qt3DInput/QAction>
-#include <Qt3DLogic/QLogicAspect>
-
-
-#include <Qt3DExtras/qtorusmesh.h>
-#include <Qt3DRender/qmesh.h>
-#include <Qt3DRender/qtechnique.h>
-#include <Qt3DRender/qmaterial.h>
-#include <Qt3DRender/qeffect.h>
-#include <Qt3DRender/qtexture.h>
-#include <Qt3DRender/qrenderpass.h>
-#include <Qt3DRender/qsceneloader.h>
-#include <Qt3DRender/qdirectionallight.h>
-#include <Qt3DExtras/qdiffusemapmaterial.h>
-#include <Qt3DExtras/QOrbitCameraController>
-#include <Qt3DRender/QObjectPicker.h>
-
-#include <Qt3DCore/qtransform.h>
-#include <Qt3DCore/qaspectengine.h>
-#include <Qt3DExtras/qforwardrenderer.h>
-
-#include <Qt3DRender/qrenderaspect.h>
-#include <Qt3DExtras/qforwardrenderer.h>
-#include <Qt3DRender/QLayerFilter>
-
-#include <Qt3DRender/QRenderSettings>
-#include <Qt3DInput/QInputSettings>
 
 #include <QOpenGLContext>
 #include <qstandarditemmodel.h>
@@ -894,12 +859,6 @@ void MainWindow::setupQt3d()
     rootEntity->addComponent(renderSettings);
     rootEntity->addComponent(inputSettings);
     engine->setRootEntity(Qt3DCore::QEntityPtr(rootEntity));
-
-    //add renderlayers to root so they dont get deletes when root does
-    RenderLayers::initRenderLayers();
-    rootEntity->addComponent(RenderLayers::defaultLayer);
-    rootEntity->addComponent(RenderLayers::gizmoLayer);
-    rootEntity->addComponent(RenderLayers::billboardLayer);
 
     //SCENE
     SceneManager* scene = nullptr;

@@ -351,7 +351,7 @@ SceneNode* SceneNode::createCube(QString name)
     Qt3DExtras::QCuboidMesh* cubeMesh = new Qt3DExtras::QCuboidMesh();
     cubeMesh->setObjectName(name);
     ent->addComponent(cubeMesh);
-    ent->addComponent(RenderLayers::defaultLayer);
+    //ent->addComponent(RenderLayers::defaultLayer);
 
     ent->setObjectName(name);
 

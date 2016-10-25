@@ -26,7 +26,7 @@ int main(int argc, char *argv[])
     QApplication::setDesktopSettingsAware(false);
 
     //https://gist.github.com/skyrpex/5547015
-    a.setStyle(QStyleFactory::create("fusion"));
+    app.setStyle(QStyleFactory::create("fusion"));
     QPalette palette;
     palette.setColor(QPalette::Window, QColor(83, 83, 83));
     palette.setColor(QPalette::WindowText, Qt::white);
@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
     palette.setColor(QPalette::Inactive, QPalette::Text, QColor(135, 135, 135));
     palette.setColor(QPalette::Disabled, QPalette::Text, QColor(135, 135, 135));
     palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(135, 135, 135));
-    a.setPalette(palette);
+    app.setPalette(palette);
 
     //splah screen
     QSplashScreen splash;
@@ -55,17 +55,17 @@ int main(int argc, char *argv[])
     //draw main window maximized
     MainWindow window;
     window.showMaximized();
-    splash->hide();
+    splash.hide();
 
     //show info dialog is settings stipulate so
-    auto settings = w.getSettingsManager();
+    auto settings = window.getSettingsManager();
     if(settings->getValue("show_info_dialog_on_start",QVariant::fromValue(true)).value<bool>() == true)
     {
         InfoDialog dialog;
-        dialog.setMainWindow(&w);
+        dialog.setMainWindow(&window);
         dialog.setModal(true);
         dialog.exec();
     }
 
-    return a.exec();
+    return app.exec();
 }
