@@ -11,7 +11,6 @@ For more information see the LICENSE file
 
 #include "spherelayerwidget.h"
 #include "ui_spherelayerwidget.h"
-#include <Qt3DExtras/QSphereMesh>
 #include "../scenegraph/scenenodes.h"
 
 SphereLayerWidget::SphereLayerWidget(QWidget *parent) :

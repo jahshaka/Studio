@@ -18,11 +18,6 @@ namespace Ui {
 class WorldLayerWidget;
 }
 
-namespace Qt3DExtras
-{
-    class QForwardRenderer;
-}
-
 class SceneManager;
 class QGridLayout;
 class QHBoxLayout;
@@ -32,7 +27,6 @@ class WorldLayerWidget : public QWidget
 {
     Q_OBJECT
     SceneManager* scene;
-    Qt3DExtras::QForwardRenderer* renderer;
     QGridLayout* grid;
     QHBoxLayout* hbox;
     QList<QString> presets;

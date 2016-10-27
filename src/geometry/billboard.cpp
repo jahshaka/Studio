@@ -9,11 +9,6 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include <QAttribute>
-#include <QBuffer>
-#include <QGeometry>
-#include <QBuffer>
-#include <QBufferDataGenerator>
 #include "billboard.h"
 #include <QVector3D>
 

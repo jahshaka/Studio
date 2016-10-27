@@ -2,15 +2,48 @@
 #define LIGHTNODE_H
 
 #include <QSharedPointer>
+#include "../core/scenenode.h"
+namespace jah3d
+{
 
 typedef QSharedPointer<LightNode> LightNodePtr;
 
-class LightNode
+enum LightType:int
 {
-public:
-    LightNodePtr create();
-private:
-    LightNode();
+    Point = 1,
+    Spot = 2,
+    Directional = 3
 };
+
+class LightNode:public SceneNode
+{
+    LightType lightType;
+    QVector3D lightDir;
+public:
+
+    float radius;
+    QColor color;
+    float strength;
+
+    LightNodePtr create();
+
+    void setLightType(LightType type);
+    LightType getLightType();
+
+private:
+    LightNode()
+    {
+        this->sceneNodeType = SceneNodeType::Light;
+
+        lightType = LightType::Point;
+
+        radius = 5;
+        color = QColor(255,255,255);
+        strength = 1;
+    }
+};
+
+
+}
 
 #endif // LIGHTNODE_H

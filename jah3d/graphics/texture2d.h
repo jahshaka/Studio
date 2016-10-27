@@ -4,6 +4,8 @@
 namespace jah3d
 {
 
+class Texture;
+
 class Texture2D:public Texture
 {
 public:

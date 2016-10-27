@@ -3,7 +3,7 @@
 
 #include <QList>
 #include <QSharedPointer>
-
+#include "scenenode.h"
 
 namespace jah3d
 {
@@ -12,7 +12,7 @@ class LightNode;
 class SceneNode;
 
 typedef QSharedPointer<LightNode> LightNodePtr;
-typedef QSharedPointer<SceneNode> SceneNodePtr;
+//typedef QSharedPointer<SceneNode> SceneNodePtr;
 typedef QSharedPointer<Scene> ScenePtr;
 
 class Scene
@@ -23,11 +23,13 @@ private:
 
     Scene()
     {
-
+        rootNode = SceneNode::create();
     }
 public:
     ScenePtr create();
 
+    void update(float dt);
+    void render();
 };
 
 }

@@ -20,11 +20,6 @@ namespace Ui {
 class MaterialWidget;
 }
 
-namespace Qt3DRender
-{
-    class QMaterial;
-}
-
 class SceneNode;
 enum class MaterialType;
 class MaterialProxy;

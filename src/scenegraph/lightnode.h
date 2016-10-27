@@ -12,20 +12,6 @@ For more information see the LICENSE file
 #ifndef LIGHTNODE_H
 #define LIGHTNODE_H
 
-//#include "../scenenode.h"
-
-class SceneNode;
-namespace Qt3DCore
-{
-    class QEntity;
-}
-
-namespace Qt3DRender
-{
-    class QLight;
-    class QSphereMesh;
-}
-
 enum class LightType
 {
     Point,

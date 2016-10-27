@@ -9,12 +9,6 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include <QAttribute>
-#include <QBuffer>
-#include <QGeometry>
-#include <QGeometryRenderer>
-#include <QBuffer>
-#include <QBufferDataGenerator>
 #include <QVector3D>
 #include <QColor>
 #include "linerenderer.h"

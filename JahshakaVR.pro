@@ -65,7 +65,6 @@ SOURCES += src/main.cpp\
     src/widgets/toruslayerwidget.cpp \
     src/widgets/transformwidget.cpp \
     src/widgets/worldlayerwidget.cpp \
-    src/core/jahrenderer.cpp \
     src/core/nodekeyframeanimation.cpp \
     src/core/project.cpp \
     src/core/sceneparser.cpp \
@@ -131,7 +130,6 @@ HEADERS  += src/mainwindow.h \
     src/widgets/toruslayerwidget.h \
     src/widgets/transformwidget.h \
     src/widgets/worldlayerwidget.h \
-    src/core/jahrenderer.h \
     src/core/keyframeanimation.h \
     src/core/keyframes.h \
     src/core/nodekeyframe.h \

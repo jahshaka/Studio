@@ -15,12 +15,6 @@ For more information see the LICENSE file
 #include "../scenegraph/scenenodes.h"
 #include "qfiledialog.h"
 
-#include <Qt3DExtras/QPhongMaterial>
-#include <Qt3DExtras/QDiffuseMapMaterial>
-#include <Qt3DExtras/QDiffuseSpecularMapMaterial>
-#include <Qt3DExtras/QNormalDiffuseMapMaterial>
-#include <Qt3DRender/QTextureImage>
-
 #include "../materials/materialproxy.h"
 #include "../materials/materials.h"
 #include "../helpers/texturehelper.h"

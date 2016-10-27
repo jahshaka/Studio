@@ -6,6 +6,8 @@
 namespace jah3d
 {
 
+typedef QSharedPointer<Material> MaterialPtr;
+
 class Material
 {
 public:

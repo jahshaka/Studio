@@ -18,12 +18,6 @@ namespace Qt3DCore
     class QEntity;
 }
 
-namespace Qt3DRender
-{
-    class QLight;
-    class QTorusMesh;
-}
-
 class QXmlStreamWriter;
 class QXmlStreamReader;
 

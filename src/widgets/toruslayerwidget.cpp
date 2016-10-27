@@ -12,7 +12,6 @@ For more information see the LICENSE file
 #include "toruslayerwidget.h"
 #include "ui_toruslayerwidget.h"
 #include "../scenegraph/scenenodes.h"
-#include "Qt3DExtras/QTorusMesh"
 
 TorusLayerWidget::TorusLayerWidget(QWidget *parent) :
     QWidget(parent),
