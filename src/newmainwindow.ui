@@ -20,6 +20,110 @@
   <property name="windowOpacity">
    <double>1.000000000000000</double>
   </property>
+  <property name="styleSheet">
+   <string notr="true">/*
+*=======================================================================================
+* Defaut StyleSheet for All System WIdgets and Components
+* @Styled: Orane Campbell
+* JahshakaVR 1.0.0
+* Date: 10/27/2016
+*=======================================================================================
+*/
+
+QTabWidget::pane{
+    border: 1px solid #333333; top : -1px;
+	background:rgb(67, 67, 67);
+}
+
+QTabWidget::tab-bar {
+	background-color: rgb(54, 54, 54);
+   /* border-bottom: 1px soild #434343;*/
+}
+
+QTabBar::tab {
+	background-color:rgb(54, 54, 54);
+ 	border-bottom: 1px soild #333333;
+    min-width: 15ex;
+    min-height: 4ex;
+    padding: 6px;
+    min-width: 25ex;
+}
+
+QTabBar::tab:selected, QTabBar::tab:hover{
+    border: 1px solid #333333; bottom : -1px;
+	background-color:rgb(67, 67, 67);
+    border-bottom: 0px;
+    min-width: 8ex;
+    padding: 5px;
+    min-width: 20ex;
+}
+
+QTabBar::tab:selected {
+    border: 1px solid #333333; bottom : -1px;
+	background-color:rgb(67, 67, 67);
+    border-bottom: 0px;
+    min-width: 8ex;
+    padding: 5px;
+    min-width: 20ex;
+}
+
+QTabBar::tab:!selected {
+    margin-top: 2px; 
+}
+
+QDockWidget {
+	background-color: rgb(95, 95, 95);
+    border: 1px solid lightgray;
+    titlebar-close-icon: url(:/app/icons/delete.png);
+    titlebar-normal-icon: url(:/app/icons/expand-button.png);
+	color: rgb(255, 255, 255);
+}
+
+QDockWidget::title {
+	height: 100px;
+    text-align: center; /* align the text to the left */
+    background: lightgray;
+    padding-left: 5px 5px 5px 5pc;
+	color: rgb(255, 255, 255);
+	background-color: &quot;#313131&quot;;
+}
+
+QLabel {
+color: rgb(197, 197, 197);
+}
+
+QTextEdit {
+background-color: rgb(113, 113, 113);
+color: rgb(172, 172, 172);
+}
+
+QSlider::groove:horizontal {
+border: 1px solid #999999;
+height: 30px;
+}
+
+QSlider::handle:horizontal {
+width: 8px;
+ /*background-image: url(:/slider-knob.png);*/
+background: rgb(214, 214, 214);
+
+}
+
+QSlider::add-page:qlineargradient {
+background: #4c4c4c;
+border: 1px solid #4d4d4d;
+
+}
+
+QSlider::sub-page:qlineargradient{
+background: #4c4c4c;
+border: 1px solid #4d4d4d;
+}
+
+QSlider::handle:horizontal:hover {
+background-color: rgb(30, 144, 255);
+}</string>
+  </property>
   <property name="iconSize">
    <size>
     <width>30</width>
@@ -185,8 +289,14 @@ QMenu::item:selected {
   <widget class="QDockWidget" name="sceneHierarchy">
    <property name="minimumSize">
     <size>
-     <width>200</width>
+     <width>210</width>
      <height>564</height>
+    </size>
+   </property>
+   <property name="maximumSize">
+    <size>
+     <width>210</width>
+     <height>524287</height>
     </size>
    </property>
    <property name="styleSheet">
@@ -448,14 +558,20 @@ QToolButton:hover {
    <property name="minimumSize">
     <size>
      <width>300</width>
-     <height>0</height>
+     <height>212</height>
+    </size>
+   </property>
+   <property name="maximumSize">
+    <size>
+     <width>524287</width>
+     <height>205</height>
     </size>
    </property>
    <property name="styleSheet">
     <string notr="true"/>
    </property>
    <property name="windowTitle">
-    <string>Presets</string>
+    <string>3D Model Presets</string>
    </property>
    <attribute name="dockWidgetArea">
     <number>2</number>
@@ -478,17 +594,17 @@ QToolButton:hover {
       <number>0</number>
      </property>
      <item>
-      <widget class="MaterialSets" name="materialpresets" native="true">
+      <widget class="ModelPresets" name="modelpresets" native="true">
        <property name="minimumSize">
         <size>
          <width>0</width>
-         <height>190</height>
+         <height>0</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
          <width>16777215</width>
-         <height>190</height>
+         <height>16777215</height>
         </size>
        </property>
       </widget>
@@ -499,7 +615,7 @@ QToolButton:hover {
   <widget class="QDockWidget" name="AnimationDock">
    <property name="minimumSize">
     <size>
-     <width>80</width>
+     <width>82</width>
      <height>200</height>
     </size>
    </property>
@@ -552,9 +668,7 @@ QToolButton:hover {
       </widget>
      </item>
      <item row="1" column="0">
-      <widget class="AnimationWidget" name="animationtimeline">
-       <zorder>Propertieswidget</zorder>
-      </widget>
+      <widget class="AnimationWidget" name="animationtimeline"/>
      </item>
     </layout>
    </widget>
@@ -574,6 +688,18 @@ QToolButton:hover {
    </attribute>
    <widget class="QWidget" name="dockWidgetContents">
     <layout class="QGridLayout" name="gridLayout_3">
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
+     <property name="bottomMargin">
+      <number>0</number>
+     </property>
      <item row="0" column="0">
       <widget class="QScrollArea" name="Propertieswidget">
        <property name="minimumSize">
@@ -590,8 +716,8 @@ QToolButton:hover {
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>280</width>
-          <height>258</height>
+          <width>298</width>
+          <height>321</height>
          </rect>
         </property>
        </widget>
@@ -599,6 +725,27 @@ QToolButton:hover {
      </item>
     </layout>
    </widget>
+  </widget>
+  <widget class="QDockWidget" name="dockWidget_2">
+   <property name="minimumSize">
+    <size>
+     <width>300</width>
+     <height>44</height>
+    </size>
+   </property>
+   <property name="maximumSize">
+    <size>
+     <width>300</width>
+     <height>524287</height>
+    </size>
+   </property>
+   <property name="windowTitle">
+    <string>Object View</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>8</number>
+   </attribute>
+   <widget class="QWidget" name="dockWidgetContents_2"/>
   </widget>
   <action name="actionSave">
    <property name="icon">
@@ -745,15 +892,15 @@ QToolButton:hover {
    <header location="global">src/widgets/layertreewidget.h</header>
   </customwidget>
   <customwidget>
-   <class>MaterialSets</class>
-   <extends>QWidget</extends>
-   <header>src/widgets/materialsets.h</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
    <class>AnimationWidget</class>
    <extends>QFrame</extends>
    <header>src/widgets/animationwidget.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ModelPresets</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/modelpresets.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

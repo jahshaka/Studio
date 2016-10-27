@@ -48,5 +48,8 @@
         <file>app/icons/video-camera.svg</file>
         <file>app/icons/world.svg</file>
         <file>app/icons/bulb.png</file>
+        <file>app/icons/expand-button.png</file>
+        <file>app/icons/delete.png</file>
+        <file>app/icons/close.png</file>
     </qresource>
 </RCC>

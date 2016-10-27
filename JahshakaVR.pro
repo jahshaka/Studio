@@ -91,7 +91,9 @@ SOURCES += src/main.cpp\
     src/globals.cpp \
     src/dialogs/renamelayerdialog.cpp \
     src/materials/gizmomaterial.cpp \
-    src/widgets/materialsets.cpp
+    src/widgets/materialsets.cpp \
+    src/widgets/modelpresets.cpp \
+    src/widgets/accordianwidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -164,7 +166,9 @@ HEADERS  += src/mainwindow.h \
     src/editor/gizmos/translationgizmo.h \
 	src/dialogs/infodialog.h \
     src/globals.h \
-    src/widgets/materialsets.h
+    src/widgets/materialsets.h \
+    src/widgets/modelpresets.h \
+    src/widgets/accordianwidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -192,7 +196,9 @@ FORMS    += \
     src/widgets/worldlayerwidget.ui \
     src/dialogs/infodialog.ui \
     src/newmainwindow.ui \
-    src/widgets/materialsets.ui
+    src/widgets/materialsets.ui \
+    src/widgets/modelpresets.ui \
+    src/widgets/accordianwidget.ui
 
 DISTFILES +=
 
@@ -202,7 +208,8 @@ RESOURCES += \
     images.qrc \
     materials.qrc \
     models.qrc \
-    textures.qrc
+    textures.qrc \
+    modelpresets.qrc
 
 win32: RC_ICONS = icon.ico
 
