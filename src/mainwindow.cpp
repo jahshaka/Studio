@@ -31,9 +31,6 @@ For more information see the LICENSE file
 #include <QDesktopServices>
 
 #include "dialogs/loadmeshdialog.h"
-
-#include "scenegraph/scenemanager.h"
-#include "scenegraph/scenenodes.h"
 #include "core/surfaceview.h"
 #include "core/nodekeyframeanimation.h"
 #include "core/nodekeyframe.h"
@@ -43,8 +40,6 @@ For more information see the LICENSE file
 #include "widgets/transformwidget.h"
 #include "widgets/lightlayerwidget.h"
 #include "widgets/modellayerwidget.h"
-#include "widgets/toruslayerwidget.h"
-#include "widgets/spherelayerwidget.h"
 #include "widgets/animationwidget.h"
 #include "widgets/texturedplanelayerwidget.h"
 #include "widgets/worldlayerwidget.h"
@@ -64,8 +59,6 @@ For more information see the LICENSE file
 #include "dialogs/licensedialog.h"
 #include "dialogs/aboutdialog.h"
 
-#include "materials/materials.h"
-#include "core/jahrenderer.h"
 #include "helpers/collisionhelper.h"
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -1081,9 +1074,6 @@ void MainWindow::duplicateNode()
     //newNode->pos.setY(3);
     newNode->_updateTransform();
     auto newNodeEnt = newNode->getEntity();
-
-    //add QObjectPicker
-    makeSceneNodePickable(newNode);
 
     //tree node
     auto newItem = new QTreeWidgetItem();

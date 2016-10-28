@@ -59,10 +59,8 @@ SOURCES += src/main.cpp\
     src/widgets/maintimelinewidget.cpp \
     src/widgets/materialwidget.cpp \
     src/widgets/modellayerwidget.cpp \
-    src/widgets/spherelayerwidget.cpp \
     src/widgets/texturedplanelayerwidget.cpp \
     src/widgets/timelinewidget.cpp \
-    src/widgets/toruslayerwidget.cpp \
     src/widgets/transformwidget.cpp \
     src/widgets/worldlayerwidget.cpp \
     src/core/nodekeyframeanimation.cpp \
@@ -71,9 +69,6 @@ SOURCES += src/main.cpp\
     src/core/settingsmanager.cpp \
     src/core/surfaceview.cpp \
     src/editor/editorcameracontroller.cpp \
-    src/scenegraph/scenemanager.cpp \
-    src/scenegraph/scenenodes.cpp \
-    src/scenegraph/skyboxnode.cpp \
     src/geometry/billboard.cpp \
     src/geometry/gridentity.cpp \
     src/geometry/gridrenderer.cpp \
@@ -100,7 +95,6 @@ HEADERS  += src/mainwindow.h \
     src/materials/refractivematerial.h \
     src/widgets/colorvaluewidget.h \
     src/widgets/colorpickerwidget.h \
-    src/helpers/texturehelper.h \
     src/helpers/settingshelper.h \
     src/dialogs/preferencesdialog.h \
     src/dialogs/aboutdialog.h \
@@ -124,10 +118,8 @@ HEADERS  += src/mainwindow.h \
     src/widgets/materialwidget.h \
     src/widgets/modellayerwidget.h \
     src/widgets/scenenodetransformui.h \
-    src/widgets/spherelayerwidget.h \
     src/widgets/texturedplanelayerwidget.h \
     src/widgets/timelinewidget.h \
-    src/widgets/toruslayerwidget.h \
     src/widgets/transformwidget.h \
     src/widgets/worldlayerwidget.h \
     src/core/keyframeanimation.h \
@@ -139,11 +131,6 @@ HEADERS  += src/mainwindow.h \
     src/core/settingsmanager.h \
     src/core/surfaceview.h \
     src/editor/editorcameracontroller.h \
-    src/scenegraph/lightnode.h \
-    src/scenegraph/scenemanager.h \
-    src/scenegraph/scenenodes.h \
-    src/scenegraph/skyboxnode.h \
-    src/scenegraph/torusnode.h \
     src/geometry/billboard.h \
     src/geometry/endlessplane.h \
     src/geometry/gridentity.h \
@@ -209,4 +196,4 @@ INSTALLS += \
     install_assets \
     install_content
 
-include(jah3d/jah3d.pri)
+include(src/jah3d/jah3d.pri)
