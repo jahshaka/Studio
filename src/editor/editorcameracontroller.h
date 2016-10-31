@@ -12,72 +12,27 @@ For more information see the LICENSE file
 #ifndef EDITORCAMERACONTROLLER_H
 #define EDITORCAMERACONTROLLER_H
 
-#include <Qt3DCore/QEntity>
-#include <Qt3DRender/QCamera>
-#include <Qt3DInput/QAxis>
-#include <Qt3DInput/QAnalogAxisInput>
-#include <Qt3DInput/QButtonAxisInput>
-#include <Qt3DInput/QAction>
-#include <Qt3DInput/QActionInput>
-#include <Qt3DInput/QLogicalDevice>
-#include <Qt3DInput/QKeyboardDevice>
-#include <Qt3DInput/QMouseDevice>
-#include <Qt3DInput/QMouseEvent>
-#include <Qt3DLogic/QFrameAction>
+#include <QPoint>
+#include <QVector3D>
+#include "../jah3d/core/scenenode.h"
+#include "../jah3d/scenegraph/cameranode.h"
 
-using namespace Qt3DRender;
-using namespace Qt3DLogic;
+//class CameraPtr;
 
-class EditorCameraController:public Qt3DCore::QEntity
+class EditorCameraController
 {
     Q_OBJECT
 
-    QCamera* camera;
-    Qt3DInput::QMouseDevice* mouse;
-    Qt3DInput::QKeyboardDevice* keyboard;
-    Qt3DInput::QLogicalDevice* logic;
-    QFrameAction* frameAction;
-
-
-
-    Qt3DInput::QAction *leftMouseButtonAction;
-    Qt3DInput::QAction *middleMouseButtonAction;
-    Qt3DInput::QAction *rightMouseButtonAction;
-    Qt3DInput::QAction *altButtonAction;
-    Qt3DInput::QAction *shiftButtonAction;
-
-    Qt3DInput::QAxis *mouseXAxis;
-    Qt3DInput::QAxis *mouseYAxis;
-    Qt3DInput::QAxis *txAxis;
-    Qt3DInput::QAxis *tyAxis;
-    Qt3DInput::QAxis *tzAxis;
-
-    Qt3DInput::QAxis *wheelAxis;
-
-    Qt3DInput::QActionInput *leftMouseButtonInput;
-    Qt3DInput::QActionInput *middleMouseButtonInput;
-    Qt3DInput::QActionInput *rightMouseButtonInput;
-    Qt3DInput::QActionInput *altButtonInput;
-    Qt3DInput::QActionInput *shiftButtonInput;
-
-    Qt3DInput::QAnalogAxisInput *mouseXInput;
-    Qt3DInput::QAnalogAxisInput *mouseYInput;
-
-    Qt3DInput::QAnalogAxisInput *mouseWheelInput;
-
-    Qt3DInput::QButtonAxisInput *keyboardXPosInput;
-    Qt3DInput::QButtonAxisInput *keyboardXNegInput;
-    Qt3DInput::QButtonAxisInput *keyboardYPosInput;
-    Qt3DInput::QButtonAxisInput *keyboardYNegInput;
+    jah3d::CameraNodePtr camera;
 
     float lookSpeed;
     float linearSpeed;
 
 public:
-    EditorCameraController(Qt3DCore::QEntity* parent,QCamera* cam);
+    EditorCameraController(jah3d::CameraNodePtr  cam);
 
-    QCamera* getCamera();
-    void setCamera(QCamera* cam);
+    jah3d::CameraNodePtr  getCamera();
+    void setCamera(jah3d::CameraNodePtr  cam);
 
     QVector3D getPos();
 

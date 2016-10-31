@@ -12,21 +12,9 @@ For more information see the LICENSE file
 #include "materialwidget.h"
 #include "ui_materialwidget.h"
 #include "qmaterial.h"
-#include "../scenegraph/scenenodes.h"
+//#include "../scenegraph/scenenodes.h"
+#include "../jah3d/core/scenenode.h"
 #include "qfiledialog.h"
-
-#include "../materials/materialproxy.h"
-#include "../materials/materials.h"
-#include "../helpers/texturehelper.h"
-
-using namespace Qt3DRender;
-using namespace Qt3DExtras;
-
-void ShinyRedMaterial::apply(SceneNode* node, MaterialWidget* widget)
-{
-    Q_UNUSED(node);
-    Q_UNUSED(widget);
-}
 
 MaterialWidget::MaterialWidget(QWidget *parent) :
     QWidget(parent),
@@ -46,35 +34,12 @@ MaterialWidget::MaterialWidget(QWidget *parent) :
     ui->listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
 
     /*
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/6fabad31614841.5605a483d7eed.png"),"Earth"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/another.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/board.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/carbon fiber.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/cball.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/glass.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/green_glass_ball_by_kiirokaeru-d5c1l1p.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/rock.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/weld.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/wireframe.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/cball.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/glass.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/green_glass_ball_by_kiirokaeru-d5c1l1p.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/rock.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/weld.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/wireframe.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/cball.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/glass.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/green_glass_ball_by_kiirokaeru-d5c1l1p.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/rock.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/weld.png"),"Tornado"));
-    ui->listWidget->addItem(new QListWidgetItem(QIcon(":/materials/wireframe.png"),"Tornado"));
-    */
-
     auto presets = MaterialPreset::getDefaultPresets();
     for(auto preset:presets)
     {
         this->addPreset(preset);
     }
+    */
 
     connect(ui->listWidget,SIGNAL(itemClicked(QListWidgetItem*)),this,SLOT(materialPresetChanged(QListWidgetItem*)));
 
@@ -97,23 +62,19 @@ MaterialWidget::MaterialWidget(QWidget *parent) :
     connect(ui->clearSpecularMap,SIGNAL(pressed()),this,SLOT(clearSpecularMap()));
     connect(ui->clearReflectionMap,SIGNAL(pressed()),this,SLOT(clearReflectionMap()));
 
-    //connect(ui->)
-
     ui->textureScale->setLabelText("");
     connect(ui->textureScale,SIGNAL(valueChanged(int)),this,SLOT(changeTextureScale(int)));
     ui->textureScale->setValueRange(0,1000);
 
     matProxy = nullptr;
     node = nullptr;
-
-    //initPredefinedMaterials();
 }
 
 MaterialWidget::~MaterialWidget()
 {
     delete ui;
 }
-
+/*
 void MaterialWidget::normalIntensityChanged(int val)
 {
     float shininess = val/100.0f;
@@ -339,4 +300,5 @@ QString MaterialWidget::loadTexture()
     QString dir = QApplication::applicationDirPath()+"/assets/textures/";
     return QFileDialog::getOpenFileName(this,"Open Texture File",dir,"Image Files (*.png *.jpg *.bmp)");
 }
+*/
 

@@ -8,6 +8,7 @@ class QOpenGLTexture;
 namespace jah3d
 {
 
+class Texture;
 typedef QSharedPointer<Texture> TexturePtr;
 
 class Texture

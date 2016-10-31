@@ -117,7 +117,7 @@ AnimationWidget::~AnimationWidget()
     delete ui;
 }
 
-void AnimationWidget::setSceneNode(SceneNode* node)
+void AnimationWidget::setSceneNode(jah3d::SceneNodePtr node)
 {
     ui->keywidgetView->setSceneNode(node);
     ui->timeline->setSceneNode(node);

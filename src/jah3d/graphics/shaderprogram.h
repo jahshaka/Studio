@@ -6,13 +6,14 @@
 namespace jah3d
 {
 
+class ShaderProgram;
 typedef QSharedPointer<ShaderProgram> ShaderProgramPtr;
 
 class ShaderProgram
 {
 public:
-    ShaderProgramPtr load(QString vertexShaderFile,QString fragmentShaderFile);
-    ShaderProgramPtr create(QString vertexShader,QString fragmentShader);
+    static ShaderProgramPtr load(QString vertexShaderFile,QString fragmentShaderFile);
+    static ShaderProgramPtr create(QString vertexShader,QString fragmentShader);
 };
 
 }

@@ -15,6 +15,7 @@ class VertexLayout;
 namespace jah3d
 {
 
+class Mesh;
 typedef QSharedPointer<Mesh> MeshPtr;
 
 class Mesh
@@ -32,7 +33,7 @@ public:
     static Mesh* loadMesh(QString filePath);
 
 private:
-    Mesh(aiMesh* mesh);
+    Mesh(aiMesh* mesh,VertexLayout vertexLayout);
 };
 
 }

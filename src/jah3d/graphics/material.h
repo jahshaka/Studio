@@ -3,10 +3,14 @@
 
 #include "shaderprogram.h"
 #include "texture.h"
+#include <QSharedPointer>
+
+class QOpenGLShaderProgram;
 
 namespace jah3d
 {
 
+class Material;
 typedef QSharedPointer<Material> MaterialPtr;
 
 struct MaterialTexture
@@ -18,7 +22,8 @@ struct MaterialTexture
 class Material
 {
 public:
-    ShaderProgramPtr program;
+    //ShaderProgramPtr program;
+    QOpenGLShaderProgram* program;
     //QMap<QString, TexturePtr> textures;
     QList<MaterialTexture*> textures;
 

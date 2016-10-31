@@ -14,7 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QMap>
-#include "../materials/materialpresets.h"
+#include "../jah3d/core/scenenode.h"
 
 namespace Ui {
 class MaterialWidget;
@@ -30,31 +30,6 @@ class MaterialWidget;
 class AdvanceMaterial;
 class QListWidgetItem;
 
-class PredefinedMaterial:public QObject
-{
-    Q_OBJECT
-public:
-    PredefinedMaterial():
-        QObject()
-    {
-
-    }
-
-    virtual void apply(SceneNode* node, MaterialWidget* widget)
-    {
-        Q_UNUSED(node);
-        Q_UNUSED(widget);
-    }
-};
-
-class ShinyRedMaterial:public PredefinedMaterial
-{
-    Q_OBJECT
-
-public:
-    void apply(SceneNode* node, MaterialWidget* widget) override;
-};
-
 class MaterialWidget : public QWidget
 {
     Q_OBJECT
@@ -67,7 +42,7 @@ public:
     SceneNode* node;
     MaterialProxy* matProxy;
     //MaterialData* matData;//and this?
-    void setSceneNode(SceneNode* node);
+    void setSceneNode(jah3d::SceneNodePtr node);
     void setMaterial(AdvanceMaterial* mat);
 
     void setShininess(float);
@@ -123,7 +98,7 @@ private:
      */
     void updateUI(AdvanceMaterial* material);
 
-    void addPreset(MaterialPreset preset);
+    //void addPreset(MaterialPreset preset);
 
     QString loadTexture();
 
@@ -139,7 +114,7 @@ private:
     AdvanceMaterial* material;
 
     //material presets
-    QMap<QString,MaterialPreset> presets;
+    //QMap<QString,MaterialPreset> presets;
 };
 
 #endif // MATERIALWIDGET_H

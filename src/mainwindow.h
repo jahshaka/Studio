@@ -14,11 +14,9 @@ For more information see the LICENSE file
 
 #include <QMainWindow>
 #include <QModelIndex>
-#include "scenegraph/scenemanager.h"
 #include <QDropEvent>
 #include <QMimeData>
-#include "editor/gizmos/advancedtransformgizmo.h"
-//#include "layermanager.h"
+//#include "editor/gizmos/advancedtransformgizmo.h"
 
 namespace Ui {
 class MainWindow;
@@ -62,6 +60,9 @@ class JahRenderer;
 class GizmoHitData;
 class AdvancedGizmoHandle;
 
+class SceneNodePtr;
+class SceneManagerPtr;
+
 enum class SceneNodeType;
 
 class MainWindow : public QMainWindow
@@ -87,7 +88,7 @@ public:
     SettingsManager* getSettingsManager();
 
     void openProject(QString project);
-    void setGizmoTransformMode(GizmoTransformMode mode);
+    //void setGizmoTransformMode(GizmoTransformMode mode);
 
 private:
     void setupQt3d();
@@ -103,16 +104,16 @@ private:
     void initTorusLayerUi();
 
     void setupPropertyUi();
-    void setupPropertyTabs(SceneNode* node);
+    //void setupPropertyTabs(SceneNode* node);
 
     void setupLayerManager();
 
     void rebuildTree();
-    void populateTree(QStandardItem* treeNode,SceneNode* sceneNode);
-    void populateTree(QTreeWidgetItem* treeNode,SceneNode* sceneNode);
+    //void populateTree(QStandardItem* treeNode,SceneNode* sceneNode);
+    //void populateTree(QTreeWidgetItem* treeNode,SceneNode* sceneNode);
     void deselectTreeItems();
 
-    void addSceneNodeToSelectedTreeItem(QTreeWidget* sceneTree,SceneNode* newNode,bool addToSelected,QIcon icon);
+    //void addSceneNodeToSelectedTreeItem(QTreeWidget* sceneTree,SceneNode* newNode,bool addToSelected,QIcon icon);
 
     void setupDefaultScene();
 
@@ -121,7 +122,7 @@ private:
     QIcon getIconFromSceneNodeType(SceneNodeType type);
 
     void removeScene();
-    void setScene(SceneManager* scene);
+    void setScene(SceneManagerPtr scene);
     void updateGizmoTransform();
 
     void dragEnterEvent(QDragEnterEvent* event) override;
@@ -129,9 +130,9 @@ private:
     void dropEvent(QDropEvent* event) override;
     void dragLeaveEvent(QDragLeaveEvent* event) override;
 
-    SceneNode* getSceneNodeByEntityId(Qt3DCore::QNodeId nodeId);
+    //SceneNodePtr getSceneNodeByEntityId(Qt3DCore::QNodeId nodeId);
 
-    void assignPickerRecursively(SceneNode* node);
+    void assignPickerRecursively(SceneNodePtr node);
 
 private slots:
     //scenegraph
@@ -158,11 +159,9 @@ private slots:
     void sceneTreeCustomContextMenu(const QPoint&);
     void sceneTreeItemChanged(QTreeWidgetItem* item,int column);
 
-    void setActiveSceneNode(SceneNode* node);
-    void makeSceneNodePickable(SceneNode* entity);
+    void setActiveSceneNode(SceneNodePtr node);
 
-    void entityPicked(Qt3DRender::QPickEvent* event);
-    void createSceneNodeContextMenu(QMenu& menu,SceneNode* node);
+    void createSceneNodeContextMenu(QMenu& menu,SceneNodePtr node);
 
     //TORUS SLIDERS
     void sliderTorusMinorRadius(int val);//float
@@ -193,11 +192,8 @@ private:
     QWidget *container;
     EditorCameraController* camControl;
 
-    SceneManager* scene;
-
-    SceneNode* activeSceneNode;
-    //TransformGizmo* gizmo;
-
+    //SceneManagerPtr scene;
+    //SceneNodePtr activeSceneNode;
 
     QTimer* timer;
 
@@ -222,15 +218,6 @@ private:
     PreferencesDialog* prefsDialog;
     LicenseDialog* licenseDialog;
     AboutDialog* aboutDialog;
-
-    //gizmo stuff
-    AdvancedTransformGizmo* gizmo;
-    GizmoHitData* gizmoHitData;
-    //last gizmo title
-    //AdvancedGizmoHandle* gizmoHandle;
-
-    //current gizmo handle being selected
-    AdvancedGizmoHandle* activeGizmoHandle;
 };
 
 #endif // MAINWINDOW_H

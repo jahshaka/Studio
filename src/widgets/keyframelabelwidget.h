@@ -17,7 +17,8 @@ For more information see the LICENSE file
 #include <QPainter>
 #include <QMouseEvent>
 #include <vector>
-#include "../scenegraph/scenenodes.h"
+//#include "../scenegraph/scenenodes.h"
+#include "../jah3d/core/scenenode.h"
 
 class KeyFrameLabelWidget:public QWidget
 {
@@ -25,11 +26,11 @@ class KeyFrameLabelWidget:public QWidget
     QColor itemColor;
 
     QPen cursorPen;
-    SceneNode* obj;
+    jah3d::SceneNodePtr obj;
 public:
     KeyFrameLabelWidget(QWidget* parent);
 
-    void setSceneNode(SceneNode* node);
+    void setSceneNode(jah3d::SceneNodePtr node);
 
     void paintEvent(QPaintEvent *painter);
 

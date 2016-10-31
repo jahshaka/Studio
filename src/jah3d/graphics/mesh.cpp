@@ -18,8 +18,9 @@
 namespace jah3d
 {
 
-Mesh::Mesh(aiMesh* mesh)
+Mesh::Mesh(aiMesh* mesh,VertexLayout vertexLayout)
 {
+    this->vertexLayout = vertexLayout;
     //assumes mesh is triangulated
     //assumes mesh data is laid out in a flat array
     //i.e. no index buffer used
@@ -100,7 +101,7 @@ Mesh* Mesh::loadMesh(QString filePath)
     Assimp::Importer importer;
     const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(),aiProcessPreset_TargetRealtime_Fast);
 
-    aiMesh *mesh = scene->mMeshes[0];
+    auto mesh = scene->mMeshes[0];
 
     return new Mesh(mesh,VertexLayout::createMeshDefault());
 }

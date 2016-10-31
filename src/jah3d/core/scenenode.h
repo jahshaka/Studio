@@ -3,10 +3,14 @@
 
 #include <QSharedPointer>
 #include "scene.h"
+#include <QQuaternion>
+#include <QMatrix4x4>
+#include <QVector3D>
 
 namespace jah3d
 {
 
+class SceneNode;
 typedef QSharedPointer<SceneNode> SceneNodePtr;
 
 enum SceneNodeType
@@ -17,7 +21,7 @@ enum SceneNodeType
     Camera
 };
 
-class SceneNode
+class SceneNode:public QEnableSharedFromThis<SceneNode>
 {
     //cached local and global transform
     QMatrix4x4 localTransform;
@@ -36,65 +40,22 @@ class SceneNode
     QList<SceneNodePtr> children;
 
     friend class Renderer;
+    friend class Scene;
 
 public:
-    SceneNode():
-        pos(QVector3D(0)),
-        scale(QVector3D(0)),
-        rot(QQuaternion)
+    SceneNode();
 
-    {
-        sceneNodeType = SceneNodeType::Empty;
-    }
+    static SceneNodePtr create();
+    QString getName();
 
-    static SceneNodePtr create()
-    {
-        return QSharedPointer(new SceneNode());
-    }
-
-    QString getName()
-    {
-        return name;
-    }
-
-    SceneNodeType getSceneNodeType()
-    {
-        return sceneNodeType;
-    }
-
-    void addChild(SceneNodePtr node)
-    {
-        //todo: check if child is already a node
-        children.append(node);
-        node->setParent(this);
-        node->setScene(this->scene);
-        scene->addNode(node);
-    }
-
-    void removeFromParent()
-    {
-        if(!parent.isNull())
-            this->parent->removeChild(this);
-    }
-
-    void removeChild(SceneNodePtr node)
-    {
-        children.removeOne(node);
-        node->parent = QSharedPointer<SceneNode>(nullptr);
-        node->scene = QSharedPointer<Scene>(nullptr);
-        scene->removeNode(node);
-    }
+    SceneNodeType getSceneNodeType();
+    void addChild(SceneNodePtr node);
+    void removeFromParent();
+    void removeChild(SceneNodePtr node);
 
 private:
-    void setParent(SceneNodePtr node)
-    {
-        this->parent = node;
-    }
-
-    void setScene(ScenePtr scene)
-    {
-        this->scene = scene;
-    }
+    void setParent(SceneNodePtr node);
+    void setScene(ScenePtr scene);
 };
 
 

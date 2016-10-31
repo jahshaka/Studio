@@ -2,7 +2,8 @@
 #define DEFAULTMATERIAL_H
 
 #include "../graphics/material.h"
-#include <QShaderProgram>
+#include <QOpenGLShaderProgram>
+#include <QColor>
 
 namespace jah3d
 {

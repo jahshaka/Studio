@@ -33,82 +33,42 @@ TEMPLATE = app
 
 SOURCES += src/main.cpp\
         src/mainwindow.cpp \
-    src/materials/flatshadedmaterial.cpp \
-    src/materials/colormaterial.cpp \
-    src/materials/endlessplanematerial.cpp \
-    src/materials/billboardmaterial.cpp \
-    src/materials/reflectivematerial.cpp \
-    src/materials/refractivematerial.cpp \
     src/widgets/colorvaluewidget.cpp \
     src/widgets/colorpickerwidget.cpp \
     src/dialogs/preferencesdialog.cpp \
     src/dialogs/aboutdialog.cpp \
     src/dialogs/licensedialog.cpp \
-    src/materials/advancedmaterial.cpp \
     src/dialogs/preferences/worldsettings.cpp \
-    src/materials/materialpresets.cpp \
     src/dialogs/loadmeshdialog.cpp \
-    src/materials/materialproxy.cpp \
-    src/materials/materials.cpp \
     src/widgets/animationwidget.cpp \
-    src/widgets/endlessplanelayerwidget.cpp \
     src/widgets/keyframelabelwidget.cpp \
     src/widgets/keyframewidget.cpp \
     src/widgets/lcdslider.cpp \
-    src/widgets/lightlayerwidget.cpp \
     src/widgets/maintimelinewidget.cpp \
     src/widgets/materialwidget.cpp \
-    src/widgets/modellayerwidget.cpp \
-    src/widgets/texturedplanelayerwidget.cpp \
     src/widgets/timelinewidget.cpp \
-    src/widgets/transformwidget.cpp \
-    src/widgets/worldlayerwidget.cpp \
     src/core/nodekeyframeanimation.cpp \
     src/core/project.cpp \
-    src/core/sceneparser.cpp \
     src/core/settingsmanager.cpp \
     src/core/surfaceview.cpp \
     src/editor/editorcameracontroller.cpp \
-    src/geometry/billboard.cpp \
-    src/geometry/gridentity.cpp \
-    src/geometry/gridrenderer.cpp \
-    src/geometry/linerenderer.cpp \
-    src/geometry/linestrip.cpp \
-    src/editor/gizmos/advancedtransformgizmo.cpp \
-    src/editor/gizmos/rotationgizmo.cpp \
-    src/editor/gizmos/scalegizmo.cpp \
-    src/editor/gizmos/transformgizmo.cpp \
-    src/editor/gizmos/translationgizmo.cpp \
     src/dialogs/infodialog.cpp \
     src/globals.cpp \
     src/dialogs/renamelayerdialog.cpp \
-    src/materials/gizmomaterial.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
-    src/materials/gizmomaterial.h \
-    src/materials/flatshadedmaterial.h \
-    src/materials/colormaterial.h \
-    src/materials/endlessplanematerial.h \
-    src/materials/billboardmaterial.h \
-    src/materials/reflectivematerial.h \
-    src/materials/refractivematerial.h \
     src/widgets/colorvaluewidget.h \
     src/widgets/colorpickerwidget.h \
     src/helpers/settingshelper.h \
     src/dialogs/preferencesdialog.h \
     src/dialogs/aboutdialog.h \
     src/dialogs/licensedialog.h \
-    src/materials/advancematerial.h \
     src/dialogs/preferences/worldsettings.h \
     src/helpers/collisionhelper.h \
     src/dialogs/infodialog.h \
-    src/materials/materialpresets.h \
     src/dialogs/loadmeshdialog.h \
-    src/materials/materialproxy.h \
-    src/materials/materials.h \
     src/widgets/animationwidget.h \
-    src/widgets/endlessplanelayerwidget.h \
     src/widgets/keyframelabelwidget.h \
     src/widgets/keyframewidget.h \
     src/widgets/layertreewidget.h \
@@ -116,34 +76,16 @@ HEADERS  += src/mainwindow.h \
     src/widgets/lightlayerwidget.h \
     src/widgets/maintimelinewidget.h \
     src/widgets/materialwidget.h \
-    src/widgets/modellayerwidget.h \
     src/widgets/scenenodetransformui.h \
-    src/widgets/texturedplanelayerwidget.h \
     src/widgets/timelinewidget.h \
-    src/widgets/transformwidget.h \
-    src/widgets/worldlayerwidget.h \
     src/core/keyframeanimation.h \
     src/core/keyframes.h \
     src/core/nodekeyframe.h \
     src/core/nodekeyframeanimation.h \
     src/core/project.h \
-    src/core/sceneparser.h \
     src/core/settingsmanager.h \
     src/core/surfaceview.h \
     src/editor/editorcameracontroller.h \
-    src/geometry/billboard.h \
-    src/geometry/endlessplane.h \
-    src/geometry/gridentity.h \
-    src/geometry/gridrenderer.h \
-    src/geometry/linerenderer.h \
-    src/geometry/linestrip.h \
-    src/editor/gizmos/advancedtransformgizmo.h \
-    src/editor/gizmos/gizmobase.h \
-    src/editor/gizmos/gizmotransform.h \
-    src/editor/gizmos/rotationgizmo.h \
-    src/editor/gizmos/scalegizmo.h \
-    src/editor/gizmos/transformgizmo.h \
-    src/editor/gizmos/translationgizmo.h \
 	src/dialogs/infodialog.h \
     src/globals.h
 

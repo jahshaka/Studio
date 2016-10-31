@@ -14,7 +14,8 @@ For more information see the LICENSE file
 #include <QPainter>
 #include <QMouseEvent>
 #include <vector>
-#include "../scenegraph/scenenodes.h"
+//#include "../scenegraph/scenenodes.h"
+#include "../jah3d/core/scenenode.h"
 #include "keyframelabelwidget.h"
 
 
@@ -27,16 +28,17 @@ KeyFrameLabelWidget::KeyFrameLabelWidget(QWidget* parent):
     cursorPen = QPen(QColor::fromRgb(255,255,255));
     cursorPen.setWidth(3);
 
-    obj = nullptr;
+    //obj = nullptr;
 }
 
-void KeyFrameLabelWidget::setSceneNode(SceneNode* node)
+void KeyFrameLabelWidget::setSceneNode(jah3d::SceneNodePtr node)
 {
     obj = node;
 }
 
 void KeyFrameLabelWidget::paintEvent(QPaintEvent *painter)
 {
+    /*
     Q_UNUSED(painter);
 
     int widgetWidth = this->geometry().width();
@@ -65,7 +67,7 @@ void KeyFrameLabelWidget::paintEvent(QPaintEvent *painter)
         }
 
     }
-
+    */
 }
 
 void KeyFrameLabelWidget::drawFrameLabel(QString name,QPainter* paint,int yBottom)

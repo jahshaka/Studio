@@ -14,7 +14,8 @@ For more information see the LICENSE file
 #include <QPainter>
 #include <QMouseEvent>
 #include <vector>
-#include "../scenegraph/scenenodes.h"
+//#include "../scenegraph/scenenodes.h"
+#include "../jah3d/core/scenenode.h"
 #include "keyframewidget.h"
 #include <QMenu>
 
@@ -39,10 +40,10 @@ KeyFrameWidget::KeyFrameWidget(QWidget* parent):
 
     scaleRatio = 30;
 
-    obj = nullptr;
+    //obj = nullptr;
 }
 
-void KeyFrameWidget::setSceneNode(SceneNode* node)
+void KeyFrameWidget::setSceneNode(jah3d::SceneNodePtr node)
 {
     obj = node;
 }
@@ -77,6 +78,7 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
     int frameHeight = 20;
     int ypos = -20;
 
+    /*
     if(obj!=nullptr)
     {
         if(obj->transformAnim!=nullptr)
@@ -102,6 +104,7 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
         }
 
     }
+    */
 
 }
 

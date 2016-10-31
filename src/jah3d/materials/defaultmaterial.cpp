@@ -1,10 +1,22 @@
+#include "../graphics/material.h"
+#include "../materials/defaultmaterial.h"
+#include <QFile>
+#include <QTextStream>
+
+#include <QOpenGLShader>
+#include <QOpenGLShaderProgram>
+#include <QOpenGLTexture>
+#include <QColor>
+
+#include <QOpenGLFunctions>
+
 namespace jah3d
 {
 
-AdvanceMaterial::AdvanceMaterial()
+DefaultMaterial::DefaultMaterial()
 {
     diffuseTexture = nullptr;
-    textureScale = 1.0f;
+    //textureScale = 1.0f;
 
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
     vshader->compileSourceFile("assets/simple.vert");
@@ -17,10 +29,6 @@ AdvanceMaterial::AdvanceMaterial()
     program = new QOpenGLShaderProgram;
     program->addShader(vshader);
     program->addShader(fshader);
-    program->bindAttributeLocation("a_pos", POS_ATTR_LOC);
-    program->bindAttributeLocation("a_texCoord", TEXCOORD_ATTR_LOC);
-    program->bindAttributeLocation("a_normal", NORMAL_ATTR_LOC);
-    program->bindAttributeLocation("a_tangent", TANGENT_ATTR_LOC);
 
     program->link();
 
@@ -54,7 +62,7 @@ AdvanceMaterial::AdvanceMaterial()
     this->setShininess(0.01f);
 }
 
-void AdvanceMaterial::begin(QOpenGLFunctions* gl)
+void DefaultMaterial::begin(QOpenGLFunctions* gl)
 {
     program->bind();
 
@@ -88,12 +96,12 @@ void AdvanceMaterial::begin(QOpenGLFunctions* gl)
 
 }
 
-void AdvanceMaterial::end()
+void DefaultMaterial::end()
 {
     //unset textures
 }
 
-void AdvanceMaterial::setDiffuseTexture(QOpenGLTexture* tex)
+void DefaultMaterial::setDiffuseTexture(QOpenGLTexture* tex)
 {
     diffuseTexture=tex;
     auto matTex = new MaterialTexture();
@@ -108,7 +116,7 @@ void AdvanceMaterial::setDiffuseTexture(QOpenGLTexture* tex)
 }
 
 /*
-QOpenGLShader* AdvanceMaterial::loadShader(QOpenGLShader::ShaderType type,QString filePath)
+QOpenGLShader* DefaultMaterial::loadShader(QOpenGLShader::ShaderType type,QString filePath)
 {
     //http://stackoverflow.com/questions/17149454/reading-entire-file-to-qstring
     auto shader = new QOpenGLShader(type,this);
@@ -117,7 +125,7 @@ QOpenGLShader* AdvanceMaterial::loadShader(QOpenGLShader::ShaderType type,QStrin
 }
 */
 
-void AdvanceMaterial::setAmbientColor(QColor col)
+void DefaultMaterial::setAmbientColor(QColor col)
 {
     ambientColor = col;
 
@@ -126,7 +134,7 @@ void AdvanceMaterial::setAmbientColor(QColor col)
     program->release();
 }
 
-void AdvanceMaterial::setDiffuseColor(QColor col)
+void DefaultMaterial::setDiffuseColor(QColor col)
 {
     diffuseColor = col;
 
@@ -135,12 +143,12 @@ void AdvanceMaterial::setDiffuseColor(QColor col)
     program->release();
 }
 
-QColor AdvanceMaterial::getDiffuseColor()
+QColor DefaultMaterial::getDiffuseColor()
 {
     return QColor();
 }
 
-void AdvanceMaterial::setNormalTexture(QOpenGLTexture* tex)
+void DefaultMaterial::setNormalTexture(QOpenGLTexture* tex)
 {
     normalTexture=tex;
     auto matTex = new MaterialTexture();
@@ -154,7 +162,7 @@ void AdvanceMaterial::setNormalTexture(QOpenGLTexture* tex)
     program->release();
 }
 
-void AdvanceMaterial::setNormalIntensity(float intensity)
+void DefaultMaterial::setNormalIntensity(float intensity)
 {
     normalIntensity = intensity;
 
@@ -163,13 +171,13 @@ void AdvanceMaterial::setNormalIntensity(float intensity)
     program->release();
 }
 
-float AdvanceMaterial::getNormalIntensity()
+float DefaultMaterial::getNormalIntensity()
 {
     return normalIntensity;
 }
 
 
-void AdvanceMaterial::setSpecularTexture(QOpenGLTexture* tex)
+void DefaultMaterial::setSpecularTexture(QOpenGLTexture* tex)
 {
     specularTexture=tex;
     auto matTex = new MaterialTexture();
@@ -183,7 +191,7 @@ void AdvanceMaterial::setSpecularTexture(QOpenGLTexture* tex)
     program->release();
 }
 
-void AdvanceMaterial::setSpecularColor(QColor col)
+void DefaultMaterial::setSpecularColor(QColor col)
 {
     specularColor = col;
     program->bind();
@@ -192,12 +200,12 @@ void AdvanceMaterial::setSpecularColor(QColor col)
     program->release();
 }
 
-QColor AdvanceMaterial::getSpecularColor()
+QColor DefaultMaterial::getSpecularColor()
 {
     return specularColor;
 }
 
-void AdvanceMaterial::setShininess(float shininess)
+void DefaultMaterial::setShininess(float shininess)
 {
     this->shininess = shininess;
     program->bind();
@@ -205,13 +213,13 @@ void AdvanceMaterial::setShininess(float shininess)
     program->release();
 }
 
-float AdvanceMaterial::getShininess()
+float DefaultMaterial::getShininess()
 {
     return 0.0f;
 }
 
 
-void AdvanceMaterial::setReflectionTexture(QOpenGLTexture* tex)
+void DefaultMaterial::setReflectionTexture(QOpenGLTexture* tex)
 {
     reflectionTexture=tex;
     auto matTex = new MaterialTexture();
@@ -224,7 +232,7 @@ void AdvanceMaterial::setReflectionTexture(QOpenGLTexture* tex)
     program->release();
 }
 
-void AdvanceMaterial::setReflectionInfluence(float intensity)
+void DefaultMaterial::setReflectionInfluence(float intensity)
 {
     reflectionInfluence = intensity;
 
@@ -233,7 +241,7 @@ void AdvanceMaterial::setReflectionInfluence(float intensity)
     program->release();
 }
 
-void AdvanceMaterial::setTextureScale(float scale)
+void DefaultMaterial::setTextureScale(float scale)
 {
     this->textureScale = scale;
     //qDebug()<<scale<<endl;

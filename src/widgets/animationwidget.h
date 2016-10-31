@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QTime>
 #include "ui_animationwidget.h"
+#include "../core/scenenode.h"
 
 class QWidget;
 class QElapsedTimer;
@@ -23,7 +24,7 @@ class TimelineWidget;
 class AnimationWidget : public QWidget
 {
     Q_OBJECT
-    SceneNode* node;
+    jah3d::SceneNodePtr node;
     QTimer* timer;
     //http://stackoverflow.com/questions/17571717/accessing-the-elapsed-seconds-of-a-qtimer
     QElapsedTimer* elapsedTimer;
@@ -39,7 +40,7 @@ public:
     explicit AnimationWidget(QWidget *parent = 0);
     ~AnimationWidget();
 
-    void setSceneNode(SceneNode* node);
+    void setSceneNode(jah3d::SceneNodePtr node);
 
     void setMainTimelineWidget(TimelineWidget* tl)
     {
@@ -48,25 +49,31 @@ public:
 
     void showHighlight()
     {
+        /*
         if(node==nullptr)
             return;
 
         if(mainTimeline==nullptr)
             return;
         mainTimeline->showHighlight(node->animStartTime,node->animStartTime+node->animLength);
+        */
     }
 
     void hideHighlight()
     {
+        /*
         if(node==nullptr)
             return;
         mainTimeline->hideHighlight();
+        */
     }
 
     void setAnimStartTime(int second)
     {
+        /*
         if(node!=nullptr)
             node->setAnimStartTime(second);
+            */
     }
 
     void setAnimLength(float length)
@@ -109,7 +116,7 @@ public slots:
     void setLooping(bool loop)
     {
         loopAnim = loop;
-        node->loopAnim = loop;
+        //node->loopAnim = loop;
     }
 
 private slots:

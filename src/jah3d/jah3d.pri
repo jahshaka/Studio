@@ -21,4 +21,7 @@ include(libovr/libovr.pri)
 
 SOURCES += \
     $$PWD/graphics/mesh.cpp \
-    $$PWD/materials/defaultmaterial.cpp
+    $$PWD/materials/defaultmaterial.cpp \
+    $$PWD/core/scene.cpp \
+    $$PWD/scenegraph/meshnode.cpp \
+    $$PWD/core/scenenode.cpp

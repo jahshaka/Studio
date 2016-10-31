@@ -2,14 +2,16 @@
 #define CAMERANODE_H
 
 #include <QMatrix4x4>
+#include <QSharedPointer>
 #include "../core/scenenode.h"
 
 namespace jah3d
 {
 
-typedef QSharedPointer<CameraNode> CameraNodePtr;
+class CameraNode;
+typedef QSharedPointer<jah3d::CameraNode> CameraNodePtr;
 
-class CameraNode:public SceneNode
+class CameraNode:public jah3d::SceneNode
 {
     float fov;//radians
     float aspectRatio;

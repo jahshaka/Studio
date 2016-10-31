@@ -12,10 +12,12 @@ namespace jah3d
 
 class LightNode;
 class SceneNode;
+class Scene;
 
-typedef QSharedPointer<LightNode> LightNodePtr;
+typedef QSharedPointer<jah3d::LightNode> LightNodePtr;
 //typedef QSharedPointer<SceneNode> SceneNodePtr;
-typedef QSharedPointer<Scene> ScenePtr;
+typedef QSharedPointer<jah3d::Scene> ScenePtr;
+typedef QSharedPointer<jah3d::SceneNode> SceneNodePtr;
 
 class Scene
 {
@@ -28,33 +30,15 @@ public:
     SceneNodePtr rootNode;
     QList<LightNodePtr> lights;
 
-    Scene()
-    {
-        rootNode = SceneNode::create();
-    }
+    Scene();
 public:
     static ScenePtr create();
 
     void update(float dt);
     void render();
 
-    //adds nodes to list of renderable nodes
-    //adds
-    void addNode(SceneNodePtr node)
-    {
-        if(node->sceneNodeType == SceneNodeType::Light)
-        {
-            lights.append(node);
-        }
-    }
-
-    void removeNode(SceneNodePtr node)
-    {
-        if(node->sceneNodeType == SceneNodeType::Light)
-        {
-            lights.removeOne(node);
-        }
-    }
+    void addNode(SceneNodePtr node);
+    void removeNode(SceneNodePtr node);
 };
 
 }

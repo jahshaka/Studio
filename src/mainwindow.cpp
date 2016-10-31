@@ -37,18 +37,13 @@ For more information see the LICENSE file
 #include "globals.h"
 //#include "editorcameracontroller.h"
 
-#include "widgets/transformwidget.h"
 #include "widgets/lightlayerwidget.h"
-#include "widgets/modellayerwidget.h"
 #include "widgets/animationwidget.h"
-#include "widgets/texturedplanelayerwidget.h"
-#include "widgets/worldlayerwidget.h"
-#include "widgets/endlessplanelayerwidget.h"
 
 #include "widgets/materialwidget.h"
-#include "core/sceneparser.h"
+//#include "core/sceneparser.h"
 //#include "transformgizmo.h"
-#include "editor/gizmos/advancedtransformgizmo.h"
+//#include "editor/gizmos/advancedtransformgizmo.h"
 #include "dialogs/renamelayerdialog.h"
 #include "widgets/layertreewidget.h"
 #include "core/project.h"
@@ -74,13 +69,8 @@ MainWindow::MainWindow(QWidget *parent) :
     aboutDialog = new AboutDialog();
     licenseDialog = new LicenseDialog();
 
-    this->scene = nullptr;
     ui->mainTimeline->setMainWindow(this);
     camControl = nullptr;
-
-    gizmoHitData = nullptr;
-    //gizmoHandle = nullptr;
-    activeGizmoHandle = nullptr;
 
     //todo: bind callbacks
     QMenu* addMenu = new QMenu();
@@ -156,18 +146,13 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->sceneTree->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->sceneTree, SIGNAL(customContextMenuRequested(const QPoint &)), this, SLOT(sceneTreeCustomContextMenu(const QPoint &)));
 
-    //SCENE SLIDERS
-    setupPropertyUi();
-    setupPropertyTabs(nullptr);
-
     this->setupLayerButtonMenu();
 
     //TIMER
     timer = new QTimer(this);
     connect(timer,SIGNAL(timeout()),this,SLOT(updateAnim()));
 
-    this->setupQt3d();
-    activeSceneNode = nullptr;
+    //activeSceneNode = nullptr;
 
     this->rebuildTree();
 
@@ -189,17 +174,18 @@ bool MainWindow::handleMousePress(QMouseEvent *event)
     mouseButton = event->button();
     mousePressPos = event->pos();
 
-    if(event->button() == Qt::LeftButton)
-        gizmo->onMousePress(event->x(),event->y());
+    //if(event->button() == Qt::LeftButton)
+    //    gizmo->onMousePress(event->x(),event->y());
 
     return true;
 }
 
 bool MainWindow::handleMouseRelease(QMouseEvent *event)
 {
-    if(activeGizmoHandle!=nullptr)
-        activeGizmoHandle->removeHighlight();
+    //if(activeGizmoHandle!=nullptr)
+    //    activeGizmoHandle->removeHighlight();
 
+    /*
     mouseButton = event->button();
     mouseReleasePos = event->pos();
 
@@ -220,7 +206,7 @@ bool MainWindow::handleMouseRelease(QMouseEvent *event)
     {
         gizmo->onMouseRelease(event->x(),event->y());
     }
-
+    */
     return true;
 }
 
@@ -228,7 +214,7 @@ bool MainWindow::handleMouseMove(QMouseEvent *event)
 {
     mousePos = event->pos();
 
-    gizmo->onMouseMove(event->x(),event->y());
+    //gizmo->onMouseMove(event->x(),event->y());
 
     return false;
 }
@@ -236,8 +222,10 @@ bool MainWindow::handleMouseMove(QMouseEvent *event)
 //todo: disable scrolling while doing gizmo transform
 bool MainWindow::handleMouseWheel(QWheelEvent *event)
 {
+    /*
     auto speed = 0.01f;
     this->camControl->getCamera()->translate(QVector3D(0,0,event->delta()*speed));
+    */
     return false;
 }
 
@@ -342,6 +330,7 @@ void MainWindow::sceneTreeCustomContextMenu(const QPoint& pos)
     connect(action,SIGNAL(triggered()),this,SLOT(renameNode()));
     menu.addAction(action);
 
+    /*
     //world node isnt removable
     if(node->isRemovable())
     {
@@ -356,13 +345,14 @@ void MainWindow::sceneTreeCustomContextMenu(const QPoint& pos)
         connect(action,SIGNAL(triggered()),this,SLOT(duplicateNode()));
         menu.addAction(action);
     }
-
+    */
 
     menu.exec(ui->sceneTree->mapToGlobal(pos));
 }
 
 void MainWindow::renameNode()
 {
+    /*
     auto items = ui->sceneTree->selectedItems();
     if(items.size()==0)
         return;
@@ -376,12 +366,13 @@ void MainWindow::renameNode()
 
     node->setName(dialog.getName());
     item->setText(0,node->getName());
+    */
 }
 
 void MainWindow::updateGizmoTransform()
 {
-    if(activeSceneNode==nullptr)
-        return;
+    //if(activeSceneNode==nullptr)
+    //    return;
 }
 
 void MainWindow::resizeEvent(QResizeEvent *event)
@@ -389,14 +380,14 @@ void MainWindow::resizeEvent(QResizeEvent *event)
     Q_UNUSED(event);
 
     float aspectRatio = ui->sceneContainer->width()/(float)ui->sceneContainer->height();
-    editorCam->lens()->setPerspectiveProjection(45.0f, aspectRatio, 0.1f, 1000.0f);
+    //editorCam->lens()->setPerspectiveProjection(45.0f, aspectRatio, 0.1f, 1000.0f);
 }
 
 void MainWindow::stopAnimWidget()
 {
     animWidget->stopAnimation();
 }
-
+/*
 void MainWindow::useEditorCamera()
 {
     forwardRenderer->setCamera(editorCam);
@@ -404,16 +395,19 @@ void MainWindow::useEditorCamera()
     auto cam = (UserCameraNode*)this->scene->getRootNode()->children[0];
     cam->showBody();
 }
-
+*/
+/*
 void MainWindow::useUserCamera()
 {
     auto cam = (UserCameraNode*)this->scene->getRootNode()->children[0];
     forwardRenderer->setCamera(editorCam);
     cam->hideBody();
 }
+*/
 
 void MainWindow::saveScene()
 {
+    /*
     if(Globals::project->isSaved())
     {
         auto filename = Globals::project->getFilePath();
@@ -433,11 +427,12 @@ void MainWindow::saveScene()
 
         settings->addRecentlyOpenedScene(filename);
     }
-
+    */
 }
 
 void MainWindow::saveSceneAs()
 {
+    /*
     QString dir = QApplication::applicationDirPath()+"/scenes/";
     auto filename = QFileDialog::getSaveFileName(this,"Save Scene",dir,"Jashaka Scene (*.jah)");
     auto exp = new SceneParser();
@@ -447,6 +442,7 @@ void MainWindow::saveSceneAs()
     this->setProjectTitle(Globals::project->getProjectName());
 
     settings->addRecentlyOpenedScene(filename);
+    */
 }
 
 void MainWindow::loadScene()
@@ -462,7 +458,7 @@ void MainWindow::loadScene()
 
 void MainWindow::openProject(QString filename)
 {
-
+    /*
     //remove current scene first
     this->removeScene();
 
@@ -470,10 +466,10 @@ void MainWindow::openProject(QString filename)
     auto exp = new SceneParser();
 
     //auto scene = exp->loadScene(filename,new Qt3DCore::QEntity());
-    auto sceneEnt = new Qt3DCore::QEntity();
-    sceneEnt->setParent(rootEntity);
-    auto scene = exp->loadScene(filename,sceneEnt);
-    setScene(scene);
+    //auto sceneEnt = new Qt3DCore::QEntity();
+    //sceneEnt->setParent(rootEntity);
+    //auto scene = exp->loadScene(filename,sceneEnt);
+    //setScene(scene);
 
     Globals::project->setFilePath(filename);
     this->setProjectTitle(Globals::project->getProjectName());
@@ -481,6 +477,7 @@ void MainWindow::openProject(QString filename)
     settings->addRecentlyOpenedScene(filename);
 
     delete exp;
+    */
 }
 
 /**
@@ -504,12 +501,12 @@ void MainWindow::openRecentFile()
         return;
     }
 
-    auto exp = new SceneParser();
-    auto sceneEnt = new Qt3DCore::QEntity();
-    sceneEnt->setParent(rootEntity);
+    //auto exp = new SceneParser();
+    //auto sceneEnt = new Qt3DCore::QEntity();
+    //sceneEnt->setParent(rootEntity);
 
-    auto scene = exp->loadScene(filename,sceneEnt);
-    setScene(scene);
+    //auto scene = exp->loadScene(filename,sceneEnt);
+    //setScene(scene);
 
     Globals::project->setFilePath(filename);
     this->setProjectTitle(Globals::project->getProjectName());
@@ -521,103 +518,6 @@ void MainWindow::removeScene()
 {
 }
 
-/**
- * @brief sets the active scene
- * this class now owns this instance of the scene
- * assumes scene is being set for the first time:
- * - assigns renderer to scene
- * - it assigns QPicker to all pickable entities without checking if a picker is already assigned
- * - an editorcamera controller is assigned
- * @param scene
- */
-void MainWindow::setScene(SceneManager* scene)
-{
-    //todo: remove previous scene
-    if(this->scene!=nullptr)
-    {
-        this->scene->getRootNode()->getEntity()->setParent((Qt3DCore::QEntity*)nullptr);
-        //delete this->scene;
-    }
-
-    this->scene = scene;
-    this->scene->getRootNode()->getEntity()->setParent(rootEntity);
-
-
-    //Camera is only added once now
-    if(camControl==nullptr)
-    {
-        Qt3DRender::QCamera *cameraEntity = new Qt3DRender::QCamera(rootEntity);
-
-        cameraEntity->setObjectName(QStringLiteral("cameraEntity"));
-        cameraEntity->setPosition(QVector3D(0, 10.0f, 20.0f));
-        cameraEntity->setUpVector(QVector3D(0, 1, 0));
-        cameraEntity->setViewCenter(QVector3D(0, 5.0f, 0));
-
-        float aspectRatio = ui->sceneContainer->width()/(float)ui->sceneContainer->height();
-        cameraEntity->lens()->setPerspectiveProjection(45.0f, aspectRatio, 0.1f, 1000.0f);
-
-        //camControl = new EditorCameraController(scene->getRootNode()->getEntity(),cameraEntity);
-        camControl = new EditorCameraController(rootEntity,cameraEntity);
-        jahRenderer->setCamera(cameraEntity);
-
-
-        this->editorCam = cameraEntity;
-    }
-
-    //todo: cleanup previous gizmo
-    gizmo = new AdvancedTransformGizmo(scene->getRootNode()->getEntity());
-    gizmo->setSurface(surface);
-    gizmo->setCameraController(camControl);
-
-    rebuildTree();
-}
-
-void MainWindow::assignPickerRecursively(SceneNode* node)
-{
-    return;
-
-    if(node->getSceneNodeType()!=SceneNodeType::World)
-    {
-        auto newNodeEnt = node->getEntity();
-        auto picker = new Qt3DRender::QObjectPicker(newNodeEnt);
-        picker->setHoverEnabled(false);
-        picker->setObjectName(QStringLiteral("item"));
-        newNodeEnt->addComponent(picker);
-        connect(picker, SIGNAL(pressed(Qt3DRender::QPickEvent*)), this, SLOT(entityPicked(Qt3DRender::QPickEvent*)));
-
-    }
-
-    for(auto child:node->children)
-    {
-        assignPickerRecursively(child);
-    }
-}
-
-void MainWindow::setupDefaultScene()
-{
-}
-
-void MainWindow::setActiveSceneNode(SceneNode* node)
-{
-    activeSceneNode = node;
-    setupPropertyTabs(node);
-
-    //context specific ui updates
-    if(node->getSceneNodeType()==SceneNodeType::Mesh)
-    {
-
-    }
-
-    if(node->getSceneNodeType()==SceneNodeType::Light)
-    {
-        auto light = static_cast<LightNode*>(node);
-        //lightLayerWidget->ui->
-        lightLayerWidget->setLight(light);
-    }
-
-    gizmo->trackNode(node);
-}
-
 void MainWindow::setupPropertyUi()
 {
     //TRANSFROMS
@@ -625,22 +525,6 @@ void MainWindow::setupPropertyUi()
 
     //LIGHT LAYER
     lightLayerWidget = new LightLayerWidget();
-
-    //MODEL LAYER
-    modelLayerWidget = new ModelLayerWidget();
-
-    //TORUS LAYER
-    torusLayerWidget = new TorusLayerWidget();
-    //torusLayerWidget->initCallbacks();
-
-    //SPHERE LAYER
-    sphereLayerWidget = new SphereLayerWidget();
-
-    //TEXTURED PLANE LAYER
-    texPlaneLayerWidget = new TexturedPlaneLayerWidget();
-
-    //ENDLESS PLANE
-    endlessPlaneLayerWidget = new EndlessPlaneLayerWidget();
 
     //MATERIAL UI
     materialWidget = new MaterialWidget();
@@ -650,126 +534,18 @@ void MainWindow::setupPropertyUi()
     animWidget->setMainTimelineWidget(ui->mainTimeline->getTimeline());
 
     //WORLD
-    worldLayerWidget = new WorldLayerWidget();
-}
-
-void MainWindow::setupPropertyTabs(SceneNode* node)
-{
-    auto tabs = ui->tabWidget;
-    auto prevTab = tabs->currentWidget();
-    tabs->clear();
-
-    if(node==nullptr)
-        return;
-    auto nodeType = node->getSceneNodeType();
-    if(nodeType!=SceneNodeType::World)
-    {
-        tabs->addTab(transformUi,QIcon(),"Controls");
-        transformUi->setActiveSceneNode(node);
-    }
-
-    switch(node->getSceneNodeType())
-    {
-    //case SceneNodeType::Cube:
-    //case SceneNodeType::Torus:
-    //case SceneNodeType::Sphere:
-    case SceneNodeType::Sphere:
-        //sphereLayerWidget->setSphere(static_cast<SphereNode*>(node));
-        //tabs->addTab(sphereLayerWidget,QIcon(),"Layer");
-        break;
-    case SceneNodeType::Torus:
-        //torusLayerWidget->setTorus(static_cast<TorusNode*>(node));
-        //tabs->addTab(torusLayerWidget,QIcon(),"Layer");
-        break;
-    case SceneNodeType::Mesh:
-        tabs->addTab(modelLayerWidget,QIcon(),"Layer");
-        modelLayerWidget->setMesh(static_cast<MeshNode*>(node));
-        break;
-
-    case SceneNodeType::Light:
-        lightLayerWidget->setLight(static_cast<LightNode*>(node));
-        tabs->addTab(lightLayerWidget,QIcon(),"Layer");
-        break;
-
-    case SceneNodeType::TexturedPlane:
-        //tabs->addTab(texPlaneLayerWidget,QIcon(),"Layer");
-        //texPlaneLayerWidget->setPlane(static_cast<TexturedPlaneNode*>(node));
-        break;
-    case SceneNodeType::EndlessPlane:
-        //tabs->addTab(endlessPlaneLayerWidget,QIcon(),"Layer");
-        //endlessPlaneLayerWidget->setPlane(static_cast<EndlessPlaneNode*>(node));
-        //endlessPlaneLayerWidget->setWorld(static_cast<WorldNode*>(scene->getRootNode()));
-        break;
-    case SceneNodeType::World:
-        tabs->addTab(worldLayerWidget,QIcon(),"World");
-        //worldLayerWidget->setRenderer(forwardRenderer);//this has to be first
-        //worldLayerWidget->setRenderer(jahRenderer);
-        worldLayerWidget->setScene(scene);//then this
-        break;
-    default:
-        break;
-    }
-
-    if(node->usesMaterial())
-    {
-        materialWidget->setSceneNode(node);
-        tabs->addTab(materialWidget,QIcon(),"Material");
-    }
-
-    animWidget->hideHighlight();
-    animWidget->setSceneNode(node);
-    if(nodeType!=SceneNodeType::World)
-        tabs->addTab(animWidget,QIcon(),"Animation");
-
-    //set back the active tab
-    for(int i=0;i<tabs->count();i++)
-    {
-        auto tab = tabs->widget(i);
-        if(tab==prevTab)
-        {
-            tabs->setCurrentIndex(i);
-            break;
-        }
-    }
-}
-
-/* TORUS */
-//TORUS SLIDERS
-void MainWindow::sliderTorusMinorRadius(int val)
-{
-    if(activeSceneNode!=nullptr && activeSceneNode->sceneNodeType==SceneNodeType::Torus)
-    {
-        auto torus = static_cast<TorusNode*>(activeSceneNode);
-        torus->torus->setMinorRadius(val/100.0f);
-    }
-}
-
-void MainWindow::sliderTorusRings(int val)
-{
-    if(activeSceneNode!=nullptr && activeSceneNode->sceneNodeType==SceneNodeType::Torus)
-    {
-        auto torus = static_cast<TorusNode*>(activeSceneNode);
-        torus->torus->setRings(val);
-    }
-}
-
-void MainWindow::sliderTorusSlices(int val)
-{
-    if(activeSceneNode!=nullptr && activeSceneNode->sceneNodeType==SceneNodeType::Torus)
-    {
-        auto torus = static_cast<TorusNode*>(activeSceneNode);
-        torus->torus->setSlices(val);
-    }
+    //worldLayerWidget = new WorldLayerWidget();
 }
 
 void MainWindow::sceneNodeSelected(QTreeWidgetItem* item)
 {
-    auto data = (SceneNode*)item->data(1,Qt::UserRole).value<void*>();
-    setActiveSceneNode(data);
+    //auto data = (SceneNode*)item->data(1,Qt::UserRole).value<void*>();
+    //setActiveSceneNode(data);
 }
 
 void MainWindow::sceneTreeItemChanged(QTreeWidgetItem* item,int column)
 {
+    /*
     auto node = (SceneNode*)item->data(1,Qt::UserRole).value<void*>();
 
     if(item->checkState(column) == Qt::Checked)
@@ -780,11 +556,13 @@ void MainWindow::sceneTreeItemChanged(QTreeWidgetItem* item,int column)
     {
         node->hide();
     }
+    */
 }
 
 
 void MainWindow::setupLayerButtonMenu()
 {
+    /*
     QMenu* addMenu = new QMenu();
 
     QAction *action = new QAction("2D Scene", this);
@@ -802,21 +580,23 @@ void MainWindow::setupLayerButtonMenu()
 
     action = new QAction("Video", this);
     addMenu->addAction(action);
+    */
 }
 
 void MainWindow::updateAnim()
 {
     //scene->getRootNode()->update(1/60.0f);
-    scene->getRootNode()->applyAnimationAtTime(Globals::animFrameTime);
+    //scene->getRootNode()->applyAnimationAtTime(Globals::animFrameTime);
 }
 
 void MainWindow::setSceneAnimTime(float time)
 {
-    scene->getRootNode()->applyAnimationAtTime(time);
+    //scene->getRootNode()->applyAnimationAtTime(time);
 }
 
 void MainWindow::setupQt3d()
 {
+    /*
     rootEntity = nullptr;
 
     surface = new SurfaceView();
@@ -865,10 +645,12 @@ void MainWindow::setupQt3d()
         scene = SceneManager::createDefaultMatrixScene(sceneEnt);
 
     this->setScene(scene);
+    */
 }
 
 void MainWindow::rebuildTree()
 {
+    /*
     auto sceneRoot = scene->getRootNode();
     auto root = new QTreeWidgetItem();
 
@@ -883,87 +665,42 @@ void MainWindow::rebuildTree()
     this->ui->sceneTree->clear();
     this->ui->sceneTree->addTopLevelItem(root);
     ui->sceneTree->expandAll();
-}
-
-void MainWindow::populateTree(QTreeWidgetItem* parentNode,SceneNode* sceneNode)
-{
-    using namespace Qt3DCore;
-
-    for(size_t i=0;i<sceneNode->children.size();i++)
-    {
-        SceneNode* node = sceneNode->children[i];
-
-        auto childNode = new QTreeWidgetItem();
-        childNode->setText(0,node->getName());
-        childNode->setData(1,Qt::UserRole,QVariant::fromValue((void*)node));
-        childNode->setIcon(0,this->getIconFromSceneNodeType(node->sceneNodeType));
-        childNode->setFlags(childNode->flags() | Qt::ItemIsUserCheckable);
-        childNode->setCheckState(0,Qt::Checked);
-
-
-        if(!node->isVisible())
-            childNode->setCheckState(0,Qt::Unchecked);
-
-        parentNode->addChild(childNode);
-        makeSceneNodePickable(node);
-
-        sceneTreeItems.insert(node->getEntity()->id(),childNode);
-
-        populateTree(childNode,node);
-    }
-}
-
-void MainWindow::populateTree(QStandardItem* treeNode,SceneNode* sceneNode)
-{
-    using namespace Qt3DCore;
-
-    for(size_t i=0;i<sceneNode->children.size();i++)
-    {
-        SceneNode* node = sceneNode->children[i];
-        QStandardItem* childNode = new QStandardItem(node->getName());
-        childNode->setData(QVariant::fromValue((void*)node));
-        childNode->setEditable(false);
-        treeNode->appendRow(childNode);
-
-        makeSceneNodePickable(node);
-
-        populateTree(childNode,node);
-    }
+    */
 }
 
 void MainWindow::addCube()
 {
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,SceneNode::createCube("Cube"),false,QIcon(":app/icons/sceneobject.svg"));
+    //addSceneNodeToSelectedTreeItem(ui->sceneTree,SceneNode::createCube("Cube"),false,QIcon(":app/icons/sceneobject.svg"));
 }
 
 void MainWindow::addTorus()
 {
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,TorusNode::createTorus("Torus"),false,QIcon(":app/icons/sceneobject.svg"));
+    //addSceneNodeToSelectedTreeItem(ui->sceneTree,TorusNode::createTorus("Torus"),false,QIcon(":app/icons/sceneobject.svg"));
 }
 
 void MainWindow::addSphere()
 {
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,SphereNode::createSphere("Sphere"),false,QIcon(":app/icons/sceneobject.svg"));
+    //addSceneNodeToSelectedTreeItem(ui->sceneTree,SphereNode::createSphere("Sphere"),false,QIcon(":app/icons/sceneobject.svg"));
 }
 
 void MainWindow::addCylinder()
 {
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,CylinderNode::createCylinder("Cylinder"),false,QIcon(":app/icons/sceneobject.svg"));
+    //addSceneNodeToSelectedTreeItem(ui->sceneTree,CylinderNode::createCylinder("Cylinder"),false,QIcon(":app/icons/sceneobject.svg"));
 }
 
 void MainWindow::addPointLight()
 {
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,LightNode::createLight("PointLight",LightType::Point),true,QIcon(":app/icons/light.svg"));
+    //addSceneNodeToSelectedTreeItem(ui->sceneTree,LightNode::createLight("PointLight",LightType::Point),true,QIcon(":app/icons/light.svg"));
 }
 
 void MainWindow::addSpotLight()
 {
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,LightNode::createLight("SpotLight",LightType::SpotLight),true,QIcon(":app/icons/light.svg"));
+    //addSceneNodeToSelectedTreeItem(ui->sceneTree,LightNode::createLight("SpotLight",LightType::SpotLight),true,QIcon(":app/icons/light.svg"));
 }
 
 void MainWindow::addDirectionalLight()
 {
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,LightNode::createLight("DirectionalLight",LightType::Directional),true,QIcon(":app/icons/light.svg"));
+    //addSceneNodeToSelectedTreeItem(ui->sceneTree,LightNode::createLight("DirectionalLight",LightType::Directional),true,QIcon(":app/icons/light.svg"));
 }
 
 void MainWindow::addMesh()
@@ -975,80 +712,33 @@ void MainWindow::addMesh()
     if(filename.isEmpty())
         return;
 
+    /*
     auto node = MeshNode::loadMesh(nodeName,filename);
 
     auto mat = new AdvanceMaterial();
     node->setMaterial(mat);
 
     addSceneNodeToSelectedTreeItem(ui->sceneTree,node,false,getIconFromSceneNodeType(node->sceneNodeType));
+    */
 }
 
 void MainWindow::addViewPoint()
 {
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,new UserCameraNode(new Qt3DCore::QEntity()),true,getIconFromSceneNodeType(SceneNodeType::UserCamera));
+    //addSceneNodeToSelectedTreeItem(ui->sceneTree,new UserCameraNode(new Qt3DCore::QEntity()),true,getIconFromSceneNodeType(SceneNodeType::UserCamera));
 }
 
 void MainWindow::addTexturedPlane()
 {
+    /*
     auto node = TexturedPlaneNode::createTexturedPlane("Textured Plane");
     //node->setTexture(path);
     addSceneNodeToSelectedTreeItem(ui->sceneTree,node,false,QIcon(":app/icons/square.svg"));
-}
-
-void MainWindow::addSceneNodeToSelectedTreeItem(QTreeWidget* sceneTree,SceneNode* newNode,bool addToSelected,QIcon icon)
-{
-    QTreeWidgetItem* item = nullptr;
-    SceneNode* parentNode = nullptr;
-
-    parentNode = scene->getRootNode();
-    item = ui->sceneTree->invisibleRootItem()->child(0);
-
-    parentNode->addChild(newNode);
-    newNode->pos.setY(3);
-    newNode->_updateTransform();
-    auto newNodeEnt = newNode->getEntity();
-
-    //tree node
-    auto newItem = new QTreeWidgetItem();
-    newItem->setText(0,newNode->getName());
-    newItem->setData(1,Qt::UserRole,QVariant::fromValue((void*)newNode));
-    newItem->setIcon(0,icon);//this should be changed based on the type of node
-    newItem->setFlags(newItem->flags() | Qt::ItemIsUserCheckable);
-    newItem->setCheckState(0,Qt::Checked);
-    item->addChild(newItem);
-
-    ui->sceneTree->expandAll();
-    this->setActiveSceneNode(newNode);
-
-    //select item
-    auto items = ui->sceneTree->selectedItems();
-    for(auto i:items)
-        ui->sceneTree->setItemSelected(i,false);
-
-    ui->sceneTree->setItemSelected(newItem,true);
-    //sceneNodes.insert(newNodeEnt->id(),newNode);
-    sceneTreeItems.insert(newNodeEnt->id(),newItem);
-}
-
-/**
- * @brief makes objects pickable
- * @todo ensure previous picker is removed
- * @param node valid scene node that is already added to the active scene
- */
-void MainWindow::makeSceneNodePickable(SceneNode* node)
-{
-    return;
-
-    auto newNodeEnt = node->getEntity();
-    auto picker = new Qt3DRender::QObjectPicker(newNodeEnt);
-    picker->setHoverEnabled(false);
-    picker->setObjectName(QStringLiteral("item"));//todo: replace with unique name
-    newNodeEnt->addComponent(picker);
-    connect(picker, SIGNAL(pressed(Qt3DRender::QPickEvent*)), this, SLOT(entityPicked(Qt3DRender::QPickEvent*)));
+    */
 }
 
 void MainWindow::duplicateNode()
 {
+    /*
     auto items = ui->sceneTree->selectedItems();
     if(items.size()==0)
         return;
@@ -1095,11 +785,12 @@ void MainWindow::duplicateNode()
     ui->sceneTree->setItemSelected(newItem,true);
     //sceneNodes.insert(newNodeEnt->id(),newNode);
     sceneTreeItems.insert(newNodeEnt->id(),newItem);
-
+    */
 }
 
 void MainWindow::deleteNode()
 {
+    /*
     auto items = ui->sceneTree->selectedItems();
     if(items.size()==0)
         return;
@@ -1117,74 +808,9 @@ void MainWindow::deleteNode()
     sceneTreeItems.remove(node->getEntity()->id());
 
     ui->tabWidget->clear();
-
+    */
 }
 
-
-void MainWindow::entityPicked(Qt3DRender::QPickEvent* event)
-{
-    Q_UNUSED(event);
-
-    //show context menu
-    if(mouseButton == Qt::LeftButton
-            //&& (mouseReleasePos - mousePressPos).manhattanLength() < 3 //mouse press should be equal to mouse release
-            )
-    {
-
-        auto entity = qobject_cast<Qt3DCore::QEntity*>(sender()->parent());
-        auto name = entity->objectName();
-
-        if(gizmo->isGizmoHit(mousePos.x(),mousePos.y()))
-        {
-
-            //DO NOTHING
-            //qDebug()<<"gizmo interrupted picking!";
-        }
-        else
-        {
-            auto node = getSceneNodeByEntityId(entity->id());
-
-            //deselect all nodes
-            auto items = ui->sceneTree->selectedItems();
-            for(auto i:items)
-                ui->sceneTree->setItemSelected(i,false);
-
-            auto treeItem = sceneTreeItems.value(entity->id());
-            ui->sceneTree->setItemSelected(treeItem,true);
-            this->setActiveSceneNode(node);
-        }
-    }
-
-    //qDebug()<<node->getName();
-}
-
-void MainWindow::createSceneNodeContextMenu(QMenu& menu,SceneNode* node)
-{
-    //QMenu menu;
-    QAction* action;
-
-    //rename
-    action = new QAction(QIcon(),"Rename",this);
-    connect(action,SIGNAL(triggered()),this,SLOT(renameNode()));
-    menu.addAction(action);
-
-    //world node isnt removable
-    if(node->isRemovable())
-    {
-        action = new QAction(QIcon(),"Delete",this);
-        connect(action,SIGNAL(triggered()),this,SLOT(deleteNode()));
-        menu.addAction(action);
-    }
-
-    if(node->isDuplicable())
-    {
-        action = new QAction(QIcon(),"Duplicate",this);
-        connect(action,SIGNAL(triggered()),this,SLOT(duplicateNode()));
-        menu.addAction(action);
-    }
-
-    //return menu;
-}
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {
@@ -1202,7 +828,7 @@ void MainWindow::dragMoveEvent(QDragMoveEvent *event)
  */
 void MainWindow::dropEvent(QDropEvent* event)
 {
-
+    /*
     const QMimeData* mimeData = event->mimeData();
 
     if (mimeData->hasUrls())
@@ -1224,13 +850,7 @@ void MainWindow::dropEvent(QDropEvent* event)
             auto nodeName = fileInfo.baseName();
 
             auto node = MeshNode::loadMesh(nodeName,filename);
-            /*
-            auto mat = new Qt3DExtras::QDiffuseMapMaterial();
-            mat->setSpecular(QColor::fromRgbF(1.0f, 1.0f, 1.0f, 1.0f));
-            mat->setShininess(0.0f);
 
-            node->setMaterial(mat,MaterialType::DiffuseMap);
-            */
             auto mat = new AdvanceMaterial();
             node->setMaterial(mat);
 
@@ -1240,6 +860,7 @@ void MainWindow::dropEvent(QDropEvent* event)
     }
 
     event->acceptProposedAction();
+    */
 }
 
 void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
@@ -1247,20 +868,10 @@ void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
     event->accept();
 }
 
-/**
- * @brief returns scene node associated with the nodeId
- *
- * @return pointer to scene node
- */
-SceneNode* MainWindow::getSceneNodeByEntityId(Qt3DCore::QNodeId nodeId)
-{
-    auto item = sceneTreeItems.value(nodeId);
-    auto node = (SceneNode*)item->data(1,Qt::UserRole).value<void*>();
-    return node;
-}
 
 QIcon MainWindow::getIconFromSceneNodeType(SceneNodeType type)
 {
+    /*
     switch(type)
     {
         case SceneNodeType::Cube:
@@ -1278,6 +889,7 @@ QIcon MainWindow::getIconFromSceneNodeType(SceneNodeType type)
     default:
         return QIcon();
     }
+    */
 
     return QIcon();
 }

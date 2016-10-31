@@ -14,7 +14,7 @@ For more information see the LICENSE file
 #include <QDebug>
 #include <QPainter>
 #include <QMouseEvent>
-#include "../scenegraph/scenenodes.h"
+#include "../jah3d/core/scenenode.h"
 #include "timelinewidget.h"
 #include <QtMath>
 
@@ -40,11 +40,8 @@ TimelineWidget::TimelineWidget(QWidget* parent):
 
     //scaleRatio = 30;
 
-    node=nullptr;
+    //node=nullptr;
     drawHighlight = false;
-
-    //test
-    //showHighlight(2,10);
 }
 
 void TimelineWidget::showHighlight(float start,float end)
@@ -61,7 +58,7 @@ void TimelineWidget::hideHighlight()
     this->repaint();
 }
 
-void TimelineWidget::setSceneNode(SceneNode* node)
+void TimelineWidget::setSceneNode(jah3d::SceneNodePtr node)
 {
     this->node = node;
 }
@@ -184,7 +181,7 @@ void TimelineWidget::setCursorPos(int x)
     if(node!=nullptr)
     {
         float time = getTimeAtCursor();
-        node->applyAnimationAtTime(time);
+        //node->applyAnimationAtTime(time);
     }
 
     this->repaint();
@@ -208,13 +205,11 @@ void TimelineWidget::mouseMoveEvent(QMouseEvent* evt)
 {
     if(dragging)
     {
-
         setCursorPos(evt->x());
     }
 }
 
 void TimelineWidget::resizeEvent(QResizeEvent* event)
 {
-
     QWidget::resizeEvent(event);
 }

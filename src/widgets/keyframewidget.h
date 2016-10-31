@@ -18,7 +18,9 @@ For more information see the LICENSE file
 #include <QMouseEvent>
 #include <vector>
 #include <QVector2D>
-#include "../scenegraph/scenenodes.h"
+#include "../jah3d/core/scenenode.h"
+#include "../jah3d/animation/keyframeanimation.h"
+//#include "../scenegraph/scenenodes.h"
 
 
 class KeyFrameWidget:public QWidget
@@ -45,14 +47,14 @@ private:
     bool dragging;
     int scaleRatio;
 
-    SceneNode* obj;
+    jah3d::SceneNodePtr obj;
     QPoint mousePos;
     QPoint clickPos;
 
 public:
     KeyFrameWidget(QWidget* parent);
 
-    void setSceneNode(SceneNode* node);
+    void setSceneNode(jah3d::SceneNodePtr node);
     void setMaxTimeInSeconds(float time);
     void adjustLength();
 
@@ -68,7 +70,7 @@ public:
     //void setCursorPos(int x);
 
     template<typename T>
-    void drawFrame(KeyFrame<T>* frame,QPainter* paint,int yTop)
+    void drawFrame(jah3d::KeyFrame<T>* frame,QPainter* paint,int yTop)
     {
         float penSize = 14;
         float penSizeSquared = 7*7;
@@ -81,10 +83,10 @@ public:
         highlightPen.setWidth(penSize);
         highlightPen.setCapStyle(Qt::RoundCap);
 
-
+        /*
         for(size_t i=0;i<frame->keys.size();i++)
         {
-            Key<T>* key = frame->keys[i];
+            jah3d::Key<T>* key = frame->keys[i];
             int xpos = this->timeToPos(key->time);
 
             float distSqrd = distanceSquared(xpos,yTop+10,mousePos.x(),mousePos.y());
@@ -101,6 +103,7 @@ public:
             }
 
         }
+        */
 
     }
 
