@@ -1,25 +1,25 @@
 #ifndef MESHNODE_H
 #define MESHNODE_H
 
+#include <QSharedPointer>
 #include "../core/scenenode.h"
 //#include "../graphics/mesh.h"
-#include "../graphics/material.h"
+//#include "../graphics/material.h"
 
 namespace jah3d
 {
 
 class Mesh;
-class MeshNode;
-typedef QSharedPointer<jah3d::MeshNode> MeshNodePtr;
+class Material;
 
-class MeshNode:public jah3d::SceneNode
+class MeshNode:public SceneNode
 {
 public:
 
     Mesh* mesh;
-    MaterialPtr material;
+    QSharedPointer<Material> material;
 
-    static MeshNodePtr create();
+    static QSharedPointer<jah3d::MeshNode> create();
 
     void setMesh(QString source);
     void setMesh(Mesh* mesh);
@@ -30,6 +30,9 @@ private:
 
     }
 };
+
+typedef QSharedPointer<jah3d::MeshNode> MeshNodePtr;
+
 
 }
 

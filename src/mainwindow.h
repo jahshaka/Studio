@@ -159,22 +159,19 @@ private slots:
     void sceneTreeCustomContextMenu(const QPoint&);
     void sceneTreeItemChanged(QTreeWidgetItem* item,int column);
 
-    void setActiveSceneNode(SceneNodePtr node);
+    //void setActiveSceneNode(SceneNodePtr node);
 
-    void createSceneNodeContextMenu(QMenu& menu,SceneNodePtr node);
+    //void createSceneNodeContextMenu(QMenu& menu,SceneNodePtr node);
 
     //TORUS SLIDERS
-    void sliderTorusMinorRadius(int val);//float
-    void sliderTorusRings(int val);
-    void sliderTorusSlices(int val);
 
     void saveScene();
     void saveSceneAs();
     void loadScene();
     void openRecentFile();
 
-    void useEditorCamera();
-    void useUserCamera();
+    //void useEditorCamera();
+    //void useUserCamera();
 
     void showPreferences();
     void exitApp();

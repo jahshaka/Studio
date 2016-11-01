@@ -38,6 +38,7 @@ DefaultMaterial::DefaultMaterial()
     program->setUniformValue("u_useReflectionTex",false);
     program->setUniformValue("u_useSpecularTex",false);
 
+    textureScale = 1.0f;
     ambientColor = QColor(0,0,0);
 
     useNormalTex = false;
@@ -66,10 +67,10 @@ void DefaultMaterial::begin(QOpenGLFunctions* gl)
 {
     program->bind();
 
-    program->enableAttributeArray(POS_ATTR_LOC);
-    program->enableAttributeArray(TEXCOORD_ATTR_LOC);
-    program->enableAttributeArray(NORMAL_ATTR_LOC);
-    program->enableAttributeArray(TANGENT_ATTR_LOC);
+    //program->enableAttributeArray(POS_ATTR_LOC);
+    //program->enableAttributeArray(TEXCOORD_ATTR_LOC);
+    //program->enableAttributeArray(NORMAL_ATTR_LOC);
+    //program->enableAttributeArray(TANGENT_ATTR_LOC);
 
     //program->setUniformValue("u_material.diffuse",false);
     //program->setUniformValue("u_useNormalTex",false);

@@ -2,7 +2,7 @@
 #define SCENENODE_H
 
 #include <QSharedPointer>
-#include "scene.h"
+//#include "scene.h"
 #include <QQuaternion>
 #include <QMatrix4x4>
 #include <QVector3D>
@@ -10,10 +10,11 @@
 namespace jah3d
 {
 
+class Scene;
 class SceneNode;
 typedef QSharedPointer<SceneNode> SceneNodePtr;
 
-enum SceneNodeType
+enum class SceneNodeType
 {
     Empty,
     Mesh,
@@ -23,6 +24,7 @@ enum SceneNodeType
 
 class SceneNode:public QEnableSharedFromThis<SceneNode>
 {
+public:
     //cached local and global transform
     QMatrix4x4 localTransform;
     QMatrix4x4 globalTransform;
@@ -35,14 +37,14 @@ class SceneNode:public QEnableSharedFromThis<SceneNode>
 
     QString name;
 
-    ScenePtr scene;
+    QSharedPointer<Scene> scene;
     SceneNodePtr parent;
     QList<SceneNodePtr> children;
 
     friend class Renderer;
     friend class Scene;
 
-public:
+
     SceneNode();
 
     static SceneNodePtr create();
@@ -55,7 +57,7 @@ public:
 
 private:
     void setParent(SceneNodePtr node);
-    void setScene(ScenePtr scene);
+    void setScene(QSharedPointer<Scene> scene);
 };
 
 

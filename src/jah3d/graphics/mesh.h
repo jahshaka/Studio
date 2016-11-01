@@ -4,19 +4,18 @@
 #include <QString>
 #include <QSharedPointer>
 
-class AdvanceMaterial;
-class Material;
 class aiMesh;
 class QOpenGLBuffer;
 class QOpenGLFunctions;
 class QOpenGLShaderProgram;
-class VertexLayout;
+
 
 namespace jah3d
 {
 
-class Mesh;
-typedef QSharedPointer<Mesh> MeshPtr;
+//class DefaultMaterial;
+class Material;
+class VertexLayout;
 
 class Mesh
 {
@@ -33,8 +32,10 @@ public:
     static Mesh* loadMesh(QString filePath);
 
 private:
-    Mesh(aiMesh* mesh,VertexLayout vertexLayout);
+    Mesh(aiMesh* mesh,VertexLayout* vertexLayout);
 };
+
+typedef QSharedPointer<Mesh> MeshPtr;
 
 }
 

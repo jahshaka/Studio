@@ -127,6 +127,7 @@ void AnimationWidget::setSceneNode(jah3d::SceneNodePtr node)
     ui->keylabelView->repaint();
     this->node = node;
 
+    /*
     ui->animStartTime->setValue(node->getAnimStartTime());
     //ui->timeline->setMaxTimeInSeconds(node->animLength);
     ui->animLength->setValue(node->animLength);
@@ -145,6 +146,8 @@ void AnimationWidget::setSceneNode(jah3d::SceneNodePtr node)
     default:
         break;
     }
+
+    */
 }
 
 void AnimationWidget::removeNodeSpecificActions()
@@ -206,6 +209,7 @@ void AnimationWidget::repaintViews()
 
 void AnimationWidget::addPosKey()
 {
+    /*
     if(node==nullptr)
         return;
 
@@ -216,10 +220,12 @@ void AnimationWidget::addPosKey()
     node->updateAnimPathFromKeyFrames();
 
     repaintViews();
+    */
 }
 
 void AnimationWidget::addRotKey()
 {
+    /*
     if(node==nullptr)
         return;
 
@@ -232,10 +238,12 @@ void AnimationWidget::addRotKey()
 
 
     repaintViews();
+    */
 }
 
 void AnimationWidget::addScaleKey()
 {
+    /*
     if(node==nullptr)
         return;
 
@@ -244,10 +252,12 @@ void AnimationWidget::addScaleKey()
     node->transformAnim->scale->addKey(scale,seconds);
 
     repaintViews();
+    */
 }
 
 void AnimationWidget::addPosRotKey()
 {
+    /*
     if(node==nullptr)
         return;
 
@@ -260,10 +270,12 @@ void AnimationWidget::addPosRotKey()
     node->transformAnim->rot->addKey(node->rot,seconds);
 
     repaintViews();
+    */
 }
 
 void AnimationWidget::addPosRotScaleKey()
 {
+    /*
     if(node==nullptr)
         return;
 
@@ -279,10 +291,12 @@ void AnimationWidget::addPosRotScaleKey()
     node->transformAnim->scale->addKey(scale,seconds);
 
     repaintViews();
+    */
 }
 
 void AnimationWidget::addLightColorKey()
 {
+    /*
     if(node->sceneNodeType == SceneNodeType::Light)
     {
         auto light = static_cast<LightNode*>(node);
@@ -290,10 +304,12 @@ void AnimationWidget::addLightColorKey()
 
         light->lightAnim->color->addKey(light->getColor(),seconds);
     }
+    */
 }
 
 void AnimationWidget::addLightIntensityKey()
 {
+    /*
     if(node->sceneNodeType == SceneNodeType::Light)
     {
         auto light = static_cast<LightNode*>(node);
@@ -301,6 +317,7 @@ void AnimationWidget::addLightIntensityKey()
 
         light->lightAnim->intensity->addKey(light->getIntensity(),seconds);
     }
+    */
 }
 
 void AnimationWidget::addSceneBackgroundColorKey()
@@ -325,24 +342,31 @@ void AnimationWidget::addSceneActiveCameraKey()
 
 void AnimationWidget::deletePosKeys()
 {
+    /*
     node->transformAnim->pos->clear();
     repaintViews();
+    */
 }
 
 void AnimationWidget::deleteScaleKeys()
 {
+    /*
     node->transformAnim->scale->clear();
     repaintViews();
+    */
 }
 
 void AnimationWidget::deleteRotKeys()
 {
+    /*
     node->transformAnim->rot->clear();
     repaintViews();
+    */
 }
 
 void AnimationWidget::deleteAllKeys()
 {
+    /*
     node->transformAnim->pos->clear();
     node->transformAnim->scale->clear();
     node->transformAnim->rot->clear();
@@ -362,6 +386,7 @@ void AnimationWidget::deleteAllKeys()
     }
 
     repaintViews();
+    */
 }
 
 void AnimationWidget::deleteLightColorKeys()
@@ -383,8 +408,10 @@ void AnimationWidget::timeEditChanged(QTime time)
 
 void AnimationWidget::setAnimstart(int time)
 {
+    /*
     if(node==nullptr)
         return;
     node->animStartTime = time;
     this->showHighlight();
+    */
 }

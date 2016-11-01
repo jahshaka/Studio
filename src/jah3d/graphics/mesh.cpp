@@ -18,7 +18,7 @@
 namespace jah3d
 {
 
-Mesh::Mesh(aiMesh* mesh,VertexLayout vertexLayout)
+Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
 {
     this->vertexLayout = vertexLayout;
     //assumes mesh is triangulated
@@ -92,8 +92,9 @@ void Mesh::draw(QOpenGLFunctions* gl,QOpenGLShaderProgram* program)
     program->setAttributeBuffer(TANGENT_ATTR_LOC, GL_FLOAT, 8 * sizeof(GLfloat), 3, stride);
     */
 
-    vertexLayout->apply(program);
+    vertexLayout->bind(program);
     gl->glDrawArrays(GL_TRIANGLES,0,numFaces*3);
+    vertexLayout->unbind(program);
 }
 
 Mesh* Mesh::loadMesh(QString filePath)

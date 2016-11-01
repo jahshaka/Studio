@@ -1,4 +1,5 @@
 #include "scenenode.h"
+#include "scene.h"
 
 namespace jah3d
 {
@@ -50,7 +51,7 @@ void SceneNode::removeChild(SceneNodePtr node)
 {
     children.removeOne(node);
     node->parent = QSharedPointer<SceneNode>(nullptr);
-    node->scene = ScenePtr(nullptr);
+    node->scene = QSharedPointer<Scene>(nullptr);
     scene->removeNode(node);
 }
 
@@ -59,7 +60,7 @@ void SceneNode::setParent(SceneNodePtr node)
     this->parent = node;
 }
 
-void SceneNode::setScene(ScenePtr scene)
+void SceneNode::setScene(QSharedPointer<Scene> scene)
 {
     this->scene = scene;
 }

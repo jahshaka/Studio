@@ -37,7 +37,7 @@ For more information see the LICENSE file
 #include "globals.h"
 //#include "editorcameracontroller.h"
 
-#include "widgets/lightlayerwidget.h"
+//#include "widgets/lightlayerwidget.h"
 #include "widgets/animationwidget.h"
 
 #include "widgets/materialwidget.h"
@@ -521,10 +521,10 @@ void MainWindow::removeScene()
 void MainWindow::setupPropertyUi()
 {
     //TRANSFROMS
-    transformUi = new TransformWidget();
+    //transformUi = new TransformWidget();
 
     //LIGHT LAYER
-    lightLayerWidget = new LightLayerWidget();
+    //lightLayerWidget = new LightLayerWidget();
 
     //MATERIAL UI
     materialWidget = new MaterialWidget();

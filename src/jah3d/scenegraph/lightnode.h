@@ -1,11 +1,14 @@
 #ifndef LIGHTNODE_H
 #define LIGHTNODE_H
 
+#include "QColor"
 #include <QSharedPointer>
 #include "../core/scenenode.h"
+
 namespace jah3d
 {
 
+class LightNode;
 typedef QSharedPointer<LightNode> LightNodePtr;
 
 enum LightType:int

@@ -5,11 +5,14 @@
 #include <QOpenGLShaderProgram>
 #include <QColor>
 
+class QOpenGLFunctions;
+
 namespace jah3d
 {
 
 class DefaultMaterial:public Material
 {
+    float textureScale;
     QColor ambientColor;
 
     bool useNormalTex;
@@ -65,6 +68,9 @@ class DefaultMaterial:public Material
     {
         program->setUniformValue(name.toStdString().c_str(), value);
     }
+
+    void begin(QOpenGLFunctions* gl);
+    void end();
 };
 
 }

@@ -57,7 +57,7 @@ public:
 
 private slots:
     //void materialChanged(QString);
-
+/*
     void setAmbient(QColor col);
     void setDiffuse(QColor col);
     void setSpecular(QColor col);
@@ -82,6 +82,7 @@ private slots:
     void changeTextureScale(int val);
 
     void materialPresetChanged(QListWidgetItem* item);
+    */
 private:
 
     /// \brief Sets label's image from specified file

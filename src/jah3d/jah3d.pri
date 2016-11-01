@@ -14,7 +14,8 @@ HEADERS += \
     $$PWD/graphics/renderdata.h \
     $$PWD/graphics/forwardrenderer.h \
     $$PWD/materials/defaultmaterial.h \
-    $$PWD/graphics/vertexlayout.h
+    $$PWD/graphics/vertexlayout.h \
+    $$PWD/jah3d.h
 
 include(assimp/assimp.pri)
 include(libovr/libovr.pri)
@@ -24,4 +25,5 @@ SOURCES += \
     $$PWD/materials/defaultmaterial.cpp \
     $$PWD/core/scene.cpp \
     $$PWD/scenegraph/meshnode.cpp \
-    $$PWD/core/scenenode.cpp
+    $$PWD/core/scenenode.cpp \
+    $$PWD/graphics/forwardrenderer.cpp

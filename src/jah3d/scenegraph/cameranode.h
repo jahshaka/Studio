@@ -11,7 +11,7 @@ namespace jah3d
 class CameraNode;
 typedef QSharedPointer<jah3d::CameraNode> CameraNodePtr;
 
-class CameraNode:public jah3d::SceneNode
+class CameraNode:public SceneNode
 {
     float fov;//radians
     float aspectRatio;

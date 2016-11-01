@@ -41,7 +41,9 @@ MaterialWidget::MaterialWidget(QWidget *parent) :
     }
     */
 
+    /*
     connect(ui->listWidget,SIGNAL(itemClicked(QListWidgetItem*)),this,SLOT(materialPresetChanged(QListWidgetItem*)));
+
 
     //texture map changes
     connect(ui->diffuseMap,SIGNAL(pressed()),this,SLOT(changeDiffuseMap()));
@@ -61,6 +63,7 @@ MaterialWidget::MaterialWidget(QWidget *parent) :
     connect(ui->clearNormalMap,SIGNAL(pressed()),this,SLOT(clearNormalMap()));
     connect(ui->clearSpecularMap,SIGNAL(pressed()),this,SLOT(clearSpecularMap()));
     connect(ui->clearReflectionMap,SIGNAL(pressed()),this,SLOT(clearReflectionMap()));
+    */
 
     ui->textureScale->setLabelText("");
     connect(ui->textureScale,SIGNAL(valueChanged(int)),this,SLOT(changeTextureScale(int)));

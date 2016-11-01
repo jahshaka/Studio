@@ -73,7 +73,6 @@ HEADERS  += src/mainwindow.h \
     src/widgets/keyframewidget.h \
     src/widgets/layertreewidget.h \
     src/widgets/lcdslider.h \
-    src/widgets/lightlayerwidget.h \
     src/widgets/maintimelinewidget.h \
     src/widgets/materialwidget.h \
     src/widgets/scenenodetransformui.h \

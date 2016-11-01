@@ -14,25 +14,30 @@ For more information see the LICENSE file
 
 #include <QPoint>
 #include <QVector3D>
-#include "../jah3d/core/scenenode.h"
-#include "../jah3d/scenegraph/cameranode.h"
+#include <QSharedPointer>
+//#include "../jah3d/core/scenenode.h"
+//#include "../jah3d/scenegraph/cameranode.h"
 
 //class CameraPtr;
+namespace jah3d
+{
+    class CameraNode;
+}
 
 class EditorCameraController
 {
-    Q_OBJECT
+    //Q_OBJECT
 
-    jah3d::CameraNodePtr camera;
+    QSharedPointer<jah3d::CameraNode> camera;
 
     float lookSpeed;
     float linearSpeed;
 
 public:
-    EditorCameraController(jah3d::CameraNodePtr  cam);
+    EditorCameraController(QSharedPointer<jah3d::CameraNode>  cam);
 
-    jah3d::CameraNodePtr  getCamera();
-    void setCamera(jah3d::CameraNodePtr  cam);
+    QSharedPointer<jah3d::CameraNode>  getCamera();
+    void setCamera(QSharedPointer<jah3d::CameraNode>  cam);
 
     QVector3D getPos();
 

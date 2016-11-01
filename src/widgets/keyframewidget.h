@@ -18,10 +18,15 @@ For more information see the LICENSE file
 #include <QMouseEvent>
 #include <vector>
 #include <QVector2D>
-#include "../jah3d/core/scenenode.h"
-#include "../jah3d/animation/keyframeanimation.h"
-//#include "../scenegraph/scenenodes.h"
+#include <QSharedPointer>
+//#include "../jah3d/animation/keyframeanimation.h"
+//#include "../jah3d/core/scenenode.h"
+#include "../jah3d/jah3d.h"
 
+namespace jah3d
+{
+    class SceneNode;
+}
 
 class KeyFrameWidget:public QWidget
 {
@@ -47,14 +52,14 @@ private:
     bool dragging;
     int scaleRatio;
 
-    jah3d::SceneNodePtr obj;
+    QSharedPointer<jah3d::SceneNode> obj;
     QPoint mousePos;
     QPoint clickPos;
 
 public:
     KeyFrameWidget(QWidget* parent);
 
-    void setSceneNode(jah3d::SceneNodePtr node);
+    void setSceneNode(QSharedPointer<jah3d::SceneNode> node);
     void setMaxTimeInSeconds(float time);
     void adjustLength();
 
@@ -69,6 +74,7 @@ public:
     void setTime(float time);
     //void setCursorPos(int x);
 
+    /*
     template<typename T>
     void drawFrame(jah3d::KeyFrame<T>* frame,QPainter* paint,int yTop)
     {
@@ -83,7 +89,7 @@ public:
         highlightPen.setWidth(penSize);
         highlightPen.setCapStyle(Qt::RoundCap);
 
-        /*
+
         for(size_t i=0;i<frame->keys.size();i++)
         {
             jah3d::Key<T>* key = frame->keys[i];
@@ -101,11 +107,9 @@ public:
                 paint->setPen(pen);
                 paint->drawPoint(xpos,yTop+10);//frame height should be 10
             }
-
         }
-        */
-
     }
+    */
 
 
     void drawBackgroundLines(QPainter& paint);

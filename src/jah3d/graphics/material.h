@@ -1,11 +1,12 @@
 #ifndef MATERIAL_H
 #define MATERIAL_H
 
-#include "shaderprogram.h"
-#include "texture.h"
+//#include "shaderprogram.h"
+//#include "texture.h"
 #include <QSharedPointer>
 
 class QOpenGLShaderProgram;
+class QOpenGLTexture;
 
 namespace jah3d
 {

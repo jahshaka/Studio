@@ -1,4 +1,6 @@
 #include "scene.h"
+#include "scenenode.h"
+#include "../scenegraph/lightnode.h"
 
 namespace jah3d
 {
@@ -22,7 +24,7 @@ void Scene::addNode(SceneNodePtr node)
 {
     if(node->sceneNodeType == SceneNodeType::Light)
     {
-        lights.append(node.staticCast<LightNode>());
+        lights.append(node.staticCast<jah3d::LightNode>());
     }
 }
 
@@ -30,7 +32,7 @@ void Scene::removeNode(SceneNodePtr node)
 {
     if(node->sceneNodeType == SceneNodeType::Light)
     {
-        lights.removeOne(node);
+        lights.removeOne(node.staticCast<jah3d::LightNode>());
     }
 }
 

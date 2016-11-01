@@ -14,12 +14,18 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QTime>
+#include <QSharedPointer>
 #include "ui_animationwidget.h"
-#include "../core/scenenode.h"
+//#include "../core/scenenode.h"
 
 class QWidget;
 class QElapsedTimer;
 class TimelineWidget;
+
+namespace jah3d
+{
+    class SceneNode;
+}
 
 class AnimationWidget : public QWidget
 {
@@ -40,7 +46,7 @@ public:
     explicit AnimationWidget(QWidget *parent = 0);
     ~AnimationWidget();
 
-    void setSceneNode(jah3d::SceneNodePtr node);
+    void setSceneNode(QSharedPointer<jah3d::SceneNode> node);
 
     void setMainTimelineWidget(TimelineWidget* tl)
     {
@@ -144,24 +150,6 @@ private slots:
     void stopTimer();
 
     void timeEditChanged(QTime);
-    void setAnimLength(int lengthInSeconds)
-    {
-        node->animLength = lengthInSeconds;
-        //ui->timeline->setMaxTimeInSeconds(lengthInSeconds);
-        ui->timeline->setTimeRange(0,lengthInSeconds);
-        //ui->keywidgetView->setMaxTimeInSeconds(lengthInSeconds);
-        ui->keywidgetView->setTimeRange(0,lengthInSeconds);
-        /*
-        int scaleRatio = 30;
-        ui->values->setGeometry(
-                    ui->values->x(),
-                    ui->values->y(),
-                    lengthInSeconds*scaleRatio,
-                    ui->values->height());
-        ui->values->setMinimumWidth(lengthInSeconds*scaleRatio);
-        */
-        this->showHighlight();
-    }
     void setAnimstart(int time);
 
 private:
