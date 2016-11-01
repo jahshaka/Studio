@@ -56,6 +56,9 @@ For more information see the LICENSE file
 
 #include "helpers/collisionhelper.h"
 
+#include "widgets/sceneviewwidget.h"
+#include "jah3d/scenegraph/meshnode.h"
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     //ui(new Ui::MainWindow)
@@ -155,8 +158,30 @@ MainWindow::MainWindow(QWidget *parent) :
     //activeSceneNode = nullptr;
 
     this->rebuildTree();
-
     setProjectTitle(Globals::project->getProjectName());
+
+    //init scene view
+    sceneView = new SceneViewWidget();
+    sceneView->setParent(this);
+
+    createTestScene();
+}
+
+void MainWindow::createTestScene()
+{
+    auto scene = jah3d::Scene::create();
+
+    auto cam = jah3d::CameraNode::create();
+    //cam->lookAt(QVector3D(0,0,0),QVect);
+    scene->setCamera(cam);
+
+    //add test object with basic material
+    auto obj = jah3d::MeshNode::create();
+    obj->setMesh("app/models/head.obj");
+    obj->setMaterial(jah3d::DefaultMaterial::create());
+
+    scene->rootNode->addChild(obj);
+    sceneView->setScene(scene);
 }
 
 void MainWindow::setSettingsManager(SettingsManager* settings)

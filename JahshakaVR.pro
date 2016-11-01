@@ -55,6 +55,7 @@ SOURCES += src/main.cpp\
     src/dialogs/infodialog.cpp \
     src/globals.cpp \
     src/dialogs/renamelayerdialog.cpp \
+    src/widgets/sceneviewwidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -86,7 +87,8 @@ HEADERS  += src/mainwindow.h \
     src/core/surfaceview.h \
     src/editor/editorcameracontroller.h \
 	src/dialogs/infodialog.h \
-    src/globals.h
+    src/globals.h \
+    src/widgets/sceneviewwidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

@@ -49,6 +49,8 @@ class TransformGizmo;
 class AdvancedTransformGizmo;
 class TransformWidget;
 
+class SceneViewWidget;
+
 class EditorCameraController;
 class SettingsManager;
 class PreferencesDialog;
@@ -73,6 +75,7 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
+    void createTestScene();
     void setProjectTitle(QString projectTitle);
 
     void setSceneAnimTime(float time);
@@ -130,10 +133,6 @@ private:
     void dropEvent(QDropEvent* event) override;
     void dragLeaveEvent(QDragLeaveEvent* event) override;
 
-    //SceneNodePtr getSceneNodeByEntityId(Qt3DCore::QNodeId nodeId);
-
-    void assignPickerRecursively(SceneNodePtr node);
-
 private slots:
     //scenegraph
     void addCube();
@@ -185,6 +184,8 @@ private slots:
 private:
     Ui::NewMainWindow *ui;
     SurfaceView* surface;
+    SceneViewWidget* sceneView;
+
     QStandardItemModel* treeModel;
     QWidget *container;
     EditorCameraController* camControl;
