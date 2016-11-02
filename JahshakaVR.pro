@@ -93,7 +93,8 @@ SOURCES += src/main.cpp\
     src/materials/gizmomaterial.cpp \
     src/widgets/materialsets.cpp \
     src/widgets/modelpresets.cpp \
-    src/widgets/accordianwidget.cpp
+    src/widgets/accordianbladewidget.cpp \
+    src/widgets/hfloatslider.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -168,7 +169,8 @@ HEADERS  += src/mainwindow.h \
     src/globals.h \
     src/widgets/materialsets.h \
     src/widgets/modelpresets.h \
-    src/widgets/accordianwidget.h
+    src/widgets/accordianbladewidget.h \
+    src/widgets/hfloatslider.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -198,7 +200,8 @@ FORMS    += \
     src/newmainwindow.ui \
     src/widgets/materialsets.ui \
     src/widgets/modelpresets.ui \
-    src/widgets/accordianwidget.ui
+    src/widgets/accordianbladewidget.ui \
+    src/widgets/hfloatslider.ui
 
 DISTFILES +=
 

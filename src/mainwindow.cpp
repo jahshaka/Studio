@@ -19,7 +19,6 @@ For more information see the LICENSE file
 #include <Qt3DCore/qentity.h>
 #include <Qt3DRender/qcameralens.h>
 
-
 #include <Qt3DInput/QInputAspect>
 #include <Qt3DInput/QActionInput>
 #include <Qt3DInput/QLogicalDevice>
@@ -102,6 +101,7 @@ For more information see the LICENSE file
 #include "materials/materials.h"
 #include "core/jahrenderer.h"
 #include "helpers/collisionhelper.h"
+#include "widgets/accordianbladewidget.h" // testing
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -123,6 +123,33 @@ MainWindow::MainWindow(QWidget *parent) :
     gizmoHitData = nullptr;
     //gizmoHandle = nullptr;
     activeGizmoHandle = nullptr;
+
+
+    AccordianBladeWidget *accordian = new AccordianBladeWidget();
+    accordian->setContentTitle("Fog Settings");
+    accordian->addFloatValueSlider("Fog Intensity", 0, 100);
+    accordian->addFloatValueSlider("Fog Near Distance", 0, 100);
+    accordian->addFloatValueSlider("Fog Far Distance", 0, 100);
+    accordian->addFloatValueSlider("Fog Size", 0, 100);
+    AccordianBladeWidget *accordian2 = new AccordianBladeWidget();
+    accordian2->setContentTitle("Skies Presets");
+    AccordianBladeWidget *accordian3 = new AccordianBladeWidget();
+    accordian3->setContentTitle("Grid Options");
+    AccordianBladeWidget *accordian4 = new AccordianBladeWidget();
+    accordian4->setContentTitle("Background Options");
+    AccordianBladeWidget *accordian5 = new AccordianBladeWidget();
+    accordian5->setContentTitle("Object Options");
+
+    QVBoxLayout *mainLay = new QVBoxLayout(this);
+    mainLay->addWidget(accordian);
+    mainLay->addWidget(accordian2);
+    mainLay->addWidget(accordian3);
+    mainLay->addWidget(accordian4);
+    mainLay->addWidget(accordian5);
+    mainLay->addStretch();
+    mainLay->setMargin(0);
+
+    ui->accordian->setLayout(mainLay);
 
     //todo: bind callbacks
     QMenu* addMenu = new QMenu();

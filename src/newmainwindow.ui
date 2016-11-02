@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1198</width>
-    <height>795</height>
+    <width>1209</width>
+    <height>945</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -85,7 +85,7 @@ QDockWidget::title {
     background: lightgray;
     padding-left: 5px 5px 5px 5pc;
 	color: rgb(255, 255, 255);
-	background-color: &quot;#313131&quot;;
+	background-color: &quot;#282828&quot;;
 }
 
 QLabel {
@@ -180,7 +180,7 @@ background-color: rgb(30, 144, 255);
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1198</width>
+     <width>1209</width>
      <height>30</height>
     </rect>
    </property>
@@ -554,7 +554,7 @@ QToolButton:hover {
     <zorder>widget</zorder>
    </widget>
   </widget>
-  <widget class="QDockWidget" name="PropertiesDock">
+  <widget class="QDockWidget" name="ModelsPresetsDock">
    <property name="minimumSize">
     <size>
      <width>300</width>
@@ -564,7 +564,7 @@ QToolButton:hover {
    <property name="maximumSize">
     <size>
      <width>524287</width>
-     <height>205</height>
+     <height>212</height>
     </size>
    </property>
    <property name="styleSheet">
@@ -615,8 +615,8 @@ QToolButton:hover {
   <widget class="QDockWidget" name="AnimationDock">
    <property name="minimumSize">
     <size>
-     <width>82</width>
-     <height>200</height>
+     <width>85</width>
+     <height>250</height>
     </size>
    </property>
    <property name="styleSheet">
@@ -642,6 +642,12 @@ QToolButton:hover {
      <property name="bottomMargin">
       <number>0</number>
      </property>
+     <property name="spacing">
+      <number>0</number>
+     </property>
+     <item row="1" column="0">
+      <widget class="AnimationWidget" name="animationtimeline"/>
+     </item>
      <item row="0" column="0">
       <widget class="MainTimelineWidget" name="mainTimeline" native="true">
        <property name="sizePolicy">
@@ -653,13 +659,13 @@ QToolButton:hover {
        <property name="minimumSize">
         <size>
          <width>0</width>
-         <height>52</height>
+         <height>30</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
          <width>16777215</width>
-         <height>16777215</height>
+         <height>30</height>
         </size>
        </property>
        <property name="styleSheet">
@@ -667,13 +673,10 @@ QToolButton:hover {
        </property>
       </widget>
      </item>
-     <item row="1" column="0">
-      <widget class="AnimationWidget" name="animationtimeline"/>
-     </item>
     </layout>
    </widget>
   </widget>
-  <widget class="QDockWidget" name="dockWidget">
+  <widget class="QDockWidget" name="PropertiesDock">
    <property name="minimumSize">
     <size>
      <width>89</width>
@@ -708,16 +711,19 @@ QToolButton:hover {
          <height>220</height>
         </size>
        </property>
+       <property name="sizeAdjustPolicy">
+        <enum>QAbstractScrollArea::AdjustToContents</enum>
+       </property>
        <property name="widgetResizable">
         <bool>true</bool>
        </property>
-       <widget class="QWidget" name="PropertiesContent">
+       <widget class="QWidget" name="accordian">
         <property name="geometry">
          <rect>
           <x>0</x>
           <y>0</y>
           <width>298</width>
-          <height>321</height>
+          <height>270</height>
          </rect>
         </property>
        </widget>
@@ -726,24 +732,24 @@ QToolButton:hover {
     </layout>
    </widget>
   </widget>
-  <widget class="QDockWidget" name="dockWidget_2">
+  <widget class="QDockWidget" name="ObjectViewDock">
    <property name="minimumSize">
     <size>
      <width>300</width>
-     <height>44</height>
+     <height>160</height>
     </size>
    </property>
    <property name="maximumSize">
     <size>
      <width>300</width>
-     <height>524287</height>
+     <height>160</height>
     </size>
    </property>
    <property name="windowTitle">
     <string>Object View</string>
    </property>
    <attribute name="dockWidgetArea">
-    <number>8</number>
+    <number>2</number>
    </attribute>
    <widget class="QWidget" name="dockWidgetContents_2"/>
   </widget>

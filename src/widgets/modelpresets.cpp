@@ -8,7 +8,7 @@ ModelPresets::ModelPresets(QWidget *parent) :
     ui->setupUi(this);
 
     ui->modelsSets->setViewMode(QListWidget::IconMode);
-    ui->modelsSets->setIconSize(QSize(85,85));
+    ui->modelsSets->setIconSize(QSize(88,88));
     ui->modelsSets->setResizeMode(QListWidget::Adjust);
     ui->modelsSets->setMovement(QListView::Static);
     ui->modelsSets->setSelectionBehavior(QAbstractItemView::SelectItems);
@@ -20,6 +20,9 @@ ModelPresets::ModelPresets(QWidget *parent) :
     ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/icosphere.png"),"IcoSphere"));
     ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/sphere.png"),"Sphere"));
     ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/torus.png"),"Torus"));
+    ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cone.png"),"Cone"));
+    ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cube.png"),"Cube"));
+    ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cylinder.png"),"Cylinder"));
 
 }
 
