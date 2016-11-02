@@ -11,24 +11,28 @@ namespace jah3d
 class LightNode;
 typedef QSharedPointer<LightNode> LightNodePtr;
 
-enum LightType:int
+enum class LightType:int
 {
     Point = 1,
-    Spot = 2,
-    Directional = 3
+    Directional = 2,
+    Spot = 3,
 };
 
 class LightNode:public SceneNode
 {
-    LightType lightType;
+
     QVector3D lightDir;
 public:
 
+    LightType lightType;
     float radius;
     QColor color;
-    float strength;
+    float intensity;
 
-    static LightNodePtr create();
+    static LightNodePtr create()
+    {
+        return QSharedPointer<LightNode>(new LightNode());
+    }
 
     void setLightType(LightType type);
     LightType getLightType();
@@ -42,7 +46,7 @@ private:
 
         radius = 5;
         color = QColor(255,255,255);
-        strength = 1;
+        intensity = 1;
     }
 };
 

@@ -32,7 +32,7 @@ public:
 
     void addAttrib(QString name,int type,int count,int sizeInBytes)
     {
-        VertexAttribute attrib = {-1,name,type,count,sizeInBytes};
+        VertexAttribute attrib = {attribs.size(),name,type,count,sizeInBytes};
         attribs.append(attrib);
 
         stride += sizeInBytes;
@@ -47,7 +47,7 @@ public:
         {
             program->enableAttributeArray(loc);
             program->bindAttributeLocation(attrib.name,loc);
-            program->setAttributeBuffer(attrib.loc, attrib.type, offset, attrib.count,stride);
+            program->setAttributeBuffer(loc, attrib.type, offset, attrib.count,stride);
             offset += attrib.sizeInBytes;
             loc++;
         }
@@ -69,9 +69,9 @@ public:
         auto layout = new VertexLayout();
 
         layout->addAttrib("a_pos",GL_FLOAT,3,sizeof(GLfloat)*3);
+        layout->addAttrib("a_texCoord",GL_FLOAT,2,sizeof(GLfloat)*2);
         layout->addAttrib("a_normal",GL_FLOAT,3,sizeof(GLfloat)*3);
         layout->addAttrib("a_tangent",GL_FLOAT,3,sizeof(GLfloat)*3);
-        layout->addAttrib("a_texCoord",GL_FLOAT,2,sizeof(GLfloat)*2);
 
         return layout;
     }

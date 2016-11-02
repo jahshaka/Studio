@@ -34,13 +34,18 @@ public:
 
     Scene();
 public:
-    static ScenePtr create();
+    static ScenePtr create()
+    {
+        return ScenePtr(new Scene());
+    }
 
     void update(float dt);
     void render();
 
     void addNode(SceneNodePtr node);
     void removeNode(SceneNodePtr node);
+
+    void setCamera(CameraNodePtr cameraNode);
 };
 
 }

@@ -11,6 +11,9 @@ SceneNode::SceneNode():
 
 {
     sceneNodeType = SceneNodeType::Empty;
+
+    //only this one will be used for now
+    globalTransform.setToIdentity();
 }
 
 SceneNodePtr SceneNode::create()

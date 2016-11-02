@@ -19,12 +19,13 @@ class VertexLayout;
 
 class Mesh
 {
+public:
     QOpenGLBuffer* vbo;
     VertexLayout* vertexLayout;
     int numVerts;
     int numFaces;
 
-public:
+
 
     void draw(QOpenGLFunctions* gl,Material* mat);
     void draw(QOpenGLFunctions* gl,QOpenGLShaderProgram* mat);

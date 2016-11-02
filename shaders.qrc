@@ -18,5 +18,7 @@
         <file>app/shaders/reflective_material.vert</file>
         <file>app/shaders/refractive_material.frag</file>
         <file>app/shaders/refractive_material.vert</file>
+        <file>app/shaders/simple.frag</file>
+        <file>app/shaders/simple.vert</file>
     </qresource>
 </RCC>

@@ -15,19 +15,23 @@ class Material;
 class MeshNode:public SceneNode
 {
 public:
-
     Mesh* mesh;
     QSharedPointer<Material> material;
 
-    static QSharedPointer<jah3d::MeshNode> create();
+    static QSharedPointer<jah3d::MeshNode> create()
+    {
+        return QSharedPointer<jah3d::MeshNode>(new jah3d::MeshNode());
+    }
 
     void setMesh(QString source);
     void setMesh(Mesh* mesh);
+    void setMaterial(QSharedPointer<Material> material);
 
 private:
     MeshNode()
     {
-
+        mesh = nullptr;
+        sceneNodeType = SceneNodeType::Mesh;
     }
 };
 

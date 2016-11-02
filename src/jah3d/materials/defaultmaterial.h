@@ -10,6 +10,8 @@ class QOpenGLFunctions;
 namespace jah3d
 {
 
+class Texture;
+
 class DefaultMaterial:public Material
 {
     float textureScale;
@@ -21,7 +23,7 @@ class DefaultMaterial:public Material
 
     QColor diffuseColor;
     bool useDiffuseTex;
-    QOpenGLTexture* diffuseTexture;
+    QSharedPointer<Texture> diffuseTexture;
 
     float shininess;
     bool useSpecularTex;
@@ -32,9 +34,9 @@ class DefaultMaterial:public Material
     bool useReflectonTex;
     QOpenGLTexture* reflectionTexture;
 
-    DefaultMaterial();
+public:
 
-    void setDiffuseTexture(QOpenGLTexture* tex);
+    void setDiffuseTexture(QSharedPointer<Texture> tex);
 
     void setAmbientColor(QColor col);
     QColor getAmbientColor();
@@ -63,14 +65,17 @@ class DefaultMaterial:public Material
     void setReflectionInfluence(float intensity);
     float getReflectionInfluence();
 
-    template<typename T>
-    void setUniformValue(QString name,T value)
-    {
-        program->setUniformValue(name.toStdString().c_str(), value);
-    }
 
     void begin(QOpenGLFunctions* gl);
     void end();
+
+    static QSharedPointer<DefaultMaterial> create()
+    {
+        return QSharedPointer<DefaultMaterial>(new DefaultMaterial());
+    }
+
+private:
+    DefaultMaterial();
 };
 
 }

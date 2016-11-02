@@ -4,6 +4,7 @@
 //#include "shaderprogram.h"
 //#include "texture.h"
 #include <QSharedPointer>
+#include <QOpenGLShaderProgram>
 
 class QOpenGLShaderProgram;
 class QOpenGLTexture;
@@ -30,6 +31,12 @@ public:
 
     void bind();
     void unbind();
+
+    template<typename T>
+    void setUniformValue(QString name,T value)
+    {
+        program->setUniformValue(name.toStdString().c_str(), value);
+    }
 };
 
 }

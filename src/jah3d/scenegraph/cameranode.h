@@ -48,7 +48,16 @@ public:
         return QSharedPointer<CameraNode>(new CameraNode());
     }
 
+private:
+    CameraNode()
+    {
+        viewMatrix.setToIdentity();
+        //viewMatrix = QMatrix4x4();
+        viewMatrix.lookAt(QVector3D(0,10,10),QVector3D(0,0,0),QVector3D(0,1,0));
 
+        projMatrix.setToIdentity();
+        projMatrix.perspective(45,800.0f/600.0f,1.0f,100.0f);
+    }
 
 };
 

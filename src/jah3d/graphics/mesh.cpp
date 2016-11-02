@@ -92,6 +92,10 @@ void Mesh::draw(QOpenGLFunctions* gl,QOpenGLShaderProgram* program)
     program->setAttributeBuffer(TANGENT_ATTR_LOC, GL_FLOAT, 8 * sizeof(GLfloat), 3, stride);
     */
 
+    //program->enableAttributeArray(0);
+    //auto stride = (3+2+3+3)*sizeof(GLfloat);
+    //program->setAttributeBuffer(0, GL_FLOAT, 0, 3,stride);
+
     vertexLayout->bind(program);
     gl->glDrawArrays(GL_TRIANGLES,0,numFaces*3);
     vertexLayout->unbind(program);
@@ -99,6 +103,7 @@ void Mesh::draw(QOpenGLFunctions* gl,QOpenGLShaderProgram* program)
 
 Mesh* Mesh::loadMesh(QString filePath)
 {
+    //QApplicaton
     Assimp::Importer importer;
     const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(),aiProcessPreset_TargetRealtime_Fast);
 

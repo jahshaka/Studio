@@ -58,6 +58,8 @@ For more information see the LICENSE file
 
 #include "widgets/sceneviewwidget.h"
 #include "jah3d/scenegraph/meshnode.h"
+#include "jah3d/scenegraph/cameranode.h"
+#include "jah3d/materials/defaultmaterial.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -161,10 +163,16 @@ MainWindow::MainWindow(QWidget *parent) :
     setProjectTitle(Globals::project->getProjectName());
 
     //init scene view
-    sceneView = new SceneViewWidget();
+    sceneView = new SceneViewWidget(this);
     sceneView->setParent(this);
 
-    createTestScene();
+    //
+    QGridLayout* layout = new QGridLayout();
+    layout->addWidget(sceneView);
+    layout->setMargin(0);
+    ui->sceneContainer->setLayout(layout);
+
+    //createTestScene();
 }
 
 void MainWindow::createTestScene()

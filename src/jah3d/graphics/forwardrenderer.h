@@ -22,7 +22,7 @@ class ForwardRenderer
 public:
     //all scene's transform should be updated
     void renderScene(QSharedPointer<Scene> scene);
-    QSharedPointer<ForwardRenderer> create(QOpenGLFunctions* gl);
+    static QSharedPointer<ForwardRenderer> create(QOpenGLFunctions* gl);
 
 private:
     void renderNode(RenderData* renderData,QSharedPointer<SceneNode> node);

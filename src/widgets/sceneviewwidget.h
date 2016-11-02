@@ -10,7 +10,11 @@
 namespace jah3d
 {
     class Scene;
+    class ForwardRenderer;
+    class Mesh;
 }
+
+class QOpenGLShaderProgram;
 
 class SceneViewWidget: public QOpenGLWidget, protected QOpenGLFunctions
 {
@@ -36,12 +40,15 @@ private slots:
 private:
     void makeObject();
     void renderScene();
-    void renderSceneVr();
 
     QSharedPointer<jah3d::Scene> scene;
+    QSharedPointer<jah3d::ForwardRenderer> renderer;
 
     QPointF prevMousePos;
     bool dragging;
+
+    jah3d::Mesh* mesh;
+    QOpenGLShaderProgram* program;
 
 };
 

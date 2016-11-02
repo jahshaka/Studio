@@ -36,6 +36,10 @@ void Scene::removeNode(SceneNodePtr node)
     }
 }
 
+void Scene::setCamera(CameraNodePtr cameraNode)
+{
+    camera = cameraNode;
+}
 
 
 }

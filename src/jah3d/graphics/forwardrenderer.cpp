@@ -3,6 +3,7 @@
 #include "../core/scenenode.h"
 #include "../scenegraph/cameranode.h"
 #include "../scenegraph/meshnode.h"
+#include "../scenegraph/lightnode.h"
 #include "../graphics/mesh.h"
 #include "renderdata.h"
 #include "material.h"
@@ -44,7 +45,8 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
         auto meshNode = node.staticCast<MeshNode>();
         auto mat = meshNode->material;
 
-        mat->program->bind();
+        QOpenGLShaderProgram* program = mat->program;
+        program->bind();
 
         //bind textures
         auto textures = mat->textures;
@@ -65,11 +67,43 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
             }
         }
 
-        meshNode->mesh->draw(gl,mat->program);
+        //send transform and light data
+        //QMatrix4x4 local;
+        //local.setToIdentity();
+        program->setUniformValue("u_worldMatrix",node->globalTransform);
+        program->setUniformValue("u_viewMatrix",renderData->viewMatrix);
+        program->setUniformValue("u_projMatrix",renderData->projMatrix);
 
+        program->setUniformValue("u_textureScale",1.0f);
+
+        auto lightCount = renderData->scene->lights.size();
+        mat->program->setUniformValue("u_lightCount",lightCount);
+
+        for(int i=0;i<lightCount;i++)
+        {
+            auto light = renderData->scene->lights[i];
+
+            QString lightPrefix = QString("u_lights[%0].").arg(i);
+            mat->setUniformValue(lightPrefix+"type", (int)light->lightType);
+            mat->setUniformValue(lightPrefix+"position", light->pos);
+            //mat->setUniformValue(lightPrefix+"direction", light->getDirection());
+            mat->setUniformValue(lightPrefix+"cutOffAngle", 30.0f);
+            mat->setUniformValue(lightPrefix+"intensity", light->intensity);
+            mat->setUniformValue(lightPrefix+"color", light->color);
+
+            mat->setUniformValue(lightPrefix+"constantAtten", 1.0f);
+            mat->setUniformValue(lightPrefix+"linearAtten", 0.0f);
+            mat->setUniformValue(lightPrefix+"quadtraticAtten", 0.2f);
+        }
+
+
+        meshNode->mesh->draw(gl,program);
 
         mat->program->release();
     }
+
+    for(auto childNode:node->children)
+        renderNode(renderData,childNode);
 }
 
 }

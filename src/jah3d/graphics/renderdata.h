@@ -19,6 +19,7 @@ struct RenderData
     QMatrix4x4 viewMatrix;
     QMatrix4x4 projMatrix;
 
+    QVector3D eyePos;
     //QList<LightNodePtr> lights;
 };
 

@@ -1,4 +1,5 @@
 #include "../graphics/material.h"
+#include "../graphics/texture.h"
 #include "../materials/defaultmaterial.h"
 #include <QFile>
 #include <QTextStream>
@@ -15,20 +16,29 @@ namespace jah3d
 
 DefaultMaterial::DefaultMaterial()
 {
-    diffuseTexture = nullptr;
+    //diffuseTexture = nullptr;
     //textureScale = 1.0f;
 
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile("assets/simple.vert");
+    vshader->compileSourceFile("app/shaders/simple.vert");
+    //vshader->compileSourceFile("app/shaders/color.vert");
     //vshader->compileSourceFile("assets/advance.vert");
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile("assets/simple.frag");
+    fshader->compileSourceFile("app/shaders/simple.frag");
+    //fshader->compileSourceFile("app/shaders/color.frag");
     //fshader->compileSourceFile("assets/advance.frag");
+
+
 
     program = new QOpenGLShaderProgram;
     program->addShader(vshader);
     program->addShader(fshader);
+
+    program->bindAttributeLocation("a_pos", 0);
+    program->bindAttributeLocation("a_texCoord", 1);
+    program->bindAttributeLocation("a_normal", 2);
+    program->bindAttributeLocation("a_tangent", 3);
 
     program->link();
 
@@ -47,7 +57,7 @@ DefaultMaterial::DefaultMaterial()
 
     diffuseColor = QColor(255,255,255);
     useDiffuseTex = false;
-    diffuseTexture = nullptr;
+    //diffuseTexture = nullptr;
 
     shininess = 100;
     useSpecularTex = false;
@@ -61,6 +71,8 @@ DefaultMaterial::DefaultMaterial()
     this->setDiffuseColor(diffuseColor);
     this->setSpecularColor(specularColor);
     this->setShininess(0.01f);
+
+    program->release();
 }
 
 void DefaultMaterial::begin(QOpenGLFunctions* gl)
@@ -102,11 +114,11 @@ void DefaultMaterial::end()
     //unset textures
 }
 
-void DefaultMaterial::setDiffuseTexture(QOpenGLTexture* tex)
+void DefaultMaterial::setDiffuseTexture(QSharedPointer<Texture> tex)
 {
     diffuseTexture=tex;
     auto matTex = new MaterialTexture();
-    matTex->texture = tex;
+    matTex->texture = tex->texture;//bad! fix!
     matTex->name = "u_diffuseTexture";
     textures.append(matTex);
 
