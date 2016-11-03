@@ -8,6 +8,7 @@
 
 class QOpenGLShaderProgram;
 class QOpenGLTexture;
+class QOpenGLFunctions;
 
 namespace jah3d
 {
@@ -29,8 +30,18 @@ public:
     //QMap<QString, TexturePtr> textures;
     QList<MaterialTexture*> textures;
 
-    void bind();
-    void unbind();
+    //void bind();
+    //void unbind();
+
+    virtual void begin(QOpenGLFunctions* gl)
+    {
+
+    }
+
+    virtual void end()
+    {
+
+    }
 
     template<typename T>
     void setUniformValue(QString name,T value)

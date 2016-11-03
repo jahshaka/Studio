@@ -10,6 +10,7 @@ namespace jah3d
 {
 
 //class Texture;
+class Texture2D;
 typedef QSharedPointer<Texture2D> Texture2DPtr;
 
 class Texture2D: public Texture
@@ -24,7 +25,7 @@ public:
         if(image.isNull())
         {
             qDebug()<<"error loading image: "<<path<<endl;
-            return nullptr;
+            return Texture2DPtr(nullptr);
         }
 
         return create(image);

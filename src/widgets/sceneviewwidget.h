@@ -12,6 +12,9 @@ namespace jah3d
     class Scene;
     class ForwardRenderer;
     class Mesh;
+    class SceneNode;
+    class MeshNode;
+    class DefaultMaterial;
 }
 
 class QOpenGLShaderProgram;
@@ -47,8 +50,13 @@ private:
     QPointF prevMousePos;
     bool dragging;
 
+    int initialized;
+    void initialize();
+
     jah3d::Mesh* mesh;
     QOpenGLShaderProgram* program;
+    QSharedPointer<jah3d::MeshNode> boxNode;
+    QSharedPointer<jah3d::DefaultMaterial> mat;
 
 };
 

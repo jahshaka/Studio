@@ -11,6 +11,7 @@ namespace jah3d
 {
 
 class Texture;
+class Texture2D;
 
 class DefaultMaterial:public Material
 {
@@ -23,7 +24,7 @@ class DefaultMaterial:public Material
 
     QColor diffuseColor;
     bool useDiffuseTex;
-    QSharedPointer<Texture> diffuseTexture;
+    QSharedPointer<Texture2D> diffuseTexture;
 
     float shininess;
     bool useSpecularTex;
@@ -36,7 +37,7 @@ class DefaultMaterial:public Material
 
 public:
 
-    void setDiffuseTexture(QSharedPointer<Texture> tex);
+    void setDiffuseTexture(QSharedPointer<Texture2D> tex);
 
     void setAmbientColor(QColor col);
     QColor getAmbientColor();
@@ -66,8 +67,8 @@ public:
     float getReflectionInfluence();
 
 
-    void begin(QOpenGLFunctions* gl);
-    void end();
+    void begin(QOpenGLFunctions* gl) override;
+    void end() override;
 
     static QSharedPointer<DefaultMaterial> create()
     {

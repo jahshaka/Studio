@@ -13,6 +13,7 @@
 #include "../jah3d/materials/defaultmaterial.h"
 #include "../jah3d/graphics/forwardrenderer.h"
 #include "../jah3d/graphics/mesh.h"
+#include "../jah3d/graphics/texture2d.h"
 
 
 SceneViewWidget::SceneViewWidget(QWidget *parent):
@@ -30,6 +31,38 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
     installEventFilter(this);
 
     renderer = jah3d::ForwardRenderer::create(this);
+    initialized = 2;
+}
+
+void SceneViewWidget::initialize()
+{
+    auto scene = jah3d::Scene::create();
+
+    auto cam = jah3d::CameraNode::create();
+    //cam->lookAt(QVector3D(0,0,0),QVect);
+    scene->setCamera(cam);
+
+    //add test object with basic material
+    boxNode = jah3d::MeshNode::create();
+    boxNode->setMesh("app/models/cube.obj");
+
+    mat = jah3d::DefaultMaterial::create();
+    boxNode->setMaterial(mat);
+    mat->setDiffuseColor(QColor(255,200,200));
+    mat->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/Artistic Pattern.png"));
+
+    //lighting
+    auto light = jah3d::LightNode::create();
+    //light->setLightType(jah3d::LightType::Point);
+    scene->rootNode->addChild(light);
+    light->pos = QVector3D(0,3,0);
+
+
+    scene->rootNode->addChild(boxNode);
+    setScene(scene);
+
+    //initialized = 0;
+    initialized = -1;
 }
 
 void SceneViewWidget::setScene(QSharedPointer<jah3d::Scene> scene)
@@ -39,53 +72,29 @@ void SceneViewWidget::setScene(QSharedPointer<jah3d::Scene> scene)
 
 void SceneViewWidget::updateScene()
 {
-
 }
 
 void SceneViewWidget::initializeGL()
 {
+    makeCurrent();
+
     initializeOpenGLFunctions();
 
     glEnable(GL_DEPTH_TEST);
-    //glEnable(GL_CULL_FACE);
+    glEnable(GL_CULL_FACE);
 
-    auto scene = jah3d::Scene::create();
-
-    auto cam = jah3d::CameraNode::create();
-    //cam->lookAt(QVector3D(0,0,0),QVect);
-    scene->setCamera(cam);
-
-    //add test object with basic material
-    auto obj = jah3d::MeshNode::create();
-    obj->setMesh("app/models/cube.obj");
-
-    auto mat = jah3d::DefaultMaterial::create();
-    obj->setMaterial(mat);
-    mat->setDiffuseColor(QColor(255,200,200));
-
-    //lighting
-    auto light = jah3d::LightNode::create();
-    //light->setLightType(jah3d::LightType::Point);
-    scene->rootNode->addChild(light);
-    light->pos = QVector3D(0,3,0);
-
-
-    scene->rootNode->addChild(obj);
-    setScene(scene);
+    initialize();
 
     auto timer = new QTimer(this);
     connect(timer,SIGNAL(timeout()),this,SLOT(update()));
-    timer->start(16);//60fps
+    timer->start();
 }
 
 void SceneViewWidget::paintGL()
 {
-    if(!!scene)
-    {
-        float dt = 1.0f/60.0f;
-        //scene->update(dt);
-        renderScene();
-    }
+    float dt = 1.0f/60.0f;
+    //scene->update(dt);
+    renderScene();
 }
 
 void SceneViewWidget::renderScene()
@@ -95,9 +104,23 @@ void SceneViewWidget::renderScene()
     glClearColor(1.0f,1.0f,1.0f,1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    if(initialized==0)
+        initialize();
+
+    initialized-=1;
+
     //scene->render();
-    if(!!renderer)
+
+    if(!!renderer && !!scene)
     {
+        boxNode->pos += QVector3D(0.001f,0,0);
+        scene->update(1.0f/60);
+
+        //mat->program->bind();
+        //mat->program->setUniformValue("mat_diffuse",QVector3D(1,0,0));
+        //mat->program->release();
+
+        //mat->setDiffuseColor(QColor(255,200,200));
         renderer->renderScene(scene);
     }
 
@@ -110,6 +133,8 @@ void SceneViewWidget::renderScene()
     program->setAttributeBuffer(0, GL_FLOAT, 0, 3,stride);
     this->glDrawArrays(GL_TRIANGLES,0,mesh->numFaces*3);
     */
+
+    //this->repaint();
 }
 
 void SceneViewWidget::resizeGL(int width, int height)
@@ -151,8 +176,9 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
 
     if(dragging)
     {
-        //QPointF dir = localPos-prevMousePos;
+        QPointF dir = localPos-prevMousePos;
         //camera->rotate(-dir.x(),-dir.y());
+        boxNode->rot *= QQuaternion::fromEulerAngles(0,dir.x(),0);
     }
 
     prevMousePos = localPos;

@@ -6,7 +6,7 @@ namespace jah3d
 
 SceneNode::SceneNode():
     pos(QVector3D(0,0,0)),
-    scale(QVector3D(0,0,0)),
+    scale(QVector3D(1,1,1)),
     rot(QQuaternion())
 
 {
@@ -56,6 +56,23 @@ void SceneNode::removeChild(SceneNodePtr node)
     node->parent = QSharedPointer<SceneNode>(nullptr);
     node->scene = QSharedPointer<Scene>(nullptr);
     scene->removeNode(node);
+}
+
+void SceneNode::update(float dt)
+{
+    localTransform.setToIdentity();
+
+    localTransform.translate(pos);
+    localTransform.rotate(rot);
+    localTransform.scale(scale);
+
+    if(!!parent)
+        globalTransform = this->parent->globalTransform*localTransform;
+    else
+        globalTransform = localTransform;
+
+    for(auto child:children)
+        child->update(dt);
 }
 
 void SceneNode::setParent(SceneNodePtr node)

@@ -70,7 +70,7 @@ MaterialWidget::MaterialWidget(QWidget *parent) :
     ui->textureScale->setValueRange(0,1000);
 
     matProxy = nullptr;
-    node = nullptr;
+    //node = nullptr;
 }
 
 MaterialWidget::~MaterialWidget()

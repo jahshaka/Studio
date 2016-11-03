@@ -55,6 +55,8 @@ public:
     void removeFromParent();
     void removeChild(SceneNodePtr node);
 
+    void update(float dt);
+
 private:
     void setParent(SceneNodePtr node);
     void setScene(QSharedPointer<Scene> scene);

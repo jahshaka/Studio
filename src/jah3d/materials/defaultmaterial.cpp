@@ -1,5 +1,6 @@
 #include "../graphics/material.h"
 #include "../graphics/texture.h"
+#include "../graphics/texture2d.h"
 #include "../materials/defaultmaterial.h"
 #include <QFile>
 #include <QTextStream>
@@ -47,6 +48,8 @@ DefaultMaterial::DefaultMaterial()
     program->setUniformValue("u_useNormalTex",false);
     program->setUniformValue("u_useReflectionTex",false);
     program->setUniformValue("u_useSpecularTex",false);
+    program->setUniformValue("u_material.diffuse",QVector3D(1,0,0));
+    //program->release();
 
     textureScale = 1.0f;
     ambientColor = QColor(0,0,0);
@@ -72,17 +75,12 @@ DefaultMaterial::DefaultMaterial()
     this->setSpecularColor(specularColor);
     this->setShininess(0.01f);
 
-    program->release();
+    //program->release();
 }
 
 void DefaultMaterial::begin(QOpenGLFunctions* gl)
 {
     program->bind();
-
-    //program->enableAttributeArray(POS_ATTR_LOC);
-    //program->enableAttributeArray(TEXCOORD_ATTR_LOC);
-    //program->enableAttributeArray(NORMAL_ATTR_LOC);
-    //program->enableAttributeArray(TANGENT_ATTR_LOC);
 
     //program->setUniformValue("u_material.diffuse",false);
     //program->setUniformValue("u_useNormalTex",false);
@@ -91,21 +89,22 @@ void DefaultMaterial::begin(QOpenGLFunctions* gl)
     for(int i=0;i<textures.size();i++)
     {
         auto tex = textures[i];
+        gl->glActiveTexture(GL_TEXTURE0+i);
+
         if(tex->texture!=nullptr)
         {
-            gl->glActiveTexture(GL_TEXTURE0+i);
             tex->texture->bind(i);
             program->setUniformValue(tex->name.toStdString().c_str(), i);
         }
         else
         {
-            //unset texture
-            //bug: setting this to -1 throws error when drawing array
-            //program->setUniformValue(tex->name.toStdString().c_str(), 1000);
+            //gl->glActiveTexture(GL_TEXTURE0+i);
+            gl->glBindTexture(GL_TEXTURE_2D,0);
         }
     }
 
-    //pass light data
+    //set params
+    program->setUniformValue("u_material.diffuse",QVector3D(diffuseColor.redF(),diffuseColor.greenF(),diffuseColor.blueF()));
 
 }
 
@@ -114,7 +113,7 @@ void DefaultMaterial::end()
     //unset textures
 }
 
-void DefaultMaterial::setDiffuseTexture(QSharedPointer<Texture> tex)
+void DefaultMaterial::setDiffuseTexture(QSharedPointer<Texture2D> tex)
 {
     diffuseTexture=tex;
     auto matTex = new MaterialTexture();
@@ -125,7 +124,7 @@ void DefaultMaterial::setDiffuseTexture(QSharedPointer<Texture> tex)
     //useDiffuseTex
     program->bind();
     program->setUniformValue("u_useDiffuseTex",true);
-    program->release();
+    //program->release();
 }
 
 /*
@@ -144,7 +143,7 @@ void DefaultMaterial::setAmbientColor(QColor col)
 
     program->bind();
     program->setUniformValue("u_material.ambient",QVector3D(col.redF(),col.greenF(),col.blueF()));
-    program->release();
+    //program->release();
 }
 
 void DefaultMaterial::setDiffuseColor(QColor col)
@@ -153,7 +152,8 @@ void DefaultMaterial::setDiffuseColor(QColor col)
 
     program->bind();
     program->setUniformValue("u_material.diffuse",QVector3D(col.redF(),col.greenF(),col.blueF()));
-    program->release();
+    //program->setUniformValue("u_material.diffuse",QVector3D(1,1,1));
+    //program->release();
 }
 
 QColor DefaultMaterial::getDiffuseColor()
@@ -172,7 +172,7 @@ void DefaultMaterial::setNormalTexture(QOpenGLTexture* tex)
     //useDiffuseTex
     program->bind();
     program->setUniformValue("u_useNormalTex",true);
-    program->release();
+    //program->release();
 }
 
 void DefaultMaterial::setNormalIntensity(float intensity)
@@ -181,7 +181,7 @@ void DefaultMaterial::setNormalIntensity(float intensity)
 
     program->bind();
     program->setUniformValue("u_normalIntensity",normalIntensity);
-    program->release();
+    //program->release();
 }
 
 float DefaultMaterial::getNormalIntensity()
@@ -201,7 +201,7 @@ void DefaultMaterial::setSpecularTexture(QOpenGLTexture* tex)
     //useDiffuseTex
     program->bind();
     program->setUniformValue("u_useSpecularTex",true);
-    program->release();
+    //program->release();
 }
 
 void DefaultMaterial::setSpecularColor(QColor col)
@@ -210,7 +210,7 @@ void DefaultMaterial::setSpecularColor(QColor col)
     program->bind();
     auto spec = QVector3D(col.redF(),col.greenF(),col.blueF());
     program->setUniformValue("u_material.specular",spec);
-    program->release();
+    //program->release();
 }
 
 QColor DefaultMaterial::getSpecularColor()
@@ -223,7 +223,7 @@ void DefaultMaterial::setShininess(float shininess)
     this->shininess = shininess;
     program->bind();
     program->setUniformValue("u_material.shininess",shininess);
-    program->release();
+    //program->release();
 }
 
 float DefaultMaterial::getShininess()
@@ -242,7 +242,7 @@ void DefaultMaterial::setReflectionTexture(QOpenGLTexture* tex)
 
     program->bind();
     program->setUniformValue("u_useReflectionTex",true);
-    program->release();
+    //program->release();
 }
 
 void DefaultMaterial::setReflectionInfluence(float intensity)
@@ -251,7 +251,7 @@ void DefaultMaterial::setReflectionInfluence(float intensity)
 
     program->bind();
     program->setUniformValue("u_reflectionInfluence",intensity);
-    program->release();
+    //program->release();
 }
 
 void DefaultMaterial::setTextureScale(float scale)
@@ -262,7 +262,7 @@ void DefaultMaterial::setTextureScale(float scale)
 
     program->bind();
     program->setUniformValue("u_textureScale",scale);
-    program->release();
+    //program->release();
 }
 
 }

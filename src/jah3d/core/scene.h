@@ -21,7 +21,7 @@ typedef QSharedPointer<jah3d::Scene> ScenePtr;
 typedef QSharedPointer<jah3d::SceneNode> SceneNodePtr;
 typedef QSharedPointer<jah3d::CameraNode> CameraNodePtr;
 
-class Scene
+class Scene:public QEnableSharedFromThis<Scene>
 {
 private:
 
@@ -34,10 +34,7 @@ public:
 
     Scene();
 public:
-    static ScenePtr create()
-    {
-        return ScenePtr(new Scene());
-    }
+    static ScenePtr create();
 
     void update(float dt);
     void render();

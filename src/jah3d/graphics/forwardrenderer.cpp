@@ -17,6 +17,7 @@ namespace jah3d
 ForwardRenderer::ForwardRenderer(QOpenGLFunctions* gl)
 {
     this->gl = gl;
+    renderData = new RenderData();
 }
 
 QSharedPointer<ForwardRenderer> ForwardRenderer::create(QOpenGLFunctions* gl)
@@ -30,7 +31,7 @@ void ForwardRenderer::renderScene(QSharedPointer<Scene> scene)
     auto cam = scene->camera;
 
     //gather lights
-    renderData = new RenderData();//bad, no allocations per frame
+    //renderData = new RenderData();//bad, no allocations per frame
     renderData->scene = scene;
     renderData->projMatrix = cam->projMatrix;
     renderData->viewMatrix = cam->viewMatrix;
@@ -46,9 +47,10 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
         auto mat = meshNode->material;
 
         QOpenGLShaderProgram* program = mat->program;
-        program->bind();
+        //program->bind();
 
         //bind textures
+        /*
         auto textures = mat->textures;
         for(int i=0;i<textures.size();i++)
         {
@@ -66,6 +68,9 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
                 gl->glBindTexture(GL_TEXTURE_2D,0);
             }
         }
+        */
+
+        mat->begin(gl);
 
         //send transform and light data
         //QMatrix4x4 local;
@@ -96,10 +101,9 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
             mat->setUniformValue(lightPrefix+"quadtraticAtten", 0.2f);
         }
 
-
         meshNode->mesh->draw(gl,program);
 
-        mat->program->release();
+        //mat->program->release();
     }
 
     for(auto childNode:node->children)

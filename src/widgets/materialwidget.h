@@ -39,7 +39,7 @@ public:
     ~MaterialWidget();
 
     //not owned by this class
-    SceneNode* node;
+    //SceneNode* node;
     MaterialProxy* matProxy;
     //MaterialData* matData;//and this?
     void setSceneNode(jah3d::SceneNodePtr node);

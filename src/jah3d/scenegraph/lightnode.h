@@ -18,7 +18,7 @@ enum class LightType:int
     Spot = 3,
 };
 
-class LightNode:public SceneNode
+class LightNode:public SceneNode,public QEnableSharedFromThis<LightNode>
 {
 
     QVector3D lightDir;

@@ -8,11 +8,12 @@ namespace jah3d
 Scene::Scene()
 {
     rootNode = SceneNode::create();
+    //rootNode->setScene(this->sharedFromThis());
 }
 
 void Scene::update(float dt)
 {
-
+    rootNode->update(dt);
 }
 
 void Scene::render()
@@ -24,7 +25,8 @@ void Scene::addNode(SceneNodePtr node)
 {
     if(node->sceneNodeType == SceneNodeType::Light)
     {
-        lights.append(node.staticCast<jah3d::LightNode>());
+        auto light = node.staticCast<jah3d::LightNode>();
+        lights.append(light);
     }
 }
 
@@ -41,5 +43,12 @@ void Scene::setCamera(CameraNodePtr cameraNode)
     camera = cameraNode;
 }
 
+ScenePtr Scene::create()
+{
+    ScenePtr scene(new Scene());
+    scene->rootNode->setScene(scene);
+
+    return scene;
+}
 
 }

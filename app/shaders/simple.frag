@@ -53,6 +53,8 @@ struct Material
     vec3 ambient;
 };
 
+uniform vec3 mat_diffuse;
+
 uniform Material u_material;
 
 struct Fog
@@ -152,16 +154,22 @@ void main()
         //specular += spec;
     }
 
+    //diffuse = vec3(1,1,1);
 
+    //vec3 col = vec3(1,0,1);
     vec3 col = u_material.diffuse;
-    if(u_useDiffuseTex)
-        col = col * texture2D(u_diffuseTexture,v_texCoord).rgb;
+    //vec3 col = mat_diffuse;
+    //if(u_useDiffuseTex)
+    //    col = col * texture2D(u_diffuseTexture,v_texCoord).rgb;
 
     if(u_useSpecularTex)
         specular = specular * texture2D(u_specularTexture,v_texCoord).rgb;
 
+
     vec3 finalColor = col*(u_material.ambient+diffuse)+
             (u_material.specular*specular);
+
+    //vec3 finalColor = col;
 
     if(u_useReflectionTex)
     {
