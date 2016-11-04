@@ -51,5 +51,11 @@
         <file>app/icons/expand-button.png</file>
         <file>app/icons/delete.png</file>
         <file>app/icons/close.png</file>
+        <file>app/icons/error.svg</file>
+        <file>app/icons/add-2.svg</file>
+        <file>app/icons/import.svg</file>
+        <file>app/icons/export.svg</file>
+        <file>app/icons/drop-down-arrow.svg</file>
+        <file>app/icons/play-arrow.svg</file>
     </qresource>
 </RCC>

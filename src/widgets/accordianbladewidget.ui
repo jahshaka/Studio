@@ -87,17 +87,22 @@
         </property>
         <property name="styleSheet">
          <string notr="true">QPushButton {
-background-color: rgb(74, 74, 74);
-border-radius: 0;
+   border-image: url(:/app/icons/up-arrow.svg);
+   background-color: rgb(74, 74, 74);
+   border-radius: 0;
 }
 
 QPushButton:hover {
+    border-image: url(:/app/icons/up-arrow.svg);
 	background-color: rgb(30, 144, 255);
 	border: none;
-}</string>
+}
+
+
+</string>
         </property>
         <property name="text">
-         <string>V</string>
+         <string/>
         </property>
        </widget>
       </item>
