@@ -60,6 +60,11 @@ float EditorCameraController::getLookSpeed()
     return lookSpeed;
 }
 
+void EditorCameraController::onMouseDragged(int x,int y)
+{
+    //rotate camera accordingly
+}
+
 //returns ray direction
 //stolen from qtlabs 3d editor
 QVector3D EditorCameraController::unproject(int viewPortWidth, int viewPortHeight,QPoint pos)

@@ -13,6 +13,7 @@ namespace jah3d
 class Scene;
 class SceneNode;
 class RenderData;
+class Viewport;
 
 class ForwardRenderer
 {
@@ -21,7 +22,7 @@ class ForwardRenderer
 
 public:
     //all scene's transform should be updated
-    void renderScene(QSharedPointer<Scene> scene);
+    void renderScene(Viewport* vp,QSharedPointer<Scene> scene);
     static QSharedPointer<ForwardRenderer> create(QOpenGLFunctions* gl);
 
 private:

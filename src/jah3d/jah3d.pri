@@ -15,7 +15,8 @@ HEADERS += \
     $$PWD/graphics/forwardrenderer.h \
     $$PWD/materials/defaultmaterial.h \
     $$PWD/graphics/vertexlayout.h \
-    $$PWD/jah3d.h
+    $$PWD/jah3d.h \
+    $$PWD/graphics/viewport.h
 
 include(assimp/assimp.pri)
 include(libovr/libovr.pri)

@@ -105,6 +105,11 @@ void DefaultMaterial::begin(QOpenGLFunctions* gl)
 
     //set params
     program->setUniformValue("u_material.diffuse",QVector3D(diffuseColor.redF(),diffuseColor.greenF(),diffuseColor.blueF()));
+    program->setUniformValue("u_material.ambient",QVector3D(ambientColor.redF(),ambientColor.greenF(),ambientColor.blueF()));
+    program->setUniformValue("u_material.specular",QVector3D(specularColor.redF(),specularColor.greenF(),specularColor.blueF()));
+    program->setUniformValue("u_material.shininess",shininess);
+
+    //program->setUniformValue("u_useDiffuseTexture",useDiffuseTexture);
 
 }
 

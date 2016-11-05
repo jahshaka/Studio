@@ -13,9 +13,9 @@ typedef QSharedPointer<LightNode> LightNodePtr;
 
 enum class LightType:int
 {
-    Point = 1,
-    Directional = 2,
-    Spot = 3,
+    Point = 0,
+    Directional = 1,
+    Spot = 2,
 };
 
 class LightNode:public SceneNode,public QEnableSharedFromThis<LightNode>
@@ -34,8 +34,25 @@ public:
         return QSharedPointer<LightNode>(new LightNode());
     }
 
-    void setLightType(LightType type);
-    LightType getLightType();
+    void setLightType(LightType type)
+    {
+        this->lightType = type;
+    }
+
+    LightType getLightType()
+    {
+        return lightType;
+    }
+
+    QVector3D getLightDir()
+    {
+        QVector4D defaultDir(0,-1,0,0);
+
+        QVector4D dir = (globalTransform * defaultDir);
+
+        return dir.toVector3D();
+
+    }
 
 private:
     LightNode()
@@ -48,6 +65,8 @@ private:
         color = QColor(255,255,255);
         intensity = 1;
     }
+
+
 };
 
 

@@ -10,6 +10,7 @@
 #include <QOpenGLShaderProgram>
 #include <QOpenGLFunctions>
 #include <QOpenGLTexture>
+#include "viewport.h"
 
 namespace jah3d
 {
@@ -26,13 +27,17 @@ QSharedPointer<ForwardRenderer> ForwardRenderer::create(QOpenGLFunctions* gl)
 }
 
 //all scene's transform should be updated
-void ForwardRenderer::renderScene(QSharedPointer<Scene> scene)
+void ForwardRenderer::renderScene(Viewport* vp,QSharedPointer<Scene> scene)
 {
     auto cam = scene->camera;
 
     //gather lights
     //renderData = new RenderData();//bad, no allocations per frame
     renderData->scene = scene;
+
+    cam->setAspectRatio(vp->getAspectRatio());
+    cam->updateCameraMatrices();
+
     renderData->projMatrix = cam->projMatrix;
     renderData->viewMatrix = cam->viewMatrix;
 
@@ -92,6 +97,7 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
             mat->setUniformValue(lightPrefix+"type", (int)light->lightType);
             mat->setUniformValue(lightPrefix+"position", light->pos);
             //mat->setUniformValue(lightPrefix+"direction", light->getDirection());
+            mat->setUniformValue(lightPrefix+"direction", light->getLightDir());
             mat->setUniformValue(lightPrefix+"cutOffAngle", 30.0f);
             mat->setUniformValue(lightPrefix+"intensity", light->intensity);
             mat->setUniformValue(lightPrefix+"color", light->color);

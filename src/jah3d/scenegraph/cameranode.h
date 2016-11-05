@@ -15,6 +15,9 @@ class CameraNode:public SceneNode
 {
     float fov;//radians
     float aspectRatio;
+    float angle;//in degrees
+    float nearClip;
+    float farClip;
 public:
 
     QMatrix4x4 viewMatrix;
@@ -39,7 +42,16 @@ public:
     //update view and proj matrices
     void updateCameraMatrices()
     {
+        viewMatrix.setToIdentity();
 
+        QVector3D pos = globalTransform.column(3).toVector3D();
+        QVector3D dir = (globalTransform*QVector4D(0,0,-1,0)).toVector3D();
+        QVector3D up = (globalTransform*QVector4D(0,1,0,0)).toVector3D();
+        viewMatrix.lookAt(pos,dir,up);
+        //viewMatrix.lookAt(pos,QVector3D(0,0,0),QVector3D(0,1,0));
+
+        projMatrix.setToIdentity();
+        projMatrix.perspective(angle,aspectRatio,nearClip,farClip);
     }
 
 
@@ -51,12 +63,12 @@ public:
 private:
     CameraNode()
     {
-        viewMatrix.setToIdentity();
-        //viewMatrix = QMatrix4x4();
-        viewMatrix.lookAt(QVector3D(0,10,10),QVector3D(0,0,0),QVector3D(0,1,0));
+        angle = 45;
+        nearClip = 0.1f;
+        farClip = 100.0f;
+        aspectRatio = 1.0f;//assumes a square viewport by default
 
-        projMatrix.setToIdentity();
-        projMatrix.perspective(45,800.0f/600.0f,1.0f,100.0f);
+        updateCameraMatrices();
     }
 
 };

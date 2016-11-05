@@ -47,6 +47,8 @@ public:
     void setLookSpeed(float speed);
     float getLookSpeed();
 
+    void onMouseDragged(int x,int y);
+
     QVector3D unproject(int viewPortWidth, int viewPortHeight,QPoint pos);
 
 private slots:

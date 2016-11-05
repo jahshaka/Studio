@@ -15,13 +15,18 @@ namespace jah3d
     class SceneNode;
     class MeshNode;
     class DefaultMaterial;
+    class Viewport;
 }
+
+class EditorCameraController;
 
 class QOpenGLShaderProgram;
 
 class SceneViewWidget: public QOpenGLWidget, protected QOpenGLFunctions
 {
     Q_OBJECT
+
+    EditorCameraController* camController;
 public:
     explicit SceneViewWidget(QWidget *parent);
 
@@ -57,6 +62,7 @@ private:
     QOpenGLShaderProgram* program;
     QSharedPointer<jah3d::MeshNode> boxNode;
     QSharedPointer<jah3d::DefaultMaterial> mat;
+    jah3d::Viewport* viewport;
 
 };
 
