@@ -32,7 +32,7 @@ class DefaultMaterial:public Material
     QOpenGLTexture* specularTexture;
 
     float reflectionInfluence;
-    bool useReflectonTex;
+    bool useReflectionTex;
     QOpenGLTexture* reflectionTexture;
 
 public:

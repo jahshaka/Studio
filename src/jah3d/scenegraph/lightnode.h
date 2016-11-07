@@ -63,7 +63,7 @@ private:
 
         radius = 5;
         color = QColor(255,255,255);
-        intensity = 1;
+        intensity = 0.2f;
     }
 
 

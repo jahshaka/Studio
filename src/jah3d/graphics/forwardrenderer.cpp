@@ -40,6 +40,7 @@ void ForwardRenderer::renderScene(Viewport* vp,QSharedPointer<Scene> scene)
 
     renderData->projMatrix = cam->projMatrix;
     renderData->viewMatrix = cam->viewMatrix;
+    renderData->eyePos = cam->globalTransform.column(3).toVector3D();
 
     renderNode(renderData,scene->rootNode);
 }
@@ -83,6 +84,9 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
         program->setUniformValue("u_worldMatrix",node->globalTransform);
         program->setUniformValue("u_viewMatrix",renderData->viewMatrix);
         program->setUniformValue("u_projMatrix",renderData->projMatrix);
+        program->setUniformValue("u_normalMatrix",node->globalTransform.normalMatrix());
+
+        program->setUniformValue("u_eyePos",renderData->eyePos);
 
         program->setUniformValue("u_textureScale",1.0f);
 
@@ -95,7 +99,7 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
 
             QString lightPrefix = QString("u_lights[%0].").arg(i);
             mat->setUniformValue(lightPrefix+"type", (int)light->lightType);
-            mat->setUniformValue(lightPrefix+"position", light->pos);
+            mat->setUniformValue(lightPrefix+"position", light->globalTransform.column(3).toVector3D());
             //mat->setUniformValue(lightPrefix+"direction", light->getDirection());
             mat->setUniformValue(lightPrefix+"direction", light->getLightDir());
             mat->setUniformValue(lightPrefix+"cutOffAngle", 30.0f);
@@ -104,7 +108,7 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
 
             mat->setUniformValue(lightPrefix+"constantAtten", 1.0f);
             mat->setUniformValue(lightPrefix+"linearAtten", 0.0f);
-            mat->setUniformValue(lightPrefix+"quadtraticAtten", 0.2f);
+            mat->setUniformValue(lightPrefix+"quadtraticAtten", 1.0f);
         }
 
         meshNode->mesh->draw(gl,program);

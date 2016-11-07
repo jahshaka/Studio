@@ -1,4 +1,6 @@
 //#version 330
+//http://www.tomdalling.com/blog/modern-opengl/07-more-lighting-ambient-specular-attenuation-gamma/
+
 #version 150
 #define PI 3.14159265359
 #define PI2 6.28318530718
@@ -53,7 +55,7 @@ struct Material
     vec3 ambient;
 };
 
-uniform vec3 mat_diffuse;
+//uniform vec3 mat_diffuse;
 
 uniform Material u_material;
 
@@ -133,17 +135,17 @@ void main()
         else
         {
             //directional
-            lightDir = normalize(-u_lights[i].direction);
-            ndl = max(dot(lightDir, n),0.0);
+            l = normalize(-u_lights[i].direction);
+            ndl = max(dot(l, n),0.0);
         }
 
         float spec = 0.0;
 
         if (ndl > 0.0 && u_material.shininess > 0.0) {
             float normFactor = (u_material.shininess + 2.0) / 2.0;//todo: find a better alternative
-            vec3 r = reflect(-lightDir, n);
+            vec3 r = reflect(-l, n);
             spec = normFactor*pow(max(dot(r, v), 0.0), u_material.shininess);
-            //spec = pow(max(dot(r, v), 0.0), 100f);
+            //spec = pow(max(dot(r, v), 0.0), 0.7f);
         }
 
 

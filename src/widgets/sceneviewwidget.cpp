@@ -34,7 +34,6 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
     installEventFilter(this);
 
     renderer = jah3d::ForwardRenderer::create(this);
-    initialized = 2;
 
     viewport = new jah3d::Viewport();
 
@@ -59,14 +58,15 @@ void SceneViewWidget::initialize()
     mat = jah3d::DefaultMaterial::create();
     boxNode->setMaterial(mat);
     mat->setDiffuseColor(QColor(255,200,200));
-    mat->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/Artistic Pattern.png"));
+    //mat->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/Artistic Pattern.png"));
 
     //lighting
     auto light = jah3d::LightNode::create();
-    light->setLightType(jah3d::LightType::Directional);
+    light->setLightType(jah3d::LightType::Point);
     light->rot = QQuaternion::fromEulerAngles(45,0,0);
     scene->rootNode->addChild(light);
-    light->pos = QVector3D(0,3,0);
+    light->pos = QVector3D(0,50,0);
+    light->intensity = 1;
 
 
     scene->rootNode->addChild(boxNode);

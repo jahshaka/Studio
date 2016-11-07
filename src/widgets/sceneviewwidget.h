@@ -55,7 +55,6 @@ private:
     QPointF prevMousePos;
     bool dragging;
 
-    int initialized;
     void initialize();
 
     jah3d::Mesh* mesh;
