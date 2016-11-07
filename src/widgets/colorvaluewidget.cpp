@@ -36,6 +36,11 @@ void ColorValueWidget::setTitle(QString title)
     _title = title;
 }
 
+void ColorValueWidget::setLabel(QString name)
+{
+    ui->label->setText(name);
+}
+
 void ColorValueWidget::onColorChanged(QColor color)
 {
     Q_UNUSED(color);

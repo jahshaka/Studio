@@ -101,7 +101,7 @@ For more information see the LICENSE file
 #include "materials/materials.h"
 #include "core/jahrenderer.h"
 #include "helpers/collisionhelper.h"
-#include "widgets/accordianbladewidget.h" // testing
+#include "widgets/accordianbladewidget.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -124,26 +124,40 @@ MainWindow::MainWindow(QWidget *parent) :
     //gizmoHandle = nullptr;
     activeGizmoHandle = nullptr;
 
+    // Accordian SideDock Properties
 
     AccordianBladeWidget *accordian = new AccordianBladeWidget();
     accordian->setContentTitle("Fog Settings");
     accordian->addFloatValueSlider("Fog Intensity", 0, 100);
-    accordian->addFloatValueSlider("Fog Near Distance", 0, 100);
-    accordian->addFloatValueSlider("Fog Far Distance", 0, 100);
-    accordian->addFloatValueSlider("Fog Size", 0, 100);
+    accordian->addFloatValueSlider("Fog Intensity", 0, 100);
+    accordian->addColorPicker("Fog Shade");
+    accordian->addTexturePicker("Fog Diffuse");
+    accordian->setMaxHeight(280);
+
     AccordianBladeWidget *accordian2 = new AccordianBladeWidget();
     accordian2->setContentTitle("Skies Presets");
-    AccordianBladeWidget *accordian3 = new AccordianBladeWidget();
-    accordian3->setContentTitle("Grid Options");
+    accordian2->addFloatValueSlider("Fog Intensity", 0, 100);
+    accordian2->addFloatValueSlider("Fog Near Distance", 0, 100);
+    accordian2->addFloatValueSlider("Fog Far Distance", 0, 100);
+    accordian2->addFloatValueSlider("Fog Size", 0, 100);
+    accordian2->addFloatValueSlider("Fog Intensity", 0, 100);
+    accordian2->addFloatValueSlider("Fog Near Distance", 0, 100);
+    accordian2->addFloatValueSlider("Fog Far Distance", 0, 100);
+    accordian2->setMaxHeight(300);
+
     AccordianBladeWidget *accordian4 = new AccordianBladeWidget();
     accordian4->setContentTitle("Background Options");
+    accordian4->addFloatValueSlider("Fog Intensity", 0, 100);
+    accordian4->addFloatValueSlider("Fog Intensity", 0, 100);
+    accordian4->setMaxHeight(100);
+
     AccordianBladeWidget *accordian5 = new AccordianBladeWidget();
     accordian5->setContentTitle("Object Options");
+    accordian5->addTransform();
 
     QVBoxLayout *mainLay = new QVBoxLayout(this);
     mainLay->addWidget(accordian);
     mainLay->addWidget(accordian2);
-    mainLay->addWidget(accordian3);
     mainLay->addWidget(accordian4);
     mainLay->addWidget(accordian5);
     mainLay->addStretch();

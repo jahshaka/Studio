@@ -87,22 +87,22 @@
         </property>
         <property name="styleSheet">
          <string notr="true">QPushButton {
-   border-image: url(:/app/icons/up-arrow.svg);
    background-color: rgb(74, 74, 74);
    border-radius: 0;
 }
 
 QPushButton:hover {
-    border-image: url(:/app/icons/up-arrow.svg);
 	background-color: rgb(30, 144, 255);
 	border: none;
 }
-
-
 </string>
         </property>
         <property name="text">
          <string/>
+        </property>
+        <property name="icon">
+         <iconset resource="../../icons.qrc">
+          <normaloff>:/app/icons/down-arrow.svg</normaloff>:/app/icons/down-arrow.svg</iconset>
         </property>
        </widget>
       </item>
@@ -151,6 +151,8 @@ QPushButton:hover {
   <zorder>contentpane</zorder>
   <zorder>bg</zorder>
  </widget>
- <resources/>
+ <resources>
+  <include location="../../icons.qrc"/>
+ </resources>
  <connections/>
 </ui>

@@ -620,13 +620,13 @@ QTreeView::branch:open:has-children:has-siblings  {
    <property name="minimumSize">
     <size>
      <width>300</width>
-     <height>212</height>
+     <height>230</height>
     </size>
    </property>
    <property name="maximumSize">
     <size>
      <width>524287</width>
-     <height>212</height>
+     <height>230</height>
     </size>
    </property>
    <property name="styleSheet">
@@ -923,7 +923,7 @@ background-color: rgb(30, 144, 255);
           <x>0</x>
           <y>0</y>
           <width>298</width>
-          <height>270</height>
+          <height>413</height>
          </rect>
         </property>
        </widget>
@@ -949,7 +949,7 @@ background-color: rgb(30, 144, 255);
     <string>Object View</string>
    </property>
    <attribute name="dockWidgetArea">
-    <number>2</number>
+    <number>8</number>
    </attribute>
    <widget class="QWidget" name="objectview"/>
   </widget>

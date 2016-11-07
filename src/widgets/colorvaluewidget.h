@@ -28,9 +28,10 @@ class ColorValueWidget : public QWidget
 public:
     explicit ColorValueWidget(QWidget *parent = 0);
     ~ColorValueWidget();
-
+    Ui::ColorValueWidget *ui;
     QString getTitle();
     void setTitle(QString title);
+    void setLabel(QString name);
 
 private slots:
     void onColorChanged(QColor color);
@@ -40,8 +41,6 @@ signals:
     void colorChanged(QColor color);
     void setColor(QColor color);
 
-private:
-    Ui::ColorValueWidget *ui;
 };
 
 #endif // COLORVALUEWIDGET_H

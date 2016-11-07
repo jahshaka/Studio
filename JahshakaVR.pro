@@ -94,7 +94,9 @@ SOURCES += src/main.cpp\
     src/widgets/materialsets.cpp \
     src/widgets/modelpresets.cpp \
     src/widgets/accordianbladewidget.cpp \
-    src/widgets/hfloatslider.cpp
+    src/widgets/hfloatslider.cpp \
+    src/widgets/texturepicker.cpp \
+    src/widgets/transformeditor.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -170,7 +172,9 @@ HEADERS  += src/mainwindow.h \
     src/widgets/materialsets.h \
     src/widgets/modelpresets.h \
     src/widgets/accordianbladewidget.h \
-    src/widgets/hfloatslider.h
+    src/widgets/hfloatslider.h \
+    src/widgets/texturepicker.h \
+    src/widgets/transformeditor.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -201,7 +205,9 @@ FORMS    += \
     src/widgets/materialsets.ui \
     src/widgets/modelpresets.ui \
     src/widgets/accordianbladewidget.ui \
-    src/widgets/hfloatslider.ui
+    src/widgets/hfloatslider.ui \
+    src/widgets/texturepicker.ui \
+    src/widgets/transformeditor.ui
 
 DISTFILES +=
 

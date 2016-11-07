@@ -68,7 +68,7 @@
     </widget>
    </item>
    <item row="0" column="2">
-    <widget class="QDoubleSpinBox" name="spinbox">
+    <widget class="QSpinBox" name="spinbox">
      <property name="minimumSize">
       <size>
        <width>0</width>

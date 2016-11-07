@@ -12,12 +12,20 @@ class AccordianBladeWidget : public QWidget
     Q_OBJECT
 
 public:
+
+    int minimum_height;
+
     explicit AccordianBladeWidget(QWidget *parent = 0);
     ~AccordianBladeWidget();
+
+    void addTransform();
+    void addSkyPresets();
+    void addMatPresets();
+    void setMaxHeight( int height );
     void addColorPicker( QString name );
+    void addTexturePicker( QString name );
     void setContentTitle( QString title );
     void addFloatValueSlider( QString name, float range_1 , float range_2 );
-    //void addTexturePicker( QString name );
 
 private slots:
     void on_toggle_clicked();
