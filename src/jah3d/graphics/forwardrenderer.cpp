@@ -100,7 +100,7 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
 
         program->setUniformValue("u_eyePos",renderData->eyePos);
 
-        program->setUniformValue("u_textureScale",1.0f);
+        //program->setUniformValue("u_textureScale",1.0f);
 
         auto lightCount = renderData->scene->lights.size();
         mat->program->setUniformValue("u_lightCount",lightCount);

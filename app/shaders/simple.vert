@@ -23,7 +23,10 @@ void main()
     v_worldPos = (u_worldMatrix*vec4(a_pos,1.0)).xyz;
     //gl_Position = matrix*vec4(a_pos,1.0);
     gl_Position = u_projMatrix*u_viewMatrix*u_worldMatrix*vec4(a_pos,1.0);
+
     v_texCoord = a_texCoord*u_textureScale;
+    //v_texCoord = a_texCoord*2;
+
     v_normal = normalize((u_normalMatrix*a_normal));
     vec3 v_tangent = normalize((u_normalMatrix*a_tangent));
     //vec3 v_bitangent = cross(v_normal,v_tangent);

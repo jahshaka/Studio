@@ -18,10 +18,13 @@ using namespace jah3d;
 
 EditorCameraController::EditorCameraController(CameraNodePtr cam)
 {
-    camera = cam;
+    setCamera(cam);
 
     lookSpeed = 200;
     linearSpeed = 1;
+
+    yaw = 0;
+    pitch = 0;
 }
 
 CameraNodePtr EditorCameraController::getCamera()
@@ -32,6 +35,7 @@ CameraNodePtr EditorCameraController::getCamera()
 void EditorCameraController::setCamera(CameraNodePtr cam)
 {
     this->camera = cam;
+    this->updateCameraRot();
 }
 
 QVector3D EditorCameraController::getPos()
@@ -63,6 +67,21 @@ float EditorCameraController::getLookSpeed()
 void EditorCameraController::onMouseDragged(int x,int y)
 {
     //rotate camera accordingly
+    this->yaw += x/10.0f;
+    this->pitch += y/10.0f;
+
+    /*
+    QVector3D upVector(0,1,0);
+    QVector3D viewVector = camera->viewCenter() - camera->position();
+    auto x = QVector3D::crossProduct(viewVector, upVector).normalized();
+    //auto z = viewVector.normalized();
+    auto z = QVector3D::crossProduct(upVector,x).normalized();
+
+    camera->translateWorld(txAxis->value()*x*linearSpeed);
+    camera->translateWorld(tyAxis->value()*z*linearSpeed);
+    */
+
+    updateCameraRot();
 }
 
 //returns ray direction
@@ -82,32 +101,12 @@ QVector3D EditorCameraController::unproject(int viewPortWidth, int viewPortHeigh
     return ray.toVector3D().normalized();
 }
 
-void EditorCameraController::onFrame(float dt)
+void EditorCameraController::updateCameraRot()
 {
-    /*
-    if(rightMouseButtonAction->isActive())
-    {
+    //QQuaternion yawQuat = QQuaternion::fromEulerAngles(0,yaw,0);
+    //QQuaternion pitchQuat = QQuaternion::fromEulerAngles(pitch,0,0);
 
-        camera->tilt((mouseYAxis->value() * lookSpeed) * dt);
-        camera->pan((mouseXAxis->value() * lookSpeed) * dt, QVector3D(0,1,0));
-    }
+    //camera->rot = yawQuat*pitchQuat;
 
-    if(middleMouseButtonAction->isActive())
-    {
-        auto panSpeed = 1.0f;
-
-        camera->translate(QVector3D(-mouseXAxis->value()*panSpeed,-mouseYAxis->value()*panSpeed,0));
-        //qDebug()<<"pan";
-    }
-
-    QVector3D upVector(0,1,0);
-    QVector3D viewVector = camera->viewCenter() - camera->position();
-    auto x = QVector3D::crossProduct(viewVector, upVector).normalized();
-    //auto z = viewVector.normalized();
-    auto z = QVector3D::crossProduct(upVector,x).normalized();
-
-    camera->translateWorld(txAxis->value()*x*linearSpeed);
-    camera->translateWorld(tyAxis->value()*z*linearSpeed);
-    //camera->translateWorld(QVector3D(txAxis->value()*linearSpeed*x,0,tyAxis->value()*linearSpeed*z));
-    */
+    camera->rot = QQuaternion::fromEulerAngles(pitch,yaw,0);
 }

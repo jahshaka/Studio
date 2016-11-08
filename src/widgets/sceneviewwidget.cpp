@@ -41,16 +41,29 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
 
 void SceneViewWidget::initialize()
 {
-    renderer = jah3d::ForwardRenderer::create(this);
+
 
     auto scene = jah3d::Scene::create();
 
     auto cam = jah3d::CameraNode::create();
     cam->pos = QVector3D(0,5,5);
-    cam->rot = QQuaternion::fromEulerAngles(-50,0,0);
+    cam->rot = QQuaternion::fromEulerAngles(-45,0,0);
     //cam->lookAt(QVector3D(0,0,0),QVect);
     scene->setCamera(cam);
     scene->rootNode->addChild(cam);
+
+    //second node
+    auto node = jah3d::MeshNode::create();
+    //boxNode->setMesh("app/models/head.obj");
+    node->setMesh("app/models/plane.obj");
+    node->scale = QVector3D(100,1,100);
+
+    auto m = jah3d::DefaultMaterial::create();
+    node->setMaterial(m);
+    m->setDiffuseColor(QColor(255,255,255));
+    m->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/defaultgrid.png"));
+    m->setTextureScale(100);
+    scene->rootNode->addChild(node);
 
     //add test object with basic material
     boxNode = jah3d::MeshNode::create();
@@ -64,16 +77,7 @@ void SceneViewWidget::initialize()
     mat->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/Artistic Pattern.png"));
 
 
-    //second node
-    auto node = jah3d::MeshNode::create();
-    //boxNode->setMesh("app/models/head.obj");
-    node->setMesh("app/models/cube.obj");
 
-    auto m = jah3d::DefaultMaterial::create();
-    node->setMaterial(m);
-    m->setDiffuseColor(QColor(255,200,200));
-    m->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/Artistic Pattern.png"));
-    //scene->rootNode->addChild(node);
 
     //lighting
     auto light = jah3d::LightNode::create();
@@ -81,12 +85,13 @@ void SceneViewWidget::initialize()
     light->rot = QQuaternion::fromEulerAngles(45,0,0);
     scene->rootNode->addChild(light);
     //light->pos = QVector3D(5,5,0);
-    light->pos = QVector3D(-3,0,3);
+    light->pos = QVector3D(0,10,3);
     light->intensity = 2;
     light->icon = jah3d::Texture2D::load("app/icons/bulb.png");
 
 
     scene->rootNode->addChild(boxNode);
+    //scene->rootNode->addChild(node);
     setScene(scene);
 
     camController = new EditorCameraController(cam);
@@ -109,6 +114,8 @@ void SceneViewWidget::initializeGL()
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
+
+    renderer = jah3d::ForwardRenderer::create(this);
 
     initialize();
 
@@ -183,10 +190,11 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     {
         QPointF dir = localPos-prevMousePos;
         //camera->rotate(-dir.x(),-dir.y());
-        boxNode->rot *= QQuaternion::fromEulerAngles(0,dir.x(),0);
+        //if(!!boxNode)
+        //    boxNode->rot *= QQuaternion::fromEulerAngles(0,dir.x(),0);
 
         if(camController!=nullptr)
-            camController->onMouseDragged(dir.x(),dir.y());
+            camController->onMouseDragged(-dir.x(),-dir.y());
 
     }
 

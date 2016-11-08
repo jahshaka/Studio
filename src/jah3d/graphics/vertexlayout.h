@@ -42,24 +42,22 @@ public:
     void bind(QOpenGLShaderProgram* program)
     {
         int offset = 0;
-        int loc = 0;
         for(auto attrib: attribs)
         {
-            program->enableAttributeArray(loc);
-            program->bindAttributeLocation(attrib.name,loc);
-            program->setAttributeBuffer(loc, attrib.type, offset, attrib.count,stride);
+            attrib.loc = program->attributeLocation(attrib.name);//todo: do this once per shader
+            program->enableAttributeArray(attrib.loc);
+            //program->bindAttributeLocation(attrib.name,loc);// slow! causes shader relinking!
+
+            program->setAttributeBuffer(attrib.loc, attrib.type, offset, attrib.count,stride);
             offset += attrib.sizeInBytes;
-            loc++;
         }
     }
 
     void unbind(QOpenGLShaderProgram* program)
     {
-        int loc = 0;
         for(auto attrib: attribs)
         {
-            program->disableAttributeArray(loc);
-            loc++;
+            program->disableAttributeArray(attrib.loc);
         }
     }
 

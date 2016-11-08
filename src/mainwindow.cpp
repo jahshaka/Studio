@@ -22,7 +22,6 @@ For more information see the LICENSE file
 #include <QMessageBox>
 
 #include <QFileDialog>
-#include <QPickEvent>
 
 #include <QTreeWidgetItem>
 

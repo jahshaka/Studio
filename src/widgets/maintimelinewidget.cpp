@@ -44,7 +44,8 @@ MainTimelineWidget::MainTimelineWidget(QWidget *parent) :
     connect(ui->timeEnd,SIGNAL(valueChanged(int)),this,SLOT(timeEndChanged(int)));
 
     //connect(ui->animLength,SIGNAL(valueChanged(int)),this,SLOT(animLengthChanged(int)));
-    connect(ui->timeline,SIGNAL(cursorMoved(float)),this,SLOT(timelineCursorChanged(float)));
+
+    //connect(ui->timeline,SIGNAL(cursorMoved(float)),this,SLOT(timelineCursorChanged(float)));
 
     connect(ui->play,SIGNAL(clicked(bool)),this,SLOT(play()));
     connect(ui->rewind,SIGNAL(clicked(bool)),this,SLOT(rewind()));
@@ -105,7 +106,7 @@ void MainTimelineWidget::animLengthChanged(int timeInSeconds)
 void MainTimelineWidget::startTimer()
 {
     elapsedTimer->start();
-    timer->start(1.0f/60);//as fast as possible
+    timer->start();
     if(mainWindow!=nullptr)
         mainWindow->stopAnimWidget();
 }

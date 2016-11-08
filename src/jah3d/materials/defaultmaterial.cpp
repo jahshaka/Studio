@@ -109,6 +109,8 @@ void DefaultMaterial::begin(QOpenGLFunctions* gl)
     program->setUniformValue("u_material.specular",QVector3D(specularColor.redF(),specularColor.greenF(),specularColor.blueF()));
     program->setUniformValue("u_material.shininess",shininess);
 
+    program->setUniformValue("u_textureScale", this->textureScale);
+
     program->setUniformValue("u_useDiffuseTex",useDiffuseTex);
     program->setUniformValue("u_normalTexture",useNormalTex);
     program->setUniformValue("u_reflectionTexture",useReflectionTex);
@@ -237,7 +239,7 @@ void DefaultMaterial::setShininess(float shininess)
 
 float DefaultMaterial::getShininess()
 {
-    return 0.0f;
+    return shininess;
 }
 
 
@@ -248,30 +250,16 @@ void DefaultMaterial::setReflectionTexture(QOpenGLTexture* tex)
     matTex->texture = tex;
     matTex->name = "u_reflectionTexture";
     textures.append(matTex);
-
-    program->bind();
-    program->setUniformValue("u_useReflectionTex",true);
-    //program->release();
 }
 
 void DefaultMaterial::setReflectionInfluence(float intensity)
 {
     reflectionInfluence = intensity;
-
-    program->bind();
-    program->setUniformValue("u_reflectionInfluence",intensity);
-    //program->release();
 }
 
 void DefaultMaterial::setTextureScale(float scale)
 {
     this->textureScale = scale;
-    //qDebug()<<scale<<endl;
-    //textureScaleParam->setValue(scale);
-
-    program->bind();
-    program->setUniformValue("u_textureScale",scale);
-    //program->release();
 }
 
 }

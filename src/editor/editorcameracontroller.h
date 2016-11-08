@@ -33,6 +33,9 @@ class EditorCameraController
     float lookSpeed;
     float linearSpeed;
 
+    float yaw;
+    float pitch;
+
 public:
     EditorCameraController(QSharedPointer<jah3d::CameraNode>  cam);
 
@@ -51,8 +54,7 @@ public:
 
     QVector3D unproject(int viewPortWidth, int viewPortHeight,QPoint pos);
 
-private slots:
-    void onFrame(float dt);
+    void updateCameraRot();
 };
 
 #endif // EDITORCAMERACONTROLLER_H

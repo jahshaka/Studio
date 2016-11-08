@@ -33,6 +33,7 @@ public:
 
     //editor-specific
     QSharedPointer<Texture2D> icon;
+    float iconSize;
 
     static LightNodePtr create()
     {
@@ -69,6 +70,8 @@ private:
         radius = 5;
         color = QColor(255,255,255);
         intensity = 0.2f;
+
+        iconSize = 0.5f;
     }
 
 
