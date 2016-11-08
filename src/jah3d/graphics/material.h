@@ -30,6 +30,13 @@ public:
     //QMap<QString, TexturePtr> textures;
     QList<MaterialTexture*> textures;
 
+    bool acceptsLighting;
+
+    Material()
+    {
+        acceptsLighting = true;
+    }
+
     //void bind();
     //void unbind();
 

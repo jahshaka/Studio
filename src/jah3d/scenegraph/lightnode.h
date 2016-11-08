@@ -8,6 +8,8 @@
 namespace jah3d
 {
 
+class Texture2D;
+
 class LightNode;
 typedef QSharedPointer<LightNode> LightNodePtr;
 
@@ -28,6 +30,9 @@ public:
     float radius;
     QColor color;
     float intensity;
+
+    //editor-specific
+    QSharedPointer<Texture2D> icon;
 
     static LightNodePtr create()
     {

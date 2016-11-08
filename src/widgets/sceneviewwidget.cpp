@@ -26,14 +26,12 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
 
     QSurfaceFormat format;
     format.setDepthBufferSize(32);
-    format.setMajorVersion(3);
-    format.setMinorVersion(3);
-    //format.setSamples(16);
+    //format.setMajorVersion(3);
+    //format.setMinorVersion(3);
+    format.setSamples(0);
 
     setFormat(format);
     installEventFilter(this);
-
-    renderer = jah3d::ForwardRenderer::create(this);
 
     viewport = new jah3d::Viewport();
 
@@ -43,30 +41,49 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
 
 void SceneViewWidget::initialize()
 {
+    renderer = jah3d::ForwardRenderer::create(this);
+
     auto scene = jah3d::Scene::create();
 
     auto cam = jah3d::CameraNode::create();
-    cam->pos = QVector3D(0,0,5);
+    cam->pos = QVector3D(0,5,5);
+    cam->rot = QQuaternion::fromEulerAngles(-50,0,0);
     //cam->lookAt(QVector3D(0,0,0),QVect);
     scene->setCamera(cam);
     scene->rootNode->addChild(cam);
 
     //add test object with basic material
     boxNode = jah3d::MeshNode::create();
-    boxNode->setMesh("app/models/head.obj");
+    //boxNode->setMesh("app/models/head.obj");
+    //boxNode->setMesh("app/models/box.obj");
+    boxNode->setMesh("assets/models/StanfordDragon.obj");
 
     mat = jah3d::DefaultMaterial::create();
     boxNode->setMaterial(mat);
     mat->setDiffuseColor(QColor(255,200,200));
-    //mat->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/Artistic Pattern.png"));
+    mat->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/Artistic Pattern.png"));
+
+
+    //second node
+    auto node = jah3d::MeshNode::create();
+    //boxNode->setMesh("app/models/head.obj");
+    node->setMesh("app/models/cube.obj");
+
+    auto m = jah3d::DefaultMaterial::create();
+    node->setMaterial(m);
+    m->setDiffuseColor(QColor(255,200,200));
+    m->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/Artistic Pattern.png"));
+    //scene->rootNode->addChild(node);
 
     //lighting
     auto light = jah3d::LightNode::create();
     light->setLightType(jah3d::LightType::Point);
     light->rot = QQuaternion::fromEulerAngles(45,0,0);
     scene->rootNode->addChild(light);
-    light->pos = QVector3D(0,50,0);
-    light->intensity = 1;
+    //light->pos = QVector3D(5,5,0);
+    light->pos = QVector3D(-3,0,3);
+    light->intensity = 2;
+    light->icon = jah3d::Texture2D::load("app/icons/bulb.png");
 
 
     scene->rootNode->addChild(boxNode);
@@ -110,8 +127,8 @@ void SceneViewWidget::paintGL()
 void SceneViewWidget::renderScene()
 {
     //glViewport(0, 0, this->width(),this->height());
-    //glClearColor(0.3f,0.3f,0.3f,1);
-    glClearColor(1.0f,1.0f,1.0f,1);
+    glClearColor(0.3f,0.3f,0.3f,1);
+    //glClearColor(1.0f,1.0f,1.0f,1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if(!!renderer && !!scene)

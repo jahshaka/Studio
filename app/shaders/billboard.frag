@@ -9,29 +9,35 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#version 150 core
+#version 150
 
 uniform sampler2D tex;
 uniform bool useTexture;
 uniform vec4 color;
 
-in vec2 texCoord;
-
-out vec4 fragColor;
+varying vec2 v_texCoord;
 
 void main()
 {
+    /*
     if(useTexture)
     {
-        vec4 color = texture( tex, texCoord ).rgba;
+        vec4 color = texture( tex, v_texCoord ).rgba;
         if(color.a<0.1f)
             discard;
+
         color.a = 1.0;
-        fragColor = color;
+        gl_FragColor = color;
     }
     else
-        fragColor = color;
+        gl_FragColor = color;
+    */
 
-    //fragColor = vec4(1.0,0.0,0.0,1);
-    //fragColor = vec4(1,1,1,1);
+    vec4 color = texture( tex, v_texCoord ).rgba;
+    if(color.a<0.1f)
+        discard;
+
+    color.a = 1.0;
+    gl_FragColor = color;
+    //gl_FragColor = vec4(1.0,1.0,1.0,1.0);
 }

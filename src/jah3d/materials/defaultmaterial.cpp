@@ -64,7 +64,7 @@ DefaultMaterial::DefaultMaterial()
 
     shininess = 50.0f;
     useSpecularTex = false;
-    specularColor = QColor(5,5,5);
+    specularColor = QColor(200,200,200);
     specularTexture = nullptr;
 
     reflectionInfluence = 0.0f;
@@ -93,7 +93,7 @@ void DefaultMaterial::begin(QOpenGLFunctions* gl)
 
         if(tex->texture!=nullptr)
         {
-            tex->texture->bind(i);
+            tex->texture->bind();
             program->setUniformValue(tex->name.toStdString().c_str(), i);
         }
         else
@@ -109,7 +109,7 @@ void DefaultMaterial::begin(QOpenGLFunctions* gl)
     program->setUniformValue("u_material.specular",QVector3D(specularColor.redF(),specularColor.greenF(),specularColor.blueF()));
     program->setUniformValue("u_material.shininess",shininess);
 
-    program->setUniformValue("u_useDiffuseTexture",useDiffuseTex);
+    program->setUniformValue("u_useDiffuseTex",useDiffuseTex);
     program->setUniformValue("u_normalTexture",useNormalTex);
     program->setUniformValue("u_reflectionTexture",useReflectionTex);
     program->setUniformValue("u_reflectionInfluence",reflectionInfluence);
@@ -124,14 +124,15 @@ void DefaultMaterial::end()
 void DefaultMaterial::setDiffuseTexture(QSharedPointer<Texture2D> tex)
 {
     diffuseTexture=tex;
+    useDiffuseTex = true;
     auto matTex = new MaterialTexture();
     matTex->texture = tex->texture;//bad! fix!
     matTex->name = "u_diffuseTexture";
     textures.append(matTex);
 
     //useDiffuseTex
-    program->bind();
-    program->setUniformValue("u_useDiffuseTex",true);
+    //program->bind();
+    //program->setUniformValue("u_useDiffuseTex",true);
     //program->release();
 }
 

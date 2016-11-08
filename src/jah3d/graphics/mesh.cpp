@@ -25,8 +25,8 @@ Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
     //assumes mesh data is laid out in a flat array
     //i.e. no index buffer used
 
-    //float* meshData = new ;
-    numVerts = mesh->mNumVertices;
+    //numVerts = mesh->mNumVertices;
+    numVerts = mesh->mNumFaces*3;
     numFaces = mesh->mNumFaces;
 
     //slow, but good enough for now
@@ -70,9 +70,19 @@ Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
     vbo->create();
     vbo->bind();
     vbo->allocate(data.constData(), data.count() * sizeof(GLfloat));
-    //vbo->release();
 
-    vertexLayout = VertexLayout::createMeshDefault();
+}
+
+Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
+{
+    this->vertexLayout = vertexLayout;
+
+    numVerts = numElements;
+
+    vbo = new QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+    vbo->create();
+    vbo->bind();
+    vbo->allocate(data, dataSize);
 }
 
 void Mesh::draw(QOpenGLFunctions* gl,Material* mat)
@@ -84,20 +94,8 @@ void Mesh::draw(QOpenGLFunctions* gl,QOpenGLShaderProgram* program)
 {
     vbo->bind();
 
-    /*
-    auto stride = (3+2+3+3)*sizeof(GLfloat);
-    program->setAttributeBuffer(POS_ATTR_LOC, GL_FLOAT, 0, 3,stride);
-    program->setAttributeBuffer(TEXCOORD_ATTR_LOC, GL_FLOAT, 3 * sizeof(GLfloat), 2, stride );
-    program->setAttributeBuffer(NORMAL_ATTR_LOC, GL_FLOAT, 5 * sizeof(GLfloat), 3, stride);
-    program->setAttributeBuffer(TANGENT_ATTR_LOC, GL_FLOAT, 8 * sizeof(GLfloat), 3, stride);
-    */
-
-    //program->enableAttributeArray(0);
-    //auto stride = (3+2+3+3)*sizeof(GLfloat);
-    //program->setAttributeBuffer(0, GL_FLOAT, 0, 3,stride);
-
     vertexLayout->bind(program);
-    gl->glDrawArrays(GL_TRIANGLES,0,numFaces*3);
+    gl->glDrawArrays(GL_TRIANGLES,0,numVerts);//todo: bad to assume triangles, allow other primitive types
     vertexLayout->unbind(program);
 }
 
@@ -110,6 +108,11 @@ Mesh* Mesh::loadMesh(QString filePath)
     auto mesh = scene->mMeshes[0];
 
     return new Mesh(mesh,VertexLayout::createMeshDefault());
+}
+
+Mesh* Mesh::create(void* data,int dataSize,int numVerts,VertexLayout* vertexLayout)
+{
+    return new Mesh(data,dataSize,numVerts,vertexLayout);
 }
 
 }

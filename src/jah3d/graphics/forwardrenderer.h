@@ -1,11 +1,10 @@
 #ifndef FORWARDRENDERER_H
 #define FORWARDRENDERER_H
 
-
-//#include "../core/scene.h"
-//#include "../core/scenenode.h"
 #include <QOpenGLContext>
 #include <QSharedPointer>
+
+class QOpenGLShaderProgram;
 
 namespace jah3d
 {
@@ -14,6 +13,9 @@ class Scene;
 class SceneNode;
 class RenderData;
 class Viewport;
+class Mesh;
+class BillboardMaterial;
+class Billboard;
 
 class ForwardRenderer
 {
@@ -21,13 +23,21 @@ class ForwardRenderer
     RenderData* renderData;
 
 public:
-    //all scene's transform should be updated
+    //all scenenodes' transform should be updated before calling this functions
     void renderScene(Viewport* vp,QSharedPointer<Scene> scene);
     static QSharedPointer<ForwardRenderer> create(QOpenGLFunctions* gl);
 
 private:
-    void renderNode(RenderData* renderData,QSharedPointer<SceneNode> node);
     ForwardRenderer(QOpenGLFunctions* gl);
+
+
+    void renderNode(RenderData* renderData,QSharedPointer<SceneNode> node);
+    void renderBillboardIcons(RenderData* renderData);
+
+    //editor-specific
+    jah3d::Billboard* billboard;
+    //void createBillboardIconAssets();
+
 };
 
 }

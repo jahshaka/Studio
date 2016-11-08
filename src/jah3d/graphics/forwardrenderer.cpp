@@ -4,13 +4,16 @@
 #include "../scenegraph/cameranode.h"
 #include "../scenegraph/meshnode.h"
 #include "../scenegraph/lightnode.h"
-#include "../graphics/mesh.h"
+#include "mesh.h"
+#include "graphicshelper.h"
 #include "renderdata.h"
 #include "material.h"
 #include <QOpenGLShaderProgram>
 #include <QOpenGLFunctions>
 #include <QOpenGLTexture>
 #include "viewport.h"
+#include "utils/billboard.h"
+#include "texture2d.h"
 
 namespace jah3d
 {
@@ -19,6 +22,8 @@ ForwardRenderer::ForwardRenderer(QOpenGLFunctions* gl)
 {
     this->gl = gl;
     renderData = new RenderData();
+
+    billboard = new Billboard(gl);
 }
 
 QSharedPointer<ForwardRenderer> ForwardRenderer::create(QOpenGLFunctions* gl)
@@ -31,8 +36,7 @@ void ForwardRenderer::renderScene(Viewport* vp,QSharedPointer<Scene> scene)
 {
     auto cam = scene->camera;
 
-    //gather lights
-    //renderData = new RenderData();//bad, no allocations per frame
+    //STEP 1: RENDER SCENE
     renderData->scene = scene;
 
     cam->setAspectRatio(vp->getAspectRatio());
@@ -41,8 +45,16 @@ void ForwardRenderer::renderScene(Viewport* vp,QSharedPointer<Scene> scene)
     renderData->projMatrix = cam->projMatrix;
     renderData->viewMatrix = cam->viewMatrix;
     renderData->eyePos = cam->globalTransform.column(3).toVector3D();
+    //renderData->gl = gl;
 
     renderNode(renderData,scene->rootNode);
+
+    //STEP 2: RENDER LINES (for e.g. light radius and the camera frustum)
+
+    //STEP 3: RENDER BILLBOARD ICONS
+    renderBillboardIcons(renderData);
+
+    //STEP 4: RENDER GIZMOS
 }
 
 void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode> node)
@@ -52,7 +64,7 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
         auto meshNode = node.staticCast<MeshNode>();
         auto mat = meshNode->material;
 
-        QOpenGLShaderProgram* program = mat->program;
+        auto program = mat->program;
         //program->bind();
 
         //bind textures
@@ -119,5 +131,45 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
     for(auto childNode:node->children)
         renderNode(renderData,childNode);
 }
+
+void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
+{
+    gl->glDisable(GL_CULL_FACE);
+
+    auto lightCount = renderData->scene->lights.size();
+    auto program = billboard->program;
+    program->bind();
+
+    for(int i=0;i<lightCount;i++)
+    {
+        auto light = renderData->scene->lights[i];
+
+        program->setUniformValue("u_worldMatrix",light->globalTransform);
+        program->setUniformValue("u_viewMatrix",renderData->viewMatrix);
+        program->setUniformValue("u_projMatrix",renderData->projMatrix);
+
+        gl->glActiveTexture(GL_TEXTURE0);
+        auto icon = light->icon;
+        if(!!icon)
+        {
+            icon->texture->bind();
+        }
+
+        billboard->draw(gl);
+    }
+
+    gl->glEnable(GL_CULL_FACE);
+}
+
+/*
+void ForwardRenderer::createBillboardIconAssets()
+{
+    //create shader
+    //billboardShader = GraphicsHelper::loadShader("app/shaders/billboard.vert","app/shaders/billboard.frag");
+
+    //create mesh
+
+}
+*/
 
 }

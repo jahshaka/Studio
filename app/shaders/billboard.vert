@@ -9,22 +9,23 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#version 150 core
+#version 150
 
-in vec3 vertexPosition;
-in vec2 vertexTexCoord;
+attribute vec3 a_pos;
+attribute vec2 a_texCoord;
 
-out vec2 texCoord;
+varying vec2 v_texCoord;
 
-uniform mat4 modelView;
-uniform mat4 projectionMatrix;
-uniform mat4 mvp;
+uniform mat4 u_worldMatrix;
+uniform mat4 u_viewMatrix;
+uniform mat4 u_projMatrix;
 
 void main()
 {
-    texCoord = vertexTexCoord;
+    v_texCoord = a_texCoord;
 
-    mat4 mat = modelView;
+    mat4 mat = u_viewMatrix*u_worldMatrix;
+
 
     mat[0][0] = 1.0f;
     mat[0][1] = 0.0f;
@@ -38,7 +39,9 @@ void main()
     mat[2][1] = 0.0f;
     mat[2][2] = 1.0f;
 
-    gl_Position = projectionMatrix * mat * vec4( vertexPosition, 1.0 );
-    //gl_Position = projectionMatrix * modelView * vec4( vertexPosition, 1.0 );
-    //gl_Position = mvp * vec4( vertexPosition, 1.0 );
+
+    gl_Position = u_projMatrix * mat * vec4( a_pos, 1.0 );
+    //gl_Position =  vec4( a_pos, 1.0 );
+    //gl_Position =  u_projMatrix * u_viewMatrix * u_worldMatrix * vec4( a_pos, 1.0 );
+    //gl_Position = u_projMatrix*u_viewMatrix*u_worldMatrix*vec4(a_pos,1.0);
 }

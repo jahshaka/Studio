@@ -161,8 +161,8 @@ void main()
     //vec3 col = vec3(1,0,1);
     vec3 col = u_material.diffuse;
     //vec3 col = mat_diffuse;
-    //if(u_useDiffuseTex)
-    //    col = col * texture2D(u_diffuseTexture,v_texCoord).rgb;
+    if(u_useDiffuseTex)
+        col = col * texture2D(u_diffuseTexture,v_texCoord).rgb;
 
     if(u_useSpecularTex)
         specular = specular * texture2D(u_specularTexture,v_texCoord).rgb;
