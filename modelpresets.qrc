@@ -1,0 +1,10 @@
+<RCC>
+    <qresource prefix="/">
+        <file>app/modelpresets/cone.png</file>
+        <file>app/modelpresets/cube.png</file>
+        <file>app/modelpresets/cylinder.png</file>
+        <file>app/modelpresets/icosphere.png</file>
+        <file>app/modelpresets/sphere.png</file>
+        <file>app/modelpresets/torus.png</file>
+    </qresource>
+</RCC>

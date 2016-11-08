@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1079</width>
-    <height>553</height>
+    <width>1209</width>
+    <height>955</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,303 +20,17 @@
   <property name="windowOpacity">
    <double>1.000000000000000</double>
   </property>
-  <property name="iconSize">
-   <size>
-    <width>30</width>
-    <height>30</height>
-   </size>
-  </property>
-  <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="verticalLayout">
-    <property name="spacing">
-     <number>0</number>
-    </property>
-    <property name="leftMargin">
-     <number>0</number>
-    </property>
-    <property name="topMargin">
-     <number>0</number>
-    </property>
-    <property name="rightMargin">
-     <number>0</number>
-    </property>
-    <property name="bottomMargin">
-     <number>0</number>
-    </property>
-    <item>
-     <widget class="QWidget" name="sceneContainer" native="true"/>
-    </item>
-    <item>
-     <widget class="MainTimelineWidget" name="mainTimeline" native="true">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="minimumSize">
-       <size>
-        <width>0</width>
-        <height>52</height>
-       </size>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>16777215</width>
-        <height>16777215</height>
-       </size>
-      </property>
-      <property name="styleSheet">
-       <string notr="true"/>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QWidget" name="bottomContainer" native="true">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="minimumSize">
-       <size>
-        <width>0</width>
-        <height>300</height>
-       </size>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>16777215</width>
-        <height>300</height>
-       </size>
-      </property>
-      <layout class="QHBoxLayout" name="horizontalLayout">
-       <property name="leftMargin">
-        <number>0</number>
-       </property>
-       <property name="topMargin">
-        <number>2</number>
-       </property>
-       <property name="rightMargin">
-        <number>0</number>
-       </property>
-       <property name="bottomMargin">
-        <number>0</number>
-       </property>
-       <item>
-        <widget class="QWidget" name="sceneTreeContainer" native="true">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>210</width>
-           <height>0</height>
-          </size>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>300</width>
-           <height>16777215</height>
-          </size>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_2">
-          <property name="spacing">
-           <number>0</number>
-          </property>
-          <property name="leftMargin">
-           <number>0</number>
-          </property>
-          <property name="topMargin">
-           <number>0</number>
-          </property>
-          <property name="rightMargin">
-           <number>0</number>
-          </property>
-          <property name="bottomMargin">
-           <number>0</number>
-          </property>
-          <item>
-           <widget class="LayerTreeWidget" name="sceneTree">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">
-QTreeView::item:hover {
-    background: #42b5e8;
-}
+  <property name="styleSheet">
+   <string notr="true">/*
+*=======================================================================================
+* Defaut StyleSheet for All System WIdgets and Components
+* @Styled: Orane Campbell
+* JahshakaVR 1.0.0
+* Date: 10/27/2016
+*=======================================================================================
+*/
 
-QTreeView::item:selected {
-    background: #1e90ff;
-}
-
-QTreeView::item:selected:active{
-    background: #1e90ff;
-}
-
-QTreeView::item:selected:!active {
-    background: #98dbf8;
-}
-
-
-QTreeView::branch:has-children:!has-siblings:closed,
-QTreeView::branch:closed:has-children:has-siblings {
-        image: url(&quot;:/icons/keyboard-right-arrow-button.svg&quot;);
-}
-
-QTreeView::branch:open:has-children:!has-siblings,
-QTreeView::branch:open:has-children:has-siblings  {
-        image: url(&quot;:/icons/expand-button.svg&quot;);
-}</string>
-            </property>
-            <attribute name="headerVisible">
-             <bool>false</bool>
-            </attribute>
-            <column>
-             <property name="text">
-              <string notr="true">1</string>
-             </property>
-            </column>
-           </widget>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_2">
-            <property name="spacing">
-             <number>1</number>
-            </property>
-            <item>
-             <widget class="QToolButton" name="toolButton">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="minimumSize">
-               <size>
-                <width>90</width>
-                <height>45</height>
-               </size>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">QToolButton {
-    color: white;
-    background-color: rgb(113, 113, 113);
-    border-radius: 2px;
-/*
-    padding: -25px 0px 5px 0;
-    background-position: center bottom;
-    background-repeat: no-repeat;
-    background-origin: content;
-    background-image: url(&quot;:icons/add.svg&quot;);*/
-}	
-
-QToolButton:hover {
-    color: white;
-	background-color: rgb(0, 170, 255);
-    border-radius: 2px;
-/*
-    padding: -25px 0px 5px 0;
-    background-position: center bottom;
-    background-repeat: no-repeat;
-    background-origin: content;
-    background-image: url(&quot;:icons/add.svg&quot;);*/
-}
-
-</string>
-              </property>
-              <property name="text">
-               <string>Add Object</string>
-              </property>
-              <property name="iconSize">
-               <size>
-                <width>12</width>
-                <height>12</height>
-               </size>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="deleteButton">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="minimumSize">
-               <size>
-                <width>0</width>
-                <height>45</height>
-               </size>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">QPushButton {
-    color: white;
-    background-color: rgb(113, 113, 113);
-    border-radius: 2px;
-/*
-    padding: -25px 0px 5px 0;
-    background-position: center bottom;
-    background-repeat: no-repeat;
-    background-origin: content;
-    background-image: url(&quot;:icons/add.svg&quot;);*/
-}	
-
-QPushButton:hover {
-    color: white;
-	background-color: rgb(0, 170, 255);
-    border-radius: 2px;
-/*
-    padding: -25px 0px 5px 0;
-    background-position: center bottom;
-    background-repeat: no-repeat;
-    background-origin: content;
-    background-image: url(&quot;:icons/add.svg&quot;);*/
-}
-
-</string>
-              </property>
-              <property name="text">
-               <string>Remove Object</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <widget class="QTabWidget" name="tabWidget">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>300</height>
-          </size>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>16777215</width>
-           <height>300</height>
-          </size>
-         </property>
-         <property name="styleSheet">
-          <string notr="true">QTabWidget::pane{
+QTabWidget::pane{
     border: 1px solid #333333; top : -1px;
 	background:rgb(67, 67, 67);
 }
@@ -329,8 +43,9 @@ QTabWidget::tab-bar {
 QTabBar::tab {
 	background-color:rgb(54, 54, 54);
  	border-bottom: 1px soild #333333;
-    min-width: 12ex;
-    padding: 5px;
+    min-width: 15ex;
+    min-height: 4ex;
+    padding: 6px;
     min-width: 25ex;
 }
 
@@ -354,14 +69,108 @@ QTabBar::tab:selected {
 
 QTabBar::tab:!selected {
     margin-top: 2px; 
+}
+
+QDockWidget {
+	background-color: rgb(95, 95, 95);
+    border: 1px solid lightgray;
+    titlebar-close-icon: url(:/app/icons/delete.png);
+    titlebar-normal-icon: url(:/app/icons/expand-button.png);
+	color: rgb(255, 255, 255);
+}
+
+QDockWidget::title {
+	height: 100px;
+    text-align: center; /* align the text to the left */
+    background: lightgray;
+    padding-left: 5px 5px 5px 5pc;
+	color: rgb(255, 255, 255);
+	background-color: &quot;#282828&quot;;
+}
+
+QLabel {
+color: rgb(197, 197, 197);
+}
+
+QTextEdit {
+background-color: rgb(113, 113, 113);
+color: rgb(172, 172, 172);
+}
+
+QSlider::groove:horizontal {
+border: 1px solid #999999;
+height: 30px;
+}
+
+QSlider::handle:horizontal {
+width: 8px;
+ /*background-image: url(:/slider-knob.png);*/
+background: rgb(214, 214, 214);
+
+}
+
+QSlider::add-page:qlineargradient {
+background: #4c4c4c;
+border: 1px solid #4d4d4d;
+
+}
+
+QSlider::sub-page:qlineargradient{
+background: #4c4c4c;
+border: 1px solid #4d4d4d;
+}
+
+QSlider::handle:horizontal:hover {
+background-color: rgb(30, 144, 255);
 }</string>
-         </property>
-         <property name="currentIndex">
-          <number>-1</number>
-         </property>
-        </widget>
-       </item>
-      </layout>
+  </property>
+  <property name="iconSize">
+   <size>
+    <width>30</width>
+    <height>30</height>
+   </size>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QGridLayout" name="gridLayout">
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <item row="0" column="0">
+     <widget class="QTabWidget" name="MainSceneArea">
+      <property name="currentIndex">
+       <number>0</number>
+      </property>
+      <widget class="QWidget" name="sceneview">
+       <attribute name="title">
+        <string>Scene View</string>
+       </attribute>
+       <layout class="QGridLayout" name="gridLayout_2">
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item row="0" column="0">
+         <widget class="QWidget" name="sceneContainer" native="true"/>
+        </item>
+       </layout>
+      </widget>
      </widget>
     </item>
    </layout>
@@ -371,7 +180,7 @@ QTabBar::tab:!selected {
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1079</width>
+     <width>1209</width>
      <height>30</height>
     </rect>
    </property>
@@ -468,8 +277,681 @@ QMenu::item:selected {
     <addaction name="actionVisit_Website"/>
     <addaction name="actionBlog"/>
    </widget>
+   <widget class="QMenu" name="menuEdit">
+    <property name="title">
+     <string>Edit</string>
+    </property>
+   </widget>
    <addaction name="menuFile"/>
+   <addaction name="menuEdit"/>
    <addaction name="menuHelp"/>
+  </widget>
+  <widget class="QDockWidget" name="sceneHierarchy">
+   <property name="minimumSize">
+    <size>
+     <width>210</width>
+     <height>564</height>
+    </size>
+   </property>
+   <property name="maximumSize">
+    <size>
+     <width>210</width>
+     <height>524287</height>
+    </size>
+   </property>
+   <property name="styleSheet">
+    <string notr="true"/>
+   </property>
+   <property name="windowTitle">
+    <string>Scene Hierarchy</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>1</number>
+   </attribute>
+   <widget class="QWidget" name="sceneHierarchyContents">
+    <layout class="QVBoxLayout" name="verticalLayout_3">
+     <property name="spacing">
+      <number>0</number>
+     </property>
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
+     <property name="bottomMargin">
+      <number>0</number>
+     </property>
+     <item alignment="Qt::AlignLeft">
+      <widget class="QWidget" name="widget_2" native="true">
+       <property name="minimumSize">
+        <size>
+         <width>210</width>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">background-color: rgb(85, 85, 85);</string>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_4">
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QFrame" name="frame">
+          <property name="minimumSize">
+           <size>
+            <width>100</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>100</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="frameShape">
+           <enum>QFrame::StyledPanel</enum>
+          </property>
+          <property name="frameShadow">
+           <enum>QFrame::Raised</enum>
+          </property>
+          <layout class="QHBoxLayout" name="horizontalLayout_3">
+           <property name="spacing">
+            <number>3</number>
+           </property>
+           <property name="leftMargin">
+            <number>0</number>
+           </property>
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="rightMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+           <item>
+            <widget class="QToolButton" name="toolButton">
+             <property name="minimumSize">
+              <size>
+               <width>25</width>
+               <height>25</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>25</width>
+               <height>25</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">QToolButton {
+border: none;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QToolButton:hover {
+background-color: rgb(30, 144, 255);
+}</string>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+             <property name="icon">
+              <iconset resource="../icons.qrc">
+               <normaloff>:/app/icons/add-2.svg</normaloff>:/app/icons/add-2.svg</iconset>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="deleteButton">
+             <property name="minimumSize">
+              <size>
+               <width>25</width>
+               <height>25</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>25</width>
+               <height>25</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">QPushButton {
+border: none;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QPushButton:hover {
+background-color: rgb(30, 144, 255);
+}</string>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+             <property name="icon">
+              <iconset resource="../icons.qrc">
+               <normaloff>:/app/icons/error.svg</normaloff>:/app/icons/error.svg</iconset>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pushButton_2">
+             <property name="minimumSize">
+              <size>
+               <width>25</width>
+               <height>25</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>25</width>
+               <height>25</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">QPushButton {
+border: none;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QPushButton:hover {
+background-color: rgb(30, 144, 255);
+}</string>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+             <property name="icon">
+              <iconset resource="../icons.qrc">
+               <normaloff>:/app/icons/photo-camera.svg</normaloff>:/app/icons/photo-camera.svg</iconset>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="LayerTreeWidget" name="sceneTree">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>210</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">
+QTreeView::item:hover {
+    background: #42b5e8;
+}
+
+QTreeView::item:selected {
+    background: #1e90ff;
+}
+
+QTreeView::item:selected:active{
+    background: #1e90ff;
+}
+
+QTreeView::item:selected:!active {
+    background: #98dbf8;
+}
+
+
+QTreeView::branch:has-children:!has-siblings:closed,
+QTreeView::branch:closed:has-children:has-siblings {
+        image: url(&quot;:/icons/keyboard-right-arrow-button.svg&quot;);
+}
+
+QTreeView::branch:open:has-children:!has-siblings,
+QTreeView::branch:open:has-children:has-siblings  {
+        image: url(&quot;:/icons/expand-button.svg&quot;);
+}</string>
+       </property>
+       <attribute name="headerVisible">
+        <bool>false</bool>
+       </attribute>
+       <column>
+        <property name="text">
+         <string notr="true">1</string>
+        </property>
+       </column>
+      </widget>
+     </item>
+     <item>
+      <widget class="QWidget" name="sceneTreeContainer" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>210</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>300</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_2">
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QWidget" name="widget" native="true">
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <property name="spacing">
+         <number>2</number>
+        </property>
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+       </layout>
+      </widget>
+     </item>
+    </layout>
+    <zorder>sceneTreeContainer</zorder>
+    <zorder>sceneTree</zorder>
+    <zorder>widget</zorder>
+    <zorder>widget_2</zorder>
+   </widget>
+  </widget>
+  <widget class="QDockWidget" name="ModelsPresetsDock">
+   <property name="minimumSize">
+    <size>
+     <width>300</width>
+     <height>230</height>
+    </size>
+   </property>
+   <property name="maximumSize">
+    <size>
+     <width>524287</width>
+     <height>230</height>
+    </size>
+   </property>
+   <property name="styleSheet">
+    <string notr="true"/>
+   </property>
+   <property name="windowTitle">
+    <string>3D Model Presets</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>2</number>
+   </attribute>
+   <widget class="QWidget" name="layout">
+    <layout class="QVBoxLayout" name="verticalLayout">
+     <property name="spacing">
+      <number>0</number>
+     </property>
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
+     <property name="bottomMargin">
+      <number>0</number>
+     </property>
+     <item>
+      <widget class="QWidget" name="widget_3" native="true">
+       <property name="minimumSize">
+        <size>
+         <width>210</width>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">background-color: rgb(85, 85, 85);</string>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_5">
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QFrame" name="frame_2">
+          <property name="minimumSize">
+           <size>
+            <width>70</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>70</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="frameShape">
+           <enum>QFrame::StyledPanel</enum>
+          </property>
+          <property name="frameShadow">
+           <enum>QFrame::Raised</enum>
+          </property>
+          <layout class="QHBoxLayout" name="horizontalLayout_4">
+           <property name="spacing">
+            <number>3</number>
+           </property>
+           <property name="leftMargin">
+            <number>0</number>
+           </property>
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="rightMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+           <item>
+            <widget class="QToolButton" name="toolButton_2">
+             <property name="minimumSize">
+              <size>
+               <width>25</width>
+               <height>25</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>25</width>
+               <height>25</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">QToolButton {
+border: none;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QToolButton:hover {
+background-color: rgb(30, 144, 255);
+}</string>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+             <property name="icon">
+              <iconset resource="../icons.qrc">
+               <normaloff>:/app/icons/import.svg</normaloff>:/app/icons/import.svg</iconset>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pushButton_3">
+             <property name="minimumSize">
+              <size>
+               <width>25</width>
+               <height>25</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>25</width>
+               <height>25</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">QPushButton {
+border: none;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QPushButton:hover {
+background-color: rgb(30, 144, 255);
+}</string>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+             <property name="icon">
+              <iconset resource="../icons.qrc">
+               <normaloff>:/app/icons/export.svg</normaloff>:/app/icons/export.svg</iconset>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="ModelPresets" name="modelpresets" native="true">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>16777215</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QDockWidget" name="AnimationDock">
+   <property name="minimumSize">
+    <size>
+     <width>85</width>
+     <height>250</height>
+    </size>
+   </property>
+   <property name="styleSheet">
+    <string notr="true"/>
+   </property>
+   <property name="windowTitle">
+    <string>Animation</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>8</number>
+   </attribute>
+   <widget class="QWidget" name="layout_2">
+    <layout class="QGridLayout" name="gridLayout_5">
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
+     <property name="bottomMargin">
+      <number>0</number>
+     </property>
+     <property name="spacing">
+      <number>0</number>
+     </property>
+     <item row="1" column="0">
+      <widget class="AnimationWidget" name="animationtimeline"/>
+     </item>
+     <item row="0" column="0">
+      <widget class="MainTimelineWidget" name="mainTimeline" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QDockWidget" name="PropertiesDock">
+   <property name="minimumSize">
+    <size>
+     <width>89</width>
+     <height>300</height>
+    </size>
+   </property>
+   <property name="windowTitle">
+    <string>Properties</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>2</number>
+   </attribute>
+   <widget class="QWidget" name="dockWidgetContents">
+    <layout class="QGridLayout" name="gridLayout_3">
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
+     <property name="bottomMargin">
+      <number>0</number>
+     </property>
+     <item row="0" column="0">
+      <widget class="QScrollArea" name="Propertieswidget">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>220</height>
+        </size>
+       </property>
+       <property name="sizeAdjustPolicy">
+        <enum>QAbstractScrollArea::AdjustToContents</enum>
+       </property>
+       <property name="widgetResizable">
+        <bool>true</bool>
+       </property>
+       <widget class="QWidget" name="accordian">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>0</y>
+          <width>298</width>
+          <height>413</height>
+         </rect>
+        </property>
+       </widget>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QDockWidget" name="ObjectViewDock">
+   <property name="minimumSize">
+    <size>
+     <width>300</width>
+     <height>160</height>
+    </size>
+   </property>
+   <property name="maximumSize">
+    <size>
+     <width>300</width>
+     <height>160</height>
+    </size>
+   </property>
+   <property name="windowTitle">
+    <string>Object View</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>8</number>
+   </attribute>
+   <widget class="QWidget" name="objectview"/>
   </widget>
   <action name="actionSave">
    <property name="icon">
@@ -614,6 +1096,18 @@ QMenu::item:selected {
    <class>LayerTreeWidget</class>
    <extends>QTreeWidget</extends>
    <header location="global">src/widgets/layertreewidget.h</header>
+  </customwidget>
+  <customwidget>
+   <class>AnimationWidget</class>
+   <extends>QFrame</extends>
+   <header>src/widgets/animationwidget.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ModelPresets</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/modelpresets.h</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <resources>
