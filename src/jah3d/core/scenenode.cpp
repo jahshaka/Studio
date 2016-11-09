@@ -11,8 +11,14 @@ SceneNode::SceneNode():
 
 {
     sceneNodeType = SceneNodeType::Empty;
+    nodeId = generateNodeId();
+    setName(QString("SceneNode%1").arg(nodeId));
 
-    //only this one will be used for now
+    visible = true;
+    duplicable = false;
+    removable = true;
+
+    localTransform.setToIdentity();
     globalTransform.setToIdentity();
 }
 
@@ -24,6 +30,16 @@ SceneNodePtr SceneNode::create()
 QString SceneNode::getName()
 {
     return name;
+}
+
+void SceneNode::setName(QString name)
+{
+    this->name = name;
+}
+
+long SceneNode::getNodeId()
+{
+    return nodeId;
 }
 
 SceneNodeType SceneNode::getSceneNodeType()
@@ -84,6 +100,13 @@ void SceneNode::setScene(QSharedPointer<Scene> scene)
 {
     this->scene = scene;
 }
+
+long SceneNode::generateNodeId()
+{
+    return nextId++;
+}
+
+long SceneNode::nextId = 0;
 
 
 }

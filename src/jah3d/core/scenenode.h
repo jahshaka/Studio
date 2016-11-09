@@ -36,19 +36,54 @@ public:
     SceneNodeType sceneNodeType;
 
     QString name;
+    long nodeId;
 
     QSharedPointer<Scene> scene;
     SceneNodePtr parent;
     QList<SceneNodePtr> children;
 
+    //editor specific
+    bool duplicable;
+    bool visible;
+    bool removable;
+
     friend class Renderer;
     friend class Scene;
 
-
+public:
     SceneNode();
 
     static SceneNodePtr create();
+
+    void setName(QString name);
     QString getName();
+
+    long getNodeId();
+
+    bool isDuplicable()
+    {
+        return duplicable;
+    }
+
+    bool isVisible()
+    {
+        return visible;
+    }
+
+    void show()
+    {
+        visible = true;
+    }
+
+    void hide()
+    {
+        visible = false;
+    }
+
+    bool isRemovable()
+    {
+        return removable;
+    }
 
     SceneNodeType getSceneNodeType();
     void addChild(SceneNodePtr node);
@@ -60,6 +95,9 @@ public:
 private:
     void setParent(SceneNodePtr node);
     void setScene(QSharedPointer<Scene> scene);
+
+    static long generateNodeId();
+    static long nextId;
 };
 
 

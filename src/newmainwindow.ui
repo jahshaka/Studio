@@ -286,7 +286,7 @@ QMenu::item:selected {
    <addaction name="menuEdit"/>
    <addaction name="menuHelp"/>
   </widget>
-  <widget class="QDockWidget" name="sceneHierarchy">
+  <widget class="QDockWidget" name="sceneHierarchyDock">
    <property name="minimumSize">
     <size>
      <width>210</width>
@@ -302,13 +302,16 @@ QMenu::item:selected {
    <property name="styleSheet">
     <string notr="true"/>
    </property>
+   <property name="floating">
+    <bool>false</bool>
+   </property>
    <property name="windowTitle">
     <string>Scene Hierarchy</string>
    </property>
    <attribute name="dockWidgetArea">
     <number>1</number>
    </attribute>
-   <widget class="SceneHeirarchyWidget" name="sceneHierarchyContents">
+   <widget class="SceneHeirarchyWidget" name="sceneHierarchy">
     <layout class="QVBoxLayout" name="verticalLayout_3">
      <property name="spacing">
       <number>0</number>

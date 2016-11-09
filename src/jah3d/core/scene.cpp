@@ -1,6 +1,7 @@
 #include "scene.h"
 #include "scenenode.h"
 #include "../scenegraph/lightnode.h"
+#include "../scenegraph/cameranode.h"
 
 namespace jah3d
 {
@@ -14,6 +15,10 @@ Scene::Scene()
 void Scene::update(float dt)
 {
     rootNode->update(dt);
+
+    //cameras may not necessarily be a part of the scene heirarchy, so their matrices are updated here
+    camera->update(dt);
+    camera->updateCameraMatrices();
 }
 
 void Scene::render()

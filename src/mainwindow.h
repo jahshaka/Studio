@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QModelIndex>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QSharedPointer>
 //#include "editor/gizmos/advancedtransformgizmo.h"
 
 namespace Ui {
@@ -62,8 +63,12 @@ class JahRenderer;
 class GizmoHitData;
 class AdvancedGizmoHandle;
 
-class SceneNodePtr;
-class SceneManagerPtr;
+namespace jah3d
+{
+    class SceneNode;
+    class Scene;
+}
+
 
 class QOpenGLFunctions;
 
@@ -77,7 +82,7 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
-    void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl);
+
     void setProjectTitle(QString projectTitle);
 
     void setSceneAnimTime(float time);
@@ -127,7 +132,7 @@ private:
     QIcon getIconFromSceneNodeType(SceneNodeType type);
 
     void removeScene();
-    void setScene(SceneManagerPtr scene);
+    void setScene(QSharedPointer<jah3d::Scene> scene);
     void updateGizmoTransform();
 
     void dragEnterEvent(QDragEnterEvent* event) override;
@@ -135,7 +140,7 @@ private:
     void dropEvent(QDropEvent* event) override;
     void dragLeaveEvent(QDragLeaveEvent* event) override;
 
-private slots:
+public slots:
     //scenegraph
     void addCube();
     void addTorus();
@@ -160,19 +165,14 @@ private slots:
     void sceneTreeCustomContextMenu(const QPoint&);
     void sceneTreeItemChanged(QTreeWidgetItem* item,int column);
 
-    //void setActiveSceneNode(SceneNodePtr node);
-
-    //void createSceneNodeContextMenu(QMenu& menu,SceneNodePtr node);
+    void sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode);
 
     //TORUS SLIDERS
-
     void saveScene();
     void saveSceneAs();
     void loadScene();
     void openRecentFile();
 
-    //void useEditorCamera();
-    //void useUserCamera();
 
     void showPreferences();
     void exitApp();
@@ -183,6 +183,8 @@ private slots:
     void openBlogUrl();
     void openWebsiteUrl();
 
+    void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl);
+
 private:
     Ui::NewMainWindow *ui;
     SurfaceView* surface;
@@ -192,8 +194,8 @@ private:
     QWidget *container;
     EditorCameraController* camControl;
 
-    //SceneManagerPtr scene;
-    //SceneNodePtr activeSceneNode;
+    QSharedPointer<jah3d::Scene> scene;
+    QSharedPointer<jah3d::SceneNode> activeSceneNode;
 
     QTimer* timer;
 

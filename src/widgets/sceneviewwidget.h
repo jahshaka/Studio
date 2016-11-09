@@ -26,6 +26,7 @@ class SceneViewWidget: public QOpenGLWidget, protected QOpenGLFunctions
 {
     Q_OBJECT
 
+
     EditorCameraController* camController;
 public:
     explicit SceneViewWidget(QWidget *parent);
@@ -65,6 +66,7 @@ private:
 
 signals:
     void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl);
+
 
 };
 

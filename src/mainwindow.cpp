@@ -82,59 +82,13 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->mainTimeline->setMainWindow(this);
     camControl = nullptr;
 
-    //todo: bind callbacks
-    QMenu* addMenu = new QMenu();
-
-    auto primtiveMenu = addMenu->addMenu("Primtives");
-    QAction *action = new QAction("Torus", this);
-    primtiveMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(addTorus()));
-
-    action = new QAction("Cube", this);
-    primtiveMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(addCube()));
-
-    action = new QAction("Sphere", this);
-    primtiveMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(addSphere()));
-
-    action = new QAction("Cylinder", this);
-    primtiveMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(addCylinder()));
-
-    action = new QAction("Plane", this);
-    primtiveMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(addTexturedPlane()));
-
-    //LIGHTS
-    auto lightMenu = addMenu->addMenu("Lights");
-    action = new QAction("PointLight", this);
-    lightMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(addPointLight()));
-
-    action = new QAction("SpotLight", this);
-    lightMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(addSpotLight()));
-
-    action = new QAction("DirectionalLight", this);
-    lightMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(addDirectionalLight()));
-
     //connect(ui->deleteButton,SIGNAL(pressed()),this,SLOT(deleteNode()));
 
     setupFileMenu();
     setupViewMenu();
     setupHelpMenu();
 
-    //MESHES
-    action = new QAction("Load 3D Object", this);
-    addMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(addMesh()));
 
-    //VIEWPOINT
-    action = new QAction("ViewPoint", this);
-    addMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(addViewPoint()));
 
     /*
     //resize event for plane
@@ -166,7 +120,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     //activeSceneNode = nullptr;
 
-    this->rebuildTree();
+    //this->rebuildTree();
     setProjectTitle(Globals::project->getProjectName());
 
     //init scene view
@@ -178,9 +132,12 @@ MainWindow::MainWindow(QWidget *parent) :
     layout->addWidget(sceneView);
     layout->setMargin(0);
     ui->sceneContainer->setLayout(layout);
-    connect(sceneView,SIGNAL(initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl)),this,SLOT(initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl)));
+    connect(sceneView,SIGNAL(initializeGraphics(SceneViewWidget*,QOpenGLFunctions*)),this,SLOT(initializeGraphics(SceneViewWidget*,QOpenGLFunctions*)));
 
     //createTestScene();
+
+    ui->sceneHierarchy->setMainWindow(this);
+    connect(ui->sceneHierarchy,SIGNAL(sceneNodeSelected(QSharedPointer<jah3d::SceneNode>)),this,SLOT(sceneNodeSelected(QSharedPointer<jah3d::SceneNode>)));
 }
 
 //create test scene
@@ -193,7 +150,7 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl
     cam->rot = QQuaternion::fromEulerAngles(-45,0,0);
     //cam->lookAt(QVector3D(0,0,0),QVect);
     scene->setCamera(cam);
-    scene->rootNode->addChild(cam);
+    //scene->rootNode->addChild(cam);//editor camera shouldnt be a part of the scene itself
 
     //second node
     auto node = jah3d::MeshNode::create();
@@ -233,7 +190,8 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl
 
     scene->rootNode->addChild(boxNode);
 
-    sceneView->setScene(scene);
+    //sceneView->setScene(scene);
+    this->setScene(scene);
 }
 
 void MainWindow::setSettingsManager(SettingsManager* settings)
@@ -593,6 +551,13 @@ void MainWindow::openRecentFile()
     settings->addRecentlyOpenedScene(filename);
 }
 
+void MainWindow::setScene(QSharedPointer<jah3d::Scene> scene)
+{
+    this->scene = scene;
+    this->sceneView->setScene(scene);
+    ui->sceneHierarchy->setScene(scene);
+}
+
 void MainWindow::removeScene()
 {
 }
@@ -638,6 +603,17 @@ void MainWindow::sceneTreeItemChanged(QTreeWidgetItem* item,int column)
     */
 }
 
+void MainWindow::sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode)
+{
+    //todo: ensure this node is a part of the scene
+    //scene->setHighlightedNode(sceneNode);
+
+    //show properties for sceneenode
+
+    activeSceneNode = sceneNode;
+
+}
+
 
 void MainWindow::setupLayerButtonMenu()
 {
@@ -671,80 +647,6 @@ void MainWindow::updateAnim()
 void MainWindow::setSceneAnimTime(float time)
 {
     //scene->getRootNode()->applyAnimationAtTime(time);
-}
-
-void MainWindow::setupQt3d()
-{
-    /*
-    rootEntity = nullptr;
-
-    surface = new SurfaceView();
-    surface->installEventFilter(this);
-    //QWidget *container = QWidget::createWindowContainer(view,this);
-    QWidget *container = QWidget::createWindowContainer(surface,ui->sceneContainer);
-    //container->setAcceptDrops(true);
-
-    QGridLayout* layout = new QGridLayout();
-    layout->addWidget(container);
-    layout->setMargin(0);
-    ui->sceneContainer->setLayout(layout);
-
-    engine = new Qt3DCore::QAspectEngine();
-    //Qt3D::QAspectEngine engine;
-    engine->registerAspect(new Qt3DRender::QRenderAspect());
-    engine->registerAspect(new Qt3DLogic::QLogicAspect());
-    engine->registerAspect(new Qt3DInput::QInputAspect);
-
-    jahRenderer = new JahRenderer();
-    jahRenderer->setSurface(surface);
-
-    renderSettings = new Qt3DRender::QRenderSettings();
-    renderSettings->pickingSettings()->setPickMethod(Qt3DRender::QPickingSettings::TrianglePicking);
-    renderSettings->pickingSettings()->setPickResultMode(Qt3DRender::QPickingSettings::NearestPick);
-    inputSettings = new Qt3DInput::QInputSettings();
-    inputSettings->setEventSource(surface);
-    //renderSettings->setActiveFrameGraph(forwardRenderer);
-    renderSettings->setActiveFrameGraph(jahRenderer);
-
-
-    rootEntity = new Qt3DCore::QEntity();
-    rootEntity->addComponent(renderSettings);
-    rootEntity->addComponent(inputSettings);
-    engine->setRootEntity(Qt3DCore::QEntityPtr(rootEntity));
-
-    //SCENE
-    SceneManager* scene = nullptr;
-    auto sceneEnt = new Qt3DCore::QEntity();
-    sceneEnt->setParent(rootEntity);
-
-    auto sceneToUse = settings->getValue("default_scene","matrix").toString();
-    if(sceneToUse=="grid")
-        scene = SceneManager::createDefaultGridScene(sceneEnt);
-    else
-        scene = SceneManager::createDefaultMatrixScene(sceneEnt);
-
-    this->setScene(scene);
-    */
-}
-
-void MainWindow::rebuildTree()
-{
-    /*
-    auto sceneRoot = scene->getRootNode();
-    auto root = new QTreeWidgetItem();
-
-    root->setText(0,sceneRoot->getName());
-    root->setIcon(0,this->getIconFromSceneNodeType(SceneNodeType::World));
-    root->setData(1,Qt::UserRole,QVariant::fromValue((void*)sceneRoot));
-
-    //populate tree
-    sceneTreeItems.clear();
-    populateTree(root,sceneRoot);
-
-    this->ui->sceneTree->clear();
-    this->ui->sceneTree->addTopLevelItem(root);
-    ui->sceneTree->expandAll();
-    */
 }
 
 void MainWindow::addCube()
@@ -869,6 +771,10 @@ void MainWindow::duplicateNode()
 
 void MainWindow::deleteNode()
 {
+
+    activeSceneNode->removeFromParent();
+    ui->sceneHierarchy->repopulateTree();
+
     /*
     auto items = ui->sceneTree->selectedItems();
     if(items.size()==0)

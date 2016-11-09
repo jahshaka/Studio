@@ -59,8 +59,9 @@ void ForwardRenderer::renderScene(Viewport* vp,QSharedPointer<Scene> scene)
 
 void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode> node)
 {
-    if(node->sceneNodeType==SceneNodeType::Mesh)
+    if(node->sceneNodeType==SceneNodeType::Mesh && node->isVisible())
     {
+        qDebug()<<node->getName()+" is "+(node->isVisible()?"visible":"invisible")<<endl;
         auto meshNode = node.staticCast<MeshNode>();
         auto mat = meshNode->material;
 

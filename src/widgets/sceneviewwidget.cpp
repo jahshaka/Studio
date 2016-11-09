@@ -140,7 +140,9 @@ void SceneViewWidget::renderScene()
 
     if(!!renderer && !!scene)
     {
-        boxNode->pos += QVector3D(0.001f,0,0);
+        if(!!boxNode)
+            boxNode->pos += QVector3D(0.001f,0,0);
+
         scene->update(1.0f/60);
 
         renderer->renderScene(viewport,scene);
