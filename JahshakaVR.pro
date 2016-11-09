@@ -32,7 +32,7 @@ TEMPLATE = app
 
 
 SOURCES += src/main.cpp\
-        src/mainwindow.cpp \
+    src/mainwindow.cpp \
     src/widgets/colorvaluewidget.cpp \
     src/widgets/colorpickerwidget.cpp \
     src/dialogs/preferencesdialog.cpp \
@@ -55,14 +55,14 @@ SOURCES += src/main.cpp\
     src/dialogs/infodialog.cpp \
     src/globals.cpp \
     src/dialogs/renamelayerdialog.cpp \
-    src/widgets/sceneviewwidget.cpp
-    src/materials/gizmomaterial.cpp \
+    src/widgets/sceneviewwidget.cpp \
     src/widgets/materialsets.cpp \
     src/widgets/modelpresets.cpp \
     src/widgets/accordianbladewidget.cpp \
     src/widgets/hfloatslider.cpp \
     src/widgets/texturepicker.cpp \
-    src/widgets/transformeditor.cpp
+    src/widgets/transformeditor.cpp \
+    src/widgets/sceneheirarchywidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -93,16 +93,17 @@ HEADERS  += src/mainwindow.h \
     src/core/settingsmanager.h \
     src/core/surfaceview.h \
     src/editor/editorcameracontroller.h \
-	src/dialogs/infodialog.h \
+    src/dialogs/infodialog.h \
     src/globals.h \
-    src/widgets/sceneviewwidget.h
+    src/widgets/sceneviewwidget.h \
     src/globals.h \
     src/widgets/materialsets.h \
     src/widgets/modelpresets.h \
     src/widgets/accordianbladewidget.h \
     src/widgets/hfloatslider.h \
     src/widgets/texturepicker.h \
-    src/widgets/transformeditor.h
+    src/widgets/transformeditor.h \
+    src/widgets/sceneheirarchywidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -135,9 +136,8 @@ FORMS    += \
     src/widgets/accordianbladewidget.ui \
     src/widgets/hfloatslider.ui \
     src/widgets/texturepicker.ui \
-    src/widgets/transformeditor.ui
-
-DISTFILES +=
+    src/widgets/transformeditor.ui \
+    src/widgets/sceneheirarchywidget.ui
 
 RESOURCES += \
     shaders.qrc \

@@ -63,6 +63,9 @@ private:
     QSharedPointer<jah3d::DefaultMaterial> mat;
     jah3d::Viewport* viewport;
 
+signals:
+    void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl);
+
 };
 
 #endif // SCENEVIEWWIDGET_H

@@ -42,7 +42,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
 void SceneViewWidget::initialize()
 {
 
-
+    /*
     auto scene = jah3d::Scene::create();
 
     auto cam = jah3d::CameraNode::create();
@@ -76,25 +76,23 @@ void SceneViewWidget::initialize()
     mat->setDiffuseColor(QColor(255,200,200));
     mat->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/Artistic Pattern.png"));
 
-
-
-
     //lighting
     auto light = jah3d::LightNode::create();
     light->setLightType(jah3d::LightType::Point);
     light->rot = QQuaternion::fromEulerAngles(45,0,0);
     scene->rootNode->addChild(light);
     //light->pos = QVector3D(5,5,0);
-    light->pos = QVector3D(0,10,3);
-    light->intensity = 2;
+    light->pos = QVector3D(-5,5,3);
+    light->intensity = 1;
     light->icon = jah3d::Texture2D::load("app/icons/bulb.png");
 
 
     scene->rootNode->addChild(boxNode);
     //scene->rootNode->addChild(node);
     setScene(scene);
+    */
 
-    camController = new EditorCameraController(cam);
+    //camController = new EditorCameraController(cam);
 }
 
 void SceneViewWidget::setScene(QSharedPointer<jah3d::Scene> scene)
@@ -118,6 +116,8 @@ void SceneViewWidget::initializeGL()
     renderer = jah3d::ForwardRenderer::create(this);
 
     initialize();
+
+    emit initializeGraphics(this,this);
 
     auto timer = new QTimer(this);
     connect(timer,SIGNAL(timeout()),this,SLOT(update()));

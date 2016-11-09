@@ -65,6 +65,8 @@ class AdvancedGizmoHandle;
 class SceneNodePtr;
 class SceneManagerPtr;
 
+class QOpenGLFunctions;
+
 enum class SceneNodeType;
 
 class MainWindow : public QMainWindow
@@ -75,7 +77,7 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
-    void createTestScene();
+    void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl);
     void setProjectTitle(QString projectTitle);
 
     void setSceneAnimTime(float time);

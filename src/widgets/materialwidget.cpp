@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "materialwidget.h"
 #include "ui_materialwidget.h"
-#include "qmaterial.h"
+//#include "qmaterial.h"
 //#include "../scenegraph/scenenodes.h"
 #include "../jah3d/core/scenenode.h"
 #include "qfiledialog.h"
