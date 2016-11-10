@@ -1,5 +1,11 @@
 #include "cameracontrollerbase.h"
 
+
+void CameraControllerBase::setCamera(QSharedPointer<jah3d::CameraNode>  cam)
+{
+
+}
+
 void CameraControllerBase::onMouseDown(Qt::MouseButton button)
 {
     switch(button)
@@ -27,21 +33,27 @@ void CameraControllerBase::onMouseUp(Qt::MouseButton button)
     {
         case Qt::LeftButton:
             leftMouseDown = false;
-        break;
+            break;
 
         case Qt::MiddleButton:
             middleMouseDown = false;
-        break;
+            break;
 
         case Qt::RightButton:
             rightMouseDown = false;
-        break;
+            break;
 
-    default:
-        break;
+        default:
+            break;
     }
 }
 
+/**
+ *
+ * issue: when the middle mouse button is down, mouse move events arent registered
+ * https://github.com/bjorn/tiled/issues/1079
+ * https://bugreports.qt.io/browse/QTBUG-48361
+ */
 void CameraControllerBase::onMouseMove(int x,int y)
 {
 

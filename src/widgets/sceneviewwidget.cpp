@@ -34,7 +34,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
     format.setSamples(0);
 
     setFormat(format);
-    installEventFilter(this);
+    setMouseTracking(true);
+    //installEventFilter(this);
 
     viewport = new jah3d::Viewport();
 
@@ -44,6 +45,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
     camController = defaultCam;
 
     editorCam = jah3d::CameraNode::create();
+    editorCam->pos = QVector3D(0,5,5);
+    camController->setCamera(editorCam);
 }
 
 void SceneViewWidget::initialize()
@@ -105,6 +108,7 @@ void SceneViewWidget::initialize()
 void SceneViewWidget::setScene(QSharedPointer<jah3d::Scene> scene)
 {
     this->scene = scene;
+    scene->setCamera(editorCam);
 }
 
 void SceneViewWidget::updateScene()
@@ -169,19 +173,19 @@ bool SceneViewWidget::eventFilter(QObject *obj, QEvent *event)
     {
         QMouseEvent* evt = static_cast<QMouseEvent*>(event);
         mouseMoveEvent(evt);
-        return true;
+        return false;
     }
     else if(type == QEvent::MouseButtonPress)
     {
         QMouseEvent* evt = static_cast<QMouseEvent*>(event);
         mousePressEvent(evt);
-        return true;
+        return false;
     }
     else if( type == QEvent::MouseButtonRelease)
     {
         QMouseEvent* evt = static_cast<QMouseEvent*>(event);
         mouseReleaseEvent(evt);
-        return true;
+        return false;
     }
 
     return QWidget::eventFilter(obj,event);
@@ -192,17 +196,18 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     //issue - only fired when mouse is dragged
     QPointF localPos = e->windowPos();
 
+    QPointF dir = localPos-prevMousePos;
+
     if(dragging)
     {
-        QPointF dir = localPos-prevMousePos;
+
         //camera->rotate(-dir.x(),-dir.y());
         //if(!!boxNode)
         //    boxNode->rot *= QQuaternion::fromEulerAngles(0,dir.x(),0);
-
-        if(camController!=nullptr)
-            camController->onMouseMove(-dir.x(),-dir.y());
-
     }
+
+    if(camController!=nullptr)
+        camController->onMouseMove(-dir.x(),-dir.y());
 
     prevMousePos = localPos;
 }

@@ -41,7 +41,7 @@ public:
     EditorCameraController();
 
     QSharedPointer<jah3d::CameraNode>  getCamera();
-    void setCamera(QSharedPointer<jah3d::CameraNode>  cam);
+    void setCamera(QSharedPointer<jah3d::CameraNode>  cam) override;
 
     QVector3D getPos();
 
@@ -51,11 +51,13 @@ public:
     void setLookSpeed(float speed);
     float getLookSpeed();
 
+    //incomplete
     void tilt(float angle);
 
+    //incomplete
     void pan(float angle);
 
-    void onMouseDragged(int x,int y);
+    void onMouseMove(int x,int y) override;
 
     /**
      * @brief unprojects point

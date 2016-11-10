@@ -13,6 +13,8 @@ For more information see the LICENSE file
 #include <QVector3D>
 #include "../jah3d/core/scenenode.h"
 #include "../jah3d/scenegraph/cameranode.h"
+#include <qmath.h>
+#include <math.h>
 
 using namespace jah3d;
 
@@ -32,9 +34,19 @@ CameraNodePtr EditorCameraController::getCamera()
     return camera;
 }
 
+/**
+ * Sets camera
+ * Reduces the camera's orientation to just the yaw and pitch
+ * http://stackoverflow.com/questions/2782647/how-to-get-yaw-pitch-and-roll-from-a-3d-vector/33790309#33790309
+ */
 void EditorCameraController::setCamera(CameraNodePtr cam)
 {
     this->camera = cam;
+
+    auto viewVec = cam->rot.rotatedVector(QVector3D(0,0,-1));//default forward is -z
+    pitch = qRadiansToDegrees(qAsin(viewVec.y()));
+    yaw = qAtan2(viewVec.x(),viewVec.z());
+
     this->updateCameraRot();
 }
 
@@ -66,11 +78,22 @@ float EditorCameraController::getLookSpeed()
 
 /**
  * @brief rotates camera around the local x-axis
+ * the angle is in degrees
+ * pitch is restricted to the range of -90 and 90
  * todo: use global rotation in calculation
  */
 void EditorCameraController::tilt(float angle)
 {
-    auto viewVec = rot
+    /*
+    auto forward = camera->rot.rotatedVector(QVector3D(0,0,-1));
+    auto up = QVector3D(0,1,0);
+
+    auto side = QVector3D::crossProduct(forward,up);
+    */
+
+    pitch += angle;
+    pitch = (pitch<-90?-90:(pitch>90?90:pitch));//clamp( pitch,-90,90)
+
 }
 
 /**
@@ -79,7 +102,9 @@ void EditorCameraController::tilt(float angle)
  */
 void EditorCameraController::pan(float angle)
 {
-
+    //camera->rot = QQuaternion::fromAxisAndAngle(QVector3D(0,1,0),angle)*camera->rot;
+    yaw += angle;
+    //yaw = fmod(yaw,360);
 }
 
 /**
@@ -87,13 +112,27 @@ void EditorCameraController::pan(float angle)
  * @param x
  * @param y
  */
-void EditorCameraController::onMouseDragged(int x,int y)
+void EditorCameraController::onMouseMove(int x,int y)
 {
-    //rotate camera accordingly
-    this->yaw += x/10.0f;
-    this->pitch += y/10.0f;
+    if(rightMouseDown)
+    {
+        //rotate camera
+        this->yaw += x/10.0f;
+        this->pitch += y/10.0f;
+    }
+
+    if(middleMouseDown)
+    {
+        //translate camera
+        float dragSpeed = 0.1f;
+        auto dir = camera->rot.rotatedVector(QVector3D(x*dragSpeed,-y*dragSpeed,0));
+        camera->pos += dir;
+
+        camera->update(0);//force calculation of global transform. find a better way to do this
+    }
 
     /*
+    //todo: world-space translation using keyboard
     QVector3D upVector(0,1,0);
     QVector3D viewVector = camera->viewCenter() - camera->position();
     auto x = QVector3D::crossProduct(viewVector, upVector).normalized();

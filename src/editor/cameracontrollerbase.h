@@ -2,10 +2,23 @@
 #define ICAMERACONTROLLER_H
 
 #include <Qt>
+#include <QSharedPointer>
+
+namespace jah3d
+{
+    class CameraNode;
+}
 
 class CameraControllerBase
 {
 public:
+    CameraControllerBase()
+    {
+        resetMouseStates();
+    }
+
+    virtual void setCamera(QSharedPointer<jah3d::CameraNode>  cam);
+
     virtual void onMouseDown(Qt::MouseButton button);
     virtual void onMouseUp(Qt::MouseButton button);
     virtual void onMouseMove(int x,int y);
@@ -13,7 +26,7 @@ public:
 
     void resetMouseStates();
 
-private:
+protected:
     bool leftMouseDown;
     bool middleMouseDown;
     bool rightMouseDown;
