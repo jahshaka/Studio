@@ -16,7 +16,10 @@
 #include "../jah3d/graphics/texture2d.h"
 #include "../jah3d/graphics/viewport.h"
 
+
+#include "../editor/cameracontrollerbase.h"
 #include "../editor/editorcameracontroller.h"
+#include "../editor/orbitalcameracontroller.h"
 
 
 SceneViewWidget::SceneViewWidget(QWidget *parent):
@@ -35,8 +38,12 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
 
     viewport = new jah3d::Viewport();
 
-    camController = nullptr;
+    //camController = nullptr;
+    defaultCam = new EditorCameraController();
+    orbitalCam = new OrbitalCameraController();
+    camController = defaultCam;
 
+    editorCam = jah3d::CameraNode::create();
 }
 
 void SceneViewWidget::initialize()
@@ -140,9 +147,6 @@ void SceneViewWidget::renderScene()
 
     if(!!renderer && !!scene)
     {
-        if(!!boxNode)
-            boxNode->pos += QVector3D(0.001f,0,0);
-
         scene->update(1.0f/60);
 
         renderer->renderScene(viewport,scene);
@@ -196,7 +200,7 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
         //    boxNode->rot *= QQuaternion::fromEulerAngles(0,dir.x(),0);
 
         if(camController!=nullptr)
-            camController->onMouseDragged(-dir.x(),-dir.y());
+            camController->onMouseMove(-dir.x(),-dir.y());
 
     }
 
@@ -210,6 +214,9 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
     {
         dragging = true;
     }
+
+    if(camController!=nullptr)
+        camController->onMouseDown(e->button());
 }
 
 void SceneViewWidget::mouseReleaseEvent(QMouseEvent *e)
@@ -218,4 +225,12 @@ void SceneViewWidget::mouseReleaseEvent(QMouseEvent *e)
     {
         dragging = false;
     }
+
+    if(camController!=nullptr)
+        camController->onMouseUp(e->button());
+}
+
+void SceneViewWidget::wheelEvent(QWheelEvent *event)
+{
+    qDebug()<<"wheel event"<<endl;
 }

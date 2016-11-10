@@ -89,7 +89,6 @@ MainWindow::MainWindow(QWidget *parent) :
     setupHelpMenu();
 
 
-
     /*
     //resize event for plane
     ui->toolButton->setMenu(addMenu);
@@ -149,7 +148,9 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl
     cam->pos = QVector3D(0,5,5);
     cam->rot = QQuaternion::fromEulerAngles(-45,0,0);
     //cam->lookAt(QVector3D(0,0,0),QVect);
+
     scene->setCamera(cam);
+    //camControl = new EditorCameraController(cam);
     //scene->rootNode->addChild(cam);//editor camera shouldnt be a part of the scene itself
 
     //second node

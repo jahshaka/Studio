@@ -62,7 +62,8 @@ SOURCES += src/main.cpp\
     src/widgets/hfloatslider.cpp \
     src/widgets/texturepicker.cpp \
     src/widgets/transformeditor.cpp \
-    src/widgets/sceneheirarchywidget.cpp
+    src/widgets/sceneheirarchywidget.cpp \
+    src/editor/cameracontrollerbase.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -103,7 +104,9 @@ HEADERS  += src/mainwindow.h \
     src/widgets/hfloatslider.h \
     src/widgets/texturepicker.h \
     src/widgets/transformeditor.h \
-    src/widgets/sceneheirarchywidget.h
+    src/widgets/sceneheirarchywidget.h \
+    src/editor/orbitalcameracontroller.h \
+    src/editor/cameracontrollerbase.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

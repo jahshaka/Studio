@@ -16,9 +16,9 @@ For more information see the LICENSE file
 
 using namespace jah3d;
 
-EditorCameraController::EditorCameraController(CameraNodePtr cam)
+EditorCameraController::EditorCameraController()
 {
-    setCamera(cam);
+    //setCamera(cam);
 
     lookSpeed = 200;
     linearSpeed = 1;
@@ -64,6 +64,29 @@ float EditorCameraController::getLookSpeed()
     return lookSpeed;
 }
 
+/**
+ * @brief rotates camera around the local x-axis
+ * todo: use global rotation in calculation
+ */
+void EditorCameraController::tilt(float angle)
+{
+    auto viewVec = rot
+}
+
+/**
+ * @brief rotates the camera around the up vector
+ * @param angle
+ */
+void EditorCameraController::pan(float angle)
+{
+
+}
+
+/**
+ *
+ * @param x
+ * @param y
+ */
 void EditorCameraController::onMouseDragged(int x,int y)
 {
     //rotate camera accordingly
@@ -84,6 +107,10 @@ void EditorCameraController::onMouseDragged(int x,int y)
     updateCameraRot();
 }
 
+/*
+ * tilt - does the tile
+ */
+
 //returns ray direction
 //stolen from qtlabs 3d editor
 QVector3D EditorCameraController::unproject(int viewPortWidth, int viewPortHeight,QPoint pos)
@@ -101,12 +128,14 @@ QVector3D EditorCameraController::unproject(int viewPortWidth, int viewPortHeigh
     return ray.toVector3D().normalized();
 }
 
+/**
+ * @brief EditorCameraController::updateCameraRot
+ */
 void EditorCameraController::updateCameraRot()
 {
     //QQuaternion yawQuat = QQuaternion::fromEulerAngles(0,yaw,0);
     //QQuaternion pitchQuat = QQuaternion::fromEulerAngles(pitch,0,0);
 
     //camera->rot = yawQuat*pitchQuat;
-
     camera->rot = QQuaternion::fromEulerAngles(pitch,yaw,0);
 }

@@ -16,22 +16,26 @@ namespace jah3d
     class MeshNode;
     class DefaultMaterial;
     class Viewport;
+    class CameraNode;
 }
 
 class EditorCameraController;
-
 class QOpenGLShaderProgram;
+class CameraControllerBase;
+class OrbitalCameraController;
 
 class SceneViewWidget: public QOpenGLWidget, protected QOpenGLFunctions
 {
     Q_OBJECT
 
-
-    EditorCameraController* camController;
+    CameraControllerBase* camController;
+    EditorCameraController* defaultCam;
+    OrbitalCameraController* orbitalCam;
 public:
     explicit SceneViewWidget(QWidget *parent);
 
     void setScene(QSharedPointer<jah3d::Scene> scene);
+    void setEditorCamera(QSharedPointer<jah3d::CameraNode> camera);
 
 protected:
     void initializeGL();
@@ -39,6 +43,7 @@ protected:
     void mousePressEvent(QMouseEvent* evt);
     void mouseMoveEvent(QMouseEvent* evt);
     void mouseReleaseEvent(QMouseEvent* evt);
+    void wheelEvent(QWheelEvent *event);
 
 
 private slots:
@@ -50,6 +55,7 @@ private:
     void makeObject();
     void renderScene();
 
+    QSharedPointer<jah3d::CameraNode> editorCam;
     QSharedPointer<jah3d::Scene> scene;
     QSharedPointer<jah3d::ForwardRenderer> renderer;
 
@@ -58,10 +64,6 @@ private:
 
     void initialize();
 
-    jah3d::Mesh* mesh;
-    QOpenGLShaderProgram* program;
-    QSharedPointer<jah3d::MeshNode> boxNode;
-    QSharedPointer<jah3d::DefaultMaterial> mat;
     jah3d::Viewport* viewport;
 
 signals:

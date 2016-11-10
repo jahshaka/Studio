@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 //#include "../jah3d/core/scenenode.h"
 //#include "../jah3d/scenegraph/cameranode.h"
+#include "cameracontrollerbase.h"
 
 //class CameraPtr;
 namespace jah3d
@@ -24,7 +25,7 @@ namespace jah3d
     class CameraNode;
 }
 
-class EditorCameraController
+class EditorCameraController:public CameraControllerBase
 {
     //Q_OBJECT
 
@@ -37,7 +38,7 @@ class EditorCameraController
     float pitch;
 
 public:
-    EditorCameraController(QSharedPointer<jah3d::CameraNode>  cam);
+    EditorCameraController();
 
     QSharedPointer<jah3d::CameraNode>  getCamera();
     void setCamera(QSharedPointer<jah3d::CameraNode>  cam);
@@ -50,8 +51,19 @@ public:
     void setLookSpeed(float speed);
     float getLookSpeed();
 
+    void tilt(float angle);
+
+    void pan(float angle);
+
     void onMouseDragged(int x,int y);
 
+    /**
+     * @brief unprojects point
+     * @param viewPortWidth
+     * @param viewPortHeight
+     * @param pos
+     * @return
+     */
     QVector3D unproject(int viewPortWidth, int viewPortHeight,QPoint pos);
 
     void updateCameraRot();
