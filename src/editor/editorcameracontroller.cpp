@@ -124,7 +124,7 @@ void EditorCameraController::onMouseMove(int x,int y)
     if(middleMouseDown)
     {
         //translate camera
-        float dragSpeed = 0.1f;
+        float dragSpeed = 0.01f;
         auto dir = camera->rot.rotatedVector(QVector3D(x*dragSpeed,-y*dragSpeed,0));
         camera->pos += dir;
 
@@ -144,6 +144,13 @@ void EditorCameraController::onMouseMove(int x,int y)
     */
 
     updateCameraRot();
+}
+
+void EditorCameraController::onMouseWheel(int delta)
+{
+    auto zoomSpeed = 0.01f;
+    auto forward = camera->rot.rotatedVector(QVector3D(0,0,-1));
+    camera->pos += forward*zoomSpeed*delta;
 }
 
 /*

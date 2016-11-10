@@ -58,6 +58,7 @@ public:
     void pan(float angle);
 
     void onMouseMove(int x,int y) override;
+    void onMouseWheel(int delta) override;
 
     /**
      * @brief unprojects point

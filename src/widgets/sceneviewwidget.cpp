@@ -238,4 +238,6 @@ void SceneViewWidget::mouseReleaseEvent(QMouseEvent *e)
 void SceneViewWidget::wheelEvent(QWheelEvent *event)
 {
     qDebug()<<"wheel event"<<endl;
+    if(camController!=nullptr)
+        camController->onMouseWheel(event->delta());
 }
