@@ -19,8 +19,6 @@ public:
     ~AccordianBladeWidget();
 
     void addTransform();
-    void addSkyPresets();
-    void addMatPresets();
     void setMaxHeight( int height );
     void addColorPicker( QString name );
     void addTexturePicker( QString name );

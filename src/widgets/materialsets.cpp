@@ -8,7 +8,7 @@ MaterialSets::MaterialSets(QWidget *parent) :
     ui->setupUi(this);
 
     ui->materialPresets->setViewMode(QListWidget::IconMode);
-    ui->materialPresets->setIconSize(QSize(40,40));
+    ui->materialPresets->setIconSize(QSize(65,65));
     ui->materialPresets->setResizeMode(QListWidget::Adjust);
     ui->materialPresets->setMovement(QListView::Static);
     ui->materialPresets->setSelectionBehavior(QAbstractItemView::SelectItems);
@@ -27,8 +27,7 @@ MaterialSets::MaterialSets(QWidget *parent) :
     ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/greenpattern.png"),"Tornado"));
     ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/groundboard.png"),"Tornado"));
     ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/info_graphic.png"),"Tornado"));
-    ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/oldtile.png"),"Tornado"));
-    ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/wallpattern.png"),"Tornado"));
+
 
 
 }
