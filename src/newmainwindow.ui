@@ -30,6 +30,10 @@
 *=======================================================================================
 */
 
+/*
+Tab Sections
+*/
+
 QTabWidget::pane{
     border: 1px solid #333333; top : -1px;
 	background:rgb(67, 67, 67);
@@ -37,7 +41,6 @@ QTabWidget::pane{
 
 QTabWidget::tab-bar {
 	background-color: rgb(54, 54, 54);
-   /* border-bottom: 1px soild #434343;*/
 }
 
 QTabBar::tab {
@@ -61,7 +64,7 @@ QTabBar::tab:selected, QTabBar::tab:hover{
 QTabBar::tab:selected {
     border: 1px solid #333333; bottom : -1px;
 	background-color:rgb(67, 67, 67);
-    border-bottom: 0px;
+    border-bottom:3px;
     min-width: 8ex;
     padding: 5px;
     min-width: 20ex;
@@ -70,6 +73,10 @@ QTabBar::tab:selected {
 QTabBar::tab:!selected {
     margin-top: 2px; 
 }
+
+/*
+*Dock Widget Styling Section
+*/
 
 QDockWidget {
 	background-color: rgb(95, 95, 95);
@@ -88,6 +95,32 @@ QDockWidget::title {
 	background-color: &quot;#282828&quot;;
 }
 
+QDockWidget::close-button, QDockWidget::float-button {
+    border: 1px solid transparent;
+    padding: 1px;
+    margin: 1px;
+}
+
+QDockWidget::close-button:hover, QDockWidget::float-button:hover {
+    background: rgb(30, 144, 255);;
+}
+
+QDockWidget::close-button:pressed, QDockWidget::float-button:pressed {
+    padding: 1px -1px -1px 1px;
+}
+
+/*
+* Labels, TextEdits Sliders and Nobs
+*/
+
+QToolTip {
+    border: 2px solid darkkhaki;
+    padding: 5px;
+	background: black;
+    border-radius: 3px;
+   opacity: 200; 
+}
+
 QLabel {
 color: rgb(197, 197, 197);
 }
@@ -104,7 +137,6 @@ height: 30px;
 
 QSlider::handle:horizontal {
 width: 8px;
- /*background-image: url(:/slider-knob.png);*/
 background: rgb(214, 214, 214);
 
 }
@@ -145,32 +177,10 @@ background-color: rgb(30, 144, 255);
      <number>0</number>
     </property>
     <item row="0" column="0">
-     <widget class="QTabWidget" name="MainSceneArea">
-      <property name="currentIndex">
-       <number>0</number>
+     <widget class="QWidget" name="sceneContainer" native="true">
+      <property name="styleSheet">
+       <string notr="true"/>
       </property>
-      <widget class="QWidget" name="sceneview">
-       <attribute name="title">
-        <string>Scene View</string>
-       </attribute>
-       <layout class="QGridLayout" name="gridLayout_2">
-        <property name="leftMargin">
-         <number>0</number>
-        </property>
-        <property name="topMargin">
-         <number>0</number>
-        </property>
-        <property name="rightMargin">
-         <number>0</number>
-        </property>
-        <property name="bottomMargin">
-         <number>0</number>
-        </property>
-        <item row="0" column="0">
-         <widget class="QWidget" name="sceneContainer" native="true"/>
-        </item>
-       </layout>
-      </widget>
      </widget>
     </item>
    </layout>
@@ -281,9 +291,17 @@ QMenu::item:selected {
     <property name="title">
      <string>Edit</string>
     </property>
+    <addaction name="actionUndo_2"/>
+    <addaction name="actionRedo_2"/>
+   </widget>
+   <widget class="QMenu" name="menuWindow">
+    <property name="title">
+     <string>Window</string>
+    </property>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
+   <addaction name="menuWindow"/>
    <addaction name="menuHelp"/>
   </widget>
   <widget class="QDockWidget" name="sceneHierarchy">
@@ -303,13 +321,13 @@ QMenu::item:selected {
     <string notr="true"/>
    </property>
    <property name="windowTitle">
-    <string>Scene Hierarchy</string>
+    <string>Scene Outliner</string>
    </property>
    <attribute name="dockWidgetArea">
     <number>1</number>
    </attribute>
    <widget class="QWidget" name="sceneHierarchyContents">
-    <layout class="QVBoxLayout" name="verticalLayout_3">
+    <layout class="QVBoxLayout" name="verticalLayout">
      <property name="spacing">
       <number>0</number>
      </property>
@@ -325,7 +343,17 @@ QMenu::item:selected {
      <property name="bottomMargin">
       <number>0</number>
      </property>
-     <item alignment="Qt::AlignLeft">
+     <item>
+      <widget class="QLineEdit" name="searchbar">
+       <property name="text">
+        <string/>
+       </property>
+       <property name="placeholderText">
+        <string> Search...</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QWidget" name="widget_2" native="true">
        <property name="minimumSize">
         <size>
@@ -369,6 +397,9 @@ QMenu::item:selected {
             <height>16777215</height>
            </size>
           </property>
+          <property name="styleSheet">
+           <string notr="true">border: none;</string>
+          </property>
           <property name="frameShape">
            <enum>QFrame::StyledPanel</enum>
           </property>
@@ -405,6 +436,9 @@ QMenu::item:selected {
                <height>25</height>
               </size>
              </property>
+             <property name="toolTip">
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;add object&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             </property>
              <property name="styleSheet">
               <string notr="true">QToolButton {
 border: none;
@@ -438,6 +472,9 @@ background-color: rgb(30, 144, 255);
                <height>25</height>
               </size>
              </property>
+             <property name="toolTip">
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;remove object&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             </property>
              <property name="styleSheet">
               <string notr="true">QPushButton {
 border: none;
@@ -470,6 +507,9 @@ background-color: rgb(30, 144, 255);
                <width>25</width>
                <height>25</height>
               </size>
+             </property>
+             <property name="toolTip">
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;change gizmo&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
              </property>
              <property name="styleSheet">
               <string notr="true">QPushButton {
@@ -550,6 +590,27 @@ QTreeView::branch:open:has-children:has-siblings  {
       </widget>
      </item>
      <item>
+      <widget class="QWidget" name="widget" native="true">
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <property name="spacing">
+         <number>2</number>
+        </property>
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+       </layout>
+      </widget>
+     </item>
+     <item>
       <widget class="QWidget" name="sceneTreeContainer" native="true">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
@@ -588,61 +649,38 @@ QTreeView::branch:open:has-children:has-siblings  {
        </layout>
       </widget>
      </item>
-     <item>
-      <widget class="QWidget" name="widget" native="true">
-       <layout class="QHBoxLayout" name="horizontalLayout">
-        <property name="spacing">
-         <number>2</number>
-        </property>
-        <property name="leftMargin">
-         <number>0</number>
-        </property>
-        <property name="topMargin">
-         <number>0</number>
-        </property>
-        <property name="rightMargin">
-         <number>0</number>
-        </property>
-        <property name="bottomMargin">
-         <number>0</number>
-        </property>
-       </layout>
-      </widget>
-     </item>
     </layout>
     <zorder>sceneTreeContainer</zorder>
     <zorder>sceneTree</zorder>
     <zorder>widget</zorder>
     <zorder>widget_2</zorder>
+    <zorder>searchbar</zorder>
    </widget>
   </widget>
-  <widget class="QDockWidget" name="ModelsPresetsDock">
+  <widget class="QDockWidget" name="PresetsDock">
    <property name="minimumSize">
     <size>
-     <width>300</width>
-     <height>230</height>
+     <width>400</width>
+     <height>200</height>
     </size>
    </property>
    <property name="maximumSize">
     <size>
      <width>524287</width>
-     <height>230</height>
+     <height>300</height>
     </size>
    </property>
    <property name="styleSheet">
     <string notr="true"/>
    </property>
    <property name="windowTitle">
-    <string>3D Model Presets</string>
+    <string>Presets</string>
    </property>
    <attribute name="dockWidgetArea">
     <number>2</number>
    </attribute>
    <widget class="QWidget" name="layout">
-    <layout class="QVBoxLayout" name="verticalLayout">
-     <property name="spacing">
-      <number>0</number>
-     </property>
+    <layout class="QGridLayout" name="gridLayout_2">
      <property name="leftMargin">
       <number>0</number>
      </property>
@@ -655,88 +693,122 @@ QTreeView::branch:open:has-children:has-siblings  {
      <property name="bottomMargin">
       <number>0</number>
      </property>
-     <item>
-      <widget class="QWidget" name="widget_3" native="true">
-       <property name="minimumSize">
-        <size>
-         <width>210</width>
-         <height>25</height>
-        </size>
+     <property name="spacing">
+      <number>0</number>
+     </property>
+     <item row="0" column="0">
+      <widget class="QTabWidget" name="tabWidget">
+       <property name="currentIndex">
+        <number>0</number>
        </property>
-       <property name="maximumSize">
-        <size>
-         <width>16777215</width>
-         <height>25</height>
-        </size>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">background-color: rgb(85, 85, 85);</string>
-       </property>
-       <layout class="QVBoxLayout" name="verticalLayout_5">
-        <property name="leftMargin">
-         <number>0</number>
-        </property>
-        <property name="topMargin">
-         <number>0</number>
-        </property>
-        <property name="rightMargin">
-         <number>0</number>
-        </property>
-        <property name="bottomMargin">
-         <number>0</number>
-        </property>
-        <item>
-         <widget class="QFrame" name="frame_2">
-          <property name="minimumSize">
-           <size>
-            <width>70</width>
-            <height>25</height>
-           </size>
-          </property>
-          <property name="maximumSize">
-           <size>
-            <width>70</width>
-            <height>16777215</height>
-           </size>
-          </property>
-          <property name="frameShape">
-           <enum>QFrame::StyledPanel</enum>
-          </property>
-          <property name="frameShadow">
-           <enum>QFrame::Raised</enum>
-          </property>
-          <layout class="QHBoxLayout" name="horizontalLayout_4">
-           <property name="spacing">
-            <number>3</number>
+       <widget class="QWidget" name="tamodelsb_3">
+        <attribute name="title">
+         <string>Models</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout_4">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <property name="verticalSpacing">
+          <number>0</number>
+         </property>
+         <item row="0" column="0">
+          <widget class="QWidget" name="modeloptionbar" native="true">
+           <property name="minimumSize">
+            <size>
+             <width>210</width>
+             <height>25</height>
+            </size>
            </property>
-           <property name="leftMargin">
-            <number>0</number>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>25</height>
+            </size>
            </property>
-           <property name="topMargin">
-            <number>0</number>
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(85, 85, 85);</string>
            </property>
-           <property name="rightMargin">
-            <number>0</number>
-           </property>
-           <property name="bottomMargin">
-            <number>0</number>
-           </property>
-           <item>
-            <widget class="QToolButton" name="toolButton_2">
-             <property name="minimumSize">
-              <size>
-               <width>25</width>
-               <height>25</height>
-              </size>
-             </property>
-             <property name="maximumSize">
-              <size>
-               <width>25</width>
-               <height>25</height>
-              </size>
-             </property>
-             <property name="styleSheet">
-              <string notr="true">QToolButton {
+           <layout class="QVBoxLayout" name="verticalLayout_5">
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QFrame" name="frame_2">
+              <property name="minimumSize">
+               <size>
+                <width>70</width>
+                <height>25</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>70</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">border: none;</string>
+              </property>
+              <property name="frameShape">
+               <enum>QFrame::StyledPanel</enum>
+              </property>
+              <property name="frameShadow">
+               <enum>QFrame::Raised</enum>
+              </property>
+              <layout class="QHBoxLayout" name="horizontalLayout_4">
+               <property name="spacing">
+                <number>3</number>
+               </property>
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QToolButton" name="importmod">
+                 <property name="minimumSize">
+                  <size>
+                   <width>25</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>25</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="toolTip">
+                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;import new models&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">QToolButton {
 border: none;
 	background-color: rgba(255, 255, 255, 0);
 }
@@ -744,32 +816,35 @@ border: none;
 QToolButton:hover {
 background-color: rgb(30, 144, 255);
 }</string>
-             </property>
-             <property name="text">
-              <string/>
-             </property>
-             <property name="icon">
-              <iconset resource="../icons.qrc">
-               <normaloff>:/app/icons/import.svg</normaloff>:/app/icons/import.svg</iconset>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QPushButton" name="pushButton_3">
-             <property name="minimumSize">
-              <size>
-               <width>25</width>
-               <height>25</height>
-              </size>
-             </property>
-             <property name="maximumSize">
-              <size>
-               <width>25</width>
-               <height>25</height>
-              </size>
-             </property>
-             <property name="styleSheet">
-              <string notr="true">QPushButton {
+                 </property>
+                 <property name="text">
+                  <string/>
+                 </property>
+                 <property name="icon">
+                  <iconset resource="../icons.qrc">
+                   <normaloff>:/app/icons/import.svg</normaloff>:/app/icons/import.svg</iconset>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="removemod">
+                 <property name="minimumSize">
+                  <size>
+                   <width>25</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>25</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="toolTip">
+                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;remove object&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">QPushButton {
 border: none;
 	background-color: rgba(255, 255, 255, 0);
 }
@@ -777,36 +852,387 @@ border: none;
 QPushButton:hover {
 background-color: rgb(30, 144, 255);
 }</string>
-             </property>
-             <property name="text">
-              <string/>
-             </property>
-             <property name="icon">
-              <iconset resource="../icons.qrc">
-               <normaloff>:/app/icons/export.svg</normaloff>:/app/icons/export.svg</iconset>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-     </item>
-     <item>
-      <widget class="ModelPresets" name="modelpresets" native="true">
-       <property name="minimumSize">
-        <size>
-         <width>0</width>
-         <height>0</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>16777215</width>
-         <height>16777215</height>
-        </size>
-       </property>
+                 </property>
+                 <property name="text">
+                  <string/>
+                 </property>
+                 <property name="icon">
+                  <iconset resource="../icons.qrc">
+                   <normaloff>:/app/icons/export.svg</normaloff>:/app/icons/export.svg</iconset>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="ModelPresets" name="modelpresets" native="true">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>16777215</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="skys">
+        <attribute name="title">
+         <string>Skys</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="verticalLayout_8">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QWidget" name="skyoptionbar" native="true">
+           <property name="minimumSize">
+            <size>
+             <width>210</width>
+             <height>25</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>25</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(85, 85, 85);</string>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout_6">
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QFrame" name="frame_3">
+              <property name="minimumSize">
+               <size>
+                <width>70</width>
+                <height>25</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>70</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">border: none;</string>
+              </property>
+              <property name="frameShape">
+               <enum>QFrame::StyledPanel</enum>
+              </property>
+              <property name="frameShadow">
+               <enum>QFrame::Raised</enum>
+              </property>
+              <layout class="QHBoxLayout" name="horizontalLayout_5">
+               <property name="spacing">
+                <number>3</number>
+               </property>
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QToolButton" name="importsky">
+                 <property name="minimumSize">
+                  <size>
+                   <width>25</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>25</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="toolTip">
+                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;import new models&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">QToolButton {
+border: none;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QToolButton:hover {
+background-color: rgb(30, 144, 255);
+}</string>
+                 </property>
+                 <property name="text">
+                  <string/>
+                 </property>
+                 <property name="icon">
+                  <iconset resource="../icons.qrc">
+                   <normaloff>:/app/icons/import.svg</normaloff>:/app/icons/import.svg</iconset>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="clearsky">
+                 <property name="minimumSize">
+                  <size>
+                   <width>25</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>25</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="toolTip">
+                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;remove object&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">QPushButton {
+border: none;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QPushButton:hover {
+background-color: rgb(30, 144, 255);
+}</string>
+                 </property>
+                 <property name="text">
+                  <string/>
+                 </property>
+                 <property name="icon">
+                  <iconset resource="../icons.qrc">
+                   <normaloff>:/app/icons/export.svg</normaloff>:/app/icons/export.svg</iconset>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QWidget" name="skypresets" native="true"/>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="materials">
+        <attribute name="title">
+         <string>Materials</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="verticalLayout_3">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QWidget" name="materialoptionbar" native="true">
+           <property name="minimumSize">
+            <size>
+             <width>210</width>
+             <height>25</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>25</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(85, 85, 85);</string>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout_7">
+            <property name="spacing">
+             <number>0</number>
+            </property>
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QFrame" name="frame_4">
+              <property name="minimumSize">
+               <size>
+                <width>70</width>
+                <height>25</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>70</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">border: none;</string>
+              </property>
+              <property name="frameShape">
+               <enum>QFrame::StyledPanel</enum>
+              </property>
+              <property name="frameShadow">
+               <enum>QFrame::Raised</enum>
+              </property>
+              <layout class="QHBoxLayout" name="horizontalLayout_6">
+               <property name="spacing">
+                <number>3</number>
+               </property>
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QToolButton" name="importmat">
+                 <property name="minimumSize">
+                  <size>
+                   <width>25</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>25</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="toolTip">
+                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;import new models&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">QToolButton {
+border: none;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QToolButton:hover {
+background-color: rgb(30, 144, 255);
+}</string>
+                 </property>
+                 <property name="text">
+                  <string/>
+                 </property>
+                 <property name="icon">
+                  <iconset resource="../icons.qrc">
+                   <normaloff>:/app/icons/import.svg</normaloff>:/app/icons/import.svg</iconset>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="remove">
+                 <property name="minimumSize">
+                  <size>
+                   <width>25</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>25</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="toolTip">
+                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;remove object&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">QPushButton {
+border: none;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QPushButton:hover {
+background-color: rgb(30, 144, 255);
+}</string>
+                 </property>
+                 <property name="text">
+                  <string/>
+                 </property>
+                 <property name="icon">
+                  <iconset resource="../icons.qrc">
+                   <normaloff>:/app/icons/export.svg</normaloff>:/app/icons/export.svg</iconset>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="MaterialSets" name="materialpresets" native="true"/>
+         </item>
+        </layout>
+       </widget>
       </widget>
      </item>
     </layout>
@@ -908,8 +1334,11 @@ background-color: rgb(30, 144, 255);
        <property name="minimumSize">
         <size>
          <width>0</width>
-         <height>220</height>
+         <height>300</height>
         </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">background-color: rgb(64, 64, 64);</string>
        </property>
        <property name="sizeAdjustPolicy">
         <enum>QAbstractScrollArea::AdjustToContents</enum>
@@ -922,8 +1351,8 @@ background-color: rgb(30, 144, 255);
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>298</width>
-          <height>413</height>
+          <width>398</width>
+          <height>351</height>
          </rect>
         </property>
        </widget>
@@ -935,15 +1364,18 @@ background-color: rgb(30, 144, 255);
   <widget class="QDockWidget" name="ObjectViewDock">
    <property name="minimumSize">
     <size>
-     <width>300</width>
+     <width>400</width>
      <height>160</height>
     </size>
    </property>
    <property name="maximumSize">
     <size>
-     <width>300</width>
-     <height>160</height>
+     <width>320</width>
+     <height>524287</height>
     </size>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">background-color: rgb(64, 64, 64);</string>
    </property>
    <property name="windowTitle">
     <string>Object View</string>
@@ -1084,6 +1516,16 @@ background-color: rgb(30, 144, 255);
     <string>Redo</string>
    </property>
   </action>
+  <action name="actionUndo_2">
+   <property name="text">
+    <string>Undo</string>
+   </property>
+  </action>
+  <action name="actionRedo_2">
+   <property name="text">
+    <string>Redo</string>
+   </property>
+  </action>
  </widget>
  <customwidgets>
   <customwidget>
@@ -1107,6 +1549,12 @@ background-color: rgb(30, 144, 255);
    <class>ModelPresets</class>
    <extends>QWidget</extends>
    <header>src/widgets/modelpresets.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>MaterialSets</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/materialsets.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

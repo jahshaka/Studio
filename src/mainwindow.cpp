@@ -124,6 +124,19 @@ MainWindow::MainWindow(QWidget *parent) :
     //gizmoHandle = nullptr;
     activeGizmoHandle = nullptr;
 
+    // Dock Widgets Settings
+/*
+    QDockWidget *dock1 = new QDockWidget("Dock1", this);
+    dock1->setWidget(new QLabel("Dock 1 content", this));
+    dock1->setTitleBarWidget(new QWidget());
+    addDockWidget(Qt::RightDockWidgetArea, dock1);
+    QDockWidget *dock2 = new QDockWidget("Dock2", this);
+    dock2->setWidget(new QLabel("Dock 2 content", this));
+    addDockWidget(Qt::RightDockWidgetArea, dock2);
+    tabifyDockWidget(dock1, dock2);
+    setTabPosition(Qt::RightDockWidgetArea, QTabWidget::North );
+*/
+
     // Accordian SideDock Properties
 
     AccordianBladeWidget *accordian = new AccordianBladeWidget();
