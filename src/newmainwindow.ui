@@ -217,6 +217,7 @@ QSlider::handle:horizontal:hover {
 background-color: rgb(30, 144, 255);
 }
 
+
 /*
 *Spinbox settings ============================================================================
 */
@@ -224,11 +225,12 @@ background-color: rgb(30, 144, 255);
 QSpinBox {
     padding-right: 15px; /* make room for the arrows */
     border-width: 1;  
+	border-image: url(:/app/content/skies/default.png) 4;
 	border: 1px solid  rgb(40, 40, 40);
+	color: black;
 }
 
 QSpinBox::up-button {
-	
 	background-color: rgb(50, 50, 50);
 	border-image: url(:/app/icons/up-arrow.svg) 1;
     border-width:.2;  
@@ -260,10 +262,12 @@ QSpinBox::down-button:pressed {
 	background-color: rgb(30, 144, 255);
 }
 
-QSpinBox {
+QDoubleSpinBox {
     padding-right: 15px; /* make room for the arrows */
+	border-image: url(:/app/content/skies/default.png) 4;
     border-width: 1;  
 	border: 1px solid  rgb(80, 80, 80);
+	color: black;
 }
 
 QDoubleSpinBox::up-button {
@@ -298,6 +302,76 @@ QDoubleSpinBox::down-button:hover {
 QDoubleSpinBox::down-button:pressed {
 	background-color: rgb(30, 144, 255);
 }
+
+
+
+/*
+*-========  list view scrollbar style  =============================================================
+*
+*/
+
+ QScrollBar:vertical {
+	 background-color: &quot;#282828&quot;;
+     width: 15px;
+     margin: 22px 0 22px 0;
+ }
+
+ QScrollBar::handle:vertical {
+	background-color: rgb(97, 97, 97);
+     min-height: 20px;
+	 border-radius: 5px;
+	 margin-left: 2px;
+	 margin-right: 2px;
+ }
+
+ QScrollBar::handle:vertical:hover {
+	background-color: rgb(110, 110, 110);
+     min-height: 20px;
+	 border-radius: 5px;
+	 margin-left: 2px;
+	 margin-right: 2px;
+ }
+
+ QScrollBar::add-line:vertical { 
+	background-color: rgb(100, 100, 100);
+     height: 20px;
+     subcontrol-position: bottom;
+     subcontrol-origin: margin;
+ }
+
+ QScrollBar::sub-line:vertical { 
+	background-color: rgb(100, 100, 100);
+     height: 20px;
+     subcontrol-position: top;
+     subcontrol-origin: margin;
+ }
+
+ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+     background: none;
+ }
+
+QScrollBar::up-arrow:vertical
+{
+	image: url(:/app/icons/up-arrow.svg);
+}
+QScrollBar::up-arrow:vertical:hover
+{
+	background-color: rgb(30, 144, 255);
+	image: url(:/app/icons/up-arrow.svg);
+}
+
+QScrollBar::down-arrow:vertical
+{
+	
+	image: url(:/app/icons/down-arrow.svg);
+}
+
+QScrollBar::down-arrow:vertical:hover
+{
+	background-color: rgb(30, 144, 255);
+	image: url(:/app/icons/down-arrow.svg);
+}
+
 
 </string>
   </property>
@@ -592,7 +666,7 @@ QMenu::item:selected {
         <string notr="true">border: none;</string>
        </property>
        <property name="currentIndex">
-        <number>2</number>
+        <number>1</number>
        </property>
        <widget class="QWidget" name="tamodelsb_3">
         <attribute name="title">
@@ -947,7 +1021,7 @@ background-color: rgb(30, 144, 255);
           </widget>
          </item>
          <item>
-          <widget class="QWidget" name="skypresets" native="true"/>
+          <widget class="SkyPresets" name="skypresets" native="true"/>
          </item>
         </layout>
        </widget>
@@ -1263,7 +1337,7 @@ background-color: rgb(30, 144, 255);
           <x>0</x>
           <y>0</y>
           <width>398</width>
-          <height>392</height>
+          <height>393</height>
          </rect>
         </property>
         <property name="styleSheet">
@@ -1304,47 +1378,13 @@ background-color: rgb(30, 144, 255);
     border: 1px solid rgb(30, 144, 255);
 }</string>
     </property>
-    <widget class="QSlider" name="horizontalSlider">
+    <widget class="TransformEditor" name="widget" native="true">
      <property name="geometry">
       <rect>
-       <x>80</x>
-       <y>50</y>
-       <width>160</width>
-       <height>22</height>
-      </rect>
-     </property>
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-    </widget>
-    <widget class="QSpinBox" name="spinBox">
-     <property name="geometry">
-      <rect>
-       <x>100</x>
-       <y>100</y>
-       <width>71</width>
-       <height>31</height>
-      </rect>
-     </property>
-     <property name="minimumSize">
-      <size>
-       <width>0</width>
-       <height>20</height>
-      </size>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>12</pointsize>
-      </font>
-     </property>
-    </widget>
-    <widget class="QDoubleSpinBox" name="doubleSpinBox">
-     <property name="geometry">
-      <rect>
-       <x>110</x>
-       <y>160</y>
-       <width>81</width>
-       <height>31</height>
+       <x>10</x>
+       <y>20</y>
+       <width>381</width>
+       <height>191</height>
       </rect>
      </property>
     </widget>
@@ -1521,6 +1561,18 @@ background-color: rgb(30, 144, 255);
    <class>SceneHeirarchyWidget</class>
    <extends>QWidget</extends>
    <header>src/widgets/sceneheirarchywidget.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>SkyPresets</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/skypresets.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>TransformEditor</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/transformeditor.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

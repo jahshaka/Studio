@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>ColorValueWidget</class>
- <widget class="QWidget" name="ColorValueWidget">
+ <class>DropDownWidget</class>
+ <widget class="QWidget" name="DropDownWidget">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>342</width>
+    <width>257</width>
     <height>25</height>
    </rect>
   </property>
@@ -19,16 +19,13 @@
   <property name="maximumSize">
    <size>
     <width>16777215</width>
-    <height>30</height>
+    <height>25</height>
    </size>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
-   <property name="spacing">
-    <number>0</number>
-   </property>
    <property name="leftMargin">
     <number>0</number>
    </property>
@@ -42,7 +39,7 @@
     <number>0</number>
    </property>
    <item>
-    <widget class="QLabel" name="label">
+    <widget class="QLabel" name="name">
      <property name="minimumSize">
       <size>
        <width>90</width>
@@ -58,13 +55,10 @@
      <property name="text">
       <string>TextLabel</string>
      </property>
-     <property name="alignment">
-      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-     </property>
     </widget>
    </item>
    <item>
-    <widget class="ColorPickerWidget" name="widget" native="true">
+    <widget class="QComboBox" name="comboBox">
      <property name="minimumSize">
       <size>
        <width>0</width>
@@ -81,14 +75,6 @@
    </item>
   </layout>
  </widget>
- <customwidgets>
-  <customwidget>
-   <class>ColorPickerWidget</class>
-   <extends>QWidget</extends>
-   <header>src/widgets/colorpickerwidget.h</header>
-   <container>1</container>
-  </customwidget>
- </customwidgets>
  <resources/>
  <connections/>
 </ui>
