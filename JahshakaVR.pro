@@ -63,7 +63,8 @@ SOURCES += src/main.cpp\
     src/widgets/texturepicker.cpp \
     src/widgets/transformeditor.cpp \
     src/widgets/sceneheirarchywidget.cpp \
-    src/editor/cameracontrollerbase.cpp
+    src/editor/cameracontrollerbase.cpp \
+    src/editor/orbitalcameracontroller.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \

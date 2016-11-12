@@ -17,7 +17,26 @@ namespace jah3d
 class OrbitalCameraController:public CameraControllerBase
 {
 public:
+    float lookSpeed;
+    float linearSpeed;
 
+    float yaw;
+    float pitch;
+
+    QVector3D pivot;
+    float distFromPivot;
+
+    QSharedPointer<jah3d::CameraNode> camera;
+
+    OrbitalCameraController();
+
+    QSharedPointer<jah3d::CameraNode>  getCamera();
+    void setCamera(QSharedPointer<jah3d::CameraNode>  cam) override;
+
+    void onMouseMove(int x,int y) override;
+    void onMouseWheel(int delta) override;
+
+    void updateCameraRot();
 };
 
 #endif // ORBITALCAMERACONTROLLER_H
