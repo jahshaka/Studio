@@ -100,12 +100,6 @@ QPushButton:hover {
         <property name="text">
          <string/>
         </property>
-        <property name="icon">
-         <iconset>
-          <normaloff>:/app/icons/chevron-arrow-down.svg</normaloff>
-          <activeoff>:/app/icons/right-chevron.svg</activeoff>
-          <selectedoff>:/app/icons/right-chevron.svg</selectedoff>:/app/icons/chevron-arrow-down.svg</iconset>
-        </property>
        </widget>
       </item>
       <item>

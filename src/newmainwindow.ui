@@ -225,8 +225,6 @@ background-color: rgb(30, 144, 255);
 QSpinBox {
    padding-right: 15px; /* make room for the arrows */
     border-width: 0;  
-	border: none;
-	padding: none;
 	border-image: url(:/app/images/frame.png) 4;
 	color: black;
 }
@@ -268,8 +266,7 @@ QSpinBox::down-button:pressed {
 QDoubleSpinBox {
    padding-right: 15px; /* make room for the arrows */
     border-width: 0;  
-	border: none;
-	padding: none;
+	padding: 1px;
 	border-image: url(:/app/images/frame.png) 4;
 	color: black;
 }
