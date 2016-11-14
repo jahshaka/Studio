@@ -233,7 +233,7 @@ QSpinBox {
 QSpinBox::up-button {
 	background-color: rgb(50, 50, 50);
 	border-image: url(:/app/icons/up-arrow.svg) 1;
-    border-width:.2;  
+    border-width: 1;  
 	margin-bottom:1px;
 
 }
@@ -249,7 +249,7 @@ QSpinBox::up-button:pressed {
 
 QSpinBox::down-button {
 	background-color: rgb(50, 50, 50);
-	border-image:  url(:/app/icons/down-arrow.svg);
+	border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
     border-width:.2;  
 	margin-top:1px;
 }
@@ -290,7 +290,7 @@ QDoubleSpinBox::up-button:pressed {
 
 QDoubleSpinBox::down-button {
 	background-color: rgb(50, 50, 50);
-	border-image:  url(:/app/icons/down-arrow.svg);
+	border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
     border-width:.2;  
 	margin-top:1px;
 }

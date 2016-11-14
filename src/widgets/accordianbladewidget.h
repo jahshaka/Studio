@@ -19,6 +19,7 @@ public:
     ~AccordianBladeWidget();
 
     void addTransform();
+    void addCheckBoxOption( QString name);
     void setMaxHeight( int height );
     void addColorPicker( QString name );
     void addTexturePicker( QString name );
