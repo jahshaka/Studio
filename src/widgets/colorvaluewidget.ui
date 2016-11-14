@@ -7,19 +7,19 @@
     <x>0</x>
     <y>0</y>
     <width>342</width>
-    <height>40</height>
+    <height>25</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
     <width>0</width>
-    <height>40</height>
+    <height>25</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
     <width>16777215</width>
-    <height>40</height>
+    <height>30</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -46,13 +46,13 @@
      <property name="minimumSize">
       <size>
        <width>90</width>
-       <height>0</height>
+       <height>25</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
-       <width>100</width>
-       <height>16777215</height>
+       <width>90</width>
+       <height>25</height>
       </size>
      </property>
      <property name="text">
@@ -64,7 +64,20 @@
     </widget>
    </item>
    <item>
-    <widget class="ColorPickerWidget" name="widget" native="true"/>
+    <widget class="ColorPickerWidget" name="widget" native="true">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>25</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>25</height>
+      </size>
+     </property>
+    </widget>
    </item>
   </layout>
  </widget>

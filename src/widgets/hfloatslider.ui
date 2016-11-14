@@ -46,11 +46,36 @@
      <property name="minimumSize">
       <size>
        <width>90</width>
-       <height>0</height>
+       <height>25</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>90</width>
+       <height>25</height>
       </size>
      </property>
      <property name="text">
       <string>TextLabel</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="2">
+    <widget class="QSpinBox" name="spinbox">
+     <property name="minimumSize">
+      <size>
+       <width>64</width>
+       <height>25</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>25</height>
+      </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
      </property>
     </widget>
    </item>
@@ -62,18 +87,17 @@
        <height>25</height>
       </size>
      </property>
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="2">
-    <widget class="QSpinBox" name="spinbox">
-     <property name="minimumSize">
+     <property name="maximumSize">
       <size>
-       <width>0</width>
+       <width>16777215</width>
        <height>25</height>
       </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
      </property>
     </widget>
    </item>

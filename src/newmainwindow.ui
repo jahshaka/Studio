@@ -31,7 +31,35 @@
 */
 
 /*
-Tab Sections
+*
+* Tree View Widget ============================================================================
+*
+*/
+
+QTreeView::item {
+   padding: 2px;
+}
+
+QTreeView::item:hover {
+    background: #42b5e8;
+}
+
+QTreeView::item:selected {
+    background: #1e90ff;
+}
+
+QTreeView::item:selected:active{
+    background: #1e90ff;
+}
+
+QTreeView::item:selected:!active {
+    background: #98dbf8;
+}
+
+/*
+*
+Tab Sections ============================================================================
+*
 */
 
 QTabWidget::pane{
@@ -75,7 +103,9 @@ QTabBar::tab:!selected {
 }
 
 /*
-*Dock Widget Styling Section
+*
+*Dock Widget Styling Section ============================================================================
+*
 */
 
 QDockWidget {
@@ -84,6 +114,10 @@ QDockWidget {
     titlebar-close-icon: url(:/app/icons/delete.png);
     titlebar-normal-icon: url(:/app/icons/expand-button.png);
 	color: rgb(255, 255, 255);
+}
+
+QDockWidget:hover {
+background-color: rgb(30, 144, 255);
 }
 
 QDockWidget::title {
@@ -109,9 +143,30 @@ QDockWidget::close-button:pressed, QDockWidget::float-button:pressed {
     padding: 1px -1px -1px 1px;
 }
 
+
 /*
-* Labels, TextEdits Sliders and Nobs
+*
+* Labels, Buttons ============================================================================
+*
 */
+
+QPushButton  {
+    border: none;
+	background-color: rgb(68, 68, 68);
+}
+
+QPushButton:hover {
+	background-color: rgb(30, 144, 255);
+}
+
+QToolButton {
+    border: none;
+	background-color: rgb(68, 68, 68);
+}
+
+QToolButton:hover{
+	background-color: rgb(30, 144, 255);
+}
 
 QToolTip {
     border: 2px solid darkkhaki;
@@ -129,6 +184,12 @@ QTextEdit {
 background-color: rgb(113, 113, 113);
 color: rgb(172, 172, 172);
 }
+
+/*
+*
+* Sliders settings ============================================================================
+*
+*/
 
 QSlider::groove:horizontal {
 border: 1px solid #999999;
@@ -154,7 +215,165 @@ border: 1px solid #4d4d4d;
 
 QSlider::handle:horizontal:hover {
 background-color: rgb(30, 144, 255);
-}</string>
+}
+
+
+/*
+*Spinbox settings ============================================================================
+*/
+
+QSpinBox {
+    padding-right: 15px; /* make room for the arrows */
+    border-width: 1;  
+	border-image: url(:/app/content/skies/default.png) 4;
+	border: 1px solid  rgb(40, 40, 40);
+	color: black;
+}
+
+QSpinBox::up-button {
+	background-color: rgb(50, 50, 50);
+	border-image: url(:/app/icons/up-arrow.svg) 1;
+    border-width: 1;  
+	margin-bottom:1px;
+
+}
+
+QSpinBox::up-button:hover {
+	background-color: rgb(30, 144, 255);
+}
+
+QSpinBox::up-button:pressed {	
+	background-color: rgb(30, 144, 255);
+}
+
+
+QSpinBox::down-button {
+	background-color: rgb(50, 50, 50);
+	border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
+    border-width:.2;  
+	margin-top:1px;
+}
+
+QSpinBox::down-button:hover {
+	background-color: rgb(30, 144, 255);
+}
+
+QSpinBox::down-button:pressed {
+	background-color: rgb(30, 144, 255);
+}
+
+QDoubleSpinBox {
+    padding-right: 15px; /* make room for the arrows */
+	border-image: url(:/app/content/skies/default.png) 4;
+    border-width: 1;  
+	border: 1px solid  rgb(80, 80, 80);
+	color: black;
+}
+
+QDoubleSpinBox::up-button {
+	
+	background-color: rgb(50, 50, 50);
+	border-image: url(:/app/icons/up-arrow.svg) 1;
+    border-width:.2;  
+	margin-bottom:1px;
+
+}
+
+QDoubleSpinBox::up-button:hover {
+	background-color: rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::up-button:pressed {	
+	background-color: rgb(30, 144, 255);
+}
+
+
+QDoubleSpinBox::down-button {
+	background-color: rgb(50, 50, 50);
+	border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
+    border-width:.2;  
+	margin-top:1px;
+}
+
+QDoubleSpinBox::down-button:hover {
+	background-color: rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::down-button:pressed {
+	background-color: rgb(30, 144, 255);
+}
+
+
+
+/*
+*-========  list view scrollbar style  =============================================================
+*
+*/
+
+ QScrollBar:vertical {
+	 background-color: &quot;#282828&quot;;
+     width: 15px;
+     margin: 22px 0 22px 0;
+ }
+
+ QScrollBar::handle:vertical {
+	background-color: rgb(97, 97, 97);
+     min-height: 20px;
+	 border-radius: 5px;
+	 margin-left: 2px;
+	 margin-right: 2px;
+ }
+
+ QScrollBar::handle:vertical:hover {
+	background-color: rgb(110, 110, 110);
+     min-height: 20px;
+	 border-radius: 5px;
+	 margin-left: 2px;
+	 margin-right: 2px;
+ }
+
+ QScrollBar::add-line:vertical { 
+	background-color: rgb(100, 100, 100);
+     height: 20px;
+     subcontrol-position: bottom;
+     subcontrol-origin: margin;
+ }
+
+ QScrollBar::sub-line:vertical { 
+	background-color: rgb(100, 100, 100);
+     height: 20px;
+     subcontrol-position: top;
+     subcontrol-origin: margin;
+ }
+
+ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+     background: none;
+ }
+
+QScrollBar::up-arrow:vertical
+{
+	image: url(:/app/icons/up-arrow.svg);
+}
+QScrollBar::up-arrow:vertical:hover
+{
+	background-color: rgb(30, 144, 255);
+	image: url(:/app/icons/up-arrow.svg);
+}
+
+QScrollBar::down-arrow:vertical
+{
+	
+	image: url(:/app/icons/down-arrow.svg);
+}
+
+QScrollBar::down-arrow:vertical:hover
+{
+	background-color: rgb(30, 144, 255);
+	image: url(:/app/icons/down-arrow.svg);
+}
+
+
+</string>
   </property>
   <property name="iconSize">
    <size>
@@ -177,10 +396,45 @@ background-color: rgb(30, 144, 255);
      <number>0</number>
     </property>
     <item row="0" column="0">
-     <widget class="QWidget" name="sceneContainer" native="true">
+     <widget class="QWidget" name="backgroundscene" native="true">
       <property name="styleSheet">
-       <string notr="true"/>
+       <string notr="true">QWidget#backgroundscene {
+background-color: rgb(52, 52, 52);
+}
+
+QWidget#backgroundscene:hover {
+background-color: rgb(30, 144, 255);
+}
+
+QWidget#backgroundscene:selected:active {
+background-color: rgb(30, 144, 255);
+}
+
+QWidget#backgroundscene:selected:!active {
+background-color: rgb(52, 52, 52);
+}</string>
       </property>
+      <layout class="QGridLayout" name="gridLayout_6">
+       <property name="leftMargin">
+        <number>1</number>
+       </property>
+       <property name="topMargin">
+        <number>1</number>
+       </property>
+       <property name="rightMargin">
+        <number>1</number>
+       </property>
+       <property name="bottomMargin">
+        <number>1</number>
+       </property>
+       <item row="0" column="0">
+        <widget class="QWidget" name="sceneContainer" native="true">
+         <property name="styleSheet">
+          <string notr="true"/>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </item>
    </layout>
@@ -191,7 +445,7 @@ background-color: rgb(30, 144, 255);
      <x>0</x>
      <y>0</y>
      <width>1209</width>
-     <height>34</height>
+     <height>30</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -299,10 +553,19 @@ QMenu::item:selected {
      <string>Window</string>
     </property>
    </widget>
+   <widget class="QMenu" name="menuVR_Mode">
+    <property name="title">
+     <string>VR Mode</string>
+    </property>
+    <property name="separatorsCollapsible">
+     <bool>false</bool>
+    </property>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
    <addaction name="menuWindow"/>
    <addaction name="menuHelp"/>
+   <addaction name="menuVR_Mode"/>
   </widget>
   <widget class="QDockWidget" name="sceneHierarchyDock">
    <property name="minimumSize">
@@ -327,6 +590,12 @@ QMenu::item:selected {
     <number>1</number>
    </attribute>
    <widget class="SceneHeirarchyWidget" name="sceneHierarchy">
+    <property name="styleSheet">
+     <string notr="true">:hover{
+
+    border: 1px solid rgb(30, 144, 255);
+}</string>
+    </property>
     <layout class="QVBoxLayout" name="verticalLayout">
      <property name="spacing">
       <number>0</number>
@@ -369,26 +638,35 @@ QMenu::item:selected {
     <number>2</number>
    </attribute>
    <widget class="QWidget" name="layout">
+    <property name="styleSheet">
+     <string notr="true">:hover{
+
+    border: 1px solid rgb(30, 144, 255);
+}</string>
+    </property>
     <layout class="QGridLayout" name="gridLayout_2">
      <property name="leftMargin">
-      <number>0</number>
+      <number>1</number>
      </property>
      <property name="topMargin">
       <number>0</number>
      </property>
      <property name="rightMargin">
-      <number>0</number>
+      <number>1</number>
      </property>
      <property name="bottomMargin">
-      <number>0</number>
+      <number>1</number>
      </property>
      <property name="spacing">
       <number>0</number>
      </property>
      <item row="0" column="0">
       <widget class="QTabWidget" name="tabWidget">
+       <property name="styleSheet">
+        <string notr="true">border: none;</string>
+       </property>
        <property name="currentIndex">
-        <number>0</number>
+        <number>1</number>
        </property>
        <widget class="QWidget" name="tamodelsb_3">
         <attribute name="title">
@@ -743,7 +1021,7 @@ background-color: rgb(30, 144, 255);
           </widget>
          </item>
          <item>
-          <widget class="QWidget" name="skypresets" native="true"/>
+          <widget class="SkyPresets" name="skypresets" native="true"/>
          </item>
         </layout>
        </widget>
@@ -782,7 +1060,8 @@ background-color: rgb(30, 144, 255);
             </size>
            </property>
            <property name="styleSheet">
-            <string notr="true">background-color: rgb(85, 85, 85);</string>
+            <string notr="true">background-color: rgb(85, 85, 85);
+border: none;</string>
            </property>
            <layout class="QVBoxLayout" name="verticalLayout_7">
             <property name="spacing">
@@ -944,6 +1223,12 @@ background-color: rgb(30, 144, 255);
     <number>8</number>
    </attribute>
    <widget class="QWidget" name="layout_2">
+    <property name="styleSheet">
+     <string notr="true">:hover{
+
+    border: 1px solid rgb(30, 144, 255);
+}</string>
+    </property>
     <layout class="QGridLayout" name="gridLayout_5">
      <property name="leftMargin">
       <number>0</number>
@@ -961,7 +1246,11 @@ background-color: rgb(30, 144, 255);
       <number>0</number>
      </property>
      <item row="1" column="0">
-      <widget class="AnimationWidget" name="animationtimeline"/>
+      <widget class="AnimationWidget" name="animationtimeline">
+       <property name="styleSheet">
+        <string notr="true">border: none;</string>
+       </property>
+      </widget>
      </item>
      <item row="0" column="0">
       <widget class="MainTimelineWidget" name="mainTimeline" native="true">
@@ -984,7 +1273,7 @@ background-color: rgb(30, 144, 255);
         </size>
        </property>
        <property name="styleSheet">
-        <string notr="true"/>
+        <string notr="true">border: none;</string>
        </property>
       </widget>
      </item>
@@ -995,7 +1284,7 @@ background-color: rgb(30, 144, 255);
    <property name="minimumSize">
     <size>
      <width>89</width>
-     <height>320</height>
+     <height>322</height>
     </size>
    </property>
    <property name="windowTitle">
@@ -1005,6 +1294,12 @@ background-color: rgb(30, 144, 255);
     <number>2</number>
    </attribute>
    <widget class="QWidget" name="dockWidgetContents">
+    <property name="styleSheet">
+     <string notr="true">:hover{
+
+    border: 1px solid rgb(30, 144, 255);
+}</string>
+    </property>
     <layout class="QGridLayout" name="gridLayout_3">
      <property name="leftMargin">
       <number>0</number>
@@ -1027,7 +1322,8 @@ background-color: rgb(30, 144, 255);
         </size>
        </property>
        <property name="styleSheet">
-        <string notr="true">background-color: rgb(64, 64, 64);</string>
+        <string notr="true">background-color: rgb(64, 64, 64);
+</string>
        </property>
        <property name="sizeAdjustPolicy">
         <enum>QAbstractScrollArea::AdjustToContents</enum>
@@ -1041,8 +1337,11 @@ background-color: rgb(30, 144, 255);
           <x>0</x>
           <y>0</y>
           <width>398</width>
-          <height>390</height>
+          <height>393</height>
          </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">border:none;</string>
         </property>
        </widget>
       </widget>
@@ -1072,7 +1371,24 @@ background-color: rgb(30, 144, 255);
    <attribute name="dockWidgetArea">
     <number>8</number>
    </attribute>
-   <widget class="QWidget" name="objectview"/>
+   <widget class="QWidget" name="objectview">
+    <property name="styleSheet">
+     <string notr="true">:hover{
+
+    border: 1px solid rgb(30, 144, 255);
+}</string>
+    </property>
+    <widget class="TransformEditor" name="widget" native="true">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>20</y>
+       <width>381</width>
+       <height>191</height>
+      </rect>
+     </property>
+    </widget>
+   </widget>
   </widget>
   <action name="actionSave">
    <property name="icon">
@@ -1245,6 +1561,18 @@ background-color: rgb(30, 144, 255);
    <class>SceneHeirarchyWidget</class>
    <extends>QWidget</extends>
    <header>src/widgets/sceneheirarchywidget.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>SkyPresets</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/skypresets.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>TransformEditor</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/transformeditor.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

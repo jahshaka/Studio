@@ -64,6 +64,8 @@ SOURCES += src/main.cpp\
     src/widgets/transformeditor.cpp \
     src/widgets/sceneheirarchywidget.cpp \
     src/editor/cameracontrollerbase.cpp \
+    src/widgets/skypresets.cpp
+    src/editor/cameracontrollerbase.cpp \
     src/editor/orbitalcameracontroller.cpp
 
 HEADERS  += src/mainwindow.h \
@@ -107,7 +109,8 @@ HEADERS  += src/mainwindow.h \
     src/widgets/transformeditor.h \
     src/widgets/sceneheirarchywidget.h \
     src/editor/orbitalcameracontroller.h \
-    src/editor/cameracontrollerbase.h
+    src/editor/cameracontrollerbase.h \
+    src/widgets/skypresets.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -141,7 +144,8 @@ FORMS    += \
     src/widgets/hfloatslider.ui \
     src/widgets/texturepicker.ui \
     src/widgets/transformeditor.ui \
-    src/widgets/sceneheirarchywidget.ui
+    src/widgets/sceneheirarchywidget.ui \
+    src/widgets/skypresets.ui
 
 RESOURCES += \
     shaders.qrc \

@@ -57,5 +57,10 @@
         <file>app/icons/export.svg</file>
         <file>app/icons/drop-down-arrow.svg</file>
         <file>app/icons/play-arrow.svg</file>
+        <file>app/icons/up-arrow-hover.svg</file>
+        <file>app/icons/down-arrow-hover.svg</file>
+        <file>app/icons/up-arrow-.svg</file>
+        <file>app/icons/down-arrow-.svg</file>
+        <file>app/icons/chevron-arrow-down.svg</file>
     </qresource>
 </RCC>

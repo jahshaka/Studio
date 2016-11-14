@@ -6,20 +6,20 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>254</width>
-    <height>95</height>
+    <width>405</width>
+    <height>108</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
     <width>0</width>
-    <height>85</height>
+    <height>108</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
-    <width>254</width>
-    <height>95</height>
+    <width>16777215</width>
+    <height>108</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -42,8 +42,14 @@
     <widget class="QLabel" name="label">
      <property name="minimumSize">
       <size>
-       <width>60</width>
+       <width>90</width>
        <height>0</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>90</width>
+       <height>16777215</height>
       </size>
      </property>
      <property name="sizeIncrement">
@@ -65,13 +71,13 @@
      <property name="minimumSize">
       <size>
        <width>90</width>
-       <height>85</height>
+       <height>108</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
-       <width>16777215</width>
-       <height>95</height>
+       <width>120</width>
+       <height>108</height>
       </size>
      </property>
      <property name="cursor">
@@ -104,7 +110,13 @@
        <property name="minimumSize">
         <size>
          <width>100</width>
-         <height>40</height>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>25</height>
         </size>
        </property>
        <property name="text">
@@ -120,6 +132,12 @@
      </item>
      <item>
       <widget class="QLabel" name="dimensions">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>25</height>
+        </size>
+       </property>
        <property name="text">
         <string>Dimensions:</string>
        </property>
@@ -130,13 +148,13 @@
        <property name="minimumSize">
         <size>
          <width>90</width>
-         <height>0</height>
+         <height>25</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
-         <width>90</width>
-         <height>16777215</height>
+         <width>16777215</width>
+         <height>25</height>
         </size>
        </property>
        <property name="text">
@@ -146,6 +164,18 @@
      </item>
      <item>
       <widget class="QPushButton" name="pushButton">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>25</height>
+        </size>
+       </property>
        <property name="text">
         <string>clear</string>
        </property>
@@ -154,10 +184,8 @@
     </layout>
    </item>
   </layout>
-  <zorder>layoutWidget</zorder>
   <zorder>DiffuseMap</zorder>
   <zorder>label</zorder>
-  <zorder>dimensions</zorder>
  </widget>
  <resources/>
  <connections/>
