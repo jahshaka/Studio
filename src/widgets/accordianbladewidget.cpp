@@ -32,11 +32,13 @@ void AccordianBladeWidget::on_toggle_clicked()
     {
         ui->contentpane->setVisible(false);
         this->setMinimumHeight( 30 );
+
     }
     else
     {
         ui->contentpane->setVisible(true);
         this->setMinimumHeight( this->maximumHeight() );
+
     }
 }
 
