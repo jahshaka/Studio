@@ -108,9 +108,17 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
 
         for(int i=0;i<lightCount;i++)
         {
-            auto light = renderData->scene->lights[i];
-
             QString lightPrefix = QString("u_lights[%0].").arg(i);
+
+            auto light = renderData->scene->lights[i];
+            if(!light->isVisible())
+            {
+                //quick hack for now
+                mat->setUniformValue(lightPrefix+"color", QColor(0,0,0));
+                continue;
+            }
+
+
             mat->setUniformValue(lightPrefix+"type", (int)light->lightType);
             mat->setUniformValue(lightPrefix+"position", light->globalTransform.column(3).toVector3D());
             //mat->setUniformValue(lightPrefix+"direction", light->getDirection());
