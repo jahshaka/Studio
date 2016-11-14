@@ -223,19 +223,20 @@ background-color: rgb(30, 144, 255);
 */
 
 QSpinBox {
-    padding-right: 15px; /* make room for the arrows */
-    border-width: 1;  
-	border-image: url(:/app/content/skies/default.png) 4;
-	border: 1px solid  rgb(40, 40, 40);
+   padding-right: 15px; /* make room for the arrows */
+    border-width: 0;  
+	border: none;
+	padding: none;
+	border-image: url(:/app/images/frame.png) 4;
 	color: black;
 }
 
 QSpinBox::up-button {
 	background-color: rgb(50, 50, 50);
-	border-image: url(:/app/icons/up-arrow.svg) 1;
-    border-width: 1;  
-	margin-bottom:1px;
-
+	border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
+    border-width: 0;  
+	margin-bottom: -1px;
+	margin-top: -1px;
 }
 
 QSpinBox::up-button:hover {
@@ -246,12 +247,13 @@ QSpinBox::up-button:pressed {
 	background-color: rgb(30, 144, 255);
 }
 
-
 QSpinBox::down-button {
 	background-color: rgb(50, 50, 50);
 	border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
-    border-width:.2;  
+    border-width:0;  
 	margin-top:1px;
+	margin-bottom: -2px;
+	margin-top: -1px;
 }
 
 QSpinBox::down-button:hover {
@@ -262,21 +264,22 @@ QSpinBox::down-button:pressed {
 	background-color: rgb(30, 144, 255);
 }
 
+
 QDoubleSpinBox {
-    padding-right: 15px; /* make room for the arrows */
-	border-image: url(:/app/content/skies/default.png) 4;
-    border-width: 1;  
-	border: 1px solid  rgb(80, 80, 80);
+   padding-right: 15px; /* make room for the arrows */
+    border-width: 0;  
+	border: none;
+	padding: none;
+	border-image: url(:/app/images/frame.png) 4;
 	color: black;
 }
 
 QDoubleSpinBox::up-button {
-	
 	background-color: rgb(50, 50, 50);
-	border-image: url(:/app/icons/up-arrow.svg) 1;
-    border-width:.2;  
-	margin-bottom:1px;
-
+	border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
+    border-width: 0;  
+	margin-bottom: -1px;
+	margin-top: -1px;
 }
 
 QDoubleSpinBox::up-button:hover {
@@ -287,12 +290,13 @@ QDoubleSpinBox::up-button:pressed {
 	background-color: rgb(30, 144, 255);
 }
 
-
 QDoubleSpinBox::down-button {
 	background-color: rgb(50, 50, 50);
 	border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
-    border-width:.2;  
+    border-width:0;  
 	margin-top:1px;
+	margin-bottom: -2px;
+	margin-top: -1px;
 }
 
 QDoubleSpinBox::down-button:hover {
@@ -615,41 +619,184 @@ QMenu::item:selected {
     </layout>
    </widget>
   </widget>
-  <widget class="QDockWidget" name="PresetsDock">
+  <widget class="QDockWidget" name="AnimationDock">
    <property name="minimumSize">
     <size>
-     <width>400</width>
-     <height>200</height>
-    </size>
-   </property>
-   <property name="maximumSize">
-    <size>
-     <width>524287</width>
-     <height>300</height>
+     <width>85</width>
+     <height>250</height>
     </size>
    </property>
    <property name="styleSheet">
     <string notr="true"/>
    </property>
    <property name="windowTitle">
-    <string>Presets</string>
+    <string>Animation</string>
    </property>
    <attribute name="dockWidgetArea">
-    <number>2</number>
+    <number>8</number>
    </attribute>
-   <widget class="QWidget" name="layout">
+   <widget class="QWidget" name="layout_2">
     <property name="styleSheet">
      <string notr="true">:hover{
 
     border: 1px solid rgb(30, 144, 255);
 }</string>
     </property>
-    <layout class="QGridLayout" name="gridLayout_2">
+    <layout class="QGridLayout" name="gridLayout_5">
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
+     <property name="bottomMargin">
+      <number>0</number>
+     </property>
+     <property name="spacing">
+      <number>0</number>
+     </property>
+     <item row="1" column="0">
+      <widget class="AnimationWidget" name="animationtimeline">
+       <property name="styleSheet">
+        <string notr="true">border: none;</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="0">
+      <widget class="MainTimelineWidget" name="mainTimeline" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">border: none;</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QDockWidget" name="PropertiesDock">
+   <property name="minimumSize">
+    <size>
+     <width>400</width>
+     <height>322</height>
+    </size>
+   </property>
+   <property name="windowTitle">
+    <string>Properties</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>2</number>
+   </attribute>
+   <widget class="QWidget" name="dockWidgetContents">
+    <property name="styleSheet">
+     <string notr="true">:hover{
+
+    border: 1px solid rgb(30, 144, 255);
+}</string>
+    </property>
+    <layout class="QGridLayout" name="gridLayout_3">
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
+     <property name="bottomMargin">
+      <number>0</number>
+     </property>
+     <item row="0" column="0">
+      <widget class="QScrollArea" name="Propertieswidget">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>300</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">background-color: rgb(64, 64, 64);
+</string>
+       </property>
+       <property name="sizeAdjustPolicy">
+        <enum>QAbstractScrollArea::AdjustToContents</enum>
+       </property>
+       <property name="widgetResizable">
+        <bool>true</bool>
+       </property>
+       <widget class="QWidget" name="accordian">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>0</y>
+          <width>398</width>
+          <height>652</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">border:none;</string>
+        </property>
+       </widget>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QDockWidget" name="PresetsDock_2">
+   <property name="minimumSize">
+    <size>
+     <width>400</width>
+     <height>160</height>
+    </size>
+   </property>
+   <property name="maximumSize">
+    <size>
+     <width>400</width>
+     <height>524287</height>
+    </size>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">background-color: rgb(64, 64, 64);</string>
+   </property>
+   <property name="windowTitle">
+    <string>Presets</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>8</number>
+   </attribute>
+   <widget class="QWidget" name="objectview">
+    <property name="styleSheet">
+     <string notr="true">:hover{
+
+    border: 1px solid rgb(30, 144, 255);
+}</string>
+    </property>
+    <layout class="QGridLayout" name="gridLayout_7">
      <property name="leftMargin">
       <number>1</number>
      </property>
      <property name="topMargin">
-      <number>0</number>
+      <number>1</number>
      </property>
      <property name="rightMargin">
       <number>1</number>
@@ -657,17 +804,114 @@ QMenu::item:selected {
      <property name="bottomMargin">
       <number>1</number>
      </property>
-     <property name="spacing">
-      <number>0</number>
-     </property>
      <item row="0" column="0">
       <widget class="QTabWidget" name="tabWidget">
        <property name="styleSheet">
         <string notr="true">border: none;</string>
        </property>
        <property name="currentIndex">
-        <number>1</number>
+        <number>2</number>
        </property>
+       <widget class="QWidget" name="skys">
+        <attribute name="title">
+         <string>Skys</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="verticalLayout_8">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QWidget" name="skyoptionbar" native="true">
+           <property name="minimumSize">
+            <size>
+             <width>210</width>
+             <height>25</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>25</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(85, 85, 85);</string>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout_6">
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QFrame" name="frame_3">
+              <property name="minimumSize">
+               <size>
+                <width>70</width>
+                <height>25</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>70</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">border: none;</string>
+              </property>
+              <property name="frameShape">
+               <enum>QFrame::StyledPanel</enum>
+              </property>
+              <property name="frameShadow">
+               <enum>QFrame::Raised</enum>
+              </property>
+              <layout class="QHBoxLayout" name="horizontalLayout_5">
+               <property name="spacing">
+                <number>3</number>
+               </property>
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+              </layout>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="SkyPresets" name="skypresets" native="true"/>
+         </item>
+        </layout>
+       </widget>
        <widget class="QWidget" name="tamodelsb_3">
         <attribute name="title">
          <string>Models</string>
@@ -853,178 +1097,6 @@ background-color: rgb(30, 144, 255);
          </item>
         </layout>
        </widget>
-       <widget class="QWidget" name="skys">
-        <attribute name="title">
-         <string>Skys</string>
-        </attribute>
-        <layout class="QVBoxLayout" name="verticalLayout_8">
-         <property name="spacing">
-          <number>0</number>
-         </property>
-         <property name="leftMargin">
-          <number>0</number>
-         </property>
-         <property name="topMargin">
-          <number>0</number>
-         </property>
-         <property name="rightMargin">
-          <number>0</number>
-         </property>
-         <property name="bottomMargin">
-          <number>0</number>
-         </property>
-         <item>
-          <widget class="QWidget" name="skyoptionbar" native="true">
-           <property name="minimumSize">
-            <size>
-             <width>210</width>
-             <height>25</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>16777215</width>
-             <height>25</height>
-            </size>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">background-color: rgb(85, 85, 85);</string>
-           </property>
-           <layout class="QVBoxLayout" name="verticalLayout_6">
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
-            <item>
-             <widget class="QFrame" name="frame_3">
-              <property name="minimumSize">
-               <size>
-                <width>70</width>
-                <height>25</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>70</width>
-                <height>16777215</height>
-               </size>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">border: none;</string>
-              </property>
-              <property name="frameShape">
-               <enum>QFrame::StyledPanel</enum>
-              </property>
-              <property name="frameShadow">
-               <enum>QFrame::Raised</enum>
-              </property>
-              <layout class="QHBoxLayout" name="horizontalLayout_5">
-               <property name="spacing">
-                <number>3</number>
-               </property>
-               <property name="leftMargin">
-                <number>0</number>
-               </property>
-               <property name="topMargin">
-                <number>0</number>
-               </property>
-               <property name="rightMargin">
-                <number>0</number>
-               </property>
-               <property name="bottomMargin">
-                <number>0</number>
-               </property>
-               <item>
-                <widget class="QToolButton" name="importsky">
-                 <property name="minimumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="toolTip">
-                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;import new models&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">QToolButton {
-border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QToolButton:hover {
-background-color: rgb(30, 144, 255);
-}</string>
-                 </property>
-                 <property name="text">
-                  <string/>
-                 </property>
-                 <property name="icon">
-                  <iconset resource="../icons.qrc">
-                   <normaloff>:/app/icons/import.svg</normaloff>:/app/icons/import.svg</iconset>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QPushButton" name="clearsky">
-                 <property name="minimumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="toolTip">
-                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;remove object&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">QPushButton {
-border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QPushButton:hover {
-background-color: rgb(30, 144, 255);
-}</string>
-                 </property>
-                 <property name="text">
-                  <string/>
-                 </property>
-                 <property name="icon">
-                  <iconset resource="../icons.qrc">
-                   <normaloff>:/app/icons/export.svg</normaloff>:/app/icons/export.svg</iconset>
-                 </property>
-                </widget>
-               </item>
-              </layout>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-         </item>
-         <item>
-          <widget class="SkyPresets" name="skypresets" native="true"/>
-         </item>
-        </layout>
-       </widget>
        <widget class="QWidget" name="materials">
         <attribute name="title">
          <string>Materials</string>
@@ -1206,190 +1278,6 @@ background-color: rgb(30, 144, 255);
     </layout>
    </widget>
   </widget>
-  <widget class="QDockWidget" name="AnimationDock">
-   <property name="minimumSize">
-    <size>
-     <width>85</width>
-     <height>250</height>
-    </size>
-   </property>
-   <property name="styleSheet">
-    <string notr="true"/>
-   </property>
-   <property name="windowTitle">
-    <string>Animation</string>
-   </property>
-   <attribute name="dockWidgetArea">
-    <number>8</number>
-   </attribute>
-   <widget class="QWidget" name="layout_2">
-    <property name="styleSheet">
-     <string notr="true">:hover{
-
-    border: 1px solid rgb(30, 144, 255);
-}</string>
-    </property>
-    <layout class="QGridLayout" name="gridLayout_5">
-     <property name="leftMargin">
-      <number>0</number>
-     </property>
-     <property name="topMargin">
-      <number>0</number>
-     </property>
-     <property name="rightMargin">
-      <number>0</number>
-     </property>
-     <property name="bottomMargin">
-      <number>0</number>
-     </property>
-     <property name="spacing">
-      <number>0</number>
-     </property>
-     <item row="1" column="0">
-      <widget class="AnimationWidget" name="animationtimeline">
-       <property name="styleSheet">
-        <string notr="true">border: none;</string>
-       </property>
-      </widget>
-     </item>
-     <item row="0" column="0">
-      <widget class="MainTimelineWidget" name="mainTimeline" native="true">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>0</width>
-         <height>30</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>16777215</width>
-         <height>30</height>
-        </size>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">border: none;</string>
-       </property>
-      </widget>
-     </item>
-    </layout>
-   </widget>
-  </widget>
-  <widget class="QDockWidget" name="PropertiesDock">
-   <property name="minimumSize">
-    <size>
-     <width>89</width>
-     <height>322</height>
-    </size>
-   </property>
-   <property name="windowTitle">
-    <string>Properties</string>
-   </property>
-   <attribute name="dockWidgetArea">
-    <number>2</number>
-   </attribute>
-   <widget class="QWidget" name="dockWidgetContents">
-    <property name="styleSheet">
-     <string notr="true">:hover{
-
-    border: 1px solid rgb(30, 144, 255);
-}</string>
-    </property>
-    <layout class="QGridLayout" name="gridLayout_3">
-     <property name="leftMargin">
-      <number>0</number>
-     </property>
-     <property name="topMargin">
-      <number>0</number>
-     </property>
-     <property name="rightMargin">
-      <number>0</number>
-     </property>
-     <property name="bottomMargin">
-      <number>0</number>
-     </property>
-     <item row="0" column="0">
-      <widget class="QScrollArea" name="propertiesWidget">
-       <property name="minimumSize">
-        <size>
-         <width>0</width>
-         <height>300</height>
-        </size>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">background-color: rgb(64, 64, 64);
-</string>
-       </property>
-       <property name="sizeAdjustPolicy">
-        <enum>QAbstractScrollArea::AdjustToContents</enum>
-       </property>
-       <property name="widgetResizable">
-        <bool>true</bool>
-       </property>
-       <widget class="QWidget" name="accordian">
-        <property name="geometry">
-         <rect>
-          <x>0</x>
-          <y>0</y>
-          <width>398</width>
-          <height>393</height>
-         </rect>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">border:none;</string>
-        </property>
-       </widget>
-      </widget>
-     </item>
-    </layout>
-   </widget>
-  </widget>
-  <widget class="QDockWidget" name="ObjectViewDock">
-   <property name="minimumSize">
-    <size>
-     <width>400</width>
-     <height>160</height>
-    </size>
-   </property>
-   <property name="maximumSize">
-    <size>
-     <width>400</width>
-     <height>524287</height>
-    </size>
-   </property>
-   <property name="styleSheet">
-    <string notr="true">background-color: rgb(64, 64, 64);</string>
-   </property>
-   <property name="windowTitle">
-    <string>Object View</string>
-   </property>
-   <attribute name="dockWidgetArea">
-    <number>8</number>
-   </attribute>
-   <widget class="QWidget" name="objectview">
-    <property name="styleSheet">
-     <string notr="true">:hover{
-
-    border: 1px solid rgb(30, 144, 255);
-}</string>
-    </property>
-    <widget class="TransformEditor" name="widget" native="true">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>20</y>
-       <width>381</width>
-       <height>191</height>
-      </rect>
-     </property>
-    </widget>
-   </widget>
-  </widget>
   <action name="actionSave">
    <property name="icon">
     <iconset resource="../icons.qrc">
@@ -1567,12 +1455,6 @@ background-color: rgb(30, 144, 255);
    <class>SkyPresets</class>
    <extends>QWidget</extends>
    <header>src/widgets/skypresets.h</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>TransformEditor</class>
-   <extends>QWidget</extends>
-   <header>src/widgets/transformeditor.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

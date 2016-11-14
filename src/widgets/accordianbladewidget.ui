@@ -101,8 +101,10 @@ QPushButton:hover {
          <string/>
         </property>
         <property name="icon">
-         <iconset resource="../../icons.qrc">
-          <normaloff>:/app/icons/down-arrow.svg</normaloff>:/app/icons/down-arrow.svg</iconset>
+         <iconset>
+          <normaloff>:/app/icons/chevron-arrow-down.svg</normaloff>
+          <activeoff>:/app/icons/right-chevron.svg</activeoff>
+          <selectedoff>:/app/icons/right-chevron.svg</selectedoff>:/app/icons/chevron-arrow-down.svg</iconset>
         </property>
        </widget>
       </item>
@@ -115,16 +117,25 @@ QPushButton:hover {
          </size>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
          <item>
           <widget class="QLabel" name="content_title">
            <property name="minimumSize">
             <size>
-             <width>100</width>
-             <height>0</height>
+             <width>0</width>
+             <height>30</height>
             </size>
            </property>
            <property name="text">
-            <string>TextLabel</string>
+            <string> TextLabel</string>
            </property>
           </widget>
          </item>
@@ -151,8 +162,6 @@ QPushButton:hover {
   <zorder>contentpane</zorder>
   <zorder>bg</zorder>
  </widget>
- <resources>
-  <include location="../../icons.qrc"/>
- </resources>
+ <resources/>
  <connections/>
 </ui>

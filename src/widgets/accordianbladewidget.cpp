@@ -13,10 +13,11 @@ AccordianBladeWidget::AccordianBladeWidget(QWidget *parent) :
     ui(new Ui::AccordianBladeWidget)
 {
     ui->setupUi(this);
+    this->setMinimumHeight( 30 );
     QVBoxLayout *layout = new QVBoxLayout();
     ui->contentpane->setLayout(layout);
     ui->contentpane->setVisible(false);
-    this->setMinimumHeight( 30 );
+    ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); }");
 }
 
 AccordianBladeWidget::~AccordianBladeWidget()
@@ -30,11 +31,13 @@ void AccordianBladeWidget::on_toggle_clicked()
 
     if( state == true )
     {
+        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); }");
         ui->contentpane->setVisible(false);
         this->setMinimumHeight( 30 );
     }
     else
     {
+        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/chevron-arrow-down.svg); }");
         ui->contentpane->setVisible(true);
         this->setMinimumHeight( this->maximumHeight() );
     }
