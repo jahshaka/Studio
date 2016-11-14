@@ -224,19 +224,19 @@ background-color: rgb(30, 144, 255);
 
 QSpinBox {
    padding-right: 15px; /* make room for the arrows */
-    border-width: 1;  
+    border-width: 0;  
+	border: none;
+	padding: none;
 	border-image: url(:/app/images/frame.png) 4;
-	border: 1px solid  rgb(40, 40, 40);
 	color: black;
 }
 
 QSpinBox::up-button {
 	background-color: rgb(50, 50, 50);
 	border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
-    border-width: 1;  
+    border-width: 0;  
 	margin-bottom: -1px;
 	margin-top: -1px;
-	margin-right:-1px;
 }
 
 QSpinBox::up-button:hover {
@@ -247,15 +247,13 @@ QSpinBox::up-button:pressed {
 	background-color: rgb(30, 144, 255);
 }
 
-
 QSpinBox::down-button {
 	background-color: rgb(50, 50, 50);
 	border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
-    border-width:.2;  
+    border-width:0;  
 	margin-top:1px;
 	margin-bottom: -2px;
 	margin-top: -1px;
-	margin-right:-1px;
 }
 
 QSpinBox::down-button:hover {
@@ -266,21 +264,22 @@ QSpinBox::down-button:pressed {
 	background-color: rgb(30, 144, 255);
 }
 
+
 QDoubleSpinBox {
-    padding-right: 15px; /* make room for the arrows */
+   padding-right: 15px; /* make room for the arrows */
+    border-width: 0;  
+	border: none;
+	padding: none;
 	border-image: url(:/app/images/frame.png) 4;
-    border-width: 1;  
-	border: 1px solid  rgb(80, 80, 80);
 	color: black;
 }
 
 QDoubleSpinBox::up-button {
-	
 	background-color: rgb(50, 50, 50);
 	border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
-    border-width:.2;  
-	margin-bottom:1px;
-
+    border-width: 0;  
+	margin-bottom: -1px;
+	margin-top: -1px;
 }
 
 QDoubleSpinBox::up-button:hover {
@@ -291,12 +290,13 @@ QDoubleSpinBox::up-button:pressed {
 	background-color: rgb(30, 144, 255);
 }
 
-
 QDoubleSpinBox::down-button {
 	background-color: rgb(50, 50, 50);
 	border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
-    border-width:.2;  
+    border-width:0;  
 	margin-top:1px;
+	margin-bottom: -2px;
+	margin-top: -1px;
 }
 
 QDoubleSpinBox::down-button:hover {
@@ -756,6 +756,16 @@ QMenu::item:selected {
         <property name="styleSheet">
          <string notr="true">border:none;</string>
         </property>
+        <widget class="QSpinBox" name="spinBox">
+         <property name="geometry">
+          <rect>
+           <x>110</x>
+           <y>100</y>
+           <width>151</width>
+           <height>161</height>
+          </rect>
+         </property>
+        </widget>
        </widget>
       </widget>
      </item>
