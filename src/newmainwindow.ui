@@ -223,7 +223,7 @@ background-color: rgb(30, 144, 255);
 */
 
 QSpinBox {
-    padding-right: 15px; /* make room for the arrows */
+   padding-right: 15px; /* make room for the arrows */
     border-width: 1;  
 	border-image: url(:/app/images/frame.png) 4;
 	border: 1px solid  rgb(40, 40, 40);
@@ -234,8 +234,9 @@ QSpinBox::up-button {
 	background-color: rgb(50, 50, 50);
 	border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
     border-width: 1;  
-	margin-bottom:1px;
-
+	margin-bottom: -1px;
+	margin-top: -1px;
+	margin-right:-1px;
 }
 
 QSpinBox::up-button:hover {
@@ -252,6 +253,9 @@ QSpinBox::down-button {
 	border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
     border-width:.2;  
 	margin-top:1px;
+	margin-bottom: -2px;
+	margin-top: -1px;
+	margin-right:-1px;
 }
 
 QSpinBox::down-button:hover {
@@ -806,7 +810,7 @@ QMenu::item:selected {
         <string notr="true">border: none;</string>
        </property>
        <property name="currentIndex">
-        <number>0</number>
+        <number>2</number>
        </property>
        <widget class="QWidget" name="skys">
         <attribute name="title">
