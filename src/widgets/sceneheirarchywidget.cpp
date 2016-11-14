@@ -168,7 +168,8 @@ void SceneHeirarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 
 void SceneHeirarchyWidget::renameNode()
 {
-    mainWindow->deleteNode();
+    //mainWindow->deleteNode();
+    mainWindow->renameNode();
 }
 
 void SceneHeirarchyWidget::deleteNode()
@@ -189,7 +190,7 @@ void SceneHeirarchyWidget::repopulateTree()
 
     root->setText(0,rootNode->getName());
     //root->setIcon(0,this->getIconFromSceneNodeType(SceneNodeType::World));
-    //root->setData(1,Qt::UserRole,QVariant::fromValue((void*)sceneRoot));
+    root->setData(1,Qt::UserRole,QVariant::fromValue(rootNode->getNodeId()));
 
     //populate tree
     nodeList.clear();

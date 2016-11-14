@@ -9,6 +9,7 @@ namespace jah3d
 Scene::Scene()
 {
     rootNode = SceneNode::create();
+    rootNode->setName("Scene");
     //rootNode->setScene(this->sharedFromThis());
 }
 

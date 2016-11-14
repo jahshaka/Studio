@@ -390,21 +390,16 @@ void MainWindow::sceneTreeCustomContextMenu(const QPoint& pos)
 
 void MainWindow::renameNode()
 {
-    /*
-    auto items = ui->sceneTree->selectedItems();
-    if(items.size()==0)
-        return;
-    auto item = items[0];
-
-    auto node = (SceneNode*)item->data(1,Qt::UserRole).value<void*>();
-
     RenameLayerDialog dialog(this);
-    dialog.setName(node->getName());
+    dialog.setName(activeSceneNode->getName());
     dialog.exec();
 
-    node->setName(dialog.getName());
-    item->setText(0,node->getName());
-    */
+    activeSceneNode->setName(dialog.getName());
+    //item->setText(0,node->getName());
+
+    //for now
+    this->ui->sceneHierarchy->repopulateTree();
+
 }
 
 void MainWindow::updateGizmoTransform()
