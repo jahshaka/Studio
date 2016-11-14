@@ -62,5 +62,7 @@
         <file>app/icons/up-arrow-.svg</file>
         <file>app/icons/down-arrow-.svg</file>
         <file>app/icons/chevron-arrow-down.svg</file>
+        <file>app/icons/chevron-arrow-up.svg</file>
+        <file>app/icons/right-chevron.svg</file>
     </qresource>
 </RCC>
