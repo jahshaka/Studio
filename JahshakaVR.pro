@@ -64,8 +64,7 @@ SOURCES += src/main.cpp\
     src/widgets/transformeditor.cpp \
     src/widgets/sceneheirarchywidget.cpp \
     src/editor/cameracontrollerbase.cpp \
-    src/widgets/skypresets.cpp
-    src/editor/cameracontrollerbase.cpp \
+    src/widgets/skypresets.cpp \
     src/editor/orbitalcameracontroller.cpp
 
 HEADERS  += src/mainwindow.h \

@@ -26,6 +26,10 @@ public:
     void setMesh(QString source);
     void setMesh(Mesh* mesh);
     void setMaterial(QSharedPointer<jah3d::Material> material);
+    QSharedPointer<jah3d::Material> getMaterial()
+    {
+        return material;
+    }
 
 private:
     MeshNode()

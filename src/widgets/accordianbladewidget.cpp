@@ -87,3 +87,8 @@ void AccordianBladeWidget::addFloatValueSlider( QString name, float range_1 , fl
 
 }
 
+void AccordianBladeWidget::expand()
+{
+    ui->contentpane->setVisible(true);
+    this->setMinimumHeight( this->maximumHeight() );
+}

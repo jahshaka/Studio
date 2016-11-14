@@ -610,10 +610,14 @@ void MainWindow::sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode)
 
     //ui->accordian->add
     auto transBlade = new AccordianBladeWidget();
+    transBlade->setContentTitle("Transformation");
     transBlade->addTransform();
+    transBlade->expand();
 
     auto layout = new QVBoxLayout();
     layout->addWidget(transBlade);
+    layout->addStretch();
+    layout->setMargin(0);
 
     ui->accordian->setLayout(layout);
 }
@@ -653,24 +657,52 @@ void MainWindow::setSceneAnimTime(float time)
     //scene->getRootNode()->applyAnimationAtTime(time);
 }
 
+/**
+ * Adds a cube to the current scene
+ */
 void MainWindow::addCube()
 {
-    //addSceneNodeToSelectedTreeItem(ui->sceneTree,SceneNode::createCube("Cube"),false,QIcon(":app/icons/sceneobject.svg"));
+    auto node = jah3d::MeshNode::create();
+    node->setMesh("app/content/primitives/cube.obj");
+    node->setName("Cube");
+
+    addNodeToActiveNode(node);
 }
 
+/**
+ * Adds a torus to the current scene
+ */
 void MainWindow::addTorus()
 {
-    //addSceneNodeToSelectedTreeItem(ui->sceneTree,TorusNode::createTorus("Torus"),false,QIcon(":app/icons/sceneobject.svg"));
+    auto node = jah3d::MeshNode::create();
+    node->setMesh("app/content/primitives/torus.obj");
+    node->setName("Torus");
+
+    addNodeToActiveNode(node);
 }
 
+/**
+ * Adds a sphere to the current scene
+ */
 void MainWindow::addSphere()
 {
-    //addSceneNodeToSelectedTreeItem(ui->sceneTree,SphereNode::createSphere("Sphere"),false,QIcon(":app/icons/sceneobject.svg"));
+    auto node = jah3d::MeshNode::create();
+    node->setMesh("app/content/primitives/sphere.obj");
+    node->setName("Sphere");
+
+    addNodeToActiveNode(node);
 }
 
+/**
+ * Adds a cylinder to the current scene
+ */
 void MainWindow::addCylinder()
 {
-    //addSceneNodeToSelectedTreeItem(ui->sceneTree,CylinderNode::createCylinder("Cylinder"),false,QIcon(":app/icons/sceneobject.svg"));
+    auto node = jah3d::MeshNode::create();
+    node->setMesh("app/content/primitives/cylinder.obj");
+    node->setName("Cylinder");
+
+    addNodeToActiveNode(node);
 }
 
 void MainWindow::addPointLight()
@@ -719,6 +751,43 @@ void MainWindow::addTexturedPlane()
     //node->setTexture(path);
     addSceneNodeToSelectedTreeItem(ui->sceneTree,node,false,QIcon(":app/icons/square.svg"));
     */
+}
+
+/**
+ * Adds sceneNode to selected scene node. If there is no selected scene node,
+ * sceneNode is added to the root node
+ * @param sceneNode
+ */
+void MainWindow::addNodeToActiveNode(QSharedPointer<jah3d::SceneNode> sceneNode)
+{
+    if(!scene)
+    {
+        //todo: set alert that a scene needs to be set before this can be done
+    }
+
+    //apply default material
+    if(sceneNode->sceneNodeType == jah3d::SceneNodeType::Mesh)
+    {
+        auto meshNode = sceneNode.staticCast<jah3d::MeshNode>();
+
+        if(!meshNode->getMaterial())
+        {
+            auto mat = jah3d::DefaultMaterial::create();
+            meshNode->setMaterial(mat);
+        }
+
+    }
+
+    if(!!activeSceneNode)
+    {
+        activeSceneNode->addChild(sceneNode);
+    }
+    else
+    {
+        scene->getRootNode()->addChild(sceneNode);
+    }
+
+    ui->sceneHierarchy->repopulateTree();
 }
 
 void MainWindow::duplicateNode()
