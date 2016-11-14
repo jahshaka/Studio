@@ -46,6 +46,7 @@ For more information see the LICENSE file
 #include "dialogs/renamelayerdialog.h"
 #include "widgets/layertreewidget.h"
 #include "core/project.h"
+#include "widgets/accordianbladewidget.h"
 
 #include "editor/editorcameracontroller.h"
 #include "core/settingsmanager.h"
@@ -604,10 +605,17 @@ void MainWindow::sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode)
     //todo: ensure this node is a part of the scene
     //scene->setHighlightedNode(sceneNode);
 
-    //show properties for sceneenode
-
+    //show properties for scenenode
     activeSceneNode = sceneNode;
 
+    //ui->accordian->add
+    auto transBlade = new AccordianBladeWidget();
+    transBlade->addTransform();
+
+    auto layout = new QVBoxLayout();
+    layout->addWidget(transBlade);
+
+    ui->accordian->setLayout(layout);
 }
 
 

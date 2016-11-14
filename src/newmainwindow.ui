@@ -313,8 +313,8 @@ QMenu::item:selected {
    </property>
    <property name="maximumSize">
     <size>
-     <width>16777215</width>
-     <height>16777215</height>
+     <width>524287</width>
+     <height>524287</height>
     </size>
    </property>
    <property name="styleSheet">
@@ -1019,7 +1019,7 @@ background-color: rgb(30, 144, 255);
       <number>0</number>
      </property>
      <item row="0" column="0">
-      <widget class="QScrollArea" name="Propertieswidget">
+      <widget class="QScrollArea" name="propertiesWidget">
        <property name="minimumSize">
         <size>
          <width>0</width>
@@ -1041,7 +1041,7 @@ background-color: rgb(30, 144, 255);
           <x>0</x>
           <y>0</y>
           <width>398</width>
-          <height>388</height>
+          <height>390</height>
          </rect>
         </property>
        </widget>
