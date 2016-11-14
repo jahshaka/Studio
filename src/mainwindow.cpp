@@ -666,7 +666,7 @@ void MainWindow::addCube()
     node->setMesh("app/content/primitives/cube.obj");
     node->setName("Cube");
 
-    addNodeToActiveNode(node);
+    addNodeToScene(node);
 }
 
 /**
@@ -678,7 +678,7 @@ void MainWindow::addTorus()
     node->setMesh("app/content/primitives/torus.obj");
     node->setName("Torus");
 
-    addNodeToActiveNode(node);
+    addNodeToScene(node);
 }
 
 /**
@@ -690,7 +690,7 @@ void MainWindow::addSphere()
     node->setMesh("app/content/primitives/sphere.obj");
     node->setName("Sphere");
 
-    addNodeToActiveNode(node);
+    addNodeToScene(node);
 }
 
 /**
@@ -702,22 +702,31 @@ void MainWindow::addCylinder()
     node->setMesh("app/content/primitives/cylinder.obj");
     node->setName("Cylinder");
 
-    addNodeToActiveNode(node);
+    addNodeToScene(node);
 }
 
 void MainWindow::addPointLight()
 {
-    //addSceneNodeToSelectedTreeItem(ui->sceneTree,LightNode::createLight("PointLight",LightType::Point),true,QIcon(":app/icons/light.svg"));
+    auto node = jah3d::LightNode::create();
+    node->setLightType(jah3d::LightType::Point);
+
+    addNodeToScene(node);
 }
 
 void MainWindow::addSpotLight()
 {
-    //addSceneNodeToSelectedTreeItem(ui->sceneTree,LightNode::createLight("SpotLight",LightType::SpotLight),true,QIcon(":app/icons/light.svg"));
+    auto node = jah3d::LightNode::create();
+    node->setLightType(jah3d::LightType::Spot);
+
+    addNodeToScene(node);
 }
 
 void MainWindow::addDirectionalLight()
 {
-    //addSceneNodeToSelectedTreeItem(ui->sceneTree,LightNode::createLight("DirectionalLight",LightType::Directional),true,QIcon(":app/icons/light.svg"));
+    auto node = jah3d::LightNode::create();
+    node->setLightType(jah3d::LightType::Directional);
+
+    addNodeToScene(node);
 }
 
 void MainWindow::addMesh()
@@ -729,14 +738,13 @@ void MainWindow::addMesh()
     if(filename.isEmpty())
         return;
 
-    /*
-    auto node = MeshNode::loadMesh(nodeName,filename);
 
-    auto mat = new AdvanceMaterial();
-    node->setMaterial(mat);
+    auto node = jah3d::MeshNode::create();
+    node->setMesh(filename);
+    node->setName(nodeName);
 
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,node,false,getIconFromSceneNodeType(node->sceneNodeType));
-    */
+    //todo: load material data
+    addNodeToScene(node);
 }
 
 void MainWindow::addViewPoint()
@@ -786,6 +794,36 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<jah3d::SceneNode> sceneNode)
     {
         scene->getRootNode()->addChild(sceneNode);
     }
+
+    ui->sceneHierarchy->repopulateTree();
+}
+
+/**
+ * adds sceneNode directly to the scene's rootNode
+ * applied default material to mesh if one isnt present
+ */
+void MainWindow::addNodeToScene(QSharedPointer<jah3d::SceneNode> sceneNode)
+{
+    if(!scene)
+    {
+        //todo: set alert that a scene needs to be set before this can be done
+        return;
+    }
+
+    //apply default material
+    if(sceneNode->sceneNodeType == jah3d::SceneNodeType::Mesh)
+    {
+        auto meshNode = sceneNode.staticCast<jah3d::MeshNode>();
+
+        if(!meshNode->getMaterial())
+        {
+            auto mat = jah3d::DefaultMaterial::create();
+            meshNode->setMaterial(mat);
+        }
+
+    }
+
+    scene->getRootNode()->addChild(sceneNode);
 
     ui->sceneHierarchy->repopulateTree();
 }

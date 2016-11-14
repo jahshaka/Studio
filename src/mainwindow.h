@@ -125,6 +125,7 @@ private:
 
     //void addSceneNodeToSelectedTreeItem(QTreeWidget* sceneTree,SceneNode* newNode,bool addToSelected,QIcon icon);
     void addNodeToActiveNode(QSharedPointer<jah3d::SceneNode> sceneNode);
+    void addNodeToScene(QSharedPointer<jah3d::SceneNode> sceneNode);
 
     void setupDefaultScene();
 
