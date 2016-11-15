@@ -17,7 +17,7 @@ AccordianBladeWidget::AccordianBladeWidget(QWidget *parent) :
     QVBoxLayout *layout = new QVBoxLayout();
     ui->contentpane->setLayout(layout);
     ui->contentpane->setVisible(false);
-    ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); }");
+    ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); } QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
 }
 
 AccordianBladeWidget::~AccordianBladeWidget()
@@ -31,13 +31,13 @@ void AccordianBladeWidget::on_toggle_clicked()
 
     if( state == true )
     {
-        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); }");
+        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); } QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
         ui->contentpane->setVisible(false);
         this->setMinimumHeight( 30 );
     }
     else
     {
-        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/chevron-arrow-down.svg); }");
+        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/chevron-arrow-down.svg); } QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
         ui->contentpane->setVisible(true);
         this->setMinimumHeight( this->maximumHeight() );
     }

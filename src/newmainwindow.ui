@@ -31,6 +31,155 @@
 */
 
 /*
+*Spinbox settings ============================================================================
+*/
+
+QSpinBox {
+   padding-right: 15px; /* make room for the arrows */
+    border-width: 0;  
+	border-image: url(:/app/images/frame.png) 4;
+	color: black;
+}
+
+QSpinBox::up-button {
+	background-color: rgb(50, 50, 50);
+	border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
+    border-width: 0;  
+	margin-bottom: -1px;
+	margin-top: -1px;
+}
+
+QSpinBox::up-button:hover {
+	background-color: rgb(30, 144, 255);
+}
+
+QSpinBox::up-button:pressed {	
+	background-color: rgb(30, 144, 255);
+}
+
+QSpinBox::down-button {
+	background-color: rgb(50, 50, 50);
+	border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
+    border-width:0;  
+	margin-top:1px;
+	margin-bottom: -2px;
+	margin-top: -1px;
+}
+
+QSpinBox::down-button:hover {
+	background-color: rgb(30, 144, 255);
+}
+
+QSpinBox::down-button:pressed {
+	background-color: rgb(30, 144, 255);
+}
+
+/* Double Spin Box */
+
+QDoubleSpinBox {
+    padding-right: 15px; /* make room for the arrows */
+    border-width: 0;  
+	padding: 1px;
+	border-image: url(:/app/images/frame.png) 4;
+	color: black;
+}
+QDoubleSpinBox:hover {
+	border:1px solid rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::up-button {
+	background-color: rgb(50, 50, 50);
+	border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
+    border-width: 0;  
+	margin-top: -1px;
+}
+
+QDoubleSpinBox::up-button:hover {
+	background-color: rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::up-button:pressed {	
+	background-color: rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::down-button {
+	background-color: rgb(50, 50, 50);
+	border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
+    border-width:0;  
+	margin-bottom: -1px;
+}
+
+QDoubleSpinBox::down-button:hover {
+	background-color: rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::down-button:pressed {
+	background-color: rgb(30, 144, 255);
+}
+
+
+/*
+*=== DropDown Style Settings ==================================================
+*/
+
+QComboBox {
+    border: 1px solid gray;
+    border-radius: 3px;
+    padding: 1px 18px 1px 3px;
+    min-width: 6em;
+}
+
+QComboBox:hover {
+    border: 1px solid rgb(30, 144, 255);
+}
+
+QComboBox:editable {
+    background: white;
+}
+
+QComboBox:!editable, QComboBox::drop-down:editable {
+background-color: rgb(74, 74, 74);
+}
+
+/* QComboBox gets the &quot;on&quot; state when the popup is open */
+QComboBox:!editable:on, QComboBox::drop-down:editable:on {
+background-color: rgb(84, 84, 84);
+}
+
+QComboBox:on { /* shift the text when the popup opens */
+    padding-top: 3px;
+    padding-left: 4px;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 15px;
+
+    border-left-width: 1px;
+    border-left-color: darkgray;
+    border-left-style: solid; /* just a single line */
+    border-top-right-radius: 3px; /* same radius as the QComboBox */
+    border-bottom-right-radius: 3px;
+}
+QComboBox::drop-down:hover {
+	background:rgb(30, 144, 255);
+}
+QComboBox::down-arrow {
+	image: url(:/app/icons/down-arrow.svg);
+}
+
+QComboBox::down-arrow:on { /* shift the arrow when popup is open */
+    top: 1px;
+    left: 1px;
+}
+
+QComboBox QAbstractItemView {
+    border: 1px solid gray;
+    selection-background-color: rgb(30, 144, 255);
+}
+
+/*
 *
 * Tree View Widget ============================================================================
 *
@@ -217,95 +366,6 @@ QSlider::handle:horizontal:hover {
 background-color: rgb(30, 144, 255);
 }
 
-
-/*
-*Spinbox settings ============================================================================
-*/
-
-QSpinBox {
-   padding-right: 15px; /* make room for the arrows */
-    border-width: 0;  
-	border-image: url(:/app/images/frame.png) 4;
-	color: black;
-}
-
-QSpinBox::up-button {
-	background-color: rgb(50, 50, 50);
-	border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
-    border-width: 0;  
-	margin-bottom: -1px;
-	margin-top: -1px;
-}
-
-QSpinBox::up-button:hover {
-	background-color: rgb(30, 144, 255);
-}
-
-QSpinBox::up-button:pressed {	
-	background-color: rgb(30, 144, 255);
-}
-
-QSpinBox::down-button {
-	background-color: rgb(50, 50, 50);
-	border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
-    border-width:0;  
-	margin-top:1px;
-	margin-bottom: -2px;
-	margin-top: -1px;
-}
-
-QSpinBox::down-button:hover {
-	background-color: rgb(30, 144, 255);
-}
-
-QSpinBox::down-button:pressed {
-	background-color: rgb(30, 144, 255);
-}
-
-
-QDoubleSpinBox {
-   padding-right: 15px; /* make room for the arrows */
-    border-width: 0;  
-	padding: 1px;
-	border-image: url(:/app/images/frame.png) 4;
-	color: black;
-}
-
-QDoubleSpinBox::up-button {
-	background-color: rgb(50, 50, 50);
-	border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
-    border-width: 0;  
-	margin-bottom: -1px;
-	margin-top: -1px;
-}
-
-QDoubleSpinBox::up-button:hover {
-	background-color: rgb(30, 144, 255);
-}
-
-QDoubleSpinBox::up-button:pressed {	
-	background-color: rgb(30, 144, 255);
-}
-
-QDoubleSpinBox::down-button {
-	background-color: rgb(50, 50, 50);
-	border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
-    border-width:0;  
-	margin-top:1px;
-	margin-bottom: -2px;
-	margin-top: -1px;
-}
-
-QDoubleSpinBox::down-button:hover {
-	background-color: rgb(30, 144, 255);
-}
-
-QDoubleSpinBox::down-button:pressed {
-	background-color: rgb(30, 144, 255);
-}
-
-
-
 /*
 *-========  list view scrollbar style  =============================================================
 *
@@ -396,6 +456,9 @@ QScrollBar::down-arrow:vertical:hover
     <property name="bottomMargin">
      <number>0</number>
     </property>
+    <property name="verticalSpacing">
+     <number>0</number>
+    </property>
     <item row="0" column="0">
      <widget class="QWidget" name="backgroundscene" native="true">
       <property name="styleSheet">
@@ -415,7 +478,10 @@ QWidget#backgroundscene:selected:!active {
 background-color: rgb(52, 52, 52);
 }</string>
       </property>
-      <layout class="QGridLayout" name="gridLayout_6">
+      <layout class="QVBoxLayout" name="verticalLayout_2">
+       <property name="spacing">
+        <number>0</number>
+       </property>
        <property name="leftMargin">
         <number>1</number>
        </property>
@@ -428,7 +494,286 @@ background-color: rgb(52, 52, 52);
        <property name="bottomMargin">
         <number>1</number>
        </property>
-       <item row="0" column="0">
+       <item>
+        <widget class="QWidget" name="widget" native="true">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>30</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>16777215</width>
+           <height>31</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(83, 83, 83);</string>
+         </property>
+         <layout class="QHBoxLayout" name="horizontalLayout">
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QToolButton" name="importmod_3">
+            <property name="minimumSize">
+             <size>
+              <width>30</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>30</width>
+              <height>11111</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QToolButton {
+border: none;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QToolButton:hover {
+background-color: rgb(30, 144, 255);
+}</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset resource="../icons.qrc">
+              <normaloff>:/app/icons/rotate-to-right.svg</normaloff>:/app/icons/rotate-to-right.svg</iconset>
+            </property>
+            <property name="iconSize">
+             <size>
+              <width>12</width>
+              <height>12</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QToolButton" name="importmod_2">
+            <property name="minimumSize">
+             <size>
+              <width>30</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>30</width>
+              <height>11111</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QToolButton {
+border: none;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QToolButton:hover {
+background-color: rgb(30, 144, 255);
+}</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset resource="../icons.qrc">
+              <normaloff>:/app/icons/tranlate arrow.svg</normaloff>:/app/icons/tranlate arrow.svg</iconset>
+            </property>
+            <property name="iconSize">
+             <size>
+              <width>12</width>
+              <height>12</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QToolButton" name="importmod_4">
+            <property name="minimumSize">
+             <size>
+              <width>30</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>30</width>
+              <height>11111</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QToolButton {
+border: none;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QToolButton:hover {
+background-color: rgb(30, 144, 255);
+}</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset resource="../icons.qrc">
+              <normaloff>:/app/icons/expand-arrows.svg</normaloff>:/app/icons/expand-arrows.svg</iconset>
+            </property>
+            <property name="iconSize">
+             <size>
+              <width>12</width>
+              <height>12</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="comboBox_2">
+            <property name="minimumSize">
+             <size>
+              <width>101</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>100</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: rgb(71, 71, 71);</string>
+            </property>
+            <item>
+             <property name="text">
+              <string>Global</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Local</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label">
+            <property name="minimumSize">
+             <size>
+              <width>50</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>50</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Camera</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="comboBox">
+            <property name="minimumSize">
+             <size>
+              <width>101</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>100</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: rgb(71, 71, 71);</string>
+            </property>
+            <item>
+             <property name="text">
+              <string>Arc Ball</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Orbital</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QToolButton" name="importmod_6">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>40</width>
+              <height>11111</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QToolButton {
+border: none;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QToolButton:hover {
+background-color: rgb(30, 144, 255);
+}</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset resource="../icons.qrc">
+              <normaloff>:/app/icons/virtual-reality.svg</normaloff>:/app/icons/virtual-reality.svg</iconset>
+            </property>
+            <property name="iconSize">
+             <size>
+              <width>25</width>
+              <height>25</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <widget class="QWidget" name="sceneContainer" native="true">
          <property name="styleSheet">
           <string notr="true"/>
@@ -556,7 +901,7 @@ QMenu::item:selected {
    </widget>
    <widget class="QMenu" name="menuVR_Mode">
     <property name="title">
-     <string>VR Mode</string>
+     <string>VR</string>
     </property>
     <property name="separatorsCollapsible">
      <bool>false</bool>
@@ -673,13 +1018,13 @@ QMenu::item:selected {
        <property name="minimumSize">
         <size>
          <width>0</width>
-         <height>30</height>
+         <height>40</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
          <width>16777215</width>
-         <height>30</height>
+         <height>40</height>
         </size>
        </property>
        <property name="styleSheet">
@@ -807,7 +1152,7 @@ QMenu::item:selected {
         <string notr="true">border: none;</string>
        </property>
        <property name="currentIndex">
-        <number>2</number>
+        <number>1</number>
        </property>
        <widget class="QWidget" name="skys">
         <attribute name="title">
@@ -998,78 +1343,6 @@ QMenu::item:selected {
                <property name="bottomMargin">
                 <number>0</number>
                </property>
-               <item>
-                <widget class="QToolButton" name="importmod">
-                 <property name="minimumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="toolTip">
-                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;import new models&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">QToolButton {
-border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QToolButton:hover {
-background-color: rgb(30, 144, 255);
-}</string>
-                 </property>
-                 <property name="text">
-                  <string/>
-                 </property>
-                 <property name="icon">
-                  <iconset resource="../icons.qrc">
-                   <normaloff>:/app/icons/import.svg</normaloff>:/app/icons/import.svg</iconset>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QPushButton" name="removemod">
-                 <property name="minimumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="toolTip">
-                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;remove object&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">QPushButton {
-border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QPushButton:hover {
-background-color: rgb(30, 144, 255);
-}</string>
-                 </property>
-                 <property name="text">
-                  <string/>
-                 </property>
-                 <property name="icon">
-                  <iconset resource="../icons.qrc">
-                   <normaloff>:/app/icons/export.svg</normaloff>:/app/icons/export.svg</iconset>
-                 </property>
-                </widget>
-               </item>
               </layout>
              </widget>
             </item>
@@ -1187,78 +1460,6 @@ border: none;</string>
                <property name="bottomMargin">
                 <number>0</number>
                </property>
-               <item>
-                <widget class="QToolButton" name="importmat">
-                 <property name="minimumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="toolTip">
-                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;import new models&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">QToolButton {
-border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QToolButton:hover {
-background-color: rgb(30, 144, 255);
-}</string>
-                 </property>
-                 <property name="text">
-                  <string/>
-                 </property>
-                 <property name="icon">
-                  <iconset resource="../icons.qrc">
-                   <normaloff>:/app/icons/import.svg</normaloff>:/app/icons/import.svg</iconset>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QPushButton" name="remove">
-                 <property name="minimumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="toolTip">
-                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;remove object&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">QPushButton {
-border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QPushButton:hover {
-background-color: rgb(30, 144, 255);
-}</string>
-                 </property>
-                 <property name="text">
-                  <string/>
-                 </property>
-                 <property name="icon">
-                  <iconset resource="../icons.qrc">
-                   <normaloff>:/app/icons/export.svg</normaloff>:/app/icons/export.svg</iconset>
-                 </property>
-                </widget>
-               </item>
               </layout>
              </widget>
             </item>
