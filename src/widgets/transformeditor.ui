@@ -61,6 +61,9 @@
           <height>20</height>
          </size>
         </property>
+        <property name="styleSheet">
+         <string notr="true">background-color: rgb(140, 140, 140);</string>
+        </property>
        </widget>
       </item>
       <item>
@@ -158,6 +161,9 @@
           <width>64</width>
           <height>25</height>
          </size>
+        </property>
+        <property name="styleSheet">
+         <string notr="true"/>
         </property>
        </widget>
       </item>
