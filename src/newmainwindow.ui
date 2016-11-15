@@ -660,34 +660,12 @@ background-color: rgb(30, 144, 255);
             </property>
             <item>
              <property name="text">
-              <string>Gizmo</string>
+              <string>Global</string>
              </property>
             </item>
             <item>
              <property name="text">
-              <string>Translate</string>
-             </property>
-             <property name="icon">
-              <iconset resource="../icons.qrc">
-               <normaloff>:/app/icons/tranlate arrow.svg</normaloff>:/app/icons/tranlate arrow.svg</iconset>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Rotate</string>
-             </property>
-             <property name="icon">
-              <iconset resource="../icons.qrc">
-               <normaloff>:/app/icons/rotate-to-right.svg</normaloff>:/app/icons/rotate-to-right.svg</iconset>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Scale</string>
-             </property>
-             <property name="icon">
-              <iconset resource="../icons.qrc">
-               <normaloff>:/app/icons/expand-arrows.svg</normaloff>:/app/icons/expand-arrows.svg</iconset>
+              <string>Local</string>
              </property>
             </item>
            </widget>
@@ -1365,78 +1343,6 @@ QMenu::item:selected {
                <property name="bottomMargin">
                 <number>0</number>
                </property>
-               <item>
-                <widget class="QToolButton" name="importmod">
-                 <property name="minimumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="toolTip">
-                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;import new models&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">QToolButton {
-border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QToolButton:hover {
-background-color: rgb(30, 144, 255);
-}</string>
-                 </property>
-                 <property name="text">
-                  <string/>
-                 </property>
-                 <property name="icon">
-                  <iconset resource="../icons.qrc">
-                   <normaloff>:/app/icons/import.svg</normaloff>:/app/icons/import.svg</iconset>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QPushButton" name="removemod">
-                 <property name="minimumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="toolTip">
-                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;remove object&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">QPushButton {
-border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QPushButton:hover {
-background-color: rgb(30, 144, 255);
-}</string>
-                 </property>
-                 <property name="text">
-                  <string/>
-                 </property>
-                 <property name="icon">
-                  <iconset resource="../icons.qrc">
-                   <normaloff>:/app/icons/export.svg</normaloff>:/app/icons/export.svg</iconset>
-                 </property>
-                </widget>
-               </item>
               </layout>
              </widget>
             </item>
@@ -1554,78 +1460,6 @@ border: none;</string>
                <property name="bottomMargin">
                 <number>0</number>
                </property>
-               <item>
-                <widget class="QToolButton" name="importmat">
-                 <property name="minimumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="toolTip">
-                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;import new models&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">QToolButton {
-border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QToolButton:hover {
-background-color: rgb(30, 144, 255);
-}</string>
-                 </property>
-                 <property name="text">
-                  <string/>
-                 </property>
-                 <property name="icon">
-                  <iconset resource="../icons.qrc">
-                   <normaloff>:/app/icons/import.svg</normaloff>:/app/icons/import.svg</iconset>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QPushButton" name="remove">
-                 <property name="minimumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>25</width>
-                   <height>25</height>
-                  </size>
-                 </property>
-                 <property name="toolTip">
-                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;remove object&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">QPushButton {
-border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QPushButton:hover {
-background-color: rgb(30, 144, 255);
-}</string>
-                 </property>
-                 <property name="text">
-                  <string/>
-                 </property>
-                 <property name="icon">
-                  <iconset resource="../icons.qrc">
-                   <normaloff>:/app/icons/export.svg</normaloff>:/app/icons/export.svg</iconset>
-                 </property>
-                </widget>
-               </item>
               </layout>
              </widget>
             </item>
