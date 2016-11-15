@@ -645,7 +645,7 @@ background-color: rgb(30, 144, 255);
            <widget class="QComboBox" name="comboBox_2">
             <property name="minimumSize">
              <size>
-              <width>101</width>
+              <width>119</width>
               <height>0</height>
              </size>
             </property>
@@ -693,7 +693,7 @@ background-color: rgb(30, 144, 255);
            <widget class="QComboBox" name="comboBox">
             <property name="minimumSize">
              <size>
-              <width>101</width>
+              <width>119</width>
               <height>0</height>
              </size>
             </property>
@@ -1086,7 +1086,7 @@ QMenu::item:selected {
        <property name="widgetResizable">
         <bool>true</bool>
        </property>
-       <widget class="QWidget" name="accordian">
+       <widget class="SceneNodePropertiesWidget" name="sceneNodeProperties">
         <property name="geometry">
          <rect>
           <x>0</x>
@@ -1653,6 +1653,12 @@ border: none;</string>
    <class>SkyPresets</class>
    <extends>QWidget</extends>
    <header>src/widgets/skypresets.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>SceneNodePropertiesWidget</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/scenenodepropertieswidget.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

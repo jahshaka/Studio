@@ -15,7 +15,7 @@ class MaterialPropertyWidget:public AccordianBladeWidget
     Q_OBJECT
 
 public:
-    MaterialPropertyWidget(QWidget* parent);
+    MaterialPropertyWidget(QWidget* parent=nullptr);
 
     void setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode);
     QSharedPointer<jah3d::SceneNode> sceneNode;

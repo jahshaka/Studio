@@ -20,7 +20,7 @@ class LightPropertyWidget:public AccordianBladeWidget
     Q_OBJECT
 
 public:
-    LightPropertyWidget(QWidget* parent);
+    LightPropertyWidget(QWidget* parent=nullptr);
 
     ColorValueWidget* lightColor;
     HFloatSlider* radius;

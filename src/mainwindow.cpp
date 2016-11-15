@@ -609,6 +609,7 @@ void MainWindow::sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode)
     //show properties for scenenode
     activeSceneNode = sceneNode;
 
+    /*
     //ui->accordian->add
     auto transBlade = new AccordianBladeWidget();
     transBlade->setContentTitle("Transformation");
@@ -620,7 +621,9 @@ void MainWindow::sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode)
     layout->addStretch();
     layout->setMargin(0);
 
-    ui->accordian->setLayout(layout);
+    ui->sceneNodeProperties->setLayout(layout);
+    */
+    ui->sceneNodeProperties->setSceneNode(sceneNode);
 }
 
 

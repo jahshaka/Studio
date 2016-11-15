@@ -19,6 +19,8 @@ MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
     this->addTexturePicker("Reflection Texture");
     this->addColorPicker("Reflection Influence");
     //this->addTexturePicker("Diffuse Texture");
+
+    //this->setMaximumHeight(this->minimum_height);
 }
 
 

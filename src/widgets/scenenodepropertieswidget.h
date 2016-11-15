@@ -18,11 +18,11 @@ class LightPropertyWidget;
 /**
  * This class shows the properties of selected nodes in the scene
  */
-class SceneNodePropertiesWidget:QWidget
+class SceneNodePropertiesWidget:public QWidget
 {
     Q_OBJECT
 public:
-    SceneNodePropertiesWidget(QWidget* parent);
+    SceneNodePropertiesWidget(QWidget* parent=nullptr);
 
     /**
      *  sets active scene node to show properties for
