@@ -613,9 +613,14 @@ void MainWindow::sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode)
     transBlade->setContentTitle("Transformation");
     transBlade->addTransform();
     transBlade->expand();
+    auto etc = new AccordianBladeWidget();
+    etc->setContentTitle("title");
+    etc->addFilePicker("Mesh:");
+    etc->expand();
 
     auto layout = new QVBoxLayout();
     layout->addWidget(transBlade);
+    layout->addWidget(etc);
     layout->addStretch();
     layout->setMargin(0);
 

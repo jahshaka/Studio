@@ -23,6 +23,7 @@ public:
     void setMaxHeight( int height );
     void addColorPicker( QString name );
     void addTexturePicker( QString name );
+    void addFilePicker( QString name );
     void setContentTitle( QString title );
     void addFloatValueSlider( QString name, float range_1 , float range_2 );
 
