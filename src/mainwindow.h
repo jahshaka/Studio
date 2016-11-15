@@ -186,6 +186,7 @@ public slots:
     void openWebsiteUrl();
 
     void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl);
+    void cameraTypeChanged(QString);
 
 private:
     Ui::NewMainWindow *ui;

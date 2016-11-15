@@ -27,7 +27,7 @@ void OrbitalCameraController::setCamera(QSharedPointer<jah3d::CameraNode>  cam)
     pivot = cam->pos + (viewVec*distFromPivot);
 
     pitch = qRadiansToDegrees(qAsin(viewVec.y()));
-    yaw = qAtan2(viewVec.x(),viewVec.z());
+    yaw = qAtan2(viewVec.x(),-viewVec.z());
 
     this->updateCameraRot();
 }

@@ -45,7 +45,7 @@ void EditorCameraController::setCamera(CameraNodePtr cam)
 
     auto viewVec = cam->rot.rotatedVector(QVector3D(0,0,-1));//default forward is -z
     pitch = qRadiansToDegrees(qAsin(viewVec.y()));
-    yaw = qAtan2(viewVec.x(),viewVec.z());
+    yaw = qAtan2(viewVec.x(),-viewVec.z());
 
     this->updateCameraRot();
 }
@@ -184,4 +184,5 @@ void EditorCameraController::updateCameraRot()
 
     //camera->rot = yawQuat*pitchQuat;
     camera->rot = QQuaternion::fromEulerAngles(pitch,yaw,0);
+    camera->update(0);
 }

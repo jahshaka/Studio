@@ -36,23 +36,23 @@ protected slots:
     /**
      * translation change callbacks
      */
-    void xPosChanged(float value);
-    void yPosChanged(float value);
-    void zPosChanged(float value);
+    void xPosChanged(double value);
+    void yPosChanged(double value);
+    void zPosChanged(double value);
 
     /**
      * rotation change callbacks
      */
-    void xRotChanged(float value);
-    void yRotChanged(float value);
-    void zRotChanged(float value);
+    void xRotChanged(double value);
+    void yRotChanged(double value);
+    void zRotChanged(double value);
 
     /**
      * scale change callbacks
      */
-    void xScaleChanged(float value);
-    void yScaleChanged(float value);
-    void zScaleChanged(float value);
+    void xScaleChanged(double value);
+    void yScaleChanged(double value);
+    void zScaleChanged(double value);
 
 private:
     Ui::TransformEditor *ui;

@@ -138,6 +138,8 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->sceneHierarchy->setMainWindow(this);
     connect(ui->sceneHierarchy,SIGNAL(sceneNodeSelected(QSharedPointer<jah3d::SceneNode>)),this,SLOT(sceneNodeSelected(QSharedPointer<jah3d::SceneNode>)));
+
+    connect(ui->cameraTypeCombo,SIGNAL(currentTextChanged(QString)),this,SLOT(cameraTypeChanged(QString)));
 }
 
 //create test scene
@@ -195,6 +197,18 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl
 
     //sceneView->setScene(scene);
     this->setScene(scene);
+}
+
+void MainWindow::cameraTypeChanged(QString type)
+{
+    if(type=="Free")
+    {
+        sceneView->setFreeCameraMode();
+    }
+    else
+    {
+        sceneView->setArcBallCameraMode();
+    }
 }
 
 void MainWindow::setSettingsManager(SettingsManager* settings)

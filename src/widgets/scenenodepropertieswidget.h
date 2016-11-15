@@ -31,6 +31,9 @@ public:
     void setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode);
 
 private:
+    void clearLayout(QLayout* layout);
+
+private:
     QSharedPointer<jah3d::SceneNode> sceneNode;
 
     TransformEditor* transformWidget;

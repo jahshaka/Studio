@@ -10,19 +10,19 @@ TransformEditor::TransformEditor(QWidget *parent) :
     ui->setupUi(this);
 
     //translation
-    connect(ui->xpos,SIGNAL(valueChanged(double)),this,SLOT(xPosChanged(float)));
-    connect(ui->ypos,SIGNAL(valueChanged(double)),this,SLOT(yPosChanged(float)));
-    connect(ui->zpos,SIGNAL(valueChanged(double)),this,SLOT(zPosChanged(float)));
+    connect(ui->xpos,SIGNAL(valueChanged(double)),this,SLOT(xPosChanged(double)));
+    connect(ui->ypos,SIGNAL(valueChanged(double)),this,SLOT(yPosChanged(double)));
+    connect(ui->zpos,SIGNAL(valueChanged(double)),this,SLOT(zPosChanged(double)));
 
     //rotation
-    connect(ui->xrot,SIGNAL(valueChanged(double)),this,SLOT(xRotChanged(float)));
-    connect(ui->yrot,SIGNAL(valueChanged(double)),this,SLOT(yRotChanged(float)));
-    connect(ui->zrot,SIGNAL(valueChanged(double)),this,SLOT(zRotChanged(float)));
+    connect(ui->xrot,SIGNAL(valueChanged(double)),this,SLOT(xRotChanged(double)));
+    connect(ui->yrot,SIGNAL(valueChanged(double)),this,SLOT(yRotChanged(double)));
+    connect(ui->zrot,SIGNAL(valueChanged(double)),this,SLOT(zRotChanged(double)));
 
     //scale
-    connect(ui->xscale,SIGNAL(valueChanged(double)),this,SLOT(xScaleChanged(float)));
-    connect(ui->yscale,SIGNAL(valueChanged(double)),this,SLOT(yScaleChanged(float)));
-    connect(ui->zscale,SIGNAL(valueChanged(double)),this,SLOT(zScaleChanged(float)));
+    connect(ui->xscale,SIGNAL(valueChanged(double)),this,SLOT(xScaleChanged(double)));
+    connect(ui->yscale,SIGNAL(valueChanged(double)),this,SLOT(yScaleChanged(double)));
+    connect(ui->zscale,SIGNAL(valueChanged(double)),this,SLOT(zScaleChanged(double)));
 
 }
 
@@ -34,9 +34,22 @@ TransformEditor::~TransformEditor()
 void TransformEditor::setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode)
 {
     this->sceneNode = sceneNode;
+
+    ui->xpos->setValue(sceneNode->pos.x());
+    ui->ypos->setValue(sceneNode->pos.y());
+    ui->zpos->setValue(sceneNode->pos.z());
+
+    auto rot = sceneNode->rot.toEulerAngles();
+    ui->xrot->setValue(rot.x());
+    ui->yrot->setValue(rot.y());
+    ui->zrot->setValue(rot.z());
+
+    ui->xscale->setValue(sceneNode->scale.x());
+    ui->yscale->setValue(sceneNode->scale.y());
+    ui->zscale->setValue(sceneNode->scale.z());
 }
 
-void TransformEditor::xPosChanged(float value)
+void TransformEditor::xPosChanged(double value)
 {
     if(!!sceneNode)
     {
@@ -44,7 +57,7 @@ void TransformEditor::xPosChanged(float value)
     }
 }
 
-void TransformEditor::yPosChanged(float value)
+void TransformEditor::yPosChanged(double value)
 {
     if(!!sceneNode)
     {
@@ -52,7 +65,7 @@ void TransformEditor::yPosChanged(float value)
     }
 }
 
-void TransformEditor::zPosChanged(float value)
+void TransformEditor::zPosChanged(double value)
 {
     if(!!sceneNode)
     {
@@ -63,7 +76,7 @@ void TransformEditor::zPosChanged(float value)
 /**
  * rotation change callbacks
  */
-void TransformEditor::xRotChanged(float value)
+void TransformEditor::xRotChanged(double value)
 {
     if(!!sceneNode)
     {
@@ -73,7 +86,7 @@ void TransformEditor::xRotChanged(float value)
     }
 }
 
-void TransformEditor::yRotChanged(float value)
+void TransformEditor::yRotChanged(double value)
 {
     if(!!sceneNode)
     {
@@ -83,7 +96,7 @@ void TransformEditor::yRotChanged(float value)
     }
 }
 
-void TransformEditor::zRotChanged(float value)
+void TransformEditor::zRotChanged(double value)
 {
     if(!!sceneNode)
     {
@@ -96,7 +109,7 @@ void TransformEditor::zRotChanged(float value)
 /**
  * scale change callbacks
  */
-void TransformEditor::xScaleChanged(float value)
+void TransformEditor::xScaleChanged(double value)
 {
     if(!!sceneNode)
     {
@@ -104,7 +117,7 @@ void TransformEditor::xScaleChanged(float value)
     }
 }
 
-void TransformEditor::yScaleChanged(float value)
+void TransformEditor::yScaleChanged(double value)
 {
     if(!!sceneNode)
     {
@@ -112,7 +125,7 @@ void TransformEditor::yScaleChanged(float value)
     }
 }
 
-void TransformEditor::zScaleChanged(float value)
+void TransformEditor::zScaleChanged(double value)
 {
     if(!!sceneNode)
     {

@@ -37,6 +37,16 @@ public:
     void setScene(QSharedPointer<jah3d::Scene> scene);
     void setEditorCamera(QSharedPointer<jah3d::CameraNode> camera);
 
+    /**
+     * switches to the free editor camera controller
+     */
+    void setFreeCameraMode();
+
+    /**
+     * switches to the arc ball editor camera controller
+     */
+    void setArcBallCameraMode();
+
 protected:
     void initializeGL();
     bool eventFilter(QObject *obj, QEvent *event);

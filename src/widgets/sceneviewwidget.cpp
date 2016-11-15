@@ -42,8 +42,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
     //camController = nullptr;
     defaultCam = new EditorCameraController();
     orbitalCam = new OrbitalCameraController();
-    //camController = defaultCam;
-    camController = orbitalCam;
+    camController = defaultCam;
+    //camController = orbitalCam;
 
     editorCam = jah3d::CameraNode::create();
     editorCam->pos = QVector3D(0,5,13);
@@ -242,4 +242,18 @@ void SceneViewWidget::wheelEvent(QWheelEvent *event)
     //qDebug()<<"wheel event"<<endl;
     if(camController!=nullptr)
         camController->onMouseWheel(event->delta());
+}
+
+void SceneViewWidget::setFreeCameraMode()
+{
+    camController = defaultCam;
+    camController->setCamera(editorCam);
+    camController->resetMouseStates();
+}
+
+void SceneViewWidget::setArcBallCameraMode()
+{
+    camController = orbitalCam;
+    camController->setCamera(editorCam);
+    camController->resetMouseStates();
 }

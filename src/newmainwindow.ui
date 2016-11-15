@@ -690,7 +690,7 @@ background-color: rgb(30, 144, 255);
            </widget>
           </item>
           <item>
-           <widget class="QComboBox" name="comboBox">
+           <widget class="QComboBox" name="cameraTypeCombo">
             <property name="minimumSize">
              <size>
               <width>119</width>
@@ -708,12 +708,12 @@ background-color: rgb(30, 144, 255);
             </property>
             <item>
              <property name="text">
-              <string>Arc Ball</string>
+              <string>Free</string>
              </property>
             </item>
             <item>
              <property name="text">
-              <string>Orbital</string>
+              <string>Arc Ball</string>
              </property>
             </item>
            </widget>

@@ -6,9 +6,11 @@
 #include "../accordianbladewidget.h"
 
 class ColorValueWidget;
+class ColorPickerWidget;
 namespace jah3d
 {
     class SceneNode;
+    class LightNode;
 }
 
 
@@ -29,9 +31,12 @@ public:
 
 
     void setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode);
+protected slots:
+    void lightColorChanged(QColor color);
 
 private:
-    QSharedPointer<jah3d::SceneNode> sceneNode;
+    //QSharedPointer<jah3d::SceneNode> sceneNode;
+    QSharedPointer<jah3d::LightNode> lightNode;
 };
 
 #endif // LIGHTPROPERTYWIDGET_H
