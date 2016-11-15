@@ -69,6 +69,8 @@ SOURCES += src/main.cpp\
     src/widgets/scenenodepropertieswidget.cpp \
     src/widgets/propertywidgets/lightpropertywidget.cpp \
     src/widgets/propertywidgets/materialpropertywidget.cpp
+    src/editor/orbitalcameracontroller.cpp \
+    src/widgets/filepickerwidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -117,6 +119,8 @@ HEADERS  += src/mainwindow.h \
     src/widgets/propertywidgets/lightpropertywidget.h \
     src/widgets/propertywidgets/materialpropertywidget.h \
     src/widgets/scenenodepropertieswidget.h
+    src/widgets/skypresets.h \
+    src/widgets/filepickerwidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -151,7 +155,8 @@ FORMS    += \
     src/widgets/texturepicker.ui \
     src/widgets/transformeditor.ui \
     src/widgets/sceneheirarchywidget.ui \
-    src/widgets/skypresets.ui
+    src/widgets/skypresets.ui \
+    src/widgets/filepickerwidget.ui
 
 RESOURCES += \
     shaders.qrc \

@@ -28,6 +28,7 @@ public:
     void setMaxHeight( int height );
     ColorValueWidget* addColorPicker( QString name );
     TexturePicker* addTexturePicker( QString name );
+    void addFilePicker( QString name );
     void setContentTitle( QString title );
     HFloatSlider* addFloatValueSlider( QString name, float range_1 , float range_2 );
 

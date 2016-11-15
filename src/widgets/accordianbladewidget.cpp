@@ -6,6 +6,8 @@
 #include "texturepicker.h"
 #include "ui_texturepicker.h"
 #include "transformeditor.h"
+#include "filepickerwidget.h"
+#include "ui_filepickerwidget.h"
 #include <QSpinBox>
 
 AccordianBladeWidget::AccordianBladeWidget(QWidget *parent) :
@@ -72,7 +74,13 @@ ColorValueWidget* AccordianBladeWidget::addColorPicker( QString name )
     return colorpicker;
 }
 
-TexturePicker* AccordianBladeWidget::addTexturePicker( QString name ){
+void AccordianBladeWidget::addFilePicker( QString name  ){
+    FilePickerWidget *filepicker = new FilePickerWidget();
+    filepicker->ui->label->setText(name);
+    ui->contentpane->layout()->addWidget(filepicker);
+}
+
+void AccordianBladeWidget::addTexturePicker( QString name ){
 
     TexturePicker *texpicker = new TexturePicker();
     texpicker->ui->label->setText(name);
