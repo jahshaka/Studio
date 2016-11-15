@@ -46,7 +46,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
     camController = orbitalCam;
 
     editorCam = jah3d::CameraNode::create();
-    editorCam->pos = QVector3D(0,5,5);
+    editorCam->pos = QVector3D(0,5,13);
+    editorCam->rot = QQuaternion::fromEulerAngles(-15,0,0);
     camController->setCamera(editorCam);
 }
 

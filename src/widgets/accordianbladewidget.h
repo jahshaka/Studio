@@ -7,6 +7,11 @@ namespace Ui {
 class AccordianBladeWidget;
 }
 
+class TransformEditor;
+class ColorValueWidget;
+class TexturePicker;
+class HFloatSlider;
+
 class AccordianBladeWidget : public QWidget
 {
     Q_OBJECT
@@ -18,13 +23,13 @@ public:
     explicit AccordianBladeWidget(QWidget *parent = 0);
     ~AccordianBladeWidget();
 
-    void addTransform();
+    TransformEditor* addTransform();
     void addCheckBoxOption( QString name);
     void setMaxHeight( int height );
-    void addColorPicker( QString name );
-    void addTexturePicker( QString name );
+    ColorValueWidget* addColorPicker( QString name );
+    TexturePicker* addTexturePicker( QString name );
     void setContentTitle( QString title );
-    void addFloatValueSlider( QString name, float range_1 , float range_2 );
+    HFloatSlider* addFloatValueSlider( QString name, float range_1 , float range_2 );
 
     void expand();
 

@@ -146,8 +146,8 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl
     auto scene = jah3d::Scene::create();
 
     auto cam = jah3d::CameraNode::create();
-    cam->pos = QVector3D(0,5,5);
-    cam->rot = QQuaternion::fromEulerAngles(-45,0,0);
+    cam->pos = QVector3D(0,15,10);
+    cam->rot = QQuaternion::fromEulerAngles(-60,0,0);
     //cam->lookAt(QVector3D(0,0,0),QVect);
 
     scene->setCamera(cam);
@@ -164,6 +164,7 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl
     node->setMaterial(m);
     m->setDiffuseColor(QColor(255,255,255));
     m->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/defaultgrid.png"));
+    m->setShininess(0);
     m->setTextureScale(100);
     scene->rootNode->addChild(node);
 

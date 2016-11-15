@@ -53,12 +53,14 @@ void AccordianBladeWidget::setContentTitle( QString title ){
 
 }
 
-void AccordianBladeWidget::addTransform(){
+TransformEditor* AccordianBladeWidget::addTransform(){
     TransformEditor *transform = new TransformEditor();
     ui->contentpane->layout()->addWidget(transform);
+
+    return transform;
 }
 
-void AccordianBladeWidget::addColorPicker( QString name )
+ColorValueWidget* AccordianBladeWidget::addColorPicker( QString name )
 {
 
     ColorValueWidget *colorpicker = new ColorValueWidget();
@@ -67,16 +69,19 @@ void AccordianBladeWidget::addColorPicker( QString name )
     colorpicker->setLabel(name);
     ui->contentpane->layout()->addWidget(colorpicker);
 
+    return colorpicker;
 }
 
-void AccordianBladeWidget::addTexturePicker( QString name ){
+TexturePicker* AccordianBladeWidget::addTexturePicker( QString name ){
 
     TexturePicker *texpicker = new TexturePicker();
     texpicker->ui->label->setText(name);
     ui->contentpane->layout()->addWidget(texpicker);
+
+    return texpicker;
 }
 
-void AccordianBladeWidget::addFloatValueSlider( QString name, float range_1 , float range_2 )
+HFloatSlider* AccordianBladeWidget::addFloatValueSlider( QString name, float range_1 , float range_2 )
 {
     HFloatSlider *slider = new HFloatSlider();
     int height = slider->height();
@@ -88,6 +93,7 @@ void AccordianBladeWidget::addFloatValueSlider( QString name, float range_1 , fl
 
     ui->contentpane->layout()->addWidget(slider);
 
+    return slider;
 }
 
 void AccordianBladeWidget::expand()

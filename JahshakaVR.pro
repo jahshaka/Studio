@@ -65,7 +65,10 @@ SOURCES += src/main.cpp\
     src/widgets/sceneheirarchywidget.cpp \
     src/editor/cameracontrollerbase.cpp \
     src/widgets/skypresets.cpp \
-    src/editor/orbitalcameracontroller.cpp
+    src/editor/orbitalcameracontroller.cpp \
+    src/widgets/scenenodepropertieswidget.cpp \
+    src/widgets/propertywidgets/lightpropertywidget.cpp \
+    src/widgets/propertywidgets/materialpropertywidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -109,7 +112,11 @@ HEADERS  += src/mainwindow.h \
     src/widgets/sceneheirarchywidget.h \
     src/editor/orbitalcameracontroller.h \
     src/editor/cameracontrollerbase.h \
-    src/widgets/skypresets.h
+    src/widgets/skypresets.h \
+    src/widgets/propertywidgets/transformpropertywidget.h \
+    src/widgets/propertywidgets/lightpropertywidget.h \
+    src/widgets/propertywidgets/materialpropertywidget.h \
+    src/widgets/scenenodepropertieswidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
