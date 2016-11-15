@@ -68,8 +68,7 @@ SOURCES += src/main.cpp\
     src/editor/orbitalcameracontroller.cpp \
     src/widgets/scenenodepropertieswidget.cpp \
     src/widgets/propertywidgets/lightpropertywidget.cpp \
-    src/widgets/propertywidgets/materialpropertywidget.cpp
-    src/editor/orbitalcameracontroller.cpp \
+    src/widgets/propertywidgets/materialpropertywidget.cpp \
     src/widgets/filepickerwidget.cpp
 
 HEADERS  += src/mainwindow.h \
@@ -118,7 +117,7 @@ HEADERS  += src/mainwindow.h \
     src/widgets/propertywidgets/transformpropertywidget.h \
     src/widgets/propertywidgets/lightpropertywidget.h \
     src/widgets/propertywidgets/materialpropertywidget.h \
-    src/widgets/scenenodepropertieswidget.h
+    src/widgets/scenenodepropertieswidget.h \
     src/widgets/skypresets.h \
     src/widgets/filepickerwidget.h
 

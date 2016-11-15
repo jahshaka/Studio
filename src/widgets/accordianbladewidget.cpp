@@ -80,7 +80,7 @@ void AccordianBladeWidget::addFilePicker( QString name  ){
     ui->contentpane->layout()->addWidget(filepicker);
 }
 
-void AccordianBladeWidget::addTexturePicker( QString name ){
+TexturePicker* AccordianBladeWidget::addTexturePicker( QString name ){
 
     TexturePicker *texpicker = new TexturePicker();
     texpicker->ui->label->setText(name);
