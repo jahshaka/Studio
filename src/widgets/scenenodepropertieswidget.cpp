@@ -26,7 +26,7 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget* parent):
     //material blade
     materialPropView = new MaterialPropertyWidget();
     materialPropView->setContentTitle("Material");
-    materialPropView->setMaxHeight(300);
+    //materialPropView->setMaxHeight(materialPropView->minimum_height);
 
     //mesh blade
 

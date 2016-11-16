@@ -3,7 +3,7 @@
 #include "materialpropertywidget.h"
 #include "../hfloatslider.h"
 #include "../colorpickerwidget.h"
-
+#include <QDebug>
 
 MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
 {
@@ -20,7 +20,10 @@ MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
     this->addColorPicker("Reflection Influence");
     //this->addTexturePicker("Diffuse Texture");
 
-    //this->setMaximumHeight(this->minimum_height);
+    //this->setMaximumHeight(300);
+
+    // materialPropView->setMaxHeight(materialPropView->minimum_height);
+
 }
 
 
