@@ -32,6 +32,11 @@ public:
     void setLabelImage( QLabel* label,QString file);
     bool eventFilter(QObject *object, QEvent *ev);
 
+    void setTexture( QString path );
+
+signals:
+    void valueChanged( QString value);
+
 private:
 
     QString loadTexture();

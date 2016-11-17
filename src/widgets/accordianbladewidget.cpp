@@ -85,9 +85,10 @@ ColorValueWidget* AccordianBladeWidget::addColorPicker( QString name )
     return colorpicker;
 }
 
-void AccordianBladeWidget::addFilePicker( QString name  ){
+void AccordianBladeWidget::addFilePicker( QString name , QString fileextention ){
     FilePickerWidget *filepicker = new FilePickerWidget();
     int height = filepicker->height();
+    filepicker->file_extentions = fileextention;
     minimum_height += height;
     minimum_height += 10;
 

@@ -12,7 +12,7 @@ MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
 
     this->addColorPicker("Specular Color");
     this->addTexturePicker("Specular Texture");
-    this->addFloatValueSlider("Shininess",0,100);
+    this->addFloatValueSlider("Shininess",0,1)->setValue(0.5);
 
     this->addColorPicker("Ambient Color");
 
