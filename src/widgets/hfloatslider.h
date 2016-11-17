@@ -15,6 +15,9 @@ public:
     explicit HFloatSlider(QWidget *parent = 0);
     ~HFloatSlider();
     Ui::HFloatSlider *ui;
+
+protected slots:
+
 };
 
 #endif // HFLOATSLIDER_H

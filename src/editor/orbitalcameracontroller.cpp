@@ -19,15 +19,19 @@ QSharedPointer<jah3d::CameraNode>  OrbitalCameraController::getCamera()
     return camera;
 }
 
+/**
+ * Calculates the pivot location and its yaw and pitch
+ */
 void OrbitalCameraController::setCamera(QSharedPointer<jah3d::CameraNode>  cam)
 {
     this->camera = cam;
 
+    //calculate the location of the pivot
     auto viewVec = cam->rot.rotatedVector(QVector3D(0,0,-1));//default forward is -z
     pivot = cam->pos + (viewVec*distFromPivot);
 
-    pitch = qRadiansToDegrees(qAsin(viewVec.y()));
-    yaw = qAtan2(viewVec.x(),-viewVec.z());
+    float roll;
+    cam->rot.getEulerAngles(&pitch,&yaw,&roll);
 
     this->updateCameraRot();
 }
@@ -75,8 +79,7 @@ void OrbitalCameraController::updateCameraRot()
     auto localPos = rot.rotatedVector(QVector3D(0,0,1));
 
     camera->pos = pivot+(localPos*distFromPivot);
-
-    camera->rot = -rot;
+    camera->rot = rot;
     camera->update(0);
 
 

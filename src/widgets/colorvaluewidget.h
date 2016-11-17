@@ -18,6 +18,8 @@ namespace Ui {
 class ColorValueWidget;
 }
 
+class ColorPickerWidget;
+
 class ColorValueWidget : public QWidget
 {
     Q_OBJECT
@@ -32,6 +34,8 @@ public:
     QString getTitle();
     void setTitle(QString title);
     void setLabel(QString name);
+
+    ColorPickerWidget* getPicker();
 
 private slots:
     void onColorChanged(QColor color);

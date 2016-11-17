@@ -20,8 +20,6 @@ using namespace jah3d;
 
 EditorCameraController::EditorCameraController()
 {
-    //setCamera(cam);
-
     lookSpeed = 200;
     linearSpeed = 1;
 
@@ -44,8 +42,10 @@ void EditorCameraController::setCamera(CameraNodePtr cam)
     this->camera = cam;
 
     auto viewVec = cam->rot.rotatedVector(QVector3D(0,0,-1));//default forward is -z
-    pitch = qRadiansToDegrees(qAsin(viewVec.y()));
-    yaw = qAtan2(viewVec.x(),-viewVec.z());
+    viewVec.normalize();
+
+    float roll;
+    cam->rot.getEulerAngles(&pitch,&yaw,&roll);
 
     this->updateCameraRot();
 }

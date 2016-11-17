@@ -36,6 +36,11 @@ void ColorValueWidget::setTitle(QString title)
     _title = title;
 }
 
+ColorPickerWidget* ColorValueWidget::getPicker()
+{
+    return ui->widget;
+}
+
 void ColorValueWidget::setLabel(QString name)
 {
     ui->label->setText(name);
