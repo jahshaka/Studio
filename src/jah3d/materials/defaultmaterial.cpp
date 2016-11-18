@@ -152,8 +152,8 @@ void DefaultMaterial::setAmbientColor(QColor col)
 {
     ambientColor = col;
 
-    program->bind();
-    program->setUniformValue("u_material.ambient",QVector3D(col.redF(),col.greenF(),col.blueF()));
+    //program->bind();
+    //program->setUniformValue("u_material.ambient",QVector3D(col.redF(),col.greenF(),col.blueF()));
     //program->release();
 }
 
@@ -161,15 +161,15 @@ void DefaultMaterial::setDiffuseColor(QColor col)
 {
     diffuseColor = col;
 
-    program->bind();
-    program->setUniformValue("u_material.diffuse",QVector3D(col.redF(),col.greenF(),col.blueF()));
+    //program->bind();
+    //program->setUniformValue("u_material.diffuse",QVector3D(col.redF(),col.greenF(),col.blueF()));
     //program->setUniformValue("u_material.diffuse",QVector3D(1,1,1));
     //program->release();
 }
 
 QColor DefaultMaterial::getDiffuseColor()
 {
-    return QColor();
+    return diffuseColor;
 }
 
 void DefaultMaterial::setNormalTexture(QOpenGLTexture* tex)
@@ -181,8 +181,8 @@ void DefaultMaterial::setNormalTexture(QOpenGLTexture* tex)
     textures.append(matTex);
 
     //useDiffuseTex
-    program->bind();
-    program->setUniformValue("u_useNormalTex",true);
+    //program->bind();
+    //program->setUniformValue("u_useNormalTex",true);
     //program->release();
 }
 

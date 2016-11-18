@@ -54,16 +54,22 @@ void ColorPickerWidget::paintEvent(QPaintEvent* evt)
 
 void ColorPickerWidget::setColor(QColor col)
 {
-    color = col;
-    emit onSetColor(col);
-    this->repaint();
+    if(color!=col)
+    {
+        color = col;
+        emit onSetColor(col);
+        this->repaint();
+    }
 }
 
 void ColorPickerWidget::colorChanged(QColor col)
 {
-    color = col;
-    emit onColorChanged(col);
-    this->repaint();
+    if(color!=col)
+    {
+        color = col;
+        emit onColorChanged(col);
+        this->repaint();
+    }
 }
 
 void ColorPickerWidget::mouseReleaseEvent(QMouseEvent* event)

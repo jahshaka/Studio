@@ -732,6 +732,7 @@ void MainWindow::addPointLight()
 {
     auto node = jah3d::LightNode::create();
     node->setLightType(jah3d::LightType::Point);
+    node->icon = jah3d::Texture2D::load("app/icons/bulb.png");
 
     addNodeToScene(node);
 }

@@ -41,6 +41,11 @@ ColorPickerWidget* ColorValueWidget::getPicker()
     return ui->widget;
 }
 
+void ColorValueWidget::setColorValue(QColor color)
+{
+    ui->widget->setColor(color);
+}
+
 void ColorValueWidget::setLabel(QString name)
 {
     ui->label->setText(name);

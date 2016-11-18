@@ -15,8 +15,10 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     AccordianBladeWidget(parent)
 {
     lightColor = this->addColorPicker("Color");
+    intensity = this->addFloatValueSlider("Intensity",0,10);
     radius = this->addFloatValueSlider("Radius",0,100);
     spotCutOff = this->addFloatValueSlider("Spotlight CutOff",0,90);
+
 
     connect(lightColor->getPicker(),SIGNAL(onColorChanged(QColor)),this,SLOT(lightColorChanged(QColor)));
     connect(lightColor->getPicker(),SIGNAL(onSetColor(QColor)),this,SLOT(lightColorChanged(QColor)));

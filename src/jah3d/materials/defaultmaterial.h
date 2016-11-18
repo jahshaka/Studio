@@ -40,7 +40,10 @@ public:
     void setDiffuseTexture(QSharedPointer<Texture2D> tex);
 
     void setAmbientColor(QColor col);
-    QColor getAmbientColor();
+    QColor getAmbientColor()
+    {
+        return ambientColor;
+    }
 
     void setDiffuseColor(QColor col);
     QColor getDiffuseColor();

@@ -97,6 +97,8 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
 
     ui->addBtn->setMenu(addMenu);
     ui->addBtn->setPopupMode(QToolButton::InstantPopup);
+
+    connect(ui->deleteBtn,SIGNAL(clicked(bool)),mainWindow,SLOT(deleteNode()));
 }
 
 void SceneHeirarchyWidget::treeItemSelected(QTreeWidgetItem* item)

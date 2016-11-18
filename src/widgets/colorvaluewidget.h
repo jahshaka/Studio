@@ -36,6 +36,7 @@ public:
     void setLabel(QString name);
 
     ColorPickerWidget* getPicker();
+    void setColorValue(QColor color);
 
 private slots:
     void onColorChanged(QColor color);

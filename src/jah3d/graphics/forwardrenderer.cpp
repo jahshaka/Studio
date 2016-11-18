@@ -163,6 +163,10 @@ void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
         {
             icon->texture->bind();
         }
+        else
+        {
+            gl->glBindTexture(GL_TEXTURE_2D,0);
+        }
 
         billboard->draw(gl);
     }

@@ -27,6 +27,7 @@ public:
     ColorValueWidget* lightColor;
     HFloatSlider* radius;
     HFloatSlider* spotCutOff;
+    HFloatSlider* intensity;
     //EnumPicker* lightTypePicker;
 
 
