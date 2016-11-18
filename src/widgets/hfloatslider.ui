@@ -38,6 +38,9 @@
    <property name="bottomMargin">
     <number>0</number>
    </property>
+   <property name="horizontalSpacing">
+    <number>6</number>
+   </property>
    <property name="verticalSpacing">
     <number>3</number>
    </property>
@@ -57,6 +60,9 @@
      </property>
      <property name="text">
       <string>TextLabel</string>
+     </property>
+     <property name="margin">
+      <number>7</number>
      </property>
     </widget>
    </item>

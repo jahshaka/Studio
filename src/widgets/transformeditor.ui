@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>386</width>
+    <width>328</width>
     <height>150</height>
    </rect>
   </property>
@@ -59,6 +59,12 @@
          <size>
           <width>100</width>
           <height>20</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>100</width>
+          <height>16777215</height>
          </size>
         </property>
         <property name="styleSheet">
@@ -149,6 +155,12 @@
           <height>0</height>
          </size>
         </property>
+        <property name="maximumSize">
+         <size>
+          <width>100</width>
+          <height>16777215</height>
+         </size>
+        </property>
         <property name="text">
          <string>Position</string>
         </property>
@@ -228,6 +240,12 @@
           <height>0</height>
          </size>
         </property>
+        <property name="maximumSize">
+         <size>
+          <width>100</width>
+          <height>16777215</height>
+         </size>
+        </property>
         <property name="text">
          <string>Rotation</string>
         </property>
@@ -293,6 +311,12 @@
          <size>
           <width>100</width>
           <height>0</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>100</width>
+          <height>16777215</height>
          </size>
         </property>
         <property name="text">
