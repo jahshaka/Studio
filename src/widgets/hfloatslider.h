@@ -11,6 +11,11 @@ class HFloatSlider : public QWidget
 {
     Q_OBJECT
 
+    int precision;
+    float value;
+
+    float minVal;
+    float maxVal;
 public:
     explicit HFloatSlider(QWidget *parent = 0);
     ~HFloatSlider();
@@ -18,6 +23,8 @@ public:
 
     float getValue();
     void setValue( float value );
+
+    void setRange(float min,float max);
 
 signals:
     void valueChanged(float value);

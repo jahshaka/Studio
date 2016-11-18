@@ -47,7 +47,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sc
     transformPropView = new AccordianBladeWidget();
     transformPropView->setContentTitle("Transformation");
     transformWidget = transformPropView->addTransform();
-    transformPropView->expand();
+    //transformPropView->expand();
 
     //light blade
     lightPropView = new LightPropertyWidget();

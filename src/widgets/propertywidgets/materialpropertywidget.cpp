@@ -14,9 +14,8 @@ MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
 {
     ambientColor = this->addColorPicker("Ambient Color");
 
-    this->addColorPicker("Specular Color");
-    this->addTexturePicker("Specular Texture");
-    this->addFloatValueSlider("Shininess",0,1)->setValue(0.5);
+    diffuseColor = this->addColorPicker("Diffuse Color");
+    diffuseTexture = this->addTexturePicker("Diffuse Texture");
 
     specularColor =this->addColorPicker("Specular Color");
     specularTexture = this->addTexturePicker("Specular Texture");

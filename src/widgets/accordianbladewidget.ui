@@ -150,6 +150,14 @@ QPushButton:hover {
      <property name="styleSheet">
       <string notr="true">background-color: rgb(55, 55, 55);</string>
      </property>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <property name="spacing">
+       <number>0</number>
+      </property>
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+     </layout>
     </widget>
    </item>
   </layout>

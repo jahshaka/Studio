@@ -10,6 +10,10 @@ HFloatSlider::HFloatSlider(QWidget *parent) :
  //   connect(ui->spinbox,SIGNAL(valueChanged(float)),ui->slider,SLOT(setValue(int)));
  //   connect(ui->slider,SIGNAL(valueChanged(int)),ui->spinbox,SLOT(setValue(float)));
 
+    precision = 1000;
+    ui->slider->setRange(0,precision);
+
+    this->setRange(0,100);
 }
 
 HFloatSlider::~HFloatSlider()
@@ -17,30 +21,57 @@ HFloatSlider::~HFloatSlider()
     delete ui;
 }
 
+/**
+ * Sets the range for the slider and also keeps the slider's value within the said range
+ * @param minVal
+ * @param maxVal
+ */
+void HFloatSlider::setRange(float minVal,float maxVal)
+{
+    if(value<minVal)
+        value = minVal;
+    if(value>maxVal)
+        value = maxVal;
+
+    this->minVal = minVal;
+    this->maxVal = maxVal;
+
+    ui->spinbox->setRange(minVal,maxVal);
+}
+
 void  HFloatSlider::setValue( float value ){
-   ui->spinbox->setValue(value);
-   emit valueChanged(value);
+    if(this->value!=value)
+    {
+        this->value = value;
+        ui->spinbox->setValue(value);
+
+        float mappedValue = (value-minVal)/(maxVal-minVal);
+        ui->slider->setValue((int)(mappedValue*precision));
+
+        emit valueChanged(value);
+    }
+
 }
 
 float HFloatSlider::getValue() {
-    float value = ui->spinbox->value();
     return value;
 }
 
 void HFloatSlider::onValueSliderChanged(int value)
 {
-    float newval = value;
-    ui->spinbox->setValue(newval);
-    emit valueChanged(newval);
-    qDebug() << "slider change"  << newval;
+    float range = (float)value/precision;
+    this->value = (maxVal-minVal)*range;
+
+    ui->spinbox->setValue(value);
+    emit valueChanged(value);
 }
 
 void HFloatSlider::onValueSpinboxChanged(double value)
 {
+    this->value = value;
 
-    int newval = value;
-    ui->slider->setValue(newval);
+    float mappedValue = (value-minVal)/(maxVal-minVal);
+    ui->slider->setValue((int)(mappedValue*precision));
+
     emit valueChanged(value);
-    qDebug() << "spinbox change"  << newval;
-
 }
