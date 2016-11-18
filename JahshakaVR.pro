@@ -69,7 +69,8 @@ SOURCES += src/main.cpp\
     src/widgets/scenenodepropertieswidget.cpp \
     src/widgets/propertywidgets/lightpropertywidget.cpp \
     src/widgets/propertywidgets/materialpropertywidget.cpp \
-    src/widgets/filepickerwidget.cpp
+    src/widgets/filepickerwidget.cpp \
+    src/widgets/propertywidgets/worldpropertywidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -119,7 +120,8 @@ HEADERS  += src/mainwindow.h \
     src/widgets/propertywidgets/materialpropertywidget.h \
     src/widgets/scenenodepropertieswidget.h \
     src/widgets/skypresets.h \
-    src/widgets/filepickerwidget.h
+    src/widgets/filepickerwidget.h \
+    src/widgets/propertywidgets/worldpropertywidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
