@@ -9,6 +9,7 @@
 #include "filepickerwidget.h"
 #include "ui_filepickerwidget.h"
 #include <QSpinBox>
+#include <QDebug>
 
 AccordianBladeWidget::AccordianBladeWidget(QWidget *parent) :
     QWidget(parent),
@@ -41,7 +42,12 @@ void AccordianBladeWidget::on_toggle_clicked()
     {
         ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/chevron-arrow-down.svg); } QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
         ui->contentpane->setVisible(true);
-        this->setMinimumHeight( this->maximumHeight() );
+        if( minimum_height ){
+
+        }
+        this->setMinimumHeight( minimum_height );
+        this->setMaximumHeight( minimum_height );
+        qDebug() << "MINIMUM HEIGHT CALC" << minimum_height ;
     }
 }
 
@@ -57,8 +63,11 @@ void AccordianBladeWidget::setContentTitle( QString title ){
 
 TransformEditor* AccordianBladeWidget::addTransform(){
     TransformEditor *transform = new TransformEditor();
-    ui->contentpane->layout()->addWidget(transform);
+    int height = transform->height();
+    minimum_height = height + 50;
 
+    ui->contentpane->layout()->addWidget(transform);
+    ui->contentpane->layout()->setMargin(0);
     return transform;
 }
 
@@ -68,14 +77,21 @@ ColorValueWidget* AccordianBladeWidget::addColorPicker( QString name )
     ColorValueWidget *colorpicker = new ColorValueWidget();
     int height = colorpicker->height();
     minimum_height += height;
+    minimum_height += 10;
+
     colorpicker->setLabel(name);
     ui->contentpane->layout()->addWidget(colorpicker);
 
     return colorpicker;
 }
 
-void AccordianBladeWidget::addFilePicker( QString name  ){
+void AccordianBladeWidget::addFilePicker( QString name , QString fileextention ){
     FilePickerWidget *filepicker = new FilePickerWidget();
+    int height = filepicker->height();
+    filepicker->file_extentions = fileextention;
+    minimum_height += height;
+    minimum_height += 10;
+
     filepicker->ui->label->setText(name);
     ui->contentpane->layout()->addWidget(filepicker);
 }
@@ -83,9 +99,12 @@ void AccordianBladeWidget::addFilePicker( QString name  ){
 TexturePicker* AccordianBladeWidget::addTexturePicker( QString name ){
 
     TexturePicker *texpicker = new TexturePicker();
+    int height = texpicker->height();
+    minimum_height += height;
+    minimum_height += 10;
+
     texpicker->ui->label->setText(name);
     ui->contentpane->layout()->addWidget(texpicker);
-
     return texpicker;
 }
 
@@ -93,7 +112,8 @@ HFloatSlider* AccordianBladeWidget::addFloatValueSlider( QString name, float ran
 {
     HFloatSlider *slider = new HFloatSlider();
     int height = slider->height();
-    minimum_height = minimum_height + height;
+    minimum_height += height;
+    minimum_height += 10;
 
     slider->ui->label->setText(name);
     slider->ui->slider->setRange( range_1 , range_2 );
@@ -104,8 +124,3 @@ HFloatSlider* AccordianBladeWidget::addFloatValueSlider( QString name, float ran
     return slider;
 }
 
-void AccordianBladeWidget::expand()
-{
-    ui->contentpane->setVisible(true);
-    this->setMinimumHeight( this->maximumHeight() );
-}

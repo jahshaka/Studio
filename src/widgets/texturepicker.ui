@@ -30,25 +30,25 @@
     <number>0</number>
    </property>
    <property name="topMargin">
-    <number>0</number>
+    <number>1</number>
    </property>
    <property name="rightMargin">
     <number>0</number>
    </property>
    <property name="bottomMargin">
-    <number>0</number>
+    <number>2</number>
    </property>
    <item>
     <widget class="QLabel" name="label">
      <property name="minimumSize">
       <size>
-       <width>90</width>
+       <width>95</width>
        <height>0</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
-       <width>90</width>
+       <width>95</width>
        <height>16777215</height>
       </size>
      </property>
@@ -157,6 +157,23 @@
          <height>25</height>
         </size>
        </property>
+       <property name="styleSheet">
+        <string notr="true">
+QPushButton
+{
+background-color: rgb(175, 175, 175);
+border-style: inset;
+border-radius: 2px;
+text-decoration: none;
+color: rgb(0, 0, 0);
+}
+QPushButton:hover
+{
+background-color: rgb(235, 235, 235);
+border-style: inset;
+}
+</string>
+       </property>
        <property name="text">
         <string>Load</string>
        </property>
@@ -175,6 +192,23 @@
          <width>16777215</width>
          <height>25</height>
         </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">
+QPushButton
+{
+background-color: rgb(175, 175, 175);
+border-style: inset;
+border-radius: 2px;
+text-decoration: none;
+color: rgb(0, 0, 0);
+}
+QPushButton:hover
+{
+background-color: rgb(235, 235, 235);
+border-style: inset;
+}
+</string>
        </property>
        <property name="text">
         <string>clear</string>

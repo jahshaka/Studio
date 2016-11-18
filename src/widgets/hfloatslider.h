@@ -16,8 +16,16 @@ public:
     ~HFloatSlider();
     Ui::HFloatSlider *ui;
 
-protected slots:
+    float getValue();
+    void setValue( float value );
 
+signals:
+    void valueChanged(float value);
+
+
+private slots:
+    void onValueSliderChanged(int value);
+    void onValueSpinboxChanged(double value);
 };
 
 #endif // HFLOATSLIDER_H

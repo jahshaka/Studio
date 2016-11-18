@@ -4,6 +4,7 @@
 #include "../hfloatslider.h"
 #include "../colorpickerwidget.h"
 #include "../colorvaluewidget.h"
+#include <QDebug>
 
 #include "../../jah3d/scenegraph/meshnode.h"
 #include "../../jah3d/materials/defaultmaterial.h"
@@ -13,8 +14,9 @@ MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
 {
     ambientColor = this->addColorPicker("Ambient Color");
 
-    diffuseColor = this->addColorPicker("Diffuse Color");
-    diffuseTexture = this->addTexturePicker("Diffuse Texture");
+    this->addColorPicker("Specular Color");
+    this->addTexturePicker("Specular Texture");
+    this->addFloatValueSlider("Shininess",0,1)->setValue(0.5);
 
     specularColor =this->addColorPicker("Specular Color");
     specularTexture = this->addTexturePicker("Specular Texture");
@@ -24,7 +26,10 @@ MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
     reflectionInfluence = this->addFloatValueSlider("Reflection Influence",0,1);
     //this->addTexturePicker("Diffuse Texture");
 
-    //this->setMaximumHeight(this->minimum_height);
+    //this->setMaximumHeight(300);
+
+    // materialPropView->setMaxHeight(materialPropView->minimum_height);
+
 
     connect(diffuseColor->getPicker(),SIGNAL(onColorChanged(QColor)),this,SLOT(onDiffuseColorChanged(QColor)));
     connect(specularColor->getPicker(),SIGNAL(onColorChanged(QColor)),this,SLOT(onSpecularColorChanged(QColor)));

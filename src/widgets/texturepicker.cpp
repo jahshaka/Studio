@@ -59,13 +59,8 @@ void TexturePicker::setLabelImage(QLabel* label,QString file)
         QString dimension_H = QString::number(d_height);
         QString dimension_W = QString::number(d_width);
         ui->dimensions->setText( dimension_H + " X " +dimension_W );
+        emit valueChanged(file);
 
-        /*
-        QString url = R"(C:/Users/Me/Desktop/image.png)";
-        QPixmap img(url);
-        QLabel *label = new QLabel(this);
-        label->setPixmap(img);
-        */
     }
 }
 
@@ -83,4 +78,34 @@ void TexturePicker::on_pushButton_clicked()
     ui->imagename->clear();
     ui->dimensions->clear();
     ui->DiffuseMap->clear();
+}
+
+void TexturePicker::setTexture(QString path){
+
+    if(path.isNull() || path.isEmpty())
+    {
+        ui->label->clear();
+    }
+    else
+    {
+        QImage image;
+        image.load(path);
+        QPixmap pixmap = QPixmap::fromImage(image);
+        auto scaled = pixmap.scaled( ui->label->size());
+        ui->label->setPixmap(scaled);
+        d_height = image.height();
+        d_width = image.width();
+
+        QFileInfo fileInfo(path);
+        filename = fileInfo.fileName();
+        ui->imagename->setText(filename);
+        ui->imagename->setMaximumWidth(200);
+        ui->imagename->setWordWrap(true);
+
+
+        QString dimension_H = QString::number(d_height);
+        QString dimension_W = QString::number(d_width);
+        ui->dimensions->setText( dimension_H + " X " +dimension_W );
+        emit valueChanged(path);
+    }
 }

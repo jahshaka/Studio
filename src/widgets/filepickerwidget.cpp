@@ -39,5 +39,5 @@ void FilePickerWidget::filePicker(){
 QString FilePickerWidget::loadTexture()
 {
     QString dir = QApplication::applicationDirPath();
-    return QFileDialog::getOpenFileName(this,"Open Texture File",dir,"Image Files (*.png *.jpg *.bmp)");
+    return QFileDialog::getOpenFileName(this,"Open Texture File",dir,file_extentions);
 }
