@@ -131,8 +131,7 @@ HFloatSlider* AccordianBladeWidget::addFloatValueSlider( QString name, float ran
     //minimum_height = ui->contentpane->layout()->totalMinimumSize().height();
 
     slider->ui->label->setText(name);
-    slider->ui->slider->setRange( range_1 , range_2 );
-    slider->ui->spinbox->setRange( range_1 , range_2 );
+    slider->setRange(range_1,range_2);
 
     ui->contentpane->layout()->addWidget(slider);
 

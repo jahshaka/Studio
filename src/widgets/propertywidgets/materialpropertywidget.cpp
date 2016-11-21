@@ -6,6 +6,7 @@
 #include "../colorvaluewidget.h"
 #include <QDebug>
 
+#include "../../jah3d/graphics/texture2d.h"
 #include "../../jah3d/scenegraph/meshnode.h"
 #include "../../jah3d/materials/defaultmaterial.h"
 
@@ -51,11 +52,22 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> scene
     ambientColor->setColorValue(mat->getAmbientColor());
 
     diffuseColor->setColorValue(mat->getDiffuseColor());
+    //diffuseTexture->setTextur
+
     //diffuseTexture->setTexture(mat->getDiffuseColor());
 
     specularColor->setColorValue(mat->getSpecularColor());
 
 
+}
+
+void MaterialPropertyWidget::onAmbientColorChanged(QColor color)
+{
+    if(!!meshNode && !!meshNode->getMaterial())
+    {
+        auto mat = meshNode->getMaterial().staticCast<jah3d::DefaultMaterial>();
+        mat->setAmbientColor(color);
+    }
 }
 
 void MaterialPropertyWidget::onDiffuseColorChanged(QColor color)
@@ -68,6 +80,15 @@ void MaterialPropertyWidget::onDiffuseColorChanged(QColor color)
 
 }
 
+void MaterialPropertyWidget::onDiffuseTextureChanged(QString texture)
+{
+    if(!!meshNode && !!meshNode->getMaterial())
+    {
+        auto mat = meshNode->getMaterial().staticCast<jah3d::DefaultMaterial>();
+        mat->setDiffuseTexture(jah3d::Texture2D::load(texture));
+    }
+}
+
 void MaterialPropertyWidget::onSpecularColorChanged(QColor color)
 {
     if(!!meshNode && !!meshNode->getMaterial())
@@ -75,5 +96,38 @@ void MaterialPropertyWidget::onSpecularColorChanged(QColor color)
         auto mat = meshNode->getMaterial().staticCast<jah3d::DefaultMaterial>();
         mat->setSpecularColor(color);
     }
+}
+
+void MaterialPropertyWidget::onSpecularTextureChanged(QString texture)
+{
+    if(!!meshNode && !!meshNode->getMaterial())
+    {
+        auto mat = meshNode->getMaterial().staticCast<jah3d::DefaultMaterial>();
+        mat->setSpecularTexture(jah3d::Texture2D::load(texture));
+    }
+}
+
+void MaterialPropertyWidget::onShininessChanged(float shininess)
+{
+
+}
+
+void MaterialPropertyWidget::onNormalTextureChanged(QString texture)
+{
+
+}
+
+void MaterialPropertyWidget::onNormalIntensityChanged(float intensity)
+{
+
+}
+
+void MaterialPropertyWidget::onReflectionTextureChanged(QString texture)
+{
+
+}
+
+void MaterialPropertyWidget::onReflectionInfluenceChanged(float intensity)
+{
 
 }

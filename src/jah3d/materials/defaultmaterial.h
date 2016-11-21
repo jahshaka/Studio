@@ -20,7 +20,8 @@ class DefaultMaterial:public Material
 
     bool useNormalTex;
     float normalIntensity;
-    QOpenGLTexture* normalTexture;
+    //QOpenGLTexture* normalTexture;
+    QSharedPointer<Texture2D> normalTexture;
 
     QColor diffuseColor;
     bool useDiffuseTex;
@@ -29,11 +30,13 @@ class DefaultMaterial:public Material
     float shininess;
     bool useSpecularTex;
     QColor specularColor;
-    QOpenGLTexture* specularTexture;
+    //QOpenGLTexture* specularTexture;
+    QSharedPointer<Texture2D> specularTexture;
 
     float reflectionInfluence;
     bool useReflectionTex;
-    QOpenGLTexture* reflectionTexture;
+    //QOpenGLTexture* reflectionTexture;
+    QSharedPointer<Texture2D> reflectionTexture;
 
 public:
 
@@ -48,12 +51,12 @@ public:
     void setDiffuseColor(QColor col);
     QColor getDiffuseColor();
 
-    void setNormalTexture(QOpenGLTexture* image);
+    void setNormalTexture(QSharedPointer<Texture2D> tex);
 
     void setNormalIntensity(float intensity);
     float getNormalIntensity();
 
-    void setSpecularTexture(QOpenGLTexture* image);
+    void setSpecularTexture(QSharedPointer<Texture2D> tex);
 
     void setSpecularColor(QColor col);
     QColor getSpecularColor();
@@ -61,7 +64,7 @@ public:
     void setShininess(float intensity);
     float getShininess();
 
-    void setReflectionTexture(QOpenGLTexture* image);
+    void setReflectionTexture(QSharedPointer<Texture2D> tex);
 
     void setTextureScale(float scale);
     float getTextureScale();

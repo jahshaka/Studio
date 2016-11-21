@@ -68,7 +68,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sc
 
     auto layout = new QVBoxLayout();
     layout->addWidget(transformPropView);
-    materialPropView->expand();
+    transformPropView->expand();
 
     switch(sceneNode->getSceneNodeType())
     {

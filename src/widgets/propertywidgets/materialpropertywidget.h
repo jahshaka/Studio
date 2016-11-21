@@ -27,8 +27,20 @@ public:
     QSharedPointer<jah3d::MeshNode> meshNode;
 
 protected slots:
+    void onAmbientColorChanged(QColor color);
+
     void onDiffuseColorChanged(QColor color);
+    void onDiffuseTextureChanged(QString texture);
+
     void onSpecularColorChanged(QColor color);
+    void onSpecularTextureChanged(QString texture);
+    void onShininessChanged(float shininess);
+
+    void onNormalTextureChanged(QString texture);
+    void onNormalIntensityChanged(float intensity);
+
+    void onReflectionTextureChanged(QString texture);
+    void onReflectionInfluenceChanged(float intensity);
 
 private:
     ColorValueWidget* ambientColor;

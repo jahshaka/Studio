@@ -56,7 +56,7 @@ DefaultMaterial::DefaultMaterial()
 
     useNormalTex = false;
     normalIntensity = 1.0f;
-    normalTexture = nullptr;
+    //normalTexture = nullptr;
 
     diffuseColor = QColor(255,255,255);
     useDiffuseTex = false;
@@ -65,7 +65,7 @@ DefaultMaterial::DefaultMaterial()
     shininess = 50.0f;
     useSpecularTex = false;
     specularColor = QColor(200,200,200);
-    specularTexture = nullptr;
+    //specularTexture = nullptr;
 
     reflectionInfluence = 0.0f;
     useReflectionTex = false;
@@ -172,11 +172,11 @@ QColor DefaultMaterial::getDiffuseColor()
     return diffuseColor;
 }
 
-void DefaultMaterial::setNormalTexture(QOpenGLTexture* tex)
+void DefaultMaterial::setNormalTexture(QSharedPointer<Texture2D> tex)
 {
     normalTexture=tex;
     auto matTex = new MaterialTexture();
-    matTex->texture = tex;
+    matTex->texture = tex->texture;//bad!fix!
     matTex->name = "u_normalTexture";
     textures.append(matTex);
 
@@ -201,11 +201,11 @@ float DefaultMaterial::getNormalIntensity()
 }
 
 
-void DefaultMaterial::setSpecularTexture(QOpenGLTexture* tex)
+void DefaultMaterial::setSpecularTexture(QSharedPointer<Texture2D> tex)
 {
     specularTexture=tex;
     auto matTex = new MaterialTexture();
-    matTex->texture = tex;
+    matTex->texture = tex->texture;//bad!fix!
     matTex->name = "u_specularTexture";
     textures.append(matTex);
 
@@ -243,11 +243,11 @@ float DefaultMaterial::getShininess()
 }
 
 
-void DefaultMaterial::setReflectionTexture(QOpenGLTexture* tex)
+void DefaultMaterial::setReflectionTexture(QSharedPointer<Texture2D> tex)
 {
     reflectionTexture=tex;
     auto matTex = new MaterialTexture();
-    matTex->texture = tex;
+    matTex->texture = tex->texture;//bad!fix!
     matTex->name = "u_reflectionTexture";
     textures.append(matTex);
 }
