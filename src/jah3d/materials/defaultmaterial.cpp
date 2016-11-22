@@ -62,9 +62,9 @@ DefaultMaterial::DefaultMaterial()
     useDiffuseTex = false;
     //diffuseTexture = nullptr;
 
-    shininess = 50.0f;
+    shininess = 20.0f;
     useSpecularTex = false;
-    specularColor = QColor(200,200,200);
+    specularColor = QColor(20,20,20);
     //specularTexture = nullptr;
 
     reflectionInfluence = 0.0f;
@@ -111,10 +111,12 @@ void DefaultMaterial::begin(QOpenGLFunctions* gl)
 
     program->setUniformValue("u_textureScale", this->textureScale);
 
-    program->setUniformValue("u_useDiffuseTex",useDiffuseTex);
-    program->setUniformValue("u_normalTexture",useNormalTex);
-    program->setUniformValue("u_reflectionTexture",useReflectionTex);
+    program->setUniformValue("u_normalIntensity",normalIntensity);
     program->setUniformValue("u_reflectionInfluence",reflectionInfluence);
+
+    program->setUniformValue("u_useDiffuseTex",useDiffuseTex);
+    program->setUniformValue("u_useNormalTex",useNormalTex);
+    program->setUniformValue("u_useReflectionTexture",useReflectionTex);
 
 }
 
@@ -190,6 +192,8 @@ void DefaultMaterial::setNormalTexture(QSharedPointer<Texture2D> tex)
     matTex->name = "u_normalTexture";
     textures.append(matTex);
 
+    this->useNormalTex = true;
+
     //useDiffuseTex
     //program->bind();
     //program->setUniformValue("u_useNormalTex",true);
@@ -210,8 +214,8 @@ void DefaultMaterial::setNormalIntensity(float intensity)
 {
     normalIntensity = intensity;
 
-    program->bind();
-    program->setUniformValue("u_normalIntensity",normalIntensity);
+    //program->bind();
+    //program->setUniformValue("u_normalIntensity",normalIntensity);
     //program->release();
 }
 
@@ -230,8 +234,8 @@ void DefaultMaterial::setSpecularTexture(QSharedPointer<Texture2D> tex)
     textures.append(matTex);
 
     //useDiffuseTex
-    program->bind();
-    program->setUniformValue("u_useSpecularTex",true);
+    //program->bind();
+    //program->setUniformValue("u_useSpecularTex",true);
     //program->release();
 }
 
@@ -295,6 +299,11 @@ QString DefaultMaterial::getReflectionTextureSource()
 void DefaultMaterial::setReflectionInfluence(float intensity)
 {
     reflectionInfluence = intensity;
+}
+
+float DefaultMaterial::getReflectionInfluence()
+{
+    return reflectionInfluence;
 }
 
 void DefaultMaterial::setTextureScale(float scale)

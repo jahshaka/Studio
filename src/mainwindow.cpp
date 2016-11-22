@@ -759,14 +759,17 @@ void MainWindow::addMesh()
 {
     QString dir = QApplication::applicationDirPath()+"/assets/models/";
     //qDebug()<<dir;
-    auto filename = QFileDialog::getOpenFileName(this,"Load Mesh",dir,"Obj Model (*.obj)");
+    auto filename = QFileDialog::getOpenFileName(this,"Load Mesh",dir,"Mesh Files (*.obj *.fbx *.3ds)");
     auto nodeName = QFileInfo(filename).baseName();
     if(filename.isEmpty())
         return;
 
 
-    auto node = jah3d::MeshNode::create();
-    node->setMesh(filename);
+    //auto node = jah3d::MeshNode::create();
+    //node->setMesh(filename);
+    //node->setName(nodeName);
+
+    auto node = jah3d::MeshNode::loadAsSceneFragment(filename);
     node->setName(nodeName);
 
     //todo: load material data

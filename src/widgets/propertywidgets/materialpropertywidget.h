@@ -9,6 +9,7 @@ namespace jah3d
 {
     class SceneNode;
     class MeshNode;
+    class DefaultMaterial;
 }
 
 /**
@@ -25,6 +26,7 @@ public:
 
     void setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode);
     QSharedPointer<jah3d::MeshNode> meshNode;
+    QSharedPointer<jah3d::DefaultMaterial> material;
 
 protected slots:
     void onAmbientColorChanged(QColor color);

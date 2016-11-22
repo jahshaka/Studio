@@ -19,6 +19,7 @@ class VertexLayout;
 
 class Mesh
 {
+    //friend class jah3d::MeshNode;
 public:
     QOpenGLBuffer* vbo;
     VertexLayout* vertexLayout;
@@ -35,7 +36,6 @@ public:
     //assumed ownership of vertexLayout
     static Mesh* create(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
 
-private:
     Mesh(aiMesh* mesh,VertexLayout* vertexLayout);
     Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
 };

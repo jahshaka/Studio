@@ -41,27 +41,67 @@ Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
             auto i = face.mIndices[v];
 
             //pos
-            auto pos =  mesh->mVertices[i];
-            data.append(pos.x);
-            data.append(pos.y);
-            data.append(pos.z);
+            if(mesh->mNumVertices>0)
+            {
+                auto pos =  mesh->mVertices[i];
+                data.append(pos.x);
+                data.append(pos.y);
+                data.append(pos.z);
+            }
+            else
+            {
+                data.append(0);
+                data.append(0);
+                data.append(0);
+            }
 
             //texCoord
-            auto texCooord =  mesh->mTextureCoords[0][i];
-            data.append(texCooord.x);
-            data.append(texCooord.y);
+            if(mesh->mNumUVComponents[0]>0)
+            {
+                auto texCooord =  mesh->mTextureCoords[0][i];
+                data.append(texCooord.x);
+                data.append(texCooord.y);
+            }
+            else
+            {
+                //project on z axis
+                //data.append(pos.x);
+                //data.append(pos.y);
+                data.append(0);
+                data.append(0);
+            }
 
-            //normal
-            auto normal =  mesh->mNormals[i];
-            data.append(normal.x);
-            data.append(normal.y);
-            data.append(normal.z);
+            if(mesh->HasNormals())
+            {
+                //normal
+                auto normal =  mesh->mNormals[i];
+                data.append(normal.x);
+                data.append(normal.y);
+                data.append(normal.z);
+            }
+            else
+            {
+                data.append(0);
+                data.append(0);
+                data.append(0);
+            }
 
-            //tangent
-            auto tangent =  mesh->mTangents[i];
-            data.append(tangent.x);
-            data.append(tangent.y);
-            data.append(tangent.z);
+
+            if(mesh->HasTangentsAndBitangents())
+            {
+                //tangent
+                auto tangent =  mesh->mTangents[i];
+                data.append(tangent.x);
+                data.append(tangent.y);
+                data.append(tangent.z);
+            }
+            else
+            {
+                data.append(0);
+                data.append(0);
+                data.append(0);
+            }
+
         }
     }
 

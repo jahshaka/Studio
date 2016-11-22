@@ -23,6 +23,9 @@ MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
     specularTexture = this->addTexturePicker("Specular Texture");
     shininess = this->addFloatValueSlider("Shininess",0,100);
 
+    normalTexture = this->addTexturePicker("Normal Texture");
+    normalIntensity = this->addFloatValueSlider("Normal Intensity",-1,1);
+
     reflectionTexture = this->addTexturePicker("Reflection Texture");
     reflectionInfluence = this->addFloatValueSlider("Reflection Influence",0,1);
     //this->addTexturePicker("Diffuse Texture");
@@ -38,6 +41,14 @@ MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
     connect(diffuseTexture,SIGNAL(valueChanged(QString)),this,SLOT(onDiffuseTextureChanged(QString)));
 
     connect(specularColor->getPicker(),SIGNAL(onColorChanged(QColor)),this,SLOT(onSpecularColorChanged(QColor)));
+    connect(specularTexture,SIGNAL(valueChanged(QString)),this,SLOT(onSpecularTextureChanged(QString)));
+    connect(shininess,SIGNAL(valueChanged(float)),this,SLOT(onShininessChanged(float)));
+
+    connect(normalTexture,SIGNAL(valueChanged(QString)),this,SLOT(onNormalTextureChanged(QString)));
+    connect(normalIntensity,SIGNAL(valueChanged(float)),this,SLOT(onNormalIntensityChanged(float)));
+
+    connect(reflectionTexture,SIGNAL(valueChanged(QString)),this,SLOT(onReflectionTextureChanged(QString)));
+    connect(reflectionInfluence,SIGNAL(valueChanged(float)),this,SLOT(onReflectionInfluenceChanged(float)));
 
 }
 
@@ -45,14 +56,18 @@ MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
 void MaterialPropertyWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode)
 {
     if(!!sceneNode && sceneNode->getSceneNodeType()==jah3d::SceneNodeType::Mesh)
+    {
         this->meshNode = sceneNode.staticCast<jah3d::MeshNode>();
+        this->material = meshNode->getMaterial().staticCast<jah3d::DefaultMaterial>();
+    }
     else
     {
         this->meshNode.clear();
+        this->material.clear();
         return;
     }
 
-    auto mat = meshNode->getMaterial().staticCast<jah3d::DefaultMaterial>();
+    auto mat = this->material;
     //todo: ensure material isnt null
 
     ambientColor->setColorValue(mat->getAmbientColor());
@@ -61,77 +76,94 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> scene
     diffuseTexture->setTexture(mat->getDiffuseTextureSource());
 
     specularColor->setColorValue(mat->getSpecularColor());
+    specularTexture->setTexture(mat->getSpecularTextureSource());
+    shininess->setValue(mat->getShininess());
 
+    normalTexture->setTexture(mat->getNormalTextureSource());
+    normalIntensity->setValue(mat->getNormalIntensity());
+
+    reflectionTexture->setTexture(mat->getReflectionTextureSource());
+    reflectionInfluence->setValue(mat->getReflectionInfluence());
 
 }
 
 void MaterialPropertyWidget::onAmbientColorChanged(QColor color)
 {
-    if(!!meshNode && !!meshNode->getMaterial())
+    if(!!material)
     {
-        auto mat = meshNode->getMaterial().staticCast<jah3d::DefaultMaterial>();
-        mat->setAmbientColor(color);
+        material->setAmbientColor(color);
     }
 }
 
 void MaterialPropertyWidget::onDiffuseColorChanged(QColor color)
 {
-    if(!!meshNode && !!meshNode->getMaterial())
+    if(!!material)
     {
-        auto mat = meshNode->getMaterial().staticCast<jah3d::DefaultMaterial>();
-        mat->setDiffuseColor(color);
+        material->setDiffuseColor(color);
     }
 
 }
 
 void MaterialPropertyWidget::onDiffuseTextureChanged(QString texture)
 {
-    if(!!meshNode && !!meshNode->getMaterial())
+    if(!!material)
     {
-        auto mat = meshNode->getMaterial().staticCast<jah3d::DefaultMaterial>();
-        mat->setDiffuseTexture(jah3d::Texture2D::load(texture));
+        material->setDiffuseTexture(jah3d::Texture2D::load(texture));
     }
 }
 
 void MaterialPropertyWidget::onSpecularColorChanged(QColor color)
 {
-    if(!!meshNode && !!meshNode->getMaterial())
+    if(!!material)
     {
-        auto mat = meshNode->getMaterial().staticCast<jah3d::DefaultMaterial>();
-        mat->setSpecularColor(color);
+        material->setSpecularColor(color);
     }
 }
 
 void MaterialPropertyWidget::onSpecularTextureChanged(QString texture)
 {
-    if(!!meshNode && !!meshNode->getMaterial())
+    if(!!material)
     {
-        auto mat = meshNode->getMaterial().staticCast<jah3d::DefaultMaterial>();
-        mat->setSpecularTexture(jah3d::Texture2D::load(texture));
+        material->setSpecularTexture(jah3d::Texture2D::load(texture));
     }
 }
 
 void MaterialPropertyWidget::onShininessChanged(float shininess)
 {
-
+    if(!!material)
+    {
+        material->setShininess(shininess);
+    }
 }
 
 void MaterialPropertyWidget::onNormalTextureChanged(QString texture)
 {
-
+    if(!!material)
+    {
+        material->setNormalTexture(jah3d::Texture2D::load(texture));
+    }
 }
 
 void MaterialPropertyWidget::onNormalIntensityChanged(float intensity)
 {
-
+    if(!!material)
+    {
+        material->setNormalIntensity(intensity);
+    }
 }
 
 void MaterialPropertyWidget::onReflectionTextureChanged(QString texture)
 {
-
+    if(!!material)
+    {
+        material->setReflectionTexture(jah3d::Texture2D::load(texture));
+    }
 }
 
-void MaterialPropertyWidget::onReflectionInfluenceChanged(float intensity)
+void MaterialPropertyWidget::onReflectionInfluenceChanged(float influence)
 {
-
+    if(!!material)
+    {
+        material->setReflectionInfluence(influence);
+    }
 }

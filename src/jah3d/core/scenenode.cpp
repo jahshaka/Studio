@@ -99,6 +99,10 @@ void SceneNode::setParent(SceneNodePtr node)
 void SceneNode::setScene(QSharedPointer<Scene> scene)
 {
     this->scene = scene;
+
+    //if have children, set scene as well
+    for(auto child:children)
+        child->setScene(scene);
 }
 
 long SceneNode::generateNodeId()

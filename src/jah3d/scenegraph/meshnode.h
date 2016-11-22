@@ -23,6 +23,15 @@ public:
         return QSharedPointer<jah3d::MeshNode>(new jah3d::MeshNode());
     }
 
+    /**
+     * Some model contains multiple meshes with child-parent relationships. This funtion Loads the model as a scene
+     * itself. If only one mesh is in the scene, it returns it as an MeshNode rather than a SceneNode. Otherwise, it
+     * returns a null shared pointer.
+     * @param path
+     * @return
+     */
+    static QSharedPointer<jah3d::SceneNode> loadAsSceneFragment(QString path);
+
     void setMesh(QString source);
     void setMesh(Mesh* mesh);
     void setMaterial(QSharedPointer<jah3d::Material> material);
