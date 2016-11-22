@@ -138,6 +138,16 @@ void DefaultMaterial::setDiffuseTexture(QSharedPointer<Texture2D> tex)
     //program->release();
 }
 
+QString DefaultMaterial::getDiffuseTextureSource()
+{
+    if(!!diffuseTexture)
+    {
+        return diffuseTexture->source;
+    }
+
+    return QString::null;
+}
+
 /*
 QOpenGLShader* DefaultMaterial::loadShader(QOpenGLShader::ShaderType type,QString filePath)
 {
@@ -186,6 +196,16 @@ void DefaultMaterial::setNormalTexture(QSharedPointer<Texture2D> tex)
     //program->release();
 }
 
+QString DefaultMaterial::getNormalTextureSource()
+{
+    if(!!normalTexture)
+    {
+        return normalTexture->source;
+    }
+
+    return QString::null;
+}
+
 void DefaultMaterial::setNormalIntensity(float intensity)
 {
     normalIntensity = intensity;
@@ -213,6 +233,16 @@ void DefaultMaterial::setSpecularTexture(QSharedPointer<Texture2D> tex)
     program->bind();
     program->setUniformValue("u_useSpecularTex",true);
     //program->release();
+}
+
+QString DefaultMaterial::getSpecularTextureSource()
+{
+    if(!!specularTexture)
+    {
+        return specularTexture->source;
+    }
+
+    return QString::null;
 }
 
 void DefaultMaterial::setSpecularColor(QColor col)
@@ -250,6 +280,16 @@ void DefaultMaterial::setReflectionTexture(QSharedPointer<Texture2D> tex)
     matTex->texture = tex->texture;//bad!fix!
     matTex->name = "u_reflectionTexture";
     textures.append(matTex);
+}
+
+QString DefaultMaterial::getReflectionTextureSource()
+{
+    if(!!reflectionTexture)
+    {
+        return reflectionTexture->source;
+    }
+
+    return QString::null;
 }
 
 void DefaultMaterial::setReflectionInfluence(float intensity)

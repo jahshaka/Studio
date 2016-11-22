@@ -27,9 +27,19 @@ class LightNode:public SceneNode
 public:
 
     LightType lightType;
+
+    /**
+     * light's radius. This is only used for pointlights.
+     */
     float radius;
     QColor color;
     float intensity;
+
+    /**
+     * Spotlight cutoff angle in degrees.
+     * This parameter is only used if the light is a spotlight
+     */
+    float spotCutOff;
 
     //editor-specific
     QSharedPointer<Texture2D> icon;
@@ -70,6 +80,7 @@ private:
         radius = 5;
         color = QColor(255,255,255);
         intensity = 0.2f;
+        spotCutOff = 30.0f;
 
         iconSize = 0.5f;
     }

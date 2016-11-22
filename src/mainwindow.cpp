@@ -741,6 +741,7 @@ void MainWindow::addSpotLight()
 {
     auto node = jah3d::LightNode::create();
     node->setLightType(jah3d::LightType::Spot);
+    node->icon = jah3d::Texture2D::load("app/icons/bulb.png");
 
     addNodeToScene(node);
 }
@@ -749,6 +750,7 @@ void MainWindow::addDirectionalLight()
 {
     auto node = jah3d::LightNode::create();
     node->setLightType(jah3d::LightType::Directional);
+    node->icon = jah3d::Texture2D::load("app/icons/bulb.png");
 
     addNodeToScene(node);
 }

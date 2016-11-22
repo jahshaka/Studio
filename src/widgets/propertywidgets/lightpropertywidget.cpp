@@ -22,6 +22,29 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
 
     connect(lightColor->getPicker(),SIGNAL(onColorChanged(QColor)),this,SLOT(lightColorChanged(QColor)));
     connect(lightColor->getPicker(),SIGNAL(onSetColor(QColor)),this,SLOT(lightColorChanged(QColor)));
+
+    connect(intensity,SIGNAL(valueChanged(float)),this,SLOT(lightIntensityChanged(float)));
+    connect(radius,SIGNAL(valueChanged(float)),this,SLOT(lightRadiusChanged(float)));
+    connect(spotCutOff,SIGNAL(valueChanged(float)),this,SLOT(lightSpotCutoffChanged(float)));
+}
+
+void LightPropertyWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode)
+{
+    //this->sceneNode = sceneNode;
+    if(sceneNode->getSceneNodeType()==jah3d::SceneNodeType::Light)
+    {
+        lightNode = sceneNode.staticCast<jah3d::LightNode>();
+
+        //apply properties to ui
+        lightColor->setColorValue(lightNode->color);
+        intensity->setValue(lightNode->intensity);
+        radius->setValue(lightNode->radius);
+        spotCutOff->setValue(lightNode->spotCutOff);
+    }
+    else
+    {
+        lightNode.clear();
+    }
 }
 
 void LightPropertyWidget::lightColorChanged(QColor color)
@@ -30,18 +53,23 @@ void LightPropertyWidget::lightColorChanged(QColor color)
         lightNode->color = color;
 }
 
-
-void LightPropertyWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode)
+void LightPropertyWidget::lightIntensityChanged(float intensity)
 {
-    //this->sceneNode = sceneNode;
-    if(sceneNode->getSceneNodeType()==jah3d::SceneNodeType::Light)
-    {
-        lightNode = sceneNode.staticCast<jah3d::LightNode>();
-    }
-    else
-    {
-        lightNode.clear();
-    }
-
-
+    if(!!lightNode)
+        lightNode->intensity = intensity;
 }
+
+void LightPropertyWidget::lightRadiusChanged(float radius)
+{
+    if(!!lightNode)
+        lightNode->radius = radius;
+}
+
+void LightPropertyWidget::lightSpotCutoffChanged(float spotCutOff)
+{
+    if(!!lightNode)
+        lightNode->spotCutOff = spotCutOff;
+}
+
+
+

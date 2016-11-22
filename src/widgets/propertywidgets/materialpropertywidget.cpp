@@ -4,6 +4,7 @@
 #include "../hfloatslider.h"
 #include "../colorpickerwidget.h"
 #include "../colorvaluewidget.h"
+#include "../texturepicker.h"
 #include <QDebug>
 
 #include "../../jah3d/graphics/texture2d.h"
@@ -31,8 +32,13 @@ MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
     // materialPropView->setMaxHeight(materialPropView->minimum_height);
 
 
+    connect(ambientColor->getPicker(),SIGNAL(onColorChanged(QColor)),this,SLOT(onAmbientColorChanged(QColor)));
+
     connect(diffuseColor->getPicker(),SIGNAL(onColorChanged(QColor)),this,SLOT(onDiffuseColorChanged(QColor)));
+    connect(diffuseTexture,SIGNAL(valueChanged(QString)),this,SLOT(onDiffuseTextureChanged(QString)));
+
     connect(specularColor->getPicker(),SIGNAL(onColorChanged(QColor)),this,SLOT(onSpecularColorChanged(QColor)));
+
 }
 
 
@@ -52,9 +58,7 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> scene
     ambientColor->setColorValue(mat->getAmbientColor());
 
     diffuseColor->setColorValue(mat->getDiffuseColor());
-    //diffuseTexture->setTextur
-
-    //diffuseTexture->setTexture(mat->getDiffuseColor());
+    diffuseTexture->setTexture(mat->getDiffuseTextureSource());
 
     specularColor->setColorValue(mat->getSpecularColor());
 

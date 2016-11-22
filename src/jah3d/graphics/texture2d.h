@@ -28,7 +28,10 @@ public:
             return Texture2DPtr(nullptr);
         }
 
-        return create(image);
+        auto tex = create(image);
+        tex->source = path;
+
+        return tex;
     }
 
     static Texture2DPtr create(QImage image)

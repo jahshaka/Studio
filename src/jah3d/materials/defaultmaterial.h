@@ -41,6 +41,7 @@ class DefaultMaterial:public Material
 public:
 
     void setDiffuseTexture(QSharedPointer<Texture2D> tex);
+    QString getDiffuseTextureSource();
 
     void setAmbientColor(QColor col);
     QColor getAmbientColor()
@@ -52,11 +53,13 @@ public:
     QColor getDiffuseColor();
 
     void setNormalTexture(QSharedPointer<Texture2D> tex);
+    QString getNormalTextureSource();
 
     void setNormalIntensity(float intensity);
     float getNormalIntensity();
 
     void setSpecularTexture(QSharedPointer<Texture2D> tex);
+    QString getSpecularTextureSource();
 
     void setSpecularColor(QColor col);
     QColor getSpecularColor();
@@ -65,6 +68,7 @@ public:
     float getShininess();
 
     void setReflectionTexture(QSharedPointer<Texture2D> tex);
+    QString getReflectionTextureSource();
 
     void setTextureScale(float scale);
     float getTextureScale();

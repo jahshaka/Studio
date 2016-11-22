@@ -30,13 +30,41 @@ public:
     HFloatSlider* intensity;
     //EnumPicker* lightTypePicker;
 
-
+    /**
+     * Sets the active sceneNode. If the sceneNode is a LightNode it is casted
+     * to a LightNode and stored in lightNode, otherwise lightNode is reset to null
+     * @param sceneNode
+     */
     void setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode);
+
 protected slots:
+
+    /**
+     * Sets the light's color
+     * @param color
+     */
     void lightColorChanged(QColor color);
 
+    /**
+     * Sets the light's intensity
+     * @param intensity
+     */
+    void lightIntensityChanged(float intensity);
+
+    /**
+     * Sets the light's radius
+     * @param radius
+     */
+    void lightRadiusChanged(float radius);
+
+    /**
+     * Sets the light's spot cutoff angle. Only valid for spotlights.
+     * @param spotCutOff
+     */
+    void lightSpotCutoffChanged(float spotCutOff);
+
 private:
-    //QSharedPointer<jah3d::SceneNode> sceneNode;
+
     QSharedPointer<jah3d::LightNode> lightNode;
 };
 
