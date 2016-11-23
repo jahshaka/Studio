@@ -8,7 +8,7 @@
 
 #include <QString>
 #include <QOpenGLBuffer>
-#include <QOpenGLFunctions>
+#include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLTexture>
 
 #include "GL/gl.h"
@@ -125,17 +125,26 @@ Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
     vbo->allocate(data, dataSize);
 }
 
-void Mesh::draw(QOpenGLFunctions* gl,Material* mat)
+void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,Material* mat)
 {
     draw(gl,mat->program);
 }
 
-void Mesh::draw(QOpenGLFunctions* gl,QOpenGLShaderProgram* program)
+void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program)
 {
     vbo->bind();
 
     vertexLayout->bind(program);
     gl->glDrawArrays(GL_TRIANGLES,0,numVerts);//todo: bad to assume triangles, allow other primitive types
+    vertexLayout->unbind(program);
+}
+
+void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLenum primitiveMode)
+{
+    vbo->bind();
+
+    vertexLayout->bind(program);
+    gl->glDrawArrays(primitiveMode,0,numVerts);//todo: bad to assume triangles, allow other primitive types
     vertexLayout->unbind(program);
 }
 

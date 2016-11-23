@@ -3,6 +3,7 @@
 
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions>
+#include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLBuffer>
 #include <QMatrix4x4>
 #include <QSharedPointer>
@@ -24,7 +25,7 @@ class QOpenGLShaderProgram;
 class CameraControllerBase;
 class OrbitalCameraController;
 
-class SceneViewWidget: public QOpenGLWidget, protected QOpenGLFunctions
+class SceneViewWidget: public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
 {
     Q_OBJECT
 
@@ -35,6 +36,8 @@ public:
     explicit SceneViewWidget(QWidget *parent);
 
     void setScene(QSharedPointer<jah3d::Scene> scene);
+    void setSelectedNode(QSharedPointer<jah3d::SceneNode> sceneNode);
+
     void setEditorCamera(QSharedPointer<jah3d::CameraNode> camera);
 
     /**
@@ -46,6 +49,7 @@ public:
      * switches to the arc ball editor camera controller
      */
     void setArcBallCameraMode();
+
 
 protected:
     void initializeGL();
@@ -67,6 +71,7 @@ private:
 
     QSharedPointer<jah3d::CameraNode> editorCam;
     QSharedPointer<jah3d::Scene> scene;
+    QSharedPointer<jah3d::SceneNode> selectedNode;
     QSharedPointer<jah3d::ForwardRenderer> renderer;
 
     QPointF prevMousePos;
@@ -77,7 +82,7 @@ private:
     jah3d::Viewport* viewport;
 
 signals:
-    void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl);
+    void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl);
 
 
 };

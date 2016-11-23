@@ -1,7 +1,7 @@
 #ifndef BILLBOARD_H
 #define BILLBOARD_H
 
-class QOpenGLFunctions;
+class QOpenGLFunctions_3_2_Core;
 class QOpenGLBuffer;
 class QOpenGLShaderProgram;
 
@@ -16,8 +16,8 @@ class Billboard
     QOpenGLShaderProgram* program;
 
 public:
-    Billboard(QOpenGLFunctions* gl);
-    void draw(QOpenGLFunctions* gl);
+    Billboard(QOpenGLFunctions_3_2_Core* gl);
+    void draw(QOpenGLFunctions_3_2_Core* gl);
 };
 
 }

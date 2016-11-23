@@ -132,7 +132,7 @@ MainWindow::MainWindow(QWidget *parent) :
     layout->addWidget(sceneView);
     layout->setMargin(0);
     ui->sceneContainer->setLayout(layout);
-    connect(sceneView,SIGNAL(initializeGraphics(SceneViewWidget*,QOpenGLFunctions*)),this,SLOT(initializeGraphics(SceneViewWidget*,QOpenGLFunctions*)));
+    connect(sceneView,SIGNAL(initializeGraphics(SceneViewWidget*,QOpenGLFunctions_3_2_Core*)),this,SLOT(initializeGraphics(SceneViewWidget*,QOpenGLFunctions_3_2_Core*)));
 
     //createTestScene();
 
@@ -143,7 +143,7 @@ MainWindow::MainWindow(QWidget *parent) :
 }
 
 //create test scene
-void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl)
+void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
 {
     auto scene = jah3d::Scene::create();
 
@@ -642,6 +642,7 @@ void MainWindow::sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode)
 
     ui->sceneNodeProperties->setLayout(layout);
     */
+    sceneView->setSelectedNode(sceneNode);
     ui->sceneNodeProperties->setSceneNode(sceneNode);
 }
 

@@ -10,7 +10,7 @@
 #include <QOpenGLTexture>
 #include <QColor>
 
-#include <QOpenGLFunctions>
+#include <QOpenGLFunctions_3_2_Core>
 
 namespace jah3d
 {
@@ -78,7 +78,7 @@ DefaultMaterial::DefaultMaterial()
     //program->release();
 }
 
-void DefaultMaterial::begin(QOpenGLFunctions* gl)
+void DefaultMaterial::begin(QOpenGLFunctions_3_2_Core* gl)
 {
     program->bind();
 

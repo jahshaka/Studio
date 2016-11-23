@@ -7,6 +7,7 @@ namespace Ui {
 class HFloatSlider;
 }
 
+
 class HFloatSlider : public QWidget
 {
     Q_OBJECT

@@ -10,6 +10,7 @@
 #include "material.h"
 #include <QOpenGLShaderProgram>
 #include <QOpenGLFunctions>
+#include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLTexture>
 #include "viewport.h"
 #include "utils/billboard.h"
@@ -18,21 +19,22 @@
 namespace jah3d
 {
 
-ForwardRenderer::ForwardRenderer(QOpenGLFunctions* gl)
+ForwardRenderer::ForwardRenderer(QOpenGLFunctions_3_2_Core* gl)
 {
     this->gl = gl;
     renderData = new RenderData();
 
     billboard = new Billboard(gl);
+    createLineShader();
 }
 
-QSharedPointer<ForwardRenderer> ForwardRenderer::create(QOpenGLFunctions* gl)
+QSharedPointer<ForwardRenderer> ForwardRenderer::create(QOpenGLFunctions_3_2_Core* gl)
 {
     return QSharedPointer<ForwardRenderer>(new ForwardRenderer(gl));
 }
 
 //all scene's transform should be updated
-void ForwardRenderer::renderScene(Viewport* vp,QSharedPointer<Scene> scene)
+void ForwardRenderer::renderScene(Viewport* vp)
 {
     auto cam = scene->camera;
 
@@ -54,7 +56,11 @@ void ForwardRenderer::renderScene(Viewport* vp,QSharedPointer<Scene> scene)
     //STEP 3: RENDER BILLBOARD ICONS
     renderBillboardIcons(renderData);
 
-    //STEP 4: RENDER GIZMOS
+    //STEP 4: RENDER SELECTED OBJECT
+    if(!!selectedSceneNode)
+        renderSelectedNode(renderData,selectedSceneNode);
+
+    //STEP 5: RENDER GIZMOS
 }
 
 void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode> node)
@@ -172,6 +178,57 @@ void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
     }
 
     gl->glEnable(GL_CULL_FACE);
+}
+
+void ForwardRenderer::renderSelectedNode(RenderData* renderData,QSharedPointer<SceneNode> node)
+{
+    //gl->glClear(GL_DEPTH_BUFFER_BIT);
+    gl->glPolygonMode(GL_FRONT_FACE,GL_LINES);
+
+    if(node->getSceneNodeType()==jah3d::SceneNodeType::Mesh)
+    {
+        auto meshNode = node.staticCast<jah3d::MeshNode>();
+
+        if(meshNode->mesh!=nullptr)
+        {
+           lineShader->bind();
+           //lindShader->setUniformValue("",renderData)
+           lineShader->setUniformValue("u_worldMatrix",node->globalTransform);
+           lineShader->setUniformValue("u_viewMatrix",renderData->viewMatrix);
+           lineShader->setUniformValue("u_projMatrix",renderData->projMatrix);
+           lineShader->setUniformValue("u_normalMatrix",node->globalTransform.normalMatrix());
+           lineShader->setUniformValue("color",QColor(240,240,255,255));
+
+           meshNode->mesh->draw(gl,lineShader,GL_TRIANGLES);
+        }
+
+    }
+
+    gl->glPolygonMode(GL_FRONT_FACE,GL_FILL);
+}
+
+void ForwardRenderer::createLineShader()
+{
+    QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
+    vshader->compileSourceFile("app/shaders/color.vert");
+
+    QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
+    fshader->compileSourceFile("app/shaders/color.frag");
+
+
+    lineShader = new QOpenGLShaderProgram;
+    lineShader->addShader(vshader);
+    lineShader->addShader(fshader);
+
+    //program->bindAttributeLocation("a_pos", 0);
+    //program->bindAttributeLocation("a_texCoord", 1);
+    //program->bindAttributeLocation("a_normal", 2);
+    //program->bindAttributeLocation("a_tangent", 3);
+
+    lineShader->link();
+
+    lineShader->bind();
+    lineShader->setUniformValue("color",QColor(240,240,255,255));
 }
 
 /*

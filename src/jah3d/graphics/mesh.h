@@ -3,10 +3,11 @@
 
 #include <QString>
 #include <QSharedPointer>
+#include <qopengl.h>
 
 class aiMesh;
 class QOpenGLBuffer;
-class QOpenGLFunctions;
+class QOpenGLFunctions_3_2_Core;
 class QOpenGLShaderProgram;
 
 
@@ -26,8 +27,9 @@ public:
     int numVerts;
     int numFaces;
 
-    void draw(QOpenGLFunctions* gl,Material* mat);
-    void draw(QOpenGLFunctions* gl,QOpenGLShaderProgram* mat);
+    void draw(QOpenGLFunctions_3_2_Core* gl,Material* mat);
+    void draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* mat);
+    void draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* mat,GLenum primitiveMode);
 
     static Mesh* loadMesh(QString filePath);
 

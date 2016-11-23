@@ -1,4 +1,4 @@
-#include <QOpenGLFunctions>
+#include <QOpenGLFunctions_3_2_Core>
 #include "billboard.h"
 #include <qopengl.h>
 #include <QOpenGLShader>
@@ -7,7 +7,7 @@
 namespace jah3d
 {
 
-Billboard::Billboard(QOpenGLFunctions* gl)
+Billboard::Billboard(QOpenGLFunctions_3_2_Core* gl)
 {
     //todo: write shaders in script
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
@@ -55,7 +55,7 @@ Billboard::Billboard(QOpenGLFunctions* gl)
 
 }
 
-void Billboard::draw(QOpenGLFunctions* gl)
+void Billboard::draw(QOpenGLFunctions_3_2_Core* gl)
 {
     //gl->glCullFace(GL_NONE);
     //program->bind();

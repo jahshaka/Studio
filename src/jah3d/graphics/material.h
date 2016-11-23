@@ -8,7 +8,7 @@
 
 class QOpenGLShaderProgram;
 class QOpenGLTexture;
-class QOpenGLFunctions;
+class QOpenGLFunctions_3_2_Core;
 
 namespace jah3d
 {
@@ -40,7 +40,7 @@ public:
     //void bind();
     //void unbind();
 
-    virtual void begin(QOpenGLFunctions* gl)
+    virtual void begin(QOpenGLFunctions_3_2_Core* gl)
     {
 
     }

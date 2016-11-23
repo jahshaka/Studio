@@ -5,7 +5,7 @@
 #include <QOpenGLShaderProgram>
 #include <QColor>
 
-class QOpenGLFunctions;
+class QOpenGLFunctions_3_2_Core;
 
 namespace jah3d
 {
@@ -77,7 +77,7 @@ public:
     float getReflectionInfluence();
 
 
-    void begin(QOpenGLFunctions* gl) override;
+    void begin(QOpenGLFunctions_3_2_Core* gl) override;
     void end() override;
 
     static QSharedPointer<DefaultMaterial> create()

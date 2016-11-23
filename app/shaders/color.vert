@@ -14,9 +14,12 @@ For more information see the LICENSE file
 //in vec3 vertexPosition;
 in vec3 a_pos;
 
-uniform mat4 mvp;
+uniform mat4 u_viewMatrix;
+uniform mat4 u_projMatrix;
+uniform mat4 u_worldMatrix;
 
 void main()
 {
-    gl_Position = mvp * vec4( a_pos, 1.0 );
+    //gl_Position = mvp * vec4( a_pos, 1.0 );
+    gl_Position = u_projMatrix*u_viewMatrix*u_worldMatrix*vec4(a_pos,1.0);
 }

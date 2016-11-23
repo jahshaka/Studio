@@ -70,7 +70,7 @@ namespace jah3d
 }
 
 
-class QOpenGLFunctions;
+class QOpenGLFunctions_3_2_Core;
 
 enum class SceneNodeType;
 
@@ -185,7 +185,7 @@ public slots:
     void openBlogUrl();
     void openWebsiteUrl();
 
-    void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions* gl);
+    void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl);
     void cameraTypeChanged(QString);
 
 private:

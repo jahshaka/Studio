@@ -111,6 +111,16 @@ void SceneViewWidget::setScene(QSharedPointer<jah3d::Scene> scene)
 {
     this->scene = scene;
     scene->setCamera(editorCam);
+    renderer->setScene(scene);
+
+    //remove selected scenenode
+    selectedNode.reset();
+}
+
+void SceneViewWidget::setSelectedNode(QSharedPointer<jah3d::SceneNode> sceneNode)
+{
+    selectedNode = sceneNode;
+    renderer->setSelectedSceneNode(sceneNode);
 }
 
 void SceneViewWidget::updateScene()
@@ -155,7 +165,7 @@ void SceneViewWidget::renderScene()
     {
         scene->update(1.0f/60);
 
-        renderer->renderScene(viewport,scene);
+        renderer->renderScene(viewport);
     }
 }
 
