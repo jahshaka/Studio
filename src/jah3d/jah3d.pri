@@ -19,7 +19,8 @@ HEADERS += \
     $$PWD/graphics/viewport.h \
     $$PWD/materials/billboardmaterial.h \
     $$PWD/graphics/graphicshelper.h \
-    $$PWD/graphics/utils/billboard.h
+    $$PWD/graphics/utils/billboard.h \
+    $$PWD/geometry/trimesh.h
 
 include(assimp/assimp.pri)
 include(libovr/libovr.pri)
