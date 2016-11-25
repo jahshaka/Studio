@@ -65,6 +65,16 @@ public:
         return QSharedPointer<CameraNode>(new CameraNode());
     }
 
+    /**
+     * Calculate picking ray given the screen position.
+     * Assumes the ray's origin is the camera's position.
+     * @param viewPortWidth
+     * @param viewPortHeight
+     * @param pos point in screen space
+     * @return
+     */
+    QVector3D calculatePickingDirection(int viewPortWidth, int viewPortHeight,QPointF pos);
+
 private:
     CameraNode()
     {

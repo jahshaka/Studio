@@ -24,6 +24,11 @@ void MeshNode::setMesh(Mesh* mesh)
     this->mesh = mesh;
 }
 
+Mesh* MeshNode::getMesh()
+{
+    return mesh;
+}
+
 void MeshNode::setMaterial(QSharedPointer<Material> material)
 {
     this->material = material;

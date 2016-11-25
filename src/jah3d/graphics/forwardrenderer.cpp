@@ -200,9 +200,26 @@ void ForwardRenderer::renderSelectedNode(RenderData* renderData,QSharedPointer<S
             lineShader->setUniformValue("u_normalMatrix",node->globalTransform.normalMatrix());
             lineShader->setUniformValue("color",QColor(200,200,255,255));
 
+            /*
+            //test method using polygon offset line
+            gl->glEnable(GL_POLYGON_OFFSET_LINE);
+            gl->glPolygonOffset(1,100);
+
+            gl->glPolygonMode(GL_FRONT,GL_LINE);
+            gl->glLineWidth(5);
+            meshNode->mesh->draw(gl,lineShader);
+            gl->glPolygonMode(GL_FRONT,GL_FILL);
+            gl->glLineWidth(1);
+
+            gl->glDisable(GL_POLYGON_OFFSET_LINE);
+            gl->glPolygonOffset(0.0,0.0);
+            */
+
+
             //STEP 1: DRAW STENCIL OF THE FILLED POLYGON
             gl->glClearStencil(0);//sets default stencil value to 0
             gl->glClear(GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT);
+            //gl->glClear(GL_STENCIL_BUFFER_BIT);
             gl->glPolygonMode(GL_FRONT,GL_FILL);//should be the default
 
             gl->glEnable(GL_STENCIL_TEST);
@@ -234,6 +251,7 @@ void ForwardRenderer::renderSelectedNode(RenderData* renderData,QSharedPointer<S
             gl->glStencilMask(1);
             gl->glLineWidth(1);
             gl->glPolygonMode(GL_FRONT,GL_FILL);
+
         }
 
     }

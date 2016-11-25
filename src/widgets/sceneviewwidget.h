@@ -59,6 +59,11 @@ protected:
     void mouseReleaseEvent(QMouseEvent* evt);
     void wheelEvent(QWheelEvent *event);
 
+    /**
+     * Does raycasting from the mouse's screen position.
+     */
+    void doObjectPicking();
+
 
 private slots:
     void paintGL();
@@ -66,6 +71,8 @@ private slots:
     void resizeGL(int width, int height);
 
 private:
+    QSharedPointer<jah3d::SceneNode> doPicking(QSharedPointer<jah3d::SceneNode> sceneNode,QVector3D segStart,QVector3D segEnd);
+
     void makeObject();
     void renderScene();
 
@@ -83,6 +90,7 @@ private:
 
 signals:
     void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl);
+    void sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode);
 
 
 };

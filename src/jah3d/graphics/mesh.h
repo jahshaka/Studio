@@ -17,6 +17,7 @@ namespace jah3d
 //class DefaultMaterial;
 class Material;
 class VertexLayout;
+class TriMesh;
 
 class Mesh
 {
@@ -26,6 +27,12 @@ public:
     VertexLayout* vertexLayout;
     int numVerts;
     int numFaces;
+
+    TriMesh* triMesh;
+    TriMesh* getTriMesh()
+    {
+        return triMesh;
+    }
 
     void draw(QOpenGLFunctions_3_2_Core* gl,Material* mat);
     void draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* mat);

@@ -5,6 +5,7 @@
 #include <QOpenGLTexture>
 #include <QMouseEvent>
 #include <QtMath>
+#include <QDebug>
 
 #include "../jah3d.h"
 #include "../jah3d/scenegraph/meshnode.h"
@@ -13,6 +14,7 @@
 #include "../jah3d/materials/defaultmaterial.h"
 #include "../jah3d/graphics/forwardrenderer.h"
 #include "../jah3d/graphics/mesh.h"
+#include "../jah3d/geometry/trimesh.h"
 #include "../jah3d/graphics/texture2d.h"
 #include "../jah3d/graphics/viewport.h"
 
@@ -47,6 +49,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
 
     editorCam = jah3d::CameraNode::create();
     editorCam->pos = QVector3D(0,5,13);
+    //editorCam->pos = QVector3D(0,0,10);
     editorCam->rot = QQuaternion::fromEulerAngles(-15,0,0);
     camController->setCamera(editorCam);
 }
@@ -206,7 +209,7 @@ bool SceneViewWidget::eventFilter(QObject *obj, QEvent *event)
 void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
 {
     //issue - only fired when mouse is dragged
-    QPointF localPos = e->windowPos();
+    QPointF localPos = e->localPos();
 
     QPointF dir = localPos-prevMousePos;
 
@@ -222,14 +225,22 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
         camController->onMouseMove(-dir.x(),-dir.y());
 
     prevMousePos = localPos;
+
+    //qDebug()<<prevMousePos;
+    //doObjectPicking();
 }
 
 void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 {
-    prevMousePos = e->windowPos();
+    prevMousePos = e->localPos();
     if(e->button()== Qt::RightButton)
     {
         dragging = true;
+    }
+
+    if(e->button()== Qt::LeftButton)
+    {
+        this->doObjectPicking();
     }
 
     if(camController!=nullptr)
@@ -252,6 +263,49 @@ void SceneViewWidget::wheelEvent(QWheelEvent *event)
     //qDebug()<<"wheel event"<<endl;
     if(camController!=nullptr)
         camController->onMouseWheel(event->delta());
+}
+
+void SceneViewWidget::doObjectPicking()
+{
+    editorCam->updateCameraMatrices();
+
+    auto segStart = this->editorCam->pos;
+    auto rayDir = editorCam->calculatePickingDirection(viewport->width,viewport->height,prevMousePos);
+    auto segEnd = segStart+(rayDir*1000);
+
+    auto pickedNode = doPicking(scene->getRootNode(),segStart,segEnd);
+    //auto pickedNode = doPicking(scene->getRootNode(),QVector3D(0,10,1.0f),QVector3D(0,0,-1.0f));
+    if(!!pickedNode)
+        emit sceneNodeSelected(pickedNode);
+}
+
+QSharedPointer<jah3d::SceneNode> SceneViewWidget::doPicking(QSharedPointer<jah3d::SceneNode> sceneNode,QVector3D segStart,QVector3D segEnd)
+{
+    if(sceneNode->getSceneNodeType()==jah3d::SceneNodeType::Mesh)
+    {
+        auto meshNode = sceneNode.staticCast<jah3d::MeshNode>();
+        auto triMesh = meshNode->getMesh()->getTriMesh();
+
+        //transform segment to local space
+        auto invTransform = meshNode->globalTransform.inverted();
+        auto a = invTransform*segStart;
+        auto b = invTransform*segEnd;
+
+        //if(triMesh->isHitBySegment(segStart,segEnd))
+        if(triMesh->isHitBySegment(a,b))
+        {
+            return sceneNode;
+        }
+    }
+
+    for(auto child:sceneNode->children)
+    {
+        auto node = doPicking(child,segStart,segEnd);
+        if(!!node)
+            return node;
+    }
+
+    return QSharedPointer<jah3d::SceneNode>(nullptr);
 }
 
 void SceneViewWidget::setFreeCameraMode()

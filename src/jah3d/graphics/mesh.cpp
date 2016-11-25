@@ -14,12 +14,15 @@
 #include "GL/gl.h"
 
 #include "vertexlayout.h"
+#include "../geometry/trimesh.h"
 
 namespace jah3d
 {
 
 Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
 {
+    triMesh = new TriMesh();
+
     this->vertexLayout = vertexLayout;
     //assumes mesh is triangulated
     //assumes mesh data is laid out in a flat array
@@ -35,7 +38,14 @@ Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
     {
         auto face = mesh->mFaces[f];
 
-        //assumes triangles
+        //assumes mesh is made completely of triangles
+        auto a = mesh->mVertices[face.mIndices[0]];
+        auto b = mesh->mVertices[face.mIndices[1]];
+        auto c = mesh->mVertices[face.mIndices[2]];
+        triMesh->addTriangle(QVector3D(a.x,a.y,a.z),
+                             QVector3D(b.x,b.y,b.z),
+                             QVector3D(c.x,c.y,c.z));
+
         for(int v=0;v<3;v++)
         {
             auto i = face.mIndices[v];
@@ -113,8 +123,10 @@ Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
 
 }
 
+//todo: extract trimesh from data
 Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
 {
+    triMesh = nullptr;
     this->vertexLayout = vertexLayout;
 
     numVerts = numElements;

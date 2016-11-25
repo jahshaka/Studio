@@ -138,6 +138,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->sceneHierarchy->setMainWindow(this);
     connect(ui->sceneHierarchy,SIGNAL(sceneNodeSelected(QSharedPointer<jah3d::SceneNode>)),this,SLOT(sceneNodeSelected(QSharedPointer<jah3d::SceneNode>)));
+    connect(sceneView,SIGNAL(sceneNodeSelected(QSharedPointer<jah3d::SceneNode>)),this,SLOT(sceneNodeSelected(QSharedPointer<jah3d::SceneNode>)));
 
     connect(ui->cameraTypeCombo,SIGNAL(currentTextChanged(QString)),this,SLOT(cameraTypeChanged(QString)));
 }
@@ -161,6 +162,7 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     //boxNode->setMesh("app/models/head.obj");
     node->setMesh("app/models/plane.obj");
     node->scale = QVector3D(100,1,100);
+    node->setName("Ground");
 
     auto m = jah3d::DefaultMaterial::create();
     node->setMaterial(m);
@@ -169,6 +171,7 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     m->setShininess(0);
     m->setTextureScale(100);
     scene->rootNode->addChild(node);
+
 
     //add test object with basic material
     auto boxNode = jah3d::MeshNode::create();
@@ -188,6 +191,7 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     light->rot = QQuaternion::fromEulerAngles(45,0,0);
     scene->rootNode->addChild(light);
     //light->pos = QVector3D(5,5,0);
+    light->setName("Light");
     light->pos = QVector3D(-5,5,3);
     light->intensity = 1;
     light->icon = jah3d::Texture2D::load("app/icons/bulb.png");

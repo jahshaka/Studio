@@ -60,15 +60,6 @@ public:
     void onMouseMove(int x,int y) override;
     void onMouseWheel(int delta) override;
 
-    /**
-     * @brief unprojects point
-     * @param viewPortWidth
-     * @param viewPortHeight
-     * @param pos
-     * @return
-     */
-    QVector3D unproject(int viewPortWidth, int viewPortHeight,QPoint pos);
-
     void updateCameraRot();
 };
 

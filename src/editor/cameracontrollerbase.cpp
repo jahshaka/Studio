@@ -3,7 +3,7 @@
 
 void CameraControllerBase::setCamera(QSharedPointer<jah3d::CameraNode>  cam)
 {
-
+    this->camera = cam;
 }
 
 void CameraControllerBase::onMouseDown(Qt::MouseButton button)
@@ -70,3 +70,4 @@ void CameraControllerBase::resetMouseStates()
     middleMouseDown = false;
     rightMouseDown = false;
 }
+

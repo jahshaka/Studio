@@ -35,7 +35,6 @@ CameraNodePtr EditorCameraController::getCamera()
 /**
  * Sets camera
  * Reduces the camera's orientation to just the yaw and pitch
- * http://stackoverflow.com/questions/2782647/how-to-get-yaw-pitch-and-roll-from-a-3d-vector/33790309#33790309
  */
 void EditorCameraController::setCamera(CameraNodePtr cam)
 {
@@ -151,27 +150,6 @@ void EditorCameraController::onMouseWheel(int delta)
     auto zoomSpeed = 0.01f;
     auto forward = camera->rot.rotatedVector(QVector3D(0,0,-1));
     camera->pos += forward*zoomSpeed*delta;
-}
-
-/*
- * tilt - does the tile
- */
-
-//returns ray direction
-//stolen from qtlabs 3d editor
-QVector3D EditorCameraController::unproject(int viewPortWidth, int viewPortHeight,QPoint pos)
-{
-    auto projectionMatrix = camera->projMatrix;
-    auto viewMatrix = camera->viewMatrix;
-
-    float x = ((2.0f * pos.x()) / viewPortWidth) - 1.0f;
-    float y = 1.0f - ((2.0f * pos.y()) / viewPortHeight);
-
-    QVector4D ray = projectionMatrix.inverted() * QVector4D(x, y, -1.0f, 1.0f);
-    ray.setZ(-1.0f);
-    ray.setW(0.0f);
-    ray = viewMatrix.inverted() * ray;
-    return ray.toVector3D().normalized();
 }
 
 /**

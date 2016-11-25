@@ -34,6 +34,9 @@ public:
 
     void setMesh(QString source);
     void setMesh(Mesh* mesh);
+
+    Mesh* getMesh();
+
     void setMaterial(QSharedPointer<jah3d::Material> material);
     QSharedPointer<jah3d::Material> getMaterial()
     {

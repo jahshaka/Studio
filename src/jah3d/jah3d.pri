@@ -33,4 +33,5 @@ SOURCES += \
     $$PWD/core/scenenode.cpp \
     $$PWD/graphics/forwardrenderer.cpp \
     $$PWD/graphics/graphicshelper.cpp \
-    $$PWD/graphics/utils/billboard.cpp
+    $$PWD/graphics/utils/billboard.cpp \
+    $$PWD/scenegraph/cameranode.cpp

@@ -27,6 +27,8 @@ public:
     void resetMouseStates();
 
 protected:
+    QSharedPointer<jah3d::CameraNode> camera;
+
     bool leftMouseDown;
     bool middleMouseDown;
     bool rightMouseDown;
