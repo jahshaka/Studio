@@ -35,18 +35,21 @@ void TransformEditor::setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode)
 {
     this->sceneNode = sceneNode;
 
-    ui->xpos->setValue(sceneNode->pos.x());
-    ui->ypos->setValue(sceneNode->pos.y());
-    ui->zpos->setValue(sceneNode->pos.z());
+    if(!!sceneNode)
+    {
+        ui->xpos->setValue(sceneNode->pos.x());
+        ui->ypos->setValue(sceneNode->pos.y());
+        ui->zpos->setValue(sceneNode->pos.z());
 
-    auto rot = sceneNode->rot.toEulerAngles();
-    ui->xrot->setValue(rot.x());
-    ui->yrot->setValue(rot.y());
-    ui->zrot->setValue(rot.z());
+        auto rot = sceneNode->rot.toEulerAngles();
+        ui->xrot->setValue(rot.x());
+        ui->yrot->setValue(rot.y());
+        ui->zrot->setValue(rot.z());
 
-    ui->xscale->setValue(sceneNode->scale.x());
-    ui->yscale->setValue(sceneNode->scale.y());
-    ui->zscale->setValue(sceneNode->scale.z());
+        ui->xscale->setValue(sceneNode->scale.x());
+        ui->yscale->setValue(sceneNode->scale.y());
+        ui->zscale->setValue(sceneNode->scale.z());
+    }
 }
 
 void TransformEditor::xPosChanged(double value)

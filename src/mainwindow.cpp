@@ -34,15 +34,13 @@ For more information see the LICENSE file
 #include "core/nodekeyframeanimation.h"
 #include "core/nodekeyframe.h"
 #include "globals.h"
-//#include "editorcameracontroller.h"
 
-//#include "widgets/lightlayerwidget.h"
+#include "io/scenewriter.h"
+#include "io/scenereader.h"
+
 #include "widgets/animationwidget.h"
 
 #include "widgets/materialwidget.h"
-//#include "core/sceneparser.h"
-//#include "transformgizmo.h"
-//#include "editor/gizmos/advancedtransformgizmo.h"
 #include "dialogs/renamelayerdialog.h"
 #include "widgets/layertreewidget.h"
 #include "core/project.h"
@@ -460,42 +458,47 @@ void MainWindow::useUserCamera()
 
 void MainWindow::saveScene()
 {
-    /*
+
     if(Globals::project->isSaved())
     {
         auto filename = Globals::project->getFilePath();
-        auto exp = new SceneParser();
-        exp->saveScene(filename,scene);
+        auto writer = new SceneWriter();
+        writer->writeScene(filename,scene);
 
         settings->addRecentlyOpenedScene(filename);
+
+        delete writer;
     }
     else
     {
         auto filename = QFileDialog::getSaveFileName(this,"Save Scene","","Jashaka Scene (*.jah)");
-        auto exp = new SceneParser();
-        exp->saveScene(filename,scene);
+        auto writer = new SceneWriter();
+        writer->writeScene(filename,scene);
 
         Globals::project->setFilePath(filename);
         this->setProjectTitle(Globals::project->getProjectName());
 
         settings->addRecentlyOpenedScene(filename);
+
+        delete writer;
     }
-    */
+
 }
 
 void MainWindow::saveSceneAs()
 {
-    /*
+
     QString dir = QApplication::applicationDirPath()+"/scenes/";
     auto filename = QFileDialog::getSaveFileName(this,"Save Scene",dir,"Jashaka Scene (*.jah)");
-    auto exp = new SceneParser();
-    exp->saveScene(filename,scene);
+    auto writer = new SceneWriter();
+    writer->writeScene(filename,scene);
 
     Globals::project->setFilePath(filename);
     this->setProjectTitle(Globals::project->getProjectName());
 
     settings->addRecentlyOpenedScene(filename);
-    */
+
+    delete writer;
 }
 
 void MainWindow::loadScene()
@@ -511,26 +514,26 @@ void MainWindow::loadScene()
 
 void MainWindow::openProject(QString filename)
 {
-    /*
+
     //remove current scene first
     this->removeScene();
 
     //load new scene
-    auto exp = new SceneParser();
+    auto reader = new SceneReader();
 
-    //auto scene = exp->loadScene(filename,new Qt3DCore::QEntity());
+    auto scene = reader->readScene(filename);
     //auto sceneEnt = new Qt3DCore::QEntity();
     //sceneEnt->setParent(rootEntity);
     //auto scene = exp->loadScene(filename,sceneEnt);
-    //setScene(scene);
+    setScene(scene);
 
     Globals::project->setFilePath(filename);
     this->setProjectTitle(Globals::project->getProjectName());
 
     settings->addRecentlyOpenedScene(filename);
 
-    delete exp;
-    */
+    delete reader;
+
 }
 
 /**
@@ -916,9 +919,13 @@ void MainWindow::duplicateNode()
 
 void MainWindow::deleteNode()
 {
-
-    activeSceneNode->removeFromParent();
-    ui->sceneHierarchy->repopulateTree();
+    if(!!activeSceneNode)
+    {
+        activeSceneNode->removeFromParent();
+        ui->sceneHierarchy->repopulateTree();
+        sceneView->clearSelectedNode();
+        ui->sceneNodeProperties->setSceneNode(QSharedPointer<jah3d::SceneNode>(nullptr));
+    }
 
     /*
     auto items = ui->sceneTree->selectedItems();

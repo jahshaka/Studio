@@ -1,0 +1,21 @@
+#include <Qt>
+#include <qvector.h>
+
+#include <QQuaternion>
+#include <QVector3D>
+#include <QDir>
+#include <QFile>
+
+#include "scenewriter.h"
+#include "sceneiobase.h"
+
+/*
+void SceneWriter::writeScene(QString tilePath,QSharedPointer<jah3d::Scene> scene)
+{
+    dir = SceneIOBase::getDirFromFileName(fileName);
+    QFile file(fileName);
+    file.open(QIODevice::ReadWrite|QIODevice::Truncate);
+
+    writeScene(xml,scene);
+}
+*/

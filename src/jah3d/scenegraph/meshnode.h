@@ -16,6 +16,8 @@ class MeshNode:public SceneNode
 {
 public:
     Mesh* mesh;
+    QString meshPath;
+
     QSharedPointer<Material> material;
 
     static QSharedPointer<jah3d::MeshNode> create()

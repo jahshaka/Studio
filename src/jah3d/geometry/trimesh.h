@@ -32,10 +32,13 @@ public:
      */
     void addTriangle(QVector3D a,QVector3D b,QVector3D c)
     {
-        Triangle tri = {a,b,c};
+        //Triangle tri = {a,b,c,QVector3D::crossProduct(b-a,c-a)};
+        Triangle tri = {c,b,a,QVector3D::crossProduct(c-a,b-a)};//clockwise
+        //tri.normal = QVector3D::crossProduct(b-a,c-a);
+
         //Triangle tri = {c,b,a};//clockwise
         //tri.normal = QVector3D::crossProduct(c-a,b-a);
-        tri.normal = QVector3D::crossProduct(b-a,c-a);
+
 
         triangles.append(tri);
     }
@@ -43,7 +46,7 @@ public:
     //https://github.com/qt/qt3d/blob/5476bc6b4b6a12c921da502c24c4e078b04dd3b3/src/render/jobs/pickboundingvolumejob.cpp
     //realtime rendering page 192
     //no need to get uvw, just return true at the first sign of a hit
-    bool isHitBySegment(QVector3D segmentStart,QVector3D segmentEnd)
+    bool isHitBySegment(QVector3D segmentStart,QVector3D segmentEnd,QVector3D& hitPoint)
     {
         for(auto tri:triangles)
         {
@@ -51,12 +54,13 @@ public:
             auto ac = tri.c - tri.a;
             auto qp = segmentStart-segmentEnd;
 
-            auto normal = tri.normal;
-            //auto normal = QVector3D::crossProduct(ab, ac);
+            //auto normal = tri.normal;
+            auto normal = QVector3D::crossProduct(ab, ac);
             float d = QVector3D::dotProduct(qp, normal);
 
-            if (d <= 0)
-                continue;
+            //if (d <= 0)
+            //    continue;
+            if (d == 0) continue;
 
             auto ap = segmentStart - tri.a;
             auto t = QVector3D::dotProduct(ap, normal);
@@ -75,7 +79,12 @@ public:
             if (w < 0.0f || v + w > d)
                 continue;
 
+            t /= d;
+
             //all conditions have been met
+            //todo: fix please
+            hitPoint = segmentStart + (segmentEnd-segmentStart)*
+                    (t*segmentStart.distanceToPoint(segmentEnd));//t is in range 0 and 1 and denotes how far along the distance the hit is
             return true;
         }
 

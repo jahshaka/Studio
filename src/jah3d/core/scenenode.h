@@ -52,6 +52,10 @@ public:
 
 public:
     SceneNode();
+    virtual ~SceneNode()
+    {
+
+    }
 
     static SceneNodePtr create();
 
@@ -89,6 +93,8 @@ public:
     void addChild(SceneNodePtr node);
     void removeFromParent();
     void removeChild(SceneNodePtr node);
+
+    QVector3D getGlobalPosition();
 
     virtual void update(float dt);
 

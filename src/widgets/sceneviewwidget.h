@@ -25,6 +25,13 @@ class QOpenGLShaderProgram;
 class CameraControllerBase;
 class OrbitalCameraController;
 
+struct PickingResult
+{
+    QSharedPointer<jah3d::SceneNode> hitNode;
+    QVector3D hitPoint;
+
+};
+
 class SceneViewWidget: public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
 {
     Q_OBJECT
@@ -37,6 +44,7 @@ public:
 
     void setScene(QSharedPointer<jah3d::Scene> scene);
     void setSelectedNode(QSharedPointer<jah3d::SceneNode> sceneNode);
+    void clearSelectedNode();
 
     void setEditorCamera(QSharedPointer<jah3d::CameraNode> camera);
 
@@ -71,7 +79,7 @@ private slots:
     void resizeGL(int width, int height);
 
 private:
-    QSharedPointer<jah3d::SceneNode> doPicking(QSharedPointer<jah3d::SceneNode> sceneNode,QVector3D segStart,QVector3D segEnd);
+    void doPicking(QSharedPointer<jah3d::SceneNode> sceneNode,QVector3D segStart,QVector3D segEnd,QList<PickingResult>& hitList);
 
     void makeObject();
     void renderScene();

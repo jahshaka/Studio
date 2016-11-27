@@ -126,6 +126,12 @@ void SceneViewWidget::setSelectedNode(QSharedPointer<jah3d::SceneNode> sceneNode
     renderer->setSelectedSceneNode(sceneNode);
 }
 
+void SceneViewWidget::clearSelectedNode()
+{
+    selectedNode.clear();
+    renderer->setSelectedSceneNode(selectedNode);
+}
+
 void SceneViewWidget::updateScene()
 {
 }
@@ -273,14 +279,33 @@ void SceneViewWidget::doObjectPicking()
     auto rayDir = editorCam->calculatePickingDirection(viewport->width,viewport->height,prevMousePos);
     auto segEnd = segStart+(rayDir*1000);
 
-    auto pickedNode = doPicking(scene->getRootNode(),segStart,segEnd);
-    //auto pickedNode = doPicking(scene->getRootNode(),QVector3D(0,10,1.0f),QVector3D(0,0,-1.0f));
-    if(!!pickedNode)
-        emit sceneNodeSelected(pickedNode);
+    QList<PickingResult> hitList;
+    doPicking(scene->getRootNode(),segStart,segEnd,hitList);
+    //    emit sceneNodeSelected(pickedNode);
+
+    //Find the closest hit and emit signal
+    if(hitList.size()==0)
+        return;//no hits
+
+    auto item = hitList[0];
+    auto camPos = editorCam->getGlobalPosition();
+    auto closestDist = camPos.distanceToPoint(item.hitPoint);
+    auto closestNode = item.hitNode;
+
+    for(int i=1;i<hitList.size();i++)
+    {
+        item = hitList[i];
+        auto dist = camPos.distanceToPoint(item.hitPoint);
+        if(dist<closestDist)
+            closestNode = item.hitNode;
+    }
+
+    emit sceneNodeSelected(closestNode);
 }
 
-QSharedPointer<jah3d::SceneNode> SceneViewWidget::doPicking(QSharedPointer<jah3d::SceneNode> sceneNode,QVector3D segStart,QVector3D segEnd)
+void SceneViewWidget::doPicking(QSharedPointer<jah3d::SceneNode> sceneNode,QVector3D segStart,QVector3D segEnd,QList<PickingResult>& hitList)
 {
+
     if(sceneNode->getSceneNodeType()==jah3d::SceneNodeType::Mesh)
     {
         auto meshNode = sceneNode.staticCast<jah3d::MeshNode>();
@@ -292,20 +317,24 @@ QSharedPointer<jah3d::SceneNode> SceneViewWidget::doPicking(QSharedPointer<jah3d
         auto b = invTransform*segEnd;
 
         //if(triMesh->isHitBySegment(segStart,segEnd))
-        if(triMesh->isHitBySegment(a,b))
+        QVector3D hitPoint;
+        if(triMesh->isHitBySegment(a,b,hitPoint))
         {
-            return sceneNode;
+            //return sceneNode;
+            hitList.append({
+                            sceneNode,
+                            hitPoint
+                        });
         }
     }
 
     for(auto child:sceneNode->children)
     {
-        auto node = doPicking(child,segStart,segEnd);
-        if(!!node)
-            return node;
+        doPicking(child,segStart,segEnd,hitList);
     }
 
-    return QSharedPointer<jah3d::SceneNode>(nullptr);
+    //return QSharedPointer<jah3d::SceneNode>(nullptr);
+    //return hits;
 }
 
 void SceneViewWidget::setFreeCameraMode()

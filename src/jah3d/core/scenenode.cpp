@@ -110,6 +110,11 @@ long SceneNode::generateNodeId()
     return nextId++;
 }
 
+QVector3D SceneNode::getGlobalPosition()
+{
+    return globalTransform.column(3).toVector3D();
+}
+
 long SceneNode::nextId = 0;
 
 

@@ -16,9 +16,11 @@ namespace jah3d
 
 void MeshNode::setMesh(QString source)
 {
+    meshPath = source;
     mesh = Mesh::loadMesh(source);
 }
 
+//should not be used on plain scene meshes
 void MeshNode::setMesh(Mesh* mesh)
 {
     this->mesh = mesh;

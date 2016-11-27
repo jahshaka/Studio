@@ -31,7 +31,7 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
 void LightPropertyWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode)
 {
     //this->sceneNode = sceneNode;
-    if(sceneNode->getSceneNodeType()==jah3d::SceneNodeType::Light)
+    if(!!sceneNode && sceneNode->getSceneNodeType()==jah3d::SceneNodeType::Light)
     {
         lightNode = sceneNode.staticCast<jah3d::LightNode>();
 
