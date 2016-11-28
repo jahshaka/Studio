@@ -44,6 +44,8 @@ protected slots:
     void onReflectionTextureChanged(QString texture);
     void onReflectionInfluenceChanged(float intensity);
 
+    void onTextureScaleChanged(float scale);
+
 private:
     ColorValueWidget* ambientColor;
 
@@ -59,6 +61,8 @@ private:
 
     TexturePicker* reflectionTexture;
     HFloatSlider* reflectionInfluence;
+
+    HFloatSlider* textureScale;
 
 };
 

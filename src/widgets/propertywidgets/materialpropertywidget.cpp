@@ -28,6 +28,8 @@ MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
 
     reflectionTexture = this->addTexturePicker("Reflection Texture");
     reflectionInfluence = this->addFloatValueSlider("Reflection Influence",0,1);
+
+    textureScale = this->addFloatValueSlider("Texture Scale",0,1);
     //this->addTexturePicker("Diffuse Texture");
 
     //this->setMaximumHeight(300);
@@ -49,6 +51,8 @@ MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
 
     connect(reflectionTexture,SIGNAL(valueChanged(QString)),this,SLOT(onReflectionTextureChanged(QString)));
     connect(reflectionInfluence,SIGNAL(valueChanged(float)),this,SLOT(onReflectionInfluenceChanged(float)));
+
+    connect(textureScale,SIGNAL(valueChanged(float)),this,SLOT(onTextureScaleChanged(float)));
 
 }
 
@@ -84,6 +88,8 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> scene
 
     reflectionTexture->setTexture(mat->getReflectionTextureSource());
     reflectionInfluence->setValue(mat->getReflectionInfluence());
+
+    textureScale->setValue(mat->getTextureScale());
 
 }
 
@@ -165,5 +171,13 @@ void MaterialPropertyWidget::onReflectionInfluenceChanged(float influence)
     if(!!material)
     {
         material->setReflectionInfluence(influence);
+    }
+}
+
+void MaterialPropertyWidget::onTextureScaleChanged(float scale)
+{
+    if(!!material)
+    {
+        material->setTextureScale(scale);
     }
 }

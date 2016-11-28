@@ -201,7 +201,7 @@ public:
         tex = matObj["specularTexture"].toString("");
         if(!tex.isEmpty()) material->setSpecularTexture(jah3d::Texture2D::load(getAbsolutePath(tex)));
 
-        material->setTextureScale((float)matObj["textureScale"].toDouble(0.0f));
+        material->setTextureScale((float)matObj["textureScale"].toDouble(1.0f));
 
         return material;
 
