@@ -119,12 +119,11 @@ private:
         QJsonObject matObj;
         writeSceneNodeMaterial(matObj,mat);
         sceneNodeObject["material"] = matObj;
-
     }
 
     void writeSceneNodeMaterial(QJsonObject& matObj,QSharedPointer<jah3d::DefaultMaterial> mat)
     {
-        matObj["ambientColor"] = jsonColor(mat->getDiffuseColor());
+        matObj["ambientColor"] = jsonColor(mat->getAmbientColor());
 
         matObj["diffuseColor"] = jsonColor(mat->getDiffuseColor());
         matObj["diffuseTexture"] = getRelativePath(mat->getDiffuseTextureSource());
@@ -138,6 +137,8 @@ private:
 
         matObj["reflectionTexture"] = getRelativePath(mat->getReflectionTextureSource());
         matObj["reflectionInfluence"] = mat->getReflectionInfluence();
+
+        matObj["textureScale"] = mat->getTextureScale();
     }
 
     QJsonObject jsonColor(QColor color)

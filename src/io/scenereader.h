@@ -7,6 +7,8 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QJsonValue>
+#include <QJsonValueRef>
 #include <QJsonDocument>
 
 #include "../jah3d/core/scene.h"
@@ -53,6 +55,11 @@ public:
         return scene;
     }
 
+    /**
+     * Creates scene node from json data
+     * @param nodeObj
+     * @return
+     */
     QSharedPointer<jah3d::SceneNode> readSceneNode(QJsonObject& nodeObj)
     {
         QSharedPointer<jah3d::SceneNode> sceneNode;
@@ -65,7 +72,45 @@ public:
         else
             sceneNode = jah3d::SceneNode::create();
 
+        //read transform
+        readSceneNodeTransform(nodeObj,sceneNode);
+
+        //read name
+        sceneNode->name = nodeObj["name"].toString("");
+
         return sceneNode;
+    }
+
+    /**
+     * Reads pos, rot and scale properties from json object
+     * if scale isnt available then it's set to (1,1,1) by default
+     * @param nodeObj
+     * @param sceneNode
+     */
+    void readSceneNodeTransform(QJsonObject& nodeObj,QSharedPointer<jah3d::SceneNode> sceneNode)
+    {
+        auto pos = nodeObj["pos"].toObject();
+        if(!pos.isEmpty())
+        {
+            sceneNode->pos = readVector3(pos);
+        }
+
+        auto rot = nodeObj["rot"].toObject();
+        if(!rot.isEmpty())
+        {
+            //the rotation is stored as euler angles
+            sceneNode->rot = QQuaternion::fromEulerAngles(readVector3(rot));
+        }
+
+        auto scale = nodeObj["scale"].toObject();
+        if(!scale.isEmpty())
+        {
+            sceneNode->scale = readVector3(scale);
+        }
+        else
+        {
+            sceneNode->scale = QVector3D(1,1,1);
+        }
     }
 
     /**
@@ -88,6 +133,11 @@ public:
         return meshNode;
     }
 
+    /**
+     * Creates light from light node data
+     * @param nodeObj
+     * @return
+     */
     QSharedPointer<jah3d::LightNode> createLight(QJsonObject& nodeObj)
     {
         auto lightNode = jah3d::LightNode::create();
@@ -96,6 +146,10 @@ public:
         lightNode->intensity = (float)nodeObj["intensity"].toDouble(1.0f);
         lightNode->radius = (float)nodeObj["radius"].toDouble(1.0f);
         lightNode->spotCutOff = (float)nodeObj["spotCutOff"].toDouble(30.0f);
+
+        //todo: move this to the sceneview widget or somewhere more appropriate
+        lightNode->icon = jah3d::Texture2D::load("app/icons/bulb.png");
+        lightNode->iconSize = 0.5f;
 
         return lightNode;
     }
@@ -117,7 +171,7 @@ public:
 
     /**
      * Extracts material from node's json object.
-     * Creates default material if one doesnt exist
+     * Creates default material if one isnt defined in nodeObj
      * @param nodeObj
      * @return
      */
@@ -138,14 +192,16 @@ public:
         material->setDiffuseColor(readColor(colObj));
 
         auto tex = matObj["diffuseTexture"].toString("");
-        if(!tex.isEmpty()) material->setDiffuseTexture(jah3d::Texture2D::load(tex));
+        if(!tex.isEmpty()) material->setDiffuseTexture(jah3d::Texture2D::load(getAbsolutePath(tex)));
 
         colObj = matObj["specularColor"].toObject();
         material->setSpecularColor(readColor(colObj));
         material->setShininess((float)matObj["shininess"].toDouble(0.0f));
 
         tex = matObj["specularTexture"].toString("");
-        if(!tex.isEmpty()) material->setSpecularTexture(jah3d::Texture2D::load(tex));
+        if(!tex.isEmpty()) material->setSpecularTexture(jah3d::Texture2D::load(getAbsolutePath(tex)));
+
+        material->setTextureScale((float)matObj["textureScale"].toDouble(0.0f));
 
         return material;
 
@@ -153,6 +209,7 @@ public:
 
     /**
      * Reads r,g,b and a from color json object
+     * returns default QColor() if colorObj is null
      * @param colorObj
      * @return
      */
@@ -170,6 +227,27 @@ public:
         col.setAlpha(colorObj["a"].toInt(0));
 
         return col;
+    }
+
+    /**
+     * Reads x,y and z from vector json object
+     * returns default QVector3D() if colorObj is null
+     * @param vecObj
+     * @return
+     */
+    QVector3D readVector3(const QJsonObject& vecObj)
+    {
+        if(vecObj.isEmpty())
+        {
+            return QVector3D();
+        }
+
+        QVector3D vec;
+        vec.setX(vecObj["x"].toDouble(0));
+        vec.setY(vecObj["y"].toDouble(0));
+        vec.setZ(vecObj["z"].toDouble(0));
+
+        return vec;
     }
 
 

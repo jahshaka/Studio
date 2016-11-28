@@ -127,12 +127,19 @@ void DefaultMaterial::end()
 
 void DefaultMaterial::setDiffuseTexture(QSharedPointer<Texture2D> tex)
 {
-    diffuseTexture=tex;
-    useDiffuseTex = true;
-    auto matTex = new MaterialTexture();
-    matTex->texture = tex->texture;//bad! fix!
-    matTex->name = "u_diffuseTexture";
-    textures.append(matTex);
+    if(!!tex)
+    {
+        diffuseTexture=tex;
+        useDiffuseTex = true;
+        auto matTex = new MaterialTexture();
+        matTex->texture = tex->texture;//bad! fix!
+        matTex->name = "u_diffuseTexture";
+        textures.append(matTex);
+    }
+    else
+    {
+        //todo: remove texture
+    }
 
     //useDiffuseTex
     //program->bind();
@@ -309,6 +316,11 @@ float DefaultMaterial::getReflectionInfluence()
 void DefaultMaterial::setTextureScale(float scale)
 {
     this->textureScale = scale;
+}
+
+float DefaultMaterial::getTextureScale()
+{
+    return textureScale;
 }
 
 }
