@@ -24,12 +24,6 @@ class LightPropertyWidget:public AccordianBladeWidget
 public:
     LightPropertyWidget(QWidget* parent=nullptr);
 
-    ColorValueWidget* lightColor;
-    HFloatSlider* radius;
-    HFloatSlider* spotCutOff;
-    HFloatSlider* intensity;
-    //EnumPicker* lightTypePicker;
-
     /**
      * Sets the active sceneNode. If the sceneNode is a LightNode it is casted
      * to a LightNode and stored in lightNode, otherwise lightNode is reset to null
@@ -66,6 +60,12 @@ protected slots:
 private:
 
     QSharedPointer<jah3d::LightNode> lightNode;
+
+    ColorValueWidget* lightColor;
+    HFloatSlider* radius;
+    HFloatSlider* spotCutOff;
+    HFloatSlider* intensity;
+    //EnumPicker* lightTypePicker;
 };
 
 #endif // LIGHTPROPERTYWIDGET_H

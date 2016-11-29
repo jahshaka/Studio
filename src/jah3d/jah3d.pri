@@ -20,7 +20,8 @@ HEADERS += \
     $$PWD/materials/billboardmaterial.h \
     $$PWD/graphics/graphicshelper.h \
     $$PWD/graphics/utils/billboard.h \
-    $$PWD/geometry/trimesh.h
+    $$PWD/geometry/trimesh.h \
+    $$PWD/materials/defaultskymaterial.h
 
 include(assimp/assimp.pri)
 include(libovr/libovr.pri)
@@ -34,4 +35,6 @@ SOURCES += \
     $$PWD/graphics/forwardrenderer.cpp \
     $$PWD/graphics/graphicshelper.cpp \
     $$PWD/graphics/utils/billboard.cpp \
-    $$PWD/scenegraph/cameranode.cpp
+    $$PWD/scenegraph/cameranode.cpp \
+    $$PWD/graphics/texture2d.cpp \
+    $$PWD/materials/defaultskymaterial.cpp

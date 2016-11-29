@@ -94,6 +94,8 @@ public:
     void removeFromParent();
     void removeChild(SceneNodePtr node);
 
+    bool isRootNode();
+
     QVector3D getGlobalPosition();
 
     virtual void update(float dt);

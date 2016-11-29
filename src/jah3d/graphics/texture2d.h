@@ -18,29 +18,22 @@ class Texture2D: public Texture
 
 public:
     //todo: move mipmap generation and texture filter responsibilities to Texture2D class's non-static members
-    static Texture2DPtr load(QString path)
+    static Texture2DPtr load(QString path);
+
+    /**
+     * Created texture from QImage
+     * @param image
+     * @return
+     */
+    static Texture2DPtr create(QImage image);
+
+    /**
+     * Returns the path to the source file of the texture
+     * @return
+     */
+    QString getSource()
     {
-        auto image = QImage(path);
-        image = image.mirrored(false,true);
-        if(image.isNull())
-        {
-            qDebug()<<"error loading image: "<<path<<endl;
-            return Texture2DPtr(nullptr);
-        }
-
-        auto tex = create(image);
-        tex->source = path;
-
-        return tex;
-    }
-
-    static Texture2DPtr create(QImage image)
-    {
-        auto texture = new QOpenGLTexture(image);
-        texture->generateMipMaps();
-        texture->setMinMagFilters(QOpenGLTexture::LinearMipMapLinear,QOpenGLTexture::Linear);
-
-        return QSharedPointer<Texture2D>(new Texture2D(texture));
+        return source;
     }
 
 private:

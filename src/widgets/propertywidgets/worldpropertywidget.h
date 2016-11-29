@@ -7,6 +7,8 @@
 
 class ColorValueWidget;
 class ColorPickerWidget;
+class TexturePicker;
+
 namespace jah3d
 {
     class Scene;
@@ -14,21 +16,24 @@ namespace jah3d
     class LightNode;
 }
 
+/**
+ * This widget displays the properties of the scene.
+ */
 class WorldPropertyWidget:public AccordianBladeWidget
 {
+    Q_OBJECT
+
 public:
     WorldPropertyWidget();
-    QSharedPointer<jah3d::Scene> scene;
 
     void setScene(QSharedPointer<jah3d::Scene> scene);
 
 protected slots:
-    void onSkyTextureSet(QString texPath);
+    void onSkyTextureChanged(QString texPath);
 
 private:
+    QSharedPointer<jah3d::Scene> scene;
     TexturePicker* skyTexture;
-
-
 
 };
 

@@ -45,55 +45,62 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sc
 
     if(!!sceneNode)
     {
-        //gotta recreate them each time
-        transformPropView = new AccordianBladeWidget();
-        transformPropView->setContentTitle("Transformation");
-        transformWidget = transformPropView->addTransform();
-        //transformPropView->expand();
-
-        //light blade
-        lightPropView = new LightPropertyWidget();
-        lightPropView->setContentTitle("Light");
-
-        //material blade
-        materialPropView = new MaterialPropertyWidget();
-        materialPropView->setContentTitle("Material");
-        materialPropView->setMaxHeight(700);
-
-
-        this->sceneNode = sceneNode;
-        lightPropView->setSceneNode(sceneNode);
-        materialPropView->setSceneNode(sceneNode);
-        transformWidget->setSceneNode(sceneNode);
-
-        //delete this->layout();
-
-        auto layout = new QVBoxLayout();
-        layout->addWidget(transformPropView);
-        transformPropView->expand();
-
-        switch(sceneNode->getSceneNodeType())
+        if(sceneNode->isRootNode())
         {
-        case jah3d::SceneNodeType::Light:
-            layout->addWidget(lightPropView);
-            lightPropView->expand();
-            break;
-        case jah3d::SceneNodeType::Mesh:
-            layout->addWidget(materialPropView);
-            materialPropView->expand();
-            break;
 
-        default:
-            break;
         }
+        else
+        {
+            //gotta recreate them each time
+            transformPropView = new AccordianBladeWidget();
+            transformPropView->setContentTitle("Transformation");
+            transformWidget = transformPropView->addTransform();
+            //transformPropView->expand();
 
-        layout->addStretch();
-        layout->setMargin(0);
+            //light blade
+            lightPropView = new LightPropertyWidget();
+            lightPropView->setContentTitle("Light");
 
-        auto oldLayout = this->layout();
-        clearLayout(oldLayout);
+            //material blade
+            materialPropView = new MaterialPropertyWidget();
+            materialPropView->setContentTitle("Material");
+            materialPropView->setMaxHeight(700);
 
-        this->setLayout(layout);
+
+            this->sceneNode = sceneNode;
+            lightPropView->setSceneNode(sceneNode);
+            materialPropView->setSceneNode(sceneNode);
+            transformWidget->setSceneNode(sceneNode);
+
+            //delete this->layout();
+
+            auto layout = new QVBoxLayout();
+            layout->addWidget(transformPropView);
+            transformPropView->expand();
+
+            switch(sceneNode->getSceneNodeType())
+            {
+            case jah3d::SceneNodeType::Light:
+                layout->addWidget(lightPropView);
+                lightPropView->expand();
+                break;
+            case jah3d::SceneNodeType::Mesh:
+                layout->addWidget(materialPropView);
+                materialPropView->expand();
+                break;
+
+            default:
+                break;
+            }
+
+            layout->addStretch();
+            layout->setMargin(0);
+
+            auto oldLayout = this->layout();
+            clearLayout(oldLayout);
+
+            this->setLayout(layout);
+        }
     }
     else
     {

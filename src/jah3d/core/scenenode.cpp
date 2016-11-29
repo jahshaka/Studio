@@ -74,6 +74,14 @@ void SceneNode::removeChild(SceneNodePtr node)
     scene->removeNode(node);
 }
 
+bool SceneNode::isRootNode()
+{
+    if(this->scene->getRootNode().data()==this)
+        return true;
+
+    return false;
+}
+
 void SceneNode::update(float dt)
 {
     localTransform.setToIdentity();

@@ -1,8 +1,10 @@
 #include "worldpropertywidget.h"
+#include "../texturepicker.h"
 
 WorldPropertyWidget::WorldPropertyWidget()
 {
-    skyTexture = this->addTexturePicker("Sky");
+    skyTexture = this->addTexturePicker("Sky Texture");
+    connect(skyTexture,SIGNAL(valueChanged(QString)),this,SLOT(onSkyTextureChanged(QString)));
 }
 
 void WorldPropertyWidget::setScene(QSharedPointer<jah3d::Scene> scene)
@@ -14,13 +16,13 @@ void WorldPropertyWidget::setScene(QSharedPointer<jah3d::Scene> scene)
     else
     {
         this->scene.clear();
-        return;
+        //return;
     }
 
 
 }
 
-void WorldPropertyWidget::onSkyTextureSet(QString texPath)
+void WorldPropertyWidget::onSkyTextureChanged(QString texPath)
 {
-
+    //scene->setSkyTexture(texPath);
 }

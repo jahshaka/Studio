@@ -125,7 +125,8 @@ HEADERS  += src/mainwindow.h \
     src/widgets/propertywidgets/worldpropertywidget.h \
     src/io/scenewriter.h \
     src/io/sceneiobase.h \
-    src/io/scenereader.h
+    src/io/scenereader.h \
+    src/widgets/propertywidgets/scenepropertywidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

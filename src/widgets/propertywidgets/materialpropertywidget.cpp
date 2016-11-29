@@ -29,7 +29,7 @@ MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
     reflectionTexture = this->addTexturePicker("Reflection Texture");
     reflectionInfluence = this->addFloatValueSlider("Reflection Influence",0,1);
 
-    textureScale = this->addFloatValueSlider("Texture Scale",0,1);
+    textureScale = this->addFloatValueSlider("Texture Scale",0,10);
     //this->addTexturePicker("Diffuse Texture");
 
     //this->setMaximumHeight(300);

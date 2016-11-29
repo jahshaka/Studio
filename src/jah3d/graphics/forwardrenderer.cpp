@@ -51,6 +51,9 @@ void ForwardRenderer::renderScene(Viewport* vp)
 
     renderNode(renderData,scene->rootNode);
 
+    //STEP 2: RENDER SKY
+
+
     //STEP 2: RENDER LINES (for e.g. light radius and the camera frustum)
 
     //STEP 3: RENDER BILLBOARD ICONS
@@ -145,6 +148,13 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
 
     for(auto childNode:node->children)
         renderNode(renderData,childNode);
+}
+
+void ForwardRenderer::renderSky(RenderData* renderData)
+{
+    scene->skyMaterial->begin(gl);
+    scene->skyMesh->draw(gl,program);
+    scene->skyMaterial->end(gl);
 }
 
 void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
