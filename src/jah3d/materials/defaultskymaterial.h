@@ -6,7 +6,6 @@
 #include "../graphics/texture2d.h"
 #include <QOpenGLShaderProgram>
 #include <QColor>
-#include
 
 class QOpenGLFunctions_3_2_Core;
 

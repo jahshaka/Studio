@@ -16,9 +16,15 @@ namespace jah3d
 class Material;
 typedef QSharedPointer<Material> MaterialPtr;
 
+class Texture2D;
+typedef QSharedPointer<Texture2D> Texture2DPtr;
+
+class Texture;
+typedef QSharedPointer<Texture> TexturePtr;
+
 struct MaterialTexture
 {
-    QOpenGLTexture* texture;
+    Texture2DPtr texture;
     QString name;
 };
 
@@ -27,8 +33,9 @@ class Material
 public:
     //ShaderProgramPtr program;
     QOpenGLShaderProgram* program;
-    //QMap<QString, TexturePtr> textures;
-    QList<MaterialTexture*> textures;
+    QMap<QString, Texture2DPtr> textures;
+    //QMap<QString, MaterialTexture*> textures;
+    //QList<MaterialTexture*> textures;
 
     bool acceptsLighting;
 
@@ -37,18 +44,51 @@ public:
         acceptsLighting = true;
     }
 
-    //void bind();
-    //void unbind();
-
+    /**
+     * Called at the beginning of rendering a primitive
+     * This function is used by subclasses to bind the shader pass parameters,
+     * bind textures and set states.
+     * @param gl
+     */
     virtual void begin(QOpenGLFunctions_3_2_Core* gl)
     {
 
     }
 
+    /**
+     * Called after endering a pritimitive.
+     * This is used to cleanup after rendering
+     */
     virtual void end()
     {
 
     }
+
+    /**
+     * Adds texture to the material by name
+     * If the material already contains the texture, it wil be replaced
+     * @param name name of the texture uniform in the shader
+     * @param textures texture pointer
+     */
+    void addTexture(QString name,Texture2DPtr textures);
+
+    /**
+     * Removes texture from material
+     * @param name
+     */
+    void removeTexture(QString name);
+
+    /**
+     * binds all material's textures
+     * @param gl
+     */
+    void bindTextures(QOpenGLFunctions_3_2_Core* gl);
+
+    /**
+     * unbinds all material textures
+     * @param gl
+     */
+    void unbindTextures(QOpenGLFunctions_3_2_Core* gl);
 
     template<typename T>
     void setUniformValue(QString name,T value)

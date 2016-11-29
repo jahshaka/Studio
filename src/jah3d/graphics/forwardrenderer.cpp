@@ -152,9 +152,9 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
 
 void ForwardRenderer::renderSky(RenderData* renderData)
 {
-    scene->skyMaterial->begin(gl);
-    scene->skyMesh->draw(gl,program);
-    scene->skyMaterial->end(gl);
+    //scene->skyMaterial->begin(gl);
+    //scene->skyMesh->draw(gl,program);
+    //scene->skyMaterial->end(gl);
 }
 
 void ForwardRenderer::renderBillboardIcons(RenderData* renderData)

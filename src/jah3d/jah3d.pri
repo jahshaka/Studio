@@ -37,4 +37,5 @@ SOURCES += \
     $$PWD/graphics/utils/billboard.cpp \
     $$PWD/scenegraph/cameranode.cpp \
     $$PWD/graphics/texture2d.cpp \
-    $$PWD/materials/defaultskymaterial.cpp
+    $$PWD/materials/defaultskymaterial.cpp \
+    $$PWD/graphics/material.cpp
