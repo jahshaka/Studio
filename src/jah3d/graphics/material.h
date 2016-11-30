@@ -59,7 +59,7 @@ public:
      * Called after endering a pritimitive.
      * This is used to cleanup after rendering
      */
-    virtual void end()
+    virtual void end(QOpenGLFunctions_3_2_Core* gl)
     {
 
     }
@@ -89,6 +89,8 @@ public:
      * @param gl
      */
     void unbindTextures(QOpenGLFunctions_3_2_Core* gl);
+
+    void createProgramFromShaderSource(QString vsFile,QString fsFile);
 
     template<typename T>
     void setUniformValue(QString name,T value)

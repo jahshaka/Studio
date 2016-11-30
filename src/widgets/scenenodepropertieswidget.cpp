@@ -7,6 +7,7 @@
 
 #include "propertywidgets/lightpropertywidget.h"
 #include "propertywidgets/materialpropertywidget.h"
+#include "propertywidgets/worldpropertywidget.h"
 
 #include "../jah3d/core/scenenode.h"
 
@@ -47,7 +48,20 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sc
     {
         if(sceneNode->isRootNode())
         {
+            worldPropView = new WorldPropertyWidget();
+            worldPropView->setContentTitle("Sky");
+            worldPropView->setScene(sceneNode->scene);
 
+            auto layout = new QVBoxLayout();
+            layout->addWidget(worldPropView);
+
+            layout->addStretch();
+            layout->setMargin(0);
+
+            auto oldLayout = this->layout();
+            clearLayout(oldLayout);
+
+            this->setLayout(layout);
         }
         else
         {

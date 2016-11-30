@@ -12,7 +12,7 @@ namespace jah3d
 class AccordianBladeWidget;
 class TransformEditor;
 class MaterialPropertyWidget;
-
+class WorldPropertyWidget;
 class LightPropertyWidget;
 
 /**
@@ -25,7 +25,7 @@ public:
     SceneNodePropertiesWidget(QWidget* parent=nullptr);
 
     /**
-     *  sets active scene node to show properties for
+     * sets active scene node to show properties for
      * @param sceneNode
      */
     void setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode);
@@ -44,6 +44,7 @@ private:
     MaterialPropertyWidget* materialPropView;
     //MeshPropertyWidget* meshPropView;
     LightPropertyWidget* lightPropView;
+    WorldPropertyWidget* worldPropView;
 };
 
 #endif // PROPERTYWIDGET_H

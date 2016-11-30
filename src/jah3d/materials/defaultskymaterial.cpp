@@ -4,29 +4,48 @@
 namespace jah3d
 {
 
-SkyMaterial::SkyMaterial()
+DefaultSkyMaterial::DefaultSkyMaterial()
 {
+    createProgramFromShaderSource("app/shaders/defaultsky.vs","app/shaders/defaultsky.vs");
+}
+
+void DefaultSkyMaterial::setSkyTexture(Texture2DPtr tex)
+{
+    texture = tex;
+    this->addTexture("texture",tex);
+}
+
+void DefaultSkyMaterial::clearSkyTexture()
+{
+    texture.clear();
+    removeTexture("texture");
+}
+
+void DefaultSkyMaterial::setSkyColor(QColor color)
+{
+    this->color = color;
+}
+
+QColor DefaultSkyMaterial::getSkyColor()
+{
+    return color;
+}
+
+void DefaultSkyMaterial::begin(QOpenGLFunctions_3_2_Core* gl)
+{
+    Material::begin(gl);
+    this->setUniformValue("color",color);
 
 }
 
-void SkyMaterial::setSkyTexture(Texture2DPtr tex)
+void DefaultSkyMaterial::end(QOpenGLFunctions_3_2_Core* gl)
 {
-
+    Material::end(gl);
 }
 
-void SkyMaterial::clearSkyTexture()
+DefaultSkyMaterialPtr DefaultSkyMaterial::create()
 {
-
-}
-
-void SkyMaterial::setSkyColor(QColor color)
-{
-
-}
-
-QColor SkyMaterial::getSkyColor()
-{
-
+    return QSharedPointer<DefaultSkyMaterial>(new DefaultSkyMaterial());
 }
 
 }

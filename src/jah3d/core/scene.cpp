@@ -3,6 +3,7 @@
 #include "../scenegraph/lightnode.h"
 #include "../scenegraph/cameranode.h"
 #include "../graphics/mesh.h"
+#include "../materials/defaultskymaterial.h"
 
 namespace jah3d
 {
@@ -14,12 +15,14 @@ Scene::Scene()
     //rootNode->setScene(this->sharedFromThis());
 
     skyMesh = Mesh::loadMesh("app/content/primitives/sky.obj");
-    skyTexture = Texture2D::load("app/content/skies/default.png");
+    //skyTexture = Texture2D::load("app/content/skies/default.png");
+    skyMaterial = DefaultSkyMaterial::create();
 }
 
 void Scene::setSkyTexture(Texture2DPtr tex)
 {
     skyTexture = tex;
+    skyMaterial->setSkyTexture(tex);
 }
 
 QString Scene::getSkyTextureSource()

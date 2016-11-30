@@ -20,5 +20,7 @@
         <file>app/shaders/refractive_material.vert</file>
         <file>app/shaders/simple.frag</file>
         <file>app/shaders/simple.vert</file>
+        <file>app/shaders/defaultsky.vert</file>
+        <file>app/shaders/defaultsky.frag</file>
     </qresource>
 </RCC>

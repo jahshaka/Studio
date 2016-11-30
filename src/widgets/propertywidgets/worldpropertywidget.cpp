@@ -25,4 +25,5 @@ void WorldPropertyWidget::setScene(QSharedPointer<jah3d::Scene> scene)
 void WorldPropertyWidget::onSkyTextureChanged(QString texPath)
 {
     //scene->setSkyTexture(texPath);
+    scene->skyMaterial->setSkyTexture();
 }

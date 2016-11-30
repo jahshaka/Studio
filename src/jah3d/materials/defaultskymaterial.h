@@ -14,6 +14,8 @@ namespace jah3d
 
 class Texture;
 class Texture2D;
+class DefaultSkyMaterial;
+typedef QSharedPointer<DefaultSkyMaterial> DefaultSkyMaterialPtr;
 
 /**
  * This is the default sky material.
@@ -21,19 +23,29 @@ class Texture2D;
  * skyTexture
  * skyColor
  *
- * if a skyTexture is specified,then the final output color is the
+ * if a skyTexture is specified then the final output color is the
  * texture multiplied by the color. Else, only the color is used.
  */
-class SkyMaterial:public Material
+class DefaultSkyMaterial:public Material
 {
 public:
-    SkyMaterial();
+
 
     void setSkyTexture(Texture2DPtr tex);
     void clearSkyTexture();
 
     void setSkyColor(QColor color);
     QColor getSkyColor();
+
+    void begin(QOpenGLFunctions_3_2_Core* gl) override;
+    void end(QOpenGLFunctions_3_2_Core* gl) override;
+
+    static DefaultSkyMaterialPtr create();
+private:
+    DefaultSkyMaterial();
+
+    Texture2DPtr texture;
+    QColor color;
 };
 
 }

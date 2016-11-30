@@ -56,4 +56,25 @@ void Material::unbindTextures(QOpenGLFunctions_3_2_Core* gl)
     }
 }
 
+void Material::createProgramFromShaderSource(QString vsFile,QString fsFile)
+{
+    QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
+    vshader->compileSourceFile(vsFile);
+
+    QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
+    fshader->compileSourceFile(fsFile);
+
+    program = new QOpenGLShaderProgram;
+    program->addShader(vshader);
+    program->addShader(fshader);
+
+    //should this be here?
+    program->bindAttributeLocation("a_pos", 0);
+    program->bindAttributeLocation("a_texCoord", 1);
+    program->bindAttributeLocation("a_normal", 2);
+    program->bindAttributeLocation("a_tangent", 3);
+
+    program->link();
+}
+
 }

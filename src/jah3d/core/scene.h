@@ -4,6 +4,7 @@
 #include <QList>
 #include <QSharedPointer>
 #include "../graphics/texture2d.h"
+#include "../materials/defaultskymaterial.h"
 //#include "scenenode.h"
 //#include "../scenegraph/cameranode.h"
 //#include "../scenegraph/meshnode.h"
@@ -16,12 +17,14 @@ class SceneNode;
 class Scene;
 class CameraNode;
 class Mesh;
+class Material;
 
 typedef QSharedPointer<jah3d::LightNode> LightNodePtr;
 //typedef QSharedPointer<SceneNode> SceneNodePtr;
 typedef QSharedPointer<jah3d::Scene> ScenePtr;
 typedef QSharedPointer<jah3d::SceneNode> SceneNodePtr;
 typedef QSharedPointer<jah3d::CameraNode> CameraNodePtr;
+typedef QSharedPointer<jah3d::Material> MaterialPtr;
 
 class Scene:public QEnableSharedFromThis<Scene>
 {
@@ -36,6 +39,9 @@ public:
 
     Mesh* skyMesh;
     Texture2DPtr skyTexture;
+
+    //should be MaterialPtr
+    DefaultSkyMaterialPtr skyMaterial;
 
     Scene();
 public:

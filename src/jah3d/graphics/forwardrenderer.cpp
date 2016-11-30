@@ -52,18 +52,18 @@ void ForwardRenderer::renderScene(Viewport* vp)
     renderNode(renderData,scene->rootNode);
 
     //STEP 2: RENDER SKY
+    renderSky(renderData);
 
+    //STEP 3: RENDER LINES (for e.g. light radius and the camera frustum)
 
-    //STEP 2: RENDER LINES (for e.g. light radius and the camera frustum)
-
-    //STEP 3: RENDER BILLBOARD ICONS
+    //STEP 4: RENDER BILLBOARD ICONS
     renderBillboardIcons(renderData);
 
-    //STEP 4: RENDER SELECTED OBJECT
+    //STEP 5: RENDER SELECTED OBJECT
     if(!!selectedSceneNode)
         renderSelectedNode(renderData,selectedSceneNode);
 
-    //STEP 5: RENDER GIZMOS
+    //STEP 6: RENDER GIZMOS
 }
 
 void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode> node)
@@ -152,9 +152,9 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
 
 void ForwardRenderer::renderSky(RenderData* renderData)
 {
-    //scene->skyMaterial->begin(gl);
-    //scene->skyMesh->draw(gl,program);
-    //scene->skyMaterial->end(gl);
+    scene->skyMaterial->begin(gl);
+    scene->skyMesh->draw(gl,scene->skyMaterial.data());
+    scene->skyMaterial->end(gl);
 }
 
 void ForwardRenderer::renderBillboardIcons(RenderData* renderData)

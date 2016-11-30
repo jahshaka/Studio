@@ -123,7 +123,7 @@ void DefaultMaterial::begin(QOpenGLFunctions_3_2_Core* gl)
 
 }
 
-void DefaultMaterial::end()
+void DefaultMaterial::end(QOpenGLFunctions_3_2_Core* gl)
 {
     //unset textures
 }

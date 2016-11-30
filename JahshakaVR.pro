@@ -186,3 +186,7 @@ export(moveassets.commands)
 QMAKE_EXTRA_TARGETS += first moveassets movecontent
 
 include(src/jah3d/jah3d.pri)
+
+DISTFILES += \
+    app/shaders/defaultsky.vert \
+    app/shaders/defaultsky.fsh

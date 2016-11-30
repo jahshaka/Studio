@@ -78,7 +78,7 @@ public:
 
 
     void begin(QOpenGLFunctions_3_2_Core* gl) override;
-    void end() override;
+    void end(QOpenGLFunctions_3_2_Core* gl) override;
 
     static QSharedPointer<DefaultMaterial> create()
     {
