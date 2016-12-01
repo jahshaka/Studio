@@ -51,6 +51,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sc
             worldPropView = new WorldPropertyWidget();
             worldPropView->setContentTitle("Sky");
             worldPropView->setScene(sceneNode->scene);
+            worldPropView->expand();
 
             auto layout = new QVBoxLayout();
             layout->addWidget(worldPropView);

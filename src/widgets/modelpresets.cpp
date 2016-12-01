@@ -1,11 +1,16 @@
 #include "modelpresets.h"
 #include "ui_modelpresets.h"
+#include <QListWidgetItem>
+
+#include "../mainwindow.h"
 
 ModelPresets::ModelPresets(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::ModelPresets)
 {
     ui->setupUi(this);
+
+    mainWindow = nullptr;
 
     ui->modelsSets->setViewMode(QListWidget::IconMode);
     ui->modelsSets->setIconSize(QSize(88,88));
@@ -14,16 +19,60 @@ ModelPresets::ModelPresets(QWidget *parent) :
     ui->modelsSets->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->modelsSets->setSelectionMode(QAbstractItemView::SingleSelection);
 
+    connect(ui->modelsSets,SIGNAL(doubleClicked(QModelIndex)),SLOT(onPrimitiveSelected(QModelIndex)));
+
+    /*
     ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cone.png"),"Cone"));
     ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cube.png"),"Cube"));
     ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cylinder.png"),"Cylinder"));
     ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/icosphere.png"),"IcoSphere"));
     ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/sphere.png"),"Sphere"));
     ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/torus.png"),"Torus"));
-    ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cone.png"),"Cone"));
-    ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cube.png"),"Cube"));
-    ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cylinder.png"),"Cylinder"));
+    //ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cone.png"),"Cone"));
+    //ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cube.png"),"Cube"));
+    //ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cylinder.png"),"Cylinder"));
+    */
 
+    addItem("Cone",":/app/modelpresets/cone.png");
+    addItem("Cube",":/app/modelpresets/cube.png");
+    addItem("Cylinder",":/app/modelpresets/cylinder.png");
+    addItem("IcoSphere",":/app/modelpresets/icosphere.png");
+    addItem("Sphere",":/app/modelpresets/sphere.png");
+    addItem("Torus",":/app/modelpresets/torus.png");
+
+}
+
+void ModelPresets::setMainWindow(MainWindow* mainWindow)
+{
+    this->mainWindow = mainWindow;
+}
+
+void ModelPresets::onPrimitiveSelected(QModelIndex itemIndex)
+{
+    if(mainWindow==nullptr)
+        return;
+
+    auto item = ui->modelsSets->item(itemIndex.row());
+    auto text = item->text();
+
+    //if(text=="Cone")
+    //    mainWindow->addCone();
+    if(text=="Cube")
+        mainWindow->addCube();
+    if(text=="Cylinder")
+        mainWindow->addCylinder();
+    //if(text=="IcoSphere")
+    //    mainWindow->addIcoSphere();
+    if(text=="Sphere")
+        mainWindow->addSphere();
+    if(text=="Torus")
+        mainWindow->addTorus();
+}
+
+void ModelPresets::addItem(QString name,QString path)
+{
+    QListWidgetItem* item = new QListWidgetItem(QIcon(path),name);
+    ui->modelsSets->addItem(item);
 }
 
 ModelPresets::~ModelPresets()

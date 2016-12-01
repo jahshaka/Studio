@@ -138,6 +138,7 @@ void DefaultMaterial::setDiffuseTexture(QSharedPointer<Texture2D> tex)
     }
     else
     {
+        useDiffuseTex = false;
         removeTexture("u_diffuseTexture");
     }
 }
@@ -187,6 +188,7 @@ void DefaultMaterial::setNormalTexture(QSharedPointer<Texture2D> tex)
     }
     else
     {
+        useNormalTex = false;
         removeTexture("u_normalTexture");
     }
 }
@@ -222,6 +224,7 @@ void DefaultMaterial::setSpecularTexture(QSharedPointer<Texture2D> tex)
     }
     else
     {
+        useSpecularTex = false;
         removeTexture("u_specularTexture");
     }
 }

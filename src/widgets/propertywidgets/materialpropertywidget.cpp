@@ -114,7 +114,14 @@ void MaterialPropertyWidget::onDiffuseTextureChanged(QString texture)
 {
     if(!!material)
     {
-        material->setDiffuseTexture(jah3d::Texture2D::load(texture));
+        if(texture.isEmpty() || texture.isNull())
+        {
+            material->setDiffuseTexture(jah3d::Texture2D::null());
+        }
+        else
+        {
+            material->setDiffuseTexture(jah3d::Texture2D::load(texture));
+        }
     }
 }
 

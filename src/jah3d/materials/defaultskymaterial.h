@@ -16,6 +16,7 @@ class Texture;
 class Texture2D;
 class DefaultSkyMaterial;
 typedef QSharedPointer<DefaultSkyMaterial> DefaultSkyMaterialPtr;
+typedef QSharedPointer<Texture2D> Texture2DPtr;
 
 /**
  * This is the default sky material.
@@ -33,6 +34,7 @@ public:
 
     void setSkyTexture(Texture2DPtr tex);
     void clearSkyTexture();
+    Texture2DPtr getSkyTexture();
 
     void setSkyColor(QColor color);
     QColor getSkyColor();

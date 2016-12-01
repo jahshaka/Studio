@@ -8,7 +8,7 @@ TexturePicker::TexturePicker(QWidget *parent) :
     ui(new Ui::TexturePicker)
 {
     ui->setupUi(this);
-    connect(ui->load,SIGNAL(pressed()),this,SLOT(changeDiffuseMap()));
+    connect(ui->load,SIGNAL(pressed()),SLOT(changeDiffuseMap()));
 
     this->ui->DiffuseMap->installEventFilter(this);
 }
@@ -37,7 +37,7 @@ void TexturePicker::setLabelImage(QLabel* label,QString file)
 {
     if(file.isNull() || file.isEmpty())
     {
-        label->clear();
+        ui->DiffuseMap->clear();
     }
     else
     {
@@ -45,7 +45,7 @@ void TexturePicker::setLabelImage(QLabel* label,QString file)
         image.load(file);
         QPixmap pixmap = QPixmap::fromImage(image);
         auto scaled = pixmap.scaled( label->size());
-        label->setPixmap(scaled);
+        ui->DiffuseMap->setPixmap(scaled);
         d_height = image.height();
         d_width = image.width();
 
@@ -71,6 +71,7 @@ bool TexturePicker::eventFilter(QObject *object, QEvent *ev)
         changeDiffuseMap();
     }
 
+    return false;
 }
 
 void TexturePicker::on_pushButton_clicked()
@@ -78,13 +79,15 @@ void TexturePicker::on_pushButton_clicked()
     ui->imagename->clear();
     ui->dimensions->clear();
     ui->DiffuseMap->clear();
+
+    emit valueChanged(QString::null);
 }
 
 void TexturePicker::setTexture(QString path){
 
     if(path.isNull() || path.isEmpty())
     {
-        ui->label->clear();
+        ui->DiffuseMap->clear();
     }
     else
     {

@@ -20,18 +20,13 @@ class Mesh;
 class Material;
 
 typedef QSharedPointer<jah3d::LightNode> LightNodePtr;
-//typedef QSharedPointer<SceneNode> SceneNodePtr;
 typedef QSharedPointer<jah3d::Scene> ScenePtr;
 typedef QSharedPointer<jah3d::SceneNode> SceneNodePtr;
 typedef QSharedPointer<jah3d::CameraNode> CameraNodePtr;
 typedef QSharedPointer<jah3d::Material> MaterialPtr;
 
-class Scene:public QEnableSharedFromThis<Scene>
+class Scene : public QEnableSharedFromThis<Scene>
 {
-private:
-
-    //QList<MeshNodePtr> meshes;
-
 public:
     CameraNodePtr camera;
     SceneNodePtr rootNode;

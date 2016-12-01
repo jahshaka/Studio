@@ -5,6 +5,18 @@
 namespace jah3d
 {
 
+void Material::begin(QOpenGLFunctions_3_2_Core* gl)
+{
+    this->program->bind();
+    this->bindTextures(gl);
+}
+
+
+void Material::end(QOpenGLFunctions_3_2_Core* gl)
+{
+    this->unbindTextures(gl);
+}
+
 void Material::addTexture(QString name,Texture2DPtr texture)
 {
     //remove texture if it already exist
@@ -15,7 +27,7 @@ void Material::addTexture(QString name,Texture2DPtr texture)
         //delete tex;
     }
 
-    textures[name] = texture;
+    textures.insert(name,texture);
 
 }
 

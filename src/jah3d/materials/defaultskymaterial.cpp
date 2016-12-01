@@ -6,19 +6,27 @@ namespace jah3d
 
 DefaultSkyMaterial::DefaultSkyMaterial()
 {
-    createProgramFromShaderSource("app/shaders/defaultsky.vs","app/shaders/defaultsky.vs");
+    createProgramFromShaderSource("app/shaders/defaultsky.vert","app/shaders/defaultsky.frag");
 }
 
 void DefaultSkyMaterial::setSkyTexture(Texture2DPtr tex)
 {
     texture = tex;
-    this->addTexture("texture",tex);
+    if(!!tex)
+        this->addTexture("texture",tex);
+    else
+        this->removeTexture("texture");
 }
 
 void DefaultSkyMaterial::clearSkyTexture()
 {
     texture.clear();
     removeTexture("texture");
+}
+
+Texture2DPtr DefaultSkyMaterial::getSkyTexture()
+{
+    return texture;
 }
 
 void DefaultSkyMaterial::setSkyColor(QColor color)

@@ -103,7 +103,6 @@ HEADERS  += src/mainwindow.h \
     src/core/settingsmanager.h \
     src/core/surfaceview.h \
     src/editor/editorcameracontroller.h \
-    src/dialogs/infodialog.h \
     src/globals.h \
     src/widgets/sceneviewwidget.h \
     src/globals.h \
@@ -152,7 +151,6 @@ FORMS    += \
     src/widgets/toruslayerwidget.ui \
     src/widgets/transformsliders.ui \
     src/widgets/worldlayerwidget.ui \
-    src/dialogs/infodialog.ui \
     src/newmainwindow.ui \
     src/widgets/materialsets.ui \
     src/widgets/modelpresets.ui \

@@ -19,7 +19,7 @@ namespace jah3d
 /**
  * This widget displays the properties of the scene.
  */
-class WorldPropertyWidget:public AccordianBladeWidget
+class WorldPropertyWidget: public AccordianBladeWidget
 {
     Q_OBJECT
 

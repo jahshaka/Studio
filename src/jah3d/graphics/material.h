@@ -44,25 +44,24 @@ public:
         acceptsLighting = true;
     }
 
+    virtual ~Material()
+    {
+
+    }
+
     /**
      * Called at the beginning of rendering a primitive
      * This function is used by subclasses to bind the shader pass parameters,
      * bind textures and set states.
      * @param gl
      */
-    virtual void begin(QOpenGLFunctions_3_2_Core* gl)
-    {
-
-    }
+    virtual void begin(QOpenGLFunctions_3_2_Core* gl);
 
     /**
      * Called after endering a pritimitive.
      * This is used to cleanup after rendering
      */
-    virtual void end(QOpenGLFunctions_3_2_Core* gl)
-    {
-
-    }
+    virtual void end(QOpenGLFunctions_3_2_Core* gl);
 
     /**
      * Adds texture to the material by name

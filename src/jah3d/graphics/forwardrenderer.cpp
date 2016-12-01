@@ -152,9 +152,21 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
 
 void ForwardRenderer::renderSky(RenderData* renderData)
 {
+    gl->glDepthMask(false);
+
     scene->skyMaterial->begin(gl);
-    scene->skyMesh->draw(gl,scene->skyMaterial.data());
+
+    auto program = scene->skyMaterial->program;
+    program->setUniformValue("u_viewMatrix",renderData->viewMatrix);
+    program->setUniformValue("u_projMatrix",renderData->projMatrix);
+    QMatrix4x4 worldMatrix;
+    worldMatrix.setToIdentity();
+    program->setUniformValue("u_worldMatrix",worldMatrix);
+
+    scene->skyMesh->draw(gl,program);
     scene->skyMaterial->end(gl);
+
+    gl->glDepthMask(true);
 }
 
 void ForwardRenderer::renderBillboardIcons(RenderData* renderData)

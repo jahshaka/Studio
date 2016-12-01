@@ -79,36 +79,13 @@ MainWindow::MainWindow(QWidget *parent) :
     licenseDialog = new LicenseDialog();
 
     ui->mainTimeline->setMainWindow(this);
-    camControl = nullptr;
+    ui->modelpresets->setMainWindow(this);
 
-    //connect(ui->deleteButton,SIGNAL(pressed()),this,SLOT(deleteNode()));
+    camControl = nullptr;
 
     setupFileMenu();
     setupViewMenu();
     setupHelpMenu();
-
-
-    /*
-    //resize event for plane
-    ui->toolButton->setMenu(addMenu);
-    ui->toolButton->setPopupMode(QToolButton::InstantPopup);
-
-    //SCENE TREE
-    connect(ui->sceneTree,SIGNAL(itemClicked(QTreeWidgetItem*,int)),this,SLOT(sceneNodeSelected(QTreeWidgetItem*)));
-    connect(ui->sceneTree,SIGNAL(itemChanged(QTreeWidgetItem*,int)),this,SLOT(sceneTreeItemChanged(QTreeWidgetItem*,int)));
-
-    //make items draggable and droppable
-    ui->sceneTree->setSelectionMode(QAbstractItemView::SingleSelection);
-    ui->sceneTree->setDragEnabled(true);
-    ui->sceneTree->viewport()->setAcceptDrops(true);
-    ui->sceneTree->setDropIndicatorShown(true);
-    ui->sceneTree->setDragDropMode(QAbstractItemView::InternalMove);
-
-    //custom context menu
-    //http://stackoverflow.com/questions/22198427/adding-a-right-click-menu-for-specific-items-in-qtreeview
-    ui->sceneTree->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(ui->sceneTree, SIGNAL(customContextMenuRequested(const QPoint &)), this, SLOT(sceneTreeCustomContextMenu(const QPoint &)));
-    */
 
     this->setupLayerButtonMenu();
 

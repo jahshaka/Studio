@@ -6,8 +6,14 @@ namespace jah3d
 
 Texture2DPtr Texture2D::load(QString path)
 {
+    return load(path,true);
+}
+
+Texture2DPtr Texture2D::load(QString path,bool flipY)
+{
     auto image = QImage(path);
-    image = image.mirrored(false,true);
+    if(flipY)
+        image = image.mirrored(false,true);
     if(image.isNull())
     {
         qDebug()<<"error loading image: "<<path<<endl;
