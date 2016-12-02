@@ -31,17 +31,16 @@ struct MaterialTexture
 class Material
 {
 public:
-    //ShaderProgramPtr program;
     QOpenGLShaderProgram* program;
     QMap<QString, Texture2DPtr> textures;
-    //QMap<QString, MaterialTexture*> textures;
-    //QList<MaterialTexture*> textures;
 
     bool acceptsLighting;
+    int numTextures;
 
     Material()
     {
         acceptsLighting = true;
+        numTextures = 0;
     }
 
     virtual ~Material()
@@ -96,6 +95,16 @@ public:
     {
         program->setUniformValue(name.toStdString().c_str(), value);
     }
+
+protected:
+    /**
+     * Sets the amount of textures your shader uses
+     * This is to ensure that no extra textures states are left unset when the material is finishes
+     * Also, this ensures that the material wont end up using a texture from a previously set material
+     * if a texture the shader uses isnt set
+     * @param count
+     */
+    void setTextureCount(int count);
 };
 
 }

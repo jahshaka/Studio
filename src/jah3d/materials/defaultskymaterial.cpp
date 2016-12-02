@@ -7,6 +7,7 @@ namespace jah3d
 DefaultSkyMaterial::DefaultSkyMaterial()
 {
     createProgramFromShaderSource("app/shaders/defaultsky.vert","app/shaders/defaultsky.frag");
+    setTextureCount(1);
 }
 
 void DefaultSkyMaterial::setSkyTexture(Texture2DPtr tex)

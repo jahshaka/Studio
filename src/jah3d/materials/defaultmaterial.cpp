@@ -17,18 +17,13 @@ namespace jah3d
 
 DefaultMaterial::DefaultMaterial()
 {
-    //diffuseTexture = nullptr;
-    //textureScale = 1.0f;
+    setTextureCount(4);
 
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
     vshader->compileSourceFile("app/shaders/simple.vert");
-    //vshader->compileSourceFile("app/shaders/color.vert");
-    //vshader->compileSourceFile("assets/advance.vert");
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
     fshader->compileSourceFile("app/shaders/simple.frag");
-    //fshader->compileSourceFile("app/shaders/color.frag");
-    //fshader->compileSourceFile("assets/advance.frag");
 
 
 
