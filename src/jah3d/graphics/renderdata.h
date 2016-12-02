@@ -1,9 +1,6 @@
 #ifndef RENDERDATA_H
 #define RENDERDATA_H
 
-//#include "../core/scene.h"
-//#include "../core/scenenode.h"
-//#include "material.h"
 #include <QSharedPointer>
 
 namespace jah3d
@@ -20,7 +17,6 @@ struct RenderData
     QMatrix4x4 projMatrix;
 
     QVector3D eyePos;
-    //QList<LightNodePtr> lights;
 
     //fog properties
     QColor fogColor;

@@ -44,61 +44,29 @@ DefaultMaterial::DefaultMaterial()
     program->setUniformValue("u_useReflectionTex",false);
     program->setUniformValue("u_useSpecularTex",false);
     program->setUniformValue("u_material.diffuse",QVector3D(1,0,0));
-    //program->release();
 
     textureScale = 1.0f;
     ambientColor = QColor(0,0,0);
 
     useNormalTex = false;
     normalIntensity = 1.0f;
-    //normalTexture = nullptr;
 
     diffuseColor = QColor(255,255,255);
     useDiffuseTex = false;
-    //diffuseTexture = nullptr;
 
     shininess = 20.0f;
     useSpecularTex = false;
     specularColor = QColor(20,20,20);
-    //specularTexture = nullptr;
 
     reflectionInfluence = 0.0f;
     useReflectionTex = false;
-    //QOpenGLTexture* reflectionTexture;
 
-    //this->setDiffuseColor(diffuseColor);
-    //this->setSpecularColor(specularColor);
-    //this->setShininess(10);
-
-    //program->release();
 }
 
 void DefaultMaterial::begin(QOpenGLFunctions_3_2_Core* gl)
 {
     program->bind();
 
-    //program->setUniformValue("u_material.diffuse",false);
-    //program->setUniformValue("u_useNormalTex",false);
-
-    //set textures
-    /*
-    for(int i=0;i<textures.size();i++)
-    {
-        auto tex = textures[i];
-        gl->glActiveTexture(GL_TEXTURE0+i);
-
-        if(tex->texture!=nullptr)
-        {
-            tex->texture->bind();
-            program->setUniformValue(tex->name.toStdString().c_str(), i);
-        }
-        else
-        {
-            //gl->glActiveTexture(GL_TEXTURE0+i);
-            gl->glBindTexture(GL_TEXTURE_2D,0);
-        }
-    }
-    */
     bindTextures(gl);
 
     //set params
@@ -122,6 +90,7 @@ void DefaultMaterial::begin(QOpenGLFunctions_3_2_Core* gl)
 void DefaultMaterial::end(QOpenGLFunctions_3_2_Core* gl)
 {
     //unset textures
+    Material::end(gl);
 }
 
 void DefaultMaterial::setDiffuseTexture(QSharedPointer<Texture2D> tex)
@@ -149,16 +118,6 @@ QString DefaultMaterial::getDiffuseTextureSource()
 
     return QString::null;
 }
-
-/*
-QOpenGLShader* DefaultMaterial::loadShader(QOpenGLShader::ShaderType type,QString filePath)
-{
-    //http://stackoverflow.com/questions/17149454/reading-entire-file-to-qstring
-    auto shader = new QOpenGLShader(type,this);
-    shader->compileSourceFile(filePat);
-
-}
-*/
 
 void DefaultMaterial::setAmbientColor(QColor col)
 {
@@ -241,10 +200,6 @@ QString DefaultMaterial::getSpecularTextureSource()
 void DefaultMaterial::setSpecularColor(QColor col)
 {
     specularColor = col;
-    //program->bind();
-    //auto spec = QVector3D(col.redF(),col.greenF(),col.blueF());
-    //program->setUniformValue("u_material.specular",spec);
-    //program->release();
 }
 
 QColor DefaultMaterial::getSpecularColor()
@@ -255,9 +210,6 @@ QColor DefaultMaterial::getSpecularColor()
 void DefaultMaterial::setShininess(float shininess)
 {
     this->shininess = shininess;
-    //program->bind();
-    //program->setUniformValue("u_material.shininess",shininess);
-    //program->release();
 }
 
 float DefaultMaterial::getShininess()

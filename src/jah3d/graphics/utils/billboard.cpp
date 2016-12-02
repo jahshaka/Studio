@@ -57,8 +57,6 @@ Billboard::Billboard(QOpenGLFunctions_3_2_Core* gl)
 
 void Billboard::draw(QOpenGLFunctions_3_2_Core* gl)
 {
-    //gl->glCullFace(GL_NONE);
-    //program->bind();
     vbo->bind();
 
     auto stride = (3+2) * sizeof(GLfloat);
@@ -69,9 +67,7 @@ void Billboard::draw(QOpenGLFunctions_3_2_Core* gl)
     program->enableAttributeArray(1);
     program->setAttributeBuffer(1, GL_FLOAT, 3 * sizeof(GLfloat), 2, stride);
 
-    gl->glDrawArrays(GL_TRIANGLES,0,6);
-    //gl->glDrawArrays(GL_POINTS,0,6);
-    //gl->glCullFace(GL_CCW);
+    gl->glDrawArrays(GL_TRIANGLES,0,6);\
 
 }
 

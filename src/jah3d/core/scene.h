@@ -5,9 +5,6 @@
 #include <QSharedPointer>
 #include "../graphics/texture2d.h"
 #include "../materials/defaultskymaterial.h"
-//#include "scenenode.h"
-//#include "../scenegraph/cameranode.h"
-//#include "../scenegraph/meshnode.h"
 
 namespace jah3d
 {

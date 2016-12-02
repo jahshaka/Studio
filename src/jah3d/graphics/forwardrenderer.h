@@ -74,7 +74,6 @@ private:
 
     //editor-specific
     jah3d::Billboard* billboard;
-    //void createBillboardIconAssets();
 
 };
 

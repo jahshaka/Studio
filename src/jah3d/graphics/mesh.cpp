@@ -74,9 +74,6 @@ Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
             }
             else
             {
-                //project on z axis
-                //data.append(pos.x);
-                //data.append(pos.y);
                 data.append(0);
                 data.append(0);
             }
@@ -156,7 +153,7 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLen
     vbo->bind();
 
     vertexLayout->bind(program);
-    gl->glDrawArrays(primitiveMode,0,numVerts);//todo: bad to assume triangles, allow other primitive types
+    gl->glDrawArrays(primitiveMode,0,numVerts);
     vertexLayout->unbind(program);
 }
 

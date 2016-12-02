@@ -81,34 +81,10 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
         auto mat = meshNode->material;
 
         auto program = mat->program;
-        //program->bind();
-
-        //bind textures
-        /*
-        auto textures = mat->textures;
-        for(int i=0;i<textures.size();i++)
-        {
-            auto tex = textures[i];
-            gl->glActiveTexture(GL_TEXTURE0+i);
-
-            if(tex->texture!=nullptr)
-            {
-                tex->texture->bind(i);
-                mat->program->setUniformValue(tex->name.toStdString().c_str(), i);
-            }
-            else
-            {
-                gl->glActiveTexture(GL_TEXTURE0+i);
-                gl->glBindTexture(GL_TEXTURE_2D,0);
-            }
-        }
-        */
 
         mat->begin(gl);
 
         //send transform and light data
-        //QMatrix4x4 local;
-        //local.setToIdentity();
         program->setUniformValue("u_worldMatrix",node->globalTransform);
         program->setUniformValue("u_viewMatrix",renderData->viewMatrix);
         program->setUniformValue("u_projMatrix",renderData->projMatrix);
@@ -232,21 +208,6 @@ void ForwardRenderer::renderSelectedNode(RenderData* renderData,QSharedPointer<S
             lineShader->setUniformValue("u_projMatrix",renderData->projMatrix);
             lineShader->setUniformValue("u_normalMatrix",node->globalTransform.normalMatrix());
             lineShader->setUniformValue("color",QColor(200,200,255,255));
-
-            /*
-            //test method using polygon offset line
-            gl->glEnable(GL_POLYGON_OFFSET_LINE);
-            gl->glPolygonOffset(1,100);
-
-            gl->glPolygonMode(GL_FRONT,GL_LINE);
-            gl->glLineWidth(5);
-            meshNode->mesh->draw(gl,lineShader);
-            gl->glPolygonMode(GL_FRONT,GL_FILL);
-            gl->glLineWidth(1);
-
-            gl->glDisable(GL_POLYGON_OFFSET_LINE);
-            gl->glPolygonOffset(0.0,0.0);
-            */
 
 
             //STEP 1: DRAW STENCIL OF THE FILLED POLYGON
