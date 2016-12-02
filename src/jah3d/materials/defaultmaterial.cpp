@@ -115,7 +115,7 @@ void DefaultMaterial::begin(QOpenGLFunctions_3_2_Core* gl)
     program->setUniformValue("u_useDiffuseTex",useDiffuseTex);
     program->setUniformValue("u_useNormalTex",useNormalTex);
     program->setUniformValue("u_useSpecularTex",useSpecularTex);
-    program->setUniformValue("u_useReflectionTexture",useReflectionTex);
+    program->setUniformValue("u_useReflectionTex",useReflectionTex);
 
 }
 
@@ -128,7 +128,6 @@ void DefaultMaterial::setDiffuseTexture(QSharedPointer<Texture2D> tex)
 {
     if(!!tex)
     {
-        diffuseTexture=tex;
         useDiffuseTex = true;
         addTexture("u_diffuseTexture",tex);
     }
@@ -137,6 +136,8 @@ void DefaultMaterial::setDiffuseTexture(QSharedPointer<Texture2D> tex)
         useDiffuseTex = false;
         removeTexture("u_diffuseTexture");
     }
+
+    diffuseTexture=tex;
 }
 
 QString DefaultMaterial::getDiffuseTextureSource()
@@ -178,7 +179,6 @@ void DefaultMaterial::setNormalTexture(QSharedPointer<Texture2D> tex)
 {
     if(!!tex)
     {
-        normalTexture=tex;
         useNormalTex = true;
         addTexture("u_normalTexture",tex);
     }
@@ -187,6 +187,8 @@ void DefaultMaterial::setNormalTexture(QSharedPointer<Texture2D> tex)
         useNormalTex = false;
         removeTexture("u_normalTexture");
     }
+
+    normalTexture=tex;
 }
 
 QString DefaultMaterial::getNormalTextureSource()
@@ -214,7 +216,6 @@ void DefaultMaterial::setSpecularTexture(QSharedPointer<Texture2D> tex)
 {
     if(!!tex)
     {
-        specularTexture=tex;
         useSpecularTex = true;
         addTexture("u_specularTexture",tex);
     }
@@ -223,6 +224,8 @@ void DefaultMaterial::setSpecularTexture(QSharedPointer<Texture2D> tex)
         useSpecularTex = false;
         removeTexture("u_specularTexture");
     }
+
+    specularTexture=tex;
 }
 
 QString DefaultMaterial::getSpecularTextureSource()
@@ -267,7 +270,7 @@ void DefaultMaterial::setReflectionTexture(QSharedPointer<Texture2D> tex)
 {
     if(!!tex)
     {
-        reflectionTexture=tex;
+
         useReflectionTex = true;
         addTexture("u_reflectionTexture",tex);
     }
@@ -276,6 +279,8 @@ void DefaultMaterial::setReflectionTexture(QSharedPointer<Texture2D> tex)
         useReflectionTex = false;
         removeTexture("u_reflectionTexture");
     }
+
+    reflectionTexture=tex;
 }
 
 QString DefaultMaterial::getReflectionTextureSource()

@@ -16,7 +16,7 @@ uniform sampler2D u_specularTexture;
 uniform bool u_useSpecularTex;
 
 uniform sampler2D u_reflectionTexture;
-uniform bool u_reflectionInfluence;
+uniform float u_reflectionInfluence;
 uniform bool u_useReflectionTex;
 
 varying vec2 v_texCoord;

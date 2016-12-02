@@ -116,13 +116,6 @@ TexturePicker* AccordianBladeWidget::addTexturePicker( QString name ){
 
 HFloatSlider* AccordianBladeWidget::addFloatValueSlider( QString name, float range_1 , float range_2 )
 {
-    //qDebug()<<"spacing: "<<ui->contentpane->layout()->spacing();
-    //qDebug()<<"margin: "<<ui->contentpane->layout()->margin();
-    //qDebug()<<"margin: "<<ui->contentpane->layout()->margin();
-    //auto contRect = ui->contentpane->layout()->contentsRect();
-    //qDebug()<<"layout height "<<ui->contentpane->layout()->contentsRect().height()<<endl;
-    //qDebug()<<"minimum size "<<ui->contentpane->layout()->totalMinimumSize();
-
     HFloatSlider *slider = new HFloatSlider();
     int height = slider->height();
     minimum_height += height;
