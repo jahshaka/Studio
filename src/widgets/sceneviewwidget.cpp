@@ -277,33 +277,34 @@ void SceneViewWidget::doObjectPicking()
 
     auto segStart = this->editorCam->pos;
     auto rayDir = editorCam->calculatePickingDirection(viewport->width,viewport->height,prevMousePos);
-    auto segEnd = segStart+(rayDir*1000);
+    auto segEnd = segStart+(rayDir*1000);//todo: remove magic number
 
     QList<PickingResult> hitList;
     doPicking(scene->getRootNode(),segStart,segEnd,hitList);
-    //    emit sceneNodeSelected(pickedNode);
 
     //Find the closest hit and emit signal
     if(hitList.size()==0)
-        return;//no hits
-
-    auto item = hitList[0];
-    auto camPos = editorCam->getGlobalPosition();
-    auto closestDist = camPos.distanceToPoint(item.hitPoint);
-    auto closestNode = item.hitNode;
-
-    for(int i=1;i<hitList.size();i++)
     {
-        item = hitList[i];
-        auto dist = camPos.distanceToPoint(item.hitPoint);
-        if(dist<closestDist)
-            closestNode = item.hitNode;
+        emit sceneNodeSelected(jah3d::SceneNodePtr());//no hits, deselect object
+        return;
     }
 
-    emit sceneNodeSelected(closestNode);
+    if(hitList.size()==1)
+    {
+        emit sceneNodeSelected(hitList[0].hitNode);
+        return;
+    }
+
+    //sort by distance to camera then return
+    qSort(hitList.begin(),hitList.end(),[](const PickingResult& a,const PickingResult& b)
+    {
+        return a.distanceFromCameraSqrd<b.distanceFromCameraSqrd;
+    });
+
+    emit sceneNodeSelected(hitList.last().hitNode);
 }
 
-void SceneViewWidget::doPicking(QSharedPointer<jah3d::SceneNode> sceneNode,QVector3D segStart,QVector3D segEnd,QList<PickingResult>& hitList)
+void SceneViewWidget::doPicking(const QSharedPointer<jah3d::SceneNode>& sceneNode,const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList)
 {
 
     if(sceneNode->getSceneNodeType()==jah3d::SceneNodeType::Mesh)
@@ -317,6 +318,7 @@ void SceneViewWidget::doPicking(QSharedPointer<jah3d::SceneNode> sceneNode,QVect
         auto b = invTransform*segEnd;
 
         //if(triMesh->isHitBySegment(segStart,segEnd))
+        /*
         QVector3D hitPoint;
         if(triMesh->isHitBySegment(a,b,hitPoint))
         {
@@ -326,15 +328,31 @@ void SceneViewWidget::doPicking(QSharedPointer<jah3d::SceneNode> sceneNode,QVect
                             hitPoint
                         });
         }
+        */
+
+        QList<jah3d::TriangleIntersectionResult> results;
+        if(int resultCount = triMesh->getSegmentIntersections(a,b,results))
+        {
+            for(auto triResult:results)
+            {
+                //convert hit to world space
+                auto hitPoint = meshNode->globalTransform*triResult.hitPoint;
+
+
+                PickingResult pick;
+                pick.hitNode = sceneNode;
+                pick.hitPoint = hitPoint;
+                pick.distanceFromCameraSqrd = (hitPoint-editorCam->getGlobalPosition()).lengthSquared();
+
+                hitList.append(pick);
+            }
+        }
     }
 
     for(auto child:sceneNode->children)
     {
         doPicking(child,segStart,segEnd,hitList);
     }
-
-    //return QSharedPointer<jah3d::SceneNode>(nullptr);
-    //return hits;
 }
 
 void SceneViewWidget::setFreeCameraMode()

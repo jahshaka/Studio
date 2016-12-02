@@ -25,7 +25,7 @@ typedef QSharedPointer<jah3d::SceneNode> SceneNodePtr;
 typedef QSharedPointer<jah3d::CameraNode> CameraNodePtr;
 typedef QSharedPointer<jah3d::Material> MaterialPtr;
 
-class Scene : public QEnableSharedFromThis<Scene>
+class Scene: public QEnableSharedFromThis<Scene>
 {
 public:
     CameraNodePtr camera;

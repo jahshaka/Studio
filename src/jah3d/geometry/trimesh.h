@@ -7,6 +7,17 @@
 namespace jah3d
 {
 
+struct TriangleIntersectionResult
+{
+    int triangleIndex;
+    QVector3D hitPoint;
+
+    TriangleIntersectionResult()
+    {
+        triangleIndex=-1;
+    }
+};
+
 class Triangle
 {
 public:
@@ -14,6 +25,7 @@ public:
     QVector3D a,b,c;
     QVector3D normal;
 };
+
 
 /**
  * This class defines a mesh using triangles. It's used for ray-casting and intersection tests
@@ -32,8 +44,8 @@ public:
      */
     void addTriangle(QVector3D a,QVector3D b,QVector3D c)
     {
-        //Triangle tri = {a,b,c,QVector3D::crossProduct(b-a,c-a)};
-        Triangle tri = {c,b,a,QVector3D::crossProduct(c-a,b-a)};//clockwise
+        Triangle tri = {a,b,c,QVector3D::crossProduct(b-a,c-a)};
+        //Triangle tri = {c,b,a,QVector3D::crossProduct(b-c,a-c)};//clockwise
         //tri.normal = QVector3D::crossProduct(b-a,c-a);
 
         //Triangle tri = {c,b,a};//clockwise
@@ -89,6 +101,62 @@ public:
         }
 
         return false;
+    }
+
+    /**
+     * Does a segment-mesh intersection test
+     * Returns number of intersections
+     * @return
+     */
+    int getSegmentIntersections(QVector3D segmentStart,QVector3D segmentEnd,QList<TriangleIntersectionResult>& results)
+    {
+        int hits = 0;
+        for(auto i=0;i<triangles.size();i++)
+        {
+            auto tri = triangles[i];
+            auto ab = tri.b - tri.a;
+            auto ac = tri.c - tri.a;
+            auto qp = segmentStart-segmentEnd;
+
+            //auto normal = tri.normal;
+            auto normal = QVector3D::crossProduct(ab, ac);
+            float d = QVector3D::dotProduct(qp, normal);
+
+            if (d <= 0)
+                continue;
+
+            auto ap = segmentStart - tri.a;
+            auto t = QVector3D::dotProduct(ap, normal);
+
+            if (t < 0 || t > d)
+                continue;
+
+            auto e = QVector3D::crossProduct(qp, ap);
+            auto v = QVector3D::dotProduct(ac, e);
+
+            if (v < 0 || v > d)
+                continue;
+
+            auto w = -QVector3D::dotProduct(ab, e);
+
+            if (w < 0.0f || v + w > d)
+                continue;
+
+            t /= d;
+
+            //all conditions have been met
+            hits++;
+            auto hitPoint = segmentStart + (segmentEnd-segmentStart)*
+                    (t*segmentStart.distanceToPoint(segmentEnd));//t is in range 0 and 1 and denotes how far along the distance the hit is
+
+            TriangleIntersectionResult result;
+            result.triangleIndex = i;
+            result.hitPoint = hitPoint;
+            results.append(result);
+            hits++;
+        }
+
+        return hits;
     }
 
 

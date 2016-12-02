@@ -30,6 +30,8 @@ struct PickingResult
     QSharedPointer<jah3d::SceneNode> hitNode;
     QVector3D hitPoint;
 
+    //this is often used for comparisons so it's not necessary to find the root
+    float distanceFromCameraSqrd;
 };
 
 class SceneViewWidget: public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
@@ -79,7 +81,7 @@ private slots:
     void resizeGL(int width, int height);
 
 private:
-    void doPicking(QSharedPointer<jah3d::SceneNode> sceneNode,QVector3D segStart,QVector3D segEnd,QList<PickingResult>& hitList);
+    void doPicking(const QSharedPointer<jah3d::SceneNode>& sceneNode,const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList);
 
     void makeObject();
     void renderScene();
