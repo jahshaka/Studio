@@ -628,6 +628,7 @@ void MainWindow::sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode)
     */
     sceneView->setSelectedNode(sceneNode);
     ui->sceneNodeProperties->setSceneNode(sceneNode);
+    ui->sceneHierarchy->setSelectedNode(sceneNode);
 }
 
 

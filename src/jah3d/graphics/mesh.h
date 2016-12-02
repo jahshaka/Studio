@@ -46,6 +46,14 @@ public:
     static Mesh* create(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
 
     Mesh(aiMesh* mesh,VertexLayout* vertexLayout);
+
+    /**
+     *
+     * @param data
+     * @param dataSize
+     * @param numElements number of vertices
+     * @param vertexLayout
+     */
     Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
 };
 

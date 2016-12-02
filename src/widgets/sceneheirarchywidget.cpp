@@ -101,6 +101,21 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     connect(ui->deleteBtn,SIGNAL(clicked(bool)),mainWindow,SLOT(deleteNode()));
 }
 
+void SceneHeirarchyWidget::setSelectedNode(QSharedPointer<jah3d::SceneNode> sceneNode)
+{
+    selectedNode = sceneNode;
+
+    //set tree item
+    //todo: check if item exists in nodeList
+    //auto selected = ui->sceneTree->selectedItems();
+    //for(auto item:selected)
+    //    item->setSelected(false);
+
+    auto item = treeItemList[sceneNode->getNodeId()];
+    //item->setSelected(true);
+    ui->sceneTree->setCurrentItem(item);
+}
+
 void SceneHeirarchyWidget::treeItemSelected(QTreeWidgetItem* item)
 {
     //qDebug()<<"tree item selected"<<endl;
@@ -112,7 +127,6 @@ void SceneHeirarchyWidget::treeItemSelected(QTreeWidgetItem* item)
 
 void SceneHeirarchyWidget::treeItemChanged(QTreeWidgetItem* item,int column)
 {
-    //qDebug()<<"tree item changed"<<endl;
     long nodeId = item->data(1,Qt::UserRole).toLongLong();
     auto node = nodeList[nodeId];
 
@@ -126,8 +140,6 @@ void SceneHeirarchyWidget::treeItemChanged(QTreeWidgetItem* item,int column)
         node->hide();
         //qDebug()<<"hide node"<<endl;
     }
-
-    //qDebug()<<node->getName()+" is "+(node->isVisible()?"visible":"invisible")<<endl;
 }
 
 void SceneHeirarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
@@ -196,7 +208,10 @@ void SceneHeirarchyWidget::repopulateTree()
 
     //populate tree
     nodeList.clear();
+    treeItemList.clear();
+
     nodeList.insert(rootNode->getNodeId(),rootNode);
+    treeItemList.insert(rootNode->getNodeId(),root);
 
     populateTree(root,rootNode);
 
@@ -225,39 +240,11 @@ void SceneHeirarchyWidget::populateTree(QTreeWidgetItem* parentNode,QSharedPoint
 
         //sceneTreeItems.insert(node->getEntity()->id(),childNode);
         nodeList.insert(node->getNodeId(),node);
+        treeItemList.insert(node->getNodeId(),childNode);
 
         populateTree(childNode,node);
     }
 }
-
-/*
-void addTorus()
-{
-
-}
-
-void addCube()
-{
-
-}
-
-void addSphere()
-{
-
-}
-
-void addCylinder()
-{
-
-}
-
-void addTexturedPlane();
-void addPointLight();
-void addSpotLight();
-void addDirectionalLight();
-void addMesh();
-void addViewPoint();
-*/
 
 SceneHeirarchyWidget::~SceneHeirarchyWidget()
 {

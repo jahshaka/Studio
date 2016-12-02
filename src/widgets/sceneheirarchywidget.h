@@ -29,6 +29,8 @@ public:
     void setScene(QSharedPointer<jah3d::Scene> scene);
     void setMainWindow(MainWindow* mainWin);
 
+    void setSelectedNode(QSharedPointer<jah3d::SceneNode> sceneNode);
+
 protected slots:
     void treeItemSelected(QTreeWidgetItem* item);
     void treeItemChanged(QTreeWidgetItem* item,int index);
@@ -55,7 +57,10 @@ private:
     void repopulateTree();
     void populateTree(QTreeWidgetItem* parentNode,QSharedPointer<jah3d::SceneNode> sceneNode);
 
+    //maps scene nodes to their widgetitems
+    //QMap<long,QTreeWidgetItem*> nodeList;
     QMap<long,QSharedPointer<jah3d::SceneNode>> nodeList;
+    QMap<long,QTreeWidgetItem*> treeItemList;
 
 private:
     Ui::SceneHeirarchyWidget *ui;
