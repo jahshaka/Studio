@@ -114,6 +114,7 @@ void DefaultMaterial::begin(QOpenGLFunctions_3_2_Core* gl)
 
     program->setUniformValue("u_useDiffuseTex",useDiffuseTex);
     program->setUniformValue("u_useNormalTex",useNormalTex);
+    program->setUniformValue("u_useSpecularTex",useSpecularTex);
     program->setUniformValue("u_useReflectionTexture",useReflectionTex);
 
 }
