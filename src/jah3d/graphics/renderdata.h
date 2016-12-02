@@ -21,6 +21,12 @@ struct RenderData
 
     QVector3D eyePos;
     //QList<LightNodePtr> lights;
+
+    //fog properties
+    QColor fogColor;
+    float fogStart;
+    float fogEnd;
+    bool fogEnabled;
 };
 
 }

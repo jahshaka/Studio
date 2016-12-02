@@ -14,9 +14,15 @@ Scene::Scene()
     rootNode->setName("Scene");
     //rootNode->setScene(this->sharedFromThis());
 
+    //todo: move this to ui code
     skyMesh = Mesh::loadMesh("app/content/primitives/sky.obj");
     //skyTexture = Texture2D::load("app/content/skies/default.png");
     skyMaterial = DefaultSkyMaterial::create();
+
+    fogColor = QColor(250,250,250);
+    fogStart = 100;
+    fogEnd = 180;
+    fogEnabled = true;
 }
 
 void Scene::setSkyTexture(Texture2DPtr tex)

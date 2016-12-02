@@ -38,6 +38,12 @@ public:
     //should be MaterialPtr
     DefaultSkyMaterialPtr skyMaterial;
 
+    //fog properties
+    QColor fogColor;
+    float fogStart;
+    float fogEnd;
+    bool fogEnabled;
+
     Scene();
 public:
     static ScenePtr create();

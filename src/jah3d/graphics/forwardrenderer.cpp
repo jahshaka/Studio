@@ -47,6 +47,12 @@ void ForwardRenderer::renderScene(Viewport* vp)
     renderData->projMatrix = cam->projMatrix;
     renderData->viewMatrix = cam->viewMatrix;
     renderData->eyePos = cam->globalTransform.column(3).toVector3D();
+
+    renderData->fogColor = scene->fogColor;
+    renderData->fogStart = scene->fogStart;
+    renderData->fogEnd = scene->fogEnd;
+    renderData->fogEnabled = scene->fogEnabled;
+
     //renderData->gl = gl;
 
     renderNode(renderData,scene->rootNode);
@@ -109,6 +115,11 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
         program->setUniformValue("u_normalMatrix",node->globalTransform.normalMatrix());
 
         program->setUniformValue("u_eyePos",renderData->eyePos);
+
+        program->setUniformValue("u_fogData.color",renderData->fogColor);
+        program->setUniformValue("u_fogData.start",renderData->fogStart);
+        program->setUniformValue("u_fogData.end",renderData->fogEnd);
+        program->setUniformValue("u_fogData.enabled",renderData->fogEnabled);
 
         //program->setUniformValue("u_textureScale",1.0f);
 
@@ -293,26 +304,10 @@ void ForwardRenderer::createLineShader()
     lineShader->addShader(vshader);
     lineShader->addShader(fshader);
 
-    //program->bindAttributeLocation("a_pos", 0);
-    //program->bindAttributeLocation("a_texCoord", 1);
-    //program->bindAttributeLocation("a_normal", 2);
-    //program->bindAttributeLocation("a_tangent", 3);
-
     lineShader->link();
 
     lineShader->bind();
     lineShader->setUniformValue("color",QColor(240,240,255,255));
 }
-
-/*
-void ForwardRenderer::createBillboardIconAssets()
-{
-    //create shader
-    //billboardShader = GraphicsHelper::loadShader("app/shaders/billboard.vert","app/shaders/billboard.frag");
-
-    //create mesh
-
-}
-*/
 
 }

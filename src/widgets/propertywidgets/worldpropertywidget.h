@@ -30,10 +30,18 @@ public:
 
 protected slots:
     void onSkyTextureChanged(QString texPath);
+    void onFogColorChanged(QColor color);
+    void onFogStartChanged(float val);
+    void onFogEndChanged(float val);
 
 private:
     QSharedPointer<jah3d::Scene> scene;
     TexturePicker* skyTexture;
+
+    //fog properties
+    HFloatSlider* fogStart;
+    HFloatSlider* fogEnd;
+    ColorValueWidget* fogColor;
 
 };
 

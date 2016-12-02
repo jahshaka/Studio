@@ -64,7 +64,7 @@ struct Fog
     bool enabled;
     float start;
     float end;
-    vec3 color;
+    vec4 color;
 };
 
 uniform Fog u_fogData;
@@ -186,7 +186,7 @@ void main()
     {
         float zDist = length(v_worldPos-u_eyePos);
         float fogFactor = clamp((zDist-u_fogData.start)/(u_fogData.end-u_fogData.start),0,1);
-        finalColor = mix(finalColor,u_fogData.color,fogFactor);
+        finalColor = mix(finalColor,u_fogData.color.rgb,fogFactor);
     }
 
     gl_FragColor = vec4(finalColor
