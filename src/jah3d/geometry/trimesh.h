@@ -42,7 +42,7 @@ public:
      * @param b
      * @param c
      */
-    void addTriangle(QVector3D a,QVector3D b,QVector3D c)
+    void addTriangle(const QVector3D& a,const QVector3D& b,const QVector3D& c)
     {
         Triangle tri = {a,b,c,QVector3D::crossProduct(b-a,c-a)};
         //Triangle tri = {c,b,a,QVector3D::crossProduct(b-c,a-c)};//clockwise
@@ -58,7 +58,7 @@ public:
     //https://github.com/qt/qt3d/blob/5476bc6b4b6a12c921da502c24c4e078b04dd3b3/src/render/jobs/pickboundingvolumejob.cpp
     //realtime rendering page 192
     //no need to get uvw, just return true at the first sign of a hit
-    bool isHitBySegment(QVector3D segmentStart,QVector3D segmentEnd,QVector3D& hitPoint)
+    bool isHitBySegment(const QVector3D& segmentStart,const QVector3D& segmentEnd,QVector3D& hitPoint)
     {
         for(auto tri:triangles)
         {
@@ -108,12 +108,13 @@ public:
      * Returns number of intersections
      * @return
      */
-    int getSegmentIntersections(QVector3D segmentStart,QVector3D segmentEnd,QList<TriangleIntersectionResult>& results)
+    int getSegmentIntersections(const QVector3D& segmentStart,const QVector3D& segmentEnd,QList<TriangleIntersectionResult>& results)
     {
         int hits = 0;
         for(auto i=0;i<triangles.size();i++)
         {
-            auto tri = triangles[i];
+            //auto tri = triangles[i];
+            const Triangle& tri = triangles[i];
             auto ab = tri.b - tri.a;
             auto ac = tri.c - tri.a;
             auto qp = segmentStart-segmentEnd;

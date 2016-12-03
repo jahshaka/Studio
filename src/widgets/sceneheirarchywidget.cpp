@@ -111,9 +111,12 @@ void SceneHeirarchyWidget::setSelectedNode(QSharedPointer<jah3d::SceneNode> scen
     //for(auto item:selected)
     //    item->setSelected(false);
 
-    auto item = treeItemList[sceneNode->getNodeId()];
-    //item->setSelected(true);
-    ui->sceneTree->setCurrentItem(item);
+    if(!!sceneNode)
+    {
+        auto item = treeItemList[sceneNode->getNodeId()];
+        //item->setSelected(true);
+        ui->sceneTree->setCurrentItem(item);
+    }
 }
 
 void SceneHeirarchyWidget::treeItemSelected(QTreeWidgetItem* item)

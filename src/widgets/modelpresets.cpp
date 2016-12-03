@@ -21,18 +21,6 @@ ModelPresets::ModelPresets(QWidget *parent) :
 
     connect(ui->modelsSets,SIGNAL(doubleClicked(QModelIndex)),SLOT(onPrimitiveSelected(QModelIndex)));
 
-    /*
-    ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cone.png"),"Cone"));
-    ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cube.png"),"Cube"));
-    ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cylinder.png"),"Cylinder"));
-    ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/icosphere.png"),"IcoSphere"));
-    ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/sphere.png"),"Sphere"));
-    ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/torus.png"),"Torus"));
-    //ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cone.png"),"Cone"));
-    //ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cube.png"),"Cube"));
-    //ui->modelsSets->addItem(new QListWidgetItem(QIcon(":/app/modelpresets/cylinder.png"),"Cylinder"));
-    */
-
     addItem("Cone",":/app/modelpresets/cone.png");
     addItem("Cube",":/app/modelpresets/cube.png");
     addItem("Cylinder",":/app/modelpresets/cylinder.png");
