@@ -2,6 +2,7 @@
 #include "ui_texturepicker.h"
 #include "qfiledialog.h"
 #include <Qt>
+#include "../core/thumbnailmanager.h"
 
 TexturePicker::TexturePicker(QWidget *parent) :
     QWidget(parent),
@@ -41,13 +42,11 @@ void TexturePicker::setLabelImage(QLabel* label,QString file)
     }
     else
     {
-        QImage image;
-        image.load(file);
-        QPixmap pixmap = QPixmap::fromImage(image);
-        auto scaled = pixmap.scaled( label->size());
-        ui->DiffuseMap->setPixmap(scaled);
-        d_height = image.height();
-        d_width = image.width();
+        auto thumb = ThumbnailManager::createThumbnail(file,ui->DiffuseMap->width(),ui->DiffuseMap->height());
+        QPixmap pixmap = QPixmap::fromImage(*thumb->thumb);
+        ui->DiffuseMap->setPixmap(pixmap);
+        //d_height = image.height();
+        //d_width = image.width();
 
         QFileInfo fileInfo(file);
         filename = fileInfo.fileName();

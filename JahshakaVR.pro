@@ -72,7 +72,8 @@ SOURCES += src/main.cpp\
     src/widgets/filepickerwidget.cpp \
     src/widgets/propertywidgets/worldpropertywidget.cpp \
     src/io/scenewriter.cpp \
-    src/io/sceneiobase.cpp
+    src/io/sceneiobase.cpp \
+    src/core/thumbnailmanager.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -125,7 +126,8 @@ HEADERS  += src/mainwindow.h \
     src/io/scenewriter.h \
     src/io/sceneiobase.h \
     src/io/scenereader.h \
-    src/widgets/propertywidgets/scenepropertywidget.h
+    src/widgets/propertywidgets/scenepropertywidget.h \
+    src/core/thumbnailmanager.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
