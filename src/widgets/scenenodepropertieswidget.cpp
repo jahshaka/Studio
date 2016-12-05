@@ -8,6 +8,7 @@
 #include "propertywidgets/lightpropertywidget.h"
 #include "propertywidgets/materialpropertywidget.h"
 #include "propertywidgets/worldpropertywidget.h"
+#include "propertywidgets/fogpropertywidget.h"
 
 #include "../jah3d/core/scenenode.h"
 
@@ -53,9 +54,15 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sc
             worldPropView->setScene(sceneNode->scene);
             worldPropView->expand();
 
+            fogPropView = new FogPropertyWidget();
+            fogPropView->setContentTitle("Fog");
+            fogPropView->setScene(sceneNode->scene);
+            fogPropView->expand();
+
+
             auto layout = new QVBoxLayout();
             layout->addWidget(worldPropView);
-
+            layout->addWidget(fogPropView);
             layout->addStretch();
             layout->setMargin(0);
 

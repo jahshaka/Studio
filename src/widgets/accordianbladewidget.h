@@ -11,6 +11,7 @@ class TransformEditor;
 class ColorValueWidget;
 class TexturePicker;
 class HFloatSlider;
+class CheckBoxProperty;
 
 class AccordianBladeWidget : public QWidget
 {
@@ -31,6 +32,7 @@ public:
     void addFilePicker( QString name, QString fileextention );
     void setContentTitle( QString title );
     HFloatSlider* addFloatValueSlider( QString name, float range_1 , float range_2 );
+    CheckBoxProperty* addCheckBox( QString name, bool value = false );
 
     void expand();
 

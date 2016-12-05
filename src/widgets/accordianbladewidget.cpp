@@ -8,6 +8,7 @@
 #include "transformeditor.h"
 #include "filepickerwidget.h"
 #include "ui_filepickerwidget.h"
+#include "checkboxproperty.h"
 #include <QSpinBox>
 #include <QDebug>
 
@@ -129,6 +130,19 @@ HFloatSlider* AccordianBladeWidget::addFloatValueSlider( QString name, float ran
     ui->contentpane->layout()->addWidget(slider);
 
     return slider;
+}
+
+CheckBoxProperty* AccordianBladeWidget::addCheckBox( QString name, bool value )
+{
+    auto checkbox = new CheckBoxProperty();
+    checkbox->setLabel(name);
+    ui->contentpane->layout()->addWidget(checkbox);
+    int height = checkbox->height();
+
+    minimum_height += height;
+    minimum_height += 10;
+
+    return checkbox;
 }
 
 void AccordianBladeWidget::expand()

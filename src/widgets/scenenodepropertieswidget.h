@@ -14,6 +14,7 @@ class TransformEditor;
 class MaterialPropertyWidget;
 class WorldPropertyWidget;
 class LightPropertyWidget;
+class FogPropertyWidget;
 
 /**
  * This class shows the properties of selected nodes in the scene
@@ -45,6 +46,7 @@ private:
     //MeshPropertyWidget* meshPropView;
     LightPropertyWidget* lightPropView;
     WorldPropertyWidget* worldPropView;
+    FogPropertyWidget* fogPropView;
 };
 
 #endif // PROPERTYWIDGET_H
