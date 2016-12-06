@@ -18,6 +18,8 @@ void MeshNode::setMesh(QString source)
 {
     meshPath = source;
     mesh = Mesh::loadMesh(source);
+    meshPath = source;
+    meshIndex = 0;
 }
 
 //should not be used on plain scene meshes
@@ -43,7 +45,7 @@ void MeshNode::setMaterial(QSharedPointer<Material> material)
  * @param node
  * @return
  */
-QSharedPointer<jah3d::SceneNode> _buildScene(const aiScene* scene,aiNode* node)
+QSharedPointer<jah3d::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QString filePath)
 {
     QSharedPointer<jah3d::SceneNode> sceneNode;// = QSharedPointer<jah3d::SceneNode>(new jah3d::SceneNode());
 
@@ -59,6 +61,8 @@ QSharedPointer<jah3d::SceneNode> _buildScene(const aiScene* scene,aiNode* node)
         {
             meshNode->setMesh(new Mesh(mesh,VertexLayout::createMeshDefault()));
             meshNode->name = QString(mesh->mName.C_Str());
+            meshNode->meshPath = filePath;
+            meshNode->meshIndex = node->mMeshes[0];
 
             //apply material
             auto mat = jah3d::DefaultMaterial::create();
@@ -86,6 +90,8 @@ QSharedPointer<jah3d::SceneNode> _buildScene(const aiScene* scene,aiNode* node)
 
             auto meshNode = jah3d::MeshNode::create();
             meshNode->name = QString(mesh->mName.C_Str());
+            meshNode->meshPath = filePath;
+            meshNode->meshIndex = node->mMeshes[i];
 
             meshNode->setMesh(new Mesh(mesh,VertexLayout::createMeshDefault()));
             sceneNode->addChild(meshNode);
@@ -110,7 +116,7 @@ QSharedPointer<jah3d::SceneNode> _buildScene(const aiScene* scene,aiNode* node)
 
     for(auto i=0;i<node->mNumChildren;i++)
     {
-        auto child = _buildScene(scene,node->mChildren[i]);
+        auto child = _buildScene(scene,node->mChildren[i],filePath);
         sceneNode->addChild(child);
     }
 
@@ -132,10 +138,12 @@ QSharedPointer<jah3d::SceneNode> MeshNode::loadAsSceneFragment(QString filePath)
     {
         auto node = jah3d::MeshNode::create();
         node->setMesh(new Mesh(scene->mMeshes[0],VertexLayout::createMeshDefault()));
+        node->meshPath = filePath;
+        node->meshIndex = 0;
         return node;
     }
 
-    auto node = _buildScene(scene,scene->mRootNode);
+    auto node = _buildScene(scene,scene->mRootNode,filePath);
 
     return node;
 }

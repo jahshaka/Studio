@@ -17,9 +17,11 @@
 #include "../jah3d/scenegraph/lightnode.h"
 #include "../jah3d/materials/defaultmaterial.h"
 #include "../jah3d/graphics/texture2d.h"
+#include "../jah3d/graphics/graphicshelper.h"
 
 class SceneReader:public SceneIOBase
 {
+    QHash<QString,QList<jah3d::Mesh*>> meshes;
 public:
     QSharedPointer<jah3d::Scene> readScene(QString filePath)
     {
@@ -78,6 +80,14 @@ public:
         //read name
         sceneNode->name = nodeObj["name"].toString("");
 
+        QJsonArray children = nodeObj["children"].toArray();
+        for(auto childObj:children)
+        {
+            auto sceneNodeObj = childObj.toObject();
+            auto childNode = readSceneNode(sceneNodeObj);
+            sceneNode->addChild(childNode);
+        }
+
         return sceneNode;
     }
 
@@ -123,8 +133,14 @@ public:
         auto meshNode = jah3d::MeshNode::create();
 
         auto source = nodeObj["mesh"].toString("");
+        auto meshIndex = nodeObj["meshIndex"].toInt(0);
         if(!source.isEmpty())
-            meshNode->setMesh(source);
+        {
+            auto mesh = getMesh(source,meshIndex);
+            meshNode->setMesh(mesh);
+            meshNode->meshPath = source;
+            meshNode->meshIndex = meshIndex;
+        }
 
         //material
         auto material = readMaterial(nodeObj);
@@ -248,6 +264,36 @@ public:
         vec.setZ(vecObj["z"].toDouble(0));
 
         return vec;
+    }
+
+    /**
+     * Returns mesh from mesh file at index
+     * if the mesh doesnt exist, nullptr is returned
+     * @param filePath
+     * @param index
+     * @return
+     */
+    jah3d::Mesh* getMesh(QString filePath,int index)
+    {
+        //if the mesh is already in the hashmap then it was already loaded, just return the indexed mesh
+        if(meshes.contains(filePath))
+        {
+            auto meshList = meshes[filePath];
+            if(index < meshList.size())
+                return meshList[index];
+
+            return nullptr;//maybe the mesh was modified after the file was saved
+        }
+        else
+        {
+            auto meshList = jah3d::GraphicsHelper::loadAllMeshesFromFile(filePath);
+            meshes.insert(filePath,meshList);
+
+            if(index < meshList.size())
+                return meshList[index];
+
+            return nullptr;//maybe the mesh was modified after the file was saved
+        }
     }
 
 

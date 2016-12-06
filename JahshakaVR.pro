@@ -131,7 +131,8 @@ HEADERS  += src/mainwindow.h \
     src/widgets/propertywidgets/scenepropertywidget.h \
     src/core/thumbnailmanager.h \
     src/widgets/checkboxproperty.h \
-    src/widgets/propertywidgets/fogpropertywidget.h
+    src/widgets/propertywidgets/fogpropertywidget.h \
+    src/core/meshmanager.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

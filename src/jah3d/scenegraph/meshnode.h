@@ -16,7 +16,13 @@ class MeshNode:public SceneNode
 {
 public:
     Mesh* mesh;
+
     QString meshPath;
+
+    /**
+     * This holds the index of the mesh
+     */
+    int meshIndex;
 
     QSharedPointer<Material> material;
 

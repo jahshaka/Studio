@@ -21,7 +21,8 @@ HEADERS += \
     $$PWD/graphics/graphicshelper.h \
     $$PWD/graphics/utils/billboard.h \
     $$PWD/geometry/trimesh.h \
-    $$PWD/materials/defaultskymaterial.h
+    $$PWD/materials/defaultskymaterial.h \
+    $$PWD/core/meshmanager.h
 
 include(assimp/assimp.pri)
 include(libovr/libovr.pri)

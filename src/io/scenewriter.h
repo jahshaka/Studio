@@ -113,6 +113,7 @@ private:
     {
         //todo: handle generated meshes properly
         sceneNodeObject["mesh"] = meshNode->meshPath;
+        sceneNodeObject["meshIndex"] = meshNode->meshIndex;
 
         //todo: check if material actually exists
         auto mat = meshNode->getMaterial().staticCast<jah3d::DefaultMaterial>();
