@@ -223,6 +223,8 @@ private:
     PreferencesDialog* prefsDialog;
     LicenseDialog* licenseDialog;
     AboutDialog* aboutDialog;
+
+    bool vrMode;
 };
 
 #endif // MAINWINDOW_H

@@ -55,6 +55,8 @@ public:
      * @param vertexLayout
      */
     Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
+
+    ~Mesh();
 };
 
 typedef QSharedPointer<Mesh> MeshPtr;

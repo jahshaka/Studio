@@ -22,7 +22,8 @@ HEADERS += \
     $$PWD/graphics/utils/billboard.h \
     $$PWD/geometry/trimesh.h \
     $$PWD/materials/defaultskymaterial.h \
-    $$PWD/core/meshmanager.h
+    $$PWD/core/meshmanager.h \
+    $$PWD/graphics/utils/fullscreenquad.h
 
 include(assimp/assimp.pri)
 include(libovr/libovr.pri)
@@ -39,4 +40,5 @@ SOURCES += \
     $$PWD/scenegraph/cameranode.cpp \
     $$PWD/graphics/texture2d.cpp \
     $$PWD/materials/defaultskymaterial.cpp \
-    $$PWD/graphics/material.cpp
+    $$PWD/graphics/material.cpp \
+    $$PWD/graphics/utils/fullscreenquad.cpp

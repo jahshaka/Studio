@@ -173,4 +173,11 @@ Mesh* Mesh::create(void* data,int dataSize,int numVerts,VertexLayout* vertexLayo
     return new Mesh(data,dataSize,numVerts,vertexLayout);
 }
 
+Mesh::~Mesh()
+{
+    delete vertexLayout;
+    delete vbo;
+    delete triMesh;
+}
+
 }

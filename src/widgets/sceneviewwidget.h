@@ -18,6 +18,7 @@ namespace jah3d
     class DefaultMaterial;
     class Viewport;
     class CameraNode;
+    class FullScreenQuad;
 }
 
 class EditorCameraController;
@@ -97,6 +98,7 @@ private:
     void initialize();
 
     jah3d::Viewport* viewport;
+    jah3d::FullScreenQuad* fsQuad;
 
 signals:
     void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl);

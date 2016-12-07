@@ -82,6 +82,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->modelpresets->setMainWindow(this);
 
     camControl = nullptr;
+    vrMode = false;
 
     setupFileMenu();
     setupViewMenu();

@@ -3,6 +3,7 @@
 
 #include <QOpenGLContext>
 #include <QSharedPointer>
+#include "../libovr/Include/OVR_CAPI_GL.h"
 
 class QOpenGLShaderProgram;
 class QOpenGLFunctions_3_2_Core;
@@ -58,6 +59,7 @@ public:
 
     //all scenenodes' transform should be updated before calling this functions
     void renderScene(Viewport* vp);
+    void renderSceneVr(Viewport* vp);
 
     static QSharedPointer<ForwardRenderer> create(QOpenGLFunctions_3_2_Core* gl);
 
@@ -69,6 +71,32 @@ private:
     void renderSky(RenderData* renderData);
     void renderBillboardIcons(RenderData* renderData);
     void renderSelectedNode(RenderData* renderData,QSharedPointer<SceneNode> node);
+
+    //VR
+    ovrSession session;
+    ovrGraphicsLuid luid;
+    ovrHmdDesc hmdDesc;
+
+    void initOVR();
+    GLuint createDepthTexture(int width,int height);
+    ovrTextureSwapChain createTextureChain(ovrSession session,ovrTextureSwapChain &swapChain,int width,int height);
+    GLuint createMirrorFbo();
+
+    GLuint vr_depthTexture[2];
+    ovrTextureSwapChain vr_textureChain[2];
+    GLuint vr_Fbo[2];
+
+    int eyeWidth;
+    int eyeHeight;
+    long long frameIndex;
+
+    //FullscreenQuad* fsQuad;
+    GLuint vr_mirrorFbo;
+    GLuint vr_mirrorTexId;
+
+    //quick bool to enable/disable vr rendering
+    bool renderVr;
+
 
     void createLineShader();
 

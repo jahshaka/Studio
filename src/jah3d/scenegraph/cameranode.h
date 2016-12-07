@@ -13,12 +13,12 @@ typedef QSharedPointer<jah3d::CameraNode> CameraNodePtr;
 
 class CameraNode:public SceneNode
 {
+public:
     float fov;//radians
     float aspectRatio;
     float angle;//in degrees
     float nearClip;
     float farClip;
-public:
 
     QMatrix4x4 viewMatrix;
     QMatrix4x4 projMatrix;

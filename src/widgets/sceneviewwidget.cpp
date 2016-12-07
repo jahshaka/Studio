@@ -148,6 +148,7 @@ void SceneViewWidget::initializeGL()
     renderer = jah3d::ForwardRenderer::create(this);
 
     initialize();
+    fsQuad = new jah3d::FullScreenQuad();
 
     emit initializeGraphics(this,this);
 
@@ -174,7 +175,8 @@ void SceneViewWidget::renderScene()
     {
         scene->update(1.0f/60);
 
-        renderer->renderScene(viewport);
+        //renderer->renderScene(viewport);
+        renderer->renderSceneVr(viewport);
     }
 }
 
