@@ -2,6 +2,7 @@
 #include <QVector>
 #include "../mesh.h"
 #include "../graphicshelper.h"
+#include "../vertexlayout.h"
 #include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLShaderProgram>
 
@@ -35,7 +36,7 @@ FullScreenQuad::FullScreenQuad()
     layout->addAttrib("a_pos",GL_FLOAT,3,sizeof(GLfloat)*3);
     layout->addAttrib("a_texCoord",GL_FLOAT,2,sizeof(GLfloat)*2);
 
-    mesh = new jah3d::Mesh(data.constData(),data.size()*sizeof(float),6,layout);
+    mesh = new jah3d::Mesh(data.data(),data.size()*sizeof(float),6,layout);
 
     //todo: inline shader in code
     shader = GraphicsHelper::loadShader("app/shaders/fullscreen.vert","app/shaders/fullscreen.frag");

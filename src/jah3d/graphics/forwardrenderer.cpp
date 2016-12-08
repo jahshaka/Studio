@@ -195,12 +195,12 @@ void ForwardRenderer::renderSceneVr(Viewport* vp)
    frameIndex++;
 
    //rendering to the window
-   gl->glBindFramebuffer(GL_FRAMEBUFFER, this->defaultFramebufferObject());
+   //gl->glBindFramebuffer(GL_FRAMEBUFFER, gl->defaultFramebufferObject());
 
    gl->glViewport(0, 0, vp->width,vp->height);
    gl->glActiveTexture(GL_TEXTURE0);
    gl->glBindTexture(GL_TEXTURE_2D,vr_mirrorTexId);
-   fsQuad->draw(this);
+   //fsQuad->draw(this);
    gl->glBindTexture(GL_TEXTURE_2D,0);
 }
 

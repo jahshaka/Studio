@@ -17,6 +17,7 @@
 #include "../jah3d/geometry/trimesh.h"
 #include "../jah3d/graphics/texture2d.h"
 #include "../jah3d/graphics/viewport.h"
+#include "../jah3d/graphics/utils/fullscreenquad.h"
 
 
 #include "../editor/cameracontrollerbase.h"
@@ -175,8 +176,8 @@ void SceneViewWidget::renderScene()
     {
         scene->update(1.0f/60);
 
-        //renderer->renderScene(viewport);
-        renderer->renderSceneVr(viewport);
+        renderer->renderScene(viewport);
+        //renderer->renderSceneVr(viewport);
     }
 }
 
