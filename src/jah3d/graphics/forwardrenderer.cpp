@@ -14,8 +14,10 @@
 #include <QOpenGLTexture>
 #include "viewport.h"
 #include "utils/billboard.h"
+#include "utils/fullscreenquad.h"
 #include "texture2d.h"
 
+#include <QOpenGLContext>
 #include "../libovr/Include/OVR_CAPI_GL.h"
 #include "../libovr/Include/Extras/OVR_Math.h"
 
@@ -30,7 +32,10 @@ ForwardRenderer::ForwardRenderer(QOpenGLFunctions_3_2_Core* gl)
     renderData = new RenderData();
 
     billboard = new Billboard(gl);
+    fsQuad = new FullScreenQuad();
     createLineShader();
+
+    vrSupported = false;
 
     initOVR();
 }
@@ -41,7 +46,7 @@ QSharedPointer<ForwardRenderer> ForwardRenderer::create(QOpenGLFunctions_3_2_Cor
 }
 
 //all scene's transform should be updated
-void ForwardRenderer::renderScene(Viewport* vp)
+void ForwardRenderer::renderScene(QOpenGLContext* ctx,Viewport* vp)
 {
     auto cam = scene->camera;
 
@@ -79,7 +84,7 @@ void ForwardRenderer::renderScene(Viewport* vp)
     //STEP 6: RENDER GIZMOS
 }
 
-void ForwardRenderer::renderSceneVr(Viewport* vp)
+void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
 {
     auto camera = scene->camera;
     ovrEyeRenderDesc eyeRenderDesc[2];
@@ -88,7 +93,8 @@ void ForwardRenderer::renderSceneVr(Viewport* vp)
 
     // Get eye poses, feeding in correct IPD offset
     ovrPosef EyeRenderPose[2];
-    ovrVector3f HmdToEyeOffset[2] = { eyeRenderDesc[0].HmdToEyeOffset, eyeRenderDesc[1].HmdToEyeOffset };
+    ovrVector3f HmdToEyeOffset[2] = { eyeRenderDesc[0].HmdToEyeOffset,
+                                      eyeRenderDesc[1].HmdToEyeOffset };
 
     double sensorSampleTime;    // sensorSampleTime is fed into the layer later
     ovr_GetEyePoses(session, frameIndex, ovrTrue, HmdToEyeOffset, EyeRenderPose, &sensorSampleTime);
@@ -103,8 +109,16 @@ void ForwardRenderer::renderSceneVr(Viewport* vp)
         ovr_GetTextureSwapChainBufferGL(session, vr_textureChain[eye], curIndex, &curTexId);
 
         gl->glBindFramebuffer(GL_FRAMEBUFFER, vr_Fbo[eye]);
-        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, curTexId, 0);
-        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, vr_depthTexture[eye], 0);
+        gl->glFramebufferTexture2D(GL_FRAMEBUFFER,
+                                   GL_COLOR_ATTACHMENT0,
+                                   GL_TEXTURE_2D,
+                                   curTexId,
+                                   0);
+        gl->glFramebufferTexture2D(GL_FRAMEBUFFER,
+                                   GL_DEPTH_ATTACHMENT,
+                                   GL_TEXTURE_2D,
+                                   vr_depthTexture[eye],
+                                   0);
 
         gl->glViewport(0, 0, eyeWidth, eyeHeight);
         gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -131,7 +145,10 @@ void ForwardRenderer::renderSceneVr(Viewport* vp)
 
         QMatrix4x4 proj;
         proj.setToIdentity();//not needed
-        Matrix4f eyeProj = ovrMatrix4f_Projection(hmdDesc.DefaultEyeFov[eye], camera->nearClip, camera->farClip, ovrProjection_None);
+        Matrix4f eyeProj = ovrMatrix4f_Projection(hmdDesc.DefaultEyeFov[eye],
+                                                  camera->nearClip,
+                                                  camera->farClip,
+                                                  ovrProjection_None);
         for(int r=0;r<4;r++)
         {
             for(int c=0;c<4;c++)
@@ -195,12 +212,12 @@ void ForwardRenderer::renderSceneVr(Viewport* vp)
    frameIndex++;
 
    //rendering to the window
-   //gl->glBindFramebuffer(GL_FRAMEBUFFER, gl->defaultFramebufferObject());
+   gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
 
    gl->glViewport(0, 0, vp->width,vp->height);
    gl->glActiveTexture(GL_TEXTURE0);
    gl->glBindTexture(GL_TEXTURE_2D,vr_mirrorTexId);
-   //fsQuad->draw(this);
+   fsQuad->draw(gl);
    gl->glBindTexture(GL_TEXTURE_2D,0);
 }
 
@@ -443,7 +460,7 @@ void ForwardRenderer::initOVR()
 
     ovr_SetTrackingOriginType(session, ovrTrackingOrigin_FloorLevel);
 
-    renderVr = true;
+    vrSupported = true;
 
 }
 

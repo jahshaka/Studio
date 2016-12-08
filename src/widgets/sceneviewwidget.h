@@ -26,6 +26,12 @@ class QOpenGLShaderProgram;
 class CameraControllerBase;
 class OrbitalCameraController;
 
+enum class ViewportMode
+{
+    Editor,
+    VR
+};
+
 struct PickingResult
 {
     QSharedPointer<jah3d::SceneNode> hitNode;
@@ -42,6 +48,8 @@ class SceneViewWidget: public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
     CameraControllerBase* camController;
     EditorCameraController* defaultCam;
     OrbitalCameraController* orbitalCam;
+
+    ViewportMode viewportMode;
 public:
     explicit SceneViewWidget(QWidget *parent);
 
@@ -60,6 +68,10 @@ public:
      * switches to the arc ball editor camera controller
      */
     void setArcBallCameraMode();
+
+    bool isVrSupported();
+    void setViewportMode(ViewportMode viewportMode);
+    ViewportMode getViewportMode();
 
 
 protected:

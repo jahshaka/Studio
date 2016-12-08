@@ -7,6 +7,7 @@
 
 class QOpenGLShaderProgram;
 class QOpenGLFunctions_3_2_Core;
+class QOpenGLContext;
 
 namespace jah3d
 {
@@ -18,6 +19,7 @@ class Viewport;
 class Mesh;
 class BillboardMaterial;
 class Billboard;
+class FullScreenQuad;
 
 /**
  * This is a basic forward renderer.
@@ -58,10 +60,15 @@ public:
     }
 
     //all scenenodes' transform should be updated before calling this functions
-    void renderScene(Viewport* vp);
-    void renderSceneVr(Viewport* vp);
+    void renderScene(QOpenGLContext* ctx,Viewport* vp);
+    void renderSceneVr(QOpenGLContext* ctx,Viewport* vp);
 
     static QSharedPointer<ForwardRenderer> create(QOpenGLFunctions_3_2_Core* gl);
+
+    bool isVrSupported()
+    {
+        return vrSupported;
+    }
 
 private:
     ForwardRenderer(QOpenGLFunctions_3_2_Core* gl);
@@ -90,12 +97,12 @@ private:
     int eyeHeight;
     long long frameIndex;
 
-    //FullscreenQuad* fsQuad;
+    FullScreenQuad* fsQuad;
     GLuint vr_mirrorFbo;
     GLuint vr_mirrorTexId;
 
     //quick bool to enable/disable vr rendering
-    bool renderVr;
+    bool vrSupported;
 
 
     void createLineShader();

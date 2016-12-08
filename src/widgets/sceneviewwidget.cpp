@@ -53,6 +53,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
     //editorCam->pos = QVector3D(0,0,10);
     editorCam->rot = QQuaternion::fromEulerAngles(-15,0,0);
     camController->setCamera(editorCam);
+
+    viewportMode = ViewportMode::Editor;
 }
 
 void SceneViewWidget::initialize()
@@ -176,8 +178,10 @@ void SceneViewWidget::renderScene()
     {
         scene->update(1.0f/60);
 
-        renderer->renderScene(viewport);
-        //renderer->renderSceneVr(viewport);
+        if(viewportMode==ViewportMode::Editor)
+            renderer->renderScene(this->context(),viewport);
+        else
+            renderer->renderSceneVr(this->context(),viewport);
     }
 }
 
@@ -370,4 +374,19 @@ void SceneViewWidget::setArcBallCameraMode()
     camController = orbitalCam;
     camController->setCamera(editorCam);
     camController->resetMouseStates();
+}
+
+bool SceneViewWidget::isVrSupported()
+{
+    return renderer->isVrSupported();
+}
+
+void SceneViewWidget::setViewportMode(ViewportMode viewportMode)
+{
+    this->viewportMode = viewportMode;
+}
+
+ViewportMode SceneViewWidget::getViewportMode()
+{
+    return viewportMode;
 }

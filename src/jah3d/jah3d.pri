@@ -23,7 +23,8 @@ HEADERS += \
     $$PWD/geometry/trimesh.h \
     $$PWD/materials/defaultskymaterial.h \
     $$PWD/core/meshmanager.h \
-    $$PWD/graphics/utils/fullscreenquad.h
+    $$PWD/graphics/utils/fullscreenquad.h \
+    $$PWD/vr/vrdevice.h
 
 include(assimp/assimp.pri)
 include(libovr/libovr.pri)

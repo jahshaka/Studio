@@ -119,6 +119,61 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->cameraTypeCombo,SIGNAL(currentTextChanged(QString)),this,SLOT(cameraTypeChanged(QString)));
 }
 
+void MainWindow::setupVrUi()
+{
+    ui->vrBtn->setToolTipDuration(0);
+    if(sceneView->isVrSupported())
+    {
+        ui->vrBtn->setEnabled(true);
+        ui->vrBtn->setToolTip("Press to view the scene in vr");
+    }
+    else
+    {
+        ui->vrBtn->setEnabled(false);
+        ui->vrBtn->setToolTip("No Oculus device detected");
+    }
+
+    connect(ui->vrBtn,SIGNAL(clicked(bool)),SLOT(vrButtonClicked(bool)));
+
+
+}
+
+/**
+ * uses style property trick
+ * http://wiki.qt.io/Dynamic_Properties_and_Stylesheets
+ */
+void MainWindow::vrButtonClicked(bool)
+{
+    if(!sceneView->isVrSupported())
+    {
+        ui->vrBtn->setProperty("vrEnabled",false);
+    }
+    else
+    {
+        ui->vrBtn->setProperty("vrEnabled",true);
+
+        if(sceneView->getViewportMode()==ViewportMode::Editor)
+        {
+            sceneView->setViewportMode(ViewportMode::VR);
+
+            //highlight button blue
+            ui->vrBtn->setProperty("vrMode",true);
+        }
+        else
+
+        {
+            sceneView->setViewportMode(ViewportMode::Editor);
+
+            //return button back to normal color
+            ui->vrBtn->setProperty("vrMode",false);
+        }
+    }
+
+    //needed to apply changes
+    ui->vrBtn->style()->unpolish(ui->vrBtn);
+    ui->vrBtn->style()->polish(ui->vrBtn);
+}
+
 //create test scene
 void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
 {
@@ -177,6 +232,8 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
 
     //sceneView->setScene(scene);
     this->setScene(scene);
+
+    setupVrUi();
 }
 
 void MainWindow::cameraTypeChanged(QString type)

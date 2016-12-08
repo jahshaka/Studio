@@ -101,7 +101,11 @@ public:
     //void setGizmoTransformMode(GizmoTransformMode mode);
 
 private:
-    void setupQt3d();
+
+    /**
+     * Sets up the button for vr
+     */
+    void setupVrUi();
 
     //menus
     void setupFileMenu();
@@ -187,6 +191,8 @@ public slots:
 
     void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl);
     void cameraTypeChanged(QString);
+
+    void vrButtonClicked(bool);
 
 private:
     Ui::NewMainWindow *ui;

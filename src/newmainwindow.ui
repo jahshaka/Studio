@@ -645,7 +645,7 @@ background-color: rgb(30, 144, 255);
            <widget class="QComboBox" name="comboBox_2">
             <property name="minimumSize">
              <size>
-              <width>101</width>
+              <width>83</width>
               <height>0</height>
              </size>
             </property>
@@ -693,7 +693,7 @@ background-color: rgb(30, 144, 255);
            <widget class="QComboBox" name="cameraTypeCombo">
             <property name="minimumSize">
              <size>
-              <width>101</width>
+              <width>83</width>
               <height>0</height>
              </size>
             </property>
@@ -732,7 +732,7 @@ background-color: rgb(30, 144, 255);
            </spacer>
           </item>
           <item>
-           <widget class="QToolButton" name="importmod_6">
+           <widget class="QPushButton" name="vrBtn">
             <property name="minimumSize">
              <size>
               <width>40</width>
@@ -746,14 +746,23 @@ background-color: rgb(30, 144, 255);
              </size>
             </property>
             <property name="styleSheet">
-             <string notr="true">QToolButton {
+             <string notr="true">QPushButton {
 border: none;
 	background-color: rgba(255, 255, 255, 0);
 }
 
-QToolButton:hover {
+QPushButton[vrEnabled=true] {
+background-color: rgb(255, 200, 200);
+}
+QPushButton[vrMode=true] {
 background-color: rgb(30, 144, 255);
-}</string>
+}
+
+QPushButton:hover{
+background-color: rgb(30, 144, 255);
+}
+
+</string>
             </property>
             <property name="text">
              <string/>
