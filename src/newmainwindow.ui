@@ -751,10 +751,11 @@ border: none;
 	background-color: rgba(255, 255, 255, 0);
 }
 
-QPushButton[vrEnabled=true] {
-background-color: rgb(255, 200, 200);
+QPushButton[vrMode=&quot;1&quot;] {
+background-color: rgb(255, 0, 0);
 }
-QPushButton[vrMode=true] {
+
+QPushButton[vrMode=&quot;2&quot;] {
 background-color: rgb(30, 144, 255);
 }
 

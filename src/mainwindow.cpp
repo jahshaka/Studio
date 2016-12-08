@@ -65,6 +65,13 @@ For more information see the LICENSE file
 #include "jah3d/graphics/texture2d.h"
 #include "jah3d/graphics/viewport.h"
 
+enum class VRButtonMode:int
+{
+    Default=0,
+    Disabled=1,
+    VRMode=2
+};
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     //ui(new Ui::MainWindow)
@@ -126,16 +133,20 @@ void MainWindow::setupVrUi()
     {
         ui->vrBtn->setEnabled(true);
         ui->vrBtn->setToolTip("Press to view the scene in vr");
+        ui->vrBtn->setProperty("vrMode",(int)VRButtonMode::Default);
     }
     else
     {
         ui->vrBtn->setEnabled(false);
         ui->vrBtn->setToolTip("No Oculus device detected");
+        ui->vrBtn->setProperty("vrMode",(int)VRButtonMode::Disabled);
     }
 
     connect(ui->vrBtn,SIGNAL(clicked(bool)),SLOT(vrButtonClicked(bool)));
 
-
+    //needed to apply changes
+    ui->vrBtn->style()->unpolish(ui->vrBtn);
+    ui->vrBtn->style()->polish(ui->vrBtn);
 }
 
 /**
@@ -146,18 +157,16 @@ void MainWindow::vrButtonClicked(bool)
 {
     if(!sceneView->isVrSupported())
     {
-        ui->vrBtn->setProperty("vrEnabled",false);
     }
     else
     {
-        ui->vrBtn->setProperty("vrEnabled",true);
 
         if(sceneView->getViewportMode()==ViewportMode::Editor)
         {
             sceneView->setViewportMode(ViewportMode::VR);
 
             //highlight button blue
-            ui->vrBtn->setProperty("vrMode",true);
+            ui->vrBtn->setProperty("vrMode",(int)VRButtonMode::VRMode);
         }
         else
 
@@ -165,7 +174,7 @@ void MainWindow::vrButtonClicked(bool)
             sceneView->setViewportMode(ViewportMode::Editor);
 
             //return button back to normal color
-            ui->vrBtn->setProperty("vrMode",false);
+            ui->vrBtn->setProperty("vrMode",(int)VRButtonMode::Default);
         }
     }
 
