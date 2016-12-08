@@ -4,6 +4,7 @@
 #include "../../jah3d/materials/defaultskymaterial.h"
 
 #include "../colorvaluewidget.h"
+#include "../colorpickerwidget.h"
 #include "../hfloatslider.h"
 
 #include "../checkboxproperty.h"
@@ -16,7 +17,7 @@ FogPropertyWidget::FogPropertyWidget()
     fogEnd = this->addFloatValueSlider("Fog End",0,1000);
 
 
-    connect(fogColor,SIGNAL(colorChanged(QColor)),SLOT(onFogColorChanged(QColor)));
+    connect(fogColor->getPicker(),SIGNAL(onColorChanged(QColor)),SLOT(onFogColorChanged(QColor)));
     connect(fogStart,SIGNAL(valueChanged(float)),SLOT(onFogStartChanged(float)));
     connect(fogEnd,SIGNAL(valueChanged(float)),SLOT(onFogEndChanged(float)));
     connect(fogEnabled,SIGNAL(valueChanged(bool)),SLOT(onFogEnabledChanged(bool)));
