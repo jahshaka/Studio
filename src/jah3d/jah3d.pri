@@ -42,4 +42,5 @@ SOURCES += \
     $$PWD/graphics/texture2d.cpp \
     $$PWD/materials/defaultskymaterial.cpp \
     $$PWD/graphics/material.cpp \
-    $$PWD/graphics/utils/fullscreenquad.cpp
+    $$PWD/graphics/utils/fullscreenquad.cpp \
+    $$PWD/vr/vrdevice.cpp

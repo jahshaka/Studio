@@ -20,6 +20,7 @@ class Mesh;
 class BillboardMaterial;
 class Billboard;
 class FullScreenQuad;
+class VrDevice;
 
 /**
  * This is a basic forward renderer.
@@ -41,6 +42,8 @@ class ForwardRenderer
      */
     QSharedPointer<SceneNode> selectedSceneNode;
     QOpenGLShaderProgram* lineShader;
+
+    VrDevice* vrDevice;
 
 public:
 
@@ -67,42 +70,18 @@ public:
 
     bool isVrSupported()
     {
-        return vrSupported;
+        return vrDevice->isVrSupported();
     }
 
 private:
     ForwardRenderer(QOpenGLFunctions_3_2_Core* gl);
+    ~ForwardRenderer();
 
 
     void renderNode(RenderData* renderData,QSharedPointer<SceneNode> node);
     void renderSky(RenderData* renderData);
     void renderBillboardIcons(RenderData* renderData);
     void renderSelectedNode(RenderData* renderData,QSharedPointer<SceneNode> node);
-
-    //VR
-    ovrSession session;
-    ovrGraphicsLuid luid;
-    ovrHmdDesc hmdDesc;
-
-    void initOVR();
-    GLuint createDepthTexture(int width,int height);
-    ovrTextureSwapChain createTextureChain(ovrSession session,ovrTextureSwapChain &swapChain,int width,int height);
-    GLuint createMirrorFbo();
-
-    GLuint vr_depthTexture[2];
-    ovrTextureSwapChain vr_textureChain[2];
-    GLuint vr_Fbo[2];
-
-    int eyeWidth;
-    int eyeHeight;
-    long long frameIndex;
-
-    FullScreenQuad* fsQuad;
-    GLuint vr_mirrorFbo;
-    GLuint vr_mirrorTexId;
-
-    //quick bool to enable/disable vr rendering
-    bool vrSupported;
 
 
     void createLineShader();

@@ -189,13 +189,15 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     auto scene = jah3d::Scene::create();
 
     auto cam = jah3d::CameraNode::create();
-    cam->pos = QVector3D(0,15,10);
+    cam->pos = QVector3D(5, 2, 1);
     cam->rot = QQuaternion::fromEulerAngles(-60,0,0);
     //cam->lookAt(QVector3D(0,0,0),QVect);
 
     scene->setCamera(cam);
     //camControl = new EditorCameraController(cam);
     //scene->rootNode->addChild(cam);//editor camera shouldnt be a part of the scene itself
+
+    scene->setSkyTexture(jah3d::Texture2D::load("app/content/skies/vp_sky_v3_015.jpg"));
 
     //second node
     auto node = jah3d::MeshNode::create();
@@ -207,8 +209,10 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     auto m = jah3d::DefaultMaterial::create();
     node->setMaterial(m);
     m->setDiffuseColor(QColor(255,255,255));
-    m->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/defaultgrid.png"));
-    m->setShininess(0);
+    m->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/Red Brick Wall.jpg"));
+    m->setSpecularTexture(jah3d::Texture2D::load("app/content/textures/Red Brick Wall_SPEC.jpg"));
+    m->setNormalTexture(jah3d::Texture2D::load("app/content/textures/Red Brick Wall_NRM.jpg"));
+    m->setShininess(3);
     m->setTextureScale(100);
     scene->rootNode->addChild(node);
 
@@ -217,13 +221,14 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     auto boxNode = jah3d::MeshNode::create();
     //boxNode->setMesh("app/models/head.obj");
     //boxNode->setMesh("app/models/box.obj");
-    boxNode->setMesh("assets/models/StanfordDragon.obj");
+    boxNode->setMesh("assets/models/StanfordBuddha.obj");
+//    boxNode->scale = QVector3D(3.0f, 3.0f, 3.0f);
 
     auto mat = jah3d::DefaultMaterial::create();
     boxNode->setMaterial(mat);
     mat->setDiffuseColor(QColor(255,200,200));
-    mat->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/Artistic Pattern.png"));
-
+    mat->setDiffuseTexture(jah3d::Texture2D::load("assets/textures/texture_01.jpg"));
+    mat->setShininess(2);
 
     //lighting
     auto light = jah3d::LightNode::create();
@@ -231,18 +236,37 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     light->rot = QQuaternion::fromEulerAngles(45,0,0);
     scene->rootNode->addChild(light);
     //light->pos = QVector3D(5,5,0);
-    light->setName("Light");
-    light->pos = QVector3D(-5,5,3);
+    light->setName("Light 2");
+    light->pos = QVector3D(-3,7,5);
     light->intensity = 1;
     light->icon = jah3d::Texture2D::load("app/icons/bulb.png");
+
+    auto light2 = jah3d::LightNode::create();
+    light2->setLightType(jah3d::LightType::Point);
+    scene->rootNode->addChild(light2);
+    //light->pos = QVector3D(5,5,0);
+    light2->setName("Light");
+    light2->pos = QVector3D(3,3,2);
+    light2->intensity = 0.74f;
+    light2->color = QColor(176, 211, 255);
+    light2->icon = jah3d::Texture2D::load("app/icons/bulb.png");
+
+    auto dlight = jah3d::LightNode::create();
+    dlight->setLightType(jah3d::LightType::Directional);
+    scene->rootNode->addChild(dlight);
+    //light->pos = QVector3D(5,5,0);
+    dlight->setName("Dir Light");
+    dlight->pos = QVector3D(0,10,0);
+    dlight->intensity = 1;
+    dlight->icon = jah3d::Texture2D::load("app/icons/bulb.png");
 
 
     scene->rootNode->addChild(boxNode);
 
     //sceneView->setScene(scene);
     this->setScene(scene);
-
     setupVrUi();
+
 }
 
 void MainWindow::cameraTypeChanged(QString type)

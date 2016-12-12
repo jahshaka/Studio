@@ -16,6 +16,7 @@
 #include "utils/billboard.h"
 #include "utils/fullscreenquad.h"
 #include "texture2d.h"
+#include "../vr/vrdevice.h"
 
 #include <QOpenGLContext>
 #include "../libovr/Include/OVR_CAPI_GL.h"
@@ -35,9 +36,8 @@ ForwardRenderer::ForwardRenderer(QOpenGLFunctions_3_2_Core* gl)
     fsQuad = new FullScreenQuad();
     createLineShader();
 
-    vrSupported = false;
-
-    initOVR();
+    vrDevice = new VrDevice();
+    vrDevice->initialize();
 }
 
 QSharedPointer<ForwardRenderer> ForwardRenderer::create(QOpenGLFunctions_3_2_Core* gl)
@@ -86,6 +86,9 @@ void ForwardRenderer::renderScene(QOpenGLContext* ctx,Viewport* vp)
 
 void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
 {
+    if(!vrDevice->isVrSupported())
+        return;
+
     auto camera = scene->camera;
     ovrEyeRenderDesc eyeRenderDesc[2];
     eyeRenderDesc[0] = ovr_GetRenderDesc(session, ovrEye_Left, hmdDesc.DefaultEyeFov[0]);
@@ -420,136 +423,9 @@ void ForwardRenderer::createLineShader()
     lineShader->setUniformValue("color",QColor(240,240,255,255));
 }
 
-
-//VR
-
-//an opengl context must be set for this function to execute properly
-void ForwardRenderer::initOVR()
+ForwardRenderer::~ForwardRenderer()
 {
-    ovrResult result = ovr_Initialize(nullptr);
-    if(!OVR_SUCCESS(result))
-    {
-        qDebug()<<"Failed to initialize libOVR.";
-        return;
-    }
-
-    result = ovr_Create(&session, &luid);
-    if (!OVR_SUCCESS(result))
-    {
-        qDebug()<<"could not create session";
-        return;
-    }
-
-    hmdDesc = ovr_GetHmdDesc(session);
-
-    //intialize framebuffers necessary for rendering to the hmd
-    for (int eye = 0; eye < 2; ++eye)
-    {
-        ovrSizei texSize = ovr_GetFovTextureSize(session, ovrEyeType(eye), hmdDesc.DefaultEyeFov[eye], 1);
-        createTextureChain(session,vr_textureChain[eye],texSize.w,texSize.h );
-        vr_depthTexture[eye]   = createDepthTexture(texSize.w,texSize.h);
-
-        //should be the same for all
-        eyeWidth = texSize.w;
-        eyeHeight = texSize.h;
-    }
-    gl->glGenFramebuffers(2,vr_Fbo);
-    //done
-
-    createMirrorFbo();
-
-    ovr_SetTrackingOriginType(session, ovrTrackingOrigin_FloorLevel);
-
-    vrSupported = true;
-
-}
-
-GLuint ForwardRenderer::createDepthTexture(int width,int height)
-{
-    GLuint texId;
-    gl->glGenTextures(1, &texId);
-    gl->glBindTexture(GL_TEXTURE_2D, texId);
-    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    GLenum internalFormat = GL_DEPTH_COMPONENT24;
-    GLenum type = GL_UNSIGNED_INT;
-    //GLenum internalFormat = GL_DEPTH_COMPONENT32F;
-    //GLenum type = GL_FLOAT;
-
-    gl->glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, GL_DEPTH_COMPONENT, type, NULL);
-
-    return texId;
-}
-
-ovrTextureSwapChain ForwardRenderer::createTextureChain(ovrSession session,ovrTextureSwapChain &swapChain,int width,int height)
-{
-    //ovrTextureSwapChain swapChain;
-
-    ovrTextureSwapChainDesc desc = {};
-    desc.Type = ovrTexture_2D;
-    desc.ArraySize = 1;
-    desc.Width = width;
-    desc.Height = height;
-    desc.MipLevels = 1;
-    desc.Format = OVR_FORMAT_R8G8B8A8_UNORM_SRGB;
-    desc.SampleCount = 1;
-    desc.StaticImage = ovrFalse;
-
-    ovrResult result = ovr_CreateTextureSwapChainGL(session, &desc, &swapChain);
-    if (!OVR_SUCCESS(result))
-    {
-        qDebug()<<"could not create swap chain!";
-        return nullptr;
-    }
-
-    int length = 0;
-    ovr_GetTextureSwapChainLength(session, swapChain, &length);
-
-    for (int i = 0; i < length; ++i)
-    {
-        GLuint chainTexId;
-        ovr_GetTextureSwapChainBufferGL(session, swapChain, i, &chainTexId);
-        gl->glBindTexture(GL_TEXTURE_2D, chainTexId);
-
-        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    }
-
-}
-
-GLuint ForwardRenderer::createMirrorFbo()
-{
-    ovrMirrorTexture mirrorTexture = nullptr;
-
-    ovrMirrorTextureDesc desc;
-    memset(&desc, 0, sizeof(desc));
-    //todo: use actual viewport size
-    desc.Width = 800;
-    desc.Height = 600;
-    desc.Format = OVR_FORMAT_R8G8B8A8_UNORM_SRGB;
-
-    // Create mirror texture and an FBO used to copy mirror texture to back buffer
-    ovrResult result = ovr_CreateMirrorTextureGL(session, &desc, &mirrorTexture);
-    if (!OVR_SUCCESS(result))
-    {
-        qDebug()<< "Failed to create mirror texture.";
-        return 0;
-    }
-
-    // Configure the mirror read buffer
-    // no need to store this texture anywhere
-    ovr_GetMirrorTextureBufferGL(session, mirrorTexture, &vr_mirrorTexId);
-
-    gl->glGenFramebuffers(1, &vr_mirrorFbo);
-    gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, vr_mirrorFbo);
-    gl->glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, vr_mirrorTexId, 0);
-    gl->glFramebufferRenderbuffer(GL_READ_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, 0);
-    gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    delete vrDevice;
 }
 
 }
