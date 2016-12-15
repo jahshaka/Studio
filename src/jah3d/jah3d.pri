@@ -24,7 +24,8 @@ HEADERS += \
     $$PWD/materials/defaultskymaterial.h \
     $$PWD/core/meshmanager.h \
     $$PWD/graphics/utils/fullscreenquad.h \
-    $$PWD/vr/vrdevice.h
+    $$PWD/vr/vrdevice.h \
+    $$PWD/math/mathhelper.h
 
 include(assimp/assimp.pri)
 include(libovr/libovr.pri)

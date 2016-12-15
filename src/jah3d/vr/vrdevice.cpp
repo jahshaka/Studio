@@ -20,8 +20,9 @@ struct VrFrameData
     double sensorSampleTime;
 };
 
-VrDevice::VrDevice()
+VrDevice::VrDevice(QOpenGLFunctions_3_2_Core* gl)
 {
+    this->gl = gl;
     vrSupported = false;
     frameData = new VrFrameData();
 }
@@ -177,15 +178,10 @@ void VrDevice::beginFrame()
     frameData->eyeRenderDesc[0] = ovr_GetRenderDesc(session, ovrEye_Left, hmdDesc.DefaultEyeFov[0]);
     frameData->eyeRenderDesc[1] = ovr_GetRenderDesc(session, ovrEye_Right, hmdDesc.DefaultEyeFov[1]);
 
-    frameData->eyeRenderPose[2];
-    frameData->hmdToEyeOffset[2] = { frameData->eyeRenderDesc[0].HmdToEyeOffset,
-                                      frameData->eyeRenderDesc[1].HmdToEyeOffset };
+    frameData->hmdToEyeOffset[0] = frameData->eyeRenderDesc[0].HmdToEyeOffset;
+    frameData->hmdToEyeOffset[1] = frameData->eyeRenderDesc[1].HmdToEyeOffset;
 
-    frameData->sensorSampleTime;
     ovr_GetEyePoses(session, frameIndex, ovrTrue, frameData->hmdToEyeOffset, frameData->eyeRenderPose, &frameData->sensorSampleTime);
-
-    Vector3f Pos2 = Vector3f(camera->pos.x(),camera->pos.y(),camera->pos.z());
-    GLuint curTexId;
 }
 
 void VrDevice::endFrame()
@@ -247,17 +243,17 @@ void VrDevice::endEye(int eye)
     ovr_CommitTextureSwapChain(session, vr_textureChain[eye]);
 }
 
-QMatrix4x4 VrDevice::getEyeViewMatrix(int eye)
+QMatrix4x4 VrDevice::getEyeViewMatrix(int eye,QVector3D pivot)
 {
+    Vector3f origin = Vector3f(pivot.x(),pivot.y(),pivot.z());
+
     Matrix4f rollPitchYaw = Matrix4f::RotationY(0);
-    Matrix4f finalRollPitchYaw = rollPitchYaw * Matrix4f(EyeRenderPose[eye].Orientation);
+    Matrix4f finalRollPitchYaw = rollPitchYaw * Matrix4f(frameData->eyeRenderPose[eye].Orientation);
     Vector3f finalUp = finalRollPitchYaw.Transform(Vector3f(0, 1, 0));
     Vector3f finalForward = finalRollPitchYaw.Transform(Vector3f(0, 0, -1));
-    Vector3f shiftedEyePos = Pos2 + rollPitchYaw.Transform(EyeRenderPose[eye].Position);
+    Vector3f shiftedEyePos = origin + rollPitchYaw.Transform(frameData->eyeRenderPose[eye].Position);
 
     Vector3f forward = shiftedEyePos + finalForward;
-
-    renderData->eyePos = QVector3D(shiftedEyePos.x,shiftedEyePos.y,shiftedEyePos.z);
 
     QMatrix4x4 view;
     view.setToIdentity();
@@ -269,9 +265,30 @@ QMatrix4x4 VrDevice::getEyeViewMatrix(int eye)
 
 }
 
-QMatrix4x4 VrDevice::getEyeProjMatrix(int eye)
+QMatrix4x4 VrDevice::getEyeProjMatrix(int eye,float nearClip,float farClip)
 {
+    QMatrix4x4 proj;
+    proj.setToIdentity();//not needed
+    Matrix4f eyeProj = ovrMatrix4f_Projection(hmdDesc.DefaultEyeFov[eye],
+                                              nearClip,
+                                              farClip,
+                                              ovrProjection_None);
 
+    //todo: put in
+    for(int r=0;r<4;r++)
+    {
+        for(int c=0;c<4;c++)
+        {
+            proj(r,c) = eyeProj.M[r][c];
+        }
+    }
+
+    return proj;
+}
+
+GLuint VrDevice::bindMirrorTextureId()
+{
+    gl->glBindTexture(GL_TEXTURE_2D,vr_mirrorTexId);
 }
 
 }

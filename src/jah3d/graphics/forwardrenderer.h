@@ -68,14 +68,14 @@ public:
 
     static QSharedPointer<ForwardRenderer> create(QOpenGLFunctions_3_2_Core* gl);
 
-    bool isVrSupported()
-    {
-        return vrDevice->isVrSupported();
-    }
+    bool isVrSupported();
+
+
+    ~ForwardRenderer();
 
 private:
     ForwardRenderer(QOpenGLFunctions_3_2_Core* gl);
-    ~ForwardRenderer();
+
 
 
     void renderNode(RenderData* renderData,QSharedPointer<SceneNode> node);
@@ -88,6 +88,7 @@ private:
 
     //editor-specific
     jah3d::Billboard* billboard;
+    FullScreenQuad* fsQuad;
 
 };
 

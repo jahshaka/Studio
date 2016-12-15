@@ -24,7 +24,7 @@ struct VrFrameData;
 class VrDevice
 {
 public:
-    VrDevice();
+    VrDevice(QOpenGLFunctions_3_2_Core* gl);
     void initialize();
     void setTrackingOrigin(VrTrackingOrigin trackingOrigin);
 
@@ -38,8 +38,10 @@ public:
     void beginEye(int eye);
     void endEye(int eye);
 
-    QMatrix4x4 getEyeViewMatrix(int eye);
-    QMatrix4x4 getEyeProjMatrix(int eye);
+    QMatrix4x4 getEyeViewMatrix(int eye,QVector3D pivot);
+    QMatrix4x4 getEyeProjMatrix(int eye,float nearClip,float farClip);
+
+    GLuint bindMirrorTextureId();
 
 private:
     GLuint createDepthTexture(int width,int height);

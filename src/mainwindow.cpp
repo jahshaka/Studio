@@ -197,7 +197,7 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     //camControl = new EditorCameraController(cam);
     //scene->rootNode->addChild(cam);//editor camera shouldnt be a part of the scene itself
 
-    scene->setSkyTexture(jah3d::Texture2D::load("app/content/skies/vp_sky_v3_015.jpg"));
+    scene->setSkyTexture(jah3d::Texture2D::load("app/content/skies/vp_sky_v3_015.jpg",false));
 
     //second node
     auto node = jah3d::MeshNode::create();

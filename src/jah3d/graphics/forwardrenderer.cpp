@@ -36,7 +36,7 @@ ForwardRenderer::ForwardRenderer(QOpenGLFunctions_3_2_Core* gl)
     fsQuad = new FullScreenQuad();
     createLineShader();
 
-    vrDevice = new VrDevice();
+    vrDevice = new VrDevice(gl);
     vrDevice->initialize();
 }
 
@@ -90,76 +90,17 @@ void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
         return;
 
     auto camera = scene->camera;
-    ovrEyeRenderDesc eyeRenderDesc[2];
-    eyeRenderDesc[0] = ovr_GetRenderDesc(session, ovrEye_Left, hmdDesc.DefaultEyeFov[0]);
-    eyeRenderDesc[1] = ovr_GetRenderDesc(session, ovrEye_Right, hmdDesc.DefaultEyeFov[1]);
-
-    // Get eye poses, feeding in correct IPD offset
-    ovrPosef EyeRenderPose[2];
-    ovrVector3f HmdToEyeOffset[2] = { eyeRenderDesc[0].HmdToEyeOffset,
-                                      eyeRenderDesc[1].HmdToEyeOffset };
-
-    double sensorSampleTime;    // sensorSampleTime is fed into the layer later
-    ovr_GetEyePoses(session, frameIndex, ovrTrue, HmdToEyeOffset, EyeRenderPose, &sensorSampleTime);
-
-    Vector3f Pos2 = Vector3f(camera->pos.x(),camera->pos.y(),camera->pos.z());
-    GLuint curTexId;
+    vrDevice->beginFrame();
 
     for (int eye = 0; eye < 2; ++eye)
     {
-        int curIndex;
-        ovr_GetTextureSwapChainCurrentIndex(session, vr_textureChain[eye], &curIndex);
-        ovr_GetTextureSwapChainBufferGL(session, vr_textureChain[eye], curIndex, &curTexId);
+        vrDevice->beginEye(eye);
 
-        gl->glBindFramebuffer(GL_FRAMEBUFFER, vr_Fbo[eye]);
-        gl->glFramebufferTexture2D(GL_FRAMEBUFFER,
-                                   GL_COLOR_ATTACHMENT0,
-                                   GL_TEXTURE_2D,
-                                   curTexId,
-                                   0);
-        gl->glFramebufferTexture2D(GL_FRAMEBUFFER,
-                                   GL_DEPTH_ATTACHMENT,
-                                   GL_TEXTURE_2D,
-                                   vr_depthTexture[eye],
-                                   0);
-
-        gl->glViewport(0, 0, eyeWidth, eyeHeight);
-        gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        gl->glEnable(GL_FRAMEBUFFER_SRGB);
-
-        // Get view and projection matrices
-        Matrix4f rollPitchYaw = Matrix4f::RotationY(0);
-        Matrix4f finalRollPitchYaw = rollPitchYaw * Matrix4f(EyeRenderPose[eye].Orientation);
-        Vector3f finalUp = finalRollPitchYaw.Transform(Vector3f(0, 1, 0));
-        Vector3f finalForward = finalRollPitchYaw.Transform(Vector3f(0, 0, -1));
-        Vector3f shiftedEyePos = Pos2 + rollPitchYaw.Transform(EyeRenderPose[eye].Position);
-
-        Vector3f forward = shiftedEyePos + finalForward;
-
-        renderData->eyePos = QVector3D(shiftedEyePos.x,shiftedEyePos.y,shiftedEyePos.z);
-
-        QMatrix4x4 view;
-        view.setToIdentity();
-        view.lookAt(QVector3D(shiftedEyePos.x,shiftedEyePos.y,shiftedEyePos.z),
-                    QVector3D(forward.x,forward.y,forward.z),
-                    QVector3D(finalUp.x,finalUp.y,finalUp.z));
-
+        auto view = vrDevice->getEyeViewMatrix(eye,camera->pos);
+        renderData->eyePos = view.column(3).toVector3D();
         renderData->viewMatrix = view;
 
-        QMatrix4x4 proj;
-        proj.setToIdentity();//not needed
-        Matrix4f eyeProj = ovrMatrix4f_Projection(hmdDesc.DefaultEyeFov[eye],
-                                                  camera->nearClip,
-                                                  camera->farClip,
-                                                  ovrProjection_None);
-        for(int r=0;r<4;r++)
-        {
-            for(int c=0;c<4;c++)
-            {
-                proj(r,c) = eyeProj.M[r][c];
-            }
-        }
-
+        auto proj = vrDevice->getEyeProjMatrix(eye,0.1f,1000.0f);
         renderData->projMatrix = proj;
 
 
@@ -184,44 +125,24 @@ void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
         renderSky(renderData);
 
 
-        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
-        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
-
-        // Commit changes to the textures so they get picked up frame
-        ovr_CommitTextureSwapChain(session, vr_textureChain[eye]);
+        vrDevice->endEye(eye);
     }
 
-    ovrLayerEyeFov ld;
-    ld.Header.Type  = ovrLayerType_EyeFov;
-    ld.Header.Flags = ovrLayerFlag_TextureOriginAtBottomLeft;   // Because OpenGL.
-
-    for (int eye = 0; eye < 2; ++eye)
-    {
-        ld.ColorTexture[eye] = vr_textureChain[eye];
-        ld.Viewport[eye]     = Recti(Sizei(eyeWidth,eyeHeight));
-        ld.Fov[eye]          = hmdDesc.DefaultEyeFov[eye];
-        ld.RenderPose[eye]   = EyeRenderPose[eye];
-        ld.SensorSampleTime  = sensorSampleTime;
-    }
-
-    ovrLayerHeader* layers = &ld.Header;
-    ovrResult result = ovr_SubmitFrame(session, frameIndex, nullptr, &layers, 1);
-
-    if (!OVR_SUCCESS(result))
-    {
-        qDebug()<<"error submitting frame"<<endl;
-    }
-
-   frameIndex++;
+    vrDevice->endFrame();
 
    //rendering to the window
    gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
 
    gl->glViewport(0, 0, vp->width,vp->height);
    gl->glActiveTexture(GL_TEXTURE0);
-   gl->glBindTexture(GL_TEXTURE_2D,vr_mirrorTexId);
+   vrDevice->bindMirrorTextureId();
    fsQuad->draw(gl);
    gl->glBindTexture(GL_TEXTURE_2D,0);
+}
+
+bool ForwardRenderer::isVrSupported()
+{
+    return vrDevice->isVrSupported();
 }
 
 void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode> node)
