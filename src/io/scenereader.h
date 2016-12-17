@@ -2,7 +2,7 @@
 #define SCENEREADER_H
 
 #include <QSharedPointer>
-#include "sceneiobase.h"
+#include "assetiobase.h"
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -19,13 +19,13 @@
 #include "../jah3d/graphics/texture2d.h"
 #include "../jah3d/graphics/graphicshelper.h"
 
-class SceneReader:public SceneIOBase
+class SceneReader:public AssetIOBase
 {
     QHash<QString,QList<jah3d::Mesh*>> meshes;
 public:
     QSharedPointer<jah3d::Scene> readScene(QString filePath)
     {
-        dir = SceneIOBase::getDirFromFileName(filePath);
+        dir = AssetIOBase::getDirFromFileName(filePath);
         QFile file(filePath);
         file.open(QIODevice::ReadOnly);
 
@@ -221,49 +221,6 @@ public:
 
         return material;
 
-    }
-
-    /**
-     * Reads r,g,b and a from color json object
-     * returns default QColor() if colorObj is null
-     * @param colorObj
-     * @return
-     */
-    QColor readColor(const QJsonObject& colorObj)
-    {
-        if(colorObj.isEmpty())
-        {
-            return QColor();
-        }
-
-        QColor col;
-        col.setRed(colorObj["r"].toInt(0));
-        col.setGreen(colorObj["g"].toInt(0));
-        col.setBlue(colorObj["b"].toInt(0));
-        col.setAlpha(colorObj["a"].toInt(0));
-
-        return col;
-    }
-
-    /**
-     * Reads x,y and z from vector json object
-     * returns default QVector3D() if colorObj is null
-     * @param vecObj
-     * @return
-     */
-    QVector3D readVector3(const QJsonObject& vecObj)
-    {
-        if(vecObj.isEmpty())
-        {
-            return QVector3D();
-        }
-
-        QVector3D vec;
-        vec.setX(vecObj["x"].toDouble(0));
-        vec.setY(vecObj["y"].toDouble(0));
-        vec.setZ(vecObj["z"].toDouble(0));
-
-        return vec;
     }
 
     /**

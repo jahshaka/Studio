@@ -62,6 +62,7 @@ class JahRenderer;
 
 class GizmoHitData;
 class AdvancedGizmoHandle;
+class MaterialPreset;
 
 namespace jah3d
 {
@@ -99,6 +100,12 @@ public:
 
     void openProject(QString project);
     //void setGizmoTransformMode(GizmoTransformMode mode);
+
+    /**
+     * Applies material preset to active scene node and refreshes material property widget
+     * @param preset
+     */
+    void applyMaterialPreset(MaterialPreset* preset);
 
 private:
 

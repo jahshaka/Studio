@@ -64,6 +64,9 @@ For more information see the LICENSE file
 #include "jah3d/graphics/mesh.h"
 #include "jah3d/graphics/texture2d.h"
 #include "jah3d/graphics/viewport.h"
+#include "jah3d/graphics/texture2d.h"
+
+#include "core/materialpreset.h"
 
 enum class VRButtonMode:int
 {
@@ -87,6 +90,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->mainTimeline->setMainWindow(this);
     ui->modelpresets->setMainWindow(this);
+    ui->materialpresets->setMainWindow(this);
 
     camControl = nullptr;
     vrMode = false;
@@ -304,31 +308,6 @@ bool MainWindow::handleMousePress(QMouseEvent *event)
 
 bool MainWindow::handleMouseRelease(QMouseEvent *event)
 {
-    //if(activeGizmoHandle!=nullptr)
-    //    activeGizmoHandle->removeHighlight();
-
-    /*
-    mouseButton = event->button();
-    mouseReleasePos = event->pos();
-
-
-
-    //show context menu
-    if(mouseButton == Qt::RightButton
-            && (mouseReleasePos - mousePressPos).manhattanLength() < 3 //mouse press should be equal to mouse release
-            && activeSceneNode != nullptr
-            )
-    {
-        QMenu menu;
-        createSceneNodeContextMenu(menu,activeSceneNode);
-
-        menu.exec(mouseReleasePos);
-    }
-    else if(mouseButton == Qt::LeftButton)
-    {
-        gizmo->onMouseRelease(event->x(),event->y());
-    }
-    */
     return true;
 }
 
@@ -344,10 +323,6 @@ bool MainWindow::handleMouseMove(QMouseEvent *event)
 //todo: disable scrolling while doing gizmo transform
 bool MainWindow::handleMouseWheel(QWheelEvent *event)
 {
-    /*
-    auto speed = 0.01f;
-    this->camControl->getCamera()->translate(QVector3D(0,0,event->delta()*speed));
-    */
     return false;
 }
 
@@ -437,41 +412,6 @@ void MainWindow::setProjectTitle(QString projectTitle)
 
 void MainWindow::sceneTreeCustomContextMenu(const QPoint& pos)
 {
-    /*
-    QModelIndex index = ui->sceneTree->indexAt(pos);
-    if (!index.isValid()) {
-        return;
-    }
-
-    auto item = ui->sceneTree->itemAt(pos);
-    auto node = (SceneNode*)item->data(1,Qt::UserRole).value<void*>();
-    QMenu menu;
-    QAction* action;
-
-    //rename
-    action = new QAction(QIcon(),"Rename",this);
-    connect(action,SIGNAL(triggered()),this,SLOT(renameNode()));
-    menu.addAction(action);
-    */
-
-    /*
-    //world node isnt removable
-    if(node->isRemovable())
-    {
-        action = new QAction(QIcon(),"Delete",this);
-        connect(action,SIGNAL(triggered()),this,SLOT(deleteNode()));
-        menu.addAction(action);
-    }
-
-    if(node->isDuplicable())
-    {
-        action = new QAction(QIcon(),"Duplicate",this);
-        connect(action,SIGNAL(triggered()),this,SLOT(duplicateNode()));
-        menu.addAction(action);
-    }
-    */
-
-    //menu.exec(ui->sceneTree->mapToGlobal(pos));
 }
 
 void MainWindow::renameNode()
@@ -506,23 +446,6 @@ void MainWindow::stopAnimWidget()
 {
     animWidget->stopAnimation();
 }
-/*
-void MainWindow::useEditorCamera()
-{
-    forwardRenderer->setCamera(editorCam);
-
-    auto cam = (UserCameraNode*)this->scene->getRootNode()->children[0];
-    cam->showBody();
-}
-*/
-/*
-void MainWindow::useUserCamera()
-{
-    auto cam = (UserCameraNode*)this->scene->getRootNode()->children[0];
-    forwardRenderer->setCamera(editorCam);
-    cam->hideBody();
-}
-*/
 
 void MainWindow::saveScene()
 {
@@ -604,6 +527,35 @@ void MainWindow::openProject(QString filename)
 
 }
 
+void MainWindow::applyMaterialPreset(MaterialPreset* preset)
+{
+    if(!activeSceneNode || activeSceneNode->sceneNodeType!=jah3d::SceneNodeType::Mesh)
+        return;
+
+    auto meshNode = activeSceneNode.staticCast<jah3d::MeshNode>();
+
+    auto mat = jah3d::DefaultMaterial::create();
+    mat->setAmbientColor(preset->ambientColor);
+
+    mat->setDiffuseColor(preset->diffuseColor);
+    mat->setDiffuseTexture(jah3d::Texture2D::load(preset->diffuseTexture));
+
+    mat->setSpecularColor(preset->specularColor);
+    mat->setSpecularTexture(jah3d::Texture2D::load(preset->specularTexture));
+    mat->setShininess(preset->shininess);
+
+    mat->setNormalTexture(jah3d::Texture2D::load(preset->normalTexture));
+    mat->setNormalIntensity(preset->normalIntensity);
+
+    mat->setReflectionTexture(jah3d::Texture2D::load(preset->reflectionTexture));
+    mat->setReflectionInfluence(preset->reflectionInfluence);
+
+    meshNode->setMaterial(mat);
+
+    //todo: update node's material without updating the whole ui
+    this->ui->sceneNodeProperties->refreshMaterial();
+}
+
 /**
  * @brief callback for "Recent Files" submenu actions
  * opens files directly, no file dialog
@@ -624,13 +576,6 @@ void MainWindow::openRecentFile()
         box.exec();
         return;
     }
-
-    //auto exp = new SceneParser();
-    //auto sceneEnt = new Qt3DCore::QEntity();
-    //sceneEnt->setParent(rootEntity);
-
-    //auto scene = exp->loadScene(filename,sceneEnt);
-    //setScene(scene);
 
     Globals::project->setFilePath(filename);
     this->setProjectTitle(Globals::project->getProjectName());
@@ -676,47 +621,14 @@ void MainWindow::sceneNodeSelected(QTreeWidgetItem* item)
 
 void MainWindow::sceneTreeItemChanged(QTreeWidgetItem* item,int column)
 {
-    /*
-    auto node = (SceneNode*)item->data(1,Qt::UserRole).value<void*>();
 
-    if(item->checkState(column) == Qt::Checked)
-    {
-        node->show();
-    }
-    else
-    {
-        node->hide();
-    }
-    */
 }
 
 void MainWindow::sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode)
 {
-    //todo: ensure this node is a part of the scene
-    //scene->setHighlightedNode(sceneNode);
-
     //show properties for scenenode
     activeSceneNode = sceneNode;
 
-    /*
-    //ui->accordian->add
-    auto transBlade = new AccordianBladeWidget();
-    transBlade->setContentTitle("Transformation");
-    transBlade->addTransform();
-    transBlade->expand();
-    auto etc = new AccordianBladeWidget();
-    etc->setContentTitle("title");
-    etc->addFilePicker("Mesh:");
-    etc->expand();
-
-    auto layout = new QVBoxLayout();
-    layout->addWidget(transBlade);
-    layout->addWidget(etc);
-    layout->addStretch();
-    layout->setMargin(0);
-
-    ui->sceneNodeProperties->setLayout(layout);
-    */
     sceneView->setSelectedNode(sceneNode);
     ui->sceneNodeProperties->setSceneNode(sceneNode);
     ui->sceneHierarchy->setSelectedNode(sceneNode);
@@ -725,25 +637,6 @@ void MainWindow::sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode)
 
 void MainWindow::setupLayerButtonMenu()
 {
-    /*
-    QMenu* addMenu = new QMenu();
-
-    QAction *action = new QAction("2D Scene", this);
-    addMenu->addAction(action);
-
-    action = new QAction("Scene Graph", this);
-    addMenu->addAction(action);
-    //connect(action,SIGNAL(triggered()),this,SLOT(addSceneGraphLayer()));
-
-    action = new QAction("Text", this);
-    addMenu->addAction(action);
-
-    action = new QAction("Particles", this);
-    addMenu->addAction(action);
-
-    action = new QAction("Video", this);
-    addMenu->addAction(action);
-    */
 }
 
 void MainWindow::updateAnim()

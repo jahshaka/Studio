@@ -134,6 +134,12 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sc
     }
 }
 
+void SceneNodePropertiesWidget::refreshMaterial()
+{
+    if(!!sceneNode && sceneNode->sceneNodeType==jah3d::SceneNodeType::Mesh)
+        materialPropView->setSceneNode(sceneNode);
+}
+
 /**
  * clears layout and child layouts and deletes child widget
  * @param layout

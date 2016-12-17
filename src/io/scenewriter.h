@@ -2,7 +2,7 @@
 #define SCENEWRITER_H
 
 #include <QSharedPointer>
-#include "sceneiobase.h"
+#include "assetiobase.h"
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -22,12 +22,12 @@ namespace jah3d
 }
 */
 
-class SceneWriter:public SceneIOBase
+class SceneWriter:public AssetIOBase
 {
 public:
     void writeScene(QString filePath,QSharedPointer<jah3d::Scene> scene)
     {
-        dir = SceneIOBase::getDirFromFileName(filePath);
+        dir = AssetIOBase::getDirFromFileName(filePath);
         QFile file(filePath);
         file.open(QIODevice::WriteOnly|QIODevice::Truncate);
 

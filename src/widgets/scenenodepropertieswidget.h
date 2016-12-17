@@ -31,6 +31,11 @@ public:
      */
     void setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode);
 
+    /**
+     * Updates material properties if active scene node is a mesh
+     */
+    void refreshMaterial();
+
 private:
     void clearLayout(QLayout* layout);
 

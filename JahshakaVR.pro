@@ -72,10 +72,11 @@ SOURCES += src/main.cpp\
     src/widgets/filepickerwidget.cpp \
     src/widgets/propertywidgets/worldpropertywidget.cpp \
     src/io/scenewriter.cpp \
-    src/io/sceneiobase.cpp \
     src/core/thumbnailmanager.cpp \
     src/widgets/checkboxproperty.cpp \
-    src/widgets/propertywidgets/fogpropertywidget.cpp
+    src/widgets/propertywidgets/fogpropertywidget.cpp \
+    src/io/assetiobase.cpp \
+    src/io/materialpresetreader.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -126,13 +127,15 @@ HEADERS  += src/mainwindow.h \
     src/widgets/filepickerwidget.h \
     src/widgets/propertywidgets/worldpropertywidget.h \
     src/io/scenewriter.h \
-    src/io/sceneiobase.h \
     src/io/scenereader.h \
     src/widgets/propertywidgets/scenepropertywidget.h \
     src/core/thumbnailmanager.h \
     src/widgets/checkboxproperty.h \
     src/widgets/propertywidgets/fogpropertywidget.h \
-    src/core/meshmanager.h
+    src/core/meshmanager.h \
+    src/io/assetiobase.h \
+    src/core/materialpreset.h \
+    src/io/materialpresetreader.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

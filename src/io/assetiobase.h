@@ -3,7 +3,7 @@
 
 #include <QDir>
 
-class SceneIOBase
+class AssetIOBase
 {
 protected:
 
@@ -12,6 +12,7 @@ protected:
     //used for creating absolute file paths for assets upon loading scene
     QDir dir;
 
+    void setAssetPath(QString assetPath);
 
     //returns QDir containing filename's parent folder
     static QDir getDirFromFileName(QString filename);
@@ -28,6 +29,23 @@ protected:
     //returns original string if filepath is a resource
     //returns null string if path doesnt exist
     QString getAbsolutePath(QString filename);
+
+
+    /**
+     * Reads r,g,b and a from color json object
+     * returns default QColor() if colorObj is null
+     * @param colorObj
+     * @return
+     */
+    QColor readColor(const QJsonObject& colorObj);
+
+    /**
+     * Reads x,y and z from vector json object
+     * returns default QVector3D() if colorObj is null
+     * @param vecObj
+     * @return
+     */
+    QVector3D readVector3(const QJsonObject& vecObj);
 };
 
 #endif // SCENEIOBASE_H

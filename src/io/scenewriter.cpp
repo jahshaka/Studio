@@ -7,7 +7,7 @@
 #include <QFile>
 
 #include "scenewriter.h"
-#include "sceneiobase.h"
+#include "assetiobase.h"
 
 /*
 void SceneWriter::writeScene(QString tilePath,QSharedPointer<jah3d::Scene> scene)

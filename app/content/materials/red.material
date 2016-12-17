@@ -1,0 +1,17 @@
+{
+	"name":"Shiny Red",
+	"icon":"../../materials/shiny_red.png",
+	"diffuseColor":{
+		"r":255,
+		"g":0,
+		"b":0,
+		"a":255
+	},
+	"specularColor":{
+		"r":50,
+		"g":50,
+		"b":50,
+		"a":255
+	},
+	"shininess":15
+}
