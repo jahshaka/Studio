@@ -324,6 +324,9 @@ void SceneViewWidget::doPicking(const QSharedPointer<jah3d::SceneNode>& sceneNod
         auto a = invTransform*segStart;
         auto b = invTransform*segEnd;
 
+        //auto dist = a.distanceToPoint(b);
+        //qDebug()<<"segment distance: " <<dist;
+
         //if(triMesh->isHitBySegment(segStart,segEnd))
         /*
         QVector3D hitPoint;
@@ -344,8 +347,18 @@ void SceneViewWidget::doPicking(const QSharedPointer<jah3d::SceneNode>& sceneNod
             {
                 //convert hit to world space
                 auto hitPoint = meshNode->globalTransform*triResult.hitPoint;
+                /*
+                auto dist = segStart.distanceToPoint(segEnd);
+                qDebug()<<"start: "<<segStart;
+                qDebug()<<"end: "<<segEnd;
+                qDebug()<<"t: "<<triResult.t;
+                qDebug()<<"segment distance: " <<dist;
+                auto hitPoint = segStart + (segEnd-segStart)*
+                        triResult.t;
+                qDebug()<<sceneNode->name<<" hit: " <<hitPoint;
 
-
+                qDebug()<<"cam pos: "<<editorCam->getGlobalPosition();
+                */
                 PickingResult pick;
                 pick.hitNode = sceneNode;
                 pick.hitPoint = hitPoint;

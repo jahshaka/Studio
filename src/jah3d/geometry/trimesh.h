@@ -11,6 +11,7 @@ struct TriangleIntersectionResult
 {
     int triangleIndex;
     QVector3D hitPoint;
+    float t;//distance along length of the segment
 
     TriangleIntersectionResult()
     {
@@ -94,9 +95,8 @@ public:
             t /= d;
 
             //all conditions have been met
-            //todo: fix please
-            hitPoint = segmentStart + (segmentEnd-segmentStart)*
-                    (t*segmentStart.distanceToPoint(segmentEnd));//t is in range 0 and 1 and denotes how far along the distance the hit is
+            //todo: fix please. return t instead
+            hitPoint = segmentStart + (segmentEnd-segmentStart)*t;//t is in range 0 and 1 and denotes how far along the distance the hit is
             return true;
         }
 
@@ -147,12 +147,16 @@ public:
 
             //all conditions have been met
             hits++;
-            auto hitPoint = segmentStart + (segmentEnd-segmentStart)*
-                    (t*segmentStart.distanceToPoint(segmentEnd));//t is in range 0 and 1 and denotes how far along the distance the hit is
+
+            auto dist = segmentStart.distanceToPoint(segmentEnd);
+            //qDebug()<<dist;
+            auto hitPoint = segmentStart + (segmentEnd-segmentStart)*t;
 
             TriangleIntersectionResult result;
             result.triangleIndex = i;
             result.hitPoint = hitPoint;
+            result.t = t;
+            //result.hitPoint = tri.a*u + tri.b*v + tri.c*w;
             results.append(result);
             hits++;
         }
