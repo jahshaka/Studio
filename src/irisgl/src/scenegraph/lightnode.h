@@ -1,17 +1,23 @@
+/**************************************************************************
+This file is part of IrisGL
+http://www.irisgl.org
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef LIGHTNODE_H
 #define LIGHTNODE_H
 
 #include "QColor"
-#include <QSharedPointer>
+#include "../irisglfwd.h"
 #include "../core/scenenode.h"
 
 namespace iris
 {
-
-class Texture2D;
-
-class LightNode;
-typedef QSharedPointer<LightNode> LightNodePtr;
 
 enum class LightType:int
 {
@@ -47,7 +53,7 @@ public:
 
     static LightNodePtr create()
     {
-        return QSharedPointer<LightNode>(new LightNode());
+        return LightNodePtr(new LightNode());
     }
 
     void setLightType(LightType type)

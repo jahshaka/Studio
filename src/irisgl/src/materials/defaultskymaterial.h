@@ -1,9 +1,20 @@
+/**************************************************************************
+This file is part of IrisGL
+http://www.irisgl.org
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef SKYMATERIAL_H
 #define SKYMATERIAL_H
 
 
 #include "../graphics/material.h"
-#include "../graphics/texture2d.h"
+#include "../irisglfwd.h"
 #include <QOpenGLShaderProgram>
 #include <QColor>
 
@@ -11,12 +22,6 @@ class QOpenGLFunctions_3_2_Core;
 
 namespace iris
 {
-
-class Texture;
-class Texture2D;
-class DefaultSkyMaterial;
-typedef QSharedPointer<DefaultSkyMaterial> DefaultSkyMaterialPtr;
-typedef QSharedPointer<Texture2D> Texture2DPtr;
 
 /**
  * This is the default sky material.
@@ -30,7 +35,6 @@ typedef QSharedPointer<Texture2D> Texture2DPtr;
 class DefaultSkyMaterial:public Material
 {
 public:
-
 
     void setSkyTexture(Texture2DPtr tex);
     void clearSkyTexture();

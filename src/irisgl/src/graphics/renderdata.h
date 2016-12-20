@@ -1,17 +1,26 @@
+/**************************************************************************
+This file is part of IrisGL
+http://www.irisgl.org
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef RENDERDATA_H
 #define RENDERDATA_H
 
-#include <QSharedPointer>
+#include "../irisglfwd.h"
 
 namespace iris
 {
-class Scene;
-class Material;
 
 struct RenderData
 {
-    QSharedPointer<Scene> scene;
-    QSharedPointer<Material> material;
+    ScenePtr scene;
+    MaterialPtr material;
 
     QMatrix4x4 viewMatrix;
     QMatrix4x4 projMatrix;

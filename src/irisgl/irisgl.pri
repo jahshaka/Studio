@@ -1,3 +1,14 @@
+#**************************************************************************
+#This file is part of IrisGL
+#http://www.irisgl.org
+#Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+#
+#This is free software: you may copy, redistribute
+#and/or modify it under the terms of the GPLv3 License
+#
+#For more information see the LICENSE file
+#**************************************************************************
+
 HEADERS += \
     $$PWD/src/core/scene.h \
     $$PWD/src/core/scenenode.h \
@@ -7,7 +18,6 @@ HEADERS += \
     $$PWD/src/graphics/texture2d.h \
     $$PWD/src/graphics/texture.h \
     $$PWD/src/graphics/mesh.h \
-    $$PWD/src/graphics/shaderprogram.h \
     $$PWD/src/graphics/material.h \
     $$PWD/src/scenegraph/cameranode.h \
     $$PWD/src/scenegraph/meshnode.h \
@@ -25,7 +35,9 @@ HEADERS += \
     $$PWD/src/core/meshmanager.h \
     $$PWD/src/graphics/utils/fullscreenquad.h \
     $$PWD/src/vr/vrdevice.h \
-    $$PWD/src/math/mathhelper.h
+    $$PWD/src/math/mathhelper.h \
+    $$PWD/src/irisglfwd.h \
+    $$PWD/src/graphics/shader.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -44,4 +56,6 @@ SOURCES += \
     $$PWD/src/materials/defaultskymaterial.cpp \
     $$PWD/src/graphics/material.cpp \
     $$PWD/src/graphics/utils/fullscreenquad.cpp \
-    $$PWD/src/vr/vrdevice.cpp
+    $$PWD/src/vr/vrdevice.cpp \
+    $$PWD/src/geometry/trimesh.cpp \
+    $$PWD/src/graphics/vertexlayout.cpp

@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of IrisGL
+http://www.irisgl.org
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef TEXTURE2D_H
 #define TEXTURE2D_H
 
@@ -5,13 +16,10 @@
 #include "texture.h"
 #include <QOpenGLTexture>
 #include <QImage>
+#include "../irisglfwd.h"
 
 namespace iris
 {
-
-//class Texture;
-class Texture2D;
-typedef QSharedPointer<Texture2D> Texture2DPtr;
 
 class Texture2D: public Texture
 {
@@ -22,9 +30,9 @@ public:
      * Returns a null shared pointer
      * @return
      */
-    static QSharedPointer<Texture2D> null()
+    static Texture2DPtr null()
     {
-        return QSharedPointer<Texture2D>(nullptr);
+        return Texture2DPtr(nullptr);
     }
 
     //todo: move mipmap generation and texture filter responsibilities to Texture2D class's non-static members

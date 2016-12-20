@@ -1,9 +1,18 @@
+/**************************************************************************
+This file is part of IrisGL
+http://www.irisgl.org
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef MATERIAL_H
 #define MATERIAL_H
 
-//#include "shaderprogram.h"
-//#include "texture.h"
-#include <QSharedPointer>
+#include "../irisglfwd.h"
 #include <QOpenGLShaderProgram>
 
 class QOpenGLShaderProgram;
@@ -12,15 +21,6 @@ class QOpenGLFunctions_3_2_Core;
 
 namespace iris
 {
-
-class Material;
-typedef QSharedPointer<Material> MaterialPtr;
-
-class Texture2D;
-typedef QSharedPointer<Texture2D> Texture2DPtr;
-
-class Texture;
-typedef QSharedPointer<Texture> TexturePtr;
 
 struct MaterialTexture
 {

@@ -1,18 +1,24 @@
+/**************************************************************************
+This file is part of IrisGL
+http://www.irisgl.org
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef SCENENODE_H
 #define SCENENODE_H
 
-#include <QSharedPointer>
-//#include "scene.h"
+#include "../irisglfwd.h"
 #include <QQuaternion>
 #include <QMatrix4x4>
 #include <QVector3D>
 
 namespace iris
 {
-
-class Scene;
-class SceneNode;
-typedef QSharedPointer<SceneNode> SceneNodePtr;
 
 enum class SceneNodeType
 {
@@ -38,7 +44,7 @@ public:
     QString name;
     long nodeId;
 
-    QSharedPointer<Scene> scene;
+    ScenePtr scene;
     SceneNodePtr parent;
     QList<SceneNodePtr> children;
 
@@ -102,7 +108,7 @@ public:
 
 private:
     void setParent(SceneNodePtr node);
-    void setScene(QSharedPointer<Scene> scene);
+    void setScene(ScenePtr scene);
 
     static long generateNodeId();
     static long nextId;

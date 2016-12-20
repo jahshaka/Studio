@@ -1,15 +1,24 @@
+/**************************************************************************
+This file is part of IrisGL
+http://www.irisgl.org
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef CAMERANODE_H
 #define CAMERANODE_H
 
 #include <QMatrix4x4>
-#include <QSharedPointer>
+#include "../irisglfwd.h"
 #include "../core/scenenode.h"
 
 namespace iris
 {
 
-class CameraNode;
-typedef QSharedPointer<iris::CameraNode> CameraNodePtr;
 
 class CameraNode:public SceneNode
 {

@@ -1,26 +1,24 @@
+/**************************************************************************
+This file is part of IrisGL
+http://www.irisgl.org
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef SCENE_H
 #define SCENE_H
 
 #include <QList>
-#include <QSharedPointer>
+#include "../irisglfwd.h"
 #include "../graphics/texture2d.h"
 #include "../materials/defaultskymaterial.h"
 
 namespace iris
 {
-
-class LightNode;
-class SceneNode;
-class Scene;
-class CameraNode;
-class Mesh;
-class Material;
-
-typedef QSharedPointer<iris::LightNode> LightNodePtr;
-typedef QSharedPointer<iris::Scene> ScenePtr;
-typedef QSharedPointer<iris::SceneNode> SceneNodePtr;
-typedef QSharedPointer<iris::CameraNode> CameraNodePtr;
-typedef QSharedPointer<iris::Material> MaterialPtr;
 
 class Scene: public QEnableSharedFromThis<Scene>
 {

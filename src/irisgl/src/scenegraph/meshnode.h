@@ -1,16 +1,22 @@
+/**************************************************************************
+This file is part of IrisGL
+http://www.irisgl.org
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef MESHNODE_H
 #define MESHNODE_H
 
-#include <QSharedPointer>
+#include "../irisglfwd.h"
 #include "../core/scenenode.h"
-//#include "../graphics/mesh.h"
-//#include "../graphics/material.h"
 
 namespace iris
 {
-
-class Mesh;
-class Material;
 
 class MeshNode:public SceneNode
 {
@@ -24,11 +30,11 @@ public:
      */
     int meshIndex;
 
-    QSharedPointer<Material> material;
+    MaterialPtr material;
 
-    static QSharedPointer<iris::MeshNode> create()
+    static MeshNodePtr create()
     {
-        return QSharedPointer<iris::MeshNode>(new iris::MeshNode());
+        return MeshNodePtr(new MeshNode());
     }
 
     /**
@@ -38,15 +44,15 @@ public:
      * @param path
      * @return
      */
-    static QSharedPointer<iris::SceneNode> loadAsSceneFragment(QString path);
+    static SceneNodePtr loadAsSceneFragment(QString path);
 
     void setMesh(QString source);
     void setMesh(Mesh* mesh);
 
     Mesh* getMesh();
 
-    void setMaterial(QSharedPointer<iris::Material> material);
-    QSharedPointer<iris::Material> getMaterial()
+    void setMaterial(MaterialPtr material);
+    MaterialPtr getMaterial()
     {
         return material;
     }
@@ -58,9 +64,6 @@ private:
         sceneNodeType = SceneNodeType::Mesh;
     }
 };
-
-typedef QSharedPointer<iris::MeshNode> MeshNodePtr;
-
 
 }
 

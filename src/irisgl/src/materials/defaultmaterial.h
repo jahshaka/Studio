@@ -1,6 +1,18 @@
+/**************************************************************************
+This file is part of IrisGL
+http://www.irisgl.org
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef DEFAULTMATERIAL_H
 #define DEFAULTMATERIAL_H
 
+#include "../irisglfwd.h"
 #include "../graphics/material.h"
 #include <QOpenGLShaderProgram>
 #include <QColor>
@@ -10,9 +22,6 @@ class QOpenGLFunctions_3_2_Core;
 namespace iris
 {
 
-class Texture;
-class Texture2D;
-
 class DefaultMaterial:public Material
 {
     float textureScale;
@@ -20,27 +29,27 @@ class DefaultMaterial:public Material
 
     bool useNormalTex;
     float normalIntensity;
-    //QOpenGLTexture* normalTexture;
-    QSharedPointer<Texture2D> normalTexture;
+
+    Texture2DPtr normalTexture;
 
     QColor diffuseColor;
     bool useDiffuseTex;
-    QSharedPointer<Texture2D> diffuseTexture;
+    Texture2DPtr diffuseTexture;
 
     float shininess;
     bool useSpecularTex;
     QColor specularColor;
-    //QOpenGLTexture* specularTexture;
-    QSharedPointer<Texture2D> specularTexture;
+
+    Texture2DPtr specularTexture;
 
     float reflectionInfluence;
     bool useReflectionTex;
-    //QOpenGLTexture* reflectionTexture;
-    QSharedPointer<Texture2D> reflectionTexture;
+
+    Texture2DPtr reflectionTexture;
 
 public:
 
-    void setDiffuseTexture(QSharedPointer<Texture2D> tex);
+    void setDiffuseTexture(Texture2DPtr tex);
     QString getDiffuseTextureSource();
 
     void setAmbientColor(QColor col);
@@ -52,13 +61,13 @@ public:
     void setDiffuseColor(QColor col);
     QColor getDiffuseColor();
 
-    void setNormalTexture(QSharedPointer<Texture2D> tex);
+    void setNormalTexture(Texture2DPtr tex);
     QString getNormalTextureSource();
 
     void setNormalIntensity(float intensity);
     float getNormalIntensity();
 
-    void setSpecularTexture(QSharedPointer<Texture2D> tex);
+    void setSpecularTexture(Texture2DPtr tex);
     QString getSpecularTextureSource();
 
     void setSpecularColor(QColor col);
@@ -67,7 +76,7 @@ public:
     void setShininess(float intensity);
     float getShininess();
 
-    void setReflectionTexture(QSharedPointer<Texture2D> tex);
+    void setReflectionTexture(Texture2DPtr tex);
     QString getReflectionTextureSource();
 
     void setTextureScale(float scale);
@@ -80,9 +89,9 @@ public:
     void begin(QOpenGLFunctions_3_2_Core* gl) override;
     void end(QOpenGLFunctions_3_2_Core* gl) override;
 
-    static QSharedPointer<DefaultMaterial> create()
+    static DefaultMaterialPtr create()
     {
-        return QSharedPointer<DefaultMaterial>(new DefaultMaterial());
+        return DefaultMaterialPtr(new DefaultMaterial());
     }
 
 private:
