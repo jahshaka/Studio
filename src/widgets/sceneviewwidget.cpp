@@ -305,7 +305,7 @@ void SceneViewWidget::doObjectPicking()
     //sort by distance to camera then return
     qSort(hitList.begin(),hitList.end(),[](const PickingResult& a,const PickingResult& b)
     {
-        return a.distanceFromCameraSqrd<b.distanceFromCameraSqrd;
+        return a.distanceFromCameraSqrd>b.distanceFromCameraSqrd;
     });
 
     emit sceneNodeSelected(hitList.last().hitNode);

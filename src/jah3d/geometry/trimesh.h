@@ -149,7 +149,6 @@ public:
             hits++;
 
             auto dist = segmentStart.distanceToPoint(segmentEnd);
-            //qDebug()<<dist;
             auto hitPoint = segmentStart + (segmentEnd-segmentStart)*t;
 
             TriangleIntersectionResult result;
