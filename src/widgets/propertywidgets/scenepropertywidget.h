@@ -7,7 +7,7 @@
 
 class ColorValueWidget;
 class ColorPickerWidget;
-namespace jah3d
+namespace iris
 {
     class Scene;
 }
@@ -19,10 +19,10 @@ class ScenePropertyWidget:public AccordianBladeWidget
 public:
     ScenePropertyWidget(QWidget* parent = nullptr);
 
-    void setScene(QSharedPointer<jah3d::Scene> sceneNode);
+    void setScene(QSharedPointer<iris::Scene> sceneNode);
 
 private:
-    QSharedPointer<jah3d::Scene> sceneNode;
+    QSharedPointer<iris::Scene> sceneNode;
 };
 
 #endif // SCENEPROPERTYWIDGET_H

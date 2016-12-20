@@ -16,7 +16,7 @@ For more information see the LICENSE file
 #include <QDropEvent>
 #include <QDebug>
 //#include "../scenegraph/scenenodes.h"
-#include "../jah3d/core/scenenode.h"
+#include "../irisgl/src/core/scenenode.h"
 
 //class QTreeWidget;
 

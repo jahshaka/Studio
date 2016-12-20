@@ -1,4 +1,4 @@
-#include "../jah3d/materials/defaultmaterial.h"
+#include "../irisgl/src/materials/defaultmaterial.h"
 #include "materialpresetreader.h"
 #include "../core/materialpreset.h"
 

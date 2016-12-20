@@ -3,8 +3,8 @@
 #include <QSharedPointer>
 #include <QtMath>
 
-#include "../jah3d/core/scenenode.h"
-#include "../jah3d/scenegraph/cameranode.h"
+#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/cameranode.h"
 #include "cameracontrollerbase.h"
 #include "orbitalcameracontroller.h"
 
@@ -14,7 +14,7 @@ OrbitalCameraController::OrbitalCameraController()
     distFromPivot = 15;
 }
 
-QSharedPointer<jah3d::CameraNode>  OrbitalCameraController::getCamera()
+QSharedPointer<iris::CameraNode>  OrbitalCameraController::getCamera()
 {
     return camera;
 }
@@ -22,7 +22,7 @@ QSharedPointer<jah3d::CameraNode>  OrbitalCameraController::getCamera()
 /**
  * Calculates the pivot location and its yaw and pitch
  */
-void OrbitalCameraController::setCamera(QSharedPointer<jah3d::CameraNode>  cam)
+void OrbitalCameraController::setCamera(QSharedPointer<iris::CameraNode>  cam)
 {
     this->camera = cam;
 

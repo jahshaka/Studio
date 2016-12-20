@@ -1,7 +1,7 @@
 #include "transformeditor.h"
 #include "ui_transformeditor.h"
 
-#include "../../jah3d/core/scenenode.h"
+#include "../irisgl/src/core/scenenode.h"
 
 TransformEditor::TransformEditor(QWidget *parent) :
     QWidget(parent),
@@ -31,7 +31,7 @@ TransformEditor::~TransformEditor()
     delete ui;
 }
 
-void TransformEditor::setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode)
+void TransformEditor::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     this->sceneNode = sceneNode;
 

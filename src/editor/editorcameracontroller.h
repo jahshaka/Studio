@@ -15,12 +15,12 @@ For more information see the LICENSE file
 #include <QPoint>
 #include <QVector3D>
 #include <QSharedPointer>
-//#include "../jah3d/core/scenenode.h"
-//#include "../jah3d/scenegraph/cameranode.h"
+//#include "../irisgl/src/core/scenenode.h"
+//#include "../irisgl/src/scenegraph/cameranode.h"
 #include "cameracontrollerbase.h"
 
 //class CameraPtr;
-namespace jah3d
+namespace iris
 {
     class CameraNode;
 }
@@ -29,7 +29,7 @@ class EditorCameraController:public CameraControllerBase
 {
     //Q_OBJECT
 
-    QSharedPointer<jah3d::CameraNode> camera;
+    QSharedPointer<iris::CameraNode> camera;
 
     float lookSpeed;
     float linearSpeed;
@@ -40,8 +40,8 @@ class EditorCameraController:public CameraControllerBase
 public:
     EditorCameraController();
 
-    QSharedPointer<jah3d::CameraNode>  getCamera();
-    void setCamera(QSharedPointer<jah3d::CameraNode>  cam) override;
+    QSharedPointer<iris::CameraNode>  getCamera();
+    void setCamera(QSharedPointer<iris::CameraNode>  cam) override;
 
     QVector3D getPos();
 

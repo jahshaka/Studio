@@ -14,7 +14,7 @@ For more information see the LICENSE file
 #include <QDebug>
 #include <QPainter>
 #include <QMouseEvent>
-#include "../jah3d/core/scenenode.h"
+#include "../irisgl/src/core/scenenode.h"
 #include "timelinewidget.h"
 #include <QtMath>
 
@@ -58,7 +58,7 @@ void TimelineWidget::hideHighlight()
     this->repaint();
 }
 
-void TimelineWidget::setSceneNode(jah3d::SceneNodePtr node)
+void TimelineWidget::setSceneNode(iris::SceneNodePtr node)
 {
     this->node = node;
 }

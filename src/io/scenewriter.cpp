@@ -10,7 +10,7 @@
 #include "assetiobase.h"
 
 /*
-void SceneWriter::writeScene(QString tilePath,QSharedPointer<jah3d::Scene> scene)
+void SceneWriter::writeScene(QString tilePath,QSharedPointer<iris::Scene> scene)
 {
     dir = SceneIOBase::getDirFromFileName(fileName);
     QFile file(fileName);

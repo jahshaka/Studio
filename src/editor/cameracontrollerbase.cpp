@@ -1,7 +1,7 @@
 #include "cameracontrollerbase.h"
 
 
-void CameraControllerBase::setCamera(QSharedPointer<jah3d::CameraNode>  cam)
+void CameraControllerBase::setCamera(QSharedPointer<iris::CameraNode>  cam)
 {
     this->camera = cam;
 }

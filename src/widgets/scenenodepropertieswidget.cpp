@@ -10,7 +10,7 @@
 #include "propertywidgets/worldpropertywidget.h"
 #include "propertywidgets/fogpropertywidget.h"
 
-#include "../jah3d/core/scenenode.h"
+#include "../irisgl/src/core/scenenode.h"
 
 
 SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget* parent):
@@ -41,7 +41,7 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget* parent):
  * sets active scene node and determines which property ui should be shown
  * @param sceneNode
  */
-void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode)
+void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     //todo: properly cleanup layout
 
@@ -102,11 +102,11 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sc
 
             switch(sceneNode->getSceneNodeType())
             {
-            case jah3d::SceneNodeType::Light:
+            case iris::SceneNodeType::Light:
                 layout->addWidget(lightPropView);
                 lightPropView->expand();
                 break;
-            case jah3d::SceneNodeType::Mesh:
+            case iris::SceneNodeType::Mesh:
                 layout->addWidget(materialPropView);
                 materialPropView->expand();
                 break;
@@ -136,7 +136,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sc
 
 void SceneNodePropertiesWidget::refreshMaterial()
 {
-    if(!!sceneNode && sceneNode->sceneNodeType==jah3d::SceneNodeType::Mesh)
+    if(!!sceneNode && sceneNode->sceneNodeType==iris::SceneNodeType::Mesh)
         materialPropView->setSceneNode(sceneNode);
 }
 

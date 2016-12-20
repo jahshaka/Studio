@@ -9,7 +9,7 @@ class ColorValueWidget;
 class ColorPickerWidget;
 class TexturePicker;
 
-namespace jah3d
+namespace iris
 {
     class Scene;
     class SceneNode;
@@ -26,13 +26,13 @@ class WorldPropertyWidget: public AccordianBladeWidget
 public:
     WorldPropertyWidget();
 
-    void setScene(QSharedPointer<jah3d::Scene> scene);
+    void setScene(QSharedPointer<iris::Scene> scene);
 
 protected slots:
     void onSkyTextureChanged(QString texPath);
 
 private:
-    QSharedPointer<jah3d::Scene> scene;
+    QSharedPointer<iris::Scene> scene;
     TexturePicker* skyTexture;
 
 };

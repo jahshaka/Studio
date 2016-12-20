@@ -7,8 +7,8 @@
 
 #include "../mainwindow.h"
 
-#include "../jah3d/core/scene.h"
-#include "../jah3d/core/scenenode.h"
+#include "../irisgl/src/core/scene.h"
+#include "../irisgl/src/core/scenenode.h"
 
 SceneHeirarchyWidget::SceneHeirarchyWidget(QWidget *parent) :
     QWidget(parent),
@@ -35,7 +35,7 @@ SceneHeirarchyWidget::SceneHeirarchyWidget(QWidget *parent) :
 
 }
 
-void SceneHeirarchyWidget::setScene(QSharedPointer<jah3d::Scene> scene)
+void SceneHeirarchyWidget::setScene(QSharedPointer<iris::Scene> scene)
 {
     //todo: cleanly remove previous scene
     this->scene = scene;
@@ -101,7 +101,7 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     connect(ui->deleteBtn,SIGNAL(clicked(bool)),mainWindow,SLOT(deleteNode()));
 }
 
-void SceneHeirarchyWidget::setSelectedNode(QSharedPointer<jah3d::SceneNode> sceneNode)
+void SceneHeirarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     selectedNode = sceneNode;
 
@@ -223,7 +223,7 @@ void SceneHeirarchyWidget::repopulateTree()
     ui->sceneTree->expandAll();
 }
 
-void SceneHeirarchyWidget::populateTree(QTreeWidgetItem* parentNode,QSharedPointer<jah3d::SceneNode> sceneNode)
+void SceneHeirarchyWidget::populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode)
 {
     for(auto node:sceneNode->children)
     {

@@ -7,9 +7,9 @@
 #include "../texturepicker.h"
 #include <QDebug>
 
-#include "../../jah3d/graphics/texture2d.h"
-#include "../../jah3d/scenegraph/meshnode.h"
-#include "../../jah3d/materials/defaultmaterial.h"
+#include "../../irisgl/src/graphics/texture2d.h"
+#include "../../irisgl/src/scenegraph/meshnode.h"
+#include "../../irisgl/src/materials/defaultmaterial.h"
 
 
 MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
@@ -57,12 +57,12 @@ MaterialPropertyWidget::MaterialPropertyWidget(QWidget* parent)
 }
 
 
-void MaterialPropertyWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode)
+void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
-    if(!!sceneNode && sceneNode->getSceneNodeType()==jah3d::SceneNodeType::Mesh)
+    if(!!sceneNode && sceneNode->getSceneNodeType()==iris::SceneNodeType::Mesh)
     {
-        this->meshNode = sceneNode.staticCast<jah3d::MeshNode>();
-        this->material = meshNode->getMaterial().staticCast<jah3d::DefaultMaterial>();
+        this->meshNode = sceneNode.staticCast<iris::MeshNode>();
+        this->material = meshNode->getMaterial().staticCast<iris::DefaultMaterial>();
     }
     else
     {
@@ -116,11 +116,11 @@ void MaterialPropertyWidget::onDiffuseTextureChanged(QString texture)
     {
         if(texture.isEmpty() || texture.isNull())
         {
-            material->setDiffuseTexture(jah3d::Texture2D::null());
+            material->setDiffuseTexture(iris::Texture2D::null());
         }
         else
         {
-            material->setDiffuseTexture(jah3d::Texture2D::load(texture));
+            material->setDiffuseTexture(iris::Texture2D::load(texture));
         }
     }
 }
@@ -137,7 +137,7 @@ void MaterialPropertyWidget::onSpecularTextureChanged(QString texture)
 {
     if(!!material)
     {
-        material->setSpecularTexture(jah3d::Texture2D::load(texture));
+        material->setSpecularTexture(iris::Texture2D::load(texture));
     }
 }
 
@@ -153,7 +153,7 @@ void MaterialPropertyWidget::onNormalTextureChanged(QString texture)
 {
     if(!!material)
     {
-        material->setNormalTexture(jah3d::Texture2D::load(texture));
+        material->setNormalTexture(iris::Texture2D::load(texture));
     }
 }
 
@@ -169,7 +169,7 @@ void MaterialPropertyWidget::onReflectionTextureChanged(QString texture)
 {
     if(!!material)
     {
-        material->setReflectionTexture(jah3d::Texture2D::load(texture));
+        material->setReflectionTexture(iris::Texture2D::load(texture));
     }
 }
 

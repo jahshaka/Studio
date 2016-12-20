@@ -1,7 +1,7 @@
 #include "fogpropertywidget.h"
 #include "../texturepicker.h"
-#include "../../jah3d/core/scene.h"
-#include "../../jah3d/materials/defaultskymaterial.h"
+#include "../../irisgl/src/core/scene.h"
+#include "../../irisgl/src/materials/defaultskymaterial.h"
 
 #include "../colorvaluewidget.h"
 #include "../colorpickerwidget.h"
@@ -23,7 +23,7 @@ FogPropertyWidget::FogPropertyWidget()
     connect(fogEnabled,SIGNAL(valueChanged(bool)),SLOT(onFogEnabledChanged(bool)));
 }
 
-void FogPropertyWidget::setScene(QSharedPointer<jah3d::Scene> scene)
+void FogPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 {
     if(!!scene)
     {

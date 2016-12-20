@@ -22,7 +22,7 @@ class QWidget;
 class QElapsedTimer;
 class TimelineWidget;
 
-namespace jah3d
+namespace iris
 {
     class SceneNode;
 }
@@ -30,7 +30,7 @@ namespace jah3d
 class AnimationWidget : public QWidget
 {
     Q_OBJECT
-    jah3d::SceneNodePtr node;
+    iris::SceneNodePtr node;
     QTimer* timer;
     //http://stackoverflow.com/questions/17571717/accessing-the-elapsed-seconds-of-a-qtimer
     QElapsedTimer* elapsedTimer;
@@ -46,7 +46,7 @@ public:
     explicit AnimationWidget(QWidget *parent = 0);
     ~AnimationWidget();
 
-    void setSceneNode(QSharedPointer<jah3d::SceneNode> node);
+    void setSceneNode(QSharedPointer<iris::SceneNode> node);
 
     void setMainTimelineWidget(TimelineWidget* tl)
     {

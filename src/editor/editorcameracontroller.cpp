@@ -11,12 +11,12 @@ For more information see the LICENSE file
 
 #include "editorcameracontroller.h"
 #include <QVector3D>
-#include "../jah3d/core/scenenode.h"
-#include "../jah3d/scenegraph/cameranode.h"
+#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/cameranode.h"
 #include <qmath.h>
 #include <math.h>
 
-using namespace jah3d;
+using namespace iris;
 
 EditorCameraController::EditorCameraController()
 {

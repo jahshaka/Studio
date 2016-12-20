@@ -5,7 +5,7 @@
 #include <QSharedPointer>
 #include "../accordianbladewidget.h"
 
-namespace jah3d
+namespace iris
 {
     class SceneNode;
     class MeshNode;
@@ -14,7 +14,7 @@ namespace jah3d
 
 /**
  *  Displays properties for materials
- *  right now it is made specifically for the jah3d::DefaulMaterial class
+ *  right now it is made specifically for the iris::DefaulMaterial class
  *
  */
 class MaterialPropertyWidget:public AccordianBladeWidget
@@ -24,9 +24,9 @@ class MaterialPropertyWidget:public AccordianBladeWidget
 public:
     MaterialPropertyWidget(QWidget* parent=nullptr);
 
-    void setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode);
-    QSharedPointer<jah3d::MeshNode> meshNode;
-    QSharedPointer<jah3d::DefaultMaterial> material;
+    void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
+    QSharedPointer<iris::MeshNode> meshNode;
+    QSharedPointer<iris::DefaultMaterial> material;
 
 protected slots:
     void onAmbientColorChanged(QColor color);

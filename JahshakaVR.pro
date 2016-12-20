@@ -194,7 +194,7 @@ export(movecontent.commands)
 export(moveassets.commands)
 QMAKE_EXTRA_TARGETS += first moveassets movecontent
 
-include(src/jah3d/jah3d.pri)
+include(src/irisgl/irisgl.pri)
 
 DISTFILES += \
     app/shaders/defaultsky.vert \

@@ -19,11 +19,9 @@ For more information see the LICENSE file
 #include <vector>
 #include <QVector2D>
 #include <QSharedPointer>
-//#include "../jah3d/animation/keyframeanimation.h"
-//#include "../jah3d/core/scenenode.h"
-#include "../jah3d/jah3d.h"
+#include "../irisgl/src/irisgl.h"
 
-namespace jah3d
+namespace iris
 {
     class SceneNode;
 }
@@ -52,14 +50,14 @@ private:
     bool dragging;
     int scaleRatio;
 
-    QSharedPointer<jah3d::SceneNode> obj;
+    QSharedPointer<iris::SceneNode> obj;
     QPoint mousePos;
     QPoint clickPos;
 
 public:
     KeyFrameWidget(QWidget* parent);
 
-    void setSceneNode(QSharedPointer<jah3d::SceneNode> node);
+    void setSceneNode(QSharedPointer<iris::SceneNode> node);
     void setMaxTimeInSeconds(float time);
     void adjustLength();
 
@@ -76,7 +74,7 @@ public:
 
     /*
     template<typename T>
-    void drawFrame(jah3d::KeyFrame<T>* frame,QPainter* paint,int yTop)
+    void drawFrame(iris::KeyFrame<T>* frame,QPainter* paint,int yTop)
     {
         float penSize = 14;
         float penSizeSquared = 7*7;
@@ -92,7 +90,7 @@ public:
 
         for(size_t i=0;i<frame->keys.size();i++)
         {
-            jah3d::Key<T>* key = frame->keys[i];
+            iris::Key<T>* key = frame->keys[i];
             int xpos = this->timeToPos(key->time);
 
             float distSqrd = distanceSquared(xpos,yTop+10,mousePos.x(),mousePos.y());

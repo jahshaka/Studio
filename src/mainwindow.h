@@ -64,7 +64,7 @@ class GizmoHitData;
 class AdvancedGizmoHandle;
 class MaterialPreset;
 
-namespace jah3d
+namespace iris
 {
     class SceneNode;
     class Scene;
@@ -135,8 +135,8 @@ private:
     void deselectTreeItems();
 
     //void addSceneNodeToSelectedTreeItem(QTreeWidget* sceneTree,SceneNode* newNode,bool addToSelected,QIcon icon);
-    void addNodeToActiveNode(QSharedPointer<jah3d::SceneNode> sceneNode);
-    void addNodeToScene(QSharedPointer<jah3d::SceneNode> sceneNode);
+    void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
+    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode);
 
     void setupDefaultScene();
 
@@ -145,7 +145,7 @@ private:
     QIcon getIconFromSceneNodeType(SceneNodeType type);
 
     void removeScene();
-    void setScene(QSharedPointer<jah3d::Scene> scene);
+    void setScene(QSharedPointer<iris::Scene> scene);
     void updateGizmoTransform();
 
     void dragEnterEvent(QDragEnterEvent* event) override;
@@ -178,7 +178,7 @@ public slots:
     void sceneTreeCustomContextMenu(const QPoint&);
     void sceneTreeItemChanged(QTreeWidgetItem* item,int column);
 
-    void sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode);
+    void sceneNodeSelected(QSharedPointer<iris::SceneNode> sceneNode);
 
     //TORUS SLIDERS
     void saveScene();
@@ -210,8 +210,8 @@ private:
     QWidget *container;
     EditorCameraController* camControl;
 
-    QSharedPointer<jah3d::Scene> scene;
-    QSharedPointer<jah3d::SceneNode> activeSceneNode;
+    QSharedPointer<iris::Scene> scene;
+    QSharedPointer<iris::SceneNode> activeSceneNode;
 
     QTimer* timer;
 

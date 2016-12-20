@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include <QMouseEvent>
 #include <vector>
 //#include "../scenegraph/scenenodes.h"
-#include "../jah3d/core/scenenode.h"
+#include "../irisgl/src/core/scenenode.h"
 #include "keyframelabelwidget.h"
 
 
@@ -31,7 +31,7 @@ KeyFrameLabelWidget::KeyFrameLabelWidget(QWidget* parent):
     //obj = nullptr;
 }
 
-void KeyFrameLabelWidget::setSceneNode(jah3d::SceneNodePtr node)
+void KeyFrameLabelWidget::setSceneNode(iris::SceneNodePtr node)
 {
     obj = node;
 }

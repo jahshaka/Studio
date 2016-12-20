@@ -9,14 +9,14 @@
 #include <QJsonObject>
 #include <QJsonDocument>
 
-#include "../jah3d/core/scene.h"
-#include "../jah3d/core/scenenode.h"
-#include "../jah3d/scenegraph/meshnode.h"
-#include "../jah3d/scenegraph/lightnode.h"
-#include "../jah3d/materials/defaultmaterial.h"
+#include "../irisgl/src/core/scene.h"
+#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/meshnode.h"
+#include "../irisgl/src/scenegraph/lightnode.h"
+#include "../irisgl/src/materials/defaultmaterial.h"
 
 /*
-namespace jah3d
+namespace iris
 {
     class Scene;
 }
@@ -25,7 +25,7 @@ namespace jah3d
 class SceneWriter:public AssetIOBase
 {
 public:
-    void writeScene(QString filePath,QSharedPointer<jah3d::Scene> scene)
+    void writeScene(QString filePath,QSharedPointer<iris::Scene> scene)
     {
         dir = AssetIOBase::getDirFromFileName(filePath);
         QFile file(filePath);
@@ -41,7 +41,7 @@ public:
     }
 
 private:
-    void writeScene(QJsonObject& projectObj,QSharedPointer<jah3d::Scene> scene)
+    void writeScene(QJsonObject& projectObj,QSharedPointer<iris::Scene> scene)
     {
         QJsonObject rootNodeObj;
         writeSceneNode(rootNodeObj,scene->getRootNode());
@@ -54,7 +54,7 @@ private:
         //todo: add editor specific data
     }
 
-    void writeSceneNode(QJsonObject& sceneNodeObj,QSharedPointer<jah3d::SceneNode> sceneNode)
+    void writeSceneNode(QJsonObject& sceneNodeObj,QSharedPointer<iris::SceneNode> sceneNode)
     {
         sceneNodeObj["name"] = sceneNode->getName();
         sceneNodeObj["type"] = getSceneNodeTypeName(sceneNode->sceneNodeType);
@@ -89,12 +89,12 @@ private:
         //todo: write data specific to node type
         switch(sceneNode->sceneNodeType)
         {
-            case jah3d::SceneNodeType::Mesh:
-                writeMeshData(sceneNodeObj,sceneNode.staticCast<jah3d::MeshNode>());
+            case iris::SceneNodeType::Mesh:
+                writeMeshData(sceneNodeObj,sceneNode.staticCast<iris::MeshNode>());
             break;
 
-            case jah3d::SceneNodeType::Light:
-                writeLightData(sceneNodeObj,sceneNode.staticCast<jah3d::LightNode>());
+            case iris::SceneNodeType::Light:
+                writeLightData(sceneNodeObj,sceneNode.staticCast<iris::LightNode>());
             break;
         }
 
@@ -109,20 +109,20 @@ private:
         sceneNodeObj["children"] = childrenArray;
     }
 
-    void writeMeshData(QJsonObject& sceneNodeObject,QSharedPointer<jah3d::MeshNode> meshNode)
+    void writeMeshData(QJsonObject& sceneNodeObject,QSharedPointer<iris::MeshNode> meshNode)
     {
         //todo: handle generated meshes properly
         sceneNodeObject["mesh"] = meshNode->meshPath;
         sceneNodeObject["meshIndex"] = meshNode->meshIndex;
 
         //todo: check if material actually exists
-        auto mat = meshNode->getMaterial().staticCast<jah3d::DefaultMaterial>();
+        auto mat = meshNode->getMaterial().staticCast<iris::DefaultMaterial>();
         QJsonObject matObj;
         writeSceneNodeMaterial(matObj,mat);
         sceneNodeObject["material"] = matObj;
     }
 
-    void writeSceneNodeMaterial(QJsonObject& matObj,QSharedPointer<jah3d::DefaultMaterial> mat)
+    void writeSceneNodeMaterial(QJsonObject& matObj,QSharedPointer<iris::DefaultMaterial> mat)
     {
         matObj["ambientColor"] = jsonColor(mat->getAmbientColor());
 
@@ -163,7 +163,7 @@ private:
         return obj;
     }
 
-    void writeLightData(QJsonObject& sceneNodeObject,QSharedPointer<jah3d::LightNode> lightNode)
+    void writeLightData(QJsonObject& sceneNodeObject,QSharedPointer<iris::LightNode> lightNode)
     {
         sceneNodeObject["lightType"] = getLightNodeTypeName(lightNode->lightType);
         sceneNodeObject["intensity"] = lightNode->intensity;
@@ -171,30 +171,30 @@ private:
         sceneNodeObject["spotCutOff"] = lightNode->spotCutOff;
     }
 
-    QString getSceneNodeTypeName(jah3d::SceneNodeType nodeType)
+    QString getSceneNodeTypeName(iris::SceneNodeType nodeType)
     {
         switch(nodeType)
         {
-        case jah3d::SceneNodeType::Empty:
+        case iris::SceneNodeType::Empty:
             return "empty";
-        case jah3d::SceneNodeType::Light:
+        case iris::SceneNodeType::Light:
             return "light";
-        case jah3d::SceneNodeType::Mesh:
+        case iris::SceneNodeType::Mesh:
             return "mesh";
         default:
             return "empty";
         }
     }
 
-    QString getLightNodeTypeName(jah3d::LightType lightType)
+    QString getLightNodeTypeName(iris::LightType lightType)
     {
         switch(lightType)
         {
-        case jah3d::LightType::Point:
+        case iris::LightType::Point:
             return "point";
-        case jah3d::LightType::Directional:
+        case iris::LightType::Directional:
             return "directional";
-        case jah3d::LightType::Spot:
+        case iris::LightType::Spot:
             return "spot";
         }
     }

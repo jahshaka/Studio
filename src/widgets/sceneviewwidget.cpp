@@ -7,17 +7,17 @@
 #include <QtMath>
 #include <QDebug>
 
-#include "../jah3d.h"
-#include "../jah3d/scenegraph/meshnode.h"
-#include "../jah3d/scenegraph/cameranode.h"
-#include "../jah3d/scenegraph/lightnode.h"
-#include "../jah3d/materials/defaultmaterial.h"
-#include "../jah3d/graphics/forwardrenderer.h"
-#include "../jah3d/graphics/mesh.h"
-#include "../jah3d/geometry/trimesh.h"
-#include "../jah3d/graphics/texture2d.h"
-#include "../jah3d/graphics/viewport.h"
-#include "../jah3d/graphics/utils/fullscreenquad.h"
+#include "../irisgl/src/irisgl.h"
+#include "../irisgl/src/scenegraph/meshnode.h"
+#include "../irisgl/src/scenegraph/cameranode.h"
+#include "../irisgl/src/scenegraph/lightnode.h"
+#include "../irisgl/src/materials/defaultmaterial.h"
+#include "../irisgl/src/graphics/forwardrenderer.h"
+#include "../irisgl/src/graphics/mesh.h"
+#include "../irisgl/src/geometry/trimesh.h"
+#include "../irisgl/src/graphics/texture2d.h"
+#include "../irisgl/src/graphics/viewport.h"
+#include "../irisgl/src/graphics/utils/fullscreenquad.h"
 
 
 #include "../editor/cameracontrollerbase.h"
@@ -40,7 +40,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
     setMouseTracking(true);
     //installEventFilter(this);
 
-    viewport = new jah3d::Viewport();
+    viewport = new iris::Viewport();
 
     //camController = nullptr;
     defaultCam = new EditorCameraController();
@@ -48,7 +48,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
     camController = defaultCam;
     //camController = orbitalCam;
 
-    editorCam = jah3d::CameraNode::create();
+    editorCam = iris::CameraNode::create();
     editorCam->pos = QVector3D(0,5,13);
     //editorCam->pos = QVector3D(0,0,10);
     editorCam->rot = QQuaternion::fromEulerAngles(-15,0,0);
@@ -61,9 +61,9 @@ void SceneViewWidget::initialize()
 {
 
     /*
-    auto scene = jah3d::Scene::create();
+    auto scene = iris::Scene::create();
 
-    auto cam = jah3d::CameraNode::create();
+    auto cam = iris::CameraNode::create();
     cam->pos = QVector3D(0,5,5);
     cam->rot = QQuaternion::fromEulerAngles(-45,0,0);
     //cam->lookAt(QVector3D(0,0,0),QVect);
@@ -71,38 +71,38 @@ void SceneViewWidget::initialize()
     scene->rootNode->addChild(cam);
 
     //second node
-    auto node = jah3d::MeshNode::create();
+    auto node = iris::MeshNode::create();
     //boxNode->setMesh("app/models/head.obj");
     node->setMesh("app/models/plane.obj");
     node->scale = QVector3D(100,1,100);
 
-    auto m = jah3d::DefaultMaterial::create();
+    auto m = iris::DefaultMaterial::create();
     node->setMaterial(m);
     m->setDiffuseColor(QColor(255,255,255));
-    m->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/defaultgrid.png"));
+    m->setDiffuseTexture(iris::Texture2D::load("app/content/textures/defaultgrid.png"));
     m->setTextureScale(100);
     scene->rootNode->addChild(node);
 
     //add test object with basic material
-    boxNode = jah3d::MeshNode::create();
+    boxNode = iris::MeshNode::create();
     //boxNode->setMesh("app/models/head.obj");
     //boxNode->setMesh("app/models/box.obj");
     boxNode->setMesh("assets/models/StanfordDragon.obj");
 
-    mat = jah3d::DefaultMaterial::create();
+    mat = iris::DefaultMaterial::create();
     boxNode->setMaterial(mat);
     mat->setDiffuseColor(QColor(255,200,200));
-    mat->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/Artistic Pattern.png"));
+    mat->setDiffuseTexture(iris::Texture2D::load("app/content/textures/Artistic Pattern.png"));
 
     //lighting
-    auto light = jah3d::LightNode::create();
-    light->setLightType(jah3d::LightType::Point);
+    auto light = iris::LightNode::create();
+    light->setLightType(iris::LightType::Point);
     light->rot = QQuaternion::fromEulerAngles(45,0,0);
     scene->rootNode->addChild(light);
     //light->pos = QVector3D(5,5,0);
     light->pos = QVector3D(-5,5,3);
     light->intensity = 1;
-    light->icon = jah3d::Texture2D::load("app/icons/bulb.png");
+    light->icon = iris::Texture2D::load("app/icons/bulb.png");
 
 
     scene->rootNode->addChild(boxNode);
@@ -113,7 +113,7 @@ void SceneViewWidget::initialize()
     //camController = new EditorCameraController(cam);
 }
 
-void SceneViewWidget::setScene(QSharedPointer<jah3d::Scene> scene)
+void SceneViewWidget::setScene(QSharedPointer<iris::Scene> scene)
 {
     this->scene = scene;
     scene->setCamera(editorCam);
@@ -123,7 +123,7 @@ void SceneViewWidget::setScene(QSharedPointer<jah3d::Scene> scene)
     selectedNode.reset();
 }
 
-void SceneViewWidget::setSelectedNode(QSharedPointer<jah3d::SceneNode> sceneNode)
+void SceneViewWidget::setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     selectedNode = sceneNode;
     renderer->setSelectedSceneNode(sceneNode);
@@ -148,10 +148,10 @@ void SceneViewWidget::initializeGL()
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
 
-    renderer = jah3d::ForwardRenderer::create(this);
+    renderer = iris::ForwardRenderer::create(this);
 
     initialize();
-    fsQuad = new jah3d::FullScreenQuad();
+    fsQuad = new iris::FullScreenQuad();
 
     emit initializeGraphics(this,this);
 
@@ -292,7 +292,7 @@ void SceneViewWidget::doObjectPicking()
     //Find the closest hit and emit signal
     if(hitList.size()==0)
     {
-        emit sceneNodeSelected(jah3d::SceneNodePtr());//no hits, deselect object
+        emit sceneNodeSelected(iris::SceneNodePtr());//no hits, deselect object
         return;
     }
 
@@ -311,12 +311,12 @@ void SceneViewWidget::doObjectPicking()
     emit sceneNodeSelected(hitList.last().hitNode);
 }
 
-void SceneViewWidget::doPicking(const QSharedPointer<jah3d::SceneNode>& sceneNode,const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList)
+void SceneViewWidget::doPicking(const QSharedPointer<iris::SceneNode>& sceneNode,const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList)
 {
 
-    if(sceneNode->getSceneNodeType()==jah3d::SceneNodeType::Mesh)
+    if(sceneNode->getSceneNodeType()==iris::SceneNodeType::Mesh)
     {
-        auto meshNode = sceneNode.staticCast<jah3d::MeshNode>();
+        auto meshNode = sceneNode.staticCast<iris::MeshNode>();
         auto triMesh = meshNode->getMesh()->getTriMesh();
 
         //transform segment to local space
@@ -340,7 +340,7 @@ void SceneViewWidget::doPicking(const QSharedPointer<jah3d::SceneNode>& sceneNod
         }
         */
 
-        QList<jah3d::TriangleIntersectionResult> results;
+        QList<iris::TriangleIntersectionResult> results;
         if(int resultCount = triMesh->getSegmentIntersections(a,b,results))
         {
             for(auto triResult:results)

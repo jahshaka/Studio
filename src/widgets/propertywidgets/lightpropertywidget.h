@@ -7,7 +7,7 @@
 
 class ColorValueWidget;
 class ColorPickerWidget;
-namespace jah3d
+namespace iris
 {
     class SceneNode;
     class LightNode;
@@ -29,7 +29,7 @@ public:
      * to a LightNode and stored in lightNode, otherwise lightNode is reset to null
      * @param sceneNode
      */
-    void setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode);
+    void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
 
 protected slots:
 
@@ -59,7 +59,7 @@ protected slots:
 
 private:
 
-    QSharedPointer<jah3d::LightNode> lightNode;
+    QSharedPointer<iris::LightNode> lightNode;
 
     ColorValueWidget* lightColor;
     HFloatSlider* radius;

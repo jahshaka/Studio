@@ -14,7 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QMap>
-#include "../jah3d/core/scenenode.h"
+#include "../irisgl/src/core/scenenode.h"
 
 namespace Ui {
 class MaterialWidget;
@@ -42,7 +42,7 @@ public:
     //SceneNode* node;
     MaterialProxy* matProxy;
     //MaterialData* matData;//and this?
-    void setSceneNode(jah3d::SceneNodePtr node);
+    void setSceneNode(iris::SceneNodePtr node);
     void setMaterial(AdvanceMaterial* mat);
 
     void setShininess(float);

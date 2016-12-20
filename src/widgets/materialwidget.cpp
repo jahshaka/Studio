@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #include "ui_materialwidget.h"
 //#include "qmaterial.h"
 //#include "../scenegraph/scenenodes.h"
-#include "../jah3d/core/scenenode.h"
+#include "../irisgl/src/core/scenenode.h"
 #include "qfiledialog.h"
 
 MaterialWidget::MaterialWidget(QWidget *parent) :

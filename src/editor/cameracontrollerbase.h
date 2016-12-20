@@ -4,7 +4,7 @@
 #include <Qt>
 #include <QSharedPointer>
 
-namespace jah3d
+namespace iris
 {
     class CameraNode;
 }
@@ -17,7 +17,7 @@ public:
         resetMouseStates();
     }
 
-    virtual void setCamera(QSharedPointer<jah3d::CameraNode>  cam);
+    virtual void setCamera(QSharedPointer<iris::CameraNode>  cam);
 
     virtual void onMouseDown(Qt::MouseButton button);
     virtual void onMouseUp(Qt::MouseButton button);
@@ -27,7 +27,7 @@ public:
     void resetMouseStates();
 
 protected:
-    QSharedPointer<jah3d::CameraNode> camera;
+    QSharedPointer<iris::CameraNode> camera;
 
     bool leftMouseDown;
     bool middleMouseDown;

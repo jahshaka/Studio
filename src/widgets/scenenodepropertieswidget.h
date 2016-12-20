@@ -4,7 +4,7 @@
 #include <QWidget>
 #include <QSharedPointer>
 
-namespace jah3d
+namespace iris
 {
     class SceneNode;
 }
@@ -29,7 +29,7 @@ public:
      * sets active scene node to show properties for
      * @param sceneNode
      */
-    void setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode);
+    void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
 
     /**
      * Updates material properties if active scene node is a mesh
@@ -40,7 +40,7 @@ private:
     void clearLayout(QLayout* layout);
 
 private:
-    QSharedPointer<jah3d::SceneNode> sceneNode;
+    QSharedPointer<iris::SceneNode> sceneNode;
 
     TransformEditor* transformWidget;
     AccordianBladeWidget* transformPropView;

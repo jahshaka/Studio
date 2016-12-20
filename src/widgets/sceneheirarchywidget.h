@@ -8,7 +8,7 @@ namespace Ui {
 class SceneHeirarchyWidget;
 }
 
-namespace jah3d
+namespace iris
 {
     class Scene;
     class SceneNode;
@@ -26,10 +26,10 @@ public:
     explicit SceneHeirarchyWidget(QWidget *parent = 0);
     ~SceneHeirarchyWidget();
 
-    void setScene(QSharedPointer<jah3d::Scene> scene);
+    void setScene(QSharedPointer<iris::Scene> scene);
     void setMainWindow(MainWindow* mainWin);
 
-    void setSelectedNode(QSharedPointer<jah3d::SceneNode> sceneNode);
+    void setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode);
 
 protected slots:
     void treeItemSelected(QTreeWidgetItem* item);
@@ -55,21 +55,21 @@ protected slots:
 
 private:
     void repopulateTree();
-    void populateTree(QTreeWidgetItem* parentNode,QSharedPointer<jah3d::SceneNode> sceneNode);
+    void populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode);
 
     //maps scene nodes to their widgetitems
     //QMap<long,QTreeWidgetItem*> nodeList;
-    QMap<long,QSharedPointer<jah3d::SceneNode>> nodeList;
+    QMap<long,QSharedPointer<iris::SceneNode>> nodeList;
     QMap<long,QTreeWidgetItem*> treeItemList;
 
 private:
     Ui::SceneHeirarchyWidget *ui;
-    QSharedPointer<jah3d::Scene> scene;
-    QSharedPointer<jah3d::SceneNode> selectedNode;
+    QSharedPointer<iris::Scene> scene;
+    QSharedPointer<iris::SceneNode> selectedNode;
     MainWindow* mainWindow;
 
 signals:
-    void sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode);
+    void sceneNodeSelected(QSharedPointer<iris::SceneNode> sceneNode);
 };
 
 #endif // SCENEHEIRARCHYWIDGET_H

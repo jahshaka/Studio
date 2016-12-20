@@ -6,9 +6,9 @@
 #include "../colorpickerwidget.h"
 #include "../colorvaluewidget.h"
 
-#include "../../jah3d/core/scene.h"
-#include "../../jah3d/core/scenenode.h"
-#include "../../jah3d/scenegraph/lightnode.h"
+#include "../../irisgl/src/core/scene.h"
+#include "../../irisgl/src/core/scenenode.h"
+#include "../../irisgl/src/scenegraph/lightnode.h"
 
 
 LightPropertyWidget::LightPropertyWidget(QWidget* parent):
@@ -28,12 +28,12 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     connect(spotCutOff,SIGNAL(valueChanged(float)),this,SLOT(lightSpotCutoffChanged(float)));
 }
 
-void LightPropertyWidget::setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode)
+void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     //this->sceneNode = sceneNode;
-    if(!!sceneNode && sceneNode->getSceneNodeType()==jah3d::SceneNodeType::Light)
+    if(!!sceneNode && sceneNode->getSceneNodeType()==iris::SceneNodeType::Light)
     {
-        lightNode = sceneNode.staticCast<jah3d::LightNode>();
+        lightNode = sceneNode.staticCast<iris::LightNode>();
 
         //apply properties to ui
         lightColor->setColorValue(lightNode->color);

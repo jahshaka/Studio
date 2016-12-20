@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include <QPainter>
 #include <QMouseEvent>
 //#include "../scenegraph/scenenodes.h"
-#include "../jah3d/core/scenenode.h"
+#include "../irisgl/src/core/scenenode.h"
 
 
 //https://kernelcoder.wordpress.com/2010/08/25/how-to-insert-ruler-scale-type-widget-into-a-qabstractscrollarea-type-widget/
@@ -46,7 +46,7 @@ public:
     //int scaleRatio;
 
     //timeline widget doesnt manage lifetime of this pointer
-    jah3d::SceneNodePtr node;
+    iris::SceneNodePtr node;
 
     float highlightStart;
     float highlightEnd;
@@ -60,7 +60,7 @@ public:
     void showHighlight(float start,float end);
     void hideHighlight();
 
-    void setSceneNode(jah3d::SceneNodePtr node);
+    void setSceneNode(iris::SceneNodePtr node);
 
     float getTimeAtCursor();
     //void setMaxTimeInSeconds(float time);

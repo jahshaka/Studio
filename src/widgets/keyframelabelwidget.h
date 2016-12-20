@@ -18,7 +18,7 @@ For more information see the LICENSE file
 #include <QMouseEvent>
 #include <vector>
 //#include "../scenegraph/scenenodes.h"
-#include "../jah3d/core/scenenode.h"
+#include "../irisgl/src/core/scenenode.h"
 
 class KeyFrameLabelWidget:public QWidget
 {
@@ -26,11 +26,11 @@ class KeyFrameLabelWidget:public QWidget
     QColor itemColor;
 
     QPen cursorPen;
-    jah3d::SceneNodePtr obj;
+    iris::SceneNodePtr obj;
 public:
     KeyFrameLabelWidget(QWidget* parent);
 
-    void setSceneNode(jah3d::SceneNodePtr node);
+    void setSceneNode(iris::SceneNodePtr node);
 
     void paintEvent(QPaintEvent *painter);
 

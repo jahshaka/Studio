@@ -8,7 +8,7 @@
 #include <QMatrix4x4>
 #include <QSharedPointer>
 
-namespace jah3d
+namespace iris
 {
     class Scene;
     class ForwardRenderer;
@@ -34,7 +34,7 @@ enum class ViewportMode
 
 struct PickingResult
 {
-    QSharedPointer<jah3d::SceneNode> hitNode;
+    QSharedPointer<iris::SceneNode> hitNode;
     QVector3D hitPoint;
 
     //this is often used for comparisons so it's not necessary to find the root
@@ -53,11 +53,11 @@ class SceneViewWidget: public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
 public:
     explicit SceneViewWidget(QWidget *parent);
 
-    void setScene(QSharedPointer<jah3d::Scene> scene);
-    void setSelectedNode(QSharedPointer<jah3d::SceneNode> sceneNode);
+    void setScene(QSharedPointer<iris::Scene> scene);
+    void setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode);
     void clearSelectedNode();
 
-    void setEditorCamera(QSharedPointer<jah3d::CameraNode> camera);
+    void setEditorCamera(QSharedPointer<iris::CameraNode> camera);
 
     /**
      * switches to the free editor camera controller
@@ -94,27 +94,27 @@ private slots:
     void resizeGL(int width, int height);
 
 private:
-    void doPicking(const QSharedPointer<jah3d::SceneNode>& sceneNode,const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList);
+    void doPicking(const QSharedPointer<iris::SceneNode>& sceneNode,const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList);
 
     void makeObject();
     void renderScene();
 
-    QSharedPointer<jah3d::CameraNode> editorCam;
-    QSharedPointer<jah3d::Scene> scene;
-    QSharedPointer<jah3d::SceneNode> selectedNode;
-    QSharedPointer<jah3d::ForwardRenderer> renderer;
+    QSharedPointer<iris::CameraNode> editorCam;
+    QSharedPointer<iris::Scene> scene;
+    QSharedPointer<iris::SceneNode> selectedNode;
+    QSharedPointer<iris::ForwardRenderer> renderer;
 
     QPointF prevMousePos;
     bool dragging;
 
     void initialize();
 
-    jah3d::Viewport* viewport;
-    jah3d::FullScreenQuad* fsQuad;
+    iris::Viewport* viewport;
+    iris::FullScreenQuad* fsQuad;
 
 signals:
     void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl);
-    void sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode);
+    void sceneNodeSelected(QSharedPointer<iris::SceneNode> sceneNode);
 
 
 };

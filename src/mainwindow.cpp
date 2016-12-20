@@ -55,16 +55,16 @@ For more information see the LICENSE file
 #include "helpers/collisionhelper.h"
 
 #include "widgets/sceneviewwidget.h"
-#include "jah3d/jah3d.h"
-#include "jah3d/scenegraph/meshnode.h"
-#include "jah3d/scenegraph/cameranode.h"
-#include "jah3d/scenegraph/lightnode.h"
-#include "jah3d/materials/defaultmaterial.h"
-#include "jah3d/graphics/forwardrenderer.h"
-#include "jah3d/graphics/mesh.h"
-#include "jah3d/graphics/texture2d.h"
-#include "jah3d/graphics/viewport.h"
-#include "jah3d/graphics/texture2d.h"
+#include "irisgl/src/irisgl.h"
+#include "irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/src/scenegraph/cameranode.h"
+#include "irisgl/src/scenegraph/lightnode.h"
+#include "irisgl/src/materials/defaultmaterial.h"
+#include "irisgl/src/graphics/forwardrenderer.h"
+#include "irisgl/src/graphics/mesh.h"
+#include "irisgl/src/graphics/texture2d.h"
+#include "irisgl/src/graphics/viewport.h"
+#include "irisgl/src/graphics/texture2d.h"
 
 #include "core/materialpreset.h"
 
@@ -124,8 +124,8 @@ MainWindow::MainWindow(QWidget *parent) :
     //createTestScene();
 
     ui->sceneHierarchy->setMainWindow(this);
-    connect(ui->sceneHierarchy,SIGNAL(sceneNodeSelected(QSharedPointer<jah3d::SceneNode>)),this,SLOT(sceneNodeSelected(QSharedPointer<jah3d::SceneNode>)));
-    connect(sceneView,SIGNAL(sceneNodeSelected(QSharedPointer<jah3d::SceneNode>)),this,SLOT(sceneNodeSelected(QSharedPointer<jah3d::SceneNode>)));
+    connect(ui->sceneHierarchy,SIGNAL(sceneNodeSelected(QSharedPointer<iris::SceneNode>)),this,SLOT(sceneNodeSelected(QSharedPointer<iris::SceneNode>)));
+    connect(sceneView,SIGNAL(sceneNodeSelected(QSharedPointer<iris::SceneNode>)),this,SLOT(sceneNodeSelected(QSharedPointer<iris::SceneNode>)));
 
     connect(ui->cameraTypeCombo,SIGNAL(currentTextChanged(QString)),this,SLOT(cameraTypeChanged(QString)));
 }
@@ -190,9 +190,9 @@ void MainWindow::vrButtonClicked(bool)
 //create test scene
 void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
 {
-    auto scene = jah3d::Scene::create();
+    auto scene = iris::Scene::create();
 
-    auto cam = jah3d::CameraNode::create();
+    auto cam = iris::CameraNode::create();
     cam->pos = QVector3D(5, 2, 1);
     cam->rot = QQuaternion::fromEulerAngles(-60,0,0);
     //cam->lookAt(QVector3D(0,0,0),QVect);
@@ -201,68 +201,68 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     //camControl = new EditorCameraController(cam);
     //scene->rootNode->addChild(cam);//editor camera shouldnt be a part of the scene itself
 
-    scene->setSkyTexture(jah3d::Texture2D::load("app/content/skies/vp_sky_v3_015.jpg",false));
+    scene->setSkyTexture(iris::Texture2D::load("app/content/skies/vp_sky_v3_015.jpg",false));
 
     //second node
-    auto node = jah3d::MeshNode::create();
+    auto node = iris::MeshNode::create();
     //boxNode->setMesh("app/models/head.obj");
     node->setMesh("app/models/plane.obj");
     node->scale = QVector3D(100,1,100);
     node->setName("Ground");
 
-    auto m = jah3d::DefaultMaterial::create();
+    auto m = iris::DefaultMaterial::create();
     node->setMaterial(m);
     m->setDiffuseColor(QColor(255,255,255));
-    m->setDiffuseTexture(jah3d::Texture2D::load("app/content/textures/Red Brick Wall.jpg"));
-    m->setSpecularTexture(jah3d::Texture2D::load("app/content/textures/Red Brick Wall_SPEC.jpg"));
-    m->setNormalTexture(jah3d::Texture2D::load("app/content/textures/Red Brick Wall_NRM.jpg"));
+    m->setDiffuseTexture(iris::Texture2D::load("app/content/textures/Red Brick Wall.jpg"));
+    m->setSpecularTexture(iris::Texture2D::load("app/content/textures/Red Brick Wall_SPEC.jpg"));
+    m->setNormalTexture(iris::Texture2D::load("app/content/textures/Red Brick Wall_NRM.jpg"));
     m->setShininess(3);
     m->setTextureScale(100);
     scene->rootNode->addChild(node);
 
 
     //add test object with basic material
-    auto boxNode = jah3d::MeshNode::create();
+    auto boxNode = iris::MeshNode::create();
     //boxNode->setMesh("app/models/head.obj");
     //boxNode->setMesh("app/models/box.obj");
     boxNode->setMesh("assets/models/StanfordBuddha.obj");
 //    boxNode->scale = QVector3D(3.0f, 3.0f, 3.0f);
 
-    auto mat = jah3d::DefaultMaterial::create();
+    auto mat = iris::DefaultMaterial::create();
     boxNode->setMaterial(mat);
     mat->setDiffuseColor(QColor(255,200,200));
-    mat->setDiffuseTexture(jah3d::Texture2D::load("assets/textures/texture_01.jpg"));
+    mat->setDiffuseTexture(iris::Texture2D::load("assets/textures/texture_01.jpg"));
     mat->setShininess(2);
 
     //lighting
-    auto light = jah3d::LightNode::create();
-    light->setLightType(jah3d::LightType::Point);
+    auto light = iris::LightNode::create();
+    light->setLightType(iris::LightType::Point);
     light->rot = QQuaternion::fromEulerAngles(45,0,0);
     scene->rootNode->addChild(light);
     //light->pos = QVector3D(5,5,0);
     light->setName("Light 2");
     light->pos = QVector3D(-3,7,5);
     light->intensity = 1;
-    light->icon = jah3d::Texture2D::load("app/icons/bulb.png");
+    light->icon = iris::Texture2D::load("app/icons/bulb.png");
 
-    auto light2 = jah3d::LightNode::create();
-    light2->setLightType(jah3d::LightType::Point);
+    auto light2 = iris::LightNode::create();
+    light2->setLightType(iris::LightType::Point);
     scene->rootNode->addChild(light2);
     //light->pos = QVector3D(5,5,0);
     light2->setName("Light");
     light2->pos = QVector3D(3,3,2);
     light2->intensity = 0.74f;
     light2->color = QColor(176, 211, 255);
-    light2->icon = jah3d::Texture2D::load("app/icons/bulb.png");
+    light2->icon = iris::Texture2D::load("app/icons/bulb.png");
 
-    auto dlight = jah3d::LightNode::create();
-    dlight->setLightType(jah3d::LightType::Directional);
+    auto dlight = iris::LightNode::create();
+    dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
     //light->pos = QVector3D(5,5,0);
     dlight->setName("Dir Light");
     dlight->pos = QVector3D(0,10,0);
     dlight->intensity = 1;
-    dlight->icon = jah3d::Texture2D::load("app/icons/bulb.png");
+    dlight->icon = iris::Texture2D::load("app/icons/bulb.png");
 
 
     scene->rootNode->addChild(boxNode);
@@ -529,25 +529,25 @@ void MainWindow::openProject(QString filename)
 
 void MainWindow::applyMaterialPreset(MaterialPreset* preset)
 {
-    if(!activeSceneNode || activeSceneNode->sceneNodeType!=jah3d::SceneNodeType::Mesh)
+    if(!activeSceneNode || activeSceneNode->sceneNodeType!=iris::SceneNodeType::Mesh)
         return;
 
-    auto meshNode = activeSceneNode.staticCast<jah3d::MeshNode>();
+    auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
 
-    auto mat = jah3d::DefaultMaterial::create();
+    auto mat = iris::DefaultMaterial::create();
     mat->setAmbientColor(preset->ambientColor);
 
     mat->setDiffuseColor(preset->diffuseColor);
-    mat->setDiffuseTexture(jah3d::Texture2D::load(preset->diffuseTexture));
+    mat->setDiffuseTexture(iris::Texture2D::load(preset->diffuseTexture));
 
     mat->setSpecularColor(preset->specularColor);
-    mat->setSpecularTexture(jah3d::Texture2D::load(preset->specularTexture));
+    mat->setSpecularTexture(iris::Texture2D::load(preset->specularTexture));
     mat->setShininess(preset->shininess);
 
-    mat->setNormalTexture(jah3d::Texture2D::load(preset->normalTexture));
+    mat->setNormalTexture(iris::Texture2D::load(preset->normalTexture));
     mat->setNormalIntensity(preset->normalIntensity);
 
-    mat->setReflectionTexture(jah3d::Texture2D::load(preset->reflectionTexture));
+    mat->setReflectionTexture(iris::Texture2D::load(preset->reflectionTexture));
     mat->setReflectionInfluence(preset->reflectionInfluence);
 
     meshNode->setMaterial(mat);
@@ -583,7 +583,7 @@ void MainWindow::openRecentFile()
     settings->addRecentlyOpenedScene(filename);
 }
 
-void MainWindow::setScene(QSharedPointer<jah3d::Scene> scene)
+void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 {
     this->scene = scene;
     this->sceneView->setScene(scene);
@@ -624,7 +624,7 @@ void MainWindow::sceneTreeItemChanged(QTreeWidgetItem* item,int column)
 
 }
 
-void MainWindow::sceneNodeSelected(QSharedPointer<jah3d::SceneNode> sceneNode)
+void MainWindow::sceneNodeSelected(QSharedPointer<iris::SceneNode> sceneNode)
 {
     //show properties for scenenode
     activeSceneNode = sceneNode;
@@ -655,7 +655,7 @@ void MainWindow::setSceneAnimTime(float time)
  */
 void MainWindow::addCube()
 {
-    auto node = jah3d::MeshNode::create();
+    auto node = iris::MeshNode::create();
     node->setMesh("app/content/primitives/cube.obj");
     node->setName("Cube");
 
@@ -667,7 +667,7 @@ void MainWindow::addCube()
  */
 void MainWindow::addTorus()
 {
-    auto node = jah3d::MeshNode::create();
+    auto node = iris::MeshNode::create();
     node->setMesh("app/content/primitives/torus.obj");
     node->setName("Torus");
 
@@ -679,7 +679,7 @@ void MainWindow::addTorus()
  */
 void MainWindow::addSphere()
 {
-    auto node = jah3d::MeshNode::create();
+    auto node = iris::MeshNode::create();
     node->setMesh("app/content/primitives/sphere.obj");
     node->setName("Sphere");
 
@@ -691,7 +691,7 @@ void MainWindow::addSphere()
  */
 void MainWindow::addCylinder()
 {
-    auto node = jah3d::MeshNode::create();
+    auto node = iris::MeshNode::create();
     node->setMesh("app/content/primitives/cylinder.obj");
     node->setName("Cylinder");
 
@@ -700,27 +700,27 @@ void MainWindow::addCylinder()
 
 void MainWindow::addPointLight()
 {
-    auto node = jah3d::LightNode::create();
-    node->setLightType(jah3d::LightType::Point);
-    node->icon = jah3d::Texture2D::load("app/icons/bulb.png");
+    auto node = iris::LightNode::create();
+    node->setLightType(iris::LightType::Point);
+    node->icon = iris::Texture2D::load("app/icons/bulb.png");
 
     addNodeToScene(node);
 }
 
 void MainWindow::addSpotLight()
 {
-    auto node = jah3d::LightNode::create();
-    node->setLightType(jah3d::LightType::Spot);
-    node->icon = jah3d::Texture2D::load("app/icons/bulb.png");
+    auto node = iris::LightNode::create();
+    node->setLightType(iris::LightType::Spot);
+    node->icon = iris::Texture2D::load("app/icons/bulb.png");
 
     addNodeToScene(node);
 }
 
 void MainWindow::addDirectionalLight()
 {
-    auto node = jah3d::LightNode::create();
-    node->setLightType(jah3d::LightType::Directional);
-    node->icon = jah3d::Texture2D::load("app/icons/bulb.png");
+    auto node = iris::LightNode::create();
+    node->setLightType(iris::LightType::Directional);
+    node->icon = iris::Texture2D::load("app/icons/bulb.png");
 
     addNodeToScene(node);
 }
@@ -735,11 +735,11 @@ void MainWindow::addMesh()
         return;
 
 
-    //auto node = jah3d::MeshNode::create();
+    //auto node = iris::MeshNode::create();
     //node->setMesh(filename);
     //node->setName(nodeName);
 
-    auto node = jah3d::MeshNode::loadAsSceneFragment(filename);
+    auto node = iris::MeshNode::loadAsSceneFragment(filename);
     node->setName(nodeName);
 
     //todo: load material data
@@ -765,7 +765,7 @@ void MainWindow::addTexturedPlane()
  * sceneNode is added to the root node
  * @param sceneNode
  */
-void MainWindow::addNodeToActiveNode(QSharedPointer<jah3d::SceneNode> sceneNode)
+void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     if(!scene)
     {
@@ -773,13 +773,13 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<jah3d::SceneNode> sceneNode)
     }
 
     //apply default material
-    if(sceneNode->sceneNodeType == jah3d::SceneNodeType::Mesh)
+    if(sceneNode->sceneNodeType == iris::SceneNodeType::Mesh)
     {
-        auto meshNode = sceneNode.staticCast<jah3d::MeshNode>();
+        auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
         if(!meshNode->getMaterial())
         {
-            auto mat = jah3d::DefaultMaterial::create();
+            auto mat = iris::DefaultMaterial::create();
             meshNode->setMaterial(mat);
         }
 
@@ -801,7 +801,7 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<jah3d::SceneNode> sceneNode)
  * adds sceneNode directly to the scene's rootNode
  * applied default material to mesh if one isnt present
  */
-void MainWindow::addNodeToScene(QSharedPointer<jah3d::SceneNode> sceneNode)
+void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
 {
     if(!scene)
     {
@@ -810,13 +810,13 @@ void MainWindow::addNodeToScene(QSharedPointer<jah3d::SceneNode> sceneNode)
     }
 
     //apply default material
-    if(sceneNode->sceneNodeType == jah3d::SceneNodeType::Mesh)
+    if(sceneNode->sceneNodeType == iris::SceneNodeType::Mesh)
     {
-        auto meshNode = sceneNode.staticCast<jah3d::MeshNode>();
+        auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
         if(!meshNode->getMaterial())
         {
-            auto mat = jah3d::DefaultMaterial::create();
+            auto mat = iris::DefaultMaterial::create();
             meshNode->setMaterial(mat);
         }
 
@@ -886,7 +886,7 @@ void MainWindow::deleteNode()
         activeSceneNode->removeFromParent();
         ui->sceneHierarchy->repopulateTree();
         sceneView->clearSelectedNode();
-        ui->sceneNodeProperties->setSceneNode(QSharedPointer<jah3d::SceneNode>(nullptr));
+        ui->sceneNodeProperties->setSceneNode(QSharedPointer<iris::SceneNode>(nullptr));
     }
 
     /*

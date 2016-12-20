@@ -9,7 +9,7 @@ class ColorValueWidget;
 class ColorPickerWidget;
 class TexturePicker;
 
-namespace jah3d
+namespace iris
 {
     class Scene;
     class SceneNode;
@@ -26,7 +26,7 @@ class FogPropertyWidget: public AccordianBladeWidget
 public:
     FogPropertyWidget();
 
-    void setScene(QSharedPointer<jah3d::Scene> scene);
+    void setScene(QSharedPointer<iris::Scene> scene);
 
 protected slots:
     void onFogColorChanged(QColor color);
@@ -35,7 +35,7 @@ protected slots:
     void onFogEnabledChanged(bool val);
 
 private:
-    QSharedPointer<jah3d::Scene> scene;
+    QSharedPointer<iris::Scene> scene;
 
     //fog properties
     CheckBoxProperty* fogEnabled;

@@ -4,7 +4,7 @@
 #include <QWidget>
 #include <QSharedPointer>
 
-namespace jah3d
+namespace iris
 {
     class SceneNode;
 }
@@ -25,7 +25,7 @@ public:
      *  sects active scene node
      * @param sceneNode
      */
-    void setSceneNode(QSharedPointer<jah3d::SceneNode> sceneNode);
+    void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
 
 protected slots:
     /**
@@ -57,7 +57,7 @@ protected slots:
 private:
     Ui::TransformEditor *ui;
 
-    QSharedPointer<jah3d::SceneNode> sceneNode;
+    QSharedPointer<iris::SceneNode> sceneNode;
 };
 
 #endif // TRANSFORMEDITOR_H

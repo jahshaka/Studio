@@ -11,19 +11,19 @@
 #include <QJsonValueRef>
 #include <QJsonDocument>
 
-#include "../jah3d/core/scene.h"
-#include "../jah3d/core/scenenode.h"
-#include "../jah3d/scenegraph/meshnode.h"
-#include "../jah3d/scenegraph/lightnode.h"
-#include "../jah3d/materials/defaultmaterial.h"
-#include "../jah3d/graphics/texture2d.h"
-#include "../jah3d/graphics/graphicshelper.h"
+#include "../irisgl/src/core/scene.h"
+#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/meshnode.h"
+#include "../irisgl/src/scenegraph/lightnode.h"
+#include "../irisgl/src/materials/defaultmaterial.h"
+#include "../irisgl/src/graphics/texture2d.h"
+#include "../irisgl/src/graphics/graphicshelper.h"
 
 class SceneReader:public AssetIOBase
 {
-    QHash<QString,QList<jah3d::Mesh*>> meshes;
+    QHash<QString,QList<iris::Mesh*>> meshes;
 public:
-    QSharedPointer<jah3d::Scene> readScene(QString filePath)
+    QSharedPointer<iris::Scene> readScene(QString filePath)
     {
         dir = AssetIOBase::getDirFromFileName(filePath);
         QFile file(filePath);
@@ -38,9 +38,9 @@ public:
         return scene;
     }
 
-    QSharedPointer<jah3d::Scene> readScene(QJsonObject& projectObj)
+    QSharedPointer<iris::Scene> readScene(QJsonObject& projectObj)
     {
-        auto scene = jah3d::Scene::create();
+        auto scene = iris::Scene::create();
 
         //scene already contains root node, so just add children
         auto sceneObj = projectObj["scene"].toObject();
@@ -62,17 +62,17 @@ public:
      * @param nodeObj
      * @return
      */
-    QSharedPointer<jah3d::SceneNode> readSceneNode(QJsonObject& nodeObj)
+    QSharedPointer<iris::SceneNode> readSceneNode(QJsonObject& nodeObj)
     {
-        QSharedPointer<jah3d::SceneNode> sceneNode;
+        QSharedPointer<iris::SceneNode> sceneNode;
 
         QString nodeType = nodeObj["type"].toString("empty");
         if(nodeType=="mesh")
-            sceneNode = createMesh(nodeObj).staticCast<jah3d::SceneNode>();
+            sceneNode = createMesh(nodeObj).staticCast<iris::SceneNode>();
         else if(nodeType=="light")
-            sceneNode = createLight(nodeObj).staticCast<jah3d::SceneNode>();
+            sceneNode = createLight(nodeObj).staticCast<iris::SceneNode>();
         else
-            sceneNode = jah3d::SceneNode::create();
+            sceneNode = iris::SceneNode::create();
 
         //read transform
         readSceneNodeTransform(nodeObj,sceneNode);
@@ -97,7 +97,7 @@ public:
      * @param nodeObj
      * @param sceneNode
      */
-    void readSceneNodeTransform(QJsonObject& nodeObj,QSharedPointer<jah3d::SceneNode> sceneNode)
+    void readSceneNodeTransform(QJsonObject& nodeObj,QSharedPointer<iris::SceneNode> sceneNode)
     {
         auto pos = nodeObj["pos"].toObject();
         if(!pos.isEmpty())
@@ -128,9 +128,9 @@ public:
      * @param nodeObj
      * @return
      */
-    QSharedPointer<jah3d::MeshNode> createMesh(QJsonObject& nodeObj)
+    QSharedPointer<iris::MeshNode> createMesh(QJsonObject& nodeObj)
     {
-        auto meshNode = jah3d::MeshNode::create();
+        auto meshNode = iris::MeshNode::create();
 
         auto source = nodeObj["mesh"].toString("");
         auto meshIndex = nodeObj["meshIndex"].toInt(0);
@@ -154,9 +154,9 @@ public:
      * @param nodeObj
      * @return
      */
-    QSharedPointer<jah3d::LightNode> createLight(QJsonObject& nodeObj)
+    QSharedPointer<iris::LightNode> createLight(QJsonObject& nodeObj)
     {
-        auto lightNode = jah3d::LightNode::create();
+        auto lightNode = iris::LightNode::create();
 
         lightNode->setLightType(getLightTypeFromName(nodeObj["lightType"].toString("point")));
         lightNode->intensity = (float)nodeObj["intensity"].toDouble(1.0f);
@@ -164,24 +164,24 @@ public:
         lightNode->spotCutOff = (float)nodeObj["spotCutOff"].toDouble(30.0f);
 
         //todo: move this to the sceneview widget or somewhere more appropriate
-        lightNode->icon = jah3d::Texture2D::load("app/icons/bulb.png");
+        lightNode->icon = iris::Texture2D::load("app/icons/bulb.png");
         lightNode->iconSize = 0.5f;
 
         return lightNode;
     }
 
-    jah3d::LightType getLightTypeFromName(QString lightType)
+    iris::LightType getLightTypeFromName(QString lightType)
     {
         if(lightType=="point")
-            return jah3d::LightType::Point;
+            return iris::LightType::Point;
 
         if(lightType=="directional")
-            return jah3d::LightType::Directional;
+            return iris::LightType::Directional;
 
         if(lightType=="spot")
-            return jah3d::LightType::Spot;
+            return iris::LightType::Spot;
 
-        return jah3d::LightType::Point;
+        return iris::LightType::Point;
 
     }
 
@@ -191,15 +191,15 @@ public:
      * @param nodeObj
      * @return
      */
-    QSharedPointer<jah3d::Material> readMaterial(QJsonObject& nodeObj)
+    QSharedPointer<iris::Material> readMaterial(QJsonObject& nodeObj)
     {
         if(nodeObj["material"].isNull())
         {
-            return jah3d::DefaultMaterial::create();
+            return iris::DefaultMaterial::create();
         }
 
         QJsonObject matObj = nodeObj["material"].toObject();
-        auto material = jah3d::DefaultMaterial::create();
+        auto material = iris::DefaultMaterial::create();
 
         auto colObj = matObj["ambientColor"].toObject();
         material->setAmbientColor(readColor(colObj));
@@ -208,14 +208,14 @@ public:
         material->setDiffuseColor(readColor(colObj));
 
         auto tex = matObj["diffuseTexture"].toString("");
-        if(!tex.isEmpty()) material->setDiffuseTexture(jah3d::Texture2D::load(getAbsolutePath(tex)));
+        if(!tex.isEmpty()) material->setDiffuseTexture(iris::Texture2D::load(getAbsolutePath(tex)));
 
         colObj = matObj["specularColor"].toObject();
         material->setSpecularColor(readColor(colObj));
         material->setShininess((float)matObj["shininess"].toDouble(0.0f));
 
         tex = matObj["specularTexture"].toString("");
-        if(!tex.isEmpty()) material->setSpecularTexture(jah3d::Texture2D::load(getAbsolutePath(tex)));
+        if(!tex.isEmpty()) material->setSpecularTexture(iris::Texture2D::load(getAbsolutePath(tex)));
 
         material->setTextureScale((float)matObj["textureScale"].toDouble(1.0f));
 
@@ -230,7 +230,7 @@ public:
      * @param index
      * @return
      */
-    jah3d::Mesh* getMesh(QString filePath,int index)
+    iris::Mesh* getMesh(QString filePath,int index)
     {
         //if the mesh is already in the hashmap then it was already loaded, just return the indexed mesh
         if(meshes.contains(filePath))
@@ -243,7 +243,7 @@ public:
         }
         else
         {
-            auto meshList = jah3d::GraphicsHelper::loadAllMeshesFromFile(filePath);
+            auto meshList = iris::GraphicsHelper::loadAllMeshesFromFile(filePath);
             meshes.insert(filePath,meshList);
 
             if(index < meshList.size())

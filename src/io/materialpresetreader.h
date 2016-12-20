@@ -4,7 +4,7 @@
 #include <QSharedPointer>
 #include "assetiobase.h"
 
-namespace jah3d
+namespace iris
 {
     class Material;
 }
