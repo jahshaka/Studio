@@ -41,6 +41,7 @@ typedef QSharedPointer<CameraNode> CameraNodePtr;
 typedef QSharedPointer<MeshNode> MeshNodePtr;
 typedef QSharedPointer<DefaultSkyMaterial> DefaultSkyMaterialPtr;
 typedef QSharedPointer<Texture2D> Texture2DPtr;
+typedef QSharedPointer<Texture> TexturePtr;
 typedef QSharedPointer<ForwardRenderer> ForwardRendererPtr;
 
 

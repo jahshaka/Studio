@@ -29,6 +29,7 @@ Scene::Scene()
     skyMesh = Mesh::loadMesh("app/content/primitives/sky.obj");
     //skyTexture = Texture2D::load("app/content/skies/default.png");
     skyMaterial = DefaultSkyMaterial::create();
+    skyColor = QColor(255,255,255,255);
 
     fogColor = QColor(250,250,250);
     fogStart = 100;
@@ -50,6 +51,13 @@ QString Scene::getSkyTextureSource()
 void Scene::clearSkyTexture()
 {
     skyTexture.clear();
+    skyMaterial->clearSkyTexture();
+}
+
+void Scene::setSkyColor(QColor color)
+{
+    this->skyColor = color;
+    skyMaterial->setSkyColor(color);
 }
 
 void Scene::update(float dt)

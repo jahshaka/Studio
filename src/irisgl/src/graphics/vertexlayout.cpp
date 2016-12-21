@@ -1,4 +1,5 @@
 #include "vertexlayout.h"
+#include "shader.h"
 
 namespace iris
 {
@@ -33,6 +34,37 @@ void VertexLayout::bind(QOpenGLShaderProgram* program)
 
 void VertexLayout::unbind(QOpenGLShaderProgram* program)
 {
+    for(auto attrib: attribs)
+    {
+        program->disableAttributeArray(attrib.loc);
+    }
+}
+
+void VertexLayout::bind(ShaderPtr shader)
+{
+    auto program = shader->program;
+    int offset = 0;
+    for(auto attrib: attribs)
+    {
+        if(!shader->attribs.contains(attrib.name))
+        {
+            offset += attrib.sizeInBytes;
+            continue;
+        }
+
+        auto shaderAttrib = shader->attribs[attrib.name];
+
+        attrib.loc = shaderAttrib->location;//todo: do this once per shader
+        program->enableAttributeArray(attrib.loc);
+
+        program->setAttributeBuffer(attrib.loc, attrib.type, offset, attrib.count,this->stride);
+        offset += attrib.sizeInBytes;
+    }
+}
+
+void VertexLayout::unbind(ShaderPtr shader)
+{
+    auto program = shader->program;
     for(auto attrib: attribs)
     {
         program->disableAttributeArray(attrib.loc);

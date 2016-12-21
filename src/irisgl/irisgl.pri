@@ -37,7 +37,8 @@ HEADERS += \
     $$PWD/src/vr/vrdevice.h \
     $$PWD/src/math/mathhelper.h \
     $$PWD/src/irisglfwd.h \
-    $$PWD/src/graphics/shader.h
+    $$PWD/src/graphics/shader.h \
+    $$PWD/src/irisgl.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -58,4 +59,6 @@ SOURCES += \
     $$PWD/src/graphics/utils/fullscreenquad.cpp \
     $$PWD/src/vr/vrdevice.cpp \
     $$PWD/src/geometry/trimesh.cpp \
-    $$PWD/src/graphics/vertexlayout.cpp
+    $$PWD/src/graphics/vertexlayout.cpp \
+    $$PWD/src/graphics/shader.cpp \
+    $$PWD/src/graphics/texture.cpp

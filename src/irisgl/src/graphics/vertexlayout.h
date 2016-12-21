@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QList>
 #include <QOpenGLShaderProgram>
+#include "../irisglfwd.h"
 
 namespace iris
 {
@@ -42,8 +43,10 @@ public:
 
     //todo: make this more efficient
     void bind(QOpenGLShaderProgram* program);
-
     void unbind(QOpenGLShaderProgram* program);
+
+    void bind(ShaderPtr shader);
+    void unbind(ShaderPtr shader);
 
     //default vertex layout for meshes
     static VertexLayout* createMeshDefault();

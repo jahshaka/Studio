@@ -34,6 +34,9 @@ vec2 envMapEquirect(vec3 wcNormal) {
 
 void main()
 {
-    gl_FragColor = texture2D(texture, envMapEquirect(normalize(v_worldNormal)));
+    if(useTexture)
+        gl_FragColor = color*texture2D(texture, envMapEquirect(normalize(v_worldNormal)));
+    else
+        gl_FragColor = color;
     //gl_FragColor = vec4(1,1,1,1);
 }

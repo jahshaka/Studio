@@ -19,6 +19,8 @@ DefaultSkyMaterial::DefaultSkyMaterial()
 {
     createProgramFromShaderSource("app/shaders/defaultsky.vert","app/shaders/defaultsky.frag");
     setTextureCount(1);
+
+    color = QColor(255,255,255,255);
 }
 
 void DefaultSkyMaterial::setSkyTexture(Texture2DPtr tex)
@@ -55,6 +57,10 @@ void DefaultSkyMaterial::begin(QOpenGLFunctions_3_2_Core* gl)
 {
     Material::begin(gl);
     this->setUniformValue("color",color);
+    if(!!texture)
+        this->setUniformValue("useTexture",true);
+    else
+        this->setUniformValue("useTexture",false);
 
 }
 

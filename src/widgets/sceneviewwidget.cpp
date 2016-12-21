@@ -17,6 +17,7 @@
 #include "../irisgl/src/geometry/trimesh.h"
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/viewport.h"
+#include "../irisgl/src/core/scene.h"
 #include "../irisgl/src/graphics/utils/fullscreenquad.h"
 
 

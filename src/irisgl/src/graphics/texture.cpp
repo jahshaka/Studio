@@ -9,26 +9,20 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#ifndef TEXTURE_H
-#define TEXTURE_H
-
-#include <QSharedPointer>
-
-class QOpenGLTexture;
+#include "texture.h"
+#include <QOpenGLTexture>
 
 namespace iris
 {
 
-class Texture
+void Texture::bind()
 {
-public:
-    QOpenGLTexture* texture;
-    QString source;
-
-    void bind();
-    void bind(int index);
-};
-
+    texture->bind();
 }
 
-#endif // TEXTURE_H
+void Texture::bind(int index)
+{
+    texture->bind(index);
+}
+
+}
