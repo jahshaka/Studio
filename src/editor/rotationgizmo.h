@@ -116,7 +116,7 @@ public:
         widgetPos.setToIdentity();
 
         // wtf...
-        if (!!this->currentNode && !!this->lastSelectedNode &&
+        if (!!this->currentNode &&
                 (this->currentNode->getName() == "axis__x" ||
                  this->currentNode->getName() == "axis__y" ||
                  this->currentNode->getName() == "axis__z"))

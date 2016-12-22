@@ -79,6 +79,10 @@ public:
     void setViewportMode(ViewportMode viewportMode);
     ViewportMode getViewportMode();
 
+    void setGizmoLoc();
+    void setGizmoRot();
+    void setGizmoScale();
+
 protected:
     void initializeGL();
     bool eventFilter(QObject *obj, QEvent *event);
@@ -93,7 +97,7 @@ protected:
 
 private slots:
     void paintGL();
-    void updateScene();
+    void updateScene(bool once = false);
     void resizeGL(int width, int height);
 
 private:

@@ -201,6 +201,13 @@ public slots:
 
     void vrButtonClicked(bool);
 
+private slots:
+    void on_importmod_2_clicked(bool checked);
+
+    void on_importmod_4_clicked();
+
+    void on_importmod_3_clicked();
+
 private:
     Ui::NewMainWindow *ui;
     SurfaceView* surface;

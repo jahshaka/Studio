@@ -3,6 +3,7 @@
 
 #include "gizmoinstance.h"
 #include "gizmohandle.h"
+#include "../irisgl/src/core/scene.h"
 
 class TranslationGizmo : public GizmoInstance
 {

@@ -8,6 +8,7 @@
 #include <QDebug>
 
 #include "../irisgl/src/irisgl.h"
+#include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
@@ -95,12 +96,17 @@ void SceneViewWidget::clearSelectedNode()
     renderer->setSelectedSceneNode(selectedNode);
 }
 
-void SceneViewWidget::updateScene()
+void SceneViewWidget::updateScene(bool once)
 {
     // draw the 3d manipulation gizmo
     if (!!viewportGizmo->lastSelectedNode) {
-        viewportGizmo->render(renderer->GLA, editorCam->viewMatrix, ProjMatrix);
+        viewportGizmo->render(renderer->GLA, ViewMatrix, ProjMatrix);
     }
+
+//    if (once) {
+//        viewportGizmo->render(renderer->GLA, ViewMatrix, ProjMatrix);
+//        return;
+//    }
 }
 
 void SceneViewWidget::initializeGL()
@@ -232,13 +238,6 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
         dragging = true;
     }
 
-    if (e->button() == Qt::MiddleButton) {
-        // create an assign operator????
-        // just get it to render immediately after
-        editorCam->updateCameraMatrices();
-        viewportGizmo = scaleGizmo;
-    }
-
     if (e->button() == Qt::LeftButton) {
         editorCam->updateCameraMatrices();
 
@@ -339,8 +338,6 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
     viewportGizmo->setPlaneOrientation(hitList.last().hitNode->getName());
 
     viewportGizmo->currentNode = hitList.last().hitNode;
-
-    qDebug() << viewportGizmo->currentNode->getName();
 
     viewportGizmo->onMousePress(editorCam->pos, this->calculateMouseRay(point) * 512);
 }
@@ -471,4 +468,28 @@ void SceneViewWidget::setViewportMode(ViewportMode viewportMode)
 ViewportMode SceneViewWidget::getViewportMode()
 {
     return viewportMode;
+}
+
+void SceneViewWidget::setGizmoLoc()
+{
+    editorCam->updateCameraMatrices();
+    viewportGizmo->lastSelectedNode = selectedNode;
+    viewportGizmo = translationGizmo;
+    this->updateScene();
+}
+
+void SceneViewWidget::setGizmoRot()
+{
+    editorCam->updateCameraMatrices();
+    viewportGizmo->lastSelectedNode = selectedNode;
+    viewportGizmo = rotationGizmo;
+    this->updateScene();
+}
+
+void SceneViewWidget::setGizmoScale()
+{
+    editorCam->updateCameraMatrices();
+    viewportGizmo->lastSelectedNode = selectedNode;
+    viewportGizmo = scaleGizmo;
+    this->updateScene();
 }
