@@ -4,7 +4,6 @@
 #include <QWidget>
 #include <QMap>
 #include <QEvent>
-#include <QDropEvent>
 
 namespace Ui {
 class SceneHeirarchyWidget;
@@ -50,8 +49,8 @@ private:
     void populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode);
 
     // maps scene nodes to their widgetitems
-    QMap<long,QSharedPointer<iris::SceneNode>> nodeList;
-    QMap<long,QTreeWidgetItem*> treeItemList;
+    QMap<long, QSharedPointer<iris::SceneNode>> nodeList;
+    QMap<long, QTreeWidgetItem*> treeItemList;
 
     QSharedPointer<iris::SceneNode> lastDraggedHiearchyItemSrc;
 
