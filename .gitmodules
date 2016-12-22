@@ -1,0 +1,3 @@
+[submodule "src/irisgl"]
+	path = src/irisgl
+	url = git@github.com:jahshaka/IrisGL.git
