@@ -139,7 +139,9 @@ HEADERS  += src/mainwindow.h \
     src/editor/gizmohandle.h \
     src/editor/gizmotransform.h \
     src/editor/translationgizmo.h \
-    src/editor/viewportgizmo.h
+    src/editor/viewportgizmo.h \
+    src/editor/rotationgizmo.h \
+    src/editor/scalegizmo.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

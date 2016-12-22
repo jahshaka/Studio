@@ -1,10 +1,10 @@
-#ifndef TRANSLATIONGIZMO_H
-#define TRANSLATIONGIZMO_H
+#ifndef SCALEGIZMO_H
+#define SCALEGIZMO_H
 
 #include "gizmotransform.h"
 #include "gizmohandle.h"
 
-class TranslationGizmo : public GizmoTransform
+class ScaleGizmo : public GizmoTransform
 {
 private:
 
@@ -22,20 +22,20 @@ public:
     QVector3D translatePlaneNormal;
     float translatePlaneD;
 
-    TranslationGizmo() {
+    ScaleGizmo() {
 
         POINTER = iris::Scene::create();
 
-        const QString objPath = "app/models/axis_x.obj";
+        const QString objPath = "app/models/scale_x.obj";
         handles[HANDLE_XAXIS] = new GizmoHandle(objPath, "axis__x");
         handles[HANDLE_XAXIS]->setHandleColor(QColor(255, 0, 0, 96));
         POINTER->rootNode->addChild(handles[HANDLE_XAXIS]->gizmoHandle);
 
-        handles[HANDLE_YAXIS] = new GizmoHandle("app/models/axis_y.obj", "axis__y");
+        handles[HANDLE_YAXIS] = new GizmoHandle("app/models/scale_y.obj", "axis__y");
         handles[HANDLE_YAXIS]->setHandleColor(QColor(0, 255, 0, 96));
         POINTER->rootNode->addChild(handles[HANDLE_YAXIS]->gizmoHandle);
 
-        handles[HANDLE_ZAXIS] = new GizmoHandle("app/models/axis_z.obj", "axis__z");
+        handles[HANDLE_ZAXIS] = new GizmoHandle("app/models/scale_z.obj", "axis__z");
         handles[HANDLE_ZAXIS]->setHandleColor(QColor(0, 0, 255, 96));
         POINTER->rootNode->addChild(handles[HANDLE_ZAXIS]->gizmoHandle);
     }
@@ -44,7 +44,7 @@ public:
 
     }
 
-    ~TranslationGizmo() {
+    ~ScaleGizmo() {
         // pass
     }
 
@@ -78,7 +78,7 @@ public:
         widgetPos.setToIdentity();
 
         // wtf...
-        if (!!this->currentNode &&
+        if (!!this->currentNode && !!this->lastSelectedNode &&
                 (this->currentNode->getName() == "axis__x" ||
                  this->currentNode->getName() == "axis__y" ||
                  this->currentNode->getName() == "axis__z"))
@@ -131,4 +131,4 @@ public:
     }
 };
 
-#endif // TRANSLATIONGIZMO_H
+#endif // SCALEGIZMO_H

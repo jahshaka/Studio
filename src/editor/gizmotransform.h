@@ -12,17 +12,33 @@ For more information see the LICENSE file
 #ifndef GIZMOTRANSFORM_H
 #define GIZMOTRANSFORM_H
 
+#include <QtMath>
+#include <QDebug>
 #include <QString>
 
 class GizmoTransform
 {
 public:
-    /**
-     * @brief called when a handle is selected form picker
-     * this is where the transformation begins
-     * @param name
-     * @return
-     */
+
+//    QSharedPointer<iris::Scene> POINTER;
+//    QSharedPointer<iris::SceneNode> lastSelectedNode;
+//    QSharedPointer<iris::SceneNode> currentNode;
+//    QVector3D finalHitPoint;
+//    QVector3D translatePlaneNormal;
+//    float translatePlaneD;
+
+    static GizmoTransform* create() {
+
+    }
+
+    virtual void createHandleShader() {
+
+    }
+
+    virtual void render(QOpenGLFunctions_3_2_Core*, QMatrix4x4&, QMatrix4x4&) {
+
+    }
+
     virtual bool onHandleSelected(QString name,int x,int y)
     {
         Q_UNUSED(name);

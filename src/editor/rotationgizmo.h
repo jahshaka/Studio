@@ -1,10 +1,10 @@
-#ifndef TRANSLATIONGIZMO_H
-#define TRANSLATIONGIZMO_H
+#ifndef ROTATIONGIZMO_H
+#define ROTATIONGIZMO_H
 
 #include "gizmotransform.h"
 #include "gizmohandle.h"
 
-class TranslationGizmo : public GizmoTransform
+class RotationGizmo : public GizmoTransform
 {
 private:
 
@@ -22,20 +22,19 @@ public:
     QVector3D translatePlaneNormal;
     float translatePlaneD;
 
-    TranslationGizmo() {
+    RotationGizmo() {
 
         POINTER = iris::Scene::create();
 
-        const QString objPath = "app/models/axis_x.obj";
-        handles[HANDLE_XAXIS] = new GizmoHandle(objPath, "axis__x");
+        handles[HANDLE_XAXIS] = new GizmoHandle("app/models/rot_x.obj", "axis__x");
         handles[HANDLE_XAXIS]->setHandleColor(QColor(255, 0, 0, 96));
         POINTER->rootNode->addChild(handles[HANDLE_XAXIS]->gizmoHandle);
 
-        handles[HANDLE_YAXIS] = new GizmoHandle("app/models/axis_y.obj", "axis__y");
+        handles[HANDLE_YAXIS] = new GizmoHandle("app/models/rot_y.obj", "axis__y");
         handles[HANDLE_YAXIS]->setHandleColor(QColor(0, 255, 0, 96));
         POINTER->rootNode->addChild(handles[HANDLE_YAXIS]->gizmoHandle);
 
-        handles[HANDLE_ZAXIS] = new GizmoHandle("app/models/axis_z.obj", "axis__z");
+        handles[HANDLE_ZAXIS] = new GizmoHandle("app/models/rot_z.obj", "axis__z");
         handles[HANDLE_ZAXIS]->setHandleColor(QColor(0, 0, 255, 96));
         POINTER->rootNode->addChild(handles[HANDLE_ZAXIS]->gizmoHandle);
     }
@@ -44,7 +43,7 @@ public:
 
     }
 
-    ~TranslationGizmo() {
+    ~RotationGizmo() {
         // pass
     }
 
@@ -94,6 +93,24 @@ public:
             }
         }
 
+        if (!!this->currentNode && this->currentNode->getName() == "axis__x") {
+            handles[HANDLE_XAXIS]->gizmoHandle->rot = this->currentNode->rot;
+        } else {
+            handles[HANDLE_XAXIS]->gizmoHandle->rot = this->lastSelectedNode->rot;
+        }
+
+        if (!!this->currentNode && this->currentNode->getName() == "axis__y") {
+            handles[HANDLE_YAXIS]->gizmoHandle->rot = this->currentNode->rot;
+        } else {
+            handles[HANDLE_YAXIS]->gizmoHandle->rot = this->lastSelectedNode->rot;
+        }
+
+        if (!!this->currentNode && this->currentNode->getName() == "axis__z") {
+            handles[HANDLE_ZAXIS]->gizmoHandle->rot = this->currentNode->rot;
+        } else {
+            handles[HANDLE_ZAXIS]->gizmoHandle->rot = this->lastSelectedNode->rot;
+        }
+
         POINTER->update(0);
 
         gl->glDisable(GL_CULL_FACE);
@@ -131,4 +148,4 @@ public:
     }
 };
 
-#endif // TRANSLATIONGIZMO_H
+#endif // ROTATIONGIZMO_H

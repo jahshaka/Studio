@@ -26,7 +26,11 @@ class QOpenGLShaderProgram;
 class CameraControllerBase;
 class OrbitalCameraController;
 
+class GizmoTransform;
+class ViewportGizmo;
 class TranslationGizmo;
+class RotationGizmo;
+class ScaleGizmo;
 
 enum class ViewportMode
 {
@@ -125,6 +129,10 @@ private:
     QMatrix4x4 ProjMatrix;
 
     TranslationGizmo* translationGizmo;
+    RotationGizmo* rotationGizmo;
+    ScaleGizmo* scaleGizmo;
+
+    ViewportGizmo* viewPortGizmo;
 
     iris::Viewport* viewport;
     iris::FullScreenQuad* fsQuad;
