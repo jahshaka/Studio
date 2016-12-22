@@ -15,12 +15,6 @@ private:
     QOpenGLShaderProgram* handleShader;
 
 public:
-//    QSharedPointer<iris::Scene> POINTER;
-//    QSharedPointer<iris::SceneNode> lastSelectedNode;
-//    QSharedPointer<iris::SceneNode> currentNode;
-//    QVector3D finalHitPoint;
-//    QVector3D translatePlaneNormal;
-//    float translatePlaneD;
 
     QSharedPointer<iris::Scene> POINTER;
     QSharedPointer<iris::SceneNode> getRootNode() {
@@ -31,35 +25,75 @@ public:
 
         POINTER = iris::Scene::create();
 
-        handles[HANDLE_XAXIS] = new GizmoHandle("app/models/rot_x.obj", "axis__x");
-        handles[HANDLE_XAXIS]->setHandleColor(QColor(255, 0, 0, 96));
-        POINTER->rootNode->addChild(handles[HANDLE_XAXIS]->gizmoHandle);
+        handles[(int) AxisHandle::X] = new GizmoHandle("app/models/rot_x.obj", "axis__x");
+        handles[(int) AxisHandle::X]->setHandleColor(QColor(231, 76, 60));
+        POINTER->rootNode->addChild(handles[(int) AxisHandle::X]->gizmoHandle);
 
-        handles[HANDLE_YAXIS] = new GizmoHandle("app/models/rot_y.obj", "axis__y");
-        handles[HANDLE_YAXIS]->setHandleColor(QColor(0, 255, 0, 96));
-        POINTER->rootNode->addChild(handles[HANDLE_YAXIS]->gizmoHandle);
+        handles[(int) AxisHandle::Y] = new GizmoHandle("app/models/rot_y.obj", "axis__y");
+        handles[(int) AxisHandle::Y]->setHandleColor(QColor(46, 224, 113));
+        POINTER->rootNode->addChild(handles[(int) AxisHandle::Y]->gizmoHandle);
 
-        handles[HANDLE_ZAXIS] = new GizmoHandle("app/models/rot_z.obj", "axis__z");
-        handles[HANDLE_ZAXIS]->setHandleColor(QColor(0, 0, 255, 96));
-        POINTER->rootNode->addChild(handles[HANDLE_ZAXIS]->gizmoHandle);
+        handles[(int) AxisHandle::Z] = new GizmoHandle("app/models/rot_z.obj", "axis__z");
+        handles[(int) AxisHandle::Z]->setHandleColor(QColor(37, 118, 235));
+        POINTER->rootNode->addChild(handles[(int) AxisHandle::Z]->gizmoHandle);
     }
 
-    void setPlaneNormal() {
-
+    void setPlaneOrientation(const QString& axis) {
+        if (axis == "axis__y") translatePlaneNormal = QVector3D(.0f, .0f, 1.f);
+        else translatePlaneNormal = QVector3D(.0f, 1.f, .0f);
     }
 
     ~RotationGizmo() {
         // pass
     }
 
-    void update() {
-//        for (int i = 0; i < 3; i++) {
-//            handles[i]->localTransform.setToIdentity();
-//            handles[i]->localTransform.translate(handles[i]->getHandlePosition());
-//            handles[i]->localTransform.rotate(handles[i]->getHandleRotation());
+    void update(QVector3D pos, QVector3D r) {
+        QVector3D ray = (r * 512 - pos).normalized();
+        float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
 
-//            handles[i]->globalTransform = handles[i]->localTransform;
-//        }
+        if (nDotR != 0.0f) {
+            float distance = (QVector3D::dotProduct(
+                                  translatePlaneNormal,
+                                  pos) + translatePlaneD) / nDotR;
+            QVector3D Point = ray * distance + pos;
+
+            auto prevHit = (finalHitPoint - currentNode->pos).normalized();
+            auto curHit = (Point - currentNode->pos).normalized();
+
+            if (currentNode->getName() == "axis__x") {
+                auto prevAngle = qAtan2(-prevHit.z(), prevHit.x());
+                auto curAngle = qAtan2(-curHit.z(), curHit.x());
+
+                auto angleDiff = curAngle - prevAngle;
+
+                currentNode->rot =
+                     QQuaternion::fromEulerAngles(qRadiansToDegrees(angleDiff), 0, 0) * currentNode->rot;
+            }
+
+            if (currentNode->getName() == "axis__y") {
+                auto prevAngle = qAtan2(-prevHit.x(), prevHit.y());
+                auto curAngle = qAtan2(-curHit.x(), curHit.y());
+
+                auto angleDiff = curAngle - prevAngle;
+
+                currentNode->rot =
+                     QQuaternion::fromEulerAngles(0, 0, qRadiansToDegrees(angleDiff)) * currentNode->rot;
+            }
+
+            if (currentNode->getName() == "axis__z") {
+                auto prevAngle = qAtan2(-prevHit.z(), prevHit.x());
+                auto curAngle = qAtan2(-curHit.z(), curHit.x());
+
+                auto angleDiff = curAngle - prevAngle;
+
+                currentNode->rot =
+                     QQuaternion::fromEulerAngles(0, qRadiansToDegrees(angleDiff), 0) * currentNode->rot;
+            }
+
+            lastSelectedNode->rot = currentNode->rot;
+
+            finalHitPoint = Point;
+        }
     }
 
     void createHandleShader() {
@@ -82,39 +116,43 @@ public:
         widgetPos.setToIdentity();
 
         // wtf...
-        if (!!this->currentNode &&
+        if (!!this->currentNode && !!this->lastSelectedNode &&
                 (this->currentNode->getName() == "axis__x" ||
                  this->currentNode->getName() == "axis__y" ||
                  this->currentNode->getName() == "axis__z"))
         {
-            widgetPos.translate(this->currentNode->pos);
+            widgetPos.translate(currentNode->pos);
+//            widgetPos.rotate(currentNode->rot);
             for (int i = 0; i < 3; i++) {
-                handles[i]->gizmoHandle->pos = this->currentNode->pos;
+                handles[i]->gizmoHandle->pos = currentNode->pos;
+                handles[i]->gizmoHandle->rot = currentNode->rot;
             }
-        } else {
-            widgetPos.translate(this->lastSelectedNode->pos);
+        } else if (!!lastSelectedNode) {
+            widgetPos.translate(lastSelectedNode->pos);
+//            widgetPos.rotate(lastSelectedNode->rot);
             for (int i = 0; i < 3; i++) {
-                handles[i]->gizmoHandle->pos = this->lastSelectedNode->pos;
+                handles[i]->gizmoHandle->pos = lastSelectedNode->pos;
+                handles[i]->gizmoHandle->rot = lastSelectedNode->rot;
             }
         }
 
-        if (!!this->currentNode && this->currentNode->getName() == "axis__x") {
-            handles[HANDLE_XAXIS]->gizmoHandle->rot = this->currentNode->rot;
-        } else {
-            handles[HANDLE_XAXIS]->gizmoHandle->rot = this->lastSelectedNode->rot;
-        }
+//        if (!!this->currentNode && this->currentNode->getName() == "axis__x") {
+//            handles[(int) AxisHandle::X]->gizmoHandle->rot = this->currentNode->rot;
+//        } else {
+//            handles[(int) AxisHandle::X]->gizmoHandle->rot = this->lastSelectedNode->rot;
+//        }
 
-        if (!!this->currentNode && this->currentNode->getName() == "axis__y") {
-            handles[HANDLE_YAXIS]->gizmoHandle->rot = this->currentNode->rot;
-        } else {
-            handles[HANDLE_YAXIS]->gizmoHandle->rot = this->lastSelectedNode->rot;
-        }
+//        if (!!this->currentNode && this->currentNode->getName() == "axis__y") {
+//            handles[(int) AxisHandle::Y]->gizmoHandle->rot = this->currentNode->rot;
+//        } else {
+//            handles[(int) AxisHandle::Y]->gizmoHandle->rot = this->lastSelectedNode->rot;
+//        }
 
-        if (!!this->currentNode && this->currentNode->getName() == "axis__z") {
-            handles[HANDLE_ZAXIS]->gizmoHandle->rot = this->currentNode->rot;
-        } else {
-            handles[HANDLE_ZAXIS]->gizmoHandle->rot = this->lastSelectedNode->rot;
-        }
+//        if (!!this->currentNode && this->currentNode->getName() == "axis__z") {
+//            handles[(int) AxisHandle::Z]->gizmoHandle->rot = this->currentNode->rot;
+//        } else {
+//            handles[(int) AxisHandle::Z]->gizmoHandle->rot = this->lastSelectedNode->rot;
+//        }
 
         POINTER->update(0);
 
@@ -140,8 +178,16 @@ public:
 
     }
 
-    bool onMousePress(int x, int y) {
+    void onMousePress(QVector3D pos, QVector3D r) {
+        translatePlaneD = -QVector3D::dotProduct(translatePlaneNormal, finalHitPoint);
 
+        QVector3D ray = (r - pos).normalized();
+        float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
+
+        if (nDotR != 0.0f) {
+            float distance = (QVector3D::dotProduct(translatePlaneNormal, pos) + translatePlaneD) / nDotR;
+            finalHitPoint = ray * distance + pos; // initial hit
+        }
     }
 
     bool onMouseMove(int x, int y) {

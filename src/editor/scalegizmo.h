@@ -31,36 +31,55 @@ public:
 
         POINTER = iris::Scene::create();
 
-        const QString objPath = "app/models/scale_x.obj";
-        handles[HANDLE_XAXIS] = new GizmoHandle(objPath, "axis__x");
-        handles[HANDLE_XAXIS]->setHandleColor(QColor(255, 0, 0, 96));
-        POINTER->rootNode->addChild(handles[HANDLE_XAXIS]->gizmoHandle);
+        handles[(int) AxisHandle::X] = new GizmoHandle("app/models/scale_x.obj", "axis__x");
+        handles[(int) AxisHandle::X]->setHandleColor(QColor(231, 76, 60));
+        POINTER->rootNode->addChild(handles[(int) AxisHandle::X]->gizmoHandle);
 
-        handles[HANDLE_YAXIS] = new GizmoHandle("app/models/scale_y.obj", "axis__y");
-        handles[HANDLE_YAXIS]->setHandleColor(QColor(0, 255, 0, 96));
-        POINTER->rootNode->addChild(handles[HANDLE_YAXIS]->gizmoHandle);
+        handles[(int) AxisHandle::Y] = new GizmoHandle("app/models/scale_y.obj", "axis__y");
+        handles[(int) AxisHandle::Y]->setHandleColor(QColor(46, 224, 113));
+        POINTER->rootNode->addChild(handles[(int) AxisHandle::Y]->gizmoHandle);
 
-        handles[HANDLE_ZAXIS] = new GizmoHandle("app/models/scale_z.obj", "axis__z");
-        handles[HANDLE_ZAXIS]->setHandleColor(QColor(0, 0, 255, 96));
-        POINTER->rootNode->addChild(handles[HANDLE_ZAXIS]->gizmoHandle);
+        handles[(int) AxisHandle::Z] = new GizmoHandle("app/models/scale_z.obj", "axis__z");
+        handles[(int) AxisHandle::Z]->setHandleColor(QColor(37, 118, 235));
+        POINTER->rootNode->addChild(handles[(int) AxisHandle::Z]->gizmoHandle);
     }
 
-    void setPlaneNormal() {
-
+    void setPlaneOrientation(const QString& axis) {
+        if (axis == "axis__x")      translatePlaneNormal = QVector3D(.0f, 1.f, .0f);
+        else if (axis == "axis__y") translatePlaneNormal = QVector3D(.0f, .0f, 1.f);
+        else if (axis == "axis__z") translatePlaneNormal = QVector3D(.0f, 1.f, .0f);
     }
 
     ~ScaleGizmo() {
         // pass
     }
 
-    void update() {
-//        for (int i = 0; i < 3; i++) {
-//            handles[i]->localTransform.setToIdentity();
-//            handles[i]->localTransform.translate(handles[i]->getHandlePosition());
-//            handles[i]->localTransform.rotate(handles[i]->getHandleRotation());
+    void update(QVector3D pos, QVector3D r) {
+        QVector3D ray = (r * 512 - pos).normalized();
+        float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
 
-//            handles[i]->globalTransform = handles[i]->localTransform;
-//        }
+        if (nDotR != 0.0f) {
+            float distance = (QVector3D::dotProduct(
+                                  translatePlaneNormal,
+                                  pos) + translatePlaneD) / nDotR;
+            QVector3D Point = ray * distance + pos;
+            QVector3D Offset = Point - finalHitPoint;
+
+            // standard - move to set plane orientation func
+            if (currentNode->getName() == "axis__x") {
+                Offset = QVector3D(Offset.x(), 0, 0);
+            } else if (currentNode->getName() == "axis__y") {
+                Offset = QVector3D(0, Offset.y(), 0);
+            } else if (currentNode->getName() == "axis__z") {
+                Offset = QVector3D(0, 0, Offset.z());
+            }
+
+            // scale the handles but not the box part
+//            currentNode->pos += Offset;
+            lastSelectedNode->scale += Offset;
+
+            finalHitPoint = Point;
+        }
     }
 
     void createHandleShader() {
@@ -123,8 +142,16 @@ public:
 
     }
 
-    bool onMousePress(int x, int y) {
+    void onMousePress(QVector3D pos, QVector3D r) {
+        translatePlaneD = -QVector3D::dotProduct(translatePlaneNormal, finalHitPoint);
 
+        QVector3D ray = (r - pos).normalized();
+        float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
+
+        if (nDotR != 0.0f) {
+            float distance = (QVector3D::dotProduct(translatePlaneNormal, pos) + translatePlaneD) / nDotR;
+            finalHitPoint = ray * distance + pos; // initial hit
+        }
     }
 
     bool onMouseMove(int x, int y) {

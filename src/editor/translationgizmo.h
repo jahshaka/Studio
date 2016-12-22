@@ -33,25 +33,28 @@ public:
 
         // todo load one obj
         const QString objPath = "app/models/axis_x.obj";
-        handles[AxisHandle::X] = new GizmoHandle(objPath, "axis__x");
-        handles[AxisHandle::X]->setHandleColor(QColor(255, 0, 0, 96));
-        POINTER->rootNode->addChild(handles[AxisHandle::X]->gizmoHandle);
+        // having to cast to int kinda defeats the point of nice short enums huh...
+        handles[(int) AxisHandle::X] = new GizmoHandle("app/models/axis_x.obj", "axis__x");
+        handles[(int) AxisHandle::X]->setHandleColor(QColor(231, 76, 60));
+        POINTER->rootNode->addChild(handles[(int) AxisHandle::X]->gizmoHandle);
 
-        handles[AxisHandle::Y] = new GizmoHandle("app/models/axis_y.obj", "axis__y");
-        handles[AxisHandle::Y]->setHandleColor(QColor(0, 255, 0, 96));
-        POINTER->rootNode->addChild(handles[AxisHandle::X]->gizmoHandle);
+        handles[(int) AxisHandle::Y] = new GizmoHandle("app/models/axis_y.obj", "axis__y");
+        handles[(int) AxisHandle::Y]->setHandleColor(QColor(46, 224, 113));
+        POINTER->rootNode->addChild(handles[(int) AxisHandle::Y]->gizmoHandle);
 
-        handles[AxisHandle::Z] = new GizmoHandle("app/models/axis_z.obj", "axis__z");
-        handles[AxisHandle::Z]->setHandleColor(QColor(0, 0, 255, 96));
-        POINTER->rootNode->addChild(handles[AxisHandle::Z]->gizmoHandle);
+        handles[(int) AxisHandle::Z] = new GizmoHandle("app/models/axis_z.obj", "axis__z");
+        handles[(int) AxisHandle::Z]->setHandleColor(QColor(37, 118, 235));
+        POINTER->rootNode->addChild(handles[(int) AxisHandle::Z]->gizmoHandle);
     }
 
-    void setPlaneNormal() {
-
+    void setPlaneOrientation(const QString& axis) {
+        if (axis == "axis__x")      translatePlaneNormal = QVector3D(.0f, 1.f, .0f);
+        else if (axis == "axis__y") translatePlaneNormal = QVector3D(.0f, .0f, 1.f);
+        else if (axis == "axis__z") translatePlaneNormal = QVector3D(.0f, 1.f, .0f);
     }
 
     ~TranslationGizmo() {
-        // pass
+        qDebug() << "destroyed";
     }
 
     void update(QVector3D pos, QVector3D r) {
@@ -141,8 +144,16 @@ public:
 
     }
 
-    bool onMousePress(int x, int y) {
+    void onMousePress(QVector3D pos, QVector3D r) {
+        translatePlaneD = -QVector3D::dotProduct(translatePlaneNormal, finalHitPoint);
 
+        QVector3D ray = (r - pos).normalized();
+        float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
+
+        if (nDotR != 0.0f) {
+            float distance = (QVector3D::dotProduct(translatePlaneNormal, pos) + translatePlaneD) / nDotR;
+            finalHitPoint = ray * distance + pos; // initial hit
+        }
     }
 
     bool onMouseMove(int x, int y) {

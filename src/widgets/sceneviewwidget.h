@@ -41,7 +41,6 @@ enum class ViewportMode
 struct PickingResult
 {
     QSharedPointer<iris::SceneNode> hitNode;
-    QSharedPointer<iris::MeshNode> hitHandle;
     QVector3D hitPoint;
 
     // this is often used for comparisons so it's not necessary to find the root

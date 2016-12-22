@@ -19,8 +19,8 @@ For more information see the LICENSE file
 
 enum class AxisHandle
 {
-    X,
-    Y
+    X = 0,
+    Y,
     Z
 };
 

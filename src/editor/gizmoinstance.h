@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #ifndef GIZMOINSTANCE_H
 #define GIZMOINSTANCE_H
 
-#include <QtMath>
+#include "gizmohandle.h"
 
 class GizmoInstance
 {
@@ -28,6 +28,8 @@ public:
 
     virtual void update(QVector3D, QVector3D) = 0;
 
+    virtual void setPlaneOrientation(const QString&) = 0;
+
     virtual void createHandleShader() = 0;
 
     virtual void render(QOpenGLFunctions_3_2_Core*, QMatrix4x4&, QMatrix4x4&) = 0;
@@ -40,19 +42,14 @@ public:
         return false;
     }
 
-    virtual bool onMousePress(int x,int y)
-    {
-        Q_UNUSED(x);
-        Q_UNUSED(y);
-        return false;
-    }
-
     virtual bool onMouseMove(int x,int y)
     {
         Q_UNUSED(x);
         Q_UNUSED(y);
         return false;
     }
+
+    virtual void onMousePress(QVector3D, QVector3D) = 0;
 
     virtual bool onMouseRelease(int x,int y)
     {
