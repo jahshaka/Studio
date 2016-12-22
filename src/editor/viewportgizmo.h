@@ -1,0 +1,4 @@
+#ifndef VIEWPORTGIZMO_H
+#define VIEWPORTGIZMO_H
+
+#endif // VIEWPORTGIZMO_H

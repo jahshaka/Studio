@@ -135,7 +135,11 @@ HEADERS  += src/mainwindow.h \
     src/core/meshmanager.h \
     src/io/assetiobase.h \
     src/core/materialpreset.h \
-    src/io/materialpresetreader.h
+    src/io/materialpresetreader.h \
+    src/editor/gizmohandle.h \
+    src/editor/gizmotransform.h \
+    src/editor/translationgizmo.h \
+    src/editor/viewportgizmo.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

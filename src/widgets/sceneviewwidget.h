@@ -26,6 +26,8 @@ class QOpenGLShaderProgram;
 class CameraControllerBase;
 class OrbitalCameraController;
 
+class TranslationGizmo;
+
 enum class ViewportMode
 {
     Editor,
@@ -35,9 +37,10 @@ enum class ViewportMode
 struct PickingResult
 {
     QSharedPointer<iris::SceneNode> hitNode;
+    QSharedPointer<iris::MeshNode> hitHandle;
     QVector3D hitPoint;
 
-    //this is often used for comparisons so it's not necessary to find the root
+    // this is often used for comparisons so it's not necessary to find the root
     float distanceFromCameraSqrd;
 };
 
@@ -73,7 +76,6 @@ public:
     void setViewportMode(ViewportMode viewportMode);
     ViewportMode getViewportMode();
 
-
 protected:
     void initializeGL();
     bool eventFilter(QObject *obj, QEvent *event);
@@ -82,11 +84,9 @@ protected:
     void mouseReleaseEvent(QMouseEvent* evt);
     void wheelEvent(QWheelEvent *event);
 
-    /**
-     * Does raycasting from the mouse's screen position.
-     */
-    void doObjectPicking();
-
+    // does raycasting from the mouse's screen position.
+    void doObjectPicking(const QPointF& point);
+    void doGizmoPicking(const QPointF& point);
 
 private slots:
     void paintGL();
@@ -94,8 +94,17 @@ private slots:
     void resizeGL(int width, int height);
 
 private:
-    void doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList);
     void doLightPicking(const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList);
+    // @TODO: use one picking function and pick by mesh type
+    void doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,
+                        const QVector3D& segStart,
+                        const QVector3D& segEnd,
+                        QList<PickingResult>& hitList);
+
+    void doMeshPicking(const QSharedPointer<iris::SceneNode>& widgetHandles,
+                       const QVector3D& segStart,
+                       const QVector3D& segEnd,
+                       QList<PickingResult>& hitList);
 
     void makeObject();
     void renderScene();
@@ -110,13 +119,19 @@ private:
 
     void initialize();
 
+    QVector3D calculateMouseRay(const QPointF& pos);
+
+    QMatrix4x4 ViewMatrix;
+    QMatrix4x4 ProjMatrix;
+
+    TranslationGizmo* translationGizmo;
+
     iris::Viewport* viewport;
     iris::FullScreenQuad* fsQuad;
 
 signals:
     void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl);
     void sceneNodeSelected(QSharedPointer<iris::SceneNode> sceneNode);
-
 
 };
 
