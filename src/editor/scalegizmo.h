@@ -1,10 +1,10 @@
 #ifndef SCALEGIZMO_H
 #define SCALEGIZMO_H
 
-#include "gizmotransform.h"
+#include "gizmoinstance.h"
 #include "gizmohandle.h"
 
-class ScaleGizmo : public GizmoTransform
+class ScaleGizmo : public GizmoInstance
 {
 private:
 
@@ -15,12 +15,17 @@ private:
     QOpenGLShaderProgram* handleShader;
 
 public:
+//    QSharedPointer<iris::Scene> POINTER;
+//    QSharedPointer<iris::SceneNode> lastSelectedNode;
+//    QSharedPointer<iris::SceneNode> currentNode;
+//    QVector3D finalHitPoint;
+//    QVector3D translatePlaneNormal;
+//    float translatePlaneD;
+
     QSharedPointer<iris::Scene> POINTER;
-    QSharedPointer<iris::SceneNode> lastSelectedNode;
-    QSharedPointer<iris::SceneNode> currentNode;
-    QVector3D finalHitPoint;
-    QVector3D translatePlaneNormal;
-    float translatePlaneD;
+    QSharedPointer<iris::SceneNode> getRootNode() {
+        return this->POINTER->getRootNode();
+    }
 
     ScaleGizmo() {
 
@@ -87,7 +92,7 @@ public:
             for (int i = 0; i < 3; i++) {
                 handles[i]->gizmoHandle->pos = this->currentNode->pos;
             }
-        } else {
+        } else if (!!this->lastSelectedNode) {
             widgetPos.translate(this->lastSelectedNode->pos);
             for (int i = 0; i < 3; i++) {
                 handles[i]->gizmoHandle->pos = this->lastSelectedNode->pos;

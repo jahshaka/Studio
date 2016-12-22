@@ -12,16 +12,17 @@ For more information see the LICENSE file
 #ifndef GIZMOHANDLE_H
 #define GIZMOHANDLE_H
 
-#include <QMouseEvent>
 #include <QtMath>
-#include <QDebug>
 
 #include "../irisgl/src/irisgl.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 
-#define HANDLE_XAXIS 0
-#define HANDLE_YAXIS 1
-#define HANDLE_ZAXIS 2
+enum class AxisHandle
+{
+    X,
+    Y
+    Z
+};
 
 enum class GizmoTransformMode
 {
@@ -34,6 +35,23 @@ enum class GizmoTransformSpace
 {
     Local,
     Global
+};
+
+enum class GizmoTransformAxis
+{
+    NONE,
+    X,
+    Y,
+    Z,
+    XY,
+    XZ,
+    YZ
+};
+
+enum class GizmoPivot
+{
+    CENTER,
+    OBJECT_PIVOT
 };
 
 class GizmoHandle
@@ -95,6 +113,7 @@ public:
     }
 
     QSharedPointer<iris::MeshNode> gizmoHandle;
+
 //    QMatrix4x4 localTransform;
 //    QMatrix4x4 globalTransform;
 };

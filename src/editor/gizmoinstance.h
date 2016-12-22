@@ -9,35 +9,28 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#ifndef GIZMOTRANSFORM_H
-#define GIZMOTRANSFORM_H
+#ifndef GIZMOINSTANCE_H
+#define GIZMOINSTANCE_H
 
 #include <QtMath>
-#include <QDebug>
-#include <QString>
 
-class GizmoTransform
+class GizmoInstance
 {
 public:
-
 //    QSharedPointer<iris::Scene> POINTER;
-//    QSharedPointer<iris::SceneNode> lastSelectedNode;
-//    QSharedPointer<iris::SceneNode> currentNode;
-//    QVector3D finalHitPoint;
-//    QVector3D translatePlaneNormal;
-//    float translatePlaneD;
+    QSharedPointer<iris::SceneNode> lastSelectedNode;
+    QSharedPointer<iris::SceneNode> currentNode;
+    QVector3D finalHitPoint;
+    QVector3D translatePlaneNormal;
+    float translatePlaneD;
 
-    static GizmoTransform* create() {
+    virtual QSharedPointer<iris::SceneNode> getRootNode() = 0;
 
-    }
+    virtual void update(QVector3D, QVector3D) = 0;
 
-    virtual void createHandleShader() {
+    virtual void createHandleShader() = 0;
 
-    }
-
-    virtual void render(QOpenGLFunctions_3_2_Core*, QMatrix4x4&, QMatrix4x4&) {
-
-    }
+    virtual void render(QOpenGLFunctions_3_2_Core*, QMatrix4x4&, QMatrix4x4&) = 0;
 
     virtual bool onHandleSelected(QString name,int x,int y)
     {
@@ -76,4 +69,4 @@ public:
     }
 };
 
-#endif // GIZMOTRANSFORM_H
+#endif // GIZMOINSTANCE_H

@@ -24,7 +24,6 @@
 #include "../editor/editorcameracontroller.h"
 #include "../editor/orbitalcameracontroller.h"
 
-
 #include "../editor/translationgizmo.h"
 #include "../editor/rotationgizmo.h"
 #include "../editor/scalegizmo.h"
@@ -41,7 +40,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     setFormat(format);
     setMouseTracking(true);
-    //installEventFilter(this);
+//    installEventFilter(this);
 
     viewport = new iris::Viewport();
 
@@ -62,14 +61,16 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
 void SceneViewWidget::initialize()
 {
-//    translationGizmo = new TranslationGizmo;
-//    translationGizmo->createHandleShader();
+    translationGizmo = new TranslationGizmo;
+    translationGizmo->createHandleShader();
 
 //    rotationGizmo = new RotationGizmo;
 //    rotationGizmo->createHandleShader();
 
-    scaleGizmo = new ScaleGizmo;
-    scaleGizmo->createHandleShader();
+//    scaleGizmo = new ScaleGizmo;
+//    scaleGizmo->createHandleShader();
+
+    viewportGizmo = translationGizmo;
 }
 
 void SceneViewWidget::setScene(QSharedPointer<iris::Scene> scene)
@@ -104,8 +105,8 @@ void SceneViewWidget::updateScene()
 //        rotationGizmo->render(renderer->GLA, ViewMatrix, ProjMatrix);
 //    }
 
-    if (!!scaleGizmo->lastSelectedNode) {
-        scaleGizmo->render(renderer->GLA, ViewMatrix, ProjMatrix);
+    if (!!viewportGizmo->lastSelectedNode) {
+        viewportGizmo->render(renderer->GLA, ViewMatrix, ProjMatrix);
     }
 }
 
@@ -123,10 +124,10 @@ void SceneViewWidget::initializeGL()
     initialize();
     fsQuad = new iris::FullScreenQuad();
 
-    emit initializeGraphics(this,this);
+    emit initializeGraphics(this, this);
 
     auto timer = new QTimer(this);
-    connect(timer,SIGNAL(timeout()),this,SLOT(update()));
+    connect(timer, SIGNAL(timeout()), this, SLOT(update()));
     timer->start();
 }
 
@@ -167,22 +168,24 @@ bool SceneViewWidget::eventFilter(QObject *obj, QEvent *event)
 {
     QEvent::Type type = event->type();
 
-    if (type == QEvent::MouseMove) {
+    if (type == QEvent::MouseMove)
+    {
         QMouseEvent* evt = static_cast<QMouseEvent*>(event);
         mouseMoveEvent(evt);
         return false;
-    } else if (type == QEvent::MouseButtonPress) {
-
+    } else if (type == QEvent::MouseButtonPress)
+    {
         QMouseEvent* evt = static_cast<QMouseEvent*>(event);
         mousePressEvent(evt);
         return false;
-    } else if (type == QEvent::MouseButtonRelease) {
+    } else if (type == QEvent::MouseButtonRelease)
+    {
         QMouseEvent* evt = static_cast<QMouseEvent*>(event);
         mouseReleaseEvent(evt);
         return false;
     }
 
-    return QWidget::eventFilter(obj,event);
+    return QWidget::eventFilter(obj, event);
 }
 
 QVector3D SceneViewWidget::calculateMouseRay(const QPointF& pos)
@@ -217,26 +220,9 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     QPointF localPos = e->localPos();
     QPointF dir = localPos - prevMousePos;
 
-    if (e->buttons() == Qt::LeftButton && !!scaleGizmo->currentNode)
+    if (e->buttons() == Qt::LeftButton && !!viewportGizmo->currentNode)
     {
-         QVector3D ray = (this->calculateMouseRay(localPos) * 512 - this->editorCam->pos).normalized();
-         float nDotR = -QVector3D::dotProduct(scaleGizmo->translatePlaneNormal, ray);
-
-         if (nDotR != 0.0f) {
-             float distance = (QVector3D::dotProduct(
-                                   scaleGizmo->translatePlaneNormal,
-                                   this->editorCam->pos) + scaleGizmo->translatePlaneD) / nDotR;
-             QVector3D Point = ray * distance + this->editorCam->pos;
-             QVector3D Offset = Point - scaleGizmo->finalHitPoint;
-
-             // standard - move to set plane orientation func
-             if (scaleGizmo->currentNode->getName() == "axis__x") {
-                 Offset = QVector3D(Offset.x(), 0, 0);
-             } else if (scaleGizmo->currentNode->getName() == "axis__y") {
-                 Offset = QVector3D(0, Offset.y(), 0);
-             } else if (scaleGizmo->currentNode->getName() == "axis__z") {
-                 Offset = QVector3D(0, 0, Offset.z());
-             }
+         viewportGizmo->update(editorCam->pos, calculateMouseRay(localPos));
 
              // rotation
 //             if (rotationGizmo->currentNode->getName() == "axis__z") {
@@ -286,14 +272,14 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
 //             }
 
              // scale
-            scaleGizmo->lastSelectedNode->scale += Offset;
+//            scaleGizmo->lastSelectedNode->scale += Offset;
 
              // also NOT standard, for trans only
-//             rotationGizmo->currentNode->pos += Offset;
-//             rotationGizmo->lastSelectedNode->pos += Offset;
+//             viewportGizmo->currentNode->pos += Offset;
+//             viewportGizmo->lastSelectedNode->pos += Offset;
 
-             scaleGizmo->finalHitPoint = Point;
-         }
+//             viewportGizmo->finalHitPoint = Point;
+//         }
      }
 
     if (camController != nullptr) {
@@ -311,17 +297,23 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
         dragging = true;
     }
 
+    if (e->button() == Qt::MiddleButton) {
+        // create an assign operator????
+        // just get it to render immediately after
+        editorCam->updateCameraMatrices();
+        viewportGizmo = scaleGizmo;
+    }
+
     if (e->button() == Qt::LeftButton) {
         editorCam->updateCameraMatrices();
 
-//        if (!!selectedNode) {
+        if (!!selectedNode) {
             this->doGizmoPicking(e->localPos());
-//        }
+            // don't pick anything else if we have a widget
+            return;
+        }
 
-        // don't pick twice in succession, see if we hit a widget first or not
-//        if (scaleGizmo->currentNode.isNull()) {
-            this->doObjectPicking(e->localPos());
-//        }
+        this->doObjectPicking(e->localPos());
     }
 
     if (camController != nullptr) {
@@ -336,7 +328,7 @@ void SceneViewWidget::mouseReleaseEvent(QMouseEvent *e)
     }
 
     if (e->button() == Qt::LeftButton) {
-//        rotationGizmo->currentNode = iris::SceneNodePtr();
+        // maybe explicitly hard reset stuff related to picking here
     }
 
     if (camController != nullptr) {
@@ -356,32 +348,32 @@ void SceneViewWidget::doObjectPicking(const QPointF& point)
     editorCam->updateCameraMatrices();
 
     auto segStart = this->editorCam->pos;
-    auto rayDir = this->calculateMouseRay(point) * 512;
-    // auto rayDir = editorCam->calculatePickingDirection(viewport->width,viewport->height,prevMousePos);
-    auto segEnd = segStart + rayDir;
+    auto rayDir = editorCam->calculatePickingDirection(viewport->width, viewport->height, prevMousePos);
+    auto segEnd = segStart + rayDir * 512;
 
     QList<PickingResult> hitList;
     doScenePicking(scene->getRootNode(), segStart, segEnd, hitList);
     doLightPicking(segStart,segEnd,hitList);
 
-    // find the closest hit and emit signal
     if (hitList.size() == 0) {
-        emit sceneNodeSelected(iris::SceneNodePtr());//no hits, deselect object
+        // no hits, deselect last selected object in viewport and hiearchy
+        emit sceneNodeSelected(iris::SceneNodePtr());
         return;
     }
 
+    // if the size of the list is 1 we know it was the only one so return early
     if (hitList.size() == 1) {
-        scaleGizmo->lastSelectedNode = hitList[0].hitNode;
+        viewportGizmo->lastSelectedNode = hitList[0].hitNode;
         emit sceneNodeSelected(hitList[0].hitNode);
         return;
     }
 
-    // sort by distance to camera then return the closest
+    // sort by distance to camera then return the closest hit node
     qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
         return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
     });
 
-    scaleGizmo->lastSelectedNode = hitList.last().hitNode;
+    viewportGizmo->lastSelectedNode = hitList.last().hitNode;
     emit sceneNodeSelected(hitList.last().hitNode);
 }
 
@@ -390,16 +382,15 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
     editorCam->updateCameraMatrices();
 
     auto segStart = this->editorCam->pos;
-    auto rayDir = this->calculateMouseRay(point) * 512;
-    // auto rayDir = editorCam->calculatePickingDirection(viewport->width,viewport->height,prevMousePos);
-    auto segEnd = segStart + rayDir;
+    auto rayDir = editorCam->calculatePickingDirection(viewport->width, viewport->height, prevMousePos);
+    auto segEnd = segStart + rayDir * 512;
 
     QList<PickingResult> hitList;
-    doMeshPicking(scaleGizmo->POINTER->getRootNode(), segStart, segEnd, hitList);
+    doMeshPicking(viewportGizmo->getRootNode(), segStart, segEnd, hitList);
 
     if (hitList.size() == 0) {
-        scaleGizmo->lastSelectedNode = iris::SceneNodePtr();
-        scaleGizmo->currentNode = iris::SceneNodePtr();
+        viewportGizmo->lastSelectedNode = iris::SceneNodePtr();
+        viewportGizmo->currentNode = iris::SceneNodePtr();
         emit sceneNodeSelected(iris::SceneNodePtr());
         return;
     }
@@ -408,7 +399,7 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
         return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
     });
 
-    scaleGizmo->finalHitPoint = hitList.last().hitPoint;
+    viewportGizmo->finalHitPoint = hitList.last().hitPoint;
 
     // translation
 //    if (hitList.last().hitNode->getName() == "axis__y") {
@@ -418,24 +409,24 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
 //    }
 
     if (hitList.last().hitNode->getName() == "axis__x") {
-        scaleGizmo->translatePlaneNormal = QVector3D(.0f, 1.f, .0f);
+        viewportGizmo->translatePlaneNormal = QVector3D(.0f, 1.f, .0f);
     } else if (hitList.last().hitNode->getName() == "axis__y") {
-        scaleGizmo->translatePlaneNormal = QVector3D(.0f, 0.f, 1.f);
+        viewportGizmo->translatePlaneNormal = QVector3D(.0f, 0.f, 1.f);
     } else if (hitList.last().hitNode->getName() == "axis__z") {
-        scaleGizmo->translatePlaneNormal = QVector3D(.0f, 1.f, .0f);
+        viewportGizmo->translatePlaneNormal = QVector3D(.0f, 1.f, .0f);
     }
 
-    scaleGizmo->translatePlaneD = -QVector3D::dotProduct(scaleGizmo->translatePlaneNormal,
-                                                               scaleGizmo->finalHitPoint);
-    scaleGizmo->currentNode = hitList.last().hitNode;
+    viewportGizmo->translatePlaneD = -QVector3D::dotProduct(viewportGizmo->translatePlaneNormal,
+                                                               viewportGizmo->finalHitPoint);
+    viewportGizmo->currentNode = hitList.last().hitNode;
 
     QVector3D ray = (this->calculateMouseRay(point) * 512 - this->editorCam->pos).normalized();
-    float nDotR = -QVector3D::dotProduct(scaleGizmo->translatePlaneNormal, ray);
+    float nDotR = -QVector3D::dotProduct(viewportGizmo->translatePlaneNormal, ray);
 
     if (nDotR != 0.0f) {
-        float distance = (QVector3D::dotProduct(scaleGizmo->translatePlaneNormal,
-                                                this->editorCam->pos) + scaleGizmo->translatePlaneD) / nDotR;
-        scaleGizmo->finalHitPoint = ray * distance + this->editorCam->pos; // initial hit
+        float distance = (QVector3D::dotProduct(viewportGizmo->translatePlaneNormal,
+                                                this->editorCam->pos) + viewportGizmo->translatePlaneD) / nDotR;
+        viewportGizmo->finalHitPoint = ray * distance + this->editorCam->pos; // initial hit
     }
 }
 

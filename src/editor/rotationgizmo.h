@@ -1,10 +1,10 @@
 #ifndef ROTATIONGIZMO_H
 #define ROTATIONGIZMO_H
 
-#include "gizmotransform.h"
+#include "gizmoinstance.h"
 #include "gizmohandle.h"
 
-class RotationGizmo : public GizmoTransform
+class RotationGizmo : public GizmoInstance
 {
 private:
 
@@ -15,12 +15,17 @@ private:
     QOpenGLShaderProgram* handleShader;
 
 public:
+//    QSharedPointer<iris::Scene> POINTER;
+//    QSharedPointer<iris::SceneNode> lastSelectedNode;
+//    QSharedPointer<iris::SceneNode> currentNode;
+//    QVector3D finalHitPoint;
+//    QVector3D translatePlaneNormal;
+//    float translatePlaneD;
+
     QSharedPointer<iris::Scene> POINTER;
-    QSharedPointer<iris::SceneNode> lastSelectedNode;
-    QSharedPointer<iris::SceneNode> currentNode;
-    QVector3D finalHitPoint;
-    QVector3D translatePlaneNormal;
-    float translatePlaneD;
+    QSharedPointer<iris::SceneNode> getRootNode() {
+        return this->POINTER->getRootNode();
+    }
 
     RotationGizmo() {
 

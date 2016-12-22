@@ -1,10 +1,10 @@
 #ifndef TRANSLATIONGIZMO_H
 #define TRANSLATIONGIZMO_H
 
-#include "gizmotransform.h"
+#include "gizmoinstance.h"
 #include "gizmohandle.h"
 
-class TranslationGizmo : public GizmoTransform
+class TranslationGizmo : public GizmoInstance
 {
 private:
 
@@ -15,29 +15,35 @@ private:
     QOpenGLShaderProgram* handleShader;
 
 public:
+//    QSharedPointer<iris::Scene> POINTER;
+//    QSharedPointer<iris::SceneNode> lastSelectedNode;
+//    QSharedPointer<iris::SceneNode> currentNode;
+//    QVector3D finalHitPoint;
+//    QVector3D translatePlaneNormal;
+//    float translatePlaneD;
+
     QSharedPointer<iris::Scene> POINTER;
-    QSharedPointer<iris::SceneNode> lastSelectedNode;
-    QSharedPointer<iris::SceneNode> currentNode;
-    QVector3D finalHitPoint;
-    QVector3D translatePlaneNormal;
-    float translatePlaneD;
+    QSharedPointer<iris::SceneNode> getRootNode() {
+        return this->POINTER->getRootNode();
+    }
 
     TranslationGizmo() {
 
         POINTER = iris::Scene::create();
 
+        // todo load one obj
         const QString objPath = "app/models/axis_x.obj";
-        handles[HANDLE_XAXIS] = new GizmoHandle(objPath, "axis__x");
-        handles[HANDLE_XAXIS]->setHandleColor(QColor(255, 0, 0, 96));
-        POINTER->rootNode->addChild(handles[HANDLE_XAXIS]->gizmoHandle);
+        handles[AxisHandle::X] = new GizmoHandle(objPath, "axis__x");
+        handles[AxisHandle::X]->setHandleColor(QColor(255, 0, 0, 96));
+        POINTER->rootNode->addChild(handles[AxisHandle::X]->gizmoHandle);
 
-        handles[HANDLE_YAXIS] = new GizmoHandle("app/models/axis_y.obj", "axis__y");
-        handles[HANDLE_YAXIS]->setHandleColor(QColor(0, 255, 0, 96));
-        POINTER->rootNode->addChild(handles[HANDLE_YAXIS]->gizmoHandle);
+        handles[AxisHandle::Y] = new GizmoHandle("app/models/axis_y.obj", "axis__y");
+        handles[AxisHandle::Y]->setHandleColor(QColor(0, 255, 0, 96));
+        POINTER->rootNode->addChild(handles[AxisHandle::X]->gizmoHandle);
 
-        handles[HANDLE_ZAXIS] = new GizmoHandle("app/models/axis_z.obj", "axis__z");
-        handles[HANDLE_ZAXIS]->setHandleColor(QColor(0, 0, 255, 96));
-        POINTER->rootNode->addChild(handles[HANDLE_ZAXIS]->gizmoHandle);
+        handles[AxisHandle::Z] = new GizmoHandle("app/models/axis_z.obj", "axis__z");
+        handles[AxisHandle::Z]->setHandleColor(QColor(0, 0, 255, 96));
+        POINTER->rootNode->addChild(handles[AxisHandle::Z]->gizmoHandle);
     }
 
     void setPlaneNormal() {
@@ -48,14 +54,31 @@ public:
         // pass
     }
 
-    void update() {
-//        for (int i = 0; i < 3; i++) {
-//            handles[i]->localTransform.setToIdentity();
-//            handles[i]->localTransform.translate(handles[i]->getHandlePosition());
-//            handles[i]->localTransform.rotate(handles[i]->getHandleRotation());
+    void update(QVector3D pos, QVector3D r) {
+        QVector3D ray = (r * 512 - pos).normalized();
+        float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
 
-//            handles[i]->globalTransform = handles[i]->localTransform;
-//        }
+        if (nDotR != 0.0f) {
+            float distance = (QVector3D::dotProduct(
+                                  translatePlaneNormal,
+                                  pos) + translatePlaneD) / nDotR;
+            QVector3D Point = ray * distance + pos;
+            QVector3D Offset = Point - finalHitPoint;
+
+            // standard - move to set plane orientation func
+            if (currentNode->getName() == "axis__x") {
+                Offset = QVector3D(Offset.x(), 0, 0);
+            } else if (currentNode->getName() == "axis__y") {
+                Offset = QVector3D(0, Offset.y(), 0);
+            } else if (currentNode->getName() == "axis__z") {
+                Offset = QVector3D(0, 0, Offset.z());
+            }
+
+            currentNode->pos += Offset;
+            lastSelectedNode->pos += Offset;
+
+            finalHitPoint = Point;
+        }
     }
 
     void createHandleShader() {
@@ -87,7 +110,7 @@ public:
             for (int i = 0; i < 3; i++) {
                 handles[i]->gizmoHandle->pos = this->currentNode->pos;
             }
-        } else {
+        } else if (!!this->lastSelectedNode) {
             widgetPos.translate(this->lastSelectedNode->pos);
             for (int i = 0; i < 3; i++) {
                 handles[i]->gizmoHandle->pos = this->lastSelectedNode->pos;
