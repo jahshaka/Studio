@@ -18,8 +18,15 @@ SceneHeirarchyWidget::SceneHeirarchyWidget(QWidget *parent) :
 
     mainWindow = nullptr;
 
-    connect(ui->sceneTree,SIGNAL(itemClicked(QTreeWidgetItem*,int)),this,SLOT(treeItemSelected(QTreeWidgetItem*)));
-    connect(ui->sceneTree,SIGNAL(itemChanged(QTreeWidgetItem*,int)),this,SLOT(treeItemChanged(QTreeWidgetItem*,int)));
+    ui->sceneTree->viewport()->installEventFilter(this);
+
+    connect(ui->sceneTree, SIGNAL(itemClicked(QTreeWidgetItem*, int)),
+            this,
+            SLOT(treeItemSelected(QTreeWidgetItem*)));
+    connect(ui->sceneTree,
+            SIGNAL(itemChanged(QTreeWidgetItem*, int)),
+            this,
+            SLOT(treeItemChanged(QTreeWidgetItem*, int)));
 
     //make items draggable and droppable
     ui->sceneTree->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -117,6 +124,58 @@ void SceneHeirarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> scene
         //item->setSelected(true);
         ui->sceneTree->setCurrentItem(item);
     }
+}
+
+bool SceneHeirarchyWidget::eventFilter(QObject *watched, QEvent *event)
+{
+//    QList<QTreeWidgetItem*> dragItems = selectedItems();
+
+//    QTreeWidget::dropEvent(static_cast<QDropEvent*>(event));
+//    this->dropEvent(static_cast<QDropEvent*>(event));
+
+    if (event->type() == QEvent::Drop) {
+        auto dropEventPtr = static_cast<QDropEvent*>(event);
+        this->dropEvent(dropEventPtr);
+
+        QTreeWidgetItem *droppedIndex = ui->sceneTree->itemAt(dropEventPtr->pos().x(),
+                                                              dropEventPtr->pos().y());
+            if (droppedIndex) {
+                long itemId = droppedIndex->data(1,Qt::UserRole).toLongLong();
+
+                auto source = nodeList[itemId];
+                qDebug() << "Dest: " << source->getName();
+
+//            auto rootNode = scene->getRootNode();
+//            rootNode->
+//            auto node = nodeList.find(source->getNodeId());
+
+                source->addChild(this->lastDraggedHiearchyItemSrc);
+
+//            if(!!sceneNode)
+//            {
+//                auto item = treeItemList[sceneNode->getNodeId()];
+//                //item->setSelected(true);
+//                ui->sceneTree->setCurrentItem(item);
+//            }
+        }
+    }
+
+    if (event->type() == QEvent::DragEnter) {
+        auto eventPtr = static_cast<QDragEnterEvent*>(event);
+//        auto sourceItem = eventPtr->source();
+
+        auto selected = ui->sceneTree->selectedItems();
+        if (selected.size() > 0) {
+            long itemId = selected[0]->data(1, Qt::UserRole).toLongLong();
+
+            auto source = nodeList[itemId];
+            lastDraggedHiearchyItemSrc = source;
+
+            qDebug() << "source: " << source->getName();
+        }
+    }
+
+    return QObject::eventFilter(watched, event);
 }
 
 void SceneHeirarchyWidget::treeItemSelected(QTreeWidgetItem* item)
