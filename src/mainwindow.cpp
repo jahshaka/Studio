@@ -203,7 +203,7 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     //scene->rootNode->addChild(cam);//editor camera shouldnt be a part of the scene itself
 
     //scene->setSkyTexture(iris::Texture2D::load("app/content/skies/vp_sky_v3_015.jpg",false));
-    scene->setSkyColor(QColor(100,100,100,255));
+    scene->setSkyColor(QColor(64,64,64,255));
 
     //second node
     auto node = iris::MeshNode::create();
@@ -247,7 +247,7 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     scene->rootNode->addChild(boxNode);
 
     //fog params
-    scene->fogColor = QColor(100,100,100);
+    scene->fogColor = QColor(64,64,64,255);
 
     //sceneView->setScene(scene);
     this->setScene(scene);
