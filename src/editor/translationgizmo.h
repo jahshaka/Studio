@@ -14,14 +14,9 @@ private:
     GizmoHandle* activeHandle;
 
     QOpenGLShaderProgram* handleShader;
+    float scale;
 
 public:
-//    QSharedPointer<iris::Scene> POINTER;
-//    QSharedPointer<iris::SceneNode> lastSelectedNode;
-//    QSharedPointer<iris::SceneNode> currentNode;
-//    QVector3D finalHitPoint;
-//    QVector3D translatePlaneNormal;
-//    float translatePlaneD;
 
     QSharedPointer<iris::Scene> POINTER;
     QSharedPointer<iris::SceneNode> getRootNode() {
@@ -30,6 +25,7 @@ public:
 
     TranslationGizmo() {
 
+        scale = 1.f;
         POINTER = iris::Scene::create();
 
         // todo load one obj
@@ -55,7 +51,7 @@ public:
     }
 
     ~TranslationGizmo() {
-        qDebug() << "destroyed";
+
     }
 
     void update(QVector3D pos, QVector3D r) {
@@ -77,6 +73,10 @@ public:
             } else if (currentNode->getName() == "axis__z") {
                 Offset = QVector3D(0, 0, Offset.z());
             }
+
+            const float gizmoSize = .05f;
+            // https://www.gamedev.net/topic/674723-3d-editor-transform-gizmoshandles/
+            scale = gizmoSize * ((pos - currentNode->pos).length() / qTan(45.0f / 2.0f));
 
             currentNode->pos += Offset;
             lastSelectedNode->pos += Offset;
@@ -111,13 +111,17 @@ public:
                  this->currentNode->getName() == "axis__z"))
         {
             widgetPos.translate(this->currentNode->pos);
+            widgetPos.scale(scale);
             for (int i = 0; i < 3; i++) {
                 handles[i]->gizmoHandle->pos = this->currentNode->pos;
+                handles[i]->gizmoHandle->scale = QVector3D(scale, scale, scale);
             }
         } else if (!!this->lastSelectedNode) {
             widgetPos.translate(this->lastSelectedNode->pos);
+            widgetPos.scale(scale);
             for (int i = 0; i < 3; i++) {
                 handles[i]->gizmoHandle->pos = this->lastSelectedNode->pos;
+                handles[i]->gizmoHandle->scale = QVector3D(scale, scale, scale);
             }
         }
 

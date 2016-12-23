@@ -475,7 +475,6 @@ void SceneViewWidget::setGizmoLoc()
     editorCam->updateCameraMatrices();
     viewportGizmo->lastSelectedNode = selectedNode;
     viewportGizmo = translationGizmo;
-    this->updateScene();
 }
 
 void SceneViewWidget::setGizmoRot()
@@ -483,7 +482,6 @@ void SceneViewWidget::setGizmoRot()
     editorCam->updateCameraMatrices();
     viewportGizmo->lastSelectedNode = selectedNode;
     viewportGizmo = rotationGizmo;
-    this->updateScene();
 }
 
 void SceneViewWidget::setGizmoScale()
@@ -491,5 +489,4 @@ void SceneViewWidget::setGizmoScale()
     editorCam->updateCameraMatrices();
     viewportGizmo->lastSelectedNode = selectedNode;
     viewportGizmo = scaleGizmo;
-    this->updateScene();
 }
