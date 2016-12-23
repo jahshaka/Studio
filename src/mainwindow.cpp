@@ -219,20 +219,20 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
 
     // add test object with basic material
     auto boxNode = iris::MeshNode::create();
-    boxNode->setMesh("assets/models/StanfordBunny.obj");
+    boxNode->setMesh("assets/models/StanfordLucy.obj");
+    boxNode->setName("Stanford Lucy");
     boxNode->scale = QVector3D(2, 2, 2);
 
     auto mat = iris::DefaultMaterial::create();
     boxNode->setMaterial(mat);
-    mat->setDiffuseColor(QColor(255, 200, 200));
-    mat->setDiffuseTexture(iris::Texture2D::load("assets/textures/texture_01.jpg"));
+    mat->setDiffuseColor(QColor(156, 170, 206));
+    mat->setDiffuseTexture(iris::Texture2D::load("assets/textures/TexturesCom_MarbleWhite0058_M.jpg"));
     mat->setShininess(2);
     mat->setAmbientColor(QColor(64, 64, 64));
 
     // lighting
     auto light = iris::LightNode::create();
     light->setLightType(iris::LightType::Point);
-    light->rot = QQuaternion::fromEulerAngles(45, 0, 0);
     scene->rootNode->addChild(light);
     light->setName("Bounce Lamp");
     light->pos = QVector3D(-3, 7, 5);
@@ -240,7 +240,7 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     light->icon = iris::Texture2D::load("app/icons/bulb.png");
 
     auto dlight = iris::LightNode::create();
-    //dlight->setLightType(iris::LightType::Directional);
+    dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
     dlight->setName("Main Lamp");
     dlight->pos = QVector3D(0, 10, 0);

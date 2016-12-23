@@ -52,9 +52,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     //camController = orbitalCam;
 
     editorCam = iris::CameraNode::create();
-    editorCam->pos = QVector3D(0,5,13);
-    //editorCam->pos = QVector3D(0,0,10);
-    editorCam->rot = QQuaternion::fromEulerAngles(-15,0,0);
+    editorCam->pos = QVector3D(0, 5, 7);
+    editorCam->rot = QQuaternion::fromEulerAngles(-20, 0, 0);
     camController->setCamera(editorCam);
 
     viewportMode = ViewportMode::Editor;
@@ -62,13 +61,13 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
 void SceneViewWidget::initialize()
 {
-    translationGizmo = new TranslationGizmo;
+    translationGizmo = new TranslationGizmo(editorCam);
     translationGizmo->createHandleShader();
 
-    rotationGizmo = new RotationGizmo;
+    rotationGizmo = new RotationGizmo(editorCam);
     rotationGizmo->createHandleShader();
 
-    scaleGizmo = new ScaleGizmo;
+    scaleGizmo = new ScaleGizmo(editorCam);
     scaleGizmo->createHandleShader();
 
     viewportGizmo = translationGizmo;
@@ -102,11 +101,6 @@ void SceneViewWidget::updateScene(bool once)
     if (!!viewportGizmo->lastSelectedNode) {
         viewportGizmo->render(renderer->GLA, ViewMatrix, ProjMatrix);
     }
-
-//    if (once) {
-//        viewportGizmo->render(renderer->GLA, ViewMatrix, ProjMatrix);
-//        return;
-//    }
 }
 
 void SceneViewWidget::initializeGL()
@@ -167,18 +161,15 @@ bool SceneViewWidget::eventFilter(QObject *obj, QEvent *event)
 {
     QEvent::Type type = event->type();
 
-    if (type == QEvent::MouseMove)
-    {
+    if (type == QEvent::MouseMove) {
         QMouseEvent* evt = static_cast<QMouseEvent*>(event);
         mouseMoveEvent(evt);
         return false;
-    } else if (type == QEvent::MouseButtonPress)
-    {
+    } else if (type == QEvent::MouseButtonPress) {
         QMouseEvent* evt = static_cast<QMouseEvent*>(event);
         mousePressEvent(evt);
         return false;
-    } else if (type == QEvent::MouseButtonRelease)
-    {
+    } else if (type == QEvent::MouseButtonRelease) {
         QMouseEvent* evt = static_cast<QMouseEvent*>(event);
         mouseReleaseEvent(evt);
         return false;
@@ -242,6 +233,11 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
         editorCam->updateCameraMatrices();
 
         if (!!selectedNode) {
+            viewportGizmo->isGizmoHit(editorCam, e->localPos(), this->calculateMouseRay(e->localPos()));
+            viewportGizmo->isHandleHit();
+        }
+
+        if (!!selectedNode) {
             this->doGizmoPicking(e->localPos());
             // don't pick anything else if we have a widget
             return;
@@ -263,6 +259,7 @@ void SceneViewWidget::mouseReleaseEvent(QMouseEvent *e)
 
     if (e->button() == Qt::LeftButton) {
         // maybe explicitly hard reset stuff related to picking here
+        viewportGizmo->onMouseRelease();
     }
 
     if (camController != nullptr) {
@@ -287,7 +284,7 @@ void SceneViewWidget::doObjectPicking(const QPointF& point)
 
     QList<PickingResult> hitList;
     doScenePicking(scene->getRootNode(), segStart, segEnd, hitList);
-    doLightPicking(segStart,segEnd,hitList);
+    doLightPicking(segStart, segEnd, hitList);
 
     if (hitList.size() == 0) {
         // no hits, deselect last selected object in viewport and hiearchy
@@ -347,8 +344,7 @@ void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& scen
                                      const QVector3D& segEnd,
                                      QList<PickingResult>& hitList)
 {
-    if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh)
-    {
+    if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
         auto triMesh = meshNode->getMesh()->getTriMesh();
 
@@ -383,8 +379,7 @@ void SceneViewWidget::doMeshPicking(const QSharedPointer<iris::SceneNode>& scene
                                     const QVector3D& segEnd,
                                     QList<PickingResult>& hitList)
 {
-    if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh)
-    {
+    if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
         auto triMesh = meshNode->getMesh()->getTriMesh();
 
@@ -409,13 +404,14 @@ void SceneViewWidget::doMeshPicking(const QSharedPointer<iris::SceneNode>& scene
         }
     }
 
-    for(auto child:sceneNode->children)
-    {
-        doScenePicking(child,segStart,segEnd,hitList);
+    for (auto child : sceneNode->children) {
+        doMeshPicking(child, segStart, segEnd, hitList);
     }
 }
 
-void SceneViewWidget::doLightPicking(const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList)
+void SceneViewWidget::doLightPicking(const QVector3D& segStart,
+                                     const QVector3D& segEnd,
+                                     QList<PickingResult>& hitList)
 {
     const float lightRadius = 0.5f;
 
@@ -425,9 +421,12 @@ void SceneViewWidget::doLightPicking(const QVector3D& segStart,const QVector3D& 
     QVector3D hitPoint;
     float t;
 
-    for(auto light:scene->lights)
-    {
-        if(iris::IntersectionHelper::raySphereIntersects(segStart,rayDir,light->pos,lightRadius,t,hitPoint))
+    for (auto light: scene->lights) {
+        if (iris::IntersectionHelper::raySphereIntersects(segStart,
+                                                          rayDir,
+                                                          light->pos,
+                                                          lightRadius,
+                                                          t, hitPoint))
         {
             PickingResult pick;
             pick.hitNode = light.staticCast<iris::SceneNode>();
@@ -436,8 +435,6 @@ void SceneViewWidget::doLightPicking(const QVector3D& segStart,const QVector3D& 
 
             hitList.append(pick);
         }
-    for (auto child : sceneNode->children) {
-        doMeshPicking(child, segStart, segEnd, hitList);
     }
 }
 

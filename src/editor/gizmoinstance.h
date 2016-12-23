@@ -24,6 +24,10 @@ public:
     QVector3D translatePlaneNormal;
     float translatePlaneD;
 
+    QSharedPointer<iris::CameraNode> camera;
+    QSharedPointer<iris::SceneNode> hitNode;
+    QString lastHitAxis;
+
     virtual QSharedPointer<iris::SceneNode> getRootNode() = 0;
 
     virtual void update(QVector3D, QVector3D) = 0;
@@ -42,28 +46,13 @@ public:
         return false;
     }
 
-    virtual bool onMouseMove(int x,int y)
-    {
-        Q_UNUSED(x);
-        Q_UNUSED(y);
-        return false;
-    }
+    virtual void isHandleHit() = 0;
 
     virtual void onMousePress(QVector3D, QVector3D) = 0;
 
-    virtual bool onMouseRelease(int x,int y)
-    {
-        Q_UNUSED(x);
-        Q_UNUSED(y);
-        return false;
-    }
+    virtual void onMouseRelease() = 0;
 
-    virtual bool isGizmoHit(int x,int y)
-    {
-        Q_UNUSED(x);
-        Q_UNUSED(y);
-        return false;
-    }
+    virtual void isGizmoHit(const iris::CameraNodePtr&, const QPointF&, const QVector3D&) = 0;
 };
 
 #endif // GIZMOINSTANCE_H

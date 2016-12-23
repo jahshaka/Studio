@@ -15,6 +15,7 @@ private:
 
     QOpenGLShaderProgram* handleShader;
     float scale;
+    const float gizmoSize = .05f;
 
 public:
 
@@ -23,8 +24,9 @@ public:
         return this->POINTER->getRootNode();
     }
 
-    TranslationGizmo() {
+    TranslationGizmo(const QSharedPointer<iris::CameraNode>& camera) {
 
+        this->camera = camera;
         scale = 1.f;
         POINTER = iris::Scene::create();
 
@@ -74,7 +76,6 @@ public:
                 Offset = QVector3D(0, 0, Offset.z());
             }
 
-            const float gizmoSize = .05f;
             // https://www.gamedev.net/topic/674723-3d-editor-transform-gizmoshandles/
             scale = gizmoSize * ((pos - currentNode->pos).length() / qTan(45.0f / 2.0f));
 
@@ -82,6 +83,18 @@ public:
             lastSelectedNode->pos += Offset;
 
             finalHitPoint = Point;
+        }
+
+        if (lastHitAxis == "axis__x") {
+            handles[(int) AxisHandle::X]->setHandleColor(QColor(245, 245, 0, 200));
+        }
+
+        if (lastHitAxis == "axis__y") {
+            handles[(int) AxisHandle::Y]->setHandleColor(QColor(245, 245, 0, 200));
+        }
+
+        if (lastHitAxis == "axis__z") {
+            handles[(int) AxisHandle::Z]->setHandleColor(QColor(245, 245, 0, 200));
         }
     }
 
@@ -131,9 +144,6 @@ public:
         gl->glClear(GL_DEPTH_BUFFER_BIT);
 
         for (int i = 0; i < 3; i++) {
-//            widgetPos.translate(handles[i]->getHandlePosition());
-//            widgetPos.rotate(handles[i]->getHandleRotation());
-
             handleShader->setUniformValue("u_worldMatrix", widgetPos);
             handleShader->setUniformValue("u_viewMatrix", viewMatrix);
             handleShader->setUniformValue("u_projMatrix", projMatrix);
@@ -161,12 +171,88 @@ public:
         }
     }
 
-    bool onMouseMove(int x, int y) {
+    void isHandleHit() {
+        if (!!hitNode && hitNode->getName() == "axis__x") {
+            handles[(int) AxisHandle::X]->setHandleColor(QColor(245, 245, 0, 200));
+        } else {
+            handles[(int) AxisHandle::X]->setHandleColor(QColor(231, 76, 60));
+        }
 
+        if (!!hitNode && hitNode->getName() == "axis__y") {
+            handles[(int) AxisHandle::Y]->setHandleColor(QColor(245, 245, 0, 200));
+        } else {
+            handles[(int) AxisHandle::Y]->setHandleColor(QColor(46, 224, 113));
+        }
+
+        if (!!hitNode && hitNode->getName() == "axis__z") {
+            handles[(int) AxisHandle::Z]->setHandleColor(QColor(245, 245, 0, 200));
+        } else {
+            handles[(int) AxisHandle::Z]->setHandleColor(QColor(37, 118, 235));
+        }
     }
 
-    bool onMouseRelease(int x, int y) {
+    void onMouseRelease() {
+        handles[(int) AxisHandle::X]->setHandleColor(QColor(231, 76, 60));
+        handles[(int) AxisHandle::Y]->setHandleColor(QColor(46, 224, 113));
+        handles[(int) AxisHandle::Z]->setHandleColor(QColor(37, 118, 235));
+    }
 
+    void isGizmoHit(const iris::CameraNodePtr& camera, const QPointF& pos, const QVector3D& rayDir) {
+        camera->updateCameraMatrices();
+
+        auto segStart = camera->pos;
+        auto segEnd = segStart + rayDir * 512;
+
+        QList<PickingResult> hitList;
+        doMeshPicking(POINTER->getRootNode(), segStart, segEnd, hitList);
+
+        if (hitList.size() == 0) {
+            hitNode = iris::SceneNodePtr();
+            return;
+        }
+
+        qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
+            return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
+        });
+
+        hitNode = hitList.last().hitNode;
+        lastHitAxis = hitNode->getName();
+    }
+
+    void doMeshPicking(const QSharedPointer<iris::SceneNode>& sceneNode,
+                       const QVector3D& segStart,
+                       const QVector3D& segEnd,
+                       QList<PickingResult>& hitList)
+    {
+        if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh)
+        {
+            auto meshNode = sceneNode.staticCast<iris::MeshNode>();
+            auto triMesh = meshNode->getMesh()->getTriMesh();
+
+            // transform segment to local space
+            auto invTransform = meshNode->globalTransform.inverted();
+            auto a = invTransform * segStart;
+            auto b = invTransform * segEnd;
+
+            QList<iris::TriangleIntersectionResult> results;
+            if (int resultCount = triMesh->getSegmentIntersections(a, b, results)) {
+                for (auto triResult : results) {
+                    // convert hit to world space
+                    auto hitPoint = meshNode->globalTransform * triResult.hitPoint;
+
+                    PickingResult pick;
+                    pick.hitNode = sceneNode;
+                    pick.hitPoint = hitPoint;
+                    pick.distanceFromCameraSqrd = (hitPoint - camera->getGlobalPosition()).lengthSquared();
+
+                    hitList.append(pick);
+                }
+            }
+        }
+
+        for (auto child : sceneNode->children) {
+            doMeshPicking(child, segStart, segEnd, hitList);
+        }
     }
 };
 

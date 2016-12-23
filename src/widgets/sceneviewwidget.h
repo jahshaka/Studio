@@ -47,7 +47,8 @@ struct PickingResult
     float distanceFromCameraSqrd;
 };
 
-class SceneViewWidget: public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
+class SceneViewWidget : public QOpenGLWidget,
+                        protected QOpenGLFunctions_3_2_Core
 {
     Q_OBJECT
 
@@ -65,14 +66,10 @@ public:
 
     void setEditorCamera(QSharedPointer<iris::CameraNode> camera);
 
-    /**
-     * switches to the free editor camera controller
-     */
+    // switches to the free editor camera controller
     void setFreeCameraMode();
 
-    /**
-     * switches to the arc ball editor camera controller
-     */
+    //switches to the arc ball editor camera controller
     void setArcBallCameraMode();
 
     bool isVrSupported();
@@ -101,7 +98,10 @@ private slots:
     void resizeGL(int width, int height);
 
 private:
-    void doLightPicking(const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList);
+    void doLightPicking(const QVector3D& segStart,
+                        const QVector3D& segEnd,
+                        QList<PickingResult>& hitList);
+
     // @TODO: use one picking function and pick by mesh type
     void doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,
                         const QVector3D& segStart,
@@ -141,7 +141,8 @@ private:
     iris::FullScreenQuad* fsQuad;
 
 signals:
-    void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl);
+    void initializeGraphics(SceneViewWidget* widget,
+                            QOpenGLFunctions_3_2_Core* gl);
     void sceneNodeSelected(QSharedPointer<iris::SceneNode> sceneNode);
 
 };
