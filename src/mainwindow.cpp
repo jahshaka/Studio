@@ -62,6 +62,7 @@ For more information see the LICENSE file
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/graphics/forwardrenderer.h"
 #include "irisgl/src/graphics/mesh.h"
+#include "irisgl/src/graphics/shader.h"
 #include "irisgl/src/graphics/texture2d.h"
 #include "irisgl/src/graphics/viewport.h"
 #include "irisgl/src/graphics/texture2d.h"
@@ -193,84 +194,68 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     auto scene = iris::Scene::create();
 
     auto cam = iris::CameraNode::create();
-    cam->pos = QVector3D(5, 2, 1);
-    cam->rot = QQuaternion::fromEulerAngles(-60,0,0);
-    //cam->lookAt(QVector3D(0,0,0),QVect);
+    cam->pos = QVector3D(6, 12, 14);
 
     scene->setCamera(cam);
-    //camControl = new EditorCameraController(cam);
-    //scene->rootNode->addChild(cam);//editor camera shouldnt be a part of the scene itself
+    // editor camera shouldnt be a part of the scene itself
+    // scene->rootNode->addChild(cam);
 
-    scene->setSkyTexture(iris::Texture2D::load("app/content/skies/vp_sky_v3_015.jpg",false));
+    scene->setSkyColor(QColor(64, 64, 64, 255));
 
-    //second node
+    // second node
     auto node = iris::MeshNode::create();
-    //boxNode->setMesh("app/models/head.obj");
     node->setMesh("app/models/plane.obj");
-    node->scale = QVector3D(100,1,100);
+    node->scale = QVector3D(1024, 1, 1024);
     node->setName("Ground");
 
     auto m = iris::DefaultMaterial::create();
     node->setMaterial(m);
-    m->setDiffuseColor(QColor(255,255,255));
-    m->setDiffuseTexture(iris::Texture2D::load("app/content/textures/Red Brick Wall.jpg"));
-    m->setSpecularTexture(iris::Texture2D::load("app/content/textures/Red Brick Wall_SPEC.jpg"));
-    m->setNormalTexture(iris::Texture2D::load("app/content/textures/Red Brick Wall_NRM.jpg"));
-    m->setShininess(3);
-    m->setTextureScale(100);
+    m->setDiffuseColor(QColor(255, 255, 255));
+    m->setDiffuseTexture(iris::Texture2D::load("app/content/textures/tile.png"));
+    m->setShininess(0);
+    m->setSpecularColor(QColor(0, 0, 0));
+    m->setTextureScale(500);
     scene->rootNode->addChild(node);
 
-
-    //add test object with basic material
+    // add test object with basic material
     auto boxNode = iris::MeshNode::create();
-    //boxNode->setMesh("app/models/head.obj");
-    //boxNode->setMesh("app/models/box.obj");
-    boxNode->setMesh("assets/models/StanfordBuddha.obj");
-//    boxNode->scale = QVector3D(3.0f, 3.0f, 3.0f);
+    boxNode->setMesh("assets/models/StanfordBunny.obj");
+    boxNode->scale = QVector3D(2, 2, 2);
 
     auto mat = iris::DefaultMaterial::create();
     boxNode->setMaterial(mat);
-    mat->setDiffuseColor(QColor(255,200,200));
+    mat->setDiffuseColor(QColor(255, 200, 200));
     mat->setDiffuseTexture(iris::Texture2D::load("assets/textures/texture_01.jpg"));
     mat->setShininess(2);
+    mat->setAmbientColor(QColor(64, 64, 64));
 
-    //lighting
+    // lighting
     auto light = iris::LightNode::create();
     light->setLightType(iris::LightType::Point);
-    light->rot = QQuaternion::fromEulerAngles(45,0,0);
+    light->rot = QQuaternion::fromEulerAngles(45, 0, 0);
     scene->rootNode->addChild(light);
-    //light->pos = QVector3D(5,5,0);
-    light->setName("Light 2");
-    light->pos = QVector3D(-3,7,5);
-    light->intensity = 1;
+    light->setName("Bounce Lamp");
+    light->pos = QVector3D(-3, 7, 5);
+    light->intensity = .21;
     light->icon = iris::Texture2D::load("app/icons/bulb.png");
-
-    auto light2 = iris::LightNode::create();
-    light2->setLightType(iris::LightType::Point);
-    scene->rootNode->addChild(light2);
-    //light->pos = QVector3D(5,5,0);
-    light2->setName("Light");
-    light2->pos = QVector3D(3,3,2);
-    light2->intensity = 0.74f;
-    light2->color = QColor(176, 211, 255);
-    light2->icon = iris::Texture2D::load("app/icons/bulb.png");
 
     auto dlight = iris::LightNode::create();
     //dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
-    //light->pos = QVector3D(5,5,0);
-    dlight->setName("Dir Light");
-    dlight->pos = QVector3D(0,10,0);
+    dlight->setName("Main Lamp");
+    dlight->pos = QVector3D(0, 10, 0);
     dlight->intensity = 1;
     dlight->icon = iris::Texture2D::load("app/icons/bulb.png");
 
-
     scene->rootNode->addChild(boxNode);
 
-    //sceneView->setScene(scene);
+    // fog params
+    scene->fogColor = QColor(64, 64, 64, 255);
+
+    auto shader = iris::Shader::load(gl, "app/shaders/simple.vert", "app/shaders/simple.frag");
+
     this->setScene(scene);
     setupVrUi();
-
 }
 
 void MainWindow::cameraTypeChanged(QString type)
