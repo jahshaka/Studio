@@ -18,7 +18,7 @@ For more information see the LICENSE file
 namespace iris
 {
 
-Billboard::Billboard(QOpenGLFunctions_3_2_Core* gl)
+Billboard::Billboard(QOpenGLFunctions_3_2_Core* gl,float size)
 {
     //todo: write shaders in script
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
@@ -40,23 +40,23 @@ Billboard::Billboard(QOpenGLFunctions_3_2_Core* gl)
     QVector<float> data;
 
     //TRIANGLE 1
-    data.append(-1);data.append(-1);data.append(0);
+    data.append(-size);data.append(-size);data.append(0);
     data.append(0);data.append(0);
 
-    data.append(1);data.append(-1);data.append(0);
+    data.append(size);data.append(-size);data.append(0);
     data.append(1);data.append(0);
 
-    data.append(-1);data.append(1);data.append(0);
+    data.append(-size);data.append(size);data.append(0);
     data.append(0);data.append(1);
 
     //TRIANGLE 2
-    data.append(-1);data.append(1);data.append(0);
+    data.append(-size);data.append(size);data.append(0);
     data.append(0);data.append(1);
 
-    data.append(1);data.append(-1);data.append(0);
+    data.append(size);data.append(-size);data.append(0);
     data.append(1);data.append(0);
 
-    data.append(1);data.append(1);data.append(0);
+    data.append(size);data.append(size);data.append(0);
     data.append(1);data.append(1);
 
     vbo = new QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);

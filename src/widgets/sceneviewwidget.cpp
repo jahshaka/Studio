@@ -19,6 +19,7 @@
 #include "../irisgl/src/graphics/viewport.h"
 #include "../irisgl/src/core/scene.h"
 #include "../irisgl/src/graphics/utils/fullscreenquad.h"
+#include "../irisgl/src/math/intersectionhelper.h"
 
 
 #include "../editor/cameracontrollerbase.h"
@@ -290,18 +291,13 @@ void SceneViewWidget::doObjectPicking()
     auto segEnd = segStart+(rayDir*1000);//todo: remove magic number
 
     QList<PickingResult> hitList;
-    doPicking(scene->getRootNode(),segStart,segEnd,hitList);
+    doMeshPicking(scene->getRootNode(),segStart,segEnd,hitList);
+    doLightPicking(segStart,segEnd,hitList);
 
     //Find the closest hit and emit signal
     if(hitList.size()==0)
     {
         emit sceneNodeSelected(iris::SceneNodePtr());//no hits, deselect object
-        return;
-    }
-
-    if(hitList.size()==1)
-    {
-        emit sceneNodeSelected(hitList[0].hitNode);
         return;
     }
 
@@ -314,7 +310,7 @@ void SceneViewWidget::doObjectPicking()
     emit sceneNodeSelected(hitList.last().hitNode);
 }
 
-void SceneViewWidget::doPicking(const QSharedPointer<iris::SceneNode>& sceneNode,const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList)
+void SceneViewWidget::doMeshPicking(const QSharedPointer<iris::SceneNode>& sceneNode,const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList)
 {
 
     if(sceneNode->getSceneNodeType()==iris::SceneNodeType::Mesh)
@@ -327,21 +323,6 @@ void SceneViewWidget::doPicking(const QSharedPointer<iris::SceneNode>& sceneNode
         auto a = invTransform*segStart;
         auto b = invTransform*segEnd;
 
-        //auto dist = a.distanceToPoint(b);
-        //qDebug()<<"segment distance: " <<dist;
-
-        //if(triMesh->isHitBySegment(segStart,segEnd))
-        /*
-        QVector3D hitPoint;
-        if(triMesh->isHitBySegment(a,b,hitPoint))
-        {
-            //return sceneNode;
-            hitList.append({
-                            sceneNode,
-                            hitPoint
-                        });
-        }
-        */
 
         QList<iris::TriangleIntersectionResult> results;
         if(int resultCount = triMesh->getSegmentIntersections(a,b,results))
@@ -350,18 +331,7 @@ void SceneViewWidget::doPicking(const QSharedPointer<iris::SceneNode>& sceneNode
             {
                 //convert hit to world space
                 auto hitPoint = meshNode->globalTransform*triResult.hitPoint;
-                /*
-                auto dist = segStart.distanceToPoint(segEnd);
-                qDebug()<<"start: "<<segStart;
-                qDebug()<<"end: "<<segEnd;
-                qDebug()<<"t: "<<triResult.t;
-                qDebug()<<"segment distance: " <<dist;
-                auto hitPoint = segStart + (segEnd-segStart)*
-                        triResult.t;
-                qDebug()<<sceneNode->name<<" hit: " <<hitPoint;
 
-                qDebug()<<"cam pos: "<<editorCam->getGlobalPosition();
-                */
                 PickingResult pick;
                 pick.hitNode = sceneNode;
                 pick.hitPoint = hitPoint;
@@ -374,7 +344,31 @@ void SceneViewWidget::doPicking(const QSharedPointer<iris::SceneNode>& sceneNode
 
     for(auto child:sceneNode->children)
     {
-        doPicking(child,segStart,segEnd,hitList);
+        doMeshPicking(child,segStart,segEnd,hitList);
+    }
+}
+
+void SceneViewWidget::doLightPicking(const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList)
+{
+    const float lightRadius = 0.5f;
+
+    auto rayDir = (segEnd-segStart);
+    float segLengthSqrd = rayDir.lengthSquared();
+    rayDir.normalize();
+    QVector3D hitPoint;
+    float t;
+
+    for(auto light:scene->lights)
+    {
+        if(iris::IntersectionHelper::raySphereIntersects(segStart,rayDir,light->pos,lightRadius,t,hitPoint))
+        {
+            PickingResult pick;
+            pick.hitNode = light.staticCast<iris::SceneNode>();
+            pick.hitPoint = hitPoint;
+            pick.distanceFromCameraSqrd = (hitPoint-editorCam->getGlobalPosition()).lengthSquared();
+
+            hitList.append(pick);
+        }
     }
 }
 

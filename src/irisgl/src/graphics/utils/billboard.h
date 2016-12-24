@@ -27,7 +27,7 @@ class Billboard
     QOpenGLShaderProgram* program;
 
 public:
-    Billboard(QOpenGLFunctions_3_2_Core* gl);
+    Billboard(QOpenGLFunctions_3_2_Core* gl,float size=0.5f);
     void draw(QOpenGLFunctions_3_2_Core* gl);
 };
 

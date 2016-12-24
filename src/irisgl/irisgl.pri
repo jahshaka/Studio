@@ -38,7 +38,8 @@ HEADERS += \
     $$PWD/src/math/mathhelper.h \
     $$PWD/src/irisglfwd.h \
     $$PWD/src/graphics/shader.h \
-    $$PWD/src/irisgl.h
+    $$PWD/src/irisgl.h \
+    $$PWD/src/math/intersectionhelper.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
