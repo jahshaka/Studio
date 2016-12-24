@@ -34,13 +34,11 @@ struct Light {
     vec3 position;
     vec3 ambient;
     vec4 color;
-    float range;
+    float distance;
     float intensity;
     vec3 direction;
-    float constantAtten;
-    float linearAtten;
-    float quadraticAtten;
     float cutOffAngle;
+    float cutOffSoftness;
 };
 uniform Light u_lights[MAX_LIGHTS];
 uniform int u_lightCount;
@@ -95,6 +93,7 @@ void main()
     }
 
     vec3 v = normalize(u_eyePos-v_worldPos);
+    float spotCutoff = 1.0;
 
     for(int i=0;i<u_lightCount;i++)
     {
@@ -111,9 +110,8 @@ void main()
             if(ndl>0)
             {
                 float lightDist = length(lightDir);
-                atten = 1.0/(u_lights[i].constantAtten +
-                        u_lights[i].linearAtten * lightDist +
-                        u_lights[i].quadraticAtten * lightDist * lightDist);
+
+                atten = 1.0-smoothstep(0.0,u_lights[i].distance,lightDist);
 
                 //attenuation
                 //https://developer.valvesoftware.com/wiki/Constant-Linear-Quadratic_Falloff
@@ -124,10 +122,12 @@ void main()
 
             if(u_lights[i].type==TYPE_SPOT)
             {
-                //todo: soft edges for spot cut-off
-                if (degrees(acos(dot(-l, u_lights[i].direction))) > u_lights[i].cutOffAngle)
-                //if (degrees(acos(dot(-l, u_lights[i].direction))) > 30)
-                    ndl = 0.0;
+                float cos_angle = degrees(acos(dot(-l, u_lights[i].direction)));
+                spotCutoff = clamp((cos_angle-u_lights[i].cutOffAngle)/
+                                   (-u_lights[i].cutOffSoftness)
+                                  ,
+                                  0.0,1.0);
+                ndl = ndl*spotCutoff;
             }
 
 
@@ -144,7 +144,7 @@ void main()
         if (ndl > 0.0 && u_material.shininess > 0.0) {
             float normFactor = (u_material.shininess + 2.0) / 2.0;//todo: find a better alternative
             vec3 r = reflect(-l, n);
-            spec = normFactor*pow(max(dot(r, v), 0.0), u_material.shininess);
+            spec = normFactor*pow(max(dot(r, v), 0.0), u_material.shininess)*spotCutoff;
             //spec = pow(max(dot(r, v), 0.0), 0.7f);
         }
 

@@ -291,7 +291,7 @@ void SceneViewWidget::doObjectPicking()
     auto segEnd = segStart+(rayDir*1000);//todo: remove magic number
 
     QList<PickingResult> hitList;
-    doMeshPicking(scene->getRootNode(),segStart,segEnd,hitList);
+    doScenePicking(scene->getRootNode(),segStart,segEnd,hitList);
     doLightPicking(segStart,segEnd,hitList);
 
     //Find the closest hit and emit signal
@@ -310,7 +310,7 @@ void SceneViewWidget::doObjectPicking()
     emit sceneNodeSelected(hitList.last().hitNode);
 }
 
-void SceneViewWidget::doMeshPicking(const QSharedPointer<iris::SceneNode>& sceneNode,const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList)
+void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList)
 {
 
     if(sceneNode->getSceneNodeType()==iris::SceneNodeType::Mesh)
@@ -344,7 +344,7 @@ void SceneViewWidget::doMeshPicking(const QSharedPointer<iris::SceneNode>& scene
 
     for(auto child:sceneNode->children)
     {
-        doMeshPicking(child,segStart,segEnd,hitList);
+        doScenePicking(child,segStart,segEnd,hitList);
     }
 }
 

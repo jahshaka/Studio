@@ -94,7 +94,7 @@ private slots:
     void resizeGL(int width, int height);
 
 private:
-    void doMeshPicking(const QSharedPointer<iris::SceneNode>& sceneNode,const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList);
+    void doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList);
     void doLightPicking(const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList);
 
     void makeObject();

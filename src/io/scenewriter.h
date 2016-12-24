@@ -167,7 +167,7 @@ private:
     {
         sceneNodeObject["lightType"] = getLightNodeTypeName(lightNode->lightType);
         sceneNodeObject["intensity"] = lightNode->intensity;
-        sceneNodeObject["radius"] = lightNode->radius;
+        sceneNodeObject["distance"] = lightNode->distance;
         sceneNodeObject["spotCutOff"] = lightNode->spotCutOff;
     }
 
