@@ -35,7 +35,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
     format.setDepthBufferSize(32);
     //format.setMajorVersion(3);
     //format.setMinorVersion(3);
-    format.setSamples(0);
+    format.setSamples(1);
 
     setFormat(format);
     setMouseTracking(true);
@@ -175,12 +175,14 @@ void SceneViewWidget::renderScene()
     //glClearColor(1.0f,1.0f,1.0f,1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    QMatrix4x4 view,proj;
+
     if(!!renderer && !!scene)
     {
         scene->update(1.0f/60);
 
         if(viewportMode==ViewportMode::Editor)
-            renderer->renderScene(this->context(),viewport);
+            renderer->renderScene(this->context(),viewport,view,proj);
         else
             renderer->renderSceneVr(this->context(),viewport);
     }

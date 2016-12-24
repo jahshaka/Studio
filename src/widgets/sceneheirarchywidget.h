@@ -3,6 +3,7 @@
 
 #include <QWidget>
 #include <QMap>
+#include <QEvent>
 
 namespace Ui {
 class SceneHeirarchyWidget;
@@ -31,6 +32,9 @@ public:
 
     void setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode);
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event);
+
 protected slots:
     void treeItemSelected(QTreeWidgetItem* item);
     void treeItemChanged(QTreeWidgetItem* item,int index);
@@ -40,27 +44,15 @@ protected slots:
     void deleteNode();
     void duplicateNode();
 
-    /*
-    void addTorus();
-    void addCube();
-    void addSphere();
-    void addCylinder();
-    void addTexturedPlane();
-    void addPointLight();
-    void addSpotLight();
-    void addDirectionalLight();
-    void addMesh();
-    void addViewPoint();
-    */
-
 private:
     void repopulateTree();
     void populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode);
 
-    //maps scene nodes to their widgetitems
-    //QMap<long,QTreeWidgetItem*> nodeList;
-    QMap<long,QSharedPointer<iris::SceneNode>> nodeList;
-    QMap<long,QTreeWidgetItem*> treeItemList;
+    // maps scene nodes to their widgetitems
+    QMap<long, QSharedPointer<iris::SceneNode>> nodeList;
+    QMap<long, QTreeWidgetItem*> treeItemList;
+
+    QSharedPointer<iris::SceneNode> lastDraggedHiearchyItemSrc;
 
 private:
     Ui::SceneHeirarchyWidget *ui;
