@@ -192,8 +192,10 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
             mat->setUniformValue(lightPrefix+"type", (int)light->lightType);
             mat->setUniformValue(lightPrefix+"position", light->globalTransform.column(3).toVector3D());
             //mat->setUniformValue(lightPrefix+"direction", light->getDirection());
+            mat->setUniformValue(lightPrefix+"distance", light->distance);
             mat->setUniformValue(lightPrefix+"direction", light->getLightDir());
             mat->setUniformValue(lightPrefix+"cutOffAngle", light->spotCutOff);
+            mat->setUniformValue(lightPrefix+"cutOffSoftness", light->spotCutOffSoftness);
             mat->setUniformValue(lightPrefix+"intensity", light->intensity);
             mat->setUniformValue(lightPrefix+"color", light->color);
 

@@ -46,10 +46,10 @@ protected slots:
     void lightIntensityChanged(float intensity);
 
     /**
-     * Sets the light's radius
-     * @param radius
+     * Sets the light's distance
+     * @param distance
      */
-    void lightRadiusChanged(float radius);
+    void lightDistanceChanged(float distance);
 
     /**
      * Sets the light's spot cutoff angle. Only valid for spotlights.
@@ -57,13 +57,16 @@ protected slots:
      */
     void lightSpotCutoffChanged(float spotCutOff);
 
+    void lightSpotCutoffSoftnessChanged(float spotCutOffSoftness);
+
 private:
 
     QSharedPointer<iris::LightNode> lightNode;
 
     ColorValueWidget* lightColor;
-    HFloatSlider* radius;
+    HFloatSlider* distance;
     HFloatSlider* spotCutOff;
+    HFloatSlider* spotCutOffSoftness;
     HFloatSlider* intensity;
     //EnumPicker* lightTypePicker;
 };
