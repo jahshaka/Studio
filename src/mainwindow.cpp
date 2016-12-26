@@ -236,7 +236,7 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     mat->setShininess(2);
 
     auto dlight = iris::LightNode::create();
-    dlight->setLightType(iris::LightType::Directional);
+    //dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
     dlight->setName("Main Light");
     dlight->pos = QVector3D(0,10,0);
