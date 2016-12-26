@@ -111,7 +111,9 @@ void main()
             {
                 float lightDist = length(lightDir);
 
-                atten = 1.0-smoothstep(0.0,u_lights[i].distance,lightDist);
+                //atten = 1.0-smoothstep(0.0,u_lights[i].distance,lightDist);
+                atten = clamp((lightDist-u_lights[i].distance)/(-u_lights[i].distance),0.0,1.0);
+                atten = atten*atten;
 
                 //attenuation
                 //https://developer.valvesoftware.com/wiki/Constant-Linear-Quadratic_Falloff
