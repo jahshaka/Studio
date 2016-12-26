@@ -29,12 +29,24 @@ enum class KeyFrameType
     String
 };
 
+enum class TangentType
+{
+    Free,
+    Linear
+};
+
 template<typename T>
 class Key
 {
 public:
     T value;
     double time;
+
+    TangentType leftTangent;
+    TangentType leftTangent;
+
+    QVector2D leftHandle;
+    QVector2D rightHandle;
 
     inline bool operator< ( const T& rhs)
     {

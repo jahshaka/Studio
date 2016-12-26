@@ -28,9 +28,17 @@ namespace iris
 
 class KeyFrameWidget:public QWidget
 {
+    /**
+     * viewLeft and viewRight are like the "camera" of the keyframes
+     * they are used for translating keys from their local "key space"
+     * to viewport space and vice versa.
+     */
+    float viewLeft;
+    float viewRight;
+
 private:
-    int timeToPos(float timeInSeconds);
-    float posToTime(int xpos);
+    float screenSpaceToKeySpace(float x);
+    float keySpaceToScreenSpace(float x);
 
 private:
     QColor bgColor;
@@ -50,14 +58,14 @@ private:
     bool dragging;
     int scaleRatio;
 
-    QSharedPointer<iris::SceneNode> obj;
+    iris::SceneNodePtr obj;
     QPoint mousePos;
     QPoint clickPos;
 
 public:
     KeyFrameWidget(QWidget* parent);
 
-    void setSceneNode(QSharedPointer<iris::SceneNode> node);
+    void setSceneNode(iris::SceneNodePtr node);
     void setMaxTimeInSeconds(float time);
     void adjustLength();
 

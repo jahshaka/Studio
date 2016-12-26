@@ -48,6 +48,8 @@ public:
     SceneNodePtr parent;
     QList<SceneNodePtr> children;
 
+    KeyFrameSetPtr keyFrameSet;
+
     // editor specific
     bool duplicable;
     bool visible;

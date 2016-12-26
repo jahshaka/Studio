@@ -30,6 +30,7 @@ class Billboard;
 class FullScreenQuad;
 class DefaultMaterial;
 class ForwardRenderer;
+class KeyFrameSet;
 
 typedef QSharedPointer<Shader> ShaderPtr;
 typedef QSharedPointer<Scene> ScenePtr;
@@ -43,6 +44,7 @@ typedef QSharedPointer<DefaultSkyMaterial> DefaultSkyMaterialPtr;
 typedef QSharedPointer<Texture2D> Texture2DPtr;
 typedef QSharedPointer<Texture> TexturePtr;
 typedef QSharedPointer<ForwardRenderer> ForwardRendererPtr;
+typedef QSharedPointer<KeyFrameSet> KeyFrameSetPtr;
 
 
 }

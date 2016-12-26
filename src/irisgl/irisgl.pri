@@ -38,7 +38,9 @@ HEADERS += \
     $$PWD/src/irisglfwd.h \
     $$PWD/src/graphics/shader.h \
     $$PWD/src/irisgl.h \
-    $$PWD/src/math/intersectionhelper.h
+    $$PWD/src/math/intersectionhelper.h \
+    $$PWD/src/animation/keyframeset.h \
+    $$PWD/src/math/bezierhelper.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)

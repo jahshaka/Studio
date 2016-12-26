@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <vector>
 //#include "../scenegraph/scenenodes.h"
 #include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/animation/keyframeset.h"
 #include "keyframewidget.h"
 #include <QMenu>
 
@@ -78,9 +79,10 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
     int frameHeight = 20;
     int ypos = -20;
 
-    /*
-    if(obj!=nullptr)
+
+    if(obj!=nullptr && !!obj->keyFrameSet)
     {
+        /*
         if(obj->transformAnim!=nullptr)
         {
             if(obj->transformAnim->pos->hasKeys())
@@ -91,20 +93,18 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
 
             if(obj->transformAnim->scale->hasKeys())
                 drawFrame(obj->transformAnim->scale,&paint,ypos+=frameHeight);
-        }
+        }*/
 
-        if(obj->sceneNodeType == SceneNodeType::Light)
+        auto frameSet = obj->keyFrameSet;
+
+        for(auto frame:frameSet->keyFrames)
         {
-            auto light = static_cast<LightNode*>(obj);
-            if(light->lightAnim->color->hasKeys())
-                drawFrame(light->lightAnim->color,&paint,ypos+=frameHeight);
 
-            if(light->lightAnim->intensity->hasKeys())
-                drawFrame(light->lightAnim->intensity,&paint,ypos+=frameHeight);
         }
+
 
     }
-    */
+
 
 }
 
@@ -140,11 +140,11 @@ void KeyFrameWidget::mouseReleaseEvent(QMouseEvent* evt)
     dragging = false;
     mousePos = evt->pos();
 
-    qDebug()<<"Mouse Release"<<endl;
+    //qDebug()<<"Mouse Release"<<endl;
 
     if(mousePos==clickPos && evt->button() == Qt::RightButton)
     {
-        qDebug()<<"Context Menu"<<endl;
+        //qDebug()<<"Context Menu"<<endl;
 
         //show context menu
         QMenu menu;
@@ -227,4 +227,14 @@ float KeyFrameWidget::distanceSquared(float x1,float y1,float x2,float y2)
     float dx = x2-x1;
     float dy = y2-y1;
     return dx*dx + dy*dy;
+}
+
+float KeyFrameWidget::screenSpaceToKeySpace(float x)
+{
+    return x/100;
+}
+
+float KeyFrameWidget::keySpaceToScreenSpace(float x)
+{
+    return x*100;
 }
