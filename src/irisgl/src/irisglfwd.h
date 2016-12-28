@@ -5,6 +5,7 @@
  */
 
 #include <QSharedPointer>
+#include "animation/keyframeanimation.h"
 
 namespace iris
 {
@@ -45,6 +46,7 @@ typedef QSharedPointer<Texture2D> Texture2DPtr;
 typedef QSharedPointer<Texture> TexturePtr;
 typedef QSharedPointer<ForwardRenderer> ForwardRendererPtr;
 typedef QSharedPointer<KeyFrameSet> KeyFrameSetPtr;
+typedef QSharedPointer<FloatKeyFrame> FloatKeyFramePtr;
 
 
 }

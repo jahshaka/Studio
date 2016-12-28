@@ -55,7 +55,7 @@ For more information see the LICENSE file
 #include "helpers/collisionhelper.h"
 
 #include "widgets/sceneviewwidget.h"
-#include "irisgl/src/irisgl.h"
+//#include "irisgl/src/irisgl.h"
 #include "irisgl/src/scenegraph/meshnode.h"
 #include "irisgl/src/scenegraph/cameranode.h"
 #include "irisgl/src/scenegraph/lightnode.h"
@@ -66,6 +66,8 @@ For more information see the LICENSE file
 #include "irisgl/src/graphics/texture2d.h"
 #include "irisgl/src/graphics/viewport.h"
 #include "irisgl/src/graphics/texture2d.h"
+#include "irisgl/src/animation/keyframeset.h"
+#include "irisgl/src/animation/keyframeanimation.h"
 
 #include "core/materialpreset.h"
 
@@ -254,6 +256,7 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     dlight->pos = QVector3D(0, 10, 0);
     dlight->intensity = 1;
     dlight->icon = iris::Texture2D::load("app/icons/bulb.png");
+
 
     scene->rootNode->addChild(boxNode);
 
@@ -629,6 +632,7 @@ void MainWindow::sceneNodeSelected(QSharedPointer<iris::SceneNode> sceneNode)
     sceneView->setSelectedNode(sceneNode);
     ui->sceneNodeProperties->setSceneNode(sceneNode);
     ui->sceneHierarchy->setSelectedNode(sceneNode);
+    ui->animationtimeline->setSceneNode(sceneNode);
 }
 
 

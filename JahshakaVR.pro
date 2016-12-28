@@ -176,7 +176,8 @@ FORMS    += \
     src/widgets/sceneheirarchywidget.ui \
     src/widgets/skypresets.ui \
     src/widgets/filepickerwidget.ui \
-    src/widgets/checkboxproperty.ui
+    src/widgets/checkboxproperty.ui \
+    src/widgets/keyframelabelwidget.ui
 
 RESOURCES += \
     shaders.qrc \

@@ -46,7 +46,7 @@ public:
     explicit AnimationWidget(QWidget *parent = 0);
     ~AnimationWidget();
 
-    void setSceneNode(QSharedPointer<iris::SceneNode> node);
+    void setSceneNode(iris::SceneNodePtr node);
 
     void setMainTimelineWidget(TimelineWidget* tl)
     {

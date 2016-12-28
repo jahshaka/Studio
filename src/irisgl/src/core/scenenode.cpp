@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "scenenode.h"
 #include "scene.h"
+#include "../animation/keyframeset.h"
 
 namespace iris
 {
@@ -31,6 +32,8 @@ SceneNode::SceneNode():
 
     localTransform.setToIdentity();
     globalTransform.setToIdentity();
+
+    keyFrameSet = KeyFrameSet::create();
 }
 
 SceneNodePtr SceneNode::create()

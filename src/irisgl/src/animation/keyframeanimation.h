@@ -43,7 +43,7 @@ public:
     double time;
 
     TangentType leftTangent;
-    TangentType leftTangent;
+    TangentType rightTangent;
 
     QVector2D leftHandle;
     QVector2D rightHandle;
@@ -223,11 +223,15 @@ public:
 
     virtual ~KeyFrame()
     {
+        for(auto iter = keys.begin();iter!=keys.end();iter++)
+            delete *iter;
     }
 
 protected:
     virtual T interpolate(T a,T b,float t)=0;
 };
+
+typedef Key<float> FloatKey;
 
 class FloatKeyFrame:public KeyFrame<float>
 {

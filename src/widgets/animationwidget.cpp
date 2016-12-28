@@ -16,6 +16,8 @@ For more information see the LICENSE file
 #include <QTimer>
 #include <QElapsedTimer>
 #include <QTime>
+#include "../irisgl/src/animation/keyframeanimation.h"
+#include "../irisgl/src/animation/keyframeset.h"
 
 
 AnimationWidget::AnimationWidget(QWidget *parent) :
@@ -209,50 +211,52 @@ void AnimationWidget::repaintViews()
 
 void AnimationWidget::addPosKey()
 {
-    /*
-    if(node==nullptr)
+    if(!node)
         return;
 
     float seconds = ui->timeline->getTimeAtCursor();
     QVector3D pos = node->pos;
-    node->transformAnim->pos->addKey(pos,seconds);
+    //node->transformAnim->pos->addKey(pos,seconds);
 
-    node->updateAnimPathFromKeyFrames();
+    auto frameSet = node->keyFrameSet;
+    frameSet->getOrCreateFrame("position.x")->addKey(seconds,pos.x());
+    frameSet->getOrCreateFrame("position.y")->addKey(seconds,pos.y());
+    frameSet->getOrCreateFrame("position.z")->addKey(seconds,pos.z());
+
+    //node->updateAnimPathFromKeyFrames();
 
     repaintViews();
-    */
 }
 
 void AnimationWidget::addRotKey()
 {
-    /*
-    if(node==nullptr)
+    if(!node)
         return;
 
     float seconds = ui->timeline->getTimeAtCursor();
-    //QQuaternion rot = node->rot;
-    node->transformAnim->rot->addKey(node->rot,seconds);
+    QVector3D rot = node->rot.toEulerAngles();
 
-    //need the transform in euler so we get it from the ui directly
-    //node stores rot in quaternions
-
-
+    auto frameSet = node->keyFrameSet;
+    frameSet->getOrCreateFrame("rot.x")->addKey(seconds,rot.x());
+    frameSet->getOrCreateFrame("rot.y")->addKey(seconds,rot.y());
+    frameSet->getOrCreateFrame("rot.z")->addKey(seconds,rot.z());
     repaintViews();
-    */
 }
 
 void AnimationWidget::addScaleKey()
 {
-    /*
-    if(node==nullptr)
+    if(!node)
         return;
 
     float seconds = ui->timeline->getTimeAtCursor();
     QVector3D scale = node->scale;
-    node->transformAnim->scale->addKey(scale,seconds);
+
+    auto frameSet = node->keyFrameSet;
+    frameSet->getOrCreateFrame("scale.x")->addKey(seconds,scale.x());
+    frameSet->getOrCreateFrame("scale.y")->addKey(seconds,scale.y());
+    frameSet->getOrCreateFrame("scale.z")->addKey(seconds,scale.z());
 
     repaintViews();
-    */
 }
 
 void AnimationWidget::addPosRotKey()

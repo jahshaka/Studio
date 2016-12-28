@@ -17,6 +17,7 @@ For more information see the LICENSE file
 //#include "../scenegraph/scenenodes.h"
 #include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/animation/keyframeset.h"
+#include "../irisgl/src/animation/keyframeanimation.h"
 #include "keyframewidget.h"
 #include <QMenu>
 
@@ -42,6 +43,12 @@ KeyFrameWidget::KeyFrameWidget(QWidget* parent):
     scaleRatio = 30;
 
     //obj = nullptr;
+    rangeStart = 0;
+    rangeEnd = 100;
+
+    leftButtonDown = false;
+    middleButtonDown = false;
+    rightButtonDown = false;
 }
 
 void KeyFrameWidget::setSceneNode(iris::SceneNodePtr node)
@@ -99,13 +106,46 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
 
         for(auto frame:frameSet->keyFrames)
         {
-
+            drawFrame(paint,frame,ypos+=frameHeight);
         }
 
 
     }
 
 
+}
+
+void KeyFrameWidget::drawFrame(QPainter& paint,iris::FloatKeyFrame* keyFrame,int yTop)
+{
+    float penSize = 14;
+    float penSizeSquared = 7*7;
+
+    QPen pen(QColor::fromRgb(255,255,255));
+    pen.setWidth(penSize);
+    pen.setCapStyle(Qt::RoundCap);
+
+    QPen highlightPen(QColor::fromRgb(100,100,100));
+    highlightPen.setWidth(penSize);
+    highlightPen.setCapStyle(Qt::RoundCap);
+
+    for(auto key:keyFrame->keys)
+    {
+        int xpos = this->timeToPos(key->time);
+
+        float distSqrd = distanceSquared(xpos,yTop+10,mousePos.x(),mousePos.y());
+
+        if(distSqrd < penSizeSquared)
+        {
+            paint.setPen(highlightPen);
+            paint.drawPoint(xpos,yTop+10);//frame height should be 10
+        }
+        else
+        {
+            paint.setPen(pen);
+            paint.drawPoint(xpos,yTop+10);//frame height should be 10
+        }
+
+    }
 }
 
 void KeyFrameWidget::drawBackgroundLines(QPainter& paint)
@@ -132,6 +172,18 @@ void KeyFrameWidget::mousePressEvent(QMouseEvent* evt)
     dragging = true;
     mousePos = evt->pos();
     clickPos = mousePos;
+
+    if(evt->button() == Qt::LeftButton)
+        leftButtonDown = true;
+    if(evt->button() == Qt::MiddleButton)
+        middleButtonDown = true;
+    if(evt->button() == Qt::RightButton)
+        rightButtonDown = true;
+
+    if(mousePos==clickPos && evt->button() == Qt::LeftButton)
+    {
+        this->selectedKey = this->getSelectedKey(mousePos.x(),mousePos.y());
+    }
 }
 
 void KeyFrameWidget::mouseReleaseEvent(QMouseEvent* evt)
@@ -152,21 +204,34 @@ void KeyFrameWidget::mouseReleaseEvent(QMouseEvent* evt)
         menu.addAction("delete");
         //menu.exec();
     }
+
+    if(evt->button() == Qt::LeftButton)
+        leftButtonDown = false;
+    if(evt->button() == Qt::MiddleButton)
+        middleButtonDown = false;
+    if(evt->button() == Qt::RightButton)
+        rightButtonDown = false;
+
+
 }
 
 void KeyFrameWidget::mouseMoveEvent(QMouseEvent* evt)
 {
-    mousePos = evt->pos();
-
     if(dragging)
     {
         //assuming this is local
         int x = evt->x();
-        cursorPos = x;
-
-
     }
 
+    if(leftButtonDown && selectedKey!=nullptr)
+    {
+        //key dragging
+        auto timeDiff = posToTime(evt->x())-posToTime(cursorPos);
+        selectedKey->time+=timeDiff;
+    }
+
+    cursorPos = evt->x();
+    mousePos = evt->pos();
     this->repaint();
 }
 
@@ -237,4 +302,29 @@ float KeyFrameWidget::screenSpaceToKeySpace(float x)
 float KeyFrameWidget::keySpaceToScreenSpace(float x)
 {
     return x*100;
+}
+
+iris::FloatKey* KeyFrameWidget::getSelectedKey(int x,int y)
+{
+    float penSizeSquared = 7*7;
+
+    int frameHeight = 20;
+    int ypos = -20;
+    for(auto keyFrame:obj->keyFrameSet->keyFrames)
+    {
+        ypos+=frameHeight;
+        for(auto key:keyFrame->keys)
+        {
+            int xpos = this->timeToPos(key->time);
+
+            float distSqrd = distanceSquared(xpos,ypos+10,x,y);
+
+            if(distSqrd < penSizeSquared)
+            {
+                return key;
+            }
+        }
+    }
+
+    return nullptr;
 }
