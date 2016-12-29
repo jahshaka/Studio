@@ -101,6 +101,7 @@ public:
 
     QVector3D getGlobalPosition();
     QMatrix4x4 getGlobalTransform();
+    QMatrix4x4 getLocalTransform();
 
     virtual void update(float dt);
 

@@ -76,6 +76,9 @@ public:
     void setViewportMode(ViewportMode viewportMode);
     ViewportMode getViewportMode();
 
+    void setTransformOrientationLocal();
+    void setTransformOrientationGlobal();
+
     void setGizmoLoc();
     void setGizmoRot();
     void setGizmoScale();
@@ -123,6 +126,7 @@ private:
 
     QPointF prevMousePos;
     bool dragging;
+    bool initialH;
 
     void initialize();
 

@@ -525,7 +525,7 @@ background-color: rgb(52, 52, 52);
            <number>0</number>
           </property>
           <item>
-           <widget class="QToolButton" name="importmod_3">
+           <widget class="QToolButton" name="rotateGizmoBtn">
             <property name="minimumSize">
              <size>
               <width>30</width>
@@ -564,7 +564,7 @@ background-color: rgb(30, 144, 255);
            </widget>
           </item>
           <item>
-           <widget class="QToolButton" name="importmod_2">
+           <widget class="QToolButton" name="translateGizmoBtn">
             <property name="minimumSize">
              <size>
               <width>30</width>
@@ -603,7 +603,7 @@ background-color: rgb(30, 144, 255);
            </widget>
           </item>
           <item>
-           <widget class="QToolButton" name="importmod_4">
+           <widget class="QToolButton" name="scaleGizmoBtn">
             <property name="minimumSize">
              <size>
               <width>30</width>
@@ -642,10 +642,10 @@ background-color: rgb(30, 144, 255);
            </widget>
           </item>
           <item>
-           <widget class="QComboBox" name="comboBox_2">
+           <widget class="QComboBox" name="transformCombo">
             <property name="minimumSize">
              <size>
-              <width>119</width>
+              <width>101</width>
               <height>0</height>
              </size>
             </property>
@@ -693,7 +693,7 @@ background-color: rgb(30, 144, 255);
            <widget class="QComboBox" name="cameraTypeCombo">
             <property name="minimumSize">
              <size>
-              <width>119</width>
+              <width>101</width>
               <height>0</height>
              </size>
             </property>

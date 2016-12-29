@@ -41,7 +41,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     setFormat(format);
     setMouseTracking(true);
-//    installEventFilter(this);
+    //installEventFilter(this);
 
     viewport = new iris::Viewport();
 
@@ -61,6 +61,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
 void SceneViewWidget::initialize()
 {
+    initialH = true;
+
     translationGizmo = new TranslationGizmo(editorCam);
     translationGizmo->createHandleShader();
 
@@ -97,10 +99,12 @@ void SceneViewWidget::clearSelectedNode()
 
 void SceneViewWidget::updateScene(bool once)
 {
-    // draw the 3d manipulation gizmo
+    // update and draw the 3d manipulation gizmo
     if (!!viewportGizmo->lastSelectedNode) {
+        viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
         viewportGizmo->render(renderer->GLA, ViewMatrix, ProjMatrix);
     }
+
 }
 
 void SceneViewWidget::initializeGL()
@@ -232,18 +236,17 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
     if (e->button() == Qt::LeftButton) {
         editorCam->updateCameraMatrices();
 
+        this->doGizmoPicking(e->localPos());
+
         if (!!selectedNode) {
             viewportGizmo->isGizmoHit(editorCam, e->localPos(), this->calculateMouseRay(e->localPos()));
             viewportGizmo->isHandleHit();
         }
 
-        if (!!selectedNode) {
-            this->doGizmoPicking(e->localPos());
-            // don't pick anything else if we have a widget
-            return;
+        // if we don't have a selected node prioritize object picking
+        if (selectedNode.isNull()) {
+            this->doObjectPicking(e->localPos());
         }
-
-        this->doObjectPicking(e->localPos());
     }
 
     if (camController != nullptr) {
@@ -467,23 +470,33 @@ ViewportMode SceneViewWidget::getViewportMode()
     return viewportMode;
 }
 
+void SceneViewWidget::setTransformOrientationLocal()
+{
+    viewportGizmo->setTransformOrientation("Local");
+}
+
+void SceneViewWidget::setTransformOrientationGlobal()
+{
+    viewportGizmo->setTransformOrientation("Global");
+}
+
 void SceneViewWidget::setGizmoLoc()
 {
     editorCam->updateCameraMatrices();
-    viewportGizmo->lastSelectedNode = selectedNode;
     viewportGizmo = translationGizmo;
+    viewportGizmo->lastSelectedNode = selectedNode;
 }
 
 void SceneViewWidget::setGizmoRot()
 {
     editorCam->updateCameraMatrices();
-    viewportGizmo->lastSelectedNode = selectedNode;
     viewportGizmo = rotationGizmo;
+    viewportGizmo->lastSelectedNode = selectedNode;
 }
 
 void SceneViewWidget::setGizmoScale()
 {
     editorCam->updateCameraMatrices();
-    viewportGizmo->lastSelectedNode = selectedNode;
     viewportGizmo = scaleGizmo;
+    viewportGizmo->lastSelectedNode = selectedNode;
 }

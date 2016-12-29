@@ -13,16 +13,12 @@ private:
     GizmoHandle* activeHandle;
 
     QOpenGLShaderProgram* handleShader;
+    float scale;
+    const float gizmoSize = .05f;
 
 public:
-//    QSharedPointer<iris::Scene> POINTER;
-//    QSharedPointer<iris::SceneNode> lastSelectedNode;
-//    QSharedPointer<iris::SceneNode> currentNode;
-//    QVector3D finalHitPoint;
-//    QVector3D translatePlaneNormal;
-//    float translatePlaneD;
 
-    QSharedPointer<iris::Scene> POINTER;
+//    QSharedPointer<iris::Scene> POINTER;
     QSharedPointer<iris::SceneNode> getRootNode() {
         return this->POINTER->getRootNode();
     }
@@ -51,8 +47,21 @@ public:
         else if (axis == "axis__z") translatePlaneNormal = QVector3D(.0f, 1.f, .0f);
     }
 
-    ~ScaleGizmo() {
-        // pass
+    void getTransformOrientation() {
+
+    }
+
+    void setTransformOrientation(const QString&) {
+
+    }
+
+    void updateTransforms(const QVector3D& pos) {
+        scale = gizmoSize * ((pos - lastSelectedNode->pos).length() / qTan(45.0f / 2.0f));
+
+        for (int i = 0; i < 3; i++) {
+            handles[i]->gizmoHandle->pos = lastSelectedNode->getGlobalPosition();
+            handles[i]->gizmoHandle->scale = QVector3D(scale, scale, scale);
+        }
     }
 
     void update(QVector3D pos, QVector3D r) {
@@ -70,13 +79,11 @@ public:
             if (currentNode->getName() == "axis__x") {
                 Offset = QVector3D(Offset.x(), 0, 0);
             } else if (currentNode->getName() == "axis__y") {
-                Offset = QVector3D(0, Offset.y(), 0);
+                Offset = QVector3D(Offset.x(), Offset.y(), 0);
             } else if (currentNode->getName() == "axis__z") {
                 Offset = QVector3D(0, 0, Offset.z());
             }
 
-            // scale the handles but not the box part
-//            currentNode->pos += Offset;
             lastSelectedNode->scale += Offset;
 
             finalHitPoint = Point;
@@ -120,14 +127,16 @@ public:
                  this->currentNode->getName() == "axis__y" ||
                  this->currentNode->getName() == "axis__z"))
         {
-            widgetPos.translate(this->currentNode->pos);
+            widgetPos.translate(this->currentNode->getGlobalPosition());
+            widgetPos.scale(scale);
             for (int i = 0; i < 3; i++) {
-                handles[i]->gizmoHandle->pos = this->currentNode->pos;
+                handles[i]->gizmoHandle->pos = this->currentNode->getGlobalPosition();
             }
         } else if (!!this->lastSelectedNode) {
-            widgetPos.translate(this->lastSelectedNode->pos);
+            widgetPos.translate(this->lastSelectedNode->getGlobalPosition());
+            widgetPos.scale(scale);
             for (int i = 0; i < 3; i++) {
-                handles[i]->gizmoHandle->pos = this->lastSelectedNode->pos;
+                handles[i]->gizmoHandle->pos = this->lastSelectedNode->getGlobalPosition();
             }
         }
 
@@ -137,13 +146,11 @@ public:
         gl->glClear(GL_DEPTH_BUFFER_BIT);
 
         for (int i = 0; i < 3; i++) {
-//            widgetPos.translate(handles[i]->getHandlePosition());
-//            widgetPos.rotate(handles[i]->getHandleRotation());
-
             handleShader->setUniformValue("u_worldMatrix", widgetPos);
             handleShader->setUniformValue("u_viewMatrix", viewMatrix);
             handleShader->setUniformValue("u_projMatrix", projMatrix);
 
+            handleShader->setUniformValue("showHalf", false);
             handleShader->setUniformValue("color", handles[i]->getHandleColor());
             handles[i]->gizmoHandle->getMesh()->draw(gl, handleShader);
         }

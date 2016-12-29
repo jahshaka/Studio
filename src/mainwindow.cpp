@@ -115,20 +115,27 @@ MainWindow::MainWindow(QWidget *parent) :
     sceneView = new SceneViewWidget(this);
     sceneView->setParent(this);
 
-    //
     QGridLayout* layout = new QGridLayout(ui->sceneContainer);
     layout->addWidget(sceneView);
     layout->setMargin(0);
     ui->sceneContainer->setLayout(layout);
-    connect(sceneView,SIGNAL(initializeGraphics(SceneViewWidget*,QOpenGLFunctions_3_2_Core*)),this,SLOT(initializeGraphics(SceneViewWidget*,QOpenGLFunctions_3_2_Core*)));
 
-    //createTestScene();
+    connect(sceneView, SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),
+            this, SLOT(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)));
 
     ui->sceneHierarchy->setMainWindow(this);
-    connect(ui->sceneHierarchy,SIGNAL(sceneNodeSelected(QSharedPointer<iris::SceneNode>)),this,SLOT(sceneNodeSelected(QSharedPointer<iris::SceneNode>)));
-    connect(sceneView,SIGNAL(sceneNodeSelected(QSharedPointer<iris::SceneNode>)),this,SLOT(sceneNodeSelected(QSharedPointer<iris::SceneNode>)));
 
-    connect(ui->cameraTypeCombo,SIGNAL(currentTextChanged(QString)),this,SLOT(cameraTypeChanged(QString)));
+    connect(ui->sceneHierarchy,SIGNAL(sceneNodeSelected(QSharedPointer<iris::SceneNode>)),
+            this, SLOT(sceneNodeSelected(QSharedPointer<iris::SceneNode>)));
+
+    connect(sceneView, SIGNAL(sceneNodeSelected(QSharedPointer<iris::SceneNode>)),
+            this, SLOT(sceneNodeSelected(QSharedPointer<iris::SceneNode>)));
+
+    connect(ui->cameraTypeCombo, SIGNAL(currentTextChanged(QString)),
+            this, SLOT(cameraTypeChanged(QString)));
+
+    connect(ui->transformCombo, SIGNAL(currentTextChanged(QString)),
+            this, SLOT(transformOrientationChanged(QString)));
 }
 
 void MainWindow::setupVrUi()
@@ -182,6 +189,7 @@ void MainWindow::vrButtonClicked(bool)
             ui->vrBtn->setProperty("vrMode",(int)VRButtonMode::Default);
         }
     }
+
 
     //needed to apply changes
     ui->vrBtn->style()->unpolish(ui->vrBtn);
@@ -252,21 +260,25 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     // fog params
     scene->fogColor = QColor(64, 64, 64, 255);
 
-    auto shader = iris::Shader::load(gl, "app/shaders/simple.vert", "app/shaders/simple.frag");
-
     this->setScene(scene);
     setupVrUi();
 }
 
 void MainWindow::cameraTypeChanged(QString type)
 {
-    if(type=="Free")
-    {
+    if (type == "Free") {
         sceneView->setFreeCameraMode();
-    }
-    else
-    {
+    } else {
         sceneView->setArcBallCameraMode();
+    }
+}
+
+void MainWindow::transformOrientationChanged(QString type)
+{
+    if (type == "Local") {
+        sceneView->setTransformOrientationLocal();
+    } else {
+        sceneView->setTransformOrientationGlobal();
     }
 }
 
@@ -1018,18 +1030,17 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::on_importmod_2_clicked(bool checked)
+void MainWindow::on_translateGizmoBtn_clicked()
 {
-    // ui->importmod_2->setCheckable(checked);
     sceneView->setGizmoLoc();
 }
 
-void MainWindow::on_importmod_4_clicked()
+void MainWindow::on_scaleGizmoBtn_clicked()
 {
     sceneView->setGizmoScale();
 }
 
-void MainWindow::on_importmod_3_clicked()
+void MainWindow::on_rotateGizmoBtn_clicked()
 {
     sceneView->setGizmoRot();
 }

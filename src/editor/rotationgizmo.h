@@ -12,15 +12,11 @@ private:
     GizmoHandle* gizmo;
     GizmoHandle* activeHandle;
 
-    QQuaternion rotationX;
-    QQuaternion rotationY;
-    QQuaternion rotationZ;
-
     QOpenGLShaderProgram* handleShader;
+    float scale;
+    const float gizmoSize = .0175f;
 
 public:
-
-    QSharedPointer<iris::Scene> POINTER;
     QSharedPointer<iris::SceneNode> getRootNode() {
         return this->POINTER->getRootNode();
     }
@@ -44,13 +40,29 @@ public:
     }
 
     void setPlaneOrientation(const QString& axis) {
-        if (axis == "axis__x") translatePlaneNormal = QVector3D(1.f, .0f, 0.f);
+        if (axis == "axis__x")      translatePlaneNormal = QVector3D(1.f, .0f, 0.f);
         else if (axis == "axis__y") translatePlaneNormal = QVector3D(.0f, .0f, 1.f);
         else if (axis == "axis__z") translatePlaneNormal = QVector3D(.0f, 1.f, 0.f);
+
+        if (transformOrientation == "Local") {
+            translatePlaneNormal =
+                    lastSelectedNode->rot.rotatedVector(translatePlaneNormal).normalized();
+        }
     }
 
-    ~RotationGizmo() {
-        // pass
+    void updateTransforms(const QVector3D& pos) {
+        scale = gizmoSize * ((pos - lastSelectedNode->pos).length() / qTan(45.0f / 2.0f));
+
+        for (int i = 0; i < 3; i++) {
+            if (transformOrientation == "Local") {
+                handles[i]->gizmoHandle->rot = lastSelectedNode->rot;
+            } else {
+                handles[i]->gizmoHandle->rot = QQuaternion();
+            }
+
+            handles[i]->gizmoHandle->pos = lastSelectedNode->getGlobalPosition();
+            handles[i]->gizmoHandle->scale = QVector3D(scale, scale, scale);
+        }
     }
 
     void update(QVector3D pos, QVector3D r) {
@@ -66,14 +78,15 @@ public:
             auto prevHit = (finalHitPoint - currentNode->pos).normalized();
             auto curHit = (Point - currentNode->pos).normalized();
 
+            QQuaternion rot;
+
             if (currentNode->getName() == "axis__x") {
                 auto prevAngle = qAtan2(-prevHit.y(), prevHit.z());
                 auto curAngle = qAtan2(-curHit.y(), curHit.z());
 
                 auto angleDiff = curAngle - prevAngle;
 
-                rotationX =
-                     QQuaternion::fromEulerAngles(qRadiansToDegrees(angleDiff), 0, 0) * currentNode->rot;
+                rot = QQuaternion::fromEulerAngles(qRadiansToDegrees(angleDiff), 0, 0);
             }
 
             if (currentNode->getName() == "axis__y") {
@@ -82,8 +95,7 @@ public:
 
                 auto angleDiff = curAngle - prevAngle;
 
-                rotationY =
-                     QQuaternion::fromEulerAngles(0, 0, qRadiansToDegrees(angleDiff)) * currentNode->rot;
+                rot = QQuaternion::fromEulerAngles(0, 0, qRadiansToDegrees(angleDiff));
             }
 
             if (currentNode->getName() == "axis__z") {
@@ -92,11 +104,26 @@ public:
 
                 auto angleDiff = curAngle - prevAngle;
 
-                rotationZ =
-                     QQuaternion::fromEulerAngles(0, qRadiansToDegrees(angleDiff), 0) * currentNode->rot;
+                rot = QQuaternion::fromEulerAngles(0, qRadiansToDegrees(angleDiff), 0);
             }
 
-            lastSelectedNode->rot = rotationX * rotationY * rotationZ;
+            // if we're behind the normal for the axis, change the direction of the rotation
+            if (nDotR < 0) {
+                rot = -rot;
+            }
+
+            // local orientation
+            if (transformOrientation == "Local") {
+                lastSelectedNode->rot = lastSelectedNode->rot * rot;
+
+                for (int i = 0; i < 3; i++) {
+                    handles[i]->gizmoHandle->rot = lastSelectedNode->rot;
+                }
+            } else {
+                lastSelectedNode->rot = rot * lastSelectedNode->rot;
+            }
+
+            lastSelectedNode->rot.normalize();
 
             finalHitPoint = Point;
         }
@@ -127,32 +154,22 @@ public:
         handleShader->link();
     }
 
+    void getTransformOrientation() {
+
+    }
+
+    void setTransformOrientation(const QString& type) {
+        transformOrientation = type;
+    }
+
     void render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix) {
         handleShader->bind();
 
-        // GLOBAL TRANSFORM
         if (!!this->currentNode) {
-            if (currentNode->getName() == "axis__x") {
-                handles[(int) AxisHandle::X]->gizmoHandle->rot = rotationX;
-            }
-
-            if (currentNode->getName() == "axis__y") {
-                handles[(int) AxisHandle::Y]->gizmoHandle->rot = rotationY;
-            }
-
-            if (currentNode->getName() == "axis__z") {
-                handles[(int) AxisHandle::Z]->gizmoHandle->rot = rotationZ;
-            }
-
             for (int i = 0; i < 3; i++) {
                 handles[i]->gizmoHandle->pos = currentNode->pos;
             }
-
         } else {
-            // @TODO MAYBE - rotate the XY axes to orient themselves according to the model
-            // orientation, this helps visually reinforces even tho we are rotating globally
-            // the axes have also been reoriented. Will be easier with parenting...
-
             for (int i = 0; i < 3; i++) {
                 handles[i]->gizmoHandle->pos = lastSelectedNode->pos;
             }
@@ -162,6 +179,8 @@ public:
 
         // draw this gizmo over every other object in the scene
         gl->glDisable(GL_CULL_FACE);
+        gl->glEnable(GL_BLEND);
+        gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         gl->glClear(GL_DEPTH_BUFFER_BIT);
 
         // every axis moves independently
@@ -171,16 +190,21 @@ public:
 
             widgetPos.translate(handles[i]->gizmoHandle->pos);
             widgetPos.rotate(handles[i]->gizmoHandle->rot);
+            widgetPos.scale(scale);
 
             handleShader->setUniformValue("u_worldMatrix", widgetPos);
             handleShader->setUniformValue("u_viewMatrix", viewMatrix);
             handleShader->setUniformValue("u_projMatrix", projMatrix);
 
+            handleShader->setUniformValue("showHalf", true);
             handleShader->setUniformValue("color", handles[i]->getHandleColor());
             handles[i]->gizmoHandle->getMesh()->draw(gl, handleShader);
         }
 
+        gl->glDisable(GL_BLEND);
         gl->glEnable(GL_CULL_FACE);
+
+        handleShader->release();
     }
 
     bool onHandleSelected(QString name, int x, int y) {
@@ -188,14 +212,14 @@ public:
     }
 
     void onMousePress(QVector3D pos, QVector3D r) {
-        translatePlaneD = -QVector3D::dotProduct(translatePlaneNormal, finalHitPoint);
+        translatePlaneD = -QVector3D::dotProduct(translatePlaneNormal, lastSelectedNode->getGlobalPosition());
 
         QVector3D ray = (r - pos).normalized();
         float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
 
         if (nDotR != 0.0f) {
             float distance = (QVector3D::dotProduct(translatePlaneNormal, pos) + translatePlaneD) / nDotR;
-            finalHitPoint = ray * distance + pos; // initial hit
+            finalHitPoint = ray * distance + pos;
         }
     }
 

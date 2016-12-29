@@ -24,17 +24,27 @@ public:
     QVector3D translatePlaneNormal;
     float translatePlaneD;
 
+    QSharedPointer<iris::Scene> POINTER;
+
     QSharedPointer<iris::CameraNode> camera;
     QSharedPointer<iris::SceneNode> hitNode;
     QString lastHitAxis;
 
+    QString transformOrientation;
+
     virtual QSharedPointer<iris::SceneNode> getRootNode() = 0;
+
+    virtual void updateTransforms(const QVector3D& pos) = 0;
 
     virtual void update(QVector3D, QVector3D) = 0;
 
     virtual void setPlaneOrientation(const QString&) = 0;
 
     virtual void createHandleShader() = 0;
+
+    virtual void getTransformOrientation() = 0;
+
+    virtual void setTransformOrientation(const QString&) = 0;
 
     virtual void render(QOpenGLFunctions_3_2_Core*, QMatrix4x4&, QMatrix4x4&) = 0;
 

@@ -186,7 +186,6 @@ public slots:
     void loadScene();
     void openRecentFile();
 
-
     void showPreferences();
     void exitApp();
     void newScene();
@@ -196,17 +195,16 @@ public slots:
     void openBlogUrl();
     void openWebsiteUrl();
 
-    void initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl);
+    void initializeGraphics(SceneViewWidget* widget, QOpenGLFunctions_3_2_Core* gl);
     void cameraTypeChanged(QString);
+    void transformOrientationChanged(QString);
 
     void vrButtonClicked(bool);
 
 private slots:
-    void on_importmod_2_clicked(bool checked);
-
-    void on_importmod_4_clicked();
-
-    void on_importmod_3_clicked();
+    void on_translateGizmoBtn_clicked();
+    void on_scaleGizmoBtn_clicked();
+    void on_rotateGizmoBtn_clicked();
 
 private:
     Ui::NewMainWindow *ui;

@@ -15,11 +15,11 @@ private:
 
     QOpenGLShaderProgram* handleShader;
     float scale;
-    const float gizmoSize = .05f;
+    const float gizmoSize = .038f;
 
 public:
 
-    QSharedPointer<iris::Scene> POINTER;
+//    QSharedPointer<iris::Scene> POINTER;
     QSharedPointer<iris::SceneNode> getRootNode() {
         return this->POINTER->getRootNode();
     }
@@ -52,8 +52,21 @@ public:
         else if (axis == "axis__z") translatePlaneNormal = QVector3D(.0f, 1.f, .0f);
     }
 
-    ~TranslationGizmo() {
+    void getTransformOrientation() {
 
+    }
+
+    void setTransformOrientation(const QString&) {
+
+    }
+
+    void updateTransforms(const QVector3D& pos) {
+        scale = gizmoSize * ((pos - lastSelectedNode->pos).length() / qTan(45.0f / 2.0f));
+
+        for (int i = 0; i < 3; i++) {
+            handles[i]->gizmoHandle->pos = lastSelectedNode->getGlobalPosition();
+            handles[i]->gizmoHandle->scale = QVector3D(scale, scale, scale);
+        }
     }
 
     void update(QVector3D pos, QVector3D r) {
@@ -77,7 +90,7 @@ public:
             }
 
             // https://www.gamedev.net/topic/674723-3d-editor-transform-gizmoshandles/
-            scale = gizmoSize * ((pos - currentNode->pos).length() / qTan(45.0f / 2.0f));
+//            scale = gizmoSize * ((pos - lastSelectedNode->pos).length() / qTan(45.0f / 2.0f));
 
             currentNode->pos += Offset;
             lastSelectedNode->pos += Offset;
@@ -127,14 +140,14 @@ public:
             widgetPos.scale(scale);
             for (int i = 0; i < 3; i++) {
                 handles[i]->gizmoHandle->pos = this->currentNode->pos;
-                handles[i]->gizmoHandle->scale = QVector3D(scale, scale, scale);
+//                handles[i]->gizmoHandle->scale = QVector3D(scale, scale, scale);
             }
         } else if (!!this->lastSelectedNode) {
             widgetPos.translate(this->lastSelectedNode->pos);
             widgetPos.scale(scale);
             for (int i = 0; i < 3; i++) {
                 handles[i]->gizmoHandle->pos = this->lastSelectedNode->pos;
-                handles[i]->gizmoHandle->scale = QVector3D(scale, scale, scale);
+//                handles[i]->gizmoHandle->scale = QVector3D(scale, scale, scale);
             }
         }
 
@@ -148,6 +161,7 @@ public:
             handleShader->setUniformValue("u_viewMatrix", viewMatrix);
             handleShader->setUniformValue("u_projMatrix", projMatrix);
 
+            handleShader->setUniformValue("showHalf", false);
             handleShader->setUniformValue("color", handles[i]->getHandleColor());
             handles[i]->gizmoHandle->getMesh()->draw(gl, handleShader);
         }
