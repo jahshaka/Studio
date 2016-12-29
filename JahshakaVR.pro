@@ -76,7 +76,8 @@ SOURCES += src/main.cpp\
     src/widgets/checkboxproperty.cpp \
     src/widgets/propertywidgets/fogpropertywidget.cpp \
     src/io/assetiobase.cpp \
-    src/io/materialpresetreader.cpp
+    src/io/materialpresetreader.cpp \
+    src/widgets/keyframelabeltreewidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -136,6 +137,8 @@ HEADERS  += src/mainwindow.h \
     src/io/assetiobase.h \
     src/core/materialpreset.h \
     src/io/materialpresetreader.h \
+    src/widgets/keyframelabeltreewidget.h
+    src/io/materialpresetreader.h \
     src/editor/gizmohandle.h \
     src/editor/translationgizmo.h \
     src/editor/rotationgizmo.h \
@@ -177,7 +180,8 @@ FORMS    += \
     src/widgets/skypresets.ui \
     src/widgets/filepickerwidget.ui \
     src/widgets/checkboxproperty.ui \
-    src/widgets/keyframelabelwidget.ui
+    src/widgets/keyframelabelwidget.ui \
+    src/widgets/keyframelabeltreewidget.ui
 
 RESOURCES += \
     shaders.qrc \

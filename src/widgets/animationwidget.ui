@@ -65,7 +65,7 @@
           </property>
           <property name="minimumSize">
            <size>
-            <width>100</width>
+            <width>150</width>
             <height>0</height>
            </size>
           </property>
@@ -134,7 +134,7 @@ border_bottom: 1px solid #252525;
             </widget>
            </item>
            <item>
-            <widget class="KeyFrameLabelWidget" name="keylabelView" native="true">
+            <widget class="KeyFrameLabelTreeWidget" name="keylabelView" native="true">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
                <horstretch>0</horstretch>
@@ -720,9 +720,9 @@ border-style: inset;
    <container>1</container>
   </customwidget>
   <customwidget>
-   <class>KeyFrameLabelWidget</class>
+   <class>KeyFrameLabelTreeWidget</class>
    <extends>QWidget</extends>
-   <header location="global">src/widgets/keyframelabelwidget.h</header>
+   <header>src/widgets/keyframelabeltreewidget.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

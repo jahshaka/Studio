@@ -28,9 +28,22 @@ public:
         auto keyFrame = new FloatKeyFrame();
         keyFrames.insert(name,keyFrame);
         return keyFrame;
-
     }
 
+    FloatKeyFrame* getKeyFrame(QString name)
+    {
+        if(keyFrames.contains(name))
+        {
+            return keyFrames[name];
+        }
+
+        return null;
+    }
+
+    bool hasKeyFrame(QString name)
+    {
+        return keyFrames.contains(name);
+    }
 
     static KeyFrameSetPtr create()
     {

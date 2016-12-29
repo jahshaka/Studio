@@ -61,6 +61,7 @@ public:
     void setSkyColor(QColor color);
 
 
+    void updateSceneAnimation(float time);
     void update(float dt);
     void render();
 

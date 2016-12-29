@@ -106,6 +106,7 @@ public:
     QMatrix4x4 getLocalTransform();
 
     virtual void update(float dt);
+    virtual void updateAnimation(float time);
 
 private:
     void setParent(SceneNodePtr node);
