@@ -1,7 +1,7 @@
 #ifndef KEYFRAMESET_H
 #define KEYFRAMESET_H
 
-#include <QHash>
+#include <QMap>
 #include "../irisglfwd.h"
 //#include "keyframeset.h"
 
@@ -16,7 +16,8 @@ class FloatKeyFrame;
 class KeyFrameSet
 {
 public:
-    QHash<QString,FloatKeyFrame*> keyFrames;
+    //QMap presrves insertion order,QHash doesnt
+    QMap<QString,FloatKeyFrame*> keyFrames;
 
     FloatKeyFrame* getOrCreateFrame(QString name)
     {

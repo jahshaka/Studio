@@ -122,28 +122,28 @@ void SceneNode::updateAnimation(float time)
 {
     //@todo: cache transformation animations for faster lookup
 
-    if(keyFrameSet->hasKeyFrame("position.x"))
-        pos.setX(keyFrameSet->getKeyFrame("position.x")->getValueAt(time));
-    if(keyFrameSet->hasKeyFrame("position.y"))
-        pos.setY(keyFrameSet->getKeyFrame("position.y")->getValueAt(time));
-    if(keyFrameSet->hasKeyFrame("position.z"))
-        pos.setZ(keyFrameSet->getKeyFrame("position.z")->getValueAt(time));
+    if(keyFrameSet->hasKeyFrame("Translation X"))
+        pos.setX(keyFrameSet->getKeyFrame("Translation X")->getValueAt(time));
+    if(keyFrameSet->hasKeyFrame("Translation Y"))
+        pos.setY(keyFrameSet->getKeyFrame("Translation Y")->getValueAt(time));
+    if(keyFrameSet->hasKeyFrame("Translation Z"))
+        pos.setZ(keyFrameSet->getKeyFrame("Translation Z")->getValueAt(time));
 
     auto rotEuler = rot.toEulerAngles();
-    if(keyFrameSet->hasKeyFrame("rotation.x"))
-        rotEuler.setX(keyFrameSet->getKeyFrame("rotation.x")->getValueAt(time));
-    if(keyFrameSet->hasKeyFrame("rotation.y"))
-        rotEuler.setY(keyFrameSet->getKeyFrame("rotation.y")->getValueAt(time));
-    if(keyFrameSet->hasKeyFrame("rotation.z"))
-        rotEuler.setZ(keyFrameSet->getKeyFrame("rotation.z")->getValueAt(time));
+    if(keyFrameSet->hasKeyFrame("Rotation X"))
+        rotEuler.setX(keyFrameSet->getKeyFrame("Rotation X")->getValueAt(time));
+    if(keyFrameSet->hasKeyFrame("Rotation Y"))
+        rotEuler.setY(keyFrameSet->getKeyFrame("Rotation Y")->getValueAt(time));
+    if(keyFrameSet->hasKeyFrame("Rotation Z"))
+        rotEuler.setZ(keyFrameSet->getKeyFrame("Rotation Z")->getValueAt(time));
     rot = QQuaternion::fromEulerAngles(rotEuler);
 
-    if(keyFrameSet->hasKeyFrame("scale.x"))
-        scale.setX(keyFrameSet->getKeyFrame("scale.x")->getValueAt(time));
-    if(keyFrameSet->hasKeyFrame("scale.y"))
-        scale.setY(keyFrameSet->getKeyFrame("scale.y")->getValueAt(time));
-    if(keyFrameSet->hasKeyFrame("scale.z"))
-        scale.setZ(keyFrameSet->getKeyFrame("scale.z")->getValueAt(time));
+    if(keyFrameSet->hasKeyFrame("Scale X"))
+        scale.setX(keyFrameSet->getKeyFrame("Scale X")->getValueAt(time));
+    if(keyFrameSet->hasKeyFrame("Scale Y"))
+        scale.setY(keyFrameSet->getKeyFrame("Scale Y")->getValueAt(time));
+    if(keyFrameSet->hasKeyFrame("Scale Z"))
+        scale.setZ(keyFrameSet->getKeyFrame("Scale Z")->getValueAt(time));
 
     //update children
     for (auto child : children) {

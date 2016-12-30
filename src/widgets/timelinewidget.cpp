@@ -22,7 +22,6 @@ For more information see the LICENSE file
 TimelineWidget::TimelineWidget(QWidget* parent):
     QWidget(parent)
 {
-    //this->setGeometry(0,0,800,20);
 
     bgColor = QColor::fromRgb(30,30,30);
     itemColor = QColor::fromRgb(255,255,255);
@@ -38,10 +37,15 @@ TimelineWidget::TimelineWidget(QWidget* parent):
 
     dragging = false;
 
-    //scaleRatio = 30;
-
     //node=nullptr;
     drawHighlight = false;
+
+    rangeStart = 0;
+    rangeEnd = 100;
+
+    leftButtonDown = false;
+    middleButtonDown = false;
+    rightButtonDown = false;
 }
 
 void TimelineWidget::showHighlight(float start,float end)
@@ -102,52 +106,56 @@ float TimelineWidget::getEndTimeRange()
     return rangeEnd;
 }
 
-void TimelineWidget::oldpaintEvent(QPaintEvent *painter)
-{
-    Q_UNUSED(painter);
-}
-
 void TimelineWidget::paintEvent(QPaintEvent *painter)
 {
     Q_UNUSED(painter);
 
     int widgetWidth = this->geometry().width();
     int widgetHeight = this->geometry().height();
+
     QPainter paint(this);
 
     //black bg
     paint.fillRect(0,0,widgetWidth,widgetHeight,bgColor);
 
-    //cosmetic
+    // draws the dark part of the bottom of the frame
     paint.setPen(QColor::fromRgb(100,100,100));
-    //paint.drawLine(0,0,widgetWidth,0);
     paint.fillRect(0,0,widgetWidth,widgetHeight/2,QColor::fromRgb(50,50,50));
-
     paint.setPen(linePen);
 
-    float timeRange = rangeEnd-rangeStart;
-    float timeStepWidth = widgetWidth/10;
-    int majorInterval = qFloor(timeStepWidth);
+    QPen smallPen = QPen(QColor::fromRgb(55,55,55));
+    QPen bigPen = QPen(QColor::fromRgb(200,200,200));
 
-    for(int x=0;x<widgetWidth;x+=1)
+
+    //find increment automatically
+    float increment = 10.0f;//start on the smallest level
+    auto range = rangeEnd-rangeStart;
+    while(increment*10<range)
+        increment*=10;
+
+    float startTime = rangeStart - fmod(rangeStart,increment)-increment;
+    float endTime = rangeEnd - fmod(rangeEnd,increment)+increment;
+
+    //big increments
+    paint.setPen(bigPen);
+    for(float x=startTime;x<endTime;x+=increment)
     {
-        if(x%majorInterval==0)
-        {
-            paint.drawLine(x,widgetHeight,x,widgetHeight-15);
+        int screenPos = timeToPos(x);
+        paint.drawLine(screenPos,0,screenPos,widgetHeight);
 
-            int timeInSeconds = rangeStart+((float)x/widgetWidth)*timeRange;
+        int timeInSeconds = (int)x;
 
-            int secs = timeInSeconds%60;
-            int mins = timeInSeconds/60;
-            int hours = timeInSeconds/3600;
+        int secs = timeInSeconds%60;
+        int mins = timeInSeconds/60;
+        int hours = timeInSeconds/3600;
 
-            paint.drawText(x+3,widgetHeight-5,QString("%1:%2:%3")
-                           .arg(hours,2,10,QLatin1Char('0'))
-                           .arg(mins,2,10,QLatin1Char('0'))
-                           .arg(secs,2,10,QLatin1Char('0')));
-        }
+        paint.drawText(screenPos+3,widgetHeight-5,QString("%1:%2:%3")
+                       .arg(hours,2,10,QLatin1Char('0'))
+                       .arg(mins,2,10,QLatin1Char('0'))
+                       .arg(secs,2,10,QLatin1Char('0')));
     }
 
+    //highlights the animation range of the selected node
     if(drawHighlight)
     {
         int start = timeToPos(highlightStart);
@@ -164,41 +172,56 @@ void TimelineWidget::paintEvent(QPaintEvent *painter)
 
 int TimelineWidget::timeToPos(float timeInSeconds)
 {
-    float range = rangeEnd-rangeStart;
-    return (int)((timeInSeconds/range)*this->geometry().width());
+    float timeSpacePos = (timeInSeconds-rangeStart)/(rangeEnd-rangeStart);
+    return (int)(timeSpacePos*this->geometry().width());
 }
 
 float TimelineWidget::posToTime(int xpos)
 {
     float range = rangeEnd-rangeStart;
-    return range*((float)xpos/this->geometry().width());
+    return rangeStart+range*((float)xpos/this->geometry().width());
 }
 
-void TimelineWidget::setCursorPos(int x)
+void TimelineWidget::setCursorPos(float timeInSeconds)
 {
     //assuming x is local
-    cursorPos = x;
-    if(node!=nullptr)
-    {
-        float time = getTimeAtCursor();
-        //node->applyAnimationAtTime(time);
-    }
+    cursorPos = timeInSeconds;
 
     this->repaint();
-    emit cursorMoved(posToTime(x));
+    emit cursorMoved(timeInSeconds);
 }
 
 void TimelineWidget::mousePressEvent(QMouseEvent* evt)
 {
     Q_UNUSED(evt);
-    dragging = true;
-    setCursorPos(evt->x());
+    mousePos = evt->pos();
+    clickPos = mousePos;
+
+    if(evt->button() == Qt::LeftButton)
+        leftButtonDown = true;
+    if(evt->button() == Qt::MiddleButton)
+        middleButtonDown = true;
+    if(evt->button() == Qt::RightButton)
+        rightButtonDown = true;
+
+    if(evt->button() == Qt::LeftButton)
+    {
+        setCursorPos(posToTime(evt->x()));
+    }
 }
 
 void TimelineWidget::mouseReleaseEvent(QMouseEvent* evt)
 {
     Q_UNUSED(evt);
     dragging = false;
+    mousePos = evt->pos();
+
+    if(evt->button() == Qt::LeftButton)
+        leftButtonDown = false;
+    if(evt->button() == Qt::MiddleButton)
+        middleButtonDown = false;
+    if(evt->button() == Qt::RightButton)
+        rightButtonDown = false;
 }
 
 void TimelineWidget::mouseMoveEvent(QMouseEvent* evt)
@@ -207,6 +230,33 @@ void TimelineWidget::mouseMoveEvent(QMouseEvent* evt)
     {
         setCursorPos(evt->x());
     }
+
+    if(middleButtonDown)
+    {
+        //qDebug()<<"middle mouse dragging"<<endl;
+        auto timeDiff = posToTime(evt->x())-posToTime(cursorPos);
+        rangeStart-=timeDiff;
+        rangeEnd-=timeDiff;
+    }
+
+    cursorPos = evt->x();
+    mousePos = evt->pos();
+    this->repaint();
+}
+
+void TimelineWidget::wheelEvent(QWheelEvent* evt)
+{
+    auto delta = evt->delta();
+    float sign = delta<0?-1:1;
+
+    //0.2f here is the zoom speed
+    float scale = 1.0f - sign * 0.2f;
+
+    float timeSpacePivot = posToTime(evt->x());
+    rangeStart = timeSpacePivot+(rangeStart-timeSpacePivot)*scale;
+    rangeEnd = timeSpacePivot+(rangeEnd-timeSpacePivot)*scale;
+
+    this->repaint();
 }
 
 void TimelineWidget::resizeEvent(QResizeEvent* event)

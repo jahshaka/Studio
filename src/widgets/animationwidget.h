@@ -104,6 +104,12 @@ public:
         //ui->timeControls->update();
     }
     void repaintViews();
+
+    //startRange and endRange are in seconds
+    void setTimeViewRange(float startRange,float endRange);
+
+    //sets cursor position at time
+    void setCursorPositionAtTime(float timeInSeconds);
 private:
 
     void removeNodeSpecificActions();

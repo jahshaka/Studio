@@ -47,6 +47,9 @@ KeyFrameWidget::KeyFrameWidget(QWidget* parent):
     rangeStart = 0;
     rangeEnd = 100;
 
+    minRange = 10;
+    maxRange = 1000;
+
     leftButtonDown = false;
     middleButtonDown = false;
     rightButtonDown = false;
@@ -156,15 +159,6 @@ void KeyFrameWidget::drawBackgroundLines(QPainter& paint)
     QPen bigPen = QPen(QColor::fromRgb(200,200,200));
 
 
-    /*
-    int widgetWidth = this->geometry().width();
-    int widgetHeight = this->geometry().height();
-    for(int x=0;x<widgetWidth;x+=scaleRatio*3)
-    {
-        paint.drawLine(x,0,x,widgetHeight);
-    }
-    */
-
     //find increment automatically
     float increment = 10.0f;//start on the smallest level
     auto range = rangeEnd-rangeStart;
@@ -174,8 +168,6 @@ void KeyFrameWidget::drawBackgroundLines(QPainter& paint)
 
     float startTime = rangeStart - fmod(rangeStart,increment)-increment;
     float endTime = rangeEnd - fmod(rangeEnd,increment)+increment;
-    //qDebug()<<"startTime "<<startTime;
-    //qDebug()<<"endTime "<<endTime;
 
     int widgetHeight = this->geometry().height();
 
@@ -195,11 +187,6 @@ void KeyFrameWidget::drawBackgroundLines(QPainter& paint)
         paint.drawLine(screenPos,0,screenPos,widgetHeight);
     }
 
-}
-
-int KeyFrameWidget::getXPosFromSeconds(float seconds)
-{
-    return (int)(seconds*scaleRatio);
 }
 
 void KeyFrameWidget::mousePressEvent(QMouseEvent* evt)
@@ -224,11 +211,8 @@ void KeyFrameWidget::mousePressEvent(QMouseEvent* evt)
 
 void KeyFrameWidget::mouseReleaseEvent(QMouseEvent* evt)
 {
-    Q_UNUSED(evt);
     dragging = false;
     mousePos = evt->pos();
-
-    //qDebug()<<"Mouse Release"<<endl;
 
     if(mousePos==clickPos && evt->button() == Qt::RightButton)
     {
@@ -253,12 +237,6 @@ void KeyFrameWidget::mouseReleaseEvent(QMouseEvent* evt)
 
 void KeyFrameWidget::mouseMoveEvent(QMouseEvent* evt)
 {
-    if(dragging)
-    {
-        //assuming this is local
-        int x = evt->x();
-    }
-
     if(leftButtonDown && selectedKey!=nullptr)
     {
         //key dragging
@@ -290,6 +268,8 @@ void KeyFrameWidget::wheelEvent(QWheelEvent* evt)
     float timeSpacePivot = posToTime(evt->x());
     rangeStart = timeSpacePivot+(rangeStart-timeSpacePivot)*scale;
     rangeEnd = timeSpacePivot+(rangeEnd-timeSpacePivot)*scale;
+
+    //min start
 
     this->repaint();
 }
@@ -336,8 +316,6 @@ float KeyFrameWidget::getEndTimeRange()
 
 int KeyFrameWidget::timeToPos(float timeInSeconds)
 {
-    //float range = rangeEnd-rangeStart;
-    //return (int)((timeInSeconds/range)*this->geometry().width());
     float timeSpacePos = (timeInSeconds-rangeStart)/(rangeEnd-rangeStart);
     return (int)(timeSpacePos*this->geometry().width());
 }
@@ -345,7 +323,6 @@ int KeyFrameWidget::timeToPos(float timeInSeconds)
 float KeyFrameWidget::posToTime(int xpos)
 {
     float range = rangeEnd-rangeStart;
-    //return range*((float)xpos/this->geometry().width());
     return rangeStart+range*((float)xpos/this->geometry().width());
 }
 
@@ -354,16 +331,6 @@ float KeyFrameWidget::distanceSquared(float x1,float y1,float x2,float y2)
     float dx = x2-x1;
     float dy = y2-y1;
     return dx*dx + dy*dy;
-}
-
-float KeyFrameWidget::screenSpaceToKeySpace(float x)
-{
-    return x/100;
-}
-
-float KeyFrameWidget::keySpaceToScreenSpace(float x)
-{
-    return x*100;
 }
 
 iris::FloatKey* KeyFrameWidget::getSelectedKey(int x,int y)

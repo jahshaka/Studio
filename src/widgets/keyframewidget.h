@@ -37,10 +37,6 @@ class KeyFrameWidget:public QWidget
     float viewRight;
 
 private:
-    float screenSpaceToKeySpace(float x);
-    float keySpaceToScreenSpace(float x);
-
-private:
     QColor bgColor;
     QColor itemColor;
 
@@ -52,6 +48,9 @@ private:
     //the range is in the time space
     float rangeStart;
     float rangeEnd;
+
+    float minRange;
+    float maxRange;
 
     //indicates current time
     int cursorPos;

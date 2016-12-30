@@ -27,6 +27,14 @@ class TimelineWidget:public QWidget
 private:
     int timeToPos(float timeInSeconds);
     float posToTime(int xpos);
+
+    bool leftButtonDown;
+    bool middleButtonDown;
+    bool rightButtonDown;
+
+    QPoint clickPos;
+    QPoint mousePos;
+
 public:
     QColor bgColor;
     QColor itemColor;
@@ -34,13 +42,12 @@ public:
     QPen linePen;
     QPen cursorPen;
 
-    //float maxTimeInSeconds;
+    //raneg of time being viewed in seconds
     float rangeStart;
     float rangeEnd;
 
-    //indicates current time
-    int cursorPos;
-    //double currentTime;
+    //indicates current time at cursor in seconds
+    float cursorPos;
 
     bool dragging;
     //int scaleRatio;
@@ -63,19 +70,20 @@ public:
     void setSceneNode(iris::SceneNodePtr node);
 
     float getTimeAtCursor();
+
     //void setMaxTimeInSeconds(float time);
     void setTimeRange(float start,float end);
     void setStartTime(float start);
     void setEndTime(float end);
     void setTime(float time);
-    void setCursorPos(int x);
+    void setCursorPos(float timeInSeconds);
 
-    void oldpaintEvent(QPaintEvent *painter);//unused
     void paintEvent(QPaintEvent *painter);
     void mousePressEvent(QMouseEvent* evt);
     void mouseReleaseEvent(QMouseEvent* evt);
     void mouseMoveEvent(QMouseEvent* evt);
     void resizeEvent(QResizeEvent* event);
+    void wheelEvent(QWheelEvent* evt);
 
 signals:
     void cursorMoved(float timeInSeconds);
