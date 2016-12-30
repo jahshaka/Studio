@@ -15,7 +15,7 @@
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <property name="spacing">
-    <number>3</number>
+    <number>0</number>
    </property>
    <property name="leftMargin">
     <number>0</number>
@@ -55,6 +55,9 @@
       </property>
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout_3">
+        <property name="spacing">
+         <number>0</number>
+        </property>
         <item>
          <widget class="QWidget" name="widget" native="true">
           <property name="sizePolicy">
@@ -134,9 +137,9 @@ border_bottom: 1px solid #252525;
             </widget>
            </item>
            <item>
-            <widget class="KeyFrameLabelTreeWidget" name="keylabelView" native="true">
+            <widget class="KeyFrameLabelWidget" name="keylabelView" native="true">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
+              <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
@@ -720,9 +723,9 @@ border-style: inset;
    <container>1</container>
   </customwidget>
   <customwidget>
-   <class>KeyFrameLabelTreeWidget</class>
+   <class>KeyFrameLabelWidget</class>
    <extends>QWidget</extends>
-   <header>src/widgets/keyframelabeltreewidget.h</header>
+   <header>src/widgets/keyframelabelwidget.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

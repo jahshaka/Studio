@@ -37,7 +37,7 @@ public:
             return keyFrames[name];
         }
 
-        return null;
+        return nullptr;
     }
 
     bool hasKeyFrame(QString name)

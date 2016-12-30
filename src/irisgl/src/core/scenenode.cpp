@@ -147,7 +147,7 @@ void SceneNode::updateAnimation(float time)
 
     //update children
     for (auto child : children) {
-        child->updateAnimation(dt);
+        child->updateAnimation(time);
     }
 }
 

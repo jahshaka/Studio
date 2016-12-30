@@ -49,6 +49,7 @@ private:
 
     float maxTimeInSeconds;
 
+    //the range is in the time space
     float rangeStart;
     float rangeEnd;
 
@@ -93,6 +94,7 @@ public:
     void mousePressEvent(QMouseEvent* evt);
     void mouseReleaseEvent(QMouseEvent* evt);
     void mouseMoveEvent(QMouseEvent* evt);
+    void wheelEvent(QWheelEvent* evt);
     //void resizeEvent(QResizeEvent* event);
     void paintEvent(QPaintEvent *painter);
 

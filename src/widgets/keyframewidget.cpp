@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "keyframewidget.h"
 #include <QMenu>
+#include <math.h>
 
 KeyFrameWidget::KeyFrameWidget(QWidget* parent):
     QWidget(parent)
@@ -128,6 +129,7 @@ void KeyFrameWidget::drawFrame(QPainter& paint,iris::FloatKeyFrame* keyFrame,int
     highlightPen.setWidth(penSize);
     highlightPen.setCapStyle(Qt::RoundCap);
 
+
     for(auto key:keyFrame->keys)
     {
         int xpos = this->timeToPos(key->time);
@@ -150,15 +152,49 @@ void KeyFrameWidget::drawFrame(QPainter& paint,iris::FloatKeyFrame* keyFrame,int
 
 void KeyFrameWidget::drawBackgroundLines(QPainter& paint)
 {
-    QPen pen = QPen(QColor::fromRgb(55,55,55));
-    paint.setPen(pen);
+    QPen smallPen = QPen(QColor::fromRgb(55,55,55));
+    QPen bigPen = QPen(QColor::fromRgb(200,200,200));
 
+
+    /*
     int widgetWidth = this->geometry().width();
     int widgetHeight = this->geometry().height();
     for(int x=0;x<widgetWidth;x+=scaleRatio*3)
     {
         paint.drawLine(x,0,x,widgetHeight);
     }
+    */
+
+    //find increment automatically
+    float increment = 10.0f;//start on the smallest level
+    auto range = rangeEnd-rangeStart;
+    while(increment*10<range)
+        increment*=10;
+    float smallIncrement = increment/10.0f;
+
+    float startTime = rangeStart - fmod(rangeStart,increment)-increment;
+    float endTime = rangeEnd - fmod(rangeEnd,increment)+increment;
+    //qDebug()<<"startTime "<<startTime;
+    //qDebug()<<"endTime "<<endTime;
+
+    int widgetHeight = this->geometry().height();
+
+    //small increments
+    paint.setPen(smallPen);
+    for(float x=startTime;x<endTime;x+=smallIncrement)
+    {
+        int screenPos = timeToPos(x);
+        paint.drawLine(screenPos,0,screenPos,widgetHeight);
+    }
+
+    //big increments
+    paint.setPen(bigPen);
+    for(float x=startTime;x<endTime;x+=increment)
+    {
+        int screenPos = timeToPos(x);
+        paint.drawLine(screenPos,0,screenPos,widgetHeight);
+    }
+
 }
 
 int KeyFrameWidget::getXPosFromSeconds(float seconds)
@@ -230,8 +266,31 @@ void KeyFrameWidget::mouseMoveEvent(QMouseEvent* evt)
         selectedKey->time+=timeDiff;
     }
 
+    if(middleButtonDown)
+    {
+        //qDebug()<<"middle mouse dragging"<<endl;
+        auto timeDiff = posToTime(evt->x())-posToTime(cursorPos);
+        rangeStart-=timeDiff;
+        rangeEnd-=timeDiff;
+    }
+
     cursorPos = evt->x();
     mousePos = evt->pos();
+    this->repaint();
+}
+
+void KeyFrameWidget::wheelEvent(QWheelEvent* evt)
+{
+    auto delta = evt->delta();
+    float sign = delta<0?-1:1;
+
+    //0.2f here is the zoom speed
+    float scale = 1.0f-sign*0.2f;
+
+    float timeSpacePivot = posToTime(evt->x());
+    rangeStart = timeSpacePivot+(rangeStart-timeSpacePivot)*scale;
+    rangeEnd = timeSpacePivot+(rangeEnd-timeSpacePivot)*scale;
+
     this->repaint();
 }
 
@@ -277,14 +336,17 @@ float KeyFrameWidget::getEndTimeRange()
 
 int KeyFrameWidget::timeToPos(float timeInSeconds)
 {
-    float range = rangeEnd-rangeStart;
-    return (int)((timeInSeconds/range)*this->geometry().width());
+    //float range = rangeEnd-rangeStart;
+    //return (int)((timeInSeconds/range)*this->geometry().width());
+    float timeSpacePos = (timeInSeconds-rangeStart)/(rangeEnd-rangeStart);
+    return (int)(timeSpacePos*this->geometry().width());
 }
 
 float KeyFrameWidget::posToTime(int xpos)
 {
     float range = rangeEnd-rangeStart;
-    return range*((float)xpos/this->geometry().width());
+    //return range*((float)xpos/this->geometry().width());
+    return rangeStart+range*((float)xpos/this->geometry().width());
 }
 
 float KeyFrameWidget::distanceSquared(float x1,float y1,float x2,float y2)
