@@ -94,29 +94,20 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
 
     if(obj!=nullptr && !!obj->animation)
     {
-        /*
-        if(obj->transformAnim!=nullptr)
-        {
-            if(obj->transformAnim->pos->hasKeys())
-                drawFrame(obj->transformAnim->pos,&paint,ypos+=frameHeight);
-
-            if(obj->transformAnim->rot->hasKeys())
-                drawFrame(obj->transformAnim->rot,&paint,ypos+=frameHeight);
-
-            if(obj->transformAnim->scale->hasKeys())
-                drawFrame(obj->transformAnim->scale,&paint,ypos+=frameHeight);
-        }*/
-
         auto frameSet = obj->animation->keyFrameSet;
 
         for(auto frame:frameSet->keyFrames)
         {
             drawFrame(paint,frame,ypos+=frameHeight);
         }
-
-
     }
 
+    //cursor
+    auto cursorPen = QPen(QColor::fromRgb(142,45,197));
+    cursorPen.setWidth(3);
+    paint.setPen(cursorPen);
+    auto cursorScreenPos = timeToPos(cursorPos);
+    paint.drawLine(cursorScreenPos,0,cursorScreenPos,widgetHeight);
 
 }
 
@@ -244,16 +235,20 @@ void KeyFrameWidget::mouseMoveEvent(QMouseEvent* evt)
         auto timeDiff = posToTime(evt->x())-posToTime(cursorPos);
         selectedKey->time+=timeDiff;
     }
+    else if(leftButtonDown)
+    {
+        cursorPos = posToTime(evt->x());
+    }
 
     if(middleButtonDown)
     {
         //qDebug()<<"middle mouse dragging"<<endl;
-        auto timeDiff = posToTime(evt->x())-posToTime(cursorPos);
+        auto timeDiff = posToTime(evt->x())-posToTime(mousePos.x());
         rangeStart-=timeDiff;
         rangeEnd-=timeDiff;
     }
 
-    cursorPos = evt->x();
+
     mousePos = evt->pos();
     this->repaint();
 }
@@ -278,7 +273,7 @@ void KeyFrameWidget::wheelEvent(QWheelEvent* evt)
 
 float KeyFrameWidget::getTimeAtCursor()
 {
-    return posToTime(cursorPos);
+    return cursorPos;
 }
 
 void KeyFrameWidget::setTime(float time)

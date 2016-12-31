@@ -228,14 +228,15 @@ void AnimationWidget::addPosKey()
     if(!node)
         return;
 
-    float seconds = ui->timeline->getTimeAtCursor();
+    //float seconds = ui->timeline->getTimeAtCursor();
+    float seconds = ui->keywidgetView->getTimeAtCursor();
     QVector3D pos = node->pos;
     //node->transformAnim->pos->addKey(pos,seconds);
 
     auto frameSet = node->animation->keyFrameSet;
-    frameSet->getOrCreateFrame("Translation X")->addKey(seconds,pos.x());
-    frameSet->getOrCreateFrame("Translation Y")->addKey(seconds,pos.y());
-    frameSet->getOrCreateFrame("Translation Z")->addKey(seconds,pos.z());
+    frameSet->getOrCreateFrame("Translation X")->addKey(pos.x(),seconds);
+    frameSet->getOrCreateFrame("Translation Y")->addKey(pos.y(),seconds);
+    frameSet->getOrCreateFrame("Translation Z")->addKey(pos.z(),seconds);
 
     //node->updateAnimPathFromKeyFrames();
 
@@ -247,13 +248,14 @@ void AnimationWidget::addRotKey()
     if(!node)
         return;
 
-    float seconds = ui->timeline->getTimeAtCursor();
+    //float seconds = ui->timeline->getTimeAtCursor();
+    float seconds = ui->keywidgetView->getTimeAtCursor();
     QVector3D rot = node->rot.toEulerAngles();
 
     auto frameSet = node->animation->keyFrameSet;
-    frameSet->getOrCreateFrame("Rotation X")->addKey(seconds,rot.x());
-    frameSet->getOrCreateFrame("Rotation Y")->addKey(seconds,rot.y());
-    frameSet->getOrCreateFrame("Rotation Z")->addKey(seconds,rot.z());
+    frameSet->getOrCreateFrame("Rotation X")->addKey(rot.x(),seconds);
+    frameSet->getOrCreateFrame("Rotation Y")->addKey(rot.y(),seconds);
+    frameSet->getOrCreateFrame("Rotation Z")->addKey(rot.z(),seconds);
     repaintViews();
 }
 
@@ -262,13 +264,14 @@ void AnimationWidget::addScaleKey()
     if(!node)
         return;
 
-    float seconds = ui->timeline->getTimeAtCursor();
+    //float seconds = ui->timeline->getTimeAtCursor();
+    float seconds = ui->keywidgetView->getTimeAtCursor();
     QVector3D scale = node->scale;
 
     auto frameSet = node->animation->keyFrameSet;
-    frameSet->getOrCreateFrame("Scale X")->addKey(seconds,scale.x());
-    frameSet->getOrCreateFrame("Scale Y")->addKey(seconds,scale.y());
-    frameSet->getOrCreateFrame("Scale Z")->addKey(seconds,scale.z());
+    frameSet->getOrCreateFrame("Scale X")->addKey(scale.x(),seconds);
+    frameSet->getOrCreateFrame("Scale Y")->addKey(scale.y(),seconds);
+    frameSet->getOrCreateFrame("Scale Z")->addKey(scale.z(),seconds);
 
     repaintViews();
 }

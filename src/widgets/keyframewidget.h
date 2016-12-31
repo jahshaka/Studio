@@ -52,8 +52,8 @@ private:
     float minRange;
     float maxRange;
 
-    //indicates current time
-    int cursorPos;
+    //indicates time at cursor
+    float cursorPos;
 
     bool dragging;
     int scaleRatio;
