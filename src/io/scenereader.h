@@ -18,6 +18,9 @@
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/graphicshelper.h"
+#include "../irisgl/src/animation/animation.h"
+#include "../irisgl/src/animation/keyframeanimation.h"
+#include "../irisgl/src/animation/keyframeset.h"
 
 class SceneReader:public AssetIOBase
 {
@@ -77,6 +80,8 @@ public:
         //read transform
         readSceneNodeTransform(nodeObj,sceneNode);
 
+        readAnimationData(nodeObj,sceneNode);
+
         //read name
         sceneNode->name = nodeObj["name"].toString("");
 
@@ -89,6 +94,43 @@ public:
         }
 
         return sceneNode;
+    }
+
+
+    void readAnimationData(QJsonObject& nodeObj,QSharedPointer<iris::SceneNode> sceneNode)
+    {
+        auto animObj = nodeObj["animation"].toObject();
+        if(animObj.isEmpty())
+            return;
+
+        auto framesArray = animObj["frames"].toArray();
+        if(framesArray.isEmpty())
+            return;
+
+        auto animation = iris::Animation::create();
+
+        for(auto frameValue:framesArray)
+        {
+            auto frameObj = frameValue.toObject();
+
+            auto frame = new iris::FloatKeyFrame();
+            frame->name = frameObj["name"].toString("Frame");
+
+
+            auto keysObj = frameObj["keys"].toArray();
+            for(auto keyValue:keysObj)
+            {
+                auto keyObj = keyValue.toObject();
+                float time = keyObj["time"].toDouble(0);
+                float value = keyObj["value"].toDouble(0);
+                frame->addKey(value,time);
+            }
+            animation->keyFrameSet->keyFrames.insert(frame->name,frame);
+            animation->length = animObj["length"].toDouble(1);
+            animation->loop = animObj["loop"].toBool(false);
+        }
+
+        sceneNode->animation = animation;
     }
 
     /**
