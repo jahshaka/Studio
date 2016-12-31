@@ -199,6 +199,11 @@ void KeyFrameWidget::mousePressEvent(QMouseEvent* evt)
     {
         this->selectedKey = this->getSelectedKey(mousePos.x(),mousePos.y());
     }
+    else if(leftButtonDown)
+    {
+        cursorPos = posToTime(evt->x());
+        emit cursorTimeChanged(cursorPos);
+    }
 }
 
 void KeyFrameWidget::mouseReleaseEvent(QMouseEvent* evt)
@@ -232,12 +237,13 @@ void KeyFrameWidget::mouseMoveEvent(QMouseEvent* evt)
     if(leftButtonDown && selectedKey!=nullptr)
     {
         //key dragging
-        auto timeDiff = posToTime(evt->x())-posToTime(cursorPos);
+        auto timeDiff = posToTime(evt->x())-posToTime(mousePos.x());
         selectedKey->time+=timeDiff;
     }
     else if(leftButtonDown)
     {
         cursorPos = posToTime(evt->x());
+        emit cursorTimeChanged(cursorPos);
     }
 
     if(middleButtonDown)

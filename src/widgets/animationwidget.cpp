@@ -19,6 +19,8 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
 #include "../irisgl/src/animation/animation.h"
+#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/core/scene.h"
 
 
 AnimationWidget::AnimationWidget(QWidget *parent) :
@@ -112,12 +114,20 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     connect(ui->animStartTime,SIGNAL(valueChanged(int)),this,SLOT(setAnimstart(int)));
     connect(ui->loopAnim,SIGNAL(clicked(bool)),this,SLOT(setLooping(bool)));
 
+    connect(ui->keywidgetView,SIGNAL(cursorTimeChanged(float)),this,SLOT(onObjectAnimationTimeChanged(float)));
+    connect(ui->timeline,SIGNAL(cursorMoved(float)),this,SLOT(onSceneAnimationTimeChanged(float)));
+
     mainTimeline = nullptr;
 }
 
 AnimationWidget::~AnimationWidget()
 {
     delete ui;
+}
+
+void AnimationWidget::setScene(iris::ScenePtr scene)
+{
+    this->scene = scene;
 }
 
 void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
@@ -435,4 +445,20 @@ void AnimationWidget::setAnimstart(int time)
     node->animStartTime = time;
     this->showHighlight();
     */
+}
+
+void AnimationWidget::onObjectAnimationTimeChanged(float timeInSeconds)
+{
+    if(!!node)
+    {
+        node->updateAnimation(timeInSeconds);
+    }
+}
+
+void AnimationWidget::onSceneAnimationTimeChanged(float timeInSeconds)
+{
+    if(!!scene)
+    {
+        scene->updateSceneAnimation(timeInSeconds);
+    }
 }

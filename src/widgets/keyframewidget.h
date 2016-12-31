@@ -28,6 +28,8 @@ namespace iris
 
 class KeyFrameWidget:public QWidget
 {
+    Q_OBJECT
+
     /**
      * viewLeft and viewRight are like the "camera" of the keyframes
      * they are used for translating keys from their local "key space"
@@ -96,6 +98,9 @@ public:
     void wheelEvent(QWheelEvent* evt);
     //void resizeEvent(QResizeEvent* event);
     void paintEvent(QPaintEvent *painter);
+
+signals:
+    void cursorTimeChanged(float timeInSeconds);
 
 private:
     /**
