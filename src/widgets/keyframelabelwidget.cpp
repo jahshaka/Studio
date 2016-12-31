@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/animation/keyframeset.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
+#include "../irisgl/src/animation/animation.h"
 #include "keyframelabelwidget.h"
 
 
@@ -40,7 +41,6 @@ void KeyFrameLabelWidget::setSceneNode(iris::SceneNodePtr node)
 
 void KeyFrameLabelWidget::paintEvent(QPaintEvent *painter)
 {
-
     Q_UNUSED(painter);
 
     int widgetWidth = this->geometry().width();
@@ -54,9 +54,9 @@ void KeyFrameLabelWidget::paintEvent(QPaintEvent *painter)
     int frameHeight = 20;
     int ypos = 0;
 
-    if(!!obj && !!obj->keyFrameSet)
+    if(!!obj && !!obj->animation)
     {
-        auto keyFrames = obj->keyFrameSet->keyFrames;
+        auto keyFrames = obj->animation->keyFrameSet->keyFrames;
         for(auto iter = keyFrames.begin();
             iter!=keyFrames.end();
             iter++)

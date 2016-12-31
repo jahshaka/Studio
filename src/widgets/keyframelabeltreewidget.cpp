@@ -4,6 +4,7 @@
 #include <QStringList>
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
+#include "../irisgl/src/animation/animation.h"
 #include "../irisgl/src/core/scenenode.h"
 
 class KeyFrameGroup
@@ -29,9 +30,9 @@ KeyFrameLabelTreeWidget::~KeyFrameLabelTreeWidget()
 void KeyFrameLabelTreeWidget::setSceneNode(iris::SceneNodePtr node)
 {
     this->node = node;
-    if(!!node && !!node->keyFrameSet)
+    if(!!node && !!node->animation->keyFrameSet)
     {
-        parseKeyFramesToGroups(node->keyFrameSet);
+        parseKeyFramesToGroups(node->animation->keyFrameSet);
 
         //build tree from groups
         buildTreeFromKeyFrameGroups(groups);

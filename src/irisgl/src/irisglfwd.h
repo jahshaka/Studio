@@ -32,6 +32,7 @@ class FullScreenQuad;
 class DefaultMaterial;
 class ForwardRenderer;
 class KeyFrameSet;
+class Animation;
 
 typedef QSharedPointer<Shader> ShaderPtr;
 typedef QSharedPointer<Scene> ScenePtr;
@@ -47,6 +48,7 @@ typedef QSharedPointer<Texture> TexturePtr;
 typedef QSharedPointer<ForwardRenderer> ForwardRendererPtr;
 typedef QSharedPointer<KeyFrameSet> KeyFrameSetPtr;
 typedef QSharedPointer<FloatKeyFrame> FloatKeyFramePtr;
+typedef QSharedPointer<Animation> AnimationPtr;
 
 
 }

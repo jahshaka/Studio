@@ -48,7 +48,8 @@ public:
     SceneNodePtr parent;
     QList<SceneNodePtr> children;
 
-    KeyFrameSetPtr keyFrameSet;
+    //KeyFrameSetPtr keyFrameSet;
+    AnimationPtr animation;
 
     // editor specific
     bool duplicable;

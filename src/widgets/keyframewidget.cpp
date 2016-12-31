@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/animation/keyframeset.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
+#include "../irisgl/src/animation/animation.h"
 #include "keyframewidget.h"
 #include <QMenu>
 #include <math.h>
@@ -25,13 +26,13 @@ For more information see the LICENSE file
 KeyFrameWidget::KeyFrameWidget(QWidget* parent):
     QWidget(parent)
 {
-    this->setGeometry(0,0,800,500);
+    //this->setGeometry(0,0,800,500);
 
     bgColor = QColor::fromRgb(50,50,50);
     itemColor = QColor::fromRgb(255,255,255);
 
     maxTimeInSeconds = 30;
-    cursorPos = 10;
+    cursorPos = 5;
 
     linePen = QPen(itemColor);
     cursorPen = QPen(QColor::fromRgb(142,45,197));
@@ -91,7 +92,7 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
     int ypos = -20;
 
 
-    if(obj!=nullptr && !!obj->keyFrameSet)
+    if(obj!=nullptr && !!obj->animation)
     {
         /*
         if(obj->transformAnim!=nullptr)
@@ -106,7 +107,7 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
                 drawFrame(obj->transformAnim->scale,&paint,ypos+=frameHeight);
         }*/
 
-        auto frameSet = obj->keyFrameSet;
+        auto frameSet = obj->animation->keyFrameSet;
 
         for(auto frame:frameSet->keyFrames)
         {
@@ -339,7 +340,7 @@ iris::FloatKey* KeyFrameWidget::getSelectedKey(int x,int y)
 
     int frameHeight = 20;
     int ypos = -20;
-    for(auto keyFrame:obj->keyFrameSet->keyFrames)
+    for(auto keyFrame:obj->animation->keyFrameSet->keyFrames)
     {
         ypos+=frameHeight;
         for(auto key:keyFrame->keys)

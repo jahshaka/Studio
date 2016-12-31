@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "scenenode.h"
 #include "scene.h"
 #include "../animation/keyframeset.h"
+#include "../animation/animation.h"
 
 namespace iris
 {
@@ -33,7 +34,8 @@ SceneNode::SceneNode():
     localTransform.setToIdentity();
     globalTransform.setToIdentity();
 
-    keyFrameSet = KeyFrameSet::create();
+    //keyFrameSet = KeyFrameSet::create();
+    animation = iris::Animation::create();
 }
 
 SceneNodePtr SceneNode::create()
@@ -121,6 +123,7 @@ bool SceneNode::isRootNode()
 void SceneNode::updateAnimation(float time)
 {
     //@todo: cache transformation animations for faster lookup
+    auto keyFrameSet = animation->keyFrameSet;
 
     if(keyFrameSet->hasKeyFrame("Translation X"))
         pos.setX(keyFrameSet->getKeyFrame("Translation X")->getValueAt(time));

@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include <QTime>
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
+#include "../irisgl/src/animation/animation.h"
 
 
 AnimationWidget::AnimationWidget(QWidget *parent) :
@@ -231,7 +232,7 @@ void AnimationWidget::addPosKey()
     QVector3D pos = node->pos;
     //node->transformAnim->pos->addKey(pos,seconds);
 
-    auto frameSet = node->keyFrameSet;
+    auto frameSet = node->animation->keyFrameSet;
     frameSet->getOrCreateFrame("Translation X")->addKey(seconds,pos.x());
     frameSet->getOrCreateFrame("Translation Y")->addKey(seconds,pos.y());
     frameSet->getOrCreateFrame("Translation Z")->addKey(seconds,pos.z());
@@ -249,7 +250,7 @@ void AnimationWidget::addRotKey()
     float seconds = ui->timeline->getTimeAtCursor();
     QVector3D rot = node->rot.toEulerAngles();
 
-    auto frameSet = node->keyFrameSet;
+    auto frameSet = node->animation->keyFrameSet;
     frameSet->getOrCreateFrame("Rotation X")->addKey(seconds,rot.x());
     frameSet->getOrCreateFrame("Rotation Y")->addKey(seconds,rot.y());
     frameSet->getOrCreateFrame("Rotation Z")->addKey(seconds,rot.z());
@@ -264,7 +265,7 @@ void AnimationWidget::addScaleKey()
     float seconds = ui->timeline->getTimeAtCursor();
     QVector3D scale = node->scale;
 
-    auto frameSet = node->keyFrameSet;
+    auto frameSet = node->animation->keyFrameSet;
     frameSet->getOrCreateFrame("Scale X")->addKey(seconds,scale.x());
     frameSet->getOrCreateFrame("Scale Y")->addKey(seconds,scale.y());
     frameSet->getOrCreateFrame("Scale Z")->addKey(seconds,scale.z());

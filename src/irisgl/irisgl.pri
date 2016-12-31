@@ -40,7 +40,8 @@ HEADERS += \
     $$PWD/src/irisgl.h \
     $$PWD/src/math/intersectionhelper.h \
     $$PWD/src/animation/keyframeset.h \
-    $$PWD/src/math/bezierhelper.h
+    $$PWD/src/math/bezierhelper.h \
+    $$PWD/src/animation/animation.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -63,4 +64,5 @@ SOURCES += \
     $$PWD/src/geometry/trimesh.cpp \
     $$PWD/src/graphics/vertexlayout.cpp \
     $$PWD/src/graphics/shader.cpp \
-    $$PWD/src/graphics/texture.cpp
+    $$PWD/src/graphics/texture.cpp \
+    $$PWD/src/animation/animation.cpp
