@@ -5,6 +5,7 @@
  */
 
 #include <QSharedPointer>
+#include "animation/keyframeanimation.h"
 
 namespace iris
 {
@@ -30,6 +31,8 @@ class Billboard;
 class FullScreenQuad;
 class DefaultMaterial;
 class ForwardRenderer;
+class KeyFrameSet;
+class Animation;
 
 typedef QSharedPointer<Shader> ShaderPtr;
 typedef QSharedPointer<Scene> ScenePtr;
@@ -43,6 +46,9 @@ typedef QSharedPointer<DefaultSkyMaterial> DefaultSkyMaterialPtr;
 typedef QSharedPointer<Texture2D> Texture2DPtr;
 typedef QSharedPointer<Texture> TexturePtr;
 typedef QSharedPointer<ForwardRenderer> ForwardRendererPtr;
+typedef QSharedPointer<KeyFrameSet> KeyFrameSetPtr;
+typedef QSharedPointer<FloatKeyFrame> FloatKeyFramePtr;
+typedef QSharedPointer<Animation> AnimationPtr;
 
 
 }

@@ -30,6 +30,7 @@ namespace iris
 class AnimationWidget : public QWidget
 {
     Q_OBJECT
+    iris::ScenePtr scene;
     iris::SceneNodePtr node;
     QTimer* timer;
     //http://stackoverflow.com/questions/17571717/accessing-the-elapsed-seconds-of-a-qtimer
@@ -46,7 +47,8 @@ public:
     explicit AnimationWidget(QWidget *parent = 0);
     ~AnimationWidget();
 
-    void setSceneNode(QSharedPointer<iris::SceneNode> node);
+    void setScene(iris::ScenePtr scene);
+    void setSceneNode(iris::SceneNodePtr node);
 
     void setMainTimelineWidget(TimelineWidget* tl)
     {
@@ -104,6 +106,12 @@ public:
         //ui->timeControls->update();
     }
     void repaintViews();
+
+    //startRange and endRange are in seconds
+    void setTimeViewRange(float startRange,float endRange);
+
+    //sets cursor position at time
+    void setCursorPositionAtTime(float timeInSeconds);
 private:
 
     void removeNodeSpecificActions();
@@ -152,6 +160,8 @@ private slots:
     void timeEditChanged(QTime);
     void setAnimstart(int time);
 
+    void onObjectAnimationTimeChanged(float timeInSeconds);
+    void onSceneAnimationTimeChanged(float timeInSeconds);
 private:
     float time;
     float timerSpeed;

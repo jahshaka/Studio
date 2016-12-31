@@ -29,12 +29,24 @@ enum class KeyFrameType
     String
 };
 
+enum class TangentType
+{
+    Free,
+    Linear
+};
+
 template<typename T>
 class Key
 {
 public:
     T value;
     double time;
+
+    TangentType leftTangent;
+    TangentType rightTangent;
+
+    QVector2D leftHandle;
+    QVector2D rightHandle;
 
     inline bool operator< ( const T& rhs)
     {
@@ -211,11 +223,15 @@ public:
 
     virtual ~KeyFrame()
     {
+        for(auto iter = keys.begin();iter!=keys.end();iter++)
+            delete *iter;
     }
 
 protected:
     virtual T interpolate(T a,T b,float t)=0;
 };
+
+typedef Key<float> FloatKey;
 
 class FloatKeyFrame:public KeyFrame<float>
 {

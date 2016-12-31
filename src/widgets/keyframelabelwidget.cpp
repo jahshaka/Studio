@@ -16,6 +16,9 @@ For more information see the LICENSE file
 #include <vector>
 //#include "../scenegraph/scenenodes.h"
 #include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/animation/keyframeset.h"
+#include "../irisgl/src/animation/keyframeanimation.h"
+#include "../irisgl/src/animation/animation.h"
 #include "keyframelabelwidget.h"
 
 
@@ -38,7 +41,6 @@ void KeyFrameLabelWidget::setSceneNode(iris::SceneNodePtr node)
 
 void KeyFrameLabelWidget::paintEvent(QPaintEvent *painter)
 {
-    /*
     Q_UNUSED(painter);
 
     int widgetWidth = this->geometry().width();
@@ -52,22 +54,18 @@ void KeyFrameLabelWidget::paintEvent(QPaintEvent *painter)
     int frameHeight = 20;
     int ypos = 0;
 
-    if(obj!=nullptr)
+    if(!!obj && !!obj->animation)
     {
-        if(obj->transformAnim!=nullptr)
+        auto keyFrames = obj->animation->keyFrameSet->keyFrames;
+        for(auto iter = keyFrames.begin();
+            iter!=keyFrames.end();
+            iter++)
         {
-            if(obj->transformAnim->pos->hasKeys())
-                drawFrameLabel("location",&paint,ypos+=frameHeight);
-
-            if(obj->transformAnim->rot->hasKeys())
-                drawFrameLabel("rotation",&paint,ypos+=frameHeight);
-
-            if(obj->transformAnim->scale->hasKeys())
-                drawFrameLabel("scale",&paint,ypos+=frameHeight);
+            drawFrameLabel(iter.key(),&paint,ypos+=frameHeight);
         }
 
     }
-    */
+
 }
 
 void KeyFrameLabelWidget::drawFrameLabel(QString name,QPainter* paint,int yBottom)

@@ -14,8 +14,9 @@ For more information see the LICENSE file
 
 #include "QVector3D"
 #include "QQuaternion"
-#include "keyframeanimation.h"
+//#include "keyframeanimation.h"
 
+/*
 namespace iris
 {
 
@@ -35,6 +36,7 @@ public:
         time = 0;
     }
 };
+*/
 
 }
 

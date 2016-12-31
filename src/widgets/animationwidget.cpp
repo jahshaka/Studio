@@ -16,6 +16,11 @@ For more information see the LICENSE file
 #include <QTimer>
 #include <QElapsedTimer>
 #include <QTime>
+#include "../irisgl/src/animation/keyframeanimation.h"
+#include "../irisgl/src/animation/keyframeset.h"
+#include "../irisgl/src/animation/animation.h"
+#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/core/scene.h"
 
 
 AnimationWidget::AnimationWidget(QWidget *parent) :
@@ -109,12 +114,20 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     connect(ui->animStartTime,SIGNAL(valueChanged(int)),this,SLOT(setAnimstart(int)));
     connect(ui->loopAnim,SIGNAL(clicked(bool)),this,SLOT(setLooping(bool)));
 
+    connect(ui->keywidgetView,SIGNAL(cursorTimeChanged(float)),this,SLOT(onObjectAnimationTimeChanged(float)));
+    connect(ui->timeline,SIGNAL(cursorMoved(float)),this,SLOT(onSceneAnimationTimeChanged(float)));
+
     mainTimeline = nullptr;
 }
 
 AnimationWidget::~AnimationWidget()
 {
     delete ui;
+}
+
+void AnimationWidget::setScene(iris::ScenePtr scene)
+{
+    this->scene = scene;
 }
 
 void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
@@ -207,52 +220,70 @@ void AnimationWidget::repaintViews()
     ui->keylabelView->repaint();
 }
 
+/*
+//startRange and endRange are in seconds
+void AnimationWidget::setAnimationViewRange(float startRange,float endRange)
+{
+    //ui->timeline->set
+}
+
+//sets cursor position at time
+void AnimationWidget::setCursorPositionAtTime(float timeInSeconds)
+{
+
+}
+*/
 void AnimationWidget::addPosKey()
 {
-    /*
-    if(node==nullptr)
+    if(!node)
         return;
 
-    float seconds = ui->timeline->getTimeAtCursor();
+    //float seconds = ui->timeline->getTimeAtCursor();
+    float seconds = ui->keywidgetView->getTimeAtCursor();
     QVector3D pos = node->pos;
-    node->transformAnim->pos->addKey(pos,seconds);
+    //node->transformAnim->pos->addKey(pos,seconds);
 
-    node->updateAnimPathFromKeyFrames();
+    auto frameSet = node->animation->keyFrameSet;
+    frameSet->getOrCreateFrame("Translation X")->addKey(pos.x(),seconds);
+    frameSet->getOrCreateFrame("Translation Y")->addKey(pos.y(),seconds);
+    frameSet->getOrCreateFrame("Translation Z")->addKey(pos.z(),seconds);
+
+    //node->updateAnimPathFromKeyFrames();
 
     repaintViews();
-    */
 }
 
 void AnimationWidget::addRotKey()
 {
-    /*
-    if(node==nullptr)
+    if(!node)
         return;
 
-    float seconds = ui->timeline->getTimeAtCursor();
-    //QQuaternion rot = node->rot;
-    node->transformAnim->rot->addKey(node->rot,seconds);
+    //float seconds = ui->timeline->getTimeAtCursor();
+    float seconds = ui->keywidgetView->getTimeAtCursor();
+    QVector3D rot = node->rot.toEulerAngles();
 
-    //need the transform in euler so we get it from the ui directly
-    //node stores rot in quaternions
-
-
+    auto frameSet = node->animation->keyFrameSet;
+    frameSet->getOrCreateFrame("Rotation X")->addKey(rot.x(),seconds);
+    frameSet->getOrCreateFrame("Rotation Y")->addKey(rot.y(),seconds);
+    frameSet->getOrCreateFrame("Rotation Z")->addKey(rot.z(),seconds);
     repaintViews();
-    */
 }
 
 void AnimationWidget::addScaleKey()
 {
-    /*
-    if(node==nullptr)
+    if(!node)
         return;
 
-    float seconds = ui->timeline->getTimeAtCursor();
+    //float seconds = ui->timeline->getTimeAtCursor();
+    float seconds = ui->keywidgetView->getTimeAtCursor();
     QVector3D scale = node->scale;
-    node->transformAnim->scale->addKey(scale,seconds);
+
+    auto frameSet = node->animation->keyFrameSet;
+    frameSet->getOrCreateFrame("Scale X")->addKey(scale.x(),seconds);
+    frameSet->getOrCreateFrame("Scale Y")->addKey(scale.y(),seconds);
+    frameSet->getOrCreateFrame("Scale Z")->addKey(scale.z(),seconds);
 
     repaintViews();
-    */
 }
 
 void AnimationWidget::addPosRotKey()
@@ -414,4 +445,20 @@ void AnimationWidget::setAnimstart(int time)
     node->animStartTime = time;
     this->showHighlight();
     */
+}
+
+void AnimationWidget::onObjectAnimationTimeChanged(float timeInSeconds)
+{
+    if(!!node)
+    {
+        node->updateAnimation(timeInSeconds);
+    }
+}
+
+void AnimationWidget::onSceneAnimationTimeChanged(float timeInSeconds)
+{
+    if(!!scene)
+    {
+        scene->updateSceneAnimation(timeInSeconds);
+    }
 }

@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "scenenode.h"
 #include "scene.h"
+#include "../animation/keyframeset.h"
+#include "../animation/animation.h"
 
 namespace iris
 {
@@ -31,6 +33,9 @@ SceneNode::SceneNode():
 
     localTransform.setToIdentity();
     globalTransform.setToIdentity();
+
+    //keyFrameSet = KeyFrameSet::create();
+    animation = iris::Animation::create();
 }
 
 SceneNodePtr SceneNode::create()
@@ -113,6 +118,40 @@ bool SceneNode::isRootNode()
         return true;
 
     return false;
+}
+
+void SceneNode::updateAnimation(float time)
+{
+    //@todo: cache transformation animations for faster lookup
+    auto keyFrameSet = animation->keyFrameSet;
+
+    if(keyFrameSet->hasKeyFrame("Translation X"))
+        pos.setX(keyFrameSet->getKeyFrame("Translation X")->getValueAt(time));
+    if(keyFrameSet->hasKeyFrame("Translation Y"))
+        pos.setY(keyFrameSet->getKeyFrame("Translation Y")->getValueAt(time));
+    if(keyFrameSet->hasKeyFrame("Translation Z"))
+        pos.setZ(keyFrameSet->getKeyFrame("Translation Z")->getValueAt(time));
+
+    auto rotEuler = rot.toEulerAngles();
+    if(keyFrameSet->hasKeyFrame("Rotation X"))
+        rotEuler.setX(keyFrameSet->getKeyFrame("Rotation X")->getValueAt(time));
+    if(keyFrameSet->hasKeyFrame("Rotation Y"))
+        rotEuler.setY(keyFrameSet->getKeyFrame("Rotation Y")->getValueAt(time));
+    if(keyFrameSet->hasKeyFrame("Rotation Z"))
+        rotEuler.setZ(keyFrameSet->getKeyFrame("Rotation Z")->getValueAt(time));
+    rot = QQuaternion::fromEulerAngles(rotEuler);
+
+    if(keyFrameSet->hasKeyFrame("Scale X"))
+        scale.setX(keyFrameSet->getKeyFrame("Scale X")->getValueAt(time));
+    if(keyFrameSet->hasKeyFrame("Scale Y"))
+        scale.setY(keyFrameSet->getKeyFrame("Scale Y")->getValueAt(time));
+    if(keyFrameSet->hasKeyFrame("Scale Z"))
+        scale.setZ(keyFrameSet->getKeyFrame("Scale Z")->getValueAt(time));
+
+    //update children
+    for (auto child : children) {
+        child->updateAnimation(time);
+    }
 }
 
 void SceneNode::update(float dt)

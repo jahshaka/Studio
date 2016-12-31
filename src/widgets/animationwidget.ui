@@ -15,7 +15,7 @@
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <property name="spacing">
-    <number>3</number>
+    <number>0</number>
    </property>
    <property name="leftMargin">
     <number>0</number>
@@ -55,6 +55,9 @@
       </property>
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout_3">
+        <property name="spacing">
+         <number>0</number>
+        </property>
         <item>
          <widget class="QWidget" name="widget" native="true">
           <property name="sizePolicy">
@@ -65,7 +68,7 @@
           </property>
           <property name="minimumSize">
            <size>
-            <width>100</width>
+            <width>150</width>
             <height>0</height>
            </size>
           </property>
@@ -102,7 +105,7 @@
              <property name="minimumSize">
               <size>
                <width>0</width>
-               <height>30</height>
+               <height>40</height>
               </size>
              </property>
              <property name="maximumSize">
@@ -136,7 +139,7 @@ border_bottom: 1px solid #252525;
            <item>
             <widget class="KeyFrameLabelWidget" name="keylabelView" native="true">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
+              <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
@@ -722,7 +725,7 @@ border-style: inset;
   <customwidget>
    <class>KeyFrameLabelWidget</class>
    <extends>QWidget</extends>
-   <header location="global">src/widgets/keyframelabelwidget.h</header>
+   <header>src/widgets/keyframelabelwidget.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

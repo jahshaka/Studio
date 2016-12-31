@@ -48,6 +48,9 @@ public:
     SceneNodePtr parent;
     QList<SceneNodePtr> children;
 
+    //KeyFrameSetPtr keyFrameSet;
+    AnimationPtr animation;
+
     // editor specific
     bool duplicable;
     bool visible;
@@ -104,6 +107,7 @@ public:
     QMatrix4x4 getLocalTransform();
 
     virtual void update(float dt);
+    virtual void updateAnimation(float time);
 
 private:
     void setParent(SceneNodePtr node);

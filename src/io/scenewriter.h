@@ -14,7 +14,9 @@
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
-
+#include "../irisgl/src/animation/animation.h"
+#include "../irisgl/src/animation/keyframeanimation.h"
+#include "../irisgl/src/animation/keyframeset.h"
 /*
 namespace iris
 {
@@ -54,31 +56,10 @@ private:
         //todo: add editor specific data
     }
 
-    void writeSceneNode(QJsonObject& sceneNodeObj,QSharedPointer<iris::SceneNode> sceneNode)
+    void writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sceneNode)
     {
         sceneNodeObj["name"] = sceneNode->getName();
         sceneNodeObj["type"] = getSceneNodeTypeName(sceneNode->sceneNodeType);
-
-        /*
-        QJsonObject pos;
-        pos["x"] = sceneNode->pos.x();
-        pos["y"] = sceneNode->pos.y();
-        pos["z"] = sceneNode->pos.z();
-        sceneNodeObj["pos"] = pos;
-
-        QJsonObject rot;
-        auto r = sceneNode->rot.toEulerAngles();
-        pos["x"] = r.x();
-        pos["y"] = r.y();
-        pos["z"] = r.z();
-        sceneNodeObj["rot"] = rot;
-
-        QJsonObject scale;
-        scale["x"] = sceneNode->scale.x();
-        scale["y"] = sceneNode->scale.y();
-        scale["z"] = sceneNode->scale.z();
-        sceneNodeObj["scale"] = scale;
-        */
 
         sceneNodeObj["pos"] = jsonVector3(sceneNode->pos);
         auto rot = sceneNode->rot.toEulerAngles();
@@ -98,6 +79,8 @@ private:
             break;
         }
 
+        writeAnimationData(sceneNodeObj,sceneNode);
+
         QJsonArray childrenArray;
         for(auto childNode:sceneNode->children)
         {
@@ -107,6 +90,43 @@ private:
             childrenArray.append(childNodeObj);
         }
         sceneNodeObj["children"] = childrenArray;
+    }
+
+    void writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePtr sceneNode)
+    {
+        auto anim = sceneNode->animation;
+        if(!anim)
+            return;
+
+        QJsonObject animObj;
+        animObj["name"] = anim->name;
+        animObj["length"] = anim->length;
+        animObj["loop"] = anim->loop;
+
+        QJsonArray frames;
+        for(auto frameName:anim->keyFrameSet->keyFrames.keys())
+        {
+            auto frame = anim->keyFrameSet->keyFrames[frameName];
+
+            QJsonObject frameObj;
+            QJsonArray keys;
+            for(auto key:frame->keys)
+            {
+                QJsonObject keyObj;
+                keyObj["time"] = key->time;
+                keyObj["value"] = key->value;
+
+                keys.append(keyObj);
+            }
+
+            frameObj["keys"] = keys;
+            frameObj["name"] = frameName;
+            frames.append(frameObj);
+        }
+
+        animObj["frames"] = frames;
+
+        sceneNodeObj["animation"] = animObj;
     }
 
     void writeMeshData(QJsonObject& sceneNodeObject,QSharedPointer<iris::MeshNode> meshNode)
