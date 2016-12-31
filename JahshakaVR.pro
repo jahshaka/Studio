@@ -137,7 +137,7 @@ HEADERS  += src/mainwindow.h \
     src/io/assetiobase.h \
     src/core/materialpreset.h \
     src/io/materialpresetreader.h \
-    src/widgets/keyframelabeltreewidget.h
+    src/widgets/keyframelabeltreewidget.h \
     src/io/materialpresetreader.h \
     src/editor/gizmohandle.h \
     src/editor/translationgizmo.h \
