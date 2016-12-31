@@ -8,6 +8,7 @@
 #include <QDebug>
 
 #include "../irisgl/src/irisgl.h"
+#include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
@@ -17,18 +18,18 @@
 #include "../irisgl/src/geometry/trimesh.h"
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/viewport.h"
-#include "../irisgl/src/core/scene.h"
 #include "../irisgl/src/graphics/utils/fullscreenquad.h"
 #include "../irisgl/src/math/intersectionhelper.h"
-
 
 #include "../editor/cameracontrollerbase.h"
 #include "../editor/editorcameracontroller.h"
 #include "../editor/orbitalcameracontroller.h"
 
+#include "../editor/translationgizmo.h"
+#include "../editor/rotationgizmo.h"
+#include "../editor/scalegizmo.h"
 
-SceneViewWidget::SceneViewWidget(QWidget *parent):
-    QOpenGLWidget(parent)
+SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 {
     dragging = false;
 
@@ -51,9 +52,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
     //camController = orbitalCam;
 
     editorCam = iris::CameraNode::create();
-    editorCam->pos = QVector3D(0,5,13);
-    //editorCam->pos = QVector3D(0,0,10);
-    editorCam->rot = QQuaternion::fromEulerAngles(-15,0,0);
+    editorCam->pos = QVector3D(0, 5, 7);
+    editorCam->rot = QQuaternion::fromEulerAngles(-20, 0, 0);
     camController->setCamera(editorCam);
 
     viewportMode = ViewportMode::Editor;
@@ -61,58 +61,18 @@ SceneViewWidget::SceneViewWidget(QWidget *parent):
 
 void SceneViewWidget::initialize()
 {
+    initialH = true;
 
-    /*
-    auto scene = iris::Scene::create();
+    translationGizmo = new TranslationGizmo(editorCam);
+    translationGizmo->createHandleShader();
 
-    auto cam = iris::CameraNode::create();
-    cam->pos = QVector3D(0,5,5);
-    cam->rot = QQuaternion::fromEulerAngles(-45,0,0);
-    //cam->lookAt(QVector3D(0,0,0),QVect);
-    scene->setCamera(cam);
-    scene->rootNode->addChild(cam);
+    rotationGizmo = new RotationGizmo(editorCam);
+    rotationGizmo->createHandleShader();
 
-    //second node
-    auto node = iris::MeshNode::create();
-    //boxNode->setMesh("app/models/head.obj");
-    node->setMesh("app/models/plane.obj");
-    node->scale = QVector3D(100,1,100);
+    scaleGizmo = new ScaleGizmo(editorCam);
+    scaleGizmo->createHandleShader();
 
-    auto m = iris::DefaultMaterial::create();
-    node->setMaterial(m);
-    m->setDiffuseColor(QColor(255,255,255));
-    m->setDiffuseTexture(iris::Texture2D::load("app/content/textures/defaultgrid.png"));
-    m->setTextureScale(100);
-    scene->rootNode->addChild(node);
-
-    //add test object with basic material
-    boxNode = iris::MeshNode::create();
-    //boxNode->setMesh("app/models/head.obj");
-    //boxNode->setMesh("app/models/box.obj");
-    boxNode->setMesh("assets/models/StanfordDragon.obj");
-
-    mat = iris::DefaultMaterial::create();
-    boxNode->setMaterial(mat);
-    mat->setDiffuseColor(QColor(255,200,200));
-    mat->setDiffuseTexture(iris::Texture2D::load("app/content/textures/Artistic Pattern.png"));
-
-    //lighting
-    auto light = iris::LightNode::create();
-    light->setLightType(iris::LightType::Point);
-    light->rot = QQuaternion::fromEulerAngles(45,0,0);
-    scene->rootNode->addChild(light);
-    //light->pos = QVector3D(5,5,0);
-    light->pos = QVector3D(-5,5,3);
-    light->intensity = 1;
-    light->icon = iris::Texture2D::load("app/icons/bulb.png");
-
-
-    scene->rootNode->addChild(boxNode);
-    //scene->rootNode->addChild(node);
-    setScene(scene);
-    */
-
-    //camController = new EditorCameraController(cam);
+    viewportGizmo = translationGizmo;
 }
 
 void SceneViewWidget::setScene(QSharedPointer<iris::Scene> scene)
@@ -121,7 +81,7 @@ void SceneViewWidget::setScene(QSharedPointer<iris::Scene> scene)
     scene->setCamera(editorCam);
     renderer->setScene(scene);
 
-    //remove selected scenenode
+    // remove selected scenenode
     selectedNode.reset();
 }
 
@@ -137,8 +97,14 @@ void SceneViewWidget::clearSelectedNode()
     renderer->setSelectedSceneNode(selectedNode);
 }
 
-void SceneViewWidget::updateScene()
+void SceneViewWidget::updateScene(bool once)
 {
+    // update and draw the 3d manipulation gizmo
+    if (!!viewportGizmo->lastSelectedNode) {
+        viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
+        viewportGizmo->render(renderer->GLA, ViewMatrix, ProjMatrix);
+    }
+
 }
 
 void SceneViewWidget::initializeGL()
@@ -155,200 +121,300 @@ void SceneViewWidget::initializeGL()
     initialize();
     fsQuad = new iris::FullScreenQuad();
 
-    emit initializeGraphics(this,this);
+    emit initializeGraphics(this, this);
 
     auto timer = new QTimer(this);
-    connect(timer,SIGNAL(timeout()),this,SLOT(update()));
+    connect(timer, SIGNAL(timeout()), this, SLOT(update()));
     timer->start();
 }
 
 void SceneViewWidget::paintGL()
 {
-    float dt = 1.0f/60.0f;
-    //scene->update(dt);
+    float dt = 1.0f / 60.0f;
+    // scene->update(dt);
     renderScene();
 }
 
 void SceneViewWidget::renderScene()
 {
-    //glViewport(0, 0, this->width(),this->height());
-    glClearColor(0.3f,0.3f,0.3f,1);
-    //glClearColor(1.0f,1.0f,1.0f,1);
+    glClearColor(.3f, .3f, .3f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    QMatrix4x4 view,proj;
+    if (!!renderer && !!scene) {
+        scene->update(1.0f / 60);
 
-    if(!!renderer && !!scene)
-    {
-        scene->update(1.0f/60);
+        if (viewportMode == ViewportMode::Editor) {
+            // @TODO: find a better way to get the MV matrix from our ogl context
+            renderer->renderScene(this->context(), viewport, ViewMatrix, ProjMatrix);
+        } else {
+            renderer->renderSceneVr(this->context(), viewport);
+        }
 
-        if(viewportMode==ViewportMode::Editor)
-            renderer->renderScene(this->context(),viewport,view,proj);
-        else
-            renderer->renderSceneVr(this->context(),viewport);
+        this->updateScene();
     }
 }
 
 void SceneViewWidget::resizeGL(int width, int height)
 {
-    glViewport(0,0,width,height);
-    //camera->updateView(width,height);
+    glViewport(0, 0, width, height);
     viewport->width = width;
     viewport->height = height;
 }
 
-
 bool SceneViewWidget::eventFilter(QObject *obj, QEvent *event)
 {
     QEvent::Type type = event->type();
-    if(type == QEvent::MouseMove)
-    {
+
+    if (type == QEvent::MouseMove) {
         QMouseEvent* evt = static_cast<QMouseEvent*>(event);
         mouseMoveEvent(evt);
         return false;
-    }
-    else if(type == QEvent::MouseButtonPress)
-    {
+    } else if (type == QEvent::MouseButtonPress) {
         QMouseEvent* evt = static_cast<QMouseEvent*>(event);
         mousePressEvent(evt);
         return false;
-    }
-    else if( type == QEvent::MouseButtonRelease)
-    {
+    } else if (type == QEvent::MouseButtonRelease) {
         QMouseEvent* evt = static_cast<QMouseEvent*>(event);
         mouseReleaseEvent(evt);
         return false;
     }
 
-    return QWidget::eventFilter(obj,event);
+    return QWidget::eventFilter(obj, event);
+}
+
+QVector3D SceneViewWidget::calculateMouseRay(const QPointF& pos)
+{
+    float x = pos.x();
+    float y = pos.y();
+
+    // viewport -> NDC
+    float mousex = (2.0f * x) / this->viewport->width - 1.0f;
+    float mousey = (2.0f * y) / this->viewport->height - 1.0f;
+    QVector2D NDC = QVector2D(mousex, -mousey);
+
+    // NDC -> HCC
+    QVector4D HCC = QVector4D(NDC, -1.0f, 1.0f);
+
+    // HCC -> View Space
+    QMatrix4x4 projection_matrix_inverse = this->editorCam->projMatrix.inverted();
+    QVector4D eye_coords = projection_matrix_inverse * HCC;
+    QVector4D ray_eye = QVector4D(eye_coords.x(), eye_coords.y(), -1.0f, 0.0f);
+
+    // View Space -> World Space
+    QMatrix4x4 view_matrix_inverse = this->editorCam->viewMatrix.inverted();
+    QVector4D world_coords = view_matrix_inverse * ray_eye;
+    QVector3D final_ray_coords = QVector3D(world_coords);
+
+    return final_ray_coords.normalized();
 }
 
 void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
 {
-    //issue - only fired when mouse is dragged
+    // @ISSUE - only fired when mouse is dragged
     QPointF localPos = e->localPos();
+    QPointF dir = localPos - prevMousePos;
 
-    QPointF dir = localPos-prevMousePos;
-
-    if(dragging)
-    {
-
-        //camera->rotate(-dir.x(),-dir.y());
-        //if(!!boxNode)
-        //    boxNode->rot *= QQuaternion::fromEulerAngles(0,dir.x(),0);
+    if (e->buttons() == Qt::LeftButton && !!viewportGizmo->currentNode) {
+         viewportGizmo->update(editorCam->pos, calculateMouseRay(localPos));
     }
 
-    if(camController!=nullptr)
-        camController->onMouseMove(-dir.x(),-dir.y());
+    if (camController != nullptr) {
+        camController->onMouseMove(-dir.x(), -dir.y());
+    }
 
     prevMousePos = localPos;
-
-    //qDebug()<<prevMousePos;
-    //doObjectPicking();
 }
 
 void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 {
     prevMousePos = e->localPos();
-    if(e->button()== Qt::RightButton)
-    {
+
+    if (e->button() == Qt::RightButton) {
         dragging = true;
     }
 
-    if(e->button()== Qt::LeftButton)
-    {
-        this->doObjectPicking();
+    if (e->button() == Qt::LeftButton) {
+        editorCam->updateCameraMatrices();
+
+        this->doGizmoPicking(e->localPos());
+
+        if (!!selectedNode) {
+            viewportGizmo->isGizmoHit(editorCam, e->localPos(), this->calculateMouseRay(e->localPos()));
+            viewportGizmo->isHandleHit();
+        }
+
+        // if we don't have a selected node prioritize object picking
+        if (selectedNode.isNull()) {
+            this->doObjectPicking(e->localPos());
+        }
     }
 
-    if(camController!=nullptr)
+    if (camController != nullptr) {
         camController->onMouseDown(e->button());
+    }
 }
 
 void SceneViewWidget::mouseReleaseEvent(QMouseEvent *e)
 {
-    if(e->button()== Qt::RightButton)
-    {
+    if (e->button() == Qt::RightButton) {
         dragging = false;
     }
 
-    if(camController!=nullptr)
+    if (e->button() == Qt::LeftButton) {
+        // maybe explicitly hard reset stuff related to picking here
+        viewportGizmo->onMouseRelease();
+    }
+
+    if (camController != nullptr) {
         camController->onMouseUp(e->button());
+    }
 }
 
 void SceneViewWidget::wheelEvent(QWheelEvent *event)
 {
-    //qDebug()<<"wheel event"<<endl;
-    if(camController!=nullptr)
+    if (camController != nullptr) {
         camController->onMouseWheel(event->delta());
+    }
 }
 
-void SceneViewWidget::doObjectPicking()
+void SceneViewWidget::doObjectPicking(const QPointF& point)
 {
     editorCam->updateCameraMatrices();
 
     auto segStart = this->editorCam->pos;
-    auto rayDir = editorCam->calculatePickingDirection(viewport->width,viewport->height,prevMousePos);
-    auto segEnd = segStart+(rayDir*1000);//todo: remove magic number
+    auto rayDir = this->calculateMouseRay(point) * 512;
+    auto segEnd = segStart + rayDir;
 
     QList<PickingResult> hitList;
-    doScenePicking(scene->getRootNode(),segStart,segEnd,hitList);
-    doLightPicking(segStart,segEnd,hitList);
+    doScenePicking(scene->getRootNode(), segStart, segEnd, hitList);
+    doLightPicking(segStart, segEnd, hitList);
 
-    //Find the closest hit and emit signal
-    if(hitList.size()==0)
-    {
-        emit sceneNodeSelected(iris::SceneNodePtr());//no hits, deselect object
+    if (hitList.size() == 0) {
+        // no hits, deselect last selected object in viewport and hiearchy
+        emit sceneNodeSelected(iris::SceneNodePtr());
         return;
     }
 
-    //sort by distance to camera then return
-    qSort(hitList.begin(),hitList.end(),[](const PickingResult& a,const PickingResult& b)
-    {
-        return a.distanceFromCameraSqrd>b.distanceFromCameraSqrd;
+    // if the size of the list is 1 we know it was the only one so return early
+    if (hitList.size() == 1) {
+        viewportGizmo->lastSelectedNode = hitList[0].hitNode;
+        emit sceneNodeSelected(hitList[0].hitNode);
+        return;
+    }
+
+    // sort by distance to camera then return the closest hit node
+    qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
+        return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
     });
 
+    viewportGizmo->lastSelectedNode = hitList.last().hitNode;
     emit sceneNodeSelected(hitList.last().hitNode);
 }
 
-void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList)
+void SceneViewWidget::doGizmoPicking(const QPointF& point)
 {
+    editorCam->updateCameraMatrices();
 
-    if(sceneNode->getSceneNodeType()==iris::SceneNodeType::Mesh)
-    {
+    auto segStart = this->editorCam->pos;
+    auto rayDir = this->calculateMouseRay(point) * 512;
+    auto segEnd = segStart + rayDir;
+
+    QList<PickingResult> hitList;
+    doMeshPicking(viewportGizmo->getRootNode(), segStart, segEnd, hitList);
+
+    if (hitList.size() == 0) {
+        viewportGizmo->lastSelectedNode = iris::SceneNodePtr();
+        viewportGizmo->currentNode = iris::SceneNodePtr();
+        emit sceneNodeSelected(iris::SceneNodePtr());
+        return;
+    }
+
+    qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
+        return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
+    });
+
+    viewportGizmo->finalHitPoint = hitList.last().hitPoint;
+
+    viewportGizmo->setPlaneOrientation(hitList.last().hitNode->getName());
+
+    viewportGizmo->currentNode = hitList.last().hitNode;
+
+    viewportGizmo->onMousePress(editorCam->pos, this->calculateMouseRay(point) * 512);
+}
+
+void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,
+                                     const QVector3D& segStart,
+                                     const QVector3D& segEnd,
+                                     QList<PickingResult>& hitList)
+{
+    if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
         auto triMesh = meshNode->getMesh()->getTriMesh();
 
-        //transform segment to local space
+        // transform segment to local space
         auto invTransform = meshNode->globalTransform.inverted();
-        auto a = invTransform*segStart;
-        auto b = invTransform*segEnd;
-
+        auto a = invTransform * segStart;
+        auto b = invTransform * segEnd;
 
         QList<iris::TriangleIntersectionResult> results;
-        if(int resultCount = triMesh->getSegmentIntersections(a,b,results))
-        {
-            for(auto triResult:results)
-            {
-                //convert hit to world space
-                auto hitPoint = meshNode->globalTransform*triResult.hitPoint;
+        if (int resultCount = triMesh->getSegmentIntersections(a, b, results)) {
+            for (auto triResult : results) {
+                // convert hit to world space
+                auto hitPoint = meshNode->globalTransform * triResult.hitPoint;
 
                 PickingResult pick;
                 pick.hitNode = sceneNode;
                 pick.hitPoint = hitPoint;
-                pick.distanceFromCameraSqrd = (hitPoint-editorCam->getGlobalPosition()).lengthSquared();
+                pick.distanceFromCameraSqrd = (hitPoint - editorCam->getGlobalPosition()).lengthSquared();
 
                 hitList.append(pick);
             }
         }
     }
 
-    for(auto child:sceneNode->children)
-    {
-        doScenePicking(child,segStart,segEnd,hitList);
+    for (auto child : sceneNode->children) {
+        doScenePicking(child, segStart, segEnd, hitList);
     }
 }
 
-void SceneViewWidget::doLightPicking(const QVector3D& segStart,const QVector3D& segEnd,QList<PickingResult>& hitList)
+void SceneViewWidget::doMeshPicking(const QSharedPointer<iris::SceneNode>& sceneNode,
+                                    const QVector3D& segStart,
+                                    const QVector3D& segEnd,
+                                    QList<PickingResult>& hitList)
+{
+    if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+        auto meshNode = sceneNode.staticCast<iris::MeshNode>();
+        auto triMesh = meshNode->getMesh()->getTriMesh();
+
+        // transform segment to local space
+        auto invTransform = meshNode->globalTransform.inverted();
+        auto a = invTransform * segStart;
+        auto b = invTransform * segEnd;
+
+        QList<iris::TriangleIntersectionResult> results;
+        if (int resultCount = triMesh->getSegmentIntersections(a, b, results)) {
+            for (auto triResult : results) {
+                // convert hit to world space
+                auto hitPoint = meshNode->globalTransform * triResult.hitPoint;
+
+                PickingResult pick;
+                pick.hitNode = sceneNode;
+                pick.hitPoint = hitPoint;
+                pick.distanceFromCameraSqrd = (hitPoint - editorCam->getGlobalPosition()).lengthSquared();
+
+                hitList.append(pick);
+            }
+        }
+    }
+
+    for (auto child : sceneNode->children) {
+        doMeshPicking(child, segStart, segEnd, hitList);
+    }
+}
+
+void SceneViewWidget::doLightPicking(const QVector3D& segStart,
+                                     const QVector3D& segEnd,
+                                     QList<PickingResult>& hitList)
 {
     const float lightRadius = 0.5f;
 
@@ -358,9 +424,12 @@ void SceneViewWidget::doLightPicking(const QVector3D& segStart,const QVector3D& 
     QVector3D hitPoint;
     float t;
 
-    for(auto light:scene->lights)
-    {
-        if(iris::IntersectionHelper::raySphereIntersects(segStart,rayDir,light->pos,lightRadius,t,hitPoint))
+    for (auto light: scene->lights) {
+        if (iris::IntersectionHelper::raySphereIntersects(segStart,
+                                                          rayDir,
+                                                          light->pos,
+                                                          lightRadius,
+                                                          t, hitPoint))
         {
             PickingResult pick;
             pick.hitNode = light.staticCast<iris::SceneNode>();
@@ -399,4 +468,35 @@ void SceneViewWidget::setViewportMode(ViewportMode viewportMode)
 ViewportMode SceneViewWidget::getViewportMode()
 {
     return viewportMode;
+}
+
+void SceneViewWidget::setTransformOrientationLocal()
+{
+    viewportGizmo->setTransformOrientation("Local");
+}
+
+void SceneViewWidget::setTransformOrientationGlobal()
+{
+    viewportGizmo->setTransformOrientation("Global");
+}
+
+void SceneViewWidget::setGizmoLoc()
+{
+    editorCam->updateCameraMatrices();
+    viewportGizmo = translationGizmo;
+    viewportGizmo->lastSelectedNode = selectedNode;
+}
+
+void SceneViewWidget::setGizmoRot()
+{
+    editorCam->updateCameraMatrices();
+    viewportGizmo = rotationGizmo;
+    viewportGizmo->lastSelectedNode = selectedNode;
+}
+
+void SceneViewWidget::setGizmoScale()
+{
+    editorCam->updateCameraMatrices();
+    viewportGizmo = scaleGizmo;
+    viewportGizmo->lastSelectedNode = selectedNode;
 }

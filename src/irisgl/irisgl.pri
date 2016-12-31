@@ -25,7 +25,6 @@ HEADERS += \
     $$PWD/src/graphics/forwardrenderer.h \
     $$PWD/src/materials/defaultmaterial.h \
     $$PWD/src/graphics/vertexlayout.h \
-    $$PWD/src/iris.h \
     $$PWD/src/graphics/viewport.h \
     $$PWD/src/materials/billboardmaterial.h \
     $$PWD/src/graphics/graphicshelper.h \

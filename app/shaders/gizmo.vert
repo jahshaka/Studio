@@ -11,26 +11,25 @@ For more information see the LICENSE file
 
 #version 150 core
 
-in vec3 vertexPosition;
-in vec3 vertexNormal;
+in vec3 a_pos;
+in vec3 a_normal;
 
-out vec3 normal;
-out float originDist;
-out float vecDist;
+out vec3 v_normal;
+out float v_originDist;
+out float v_dist;
 
-uniform mat4 mvp;
-uniform mat3 modelNormalMatrix;
-uniform mat4 modelView;
-
+uniform mat4 u_viewMatrix;
+uniform mat4 u_projMatrix;
+uniform mat4 u_worldMatrix;
 
 void main()
 {
-    normal = normalize(modelNormalMatrix*vertexNormal);
-    gl_Position = mvp * vec4( vertexPosition, 1.0 );
+    v_normal = normalize(u_worldMatrix * vec4(a_normal, 0.0)).xyz;
+    gl_Position = u_projMatrix * u_viewMatrix * u_worldMatrix * vec4(a_pos, 1.0);
 
-    //object's center
-    vec4 originVec = modelView*vec4(0,0,0,1);
-    vec4 viewVec = modelView*vec4(vertexPosition,1.0);
-     vecDist = length(viewVec.xyz);
-     originDist = length(originVec.xyz);
+    vec4 originVec = u_viewMatrix * u_worldMatrix * vec4(0, 0, 0, 1);
+    vec4 viewVec = u_viewMatrix * u_worldMatrix * vec4(a_pos, 1.0);
+
+    v_dist = length(viewVec.xyz);
+    v_originDist = length(originVec.xyz);
 }

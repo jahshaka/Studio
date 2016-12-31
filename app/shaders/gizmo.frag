@@ -11,26 +11,27 @@ For more information see the LICENSE file
 
 #version 150 core
 
-uniform vec4 color;
 out vec4 fragColor;
 
-in vec3 normal;
-in float originDist;
-in float vecDist;
+uniform vec4 color;
+
+in vec3 v_normal;
+in float v_originDist;
+in float v_dist;
 
 uniform bool showHalf;
+
 void main()
 {
-    //if(alpha==0)
-    //    discard;
-
     vec4 ambient = vec4(0.1);
-    vec3 lightVec = -vec3(0,-1,0);//shining down
-    float light = max(dot(normal,lightVec),0.0);
+    vec3 lightVec = -vec3(0, -1, 0); //shining down
+    float light = max(dot(v_normal, lightVec), 0.0);
 
     float alpha = 1;
-    if(showHalf)
-        alpha = clamp(((originDist+0.1)-vecDist)/((originDist+0.1)-originDist),0.0,1.0);
 
-    fragColor = color*(ambient+light*(1.0-ambient),alpha);
+    if (showHalf) {
+        alpha = clamp(((v_originDist + 0.1) - v_dist) / ((v_originDist + 0.1) - v_originDist), 0.0, 1.0);
+    }
+
+    fragColor = color * (ambient + light * (1.0 - ambient), alpha);
 }

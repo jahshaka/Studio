@@ -115,20 +115,27 @@ MainWindow::MainWindow(QWidget *parent) :
     sceneView = new SceneViewWidget(this);
     sceneView->setParent(this);
 
-    //
     QGridLayout* layout = new QGridLayout(ui->sceneContainer);
     layout->addWidget(sceneView);
     layout->setMargin(0);
     ui->sceneContainer->setLayout(layout);
-    connect(sceneView,SIGNAL(initializeGraphics(SceneViewWidget*,QOpenGLFunctions_3_2_Core*)),this,SLOT(initializeGraphics(SceneViewWidget*,QOpenGLFunctions_3_2_Core*)));
 
-    //createTestScene();
+    connect(sceneView, SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),
+            this, SLOT(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)));
 
     ui->sceneHierarchy->setMainWindow(this);
-    connect(ui->sceneHierarchy,SIGNAL(sceneNodeSelected(QSharedPointer<iris::SceneNode>)),this,SLOT(sceneNodeSelected(QSharedPointer<iris::SceneNode>)));
-    connect(sceneView,SIGNAL(sceneNodeSelected(QSharedPointer<iris::SceneNode>)),this,SLOT(sceneNodeSelected(QSharedPointer<iris::SceneNode>)));
 
-    connect(ui->cameraTypeCombo,SIGNAL(currentTextChanged(QString)),this,SLOT(cameraTypeChanged(QString)));
+    connect(ui->sceneHierarchy,SIGNAL(sceneNodeSelected(QSharedPointer<iris::SceneNode>)),
+            this, SLOT(sceneNodeSelected(QSharedPointer<iris::SceneNode>)));
+
+    connect(sceneView, SIGNAL(sceneNodeSelected(QSharedPointer<iris::SceneNode>)),
+            this, SLOT(sceneNodeSelected(QSharedPointer<iris::SceneNode>)));
+
+    connect(ui->cameraTypeCombo, SIGNAL(currentTextChanged(QString)),
+            this, SLOT(cameraTypeChanged(QString)));
+
+    connect(ui->transformCombo, SIGNAL(currentTextChanged(QString)),
+            this, SLOT(transformOrientationChanged(QString)));
 }
 
 void MainWindow::setupVrUi()
@@ -183,6 +190,7 @@ void MainWindow::vrButtonClicked(bool)
         }
     }
 
+
     //needed to apply changes
     ui->vrBtn->style()->unpolish(ui->vrBtn);
     ui->vrBtn->style()->polish(ui->vrBtn);
@@ -194,80 +202,83 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     auto scene = iris::Scene::create();
 
     auto cam = iris::CameraNode::create();
-    cam->pos = QVector3D(5, 2, 1);
-    cam->rot = QQuaternion::fromEulerAngles(-60,0,0);
-    //cam->lookAt(QVector3D(0,0,0),QVect);
+    cam->pos = QVector3D(6, 12, 14);
 
     scene->setCamera(cam);
-    //camControl = new EditorCameraController(cam);
-    //scene->rootNode->addChild(cam);//editor camera shouldnt be a part of the scene itself
+    // editor camera shouldnt be a part of the scene itself
+    // scene->rootNode->addChild(cam);
 
-    //scene->setSkyTexture(iris::Texture2D::load("app/content/skies/vp_sky_v3_015.jpg",false));
-    scene->setSkyColor(QColor(64,64,64,255));
+    scene->setSkyColor(QColor(64, 64, 64, 255));
 
-    //second node
+    // second node
     auto node = iris::MeshNode::create();
-    //boxNode->setMesh("app/models/head.obj");
     node->setMesh("app/models/plane.obj");
-    node->scale = QVector3D(1000,1,1000);
+    node->scale = QVector3D(1024, 1, 1024);
     node->setName("Ground");
 
     auto m = iris::DefaultMaterial::create();
     node->setMaterial(m);
-    m->setDiffuseColor(QColor(255,255,255));
-    m->setDiffuseTexture(iris::Texture2D::load("app/content/textures/tile"));
+    m->setDiffuseColor(QColor(255, 255, 255));
+    m->setDiffuseTexture(iris::Texture2D::load("app/content/textures/tile.png"));
     m->setShininess(0);
-    m->setSpecularColor(QColor(0,0,0));
+    m->setSpecularColor(QColor(0, 0, 0));
     m->setTextureScale(500);
     scene->rootNode->addChild(node);
 
-
-    //add test object with basic material
+    // add test object with basic material
     auto boxNode = iris::MeshNode::create();
-    //boxNode->setMesh("app/models/head.obj");
-    //boxNode->setMesh("app/models/box.obj");
-    boxNode->setMesh("assets/models/StanfordBuddha.obj");
-//    boxNode->scale = QVector3D(3.0f, 3.0f, 3.0f);
+    boxNode->setMesh("assets/models/StanfordLucy.obj");
+    boxNode->setName("Stanford Lucy");
+    boxNode->scale = QVector3D(2, 2, 2);
 
     auto mat = iris::DefaultMaterial::create();
     boxNode->setMaterial(mat);
-    mat->setDiffuseColor(QColor(255,200,200));
-    mat->setDiffuseTexture(iris::Texture2D::load("assets/textures/texture_01.jpg"));
+    mat->setDiffuseColor(QColor(156, 170, 206));
+    mat->setDiffuseTexture(iris::Texture2D::load("assets/textures/TexturesCom_MarbleWhite0058_M.jpg"));
     mat->setShininess(2);
+    mat->setAmbientColor(QColor(64, 64, 64));
+
+    // lighting
+    auto light = iris::LightNode::create();
+    light->setLightType(iris::LightType::Point);
+    scene->rootNode->addChild(light);
+    light->setName("Bounce Lamp");
+    light->pos = QVector3D(-3, 7, 5);
+    light->intensity = .21;
+    light->icon = iris::Texture2D::load("app/icons/bulb.png");
 
     auto dlight = iris::LightNode::create();
-    //dlight->setLightType(iris::LightType::Directional);
+    dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
-    dlight->setName("Main Light");
-    dlight->pos = QVector3D(0,10,0);
+    dlight->setName("Main Lamp");
+    dlight->pos = QVector3D(0, 10, 0);
     dlight->intensity = 1;
     dlight->icon = iris::Texture2D::load("app/icons/bulb.png");
 
-
     scene->rootNode->addChild(boxNode);
 
-    //fog params
-    scene->fogColor = QColor(64,64,64,255);
+    // fog params
+    scene->fogColor = QColor(64, 64, 64, 255);
 
-    //sceneView->setScene(scene);
     this->setScene(scene);
     setupVrUi();
-
-    auto shader = iris::Shader::load(gl,
-                                     "app/shaders/simple.vert",
-                                     "app/shaders/simple.frag");
-
 }
 
 void MainWindow::cameraTypeChanged(QString type)
 {
-    if(type=="Free")
-    {
+    if (type == "Free") {
         sceneView->setFreeCameraMode();
-    }
-    else
-    {
+    } else {
         sceneView->setArcBallCameraMode();
+    }
+}
+
+void MainWindow::transformOrientationChanged(QString type)
+{
+    if (type == "Local") {
+        sceneView->setTransformOrientationLocal();
+    } else {
+        sceneView->setTransformOrientationGlobal();
     }
 }
 
@@ -1017,4 +1028,19 @@ void MainWindow::openWebsiteUrl()
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::on_translateGizmoBtn_clicked()
+{
+    sceneView->setGizmoLoc();
+}
+
+void MainWindow::on_scaleGizmoBtn_clicked()
+{
+    sceneView->setGizmoScale();
+}
+
+void MainWindow::on_rotateGizmoBtn_clicked()
+{
+    sceneView->setGizmoRot();
 }

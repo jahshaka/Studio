@@ -174,6 +174,17 @@ QMatrix4x4 SceneNode::getGlobalTransform()
     }
 }
 
+QMatrix4x4 SceneNode::getLocalTransform()
+{
+    localTransform.setToIdentity();
+
+    localTransform.translate(pos);
+    localTransform.rotate(rot);
+    localTransform.scale(scale);
+
+    return localTransform;
+}
+
 long SceneNode::nextId = 0;
 
 
