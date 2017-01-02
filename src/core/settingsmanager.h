@@ -15,15 +15,15 @@ For more information see the LICENSE file
 #include <QSettings>
 #include <QVariant>
 
-
 class SettingsManager
 {
     static SettingsManager* defaultSettings;
+
 public:
-    static SettingsManager* getDefaultManager()
-    {
-        if(defaultSettings==nullptr)
+    static SettingsManager* getDefaultManager() {
+        if (defaultSettings == nullptr) {
             defaultSettings = new SettingsManager();
+        }
 
         return defaultSettings;
     }
@@ -32,55 +32,46 @@ public:
 
     int recentlyOpenedFilesSize;
 
-    SettingsManager(QString fileName = "settings.ini")
-    {
+    SettingsManager(QString fileName = "settings.ini") {
         recentlyOpenedFilesSize = 5;
-        //auto path = QApplication::applicationDirPath() + "/" + fileName;
         auto path = fileName;
-        //qDebug()<<path;
         loadSettings(path);
-        //qDebug()<<settings->fileName();
     }
 
-    void loadSettings(QString path)
-    {
-        //auto path = QApplication::applicationDirPath().left(1) + "/settings.ini";
+    void loadSettings(QString path) {
         settings = new QSettings(path,QSettings::IniFormat);
     }
 
-    void setValue(QString name, QVariant value)
-    {
-        settings->setValue(name,value);
+    void setValue(QString name, QVariant value) {
+        settings->setValue(name, value);
     }
 
-    QVariant getValue(QString name,QVariant def)
-    {
+    QVariant getValue(QString name, QVariant def) {
         return settings->value(name,def);
     }
 
-    QStringList getRecentlyOpenedScenes()
-    {
+    QStringList getRecentlyOpenedScenes() {
         return settings->value("recent_files",QStringList()).toStringList();
     }
 
-    void addRecentlyOpenedScene(QString path)
-    {
-        auto list = settings->value("recent_files",QStringList()).toStringList();
+    void addRecentlyOpenedScene(QString path) {
+        auto list = settings->value("recent_files", QStringList()).toStringList();
 
-        //if it already exists, remove it from the list
-        //it will be added back to the top
-        if(list.contains(path))
+        // if it already exists, remove it from the list
+        // it will be added back to the top
+        if (list.contains(path)) {
             list.removeAt(list.indexOf(path));
+        }
 
-        //prevents list from adding too much
-        while(list.size() > recentlyOpenedFilesSize-1)
+        // prevents list from adding too much
+        while (list.size() > recentlyOpenedFilesSize - 1) {
             list.removeLast();
+        }
 
         list.push_front(path);
 
-        settings->setValue("recent_files",list);
+        settings->setValue("recent_files", list);
     }
-
 };
 
 #endif // SETTINGSMANAGER_H

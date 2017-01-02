@@ -5,6 +5,8 @@
 #include <QSharedPointer>
 #include "../libovr/Include/OVR_CAPI_GL.h"
 
+#define OUTLINE_STENCIL_CHANNEL 1
+
 class QOpenGLShaderProgram;
 class QOpenGLFunctions_3_2_Core;
 class QOpenGLContext;

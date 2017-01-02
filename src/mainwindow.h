@@ -146,7 +146,7 @@ private:
 
     void removeScene();
     void setScene(QSharedPointer<iris::Scene> scene);
-    void updateGizmoTransform();
+    void updateGizmoTransform();    // @TODO - move this into updateSceneSettings
 
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
@@ -200,6 +200,7 @@ public slots:
     void transformOrientationChanged(QString);
 
     void vrButtonClicked(bool);
+    void updateSceneSettings();
 
 private slots:
     void on_translateGizmoBtn_clicked();

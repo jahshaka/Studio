@@ -265,67 +265,66 @@ void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
     gl->glEnable(GL_CULL_FACE);
 }
 
-//http://gamedev.stackexchange.com/questions/59361/opengl-get-the-outline-of-multiple-overlapping-objects
+// http://gamedev.stackexchange.com/questions/59361/opengl-get-the-outline-of-multiple-overlapping-objects
 void ForwardRenderer::renderSelectedNode(RenderData* renderData,QSharedPointer<SceneNode> node)
 {
-    //todo: move these
-#define OUTLINE_STENCIL_CHANNEL 1
-
-    if(node->getSceneNodeType()==iris::SceneNodeType::Mesh)
-    {
+    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         auto meshNode = node.staticCast<iris::MeshNode>();
 
-        if(meshNode->mesh!=nullptr)
-        {
+        if (meshNode->mesh != nullptr) {
             lineShader->bind();
-            //lindShader->setUniformValue("",renderData)
-            lineShader->setUniformValue("u_worldMatrix",node->globalTransform);
-            lineShader->setUniformValue("u_viewMatrix",renderData->viewMatrix);
-            lineShader->setUniformValue("u_projMatrix",renderData->projMatrix);
-            lineShader->setUniformValue("u_normalMatrix",node->globalTransform.normalMatrix());
-            lineShader->setUniformValue("color",QColor(200,200,255,255));
+
+            lineShader->setUniformValue("u_worldMatrix",    node->globalTransform);
+            lineShader->setUniformValue("u_viewMatrix",     renderData->viewMatrix);
+            lineShader->setUniformValue("u_projMatrix",     renderData->projMatrix);
+            lineShader->setUniformValue("u_normalMatrix",   node->globalTransform.normalMatrix());
+            lineShader->setUniformValue("color",            scene->outlineColor);
 
 
-            //STEP 1: DRAW STENCIL OF THE FILLED POLYGON
-            gl->glClearStencil(0);//sets default stencil value to 0
-            gl->glClear(GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT);
-            //gl->glClear(GL_STENCIL_BUFFER_BIT);
-            gl->glPolygonMode(GL_FRONT,GL_FILL);//should be the default
+            // STEP 1: DRAW STENCIL OF THE FILLED POLYGON
+            // sets default stencil value to 0
+            gl->glClearStencil(0);
+            gl->glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+            // this should be the default
+            gl->glPolygonMode(GL_FRONT, GL_FILL);
 
             gl->glEnable(GL_STENCIL_TEST);
 
-            gl->glStencilMask(1);//works the same as the color and depth mask
-            gl->glStencilFunc(GL_ALWAYS,1,OUTLINE_STENCIL_CHANNEL);//test must always pass
-            gl->glStencilOp(GL_KEEP,GL_KEEP,GL_REPLACE);//GL_REPLACE for all becase a stencil value should always be written
-            gl->glColorMask(0,0,0,0);//disable drawing to color buffer
+            // works the same as the color and depth mask
+            gl->glStencilMask(1);
+            // test must always pass
+            gl->glStencilFunc(GL_ALWAYS, 1, OUTLINE_STENCIL_CHANNEL);
+            // GL_REPLACE for all becase a stencil value should always be written
+            gl->glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+            // disable drawing to color buffer
+            gl->glColorMask(0, 0 ,0, 0);
 
             meshNode->mesh->draw(gl,lineShader);
 
-            //STEP 2: DRAW MESH IN LINE MODE WITH A LINE WIDTH > 1 SO THE OUTLINE PASSES THE STENCIL TEST
-            gl->glPolygonMode(GL_FRONT,GL_LINE);
-            //gl->glCullFace(GL_BACK);
-            //gl->glEnable(GL_CULL_FACE);
-            gl->glLineWidth(5);
+            // STEP 2: DRAW MESH IN LINE MODE WITH A LINE WIDTH > 1 SO THE OUTLINE PASSES THE STENCIL TEST
+            gl->glPolygonMode(GL_FRONT, GL_LINE);
+            gl->glLineWidth(scene->outlineWidth);
 
-            //the default stencil value is 0, if the stencil value at a pixel is 1 that means thats where the solid
-            //mesh was rendered. The line version should only be rendered where the stencil value is 0.
-            gl->glStencilFunc(GL_EQUAL,0,OUTLINE_STENCIL_CHANNEL);
-            gl->glStencilOp(GL_KEEP,GL_KEEP,GL_KEEP);
-            gl->glStencilMask(0);//disables writing to stencil buffer
-            gl->glColorMask(1,1,1,1);//enable drawing to color buffer
+            /* the default stencil value is 0, if the stencil value at a pixel is 1 that means
+             * thats where the solid mesh was rendered. The line version should only be rendered
+             * where the stencil value is 0.
+             */
+            gl->glStencilFunc(GL_EQUAL, 0, OUTLINE_STENCIL_CHANNEL);
+            gl->glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+            // disables writing to stencil buffer
+            gl->glStencilMask(0);
+            // enable drawing to color buffer
+            gl->glColorMask(1, 1, 1, 1);
 
-            meshNode->mesh->draw(gl,lineShader);
+            meshNode->mesh->draw(gl, lineShader);
 
             gl->glDisable(GL_STENCIL_TEST);
 
             gl->glStencilMask(1);
             gl->glLineWidth(1);
-            gl->glPolygonMode(GL_FRONT,GL_FILL);
-
+            gl->glPolygonMode(GL_FRONT, GL_FILL);
         }
-
     }
-
 }
 
 void ForwardRenderer::createLineShader()
