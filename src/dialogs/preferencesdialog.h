@@ -13,29 +13,43 @@ For more information see the LICENSE file
 #define PREFERENCESDIALOG_H
 
 #include <QDialog>
+#include <QCloseEvent>
+#include <QDebug>
 
 namespace Ui {
-class PreferencesDialog;
+    class PreferencesDialog;
 }
 
 class QListWidgetItem;
 class SettingsManager;
+class WorldSettings;
 
 class PreferencesDialog : public QDialog
 {
     Q_OBJECT
     SettingsManager* settings;
 
+signals:
+    void PreferencesDialogClosed();
+
+protected:
+    void closeEvent(QCloseEvent *event) {
+        emit PreferencesDialogClosed();
+        event->accept();
+    }
+
 public:
     explicit PreferencesDialog(SettingsManager* settings);
     ~PreferencesDialog();
+
+    WorldSettings* worldSettings;
 
 private:
     void setupList();
     void setupPages();
 
 private slots:
-    void pageChanged(QListWidgetItem* prev,QListWidgetItem* cur);
+    void pageChanged(QListWidgetItem* prev, QListWidgetItem* cur);
     void closeDialog();
 
 private:

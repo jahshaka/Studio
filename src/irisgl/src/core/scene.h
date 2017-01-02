@@ -31,14 +31,23 @@ public:
     Texture2DPtr skyTexture;
     QColor skyColor;
 
-    //should be MaterialPtr
+    // should be MaterialPtr
     DefaultSkyMaterialPtr skyMaterial;
 
-    //fog properties
+    // fog properties
     QColor fogColor;
     float fogStart;
     float fogEnd;
     bool fogEnabled;
+
+    /*
+     * customizations that can be passed in and applied to a scene. ideally these
+     * should or can be GLOBAL but a scene is the highest prioritized obj atm...
+     * @future maybe have a __GlobalWorldSettings__ object?
+     * @future todo could include camera speed, motion blur px, clipping (near/far plane) pos
+     */
+    int outlineWidth;
+    QColor outlineColor;
 
     Scene();
 public:
@@ -49,17 +58,14 @@ public:
      * that the returned value is never null.
      * @return
      */
-    SceneNodePtr getRootNode()
-    {
+    SceneNodePtr getRootNode() {
         return rootNode;
     }
 
     void setSkyTexture(Texture2DPtr tex);
     QString getSkyTextureSource();
     void clearSkyTexture();
-
     void setSkyColor(QColor color);
-
 
     void updateSceneAnimation(float time);
     void update(float dt);
@@ -82,6 +88,18 @@ public:
      * @param cameraNode
      */
     void setCamera(CameraNodePtr cameraNode);
+
+    /**
+     * Sets the viewport stencil width
+     * @param width
+     */
+    void setOutlineWidth(int width);
+
+    /**
+     * Sets the viewport stencil color
+     * @param color
+     */
+    void setOutlineColor(QColor color);
 };
 
 }

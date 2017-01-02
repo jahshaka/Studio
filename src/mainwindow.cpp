@@ -49,6 +49,7 @@ For more information see the LICENSE file
 #include "editor/editorcameracontroller.h"
 #include "core/settingsmanager.h"
 #include "dialogs/preferencesdialog.h"
+#include "dialogs/preferences/worldsettings.h"
 #include "dialogs/licensedialog.h"
 #include "dialogs/aboutdialog.h"
 
@@ -71,11 +72,11 @@ For more information see the LICENSE file
 
 #include "core/materialpreset.h"
 
-enum class VRButtonMode:int
+enum class VRButtonMode : int
 {
-    Default=0,
-    Disabled=1,
-    VRMode=2
+    Default = 0,
+    Disabled,
+    VRMode
 };
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -104,16 +105,13 @@ MainWindow::MainWindow(QWidget *parent) :
 
     this->setupLayerButtonMenu();
 
-    //TIMER
+    // TIMER
     timer = new QTimer(this);
-    connect(timer,SIGNAL(timeout()),this,SLOT(updateAnim()));
+    connect(timer, SIGNAL(timeout()), this, SLOT(updateAnim()));
 
-    //activeSceneNode = nullptr;
-
-    //this->rebuildTree();
     setProjectTitle(Globals::project->getProjectName());
 
-    //init scene view
+    // initialzie scene view
     sceneView = new SceneViewWidget(this);
     sceneView->setParent(this);
 
@@ -359,55 +357,50 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
 void MainWindow::setupFileMenu()
 {
-    //add recent files
+    // add recent files
     auto recent = settings->getRecentlyOpenedScenes();
-    if(recent.size()==0)
-    {
-        ui->menuOpenRecent->setEnabled(false);
-    }
-    else
-    {
-        ui->menuOpenRecent->setEnabled(true);
 
+    if (recent.size() == 0) {
+        ui->menuOpenRecent->setEnabled(false);
+    } else {
+        ui->menuOpenRecent->setEnabled(true);
         ui->menuOpenRecent->clear();
-        for(auto item:recent)
-        {
-            //if(item.size()>20)
-            //    item = item;
-            auto action = new QAction(item,ui->menuOpenRecent);
+
+        for (auto item : recent) {
+            auto action = new QAction(item, ui->menuOpenRecent);
             action->setData(item);
-            connect(action,SIGNAL(triggered(bool)),this,SLOT(openRecentFile()));
+            connect(action,SIGNAL(triggered(bool)), this, SLOT(openRecentFile()));
             ui->menuOpenRecent->addAction(action);
         }
     }
 
+    connect(ui->actionSave,         SIGNAL(triggered(bool)), this, SLOT(saveScene()));
+    connect(ui->actionSave_As,      SIGNAL(triggered(bool)), this, SLOT(saveSceneAs()));
+    connect(ui->actionLoad,         SIGNAL(triggered(bool)), this, SLOT(loadScene()));
+    connect(ui->actionExit,         SIGNAL(triggered(bool)), this, SLOT(exitApp()));
+    connect(ui->actionPreferences,  SIGNAL(triggered(bool)), this, SLOT(showPreferences()));
+    connect(ui->actionNew,          SIGNAL(triggered(bool)), this, SLOT(newScene()));
 
-    connect(ui->actionSave,SIGNAL(triggered(bool)),this,SLOT(saveScene()));
-    connect(ui->actionSave_As,SIGNAL(triggered(bool)),this,SLOT(saveSceneAs()));
-    connect(ui->actionLoad,SIGNAL(triggered(bool)),this,SLOT(loadScene()));
-    connect(ui->actionExit,SIGNAL(triggered(bool)),this,SLOT(exitApp()));
-    connect(ui->actionPreferences,SIGNAL(triggered(bool)),this,SLOT(showPreferences()));
-    connect(ui->actionNew,SIGNAL(triggered(bool)),this,SLOT(newScene()));
-
+    connect(prefsDialog,  SIGNAL(PreferencesDialogClosed()), this, SLOT(updateSceneSettings()));
 }
 
 void MainWindow::setupViewMenu()
 {
-    connect(ui->actionEditorCamera,SIGNAL(triggered(bool)),this,SLOT(useEditorCamera()));
-    connect(ui->actionViewerCamera,SIGNAL(triggered(bool)),this,SLOT(useUserCamera()));
+    connect(ui->actionEditorCamera, SIGNAL(triggered(bool)), this, SLOT(useEditorCamera()));
+    connect(ui->actionViewerCamera, SIGNAL(triggered(bool)), this, SLOT(useUserCamera()));
 }
 
 void MainWindow::setupHelpMenu()
 {
-    connect(ui->actionLicense,SIGNAL(triggered(bool)),this,SLOT(showLicenseDialog()));
-    connect(ui->actionAbout,SIGNAL(triggered(bool)),this,SLOT(showAboutDialog()));
-    connect(ui->actionBlog,SIGNAL(triggered(bool)),this,SLOT(openBlogUrl()));
-    connect(ui->actionVisit_Website,SIGNAL(triggered(bool)),this,SLOT(openWebsiteUrl()));
+    connect(ui->actionLicense,      SIGNAL(triggered(bool)), this, SLOT(showLicenseDialog()));
+    connect(ui->actionAbout,        SIGNAL(triggered(bool)), this, SLOT(showAboutDialog()));
+    connect(ui->actionBlog,         SIGNAL(triggered(bool)), this, SLOT(openBlogUrl()));
+    connect(ui->actionOpenWebsite,  SIGNAL(triggered(bool)), this, SLOT(openWebsiteUrl()));
 }
 
 void MainWindow::setProjectTitle(QString projectTitle)
 {
-    this->setWindowTitle(projectTitle+" - Jahshaka");
+    this->setWindowTitle(projectTitle + " - Jahshaka");
 }
 
 void MainWindow::sceneTreeCustomContextMenu(const QPoint& pos)
@@ -588,6 +581,9 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
     this->scene = scene;
     this->sceneView->setScene(scene);
     ui->sceneHierarchy->setScene(scene);
+
+    // interim...
+    updateSceneSettings();
 }
 
 void MainWindow::removeScene()
@@ -830,54 +826,7 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
 
 void MainWindow::duplicateNode()
 {
-    /*
-    auto items = ui->sceneTree->selectedItems();
-    if(items.size()==0)
-        return;
-    auto selectedItem = items[0];
 
-    auto node = (SceneNode*)selectedItem->data(1,Qt::UserRole).value<void*>();
-
-    //world node isnt removable
-    if(!node->isDuplicable())
-        return;
-
-    QTreeWidgetItem* item = nullptr;
-    SceneNode* parentNode = nullptr;
-
-    //use rootnode instead
-    parentNode = scene->getRootNode();
-    //item = ui->sceneTree->invisibleRootItem();
-    item = ui->sceneTree->invisibleRootItem()->child(0);
-
-    auto newNode = node->duplicate();
-    newNode->setName(node->getName());
-    parentNode->addChild(newNode);
-    //newNode->pos.setY(3);
-    newNode->_updateTransform();
-    auto newNodeEnt = newNode->getEntity();
-
-    //tree node
-    auto newItem = new QTreeWidgetItem();
-    newItem->setText(0,newNode->getName());
-    newItem->setData(1,Qt::UserRole,QVariant::fromValue((void*)newNode));
-    //newItem->setIcon(0,icon);//this should be changed based on the type of node
-    newItem->setFlags(newItem->flags() | Qt::ItemIsUserCheckable);
-    newItem->setCheckState(0,Qt::Checked);
-    item->addChild(newItem);
-
-    ui->sceneTree->expandAll();
-    this->setActiveSceneNode(newNode);
-
-    //select item
-    items = ui->sceneTree->selectedItems();
-    for(auto i:items)
-        ui->sceneTree->setItemSelected(i,false);
-
-    ui->sceneTree->setItemSelected(newItem,true);
-    //sceneNodes.insert(newNodeEnt->id(),newNode);
-    sceneTreeItems.insert(newNodeEnt->id(),newItem);
-    */
 }
 
 void MainWindow::deleteNode()
@@ -1002,6 +951,12 @@ void MainWindow::showPreferences()
 void MainWindow::exitApp()
 {
     QApplication::exit();
+}
+
+void MainWindow::updateSceneSettings()
+{
+    scene->setOutlineWidth(prefsDialog->worldSettings->outlineWidth);
+    scene->setOutlineColor(prefsDialog->worldSettings->outlineColor);
 }
 
 void MainWindow::newScene()
