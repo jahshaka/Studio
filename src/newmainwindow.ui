@@ -890,7 +890,7 @@ QMenu::item:selected {
     <addaction name="actionAbout"/>
     <addaction name="actionLicense"/>
     <addaction name="separator"/>
-    <addaction name="actionVisit_Website"/>
+    <addaction name="actionOpenWebsite"/>
     <addaction name="actionBlog"/>
    </widget>
    <widget class="QMenu" name="menuEdit">
@@ -1540,7 +1540,7 @@ border: none;</string>
     <string>License</string>
    </property>
   </action>
-  <action name="actionVisit_Website">
+  <action name="actionOpenWebsite">
    <property name="text">
     <string>Visit Website</string>
    </property>
