@@ -8,6 +8,8 @@
 
 WorldPropertyWidget::WorldPropertyWidget()
 {
+    this->setContentTitle("Sky and Lighting");
+
     skyTexture = this->addTexturePicker("Sky Texture");
 
     connect(skyTexture,SIGNAL(valueChanged(QString)),SLOT(onSkyTextureChanged(QString)));
