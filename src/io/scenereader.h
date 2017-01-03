@@ -53,7 +53,7 @@ public:
         if(!skyTexPath.isEmpty())
         {
             skyTexPath = this->getAbsolutePath(skyTexPath);
-            scene->setSkyTexture(iris::Texture2D::load(skyTexPath));
+            scene->setSkyTexture(iris::Texture2D::load(skyTexPath,false));
         }
         scene->setSkyColor(this->readColor(sceneObj["skyColor"].toObject()));
         scene->setAmbientColor(this->readColor(sceneObj["ambientColor"].toObject()));
@@ -196,7 +196,7 @@ public:
         auto meshIndex = nodeObj["meshIndex"].toInt(0);
         if(!source.isEmpty())
         {
-            auto mesh = getMesh(source,meshIndex);
+            auto mesh = getMesh(getAbsolutePath(source),meshIndex);
             meshNode->setMesh(mesh);
             meshNode->meshPath = source;
             meshNode->meshIndex = meshIndex;

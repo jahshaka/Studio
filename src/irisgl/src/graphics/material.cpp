@@ -16,14 +16,14 @@ For more information see the LICENSE file
 namespace iris
 {
 
-void Material::begin(QOpenGLFunctions_3_2_Core* gl)
+void Material::begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
 {
     this->program->bind();
     this->bindTextures(gl);
 }
 
 
-void Material::end(QOpenGLFunctions_3_2_Core* gl)
+void Material::end(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
 {
     this->unbindTextures(gl);
 }

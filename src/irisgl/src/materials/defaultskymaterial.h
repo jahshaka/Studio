@@ -43,8 +43,8 @@ public:
     void setSkyColor(QColor color);
     QColor getSkyColor();
 
-    void begin(QOpenGLFunctions_3_2_Core* gl) override;
-    void end(QOpenGLFunctions_3_2_Core* gl) override;
+    void begin(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
+    void end(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
 
     static DefaultSkyMaterialPtr create();
 private:

@@ -147,7 +147,7 @@ private:
     void writeMeshData(QJsonObject& sceneNodeObject,iris::MeshNodePtr meshNode)
     {
         //todo: handle generated meshes properly
-        sceneNodeObject["mesh"] = meshNode->meshPath;
+        sceneNodeObject["mesh"] = getRelativePath(meshNode->meshPath);
         sceneNodeObject["meshIndex"] = meshNode->meshIndex;
 
         //todo: check if material actually exists

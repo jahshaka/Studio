@@ -53,9 +53,9 @@ QColor DefaultSkyMaterial::getSkyColor()
     return color;
 }
 
-void DefaultSkyMaterial::begin(QOpenGLFunctions_3_2_Core* gl)
+void DefaultSkyMaterial::begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
 {
-    Material::begin(gl);
+    Material::begin(gl,scene);
     this->setUniformValue("color",color);
     if(!!texture)
         this->setUniformValue("useTexture",true);
@@ -64,9 +64,9 @@ void DefaultSkyMaterial::begin(QOpenGLFunctions_3_2_Core* gl)
 
 }
 
-void DefaultSkyMaterial::end(QOpenGLFunctions_3_2_Core* gl)
+void DefaultSkyMaterial::end(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
 {
-    Material::end(gl);
+    Material::end(gl,scene);
 }
 
 DefaultSkyMaterialPtr DefaultSkyMaterial::create()
