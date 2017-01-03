@@ -50,7 +50,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
         if(sceneNode->isRootNode())
         {
             worldPropView = new WorldPropertyWidget();
-            worldPropView->setContentTitle("Sky");
+            //worldPropView->setContentTitle("Sky");
             worldPropView->setScene(sceneNode->scene);
             worldPropView->expand();
 
