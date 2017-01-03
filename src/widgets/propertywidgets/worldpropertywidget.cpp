@@ -4,6 +4,7 @@
 #include "../../irisgl/src/materials/defaultskymaterial.h"
 
 #include "../colorvaluewidget.h"
+#include "../colorpickerwidget.h"
 #include "../hfloatslider.h"
 
 WorldPropertyWidget::WorldPropertyWidget()
@@ -11,8 +12,12 @@ WorldPropertyWidget::WorldPropertyWidget()
     this->setContentTitle("Sky and Lighting");
 
     skyTexture = this->addTexturePicker("Sky Texture");
+    skyColor = this->addColorPicker("Sky Color");
+    ambientColor = this->addColorPicker("Ambient Color");
 
     connect(skyTexture,SIGNAL(valueChanged(QString)),SLOT(onSkyTextureChanged(QString)));
+    connect(skyColor->getPicker(),SIGNAL(onColorChanged(QColor)),SLOT(onSkyColorChanged(QColor)));
+    connect(ambientColor->getPicker(),SIGNAL(onColorChanged(QColor)),SLOT(onAmbientColorChanged(QColor)));
 }
 
 void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
@@ -20,9 +25,12 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
     if(!!scene)
     {
         this->scene = scene;
-        auto skyTex = scene->skyMaterial->getSkyTexture();
+        auto skyTex = scene->skyTexture;
         if(!!skyTex)
             skyTexture->setTexture(skyTex->getSource());
+
+        skyColor->setColorValue(scene->skyColor);
+        ambientColor->setColorValue(scene->ambientColor);
 
     }
     else
@@ -39,11 +47,22 @@ void WorldPropertyWidget::onSkyTextureChanged(QString texPath)
 {
     if(texPath.isEmpty())
     {
-        scene->skyMaterial->setSkyTexture(iris::Texture2DPtr());
+        scene->setSkyTexture(iris::Texture2DPtr());
 
     }
     else
     {
-        scene->skyMaterial->setSkyTexture(iris::Texture2D::load(texPath,false));
+        scene->setSkyTexture(iris::Texture2D::load(texPath,false));
     }
+}
+
+void WorldPropertyWidget::onSkyColorChanged(QColor color)
+{
+    scene->setSkyColor(color);
+}
+
+void WorldPropertyWidget::onAmbientColorChanged(QColor color)
+{
+    //scene->set
+    scene->setAmbientColor(color);
 }
