@@ -32,10 +32,25 @@
    <string>Form</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_2">
-   <item alignment="Qt::AlignLeft">
+   <property name="spacing">
+    <number>6</number>
+   </property>
+   <property name="leftMargin">
+    <number>8</number>
+   </property>
+   <property name="topMargin">
+    <number>8</number>
+   </property>
+   <property name="rightMargin">
+    <number>8</number>
+   </property>
+   <property name="bottomMargin">
+    <number>8</number>
+   </property>
+   <item>
     <widget class="QWidget" name="widget" native="true">
      <property name="sizePolicy">
-      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
@@ -78,6 +93,84 @@
     </widget>
    </item>
    <item>
+    <widget class="QWidget" name="widget_2" native="true">
+     <layout class="QVBoxLayout" name="verticalLayout_3">
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_4">
+        <item>
+         <widget class="QLabel" name="label_3">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>Outline Width:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="outlineWidth">
+          <property name="maximum">
+           <number>10</number>
+          </property>
+          <property name="value">
+           <number>5</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeType">
+           <enum>QSizePolicy::Preferred</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>32</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_4">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>Outline Color:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="ColorPickerWidget" name="outlineColor" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>24</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="groupBox">
      <property name="styleSheet">
       <string notr="true">QGroupBox {
@@ -86,6 +179,12 @@ border-color: rgb(54, 54, 54);
      </property>
      <property name="title">
       <string>Options</string>
+     </property>
+     <property name="flat">
+      <bool>false</bool>
+     </property>
+     <property name="checkable">
+      <bool>false</bool>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout">
       <item>
@@ -109,7 +208,7 @@ border-color: rgb(54, 54, 54);
            <string>Matrix</string>
           </property>
           <property name="icon">
-           <iconset resource="../../../icons.qrc">
+           <iconset>
             <normaloff>:/icons/matrix.png</normaloff>:/icons/matrix.png</iconset>
           </property>
           <property name="iconSize">
@@ -129,7 +228,7 @@ border-color: rgb(54, 54, 54);
            <string>Grid</string>
           </property>
           <property name="icon">
-           <iconset resource="../../../icons.qrc">
+           <iconset>
             <normaloff>:/icons/grid.png</normaloff>:/icons/grid.png</iconset>
           </property>
           <property name="iconSize">
@@ -150,18 +249,17 @@ border-color: rgb(54, 54, 54);
    </item>
   </layout>
   <zorder>groupBox</zorder>
-  <zorder>label_2</zorder>
-  <zorder>comboBox</zorder>
-  <zorder>label_2</zorder>
-  <zorder>pushButton</zorder>
-  <zorder>pushButton_2</zorder>
-  <zorder>pushButton_3</zorder>
   <zorder>widget</zorder>
-  <zorder>pushButton_4</zorder>
-  <zorder>pushButton_5</zorder>
+  <zorder>widget_2</zorder>
  </widget>
- <resources>
-  <include location="../../../icons.qrc"/>
- </resources>
+ <customwidgets>
+  <customwidget>
+   <class>ColorPickerWidget</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/colorpickerwidget.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
  <connections/>
 </ui>

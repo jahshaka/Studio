@@ -14,7 +14,7 @@ For more information see the LICENSE file
 #include <QWidget>
 
 namespace Ui {
-class WorldSettings;
+    class WorldSettings;
 }
 
 class SettingsManager;
@@ -23,17 +23,26 @@ class WorldSettings : public QWidget
 {
     Q_OBJECT
     SettingsManager* settings;
+
 public:
     explicit WorldSettings(SettingsManager* settings);
     ~WorldSettings();
 
+    int outlineWidth;
+    QColor outlineColor;
+
     void setupDefaultSceneOptions();
     void setupGizmoOptions();
+    void setupOutline();
+
 private slots:
     void onGizmoOptionChosen(int index);
     void onDefaultSceneChosen();
 
-private:
+    void outlineWidthChanged(int width);
+    void outlineColorChanged(QColor color);
+
+public:
     Ui::WorldSettings *ui;
 };
 

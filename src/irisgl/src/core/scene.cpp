@@ -58,7 +58,7 @@ void Scene::update(float dt)
 {
     rootNode->update(dt);
 
-    //c ameras may not necessarily be a part of the scene heirarchy, so their matrices are updated here
+    // cameras aren't always be a part of the scene hierarchy, so their matrices are updated here
     if (!!camera) {
         camera->update(dt);
         camera->updateCameraMatrices();
@@ -72,8 +72,7 @@ void Scene::render()
 
 void Scene::addNode(SceneNodePtr node)
 {
-    if(node->sceneNodeType == SceneNodeType::Light)
-    {
+    if (node->sceneNodeType == SceneNodeType::Light) {
         auto light = node.staticCast<iris::LightNode>();
         lights.append(light);
     }
@@ -81,8 +80,7 @@ void Scene::addNode(SceneNodePtr node)
 
 void Scene::removeNode(SceneNodePtr node)
 {
-    if(node->sceneNodeType == SceneNodeType::Light)
-    {
+    if (node->sceneNodeType == SceneNodeType::Light) {
         lights.removeOne(node.staticCast<iris::LightNode>());
     }
 }
@@ -98,6 +96,16 @@ ScenePtr Scene::create()
     scene->rootNode->setScene(scene);
 
     return scene;
+}
+
+void Scene::setOutlineWidth(int width)
+{
+    outlineWidth = width;
+}
+
+void Scene::setOutlineColor(QColor color)
+{
+    outlineColor = color;
 }
 
 }

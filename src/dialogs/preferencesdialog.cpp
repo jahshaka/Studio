@@ -25,13 +25,10 @@ PreferencesDialog::PreferencesDialog(SettingsManager* settings) :
     setWindowTitle("Preferences");
     ui->cancelButton->hide();
 
-    //connect(ui->, &QAbstractButton::clicked, this, &QWidget::close);
-    connect(ui->okButton,SIGNAL(clicked(bool)),this,SLOT(close()));
-    //connect(ui->cancelButton,SIGNAL(clicked(bool)),this,SLOT(close()));
+    connect(ui->okButton, SIGNAL(clicked(bool)), this, SLOT(close()));
 
     setupList();
     setupPages();
-
 }
 
 void PreferencesDialog::setupList()
@@ -44,16 +41,18 @@ void PreferencesDialog::setupList()
     QListWidgetItem *item = new QListWidgetItem(ui->listWidget);
     item->setIcon(QIcon(":/icons/world.svg"));
     item->setText(tr("Editor"));
-    item->setSizeHint(QSize(80,80));
+    item->setSizeHint(QSize(80, 80));
     item->setTextAlignment(Qt::AlignHCenter);
     item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
 
-    connect(ui->listWidget,SIGNAL(currentItemChanged(QListWidgetItem*,QListWidgetItem*)) , this,SLOT(pageChanged(QListWidgetItem*,QListWidgetItem*)));
+    connect(ui->listWidget, SIGNAL(currentItemChanged(QListWidgetItem*, QListWidgetItem*)),
+            this, SLOT(pageChanged(QListWidgetItem*, QListWidgetItem*)));
 }
 
 void PreferencesDialog::setupPages()
 {
-    auto worldSettings = new WorldSettings(settings);
+    // can we elimate this to be more permanent? why (was/is) this dynamic really?
+    worldSettings = new WorldSettings(settings);
     ui->stackedWidget->addWidget(worldSettings);
 }
 
