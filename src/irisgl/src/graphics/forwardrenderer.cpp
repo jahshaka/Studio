@@ -156,7 +156,7 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
 
         auto program = mat->program;
 
-        mat->begin(gl);
+        mat->begin(gl,scene);
 
         //send transform and light data
         program->setUniformValue("u_worldMatrix",node->globalTransform);
@@ -217,7 +217,7 @@ void ForwardRenderer::renderSky(RenderData* renderData)
 {
     gl->glDepthMask(false);
 
-    scene->skyMaterial->begin(gl);
+    scene->skyMaterial->begin(gl,scene);
 
     auto program = scene->skyMaterial->program;
     program->setUniformValue("u_viewMatrix",renderData->viewMatrix);
@@ -227,7 +227,7 @@ void ForwardRenderer::renderSky(RenderData* renderData)
     program->setUniformValue("u_worldMatrix",worldMatrix);
 
     scene->skyMesh->draw(gl,program);
-    scene->skyMaterial->end(gl);
+    scene->skyMaterial->end(gl,scene);
 
     gl->glDepthMask(true);
 }
