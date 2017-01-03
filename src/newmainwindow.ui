@@ -645,7 +645,7 @@ background-color: rgb(30, 144, 255);
            <widget class="QComboBox" name="transformCombo">
             <property name="minimumSize">
              <size>
-              <width>101</width>
+              <width>119</width>
               <height>0</height>
              </size>
             </property>
@@ -693,7 +693,7 @@ background-color: rgb(30, 144, 255);
            <widget class="QComboBox" name="cameraTypeCombo">
             <property name="minimumSize">
              <size>
-              <width>101</width>
+              <width>119</width>
               <height>0</height>
              </size>
             </property>
@@ -801,7 +801,7 @@ background-color: rgb(30, 144, 255);
      <x>0</x>
      <y>0</y>
      <width>1209</width>
-     <height>30</height>
+     <height>34</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -1098,7 +1098,7 @@ QMenu::item:selected {
           <x>0</x>
           <y>0</y>
           <width>398</width>
-          <height>652</height>
+          <height>648</height>
          </rect>
         </property>
         <property name="styleSheet">
@@ -1158,11 +1158,11 @@ QMenu::item:selected {
         <string notr="true">border: none;</string>
        </property>
        <property name="currentIndex">
-        <number>2</number>
+        <number>0</number>
        </property>
-       <widget class="QWidget" name="skys">
+       <widget class="QWidget" name="skies">
         <attribute name="title">
-         <string>Skys</string>
+         <string>Skies</string>
         </attribute>
         <layout class="QVBoxLayout" name="verticalLayout_8">
          <property name="spacing">

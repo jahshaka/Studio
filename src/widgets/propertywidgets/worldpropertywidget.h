@@ -30,10 +30,14 @@ public:
 
 protected slots:
     void onSkyTextureChanged(QString texPath);
+    void onSkyColorChanged(QColor color);
+    void onAmbientColorChanged(QColor color);
 
 private:
     QSharedPointer<iris::Scene> scene;
     TexturePicker* skyTexture;
+    ColorValueWidget* skyColor;
+    ColorValueWidget* ambientColor;
 
 };
 

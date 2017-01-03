@@ -49,6 +49,11 @@ void Scene::setSkyColor(QColor color)
     skyMaterial->setSkyColor(color);
 }
 
+void Scene::setAmbientColor(QColor color)
+{
+    this->ambientColor = color;
+}
+
 void Scene::updateSceneAnimation(float time)
 {
     rootNode->updateAnimation(time);
