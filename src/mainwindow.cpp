@@ -196,6 +196,13 @@ void MainWindow::vrButtonClicked(bool)
     ui->vrBtn->style()->polish(ui->vrBtn);
 }
 
+QString MainWindow::getAbsolutePath(QString relToApp)
+{
+    auto path = QDir::cleanPath(QCoreApplication::applicationDirPath()+QDir::separator()+relToApp);
+    qDebug()<<path;
+    return path;
+}
+
 //create test scene
 void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
 {
@@ -212,14 +219,14 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
 
     // second node
     auto node = iris::MeshNode::create();
-    node->setMesh("app/models/plane.obj");
+    node->setMesh(getAbsolutePath("../app/models/plane.obj"));
     node->scale = QVector3D(1024, 1, 1024);
     node->setName("Ground");
 
     auto m = iris::DefaultMaterial::create();
     node->setMaterial(m);
     m->setDiffuseColor(QColor(255, 255, 255));
-    m->setDiffuseTexture(iris::Texture2D::load("app/content/textures/tile.png"));
+    m->setDiffuseTexture(iris::Texture2D::load(getAbsolutePath("../app/content/textures/tile.png")));
     m->setShininess(0);
     m->setSpecularColor(QColor(0, 0, 0));
     m->setTextureScale(500);
@@ -227,16 +234,16 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
 
     // add test object with basic material
     auto boxNode = iris::MeshNode::create();
-    boxNode->setMesh("assets/models/StanfordLucy.obj");
+    boxNode->setMesh(getAbsolutePath("../assets/models/StanfordLucy.obj"));
     boxNode->setName("Stanford Lucy");
     boxNode->scale = QVector3D(2, 2, 2);
 
     auto mat = iris::DefaultMaterial::create();
     boxNode->setMaterial(mat);
     mat->setDiffuseColor(QColor(156, 170, 206));
-    mat->setDiffuseTexture(iris::Texture2D::load("assets/textures/TexturesCom_MarbleWhite0058_M.jpg"));
+    mat->setDiffuseTexture(iris::Texture2D::load(getAbsolutePath("../assets/textures/TexturesCom_MarbleWhite0058_M.jpg")));
     mat->setShininess(2);
-    mat->setAmbientColor(QColor(64, 64, 64));
+    //mat->setAmbientColor(QColor(64, 64, 64));
 
     // lighting
     auto light = iris::LightNode::create();

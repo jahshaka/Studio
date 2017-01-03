@@ -29,7 +29,7 @@ public:
     Ui::TexturePicker *ui;
 
     //void setDiffuseMap(QString path);
-    void setLabelImage( QLabel* label,QString file);
+    void setLabelImage( QLabel* label,QString file,bool emitSignal = true);
     bool eventFilter(QObject *object, QEvent *ev);
 
     void setTexture( QString path );

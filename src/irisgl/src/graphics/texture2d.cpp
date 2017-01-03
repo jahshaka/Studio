@@ -40,7 +40,7 @@ Texture2DPtr Texture2D::load(QString path,bool flipY)
 Texture2DPtr Texture2D::create(QImage image)
 {
     auto texture = new QOpenGLTexture(image);
-    texture->generateMipMaps();
+    //texture->generateMipMaps();
     texture->setMinMagFilters(QOpenGLTexture::LinearMipMapLinear,QOpenGLTexture::Linear);
 
     return QSharedPointer<Texture2D>(new Texture2D(texture));

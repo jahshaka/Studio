@@ -34,7 +34,7 @@ QString TexturePicker::loadTexture()
     return QFileDialog::getOpenFileName(this,"Open Texture File",dir,"Image Files (*.png *.jpg *.bmp)");
 }
 
-void TexturePicker::setLabelImage(QLabel* label,QString file)
+void TexturePicker::setLabelImage(QLabel* label,QString file,bool emitSignal)
 {
     if(file.isNull() || file.isEmpty())
     {
@@ -58,9 +58,10 @@ void TexturePicker::setLabelImage(QLabel* label,QString file)
         QString dimension_H = QString::number(d_height);
         QString dimension_W = QString::number(d_width);
         ui->dimensions->setText( dimension_H + " X " +dimension_W );
-        emit valueChanged(file);
-
     }
+
+    if(emitSignal)
+        emit valueChanged(file);
 }
 
 bool TexturePicker::eventFilter(QObject *object, QEvent *ev)
@@ -90,6 +91,6 @@ void TexturePicker::setTexture(QString path){
     }
     else
     {
-        setLabelImage(ui->DiffuseMap,path);
+        setLabelImage(ui->DiffuseMap,path,false);
     }
 }

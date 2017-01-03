@@ -54,13 +54,13 @@ public:
      * bind textures and set states.
      * @param gl
      */
-    virtual void begin(QOpenGLFunctions_3_2_Core* gl);
+    virtual void begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene);
 
     /**
      * Called after endering a pritimitive.
      * This is used to cleanup after rendering
      */
-    virtual void end(QOpenGLFunctions_3_2_Core* gl);
+    virtual void end(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene);
 
     /**
      * Adds texture to the material by name

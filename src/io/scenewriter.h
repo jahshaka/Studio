@@ -27,7 +27,7 @@ namespace iris
 class SceneWriter:public AssetIOBase
 {
 public:
-    void writeScene(QString filePath,QSharedPointer<iris::Scene> scene)
+    void writeScene(QString filePath,iris::ScenePtr scene)
     {
         dir = AssetIOBase::getDirFromFileName(filePath);
         QFile file(filePath);
@@ -43,12 +43,27 @@ public:
     }
 
 private:
-    void writeScene(QJsonObject& projectObj,QSharedPointer<iris::Scene> scene)
+    void writeScene(QJsonObject& projectObj,iris::ScenePtr scene)
     {
+        QJsonObject sceneObj;
+
+        //scene properties
+        if(!!scene->skyTexture)
+            sceneObj["skyTexture"] = this->getRelativePath(scene->skyTexture->getSource());
+        else
+            sceneObj["skyTexture"] = "";
+
+        sceneObj["skyColor"] = jsonColor(scene->skyColor);
+        sceneObj["ambientColor"] = jsonColor(scene->ambientColor);
+
+        sceneObj["fogColor"] = jsonColor(scene->fogColor);
+        sceneObj["fogStart"] = scene->fogStart;
+        sceneObj["fogEnd"] = scene->fogEnd;
+        sceneObj["fogEnabled"] = scene->fogEnabled;
+
+
         QJsonObject rootNodeObj;
         writeSceneNode(rootNodeObj,scene->getRootNode());
-
-        QJsonObject sceneObj;
         sceneObj["rootNode"] = rootNodeObj;
 
         projectObj["scene"] = sceneObj;
@@ -129,10 +144,10 @@ private:
         sceneNodeObj["animation"] = animObj;
     }
 
-    void writeMeshData(QJsonObject& sceneNodeObject,QSharedPointer<iris::MeshNode> meshNode)
+    void writeMeshData(QJsonObject& sceneNodeObject,iris::MeshNodePtr meshNode)
     {
         //todo: handle generated meshes properly
-        sceneNodeObject["mesh"] = meshNode->meshPath;
+        sceneNodeObject["mesh"] = getRelativePath(meshNode->meshPath);
         sceneNodeObject["meshIndex"] = meshNode->meshIndex;
 
         //todo: check if material actually exists
@@ -142,7 +157,7 @@ private:
         sceneNodeObject["material"] = matObj;
     }
 
-    void writeSceneNodeMaterial(QJsonObject& matObj,QSharedPointer<iris::DefaultMaterial> mat)
+    void writeSceneNodeMaterial(QJsonObject& matObj,iris::DefaultMaterialPtr mat)
     {
         matObj["ambientColor"] = jsonColor(mat->getAmbientColor());
 
@@ -183,7 +198,7 @@ private:
         return obj;
     }
 
-    void writeLightData(QJsonObject& sceneNodeObject,QSharedPointer<iris::LightNode> lightNode)
+    void writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr lightNode)
     {
         sceneNodeObject["lightType"] = getLightNodeTypeName(lightNode->lightType);
         sceneNodeObject["intensity"] = lightNode->intensity;

@@ -114,6 +114,13 @@ private:
      */
     void setupVrUi();
 
+    /**
+     * Returns absolute path of file
+     * @param relToApp file path relative to application
+     * @return
+     */
+    QString getAbsolutePath(QString relToApp);
+
     //menus
     void setupFileMenu();
     void setupViewMenu();

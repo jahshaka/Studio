@@ -30,6 +30,7 @@ public:
     Mesh* skyMesh;
     Texture2DPtr skyTexture;
     QColor skyColor;
+    QColor ambientColor;
 
     // should be MaterialPtr
     DefaultSkyMaterialPtr skyMaterial;
@@ -66,6 +67,7 @@ public:
     QString getSkyTextureSource();
     void clearSkyTexture();
     void setSkyColor(QColor color);
+    void setAmbientColor(QColor color);
 
     void updateSceneAnimation(float time);
     void update(float dt);
