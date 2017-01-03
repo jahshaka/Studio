@@ -26,7 +26,7 @@ class SceneReader:public AssetIOBase
 {
     QHash<QString,QList<iris::Mesh*>> meshes;
 public:
-    QSharedPointer<iris::Scene> readScene(QString filePath)
+    iris::ScenePtr readScene(QString filePath)
     {
         dir = AssetIOBase::getDirFromFileName(filePath);
         QFile file(filePath);
@@ -41,12 +41,30 @@ public:
         return scene;
     }
 
-    QSharedPointer<iris::Scene> readScene(QJsonObject& projectObj)
+    iris::ScenePtr readScene(QJsonObject& projectObj)
     {
         auto scene = iris::Scene::create();
 
         //scene already contains root node, so just add children
         auto sceneObj = projectObj["scene"].toObject();
+
+        //read properties
+        auto skyTexPath = sceneObj["skyTexture"].toString("");
+        if(!skyTexPath.isEmpty())
+        {
+            skyTexPath = this->getAbsolutePath(skyTexPath);
+            scene->setSkyTexture(iris::Texture2D::load(skyTexPath));
+        }
+        scene->setSkyColor(this->readColor(sceneObj["skyColor"].toObject()));
+        scene->setAmbientColor(this->readColor(sceneObj["ambientColor"].toObject()));
+
+        scene->fogColor = this->readColor(sceneObj["fogColor"].toObject());
+        scene->fogStart = sceneObj["fogStart"].toDouble(100);
+        scene->fogEnd = sceneObj["fogEnd"].toDouble(120);
+        scene->fogEnabled = sceneObj["fogEnabled"].toBool(true);
+
+
+
         auto rootNode = sceneObj["rootNode"].toObject();
         QJsonArray children = rootNode["children"].toArray();
 
@@ -65,9 +83,9 @@ public:
      * @param nodeObj
      * @return
      */
-    QSharedPointer<iris::SceneNode> readSceneNode(QJsonObject& nodeObj)
+    iris::SceneNodePtr readSceneNode(QJsonObject& nodeObj)
     {
-        QSharedPointer<iris::SceneNode> sceneNode;
+        iris::SceneNodePtr sceneNode;
 
         QString nodeType = nodeObj["type"].toString("empty");
         if(nodeType=="mesh")
@@ -97,7 +115,7 @@ public:
     }
 
 
-    void readAnimationData(QJsonObject& nodeObj,QSharedPointer<iris::SceneNode> sceneNode)
+    void readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr sceneNode)
     {
         auto animObj = nodeObj["animation"].toObject();
         if(animObj.isEmpty())
@@ -139,7 +157,7 @@ public:
      * @param nodeObj
      * @param sceneNode
      */
-    void readSceneNodeTransform(QJsonObject& nodeObj,QSharedPointer<iris::SceneNode> sceneNode)
+    void readSceneNodeTransform(QJsonObject& nodeObj,iris::SceneNodePtr sceneNode)
     {
         auto pos = nodeObj["pos"].toObject();
         if(!pos.isEmpty())
@@ -170,7 +188,7 @@ public:
      * @param nodeObj
      * @return
      */
-    QSharedPointer<iris::MeshNode> createMesh(QJsonObject& nodeObj)
+    iris::MeshNodePtr createMesh(QJsonObject& nodeObj)
     {
         auto meshNode = iris::MeshNode::create();
 
@@ -196,7 +214,7 @@ public:
      * @param nodeObj
      * @return
      */
-    QSharedPointer<iris::LightNode> createLight(QJsonObject& nodeObj)
+    iris::LightNodePtr createLight(QJsonObject& nodeObj)
     {
         auto lightNode = iris::LightNode::create();
 
@@ -233,7 +251,7 @@ public:
      * @param nodeObj
      * @return
      */
-    QSharedPointer<iris::Material> readMaterial(QJsonObject& nodeObj)
+    iris::MaterialPtr readMaterial(QJsonObject& nodeObj)
     {
         if(nodeObj["material"].isNull())
         {
