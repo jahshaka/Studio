@@ -73,6 +73,7 @@ void SceneViewWidget::initialize()
     scaleGizmo->createHandleShader();
 
     viewportGizmo = translationGizmo;
+    transformMode = "Global";
 }
 
 void SceneViewWidget::setScene(QSharedPointer<iris::Scene> scene)
@@ -104,7 +105,6 @@ void SceneViewWidget::updateScene(bool once)
         viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
         viewportGizmo->render(renderer->GLA, ViewMatrix, ProjMatrix);
     }
-
 }
 
 void SceneViewWidget::initializeGL()
@@ -282,7 +282,7 @@ void SceneViewWidget::doObjectPicking(const QPointF& point)
     editorCam->updateCameraMatrices();
 
     auto segStart = this->editorCam->pos;
-    auto rayDir = this->calculateMouseRay(point) * 512;
+    auto rayDir = this->calculateMouseRay(point) * 1024;
     auto segEnd = segStart + rayDir;
 
     QList<PickingResult> hitList;
@@ -316,7 +316,7 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
     editorCam->updateCameraMatrices();
 
     auto segStart = this->editorCam->pos;
-    auto rayDir = this->calculateMouseRay(point) * 512;
+    auto rayDir = this->calculateMouseRay(point) * 1024;
     auto segEnd = segStart + rayDir;
 
     QList<PickingResult> hitList;
@@ -339,7 +339,7 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
 
     viewportGizmo->currentNode = hitList.last().hitNode;
 
-    viewportGizmo->onMousePress(editorCam->pos, this->calculateMouseRay(point) * 512);
+    viewportGizmo->onMousePress(editorCam->pos, this->calculateMouseRay(point) * 1024);
 }
 
 void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,
@@ -483,20 +483,26 @@ void SceneViewWidget::setTransformOrientationGlobal()
 void SceneViewWidget::setGizmoLoc()
 {
     editorCam->updateCameraMatrices();
+    transformMode = viewportGizmo->getTransformOrientation();
     viewportGizmo = translationGizmo;
+    viewportGizmo->setTransformOrientation(transformMode);
     viewportGizmo->lastSelectedNode = selectedNode;
 }
 
 void SceneViewWidget::setGizmoRot()
 {
     editorCam->updateCameraMatrices();
+    transformMode = viewportGizmo->getTransformOrientation();
     viewportGizmo = rotationGizmo;
+    viewportGizmo->setTransformOrientation(transformMode);
     viewportGizmo->lastSelectedNode = selectedNode;
 }
 
 void SceneViewWidget::setGizmoScale()
 {
     editorCam->updateCameraMatrices();
+    transformMode = viewportGizmo->getTransformOrientation();
     viewportGizmo = scaleGizmo;
+    viewportGizmo->setTransformOrientation(transformMode);
     viewportGizmo->lastSelectedNode = selectedNode;
 }
