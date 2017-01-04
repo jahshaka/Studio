@@ -156,19 +156,12 @@ FORMS    += \
     src/dialogs/infodialog.ui \
     src/dialogs/loadmeshdialog.ui \
     src/widgets/animationwidget.ui \
-    src/widgets/endlessplanelayerwidget.ui \
     src/widgets/lcdslider.ui \
-    src/widgets/lightlayerwidget.ui \
     src/widgets/maintimelinewidget.ui \
-    src/widgets/materialwidget.ui \
-    src/widgets/modellayerwidget.ui \
     src/widgets/namedvalueslider.ui \
     src/widgets/newlcdslider.ui \
-    src/widgets/spherelayerwidget.ui \
-    src/widgets/texturedplanelayerwidget.ui \
     src/widgets/toruslayerwidget.ui \
     src/widgets/transformsliders.ui \
-    src/widgets/worldlayerwidget.ui \
     src/newmainwindow.ui \
     src/widgets/materialsets.ui \
     src/widgets/modelpresets.ui \
