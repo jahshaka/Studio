@@ -47,12 +47,12 @@ public:
         else if (axis == "axis__z") translatePlaneNormal = QVector3D(.0f, 1.f, .0f);
     }
 
-    void getTransformOrientation() {
-
+    QString getTransformOrientation() {
+        return transformOrientation;
     }
 
-    void setTransformOrientation(const QString&) {
-
+    void setTransformOrientation(const QString& type) {
+        transformOrientation = type;
     }
 
     void updateTransforms(const QVector3D& pos) {
@@ -65,7 +65,7 @@ public:
     }
 
     void update(QVector3D pos, QVector3D r) {
-        QVector3D ray = (r * 512 - pos).normalized();
+        QVector3D ray = (r * 1024 - pos).normalized();
         float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
 
         if (nDotR != 0.0f) {
@@ -200,7 +200,7 @@ public:
         camera->updateCameraMatrices();
 
         auto segStart = camera->pos;
-        auto segEnd = segStart + rayDir * 512;
+        auto segEnd = segStart + rayDir * 1024;
 
         QList<PickingResult> hitList;
         doMeshPicking(POINTER->getRootNode(), segStart, segEnd, hitList);

@@ -42,7 +42,7 @@ public:
 
     virtual void createHandleShader() = 0;
 
-    virtual void getTransformOrientation() = 0;
+    virtual QString getTransformOrientation() = 0;
 
     virtual void setTransformOrientation(const QString&) = 0;
 

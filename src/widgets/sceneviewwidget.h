@@ -140,6 +140,7 @@ private:
     ScaleGizmo* scaleGizmo;
 
     GizmoInstance* viewportGizmo;
+    QString transformMode;
 
     iris::Viewport* viewport;
     iris::FullScreenQuad* fsQuad;
