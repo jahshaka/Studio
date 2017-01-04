@@ -40,7 +40,6 @@ For more information see the LICENSE file
 
 #include "widgets/animationwidget.h"
 
-#include "widgets/materialwidget.h"
 #include "dialogs/renamelayerdialog.h"
 #include "widgets/layertreewidget.h"
 #include "core/project.h"
@@ -599,15 +598,6 @@ void MainWindow::removeScene()
 
 void MainWindow::setupPropertyUi()
 {
-    //TRANSFROMS
-    //transformUi = new TransformWidget();
-
-    //LIGHT LAYER
-    //lightLayerWidget = new LightLayerWidget();
-
-    //MATERIAL UI
-    materialWidget = new MaterialWidget();
-
     //ANIMATION
     animWidget = new AnimationWidget();
     animWidget->setMainTimelineWidget(ui->mainTimeline->getTimeline());
