@@ -124,7 +124,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->sceneHierarchy->setMainWindow(this);
 
-    connect(ui->sceneHierarchy,SIGNAL(sceneNodeSelected(QSharedPointer<iris::SceneNode>)),
+    connect(ui->sceneHierarchy, SIGNAL(sceneNodeSelected(QSharedPointer<iris::SceneNode>)),
             this, SLOT(sceneNodeSelected(QSharedPointer<iris::SceneNode>)));
 
     connect(sceneView, SIGNAL(sceneNodeSelected(QSharedPointer<iris::SceneNode>)),
@@ -140,20 +140,17 @@ MainWindow::MainWindow(QWidget *parent) :
 void MainWindow::setupVrUi()
 {
     ui->vrBtn->setToolTipDuration(0);
-    if(sceneView->isVrSupported())
-    {
+    if (sceneView->isVrSupported()) {
         ui->vrBtn->setEnabled(true);
         ui->vrBtn->setToolTip("Press to view the scene in vr");
-        ui->vrBtn->setProperty("vrMode",(int)VRButtonMode::Default);
-    }
-    else
-    {
+        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Default);
+    } else {
         ui->vrBtn->setEnabled(false);
         ui->vrBtn->setToolTip("No Oculus device detected");
-        ui->vrBtn->setProperty("vrMode",(int)VRButtonMode::Disabled);
+        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Disabled);
     }
 
-    connect(ui->vrBtn,SIGNAL(clicked(bool)),SLOT(vrButtonClicked(bool)));
+    connect(ui->vrBtn, SIGNAL(clicked(bool)), SLOT(vrButtonClicked(bool)));
 
     //needed to apply changes
     ui->vrBtn->style()->unpolish(ui->vrBtn);
@@ -166,29 +163,21 @@ void MainWindow::setupVrUi()
  */
 void MainWindow::vrButtonClicked(bool)
 {
-    if(!sceneView->isVrSupported())
-    {
-    }
-    else
-    {
-
-        if(sceneView->getViewportMode()==ViewportMode::Editor)
-        {
+    if (!sceneView->isVrSupported()) {
+        // pass
+    } else {
+        if (sceneView->getViewportMode()==ViewportMode::Editor) {
             sceneView->setViewportMode(ViewportMode::VR);
 
             //highlight button blue
             ui->vrBtn->setProperty("vrMode",(int)VRButtonMode::VRMode);
-        }
-        else
-
-        {
+        } else {
             sceneView->setViewportMode(ViewportMode::Editor);
 
             //return button back to normal color
             ui->vrBtn->setProperty("vrMode",(int)VRButtonMode::Default);
         }
     }
-
 
     //needed to apply changes
     ui->vrBtn->style()->unpolish(ui->vrBtn);
@@ -197,8 +186,7 @@ void MainWindow::vrButtonClicked(bool)
 
 QString MainWindow::getAbsolutePath(QString relToApp)
 {
-    auto path = QDir::cleanPath(QCoreApplication::applicationDirPath()+QDir::separator()+relToApp);
-    qDebug()<<path;
+    auto path = QDir::cleanPath(QCoreApplication::applicationDirPath() + QDir::separator() + relToApp);
     return path;
 }
 
@@ -392,8 +380,7 @@ void MainWindow::setupFileMenu()
 
 void MainWindow::setupViewMenu()
 {
-    connect(ui->actionEditorCamera, SIGNAL(triggered(bool)), this, SLOT(useEditorCamera()));
-    connect(ui->actionViewerCamera, SIGNAL(triggered(bool)), this, SLOT(useUserCamera()));
+
 }
 
 void MainWindow::setupHelpMenu()
@@ -598,18 +585,13 @@ void MainWindow::removeScene()
 
 void MainWindow::setupPropertyUi()
 {
-    //ANIMATION
     animWidget = new AnimationWidget();
     animWidget->setMainTimelineWidget(ui->mainTimeline->getTimeline());
-
-    //WORLD
-    //worldLayerWidget = new WorldLayerWidget();
 }
 
 void MainWindow::sceneNodeSelected(QTreeWidgetItem* item)
 {
-    //auto data = (SceneNode*)item->data(1,Qt::UserRole).value<void*>();
-    //setActiveSceneNode(data);
+
 }
 
 void MainWindow::sceneTreeItemChanged(QTreeWidgetItem* item,int column)

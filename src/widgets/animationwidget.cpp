@@ -110,7 +110,7 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     connect(ui->stop,SIGNAL(pressed()),this,SLOT(stopTimer()));
 
     //connect(ui->timeEdit,SIGNAL(timeChanged(QTime)),this,SLOT(timeEditChanged(QTime)));
-    connect(ui->animLength,SIGNAL(valueChanged(int)),this,SLOT(setAnimLength(int)));
+//    connect(ui->animLength,SIGNAL(valueChanged(int)),this,SLOT(setAnimLength(int)));
     connect(ui->animStartTime,SIGNAL(valueChanged(int)),this,SLOT(setAnimstart(int)));
     connect(ui->loopAnim,SIGNAL(clicked(bool)),this,SLOT(setLooping(bool)));
 

@@ -9,7 +9,7 @@ TexturePicker::TexturePicker(QWidget *parent) :
     ui(new Ui::TexturePicker)
 {
     ui->setupUi(this);
-    connect(ui->load, SIGNAL(pressed()), SLOT(changeDiffuseMap()));
+    connect(ui->load, SIGNAL(pressed()), SLOT(changeTextureMap()));
 
     this->ui->texture->installEventFilter(this);
 }

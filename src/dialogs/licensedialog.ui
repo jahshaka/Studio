@@ -32,8 +32,8 @@
    <string>Dialog</string>
   </property>
   <property name="windowIcon">
-   <iconset>
-    <normaloff>:/icons/logo03.svg</normaloff>:/icons/logo03.svg</iconset>
+   <iconset resource="../../icons.qrc">
+    <normaloff>:/app/icons/logo03.svg</normaloff>:/app/icons/logo03.svg</iconset>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
@@ -807,6 +807,8 @@ color: rgb(115, 115, 115);
    </item>
   </layout>
  </widget>
- <resources/>
+ <resources>
+  <include location="../../icons.qrc"/>
+ </resources>
  <connections/>
 </ui>

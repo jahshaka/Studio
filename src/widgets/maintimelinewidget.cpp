@@ -43,8 +43,8 @@ MainTimelineWidget::MainTimelineWidget(QWidget *parent) :
 
     //connect(ui->play,SIGNAL(clicked(bool)),this,SLOT(startTimer()));
     connect(ui->stop,SIGNAL(clicked(bool)),this,SLOT(stopTimer()));
-    connect(ui->timeStart,SIGNAL(valueChanged(int)),this,SLOT(timeStartChanged(int)));
-    connect(ui->timeEnd,SIGNAL(valueChanged(int)),this,SLOT(timeEndChanged(int)));
+//    connect(ui->timeStart,SIGNAL(valueChanged(int)),this,SLOT(timeStartChanged(int)));
+//    connect(ui->timeEnd,SIGNAL(valueChanged(int)),this,SLOT(timeEndChanged(int)));
 
     //connect(ui->animLength,SIGNAL(valueChanged(int)),this,SLOT(animLengthChanged(int)));
 
