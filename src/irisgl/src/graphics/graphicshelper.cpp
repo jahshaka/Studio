@@ -53,7 +53,7 @@ QList<iris::Mesh*> GraphicsHelper::loadAllMeshesFromFile(QString filePath)
 
     if(scene)
     {
-        for(auto i=0;i<scene->mNumMeshes;i++)
+        for(unsigned i=0;i<scene->mNumMeshes;i++)
         {
             auto mesh = new Mesh(scene->mMeshes[i],VertexLayout::createMeshDefault());
             meshes.append(mesh);

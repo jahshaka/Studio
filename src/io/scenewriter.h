@@ -83,27 +83,25 @@ private:
 
 
         //todo: write data specific to node type
-        switch(sceneNode->sceneNodeType)
-        {
+        switch (sceneNode->sceneNodeType) {
             case iris::SceneNodeType::Mesh:
                 writeMeshData(sceneNodeObj,sceneNode.staticCast<iris::MeshNode>());
             break;
-
             case iris::SceneNodeType::Light:
                 writeLightData(sceneNodeObj,sceneNode.staticCast<iris::LightNode>());
             break;
+            default: break;
         }
 
         writeAnimationData(sceneNodeObj,sceneNode);
 
         QJsonArray childrenArray;
-        for(auto childNode:sceneNode->children)
-        {
+        for (auto childNode : sceneNode->children) {
             QJsonObject childNodeObj;
-            writeSceneNode(childNodeObj,childNode);
-
+            writeSceneNode(childNodeObj, childNode);
             childrenArray.append(childNodeObj);
         }
+
         sceneNodeObj["children"] = childrenArray;
     }
 
@@ -223,14 +221,15 @@ private:
 
     QString getLightNodeTypeName(iris::LightType lightType)
     {
-        switch(lightType)
-        {
-        case iris::LightType::Point:
-            return "point";
-        case iris::LightType::Directional:
-            return "directional";
-        case iris::LightType::Spot:
-            return "spot";
+        switch (lightType) {
+            case iris::LightType::Point:
+                return "point";
+            case iris::LightType::Directional:
+                return "directional";
+            case iris::LightType::Spot:
+                return "spot";
+            default:
+                return "none";
         }
     }
 };
