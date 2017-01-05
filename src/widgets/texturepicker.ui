@@ -42,7 +42,7 @@
     <widget class="QLabel" name="label">
      <property name="minimumSize">
       <size>
-       <width>100</width>
+       <width>152</width>
        <height>0</height>
       </size>
      </property>
@@ -67,13 +67,13 @@
     </widget>
    </item>
    <item>
-    <widget class="QLabel" name="DiffuseMap">
+    <widget class="QLabel" name="texture">
      <property name="enabled">
       <bool>true</bool>
      </property>
      <property name="minimumSize">
       <size>
-       <width>90</width>
+       <width>108</width>
        <height>108</height>
       </size>
      </property>
@@ -134,20 +134,13 @@
       </widget>
      </item>
      <item>
-      <widget class="QLabel" name="dimensions">
-       <property name="minimumSize">
-        <size>
-         <width>0</width>
-         <height>25</height>
-        </size>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-      </widget>
-     </item>
-     <item>
       <widget class="QPushButton" name="load">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="minimumSize">
         <size>
          <width>90</width>
@@ -184,6 +177,12 @@ border-style: inset;
      </item>
      <item>
       <widget class="QPushButton" name="pushButton">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="minimumSize">
         <size>
          <width>0</width>
@@ -214,14 +213,27 @@ border-style: inset;
 </string>
        </property>
        <property name="text">
-        <string>clear</string>
+        <string>Clear</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="dimensions">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="text">
+        <string/>
        </property>
       </widget>
      </item>
     </layout>
    </item>
   </layout>
-  <zorder>DiffuseMap</zorder>
+  <zorder>texture</zorder>
   <zorder>label</zorder>
  </widget>
  <resources/>

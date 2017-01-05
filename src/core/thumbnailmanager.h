@@ -30,9 +30,8 @@ struct Thumbnail
 class ThumbnailManager
 {
 public:
-    static QSharedPointer<Thumbnail> createThumbnail(QString filename,int width,int height);
-
-    static QHash<QString,QSharedPointer<Thumbnail>> thumbnails;
+    static QSharedPointer<Thumbnail> createThumbnail(QString filename, int width, int height);
+    static QHash<QString, QSharedPointer<Thumbnail>> thumbnails;
 };
 
 

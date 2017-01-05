@@ -48,14 +48,6 @@ public:
 
     virtual void render(QOpenGLFunctions_3_2_Core*, QMatrix4x4&, QMatrix4x4&) = 0;
 
-    virtual bool onHandleSelected(QString name,int x,int y)
-    {
-        Q_UNUSED(name);
-        Q_UNUSED(x);
-        Q_UNUSED(y);
-        return false;
-    }
-
     virtual void isHandleHit() = 0;
 
     virtual void onMousePress(QVector3D, QVector3D) = 0;

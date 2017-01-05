@@ -207,10 +207,6 @@ public:
         handleShader->release();
     }
 
-    bool onHandleSelected(QString name, int x, int y) {
-
-    }
-
     void onMousePress(QVector3D pos, QVector3D r) {
         translatePlaneD = -QVector3D::dotProduct(translatePlaneNormal, lastSelectedNode->getGlobalPosition());
 

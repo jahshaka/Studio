@@ -23,6 +23,7 @@ SceneHeirarchyWidget::SceneHeirarchyWidget(QWidget *parent) :
     connect(ui->sceneTree, SIGNAL(itemClicked(QTreeWidgetItem*, int)),
             this,
             SLOT(treeItemSelected(QTreeWidgetItem*)));
+
     connect(ui->sceneTree,
             SIGNAL(itemChanged(QTreeWidgetItem*, int)),
             this,

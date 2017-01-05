@@ -117,7 +117,7 @@
              <property name="styleSheet">
               <string notr="true">QWidget #widget_2{
 background-color: #429ff9;
-border_bottom: 1px solid #252525;
+border-bottom: 1px solid #252525;
 }
 </string>
              </property>

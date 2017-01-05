@@ -95,7 +95,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
         //otherwise, add meshes as child nodes
         sceneNode = QSharedPointer<iris::SceneNode>(new iris::SceneNode());
 
-        for(auto i=0;i<node->mNumMeshes;i++)
+        for(unsigned i=0;i<node->mNumMeshes;i++)
         {
             auto mesh = scene->mMeshes[node->mMeshes[i]];
 
@@ -125,7 +125,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
     rot.Normalize();
     sceneNode->rot = QQuaternion(rot.w,rot.x,rot.y,rot.z);//not sure if this is correct
 
-    for(auto i=0;i<node->mNumChildren;i++)
+    for(unsigned i=0;i<node->mNumChildren;i++)
     {
         auto child = _buildScene(scene,node->mChildren[i],filePath);
         sceneNode->addChild(child);

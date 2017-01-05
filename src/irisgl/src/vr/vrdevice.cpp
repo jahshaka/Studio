@@ -46,41 +46,38 @@ bool VrDevice::isVrSupported()
 void VrDevice::initialize()
 {
     ovrResult result = ovr_Initialize(nullptr);
-    if(!OVR_SUCCESS(result))
-    {
+    if (!OVR_SUCCESS(result)) {
         qDebug()<<"Failed to initialize libOVR.";
         return;
     }
 
     result = ovr_Create(&session, &luid);
-    if (!OVR_SUCCESS(result))
-    {
-        qDebug()<<"could not create session";
+    if (!OVR_SUCCESS(result)) {
+        qDebug() << "Could not create libOVR session!";
         return;
     }
 
     hmdDesc = ovr_GetHmdDesc(session);
 
-    //intialize framebuffers necessary for rendering to the hmd
-    for (int eye = 0; eye < 2; ++eye)
-    {
-        ovrSizei texSize = ovr_GetFovTextureSize(session, ovrEyeType(eye), hmdDesc.DefaultEyeFov[eye], 1);
-        createTextureChain(session,vr_textureChain[eye],texSize.w,texSize.h );
-        vr_depthTexture[eye] = createDepthTexture(texSize.w,texSize.h);
+    // intialize framebuffers necessary for rendering to the hmd
+    for (int eye = 0; eye < 2; ++eye) {
+        ovrSizei texSize = ovr_GetFovTextureSize(session,
+                                                 ovrEyeType(eye),
+                                                 hmdDesc.DefaultEyeFov[eye], 1);
+        createTextureChain(session, vr_textureChain[eye], texSize.w, texSize.h );
+        vr_depthTexture[eye] = createDepthTexture(texSize.w, texSize.h);
 
-        //should be the same for all
+        // should be the same for all
         eyeWidth = texSize.w;
         eyeHeight = texSize.h;
     }
-    gl->glGenFramebuffers(2,vr_Fbo);
+    gl->glGenFramebuffers(2, vr_Fbo);
 
-
-    createMirrorFbo(800,600);
+    createMirrorFbo(800, 600);
 
     setTrackingOrigin(VrTrackingOrigin::FloorLevel);
 
     vrSupported = true;
-
 }
 
 void VrDevice::setTrackingOrigin(VrTrackingOrigin trackingOrigin)
@@ -113,7 +110,10 @@ GLuint VrDevice::createDepthTexture(int width,int height)
     return texId;
 }
 
-ovrTextureSwapChain VrDevice::createTextureChain(ovrSession session,ovrTextureSwapChain &swapChain,int width,int height)
+ovrTextureSwapChain VrDevice::createTextureChain(ovrSession session,
+                                                 ovrTextureSwapChain &swapChain,
+                                                 int width,
+                                                 int height)
 {
     //ovrTextureSwapChain swapChain;
 
@@ -128,8 +128,7 @@ ovrTextureSwapChain VrDevice::createTextureChain(ovrSession session,ovrTextureSw
     desc.StaticImage = ovrFalse;
 
     ovrResult result = ovr_CreateTextureSwapChainGL(session, &desc, &swapChain);
-    if (!OVR_SUCCESS(result))
-    {
+    if (!OVR_SUCCESS(result)) {
         //qDebug()<<"could not create swap chain!";
         return nullptr;
     }
@@ -137,8 +136,7 @@ ovrTextureSwapChain VrDevice::createTextureChain(ovrSession session,ovrTextureSw
     int length = 0;
     ovr_GetTextureSwapChainLength(session, swapChain, &length);
 
-    for (int i = 0; i < length; ++i)
-    {
+    for (int i = 0; i < length; ++i) {
         GLuint chainTexId;
         ovr_GetTextureSwapChainBufferGL(session, swapChain, i, &chainTexId);
         gl->glBindTexture(GL_TEXTURE_2D, chainTexId);
@@ -149,6 +147,7 @@ ovrTextureSwapChain VrDevice::createTextureChain(ovrSession session,ovrTextureSw
         gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     }
 
+    return swapChain;
 }
 
 GLuint VrDevice::createMirrorFbo(int width,int height)
@@ -286,11 +285,9 @@ QMatrix4x4 VrDevice::getEyeProjMatrix(int eye,float nearClip,float farClip)
                                               ovrProjection_None);
 
     //todo: put in
-    for(int r=0;r<4;r++)
-    {
-        for(int c=0;c<4;c++)
-        {
-            proj(r,c) = eyeProj.M[r][c];
+    for (int r = 0; r < 4; r++) {
+        for (int c = 0;c < 4; c++) {
+            proj(r, c) = eyeProj.M[r][c];
         }
     }
 
@@ -299,7 +296,8 @@ QMatrix4x4 VrDevice::getEyeProjMatrix(int eye,float nearClip,float farClip)
 
 GLuint VrDevice::bindMirrorTextureId()
 {
-    gl->glBindTexture(GL_TEXTURE_2D,vr_mirrorTexId);
+    gl->glBindTexture(GL_TEXTURE_2D, vr_mirrorTexId);
+    return vr_mirrorTexId;
 }
 
 }

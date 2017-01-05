@@ -158,10 +158,6 @@ public:
         gl->glEnable(GL_CULL_FACE);
     }
 
-    bool onHandleSelected(QString name, int x, int y) {
-
-    }
-
     void onMousePress(QVector3D pos, QVector3D r) {
         translatePlaneD = -QVector3D::dotProduct(translatePlaneNormal, finalHitPoint);
 

@@ -45,17 +45,16 @@ Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
 
     //slow, but good enough for now
     QVector<float> data;
-    for(int f =0;f<mesh->mNumFaces;f++)
-    {
+    for (unsigned f = 0; f < mesh->mNumFaces; f++) {
         auto face = mesh->mFaces[f];
 
         //assumes mesh is made completely of triangles
         auto a = mesh->mVertices[face.mIndices[0]];
         auto b = mesh->mVertices[face.mIndices[1]];
         auto c = mesh->mVertices[face.mIndices[2]];
-        triMesh->addTriangle(QVector3D(a.x,a.y,a.z),
-                             QVector3D(b.x,b.y,b.z),
-                             QVector3D(c.x,c.y,c.z));
+        triMesh->addTriangle(QVector3D(a.x, a.y, a.z),
+                             QVector3D(b.x, b.y, b.z),
+                             QVector3D(c.x, c.y, c.z));
 
         for(int v=0;v<3;v++)
         {

@@ -39,7 +39,7 @@ void PreferencesDialog::setupList()
     list->setMovement(QListView::Static);
 
     QListWidgetItem *item = new QListWidgetItem(ui->listWidget);
-    item->setIcon(QIcon(":/icons/world.svg"));
+    item->setIcon(QIcon(":/app/icons/world.svg"));
     item->setText(tr("Editor"));
     item->setSizeHint(QSize(80, 80));
     item->setTextAlignment(Qt::AlignHCenter);
