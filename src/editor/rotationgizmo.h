@@ -31,11 +31,11 @@ public:
         POINTER->rootNode->addChild(handles[(int) AxisHandle::X]->gizmoHandle);
 
         handles[(int) AxisHandle::Y] = new GizmoHandle("app/models/rot_y.obj", "axis__y");
-        handles[(int) AxisHandle::Y]->setHandleColor(QColor(46, 224, 113));
+        handles[(int) AxisHandle::Y]->setHandleColor(QColor(37, 118, 235));
         POINTER->rootNode->addChild(handles[(int) AxisHandle::Y]->gizmoHandle);
 
         handles[(int) AxisHandle::Z] = new GizmoHandle("app/models/rot_z.obj", "axis__z");
-        handles[(int) AxisHandle::Z]->setHandleColor(QColor(37, 118, 235));
+        handles[(int) AxisHandle::Z]->setHandleColor(QColor(46, 224, 113));
         POINTER->rootNode->addChild(handles[(int) AxisHandle::Z]->gizmoHandle);
     }
 
@@ -66,7 +66,7 @@ public:
     }
 
     void update(QVector3D pos, QVector3D r) {
-        QVector3D ray = (r * 512 - pos).normalized();
+        QVector3D ray = (r * 1024 - pos).normalized();
         float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
 
         if (nDotR != 0.0f) {
@@ -154,8 +154,8 @@ public:
         handleShader->link();
     }
 
-    void getTransformOrientation() {
-
+    QString getTransformOrientation() {
+        return transformOrientation;
     }
 
     void setTransformOrientation(const QString& type) {
@@ -249,7 +249,7 @@ public:
         camera->updateCameraMatrices();
 
         auto segStart = camera->pos;
-        auto segEnd = segStart + rayDir * 512;
+        auto segEnd = segStart + rayDir * 1024;
 
         QList<PickingResult> hitList;
         doMeshPicking(POINTER->getRootNode(), segStart, segEnd, hitList);

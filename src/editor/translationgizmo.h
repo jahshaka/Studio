@@ -19,7 +19,6 @@ private:
 
 public:
 
-//    QSharedPointer<iris::Scene> POINTER;
     QSharedPointer<iris::SceneNode> getRootNode() {
         return this->POINTER->getRootNode();
     }
@@ -50,14 +49,19 @@ public:
         if (axis == "axis__x")      translatePlaneNormal = QVector3D(.0f, 1.f, .0f);
         else if (axis == "axis__y") translatePlaneNormal = QVector3D(.0f, .0f, 1.f);
         else if (axis == "axis__z") translatePlaneNormal = QVector3D(.0f, 1.f, .0f);
+
+//        if (transformOrientation == "Local") {
+//            translatePlaneNormal =
+//                    lastSelectedNode->rot.rotatedVector(translatePlaneNormal).normalized();
+//        }
     }
 
-    void getTransformOrientation() {
-
+    QString getTransformOrientation() {
+        return transformOrientation;
     }
 
-    void setTransformOrientation(const QString&) {
-
+    void setTransformOrientation(const QString& type) {
+        transformOrientation = type;
     }
 
     void updateTransforms(const QVector3D& pos) {
@@ -65,12 +69,17 @@ public:
 
         for (int i = 0; i < 3; i++) {
             handles[i]->gizmoHandle->pos = lastSelectedNode->getGlobalPosition();
+//            if (transformOrientation == "Local") {
+//                handles[i]->gizmoHandle->rot = lastSelectedNode->rot;
+//            } else {
+//                handles[i]->gizmoHandle->rot = QQuaternion();
+//            }
             handles[i]->gizmoHandle->scale = QVector3D(scale, scale, scale);
         }
     }
 
     void update(QVector3D pos, QVector3D r) {
-        QVector3D ray = (r * 512 - pos).normalized();
+        QVector3D ray = (r * 1024 - pos).normalized();
         float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
 
         if (nDotR != 0.0f) {
@@ -88,9 +97,6 @@ public:
             } else if (currentNode->getName() == "axis__z") {
                 Offset = QVector3D(0, 0, Offset.z());
             }
-
-            // https://www.gamedev.net/topic/674723-3d-editor-transform-gizmoshandles/
-//            scale = gizmoSize * ((pos - lastSelectedNode->pos).length() / qTan(45.0f / 2.0f));
 
             currentNode->pos += Offset;
             lastSelectedNode->pos += Offset;
@@ -127,27 +133,13 @@ public:
     void render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix) {
         handleShader->bind();
 
-        QMatrix4x4 widgetPos;
-        widgetPos.setToIdentity();
-
-        // wtf...
-        if (!!this->currentNode &&
-                (this->currentNode->getName() == "axis__x" ||
-                 this->currentNode->getName() == "axis__y" ||
-                 this->currentNode->getName() == "axis__z"))
-        {
-            widgetPos.translate(this->currentNode->pos);
-            widgetPos.scale(scale);
+        if (!!this->currentNode) {
             for (int i = 0; i < 3; i++) {
-                handles[i]->gizmoHandle->pos = this->currentNode->pos;
-//                handles[i]->gizmoHandle->scale = QVector3D(scale, scale, scale);
+                handles[i]->gizmoHandle->pos = currentNode->pos;
             }
-        } else if (!!this->lastSelectedNode) {
-            widgetPos.translate(this->lastSelectedNode->pos);
-            widgetPos.scale(scale);
+        } else {
             for (int i = 0; i < 3; i++) {
-                handles[i]->gizmoHandle->pos = this->lastSelectedNode->pos;
-//                handles[i]->gizmoHandle->scale = QVector3D(scale, scale, scale);
+                handles[i]->gizmoHandle->pos = lastSelectedNode->getGlobalPosition();
             }
         }
 
@@ -157,6 +149,13 @@ public:
         gl->glClear(GL_DEPTH_BUFFER_BIT);
 
         for (int i = 0; i < 3; i++) {
+            QMatrix4x4 widgetPos;
+            widgetPos.setToIdentity();
+
+            widgetPos.translate(handles[i]->gizmoHandle->pos);
+//            widgetPos.rotate(handles[i]->gizmoHandle->rot);
+            widgetPos.scale(scale);
+
             handleShader->setUniformValue("u_worldMatrix", widgetPos);
             handleShader->setUniformValue("u_viewMatrix", viewMatrix);
             handleShader->setUniformValue("u_projMatrix", projMatrix);
@@ -211,7 +210,7 @@ public:
         camera->updateCameraMatrices();
 
         auto segStart = camera->pos;
-        auto segEnd = segStart + rayDir * 512;
+        auto segEnd = segStart + rayDir * 1024;
 
         QList<PickingResult> hitList;
         doMeshPicking(POINTER->getRootNode(), segStart, segEnd, hitList);
