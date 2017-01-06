@@ -58,5 +58,7 @@ MaterialPreset* MaterialPresetReader::readMaterialPreset(QString filename)
         material->reflectionTexture = getAbsolutePath(tex);
     material->reflectionInfluence = (float)matObj["reflectionInfluence"].toDouble(0.0f);
 
+    material->textureScale = (float)matObj["textureScale"].toDouble(1.0f);
+
     return material;
 }

@@ -1,0 +1,21 @@
+{
+    "name": "Brick Ground",
+    "icon": "../../materials/brick_ground.png",
+    "diffuseTexture": "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_COLOR.png",
+    "normalTexture": "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_NRM.png",
+    "specularTexture": "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_SPEC.png",
+    "textureScale": 512,
+    "diffuseColor": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+    },
+    "specularColor": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+    },
+    "shininess": 3
+}

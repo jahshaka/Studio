@@ -536,6 +536,8 @@ void MainWindow::applyMaterialPreset(MaterialPreset* preset)
     mat->setReflectionTexture(iris::Texture2D::load(preset->reflectionTexture));
     mat->setReflectionInfluence(preset->reflectionInfluence);
 
+    mat->setTextureScale(preset->textureScale);
+
     meshNode->setMaterial(mat);
 
     //todo: update node's material without updating the whole ui

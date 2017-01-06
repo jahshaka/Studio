@@ -23,6 +23,8 @@ struct MaterialPreset
 
     QString reflectionTexture;
     float reflectionInfluence;
+
+    float textureScale;
 };
 
 #endif // MATERIALPRESET_H
