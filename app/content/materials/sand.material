@@ -1,0 +1,21 @@
+{
+    "name": "Sand",
+    "icon": "../../materials/sand.png",
+    "diffuseTexture": "presets/sand/Ground10_1_COLOR.png",
+    "normalTexture": "presets/sand/Ground10_1_NRM.png",
+    "specularTexture": "presets/sand/Ground10_1_SPEC.png",
+    "textureScale": 48,
+    "diffuseColor": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+    },
+    "specularColor": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+    },
+    "shininess": 0
+}

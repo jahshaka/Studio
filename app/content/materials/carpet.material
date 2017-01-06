@@ -1,0 +1,21 @@
+{
+    "name": "Carpet",
+    "icon": "../../materials/carpet.png",
+    "diffuseTexture": "presets/carpet/Carpet_04_UV_H_CM_1_COLOR.png",
+    "normalTexture": "presets/carpet/Carpet_04_UV_H_CM_1_NRM.png",
+    "specularTexture": "presets/carpet/Carpet_04_UV_H_CM_1_SPEC.png",
+    "textureScale": 512,
+    "diffuseColor": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+    },
+    "specularColor": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+    },
+    "shininess": 3
+}
