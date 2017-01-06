@@ -11,6 +11,7 @@ uniform bool u_useDiffuseTex;
 
 uniform sampler2D u_normalTexture;
 uniform bool u_useNormalTex;
+uniform float u_normalIntensity;
 
 uniform sampler2D u_specularTexture;
 uniform bool u_useSpecularTex;
@@ -90,6 +91,7 @@ void main()
     {
         vec3 texNorm = (texture2D(u_normalTexture,v_texCoord).xyz-0.5)*2;
         normal = normalize(v_tanToWorld*texNorm);
+        //normal = mix(normal,vec3(0,0,0),u_normalIntensity);
     }
 
     vec3 v = normalize(u_eyePos-v_worldPos);
@@ -151,18 +153,12 @@ void main()
         }
 
 
-        //diffuse += atten*ndl*u_lights[i].intensity*u_lights[i].color.rgb;
-        //diffuse += u_lights[i].intensity*u_lights[i].color.rgb;
         diffuse += atten*ndl*u_lights[i].intensity*u_lights[i].color.rgb;
         specular += atten*spec* u_lights[i].intensity * u_lights[i].color.rgb;
-        //specular += spec;
     }
 
-    //diffuse = vec3(1,1,1);
-
-    //vec3 col = vec3(1,0,1);
     vec3 col = u_material.diffuse;
-    //vec3 col = mat_diffuse;
+
     if(u_useDiffuseTex)
         col = col * texture2D(u_diffuseTexture,v_texCoord).rgb;
 
@@ -172,8 +168,6 @@ void main()
 
     vec3 finalColor = col*(u_material.ambient+diffuse)+
             (u_material.specular*specular);
-
-    //vec3 finalColor = col;
 
     if(u_useReflectionTex)
     {
@@ -194,12 +188,4 @@ void main()
     gl_FragColor = vec4(finalColor
                 ,
                 1.0);
-
-    /*
-    gl_FragColor = vec4(
-                (u_material.specular*specular),
-                1.0);
-    */
-    //gl_FragColor = vec4(diffuse,1.0);
-    //gl_FragColor = vec4(v_normal,1.0);
 }

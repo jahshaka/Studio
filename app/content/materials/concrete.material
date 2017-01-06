@@ -1,9 +1,9 @@
 {
     "name": "Concrete",
     "icon": "../../materials/old_painted_metal.png",
-    "diffuseTexture": "presets/concrete/Old_Painted_UV_H_CM_1_COLOR.png",
-    "normalTexture": "presets/concrete/Old_Painted_UV_H_CM_1_NRM.png",
-    "specularTexture": "presets/concrete/Old_Painted_UV_H_CM_1_SPEC.png",
+    "diffuseTexture": "presets/old_painted_metal/Old_Painted_UV_H_CM_1_COLOR.png",
+    "normalTexture": "presets/old_painted_metal/Old_Painted_UV_H_CM_1_NRM.png",
+    "specularTexture": "presets/old_painted_metal/Old_Painted_UV_H_CM_1_SPEC.png",
     "textureScale": 4,
     "diffuseColor": {
         "r": 255,
