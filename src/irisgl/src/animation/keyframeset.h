@@ -3,7 +3,6 @@
 
 #include <QMap>
 #include "../irisglfwd.h"
-//#include "keyframeset.h"
 
 namespace iris
 {
@@ -19,37 +18,13 @@ public:
     //QMap presrves insertion order,QHash doesnt
     QMap<QString,FloatKeyFrame*> keyFrames;
 
-    FloatKeyFrame* getOrCreateFrame(QString name)
-    {
-        if(keyFrames.contains(name))
-        {
-            return keyFrames[name];
-        }
+    FloatKeyFrame* getOrCreateFrame(QString name);
 
-        auto keyFrame = new FloatKeyFrame();
-        keyFrames.insert(name,keyFrame);
-        return keyFrame;
-    }
+    FloatKeyFrame* getKeyFrame(QString name);
 
-    FloatKeyFrame* getKeyFrame(QString name)
-    {
-        if(keyFrames.contains(name))
-        {
-            return keyFrames[name];
-        }
+    bool hasKeyFrame(QString name);
 
-        return nullptr;
-    }
-
-    bool hasKeyFrame(QString name)
-    {
-        return keyFrames.contains(name);
-    }
-
-    static KeyFrameSetPtr create()
-    {
-        return KeyFrameSetPtr(new KeyFrameSet());
-    }
+    static QSharedPointer<KeyFrameSet> create();
 };
 
 }

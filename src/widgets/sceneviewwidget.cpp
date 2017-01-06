@@ -29,19 +29,25 @@
 #include "../editor/rotationgizmo.h"
 #include "../editor/scalegizmo.h"
 
+#include "../core/keyboardstate.h"
+
 SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 {
     dragging = false;
 
     QSurfaceFormat format;
     format.setDepthBufferSize(32);
-    //format.setMajorVersion(3);
-    //format.setMinorVersion(3);
+    format.setMajorVersion(3);
+    format.setMinorVersion(2);
+    format.setProfile(QSurfaceFormat::CoreProfile);
     format.setSamples(1);
 
     setFormat(format);
+    // needed in order to get mouse events
     setMouseTracking(true);
-    //installEventFilter(this);
+    // needed in order to get key events
+    // http://stackoverflow.com/a/7879484/991834
+    setFocusPolicy(Qt::ClickFocus);
 
     viewport = new iris::Viewport();
 
@@ -57,6 +63,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     camController->setCamera(editorCam);
 
     viewportMode = ViewportMode::Editor;
+
 }
 
 void SceneViewWidget::initialize()
@@ -76,7 +83,7 @@ void SceneViewWidget::initialize()
     transformMode = "Global";
 }
 
-void SceneViewWidget::setScene(QSharedPointer<iris::Scene> scene)
+void SceneViewWidget::setScene(iris::ScenePtr scene)
 {
     this->scene = scene;
     scene->setCamera(editorCam);
@@ -86,7 +93,7 @@ void SceneViewWidget::setScene(QSharedPointer<iris::Scene> scene)
     selectedNode.reset();
 }
 
-void SceneViewWidget::setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode)
+void SceneViewWidget::setSelectedNode(iris::SceneNodePtr sceneNode)
 {
     selectedNode = sceneNode;
     renderer->setSelectedSceneNode(sceneNode);
@@ -105,6 +112,8 @@ void SceneViewWidget::updateScene(bool once)
         viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
         viewportGizmo->render(renderer->GLA, ViewMatrix, ProjMatrix);
     }
+
+
 }
 
 void SceneViewWidget::initializeGL()
@@ -140,8 +149,13 @@ void SceneViewWidget::renderScene()
     glClearColor(.3f, .3f, .3f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    //todo: find actual delta time
+    const float dt = 1.0f / 60.0f;
+
     if (!!renderer && !!scene) {
-        scene->update(1.0f / 60);
+        this->camController->update(dt);
+
+        scene->update(dt);
 
         if (viewportMode == ViewportMode::Editor) {
             // @TODO: find a better way to get the MV matrix from our ogl context
@@ -163,6 +177,7 @@ void SceneViewWidget::resizeGL(int width, int height)
 
 bool SceneViewWidget::eventFilter(QObject *obj, QEvent *event)
 {
+    /*
     QEvent::Type type = event->type();
 
     if (type == QEvent::MouseMove) {
@@ -177,9 +192,17 @@ bool SceneViewWidget::eventFilter(QObject *obj, QEvent *event)
         QMouseEvent* evt = static_cast<QMouseEvent*>(event);
         mouseReleaseEvent(evt);
         return false;
+    } else if (type == QEvent::KeyPress) {
+        qDebug()<<"key press!";
+        return false;
+    } else if (type == QEvent::KeyRelease) {
+        qDebug()<<"key release!";
+        return false;
     }
+    */
 
     return QWidget::eventFilter(obj, event);
+
 }
 
 QVector3D SceneViewWidget::calculateMouseRay(const QPointF& pos)
@@ -275,6 +298,21 @@ void SceneViewWidget::wheelEvent(QWheelEvent *event)
     if (camController != nullptr) {
         camController->onMouseWheel(event->delta());
     }
+}
+
+void SceneViewWidget::keyPressEvent(QKeyEvent *event)
+{
+    KeyboardState::keyStates[event->key()] = true;
+}
+
+void SceneViewWidget::keyReleaseEvent(QKeyEvent *event)
+{
+    KeyboardState::keyStates[event->key()] = false;
+}
+
+void SceneViewWidget::focusOutEvent(QFocusEvent* event)
+{
+    KeyboardState::reset();
 }
 
 void SceneViewWidget::doObjectPicking(const QPointF& point)
@@ -506,3 +544,4 @@ void SceneViewWidget::setGizmoScale()
     viewportGizmo->setTransformOrientation(transformMode);
     viewportGizmo->lastSelectedNode = selectedNode;
 }
+

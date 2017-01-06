@@ -5,7 +5,7 @@
  */
 
 #include <QSharedPointer>
-#include "animation/keyframeanimation.h"
+//#include "animation/keyframeanimation.h"
 
 namespace iris
 {
@@ -33,7 +33,11 @@ class DefaultMaterial;
 class ForwardRenderer;
 class KeyFrameSet;
 class Animation;
+class FloatKeyFrame;
+template<typename T> class Key;
+typedef Key<float> FloatKey;
 
+typedef QSharedPointer<iris::Animation> AnimationPtr;
 typedef QSharedPointer<Shader> ShaderPtr;
 typedef QSharedPointer<Scene> ScenePtr;
 typedef QSharedPointer<SceneNode> SceneNodePtr;
@@ -48,7 +52,7 @@ typedef QSharedPointer<Texture> TexturePtr;
 typedef QSharedPointer<ForwardRenderer> ForwardRendererPtr;
 typedef QSharedPointer<KeyFrameSet> KeyFrameSetPtr;
 typedef QSharedPointer<FloatKeyFrame> FloatKeyFramePtr;
-typedef QSharedPointer<Animation> AnimationPtr;
+
 
 
 }

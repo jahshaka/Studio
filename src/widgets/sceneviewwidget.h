@@ -7,6 +7,9 @@
 #include <QOpenGLBuffer>
 #include <QMatrix4x4>
 #include <QSharedPointer>
+#include <QHash>
+
+#include "../irisgl.h"
 
 namespace iris
 {
@@ -40,7 +43,7 @@ enum class ViewportMode
 
 struct PickingResult
 {
-    QSharedPointer<iris::SceneNode> hitNode;
+    iris::SceneNodePtr hitNode;
     QVector3D hitPoint;
 
     // this is often used for comparisons so it's not necessary to find the root
@@ -60,11 +63,11 @@ class SceneViewWidget : public QOpenGLWidget,
 public:
     explicit SceneViewWidget(QWidget *parent);
 
-    void setScene(QSharedPointer<iris::Scene> scene);
-    void setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode);
+    void setScene(iris::ScenePtr scene);
+    void setSelectedNode(iris::SceneNodePtr sceneNode);
     void clearSelectedNode();
 
-    void setEditorCamera(QSharedPointer<iris::CameraNode> camera);
+    void setEditorCamera(iris::CameraNodePtr camera);
 
     // switches to the free editor camera controller
     void setFreeCameraMode();
@@ -90,6 +93,9 @@ protected:
     void mouseMoveEvent(QMouseEvent* evt);
     void mouseReleaseEvent(QMouseEvent* evt);
     void wheelEvent(QWheelEvent *event);
+    void keyPressEvent(QKeyEvent *event);
+    void keyReleaseEvent(QKeyEvent *event);
+    void focusOutEvent(QFocusEvent* event);
 
     // does raycasting from the mouse's screen position.
     void doObjectPicking(const QPointF& point);
@@ -106,12 +112,12 @@ private:
                         QList<PickingResult>& hitList);
 
     // @TODO: use one picking function and pick by mesh type
-    void doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,
+    void doScenePicking(const iris::SceneNodePtr& sceneNode,
                         const QVector3D& segStart,
                         const QVector3D& segEnd,
                         QList<PickingResult>& hitList);
 
-    void doMeshPicking(const QSharedPointer<iris::SceneNode>& widgetHandles,
+    void doMeshPicking(const iris::SceneNodePtr& widgetHandles,
                        const QVector3D& segStart,
                        const QVector3D& segEnd,
                        QList<PickingResult>& hitList);
@@ -119,10 +125,10 @@ private:
     void makeObject();
     void renderScene();
 
-    QSharedPointer<iris::CameraNode> editorCam;
-    QSharedPointer<iris::Scene> scene;
-    QSharedPointer<iris::SceneNode> selectedNode;
-    QSharedPointer<iris::ForwardRenderer> renderer;
+    iris::CameraNodePtr editorCam;
+    iris::ScenePtr scene;
+    iris::SceneNodePtr selectedNode;
+    iris::ForwardRendererPtr renderer;
 
     QPointF prevMousePos;
     bool dragging;
@@ -148,7 +154,7 @@ private:
 signals:
     void initializeGraphics(SceneViewWidget* widget,
                             QOpenGLFunctions_3_2_Core* gl);
-    void sceneNodeSelected(QSharedPointer<iris::SceneNode> sceneNode);
+    void sceneNodeSelected(iris::SceneNodePtr sceneNode);
 
 };
 

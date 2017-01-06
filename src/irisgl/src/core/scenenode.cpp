@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "scene.h"
 #include "../animation/keyframeset.h"
 #include "../animation/animation.h"
+#include "../animation/keyframeanimation.h"
 
 namespace iris
 {

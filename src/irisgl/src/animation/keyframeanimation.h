@@ -231,7 +231,7 @@ protected:
     virtual T interpolate(T a,T b,float t)=0;
 };
 
-typedef Key<float> FloatKey;
+//typedef Key<float> FloatKey;
 
 class FloatKeyFrame:public KeyFrame<float>
 {

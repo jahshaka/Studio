@@ -15,11 +15,8 @@ For more information see the LICENSE file
 #include <QPoint>
 #include <QVector3D>
 #include <QSharedPointer>
-//#include "../irisgl/src/core/scenenode.h"
-//#include "../irisgl/src/scenegraph/cameranode.h"
 #include "cameracontrollerbase.h"
 
-//class CameraPtr;
 namespace iris
 {
     class CameraNode;
@@ -61,6 +58,8 @@ public:
     void onMouseWheel(int delta) override;
 
     void updateCameraRot();
+
+    void update(float dt);
 };
 
 #endif // EDITORCAMERACONTROLLER_H
