@@ -5,10 +5,11 @@
 #include <QMenu>
 #include <QDebug>
 
-#include "../mainwindow.h"
+
 
 #include "../irisgl/src/core/scene.h"
 #include "../irisgl/src/core/scenenode.h"
+#include "../mainwindow.h"
 
 SceneHeirarchyWidget::SceneHeirarchyWidget(QWidget *parent) :
     QWidget(parent),

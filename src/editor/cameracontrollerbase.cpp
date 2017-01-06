@@ -71,3 +71,8 @@ void CameraControllerBase::resetMouseStates()
     rightMouseDown = false;
 }
 
+void CameraControllerBase::update(float dt)
+{
+
+}
+

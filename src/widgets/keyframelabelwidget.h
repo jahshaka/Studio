@@ -17,8 +17,7 @@ For more information see the LICENSE file
 #include <QPainter>
 #include <QMouseEvent>
 #include <vector>
-//#include "../scenegraph/scenenodes.h"
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/irisglfwd.h"
 
 class KeyFrameLabelWidget:public QWidget
 {

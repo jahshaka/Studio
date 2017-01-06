@@ -24,7 +24,10 @@ public:
     virtual void onMouseMove(int x,int y);
     virtual void onMouseWheel(int val);
 
+    virtual void update(float dt);
+
     void resetMouseStates();
+
 
 protected:
     QSharedPointer<iris::CameraNode> camera;

@@ -65,4 +65,5 @@ SOURCES += \
     $$PWD/src/graphics/vertexlayout.cpp \
     $$PWD/src/graphics/shader.cpp \
     $$PWD/src/graphics/texture.cpp \
-    $$PWD/src/animation/animation.cpp
+    $$PWD/src/animation/animation.cpp \
+    $$PWD/src/animation/keyframeset.cpp

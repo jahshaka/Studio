@@ -3,7 +3,7 @@
 
 #include <QWidget>
 #include <QHash>
-#include "../irisgl.h"
+#include "../irisglfwd.h"
 
 namespace Ui {
 class KeyFrameLabelTreeWidget;

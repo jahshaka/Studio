@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QMap>
 #include <QEvent>
+#include "../irisgl/src/irisglfwd.h"
 
 namespace Ui {
 class SceneHeirarchyWidget;
@@ -61,7 +62,7 @@ private:
     MainWindow* mainWindow;
 
 signals:
-    void sceneNodeSelected(QSharedPointer<iris::SceneNode> sceneNode);
+    void sceneNodeSelected(iris::SceneNodePtr sceneNode);
 };
 
 #endif // SCENEHEIRARCHYWIDGET_H

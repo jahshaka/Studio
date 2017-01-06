@@ -28,6 +28,9 @@ enum class SceneNodeType
     Camera
 };
 
+class Animation;
+typedef QSharedPointer<Animation> AnimationPtr;
+
 class SceneNode:public QEnableSharedFromThis<SceneNode>
 {
 public:
@@ -48,7 +51,6 @@ public:
     SceneNodePtr parent;
     QList<SceneNodePtr> children;
 
-    //KeyFrameSetPtr keyFrameSet;
     AnimationPtr animation;
 
     // editor specific
