@@ -1,5 +1,6 @@
 #include "animation.h"
 #include "keyframeset.h"
+#include "../irisglfwd.h"
 
 namespace iris
 {

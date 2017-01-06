@@ -785,6 +785,9 @@ background-color: rgb(30, 144, 255);
        </item>
        <item>
         <widget class="QWidget" name="sceneContainer" native="true">
+         <property name="focusPolicy">
+          <enum>Qt::ClickFocus</enum>
+         </property>
          <property name="styleSheet">
           <string notr="true"/>
          </property>

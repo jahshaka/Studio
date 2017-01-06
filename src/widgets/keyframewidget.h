@@ -19,7 +19,7 @@ For more information see the LICENSE file
 #include <vector>
 #include <QVector2D>
 #include <QSharedPointer>
-#include "../irisgl/src/irisgl.h"
+#include "../irisgl/src/irisglfwd.h"
 
 namespace iris
 {

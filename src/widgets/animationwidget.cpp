@@ -213,6 +213,28 @@ void AnimationWidget::stopTimer()
     ui->timeline->setTime(startedTime);
 }
 
+void AnimationWidget::setAnimLength(float length)
+{
+    //todo
+    int scaleRatio = 30;
+    ui->values->setGeometry(0,0,length*scaleRatio,ui->values->height());
+    this->showHighlight();
+}
+
+void AnimationWidget::stopAnimation()
+{
+    stopTimer();
+}
+
+void AnimationWidget::fixLayout()
+{
+    ui->values->adjustSize();
+    //ui->values->update();
+
+    ui->timeControls->adjustSize();
+    //ui->timeControls->update();
+}
+
 void AnimationWidget::repaintViews()
 {
     ui->timeline->repaint();

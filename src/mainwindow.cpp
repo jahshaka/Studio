@@ -16,6 +16,22 @@ For more information see the LICENSE file
 #include <qwindow.h>
 #include <qsurface.h>
 
+//#include "irisgl/src/irisgl.h"
+#include "irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/src/scenegraph/cameranode.h"
+#include "irisgl/src/core/scene.h"
+#include "irisgl/src/core/scenenode.h"
+#include "irisgl/src/scenegraph/lightnode.h"
+#include "irisgl/src/materials/defaultmaterial.h"
+#include "irisgl/src/graphics/forwardrenderer.h"
+#include "irisgl/src/graphics/mesh.h"
+#include "irisgl/src/graphics/shader.h"
+#include "irisgl/src/graphics/texture2d.h"
+#include "irisgl/src/graphics/viewport.h"
+#include "irisgl/src/graphics/texture2d.h"
+#include "irisgl/src/animation/keyframeset.h"
+#include "irisgl/src/animation/keyframeanimation.h"
+
 #include <QOpenGLContext>
 #include <qstandarditemmodel.h>
 #include <QKeyEvent>
@@ -35,9 +51,6 @@ For more information see the LICENSE file
 #include "core/nodekeyframe.h"
 #include "globals.h"
 
-#include "io/scenewriter.h"
-#include "io/scenereader.h"
-
 #include "widgets/animationwidget.h"
 
 #include "dialogs/renamelayerdialog.h"
@@ -55,21 +68,10 @@ For more information see the LICENSE file
 #include "helpers/collisionhelper.h"
 
 #include "widgets/sceneviewwidget.h"
-//#include "irisgl/src/irisgl.h"
-#include "irisgl/src/scenegraph/meshnode.h"
-#include "irisgl/src/scenegraph/cameranode.h"
-#include "irisgl/src/scenegraph/lightnode.h"
-#include "irisgl/src/materials/defaultmaterial.h"
-#include "irisgl/src/graphics/forwardrenderer.h"
-#include "irisgl/src/graphics/mesh.h"
-#include "irisgl/src/graphics/shader.h"
-#include "irisgl/src/graphics/texture2d.h"
-#include "irisgl/src/graphics/viewport.h"
-#include "irisgl/src/graphics/texture2d.h"
-#include "irisgl/src/animation/keyframeset.h"
-#include "irisgl/src/animation/keyframeanimation.h"
-
 #include "core/materialpreset.h"
+
+#include "io/scenewriter.h"
+#include "io/scenereader.h"
 
 enum class VRButtonMode : int
 {
@@ -80,7 +82,6 @@ enum class VRButtonMode : int
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
-    //ui(new Ui::MainWindow)
     ui(new Ui::NewMainWindow)
 {
     ui->setupUi(this);
@@ -111,8 +112,13 @@ MainWindow::MainWindow(QWidget *parent) :
     setProjectTitle(Globals::project->getProjectName());
 
     // initialzie scene view
-    sceneView = new SceneViewWidget(this);
-    sceneView->setParent(this);
+    //sceneView = new SceneViewWidget(this);
+    //sceneView->setParent(this);
+    sceneView = new SceneViewWidget(ui->sceneContainer);
+    sceneView->setParent(ui->sceneContainer);
+    //auto focusPolicy = sceneView->focusPolicy();
+    sceneView->setFocusPolicy(Qt::ClickFocus);
+    sceneView->setFocus();
 
     QGridLayout* layout = new QGridLayout(ui->sceneContainer);
     layout->addWidget(sceneView);
@@ -124,11 +130,11 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->sceneHierarchy->setMainWindow(this);
 
-    connect(ui->sceneHierarchy, SIGNAL(sceneNodeSelected(QSharedPointer<iris::SceneNode>)),
-            this, SLOT(sceneNodeSelected(QSharedPointer<iris::SceneNode>)));
+    connect(ui->sceneHierarchy, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
+            this, SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
-    connect(sceneView, SIGNAL(sceneNodeSelected(QSharedPointer<iris::SceneNode>)),
-            this, SLOT(sceneNodeSelected(QSharedPointer<iris::SceneNode>)));
+    connect(sceneView, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
+            this, SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
     connect(ui->cameraTypeCombo, SIGNAL(currentTextChanged(QString)),
             this, SLOT(cameraTypeChanged(QString)));
@@ -601,7 +607,7 @@ void MainWindow::sceneTreeItemChanged(QTreeWidgetItem* item,int column)
 
 }
 
-void MainWindow::sceneNodeSelected(QSharedPointer<iris::SceneNode> sceneNode)
+void MainWindow::sceneNodeSelected(iris::SceneNodePtr sceneNode)
 {
     //show properties for scenenode
     activeSceneNode = sceneNode;

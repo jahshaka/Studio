@@ -76,7 +76,9 @@ SOURCES += src/main.cpp\
     src/widgets/propertywidgets/fogpropertywidget.cpp \
     src/io/assetiobase.cpp \
     src/io/materialpresetreader.cpp \
-    src/widgets/keyframelabeltreewidget.cpp
+    src/widgets/keyframelabeltreewidget.cpp \
+    src/core/keyboardstate.cpp \
+    src/io/scenereader.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -141,7 +143,8 @@ HEADERS  += src/mainwindow.h \
     src/editor/translationgizmo.h \
     src/editor/rotationgizmo.h \
     src/editor/scalegizmo.h \
-    src/editor/gizmoinstance.h
+    src/editor/gizmoinstance.h \
+    src/core/keyboardstate.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

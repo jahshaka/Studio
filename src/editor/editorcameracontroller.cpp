@@ -15,13 +15,14 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include <qmath.h>
 #include <math.h>
+#include "../core/keyboardstate.h"
 
 using namespace iris;
 
 EditorCameraController::EditorCameraController()
 {
     lookSpeed = 200;
-    linearSpeed = 1;
+    linearSpeed = 0.4f;
 
     yaw = 0;
     pitch = 0;
@@ -163,4 +164,28 @@ void EditorCameraController::updateCameraRot()
     //camera->rot = yawQuat*pitchQuat;
     camera->rot = QQuaternion::fromEulerAngles(pitch,yaw,0);
     camera->update(0);
+}
+
+void EditorCameraController::update(float dt)
+{
+    const QVector3D upVector(0, 1, 0);
+    auto forwardVector = camera->rot.rotatedVector(QVector3D(0, 0, -1));
+    auto x = QVector3D::crossProduct(forwardVector,upVector).normalized();
+    auto z = QVector3D::crossProduct(upVector,x).normalized();
+
+    // left
+    if(KeyboardState::isKeyDown(Qt::Key_Left) ||KeyboardState::isKeyDown(Qt::Key_A) )
+        camera->pos -= x * linearSpeed;
+
+    // right
+    if(KeyboardState::isKeyDown(Qt::Key_Right) ||KeyboardState::isKeyDown(Qt::Key_D) )
+        camera->pos += x * linearSpeed;
+
+    // up
+    if(KeyboardState::isKeyDown(Qt::Key_Up) ||KeyboardState::isKeyDown(Qt::Key_W) )
+        camera->pos += z * linearSpeed;
+
+    // down
+    if(KeyboardState::isKeyDown(Qt::Key_Down) ||KeyboardState::isKeyDown(Qt::Key_S) )
+        camera->pos -= z * linearSpeed;
 }

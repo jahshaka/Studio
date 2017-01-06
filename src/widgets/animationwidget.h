@@ -15,21 +15,24 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QTime>
 #include <QSharedPointer>
-#include "ui_animationwidget.h"
-//#include "../core/scenenode.h"
+//#include "ui_animationwidget.h"
+#include "../irisgl/src/irisglfwd.h"
 
 class QWidget;
 class QElapsedTimer;
 class TimelineWidget;
 
-namespace iris
+class QMenu;
+
+namespace Ui
 {
-    class SceneNode;
+    class AnimationWidget;
 }
 
 class AnimationWidget : public QWidget
 {
     Q_OBJECT
+
     iris::ScenePtr scene;
     iris::SceneNodePtr node;
     QTimer* timer;
@@ -84,27 +87,11 @@ public:
             */
     }
 
-    void setAnimLength(float length)
-    {
-        //todo
-        int scaleRatio = 30;
-        ui->values->setGeometry(0,0,length*scaleRatio,ui->values->height());
-        this->showHighlight();
-    }
+    void setAnimLength(float length);
 
-    void stopAnimation()
-    {
-        stopTimer();
-    }
+    void stopAnimation();
+    void fixLayout();
 
-    void fixLayout()
-    {
-        ui->values->adjustSize();
-        //ui->values->update();
-
-        ui->timeControls->adjustSize();
-        //ui->timeControls->update();
-    }
     void repaintViews();
 
     //startRange and endRange are in seconds
