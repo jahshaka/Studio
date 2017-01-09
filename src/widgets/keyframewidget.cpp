@@ -82,6 +82,10 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
     //black bg
     paint.fillRect(0,0,widgetWidth,widgetHeight,bgColor);
 
+    // dont draw any lines if no scenenode is selected
+    if(!obj)
+        return;
+
     //cosmetic
     drawBackgroundLines(paint);
 
@@ -177,6 +181,16 @@ void KeyFrameWidget::drawBackgroundLines(QPainter& paint)
     {
         int screenPos = timeToPos(x);
         paint.drawLine(screenPos,0,screenPos,widgetHeight);
+
+        int timeInSeconds = (int)x;
+        int secs = timeInSeconds%60;
+        int mins = timeInSeconds/60;
+        int hours = timeInSeconds/3600;
+
+        paint.drawText(screenPos+3,widgetHeight-5,QString("%1:%2:%3")
+                       .arg(hours,2,10,QLatin1Char('0'))
+                       .arg(mins,2,10,QLatin1Char('0'))
+                       .arg(secs,2,10,QLatin1Char('0')));
     }
 
 }
@@ -337,6 +351,9 @@ float KeyFrameWidget::distanceSquared(float x1,float y1,float x2,float y2)
 
 iris::FloatKey* KeyFrameWidget::getSelectedKey(int x,int y)
 {
+    if(!obj)
+        return nullptr;
+
     float penSizeSquared = 7*7;
 
     int frameHeight = 20;

@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include <QDropEvent>
 #include <QMimeData>
 #include <QSharedPointer>
-#include "../../irisgl/src/irisglfwd.h"
+#include "irisgl/src/irisglfwd.h"
 
 namespace Ui {
 class MainWindow;
