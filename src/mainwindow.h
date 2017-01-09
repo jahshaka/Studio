@@ -100,6 +100,7 @@ public:
     void setSettingsManager(SettingsManager* settings);
     SettingsManager* getSettingsManager();
 
+    iris::ScenePtr getScene();
     void openProject(QString project);
     //void setGizmoTransformMode(GizmoTransformMode mode);
 
@@ -109,19 +110,19 @@ public:
      */
     void applyMaterialPreset(MaterialPreset* preset);
 
-private:
-
-    /**
-     * Sets up the button for vr
-     */
-    void setupVrUi();
-
     /**
      * Returns absolute path of file
      * @param relToApp file path relative to application
      * @return
      */
     QString getAbsolutePath(QString relToApp);
+
+private:
+
+    /**
+     * Sets up the button for vr
+     */
+    void setupVrUi();
 
     //menus
     void setupFileMenu();

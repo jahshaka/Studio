@@ -61,6 +61,8 @@ class SceneViewWidget : public QOpenGLWidget,
 
     ViewportMode viewportMode;
 public:
+    iris::CameraNodePtr editorCam;
+
     explicit SceneViewWidget(QWidget *parent);
 
     void setScene(iris::ScenePtr scene);
@@ -125,7 +127,7 @@ private:
     void makeObject();
     void renderScene();
 
-    iris::CameraNodePtr editorCam;
+
     iris::ScenePtr scene;
     iris::SceneNodePtr selectedNode;
     iris::ForwardRendererPtr renderer;

@@ -4,7 +4,7 @@
     "diffuseTexture": "presets/patchy_grass/patchygrass_1_COLOR.png",
     "normalTexture": "presets/patchy_grass/patchygrass_1_NRM.png",
     "specularTexture": "presets/patchy_grass/patchygrass_1_SPEC.png",
-    "textureScale": 512,
+    "textureScale": 3,
     "diffuseColor": {
         "r": 255,
         "g": 255,

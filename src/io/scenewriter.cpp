@@ -193,6 +193,7 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     sceneNodeObject["intensity"] = lightNode->intensity;
     sceneNodeObject["distance"] = lightNode->distance;
     sceneNodeObject["spotCutOff"] = lightNode->spotCutOff;
+    sceneNodeObject["color"] = jsonColor(lightNode->color);
 }
 
 QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)

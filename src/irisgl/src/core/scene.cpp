@@ -24,6 +24,8 @@ Scene::Scene()
     fogStart = 100;
     fogEnd = 180;
     fogEnabled = true;
+
+    ambientColor = QColor(64, 64, 64);
 }
 
 void Scene::setSkyTexture(Texture2DPtr tex)

@@ -896,37 +896,14 @@ QMenu::item:selected {
     <addaction name="actionOpenWebsite"/>
     <addaction name="actionBlog"/>
    </widget>
-   <widget class="QMenu" name="menuEdit">
-    <property name="title">
-     <string>Edit</string>
-    </property>
-    <addaction name="actionUndo_2"/>
-    <addaction name="actionRedo_2"/>
-   </widget>
-   <widget class="QMenu" name="menuWindow">
-    <property name="title">
-     <string>Window</string>
-    </property>
-   </widget>
-   <widget class="QMenu" name="menuVR_Mode">
-    <property name="title">
-     <string>VR</string>
-    </property>
-    <property name="separatorsCollapsible">
-     <bool>false</bool>
-    </property>
-   </widget>
    <addaction name="menuFile"/>
-   <addaction name="menuEdit"/>
-   <addaction name="menuWindow"/>
    <addaction name="menuHelp"/>
-   <addaction name="menuVR_Mode"/>
   </widget>
   <widget class="QDockWidget" name="sceneHierarchyDock">
    <property name="minimumSize">
     <size>
-     <width>210</width>
-     <height>564</height>
+     <width>200</width>
+     <height>0</height>
     </size>
    </property>
    <property name="maximumSize">
@@ -937,6 +914,9 @@ QMenu::item:selected {
    </property>
    <property name="styleSheet">
     <string notr="true"/>
+   </property>
+   <property name="floating">
+    <bool>false</bool>
    </property>
    <property name="windowTitle">
     <string>Scene Outliner</string>
@@ -1163,6 +1143,110 @@ QMenu::item:selected {
        <property name="currentIndex">
         <number>0</number>
        </property>
+       <widget class="QWidget" name="materials">
+        <attribute name="title">
+         <string>Materials</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="verticalLayout_3">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QWidget" name="materialoptionbar" native="true">
+           <property name="minimumSize">
+            <size>
+             <width>210</width>
+             <height>25</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>25</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(85, 85, 85);
+border: none;</string>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout_7">
+            <property name="spacing">
+             <number>0</number>
+            </property>
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QFrame" name="frame_4">
+              <property name="minimumSize">
+               <size>
+                <width>70</width>
+                <height>25</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>70</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">border: none;</string>
+              </property>
+              <property name="frameShape">
+               <enum>QFrame::StyledPanel</enum>
+              </property>
+              <property name="frameShadow">
+               <enum>QFrame::Raised</enum>
+              </property>
+              <layout class="QHBoxLayout" name="horizontalLayout_6">
+               <property name="spacing">
+                <number>3</number>
+               </property>
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+              </layout>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="MaterialSets" name="materialpresets" native="true"/>
+         </item>
+        </layout>
+       </widget>
        <widget class="QWidget" name="skies">
         <attribute name="title">
          <string>Skies</string>
@@ -1373,110 +1457,6 @@ QMenu::item:selected {
             </size>
            </property>
           </widget>
-         </item>
-        </layout>
-       </widget>
-       <widget class="QWidget" name="materials">
-        <attribute name="title">
-         <string>Materials</string>
-        </attribute>
-        <layout class="QVBoxLayout" name="verticalLayout_3">
-         <property name="spacing">
-          <number>0</number>
-         </property>
-         <property name="leftMargin">
-          <number>0</number>
-         </property>
-         <property name="topMargin">
-          <number>0</number>
-         </property>
-         <property name="rightMargin">
-          <number>0</number>
-         </property>
-         <property name="bottomMargin">
-          <number>0</number>
-         </property>
-         <item>
-          <widget class="QWidget" name="materialoptionbar" native="true">
-           <property name="minimumSize">
-            <size>
-             <width>210</width>
-             <height>25</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>16777215</width>
-             <height>25</height>
-            </size>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">background-color: rgb(85, 85, 85);
-border: none;</string>
-           </property>
-           <layout class="QVBoxLayout" name="verticalLayout_7">
-            <property name="spacing">
-             <number>0</number>
-            </property>
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
-            <item>
-             <widget class="QFrame" name="frame_4">
-              <property name="minimumSize">
-               <size>
-                <width>70</width>
-                <height>25</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>70</width>
-                <height>16777215</height>
-               </size>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">border: none;</string>
-              </property>
-              <property name="frameShape">
-               <enum>QFrame::StyledPanel</enum>
-              </property>
-              <property name="frameShadow">
-               <enum>QFrame::Raised</enum>
-              </property>
-              <layout class="QHBoxLayout" name="horizontalLayout_6">
-               <property name="spacing">
-                <number>3</number>
-               </property>
-               <property name="leftMargin">
-                <number>0</number>
-               </property>
-               <property name="topMargin">
-                <number>0</number>
-               </property>
-               <property name="rightMargin">
-                <number>0</number>
-               </property>
-               <property name="bottomMargin">
-                <number>0</number>
-               </property>
-              </layout>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-         </item>
-         <item>
-          <widget class="MaterialSets" name="materialpresets" native="true"/>
          </item>
         </layout>
        </widget>
