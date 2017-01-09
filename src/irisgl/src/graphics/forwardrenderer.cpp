@@ -204,7 +204,8 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
             mat->setUniformValue(lightPrefix+"quadtraticAtten", 1.0f);
         }
 
-        meshNode->mesh->draw(gl,program);
+        if(meshNode->mesh != nullptr)
+            meshNode->mesh->draw(gl, program);
 
         //mat->program->release();
     }

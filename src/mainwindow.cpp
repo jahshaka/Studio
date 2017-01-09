@@ -95,6 +95,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->mainTimeline->setMainWindow(this);
     ui->modelpresets->setMainWindow(this);
     ui->materialpresets->setMainWindow(this);
+    ui->skypresets->setMainWindow(this);
 
     camControl = nullptr;
     vrMode = false;
@@ -190,6 +191,11 @@ void MainWindow::vrButtonClicked(bool)
     ui->vrBtn->style()->polish(ui->vrBtn);
 }
 
+iris::ScenePtr MainWindow::getScene()
+{
+    return scene;
+}
+
 QString MainWindow::getAbsolutePath(QString relToApp)
 {
     auto path = QDir::cleanPath(QCoreApplication::applicationDirPath() + QDir::separator() + relToApp);
@@ -209,11 +215,13 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     // scene->rootNode->addChild(cam);
 
     scene->setSkyColor(QColor(64, 64, 64, 255));
+    scene->setAmbientColor(QColor(72, 72, 72));
 
     // second node
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsolutePath("../app/models/plane.obj"));
-    node->scale = QVector3D(1024, 1, 1024);
+    //node->setMesh(getAbsolutePath("../app/models/plane.obj"));
+    node->setMesh(getAbsolutePath("../app/models/ground.obj"));
+    //node->scale = QVector3D(1024, 1, 1024);
     node->setName("Ground");
 
     auto m = iris::DefaultMaterial::create();
@@ -222,7 +230,8 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     m->setDiffuseTexture(iris::Texture2D::load(getAbsolutePath("../app/content/textures/tile.png")));
     m->setShininess(0);
     m->setSpecularColor(QColor(0, 0, 0));
-    m->setTextureScale(500);
+    m->setTextureScale(4);
+
     scene->rootNode->addChild(node);
 
     // add test object with basic material
@@ -237,15 +246,6 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     mat->setDiffuseTexture(iris::Texture2D::load(getAbsolutePath("../assets/textures/TexturesCom_MarbleWhite0058_M.jpg")));
     mat->setShininess(2);
     //mat->setAmbientColor(QColor(64, 64, 64));
-
-    // lighting
-    auto light = iris::LightNode::create();
-    light->setLightType(iris::LightType::Point);
-    scene->rootNode->addChild(light);
-    light->setName("Bounce Lamp");
-    light->pos = QVector3D(-3, 7, 5);
-    light->intensity = .21;
-    light->icon = iris::Texture2D::load("app/icons/bulb.png");
 
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
@@ -530,16 +530,20 @@ void MainWindow::applyMaterialPreset(MaterialPreset* preset)
     mat->setAmbientColor(preset->ambientColor);
 
     mat->setDiffuseColor(preset->diffuseColor);
-    mat->setDiffuseTexture(iris::Texture2D::load(preset->diffuseTexture));
+    if(!preset->diffuseTexture.isEmpty())
+        mat->setDiffuseTexture(iris::Texture2D::load(preset->diffuseTexture));
 
     mat->setSpecularColor(preset->specularColor);
-    mat->setSpecularTexture(iris::Texture2D::load(preset->specularTexture));
+    if(!preset->specularTexture.isEmpty())
+        mat->setSpecularTexture(iris::Texture2D::load(preset->specularTexture));
     mat->setShininess(preset->shininess);
 
-    mat->setNormalTexture(iris::Texture2D::load(preset->normalTexture));
+    if(!preset->normalTexture.isEmpty())
+        mat->setNormalTexture(iris::Texture2D::load(preset->normalTexture));
     mat->setNormalIntensity(preset->normalIntensity);
 
-    mat->setReflectionTexture(iris::Texture2D::load(preset->reflectionTexture));
+    if(!preset->reflectionTexture.isEmpty())
+        mat->setReflectionTexture(iris::Texture2D::load(preset->reflectionTexture));
     mat->setReflectionInfluence(preset->reflectionInfluence);
 
     mat->setTextureScale(preset->textureScale);
@@ -640,7 +644,7 @@ void MainWindow::setSceneAnimTime(float time)
 void MainWindow::addCube()
 {
     auto node = iris::MeshNode::create();
-    node->setMesh("app/content/primitives/cube.obj");
+    node->setMesh(getAbsolutePath("../app/content/primitives/cube.obj"));
     node->setName("Cube");
 
     addNodeToScene(node);
@@ -652,7 +656,7 @@ void MainWindow::addCube()
 void MainWindow::addTorus()
 {
     auto node = iris::MeshNode::create();
-    node->setMesh("app/content/primitives/torus.obj");
+    node->setMesh(getAbsolutePath("../app/content/primitives/torus.obj"));
     node->setName("Torus");
 
     addNodeToScene(node);
@@ -664,7 +668,7 @@ void MainWindow::addTorus()
 void MainWindow::addSphere()
 {
     auto node = iris::MeshNode::create();
-    node->setMesh("app/content/primitives/sphere.obj");
+    node->setMesh(getAbsolutePath("../app/content/primitives/sphere.obj"));
     node->setName("Sphere");
 
     addNodeToScene(node);
@@ -676,7 +680,7 @@ void MainWindow::addSphere()
 void MainWindow::addCylinder()
 {
     auto node = iris::MeshNode::create();
-    node->setMesh("app/content/primitives/cylinder.obj");
+    node->setMesh(getAbsolutePath("../app/content/primitives/cylinder.obj"));
     node->setName("Cylinder");
 
     addNodeToScene(node);
@@ -687,6 +691,8 @@ void MainWindow::addPointLight()
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Point);
     node->icon = iris::Texture2D::load("app/icons/bulb.png");
+    node->intensity = 1.0f;
+    node->distance = 40.0f;
 
     addNodeToScene(node);
 }
@@ -700,11 +706,13 @@ void MainWindow::addSpotLight()
     addNodeToScene(node);
 }
 
+
 void MainWindow::addDirectionalLight()
 {
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Directional);
     node->icon = iris::Texture2D::load("app/icons/bulb.png");
+
 
     addNodeToScene(node);
 }
@@ -793,6 +801,11 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
         return;
     }
 
+    const float spawnDist = 10.0f;
+    auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, 0, -spawnDist));
+    offset += sceneView->editorCam->pos;
+    sceneNode->pos = offset;
+
     //apply default material
     if(sceneNode->sceneNodeType == iris::SceneNodeType::Mesh)
     {
@@ -809,6 +822,8 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
     scene->getRootNode()->addChild(sceneNode);
 
     ui->sceneHierarchy->repopulateTree();
+
+    sceneNodeSelected(sceneNode);
 }
 
 void MainWindow::duplicateNode()

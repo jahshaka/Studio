@@ -218,6 +218,7 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->intensity = (float)nodeObj["intensity"].toDouble(1.0f);
     lightNode->distance = (float)nodeObj["radius"].toDouble(1.0f);
     lightNode->spotCutOff = (float)nodeObj["spotCutOff"].toDouble(30.0f);
+    lightNode->color = readColor(nodeObj["color"].toObject());
 
     //todo: move this to the sceneview widget or somewhere more appropriate
     lightNode->icon = iris::Texture2D::load("app/icons/bulb.png");
@@ -265,6 +266,9 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 
     auto tex = matObj["diffuseTexture"].toString("");
     if(!tex.isEmpty()) material->setDiffuseTexture(iris::Texture2D::load(getAbsolutePath(tex)));
+
+    tex = matObj["normalTexture"].toString("");
+    if(!tex.isEmpty()) material->setNormalTexture(iris::Texture2D::load(getAbsolutePath(tex)));
 
     colObj = matObj["specularColor"].toObject();
     material->setSpecularColor(readColor(colObj));
