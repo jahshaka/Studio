@@ -211,17 +211,13 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     cam->pos = QVector3D(6, 12, 14);
 
     scene->setCamera(cam);
-    // editor camera shouldnt be a part of the scene itself
-    // scene->rootNode->addChild(cam);
 
-    scene->setSkyColor(QColor(64, 64, 64, 255));
+    scene->setSkyColor(QColor(255, 255, 255, 255));
     scene->setAmbientColor(QColor(72, 72, 72));
 
     // second node
     auto node = iris::MeshNode::create();
-    //node->setMesh(getAbsolutePath("../app/models/plane.obj"));
     node->setMesh(getAbsolutePath("../app/models/ground.obj"));
-    //node->scale = QVector3D(1024, 1, 1024);
     node->setName("Ground");
 
     auto m = iris::DefaultMaterial::create();
@@ -243,7 +239,7 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     dlight->icon = iris::Texture2D::load("app/icons/bulb.png");
 
     // fog params
-    scene->fogColor = QColor(64, 64, 64, 255);
+    scene->fogColor = QColor(255, 255, 255, 255);
 
     this->setScene(scene);
     setupVrUi();
