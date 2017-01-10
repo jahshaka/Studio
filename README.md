@@ -1,11 +1,11 @@
-# JahshakaVR [![License (GPL version 3)](https://img.shields.io/badge/license-GNU%20GPL%20version%203-brightgreen.svg?style=flat-square)](http://opensource.org/licenses/GPL-3.0)
-JahshakaVR brings you the future of immersive digital content creation with the leading free and open source digital content creation suite.
-
-**official website:** http://www.jahshakavr.com/
-
-**reddit channel:** https://www.reddit.com/r/jahshaka/
-
-**pre-release:** https://github.com/jahshaka/VR/releases
+<h1 align="center" style="margin-bottom:0px">JahshakaVR<br/><img src="https://img.shields.io/badge/license-GNU%20GPL%20version%203-brightgreen.svg?style=flat-square" alt="Jahshaka Screenshot"/></h1>
+<p align="center">
+ <img src="http://www.jahshakavr.com/wp-content/uploads/2016/09/screenshot.jpg" alt="Jahshaka Screenshot"/>
+</p>
+<div align="center">
+  <a href="http://www.jahshakavr.com/"> website </a> &bull; <a href="https://www.reddit.com/r/jahshaka/"> reddit </a> &bull; <a href="https://github.com/jahshaka/VR/releases"> releases</a>
+</div>
+<p align="center"><b>JahshakaVR brings you the future of immersive digital content creation with the leading free and open source digital content creation suite.</b></p>
 
 ## Features:
  - VR via the Oculus Rift
@@ -13,31 +13,26 @@ JahshakaVR brings you the future of immersive digital content creation with the 
  - A powerful effects system
 
 ## Screenshots
-![](http://www.jahshakavr.com/wp-content/uploads/2016/09/screenshot.jpg)
 ![](http://www.jahshakavr.com/wp-content/uploads/2016/09/blank.jpg)
+![](http://www.jahshakavr.com/wp-content/uploads/2016/09/screenshot.jpg)
 
 ## Building From Source
 ###Dependencies:
 - Qt 5.7
 
 ###Steps:
-- clone repository
-- open .pro file in QtCreator
-- add an "install" make build step as shown [here](http://stackoverflow.com/questions/11593165/qtcreator-copy-files-to-output-directory-with-installs)
-    - Switch to **Projects** Mode: press Ctrl+5.
-    - On **Build Settings** tab under **Build Steps** click on **Add Build Step**.
-    - Choose **Make** from the menu.
-    - Write "install" into **Make arguments:** text input box.
+- Clone repository
+- Open .pro file in QtCreator
 - Run
 
 ## Credits
-###Skies
+####Skies
 Free ski textures from [VizPeople CCO Catalog](http://www.viz-people.com/portfolio/free-hdri-maps/)
 
-###Textures
+####Textures
 Royalty-free images from [Pixabay](https://pixabay.com/)
 
-###Icons:
+####Icons:
 **Icomoon Free 1** by [icomoon](http://www.flaticon.com/authors/icomoon) at [flaticon](http://www.flaticon.com/)
 
 **Material Design** by [google](http://www.flaticon.com/authors/google) at [flaticon](http://www.flaticon.com/)
