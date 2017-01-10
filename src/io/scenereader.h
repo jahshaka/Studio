@@ -15,13 +15,17 @@
 #include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
 
+class EditorData;
+
 class SceneReader:public AssetIOBase
 {
     QHash<QString,QList<iris::Mesh*>> meshes;
 public:
-    iris::ScenePtr readScene(QString filePath);
+    iris::ScenePtr readScene(QString filePath,EditorData** editorData = nullptr);
 
     iris::ScenePtr readScene(QJsonObject& projectObj);
+
+    EditorData* readEditorData(QJsonObject& projectObj);
 
     /**
      * Creates scene node from json data

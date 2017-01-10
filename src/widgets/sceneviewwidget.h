@@ -35,6 +35,8 @@ class TranslationGizmo;
 class RotationGizmo;
 class ScaleGizmo;
 
+class EditorData;
+
 enum class ViewportMode
 {
     Editor,
@@ -87,6 +89,9 @@ public:
     void setGizmoLoc();
     void setGizmoRot();
     void setGizmoScale();
+
+    void setEditorData(EditorData* data);
+    EditorData* getEditorData();
 
 protected:
     void initializeGL();

@@ -446,7 +446,7 @@ void MainWindow::saveScene()
     {
         auto filename = Globals::project->getFilePath();
         auto writer = new SceneWriter();
-        writer->writeScene(filename,scene);
+        writer->writeScene(filename,scene,sceneView->getEditorData());
 
         settings->addRecentlyOpenedScene(filename);
 
@@ -456,7 +456,7 @@ void MainWindow::saveScene()
     {
         auto filename = QFileDialog::getSaveFileName(this,"Save Scene","","Jashaka Scene (*.jah)");
         auto writer = new SceneWriter();
-        writer->writeScene(filename,scene);
+        writer->writeScene(filename,scene,sceneView->getEditorData());
 
         Globals::project->setFilePath(filename);
         this->setProjectTitle(Globals::project->getProjectName());
@@ -474,7 +474,7 @@ void MainWindow::saveSceneAs()
     QString dir = QApplication::applicationDirPath()+"/scenes/";
     auto filename = QFileDialog::getSaveFileName(this,"Save Scene",dir,"Jashaka Scene (*.jah)");
     auto writer = new SceneWriter();
-    writer->writeScene(filename,scene);
+    writer->writeScene(filename,scene,sceneView->getEditorData());
 
     Globals::project->setFilePath(filename);
     this->setProjectTitle(Globals::project->getProjectName());
@@ -504,11 +504,11 @@ void MainWindow::openProject(QString filename)
     //load new scene
     auto reader = new SceneReader();
 
-    auto scene = reader->readScene(filename);
-    //auto sceneEnt = new Qt3DCore::QEntity();
-    //sceneEnt->setParent(rootEntity);
-    //auto scene = exp->loadScene(filename,sceneEnt);
+    EditorData* editorData = nullptr;
+    auto scene = reader->readScene(filename,&editorData);
     setScene(scene);
+    if(editorData != nullptr)
+        sceneView->setEditorData(editorData);
 
     Globals::project->setFilePath(filename);
     this->setProjectTitle(Globals::project->getProjectName());

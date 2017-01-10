@@ -25,6 +25,8 @@
 #include "../editor/editorcameracontroller.h"
 #include "../editor/orbitalcameracontroller.h"
 
+#include "../editor/editordata.h"
+
 #include "../editor/translationgizmo.h"
 #include "../editor/rotationgizmo.h"
 #include "../editor/scalegizmo.h"
@@ -332,7 +334,7 @@ void SceneViewWidget::doObjectPicking(const QPointF& point)
     doLightPicking(segStart, segEnd, hitList);
 
     if (hitList.size() == 0) {
-        // no hits, deselect last selected object in viewport and hiearchy
+        // no hits, deselect last selected object in viewport and heirarchy
         emit sceneNodeSelected(iris::SceneNodePtr());
         return;
     }
@@ -547,5 +549,20 @@ void SceneViewWidget::setGizmoScale()
     viewportGizmo = scaleGizmo;
     viewportGizmo->setTransformOrientation(transformMode);
     viewportGizmo->lastSelectedNode = selectedNode;
+}
+
+
+void SceneViewWidget::setEditorData(EditorData* data)
+{
+    editorCam = data->editorCamera;
+    orbitalCam->distFromPivot = data->distFromPivot;
+    scene->camera = editorCam;
+}
+
+EditorData* SceneViewWidget::getEditorData()
+{
+    auto data = new EditorData();
+    data->editorCamera = editorCam;
+    data->distFromPivot = orbitalCam->distFromPivot;
 }
 
