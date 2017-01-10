@@ -234,19 +234,6 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
 
     scene->rootNode->addChild(node);
 
-    // add test object with basic material
-    auto boxNode = iris::MeshNode::create();
-    boxNode->setMesh(getAbsolutePath("../assets/models/StanfordLucy.obj"));
-    boxNode->setName("Stanford Lucy");
-    boxNode->scale = QVector3D(2, 2, 2);
-
-    auto mat = iris::DefaultMaterial::create();
-    boxNode->setMaterial(mat);
-    mat->setDiffuseColor(QColor(156, 170, 206));
-    mat->setDiffuseTexture(iris::Texture2D::load(getAbsolutePath("../assets/textures/TexturesCom_MarbleWhite0058_M.jpg")));
-    mat->setShininess(2);
-    //mat->setAmbientColor(QColor(64, 64, 64));
-
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
@@ -254,9 +241,6 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     dlight->pos = QVector3D(0, 10, 0);
     dlight->intensity = 1;
     dlight->icon = iris::Texture2D::load("app/icons/bulb.png");
-
-
-    scene->rootNode->addChild(boxNode);
 
     // fog params
     scene->fogColor = QColor(64, 64, 64, 255);
@@ -441,6 +425,7 @@ void MainWindow::stopAnimWidget()
 
 void MainWindow::saveScene()
 {
+    qDebug()<<"saving scene";
 
     if(Globals::project->isSaved())
     {
