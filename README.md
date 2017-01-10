@@ -1,6 +1,5 @@
-<h1 align="center" style="margin-bottom:0px">JahshakaVR<br/><img src="https://img.shields.io/badge/license-GNU%20GPL%20version%203-brightgreen.svg?style=flat-square" alt="Jahshaka Screenshot"/></h1>
 <p align="center">
- <img src="http://www.jahshakavr.com/wp-content/uploads/2016/09/screenshot.jpg" alt="Jahshaka Screenshot"/>
+ <img src="https://snag.gy/OcwmDL.jpg" alt="Jahshaka Screenshot"/>
 </p>
 <div align="center">
   <a href="http://www.jahshakavr.com/"> website </a> &bull; <a href="https://www.reddit.com/r/jahshaka/"> reddit </a> &bull; <a href="https://github.com/jahshaka/VR/releases"> releases</a>
@@ -8,13 +7,13 @@
 <p align="center"><b>JahshakaVR brings you the future of immersive digital content creation with the leading free and open source digital content creation suite.</b></p>
 
 ## Features:
- - VR via the Oculus Rift
+ - View scenes in virtual reality via the Oculus Rift
  - Build and share your scenes with the world
  - A powerful effects system
 
 ## Screenshots
-![](http://www.jahshakavr.com/wp-content/uploads/2016/09/blank.jpg)
-![](http://www.jahshakavr.com/wp-content/uploads/2016/09/screenshot.jpg)
+![](https://snag.gy/ia7kDK.jpg)
+![](https://snag.gy/lP9Z0T.jpg)
 
 ## Building From Source
 ###Dependencies:
