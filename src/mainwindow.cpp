@@ -196,8 +196,12 @@ iris::ScenePtr MainWindow::getScene()
     return scene;
 }
 
-QString MainWindow::getAbsolutePath(QString relToApp)
+QString MainWindow::getAbsoluteAssetPath(QString relToApp)
 {
+#ifdef WIN32
+    relToApp = QStringLiteral("..")+QDir::separator()+relToApp;
+#endif
+
     auto path = QDir::cleanPath(QCoreApplication::applicationDirPath() + QDir::separator() + relToApp);
     return path;
 }
@@ -217,13 +221,13 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
 
     // second node
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsolutePath("../app/models/ground.obj"));
+    node->setMesh(getAbsoluteAssetPath("app/models/ground.obj"));
     node->setName("Ground");
 
     auto m = iris::DefaultMaterial::create();
     node->setMaterial(m);
     m->setDiffuseColor(QColor(255, 255, 255));
-    m->setDiffuseTexture(iris::Texture2D::load(getAbsolutePath("../app/content/textures/tile.png")));
+    m->setDiffuseTexture(iris::Texture2D::load(getAbsoluteAssetPath("app/content/textures/tile.png")));
     m->setShininess(0);
     m->setSpecularColor(QColor(0, 0, 0));
     m->setTextureScale(4);
@@ -625,7 +629,7 @@ void MainWindow::setSceneAnimTime(float time)
 void MainWindow::addCube()
 {
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsolutePath("../app/content/primitives/cube.obj"));
+    node->setMesh(getAbsoluteAssetPath("app/content/primitives/cube.obj"));
     node->setName("Cube");
 
     addNodeToScene(node);
@@ -637,7 +641,7 @@ void MainWindow::addCube()
 void MainWindow::addTorus()
 {
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsolutePath("../app/content/primitives/torus.obj"));
+    node->setMesh(getAbsoluteAssetPath("app/content/primitives/torus.obj"));
     node->setName("Torus");
 
     addNodeToScene(node);
@@ -649,7 +653,7 @@ void MainWindow::addTorus()
 void MainWindow::addSphere()
 {
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsolutePath("../app/content/primitives/sphere.obj"));
+    node->setMesh(getAbsoluteAssetPath("app/content/primitives/sphere.obj"));
     node->setName("Sphere");
 
     addNodeToScene(node);
@@ -661,7 +665,7 @@ void MainWindow::addSphere()
 void MainWindow::addCylinder()
 {
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsolutePath("../app/content/primitives/cylinder.obj"));
+    node->setMesh(getAbsoluteAssetPath("app/content/primitives/cylinder.obj"));
     node->setName("Cylinder");
 
     addNodeToScene(node);
