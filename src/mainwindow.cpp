@@ -614,13 +614,10 @@ void MainWindow::setupLayerButtonMenu()
 
 void MainWindow::updateAnim()
 {
-    //scene->getRootNode()->update(1/60.0f);
-    //scene->getRootNode()->applyAnimationAtTime(Globals::animFrameTime);
 }
 
 void MainWindow::setSceneAnimTime(float time)
 {
-    //scene->getRootNode()->applyAnimationAtTime(time);
 }
 
 /**
@@ -725,16 +722,12 @@ void MainWindow::addMesh()
 
 void MainWindow::addViewPoint()
 {
-    //addSceneNodeToSelectedTreeItem(ui->sceneTree,new UserCameraNode(new Qt3DCore::QEntity()),true,getIconFromSceneNodeType(SceneNodeType::UserCamera));
+
 }
 
 void MainWindow::addTexturedPlane()
 {
-    /*
-    auto node = TexturedPlaneNode::createTexturedPlane("Textured Plane");
-    //node->setTexture(path);
-    addSceneNodeToSelectedTreeItem(ui->sceneTree,node,false,QIcon(":app/icons/square.svg"));
-    */
+
 }
 
 /**
@@ -825,26 +818,6 @@ void MainWindow::deleteNode()
         sceneView->clearSelectedNode();
         ui->sceneNodeProperties->setSceneNode(QSharedPointer<iris::SceneNode>(nullptr));
     }
-
-    /*
-    auto items = ui->sceneTree->selectedItems();
-    if(items.size()==0)
-        return;
-    auto item = items[0];
-
-    auto node = (SceneNode*)item->data(1,Qt::UserRole).value<void*>();
-
-    //world node isnt removable
-    if(!node->isRemovable())
-        return;
-
-    item->parent()->removeChild(item);
-    node->getParent()->removeChild(node);
-    //sceneNodes.remove(node->getEntity()->id());
-    sceneTreeItems.remove(node->getEntity()->id());
-
-    ui->tabWidget->clear();
-    */
 }
 
 
@@ -864,39 +837,7 @@ void MainWindow::dragMoveEvent(QDragMoveEvent *event)
  */
 void MainWindow::dropEvent(QDropEvent* event)
 {
-    /*
-    const QMimeData* mimeData = event->mimeData();
 
-    if (mimeData->hasUrls())
-    {
-        QStringList pathList;
-        QList<QUrl> urlList = mimeData->urls();
-
-        // extract the local paths of the files
-        for (int i = 0; i < urlList.size(); i++)
-        {
-            QString filename = urlList.at(i).toLocalFile();
-
-            //only use .obj files for now
-            QFileInfo fileInfo(filename);
-            qDebug()<<fileInfo.completeSuffix();
-            if(fileInfo.completeSuffix()!="obj")
-                continue;
-
-            auto nodeName = fileInfo.baseName();
-
-            auto node = MeshNode::loadMesh(nodeName,filename);
-
-            auto mat = new AdvanceMaterial();
-            node->setMaterial(mat);
-
-            addSceneNodeToSelectedTreeItem(ui->sceneTree,node,false,getIconFromSceneNodeType(node->sceneNodeType));
-        }
-
-    }
-
-    event->acceptProposedAction();
-    */
 }
 
 void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
@@ -907,26 +848,6 @@ void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
 
 QIcon MainWindow::getIconFromSceneNodeType(SceneNodeType type)
 {
-    /*
-    switch(type)
-    {
-        case SceneNodeType::Cube:
-        case SceneNodeType::Cylinder:
-        case SceneNodeType::Mesh:
-        case SceneNodeType::Sphere:
-        case SceneNodeType::Torus:
-            return QIcon(":app/icons/sceneobject.svg");
-        case SceneNodeType::Light:
-            return QIcon(":app/icons/light.svg");
-        case SceneNodeType::World:
-            return QIcon(":app/icons/world.svg");
-        case SceneNodeType::UserCamera:
-            return QIcon(":app/icons/people.svg");
-    default:
-        return QIcon();
-    }
-    */
-
     return QIcon();
 }
 
