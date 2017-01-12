@@ -196,8 +196,12 @@ iris::ScenePtr MainWindow::getScene()
     return scene;
 }
 
-QString MainWindow::getAbsolutePath(QString relToApp)
+QString MainWindow::getAbsoluteAssetPath(QString relToApp)
 {
+#ifdef WIN32
+    relToApp = QStringLiteral("..")+QDir::separator()+relToApp;
+#endif
+
     auto path = QDir::cleanPath(QCoreApplication::applicationDirPath() + QDir::separator() + relToApp);
     return path;
 }
@@ -211,41 +215,24 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     cam->pos = QVector3D(6, 12, 14);
 
     scene->setCamera(cam);
-    // editor camera shouldnt be a part of the scene itself
-    // scene->rootNode->addChild(cam);
 
-    scene->setSkyColor(QColor(64, 64, 64, 255));
+    scene->setSkyColor(QColor(255, 255, 255, 255));
     scene->setAmbientColor(QColor(72, 72, 72));
 
     // second node
     auto node = iris::MeshNode::create();
-    //node->setMesh(getAbsolutePath("../app/models/plane.obj"));
-    node->setMesh(getAbsolutePath("../app/models/ground.obj"));
-    //node->scale = QVector3D(1024, 1, 1024);
+    node->setMesh(getAbsoluteAssetPath("app/models/ground.obj"));
     node->setName("Ground");
 
     auto m = iris::DefaultMaterial::create();
     node->setMaterial(m);
     m->setDiffuseColor(QColor(255, 255, 255));
-    m->setDiffuseTexture(iris::Texture2D::load(getAbsolutePath("../app/content/textures/tile.png")));
+    m->setDiffuseTexture(iris::Texture2D::load(getAbsoluteAssetPath("app/content/textures/tile.png")));
     m->setShininess(0);
     m->setSpecularColor(QColor(0, 0, 0));
     m->setTextureScale(4);
 
     scene->rootNode->addChild(node);
-
-    // add test object with basic material
-    auto boxNode = iris::MeshNode::create();
-    boxNode->setMesh(getAbsolutePath("../assets/models/StanfordLucy.obj"));
-    boxNode->setName("Stanford Lucy");
-    boxNode->scale = QVector3D(2, 2, 2);
-
-    auto mat = iris::DefaultMaterial::create();
-    boxNode->setMaterial(mat);
-    mat->setDiffuseColor(QColor(156, 170, 206));
-    mat->setDiffuseTexture(iris::Texture2D::load(getAbsolutePath("../assets/textures/TexturesCom_MarbleWhite0058_M.jpg")));
-    mat->setShininess(2);
-    //mat->setAmbientColor(QColor(64, 64, 64));
 
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
@@ -255,11 +242,8 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     dlight->intensity = 1;
     dlight->icon = iris::Texture2D::load("app/icons/bulb.png");
 
-
-    scene->rootNode->addChild(boxNode);
-
     // fog params
-    scene->fogColor = QColor(64, 64, 64, 255);
+    scene->fogColor = QColor(255, 255, 255, 255);
 
     this->setScene(scene);
     setupVrUi();
@@ -441,12 +425,13 @@ void MainWindow::stopAnimWidget()
 
 void MainWindow::saveScene()
 {
+    qDebug()<<"saving scene";
 
     if(Globals::project->isSaved())
     {
         auto filename = Globals::project->getFilePath();
         auto writer = new SceneWriter();
-        writer->writeScene(filename,scene);
+        writer->writeScene(filename,scene,sceneView->getEditorData());
 
         settings->addRecentlyOpenedScene(filename);
 
@@ -456,7 +441,7 @@ void MainWindow::saveScene()
     {
         auto filename = QFileDialog::getSaveFileName(this,"Save Scene","","Jashaka Scene (*.jah)");
         auto writer = new SceneWriter();
-        writer->writeScene(filename,scene);
+        writer->writeScene(filename,scene,sceneView->getEditorData());
 
         Globals::project->setFilePath(filename);
         this->setProjectTitle(Globals::project->getProjectName());
@@ -474,7 +459,7 @@ void MainWindow::saveSceneAs()
     QString dir = QApplication::applicationDirPath()+"/scenes/";
     auto filename = QFileDialog::getSaveFileName(this,"Save Scene",dir,"Jashaka Scene (*.jah)");
     auto writer = new SceneWriter();
-    writer->writeScene(filename,scene);
+    writer->writeScene(filename,scene,sceneView->getEditorData());
 
     Globals::project->setFilePath(filename);
     this->setProjectTitle(Globals::project->getProjectName());
@@ -504,11 +489,11 @@ void MainWindow::openProject(QString filename)
     //load new scene
     auto reader = new SceneReader();
 
-    auto scene = reader->readScene(filename);
-    //auto sceneEnt = new Qt3DCore::QEntity();
-    //sceneEnt->setParent(rootEntity);
-    //auto scene = exp->loadScene(filename,sceneEnt);
+    EditorData* editorData = nullptr;
+    auto scene = reader->readScene(filename,&editorData);
     setScene(scene);
+    if(editorData != nullptr)
+        sceneView->setEditorData(editorData);
 
     Globals::project->setFilePath(filename);
     this->setProjectTitle(Globals::project->getProjectName());
@@ -644,7 +629,7 @@ void MainWindow::setSceneAnimTime(float time)
 void MainWindow::addCube()
 {
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsolutePath("../app/content/primitives/cube.obj"));
+    node->setMesh(getAbsoluteAssetPath("app/content/primitives/cube.obj"));
     node->setName("Cube");
 
     addNodeToScene(node);
@@ -656,7 +641,7 @@ void MainWindow::addCube()
 void MainWindow::addTorus()
 {
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsolutePath("../app/content/primitives/torus.obj"));
+    node->setMesh(getAbsoluteAssetPath("app/content/primitives/torus.obj"));
     node->setName("Torus");
 
     addNodeToScene(node);
@@ -668,7 +653,7 @@ void MainWindow::addTorus()
 void MainWindow::addSphere()
 {
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsolutePath("../app/content/primitives/sphere.obj"));
+    node->setMesh(getAbsoluteAssetPath("app/content/primitives/sphere.obj"));
     node->setName("Sphere");
 
     addNodeToScene(node);
@@ -680,7 +665,7 @@ void MainWindow::addSphere()
 void MainWindow::addCylinder()
 {
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsolutePath("../app/content/primitives/cylinder.obj"));
+    node->setMesh(getAbsoluteAssetPath("app/content/primitives/cylinder.obj"));
     node->setName("Cylinder");
 
     addNodeToScene(node);

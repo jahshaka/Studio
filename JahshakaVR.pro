@@ -144,7 +144,8 @@ HEADERS  += src/mainwindow.h \
     src/editor/rotationgizmo.h \
     src/editor/scalegizmo.h \
     src/editor/gizmoinstance.h \
-    src/core/keyboardstate.h
+    src/core/keyboardstate.h \
+    src/editor/editordata.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

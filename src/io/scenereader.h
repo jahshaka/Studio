@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef SCENEREADER_H
 #define SCENEREADER_H
 
@@ -15,13 +26,17 @@
 #include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
 
+class EditorData;
+
 class SceneReader:public AssetIOBase
 {
     QHash<QString,QList<iris::Mesh*>> meshes;
 public:
-    iris::ScenePtr readScene(QString filePath);
+    iris::ScenePtr readScene(QString filePath,EditorData** editorData = nullptr);
 
     iris::ScenePtr readScene(QJsonObject& projectObj);
+
+    EditorData* readEditorData(QJsonObject& projectObj);
 
     /**
      * Creates scene node from json data

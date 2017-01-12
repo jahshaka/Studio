@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #include <Qt>
 #include <qvector.h>
 
@@ -6,10 +17,13 @@
 #include <QDir>
 #include <QFile>
 
+#include "../editor/editordata.h"
+
 #include "../irisgl/src/core/scene.h"
 #include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
+#include "../irisgl/src/scenegraph/cameranode.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/animation/animation.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
@@ -19,15 +33,17 @@
 #include "assetiobase.h"
 
 
-void SceneWriter::writeScene(QString filePath,iris::ScenePtr scene)
+void SceneWriter::writeScene(QString filePath,iris::ScenePtr scene,EditorData* editorData)
 {
     dir = AssetIOBase::getDirFromFileName(filePath);
     QFile file(filePath);
     file.open(QIODevice::WriteOnly|QIODevice::Truncate);
 
     QJsonObject projectObj;
-    projectObj["version"]="0.1";
-    writeScene(projectObj,scene);
+    projectObj["version"] = "0.1";
+    writeScene(projectObj, scene);
+    if(editorData != nullptr)
+        writeEditorData(projectObj, editorData);
 
     QJsonDocument saveDoc(projectObj);
     file.write(saveDoc.toJson());
@@ -58,8 +74,22 @@ void SceneWriter::writeScene(QJsonObject& projectObj,iris::ScenePtr scene)
     sceneObj["rootNode"] = rootNodeObj;
 
     projectObj["scene"] = sceneObj;
+}
 
-    //todo: add editor specific data
+void SceneWriter::writeEditorData(QJsonObject& projectObj,EditorData* editorData)
+{
+    QJsonObject editorObj;
+
+    QJsonObject cameraObj;
+    auto cam = editorData->editorCamera;
+    cameraObj["angle"] = cam->angle;
+    cameraObj["nearClip"] = cam->nearClip;
+    cameraObj["farClip"] = cam->farClip;
+    cameraObj["pos"] = jsonVector3(editorData->editorCamera->pos);
+    cameraObj["rot"] = jsonVector3(editorData->editorCamera->rot.toEulerAngles());
+
+    editorObj["camera"] = cameraObj;
+    projectObj["editor"] = editorObj;
 }
 
 void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sceneNode)

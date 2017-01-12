@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef SCENEVIEWWIDGET_H
 #define SCENEVIEWWIDGET_H
 
@@ -34,6 +45,8 @@ class ViewportGizmo;
 class TranslationGizmo;
 class RotationGizmo;
 class ScaleGizmo;
+
+class EditorData;
 
 enum class ViewportMode
 {
@@ -87,6 +100,9 @@ public:
     void setGizmoLoc();
     void setGizmoRot();
     void setGizmoScale();
+
+    void setEditorData(EditorData* data);
+    EditorData* getEditorData();
 
 protected:
     void initializeGL();

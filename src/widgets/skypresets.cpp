@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #include "skypresets.h"
 #include "ui_skypresets.h"
 
@@ -37,6 +48,8 @@ SkyPresets::SkyPresets(QWidget *parent) :
     addSky(":/app/content/skies/vp_sky_v2_002.jpg","Sky 1");
     addSky(":/app/content/skies/vp_sky_v2_032.jpg","Sky 2");
     addSky(":/app/content/skies/vp_sky_v2_033.jpg","Sky 3");
+    addSky(":/app/content/skies/vp_sky_v2_002_test.jpg","Ugly Sky");
+
 
     connect(ui->skyList,SIGNAL(itemClicked(QListWidgetItem*)),this,SLOT(applySky(QListWidgetItem*)));
 }

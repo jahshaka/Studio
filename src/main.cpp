@@ -20,7 +20,7 @@ For more information see the LICENSE file
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
-    app.setWindowIcon(QIcon("qrc:/images/logo.png"));
+    app.setWindowIcon(QIcon(":/app/images/logo.png"));
 
     QGuiApplication::setAttribute(Qt::AA_DisableHighDpiScaling);
     QApplication::setDesktopSettingsAware(false);
@@ -49,8 +49,11 @@ int main(int argc, char *argv[])
 
     //splah screen
     QSplashScreen splash;
-    splash.setPixmap(QPixmap("qrc:/images/splashv2.jpg"));
+    auto image = QPixmap(":/app/images/splashv2.jpg");
+    splash.setPixmap(image);
     splash.show();
+
+    app.processEvents();
 
     //draw main window maximized
     MainWindow window;
@@ -58,6 +61,7 @@ int main(int argc, char *argv[])
     splash.hide();
 
     //show info dialog is settings stipulate so
+    /*
     auto settings = window.getSettingsManager();
     if(settings->getValue("show_info_dialog_on_start",QVariant::fromValue(true)).value<bool>() == true)
     {
@@ -66,6 +70,6 @@ int main(int argc, char *argv[])
         dialog.setModal(true);
         dialog.exec();
     }
-
+    */
     return app.exec();
 }

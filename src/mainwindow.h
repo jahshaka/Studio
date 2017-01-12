@@ -111,11 +111,11 @@ public:
     void applyMaterialPreset(MaterialPreset* preset);
 
     /**
-     * Returns absolute path of file
+     * Returns absolute path of file copied as an asset
      * @param relToApp file path relative to application
      * @return
      */
-    QString getAbsolutePath(QString relToApp);
+    QString getAbsoluteAssetPath(QString relToApp);
 
 private:
 

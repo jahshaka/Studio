@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef SCENEWRITER_H
 #define SCENEWRITER_H
 
@@ -12,13 +23,17 @@
 #include "../irisgl/src/scenegraph/lightnode.h"
 #include "../irisgl/src/irisglfwd.h"
 
+class EditorData;
+
 class SceneWriter : public AssetIOBase
 {
 public:
-    void writeScene(QString filePath,iris::ScenePtr scene);
+    void writeScene(QString filePath,iris::ScenePtr scene,EditorData* ediorData = nullptr);
 
 private:
     void writeScene(QJsonObject& projectObj,iris::ScenePtr scene);
+
+    void writeEditorData(QJsonObject& projectObj,EditorData* ediorData = nullptr);
 
     void writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sceneNode);
 

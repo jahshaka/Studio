@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #include <QSharedPointer>
 #include "assetiobase.h"
 #include <QDir>
@@ -10,9 +21,12 @@
 
 #include "scenereader.h"
 
+#include "../editor/editordata.h"
+
 #include "../irisgl/src/core/scene.h"
 #include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
+#include "../irisgl/src/scenegraph/cameranode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/graphics/texture2d.h"
@@ -22,7 +36,7 @@
 #include "../irisgl/src/animation/keyframeset.h"
 
 
-iris::ScenePtr SceneReader::readScene(QString filePath)
+iris::ScenePtr SceneReader::readScene(QString filePath, EditorData** editorData)
 {
     dir = AssetIOBase::getDirFromFileName(filePath);
     QFile file(filePath);
@@ -33,8 +47,34 @@ iris::ScenePtr SceneReader::readScene(QString filePath)
 
     auto projectObj = doc.object();
     auto scene = readScene(projectObj);
+    if(editorData)
+        *editorData = readEditorData(projectObj);
 
     return scene;
+}
+
+EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
+{
+    if(projectObj["editor"].isNull())
+        return nullptr;
+
+    auto editorObj = projectObj["editor"].toObject();
+
+    // @todo: check if camera object is null
+    auto camObj = editorObj["camera"].toObject();
+    auto camera = iris::CameraNode::create();
+    camera->angle = (float)camObj["angle"].toDouble(45.f);
+    camera->nearClip = (float)camObj["nearClip"].toDouble(1.f);
+    camera->farClip = (float)camObj["farClip"].toDouble(100.f);
+    camera->pos = readVector3(camObj["pos"].toObject());
+    camera->rot = QQuaternion::fromEulerAngles(readVector3(camObj["rot"].toObject()));
+
+    auto editorData = new EditorData();
+    editorData->editorCamera = camera;
+    editorData->distFromPivot = (float)camObj["distanceFromPivot"].toDouble(5.0f);
+
+
+    return editorData;
 }
 
 iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
