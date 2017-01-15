@@ -708,12 +708,12 @@ void MainWindow::addMesh()
     if(filename.isEmpty())
         return;
 
-
-    //auto node = iris::MeshNode::create();
-    //node->setMesh(filename);
-    //node->setName(nodeName);
-
     auto node = iris::MeshNode::loadAsSceneFragment(filename);
+
+    // model file may be invalid so null gets returned
+    if(!node)
+        return;
+
     node->setName(nodeName);
 
     //todo: load material data

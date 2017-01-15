@@ -9,18 +9,23 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <QFileInfo>
+#include <QDir>
+
 #include "meshnode.h"
 #include "../graphics/mesh.h"
 #include "assimp/postprocess.h"
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
 #include "assimp/mesh.h"
+#include "assimp/material.h"
 #include "assimp/matrix4x4.h"
 #include "assimp/vector3.h"
 #include "assimp/quaternion.h"
 
 #include "../graphics/vertexlayout.h"
 #include "../materials/defaultmaterial.h"
+#include "../materials/materialhelper.h"
 
 namespace iris
 {
@@ -60,14 +65,14 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
 {
     QSharedPointer<iris::SceneNode> sceneNode;// = QSharedPointer<iris::SceneNode>(new iris::SceneNode());
 
-    //if this node only has one child then make sceneNode a meshnode and add mesh to it
+    // if this node only has one child then make sceneNode a meshnode and add mesh to it
     if(node->mNumMeshes==1)
     {
         auto meshNode = iris::MeshNode::create();
         auto mesh = scene->mMeshes[node->mMeshes[0]];
 
-        //objects like Bezier curves have no vertex positions in the aiMesh
-        //aside from that, iris currently only renders meshes
+        // objects like Bezier curves have no vertex positions in the aiMesh
+        // aside from that, iris currently only renders meshes
         if(mesh->HasPositions())
         {
             meshNode->setMesh(new Mesh(mesh,VertexLayout::createMeshDefault()));
@@ -75,18 +80,29 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
             meshNode->meshPath = filePath;
             meshNode->meshIndex = node->mMeshes[0];
 
-            //apply material
+            // apply material
             auto mat = iris::DefaultMaterial::create();
             meshNode->setMaterial(mat);
 
             //todo
-            /*
-            if(mesh->mMaterialIndex>=0)
+            if(mesh->mMaterialIndex >= 0)
             {
                 auto m = scene->mMaterials[mesh->mMaterialIndex];
-                m->
+                auto dir = QFileInfo(filePath).absoluteDir().absolutePath();
+
+                auto meshMat = iris::MaterialHelper::createMaterial(m, dir);
+                if(!!meshMat)
+                    meshNode->setMaterial(meshMat);
+
+                /*
+                // loop through properties
+                for(auto i = 0; i<m->mNumProperties; i++)
+                {
+                    auto matProp = m->mProperties[i];
+                    qDebug()<< matProp->mKey.C_Str();
+                }
+                */
             }
-            */
         }
         sceneNode = meshNode;
     }
@@ -147,10 +163,21 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath)
 
     if(scene->mNumMeshes==1)
     {
+        auto mesh = scene->mMeshes[0];
         auto node = iris::MeshNode::create();
         node->setMesh(new Mesh(scene->mMeshes[0],VertexLayout::createMeshDefault()));
         node->meshPath = filePath;
         node->meshIndex = 0;
+
+        if(mesh->mMaterialIndex >= 0)
+        {
+            auto m = scene->mMaterials[mesh->mMaterialIndex];
+            auto dir = QFileInfo(filePath).absoluteDir().absolutePath();
+
+            auto meshMat = MaterialHelper::createMaterial(m,dir);
+            if(!!meshMat)
+                node->setMaterial(meshMat);
+        }
         return node;
     }
 
