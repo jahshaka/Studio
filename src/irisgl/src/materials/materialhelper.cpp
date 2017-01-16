@@ -28,10 +28,7 @@ QColor getAiMaterialColor(aiMaterial* aiMat, const char* pKey, unsigned int type
 {
     aiColor3D col;
     aiMat->Get(pKey, type, idx, col);
-    auto color = QColor(col.r * 255,
-                        col.g * 255,
-                        col.b * 255,
-                        255);
+    auto color = QColor(col.r * 255, col.g * 255, col.b * 255, 255);
 
     return color;
 }
@@ -70,13 +67,8 @@ DefaultMaterialPtr MaterialHelper::createMaterial(aiMaterial* aiMat,QString asse
     if(!assetPath.isEmpty())
     {
         auto diffuseTex = getAiMaterialTexture(aiMat, aiTextureType_DIFFUSE);
-        mat->setDiffuseTexture(
-                    Texture2D::load(assetPath + "/" + diffuseTex)
-                    );
+        mat->setDiffuseTexture(Texture2D::load(assetPath + "/" + diffuseTex));
     }
-
-
-    //auto diffuseTexName = getAiMaterialTexture(aiMat,AI_MATKEY_TEXTURE)
 
     return mat;
 }
