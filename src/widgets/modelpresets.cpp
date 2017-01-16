@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #include "modelpresets.h"
 #include "ui_modelpresets.h"
 #include <QListWidgetItem>
@@ -22,11 +33,11 @@ ModelPresets::ModelPresets(QWidget *parent) :
     connect(ui->modelsSets,SIGNAL(doubleClicked(QModelIndex)),SLOT(onPrimitiveSelected(QModelIndex)));
 
     //addItem("Cone",":/app/modelpresets/cone.png");
-    addItem("Cube","../app/modelpresets/cube.png");
-    addItem("Cylinder","../app/modelpresets/cylinder.png");
+    addItem("Cube","app/modelpresets/cube.png");
+    addItem("Cylinder","app/modelpresets/cylinder.png");
     //addItem("IcoSphere",":/app/modelpresets/icosphere.png");
-    addItem("Sphere","../app/modelpresets/sphere.png");
-    addItem("Torus","../app/modelpresets/torus.png");
+    addItem("Sphere","app/modelpresets/sphere.png");
+    addItem("Torus","app/modelpresets/torus.png");
 
 }
 
@@ -59,7 +70,7 @@ void ModelPresets::onPrimitiveSelected(QModelIndex itemIndex)
 
 void ModelPresets::addItem(QString name,QString path)
 {
-    QListWidgetItem* item = new QListWidgetItem(QIcon(mainWindow->getAbsolutePath(path)),name);
+    QListWidgetItem* item = new QListWidgetItem(QIcon(mainWindow->getAbsoluteAssetPath(path)),name);
     ui->modelsSets->addItem(item);
 }
 

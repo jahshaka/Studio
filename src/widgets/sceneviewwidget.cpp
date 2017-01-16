@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #include "sceneviewwidget.h"
 #include <QTimer>
 
@@ -24,6 +35,8 @@
 #include "../editor/cameracontrollerbase.h"
 #include "../editor/editorcameracontroller.h"
 #include "../editor/orbitalcameracontroller.h"
+
+#include "../editor/editordata.h"
 
 #include "../editor/translationgizmo.h"
 #include "../editor/rotationgizmo.h"
@@ -332,7 +345,7 @@ void SceneViewWidget::doObjectPicking(const QPointF& point)
     doLightPicking(segStart, segEnd, hitList);
 
     if (hitList.size() == 0) {
-        // no hits, deselect last selected object in viewport and hiearchy
+        // no hits, deselect last selected object in viewport and heirarchy
         emit sceneNodeSelected(iris::SceneNodePtr());
         return;
     }
@@ -547,5 +560,20 @@ void SceneViewWidget::setGizmoScale()
     viewportGizmo = scaleGizmo;
     viewportGizmo->setTransformOrientation(transformMode);
     viewportGizmo->lastSelectedNode = selectedNode;
+}
+
+
+void SceneViewWidget::setEditorData(EditorData* data)
+{
+    editorCam = data->editorCamera;
+    orbitalCam->distFromPivot = data->distFromPivot;
+    scene->camera = editorCam;
+}
+
+EditorData* SceneViewWidget::getEditorData()
+{
+    auto data = new EditorData();
+    data->editorCamera = editorCam;
+    data->distFromPivot = orbitalCam->distFromPivot;
 }
 

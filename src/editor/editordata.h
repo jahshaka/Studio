@@ -9,28 +9,16 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#ifndef MATERIALREADER_H
-#define MATERIALREADER_H
+#ifndef EDITORDATA_H
+#define EDITORDATA_H
 
-#include <QSharedPointer>
-#include "assetiobase.h"
+#include "../irisgl/src/irisglfwd.h"
 
-namespace iris
-{
-    class Material;
-}
-
-class MaterialPreset;
-
-/**
- * This class parses material definitions from json files
- */
-class MaterialPresetReader:public AssetIOBase
+class EditorData
 {
 public:
-    MaterialPresetReader();
-
-    MaterialPreset* readMaterialPreset(QString filename);
+    iris::CameraNodePtr editorCamera;
+    float distFromPivot;
 };
 
-#endif // MATERIALREADER_H
+#endif // EDITORDATA_H
