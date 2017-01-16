@@ -111,9 +111,11 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addMesh()));
 
     //VIEWPOINT
+    /*
     action = new QAction("ViewPoint", this);
     addMenu->addAction(action);
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addViewPoint()));
+    */
 
     ui->addBtn->setMenu(addMenu);
     ui->addBtn->setPopupMode(QToolButton::InstantPopup);
