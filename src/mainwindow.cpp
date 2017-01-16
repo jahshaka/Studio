@@ -782,7 +782,7 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
     }
 
     const float spawnDist = 10.0f;
-    auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, 0, -spawnDist));
+    auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, -1.0f, -spawnDist));
     offset += sceneView->editorCam->pos;
     sceneNode->pos = offset;
 
