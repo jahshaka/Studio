@@ -106,7 +106,7 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addDirectionalLight()));
 
     //MESHES
-    action = new QAction("Load 3D Object", this);
+    action = new QAction("Load Model", this);
     addMenu->addAction(action);
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addMesh()));
 
