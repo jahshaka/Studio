@@ -567,7 +567,8 @@ void SceneViewWidget::setEditorData(EditorData* data)
 {
     editorCam = data->editorCamera;
     orbitalCam->distFromPivot = data->distFromPivot;
-    scene->camera = editorCam;
+    scene->setCamera(editorCam);
+    camController->setCamera(editorCam);
 }
 
 EditorData* SceneViewWidget::getEditorData()
