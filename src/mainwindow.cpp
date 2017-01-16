@@ -213,6 +213,8 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
 
     auto cam = iris::CameraNode::create();
     cam->pos = QVector3D(6, 12, 14);
+    cam->rot = QQuaternion::fromEulerAngles(-80,0,0);
+    cam->update(0);
 
     scene->setCamera(cam);
 
