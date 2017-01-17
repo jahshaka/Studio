@@ -811,12 +811,12 @@ void MainWindow::duplicateNode()
 
 void MainWindow::deleteNode()
 {
-    if(!!activeSceneNode)
-    {
+    if (!!activeSceneNode) {
         activeSceneNode->removeFromParent();
         ui->sceneHierarchy->repopulateTree();
         sceneView->clearSelectedNode();
         ui->sceneNodeProperties->setSceneNode(QSharedPointer<iris::SceneNode>(nullptr));
+        sceneView->hideGizmo();
     }
 }
 
