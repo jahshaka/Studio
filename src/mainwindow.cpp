@@ -238,10 +238,18 @@ iris::ScenePtr MainWindow::createDefaultScene()
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
-    dlight->setName("Main Lamp");
+    dlight->setName("Directional Lamp");
     dlight->pos = QVector3D(0, 10, 0);
     dlight->intensity = 1;
-    dlight->icon = iris::Texture2D::load("app/icons/bulb.png");
+    dlight->icon = iris::Texture2D::load("app/icons/light.png");
+
+    auto plight = iris::LightNode::create();
+    plight->setLightType(iris::LightType::Point);
+    scene->rootNode->addChild(plight);
+    plight->setName("Point Lamp");
+    plight->pos = QVector3D(-3, 4, 0);
+    plight->intensity = 1;
+    plight->icon = iris::Texture2D::load("app/icons/bulb.png");
 
     // fog params
     scene->fogColor = QColor(255, 255, 255, 255);
@@ -824,12 +832,12 @@ void MainWindow::duplicateNode()
 
 void MainWindow::deleteNode()
 {
-    if(!!activeSceneNode)
-    {
+    if (!!activeSceneNode) {
         activeSceneNode->removeFromParent();
         ui->sceneHierarchy->repopulateTree();
         sceneView->clearSelectedNode();
         ui->sceneNodeProperties->setSceneNode(QSharedPointer<iris::SceneNode>(nullptr));
+        sceneView->hideGizmo();
     }
 }
 

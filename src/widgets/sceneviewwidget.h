@@ -97,6 +97,7 @@ public:
 
     void setTransformOrientationLocal();
     void setTransformOrientationGlobal();
+    void hideGizmo();
 
     void setGizmoLoc();
     void setGizmoRot();

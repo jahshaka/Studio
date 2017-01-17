@@ -135,8 +135,6 @@ void SceneViewWidget::updateScene(bool once)
         viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
         viewportGizmo->render(renderer->GLA, ViewMatrix, ProjMatrix);
     }
-
-
 }
 
 void SceneViewWidget::initializeGL()
@@ -539,6 +537,11 @@ void SceneViewWidget::setTransformOrientationLocal()
 void SceneViewWidget::setTransformOrientationGlobal()
 {
     viewportGizmo->setTransformOrientation("Global");
+}
+
+void SceneViewWidget::hideGizmo()
+{
+    viewportGizmo->lastSelectedNode = iris::SceneNodePtr();
 }
 
 void SceneViewWidget::setGizmoLoc()

@@ -252,6 +252,8 @@ void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
     auto program = billboard->program;
     program->bind();
 
+    gl->glEnable(GL_BLEND);
+    gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     for(int i=0;i<lightCount;i++)
     {
         auto light = renderData->scene->lights[i];
@@ -273,6 +275,7 @@ void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
 
         billboard->draw(gl);
     }
+    gl->glDisable(GL_BLEND);
 
     gl->glEnable(GL_CULL_FACE);
 }
