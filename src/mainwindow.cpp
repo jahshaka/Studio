@@ -92,7 +92,7 @@ MainWindow::MainWindow(QWidget *parent) :
     aboutDialog = new AboutDialog();
     licenseDialog = new LicenseDialog();
 
-    ui->mainTimeline->setMainWindow(this);
+    // ui->mainTimeline->setMainWindow(this);
     ui->modelpresets->setMainWindow(this);
     ui->materialpresets->setMainWindow(this);
     ui->skypresets->setMainWindow(this);
@@ -596,7 +596,7 @@ void MainWindow::removeScene()
 void MainWindow::setupPropertyUi()
 {
     animWidget = new AnimationWidget();
-    animWidget->setMainTimelineWidget(ui->mainTimeline->getTimeline());
+    //animWidget->setMainTimelineWidget(ui->mainTimeline->getTimeline());
 }
 
 void MainWindow::sceneNodeSelected(QTreeWidgetItem* item)

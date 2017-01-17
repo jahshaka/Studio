@@ -903,7 +903,7 @@ QMenu::item:selected {
    <property name="minimumSize">
     <size>
      <width>200</width>
-     <height>0</height>
+     <height>36</height>
     </size>
    </property>
    <property name="maximumSize">
@@ -989,33 +989,8 @@ QMenu::item:selected {
      <property name="spacing">
       <number>0</number>
      </property>
-     <item row="1" column="0">
-      <widget class="AnimationWidget" name="animationtimeline">
-       <property name="styleSheet">
-        <string notr="true">border: none;</string>
-       </property>
-      </widget>
-     </item>
      <item row="0" column="0">
-      <widget class="MainTimelineWidget" name="mainTimeline" native="true">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>0</width>
-         <height>40</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>16777215</width>
-         <height>40</height>
-        </size>
-       </property>
+      <widget class="AnimationWidget" name="animationtimeline">
        <property name="styleSheet">
         <string notr="true">border: none;</string>
        </property>
@@ -1568,12 +1543,6 @@ border: none;</string>
   </action>
  </widget>
  <customwidgets>
-  <customwidget>
-   <class>MainTimelineWidget</class>
-   <extends>QWidget</extends>
-   <header location="global">src/widgets/maintimelinewidget.h</header>
-   <container>1</container>
-  </customwidget>
   <customwidget>
    <class>AnimationWidget</class>
    <extends>QFrame</extends>
