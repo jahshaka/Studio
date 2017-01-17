@@ -30,9 +30,10 @@ AccordianBladeWidget::AccordianBladeWidget(QWidget *parent) :
     ui->setupUi(this);
     minimum_height = 11*4;//default margin is 11
     this->setMinimumHeight( ui->bg->height() );
-    QVBoxLayout *layout = new QVBoxLayout();
+    //QVBoxLayout *layout = new QVBoxLayout();
 
-    ui->contentpane->setLayout(layout);
+    //delete ui->contentpane->layout();
+    //ui->contentpane->setLayout(layout);
     ui->contentpane->setVisible(false);
     ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); } QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
 }

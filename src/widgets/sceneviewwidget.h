@@ -83,6 +83,7 @@ public:
     void clearSelectedNode();
 
     void setEditorCamera(iris::CameraNodePtr camera);
+    void resetEditorCam();
 
     // switches to the free editor camera controller
     void setFreeCameraMode();
@@ -96,6 +97,7 @@ public:
 
     void setTransformOrientationLocal();
     void setTransformOrientationGlobal();
+    void hideGizmo();
 
     void setGizmoLoc();
     void setGizmoRot();

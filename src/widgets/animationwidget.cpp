@@ -102,20 +102,15 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
 
     time = 0;
     timerSpeed = 1.0f/60;//60 fps
-    startedTime = ui->timeline->getTimeAtCursor();
+    //startedTime = ui->timeline->getTimeAtCursor();
     loopAnim = false;
 
     //buttons that affect timer
     connect(ui->play,SIGNAL(pressed()),this,SLOT(startTimer()));
     connect(ui->stop,SIGNAL(pressed()),this,SLOT(stopTimer()));
 
-    //connect(ui->timeEdit,SIGNAL(timeChanged(QTime)),this,SLOT(timeEditChanged(QTime)));
-//    connect(ui->animLength,SIGNAL(valueChanged(int)),this,SLOT(setAnimLength(int)));
-    connect(ui->animStartTime,SIGNAL(valueChanged(int)),this,SLOT(setAnimstart(int)));
-    connect(ui->loopAnim,SIGNAL(clicked(bool)),this,SLOT(setLooping(bool)));
-
     connect(ui->keywidgetView,SIGNAL(cursorTimeChanged(float)),this,SLOT(onObjectAnimationTimeChanged(float)));
-    connect(ui->timeline,SIGNAL(cursorMoved(float)),this,SLOT(onSceneAnimationTimeChanged(float)));
+    //connect(ui->timeline,SIGNAL(cursorMoved(float)),this,SLOT(onSceneAnimationTimeChanged(float)));
 
     mainTimeline = nullptr;
 }
@@ -133,7 +128,7 @@ void AnimationWidget::setScene(iris::ScenePtr scene)
 void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
 {
     ui->keywidgetView->setSceneNode(node);
-    ui->timeline->setSceneNode(node);
+    //ui->timeline->setSceneNode(node);
     ui->keylabelView->setSceneNode(node);
 
     ui->keywidgetView->repaint();
@@ -176,41 +171,35 @@ void AnimationWidget::updateAnim()
 {
     time += elapsedTimer->nsecsElapsed()/(1000.0f*1000.0f*1000.0f);
     elapsedTimer->restart();
+
+    ui->keywidgetView->setTime(time);
+    onObjectAnimationTimeChanged(time);
+
+    /*
     ui->timeline->setTime(time);
 
-    //if(time>ui->timeline->maxTimeInSeconds)
     if(time>ui->timeline->getEndTimeRange())
     {
-        /*
-        if(loopAnim)
-        {
-            while(time>ui->timeline->maxTimeInSeconds)
-                time-=ui->timeline->maxTimeInSeconds;
-        }
-        else
-        {
-            stopTimer();
-        }
-        */
-        //just top timer for now
         stopTimer();
     }
+    */
 }
 
 void AnimationWidget::startTimer()
 {
-    time = ui->timeline->getTimeAtCursor();
+    //time = ui->timeline->getTimeAtCursor();
+    time = ui->keywidgetView->getTimeAtCursor();
     timer->start(timerSpeed);
     elapsedTimer->start();
     //timer->start();
 
-    startedTime = ui->timeline->getTimeAtCursor();
+    //startedTime = ui->timeline->getTimeAtCursor();
 }
 
 void AnimationWidget::stopTimer()
 {
     timer->stop();
-    ui->timeline->setTime(startedTime);
+    //ui->timeline->setTime(startedTime);
 }
 
 void AnimationWidget::setAnimLength(float length)
@@ -237,7 +226,7 @@ void AnimationWidget::fixLayout()
 
 void AnimationWidget::repaintViews()
 {
-    ui->timeline->repaint();
+    //ui->timeline->repaint();
     ui->keywidgetView->repaint();
     ui->keylabelView->repaint();
 }

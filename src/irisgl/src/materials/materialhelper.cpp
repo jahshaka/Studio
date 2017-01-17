@@ -9,6 +9,8 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <QDir>
+
 #include "materialhelper.h"
 #include "../irisglfwd.h"
 #include "assimp/scene.h"
@@ -67,7 +69,8 @@ DefaultMaterialPtr MaterialHelper::createMaterial(aiMaterial* aiMat,QString asse
     if(!assetPath.isEmpty())
     {
         auto diffuseTex = getAiMaterialTexture(aiMat, aiTextureType_DIFFUSE);
-        mat->setDiffuseTexture(Texture2D::load(assetPath + "/" + diffuseTex));
+        mat->setDiffuseTexture(Texture2D::load(
+                                   QDir::cleanPath(assetPath + QDir::separator() + diffuseTex)));
     }
 
     return mat;

@@ -205,6 +205,7 @@ public slots:
     void openBlogUrl();
     void openWebsiteUrl();
 
+    iris::ScenePtr createDefaultScene();
     void initializeGraphics(SceneViewWidget* widget, QOpenGLFunctions_3_2_Core* gl);
     void cameraTypeChanged(QString);
     void transformOrientationChanged(QString);

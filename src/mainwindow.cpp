@@ -92,7 +92,7 @@ MainWindow::MainWindow(QWidget *parent) :
     aboutDialog = new AboutDialog();
     licenseDialog = new LicenseDialog();
 
-    ui->mainTimeline->setMainWindow(this);
+    // ui->mainTimeline->setMainWindow(this);
     ui->modelpresets->setMainWindow(this);
     ui->materialpresets->setMainWindow(this);
     ui->skypresets->setMainWindow(this);
@@ -206,13 +206,14 @@ QString MainWindow::getAbsoluteAssetPath(QString relToApp)
     return path;
 }
 
-//create test scene
-void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
+iris::ScenePtr MainWindow::createDefaultScene()
 {
     auto scene = iris::Scene::create();
 
     auto cam = iris::CameraNode::create();
     cam->pos = QVector3D(6, 12, 14);
+    cam->rot = QQuaternion::fromEulerAngles(-80,0,0);
+    cam->update(0);
 
     scene->setCamera(cam);
 
@@ -237,13 +238,29 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
-    dlight->setName("Main Lamp");
+    dlight->setName("Directional Lamp");
     dlight->pos = QVector3D(0, 10, 0);
     dlight->intensity = 1;
-    dlight->icon = iris::Texture2D::load("app/icons/bulb.png");
+    dlight->icon = iris::Texture2D::load("app/icons/light.png");
+
+    auto plight = iris::LightNode::create();
+    plight->setLightType(iris::LightType::Point);
+    scene->rootNode->addChild(plight);
+    plight->setName("Point Lamp");
+    plight->pos = QVector3D(-3, 4, 0);
+    plight->intensity = 1;
+    plight->icon = iris::Texture2D::load("app/icons/bulb.png");
 
     // fog params
     scene->fogColor = QColor(255, 255, 255, 255);
+
+    return scene;
+}
+
+//create test scene
+void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
+{
+    auto scene = this->createDefaultScene();
 
     this->setScene(scene);
     setupVrUi();
@@ -560,10 +577,14 @@ void MainWindow::openRecentFile()
         return;
     }
 
+    this->openProject(filename);
+
+    /*
     Globals::project->setFilePath(filename);
     this->setProjectTitle(Globals::project->getProjectName());
 
     settings->addRecentlyOpenedScene(filename);
+    */
 }
 
 void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
@@ -583,7 +604,7 @@ void MainWindow::removeScene()
 void MainWindow::setupPropertyUi()
 {
     animWidget = new AnimationWidget();
-    animWidget->setMainTimelineWidget(ui->mainTimeline->getTimeline());
+    //animWidget->setMainTimelineWidget(ui->mainTimeline->getTimeline());
 }
 
 void MainWindow::sceneNodeSelected(QTreeWidgetItem* item)
@@ -780,7 +801,7 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
     }
 
     const float spawnDist = 10.0f;
-    auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, 0, -spawnDist));
+    auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, -1.0f, -spawnDist));
     offset += sceneView->editorCam->pos;
     sceneNode->pos = offset;
 
@@ -811,12 +832,12 @@ void MainWindow::duplicateNode()
 
 void MainWindow::deleteNode()
 {
-    if(!!activeSceneNode)
-    {
+    if (!!activeSceneNode) {
         activeSceneNode->removeFromParent();
         ui->sceneHierarchy->repopulateTree();
         sceneView->clearSelectedNode();
         ui->sceneNodeProperties->setSceneNode(QSharedPointer<iris::SceneNode>(nullptr));
+        sceneView->hideGizmo();
     }
 }
 
@@ -869,7 +890,9 @@ void MainWindow::updateSceneSettings()
 
 void MainWindow::newScene()
 {
-
+    auto scene = this->createDefaultScene();
+    this->setScene(scene);
+    this->sceneView->resetEditorCam();
 }
 
 void MainWindow::showAboutDialog()

@@ -87,9 +87,9 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     primtiveMenu->addAction(action);
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addCylinder()));
 
-    action = new QAction("Plane", this);
-    primtiveMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addTexturedPlane()));
+//    action = new QAction("Plane", this);
+//    primtiveMenu->addAction(action);
+//    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addTexturedPlane()));
 
     //LIGHTS
     auto lightMenu = addMenu->addMenu("Lights");
@@ -106,14 +106,16 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addDirectionalLight()));
 
     //MESHES
-    action = new QAction("Load 3D Object", this);
+    action = new QAction("Load Model", this);
     addMenu->addAction(action);
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addMesh()));
 
     //VIEWPOINT
+    /*
     action = new QAction("ViewPoint", this);
     addMenu->addAction(action);
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addViewPoint()));
+    */
 
     ui->addBtn->setMenu(addMenu);
     ui->addBtn->setPopupMode(QToolButton::InstantPopup);

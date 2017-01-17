@@ -72,11 +72,17 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     editorCam = iris::CameraNode::create();
     editorCam->pos = QVector3D(0, 5, 7);
-    editorCam->rot = QQuaternion::fromEulerAngles(-20, 0, 0);
+    editorCam->rot = QQuaternion::fromEulerAngles(-5, 0, 0);
     camController->setCamera(editorCam);
 
     viewportMode = ViewportMode::Editor;
 
+}
+
+void SceneViewWidget::resetEditorCam()
+{
+    editorCam->pos = QVector3D(0, 5, 7);
+    editorCam->rot = QQuaternion::fromEulerAngles(-5, 0, 0);
 }
 
 void SceneViewWidget::initialize()
@@ -129,8 +135,6 @@ void SceneViewWidget::updateScene(bool once)
         viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
         viewportGizmo->render(renderer->GLA, ViewMatrix, ProjMatrix);
     }
-
-
 }
 
 void SceneViewWidget::initializeGL()
@@ -535,6 +539,11 @@ void SceneViewWidget::setTransformOrientationGlobal()
     viewportGizmo->setTransformOrientation("Global");
 }
 
+void SceneViewWidget::hideGizmo()
+{
+    viewportGizmo->lastSelectedNode = iris::SceneNodePtr();
+}
+
 void SceneViewWidget::setGizmoLoc()
 {
     editorCam->updateCameraMatrices();
@@ -567,7 +576,8 @@ void SceneViewWidget::setEditorData(EditorData* data)
 {
     editorCam = data->editorCamera;
     orbitalCam->distFromPivot = data->distFromPivot;
-    scene->camera = editorCam;
+    scene->setCamera(editorCam);
+    camController->setCamera(editorCam);
 }
 
 EditorData* SceneViewWidget::getEditorData()

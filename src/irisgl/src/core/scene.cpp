@@ -22,7 +22,7 @@ namespace iris
 Scene::Scene()
 {
     rootNode = SceneNode::create();
-    rootNode->setName("Scene");
+    rootNode->setName("World");
     // rootNode->setScene(this->sharedFromThis());
 
     // todo: move this to ui code

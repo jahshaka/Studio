@@ -298,7 +298,8 @@ float KeyFrameWidget::getTimeAtCursor()
 
 void KeyFrameWidget::setTime(float time)
 {
-    Q_UNUSED(time);
+    cursorPos = time;
+    this->repaint();
 }
 
 void KeyFrameWidget::setTimeRange(float start,float end)

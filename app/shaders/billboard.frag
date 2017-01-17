@@ -34,10 +34,10 @@ void main()
     */
 
     vec4 color = texture( tex, v_texCoord ).rgba;
-    if(color.a<0.1f)
-        discard;
+    // if(color.a == 0.0f)
+    //     discard;
 
-    color.a = 1.0;
+    // color.a = 1.0;
     gl_FragColor = color;
     //gl_FragColor = vec4(1.0,1.0,1.0,1.0);
 }
