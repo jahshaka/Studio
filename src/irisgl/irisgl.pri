@@ -41,7 +41,8 @@ HEADERS += \
     $$PWD/src/math/intersectionhelper.h \
     $$PWD/src/animation/keyframeset.h \
     $$PWD/src/math/bezierhelper.h \
-    $$PWD/src/animation/animation.h
+    $$PWD/src/animation/animation.h \
+    $$PWD/src/materials/materialhelper.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -66,4 +67,5 @@ SOURCES += \
     $$PWD/src/graphics/shader.cpp \
     $$PWD/src/graphics/texture.cpp \
     $$PWD/src/animation/animation.cpp \
-    $$PWD/src/animation/keyframeset.cpp
+    $$PWD/src/animation/keyframeset.cpp \
+    $$PWD/src/materials/materialhelper.cpp
