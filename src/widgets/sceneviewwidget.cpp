@@ -79,6 +79,12 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
 }
 
+void SceneViewWidget::resetEditorCam()
+{
+    editorCam->pos = QVector3D(0, 5, 7);
+    editorCam->rot = QQuaternion::fromEulerAngles(-5, 0, 0);
+}
+
 void SceneViewWidget::initialize()
 {
     initialH = true;

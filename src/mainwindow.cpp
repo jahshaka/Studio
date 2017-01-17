@@ -206,8 +206,7 @@ QString MainWindow::getAbsoluteAssetPath(QString relToApp)
     return path;
 }
 
-//create test scene
-void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
+iris::ScenePtr MainWindow::createDefaultScene()
 {
     auto scene = iris::Scene::create();
 
@@ -246,6 +245,14 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
 
     // fog params
     scene->fogColor = QColor(255, 255, 255, 255);
+
+    return scene;
+}
+
+//create test scene
+void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
+{
+    auto scene = this->createDefaultScene();
 
     this->setScene(scene);
     setupVrUi();
@@ -562,10 +569,14 @@ void MainWindow::openRecentFile()
         return;
     }
 
+    this->openProject(filename);
+
+    /*
     Globals::project->setFilePath(filename);
     this->setProjectTitle(Globals::project->getProjectName());
 
     settings->addRecentlyOpenedScene(filename);
+    */
 }
 
 void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
@@ -871,7 +882,9 @@ void MainWindow::updateSceneSettings()
 
 void MainWindow::newScene()
 {
-
+    auto scene = this->createDefaultScene();
+    this->setScene(scene);
+    this->sceneView->resetEditorCam();
 }
 
 void MainWindow::showAboutDialog()
