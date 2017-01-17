@@ -585,5 +585,7 @@ EditorData* SceneViewWidget::getEditorData()
     auto data = new EditorData();
     data->editorCamera = editorCam;
     data->distFromPivot = orbitalCam->distFromPivot;
+
+    return data;
 }
 
