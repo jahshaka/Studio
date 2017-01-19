@@ -32,6 +32,11 @@ namespace iris
 
 Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
 {
+    auto gl = new QOpenGLFunctions_3_2_Core();
+    gl->initializeOpenGLFunctions();
+
+    gl->glGenVertexArrays(1,&vao);
+
     triMesh = new TriMesh();
 
     this->vertexLayout = vertexLayout;
@@ -133,6 +138,11 @@ Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
 //todo: extract trimesh from data
 Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
 {
+    auto gl = new QOpenGLFunctions_3_2_Core();
+    gl->initializeOpenGLFunctions();
+
+    gl->glGenVertexArrays(1,&vao);
+
     triMesh = nullptr;
     this->vertexLayout = vertexLayout;
 
@@ -151,20 +161,26 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,Material* mat)
 
 void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program)
 {
+    gl->glBindVertexArray(vao);
     vbo->bind();
 
     vertexLayout->bind(program);
     gl->glDrawArrays(GL_TRIANGLES,0,numVerts);//todo: bad to assume triangles, allow other primitive types
     vertexLayout->unbind(program);
+
+    gl->glBindVertexArray(0);
 }
 
 void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLenum primitiveMode)
 {
+    gl->glBindVertexArray(vao);
     vbo->bind();
 
     vertexLayout->bind(program);
     gl->glDrawArrays(primitiveMode,0,numVerts);
     vertexLayout->unbind(program);
+
+    gl->glBindVertexArray(0);
 }
 
 Mesh* Mesh::loadMesh(QString filePath)

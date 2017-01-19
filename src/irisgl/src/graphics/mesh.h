@@ -29,6 +29,8 @@ class Mesh
 {
 
 public:
+    QOpenGLFunctions_3_2_Core* gl;
+    GLuint vao;
     QOpenGLBuffer* vbo;
     VertexLayout* vertexLayout;
     int numVerts;

@@ -1,4 +1,5 @@
 CONFIG += exceptions rtti
+#QT_PRIVATE += zlib-private
 
 gcc: {
     QMAKE_CFLAGS_WARN_ON += -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable -Wno-deprecated-declarations -Wno-unused-function -Wno-reorder

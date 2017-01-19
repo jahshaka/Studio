@@ -19,7 +19,7 @@
 QT       += core gui
 
 
-CONFIG += c++14
+CONFIG += c++11
 
 #needed to fix resource compilation error in visual studio
 #http://stackoverflow.com/questions/28426240/qt-compiler-is-out-of-heap-space
@@ -187,15 +187,18 @@ RESOURCES += \
 
 win32: RC_ICONS = icon.ico
 
-#http://stackoverflow.com/questions/19066593/copy-a-file-to-build-directory-after-compiling-project-with-qt/39234363#39234363
-moveassets.commands = $(COPY_DIR) \"$$shell_path($$PWD/assets)\" \"$$shell_path($$OUT_PWD/assets)\"
-movecontent.commands = $(COPY_DIR) \"$$shell_path($$PWD/app)\" \"$$shell_path($$OUT_PWD/app)\"
+#http://stackoverflow.com/questions/32631084/create-dir-copy-files-with-qmake
+!equals(PWD, $$OUT_PWD) {
+    #http://stackoverflow.com/questions/19066593/copy-a-file-to-build-directory-after-compiling-project-with-qt/39234363#39234363
+    moveassets.commands = $(COPY_DIR) \"$$shell_path($$PWD/assets)\" \"$$shell_path($$OUT_PWD/assets)\"
+    movecontent.commands = $(COPY_DIR) \"$$shell_path($$PWD/app)\" \"$$shell_path($$OUT_PWD/app)\"
 
-first.depends = $(first) moveassets movecontent
-export(first.depends)
-export(movecontent.commands)
-export(moveassets.commands)
-QMAKE_EXTRA_TARGETS += first moveassets movecontent
+    first.depends = $(first) moveassets movecontent
+    export(first.depends)
+    export(movecontent.commands)
+    export(moveassets.commands)
+    QMAKE_EXTRA_TARGETS += first moveassets movecontent
+}
 
 include(src/irisgl/irisgl.pri)
 
