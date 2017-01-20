@@ -84,25 +84,14 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
             auto mat = iris::DefaultMaterial::create();
             meshNode->setMaterial(mat);
 
-            //todo
-            if(mesh->mMaterialIndex >= 0)
-            {
-                auto m = scene->mMaterials[mesh->mMaterialIndex];
-                auto dir = QFileInfo(filePath).absoluteDir().absolutePath();
+            // mesh->mMaterialIndex is always at least 0
+            auto m = scene->mMaterials[mesh->mMaterialIndex];
+            auto dir = QFileInfo(filePath).absoluteDir().absolutePath();
 
-                auto meshMat = iris::MaterialHelper::createMaterial(m, dir);
-                if(!!meshMat)
-                    meshNode->setMaterial(meshMat);
+            auto meshMat = iris::MaterialHelper::createMaterial(m, dir);
+            if(!!meshMat)
+                meshNode->setMaterial(meshMat);
 
-                /*
-                // loop through properties
-                for(auto i = 0; i<m->mNumProperties; i++)
-                {
-                    auto matProp = m->mProperties[i];
-                    qDebug()<< matProp->mKey.C_Str();
-                }
-                */
-            }
         }
         sceneNode = meshNode;
     }
@@ -169,15 +158,14 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath)
         node->meshPath = filePath;
         node->meshIndex = 0;
 
-        if(mesh->mMaterialIndex >= 0)
-        {
-            auto m = scene->mMaterials[mesh->mMaterialIndex];
-            auto dir = QFileInfo(filePath).absoluteDir().absolutePath();
+        //mesh->mMaterialIndex is always >= 0
+        auto m = scene->mMaterials[mesh->mMaterialIndex];
+        auto dir = QFileInfo(filePath).absoluteDir().absolutePath();
 
-            auto meshMat = MaterialHelper::createMaterial(m,dir);
-            if(!!meshMat)
-                node->setMaterial(meshMat);
-        }
+        auto meshMat = MaterialHelper::createMaterial(m,dir);
+        if(!!meshMat)
+            node->setMaterial(meshMat);
+
         return node;
     }
 

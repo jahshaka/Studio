@@ -115,9 +115,9 @@ public:
 
     void createHandleShader() {
         QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-        vshader->compileSourceFile("app/shaders/gizmo.vert");
+        vshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"));
         QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-        fshader->compileSourceFile("app/shaders/gizmo.frag");
+        fshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.frag"));
 
         handleShader = new QOpenGLShaderProgram;
         handleShader->addShader(vshader);

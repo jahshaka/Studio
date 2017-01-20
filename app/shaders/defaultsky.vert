@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #version 150 core
 
-attribute vec3 a_pos;
+in vec3 a_pos;
 //attribute vec2 a_texCoord;
 //attribute vec3 a_normal;
 
@@ -19,7 +19,7 @@ uniform mat4 u_viewMatrix;
 uniform mat4 u_projMatrix;
 uniform mat4 u_worldMatrix;
 
-varying vec3 v_worldNormal;
+out vec3 v_worldNormal;
 
 vec3 reflect(vec3 I, vec3 N) {
     return I - 2.0 * dot(N, I) * N;

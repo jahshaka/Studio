@@ -9,10 +9,12 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-attribute vec3 a_pos;
-attribute vec2 a_texCoord;
+#version 150 core
 
-varying vec2 v_texCoord;
+in vec3 a_pos;
+in vec2 a_texCoord;
+
+out vec2 v_texCoord;
 
 void main()
 {

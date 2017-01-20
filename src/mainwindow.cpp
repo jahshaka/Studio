@@ -241,7 +241,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     dlight->setName("Directional Lamp");
     dlight->pos = QVector3D(0, 10, 0);
     dlight->intensity = 1;
-    dlight->icon = iris::Texture2D::load("app/icons/light.png");
+    dlight->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/light.png"));
 
     auto plight = iris::LightNode::create();
     plight->setLightType(iris::LightType::Point);
@@ -249,7 +249,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     plight->setName("Point Lamp");
     plight->pos = QVector3D(-3, 4, 0);
     plight->intensity = 1;
-    plight->icon = iris::Texture2D::load("app/icons/bulb.png");
+    plight->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
 
     // fog params
     scene->fogColor = QColor(255, 255, 255, 255);
@@ -693,7 +693,7 @@ void MainWindow::addPointLight()
 {
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Point);
-    node->icon = iris::Texture2D::load("app/icons/bulb.png");
+    node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
     node->intensity = 1.0f;
     node->distance = 40.0f;
 
@@ -704,7 +704,7 @@ void MainWindow::addSpotLight()
 {
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Spot);
-    node->icon = iris::Texture2D::load("app/icons/bulb.png");
+    node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
 
     addNodeToScene(node);
 }
@@ -714,7 +714,7 @@ void MainWindow::addDirectionalLight()
 {
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Directional);
-    node->icon = iris::Texture2D::load("app/icons/bulb.png");
+    node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
 
 
     addNodeToScene(node);

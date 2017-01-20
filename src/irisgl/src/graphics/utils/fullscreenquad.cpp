@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "../mesh.h"
 #include "../graphicshelper.h"
 #include "../vertexlayout.h"
+#include "../../core/irisutils.h"
 #include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLShaderProgram>
 
@@ -50,7 +51,9 @@ FullScreenQuad::FullScreenQuad()
     mesh = new iris::Mesh(data.data(),data.size()*sizeof(float),6,layout);
 
     //todo: inline shader in code
-    shader = GraphicsHelper::loadShader("app/shaders/fullscreen.vert","app/shaders/fullscreen.frag");
+    shader = GraphicsHelper::loadShader(
+                IrisUtils::getAbsoluteAssetPath("app/shaders/fullscreen.vert"),
+                IrisUtils::getAbsoluteAssetPath("app/shaders/fullscreen.frag"));
 }
 
 FullScreenQuad::~FullScreenQuad()

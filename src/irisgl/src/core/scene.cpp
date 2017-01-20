@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "../scenegraph/cameranode.h"
 #include "../graphics/mesh.h"
 #include "../materials/defaultskymaterial.h"
+#include "irisutils.h"
 
 namespace iris
 {
@@ -26,7 +27,7 @@ Scene::Scene()
     // rootNode->setScene(this->sharedFromThis());
 
     // todo: move this to ui code
-    skyMesh = Mesh::loadMesh("app/content/primitives/sky.obj");
+    skyMesh = Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/sky.obj"));
     // skyTexture = Texture2D::load("app/content/skies/default.png");
     skyMaterial = DefaultSkyMaterial::create();
     skyColor = QColor(255, 255, 255, 255);
