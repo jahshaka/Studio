@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #ifndef BILLBOARD_H
 #define BILLBOARD_H
 
+#include <qopengl.h>
+
 class QOpenGLFunctions_3_2_Core;
 class QOpenGLBuffer;
 class QOpenGLShaderProgram;
@@ -23,6 +25,7 @@ class Billboard
 {
     friend class ForwardRenderer;
 
+    GLuint vao;
     QOpenGLBuffer* vbo;
     QOpenGLShaderProgram* program;
 

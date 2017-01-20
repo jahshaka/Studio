@@ -16,6 +16,7 @@ For more information see the LICENSE file
 
 #include "../irisgl/src/irisgl.h"
 #include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/core/irisutils.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 
 enum class AxisHandle
@@ -69,7 +70,7 @@ public:
 
     GizmoHandle(const QString& objPath, const QString& name) {
         gizmoHandle = iris::MeshNode::create();
-        gizmoHandle->setMesh(objPath);
+        gizmoHandle->setMesh(IrisUtils::getAbsoluteAssetPath(objPath));
         gizmoHandle->setName(name);
     }
 

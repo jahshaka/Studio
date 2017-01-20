@@ -11,10 +11,10 @@ For more information see the LICENSE file
 
 #version 150
 
-attribute vec3 a_pos;
-attribute vec2 a_texCoord;
-attribute vec3 a_normal;
-attribute vec3 a_tangent;
+in vec3 a_pos;
+in vec2 a_texCoord;
+in vec3 a_normal;
+in vec3 a_tangent;
 
 uniform mat4 matrix;
 uniform mat4 u_viewMatrix;
@@ -23,10 +23,10 @@ uniform mat4 u_worldMatrix;
 uniform mat3 u_normalMatrix;
 uniform float u_textureScale;
 
-varying vec2 v_texCoord;
-varying vec3 v_normal;
-varying vec3 v_worldPos;
-varying mat3 v_tanToWorld;//transforms from tangent space to world space
+out vec2 v_texCoord;
+out vec3 v_normal;
+out vec3 v_worldPos;
+out mat3 v_tanToWorld;//transforms from tangent space to world space
 
 void main()
 {

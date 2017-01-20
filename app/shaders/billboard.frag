@@ -15,29 +15,14 @@ uniform sampler2D tex;
 uniform bool useTexture;
 uniform vec4 color;
 
-varying vec2 v_texCoord;
+in vec2 v_texCoord;
+
+out vec4 fragColor;
 
 void main()
 {
-    /*
-    if(useTexture)
-    {
-        vec4 color = texture( tex, v_texCoord ).rgba;
-        if(color.a<0.1f)
-            discard;
-
-        color.a = 1.0;
-        gl_FragColor = color;
-    }
-    else
-        gl_FragColor = color;
-    */
-
     vec4 color = texture( tex, v_texCoord ).rgba;
-    // if(color.a == 0.0f)
-    //     discard;
 
-    // color.a = 1.0;
-    gl_FragColor = color;
-    //gl_FragColor = vec4(1.0,1.0,1.0,1.0);
+    //color.a = 1.0;
+    fragColor = color;
 }

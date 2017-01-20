@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "../graphics/texture2d.h"
 #include "../materials/defaultmaterial.h"
 #include "../core/scene.h"
+#include "../core/irisutils.h"
 #include <QFile>
 #include <QTextStream>
 
@@ -32,11 +33,10 @@ DefaultMaterial::DefaultMaterial()
     setTextureCount(4);
 
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile("app/shaders/simple.vert");
+    vshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/simple.vert"));
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile("app/shaders/simple.frag");
-
+    fshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/simple.frag"));
 
 
     program = new QOpenGLShaderProgram;

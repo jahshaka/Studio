@@ -14,18 +14,22 @@ For more information see the LICENSE file
 #include <qopengl.h>
 #include <QOpenGLShader>
 #include <QOpenGLBuffer>
+#include "../core/irisutils.h"
 
 namespace iris
 {
 
 Billboard::Billboard(QOpenGLFunctions_3_2_Core* gl,float size)
 {
+    gl->glGenVertexArrays(1,&vao);
     //todo: write shaders in script
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile("app/shaders/billboard.vert");
+    vshader->compileSourceFile(
+                IrisUtils::getAbsoluteAssetPath("app/shaders/billboard.vert"));
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile("app/shaders/billboard.frag");
+    fshader->compileSourceFile(
+                IrisUtils::getAbsoluteAssetPath("app/shaders/billboard.frag"));
 
     program = new QOpenGLShaderProgram;
     program->addShader(vshader);
@@ -68,6 +72,7 @@ Billboard::Billboard(QOpenGLFunctions_3_2_Core* gl,float size)
 
 void Billboard::draw(QOpenGLFunctions_3_2_Core* gl)
 {
+    gl->glBindVertexArray(vao);
     vbo->bind();
 
     auto stride = (3+2) * sizeof(GLfloat);
@@ -78,7 +83,9 @@ void Billboard::draw(QOpenGLFunctions_3_2_Core* gl)
     program->enableAttributeArray(1);
     program->setAttributeBuffer(1, GL_FLOAT, 3 * sizeof(GLfloat), 2, stride);
 
-    gl->glDrawArrays(GL_TRIANGLES,0,6);\
+    gl->glDrawArrays(GL_TRIANGLES,0,6);
+
+    gl->glBindVertexArray(0);
 
 }
 

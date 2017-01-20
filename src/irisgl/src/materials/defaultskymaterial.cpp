@@ -10,14 +10,15 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "defaultskymaterial.h"
-
+#include "../core/irisutils.h"
 
 namespace iris
 {
 
 DefaultSkyMaterial::DefaultSkyMaterial()
 {
-    createProgramFromShaderSource("app/shaders/defaultsky.vert","app/shaders/defaultsky.frag");
+    createProgramFromShaderSource(IrisUtils::getAbsoluteAssetPath("app/shaders/defaultsky.vert"),
+                                  IrisUtils::getAbsoluteAssetPath("app/shaders/defaultsky.frag"));
     setTextureCount(1);
 
     color = QColor(255,255,255,255);

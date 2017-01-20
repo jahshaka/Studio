@@ -19,7 +19,8 @@ uniform sampler2D texture;
 uniform bool useTexture;
 uniform vec4 color;
 
-varying vec3 v_worldNormal;
+in vec3 v_worldNormal;
+out vec4 fragColor;
 
 vec2 envMapEquirect(vec3 wcNormal, float flipEnvMap) {
     float y = clamp( -1.0 * wcNormal.y * 0.5 + 0.5,0,1 );
@@ -35,8 +36,8 @@ vec2 envMapEquirect(vec3 wcNormal) {
 void main()
 {
     if(useTexture)
-        gl_FragColor = color*texture2D(texture, envMapEquirect(normalize(v_worldNormal)));
+        fragColor = color*texture2D(texture, envMapEquirect(normalize(v_worldNormal)));
     else
-        gl_FragColor = color;
+        fragColor = color;
     //gl_FragColor = vec4(1,1,1,1);
 }

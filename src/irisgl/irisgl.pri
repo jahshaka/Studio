@@ -42,7 +42,8 @@ HEADERS += \
     $$PWD/src/animation/keyframeset.h \
     $$PWD/src/math/bezierhelper.h \
     $$PWD/src/animation/animation.h \
-    $$PWD/src/materials/materialhelper.h
+    $$PWD/src/materials/materialhelper.h \
+    $$PWD/src/core/irisutils.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)

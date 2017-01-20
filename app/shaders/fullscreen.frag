@@ -9,13 +9,16 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-varying vec2 v_texCoord;
+#version 150 core
+
+in vec2 v_texCoord;
 
 uniform sampler2D texture;
+out vec4 fragColor;
 
 void main()
 {
 	vec4 col = texture2D(texture,v_texCoord);
 
-    gl_FragColor = col;
+    fragColor = col;
 }

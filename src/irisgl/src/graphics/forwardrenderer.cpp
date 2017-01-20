@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "utils/fullscreenquad.h"
 #include "texture2d.h"
 #include "../vr/vrdevice.h"
+#include "../core/irisutils.h"
 
 #include <QOpenGLContext>
 #include "../libovr/Include/OVR_CAPI_GL.h"
@@ -345,10 +346,10 @@ void ForwardRenderer::renderSelectedNode(RenderData* renderData,QSharedPointer<S
 void ForwardRenderer::createLineShader()
 {
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile("app/shaders/color.vert");
+    vshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/color.vert"));
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile("app/shaders/color.frag");
+    fshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/color.frag"));
 
 
     lineShader = new QOpenGLShaderProgram;

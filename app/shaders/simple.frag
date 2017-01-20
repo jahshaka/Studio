@@ -12,6 +12,7 @@ For more information see the LICENSE file
 //http://www.tomdalling.com/blog/modern-opengl/07-more-lighting-ambient-specular-attenuation-gamma/
 
 #version 150
+
 #define PI 3.14159265359
 #define PI2 6.28318530718
 #define RECIPROCAL_PI2 0.15915494
@@ -30,10 +31,10 @@ uniform sampler2D u_reflectionTexture;
 uniform float u_reflectionInfluence;
 uniform bool u_useReflectionTex;
 
-varying vec2 v_texCoord;
-varying vec3 v_normal;
-varying vec3 v_worldPos;
-varying mat3 v_tanToWorld;
+in vec2 v_texCoord;
+in vec3 v_normal;
+in vec3 v_worldPos;
+in mat3 v_tanToWorld;
 
 const int MAX_LIGHTS = 8;
 const int TYPE_POINT = 0;
@@ -77,6 +78,8 @@ struct Fog
 };
 
 uniform Fog u_fogData;
+
+out vec4 fragColor;
 
 vec2 envMapEquirect(vec3 wcNormal, float flipEnvMap) {
     float y = clamp( -1.0 * wcNormal.y * 0.5 + 0.5,0,1 );
@@ -195,7 +198,10 @@ void main()
         finalColor = mix(finalColor,u_fogData.color.rgb,fogFactor);
     }
 
+    /*
     gl_FragColor = vec4(finalColor
                 ,
                 1.0);
+                */
+    fragColor = vec4(finalColor,1.0);
 }
