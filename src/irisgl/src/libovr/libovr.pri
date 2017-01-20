@@ -19,5 +19,10 @@ SOURCES += \
     LIBS += -ldl
 }
 
+gcc{
+    QMAKE_CFLAGS_WARN_ON += -Wattributes
+    QMAKE_CXXFLAGS_WARN_ON = $$QMAKE_CFLAGS_WARN_ON
+}
+
 INCLUDEPATH += $$PWD/Include
 CONFIG += c++14

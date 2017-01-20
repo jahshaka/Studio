@@ -1,9 +1,14 @@
 CONFIG += exceptions rtti
 #QT_PRIVATE += zlib-private
 
-gcc: {
-    QMAKE_CFLAGS_WARN_ON += -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable -Wno-deprecated-declarations -Wno-unused-function -Wno-reorder
+gcc {
+    QMAKE_CFLAGS_WARN_ON += -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable \
+                            -Wno-deprecated-declarations -Wno-unused-function -Wextra -Wtype-limits \
+                            -Wunused-but-set-variable
+
     QMAKE_CXXFLAGS_WARN_ON = $$QMAKE_CFLAGS_WARN_ON
+
+    #QMAKE_CFLAGS_WARN_ON += -Wincompatible-pointer-types
 }
 
 DEFINES += ASSIMP_BUILD_NO_C4D_IMPORTER ASSIMP_BUILD_NO_COMPRESSED_IFC ASSIMP_BUILD_NO_Q3BSP_IMPORTER \
