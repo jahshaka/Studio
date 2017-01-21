@@ -32,6 +32,8 @@ SceneNode::SceneNode():
     duplicable = false;
     removable = true;
 
+    pickable = true;
+
     localTransform.setToIdentity();
     globalTransform.setToIdentity();
 

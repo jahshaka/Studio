@@ -224,6 +224,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/models/ground.obj"));
     node->setName("Ground");
+    node->setPickable(false);
 
     auto m = iris::DefaultMaterial::create();
     node->setMaterial(m);

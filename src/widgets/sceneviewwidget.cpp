@@ -406,7 +406,7 @@ void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& scen
                                      const QVector3D& segEnd,
                                      QList<PickingResult>& hitList)
 {
-    if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+    if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh && sceneNode->isPickable()) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
         auto triMesh = meshNode->getMesh()->getTriMesh();
 

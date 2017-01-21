@@ -58,6 +58,8 @@ public:
     bool visible;
     bool removable;
 
+    bool pickable;
+
     friend class Renderer;
     friend class Scene;
 
@@ -90,6 +92,16 @@ public:
 
     bool isRemovable() {
         return removable;
+    }
+
+    void setPickable(bool canPick)
+    {
+        pickable = canPick;
+    }
+
+    bool isPickable()
+    {
+        return pickable;
     }
 
     SceneNodeType getSceneNodeType();
