@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/">
+        <file>app/models/gear.obj</file>
+        <file>app/models/head.obj</file>
+        <file>app/models/head.png</file>
+        <file>app/models/rot_circle.obj</file>
+        <file>app/models/scale_arrow.obj</file>
+        <file>app/models/trans_arrow.obj</file>
+        <file>app/models/cube.obj</file>
+    </qresource>
+</RCC>

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   id="Layer_1"
+   data-name="Layer 1"
+   viewBox="0 0 11.69 10.81"
+   version="1.1"
+   inkscape:version="0.91 r13725"
+   sodipodi:docname="down-arrow.svg">
+  <metadata
+     id="metadata3349">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <sodipodi:namedview
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1"
+     objecttolerance="10"
+     gridtolerance="10"
+     guidetolerance="10"
+     inkscape:pageopacity="0"
+     inkscape:pageshadow="2"
+     inkscape:window-width="859"
+     inkscape:window-height="695"
+     id="namedview3347"
+     showgrid="false"
+     inkscape:zoom="27.53857"
+     inkscape:cx="5.343145"
+     inkscape:cy="3.9245624"
+     inkscape:window-x="2354"
+     inkscape:window-y="122"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="Layer_1" />
+  <defs
+     id="defs3337">
+    <style
+       id="style3339">.cls-1{fill:none;isolation:isolate;}</style>
+  </defs>
+  <title
+     id="title3341">down-arrow</title>
+  <image
+     width="7.612977"
+     height="5.7888465"
+     xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAARCAYAAAA7bUf6AAAACXBIWXMAAA85AAAPOQE6gPqvAAAAZUlEQVQ4T73MiQnAIAxA0YzSERzBUdysIzpCSsBAG81BPYQvBJIHiAiz0Ze9JaPMCL07cCCjm7oUKT8gBhIj0IYahD7AciQKdYBEPGgIbEM0SAU0REImsB15QybgIdTVMveOIKEe9E+I/W1ECIMAAAAASUVORK5CYII="
+     id="image3343"
+     x="2.0335116"
+     y="2.5055766" />
+  <path
+     class="cls-1"
+     id="path3345"
+     d=""
+     inkscape:connector-curvature="0"
+     style="isolation:isolate;fill:none" />
+</svg>

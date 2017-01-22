@@ -1,0 +1,69 @@
+<RCC>
+    <qresource prefix="/">
+        <file>app/icons/add.svg</file>
+        <file>app/icons/add-folder-button.svg</file>
+        <file>app/icons/businessman-talking-about-data-analysis.svg</file>
+        <file>app/icons/cancel.svg</file>
+        <file>app/icons/close tree icon.svg</file>
+        <file>app/icons/color-palette.svg</file>
+        <file>app/icons/document.svg</file>
+        <file>app/icons/down-arrow.svg</file>
+        <file>app/icons/educational-video.svg</file>
+        <file>app/icons/end.svg</file>
+        <file>app/icons/expand-arrows.svg</file>
+        <file>app/icons/expand-button.svg</file>
+        <file>app/icons/fastforward.svg</file>
+        <file>app/icons/fastreverse.svg</file>
+        <file>app/icons/file-in-folder.svg</file>
+        <file>app/icons/folder-settings-button (1).svg</file>
+        <file>app/icons/folder-settings-button.svg</file>
+        <file>app/icons/grid.png</file>
+        <file>app/icons/jahplayer-icon.png</file>
+        <file>app/icons/jahplayer-logo.jpg</file>
+        <file>app/icons/keyboard-right-arrow-button.svg</file>
+        <file>app/icons/light.svg</file>
+        <file>app/icons/logo01.png</file>
+        <file>app/icons/logo02.png</file>
+        <file>app/icons/logo03.svg</file>
+        <file>app/icons/matrix.png</file>
+        <file>app/icons/open tree icon.svg</file>
+        <file>app/icons/open-file-button.svg</file>
+        <file>app/icons/people.svg</file>
+        <file>app/icons/photo-camera.svg</file>
+        <file>app/icons/play.svg</file>
+        <file>app/icons/redo.svg</file>
+        <file>app/icons/responsive-website-design-on-monitor-screen.svg</file>
+        <file>app/icons/reverse.svg</file>
+        <file>app/icons/rotate-to-right.svg</file>
+        <file>app/icons/save-file-button.svg</file>
+        <file>app/icons/sceneobject.svg</file>
+        <file>app/icons/square.svg</file>
+        <file>app/icons/start.svg</file>
+        <file>app/icons/stop.svg</file>
+        <file>app/icons/tranlate arrow.svg</file>
+        <file>app/icons/translate-arrow.svg</file>
+        <file>app/icons/undo.svg</file>
+        <file>app/icons/up-arrow.svg</file>
+        <file>app/icons/upload-folder.svg</file>
+        <file>app/icons/video-camera.svg</file>
+        <file>app/icons/world.svg</file>
+        <file>app/icons/bulb.png</file>
+        <file>app/icons/expand-button.png</file>
+        <file>app/icons/delete.png</file>
+        <file>app/icons/close.png</file>
+        <file>app/icons/error.svg</file>
+        <file>app/icons/add-2.svg</file>
+        <file>app/icons/import.svg</file>
+        <file>app/icons/export.svg</file>
+        <file>app/icons/drop-down-arrow.svg</file>
+        <file>app/icons/play-arrow.svg</file>
+        <file>app/icons/up-arrow-hover.svg</file>
+        <file>app/icons/down-arrow-hover.svg</file>
+        <file>app/icons/up-arrow-.svg</file>
+        <file>app/icons/down-arrow-.svg</file>
+        <file>app/icons/chevron-arrow-down.svg</file>
+        <file>app/icons/chevron-arrow-up.svg</file>
+        <file>app/icons/right-chevron.svg</file>
+        <file>app/icons/virtual-reality.svg</file>
+    </qresource>
+</RCC>

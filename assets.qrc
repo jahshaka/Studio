@@ -1,0 +1,77 @@
+<RCC>
+    <qresource prefix="/">
+        <file>assets/models/monkey.obj</file>
+        <file>assets/textures/checker.jpg</file>
+        <file>assets/textures/chessboard.png</file>
+        <file>assets/models/jet.obj</file>
+        <file>assets/shaders/flat.frag</file>
+        <file>assets/shaders/flat.vert</file>
+        <file>assets/shaders/endless_plane.frag</file>
+        <file>assets/shaders/endless_plane.vert</file>
+        <file>assets/shaders/color.frag</file>
+        <file>assets/shaders/color.vert</file>
+        <file>assets/models/rot_arrow.obj</file>
+        <file>assets/models/scale_arrow.obj</file>
+        <file>assets/models/trans_arrow.obj</file>
+        <file>assets/shaders/gizmo.frag</file>
+        <file>assets/shaders/gizmo.vert</file>
+        <file>assets/shaders/billboard.frag</file>
+        <file>assets/shaders/billboard.vert</file>
+        <file>assets/textures/bulb.png</file>
+        <file>assets/textures/defaultgrid.png</file>
+        <file>assets/models/advancedgizmo/trans_arrow.obj</file>
+        <file>assets/models/advancedgizmo/rot_circle.obj</file>
+        <file>assets/models/advancedgizmo/scale_arrow.obj</file>
+        <file>assets/shaders/equisky.frag</file>
+        <file>assets/shaders/equisky.vert</file>
+        <file>assets/shaders/reflective_material.frag</file>
+        <file>assets/shaders/reflective_material.vert</file>
+        <file>assets/shaders/refractive_material.frag</file>
+        <file>assets/shaders/refractive_material.vert</file>
+        <file>assets/models/gear.obj</file>
+        <file>assets/models/head.obj</file>
+        <file>assets/models/head.png</file>
+        <file>assets/shaders/advanced.frag</file>
+        <file>assets/shaders/advanced.vert</file>
+        <file>assets/textures/plaid.jpg</file>
+        <file>assets/skies/default.png</file>
+        <file>assets/textures/info_graphic.jpg</file>
+        <file>assets/textures/Abstract Pattern.jpg</file>
+        <file>assets/textures/Age Brick Wall.jpg</file>
+        <file>assets/textures/Ancient Floor Brick.jpg</file>
+        <file>assets/textures/Artistic Pattern.png</file>
+        <file>assets/textures/bamboo.jpg</file>
+        <file>assets/textures/bark_wood.jpg</file>
+        <file>assets/textures/brick_wall.jpg</file>
+        <file>assets/textures/chboard.png</file>
+        <file>assets/textures/floral.jpg</file>
+        <file>assets/textures/Grass.png</file>
+        <file>assets/textures/ground board.jpg</file>
+        <file>assets/textures/old_tile.png</file>
+        <file>assets/textures/Prawny Pattern.png</file>
+        <file>assets/textures/Purple Swirls Pattern.jpg</file>
+        <file>assets/textures/Red Brick Wall.jpg</file>
+        <file>assets/textures/rusted iron.jpg</file>
+        <file>assets/textures/wall-pattern.jpg</file>
+        <file>assets/textures/Ancient Floor Brick_NRM.png</file>
+        <file>assets/textures/Ancient Floor Brick_SPEC.png</file>
+        <file>assets/textures/bamboo_DISP.png</file>
+        <file>assets/textures/bamboo_NRM.png</file>
+        <file>assets/textures/bamboo_SPEC.png</file>
+        <file>assets/textures/bark_wood_NRM.jpg</file>
+        <file>assets/textures/bark_wood_SPEC.jpg</file>
+        <file>assets/textures/brick_wall_NRM.jpg</file>
+        <file>assets/textures/brick_wall_SPEC.jpg</file>
+        <file>assets/textures/brickwall_normal.jpg</file>
+        <file>assets/textures/Red Brick Wall_NRM.jpg</file>
+        <file>assets/textures/Red Brick Wall_SPEC.jpg</file>
+        <file>assets/textures/wall-pattern_NRM.jpg</file>
+        <file>assets/textures/wall-pattern_SPEC.jpg</file>
+        <file>assets/skies/vp_sky_v2_002.jpg</file>
+        <file>assets/skies/vp_sky_v2_032.jpg</file>
+        <file>assets/skies/vp_sky_v2_033.jpg</file>
+        <file>assets/skies/vp_sky_v3_007.jpg</file>
+        <file>assets/skies/vp_sky_v3_015.jpg</file>
+        <file>assets/skies/vp_sky_v3_047.jpg</file>
+    </qresource>
+</RCC>
