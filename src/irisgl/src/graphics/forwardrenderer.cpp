@@ -166,7 +166,8 @@ void ForwardRenderer::renderShadows(RenderData* renderData,QSharedPointer<SceneN
                 shadowShader->setUniformValue("u_worldMatrix", node->globalTransform);
                 shadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
 
-                meshNode->mesh->draw(gl, shadowShader);
+                if(meshNode->mesh != nullptr)
+                    meshNode->mesh->draw(gl, shadowShader);
             }
         }
 
