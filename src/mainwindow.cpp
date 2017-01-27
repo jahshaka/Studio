@@ -223,6 +223,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     // second node
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/models/ground.obj"));
+    node->scale = QVector3D(.5, .5, .5);
     node->setName("Ground");
     node->setPickable(false);
 
@@ -240,13 +241,14 @@ iris::ScenePtr MainWindow::createDefaultScene()
     dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
     dlight->setName("Directional Lamp");
-    dlight->pos = QVector3D(0, 10, 0);
+    dlight->pos = QVector3D(4, 4, 0);
+    dlight->rot = QQuaternion::fromEulerAngles(15, 0, 0);
     dlight->intensity = 1;
     dlight->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/light.png"));
 
     auto plight = iris::LightNode::create();
     plight->setLightType(iris::LightType::Point);
-    scene->rootNode->addChild(plight);
+     scene->rootNode->addChild(plight);
     plight->setName("Point Lamp");
     plight->pos = QVector3D(-3, 4, 0);
     plight->intensity = 1;

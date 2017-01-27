@@ -408,25 +408,29 @@ void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& scen
 {
     if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh && sceneNode->isPickable()) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
-        auto triMesh = meshNode->getMesh()->getTriMesh();
+        auto mesh = meshNode->getMesh();
+        if(mesh != nullptr)
+        {
+            auto triMesh = meshNode->getMesh()->getTriMesh();
 
-        // transform segment to local space
-        auto invTransform = meshNode->globalTransform.inverted();
-        auto a = invTransform * segStart;
-        auto b = invTransform * segEnd;
+            // transform segment to local space
+            auto invTransform = meshNode->globalTransform.inverted();
+            auto a = invTransform * segStart;
+            auto b = invTransform * segEnd;
 
-        QList<iris::TriangleIntersectionResult> results;
-        if (int resultCount = triMesh->getSegmentIntersections(a, b, results)) {
-            for (auto triResult : results) {
-                // convert hit to world space
-                auto hitPoint = meshNode->globalTransform * triResult.hitPoint;
+            QList<iris::TriangleIntersectionResult> results;
+            if (int resultCount = triMesh->getSegmentIntersections(a, b, results)) {
+                for (auto triResult : results) {
+                    // convert hit to world space
+                    auto hitPoint = meshNode->globalTransform * triResult.hitPoint;
 
-                PickingResult pick;
-                pick.hitNode = sceneNode;
-                pick.hitPoint = hitPoint;
-                pick.distanceFromCameraSqrd = (hitPoint - editorCam->getGlobalPosition()).lengthSquared();
+                    PickingResult pick;
+                    pick.hitNode = sceneNode;
+                    pick.hitPoint = hitPoint;
+                    pick.distanceFromCameraSqrd = (hitPoint - editorCam->getGlobalPosition()).lengthSquared();
 
-                hitList.append(pick);
+                    hitList.append(pick);
+                }
             }
         }
     }

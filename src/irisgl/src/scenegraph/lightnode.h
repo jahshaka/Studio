@@ -29,8 +29,8 @@ enum class LightType:int
 class LightNode:public SceneNode
 {
 
-    QVector3D lightDir;
 public:
+    QVector3D lightDir;
 
     LightType lightType;
 
@@ -75,11 +75,12 @@ public:
 
     QVector3D getLightDir()
     {
-        QVector4D defaultDir(0,-1,0,0);
+        QVector4D defaultDir(-1,-1,-1,0);
 
         QVector4D dir = (globalTransform * defaultDir);
 
         return dir.toVector3D();
+//        return lightDir;
 
     }
 

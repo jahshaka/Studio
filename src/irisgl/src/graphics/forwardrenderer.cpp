@@ -48,9 +48,38 @@ ForwardRenderer::ForwardRenderer(QOpenGLFunctions_3_2_Core* gl)
     billboard = new Billboard(gl);
     fsQuad = new FullScreenQuad();
     createLineShader();
+    createShadowShader();
+
+    generateShadowBuffer(4096);
 
     vrDevice = new VrDevice(gl);
     vrDevice->initialize();
+}
+
+void ForwardRenderer::generateShadowBuffer(GLuint size)
+{
+    gl->glGenFramebuffers(1, &shadowFBO);
+
+    gl->glGenTextures(1, &shadowDepthMap);
+    gl->glBindTexture(GL_TEXTURE_2D, shadowDepthMap);
+    gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32,
+                     size, size,
+                     0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
+    gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthMap, 0);
+
+    gl->glDrawBuffer(GL_NONE);
+    gl->glReadBuffer(GL_NONE);
+
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // check status at end
 }
 
 QSharedPointer<ForwardRenderer> ForwardRenderer::create(QOpenGLFunctions_3_2_Core* gl)
@@ -83,7 +112,20 @@ void ForwardRenderer::renderScene(QOpenGLContext* ctx,
 
     //renderData->gl = gl;
 
-    renderNode(renderData,scene->rootNode);
+    gl->glViewport(0, 0, 4096, 4096);
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
+    gl->glClear(GL_DEPTH_BUFFER_BIT);
+    gl->glCullFace(GL_FRONT);
+    renderShadows(renderData, scene->rootNode);
+    gl->glCullFace(GL_BACK);
+
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+
+    gl->glViewport(0, 0, vp->width, vp->height);
+    gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    renderNode(renderData, scene->rootNode);
 
     // STEP 2: RENDER SKY
     renderSky(renderData);
@@ -95,6 +137,46 @@ void ForwardRenderer::renderScene(QOpenGLContext* ctx,
 
     // STEP 5: RENDER SELECTED OBJECT
     if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
+}
+
+void ForwardRenderer::renderShadows(RenderData* renderData,QSharedPointer<SceneNode> node)
+{
+    if (node->sceneNodeType == SceneNodeType::Mesh && node->isVisible()) {
+
+        shadowShader->bind();
+
+        QMatrix4x4 lightView, lightProjection;
+
+        for (auto light : scene->lights) {
+            if (light->lightType == iris::LightType::Directional && true) { // cast shadows
+                auto meshNode = node.staticCast<MeshNode>();
+
+                lightProjection.ortho(-128.0f, 128.0f, -64.0f, 64.0f, -64.0f, 128.0f);
+
+                lightView.lookAt(QVector3D(0, 0, 0),
+                                 light->getLightDir(),
+                                 QVector3D(0.0f, 1.0f, 0.0f));
+
+                QMatrix4x4 lightSpaceMatrix = lightProjection * lightView;
+
+
+                gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, shadowFBO);
+                gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthMap, 0);
+
+                shadowShader->setUniformValue("u_worldMatrix", node->globalTransform);
+                shadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
+
+                if(meshNode->mesh != nullptr)
+                    meshNode->mesh->draw(gl, shadowShader);
+            }
+        }
+
+        shadowShader->release();
+    }
+
+    for (auto childNode : node->children) {
+        renderShadows(renderData, childNode);
+    }
 }
 
 void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
@@ -115,7 +197,6 @@ void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
 
         auto proj = vrDevice->getEyeProjMatrix(eye,0.1f,1000.0f);
         renderData->projMatrix = proj;
-
 
         //STEP 1: RENDER SCENE
         renderData->scene = scene;
@@ -185,6 +266,26 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
 
         //program->setUniformValue("u_textureScale",1.0f);
 
+        program->setUniformValue("u_shadowMap", 2);
+
+        gl->glActiveTexture(GL_TEXTURE2);
+        gl->glBindTexture(GL_TEXTURE_2D, shadowDepthMap);
+
+        QMatrix4x4 lightView, lightProjection;
+
+        for (auto light : scene->lights) {
+            if (light->lightType == iris::LightType::Directional && true) { // cast shadows
+                lightProjection.ortho(-128.0f, 128.0f, -64.0f, 64.0f, -64.0f, 128.0f);
+
+                lightView.lookAt(QVector3D(0, 0, 0),
+                                 light->getLightDir(),
+                                 QVector3D(0.0f, 1.0f, 0.0f));
+
+                QMatrix4x4 lightSpaceMatrix = lightProjection * lightView;
+                program->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
+            }
+        }
+
         auto lightCount = renderData->scene->lights.size();
         mat->program->setUniformValue("u_lightCount",lightCount);
 
@@ -199,7 +300,6 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
                 mat->setUniformValue(lightPrefix+"color", QColor(0,0,0));
                 continue;
             }
-
 
             mat->setUniformValue(lightPrefix+"type", (int)light->lightType);
             mat->setUniformValue(lightPrefix+"position", light->globalTransform.column(3).toVector3D());
@@ -360,6 +460,23 @@ void ForwardRenderer::createLineShader()
 
     lineShader->bind();
     lineShader->setUniformValue("color",QColor(240,240,255,255));
+}
+
+void ForwardRenderer::createShadowShader()
+{
+    QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
+    vshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/shadow_map.vert"));
+
+    QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
+    fshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/shadow_map.frag"));
+
+    shadowShader = new QOpenGLShaderProgram;
+    shadowShader->addShader(vshader);
+    shadowShader->addShader(fshader);
+
+    shadowShader->link();
+
+    shadowShader->bind();
 }
 
 ForwardRenderer::~ForwardRenderer()

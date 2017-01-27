@@ -41,6 +41,52 @@ const int TYPE_POINT = 0;
 const int TYPE_DIRECTIONAL = 1;
 const int TYPE_SPOT = 2;
 
+in vec4 FragPosLightSpace;
+uniform sampler2D u_shadowMap;
+
+float SampleShadowMap(sampler2D shadowMap, vec2 coords, float compare) {
+    return step(compare, texture(shadowMap, coords.xy).r);
+}
+
+float SampleShadowMapLinear(sampler2D shadowMap, vec2 coords, float compare, vec2 texelSize) {
+    vec2 pixelPos = coords / texelSize + vec2(0.5);
+    vec2 fracPart = fract(pixelPos);
+    vec2 startTexel = (pixelPos - fracPart) * texelSize;
+
+    float blTexel = SampleShadowMap(shadowMap, startTexel, compare);
+    float brTexel = SampleShadowMap(shadowMap, startTexel + vec2(texelSize.x, 0.0), compare);
+    float tlTexel = SampleShadowMap(shadowMap, startTexel + vec2(0.0, texelSize.y), compare);
+    float trTexel = SampleShadowMap(shadowMap, startTexel + texelSize, compare);
+
+    float mixA = mix(blTexel, tlTexel, fracPart.y);
+    float mixB = mix(brTexel, trTexel, fracPart.y);
+
+    return mix(mixA, mixB, fracPart.x);
+}
+
+float SampleShadowMapPCF(sampler2D shadowMap, vec2 coords, float compare, vec2 texelSize) {
+    float result = 0;
+
+    const float NUM_SAMPLES = 7.0;
+    const float SAMPLES_START = (NUM_SAMPLES - 1.0) / 2.0;
+
+    for(float y = -SAMPLES_START; y <= SAMPLES_START; y++) {
+        for(float x = -SAMPLES_START; x <= SAMPLES_START; x++) {
+            vec2 offset = vec2(x, y) * texelSize;
+            result += SampleShadowMapLinear(shadowMap, coords + offset, compare, texelSize);
+        }
+    }
+
+    return result / (NUM_SAMPLES * NUM_SAMPLES);
+}
+
+float CalcShadowMap(vec4 fragPosLightSpace) {
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    projCoords = projCoords * 0.5 + 0.5;
+    vec2 texelSize = 1.0 / textureSize(u_shadowMap, 0);
+    return SampleShadowMapPCF(u_shadowMap, projCoords.xy, projCoords.z, texelSize);
+}
+
 struct Light {
     int type;
     vec3 position;
@@ -178,9 +224,10 @@ void main()
     if(u_useSpecularTex)
         specular = specular * texture2D(u_specularTexture,v_texCoord).rgb;
 
+    float ShadowFactor = CalcShadowMap(FragPosLightSpace);
 
-    vec3 finalColor = col*(u_material.ambient+diffuse)+
-            (u_material.specular*specular);
+    vec3 finalColor = (u_material.ambient + ShadowFactor *
+                      (diffuse + (u_material.specular * specular))) * col;
 
     if(u_useReflectionTex)
     {
@@ -203,5 +250,5 @@ void main()
                 ,
                 1.0);
                 */
-    fragColor = vec4(finalColor,1.0);
+    fragColor = vec4(finalColor,1.0); // + CascadeIndicator;
 }

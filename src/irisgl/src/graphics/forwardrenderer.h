@@ -55,6 +55,7 @@ class ForwardRenderer
      */
     QSharedPointer<SceneNode> selectedSceneNode;
     QOpenGLShaderProgram* lineShader;
+    QOpenGLShaderProgram* shadowShader;
 
     VrDevice* vrDevice;
 
@@ -98,6 +99,13 @@ private:
 
 
     void createLineShader();
+
+    GLuint shadowFBO;
+    GLuint shadowDepthMap;
+
+    void createShadowShader();
+    void renderShadows(RenderData* renderData, QSharedPointer<SceneNode> node);
+    void generateShadowBuffer(GLuint size = 1024);
 
     //editor-specific
     iris::Billboard* billboard;

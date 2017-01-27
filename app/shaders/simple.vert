@@ -23,6 +23,9 @@ uniform mat4 u_worldMatrix;
 uniform mat3 u_normalMatrix;
 uniform float u_textureScale;
 
+uniform mat4 u_lightSpaceMatrix;
+out vec4 FragPosLightSpace;
+
 out vec2 v_texCoord;
 out vec3 v_normal;
 out vec3 v_worldPos;
@@ -41,6 +44,8 @@ void main()
     vec3 v_tangent = normalize((u_normalMatrix*a_tangent));
     //vec3 v_bitangent = cross(v_normal,v_tangent);
     vec3 v_bitangent = cross(v_tangent,v_normal);
+
+    FragPosLightSpace = u_lightSpaceMatrix * vec4(v_worldPos, 1.0);
 
     /*
       //actual world to tangent space
