@@ -148,7 +148,7 @@ void main()
     //normal mapping
     if(u_useNormalTex)
     {
-        vec3 texNorm = (texture2D(u_normalTexture,v_texCoord).xyz-0.5)*2;
+        vec3 texNorm = (texture(u_normalTexture,v_texCoord).xyz-0.5)*2;
         normal = normalize(v_tanToWorld*texNorm);
         //normal = mix(normal,vec3(0,0,0),u_normalIntensity);
     }
@@ -219,10 +219,10 @@ void main()
     vec3 col = u_material.diffuse;
 
     if(u_useDiffuseTex)
-        col = col * texture2D(u_diffuseTexture,v_texCoord).rgb;
+        col = col * texture(u_diffuseTexture,v_texCoord).rgb;
 
     if(u_useSpecularTex)
-        specular = specular * texture2D(u_specularTexture,v_texCoord).rgb;
+        specular = specular * texture(u_specularTexture,v_texCoord).rgb;
 
     float ShadowFactor = CalcShadowMap(FragPosLightSpace);
 
@@ -233,7 +233,7 @@ void main()
     {
         vec3 incidentRay = normalize(v_worldPos-u_eyePos);
         vec3 reflVec = reflect(incidentRay,normal);
-        vec3 reflCol = texture2D(u_reflectionTexture, envMapEquirect(normalize(reflVec))).rgb;
+        vec3 reflCol = texture(u_reflectionTexture, envMapEquirect(normalize(reflVec))).rgb;
 
         finalColor = mix(finalColor,reflCol,u_reflectionInfluence);
     }
