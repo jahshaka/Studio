@@ -9,11 +9,16 @@ class IrisUtils
 public:
     static QString getAbsoluteAssetPath(QString relToApp)
     {
-    #ifdef WIN32
-        relToApp = QStringLiteral("..")+QDir::separator()+relToApp;
+        QDir basePath = QDir(QCoreApplication::applicationDirPath());
+    #if defined(WIN32)
+        basePath.cdUp();
+    #elif defined(Q_OS_MAC)
+        basePath.cdUp();
+        basePath.cdUp();
+        basePath.cdUp();
     #endif
 
-        auto path = QDir::cleanPath(QCoreApplication::applicationDirPath() + QDir::separator() + relToApp);
+        auto path = QDir::cleanPath(basePath.absolutePath() + QDir::separator() + relToApp);
         return path;
     }
 };

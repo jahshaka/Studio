@@ -19,6 +19,7 @@ For more information see the LICENSE file
 
 #include "../io/materialpresetreader.h"
 #include "../core/materialpreset.h"
+#include "../irisgl/src/core/irisutils.h"
 
 #include "../mainwindow.h"
 
@@ -37,22 +38,6 @@ MaterialSets::MaterialSets(QWidget *parent) :
     ui->materialPresets->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->materialPresets->setSelectionMode(QAbstractItemView::SingleSelection);
 
-    /*
-    ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/abstractpattern.png"),"Earth"));
-    ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/agedbrickwall.png"),"Tornado"));
-    ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/ancientfloorbrick.png"),"Tornado"));
-    ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/bamboo.png"),"Tornado"));
-    ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/barkwood.png"),"Tornado"));
-    ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/brickwall.png"),"Tornado"));
-    ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/chboard.png"),"Tornado"));
-    ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/floralpattern.png"),"Tornado"));
-    //ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/cball.png"),"Tornado"));
-    //ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/grass.png"),"Tornado"));
-    ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/greenpattern.png"),"Tornado"));
-    ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/groundboard.png"),"Tornado"));
-    ui->materialPresets->addItem(new QListWidgetItem(QIcon(":/app/materials/info_graphic.png"),"Tornado"));
-    */
-
     connect(ui->materialPresets,SIGNAL(itemClicked(QListWidgetItem*)),this,SLOT(applyMaterialPreset(QListWidgetItem*)));
 
     loadPresets();
@@ -61,7 +46,7 @@ MaterialSets::MaterialSets(QWidget *parent) :
 
 void MaterialSets::loadPresets()
 {
-    auto dir = QDir("app/content/materials");
+    auto dir = QDir(IrisUtils::getAbsoluteAssetPath("app/content/materials"));
     auto files = dir.entryInfoList(QStringList(),QDir::Files);
 
     auto reader = new MaterialPresetReader();
