@@ -50,5 +50,5 @@ void main()
     //vec3 reflectionWorld = reflect(-wcEyeDir, normalize(worldNormal));
 
     //fragColor = textureCube(tex, envMapEquirect(reflectionWorld));
-    fragColor = texture2D(tex, envMapEquirect(normalize(worldNormal)));
+    fragColor = texture(tex, envMapEquirect(normalize(worldNormal)));
 }

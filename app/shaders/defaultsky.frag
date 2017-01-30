@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #define PI2 6.28318530718
 #define RECIPROCAL_PI2 0.15915494
 
-uniform sampler2D texture;
+uniform sampler2D tex;
 uniform bool useTexture;
 uniform vec4 color;
 
@@ -36,7 +36,7 @@ vec2 envMapEquirect(vec3 wcNormal) {
 void main()
 {
     if(useTexture)
-        fragColor = color*texture2D(texture, envMapEquirect(normalize(v_worldNormal)));
+        fragColor = color*texture(tex, envMapEquirect(normalize(v_worldNormal)));
     else
         fragColor = color;
     //gl_FragColor = vec4(1,1,1,1);
