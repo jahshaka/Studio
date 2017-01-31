@@ -22,8 +22,6 @@ For more information see the LICENSE file
 #include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLTexture>
 
-#include "GL/gl.h"
-
 #include "vertexlayout.h"
 #include "../geometry/trimesh.h"
 

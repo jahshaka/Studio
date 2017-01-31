@@ -328,6 +328,9 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
 
 void ForwardRenderer::renderSky(RenderData* renderData)
 {
+    if(scene->skyMesh != nullptr)
+        return;
+
     gl->glDepthMask(false);
 
     scene->skyMaterial->begin(gl,scene);
@@ -446,10 +449,10 @@ void ForwardRenderer::renderSelectedNode(RenderData* renderData,QSharedPointer<S
 void ForwardRenderer::createLineShader()
 {
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/color.vert"));
+    vshader->compileSourceFile(":assets/shaders/color.vert");
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/color.frag"));
+    fshader->compileSourceFile(":assets/shaders/color.frag");
 
 
     lineShader = new QOpenGLShaderProgram;
@@ -465,10 +468,10 @@ void ForwardRenderer::createLineShader()
 void ForwardRenderer::createShadowShader()
 {
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/shadow_map.vert"));
+    vshader->compileSourceFile(":assets/shaders/shadow_map.vert");
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/shadow_map.frag"));
+    fshader->compileSourceFile(":assets/shaders/shadow_map.frag");
 
     shadowShader = new QOpenGLShaderProgram;
     shadowShader->addShader(vshader);

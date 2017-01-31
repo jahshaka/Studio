@@ -70,3 +70,6 @@ SOURCES += \
     $$PWD/src/animation/animation.cpp \
     $$PWD/src/animation/keyframeset.cpp \
     $$PWD/src/materials/materialhelper.cpp
+
+RESOURCES += \
+    $$PWD/assets.qrc
