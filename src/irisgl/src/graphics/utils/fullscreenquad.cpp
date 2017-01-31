@@ -51,9 +51,8 @@ FullScreenQuad::FullScreenQuad()
     mesh = new iris::Mesh(data.data(),data.size()*sizeof(float),6,layout);
 
     //todo: inline shader in code
-    shader = GraphicsHelper::loadShader(
-                IrisUtils::getAbsoluteAssetPath("app/shaders/fullscreen.vert"),
-                IrisUtils::getAbsoluteAssetPath("app/shaders/fullscreen.frag"));
+    shader = GraphicsHelper::loadShader(":assets/shaders/fullscreen.vert",
+                                        ":assets/shaders/fullscreen.frag");
 }
 
 FullScreenQuad::~FullScreenQuad()

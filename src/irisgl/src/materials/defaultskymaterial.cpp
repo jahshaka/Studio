@@ -17,8 +17,8 @@ namespace iris
 
 DefaultSkyMaterial::DefaultSkyMaterial()
 {
-    createProgramFromShaderSource(IrisUtils::getAbsoluteAssetPath("app/shaders/defaultsky.vert"),
-                                  IrisUtils::getAbsoluteAssetPath("app/shaders/defaultsky.frag"));
+    createProgramFromShaderSource(":assets/shaders/defaultsky.vert",
+                                  ":assets/shaders/defaultsky.frag");
     setTextureCount(1);
 
     color = QColor(255,255,255,255);

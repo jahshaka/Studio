@@ -33,10 +33,10 @@ DefaultMaterial::DefaultMaterial()
     setTextureCount(4);
 
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/simple.vert"));
+    vshader->compileSourceFile(":assets/shaders/default_material.vert");
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/simple.frag"));
+    fshader->compileSourceFile(":assets/shaders/default_material.frag");
 
 
     program = new QOpenGLShaderProgram;

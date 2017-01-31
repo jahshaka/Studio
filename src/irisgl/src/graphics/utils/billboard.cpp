@@ -24,12 +24,10 @@ Billboard::Billboard(QOpenGLFunctions_3_2_Core* gl,float size)
     gl->glGenVertexArrays(1,&vao);
     //todo: write shaders in script
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile(
-                IrisUtils::getAbsoluteAssetPath("app/shaders/billboard.vert"));
+    vshader->compileSourceFile(":assets/shaders/billboard.vert");
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile(
-                IrisUtils::getAbsoluteAssetPath("app/shaders/billboard.frag"));
+    fshader->compileSourceFile(":assets/shaders/billboard.frag");
 
     program = new QOpenGLShaderProgram;
     program->addShader(vshader);
