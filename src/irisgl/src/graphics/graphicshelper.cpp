@@ -37,6 +37,15 @@ QOpenGLShaderProgram* GraphicsHelper::loadShader(QString vsPath,QString fsPath)
     auto program = new QOpenGLShaderProgram;
     program->addShader(vshader);
     program->addShader(fshader);
+
+    program->bindAttributeLocation("a_pos",(int)VertexAttribUsage::Position);
+    program->bindAttributeLocation("a_texCoord",(int)VertexAttribUsage::TexCoord0);
+    program->bindAttributeLocation("a_texCoord1",(int)VertexAttribUsage::TexCoord1);
+    program->bindAttributeLocation("a_texCoord2",(int)VertexAttribUsage::TexCoord2);
+    program->bindAttributeLocation("a_texCoord3",(int)VertexAttribUsage::TexCoord3);
+    program->bindAttributeLocation("a_normal",(int)VertexAttribUsage::Normal);
+    program->bindAttributeLocation("a_tangent",(int)VertexAttribUsage::Tangent);
+
     program->link();
 
     //todo: check for errors

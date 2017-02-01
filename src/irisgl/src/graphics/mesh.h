@@ -25,13 +25,55 @@ class QOpenGLShaderProgram;
 namespace iris
 {
 
+enum class VertexAttribUsage : int
+{
+    Position = 0,
+    TexCoord0 = 1,
+    TexCoord1 = 2,
+    TexCoord2 = 3,
+    TexCoord3 = 4,
+    Normal = 5,
+    Tangent = 6,
+    BiTangent = 7,
+    Count = 8
+};
+
+class VertexArrayData
+{
+public:
+    //std::string shaderAttrib;
+    //int attribLoc;
+    GLuint bufferId;
+    VertexAttribUsage usage;
+    int numComponents;
+    GLenum type;
+
+    VertexArrayData()
+    {
+        bufferId = 0;
+    }
+
+};
+
 class Mesh
 {
 
 public:
     QOpenGLFunctions_3_2_Core* gl;
     GLuint vao;
+    GLuint vertexBuffer;
+    GLuint texCoord0Buffer;
+    GLuint texCoord1Buffer;
+    GLuint normalBuffer;
+    GLuint tangentBuffer;
+    GLuint indexBuffer;
+
+    VertexArrayData vertexArrays[(int)VertexAttribUsage::Count];
+
     QOpenGLBuffer* vbo;
+
+    int lastShaderId;
+
     VertexLayout* vertexLayout;
     int numVerts;
     int numFaces;
@@ -65,6 +107,9 @@ public:
     Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
 
     ~Mesh();
+
+private:
+    void addVertexArray(VertexAttribUsage usage,void* data,int size,GLenum type,int numComponents);
 };
 
 typedef QSharedPointer<Mesh> MeshPtr;

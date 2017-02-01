@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QFile>
 #include "texture.h"
 #include <QOpenGLTexture>
+#include "mesh.h"
 
 namespace iris
 {
@@ -43,6 +44,7 @@ Shader::~Shader()
 
 ShaderPtr Shader::load(QOpenGLFunctions_3_2_Core* gl,QString vertexShaderFile,QString fragmentShaderFile)
 {
+
     QFile vsFile(vertexShaderFile);
     vsFile.open(QFile::ReadOnly | QFile::Text);
     QString vertexShader(vsFile.readAll());
@@ -62,6 +64,7 @@ ShaderPtr Shader::create(QOpenGLFunctions_3_2_Core* gl,QString vertexShader,QStr
 Shader::Shader(QOpenGLFunctions_3_2_Core* gl,QString vertexShader,QString fragmentShader)
 {
     this->gl = gl;
+    shaderId = generateNodeId();
 
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
     vshader->compileSourceCode(vertexShader);
@@ -72,6 +75,15 @@ Shader::Shader(QOpenGLFunctions_3_2_Core* gl,QString vertexShader,QString fragme
     program = new QOpenGLShaderProgram;
     program->addShader(vshader);
     program->addShader(fshader);
+
+    program->bindAttributeLocation("a_pos",(int)VertexAttribUsage::Position);
+    program->bindAttributeLocation("a_texCoord",(int)VertexAttribUsage::TexCoord0);
+    program->bindAttributeLocation("a_texCoord1",(int)VertexAttribUsage::TexCoord1);
+    program->bindAttributeLocation("a_texCoord2",(int)VertexAttribUsage::TexCoord2);
+    program->bindAttributeLocation("a_texCoord3",(int)VertexAttribUsage::TexCoord3);
+    program->bindAttributeLocation("a_normal",(int)VertexAttribUsage::Normal);
+    program->bindAttributeLocation("a_tangent",(int)VertexAttribUsage::Tangent);
+
     program->link();
 
     //todo: check for errors
@@ -180,5 +192,12 @@ ShaderValue* Shader::getUniform(QString name)
 
     return nullptr;
 }
+
+long Shader::generateNodeId()
+{
+    return nextId++;
+}
+
+long Shader::nextId = 0;
 
 }
