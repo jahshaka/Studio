@@ -30,6 +30,7 @@ namespace iris
 
 Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
 {
+    lastShaderId = -1;
     gl = new QOpenGLFunctions_3_2_Core();
     gl->initializeOpenGLFunctions();
 
@@ -118,6 +119,7 @@ Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
     //Still slow...
     QVector<unsigned int> indices;
     indices.reserve(mesh->mNumFaces * 3);
+    triMesh->triangles.reserve(mesh->mNumFaces);
     for(unsigned i = 0;i < mesh->mNumFaces; i++)
     {
         auto face = mesh->mFaces[i];
@@ -238,6 +240,8 @@ Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
 //todo: extract trimesh from data
 Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
 {
+    lastShaderId = -1;
+
     auto gl = new QOpenGLFunctions_3_2_Core();
     gl->initializeOpenGLFunctions();
 
@@ -271,34 +275,51 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program)
 
     gl->glBindVertexArray(0);
     */
-    //program->bind();
-    gl->glUseProgram(program->programId());
+    program->bind();
+    //gl->glUseProgram(program->programId());
     gl->glBindVertexArray(vao);
+    auto programId = program->programId();
+    //qDebug() << "a_pos: " << gl->glGetAttribLocation(program->programId(),"a_pos");
+    //qDebug() << "a_texCoord: " << gl->glGetAttribLocation(program->programId(),"a_texCoord");
+    //qDebug() << "a_normal: " << gl->glGetAttribLocation(program->programId(),"a_normal");
+    //qDebug() << "a_tangent: " << gl->glGetAttribLocation(program->programId(),"a_tangent");
 
     for(int i=0; i < (int)VertexAttribUsage::Count; i++)
     {
         auto attrib = vertexArrays[i];
         if(attrib.bufferId == 0)
             continue;
-        gl->glEnableVertexAttribArray(i);
+
+        if(lastShaderId != programId)
+        {
+            gl->glEnableVertexAttribArray(i);
+            gl->glBindBuffer(GL_ARRAY_BUFFER,attrib.bufferId);
+            gl->glVertexAttribPointer(i,attrib.numComponents,attrib.type,GL_FALSE,0,0);
+        }
     }
 
     gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer);
-    //gl->glDrawElements(GL_TRIANGLES,numVerts,GL_UNSIGNED_INT,0);
-    gl->glDrawElementsBaseVertex(GL_TRIANGLES,numVerts,GL_UNSIGNED_INT,0,0);
+    gl->glDrawElements(GL_TRIANGLES,numVerts,GL_UNSIGNED_INT,0);
+    //gl->glDrawElementsBaseVertex(GL_TRIANGLES,numVerts,GL_UNSIGNED_INT,0,0);
     //gl->glDrawArrays(GL_TRIANGLES,0,numVerts);
 
+    /*
     for(int i=0; i < (int)VertexAttribUsage::Count; i++)
     {
         gl->glDisableVertexAttribArray(i);
     }
+    */
 
     gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
     gl->glBindVertexArray(0);
+
+
+    lastShaderId = programId;
 }
 
 void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLenum primitiveMode)
 {
+    return;
     gl->glBindVertexArray(vao);
     vbo->bind();
 
@@ -352,7 +373,7 @@ void Mesh::addVertexArray(VertexAttribUsage usage,void* dataPtr,int size,GLenum 
     gl->glVertexAttribPointer((int)usage,numComponents,type,GL_FALSE,0,0);
 
     gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
-    //gl->glBindVertexArray(0);
+    gl->glBindVertexArray(0);
 }
 
 }

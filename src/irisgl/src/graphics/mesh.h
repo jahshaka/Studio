@@ -68,11 +68,13 @@ public:
     GLuint tangentBuffer;
     GLuint indexBuffer;
 
+    // will cause problems if a shader was freed and gl gives the
+    // id to another shader
+    GLuint lastShaderId;
+
     VertexArrayData vertexArrays[(int)VertexAttribUsage::Count];
 
     QOpenGLBuffer* vbo;
-
-    int lastShaderId;
 
     VertexLayout* vertexLayout;
     int numVerts;

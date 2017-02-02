@@ -32,23 +32,8 @@ DefaultMaterial::DefaultMaterial()
 {
     setTextureCount(4);
 
-    QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile(":assets/shaders/default_material.vert");
-
-    QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile(":assets/shaders/default_material.frag");
-
-
-    program = new QOpenGLShaderProgram;
-    program->addShader(vshader);
-    program->addShader(fshader);
-
-    program->bindAttributeLocation("a_pos", 0);
-    program->bindAttributeLocation("a_texCoord", 1);
-    program->bindAttributeLocation("a_normal", 2);
-    program->bindAttributeLocation("a_tangent", 3);
-
-    program->link();
+    this->createProgramFromShaderSource(":assets/shaders/default_material.vert",
+                                        ":assets/shaders/default_material.frag");
 
     program->bind();
     program->setUniformValue("u_useDiffuseTex",false);

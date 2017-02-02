@@ -70,6 +70,8 @@ Billboard::Billboard(QOpenGLFunctions_3_2_Core* gl,float size)
 
 void Billboard::draw(QOpenGLFunctions_3_2_Core* gl)
 {
+    //return;
+
     gl->glBindVertexArray(vao);
     vbo->bind();
 
