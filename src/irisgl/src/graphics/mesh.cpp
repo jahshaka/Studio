@@ -31,8 +31,10 @@ namespace iris
 Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
 {
     lastShaderId = -1;
-    gl = new QOpenGLFunctions_3_2_Core();
-    gl->initializeOpenGLFunctions();
+    //gl = new QOpenGLFunctions_3_2_Core();
+    //gl->initializeOpenGLFunctions();
+    gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+
 
     gl->glGenVertexArrays(1,&vao);
 
@@ -56,6 +58,10 @@ Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
     numVerts = mesh->mNumFaces*3;
     numFaces = mesh->mNumFaces;
 
+
+    //gl->glBindVertexArray(vao);
+    if(!mesh->HasPositions())
+        throw QString("Mesh has no positions!!");
 
     this->addVertexArray(VertexAttribUsage::Position, (void*)mesh->mVertices, sizeof(aiVector3D) * mesh->mNumVertices, GL_FLOAT,3);
 
@@ -140,9 +146,28 @@ Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
     gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
     gl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * indices.size(), indices.data(), GL_STATIC_DRAW);
 
-    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
-    gl->glBindBuffer(GL_ARRAY_BUFFER,0);
+    //gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
+    //gl->glBindBuffer(GL_ARRAY_BUFFER,0);
 
+    //gl->glBindVertexArray(0);
+
+    //bind all arrays
+    gl->glBindVertexArray(vao);
+
+    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
+    for(int i=0; i < (int)VertexAttribUsage::Count; i++)
+    {
+        auto attrib = vertexArrays[i];
+        if(attrib.bufferId == 0)
+            continue;
+
+        gl->glBindBuffer(GL_ARRAY_BUFFER,attrib.bufferId);
+        gl->glVertexAttribPointer(i,attrib.numComponents,attrib.type,GL_FALSE,0,0);
+        gl->glEnableVertexAttribArray(i);
+    }
+
+    gl->glBindVertexArray(0);
+    gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 
     /*
@@ -242,10 +267,11 @@ Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
 {
     lastShaderId = -1;
 
-    auto gl = new QOpenGLFunctions_3_2_Core();
+    gl = new QOpenGLFunctions_3_2_Core();
     gl->initializeOpenGLFunctions();
 
     gl->glGenVertexArrays(1,&vao);
+    gl->glBindVertexArray(vao);
 
     triMesh = nullptr;
     this->vertexLayout = vertexLayout;
@@ -256,6 +282,8 @@ Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
     vbo->create();
     vbo->bind();
     vbo->allocate(data, dataSize);
+
+    gl->glBindVertexArray(0);
 }
 
 void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,Material* mat)
@@ -275,42 +303,49 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program)
 
     gl->glBindVertexArray(0);
     */
-    program->bind();
-    //gl->glUseProgram(program->programId());
-    gl->glBindVertexArray(vao);
+    //program->bind();
     auto programId = program->programId();
-    //qDebug() << "a_pos: " << gl->glGetAttribLocation(program->programId(),"a_pos");
-    //qDebug() << "a_texCoord: " << gl->glGetAttribLocation(program->programId(),"a_texCoord");
-    //qDebug() << "a_normal: " << gl->glGetAttribLocation(program->programId(),"a_normal");
-    //qDebug() << "a_tangent: " << gl->glGetAttribLocation(program->programId(),"a_tangent");
+    gl->glUseProgram(programId);
 
+    gl->glBindVertexArray(vao);
+
+    /*
     for(int i=0; i < (int)VertexAttribUsage::Count; i++)
     {
         auto attrib = vertexArrays[i];
         if(attrib.bufferId == 0)
             continue;
 
-        if(lastShaderId != programId)
+        //if(lastShaderId != programId)
         {
-            gl->glEnableVertexAttribArray(i);
+
             gl->glBindBuffer(GL_ARRAY_BUFFER,attrib.bufferId);
             gl->glVertexAttribPointer(i,attrib.numComponents,attrib.type,GL_FALSE,0,0);
+            gl->glEnableVertexAttribArray(i);
         }
     }
+    */
 
-    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer);
+    //gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer);
     gl->glDrawElements(GL_TRIANGLES,numVerts,GL_UNSIGNED_INT,0);
     //gl->glDrawElementsBaseVertex(GL_TRIANGLES,numVerts,GL_UNSIGNED_INT,0,0);
     //gl->glDrawArrays(GL_TRIANGLES,0,numVerts);
 
+
     /*
     for(int i=0; i < (int)VertexAttribUsage::Count; i++)
     {
+        auto attrib = vertexArrays[i];
+        if(attrib.bufferId == 0)
+            continue;
+
         gl->glDisableVertexAttribArray(i);
     }
     */
 
-    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
+
+    //gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
+    //gl->glBindBuffer(GL_ARRAY_BUFFER,0);
     gl->glBindVertexArray(0);
 
 
@@ -320,6 +355,7 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program)
 void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLenum primitiveMode)
 {
     return;
+
     gl->glBindVertexArray(vao);
     vbo->bind();
 
@@ -354,13 +390,11 @@ Mesh::~Mesh()
 
 void Mesh::addVertexArray(VertexAttribUsage usage,void* dataPtr,int size,GLenum type,int numComponents)
 {
-    gl->glBindVertexArray(vao);
-
     GLuint bufferId;
     gl->glGenBuffers(1, &bufferId);
     gl->glBindBuffer(GL_ARRAY_BUFFER, bufferId);
     gl->glBufferData(GL_ARRAY_BUFFER, size, dataPtr, GL_STATIC_DRAW);
-
+    gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     auto data = VertexArrayData();
     data.usage = usage;
@@ -370,10 +404,9 @@ void Mesh::addVertexArray(VertexAttribUsage usage,void* dataPtr,int size,GLenum 
 
     vertexArrays[(int)usage] = data;
 
-    gl->glVertexAttribPointer((int)usage,numComponents,type,GL_FALSE,0,0);
+    //gl->glVertexAttribPointer((GLuint)usage,numComponents,type,GL_FALSE,0,0);
 
-    gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
-    gl->glBindVertexArray(0);
+    //gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 }

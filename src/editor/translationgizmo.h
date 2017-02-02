@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "gizmoinstance.h"
 #include "gizmohandle.h"
 #include "../irisgl/src/core/scene.h"
+#include "../irisgl/src/graphics/graphicshelper.h"
 
 class TranslationGizmo : public GizmoInstance
 {
@@ -129,14 +130,8 @@ public:
     }
 
     void createHandleShader() {
-        QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-        vshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"));
-        QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-        fshader->compileSourceFile(IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.frag"));
-
-        handleShader = new QOpenGLShaderProgram;
-        handleShader->addShader(vshader);
-        handleShader->addShader(fshader);
+        handleShader = iris::GraphicsHelper::loadShader(IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"),
+                                                  IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.frag"));
 
         handleShader->link();
     }

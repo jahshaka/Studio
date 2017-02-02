@@ -53,6 +53,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     format.setMajorVersion(3);
     format.setMinorVersion(2);
     format.setProfile(QSurfaceFormat::CoreProfile);
+    //format.setOption();
     format.setSamples(1);
 
     setFormat(format);

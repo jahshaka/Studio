@@ -270,7 +270,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 //create test scene
 void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
 {
-    /*
+
     auto m_logger = new QOpenGLDebugLogger( this );
 
     connect( m_logger, &QOpenGLDebugLogger::messageLogged,this,
@@ -284,7 +284,7 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
         m_logger->startLogging( QOpenGLDebugLogger::SynchronousLogging );
         m_logger->enableMessages();
     }
-    */
+
 
     auto scene = this->createDefaultScene();
 

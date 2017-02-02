@@ -80,10 +80,6 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
             meshNode->meshPath = filePath;
             meshNode->meshIndex = node->mMeshes[0];
 
-            // apply material
-            auto mat = iris::DefaultMaterial::create();
-            meshNode->setMaterial(mat);
-
             // mesh->mMaterialIndex is always at least 0
             auto m = scene->mMaterials[mesh->mMaterialIndex];
             auto dir = QFileInfo(filePath).absoluteDir().absolutePath();
@@ -91,6 +87,8 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
             auto meshMat = iris::MaterialHelper::createMaterial(m, dir);
             if(!!meshMat)
                 meshNode->setMaterial(meshMat);
+            else
+                meshNode->setMaterial(iris::DefaultMaterial::create());
 
         }
         sceneNode = meshNode;
@@ -113,7 +111,15 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
             sceneNode->addChild(meshNode);
 
             //apply material
-            meshNode->setMaterial(iris::DefaultMaterial::create());
+            //meshNode->setMaterial(iris::DefaultMaterial::create());
+            auto m = scene->mMaterials[mesh->mMaterialIndex];
+            auto dir = QFileInfo(filePath).absoluteDir().absolutePath();
+
+            auto meshMat = iris::MaterialHelper::createMaterial(m, dir);
+            if(!!meshMat)
+                meshNode->setMaterial(meshMat);
+            else
+                meshNode->setMaterial(iris::DefaultMaterial::create());
         }
 
     }
