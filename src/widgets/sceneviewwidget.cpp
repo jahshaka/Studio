@@ -161,6 +161,8 @@ void SceneViewWidget::initializeGL()
 
 void SceneViewWidget::paintGL()
 {
+    makeCurrent();
+
     float dt = 1.0f / 60.0f;
     // scene->update(dt);
     renderScene();

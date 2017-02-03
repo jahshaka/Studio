@@ -21,6 +21,7 @@ namespace iris
 
 Billboard::Billboard(QOpenGLFunctions_3_2_Core* gl,float size)
 {
+    return;
     gl->glGenVertexArrays(1,&vao);
     //todo: write shaders in script
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
@@ -70,7 +71,7 @@ Billboard::Billboard(QOpenGLFunctions_3_2_Core* gl,float size)
 
 void Billboard::draw(QOpenGLFunctions_3_2_Core* gl)
 {
-    //return;
+    return;
 
     gl->glBindVertexArray(vao);
     vbo->bind();

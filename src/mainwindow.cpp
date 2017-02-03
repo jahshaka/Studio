@@ -277,7 +277,7 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
              [](QOpenGLDebugMessage msg)
     {
         auto message = msg.message();
-        qDebug() << message;
+        //qDebug() << message;
     });
 
     if ( m_logger->initialize() ) {
@@ -672,6 +672,7 @@ void MainWindow::setSceneAnimTime(float time)
  */
 void MainWindow::addCube()
 {
+    this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/content/primitives/cube.obj"));
     node->setName("Cube");
@@ -684,6 +685,7 @@ void MainWindow::addCube()
  */
 void MainWindow::addTorus()
 {
+    this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/content/primitives/torus.obj"));
     node->setName("Torus");
@@ -696,6 +698,7 @@ void MainWindow::addTorus()
  */
 void MainWindow::addSphere()
 {
+    this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/content/primitives/sphere.obj"));
     node->setName("Sphere");
@@ -708,6 +711,7 @@ void MainWindow::addSphere()
  */
 void MainWindow::addCylinder()
 {
+    this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/content/primitives/cylinder.obj"));
     node->setName("Cylinder");
@@ -717,6 +721,7 @@ void MainWindow::addCylinder()
 
 void MainWindow::addPointLight()
 {
+    this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Point);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
@@ -728,6 +733,7 @@ void MainWindow::addPointLight()
 
 void MainWindow::addSpotLight()
 {
+    this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Spot);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
@@ -738,6 +744,7 @@ void MainWindow::addSpotLight()
 
 void MainWindow::addDirectionalLight()
 {
+    this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Directional);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
@@ -748,6 +755,7 @@ void MainWindow::addDirectionalLight()
 
 void MainWindow::addMesh()
 {
+
     QString dir = QApplication::applicationDirPath()+"/assets/models/";
     //qDebug()<<dir;
     auto filename = QFileDialog::getOpenFileName(this,"Load Mesh",dir,"Mesh Files (*.obj *.fbx *.3ds)");
@@ -755,6 +763,7 @@ void MainWindow::addMesh()
     if(filename.isEmpty())
         return;
 
+    this->sceneView->makeCurrent();
     auto node = iris::MeshNode::loadAsSceneFragment(filename);
 
     // model file may be invalid so null gets returned

@@ -37,6 +37,7 @@ Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
 
 
     gl->glGenVertexArrays(1,&vao);
+    qDebug() << "vao: " << vao;
 
     triMesh = new TriMesh();
 
@@ -154,7 +155,7 @@ Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
     //bind all arrays
     gl->glBindVertexArray(vao);
 
-    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
+
     for(int i=0; i < (int)VertexAttribUsage::Count; i++)
     {
         auto attrib = vertexArrays[i];
@@ -309,7 +310,7 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program)
 
     gl->glBindVertexArray(vao);
 
-    /*
+
     for(int i=0; i < (int)VertexAttribUsage::Count; i++)
     {
         auto attrib = vertexArrays[i];
@@ -321,12 +322,12 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program)
 
             gl->glBindBuffer(GL_ARRAY_BUFFER,attrib.bufferId);
             gl->glVertexAttribPointer(i,attrib.numComponents,attrib.type,GL_FALSE,0,0);
-            gl->glEnableVertexAttribArray(i);
+            //gl->glEnableVertexAttribArray(i);
         }
     }
-    */
 
-    //gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer);
+
+    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer);
     gl->glDrawElements(GL_TRIANGLES,numVerts,GL_UNSIGNED_INT,0);
     //gl->glDrawElementsBaseVertex(GL_TRIANGLES,numVerts,GL_UNSIGNED_INT,0,0);
     //gl->glDrawArrays(GL_TRIANGLES,0,numVerts);
@@ -396,6 +397,8 @@ void Mesh::addVertexArray(VertexAttribUsage usage,void* dataPtr,int size,GLenum 
     gl->glBufferData(GL_ARRAY_BUFFER, size, dataPtr, GL_STATIC_DRAW);
     gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+    qDebug() << "vbo: "<< bufferId;
+
     auto data = VertexArrayData();
     data.usage = usage;
     data.numComponents = numComponents;
@@ -403,6 +406,8 @@ void Mesh::addVertexArray(VertexAttribUsage usage,void* dataPtr,int size,GLenum 
     data.bufferId = bufferId;
 
     vertexArrays[(int)usage] = data;
+
+
 
     //gl->glVertexAttribPointer((GLuint)usage,numComponents,type,GL_FALSE,0,0);
 
