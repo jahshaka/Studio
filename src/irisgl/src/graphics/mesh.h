@@ -41,8 +41,7 @@ enum class VertexAttribUsage : int
 class VertexArrayData
 {
 public:
-    //std::string shaderAttrib;
-    //int attribLoc;
+
     GLuint bufferId;
     VertexAttribUsage usage;
     int numComponents;
@@ -62,6 +61,7 @@ public:
     QOpenGLFunctions_3_2_Core* gl;
     GLuint vao;
     GLuint indexBuffer;
+    bool usesIndexBuffer;
 
     // will cause problems if a shader was freed and gl gives the
     // id to another shader
@@ -92,7 +92,7 @@ public:
     //assumed ownership of vertexLayout
     static Mesh* create(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
 
-    Mesh(aiMesh* mesh,VertexLayout* vertexLayout);
+    Mesh(aiMesh* mesh);
 
     /**
      *
@@ -107,6 +107,7 @@ public:
 
 private:
     void addVertexArray(VertexAttribUsage usage,void* data,int size,GLenum type,int numComponents);
+    void addIndexArray(void* data,int size,GLenum type);
 };
 
 typedef QSharedPointer<Mesh> MeshPtr;

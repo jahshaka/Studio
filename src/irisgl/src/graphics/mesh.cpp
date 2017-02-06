@@ -28,14 +28,14 @@ For more information see the LICENSE file
 namespace iris
 {
 
-Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
+Mesh::Mesh(aiMesh* mesh)
 {
     lastShaderId = -1;
     gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
 
     triMesh = new TriMesh();
 
-    this->vertexLayout = vertexLayout;
+    this->vertexLayout = nullptr;
     numVerts = mesh->mNumFaces*3;
     numFaces = mesh->mNumFaces;
 
@@ -81,8 +81,10 @@ Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
     gl->glGenBuffers(1, &indexBuffer);
     gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
     gl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * indices.size(), indices.data(), GL_STATIC_DRAW);
+    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    usesIndexBuffer = true;
 
-    gl->glBindVertexArray(0);
+    //gl->glBindVertexArray(0);
 }
 
 //todo: extract trimesh from data
@@ -90,8 +92,7 @@ Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
 {
     lastShaderId = -1;
 
-    gl = new QOpenGLFunctions_3_2_Core();
-    gl->initializeOpenGLFunctions();
+    gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
 
     gl->glGenVertexArrays(1,&vao);
     gl->glBindVertexArray(vao);
@@ -101,16 +102,9 @@ Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
 
     numVerts = numElements;
 
-    /*
-    vbo = new QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-    vbo->create();
-    vbo->bind();
-    vbo->allocate(data, dataSize);
-    */
-
-
-
     gl->glBindVertexArray(0);
+
+    usesIndexBuffer = false;
 }
 
 void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,Material* mat)
@@ -150,7 +144,7 @@ Mesh* Mesh::loadMesh(QString filePath)
 
     auto mesh = scene->mMeshes[0];
 
-    return new Mesh(mesh,VertexLayout::createMeshDefault());
+    return new Mesh(mesh);
 }
 
 Mesh* Mesh::create(void* data,int dataSize,int numVerts,VertexLayout* vertexLayout)
@@ -187,6 +181,11 @@ void Mesh::addVertexArray(VertexAttribUsage usage,void* dataPtr,int size,GLenum 
 
     gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
     gl->glBindVertexArray(0);
+}
+
+void Mesh::addIndexArray(void* data,int size,GLenum type)
+{
+
 }
 
 }
