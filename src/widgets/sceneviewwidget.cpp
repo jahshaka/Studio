@@ -84,6 +84,7 @@ void SceneViewWidget::resetEditorCam()
 {
     editorCam->pos = QVector3D(0, 5, 7);
     editorCam->rot = QQuaternion::fromEulerAngles(-5, 0, 0);
+    camController->setCamera(editorCam);
 }
 
 void SceneViewWidget::initialize()

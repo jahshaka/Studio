@@ -925,9 +925,11 @@ void MainWindow::updateSceneSettings()
 
 void MainWindow::newScene()
 {
+    this->sceneView->makeCurrent();
     auto scene = this->createDefaultScene();
     this->setScene(scene);
     this->sceneView->resetEditorCam();
+    this->sceneView->doneCurrent();
 }
 
 void MainWindow::showAboutDialog()

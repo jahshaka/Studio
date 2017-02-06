@@ -132,7 +132,7 @@ void ForwardRenderer::renderScene(QOpenGLContext* ctx,
     renderNode(renderData, scene->rootNode);
 
     // STEP 2: RENDER SKY
-    //renderSky(renderData);
+    renderSky(renderData);
 
     // STEP 3: RENDER LINES (for e.g. light radius and the camera frustum)
 
@@ -140,7 +140,7 @@ void ForwardRenderer::renderScene(QOpenGLContext* ctx,
     //renderBillboardIcons(renderData);
 
     // STEP 5: RENDER SELECTED OBJECT
-    //if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
+    if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
 }
 
 void ForwardRenderer::renderShadows(RenderData* renderData,QSharedPointer<SceneNode> node)
@@ -323,7 +323,6 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
         if(meshNode->mesh != nullptr)
             meshNode->mesh->draw(gl, program);
 
-        //mat->program->release();
     }
 
     for(auto childNode:node->children)
@@ -332,7 +331,7 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
 
 void ForwardRenderer::renderSky(RenderData* renderData)
 {
-    if(scene->skyMesh != nullptr)
+    if(scene->skyMesh == nullptr)
         return;
 
     gl->glDepthMask(false);

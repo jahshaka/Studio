@@ -61,11 +61,6 @@ class Mesh
 public:
     QOpenGLFunctions_3_2_Core* gl;
     GLuint vao;
-    GLuint vertexBuffer;
-    GLuint texCoord0Buffer;
-    GLuint texCoord1Buffer;
-    GLuint normalBuffer;
-    GLuint tangentBuffer;
     GLuint indexBuffer;
 
     // will cause problems if a shader was freed and gl gives the
