@@ -73,7 +73,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     //camController = orbitalCam;
 
     editorCam = iris::CameraNode::create();
-    editorCam->pos = QVector3D(0, 5, 7);
+    editorCam->pos = QVector3D(0, 8, 24);
     editorCam->rot = QQuaternion::fromEulerAngles(-5, 0, 0);
     camController->setCamera(editorCam);
 

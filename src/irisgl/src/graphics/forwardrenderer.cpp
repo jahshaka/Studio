@@ -51,6 +51,13 @@ ForwardRenderer::ForwardRenderer(QOpenGLFunctions_3_2_Core* gl)
     fsQuad = new FullScreenQuad();
     createLineShader();
     createShadowShader();
+    createParticleShader();
+
+    pMaster = new ParticleMaster(gl);
+    pMaster->addParticle(new Particle(QVector3D(0, 4, 0), QVector3D(0, 50, 0), 0.5, 5, 0, 3));
+    pMaster->addParticle(new Particle(QVector3D(1, 4, 0), QVector3D(0, 30, 0), 1, 5, 45, 1));
+
+    pSystem = new ParticleSystem(gl, 10, 25, .3f, 4);
 
     generateShadowBuffer(4096);
 
@@ -134,6 +141,7 @@ void ForwardRenderer::renderScene(QOpenGLContext* ctx, Viewport* vp)
     renderSky(renderData);
 
     // STEP 3: RENDER LINES (for e.g. light radius and the camera frustum)
+    renderParticles(renderData);
 
     // STEP 4: RENDER BILLBOARD ICONS
     renderBillboardIcons(renderData);
@@ -180,6 +188,18 @@ void ForwardRenderer::renderShadows(RenderData* renderData,QSharedPointer<SceneN
     for (auto childNode : node->children) {
         renderShadows(renderData, childNode);
     }
+}
+
+void ForwardRenderer::renderParticles(RenderData *renderData)
+{
+
+    particleShader->bind();
+    //pMaster->update((float) 1/50);
+    //pMaster->renderParticles(gl, particleShader, renderData);
+
+    pSystem->generateParticles(QVector3D(0, 0, 0), (float) 1/50);
+    pSystem->pm.update((float) 1/50);
+    pSystem->pm.renderParticles(gl, particleShader, renderData);
 }
 
 void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
@@ -492,6 +512,23 @@ void ForwardRenderer::createShadowShader()
                                               ":assets/shaders/shadow_map.frag");
 
     shadowShader->bind();
+}
+
+void ForwardRenderer::createParticleShader()
+{
+    QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
+    vshader->compileSourceFile(":app/shaders/particle.vert");
+
+    QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
+    fshader->compileSourceFile(":app/shaders/particle.frag");
+
+    particleShader = new QOpenGLShaderProgram;
+    particleShader->addShader(vshader);
+    particleShader->addShader(fshader);
+
+    particleShader->link();
+
+    particleShader->bind();
 }
 
 ForwardRenderer::~ForwardRenderer()

@@ -16,6 +16,11 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include "../libovr/Include/OVR_CAPI_GL.h"
 
+#include "particle.h"
+#include "particlerender.h"
+#include "particlemaster.h"
+#include "particlesystem.h"
+
 #define OUTLINE_STENCIL_CHANNEL 1
 
 class QOpenGLShaderProgram;
@@ -56,6 +61,7 @@ class ForwardRenderer
     QSharedPointer<SceneNode> selectedSceneNode;
     QOpenGLShaderProgram* lineShader;
     QOpenGLShaderProgram* shadowShader;
+    QOpenGLShaderProgram* particleShader;
 
     VrDevice* vrDevice;
 
@@ -95,12 +101,17 @@ private:
     void renderSelectedNode(RenderData* renderData, QSharedPointer<SceneNode> node);
 
     void createLineShader();
+    void createParticleShader();
 
     GLuint shadowFBO;
     GLuint shadowDepthMap;
 
+    ParticleMaster *pMaster;
+    ParticleSystem *pSystem;
+
     void createShadowShader();
     void renderShadows(RenderData* renderData, QSharedPointer<SceneNode> node);
+    void renderParticles(RenderData* renderData);
     void generateShadowBuffer(GLuint size = 1024);
 
     //editor-specific

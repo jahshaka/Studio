@@ -24,5 +24,7 @@
         <file>app/shaders/defaultsky.frag</file>
         <file>app/shaders/fullscreen.frag</file>
         <file>app/shaders/fullscreen.vert</file>
+        <file>app/shaders/particle.vert</file>
+        <file>app/shaders/particle.frag</file>
     </qresource>
 </RCC>

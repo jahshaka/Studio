@@ -45,7 +45,11 @@ HEADERS += \
     $$PWD/src/materials/materialhelper.h \
     $$PWD/src/core/irisutils.h \
     $$PWD/src/scenegraph/viewernode.h \
-    $$PWD/src/materials/viewermaterial.h
+    $$PWD/src/materials/viewermaterial.h \
+    $$PWD/src/graphics/particle.h \
+    $$PWD/src/graphics/particlerender.h \
+    $$PWD/src/graphics/particlemaster.h \
+    $$PWD/src/graphics/particlesystem.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
