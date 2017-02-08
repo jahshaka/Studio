@@ -25,13 +25,14 @@ enum class SceneNodeType
     Empty,
     Mesh,
     Light,
-    Camera
+    Camera,
+    Viewer
 };
 
 class Animation;
 typedef QSharedPointer<Animation> AnimationPtr;
 
-class SceneNode:public QEnableSharedFromThis<SceneNode>
+class SceneNode : public QEnableSharedFromThis<SceneNode>
 {
 public:
     // cached local and global transform

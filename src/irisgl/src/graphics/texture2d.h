@@ -49,7 +49,7 @@ public:
      * @param path
      * @return
      */
-    static Texture2DPtr load(QString path,bool flipY);
+    static Texture2DPtr load(QString path, bool flipY);
 
     /**
      * Created texture from QImage

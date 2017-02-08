@@ -80,8 +80,6 @@ public:
         QVector4D dir = (globalTransform * defaultDir);
 
         return dir.toVector3D();
-//        return lightDir;
-
     }
 
 private:
@@ -92,7 +90,7 @@ private:
         lightType = LightType::Point;
 
         distance = 10;
-        color = QColor(255,255,255);
+        color = QColor(255, 255, 255);
         intensity = 1.0f;
         spotCutOff = 30.0f;
         spotCutOffSoftness = 1.0f;

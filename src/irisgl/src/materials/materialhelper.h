@@ -11,7 +11,7 @@ namespace iris
 class MaterialHelper
 {
 public:
-    static DefaultMaterialPtr createMaterial(aiMaterial* aiMat,QString assetPath);
+    static DefaultMaterialPtr createMaterial(aiMaterial* aiMat, QString assetPath);
 
 };
 
