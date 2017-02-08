@@ -26,7 +26,7 @@ struct TriangleIntersectionResult
 
     TriangleIntersectionResult()
     {
-        triangleIndex=-1;
+        triangleIndex = -1;
     }
 };
 
@@ -54,19 +54,19 @@ public:
      * @param b
      * @param c
      */
-    void addTriangle(const QVector3D& a,const QVector3D& b,const QVector3D& c);
+    void addTriangle(const QVector3D& a, const QVector3D& b, const QVector3D& c);
 
     //https://github.com/qt/qt3d/blob/5476bc6b4b6a12c921da502c24c4e078b04dd3b3/src/render/jobs/pickboundingvolumejob.cpp
     //realtime rendering page 192
     //no need to get uvw, just return true at the first sign of a hit
-    bool isHitBySegment(const QVector3D& segmentStart,const QVector3D& segmentEnd,QVector3D& hitPoint);
+    bool isHitBySegment(const QVector3D& segmentStart, const QVector3D& segmentEnd, QVector3D& hitPoint);
 
     /**
      * Does a segment-mesh intersection test
      * Returns number of intersections
      * @return
      */
-    int getSegmentIntersections(const QVector3D& segmentStart,const QVector3D& segmentEnd,QList<TriangleIntersectionResult>& results);
+    int getSegmentIntersections(const QVector3D& segmentStart, const QVector3D& segmentEnd, QList<TriangleIntersectionResult>& results);
 
 
 };

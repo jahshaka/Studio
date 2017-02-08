@@ -24,13 +24,13 @@ public:
     //realtime collision detection page 178
     //assumes dir is normalized
     //returns whether or not a collision was made
-    static bool raySphereIntersects(QVector3D p,QVector3D d,
-                             QVector3D spherePos,float radius,float& t,
+    static bool raySphereIntersects(QVector3D p, QVector3D d,
+                             QVector3D spherePos, float radius, float& t,
                              QVector3D& hitPoint)
     {
-        QVector3D m = p-spherePos;
-        float b = QVector3D::dotProduct(m,d);
-        float c = QVector3D::dotProduct(m,m)-radius*radius;
+        QVector3D m = p - spherePos;
+        float b = QVector3D::dotProduct(m, d);
+        float c = QVector3D::dotProduct(m, m) - radius * radius;
 
         if(c>0 && b>0)
             return false;

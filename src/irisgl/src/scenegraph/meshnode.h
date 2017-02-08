@@ -18,7 +18,7 @@ For more information see the LICENSE file
 namespace iris
 {
 
-class MeshNode:public SceneNode
+class MeshNode : public SceneNode
 {
 public:
     Mesh* mesh;
