@@ -169,6 +169,8 @@ public slots:
     void addTorus();
     void addSphere();
     void addCylinder();
+    void addEmpty();
+    void addViewer();
     void addMesh();
     void addTexturedPlane();
     void addViewPoint();
