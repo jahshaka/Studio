@@ -53,6 +53,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     format.setMajorVersion(3);
     format.setMinorVersion(2);
     format.setProfile(QSurfaceFormat::CoreProfile);
+    //format.setOption();
     format.setSamples(1);
 
     setFormat(format);
@@ -83,6 +84,7 @@ void SceneViewWidget::resetEditorCam()
 {
     editorCam->pos = QVector3D(0, 5, 7);
     editorCam->rot = QQuaternion::fromEulerAngles(-5, 0, 0);
+    camController->setCamera(editorCam);
 }
 
 void SceneViewWidget::initialize()
@@ -160,6 +162,8 @@ void SceneViewWidget::initializeGL()
 
 void SceneViewWidget::paintGL()
 {
+    makeCurrent();
+
     float dt = 1.0f / 60.0f;
     // scene->update(dt);
     renderScene();

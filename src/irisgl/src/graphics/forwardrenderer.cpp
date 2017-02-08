@@ -125,6 +125,10 @@ void ForwardRenderer::renderScene(QOpenGLContext* ctx,
     gl->glViewport(0, 0, vp->width, vp->height);
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    //enable all attrib arrays
+    for(int i = 0;i < 8;i++)
+        gl->glEnableVertexAttribArray(i);
+
     renderNode(renderData, scene->rootNode);
 
     // STEP 2: RENDER SKY
@@ -319,7 +323,6 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
         if(meshNode->mesh != nullptr)
             meshNode->mesh->draw(gl, program);
 
-        //mat->program->release();
     }
 
     for(auto childNode:node->children)
@@ -328,7 +331,7 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
 
 void ForwardRenderer::renderSky(RenderData* renderData)
 {
-    if(scene->skyMesh != nullptr)
+    if(scene->skyMesh == nullptr)
         return;
 
     gl->glDepthMask(false);
@@ -448,18 +451,8 @@ void ForwardRenderer::renderSelectedNode(RenderData* renderData,QSharedPointer<S
 
 void ForwardRenderer::createLineShader()
 {
-    QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile(":assets/shaders/color.vert");
-
-    QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile(":assets/shaders/color.frag");
-
-
-    lineShader = new QOpenGLShaderProgram;
-    lineShader->addShader(vshader);
-    lineShader->addShader(fshader);
-
-    lineShader->link();
+    lineShader = GraphicsHelper::loadShader(":assets/shaders/color.vert",
+                                              ":assets/shaders/color.frag");
 
     lineShader->bind();
     lineShader->setUniformValue("color",QColor(240,240,255,255));
@@ -467,17 +460,8 @@ void ForwardRenderer::createLineShader()
 
 void ForwardRenderer::createShadowShader()
 {
-    QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile(":assets/shaders/shadow_map.vert");
-
-    QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile(":assets/shaders/shadow_map.frag");
-
-    shadowShader = new QOpenGLShaderProgram;
-    shadowShader->addShader(vshader);
-    shadowShader->addShader(fshader);
-
-    shadowShader->link();
+    shadowShader = GraphicsHelper::loadShader(":assets/shaders/shadow_map.vert",
+                                              ":assets/shaders/shadow_map.frag");
 
     shadowShader->bind();
 }

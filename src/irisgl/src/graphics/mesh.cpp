@@ -28,156 +28,111 @@ For more information see the LICENSE file
 namespace iris
 {
 
-Mesh::Mesh(aiMesh* mesh,VertexLayout* vertexLayout)
+Mesh::Mesh(aiMesh* mesh)
 {
-    auto gl = new QOpenGLFunctions_3_2_Core();
-    gl->initializeOpenGLFunctions();
-
-    gl->glGenVertexArrays(1,&vao);
+    lastShaderId = -1;
+    gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
 
     triMesh = new TriMesh();
 
-    this->vertexLayout = vertexLayout;
-    //assumes mesh is triangulated
-    //assumes mesh data is laid out in a flat array
-    //i.e. no index buffer used
-
-    //numVerts = mesh->mNumVertices;
+    this->vertexLayout = nullptr;
     numVerts = mesh->mNumFaces*3;
     numFaces = mesh->mNumFaces;
 
-    //slow, but good enough for now
-    QVector<float> data;
-    for (unsigned f = 0; f < mesh->mNumFaces; f++) {
-        auto face = mesh->mFaces[f];
+    gl->glGenVertexArrays(1,&vao);
 
-        //assumes mesh is made completely of triangles
+    if(!mesh->HasPositions())
+        throw QString("Mesh has no positions!!");
+
+    this->addVertexArray(VertexAttribUsage::Position, (void*)mesh->mVertices, sizeof(aiVector3D) * mesh->mNumVertices, GL_FLOAT,3);
+
+
+    if(mesh->HasTextureCoords(0))
+        this->addVertexArray(VertexAttribUsage::TexCoord0, (void*)mesh->mTextureCoords[0], sizeof(aiVector3D) * mesh->mNumVertices, GL_FLOAT,3);
+    if(mesh->HasTextureCoords(1))
+        this->addVertexArray(VertexAttribUsage::TexCoord1, (void*)mesh->mTextureCoords[1], sizeof(aiVector3D) * mesh->mNumVertices, GL_FLOAT,3);
+    if(mesh->HasNormals())
+        this->addVertexArray(VertexAttribUsage::Normal, (void*)mesh->mNormals, sizeof(aiVector3D) * mesh->mNumVertices, GL_FLOAT,3);
+    if(mesh->HasTangentsAndBitangents())
+        this->addVertexArray(VertexAttribUsage::Tangent, (void*)mesh->mTangents, sizeof(aiVector3D) * mesh->mNumVertices, GL_FLOAT,3);
+
+    gl->glBindVertexArray(vao);
+    // Assimp doesnt give the indices in an array
+    // So some calculation still has to be done
+    QVector<unsigned int> indices;
+    indices.reserve(mesh->mNumFaces * 3);
+    triMesh->triangles.reserve(mesh->mNumFaces);
+    for(unsigned i = 0; i < mesh->mNumFaces; i++)
+    {
+        auto face = mesh->mFaces[i];
+        indices.append(face.mIndices[0]);
+        indices.append(face.mIndices[1]);
+        indices.append(face.mIndices[2]);
+
         auto a = mesh->mVertices[face.mIndices[0]];
         auto b = mesh->mVertices[face.mIndices[1]];
         auto c = mesh->mVertices[face.mIndices[2]];
+
         triMesh->addTriangle(QVector3D(a.x, a.y, a.z),
                              QVector3D(b.x, b.y, b.z),
                              QVector3D(c.x, c.y, c.z));
-
-        for(int v=0;v<3;v++)
-        {
-            auto i = face.mIndices[v];
-
-            //pos
-            if(mesh->mNumVertices>0)
-            {
-                auto pos =  mesh->mVertices[i];
-                data.append(pos.x);
-                data.append(pos.y);
-                data.append(pos.z);
-            }
-            else
-            {
-                data.append(0);
-                data.append(0);
-                data.append(0);
-            }
-
-            //texCoord
-            if(mesh->mNumUVComponents[0]>0)
-            {
-                auto texCooord =  mesh->mTextureCoords[0][i];
-                data.append(texCooord.x);
-                data.append(texCooord.y);
-            }
-            else
-            {
-                data.append(0);
-                data.append(0);
-            }
-
-            if(mesh->HasNormals())
-            {
-                //normal
-                auto normal =  mesh->mNormals[i];
-                data.append(normal.x);
-                data.append(normal.y);
-                data.append(normal.z);
-            }
-            else
-            {
-                data.append(0);
-                data.append(0);
-                data.append(0);
-            }
-
-
-            if(mesh->HasTangentsAndBitangents())
-            {
-                //tangent
-                auto tangent =  mesh->mTangents[i];
-                data.append(tangent.x);
-                data.append(tangent.y);
-                data.append(tangent.z);
-            }
-            else
-            {
-                data.append(0);
-                data.append(0);
-                data.append(0);
-            }
-
-        }
     }
 
-
-    vbo = new QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-    vbo->create();
-    vbo->bind();
-    vbo->allocate(data.constData(), data.count() * sizeof(GLfloat));
+    gl->glGenBuffers(1, &indexBuffer);
+    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * indices.size(), indices.data(), GL_STATIC_DRAW);
+    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    usesIndexBuffer = true;
 
 }
 
 //todo: extract trimesh from data
 Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
 {
-    auto gl = new QOpenGLFunctions_3_2_Core();
-    gl->initializeOpenGLFunctions();
+    lastShaderId = -1;
 
-    gl->glGenVertexArrays(1,&vao);
+    gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
 
     triMesh = nullptr;
     this->vertexLayout = vertexLayout;
-
     numVerts = numElements;
 
-    vbo = new QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-    vbo->create();
-    vbo->bind();
-    vbo->allocate(data, dataSize);
-}
-
-void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,Material* mat)
-{
-    draw(gl,mat->program);
-}
-
-void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program)
-{
+    gl->glGenVertexArrays(1,&vao);
     gl->glBindVertexArray(vao);
-    vbo->bind();
 
-    vertexLayout->bind(program);
-    gl->glDrawArrays(GL_TRIANGLES,0,numVerts);//todo: bad to assume triangles, allow other primitive types
-    vertexLayout->unbind(program);
+    GLuint vbo;
+    gl->glGenBuffers(1, &vbo);
+    gl->glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    gl->glBufferData(GL_ARRAY_BUFFER,dataSize,data,GL_STATIC_DRAW);
 
+    vertexLayout->bind();
+
+    gl->glBindBuffer(GL_ARRAY_BUFFER,0);
     gl->glBindVertexArray(0);
+
+    usesIndexBuffer = false;
+}
+
+void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,Material* mat,GLenum primitiveMode)
+{
+    draw(gl,mat->program,primitiveMode);
 }
 
 void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLenum primitiveMode)
 {
+    auto programId = program->programId();
+    gl->glUseProgram(programId);
+
     gl->glBindVertexArray(vao);
-    vbo->bind();
-
-    vertexLayout->bind(program);
-    gl->glDrawArrays(primitiveMode,0,numVerts);
-    vertexLayout->unbind(program);
-
+    if(usesIndexBuffer)
+    {
+        gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer);
+        gl->glDrawElements(GL_TRIANGLES,numVerts,GL_UNSIGNED_INT,0);
+    }
+    else
+    {
+        gl->glDrawArrays(GL_TRIANGLES,0,numVerts);
+    }
     gl->glBindVertexArray(0);
 }
 
@@ -188,7 +143,7 @@ Mesh* Mesh::loadMesh(QString filePath)
 
     auto mesh = scene->mMeshes[0];
 
-    return new Mesh(mesh,VertexLayout::createMeshDefault());
+    return new Mesh(mesh);
 }
 
 Mesh* Mesh::create(void* data,int dataSize,int numVerts,VertexLayout* vertexLayout)
@@ -201,6 +156,35 @@ Mesh::~Mesh()
     delete vertexLayout;
     delete vbo;
     delete triMesh;
+}
+
+void Mesh::addVertexArray(VertexAttribUsage usage,void* dataPtr,int size,GLenum type,int numComponents)
+{
+    gl->glBindVertexArray(vao);
+
+    GLuint bufferId;
+    gl->glGenBuffers(1, &bufferId);
+    gl->glBindBuffer(GL_ARRAY_BUFFER, bufferId);
+    gl->glBufferData(GL_ARRAY_BUFFER, size, dataPtr, GL_STATIC_DRAW);
+
+    auto data = VertexArrayData();
+    data.usage = usage;
+    data.numComponents = numComponents;
+    data.type = type;
+    data.bufferId = bufferId;
+
+    vertexArrays[(int)usage] = data;
+
+    gl->glVertexAttribPointer((GLuint)usage,numComponents,type,GL_FALSE,0,0);
+    gl->glEnableVertexAttribArray((int)usage);
+
+    gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
+    gl->glBindVertexArray(0);
+}
+
+void Mesh::addIndexArray(void* data,int size,GLenum type)
+{
+
 }
 
 }

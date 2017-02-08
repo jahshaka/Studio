@@ -71,6 +71,7 @@ public:
     static ShaderPtr create(QOpenGLFunctions_3_2_Core* gl,QString vertexShader,QString fragmentShader);
 
     QOpenGLShaderProgram* program;
+    long shaderId;
 
     ~Shader();
 
@@ -102,6 +103,9 @@ public:
 private:
     Shader(QOpenGLFunctions_3_2_Core* gl,QString vertexShader,QString fragmentShader);
     QOpenGLFunctions_3_2_Core* gl;
+
+    static long generateNodeId();
+    static long nextId;
 
 protected:
     QMap<QString,ShaderValue*> attribs;

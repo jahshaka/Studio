@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "material.h"
 #include <QOpenGLFunctions_3_2_Core>
 #include "texture2d.h"
+#include "graphicshelper.h"
 
 namespace iris
 {
@@ -89,17 +90,7 @@ void Material::unbindTextures(QOpenGLFunctions_3_2_Core* gl)
 
 void Material::createProgramFromShaderSource(QString vsFile,QString fsFile)
 {
-    QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile(vsFile);
-
-    QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile(fsFile);
-
-    program = new QOpenGLShaderProgram;
-    program->addShader(vshader);
-    program->addShader(fshader);
-
-    program->link();
+    program = GraphicsHelper::loadShader(vsFile,fsFile);
 }
 
 void Material::setTextureCount(int count)

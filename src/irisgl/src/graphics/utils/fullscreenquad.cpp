@@ -45,8 +45,8 @@ FullScreenQuad::FullScreenQuad()
     data.append(1);data.append(1);
 
     auto layout = new VertexLayout();
-    layout->addAttrib("a_pos",GL_FLOAT,3,sizeof(GLfloat)*3);
-    layout->addAttrib("a_texCoord",GL_FLOAT,2,sizeof(GLfloat)*2);
+    layout->addAttrib(VertexAttribUsage::Position, GL_FLOAT, 3, sizeof(GLfloat) * 3);
+    layout->addAttrib(VertexAttribUsage::TexCoord0, GL_FLOAT, 2, sizeof(GLfloat) * 2);
 
     mesh = new iris::Mesh(data.data(),data.size()*sizeof(float),6,layout);
 
@@ -62,7 +62,7 @@ FullScreenQuad::~FullScreenQuad()
 
 void FullScreenQuad::draw(QOpenGLFunctions_3_2_Core* gl)
 {
-    shader->bind();
+    //shader->bind();
     mesh->draw(gl,shader);
 }
 

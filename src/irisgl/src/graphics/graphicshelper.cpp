@@ -37,9 +37,16 @@ QOpenGLShaderProgram* GraphicsHelper::loadShader(QString vsPath,QString fsPath)
     auto program = new QOpenGLShaderProgram;
     program->addShader(vshader);
     program->addShader(fshader);
-    program->link();
 
-    //todo: check for errors
+    program->bindAttributeLocation("a_pos",(int)VertexAttribUsage::Position);
+    program->bindAttributeLocation("a_texCoord",(int)VertexAttribUsage::TexCoord0);
+    program->bindAttributeLocation("a_texCoord1",(int)VertexAttribUsage::TexCoord1);
+    program->bindAttributeLocation("a_texCoord2",(int)VertexAttribUsage::TexCoord2);
+    program->bindAttributeLocation("a_texCoord3",(int)VertexAttribUsage::TexCoord3);
+    program->bindAttributeLocation("a_normal",(int)VertexAttribUsage::Normal);
+    program->bindAttributeLocation("a_tangent",(int)VertexAttribUsage::Tangent);
+
+    program->link();
 
     return program;
 }
@@ -49,13 +56,13 @@ QList<iris::Mesh*> GraphicsHelper::loadAllMeshesFromFile(QString filePath)
     QList<Mesh*> meshes;
 
     Assimp::Importer importer;
-    const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(),aiProcessPreset_TargetRealtime_Fast);
+    const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(), aiProcessPreset_TargetRealtime_Fast);
 
     if(scene)
     {
-        for(unsigned i=0;i<scene->mNumMeshes;i++)
+        for(unsigned i = 0; i < scene->mNumMeshes; i++)
         {
-            auto mesh = new Mesh(scene->mMeshes[i],VertexLayout::createMeshDefault());
+            auto mesh = new Mesh(scene->mMeshes[i]);
             meshes.append(mesh);
         }
     }

@@ -75,14 +75,10 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
         // aside from that, iris currently only renders meshes
         if(mesh->HasPositions())
         {
-            meshNode->setMesh(new Mesh(mesh,VertexLayout::createMeshDefault()));
+            meshNode->setMesh(new Mesh(mesh));
             meshNode->name = QString(mesh->mName.C_Str());
             meshNode->meshPath = filePath;
             meshNode->meshIndex = node->mMeshes[0];
-
-            // apply material
-            auto mat = iris::DefaultMaterial::create();
-            meshNode->setMaterial(mat);
 
             // mesh->mMaterialIndex is always at least 0
             auto m = scene->mMaterials[mesh->mMaterialIndex];
@@ -91,6 +87,8 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
             auto meshMat = iris::MaterialHelper::createMaterial(m, dir);
             if(!!meshMat)
                 meshNode->setMaterial(meshMat);
+            else
+                meshNode->setMaterial(iris::DefaultMaterial::create());
 
         }
         sceneNode = meshNode;
@@ -109,11 +107,19 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
             meshNode->meshPath = filePath;
             meshNode->meshIndex = node->mMeshes[i];
 
-            meshNode->setMesh(new Mesh(mesh,VertexLayout::createMeshDefault()));
+            meshNode->setMesh(new Mesh(mesh));
             sceneNode->addChild(meshNode);
 
             //apply material
-            meshNode->setMaterial(iris::DefaultMaterial::create());
+            //meshNode->setMaterial(iris::DefaultMaterial::create());
+            auto m = scene->mMaterials[mesh->mMaterialIndex];
+            auto dir = QFileInfo(filePath).absoluteDir().absolutePath();
+
+            auto meshMat = iris::MaterialHelper::createMaterial(m, dir);
+            if(!!meshMat)
+                meshNode->setMaterial(meshMat);
+            else
+                meshNode->setMaterial(iris::DefaultMaterial::create());
         }
 
     }
@@ -154,7 +160,7 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath)
     {
         auto mesh = scene->mMeshes[0];
         auto node = iris::MeshNode::create();
-        node->setMesh(new Mesh(scene->mMeshes[0],VertexLayout::createMeshDefault()));
+        node->setMesh(new Mesh(scene->mMeshes[0]));
         node->meshPath = filePath;
         node->meshIndex = 0;
 

@@ -21,12 +21,13 @@ class QOpenGLShaderProgram;
 namespace iris
 {
 
+class Mesh;
+
 class Billboard
 {
     friend class ForwardRenderer;
 
-    GLuint vao;
-    QOpenGLBuffer* vbo;
+    Mesh* mesh;
     QOpenGLShaderProgram* program;
 
 public:

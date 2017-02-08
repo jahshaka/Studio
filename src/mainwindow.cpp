@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include <qstandarditemmodel.h>
 #include <QKeyEvent>
 #include <QMessageBox>
+#include <QOpenGLDebugLogger>
 
 #include <QFileDialog>
 
@@ -228,6 +229,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     // second node
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/models/ground.obj"));
+    //node->setMesh(getAbsoluteAssetPath("app/models/cube.obj"));
     node->scale = QVector3D(.5, .5, .5);
     node->setName("Ground");
     node->setPickable(false);
@@ -268,6 +270,22 @@ iris::ScenePtr MainWindow::createDefaultScene()
 //create test scene
 void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
 {
+
+    auto m_logger = new QOpenGLDebugLogger( this );
+
+    connect( m_logger, &QOpenGLDebugLogger::messageLogged,this,
+             [](QOpenGLDebugMessage msg)
+    {
+        auto message = msg.message();
+        //qDebug() << message;
+    });
+
+    if ( m_logger->initialize() ) {
+        m_logger->startLogging( QOpenGLDebugLogger::SynchronousLogging );
+        m_logger->enableMessages();
+    }
+
+
     auto scene = this->createDefaultScene();
 
     this->setScene(scene);
@@ -654,6 +672,7 @@ void MainWindow::setSceneAnimTime(float time)
  */
 void MainWindow::addCube()
 {
+    this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/content/primitives/cube.obj"));
     node->setName("Cube");
@@ -666,6 +685,7 @@ void MainWindow::addCube()
  */
 void MainWindow::addTorus()
 {
+    this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/content/primitives/torus.obj"));
     node->setName("Torus");
@@ -678,6 +698,7 @@ void MainWindow::addTorus()
  */
 void MainWindow::addSphere()
 {
+    this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/content/primitives/sphere.obj"));
     node->setName("Sphere");
@@ -690,6 +711,7 @@ void MainWindow::addSphere()
  */
 void MainWindow::addCylinder()
 {
+    this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/content/primitives/cylinder.obj"));
     node->setName("Cylinder");
@@ -699,6 +721,7 @@ void MainWindow::addCylinder()
 
 void MainWindow::addPointLight()
 {
+    this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Point);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
@@ -710,6 +733,7 @@ void MainWindow::addPointLight()
 
 void MainWindow::addSpotLight()
 {
+    this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Spot);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
@@ -720,6 +744,7 @@ void MainWindow::addSpotLight()
 
 void MainWindow::addDirectionalLight()
 {
+    this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Directional);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
@@ -730,6 +755,7 @@ void MainWindow::addDirectionalLight()
 
 void MainWindow::addMesh()
 {
+
     QString dir = QApplication::applicationDirPath()+"/assets/models/";
     //qDebug()<<dir;
     auto filename = QFileDialog::getOpenFileName(this,"Load Mesh",dir,"Mesh Files (*.obj *.fbx *.3ds)");
@@ -737,6 +763,7 @@ void MainWindow::addMesh()
     if(filename.isEmpty())
         return;
 
+    this->sceneView->makeCurrent();
     auto node = iris::MeshNode::loadAsSceneFragment(filename);
 
     // model file may be invalid so null gets returned
@@ -898,9 +925,11 @@ void MainWindow::updateSceneSettings()
 
 void MainWindow::newScene()
 {
+    this->sceneView->makeCurrent();
     auto scene = this->createDefaultScene();
     this->setScene(scene);
     this->sceneView->resetEditorCam();
+    this->sceneView->doneCurrent();
 }
 
 void MainWindow::showAboutDialog()
