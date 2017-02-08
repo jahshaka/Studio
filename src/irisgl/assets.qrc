@@ -12,5 +12,7 @@
         <file>assets/shaders/color.frag</file>
         <file>assets/shaders/billboard.frag</file>
         <file>assets/shaders/billboard.vert</file>
+        <file>assets/models/head.png</file>
+        <file>assets/models/head.obj</file>
     </qresource>
 </RCC>

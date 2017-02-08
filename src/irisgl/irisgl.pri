@@ -44,7 +44,8 @@ HEADERS += \
     $$PWD/src/animation/animation.h \
     $$PWD/src/materials/materialhelper.h \
     $$PWD/src/core/irisutils.h \
-    $$PWD/src/scenegraph/viewernode.h
+    $$PWD/src/scenegraph/viewernode.h \
+    $$PWD/src/materials/viewermaterial.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -71,7 +72,8 @@ SOURCES += \
     $$PWD/src/animation/animation.cpp \
     $$PWD/src/animation/keyframeset.cpp \
     $$PWD/src/materials/materialhelper.cpp \
-    $$PWD/src/scenegraph/viewernode.cpp
+    $$PWD/src/scenegraph/viewernode.cpp \
+    $$PWD/src/materials/viewermaterial.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

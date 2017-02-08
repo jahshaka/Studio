@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "assimp/mesh.h"
 
 #include <QString>
+#include <QFile>
 #include <QOpenGLBuffer>
 #include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLTexture>
@@ -126,7 +127,7 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLen
     gl->glBindVertexArray(vao);
     if(usesIndexBuffer)
     {
-        gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer);
+        gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,QFileindexBuffer);
         gl->glDrawElements(GL_TRIANGLES,numVerts,GL_UNSIGNED_INT,0);
     }
     else
@@ -139,7 +140,19 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLen
 Mesh* Mesh::loadMesh(QString filePath)
 {
     Assimp::Importer importer;
-    const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(),aiProcessPreset_TargetRealtime_Fast);
+    const aiScene *scene;
+
+    if(filePath.startsWith(":") || filePath.startsWith("qrc:"))
+    {
+        // loads mesh from resource
+        QFile file(filePath);
+        file.open(QIODevice::ReadOnly);
+        auto data = file.readAll();
+        scene = importer.ReadFileFromMemory((void*)data.data(), data.length(), aiProcessPreset_TargetRealtime_Fast);
+    }
+    else
+        scene = importer.ReadFile(filePath.toStdString().c_str(),aiProcessPreset_TargetRealtime_Fast);
+
 
     auto mesh = scene->mMeshes[0];
 
