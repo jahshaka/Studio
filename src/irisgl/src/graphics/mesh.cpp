@@ -127,7 +127,7 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLen
     gl->glBindVertexArray(vao);
     if(usesIndexBuffer)
     {
-        gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,QFileindexBuffer);
+        gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer);
         gl->glDrawElements(GL_TRIANGLES,numVerts,GL_UNSIGNED_INT,0);
     }
     else

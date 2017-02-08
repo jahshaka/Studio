@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "irisgl/src/core/scene.h"
 #include "irisgl/src/core/scenenode.h"
 #include "irisgl/src/scenegraph/lightnode.h"
+#include "irisgl/src/scenegraph/viewernode.h"
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/graphics/forwardrenderer.h"
 #include "irisgl/src/graphics/mesh.h"
@@ -749,6 +750,22 @@ void MainWindow::addDirectionalLight()
     node->setLightType(iris::LightType::Directional);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
 
+
+    addNodeToScene(node);
+}
+
+void MainWindow::addEmpty()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::SceneNode::create();
+
+    addNodeToScene(node);
+}
+
+void MainWindow::addViewer()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::ViewerNode::create();
 
     addNodeToScene(node);
 }
