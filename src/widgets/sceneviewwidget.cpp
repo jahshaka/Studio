@@ -135,7 +135,7 @@ void SceneViewWidget::updateScene(bool once)
     // update and draw the 3d manipulation gizmo
     if (!!viewportGizmo->lastSelectedNode) {
         viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
-        viewportGizmo->render(renderer->GLA, ViewMatrix, ProjMatrix);
+        viewportGizmo->render(editorCam->viewMatrix, editorCam->projMatrix);
     }
 }
 
@@ -183,8 +183,7 @@ void SceneViewWidget::renderScene()
         scene->update(dt);
 
         if (viewportMode == ViewportMode::Editor) {
-            // @TODO: find a better way to get the MV matrix from our ogl context
-            renderer->renderScene(this->context(), viewport, ViewMatrix, ProjMatrix);
+            renderer->renderScene(this->context(), viewport);
         } else {
             renderer->renderSceneVr(this->context(), viewport);
         }
