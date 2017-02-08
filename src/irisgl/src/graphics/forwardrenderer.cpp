@@ -137,7 +137,7 @@ void ForwardRenderer::renderScene(QOpenGLContext* ctx,
     // STEP 3: RENDER LINES (for e.g. light radius and the camera frustum)
 
     // STEP 4: RENDER BILLBOARD ICONS
-    //renderBillboardIcons(renderData);
+    renderBillboardIcons(renderData);
 
     // STEP 5: RENDER SELECTED OBJECT
     if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);

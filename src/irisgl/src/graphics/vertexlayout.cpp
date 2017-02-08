@@ -11,77 +11,45 @@ For more information see the LICENSE file
 
 #include "vertexlayout.h"
 #include "shader.h"
+#include <QOpenGLFunctions_3_2_Core>
 
 namespace iris
 {
 
 VertexLayout::VertexLayout()
 {
+    gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
     stride = 0;
 }
 
-void VertexLayout::addAttrib(QString name,int type,int count,int sizeInBytes)
+void VertexLayout::addAttrib(VertexAttribUsage usage,int type,int count,int sizeInBytes)
 {
-    VertexAttribute attrib = {attribs.size(),name,type,count,sizeInBytes};
+    VertexAttribute attrib = {usage, type, count, sizeInBytes};
     attribs.append(attrib);
 
     stride += sizeInBytes;
 }
 
-//todo: make this more efficient
-void VertexLayout::bind(QOpenGLShaderProgram* program)
+void VertexLayout::bind()
 {
     int offset = 0;
     for(auto attrib: attribs)
     {
-        attrib.loc = program->attributeLocation(attrib.name);//todo: do this once per shader
-        program->enableAttributeArray(attrib.loc);
-        //program->bindAttributeLocation(attrib.name,loc);// slow! causes shader relinking!
-
-        program->setAttributeBuffer(attrib.loc, attrib.type, offset, attrib.count,stride);
+        gl->glVertexAttribPointer((GLuint)attrib.usage, attrib.count, attrib.type, GL_FALSE, stride, (GLvoid*)offset);
+        gl->glEnableVertexAttribArray((int)attrib.usage);
         offset += attrib.sizeInBytes;
     }
 }
 
-void VertexLayout::unbind(QOpenGLShaderProgram* program)
+void VertexLayout::unbind()
 {
     for(auto attrib: attribs)
     {
-        program->disableAttributeArray(attrib.loc);
+        gl->glDisableVertexAttribArray((int)attrib.usage);
     }
 }
 
-void VertexLayout::bind(ShaderPtr shader)
-{
-    auto program = shader->program;
-    int offset = 0;
-    for(auto attrib: attribs)
-    {
-        if(!shader->attribs.contains(attrib.name))
-        {
-            offset += attrib.sizeInBytes;
-            continue;
-        }
-
-        auto shaderAttrib = shader->attribs[attrib.name];
-
-        attrib.loc = shaderAttrib->location;//todo: do this once per shader
-        program->enableAttributeArray(attrib.loc);
-
-        program->setAttributeBuffer(attrib.loc, attrib.type, offset, attrib.count,this->stride);
-        offset += attrib.sizeInBytes;
-    }
-}
-
-void VertexLayout::unbind(ShaderPtr shader)
-{
-    auto program = shader->program;
-    for(auto attrib: attribs)
-    {
-        program->disableAttributeArray(attrib.loc);
-    }
-}
-
+/*
 //default vertex layout for meshes
 VertexLayout* VertexLayout::createMeshDefault()
 {
@@ -94,5 +62,5 @@ VertexLayout* VertexLayout::createMeshDefault()
 
     return layout;
 }
-
+*/
 }

@@ -81,14 +81,11 @@ public:
         return triMesh;
     }
 
-    void draw(QOpenGLFunctions_3_2_Core* gl,Material* mat);
-    void draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* mat);
-    void draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* mat,GLenum primitiveMode);
+    void draw(QOpenGLFunctions_3_2_Core* gl, Material* mat, GLenum primitiveMode = GL_TRIANGLES);
+    void draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* mat, GLenum primitiveMode = GL_TRIANGLES);
 
     static Mesh* loadMesh(QString filePath);
 
-    //assumes mesh is triangulated
-    //makes copy of data
     //assumed ownership of vertexLayout
     static Mesh* create(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
 

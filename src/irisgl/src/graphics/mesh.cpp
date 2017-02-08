@@ -84,7 +84,6 @@ Mesh::Mesh(aiMesh* mesh)
     gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     usesIndexBuffer = true;
 
-    //gl->glBindVertexArray(0);
 }
 
 //todo: extract trimesh from data
@@ -94,46 +93,46 @@ Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
 
     gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
 
+    triMesh = nullptr;
+    this->vertexLayout = vertexLayout;
+    numVerts = numElements;
+
     gl->glGenVertexArrays(1,&vao);
     gl->glBindVertexArray(vao);
 
-    triMesh = nullptr;
-    this->vertexLayout = vertexLayout;
+    GLuint vbo;
+    gl->glGenBuffers(1, &vbo);
+    gl->glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    gl->glBufferData(GL_ARRAY_BUFFER,dataSize,data,GL_STATIC_DRAW);
 
-    numVerts = numElements;
+    vertexLayout->bind();
 
+    gl->glBindBuffer(GL_ARRAY_BUFFER,0);
     gl->glBindVertexArray(0);
 
     usesIndexBuffer = false;
 }
 
-void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,Material* mat)
+void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,Material* mat,GLenum primitiveMode)
 {
-    draw(gl,mat->program);
+    draw(gl,mat->program,primitiveMode);
 }
 
-void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program)
+void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLenum primitiveMode)
 {
     auto programId = program->programId();
     gl->glUseProgram(programId);
 
     gl->glBindVertexArray(vao);
-    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer);
-    gl->glDrawElements(GL_TRIANGLES,numVerts,GL_UNSIGNED_INT,0);
-    gl->glBindVertexArray(0);
-}
-
-void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLenum primitiveMode)
-{
-    return;
-
-    gl->glBindVertexArray(vao);
-    vbo->bind();
-
-    vertexLayout->bind(program);
-    gl->glDrawArrays(primitiveMode,0,numVerts);
-    vertexLayout->unbind(program);
-
+    if(usesIndexBuffer)
+    {
+        gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer);
+        gl->glDrawElements(GL_TRIANGLES,numVerts,GL_UNSIGNED_INT,0);
+    }
+    else
+    {
+        gl->glDrawArrays(GL_TRIANGLES,0,numVerts);
+    }
     gl->glBindVertexArray(0);
 }
 
