@@ -36,7 +36,7 @@ public:
     }
 
     TranslationGizmo(const QSharedPointer<iris::CameraNode>& camera) {
-
+        gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
         this->camera = camera;
         scale = 1.f;
         POINTER = iris::Scene::create();
@@ -130,13 +130,15 @@ public:
     }
 
     void createHandleShader() {
-        handleShader = iris::GraphicsHelper::loadShader(IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"),
-                                                  IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.frag"));
+        handleShader = iris::GraphicsHelper::loadShader(
+                    IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"),
+                    IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.frag")
+        );
 
         handleShader->link();
     }
 
-    void render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix) {
+    void render(QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix) {
         handleShader->bind();
 
         if (!!this->currentNode) {

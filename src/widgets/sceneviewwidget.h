@@ -158,9 +158,6 @@ private:
 
     QVector3D calculateMouseRay(const QPointF& pos);
 
-    QMatrix4x4 ViewMatrix;
-    QMatrix4x4 ProjMatrix;
-
     GizmoInstance* translationGizmo;
     RotationGizmo* rotationGizmo;
     ScaleGizmo* scaleGizmo;

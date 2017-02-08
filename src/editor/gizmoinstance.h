@@ -14,10 +14,13 @@ For more information see the LICENSE file
 
 #include "gizmohandle.h"
 
+class QOpenGLFunctions_3_2_Core;
+
 class GizmoInstance
 {
 public:
-//    QSharedPointer<iris::Scene> POINTER;
+    QOpenGLFunctions_3_2_Core *gl;
+
     QSharedPointer<iris::SceneNode> lastSelectedNode;
     QSharedPointer<iris::SceneNode> currentNode;
     QVector3D finalHitPoint;
@@ -46,7 +49,7 @@ public:
 
     virtual void setTransformOrientation(const QString&) = 0;
 
-    virtual void render(QOpenGLFunctions_3_2_Core*, QMatrix4x4&, QMatrix4x4&) = 0;
+    virtual void render(QMatrix4x4&, QMatrix4x4&) = 0;
 
     virtual void isHandleHit() = 0;
 

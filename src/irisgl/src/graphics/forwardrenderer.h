@@ -77,15 +77,12 @@ public:
     }
 
     //all scenenodes' transform should be updated before calling this functions
-    void renderScene(QOpenGLContext* ctx, Viewport* vp, QMatrix4x4& vM, QMatrix4x4& pM);
+    void renderScene(QOpenGLContext* ctx, Viewport* vp);
     void renderSceneVr(QOpenGLContext* ctx, Viewport* vp);
-
-    QOpenGLFunctions_3_2_Core* GLA;
 
     static QSharedPointer<ForwardRenderer> create(QOpenGLFunctions_3_2_Core* gl);
 
     bool isVrSupported();
-
 
     ~ForwardRenderer();
 
@@ -96,7 +93,6 @@ private:
     void renderSky(RenderData* renderData);
     void renderBillboardIcons(RenderData* renderData);
     void renderSelectedNode(RenderData* renderData,QSharedPointer<SceneNode> node);
-
 
     void createLineShader();
 
@@ -110,7 +106,6 @@ private:
     //editor-specific
     iris::Billboard* billboard;
     FullScreenQuad* fsQuad;
-
 };
 
 }

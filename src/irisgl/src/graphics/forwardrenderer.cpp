@@ -42,7 +42,6 @@ namespace iris
 ForwardRenderer::ForwardRenderer(QOpenGLFunctions_3_2_Core* gl)
 {
     this->gl = gl;
-    this->GLA = gl;
     renderData = new RenderData();
 
     billboard = new Billboard(gl);
@@ -88,10 +87,7 @@ QSharedPointer<ForwardRenderer> ForwardRenderer::create(QOpenGLFunctions_3_2_Cor
 }
 
 // all scene's transform should be updated
-void ForwardRenderer::renderScene(QOpenGLContext* ctx,
-                                  Viewport* vp,
-                                  QMatrix4x4& viewMatrix,
-                                  QMatrix4x4& projMatrix)
+void ForwardRenderer::renderScene(QOpenGLContext* ctx, Viewport* vp)
 {
     auto cam = scene->camera;
 
@@ -101,8 +97,8 @@ void ForwardRenderer::renderScene(QOpenGLContext* ctx,
     cam->setAspectRatio(vp->getAspectRatio());
     cam->updateCameraMatrices();
 
-    projMatrix = renderData->projMatrix = cam->projMatrix;
-    viewMatrix = renderData->viewMatrix = cam->viewMatrix;
+    renderData->projMatrix = cam->projMatrix;
+    renderData->viewMatrix = cam->viewMatrix;
     renderData->eyePos = cam->globalTransform.column(3).toVector3D();
 
     renderData->fogColor = scene->fogColor;
