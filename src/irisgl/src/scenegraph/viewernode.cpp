@@ -7,6 +7,7 @@ namespace iris
 ViewerNode::ViewerNode()
 {
     this->sceneNodeType = SceneNodeType::Viewer;
+    headModel = nullptr;
 }
 
 }
