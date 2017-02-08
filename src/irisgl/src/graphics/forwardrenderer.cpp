@@ -53,11 +53,7 @@ ForwardRenderer::ForwardRenderer(QOpenGLFunctions_3_2_Core* gl)
     createShadowShader();
     createParticleShader();
 
-    pMaster = new ParticleMaster(gl);
-    pMaster->addParticle(new Particle(QVector3D(0, 4, 0), QVector3D(0, 50, 0), 0.5, 5, 0, 3));
-    pMaster->addParticle(new Particle(QVector3D(1, 4, 0), QVector3D(0, 30, 0), 1, 5, 45, 1));
-
-    pSystem = new ParticleSystem(gl, 10, 25, .3f, 4);
+    pSystem = new ParticleSystem(gl, 50, 25, .3f, 4);
 
     generateShadowBuffer(4096);
 
@@ -192,13 +188,8 @@ void ForwardRenderer::renderShadows(RenderData* renderData,QSharedPointer<SceneN
 
 void ForwardRenderer::renderParticles(RenderData *renderData)
 {
-
-    particleShader->bind();
-    //pMaster->update((float) 1/50);
-    //pMaster->renderParticles(gl, particleShader, renderData);
-
-    pSystem->generateParticles(QVector3D(0, 0, 0), (float) 1/50);
-    pSystem->pm.update((float) 1/50);
+    pSystem->generateParticles(QVector3D(0, 0, 0), 1.f/60.f);
+    pSystem->pm.update(1.f/60.f);
     pSystem->pm.renderParticles(gl, particleShader, renderData);
 }
 

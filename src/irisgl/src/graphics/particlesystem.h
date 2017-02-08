@@ -15,8 +15,7 @@ class ParticleSystem {
 public:
     ParticleMaster pm;
 
-    int randInRange(int min, int max)
-    {
+    int randInRange(int min, int max) {
       return min + (int) (rand() / (double) (RAND_MAX + 1) * (max - min + 1));
     }
 
@@ -36,26 +35,26 @@ public:
     void generateParticles(QVector3D systemCenter, float delta){
         float particlesToCreate = pps * delta;
         int count = (int) floor(particlesToCreate);
-        float partialParticle = (int) particlesToCreate % 1;
+        float partialParticle = fmod(particlesToCreate, 1);
 
-        for(int i=0;i<count;i++){
+        for (int i = 0; i < count; i++) {
             emitParticle(systemCenter);
         }
 
-        float rand_ = randInRange(-1, 2);
-        if (rand_ < partialParticle){
+        if (static_cast <float> (rand()) / static_cast <float> (RAND_MAX) < partialParticle) {
             emitParticle(systemCenter);
         }
     }
 
     void emitParticle(QVector3D center){
-        float dirX = (float) randInRange(-1, 2) * 2.f - 1.f;
-        float dirZ = (float) randInRange(-1, 2) * 2.f - 1.f;
+        float dirX = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 2.f - 1.f;
+        float dirZ = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 2.f - 1.f;
         QVector3D velocity = QVector3D(dirX, 1, dirZ);
         velocity.normalize();
         velocity *= speed;
-        //new Particles(QVector3D(center), velocity, gravityComplient, lifeLength, 0, 1);
-        pm.addParticle(new Particle(QVector3D(center), velocity, gravityComplient, lifeLength, 0, 1));
+
+        // reuse particles! this is bad.
+        pm.addParticle(new Particle(QVector3D(center), velocity, gravityComplient, lifeLength, static_cast <float> (rand()) / static_cast <float> (RAND_MAX) / 90, 1));
     }
 };
 

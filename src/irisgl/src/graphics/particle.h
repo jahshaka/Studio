@@ -2,7 +2,6 @@
 #define PARTICLE_H
 
 #include <QVector3D>
-#include <QDebug>
 
 class Particle {
 
@@ -19,13 +18,13 @@ private:
     float GRAVITY = -50;
 
 public:
-    Particle(QVector3D p, QVector3D v, float g, float ll, float r, float s) {
-        position = p;
-        velocity = v;
-        gravityEffect =  g;
+    Particle(QVector3D pos, QVector3D vel, float gr, float ll, float rot, float scl) {
+        position = pos;
+        velocity = vel;
+        gravityEffect = gr;
         lifeLength = ll;
-        rotation = r;
-        scale = s;
+        rotation = rot;
+        scale = scl;
     }
 
     float getRotation() {
@@ -41,15 +40,11 @@ public:
     }
 
     bool update(float delta) {
-        // @TODO -- remove if too old
-        float cit = GRAVITY * gravityEffect * delta;
-        velocity += QVector3D(0, cit, 0);
+        velocity += QVector3D(0, GRAVITY * gravityEffect * delta, 0);
         QVector3D change = velocity;
         change *= delta;
         position += change;
         elapsedTime += delta;
-
-        qDebug() << change << endl;
 
         return elapsedTime < lifeLength;
     }

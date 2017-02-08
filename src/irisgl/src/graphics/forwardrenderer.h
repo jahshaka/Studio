@@ -106,7 +106,6 @@ private:
     GLuint shadowFBO;
     GLuint shadowDepthMap;
 
-    ParticleMaster *pMaster;
     ParticleSystem *pSystem;
 
     void createShadowShader();

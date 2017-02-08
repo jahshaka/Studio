@@ -13,6 +13,10 @@ For more information see the LICENSE file
 
 out vec4 FragColor;
 
+in vec2 o_texCoord;
+
+uniform sampler2D pTex;
+
 void main() {
-    FragColor = vec4(1, 1, 1, 1);
+    FragColor = texture(pTex, o_texCoord);
 }

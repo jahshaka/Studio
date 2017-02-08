@@ -1,6 +1,7 @@
 #ifndef PARTICLEMASTER_H
 #define PARTICLEMASTER_H
 
+#include <iostream>
 #include "particle.h"
 #include "particlerender.h"
 
@@ -8,7 +9,7 @@
 
 class ParticleMaster {
 private:
-    std::vector<Particle*> particles;
+    std::list<Particle*> particles;
     ParticleRenderer renderer;
 
 public:
@@ -17,8 +18,16 @@ public:
     }
 
     void update(float delta) {
-        for (int i = 0; i < particles.size(); i++) {
-            particles[i]->update(delta);
+        std::list<Particle*>::iterator it = particles.begin();
+
+        while (it != particles.end()) {
+            bool alive = (*it)->update(delta);
+
+            if (!alive) {
+                it = particles.erase(it++);
+            }
+
+            ++it;
         }
     }
 
