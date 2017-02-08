@@ -15,6 +15,8 @@ For more information see the LICENSE file
 #include "../scenegraph/cameranode.h"
 #include "../scenegraph/meshnode.h"
 #include "../scenegraph/lightnode.h"
+#include "../scenegraph/viewernode.h"
+#include "../materials/viewermaterial.h"
 #include "mesh.h"
 #include "graphicshelper.h"
 #include "renderdata.h"
@@ -22,6 +24,7 @@ For more information see the LICENSE file
 #include <QOpenGLShaderProgram>
 #include <QOpenGLFunctions>
 #include <QOpenGLFunctions_3_2_Core>
+#include <QSharedPointer>
 #include <QOpenGLTexture>
 #include "viewport.h"
 #include "utils/billboard.h"
@@ -241,11 +244,31 @@ bool ForwardRenderer::isVrSupported()
 
 void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode> node)
 {
-    if(node->sceneNodeType==SceneNodeType::Mesh && node->isVisible())
+    iris::Mesh* mesh = nullptr;
+    iris::Material* mat = nullptr;
+
+    if(node->isVisible())
+    {
+        if(node->sceneNodeType == iris::SceneNodeType::Mesh)
+        {
+            auto meshNode = node.staticCast<MeshNode>();
+            mesh = meshNode->mesh;
+            mat = meshNode->material.data();
+        }
+        else if(node->sceneNodeType == iris::SceneNodeType::Viewer)
+        {
+            auto veiwerNode = node.staticCast<ViewerNode>();
+            mesh = veiwerNode->headModel;
+            mat = static_cast<iris::Material*>(veiwerNode->material.data());
+        }
+    }
+
+    //if(node->sceneNodeType==SceneNodeType::Mesh && node->isVisible())
+    if(mesh != nullptr && mat != nullptr)
     {
         //qDebug()<<node->getName()+" is "+(node->isVisible()?"visible":"invisible")<<endl;
         auto meshNode = node.staticCast<MeshNode>();
-        auto mat = meshNode->material;
+        //auto mat = meshNode->material;
 
         auto program = mat->program;
 

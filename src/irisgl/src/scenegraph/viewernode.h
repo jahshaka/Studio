@@ -15,7 +15,7 @@ public:
     ViewerNode();
 
     Mesh* headModel;
-    ViewerMaterial* material;
+    ViewerMaterialPtr material;
 };
 
 }
