@@ -168,8 +168,6 @@ void SceneViewWidget::paintGL()
 {
     makeCurrent();
 
-    float dt = 1.0f / 60.0f;
-    // scene->update(dt);
     renderScene();
 }
 
@@ -178,8 +176,6 @@ void SceneViewWidget::renderScene()
     glClearColor(.3f, .3f, .3f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    //todo: find actual delta time
-    //const float dt = 1.0f / 60.0f;
     float dt = elapsedTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
 
     if (!!renderer && !!scene) {
