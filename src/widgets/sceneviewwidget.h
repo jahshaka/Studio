@@ -39,6 +39,7 @@ class EditorCameraController;
 class QOpenGLShaderProgram;
 class CameraControllerBase;
 class OrbitalCameraController;
+class QElapsedTimer;
 
 class GizmoInstance;
 class ViewportGizmo;
@@ -73,6 +74,8 @@ class SceneViewWidget : public QOpenGLWidget,
     OrbitalCameraController* orbitalCam;
 
     ViewportMode viewportMode;
+
+    QElapsedTimer* elapsedTimer;
 public:
     iris::CameraNodePtr editorCam;
 

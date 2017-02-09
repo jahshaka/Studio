@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QMouseEvent>
 #include <QtMath>
 #include <QDebug>
+#include <QElapsedTimer>
 
 #include "../irisgl/src/irisgl.h"
 #include "../irisgl/src/core/scenenode.h"
@@ -78,6 +79,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     viewportMode = ViewportMode::Editor;
 
+    elapsedTimer = new QElapsedTimer();
 }
 
 void SceneViewWidget::resetEditorCam()
@@ -158,6 +160,8 @@ void SceneViewWidget::initializeGL()
     auto timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(update()));
     timer->start();
+
+    this->elapsedTimer->start();
 }
 
 void SceneViewWidget::paintGL()
@@ -175,7 +179,8 @@ void SceneViewWidget::renderScene()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     //todo: find actual delta time
-    const float dt = 1.0f / 60.0f;
+    //const float dt = 1.0f / 60.0f;
+    float dt = elapsedTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
 
     if (!!renderer && !!scene) {
         this->camController->update(dt);
