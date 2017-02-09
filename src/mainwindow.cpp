@@ -515,18 +515,20 @@ void MainWindow::saveSceneAs()
 
 void MainWindow::loadScene()
 {
+
     QString dir = QApplication::applicationDirPath()+"/scenes/";
     auto filename = QFileDialog::getOpenFileName(this,"Open Scene File",dir,"Jashaka Scene (*.jah)");
 
     if(filename.isEmpty() || filename.isNull())
         return;
 
+
     openProject(filename);
 }
 
 void MainWindow::openProject(QString filename)
 {
-
+    this->sceneView->makeCurrent();
     //remove current scene first
     this->removeScene();
 
@@ -534,7 +536,9 @@ void MainWindow::openProject(QString filename)
     auto reader = new SceneReader();
 
     EditorData* editorData = nullptr;
+
     auto scene = reader->readScene(filename,&editorData);
+    this->sceneView->doneCurrent();
     setScene(scene);
     if(editorData != nullptr)
         sceneView->setEditorData(editorData);

@@ -14,5 +14,7 @@
         <file>assets/shaders/billboard.vert</file>
         <file>assets/models/head.png</file>
         <file>assets/models/head.obj</file>
+        <file>assets/shaders/viewer.frag</file>
+        <file>assets/shaders/viewer.vert</file>
     </qresource>
 </RCC>

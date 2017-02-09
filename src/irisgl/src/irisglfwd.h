@@ -23,6 +23,7 @@ namespace iris
 
 class CameraNode;
 class LightNode;
+class ViewerNode;
 class Mesh;
 class Material;
 class MeshNode;
@@ -65,6 +66,7 @@ typedef QSharedPointer<ForwardRenderer> ForwardRendererPtr;
 typedef QSharedPointer<KeyFrameSet> KeyFrameSetPtr;
 typedef QSharedPointer<FloatKeyFrame> FloatKeyFramePtr;
 typedef QSharedPointer<ViewerMaterial> ViewerMaterialPtr;
+typedef QSharedPointer<ViewerNode> ViewerNodePtr;
 
 
 
