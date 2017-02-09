@@ -1,6 +1,7 @@
 #ifndef VIEWERNODE_H
 #define VIEWERNODE_H
 
+#include "../irisglfwd.h"
 #include "../core/scenenode.h"
 
 namespace iris
@@ -11,11 +12,13 @@ class ViewerMaterial;
 
 class ViewerNode : public SceneNode
 {
-public:
     ViewerNode();
 
+public:
     Mesh* headModel;
     ViewerMaterialPtr material;
+
+    static ViewerNodePtr create();
 };
 
 }

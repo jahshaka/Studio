@@ -25,8 +25,10 @@ For more information see the LICENSE file
 
 #include "../irisgl/src/core/scene.h"
 #include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/core/irisutils.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
+#include "../irisgl/src/scenegraph/viewernode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/graphics/texture2d.h"
@@ -128,6 +130,8 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
         sceneNode = createMesh(nodeObj).staticCast<iris::SceneNode>();
     else if(nodeType=="light")
         sceneNode = createLight(nodeObj).staticCast<iris::SceneNode>();
+    else if(nodeType=="viewer")
+        sceneNode = iris::ViewerNode::create();
     else
         sceneNode = iris::SceneNode::create();
 
@@ -261,7 +265,10 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->color = readColor(nodeObj["color"].toObject());
 
     //todo: move this to the sceneview widget or somewhere more appropriate
-    lightNode->icon = iris::Texture2D::load("app/icons/bulb.png");
+    if(lightNode->lightType == iris::LightType::Directional)
+        lightNode->icon = iris::Texture2D::load(IrisUtils::getAbsoluteAssetPath("app/icons/light.png"));
+    else
+        lightNode->icon = iris::Texture2D::load(IrisUtils::getAbsoluteAssetPath("app/icons/bulb.png"));
     lightNode->iconSize = 0.5f;
 
     return lightNode;

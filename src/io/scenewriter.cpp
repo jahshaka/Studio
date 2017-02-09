@@ -236,6 +236,8 @@ QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)
         return "light";
     case iris::SceneNodeType::Mesh:
         return "mesh";
+    case iris::SceneNodeType::Viewer:
+        return "viewer";
     default:
         return "empty";
     }
