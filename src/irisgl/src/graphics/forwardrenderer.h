@@ -62,6 +62,7 @@ class ForwardRenderer
     QOpenGLShaderProgram* lineShader;
     QOpenGLShaderProgram* shadowShader;
     QOpenGLShaderProgram* particleShader;
+    QOpenGLShaderProgram* emitterShader;
 
     VrDevice* vrDevice;
 
@@ -102,6 +103,10 @@ private:
 
     void createLineShader();
     void createParticleShader();
+    void createEmitterShader();
+
+    QVector3D ppos;
+    bool system;
 
     GLuint shadowFBO;
     GLuint shadowDepthMap;

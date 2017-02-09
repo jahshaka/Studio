@@ -32,8 +32,7 @@ public:
 
     MaterialPtr material;
 
-    static MeshNodePtr create()
-    {
+    static MeshNodePtr create() {
         return MeshNodePtr(new MeshNode());
     }
 
@@ -52,14 +51,18 @@ public:
     Mesh* getMesh();
 
     void setMaterial(MaterialPtr material);
-    MaterialPtr getMaterial()
-    {
+
+    MaterialPtr getMaterial() {
         return material;
     }
 
+    // not needed because this guy likes public members...
+    void setNodeType(SceneNodeType type) {
+        sceneNodeType = type;
+    }
+
 private:
-    MeshNode()
-    {
+    MeshNode() {
         mesh = nullptr;
         sceneNodeType = SceneNodeType::Mesh;
     }

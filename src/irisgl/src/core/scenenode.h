@@ -23,6 +23,7 @@ namespace iris
 enum class SceneNodeType
 {
     Empty,
+    Emitter,
     Mesh,
     Light,
     Camera,

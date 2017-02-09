@@ -776,6 +776,17 @@ void MainWindow::addViewer()
     addNodeToScene(node);
 }
 
+void MainWindow::addParticleSystem()
+{
+    auto node = iris::MeshNode::create();
+    node->setMesh(getAbsoluteAssetPath("app/content/primitives/cube.obj"));
+    node->setName("Emitter");
+    node->scale = QVector3D(.2f, .2f, .2f);
+    node->sceneNodeType = iris::SceneNodeType::Emitter;
+
+    addNodeToScene(node);
+}
+
 void MainWindow::addMesh()
 {
 
@@ -852,34 +863,29 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
  */
 void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
 {
-    if(!scene)
-    {
-        //todo: set alert that a scene needs to be set before this can be done
+    if (!scene) {
+        // @TODO: set alert that a scene needs to be set before this can be done
         return;
     }
 
+    // @TODO: add this to a constants file
     const float spawnDist = 10.0f;
     auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, -1.0f, -spawnDist));
     offset += sceneView->editorCam->pos;
     sceneNode->pos = offset;
 
-    //apply default material
-    if(sceneNode->sceneNodeType == iris::SceneNodeType::Mesh)
-    {
+    // apply default material to mesh nodes
+    if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
-        if(!meshNode->getMaterial())
-        {
+        if (!meshNode->getMaterial()) {
             auto mat = iris::DefaultMaterial::create();
             meshNode->setMaterial(mat);
         }
-
     }
 
     scene->getRootNode()->addChild(sceneNode);
-
     ui->sceneHierarchy->repopulateTree();
-
     sceneNodeSelected(sceneNode);
 }
 

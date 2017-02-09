@@ -26,6 +26,7 @@ class MaterialPropertyWidget;
 class WorldPropertyWidget;
 class LightPropertyWidget;
 class FogPropertyWidget;
+class EmitterPropertyWidget;
 
 /**
  * This class shows the properties of selected nodes in the scene
@@ -59,9 +60,13 @@ private:
     AccordianBladeWidget* meshPropView;
 
     MaterialPropertyWidget* materialPropView;
+    EmitterPropertyWidget* emitterPropView;
     //MeshPropertyWidget* meshPropView;
     LightPropertyWidget* lightPropView;
     WorldPropertyWidget* worldPropView;
+
+    // this should be under world.. why does it have its own widget?
+    // @TODO: also add an option to customize shadows in the world settings..
     FogPropertyWidget* fogPropView;
 };
 
