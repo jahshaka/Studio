@@ -106,10 +106,13 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sc
     //todo: write data specific to node type
     switch (sceneNode->sceneNodeType) {
         case iris::SceneNodeType::Mesh:
-            writeMeshData(sceneNodeObj,sceneNode.staticCast<iris::MeshNode>());
+            writeMeshData(sceneNodeObj, sceneNode.staticCast<iris::MeshNode>());
         break;
         case iris::SceneNodeType::Light:
-            writeLightData(sceneNodeObj,sceneNode.staticCast<iris::LightNode>());
+            writeLightData(sceneNodeObj, sceneNode.staticCast<iris::LightNode>());
+        break;
+        case iris::SceneNodeType::Viewer:
+            writeViewerData(sceneNodeObj, sceneNode.staticCast<iris::ViewerNode>());
         break;
         default: break;
     }
@@ -174,6 +177,11 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject,iris::MeshNodePtr m
     QJsonObject matObj;
     writeSceneNodeMaterial(matObj,mat);
     sceneNodeObject["material"] = matObj;
+}
+
+void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode)
+{
+    sceneNodeObject["viewScale"] = viewerNode->getViewScale();
 }
 
 void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj,iris::DefaultMaterialPtr mat)

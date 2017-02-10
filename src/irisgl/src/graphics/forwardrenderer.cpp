@@ -187,14 +187,20 @@ void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
     if(!vrDevice->isVrSupported())
         return;
 
-    auto camera = scene->camera;
+    //auto camera = scene->camera;
+
+    QVector3D viewerPos = scene->camera->pos;
+
+    if(!!scene->vrViewer)
+        viewerPos = scene->vrViewer->pos;
+
     vrDevice->beginFrame();
 
     for (int eye = 0; eye < 2; ++eye)
     {
         vrDevice->beginEye(eye);
 
-        auto view = vrDevice->getEyeViewMatrix(eye,camera->pos);
+        auto view = vrDevice->getEyeViewMatrix(eye, viewerPos);
         renderData->eyePos = view.column(3).toVector3D();
         renderData->viewMatrix = view;
 

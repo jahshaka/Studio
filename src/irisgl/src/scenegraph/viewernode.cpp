@@ -15,6 +15,16 @@ ViewerNode::ViewerNode()
     this->material->setTexture(Texture2D::load(":/assets/models/head.png"));
 }
 
+void ViewerNode::setViewScale(float scale)
+{
+    this->viewScale = scale;
+}
+
+float ViewerNode::getViewScale()
+{
+    return this->viewScale;
+}
+
 ViewerNodePtr ViewerNode::create()
 {
     return ViewerNodePtr(new ViewerNode());
