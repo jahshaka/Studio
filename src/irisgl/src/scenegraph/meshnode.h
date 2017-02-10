@@ -14,6 +14,8 @@ For more information see the LICENSE file
 
 #include "../irisglfwd.h"
 #include "../core/scenenode.h"
+#include "../core/irisutils.h"
+#include "../graphics/texture2d.h"
 
 namespace iris
 {
@@ -61,10 +63,28 @@ public:
         sceneNodeType = type;
     }
 
+    // temporary boy...
+    bool isEmitter;
+    int m_index;
+    static int index;
+    float pps;
+    float speed;
+    float particleLife;
+    float gravity;
+    QSharedPointer<iris::Texture2D> texture;
+
 private:
-    MeshNode() {
+    MeshNode() : m_index(index++) {
         mesh = nullptr;
         sceneNodeType = SceneNodeType::Mesh;
+
+        texture = iris::Texture2D::load(
+                    IrisUtils::getAbsoluteAssetPath("assets/textures/particleStar.png")
+        );
+        pps = 50;
+        speed = 25;
+        gravity = .2f;
+        particleLife = 10;
     }
 };
 

@@ -10,9 +10,9 @@
 class ParticleMaster {
 private:
     std::list<Particle*> particles;
-    ParticleRenderer renderer;
 
 public:
+    ParticleRenderer renderer;
     ParticleMaster(QOpenGLFunctions_3_2_Core* gl) : renderer(gl) {
 
     }

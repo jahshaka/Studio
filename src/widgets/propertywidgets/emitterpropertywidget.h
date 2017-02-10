@@ -8,6 +8,8 @@
 
 namespace iris {
     class SceneNode;
+    class MeshNode;
+    class DefaultMaterial;
 }
 
 namespace Ui {
@@ -22,12 +24,29 @@ public:
     EmitterPropertyWidget();
     ~EmitterPropertyWidget();
 
+    void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
+
 protected slots:
-    // pass
+    void onEmissionRateChanged(float val);
+    void onParticleLifeChanged(float val);
+    void onRotationFactorChanged(float val);
+    void onScaleFactorChanged(float val);
+    void onGravityFactorChanged(float val);
+    void onVelocityFactorChanged(float val);
+    void onSortOrderChanged(bool val);
+    void onBillboardImageChanged(QString);
 
 private:
-    //Ui::EmitterPropertyWidget *ui;
-    QSharedPointer<iris::SceneNode> sceneNode;
+    QSharedPointer<iris::MeshNode> meshNode;
+
+    TexturePicker* billboardImage;
+    HFloatSlider* emissionRate;
+    HFloatSlider* particleLife;
+    HFloatSlider* rotationFactor;
+    HFloatSlider* scaleFactor;
+    HFloatSlider* gravityFactor;
+    HFloatSlider* velocityFactor;
+    CheckBoxProperty* sortOrder;
 };
 
 #endif // EMITTER_H

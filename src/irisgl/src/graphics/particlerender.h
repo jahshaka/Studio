@@ -16,13 +16,15 @@ private:
     QOpenGLFunctions_3_2_Core* gl;
 
     GLuint particleId;
-    QSharedPointer<iris::Texture2D> icon;
 
 public:
+    QSharedPointer<iris::Texture2D> icon;
     ParticleRenderer(QOpenGLFunctions_3_2_Core* gl) {
         this->gl = gl;
 
-        icon = iris::Texture2D::load(IrisUtils::getAbsoluteAssetPath("assets/textures/particleStar.png"));
+//        icon = iris::Texture2D::load(
+//                    IrisUtils::getAbsoluteAssetPath("assets/textures/default_particle.jpg")
+//        );
 
         GLfloat quadVertices[] = {
             -1.f,  1.f, 0.f,    0.0f, 1.0f,
@@ -72,6 +74,10 @@ public:
         shader->setUniformValue("modelViewMatrix", modelViewMatrix);
     }
 
+    void setIcon(QSharedPointer<iris::Texture2D> icon) {
+        this->icon = icon;
+    }
+
     void render(QOpenGLShaderProgram *shader,
                 iris::RenderData* renderData,
                 std::list<Particle*> particles)
@@ -83,7 +89,7 @@ public:
 
         gl->glBindVertexArray(quadVAO);
         gl->glEnable(GL_BLEND);
-        gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE);
         gl->glDepthMask(GL_FALSE);
 
         for (auto particle : particles) {
@@ -95,8 +101,10 @@ public:
                         viewMatrix
                     );
 
-            gl->glActiveTexture(GL_TEXTURE0);
-            icon->texture->bind();
+            if (!!icon) {
+                gl->glActiveTexture(GL_TEXTURE0);
+                icon->texture->bind();
+            }
             gl->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         }
 

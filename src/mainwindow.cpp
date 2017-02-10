@@ -756,7 +756,6 @@ void MainWindow::addDirectionalLight()
     node->setLightType(iris::LightType::Directional);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
 
-
     addNodeToScene(node);
 }
 
@@ -781,7 +780,6 @@ void MainWindow::addParticleSystem()
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/content/primitives/cube.obj"));
     node->setName("Emitter");
-    node->scale = QVector3D(.2f, .2f, .2f);
     node->sceneNodeType = iris::SceneNodeType::Emitter;
 
     addNodeToScene(node);
@@ -882,6 +880,12 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
             auto mat = iris::DefaultMaterial::create();
             meshNode->setMaterial(mat);
         }
+    }
+
+    // @TODO: create a specific node type for this instead of using meshnode
+    if (sceneNode->sceneNodeType == iris::SceneNodeType::Emitter) {
+        auto meshNode = sceneNode.staticCast<iris::MeshNode>();
+        meshNode->isEmitter = true;
     }
 
     scene->getRootNode()->addChild(sceneNode);

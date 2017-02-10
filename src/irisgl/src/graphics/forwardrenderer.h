@@ -105,17 +105,14 @@ private:
     void createParticleShader();
     void createEmitterShader();
 
-    QVector3D ppos;
-    bool system;
-
     GLuint shadowFBO;
     GLuint shadowDepthMap;
 
-    ParticleSystem *pSystem;
+    std::map<int, ParticleSystem*> particleSystems;
 
     void createShadowShader();
     void renderShadows(RenderData* renderData, QSharedPointer<SceneNode> node);
-    void renderParticles(RenderData* renderData);
+    void renderParticles(RenderData* renderData, QSharedPointer<SceneNode> node);
     void generateShadowBuffer(GLuint size = 1024);
 
     //editor-specific

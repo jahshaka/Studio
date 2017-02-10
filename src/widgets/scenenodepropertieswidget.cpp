@@ -107,7 +107,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             this->sceneNode = sceneNode;
             lightPropView->setSceneNode(sceneNode);
             materialPropView->setSceneNode(sceneNode);
-            //emitterPropView->setSceneNode(sceneNode);
+            emitterPropView->setSceneNode(sceneNode);
             transformWidget->setSceneNode(sceneNode);
 
             //delete this->layout();

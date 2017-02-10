@@ -53,6 +53,10 @@ public:
     SceneNodePtr parent;
     QList<SceneNodePtr> children;
 
+    friend bool operator == (const SceneNode& a, const SceneNode &b) {
+        return a.nodeId == b.nodeId;
+    }
+
     AnimationPtr animation;
 
     // editor specific

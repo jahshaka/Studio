@@ -18,7 +18,7 @@ CheckBoxProperty::CheckBoxProperty(QWidget *parent) :
     ui(new Ui::checkboxproperty)
 {
     ui->setupUi(this);
-    connect(ui->checkBox,SIGNAL(valueChanged(bool)),SLOT(onCheckboxValueChanged(bool)));
+    connect(ui->checkBox,SIGNAL(stateChanged(bool)),SLOT(onCheckboxValueChanged(bool)));
     connect(ui->checkBox,SIGNAL(clicked(bool)),SLOT(onCheckboxValueChanged(bool)));
 }
 

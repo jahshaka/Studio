@@ -114,8 +114,8 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addViewer()));
 
     //SYSTEMS
-    auto systemsMenu = addMenu->addMenu("Effect");
-    action = new QAction("Emitter", this);
+    auto systemsMenu = addMenu->addMenu("Emitter");
+    action = new QAction("Particle System", this);
     systemsMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addParticleSystem()));
 

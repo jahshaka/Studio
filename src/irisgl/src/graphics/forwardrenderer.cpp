@@ -54,7 +54,7 @@ ForwardRenderer::ForwardRenderer(QOpenGLFunctions_3_2_Core* gl)
     createParticleShader();
     createEmitterShader();
 
-    pSystem = new ParticleSystem(gl, 50, 25, .3f, 4);
+    // particleSystems.push_back(new ParticleSystem(gl, QVector3D(0, 0, 0), 50, 25, .2f, 4));
 
     generateShadowBuffer(4096);
 
@@ -113,8 +113,6 @@ void ForwardRenderer::renderScene(QOpenGLContext* ctx, Viewport* vp)
     renderData->fogEnd = scene->fogEnd;
     renderData->fogEnabled = scene->fogEnabled;
 
-    //renderData->gl = gl;
-
     gl->glViewport(0, 0, 4096, 4096);
     gl->glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
     gl->glClear(GL_DEPTH_BUFFER_BIT);
@@ -138,7 +136,7 @@ void ForwardRenderer::renderScene(QOpenGLContext* ctx, Viewport* vp)
     renderSky(renderData);
 
     // STEP 3: RENDER LINES (for e.g. light radius and the camera frustum)
-    renderParticles(renderData);
+    renderParticles(renderData, scene->rootNode);
 
     // STEP 4: RENDER BILLBOARD ICONS
     renderBillboardIcons(renderData);
@@ -187,13 +185,29 @@ void ForwardRenderer::renderShadows(RenderData* renderData,QSharedPointer<SceneN
     }
 }
 
-void ForwardRenderer::renderParticles(RenderData *renderData)
+void ForwardRenderer::renderParticles(RenderData *renderData, QSharedPointer<SceneNode> node)
 {
-    // temporary... stressing temporary here...
-    if (system) {
-        pSystem->generateParticles(ppos, 1.f/60.f);
-        pSystem->pm.update(1.f/60.f);
-        pSystem->pm.renderParticles(gl, particleShader, renderData);
+    if (!particleSystems.empty()) {
+        for (auto p : particleSystems) {
+            p.second->generateParticles(1.f/60.f);
+
+            // this is a pretty terrible hack, find the meshnode with the same id as the emitter
+            // and request info from it
+            for (auto n : node->children) {
+                if (n->sceneNodeType == SceneNodeType::Emitter && n.staticCast<MeshNode>()->m_index == p.first) {
+                    QList<SceneNodePtr>::iterator x = std::find(node->children.begin(), node->children.end(), n);
+                    p.second->setPos((*x).staticCast<MeshNode>()->pos);
+                    p.second->setPPS((*x).staticCast<MeshNode>()->pps);
+                    p.second->setLife((*x).staticCast<MeshNode>()->particleLife);
+                    p.second->setSpeed((*x).staticCast<MeshNode>()->speed);
+                    p.second->setGravity((*x).staticCast<MeshNode>()->gravity);
+                    p.second->setTexture((*x).staticCast<MeshNode>()->texture);
+                }
+            }
+
+            p.second->pm.update(1.f/60.f);
+            p.second->pm.renderParticles(gl, particleShader, renderData);
+        }
     }
 }
 
@@ -286,6 +300,23 @@ void ForwardRenderer::renderNode(RenderData* renderData, QSharedPointer<SceneNod
             mat = static_cast<iris::Material*>(veiwerNode->material.data());
         } else if (node->sceneNodeType == SceneNodeType::Emitter) {
             auto meshNode = node.staticCast<MeshNode>();
+
+            // pass the id and create the system, hmm
+            if (meshNode->isEmitter) {
+                particleSystems.insert(
+                            std::make_pair(
+                                meshNode->m_index,
+                                new ParticleSystem(gl,
+                                                   meshNode->pos,
+                                                   meshNode->pps,
+                                                   meshNode->speed,
+                                                   meshNode->gravity,
+                                                   meshNode->particleLife,
+                                                   1)
+                            )
+                );
+            }
+
             emitterShader->bind();
 
             emitterShader->setUniformValue("projectionMatrix", renderData->projMatrix);
@@ -297,11 +328,6 @@ void ForwardRenderer::renderNode(RenderData* renderData, QSharedPointer<SceneNod
                 meshNode->mesh->draw(gl, emitterShader, GL_LINE_LOOP);
                 gl->glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             }
-
-            system = true;
-            ppos = meshNode->pos;
-
-            emitterShader->release();
         }
     }
 
