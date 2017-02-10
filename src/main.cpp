@@ -14,11 +14,21 @@ For more information see the LICENSE file
 #include <QPalette>
 #include <QStyleFactory>
 #include <QSplashScreen>
+#include <QSurfaceFormat>
 #include "dialogs/infodialog.h"
 #include "core/settingsmanager.h"
 
 int main(int argc, char *argv[])
 {
+    // fixes issue on osx where the SceneView widget shows up blank
+    QSurfaceFormat format;
+    format.setDepthBufferSize(32);
+    format.setMajorVersion(3);
+    format.setMinorVersion(2);
+    format.setProfile(QSurfaceFormat::CoreProfile);
+
+    QSurfaceFormat::setDefaultFormat(format);
+
     QApplication app(argc, argv);
     app.setWindowIcon(QIcon(":/app/images/logo.png"));
 
