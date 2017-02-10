@@ -12,11 +12,15 @@ class ViewerMaterial;
 
 class ViewerNode : public SceneNode
 {
+    float viewScale;
     ViewerNode();
 
 public:
     Mesh* headModel;
     ViewerMaterialPtr material;
+
+    void setViewScale(float scale);
+    float getViewScale();
 
     static ViewerNodePtr create();
 };

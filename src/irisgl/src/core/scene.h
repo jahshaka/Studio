@@ -25,6 +25,13 @@ class Scene: public QEnableSharedFromThis<Scene>
 public:
     CameraNodePtr camera;
     SceneNodePtr rootNode;
+
+    /*
+     * This is the default viewer that the scene
+     * will use when playing in vr mode
+     */
+    ViewerNodePtr vrViewer;
+
     QList<LightNodePtr> lights;
 
     Mesh* skyMesh;

@@ -274,6 +274,14 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     return lightNode;
 }
 
+iris::ViewerNodePtr SceneReader::createViewer(QJsonObject& nodeObj)
+{
+    auto viewerNode = iris::ViewerNode::create();
+    viewerNode->setViewScale((float)nodeObj["viewScale"].toDouble(1.0f));
+
+    return viewerNode;
+}
+
 iris::LightType SceneReader::getLightTypeFromName(QString lightType)
 {
     if(lightType=="point")
