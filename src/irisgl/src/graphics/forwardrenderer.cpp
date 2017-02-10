@@ -189,7 +189,7 @@ void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
 
     //auto camera = scene->camera;
 
-    QVector3D viewerPos = scene->camera->pos;
+    QVector3D viewerPos = scene->camera->getGlobalPosition();
 
     if(!!scene->vrViewer)
         viewerPos = scene->vrViewer->pos;
@@ -210,17 +210,17 @@ void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
         //STEP 1: RENDER SCENE
         renderData->scene = scene;
 
-        camera->setAspectRatio(vp->getAspectRatio());
-        camera->updateCameraMatrices();
+        //camera->setAspectRatio(vp->getAspectRatio());
+        //camera->updateCameraMatrices();
 
-        renderData->eyePos = camera->globalTransform.column(3).toVector3D();
+        //renderData->eyePos = camera->globalTransform.column(3).toVector3D();
+        renderData->eyePos = viewerPos;
 
         renderData->fogColor = scene->fogColor;
         renderData->fogStart = scene->fogStart;
         renderData->fogEnd = scene->fogEnd;
         renderData->fogEnabled = scene->fogEnabled;
 
-        //renderData->gl = gl;
 
         renderNode(renderData,scene->rootNode);
 

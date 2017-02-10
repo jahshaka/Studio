@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
+#include "../irisgl/src/scenegraph/viewernode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/animation/animation.h"

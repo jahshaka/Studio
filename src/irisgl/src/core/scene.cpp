@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "scenenode.h"
 #include "../scenegraph/lightnode.h"
 #include "../scenegraph/cameranode.h"
+#include "../scenegraph/viewernode.h"
 #include "../graphics/mesh.h"
 #include "../materials/defaultskymaterial.h"
 #include "irisutils.h"

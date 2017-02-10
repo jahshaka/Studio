@@ -79,12 +79,9 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     viewportMode = ViewportMode::Editor;
 
-<<<<<<< HEAD
     elapsedTimer = new QElapsedTimer();
-=======
     playScene = false;
     animTime = 0.0f;
->>>>>>> be5d8c3... Play button now plays entire scene
 }
 
 void SceneViewWidget::resetEditorCam()
