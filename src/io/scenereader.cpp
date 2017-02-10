@@ -131,7 +131,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     else if(nodeType=="light")
         sceneNode = createLight(nodeObj).staticCast<iris::SceneNode>();
     else if(nodeType=="viewer")
-        sceneNode = iris::ViewerNode::create();
+        sceneNode = createViewer(nodeObj).staticCast<iris::SceneNode>();
     else
         sceneNode = iris::SceneNode::create();
 
