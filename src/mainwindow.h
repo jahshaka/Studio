@@ -220,6 +220,8 @@ private slots:
     void on_scaleGizmoBtn_clicked();
     void on_rotateGizmoBtn_clicked();
 
+    void onPlaySceneButton();
+
 private:
     Ui::NewMainWindow *ui;
     SurfaceView* surface;

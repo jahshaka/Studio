@@ -75,7 +75,8 @@ public:
 
     QVector3D getLightDir()
     {
-        QVector4D defaultDir(-1,-1,-1,0);
+        // this is the default rotation for directional and spotlights - pointing down
+        QVector4D defaultDir(0, -1, 0, 0);
 
         QVector4D dir = (globalTransform * defaultDir);
 
