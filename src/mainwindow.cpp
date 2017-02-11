@@ -144,6 +144,8 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(ui->transformCombo, SIGNAL(currentTextChanged(QString)),
             this, SLOT(transformOrientationChanged(QString)));
+
+    connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
 }
 
 void MainWindow::setupVrUi()
@@ -991,4 +993,18 @@ void MainWindow::on_scaleGizmoBtn_clicked()
 void MainWindow::on_rotateGizmoBtn_clicked()
 {
     sceneView->setGizmoRot();
+}
+
+void MainWindow::onPlaySceneButton()
+{
+    if(ui->playSceneBtn->text() == "PLAY")
+    {
+        this->sceneView->startPlayingScene();
+        ui->playSceneBtn->setText("STOP");
+    }
+    else
+    {
+        this->sceneView->stopPlayingScene();
+        ui->playSceneBtn->setText("PLAY");
+    }
 }
