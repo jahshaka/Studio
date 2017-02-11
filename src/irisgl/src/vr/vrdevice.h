@@ -49,7 +49,7 @@ public:
     void beginEye(int eye);
     void endEye(int eye);
 
-    QMatrix4x4 getEyeViewMatrix(int eye,QVector3D pivot);
+    QMatrix4x4 getEyeViewMatrix(int eye,QVector3D pivot, float scale = 1.0f);
     QMatrix4x4 getEyeProjMatrix(int eye,float nearClip,float farClip);
 
     GLuint bindMirrorTextureId();

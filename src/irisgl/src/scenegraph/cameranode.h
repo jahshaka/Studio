@@ -54,13 +54,12 @@ public:
         viewMatrix.setToIdentity();
 
         QVector3D pos = globalTransform.column(3).toVector3D();
-        QVector3D dir = (globalTransform*QVector4D(0,0,-1,1)).toVector3D();
-        QVector3D up = (globalTransform*QVector4D(0,1,0,0)).toVector3D();
-        viewMatrix.lookAt(pos,dir,up);
-        //viewMatrix.lookAt(pos,QVector3D(0,0,0),QVector3D(0,1,0));
+        QVector3D dir = (globalTransform * QVector4D(0,0,-1,1)).toVector3D();
+        QVector3D up = (globalTransform * QVector4D(0,1,0,0)).toVector3D();
+        viewMatrix.lookAt(pos, dir, up);
 
         projMatrix.setToIdentity();
-        projMatrix.perspective(angle,aspectRatio,nearClip,farClip);
+        projMatrix.perspective(angle, aspectRatio, nearClip, farClip);
     }
 
     void update(float dt) override
@@ -82,7 +81,7 @@ public:
      * @param pos point in screen space
      * @return
      */
-    QVector3D calculatePickingDirection(int viewPortWidth, int viewPortHeight,QPointF pos);
+    QVector3D calculatePickingDirection(int viewPortWidth, int viewPortHeight, QPointF pos);
 
 private:
     CameraNode()

@@ -169,6 +169,8 @@ public slots:
     void addTorus();
     void addSphere();
     void addCylinder();
+    void addEmpty();
+    void addViewer();
     void addMesh();
     void addTexturedPlane();
     void addViewPoint();
@@ -217,6 +219,8 @@ private slots:
     void on_translateGizmoBtn_clicked();
     void on_scaleGizmoBtn_clicked();
     void on_rotateGizmoBtn_clicked();
+
+    void onPlaySceneButton();
 
 private:
     Ui::NewMainWindow *ui;

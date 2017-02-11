@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "scenenode.h"
 #include "../scenegraph/lightnode.h"
 #include "../scenegraph/cameranode.h"
+#include "../scenegraph/viewernode.h"
 #include "../graphics/mesh.h"
 #include "../materials/defaultskymaterial.h"
 #include "irisutils.h"
@@ -95,6 +96,11 @@ void Scene::addNode(SceneNodePtr node)
         auto light = node.staticCast<iris::LightNode>();
         lights.append(light);
     }
+
+    if(node->sceneNodeType == SceneNodeType::Viewer && vrViewer.isNull())
+    {
+        vrViewer = node.staticCast<iris::ViewerNode>();
+    }
 }
 
 void Scene::removeNode(SceneNodePtr node)
@@ -102,6 +108,10 @@ void Scene::removeNode(SceneNodePtr node)
     if (node->sceneNodeType == SceneNodeType::Light) {
         lights.removeOne(node.staticCast<iris::LightNode>());
     }
+
+    // If this node is the scene's viewer then reset the scene's viewer to null
+    if(vrViewer == node.staticCast<iris::ViewerNode>())
+        vrViewer.reset();
 }
 
 void Scene::setCamera(CameraNodePtr cameraNode)
