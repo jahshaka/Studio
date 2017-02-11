@@ -109,9 +109,6 @@ public:
     void setEditorData(EditorData* data);
     EditorData* getEditorData();
 
-    void startPlayingScene();
-    void stopPlayingScene();
-
 protected:
     void initializeGL();
     bool eventFilter(QObject *obj, QEvent *event);
@@ -173,9 +170,6 @@ private:
 
     iris::Viewport* viewport;
     iris::FullScreenQuad* fsQuad;
-
-    bool playScene;
-    float animTime;
 
 signals:
     void initializeGraphics(SceneViewWidget* widget,

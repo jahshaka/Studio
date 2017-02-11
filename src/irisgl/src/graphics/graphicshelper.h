@@ -24,7 +24,7 @@ class Mesh;
 class GraphicsHelper
 {
 public:
-    static QOpenGLShaderProgram* loadShader(QString vsPath, QString fsPath);
+    static QOpenGLShaderProgram* loadShader(QString vsPath,QString fsPath);
 
     /**
      * Loads all meshes from mesh file

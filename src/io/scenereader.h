@@ -70,8 +70,6 @@ public:
      */
     iris::LightNodePtr createLight(QJsonObject& nodeObj);
 
-    iris::ViewerNodePtr createViewer(QJsonObject& nodeObj);
-
     iris::LightType getLightTypeFromName(QString lightType);
 
     /**

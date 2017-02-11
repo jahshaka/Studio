@@ -40,7 +40,7 @@ class VertexLayout
 public:
     VertexLayout();
 
-    void addAttrib(VertexAttribUsage usage, int type, int count, int sizeInBytes);
+    void addAttrib(VertexAttribUsage usage,int type,int count,int sizeInBytes);
 
     //todo: make this more efficient
     void bind();

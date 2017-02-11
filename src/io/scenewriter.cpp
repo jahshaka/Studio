@@ -23,7 +23,6 @@ For more information see the LICENSE file
 #include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
-#include "../irisgl/src/scenegraph/viewernode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/animation/animation.h"
@@ -107,13 +106,10 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sc
     //todo: write data specific to node type
     switch (sceneNode->sceneNodeType) {
         case iris::SceneNodeType::Mesh:
-            writeMeshData(sceneNodeObj, sceneNode.staticCast<iris::MeshNode>());
+            writeMeshData(sceneNodeObj,sceneNode.staticCast<iris::MeshNode>());
         break;
         case iris::SceneNodeType::Light:
-            writeLightData(sceneNodeObj, sceneNode.staticCast<iris::LightNode>());
-        break;
-        case iris::SceneNodeType::Viewer:
-            writeViewerData(sceneNodeObj, sceneNode.staticCast<iris::ViewerNode>());
+            writeLightData(sceneNodeObj,sceneNode.staticCast<iris::LightNode>());
         break;
         default: break;
     }
@@ -180,11 +176,6 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject,iris::MeshNodePtr m
     sceneNodeObject["material"] = matObj;
 }
 
-void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode)
-{
-    sceneNodeObject["viewScale"] = viewerNode->getViewScale();
-}
-
 void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj,iris::DefaultMaterialPtr mat)
 {
     matObj["ambientColor"] = jsonColor(mat->getAmbientColor());
@@ -245,8 +236,6 @@ QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)
         return "light";
     case iris::SceneNodeType::Mesh:
         return "mesh";
-    case iris::SceneNodeType::Viewer:
-        return "viewer";
     default:
         return "empty";
     }
