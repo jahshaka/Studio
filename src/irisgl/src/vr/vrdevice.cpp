@@ -253,7 +253,7 @@ void VrDevice::endEye(int eye)
     ovr_CommitTextureSwapChain(session, vr_textureChain[eye]);
 }
 
-QMatrix4x4 VrDevice::getEyeViewMatrix(int eye,QVector3D pivot, float scale)
+QMatrix4x4 VrDevice::getEyeViewMatrix(int eye,QVector3D pivot)
 {
     Vector3f origin = Vector3f(pivot.x(),pivot.y(),pivot.z());
 
@@ -261,10 +261,7 @@ QMatrix4x4 VrDevice::getEyeViewMatrix(int eye,QVector3D pivot, float scale)
     Matrix4f finalRollPitchYaw = rollPitchYaw * Matrix4f(frameData->eyeRenderPose[eye].Orientation);
     Vector3f finalUp = finalRollPitchYaw.Transform(Vector3f(0, 1, 0));
     Vector3f finalForward = finalRollPitchYaw.Transform(Vector3f(0, 0, -1));
-
-    auto fd = frameData->eyeRenderPose[eye].Position;
-    auto framePos = Vector3f(fd.x, fd.y, fd.z);
-    Vector3f shiftedEyePos = origin + rollPitchYaw.Transform(framePos * scale);
+    Vector3f shiftedEyePos = origin + rollPitchYaw.Transform(frameData->eyeRenderPose[eye].Position);
 
     Vector3f forward = shiftedEyePos + finalForward;
 

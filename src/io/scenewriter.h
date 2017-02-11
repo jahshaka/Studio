@@ -41,8 +41,6 @@ private:
 
     void writeMeshData(QJsonObject& sceneNodeObject,iris::MeshNodePtr meshNode);
 
-    void writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode);
-
     void writeSceneNodeMaterial(QJsonObject& matObj,iris::DefaultMaterialPtr mat);
 
     QJsonObject jsonColor(QColor color);

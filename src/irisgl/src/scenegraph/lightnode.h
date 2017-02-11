@@ -75,12 +75,13 @@ public:
 
     QVector3D getLightDir()
     {
-        // this is the default rotation for directional and spotlights - pointing down
-        QVector4D defaultDir(0, -1, 0, 0);
+        QVector4D defaultDir(-1,-1,-1,0);
 
         QVector4D dir = (globalTransform * defaultDir);
 
         return dir.toVector3D();
+//        return lightDir;
+
     }
 
 private:
@@ -91,7 +92,7 @@ private:
         lightType = LightType::Point;
 
         distance = 10;
-        color = QColor(255, 255, 255);
+        color = QColor(255,255,255);
         intensity = 1.0f;
         spotCutOff = 30.0f;
         spotCutOffSoftness = 1.0f;

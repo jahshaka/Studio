@@ -645,7 +645,7 @@ background-color: rgb(30, 144, 255);
            <widget class="QComboBox" name="transformCombo">
             <property name="minimumSize">
              <size>
-              <width>107</width>
+              <width>119</width>
               <height>0</height>
              </size>
             </property>
@@ -693,7 +693,7 @@ background-color: rgb(30, 144, 255);
            <widget class="QComboBox" name="cameraTypeCombo">
             <property name="minimumSize">
              <size>
-              <width>107</width>
+              <width>119</width>
               <height>0</height>
              </size>
             </property>
@@ -730,13 +730,6 @@ background-color: rgb(30, 144, 255);
              </size>
             </property>
            </spacer>
-          </item>
-          <item>
-           <widget class="QPushButton" name="playSceneBtn">
-            <property name="text">
-             <string>PLAY</string>
-            </property>
-           </widget>
           </item>
           <item>
            <widget class="QPushButton" name="vrBtn">
@@ -811,7 +804,7 @@ background-color: rgb(30, 144, 255);
      <x>0</x>
      <y>0</y>
      <width>1209</width>
-     <height>30</height>
+     <height>34</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -1063,7 +1056,7 @@ QMenu::item:selected {
           <x>0</x>
           <y>0</y>
           <width>398</width>
-          <height>652</height>
+          <height>648</height>
          </rect>
         </property>
         <property name="styleSheet">

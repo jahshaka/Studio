@@ -32,7 +32,7 @@ namespace iris
  * if a skyTexture is specified then the final output color is the
  * texture multiplied by the color. Else, only the color is used.
  */
-class DefaultSkyMaterial : public Material
+class DefaultSkyMaterial:public Material
 {
 public:
 

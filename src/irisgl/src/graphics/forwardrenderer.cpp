@@ -15,8 +15,6 @@ For more information see the LICENSE file
 #include "../scenegraph/cameranode.h"
 #include "../scenegraph/meshnode.h"
 #include "../scenegraph/lightnode.h"
-#include "../scenegraph/viewernode.h"
-#include "../materials/viewermaterial.h"
 #include "mesh.h"
 #include "graphicshelper.h"
 #include "renderdata.h"
@@ -24,7 +22,6 @@ For more information see the LICENSE file
 #include <QOpenGLShaderProgram>
 #include <QOpenGLFunctions>
 #include <QOpenGLFunctions_3_2_Core>
-#include <QSharedPointer>
 #include <QOpenGLTexture>
 #include "viewport.h"
 #include "utils/billboard.h"
@@ -187,20 +184,14 @@ void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
     if(!vrDevice->isVrSupported())
         return;
 
-    //auto camera = scene->camera;
-
-    QVector3D viewerPos = scene->camera->getGlobalPosition();
-
-    if(!!scene->vrViewer)
-        viewerPos = scene->vrViewer->pos;
-
+    auto camera = scene->camera;
     vrDevice->beginFrame();
 
     for (int eye = 0; eye < 2; ++eye)
     {
         vrDevice->beginEye(eye);
 
-        auto view = vrDevice->getEyeViewMatrix(eye, viewerPos);
+        auto view = vrDevice->getEyeViewMatrix(eye,camera->pos);
         renderData->eyePos = view.column(3).toVector3D();
         renderData->viewMatrix = view;
 
@@ -210,17 +201,17 @@ void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
         //STEP 1: RENDER SCENE
         renderData->scene = scene;
 
-        //camera->setAspectRatio(vp->getAspectRatio());
-        //camera->updateCameraMatrices();
+        camera->setAspectRatio(vp->getAspectRatio());
+        camera->updateCameraMatrices();
 
-        //renderData->eyePos = camera->globalTransform.column(3).toVector3D();
-        renderData->eyePos = viewerPos;
+        renderData->eyePos = camera->globalTransform.column(3).toVector3D();
 
         renderData->fogColor = scene->fogColor;
         renderData->fogStart = scene->fogStart;
         renderData->fogEnd = scene->fogEnd;
         renderData->fogEnabled = scene->fogEnabled;
 
+        //renderData->gl = gl;
 
         renderNode(renderData,scene->rootNode);
 
@@ -250,31 +241,11 @@ bool ForwardRenderer::isVrSupported()
 
 void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode> node)
 {
-    iris::Mesh* mesh = nullptr;
-    iris::Material* mat = nullptr;
-
-    if(node->isVisible())
-    {
-        if(node->sceneNodeType == iris::SceneNodeType::Mesh)
-        {
-            auto meshNode = node.staticCast<MeshNode>();
-            mesh = meshNode->mesh;
-            mat = meshNode->material.data();
-        }
-        else if(node->sceneNodeType == iris::SceneNodeType::Viewer)
-        {
-            auto veiwerNode = node.staticCast<ViewerNode>();
-            mesh = veiwerNode->headModel;
-            mat = static_cast<iris::Material*>(veiwerNode->material.data());
-        }
-    }
-
-    //if(node->sceneNodeType==SceneNodeType::Mesh && node->isVisible())
-    if(mesh != nullptr && mat != nullptr)
+    if(node->sceneNodeType==SceneNodeType::Mesh && node->isVisible())
     {
         //qDebug()<<node->getName()+" is "+(node->isVisible()?"visible":"invisible")<<endl;
         auto meshNode = node.staticCast<MeshNode>();
-        //auto mat = meshNode->material;
+        auto mat = meshNode->material;
 
         auto program = mat->program;
 
