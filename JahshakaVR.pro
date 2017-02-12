@@ -79,7 +79,8 @@ SOURCES += src/main.cpp\
     src/widgets/keyframelabeltreewidget.cpp \
     src/core/keyboardstate.cpp \
     src/io/scenereader.cpp \
-    src/widgets/propertywidgets/emitterpropertywidget.cpp
+    src/widgets/propertywidgets/emitterpropertywidget.cpp \
+    src/widgets/combobox.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -147,7 +148,8 @@ HEADERS  += src/mainwindow.h \
     src/editor/gizmoinstance.h \
     src/core/keyboardstate.h \
     src/editor/editordata.h \
-    src/widgets/propertywidgets/emitterpropertywidget.h
+    src/widgets/propertywidgets/emitterpropertywidget.h \
+    src/widgets/combobox.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -177,7 +179,8 @@ FORMS    += \
     src/widgets/checkboxproperty.ui \
     src/widgets/keyframelabelwidget.ui \
     src/widgets/keyframelabeltreewidget.ui \
-    src/widgets/emitterproperty.ui
+    src/widgets/emitterproperty.ui \
+    src/widgets/combobox.ui
 
 RESOURCES += \
     shaders.qrc \
