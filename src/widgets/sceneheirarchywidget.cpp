@@ -105,6 +105,14 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     lightMenu->addAction(action);
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addDirectionalLight()));
 
+    action = new QAction("Empty", this);
+    addMenu->addAction(action);
+    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addEmpty()));
+
+    action = new QAction("Viewer", this);
+    addMenu->addAction(action);
+    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addViewer()));
+
     //MESHES
     action = new QAction("Load Model", this);
     addMenu->addAction(action);

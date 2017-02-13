@@ -67,8 +67,8 @@ class Shader
     friend class VertexLayout;
 
 public:
-    static ShaderPtr load(QOpenGLFunctions_3_2_Core* gl,QString vertexShaderFile,QString fragmentShaderFile);
-    static ShaderPtr create(QOpenGLFunctions_3_2_Core* gl,QString vertexShader,QString fragmentShader);
+    static ShaderPtr load(QOpenGLFunctions_3_2_Core* gl, QString vertexShaderFile, QString fragmentShaderFile);
+    static ShaderPtr create(QOpenGLFunctions_3_2_Core* gl, QString vertexShader, QString fragmentShader);
 
     QOpenGLShaderProgram* program;
     long shaderId;
@@ -81,7 +81,7 @@ public:
     ShaderValue* getUniform(QString name);
 
     template <typename T>
-    void setUniformValue(QString name,T value)
+    void setUniformValue(QString name, T value)
     {
         if(uniforms.contains(name))
         {
@@ -91,7 +91,7 @@ public:
         }
     }
 
-    void setTexture(QString name,TexturePtr texture)
+    void setTexture(QString name, TexturePtr texture)
     {
         if(samplers.contains(name))
         {
@@ -101,7 +101,7 @@ public:
     }
 
 private:
-    Shader(QOpenGLFunctions_3_2_Core* gl,QString vertexShader,QString fragmentShader);
+    Shader(QOpenGLFunctions_3_2_Core* gl, QString vertexShader, QString fragmentShader);
     QOpenGLFunctions_3_2_Core* gl;
 
     static long generateNodeId();

@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "irisgl/src/core/scene.h"
 #include "irisgl/src/core/scenenode.h"
 #include "irisgl/src/scenegraph/lightnode.h"
+#include "irisgl/src/scenegraph/viewernode.h"
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/graphics/forwardrenderer.h"
 #include "irisgl/src/graphics/mesh.h"
@@ -143,6 +144,8 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(ui->transformCombo, SIGNAL(currentTextChanged(QString)),
             this, SLOT(transformOrientationChanged(QString)));
+
+    connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
 }
 
 void MainWindow::setupVrUi()
@@ -514,18 +517,20 @@ void MainWindow::saveSceneAs()
 
 void MainWindow::loadScene()
 {
+
     QString dir = QApplication::applicationDirPath()+"/scenes/";
     auto filename = QFileDialog::getOpenFileName(this,"Open Scene File",dir,"Jashaka Scene (*.jah)");
 
     if(filename.isEmpty() || filename.isNull())
         return;
 
+
     openProject(filename);
 }
 
 void MainWindow::openProject(QString filename)
 {
-
+    this->sceneView->makeCurrent();
     //remove current scene first
     this->removeScene();
 
@@ -533,7 +538,9 @@ void MainWindow::openProject(QString filename)
     auto reader = new SceneReader();
 
     EditorData* editorData = nullptr;
+
     auto scene = reader->readScene(filename,&editorData);
+    this->sceneView->doneCurrent();
     setScene(scene);
     if(editorData != nullptr)
         sceneView->setEditorData(editorData);
@@ -749,6 +756,22 @@ void MainWindow::addDirectionalLight()
     node->setLightType(iris::LightType::Directional);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
 
+
+    addNodeToScene(node);
+}
+
+void MainWindow::addEmpty()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::SceneNode::create();
+
+    addNodeToScene(node);
+}
+
+void MainWindow::addViewer()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::ViewerNode::create();
 
     addNodeToScene(node);
 }
@@ -970,4 +993,18 @@ void MainWindow::on_scaleGizmoBtn_clicked()
 void MainWindow::on_rotateGizmoBtn_clicked()
 {
     sceneView->setGizmoRot();
+}
+
+void MainWindow::onPlaySceneButton()
+{
+    if(ui->playSceneBtn->text() == "PLAY")
+    {
+        this->sceneView->startPlayingScene();
+        ui->playSceneBtn->setText("STOP");
+    }
+    else
+    {
+        this->sceneView->stopPlayingScene();
+        ui->playSceneBtn->setText("PLAY");
+    }
 }

@@ -80,6 +80,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     viewportMode = ViewportMode::Editor;
 
     elapsedTimer = new QElapsedTimer();
+    playScene = false;
+    animTime = 0.0f;
 }
 
 void SceneViewWidget::resetEditorCam()
@@ -181,6 +183,11 @@ void SceneViewWidget::renderScene()
     if (!!renderer && !!scene) {
         this->camController->update(dt);
 
+        if(playScene)
+        {
+            animTime += dt;
+            scene->updateSceneAnimation(animTime);
+        }
         scene->update(dt);
 
         if (viewportMode == ViewportMode::Editor) {
@@ -596,4 +603,18 @@ EditorData* SceneViewWidget::getEditorData()
 
     return data;
 }
+
+void SceneViewWidget::startPlayingScene()
+{
+    playScene = true;
+    animTime = 0.0f;
+}
+
+void SceneViewWidget::stopPlayingScene()
+{
+    playScene = false;
+    animTime = 0.0f;
+    scene->updateSceneAnimation(0.0f);
+}
+
 
