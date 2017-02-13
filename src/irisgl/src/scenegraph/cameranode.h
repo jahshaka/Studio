@@ -29,8 +29,20 @@ public:
     float nearClip;
     float farClip;
 
+    float vrViewScale;
+
     QMatrix4x4 viewMatrix;
     QMatrix4x4 projMatrix;
+
+    float getVrViewScale()
+    {
+        return vrViewScale;
+    }
+
+    void setVrViewScale(float viewScale)
+    {
+        vrViewScale = viewScale;
+    }
 
     void setAspectRatio(float aspect)
     {
@@ -60,6 +72,8 @@ public:
 
         projMatrix.setToIdentity();
         projMatrix.perspective(angle, aspectRatio, nearClip, farClip);
+
+        vrViewScale = 5.0f;
     }
 
     void update(float dt) override

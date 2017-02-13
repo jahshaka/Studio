@@ -13,6 +13,8 @@ ViewerNode::ViewerNode()
     this->headModel = Mesh::loadMesh(":/assets/models/head.obj");
     this->material = ViewerMaterial::create();
     this->material->setTexture(Texture2D::load(":/assets/models/head.png"));
+
+    this->viewScale = 5.0f;
 }
 
 void ViewerNode::setViewScale(float scale)
