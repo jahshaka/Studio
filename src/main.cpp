@@ -21,6 +21,8 @@ For more information see the LICENSE file
 int main(int argc, char *argv[])
 {
     // fixes issue on osx where the SceneView widget shows up blank
+    // causes freezing on linux for some reason
+#ifdef Q_OS_MAC
     QSurfaceFormat format;
     format.setDepthBufferSize(32);
     format.setMajorVersion(3);
@@ -28,6 +30,7 @@ int main(int argc, char *argv[])
     format.setProfile(QSurfaceFormat::CoreProfile);
 
     QSurfaceFormat::setDefaultFormat(format);
+#endif
 
     QApplication app(argc, argv);
     app.setWindowIcon(QIcon(":/app/images/logo.png"));
