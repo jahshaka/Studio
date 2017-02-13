@@ -23,6 +23,7 @@ namespace iris
 enum class SceneNodeType
 {
     Empty,
+    Emitter,
     Mesh,
     Light,
     Camera,
@@ -51,6 +52,11 @@ public:
     ScenePtr scene;
     SceneNodePtr parent;
     QList<SceneNodePtr> children;
+
+    // remember this...
+    friend bool operator == (const SceneNode& a, const SceneNode &b) {
+        return a.nodeId == b.nodeId;
+    }
 
     AnimationPtr animation;
 

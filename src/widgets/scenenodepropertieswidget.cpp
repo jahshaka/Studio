@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include "propertywidgets/materialpropertywidget.h"
 #include "propertywidgets/worldpropertywidget.h"
 #include "propertywidgets/fogpropertywidget.h"
+#include "propertywidgets/emitterpropertywidget.h"
 
 #include "../irisgl/src/core/scenenode.h"
 
@@ -99,10 +100,14 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             materialPropView->setContentTitle("Material");
             materialPropView->setMaxHeight(700);
 
+            emitterPropView = new EmitterPropertyWidget();
+            emitterPropView->setContentTitle("Emitter");
+            emitterPropView->setMaxHeight(700);
 
             this->sceneNode = sceneNode;
             lightPropView->setSceneNode(sceneNode);
             materialPropView->setSceneNode(sceneNode);
+            emitterPropView->setSceneNode(sceneNode);
             transformWidget->setSceneNode(sceneNode);
 
             //delete this->layout();
@@ -120,6 +125,10 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             case iris::SceneNodeType::Mesh:
                 layout->addWidget(materialPropView);
                 materialPropView->expand();
+                break;
+            case iris::SceneNodeType::Emitter:
+                layout->addWidget(emitterPropView);
+                emitterPropView->expand();
                 break;
 
             default:

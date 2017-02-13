@@ -51,6 +51,10 @@ ForwardRenderer::ForwardRenderer(QOpenGLFunctions_3_2_Core* gl)
     fsQuad = new FullScreenQuad();
     createLineShader();
     createShadowShader();
+    createParticleShader();
+    createEmitterShader();
+
+    // particleSystems.push_back(new ParticleSystem(gl, QVector3D(0, 0, 0), 50, 25, .2f, 4));
 
     generateShadowBuffer(4096);
 
@@ -90,7 +94,7 @@ QSharedPointer<ForwardRenderer> ForwardRenderer::create(QOpenGLFunctions_3_2_Cor
 }
 
 // all scene's transform should be updated
-void ForwardRenderer::renderScene(QOpenGLContext* ctx, Viewport* vp)
+void ForwardRenderer::renderScene(QOpenGLContext* ctx, float delta, Viewport* vp)
 {
     auto cam = scene->camera;
 
@@ -108,8 +112,6 @@ void ForwardRenderer::renderScene(QOpenGLContext* ctx, Viewport* vp)
     renderData->fogStart = scene->fogStart;
     renderData->fogEnd = scene->fogEnd;
     renderData->fogEnabled = scene->fogEnabled;
-
-    //renderData->gl = gl;
 
     gl->glViewport(0, 0, 4096, 4096);
     gl->glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
@@ -134,6 +136,7 @@ void ForwardRenderer::renderScene(QOpenGLContext* ctx, Viewport* vp)
     renderSky(renderData);
 
     // STEP 3: RENDER LINES (for e.g. light radius and the camera frustum)
+    renderParticles(renderData, delta, scene->rootNode);
 
     // STEP 4: RENDER BILLBOARD ICONS
     renderBillboardIcons(renderData);
@@ -182,7 +185,41 @@ void ForwardRenderer::renderShadows(RenderData* renderData,QSharedPointer<SceneN
     }
 }
 
-void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
+void ForwardRenderer::renderParticles(RenderData *renderData, float delta, QSharedPointer<SceneNode> node)
+{
+    if (!particleSystems.empty()) {
+        for (auto p : particleSystems) {
+            p.second->generateParticles(delta);
+
+            // this is pretty messy, find the meshnode with the same id as the emitter
+            // and request info from it, also could an initializer list be user here...?
+            for (auto n : node->children) {
+                if (n->sceneNodeType == SceneNodeType::Emitter && n.staticCast<MeshNode>()->m_index == p.first) {
+                    QList<SceneNodePtr>::iterator x = std::find(node->children.begin(), node->children.end(), n);
+                    p.second->setPos((*x).staticCast<MeshNode>()->pos);
+                    p.second->setPPS((*x).staticCast<MeshNode>()->pps);
+                    p.second->setLife((*x).staticCast<MeshNode>()->particleLife);
+                    p.second->setSpeed((*x).staticCast<MeshNode>()->speed);
+                    p.second->setGravity((*x).staticCast<MeshNode>()->gravity);
+                    p.second->setTexture((*x).staticCast<MeshNode>()->texture);
+                    p.second->setDirection((*x).staticCast<MeshNode>()->getGlobalTransform());
+                    p.second->setVolumeSquare((*x).staticCast<MeshNode>()->scale);
+                    p.second->setSpeedError((*x).staticCast<MeshNode>()->speedFac);
+                    p.second->setScaleError((*x).staticCast<MeshNode>()->scaleFac);
+                    p.second->setLifeError((*x).staticCast<MeshNode>()->lifeFac);
+                    p.second->dissipate((*x).staticCast<MeshNode>()->dissipate);
+                    p.second->setRandomRotation((*x).staticCast<MeshNode>()->randomRotation);
+                    p.second->setBlendMode((*x).staticCast<MeshNode>()->useAdditive);
+                }
+            }
+
+            p.second->pm.update(delta);
+            p.second->pm.renderParticles(gl, particleShader, renderData);
+        }
+    }
+}
+
+void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx, float delta, Viewport* vp)
 {
     if(!vrDevice->isVrSupported())
         return;
@@ -230,6 +267,8 @@ void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
         //STEP 2: RENDER SKY
         renderSky(renderData);
 
+        renderParticles(renderData, delta, scene->rootNode);
+
 
         vrDevice->endEye(eye);
     }
@@ -251,7 +290,7 @@ bool ForwardRenderer::isVrSupported()
     return vrDevice->isVrSupported();
 }
 
-void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode> node)
+void ForwardRenderer::renderNode(RenderData* renderData, QSharedPointer<SceneNode> node)
 {
     iris::Mesh* mesh = nullptr;
     iris::Material* mat = nullptr;
@@ -269,13 +308,41 @@ void ForwardRenderer::renderNode(RenderData* renderData,QSharedPointer<SceneNode
             auto veiwerNode = node.staticCast<ViewerNode>();
             mesh = veiwerNode->headModel;
             mat = static_cast<iris::Material*>(veiwerNode->material.data());
+        } else if (node->sceneNodeType == SceneNodeType::Emitter) {
+            auto meshNode = node.staticCast<MeshNode>();
+
+            // pass the id and create the system, hmm
+            if (meshNode->isEmitter) {
+                particleSystems.insert(
+                            std::make_pair(
+                                meshNode->m_index,
+                                new ParticleSystem(gl,
+                                                   meshNode->pos,
+                                                   meshNode->pps,
+                                                   meshNode->speed,
+                                                   meshNode->gravity,
+                                                   meshNode->particleLife,
+                                                   1)
+                            )
+                );
+            }
+
+            emitterShader->bind();
+
+            emitterShader->setUniformValue("projectionMatrix", renderData->projMatrix);
+            emitterShader->setUniformValue("modelViewMatrix", renderData->viewMatrix * node->globalTransform);
+
+            if (meshNode->mesh != nullptr) {
+                gl->glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                gl->glLineWidth(2);
+                meshNode->mesh->draw(gl, emitterShader);
+                gl->glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            }
         }
     }
 
-    //if(node->sceneNodeType==SceneNodeType::Mesh && node->isVisible())
     if(mesh != nullptr && mat != nullptr)
     {
-        //qDebug()<<node->getName()+" is "+(node->isVisible()?"visible":"invisible")<<endl;
         auto meshNode = node.staticCast<MeshNode>();
         //auto mat = meshNode->material;
 
@@ -492,6 +559,29 @@ void ForwardRenderer::createShadowShader()
                                               ":assets/shaders/shadow_map.frag");
 
     shadowShader->bind();
+}
+
+void ForwardRenderer::createParticleShader()
+{
+    QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
+    vshader->compileSourceFile(":app/shaders/particle.vert");
+
+    QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
+    fshader->compileSourceFile(":app/shaders/particle.frag");
+
+    particleShader = new QOpenGLShaderProgram;
+    particleShader->addShader(vshader);
+    particleShader->addShader(fshader);
+
+    particleShader->link();
+
+    particleShader->bind();
+}
+
+void ForwardRenderer::createEmitterShader()
+{
+    emitterShader = GraphicsHelper::loadShader(":app/shaders/emitter.vert",
+                                               ":app/shaders/emitter.frag");
 }
 
 ForwardRenderer::~ForwardRenderer()

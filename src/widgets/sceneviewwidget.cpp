@@ -73,7 +73,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     //camController = orbitalCam;
 
     editorCam = iris::CameraNode::create();
-    editorCam->pos = QVector3D(0, 5, 7);
+    editorCam->pos = QVector3D(0, 8, 24);
     editorCam->rot = QQuaternion::fromEulerAngles(-5, 0, 0);
     camController->setCamera(editorCam);
 
@@ -179,6 +179,7 @@ void SceneViewWidget::renderScene()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     float dt = elapsedTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
+    elapsedTimer->restart();
 
     if (!!renderer && !!scene) {
         this->camController->update(dt);
@@ -191,9 +192,9 @@ void SceneViewWidget::renderScene()
         scene->update(dt);
 
         if (viewportMode == ViewportMode::Editor) {
-            renderer->renderScene(this->context(), viewport);
+            renderer->renderScene(this->context(), dt, viewport);
         } else {
-            renderer->renderSceneVr(this->context(), viewport);
+            renderer->renderSceneVr(this->context(), dt, viewport);
         }
 
         this->updateScene();

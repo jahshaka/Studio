@@ -113,6 +113,12 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     addMenu->addAction(action);
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addViewer()));
 
+    //SYSTEMS
+    auto systemsMenu = addMenu->addMenu("Emitter");
+    action = new QAction("Particle System", this);
+    systemsMenu->addAction(action);
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addParticleSystem()));
+
     //MESHES
     action = new QAction("Load Model", this);
     addMenu->addAction(action);
