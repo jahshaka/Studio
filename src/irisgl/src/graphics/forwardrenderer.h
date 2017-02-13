@@ -16,6 +16,11 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include "../libovr/Include/OVR_CAPI_GL.h"
 
+#include "particle.h"
+#include "particlerender.h"
+#include "particlemaster.h"
+#include "particlesystem.h"
+
 #define OUTLINE_STENCIL_CHANNEL 1
 
 class QOpenGLShaderProgram;
@@ -56,6 +61,8 @@ class ForwardRenderer
     QSharedPointer<SceneNode> selectedSceneNode;
     QOpenGLShaderProgram* lineShader;
     QOpenGLShaderProgram* shadowShader;
+    QOpenGLShaderProgram* particleShader;
+    QOpenGLShaderProgram* emitterShader;
 
     VrDevice* vrDevice;
 
@@ -77,8 +84,8 @@ public:
     }
 
     //all scenenodes' transform should be updated before calling this functions
-    void renderScene(QOpenGLContext* ctx, Viewport* vp);
-    void renderSceneVr(QOpenGLContext* ctx, Viewport* vp);
+    void renderScene(QOpenGLContext* ctx, float delta, Viewport* vp);
+    void renderSceneVr(QOpenGLContext* ctx, float delta, Viewport* vp);
 
     static QSharedPointer<ForwardRenderer> create(QOpenGLFunctions_3_2_Core* gl);
 
@@ -95,12 +102,17 @@ private:
     void renderSelectedNode(RenderData* renderData, QSharedPointer<SceneNode> node);
 
     void createLineShader();
+    void createParticleShader();
+    void createEmitterShader();
 
     GLuint shadowFBO;
     GLuint shadowDepthMap;
 
+    std::map<int, ParticleSystem*> particleSystems;
+
     void createShadowShader();
     void renderShadows(RenderData* renderData, QSharedPointer<SceneNode> node);
+    void renderParticles(RenderData* renderData, float delta, QSharedPointer<SceneNode> node);
     void generateShadowBuffer(GLuint size = 1024);
 
     //editor-specific

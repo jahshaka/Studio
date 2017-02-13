@@ -146,6 +146,9 @@ MainWindow::MainWindow(QWidget *parent) :
             this, SLOT(transformOrientationChanged(QString)));
 
     connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
+
+//    ui->AnimationDock->hide();
+//    ui->PresetsDock_2->hide();
 }
 
 void MainWindow::setupVrUi()
@@ -756,7 +759,6 @@ void MainWindow::addDirectionalLight()
     node->setLightType(iris::LightType::Directional);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
 
-
     addNodeToScene(node);
 }
 
@@ -772,6 +774,17 @@ void MainWindow::addViewer()
 {
     this->sceneView->makeCurrent();
     auto node = iris::ViewerNode::create();
+
+    addNodeToScene(node);
+}
+
+void MainWindow::addParticleSystem()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::MeshNode::create();
+    node->setMesh(getAbsoluteAssetPath("app/content/primitives/cube.obj"));
+    node->setName("Emitter");
+    node->sceneNodeType = iris::SceneNodeType::Emitter;
 
     addNodeToScene(node);
 }
@@ -852,34 +865,35 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
  */
 void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
 {
-    if(!scene)
-    {
-        //todo: set alert that a scene needs to be set before this can be done
+    if (!scene) {
+        // @TODO: set alert that a scene needs to be set before this can be done
         return;
     }
 
+    // @TODO: add this to a constants file
     const float spawnDist = 10.0f;
     auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, -1.0f, -spawnDist));
     offset += sceneView->editorCam->pos;
     sceneNode->pos = offset;
 
-    //apply default material
-    if(sceneNode->sceneNodeType == iris::SceneNodeType::Mesh)
-    {
+    // apply default material to mesh nodes
+    if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
-        if(!meshNode->getMaterial())
-        {
+        if (!meshNode->getMaterial()) {
             auto mat = iris::DefaultMaterial::create();
             meshNode->setMaterial(mat);
         }
+    }
 
+    // @TODO: create a specific node type for this instead of using meshnode
+    if (sceneNode->sceneNodeType == iris::SceneNodeType::Emitter) {
+        auto meshNode = sceneNode.staticCast<iris::MeshNode>();
+        meshNode->isEmitter = true;
     }
 
     scene->getRootNode()->addChild(sceneNode);
-
     ui->sceneHierarchy->repopulateTree();
-
     sceneNodeSelected(sceneNode);
 }
 

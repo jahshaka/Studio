@@ -30,6 +30,8 @@ For more information see the LICENSE file
 namespace iris
 {
 
+int MeshNode::index = 0;
+
 void MeshNode::setMesh(QString source)
 {
     meshPath = source;

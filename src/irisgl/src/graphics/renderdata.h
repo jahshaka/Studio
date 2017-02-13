@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define RENDERDATA_H
 
 #include "../irisglfwd.h"
+#include <QColor>
 
 namespace iris
 {

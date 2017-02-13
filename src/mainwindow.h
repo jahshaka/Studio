@@ -184,6 +184,8 @@ public slots:
     void addSpotLight();
     void addDirectionalLight();
 
+    void addParticleSystem();
+
     void updateAnim();
 
     void sceneNodeSelected(QTreeWidgetItem* item);
