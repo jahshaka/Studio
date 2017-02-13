@@ -2,6 +2,7 @@
 #define PARTICLE_H
 
 #include <QVector3D>
+#include <QDebug>
 
 class Particle {
 
@@ -19,12 +20,12 @@ private:
 
 public:
     Particle(QVector3D pos, QVector3D vel, float gr, float ll, float rot, float scl) {
-        position = pos;
-        velocity = vel;
+        position    = pos;
+        velocity    = vel;
         gravityEffect = gr;
-        lifeLength = ll;
-        rotation = rot;
-        scale = scl;
+        lifeLength  = ll;
+        rotation    = rot;
+        scale       = scl;
     }
 
     float getRotation() {
@@ -39,6 +40,10 @@ public:
         return position;
     }
 
+    float getLife() {
+        return lifeLength - elapsedTime;
+    }
+
     bool update(float delta) {
         velocity += QVector3D(0, GRAVITY * gravityEffect * delta, 0);
         QVector3D change = velocity;
@@ -47,6 +52,14 @@ public:
         elapsedTime += delta;
 
         return elapsedTime < lifeLength;
+    }
+
+    // niche particle properties
+    // dissipate particles over half their lifetime
+    void dissipate() {
+        if (lifeLength - elapsedTime > lifeLength/2) {
+            scale *= 1.f - 1/lifeLength;
+        }
     }
 };
 

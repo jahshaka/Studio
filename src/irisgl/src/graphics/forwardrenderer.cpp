@@ -94,7 +94,7 @@ QSharedPointer<ForwardRenderer> ForwardRenderer::create(QOpenGLFunctions_3_2_Cor
 }
 
 // all scene's transform should be updated
-void ForwardRenderer::renderScene(QOpenGLContext* ctx, Viewport* vp)
+void ForwardRenderer::renderScene(QOpenGLContext* ctx, float delta, Viewport* vp)
 {
     auto cam = scene->camera;
 
@@ -136,7 +136,7 @@ void ForwardRenderer::renderScene(QOpenGLContext* ctx, Viewport* vp)
     renderSky(renderData);
 
     // STEP 3: RENDER LINES (for e.g. light radius and the camera frustum)
-    renderParticles(renderData, scene->rootNode);
+    renderParticles(renderData, delta, scene->rootNode);
 
     // STEP 4: RENDER BILLBOARD ICONS
     renderBillboardIcons(renderData);
@@ -185,14 +185,14 @@ void ForwardRenderer::renderShadows(RenderData* renderData,QSharedPointer<SceneN
     }
 }
 
-void ForwardRenderer::renderParticles(RenderData *renderData, QSharedPointer<SceneNode> node)
+void ForwardRenderer::renderParticles(RenderData *renderData, float delta, QSharedPointer<SceneNode> node)
 {
     if (!particleSystems.empty()) {
         for (auto p : particleSystems) {
-            p.second->generateParticles(1.f/60.f);
+            p.second->generateParticles(delta);
 
-            // this is a pretty terrible hack, find the meshnode with the same id as the emitter
-            // and request info from it
+            // this is pretty messy, find the meshnode with the same id as the emitter
+            // and request info from it, also could an initializer list be user here...?
             for (auto n : node->children) {
                 if (n->sceneNodeType == SceneNodeType::Emitter && n.staticCast<MeshNode>()->m_index == p.first) {
                     QList<SceneNodePtr>::iterator x = std::find(node->children.begin(), node->children.end(), n);
@@ -202,16 +202,24 @@ void ForwardRenderer::renderParticles(RenderData *renderData, QSharedPointer<Sce
                     p.second->setSpeed((*x).staticCast<MeshNode>()->speed);
                     p.second->setGravity((*x).staticCast<MeshNode>()->gravity);
                     p.second->setTexture((*x).staticCast<MeshNode>()->texture);
+                    p.second->setDirection((*x).staticCast<MeshNode>()->getGlobalTransform());
+                    p.second->setVolumeSquare((*x).staticCast<MeshNode>()->scale);
+                    p.second->setSpeedError((*x).staticCast<MeshNode>()->speedFac);
+                    p.second->setScaleError((*x).staticCast<MeshNode>()->scaleFac);
+                    p.second->setLifeError((*x).staticCast<MeshNode>()->lifeFac);
+                    p.second->dissipate((*x).staticCast<MeshNode>()->dissipate);
+                    p.second->setRandomRotation((*x).staticCast<MeshNode>()->randomRotation);
+                    p.second->setBlendMode((*x).staticCast<MeshNode>()->useAdditive);
                 }
             }
 
-            p.second->pm.update(1.f/60.f);
+            p.second->pm.update(delta);
             p.second->pm.renderParticles(gl, particleShader, renderData);
         }
     }
 }
 
-void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
+void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx, float delta, Viewport* vp)
 {
     if(!vrDevice->isVrSupported())
         return;
@@ -258,6 +266,8 @@ void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx,Viewport* vp)
 
         //STEP 2: RENDER SKY
         renderSky(renderData);
+
+        renderParticles(renderData, delta, scene->rootNode);
 
 
         vrDevice->endEye(eye);
@@ -325,7 +335,7 @@ void ForwardRenderer::renderNode(RenderData* renderData, QSharedPointer<SceneNod
             if (meshNode->mesh != nullptr) {
                 gl->glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
                 gl->glLineWidth(2);
-                meshNode->mesh->draw(gl, emitterShader, GL_LINE_LOOP);
+                meshNode->mesh->draw(gl, emitterShader);
                 gl->glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             }
         }
@@ -570,19 +580,8 @@ void ForwardRenderer::createParticleShader()
 
 void ForwardRenderer::createEmitterShader()
 {
-    QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile(":app/shaders/emitter.vert");
-
-    QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile(":app/shaders/emitter.frag");
-
-    emitterShader = new QOpenGLShaderProgram;
-    emitterShader->addShader(vshader);
-    emitterShader->addShader(fshader);
-
-    emitterShader->link();
-
-    emitterShader->bind();
+    emitterShader = GraphicsHelper::loadShader(":app/shaders/emitter.vert",
+                                               ":app/shaders/emitter.frag");
 }
 
 ForwardRenderer::~ForwardRenderer()

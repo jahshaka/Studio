@@ -18,6 +18,7 @@ private:
     GLuint particleId;
 
 public:
+    bool useAdditive;
     QSharedPointer<iris::Texture2D> icon;
     ParticleRenderer(QOpenGLFunctions_3_2_Core* gl) {
         this->gl = gl;
@@ -44,6 +45,8 @@ public:
         gl->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE,
                                   5 * sizeof(GLfloat),
                                   (GLvoid*) (3 * sizeof(GLfloat)));
+
+        useAdditive = true;
     }
 
     void updateModelViewMatrix(QOpenGLShaderProgram *shader,
@@ -89,7 +92,11 @@ public:
 
         gl->glBindVertexArray(quadVAO);
         gl->glEnable(GL_BLEND);
-        gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        if (useAdditive) {
+            gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        } else {
+            gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        }
         gl->glDepthMask(GL_FALSE);
 
         for (auto particle : particles) {

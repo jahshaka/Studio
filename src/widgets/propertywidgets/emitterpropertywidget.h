@@ -29,11 +29,15 @@ public:
 protected slots:
     void onEmissionRateChanged(float val);
     void onParticleLifeChanged(float val);
-    void onRotationFactorChanged(float val);
+    void onLifeFactorChanged(float val);
+    void onSpeedFactorChanged(float val);
     void onScaleFactorChanged(float val);
     void onGravityFactorChanged(float val);
     void onVelocityFactorChanged(float val);
+    void onRandomRotation(bool val);
     void onSortOrderChanged(bool val);
+    void onDissipateChanged(bool val);
+    void onAdditiveChanged(bool val);
     void onBillboardImageChanged(QString);
 
 private:
@@ -42,11 +46,15 @@ private:
     TexturePicker* billboardImage;
     HFloatSlider* emissionRate;
     HFloatSlider* particleLife;
-    HFloatSlider* rotationFactor;
+    HFloatSlider* lifeFactor;
+    HFloatSlider* speedFactor;
     HFloatSlider* scaleFactor;
     HFloatSlider* gravityFactor;
     HFloatSlider* velocityFactor;
+    CheckBoxProperty* randomRotation;
     CheckBoxProperty* sortOrder;
+    CheckBoxProperty* dissipate;
+    CheckBoxProperty* useAdditive;
 };
 
 #endif // EMITTER_H

@@ -53,6 +53,7 @@ public:
     SceneNodePtr parent;
     QList<SceneNodePtr> children;
 
+    // remember this...
     friend bool operator == (const SceneNode& a, const SceneNode &b) {
         return a.nodeId == b.nodeId;
     }

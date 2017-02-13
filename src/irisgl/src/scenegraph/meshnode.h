@@ -72,6 +72,14 @@ public:
     float particleLife;
     float gravity;
     QSharedPointer<iris::Texture2D> texture;
+    bool dissipate;
+
+    bool randomRotation;
+
+    float lifeFac;
+    float scaleFac;
+    bool useAdditive;
+    float speedFac;
 
 private:
     MeshNode() : m_index(index++) {
@@ -79,12 +87,20 @@ private:
         sceneNodeType = SceneNodeType::Mesh;
 
         texture = iris::Texture2D::load(
-                    IrisUtils::getAbsoluteAssetPath("assets/textures/particleStar.png")
+                    IrisUtils::getAbsoluteAssetPath("assets/textures/default_particle.jpg")
         );
-        pps = 50;
-        speed = 25;
-        gravity = .2f;
-        particleLife = 10;
+        pps = 24;
+        speed = 12;
+        gravity = .0f;
+        particleLife = 5;
+
+        scaleFac = 0.1f;
+        lifeFac = 0.0f;
+        speedFac = 0.0f;
+
+        useAdditive = false;
+        randomRotation = true;
+        dissipate = false;
     }
 };
 

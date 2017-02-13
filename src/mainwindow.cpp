@@ -146,6 +146,9 @@ MainWindow::MainWindow(QWidget *parent) :
             this, SLOT(transformOrientationChanged(QString)));
 
     connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
+
+//    ui->AnimationDock->hide();
+//    ui->PresetsDock_2->hide();
 }
 
 void MainWindow::setupVrUi()
@@ -777,6 +780,7 @@ void MainWindow::addViewer()
 
 void MainWindow::addParticleSystem()
 {
+    this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/content/primitives/cube.obj"));
     node->setName("Emitter");
