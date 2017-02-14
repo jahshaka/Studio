@@ -16,6 +16,8 @@ namespace Ui {
     class EmitterPropertyWidget;
 }
 
+class ComboBox;
+
 class EmitterPropertyWidget : public AccordianBladeWidget
 {
     Q_OBJECT
@@ -43,6 +45,7 @@ protected slots:
 private:
     QSharedPointer<iris::MeshNode> meshNode;
 
+    ComboBox* preset;
     TexturePicker* billboardImage;
     HFloatSlider* emissionRate;
     HFloatSlider* particleLife;
@@ -55,6 +58,7 @@ private:
     CheckBoxProperty* sortOrder;
     CheckBoxProperty* dissipate;
     CheckBoxProperty* useAdditive;
+    ComboBox* blendMode;
 };
 
 #endif // EMITTER_H

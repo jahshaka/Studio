@@ -179,7 +179,6 @@ FORMS    += \
     src/widgets/checkboxproperty.ui \
     src/widgets/keyframelabelwidget.ui \
     src/widgets/keyframelabeltreewidget.ui \
-    src/widgets/emitterproperty.ui \
     src/widgets/combobox.ui
 
 RESOURCES += \

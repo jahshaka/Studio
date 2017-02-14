@@ -53,7 +53,6 @@ private:
     HFloatSlider* fogStart;
     HFloatSlider* fogEnd;
     ColorValueWidget* fogColor;
-
 };
 
 #endif // FOGPROPERTYWIDGET_H
