@@ -27,7 +27,6 @@ FogPropertyWidget::FogPropertyWidget()
     fogStart = this->addFloatValueSlider("Fog Start",0,1000);
     fogEnd = this->addFloatValueSlider("Fog End",0,1000);
 
-
     connect(fogColor->getPicker(),SIGNAL(onColorChanged(QColor)),SLOT(onFogColorChanged(QColor)));
     connect(fogStart,SIGNAL(valueChanged(float)),SLOT(onFogStartChanged(float)));
     connect(fogEnd,SIGNAL(valueChanged(float)),SLOT(onFogEndChanged(float)));
