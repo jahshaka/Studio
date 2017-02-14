@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include <QWidget>
 
 namespace Ui {
-class AccordianBladeWidget;
+    class AccordianBladeWidget;
 }
 
 class TransformEditor;
@@ -23,6 +23,7 @@ class ColorValueWidget;
 class TexturePicker;
 class HFloatSlider;
 class CheckBoxProperty;
+class ComboBox;
 
 class AccordianBladeWidget : public QWidget
 {
@@ -44,6 +45,7 @@ public:
     void setContentTitle( QString title );
     HFloatSlider* addFloatValueSlider( QString name, float range_1 , float range_2 );
     CheckBoxProperty* addCheckBox( QString name, bool value = false );
+    ComboBox* addComboBox(QString name);
 
     void expand();
 

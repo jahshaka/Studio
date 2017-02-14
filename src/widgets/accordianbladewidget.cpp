@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include "filepickerwidget.h"
 #include "ui_filepickerwidget.h"
 #include "checkboxproperty.h"
+#include "combobox.h"
+#include "ui_combobox.h"
 #include <QSpinBox>
 #include <QDebug>
 
@@ -155,6 +157,19 @@ CheckBoxProperty* AccordianBladeWidget::addCheckBox( QString name, bool value )
     minimum_height += 10;
 
     return checkbox;
+}
+
+ComboBox* AccordianBladeWidget::addComboBox(QString name)
+{
+    ComboBox* combobox = new ComboBox();
+    combobox->setLabel(name);
+    ui->contentpane->layout()->addWidget(combobox);
+    int height = combobox->height();
+
+    minimum_height += height;
+    minimum_height += 10;
+
+    return combobox;
 }
 
 void AccordianBladeWidget::expand()
