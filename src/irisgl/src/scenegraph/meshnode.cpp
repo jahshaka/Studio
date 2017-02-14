@@ -26,18 +26,49 @@ For more information see the LICENSE file
 #include "../graphics/vertexlayout.h"
 #include "../materials/defaultmaterial.h"
 #include "../materials/materialhelper.h"
+#include "../graphics/renderitem.h"
+
+#include "../core/scene.h"
+#include "../core/scenenode.h"
 
 namespace iris
 {
 
 int MeshNode::index = 0;
 
+MeshNode::MeshNode() : m_index(index++) {
+    mesh = nullptr;
+    sceneNodeType = SceneNodeType::Mesh;
+
+    texture = iris::Texture2D::load(
+                IrisUtils::getAbsoluteAssetPath("assets/textures/default_particle.jpg")
+    );
+    pps = 24;
+    speed = 12;
+    gravity = .0f;
+    particleLife = 5;
+
+    scaleFac = 0.1f;
+    lifeFac = 0.0f;
+    speedFac = 0.0f;
+
+    useAdditive = false;
+    randomRotation = true;
+    dissipate = false;
+
+    renderItem = new RenderItem();
+    renderItem->type = RenderItemType::Mesh;
+}
+
+// @todo: cleanup previous mesh item
 void MeshNode::setMesh(QString source)
 {
     meshPath = source;
     mesh = Mesh::loadMesh(source);
     meshPath = source;
     meshIndex = 0;
+
+    renderItem->mesh = mesh;
 }
 
 //should not be used on plain scene meshes
@@ -51,9 +82,17 @@ Mesh* MeshNode::getMesh()
     return mesh;
 }
 
-void MeshNode::setMaterial(QSharedPointer<Material> material)
+void MeshNode::setMaterial(MaterialPtr material)
 {
     this->material = material;
+
+    renderItem->matrial = material;
+}
+
+void MeshNode::submitRenderItems()
+{
+    this->scene->geometryRenderList.append(renderItem);
+    this->scene->shadowRenderList.append(renderItem);
 }
 
 /**

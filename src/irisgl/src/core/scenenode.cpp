@@ -174,6 +174,8 @@ void SceneNode::update(float dt)
     for (auto child : children) {
         child->update(dt);
     }
+
+    submitRenderItems();
 }
 
 void SceneNode::setParent(SceneNodePtr node)

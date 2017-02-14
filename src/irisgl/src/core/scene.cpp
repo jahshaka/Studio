@@ -39,6 +39,10 @@ Scene::Scene()
     fogEnabled = true;
 
     ambientColor = QColor(64, 64, 64);
+
+    //reserve 1000 items initially
+    geometryRenderList.reserve(1000);
+    shadowRenderList.reserve(1000);
 }
 
 void Scene::setSkyTexture(Texture2DPtr tex)

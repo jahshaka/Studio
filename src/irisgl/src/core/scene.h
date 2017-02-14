@@ -20,6 +20,8 @@ For more information see the LICENSE file
 namespace iris
 {
 
+class RenderItem;
+
 class Scene: public QEnableSharedFromThis<Scene>
 {
 public:
@@ -47,6 +49,9 @@ public:
     float fogStart;
     float fogEnd;
     bool fogEnabled;
+
+    QVector<RenderItem*> geometryRenderList;
+    QVector<RenderItem*> shadowRenderList;
 
     /*
      * customizations that can be passed in and applied to a scene. ideally these
