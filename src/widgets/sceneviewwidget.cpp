@@ -418,7 +418,10 @@ void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& scen
                                      const QVector3D& segEnd,
                                      QList<PickingResult>& hitList)
 {
-    if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh && sceneNode->isPickable()) {
+    if ((sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh     ||
+         sceneNode->getSceneNodeType() == iris::SceneNodeType::Emitter) &&
+         sceneNode->isPickable())
+    {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
         auto mesh = meshNode->getMesh();
         if(mesh != nullptr)
