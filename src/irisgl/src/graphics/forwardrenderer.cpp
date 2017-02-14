@@ -42,9 +42,9 @@ using namespace OVR;
 namespace iris
 {
 
-ForwardRenderer::ForwardRenderer(QOpenGLFunctions_3_2_Core* gl)
+ForwardRenderer::ForwardRenderer()
 {
-    this->gl = gl;
+    this->gl = QOpenGLContext::currentContext()->functions<QOpenGLFunctions_3_2_Core>();
     renderData = new RenderData();
 
     billboard = new Billboard(gl);
@@ -94,8 +94,9 @@ QSharedPointer<ForwardRenderer> ForwardRenderer::create(QOpenGLFunctions_3_2_Cor
 }
 
 // all scene's transform should be updated
-void ForwardRenderer::renderScene(QOpenGLContext* ctx, float delta, Viewport* vp)
+void ForwardRenderer::renderScene(float delta, Viewport* vp)
 {
+    auto ctx = QOpenGLContext::currentContext();
     auto cam = scene->camera;
 
     // STEP 1: RENDER SCENE
@@ -219,12 +220,11 @@ void ForwardRenderer::renderParticles(RenderData *renderData, float delta, QShar
     }
 }
 
-void ForwardRenderer::renderSceneVr(QOpenGLContext* ctx, float delta, Viewport* vp)
+void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
 {
+    auto ctx = QOpenGLContext::currentContext();
     if(!vrDevice->isVrSupported())
         return;
-
-    //auto camera = scene->camera;
 
     QVector3D viewerPos = scene->camera->getGlobalPosition();
     float viewScale = scene->camera->getVrViewScale();

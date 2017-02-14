@@ -22,6 +22,11 @@ namespace iris
 
 class RenderItem;
 
+enum class SceneRenderFlags : int
+{
+    Vr = 0x1
+};
+
 class Scene: public QEnableSharedFromThis<Scene>
 {
 public:

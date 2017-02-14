@@ -84,17 +84,17 @@ public:
     }
 
     //all scenenodes' transform should be updated before calling this functions
-    void renderScene(QOpenGLContext* ctx, float delta, Viewport* vp);
-    void renderSceneVr(QOpenGLContext* ctx, float delta, Viewport* vp);
+    void renderScene(float delta, Viewport* vp);
+    void renderSceneVr(float delta, Viewport* vp);
 
-    static QSharedPointer<ForwardRenderer> create(QOpenGLFunctions_3_2_Core* gl);
+    static QSharedPointer<ForwardRenderer> create();
 
     bool isVrSupported();
 
     ~ForwardRenderer();
 
 private:
-    ForwardRenderer(QOpenGLFunctions_3_2_Core* gl);
+    ForwardRenderer();
 
     void renderNode(RenderData* renderData, QSharedPointer<SceneNode> node);
     void renderSky(RenderData* renderData);
