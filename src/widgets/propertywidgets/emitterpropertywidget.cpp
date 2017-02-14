@@ -1,10 +1,10 @@
 #include "emitterpropertywidget.h"
-#include "ui_emitterproperty.h"
 
 #include "materialpropertywidget.h"
 #include "../texturepicker.h"
 #include "../hfloatslider.h"
 #include "../checkboxproperty.h"
+#include "../combobox.h"
 
 #include "../../irisgl/src/graphics/texture2d.h"
 #include "../../irisgl/src/scenegraph/meshnode.h"
@@ -26,6 +26,20 @@ EmitterPropertyWidget::EmitterPropertyWidget()
     sortOrder       = this->addCheckBox("Flip Sort Order", false);
     dissipate       = this->addCheckBox("Dissipate Over Time", false);
     useAdditive     = this->addCheckBox("Use Additive Blending", false);
+    blendMode       = this->addComboBox("Col Box");
+    preset          = this->addComboBox("Particle Preset");
+
+    // @TODO
+    blendMode->addItem("Premultiplied Alpha");
+    blendMode->addItem("Additive");
+
+    preset->addItem("Fire");
+    preset->addItem("Smoke");
+    preset->addItem("Rain");
+    preset->addItem("Snow");
+    preset->addItem("Steady Flow");
+    preset->addItem("Chaos");
+    preset->addItem("Sparks");
 
     connect(emissionRate,   SIGNAL(valueChanged(float)), SLOT(onEmissionRateChanged(float)));
     connect(particleLife,   SIGNAL(valueChanged(float)), SLOT(onParticleLifeChanged(float)));
