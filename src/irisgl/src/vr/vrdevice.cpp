@@ -33,7 +33,7 @@ struct VrFrameData
 
 VrDevice::VrDevice()
 {
-    this->gl = QOpenGLContext::currentContext()->functions<QOpenGLFunctions_3_2_Core>();
+    this->gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
     vrSupported = false;
     frameData = new VrFrameData();
 }

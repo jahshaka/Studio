@@ -87,7 +87,7 @@ public:
     void renderScene(float delta, Viewport* vp);
     void renderSceneVr(float delta, Viewport* vp);
 
-    static QSharedPointer<ForwardRenderer> create();
+    static ForwardRendererPtr create();
 
     bool isVrSupported();
 
@@ -111,7 +111,7 @@ private:
     std::map<int, ParticleSystem*> particleSystems;
 
     void createShadowShader();
-    void renderShadows(RenderData* renderData, QSharedPointer<SceneNode> node);
+    void renderShadows(ScenePtr node);
     void renderParticles(RenderData* renderData, float delta, QSharedPointer<SceneNode> node);
     void generateShadowBuffer(GLuint size = 1024);
 

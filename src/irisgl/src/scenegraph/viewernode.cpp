@@ -41,6 +41,7 @@ float ViewerNode::getViewScale()
 
 void ViewerNode::submitRenderItems()
 {
+    renderItem->worldMatrix = this->globalTransform;
     scene->geometryRenderList.append(renderItem);
 }
 

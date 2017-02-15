@@ -152,7 +152,7 @@ void SceneViewWidget::initializeGL()
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
 
-    renderer = iris::ForwardRenderer::create(this);
+    renderer = iris::ForwardRenderer::create();
 
     initialize();
     fsQuad = new iris::FullScreenQuad();
@@ -192,9 +192,9 @@ void SceneViewWidget::renderScene()
         scene->update(dt);
 
         if (viewportMode == ViewportMode::Editor) {
-            renderer->renderScene(this->context(), dt, viewport);
+            renderer->renderScene(dt, viewport);
         } else {
-            renderer->renderSceneVr(this->context(), dt, viewport);
+            renderer->renderSceneVr(dt, viewport);
         }
 
         this->updateScene();

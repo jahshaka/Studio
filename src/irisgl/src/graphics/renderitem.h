@@ -2,6 +2,7 @@
 #define RENDERITEM_H
 
 #include "../irisglfwd.h"
+#include "material.h"
 #include <QMatrix4x4>
 
 namespace iris
@@ -16,15 +17,6 @@ enum class RenderItemType
     ParticleSystem
 };
 
-enum class RenderLayer : int
-{
-    Background = 1000,
-    Opaque = 2000,
-    AlphaTested = 3000,
-    Transparent = 4000,
-    Overlay = 5000
-};
-
 struct RenderItem
 {
     RenderItemType type;
@@ -35,12 +27,12 @@ struct RenderItem
     SceneNodePtr sceneNode;
 
     //sort order for render layer
-    int renderLayer;
+    //int renderLayer;
 
     RenderItem()
     {
-        type = None,
-        renderLayer = RenderLayer::Opaque;
+        type = RenderItemType::None,
+        //renderLayer = (int)RenderLayer::Opaque;
         worldMatrix.setToIdentity();
     }
 };

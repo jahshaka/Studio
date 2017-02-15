@@ -21,6 +21,8 @@ For more information see the LICENSE file
 #include "graphicshelper.h"
 #include "renderdata.h"
 #include "material.h"
+#include "renderitem.h"
+#include <QOpenGLContext>
 #include <QOpenGLShaderProgram>
 #include <QOpenGLFunctions>
 #include <QOpenGLFunctions_3_2_Core>
@@ -44,7 +46,7 @@ namespace iris
 
 ForwardRenderer::ForwardRenderer()
 {
-    this->gl = QOpenGLContext::currentContext()->functions<QOpenGLFunctions_3_2_Core>();
+    this->gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
     renderData = new RenderData();
 
     billboard = new Billboard(gl);
@@ -58,7 +60,7 @@ ForwardRenderer::ForwardRenderer()
 
     generateShadowBuffer(4096);
 
-    vrDevice = new VrDevice(gl);
+    vrDevice = new VrDevice();
     vrDevice->initialize();
 }
 
@@ -88,9 +90,9 @@ void ForwardRenderer::generateShadowBuffer(GLuint size)
     // check status at end
 }
 
-QSharedPointer<ForwardRenderer> ForwardRenderer::create(QOpenGLFunctions_3_2_Core* gl)
+ForwardRendererPtr ForwardRenderer::create()
 {
-    return QSharedPointer<ForwardRenderer>(new ForwardRenderer(gl));
+    return ForwardRendererPtr(new ForwardRenderer());
 }
 
 // all scene's transform should be updated
@@ -118,7 +120,7 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     gl->glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
     gl->glClear(GL_DEPTH_BUFFER_BIT);
     gl->glCullFace(GL_FRONT);
-    renderShadows(renderData, scene->rootNode);
+    renderShadows(scene);
     gl->glCullFace(GL_BACK);
 
     gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -144,46 +146,45 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     // STEP 5: RENDER SELECTED OBJECT
     if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
+
+    //clear lists
+    scene->geometryRenderList.clear();
+    scene->shadowRenderList.clear();
 }
 
-void ForwardRenderer::renderShadows(RenderData* renderData,QSharedPointer<SceneNode> node)
+void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
 {
-    if (node->sceneNodeType == SceneNodeType::Mesh && node->isVisible()) {
+    QMatrix4x4 lightView, lightProjection;
 
-        shadowShader->bind();
+    gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, shadowFBO);
+    gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthMap, 0);
 
-        QMatrix4x4 lightView, lightProjection;
+    shadowShader->bind();
 
-        for (auto light : scene->lights) {
-            if (light->lightType == iris::LightType::Directional && true) { // cast shadows
-                auto meshNode = node.staticCast<MeshNode>();
+    for (auto light : scene->lights) {
+        if (light->lightType == iris::LightType::Directional) {
 
-                lightProjection.ortho(-128.0f, 128.0f, -64.0f, 64.0f, -64.0f, 128.0f);
+            lightProjection.ortho(-128.0f, 128.0f, -64.0f, 64.0f, -64.0f, 128.0f);
 
-                lightView.lookAt(QVector3D(0, 0, 0),
-                                 light->getLightDir(),
-                                 QVector3D(0.0f, 1.0f, 0.0f));
-
-                QMatrix4x4 lightSpaceMatrix = lightProjection * lightView;
+            lightView.lookAt(QVector3D(0, 0, 0),
+                             light->getLightDir(),
+                             QVector3D(0.0f, 1.0f, 0.0f));
+            QMatrix4x4 lightSpaceMatrix = lightProjection * lightView;
 
 
-                gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, shadowFBO);
-                gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthMap, 0);
+            shadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
 
-                shadowShader->setUniformValue("u_worldMatrix", node->globalTransform);
-                shadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
+            for (auto& item : scene->shadowRenderList) {
+                shadowShader->setUniformValue("u_worldMatrix", item->worldMatrix);
 
-                if(meshNode->mesh != nullptr)
-                    meshNode->mesh->draw(gl, shadowShader);
+                if (item->type == iris::RenderItemType::Mesh) {
+                    item->mesh->draw(gl, shadowShader);
+                }
             }
         }
-
-        shadowShader->release();
     }
 
-    for (auto childNode : node->children) {
-        renderShadows(renderData, childNode);
-    }
+    shadowShader->release();
 }
 
 void ForwardRenderer::renderParticles(RenderData *renderData, float delta, QSharedPointer<SceneNode> node)

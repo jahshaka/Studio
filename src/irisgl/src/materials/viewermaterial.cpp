@@ -19,6 +19,8 @@ ViewerMaterial::ViewerMaterial()
 {
     createProgramFromShaderSource(":assets/shaders/viewer.vert",
                                   ":assets/shaders/viewer.frag");
+
+    this->setRenderLayer((int)RenderLayer::Opaque);
 }
 
 void ViewerMaterial::setTexture(Texture2DPtr tex)

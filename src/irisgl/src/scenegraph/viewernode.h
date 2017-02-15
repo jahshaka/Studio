@@ -15,7 +15,6 @@ class ViewerNode : public SceneNode
 {
     float viewScale;
     ViewerNode();
-    ~ViewerNode();
 
 public:
     Mesh* headModel;
@@ -29,6 +28,8 @@ public:
     void submitRenderItems() override;
 
     RenderItem* renderItem;
+
+    ~ViewerNode();
 };
 
 }
