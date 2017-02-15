@@ -24,6 +24,7 @@ namespace iris
 class CameraNode;
 class LightNode;
 class ViewerNode;
+class ParticleSystemNode;
 class Mesh;
 class Material;
 class MeshNode;
@@ -67,6 +68,7 @@ typedef QSharedPointer<KeyFrameSet> KeyFrameSetPtr;
 typedef QSharedPointer<FloatKeyFrame> FloatKeyFramePtr;
 typedef QSharedPointer<ViewerMaterial> ViewerMaterialPtr;
 typedef QSharedPointer<ViewerNode> ViewerNodePtr;
+typedef QSharedPointer<ParticleSystemNode> ParticleSystemNodePtr;
 
 
 

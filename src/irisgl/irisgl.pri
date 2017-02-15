@@ -50,7 +50,8 @@ HEADERS += \
     $$PWD/src/graphics/particlerender.h \
     $$PWD/src/graphics/particlemaster.h \
     $$PWD/src/graphics/particlesystem.h \
-    $$PWD/src/graphics/renderitem.h
+    $$PWD/src/graphics/renderitem.h \
+    $$PWD/src/scenegraph/particlesystemnode.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
