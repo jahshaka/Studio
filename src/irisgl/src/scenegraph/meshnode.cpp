@@ -93,6 +93,8 @@ void MeshNode::setMaterial(MaterialPtr material)
 void MeshNode::submitRenderItems()
 {
     renderItem->worldMatrix = this->globalTransform;
+    if(!!material)
+        renderItem->renderLayer = material->renderLayer;
 
     this->scene->geometryRenderList.append(renderItem);
     this->scene->shadowRenderList.append(renderItem);

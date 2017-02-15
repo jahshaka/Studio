@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include "irisgl/src/core/scenenode.h"
 #include "irisgl/src/scenegraph/lightnode.h"
 #include "irisgl/src/scenegraph/viewernode.h"
+#include "irisgl/src/scenegraph/particlesystemnode.h"
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/graphics/forwardrenderer.h"
 #include "irisgl/src/graphics/mesh.h"
@@ -781,11 +782,14 @@ void MainWindow::addViewer()
 void MainWindow::addParticleSystem()
 {
     this->sceneView->makeCurrent();
+    /*
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/content/primitives/cube.obj"));
     node->setName("Emitter");
-    node->sceneNodeType = iris::SceneNodeType::Emitter;
+    node->sceneNodeType = iris::SceneNodeType::ParticleSystem;
+    */
 
+    auto node = iris::ParticleSystemNode::create();
     addNodeToScene(node);
 }
 
@@ -886,8 +890,7 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
         }
     }
 
-    // @TODO: create a specific node type for this instead of using meshnode
-    if (sceneNode->sceneNodeType == iris::SceneNodeType::Emitter) {
+    if (sceneNode->sceneNodeType == iris::SceneNodeType::ParticleSystem) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
         meshNode->isEmitter = true;
     }

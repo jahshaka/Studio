@@ -126,7 +126,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                 layout->addWidget(materialPropView);
                 materialPropView->expand();
                 break;
-            case iris::SceneNodeType::Emitter:
+            case iris::SceneNodeType::ParticleSystem:
                 layout->addWidget(emitterPropView);
                 emitterPropView->expand();
                 break;

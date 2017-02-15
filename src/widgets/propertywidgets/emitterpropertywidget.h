@@ -3,6 +3,7 @@
 
 #include <QWidget>
 #include <QSharedPointer>
+#include "../../irisgl/src/irisglfwd.h"
 
 #include "../accordianbladewidget.h"
 
@@ -24,7 +25,7 @@ public:
     EmitterPropertyWidget();
     ~EmitterPropertyWidget();
 
-    void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
+    void setSceneNode(iris::SceneNodePtr sceneNode);
 
 protected slots:
     void onEmissionRateChanged(float val);
@@ -41,7 +42,7 @@ protected slots:
     void onBillboardImageChanged(QString);
 
 private:
-    QSharedPointer<iris::MeshNode> meshNode;
+    iris::ParticleSystemNodePtr ps;
 
     TexturePicker* billboardImage;
     HFloatSlider* emissionRate;

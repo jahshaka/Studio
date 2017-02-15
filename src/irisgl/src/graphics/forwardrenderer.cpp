@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "../scenegraph/meshnode.h"
 #include "../scenegraph/lightnode.h"
 #include "../scenegraph/viewernode.h"
+#include "../scenegraph/particlesystemnode.h"
 #include "../materials/viewermaterial.h"
 #include "mesh.h"
 #include "graphicshelper.h"
@@ -139,7 +140,7 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     //renderSky(renderData);
 
     // STEP 3: RENDER LINES (for e.g. light radius and the camera frustum)
-    renderParticles(renderData, delta, scene->rootNode);
+    //renderParticles(renderData, delta, scene->rootNode);
 
     // STEP 4: RENDER BILLBOARD ICONS
     renderBillboardIcons(renderData);
@@ -187,8 +188,9 @@ void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
     shadowShader->release();
 }
 
-void ForwardRenderer::renderParticles(RenderData *renderData, float delta, QSharedPointer<SceneNode> node)
+void ForwardRenderer::renderParticles(RenderData *renderData, float delta, ParticleSystemNodePtr node)
 {
+    /*
     if (!particleSystems.empty()) {
         for (auto p : particleSystems) {
             p.second->generateParticles(delta);
@@ -218,7 +220,9 @@ void ForwardRenderer::renderParticles(RenderData *renderData, float delta, QShar
             p.second->pm.update(delta);
             p.second->pm.renderParticles(gl, particleShader, renderData);
         }
-    }
+    }*/
+
+    //node->renderer->renderParticles(particleShader, renderData, node->particles);
 }
 
 void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
@@ -268,7 +272,7 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
         //STEP 2: RENDER SKY
         renderSky(renderData);
 
-        renderParticles(renderData, delta, scene->rootNode);
+        //renderParticles(renderData, delta, scene->rootNode);
 
 
         vrDevice->endEye(eye);
@@ -293,139 +297,6 @@ bool ForwardRenderer::isVrSupported()
 
 void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 {
-    /*
-    iris::Mesh* mesh = nullptr;
-    iris::Material* mat = nullptr;
-
-    if(node->isVisible())
-    {
-        if(node->sceneNodeType == iris::SceneNodeType::Mesh)
-        {
-            auto meshNode = node.staticCast<MeshNode>();
-            mesh = meshNode->mesh;
-            mat = meshNode->material.data();
-        }
-        else if(node->sceneNodeType == iris::SceneNodeType::Viewer)
-        {
-            auto veiwerNode = node.staticCast<ViewerNode>();
-            mesh = veiwerNode->headModel;
-            mat = static_cast<iris::Material*>(veiwerNode->material.data());
-        } else if (node->sceneNodeType == SceneNodeType::Emitter) {
-            auto meshNode = node.staticCast<MeshNode>();
-
-            // pass the id and create the system, hmm
-            if (meshNode->isEmitter) {
-                particleSystems.insert(
-                            std::make_pair(
-                                meshNode->m_index,
-                                new ParticleSystem(gl,
-                                                   meshNode->pos,
-                                                   meshNode->pps,
-                                                   meshNode->speed,
-                                                   meshNode->gravity,
-                                                   meshNode->particleLife,
-                                                   1)
-                            )
-                );
-            }
-
-            emitterShader->bind();
-
-            emitterShader->setUniformValue("projectionMatrix", renderData->projMatrix);
-            emitterShader->setUniformValue("modelViewMatrix", renderData->viewMatrix * node->globalTransform);
-
-            if (meshNode->mesh != nullptr) {
-                gl->glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                gl->glLineWidth(2);
-                meshNode->mesh->draw(gl, emitterShader);
-                gl->glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-            }
-        }
-    }
-
-    if(mesh != nullptr && mat != nullptr)
-    {
-        auto meshNode = node.staticCast<MeshNode>();
-        //auto mat = meshNode->material;
-
-        auto program = mat->program;
-
-        mat->begin(gl,scene);
-
-        //send transform and light data
-        program->setUniformValue("u_worldMatrix",node->globalTransform);
-        program->setUniformValue("u_viewMatrix",renderData->viewMatrix);
-        program->setUniformValue("u_projMatrix",renderData->projMatrix);
-        program->setUniformValue("u_normalMatrix",node->globalTransform.normalMatrix());
-
-        program->setUniformValue("u_eyePos",renderData->eyePos);
-
-        program->setUniformValue("u_fogData.color",renderData->fogColor);
-        program->setUniformValue("u_fogData.start",renderData->fogStart);
-        program->setUniformValue("u_fogData.end",renderData->fogEnd);
-        program->setUniformValue("u_fogData.enabled",renderData->fogEnabled);
-
-        //program->setUniformValue("u_textureScale",1.0f);
-
-        program->setUniformValue("u_shadowMap", 2);
-
-        gl->glActiveTexture(GL_TEXTURE2);
-        gl->glBindTexture(GL_TEXTURE_2D, shadowDepthMap);
-
-        QMatrix4x4 lightView, lightProjection;
-
-        for (auto light : scene->lights) {
-            if (light->lightType == iris::LightType::Directional && true) { // cast shadows
-                lightProjection.ortho(-128.0f, 128.0f, -64.0f, 64.0f, -64.0f, 128.0f);
-
-                lightView.lookAt(QVector3D(0, 0, 0),
-                                 light->getLightDir(),
-                                 QVector3D(0.0f, 1.0f, 0.0f));
-
-                QMatrix4x4 lightSpaceMatrix = lightProjection * lightView;
-                program->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
-            }
-        }
-
-        auto lightCount = renderData->scene->lights.size();
-        mat->program->setUniformValue("u_lightCount",lightCount);
-
-        for(int i=0;i<lightCount;i++)
-        {
-            QString lightPrefix = QString("u_lights[%0].").arg(i);
-
-            auto light = renderData->scene->lights[i];
-            if(!light->isVisible())
-            {
-                //quick hack for now
-                mat->setUniformValue(lightPrefix+"color", QColor(0,0,0));
-                continue;
-            }
-
-            mat->setUniformValue(lightPrefix+"type", (int)light->lightType);
-            mat->setUniformValue(lightPrefix+"position", light->globalTransform.column(3).toVector3D());
-            //mat->setUniformValue(lightPrefix+"direction", light->getDirection());
-            mat->setUniformValue(lightPrefix+"distance", light->distance);
-            mat->setUniformValue(lightPrefix+"direction", light->getLightDir());
-            mat->setUniformValue(lightPrefix+"cutOffAngle", light->spotCutOff);
-            mat->setUniformValue(lightPrefix+"cutOffSoftness", light->spotCutOffSoftness);
-            mat->setUniformValue(lightPrefix+"intensity", light->intensity);
-            mat->setUniformValue(lightPrefix+"color", light->color);
-
-            mat->setUniformValue(lightPrefix+"constantAtten", 1.0f);
-            mat->setUniformValue(lightPrefix+"linearAtten", 0.0f);
-            mat->setUniformValue(lightPrefix+"quadtraticAtten", 1.0f);
-        }
-
-        if(meshNode->mesh != nullptr)
-            meshNode->mesh->draw(gl, program);
-
-    }
-
-    for(auto childNode:node->children)
-        renderNode(renderData,childNode);
-    */
-
     QMatrix4x4 lightView, lightProjection, lightSpaceMatrix;
 
     for (auto light : scene->lights) {
@@ -442,6 +313,12 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 
     auto lightCount = renderData->scene->lights.size();
 
+    //sort render list
+    //qsort(scene->geometryRenderList,scene->geometryRenderList.size(),)
+    qSort(scene->geometryRenderList.begin(), scene->geometryRenderList.end(), [](const RenderItem* a, const RenderItem* b) {
+        return a->renderLayer < b->renderLayer;
+    });
+
     for (auto& item : scene->geometryRenderList) {
         if (item->type == iris::RenderItemType::Mesh) {
 
@@ -454,6 +331,8 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                 program = mat->program;
 
                 mat->begin(gl,scene);
+            } else {
+              program = item->shaderProgram;
             }
 
             //send transform and light data
@@ -514,8 +393,9 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             }
         }
         else if(item->type == iris::RenderItemType::ParticleSystem) {
-            float dt = 1.0f / 60;
-            renderParticles(renderData, dt, item->sceneNode);
+
+            auto ps = item->sceneNode.staticCast<ParticleSystemNode>();
+            ps->renderParticles(renderData, particleShader);
         }
     }
 

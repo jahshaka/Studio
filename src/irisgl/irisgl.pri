@@ -79,7 +79,8 @@ SOURCES += \
     $$PWD/src/animation/keyframeset.cpp \
     $$PWD/src/materials/materialhelper.cpp \
     $$PWD/src/scenegraph/viewernode.cpp \
-    $$PWD/src/materials/viewermaterial.cpp
+    $$PWD/src/materials/viewermaterial.cpp \
+    $$PWD/src/scenegraph/particlesystemnode.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

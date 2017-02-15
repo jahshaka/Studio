@@ -5,6 +5,7 @@
 #include "../graphics/texture2d.h"
 #include "particlemaster.h"
 
+namespace iris {
 class ParticleSystem {
     QVector3D pos;
     float pps;
@@ -12,6 +13,8 @@ class ParticleSystem {
     float gravityComplient;
     float lifeLength;
     float scale;
+
+    int maxParticles;
 
     bool randomRotation;
     float speedError, lifeError, scaleError;
@@ -33,7 +36,7 @@ public:
                    float gravityComplient,
                    float lifeLength,
                    float scale)
-        : pm(gl)
+        : pm()
     {
         this->pos = pos;
         this->pps = pps;
@@ -44,8 +47,6 @@ public:
         directionDeviation = speedError = lifeError = scaleError = 0;
 
         this->scale = scale;
-
-        qDebug() << "particle system created!";
     }
 
     void setRandomRotation(bool val) {
@@ -78,9 +79,6 @@ public:
 
     void setDirection(QMatrix4x4 direction) {
         this->posDir = direction;
-//        this->direction = QVector3D(direction);
-//        this->direction.normalize();
-//        this->directionDeviation = (float) (deviation * M_PI);
     }
 
     void generateParticles(float delta) {
@@ -216,5 +214,7 @@ public:
         this->texture = tex;
     }
 };
+
+}
 
 #endif // PARTICLESYSTEM_H

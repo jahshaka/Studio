@@ -112,7 +112,7 @@ private:
 
     void createShadowShader();
     void renderShadows(ScenePtr node);
-    void renderParticles(RenderData* renderData, float delta, QSharedPointer<SceneNode> node);
+    void renderParticles(RenderData* renderData, float delta, ParticleSystemNodePtr node);
     void generateShadowBuffer(GLuint size = 1024);
 
     //editor-specific

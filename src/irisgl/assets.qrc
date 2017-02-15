@@ -16,5 +16,6 @@
         <file>assets/models/head.obj</file>
         <file>assets/shaders/viewer.frag</file>
         <file>assets/shaders/viewer.vert</file>
+        <file>assets/textures/default_particle.jpg</file>
     </qresource>
 </RCC>

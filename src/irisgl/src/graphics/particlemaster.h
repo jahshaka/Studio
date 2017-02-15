@@ -7,6 +7,7 @@
 
 #include "renderdata.h"
 
+namespace iris {
 class ParticleMaster {
 private:
     std::list<Particle*> particles;
@@ -14,7 +15,7 @@ private:
 
 public:
     ParticleRenderer renderer;
-    ParticleMaster(QOpenGLFunctions_3_2_Core* gl) : renderer(gl) {
+    ParticleMaster(){
 
     }
 
@@ -27,6 +28,7 @@ public:
     }
 
     void update(float delta) {
+        /*
         std::list<Particle*>::iterator it = particles.begin();
 
         while (it != particles.end()) {
@@ -43,6 +45,7 @@ public:
 
             ++it;
         }
+        */
     }
 
     void renderParticles(QOpenGLFunctions_3_2_Core* gl,
@@ -56,5 +59,7 @@ public:
         particles.push_back(particle);
     }
 };
+
+}
 
 #endif // PARTICLEMASTER_H
