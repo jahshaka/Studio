@@ -44,6 +44,8 @@ public:
         directionDeviation = speedError = lifeError = scaleError = 0;
 
         this->scale = scale;
+
+        qDebug() << "particle system created!";
     }
 
     void setRandomRotation(bool val) {

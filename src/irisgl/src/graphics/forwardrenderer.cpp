@@ -133,10 +133,10 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     for(int i = 0;i < 8;i++)
         gl->glEnableVertexAttribArray(i);
 
-    renderNode(renderData, scene->rootNode);
+    renderNode(renderData, scene);
 
     // STEP 2: RENDER SKY
-    renderSky(renderData);
+    //renderSky(renderData);
 
     // STEP 3: RENDER LINES (for e.g. light radius and the camera frustum)
     renderParticles(renderData, delta, scene->rootNode);
@@ -263,7 +263,7 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
         renderData->fogEnabled = scene->fogEnabled;
 
 
-        renderNode(renderData,scene->rootNode);
+        renderNode(renderData,scene);
 
         //STEP 2: RENDER SKY
         renderSky(renderData);
@@ -291,8 +291,9 @@ bool ForwardRenderer::isVrSupported()
     return vrDevice->isVrSupported();
 }
 
-void ForwardRenderer::renderNode(RenderData* renderData, QSharedPointer<SceneNode> node)
+void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 {
+    /*
     iris::Mesh* mesh = nullptr;
     iris::Material* mat = nullptr;
 
@@ -423,6 +424,101 @@ void ForwardRenderer::renderNode(RenderData* renderData, QSharedPointer<SceneNod
 
     for(auto childNode:node->children)
         renderNode(renderData,childNode);
+    */
+
+    QMatrix4x4 lightView, lightProjection, lightSpaceMatrix;
+
+    for (auto light : scene->lights) {
+        if (light->lightType == iris::LightType::Directional && true) { // cast shadows
+            lightProjection.ortho(-128.0f, 128.0f, -64.0f, 64.0f, -64.0f, 128.0f);
+
+            lightView.lookAt(QVector3D(0, 0, 0),
+                             light->getLightDir(),
+                             QVector3D(0.0f, 1.0f, 0.0f));
+
+            lightSpaceMatrix = lightProjection * lightView;
+        }
+    }
+
+    auto lightCount = renderData->scene->lights.size();
+
+    for (auto& item : scene->geometryRenderList) {
+        if (item->type == iris::RenderItemType::Mesh) {
+
+            QOpenGLShaderProgram* program = nullptr;
+            iris::MaterialPtr mat;
+
+            // if a material is set then use it and gets its shaderprogram
+            if (!!item->material) {
+                mat = item->material;
+                program = mat->program;
+
+                mat->begin(gl,scene);
+            }
+
+            //send transform and light data
+            program->setUniformValue("u_worldMatrix", item->worldMatrix);
+            program->setUniformValue("u_viewMatrix",renderData->viewMatrix);
+            program->setUniformValue("u_projMatrix",renderData->projMatrix);
+            program->setUniformValue("u_normalMatrix",item->worldMatrix.normalMatrix());
+
+            program->setUniformValue("u_eyePos",renderData->eyePos);
+
+            program->setUniformValue("u_fogData.color",renderData->fogColor);
+            program->setUniformValue("u_fogData.start",renderData->fogStart);
+            program->setUniformValue("u_fogData.end",renderData->fogEnd);
+            program->setUniformValue("u_fogData.enabled",renderData->fogEnabled);
+
+            program->setUniformValue("u_shadowMap", 2);
+
+            gl->glActiveTexture(GL_TEXTURE2);
+            gl->glBindTexture(GL_TEXTURE_2D, shadowDepthMap);
+
+            program->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
+            program->setUniformValue("u_lightCount",lightCount);
+
+            // only materials get lights passed to it
+            if (!!mat) {
+                for (int i=0;i<lightCount;i++)
+                {
+                    QString lightPrefix = QString("u_lights[%0].").arg(i);
+
+                    auto light = renderData->scene->lights[i];
+                    if(!light->isVisible())
+                    {
+                        //quick hack for now
+                        mat->setUniformValue(lightPrefix+"color", QColor(0,0,0));
+                        continue;
+                    }
+
+                    mat->setUniformValue(lightPrefix+"type", (int)light->lightType);
+                    mat->setUniformValue(lightPrefix+"position", light->globalTransform.column(3).toVector3D());
+                    //mat->setUniformValue(lightPrefix+"direction", light->getDirection());
+                    mat->setUniformValue(lightPrefix+"distance", light->distance);
+                    mat->setUniformValue(lightPrefix+"direction", light->getLightDir());
+                    mat->setUniformValue(lightPrefix+"cutOffAngle", light->spotCutOff);
+                    mat->setUniformValue(lightPrefix+"cutOffSoftness", light->spotCutOffSoftness);
+                    mat->setUniformValue(lightPrefix+"intensity", light->intensity);
+                    mat->setUniformValue(lightPrefix+"color", light->color);
+
+                    mat->setUniformValue(lightPrefix+"constantAtten", 1.0f);
+                    mat->setUniformValue(lightPrefix+"linearAtten", 0.0f);
+                    mat->setUniformValue(lightPrefix+"quadtraticAtten", 1.0f);
+                }
+            }
+
+            item->mesh->draw(gl, program);
+
+            if (!!mat) {
+                mat->end(gl,scene);
+            }
+        }
+        else if(item->type == iris::RenderItemType::ParticleSystem) {
+            float dt = 1.0f / 60;
+            renderParticles(renderData, dt, item->sceneNode);
+        }
+    }
+
 }
 
 void ForwardRenderer::renderSky(RenderData* renderData)

@@ -20,7 +20,7 @@ ViewerNode::ViewerNode()
 
     renderItem = new RenderItem();
     renderItem->type = RenderItemType::Mesh;
-    renderItem->matrial = this->material;
+    renderItem->material = this->material;
     renderItem->mesh = headModel;
 }
 

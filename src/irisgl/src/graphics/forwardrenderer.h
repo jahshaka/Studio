@@ -96,7 +96,7 @@ public:
 private:
     ForwardRenderer();
 
-    void renderNode(RenderData* renderData, QSharedPointer<SceneNode> node);
+    void renderNode(RenderData* renderData, ScenePtr node);
     void renderSky(RenderData* renderData);
     void renderBillboardIcons(RenderData* renderData);
     void renderSelectedNode(RenderData* renderData, QSharedPointer<SceneNode> node);

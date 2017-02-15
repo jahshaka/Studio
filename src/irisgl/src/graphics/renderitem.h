@@ -20,7 +20,7 @@ enum class RenderItemType
 struct RenderItem
 {
     RenderItemType type;
-    MaterialPtr matrial;
+    MaterialPtr material;
     Mesh* mesh;
 
     QMatrix4x4 worldMatrix;

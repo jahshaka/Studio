@@ -75,6 +75,7 @@ void MeshNode::setMesh(QString source)
 void MeshNode::setMesh(Mesh* mesh)
 {
     this->mesh = mesh;
+    renderItem->mesh = mesh;
 }
 
 Mesh* MeshNode::getMesh()
@@ -86,7 +87,7 @@ void MeshNode::setMaterial(MaterialPtr material)
 {
     this->material = material;
 
-    renderItem->matrial = material;
+    renderItem->material = material;
 }
 
 void MeshNode::submitRenderItems()
