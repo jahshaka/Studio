@@ -70,24 +70,6 @@ public:
 
     virtual void submitRenderItems() override;
 
-    // temporary boy...
-    bool isEmitter;
-    int m_index;
-    static int index;
-    float pps;
-    float speed;
-    float particleLife;
-    float gravity;
-    QSharedPointer<iris::Texture2D> texture;
-    bool dissipate;
-
-    bool randomRotation;
-
-    float lifeFac;
-    float scaleFac;
-    bool useAdditive;
-    float speedFac;
-
 private:
     MeshNode();
 };
