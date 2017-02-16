@@ -48,8 +48,6 @@ HEADERS += \
     $$PWD/src/materials/viewermaterial.h \
     $$PWD/src/graphics/particle.h \
     $$PWD/src/graphics/particlerender.h \
-    $$PWD/src/graphics/particlemaster.h \
-    $$PWD/src/graphics/particlesystem.h \
     $$PWD/src/graphics/renderitem.h \
     $$PWD/src/scenegraph/particlesystemnode.h
 

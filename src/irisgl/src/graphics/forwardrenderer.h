@@ -18,8 +18,6 @@ For more information see the LICENSE file
 
 #include "particle.h"
 #include "particlerender.h"
-#include "particlemaster.h"
-#include "particlesystem.h"
 
 #define OUTLINE_STENCIL_CHANNEL 1
 
@@ -108,11 +106,8 @@ private:
     GLuint shadowFBO;
     GLuint shadowDepthMap;
 
-    std::map<int, ParticleSystem*> particleSystems;
-
     void createShadowShader();
     void renderShadows(ScenePtr node);
-    void renderParticles(RenderData* renderData, float delta, ParticleSystemNodePtr node);
     void generateShadowBuffer(GLuint size = 1024);
 
     //editor-specific
