@@ -12,6 +12,9 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QDir>
 
+#include <cmath>
+
+#include "../math/mathhelper.h"
 #include "meshnode.h"
 #include "particlesystemnode.h"
 #include "../graphics/mesh.h"
@@ -42,6 +45,8 @@ ParticleSystemNode::ParticleSystemNode() {
     lifeFactor = 0.0f;
     speedFactor = 0.0f;
 
+    billboardScale = 1.f;
+
     useAdditive = true;
     randomRotation = true;
     dissipate = true;
@@ -70,8 +75,14 @@ ParticleSystemNode::~ParticleSystemNode()
     delete renderer;
 }
 
-void ParticleSystemNode::setBlendMode(bool useAddittive) {
+void ParticleSystemNode::setBlendMode(bool useAddittive)
+{
     renderer->useAdditive = this->useAdditive = useAddittive;
+}
+
+void ParticleSystemNode::setBillboardScale(float scale)
+{
+//    billboardScale = scale;
 }
 
 void ParticleSystemNode::submitRenderItems()
@@ -164,9 +175,9 @@ void ParticleSystemNode::update(float delta) {
         // in the future we can call behavior management here, add more forces such as wind
         if (dissipate && p->elapsedTime > 0) {
             if (dissipateInv) {
-                p->scale = (p->elapsedTime / p->lifeLength);
+                p->scale = lerp((p->elapsedTime / p->lifeLength), 0, particleScale);
             } else {
-                p->scale = 1.0f - (p->elapsedTime / p->lifeLength);
+                p->scale *= 1.0f - (p->elapsedTime / p->lifeLength);
             }
         }
 

@@ -52,6 +52,7 @@ public:
     float particleScale;
 
     int maxParticles;
+    float billboardScale;
 
     float speedError, lifeError, scaleError;
     QVector3D direction;
@@ -67,6 +68,10 @@ public:
 
     void setDissipation(bool b) {
         this->dissipate = b;
+    }
+
+    void setParticleScale(float scale) {
+        this->particleScale = scale;
     }
 
     void setDissipationInv(bool b) {
@@ -146,6 +151,8 @@ public:
     void setTexture(QSharedPointer<iris::Texture2D> tex) {
         this->texture = tex;
     }
+
+    void setBillboardScale(float scale);
 
     void update(float delta) override;
 

@@ -17,6 +17,7 @@ EmitterPropertyWidget::EmitterPropertyWidget()
     billboardImage  = this->addTexturePicker("Particle Image");
     emissionRate    = this->addFloatValueSlider("Emission Rate", 0, 512);
     particleLife    = this->addFloatValueSlider("Lifetime", 0, 32);
+    particleScale   = this->addFloatValueSlider("Particle Scale", 0, 8);
     lifeFactor      = this->addFloatValueSlider("Random Lifetime", 0, 1);
     speedFactor     = this->addFloatValueSlider("Random Speed", 0, 1);
     scaleFactor     = this->addFloatValueSlider("Random Scale", 0, 1);
@@ -44,6 +45,7 @@ EmitterPropertyWidget::EmitterPropertyWidget()
 
     connect(emissionRate,   SIGNAL(valueChanged(float)), SLOT(onEmissionRateChanged(float)));
     connect(particleLife,   SIGNAL(valueChanged(float)), SLOT(onParticleLifeChanged(float)));
+    connect(particleScale,  SIGNAL(valueChanged(float)), SLOT(onParticleScaleChanged(float)));
     connect(lifeFactor,     SIGNAL(valueChanged(float)), SLOT(onLifeFactorChanged(float)));
     connect(speedFactor,    SIGNAL(valueChanged(float)), SLOT(onSpeedFactorChanged(float)));
     connect(scaleFactor,    SIGNAL(valueChanged(float)), SLOT(onScaleFactorChanged(float)));
@@ -81,6 +83,7 @@ void EmitterPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNo
         velocityFactor->setValue(ps->speed);
         speedFactor->setValue(ps->speedFactor);
         lifeFactor->setValue(ps->lifeFactor);
+        particleScale->setValue(ps->particleScale);
         scaleFactor->setValue(ps->scaleFactor);
         randomRotation->setValue(ps->randomRotation);
         useAdditive->setValue(ps->useAdditive);
@@ -107,6 +110,13 @@ void EmitterPropertyWidget::onParticleLifeChanged(float val)
 {
     if (!!this->ps) {
         ps->lifeLength = val;
+    }
+}
+
+void EmitterPropertyWidget::onParticleScaleChanged(float val)
+{
+    if (!!this->ps) {
+        ps->particleScale = val;
     }
 }
 

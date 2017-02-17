@@ -193,6 +193,7 @@ void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodeP
 void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node)
 {
     sceneNodeObject["particlesPerSecond"]   = node->particlesPerSecond;
+    sceneNodeObject["particleScale"]        = node->particleScale;
     sceneNodeObject["dissipate"]            = node->dissipate;
     sceneNodeObject["dissipateInv"]         = node->dissipateInv;
     sceneNodeObject["gravityComplement"]    = node->gravityComplement;

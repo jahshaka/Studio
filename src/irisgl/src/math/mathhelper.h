@@ -12,8 +12,8 @@ For more information see the LICENSE file
 #ifndef MATHHELPER_H
 #define MATHHELPER_H
 
-class MathHelper
-{
-};
+float lerp(float norm, float min, float max) {
+    return (max - min) * norm + min;
+}
 
 #endif // MATHHELPER_H

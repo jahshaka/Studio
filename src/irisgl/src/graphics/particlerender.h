@@ -20,6 +20,7 @@ private:
 
 public:
     bool useAdditive;
+
     QSharedPointer<iris::Texture2D> icon;
     ParticleRenderer() {
         this->gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
