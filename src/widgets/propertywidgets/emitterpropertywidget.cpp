@@ -8,6 +8,7 @@
 
 #include "../../irisgl/src/graphics/texture2d.h"
 #include "../../irisgl/src/scenegraph/meshnode.h"
+#include "../../irisgl/src/scenegraph/particlesystemnode.h"
 #include "../../irisgl/src/materials/defaultmaterial.h"
 
 EmitterPropertyWidget::EmitterPropertyWidget()
@@ -63,86 +64,86 @@ EmitterPropertyWidget::~EmitterPropertyWidget()
 void EmitterPropertyWidget::onBillboardImageChanged(QString image)
 {
     if (!image.isEmpty() || !image.isNull()) {
-        meshNode->texture = iris::Texture2D::load(image);
+        ps->texture = iris::Texture2D::load(image);
     }
 }
 
 void EmitterPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
-    if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Emitter) {
-        this->meshNode = sceneNode.staticCast<iris::MeshNode>();
+    if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::ParticleSystem) {
+        this->ps = sceneNode.staticCast<iris::ParticleSystemNode>();
 
-        emissionRate->setValue(meshNode->pps);
-        particleLife->setValue(meshNode->particleLife);
-        gravityFactor->setValue(meshNode->gravity);
-        velocityFactor->setValue(meshNode->speed);
-        speedFactor->setValue(meshNode->speedFac);
-        lifeFactor->setValue(meshNode->lifeFac);
-        scaleFactor->setValue(meshNode->scaleFac);
-        randomRotation->setValue(meshNode->randomRotation);
+        emissionRate->setValue(ps->particlesPerSecond);
+        particleLife->setValue(ps->lifeLength);
+        gravityFactor->setValue(ps->gravityComplient);
+        velocityFactor->setValue(ps->speed);
+        speedFactor->setValue(ps->speedFac);
+        lifeFactor->setValue(ps->lifeFac);
+        scaleFactor->setValue(ps->scaleFac);
+        randomRotation->setValue(ps->randomRotation);
 
-        if (meshNode->texture) {
-            billboardImage->setTexture(meshNode->texture->getSource());
+        if (ps->texture) {
+            billboardImage->setTexture(ps->texture->getSource());
         }
 
     } else {
-        this->meshNode.clear();
+        this->ps.clear();
     }
 }
 
 void EmitterPropertyWidget::onEmissionRateChanged(float val)
 {
-    if (!!this->meshNode) {
-        meshNode->pps = val;
+    if (!!this->ps) {
+        ps->particlesPerSecond = val;
     }
 }
 
 void EmitterPropertyWidget::onParticleLifeChanged(float val)
 {
-    if (!!this->meshNode) {
-        meshNode->particleLife = val;
+    if (!!this->ps) {
+        ps->lifeLength = val;
     }
 }
 
 void EmitterPropertyWidget::onLifeFactorChanged(float val)
 {
-    if (!!this->meshNode) {
-        meshNode->lifeFac = val;
+    if (!!this->ps) {
+        ps->lifeFac = val;
     }
 }
 
 void EmitterPropertyWidget::onSpeedFactorChanged(float val)
 {
-    if (!!this->meshNode) {
-        meshNode->speedFac = val;
+    if (!!this->ps) {
+        ps->speedFac = val;
     }
 }
 
 void EmitterPropertyWidget::onScaleFactorChanged(float val)
 {
-    if (!!this->meshNode) {
-        meshNode->scaleFac = val;
+    if (!!this->ps) {
+        ps->scaleFac = val;
     }
 }
 
 void EmitterPropertyWidget::onGravityFactorChanged(float val)
 {
-    if (!!this->meshNode) {
-        meshNode->gravity = val;
+    if (!!this->ps) {
+        ps->gravityComplient = val;
     }
 }
 
 void EmitterPropertyWidget::onVelocityFactorChanged(float val)
 {
-    if (!!this->meshNode) {
-        meshNode->speed = val;
+    if (!!this->ps) {
+        ps->speed = val;
     }
 }
 
 void EmitterPropertyWidget::onRandomRotation(bool val)
 {
-    if (!!this->meshNode) {
-        meshNode->randomRotation = val;
+    if (!!this->ps) {
+        ps->randomRotation = val;
     }
 }
 
@@ -153,15 +154,15 @@ void EmitterPropertyWidget::onSortOrderChanged(bool val)
 
 void EmitterPropertyWidget::onDissipateChanged(bool val)
 {
-    if (!!this->meshNode) {
-        meshNode->dissipate = val;
+    if (!!this->ps) {
+        ps->dissipate = val;
     }
 }
 
 void EmitterPropertyWidget::onAdditiveChanged(bool val)
 {
-    if (!!this->meshNode) {
-        meshNode->useAdditive = val;
+    if (!!this->ps) {
+        ps->useAdditive = val;
     }
 }
 

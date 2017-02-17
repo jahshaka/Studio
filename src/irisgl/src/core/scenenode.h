@@ -23,7 +23,7 @@ namespace iris
 enum class SceneNodeType
 {
     Empty,
-    Emitter,
+    ParticleSystem,
     Mesh,
     Light,
     Camera,
@@ -127,8 +127,20 @@ public:
     QMatrix4x4 getGlobalTransform();
     QMatrix4x4 getLocalTransform();
 
+    /*
+     * This function does multiple things:
+     * - Calculates the transformation of the objects
+     * - Particle systems use this to update animations
+     */
     virtual void update(float dt);
     virtual void updateAnimation(float time);
+
+    /*
+     * This is the function used to add render items
+     * to the render queues
+     * Called from inside the update(float) function
+     */
+    virtual void submitRenderItems(){}
 
 private:
     void setParent(SceneNodePtr node);

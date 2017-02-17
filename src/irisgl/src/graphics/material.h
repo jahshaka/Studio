@@ -22,6 +22,15 @@ class QOpenGLFunctions_3_2_Core;
 namespace iris
 {
 
+enum class RenderLayer : int
+{
+    Background = 1000,
+    Opaque = 2000,
+    AlphaTested = 3000,
+    Transparent = 4000,
+    Overlay = 5000
+};
+
 struct MaterialTexture
 {
     Texture2DPtr texture;
@@ -31,6 +40,7 @@ struct MaterialTexture
 class Material
 {
 public:
+    int renderLayer;
     QOpenGLShaderProgram* program;
     QMap<QString, Texture2DPtr> textures;
 
@@ -46,6 +56,11 @@ public:
     virtual ~Material()
     {
 
+    }
+
+    void setRenderLayer(int layer)
+    {
+        this->renderLayer = layer;
     }
 
     /**

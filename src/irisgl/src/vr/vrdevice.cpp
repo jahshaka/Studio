@@ -31,9 +31,9 @@ struct VrFrameData
     double sensorSampleTime;
 };
 
-VrDevice::VrDevice(QOpenGLFunctions_3_2_Core* gl)
+VrDevice::VrDevice()
 {
-    this->gl = gl;
+    this->gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
     vrSupported = false;
     frameData = new VrFrameData();
 }
@@ -47,7 +47,7 @@ void VrDevice::initialize()
 {
     ovrResult result = ovr_Initialize(nullptr);
     if (!OVR_SUCCESS(result)) {
-        qDebug()<<"Failed to initialize libOVR.";
+        //qDebug()<<"Failed to initialize libOVR.";
         return;
     }
 
@@ -192,6 +192,9 @@ void VrDevice::beginFrame()
     frameData->hmdToEyeOffset[1] = frameData->eyeRenderDesc[1].HmdToEyeOffset;
 
     ovr_GetEyePoses(session, frameIndex, ovrTrue, frameData->hmdToEyeOffset, frameData->eyeRenderPose, &frameData->sensorSampleTime);
+
+    double timing = ovr_GetPredictedDisplayTime(session, 0);
+    hmdState = ovr_GetTrackingState(session, timing, ovrTrue);
 }
 
 void VrDevice::endFrame()
@@ -218,6 +221,18 @@ void VrDevice::endFrame()
     }
 
     frameIndex++;
+}
+
+QVector3D VrDevice::getHandPosition(int handIndex)
+{
+    auto handPos = hmdState.HandPoses[handIndex].ThePose.Position;
+    return QVector3D(handPos.x, handPos.y, handPos.z);
+}
+
+QQuaternion VrDevice::getHandRotation(int handIndex)
+{
+    auto handRot = hmdState.HandPoses[handIndex].ThePose.Orientation;
+    return QQuaternion(handRot.w, handRot.x, handRot.y, handRot.z);
 }
 
 void VrDevice::beginEye(int eye)

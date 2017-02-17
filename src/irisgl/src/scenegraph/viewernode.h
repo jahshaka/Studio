@@ -7,6 +7,7 @@
 namespace iris
 {
 
+class RenderItem;
 class Mesh;
 class ViewerMaterial;
 
@@ -23,6 +24,14 @@ public:
     float getViewScale();
 
     static ViewerNodePtr create();
+
+    void submitRenderItems() override;
+
+    RenderItem* renderItem;
+    RenderItem* leftHandenderItem;
+    RenderItem* rightHandRenderItem;
+
+    ~ViewerNode();
 };
 
 }

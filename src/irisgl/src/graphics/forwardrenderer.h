@@ -18,8 +18,6 @@ For more information see the LICENSE file
 
 #include "particle.h"
 #include "particlerender.h"
-#include "particlemaster.h"
-#include "particlesystem.h"
 
 #define OUTLINE_STENCIL_CHANNEL 1
 
@@ -84,19 +82,19 @@ public:
     }
 
     //all scenenodes' transform should be updated before calling this functions
-    void renderScene(QOpenGLContext* ctx, float delta, Viewport* vp);
-    void renderSceneVr(QOpenGLContext* ctx, float delta, Viewport* vp);
+    void renderScene(float delta, Viewport* vp);
+    void renderSceneVr(float delta, Viewport* vp);
 
-    static QSharedPointer<ForwardRenderer> create(QOpenGLFunctions_3_2_Core* gl);
+    static ForwardRendererPtr create();
 
     bool isVrSupported();
 
     ~ForwardRenderer();
 
 private:
-    ForwardRenderer(QOpenGLFunctions_3_2_Core* gl);
+    ForwardRenderer();
 
-    void renderNode(RenderData* renderData, QSharedPointer<SceneNode> node);
+    void renderNode(RenderData* renderData, ScenePtr node);
     void renderSky(RenderData* renderData);
     void renderBillboardIcons(RenderData* renderData);
     void renderSelectedNode(RenderData* renderData, QSharedPointer<SceneNode> node);
@@ -108,11 +106,8 @@ private:
     GLuint shadowFBO;
     GLuint shadowDepthMap;
 
-    std::map<int, ParticleSystem*> particleSystems;
-
     void createShadowShader();
-    void renderShadows(RenderData* renderData, QSharedPointer<SceneNode> node);
-    void renderParticles(RenderData* renderData, float delta, QSharedPointer<SceneNode> node);
+    void renderShadows(ScenePtr node);
     void generateShadowBuffer(GLuint size = 1024);
 
     //editor-specific

@@ -26,24 +26,38 @@ For more information see the LICENSE file
 #include "../graphics/vertexlayout.h"
 #include "../materials/defaultmaterial.h"
 #include "../materials/materialhelper.h"
+#include "../graphics/renderitem.h"
+
+#include "../core/scene.h"
+#include "../core/scenenode.h"
 
 namespace iris
 {
 
-int MeshNode::index = 0;
+MeshNode::MeshNode() {
+    mesh = nullptr;
+    sceneNodeType = SceneNodeType::Mesh;
 
+    renderItem = new RenderItem();
+    renderItem->type = RenderItemType::Mesh;
+}
+
+// @todo: cleanup previous mesh item
 void MeshNode::setMesh(QString source)
 {
     meshPath = source;
     mesh = Mesh::loadMesh(source);
     meshPath = source;
     meshIndex = 0;
+
+    renderItem->mesh = mesh;
 }
 
 //should not be used on plain scene meshes
 void MeshNode::setMesh(Mesh* mesh)
 {
     this->mesh = mesh;
+    renderItem->mesh = mesh;
 }
 
 Mesh* MeshNode::getMesh()
@@ -51,9 +65,21 @@ Mesh* MeshNode::getMesh()
     return mesh;
 }
 
-void MeshNode::setMaterial(QSharedPointer<Material> material)
+void MeshNode::setMaterial(MaterialPtr material)
 {
     this->material = material;
+
+    renderItem->material = material;
+}
+
+void MeshNode::submitRenderItems()
+{
+    renderItem->worldMatrix = this->globalTransform;
+    if(!!material)
+        renderItem->renderLayer = material->renderLayer;
+
+    this->scene->geometryRenderList.append(renderItem);
+    this->scene->shadowRenderList.append(renderItem);
 }
 
 /**

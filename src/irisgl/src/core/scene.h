@@ -20,6 +20,13 @@ For more information see the LICENSE file
 namespace iris
 {
 
+class RenderItem;
+
+enum class SceneRenderFlags : int
+{
+    Vr = 0x1
+};
+
 class Scene: public QEnableSharedFromThis<Scene>
 {
 public:
@@ -38,15 +45,17 @@ public:
     Texture2DPtr skyTexture;
     QColor skyColor;
     QColor ambientColor;
-
-    // should be MaterialPtr
     DefaultSkyMaterialPtr skyMaterial;
+    RenderItem* skyRenderItem;
 
     // fog properties
     QColor fogColor;
     float fogStart;
     float fogEnd;
     bool fogEnabled;
+
+    QVector<RenderItem*> geometryRenderList;
+    QVector<RenderItem*> shadowRenderList;
 
     /*
      * customizations that can be passed in and applied to a scene. ideally these

@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "../scenegraph/cameranode.h"
 #include "../scenegraph/viewernode.h"
 #include "../graphics/mesh.h"
+#include "../graphics/renderitem.h"
 #include "../materials/defaultskymaterial.h"
 #include "irisutils.h"
 
@@ -32,6 +33,11 @@ Scene::Scene()
     // skyTexture = Texture2D::load("app/content/skies/default.png");
     skyMaterial = DefaultSkyMaterial::create();
     skyColor = QColor(255, 255, 255, 255);
+    skyRenderItem = new RenderItem();
+    skyRenderItem->mesh = skyMesh;
+    skyRenderItem->material = skyMaterial;
+    skyRenderItem->type = RenderItemType::Mesh;
+    skyRenderItem->renderLayer = (int)RenderLayer::Background;
 
     fogColor = QColor(250, 250, 250);
     fogStart = 100;
@@ -39,6 +45,10 @@ Scene::Scene()
     fogEnabled = true;
 
     ambientColor = QColor(64, 64, 64);
+
+    //reserve 1000 items initially
+    geometryRenderList.reserve(1000);
+    shadowRenderList.reserve(1000);
 }
 
 void Scene::setSkyTexture(Texture2DPtr tex)
@@ -83,6 +93,8 @@ void Scene::update(float dt)
         camera->update(dt);
         camera->updateCameraMatrices();
     }
+
+    this->geometryRenderList.append(skyRenderItem);
 }
 
 void Scene::render()

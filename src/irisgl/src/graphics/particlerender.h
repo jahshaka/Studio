@@ -4,10 +4,14 @@
 #include <QMatrix4x4>
 #include <QOpenGLShaderProgram>
 #include <QOpenGLFunctions_3_2_Core>
+#include <QOpenGLContext>
 #include "particle.h"
 #include "renderdata.h"
 #include "texture2d.h"
 #include "../core/irisutils.h"
+
+namespace iris {
+
 
 class ParticleRenderer {
 
@@ -20,8 +24,8 @@ private:
 public:
     bool useAdditive;
     QSharedPointer<iris::Texture2D> icon;
-    ParticleRenderer(QOpenGLFunctions_3_2_Core* gl) {
-        this->gl = gl;
+    ParticleRenderer() {
+        this->gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
 
 //        icon = iris::Texture2D::load(
 //                    IrisUtils::getAbsoluteAssetPath("assets/textures/default_particle.jpg")
@@ -83,7 +87,7 @@ public:
 
     void render(QOpenGLShaderProgram *shader,
                 iris::RenderData* renderData,
-                std::list<Particle*> particles)
+                std::list<Particle*>& particles)
     {
         shader->bind();
 
@@ -92,6 +96,7 @@ public:
 
         gl->glBindVertexArray(quadVAO);
         gl->glEnable(GL_BLEND);
+        useAdditive = false;
         if (useAdditive) {
             gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         } else {
@@ -124,4 +129,5 @@ public:
     }
 };
 
+}
 #endif // PARTICLERENDER_H
