@@ -890,11 +890,6 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
         }
     }
 
-    if (sceneNode->sceneNodeType == iris::SceneNodeType::ParticleSystem) {
-        auto meshNode = sceneNode.staticCast<iris::MeshNode>();
-        meshNode->isEmitter = true;
-    }
-
     scene->getRootNode()->addChild(sceneNode);
     ui->sceneHierarchy->repopulateTree();
     sceneNodeSelected(sceneNode);

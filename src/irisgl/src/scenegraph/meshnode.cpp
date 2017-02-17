@@ -34,27 +34,9 @@ For more information see the LICENSE file
 namespace iris
 {
 
-int MeshNode::index = 0;
-
-MeshNode::MeshNode() : m_index(index++) {
+MeshNode::MeshNode() {
     mesh = nullptr;
     sceneNodeType = SceneNodeType::Mesh;
-
-    texture = iris::Texture2D::load(
-                IrisUtils::getAbsoluteAssetPath("assets/textures/default_particle.jpg")
-    );
-    pps = 24;
-    speed = 12;
-    gravity = .0f;
-    particleLife = 5;
-
-    scaleFac = 0.1f;
-    lifeFac = 0.0f;
-    speedFac = 0.0f;
-
-    useAdditive = false;
-    randomRotation = true;
-    dissipate = false;
 
     renderItem = new RenderItem();
     renderItem->type = RenderItemType::Mesh;

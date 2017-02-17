@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include "utils/fullscreenquad.h"
 #include "texture2d.h"
 #include "../vr/vrdevice.h"
+#include "../vr/vrmanager.h"
 #include "../core/irisutils.h"
 
 #include <QOpenGLContext>
@@ -59,7 +60,7 @@ ForwardRenderer::ForwardRenderer()
 
     generateShadowBuffer(4096);
 
-    vrDevice = new VrDevice();
+    vrDevice = VrManager::getDefaultDevice();
     vrDevice->initialize();
 }
 

@@ -34,8 +34,9 @@ struct VrFrameData;
  */
 class VrDevice
 {
-public:
+    friend class VrManager;
     VrDevice();
+public:
     void initialize();
     void setTrackingOrigin(VrTrackingOrigin trackingOrigin);
 

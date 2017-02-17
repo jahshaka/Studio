@@ -3,6 +3,7 @@
 #include "../core/scenenode.h"
 #include "../graphics/mesh.h"
 #include "../materials/viewermaterial.h"
+#include "../materials/defaultmaterial.h"
 #include "../graphics/texture2d.h"
 #include "../graphics/renderitem.h"
 
@@ -22,6 +23,18 @@ ViewerNode::ViewerNode()
     renderItem->type = RenderItemType::Mesh;
     renderItem->material = this->material;
     renderItem->mesh = headModel;
+
+    auto cube = Mesh::loadMesh(":/assets/models/head.obj");
+
+    leftHandenderItem = new RenderItem();
+    leftHandenderItem->type = RenderItemType::Mesh;
+    leftHandenderItem->material = DefaultMaterial::create();
+    leftHandenderItem->mesh = cube;
+
+    rightHandRenderItem = new RenderItem();
+    rightHandRenderItem->type = RenderItemType::Mesh;
+    rightHandRenderItem->material = DefaultMaterial::create();
+    rightHandRenderItem->mesh = cube;
 }
 
 ViewerNode::~ViewerNode()
@@ -43,6 +56,9 @@ void ViewerNode::submitRenderItems()
 {
     renderItem->worldMatrix = this->globalTransform;
     scene->geometryRenderList.append(renderItem);
+
+    scene->geometryRenderList.append(leftHandenderItem);
+    scene->geometryRenderList.append(rightHandRenderItem);
 }
 
 ViewerNodePtr ViewerNode::create()

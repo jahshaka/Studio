@@ -28,6 +28,8 @@ public:
     void submitRenderItems() override;
 
     RenderItem* renderItem;
+    RenderItem* leftHandenderItem;
+    RenderItem* rightHandRenderItem;
 
     ~ViewerNode();
 };
