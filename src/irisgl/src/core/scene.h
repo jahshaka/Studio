@@ -45,9 +45,8 @@ public:
     Texture2DPtr skyTexture;
     QColor skyColor;
     QColor ambientColor;
-
-    // should be MaterialPtr
     DefaultSkyMaterialPtr skyMaterial;
+    RenderItem* skyRenderItem;
 
     // fog properties
     QColor fogColor;
