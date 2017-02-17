@@ -16,7 +16,6 @@ For more information see the LICENSE file
 #include "../core/scenenode.h"
 #include "../core/irisutils.h"
 #include "../graphics/texture2d.h"
-#include "../graphics/particle.h"
 
 class QOpenGLShaderProgram;
 
@@ -24,6 +23,7 @@ namespace iris
 {
 
 class RenderItem;
+class Particle;
 class ParticleRenderer;
 
 class ParticleSystemNode : public SceneNode
@@ -37,18 +37,17 @@ public:
 
     float particlesPerSecond;
     float speed;
-    float gravity;
     iris::Texture2DPtr texture;
 
-    bool dissipate;
+    bool dissipate, dissipateInv;
     bool randomRotation;
 
-    float lifeFac;
-    float scaleFac;
+    float lifeFactor;
+    float scaleFactor;
+    float speedFactor;
     bool useAdditive;
-    float speedFac;
 
-    float gravityComplient;
+    float gravityComplement;
     float lifeLength;
     float particleScale;
 
@@ -56,10 +55,9 @@ public:
 
     float speedError, lifeError, scaleError;
     QVector3D direction;
-    float directionDeviation;
 
     QMatrix4x4 posDir;
-    QVector3D dim;
+    QVector3D boundDimension;
 
     void setRandomRotation(bool val) {
         randomRotation = val;
@@ -71,8 +69,12 @@ public:
         this->dissipate = b;
     }
 
+    void setDissipationInv(bool b) {
+        this->dissipateInv = b;
+    }
+
     void setVolumeSquare(QVector3D dim) {
-        this->dim = dim;
+        this->boundDimension = dim;
     }
 
     void setSpeedError(float error) {
@@ -92,9 +94,11 @@ public:
     }
 
     void generateParticles(float delta);
+
     void emitParticle();
 
     float generateValue(float average, float errorMargin);
+
     float generateRotation();
 
     QVector3D generateRandomUnitVector();
@@ -107,12 +111,12 @@ public:
         return this->particlesPerSecond;
     }
 
-    void setGravity(float gravityComplient) {
-        this->gravityComplient = gravityComplient;
+    void setGravity(float gravityComplement) {
+        this->gravityComplement = gravityComplement;
     }
 
     float getGravity() {
-        return this->gravityComplient;
+        return this->gravityComplement;
     }
 
     void setLife(float ll) {
@@ -144,6 +148,7 @@ public:
     }
 
     void update(float delta) override;
+
     void renderParticles(RenderData* renderData, QOpenGLShaderProgram* shader);
 
     void addParticle(Particle *particle) {
@@ -155,18 +160,14 @@ public:
     ParticleRenderer* renderer;
 
 private:
-    MaterialPtr material;
-
-    RenderItem* renderItem;
-
-    Mesh* boundsMesh;
-    RenderItem* boundsRenderItem;
+    ParticleSystemNode();
 
     std::list<Particle*> particles;
 
-
-    ParticleSystemNode();
-
+    MaterialPtr material;
+    RenderItem* renderItem;
+    Mesh* boundsMesh;
+    RenderItem* boundsRenderItem;
 };
 
 }

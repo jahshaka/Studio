@@ -4,6 +4,8 @@
 #include <QVector3D>
 #include <QDebug>
 
+namespace iris {
+
 class Particle {
 
 public:
@@ -43,5 +45,7 @@ public:
         return lifeLength - elapsedTime;
     }
 };
+
+}
 
 #endif // PARTICLE_H

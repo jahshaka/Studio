@@ -40,6 +40,7 @@ protected slots:
     void onRandomRotation(bool val);
     void onSortOrderChanged(bool val);
     void onDissipateChanged(bool val);
+    void onDissipateInvChanged(bool val);
     void onAdditiveChanged(bool val);
     void onBillboardImageChanged(QString);
 
@@ -58,6 +59,7 @@ private:
     CheckBoxProperty* randomRotation;
     CheckBoxProperty* sortOrder;
     CheckBoxProperty* dissipate;
+    CheckBoxProperty* dissipateInv;
     CheckBoxProperty* useAdditive;
     ComboBox* blendMode;
 };
