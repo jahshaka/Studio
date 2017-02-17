@@ -6,6 +6,8 @@
 #include "../materials/defaultmaterial.h"
 #include "../graphics/texture2d.h"
 #include "../graphics/renderitem.h"
+#include "../vr/vrdevice.h"
+#include "../vr/vrmanager.h"
 
 namespace iris
 {
@@ -17,14 +19,14 @@ ViewerNode::ViewerNode()
     this->material = ViewerMaterial::create();
     this->material->setTexture(Texture2D::load(":/assets/models/head.png"));
 
-    this->viewScale = 5.0f;
+    this->setViewScale(5.0f);
 
     renderItem = new RenderItem();
     renderItem->type = RenderItemType::Mesh;
     renderItem->material = this->material;
     renderItem->mesh = headModel;
 
-    auto cube = Mesh::loadMesh(":/assets/models/head.obj");
+    auto cube = Mesh::loadMesh(":/assets/models/cube.obj");
 
     leftHandenderItem = new RenderItem();
     leftHandenderItem->type = RenderItemType::Mesh;
@@ -45,6 +47,7 @@ ViewerNode::~ViewerNode()
 void ViewerNode::setViewScale(float scale)
 {
     this->viewScale = scale;
+    this->scale = QVector3D(scale, scale, scale);
 }
 
 float ViewerNode::getViewScale()
@@ -56,6 +59,22 @@ void ViewerNode::submitRenderItems()
 {
     renderItem->worldMatrix = this->globalTransform;
     scene->geometryRenderList.append(renderItem);
+
+
+    auto device = VrManager::getDefaultDevice();
+
+    QMatrix4x4 world;
+    world.setToIdentity();
+    world.translate(device->getHandPosition(0));
+    world.rotate(device->getHandRotation(0));
+    world.scale(0.05f);
+    leftHandenderItem->worldMatrix = this->globalTransform * world;
+
+    world.setToIdentity();
+    world.translate(device->getHandPosition(1));
+    world.rotate(device->getHandRotation(1));
+    world.scale(0.05f);
+    rightHandRenderItem->worldMatrix = this->globalTransform * world;
 
     scene->geometryRenderList.append(leftHandenderItem);
     scene->geometryRenderList.append(rightHandRenderItem);

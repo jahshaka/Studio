@@ -22,10 +22,8 @@ namespace iris
     class CameraNode;
 }
 
-class EditorCameraController:public CameraControllerBase
+class EditorCameraController : public CameraControllerBase
 {
-    //Q_OBJECT
-
     QSharedPointer<iris::CameraNode> camera;
 
     float lookSpeed;

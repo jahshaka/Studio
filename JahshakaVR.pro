@@ -82,6 +82,7 @@ SOURCES += src/main.cpp\
     src/widgets/propertywidgets/emitterpropertywidget.cpp \
     src/widgets/combobox.cpp \
     src/widgets/propertywidgets/nodepropertywidget.cpp
+    src/editor/editorvrcontroller.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -152,6 +153,7 @@ HEADERS  += src/mainwindow.h \
     src/widgets/propertywidgets/emitterpropertywidget.h \
     src/widgets/combobox.h \
     src/widgets/propertywidgets/nodepropertywidget.h
+    src/editor/editorvrcontroller.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

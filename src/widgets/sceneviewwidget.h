@@ -38,6 +38,7 @@ namespace iris
 class EditorCameraController;
 class QOpenGLShaderProgram;
 class CameraControllerBase;
+class EditorVrController;
 class OrbitalCameraController;
 class QElapsedTimer;
 
@@ -69,9 +70,11 @@ class SceneViewWidget : public QOpenGLWidget,
 {
     Q_OBJECT
 
+    CameraControllerBase* prevCamController;
     CameraControllerBase* camController;
     EditorCameraController* defaultCam;
     OrbitalCameraController* orbitalCam;
+    EditorVrController* vrCam;
 
     ViewportMode viewportMode;
 

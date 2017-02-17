@@ -48,6 +48,7 @@ class KeyFrameSet;
 class Animation;
 class FloatKeyFrame;
 class ViewerMaterial;
+class RenderItem;
 template<typename T> class Key;
 typedef Key<float> FloatKey;
 
