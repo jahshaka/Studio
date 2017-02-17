@@ -32,6 +32,7 @@ public:
 protected slots:
     void onEmissionRateChanged(float val);
     void onParticleLifeChanged(float val);
+    void onParticleScaleChanged(float val);
     void onLifeFactorChanged(float val);
     void onSpeedFactorChanged(float val);
     void onScaleFactorChanged(float val);
@@ -51,6 +52,7 @@ private:
     TexturePicker* billboardImage;
     HFloatSlider* emissionRate;
     HFloatSlider* particleLife;
+    HFloatSlider* particleScale;
     HFloatSlider* lifeFactor;
     HFloatSlider* speedFactor;
     HFloatSlider* scaleFactor;

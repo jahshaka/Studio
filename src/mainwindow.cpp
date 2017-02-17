@@ -230,7 +230,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     scene->setCamera(cam);
 
-    scene->setSkyColor(QColor(255, 255, 255, 255));
+    scene->setSkyColor(QColor(72, 72, 72, 255));
     scene->setAmbientColor(QColor(72, 72, 72));
 
     // second node
@@ -269,7 +269,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     plight->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
 
     // fog params
-    scene->fogColor = QColor(255, 255, 255, 255);
+    scene->fogColor = QColor(72, 72, 72, 255);
 
     return scene;
 }

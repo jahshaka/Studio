@@ -38,7 +38,6 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
 
-
 iris::ScenePtr SceneReader::readScene(QString filePath, EditorData** editorData)
 {
     dir = AssetIOBase::getDirFromFileName(filePath);
@@ -291,6 +290,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     auto particleNode = iris::ParticleSystemNode::create();
 
     particleNode->setPPS((float) nodeObj["particlesPerSecond"].toDouble(1.0f));
+    particleNode->setParticleScale((float) nodeObj["particleScale"].toDouble(1.0f));
     particleNode->setDissipation(nodeObj["dissipate"].toBool());
     particleNode->setDissipationInv(nodeObj["dissipateInv"].toBool());
     particleNode->setRandomRotation(nodeObj["randomRotation"].toBool());
