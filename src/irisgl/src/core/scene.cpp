@@ -121,9 +121,14 @@ void Scene::removeNode(SceneNodePtr node)
         lights.removeOne(node.staticCast<iris::LightNode>());
     }
 
-    // If this node is the scene's viewer then reset the scene's viewer to null
-    if(vrViewer == node.staticCast<iris::ViewerNode>())
+    // if this node is the scene's viewer then reset the scene's viewer to null
+    if (vrViewer == node.staticCast<iris::ViewerNode>()) {
         vrViewer.reset();
+    }
+
+    for (auto& child : node->children) {
+        removeNode(child);
+    }
 }
 
 void Scene::setCamera(CameraNodePtr cameraNode)

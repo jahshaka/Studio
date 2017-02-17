@@ -897,7 +897,14 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
 
 void MainWindow::duplicateNode()
 {
+    if (!scene) return;
+    if (!activeSceneNode || !activeSceneNode->isDuplicable()) return;
 
+    auto node = activeSceneNode->duplicate();
+    activeSceneNode->parent->addChild(node, false);
+
+    ui->sceneHierarchy->repopulateTree();
+    sceneNodeSelected(node);
 }
 
 void MainWindow::deleteNode()

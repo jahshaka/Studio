@@ -258,55 +258,52 @@ void SceneHeirarchyWidget::deleteNode()
 
 void SceneHeirarchyWidget::duplicateNode()
 {
-
+    mainWindow->duplicateNode();
 }
 
 void SceneHeirarchyWidget::repopulateTree()
 {
     auto rootNode = scene->getRootNode();
-    auto root = new QTreeWidgetItem();
+    auto rootTreeItem = new QTreeWidgetItem();
 
-    root->setText(0,rootNode->getName());
+    rootTreeItem->setText(0, rootNode->getName());
     //root->setIcon(0,this->getIconFromSceneNodeType(SceneNodeType::World));
-    root->setData(1,Qt::UserRole,QVariant::fromValue(rootNode->getNodeId()));
+    rootTreeItem->setData(1, Qt::UserRole,QVariant::fromValue(rootNode->getNodeId()));
 
-    //populate tree
+    // populate tree
     nodeList.clear();
     treeItemList.clear();
 
-    nodeList.insert(rootNode->getNodeId(),rootNode);
-    treeItemList.insert(rootNode->getNodeId(),root);
+    nodeList.insert(rootNode->getNodeId(), rootNode);
+    treeItemList.insert(rootNode->getNodeId(), rootTreeItem);
 
-    populateTree(root,rootNode);
+    populateTree(rootTreeItem,rootNode);
 
     ui->sceneTree->clear();
-    ui->sceneTree->addTopLevelItem(root);
+    ui->sceneTree->addTopLevelItem(rootTreeItem);
     ui->sceneTree->expandAll();
 }
 
-void SceneHeirarchyWidget::populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode)
+void SceneHeirarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
+                                        QSharedPointer<iris::SceneNode> sceneNode)
 {
-    for(auto node:sceneNode->children)
-    {
+    for (auto childNode : sceneNode->children) {
+        auto childTreeItem = new QTreeWidgetItem();
+        childTreeItem->setText(0, childNode->getName());
+        childTreeItem->setData(1, Qt::UserRole,QVariant::fromValue(childNode->getNodeId()));
+        // childNode->setIcon(0,this->getIconFromSceneNodeType(node->sceneNodeType));
+        childTreeItem->setFlags(childTreeItem->flags() | Qt::ItemIsUserCheckable);
+        childTreeItem->setCheckState(0, Qt::Checked);
 
-        auto childNode = new QTreeWidgetItem();
-        childNode->setText(0,node->getName());
-        childNode->setData(1,Qt::UserRole,QVariant::fromValue(node->getNodeId()));
-        //childNode->setIcon(0,this->getIconFromSceneNodeType(node->sceneNodeType));
-        childNode->setFlags(childNode->flags() | Qt::ItemIsUserCheckable);
-        childNode->setCheckState(0,Qt::Checked);
+        // if (!node->isVisible()) childNode->setCheckState(0,Qt::Unchecked);
 
+        parentTreeItem->addChild(childTreeItem);
 
-        //if(!node->isVisible())
-        //    childNode->setCheckState(0,Qt::Unchecked);
+        // sceneTreeItems.insert(node->getEntity()->id(),childNode);
+        nodeList.insert(childNode->getNodeId(), childNode);
+        treeItemList.insert(childNode->getNodeId(), childTreeItem);
 
-        parentNode->addChild(childNode);
-
-        //sceneTreeItems.insert(node->getEntity()->id(),childNode);
-        nodeList.insert(node->getNodeId(),node);
-        treeItemList.insert(node->getNodeId(),childNode);
-
-        populateTree(childNode,node);
+        populateTree(childTreeItem, childNode);
     }
 }
 
