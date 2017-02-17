@@ -12,24 +12,17 @@
 
 namespace iris {
 
-
 class ParticleRenderer {
 
 private:
     GLuint quadVAO, quadVBO;
     QOpenGLFunctions_3_2_Core* gl;
 
-    GLuint particleId;
-
 public:
     bool useAdditive;
     QSharedPointer<iris::Texture2D> icon;
     ParticleRenderer() {
         this->gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
-
-//        icon = iris::Texture2D::load(
-//                    IrisUtils::getAbsoluteAssetPath("assets/textures/default_particle.jpg")
-//        );
 
         GLfloat quadVertices[] = {
             -1.f,  1.f, 0.f,    0.0f, 1.0f,
@@ -96,12 +89,13 @@ public:
 
         gl->glBindVertexArray(quadVAO);
         gl->glEnable(GL_BLEND);
-        useAdditive = false;
+
         if (useAdditive) {
-            gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        } else {
             gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        } else {
+            gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         }
+
         gl->glDepthMask(GL_FALSE);
 
         for (auto particle : particles) {
@@ -120,7 +114,6 @@ public:
             gl->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         }
 
-        // unprepare
         gl->glDepthMask(GL_TRUE);
         gl->glDisable(GL_BLEND);
         gl->glBindVertexArray(0);

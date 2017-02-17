@@ -25,6 +25,7 @@ EmitterPropertyWidget::EmitterPropertyWidget()
     randomRotation  = this->addCheckBox("Random Rotation", true);
     sortOrder       = this->addCheckBox("Flip Sort Order", false);
     dissipate       = this->addCheckBox("Dissipate Over Time", false);
+    dissipateInv    = this->addCheckBox("Invert dissipation", false);
     useAdditive     = this->addCheckBox("Use Additive Blending", false);
     blendMode       = this->addComboBox("Col Box");
     preset          = this->addComboBox("Particle Preset");
@@ -51,6 +52,7 @@ EmitterPropertyWidget::EmitterPropertyWidget()
     connect(randomRotation, SIGNAL(valueChanged(bool)),  SLOT(onRandomRotation(bool)));
     connect(sortOrder,      SIGNAL(valueChanged(bool)),  SLOT(onSortOrderChanged(bool)));
     connect(dissipate,      SIGNAL(valueChanged(bool)),  SLOT(onDissipateChanged(bool)));
+    connect(dissipateInv,   SIGNAL(valueChanged(bool)),  SLOT(onDissipateInvChanged(bool)));
     connect(useAdditive,    SIGNAL(valueChanged(bool)),  SLOT(onAdditiveChanged(bool)));
     connect(billboardImage, SIGNAL(valueChanged(QString)),
             this,           SLOT(onBillboardImageChanged(QString)));
@@ -77,10 +79,13 @@ void EmitterPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNo
         particleLife->setValue(ps->lifeLength);
         gravityFactor->setValue(ps->gravityComplient);
         velocityFactor->setValue(ps->speed);
-        speedFactor->setValue(ps->speedFac);
-        lifeFactor->setValue(ps->lifeFac);
-        scaleFactor->setValue(ps->scaleFac);
+        speedFactor->setValue(ps->speedFactor);
+        lifeFactor->setValue(ps->lifeFactor);
+        scaleFactor->setValue(ps->scaleFactor);
         randomRotation->setValue(ps->randomRotation);
+        useAdditive->setValue(ps->useAdditive);
+        dissipate->setValue(ps->dissipate);
+        dissipateInv->setValue(ps->dissipateInv);
 
         if (ps->texture) {
             billboardImage->setTexture(ps->texture->getSource());
@@ -108,21 +113,21 @@ void EmitterPropertyWidget::onParticleLifeChanged(float val)
 void EmitterPropertyWidget::onLifeFactorChanged(float val)
 {
     if (!!this->ps) {
-        ps->lifeFac = val;
+        ps->setLifeError(val);
     }
 }
 
 void EmitterPropertyWidget::onSpeedFactorChanged(float val)
 {
     if (!!this->ps) {
-        ps->speedFac = val;
+        ps->setSpeedError(val);
     }
 }
 
 void EmitterPropertyWidget::onScaleFactorChanged(float val)
 {
     if (!!this->ps) {
-        ps->scaleFac = val;
+        ps->setScaleError(val);
     }
 }
 
@@ -159,10 +164,17 @@ void EmitterPropertyWidget::onDissipateChanged(bool val)
     }
 }
 
+void EmitterPropertyWidget::onDissipateInvChanged(bool val)
+{
+    if (!!this->ps) {
+        ps->dissipateInv = val;
+    }
+}
+
 void EmitterPropertyWidget::onAdditiveChanged(bool val)
 {
     if (!!this->ps) {
-        ps->useAdditive = val;
+        ps->setBlendMode(val);
     }
 }
 

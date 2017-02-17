@@ -16,7 +16,6 @@ For more information see the LICENSE file
 #include "../core/scenenode.h"
 #include "../core/irisutils.h"
 #include "../graphics/texture2d.h"
-#include "../graphics/particle.h"
 
 class QOpenGLShaderProgram;
 
@@ -24,6 +23,7 @@ namespace iris
 {
 
 class RenderItem;
+class Particle;
 class ParticleRenderer;
 
 class ParticleSystemNode : public SceneNode
@@ -40,13 +40,13 @@ public:
     float gravity;
     iris::Texture2DPtr texture;
 
-    bool dissipate;
+    bool dissipate, dissipateInv;
     bool randomRotation;
 
-    float lifeFac;
-    float scaleFac;
+    float lifeFactor;
+    float scaleFactor;
+    float speedFactor;
     bool useAdditive;
-    float speedFac;
 
     float gravityComplient;
     float lifeLength;
@@ -56,7 +56,6 @@ public:
 
     float speedError, lifeError, scaleError;
     QVector3D direction;
-    float directionDeviation;
 
     QMatrix4x4 posDir;
     QVector3D dim;
@@ -92,9 +91,11 @@ public:
     }
 
     void generateParticles(float delta);
+
     void emitParticle();
 
     float generateValue(float average, float errorMargin);
+
     float generateRotation();
 
     QVector3D generateRandomUnitVector();
@@ -144,6 +145,7 @@ public:
     }
 
     void update(float delta) override;
+
     void renderParticles(RenderData* renderData, QOpenGLShaderProgram* shader);
 
     void addParticle(Particle *particle) {
@@ -155,18 +157,14 @@ public:
     ParticleRenderer* renderer;
 
 private:
-    MaterialPtr material;
-
-    RenderItem* renderItem;
-
-    Mesh* boundsMesh;
-    RenderItem* boundsRenderItem;
+    ParticleSystemNode();
 
     std::list<Particle*> particles;
 
-
-    ParticleSystemNode();
-
+    MaterialPtr material;
+    RenderItem* renderItem;
+    Mesh* boundsMesh;
+    RenderItem* boundsRenderItem;      
 };
 
 }

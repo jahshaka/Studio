@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include "../materials/defaultmaterial.h"
 #include "../materials/materialhelper.h"
 #include "../graphics/renderitem.h"
+#include "../graphics/particle.h"
 #include "../graphics/particlerender.h"
 
 #include "../core/scene.h"
@@ -37,19 +38,20 @@ ParticleSystemNode::ParticleSystemNode() {
     particlesPerSecond = 24;
     speed = 12;
 
-    scaleFac = 0.1f;
-    lifeFac = 0.0f;
-    speedFac = 0.0f;
+    scaleFactor = 0.0f;
+    lifeFactor = 0.0f;
+    speedFactor = 0.0f;
 
     useAdditive = true;
     randomRotation = true;
-    dissipate = false;
+    dissipate = true;
+    dissipateInv = false;
 
     gravityComplient = 0;
     particleScale = 1.0f;
-    lifeLength = 5.0f;
+    lifeLength = 1.0f;
 
-    directionDeviation = speedError = lifeError = scaleError = 0;
+    speedError = lifeError = scaleError = 0;
 
     renderer = new ParticleRenderer();
 
@@ -59,7 +61,6 @@ ParticleSystemNode::ParticleSystemNode() {
     boundsRenderItem = new RenderItem();
     //boundsRenderItem->mesh = Mesh::loadMesh(":assets/models/cube.obj");
     //boundsRenderItem->material = LineMaterial::create();
-
 }
 
 ParticleSystemNode::~ParticleSystemNode()
@@ -70,8 +71,7 @@ ParticleSystemNode::~ParticleSystemNode()
 }
 
 void ParticleSystemNode::setBlendMode(bool useAddittive) {
-    this->useAdditive = useAddittive;
-    renderer->useAdditive = useAdditive;
+    renderer->useAdditive = this->useAdditive = useAddittive;
 }
 
 void ParticleSystemNode::submitRenderItems()
@@ -104,8 +104,7 @@ void ParticleSystemNode::emitParticle() {
 
     // use a volume cube
     QVector3D velocity = QVector3D(particleDirection);
-//        QVector3D velocity = generateRandomUnitVector();
-//        QVector3D velocity = generateRandomUnitVectorWithinCone(direction, directionDeviation);
+    // QVector3D velocity = generateRandomUnitVector();
 
     velocity.normalize();
     velocity *= generateValue(speed, speedError);
@@ -114,14 +113,13 @@ void ParticleSystemNode::emitParticle() {
 
     // reuse particles! this is bad.
     // change later after atlases
-
     dim = QVector3D(1,1,1) * this->scale;
     addParticle(new Particle(this->getGlobalPosition() + dim * generateRandomUnitVector(),
-                                velocity,
-                                gravityComplient,
-                                ll,
-                                generateRotation(),
-                                scl));
+                             velocity,
+                             gravityComplient,
+                             ll,
+                             generateRotation(),
+                             scl));
 }
 
 float ParticleSystemNode::generateValue(float average, float errorMargin) {
@@ -164,11 +162,12 @@ void ParticleSystemNode::update(float delta) {
         p->elapsedTime += delta;
 
         // in the future we can call behavior management here, add more forces such as wind
-        if (dissipate && p->elapsedTime>0 ) {
-            p->scale = 1.0f - (p->elapsedTime / p->lifeLength);
-            //if( p->scale > 1.0)
-            //    p->scale = 1.0;
-
+        if (dissipate && p->elapsedTime > 0) {
+            if (dissipateInv) {
+                p->scale = (p->elapsedTime / p->lifeLength);
+            } else {
+                p->scale = 1.0f - (p->elapsedTime / p->lifeLength);
+            }
         }
 
         if (p->elapsedTime > p->lifeLength) {
@@ -181,7 +180,6 @@ void ParticleSystemNode::update(float delta) {
 
 void ParticleSystemNode::renderParticles(RenderData* renderData, QOpenGLShaderProgram* shader)
 {
-
     renderer->icon = texture;
     renderer->render(shader, renderData, this->particles);
 }
