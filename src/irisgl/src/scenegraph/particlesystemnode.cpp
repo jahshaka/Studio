@@ -47,7 +47,7 @@ ParticleSystemNode::ParticleSystemNode() {
     dissipate = true;
     dissipateInv = false;
 
-    gravityComplient = 0;
+    gravityComplement = 0.0f;
     particleScale = 1.0f;
     lifeLength = 1.0f;
 
@@ -113,10 +113,10 @@ void ParticleSystemNode::emitParticle() {
 
     // reuse particles! this is bad.
     // change later after atlases
-    dim = QVector3D(1,1,1) * this->scale;
-    addParticle(new Particle(this->getGlobalPosition() + dim * generateRandomUnitVector(),
+    boundDimension = QVector3D(1, 1, 1) * this->scale;
+    addParticle(new Particle(this->getGlobalPosition() + boundDimension * generateRandomUnitVector(),
                              velocity,
-                             gravityComplient,
+                             gravityComplement,
                              ll,
                              generateRotation(),
                              scl));

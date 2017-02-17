@@ -77,7 +77,7 @@ void EmitterPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNo
 
         emissionRate->setValue(ps->particlesPerSecond);
         particleLife->setValue(ps->lifeLength);
-        gravityFactor->setValue(ps->gravityComplient);
+        gravityFactor->setValue(ps->gravityComplement);
         velocityFactor->setValue(ps->speed);
         speedFactor->setValue(ps->speedFactor);
         lifeFactor->setValue(ps->lifeFactor);
@@ -134,7 +134,7 @@ void EmitterPropertyWidget::onScaleFactorChanged(float val)
 void EmitterPropertyWidget::onGravityFactorChanged(float val)
 {
     if (!!this->ps) {
-        ps->gravityComplient = val;
+        ps->gravityComplement = val;
     }
 }
 

@@ -37,7 +37,6 @@ public:
 
     float particlesPerSecond;
     float speed;
-    float gravity;
     iris::Texture2DPtr texture;
 
     bool dissipate, dissipateInv;
@@ -48,7 +47,7 @@ public:
     float speedFactor;
     bool useAdditive;
 
-    float gravityComplient;
+    float gravityComplement;
     float lifeLength;
     float particleScale;
 
@@ -58,7 +57,7 @@ public:
     QVector3D direction;
 
     QMatrix4x4 posDir;
-    QVector3D dim;
+    QVector3D boundDimension;
 
     void setRandomRotation(bool val) {
         randomRotation = val;
@@ -70,8 +69,12 @@ public:
         this->dissipate = b;
     }
 
+    void setDissipationInv(bool b) {
+        this->dissipateInv = b;
+    }
+
     void setVolumeSquare(QVector3D dim) {
-        this->dim = dim;
+        this->boundDimension = dim;
     }
 
     void setSpeedError(float error) {
@@ -108,12 +111,12 @@ public:
         return this->particlesPerSecond;
     }
 
-    void setGravity(float gravityComplient) {
-        this->gravityComplient = gravityComplient;
+    void setGravity(float gravityComplement) {
+        this->gravityComplement = gravityComplement;
     }
 
     float getGravity() {
-        return this->gravityComplient;
+        return this->gravityComplement;
     }
 
     void setLife(float ll) {
@@ -164,7 +167,7 @@ private:
     MaterialPtr material;
     RenderItem* renderItem;
     Mesh* boundsMesh;
-    RenderItem* boundsRenderItem;      
+    RenderItem* boundsRenderItem;
 };
 
 }
