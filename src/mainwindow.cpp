@@ -270,6 +270,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     // fog params
     scene->fogColor = QColor(72, 72, 72, 255);
+    scene->shadowEnabled = true;
 
     return scene;
 }
