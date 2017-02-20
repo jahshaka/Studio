@@ -80,7 +80,8 @@ SOURCES += src/main.cpp\
     src/core/keyboardstate.cpp \
     src/io/scenereader.cpp \
     src/widgets/propertywidgets/emitterpropertywidget.cpp \
-    src/widgets/combobox.cpp
+    src/widgets/combobox.cpp \
+    src/widgets/propertywidgets/nodepropertywidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -149,7 +150,8 @@ HEADERS  += src/mainwindow.h \
     src/core/keyboardstate.h \
     src/editor/editordata.h \
     src/widgets/propertywidgets/emitterpropertywidget.h \
-    src/widgets/combobox.h
+    src/widgets/combobox.h \
+    src/widgets/propertywidgets/nodepropertywidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

@@ -75,11 +75,16 @@ void MeshNode::setMaterial(MaterialPtr material)
 void MeshNode::submitRenderItems()
 {
     renderItem->worldMatrix = this->globalTransform;
-    if(!!material)
+
+    if (!!material) {
         renderItem->renderLayer = material->renderLayer;
+    }
 
     this->scene->geometryRenderList.append(renderItem);
-    this->scene->shadowRenderList.append(renderItem);
+
+    if (this->getShadowEnabled()) {
+        this->scene->shadowRenderList.append(renderItem);
+    }
 }
 
 /**
