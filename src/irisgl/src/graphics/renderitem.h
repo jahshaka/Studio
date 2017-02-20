@@ -32,8 +32,7 @@ struct RenderItem
     //used if no material is specified
     int renderLayer;
 
-    RenderItem()
-    {
+    RenderItem() {
         type = RenderItemType::None,
         //renderLayer = (int)RenderLayer::Opaque;
         worldMatrix.setToIdentity();

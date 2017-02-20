@@ -236,10 +236,10 @@ iris::ScenePtr MainWindow::createDefaultScene()
     // second node
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/models/ground.obj"));
-    //node->setMesh(getAbsoluteAssetPath("app/models/cube.obj"));
     node->scale = QVector3D(.5, .5, .5);
     node->setName("Ground");
     node->setPickable(false);
+    node->setShadowEnabled(false);
 
     auto m = iris::DefaultMaterial::create();
     node->setMaterial(m);
@@ -270,6 +270,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     // fog params
     scene->fogColor = QColor(72, 72, 72, 255);
+    scene->shadowEnabled = true;
 
     return scene;
 }

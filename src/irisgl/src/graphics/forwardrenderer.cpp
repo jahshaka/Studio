@@ -116,22 +116,24 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     renderData->fogEnd = scene->fogEnd;
     renderData->fogEnabled = scene->fogEnabled;
 
-    gl->glViewport(0, 0, 4096, 4096);
-    gl->glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
-    gl->glClear(GL_DEPTH_BUFFER_BIT);
-    gl->glCullFace(GL_FRONT);
-    renderShadows(scene);
-    gl->glCullFace(GL_BACK);
-
-    gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+    if (scene->shadowEnabled) {
+        gl->glViewport(0, 0, 4096, 4096);
+        gl->glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
+        gl->glClear(GL_DEPTH_BUFFER_BIT);
+        gl->glCullFace(GL_FRONT);
+        renderShadows(scene);
+        gl->glCullFace(GL_BACK);
+        gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+    }
 
     gl->glViewport(0, 0, vp->width, vp->height);
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     //enable all attrib arrays
-    for(int i = 0;i < 8;i++)
+    for (int i = 0; i < 8; i++) {
         gl->glEnableVertexAttribArray(i);
+    }
 
     renderNode(renderData, scene);
 
@@ -167,7 +169,6 @@ void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
                              light->getLightDir(),
                              QVector3D(0.0f, 1.0f, 0.0f));
             QMatrix4x4 lightSpaceMatrix = lightProjection * lightView;
-
 
             shadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
 
@@ -224,7 +225,6 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
         renderData->fogStart = scene->fogStart;
         renderData->fogEnd = scene->fogEnd;
         renderData->fogEnabled = scene->fogEnabled;
-
 
         renderNode(renderData,scene);
 
@@ -308,6 +308,7 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             program->setUniformValue("u_fogData.enabled",renderData->fogEnabled);
 
             program->setUniformValue("u_shadowMap", 2);
+            program->setUniformValue("u_shadowEnabled", scene->shadowEnabled);
 
             gl->glActiveTexture(GL_TEXTURE2);
             gl->glBindTexture(GL_TEXTURE_2D, shadowDepthMap);

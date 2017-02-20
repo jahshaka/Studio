@@ -26,11 +26,13 @@ FogPropertyWidget::FogPropertyWidget()
     fogColor = this->addColorPicker("Fog Color");
     fogStart = this->addFloatValueSlider("Fog Start",0,1000);
     fogEnd = this->addFloatValueSlider("Fog End",0,1000);
+    shadowEnabled = this->addCheckBox("Enable Shadows", true);
 
     connect(fogColor->getPicker(),SIGNAL(onColorChanged(QColor)),SLOT(onFogColorChanged(QColor)));
     connect(fogStart,SIGNAL(valueChanged(float)),SLOT(onFogStartChanged(float)));
     connect(fogEnd,SIGNAL(valueChanged(float)),SLOT(onFogEndChanged(float)));
     connect(fogEnabled,SIGNAL(valueChanged(bool)),SLOT(onFogEnabledChanged(bool)));
+    connect(shadowEnabled,SIGNAL(valueChanged(bool)),SLOT(onShadowEnabledChanged(bool)));
 }
 
 void FogPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
@@ -43,7 +45,7 @@ void FogPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
         fogStart->setValue(scene->fogStart);
         fogEnd->setValue(scene->fogEnd);
         fogEnabled->setValue(scene->fogEnabled);
-
+        shadowEnabled->setValue(scene->shadowEnabled);
     }
     else
     {
@@ -77,4 +79,10 @@ void FogPropertyWidget::onFogEnabledChanged(bool val)
 {
     if(!!scene)
         scene->fogEnabled = val;
+}
+
+void FogPropertyWidget::onShadowEnabledChanged(bool val)
+{
+    if(!!scene)
+        scene->shadowEnabled = val;
 }

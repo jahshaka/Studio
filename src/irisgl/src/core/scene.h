@@ -54,6 +54,8 @@ public:
     float fogEnd;
     bool fogEnabled;
 
+    bool shadowEnabled;
+
     QVector<RenderItem*> geometryRenderList;
     QVector<RenderItem*> shadowRenderList;
 

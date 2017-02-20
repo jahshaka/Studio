@@ -61,6 +61,7 @@ public:
     bool removable;
 
     bool pickable;
+    bool shadowEnabled;
 
     friend class Renderer;
     friend class Scene;
@@ -107,14 +108,20 @@ public:
         return removable;
     }
 
-    void setPickable(bool canPick)
-    {
+    void setPickable(bool canPick) {
         pickable = canPick;
     }
 
-    bool isPickable()
-    {
+    bool isPickable() {
         return pickable;
+    }
+
+    void setShadowEnabled(bool val) {
+        shadowEnabled = val;
+    }
+
+    bool getShadowEnabled() {
+        return shadowEnabled;
     }
 
     SceneNodeType getSceneNodeType();

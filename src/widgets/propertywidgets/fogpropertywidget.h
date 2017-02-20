@@ -44,12 +44,14 @@ protected slots:
     void onFogStartChanged(float val);
     void onFogEndChanged(float val);
     void onFogEnabledChanged(bool val);
+    void onShadowEnabledChanged(bool val);
 
 private:
     QSharedPointer<iris::Scene> scene;
 
     //fog properties
     CheckBoxProperty* fogEnabled;
+    CheckBoxProperty* shadowEnabled;
     HFloatSlider* fogStart;
     HFloatSlider* fogEnd;
     ColorValueWidget* fogColor;
