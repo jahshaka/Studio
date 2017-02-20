@@ -213,6 +213,8 @@ SceneNodePtr MeshNode::createDuplicate()
 
     // @todo: pass duplicates instead of copies!!!!!!!!
     node->setMesh(this->getMesh());
+    node->meshPath = this->meshPath;
+    node->meshIndex = this->meshIndex;
     node->setMaterial(this->material);
     //node->setMesh(this->getMesh()->duplicate());
     //node->setMaterial(this->material->duplicate());

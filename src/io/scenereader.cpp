@@ -151,7 +151,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     {
         auto sceneNodeObj = childObj.toObject();
         auto childNode = readSceneNode(sceneNodeObj);
-        sceneNode->addChild(childNode);
+        sceneNode->addChild(childNode, false);
     }
 
     return sceneNode;
