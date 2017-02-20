@@ -68,6 +68,7 @@ public:
         sceneNodeType = type;
     }
 
+    SceneNodePtr createDuplicate() override;
     virtual void submitRenderItems() override;
 
 private:

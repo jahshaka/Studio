@@ -45,7 +45,6 @@ MeshNode::MeshNode() {
 // @todo: cleanup previous mesh item
 void MeshNode::setMesh(QString source)
 {
-    meshPath = source;
     mesh = Mesh::loadMesh(source);
     meshPath = source;
     meshIndex = 0;
@@ -204,6 +203,21 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath)
     }
 
     auto node = _buildScene(scene,scene->mRootNode,filePath);
+
+    return node;
+}
+
+SceneNodePtr MeshNode::createDuplicate()
+{
+    auto node = MeshNode::create();
+
+    // @todo: pass duplicates instead of copies!!!!!!!!
+    node->setMesh(this->getMesh());
+    node->meshPath = this->meshPath;
+    node->meshIndex = this->meshIndex;
+    node->setMaterial(this->material);
+    //node->setMesh(this->getMesh()->duplicate());
+    //node->setMaterial(this->material->duplicate());
 
     return node;
 }

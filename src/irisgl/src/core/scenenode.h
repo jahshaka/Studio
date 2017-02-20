@@ -53,11 +53,6 @@ public:
     SceneNodePtr parent;
     QList<SceneNodePtr> children;
 
-    // remember this...
-    friend bool operator == (const SceneNode& a, const SceneNode &b) {
-        return a.nodeId == b.nodeId;
-    }
-
     AnimationPtr animation;
 
     // editor specific
@@ -84,6 +79,17 @@ public:
     bool isDuplicable() {
         return duplicable;
     }
+
+    /*
+    * This function should return an exact copy of this node
+    * with a few exceptions:
+    * 1) The duplicate shouldnt have a parent node or be added to a scene
+    */
+   virtual SceneNodePtr createDuplicate(){
+       qt_assert((QString("This node isnt duplicable: ") + name).toStdString().c_str(),__FILE__,__LINE__);
+   }
+
+   SceneNodePtr duplicate();
 
     bool isVisible() {
         return visible;
