@@ -25,6 +25,18 @@ For more information see the LICENSE file
 #include <QSpinBox>
 #include <QDebug>
 
+// these will replace all
+// @TODO MAKE THIS A TEMPLATE
+HFloatSlider* AccordianBladeWidget::addValueSlider(QString label, float start, float end) {
+    HFloatSlider *slider = new HFloatSlider;
+    slider->ui->label->setText(label);
+    slider->setRange(start, end);
+
+    ui->contentpane->layout()->addWidget(slider);
+
+    return slider;
+}
+
 AccordianBladeWidget::AccordianBladeWidget(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::AccordianBladeWidget)
@@ -175,7 +187,14 @@ ComboBox* AccordianBladeWidget::addComboBox(QString name)
 void AccordianBladeWidget::expand()
 {
     ui->contentpane->setVisible(true);
-    this->setMinimumHeight( minimum_height );
-    this->setMaximumHeight( minimum_height );
+    this->setMinimumHeight(minimum_height);
+    this->setMaximumHeight(minimum_height);
+}
+
+void AccordianBladeWidget::expand2()
+{
+    ui->contentpane->setVisible(true);
+    this->setMinimumHeight(0);
+    this->setMaximumHeight(40);
 }
 

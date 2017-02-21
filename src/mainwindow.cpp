@@ -148,8 +148,8 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
 
-//    ui->AnimationDock->hide();
-//    ui->PresetsDock_2->hide();
+    ui->AnimationDock->hide();
+    ui->PresetsDock_2->hide();
 }
 
 void MainWindow::setupVrUi()
@@ -270,7 +270,9 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     // fog params
     scene->fogColor = QColor(72, 72, 72, 255);
-    scene->shadowEnabled = true;
+    scene->shadowEnabled = false;
+
+    sceneNodeSelected(scene->rootNode);
 
     return scene;
 }

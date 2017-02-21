@@ -6,20 +6,20 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>405</width>
+    <width>396</width>
     <height>108</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
     <width>0</width>
-    <height>108</height>
+    <height>0</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
     <width>16777215</width>
-    <height>108</height>
+    <height>16777215</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -27,28 +27,34 @@
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <property name="leftMargin">
-    <number>1</number>
+    <number>0</number>
    </property>
    <property name="topMargin">
-    <number>1</number>
+    <number>0</number>
    </property>
    <property name="rightMargin">
     <number>0</number>
    </property>
    <property name="bottomMargin">
-    <number>2</number>
+    <number>0</number>
    </property>
    <item>
     <widget class="QLabel" name="label">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
      <property name="minimumSize">
       <size>
-       <width>152</width>
+       <width>0</width>
        <height>0</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
-       <width>100</width>
+       <width>150</width>
        <height>16777215</height>
       </size>
      </property>
@@ -73,13 +79,13 @@
      </property>
      <property name="minimumSize">
       <size>
-       <width>108</width>
-       <height>108</height>
+       <width>0</width>
+       <height>0</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
-       <width>120</width>
+       <width>108</width>
        <height>108</height>
       </size>
      </property>
@@ -102,6 +108,9 @@
    </item>
    <item>
     <layout class="QVBoxLayout" name="verticalLayout">
+     <property name="spacing">
+      <number>7</number>
+     </property>
      <item>
       <widget class="QLabel" name="imagename">
        <property name="sizePolicy">
@@ -112,14 +121,14 @@
        </property>
        <property name="minimumSize">
         <size>
-         <width>100</width>
-         <height>25</height>
+         <width>0</width>
+         <height>0</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
          <width>16777215</width>
-         <height>25</height>
+         <height>16777215</height>
         </size>
        </property>
        <property name="text">
@@ -159,7 +168,6 @@ QPushButton
 {
 background-color: rgb(175, 175, 175);
 border-style: inset;
-border-radius: 2px;
 text-decoration: none;
 color: rgb(0, 0, 0);
 }
@@ -201,7 +209,6 @@ QPushButton
 {
 background-color: rgb(175, 175, 175);
 border-style: inset;
-border-radius: 2px;
 text-decoration: none;
 color: rgb(0, 0, 0);
 }
@@ -222,7 +229,7 @@ border-style: inset;
        <property name="minimumSize">
         <size>
          <width>0</width>
-         <height>25</height>
+         <height>0</height>
         </size>
        </property>
        <property name="text">

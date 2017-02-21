@@ -32,12 +32,6 @@
    <property name="bottomMargin">
     <number>0</number>
    </property>
-   <property name="horizontalSpacing">
-    <number>6</number>
-   </property>
-   <property name="verticalSpacing">
-    <number>0</number>
-   </property>
    <item row="0" column="0">
     <widget class="QWidget" name="bg" native="true">
      <property name="minimumSize">
@@ -111,13 +105,16 @@ QPushButton:hover {
          </size>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout">
-         <property name="leftMargin">
+         <property name="spacing">
           <number>0</number>
          </property>
          <property name="topMargin">
           <number>0</number>
          </property>
          <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
           <number>0</number>
          </property>
          <item>
@@ -129,7 +126,7 @@ QPushButton:hover {
             </size>
            </property>
            <property name="text">
-            <string> TextLabel</string>
+            <string/>
            </property>
           </widget>
          </item>
@@ -144,18 +141,18 @@ QPushButton:hover {
      <property name="minimumSize">
       <size>
        <width>0</width>
-       <height>160</height>
+       <height>0</height>
       </size>
      </property>
      <property name="styleSheet">
-      <string notr="true">background-color: rgb(55, 55, 55);</string>
+      <string notr="true"/>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout">
-      <property name="spacing">
-       <number>0</number>
-      </property>
       <property name="leftMargin">
        <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>7</number>
       </property>
      </layout>
     </widget>
