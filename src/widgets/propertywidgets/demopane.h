@@ -15,14 +15,6 @@
  *
  */
 
-//namespace iris {
-//    class SceneNode;
-//}
-
-//namespace Ui {
-//    class DemoPane;
-//}
-
 class DemoPane : public AccordianBladeWidget
 {
     Q_OBJECT
@@ -41,6 +33,8 @@ private:
     HFloatSlider* demoSlider;
     ColorValueWidget* demoColor;
     CheckBoxProperty* demoCheck;
+    ComboBox* demoCombo;
+    TexturePicker* demoPicker;
 };
 
 #endif // DEMOPANE_H

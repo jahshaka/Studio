@@ -37,41 +37,41 @@
 QSpinBox {
    padding-right: 15px; /* make room for the arrows */
     border-width: 0;  
-	border-image: url(:/app/images/frame.png) 4;
-	color: black;
+    border-image: url(:/app/images/frame.png) 4;
+    color: black;
 }
 
 QSpinBox::up-button {
-	background-color: rgb(50, 50, 50);
-	border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
+    background-color: rgb(50, 50, 50);
+    border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
     border-width: 0;  
-	margin-bottom: -1px;
-	margin-top: -1px;
+    margin-bottom: -1px;
+    margin-top: -1px;
 }
 
 QSpinBox::up-button:hover {
-	background-color: rgb(30, 144, 255);
+    background-color: rgb(30, 144, 255);
 }
 
-QSpinBox::up-button:pressed {	
-	background-color: rgb(30, 144, 255);
+QSpinBox::up-button:pressed {   
+    background-color: rgb(30, 144, 255);
 }
 
 QSpinBox::down-button {
-	background-color: rgb(50, 50, 50);
-	border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
+    background-color: rgb(50, 50, 50);
+    border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
     border-width:0;  
-	margin-top:1px;
-	margin-bottom: -2px;
-	margin-top: -1px;
+    margin-top:1px;
+    margin-bottom: -2px;
+    margin-top: -1px;
 }
 
 QSpinBox::down-button:hover {
-	background-color: rgb(30, 144, 255);
+    background-color: rgb(30, 144, 255);
 }
 
 QSpinBox::down-button:pressed {
-	background-color: rgb(30, 144, 255);
+    background-color: rgb(30, 144, 255);
 }
 
 /* Double Spin Box */
@@ -79,42 +79,42 @@ QSpinBox::down-button:pressed {
 QDoubleSpinBox {
     padding-right: 15px; /* make room for the arrows */
     border-width: 0;  
-	padding: 1px;
-	border-image: url(:/app/images/frame.png) 4;
-	color: black;
+    padding: 1px;
+    border-image: url(:/app/images/frame.png) 4;
+    color: black;
 }
 QDoubleSpinBox:hover {
-	border:1px solid rgb(30, 144, 255);
+    border:1px solid rgb(30, 144, 255);
 }
 
 QDoubleSpinBox::up-button {
-	background-color: rgb(50, 50, 50);
-	border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
+    background-color: rgb(50, 50, 50);
+    border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
     border-width: 0;  
-	margin-top: -1px;
+    margin-top: -1px;
 }
 
 QDoubleSpinBox::up-button:hover {
-	background-color: rgb(30, 144, 255);
+    background-color: rgb(30, 144, 255);
 }
 
-QDoubleSpinBox::up-button:pressed {	
-	background-color: rgb(30, 144, 255);
+QDoubleSpinBox::up-button:pressed { 
+    background-color: rgb(30, 144, 255);
 }
 
 QDoubleSpinBox::down-button {
-	background-color: rgb(50, 50, 50);
-	border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
+    background-color: rgb(50, 50, 50);
+    border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
     border-width:0;  
-	margin-bottom: -1px;
+    margin-bottom: -1px;
 }
 
 QDoubleSpinBox::down-button:hover {
-	background-color: rgb(30, 144, 255);
+    background-color: rgb(30, 144, 255);
 }
 
 QDoubleSpinBox::down-button:pressed {
-	background-color: rgb(30, 144, 255);
+    background-color: rgb(30, 144, 255);
 }
 
 
@@ -163,10 +163,10 @@ QComboBox::drop-down {
     border-bottom-right-radius: 3px;
 }
 QComboBox::drop-down:hover {
-	background:rgb(30, 144, 255);
+    background:rgb(30, 144, 255);
 }
 QComboBox::down-arrow {
-	image: url(:/app/icons/down-arrow.svg);
+    image: url(:/app/icons/down-arrow.svg);
 }
 
 QComboBox::down-arrow:on { /* shift the arrow when popup is open */
@@ -213,16 +213,16 @@ Tab Sections ===================================================================
 
 QTabWidget::pane{
     border: 1px solid #333333; top : -1px;
-	background:rgb(67, 67, 67);
+    background:rgb(67, 67, 67);
 }
 
 QTabWidget::tab-bar {
-	background-color: rgb(54, 54, 54);
+    background-color: rgb(54, 54, 54);
 }
 
 QTabBar::tab {
-	background-color:rgb(54, 54, 54);
- 	border-bottom: 1px soild #333333;
+    background-color:rgb(54, 54, 54);
+    border-bottom: 1px soild #333333;
     min-width: 15ex;
     min-height: 4ex;
     padding: 6px;
@@ -231,7 +231,7 @@ QTabBar::tab {
 
 QTabBar::tab:selected, QTabBar::tab:hover{
     border: 1px solid #333333; bottom : -1px;
-	background-color:rgb(67, 67, 67);
+    background-color:rgb(67, 67, 67);
     border-bottom: 0px;
     min-width: 8ex;
     padding: 5px;
@@ -240,7 +240,7 @@ QTabBar::tab:selected, QTabBar::tab:hover{
 
 QTabBar::tab:selected {
     border: 1px solid #333333; bottom : -1px;
-	background-color:rgb(67, 67, 67);
+    background-color:rgb(67, 67, 67);
     border-bottom:3px;
     min-width: 8ex;
     padding: 5px;
@@ -258,11 +258,11 @@ QTabBar::tab:!selected {
 */
 
 QDockWidget {
-	background-color: rgb(95, 95, 95);
+    background-color: rgb(95, 95, 95);
     border: 1px solid lightgray;
     titlebar-close-icon: url(:/app/icons/delete.png);
     titlebar-normal-icon: url(:/app/icons/expand-button.png);
-	color: rgb(255, 255, 255);
+    color: rgb(255, 255, 255);
 }
 
 QDockWidget:hover {
@@ -270,12 +270,12 @@ background-color: rgb(30, 144, 255);
 }
 
 QDockWidget::title {
-	height: 100px;
+    height: 100px;
     text-align: center; /* align the text to the left */
     background: lightgray;
     padding-left: 5px 5px 5px 5pc;
-	color: rgb(255, 255, 255);
-	background-color: &quot;#282828&quot;;
+    color: rgb(255, 255, 255);
+    background-color: &quot;#282828&quot;;
 }
 
 QDockWidget::close-button, QDockWidget::float-button {
@@ -301,26 +301,26 @@ QDockWidget::close-button:pressed, QDockWidget::float-button:pressed {
 
 QPushButton  {
     border: none;
-	background-color: rgb(68, 68, 68);
+    background-color: rgb(68, 68, 68);
 }
 
 QPushButton:hover {
-	background-color: rgb(30, 144, 255);
+    background-color: rgb(30, 144, 255);
 }
 
 QToolButton {
     border: none;
-	background-color: rgb(68, 68, 68);
+    background-color: rgb(68, 68, 68);
 }
 
 QToolButton:hover{
-	background-color: rgb(30, 144, 255);
+    background-color: rgb(30, 144, 255);
 }
 
 QToolTip {
     border: 2px solid darkkhaki;
     padding: 5px;
-	background: black;
+    background: black;
     border-radius: 3px;
    opacity: 200; 
 }
@@ -372,36 +372,36 @@ background-color: rgb(30, 144, 255);
 */
 
  QScrollBar:vertical {
-	 background-color: &quot;#282828&quot;;
+     background-color: &quot;#282828&quot;;
      width: 15px;
      margin: 22px 0 22px 0;
  }
 
  QScrollBar::handle:vertical {
-	background-color: rgb(97, 97, 97);
+    background-color: rgb(97, 97, 97);
      min-height: 20px;
-	 border-radius: 5px;
-	 margin-left: 2px;
-	 margin-right: 2px;
+     border-radius: 5px;
+     margin-left: 2px;
+     margin-right: 2px;
  }
 
  QScrollBar::handle:vertical:hover {
-	background-color: rgb(110, 110, 110);
+    background-color: rgb(110, 110, 110);
      min-height: 20px;
-	 border-radius: 5px;
-	 margin-left: 2px;
-	 margin-right: 2px;
+     border-radius: 5px;
+     margin-left: 2px;
+     margin-right: 2px;
  }
 
  QScrollBar::add-line:vertical { 
-	background-color: rgb(100, 100, 100);
+    background-color: rgb(100, 100, 100);
      height: 20px;
      subcontrol-position: bottom;
      subcontrol-origin: margin;
  }
 
  QScrollBar::sub-line:vertical { 
-	background-color: rgb(100, 100, 100);
+    background-color: rgb(100, 100, 100);
      height: 20px;
      subcontrol-position: top;
      subcontrol-origin: margin;
@@ -413,24 +413,24 @@ background-color: rgb(30, 144, 255);
 
 QScrollBar::up-arrow:vertical
 {
-	image: url(:/app/icons/up-arrow.svg);
+    image: url(:/app/icons/up-arrow.svg);
 }
 QScrollBar::up-arrow:vertical:hover
 {
-	background-color: rgb(30, 144, 255);
-	image: url(:/app/icons/up-arrow.svg);
+    background-color: rgb(30, 144, 255);
+    image: url(:/app/icons/up-arrow.svg);
 }
 
 QScrollBar::down-arrow:vertical
 {
-	
-	image: url(:/app/icons/down-arrow.svg);
+    
+    image: url(:/app/icons/down-arrow.svg);
 }
 
 QScrollBar::down-arrow:vertical:hover
 {
-	background-color: rgb(30, 144, 255);
-	image: url(:/app/icons/down-arrow.svg);
+    background-color: rgb(30, 144, 255);
+    image: url(:/app/icons/down-arrow.svg);
 }
 
 
