@@ -152,7 +152,7 @@ HEADERS  += src/mainwindow.h \
     src/editor/editordata.h \
     src/widgets/propertywidgets/emitterpropertywidget.h \
     src/widgets/combobox.h \
-    src/widgets/propertywidgets/nodepropertywidget.h
+    src/widgets/propertywidgets/nodepropertywidget.h \
     src/editor/editorvrcontroller.h
 
 FORMS    += \
