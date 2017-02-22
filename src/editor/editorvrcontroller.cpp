@@ -46,7 +46,10 @@ void EditorVrController::update(float dt)
 
     // keyboard movement
     const QVector3D upVector(0, 1, 0);
+    //not giving proper rotation when not in debug mode
+    //apparently i need to normalize the head rotation quaternion
     auto rot = vrDevice->getHeadRotation();
+    rot.normalize();
     auto forwardVector = rot.rotatedVector(QVector3D(0, 0, -1));
     auto x = QVector3D::crossProduct(forwardVector,upVector).normalized();
     auto z = QVector3D::crossProduct(upVector,x).normalized();
@@ -69,7 +72,6 @@ void EditorVrController::update(float dt)
 
     // touch controls
     auto dir = vrDevice->getTouchController(0)->GetThumbstick();
-    //qDebug() << dir;
     camera->pos += x * dir.x();
     camera->pos += z * dir.y();
     camera->rot = QQuaternion();
