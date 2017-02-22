@@ -193,11 +193,16 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
 
     QVector3D viewerPos = scene->camera->getGlobalPosition();
     float viewScale = scene->camera->getVrViewScale();
+    QMatrix4x4 viewTransform = scene->camera->globalTransform;
+    //viewTransform.setToIdentity();
 
+    /*
     if(!!scene->vrViewer) {
         viewerPos = scene->vrViewer->getGlobalPosition();
         viewScale = scene->vrViewer->getViewScale();
+        viewTransform = scene->vrViewer->globalTransform;
     }
+    */
 
     vrDevice->beginFrame();
 
@@ -205,7 +210,7 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
     {
         vrDevice->beginEye(eye);
 
-        auto view = vrDevice->getEyeViewMatrix(eye, viewerPos, viewScale);
+        auto view = vrDevice->getEyeViewMatrix(eye, viewerPos, viewTransform);
         renderData->eyePos = view.column(3).toVector3D();
         renderData->viewMatrix = view;
 
@@ -229,7 +234,7 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
         renderNode(renderData,scene);
 
         //STEP 2: RENDER SKY
-        renderSky(renderData);
+        //renderSky(renderData);
 
         //renderParticles(renderData, delta, scene->rootNode);
 
@@ -247,6 +252,9 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
    vrDevice->bindMirrorTextureId();
    fsQuad->draw(gl);
    gl->glBindTexture(GL_TEXTURE_2D,0);
+
+   scene->geometryRenderList.clear();
+   scene->shadowRenderList.clear();
 }
 
 bool ForwardRenderer::isVrSupported()

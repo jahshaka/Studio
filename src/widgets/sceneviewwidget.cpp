@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "../editor/cameracontrollerbase.h"
 #include "../editor/editorcameracontroller.h"
 #include "../editor/orbitalcameracontroller.h"
+#include "../editor/editorvrcontroller.h"
 
 #include "../editor/editordata.h"
 
@@ -69,7 +70,9 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     //camController = nullptr;
     defaultCam = new EditorCameraController();
     orbitalCam = new OrbitalCameraController();
+
     camController = defaultCam;
+    prevCamController = defaultCam;
     //camController = orbitalCam;
 
     editorCam = iris::CameraNode::create();
@@ -106,6 +109,9 @@ void SceneViewWidget::initialize()
 
     viewportGizmo = translationGizmo;
     transformMode = "Global";
+
+    // has to be initialized here since it loads assets
+    vrCam = new EditorVrController();
 }
 
 void SceneViewWidget::setScene(iris::ScenePtr scene)
@@ -113,6 +119,7 @@ void SceneViewWidget::setScene(iris::ScenePtr scene)
     this->scene = scene;
     scene->setCamera(editorCam);
     renderer->setScene(scene);
+    vrCam->setScene(scene);
 
     // remove selected scenenode
     selectedNode.reset();
@@ -540,6 +547,22 @@ bool SceneViewWidget::isVrSupported()
 void SceneViewWidget::setViewportMode(ViewportMode viewportMode)
 {
     this->viewportMode = viewportMode;
+
+    // switch cam to vr mode
+    if(viewportMode == ViewportMode::VR)
+    {
+        prevCamController = camController;
+        camController = vrCam;
+        camController->setCamera(editorCam);
+        camController->resetMouseStates();
+
+    }
+    else
+    {
+        camController = prevCamController;
+        camController->setCamera(editorCam);
+        camController->resetMouseStates();
+    }
 }
 
 ViewportMode SceneViewWidget::getViewportMode()

@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef VRDEVICE_H
 #define VRDEVICE_H
 
+#include <QMatrix4x4>
 #include <QOpenGLContext>
 #include "../libovr/Include/OVR_CAPI_GL.h"
 
@@ -25,6 +26,42 @@ enum class VrTrackingOrigin
 {
     EyeLevel,
     FloorLevel
+};
+
+enum VrTouchInput
+{
+    A                   = ovrButton_A,
+    B                   = ovrButton_B,
+    RightThumb          = ovrButton_RThumb,
+    RightIndexTrigger   = 0x00000010,
+
+    X                   = ovrButton_X,
+    Y                   = ovrButton_Y,
+    LeftThumb           = ovrButton_LThumb,
+    LeftIndexTrigger    = 0x00001000,
+
+    RightIndexPointing  = 0x00000020,
+    RightThumbUp        = 0x00000040,
+
+    LeftIndexPointing   = 0x00002000,
+    LeftThumbUp         = 0x00004000
+};
+
+class VrTouchController
+{
+    friend class VrDevice;
+    ovrInputState inputState;
+    ovrInputState prevInputState;
+
+    int index;
+
+public:
+    VrTouchController(int index);
+
+    bool isButtonDown(VrTouchInput btn);
+    bool isButtonUp(VrTouchInput btn);
+
+    QVector2D GetThumbstick();
 };
 
 struct VrFrameData;
@@ -50,13 +87,17 @@ public:
     void beginEye(int eye);
     void endEye(int eye);
 
-    QMatrix4x4 getEyeViewMatrix(int eye,QVector3D pivot, float scale = 1.0f);
+    QMatrix4x4 getEyeViewMatrix(int eye,QVector3D pivot,QMatrix4x4 transform = QMatrix4x4());
     QMatrix4x4 getEyeProjMatrix(int eye,float nearClip,float farClip);
 
     GLuint bindMirrorTextureId();
 
     QVector3D getHandPosition(int handIndex);
     QQuaternion getHandRotation(int handIndex);
+
+    VrTouchController* getTouchController(int index);
+    QQuaternion getHeadRotation();
+    QVector3D getHeadPos();
 
 private:
     GLuint createDepthTexture(int width,int height);
@@ -86,6 +127,8 @@ private:
     VrFrameData* frameData;
 
     ovrTrackingState hmdState;
+
+    VrTouchController* touchControllers[2];
 };
 
 }
