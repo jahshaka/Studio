@@ -35,6 +35,7 @@ private:
     CheckBoxProperty* demoCheck;
     ComboBox* demoCombo;
     TexturePicker* demoPicker;
+    TextInput* demoInput;
 };
 
 #endif // DEMOPANE_H

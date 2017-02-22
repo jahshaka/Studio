@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "ui_filepickerwidget.h"
 #include "checkboxproperty.h"
 #include "combobox.h"
+#include "textinput.h"
 #include "ui_combobox.h"
 #include <QSpinBox>
 #include <QDebug>
@@ -182,6 +183,19 @@ ComboBox* AccordianBladeWidget::addComboBox(QString name)
     minimum_height += 10;
 
     return combobox;
+}
+
+TextInput* AccordianBladeWidget::addTextInput(QString name)
+{
+    TextInput* textInput = new TextInput();
+    textInput->setLabel(name);
+    ui->contentpane->layout()->addWidget(textInput);
+    int height = textInput->height();
+
+    minimum_height += height;
+    minimum_height += 10;
+
+    return textInput;
 }
 
 void AccordianBladeWidget::expand()

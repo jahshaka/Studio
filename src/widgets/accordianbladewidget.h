@@ -24,6 +24,7 @@ class TexturePicker;
 class HFloatSlider;
 class CheckBoxProperty;
 class ComboBox;
+class TextInput;
 
 /*
  *  Widget's are appended with 1 of 3 types
@@ -59,6 +60,8 @@ public:
     HFloatSlider* addFloatValueSlider( QString name, float range_1 , float range_2 );
     CheckBoxProperty* addCheckBox( QString name, bool value = false );
     ComboBox* addComboBox(QString name);
+
+    TextInput* addTextInput(QString name);
 
     void expand();
     void expand2();

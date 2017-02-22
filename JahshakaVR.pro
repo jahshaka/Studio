@@ -82,7 +82,8 @@ SOURCES += src/main.cpp\
     src/widgets/combobox.cpp \
     src/widgets/propertywidgets/nodepropertywidget.cpp \
     src/editor/editorvrcontroller.cpp \
-    src/widgets/propertywidgets/demopane.cpp
+    src/widgets/propertywidgets/demopane.cpp \
+    src/widgets/textinput.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -153,7 +154,8 @@ HEADERS  += src/mainwindow.h \
     src/widgets/combobox.h \
     src/widgets/propertywidgets/nodepropertywidget.h \
     src/editor/editorvrcontroller.h \
-    src/widgets/propertywidgets/demopane.h
+    src/widgets/propertywidgets/demopane.h \
+    src/widgets/textinput.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -181,7 +183,8 @@ FORMS    += \
     src/widgets/checkboxproperty.ui \
     src/widgets/keyframelabelwidget.ui \
     src/widgets/keyframelabeltreewidget.ui \
-    src/widgets/combobox.ui
+    src/widgets/combobox.ui \
+    src/widgets/textinput.ui
 
 RESOURCES += \
     shaders.qrc \

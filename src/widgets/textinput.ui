@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>ComboBox</class>
- <widget class="QWidget" name="ComboBox">
+ <class>TextInput</class>
+ <widget class="QWidget" name="TextInput">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -13,9 +13,15 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true"/>
+  </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
-   <property name="leftMargin">
+   <property name="spacing">
     <number>0</number>
+   </property>
+   <property name="leftMargin">
+    <number>7</number>
    </property>
    <property name="topMargin">
     <number>0</number>
@@ -28,20 +34,11 @@
    </property>
    <item>
     <widget class="QLabel" name="label">
-     <property name="enabled">
-      <bool>true</bool>
-     </property>
      <property name="sizePolicy">
       <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
-     </property>
-     <property name="minimumSize">
-      <size>
-       <width>0</width>
-       <height>0</height>
-      </size>
      </property>
      <property name="maximumSize">
       <size>
@@ -52,27 +49,22 @@
      <property name="text">
       <string>Placeholder Text</string>
      </property>
-     <property name="alignment">
-      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-     </property>
-     <property name="margin">
-      <number>7</number>
-     </property>
     </widget>
    </item>
    <item>
-    <widget class="QComboBox" name="comboBox">
-     <property name="enabled">
-      <bool>true</bool>
+    <widget class="QLabel" name="label_2">
+     <property name="styleSheet">
+      <string notr="true">font-weight: bold;</string>
      </property>
-     <property name="currentText">
-      <string>New Item</string>
+     <property name="text">
+      <string>This is another label</string>
      </property>
-     <item>
-      <property name="text">
-       <string>New Item</string>
-      </property>
-     </item>
+     <property name="textFormat">
+      <enum>Qt::PlainText</enum>
+     </property>
+     <property name="scaledContents">
+      <bool>false</bool>
+     </property>
     </widget>
    </item>
   </layout>
