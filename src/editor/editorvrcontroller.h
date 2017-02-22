@@ -13,7 +13,14 @@ public:
     iris::RenderItem* leftHandRenderItem;
     iris::RenderItem* rightHandRenderItem;
 
+    iris::Mesh* beamMesh;
+    iris::RenderItem* leftBeamRenderItem;
+    iris::RenderItem* rightBeamRenderItem;
+
     iris::VrDevice* vrDevice;
+
+    iris::SceneNodePtr leftPickedNode;
+    iris::SceneNodePtr rightPickedNode;
 
     //iris::SceneNodePtr tracker;
     iris::ScenePtr scene;
@@ -25,6 +32,13 @@ public:
     void updateCameraRot();
 
     void update(float dt);
+
+private:
+    /*
+     * Does a ray casy to the scene
+     * Returns nearest object hit in the raycast
+     */
+    float rayCastToScene(QMatrix4x4 handMatrix);
 };
 
 #endif // EDITORVRCONTROLLER_H

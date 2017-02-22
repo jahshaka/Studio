@@ -14,9 +14,11 @@ For more information see the LICENSE file
 #include "../scenegraph/lightnode.h"
 #include "../scenegraph/cameranode.h"
 #include "../scenegraph/viewernode.h"
+#include "../scenegraph/meshnode.h"
 #include "../graphics/mesh.h"
 #include "../graphics/renderitem.h"
 #include "../materials/defaultskymaterial.h"
+#include "../geometry/trimesh.h"
 #include "irisutils.h"
 
 namespace iris
@@ -100,6 +102,54 @@ void Scene::update(float dt)
 void Scene::render()
 {
 
+}
+
+void Scene::rayCast(const QVector3D& segStart,
+                    const QVector3D& segEnd,
+                    QList<PickingResult>& hitList)
+{
+    rayCast(rootNode, segStart, segEnd, hitList);
+}
+
+void Scene::rayCast(const QSharedPointer<iris::SceneNode>& sceneNode,
+                    const QVector3D& segStart,
+                    const QVector3D& segEnd,
+                    QList<iris::PickingResult>& hitList)
+{
+    if ((sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) &&
+         sceneNode->isPickable())
+    {
+        auto meshNode = sceneNode.staticCast<iris::MeshNode>();
+        auto mesh = meshNode->getMesh();
+        if(mesh != nullptr)
+        {
+            auto triMesh = meshNode->getMesh()->getTriMesh();
+
+            // transform segment to local space
+            auto invTransform = meshNode->globalTransform.inverted();
+            auto a = invTransform * segStart;
+            auto b = invTransform * segEnd;
+
+            QList<iris::TriangleIntersectionResult> results;
+            if (int resultCount = triMesh->getSegmentIntersections(a, b, results)) {
+                for (auto triResult : results) {
+                    // convert hit to world space
+                    auto hitPoint = meshNode->globalTransform * triResult.hitPoint;
+
+                    PickingResult pick;
+                    pick.hitNode = sceneNode;
+                    pick.hitPoint = hitPoint;
+                    pick.distanceFromStartSqrd = (hitPoint - segStart).lengthSquared();
+
+                    hitList.append(pick);
+                }
+            }
+        }
+    }
+
+    for (auto child : sceneNode->children) {
+        rayCast(child, segStart, segEnd, hitList);
+    }
 }
 
 void Scene::addNode(SceneNodePtr node)

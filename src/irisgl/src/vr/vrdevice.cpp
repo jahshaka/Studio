@@ -38,12 +38,27 @@ VrTouchController::VrTouchController(int index)
 
 bool VrTouchController::isButtonDown(VrTouchInput btn)
 {
-    return (inputState.Buttons & btn) != 0;
+    return isButtonDown(inputState, btn);
+}
+
+bool VrTouchController::isButtonDown(const ovrInputState& state, VrTouchInput btn)
+{
+    return (state.Buttons & (int)btn) != 0;
 }
 
 bool VrTouchController::isButtonUp(VrTouchInput btn)
 {
     return !isButtonDown(btn);
+}
+
+bool VrTouchController::isButtonPressed(VrTouchInput btn)
+{
+    return !isButtonDown(prevInputState, btn) && isButtonDown(inputState, btn);
+}
+
+bool VrTouchController::isButtonReleased(VrTouchInput btn)
+{
+    return isButtonDown(prevInputState, btn) && !isButtonDown(inputState, btn);
 }
 
 QVector2D VrTouchController::GetThumbstick()
