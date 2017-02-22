@@ -81,7 +81,7 @@ SOURCES += src/main.cpp\
     src/io/scenereader.cpp \
     src/widgets/propertywidgets/emitterpropertywidget.cpp \
     src/widgets/combobox.cpp \
-    src/widgets/propertywidgets/nodepropertywidget.cpp
+    src/widgets/propertywidgets/nodepropertywidget.cpp \
     src/editor/editorvrcontroller.cpp
 
 HEADERS  += src/mainwindow.h \
