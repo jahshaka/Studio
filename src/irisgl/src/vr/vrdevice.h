@@ -28,17 +28,19 @@ enum class VrTrackingOrigin
     FloorLevel
 };
 
-enum VrTouchInput
+enum class VrTouchInput : unsigned int
 {
     A                   = ovrButton_A,
     B                   = ovrButton_B,
     RightThumb          = ovrButton_RThumb,
     RightIndexTrigger   = 0x00000010,
+    RightShoulder       = ovrButton_RShoulder,
 
     X                   = ovrButton_X,
     Y                   = ovrButton_Y,
     LeftThumb           = ovrButton_LThumb,
     LeftIndexTrigger    = 0x00001000,
+    LeftShoulder        = ovrButton_LShoulder,
 
     RightIndexPointing  = 0x00000020,
     RightThumbUp        = 0x00000040,
@@ -61,7 +63,13 @@ public:
     bool isButtonDown(VrTouchInput btn);
     bool isButtonUp(VrTouchInput btn);
 
+    bool isButtonPressed(VrTouchInput btn);
+    bool isButtonReleased(VrTouchInput btn);
+
     QVector2D GetThumbstick();
+
+private:
+    bool isButtonDown(const ovrInputState& state, VrTouchInput btn);
 };
 
 struct VrFrameData;

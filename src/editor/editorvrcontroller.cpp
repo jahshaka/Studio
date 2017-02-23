@@ -10,6 +10,7 @@
 #include "../irisgl/src/core/irisutils.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../core/keyboardstate.h"
+#include <QtMath>
 
 
 EditorVrController::EditorVrController()
@@ -32,6 +33,21 @@ EditorVrController::EditorVrController()
     rightHandRenderItem->type = iris::RenderItemType::Mesh;
     rightHandRenderItem->material = mat;
     rightHandRenderItem->mesh = rightHandModel;
+
+    beamMesh = iris::Mesh::loadMesh(
+                IrisUtils::getAbsoluteAssetPath("app/content/models/beam.obj"));
+    auto beamMat = iris::DefaultMaterial::create();
+    beamMat->setDiffuseColor(QColor(255,100,100));
+
+    leftBeamRenderItem = new iris::RenderItem();
+    leftBeamRenderItem->type = iris::RenderItemType::Mesh;
+    leftBeamRenderItem->material = beamMat;
+    leftBeamRenderItem->mesh = beamMesh;
+
+    rightBeamRenderItem = new iris::RenderItem();
+    rightBeamRenderItem->type = iris::RenderItemType::Mesh;
+    rightBeamRenderItem->material = beamMat;
+    rightBeamRenderItem->mesh = beamMesh;
 }
 
 void EditorVrController::setScene(iris::ScenePtr scene)
@@ -42,11 +58,14 @@ void EditorVrController::setScene(iris::ScenePtr scene)
 void EditorVrController::update(float dt)
 {
     vrDevice = iris::VrManager::getDefaultDevice();
-    const float linearSpeed = 1.4f;
+    const float linearSpeed = 10.4f * dt;
 
     // keyboard movement
     const QVector3D upVector(0, 1, 0);
+    //not giving proper rotation when not in debug mode
+    //apparently i need to normalize the head rotation quaternion
     auto rot = vrDevice->getHeadRotation();
+    rot.normalize();
     auto forwardVector = rot.rotatedVector(QVector3D(0, 0, -1));
     auto x = QVector3D::crossProduct(forwardVector,upVector).normalized();
     auto z = QVector3D::crossProduct(upVector,x).normalized();
@@ -68,10 +87,17 @@ void EditorVrController::update(float dt)
         camera->pos -= z * linearSpeed;
 
     // touch controls
-    auto dir = vrDevice->getTouchController(0)->GetThumbstick();
-    //qDebug() << dir;
-    camera->pos += x * dir.x();
-    camera->pos += z * dir.y();
+    auto leftTouch = vrDevice->getTouchController(0);
+    auto dir = leftTouch->GetThumbstick();
+    camera->pos += x * linearSpeed * dir.x() * 2;
+    camera->pos += z * linearSpeed * dir.y() * 2;
+
+
+    if(leftTouch->isButtonDown(iris::VrTouchInput::Y))
+        camera->pos += QVector3D(0, linearSpeed, 0);
+    if(leftTouch->isButtonDown(iris::VrTouchInput::X))
+        camera->pos += QVector3D(0, -linearSpeed, 0);
+
     camera->rot = QQuaternion();
     camera->update(0);
 
@@ -85,6 +111,7 @@ void EditorVrController::update(float dt)
     world.rotate(device->getHandRotation(0));
     world.scale(0.55f);
     leftHandRenderItem->worldMatrix = camera->globalTransform * world;
+    leftBeamRenderItem->worldMatrix = leftHandRenderItem->worldMatrix;
 
 
     world.setToIdentity();
@@ -92,9 +119,45 @@ void EditorVrController::update(float dt)
     world.rotate(device->getHandRotation(1));
     world.scale(0.55f);
     rightHandRenderItem->worldMatrix = camera->globalTransform * world;
+    rightBeamRenderItem->worldMatrix = rightHandRenderItem->worldMatrix;
+
+
+    // Handle picking and movement of picked objects
+    float dist = rayCastToScene(leftBeamRenderItem->worldMatrix);
+    leftBeamRenderItem->worldMatrix.scale(1, 1, dist * (1.0f / 0.55f ));
+
+    //auto leftTouch = vrDevice->getTouchController(0);
+    //if (leftTouch->isButtonDown(iris::VrTouchInput::LeftIndexTrigger))
+    //    qDebug() << "trigger down";
+    //if (leftTouch->isButtonDown(iris::VrTouchInput::X))
+    //    qDebug() << "x down";
+
+    dist = rayCastToScene(rightBeamRenderItem->worldMatrix);
+    rightBeamRenderItem->worldMatrix.scale(1, 1, dist  * (1.0f / 0.55f ));
 
     scene->geometryRenderList.append(leftHandRenderItem);
     scene->geometryRenderList.append(rightHandRenderItem);
+
+    scene->geometryRenderList.append(leftBeamRenderItem);
+    scene->geometryRenderList.append(rightBeamRenderItem);
+}
+
+float EditorVrController::rayCastToScene(QMatrix4x4 handMatrix)
+{
+    QList<iris::PickingResult> hits;
+
+    scene->rayCast(handMatrix * QVector3D(0,0,0),
+                   handMatrix * QVector3D(0,0,-100),
+                   hits);
+
+    if(hits.size() == 0)
+        return 100.0f;
+
+    qSort(hits.begin(), hits.end(), [](const iris::PickingResult& a, const iris::PickingResult& b){
+        return a.distanceFromStartSqrd < b.distanceFromStartSqrd;
+    });
+
+    return qSqrt(hits.first().distanceFromStartSqrd);
 }
 
 

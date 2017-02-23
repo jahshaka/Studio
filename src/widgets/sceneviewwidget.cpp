@@ -548,6 +548,7 @@ void SceneViewWidget::setViewportMode(ViewportMode viewportMode)
 {
     this->viewportMode = viewportMode;
 
+    //return;
     // switch cam to vr mode
     if(viewportMode == ViewportMode::VR)
     {
