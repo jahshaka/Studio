@@ -127,8 +127,8 @@ void EditorVrController::update(float dt)
     leftBeamRenderItem->worldMatrix.scale(1, 1, dist * (1.0f / 0.55f ));
 
     //auto leftTouch = vrDevice->getTouchController(0);
-    //if (leftTouch->isButtonDown(iris::VrTouchInput::LeftIndexTrigger))
-    //    qDebug() << "trigger down";
+    if (leftTouch->isButtonDown(iris::VrTouchInput::LeftIndexTrigger))
+        qDebug() << "trigger down";
     //if (leftTouch->isButtonDown(iris::VrTouchInput::X))
     //    qDebug() << "x down";
 
@@ -140,6 +140,8 @@ void EditorVrController::update(float dt)
 
     scene->geometryRenderList.append(leftBeamRenderItem);
     scene->geometryRenderList.append(rightBeamRenderItem);
+
+    qDebug() << camera->pos;
 }
 
 float EditorVrController::rayCastToScene(QMatrix4x4 handMatrix)

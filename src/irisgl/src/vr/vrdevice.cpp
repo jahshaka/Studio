@@ -67,6 +67,16 @@ QVector2D VrTouchController::GetThumbstick()
     return QVector2D(value.x, value.y);
 }
 
+float VrTouchController::getIndexTrigger()
+{
+    return inputState.IndexTrigger[index];
+}
+
+float VrTouchController::getHandTrigger()
+{
+    return inputState.HandTrigger[index];
+}
+
 VrDevice::VrDevice()
 {
     this->gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();

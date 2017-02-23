@@ -3,6 +3,7 @@
 
 #include "../irisgl/src/irisglfwd.h"
 #include "cameracontrollerbase.h"
+#include <QMatrix4x4>
 
 class EditorVrController : public CameraControllerBase
 {
@@ -21,6 +22,11 @@ public:
 
     iris::SceneNodePtr leftPickedNode;
     iris::SceneNodePtr rightPickedNode;
+
+    // These are the offsets from the controllers to the
+    // selected object
+    QMatrix4x4 leftNodeOffset;
+    QMatrix4x4 rightNodeOffset;
 
     //iris::SceneNodePtr tracker;
     iris::ScenePtr scene;

@@ -68,6 +68,9 @@ public:
 
     QVector2D GetThumbstick();
 
+    float getIndexTrigger();
+    float getHandTrigger();
+
 private:
     bool isButtonDown(const ovrInputState& state, VrTouchInput btn);
 };
