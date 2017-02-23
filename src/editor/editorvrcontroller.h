@@ -41,10 +41,10 @@ public:
 
 private:
     /*
-     * Does a ray casy to the scene
+     * Does a ray cast to the scene
      * Returns nearest object hit in the raycast
      */
-    float rayCastToScene(QMatrix4x4 handMatrix);
+    bool rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResult& result);
 };
 
 #endif // EDITORVRCONTROLLER_H

@@ -88,7 +88,8 @@ void SceneNode::addChild(SceneNodePtr node, bool keepTransform)
         // this->update(0);///shortcut for now
         auto thisGlobalTransform = this->getGlobalTransform();
 
-        auto diff = initialGlobalTransform * thisGlobalTransform.inverted();
+        //auto diff = initialGlobalTransform * thisGlobalTransform.inverted();
+        auto diff = thisGlobalTransform.inverted() * initialGlobalTransform;
 
         auto pos = diff.column(3).toVector3D();
         node->pos = pos;
@@ -226,10 +227,12 @@ QMatrix4x4 SceneNode::getGlobalTransform()
 
     if (parent.isNull()) {
         // this is a check for the root node
-        return localTransform;
+        globalTransform = localTransform;
     } else {
-        return parent->getGlobalTransform() * localTransform;
+        globalTransform = parent->getGlobalTransform() * localTransform;
     }
+
+    return globalTransform;
 }
 
 QMatrix4x4 SceneNode::getLocalTransform()

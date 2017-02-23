@@ -204,6 +204,17 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
     }
     */
 
+    if (scene->shadowEnabled) {
+        gl->glViewport(0, 0, 4096, 4096);
+        gl->glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
+        gl->glClear(GL_DEPTH_BUFFER_BIT);
+        gl->glCullFace(GL_FRONT);
+        renderShadows(scene);
+        gl->glCullFace(GL_BACK);
+        gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+    }
+
     vrDevice->beginFrame();
 
     for (int eye = 0; eye < 2; ++eye)

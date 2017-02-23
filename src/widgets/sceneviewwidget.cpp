@@ -191,14 +191,16 @@ void SceneViewWidget::renderScene()
     elapsedTimer->restart();
 
     if (!!renderer && !!scene) {
-        this->camController->update(dt);
 
+        this->camController->update(dt);
         if(playScene)
         {
             animTime += dt;
             scene->updateSceneAnimation(animTime);
         }
+
         scene->update(dt);
+
 
         if (viewportMode == ViewportMode::Editor) {
             renderer->renderScene(dt, viewport);
