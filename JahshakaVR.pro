@@ -174,7 +174,6 @@ FORMS    += \
     src/widgets/materialsets.ui \
     src/widgets/modelpresets.ui \
     src/widgets/accordianbladewidget.ui \
-    src/widgets/hfloatslider.ui \
     src/widgets/texturepicker.ui \
     src/widgets/transformeditor.ui \
     src/widgets/sceneheirarchywidget.ui \
@@ -184,7 +183,8 @@ FORMS    += \
     src/widgets/keyframelabelwidget.ui \
     src/widgets/keyframelabeltreewidget.ui \
     src/widgets/combobox.ui \
-    src/widgets/textinput.ui
+    src/widgets/textinput.ui \
+    src/widgets/hfloatslider.ui
 
 RESOURCES += \
     shaders.qrc \

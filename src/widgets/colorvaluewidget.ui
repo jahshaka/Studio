@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>396</width>
-    <height>30</height>
+    <height>32</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -27,7 +27,7 @@
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <property name="spacing">
-    <number>0</number>
+    <number>7</number>
    </property>
    <property name="leftMargin">
     <number>7</number>
@@ -44,7 +44,7 @@
    <item>
     <widget class="QLabel" name="label">
      <property name="sizePolicy">
-      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
@@ -62,7 +62,7 @@
       </size>
      </property>
      <property name="text">
-      <string>TextLabel</string>
+      <string>Placeholder Text</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
@@ -80,7 +80,7 @@
      <property name="maximumSize">
       <size>
        <width>16777215</width>
-       <height>25</height>
+       <height>16777215</height>
       </size>
      </property>
     </widget>

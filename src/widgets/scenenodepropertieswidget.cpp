@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "propertywidgets/fogpropertywidget.h"
 #include "propertywidgets/emitterpropertywidget.h"
 
+#include "propertywidgets/nodepropertywidget.h"
 #include "propertywidgets/demopane.h"
 
 #include "../irisgl/src/core/scenenode.h"
@@ -80,6 +81,10 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             transformWidget = transformPropView->addTransform();
             //transformPropView->expand();
 
+            nodePropView = new NodePropertyWidget();
+            nodePropView->setContentTitle("Node Properties");
+            nodePropView->setMaxHeight(700);
+
             //light blade
             lightPropView = new LightPropertyWidget();
             lightPropView->setContentTitle("Light");
@@ -94,6 +99,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             emitterPropView->setMaxHeight(700);
 
             this->sceneNode = sceneNode;
+            nodePropView->setSceneNode(sceneNode);
             lightPropView->setSceneNode(sceneNode);
             materialPropView->setSceneNode(sceneNode);
             emitterPropView->setSceneNode(sceneNode);
@@ -112,8 +118,10 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                 lightPropView->expand();
                 break;
             case iris::SceneNodeType::Mesh:
+                layout->addWidget(nodePropView);
                 layout->addWidget(materialPropView);
                 materialPropView->expand();
+                nodePropView->expand();
                 break;
             case iris::SceneNodeType::ParticleSystem:
                 layout->addWidget(emitterPropView);

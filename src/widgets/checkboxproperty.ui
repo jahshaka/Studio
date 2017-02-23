@@ -21,7 +21,7 @@
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <property name="spacing">
-    <number>0</number>
+    <number>7</number>
    </property>
    <property name="leftMargin">
     <number>7</number>
@@ -37,34 +37,34 @@
    </property>
    <item>
     <widget class="QLabel" name="label">
-     <property name="enabled">
-      <bool>true</bool>
-     </property>
      <property name="sizePolicy">
-      <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+      <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
-     <property name="minimumSize">
-      <size>
-       <width>0</width>
-       <height>0</height>
-      </size>
-     </property>
      <property name="maximumSize">
       <size>
-       <width>152</width>
+       <width>150</width>
        <height>16777215</height>
       </size>
      </property>
      <property name="text">
       <string>Placeholder Text</string>
      </property>
+     <property name="margin">
+      <number>0</number>
+     </property>
     </widget>
    </item>
    <item>
     <widget class="QCheckBox" name="checkBox">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
      <property name="text">
       <string/>
      </property>

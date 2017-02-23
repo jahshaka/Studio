@@ -34,7 +34,7 @@
      <property name="minimumSize">
       <size>
        <width>0</width>
-       <height>30</height>
+       <height>32</height>
       </size>
      </property>
      <property name="styleSheet">
@@ -60,10 +60,16 @@ border: none;
       </property>
       <item>
        <widget class="QToolButton" name="addBtn">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
         <property name="minimumSize">
          <size>
-          <width>75</width>
-          <height>30</height>
+          <width>96</width>
+          <height>0</height>
          </size>
         </property>
         <property name="text">
@@ -86,10 +92,16 @@ border: none;
       </item>
       <item>
        <widget class="QPushButton" name="deleteBtn">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
         <property name="minimumSize">
          <size>
-          <width>75</width>
-          <height>30</height>
+          <width>96</width>
+          <height>0</height>
          </size>
         </property>
         <property name="text">

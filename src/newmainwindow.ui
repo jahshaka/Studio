@@ -21,8 +21,112 @@
    <double>1.000000000000000</double>
   </property>
   <property name="styleSheet">
-   <string notr="true">
-</string>
+   <string notr="true">* {
+	font-family: &quot;Open Sans&quot;;
+	font-size: 15px;
+    font-weight: bold;
+    color: #DEDEDE;
+}
+
+QMainWindow {
+    background-color: #212121;
+}
+
+QDockWidget::title {
+	background-color: #212121;
+	text-align: center;
+}
+
+QDockWidget {
+    background-color: rgb(95, 95, 95);
+    border: 1px solid lightgray;
+	titlebar-close-icon: url(:app/icons/close.svg);
+	titlebar-normal-icon: url(:app/icons/plus.svg);
+}
+
+QDockWidget::close-button, QDockWidget::float-button {
+	icon-size: 14px;
+}
+
+QMenuBar {
+    background-color:  #303030;
+    padding: 5px 5px 0px 5px;
+	border: 1px soild black;
+	opacity: 0.5;
+}
+
+QMenuBar::item {
+    /* spacing: 3px; */
+    /* spacing between menu bar items */
+     padding: 1px 8px;
+     background:  transparent;
+ }
+
+ QMenuBar::item:selected { /* when selected using mouse or keyboard */
+     background: #212121;
+ }
+
+/*
+*
+* Labels, Buttons ============================================================================
+*
+*/
+
+QPushButton  {
+    border: none;
+    background-color: #212121;
+}
+
+QPushButton:hover {
+    background-color: #555;
+}
+
+QToolButton {
+    border: none;
+    background-color: #212121;
+}
+
+QToolButton:hover{
+    background-color: #555;
+}
+
+QToolTip {
+    border: 2px solid darkkhaki;
+    padding: 5px;
+    background: black;
+    border-radius: 3px;
+   	opacity: 200;
+}
+
+QLabel {
+	color: rgb(197, 197, 197);
+}
+
+
+/* =============================================== */
+QToolBar &gt; QToolButton {
+    background-color: #212121;
+    border: 1px solid #1e1e1e;
+    border-radius: 2px;
+    padding: 8px;
+    width: 16px;
+    height: 16px;
+    margin-left: 8px;
+}
+
+QToolBar {
+    background:  #303030;
+   /* spacing: 4px; /* spacing between items in the tool bar */
+    min-height: 52px;
+    border-top: 1px solid #1e1e1e;
+    border-bottom: 1px solid #1e1e1e;
+}
+
+QToolBar::separator:horizontal {
+    background-color: #272727;
+    width: 1px;
+    margin-left: 8px;
+}</string>
   </property>
   <property name="iconSize">
    <size>
@@ -30,7 +134,16 @@
     <height>30</height>
    </size>
   </property>
+  <property name="dockNestingEnabled">
+   <bool>false</bool>
+  </property>
+  <property name="unifiedTitleAndToolBarOnMac">
+   <bool>false</bool>
+  </property>
   <widget class="QWidget" name="centralwidget">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
    <layout class="QGridLayout" name="gridLayout">
     <property name="leftMargin">
      <number>0</number>
@@ -49,23 +162,6 @@
     </property>
     <item row="0" column="0">
      <widget class="QWidget" name="backgroundscene" native="true">
-      <property name="styleSheet">
-       <string notr="true">QWidget#backgroundscene {
-background-color: rgb(52, 52, 52);
-}
-
-QWidget#backgroundscene:hover {
-background-color: rgb(30, 144, 255);
-}
-
-QWidget#backgroundscene:selected:active {
-background-color: rgb(30, 144, 255);
-}
-
-QWidget#backgroundscene:selected:!active {
-background-color: rgb(52, 52, 52);
-}</string>
-      </property>
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <property name="spacing">
         <number>0</number>
@@ -96,9 +192,6 @@ background-color: rgb(52, 52, 52);
            <height>31</height>
           </size>
          </property>
-         <property name="styleSheet">
-          <string notr="true">background-color: rgb(83, 83, 83);</string>
-         </property>
          <layout class="QHBoxLayout" name="horizontalLayout">
           <property name="leftMargin">
            <number>0</number>
@@ -112,200 +205,6 @@ background-color: rgb(52, 52, 52);
           <property name="bottomMargin">
            <number>0</number>
           </property>
-          <item>
-           <widget class="QToolButton" name="rotateGizmoBtn">
-            <property name="minimumSize">
-             <size>
-              <width>30</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="maximumSize">
-             <size>
-              <width>30</width>
-              <height>11111</height>
-             </size>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">QToolButton {
-border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QToolButton:hover {
-background-color: rgb(30, 144, 255);
-}</string>
-            </property>
-            <property name="text">
-             <string/>
-            </property>
-            <property name="icon">
-             <iconset resource="../icons.qrc">
-              <normaloff>:/app/icons/rotate-to-right.svg</normaloff>:/app/icons/rotate-to-right.svg</iconset>
-            </property>
-            <property name="iconSize">
-             <size>
-              <width>12</width>
-              <height>12</height>
-             </size>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QToolButton" name="translateGizmoBtn">
-            <property name="minimumSize">
-             <size>
-              <width>30</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="maximumSize">
-             <size>
-              <width>30</width>
-              <height>11111</height>
-             </size>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">QToolButton {
-border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QToolButton:hover {
-background-color: rgb(30, 144, 255);
-}</string>
-            </property>
-            <property name="text">
-             <string/>
-            </property>
-            <property name="icon">
-             <iconset resource="../icons.qrc">
-              <normaloff>:/app/icons/tranlate arrow.svg</normaloff>:/app/icons/tranlate arrow.svg</iconset>
-            </property>
-            <property name="iconSize">
-             <size>
-              <width>12</width>
-              <height>12</height>
-             </size>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QToolButton" name="scaleGizmoBtn">
-            <property name="minimumSize">
-             <size>
-              <width>30</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="maximumSize">
-             <size>
-              <width>30</width>
-              <height>11111</height>
-             </size>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">QToolButton {
-border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QToolButton:hover {
-background-color: rgb(30, 144, 255);
-}</string>
-            </property>
-            <property name="text">
-             <string/>
-            </property>
-            <property name="icon">
-             <iconset resource="../icons.qrc">
-              <normaloff>:/app/icons/expand-arrows.svg</normaloff>:/app/icons/expand-arrows.svg</iconset>
-            </property>
-            <property name="iconSize">
-             <size>
-              <width>12</width>
-              <height>12</height>
-             </size>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QComboBox" name="transformCombo">
-            <property name="minimumSize">
-             <size>
-              <width>0</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="maximumSize">
-             <size>
-              <width>100</width>
-              <height>16777215</height>
-             </size>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">background-color: rgb(71, 71, 71);</string>
-            </property>
-            <item>
-             <property name="text">
-              <string>Global</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Local</string>
-             </property>
-            </item>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="label">
-            <property name="minimumSize">
-             <size>
-              <width>50</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="maximumSize">
-             <size>
-              <width>50</width>
-              <height>16777215</height>
-             </size>
-            </property>
-            <property name="text">
-             <string>Camera</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QComboBox" name="cameraTypeCombo">
-            <property name="minimumSize">
-             <size>
-              <width>0</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="maximumSize">
-             <size>
-              <width>100</width>
-              <height>16777215</height>
-             </size>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">background-color: rgb(71, 71, 71);</string>
-            </property>
-            <item>
-             <property name="text">
-              <string>Free</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Arc Ball</string>
-             </property>
-            </item>
-           </widget>
-          </item>
           <item>
            <spacer name="horizontalSpacer">
             <property name="orientation">
@@ -399,7 +298,7 @@ background-color: rgb(30, 144, 255);
      <x>0</x>
      <y>0</y>
      <width>1209</width>
-     <height>34</height>
+     <height>32</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -413,53 +312,6 @@ background-color: rgb(30, 144, 255);
      <width>0</width>
      <height>30</height>
     </size>
-   </property>
-   <property name="styleSheet">
-    <string notr="true">QMenuBar {
-    background-color: rgb(83, 83, 83);
-    padding: 5px 5px 0px 5px;
-	border: 1px soild black;
-	opacity: 0.5;
-}
-
-QMenuBar::item {
-    spacing: 6px; /* spacing between menu bar items */
-    padding: 2px 6px;
-    background: transparent;
-}
-
-QMenuBar::item:selected { /* when selected using mouse or keyboard */
-    background: #1e90ff;
-}
-
-QMenuBar::item:pressed {
-    background: #1e90ff;
-}
-
-
-/* menu edit */
-
-QMenu {
-    border: 1px solid black;
-    min-width: 200px;
-}
-/*
-QMenu::item {
-    background-color: transparent;
-    min-width: 200px;
-}
-
-QMenu::item:selected {
-    background-color: #1e90ff;
-    border-bottom: 1px solid #1eb2ff;
-}
-
-QMenu::item:selected {
-    border-color: darkblue;
-    background: #1e90ff;
-    border-bottom: 1px solid #1eb2ff;
-}
-</string>
    </property>
    <widget class="QMenu" name="menuFile">
     <property name="title">
@@ -497,8 +349,8 @@ QMenu::item:selected {
   <widget class="QDockWidget" name="sceneHierarchyDock">
    <property name="minimumSize">
     <size>
-     <width>200</width>
-     <height>36</height>
+     <width>320</width>
+     <height>38</height>
     </size>
    </property>
    <property name="maximumSize">
@@ -521,9 +373,8 @@ QMenu::item:selected {
    </attribute>
    <widget class="SceneHeirarchyWidget" name="sceneHierarchy">
     <property name="styleSheet">
-     <string notr="true">:hover{
-
-    border: 1px solid rgb(30, 144, 255);
+     <string notr="true">:hove {
+    border: 1px solid orange;
 }</string>
     </property>
     <layout class="QVBoxLayout" name="verticalLayout">
@@ -597,8 +448,14 @@ QMenu::item:selected {
   <widget class="QDockWidget" name="PropertiesDock">
    <property name="minimumSize">
     <size>
-     <width>400</width>
+     <width>396</width>
      <height>322</height>
+    </size>
+   </property>
+   <property name="maximumSize">
+    <size>
+     <width>524287</width>
+     <height>524287</height>
     </size>
    </property>
    <property name="windowTitle">
@@ -610,8 +467,7 @@ QMenu::item:selected {
    <widget class="QWidget" name="dockWidgetContents">
     <property name="styleSheet">
      <string notr="true">:hover{
-
-    border: 1px solid rgb(30, 144, 255);
+    border: 1px solid orange; /*rgb(30, 144, 255);*/
 }</string>
     </property>
     <layout class="QGridLayout" name="gridLayout_3">
@@ -635,10 +491,6 @@ QMenu::item:selected {
          <height>300</height>
         </size>
        </property>
-       <property name="styleSheet">
-        <string notr="true">background-color: rgb(64, 64, 64);
-</string>
-       </property>
        <property name="sizeAdjustPolicy">
         <enum>QAbstractScrollArea::AdjustToContents</enum>
        </property>
@@ -650,8 +502,8 @@ QMenu::item:selected {
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>398</width>
-          <height>649</height>
+          <width>394</width>
+          <height>594</height>
          </rect>
         </property>
         <property name="styleSheet">
@@ -1035,6 +887,29 @@ border: none;</string>
     </layout>
    </widget>
   </widget>
+  <widget class="QToolBar" name="toolBar">
+   <property name="windowTitle">
+    <string>toolBar</string>
+   </property>
+   <attribute name="toolBarArea">
+    <enum>TopToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+   <addaction name="actionUndo"/>
+   <addaction name="actionRedo"/>
+   <addaction name="separator"/>
+   <addaction name="actionTranslate"/>
+   <addaction name="actionRotate"/>
+   <addaction name="actionScale"/>
+   <addaction name="separator"/>
+   <addaction name="actionGlobalSpace"/>
+   <addaction name="actionLocalSpace"/>
+   <addaction name="separator"/>
+   <addaction name="actionFreeCamera"/>
+   <addaction name="actionArcballCam"/>
+  </widget>
   <action name="actionSave">
    <property name="text">
     <string>Save</string>
@@ -1043,24 +918,6 @@ border: none;</string>
   <action name="actionLoad">
    <property name="text">
     <string>Open</string>
-   </property>
-  </action>
-  <action name="actionEditorCamera">
-   <property name="icon">
-    <iconset resource="../icons.qrc">
-     <normaloff>:/app/icons/video-camera.svg</normaloff>:/app/icons/video-camera.svg</iconset>
-   </property>
-   <property name="text">
-    <string>Editor Camera</string>
-   </property>
-  </action>
-  <action name="actionViewerCamera">
-   <property name="icon">
-    <iconset resource="../icons.qrc">
-     <normaloff>:/app/icons/photo-camera.svg</normaloff>:/app/icons/photo-camera.svg</iconset>
-   </property>
-   <property name="text">
-    <string>Viewer Camera</string>
    </property>
   </action>
   <action name="actionSave_As">
@@ -1126,14 +983,70 @@ border: none;</string>
     <string>Redo</string>
    </property>
   </action>
-  <action name="actionUndo_2">
+  <action name="actionTranslate">
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/tranlate arrow.svg</normaloff>:/app/icons/tranlate arrow.svg</iconset>
+   </property>
    <property name="text">
-    <string>Undo</string>
+    <string>Translate</string>
    </property>
   </action>
-  <action name="actionRedo_2">
+  <action name="actionRotate">
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/rotate-to-right.svg</normaloff>:/app/icons/rotate-to-right.svg</iconset>
+   </property>
    <property name="text">
-    <string>Redo</string>
+    <string>Rotate</string>
+   </property>
+  </action>
+  <action name="actionScale">
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/expand-arrows.svg</normaloff>:/app/icons/expand-arrows.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Scale</string>
+   </property>
+  </action>
+  <action name="actionGlobalSpace">
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/world.svg</normaloff>:/app/icons/world.svg</iconset>
+   </property>
+   <property name="text">
+    <string>GlobalSpace</string>
+   </property>
+  </action>
+  <action name="actionLocalSpace">
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/sceneobject.svg</normaloff>:/app/icons/sceneobject.svg</iconset>
+   </property>
+   <property name="text">
+    <string>localSpace</string>
+   </property>
+  </action>
+  <action name="actionFreeCamera">
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/people.svg</normaloff>:/app/icons/people.svg</iconset>
+   </property>
+   <property name="text">
+    <string>freeCamera</string>
+   </property>
+  </action>
+  <action name="actionArcballCam">
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/local.svg</normaloff>:/app/icons/local.svg</iconset>
+   </property>
+   <property name="text">
+    <string>arcballCam</string>
+   </property>
+   <property name="toolTip">
+    <string>arcballCam</string>
    </property>
   </action>
  </widget>

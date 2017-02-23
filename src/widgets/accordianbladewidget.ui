@@ -19,6 +19,24 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">QWidget#AccordionBladeWidget {
+	background-color: #212121;
+}
+
+QWidget#bg {
+	background-color: #4D4D4D;
+}
+
+QPushButton#toggle {
+	background-color: #4D4D4D;
+    border: 0;
+}
+
+QLabel#content_title {
+	background-color: #4D4D4D;
+}</string>
+  </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="leftMargin">
     <number>0</number>
@@ -32,6 +50,27 @@
    <property name="bottomMargin">
     <number>0</number>
    </property>
+   <item row="1" column="0">
+    <widget class="QWidget" name="contentpane" native="true">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>0</height>
+      </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>7</number>
+      </property>
+     </layout>
+    </widget>
+   </item>
    <item row="0" column="0">
     <widget class="QWidget" name="bg" native="true">
      <property name="minimumSize">
@@ -46,12 +85,9 @@
        <height>30</height>
       </size>
      </property>
-     <property name="styleSheet">
-      <string notr="true">background-color: rgb(126, 126, 126);</string>
-     </property>
      <layout class="QHBoxLayout" name="horizontalLayout_3">
       <property name="spacing">
-       <number>0</number>
+       <number>7</number>
       </property>
       <property name="leftMargin">
        <number>0</number>
@@ -80,16 +116,7 @@
          </size>
         </property>
         <property name="styleSheet">
-         <string notr="true">QPushButton {
-   background-color: rgb(74, 74, 74);
-   border-radius: 0;
-}
-
-QPushButton:hover {
-	background-color: rgb(30, 144, 255);
-	border: none;
-}
-</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string/>
@@ -97,63 +124,18 @@ QPushButton:hover {
        </widget>
       </item>
       <item>
-       <widget class="QWidget" name="bgtext" native="true">
+       <widget class="QLabel" name="content_title">
         <property name="minimumSize">
          <size>
-          <width>150</width>
-          <height>0</height>
+          <width>0</width>
+          <height>30</height>
          </size>
         </property>
-        <layout class="QHBoxLayout" name="horizontalLayout">
-         <property name="spacing">
-          <number>0</number>
-         </property>
-         <property name="topMargin">
-          <number>0</number>
-         </property>
-         <property name="rightMargin">
-          <number>0</number>
-         </property>
-         <property name="bottomMargin">
-          <number>0</number>
-         </property>
-         <item>
-          <widget class="QLabel" name="content_title">
-           <property name="minimumSize">
-            <size>
-             <width>0</width>
-             <height>30</height>
-            </size>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-          </widget>
-         </item>
-        </layout>
+        <property name="text">
+         <string>asasa</string>
+        </property>
        </widget>
       </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="1" column="0">
-    <widget class="QWidget" name="contentpane" native="true">
-     <property name="minimumSize">
-      <size>
-       <width>0</width>
-       <height>0</height>
-      </size>
-     </property>
-     <property name="styleSheet">
-      <string notr="true"/>
-     </property>
-     <layout class="QVBoxLayout" name="verticalLayout">
-      <property name="leftMargin">
-       <number>0</number>
-      </property>
-      <property name="rightMargin">
-       <number>7</number>
-      </property>
      </layout>
     </widget>
    </item>

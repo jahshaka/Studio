@@ -140,13 +140,18 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(sceneView, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
             this, SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
-    connect(ui->cameraTypeCombo, SIGNAL(currentTextChanged(QString)),
-            this, SLOT(cameraTypeChanged(QString)));
-
-    connect(ui->transformCombo, SIGNAL(currentTextChanged(QString)),
-            this, SLOT(transformOrientationChanged(QString)));
-
     connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
+
+    // toolbar stuff
+    connect(ui->actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
+    connect(ui->actionRotate,       SIGNAL(triggered(bool)), SLOT(rotateGizmo()));
+    connect(ui->actionScale,        SIGNAL(triggered(bool)), SLOT(scaleGizmo()));
+
+    connect(ui->actionGlobalSpace,  SIGNAL(triggered(bool)), SLOT(useGlobalTransform()));
+    connect(ui->actionLocalSpace,   SIGNAL(triggered(bool)), SLOT(useLocalTransform()));
+
+    connect(ui->actionFreeCamera,   SIGNAL(triggered(bool)), SLOT(useFreeCamera()));
+    connect(ui->actionArcballCam,   SIGNAL(triggered(bool)), SLOT(useArcballCam()));
 
     ui->AnimationDock->hide();
     ui->PresetsDock_2->hide();
@@ -300,24 +305,6 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
 
     this->setScene(scene);
     setupVrUi();
-}
-
-void MainWindow::cameraTypeChanged(QString type)
-{
-    if (type == "Free") {
-        sceneView->setFreeCameraMode();
-    } else {
-        sceneView->setArcBallCameraMode();
-    }
-}
-
-void MainWindow::transformOrientationChanged(QString type)
-{
-    if (type == "Local") {
-        sceneView->setTransformOrientationLocal();
-    } else {
-        sceneView->setTransformOrientationGlobal();
-    }
 }
 
 void MainWindow::setSettingsManager(SettingsManager* settings)
@@ -1002,19 +989,39 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::on_translateGizmoBtn_clicked()
+void MainWindow::useFreeCamera()
+{
+    sceneView->setFreeCameraMode();
+}
+
+void MainWindow::useArcballCam()
+{
+    sceneView->setArcBallCameraMode();
+}
+
+void MainWindow::useLocalTransform()
+{
+    sceneView->setTransformOrientationLocal();
+}
+
+void MainWindow::useGlobalTransform()
+{
+    sceneView->setTransformOrientationGlobal();
+}
+
+void MainWindow::translateGizmo()
 {
     sceneView->setGizmoLoc();
 }
 
-void MainWindow::on_scaleGizmoBtn_clicked()
-{
-    sceneView->setGizmoScale();
-}
-
-void MainWindow::on_rotateGizmoBtn_clicked()
+void MainWindow::rotateGizmo()
 {
     sceneView->setGizmoRot();
+}
+
+void MainWindow::scaleGizmo()
+{
+    sceneView->setGizmoScale();
 }
 
 void MainWindow::onPlaySceneButton()
