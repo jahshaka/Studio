@@ -133,7 +133,7 @@ void EditorVrController::update(float dt)
         // Pick a node if the trigger is down
         if (leftTouch->getIndexTrigger() > 0.1f && !leftPickedNode)
         {
-            qDebug() << "picked: " << pick.hitNode->name;
+            //qDebug() << "picked: " << pick.hitNode->name;
             leftPickedNode = pick.hitNode;
 
             //calculate offset
@@ -160,30 +160,19 @@ void EditorVrController::update(float dt)
         auto nodeGlobal = leftHandRenderItem->worldMatrix * leftNodeOffset;
 
         // calculate position relative to parent
-        auto localTransform = nodeGlobal * leftPickedNode->parent->getGlobalTransform().inverted();
+        auto localTransform = leftPickedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
 
         // decompose matrix to assign pos, rot and scale
         iris::MathHelper::decomposeMatrix(localTransform,
                                           leftPickedNode->pos,
                                           leftPickedNode->rot,
                                           leftPickedNode->scale);
-
-        qDebug() << leftPickedNode->pos;
-        qDebug() << leftPickedNode->rot;
-        qDebug() << leftPickedNode->scale;
+        leftPickedNode->rot.normalize();
 
         // @todo: force recalculatioin of global transform
         // leftPickedNode->update(0);// bad!
         // it wil be updated a frame later, no need to stress over this
     }
-
-    //auto leftTouch = vrDevice->getTouchController(0);
-    //if (leftTouch->isButtonDown(iris::VrTouchInput::LeftIndexTrigger))
-    //    qDebug() << "trigger down";
-    //if (leftTouch->isButtonDown(iris::VrTouchInput::X))
-    //    qDebug() << "x down";
-
-    //qDebug() << leftTouch->getIndexTrigger();
 
     if (rayCastToScene(rightBeamRenderItem->worldMatrix, pick)) {
         auto dist = qSqrt(pick.distanceFromStartSqrd);
@@ -194,7 +183,7 @@ void EditorVrController::update(float dt)
     scene->geometryRenderList.append(rightHandRenderItem);
 
     scene->geometryRenderList.append(leftBeamRenderItem);
-    //scene->geometryRenderList.append(rightBeamRenderItem);
+    scene->geometryRenderList.append(rightBeamRenderItem);
 }
 
 bool EditorVrController::rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResult& result)
