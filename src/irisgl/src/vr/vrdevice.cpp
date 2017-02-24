@@ -344,6 +344,15 @@ void VrDevice::endEye(int eye)
     ovr_CommitTextureSwapChain(session, vr_textureChain[eye]);
 }
 
+bool VrDevice::isHeadMounted()
+{
+    ovrSessionStatus sessionStatus;
+
+    ovr_GetSessionStatus(session, &sessionStatus);
+    //qDebug() <<"tracking state: "<< sessionStatus;
+    return sessionStatus.HmdMounted;
+}
+
 QMatrix4x4 VrDevice::getEyeViewMatrix(int eye, QVector3D pivot, QMatrix4x4 transform)
 {
     Vector3f origin = Vector3f(pivot.x(),pivot.y(),pivot.z());

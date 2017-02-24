@@ -70,7 +70,6 @@ public:
 
     float getIndexTrigger();
     float getHandTrigger();
-
 private:
     bool isButtonDown(const ovrInputState& state, VrTouchInput btn);
 };
@@ -97,6 +96,12 @@ public:
 
     void beginEye(int eye);
     void endEye(int eye);
+
+    /*
+     * Returns whether or not the headset is being tracked
+     * If orientation is being track the the headset is on the persons head
+     */
+    bool isHeadMounted();
 
     QMatrix4x4 getEyeViewMatrix(int eye,QVector3D pivot,QMatrix4x4 transform = QMatrix4x4());
     QMatrix4x4 getEyeProjMatrix(int eye,float nearClip,float farClip);

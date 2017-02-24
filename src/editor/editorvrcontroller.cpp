@@ -133,7 +133,6 @@ void EditorVrController::update(float dt)
         // Pick a node if the trigger is down
         if (leftTouch->getIndexTrigger() > 0.1f && !leftPickedNode)
         {
-            //qDebug() << "picked: " << pick.hitNode->name;
             leftPickedNode = pick.hitNode;
 
             //calculate offset
@@ -202,7 +201,6 @@ bool EditorVrController::rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResu
     });
 
     result = hits.first();
-
     return true;
 }
 
