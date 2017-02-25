@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QActionGroup>
 #include <QModelIndex>
 #include <QDropEvent>
 #include <QMimeData>
@@ -263,6 +264,10 @@ private:
     PreferencesDialog* prefsDialog;
     LicenseDialog* licenseDialog;
     AboutDialog* aboutDialog;
+
+    QActionGroup* transformGroup;
+    QActionGroup* transformSpaceGroup;
+    QActionGroup* cameraGroup;
 
     bool vrMode;
 };

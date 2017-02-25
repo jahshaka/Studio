@@ -147,14 +147,29 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->actionRotate,       SIGNAL(triggered(bool)), SLOT(rotateGizmo()));
     connect(ui->actionScale,        SIGNAL(triggered(bool)), SLOT(scaleGizmo()));
 
+    transformGroup = new QActionGroup(this);
+    transformGroup->addAction(ui->actionTranslate);
+    transformGroup->addAction(ui->actionRotate);
+    transformGroup->addAction(ui->actionScale);
+
     connect(ui->actionGlobalSpace,  SIGNAL(triggered(bool)), SLOT(useGlobalTransform()));
     connect(ui->actionLocalSpace,   SIGNAL(triggered(bool)), SLOT(useLocalTransform()));
+
+    transformSpaceGroup = new QActionGroup(this);
+    transformSpaceGroup->addAction(ui->actionGlobalSpace);
+    transformSpaceGroup->addAction(ui->actionLocalSpace);
+    ui->actionGlobalSpace->setChecked(true);
 
     connect(ui->actionFreeCamera,   SIGNAL(triggered(bool)), SLOT(useFreeCamera()));
     connect(ui->actionArcballCam,   SIGNAL(triggered(bool)), SLOT(useArcballCam()));
 
-    ui->AnimationDock->hide();
-    ui->PresetsDock_2->hide();
+    cameraGroup = new QActionGroup(this);
+    cameraGroup->addAction(ui->actionFreeCamera);
+    cameraGroup->addAction(ui->actionArcballCam);
+    ui->actionFreeCamera->setChecked(true);
+
+    //ui->AnimationDock->hide();
+    //ui->PresetsDock_2->hide();
 }
 
 void MainWindow::setupVrUi()
@@ -235,8 +250,8 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     scene->setCamera(cam);
 
-    scene->setSkyColor(QColor(72, 72, 72, 255));
-    scene->setAmbientColor(QColor(72, 72, 72));
+    scene->setSkyColor(QColor(72, 72, 72));
+    scene->setAmbientColor(QColor(96, 96, 96));
 
     // second node
     auto node = iris::MeshNode::create();
@@ -274,7 +289,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     plight->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
 
     // fog params
-    scene->fogColor = QColor(72, 72, 72, 255);
+    scene->fogColor = QColor(72, 72, 72);
     scene->shadowEnabled = false;
 
     sceneNodeSelected(scene->rootNode);
