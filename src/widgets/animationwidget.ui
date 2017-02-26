@@ -13,6 +13,29 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">QPushButton {
+	border: 0;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QPushButton:hover {
+	background-color: rgb(30, 144, 255);
+}
+
+QWidget#controls &gt; QToolButton {
+	background-color: #4D4D4D!important;
+	border-style: inset;
+	text-decoration: none;
+	color: rgb(0, 0, 0);
+}
+
+QWidget#controls &gt; QToolButton:hover {
+	background-color: rgb(235, 235, 235);
+	border-style: inset;
+}
+</string>
+  </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <property name="spacing">
     <number>0</number>
@@ -37,10 +60,7 @@
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
-     <layout class="QVBoxLayout" name="verticalLayout_4">
-      <property name="spacing">
-       <number>0</number>
-      </property>
+     <layout class="QGridLayout" name="gridLayout">
       <property name="leftMargin">
        <number>0</number>
       </property>
@@ -51,9 +71,9 @@
        <number>0</number>
       </property>
       <property name="bottomMargin">
-       <number>0</number>
+       <number>7</number>
       </property>
-      <item>
+      <item row="0" column="0">
        <layout class="QHBoxLayout" name="horizontalLayout_3">
         <property name="spacing">
          <number>0</number>
@@ -79,14 +99,11 @@
            </size>
           </property>
           <layout class="QVBoxLayout" name="verticalLayout">
-           <property name="spacing">
-            <number>0</number>
-           </property>
            <property name="leftMargin">
-            <number>0</number>
+            <number>7</number>
            </property>
            <property name="topMargin">
-            <number>0</number>
+            <number>7</number>
            </property>
            <property name="rightMargin">
             <number>0</number>
@@ -94,6 +111,43 @@
            <property name="bottomMargin">
             <number>0</number>
            </property>
+           <item>
+            <widget class="QWidget" name="widget_2" native="true">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <layout class="QVBoxLayout" name="verticalLayout_2">
+              <property name="leftMargin">
+               <number>0</number>
+              </property>
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <property name="rightMargin">
+               <number>0</number>
+              </property>
+              <property name="bottomMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="label">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="text">
+                 <string>KeyFrames</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
            <item>
             <widget class="KeyFrameLabelWidget" name="keylabelView" native="true">
              <property name="sizePolicy">
@@ -104,11 +158,10 @@
              </property>
              <property name="minimumSize">
               <size>
-               <width>100</width>
+               <width>128</width>
                <height>0</height>
               </size>
              </property>
-             <zorder>keywidgetView</zorder>
             </widget>
            </item>
           </layout>
@@ -116,20 +169,12 @@
         </item>
         <item>
          <widget class="QWidget" name="values" native="true">
-          <property name="styleSheet">
-           <string notr="true">QWidget #timelinecontainer {
-border: 1px solid #1e1e1e;
-}</string>
-          </property>
-          <layout class="QVBoxLayout" name="verticalLayout_3">
-           <property name="spacing">
-            <number>0</number>
-           </property>
+          <layout class="QVBoxLayout" name="verticalLayout_4">
            <property name="leftMargin">
-            <number>0</number>
+            <number>7</number>
            </property>
            <property name="topMargin">
-            <number>0</number>
+            <number>7</number>
            </property>
            <property name="rightMargin">
             <number>0</number>
@@ -138,6 +183,43 @@ border: 1px solid #1e1e1e;
             <number>0</number>
            </property>
            <item>
+            <widget class="QWidget" name="widget_3" native="true">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <layout class="QVBoxLayout" name="verticalLayout_3">
+              <property name="leftMargin">
+               <number>0</number>
+              </property>
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <property name="rightMargin">
+               <number>0</number>
+              </property>
+              <property name="bottomMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="label_2">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="text">
+                 <string>Timeline</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
             <widget class="KeyFrameWidget" name="keywidgetView" native="true">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -145,8 +227,9 @@ border: 1px solid #1e1e1e;
                <verstretch>0</verstretch>
               </sizepolicy>
              </property>
-             <zorder>keylabelView</zorder>
-             <zorder>keylabelView</zorder>
+             <property name="styleSheet">
+              <string notr="true"/>
+             </property>
             </widget>
            </item>
           </layout>
@@ -154,32 +237,29 @@ border: 1px solid #1e1e1e;
         </item>
        </layout>
       </item>
-      <item>
+      <item row="1" column="0" alignment="Qt::AlignHCenter">
        <widget class="QWidget" name="controls" native="true">
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>40</height>
+          <height>42</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
           <width>16777215</width>
-          <height>40</height>
+          <height>42</height>
          </size>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">background-color: rgb(78, 78,78);</string>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_2">
          <property name="leftMargin">
-          <number>256</number>
+          <number>0</number>
          </property>
          <property name="topMargin">
           <number>0</number>
          </property>
          <property name="rightMargin">
-          <number>256</number>
+          <number>0</number>
          </property>
          <property name="bottomMargin">
           <number>0</number>
@@ -194,25 +274,15 @@ border: 1px solid #1e1e1e;
            </property>
            <property name="minimumSize">
             <size>
-             <width>40</width>
-             <height>40</height>
+             <width>32</width>
+             <height>32</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
-             <width>40</width>
-             <height>40</height>
+             <width>16777215</width>
+             <height>16777215</height>
             </size>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">QPushButton {
-border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QPushButton:hover {
-background-color: rgb(30, 144, 255);
-}</string>
            </property>
            <property name="text">
             <string/>
@@ -239,25 +309,53 @@ background-color: rgb(30, 144, 255);
            </property>
            <property name="minimumSize">
             <size>
-             <width>40</width>
-             <height>40</height>
+             <width>32</width>
+             <height>32</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
-             <width>40</width>
-             <height>40</height>
+             <width>16777215</width>
+             <height>16777215</height>
             </size>
            </property>
            <property name="styleSheet">
-            <string notr="true">QPushButton {
-border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QPushButton:hover {
-background-color: rgb(30, 144, 255);
-}</string>
+            <string notr="true"/>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../../icons.qrc">
+             <normaloff>:/app/icons/play.svg</normaloff>:/app/icons/play.svg</iconset>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>12</width>
+             <height>12</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="playAll">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>32</width>
+             <height>32</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>16777215</height>
+            </size>
            </property>
            <property name="text">
             <string/>
@@ -284,32 +382,15 @@ background-color: rgb(30, 144, 255);
            </property>
            <property name="minimumSize">
             <size>
-             <width>90</width>
-             <height>30</height>
+             <width>108</width>
+             <height>32</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
-             <width>100</width>
-             <height>30</height>
+             <width>16777215</width>
+             <height>16777215</height>
             </size>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">
-QToolButton
-{
-background-color: rgb(175, 175, 175);
-border-style: inset;
-border-radius: 2px;
-text-decoration: none;
-color: rgb(0, 0, 0);
-}
-QToolButton:hover
-{
-background-color: rgb(235, 235, 235);
-border-style: inset;
-}
-</string>
            </property>
            <property name="text">
             <string>Insert Frame</string>
@@ -329,32 +410,15 @@ border-style: inset;
            </property>
            <property name="minimumSize">
             <size>
-             <width>90</width>
-             <height>30</height>
+             <width>108</width>
+             <height>32</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
-             <width>100</width>
-             <height>30</height>
+             <width>16777215</width>
+             <height>16777215</height>
             </size>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">
-QToolButton
-{
-background-color: rgb(175, 175, 175);
-border-style: inset;
-border-radius: 2px;
-text-decoration: none;
-color: rgb(0, 0, 0);
-}
-QToolButton:hover
-{
-background-color: rgb(235, 235, 235);
-border-style: inset;
-}
-</string>
            </property>
            <property name="text">
             <string>Delete Frames</string>

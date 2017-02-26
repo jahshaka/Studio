@@ -96,9 +96,9 @@ MainWindow::MainWindow(QWidget *parent) :
     licenseDialog = new LicenseDialog();
 
     // ui->mainTimeline->setMainWindow(this);
-    ui->modelpresets->setMainWindow(this);
+//    ui->modelpresets->setMainWindow(this);
     ui->materialpresets->setMainWindow(this);
-    ui->skypresets->setMainWindow(this);
+//    ui->skypresets->setMainWindow(this);
 
     camControl = nullptr;
     vrMode = false;
@@ -168,8 +168,18 @@ MainWindow::MainWindow(QWidget *parent) :
     cameraGroup->addAction(ui->actionArcballCam);
     ui->actionFreeCamera->setChecked(true);
 
-    //ui->AnimationDock->hide();
-    //ui->PresetsDock_2->hide();
+//    QWidget* empty = new QWidget();
+//    empty->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding);
+//    ui->mainToolBar->addWidget(empty);
+
+//    QPushButton* but = new QPushButton();
+//    QIcon ico(":/app/icons/virtual-reality.svg");
+//    but->setIcon(ico);
+//    but->setStyleSheet("background-color: green; padding: 8px; border: 1px solid blue; margin: 12px;");
+//    ui->mainToolBar->addWidget(but);
+
+//    ui->AnimationDock->hide();
+//    ui->PresetsDock->hide();
 }
 
 void MainWindow::setupVrUi()

@@ -47,7 +47,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
         {
             demoPane = new DemoPane();
             demoPane->setContentTitle("Demo Pane");
-            demoPane->expand();
+            // demoPane->expand();
 
             /// ------------------------------------
 

@@ -102,7 +102,6 @@ HEADERS  += src/mainwindow.h \
     src/widgets/keyframewidget.h \
     src/widgets/layertreewidget.h \
     src/widgets/maintimelinewidget.h \
-    src/widgets/scenenodetransformui.h \
     src/widgets/timelinewidget.h \
     src/core/keyframeanimation.h \
     src/core/keyframes.h \
@@ -169,7 +168,6 @@ FORMS    += \
     src/dialogs/loadmeshdialog.ui \
     src/widgets/animationwidget.ui \
     src/widgets/maintimelinewidget.ui \
-    src/widgets/namedvalueslider.ui \
     src/newmainwindow.ui \
     src/widgets/materialsets.ui \
     src/widgets/accordianbladewidget.ui \

@@ -50,6 +50,9 @@ QLabel#content_title {
    <property name="bottomMargin">
     <number>0</number>
    </property>
+   <property name="spacing">
+    <number>7</number>
+   </property>
    <item row="1" column="0">
     <widget class="QWidget" name="contentpane" native="true">
      <property name="minimumSize">
@@ -140,8 +143,6 @@ QLabel#content_title {
     </widget>
    </item>
   </layout>
-  <zorder>contentpane</zorder>
-  <zorder>bg</zorder>
  </widget>
  <resources/>
  <connections/>
