@@ -21,12 +21,12 @@ For more information see the LICENSE file
 #include "irisgl/src/irisglfwd.h"
 
 namespace Ui {
-class MainWindow;
-class NewMainWindow;
+    class MainWindow;
 }
 
 class SurfaceView;
 
+class QPushButton;
 class QStandardItem;
 class QStandardItemModel;
 class QTreeWidgetItem;
@@ -227,10 +227,10 @@ private slots:
     void rotateGizmo();
     void scaleGizmo();
 
-    void onPlaySceneButton();
+//    void onPlaySceneButton();
 
 private:
-    Ui::NewMainWindow *ui;
+    Ui::MainWindow *ui;
     SurfaceView* surface;
     SceneViewWidget* sceneView;
 
@@ -270,6 +270,7 @@ private:
     QActionGroup* cameraGroup;
 
     bool vrMode;
+    QPushButton* vrButton;
 };
 
 #endif // MAINWINDOW_H

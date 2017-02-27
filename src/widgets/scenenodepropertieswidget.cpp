@@ -45,9 +45,9 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
     {
         if(sceneNode->isRootNode())
         {
-            demoPane = new DemoPane();
-            demoPane->setContentTitle("Demo Pane");
-            // demoPane->expand();
+//            demoPane = new DemoPane();
+//            demoPane->setContentTitle("Demo Pane");
+//            demoPane->expand();
 
             /// ------------------------------------
 
@@ -62,7 +62,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             fogPropView->expand();
 
             auto layout = new QVBoxLayout();
-            layout->addWidget(demoPane);
+//            layout->addWidget(demoPane);
             layout->addWidget(worldPropView);
             layout->addWidget(fogPropView);
             layout->addStretch();

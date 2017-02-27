@@ -10,8 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "mainwindow.h"
-//#include "ui_mainwindow.h"
-#include "ui_newmainwindow.h"
+#include "ui_mainwindow.h"
 
 #include <qwindow.h>
 #include <qsurface.h>
@@ -44,6 +43,7 @@ For more information see the LICENSE file
 
 #include <QTreeWidgetItem>
 
+#include <QPushButton>
 #include <QTimer>
 #include <math.h>
 #include <QDesktopServices>
@@ -85,7 +85,7 @@ enum class VRButtonMode : int
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
-    ui(new Ui::NewMainWindow)
+    ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
     this->setWindowTitle("Jahshaka VR");
@@ -95,10 +95,10 @@ MainWindow::MainWindow(QWidget *parent) :
     aboutDialog = new AboutDialog();
     licenseDialog = new LicenseDialog();
 
-    // ui->mainTimeline->setMainWindow(this);
-//    ui->modelpresets->setMainWindow(this);
-    ui->materialpresets->setMainWindow(this);
-//    ui->skypresets->setMainWindow(this);
+//    ui->animationtimeline->setMainWindow(this);
+    ui->modelPresets->setMainWindow(this);
+    ui->materialPresets->setMainWindow(this);
+    ui->skyPresets->setMainWindow(this);
 
     camControl = nullptr;
     vrMode = false;
@@ -140,7 +140,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(sceneView, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
             this, SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
-    connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
+//    connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
 
     // toolbar stuff
     connect(ui->actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
@@ -168,15 +168,17 @@ MainWindow::MainWindow(QWidget *parent) :
     cameraGroup->addAction(ui->actionArcballCam);
     ui->actionFreeCamera->setChecked(true);
 
-//    QWidget* empty = new QWidget();
-//    empty->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding);
-//    ui->mainToolBar->addWidget(empty);
+    // this acts as a spacer
+    QWidget* empty = new QWidget();
+    empty->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding);
+    ui->ToolBar->addWidget(empty);
 
-//    QPushButton* but = new QPushButton();
-//    QIcon ico(":/app/icons/virtual-reality.svg");
-//    but->setIcon(ico);
-//    but->setStyleSheet("background-color: green; padding: 8px; border: 1px solid blue; margin: 12px;");
-//    ui->mainToolBar->addWidget(but);
+    vrButton = new QPushButton();
+    QIcon ico(":/app/icons/virtual-reality.svg");
+    vrButton->setIcon(ico);
+    vrButton->setObjectName("vrButton");
+    //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
+    ui->ToolBar->addWidget(vrButton);
 
 //    ui->AnimationDock->hide();
 //    ui->PresetsDock->hide();
@@ -184,22 +186,39 @@ MainWindow::MainWindow(QWidget *parent) :
 
 void MainWindow::setupVrUi()
 {
-    ui->vrBtn->setToolTipDuration(0);
+//    ui->vrBtn->setToolTipDuration(0);
+//    if (sceneView->isVrSupported()) {
+//        ui->vrBtn->setEnabled(true);
+//        ui->vrBtn->setToolTip("Press to view the scene in vr");
+//        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Default);
+//    } else {
+//        ui->vrBtn->setEnabled(false);
+//        ui->vrBtn->setToolTip("No Oculus device detected");
+//        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Disabled);
+//    }
+
+//    connect(ui->vrBtn, SIGNAL(clicked(bool)), SLOT(vrButtonClicked(bool)));
+
+//    //needed to apply changes
+//    ui->vrBtn->style()->unpolish(ui->vrBtn);
+//    ui->vrBtn->style()->polish(ui->vrBtn);
+
+    vrButton->setToolTipDuration(0);
     if (sceneView->isVrSupported()) {
-        ui->vrBtn->setEnabled(true);
-        ui->vrBtn->setToolTip("Press to view the scene in vr");
-        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Default);
+        vrButton->setEnabled(true);
+        vrButton->setToolTip("Press to view the scene in vr");
+        vrButton->setProperty("vrMode", (int) VRButtonMode::Default);
     } else {
-        ui->vrBtn->setEnabled(false);
-        ui->vrBtn->setToolTip("No Oculus device detected");
-        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Disabled);
+        vrButton->setEnabled(false);
+        vrButton->setToolTip("No Oculus device detected");
+        vrButton->setProperty("vrMode", (int) VRButtonMode::Disabled);
     }
 
-    connect(ui->vrBtn, SIGNAL(clicked(bool)), SLOT(vrButtonClicked(bool)));
+    connect(vrButton, SIGNAL(clicked(bool)), SLOT(vrButtonClicked(bool)));
 
     //needed to apply changes
-    ui->vrBtn->style()->unpolish(ui->vrBtn);
-    ui->vrBtn->style()->polish(ui->vrBtn);
+    vrButton->style()->unpolish(vrButton);
+    vrButton->style()->polish(vrButton);
 }
 
 /**
@@ -215,18 +234,18 @@ void MainWindow::vrButtonClicked(bool)
             sceneView->setViewportMode(ViewportMode::VR);
 
             //highlight button blue
-            ui->vrBtn->setProperty("vrMode",(int)VRButtonMode::VRMode);
+            vrButton->setProperty("vrMode",(int)VRButtonMode::VRMode);
         } else {
             sceneView->setViewportMode(ViewportMode::Editor);
 
             //return button back to normal color
-            ui->vrBtn->setProperty("vrMode",(int)VRButtonMode::Default);
+            vrButton->setProperty("vrMode",(int)VRButtonMode::Default);
         }
     }
 
     //needed to apply changes
-    ui->vrBtn->style()->unpolish(ui->vrBtn);
-    ui->vrBtn->style()->polish(ui->vrBtn);
+    vrButton->style()->unpolish(vrButton);
+    vrButton->style()->polish(vrButton);
 }
 
 iris::ScenePtr MainWindow::getScene()
@@ -1049,16 +1068,16 @@ void MainWindow::scaleGizmo()
     sceneView->setGizmoScale();
 }
 
-void MainWindow::onPlaySceneButton()
-{
-    if(ui->playSceneBtn->text() == "PLAY")
-    {
-        this->sceneView->startPlayingScene();
-        ui->playSceneBtn->setText("STOP");
-    }
-    else
-    {
-        this->sceneView->stopPlayingScene();
-        ui->playSceneBtn->setText("PLAY");
-    }
-}
+//void MainWindow::onPlaySceneButton()
+//{
+//    if(ui->playSceneBtn->text() == "PLAY")
+//    {
+//        this->sceneView->startPlayingScene();
+//        ui->playSceneBtn->setText("STOP");
+//    }
+//    else
+//    {
+//        this->sceneView->stopPlayingScene();
+//        ui->playSceneBtn->setText("PLAY");
+//    }
+//}

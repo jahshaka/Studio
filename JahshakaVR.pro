@@ -83,7 +83,8 @@ SOURCES += src/main.cpp\
     src/widgets/propertywidgets/nodepropertywidget.cpp \
     src/editor/editorvrcontroller.cpp \
     src/widgets/propertywidgets/demopane.cpp \
-    src/widgets/textinput.cpp
+    src/widgets/textinput.cpp \
+    src/widgets/labelwidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -154,7 +155,8 @@ HEADERS  += src/mainwindow.h \
     src/widgets/propertywidgets/nodepropertywidget.h \
     src/editor/editorvrcontroller.h \
     src/widgets/propertywidgets/demopane.h \
-    src/widgets/textinput.h
+    src/widgets/textinput.h \
+    src/widgets/labelwidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -168,7 +170,6 @@ FORMS    += \
     src/dialogs/loadmeshdialog.ui \
     src/widgets/animationwidget.ui \
     src/widgets/maintimelinewidget.ui \
-    src/newmainwindow.ui \
     src/widgets/materialsets.ui \
     src/widgets/accordianbladewidget.ui \
     src/widgets/texturepicker.ui \
@@ -182,7 +183,9 @@ FORMS    += \
     src/widgets/combobox.ui \
     src/widgets/textinput.ui \
     src/widgets/hfloatslider.ui \
-    src/widgets/modelpresets.ui
+    src/widgets/modelpresets.ui \
+    src/mainwindow.ui \
+    src/widgets/labelwidget.ui
 
 RESOURCES += \
     shaders.qrc \

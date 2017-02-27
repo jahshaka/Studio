@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>NewMainWindow</class>
- <widget class="QMainWindow" name="NewMainWindow">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -27,13 +27,169 @@
     color: #DEDEDE;
 }
 
+/*
+*=== DropDown Style Settings ==================================================
+*/
+
+QComboBox {
+    background: #4D4D4D;
+	color: white;
+	border:  0;
+}
+
+QComboBox QAbstractItemView {
+   /* background-color: #4D4D4D; */
+    selection-background-color: red;
+	border: 0;
+	outline: none;
+}
+
+QComboBox::drop-down {
+	border:  0;
+	/*background: #4D4D4D; */
+}
+
+QComboBox::down-arrow {
+	image: url(:app/icons/dropdown.png);
+	width: 18px;
+	height: 14px;
+ }
+
+/* Double Spin Box */
+QDoubleSpinBox {
+   	padding-right: 15px; /* make room for the arrows */
+    border-width: 3px;
+	/*border-right: 18px solid #1e1e1e; /* hide a 1px gap */
+	background-color: #4d4d4d;
+    /*border-image: url(:/app/images/frame.png) 4; */
+    color: black;
+}
+
+QDoubleSpinBox:hover {
+    border: 1px solid rgb(30, 144, 255); 
+}
+
+QDoubleSpinBox::up-button {
+	background-color: #1e1e1e;
+    subcontrol-origin: border;
+    subcontrol-position: top right; /* position at the top right corner */
+
+    width: 16px; /* 16 + 2*1px border-width = 15px padding + 3px parent border */
+    border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
+    border-width: 1px;
+}
+
+QDoubleSpinBox::up-button:hover {
+    background-color: rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::up-button:pressed {
+    background-color: rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::down-button {
+	background-color: #1e1e1e;
+    subcontrol-origin: border;
+    subcontrol-position: bottom right; /* position at bottom right corner */
+	margin-top: -1px;
+    width: 16px;
+    border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
+    border-width: 1px;
+    border-top-width: 1px;
+}
+
+QDoubleSpinBox::down-button:hover {
+    background-color: rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::down-button:pressed {
+    background-color: rgb(30, 144, 255);
+}
+
+/* ==== VR === */
+
+QPushButton#vrButton {
+	border: none;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QPushButton#vrButton[vrMode=&quot;1&quot;] {
+	background-color: #e74c3c;
+}
+
+QPushButton#vrButton[vrMode=&quot;2&quot;] {
+	background-color: #2980b9;
+}
+
+QPushButton#vrButton:hover {
+	background-color: #3498db;
+}
+
+/* ================== */
+
+ QScrollBar:vertical {
+     background-color: #212121;
+     width: 18px;
+     margin: 22px 0 22px 0;
+ }
+
+ QScrollBar::handle:vertical {
+	background-color: #444;
+     min-height: 20px;
+     margin-left: 2px;
+     margin-right: 2px;
+ }
+
+QScrollBar::handle:vertical:hover {
+	background-color: #555;
+	min-height: 20px;
+	margin-left: 2px;
+	margin-right: 2px;
+}
+
+QScrollBar::add-line:vertical {
+	background-color: #444;
+	height: 20px;
+	border: 2px solid #212121;
+	border-width: 2px 2px  0 2px;
+	subcontrol-position: bottom;
+	subcontrol-origin: margin;
+ }
+
+QScrollBar::sub-line:vertical {
+    background-color: #444;
+	height: 20px;
+	border: 2px solid #212121;
+	border-width: 0 2px 2px 2px;
+	subcontrol-position: top;
+	subcontrol-origin: margin;
+ }
+
+QScrollBar::up-arrow:vertical {
+    image: url(:/app/icons/up-arrow.svg);
+}
+
+QScrollBar::up-arrow:vertical:hover {
+    background-color: #555;
+}
+
+QScrollBar::down-arrow:vertical {
+    image: url(:/app/icons/down-arrow.svg);
+}
+
+QScrollBar::down-arrow:vertical:hover {
+    background-color: #555;
+}
+
+/* ========================== */
+
 QWidget#sceneTree {
 	background-color: #303030;
 }
 
-/*QMainWindow {
-    background-color: #212121;
-}*/
+QMainWindow {
+	/*background-color: red;*/
+}
 
 QDockWidget::title {
 	background-color: #212121;
@@ -93,6 +249,7 @@ QToolButton:hover{
 
 QToolTip {
     padding: 2px;
+	border: 0;
     background: black;
    	opacity: 200;
 }
@@ -103,14 +260,14 @@ QLabel {
 
 
 /* =============================================== */
-QToolBar &gt; QToolButton {
+QToolBar &gt; QToolButton, QWidget#vrButton {
     background-color: #212121;
     border: 1px solid #1e1e1e;
     border-radius: 2px;
     padding: 8px;
     width: 16px;
     height: 16px;
-    margin-left: 8px;
+    margin: 8px;
 }
 
 QToolBar {
@@ -189,7 +346,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
   <property name="unifiedTitleAndToolBarOnMac">
    <bool>false</bool>
   </property>
-  <widget class="QWidget" name="centralwidget">
+  <widget class="QWidget" name="viewportLayout">
    <property name="enabled">
     <bool>true</bool>
    </property>
@@ -216,16 +373,16 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
         <number>0</number>
        </property>
        <property name="leftMargin">
-        <number>1</number>
+        <number>0</number>
        </property>
        <property name="topMargin">
-        <number>1</number>
+        <number>0</number>
        </property>
        <property name="rightMargin">
-        <number>1</number>
+        <number>0</number>
        </property>
        <property name="bottomMargin">
-        <number>1</number>
+        <number>0</number>
        </property>
        <item>
         <widget class="QWidget" name="widget" native="true">
@@ -240,6 +397,9 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
            <width>16777215</width>
            <height>32</height>
           </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background: #212121</string>
          </property>
          <layout class="QHBoxLayout" name="horizontalLayout">
           <property name="leftMargin">
@@ -268,58 +428,12 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
            </spacer>
           </item>
           <item>
-           <widget class="QPushButton" name="playSceneBtn">
+           <widget class="QCheckBox" name="checkBox">
             <property name="text">
-             <string>PLAY</string>
+             <string>Realtime Preview</string>
             </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="vrBtn">
-            <property name="minimumSize">
-             <size>
-              <width>0</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="maximumSize">
-             <size>
-              <width>16777215</width>
-              <height>16777215</height>
-             </size>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">QPushButton {
-	border: none;
-	background-color: rgba(255, 255, 255, 0);
-}
-
-QPushButton[vrMode=&quot;1&quot;] {
-	background-color: #e74c3c;
-}
-
-QPushButton[vrMode=&quot;2&quot;] {
-	background-color: #2980b9;
-}
-
-QPushButton:hover {
-	background-color: #3498db;
-}
-
-</string>
-            </property>
-            <property name="text">
-             <string/>
-            </property>
-            <property name="icon">
-             <iconset resource="../icons.qrc">
-              <normaloff>:/app/icons/virtual-reality.svg</normaloff>:/app/icons/virtual-reality.svg</iconset>
-            </property>
-            <property name="iconSize">
-             <size>
-              <width>25</width>
-              <height>25</height>
-             </size>
+            <property name="checked">
+             <bool>true</bool>
             </property>
            </widget>
           </item>
@@ -347,7 +461,7 @@ QPushButton:hover {
      <x>0</x>
      <y>0</y>
      <width>994</width>
-     <height>30</height>
+     <height>32</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -399,7 +513,7 @@ QPushButton:hover {
    <property name="minimumSize">
     <size>
      <width>320</width>
-     <height>36</height>
+     <height>89</height>
     </size>
    </property>
    <property name="maximumSize">
@@ -475,7 +589,12 @@ QPushButton:hover {
    </attribute>
    <widget class="QWidget" name="animationWidgetContents">
     <property name="styleSheet">
-     <string notr="true">:hover {
+     <string notr="true">QWidget#animationWidgetContents {
+	border: 1px solid #1e1e1e;
+	background: #212121;
+}
+
+QWidget#animationWidgetContents:hover {
     border: 1px solid #3498db;
 }</string>
     </property>
@@ -496,11 +615,7 @@ QPushButton:hover {
       <number>0</number>
      </property>
      <item row="0" column="0">
-      <widget class="AnimationWidget" name="animationtimeline">
-       <property name="styleSheet">
-        <string notr="true">border: none;</string>
-       </property>
-      </widget>
+      <widget class="AnimationWidget" name="animationtimeline"/>
      </item>
     </layout>
    </widget>
@@ -509,7 +624,7 @@ QPushButton:hover {
    <property name="minimumSize">
     <size>
      <width>396</width>
-     <height>108</height>
+     <height>137</height>
     </size>
    </property>
    <property name="maximumSize">
@@ -535,7 +650,9 @@ QPushButton:hover {
      </size>
     </property>
     <property name="styleSheet">
-     <string notr="true">QWidget:dockWidgetContents { border: 1px solid #212121; }
+     <string notr="true">QWidget:dockWidgetContents {
+	border: 1px solid #212121;
+}
 
 :hover{
     border: 1px solid #3498db;
@@ -568,6 +685,11 @@ QPushButton:hover {
          <height>0</height>
         </size>
        </property>
+       <property name="styleSheet">
+        <string notr="true">QScrollBar {
+	border: 0;
+}</string>
+       </property>
        <property name="lineWidth">
         <number>1</number>
        </property>
@@ -583,7 +705,7 @@ QPushButton:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>291</height>
+          <height>302</height>
          </rect>
         </property>
         <property name="styleSheet">
@@ -622,7 +744,7 @@ QPushButton:hover {
    <attribute name="dockWidgetArea">
     <number>8</number>
    </attribute>
-   <widget class="QWidget" name="objectview">
+   <widget class="QWidget" name="Preset_Tabs_Layout">
     <property name="sizePolicy">
      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
       <horstretch>0</horstretch>
@@ -659,7 +781,7 @@ QPushButton:hover {
      <item row="0" column="0">
       <widget class="QTabWidget" name="tabWidget">
        <property name="sizePolicy">
-        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+        <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
@@ -676,7 +798,7 @@ QPushButton:hover {
        <property name="currentIndex">
         <number>0</number>
        </property>
-       <widget class="QWidget" name="materials">
+       <widget class="QWidget" name="MP_Layout">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
           <horstretch>0</horstretch>
@@ -709,7 +831,7 @@ QPushButton:hover {
           <number>0</number>
          </property>
          <item row="0" column="0">
-          <widget class="MaterialSets" name="materialpresets" native="true">
+          <widget class="MaterialSets" name="materialPresets" native="true">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
              <horstretch>0</horstretch>
@@ -723,7 +845,7 @@ QPushButton:hover {
          </item>
         </layout>
        </widget>
-       <widget class="QWidget" name="skies">
+       <widget class="QWidget" name="S_Layout">
         <property name="styleSheet">
          <string notr="true">border: 0</string>
         </property>
@@ -744,11 +866,11 @@ QPushButton:hover {
           <number>0</number>
          </property>
          <item row="0" column="0">
-          <widget class="SkyPresets" name="widget_2" native="true"/>
+          <widget class="SkyPresets" name="skyPresets" native="true"/>
          </item>
         </layout>
        </widget>
-       <widget class="QWidget" name="models">
+       <widget class="QWidget" name="M_Layout">
         <property name="styleSheet">
          <string notr="true">border: 0</string>
         </property>
@@ -769,7 +891,7 @@ QPushButton:hover {
           <number>0</number>
          </property>
          <item row="0" column="0">
-          <widget class="ModelPresets" name="widget_3" native="true"/>
+          <widget class="ModelPresets" name="modelPresets" native="true"/>
          </item>
         </layout>
        </widget>

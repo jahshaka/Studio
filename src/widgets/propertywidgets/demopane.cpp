@@ -4,6 +4,7 @@
 #include "../combobox.h"
 #include "../texturepicker.h"
 #include "../textinput.h"
+#include "../labelwidget.h"
 
 DemoPane::DemoPane()
 {
@@ -16,6 +17,9 @@ DemoPane::DemoPane()
 
     demoPicker  = this->addTexturePicker("Demo Picker");
 
-    demoColor   = this->addColorPicker("Demo Color");
     demoInput   = this->addTextInput("Demo Text Input");
+    demoColor   = this->addColorPicker("Demo Color");
+
+    demoLabel   = this->addLabel("Demo Label");
+    demoLabel->setText("The fat fox runs!");
 }

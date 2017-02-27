@@ -25,6 +25,7 @@ class HFloatSlider;
 class CheckBoxProperty;
 class ComboBox;
 class TextInput;
+class LabelWidget;
 
 /*
  *  Widget's are appended with 1 of 3 types
@@ -62,6 +63,7 @@ public:
     ComboBox* addComboBox(QString name);
 
     TextInput* addTextInput(QString name);
+    LabelWidget* addLabel(QString name);
 
     void expand();
     void expand2();

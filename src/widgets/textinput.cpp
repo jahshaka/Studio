@@ -22,17 +22,17 @@ void TextInput::setLabel(const QString& label)
 
 void TextInput::setText(const QString& text)
 {
-
+    ui->lineEdit->setText(text);
 }
 
 void TextInput::clearText()
 {
-
+    ui->lineEdit->clear();
 }
 
 QString TextInput::getText()
 {
-
+    return ui->lineEdit->text();
 }
 
 void TextInput::onTextInputChanged(const QString& val)

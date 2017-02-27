@@ -36,6 +36,7 @@ private:
     ComboBox* demoCombo;
     TexturePicker* demoPicker;
     TextInput* demoInput;
+    LabelWidget* demoLabel;
 };
 
 #endif // DEMOPANE_H

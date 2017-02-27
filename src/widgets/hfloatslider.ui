@@ -27,49 +27,6 @@ QSlider::handle:horizontal {
     background: #AFAFAF;
     width: 15px;
     margin: -2px 0; /* handle is placed by default on the contents rect of the groove. Expand outside the groove */
-}
-
-/* Double Spin Box */
-QDoubleSpinBox {
-    padding-right: 15px; /* make room for the arrows */
-    border-width: 0;
-    padding: 1px;
-    border-image: url(:/app/images/frame.png) 4;
-    color: black;
-}
-
-QDoubleSpinBox:hover {
-    border: 1px solid rgb(30, 144, 255); 
-}
-
-QDoubleSpinBox::up-button {
-    background-color: rgb(50, 50, 50);
-    border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
-    border-width: 0;
-    margin-top: -1px;
-}
-
-QDoubleSpinBox::up-button:hover {
-    background-color: rgb(30, 144, 255);
-}
-
-QDoubleSpinBox::up-button:pressed {
-    background-color: rgb(30, 144, 255);
-}
-
-QDoubleSpinBox::down-button {
-    background-color: rgb(50, 50, 50);
-    border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
-    border-width:0;
-    margin-bottom: -1px;
-}
-
-QDoubleSpinBox::down-button:hover {
-    background-color: rgb(30, 144, 255);
-}
-
-QDoubleSpinBox::down-button:pressed {
-    background-color: rgb(30, 144, 255);
 }</string>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">

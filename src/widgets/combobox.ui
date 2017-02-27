@@ -14,33 +14,7 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">/*
-*=== DropDown Style Settings ==================================================
-*/
-
-QComboBox {
-    background: #4D4D4D;
-	color: white;
-	border:  0;
-}
-
-QComboBox QAbstractItemView {
-    background-color: #4D4D4D;
-    selection-background-color: #303030;
-	border: 0;
-	outline: none;
-}
-
-QComboBox::drop-down {
-	border:  0;
-	background: #4D4D4D;
-}
-
-QComboBox::down-arrow {
-	image: url(:app/icons/dropdown.png);
-	width: 18px;
-	height: 14px;
- }</string>
+   <string notr="true"/>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <property name="leftMargin">
@@ -101,13 +75,8 @@ QComboBox::down-arrow {
       </sizepolicy>
      </property>
      <property name="currentText">
-      <string>New Item</string>
+      <string/>
      </property>
-     <item>
-      <property name="text">
-       <string>New Item</string>
-      </property>
-     </item>
     </widget>
    </item>
   </layout>

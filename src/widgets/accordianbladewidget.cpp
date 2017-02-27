@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "checkboxproperty.h"
 #include "combobox.h"
 #include "textinput.h"
+#include "labelwidget.h"
 #include "ui_combobox.h"
 #include <QSpinBox>
 #include <QDebug>
@@ -196,6 +197,19 @@ TextInput* AccordianBladeWidget::addTextInput(QString name)
     minimum_height += 10;
 
     return textInput;
+}
+
+LabelWidget* AccordianBladeWidget::addLabel(QString name)
+{
+    LabelWidget* label = new LabelWidget();
+    label->setLabel(name);
+    ui->contentpane->layout()->addWidget(label);
+    int height = label->height();
+
+    minimum_height += height;
+    minimum_height += 10;
+
+    return label;
 }
 
 void AccordianBladeWidget::expand()
