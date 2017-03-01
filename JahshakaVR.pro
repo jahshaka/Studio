@@ -43,7 +43,6 @@ SOURCES += src/main.cpp\
     src/widgets/animationwidget.cpp \
     src/widgets/keyframelabelwidget.cpp \
     src/widgets/keyframewidget.cpp \
-    src/widgets/lcdslider.cpp \
     src/widgets/maintimelinewidget.cpp \
     src/widgets/timelinewidget.cpp \
     src/core/nodekeyframeanimation.cpp \
@@ -82,7 +81,10 @@ SOURCES += src/main.cpp\
     src/widgets/propertywidgets/emitterpropertywidget.cpp \
     src/widgets/combobox.cpp \
     src/widgets/propertywidgets/nodepropertywidget.cpp \
-    src/editor/editorvrcontroller.cpp
+    src/editor/editorvrcontroller.cpp \
+    src/widgets/propertywidgets/demopane.cpp \
+    src/widgets/textinput.cpp \
+    src/widgets/labelwidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -100,9 +102,7 @@ HEADERS  += src/mainwindow.h \
     src/widgets/keyframelabelwidget.h \
     src/widgets/keyframewidget.h \
     src/widgets/layertreewidget.h \
-    src/widgets/lcdslider.h \
     src/widgets/maintimelinewidget.h \
-    src/widgets/scenenodetransformui.h \
     src/widgets/timelinewidget.h \
     src/core/keyframeanimation.h \
     src/core/keyframes.h \
@@ -153,7 +153,10 @@ HEADERS  += src/mainwindow.h \
     src/widgets/propertywidgets/emitterpropertywidget.h \
     src/widgets/combobox.h \
     src/widgets/propertywidgets/nodepropertywidget.h \
-    src/editor/editorvrcontroller.h
+    src/editor/editorvrcontroller.h \
+    src/widgets/propertywidgets/demopane.h \
+    src/widgets/textinput.h \
+    src/widgets/labelwidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -166,15 +169,9 @@ FORMS    += \
     src/dialogs/infodialog.ui \
     src/dialogs/loadmeshdialog.ui \
     src/widgets/animationwidget.ui \
-    src/widgets/lcdslider.ui \
     src/widgets/maintimelinewidget.ui \
-    src/widgets/namedvalueslider.ui \
-    src/widgets/newlcdslider.ui \
-    src/newmainwindow.ui \
     src/widgets/materialsets.ui \
-    src/widgets/modelpresets.ui \
     src/widgets/accordianbladewidget.ui \
-    src/widgets/hfloatslider.ui \
     src/widgets/texturepicker.ui \
     src/widgets/transformeditor.ui \
     src/widgets/sceneheirarchywidget.ui \
@@ -183,7 +180,12 @@ FORMS    += \
     src/widgets/checkboxproperty.ui \
     src/widgets/keyframelabelwidget.ui \
     src/widgets/keyframelabeltreewidget.ui \
-    src/widgets/combobox.ui
+    src/widgets/combobox.ui \
+    src/widgets/textinput.ui \
+    src/widgets/hfloatslider.ui \
+    src/widgets/modelpresets.ui \
+    src/mainwindow.ui \
+    src/widgets/labelwidget.ui
 
 RESOURCES += \
     shaders.qrc \
@@ -192,7 +194,8 @@ RESOURCES += \
     materials.qrc \
     models.qrc \
     textures.qrc \
-    modelpresets.qrc
+    modelpresets.qrc \
+    fonts.qrc
 
 win32: RC_ICONS = icon.ico
 

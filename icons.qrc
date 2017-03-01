@@ -65,5 +65,11 @@
         <file>app/icons/chevron-arrow-up.svg</file>
         <file>app/icons/right-chevron.svg</file>
         <file>app/icons/virtual-reality.svg</file>
+        <file>app/icons/dropdown.png</file>
+        <file>app/icons/plus.svg</file>
+        <file>app/icons/close.svg</file>
+        <file>app/icons/local.svg</file>
+        <file>app/icons/light.png</file>
+        <file>app/icons/undo.png</file>
     </qresource>
 </RCC>

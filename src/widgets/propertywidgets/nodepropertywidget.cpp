@@ -2,17 +2,22 @@
 
 #include "../checkboxproperty.h"
 #include "../hfloatslider.h"
+#include "../combobox.h"
 
 #include "../../irisgl/src/scenegraph/meshnode.h"
 #include "../../irisgl/src/scenegraph/particlesystemnode.h"
 
 NodePropertyWidget::NodePropertyWidget()
 {
-//    slider = this->addFloatValueSlider("aaaaaaaaaa", 1, 10);
+    drawType = this->addComboBox("Draw type");
+    drawType->addItem("Textured");
+    drawType->addItem("Shaded");
+    drawType->addItem("Wireframe");
+
+    uuid = this->addTextInput("UUID");
     shadowCaster = this->addCheckBox("Cast Shadows", true);
     shadowReceiver = this->addCheckBox("Receive Shadows", true);
 
-//    slider->setDisabled(true);
     shadowReceiver->setDisabled(true);
 
     connect(shadowCaster, SIGNAL(valueChanged(bool)), SLOT(onShadowEnabledChanged(bool)));

@@ -15,11 +15,11 @@ For more information see the LICENSE file
 
 CheckBoxProperty::CheckBoxProperty(QWidget *parent) :
     QWidget(parent),
-    ui(new Ui::checkboxproperty)
+    ui(new Ui::CheckBoxProperty)
 {
     ui->setupUi(this);
-    connect(ui->checkBox,SIGNAL(stateChanged(bool)),SLOT(onCheckboxValueChanged(bool)));
-    connect(ui->checkBox,SIGNAL(clicked(bool)),SLOT(onCheckboxValueChanged(bool)));
+    connect(ui->checkBox,SIGNAL(stateChanged(int)),SLOT(onCheckboxValueChanged(int)));
+//    connect(ui->checkBox,SIGNAL(clicked(bool)),SLOT(onCheckboxValueChanged(bool)));
 }
 
 CheckBoxProperty::~CheckBoxProperty()
@@ -38,7 +38,7 @@ void CheckBoxProperty::setLabel(QString label)
     ui->label->setText(label);
 }
 
-void CheckBoxProperty::onCheckboxValueChanged(bool val)
+void CheckBoxProperty::onCheckboxValueChanged(int val)
 {
     emit valueChanged(val);
 }

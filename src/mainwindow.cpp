@@ -10,8 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "mainwindow.h"
-//#include "ui_mainwindow.h"
-#include "ui_newmainwindow.h"
+#include "ui_mainwindow.h"
 
 #include <qwindow.h>
 #include <qsurface.h>
@@ -34,6 +33,7 @@ For more information see the LICENSE file
 #include "irisgl/src/animation/keyframeset.h"
 #include "irisgl/src/animation/keyframeanimation.h"
 
+#include <QFontDatabase>
 #include <QOpenGLContext>
 #include <qstandarditemmodel.h>
 #include <QKeyEvent>
@@ -44,6 +44,7 @@ For more information see the LICENSE file
 
 #include <QTreeWidgetItem>
 
+#include <QPushButton>
 #include <QTimer>
 #include <math.h>
 #include <QDesktopServices>
@@ -85,20 +86,26 @@ enum class VRButtonMode : int
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
-    ui(new Ui::NewMainWindow)
+    ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
     this->setWindowTitle("Jahshaka VR");
+
+    int fontId = QFontDatabase::addApplicationFont(getAbsoluteAssetPath("app/fonts/OpenSans.ttf"));
+    QString family = QFontDatabase::applicationFontFamilies(fontId).at(0);
+    QFont font = QFont(family);
+    font.setPointSizeF(9);
+    QApplication::setFont(font);
 
     settings = SettingsManager::getDefaultManager();
     prefsDialog = new PreferencesDialog(settings);
     aboutDialog = new AboutDialog();
     licenseDialog = new LicenseDialog();
 
-    // ui->mainTimeline->setMainWindow(this);
-    ui->modelpresets->setMainWindow(this);
-    ui->materialpresets->setMainWindow(this);
-    ui->skypresets->setMainWindow(this);
+//    ui->animationtimeline->setMainWindow(this);
+    ui->materialPresets->setMainWindow(this);
+    ui->modelPresets->setMainWindow(this);
+    ui->skyPresets->setMainWindow(this);
 
     camControl = nullptr;
     vrMode = false;
@@ -140,36 +147,85 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(sceneView, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
             this, SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
-    connect(ui->cameraTypeCombo, SIGNAL(currentTextChanged(QString)),
-            this, SLOT(cameraTypeChanged(QString)));
+//    connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
 
-    connect(ui->transformCombo, SIGNAL(currentTextChanged(QString)),
-            this, SLOT(transformOrientationChanged(QString)));
+    // toolbar stuff
+    connect(ui->actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
+    connect(ui->actionRotate,       SIGNAL(triggered(bool)), SLOT(rotateGizmo()));
+    connect(ui->actionScale,        SIGNAL(triggered(bool)), SLOT(scaleGizmo()));
 
-    connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
+    transformGroup = new QActionGroup(this);
+    transformGroup->addAction(ui->actionTranslate);
+    transformGroup->addAction(ui->actionRotate);
+    transformGroup->addAction(ui->actionScale);
+
+    connect(ui->actionGlobalSpace,  SIGNAL(triggered(bool)), SLOT(useGlobalTransform()));
+    connect(ui->actionLocalSpace,   SIGNAL(triggered(bool)), SLOT(useLocalTransform()));
+
+    transformSpaceGroup = new QActionGroup(this);
+    transformSpaceGroup->addAction(ui->actionGlobalSpace);
+    transformSpaceGroup->addAction(ui->actionLocalSpace);
+    ui->actionGlobalSpace->setChecked(true);
+
+    connect(ui->actionFreeCamera,   SIGNAL(triggered(bool)), SLOT(useFreeCamera()));
+    connect(ui->actionArcballCam,   SIGNAL(triggered(bool)), SLOT(useArcballCam()));
+
+    cameraGroup = new QActionGroup(this);
+    cameraGroup->addAction(ui->actionFreeCamera);
+    cameraGroup->addAction(ui->actionArcballCam);
+    ui->actionFreeCamera->setChecked(true);
+
+    // this acts as a spacer
+    QWidget* empty = new QWidget();
+    empty->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding);
+    ui->ToolBar->addWidget(empty);
+
+    vrButton = new QPushButton();
+    QIcon ico(":/app/icons/virtual-reality.svg");
+    vrButton->setIcon(ico);
+    vrButton->setObjectName("vrButton");
+    //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
+    ui->ToolBar->addWidget(vrButton);
 
 //    ui->AnimationDock->hide();
-//    ui->PresetsDock_2->hide();
+//    ui->PresetsDock->hide();
 }
 
 void MainWindow::setupVrUi()
 {
-    ui->vrBtn->setToolTipDuration(0);
+//    ui->vrBtn->setToolTipDuration(0);
+//    if (sceneView->isVrSupported()) {
+//        ui->vrBtn->setEnabled(true);
+//        ui->vrBtn->setToolTip("Press to view the scene in vr");
+//        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Default);
+//    } else {
+//        ui->vrBtn->setEnabled(false);
+//        ui->vrBtn->setToolTip("No Oculus device detected");
+//        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Disabled);
+//    }
+
+//    connect(ui->vrBtn, SIGNAL(clicked(bool)), SLOT(vrButtonClicked(bool)));
+
+//    //needed to apply changes
+//    ui->vrBtn->style()->unpolish(ui->vrBtn);
+//    ui->vrBtn->style()->polish(ui->vrBtn);
+
+    vrButton->setToolTipDuration(0);
     if (sceneView->isVrSupported()) {
-        ui->vrBtn->setEnabled(true);
-        ui->vrBtn->setToolTip("Press to view the scene in vr");
-        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Default);
+        vrButton->setEnabled(true);
+        vrButton->setToolTip("Press to view the scene in vr");
+        vrButton->setProperty("vrMode", (int) VRButtonMode::Default);
     } else {
-        ui->vrBtn->setEnabled(false);
-        ui->vrBtn->setToolTip("No Oculus device detected");
-        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Disabled);
+        vrButton->setEnabled(false);
+        vrButton->setToolTip("No Oculus device detected");
+        vrButton->setProperty("vrMode", (int) VRButtonMode::Disabled);
     }
 
-    connect(ui->vrBtn, SIGNAL(clicked(bool)), SLOT(vrButtonClicked(bool)));
+    connect(vrButton, SIGNAL(clicked(bool)), SLOT(vrButtonClicked(bool)));
 
     //needed to apply changes
-    ui->vrBtn->style()->unpolish(ui->vrBtn);
-    ui->vrBtn->style()->polish(ui->vrBtn);
+    vrButton->style()->unpolish(vrButton);
+    vrButton->style()->polish(vrButton);
 }
 
 /**
@@ -185,18 +241,18 @@ void MainWindow::vrButtonClicked(bool)
             sceneView->setViewportMode(ViewportMode::VR);
 
             //highlight button blue
-            ui->vrBtn->setProperty("vrMode",(int)VRButtonMode::VRMode);
+            vrButton->setProperty("vrMode",(int)VRButtonMode::VRMode);
         } else {
             sceneView->setViewportMode(ViewportMode::Editor);
 
             //return button back to normal color
-            ui->vrBtn->setProperty("vrMode",(int)VRButtonMode::Default);
+            vrButton->setProperty("vrMode",(int)VRButtonMode::Default);
         }
     }
 
     //needed to apply changes
-    ui->vrBtn->style()->unpolish(ui->vrBtn);
-    ui->vrBtn->style()->polish(ui->vrBtn);
+    vrButton->style()->unpolish(vrButton);
+    vrButton->style()->polish(vrButton);
 }
 
 iris::ScenePtr MainWindow::getScene()
@@ -230,8 +286,8 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     scene->setCamera(cam);
 
-    scene->setSkyColor(QColor(72, 72, 72, 255));
-    scene->setAmbientColor(QColor(72, 72, 72));
+    scene->setSkyColor(QColor(72, 72, 72));
+    scene->setAmbientColor(QColor(96, 96, 96));
 
     // second node
     auto node = iris::MeshNode::create();
@@ -269,8 +325,10 @@ iris::ScenePtr MainWindow::createDefaultScene()
     plight->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
 
     // fog params
-    scene->fogColor = QColor(72, 72, 72, 255);
+    scene->fogColor = QColor(72, 72, 72);
     scene->shadowEnabled = true;
+
+    sceneNodeSelected(scene->rootNode);
 
     return scene;
 }
@@ -279,43 +337,24 @@ iris::ScenePtr MainWindow::createDefaultScene()
 void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
 {
 
-    auto m_logger = new QOpenGLDebugLogger( this );
+//    auto m_logger = new QOpenGLDebugLogger( this );
 
-    connect( m_logger, &QOpenGLDebugLogger::messageLogged,this,
-             [](QOpenGLDebugMessage msg)
-    {
-        auto message = msg.message();
-        //qDebug() << message;
-    });
+//    connect( m_logger, &QOpenGLDebugLogger::messageLogged,this,
+//             [](QOpenGLDebugMessage msg)
+//    {
+//        auto message = msg.message();
+//        //qDebug() << message;
+//    });
 
-    if ( m_logger->initialize() ) {
-        m_logger->startLogging( QOpenGLDebugLogger::SynchronousLogging );
-        m_logger->enableMessages();
-    }
-
+//    if ( m_logger->initialize() ) {
+//        m_logger->startLogging( QOpenGLDebugLogger::SynchronousLogging );
+//        m_logger->enableMessages();
+//    }
 
     auto scene = this->createDefaultScene();
 
     this->setScene(scene);
     setupVrUi();
-}
-
-void MainWindow::cameraTypeChanged(QString type)
-{
-    if (type == "Free") {
-        sceneView->setFreeCameraMode();
-    } else {
-        sceneView->setArcBallCameraMode();
-    }
-}
-
-void MainWindow::transformOrientationChanged(QString type)
-{
-    if (type == "Local") {
-        sceneView->setTransformOrientationLocal();
-    } else {
-        sceneView->setTransformOrientationGlobal();
-    }
 }
 
 void MainWindow::setSettingsManager(SettingsManager* settings)
@@ -1000,31 +1039,51 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::on_translateGizmoBtn_clicked()
+void MainWindow::useFreeCamera()
+{
+    sceneView->setFreeCameraMode();
+}
+
+void MainWindow::useArcballCam()
+{
+    sceneView->setArcBallCameraMode();
+}
+
+void MainWindow::useLocalTransform()
+{
+    sceneView->setTransformOrientationLocal();
+}
+
+void MainWindow::useGlobalTransform()
+{
+    sceneView->setTransformOrientationGlobal();
+}
+
+void MainWindow::translateGizmo()
 {
     sceneView->setGizmoLoc();
 }
 
-void MainWindow::on_scaleGizmoBtn_clicked()
-{
-    sceneView->setGizmoScale();
-}
-
-void MainWindow::on_rotateGizmoBtn_clicked()
+void MainWindow::rotateGizmo()
 {
     sceneView->setGizmoRot();
 }
 
-void MainWindow::onPlaySceneButton()
+void MainWindow::scaleGizmo()
 {
-    if(ui->playSceneBtn->text() == "PLAY")
-    {
-        this->sceneView->startPlayingScene();
-        ui->playSceneBtn->setText("STOP");
-    }
-    else
-    {
-        this->sceneView->stopPlayingScene();
-        ui->playSceneBtn->setText("PLAY");
-    }
+    sceneView->setGizmoScale();
 }
+
+//void MainWindow::onPlaySceneButton()
+//{
+//    if(ui->playSceneBtn->text() == "PLAY")
+//    {
+//        this->sceneView->startPlayingScene();
+//        ui->playSceneBtn->setText("STOP");
+//    }
+//    else
+//    {
+//        this->sceneView->stopPlayingScene();
+//        ui->playSceneBtn->setText("PLAY");
+//    }
+//}
