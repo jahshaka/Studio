@@ -83,7 +83,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 
             nodePropView = new NodePropertyWidget();
             nodePropView->setContentTitle("Node Properties");
-            nodePropView->setMaxHeight(700);
+//            nodePropView->setMaxHeight(700);
 
             //light blade
             lightPropView = new LightPropertyWidget();
@@ -96,7 +96,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 
             emitterPropView = new EmitterPropertyWidget();
             emitterPropView->setContentTitle("Emitter");
-            emitterPropView->setMaxHeight(700);
+//            emitterPropView->setMaxHeight(700);
 
             this->sceneNode = sceneNode;
             nodePropView->setSceneNode(sceneNode);

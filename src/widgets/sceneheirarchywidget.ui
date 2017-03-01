@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>258</width>
-    <height>741</height>
+    <width>256</width>
+    <height>256</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -44,12 +44,13 @@
      </property>
      <property name="styleSheet">
       <string notr="true">QWidget#widget{
-border: none;
+	border: none;
+	background-color: #303030;
 }</string>
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout">
       <property name="spacing">
-       <number>3</number>
+       <number>2</number>
       </property>
       <property name="leftMargin">
        <number>0</number>
@@ -76,6 +77,9 @@ border: none;
           <width>96</width>
           <height>0</height>
          </size>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">border: 0</string>
         </property>
         <property name="text">
          <string>Add</string>
@@ -109,6 +113,9 @@ border: none;
           <height>0</height>
          </size>
         </property>
+        <property name="styleSheet">
+         <string notr="true">border: 0</string>
+        </property>
         <property name="text">
          <string>Delete</string>
         </property>
@@ -136,6 +143,12 @@ border: none;
    </item>
    <item>
     <widget class="QTreeWidget" name="sceneTree">
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <property name="animated">
+      <bool>true</bool>
+     </property>
      <attribute name="headerVisible">
       <bool>false</bool>
      </attribute>

@@ -335,41 +335,6 @@ QWidget#controls &gt; QToolButton:hover {
           </widget>
          </item>
          <item>
-          <widget class="QPushButton" name="playAll">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="minimumSize">
-            <size>
-             <width>32</width>
-             <height>32</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>16777215</width>
-             <height>16777215</height>
-            </size>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-           <property name="icon">
-            <iconset resource="../../icons.qrc">
-             <normaloff>:/app/icons/play.svg</normaloff>:/app/icons/play.svg</iconset>
-           </property>
-           <property name="iconSize">
-            <size>
-             <width>12</width>
-             <height>12</height>
-            </size>
-           </property>
-          </widget>
-         </item>
-         <item>
           <widget class="QToolButton" name="insertFrame">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">

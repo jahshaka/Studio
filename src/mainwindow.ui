@@ -22,10 +22,64 @@
   </property>
   <property name="styleSheet">
    <string notr="true">* {
-	font-family: &quot;Open Sans&quot;;
-	font-weight: bold;
-    color: #DEDEDE;
+    color: #BBB;
 }
+
+QMenu {
+    background-color: #212121;
+}
+
+QMenu::item {
+    /* sets background of menu item. set this to something non-transparent
+        if you want menu color and menu item color to be different */
+    background-color: #212121;
+}
+
+QMenu::item:selected { /* when user selects item using mouse or keyboard */
+    background-color: #3498db;
+}
+
+QMenu::indicator::unchecked {
+    background-color: #303030;
+    border: 3px solid #212121;
+}
+
+QMenu::indicator::checked {
+    background-color: #bbb;
+    border: 3px solid #212121;
+}
+
+/*
+*
+* Tree View Widget ============================================================================
+*
+*/
+
+QTreeView::item {
+   padding: 2px;
+}
+
+QTreeView {
+	selection-background-color: #3498db;
+}
+
+/*QTreeView::item:hover {
+    background: #42b5e8;
+}*/
+
+/*QTreeView::item:selected {
+    background: #BBB;
+	color: green;
+}*/
+
+QTreeView::item:selected:active{
+    background-color: #3498db;
+	color: #BBB;
+}
+
+/*QTreeView::item:selected:!active {
+    background: #BBB;
+}*/
 
 /*
 *=== DropDown Style Settings ==================================================
@@ -33,7 +87,7 @@
 
 QComboBox {
     background: #4D4D4D;
-	color: white;
+	color: #BBB;
 	border:  0;
 }
 
@@ -60,9 +114,9 @@ QDoubleSpinBox {
    	padding-right: 15px; /* make room for the arrows */
     border-width: 3px;
 	/*border-right: 18px solid #1e1e1e; /* hide a 1px gap */
-	background-color: #4d4d4d;
+	background-color: #404040;
     /*border-image: url(:/app/images/frame.png) 4; */
-    color: black;
+    color: #BBB;
 }
 
 QDoubleSpinBox:hover {
@@ -70,7 +124,7 @@ QDoubleSpinBox:hover {
 }
 
 QDoubleSpinBox::up-button {
-	background-color: #1e1e1e;
+	background-color: #4d4d4d;
     subcontrol-origin: border;
     subcontrol-position: top right; /* position at the top right corner */
 
@@ -88,7 +142,7 @@ QDoubleSpinBox::up-button:pressed {
 }
 
 QDoubleSpinBox::down-button {
-	background-color: #1e1e1e;
+	background-color: #4d4d4d;
     subcontrol-origin: border;
     subcontrol-position: bottom right; /* position at bottom right corner */
 	margin-top: -1px;
@@ -188,7 +242,7 @@ QWidget#sceneTree {
 }
 
 QMainWindow {
-	/*background-color: red;*/
+	background-color: #1e1e1e;
 }
 
 QDockWidget::title {
@@ -284,14 +338,8 @@ QToolBar::separator:horizontal {
     margin-left: 8px;
 }
 
-QTabWidget {
-    background-color: red;
-    border:1px soild yellow;
-}
-
 QTabWidget::tab-bar {
     /*min-width:  48px; */
-    background-color: red;
 }
 
 QTabBar::close-button {
@@ -300,8 +348,6 @@ QTabBar::close-button {
 }
 
 QTabWidget::pane {
-    /*padding: 5px;*/
-   /* margin:12px; */
 	margin: -1px;
 	border-top: 1px solid #1e1e1e;
 }
@@ -312,7 +358,7 @@ QTabBar::tab:selected {
 }
 
 QTabBar::tab {
-   background-color: #4d4d4d;
+	background-color: #4d4d4d;
     min-width: 96px;
     min-height: 24px;
     padding-bottom: 2px;
@@ -323,7 +369,7 @@ QTabBar::tab {
 
 /* special override */
 QWidget#addBtn, QWidget#deleteBtn {
-	background-color: #303030;
+	background-color: #4D4D4D;
 }
 
 QWidget#addBtn:hover, QWidget#deleteBtn:hover {
@@ -543,23 +589,6 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     border: 1px solid #3498db;
 }</string>
     </property>
-    <layout class="QVBoxLayout" name="verticalLayout">
-     <property name="spacing">
-      <number>0</number>
-     </property>
-     <property name="leftMargin">
-      <number>0</number>
-     </property>
-     <property name="topMargin">
-      <number>0</number>
-     </property>
-     <property name="rightMargin">
-      <number>0</number>
-     </property>
-     <property name="bottomMargin">
-      <number>0</number>
-     </property>
-    </layout>
    </widget>
   </widget>
   <widget class="QDockWidget" name="AnimationDock">
@@ -571,8 +600,8 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
    </property>
    <property name="minimumSize">
     <size>
-     <width>61</width>
-     <height>36</height>
+     <width>63</width>
+     <height>38</height>
     </size>
    </property>
    <property name="maximumSize">
@@ -705,7 +734,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>302</height>
+          <height>304</height>
          </rect>
         </property>
         <property name="styleSheet">
@@ -717,192 +746,9 @@ QWidget#animationWidgetContents:hover {
     </layout>
    </widget>
   </widget>
-  <widget class="QDockWidget" name="PresetsDock">
-   <property name="sizePolicy">
-    <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-     <horstretch>0</horstretch>
-     <verstretch>0</verstretch>
-    </sizepolicy>
-   </property>
-   <property name="minimumSize">
-    <size>
-     <width>398</width>
-     <height>69</height>
-    </size>
-   </property>
-   <property name="styleSheet">
-    <string notr="true">#objectview {
-	border: 1px solid #212121;
-}</string>
-   </property>
-   <property name="features">
-    <set>QDockWidget::AllDockWidgetFeatures</set>
-   </property>
-   <property name="windowTitle">
-    <string>Presets</string>
-   </property>
-   <attribute name="dockWidgetArea">
-    <number>8</number>
-   </attribute>
-   <widget class="QWidget" name="Preset_Tabs_Layout">
-    <property name="sizePolicy">
-     <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-      <horstretch>0</horstretch>
-      <verstretch>0</verstretch>
-     </sizepolicy>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>0</width>
-      <height>0</height>
-     </size>
-    </property>
-    <property name="styleSheet">
-     <string notr="true">:hover {
-    border: 1px solid #3498db;
-}</string>
-    </property>
-    <layout class="QGridLayout" name="gridLayout_2">
-     <property name="leftMargin">
-      <number>1</number>
-     </property>
-     <property name="topMargin">
-      <number>1</number>
-     </property>
-     <property name="rightMargin">
-      <number>1</number>
-     </property>
-     <property name="bottomMargin">
-      <number>1</number>
-     </property>
-     <property name="spacing">
-      <number>7</number>
-     </property>
-     <item row="0" column="0">
-      <widget class="QTabWidget" name="tabWidget">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>396</width>
-         <height>0</height>
-        </size>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">border: 0;</string>
-       </property>
-       <property name="currentIndex">
-        <number>0</number>
-       </property>
-       <widget class="QWidget" name="MP_Layout">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>0</height>
-         </size>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">border: 0</string>
-        </property>
-        <attribute name="title">
-         <string>Materials</string>
-        </attribute>
-        <layout class="QGridLayout" name="gridLayout_6">
-         <property name="leftMargin">
-          <number>0</number>
-         </property>
-         <property name="topMargin">
-          <number>0</number>
-         </property>
-         <property name="rightMargin">
-          <number>0</number>
-         </property>
-         <property name="bottomMargin">
-          <number>0</number>
-         </property>
-         <item row="0" column="0">
-          <widget class="MaterialSets" name="materialPresets" native="true">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="styleSheet">
-            <string notr="true"/>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-       <widget class="QWidget" name="S_Layout">
-        <property name="styleSheet">
-         <string notr="true">border: 0</string>
-        </property>
-        <attribute name="title">
-         <string>Skies</string>
-        </attribute>
-        <layout class="QGridLayout" name="gridLayout_4">
-         <property name="leftMargin">
-          <number>0</number>
-         </property>
-         <property name="topMargin">
-          <number>0</number>
-         </property>
-         <property name="rightMargin">
-          <number>0</number>
-         </property>
-         <property name="bottomMargin">
-          <number>0</number>
-         </property>
-         <item row="0" column="0">
-          <widget class="SkyPresets" name="skyPresets" native="true"/>
-         </item>
-        </layout>
-       </widget>
-       <widget class="QWidget" name="M_Layout">
-        <property name="styleSheet">
-         <string notr="true">border: 0</string>
-        </property>
-        <attribute name="title">
-         <string>Models</string>
-        </attribute>
-        <layout class="QGridLayout" name="gridLayout_7">
-         <property name="leftMargin">
-          <number>0</number>
-         </property>
-         <property name="topMargin">
-          <number>0</number>
-         </property>
-         <property name="rightMargin">
-          <number>0</number>
-         </property>
-         <property name="bottomMargin">
-          <number>0</number>
-         </property>
-         <item row="0" column="0">
-          <widget class="ModelPresets" name="modelPresets" native="true"/>
-         </item>
-        </layout>
-       </widget>
-      </widget>
-     </item>
-    </layout>
-   </widget>
-  </widget>
   <widget class="QToolBar" name="ToolBar">
    <property name="windowTitle">
-    <string>toolBar</string>
+    <string>ToolBar</string>
    </property>
    <property name="styleSheet">
     <string notr="true">QToolButton
@@ -948,6 +794,148 @@ QToolButton:checked
    <addaction name="separator"/>
    <addaction name="actionFreeCamera"/>
    <addaction name="actionArcballCam"/>
+  </widget>
+  <widget class="QDockWidget" name="PresetsDock">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">background: #212121</string>
+   </property>
+   <property name="windowTitle">
+    <string>Presets</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>8</number>
+   </attribute>
+   <widget class="QWidget" name="dockContents">
+    <property name="sizePolicy">
+     <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+      <horstretch>0</horstretch>
+      <verstretch>0</verstretch>
+     </sizepolicy>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>396</width>
+      <height>0</height>
+     </size>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <layout class="QGridLayout" name="gridLayout_2">
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
+     <property name="bottomMargin">
+      <number>0</number>
+     </property>
+     <item row="0" column="0">
+      <widget class="QTabWidget" name="tabWidget">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="currentIndex">
+        <number>0</number>
+       </property>
+       <widget class="QWidget" name="MP_Layout">
+        <attribute name="title">
+         <string>Materials</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout_3">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item row="0" column="0">
+          <widget class="MaterialSets" name="materialPresets" native="true">
+           <property name="styleSheet">
+            <string notr="true">border: 0</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="S_Layout">
+        <attribute name="title">
+         <string>Skies</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout_6">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item row="0" column="0">
+          <widget class="SkyPresets" name="skyPresets" native="true">
+           <property name="styleSheet">
+            <string notr="true">border: 0</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="M_Layout">
+        <attribute name="title">
+         <string>Models</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout_4">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item row="0" column="0">
+          <widget class="ModelPresets" name="modelPresets" native="true">
+           <property name="styleSheet">
+            <string notr="true">border: 0</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </widget>
+     </item>
+    </layout>
+   </widget>
   </widget>
   <action name="actionSave">
    <property name="text">
@@ -1007,7 +995,7 @@ QToolButton:checked
   <action name="actionUndo">
    <property name="icon">
     <iconset resource="../icons.qrc">
-     <normaloff>:/app/icons/undo.svg</normaloff>:/app/icons/undo.svg</iconset>
+     <normaloff>:/app/icons/undo.png</normaloff>:/app/icons/undo.png</iconset>
    </property>
    <property name="text">
     <string>Undo</string>
@@ -1034,7 +1022,7 @@ QToolButton:checked
      <selectedon>:/app/icons/tranlate arrow.svg</selectedon>:/app/icons/tranlate arrow.svg</iconset>
    </property>
    <property name="text">
-    <string>Translate</string>
+    <string>Translate Tool</string>
    </property>
   </action>
   <action name="actionRotate">
@@ -1046,7 +1034,7 @@ QToolButton:checked
      <normaloff>:/app/icons/rotate-to-right.svg</normaloff>:/app/icons/rotate-to-right.svg</iconset>
    </property>
    <property name="text">
-    <string>Rotate</string>
+    <string>Rotate Tool</string>
    </property>
   </action>
   <action name="actionScale">
@@ -1058,7 +1046,7 @@ QToolButton:checked
      <normaloff>:/app/icons/expand-arrows.svg</normaloff>:/app/icons/expand-arrows.svg</iconset>
    </property>
    <property name="text">
-    <string>Scale</string>
+    <string>Scale Tool</string>
    </property>
   </action>
   <action name="actionGlobalSpace">
@@ -1070,7 +1058,7 @@ QToolButton:checked
      <normaloff>:/app/icons/world.svg</normaloff>:/app/icons/world.svg</iconset>
    </property>
    <property name="text">
-    <string>GlobalSpace</string>
+    <string>Global Space</string>
    </property>
   </action>
   <action name="actionLocalSpace">
@@ -1082,7 +1070,7 @@ QToolButton:checked
      <normaloff>:/app/icons/sceneobject.svg</normaloff>:/app/icons/sceneobject.svg</iconset>
    </property>
    <property name="text">
-    <string>localSpace</string>
+    <string>Local Space</string>
    </property>
   </action>
   <action name="actionFreeCamera">
@@ -1094,7 +1082,7 @@ QToolButton:checked
      <normaloff>:/app/icons/people.svg</normaloff>:/app/icons/people.svg</iconset>
    </property>
    <property name="text">
-    <string>freeCamera</string>
+    <string>Free Camera</string>
    </property>
   </action>
   <action name="actionArcballCam">
@@ -1106,10 +1094,10 @@ QToolButton:checked
      <normaloff>:/app/icons/local.svg</normaloff>:/app/icons/local.svg</iconset>
    </property>
    <property name="text">
-    <string>arcballCam</string>
+    <string>Arcball Camera</string>
    </property>
    <property name="toolTip">
-    <string>arcballCam</string>
+    <string>Arcball Camera</string>
    </property>
   </action>
  </widget>
@@ -1139,15 +1127,15 @@ QToolButton:checked
    <container>1</container>
   </customwidget>
   <customwidget>
-   <class>SkyPresets</class>
-   <extends>QWidget</extends>
-   <header>src/widgets/skypresets.h</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
    <class>ModelPresets</class>
    <extends>QWidget</extends>
    <header>src/widgets/modelpresets.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>SkyPresets</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/skypresets.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

@@ -20,12 +20,12 @@
 
 QSlider::groove:horizontal {
    /* height: 8px; /* the groove expands to the size of the slider by default. by giving it a height, it has a fixed size */
-    background: #4d4d4d;
+    background: #404040;
 }
 
 QSlider::handle:horizontal {
     background: #AFAFAF;
-    width: 15px;
+    width: 10px;
     margin: -2px 0; /* handle is placed by default on the contents rect of the groove. Expand outside the groove */
 }</string>
   </property>

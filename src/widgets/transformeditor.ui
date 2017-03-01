@@ -25,9 +25,6 @@
 }</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
-   <property name="spacing">
-    <number>0</number>
-   </property>
    <item>
     <widget class="QWidget" name="widget_5" native="true">
      <property name="minimumSize">
@@ -79,13 +76,13 @@
         <property name="minimumSize">
          <size>
           <width>64</width>
-          <height>20</height>
+          <height>0</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
           <width>16777215</width>
-          <height>20</height>
+          <height>24</height>
          </size>
         </property>
         <property name="styleSheet">
@@ -107,6 +104,37 @@
          <property name="spacing">
           <number>0</number>
          </property>
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_4">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="font">
+            <font>
+             <weight>75</weight>
+             <bold>true</bold>
+            </font>
+           </property>
+           <property name="text">
+            <string>X</string>
+           </property>
+           <property name="textFormat">
+            <enum>Qt::RichText</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
         </layout>
        </widget>
       </item>
@@ -115,13 +143,13 @@
         <property name="minimumSize">
          <size>
           <width>64</width>
-          <height>20</height>
+          <height>0</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
           <width>16777215</width>
-          <height>20</height>
+          <height>16777215</height>
          </size>
         </property>
         <property name="styleSheet">
@@ -145,6 +173,12 @@
          </property>
          <item row="0" column="0">
           <widget class="QLabel" name="label_2">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="font">
             <font>
              <weight>75</weight>
@@ -170,13 +204,13 @@
         <property name="minimumSize">
          <size>
           <width>64</width>
-          <height>20</height>
+          <height>0</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
           <width>16777215</width>
-          <height>20</height>
+          <height>16777215</height>
          </size>
         </property>
         <property name="styleSheet">
@@ -195,11 +229,14 @@
          <property name="bottomMargin">
           <number>0</number>
          </property>
-         <property name="spacing">
-          <number>0</number>
-         </property>
          <item row="0" column="0">
           <widget class="QLabel" name="label_3">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="font">
             <font>
              <weight>75</weight>
@@ -259,7 +296,7 @@
         <property name="minimumSize">
          <size>
           <width>64</width>
-          <height>24</height>
+          <height>32</height>
          </size>
         </property>
         <property name="styleSheet">
@@ -281,7 +318,7 @@
         <property name="minimumSize">
          <size>
           <width>64</width>
-          <height>24</height>
+          <height>32</height>
          </size>
         </property>
         <property name="minimum">
@@ -300,7 +337,7 @@
         <property name="minimumSize">
          <size>
           <width>64</width>
-          <height>24</height>
+          <height>32</height>
          </size>
         </property>
         <property name="minimum">
@@ -356,7 +393,7 @@
         <property name="minimumSize">
          <size>
           <width>64</width>
-          <height>24</height>
+          <height>32</height>
          </size>
         </property>
         <property name="minimum">
@@ -375,7 +412,7 @@
         <property name="minimumSize">
          <size>
           <width>64</width>
-          <height>24</height>
+          <height>32</height>
          </size>
         </property>
         <property name="minimum">
@@ -394,7 +431,7 @@
         <property name="minimumSize">
          <size>
           <width>64</width>
-          <height>24</height>
+          <height>32</height>
          </size>
         </property>
         <property name="minimum">
@@ -450,7 +487,7 @@
         <property name="minimumSize">
          <size>
           <width>64</width>
-          <height>24</height>
+          <height>32</height>
          </size>
         </property>
         <property name="minimum">
@@ -469,7 +506,7 @@
         <property name="minimumSize">
          <size>
           <width>64</width>
-          <height>24</height>
+          <height>32</height>
          </size>
         </property>
         <property name="minimum">
@@ -488,7 +525,7 @@
         <property name="minimumSize">
          <size>
           <width>64</width>
-          <height>24</height>
+          <height>32</height>
          </size>
         </property>
         <property name="minimum">

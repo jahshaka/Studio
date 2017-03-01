@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "irisgl/src/animation/keyframeset.h"
 #include "irisgl/src/animation/keyframeanimation.h"
 
+#include <QFontDatabase>
 #include <QOpenGLContext>
 #include <qstandarditemmodel.h>
 #include <QKeyEvent>
@@ -90,14 +91,20 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     this->setWindowTitle("Jahshaka VR");
 
+    int fontId = QFontDatabase::addApplicationFont(getAbsoluteAssetPath("app/fonts/OpenSans.ttf"));
+    QString family = QFontDatabase::applicationFontFamilies(fontId).at(0);
+    QFont font = QFont(family);
+    font.setPointSizeF(9);
+    QApplication::setFont(font);
+
     settings = SettingsManager::getDefaultManager();
     prefsDialog = new PreferencesDialog(settings);
     aboutDialog = new AboutDialog();
     licenseDialog = new LicenseDialog();
 
 //    ui->animationtimeline->setMainWindow(this);
-    ui->modelPresets->setMainWindow(this);
     ui->materialPresets->setMainWindow(this);
+    ui->modelPresets->setMainWindow(this);
     ui->skyPresets->setMainWindow(this);
 
     camControl = nullptr;
@@ -319,7 +326,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     // fog params
     scene->fogColor = QColor(72, 72, 72);
-    scene->shadowEnabled = false;
+    scene->shadowEnabled = true;
 
     sceneNodeSelected(scene->rootNode);
 
@@ -330,20 +337,19 @@ iris::ScenePtr MainWindow::createDefaultScene()
 void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
 {
 
-    auto m_logger = new QOpenGLDebugLogger( this );
+//    auto m_logger = new QOpenGLDebugLogger( this );
 
-    connect( m_logger, &QOpenGLDebugLogger::messageLogged,this,
-             [](QOpenGLDebugMessage msg)
-    {
-        auto message = msg.message();
-        //qDebug() << message;
-    });
+//    connect( m_logger, &QOpenGLDebugLogger::messageLogged,this,
+//             [](QOpenGLDebugMessage msg)
+//    {
+//        auto message = msg.message();
+//        //qDebug() << message;
+//    });
 
-    if ( m_logger->initialize() ) {
-        m_logger->startLogging( QOpenGLDebugLogger::SynchronousLogging );
-        m_logger->enableMessages();
-    }
-
+//    if ( m_logger->initialize() ) {
+//        m_logger->startLogging( QOpenGLDebugLogger::SynchronousLogging );
+//        m_logger->enableMessages();
+//    }
 
     auto scene = this->createDefaultScene();
 

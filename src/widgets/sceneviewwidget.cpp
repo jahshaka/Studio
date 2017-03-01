@@ -145,8 +145,10 @@ void SceneViewWidget::updateScene(bool once)
 {
     // update and draw the 3d manipulation gizmo
     if (!!viewportGizmo->lastSelectedNode) {
-        viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
-        viewportGizmo->render(editorCam->viewMatrix, editorCam->projMatrix);
+        if (!viewportGizmo->lastSelectedNode->isRootNode()) {
+            viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
+            viewportGizmo->render(editorCam->viewMatrix, editorCam->projMatrix);
+        }
     }
 }
 

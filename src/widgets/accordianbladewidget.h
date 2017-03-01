@@ -66,7 +66,6 @@ public:
     LabelWidget* addLabel(QString name);
 
     void expand();
-    void expand2();
 
     HFloatSlider* addValueSlider(QString label, float start, float end);
 
