@@ -49,6 +49,7 @@ class Animation;
 class FloatKeyFrame;
 class ViewerMaterial;
 class RenderItem;
+class PickingResult;
 template<typename T> class Key;
 typedef Key<float> FloatKey;
 

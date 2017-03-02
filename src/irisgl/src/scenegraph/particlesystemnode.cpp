@@ -175,7 +175,7 @@ void ParticleSystemNode::update(float delta) {
         // in the future we can call behavior management here, add more forces such as wind
         if (dissipate && p->elapsedTime > 0) {
             if (dissipateInv) {
-                p->scale = lerp((p->elapsedTime / p->lifeLength), 0, particleScale);
+                p->scale = MathHelper::lerp((p->elapsedTime / p->lifeLength), 0, particleScale);
             } else {
                 p->scale *= 1.0f - (p->elapsedTime / p->lifeLength);
             }

@@ -81,7 +81,8 @@ SOURCES += \
     $$PWD/src/scenegraph/viewernode.cpp \
     $$PWD/src/materials/viewermaterial.cpp \
     $$PWD/src/scenegraph/particlesystemnode.cpp \
-    $$PWD/src/vr/vrmanager.cpp
+    $$PWD/src/vr/vrmanager.cpp \
+    $$PWD/src/math/mathhelper.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

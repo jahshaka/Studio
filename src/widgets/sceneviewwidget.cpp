@@ -32,6 +32,8 @@ For more information see the LICENSE file
 #include "../irisgl/src/graphics/viewport.h"
 #include "../irisgl/src/graphics/utils/fullscreenquad.h"
 #include "../irisgl/src/math/intersectionhelper.h"
+#include "../irisgl/src/vr/vrmanager.h"
+#include "../irisgl/src/vr/vrdevice.h"
 
 #include "../editor/cameracontrollerbase.h"
 #include "../editor/editorcameracontroller.h"
@@ -145,7 +147,7 @@ void SceneViewWidget::updateScene(bool once)
 {
     // update and draw the 3d manipulation gizmo
     if (!!viewportGizmo->lastSelectedNode) {
-        if (!viewportGizmo->lastSelectedNode->isRootNode()) {
+        if (viewportMode != ViewportMode::VR) {
             viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
             viewportGizmo->render(editorCam->viewMatrix, editorCam->projMatrix);
         }
@@ -179,6 +181,18 @@ void SceneViewWidget::paintGL()
 {
     makeCurrent();
 
+    if(iris::VrManager::getDefaultDevice()->isHeadMounted() &&
+            viewportMode != ViewportMode::VR)
+    {
+        // set to vr mode automatically if a headset is detected
+        this->setViewportMode(ViewportMode::VR);
+    }
+    else if(!iris::VrManager::getDefaultDevice()->isHeadMounted() &&
+            viewportMode == ViewportMode::VR)
+    {
+        this->setViewportMode(ViewportMode::Editor);
+    }
+
     renderScene();
 }
 
@@ -191,14 +205,16 @@ void SceneViewWidget::renderScene()
     elapsedTimer->restart();
 
     if (!!renderer && !!scene) {
-        this->camController->update(dt);
 
+        this->camController->update(dt);
         if(playScene)
         {
             animTime += dt;
             scene->updateSceneAnimation(animTime);
         }
+
         scene->update(dt);
+
 
         if (viewportMode == ViewportMode::Editor) {
             renderer->renderScene(dt, viewport);

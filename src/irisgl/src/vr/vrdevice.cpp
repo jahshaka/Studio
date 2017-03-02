@@ -67,6 +67,16 @@ QVector2D VrTouchController::GetThumbstick()
     return QVector2D(value.x, value.y);
 }
 
+float VrTouchController::getIndexTrigger()
+{
+    return inputState.IndexTrigger[index];
+}
+
+float VrTouchController::getHandTrigger()
+{
+    return inputState.HandTrigger[index];
+}
+
 VrDevice::VrDevice()
 {
     this->gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
@@ -332,6 +342,15 @@ void VrDevice::endEye(int eye)
     gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
 
     ovr_CommitTextureSwapChain(session, vr_textureChain[eye]);
+}
+
+bool VrDevice::isHeadMounted()
+{
+    ovrSessionStatus sessionStatus;
+
+    ovr_GetSessionStatus(session, &sessionStatus);
+    //qDebug() <<"tracking state: "<< sessionStatus;
+    return sessionStatus.HmdMounted;
 }
 
 QMatrix4x4 VrDevice::getEyeViewMatrix(int eye, QVector3D pivot, QMatrix4x4 transform)

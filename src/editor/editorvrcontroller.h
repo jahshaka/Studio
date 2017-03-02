@@ -3,6 +3,7 @@
 
 #include "../irisgl/src/irisglfwd.h"
 #include "cameracontrollerbase.h"
+#include <QMatrix4x4>
 
 class EditorVrController : public CameraControllerBase
 {
@@ -22,6 +23,11 @@ public:
     iris::SceneNodePtr leftPickedNode;
     iris::SceneNodePtr rightPickedNode;
 
+    // These are the offsets from the controllers to the
+    // selected object
+    QMatrix4x4 leftNodeOffset;
+    QMatrix4x4 rightNodeOffset;
+
     //iris::SceneNodePtr tracker;
     iris::ScenePtr scene;
 
@@ -35,10 +41,10 @@ public:
 
 private:
     /*
-     * Does a ray casy to the scene
+     * Does a ray cast to the scene
      * Returns nearest object hit in the raycast
      */
-    float rayCastToScene(QMatrix4x4 handMatrix);
+    bool rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResult& result);
 };
 
 #endif // EDITORVRCONTROLLER_H

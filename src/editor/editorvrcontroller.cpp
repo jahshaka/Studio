@@ -8,6 +8,7 @@
 #include "../irisgl/src/core/scene.h"
 #include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/core/irisutils.h"
+#include "../irisgl/src/math/mathhelper.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../core/keyboardstate.h"
 #include <QtMath>
@@ -109,7 +110,7 @@ void EditorVrController::update(float dt)
     world.setToIdentity();
     world.translate(device->getHandPosition(0));
     world.rotate(device->getHandRotation(0));
-    world.scale(0.55f);
+    //world.scale(0.55f);
     leftHandRenderItem->worldMatrix = camera->globalTransform * world;
     leftBeamRenderItem->worldMatrix = leftHandRenderItem->worldMatrix;
 
@@ -117,23 +118,65 @@ void EditorVrController::update(float dt)
     world.setToIdentity();
     world.translate(device->getHandPosition(1));
     world.rotate(device->getHandRotation(1));
-    world.scale(0.55f);
+    //world.scale(0.55f);
     rightHandRenderItem->worldMatrix = camera->globalTransform * world;
     rightBeamRenderItem->worldMatrix = rightHandRenderItem->worldMatrix;
 
 
     // Handle picking and movement of picked objects
-    float dist = rayCastToScene(leftBeamRenderItem->worldMatrix);
-    leftBeamRenderItem->worldMatrix.scale(1, 1, dist * (1.0f / 0.55f ));
+    iris::PickingResult pick;
+    if (rayCastToScene(leftHandRenderItem->worldMatrix, pick)) {
+        auto dist = qSqrt(pick.distanceFromStartSqrd);
+        //qDebug() << "hit at dist: " << dist;
+        leftBeamRenderItem->worldMatrix.scale(1, 1, dist /* * (1.0f / 0.55f )*/);// todo: remove magic 0.55
 
-    //auto leftTouch = vrDevice->getTouchController(0);
-    //if (leftTouch->isButtonDown(iris::VrTouchInput::LeftIndexTrigger))
-    //    qDebug() << "trigger down";
-    //if (leftTouch->isButtonDown(iris::VrTouchInput::X))
-    //    qDebug() << "x down";
+        // Pick a node if the trigger is down
+        if (leftTouch->getIndexTrigger() > 0.1f && !leftPickedNode)
+        {
+            leftPickedNode = pick.hitNode;
 
-    dist = rayCastToScene(rightBeamRenderItem->worldMatrix);
-    rightBeamRenderItem->worldMatrix.scale(1, 1, dist  * (1.0f / 0.55f ));
+            //calculate offset
+            //leftNodeOffset = leftPickedNode->getGlobalTransform() * leftHandRenderItem->worldMatrix.inverted();
+            leftNodeOffset =  leftHandRenderItem->worldMatrix.inverted() * leftPickedNode->getGlobalTransform();
+        }
+
+    }
+    else
+    {
+        leftBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f ));
+    }
+
+    if(leftTouch->getIndexTrigger() < 0.1f && !!leftPickedNode)
+    {
+        // release node
+        leftPickedNode.clear();
+        leftNodeOffset.setToIdentity(); // why bother?
+    }
+
+    // update picked node
+    if (!!leftPickedNode) {
+        // calculate the global position
+        auto nodeGlobal = leftHandRenderItem->worldMatrix * leftNodeOffset;
+
+        // calculate position relative to parent
+        auto localTransform = leftPickedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
+
+        // decompose matrix to assign pos, rot and scale
+        iris::MathHelper::decomposeMatrix(localTransform,
+                                          leftPickedNode->pos,
+                                          leftPickedNode->rot,
+                                          leftPickedNode->scale);
+        leftPickedNode->rot.normalize();
+
+        // @todo: force recalculatioin of global transform
+        // leftPickedNode->update(0);// bad!
+        // it wil be updated a frame later, no need to stress over this
+    }
+
+    if (rayCastToScene(rightBeamRenderItem->worldMatrix, pick)) {
+        auto dist = qSqrt(pick.distanceFromStartSqrd);
+        rightBeamRenderItem->worldMatrix.scale(1, 1,(dist /*  * (1.0f / 0.55f )*/));// todo: remove magic 0.55
+    }
 
     scene->geometryRenderList.append(leftHandRenderItem);
     scene->geometryRenderList.append(rightHandRenderItem);
@@ -142,7 +185,7 @@ void EditorVrController::update(float dt)
     scene->geometryRenderList.append(rightBeamRenderItem);
 }
 
-float EditorVrController::rayCastToScene(QMatrix4x4 handMatrix)
+bool EditorVrController::rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResult& result)
 {
     QList<iris::PickingResult> hits;
 
@@ -151,13 +194,14 @@ float EditorVrController::rayCastToScene(QMatrix4x4 handMatrix)
                    hits);
 
     if(hits.size() == 0)
-        return 100.0f;
+        return false;
 
     qSort(hits.begin(), hits.end(), [](const iris::PickingResult& a, const iris::PickingResult& b){
         return a.distanceFromStartSqrd < b.distanceFromStartSqrd;
     });
 
-    return qSqrt(hits.first().distanceFromStartSqrd);
+    result = hits.first();
+    return true;
 }
 
 
