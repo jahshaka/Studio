@@ -94,7 +94,8 @@ SOURCES += src/main.cpp\
     src/dialogs/newprojectdialog.cpp \
     src/widgets/assetwidget.cpp \
     src/io/assetmanager.cpp \
-    src/widgets/assetpickerwidget.cpp
+    src/widgets/assetpickerwidget.cpp \
+    src/widgets/keyframelabel.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -178,7 +179,8 @@ HEADERS  += src/mainwindow.h \
     src/widgets/assetwidget.h \
     src/io/assetmanager.h \
     src/widgets/assetpickerwidget.h \
-    src/constants.h
+    src/constants.h \
+    src/widgets/keyframelabel.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -213,7 +215,8 @@ FORMS    += \
     src/dialogs/projectdialog.ui \
     src/dialogs/newprojectdialog.ui \
     src/widgets/assetwidget.ui \
-    src/widgets/assetpickerwidget.ui
+    src/widgets/assetpickerwidget.ui \
+    src/widgets/keyframelabel.ui
 
 RESOURCES += \
     shaders.qrc \
