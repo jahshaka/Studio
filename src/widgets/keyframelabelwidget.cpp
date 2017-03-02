@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include <QDebug>
 #include <QPainter>
 #include <QMouseEvent>
+#include <QVBoxLayout>
 #include <vector>
 //#include "../scenegraph/scenenodes.h"
 #include "../irisgl/src/core/scenenode.h"
@@ -20,63 +21,76 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/animation.h"
 #include "keyframelabelwidget.h"
+#include "keyframelabel.h"
+#include "ui_keyframelabelwidget.h"
 
 
 KeyFrameLabelWidget::KeyFrameLabelWidget(QWidget* parent):
-    QWidget(parent)
+    QWidget(parent),
+    ui(new Ui::KeyFrameLabelWidget)
 {
+    ui->setupUi(this);
+
     bgColor = QColor::fromRgb(50,50,50);
     itemColor = QColor::fromRgb(255,255,255);
 
     cursorPen = QPen(QColor::fromRgb(255,255,255));
     cursorPen.setWidth(3);
 
-    //obj = nullptr;
+    auto scrollBar = ui->scrollArea->verticalScrollBar();
+    //connect(scrollBar,SIGNAL(valueChanged(int)), this, SLOT(scrollValueChanged(int)));
+
+    ui->scrollAreaWidgetContents->installEventFilter(this);
 }
 
 void KeyFrameLabelWidget::setSceneNode(iris::SceneNodePtr node)
 {
     obj = node;
+    if (!!obj->animation) {
+        this->setKeyFrameSet(obj->animation->keyFrameSet);
+    } else {
+        this->clearKeyFrameSet();
+    }
 }
 
-void KeyFrameLabelWidget::paintEvent(QPaintEvent *painter)
+void KeyFrameLabelWidget::setKeyFrameSet(iris::KeyFrameSetPtr frameSet)
 {
-    Q_UNUSED(painter);
+    auto layout = new QVBoxLayout();
+    ui->scrollAreaWidgetContents->setLayout(layout);
 
-    int widgetWidth = this->geometry().width();
-    int widgetHeight = this->geometry().height();
-    QPainter paint(this);
-
-    //black bg
-    paint.fillRect(0,0,widgetWidth,widgetHeight,bgColor);
-
-    //draw each key frame set
-    int frameHeight = 24;
-    int ypos = 0;
-
-    if(!!obj && !!obj->animation)
-    {
-        auto keyFrames = obj->animation->keyFrameSet->keyFrames;
-        for(auto iter = keyFrames.begin();
-            iter!=keyFrames.end();
-            iter++)
-        {
-            drawFrameLabel(iter.key(),&paint,ypos+=frameHeight);
-        }
+    //todo: group widgets
+    for (auto frame : frameSet->keyFrames) {
 
     }
-
 }
 
-void KeyFrameLabelWidget::drawFrameLabel(QString name,QPainter* paint,int yBottom)
+void KeyFrameLabelWidget::clearKeyFrameSet()
 {
-    QPen pen(QColor::fromRgb(255,255,255));
-    pen.setWidth(14);
-    pen.setCapStyle(Qt::RoundCap);
-
-    paint->setPen(pen);
-
-    paint->drawText(0,yBottom-10,name);
-
+    auto layout = new QVBoxLayout();
+    ui->scrollAreaWidgetContents->setLayout(layout);
 }
+
+void KeyFrameLabelWidget::scrollValueChanged(int val)
+{
+    qDebug() << "Scroll value: " << val;
+    //dopeSheet->setScrollValue(val);
+}
+
+bool KeyFrameLabelWidget::eventFilter(QObject *obj, QEvent *evt)
+{
+    if (evt->type() == QEvent::Resize) {
+
+        auto resizeEvt = static_cast<QResizeEvent*>(evt);
+        qDebug() << resizeEvt->size();
+
+//        if (dopeSheet != nullptr) {
+//           dopeSheet->setContentHeight(resizeEvt->size().height());
+//        }
+
+        return true;
+    }
+
+    return false;
+}
+
 
