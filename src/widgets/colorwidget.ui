@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>CheckBoxProperty</class>
- <widget class="QWidget" name="CheckBoxProperty">
+ <class>ColorWidget</class>
+ <widget class="QWidget" name="ColorWidget">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -9,12 +9,6 @@
     <width>396</width>
     <height>24</height>
    </rect>
-  </property>
-  <property name="maximumSize">
-   <size>
-    <width>16777215</width>
-    <height>16777215</height>
-   </size>
   </property>
   <property name="windowTitle">
    <string>Form</string>
@@ -24,7 +18,7 @@
     <number>6</number>
    </property>
    <property name="leftMargin">
-    <number>7</number>
+    <number>9</number>
    </property>
    <property name="topMargin">
     <number>0</number>
@@ -52,23 +46,10 @@
      <property name="text">
       <string>Placeholder Text</string>
      </property>
-     <property name="margin">
-      <number>0</number>
-     </property>
     </widget>
    </item>
    <item>
-    <widget class="QCheckBox" name="checkBox">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
+    <widget class="QWidget" name="color" native="true"/>
    </item>
   </layout>
  </widget>

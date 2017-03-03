@@ -1,7 +1,5 @@
 <RCC>
     <qresource prefix="/">
-        <file>app/fonts/OpenSans-Light.ttf</file>
-        <file>app/fonts/OpenSans-Regular.ttf</file>
-        <file>app/fonts/OpenSans.ttf</file>
+        <file>app/fonts/OpenSans-Bold.ttf</file>
     </qresource>
 </RCC>

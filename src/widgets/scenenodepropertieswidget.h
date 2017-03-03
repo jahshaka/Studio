@@ -73,7 +73,7 @@ private:
     // @TODO: also add an option to customize shadows in the world settings..
     FogPropertyWidget* fogPropView;
 
-//    DemoPane* demoPane;
+    DemoPane* demoPane;
 };
 
 #endif // PROPERTYWIDGET_H

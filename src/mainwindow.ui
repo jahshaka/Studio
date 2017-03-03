@@ -507,7 +507,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
      <x>0</x>
      <y>0</y>
      <width>994</width>
-     <height>32</height>
+     <height>30</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -734,7 +734,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>304</height>
+          <height>306</height>
          </rect>
         </property>
         <property name="styleSheet">

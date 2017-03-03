@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "textinput.h"
 #include "labelwidget.h"
 #include "ui_combobox.h"
+#include "colorwidget.hpp"
 #include <QSpinBox>
 #include <QDebug>
 
@@ -44,14 +45,16 @@ AccordianBladeWidget::AccordianBladeWidget(QWidget *parent) :
     ui(new Ui::AccordianBladeWidget)
 {
     ui->setupUi(this);
-    minimum_height = 52;//11*4;//default margin is 11
-    this->setMinimumHeight( ui->bg->height() );
-    //QVBoxLayout *layout = new QVBoxLayout();
 
-    //delete ui->contentpane->layout();
-    //ui->contentpane->setLayout(layout);
+    stretch = 10;
     ui->contentpane->setVisible(false);
-    ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); } QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
+    minimum_height = ui->bg->height();
+    this->setMinimumHeight(ui->bg->height());
+
+    qDebug() << "minimum_height " << minimum_height;
+
+    ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); }"
+                              "QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
 }
 
 AccordianBladeWidget::~AccordianBladeWidget()
@@ -61,28 +64,18 @@ AccordianBladeWidget::~AccordianBladeWidget()
 
 void AccordianBladeWidget::on_toggle_clicked()
 {
-    bool state = ui->contentpane->isVisible();
+    if (ui->contentpane->isVisible()) {
+        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); }"
+                                  "QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
 
-    if( state == true )
-    {
-        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); } QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
         ui->contentpane->setVisible(false);
-        auto bgHeight = ui->bg->height();
-        this->setMinimumHeight( bgHeight );
-    }
-    else
-    {
-        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/chevron-arrow-down.svg); } QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
-        ui->contentpane->setVisible(true);
-        if( minimum_height ){
+//        minimum_height = ui->bg->height();
+        this->setMinimumHeight(ui->bg->height());
+    } else {
+        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/chevron-arrow-down.svg); }"
+                                  "QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
 
-        }
-        this->setMinimumHeight( minimum_height );
-        this->setMaximumHeight( minimum_height );
-
-        //this->setMinimumHeight( ui->contentpane->layout()->totalMinimumSize().height() + -ui->contentpane->layout()->contentsRect().height() );
-        //this->setMaximumHeight( ui->contentpane->layout()->totalMinimumSize().height() + -ui->contentpane->layout()->contentsRect().height());
-        //qDebug() << "MINIMUM HEIGHT CALC" << minimum_height ;
+        expand();
     }
 }
 
@@ -93,7 +86,6 @@ void AccordianBladeWidget::setMaxHeight( int height){
 void AccordianBladeWidget::setContentTitle( QString title ){
 
     ui->content_title->setText(title);
-
 }
 
 TransformEditor* AccordianBladeWidget::addTransform(){
@@ -108,14 +100,34 @@ TransformEditor* AccordianBladeWidget::addTransform(){
 
 ColorValueWidget* AccordianBladeWidget::addColorPicker( QString name )
 {
-
     ColorValueWidget *colorpicker = new ColorValueWidget();
     int height = colorpicker->height();
     minimum_height += height;
-    minimum_height += 12;
+    minimum_height += stretch;
 
     colorpicker->setLabel(name);
     ui->contentpane->layout()->addWidget(colorpicker);
+
+    qDebug() << ">>> color picker " << height;
+    qDebug() << "minimum_height " << minimum_height;
+
+    return colorpicker;
+}
+
+ColorWidget* AccordianBladeWidget::addColorWidget(QString name)
+{
+    ColorWidget *colorpicker = new ColorWidget();
+    int height = colorpicker->height();
+    minimum_height += height;
+    minimum_height += stretch;
+
+
+
+    colorpicker->setLabel(name);
+    ui->contentpane->layout()->addWidget(colorpicker);
+
+    qDebug() << ">>> color WIDGET " << height;
+    qDebug() << "minimum_height " << minimum_height;
 
     return colorpicker;
 }
@@ -125,7 +137,7 @@ void AccordianBladeWidget::addFilePicker( QString name , QString fileextention )
     int height = filepicker->height();
     filepicker->file_extentions = fileextention;
     minimum_height += height;
-    minimum_height += 16;
+    minimum_height += stretch;
 
     filepicker->ui->label->setText(name);
     ui->contentpane->layout()->addWidget(filepicker);
@@ -136,10 +148,15 @@ TexturePicker* AccordianBladeWidget::addTexturePicker( QString name ){
     TexturePicker *texpicker = new TexturePicker();
     int height = texpicker->height();
     minimum_height += height;
-    minimum_height += 16;
+    minimum_height += stretch;
+
 
     texpicker->ui->label->setText(name);
     ui->contentpane->layout()->addWidget(texpicker);
+
+    qDebug() << ">>> texture picker " << height;
+    qDebug() << "minimum_height " << minimum_height;
+
     return texpicker;
 }
 
@@ -148,7 +165,8 @@ HFloatSlider* AccordianBladeWidget::addFloatValueSlider( QString name, float ran
     HFloatSlider *slider = new HFloatSlider();
     int height = slider->height();
     minimum_height += height;
-    minimum_height += 12;
+    minimum_height += stretch;
+
 
     //minimum_height = ui->contentpane->layout()->totalMinimumSize().height();
 
@@ -157,6 +175,10 @@ HFloatSlider* AccordianBladeWidget::addFloatValueSlider( QString name, float ran
 
     ui->contentpane->layout()->addWidget(slider);
 
+    qDebug() << ">>> slider " << height;
+    qDebug() << "minimum_height " << minimum_height;
+
+
     return slider;
 }
 
@@ -164,11 +186,14 @@ CheckBoxProperty* AccordianBladeWidget::addCheckBox( QString name, bool value )
 {
     auto checkbox = new CheckBoxProperty();
     checkbox->setLabel(name);
-    ui->contentpane->layout()->addWidget(checkbox);
     int height = checkbox->height();
-
     minimum_height += height;
-    minimum_height += 16;
+
+    qDebug() << ">>> checkbox " << height;
+    qDebug() << "minimum_height " << minimum_height;
+
+    minimum_height += stretch;
+    ui->contentpane->layout()->addWidget(checkbox);
 
     return checkbox;
 }
@@ -181,7 +206,11 @@ ComboBox* AccordianBladeWidget::addComboBox(QString name)
     int height = combobox->height();
 
     minimum_height += height;
-    minimum_height += 16;
+
+    qDebug() << ">>> combo " << height;
+    qDebug() << "minimum_height " << minimum_height;
+
+    minimum_height += stretch;
 
     return combobox;
 }
@@ -192,9 +221,12 @@ TextInput* AccordianBladeWidget::addTextInput(QString name)
     textInput->setLabel(name);
     ui->contentpane->layout()->addWidget(textInput);
     int height = textInput->height();
-
     minimum_height += height;
-    minimum_height += 16;
+
+    qDebug() << ">>> text inp " << height;
+    qDebug() << "minimum_height " << minimum_height;
+
+    minimum_height += stretch;
 
     return textInput;
 }
@@ -207,13 +239,18 @@ LabelWidget* AccordianBladeWidget::addLabel(QString name)
     int height = label->height();
 
     minimum_height += height;
-    minimum_height += 16;
+
+    qDebug() << ">>> label inp " << height;
+    qDebug() << "minimum_height " << minimum_height;
+
+    minimum_height += stretch;
 
     return label;
 }
 
 void AccordianBladeWidget::expand()
 {
+    qDebug() << "calling " << minimum_height;
     ui->contentpane->setVisible(true);
     this->setMinimumHeight(minimum_height);
     this->setMaximumHeight(minimum_height);

@@ -47,30 +47,30 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
         {
 //            demoPane = new DemoPane();
 //            demoPane->setContentTitle("Demo Pane");
-//            demoPane->expand();
 
             /// ------------------------------------
 
-            worldPropView = new WorldPropertyWidget();
-            //worldPropView->setContentTitle("Sky");
-            worldPropView->setScene(sceneNode->scene);
-            worldPropView->expand();
+//            fogPropView = new FogPropertyWidget();
+//            fogPropView->setContentTitle("Fog");
+//            fogPropView->setScene(sceneNode->scene);
 
-            fogPropView = new FogPropertyWidget();
-            fogPropView->setContentTitle("Fog");
-            fogPropView->setScene(sceneNode->scene);
-            fogPropView->expand();
+            worldPropView = new WorldPropertyWidget();
+            worldPropView->setContentTitle("Environment");
+            worldPropView->setScene(sceneNode->scene);
 
             auto layout = new QVBoxLayout();
 //            layout->addWidget(demoPane);
+//            demoPane->expand();
+
+//            layout->addWidget(fogPropView);
             layout->addWidget(worldPropView);
-            layout->addWidget(fogPropView);
+            worldPropView->expand();
+//            fogPropView->expand();
+
             layout->addStretch();
             layout->setMargin(0);
 
-            auto oldLayout = this->layout();
-            clearLayout(oldLayout);
-
+            clearLayout(this->layout());
             this->setLayout(layout);
         }
         else
@@ -92,7 +92,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             //material blade
             materialPropView = new MaterialPropertyWidget();
             materialPropView->setContentTitle("Material");
-            materialPropView->setMaxHeight(700);
+//            materialPropView->setMaxHeight(700);
 
             emitterPropView = new EmitterPropertyWidget();
             emitterPropView->setContentTitle("Emitter");

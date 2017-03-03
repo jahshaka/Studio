@@ -17,18 +17,33 @@ For more information see the LICENSE file
 #include "../colorvaluewidget.h"
 #include "../colorpickerwidget.h"
 #include "../hfloatslider.h"
+#include "../checkboxproperty.h"
+#include "../colorwidget.hpp"
 
 WorldPropertyWidget::WorldPropertyWidget()
 {
     this->setContentTitle("Sky and Lighting");
 
-    skyTexture = this->addTexturePicker("Sky Texture");
     skyColor = this->addColorPicker("Sky Color");
     ambientColor = this->addColorPicker("Ambient Color");
+    skyTexture = this->addTexturePicker("Sky Texture");
+
+    fogEnabled = this->addCheckBox("Enabled",false);
+    fogColor = this->addColorPicker("Fog Color");
+    fogStart = this->addFloatValueSlider("Fog Start",0,1000);
+    fogEnd = this->addFloatValueSlider("Fog End",0,1000);
+    shadowEnabled = this->addCheckBox("Enable Shadows", true);
+
 
     connect(skyTexture,SIGNAL(valueChanged(QString)),SLOT(onSkyTextureChanged(QString)));
     connect(skyColor->getPicker(),SIGNAL(onColorChanged(QColor)),SLOT(onSkyColorChanged(QColor)));
     connect(ambientColor->getPicker(),SIGNAL(onColorChanged(QColor)),SLOT(onAmbientColorChanged(QColor)));
+
+    connect(fogColor->getPicker(),SIGNAL(onColorChanged(QColor)),SLOT(onFogColorChanged(QColor)));
+    connect(fogStart,SIGNAL(valueChanged(float)),SLOT(onFogStartChanged(float)));
+    connect(fogEnd,SIGNAL(valueChanged(float)),SLOT(onFogEndChanged(float)));
+    connect(fogEnabled,SIGNAL(valueChanged(bool)),SLOT(onFogEnabledChanged(bool)));
+    connect(shadowEnabled,SIGNAL(valueChanged(bool)),SLOT(onShadowEnabledChanged(bool)));
 }
 
 void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
@@ -42,6 +57,12 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 
         skyColor->setColorValue(scene->skyColor);
         ambientColor->setColorValue(scene->ambientColor);
+
+        fogColor->setColorValue(scene->fogColor);
+        fogStart->setValue(scene->fogStart);
+        fogEnd->setValue(scene->fogEnd);
+        fogEnabled->setValue(scene->fogEnabled);
+        shadowEnabled->setValue(scene->shadowEnabled);
 
     }
     else
@@ -77,3 +98,34 @@ void WorldPropertyWidget::onAmbientColorChanged(QColor color)
     //scene->set
     scene->setAmbientColor(color);
 }
+
+void WorldPropertyWidget::onFogColorChanged(QColor color)
+{
+    if(!!scene)
+        scene->fogColor = color;
+}
+
+void WorldPropertyWidget::onFogStartChanged(float val)
+{
+    if(!!scene)
+        scene->fogStart = val;
+}
+
+void WorldPropertyWidget::onFogEndChanged(float val)
+{
+    if(!!scene)
+        scene->fogEnd = val;
+}
+
+void WorldPropertyWidget::onFogEnabledChanged(bool val)
+{
+    if(!!scene)
+        scene->fogEnabled = val;
+}
+
+void WorldPropertyWidget::onShadowEnabledChanged(bool val)
+{
+    if(!!scene)
+        scene->shadowEnabled = val;
+}
+

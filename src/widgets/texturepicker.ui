@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>396</width>
-    <height>115</height>
+    <height>108</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -67,7 +67,7 @@ QWidget#texture {
      </property>
      <property name="minimumSize">
       <size>
-       <width>150</width>
+       <width>0</width>
        <height>0</height>
       </size>
      </property>
@@ -80,7 +80,7 @@ QWidget#texture {
      <property name="sizeIncrement">
       <size>
        <width>0</width>
-       <height>1</height>
+       <height>0</height>
       </size>
      </property>
      <property name="text">
@@ -96,16 +96,22 @@ QWidget#texture {
      <property name="enabled">
       <bool>true</bool>
      </property>
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
      <property name="minimumSize">
       <size>
-       <width>108</width>
-       <height>108</height>
+       <width>0</width>
+       <height>0</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
        <width>108</width>
-       <height>108</height>
+       <height>16777215</height>
       </size>
      </property>
      <property name="cursor">
@@ -115,7 +121,7 @@ QWidget#texture {
       <bool>true</bool>
      </property>
      <property name="frameShape">
-      <enum>QFrame::Box</enum>
+      <enum>QFrame::NoFrame</enum>
      </property>
      <property name="text">
       <string/>
@@ -146,7 +152,7 @@ QWidget#texture {
       <item>
        <widget class="QLabel" name="imagename">
         <property name="sizePolicy">
-         <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
@@ -154,7 +160,7 @@ QWidget#texture {
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>21</height>
+          <height>0</height>
          </size>
         </property>
         <property name="maximumSize">
@@ -184,14 +190,14 @@ QWidget#texture {
         </property>
         <property name="minimumSize">
          <size>
-          <width>90</width>
-          <height>25</height>
+          <width>0</width>
+          <height>0</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
           <width>16777215</width>
-          <height>25</height>
+          <height>16777215</height>
          </size>
         </property>
         <property name="text">
@@ -210,13 +216,13 @@ QWidget#texture {
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>25</height>
+          <height>0</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
           <width>16777215</width>
-          <height>25</height>
+          <height>16777215</height>
          </size>
         </property>
         <property name="text">
@@ -227,7 +233,7 @@ QWidget#texture {
       <item>
        <widget class="QLabel" name="dimensions">
         <property name="sizePolicy">
-         <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
@@ -235,7 +241,7 @@ QWidget#texture {
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>21</height>
+          <height>0</height>
          </size>
         </property>
         <property name="text">

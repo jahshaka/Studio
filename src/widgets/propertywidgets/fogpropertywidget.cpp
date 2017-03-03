@@ -22,6 +22,7 @@ For more information see the LICENSE file
 
 FogPropertyWidget::FogPropertyWidget()
 {
+//    demoWidget = this->addColorWidget("Boi if u");
     fogEnabled = this->addCheckBox("Enabled",false);
     fogColor = this->addColorPicker("Fog Color");
     fogStart = this->addFloatValueSlider("Fog Start",0,1000);

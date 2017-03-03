@@ -26,6 +26,7 @@ class CheckBoxProperty;
 class ComboBox;
 class TextInput;
 class LabelWidget;
+class ColorWidget;
 
 /*
  *  Widget's are appended with 1 of 3 types
@@ -40,7 +41,7 @@ class AccordianBladeWidget : public QWidget
     Q_OBJECT
 
 public:
-    int minimum_height;
+    int minimum_height, stretch;
 
     explicit AccordianBladeWidget(QWidget *parent = 0);
     ~AccordianBladeWidget();
@@ -64,6 +65,7 @@ public:
 
     TextInput* addTextInput(QString name);
     LabelWidget* addLabel(QString name);
+    ColorWidget* addColorWidget(QString);
 
     void expand();
 

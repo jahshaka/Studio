@@ -91,11 +91,12 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     this->setWindowTitle("Jahshaka VR");
 
-    int fontId = QFontDatabase::addApplicationFont(getAbsoluteAssetPath("app/fonts/OpenSans.ttf"));
-    QString family = QFontDatabase::applicationFontFamilies(fontId).at(0);
-    QFont font = QFont(family);
-    font.setPointSizeF(9);
-    QApplication::setFont(font);
+    QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
+    if (fontFile.exists()) {
+        fontFile.open(QIODevice::ReadOnly);
+        QFontDatabase::addApplicationFontFromData(fontFile.readAll());
+        QApplication::setFont(QFont("Open Sans", 10));
+    }
 
     settings = SettingsManager::getDefaultManager();
     prefsDialog = new PreferencesDialog(settings);
