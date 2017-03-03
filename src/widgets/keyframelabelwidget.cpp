@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include <QPainter>
 #include <QMouseEvent>
 #include <QVBoxLayout>
+#include <QLayoutItem>
 #include <QScrollBar>
 #include <vector>
 //#include "../scenegraph/scenenodes.h"
@@ -56,6 +57,12 @@ void KeyFrameLabelWidget::setSceneNode(iris::SceneNodePtr node)
 
 void KeyFrameLabelWidget::setKeyFrameSet(iris::KeyFrameSetPtr frameSet)
 {
+    //foreach (QWidget * w, ui->scrollAreaWidgetContents->findChildren<QWidget*>()) delete w;
+    //delete ui->scrollAreaWidgetContents->layout();
+    clearLayout(ui->scrollAreaWidgetContents->layout());
+    delete ui->scrollAreaWidgetContents->layout();
+    labels.clear();
+
     auto layout = new QVBoxLayout();
 
     //todo: group widgets
@@ -65,24 +72,44 @@ void KeyFrameLabelWidget::setKeyFrameSet(iris::KeyFrameSetPtr frameSet)
         auto label = new KeyFrameLabel();
         label->setTitle(key);
         layout->addWidget(label);
+        labels.append(label);
     }
 
     layout->addStretch();
-    delete ui->scrollAreaWidgetContents->layout();
     ui->scrollAreaWidgetContents->setLayout(layout);
 }
 
 void KeyFrameLabelWidget::clearKeyFrameSet()
 {
-    return;
-    auto layout = new QVBoxLayout();
-    ui->scrollAreaWidgetContents->setLayout(layout);
+    //delete ui->scrollAreaWidgetContents->layout();
+    //foreach (QWidget * w, ui->scrollAreaWidgetContents->findChildren<QWidget*>()) delete w;
+    clearLayout(ui->scrollAreaWidgetContents->layout());
+    labels.clear();
+}
+
+void KeyFrameLabelWidget::resetKeyFrames()
+{
+    if (!!obj && !!obj->animation) {
+        this->setKeyFrameSet(obj->animation->keyFrameSet);
+    }
 }
 
 void KeyFrameLabelWidget::scrollValueChanged(int val)
 {
     qDebug() << "Scroll value: " << val;
     //dopeSheet->setScrollValue(val);
+}
+
+void KeyFrameLabelWidget::clearLayout(QLayout *layout)
+{
+    if (layout == nullptr)
+        return;
+
+    QLayoutItem* item;
+    while ( ( item = layout->takeAt(0) ) != nullptr ){
+        delete item->widget();
+        delete item;
+    }
 }
 
 bool KeyFrameLabelWidget::eventFilter(QObject *obj, QEvent *evt)

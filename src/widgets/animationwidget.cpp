@@ -261,6 +261,7 @@ void AnimationWidget::addPosKey()
 
     //node->updateAnimPathFromKeyFrames();
 
+    ui->keylabelView->resetKeyFrames();
     repaintViews();
 }
 
