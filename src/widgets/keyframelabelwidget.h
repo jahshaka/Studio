@@ -22,6 +22,7 @@ For more information see the LICENSE file
 namespace Ui {
     class KeyFrameLabelWidget;
 }
+class KeyFrameLabel;
 
 class KeyFrameLabelWidget:public QWidget
 {
@@ -38,6 +39,7 @@ public:
     void setSceneNode(iris::SceneNodePtr node);
     void setKeyFrameSet(iris::KeyFrameSetPtr frameSet);
     void clearKeyFrameSet();
+    void resetKeyFrames();
 
     //void resizeEvent(QResizeEvent* evt);
     bool eventFilter(QObject *obj, QEvent *evt);
@@ -46,7 +48,14 @@ private slots:
     void scrollValueChanged(int val);
 
 private:
+    /*
+     * Deletes all items in layout
+     */
+    void clearLayout(QLayout* layout);
+
+private:
     Ui::KeyFrameLabelWidget* ui;
+    QList<KeyFrameLabel*> labels;
 };
 
 #endif // KEYFRAMELABELWIDGET_H
