@@ -58,6 +58,7 @@ DefaultMaterial::DefaultMaterial()
     reflectionInfluence = 0.0f;
     useReflectionTex = false;
 
+    this->setRenderLayer((int)RenderLayer::Opaque);
 }
 
 void DefaultMaterial::begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)

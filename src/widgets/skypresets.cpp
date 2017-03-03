@@ -24,10 +24,10 @@ SkyPresets::SkyPresets(QWidget *parent) :
 
     mainWindow = nullptr;
 
-    ui->skyList->setViewMode(QListWidget::IconMode);
-    ui->skyList->setIconSize(QSize(110,80));
-    ui->skyList->setResizeMode(QListWidget::Adjust);
-    ui->skyList->setMovement(QListView::Static);
+//    ui->skyList->setViewMode(QListWidget::IconMode);
+//    ui->skyList->setIconSize(QSize(110,80));
+//    ui->skyList->setResizeMode(QListWidget::Adjust);
+//    ui->skyList->setMovement(QListView::Static);
     ui->skyList->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->skyList->setSelectionMode(QAbstractItemView::SingleSelection);
 

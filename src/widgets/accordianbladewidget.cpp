@@ -20,15 +20,31 @@ For more information see the LICENSE file
 #include "filepickerwidget.h"
 #include "ui_filepickerwidget.h"
 #include "checkboxproperty.h"
+#include "combobox.h"
+#include "textinput.h"
+#include "labelwidget.h"
+#include "ui_combobox.h"
 #include <QSpinBox>
 #include <QDebug>
+
+// these will replace all
+// @TODO MAKE THIS A TEMPLATE
+HFloatSlider* AccordianBladeWidget::addValueSlider(QString label, float start, float end) {
+    HFloatSlider *slider = new HFloatSlider;
+    slider->ui->label->setText(label);
+    slider->setRange(start, end);
+
+    ui->contentpane->layout()->addWidget(slider);
+
+    return slider;
+}
 
 AccordianBladeWidget::AccordianBladeWidget(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::AccordianBladeWidget)
 {
     ui->setupUi(this);
-    minimum_height = 11*4;//default margin is 11
+    minimum_height = 52;//11*4;//default margin is 11
     this->setMinimumHeight( ui->bg->height() );
     //QVBoxLayout *layout = new QVBoxLayout();
 
@@ -83,7 +99,7 @@ void AccordianBladeWidget::setContentTitle( QString title ){
 TransformEditor* AccordianBladeWidget::addTransform(){
     TransformEditor *transform = new TransformEditor();
     int height = transform->height();
-    minimum_height = height + 50;
+    minimum_height = height + 52;
 
     ui->contentpane->layout()->addWidget(transform);
     ui->contentpane->layout()->setMargin(0);
@@ -96,7 +112,7 @@ ColorValueWidget* AccordianBladeWidget::addColorPicker( QString name )
     ColorValueWidget *colorpicker = new ColorValueWidget();
     int height = colorpicker->height();
     minimum_height += height;
-    minimum_height += 10;
+    minimum_height += 12;
 
     colorpicker->setLabel(name);
     ui->contentpane->layout()->addWidget(colorpicker);
@@ -109,7 +125,7 @@ void AccordianBladeWidget::addFilePicker( QString name , QString fileextention )
     int height = filepicker->height();
     filepicker->file_extentions = fileextention;
     minimum_height += height;
-    minimum_height += 10;
+    minimum_height += 16;
 
     filepicker->ui->label->setText(name);
     ui->contentpane->layout()->addWidget(filepicker);
@@ -120,7 +136,7 @@ TexturePicker* AccordianBladeWidget::addTexturePicker( QString name ){
     TexturePicker *texpicker = new TexturePicker();
     int height = texpicker->height();
     minimum_height += height;
-    minimum_height += 10;
+    minimum_height += 16;
 
     texpicker->ui->label->setText(name);
     ui->contentpane->layout()->addWidget(texpicker);
@@ -132,7 +148,7 @@ HFloatSlider* AccordianBladeWidget::addFloatValueSlider( QString name, float ran
     HFloatSlider *slider = new HFloatSlider();
     int height = slider->height();
     minimum_height += height;
-    minimum_height += 10;
+    minimum_height += 12;
 
     //minimum_height = ui->contentpane->layout()->totalMinimumSize().height();
 
@@ -152,15 +168,54 @@ CheckBoxProperty* AccordianBladeWidget::addCheckBox( QString name, bool value )
     int height = checkbox->height();
 
     minimum_height += height;
-    minimum_height += 10;
+    minimum_height += 16;
 
     return checkbox;
+}
+
+ComboBox* AccordianBladeWidget::addComboBox(QString name)
+{
+    ComboBox* combobox = new ComboBox();
+    combobox->setLabel(name);
+    ui->contentpane->layout()->addWidget(combobox);
+    int height = combobox->height();
+
+    minimum_height += height;
+    minimum_height += 16;
+
+    return combobox;
+}
+
+TextInput* AccordianBladeWidget::addTextInput(QString name)
+{
+    TextInput* textInput = new TextInput();
+    textInput->setLabel(name);
+    ui->contentpane->layout()->addWidget(textInput);
+    int height = textInput->height();
+
+    minimum_height += height;
+    minimum_height += 16;
+
+    return textInput;
+}
+
+LabelWidget* AccordianBladeWidget::addLabel(QString name)
+{
+    LabelWidget* label = new LabelWidget();
+    label->setLabel(name);
+    ui->contentpane->layout()->addWidget(label);
+    int height = label->height();
+
+    minimum_height += height;
+    minimum_height += 16;
+
+    return label;
 }
 
 void AccordianBladeWidget::expand()
 {
     ui->contentpane->setVisible(true);
-    this->setMinimumHeight( minimum_height );
-    this->setMaximumHeight( minimum_height );
+    this->setMinimumHeight(minimum_height);
+    this->setMaximumHeight(minimum_height);
 }
 

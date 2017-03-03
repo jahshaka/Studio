@@ -31,28 +31,27 @@ MaterialSets::MaterialSets(QWidget *parent) :
 
     mainWindow = nullptr;
 
-    ui->materialPresets->setViewMode(QListWidget::IconMode);
-    ui->materialPresets->setIconSize(QSize(65,65));
-    ui->materialPresets->setResizeMode(QListWidget::Adjust);
-    ui->materialPresets->setMovement(QListView::Static);
+//    ui->materialPresets->setViewMode(QListWidget::IconMode);
+//    ui->materialPresets->setIconSize(QSize(64, 64));
+//    ui->materialPresets->setResizeMode(QListWidget::Adjust);
+//    ui->materialPresets->setMovement(QListView::Static);
     ui->materialPresets->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->materialPresets->setSelectionMode(QAbstractItemView::SingleSelection);
 
-    connect(ui->materialPresets,SIGNAL(itemClicked(QListWidgetItem*)),this,SLOT(applyMaterialPreset(QListWidgetItem*)));
+    connect(ui->materialPresets,    SIGNAL(itemClicked(QListWidgetItem*)),
+            this,                   SLOT(applyMaterialPreset(QListWidgetItem*)));
 
     loadPresets();
-
 }
 
 void MaterialSets::loadPresets()
 {
     auto dir = QDir(IrisUtils::getAbsoluteAssetPath("app/content/materials"));
-    auto files = dir.entryInfoList(QStringList(),QDir::Files);
+    auto files = dir.entryInfoList(QStringList(), QDir::Files);
 
     auto reader = new MaterialPresetReader();
 
-    for(auto file:files)
-    {
+    for (auto file : files) {
         auto preset = reader->readMaterialPreset(file.absoluteFilePath());
         addPreset(preset);
     }

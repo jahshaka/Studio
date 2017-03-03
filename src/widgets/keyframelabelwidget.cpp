@@ -51,7 +51,7 @@ void KeyFrameLabelWidget::paintEvent(QPaintEvent *painter)
     paint.fillRect(0,0,widgetWidth,widgetHeight,bgColor);
 
     //draw each key frame set
-    int frameHeight = 20;
+    int frameHeight = 24;
     int ypos = 0;
 
     if(!!obj && !!obj->animation)
@@ -76,7 +76,7 @@ void KeyFrameLabelWidget::drawFrameLabel(QString name,QPainter* paint,int yBotto
 
     paint->setPen(pen);
 
-    paint->drawText(10,yBottom-10,name);
+    paint->drawText(0,yBottom-10,name);
 
 }
 

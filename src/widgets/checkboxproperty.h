@@ -13,9 +13,10 @@ For more information see the LICENSE file
 #define CHECKBOXPROPERTY_H
 
 #include <QWidget>
+#include <QCheckBox>
 
 namespace Ui {
-class checkboxproperty;
+    class CheckBoxProperty;
 }
 
 class CheckBoxProperty : public QWidget
@@ -37,16 +38,16 @@ public:
      * Sets the label for the property
      * @param lable
      */
-    void setLabel(QString lable);
+    void setLabel(QString label);
 
 signals:
     void valueChanged(bool val);
 
 private slots:
-    void onCheckboxValueChanged(bool val);
+    void onCheckboxValueChanged(int val);
 
 private:
-    Ui::checkboxproperty *ui;
+    Ui::CheckBoxProperty *ui;
 };
 
 #endif // CHECKBOXPROPERTY_H

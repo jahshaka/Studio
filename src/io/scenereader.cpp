@@ -30,13 +30,13 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../irisgl/src/scenegraph/viewernode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
+#include "../irisgl/src/scenegraph/particlesystemnode.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/graphicshelper.h"
 #include "../irisgl/src/animation/animation.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
-
 
 iris::ScenePtr SceneReader::readScene(QString filePath, EditorData** editorData)
 {
@@ -126,14 +126,17 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     iris::SceneNodePtr sceneNode;
 
     QString nodeType = nodeObj["type"].toString("empty");
-    if(nodeType=="mesh")
+    if (nodeType == "mesh") {
         sceneNode = createMesh(nodeObj).staticCast<iris::SceneNode>();
-    else if(nodeType=="light")
+    } else if (nodeType == "light") {
         sceneNode = createLight(nodeObj).staticCast<iris::SceneNode>();
-    else if(nodeType=="viewer")
+    } else if (nodeType == "viewer") {
         sceneNode = createViewer(nodeObj).staticCast<iris::SceneNode>();
-    else
+    } else if (nodeType == "particle system") {
+        sceneNode = createParticleSystem(nodeObj).staticCast<iris::SceneNode>();
+    } else {
         sceneNode = iris::SceneNode::create();
+    }
 
     //read transform
     readSceneNodeTransform(nodeObj,sceneNode);
@@ -148,7 +151,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     {
         auto sceneNodeObj = childObj.toObject();
         auto childNode = readSceneNode(sceneNodeObj);
-        sceneNode->addChild(childNode);
+        sceneNode->addChild(childNode, false);
     }
 
     return sceneNode;
@@ -282,19 +285,32 @@ iris::ViewerNodePtr SceneReader::createViewer(QJsonObject& nodeObj)
     return viewerNode;
 }
 
+iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeObj)
+{
+    auto particleNode = iris::ParticleSystemNode::create();
+
+    particleNode->setPPS((float) nodeObj["particlesPerSecond"].toDouble(1.0f));
+    particleNode->setParticleScale((float) nodeObj["particleScale"].toDouble(1.0f));
+    particleNode->setDissipation(nodeObj["dissipate"].toBool());
+    particleNode->setDissipationInv(nodeObj["dissipateInv"].toBool());
+    particleNode->setRandomRotation(nodeObj["randomRotation"].toBool());
+    particleNode->setGravity((float) nodeObj["gravityComplement"].toDouble(1.0f));
+    particleNode->setBlendMode(nodeObj["blendMode"].toBool());
+    particleNode->setLife((float) nodeObj["lifeLength"].toDouble(1.0f));
+    particleNode->setName(nodeObj["name"].toString());
+    particleNode->setSpeed((float) nodeObj["speed"].toDouble(1.0f));
+    particleNode->setTexture(iris::Texture2D::load(getAbsolutePath(nodeObj["texture"].toString())));
+
+    return particleNode;
+}
+
 iris::LightType SceneReader::getLightTypeFromName(QString lightType)
 {
-    if(lightType=="point")
-        return iris::LightType::Point;
-
-    if(lightType=="directional")
-        return iris::LightType::Directional;
-
-    if(lightType=="spot")
-        return iris::LightType::Spot;
+    if (lightType == "point")       return iris::LightType::Point;
+    if (lightType == "directional") return iris::LightType::Directional;
+    if (lightType == "spot")        return iris::LightType::Spot;
 
     return iris::LightType::Point;
-
 }
 
 /**

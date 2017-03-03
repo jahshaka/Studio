@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "defaultskymaterial.h"
 #include "../core/irisutils.h"
+#include "../graphics/renderitem.h"
 
 namespace iris
 {
@@ -22,6 +23,8 @@ DefaultSkyMaterial::DefaultSkyMaterial()
     setTextureCount(1);
 
     color = QColor(255,255,255,255);
+
+    this->setRenderLayer((int)RenderLayer::Background);
 }
 
 void DefaultSkyMaterial::setSkyTexture(Texture2DPtr tex)

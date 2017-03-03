@@ -32,10 +32,13 @@ For more information see the LICENSE file
 #include "../irisgl/src/graphics/viewport.h"
 #include "../irisgl/src/graphics/utils/fullscreenquad.h"
 #include "../irisgl/src/math/intersectionhelper.h"
+#include "../irisgl/src/vr/vrmanager.h"
+#include "../irisgl/src/vr/vrdevice.h"
 
 #include "../editor/cameracontrollerbase.h"
 #include "../editor/editorcameracontroller.h"
 #include "../editor/orbitalcameracontroller.h"
+#include "../editor/editorvrcontroller.h"
 
 #include "../editor/editordata.h"
 
@@ -69,11 +72,13 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     //camController = nullptr;
     defaultCam = new EditorCameraController();
     orbitalCam = new OrbitalCameraController();
+
     camController = defaultCam;
+    prevCamController = defaultCam;
     //camController = orbitalCam;
 
     editorCam = iris::CameraNode::create();
-    editorCam->pos = QVector3D(0, 5, 7);
+    editorCam->pos = QVector3D(0, 8, 24);
     editorCam->rot = QQuaternion::fromEulerAngles(-5, 0, 0);
     camController->setCamera(editorCam);
 
@@ -106,6 +111,9 @@ void SceneViewWidget::initialize()
 
     viewportGizmo = translationGizmo;
     transformMode = "Global";
+
+    // has to be initialized here since it loads assets
+    vrCam = new EditorVrController();
 }
 
 void SceneViewWidget::setScene(iris::ScenePtr scene)
@@ -113,6 +121,7 @@ void SceneViewWidget::setScene(iris::ScenePtr scene)
     this->scene = scene;
     scene->setCamera(editorCam);
     renderer->setScene(scene);
+    vrCam->setScene(scene);
 
     // remove selected scenenode
     selectedNode.reset();
@@ -138,8 +147,10 @@ void SceneViewWidget::updateScene(bool once)
 {
     // update and draw the 3d manipulation gizmo
     if (!!viewportGizmo->lastSelectedNode) {
-        viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
-        viewportGizmo->render(editorCam->viewMatrix, editorCam->projMatrix);
+        if (viewportMode != ViewportMode::VR) {
+            viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
+            viewportGizmo->render(editorCam->viewMatrix, editorCam->projMatrix);
+        }
     }
 }
 
@@ -152,7 +163,7 @@ void SceneViewWidget::initializeGL()
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
 
-    renderer = iris::ForwardRenderer::create(this);
+    renderer = iris::ForwardRenderer::create();
 
     initialize();
     fsQuad = new iris::FullScreenQuad();
@@ -170,6 +181,18 @@ void SceneViewWidget::paintGL()
 {
     makeCurrent();
 
+    if(iris::VrManager::getDefaultDevice()->isHeadMounted() &&
+            viewportMode != ViewportMode::VR)
+    {
+        // set to vr mode automatically if a headset is detected
+        this->setViewportMode(ViewportMode::VR);
+    }
+    else if(!iris::VrManager::getDefaultDevice()->isHeadMounted() &&
+            viewportMode == ViewportMode::VR)
+    {
+        this->setViewportMode(ViewportMode::Editor);
+    }
+
     renderScene();
 }
 
@@ -179,21 +202,24 @@ void SceneViewWidget::renderScene()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     float dt = elapsedTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
+    elapsedTimer->restart();
 
     if (!!renderer && !!scene) {
-        this->camController->update(dt);
 
+        this->camController->update(dt);
         if(playScene)
         {
             animTime += dt;
             scene->updateSceneAnimation(animTime);
         }
+
         scene->update(dt);
 
+
         if (viewportMode == ViewportMode::Editor) {
-            renderer->renderScene(this->context(), viewport);
+            renderer->renderScene(dt, viewport);
         } else {
-            renderer->renderSceneVr(this->context(), viewport);
+            renderer->renderSceneVr(dt, viewport);
         }
 
         this->updateScene();
@@ -417,7 +443,9 @@ void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& scen
                                      const QVector3D& segEnd,
                                      QList<PickingResult>& hitList)
 {
-    if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh && sceneNode->isPickable()) {
+    if ((sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) &&
+         sceneNode->isPickable())
+    {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
         auto mesh = meshNode->getMesh();
         if(mesh != nullptr)
@@ -537,6 +565,23 @@ bool SceneViewWidget::isVrSupported()
 void SceneViewWidget::setViewportMode(ViewportMode viewportMode)
 {
     this->viewportMode = viewportMode;
+
+    //return;
+    // switch cam to vr mode
+    if(viewportMode == ViewportMode::VR)
+    {
+        prevCamController = camController;
+        camController = vrCam;
+        camController->setCamera(editorCam);
+        camController->resetMouseStates();
+
+    }
+    else
+    {
+        camController = prevCamController;
+        camController->setCamera(editorCam);
+        camController->resetMouseStates();
+    }
 }
 
 ViewportMode SceneViewWidget::getViewportMode()

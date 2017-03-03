@@ -6,26 +6,38 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>331</width>
-    <height>203</height>
+    <width>256</width>
+    <height>256</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
    <item row="0" column="0">
     <widget class="QListWidget" name="skyList">
      <property name="sizePolicy">
-      <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
      <property name="minimumSize">
       <size>
-       <width>150</width>
-       <height>181</height>
+       <width>0</width>
+       <height>0</height>
       </size>
      </property>
      <property name="maximumSize">
@@ -40,7 +52,7 @@
       </font>
      </property>
      <property name="styleSheet">
-      <string notr="true"/>
+      <string notr="true">background-color: #303030</string>
      </property>
     </widget>
    </item>

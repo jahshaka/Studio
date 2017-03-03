@@ -20,32 +20,17 @@ For more information see the LICENSE file
 #include "propertywidgets/materialpropertywidget.h"
 #include "propertywidgets/worldpropertywidget.h"
 #include "propertywidgets/fogpropertywidget.h"
+#include "propertywidgets/emitterpropertywidget.h"
+
+#include "propertywidgets/nodepropertywidget.h"
+#include "propertywidgets/demopane.h"
 
 #include "../irisgl/src/core/scenenode.h"
 
 
-SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget* parent):
-    QWidget(parent)
+SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget* parent) : QWidget(parent)
 {
-    /*
-    //transform blade and widget
-    transformPropView = new AccordianBladeWidget();
-    transformPropView->setContentTitle("Transformation");
-    transformWidget = transformPropView->addTransform();
 
-    //light blade
-    lightPropView = new LightPropertyWidget();
-    lightPropView->setContentTitle("Light");
-
-    //material blade
-    materialPropView = new MaterialPropertyWidget();
-    materialPropView->setContentTitle("Material");
-    //materialPropView->setMaxHeight(materialPropView->minimum_height);
-
-    //mesh blade
-
-    //scene blade
-    */
 }
 
 /**
@@ -60,6 +45,12 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
     {
         if(sceneNode->isRootNode())
         {
+//            demoPane = new DemoPane();
+//            demoPane->setContentTitle("Demo Pane");
+//            demoPane->expand();
+
+            /// ------------------------------------
+
             worldPropView = new WorldPropertyWidget();
             //worldPropView->setContentTitle("Sky");
             worldPropView->setScene(sceneNode->scene);
@@ -70,8 +61,8 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             fogPropView->setScene(sceneNode->scene);
             fogPropView->expand();
 
-
             auto layout = new QVBoxLayout();
+//            layout->addWidget(demoPane);
             layout->addWidget(worldPropView);
             layout->addWidget(fogPropView);
             layout->addStretch();
@@ -90,6 +81,10 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             transformWidget = transformPropView->addTransform();
             //transformPropView->expand();
 
+            nodePropView = new NodePropertyWidget();
+            nodePropView->setContentTitle("Node Properties");
+//            nodePropView->setMaxHeight(700);
+
             //light blade
             lightPropView = new LightPropertyWidget();
             lightPropView->setContentTitle("Light");
@@ -99,10 +94,15 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             materialPropView->setContentTitle("Material");
             materialPropView->setMaxHeight(700);
 
+            emitterPropView = new EmitterPropertyWidget();
+            emitterPropView->setContentTitle("Emitter");
+//            emitterPropView->setMaxHeight(700);
 
             this->sceneNode = sceneNode;
+            nodePropView->setSceneNode(sceneNode);
             lightPropView->setSceneNode(sceneNode);
             materialPropView->setSceneNode(sceneNode);
+            emitterPropView->setSceneNode(sceneNode);
             transformWidget->setSceneNode(sceneNode);
 
             //delete this->layout();
@@ -118,8 +118,14 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                 lightPropView->expand();
                 break;
             case iris::SceneNodeType::Mesh:
+                layout->addWidget(nodePropView);
                 layout->addWidget(materialPropView);
                 materialPropView->expand();
+                nodePropView->expand();
+                break;
+            case iris::SceneNodeType::ParticleSystem:
+                layout->addWidget(emitterPropView);
+                emitterPropView->expand();
                 break;
 
             default:
