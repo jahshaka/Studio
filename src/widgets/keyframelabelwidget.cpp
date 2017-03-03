@@ -96,7 +96,7 @@ void KeyFrameLabelWidget::resetKeyFrames()
 
 void KeyFrameLabelWidget::scrollValueChanged(int val)
 {
-    qDebug() << "Scroll value: " << val;
+    //qDebug() << "Scroll value: " << val;
     //dopeSheet->setScrollValue(val);
 }
 
@@ -117,7 +117,7 @@ bool KeyFrameLabelWidget::eventFilter(QObject *obj, QEvent *evt)
     if (evt->type() == QEvent::Resize) {
 
         auto resizeEvt = static_cast<QResizeEvent*>(evt);
-        qDebug() << resizeEvt->size();
+        //qDebug() << resizeEvt->size();
         /*
         if (dopeSheet != nullptr) {
            dopeSheet->setContentHeight(resizeEvt->size().height());

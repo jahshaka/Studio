@@ -278,6 +278,8 @@ void AnimationWidget::addRotKey()
     frameSet->getOrCreateFrame("Rotation X")->addKey(rot.x(),seconds);
     frameSet->getOrCreateFrame("Rotation Y")->addKey(rot.y(),seconds);
     frameSet->getOrCreateFrame("Rotation Z")->addKey(rot.z(),seconds);
+
+    ui->keylabelView->resetKeyFrames();
     repaintViews();
 }
 
@@ -295,6 +297,7 @@ void AnimationWidget::addScaleKey()
     frameSet->getOrCreateFrame("Scale Y")->addKey(scale.y(),seconds);
     frameSet->getOrCreateFrame("Scale Z")->addKey(scale.z(),seconds);
 
+    ui->keylabelView->resetKeyFrames();
     repaintViews();
 }
 
