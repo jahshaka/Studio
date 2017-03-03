@@ -37,7 +37,6 @@ private:
     TexturePicker* demoPicker;
     TextInput* demoInput;
     LabelWidget* demoLabel;
-    ColorWidget* demoWidget;
 };
 
 #endif // DEMOPANE_H

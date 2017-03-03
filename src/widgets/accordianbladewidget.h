@@ -26,7 +26,6 @@ class CheckBoxProperty;
 class ComboBox;
 class TextInput;
 class LabelWidget;
-class ColorWidget;
 
 /*
  *  Widget's are appended with 1 of 3 types
@@ -65,7 +64,6 @@ public:
 
     TextInput* addTextInput(QString name);
     LabelWidget* addLabel(QString name);
-    ColorWidget* addColorWidget(QString);
 
     void expand();
 

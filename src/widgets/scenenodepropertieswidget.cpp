@@ -41,31 +41,31 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 {
     //todo: properly cleanup layout
 
-    if(!!sceneNode)
+    if (!!sceneNode)
     {
         if(sceneNode->isRootNode())
         {
-//            demoPane = new DemoPane();
-//            demoPane->setContentTitle("Demo Pane");
+            demoPane = new DemoPane();
+            demoPane->setContentTitle("Demo Pane");
+            demoPane->expand();
 
-            /// ------------------------------------
+            ///   -----------------------------------
 
-//            fogPropView = new FogPropertyWidget();
-//            fogPropView->setContentTitle("Fog");
-//            fogPropView->setScene(sceneNode->scene);
+            fogPropView = new FogPropertyWidget();
+            fogPropView->setContentTitle("Fog");
+            fogPropView->setScene(sceneNode->scene);
 
             worldPropView = new WorldPropertyWidget();
             worldPropView->setContentTitle("Environment");
             worldPropView->setScene(sceneNode->scene);
 
             auto layout = new QVBoxLayout();
-//            layout->addWidget(demoPane);
-//            demoPane->expand();
+            layout->addWidget(demoPane);
 
-//            layout->addWidget(fogPropView);
+            layout->addWidget(fogPropView);
             layout->addWidget(worldPropView);
             worldPropView->expand();
-//            fogPropView->expand();
+            fogPropView->expand();
 
             layout->addStretch();
             layout->setMargin(0);
@@ -83,7 +83,6 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 
             nodePropView = new NodePropertyWidget();
             nodePropView->setContentTitle("Node Properties");
-//            nodePropView->setMaxHeight(700);
 
             //light blade
             lightPropView = new LightPropertyWidget();
@@ -92,11 +91,9 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             //material blade
             materialPropView = new MaterialPropertyWidget();
             materialPropView->setContentTitle("Material");
-//            materialPropView->setMaxHeight(700);
 
             emitterPropView = new EmitterPropertyWidget();
             emitterPropView->setContentTitle("Emitter");
-//            emitterPropView->setMaxHeight(700);
 
             this->sceneNode = sceneNode;
             nodePropView->setSceneNode(sceneNode);

@@ -44,25 +44,11 @@ protected slots:
     void onSkyColorChanged(QColor color);
     void onAmbientColorChanged(QColor color);
 
-    void onFogColorChanged(QColor color);
-    void onFogStartChanged(float val);
-    void onFogEndChanged(float val);
-    void onFogEnabledChanged(bool val);
-    void onShadowEnabledChanged(bool val);
-
-
 private:
     QSharedPointer<iris::Scene> scene;
     TexturePicker* skyTexture;
     ColorValueWidget* skyColor;
     ColorValueWidget* ambientColor;
-
-    CheckBoxProperty* fogEnabled;
-    CheckBoxProperty* shadowEnabled;
-    HFloatSlider* fogStart;
-    HFloatSlider* fogEnd;
-    ColorValueWidget* fogColor;
-
 
 };
 

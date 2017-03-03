@@ -84,8 +84,7 @@ SOURCES += src/main.cpp\
     src/editor/editorvrcontroller.cpp \
     src/widgets/propertywidgets/demopane.cpp \
     src/widgets/textinput.cpp \
-    src/widgets/labelwidget.cpp \
-    src/widgets/colorwidget.cpp
+    src/widgets/labelwidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -157,8 +156,7 @@ HEADERS  += src/mainwindow.h \
     src/editor/editorvrcontroller.h \
     src/widgets/propertywidgets/demopane.h \
     src/widgets/textinput.h \
-    src/widgets/labelwidget.h \
-    src/widgets/colorwidget.hpp
+    src/widgets/labelwidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -187,8 +185,7 @@ FORMS    += \
     src/widgets/hfloatslider.ui \
     src/widgets/modelpresets.ui \
     src/mainwindow.ui \
-    src/widgets/labelwidget.ui \
-    src/widgets/colorwidget.ui
+    src/widgets/labelwidget.ui
 
 RESOURCES += \
     shaders.qrc \

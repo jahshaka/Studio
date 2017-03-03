@@ -5,7 +5,8 @@
 #include "../texturepicker.h"
 #include "../textinput.h"
 #include "../labelwidget.h"
-#include "../colorwidget.hpp"
+
+#include <QDebug>
 
 DemoPane::DemoPane()
 {
@@ -24,5 +25,5 @@ DemoPane::DemoPane()
     demoLabel   = this->addLabel("Demo Label");
     demoLabel->setText("The fat fox runs!");
 
-//    demoWidget = this->addColorWidget("Demo Color");
+    qDebug() << "demo prop " << this->height();
 }

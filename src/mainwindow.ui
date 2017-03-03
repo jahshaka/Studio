@@ -111,10 +111,11 @@ QComboBox::down-arrow {
 
 /* Double Spin Box */
 QDoubleSpinBox {
-   	padding-right: 15px; /* make room for the arrows */
+   /*	padding-right: 15px; /* make room for the arrows */
     border-width: 3px;
 	/*border-right: 18px solid #1e1e1e; /* hide a 1px gap */
 	background-color: #404040;
+	selection-color: #BBB;
     /*border-image: url(:/app/images/frame.png) 4; */
     color: #BBB;
 }
@@ -127,9 +128,9 @@ QDoubleSpinBox::up-button {
 	background-color: #4d4d4d;
     subcontrol-origin: border;
     subcontrol-position: top right; /* position at the top right corner */
-
-    width: 16px; /* 16 + 2*1px border-width = 15px padding + 3px parent border */
-    border-image: url(:/app/icons/chevron-arrow-up.svg) 1;
+	
+    width: 15px; /* 16 + 2*1px border-width = 15px padding + 3px parent border */
+    border-image: url(:/app/icons/chevron-arrow-up.svg);
     border-width: 1px;
 }
 
@@ -146,8 +147,8 @@ QDoubleSpinBox::down-button {
     subcontrol-origin: border;
     subcontrol-position: bottom right; /* position at bottom right corner */
 	margin-top: -1px;
-    width: 16px;
-    border-image: url(:/app/icons/chevron-arrow-down.svg) 1;
+    width: 15px;
+    border-image: url(:/app/icons/chevron-arrow-down.svg);
     border-width: 1px;
     border-top-width: 1px;
 }

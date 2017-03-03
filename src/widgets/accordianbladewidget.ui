@@ -126,15 +126,15 @@ QLabel#content_title {
      <property name="minimumSize">
       <size>
        <width>0</width>
-       <height>24</height>
+       <height>0</height>
       </size>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout">
       <property name="spacing">
        <number>6</number>
       </property>
-      <property name="leftMargin">
-       <number>0</number>
+      <property name="topMargin">
+       <number>9</number>
       </property>
      </layout>
     </widget>
