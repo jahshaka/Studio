@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include <QPainter>
 #include <QMouseEvent>
 #include <QVBoxLayout>
+#include <QScrollBar>
 #include <vector>
 //#include "../scenegraph/scenenodes.h"
 #include "../irisgl/src/core/scenenode.h"
@@ -46,7 +47,7 @@ KeyFrameLabelWidget::KeyFrameLabelWidget(QWidget* parent):
 void KeyFrameLabelWidget::setSceneNode(iris::SceneNodePtr node)
 {
     obj = node;
-    if (!!obj->animation) {
+    if (!!obj && !!obj->animation) {
         this->setKeyFrameSet(obj->animation->keyFrameSet);
     } else {
         this->clearKeyFrameSet();
@@ -56,16 +57,24 @@ void KeyFrameLabelWidget::setSceneNode(iris::SceneNodePtr node)
 void KeyFrameLabelWidget::setKeyFrameSet(iris::KeyFrameSetPtr frameSet)
 {
     auto layout = new QVBoxLayout();
-    ui->scrollAreaWidgetContents->setLayout(layout);
 
     //todo: group widgets
-    for (auto frame : frameSet->keyFrames) {
+    for (auto key : frameSet->keyFrames.keys()) {
+        auto frame = frameSet->keyFrames[key];
 
+        auto label = new KeyFrameLabel();
+        label->setTitle(key);
+        layout->addWidget(label);
     }
+
+    layout->addStretch();
+    delete ui->scrollAreaWidgetContents->layout();
+    ui->scrollAreaWidgetContents->setLayout(layout);
 }
 
 void KeyFrameLabelWidget::clearKeyFrameSet()
 {
+    return;
     auto layout = new QVBoxLayout();
     ui->scrollAreaWidgetContents->setLayout(layout);
 }
@@ -82,11 +91,11 @@ bool KeyFrameLabelWidget::eventFilter(QObject *obj, QEvent *evt)
 
         auto resizeEvt = static_cast<QResizeEvent*>(evt);
         qDebug() << resizeEvt->size();
-
-//        if (dopeSheet != nullptr) {
-//           dopeSheet->setContentHeight(resizeEvt->size().height());
-//        }
-
+        /*
+        if (dopeSheet != nullptr) {
+           dopeSheet->setContentHeight(resizeEvt->size().height());
+        }
+        */
         return true;
     }
 
