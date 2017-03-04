@@ -95,7 +95,7 @@ MainWindow::MainWindow(QWidget *parent) :
     if (fontFile.exists()) {
         fontFile.open(QIODevice::ReadOnly);
         QFontDatabase::addApplicationFontFromData(fontFile.readAll());
-        QApplication::setFont(QFont("Open Sans", 10));
+        QApplication::setFont(QFont("Open Sans", 9));
     }
 
     settings = SettingsManager::getDefaultManager();

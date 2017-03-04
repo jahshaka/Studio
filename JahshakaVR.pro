@@ -67,7 +67,6 @@ SOURCES += src/main.cpp\
     src/widgets/scenenodepropertieswidget.cpp \
     src/widgets/propertywidgets/lightpropertywidget.cpp \
     src/widgets/propertywidgets/materialpropertywidget.cpp \
-    src/widgets/filepickerwidget.cpp \
     src/widgets/propertywidgets/worldpropertywidget.cpp \
     src/io/scenewriter.cpp \
     src/core/thumbnailmanager.cpp \
@@ -129,7 +128,6 @@ HEADERS  += src/mainwindow.h \
     src/widgets/propertywidgets/lightpropertywidget.h \
     src/widgets/propertywidgets/materialpropertywidget.h \
     src/widgets/scenenodepropertieswidget.h \
-    src/widgets/filepickerwidget.h \
     src/widgets/propertywidgets/worldpropertywidget.h \
     src/io/scenewriter.h \
     src/io/scenereader.h \
@@ -176,7 +174,6 @@ FORMS    += \
     src/widgets/transformeditor.ui \
     src/widgets/sceneheirarchywidget.ui \
     src/widgets/skypresets.ui \
-    src/widgets/filepickerwidget.ui \
     src/widgets/checkboxproperty.ui \
     src/widgets/keyframelabelwidget.ui \
     src/widgets/keyframelabeltreewidget.ui \

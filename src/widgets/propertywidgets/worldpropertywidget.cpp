@@ -21,7 +21,7 @@ For more information see the LICENSE file
 
 WorldPropertyWidget::WorldPropertyWidget()
 {
-    this->setContentTitle("Sky and Lighting");
+    this->setPanelTitle("Sky and Lighting");
 
     skyColor = this->addColorPicker("Sky Color");
     ambientColor = this->addColorPicker("Ambient Color");

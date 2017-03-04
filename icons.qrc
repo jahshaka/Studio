@@ -74,5 +74,6 @@
         <file>app/icons/down_arrow_check.png</file>
         <file>app/icons/up_arrow_check.png</file>
         <file>app/icons/dropup.png</file>
+        <file>app/icons/link-symbol.svg</file>
     </qresource>
 </RCC>

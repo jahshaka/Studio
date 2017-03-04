@@ -37,6 +37,7 @@ MaterialSets::MaterialSets(QWidget *parent) :
     ui->materialPresets->setMovement(QListView::Static);
     ui->materialPresets->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->materialPresets->setSelectionMode(QAbstractItemView::SingleSelection);
+    ui->materialPresets->setSpacing(4);
 
     connect(ui->materialPresets,    SIGNAL(itemClicked(QListWidgetItem*)),
             this,                   SLOT(applyMaterialPreset(QListWidgetItem*)));

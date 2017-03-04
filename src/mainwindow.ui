@@ -602,7 +602,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
    <property name="minimumSize">
     <size>
      <width>63</width>
-     <height>38</height>
+     <height>0</height>
     </size>
    </property>
    <property name="maximumSize">
@@ -618,6 +618,12 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <number>8</number>
    </attribute>
    <widget class="QWidget" name="animationWidgetContents">
+    <property name="minimumSize">
+     <size>
+      <width>0</width>
+      <height>0</height>
+     </size>
+    </property>
     <property name="styleSheet">
      <string notr="true">QWidget#animationWidgetContents {
 	border: 1px solid #1e1e1e;
@@ -735,7 +741,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>306</height>
+          <height>225</height>
          </rect>
         </property>
         <property name="styleSheet">
@@ -802,6 +808,12 @@ QToolButton:checked
      <horstretch>0</horstretch>
      <verstretch>0</verstretch>
     </sizepolicy>
+   </property>
+   <property name="minimumSize">
+    <size>
+     <width>396</width>
+     <height>67</height>
+    </size>
    </property>
    <property name="styleSheet">
     <string notr="true">background: #212121</string>

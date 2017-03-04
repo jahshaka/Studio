@@ -36,7 +36,6 @@ class FogPropertyWidget: public AccordianBladeWidget
 
 public:
     FogPropertyWidget();
-
     void setScene(QSharedPointer<iris::Scene> scene);
 
 protected slots:
@@ -49,7 +48,6 @@ protected slots:
 private:
     QSharedPointer<iris::Scene> scene;
 
-    //fog properties
     CheckBoxProperty* fogEnabled;
     CheckBoxProperty* shadowEnabled;
     HFloatSlider* fogStart;

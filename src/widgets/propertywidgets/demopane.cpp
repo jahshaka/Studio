@@ -22,8 +22,5 @@ DemoPane::DemoPane()
     demoInput   = this->addTextInput("Demo Text Input");
     demoColor   = this->addColorPicker("Demo Color");
 
-    demoLabel   = this->addLabel("Demo Label");
-    demoLabel->setText("The fat fox runs!");
-
-    qDebug() << "demo prop " << this->height();
+    demoLabel   = this->addLabel("Demo Label", "The fat fox runs!");
 }

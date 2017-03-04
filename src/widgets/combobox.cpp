@@ -7,11 +7,7 @@ ComboBox::ComboBox(QWidget* parent) : QWidget(parent), ui(new Ui::ComboBox)
 {
     ui->setupUi(this);
 
-//    ui->comboBox->setMinimumSize(128, 32);
-//    qDebug() << "box " << this->height();
-
-    connect(ui->comboBox,   SIGNAL(currentTextChanged(QString)),
-            this,           SLOT(onDropDownTextChanged(QString)));
+    connect(ui->comboBox, SIGNAL(currentTextChanged(QString)), SLOT(onDropDownTextChanged(QString)));
 }
 
 ComboBox::~ComboBox()
