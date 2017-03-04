@@ -82,18 +82,24 @@ void AccordianBladeWidget::setMaxHeight( int height){
     this->setMaximumHeight( height );
 }
 
-void AccordianBladeWidget::setContentTitle( QString title ){
-
+void AccordianBladeWidget::setContentTitle( QString title )
+{
     ui->content_title->setText(title);
 }
 
-TransformEditor* AccordianBladeWidget::addTransform(){
+TransformEditor* AccordianBladeWidget::addTransform()
+{
     TransformEditor *transform = new TransformEditor();
+
     int height = transform->height();
-    minimum_height = height + 52;
+    int spacing = ui->contentpane->layout()->spacing();
+
+    minimum_height += height;
+//    minimum_height += 4 * spacing;
 
     ui->contentpane->layout()->addWidget(transform);
     ui->contentpane->layout()->setMargin(0);
+
     return transform;
 }
 
