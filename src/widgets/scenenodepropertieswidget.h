@@ -15,8 +15,7 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QSharedPointer>
 
-namespace iris
-{
+namespace iris {
     class SceneNode;
 }
 
@@ -27,7 +26,6 @@ class WorldPropertyWidget;
 class LightPropertyWidget;
 class FogPropertyWidget;
 class EmitterPropertyWidget;
-
 class NodePropertyWidget;
 class DemoPane;
 
@@ -57,23 +55,17 @@ private:
 private:
     QSharedPointer<iris::SceneNode> sceneNode;
 
-    TransformEditor* transformWidget;
     AccordianBladeWidget* transformPropView;
-
-    AccordianBladeWidget* meshPropView;
+    TransformEditor* transformWidget;
 
     MaterialPropertyWidget* materialPropView;
     EmitterPropertyWidget* emitterPropView;
-    //MeshPropertyWidget* meshPropView;
     NodePropertyWidget* nodePropView;
     LightPropertyWidget* lightPropView;
     WorldPropertyWidget* worldPropView;
-
-    // this should be under world.. why does it have its own widget?
-    // @TODO: also add an option to customize shadows in the world settings..
     FogPropertyWidget* fogPropView;
 
-//    DemoPane* demoPane;
+    // DemoPane* demoPane;
 };
 
 #endif // PROPERTYWIDGET_H

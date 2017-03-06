@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>LabelWidget</class>
- <widget class="QWidget" name="LabelWidget">
+ <class>TextInputWidget</class>
+ <widget class="QWidget" name="TextInputWidget">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -18,6 +18,9 @@
   </property>
   <property name="windowTitle">
    <string>Form</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true"/>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <property name="leftMargin">
@@ -52,21 +55,15 @@
     </widget>
    </item>
    <item>
-    <widget class="QLabel" name="display">
+    <widget class="QLineEdit" name="text">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
        <horstretch>3</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
-     <property name="font">
-      <font>
-       <weight>75</weight>
-       <bold>true</bold>
-      </font>
-     </property>
-     <property name="text">
-      <string/>
+     <property name="frame">
+      <bool>false</bool>
      </property>
     </widget>
    </item>

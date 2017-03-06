@@ -20,8 +20,7 @@ class ColorValueWidget;
 class ColorPickerWidget;
 class TexturePicker;
 
-namespace iris
-{
+namespace iris {
     class Scene;
     class SceneNode;
     class LightNode;
@@ -36,7 +35,6 @@ class FogPropertyWidget: public AccordianBladeWidget
 
 public:
     FogPropertyWidget();
-
     void setScene(QSharedPointer<iris::Scene> scene);
 
 protected slots:
@@ -49,11 +47,10 @@ protected slots:
 private:
     QSharedPointer<iris::Scene> scene;
 
-    //fog properties
-    CheckBoxProperty* fogEnabled;
-    CheckBoxProperty* shadowEnabled;
-    HFloatSlider* fogStart;
-    HFloatSlider* fogEnd;
+    CheckBoxWidget* fogEnabled;
+    CheckBoxWidget* shadowEnabled;
+    HFloatSliderWidget* fogStart;
+    HFloatSliderWidget* fogEnd;
     ColorValueWidget* fogColor;
 };
 

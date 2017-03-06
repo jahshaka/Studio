@@ -71,5 +71,9 @@
         <file>app/icons/local.svg</file>
         <file>app/icons/light.png</file>
         <file>app/icons/undo.png</file>
+        <file>app/icons/down_arrow_check.png</file>
+        <file>app/icons/up_arrow_check.png</file>
+        <file>app/icons/dropup.png</file>
+        <file>app/icons/link-symbol.svg</file>
     </qresource>
 </RCC>

@@ -10,21 +10,22 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "worldpropertywidget.h"
-#include "../texturepicker.h"
+#include "../texturepickerwidget.h"
 #include "../../irisgl/src/core/scene.h"
 #include "../../irisgl/src/materials/defaultskymaterial.h"
 
 #include "../colorvaluewidget.h"
 #include "../colorpickerwidget.h"
-#include "../hfloatslider.h"
+#include "../hfloatsliderwidget.h"
+#include "../checkboxwidget.h"
 
 WorldPropertyWidget::WorldPropertyWidget()
 {
-    this->setContentTitle("Sky and Lighting");
+    this->setPanelTitle("Sky and Lighting");
 
-    skyTexture = this->addTexturePicker("Sky Texture");
     skyColor = this->addColorPicker("Sky Color");
     ambientColor = this->addColorPicker("Ambient Color");
+    skyTexture = this->addTexturePicker("Sky Texture");
 
     connect(skyTexture,SIGNAL(valueChanged(QString)),SLOT(onSkyTextureChanged(QString)));
     connect(skyColor->getPicker(),SIGNAL(onColorChanged(QColor)),SLOT(onSkyColorChanged(QColor)));
@@ -42,7 +43,6 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 
         skyColor->setColorValue(scene->skyColor);
         ambientColor->setColorValue(scene->ambientColor);
-
     }
     else
     {
@@ -77,3 +77,4 @@ void WorldPropertyWidget::onAmbientColorChanged(QColor color)
     //scene->set
     scene->setAmbientColor(color);
 }
+

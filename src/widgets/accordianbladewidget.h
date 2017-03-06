@@ -20,60 +20,40 @@ namespace Ui {
 
 class TransformEditor;
 class ColorValueWidget;
-class TexturePicker;
-class HFloatSlider;
-class CheckBoxProperty;
-class ComboBox;
-class TextInput;
+class TexturePickerWidget;
+class HFloatSliderWidget;
+class CheckBoxWidget;
+class ComboBoxWidget;
+class TextInputWidget;
 class LabelWidget;
-
-/*
- *  Widget's are appended with 1 of 3 types
- *  1. Property     - code representation of widgets
- *  2. Widget       - actual form with Qt/custom widgets
- *  3. Pane         - a dynamic layout that houses widgets
- *
- */
 
 class AccordianBladeWidget : public QWidget
 {
     Q_OBJECT
 
 public:
-    int minimum_height;
-
-    explicit AccordianBladeWidget(QWidget *parent = 0);
+    explicit AccordianBladeWidget(QWidget* parent = 0);
     ~AccordianBladeWidget();
 
-    TransformEditor* addTransform();
+    TransformEditor*        addTransformControls();
 
+    ColorValueWidget*       addColorPicker(const QString&);
+    TexturePickerWidget*    addTexturePicker(const QString&);
+    HFloatSliderWidget*     addFloatValueSlider(const QString&, float start, float end);
+    CheckBoxWidget*         addCheckBox(const QString&, bool value = false);
+    ComboBoxWidget*         addComboBox(const QString&);
+    TextInputWidget*        addTextInput(const QString&);
+    LabelWidget*            addLabel(const QString& title, const QString& text);
 
-    void addCheckBoxOption( QString name);
-    void setMaxHeight( int height );
-    void addFilePicker( QString name, QString fileextention );
-    void setContentTitle( QString title );
-
-
-    ColorValueWidget* addColorPicker( QString name );
-    TexturePicker* addTexturePicker( QString name );
-
-
-    HFloatSlider* addFloatValueSlider( QString name, float range_1 , float range_2 );
-    CheckBoxProperty* addCheckBox( QString name, bool value = false );
-    ComboBox* addComboBox(QString name);
-
-    TextInput* addTextInput(QString name);
-    LabelWidget* addLabel(QString name);
-
+    void setPanelTitle(const QString&);
     void expand();
 
-    HFloatSlider* addValueSlider(QString label, float start, float end);
-
 private slots:
-    void on_toggle_clicked();
+    void onPanelToggled();
 
 private:
     Ui::AccordianBladeWidget *ui;
+    int minimum_height, stretch;
 };
 
 #endif // ACCORDIANBLADEWIDGET_H

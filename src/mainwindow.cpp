@@ -91,11 +91,12 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     this->setWindowTitle("Jahshaka VR");
 
-    int fontId = QFontDatabase::addApplicationFont(getAbsoluteAssetPath("app/fonts/OpenSans.ttf"));
-    QString family = QFontDatabase::applicationFontFamilies(fontId).at(0);
-    QFont font = QFont(family);
-    font.setPointSizeF(9);
-    QApplication::setFont(font);
+    QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
+    if (fontFile.exists()) {
+        fontFile.open(QIODevice::ReadOnly);
+        QFontDatabase::addApplicationFontFromData(fontFile.readAll());
+        QApplication::setFont(QFont("Open Sans", 9));
+    }
 
     settings = SettingsManager::getDefaultManager();
     prefsDialog = new PreferencesDialog(settings);
@@ -177,7 +178,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     // this acts as a spacer
     QWidget* empty = new QWidget();
-    empty->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding);
+    empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     ui->ToolBar->addWidget(empty);
 
     vrButton = new QPushButton();
@@ -310,7 +311,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
-    dlight->setName("Directional Lamp");
+    dlight->setName("Directional Light");
     dlight->pos = QVector3D(4, 4, 0);
     dlight->rot = QQuaternion::fromEulerAngles(15, 0, 0);
     dlight->intensity = 1;
@@ -319,7 +320,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     auto plight = iris::LightNode::create();
     plight->setLightType(iris::LightType::Point);
      scene->rootNode->addChild(plight);
-    plight->setName("Point Lamp");
+    plight->setName("Point Light");
     plight->pos = QVector3D(-3, 4, 0);
     plight->intensity = 1;
     plight->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
@@ -333,7 +334,6 @@ iris::ScenePtr MainWindow::createDefaultScene()
     return scene;
 }
 
-//create test scene
 void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
 {
 
@@ -343,7 +343,6 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
 //             [](QOpenGLDebugMessage msg)
 //    {
 //        auto message = msg.message();
-//        //qDebug() << message;
 //    });
 
 //    if ( m_logger->initialize() ) {
@@ -776,6 +775,7 @@ void MainWindow::addPointLight()
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Point);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
+    node->setName("Point Light");
     node->intensity = 1.0f;
     node->distance = 40.0f;
 
@@ -788,6 +788,7 @@ void MainWindow::addSpotLight()
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Spot);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
+    node->setName("Spot Light");
 
     addNodeToScene(node);
 }
@@ -799,6 +800,7 @@ void MainWindow::addDirectionalLight()
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Directional);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
+    node->setName("Directional Light");
 
     addNodeToScene(node);
 }
@@ -807,6 +809,7 @@ void MainWindow::addEmpty()
 {
     this->sceneView->makeCurrent();
     auto node = iris::SceneNode::create();
+    node->setName("Empty");
 
     addNodeToScene(node);
 }
@@ -815,6 +818,7 @@ void MainWindow::addViewer()
 {
     this->sceneView->makeCurrent();
     auto node = iris::ViewerNode::create();
+    node->setName("Viewer");
 
     addNodeToScene(node);
 }
@@ -830,29 +834,27 @@ void MainWindow::addParticleSystem()
     */
 
     auto node = iris::ParticleSystemNode::create();
+    node->setName("Particle System");
     addNodeToScene(node);
 }
 
 void MainWindow::addMesh()
 {
-
-    QString dir = QApplication::applicationDirPath()+"/assets/models/";
-    //qDebug()<<dir;
-    auto filename = QFileDialog::getOpenFileName(this,"Load Mesh",dir,"Mesh Files (*.obj *.fbx *.3ds)");
+    QString dir = QApplication::applicationDirPath() + "/assets/models/";
+    auto filename = QFileDialog::getOpenFileName(this, "Load Mesh",
+                                                 dir, "Mesh Files (*.obj *.fbx *.3ds)");
     auto nodeName = QFileInfo(filename).baseName();
-    if(filename.isEmpty())
-        return;
+    if (filename.isEmpty()) return;
 
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::loadAsSceneFragment(filename);
 
     // model file may be invalid so null gets returned
-    if(!node)
-        return;
+    if (!node) return;
 
     node->setName(nodeName);
 
-    //todo: load material data
+    // todo: load material data
     addNodeToScene(node);
 }
 
@@ -873,30 +875,24 @@ void MainWindow::addTexturedPlane()
  */
 void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
-    if(!scene)
-    {
+    if (!scene) {
         //todo: set alert that a scene needs to be set before this can be done
     }
 
-    //apply default material
-    if(sceneNode->sceneNodeType == iris::SceneNodeType::Mesh)
-    {
+    // apply default material
+    if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
-        if(!meshNode->getMaterial())
-        {
+        if (!meshNode->getMaterial()) {
             auto mat = iris::DefaultMaterial::create();
             meshNode->setMaterial(mat);
         }
 
     }
 
-    if(!!activeSceneNode)
-    {
+    if (!!activeSceneNode) {
         activeSceneNode->addChild(sceneNode);
-    }
-    else
-    {
+    } else {
         scene->getRootNode()->addChild(sceneNode);
     }
 

@@ -11,47 +11,39 @@ For more information see the LICENSE file
 
 #include "accordianbladewidget.h"
 #include "ui_accordianbladewidget.h"
-#include "hfloatslider.h"
-#include "ui_hfloatslider.h"
+#include "hfloatsliderwidget.h"
+#include "ui_hfloatsliderwidget.h"
 #include "colorvaluewidget.h"
-#include "texturepicker.h"
-#include "ui_texturepicker.h"
+#include "ui_colorvaluewidget.h"
+#include "texturepickerwidget.h"
+#include "ui_texturepickerwidget.h"
 #include "transformeditor.h"
-#include "filepickerwidget.h"
-#include "ui_filepickerwidget.h"
-#include "checkboxproperty.h"
-#include "combobox.h"
-#include "textinput.h"
+#include "ui_transformeditor.h"
+#include "checkboxwidget.h"
+#include "ui_checkboxwidget.h"
+#include "comboboxwidget.h"
+#include "ui_comboboxwidget.h"
+#include "textinputwidget.h"
+#include "ui_textinputwidget.h"
+#include "ui_labelwidget.h"
 #include "labelwidget.h"
-#include "ui_combobox.h"
-#include <QSpinBox>
-#include <QDebug>
+#include "ui_labelwidget.h"
 
-// these will replace all
-// @TODO MAKE THIS A TEMPLATE
-HFloatSlider* AccordianBladeWidget::addValueSlider(QString label, float start, float end) {
-    HFloatSlider *slider = new HFloatSlider;
-    slider->ui->label->setText(label);
-    slider->setRange(start, end);
-
-    ui->contentpane->layout()->addWidget(slider);
-
-    return slider;
-}
-
-AccordianBladeWidget::AccordianBladeWidget(QWidget *parent) :
+AccordianBladeWidget::AccordianBladeWidget(QWidget* parent) :
     QWidget(parent),
     ui(new Ui::AccordianBladeWidget)
 {
     ui->setupUi(this);
-    minimum_height = 52;//11*4;//default margin is 11
-    this->setMinimumHeight( ui->bg->height() );
-    //QVBoxLayout *layout = new QVBoxLayout();
 
-    //delete ui->contentpane->layout();
-    //ui->contentpane->setLayout(layout);
+    stretch = 0;
+    setMinimumHeight( ui->bg->height());
+    minimum_height = minimumHeight();
+
+    connect(ui->toggle, SIGNAL(toggled(bool)), SLOT(onPanelToggled()));
+
+    ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); }"
+                              "QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
     ui->contentpane->setVisible(false);
-    ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); } QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
 }
 
 AccordianBladeWidget::~AccordianBladeWidget()
@@ -59,163 +51,137 @@ AccordianBladeWidget::~AccordianBladeWidget()
     delete ui;
 }
 
-void AccordianBladeWidget::on_toggle_clicked()
+void AccordianBladeWidget::onPanelToggled()
 {
-    bool state = ui->contentpane->isVisible();
+    if (ui->contentpane->isVisible()) {
+        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); }"
+                                  "QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
 
-    if( state == true )
-    {
-        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); } QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
         ui->contentpane->setVisible(false);
-        auto bgHeight = ui->bg->height();
-        this->setMinimumHeight( bgHeight );
-    }
-    else
-    {
-        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/chevron-arrow-down.svg); } QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
-        ui->contentpane->setVisible(true);
-        if( minimum_height ){
+        this->setMinimumHeight(ui->bg->height());
+    } else {
+        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/chevron-arrow-down.svg); }"
+                                  "QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
 
-        }
-        this->setMinimumHeight( minimum_height );
-        this->setMaximumHeight( minimum_height );
-
-        //this->setMinimumHeight( ui->contentpane->layout()->totalMinimumSize().height() + -ui->contentpane->layout()->contentsRect().height() );
-        //this->setMaximumHeight( ui->contentpane->layout()->totalMinimumSize().height() + -ui->contentpane->layout()->contentsRect().height());
-        //qDebug() << "MINIMUM HEIGHT CALC" << minimum_height ;
+        expand();
     }
 }
 
-void AccordianBladeWidget::setMaxHeight( int height){
-    this->setMaximumHeight( height );
-}
-
-void AccordianBladeWidget::setContentTitle( QString title ){
-
-    ui->content_title->setText(title);
-
-}
-
-TransformEditor* AccordianBladeWidget::addTransform(){
-    TransformEditor *transform = new TransformEditor();
-    int height = transform->height();
-    minimum_height = height + 52;
-
-    ui->contentpane->layout()->addWidget(transform);
-    ui->contentpane->layout()->setMargin(0);
-    return transform;
-}
-
-ColorValueWidget* AccordianBladeWidget::addColorPicker( QString name )
+void AccordianBladeWidget::setPanelTitle(const QString& title)
 {
+    ui->content_title->setText(title);
+}
 
-    ColorValueWidget *colorpicker = new ColorValueWidget();
-    int height = colorpicker->height();
+TransformEditor* AccordianBladeWidget::addTransformControls()
+{
+    auto transformEditor = new TransformEditor();
+
+    int height = transformEditor->height();
+    int spacing = ui->contentpane->layout()->spacing();
+
     minimum_height += height;
-    minimum_height += 12;
 
+    ui->contentpane->layout()->addWidget(transformEditor);
+    ui->contentpane->layout()->setMargin(0);
+
+    return transformEditor;
+}
+
+ColorValueWidget* AccordianBladeWidget::addColorPicker(const QString& name)
+{
+    auto colorpicker = new ColorValueWidget();
     colorpicker->setLabel(name);
-    ui->contentpane->layout()->addWidget(colorpicker);
 
+    minimum_height += colorpicker->height() + stretch;
+
+    ui->contentpane->layout()->addWidget(colorpicker);
     return colorpicker;
 }
 
-void AccordianBladeWidget::addFilePicker( QString name , QString fileextention ){
-    FilePickerWidget *filepicker = new FilePickerWidget();
-    int height = filepicker->height();
-    filepicker->file_extentions = fileextention;
-    minimum_height += height;
-    minimum_height += 16;
-
-    filepicker->ui->label->setText(name);
-    ui->contentpane->layout()->addWidget(filepicker);
-}
-
-TexturePicker* AccordianBladeWidget::addTexturePicker( QString name ){
-
-    TexturePicker *texpicker = new TexturePicker();
-    int height = texpicker->height();
-    minimum_height += height;
-    minimum_height += 16;
-
+TexturePickerWidget* AccordianBladeWidget::addTexturePicker(const QString& name)
+{
+    auto texpicker = new TexturePickerWidget();
     texpicker->ui->label->setText(name);
+
+    minimum_height += texpicker->height() + stretch;
+
     ui->contentpane->layout()->addWidget(texpicker);
     return texpicker;
 }
 
-HFloatSlider* AccordianBladeWidget::addFloatValueSlider( QString name, float range_1 , float range_2 )
+HFloatSliderWidget* AccordianBladeWidget::addFloatValueSlider(
+        const QString& name,
+        float start,
+        float end)
 {
-    HFloatSlider *slider = new HFloatSlider();
-    int height = slider->height();
-    minimum_height += height;
-    minimum_height += 12;
-
-    //minimum_height = ui->contentpane->layout()->totalMinimumSize().height();
-
+    auto slider = new HFloatSliderWidget();
     slider->ui->label->setText(name);
-    slider->setRange(range_1,range_2);
+    slider->setRange(start, end);
+
+    minimum_height += slider->height() + stretch;
 
     ui->contentpane->layout()->addWidget(slider);
-
     return slider;
 }
 
-CheckBoxProperty* AccordianBladeWidget::addCheckBox( QString name, bool value )
+CheckBoxWidget* AccordianBladeWidget::addCheckBox(const QString& title, bool value)
 {
-    auto checkbox = new CheckBoxProperty();
-    checkbox->setLabel(name);
+    auto checkbox = new CheckBoxWidget();
+    checkbox->setLabel(title);
+
+    minimum_height += checkbox->height() + stretch;
+
     ui->contentpane->layout()->addWidget(checkbox);
-    int height = checkbox->height();
-
-    minimum_height += height;
-    minimum_height += 16;
-
     return checkbox;
 }
 
-ComboBox* AccordianBladeWidget::addComboBox(QString name)
+ComboBoxWidget* AccordianBladeWidget::addComboBox(const QString& title)
 {
-    ComboBox* combobox = new ComboBox();
-    combobox->setLabel(name);
+    auto combobox = new ComboBoxWidget();
+    combobox->setLabel(title);
+
+    minimum_height += combobox->height() + stretch;
+
     ui->contentpane->layout()->addWidget(combobox);
-    int height = combobox->height();
-
-    minimum_height += height;
-    minimum_height += 16;
-
     return combobox;
 }
 
-TextInput* AccordianBladeWidget::addTextInput(QString name)
+TextInputWidget* AccordianBladeWidget::addTextInput(const QString& title)
 {
-    TextInput* textInput = new TextInput();
-    textInput->setLabel(name);
+    auto textInput = new TextInputWidget();
+    textInput->setLabel(title);
+
+    minimum_height += textInput->height() + stretch;
+
     ui->contentpane->layout()->addWidget(textInput);
-    int height = textInput->height();
-
-    minimum_height += height;
-    minimum_height += 16;
-
     return textInput;
 }
 
-LabelWidget* AccordianBladeWidget::addLabel(QString name)
+LabelWidget* AccordianBladeWidget::addLabel(const QString& title, const QString& text)
 {
-    LabelWidget* label = new LabelWidget();
-    label->setLabel(name);
+    auto label = new LabelWidget();
+    label->setLabel(title);
+    label->setText(text);
+
+    minimum_height += label->height() + stretch;
+
     ui->contentpane->layout()->addWidget(label);
-    int height = label->height();
-
-    minimum_height += height;
-    minimum_height += 16;
-
     return label;
 }
 
 void AccordianBladeWidget::expand()
 {
+    // this is a tad bit hacky and there is definitely a better way to do this automatically
+    // for now, we calculate and set the accordion height including spacing and margins
+    int widgetCount = ui->contentpane->layout()->count();
+    int topMargin, bottomMargin;
+    int spacing = ui->contentpane->layout()->spacing();
+    ui->contentpane->layout()->getContentsMargins(nullptr, &topMargin, nullptr, &bottomMargin);
+    int finalHeight = minimum_height + (widgetCount * spacing) + topMargin + bottomMargin;
+
+    this->setMinimumHeight(finalHeight);
+    this->setMaximumHeight(finalHeight);
+
     ui->contentpane->setVisible(true);
-    this->setMinimumHeight(minimum_height);
-    this->setMaximumHeight(minimum_height);
 }
 

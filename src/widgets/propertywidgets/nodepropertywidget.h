@@ -25,10 +25,10 @@ protected slots:
 private:
     QSharedPointer<iris::SceneNode> sceneNode;
 
-    ComboBox* drawType;
-    TextInput* uuid;
-    CheckBoxProperty* shadowCaster;
-    CheckBoxProperty* shadowReceiver;
+    ComboBoxWidget* drawType;
+    TextInputWidget* uuid;
+    CheckBoxWidget* shadowCaster;
+    CheckBoxWidget* shadowReceiver;
 };
 
 #endif // NODEPROPERTY_H

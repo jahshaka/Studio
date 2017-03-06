@@ -23,10 +23,10 @@ ModelPresets::ModelPresets(QWidget *parent) :
 
     mainWindow = nullptr;
 
-//    ui->modelsSets->setViewMode(QListWidget::IconMode);
-//    ui->modelsSets->setIconSize(QSize(88,88));
-//    ui->modelsSets->setResizeMode(QListWidget::Adjust);
-//    ui->modelsSets->setMovement(QListView::Static);
+    ui->modelsSets->setViewMode(QListWidget::IconMode);
+    ui->modelsSets->setIconSize(QSize(88,88));
+    ui->modelsSets->setResizeMode(QListWidget::Adjust);
+    ui->modelsSets->setMovement(QListView::Static);
     ui->modelsSets->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->modelsSets->setSelectionMode(QAbstractItemView::SingleSelection);
 
