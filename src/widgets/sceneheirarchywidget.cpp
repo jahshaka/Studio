@@ -70,7 +70,7 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     //todo: bind callbacks
     QMenu* addMenu = new QMenu();
 
-    auto primtiveMenu = addMenu->addMenu("Primtives");
+    auto primtiveMenu = addMenu->addMenu("Primitive");
     QAction *action = new QAction("Torus", this);
     primtiveMenu->addAction(action);
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addTorus()));
@@ -92,37 +92,36 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
 //    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addTexturedPlane()));
 
     //LIGHTS
-    auto lightMenu = addMenu->addMenu("Lights");
-    action = new QAction("PointLight", this);
+    auto lightMenu = addMenu->addMenu("Light");
+    action = new QAction("Point", this);
     lightMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addPointLight()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addPointLight()));
 
-    action = new QAction("SpotLight", this);
+    action = new QAction("Spot", this);
     lightMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addSpotLight()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addSpotLight()));
 
-    action = new QAction("DirectionalLight", this);
+    action = new QAction("Directional", this);
     lightMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addDirectionalLight()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addDirectionalLight()));
 
     action = new QAction("Empty", this);
     addMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addEmpty()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addEmpty()));
 
     action = new QAction("Viewer", this);
     addMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addViewer()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addViewer()));
 
     //SYSTEMS
-    auto systemsMenu = addMenu->addMenu("Emitter");
     action = new QAction("Particle System", this);
-    systemsMenu->addAction(action);
+    addMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addParticleSystem()));
 
     //MESHES
     action = new QAction("Load Model", this);
     addMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addMesh()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addMesh()));
 
     //VIEWPOINT
     /*
@@ -134,7 +133,7 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     ui->addBtn->setMenu(addMenu);
     ui->addBtn->setPopupMode(QToolButton::InstantPopup);
 
-    connect(ui->deleteBtn,SIGNAL(clicked(bool)),mainWindow,SLOT(deleteNode()));
+    connect(ui->deleteBtn, SIGNAL(clicked(bool)), mainWindow, SLOT(deleteNode()));
 }
 
 void SceneHeirarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode)
@@ -147,8 +146,7 @@ void SceneHeirarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> scene
     //for(auto item:selected)
     //    item->setSelected(false);
 
-    if(!!sceneNode)
-    {
+    if(!!sceneNode) {
         auto item = treeItemList[sceneNode->getNodeId()];
         //item->setSelected(true);
         ui->sceneTree->setCurrentItem(item);

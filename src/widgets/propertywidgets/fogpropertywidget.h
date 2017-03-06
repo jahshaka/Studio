@@ -20,8 +20,7 @@ class ColorValueWidget;
 class ColorPickerWidget;
 class TexturePicker;
 
-namespace iris
-{
+namespace iris {
     class Scene;
     class SceneNode;
     class LightNode;
@@ -48,10 +47,10 @@ protected slots:
 private:
     QSharedPointer<iris::Scene> scene;
 
-    CheckBoxProperty* fogEnabled;
-    CheckBoxProperty* shadowEnabled;
-    HFloatSlider* fogStart;
-    HFloatSlider* fogEnd;
+    CheckBoxWidget* fogEnabled;
+    CheckBoxWidget* shadowEnabled;
+    HFloatSliderWidget* fogStart;
+    HFloatSliderWidget* fogEnd;
     ColorValueWidget* fogColor;
 };
 

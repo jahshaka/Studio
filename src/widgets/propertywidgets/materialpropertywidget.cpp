@@ -12,11 +12,10 @@ For more information see the LICENSE file
 #include "../accordianbladewidget.h"
 
 #include "materialpropertywidget.h"
-#include "../hfloatslider.h"
+#include "../hfloatsliderwidget.h"
 #include "../colorpickerwidget.h"
 #include "../colorvaluewidget.h"
-#include "../texturepicker.h"
-#include <QDebug>
+#include "../texturepickerwidget.h"
 
 #include "../../irisgl/src/graphics/texture2d.h"
 #include "../../irisgl/src/scenegraph/meshnode.h"

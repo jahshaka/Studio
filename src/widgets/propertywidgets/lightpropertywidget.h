@@ -75,10 +75,10 @@ private:
     QSharedPointer<iris::LightNode> lightNode;
 
     ColorValueWidget* lightColor;
-    HFloatSlider* distance;
-    HFloatSlider* spotCutOff;
-    HFloatSlider* spotCutOffSoftness;
-    HFloatSlider* intensity;
+    HFloatSliderWidget* distance;
+    HFloatSliderWidget* spotCutOff;
+    HFloatSliderWidget* spotCutOffSoftness;
+    HFloatSliderWidget* intensity;
     //EnumPicker* lightTypePicker;
 };
 

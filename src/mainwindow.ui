@@ -247,6 +247,7 @@ QMainWindow {
 }
 
 QDockWidget::title {
+	padding: 2px;
 	background-color: #212121;
 	text-align: center;
 }
@@ -360,9 +361,9 @@ QTabBar::tab:selected {
 
 QTabBar::tab {
 	background-color: #4d4d4d;
-    min-width: 96px;
-    min-height: 24px;
-    padding-bottom: 2px;
+	min-width: 108px;
+    	min-height: 24px;
+    	padding: 4px 0;
    /* border-top: 1px solid #1e1e1e; */
  	border-right: 1px solid #1e1e1e;
 	border-bottom: 1px solid #1e1e1e;
@@ -602,7 +603,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
    <property name="minimumSize">
     <size>
      <width>63</width>
-     <height>0</height>
+     <height>34</height>
     </size>
    </property>
    <property name="maximumSize">
@@ -741,7 +742,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>225</height>
+          <height>290</height>
          </rect>
         </property>
         <property name="styleSheet">
@@ -812,7 +813,7 @@ QToolButton:checked
    <property name="minimumSize">
     <size>
      <width>396</width>
-     <height>67</height>
+     <height>87</height>
     </size>
    </property>
    <property name="styleSheet">

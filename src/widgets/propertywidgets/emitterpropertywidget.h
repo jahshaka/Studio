@@ -1,5 +1,16 @@
-#ifndef EMITTERPROPERTY_H
-#define EMITTERPROPERTY_H
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
+#ifndef EMITTERPROPERTYWIDGET_H
+#define EMITTERPROPERTYWIDGET_H
 
 #include <QWidget>
 #include <QSharedPointer>
@@ -16,8 +27,6 @@ namespace iris {
 namespace Ui {
     class EmitterPropertyWidget;
 }
-
-class ComboBox;
 
 class EmitterPropertyWidget : public AccordianBladeWidget
 {
@@ -48,22 +57,22 @@ protected slots:
 private:
     iris::ParticleSystemNodePtr ps;
 
-    ComboBox* preset;
-    TexturePicker* billboardImage;
-    HFloatSlider* emissionRate;
-    HFloatSlider* particleLife;
-    HFloatSlider* particleScale;
-    HFloatSlider* lifeFactor;
-    HFloatSlider* speedFactor;
-    HFloatSlider* scaleFactor;
-    HFloatSlider* gravityFactor;
-    HFloatSlider* velocityFactor;
-    CheckBoxProperty* randomRotation;
-    CheckBoxProperty* sortOrder;
-    CheckBoxProperty* dissipate;
-    CheckBoxProperty* dissipateInv;
-    CheckBoxProperty* useAdditive;
-    ComboBox* blendMode;
+    ComboBoxWidget* preset;
+    TexturePickerWidget* billboardImage;
+    HFloatSliderWidget* emissionRate;
+    HFloatSliderWidget* particleLife;
+    HFloatSliderWidget* particleScale;
+    HFloatSliderWidget* lifeFactor;
+    HFloatSliderWidget* speedFactor;
+    HFloatSliderWidget* scaleFactor;
+    HFloatSliderWidget* gravityFactor;
+    HFloatSliderWidget* velocityFactor;
+    CheckBoxWidget* randomRotation;
+    CheckBoxWidget* sortOrder;
+    CheckBoxWidget* dissipate;
+    CheckBoxWidget* dissipateInv;
+    CheckBoxWidget* useAdditive;
+    ComboBoxWidget* blendMode;
 };
 
-#endif // EMITTER_H
+#endif // EMITTERPROPERTYWIDGET_H

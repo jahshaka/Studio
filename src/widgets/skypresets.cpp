@@ -25,23 +25,23 @@ SkyPresets::SkyPresets(QWidget *parent) :
     mainWindow = nullptr;
 
     ui->skyList->setViewMode(QListWidget::IconMode);
-    ui->skyList->setIconSize(QSize(110,80));
+    ui->skyList->setIconSize(QSize(110, 80));
     ui->skyList->setResizeMode(QListWidget::Adjust);
     ui->skyList->setMovement(QListView::Static);
     ui->skyList->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->skyList->setSelectionMode(QAbstractItemView::SingleSelection);
 
-    addSky(":/app/content/skies/default.png","Default");
-    addSky(":/app/content/skies/vp_sky_v2_002.jpg","Sky 1");
-    addSky(":/app/content/skies/vp_sky_v2_032.jpg","Sky 2");
-    addSky(":/app/content/skies/vp_sky_v2_033.jpg","Sky 3");
-    addSky(":/app/content/skies/vp_sky_v2_002.jpg","Sky 1");
-    addSky(":/app/content/skies/vp_sky_v2_032.jpg","Sky 2");
-    addSky(":/app/content/skies/vp_sky_v2_033.jpg","Sky 3");
-    addSky(":/app/content/skies/vp_sky_v2_002_test.jpg","Fading Sky");
+    addSky(":/app/content/skies/default.png", "Default");
+    addSky(":/app/content/skies/vp_sky_v2_002.jpg", "Sky 1");
+    addSky(":/app/content/skies/vp_sky_v2_032.jpg", "Sky 2");
+    addSky(":/app/content/skies/vp_sky_v2_033.jpg", "Sky 3");
+    addSky(":/app/content/skies/vp_sky_v2_002.jpg", "Sky 1");
+    addSky(":/app/content/skies/vp_sky_v2_032.jpg", "Sky 2");
+    addSky(":/app/content/skies/vp_sky_v2_033.jpg", "Sky 3");
+    addSky(":/app/content/skies/vp_sky_v2_002_test.jpg", "Fading Sky");
 
-
-    connect(ui->skyList,SIGNAL(itemClicked(QListWidgetItem*)),this,SLOT(applySky(QListWidgetItem*)));
+    connect(ui->skyList,    SIGNAL(itemClicked(QListWidgetItem*)),
+            this,           SLOT(applySky(QListWidgetItem*)));
 }
 
 SkyPresets::~SkyPresets()
@@ -60,11 +60,10 @@ void SkyPresets::addSky(QString path, QString name)
 
 void SkyPresets::applySky(QListWidgetItem* item)
 {
-    if(!mainWindow)
-        return;
+    if (!mainWindow) return;
 
     auto sky = skies[item->data(Qt::UserRole).toInt()];
 
-    mainWindow->getScene()->setSkyTexture(iris::Texture2D::load(sky,false));
-    mainWindow->getScene()->setSkyColor(QColor(255,255,255));
+    mainWindow->getScene()->setSkyTexture(iris::Texture2D::load(sky, false));
+    mainWindow->getScene()->setSkyColor(QColor(255, 255, 255));
 }

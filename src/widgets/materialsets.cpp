@@ -37,12 +37,18 @@ MaterialSets::MaterialSets(QWidget *parent) :
     ui->materialPresets->setMovement(QListView::Static);
     ui->materialPresets->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->materialPresets->setSelectionMode(QAbstractItemView::SingleSelection);
-    ui->materialPresets->setSpacing(4);
+//    ui->materialPresets->setSpacing(4);
 
     connect(ui->materialPresets,    SIGNAL(itemClicked(QListWidgetItem*)),
             this,                   SLOT(applyMaterialPreset(QListWidgetItem*)));
 
     loadPresets();
+}
+
+MaterialSets::~MaterialSets()
+{
+    delete ui;
+    for (auto preset : presets) delete preset;
 }
 
 void MaterialSets::loadPresets()
@@ -62,24 +68,15 @@ void MaterialSets::addPreset(MaterialPreset* preset)
 {
     presets.append(preset);
 
-    auto item = new QListWidgetItem(QIcon(preset->icon),preset->name);
-    item->setData(Qt::UserRole,presets.count()-1);
+    auto item = new QListWidgetItem(QIcon(preset->icon), preset->name);
+    item->setData(Qt::UserRole, presets.count() - 1);
     ui->materialPresets->addItem(item);
 }
 
 void MaterialSets::applyMaterialPreset(QListWidgetItem* item)
 {
-    if(!mainWindow)
-        return;
+    if (!mainWindow) return;
 
     auto preset = presets[item->data(Qt::UserRole).toInt()];
     mainWindow->applyMaterialPreset(preset);
-}
-
-MaterialSets::~MaterialSets()
-{
-    delete ui;
-
-    for(auto preset:presets)
-        delete preset;
 }

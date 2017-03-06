@@ -16,8 +16,7 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include "../accordianbladewidget.h"
 
-namespace iris
-{
+namespace iris {
     class SceneNode;
     class MeshNode;
     class DefaultMaterial;
@@ -28,7 +27,7 @@ namespace iris
  *  right now it is made specifically for the iris::DefaulMaterial class
  *
  */
-class MaterialPropertyWidget:public AccordianBladeWidget
+class MaterialPropertyWidget : public AccordianBladeWidget
 {
     Q_OBJECT
 
@@ -61,19 +60,19 @@ private:
     ColorValueWidget* ambientColor;
 
     ColorValueWidget* diffuseColor;
-    TexturePicker* diffuseTexture;
+    TexturePickerWidget* diffuseTexture;
 
     ColorValueWidget* specularColor;
-    TexturePicker* specularTexture;
-    HFloatSlider* shininess;
+    TexturePickerWidget* specularTexture;
+    HFloatSliderWidget* shininess;
 
-    TexturePicker* normalTexture;
-    HFloatSlider* normalIntensity;
+    TexturePickerWidget* normalTexture;
+    HFloatSliderWidget* normalIntensity;
 
-    TexturePicker* reflectionTexture;
-    HFloatSlider* reflectionInfluence;
+    TexturePickerWidget* reflectionTexture;
+    HFloatSliderWidget* reflectionInfluence;
 
-    HFloatSlider* textureScale;
+    HFloatSliderWidget* textureScale;
 
 };
 

@@ -1,10 +1,21 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #include "emitterpropertywidget.h"
 
 #include "materialpropertywidget.h"
-#include "../texturepicker.h"
-#include "../hfloatslider.h"
-#include "../checkboxproperty.h"
-#include "../combobox.h"
+#include "../texturepickerwidget.h"
+#include "../hfloatsliderwidget.h"
+#include "../checkboxwidget.h"
+#include "../comboboxwidget.h"
 
 #include "../../irisgl/src/graphics/texture2d.h"
 #include "../../irisgl/src/scenegraph/meshnode.h"

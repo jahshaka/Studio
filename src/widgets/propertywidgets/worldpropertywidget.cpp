@@ -10,14 +10,14 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "worldpropertywidget.h"
-#include "../texturepicker.h"
+#include "../texturepickerwidget.h"
 #include "../../irisgl/src/core/scene.h"
 #include "../../irisgl/src/materials/defaultskymaterial.h"
 
 #include "../colorvaluewidget.h"
 #include "../colorpickerwidget.h"
-#include "../hfloatslider.h"
-#include "../checkboxproperty.h"
+#include "../hfloatsliderwidget.h"
+#include "../checkboxwidget.h"
 
 WorldPropertyWidget::WorldPropertyWidget()
 {

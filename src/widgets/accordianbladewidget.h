@@ -20,11 +20,11 @@ namespace Ui {
 
 class TransformEditor;
 class ColorValueWidget;
-class TexturePicker;
-class HFloatSlider;
-class CheckBoxProperty;
-class ComboBox;
-class TextInput;
+class TexturePickerWidget;
+class HFloatSliderWidget;
+class CheckBoxWidget;
+class ComboBoxWidget;
+class TextInputWidget;
 class LabelWidget;
 
 class AccordianBladeWidget : public QWidget
@@ -35,15 +35,15 @@ public:
     explicit AccordianBladeWidget(QWidget* parent = 0);
     ~AccordianBladeWidget();
 
-    TransformEditor*    addTransformControls();
+    TransformEditor*        addTransformControls();
 
-    ColorValueWidget*   addColorPicker(const QString&);
-    TexturePicker*      addTexturePicker(const QString&);
-    HFloatSlider*       addFloatValueSlider(const QString&, float start, float end);
-    CheckBoxProperty*   addCheckBox(const QString&, bool value = false);
-    ComboBox*           addComboBox(const QString&);
-    TextInput*          addTextInput(const QString&);
-    LabelWidget*        addLabel(const QString& title, const QString& text);
+    ColorValueWidget*       addColorPicker(const QString&);
+    TexturePickerWidget*    addTexturePicker(const QString&);
+    HFloatSliderWidget*     addFloatValueSlider(const QString&, float start, float end);
+    CheckBoxWidget*         addCheckBox(const QString&, bool value = false);
+    ComboBoxWidget*         addComboBox(const QString&);
+    TextInputWidget*        addTextInput(const QString&);
+    LabelWidget*            addLabel(const QString& title, const QString& text);
 
     void setPanelTitle(const QString&);
     void expand();

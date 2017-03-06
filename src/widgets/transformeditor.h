@@ -40,35 +40,29 @@ public:
 
 protected slots:
     /**
-     * triggered when active scene node's properties gets updated externally (from gizmo, scripts, etc)
+     * should be triggered when active scene node's properties gets
+     * updated externally (from gizmo, scripts, etc)
      */
-    //void sceneNodeUpdated();
+    // void sceneNodeUpdated();
 
-    /**
-     * translation change callbacks
-     */
     void xPosChanged(double value);
     void yPosChanged(double value);
     void zPosChanged(double value);
 
-    /**
-     * rotation change callbacks
-     */
     void xRotChanged(double value);
     void yRotChanged(double value);
     void zRotChanged(double value);
 
-    /**
-     * scale change callbacks
-     */
     void xScaleChanged(double value);
     void yScaleChanged(double value);
     void zScaleChanged(double value);
 
-private:
-    Ui::TransformEditor *ui;
+    void onResetBtnClicked();
 
+private:
     QSharedPointer<iris::SceneNode> sceneNode;
+    QSharedPointer<iris::SceneNode> defaultStateNode;
+    Ui::TransformEditor* ui;
 };
 
 #endif // TRANSFORMEDITOR_H

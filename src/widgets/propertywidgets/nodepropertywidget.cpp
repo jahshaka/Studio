@@ -1,8 +1,8 @@
 #include "nodepropertywidget.h"
 
-#include "../checkboxproperty.h"
-#include "../hfloatslider.h"
-#include "../combobox.h"
+#include "../checkboxwidget.h"
+#include "../hfloatsliderwidget.h"
+#include "../comboboxwidget.h"
 
 #include "../../irisgl/src/scenegraph/meshnode.h"
 #include "../../irisgl/src/scenegraph/particlesystemnode.h"

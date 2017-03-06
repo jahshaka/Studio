@@ -11,20 +11,20 @@ For more information see the LICENSE file
 
 #include "accordianbladewidget.h"
 #include "ui_accordianbladewidget.h"
-#include "hfloatslider.h"
-#include "ui_hfloatslider.h"
+#include "hfloatsliderwidget.h"
+#include "ui_hfloatsliderwidget.h"
 #include "colorvaluewidget.h"
 #include "ui_colorvaluewidget.h"
-#include "texturepicker.h"
-#include "ui_texturepicker.h"
+#include "texturepickerwidget.h"
+#include "ui_texturepickerwidget.h"
 #include "transformeditor.h"
 #include "ui_transformeditor.h"
-#include "checkboxproperty.h"
-#include "ui_checkboxproperty.h"
-#include "combobox.h"
-#include "ui_combobox.h"
-#include "textinput.h"
-#include "ui_textinput.h"
+#include "checkboxwidget.h"
+#include "ui_checkboxwidget.h"
+#include "comboboxwidget.h"
+#include "ui_comboboxwidget.h"
+#include "textinputwidget.h"
+#include "ui_textinputwidget.h"
 #include "ui_labelwidget.h"
 #include "labelwidget.h"
 #include "ui_labelwidget.h"
@@ -74,22 +74,22 @@ void AccordianBladeWidget::setPanelTitle(const QString& title)
 
 TransformEditor* AccordianBladeWidget::addTransformControls()
 {
-    TransformEditor *transform = new TransformEditor();
+    auto transformEditor = new TransformEditor();
 
-    int height = transform->height();
+    int height = transformEditor->height();
     int spacing = ui->contentpane->layout()->spacing();
 
     minimum_height += height;
 
-    ui->contentpane->layout()->addWidget(transform);
+    ui->contentpane->layout()->addWidget(transformEditor);
     ui->contentpane->layout()->setMargin(0);
 
-    return transform;
+    return transformEditor;
 }
 
 ColorValueWidget* AccordianBladeWidget::addColorPicker(const QString& name)
 {
-    ColorValueWidget *colorpicker = new ColorValueWidget();
+    auto colorpicker = new ColorValueWidget();
     colorpicker->setLabel(name);
 
     minimum_height += colorpicker->height() + stretch;
@@ -98,9 +98,9 @@ ColorValueWidget* AccordianBladeWidget::addColorPicker(const QString& name)
     return colorpicker;
 }
 
-TexturePicker* AccordianBladeWidget::addTexturePicker(const QString& name)
+TexturePickerWidget* AccordianBladeWidget::addTexturePicker(const QString& name)
 {
-    TexturePicker *texpicker = new TexturePicker();
+    auto texpicker = new TexturePickerWidget();
     texpicker->ui->label->setText(name);
 
     minimum_height += texpicker->height() + stretch;
@@ -109,9 +109,12 @@ TexturePicker* AccordianBladeWidget::addTexturePicker(const QString& name)
     return texpicker;
 }
 
-HFloatSlider* AccordianBladeWidget::addFloatValueSlider(const QString& name, float start, float end)
+HFloatSliderWidget* AccordianBladeWidget::addFloatValueSlider(
+        const QString& name,
+        float start,
+        float end)
 {
-    HFloatSlider *slider = new HFloatSlider();
+    auto slider = new HFloatSliderWidget();
     slider->ui->label->setText(name);
     slider->setRange(start, end);
 
@@ -121,9 +124,9 @@ HFloatSlider* AccordianBladeWidget::addFloatValueSlider(const QString& name, flo
     return slider;
 }
 
-CheckBoxProperty* AccordianBladeWidget::addCheckBox(const QString& title, bool value)
+CheckBoxWidget* AccordianBladeWidget::addCheckBox(const QString& title, bool value)
 {
-    auto checkbox = new CheckBoxProperty();
+    auto checkbox = new CheckBoxWidget();
     checkbox->setLabel(title);
 
     minimum_height += checkbox->height() + stretch;
@@ -132,9 +135,9 @@ CheckBoxProperty* AccordianBladeWidget::addCheckBox(const QString& title, bool v
     return checkbox;
 }
 
-ComboBox* AccordianBladeWidget::addComboBox(const QString& title)
+ComboBoxWidget* AccordianBladeWidget::addComboBox(const QString& title)
 {
-    ComboBox* combobox = new ComboBox();
+    auto combobox = new ComboBoxWidget();
     combobox->setLabel(title);
 
     minimum_height += combobox->height() + stretch;
@@ -143,9 +146,9 @@ ComboBox* AccordianBladeWidget::addComboBox(const QString& title)
     return combobox;
 }
 
-TextInput* AccordianBladeWidget::addTextInput(const QString& title)
+TextInputWidget* AccordianBladeWidget::addTextInput(const QString& title)
 {
-    TextInput* textInput = new TextInput();
+    auto textInput = new TextInputWidget();
     textInput->setLabel(title);
 
     minimum_height += textInput->height() + stretch;
@@ -156,7 +159,7 @@ TextInput* AccordianBladeWidget::addTextInput(const QString& title)
 
 LabelWidget* AccordianBladeWidget::addLabel(const QString& title, const QString& text)
 {
-    LabelWidget* label = new LabelWidget();
+    auto label = new LabelWidget();
     label->setLabel(title);
     label->setText(text);
 

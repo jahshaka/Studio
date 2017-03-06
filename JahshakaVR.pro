@@ -57,8 +57,6 @@ SOURCES += src/main.cpp\
     src/widgets/materialsets.cpp \
     src/widgets/modelpresets.cpp \
     src/widgets/accordianbladewidget.cpp \
-    src/widgets/hfloatslider.cpp \
-    src/widgets/texturepicker.cpp \
     src/widgets/transformeditor.cpp \
     src/widgets/sceneheirarchywidget.cpp \
     src/editor/cameracontrollerbase.cpp \
@@ -70,7 +68,6 @@ SOURCES += src/main.cpp\
     src/widgets/propertywidgets/worldpropertywidget.cpp \
     src/io/scenewriter.cpp \
     src/core/thumbnailmanager.cpp \
-    src/widgets/checkboxproperty.cpp \
     src/widgets/propertywidgets/fogpropertywidget.cpp \
     src/io/assetiobase.cpp \
     src/io/materialpresetreader.cpp \
@@ -78,12 +75,15 @@ SOURCES += src/main.cpp\
     src/core/keyboardstate.cpp \
     src/io/scenereader.cpp \
     src/widgets/propertywidgets/emitterpropertywidget.cpp \
-    src/widgets/combobox.cpp \
     src/widgets/propertywidgets/nodepropertywidget.cpp \
     src/editor/editorvrcontroller.cpp \
     src/widgets/propertywidgets/demopane.cpp \
-    src/widgets/textinput.cpp \
-    src/widgets/labelwidget.cpp
+    src/widgets/labelwidget.cpp \
+    src/widgets/checkboxwidget.cpp \
+    src/widgets/textinputwidget.cpp \
+    src/widgets/comboboxwidget.cpp \
+    src/widgets/hfloatsliderwidget.cpp \
+    src/widgets/texturepickerwidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -117,8 +117,6 @@ HEADERS  += src/mainwindow.h \
     src/widgets/materialsets.h \
     src/widgets/modelpresets.h \
     src/widgets/accordianbladewidget.h \
-    src/widgets/hfloatslider.h \
-    src/widgets/texturepicker.h \
     src/widgets/transformeditor.h \
     src/widgets/sceneheirarchywidget.h \
     src/editor/orbitalcameracontroller.h \
@@ -133,7 +131,6 @@ HEADERS  += src/mainwindow.h \
     src/io/scenereader.h \
     src/widgets/propertywidgets/scenepropertywidget.h \
     src/core/thumbnailmanager.h \
-    src/widgets/checkboxproperty.h \
     src/widgets/propertywidgets/fogpropertywidget.h \
     src/core/meshmanager.h \
     src/io/assetiobase.h \
@@ -149,12 +146,15 @@ HEADERS  += src/mainwindow.h \
     src/core/keyboardstate.h \
     src/editor/editordata.h \
     src/widgets/propertywidgets/emitterpropertywidget.h \
-    src/widgets/combobox.h \
     src/widgets/propertywidgets/nodepropertywidget.h \
     src/editor/editorvrcontroller.h \
     src/widgets/propertywidgets/demopane.h \
-    src/widgets/textinput.h \
-    src/widgets/labelwidget.h
+    src/widgets/labelwidget.h \
+    src/widgets/checkboxwidget.h \
+    src/widgets/textinputwidget.h \
+    src/widgets/comboboxwidget.h \
+    src/widgets/hfloatsliderwidget.h \
+    src/widgets/texturepickerwidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -170,19 +170,19 @@ FORMS    += \
     src/widgets/maintimelinewidget.ui \
     src/widgets/materialsets.ui \
     src/widgets/accordianbladewidget.ui \
-    src/widgets/texturepicker.ui \
     src/widgets/transformeditor.ui \
     src/widgets/sceneheirarchywidget.ui \
     src/widgets/skypresets.ui \
-    src/widgets/checkboxproperty.ui \
     src/widgets/keyframelabelwidget.ui \
     src/widgets/keyframelabeltreewidget.ui \
-    src/widgets/combobox.ui \
-    src/widgets/textinput.ui \
-    src/widgets/hfloatslider.ui \
     src/widgets/modelpresets.ui \
     src/mainwindow.ui \
-    src/widgets/labelwidget.ui
+    src/widgets/labelwidget.ui \
+    src/widgets/checkboxwidget.ui \
+    src/widgets/textinputwidget.ui \
+    src/widgets/comboboxwidget.ui \
+    src/widgets/hfloatsliderwidget.ui \
+    src/widgets/texturepickerwidget.ui
 
 RESOURCES += \
     shaders.qrc \
