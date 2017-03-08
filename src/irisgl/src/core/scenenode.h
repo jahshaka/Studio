@@ -30,6 +30,7 @@ enum class SceneNodeType {
 };
 
 class Animation;
+class PropertyAnim;
 typedef QSharedPointer<Animation> AnimationPtr;
 
 class SceneNode : public QEnableSharedFromThis<SceneNode>
@@ -79,6 +80,8 @@ public:
     bool isDuplicable() {
         return duplicable;
     }
+
+    virtual QList<PropertyAnim> getPropertyAnimations();
 
     /*
     * This function should return an exact copy of this node
