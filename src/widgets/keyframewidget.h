@@ -26,6 +26,8 @@ namespace iris
     class SceneNode;
 }
 
+class KeyFrameLabelWidget;
+
 class KeyFrameWidget:public QWidget
 {
     Q_OBJECT
@@ -70,6 +72,8 @@ private:
     bool middleButtonDown;
     bool rightButtonDown;
 
+    KeyFrameLabelWidget *labelWidget;
+
 public:
     KeyFrameWidget(QWidget* parent);
 
@@ -88,7 +92,7 @@ public:
     void setTime(float time);
     //void setCursorPos(int x);
 
-    void drawFrame(QPainter& paint,iris::FloatKeyFrame* keyFrame,int y);
+    void drawFrame(QPainter& paint, iris::FloatKeyFrame* keyFrame, int y, int height);
     void drawBackgroundLines(QPainter& paint);
     int getXPosFromSeconds(float seconds);
 
@@ -98,6 +102,8 @@ public:
     void wheelEvent(QWheelEvent* evt);
     //void resizeEvent(QResizeEvent* event);
     void paintEvent(QPaintEvent *painter);
+
+    void setLabelWidget(KeyFrameLabelWidget *value);
 
 signals:
     void cursorTimeChanged(float timeInSeconds);

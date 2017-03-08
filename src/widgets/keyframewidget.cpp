@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/animation.h"
 #include "keyframewidget.h"
+#include "keyframelabelwidget.h"
+#include "keyframelabel.h"
 #include <QMenu>
 #include <math.h>
 
@@ -54,6 +56,8 @@ KeyFrameWidget::KeyFrameWidget(QWidget* parent):
     leftButtonDown = false;
     middleButtonDown = false;
     rightButtonDown = false;
+
+    labelWidget = nullptr;
 }
 
 void KeyFrameWidget::setSceneNode(iris::SceneNodePtr node)
@@ -92,17 +96,22 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
     paint.setPen(linePen);
 
     //draw each key frame set
-    int frameHeight = 20;
-    int ypos = -20;
+    int ypos = 0;
 
-
-    if(obj!=nullptr && !!obj->animation)
-    {
+    if (labelWidget != nullptr) {
+        /*
         auto frameSet = obj->animation->keyFrameSet;
 
-        for(auto frame:frameSet->keyFrames)
-        {
+        for (auto frame:frameSet->keyFrames) {
             drawFrame(paint,frame,ypos+=frameHeight);
+        }
+        */
+
+        auto labels = labelWidget->getLabels();
+        for (auto label : labels) {
+            drawFrame(paint, label->getKeyFrame(),ypos,label->height());
+
+            ypos+=label->height();
         }
     }
 
@@ -115,7 +124,7 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
 
 }
 
-void KeyFrameWidget::drawFrame(QPainter& paint,iris::FloatKeyFrame* keyFrame,int yTop)
+void KeyFrameWidget::drawFrame(QPainter& paint, iris::FloatKeyFrame* keyFrame, int yTop,int height)
 {
     float penSize = 14;
     float penSizeSquared = 7*7;
@@ -127,23 +136,23 @@ void KeyFrameWidget::drawFrame(QPainter& paint,iris::FloatKeyFrame* keyFrame,int
     QPen highlightPen(QColor::fromRgb(100,100,100));
     highlightPen.setWidth(penSize);
     highlightPen.setCapStyle(Qt::RoundCap);
-
+    auto halfHeight = + height / 2.0f;
 
     for(auto key:keyFrame->keys)
     {
         int xpos = this->timeToPos(key->time);
 
-        float distSqrd = distanceSquared(xpos,yTop+10,mousePos.x(),mousePos.y());
+        float distSqrd = distanceSquared(xpos, yTop + halfHeight, mousePos.x(), mousePos.y());
 
         if(distSqrd < penSizeSquared)
         {
             paint.setPen(highlightPen);
-            paint.drawPoint(xpos,yTop+10);//frame height should be 10
+            paint.drawPoint(xpos, yTop + height / 2.0f);
         }
         else
         {
             paint.setPen(pen);
-            paint.drawPoint(xpos,yTop+10);//frame height should be 10
+            paint.drawPoint(xpos, yTop + height / 2.0f);
         }
 
     }
@@ -152,7 +161,7 @@ void KeyFrameWidget::drawFrame(QPainter& paint,iris::FloatKeyFrame* keyFrame,int
 void KeyFrameWidget::drawBackgroundLines(QPainter& paint)
 {
     QPen smallPen = QPen(QColor::fromRgb(55,55,55));
-    QPen bigPen = QPen(QColor::fromRgb(200,200,200));
+    QPen bigPen = QPen(QColor::fromRgb(150,150,150));
 
 
     //find increment automatically
@@ -187,10 +196,12 @@ void KeyFrameWidget::drawBackgroundLines(QPainter& paint)
         int mins = timeInSeconds/60;
         int hours = timeInSeconds/3600;
 
+        /*
         paint.drawText(screenPos+3,widgetHeight-5,QString("%1:%2:%3")
                        .arg(hours,2,10,QLatin1Char('0'))
                        .arg(mins,2,10,QLatin1Char('0'))
                        .arg(secs,2,10,QLatin1Char('0')));
+        */
     }
 
 }
@@ -376,4 +387,9 @@ iris::FloatKey* KeyFrameWidget::getSelectedKey(int x,int y)
     }
 
     return nullptr;
+}
+
+void KeyFrameWidget::setLabelWidget(KeyFrameLabelWidget *value)
+{
+    labelWidget = value;
 }

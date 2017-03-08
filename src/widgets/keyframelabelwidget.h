@@ -44,6 +44,8 @@ public:
     //void resizeEvent(QResizeEvent* evt);
     bool eventFilter(QObject *obj, QEvent *evt);
 
+    QList<KeyFrameLabel *> getLabels() const;
+
 private slots:
     void scrollValueChanged(int val);
 

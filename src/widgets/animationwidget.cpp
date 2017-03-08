@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QAction>
 #include <QTimer>
 #include <QElapsedTimer>
+#include <QToolButton>
 #include <QTime>
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
@@ -28,6 +29,12 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     ui(new Ui::AnimationWidget)
 {
     ui->setupUi(this);
+
+    ui->keywidgetView->setLabelWidget(ui->keylabelView);
+
+    connect(ui->insertFrame, &QToolButton::clicked, this, [=](bool clicked) {
+        qDebug() << "Clicked";
+    });
 
     //auto menu = new QMenu();
     addMenu = new QMenu();
@@ -70,7 +77,10 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     //menu->addAction(addSceneBackgroundColorKeyAction);
     connect(addSceneBackgroundColorKeyAction,SIGNAL(triggered(bool)),this,SLOT(addSceneActiveCameraKey()));
 
+    //qDebug() << addMenu->actions().count();
     ui->insertFrame->setMenu(addMenu);
+    //ui->insertFrame->setMenu(addMenu);
+    qDebug() << ui->insertFrame->menu()->actions().count();
 
     //REMOVE KEYFRAME BUTTON
     //menu = new QMenu();
@@ -92,7 +102,7 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     connect(action,SIGNAL(triggered()),this,SLOT(deleteAllKeys()));
 
 
-    ui->deleteFrames->setMenu(deleteMenu);
+    // ui->deleteFrames->setMenu(deleteMenu);
 
     //timer
     timer = new QTimer(this);
@@ -106,13 +116,15 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     loopAnim = false;
 
     //buttons that affect timer
-    connect(ui->play,SIGNAL(pressed()),this,SLOT(startTimer()));
-    connect(ui->stop,SIGNAL(pressed()),this,SLOT(stopTimer()));
+    // connect(ui->play,SIGNAL(pressed()),this,SLOT(startTimer()));
+    // connect(ui->stop,SIGNAL(pressed()),this,SLOT(stopTimer()));
 
     connect(ui->keywidgetView,SIGNAL(cursorTimeChanged(float)),this,SLOT(onObjectAnimationTimeChanged(float)));
     //connect(ui->timeline,SIGNAL(cursorMoved(float)),this,SLOT(onSceneAnimationTimeChanged(float)));
 
     mainTimeline = nullptr;
+
+    // ui->timeline->resize(0,ui->widget_5->height());
 }
 
 AnimationWidget::~AnimationWidget()
@@ -156,12 +168,14 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
     }
 
     */
+
+    ui->insertFrame->setMenu(addMenu);
 }
 
 void AnimationWidget::removeNodeSpecificActions()
 {
-    addMenu->removeAction(addLightColorKeyAction);
-    addMenu->removeAction(addLightIntensityKeyAction);
+    //addMenu->removeAction(addLightColorKeyAction);
+    //addMenu->removeAction(addLightIntensityKeyAction);
 
     deleteMenu->removeAction(deleteLightColorKeysAction);
     deleteMenu->removeAction(deleteLightIntensityKeysAction);
@@ -206,7 +220,7 @@ void AnimationWidget::setAnimLength(float length)
 {
     //todo
     int scaleRatio = 30;
-    ui->values->setGeometry(0,0,length*scaleRatio,ui->values->height());
+    // ui->values->setGeometry(0,0,length*scaleRatio,ui->values->height());
     this->showHighlight();
 }
 
@@ -217,11 +231,9 @@ void AnimationWidget::stopAnimation()
 
 void AnimationWidget::fixLayout()
 {
-    ui->values->adjustSize();
-    //ui->values->update();
+    // ui->values->adjustSize();
 
-    ui->timeControls->adjustSize();
-    //ui->timeControls->update();
+    // ui->timeControls->adjustSize();
 }
 
 void AnimationWidget::repaintViews()

@@ -59,6 +59,7 @@ template <typename T> bool KeyCompare(const Key<T> * const & a, const Key<T> * c
    return a->time < b->time;
 }
 
+
 template<typename T>
 class KeyFrame
 {

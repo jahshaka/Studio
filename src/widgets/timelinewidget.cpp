@@ -22,6 +22,12 @@ For more information see the LICENSE file
 TimelineWidget::TimelineWidget(QWidget* parent):
     QWidget(parent)
 {
+    QSizePolicy sizePolicy;
+    sizePolicy.setHorizontalPolicy(QSizePolicy::Fixed);
+    sizePolicy.setVerticalPolicy(QSizePolicy::Preferred);
+    this->setSizePolicy(sizePolicy);
+    this->setGeometry(0, 0, 100, 21);
+    //this->resize(100,21);
 
     bgColor = QColor::fromRgb(30,30,30);
     itemColor = QColor::fromRgb(255,255,255);
@@ -30,7 +36,8 @@ TimelineWidget::TimelineWidget(QWidget* parent):
     cursorPos = 10;
 
     linePen = QPen(itemColor);
-    cursorPen = QPen(QColor::fromRgb(142,45,197));
+    //cursorPen = QPen(QColor::fromRgb(142,45,197));
+    cursorPen = QPen(QColor::fromRgb(255,0,0));
     cursorPen.setWidth(3);
 
     setMouseTracking(true);
@@ -116,11 +123,11 @@ void TimelineWidget::paintEvent(QPaintEvent *painter)
     QPainter paint(this);
 
     //black bg
-    paint.fillRect(0,0,widgetWidth,widgetHeight,bgColor);
+    //paint.fillRect(0,0,widgetWidth,widgetHeight,bgColor);
 
     // draws the dark part of the bottom of the frame
     paint.setPen(QColor::fromRgb(100,100,100));
-    paint.fillRect(0,0,widgetWidth,widgetHeight/2,QColor::fromRgb(50,50,50));
+    paint.fillRect(0,0,widgetWidth,widgetHeight,QColor::fromRgb(80, 80, 80));
     paint.setPen(linePen);
 
     QPen smallPen = QPen(QColor::fromRgb(55,55,55));
@@ -141,7 +148,10 @@ void TimelineWidget::paintEvent(QPaintEvent *painter)
     for(float x=startTime;x<endTime;x+=increment)
     {
         int screenPos = timeToPos(x);
-        paint.drawLine(screenPos,0,screenPos,widgetHeight);
+        paint.drawLine(screenPos,
+                       widgetHeight - widgetHeight/3.0f,
+                       screenPos,
+                       widgetHeight);
 
         int timeInSeconds = (int)x;
 

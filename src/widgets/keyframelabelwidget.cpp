@@ -64,6 +64,8 @@ void KeyFrameLabelWidget::setKeyFrameSet(iris::KeyFrameSetPtr frameSet)
     labels.clear();
 
     auto layout = new QVBoxLayout();
+    layout->setSpacing(0);
+    layout->setMargin(0);
 
     //todo: group widgets
     for (auto key : frameSet->keyFrames.keys()) {
@@ -71,6 +73,7 @@ void KeyFrameLabelWidget::setKeyFrameSet(iris::KeyFrameSetPtr frameSet)
 
         auto label = new KeyFrameLabel();
         label->setTitle(key);
+        label->setKeyFrame(frame);
         layout->addWidget(label);
         labels.append(label);
     }
@@ -110,6 +113,11 @@ void KeyFrameLabelWidget::clearLayout(QLayout *layout)
         delete item->widget();
         delete item;
     }
+}
+
+QList<KeyFrameLabel *> KeyFrameLabelWidget::getLabels() const
+{
+    return labels;
 }
 
 bool KeyFrameLabelWidget::eventFilter(QObject *obj, QEvent *evt)
