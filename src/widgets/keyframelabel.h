@@ -2,6 +2,7 @@
 #define KEYFRAMELABEL_H
 
 #include <QWidget>
+#include "../irisgl/src/irisglfwd.h"
 
 
 namespace Ui {
@@ -13,6 +14,7 @@ class KeyFrameLabel : public QWidget
     Q_OBJECT
 
     bool collapsed;
+    iris::FloatKeyFrame *keyFrame;
 
 public:
     explicit KeyFrameLabel(QWidget *parent = 0);
@@ -26,6 +28,10 @@ public:
 
     void collapse();
     void expand();
+
+    void setKeyFrame(iris::FloatKeyFrame *value);
+
+    iris::FloatKeyFrame *getKeyFrame() const;
 
 protected slots:
     void toggleCollapse();

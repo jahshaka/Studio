@@ -2,6 +2,16 @@
 #include "ui_keyframelabel.h"
 
 
+void KeyFrameLabel::setKeyFrame(iris::FloatKeyFrame *value)
+{
+    keyFrame = value;
+}
+
+iris::FloatKeyFrame *KeyFrameLabel::getKeyFrame() const
+{
+    return keyFrame;
+}
+
 KeyFrameLabel::KeyFrameLabel(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::KeyFrameLabel)
