@@ -26,7 +26,7 @@ class FloatKeyFrame;
 class KeyFrameSet
 {
 public:
-    //QMap presrves insertion order,QHash doesnt
+    //QMap preserves insertion order,QHash doesnt
     QMap<QString,FloatKeyFrame*> keyFrames;
 
     FloatKeyFrame* getOrCreateFrame(QString name);

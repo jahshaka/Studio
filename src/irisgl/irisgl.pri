@@ -63,7 +63,8 @@ HEADERS += \
     $$PWD/src/postprocesses/radialblurpostprocess.h \
     $$PWD/src/postprocesses/greyscalepostprocess.h \
     $$PWD/src/postprocesses/ssaopostprocess.h \
-    $$PWD/src/postprocesses/materialpostprocess.h
+    $$PWD/src/postprocesses/materialpostprocess.h \
+    $$PWD/src/animation/propertyanim.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -102,7 +103,8 @@ SOURCES += \
     $$PWD/src/postprocesses/radialblurpostprocess.cpp \
     $$PWD/src/postprocesses/bloompostprocess.cpp \
     $$PWD/src/postprocesses/greyscalepostprocess.cpp \
-    $$PWD/src/postprocesses/ssaopostprocess.cpp
+    $$PWD/src/postprocesses/ssaopostprocess.cpp \
+    $$PWD/src/animation/propertyanim.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc
