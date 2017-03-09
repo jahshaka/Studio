@@ -25,4 +25,33 @@ Animation::Animation()
     keyFrameSet = KeyFrameSet::create();
 }
 
+QString Animation::getName() const
+{
+    return name;
+}
+
+void Animation::setName(const QString &value)
+{
+    name = value;
+}
+
+void Animation::addPropertyAnim(PropertyAnim *anim)
+{
+    Q_ASSERT(!keyFrames.contains(name));
+
+    keyFrames.insert(anim->name, anim);
+}
+
+PropertyAnim* Animation::getPropertyAnim(QString name)
+{
+    Q_ASSERT(!keyFrames.contains(name));
+
+    return keyFrames[name];
+}
+
+bool Animation::hasPropertyAnim(QString name)
+{
+    return keyFrames.contains(name);
+}
+
 }

@@ -19,6 +19,7 @@ namespace iris
 {
 
 class FloatKeyFrame;
+class PropertyAnim;
 
 /**
  * This class stores float keyframes associated with a QString key
@@ -26,12 +27,16 @@ class FloatKeyFrame;
 class KeyFrameSet
 {
 public:
+    ~KeyFrameSet();
+
     //QMap preserves insertion order,QHash doesnt
-    QMap<QString,FloatKeyFrame*> keyFrames;
+    QMap<QString,PropertyAnim*> keyFrames;
 
-    FloatKeyFrame* getOrCreateFrame(QString name);
+    void addKeyFrame(PropertyAnim* anim);
 
-    FloatKeyFrame* getKeyFrame(QString name);
+    PropertyAnim* getOrCreateFrame(QString name);
+
+    PropertyAnim* getKeyFrame(QString name);
 
     bool hasKeyFrame(QString name);
 
