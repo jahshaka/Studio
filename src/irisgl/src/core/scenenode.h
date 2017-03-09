@@ -63,6 +63,8 @@ public:
     bool pickable;
     bool shadowEnabled;
 
+    int materialType;
+
     friend class Renderer;
     friend class Scene;
 

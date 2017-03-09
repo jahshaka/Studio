@@ -32,7 +32,8 @@ class MaterialPropertyWidget : public AccordianBladeWidget
     Q_OBJECT
 
 public:
-    MaterialPropertyWidget(QWidget* parent=nullptr);
+    int materialType;
+    MaterialPropertyWidget(int materialType = 1, QWidget* parent=nullptr);
 
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
     QSharedPointer<iris::MeshNode> meshNode;
@@ -73,6 +74,9 @@ private:
     HFloatSliderWidget* reflectionInfluence;
 
     HFloatSliderWidget* textureScale;
+
+    // 2
+    LabelWidget* fuNick;
 
 };
 

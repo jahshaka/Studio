@@ -32,8 +32,17 @@ Scene::Scene()
 
     // todo: move this to ui code
     skyMesh = Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/sky.obj"));
-    // skyTexture = Texture2D::load("app/content/skies/default.png");
+
+    QString x1 = IrisUtils::getAbsoluteAssetPath("app/content/textures/left.jpg");
+    QString x2 = IrisUtils::getAbsoluteAssetPath("app/content/textures/right.jpg");
+    QString y1 = IrisUtils::getAbsoluteAssetPath("app/content/textures/top.jpg");
+    QString y2 = IrisUtils::getAbsoluteAssetPath("app/content/textures/bottom.jpg");
+    QString z1 = IrisUtils::getAbsoluteAssetPath("app/content/textures/front.jpg");
+    QString z2 = IrisUtils::getAbsoluteAssetPath("app/content/textures/back.jpg");
+
+    skyTexture = Texture2D::createCubeMap(x1, x2, y1, y2, z1, z2);
     skyMaterial = DefaultSkyMaterial::create();
+    skyMaterial->setSkyTexture(skyTexture);
     skyColor = QColor(255, 255, 255, 255);
     skyRenderItem = new RenderItem();
     skyRenderItem->mesh = skyMesh;

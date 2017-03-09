@@ -31,15 +31,15 @@ void DefaultSkyMaterial::setSkyTexture(Texture2DPtr tex)
 {
     texture = tex;
     if(!!tex)
-        this->addTexture("texture",tex);
-    else
-        this->removeTexture("texture");
+        this->addTexture("skybox",tex);
+//    else
+//        this->removeTexture("texture");
 }
 
 void DefaultSkyMaterial::clearSkyTexture()
 {
-    texture.clear();
-    removeTexture("texture");
+//    texture.clear();
+//    removeTexture("texture");
 }
 
 Texture2DPtr DefaultSkyMaterial::getSkyTexture()
@@ -59,18 +59,34 @@ QColor DefaultSkyMaterial::getSkyColor()
 
 void DefaultSkyMaterial::begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
 {
-    Material::begin(gl,scene);
-    this->setUniformValue("color",color);
-    if(!!texture)
-        this->setUniformValue("useTexture",true);
-    else
-        this->setUniformValue("useTexture",false);
+    Material::beginCube(gl,scene);
+//    this->setUniformValue("skybox", texture);
+//    if(!!texture)
+//        this->setUniformValue("skybox", texture);
+//    else
+//        this->setUniformValue("useTexture",false);
+
+}
+
+void DefaultSkyMaterial::beginCube(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+{
+    Material::beginCube(gl,scene);
+//    this->setUniformValue("color",color);
+//    if(!!texture)
+//        this->setUniformValue("skybox", texture);
+//    else
+//        this->setUniformValue("useTexture",false);
 
 }
 
 void DefaultSkyMaterial::end(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
 {
-    Material::end(gl,scene);
+    Material::endCube(gl,scene);
+}
+
+void DefaultSkyMaterial::endCube(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+{
+    Material::endCube(gl,scene);
 }
 
 DefaultSkyMaterialPtr DefaultSkyMaterial::create()

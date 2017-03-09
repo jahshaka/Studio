@@ -45,4 +45,46 @@ Texture2DPtr Texture2D::create(QImage image)
 
     return QSharedPointer<Texture2D>(new Texture2D(texture));
 }
+
+Texture2DPtr Texture2D::createCubeMap(QString posX, QString negX,
+                                      QString posY, QString negY,
+                                      QString posZ, QString negZ)
+{
+    const QImage pos_x = QImage(posX).convertToFormat(QImage::Format_RGBA8888);
+    const QImage neg_x = QImage(negX).convertToFormat(QImage::Format_RGBA8888);
+    const QImage pos_y = QImage(posY).mirrored(true).convertToFormat(QImage::Format_RGBA8888);
+    const QImage neg_y = QImage(negY).mirrored(true).convertToFormat(QImage::Format_RGBA8888);
+    const QImage pos_z = QImage(posZ).convertToFormat(QImage::Format_RGBA8888);
+    const QImage neg_z = QImage(negZ).convertToFormat(QImage::Format_RGBA8888);
+
+    auto texture = new QOpenGLTexture(QOpenGLTexture::TargetCubeMap);
+    texture->create();
+    texture->setSize(pos_x.width(), pos_x.height(), pos_x.depth());
+    texture->setFormat(QOpenGLTexture::RGBA8_UNorm);
+    texture->allocateStorage();
+    texture->setData(0, 0, QOpenGLTexture::CubeMapPositiveX,
+                     QOpenGLTexture::RGBA, QOpenGLTexture::UInt8,
+                     (const void*) pos_x.constBits(), 0);
+    texture->setData(0, 0, QOpenGLTexture::CubeMapPositiveY,
+                     QOpenGLTexture::RGBA, QOpenGLTexture::UInt8,
+                     (const void*) pos_y.constBits(), 0);
+    texture->setData(0, 0, QOpenGLTexture::CubeMapPositiveZ,
+                     QOpenGLTexture::RGBA, QOpenGLTexture::UInt8,
+                     (const void*) pos_z.constBits(), 0);
+    texture->setData(0, 0, QOpenGLTexture::CubeMapNegativeX,
+                     QOpenGLTexture::RGBA, QOpenGLTexture::UInt8,
+                     (const void*) neg_x.constBits(), 0);
+    texture->setData(0, 0, QOpenGLTexture::CubeMapNegativeY,
+                     QOpenGLTexture::RGBA, QOpenGLTexture::UInt8,
+                     (const void*) neg_y.constBits(), 0);
+    texture->setData(0, 0, QOpenGLTexture::CubeMapNegativeZ,
+                     QOpenGLTexture::RGBA, QOpenGLTexture::UInt8,
+                     (const void*) neg_z.constBits(), 0);
+
+    texture->setWrapMode(QOpenGLTexture::ClampToEdge);
+    texture->setMinificationFilter(QOpenGLTexture::Linear);
+    texture->setMagnificationFilter(QOpenGLTexture::Linear);
+
+    return QSharedPointer<Texture2D>(new Texture2D(texture));
+}
 }

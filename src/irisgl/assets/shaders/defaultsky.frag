@@ -15,29 +15,16 @@ For more information see the LICENSE file
 #define PI2 6.28318530718
 #define RECIPROCAL_PI2 0.15915494
 
-uniform sampler2D tex;
+//uniform sampler2D tex;
+uniform samplerCube cubemap;
 uniform bool useTexture;
 uniform vec4 color;
 
 in vec3 v_worldNormal;
+in vec3 v_texCoord;
 out vec4 fragColor;
-
-vec2 envMapEquirect(vec3 wcNormal, float flipEnvMap) {
-    float y = clamp( -1.0 * wcNormal.y * 0.5 + 0.5,0,1 );
-    float x = atan(  wcNormal.z, wcNormal.x ) * RECIPROCAL_PI2 + 0.5;
-    return vec2(x, y);
-}
-
-vec2 envMapEquirect(vec3 wcNormal) {
-    //-1.0 for left handed coordinate system oriented texture (usual case)
-    return envMapEquirect(wcNormal, -1.0);
-}
 
 void main()
 {
-    if(useTexture)
-        fragColor = color*texture(tex, envMapEquirect(normalize(v_worldNormal)));
-    else
-        fragColor = color;
-    //gl_FragColor = vec4(1,1,1,1);
+    fragColor = texture(cubemap, v_worldNormal); // vec4(1, 1, .5, 1);
 }

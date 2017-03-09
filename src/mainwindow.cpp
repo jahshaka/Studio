@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "irisgl/src/scenegraph/viewernode.h"
 #include "irisgl/src/scenegraph/particlesystemnode.h"
 #include "irisgl/src/materials/defaultmaterial.h"
+#include "irisgl/src/materials/custommaterial.h"
 #include "irisgl/src/graphics/forwardrenderer.h"
 #include "irisgl/src/graphics/mesh.h"
 #include "irisgl/src/graphics/shader.h"
@@ -293,7 +294,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     // second node
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/models/ground.obj"));
-    node->scale = QVector3D(.5, .5, .5);
+    node->scale = QVector3D(.05, .05, .05);
     node->setName("Ground");
     node->setPickable(false);
     node->setShadowEnabled(false);
@@ -304,7 +305,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     m->setDiffuseTexture(iris::Texture2D::load(getAbsoluteAssetPath("app/content/textures/tile.png")));
     m->setShininess(0);
     m->setSpecularColor(QColor(0, 0, 0));
-    m->setTextureScale(4);
+    m->setTextureScale(.5);
 
     scene->rootNode->addChild(node);
 
@@ -852,6 +853,7 @@ void MainWindow::addMesh()
     // model file may be invalid so null gets returned
     if (!node) return;
 
+    node->materialType = 2;
     node->setName(nodeName);
 
     // todo: load material data
@@ -920,10 +922,10 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
     if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
-        if (!meshNode->getMaterial()) {
-            auto mat = iris::DefaultMaterial::create();
+//        if (!meshNode->getMaterial()) {
+            auto mat = iris::CustomMaterial::create();
             meshNode->setMaterial(mat);
-        }
+//        }
     }
 
     scene->getRootNode()->addChild(sceneNode);

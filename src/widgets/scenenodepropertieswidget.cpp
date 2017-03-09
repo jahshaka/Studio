@@ -77,7 +77,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             lightPropView = new LightPropertyWidget();
             lightPropView->setPanelTitle("Light");
 
-            materialPropView = new MaterialPropertyWidget();
+            materialPropView = new MaterialPropertyWidget(sceneNode->materialType);
             materialPropView->setPanelTitle("Material");
 
             emitterPropView = new EmitterPropertyWidget();

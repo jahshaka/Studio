@@ -23,8 +23,18 @@ void Material::begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
     this->bindTextures(gl);
 }
 
+void Material::beginCube(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+{
+    this->program->bind();
+    this->bindCubeTextures(gl);
+}
 
 void Material::end(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+{
+    this->unbindTextures(gl);
+}
+
+void Material::endCube(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
 {
     this->unbindTextures(gl);
 }
@@ -52,6 +62,34 @@ void Material::removeTexture(QString name)
 }
 
 void Material::bindTextures(QOpenGLFunctions_3_2_Core* gl)
+{
+    int count=0;
+    for(auto it = textures.begin();it != textures.end();it++,count++)
+    {
+        auto tex = it.value();
+        gl->glActiveTexture(GL_TEXTURE0+count);
+
+        if(tex->texture!=nullptr)
+        {
+            tex->texture->bind();
+            program->setUniformValue(it.key().toStdString().c_str(), count);
+        }
+        else
+        {
+            gl->glBindTexture(GL_TEXTURE_2D,0);
+        }
+    }
+
+    //bind the rest of the textures to 0
+    for(;count<numTextures;count++)
+    {
+        gl->glActiveTexture(GL_TEXTURE0+count);
+        gl->glBindTexture(GL_TEXTURE_2D,0);
+    }
+
+}
+
+void Material::bindCubeTextures(QOpenGLFunctions_3_2_Core* gl)
 {
     int count=0;
     for(auto it = textures.begin();it != textures.end();it++,count++)
