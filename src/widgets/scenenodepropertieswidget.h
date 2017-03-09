@@ -15,8 +15,7 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QSharedPointer>
 
-namespace iris
-{
+namespace iris {
     class SceneNode;
 }
 
@@ -26,6 +25,9 @@ class MaterialPropertyWidget;
 class WorldPropertyWidget;
 class LightPropertyWidget;
 class FogPropertyWidget;
+class EmitterPropertyWidget;
+class NodePropertyWidget;
+class DemoPane;
 
 /**
  * This class shows the properties of selected nodes in the scene
@@ -53,16 +55,17 @@ private:
 private:
     QSharedPointer<iris::SceneNode> sceneNode;
 
-    TransformEditor* transformWidget;
     AccordianBladeWidget* transformPropView;
-
-    AccordianBladeWidget* meshPropView;
+    TransformEditor* transformWidget;
 
     MaterialPropertyWidget* materialPropView;
-    //MeshPropertyWidget* meshPropView;
+    EmitterPropertyWidget* emitterPropView;
+    NodePropertyWidget* nodePropView;
     LightPropertyWidget* lightPropView;
     WorldPropertyWidget* worldPropView;
     FogPropertyWidget* fogPropView;
+
+    // DemoPane* demoPane;
 };
 
 #endif // PROPERTYWIDGET_H

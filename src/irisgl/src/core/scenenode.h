@@ -23,6 +23,7 @@ namespace iris
 enum class SceneNodeType
 {
     Empty,
+    ParticleSystem,
     Mesh,
     Light,
     Camera,
@@ -60,6 +61,7 @@ public:
     bool removable;
 
     bool pickable;
+    bool shadowEnabled;
 
     friend class Renderer;
     friend class Scene;
@@ -79,6 +81,17 @@ public:
         return duplicable;
     }
 
+    /*
+    * This function should return an exact copy of this node
+    * with a few exceptions:
+    * 1) The duplicate shouldnt have a parent node or be added to a scene
+    */
+   virtual SceneNodePtr createDuplicate(){
+       qt_assert((QString("This node isnt duplicable: ") + name).toStdString().c_str(),__FILE__,__LINE__);
+   }
+
+   SceneNodePtr duplicate();
+
     bool isVisible() {
         return visible;
     }
@@ -95,14 +108,20 @@ public:
         return removable;
     }
 
-    void setPickable(bool canPick)
-    {
+    void setPickable(bool canPick) {
         pickable = canPick;
     }
 
-    bool isPickable()
-    {
+    bool isPickable() {
         return pickable;
+    }
+
+    void setShadowEnabled(bool val) {
+        shadowEnabled = val;
+    }
+
+    bool getShadowEnabled() {
+        return shadowEnabled;
     }
 
     SceneNodeType getSceneNodeType();
@@ -121,8 +140,20 @@ public:
     QMatrix4x4 getGlobalTransform();
     QMatrix4x4 getLocalTransform();
 
+    /*
+     * This function does multiple things:
+     * - Calculates the transformation of the objects
+     * - Particle systems use this to update animations
+     */
     virtual void update(float dt);
     virtual void updateAnimation(float time);
+
+    /*
+     * This is the function used to add render items
+     * to the render queues
+     * Called from inside the update(float) function
+     */
+    virtual void submitRenderItems(){}
 
 private:
     void setParent(SceneNodePtr node);

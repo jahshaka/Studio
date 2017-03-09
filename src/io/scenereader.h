@@ -28,9 +28,10 @@ For more information see the LICENSE file
 
 class EditorData;
 
-class SceneReader:public AssetIOBase
+class SceneReader : public AssetIOBase
 {
     QHash<QString,QList<iris::Mesh*>> meshes;
+
 public:
     iris::ScenePtr readScene(QString filePath,EditorData** editorData = nullptr);
 
@@ -72,6 +73,8 @@ public:
 
     iris::ViewerNodePtr createViewer(QJsonObject& nodeObj);
 
+    iris::ParticleSystemNodePtr createParticleSystem(QJsonObject& nodeObj);
+
     iris::LightType getLightTypeFromName(QString lightType);
 
     /**
@@ -90,8 +93,6 @@ public:
      * @return
      */
     iris::Mesh* getMesh(QString filePath,int index);
-
-
 };
 
 #endif // SCENEREADER_H

@@ -14,9 +14,13 @@ For more information see the LICENSE file
 
 #include "../irisglfwd.h"
 #include "../core/scenenode.h"
+#include "../core/irisutils.h"
+#include "../graphics/texture2d.h"
 
 namespace iris
 {
+
+class RenderItem;
 
 class MeshNode : public SceneNode
 {
@@ -32,8 +36,9 @@ public:
 
     MaterialPtr material;
 
-    static MeshNodePtr create()
-    {
+    RenderItem* renderItem;
+
+    static MeshNodePtr create() {
         return MeshNodePtr(new MeshNode());
     }
 
@@ -52,17 +57,22 @@ public:
     Mesh* getMesh();
 
     void setMaterial(MaterialPtr material);
-    MaterialPtr getMaterial()
-    {
+
+    MaterialPtr getMaterial() {
         return material;
     }
 
-private:
-    MeshNode()
-    {
-        mesh = nullptr;
-        sceneNodeType = SceneNodeType::Mesh;
+    // not needed because this guy likes public members...
+    // shouldnt be here at all, the value is already set in the constructor...
+    void setNodeType(SceneNodeType type) {
+        sceneNodeType = type;
     }
+
+    SceneNodePtr createDuplicate() override;
+    virtual void submitRenderItems() override;
+
+private:
+    MeshNode();
 };
 
 }

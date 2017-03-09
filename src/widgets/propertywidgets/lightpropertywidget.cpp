@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #include <QWidget>
 
 #include "lightpropertywidget.h"
-#include "../hfloatslider.h"
+#include "../hfloatsliderwidget.h"
 #include "../colorpickerwidget.h"
 #include "../colorvaluewidget.h"
 

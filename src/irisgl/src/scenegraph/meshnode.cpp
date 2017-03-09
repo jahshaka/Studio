@@ -26,22 +26,37 @@ For more information see the LICENSE file
 #include "../graphics/vertexlayout.h"
 #include "../materials/defaultmaterial.h"
 #include "../materials/materialhelper.h"
+#include "../graphics/renderitem.h"
+
+#include "../core/scene.h"
+#include "../core/scenenode.h"
 
 namespace iris
 {
 
+MeshNode::MeshNode() {
+    mesh = nullptr;
+    sceneNodeType = SceneNodeType::Mesh;
+
+    renderItem = new RenderItem();
+    renderItem->type = RenderItemType::Mesh;
+}
+
+// @todo: cleanup previous mesh item
 void MeshNode::setMesh(QString source)
 {
-    meshPath = source;
     mesh = Mesh::loadMesh(source);
     meshPath = source;
     meshIndex = 0;
+
+    renderItem->mesh = mesh;
 }
 
 //should not be used on plain scene meshes
 void MeshNode::setMesh(Mesh* mesh)
 {
     this->mesh = mesh;
+    renderItem->mesh = mesh;
 }
 
 Mesh* MeshNode::getMesh()
@@ -49,9 +64,26 @@ Mesh* MeshNode::getMesh()
     return mesh;
 }
 
-void MeshNode::setMaterial(QSharedPointer<Material> material)
+void MeshNode::setMaterial(MaterialPtr material)
 {
     this->material = material;
+
+    renderItem->material = material;
+}
+
+void MeshNode::submitRenderItems()
+{
+    renderItem->worldMatrix = this->globalTransform;
+
+    if (!!material) {
+        renderItem->renderLayer = material->renderLayer;
+    }
+
+    this->scene->geometryRenderList.append(renderItem);
+
+    if (this->getShadowEnabled()) {
+        this->scene->shadowRenderList.append(renderItem);
+    }
 }
 
 /**
@@ -176,6 +208,21 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath)
     }
 
     auto node = _buildScene(scene,scene->mRootNode,filePath);
+
+    return node;
+}
+
+SceneNodePtr MeshNode::createDuplicate()
+{
+    auto node = MeshNode::create();
+
+    // @todo: pass duplicates instead of copies!!!!!!!!
+    node->setMesh(this->getMesh());
+    node->meshPath = this->meshPath;
+    node->meshIndex = this->meshIndex;
+    node->setMaterial(this->material);
+    //node->setMesh(this->getMesh()->duplicate());
+    //node->setMaterial(this->material->duplicate());
 
     return node;
 }

@@ -10,8 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "mainwindow.h"
-//#include "ui_mainwindow.h"
-#include "ui_newmainwindow.h"
+#include "ui_mainwindow.h"
 
 #include <qwindow.h>
 #include <qsurface.h>
@@ -23,6 +22,7 @@ For more information see the LICENSE file
 #include "irisgl/src/core/scenenode.h"
 #include "irisgl/src/scenegraph/lightnode.h"
 #include "irisgl/src/scenegraph/viewernode.h"
+#include "irisgl/src/scenegraph/particlesystemnode.h"
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/graphics/forwardrenderer.h"
 #include "irisgl/src/graphics/mesh.h"
@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "irisgl/src/animation/keyframeset.h"
 #include "irisgl/src/animation/keyframeanimation.h"
 
+#include <QFontDatabase>
 #include <QOpenGLContext>
 #include <qstandarditemmodel.h>
 #include <QKeyEvent>
@@ -43,6 +44,7 @@ For more information see the LICENSE file
 
 #include <QTreeWidgetItem>
 
+#include <QPushButton>
 #include <QTimer>
 #include <math.h>
 #include <QDesktopServices>
@@ -84,20 +86,27 @@ enum class VRButtonMode : int
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
-    ui(new Ui::NewMainWindow)
+    ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
     this->setWindowTitle("Jahshaka VR");
+
+    QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
+    if (fontFile.exists()) {
+        fontFile.open(QIODevice::ReadOnly);
+        QFontDatabase::addApplicationFontFromData(fontFile.readAll());
+        QApplication::setFont(QFont("Open Sans", 9));
+    }
 
     settings = SettingsManager::getDefaultManager();
     prefsDialog = new PreferencesDialog(settings);
     aboutDialog = new AboutDialog();
     licenseDialog = new LicenseDialog();
 
-    // ui->mainTimeline->setMainWindow(this);
-    ui->modelpresets->setMainWindow(this);
-    ui->materialpresets->setMainWindow(this);
-    ui->skypresets->setMainWindow(this);
+//    ui->animationtimeline->setMainWindow(this);
+    ui->materialPresets->setMainWindow(this);
+    ui->modelPresets->setMainWindow(this);
+    ui->skyPresets->setMainWindow(this);
 
     camControl = nullptr;
     vrMode = false;
@@ -139,33 +148,85 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(sceneView, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
             this, SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
-    connect(ui->cameraTypeCombo, SIGNAL(currentTextChanged(QString)),
-            this, SLOT(cameraTypeChanged(QString)));
+//    connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
 
-    connect(ui->transformCombo, SIGNAL(currentTextChanged(QString)),
-            this, SLOT(transformOrientationChanged(QString)));
+    // toolbar stuff
+    connect(ui->actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
+    connect(ui->actionRotate,       SIGNAL(triggered(bool)), SLOT(rotateGizmo()));
+    connect(ui->actionScale,        SIGNAL(triggered(bool)), SLOT(scaleGizmo()));
 
-    connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
+    transformGroup = new QActionGroup(this);
+    transformGroup->addAction(ui->actionTranslate);
+    transformGroup->addAction(ui->actionRotate);
+    transformGroup->addAction(ui->actionScale);
+
+    connect(ui->actionGlobalSpace,  SIGNAL(triggered(bool)), SLOT(useGlobalTransform()));
+    connect(ui->actionLocalSpace,   SIGNAL(triggered(bool)), SLOT(useLocalTransform()));
+
+    transformSpaceGroup = new QActionGroup(this);
+    transformSpaceGroup->addAction(ui->actionGlobalSpace);
+    transformSpaceGroup->addAction(ui->actionLocalSpace);
+    ui->actionGlobalSpace->setChecked(true);
+
+    connect(ui->actionFreeCamera,   SIGNAL(triggered(bool)), SLOT(useFreeCamera()));
+    connect(ui->actionArcballCam,   SIGNAL(triggered(bool)), SLOT(useArcballCam()));
+
+    cameraGroup = new QActionGroup(this);
+    cameraGroup->addAction(ui->actionFreeCamera);
+    cameraGroup->addAction(ui->actionArcballCam);
+    ui->actionFreeCamera->setChecked(true);
+
+    // this acts as a spacer
+    QWidget* empty = new QWidget();
+    empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    ui->ToolBar->addWidget(empty);
+
+    vrButton = new QPushButton();
+    QIcon ico(":/app/icons/virtual-reality.svg");
+    vrButton->setIcon(ico);
+    vrButton->setObjectName("vrButton");
+    //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
+    ui->ToolBar->addWidget(vrButton);
+
+//    ui->AnimationDock->hide();
+//    ui->PresetsDock->hide();
 }
 
 void MainWindow::setupVrUi()
 {
-    ui->vrBtn->setToolTipDuration(0);
+//    ui->vrBtn->setToolTipDuration(0);
+//    if (sceneView->isVrSupported()) {
+//        ui->vrBtn->setEnabled(true);
+//        ui->vrBtn->setToolTip("Press to view the scene in vr");
+//        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Default);
+//    } else {
+//        ui->vrBtn->setEnabled(false);
+//        ui->vrBtn->setToolTip("No Oculus device detected");
+//        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Disabled);
+//    }
+
+//    connect(ui->vrBtn, SIGNAL(clicked(bool)), SLOT(vrButtonClicked(bool)));
+
+//    //needed to apply changes
+//    ui->vrBtn->style()->unpolish(ui->vrBtn);
+//    ui->vrBtn->style()->polish(ui->vrBtn);
+
+    vrButton->setToolTipDuration(0);
     if (sceneView->isVrSupported()) {
-        ui->vrBtn->setEnabled(true);
-        ui->vrBtn->setToolTip("Press to view the scene in vr");
-        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Default);
+        vrButton->setEnabled(true);
+        vrButton->setToolTip("Press to view the scene in vr");
+        vrButton->setProperty("vrMode", (int) VRButtonMode::Default);
     } else {
-        ui->vrBtn->setEnabled(false);
-        ui->vrBtn->setToolTip("No Oculus device detected");
-        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Disabled);
+        vrButton->setEnabled(false);
+        vrButton->setToolTip("No Oculus device detected");
+        vrButton->setProperty("vrMode", (int) VRButtonMode::Disabled);
     }
 
-    connect(ui->vrBtn, SIGNAL(clicked(bool)), SLOT(vrButtonClicked(bool)));
+    connect(vrButton, SIGNAL(clicked(bool)), SLOT(vrButtonClicked(bool)));
 
     //needed to apply changes
-    ui->vrBtn->style()->unpolish(ui->vrBtn);
-    ui->vrBtn->style()->polish(ui->vrBtn);
+    vrButton->style()->unpolish(vrButton);
+    vrButton->style()->polish(vrButton);
 }
 
 /**
@@ -181,18 +242,18 @@ void MainWindow::vrButtonClicked(bool)
             sceneView->setViewportMode(ViewportMode::VR);
 
             //highlight button blue
-            ui->vrBtn->setProperty("vrMode",(int)VRButtonMode::VRMode);
+            vrButton->setProperty("vrMode",(int)VRButtonMode::VRMode);
         } else {
             sceneView->setViewportMode(ViewportMode::Editor);
 
             //return button back to normal color
-            ui->vrBtn->setProperty("vrMode",(int)VRButtonMode::Default);
+            vrButton->setProperty("vrMode",(int)VRButtonMode::Default);
         }
     }
 
     //needed to apply changes
-    ui->vrBtn->style()->unpolish(ui->vrBtn);
-    ui->vrBtn->style()->polish(ui->vrBtn);
+    vrButton->style()->unpolish(vrButton);
+    vrButton->style()->polish(vrButton);
 }
 
 iris::ScenePtr MainWindow::getScene()
@@ -226,16 +287,16 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     scene->setCamera(cam);
 
-    scene->setSkyColor(QColor(255, 255, 255, 255));
-    scene->setAmbientColor(QColor(72, 72, 72));
+    scene->setSkyColor(QColor(72, 72, 72));
+    scene->setAmbientColor(QColor(96, 96, 96));
 
     // second node
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/models/ground.obj"));
-    //node->setMesh(getAbsoluteAssetPath("app/models/cube.obj"));
     node->scale = QVector3D(.5, .5, .5);
     node->setName("Ground");
     node->setPickable(false);
+    node->setShadowEnabled(false);
 
     auto m = iris::DefaultMaterial::create();
     node->setMaterial(m);
@@ -250,7 +311,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
-    dlight->setName("Directional Lamp");
+    dlight->setName("Directional Light");
     dlight->pos = QVector3D(4, 4, 0);
     dlight->rot = QQuaternion::fromEulerAngles(15, 0, 0);
     dlight->intensity = 1;
@@ -259,58 +320,40 @@ iris::ScenePtr MainWindow::createDefaultScene()
     auto plight = iris::LightNode::create();
     plight->setLightType(iris::LightType::Point);
      scene->rootNode->addChild(plight);
-    plight->setName("Point Lamp");
+    plight->setName("Point Light");
     plight->pos = QVector3D(-3, 4, 0);
     plight->intensity = 1;
     plight->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
 
     // fog params
-    scene->fogColor = QColor(255, 255, 255, 255);
+    scene->fogColor = QColor(72, 72, 72);
+    scene->shadowEnabled = true;
+
+    sceneNodeSelected(scene->rootNode);
 
     return scene;
 }
 
-//create test scene
 void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
 {
 
-    auto m_logger = new QOpenGLDebugLogger( this );
+//    auto m_logger = new QOpenGLDebugLogger( this );
 
-    connect( m_logger, &QOpenGLDebugLogger::messageLogged,this,
-             [](QOpenGLDebugMessage msg)
-    {
-        auto message = msg.message();
-        //qDebug() << message;
-    });
+//    connect( m_logger, &QOpenGLDebugLogger::messageLogged,this,
+//             [](QOpenGLDebugMessage msg)
+//    {
+//        auto message = msg.message();
+//    });
 
-    if ( m_logger->initialize() ) {
-        m_logger->startLogging( QOpenGLDebugLogger::SynchronousLogging );
-        m_logger->enableMessages();
-    }
-
+//    if ( m_logger->initialize() ) {
+//        m_logger->startLogging( QOpenGLDebugLogger::SynchronousLogging );
+//        m_logger->enableMessages();
+//    }
 
     auto scene = this->createDefaultScene();
 
     this->setScene(scene);
     setupVrUi();
-}
-
-void MainWindow::cameraTypeChanged(QString type)
-{
-    if (type == "Free") {
-        sceneView->setFreeCameraMode();
-    } else {
-        sceneView->setArcBallCameraMode();
-    }
-}
-
-void MainWindow::transformOrientationChanged(QString type)
-{
-    if (type == "Local") {
-        sceneView->setTransformOrientationLocal();
-    } else {
-        sceneView->setTransformOrientationGlobal();
-    }
 }
 
 void MainWindow::setSettingsManager(SettingsManager* settings)
@@ -732,6 +775,7 @@ void MainWindow::addPointLight()
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Point);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
+    node->setName("Point Light");
     node->intensity = 1.0f;
     node->distance = 40.0f;
 
@@ -744,6 +788,7 @@ void MainWindow::addSpotLight()
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Spot);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
+    node->setName("Spot Light");
 
     addNodeToScene(node);
 }
@@ -755,7 +800,7 @@ void MainWindow::addDirectionalLight()
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Directional);
     node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
-
+    node->setName("Directional Light");
 
     addNodeToScene(node);
 }
@@ -764,6 +809,7 @@ void MainWindow::addEmpty()
 {
     this->sceneView->makeCurrent();
     auto node = iris::SceneNode::create();
+    node->setName("Empty");
 
     addNodeToScene(node);
 }
@@ -772,30 +818,43 @@ void MainWindow::addViewer()
 {
     this->sceneView->makeCurrent();
     auto node = iris::ViewerNode::create();
+    node->setName("Viewer");
 
+    addNodeToScene(node);
+}
+
+void MainWindow::addParticleSystem()
+{
+    this->sceneView->makeCurrent();
+    /*
+    auto node = iris::MeshNode::create();
+    node->setMesh(getAbsoluteAssetPath("app/content/primitives/cube.obj"));
+    node->setName("Emitter");
+    node->sceneNodeType = iris::SceneNodeType::ParticleSystem;
+    */
+
+    auto node = iris::ParticleSystemNode::create();
+    node->setName("Particle System");
     addNodeToScene(node);
 }
 
 void MainWindow::addMesh()
 {
-
-    QString dir = QApplication::applicationDirPath()+"/assets/models/";
-    //qDebug()<<dir;
-    auto filename = QFileDialog::getOpenFileName(this,"Load Mesh",dir,"Mesh Files (*.obj *.fbx *.3ds)");
+    QString dir = QApplication::applicationDirPath() + "/assets/models/";
+    auto filename = QFileDialog::getOpenFileName(this, "Load Mesh",
+                                                 dir, "Mesh Files (*.obj *.fbx *.3ds)");
     auto nodeName = QFileInfo(filename).baseName();
-    if(filename.isEmpty())
-        return;
+    if (filename.isEmpty()) return;
 
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::loadAsSceneFragment(filename);
 
     // model file may be invalid so null gets returned
-    if(!node)
-        return;
+    if (!node) return;
 
     node->setName(nodeName);
 
-    //todo: load material data
+    // todo: load material data
     addNodeToScene(node);
 }
 
@@ -816,30 +875,24 @@ void MainWindow::addTexturedPlane()
  */
 void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
-    if(!scene)
-    {
+    if (!scene) {
         //todo: set alert that a scene needs to be set before this can be done
     }
 
-    //apply default material
-    if(sceneNode->sceneNodeType == iris::SceneNodeType::Mesh)
-    {
+    // apply default material
+    if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
-        if(!meshNode->getMaterial())
-        {
+        if (!meshNode->getMaterial()) {
             auto mat = iris::DefaultMaterial::create();
             meshNode->setMaterial(mat);
         }
 
     }
 
-    if(!!activeSceneNode)
-    {
+    if (!!activeSceneNode) {
         activeSceneNode->addChild(sceneNode);
-    }
-    else
-    {
+    } else {
         scene->getRootNode()->addChild(sceneNode);
     }
 
@@ -852,40 +905,42 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
  */
 void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
 {
-    if(!scene)
-    {
-        //todo: set alert that a scene needs to be set before this can be done
+    if (!scene) {
+        // @TODO: set alert that a scene needs to be set before this can be done
         return;
     }
 
+    // @TODO: add this to a constants file
     const float spawnDist = 10.0f;
     auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, -1.0f, -spawnDist));
     offset += sceneView->editorCam->pos;
     sceneNode->pos = offset;
 
-    //apply default material
-    if(sceneNode->sceneNodeType == iris::SceneNodeType::Mesh)
-    {
+    // apply default material to mesh nodes
+    if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
-        if(!meshNode->getMaterial())
-        {
+        if (!meshNode->getMaterial()) {
             auto mat = iris::DefaultMaterial::create();
             meshNode->setMaterial(mat);
         }
-
     }
 
     scene->getRootNode()->addChild(sceneNode);
-
     ui->sceneHierarchy->repopulateTree();
-
     sceneNodeSelected(sceneNode);
 }
 
 void MainWindow::duplicateNode()
 {
+    if (!scene) return;
+    if (!activeSceneNode || !activeSceneNode->isDuplicable()) return;
 
+    auto node = activeSceneNode->duplicate();
+    activeSceneNode->parent->addChild(node, false);
+
+    ui->sceneHierarchy->repopulateTree();
+    sceneNodeSelected(node);
 }
 
 void MainWindow::deleteNode()
@@ -980,31 +1035,51 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::on_translateGizmoBtn_clicked()
+void MainWindow::useFreeCamera()
+{
+    sceneView->setFreeCameraMode();
+}
+
+void MainWindow::useArcballCam()
+{
+    sceneView->setArcBallCameraMode();
+}
+
+void MainWindow::useLocalTransform()
+{
+    sceneView->setTransformOrientationLocal();
+}
+
+void MainWindow::useGlobalTransform()
+{
+    sceneView->setTransformOrientationGlobal();
+}
+
+void MainWindow::translateGizmo()
 {
     sceneView->setGizmoLoc();
 }
 
-void MainWindow::on_scaleGizmoBtn_clicked()
-{
-    sceneView->setGizmoScale();
-}
-
-void MainWindow::on_rotateGizmoBtn_clicked()
+void MainWindow::rotateGizmo()
 {
     sceneView->setGizmoRot();
 }
 
-void MainWindow::onPlaySceneButton()
+void MainWindow::scaleGizmo()
 {
-    if(ui->playSceneBtn->text() == "PLAY")
-    {
-        this->sceneView->startPlayingScene();
-        ui->playSceneBtn->setText("STOP");
-    }
-    else
-    {
-        this->sceneView->stopPlayingScene();
-        ui->playSceneBtn->setText("PLAY");
-    }
+    sceneView->setGizmoScale();
 }
+
+//void MainWindow::onPlaySceneButton()
+//{
+//    if(ui->playSceneBtn->text() == "PLAY")
+//    {
+//        this->sceneView->startPlayingScene();
+//        ui->playSceneBtn->setText("STOP");
+//    }
+//    else
+//    {
+//        this->sceneView->stopPlayingScene();
+//        ui->playSceneBtn->setText("PLAY");
+//    }
+//}

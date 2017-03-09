@@ -18,10 +18,9 @@ For more information see the LICENSE file
 
 class ColorValueWidget;
 class ColorPickerWidget;
-class TexturePicker;
+class TexturePickerWidget;
 
-namespace iris
-{
+namespace iris {
     class Scene;
     class SceneNode;
     class LightNode;
@@ -46,10 +45,9 @@ protected slots:
 
 private:
     QSharedPointer<iris::Scene> scene;
-    TexturePicker* skyTexture;
+    TexturePickerWidget* skyTexture;
     ColorValueWidget* skyColor;
     ColorValueWidget* ambientColor;
-
 };
 
 #endif // SCENEPROPERTYWIDGET_H

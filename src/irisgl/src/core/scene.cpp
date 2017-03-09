@@ -14,8 +14,11 @@ For more information see the LICENSE file
 #include "../scenegraph/lightnode.h"
 #include "../scenegraph/cameranode.h"
 #include "../scenegraph/viewernode.h"
+#include "../scenegraph/meshnode.h"
 #include "../graphics/mesh.h"
+#include "../graphics/renderitem.h"
 #include "../materials/defaultskymaterial.h"
+#include "../geometry/trimesh.h"
 #include "irisutils.h"
 
 namespace iris
@@ -32,6 +35,11 @@ Scene::Scene()
     // skyTexture = Texture2D::load("app/content/skies/default.png");
     skyMaterial = DefaultSkyMaterial::create();
     skyColor = QColor(255, 255, 255, 255);
+    skyRenderItem = new RenderItem();
+    skyRenderItem->mesh = skyMesh;
+    skyRenderItem->material = skyMaterial;
+    skyRenderItem->type = RenderItemType::Mesh;
+    skyRenderItem->renderLayer = (int)RenderLayer::Background;
 
     fogColor = QColor(250, 250, 250);
     fogStart = 100;
@@ -39,6 +47,10 @@ Scene::Scene()
     fogEnabled = true;
 
     ambientColor = QColor(64, 64, 64);
+
+    //reserve 1000 items initially
+    geometryRenderList.reserve(1000);
+    shadowRenderList.reserve(1000);
 }
 
 void Scene::setSkyTexture(Texture2DPtr tex)
@@ -83,11 +95,61 @@ void Scene::update(float dt)
         camera->update(dt);
         camera->updateCameraMatrices();
     }
+
+    this->geometryRenderList.append(skyRenderItem);
 }
 
 void Scene::render()
 {
 
+}
+
+void Scene::rayCast(const QVector3D& segStart,
+                    const QVector3D& segEnd,
+                    QList<PickingResult>& hitList)
+{
+    rayCast(rootNode, segStart, segEnd, hitList);
+}
+
+void Scene::rayCast(const QSharedPointer<iris::SceneNode>& sceneNode,
+                    const QVector3D& segStart,
+                    const QVector3D& segEnd,
+                    QList<iris::PickingResult>& hitList)
+{
+    if ((sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) &&
+         sceneNode->isPickable())
+    {
+        auto meshNode = sceneNode.staticCast<iris::MeshNode>();
+        auto mesh = meshNode->getMesh();
+        if(mesh != nullptr)
+        {
+            auto triMesh = meshNode->getMesh()->getTriMesh();
+
+            // transform segment to local space
+            auto invTransform = meshNode->globalTransform.inverted();
+            auto a = invTransform * segStart;
+            auto b = invTransform * segEnd;
+
+            QList<iris::TriangleIntersectionResult> results;
+            if (int resultCount = triMesh->getSegmentIntersections(a, b, results)) {
+                for (auto triResult : results) {
+                    // convert hit to world space
+                    auto hitPoint = meshNode->globalTransform * triResult.hitPoint;
+
+                    PickingResult pick;
+                    pick.hitNode = sceneNode;
+                    pick.hitPoint = hitPoint;
+                    pick.distanceFromStartSqrd = (hitPoint - segStart).lengthSquared();
+
+                    hitList.append(pick);
+                }
+            }
+        }
+    }
+
+    for (auto child : sceneNode->children) {
+        rayCast(child, segStart, segEnd, hitList);
+    }
 }
 
 void Scene::addNode(SceneNodePtr node)
@@ -109,9 +171,14 @@ void Scene::removeNode(SceneNodePtr node)
         lights.removeOne(node.staticCast<iris::LightNode>());
     }
 
-    // If this node is the scene's viewer then reset the scene's viewer to null
-    if(vrViewer == node.staticCast<iris::ViewerNode>())
+    // if this node is the scene's viewer then reset the scene's viewer to null
+    if (vrViewer == node.staticCast<iris::ViewerNode>()) {
         vrViewer.reset();
+    }
+
+    for (auto& child : node->children) {
+        removeNode(child);
+    }
 }
 
 void Scene::setCamera(CameraNodePtr cameraNode)
