@@ -16,22 +16,34 @@ For more information see the LICENSE file
 
 namespace iris
 {
+class PropertyAnim;
 
 class Animation
 {
-public:
     QString name;
     bool loop;
     float length;
+public:
 
-    KeyFrameSetPtr keyFrameSet;
+    //QMap preserves insertion order,QHash doesnt
+    QMap<QString,PropertyAnim*> properties;
 
-    Animation();
+    Animation(QString name);
+    ~Animation();
 
-    static AnimationPtr create()
+    void addPropertyAnim(PropertyAnim* anim);
+
+    PropertyAnim* getPropertyAnim(QString name);
+
+    bool hasPropertyAnim(QString name);
+
+    static AnimationPtr create(QString name)
     {
-        return AnimationPtr(new Animation());
+        return AnimationPtr(new Animation(name));
     }
+
+    QString getName() const;
+    void setName(const QString &value);
 };
 
 }

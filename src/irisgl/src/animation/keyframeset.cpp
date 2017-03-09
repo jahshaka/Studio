@@ -11,23 +11,37 @@ For more information see the LICENSE file
 
 #include "keyframeset.h"
 #include "keyframeanimation.h"
+#include "propertyanim.h"
 
 namespace iris
 {
 
-FloatKeyFrame* KeyFrameSet::getOrCreateFrame(QString name)
+KeyFrameSet::~KeyFrameSet()
+{
+    //todo: delete keys
+}
+
+void KeyFrameSet::addKeyFrame(PropertyAnim *anim)
+{
+    Q_ASSERT(!keyFrames.contains(name));
+
+    keyFrames.insert(anim->name, anim);
+}
+
+FloatPropertyAnim* KeyFrameSet::getOrCreateFrame(QString name)
 {
     if(keyFrames.contains(name))
     {
         return keyFrames[name];
     }
 
-    auto keyFrame = new FloatKeyFrame();
-    keyFrames.insert(name,keyFrame);
-    return keyFrame;
+    auto propAnim = new FloatPropertyAnim();
+    propAnim->name = name;
+    keyFrames.insert(name, propAnim);
+    return propAnim;
 }
 
-FloatKeyFrame* KeyFrameSet::getKeyFrame(QString name)
+PropertyAnim* KeyFrameSet::getKeyFrame(QString name)
 {
     if(keyFrames.contains(name))
     {

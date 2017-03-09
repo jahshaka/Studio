@@ -28,7 +28,7 @@ public:
     }
 };
 
-class FloatPropertyAnim
+class FloatPropertyAnim : public PropertyAnim
 {
     FloatKeyFrame* keyFrame;
 public:
@@ -39,7 +39,7 @@ public:
     virtual QList<PropertyAnimInfo> getKeyFrames() override;
 };
 
-class Vector3DPropertyAnim
+class Vector3DPropertyAnim : public PropertyAnim
 {
     FloatKeyFrame* keyFrames[3];
 public:
@@ -50,7 +50,7 @@ public:
     virtual QList<PropertyAnimInfo> getKeyFrames() override;
 };
 
-class ColorPropertyAnim
+class ColorPropertyAnim : public PropertyAnim
 {
     FloatKeyFrame* keyFrames[4];
 public:
