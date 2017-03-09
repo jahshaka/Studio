@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
 #include "../irisgl/src/animation/animation.h"
+#include "../irisgl/src/animation/propertyanim.h"
+#include "../irisgl/src/animation/animableproperty.h"
 #include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/core/scene.h"
 
@@ -32,85 +34,13 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
 
     ui->keywidgetView->setLabelWidget(ui->keylabelView);
 
-    connect(ui->insertFrame, &QToolButton::clicked, this, [=](bool clicked) {
-        qDebug() << "Clicked";
-    });
-
-    //auto menu = new QMenu();
-    addMenu = new QMenu();
-
-    //ADD KEYFRAME BUTTON
-    QAction* action = new QAction("Location", this);
-    addMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(addPosKey()));
-
-    action = new QAction("Rotation", this);
-    addMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(addRotKey()));
-
-    action = new QAction("Scale", this);
-    addMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(addScaleKey()));
-
-    action = new QAction("Location + Rotation", this);
-    addMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(addPosRotKey()));
-
-    action = new QAction("Location + Rotation + Scale", this);
-    addMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(addPosRotScaleKey()));
-
-    //todo: add other keyframe attribs based on scene node
-    addLightColorKeyAction = new QAction("Light Color", this);
-    //menu->addAction(addLightColorKeyAction);
-    connect(addLightColorKeyAction,SIGNAL(triggered(bool)),this,SLOT(addLightColorKey()));
-
-    addLightIntensityKeyAction = new QAction("Light Intensity", this);
-    //menu->addAction(addLightIntensityKeyAction);
-    connect(addLightIntensityKeyAction,SIGNAL(triggered(bool)),this,SLOT(addLightIntensityKey()));
-
-    addSceneBackgroundColorKeyAction = new QAction("World Color", this);
-    //menu->addAction(addSceneBackgroundColorKeyAction);
-    connect(addSceneBackgroundColorKeyAction,SIGNAL(triggered(bool)),this,SLOT(addSceneBackgroundColorKey()));
-
-    addSceneActiveCameraKeyAction = new QAction("Active Camera", this);
-    //menu->addAction(addSceneBackgroundColorKeyAction);
-    connect(addSceneBackgroundColorKeyAction,SIGNAL(triggered(bool)),this,SLOT(addSceneActiveCameraKey()));
-
-    //qDebug() << addMenu->actions().count();
-    ui->insertFrame->setMenu(addMenu);
-    //ui->insertFrame->setMenu(addMenu);
-    qDebug() << ui->insertFrame->menu()->actions().count();
-
-    //REMOVE KEYFRAME BUTTON
-    //menu = new QMenu();
-    deleteMenu = new QMenu();
-    action = new QAction("Location", this);
-    deleteMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(deletePosKeys()));
-
-    action = new QAction("Rotation", this);
-    deleteMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(deleteScaleKeys()));
-
-    action = new QAction("Scale", this);
-    deleteMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(deleteRotKeys()));
-
-    action = new QAction("All", this);
-    deleteMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),this,SLOT(deleteAllKeys()));
-
-
-    // ui->deleteFrames->setMenu(deleteMenu);
-
     //timer
     timer = new QTimer(this);
     //timer = new QElapsedTimer(this);
     connect(timer,SIGNAL(timeout()),this,SLOT(updateAnim()));
     elapsedTimer = new QElapsedTimer();
 
-    time = 0;
+    timeAtCursor = 0;
     timerSpeed = 1.0f/60;//60 fps
     //startedTime = ui->timeline->getTimeAtCursor();
     loopAnim = false;
@@ -123,8 +53,6 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     //connect(ui->timeline,SIGNAL(cursorMoved(float)),this,SLOT(onSceneAnimationTimeChanged(float)));
 
     mainTimeline = nullptr;
-
-    // ui->timeline->resize(0,ui->widget_5->height());
 }
 
 AnimationWidget::~AnimationWidget()
@@ -147,47 +75,35 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
     ui->keylabelView->repaint();
     this->node = node;
 
-    /*
-    ui->animStartTime->setValue(node->getAnimStartTime());
-    //ui->timeline->setMaxTimeInSeconds(node->animLength);
-    ui->animLength->setValue(node->animLength);
-    setAnimLength(node->animLength);
-    ui->loopAnim->setChecked(node->loopAnim);
-    ui->animStartTime->setValue(node->animStartTime);
-    this->showHighlight();
+    if (!!node) {
 
-    switch(node->sceneNodeType)
-    {
-    case SceneNodeType::Light:
-        addMenu->addAction(addLightColorKeyAction);
-        addMenu->addAction(addLightIntensityKeyAction);
-        break;
+        animableProperties = node->getAnimableProperties();
 
-    default:
-        break;
+        // rebuild menu
+        auto menu = new QMenu();
+        int index = 0;
+        for (auto prop : animableProperties) {
+            auto action = new QAction();
+            action->setText(prop.name);
+            action->setData(index++);
+
+            menu->addAction(action);
+        }
+
+        ui->insertFrame->setMenu(menu);
+    } else {
+        ui->insertFrame->setMenu(new QMenu());
+        animation = nullptr;
     }
-
-    */
-
-    ui->insertFrame->setMenu(addMenu);
-}
-
-void AnimationWidget::removeNodeSpecificActions()
-{
-    //addMenu->removeAction(addLightColorKeyAction);
-    //addMenu->removeAction(addLightIntensityKeyAction);
-
-    deleteMenu->removeAction(deleteLightColorKeysAction);
-    deleteMenu->removeAction(deleteLightIntensityKeysAction);
 }
 
 void AnimationWidget::updateAnim()
 {
-    time += elapsedTimer->nsecsElapsed()/(1000.0f*1000.0f*1000.0f);
+    timeAtCursor += elapsedTimer->nsecsElapsed()/(1000.0f*1000.0f*1000.0f);
     elapsedTimer->restart();
 
-    ui->keywidgetView->setTime(time);
-    onObjectAnimationTimeChanged(time);
+    ui->keywidgetView->setTime(timeAtCursor);
+    onObjectAnimationTimeChanged(timeAtCursor);
 
     /*
     ui->timeline->setTime(time);
@@ -202,7 +118,7 @@ void AnimationWidget::updateAnim()
 void AnimationWidget::startTimer()
 {
     //time = ui->timeline->getTimeAtCursor();
-    time = ui->keywidgetView->getTimeAtCursor();
+    timeAtCursor = ui->keywidgetView->getTimeAtCursor();
     timer->start(timerSpeed);
     elapsedTimer->start();
     //timer->start();
@@ -243,19 +159,82 @@ void AnimationWidget::repaintViews()
     ui->keylabelView->repaint();
 }
 
-/*
-//startRange and endRange are in seconds
-void AnimationWidget::setAnimationViewRange(float startRange,float endRange)
+iris::PropertyAnim *AnimationWidget::createPropertyAnim(const iris::AnimableProperty& prop)
 {
-    //ui->timeline->set
+    iris::PropertyAnim* anim;
+
+    switch (prop.type) {
+    case iris::AnimablePropertyType::Float:
+        anim = new iris::FloatPropertyAnim();
+    break;
+
+    case iris::AnimablePropertyType::Vector3:
+        anim = new iris::Vector3DPropertyAnim();
+    break;
+
+    case iris::AnimablePropertyType::Color:
+        anim = new iris::ColorPropertyAnim();
+    break;
+
+    default:
+        Q_ASSERT(false);
+    }
+
+    anim->setName(prop.name);
+    return anim;
 }
 
-//sets cursor position at time
-void AnimationWidget::setCursorPositionAtTime(float timeInSeconds)
+void AnimationWidget::addPropertyKey(QAction *action)
 {
+    if (animation == nullptr)
+        return;
 
+    auto index = action->data().toInt();
+    auto animProp = animableProperties[index];
+
+    // Get or create property
+    iris::PropertyAnim* anim;
+    if (animation->hasPropertyAnim(animProp.name))
+    {
+        anim = animation->getPropertyAnim(animProp.name);
+    } else {
+        anim = createPropertyAnim(animProp);
+    }
+
+    auto val = node->getAnimPropertyValue(animProp.name);
+
+    switch (animProp.type) {
+    case iris::AnimablePropertyType::Float:
+    {
+        auto value = val.toFloat();
+        anim->getKeyFrames()[0].keyFrame->
+                addKey(value,this->timeAtCursor);
+    }
+        break;
+    case iris::AnimablePropertyType::Vector3:
+    {
+        auto value = val.value<QVector3D>();
+        auto frames =  anim->getKeyFrames();
+        frames[0].keyFrame->addKey(value.x(), this->timeAtCursor);
+        frames[1].keyFrame->addKey(value.y(), this->timeAtCursor);
+        frames[2].keyFrame->addKey(value.z(), this->timeAtCursor);
+    }
+        break;
+    case iris::AnimablePropertyType::Color:
+    {
+        auto value = val.value<QColor>();
+        auto frames =  anim->getKeyFrames();
+        frames[0].keyFrame->addKey(value.redF(),    this->timeAtCursor);
+        frames[1].keyFrame->addKey(value.greenF(),  this->timeAtCursor);
+        frames[2].keyFrame->addKey(value.blueF(),   this->timeAtCursor);
+        frames[3].keyFrame->addKey(value.alphaF(),   this->timeAtCursor);
+    }
+        break;
+    }
+
+    this->repaintViews();
 }
-*/
+
 void AnimationWidget::addPosKey()
 {
     return;

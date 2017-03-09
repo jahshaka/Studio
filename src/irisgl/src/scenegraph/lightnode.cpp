@@ -17,4 +17,12 @@ QList<AnimableProperty> LightNode::getAnimableProperties()
     return props;
 }
 
+QVariant LightNode::getAnimPropertyValue(QString valueName)
+{
+    if(valueName == "LightIntensity")
+        return intensity;
+
+    return SceneNode::getAnimPropertyValue(valueName);
+}
+
 }

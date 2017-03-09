@@ -32,7 +32,6 @@ KeyFrameLabelTreeWidget::KeyFrameLabelTreeWidget(QWidget *parent) :
     ui->setupUi(this);
 }
 
-
 KeyFrameLabelTreeWidget::~KeyFrameLabelTreeWidget()
 {
     delete ui;
@@ -41,15 +40,9 @@ KeyFrameLabelTreeWidget::~KeyFrameLabelTreeWidget()
 void KeyFrameLabelTreeWidget::setSceneNode(iris::SceneNodePtr node)
 {
     this->node = node;
-    /*
-    if(!!node && !!node->animation->keyFrameSet)
-    {
-        parseKeyFramesToGroups(node->animation->keyFrameSet);
 
-        //build tree from groups
-        buildTreeFromKeyFrameGroups(groups);
-    }
-    */
+    // refresh tree
+
 }
 
 /**

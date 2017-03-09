@@ -82,6 +82,7 @@ public:
     }
 
     virtual QList<AnimableProperty> getAnimableProperties();
+    virtual QVariant getAnimPropertyValue(QString valueName);
 
     /*
     * This function should return an exact copy of this node

@@ -173,7 +173,7 @@ QWidget#controls &gt; QToolButton:hover {
         </widget>
        </item>
        <item>
-        <widget class="KeyFrameLabelWidget" name="keylabelView" native="true">
+        <widget class="KeyFrameLabelTreeWIdget" name="keylabelView" native="true">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
            <horstretch>0</horstretch>
@@ -405,15 +405,15 @@ QWidget#controls &gt; QToolButton:hover {
    <container>1</container>
   </customwidget>
   <customwidget>
-   <class>KeyFrameLabelWidget</class>
-   <extends>QWidget</extends>
-   <header>src/widgets/keyframelabelwidget.h</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
    <class>TimelineWidget</class>
    <extends>QWidget</extends>
    <header>src/widgets/timelinewidget.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>KeyFrameLabelTreeWIdget</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/keyframelabeltreewidget.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>
