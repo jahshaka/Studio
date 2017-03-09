@@ -363,6 +363,7 @@ float KeyFrameWidget::distanceSquared(float x1,float y1,float x2,float y2)
 
 iris::FloatKey* KeyFrameWidget::getSelectedKey(int x,int y)
 {
+    /*
     if(!obj)
         return nullptr;
 
@@ -385,6 +386,7 @@ iris::FloatKey* KeyFrameWidget::getSelectedKey(int x,int y)
             }
         }
     }
+    */
 
     return nullptr;
 }

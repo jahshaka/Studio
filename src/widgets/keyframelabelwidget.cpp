@@ -49,7 +49,7 @@ void KeyFrameLabelWidget::setSceneNode(iris::SceneNodePtr node)
 {
     obj = node;
     if (!!obj && !!obj->animation) {
-        this->setKeyFrameSet(obj->animation->keyFrameSet);
+        //this->setKeyFrameSet(obj->animation->keyFrameSet);
     } else {
         this->clearKeyFrameSet();
     }
@@ -73,7 +73,7 @@ void KeyFrameLabelWidget::setKeyFrameSet(iris::KeyFrameSetPtr frameSet)
 
         auto label = new KeyFrameLabel();
         label->setTitle(key);
-        label->setKeyFrame(frame);
+        //label->setKeyFrame(frame);
         layout->addWidget(label);
         labels.append(label);
     }
@@ -93,7 +93,7 @@ void KeyFrameLabelWidget::clearKeyFrameSet()
 void KeyFrameLabelWidget::resetKeyFrames()
 {
     if (!!obj && !!obj->animation) {
-        this->setKeyFrameSet(obj->animation->keyFrameSet);
+        //this->setKeyFrameSet(obj->animation->keyFrameSet);
     }
 }
 

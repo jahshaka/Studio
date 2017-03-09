@@ -19,13 +19,17 @@ struct PropertyAnimInfo
 
 class PropertyAnim
 {
-public:
+protected:
     QString name;
+public:
     virtual QList<PropertyAnimInfo> getKeyFrames()
     {
         QList<PropertyAnimInfo> list;
         return list;
     }
+
+    QString getName() const;
+    void setName(const QString &value);
 };
 
 class FloatPropertyAnim : public PropertyAnim

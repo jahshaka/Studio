@@ -46,6 +46,8 @@ public:
         return MeshNodePtr(new MeshNode());
     }
 
+    virtual QList<AnimableProperty> getAnimableProperties() override;
+
     /**
      * Some model contains multiple meshes with child-parent relationships. This funtion Loads the model as a scene
      * itself. If only one mesh is in the scene, it returns it as an MeshNode rather than a SceneNode. Otherwise, it

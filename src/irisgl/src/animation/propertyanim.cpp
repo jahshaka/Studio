@@ -94,5 +94,15 @@ PropertyAnimInfo::PropertyAnimInfo(QString name, FloatKeyFrame *keyFrame)
     this->keyFrame = keyFrame;
 }
 
+QString PropertyAnim::getName() const
+{
+    return name;
+}
+
+void PropertyAnim::setName(const QString &value)
+{
+    name = value;
+}
+
 
 }

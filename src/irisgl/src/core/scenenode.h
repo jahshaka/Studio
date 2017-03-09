@@ -81,7 +81,7 @@ public:
         return duplicable;
     }
 
-    //virtual QList<PropertyAnim> getPropertyAnimations();
+    virtual QList<AnimableProperty> getAnimableProperties();
 
     /*
     * This function should return an exact copy of this node

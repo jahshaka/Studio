@@ -64,7 +64,8 @@ HEADERS += \
     $$PWD/src/postprocesses/greyscalepostprocess.h \
     $$PWD/src/postprocesses/ssaopostprocess.h \
     $$PWD/src/postprocesses/materialpostprocess.h \
-    $$PWD/src/animation/propertyanim.h
+    $$PWD/src/animation/propertyanim.h \
+    $$PWD/src/animation/animableproperty.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -104,7 +105,8 @@ SOURCES += \
     $$PWD/src/postprocesses/bloompostprocess.cpp \
     $$PWD/src/postprocesses/greyscalepostprocess.cpp \
     $$PWD/src/postprocesses/ssaopostprocess.cpp \
-    $$PWD/src/animation/propertyanim.cpp
+    $$PWD/src/animation/propertyanim.cpp \
+    $$PWD/src/scenegraph/lightnode.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

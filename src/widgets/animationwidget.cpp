@@ -258,9 +258,10 @@ void AnimationWidget::setCursorPositionAtTime(float timeInSeconds)
 */
 void AnimationWidget::addPosKey()
 {
+    return;
     if(!node)
         return;
-
+    /*
     //float seconds = ui->timeline->getTimeAtCursor();
     float seconds = ui->keywidgetView->getTimeAtCursor();
     QVector3D pos = node->pos;
@@ -275,13 +276,15 @@ void AnimationWidget::addPosKey()
 
     ui->keylabelView->resetKeyFrames();
     repaintViews();
+    */
 }
 
 void AnimationWidget::addRotKey()
 {
+    return;
     if(!node)
         return;
-
+    /*
     //float seconds = ui->timeline->getTimeAtCursor();
     float seconds = ui->keywidgetView->getTimeAtCursor();
     QVector3D rot = node->rot.toEulerAngles();
@@ -293,13 +296,16 @@ void AnimationWidget::addRotKey()
 
     ui->keylabelView->resetKeyFrames();
     repaintViews();
+    */
 }
 
 void AnimationWidget::addScaleKey()
 {
+    return;
+
     if(!node)
         return;
-
+    /*
     //float seconds = ui->timeline->getTimeAtCursor();
     float seconds = ui->keywidgetView->getTimeAtCursor();
     QVector3D scale = node->scale;
@@ -311,6 +317,7 @@ void AnimationWidget::addScaleKey()
 
     ui->keylabelView->resetKeyFrames();
     repaintViews();
+    */
 }
 
 void AnimationWidget::addPosRotKey()
