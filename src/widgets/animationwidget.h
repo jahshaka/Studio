@@ -46,6 +46,9 @@ class AnimationWidget : public QWidget
 
     QMenu* addMenu;
     QMenu* deleteMenu;
+
+    QList<iris::AnimableProperty> animableProperties;
+    iris::Animation* animation;
 public:
     explicit AnimationWidget(QWidget *parent = 0);
     ~AnimationWidget();
@@ -100,7 +103,7 @@ public:
     //sets cursor position at time
     void setCursorPositionAtTime(float timeInSeconds);
 private:
-
+    iris::PropertyAnim* createPropertyAnim(const iris::AnimableProperty& prop);
     void removeNodeSpecificActions();
 
     //add actions
@@ -121,6 +124,8 @@ public slots:
     }
 
 private slots:
+    void addPropertyKey(QAction* action);
+
     void addPosKey();
     void addRotKey();
     void addScaleKey();
@@ -145,12 +150,12 @@ private slots:
     void stopTimer();
 
     void timeEditChanged(QTime);
-    void setAnimstart(int time);
+    void setAnimstart(int timeAtCursor);
 
     void onObjectAnimationTimeChanged(float timeInSeconds);
     void onSceneAnimationTimeChanged(float timeInSeconds);
 private:
-    float time;
+    float timeAtCursor;
     float timerSpeed;
     Ui::AnimationWidget *ui;
 };

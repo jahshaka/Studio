@@ -84,6 +84,7 @@ public:
     }
 
     virtual QList<AnimableProperty> getAnimableProperties() override;
+    virtual QVariant getAnimPropertyValue(QString valueName);
 
 private:
     LightNode()

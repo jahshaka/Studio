@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include "../materials/custommaterial.h"
 #include "../materials/materialhelper.h"
 #include "../graphics/renderitem.h"
+#include "../animation/animableproperty.h"
 
 #include "../core/scene.h"
 #include "../core/scenenode.h"

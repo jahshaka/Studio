@@ -73,6 +73,20 @@ QList<AnimableProperty> SceneNode::getAnimableProperties()
     return props;
 }
 
+QVariant SceneNode::getAnimPropertyValue(QString valueName)
+{
+    if(valueName == "Position")
+        return pos;
+
+    if(valueName == "Rotation")
+        return rot.toEulerAngles();
+
+    if(valueName == "Scale")
+        return scale;
+
+    return QVariant();
+}
+
 SceneNodeType SceneNode::getSceneNodeType()
 {
     return sceneNodeType;
