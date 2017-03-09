@@ -83,6 +83,8 @@ public:
         return dir.toVector3D();
     }
 
+    virtual QList<AnimableProperty> getAnimableProperties() override;
+
 private:
     LightNode()
     {

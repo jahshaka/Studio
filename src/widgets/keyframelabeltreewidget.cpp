@@ -41,6 +41,7 @@ KeyFrameLabelTreeWidget::~KeyFrameLabelTreeWidget()
 void KeyFrameLabelTreeWidget::setSceneNode(iris::SceneNodePtr node)
 {
     this->node = node;
+    /*
     if(!!node && !!node->animation->keyFrameSet)
     {
         parseKeyFramesToGroups(node->animation->keyFrameSet);
@@ -48,6 +49,7 @@ void KeyFrameLabelTreeWidget::setSceneNode(iris::SceneNodePtr node)
         //build tree from groups
         buildTreeFromKeyFrameGroups(groups);
     }
+    */
 }
 
 /**
@@ -57,7 +59,7 @@ void KeyFrameLabelTreeWidget::setSceneNode(iris::SceneNodePtr node)
 void KeyFrameLabelTreeWidget::parseKeyFramesToGroups(iris::KeyFrameSetPtr frameSet)
 {
     groups = QHash<QString,KeyFrameGroup*>();
-
+    /*
     for(auto iter = frameSet->keyFrames.begin();iter!=frameSet->keyFrames.end();iter++)
     {
         //get the top-most namespace
@@ -86,6 +88,7 @@ void KeyFrameLabelTreeWidget::parseKeyFramesToGroups(iris::KeyFrameSetPtr frameS
             qDebug()<<"invalid keyframe namspace "<<iter.key();
         }
     }
+    */
 }
 
 void KeyFrameLabelTreeWidget::buildTreeFromKeyFrameGroups(QHash<QString,KeyFrameGroup*> groups)

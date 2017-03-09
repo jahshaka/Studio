@@ -13,9 +13,11 @@ For more information see the LICENSE file
 #define ANIMATION_H
 
 #include "../irisglfwd.h"
+#include <QMap>
 
 namespace iris
 {
+
 class PropertyAnim;
 
 class Animation
@@ -28,7 +30,7 @@ public:
     //QMap preserves insertion order,QHash doesnt
     QMap<QString,PropertyAnim*> properties;
 
-    Animation(QString name);
+    explicit Animation(QString name = "Animation");
     ~Animation();
 
     void addPropertyAnim(PropertyAnim* anim);
@@ -44,6 +46,12 @@ public:
 
     QString getName() const;
     void setName(const QString &value);
+
+    float getLength() const;
+    void setLength(float value);
+
+    bool getLooping() const;
+    void setLooping(bool value);
 };
 
 }

@@ -23,12 +23,12 @@ KeyFrameSet::~KeyFrameSet()
 
 void KeyFrameSet::addKeyFrame(PropertyAnim *anim)
 {
-    Q_ASSERT(!keyFrames.contains(name));
+    Q_ASSERT(!keyFrames.contains(anim->getName()));
 
-    keyFrames.insert(anim->name, anim);
+    keyFrames.insert(anim->getName(), anim);
 }
 
-FloatPropertyAnim* KeyFrameSet::getOrCreateFrame(QString name)
+PropertyAnim* KeyFrameSet::getOrCreateFrame(QString name)
 {
     if(keyFrames.contains(name))
     {
@@ -36,7 +36,7 @@ FloatPropertyAnim* KeyFrameSet::getOrCreateFrame(QString name)
     }
 
     auto propAnim = new FloatPropertyAnim();
-    propAnim->name = name;
+    propAnim->setName(name);
     keyFrames.insert(name, propAnim);
     return propAnim;
 }

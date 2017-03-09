@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "scene.h"
 #include "../animation/keyframeset.h"
 #include "../animation/animation.h"
+#include "../animation/animableproperty.h"
 #include "../animation/keyframeanimation.h"
 
 namespace iris
@@ -39,7 +40,7 @@ SceneNode::SceneNode():
     globalTransform.setToIdentity();
 
     //keyFrameSet = KeyFrameSet::create();
-    animation = iris::Animation::create();
+    animation = iris::Animation::create("");
 }
 
 SceneNodePtr SceneNode::create()
@@ -60,6 +61,16 @@ void SceneNode::setName(QString name)
 long SceneNode::getNodeId()
 {
     return nodeId;
+}
+
+QList<AnimableProperty> SceneNode::getAnimableProperties()
+{
+    QList<AnimableProperty> props;
+    props.append(AnimableProperty("Position",AnimablePropertyType::Vector3));
+    props.append(AnimableProperty("Rotation",AnimablePropertyType::Vector3));
+    props.append(AnimableProperty("Scale",AnimablePropertyType::Vector3));
+
+    return props;
 }
 
 SceneNodeType SceneNode::getSceneNodeType()
@@ -131,6 +142,7 @@ bool SceneNode::isRootNode()
 
 void SceneNode::updateAnimation(float time)
 {
+    /*
     //@todo: cache transformation animations for faster lookup
     auto keyFrameSet = animation->keyFrameSet;
 
@@ -161,6 +173,7 @@ void SceneNode::updateAnimation(float time)
     for (auto child : children) {
         child->updateAnimation(time);
     }
+    */
 }
 
 void SceneNode::update(float dt)

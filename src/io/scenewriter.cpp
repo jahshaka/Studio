@@ -176,10 +176,11 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
         return;
 
     QJsonObject animObj;
-    animObj["name"] = anim->name;
-    animObj["length"] = anim->length;
-    animObj["loop"] = anim->loop;
+    animObj["name"] = anim->getName();
+    animObj["length"] = anim->getLength();
+    animObj["loop"] = anim->getLooping();
 
+    /*
     QJsonArray frames;
     for(auto frameName:anim->keyFrameSet->keyFrames.keys())
     {
@@ -201,9 +202,11 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
         frames.append(frameObj);
     }
 
+
     animObj["frames"] = frames;
 
     sceneNodeObj["animation"] = animObj;
+    */
 }
 
 void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode)

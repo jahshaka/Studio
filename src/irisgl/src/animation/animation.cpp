@@ -11,18 +11,21 @@ For more information see the LICENSE file
 
 #include "animation.h"
 #include "keyframeset.h"
+#include "propertyanim.h"
 #include "../irisglfwd.h"
 
 namespace iris
 {
 
-Animation::Animation()
+Animation::Animation(QString name)
 {
-    name = "Animation";
+    this->name = name;
     loop = false;
     length = 1.0f;
+}
 
-    keyFrameSet = KeyFrameSet::create();
+Animation::~Animation()
+{
 }
 
 QString Animation::getName() const
@@ -35,23 +38,43 @@ void Animation::setName(const QString &value)
     name = value;
 }
 
+float Animation::getLength() const
+{
+    return length;
+}
+
+void Animation::setLength(float value)
+{
+    length = value;
+}
+
+bool Animation::getLooping() const
+{
+    return loop;
+}
+
+void Animation::setLooping(bool value)
+{
+    loop = value;
+}
+
 void Animation::addPropertyAnim(PropertyAnim *anim)
 {
-    Q_ASSERT(!keyFrames.contains(name));
-
-    keyFrames.insert(anim->name, anim);
+    Q_ASSERT(!properties.contains(name));
+    
+    properties.insert(anim->getName(), anim);
 }
 
 PropertyAnim* Animation::getPropertyAnim(QString name)
 {
-    Q_ASSERT(!keyFrames.contains(name));
+    Q_ASSERT(!properties.contains(name));
 
-    return keyFrames[name];
+    return properties[name];
 }
 
 bool Animation::hasPropertyAnim(QString name)
 {
-    return keyFrames.contains(name);
+    return properties.contains(name);
 }
 
 }

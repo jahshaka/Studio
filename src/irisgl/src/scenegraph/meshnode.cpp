@@ -35,7 +35,7 @@ For more information see the LICENSE file
 #include "../core/scene.h"
 #include "../core/scenenode.h"
 #include "../core/irisutils.h"
-
+#include "../animation/animableproperty.h"
 
 namespace iris
 {
@@ -62,6 +62,15 @@ FaceCullingMode MeshNode::getFaceCullingMode() const
 void MeshNode::setFaceCullingMode(const FaceCullingMode &value)
 {
     faceCullingMode = value;
+}
+
+QList<AnimableProperty> MeshNode::getAnimableProperties()
+{
+    auto props = SceneNode::getAnimableProperties();
+
+    // @todo: extract properties from material
+
+    return props;
 }
 
 void MeshNode::setMesh(QString source)
