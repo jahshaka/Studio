@@ -40,6 +40,7 @@ public:
     MaterialPropertyWidget(int materialType = 1, QWidget* parent=nullptr);
 
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode, bool skip = false);
+    QSharedPointer<iris::SceneNode> masterNode;
     QSharedPointer<iris::MeshNode> meshNode;
 
     QSharedPointer<iris::DefaultMaterial> material;

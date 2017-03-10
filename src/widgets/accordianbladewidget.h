@@ -50,8 +50,6 @@ public:
 
     void clearPanel();
 
-    QVBoxLayout* contentLayout;
-
 private slots:
     void onPanelToggled();
 

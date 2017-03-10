@@ -141,6 +141,8 @@ MaterialPropertyWidget::MaterialPropertyWidget(int materialType, QWidget* parent
 
 void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode, bool skip)
 {
+    masterNode = sceneNode;
+
     if (materialType == 1) {
         qDebug() << "using default";
         if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
@@ -156,6 +158,7 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
         //todo: ensure material isnt null
 
         if (!skip) {
+
             ambientColor->setColorValue(mat->getAmbientColor());
 
             diffuseColor->setColorValue(mat->getDiffuseColor());
@@ -177,11 +180,14 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
         qDebug() << "using custom";
         if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             this->meshNode = sceneNode.staticCast<iris::MeshNode>();
+//            auto mat = iris::CustomMaterial::create();
             this->customMaterial = meshNode->getCustomMaterial().staticCast<iris::CustomMaterial>();
 
             for (int i = 0; i < allocated; i++) {
                 customSliders[i]->setValue(customMaterial->sliderValues[i]);
             }
+
+            this->customMaterial->initializeDefaultValues(materialReader->getParsedShader());
         } else {
             this->meshNode.clear();
             this->customMaterial.clear();
@@ -202,12 +208,16 @@ void MaterialPropertyWidget::onMaterialSelectorChanged(QString text)
 {
     if (text == "Default Material") {
         this->materialType = this->meshNode->materialType = 1;
+        auto mat = iris::DefaultMaterial::create();
+//        this->meshNode->setMaterial(this->material);
         this->meshNode->setActiveMaterial(1);
-//        this->setSceneNode(this->meshNode, true);
+
+        this->setSceneNode(masterNode, true);
     } else if (text == "Glass") {
         this->materialType = this->meshNode->materialType = 2;
+//        this->meshNode->setMaterial(this->customMaterial);
         this->meshNode->setActiveMaterial(2);
-        clearPanel();
+//        clearPanel();
 //        this->setSceneNode(this->meshNode);
     }
 }

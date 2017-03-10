@@ -10,15 +10,20 @@ CustomMaterial::CustomMaterial()
     createProgramFromShaderSource(":assets/shaders/custom.vert",
                                   ":assets/shaders/custom.frag");
 
-    QString x1 = IrisUtils::getAbsoluteAssetPath("app/content/textures/left.jpg");
-    QString x2 = IrisUtils::getAbsoluteAssetPath("app/content/textures/right.jpg");
-    QString y1 = IrisUtils::getAbsoluteAssetPath("app/content/textures/top.jpg");
-    QString y2 = IrisUtils::getAbsoluteAssetPath("app/content/textures/bottom.jpg");
-    QString z1 = IrisUtils::getAbsoluteAssetPath("app/content/textures/front.jpg");
-    QString z2 = IrisUtils::getAbsoluteAssetPath("app/content/textures/back.jpg");
+//    QString x1 = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/ame_desert/left.png");
+//    QString x2 = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/ame_desert/right.png");
+//    QString y1 = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/ame_desert/top.png");
+//    QString y2 = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/ame_desert/bottom.png");
+//    QString z1 = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/ame_desert/front.png");
+//    QString z2 = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/ame_desert/back.png");
 
-    auto skyTexture = Texture2D::createCubeMap(x1, x2, y1, y2, z1, z2);
-    setTexture(skyTexture);
+//    auto skyTexture = Texture2D::createCubeMap(x1, x2, y1, y2, z1, z2);
+//    setTexture(skyTexture);
+
+    allocated = 0;
+
+    sliderValues[0] = 0.5;
+    sliderValues[1] = 0.5;
 
     this->setRenderLayer((int)RenderLayer::Opaque);
 }
@@ -26,20 +31,18 @@ CustomMaterial::CustomMaterial()
 void CustomMaterial::setTexture(Texture2DPtr tex)
 {
     texture = tex;
-    if(!!tex)
-        this->addTexture("skybox", tex);
-    else
-        this->removeTexture("skybox");
+    if (!!tex)  this->addTexture("skybox", tex);
+    else        this->removeTexture("skybox");
 }
 
 void CustomMaterial::initializeDefaultValues(const QJsonObject &jahShader)
 {
     auto uniforms = jahShader["uniforms"].toObject();
 
-    int allocated = 0;
+    allocated = 0;
     for (auto childObj : uniforms) {
         if (childObj.toObject()["type"] == "slider") {
-            sliderValues[allocated] = (float) childObj.toObject()["value"].toDouble();
+            uniformName[allocated] = childObj.toObject()["uniform"].toString();;
             allocated++;
         }
     }
@@ -53,7 +56,9 @@ Texture2DPtr CustomMaterial::getTexture()
 void CustomMaterial::begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
 {
     Material::begin(gl,scene);
-    program->setUniformValue("color", QVector3D(120, 120, 15));
+    for (int i = 0; i < 2; i++) {
+        this->setUniformValue(uniformName[i], sliderValues[i]);
+    }
 }
 
 void CustomMaterial::end(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)

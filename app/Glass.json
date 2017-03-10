@@ -5,18 +5,18 @@
         "property": {
             "name"      : "Refraction Amnt",
             "type"      : "slider",
-            "start"     : 1,
-            "end"       : 100,
-            "value"     : 50,
-            "uniform"   : "u_strength"
+            "start"     : 0,
+            "end"       : 1,
+            "value"     : 1,
+            "uniform"   : "u_refrac_strength"
         },
         "property2": {
             "name"      : "Reflection Amnt",
             "type"      : "slider",
-            "start"     : 1,
-            "end"       : 20,
-            "value"     : 5,
-            "uniform"   : "u_strength"
+            "start"     : 0,
+            "end"       : 1,
+            "value"     : 1,
+            "uniform"   : "u_reflec_strength"
         }
     },
     "shader": "path"

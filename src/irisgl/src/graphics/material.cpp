@@ -128,7 +128,7 @@ void Material::unbindTextures(QOpenGLFunctions_3_2_Core* gl)
 
 void Material::createProgramFromShaderSource(QString vsFile,QString fsFile)
 {
-    program = GraphicsHelper::loadShader(vsFile,fsFile);
+    program = GraphicsHelper::loadShader(vsFile, fsFile);
 }
 
 void Material::setTextureCount(int count)

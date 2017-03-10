@@ -30,16 +30,14 @@ DefaultSkyMaterial::DefaultSkyMaterial()
 void DefaultSkyMaterial::setSkyTexture(Texture2DPtr tex)
 {
     texture = tex;
-    if(!!tex)
-        this->addTexture("skybox",tex);
-//    else
-//        this->removeTexture("texture");
+    if (!!tex)  this->addTexture("skybox", tex);
+    else        this->removeTexture("texture");
 }
 
 void DefaultSkyMaterial::clearSkyTexture()
 {
-//    texture.clear();
-//    removeTexture("texture");
+    texture.clear();
+    removeTexture("texture");
 }
 
 Texture2DPtr DefaultSkyMaterial::getSkyTexture()
