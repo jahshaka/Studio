@@ -1,0 +1,23 @@
+{
+    "name": "Glass Shader",
+    "preview": false,
+    "uniforms": {
+        "property": {
+            "name"      : "Refraction Amnt",
+            "type"      : "slider",
+            "start"     : 1,
+            "end"       : 100,
+            "value"     : 50,
+            "uniform"   : "u_strength"
+        },
+        "property2": {
+            "name"      : "Reflection Amnt",
+            "type"      : "slider",
+            "start"     : 1,
+            "end"       : 20,
+            "value"     : 5,
+            "uniform"   : "u_strength"
+        }
+    },
+    "shader": "path"
+}

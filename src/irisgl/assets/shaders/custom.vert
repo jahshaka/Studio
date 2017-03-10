@@ -16,7 +16,7 @@ in vec3 a_normal;
 in vec2 a_texCoord;
 
 out vec3 v_normal;
-out vec2 v_texCoord;
+out vec3 v_pos;
 
 uniform mat4 u_viewMatrix;
 uniform mat4 u_projMatrix;
@@ -24,8 +24,8 @@ uniform mat4 u_worldMatrix;
 
 void main()
 {
+    v_pos = vec3(u_worldMatrix * vec4(a_pos, 1.0));
     v_normal = normalize(u_worldMatrix * vec4(a_normal, 0.0)).xyz;
-    v_texCoord = a_texCoord;
 
     gl_Position = u_projMatrix * u_viewMatrix * u_worldMatrix * vec4(a_pos, 1.0);
 }

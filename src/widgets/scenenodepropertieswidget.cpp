@@ -40,7 +40,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 {
     if (!!sceneNode) {
         if (sceneNode->isRootNode()) {
-            // remember this is used to test new widgets..., do not push to prod enabled!
+            /* remember this is used to test new widgets. Do NOT push to prod enabled! */
             // demoPane = new DemoPane();
             // demoPane->setPanelTitle("Demo Pane");
             // demoPane->expand();

@@ -17,6 +17,10 @@ public:
 
     void setLabel(const QString&);
     void addItem(const QString&);
+    void setCurrentItem(const QString&);
+
+signals:
+    void currentIndexChanged(const QString&);
 
 private slots:
     void onDropDownTextChanged(const QString&);

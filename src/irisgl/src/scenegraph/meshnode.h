@@ -35,6 +35,7 @@ public:
     int meshIndex;
 
     MaterialPtr material;
+    MaterialPtr customMaterial;
 
     RenderItem* renderItem;
 
@@ -57,9 +58,16 @@ public:
     Mesh* getMesh();
 
     void setMaterial(MaterialPtr material);
+    void setCustomMaterial(MaterialPtr material);
+
+    void setActiveMaterial(int type);
 
     MaterialPtr getMaterial() {
         return material;
+    }
+
+    MaterialPtr getCustomMaterial() {
+        return customMaterial;
     }
 
     // not needed because this guy likes public members...

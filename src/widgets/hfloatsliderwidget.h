@@ -27,6 +27,7 @@ class HFloatSliderWidget : public QWidget
     float minVal, maxVal;
 
 public:
+    int index;
     HFloatSliderWidget(QWidget *parent = 0);
     ~HFloatSliderWidget();
 

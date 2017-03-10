@@ -281,6 +281,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 {
     auto scene = iris::Scene::create();
 
+
     auto cam = iris::CameraNode::create();
     cam->pos = QVector3D(6, 12, 14);
     cam->rot = QQuaternion::fromEulerAngles(-80,0,0);
@@ -853,7 +854,7 @@ void MainWindow::addMesh()
     // model file may be invalid so null gets returned
     if (!node) return;
 
-    node->materialType = 2;
+//    node->materialType = 2;
     node->setName(nodeName);
 
     // todo: load material data
@@ -923,8 +924,18 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
 //        if (!meshNode->getMaterial()) {
-            auto mat = iris::CustomMaterial::create();
-            meshNode->setMaterial(mat);
+//            if (meshNode->materialType == 1) {
+                auto mat2 = iris::CustomMaterial::create();
+                meshNode->setCustomMaterial(mat2);
+                auto mat = iris::DefaultMaterial::create();
+                meshNode->setMaterial(mat);
+
+                meshNode->setActiveMaterial(1);
+//            } else {
+//                auto mat = iris::CustomMaterial::create();
+//                meshNode->setMaterial(mat);
+//            }
+
 //        }
     }
 

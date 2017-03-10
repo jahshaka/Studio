@@ -16,16 +16,20 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include "../accordianbladewidget.h"
 
+#include <QJsonObject>
+
 namespace iris {
     class SceneNode;
     class MeshNode;
+    class Material;
     class DefaultMaterial;
+    class CustomMaterial;
+
 }
+class MaterialReader;
 
 /**
  *  Displays properties for materials
- *  right now it is made specifically for the iris::DefaulMaterial class
- *
  */
 class MaterialPropertyWidget : public AccordianBladeWidget
 {
@@ -35,9 +39,14 @@ public:
     int materialType;
     MaterialPropertyWidget(int materialType = 1, QWidget* parent=nullptr);
 
-    void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
+    void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode, bool skip = false);
     QSharedPointer<iris::MeshNode> meshNode;
+
     QSharedPointer<iris::DefaultMaterial> material;
+    QSharedPointer<iris::CustomMaterial> customMaterial;
+
+    MaterialReader* materialReader;
+    void parseJahShader(const QJsonObject &jahShader);
 
 protected slots:
     void onAmbientColorChanged(QColor color);
@@ -56,8 +65,14 @@ protected slots:
     void onReflectionInfluenceChanged(float intensity);
 
     void onTextureScaleChanged(float scale);
+    void onCustomSliderChanged(QWidget *t);
+
+    void onMaterialSelectorChanged(QString);
 
 private:
+    QString currentMaterial;
+    ComboBoxWidget* materialSelector;
+
     ColorValueWidget* ambientColor;
 
     ColorValueWidget* diffuseColor;
@@ -76,8 +91,8 @@ private:
     HFloatSliderWidget* textureScale;
 
     // 2
-    LabelWidget* fuNick;
-
+    int allocated;
+    HFloatSliderWidget* customSliders[12];
 };
 
 #endif // MATERIALPROPERTYWIDGET_H

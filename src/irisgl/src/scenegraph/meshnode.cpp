@@ -40,6 +40,8 @@ MeshNode::MeshNode() {
 
     renderItem = new RenderItem();
     renderItem->type = RenderItemType::Mesh;
+
+    materialType = 1;
 }
 
 // @todo: cleanup previous mesh item
@@ -67,8 +69,23 @@ Mesh* MeshNode::getMesh()
 void MeshNode::setMaterial(MaterialPtr material)
 {
     this->material = material;
-
+//    setActiveMaterial(1);
     renderItem->material = material;
+}
+
+void MeshNode::setCustomMaterial(MaterialPtr material)
+{
+    this->customMaterial = material;
+//    renderItem->material = customMaterial;
+}
+
+void MeshNode::setActiveMaterial(int type)
+{
+    if (type == 1) {
+        renderItem->material = material;
+    } else {
+        renderItem->material = customMaterial;
+    }
 }
 
 void MeshNode::submitRenderItems()

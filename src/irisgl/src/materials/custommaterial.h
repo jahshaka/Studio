@@ -3,6 +3,7 @@
 
 #include "../graphics/material.h"
 #include "../irisglfwd.h"
+#include <QJsonObject>
 #include <QOpenGLShaderProgram>
 #include <QColor>
 
@@ -20,6 +21,9 @@ public:
 
     void begin(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
     void end(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
+
+    float sliderValues[12];
+    void initializeDefaultValues(const QJsonObject &jahShader);
 
     static CustomMaterialPtr create();
 private:

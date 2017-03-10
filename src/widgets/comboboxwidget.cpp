@@ -7,7 +7,7 @@ ComboBoxWidget::ComboBoxWidget(QWidget* parent) : QWidget(parent), ui(new Ui::Co
 {
     ui->setupUi(this);
 
-    connect(ui->comboBox, SIGNAL(currentTextChanged(QString)), SLOT(onDropDownTextChanged(QString)));
+    connect(ui->comboBox, SIGNAL(currentIndexChanged(QString)), SLOT(onDropDownTextChanged(QString)));
 }
 
 ComboBoxWidget::~ComboBoxWidget()
@@ -25,7 +25,13 @@ void ComboBoxWidget::addItem(const QString& item)
     ui->comboBox->addItem(item);
 }
 
+void ComboBoxWidget::setCurrentItem(const QString& item)
+{
+    if (ui->comboBox->findText(item) == -1) return;
+    ui->comboBox->setCurrentText(item);
+}
+
 void ComboBoxWidget::onDropDownTextChanged(const QString& text)
 {
-
+    emit currentIndexChanged(text);
 }

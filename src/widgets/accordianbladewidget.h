@@ -48,6 +48,10 @@ public:
     void setPanelTitle(const QString&);
     void expand();
 
+    void clearPanel();
+
+    QVBoxLayout* contentLayout;
+
 private slots:
     void onPanelToggled();
 

@@ -51,6 +51,11 @@ AccordianBladeWidget::~AccordianBladeWidget()
     delete ui;
 }
 
+void AccordianBladeWidget::clearPanel()
+{
+
+}
+
 void AccordianBladeWidget::onPanelToggled()
 {
     if (ui->contentpane->isVisible()) {

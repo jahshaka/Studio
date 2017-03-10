@@ -14,7 +14,16 @@ For more information see the LICENSE file
 uniform vec4 color;
 out vec4 fragColor;
 
+in vec3 v_pos;
+in vec3 v_normal;
+
+uniform vec3 u_eyePos;
+uniform samplerCube skybox;
+
 void main()
 {
-    fragColor = vec4(.5, 1, 1, 1);
+    float ratio = 1.00 / 1.52;
+    vec3 I = normalize(v_pos - u_eyePos);
+    vec3 R = refract(I, normalize(v_normal), ratio);
+    fragColor = texture(skybox, R); //vec4(0, 1, 0, 1);
 }
