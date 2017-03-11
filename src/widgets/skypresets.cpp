@@ -15,6 +15,8 @@ For more information see the LICENSE file
 #include "../mainwindow.h"
 #include "../irisgl/src/core/scene.h"
 #include "../irisgl/src/materials/defaultskymaterial.h"
+#include "../irisgl/src/core/irisutils.h"
+#include "../irisgl/src/graphics/texture2d.h"
 
 SkyPresets::SkyPresets(QWidget *parent) :
     QWidget(parent),
@@ -31,17 +33,22 @@ SkyPresets::SkyPresets(QWidget *parent) :
     ui->skyList->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->skyList->setSelectionMode(QAbstractItemView::SingleSelection);
 
-    addSky(":/app/content/skies/default.png", "Default");
-    addSky(":/app/content/skies/vp_sky_v2_002.jpg", "Sky 1");
-    addSky(":/app/content/skies/vp_sky_v2_032.jpg", "Sky 2");
+
 //    addSky(":/app/content/skies/vp_sky_v2_033.jpg", "Sky 3");
 //    addSky(":/app/content/skies/vp_sky_v2_002.jpg", "Sky 1");
 //    addSky(":/app/content/skies/vp_sky_v2_032.jpg", "Sky 2");
 //    addSky(":/app/content/skies/vp_sky_v2_033.jpg", "Sky 3");
 //    addSky(":/app/content/skies/vp_sky_v2_002_test.jpg", "Fading Sky");
 
+    QString cove = IrisUtils::getAbsoluteAssetPath("app/content/textures/front.jpg");
+    QString dessert = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/ame_desert/front.png");
+
+//    alternativeSkies.append(x1);
+    addCubeSky(cove, "Dim Cove");
+    addCubeSky(dessert, "Ame Desert");
+
     connect(ui->skyList,    SIGNAL(itemClicked(QListWidgetItem*)),
-            this,           SLOT(applySky(QListWidgetItem*)));
+            this,           SLOT(applyCubeSky(QListWidgetItem*)));
 }
 
 SkyPresets::~SkyPresets()
@@ -56,6 +63,36 @@ void SkyPresets::addSky(QString path, QString name)
     auto item = new QListWidgetItem(QIcon(path), name);
     item->setData(Qt::UserRole, skies.count() - 1);
     ui->skyList->addItem(item);
+}
+
+void SkyPresets::addCubeSky(QString path, QString name)
+{
+    alternativeSkies.append(path);
+
+    auto item = new QListWidgetItem(QIcon(path), name);
+    item->setData(Qt::UserRole, alternativeSkies.count() - 1);
+    ui->skyList->addItem(item);
+}
+
+void SkyPresets::applyCubeSky(QListWidgetItem* item)
+{
+    if (!mainWindow) return;
+
+    auto sky = alternativeSkies[item->data(Qt::UserRole).toInt()];
+
+    auto fInfo = QFileInfo(sky);
+    auto path = fInfo.path();
+    auto ext = fInfo.suffix();
+
+    auto x1 = path + "/left." + ext;
+    auto x2 = path + "/right." + ext;
+    auto y1 = path + "/top." + ext;
+    auto y2 = path + "/bottom." + ext;
+    auto z1 = path + "/front." + ext;
+    auto z2 = path + "/back." + ext;
+
+    mainWindow->getScene()->setSkyTexture(iris::Texture2D::createCubeMap(x1, x2, y1, y2, z1, z2));
+    mainWindow->getScene()->setSkyColor(QColor(255, 255, 255));
 }
 
 void SkyPresets::applySky(QListWidgetItem* item)

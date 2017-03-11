@@ -26,5 +26,11 @@ out vec4 fragColor;
 
 void main()
 {
-    fragColor = texture(cubemap, v_worldNormal); // vec4(1, 1, .5, 1);
+     // vec4(1, 1, .5, 1);
+    if(useTexture)
+//        fragColor = color*texture(tex, envMapEquirect(normalize(v_worldNormal)));
+        fragColor = texture(cubemap, v_worldNormal);
+    else
+        fragColor = color;
+    //gl_FragColor = vec4(1,1,1,1);
 }

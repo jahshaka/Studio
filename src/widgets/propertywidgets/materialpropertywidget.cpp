@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include "../../io/materialreader.hpp"
 
 #include <QSignalMapper>
+#include <QLayout>
 
 void MaterialPropertyWidget::parseJahShader(const QJsonObject &jahShader)
 {
@@ -126,7 +127,7 @@ MaterialPropertyWidget::MaterialPropertyWidget(int materialType, QWidget* parent
                 this,                       SLOT(onTextureScaleChanged(float)));
     } else {
 
-        QSignalMapper* signalMapper = new QSignalMapper (this);
+        QSignalMapper *signalMapper = new QSignalMapper (this);
         for (int i = 0; i < allocated; i++) {
             // @TODO, somewhat fine as it is built in but there is
             // surely a cleaner way to go about this...
@@ -137,7 +138,6 @@ MaterialPropertyWidget::MaterialPropertyWidget(int materialType, QWidget* parent
         connect(signalMapper, SIGNAL(mapped(QWidget *)), SLOT(onCustomSliderChanged(QWidget *)));
     }
 }
-
 
 void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode, bool skip)
 {
@@ -214,6 +214,7 @@ void MaterialPropertyWidget::onMaterialSelectorChanged(QString text)
 
         this->setSceneNode(masterNode, true);
     } else if (text == "Glass") {
+        this->clearPanel(this->layout());
         this->materialType = this->meshNode->materialType = 2;
 //        this->meshNode->setMaterial(this->customMaterial);
         this->meshNode->setActiveMaterial(2);
