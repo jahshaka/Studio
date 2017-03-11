@@ -92,7 +92,7 @@ QComboBox {
 }
 
 QComboBox QAbstractItemView {
-   /* background-color: #4D4D4D; */
+   background-color: #212121; 
     selection-background-color: red;
 	border: 0;
 	outline: none;
@@ -602,8 +602,8 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
    </property>
    <property name="minimumSize">
     <size>
-     <width>63</width>
-     <height>34</height>
+     <width>64</width>
+     <height>36</height>
     </size>
    </property>
    <property name="maximumSize">
@@ -742,7 +742,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>290</height>
+          <height>286</height>
          </rect>
         </property>
         <property name="styleSheet">

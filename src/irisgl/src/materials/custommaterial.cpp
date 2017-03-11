@@ -31,8 +31,11 @@ CustomMaterial::CustomMaterial()
 void CustomMaterial::setTexture(Texture2DPtr tex)
 {
     texture = tex;
-    if (!!tex)  this->addTexture("skybox", tex);
-    else        this->removeTexture("skybox");
+    if (!!tex) {
+        addTexture("skybox", tex);
+    } else {
+        this->removeTexture("skybox");
+    }
 }
 
 void CustomMaterial::initializeDefaultValues(const QJsonObject &jahShader)
@@ -53,17 +56,17 @@ Texture2DPtr CustomMaterial::getTexture()
     return texture;
 }
 
-void CustomMaterial::begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+void CustomMaterial::begin(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene)
 {
-    Material::begin(gl,scene);
-    for (int i = 0; i < 2; i++) {
+    Material::begin(gl, scene);
+    for (int i = 0; i < allocated; i++) {
         this->setUniformValue(uniformName[i], sliderValues[i]);
     }
 }
 
 void CustomMaterial::end(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
 {
-    Material::end(gl,scene);
+    Material::end(gl, scene);
 }
 
 CustomMaterialPtr CustomMaterial::create()

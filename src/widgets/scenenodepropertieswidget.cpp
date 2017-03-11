@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QLayout>
 
+#include "../irisgl/src/core/scenenode.h"
+
 #include "scenenodepropertieswidget.h"
 #include "accordianbladewidget.h"
 #include "transformeditor.h"
@@ -24,10 +26,7 @@ For more information see the LICENSE file
 #include "propertywidgets/nodepropertywidget.h"
 #include "propertywidgets/demopane.h"
 
-#include "../irisgl/src/core/scenenode.h"
-
-
-SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget* parent) : QWidget(parent)
+SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(parent)
 {
 
 }
@@ -40,7 +39,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 {
     if (!!sceneNode) {
         if (sceneNode->isRootNode()) {
-            /* remember this is used to test new widgets. Do NOT push to prod enabled! */
+            /* remember this is used to test new widgets. Do NOT push to master enabled! */
             // demoPane = new DemoPane();
             // demoPane->setPanelTitle("Demo Pane");
             // demoPane->expand();
@@ -57,7 +56,6 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 
             auto layout = new QVBoxLayout();
             // layout->addWidget(demoPane);
-
             layout->addWidget(fogPropView);
             layout->addWidget(worldPropView);
 
@@ -67,65 +65,66 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             clearLayout(this->layout());
             this->setLayout(layout);
         } else {
+            this->sceneNode = sceneNode;
+
             transformPropView = new AccordianBladeWidget();
             transformPropView->setPanelTitle("Transformation");
             transformWidget = transformPropView->addTransformControls();
+            transformWidget->setSceneNode(sceneNode);
 
             nodePropView = new NodePropertyWidget();
             nodePropView->setPanelTitle("Node Properties");
+            nodePropView->setSceneNode(sceneNode);
 
             lightPropView = new LightPropertyWidget();
             lightPropView->setPanelTitle("Light");
+            lightPropView->setSceneNode(sceneNode);
 
-            materialPropView = new MaterialPropertyWidget(sceneNode->materialType);
+            materialPropView = new MaterialPropertyWidget(sceneNode);
             materialPropView->setPanelTitle("Material");
+            materialPropView->setSceneNode(sceneNode);
 
             emitterPropView = new EmitterPropertyWidget();
             emitterPropView->setPanelTitle("Emitter");
-
-            this->sceneNode = sceneNode;
-
-            nodePropView->setSceneNode(sceneNode);
-            lightPropView->setSceneNode(sceneNode);
-            materialPropView->setSceneNode(sceneNode);
             emitterPropView->setSceneNode(sceneNode);
-            transformWidget->setSceneNode(sceneNode);
 
             auto layout = new QVBoxLayout();
             layout->addWidget(transformPropView);
             transformPropView->expand();
 
             switch (sceneNode->getSceneNodeType()) {
-                case iris::SceneNodeType::Light:
+                case iris::SceneNodeType::Light: {
                     layout->addWidget(lightPropView);
                     lightPropView->expand();
                     break;
-                case iris::SceneNodeType::Mesh:
+                }
+
+                case iris::SceneNodeType::Mesh: {
                     layout->addWidget(nodePropView);
                     layout->addWidget(materialPropView);
                     materialPropView->expand();
                     nodePropView->expand();
                     break;
-                case iris::SceneNodeType::ParticleSystem:
+                }
+
+                case iris::SceneNodeType::ParticleSystem: {
                     layout->addWidget(emitterPropView);
                     emitterPropView->expand();
                     break;
-                default:
-                    break;
+                }
+
+                default: break;
             }
 
             layout->addStretch();
             layout->setMargin(0);
 
-            auto oldLayout = this->layout();
-            clearLayout(oldLayout);
-
+            clearLayout(this->layout());
             this->setLayout(layout);
         }
     } else {
-        auto layout = new QVBoxLayout();
         clearLayout(this->layout());
-        this->setLayout(layout);
+        this->setLayout(new QVBoxLayout());
     }
 }
 
@@ -140,7 +139,7 @@ void SceneNodePropertiesWidget::refreshMaterial()
  * clears layout and child layouts and deletes child widget
  * @param layout
  */
-void SceneNodePropertiesWidget::clearLayout(QLayout* layout)
+void SceneNodePropertiesWidget::clearLayout(QLayout *layout)
 {
     if (layout == nullptr) return;
 

@@ -30,6 +30,7 @@ public:
     void initializeDefaultValues(const QJsonObject &jahShader);
 
     static CustomMaterialPtr create();
+
 private:
     CustomMaterial();
 

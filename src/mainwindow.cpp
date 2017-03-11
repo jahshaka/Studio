@@ -189,8 +189,8 @@ MainWindow::MainWindow(QWidget *parent) :
     //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
     ui->ToolBar->addWidget(vrButton);
 
-//    ui->AnimationDock->hide();
-//    ui->PresetsDock->hide();
+    ui->AnimationDock->hide();
+    ui->PresetsDock->hide();
 }
 
 void MainWindow::setupVrUi()
@@ -306,7 +306,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     m->setDiffuseTexture(iris::Texture2D::load(getAbsoluteAssetPath("app/content/textures/tile.png")));
     m->setShininess(0);
     m->setSpecularColor(QColor(0, 0, 0));
-    m->setTextureScale(.5);
+    m->setTextureScale(.35);
 
     scene->rootNode->addChild(node);
 

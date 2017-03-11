@@ -83,8 +83,10 @@ void MeshNode::setActiveMaterial(int type)
 {
     if (type == 1) {
         renderItem->material = material;
+        materialType = 1;
     } else {
         renderItem->material = customMaterial;
+        materialType = 2;
     }
 }
 

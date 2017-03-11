@@ -7,7 +7,7 @@ ComboBoxWidget::ComboBoxWidget(QWidget* parent) : QWidget(parent), ui(new Ui::Co
 {
     ui->setupUi(this);
 
-    connect(ui->comboBox, SIGNAL(currentIndexChanged(QString)), SLOT(onDropDownTextChanged(QString)));
+    connect(ui->comboBox, SIGNAL(currentTextChanged(QString)), SLOT(onDropDownTextChanged(QString)));
 }
 
 ComboBoxWidget::~ComboBoxWidget()
@@ -15,23 +15,27 @@ ComboBoxWidget::~ComboBoxWidget()
     delete ui;
 }
 
-void ComboBoxWidget::setLabel(const QString& label)
+void ComboBoxWidget::setLabel(const QString &label)
 {
     ui->label->setText(label);
 }
 
-void ComboBoxWidget::addItem(const QString& item)
+void ComboBoxWidget::addItem(const QString &item)
 {
     ui->comboBox->addItem(item);
 }
 
-void ComboBoxWidget::setCurrentItem(const QString& item)
+QString ComboBoxWidget::getCurrentItem()
 {
-    if (ui->comboBox->findText(item) == -1) return;
-    ui->comboBox->setCurrentText(item);
+    return ui->comboBox->currentText();
 }
 
-void ComboBoxWidget::onDropDownTextChanged(const QString& text)
+void ComboBoxWidget::setCurrentItem(const QString &item)
+{
+    ui->comboBox->setCurrentIndex(ui->comboBox->findData(item, Qt::DisplayRole));
+}
+
+void ComboBoxWidget::onDropDownTextChanged(const QString &text)
 {
     emit currentIndexChanged(text);
 }

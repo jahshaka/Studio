@@ -17,6 +17,8 @@ For more information see the LICENSE file
 #include "../accordianbladewidget.h"
 
 #include <QJsonObject>
+#include <QSignalMapper>
+#include <QLayout>
 
 namespace iris {
     class SceneNode;
@@ -24,7 +26,6 @@ namespace iris {
     class Material;
     class DefaultMaterial;
     class CustomMaterial;
-
 }
 class MaterialReader;
 
@@ -36,11 +37,9 @@ class MaterialPropertyWidget : public AccordianBladeWidget
     Q_OBJECT
 
 public:
-    int materialType;
-    MaterialPropertyWidget(int materialType = 1, QWidget* parent=nullptr);
+    MaterialPropertyWidget(QSharedPointer<iris::SceneNode> sceneNode, QWidget *parent = nullptr);
 
-    void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode, bool skip = false);
-    QSharedPointer<iris::SceneNode> masterNode;
+    void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
     QSharedPointer<iris::MeshNode> meshNode;
 
     QSharedPointer<iris::DefaultMaterial> material;
@@ -48,6 +47,10 @@ public:
 
     MaterialReader* materialReader;
     void parseJahShader(const QJsonObject &jahShader);
+
+    void setupDefaultMaterial();
+    void setupCustomMaterial();
+    void setupShaderSelector();
 
 protected slots:
     void onAmbientColorChanged(QColor color);
@@ -68,7 +71,7 @@ protected slots:
     void onTextureScaleChanged(float scale);
     void onCustomSliderChanged(QWidget *t);
 
-    void onMaterialSelectorChanged(QString);
+    void onMaterialSelectorChanged(const QString&);
 
 private:
     QString currentMaterial;

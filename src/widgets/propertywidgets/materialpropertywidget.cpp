@@ -26,12 +26,9 @@ For more information see the LICENSE file
 
 #include "../../io/materialreader.hpp"
 
-#include <QSignalMapper>
-#include <QLayout>
-
 void MaterialPropertyWidget::parseJahShader(const QJsonObject &jahShader)
 {
-    // @TODO: add some early check here to escape early
+    // @TODO: add some check here to escape early
 
     auto shaderName = jahShader["name"].toString();
     auto uniforms = jahShader["uniforms"].toObject();
@@ -44,9 +41,7 @@ void MaterialPropertyWidget::parseJahShader(const QJsonObject &jahShader)
             auto start  = (float) childObj.toObject()["start"].toDouble();
             auto end    = (float) childObj.toObject()["end"].toDouble();
             auto value  = (float) childObj.toObject()["value"].toDouble();
-            customSliders[allocated] = this->addFloatValueSlider(text,
-                                                                 start,
-                                                                 end);
+            customSliders[allocated] = this->addFloatValueSlider(text, start, end);
 
             customSliders[allocated]->index = allocated;
             allocated++;
@@ -54,110 +49,108 @@ void MaterialPropertyWidget::parseJahShader(const QJsonObject &jahShader)
     }
 }
 
-MaterialPropertyWidget::MaterialPropertyWidget(int materialType, QWidget* parent)
+void MaterialPropertyWidget::setupDefaultMaterial()
 {
-    this->materialType = materialType;
-    /*currentMaterial = "Default"; Glass - Custom */
+    ambientColor        = this->addColorPicker("Ambient Color");
+    diffuseColor        = this->addColorPicker("Diffuse Color");
+    diffuseTexture      = this->addTexturePicker("Diffuse Texture");
+    specularColor       = this->addColorPicker("Specular Color");
+    specularTexture     = this->addTexturePicker("Specular Texture");
+    shininess           = this->addFloatValueSlider("Shininess", 0, 100.f);
+    normalTexture       = this->addTexturePicker("Normal Texture");
+    normalIntensity     = this->addFloatValueSlider("Normal Intensity", -1.f, 1.f);
+    reflectionTexture   = this->addTexturePicker("Reflection Texture");
+    reflectionInfluence = this->addFloatValueSlider("Reflection Influence", 0, 1.f);
+    textureScale        = this->addFloatValueSlider("Texture Scale", 0, 10.f);
 
-    materialSelector = this->addComboBox("Material Type");
-    materialSelector->addItem("Default Material");
+    connect(ambientColor->getPicker(),  SIGNAL(onColorChanged(QColor)),
+            this,                       SLOT(onAmbientColorChanged(QColor)));
+
+    connect(diffuseColor->getPicker(),  SIGNAL(onColorChanged(QColor)),
+            this,                       SLOT(onDiffuseColorChanged(QColor)));
+
+    connect(diffuseTexture,             SIGNAL(valueChanged(QString)),
+            this,                       SLOT(onDiffuseTextureChanged(QString)));
+
+    connect(specularColor->getPicker(), SIGNAL(onColorChanged(QColor)),
+            this,                       SLOT(onSpecularColorChanged(QColor)));
+
+    connect(specularTexture,            SIGNAL(valueChanged(QString)),
+            this,                       SLOT(onSpecularTextureChanged(QString)));
+
+    connect(shininess,                  SIGNAL(valueChanged(float)),
+            this,                       SLOT(onShininessChanged(float)));
+
+    connect(normalTexture,              SIGNAL(valueChanged(QString)),
+            this,                       SLOT(onNormalTextureChanged(QString)));
+
+    connect(normalIntensity,            SIGNAL(valueChanged(float)),
+            this,                       SLOT(onNormalIntensityChanged(float)));
+
+    connect(reflectionTexture,          SIGNAL(valueChanged(QString)),
+            this,                       SLOT(onReflectionTextureChanged(QString)));
+
+    connect(reflectionInfluence,        SIGNAL(valueChanged(float)),
+            this,                       SLOT(onReflectionInfluenceChanged(float)));
+
+    connect(textureScale,               SIGNAL(valueChanged(float)),
+            this,                       SLOT(onTextureScaleChanged(float)));
+}
+
+void MaterialPropertyWidget::setupCustomMaterial()
+{
+    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/Glass.json"));
+    parseJahShader(materialReader->getParsedShader());
+
+    QSignalMapper *signalMapper = new QSignalMapper (this);
+    for (int i = 0; i < allocated; i++) {
+        // @TODO, somewhat fine as it is built in but there is
+        // surely a cleaner way to go about this...
+        connect(customSliders[i],       SIGNAL(valueChanged(float)), signalMapper, SLOT(map()));
+        signalMapper->setMapping(customSliders[i], customSliders[i]);
+    }
+
+    connect(signalMapper, SIGNAL(mapped(QWidget*)), SLOT(onCustomSliderChanged(QWidget *)));
+}
+
+void MaterialPropertyWidget::setupShaderSelector()
+{
+    materialSelector = this->addComboBox("Shader");
+    materialSelector->addItem("Default");
     materialSelector->addItem("Glass");
-    materialSelector->addItem("Custom");
 
-    materialReader = new MaterialReader();
-
-    // cleanup pl0x
-    if (materialType == 1) {
+    if (meshNode->getMaterialType() == 1) {
         materialSelector->setCurrentItem("Default");
     } else {
         materialSelector->setCurrentItem("Glass");
-
-        materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/Glass.json"));
-        parseJahShader(materialReader->getParsedShader());
     }
 
-    connect(materialSelector,               SIGNAL(currentIndexChanged(QString)),
-            this,                           SLOT(onMaterialSelectorChanged(QString)));
+    connect(materialSelector,   SIGNAL(currentIndexChanged(QString)),
+            this,               SLOT(onMaterialSelectorChanged(QString)));
+}
 
-    if (materialType == 1) {
+MaterialPropertyWidget::MaterialPropertyWidget(QSharedPointer<iris::SceneNode> sceneNode, QWidget *parent)
+{
+    materialReader = new MaterialReader();
 
-        ambientColor        = this->addColorPicker("Ambient Color");
-        diffuseColor        = this->addColorPicker("Diffuse Color");
-        diffuseTexture      = this->addTexturePicker("Diffuse Texture");
-        specularColor       = this->addColorPicker("Specular Color");
-        specularTexture     = this->addTexturePicker("Specular Texture");
-        shininess           = this->addFloatValueSlider("Shininess", 0, 100.f);
-        normalTexture       = this->addTexturePicker("Normal Texture");
-        normalIntensity     = this->addFloatValueSlider("Normal Intensity", -1.f, 1.f);
-        reflectionTexture   = this->addTexturePicker("Reflection Texture");
-        reflectionInfluence = this->addFloatValueSlider("Reflection Influence", 0, 1.f);
-        textureScale        = this->addFloatValueSlider("Texture Scale", 0, 10.f);
-
-        connect(ambientColor->getPicker(),  SIGNAL(onColorChanged(QColor)),
-                this,                       SLOT(onAmbientColorChanged(QColor)));
-
-        connect(diffuseColor->getPicker(),  SIGNAL(onColorChanged(QColor)),
-                this,                       SLOT(onDiffuseColorChanged(QColor)));
-
-        connect(diffuseTexture,             SIGNAL(valueChanged(QString)),
-                this,                       SLOT(onDiffuseTextureChanged(QString)));
-
-        connect(specularColor->getPicker(), SIGNAL(onColorChanged(QColor)),
-                this,                       SLOT(onSpecularColorChanged(QColor)));
-
-        connect(specularTexture,            SIGNAL(valueChanged(QString)),
-                this,                       SLOT(onSpecularTextureChanged(QString)));
-
-        connect(shininess,                  SIGNAL(valueChanged(float)),
-                this,                       SLOT(onShininessChanged(float)));
-
-        connect(normalTexture,              SIGNAL(valueChanged(QString)),
-                this,                       SLOT(onNormalTextureChanged(QString)));
-
-        connect(normalIntensity,            SIGNAL(valueChanged(float)),
-                this,                       SLOT(onNormalIntensityChanged(float)));
-
-        connect(reflectionTexture,          SIGNAL(valueChanged(QString)),
-                this,                       SLOT(onReflectionTextureChanged(QString)));
-
-        connect(reflectionInfluence,        SIGNAL(valueChanged(float)),
-                this,                       SLOT(onReflectionInfluenceChanged(float)));
-
-        connect(textureScale,               SIGNAL(valueChanged(float)),
-                this,                       SLOT(onTextureScaleChanged(float)));
-    } else {
-
-        QSignalMapper *signalMapper = new QSignalMapper (this);
-        for (int i = 0; i < allocated; i++) {
-            // @TODO, somewhat fine as it is built in but there is
-            // surely a cleaner way to go about this...
-            connect(customSliders[i],       SIGNAL(valueChanged(float)), signalMapper, SLOT(map()));
-            signalMapper->setMapping(customSliders[i], customSliders[i]);
-        }
-
-        connect(signalMapper, SIGNAL(mapped(QWidget *)), SLOT(onCustomSliderChanged(QWidget *)));
+    if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+        this->meshNode = sceneNode.staticCast<iris::MeshNode>();
     }
 }
 
-void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode, bool skip)
+void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
-    masterNode = sceneNode;
+    setupShaderSelector();
 
-    if (materialType == 1) {
-        qDebug() << "using default";
+    if (this->meshNode->getMaterialType() == 1) {
         if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             this->meshNode = sceneNode.staticCast<iris::MeshNode>();
             this->material = meshNode->getMaterial().staticCast<iris::DefaultMaterial>();
-        } else {
-            this->meshNode.clear();
-            this->material.clear();
-            return;
-        }
 
-        auto mat = this->material;
-        //todo: ensure material isnt null
+            setupDefaultMaterial();
 
-        if (!skip) {
+            auto mat = this->material;
+            //todo: ensure material isnt null
 
             ambientColor->setColorValue(mat->getAmbientColor());
 
@@ -175,13 +168,18 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
             reflectionInfluence->setValue(mat->getReflectionInfluence());
 
             textureScale->setValue(mat->getTextureScale());
+        } else {
+            this->meshNode.clear();
+            this->material.clear();
+            return;
         }
-    } else {
-        qDebug() << "using custom";
+    } else if (this->meshNode->getMaterialType() == 2) {
+
         if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             this->meshNode = sceneNode.staticCast<iris::MeshNode>();
-//            auto mat = iris::CustomMaterial::create();
             this->customMaterial = meshNode->getCustomMaterial().staticCast<iris::CustomMaterial>();
+
+            setupCustomMaterial();
 
             for (int i = 0; i < allocated; i++) {
                 customSliders[i]->setValue(customMaterial->sliderValues[i]);
@@ -204,22 +202,50 @@ void MaterialPropertyWidget::onCustomSliderChanged(QWidget *t)
     }
 }
 
-void MaterialPropertyWidget::onMaterialSelectorChanged(QString text)
+void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
 {
-    if (text == "Default Material") {
-        this->materialType = this->meshNode->materialType = 1;
-        auto mat = iris::DefaultMaterial::create();
-//        this->meshNode->setMaterial(this->material);
-        this->meshNode->setActiveMaterial(1);
+    if (!!this->meshNode) {
+        if (text == "Default") {
+            this->meshNode->setMaterialType(1);
+            this->meshNode->setActiveMaterial(1);
 
-        this->setSceneNode(masterNode, true);
-    } else if (text == "Glass") {
+        } else {
+            this->meshNode->setMaterialType(2);
+            this->meshNode->setActiveMaterial(2);
+        }
+    }
+
+    if (text == "Default") {
         this->clearPanel(this->layout());
-        this->materialType = this->meshNode->materialType = 2;
-//        this->meshNode->setMaterial(this->customMaterial);
-        this->meshNode->setActiveMaterial(2);
-//        clearPanel();
-//        this->setSceneNode(this->meshNode);
+
+        resetHeight();
+
+        int finalHeight = 30 + (8 * 28) /* narrows */ + (4 * 108) /* pickers */ + (12 * 6) + 9 + 9;
+
+        setHeight(finalHeight - 30);
+
+        this->setMinimumHeight(finalHeight);
+        this->setMaximumHeight(finalHeight);
+
+        this->setSceneNode(this->meshNode);
+
+    } else if (text == "Glass") {
+
+        this->clearPanel(this->layout());
+
+        resetHeight();
+
+        // this isn't magic, there are values but it's not possible to get them yet
+        // finalHeight = minimum_height + (widgets * height) +
+        //              (widgetCount * heights) + topMargin + bottomMargin;
+        int finalHeight = 30 + (3 * 28) + (3 * 6) + 9 + 9;
+
+        setHeight(finalHeight - 30);
+
+        this->setMinimumHeight(finalHeight);
+        this->setMaximumHeight(finalHeight);
+
+        this->setSceneNode(this->meshNode);
     }
 }
 

@@ -16,10 +16,6 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include "../accordianbladewidget.h"
 
-class ColorValueWidget;
-class ColorPickerWidget;
-class TexturePickerWidget;
-
 namespace iris {
     class Scene;
     class SceneNode;
@@ -38,6 +34,8 @@ public:
 
     void setScene(QSharedPointer<iris::Scene> scene);
 
+    void setupViewSelector();
+
 protected slots:
     void onSkyTextureChanged(QString texPath);
     void onSkyColorChanged(QColor color);
@@ -45,9 +43,11 @@ protected slots:
 
 private:
     QSharedPointer<iris::Scene> scene;
-    TexturePickerWidget* skyTexture;
-    ColorValueWidget* skyColor;
-    ColorValueWidget* ambientColor;
+    ComboBoxWidget *viewSelector;
+    CheckBoxWidget *flipView;
+    TexturePickerWidget *skyTexture;
+    ColorValueWidget *skyColor;
+    ColorValueWidget *ambientColor;
 };
 
 #endif // SCENEPROPERTYWIDGET_H

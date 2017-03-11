@@ -19,12 +19,16 @@
             "uniform"   : "u_reflec_strength"
         },
         "property3": {
-            "name"      : "Asasasas",
-            "type"      : "slider",
-            "start"     : 0,
-            "end"       : 12,
-            "value"     : 11,
-            "uniform"   : "u_reflec_strength12"
+            "name"      : "Presets",
+            "type"      : "combobox",
+            "items"     : {
+                "Air"           : 12,
+                "Glass"         : 100,
+                "Thick Glass"   : 200,
+                "Frosted Glass" : 100,
+                "Tinted Glass"  : 500,
+                "Flat Clear"    : 0
+            }
         }
     },
     "shader": "path"

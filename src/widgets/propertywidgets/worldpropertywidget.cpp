@@ -18,6 +18,18 @@ For more information see the LICENSE file
 #include "../colorpickerwidget.h"
 #include "../hfloatsliderwidget.h"
 #include "../checkboxwidget.h"
+#include "../comboboxwidget.h"
+
+void WorldPropertyWidget::setupViewSelector()
+{
+    viewSelector = this->addComboBox("Skybox View");
+    viewSelector->addItem("Front +Z");
+    viewSelector->addItem("Back -Z");
+    viewSelector->addItem("Top +Y");
+    viewSelector->addItem("Bottom -Y");
+    viewSelector->addItem("Left -Y");
+    viewSelector->addItem("Right +Y");
+}
 
 WorldPropertyWidget::WorldPropertyWidget()
 {
@@ -25,6 +37,9 @@ WorldPropertyWidget::WorldPropertyWidget()
 
     skyColor = this->addColorPicker("Sky Color");
     ambientColor = this->addColorPicker("Ambient Color");
+
+    setupViewSelector();
+
     skyTexture = this->addTexturePicker("Sky Texture");
 
     connect(skyTexture,SIGNAL(valueChanged(QString)),SLOT(onSkyTextureChanged(QString)));

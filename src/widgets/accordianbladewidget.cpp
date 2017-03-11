@@ -65,7 +65,7 @@ void AccordianBladeWidget::clearPanel(QLayout *layout)
         delete item;
     }
 
-    delete layout;
+//    delete layout;
 }
 
 void AccordianBladeWidget::onPanelToggled()

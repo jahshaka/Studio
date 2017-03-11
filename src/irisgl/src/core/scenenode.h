@@ -126,6 +126,14 @@ public:
         return shadowEnabled;
     }
 
+    int getMaterialType() {
+        return materialType;
+    }
+
+    void setMaterialType(int type) {
+        materialType = type;
+    }
+
     SceneNodeType getSceneNodeType();
     /**
      * @brief addChild
