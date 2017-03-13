@@ -95,7 +95,8 @@ SOURCES += src/main.cpp\
     src/widgets/assetwidget.cpp \
     src/io/assetmanager.cpp \
     src/widgets/assetpickerwidget.cpp \
-    src/widgets/keyframelabel.cpp
+    src/widgets/keyframelabel.cpp \
+    src/uimanager.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -180,7 +181,8 @@ HEADERS  += src/mainwindow.h \
     src/io/assetmanager.h \
     src/widgets/assetpickerwidget.h \
     src/constants.h \
-    src/widgets/keyframelabel.h
+    src/widgets/keyframelabel.h \
+    src/uimanager.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
