@@ -24,6 +24,7 @@ class TimelineWidget;
 
 class QMenu;
 class QTreeWidget;
+class QTreeWidgetItem;
 
 namespace Ui
 {
@@ -89,10 +90,10 @@ private slots:
     void stopTimer();
 
     void timeEditChanged(QTime);
-    void setAnimstart(int timeAtCursor);
 
     void onObjectAnimationTimeChanged(float timeInSeconds);
     void onSceneAnimationTimeChanged(float timeInSeconds);
+
 private:
     float timeAtCursor;
     float timerSpeed;

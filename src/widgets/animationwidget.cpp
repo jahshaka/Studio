@@ -33,6 +33,7 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     ui->setupUi(this);
 
     ui->keywidgetView->setLabelWidget(ui->keylabelView);
+    ui->keylabelView->setAnimWidget(this);
 
     //timer
     timer = new QTimer(this);
@@ -231,21 +232,10 @@ void AnimationWidget::addPropertyKey(QAction *action)
     this->repaintViews();
 }
 
-void AnimationWidget::deleteLightColorKeys()
-{
-
-}
-
-void AnimationWidget::deleteLightIntensityKeys()
-{
-
-}
-
 void AnimationWidget::timeEditChanged(QTime time)
 {
     int totalSecs = time.second()+time.minute()*60;
     this->setAnimLength(totalSecs);
-    this->showHighlight();
 }
 
 void AnimationWidget::onObjectAnimationTimeChanged(float timeInSeconds)
@@ -264,3 +254,4 @@ void AnimationWidget::onSceneAnimationTimeChanged(float timeInSeconds)
         scene->updateSceneAnimation(timeInSeconds);
     }
 }
+

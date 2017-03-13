@@ -22,6 +22,8 @@ class KeyFrameLabelTreeWidget;
 
 class KeyFrameGroup;
 class QTreeWidget;
+class QTreeWidgetItem;
+class AnimationWidget;
 
 struct KeyFrameData
 {
@@ -48,16 +50,23 @@ public:
 
     QTreeWidget* getTree();
 
+    void setAnimWidget(AnimationWidget *value);
+
 private:
     void addPropertyToTree(iris::PropertyAnim* prop);
     void addFloatPropertyToTree(iris::FloatPropertyAnim* prop);
     void addVector3PropertyToTree(iris::Vector3DPropertyAnim* prop);
     void addColorPropertyToTree(iris::ColorPropertyAnim* prop);
 
+private slots:
+    void itemCollapsed(QTreeWidgetItem* item);
+    void itemExpanded(QTreeWidgetItem* item);
+
 private:
     Ui::KeyFrameLabelTreeWidget *ui;
     iris::SceneNodePtr node;
     QHash<QString,KeyFrameGroup*> groups;
+    AnimationWidget* animWidget;
 
     void parseKeyFramesToGroups(iris::KeyFrameSetPtr frameSet);
 

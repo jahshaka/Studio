@@ -65,7 +65,8 @@ HEADERS += \
     $$PWD/src/postprocesses/ssaopostprocess.h \
     $$PWD/src/postprocesses/materialpostprocess.h \
     $$PWD/src/animation/propertyanim.h \
-    $$PWD/src/animation/animableproperty.h
+    $$PWD/src/animation/animableproperty.h \
+    $$PWD/src/utils/hashedlist.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
