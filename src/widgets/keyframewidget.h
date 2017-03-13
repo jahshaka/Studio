@@ -46,6 +46,7 @@ class KeyFrameWidget:public QWidget
 
 private:
     QColor bgColor;
+    QColor propColor;
     QColor itemColor;
 
     QPen linePen;

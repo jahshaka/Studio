@@ -96,6 +96,7 @@ void KeyFrameLabelTreeWidget::addPropertyToTree(iris::PropertyAnim *prop)
 
         KeyFrameData frameData;
         //frameData.keyFrame = frames[0].keyFrame;
+        frameData.keyFrame = nullptr;
         frameData.propertyName = prop->getName();
         frameData.subPropertyName = "";
         treeItem->setData(0,Qt::UserRole,QVariant::fromValue(frameData));

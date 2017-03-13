@@ -35,6 +35,7 @@ KeyFrameWidget::KeyFrameWidget(QWidget* parent):
     //this->setGeometry(0,0,800,500);
 
     bgColor = QColor::fromRgb(50,50,50);
+    propColor = QColor::fromRgb(70, 70, 70, 50);
     itemColor = QColor::fromRgb(255,255,255);
 
     maxTimeInSeconds = 30;
@@ -149,6 +150,10 @@ void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetIt
     pen.setWidth(penSize);
     pen.setCapStyle(Qt::RoundCap);
 
+    QPen innerPen(QColor::fromRgb(155,155,155));
+    innerPen.setWidth(penSize-4);
+    innerPen.setCapStyle(Qt::RoundCap);
+
     QPen highlightPen(QColor::fromRgb(100,100,100));
     highlightPen.setWidth(penSize);
     highlightPen.setCapStyle(Qt::RoundCap);
@@ -165,14 +170,26 @@ void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetIt
             {
                 paint.setPen(highlightPen);
                 paint.drawPoint(xpos, yTop + height / 2.0f);
+
+                paint.setPen(innerPen);
+                paint.drawPoint(xpos, yTop + height / 2.0f);
             }
             else
             {
                 paint.setPen(pen);
                 paint.drawPoint(xpos, yTop + height / 2.0f);
+
+                paint.setPen(innerPen);
+                paint.drawPoint(xpos, yTop + height / 2.0f);
             }
         }
+    } else {
+        paint.fillRect(0, yTop, this->width(), height, propColor);
     }
+
+    QPen smallPen = QPen(QColor::fromRgb(55,55,55));
+    paint.setPen(smallPen);
+    paint.drawLine(0, yTop + height, this->width(), yTop + height);
 
     yTop += height;
 
