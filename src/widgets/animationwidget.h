@@ -76,6 +76,9 @@ public:
     //sets cursor position at time
     void setCursorPositionAtTime(float timeInSeconds);
 
+    void removeProperty(QString propertyName);
+    void clearPropertyKeys(QString propertyName);
+
 private:
     iris::PropertyAnim* createPropertyAnim(const iris::AnimableProperty& prop);
 

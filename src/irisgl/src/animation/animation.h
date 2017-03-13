@@ -34,6 +34,7 @@ public:
     ~Animation();
 
     void addPropertyAnim(PropertyAnim* anim);
+    void removePropertyAnim(QString name);
 
     PropertyAnim* getPropertyAnim(QString name);
 
