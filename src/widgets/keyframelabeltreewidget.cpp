@@ -13,6 +13,8 @@ For more information see the LICENSE file
 #include "ui_keyframelabeltreewidget.h"
 
 #include <QStringList>
+#include <QTreeWidget>
+#include <QMenu>
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
 #include "../irisgl/src/animation/animation.h"
@@ -37,6 +39,9 @@ KeyFrameLabelTreeWidget::KeyFrameLabelTreeWidget(QWidget *parent) :
 
     connect(ui->treeWidget, SIGNAL(itemCollapsed(QTreeWidgetItem*)), this, SLOT(itemCollapsed(QTreeWidgetItem*)));
     connect(ui->treeWidget, SIGNAL(itemExpanded(QTreeWidgetItem*)), this, SLOT(itemExpanded(QTreeWidgetItem*)));
+    connect(ui->treeWidget, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(customContextMenuRequested(QPoint)));
+
+    ui->treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 }
 
 KeyFrameLabelTreeWidget::~KeyFrameLabelTreeWidget()
@@ -129,6 +134,29 @@ void KeyFrameLabelTreeWidget::itemCollapsed(QTreeWidgetItem *item)
 void KeyFrameLabelTreeWidget::itemExpanded(QTreeWidgetItem *item)
 {
     animWidget->repaintViews();
+}
+
+void KeyFrameLabelTreeWidget::customContextMenuRequested(const QPoint &point)
+{
+    QMenu* menu = new QMenu();
+    auto item = ui->treeWidget->itemAt(point);
+
+    if (item == nullptr)
+        return;
+
+    // whole poperties can be deleted, subproperties can only be cleared
+    KeyFrameData data = item->data(0,Qt::UserRole).value<KeyFrameData>();
+
+    if(data.subPropertyName.isEmpty()) {
+        // it's a property, thus it can be deleted
+        auto action = new QAction("Remove Property");
+        menu->addAction(action);
+    }
+
+    auto action = new QAction("Clear Keys");
+    menu->addAction(action);
+
+    menu->exec(this->mapToGlobal(point));
 }
 
 void KeyFrameLabelTreeWidget::setAnimWidget(AnimationWidget *value)
