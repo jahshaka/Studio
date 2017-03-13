@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "keyframeset.h"
 #include "propertyanim.h"
 #include "../irisglfwd.h"
+#include <QDebug>
 
 namespace iris
 {
@@ -63,6 +64,15 @@ void Animation::addPropertyAnim(PropertyAnim *anim)
     //Q_ASSERT(!properties.contains(name));
     
     properties.insert(anim->getName(), anim);
+}
+
+void Animation::removePropertyAnim(QString name)
+{
+    auto prop = properties[name];
+    delete prop;
+
+    if (properties.remove(name) == 0)
+        qDebug() << "Animation property "<<name<<" doesnt exist";
 }
 
 PropertyAnim* Animation::getPropertyAnim(QString name)

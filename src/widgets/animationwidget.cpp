@@ -145,6 +145,21 @@ void AnimationWidget::repaintViews()
     ui->keylabelView->repaint();
 }
 
+void AnimationWidget::removeProperty(QString propertyName)
+{
+    if (!!node) {
+        node->animation->removePropertyAnim(propertyName);
+        ui->keylabelView->removeProperty(propertyName);
+
+        this->repaintViews();
+    }
+}
+
+void AnimationWidget::clearPropertyKeys(QString propertyName)
+{
+
+}
+
 iris::PropertyAnim *AnimationWidget::createPropertyAnim(const iris::AnimableProperty& prop)
 {
     iris::PropertyAnim* anim;

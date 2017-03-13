@@ -42,6 +42,7 @@ KeyFrameLabelTreeWidget::KeyFrameLabelTreeWidget(QWidget *parent) :
     connect(ui->treeWidget, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(customContextMenuRequested(QPoint)));
 
     ui->treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    rightClickedItem = nullptr;
 }
 
 KeyFrameLabelTreeWidget::~KeyFrameLabelTreeWidget()
@@ -84,8 +85,6 @@ void KeyFrameLabelTreeWidget::addPropertyToTree(iris::PropertyAnim *prop)
     auto treeItem = new QTreeWidgetItem();
     treeItem->setText(0,prop->getName());
 
-
-
     if (frames.size() == 1) {
         KeyFrameData frameData;
         frameData.keyFrame = frames[0].keyFrame;
@@ -94,6 +93,13 @@ void KeyFrameLabelTreeWidget::addPropertyToTree(iris::PropertyAnim *prop)
 
         treeItem->setData(0,Qt::UserRole,QVariant::fromValue(frameData));
     } else {
+
+        KeyFrameData frameData;
+        //frameData.keyFrame = frames[0].keyFrame;
+        frameData.propertyName = prop->getName();
+        frameData.subPropertyName = "";
+        treeItem->setData(0,Qt::UserRole,QVariant::fromValue(frameData));
+
         for (auto frame : frames) {
             auto childItem = new QTreeWidgetItem();
             childItem->setText(0,frame.name);
@@ -109,21 +115,6 @@ void KeyFrameLabelTreeWidget::addPropertyToTree(iris::PropertyAnim *prop)
     }
 
     ui->treeWidget->invisibleRootItem()->addChild(treeItem);
-}
-
-void KeyFrameLabelTreeWidget::addFloatPropertyToTree(iris::FloatPropertyAnim *prop)
-{
-
-}
-
-void KeyFrameLabelTreeWidget::addVector3PropertyToTree(iris::Vector3DPropertyAnim *prop)
-{
-
-}
-
-void KeyFrameLabelTreeWidget::addColorPropertyToTree(iris::ColorPropertyAnim *prop)
-{
-
 }
 
 void KeyFrameLabelTreeWidget::itemCollapsed(QTreeWidgetItem *item)
@@ -144,6 +135,8 @@ void KeyFrameLabelTreeWidget::customContextMenuRequested(const QPoint &point)
     if (item == nullptr)
         return;
 
+    rightClickedItem = item;
+
     // whole poperties can be deleted, subproperties can only be cleared
     KeyFrameData data = item->data(0,Qt::UserRole).value<KeyFrameData>();
 
@@ -155,8 +148,52 @@ void KeyFrameLabelTreeWidget::customContextMenuRequested(const QPoint &point)
 
     auto action = new QAction("Clear Keys");
     menu->addAction(action);
+    connect(menu, SIGNAL(triggered(QAction*)), this, SLOT(onTreeItemContextMenu(QAction*)));
 
     menu->exec(this->mapToGlobal(point));
+
+
+}
+
+void KeyFrameLabelTreeWidget::onTreeItemContextMenu(QAction *action)
+{
+    KeyFrameData data = rightClickedItem->data(0,Qt::UserRole).value<KeyFrameData>();
+    if(action->text()=="Remove Property") {
+        animWidget->removeProperty(data.propertyName);
+        //this->removeProperty(data.propertyName);
+    } else if(action->text()=="Clear Keys") {
+
+        if(data.subPropertyName.isEmpty()) {
+            this->clearPropertyKeyFrame(data.propertyName);
+        } else {
+            this->clearSubPropertyKeyFrame(data.propertyName, data.subPropertyName);
+        }
+    }
+}
+
+void KeyFrameLabelTreeWidget::removeProperty(QString propertyName)
+{
+    //remove from tree
+    for (int i=0; i<  ui->treeWidget->invisibleRootItem()->childCount(); i++) {
+
+        auto item = ui->treeWidget->invisibleRootItem()->child(i);
+        auto data = item->data(0, Qt::UserRole).value<KeyFrameData>();
+
+        if (data.propertyName == propertyName) {
+            ui->treeWidget->invisibleRootItem()->removeChild(item);
+            break;
+        }
+    }
+}
+
+void KeyFrameLabelTreeWidget::clearPropertyKeyFrame(QString propertyName)
+{
+    animWidget->clearPropertyKeys(propertyName);
+}
+
+void KeyFrameLabelTreeWidget::clearSubPropertyKeyFrame(QString propertyName, QString subPropertyName)
+{
+
 }
 
 void KeyFrameLabelTreeWidget::setAnimWidget(AnimationWidget *value)
@@ -164,71 +201,3 @@ void KeyFrameLabelTreeWidget::setAnimWidget(AnimationWidget *value)
     animWidget = value;
 }
 
-/**
- * Groups keyFrameSets by the top-level namespace
- * @param frameSet
- */
-void KeyFrameLabelTreeWidget::parseKeyFramesToGroups(iris::KeyFrameSetPtr frameSet)
-{
-    groups = QHash<QString,KeyFrameGroup*>();
-    /*
-    for(auto iter = frameSet->keyFrames.begin();iter!=frameSet->keyFrames.end();iter++)
-    {
-        //get the top-most namespace
-        auto parts = iter.key().split(".");
-
-        if(parts.count()>=1)
-        {
-            auto nameSpace = parts[0];
-            auto pair = QPair<QString,iris::FloatKeyFrame*>(iter.key(),iter.value());
-
-            if(groups.contains(nameSpace))
-            {
-                groups[nameSpace]->frames.append(pair);
-            }
-            else
-            {
-                auto group = new KeyFrameGroup();
-                group->nameSpace = nameSpace;
-                groups.insert(nameSpace,group);
-
-                group->frames.append(pair);
-            }
-        }
-        else
-        {
-            qDebug()<<"invalid keyframe namspace "<<iter.key();
-        }
-    }
-    */
-}
-
-void KeyFrameLabelTreeWidget::buildTreeFromKeyFrameGroups(QHash<QString,KeyFrameGroup*> groups)
-{
-    auto tree = ui->treeWidget;
-    tree->clear();
-
-    QSize itemHint;
-    for(auto iter = groups.begin();iter!=groups.end();iter++)
-    {
-        auto groupTreeItem = new QTreeWidgetItem();
-        groupTreeItem->setText(0,iter.key());
-        tree->invisibleRootItem()->addChild(groupTreeItem);
-
-        auto group = iter.value();
-        for(auto keyFramePair:group->frames)
-        {
-            auto frameItem = new QTreeWidgetItem();
-            frameItem->setText(0,keyFramePair.first);
-            groupTreeItem->addChild(frameItem);
-
-            itemHint = frameItem->sizeHint(0);
-        }
-    }
-
-    tree->updateGeometry();
-
-    itemHint = tree->invisibleRootItem()->sizeHint(0);
-    //fetch sample height for QTreeWidgetItem
-    //auto size =
-}

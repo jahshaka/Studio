@@ -54,21 +54,30 @@ public:
 
 private:
     void addPropertyToTree(iris::PropertyAnim* prop);
-    void addFloatPropertyToTree(iris::FloatPropertyAnim* prop);
-    void addVector3PropertyToTree(iris::Vector3DPropertyAnim* prop);
-    void addColorPropertyToTree(iris::ColorPropertyAnim* prop);
 
-private slots:
+public slots:
     void itemCollapsed(QTreeWidgetItem* item);
     void itemExpanded(QTreeWidgetItem* item);
 
     void customContextMenuRequested(const QPoint&);
+
+    void onTreeItemContextMenu(QAction* action);
+
+    void removeProperty(QString propertyName);
+    void clearPropertyKeyFrame(QString propertyName);
+    void clearSubPropertyKeyFrame(QString propertyName, QString subPropertyName);
 
 private:
     Ui::KeyFrameLabelTreeWidget *ui;
     iris::SceneNodePtr node;
     QHash<QString,KeyFrameGroup*> groups;
     AnimationWidget* animWidget;
+
+    QTreeWidgetItem* rightClickedItem;
+
+    // context menu actions
+    QAction* removePropertyAction;
+    QAction* clearKeyFrameAction;
 
     void parseKeyFramesToGroups(iris::KeyFrameSetPtr frameSet);
 
