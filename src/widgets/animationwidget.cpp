@@ -110,40 +110,22 @@ void AnimationWidget::updateAnim()
 
     ui->keywidgetView->setTime(timeAtCursor);
     onObjectAnimationTimeChanged(timeAtCursor);
-
-    /*
-    ui->timeline->setTime(time);
-
-    if(time>ui->timeline->getEndTimeRange())
-    {
-        stopTimer();
-    }
-    */
 }
 
 void AnimationWidget::startTimer()
 {
-    //time = ui->timeline->getTimeAtCursor();
     timeAtCursor = ui->keywidgetView->getTimeAtCursor();
     timer->start(timerSpeed);
     elapsedTimer->start();
-    //timer->start();
-
-    //startedTime = ui->timeline->getTimeAtCursor();
 }
 
 void AnimationWidget::stopTimer()
 {
     timer->stop();
-    //ui->timeline->setTime(startedTime);
 }
 
 void AnimationWidget::setAnimLength(float length)
 {
-    //todo
-    int scaleRatio = 30;
-    // ui->values->setGeometry(0,0,length*scaleRatio,ui->values->height());
-    this->showHighlight();
 }
 
 void AnimationWidget::stopAnimation()
@@ -153,9 +135,6 @@ void AnimationWidget::stopAnimation()
 
 void AnimationWidget::fixLayout()
 {
-    // ui->values->adjustSize();
-
-    // ui->timeControls->adjustSize();
 }
 
 void AnimationWidget::repaintViews()
@@ -188,6 +167,13 @@ iris::PropertyAnim *AnimationWidget::createPropertyAnim(const iris::AnimableProp
 
     anim->setName(prop.name);
     return anim;
+}
+
+void AnimationWidget::setLooping(bool loop)
+{
+    if (!!node) {
+        node->animation->setLooping(loop);
+    }
 }
 
 void AnimationWidget::addPropertyKey(QAction *action)

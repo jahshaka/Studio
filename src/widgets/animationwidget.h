@@ -62,35 +62,6 @@ public:
         mainTimeline = tl;
     }
 
-    void showHighlight()
-    {
-        /*
-        if(node==nullptr)
-            return;
-
-        if(mainTimeline==nullptr)
-            return;
-        mainTimeline->showHighlight(node->animStartTime,node->animStartTime+node->animLength);
-        */
-    }
-
-    void hideHighlight()
-    {
-        /*
-        if(node==nullptr)
-            return;
-        mainTimeline->hideHighlight();
-        */
-    }
-
-    void setAnimStartTime(int second)
-    {
-        /*
-        if(node!=nullptr)
-            node->setAnimStartTime(second);
-            */
-    }
-
     void setAnimLength(float length);
 
     void stopAnimation();
@@ -106,46 +77,12 @@ public:
 
 private:
     iris::PropertyAnim* createPropertyAnim(const iris::AnimableProperty& prop);
-    void removeNodeSpecificActions();
-
-    //add actions
-    QAction* addLightColorKeyAction;
-    QAction* addLightIntensityKeyAction;
-    QAction* addSceneBackgroundColorKeyAction;
-    QAction* addSceneActiveCameraKeyAction;
-
-    //deletion actions
-    QAction* deleteLightColorKeysAction;
-    QAction* deleteLightIntensityKeysAction;
 
 public slots:
-    void setLooping(bool loop)
-    {
-        loopAnim = loop;
-        //node->loopAnim = loop;
-    }
+    void setLooping(bool loop);
 
 private slots:
     void addPropertyKey(QAction* action);
-
-    void addPosKey();
-    void addRotKey();
-    void addScaleKey();
-    void addPosRotKey();
-    void addPosRotScaleKey();
-
-    void addLightColorKey();
-    void addLightIntensityKey();
-    void deleteLightColorKeys();
-    void deleteLightIntensityKeys();
-
-    void addSceneBackgroundColorKey();
-    void addSceneActiveCameraKey();
-
-    void deletePosKeys();
-    void deleteScaleKeys();
-    void deleteRotKeys();
-    void deleteAllKeys();
 
     void updateAnim();
     void startTimer();
