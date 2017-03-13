@@ -20,13 +20,29 @@ in vec3 v_normal;
 uniform vec3 u_eyePos;
 uniform samplerCube skybox;
 
-uniform float u_refrac_strength;
-uniform float u_reflec_strength;
+const float air = 1.0;
+const float glass = 1.51714;
+
+const float Eta = air / glass;
+const float R0 = ((air - glass) * (air - glass)) / ((air + glass) * (air + glass));
+
+uniform float u_fresnel_factor;
+uniform float u_strength;
 
 void main()
 {
-    float ratio = 1.00 / 1.52;
     vec3 I = normalize(v_pos - u_eyePos);
-    vec3 R = refract(I, normalize(v_normal), u_refrac_strength);
-    fragColor = texture(skybox, R);
+    // vec3 R = refract(I, normalize(v_normal), u_refrac_strength);
+
+    vec3 v_refraction = refract(I, normalize(v_normal), u_fresnel_factor);
+    vec3 v_reflection = reflect(I, normalize(v_normal));
+
+    // float v_fresnel = R0 + (1.0 - R0) * pow((1.0 - dot(-I, normalize(v_normal))), 5.0);
+
+    vec4 refr_color = texture(skybox, normalize(v_refraction));
+    vec4 refl_color = texture(skybox, normalize(v_reflection));
+
+    vec4 mixedTr = mix(refr_color, refl_color, u_strength);
+
+    fragColor = mixedTr; // texture(skybox, R);
 }

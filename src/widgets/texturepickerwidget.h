@@ -28,16 +28,17 @@ private slots:
     void on_pushButton_clicked();
 
 public:
-    QString filename;
+    QString filename, filePath;
 
     explicit TexturePickerWidget(QWidget *parent = 0);
     ~TexturePickerWidget();
 
     Ui::TexturePickerWidget *ui;
 
-    void setLabelImage( QLabel* label, QString file, bool emitSignal = true);
+    void setLabelImage(QLabel* label, QString file, bool emitSignal = true);
     bool eventFilter(QObject *object, QEvent *ev);
     void setTexture(QString path);
+    QString getTexturePath();
 
 signals:
     void valueChanged( QString value);

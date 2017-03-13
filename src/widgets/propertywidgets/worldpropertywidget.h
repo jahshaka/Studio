@@ -14,6 +14,8 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QSharedPointer>
+#include "../irisglfwd.h"
+#include "../graphics/texture2d.h"
 #include "../accordianbladewidget.h"
 
 namespace iris {
@@ -33,13 +35,13 @@ public:
     WorldPropertyWidget();
 
     void setScene(QSharedPointer<iris::Scene> scene);
-
     void setupViewSelector();
 
 protected slots:
     void onSkyTextureChanged(QString texPath);
     void onSkyColorChanged(QColor color);
     void onAmbientColorChanged(QColor color);
+    void viewTextureSlotChanged(const QString &text);
 
 private:
     QSharedPointer<iris::Scene> scene;
@@ -48,6 +50,8 @@ private:
     TexturePickerWidget *skyTexture;
     ColorValueWidget *skyColor;
     ColorValueWidget *ambientColor;
+
+    QString skyBoxTextures[6];
 };
 
 #endif // SCENEPROPERTYWIDGET_H

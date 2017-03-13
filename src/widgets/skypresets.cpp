@@ -27,12 +27,11 @@ SkyPresets::SkyPresets(QWidget *parent) :
     mainWindow = nullptr;
 
     ui->skyList->setViewMode(QListWidget::IconMode);
-    ui->skyList->setIconSize(QSize(110, 80));
+    ui->skyList->setIconSize(QSize(64, 64));
     ui->skyList->setResizeMode(QListWidget::Adjust);
     ui->skyList->setMovement(QListView::Static);
     ui->skyList->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->skyList->setSelectionMode(QAbstractItemView::SingleSelection);
-
 
 //    addSky(":/app/content/skies/vp_sky_v2_033.jpg", "Sky 3");
 //    addSky(":/app/content/skies/vp_sky_v2_002.jpg", "Sky 1");
@@ -42,10 +41,16 @@ SkyPresets::SkyPresets(QWidget *parent) :
 
     QString cove = IrisUtils::getAbsoluteAssetPath("app/content/textures/front.jpg");
     QString dessert = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/ame_desert/front.png");
+    QString lake = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/yokohama/front.jpg");
+    QString field = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/field/front.jpg");
+    QString creek = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/creek/front.jpg");
 
 //    alternativeSkies.append(x1);
-    addCubeSky(cove, "Dim Cove");
-    addCubeSky(dessert, "Ame Desert");
+    addCubeSky(cove, "Cove");
+    addCubeSky(dessert, "Dessert");
+    addCubeSky(lake, "Bay");
+    addCubeSky(field, "Field");
+    addCubeSky(creek, "Creek");
 
     connect(ui->skyList,    SIGNAL(itemClicked(QListWidgetItem*)),
             this,           SLOT(applyCubeSky(QListWidgetItem*)));

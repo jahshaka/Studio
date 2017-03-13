@@ -48,8 +48,11 @@ Texture2DPtr Texture2D::create(QImage image)
 
 Texture2DPtr Texture2D::createCubeMap(QString posX, QString negX,
                                       QString posY, QString negY,
-                                      QString posZ, QString negZ)
+                                      QString posZ, QString negZ,
+                                      QImage *info)
 {
+    int width, height, depth;
+
     const QImage pos_x = QImage(posX).convertToFormat(QImage::Format_RGBA8888);
     const QImage neg_x = QImage(negX).convertToFormat(QImage::Format_RGBA8888);
     const QImage pos_y = QImage(posY).mirrored(true).convertToFormat(QImage::Format_RGBA8888);
@@ -57,9 +60,19 @@ Texture2DPtr Texture2D::createCubeMap(QString posX, QString negX,
     const QImage pos_z = QImage(posZ).convertToFormat(QImage::Format_RGBA8888);
     const QImage neg_z = QImage(negZ).convertToFormat(QImage::Format_RGBA8888);
 
+    if (info) {
+        width = pos_x.width();
+        height = pos_x.height();
+        depth = pos_x.depth();
+    } else {
+        width = pos_x.width();
+        height = pos_x.height();
+        depth = pos_x.depth();
+    }
+
     auto texture = new QOpenGLTexture(QOpenGLTexture::TargetCubeMap);
     texture->create();
-    texture->setSize(pos_x.width(), pos_x.height(), pos_x.depth());
+    texture->setSize(width, height, depth);
     texture->setFormat(QOpenGLTexture::RGBA8_UNorm);
     texture->allocateStorage();
     texture->setData(0, 0, QOpenGLTexture::CubeMapPositiveX,

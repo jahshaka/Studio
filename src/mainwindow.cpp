@@ -189,8 +189,8 @@ MainWindow::MainWindow(QWidget *parent) :
     //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
     ui->ToolBar->addWidget(vrButton);
 
-    ui->AnimationDock->hide();
-    ui->PresetsDock->hide();
+//    ui->AnimationDock->hide();
+//    ui->PresetsDock->hide();
 }
 
 void MainWindow::setupVrUi()
@@ -925,8 +925,6 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
 
 //        if (!meshNode->getMaterial()) {
 //            if (meshNode->materialType == 1) {
-                auto mat2 = iris::CustomMaterial::create();
-                meshNode->setCustomMaterial(mat2);
                 auto mat = iris::DefaultMaterial::create();
                 meshNode->setMaterial(mat);
 

@@ -115,14 +115,15 @@ void MaterialPropertyWidget::setupCustomMaterial()
 
 void MaterialPropertyWidget::setupShaderSelector()
 {
+    // load these from a directory in the future...
     materialSelector = this->addComboBox("Shader");
-    materialSelector->addItem("Default");
-    materialSelector->addItem("Glass");
+    materialSelector->addItem("Default Shader");
+    materialSelector->addItem("Environment Surface Shader");
 
     if (meshNode->getMaterialType() == 1) {
-        materialSelector->setCurrentItem("Default");
+        materialSelector->setCurrentItem("Default Shader");
     } else {
-        materialSelector->setCurrentItem("Glass");
+        materialSelector->setCurrentItem("Environment Surface Shader");
     }
 
     connect(materialSelector,   SIGNAL(currentIndexChanged(QString)),
@@ -133,13 +134,17 @@ MaterialPropertyWidget::MaterialPropertyWidget(QSharedPointer<iris::SceneNode> s
 {
     materialReader = new MaterialReader();
 
-    if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+    if (!!sceneNode) {
         this->meshNode = sceneNode.staticCast<iris::MeshNode>();
     }
 }
 
 void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
+    if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+        this->meshNode = sceneNode.staticCast<iris::MeshNode>();
+    }
+
     setupShaderSelector();
 
     if (this->meshNode->getMaterialType() == 1) {
@@ -205,7 +210,7 @@ void MaterialPropertyWidget::onCustomSliderChanged(QWidget *t)
 void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
 {
     if (!!this->meshNode) {
-        if (text == "Default") {
+        if (text == "Default Shader") {
             this->meshNode->setMaterialType(1);
             this->meshNode->setActiveMaterial(1);
 
@@ -215,7 +220,7 @@ void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
         }
     }
 
-    if (text == "Default") {
+    if (text == "Default Shader") {
         this->clearPanel(this->layout());
 
         resetHeight();
@@ -229,7 +234,7 @@ void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
 
         this->setSceneNode(this->meshNode);
 
-    } else if (text == "Glass") {
+    } else if (text == "Environment Surface Shader") {
 
         this->clearPanel(this->layout());
 

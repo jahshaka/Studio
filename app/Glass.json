@@ -1,34 +1,22 @@
 {
-    "name": "Glass Shader",
+    "name": "Refractive Shader",
     "preview": false,
     "uniforms": {
         "property": {
-            "name"      : "Refraction Amnt",
+            "name"      : "Fresnel",
             "type"      : "slider",
+            "value"     : 0.5,
             "start"     : 0,
             "end"       : 1,
-            "value"     : 1,
-            "uniform"   : "u_refrac_strength"
+            "uniform"   : "u_fresnel_factor"
         },
         "property2": {
-            "name"      : "Reflection Amnt",
+            "name"      : "Influence",
             "type"      : "slider",
+            "value"     : 0.5,
             "start"     : 0,
             "end"       : 1,
-            "value"     : 1,
-            "uniform"   : "u_reflec_strength"
-        },
-        "property3": {
-            "name"      : "Presets",
-            "type"      : "combobox",
-            "items"     : {
-                "Air"           : 12,
-                "Glass"         : 100,
-                "Thick Glass"   : 200,
-                "Frosted Glass" : 100,
-                "Tinted Glass"  : 500,
-                "Flat Clear"    : 0
-            }
+            "uniform"   : "u_strength"
         }
     },
     "shader": "path"

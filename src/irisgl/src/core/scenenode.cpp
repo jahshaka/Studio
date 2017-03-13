@@ -38,7 +38,7 @@ SceneNode::SceneNode():
     localTransform.setToIdentity();
     globalTransform.setToIdentity();
 
-    setMaterialType(1);
+    materialType = 1;
 
     //keyFrameSet = KeyFrameSet::create();
     animation = iris::Animation::create();
