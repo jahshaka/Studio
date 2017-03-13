@@ -38,7 +38,7 @@ KeyFrameWidget::KeyFrameWidget(QWidget* parent):
     itemColor = QColor::fromRgb(255,255,255);
 
     maxTimeInSeconds = 30;
-    cursorPos = 5;
+    cursorPos = 0;
 
     linePen = QPen(itemColor);
     cursorPen = QPen(QColor::fromRgb(142,45,197));

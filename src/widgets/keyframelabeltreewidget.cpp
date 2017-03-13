@@ -19,6 +19,8 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/propertyanim.h"
 #include "../irisgl/src/core/scenenode.h"
 
+#include "animationwidget.h"
+
 
 class KeyFrameGroup
 {
@@ -32,6 +34,9 @@ KeyFrameLabelTreeWidget::KeyFrameLabelTreeWidget(QWidget *parent) :
     ui(new Ui::KeyFrameLabelTreeWidget)
 {
     ui->setupUi(this);
+
+    connect(ui->treeWidget, SIGNAL(itemCollapsed(QTreeWidgetItem*)), this, SLOT(itemCollapsed(QTreeWidgetItem*)));
+    connect(ui->treeWidget, SIGNAL(itemExpanded(QTreeWidgetItem*)), this, SLOT(itemExpanded(QTreeWidgetItem*)));
 }
 
 KeyFrameLabelTreeWidget::~KeyFrameLabelTreeWidget()
@@ -114,6 +119,21 @@ void KeyFrameLabelTreeWidget::addVector3PropertyToTree(iris::Vector3DPropertyAni
 void KeyFrameLabelTreeWidget::addColorPropertyToTree(iris::ColorPropertyAnim *prop)
 {
 
+}
+
+void KeyFrameLabelTreeWidget::itemCollapsed(QTreeWidgetItem *item)
+{
+    animWidget->repaintViews();
+}
+
+void KeyFrameLabelTreeWidget::itemExpanded(QTreeWidgetItem *item)
+{
+    animWidget->repaintViews();
+}
+
+void KeyFrameLabelTreeWidget::setAnimWidget(AnimationWidget *value)
+{
+    animWidget = value;
 }
 
 /**
