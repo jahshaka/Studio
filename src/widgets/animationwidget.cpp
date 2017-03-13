@@ -79,6 +79,7 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
     this->node = node;
 
     if (!!node) {
+        scene = node->scene;
 
         animableProperties = node->getAnimableProperties();
 
@@ -235,211 +236,13 @@ void AnimationWidget::addPropertyKey(QAction *action)
         frames[0].keyFrame->addKey(value.redF(),    this->timeAtCursor);
         frames[1].keyFrame->addKey(value.greenF(),  this->timeAtCursor);
         frames[2].keyFrame->addKey(value.blueF(),   this->timeAtCursor);
-        frames[3].keyFrame->addKey(value.alphaF(),   this->timeAtCursor);
+        frames[3].keyFrame->addKey(value.alphaF(),  this->timeAtCursor);
     }
         break;
     }
 
 
     this->repaintViews();
-}
-
-void AnimationWidget::addPosKey()
-{
-    return;
-    if(!node)
-        return;
-    /*
-    //float seconds = ui->timeline->getTimeAtCursor();
-    float seconds = ui->keywidgetView->getTimeAtCursor();
-    QVector3D pos = node->pos;
-    //node->transformAnim->pos->addKey(pos,seconds);
-
-    auto frameSet = node->animation->keyFrameSet;
-    frameSet->getOrCreateFrame("Translation X")->addKey(pos.x(),seconds);
-    frameSet->getOrCreateFrame("Translation Y")->addKey(pos.y(),seconds);
-    frameSet->getOrCreateFrame("Translation Z")->addKey(pos.z(),seconds);
-
-    //node->updateAnimPathFromKeyFrames();
-
-    ui->keylabelView->resetKeyFrames();
-    repaintViews();
-    */
-}
-
-void AnimationWidget::addRotKey()
-{
-    return;
-    if(!node)
-        return;
-    /*
-    //float seconds = ui->timeline->getTimeAtCursor();
-    float seconds = ui->keywidgetView->getTimeAtCursor();
-    QVector3D rot = node->rot.toEulerAngles();
-
-    auto frameSet = node->animation->keyFrameSet;
-    frameSet->getOrCreateFrame("Rotation X")->addKey(rot.x(),seconds);
-    frameSet->getOrCreateFrame("Rotation Y")->addKey(rot.y(),seconds);
-    frameSet->getOrCreateFrame("Rotation Z")->addKey(rot.z(),seconds);
-
-    ui->keylabelView->resetKeyFrames();
-    repaintViews();
-    */
-}
-
-void AnimationWidget::addScaleKey()
-{
-    return;
-
-    if(!node)
-        return;
-    /*
-    //float seconds = ui->timeline->getTimeAtCursor();
-    float seconds = ui->keywidgetView->getTimeAtCursor();
-    QVector3D scale = node->scale;
-
-    auto frameSet = node->animation->keyFrameSet;
-    frameSet->getOrCreateFrame("Scale X")->addKey(scale.x(),seconds);
-    frameSet->getOrCreateFrame("Scale Y")->addKey(scale.y(),seconds);
-    frameSet->getOrCreateFrame("Scale Z")->addKey(scale.z(),seconds);
-
-    ui->keylabelView->resetKeyFrames();
-    repaintViews();
-    */
-}
-
-void AnimationWidget::addPosRotKey()
-{
-    /*
-    if(node==nullptr)
-        return;
-
-    float seconds = ui->timeline->getTimeAtCursor();
-
-    QVector3D pos = node->pos;
-    node->transformAnim->pos->addKey(pos,seconds);
-
-    //QQuaternion rot = node->rot;
-    node->transformAnim->rot->addKey(node->rot,seconds);
-
-    repaintViews();
-    */
-}
-
-void AnimationWidget::addPosRotScaleKey()
-{
-    /*
-    if(node==nullptr)
-        return;
-
-    float seconds = ui->timeline->getTimeAtCursor();
-
-    QVector3D pos = node->pos;
-    node->transformAnim->pos->addKey(pos,seconds);
-
-    //QQuaternion rot = node->rot;
-    node->transformAnim->rot->addKey(node->rot,seconds);
-
-    QVector3D scale = node->scale;
-    node->transformAnim->scale->addKey(scale,seconds);
-
-    repaintViews();
-    */
-}
-
-void AnimationWidget::addLightColorKey()
-{
-    /*
-    if(node->sceneNodeType == SceneNodeType::Light)
-    {
-        auto light = static_cast<LightNode*>(node);
-        float seconds = ui->timeline->getTimeAtCursor();
-
-        light->lightAnim->color->addKey(light->getColor(),seconds);
-    }
-    */
-}
-
-void AnimationWidget::addLightIntensityKey()
-{
-    /*
-    if(node->sceneNodeType == SceneNodeType::Light)
-    {
-        auto light = static_cast<LightNode*>(node);
-        float seconds = ui->timeline->getTimeAtCursor();
-
-        light->lightAnim->intensity->addKey(light->getIntensity(),seconds);
-    }
-    */
-}
-
-void AnimationWidget::addSceneBackgroundColorKey()
-{
-    //todo
-    /*
-`   if(node->sceneNodeType == SceneNodeType::World)
-    {
-        auto world = static_cast<WorldNode*>(node);
-        float seconds = ui->timeline->getTimeAtCursor();
-        world->getColor();
-
-        light->lightAnim->intensityKey->addKey(light->getIntensity(),seconds);
-    }
-    */
-}
-
-void AnimationWidget::addSceneActiveCameraKey()
-{
-    //todo
-}
-
-void AnimationWidget::deletePosKeys()
-{
-    /*
-    node->transformAnim->pos->clear();
-    repaintViews();
-    */
-}
-
-void AnimationWidget::deleteScaleKeys()
-{
-    /*
-    node->transformAnim->scale->clear();
-    repaintViews();
-    */
-}
-
-void AnimationWidget::deleteRotKeys()
-{
-    /*
-    node->transformAnim->rot->clear();
-    repaintViews();
-    */
-}
-
-void AnimationWidget::deleteAllKeys()
-{
-    /*
-    node->transformAnim->pos->clear();
-    node->transformAnim->scale->clear();
-    node->transformAnim->rot->clear();
-
-    switch(node->sceneNodeType)
-    {
-        case SceneNodeType::Light:
-        {
-            auto light = static_cast<LightNode*>(node);
-            light->lightAnim->color->clear();
-            light->lightAnim->intensity->clear();
-        }
-        break;
-    default:
-        break;
-
-    }
-
-    repaintViews();
-    */
 }
 
 void AnimationWidget::deleteLightColorKeys()
@@ -457,16 +260,6 @@ void AnimationWidget::timeEditChanged(QTime time)
     int totalSecs = time.second()+time.minute()*60;
     this->setAnimLength(totalSecs);
     this->showHighlight();
-}
-
-void AnimationWidget::setAnimstart(int time)
-{
-    /*
-    if(node==nullptr)
-        return;
-    node->animStartTime = time;
-    this->showHighlight();
-    */
 }
 
 void AnimationWidget::onObjectAnimationTimeChanged(float timeInSeconds)

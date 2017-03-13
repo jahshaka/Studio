@@ -71,10 +71,10 @@ ColorPropertyAnim::~ColorPropertyAnim()
 QColor ColorPropertyAnim::getValue(float time)
 {
     return QColor(
-                keyFrames[0]->getValueAt(time),
-                keyFrames[1]->getValueAt(time),
-                keyFrames[2]->getValueAt(time),
-                keyFrames[3]->getValueAt(time)
+                keyFrames[0]->getValueAt(time) * 255,
+                keyFrames[1]->getValueAt(time) * 255,
+                keyFrames[2]->getValueAt(time) * 255,
+                keyFrames[3]->getValueAt(time) * 255
                 );
 }
 
