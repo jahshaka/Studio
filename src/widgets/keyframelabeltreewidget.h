@@ -21,6 +21,18 @@ class KeyFrameLabelTreeWidget;
 }
 
 class KeyFrameGroup;
+class QTreeWidget;
+
+struct KeyFrameData
+{
+    QString propertyName;
+    QString subPropertyName;
+    iris::FloatKeyFrame* keyFrame;
+    //iris::PropertyAnim *prop;
+};
+
+Q_DECLARE_METATYPE(KeyFrameData)
+
 class KeyFrameLabelTreeWidget : public QWidget
 {
     Q_OBJECT
@@ -30,6 +42,17 @@ public:
     ~KeyFrameLabelTreeWidget();
 
     void setSceneNode(iris::SceneNodePtr node);
+
+    // propName must be a name
+    void addProperty(QString propName);
+
+    QTreeWidget* getTree();
+
+private:
+    void addPropertyToTree(iris::PropertyAnim* prop);
+    void addFloatPropertyToTree(iris::FloatPropertyAnim* prop);
+    void addVector3PropertyToTree(iris::Vector3DPropertyAnim* prop);
+    void addColorPropertyToTree(iris::ColorPropertyAnim* prop);
 
 private:
     Ui::KeyFrameLabelTreeWidget *ui;

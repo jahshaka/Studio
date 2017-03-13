@@ -66,7 +66,7 @@ QWidget#controls &gt; QToolButton:hover {
       </property>
       <property name="minimumSize">
        <size>
-        <width>250</width>
+        <width>0</width>
         <height>0</height>
        </size>
       </property>
@@ -173,12 +173,15 @@ QWidget#controls &gt; QToolButton:hover {
         </widget>
        </item>
        <item>
-        <widget class="KeyFrameLabelTreeWIdget" name="keylabelView" native="true">
+        <widget class="KeyFrameLabelTreeWidget" name="keylabelView" native="true">
          <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
            <horstretch>0</horstretch>
            <verstretch>1</verstretch>
           </sizepolicy>
+         </property>
+         <property name="styleSheet">
+          <string notr="true"/>
          </property>
         </widget>
        </item>
@@ -360,7 +363,7 @@ QWidget#controls &gt; QToolButton:hover {
               <number>0</number>
              </property>
              <item>
-              <widget class="TimelineWidget" name="widget_8" native="true">
+              <widget class="TimelineWidget" name="timeline" native="true">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                  <horstretch>0</horstretch>
@@ -411,7 +414,7 @@ QWidget#controls &gt; QToolButton:hover {
    <container>1</container>
   </customwidget>
   <customwidget>
-   <class>KeyFrameLabelTreeWIdget</class>
+   <class>KeyFrameLabelTreeWidget</class>
    <extends>QWidget</extends>
    <header>src/widgets/keyframelabeltreewidget.h</header>
    <container>1</container>

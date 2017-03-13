@@ -21,9 +21,13 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/animation.h"
 #include "keyframewidget.h"
 #include "keyframelabelwidget.h"
+#include "keyframelabeltreewidget.h"
 #include "keyframelabel.h"
 #include <QMenu>
 #include <math.h>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
+#include <QVariant>
 
 KeyFrameWidget::KeyFrameWidget(QWidget* parent):
     QWidget(parent)
@@ -106,12 +110,21 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
             drawFrame(paint,frame,ypos+=frameHeight);
         }
         */
-
+        /*
         auto labels = labelWidget->getLabels();
         for (auto label : labels) {
             drawFrame(paint, label->getKeyFrame(),ypos,label->height());
 
             ypos+=label->height();
+        }
+        */
+
+        auto top = 0;
+        auto tree = labelWidget->getTree();
+        for( int i = 0; i < tree->invisibleRootItem()->childCount(); ++i ) {
+            auto item = tree->invisibleRootItem()->child(i);
+
+            drawFrame(paint, tree, item, top );
         }
     }
 
@@ -124,8 +137,11 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
 
 }
 
-void KeyFrameWidget::drawFrame(QPainter& paint, iris::FloatKeyFrame* keyFrame, int yTop,int height)
+void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetItem* item, int& yTop)
 {
+    auto data = item->data(0,Qt::UserRole).value<KeyFrameData>();
+    auto height = tree->visualItemRect(item).height();
+
     float penSize = 14;
     float penSizeSquared = 7*7;
 
@@ -138,23 +154,34 @@ void KeyFrameWidget::drawFrame(QPainter& paint, iris::FloatKeyFrame* keyFrame, i
     highlightPen.setCapStyle(Qt::RoundCap);
     auto halfHeight = + height / 2.0f;
 
-    for(auto key:keyFrame->keys)
-    {
-        int xpos = this->timeToPos(key->time);
-
-        float distSqrd = distanceSquared(xpos, yTop + halfHeight, mousePos.x(), mousePos.y());
-
-        if(distSqrd < penSizeSquared)
+    if (data.keyFrame != nullptr) {
+        for(auto key:data.keyFrame->keys)
         {
-            paint.setPen(highlightPen);
-            paint.drawPoint(xpos, yTop + height / 2.0f);
-        }
-        else
-        {
-            paint.setPen(pen);
-            paint.drawPoint(xpos, yTop + height / 2.0f);
-        }
+            int xpos = this->timeToPos(key->time);
 
+            float distSqrd = distanceSquared(xpos, yTop + halfHeight, mousePos.x(), mousePos.y());
+
+            if(distSqrd < penSizeSquared)
+            {
+                paint.setPen(highlightPen);
+                paint.drawPoint(xpos, yTop + height / 2.0f);
+            }
+            else
+            {
+                paint.setPen(pen);
+                paint.drawPoint(xpos, yTop + height / 2.0f);
+            }
+        }
+    }
+
+    yTop += height;
+
+    if (item->isExpanded()) {
+        for( int i = 0; i < item->childCount(); ++i ) {
+            auto childItem = item->child(i);
+
+            drawFrame(paint, tree, childItem, yTop );
+        }
     }
 }
 
@@ -224,11 +251,13 @@ void KeyFrameWidget::mousePressEvent(QMouseEvent* evt)
     {
         this->selectedKey = this->getSelectedKey(mousePos.x(),mousePos.y());
     }
+    /*
     else if(leftButtonDown)
     {
         cursorPos = posToTime(evt->x());
         emit cursorTimeChanged(cursorPos);
     }
+    */
 }
 
 void KeyFrameWidget::mouseReleaseEvent(QMouseEvent* evt)
@@ -265,18 +294,20 @@ void KeyFrameWidget::mouseMoveEvent(QMouseEvent* evt)
         auto timeDiff = posToTime(evt->x())-posToTime(mousePos.x());
         selectedKey->time+=timeDiff;
     }
+    /*
     else if(leftButtonDown)
     {
         cursorPos = posToTime(evt->x());
         emit cursorTimeChanged(cursorPos);
     }
-
+    */
     if(middleButtonDown)
     {
-        //qDebug()<<"middle mouse dragging"<<endl;
-        auto timeDiff = posToTime(evt->x())-posToTime(mousePos.x());
+        auto timeDiff = posToTime(evt->x()) - posToTime(mousePos.x());
         rangeStart-=timeDiff;
         rangeEnd-=timeDiff;
+
+        emit timeRangeChanged(rangeStart, rangeEnd);
     }
 
 
@@ -297,6 +328,7 @@ void KeyFrameWidget::wheelEvent(QWheelEvent* evt)
     rangeEnd = timeSpacePivot+(rangeEnd-timeSpacePivot)*scale;
 
     //min start
+    emit timeRangeChanged(rangeStart, rangeEnd);
 
     this->repaint();
 }
@@ -391,7 +423,12 @@ iris::FloatKey* KeyFrameWidget::getSelectedKey(int x,int y)
     return nullptr;
 }
 
-void KeyFrameWidget::setLabelWidget(KeyFrameLabelWidget *value)
+void KeyFrameWidget::setLabelWidget(KeyFrameLabelTreeWidget *value)
 {
     labelWidget = value;
+}
+
+void KeyFrameWidget::cursorTimeChanged(float timeInSeconds)
+{
+    setTime(timeInSeconds);
 }

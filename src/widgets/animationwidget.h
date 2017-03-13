@@ -23,6 +23,7 @@ class QElapsedTimer;
 class TimelineWidget;
 
 class QMenu;
+class QTreeWidget;
 
 namespace Ui
 {
@@ -48,7 +49,7 @@ class AnimationWidget : public QWidget
     QMenu* deleteMenu;
 
     QList<iris::AnimableProperty> animableProperties;
-    iris::Animation* animation;
+    iris::AnimationPtr animation;
 public:
     explicit AnimationWidget(QWidget *parent = 0);
     ~AnimationWidget();
@@ -102,6 +103,7 @@ public:
 
     //sets cursor position at time
     void setCursorPositionAtTime(float timeInSeconds);
+
 private:
     iris::PropertyAnim* createPropertyAnim(const iris::AnimableProperty& prop);
     void removeNodeSpecificActions();

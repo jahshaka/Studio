@@ -60,16 +60,31 @@ void Animation::setLooping(bool value)
 
 void Animation::addPropertyAnim(PropertyAnim *anim)
 {
-    Q_ASSERT(!properties.contains(name));
+    //Q_ASSERT(!properties.contains(name));
     
     properties.insert(anim->getName(), anim);
 }
 
 PropertyAnim* Animation::getPropertyAnim(QString name)
 {
-    Q_ASSERT(!properties.contains(name));
+    //Q_ASSERT(properties.contains(name));
 
     return properties[name];
+}
+
+FloatPropertyAnim *Animation::getFloatPropertyAnim(QString name)
+{
+    return (FloatPropertyAnim*)properties[name];
+}
+
+Vector3DPropertyAnim *Animation::getVector3PropertyAnim(QString name)
+{
+    return (Vector3DPropertyAnim*)properties[name];
+}
+
+ColorPropertyAnim *Animation::getColorPropertyAnim(QString name)
+{
+    return (ColorPropertyAnim*)properties[name];
 }
 
 bool Animation::hasPropertyAnim(QString name)

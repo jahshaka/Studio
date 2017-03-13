@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "scene.h"
 #include "../animation/keyframeset.h"
 #include "../animation/animation.h"
+#include "../animation/propertyanim.h"
 #include "../animation/animableproperty.h"
 #include "../animation/keyframeanimation.h"
 
@@ -188,6 +189,21 @@ void SceneNode::updateAnimation(float time)
         child->updateAnimation(time);
     }
     */
+
+    if (animation->hasPropertyAnim("Position")) {
+        pos = animation->getVector3PropertyAnim("Position")->getValue(time);
+    }
+    if (animation->hasPropertyAnim("Rotation")) {
+        auto r = animation->getVector3PropertyAnim("Rotation")->getValue(time);
+        rot = QQuaternion::fromEulerAngles(r);
+    }
+    if (animation->hasPropertyAnim("Scale")) {
+        scale = animation->getVector3PropertyAnim("Scale")->getValue(time);
+    }
+
+    for (auto child : children) {
+        child->updateAnimation(time);
+    }
 }
 
 void SceneNode::update(float dt)
