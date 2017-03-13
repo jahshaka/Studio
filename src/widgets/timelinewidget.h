@@ -72,7 +72,6 @@ public:
     float getTimeAtCursor();
 
     //void setMaxTimeInSeconds(float time);
-    void setTimeRange(float start,float end);
     void setStartTime(float start);
     void setEndTime(float end);
     void setTime(float time);
@@ -87,6 +86,10 @@ public:
 
 signals:
     void cursorMoved(float timeInSeconds);
+    void timeRangeChanged(float timeStart, float timeEnd);
+
+public slots:
+    void setTimeRange(float start,float end);
 
 };
 

@@ -16,7 +16,9 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
 #include "../irisgl/src/animation/animation.h"
+#include "../irisgl/src/animation/propertyanim.h"
 #include "../irisgl/src/core/scenenode.h"
+
 
 class KeyFrameGroup
 {
@@ -41,7 +43,76 @@ void KeyFrameLabelTreeWidget::setSceneNode(iris::SceneNodePtr node)
 {
     this->node = node;
 
+    ui->treeWidget->clear();
+
+    if (!node)
+        return;
+
     // refresh tree
+    auto animation = node->animation;
+    for(auto prop : animation->properties) {
+        // add prop to tree
+        //switch(prop->)
+        addPropertyToTree(prop);
+    }
+}
+
+void KeyFrameLabelTreeWidget::addProperty(QString propName)
+{
+    auto prop = node->animation->properties[propName];
+    addPropertyToTree(prop);
+}
+
+QTreeWidget *KeyFrameLabelTreeWidget::getTree()
+{
+    return ui->treeWidget;
+}
+
+void KeyFrameLabelTreeWidget::addPropertyToTree(iris::PropertyAnim *prop)
+{
+    auto frames = prop->getKeyFrames();
+    auto treeItem = new QTreeWidgetItem();
+    treeItem->setText(0,prop->getName());
+
+
+
+    if (frames.size() == 1) {
+        KeyFrameData frameData;
+        frameData.keyFrame = frames[0].keyFrame;
+        frameData.propertyName = prop->getName();
+        frameData.subPropertyName = "";
+
+        treeItem->setData(0,Qt::UserRole,QVariant::fromValue(frameData));
+    } else {
+        for (auto frame : frames) {
+            auto childItem = new QTreeWidgetItem();
+            childItem->setText(0,frame.name);
+
+            KeyFrameData frameData;
+            frameData.keyFrame = frame.keyFrame;
+            frameData.propertyName = prop->getName();
+            frameData.subPropertyName = frame.name;
+
+            childItem->setData(0, Qt::UserRole, QVariant::fromValue(frameData));
+            treeItem->addChild(childItem);
+        }
+    }
+
+    ui->treeWidget->invisibleRootItem()->addChild(treeItem);
+}
+
+void KeyFrameLabelTreeWidget::addFloatPropertyToTree(iris::FloatPropertyAnim *prop)
+{
+
+}
+
+void KeyFrameLabelTreeWidget::addVector3PropertyToTree(iris::Vector3DPropertyAnim *prop)
+{
+
+}
+
+void KeyFrameLabelTreeWidget::addColorPropertyToTree(iris::ColorPropertyAnim *prop)
+{
 
 }
 

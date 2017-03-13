@@ -177,7 +177,7 @@ void TimelineWidget::paintEvent(QPaintEvent *painter)
 
     //cursor
     paint.setPen(cursorPen);
-    paint.drawLine(cursorPos,0,cursorPos,widgetHeight);
+    paint.drawLine(timeToPos(cursorPos), 0, timeToPos(cursorPos), widgetHeight);
 }
 
 int TimelineWidget::timeToPos(float timeInSeconds)
@@ -216,6 +216,7 @@ void TimelineWidget::mousePressEvent(QMouseEvent* evt)
 
     if(evt->button() == Qt::LeftButton)
     {
+        dragging = true;
         setCursorPos(posToTime(evt->x()));
     }
 }
@@ -238,19 +239,23 @@ void TimelineWidget::mouseMoveEvent(QMouseEvent* evt)
 {
     if(dragging)
     {
-        setCursorPos(evt->x());
+        setCursorPos(posToTime(evt->x()));
+        emit cursorMoved(cursorPos);
     }
 
     if(middleButtonDown)
     {
         //qDebug()<<"middle mouse dragging"<<endl;
-        auto timeDiff = posToTime(evt->x())-posToTime(cursorPos);
+        auto timeDiff = posToTime(evt->x()) - posToTime(mousePos.x());
         rangeStart-=timeDiff;
         rangeEnd-=timeDiff;
+
+        emit timeRangeChanged(rangeStart, rangeEnd);
     }
 
-    cursorPos = evt->x();
+    //cursorPos = evt->x();
     mousePos = evt->pos();
+
     this->repaint();
 }
 
@@ -265,6 +270,8 @@ void TimelineWidget::wheelEvent(QWheelEvent* evt)
     float timeSpacePivot = posToTime(evt->x());
     rangeStart = timeSpacePivot+(rangeStart-timeSpacePivot)*scale;
     rangeEnd = timeSpacePivot+(rangeEnd-timeSpacePivot)*scale;
+
+    emit timeRangeChanged(rangeStart, rangeEnd);
 
     this->repaint();
 }

@@ -37,6 +37,12 @@ public:
 
     PropertyAnim* getPropertyAnim(QString name);
 
+    FloatPropertyAnim* getFloatPropertyAnim(QString name);
+
+    Vector3DPropertyAnim* getVector3PropertyAnim(QString name);
+
+    ColorPropertyAnim* getColorPropertyAnim(QString name);
+
     bool hasPropertyAnim(QString name);
 
     static AnimationPtr create(QString name)

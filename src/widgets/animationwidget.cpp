@@ -49,8 +49,11 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     // connect(ui->play,SIGNAL(pressed()),this,SLOT(startTimer()));
     // connect(ui->stop,SIGNAL(pressed()),this,SLOT(stopTimer()));
 
-    connect(ui->keywidgetView,SIGNAL(cursorTimeChanged(float)),this,SLOT(onObjectAnimationTimeChanged(float)));
-    //connect(ui->timeline,SIGNAL(cursorMoved(float)),this,SLOT(onSceneAnimationTimeChanged(float)));
+    //connect(ui->keywidgetView,SIGNAL(cursorTimeChanged(float)),this,SLOT(onObjectAnimationTimeChanged(float)));
+    connect(ui->timeline,SIGNAL(cursorMoved(float)),this,SLOT(onSceneAnimationTimeChanged(float)));
+    connect(ui->timeline,SIGNAL(cursorMoved(float)),ui->keywidgetView,SLOT(cursorTimeChanged(float)));
+    connect(ui->timeline,SIGNAL(timeRangeChanged(float,float)),ui->keywidgetView,SLOT(setTimeRange(float,float)));
+    connect(ui->keywidgetView,SIGNAL(timeRangeChanged(float,float)),ui->timeline,SLOT(setTimeRange(float,float)));
 
     mainTimeline = nullptr;
 }
@@ -90,10 +93,12 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
             menu->addAction(action);
         }
 
+        animation = node->animation;
+        connect(menu, SIGNAL(triggered(QAction*)), this ,SLOT(addPropertyKey(QAction*)));
         ui->insertFrame->setMenu(menu);
     } else {
         ui->insertFrame->setMenu(new QMenu());
-        animation = nullptr;
+        animation.clear();
     }
 }
 
@@ -186,7 +191,7 @@ iris::PropertyAnim *AnimationWidget::createPropertyAnim(const iris::AnimableProp
 
 void AnimationWidget::addPropertyKey(QAction *action)
 {
-    if (animation == nullptr)
+    if (!animation)
         return;
 
     auto index = action->data().toInt();
@@ -199,6 +204,9 @@ void AnimationWidget::addPropertyKey(QAction *action)
         anim = animation->getPropertyAnim(animProp.name);
     } else {
         anim = createPropertyAnim(animProp);
+        anim->setName(animProp.name);
+        animation->addPropertyAnim(anim);
+        ui->keylabelView->addProperty(animProp.name);
     }
 
     auto val = node->getAnimPropertyValue(animProp.name);
@@ -231,6 +239,7 @@ void AnimationWidget::addPropertyKey(QAction *action)
     }
         break;
     }
+
 
     this->repaintViews();
 }
@@ -470,6 +479,7 @@ void AnimationWidget::onObjectAnimationTimeChanged(float timeInSeconds)
 
 void AnimationWidget::onSceneAnimationTimeChanged(float timeInSeconds)
 {
+    this->timeAtCursor = timeInSeconds;
     if(!!scene)
     {
         scene->updateSceneAnimation(timeInSeconds);

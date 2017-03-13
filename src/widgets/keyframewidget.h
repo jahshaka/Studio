@@ -27,6 +27,10 @@ namespace iris
 }
 
 class KeyFrameLabelWidget;
+class KeyFrameLabelTreeWidget;
+
+class QTreeWidget;
+class QTreeWidgetItem;
 
 class KeyFrameWidget:public QWidget
 {
@@ -72,7 +76,7 @@ private:
     bool middleButtonDown;
     bool rightButtonDown;
 
-    KeyFrameLabelWidget *labelWidget;
+    KeyFrameLabelTreeWidget *labelWidget;
 
 public:
     KeyFrameWidget(QWidget* parent);
@@ -86,13 +90,13 @@ public:
 
     float getTimeAtCursor();
     //void setMaxTimeInSeconds(float time);
-    void setTimeRange(float start,float end);
+
     void setStartTime(float start);
     void setEndTime(float end);
     void setTime(float time);
     //void setCursorPos(int x);
 
-    void drawFrame(QPainter& paint, iris::FloatKeyFrame* keyFrame, int y, int height);
+    void drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetItem* item, int& yTop);
     void drawBackgroundLines(QPainter& paint);
     int getXPosFromSeconds(float seconds);
 
@@ -103,10 +107,14 @@ public:
     //void resizeEvent(QResizeEvent* event);
     void paintEvent(QPaintEvent *painter);
 
-    void setLabelWidget(KeyFrameLabelWidget *value);
+    void setLabelWidget(KeyFrameLabelTreeWidget *value);
+
+public slots:
+    void cursorTimeChanged(float timeInSeconds);
+    void setTimeRange(float start,float end);
 
 signals:
-    void cursorTimeChanged(float timeInSeconds);
+    void timeRangeChanged(float timeStart, float timeEnd);
 
 private:
     /**
