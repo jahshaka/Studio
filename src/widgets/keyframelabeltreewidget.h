@@ -62,6 +62,8 @@ private slots:
     void itemCollapsed(QTreeWidgetItem* item);
     void itemExpanded(QTreeWidgetItem* item);
 
+    void customContextMenuRequested(const QPoint&);
+
 private:
     Ui::KeyFrameLabelTreeWidget *ui;
     iris::SceneNodePtr node;
