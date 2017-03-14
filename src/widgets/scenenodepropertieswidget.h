@@ -27,6 +27,7 @@ class LightPropertyWidget;
 class FogPropertyWidget;
 class EmitterPropertyWidget;
 class NodePropertyWidget;
+class MeshPropertyWidget;
 class DemoPane;
 
 /**
@@ -64,6 +65,7 @@ private:
     LightPropertyWidget* lightPropView;
     WorldPropertyWidget* worldPropView;
     FogPropertyWidget*  fogPropView;
+    MeshPropertyWidget* meshPropView;
     // DemoPane* demoPane;
 };
 

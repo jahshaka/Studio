@@ -132,6 +132,7 @@ MainWindow::MainWindow(QWidget *parent) :
     //auto focusPolicy = sceneView->focusPolicy();
     sceneView->setFocusPolicy(Qt::ClickFocus);
     sceneView->setFocus();
+    Globals::sceneViewWidget = sceneView;
 
     QGridLayout* layout = new QGridLayout(ui->sceneContainer);
     layout->addWidget(sceneView);

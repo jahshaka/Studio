@@ -28,6 +28,8 @@ For more information see the LICENSE file
 #include "ui_labelwidget.h"
 #include "labelwidget.h"
 #include "ui_labelwidget.h"
+#include "filepickerwidget.h"
+#include "ui_filepickerwidget.h"
 
 AccordianBladeWidget::AccordianBladeWidget(QWidget* parent) :
     QWidget(parent),
@@ -124,6 +126,18 @@ TexturePickerWidget* AccordianBladeWidget::addTexturePicker(const QString& name)
 
     ui->contentpane->layout()->addWidget(texpicker);
     return texpicker;
+}
+
+FilePickerWidget* AccordianBladeWidget::addFilePicker(const QString &name)
+{
+    FilePickerWidget *filePicker = new FilePickerWidget();
+    filePicker->ui->label->setText(name);
+//    filePicker->suffix = suffix;
+
+    minimum_height += filePicker->height() + stretch;
+
+    ui->contentpane->layout()->addWidget(filePicker);
+    return filePicker;
 }
 
 HFloatSliderWidget* AccordianBladeWidget::addFloatValueSlider(

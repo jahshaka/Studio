@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "propertywidgets/fogpropertywidget.h"
 #include "propertywidgets/emitterpropertywidget.h"
 #include "propertywidgets/nodepropertywidget.h"
+#include "propertywidgets/meshpropertywidget.h"
 #include "propertywidgets/demopane.h"
 
 SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(parent)
@@ -72,6 +73,10 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             transformWidget = transformPropView->addTransformControls();
             transformWidget->setSceneNode(sceneNode);
 
+            meshPropView = new MeshPropertyWidget();
+            meshPropView->setPanelTitle("Mesh Properties");
+            meshPropView->setSceneNode(sceneNode);
+
             nodePropView = new NodePropertyWidget();
             nodePropView->setPanelTitle("Node Properties");
             nodePropView->setSceneNode(sceneNode);
@@ -100,8 +105,10 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                 }
 
                 case iris::SceneNodeType::Mesh: {
+                    layout->addWidget(meshPropView);
                     layout->addWidget(nodePropView);
                     layout->addWidget(materialPropView);
+                    meshPropView->expand();
                     materialPropView->expand();
                     nodePropView->expand();
                     break;

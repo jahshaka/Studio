@@ -13,12 +13,14 @@ For more information see the LICENSE file
 #define GLOBALS_H
 
 class Project;
+class SceneViewWidget;
 
 class Globals
 {
 public:
     static float animFrameTime;//maybe this needs to go
     static Project* project;
+    static SceneViewWidget* sceneViewWidget;
 };
 
 #endif // GLOBALS_H

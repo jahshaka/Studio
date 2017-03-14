@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "../texturepickerwidget.h"
 #include "../textinputwidget.h"
 #include "../labelwidget.h"
+#include "../filepickerwidget.h"
 
 #include <QDebug>
 
@@ -34,4 +35,5 @@ DemoPane::DemoPane()
     demoColor   = this->addColorPicker("Demo Color");
 
     demoLabel   = this->addLabel("Demo Label", "The fat fox runs!");
+    demoFile    = this->addFilePicker("Demo File Picker");
 }
