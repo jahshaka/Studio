@@ -271,7 +271,7 @@ QWidget#controls &gt; QToolButton:hover {
                  <number>0</number>
                 </property>
                 <item>
-                 <widget class="QPushButton" name="pushButton_2">
+                 <widget class="QPushButton" name="beginBtn">
                   <property name="text">
                    <string/>
                   </property>
@@ -282,7 +282,7 @@ QWidget#controls &gt; QToolButton:hover {
                  </widget>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="pushButton_3">
+                 <widget class="QPushButton" name="reverseBtn">
                   <property name="text">
                    <string/>
                   </property>
@@ -293,7 +293,7 @@ QWidget#controls &gt; QToolButton:hover {
                  </widget>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="pushButton_4">
+                 <widget class="QPushButton" name="playBtn">
                   <property name="text">
                    <string/>
                   </property>
@@ -304,7 +304,18 @@ QWidget#controls &gt; QToolButton:hover {
                  </widget>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="pushButton_5">
+                 <widget class="QPushButton" name="stopBtn">
+                  <property name="text">
+                   <string/>
+                  </property>
+                  <property name="icon">
+                   <iconset resource="../../icons.qrc">
+                    <normaloff>:/app/icons/stop.svg</normaloff>:/app/icons/stop.svg</iconset>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="forwardBtn">
                   <property name="text">
                    <string/>
                   </property>
@@ -315,7 +326,7 @@ QWidget#controls &gt; QToolButton:hover {
                  </widget>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="pushButton_6">
+                 <widget class="QPushButton" name="endBtn">
                   <property name="text">
                    <string/>
                   </property>
