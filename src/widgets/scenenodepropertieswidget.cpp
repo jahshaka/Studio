@@ -138,6 +138,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 void SceneNodePropertiesWidget::refreshMaterial()
 {
     if (!!sceneNode && sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
+        materialPropView->clearPanel(materialPropView->layout());
         materialPropView->setSceneNode(sceneNode);
     }
 }
