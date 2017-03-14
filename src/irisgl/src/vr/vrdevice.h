@@ -56,6 +56,7 @@ class VrTouchController
     ovrInputState prevInputState;
 
     int index;
+    bool isBeingTracked;
 
 public:
     VrTouchController(int index);
@@ -68,10 +69,13 @@ public:
 
     QVector2D GetThumbstick();
 
+    bool isTracking();
+
     float getIndexTrigger();
     float getHandTrigger();
 private:
     bool isButtonDown(const ovrInputState& state, VrTouchInput btn);
+    void setTrackingState(bool state);
 };
 
 struct VrFrameData;
