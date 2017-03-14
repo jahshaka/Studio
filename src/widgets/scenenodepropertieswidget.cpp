@@ -40,9 +40,9 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
     if (!!sceneNode) {
         if (sceneNode->isRootNode()) {
             /* remember this is used to test new widgets. Do NOT push to master enabled! */
-            // demoPane = new DemoPane();
-            // demoPane->setPanelTitle("Demo Pane");
-            // demoPane->expand();
+             demoPane = new DemoPane();
+             demoPane->setPanelTitle("Demo Pane");
+             demoPane->expand();
 
             fogPropView = new FogPropertyWidget();
             fogPropView->setPanelTitle("Fog");
@@ -55,7 +55,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             worldPropView->expand();
 
             auto layout = new QVBoxLayout();
-            // layout->addWidget(demoPane);
+             layout->addWidget(demoPane);
             layout->addWidget(fogPropView);
             layout->addWidget(worldPropView);
 

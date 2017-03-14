@@ -64,7 +64,7 @@ private:
     LightPropertyWidget* lightPropView;
     WorldPropertyWidget* worldPropView;
     FogPropertyWidget*  fogPropView;
-    // DemoPane* demoPane;
+     DemoPane* demoPane;
 };
 
 #endif // PROPERTYWIDGET_H

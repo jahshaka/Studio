@@ -48,6 +48,7 @@ private:
     TexturePickerWidget* demoPicker;
     TextInputWidget* demoInput;
     LabelWidget* demoLabel;
+    FilePickerWidget* demoFile;
 };
 
 #endif // DEMOPANE_H
