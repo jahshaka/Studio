@@ -46,6 +46,11 @@ bool VrTouchController::isButtonDown(const ovrInputState& state, VrTouchInput bt
     return (state.Buttons & (int)btn) != 0;
 }
 
+void VrTouchController::setTrackingState(bool state)
+{
+    isBeingTracked = state;
+}
+
 bool VrTouchController::isButtonUp(VrTouchInput btn)
 {
     return !isButtonDown(btn);
@@ -65,6 +70,11 @@ QVector2D VrTouchController::GetThumbstick()
 {
     auto value = inputState.Thumbstick[index];
     return QVector2D(value.x, value.y);
+}
+
+bool VrTouchController::isTracking()
+{
+    return isBeingTracked;
 }
 
 float VrTouchController::getIndexTrigger()
@@ -253,7 +263,22 @@ void VrDevice::beginFrame()
                                            &touchControllers[i]->inputState))) {
             // @todo: log error
         }
+
+        //touchControllers[i]->isBeingTracked = (hmdState.HandStatusFlags[i] & ovrStatus_PositionTracked) == ovrStatus_PositionTracked;
+        //touchControllers[i]->isBeingTracked = (hmdState.HandStatusFlags[i] & ovrStatus_OrientationTracked);
     }
+
+    auto contTypes = ovr_GetConnectedControllerTypes(session);
+
+    if(contTypes & ovrControllerType_LTouch)
+        touchControllers[0]->isBeingTracked = true;
+    else
+        touchControllers[0]->isBeingTracked = false;
+
+    if(contTypes & ovrControllerType_RTouch)
+        touchControllers[1]->isBeingTracked = true;
+    else
+        touchControllers[1]->isBeingTracked = false;
 }
 
 void VrDevice::endFrame()
