@@ -33,13 +33,19 @@ public:
     QString filepath;
     QString suffix;
 
+    QString getFilePath() {
+        return filepath;
+    }
+
     explicit FilePickerWidget(QWidget *parent = 0);
     ~FilePickerWidget();
     Ui::FilePickerWidget *ui;
 
-private:
+signals:
+    void onPathChanged(const QString&);
 
-    QString loadTexture();
+private:
+    QString openFile();
 
 };
 

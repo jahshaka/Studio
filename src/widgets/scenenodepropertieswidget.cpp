@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "propertywidgets/fogpropertywidget.h"
 #include "propertywidgets/emitterpropertywidget.h"
 #include "propertywidgets/nodepropertywidget.h"
+#include "propertywidgets/meshpropertywidget.h"
 #include "propertywidgets/demopane.h"
 
 SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(parent)
@@ -40,9 +41,9 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
     if (!!sceneNode) {
         if (sceneNode->isRootNode()) {
             /* remember this is used to test new widgets. Do NOT push to master enabled! */
-             demoPane = new DemoPane();
-             demoPane->setPanelTitle("Demo Pane");
-             demoPane->expand();
+            // demoPane = new DemoPane();
+            // demoPane->setPanelTitle("Demo Pane");
+            // demoPane->expand();
 
             fogPropView = new FogPropertyWidget();
             fogPropView->setPanelTitle("Fog");
@@ -55,7 +56,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             worldPropView->expand();
 
             auto layout = new QVBoxLayout();
-             layout->addWidget(demoPane);
+            // layout->addWidget(demoPane);
             layout->addWidget(fogPropView);
             layout->addWidget(worldPropView);
 
@@ -71,6 +72,10 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             transformPropView->setPanelTitle("Transformation");
             transformWidget = transformPropView->addTransformControls();
             transformWidget->setSceneNode(sceneNode);
+
+            meshPropView = new MeshPropertyWidget();
+            meshPropView->setPanelTitle("Mesh Properties");
+            meshPropView->setSceneNode(sceneNode);
 
             nodePropView = new NodePropertyWidget();
             nodePropView->setPanelTitle("Node Properties");
@@ -100,8 +105,10 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                 }
 
                 case iris::SceneNodeType::Mesh: {
+                    layout->addWidget(meshPropView);
                     layout->addWidget(nodePropView);
                     layout->addWidget(materialPropView);
+                    meshPropView->expand();
                     materialPropView->expand();
                     nodePropView->expand();
                     break;

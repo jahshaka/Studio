@@ -20,6 +20,7 @@ FilePickerWidget::FilePickerWidget(QWidget *parent) :
     ui(new Ui::FilePickerWidget)
 {
     ui->setupUi(this);
+
     connect(ui->load, SIGNAL(pressed()), this, SLOT(filePicker()));
 }
 
@@ -30,7 +31,7 @@ FilePickerWidget::~FilePickerWidget()
 
 void FilePickerWidget::filePicker()
 {
-    auto file = loadTexture();
+    auto file = openFile();
 
     if (file.isNull() || file.isEmpty()) return;
     else {
@@ -39,10 +40,12 @@ void FilePickerWidget::filePicker()
         filepath = fileInfo.filePath();
         ui->filename->setText(filename);
         ui->filename->setToolTip(filepath);
+
+        emit onPathChanged(filepath);
     }
 }
 
-QString FilePickerWidget::loadTexture()
+QString FilePickerWidget::openFile()
 {
     QString dir = QApplication::applicationDirPath();
     return QFileDialog::getOpenFileName(this, "Open File", dir, suffix);

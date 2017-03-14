@@ -85,7 +85,8 @@ SOURCES += src/main.cpp\
     src/widgets/hfloatsliderwidget.cpp \
     src/widgets/texturepickerwidget.cpp \
     src/io/materialreader.cpp \
-    src/widgets/filepickerwidget.cpp
+    src/widgets/filepickerwidget.cpp \
+    src/widgets/propertywidgets/meshpropertywidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -158,7 +159,8 @@ HEADERS  += src/mainwindow.h \
     src/widgets/hfloatsliderwidget.h \
     src/widgets/texturepickerwidget.h \
     src/io/materialreader.hpp \
-    src/widgets/filepickerwidget.h
+    src/widgets/filepickerwidget.h \
+    src/widgets/propertywidgets/meshpropertywidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

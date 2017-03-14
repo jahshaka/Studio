@@ -7,8 +7,6 @@
 #include "../../irisgl/src/irisglfwd.h"
 #include "../accordianbladewidget.h"
 
-class CheckBoxProperty;
-
 class NodePropertyWidget : public AccordianBladeWidget
 {
     Q_OBJECT
