@@ -102,7 +102,7 @@ QPushButton:pressed {
       <item>
        <widget class="QLabel" name="filename">
         <property name="sizePolicy">
-         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+         <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
@@ -114,14 +114,7 @@ QPushButton:pressed {
          </size>
         </property>
         <property name="styleSheet">
-         <string notr="true">QLabel {
-	background-color: rgb(80, 80, 80);
-	padding-left: 2px;
-}
-
-QLabel:hover{
-	color: rgb(30, 144, 255);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string/>

@@ -1,6 +1,8 @@
 #include "meshpropertywidget.h"
 #include "../filepickerwidget.h"
 #include "../../irisgl/src/scenegraph/meshnode.h"
+#include "../../globals.h"
+#include "../sceneviewwidget.h"
 
 MeshPropertyWidget::MeshPropertyWidget()
 {
@@ -16,16 +18,17 @@ MeshPropertyWidget::~MeshPropertyWidget()
 
 void MeshPropertyWidget::onMeshPathChanged(const QString &path)
 {
-    // do any changes here...sceneNode is initialized...
-    qDebug() << sceneNode->getName();
-    qDebug() << path;
+    Globals::sceneViewWidget->makeCurrent();
+    meshNode->setMesh(path);
+    Globals::sceneViewWidget->doneCurrent();
 }
 
-void MeshPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
+void MeshPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 {
-    if (!!sceneNode) {
-        this->sceneNode = sceneNode.staticCast<iris::SceneNode>();
+    if (!!sceneNode && sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
+        this->meshNode = sceneNode.staticCast<iris::MeshNode>();
+        meshPicker->setFilepath(meshNode->meshPath);
     } else {
-        this->sceneNode.clear();
+        this->meshNode.clear();
     }
 }

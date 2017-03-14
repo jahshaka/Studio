@@ -21,7 +21,7 @@ protected slots:
     void onMeshPathChanged(const QString&);
 
 private:
-    QSharedPointer<iris::SceneNode> sceneNode;
+    QSharedPointer<iris::MeshNode> meshNode;
     FilePickerWidget* meshPicker;
 };
 

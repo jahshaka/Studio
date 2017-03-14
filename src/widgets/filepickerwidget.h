@@ -41,6 +41,9 @@ public:
     ~FilePickerWidget();
     Ui::FilePickerWidget *ui;
 
+    QString getFilepath() const;
+    void setFilepath(const QString &value);
+
 signals:
     void onPathChanged(const QString&);
 

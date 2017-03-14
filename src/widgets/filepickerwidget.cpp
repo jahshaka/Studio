@@ -40,9 +40,23 @@ void FilePickerWidget::filePicker()
         filepath = fileInfo.filePath();
         ui->filename->setText(filename);
         ui->filename->setToolTip(filepath);
+        ui->filename->scroll(ui->filename->width(), 0);
 
         emit onPathChanged(filepath);
     }
+}
+
+QString FilePickerWidget::getFilepath() const
+{
+    return filepath;
+}
+
+void FilePickerWidget::setFilepath(const QString &value)
+{
+    QFileInfo fileInfo(value);
+    filepath = value;
+    filename = fileInfo.fileName();
+    ui->filename->setText(fileInfo.fileName());
 }
 
 QString FilePickerWidget::openFile()
