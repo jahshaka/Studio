@@ -97,6 +97,7 @@ void SkyPresets::applyCubeSky(QListWidgetItem* item)
     auto z2 = path + "/back." + ext;
 
     mainWindow->getScene()->setSkyTexture(iris::Texture2D::createCubeMap(x1, x2, y1, y2, z1, z2));
+    mainWindow->getScene()->setSkyTextureSource(z1);
     mainWindow->getScene()->setSkyColor(QColor(255, 255, 255));
 }
 

@@ -101,23 +101,11 @@ QPushButton:pressed {
       </property>
       <item>
        <widget class="QLabel" name="filename">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>25</height>
-         </size>
-        </property>
         <property name="styleSheet">
-         <string notr="true"/>
+         <string notr="true">background: #404040; padding: 2px</string>
         </property>
         <property name="text">
-         <string/>
+         <string>TextLabel</string>
         </property>
        </widget>
       </item>

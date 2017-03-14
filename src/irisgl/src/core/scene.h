@@ -90,6 +90,10 @@ public:
     }
 
     void setSkyTexture(Texture2DPtr tex);
+    void setSkyTextureSource(QString src) {
+        skyTexture->source = src;
+    }
+
     QString getSkyTextureSource();
     void clearSkyTexture();
     void setSkyColor(QColor color);
