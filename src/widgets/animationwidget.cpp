@@ -47,8 +47,8 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     loopAnim = false;
 
     //buttons that affect timer
-    // connect(ui->play,SIGNAL(pressed()),this,SLOT(startTimer()));
-    // connect(ui->stop,SIGNAL(pressed()),this,SLOT(stopTimer()));
+    connect(ui->playBtn,SIGNAL(pressed()),this,SLOT(startTimer()));
+    connect(ui->stopBtn,SIGNAL(pressed()),this,SLOT(stopTimer()));
 
     //connect(ui->keywidgetView,SIGNAL(cursorTimeChanged(float)),this,SLOT(onObjectAnimationTimeChanged(float)));
     connect(ui->timeline,SIGNAL(cursorMoved(float)),this,SLOT(onSceneAnimationTimeChanged(float)));
@@ -110,19 +110,27 @@ void AnimationWidget::updateAnim()
     elapsedTimer->restart();
 
     ui->keywidgetView->setTime(timeAtCursor);
+    ui->timeline->setTime(timeAtCursor);
     onObjectAnimationTimeChanged(timeAtCursor);
 }
 
 void AnimationWidget::startTimer()
 {
-    timeAtCursor = ui->keywidgetView->getTimeAtCursor();
-    timer->start(timerSpeed);
-    elapsedTimer->start();
+    if (!timer->isActive()) {
+        timeAtCursor = ui->keywidgetView->getTimeAtCursor();
+        startedTime = timeAtCursor;
+
+        timer->start(timerSpeed);
+        elapsedTimer->start();
+    }
 }
 
 void AnimationWidget::stopTimer()
 {
-    timer->stop();
+    if (timer->isActive()) {
+        timeAtCursor = startedTime;
+        timer->stop();
+    }
 }
 
 void AnimationWidget::setAnimLength(float length)
