@@ -62,8 +62,7 @@ public:
      * Returns the path to the source file of the texture
      * @return
      */
-    QString getSource()
-    {
+    QString getSource() {
         return source;
     }
 

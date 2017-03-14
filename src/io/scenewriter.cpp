@@ -58,7 +58,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj,iris::ScenePtr scene)
 
     //scene properties
     if (!!scene->skyTexture) {
-        sceneObj["skyTexture"] = this->getRelativePath(scene->skyTexture->getSource());
+        sceneObj["skyTexture"] = /*this->getRelativePath(*/scene->skyTexture->getSource();//);
     } else {
         sceneObj["skyTexture"] = "";
     }
@@ -177,12 +177,20 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject,iris::MeshNodePtr m
     //todo: handle generated meshes properly
     sceneNodeObject["mesh"] = getRelativePath(meshNode->meshPath);
     sceneNodeObject["meshIndex"] = meshNode->meshIndex;
+    sceneNodeObject["materialType"] = meshNode->getMaterialType();
 
     //todo: check if material actually exists
-    auto mat = meshNode->getMaterial().staticCast<iris::DefaultMaterial>();
-    QJsonObject matObj;
-    writeSceneNodeMaterial(matObj,mat);
-    sceneNodeObject["material"] = matObj;
+//    if (meshNode->getMaterialType() == 2) {
+//        auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
+//        QJsonObject matObj;
+//        writeSceneNodeMaterial(matObj, mat);
+//        sceneNodeObject["material"] = matObj;
+//    } else {
+        auto mat = meshNode->getMaterial().staticCast<iris::DefaultMaterial>();
+        QJsonObject matObj;
+        writeSceneNodeMaterial(matObj, mat);
+        sceneNodeObject["material"] = matObj;
+//    }
 }
 
 void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode)
@@ -222,6 +230,12 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj,iris::DefaultMateri
     matObj["reflectionInfluence"] = mat->getReflectionInfluence();
 
     matObj["textureScale"] = mat->getTextureScale();
+}
+
+void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj,iris::CustomMaterialPtr mat)
+{
+//    matObj["diffuseColor"] = jsonColor(mat->getDiffuseColor());
+//    matObj["diffuseTexture"] = getRelativePath(mat->getDiffuseTextureSource());
 }
 
 QJsonObject SceneWriter::jsonColor(QColor color)

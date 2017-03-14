@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/lightnode.h"
 #include "../irisgl/src/scenegraph/particlesystemnode.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
+#include "../irisgl/src/materials/custommaterial.h"
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/graphicshelper.h"
 #include "../irisgl/src/animation/animation.h"
@@ -90,8 +91,20 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     auto skyTexPath = sceneObj["skyTexture"].toString("");
     if(!skyTexPath.isEmpty())
     {
-        skyTexPath = this->getAbsolutePath(skyTexPath);
-        scene->setSkyTexture(iris::Texture2D::load(skyTexPath,false));
+        auto fInfo = QFileInfo(skyTexPath);
+        auto path = fInfo.path();
+        auto ext = fInfo.suffix();
+
+        auto x1 = path + "/left." + ext;
+        auto x2 = path + "/right." + ext;
+        auto y1 = path + "/top." + ext;
+        auto y2 = path + "/bottom." + ext;
+        auto z1 = path + "/front." + ext;
+        auto z2 = path + "/back." + ext;
+
+//        skyTexPath = this->getAbsolutePath(skyTexPath);
+//        scene->setSkyTexture(iris::Texture2D::load(skyTexPath,false));
+        scene->setSkyTexture(iris::Texture2D::createCubeMap(x1, x2, y1, y2, z1, z2));
     }
     scene->setSkyColor(this->readColor(sceneObj["skyColor"].toObject()));
     scene->setAmbientColor(this->readColor(sceneObj["ambientColor"].toObject()));
@@ -237,17 +250,26 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 
     auto source = nodeObj["mesh"].toString("");
     auto meshIndex = nodeObj["meshIndex"].toInt(0);
+    auto materialType = nodeObj["materialType"].toInt(0);
     if(!source.isEmpty())
     {
         auto mesh = getMesh(getAbsolutePath(source),meshIndex);
         meshNode->setMesh(mesh);
+        meshNode->setMaterialType(materialType);
         meshNode->meshPath = source;
         meshNode->meshIndex = meshIndex;
     }
 
     //material
     auto material = readMaterial(nodeObj);
-    meshNode->setMaterial(material);
+    if (materialType == 1) {
+        meshNode->setMaterial(material);
+    } else {
+        auto customMat = iris::CustomMaterial::create();
+        meshNode->setMaterial(material);
+        meshNode->setCustomMaterial(customMat);
+        meshNode->setActiveMaterial(2);
+    }
 
     return meshNode;
 }

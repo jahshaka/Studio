@@ -336,7 +336,8 @@ QToolBar {
 QToolBar::separator:horizontal {
     background-color: #272727;
     width: 1px;
-    margin-left: 8px;
+    margin-left: 6px;
+	margin-right: 6px;
 }
 
 QTabWidget::tab-bar {
@@ -508,7 +509,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
      <x>0</x>
      <y>0</y>
      <width>994</width>
-     <height>30</height>
+     <height>32</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -741,7 +742,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>290</height>
+          <height>284</height>
          </rect>
         </property>
         <property name="styleSheet">
