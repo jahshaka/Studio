@@ -15,17 +15,27 @@ ComboBoxWidget::~ComboBoxWidget()
     delete ui;
 }
 
-void ComboBoxWidget::setLabel(const QString& label)
+void ComboBoxWidget::setLabel(const QString &label)
 {
     ui->label->setText(label);
 }
 
-void ComboBoxWidget::addItem(const QString& item)
+void ComboBoxWidget::addItem(const QString &item)
 {
     ui->comboBox->addItem(item);
 }
 
-void ComboBoxWidget::onDropDownTextChanged(const QString& text)
+QString ComboBoxWidget::getCurrentItem()
 {
+    return ui->comboBox->currentText();
+}
 
+void ComboBoxWidget::setCurrentItem(const QString &item)
+{
+    ui->comboBox->setCurrentIndex(ui->comboBox->findData(item, Qt::DisplayRole));
+}
+
+void ComboBoxWidget::onDropDownTextChanged(const QString &text)
+{
+    emit currentIndexChanged(text);
 }

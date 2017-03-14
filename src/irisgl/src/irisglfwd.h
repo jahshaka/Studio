@@ -48,6 +48,7 @@ class KeyFrameSet;
 class Animation;
 class FloatKeyFrame;
 class ViewerMaterial;
+class CustomMaterial;
 class RenderItem;
 class PickingResult;
 template<typename T> class Key;
@@ -69,6 +70,7 @@ typedef QSharedPointer<ForwardRenderer> ForwardRendererPtr;
 typedef QSharedPointer<KeyFrameSet> KeyFrameSetPtr;
 typedef QSharedPointer<FloatKeyFrame> FloatKeyFramePtr;
 typedef QSharedPointer<ViewerMaterial> ViewerMaterialPtr;
+typedef QSharedPointer<CustomMaterial> CustomMaterialPtr;
 typedef QSharedPointer<ViewerNode> ViewerNodePtr;
 typedef QSharedPointer<ParticleSystemNode> ParticleSystemNodePtr;
 

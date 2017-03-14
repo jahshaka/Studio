@@ -25,6 +25,7 @@ For more information see the LICENSE file
 
 #include "../graphics/vertexlayout.h"
 #include "../materials/defaultmaterial.h"
+#include "../materials/custommaterial.h"
 #include "../materials/materialhelper.h"
 #include "../graphics/renderitem.h"
 
@@ -40,6 +41,10 @@ MeshNode::MeshNode() {
 
     renderItem = new RenderItem();
     renderItem->type = RenderItemType::Mesh;
+
+    materialType = 1;
+
+    this->customMaterial = iris::CustomMaterial::create();
 }
 
 // @todo: cleanup previous mesh item
@@ -67,8 +72,25 @@ Mesh* MeshNode::getMesh()
 void MeshNode::setMaterial(MaterialPtr material)
 {
     this->material = material;
-
+//    setActiveMaterial(1);
     renderItem->material = material;
+}
+
+void MeshNode::setCustomMaterial(MaterialPtr material)
+{
+    this->customMaterial = material;
+//    renderItem->material = customMaterial;
+}
+
+void MeshNode::setActiveMaterial(int type)
+{
+    if (type == 1) {
+        renderItem->material = material;
+        materialType = 1;
+    } else {
+        renderItem->material = customMaterial;
+        materialType = 2;
+    }
 }
 
 void MeshNode::submitRenderItems()

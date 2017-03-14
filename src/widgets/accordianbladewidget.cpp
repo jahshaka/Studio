@@ -51,6 +51,23 @@ AccordianBladeWidget::~AccordianBladeWidget()
     delete ui;
 }
 
+void AccordianBladeWidget::clearPanel(QLayout *layout)
+{
+    if (ui->contentpane->layout() == nullptr) return;
+
+    while (auto item = ui->contentpane->layout()->takeAt(0)) {
+        if (auto widget = item->widget()) widget->deleteLater();
+
+        if (auto childLayout = item->layout()) {
+            this->clearPanel(childLayout);
+        }
+
+        delete item;
+    }
+
+//    delete layout;
+}
+
 void AccordianBladeWidget::onPanelToggled()
 {
     if (ui->contentpane->isVisible()) {

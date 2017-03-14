@@ -20,7 +20,11 @@ NodePropertyWidget::NodePropertyWidget()
 
     shadowReceiver->setDisabled(true);
 
-    connect(shadowCaster, SIGNAL(valueChanged(bool)), SLOT(onShadowEnabledChanged(bool)));
+    connect(shadowCaster,   SIGNAL(valueChanged(bool)),
+            this,           SLOT(onShadowEnabledChanged(bool)));
+
+    connect(drawType,       SIGNAL(currentTextChanged(QString)),
+            this,           SLOT(drawTypeChanged(QString)));
 }
 
 NodePropertyWidget::~NodePropertyWidget()
@@ -43,4 +47,9 @@ void NodePropertyWidget::onShadowEnabledChanged(bool val)
     if (!!this->sceneNode) {
         this->sceneNode->setShadowEnabled(val);
     }
+}
+
+void NodePropertyWidget::drawTypeChanged(const QString& text)
+{
+
 }

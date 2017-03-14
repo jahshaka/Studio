@@ -92,7 +92,7 @@ QComboBox {
 }
 
 QComboBox QAbstractItemView {
-   /* background-color: #4D4D4D; */
+   background-color: #212121; 
     selection-background-color: red;
 	border: 0;
 	outline: none;
@@ -509,7 +509,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
      <x>0</x>
      <y>0</y>
      <width>994</width>
-     <height>30</height>
+     <height>32</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -602,8 +602,8 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
    </property>
    <property name="minimumSize">
     <size>
-     <width>63</width>
-     <height>34</height>
+     <width>64</width>
+     <height>36</height>
     </size>
    </property>
    <property name="maximumSize">
@@ -742,7 +742,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>290</height>
+          <height>284</height>
          </rect>
         </property>
         <property name="styleSheet">
@@ -868,6 +868,32 @@ QToolButton:checked
        <property name="currentIndex">
         <number>0</number>
        </property>
+       <widget class="QWidget" name="S_Layout">
+        <attribute name="title">
+         <string>Skyboxes</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout_6">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item row="0" column="0">
+          <widget class="SkyPresets" name="skyPresets" native="true">
+           <property name="styleSheet">
+            <string notr="true">border: 0</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
        <widget class="QWidget" name="MP_Layout">
         <attribute name="title">
          <string>Materials</string>
@@ -887,32 +913,6 @@ QToolButton:checked
          </property>
          <item row="0" column="0">
           <widget class="MaterialSets" name="materialPresets" native="true">
-           <property name="styleSheet">
-            <string notr="true">border: 0</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-       <widget class="QWidget" name="S_Layout">
-        <attribute name="title">
-         <string>Skies</string>
-        </attribute>
-        <layout class="QGridLayout" name="gridLayout_6">
-         <property name="leftMargin">
-          <number>0</number>
-         </property>
-         <property name="topMargin">
-          <number>0</number>
-         </property>
-         <property name="rightMargin">
-          <number>0</number>
-         </property>
-         <property name="bottomMargin">
-          <number>0</number>
-         </property>
-         <item row="0" column="0">
-          <widget class="SkyPresets" name="skyPresets" native="true">
            <property name="styleSheet">
             <string notr="true">border: 0</string>
            </property>

@@ -21,6 +21,7 @@ public:
 
 protected slots:
     void onShadowEnabledChanged(bool val);
+    void drawTypeChanged(const QString&);
 
 private:
     QSharedPointer<iris::SceneNode> sceneNode;

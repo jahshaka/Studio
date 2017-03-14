@@ -32,11 +32,11 @@ class DemoPane;
 /**
  * This class shows the properties of selected nodes in the scene
  */
-class SceneNodePropertiesWidget:public QWidget
+class SceneNodePropertiesWidget : public QWidget
 {
     Q_OBJECT
 public:
-    SceneNodePropertiesWidget(QWidget* parent=nullptr);
+    SceneNodePropertiesWidget(QWidget *parent = nullptr);
 
     /**
      * sets active scene node to show properties for
@@ -50,7 +50,7 @@ public:
     void refreshMaterial();
 
 private:
-    void clearLayout(QLayout* layout);
+    void clearLayout(QLayout*);
 
 private:
     QSharedPointer<iris::SceneNode> sceneNode;
@@ -63,8 +63,7 @@ private:
     NodePropertyWidget* nodePropView;
     LightPropertyWidget* lightPropView;
     WorldPropertyWidget* worldPropView;
-    FogPropertyWidget* fogPropView;
-
+    FogPropertyWidget*  fogPropView;
     // DemoPane* demoPane;
 };
 

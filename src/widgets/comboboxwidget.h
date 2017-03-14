@@ -12,11 +12,17 @@ class ComboBoxWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit ComboBoxWidget(QWidget* parent = 0);
+    explicit ComboBoxWidget(QWidget *parent = 0);
     ~ComboBoxWidget();
 
     void setLabel(const QString&);
     void addItem(const QString&);
+    QString getCurrentItem();
+    void setCurrentItem(const QString&);
+
+signals:
+    void currentIndexChanged(const QString&);
+    void currentTextChanged(const QString&);
 
 private slots:
     void onDropDownTextChanged(const QString&);

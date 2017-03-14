@@ -27,6 +27,8 @@ class ComboBoxWidget;
 class TextInputWidget;
 class LabelWidget;
 
+#include <QLayout>
+
 class AccordianBladeWidget : public QWidget
 {
     Q_OBJECT
@@ -48,12 +50,22 @@ public:
     void setPanelTitle(const QString&);
     void expand();
 
+    void clearPanel(QLayout *layout);
+    int minimum_height, stretch;
+
+    void resetHeight() {
+        this->minimum_height = 0;
+    }
+
+    void setHeight(int h) {
+        this->minimum_height = h;
+    }
+
 private slots:
     void onPanelToggled();
 
 private:
     Ui::AccordianBladeWidget *ui;
-    int minimum_height, stretch;
 };
 
 #endif // ACCORDIANBLADEWIDGET_H

@@ -31,6 +31,11 @@ TexturePickerWidget::~TexturePickerWidget()
     delete ui;
 }
 
+QString TexturePickerWidget::getTexturePath()
+{
+    return filePath;
+}
+
 void TexturePickerWidget::changeTextureMap()
 {
     auto file = loadTexture();
@@ -58,6 +63,7 @@ void TexturePickerWidget::setLabelImage(QLabel* label, QString file, bool emitSi
         QPixmap pixmap = QPixmap::fromImage(*thumb->thumb);
         ui->texture->setPixmap(pixmap);
 
+        filePath = file;
         QFileInfo fileInfo(file);
         filename = fileInfo.fileName();
         ui->imagename->setText(filename);

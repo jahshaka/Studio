@@ -67,6 +67,8 @@ public:
         return source;
     }
 
+    static Texture2DPtr createCubeMap(QString, QString, QString, QString, QString, QString, QImage *i = nullptr);
+
 private:
     Texture2D(QOpenGLTexture* tex)
     {

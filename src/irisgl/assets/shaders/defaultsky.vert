@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #version 150 core
 
 in vec3 a_pos;
-//attribute vec2 a_texCoord;
+// in vec2 a_texCoord;
 //attribute vec3 a_normal;
 
 uniform mat4 u_viewMatrix;
@@ -20,16 +20,15 @@ uniform mat4 u_projMatrix;
 uniform mat4 u_worldMatrix;
 
 out vec3 v_worldNormal;
-
-vec3 reflect(vec3 I, vec3 N) {
-    return I - 2.0 * dot(N, I) * N;
-}
+out vec3 v_texCoord;
 
 void main()
 {
     v_worldNormal = normalize(a_pos);
 
     vec4 finalPos = u_projMatrix * u_viewMatrix * vec4( a_pos*1000, 1.0 );
+
+    v_texCoord = a_pos;
 
     //rendering trick to place sky behind all other objects
     //http://www.haroldserrano.com/blog/how-to-apply-a-skybox-in-opengl
