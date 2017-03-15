@@ -92,12 +92,12 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     this->setWindowTitle("Jahshaka VR");
 
-    QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
-    if (fontFile.exists()) {
-        fontFile.open(QIODevice::ReadOnly);
-        QFontDatabase::addApplicationFontFromData(fontFile.readAll());
-        QApplication::setFont(QFont("Open Sans", 9));
-    }
+//    QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
+//    if (fontFile.exists()) {
+//        fontFile.open(QIODevice::ReadOnly);
+//        QFontDatabase::addApplicationFontFromData(fontFile.readAll());
+//        QApplication::setFont(QFont("Open Sans", 9));
+//    }
 
     settings = SettingsManager::getDefaultManager();
     prefsDialog = new PreferencesDialog(settings);
@@ -296,7 +296,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     // second node
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/models/ground.obj"));
-    node->scale = QVector3D(.05, .05, .05);
+    node->scale = QVector3D(.5, .5, .5);
     node->setName("Ground");
     node->setPickable(false);
     node->setShadowEnabled(false);
@@ -307,7 +307,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     m->setDiffuseTexture(iris::Texture2D::load(getAbsoluteAssetPath("app/content/textures/tile.png")));
     m->setShininess(0);
     m->setSpecularColor(QColor(0, 0, 0));
-    m->setTextureScale(.35);
+    m->setTextureScale(4);
 
     scene->rootNode->addChild(node);
 
@@ -718,6 +718,27 @@ void MainWindow::updateAnim()
 
 void MainWindow::setSceneAnimTime(float time)
 {
+}
+
+void MainWindow::addPlane()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::MeshNode::create();
+    node->setMesh(getAbsoluteAssetPath("app/content/primitives/plane.obj"));
+    node->setName("Plane");
+
+    addNodeToScene(node);
+}
+
+
+void MainWindow::addCone()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::MeshNode::create();
+    node->setMesh(getAbsoluteAssetPath("app/content/primitives/cone.obj"));
+    node->setName("Cone");
+
+    addNodeToScene(node);
 }
 
 /**

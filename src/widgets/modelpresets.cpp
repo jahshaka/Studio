@@ -32,7 +32,8 @@ ModelPresets::ModelPresets(QWidget *parent) :
 
     connect(ui->modelsSets,SIGNAL(doubleClicked(QModelIndex)),SLOT(onPrimitiveSelected(QModelIndex)));
 
-    //addItem("Cone",":/app/modelpresets/cone.png");
+    addItem("Plane","app/modelpresets/plane.png");
+//    addItem("Cone","app/modelpresets/cone.png");
     addItem("Cube","app/modelpresets/cube.png");
     addItem("Cylinder","app/modelpresets/cylinder.png");
     //addItem("IcoSphere",":/app/modelpresets/icosphere.png");
@@ -54,8 +55,10 @@ void ModelPresets::onPrimitiveSelected(QModelIndex itemIndex)
     auto item = ui->modelsSets->item(itemIndex.row());
     auto text = item->text();
 
-    //if(text=="Cone")
-    //    mainWindow->addCone();
+    if(text=="Plane")
+        mainWindow->addPlane();
+//    if(text=="Cone")
+//        mainWindow->addCone();
     if(text=="Cube")
         mainWindow->addCube();
     if(text=="Cylinder")

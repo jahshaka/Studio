@@ -166,6 +166,8 @@ private:
 
 public slots:
     //scenegraph
+    void addPlane();
+    void addCone();
     void addCube();
     void addTorus();
     void addSphere();
