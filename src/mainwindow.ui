@@ -23,6 +23,7 @@
   <property name="styleSheet">
    <string notr="true">* {
     color: #BBB;
+font-size:14px;
 }
 
 QMenu {
@@ -509,7 +510,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
      <x>0</x>
      <y>0</y>
      <width>994</width>
-     <height>32</height>
+     <height>31</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -602,8 +603,8 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
    </property>
    <property name="minimumSize">
     <size>
-     <width>64</width>
-     <height>36</height>
+     <width>65</width>
+     <height>37</height>
     </size>
    </property>
    <property name="maximumSize">
