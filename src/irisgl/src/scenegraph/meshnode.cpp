@@ -45,9 +45,20 @@ MeshNode::MeshNode() {
     materialType = 1;
 
     this->customMaterial = iris::CustomMaterial::create();
+    faceCullingMode = FaceCullingMode::Back;
 }
 
 // @todo: cleanup previous mesh item
+FaceCullingMode MeshNode::getFaceCullingMode() const
+{
+    return faceCullingMode;
+}
+
+void MeshNode::setFaceCullingMode(const FaceCullingMode &value)
+{
+    faceCullingMode = value;
+}
+
 void MeshNode::setMesh(QString source)
 {
     mesh = Mesh::loadMesh(source);
@@ -99,6 +110,7 @@ void MeshNode::submitRenderItems()
 
     if (!!material) {
         renderItem->renderLayer = material->renderLayer;
+        renderItem->faceCullingMode = faceCullingMode;
     }
 
     this->scene->geometryRenderList.append(renderItem);
