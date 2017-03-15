@@ -87,9 +87,9 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     primtiveMenu->addAction(action);
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addCylinder()));
 
-//    action = new QAction("Plane", this);
-//    primtiveMenu->addAction(action);
-//    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addTexturedPlane()));
+    action = new QAction("Plane", this);
+    primtiveMenu->addAction(action);
+    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addPlane()));
 
     //LIGHTS
     auto lightMenu = addMenu->addMenu("Light");
