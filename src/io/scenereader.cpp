@@ -271,6 +271,18 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         meshNode->setActiveMaterial(2);
     }
 
+    auto faceCullingMode = nodeObj["faceCullingMode"].toString("back");
+
+    if (faceCullingMode == "back") {
+        meshNode->setFaceCullingMode(iris::FaceCullingMode::Back);
+    } else if (faceCullingMode == "front") {
+        meshNode->setFaceCullingMode(iris::FaceCullingMode::Front);
+    } else if (faceCullingMode == "frontandback") {
+        meshNode->setFaceCullingMode(iris::FaceCullingMode::FrontAndBack);
+    } else { //none
+        meshNode->setFaceCullingMode(iris::FaceCullingMode::None);
+    }
+
     return meshNode;
 }
 

@@ -179,6 +179,22 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject,iris::MeshNodePtr m
     sceneNodeObject["meshIndex"] = meshNode->meshIndex;
     sceneNodeObject["materialType"] = meshNode->getMaterialType();
 
+    auto cullMode = meshNode->getFaceCullingMode();
+    switch (cullMode) {
+    case iris::FaceCullingMode::Back:
+        sceneNodeObject["faceCullingMode"] = "back";
+        break;
+    case iris::FaceCullingMode::Front:
+        sceneNodeObject["faceCullingMode"] = "front";
+        break;
+    case iris::FaceCullingMode::FrontAndBack:
+        sceneNodeObject["faceCullingMode"] = "frontandback";
+        break;
+    case iris::FaceCullingMode::None:
+        sceneNodeObject["faceCullingMode"] = "none";
+        break;
+    }
+
     //todo: check if material actually exists
 //    if (meshNode->getMaterialType() == 2) {
 //        auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
