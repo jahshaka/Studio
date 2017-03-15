@@ -725,6 +725,7 @@ void MainWindow::addPlane()
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
     node->setMesh(getAbsoluteAssetPath("app/content/primitives/plane.obj"));
+    node->setFaceCullingMode(iris::FaceCullingMode::None);
     node->setName("Plane");
 
     addNodeToScene(node);

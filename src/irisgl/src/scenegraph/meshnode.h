@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "../core/scenenode.h"
 #include "../core/irisutils.h"
 #include "../graphics/texture2d.h"
+#include "../graphics/renderitem.h"
 
 namespace iris
 {
@@ -36,6 +37,8 @@ public:
 
     MaterialPtr material;
     MaterialPtr customMaterial;
+
+    FaceCullingMode faceCullingMode;
 
     RenderItem* renderItem;
 
@@ -78,6 +81,9 @@ public:
 
     SceneNodePtr createDuplicate() override;
     virtual void submitRenderItems() override;
+
+    FaceCullingMode getFaceCullingMode() const;
+    void setFaceCullingMode(const FaceCullingMode &value);
 
 private:
     MeshNode();

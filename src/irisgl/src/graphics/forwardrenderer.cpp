@@ -365,10 +365,33 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                 }
             }
 
+            // set culling state
+            // FaceCullingMode::Back is the default state
+            if (item->faceCullingMode != FaceCullingMode::Back) {
+               switch(item->faceCullingMode) {
+                case FaceCullingMode::Front:
+                    gl->glCullFace(GL_FRONT);
+                break;
+               case FaceCullingMode::FrontAndBack:
+                   gl->glCullFace(GL_FRONT_AND_BACK);
+               break;
+               case FaceCullingMode::None:
+                   gl->glDisable(GL_CULL_FACE);
+               break;
+               }
+            }
+
             item->mesh->draw(gl, program);
 
             if (!!mat) {
                 mat->end(gl,scene);
+            }
+
+            // change back culling state
+            if (item->faceCullingMode != FaceCullingMode::Back) {
+                gl->glCullFace(GL_BACK);
+            } else if(item->faceCullingMode != FaceCullingMode::None) {
+                gl->glEnable(GL_CULL_FACE);
             }
         }
         else if(item->type == iris::RenderItemType::ParticleSystem) {

@@ -10,6 +10,14 @@ namespace iris
 
 class Mesh;
 
+enum class FaceCullingMode
+{
+    None,
+    Front,
+    Back,
+    FrontAndBack
+};
+
 enum class RenderItemType
 {
     None,
@@ -28,6 +36,8 @@ struct RenderItem
 
     QOpenGLShaderProgram* shaderProgram;
 
+    FaceCullingMode faceCullingMode;
+
     //sort order for render layer
     //used if no material is specified
     int renderLayer;
@@ -36,6 +46,7 @@ struct RenderItem
         type = RenderItemType::None,
         //renderLayer = (int)RenderLayer::Opaque;
         worldMatrix.setToIdentity();
+        faceCullingMode = FaceCullingMode::Back;
     }
 };
 
