@@ -390,7 +390,7 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             // change back culling state
             if (item->faceCullingMode != FaceCullingMode::Back) {
                 gl->glCullFace(GL_BACK);
-            } else if() {
+            } else if(item->faceCullingMode != FaceCullingMode::None) {
                 gl->glEnable(GL_CULL_FACE);
             }
         }
