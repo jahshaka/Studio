@@ -106,7 +106,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 
                 case iris::SceneNodeType::Mesh: {
                     layout->addWidget(meshPropView);
-                    layout->addWidget(nodePropView);
+                    //layout->addWidget(nodePropView);
                     layout->addWidget(materialPropView);
                     meshPropView->expand();
                     materialPropView->expand();
