@@ -92,11 +92,11 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     this->setWindowTitle("Jahshaka VR");
 
-    QFile fontFile(getAbsoluteAssetPath("app/fonts/NotoSansUI-Regular.ttf"));
+    QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-bold.ttf"));
     if (fontFile.exists()) {
         fontFile.open(QIODevice::ReadOnly);
         QFontDatabase::addApplicationFontFromData(fontFile.readAll());
-        QApplication::setFont(QFont("Noto Sans UI", 9));
+        QApplication::setFont(QFont("Open Sans", 8));
     }
 
     settings = SettingsManager::getDefaultManager();
