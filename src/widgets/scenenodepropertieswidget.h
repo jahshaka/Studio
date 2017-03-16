@@ -61,7 +61,7 @@ private:
 
     MaterialPropertyWidget* materialPropView;
     EmitterPropertyWidget* emitterPropView;
-    NodePropertyWidget* nodePropView;
+    // NodePropertyWidget* nodePropView;
     LightPropertyWidget* lightPropView;
     WorldPropertyWidget* worldPropView;
     FogPropertyWidget*  fogPropView;
