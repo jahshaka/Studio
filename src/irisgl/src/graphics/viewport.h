@@ -18,18 +18,18 @@ namespace iris
 class Viewport
 {
 public:
-    int x,y;
-    int width,height;
+    int x, y, width, height;
+    int pixelRatioScale;
 
-    Viewport()
-    {
-        x = 0;y =0;
-        width=100;height=100;
+    Viewport() {
+        x = 0;
+        y = 0;
+        width = 100;
+        height = 100;
     }
 
-    float getAspectRatio()
-    {
-        return (float)width/height;
+    float getAspectRatio() {
+        return (float) width / height;
     }
 };
 

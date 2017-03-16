@@ -115,8 +115,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->fogEnd = sceneObj["fogEnd"].toDouble(120);
     scene->fogEnabled = sceneObj["fogEnabled"].toBool(true);
 
-
-
     auto rootNode = sceneObj["rootNode"].toObject();
     QJsonArray children = rootNode["children"].toArray();
 
@@ -252,10 +250,12 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     auto source = nodeObj["mesh"].toString("");
     auto meshIndex = nodeObj["meshIndex"].toInt(0);
     auto materialType = nodeObj["materialType"].toInt(0);
+    auto pickable = nodeObj["pickable"].toBool();
     if(!source.isEmpty())
     {
         auto mesh = getMesh(getAbsolutePath(source),meshIndex);
         meshNode->setMesh(mesh);
+        meshNode->setPickable(pickable);
         meshNode->setMaterialType(materialType);
         meshNode->meshPath = source;
         meshNode->meshIndex = meshIndex;

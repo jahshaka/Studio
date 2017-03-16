@@ -217,7 +217,6 @@ void SceneViewWidget::renderScene()
 
         scene->update(dt);
 
-
         if (viewportMode == ViewportMode::Editor) {
             renderer->renderScene(dt, viewport);
         } else {
@@ -230,7 +229,9 @@ void SceneViewWidget::renderScene()
 
 void SceneViewWidget::resizeGL(int width, int height)
 {
-    glViewport(0, 0, width, height);
+    // we do an explicit call to glViewport(...) in forwardrenderer
+    // with the "good DPI" values so it is not needed here initially
+    viewport->pixelRatioScale = devicePixelRatio();
     viewport->width = width;
     viewport->height = height;
 }
