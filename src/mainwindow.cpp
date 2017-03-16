@@ -266,7 +266,8 @@ iris::ScenePtr MainWindow::getScene()
 QString MainWindow::getAbsoluteAssetPath(QString relToApp)
 {
     QDir basePath = QDir(QCoreApplication::applicationDirPath());
-#if defined(WIN32)
+
+#if defined(WIN32) && defined(QT_DEBUG)
     basePath.cdUp();
 #elif defined(Q_OS_MAC)
     basePath.cdUp();
