@@ -92,11 +92,11 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     this->setWindowTitle("Jahshaka VR");
 
-    QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-bold.ttf"));
+    QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
     if (fontFile.exists()) {
         fontFile.open(QIODevice::ReadOnly);
         QFontDatabase::addApplicationFontFromData(fontFile.readAll());
-        QApplication::setFont(QFont("Open Sans", 8));
+        QApplication::setFont(QFont("Open Sans", 9));
     }
 
     settings = SettingsManager::getDefaultManager();
@@ -104,7 +104,7 @@ MainWindow::MainWindow(QWidget *parent) :
     aboutDialog = new AboutDialog();
     licenseDialog = new LicenseDialog();
 
-//    ui->animationtimeline->setMainWindow(this);
+    // ui->animationtimeline->setMainWindow(this);
     ui->materialPresets->setMainWindow(this);
     ui->modelPresets->setMainWindow(this);
     ui->skyPresets->setMainWindow(this);

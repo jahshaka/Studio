@@ -32,13 +32,13 @@ int main(int argc, char *argv[])
     QSurfaceFormat::setDefaultFormat(format);
 #endif
 
+    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    // QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    // QApplication::setDesktopSettingsAware(false);
     QApplication app(argc, argv);
     app.setWindowIcon(QIcon(":/app/images/logo.png"));
 
-    QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-    QApplication::setDesktopSettingsAware(false);
-
-    //https://gist.github.com/skyrpex/5547015
+    // https://gist.github.com/skyrpex/5547015
     app.setStyle(QStyleFactory::create("fusion"));
     QPalette palette;
     palette.setColor(QPalette::Window, QColor(48, 48, 48));
