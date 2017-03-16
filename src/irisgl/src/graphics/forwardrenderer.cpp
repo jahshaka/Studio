@@ -127,7 +127,7 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
         gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
     }
 
-    gl->glViewport(0, 0, vp->width, vp->height);
+    gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     //enable all attrib arrays

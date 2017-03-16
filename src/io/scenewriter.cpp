@@ -177,6 +177,7 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject,iris::MeshNodePtr m
     //todo: handle generated meshes properly
     sceneNodeObject["mesh"] = getRelativePath(meshNode->meshPath);
     sceneNodeObject["meshIndex"] = meshNode->meshIndex;
+    sceneNodeObject["pickable"] = meshNode->pickable;
     sceneNodeObject["materialType"] = meshNode->getMaterialType();
 
     auto cullMode = meshNode->getFaceCullingMode();
