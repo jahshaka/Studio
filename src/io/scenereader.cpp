@@ -105,6 +105,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 //        skyTexPath = this->getAbsolutePath(skyTexPath);
 //        scene->setSkyTexture(iris::Texture2D::load(skyTexPath,false));
         scene->setSkyTexture(iris::Texture2D::createCubeMap(x1, x2, y1, y2, z1, z2));
+        scene->setSkyTextureSource(z1);
     }
     scene->setSkyColor(this->readColor(sceneObj["skyColor"].toObject()));
     scene->setAmbientColor(this->readColor(sceneObj["ambientColor"].toObject()));

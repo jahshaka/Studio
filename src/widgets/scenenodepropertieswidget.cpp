@@ -77,9 +77,9 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             meshPropView->setPanelTitle("Mesh Properties");
             meshPropView->setSceneNode(sceneNode);
 
-            nodePropView = new NodePropertyWidget();
-            nodePropView->setPanelTitle("Node Properties");
-            nodePropView->setSceneNode(sceneNode);
+            // nodePropView = new NodePropertyWidget();
+            // nodePropView->setPanelTitle("Node Properties");
+            // nodePropView->setSceneNode(sceneNode);
 
             lightPropView = new LightPropertyWidget();
             lightPropView->setPanelTitle("Light");
@@ -106,7 +106,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 
                 case iris::SceneNodeType::Mesh: {
                     layout->addWidget(meshPropView);
-                    layout->addWidget(nodePropView);
+                    // layout->addWidget(nodePropView);
                     layout->addWidget(materialPropView);
                     meshPropView->expand();
                     materialPropView->expand();
