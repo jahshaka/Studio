@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef VRDEVICE_H
 #define VRDEVICE_H
 
+#include <QMatrix4x4>
 #include <QOpenGLContext>
 #include "../libovr/Include/OVR_CAPI_GL.h"
 
@@ -27,6 +28,56 @@ enum class VrTrackingOrigin
     FloorLevel
 };
 
+enum class VrTouchInput : unsigned int
+{
+    A                   = ovrButton_A,
+    B                   = ovrButton_B,
+    RightThumb          = ovrButton_RThumb,
+    RightIndexTrigger   = 0x00000010,
+    RightShoulder       = ovrButton_RShoulder,
+
+    X                   = ovrButton_X,
+    Y                   = ovrButton_Y,
+    LeftThumb           = ovrButton_LThumb,
+    LeftIndexTrigger    = 0x00001000,
+    LeftShoulder        = ovrButton_LShoulder,
+
+    RightIndexPointing  = 0x00000020,
+    RightThumbUp        = 0x00000040,
+
+    LeftIndexPointing   = 0x00002000,
+    LeftThumbUp         = 0x00004000
+};
+
+class VrTouchController
+{
+    friend class VrDevice;
+    ovrInputState inputState;
+    ovrInputState prevInputState;
+
+    int index;
+    bool isBeingTracked;
+
+public:
+    VrTouchController(int index);
+
+    bool isButtonDown(VrTouchInput btn);
+    bool isButtonUp(VrTouchInput btn);
+
+    bool isButtonPressed(VrTouchInput btn);
+    bool isButtonReleased(VrTouchInput btn);
+
+    QVector2D GetThumbstick();
+
+    bool isTracking();
+
+    float getIndexTrigger();
+    float getHandTrigger();
+private:
+    bool isButtonDown(const ovrInputState& state, VrTouchInput btn);
+    void setTrackingState(bool state);
+};
+
 struct VrFrameData;
 
 /**
@@ -34,8 +85,9 @@ struct VrFrameData;
  */
 class VrDevice
 {
+    friend class VrManager;
+    VrDevice();
 public:
-    VrDevice(QOpenGLFunctions_3_2_Core* gl);
     void initialize();
     void setTrackingOrigin(VrTrackingOrigin trackingOrigin);
 
@@ -49,10 +101,23 @@ public:
     void beginEye(int eye);
     void endEye(int eye);
 
-    QMatrix4x4 getEyeViewMatrix(int eye,QVector3D pivot, float scale = 1.0f);
+    /*
+     * Returns whether or not the headset is being tracked
+     * If orientation is being track the the headset is on the persons head
+     */
+    bool isHeadMounted();
+
+    QMatrix4x4 getEyeViewMatrix(int eye,QVector3D pivot,QMatrix4x4 transform = QMatrix4x4());
     QMatrix4x4 getEyeProjMatrix(int eye,float nearClip,float farClip);
 
     GLuint bindMirrorTextureId();
+
+    QVector3D getHandPosition(int handIndex);
+    QQuaternion getHandRotation(int handIndex);
+
+    VrTouchController* getTouchController(int index);
+    QQuaternion getHeadRotation();
+    QVector3D getHeadPos();
 
 private:
     GLuint createDepthTexture(int width,int height);
@@ -80,6 +145,10 @@ private:
 
     QOpenGLFunctions_3_2_Core* gl;
     VrFrameData* frameData;
+
+    ovrTrackingState hmdState;
+
+    VrTouchController* touchControllers[2];
 };
 
 }

@@ -45,7 +45,14 @@ HEADERS += \
     $$PWD/src/materials/materialhelper.h \
     $$PWD/src/core/irisutils.h \
     $$PWD/src/scenegraph/viewernode.h \
-    $$PWD/src/materials/viewermaterial.h
+    $$PWD/src/materials/viewermaterial.h \
+    $$PWD/src/graphics/particle.h \
+    $$PWD/src/graphics/particlerender.h \
+    $$PWD/src/graphics/renderitem.h \
+    $$PWD/src/scenegraph/particlesystemnode.h \
+    $$PWD/src/vr/vrmanager.h \
+    $$PWD/src/graphics/iviewsource.h \
+    $$PWD/src/materials/custommaterial.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -73,7 +80,11 @@ SOURCES += \
     $$PWD/src/animation/keyframeset.cpp \
     $$PWD/src/materials/materialhelper.cpp \
     $$PWD/src/scenegraph/viewernode.cpp \
-    $$PWD/src/materials/viewermaterial.cpp
+    $$PWD/src/materials/viewermaterial.cpp \
+    $$PWD/src/scenegraph/particlesystemnode.cpp \
+    $$PWD/src/vr/vrmanager.cpp \
+    $$PWD/src/math/mathhelper.cpp \
+    $$PWD/src/materials/custommaterial.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

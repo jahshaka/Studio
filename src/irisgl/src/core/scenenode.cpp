@@ -29,13 +29,16 @@ SceneNode::SceneNode():
     setName(QString("SceneNode%1").arg(nodeId));
 
     visible = true;
-    duplicable = false;
+    duplicable = true;
     removable = true;
 
     pickable = true;
+    shadowEnabled = true;
 
     localTransform.setToIdentity();
     globalTransform.setToIdentity();
+
+    materialType = 1;
 
     //keyFrameSet = KeyFrameSet::create();
     animation = iris::Animation::create();
@@ -70,6 +73,10 @@ void SceneNode::addChild(SceneNodePtr node, bool keepTransform)
 {
     auto initialGlobalTransform = node->getGlobalTransform();
 
+    if (!!node->parent) {
+        node->removeFromParent();
+    }
+
     // @TODO: check if child is already a node
     auto self = sharedFromThis();
 
@@ -83,7 +90,8 @@ void SceneNode::addChild(SceneNodePtr node, bool keepTransform)
         // this->update(0);///shortcut for now
         auto thisGlobalTransform = this->getGlobalTransform();
 
-        auto diff = initialGlobalTransform * thisGlobalTransform.inverted();
+        //auto diff = initialGlobalTransform * thisGlobalTransform.inverted();
+        auto diff = thisGlobalTransform.inverted() * initialGlobalTransform;
 
         auto pos = diff.column(3).toVector3D();
         node->pos = pos;
@@ -111,7 +119,7 @@ void SceneNode::removeChild(SceneNodePtr node)
 {
     children.removeOne(node);
     node->parent = QSharedPointer<SceneNode>(nullptr);
-    node->scene = QSharedPointer<Scene>(nullptr);
+    node->setScene(QSharedPointer<Scene>(nullptr));
     scene->removeNode(node);
 }
 
@@ -174,6 +182,9 @@ void SceneNode::update(float dt)
     for (auto child : children) {
         child->update(dt);
     }
+
+    if (this->visible)
+        submitRenderItems();
 }
 
 void SceneNode::setParent(SceneNodePtr node)
@@ -181,13 +192,21 @@ void SceneNode::setParent(SceneNodePtr node)
     this->parent = node;
 }
 
-void SceneNode::setScene(QSharedPointer<Scene> scene)
+void SceneNode::setScene(ScenePtr scene)
 {
     this->scene = scene;
 
-    //if have children, set scene as well
-    for(auto child:children)
+    // the scene could be null, as in the case of a tree being built
+    // before being added to the scene
+    // @WARN -- this actually breaks the tree...
+    // if (!!scene) {
+    //     scene->addNode(sharedFromThis());
+    // }
+
+    // add children
+    for (auto& child : children) {
         child->setScene(scene);
+    }
 }
 
 long SceneNode::generateNodeId()
@@ -210,10 +229,12 @@ QMatrix4x4 SceneNode::getGlobalTransform()
 
     if (parent.isNull()) {
         // this is a check for the root node
-        return localTransform;
+        globalTransform = localTransform;
     } else {
-        return parent->getGlobalTransform() * localTransform;
+        globalTransform = parent->getGlobalTransform() * localTransform;
     }
+
+    return globalTransform;
 }
 
 QMatrix4x4 SceneNode::getLocalTransform()
@@ -227,7 +248,29 @@ QMatrix4x4 SceneNode::getLocalTransform()
     return localTransform;
 }
 
-long SceneNode::nextId = 0;
 
+SceneNodePtr SceneNode::duplicate()
+{
+    if (!duplicable) {
+        return SceneNodePtr();
+    }
+
+    auto node = this->createDuplicate();
+
+    node->setName(this->getName());
+    node->pos = this->pos;
+    node->scale = this->scale;
+    node->rot = this->rot;
+
+    for (auto& child : this->children) {
+        if (child->isDuplicable()) {
+            node->addChild(child->duplicate(), false);
+        }
+    }
+
+    return node.staticCast<SceneNode>();
+}
+
+long SceneNode::nextId = 0;
 
 }

@@ -216,6 +216,9 @@ public:
     }
 
     void onMousePress(QVector3D pos, QVector3D r) {
+        if (!lastSelectedNode)
+            return;
+
         translatePlaneD = -QVector3D::dotProduct(translatePlaneNormal, lastSelectedNode->getGlobalPosition());
 
         QVector3D ray = (r - pos).normalized();

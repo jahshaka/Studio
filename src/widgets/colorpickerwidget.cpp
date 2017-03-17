@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "ui_colorpickerwidget.h"
 #include <QColorDialog>
 #include <QPainter>
+#include <QDebug>
 
 ColorPickerWidget::ColorPickerWidget(QWidget *parent) :
     QWidget(parent),
@@ -37,7 +38,6 @@ void ColorPickerWidget::paintEvent(QPaintEvent* evt)
     int widgetWidth = this->geometry().width();
     int widgetHeight = this->geometry().height();
     QPainter paint(this);
-
 
     paint.fillRect(0,0,widgetWidth,widgetHeight,color);
 

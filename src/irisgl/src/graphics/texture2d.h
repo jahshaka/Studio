@@ -62,10 +62,11 @@ public:
      * Returns the path to the source file of the texture
      * @return
      */
-    QString getSource()
-    {
+    QString getSource() {
         return source;
     }
+
+    static Texture2DPtr createCubeMap(QString, QString, QString, QString, QString, QString, QImage *i = nullptr);
 
 private:
     Texture2D(QOpenGLTexture* tex)

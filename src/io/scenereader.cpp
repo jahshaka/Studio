@@ -30,13 +30,14 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../irisgl/src/scenegraph/viewernode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
+#include "../irisgl/src/scenegraph/particlesystemnode.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
+#include "../irisgl/src/materials/custommaterial.h"
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/graphicshelper.h"
 #include "../irisgl/src/animation/animation.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
-
 
 iris::ScenePtr SceneReader::readScene(QString filePath, EditorData** editorData)
 {
@@ -90,8 +91,21 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     auto skyTexPath = sceneObj["skyTexture"].toString("");
     if(!skyTexPath.isEmpty())
     {
-        skyTexPath = this->getAbsolutePath(skyTexPath);
-        scene->setSkyTexture(iris::Texture2D::load(skyTexPath,false));
+        auto fInfo = QFileInfo(skyTexPath);
+        auto path = fInfo.path();
+        auto ext = fInfo.suffix();
+
+        auto x1 = path + "/left." + ext;
+        auto x2 = path + "/right." + ext;
+        auto y1 = path + "/top." + ext;
+        auto y2 = path + "/bottom." + ext;
+        auto z1 = path + "/front." + ext;
+        auto z2 = path + "/back." + ext;
+
+//        skyTexPath = this->getAbsolutePath(skyTexPath);
+//        scene->setSkyTexture(iris::Texture2D::load(skyTexPath,false));
+        scene->setSkyTexture(iris::Texture2D::createCubeMap(x1, x2, y1, y2, z1, z2));
+        scene->setSkyTextureSource(z1);
     }
     scene->setSkyColor(this->readColor(sceneObj["skyColor"].toObject()));
     scene->setAmbientColor(this->readColor(sceneObj["ambientColor"].toObject()));
@@ -100,8 +114,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->fogStart = sceneObj["fogStart"].toDouble(100);
     scene->fogEnd = sceneObj["fogEnd"].toDouble(120);
     scene->fogEnabled = sceneObj["fogEnabled"].toBool(true);
-
-
 
     auto rootNode = sceneObj["rootNode"].toObject();
     QJsonArray children = rootNode["children"].toArray();
@@ -126,14 +138,17 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     iris::SceneNodePtr sceneNode;
 
     QString nodeType = nodeObj["type"].toString("empty");
-    if(nodeType=="mesh")
+    if (nodeType == "mesh") {
         sceneNode = createMesh(nodeObj).staticCast<iris::SceneNode>();
-    else if(nodeType=="light")
+    } else if (nodeType == "light") {
         sceneNode = createLight(nodeObj).staticCast<iris::SceneNode>();
-    else if(nodeType=="viewer")
+    } else if (nodeType == "viewer") {
         sceneNode = createViewer(nodeObj).staticCast<iris::SceneNode>();
-    else
+    } else if (nodeType == "particle system") {
+        sceneNode = createParticleSystem(nodeObj).staticCast<iris::SceneNode>();
+    } else {
         sceneNode = iris::SceneNode::create();
+    }
 
     //read transform
     readSceneNodeTransform(nodeObj,sceneNode);
@@ -148,7 +163,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     {
         auto sceneNodeObj = childObj.toObject();
         auto childNode = readSceneNode(sceneNodeObj);
-        sceneNode->addChild(childNode);
+        sceneNode->addChild(childNode, false);
     }
 
     return sceneNode;
@@ -234,17 +249,40 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 
     auto source = nodeObj["mesh"].toString("");
     auto meshIndex = nodeObj["meshIndex"].toInt(0);
+    auto materialType = nodeObj["materialType"].toInt(0);
+    auto pickable = nodeObj["pickable"].toBool();
     if(!source.isEmpty())
     {
         auto mesh = getMesh(getAbsolutePath(source),meshIndex);
         meshNode->setMesh(mesh);
+        meshNode->setPickable(pickable);
+        meshNode->setMaterialType(materialType);
         meshNode->meshPath = source;
         meshNode->meshIndex = meshIndex;
     }
 
     //material
     auto material = readMaterial(nodeObj);
-    meshNode->setMaterial(material);
+    if (materialType == 1) {
+        meshNode->setMaterial(material);
+    } else {
+        auto customMat = iris::CustomMaterial::create();
+        meshNode->setMaterial(material);
+        meshNode->setCustomMaterial(customMat);
+        meshNode->setActiveMaterial(2);
+    }
+
+    auto faceCullingMode = nodeObj["faceCullingMode"].toString("back");
+
+    if (faceCullingMode == "back") {
+        meshNode->setFaceCullingMode(iris::FaceCullingMode::Back);
+    } else if (faceCullingMode == "front") {
+        meshNode->setFaceCullingMode(iris::FaceCullingMode::Front);
+    } else if (faceCullingMode == "frontandback") {
+        meshNode->setFaceCullingMode(iris::FaceCullingMode::FrontAndBack);
+    } else { //none
+        meshNode->setFaceCullingMode(iris::FaceCullingMode::None);
+    }
 
     return meshNode;
 }
@@ -282,19 +320,32 @@ iris::ViewerNodePtr SceneReader::createViewer(QJsonObject& nodeObj)
     return viewerNode;
 }
 
+iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeObj)
+{
+    auto particleNode = iris::ParticleSystemNode::create();
+
+    particleNode->setPPS((float) nodeObj["particlesPerSecond"].toDouble(1.0f));
+    particleNode->setParticleScale((float) nodeObj["particleScale"].toDouble(1.0f));
+    particleNode->setDissipation(nodeObj["dissipate"].toBool());
+    particleNode->setDissipationInv(nodeObj["dissipateInv"].toBool());
+    particleNode->setRandomRotation(nodeObj["randomRotation"].toBool());
+    particleNode->setGravity((float) nodeObj["gravityComplement"].toDouble(1.0f));
+    particleNode->setBlendMode(nodeObj["blendMode"].toBool());
+    particleNode->setLife((float) nodeObj["lifeLength"].toDouble(1.0f));
+    particleNode->setName(nodeObj["name"].toString());
+    particleNode->setSpeed((float) nodeObj["speed"].toDouble(1.0f));
+    particleNode->setTexture(iris::Texture2D::load(getAbsolutePath(nodeObj["texture"].toString())));
+
+    return particleNode;
+}
+
 iris::LightType SceneReader::getLightTypeFromName(QString lightType)
 {
-    if(lightType=="point")
-        return iris::LightType::Point;
-
-    if(lightType=="directional")
-        return iris::LightType::Directional;
-
-    if(lightType=="spot")
-        return iris::LightType::Spot;
+    if (lightType == "point")       return iris::LightType::Point;
+    if (lightType == "directional") return iris::LightType::Directional;
+    if (lightType == "spot")        return iris::LightType::Spot;
 
     return iris::LightType::Point;
-
 }
 
 /**

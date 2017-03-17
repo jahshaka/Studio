@@ -6,12 +6,17 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>258</width>
-    <height>741</height>
+    <width>256</width>
+    <height>256</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QWidget#sceneTree {
+	background-color: #303030;
+}</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <property name="spacing">
@@ -34,17 +39,18 @@
      <property name="minimumSize">
       <size>
        <width>0</width>
-       <height>30</height>
+       <height>0</height>
       </size>
      </property>
      <property name="styleSheet">
       <string notr="true">QWidget#widget{
-border: none;
+	border: none;
+	background-color: #303030;
 }</string>
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout">
       <property name="spacing">
-       <number>3</number>
+       <number>2</number>
       </property>
       <property name="leftMargin">
        <number>0</number>
@@ -60,11 +66,20 @@ border: none;
       </property>
       <item>
        <widget class="QToolButton" name="addBtn">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
         <property name="minimumSize">
          <size>
-          <width>75</width>
-          <height>30</height>
+          <width>96</width>
+          <height>0</height>
          </size>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">border: 0</string>
         </property>
         <property name="text">
          <string>Add</string>
@@ -86,11 +101,20 @@ border: none;
       </item>
       <item>
        <widget class="QPushButton" name="deleteBtn">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
         <property name="minimumSize">
          <size>
-          <width>75</width>
-          <height>30</height>
+          <width>96</width>
+          <height>0</height>
          </size>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">border: 0</string>
         </property>
         <property name="text">
          <string>Delete</string>
@@ -119,6 +143,12 @@ border: none;
    </item>
    <item>
     <widget class="QTreeWidget" name="sceneTree">
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <property name="animated">
+      <bool>true</bool>
+     </property>
      <attribute name="headerVisible">
       <bool>false</bool>
      </attribute>

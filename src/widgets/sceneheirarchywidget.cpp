@@ -70,7 +70,7 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     //todo: bind callbacks
     QMenu* addMenu = new QMenu();
 
-    auto primtiveMenu = addMenu->addMenu("Primtives");
+    auto primtiveMenu = addMenu->addMenu("Primitive");
     QAction *action = new QAction("Torus", this);
     primtiveMenu->addAction(action);
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addTorus()));
@@ -87,36 +87,41 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     primtiveMenu->addAction(action);
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addCylinder()));
 
-//    action = new QAction("Plane", this);
-//    primtiveMenu->addAction(action);
-//    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addTexturedPlane()));
+    action = new QAction("Plane", this);
+    primtiveMenu->addAction(action);
+    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addPlane()));
 
     //LIGHTS
-    auto lightMenu = addMenu->addMenu("Lights");
-    action = new QAction("PointLight", this);
+    auto lightMenu = addMenu->addMenu("Light");
+    action = new QAction("Point", this);
     lightMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addPointLight()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addPointLight()));
 
-    action = new QAction("SpotLight", this);
+    action = new QAction("Spot", this);
     lightMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addSpotLight()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addSpotLight()));
 
-    action = new QAction("DirectionalLight", this);
+    action = new QAction("Directional", this);
     lightMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addDirectionalLight()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addDirectionalLight()));
 
     action = new QAction("Empty", this);
     addMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addEmpty()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addEmpty()));
 
     action = new QAction("Viewer", this);
     addMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addViewer()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addViewer()));
+
+    //SYSTEMS
+    action = new QAction("Particle System", this);
+    addMenu->addAction(action);
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addParticleSystem()));
 
     //MESHES
     action = new QAction("Load Model", this);
     addMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addMesh()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addMesh()));
 
     //VIEWPOINT
     /*
@@ -128,7 +133,7 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     ui->addBtn->setMenu(addMenu);
     ui->addBtn->setPopupMode(QToolButton::InstantPopup);
 
-    connect(ui->deleteBtn,SIGNAL(clicked(bool)),mainWindow,SLOT(deleteNode()));
+    connect(ui->deleteBtn, SIGNAL(clicked(bool)), mainWindow, SLOT(deleteNode()));
 }
 
 void SceneHeirarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode)
@@ -141,8 +146,7 @@ void SceneHeirarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> scene
     //for(auto item:selected)
     //    item->setSelected(false);
 
-    if(!!sceneNode)
-    {
+    if(!!sceneNode) {
         auto item = treeItemList[sceneNode->getNodeId()];
         //item->setSelected(true);
         ui->sceneTree->setCurrentItem(item);
@@ -252,55 +256,52 @@ void SceneHeirarchyWidget::deleteNode()
 
 void SceneHeirarchyWidget::duplicateNode()
 {
-
+    mainWindow->duplicateNode();
 }
 
 void SceneHeirarchyWidget::repopulateTree()
 {
     auto rootNode = scene->getRootNode();
-    auto root = new QTreeWidgetItem();
+    auto rootTreeItem = new QTreeWidgetItem();
 
-    root->setText(0,rootNode->getName());
+    rootTreeItem->setText(0, rootNode->getName());
     //root->setIcon(0,this->getIconFromSceneNodeType(SceneNodeType::World));
-    root->setData(1,Qt::UserRole,QVariant::fromValue(rootNode->getNodeId()));
+    rootTreeItem->setData(1, Qt::UserRole,QVariant::fromValue(rootNode->getNodeId()));
 
-    //populate tree
+    // populate tree
     nodeList.clear();
     treeItemList.clear();
 
-    nodeList.insert(rootNode->getNodeId(),rootNode);
-    treeItemList.insert(rootNode->getNodeId(),root);
+    nodeList.insert(rootNode->getNodeId(), rootNode);
+    treeItemList.insert(rootNode->getNodeId(), rootTreeItem);
 
-    populateTree(root,rootNode);
+    populateTree(rootTreeItem,rootNode);
 
     ui->sceneTree->clear();
-    ui->sceneTree->addTopLevelItem(root);
+    ui->sceneTree->addTopLevelItem(rootTreeItem);
     ui->sceneTree->expandAll();
 }
 
-void SceneHeirarchyWidget::populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode)
+void SceneHeirarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
+                                        QSharedPointer<iris::SceneNode> sceneNode)
 {
-    for(auto node:sceneNode->children)
-    {
+    for (auto childNode : sceneNode->children) {
+        auto childTreeItem = new QTreeWidgetItem();
+        childTreeItem->setText(0, childNode->getName());
+        childTreeItem->setData(1, Qt::UserRole,QVariant::fromValue(childNode->getNodeId()));
+        // childNode->setIcon(0,this->getIconFromSceneNodeType(node->sceneNodeType));
+        childTreeItem->setFlags(childTreeItem->flags() | Qt::ItemIsUserCheckable);
+        childTreeItem->setCheckState(0, Qt::Checked);
 
-        auto childNode = new QTreeWidgetItem();
-        childNode->setText(0,node->getName());
-        childNode->setData(1,Qt::UserRole,QVariant::fromValue(node->getNodeId()));
-        //childNode->setIcon(0,this->getIconFromSceneNodeType(node->sceneNodeType));
-        childNode->setFlags(childNode->flags() | Qt::ItemIsUserCheckable);
-        childNode->setCheckState(0,Qt::Checked);
+        // if (!node->isVisible()) childNode->setCheckState(0,Qt::Unchecked);
 
+        parentTreeItem->addChild(childTreeItem);
 
-        //if(!node->isVisible())
-        //    childNode->setCheckState(0,Qt::Unchecked);
+        // sceneTreeItems.insert(node->getEntity()->id(),childNode);
+        nodeList.insert(childNode->getNodeId(), childNode);
+        treeItemList.insert(childNode->getNodeId(), childTreeItem);
 
-        parentNode->addChild(childNode);
-
-        //sceneTreeItems.insert(node->getEntity()->id(),childNode);
-        nodeList.insert(node->getNodeId(),node);
-        treeItemList.insert(node->getNodeId(),childNode);
-
-        populateTree(childNode,node);
+        populateTree(childTreeItem, childNode);
     }
 }
 

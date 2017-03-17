@@ -22,6 +22,15 @@ class QOpenGLFunctions_3_2_Core;
 namespace iris
 {
 
+enum class RenderLayer : int
+{
+    Background = 1000,
+    Opaque = 2000,
+    AlphaTested = 3000,
+    Transparent = 4000,
+    Overlay = 5000
+};
+
 struct MaterialTexture
 {
     Texture2DPtr texture;
@@ -31,6 +40,7 @@ struct MaterialTexture
 class Material
 {
 public:
+    int renderLayer;
     QOpenGLShaderProgram* program;
     QMap<QString, Texture2DPtr> textures;
 
@@ -48,6 +58,11 @@ public:
 
     }
 
+    void setRenderLayer(int layer)
+    {
+        this->renderLayer = layer;
+    }
+
     /**
      * Called at the beginning of rendering a primitive
      * This function is used by subclasses to bind the shader pass parameters,
@@ -55,12 +70,14 @@ public:
      * @param gl
      */
     virtual void begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene);
+    virtual void beginCube(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene);
 
     /**
      * Called after endering a pritimitive.
      * This is used to cleanup after rendering
      */
     virtual void end(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene);
+    virtual void endCube(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene);
 
     /**
      * Adds texture to the material by name
@@ -81,6 +98,7 @@ public:
      * @param gl
      */
     void bindTextures(QOpenGLFunctions_3_2_Core* gl);
+    void bindCubeTextures(QOpenGLFunctions_3_2_Core* gl);
 
     /**
      * unbinds all material textures

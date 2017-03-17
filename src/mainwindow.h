@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QActionGroup>
 #include <QModelIndex>
 #include <QDropEvent>
 #include <QMimeData>
@@ -20,12 +21,12 @@ For more information see the LICENSE file
 #include "irisgl/src/irisglfwd.h"
 
 namespace Ui {
-class MainWindow;
-class NewMainWindow;
+    class MainWindow;
 }
 
 class SurfaceView;
 
+class QPushButton;
 class QStandardItem;
 class QStandardItemModel;
 class QTreeWidgetItem;
@@ -165,6 +166,8 @@ private:
 
 public slots:
     //scenegraph
+    void addPlane();
+    void addCone();
     void addCube();
     void addTorus();
     void addSphere();
@@ -183,6 +186,8 @@ public slots:
     void addPointLight();
     void addSpotLight();
     void addDirectionalLight();
+
+    void addParticleSystem();
 
     void updateAnim();
 
@@ -209,21 +214,25 @@ public slots:
 
     iris::ScenePtr createDefaultScene();
     void initializeGraphics(SceneViewWidget* widget, QOpenGLFunctions_3_2_Core* gl);
-    void cameraTypeChanged(QString);
-    void transformOrientationChanged(QString);
+
+    void useFreeCamera();
+    void useArcballCam();
+
+    void useLocalTransform();
+    void useGlobalTransform();
 
     void vrButtonClicked(bool);
     void updateSceneSettings();
 
 private slots:
-    void on_translateGizmoBtn_clicked();
-    void on_scaleGizmoBtn_clicked();
-    void on_rotateGizmoBtn_clicked();
+    void translateGizmo();
+    void rotateGizmo();
+    void scaleGizmo();
 
-    void onPlaySceneButton();
+//    void onPlaySceneButton();
 
 private:
-    Ui::NewMainWindow *ui;
+    Ui::MainWindow *ui;
     SurfaceView* surface;
     SceneViewWidget* sceneView;
 
@@ -258,7 +267,12 @@ private:
     LicenseDialog* licenseDialog;
     AboutDialog* aboutDialog;
 
+    QActionGroup* transformGroup;
+    QActionGroup* transformSpaceGroup;
+    QActionGroup* cameraGroup;
+
     bool vrMode;
+    QPushButton* vrButton;
 };
 
 #endif // MAINWINDOW_H

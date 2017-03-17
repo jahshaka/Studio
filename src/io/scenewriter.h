@@ -31,27 +31,21 @@ public:
     void writeScene(QString filePath,iris::ScenePtr scene,EditorData* ediorData = nullptr);
 
 private:
-    void writeScene(QJsonObject& projectObj,iris::ScenePtr scene);
-
-    void writeEditorData(QJsonObject& projectObj,EditorData* ediorData = nullptr);
-
-    void writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sceneNode);
-
-    void writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePtr sceneNode);
-
-    void writeMeshData(QJsonObject& sceneNodeObject,iris::MeshNodePtr meshNode);
-
-    void writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode);
-
-    void writeSceneNodeMaterial(QJsonObject& matObj,iris::DefaultMaterialPtr mat);
+    void writeScene(QJsonObject& projectObj, iris::ScenePtr scene);
+    void writeEditorData(QJsonObject& projectObj, EditorData* ediorData = nullptr);
+    void writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr node);
+    void writeAnimationData(QJsonObject& sceneNodeObj, iris::SceneNodePtr node);
+    void writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr node);
+    void writeViewerData(QJsonObject& sceneNodeObject, iris::ViewerNodePtr node);
+    void writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node);
+    void writeSceneNodeMaterial(QJsonObject& matObj, iris::DefaultMaterialPtr mat);
+    void writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat);
+    void writeLightData(QJsonObject& sceneNodeObject, iris::LightNodePtr node);
 
     QJsonObject jsonColor(QColor color);
-
     QJsonObject jsonVector3(QVector3D vec);
-    void writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr lightNode);
 
     QString getSceneNodeTypeName(iris::SceneNodeType nodeType);
-
     QString getLightNodeTypeName(iris::LightType lightType);
 };
 

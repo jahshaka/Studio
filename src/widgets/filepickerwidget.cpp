@@ -20,8 +20,8 @@ FilePickerWidget::FilePickerWidget(QWidget *parent) :
     ui(new Ui::FilePickerWidget)
 {
     ui->setupUi(this);
-    connect(ui->load, SIGNAL(pressed()), this, SLOT(filePicker()));
 
+    connect(ui->load, SIGNAL(pressed()), this, SLOT(filePicker()));
 }
 
 FilePickerWidget::~FilePickerWidget()
@@ -29,26 +29,38 @@ FilePickerWidget::~FilePickerWidget()
     delete ui;
 }
 
-void FilePickerWidget::filePicker(){
-    auto file = loadTexture();
+void FilePickerWidget::filePicker()
+{
+    auto file = openFile();
 
-    if(file.isNull() || file.isEmpty())
-    {
-        return;
-    }
-    else
-    {
+    if (file.isNull() || file.isEmpty()) return;
+    else {
         QFileInfo fileInfo(file);
         filename = fileInfo.fileName();
         filepath = fileInfo.filePath();
         ui->filename->setText(filename);
         ui->filename->setToolTip(filepath);
+        ui->filename->scroll(ui->filename->width(), 0);
 
+        emit onPathChanged(filepath);
     }
 }
 
-QString FilePickerWidget::loadTexture()
+QString FilePickerWidget::getFilepath() const
+{
+    return filepath;
+}
+
+void FilePickerWidget::setFilepath(const QString &value)
+{
+    QFileInfo fileInfo(value);
+    filepath = value;
+    filename = fileInfo.fileName();
+    ui->filename->setText(fileInfo.fileName());
+}
+
+QString FilePickerWidget::openFile()
 {
     QString dir = QApplication::applicationDirPath();
-    return QFileDialog::getOpenFileName(this,"Open Texture File",dir,file_extentions);
+    return QFileDialog::getOpenFileName(this, "Open File", dir, suffix);
 }

@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/lightnode.h"
 #include "../irisgl/src/scenegraph/viewernode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
+#include "../irisgl/src/scenegraph/particlesystemnode.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/animation/animation.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
@@ -56,10 +57,11 @@ void SceneWriter::writeScene(QJsonObject& projectObj,iris::ScenePtr scene)
     QJsonObject sceneObj;
 
     //scene properties
-    if(!!scene->skyTexture)
-        sceneObj["skyTexture"] = this->getRelativePath(scene->skyTexture->getSource());
-    else
+    if (!!scene->skyTexture) {
+        sceneObj["skyTexture"] = /*this->getRelativePath(*/scene->skyTexture->getSource();//);
+    } else {
         sceneObj["skyTexture"] = "";
+    }
 
     sceneObj["skyColor"] = jsonColor(scene->skyColor);
     sceneObj["ambientColor"] = jsonColor(scene->ambientColor);
@@ -114,6 +116,9 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sc
         break;
         case iris::SceneNodeType::Viewer:
             writeViewerData(sceneNodeObj, sceneNode.staticCast<iris::ViewerNode>());
+        break;
+        case iris::SceneNodeType::ParticleSystem:
+            writeParticleData(sceneNodeObj, sceneNode.staticCast<iris::ParticleSystemNode>());
         break;
         default: break;
     }
@@ -172,17 +177,56 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject,iris::MeshNodePtr m
     //todo: handle generated meshes properly
     sceneNodeObject["mesh"] = getRelativePath(meshNode->meshPath);
     sceneNodeObject["meshIndex"] = meshNode->meshIndex;
+    sceneNodeObject["pickable"] = meshNode->pickable;
+    sceneNodeObject["materialType"] = meshNode->getMaterialType();
+
+    auto cullMode = meshNode->getFaceCullingMode();
+    switch (cullMode) {
+    case iris::FaceCullingMode::Back:
+        sceneNodeObject["faceCullingMode"] = "back";
+        break;
+    case iris::FaceCullingMode::Front:
+        sceneNodeObject["faceCullingMode"] = "front";
+        break;
+    case iris::FaceCullingMode::FrontAndBack:
+        sceneNodeObject["faceCullingMode"] = "frontandback";
+        break;
+    case iris::FaceCullingMode::None:
+        sceneNodeObject["faceCullingMode"] = "none";
+        break;
+    }
 
     //todo: check if material actually exists
-    auto mat = meshNode->getMaterial().staticCast<iris::DefaultMaterial>();
-    QJsonObject matObj;
-    writeSceneNodeMaterial(matObj,mat);
-    sceneNodeObject["material"] = matObj;
+//    if (meshNode->getMaterialType() == 2) {
+//        auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
+//        QJsonObject matObj;
+//        writeSceneNodeMaterial(matObj, mat);
+//        sceneNodeObject["material"] = matObj;
+//    } else {
+        auto mat = meshNode->getMaterial().staticCast<iris::DefaultMaterial>();
+        QJsonObject matObj;
+        writeSceneNodeMaterial(matObj, mat);
+        sceneNodeObject["material"] = matObj;
+//    }
 }
 
 void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode)
 {
     sceneNodeObject["viewScale"] = viewerNode->getViewScale();
+}
+
+void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node)
+{
+    sceneNodeObject["particlesPerSecond"]   = node->particlesPerSecond;
+    sceneNodeObject["particleScale"]        = node->particleScale;
+    sceneNodeObject["dissipate"]            = node->dissipate;
+    sceneNodeObject["dissipateInv"]         = node->dissipateInv;
+    sceneNodeObject["gravityComplement"]    = node->gravityComplement;
+    sceneNodeObject["randomRotation"]       = node->randomRotation;
+    sceneNodeObject["blendMode"]            = node->useAdditive;
+    sceneNodeObject["lifeLength"]           = node->lifeLength;
+    sceneNodeObject["speed"]                = node->speed;
+    sceneNodeObject["texture"]              = node->texture->getSource();
 }
 
 void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj,iris::DefaultMaterialPtr mat)
@@ -203,6 +247,12 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj,iris::DefaultMateri
     matObj["reflectionInfluence"] = mat->getReflectionInfluence();
 
     matObj["textureScale"] = mat->getTextureScale();
+}
+
+void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj,iris::CustomMaterialPtr mat)
+{
+//    matObj["diffuseColor"] = jsonColor(mat->getDiffuseColor());
+//    matObj["diffuseTexture"] = getRelativePath(mat->getDiffuseTextureSource());
 }
 
 QJsonObject SceneWriter::jsonColor(QColor color)
@@ -237,18 +287,19 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
 
 QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)
 {
-    switch(nodeType)
-    {
-    case iris::SceneNodeType::Empty:
-        return "empty";
-    case iris::SceneNodeType::Light:
-        return "light";
-    case iris::SceneNodeType::Mesh:
-        return "mesh";
-    case iris::SceneNodeType::Viewer:
-        return "viewer";
-    default:
-        return "empty";
+    switch (nodeType) {
+        case iris::SceneNodeType::Empty:
+            return "empty";
+        case iris::SceneNodeType::Light:
+            return "light";
+        case iris::SceneNodeType::Mesh:
+            return "mesh";
+        case iris::SceneNodeType::Viewer:
+            return "viewer";
+        case iris::SceneNodeType::ParticleSystem:
+            return "particle system";
+        default:
+            return "empty";
     }
 }
 

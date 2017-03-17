@@ -30,7 +30,7 @@ public:
     ~SkyPresets();
 
     void addSky(QString path, QString name);
-
+    void addCubeSky(QString path, QString name);
 
     void setMainWindow(MainWindow* mainWindow)
     {
@@ -39,10 +39,12 @@ public:
 
 protected slots:
     void applySky(QListWidgetItem* item);
+    void applyCubeSky(QListWidgetItem* item);
 
 private:
     Ui::SkyPresets *ui;
     QList<QString> skies;
+    QList<QString> alternativeSkies;
     MainWindow* mainWindow;
 };
 

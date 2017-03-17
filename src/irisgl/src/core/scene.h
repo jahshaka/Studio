@@ -20,6 +20,21 @@ For more information see the LICENSE file
 namespace iris
 {
 
+class RenderItem;
+
+enum class SceneRenderFlags : int
+{
+    Vr = 0x1
+};
+
+struct PickingResult
+{
+    iris::SceneNodePtr hitNode;
+    QVector3D hitPoint;
+
+    float distanceFromStartSqrd;
+};
+
 class Scene: public QEnableSharedFromThis<Scene>
 {
 public:
@@ -38,15 +53,19 @@ public:
     Texture2DPtr skyTexture;
     QColor skyColor;
     QColor ambientColor;
-
-    // should be MaterialPtr
     DefaultSkyMaterialPtr skyMaterial;
+    RenderItem* skyRenderItem;
 
     // fog properties
     QColor fogColor;
     float fogStart;
     float fogEnd;
     bool fogEnabled;
+
+    bool shadowEnabled;
+
+    QVector<RenderItem*> geometryRenderList;
+    QVector<RenderItem*> shadowRenderList;
 
     /*
      * customizations that can be passed in and applied to a scene. ideally these
@@ -71,6 +90,10 @@ public:
     }
 
     void setSkyTexture(Texture2DPtr tex);
+    void setSkyTextureSource(QString src) {
+        skyTexture->source = src;
+    }
+
     QString getSkyTextureSource();
     void clearSkyTexture();
     void setSkyColor(QColor color);
@@ -79,6 +102,15 @@ public:
     void updateSceneAnimation(float time);
     void update(float dt);
     void render();
+
+    void rayCast(const QVector3D& segStart,
+                 const QVector3D& segEnd,
+                 QList<PickingResult>& hitList);
+
+    void rayCast(const QSharedPointer<iris::SceneNode>& sceneNode,
+                 const QVector3D& segStart,
+                 const QVector3D& segEnd,
+                 QList<iris::PickingResult>& hitList);
 
     /**
      * Adds node to scene. If node is a LightNode then it is added to a list of lights.

@@ -16,7 +16,7 @@ For more information see the LICENSE file
 #include <QLabel>
 
 namespace Ui {
-class FilePickerWidget;
+    class FilePickerWidget;
 }
 
 class FilePickerWidget : public QWidget
@@ -31,15 +31,24 @@ public:
 
     QString filename;
     QString filepath;
-    QString file_extentions;
+    QString suffix;
 
-    explicit FilePickerWidget( QWidget *parent = 0);
+    QString getFilePath() {
+        return filepath;
+    }
+
+    explicit FilePickerWidget(QWidget *parent = 0);
     ~FilePickerWidget();
     Ui::FilePickerWidget *ui;
 
-private:
+    QString getFilepath() const;
+    void setFilepath(const QString &value);
 
-    QString loadTexture();
+signals:
+    void onPathChanged(const QString&);
+
+private:
+    QString openFile();
 
 };
 

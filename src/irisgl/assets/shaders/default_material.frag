@@ -43,6 +43,7 @@ const int TYPE_SPOT = 2;
 
 in vec4 FragPosLightSpace;
 uniform sampler2D u_shadowMap;
+uniform bool u_shadowEnabled;
 
 float SampleShadowMap(sampler2D shadowMap, vec2 coords, float compare) {
     return step(compare, texture(shadowMap, coords.xy).r);
@@ -211,7 +212,6 @@ void main()
             //spec = pow(max(dot(r, v), 0.0), 0.7f);
         }
 
-
         diffuse += atten*ndl*u_lights[i].intensity*u_lights[i].color.rgb;
         specular += atten*spec* u_lights[i].intensity * u_lights[i].color.rgb;
     }
@@ -224,10 +224,10 @@ void main()
     if(u_useSpecularTex)
         specular = specular * texture(u_specularTexture,v_texCoord).rgb;
 
-    float ShadowFactor = CalcShadowMap(FragPosLightSpace);
+    float ShadowFactor = u_shadowEnabled ? CalcShadowMap(FragPosLightSpace) : 1.0;
 
-    vec3 finalColor = (u_material.ambient + ShadowFactor *
-                      (diffuse + (u_material.specular * specular))) * col;
+    vec3 finalColor = (u_material.ambient + (ShadowFactor *
+                      (diffuse + (u_material.specular * specular)))) * col;
 
     if(u_useReflectionTex)
     {

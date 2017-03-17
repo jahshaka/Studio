@@ -14,9 +14,14 @@ For more information see the LICENSE file
 
 #include "../irisglfwd.h"
 #include "../core/scenenode.h"
+#include "../core/irisutils.h"
+#include "../graphics/texture2d.h"
+#include "../graphics/renderitem.h"
 
 namespace iris
 {
+
+class RenderItem;
 
 class MeshNode : public SceneNode
 {
@@ -31,9 +36,13 @@ public:
     int meshIndex;
 
     MaterialPtr material;
+    MaterialPtr customMaterial;
 
-    static MeshNodePtr create()
-    {
+    FaceCullingMode faceCullingMode;
+
+    RenderItem* renderItem;
+
+    static MeshNodePtr create() {
         return MeshNodePtr(new MeshNode());
     }
 
@@ -52,17 +61,32 @@ public:
     Mesh* getMesh();
 
     void setMaterial(MaterialPtr material);
-    MaterialPtr getMaterial()
-    {
+    void setCustomMaterial(MaterialPtr material);
+
+    void setActiveMaterial(int type);
+
+    MaterialPtr getMaterial() {
         return material;
     }
 
-private:
-    MeshNode()
-    {
-        mesh = nullptr;
-        sceneNodeType = SceneNodeType::Mesh;
+    MaterialPtr getCustomMaterial() {
+        return customMaterial;
     }
+
+    // not needed because this guy likes public members...
+    // shouldnt be here at all, the value is already set in the constructor...
+    void setNodeType(SceneNodeType type) {
+        sceneNodeType = type;
+    }
+
+    SceneNodePtr createDuplicate() override;
+    virtual void submitRenderItems() override;
+
+    FaceCullingMode getFaceCullingMode() const;
+    void setFaceCullingMode(const FaceCullingMode &value);
+
+private:
+    MeshNode();
 };
 
 }

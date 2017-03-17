@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "defaultskymaterial.h"
 #include "../core/irisutils.h"
+#include "../graphics/renderitem.h"
 
 namespace iris
 {
@@ -22,21 +23,21 @@ DefaultSkyMaterial::DefaultSkyMaterial()
     setTextureCount(1);
 
     color = QColor(255,255,255,255);
+
+    this->setRenderLayer((int)RenderLayer::Background);
 }
 
 void DefaultSkyMaterial::setSkyTexture(Texture2DPtr tex)
 {
     texture = tex;
-    if(!!tex)
-        this->addTexture("texture",tex);
-    else
-        this->removeTexture("texture");
+    if (!!tex)  this->addTexture("skybox", tex);
+    else        this->removeTexture("skybox");
 }
 
 void DefaultSkyMaterial::clearSkyTexture()
 {
     texture.clear();
-    removeTexture("texture");
+    removeTexture("skybox");
 }
 
 Texture2DPtr DefaultSkyMaterial::getSkyTexture()
@@ -56,18 +57,32 @@ QColor DefaultSkyMaterial::getSkyColor()
 
 void DefaultSkyMaterial::begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
 {
-    Material::begin(gl,scene);
-    this->setUniformValue("color",color);
-    if(!!texture)
-        this->setUniformValue("useTexture",true);
-    else
-        this->setUniformValue("useTexture",false);
+//    Material::begin(gl,scene);
+//    this->setUniformValue("skybox", texture);
+//    if(!!texture)
+//        this->setUniformValue("useTexture", true);
+//    else
+//        this->setUniformValue("useTexture",false);
+    beginCube(gl, scene);
+}
 
+void DefaultSkyMaterial::beginCube(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+{
+    Material::beginCube(gl,scene);
+    this->setUniformValue("color", color);
+    if (!!texture)  this->setUniformValue("useTexture", true);
+    else            this->setUniformValue("useTexture", false);
 }
 
 void DefaultSkyMaterial::end(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
 {
-    Material::end(gl,scene);
+    Material::end(gl, scene);
+}
+
+// not needed
+void DefaultSkyMaterial::endCube(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+{
+    Material::endCube(gl, scene);
 }
 
 DefaultSkyMaterialPtr DefaultSkyMaterial::create()

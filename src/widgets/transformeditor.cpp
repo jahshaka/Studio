@@ -14,27 +14,25 @@ For more information see the LICENSE file
 
 #include "../irisgl/src/core/scenenode.h"
 
-TransformEditor::TransformEditor(QWidget *parent) :
+TransformEditor::TransformEditor(QWidget* parent) :
     QWidget(parent),
     ui(new Ui::TransformEditor)
 {
     ui->setupUi(this);
 
-    //translation
-    connect(ui->xpos,SIGNAL(valueChanged(double)),this,SLOT(xPosChanged(double)));
-    connect(ui->ypos,SIGNAL(valueChanged(double)),this,SLOT(yPosChanged(double)));
-    connect(ui->zpos,SIGNAL(valueChanged(double)),this,SLOT(zPosChanged(double)));
+    connect(ui->xpos,   SIGNAL(valueChanged(double)),   SLOT(xPosChanged(double)));
+    connect(ui->ypos,   SIGNAL(valueChanged(double)),   SLOT(yPosChanged(double)));
+    connect(ui->zpos,   SIGNAL(valueChanged(double)),   SLOT(zPosChanged(double)));
 
-    //rotation
-    connect(ui->xrot,SIGNAL(valueChanged(double)),this,SLOT(xRotChanged(double)));
-    connect(ui->yrot,SIGNAL(valueChanged(double)),this,SLOT(yRotChanged(double)));
-    connect(ui->zrot,SIGNAL(valueChanged(double)),this,SLOT(zRotChanged(double)));
+    connect(ui->xrot,   SIGNAL(valueChanged(double)),   SLOT(xRotChanged(double)));
+    connect(ui->yrot,   SIGNAL(valueChanged(double)),   SLOT(yRotChanged(double)));
+    connect(ui->zrot,   SIGNAL(valueChanged(double)),   SLOT(zRotChanged(double)));
 
-    //scale
-    connect(ui->xscale,SIGNAL(valueChanged(double)),this,SLOT(xScaleChanged(double)));
-    connect(ui->yscale,SIGNAL(valueChanged(double)),this,SLOT(yScaleChanged(double)));
-    connect(ui->zscale,SIGNAL(valueChanged(double)),this,SLOT(zScaleChanged(double)));
+    connect(ui->xscale, SIGNAL(valueChanged(double)),   SLOT(xScaleChanged(double)));
+    connect(ui->yscale, SIGNAL(valueChanged(double)),   SLOT(yScaleChanged(double)));
+    connect(ui->zscale, SIGNAL(valueChanged(double)),   SLOT(zScaleChanged(double)));
 
+    connect(ui->resetBtn, SIGNAL(clicked(bool)),        SLOT(onResetBtnClicked()));
 }
 
 TransformEditor::~TransformEditor()
@@ -42,12 +40,41 @@ TransformEditor::~TransformEditor()
     delete ui;
 }
 
+void TransformEditor::onResetBtnClicked()
+{
+    // in the future, this should be the imported models defaults instead of assumed scene's
+    if (!!sceneNode) {
+        xPosChanged(0);
+        yPosChanged(0);
+        zPosChanged(0);
+
+        xRotChanged(0);
+        yRotChanged(0);
+        zRotChanged(0);
+
+        xScaleChanged(defaultStateNode->scale.x());
+        yScaleChanged(defaultStateNode->scale.x());
+        zScaleChanged(defaultStateNode->scale.x());
+
+        ui->xpos->setValue(0);
+        ui->ypos->setValue(0);
+        ui->zpos->setValue(0);
+
+        ui->xrot->setValue(0);
+        ui->yrot->setValue(0);
+        ui->zrot->setValue(0);
+
+        ui->xscale->setValue(defaultStateNode->scale.x());
+        ui->yscale->setValue(defaultStateNode->scale.y());
+        ui->zscale->setValue(defaultStateNode->scale.z());
+    }
+}
+
 void TransformEditor::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
-    this->sceneNode = sceneNode;
+    this->sceneNode = defaultStateNode = sceneNode;
 
-    if(!!sceneNode)
-    {
+    if (!!sceneNode) {
         ui->xpos->setValue(sceneNode->pos.x());
         ui->ypos->setValue(sceneNode->pos.y());
         ui->zpos->setValue(sceneNode->pos.z());
@@ -65,24 +92,21 @@ void TransformEditor::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 
 void TransformEditor::xPosChanged(double value)
 {
-    if(!!sceneNode)
-    {
+    if (!!sceneNode) {
         sceneNode->pos.setX(value);
     }
 }
 
 void TransformEditor::yPosChanged(double value)
 {
-    if(!!sceneNode)
-    {
+    if (!!sceneNode) {
         sceneNode->pos.setY(value);
     }
 }
 
 void TransformEditor::zPosChanged(double value)
 {
-    if(!!sceneNode)
-    {
+    if (!!sceneNode) {
         sceneNode->pos.setZ(value);
     }
 }
@@ -92,8 +116,7 @@ void TransformEditor::zPosChanged(double value)
  */
 void TransformEditor::xRotChanged(double value)
 {
-    if(!!sceneNode)
-    {
+    if (!!sceneNode) {
         auto rot = sceneNode->rot.toEulerAngles();
         rot.setX(value);
         sceneNode->rot = QQuaternion::fromEulerAngles(rot);
@@ -102,8 +125,7 @@ void TransformEditor::xRotChanged(double value)
 
 void TransformEditor::yRotChanged(double value)
 {
-    if(!!sceneNode)
-    {
+    if (!!sceneNode) {
         auto rot = sceneNode->rot.toEulerAngles();
         rot.setY(value);
         sceneNode->rot = QQuaternion::fromEulerAngles(rot);
@@ -112,8 +134,7 @@ void TransformEditor::yRotChanged(double value)
 
 void TransformEditor::zRotChanged(double value)
 {
-    if(!!sceneNode)
-    {
+    if (!!sceneNode) {
         auto rot = sceneNode->rot.toEulerAngles();
         rot.setZ(value);
         sceneNode->rot = QQuaternion::fromEulerAngles(rot);
@@ -125,24 +146,21 @@ void TransformEditor::zRotChanged(double value)
  */
 void TransformEditor::xScaleChanged(double value)
 {
-    if(!!sceneNode)
-    {
+    if (!!sceneNode) {
         sceneNode->scale.setX(value);
     }
 }
 
 void TransformEditor::yScaleChanged(double value)
 {
-    if(!!sceneNode)
-    {
+    if (!!sceneNode) {
         sceneNode->scale.setY(value);
     }
 }
 
 void TransformEditor::zScaleChanged(double value)
 {
-    if(!!sceneNode)
-    {
+    if (!!sceneNode) {
         sceneNode->scale.setZ(value);
     }
 }

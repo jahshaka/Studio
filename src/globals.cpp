@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "globals.h"
 #include "core/project.h"
+#include "widgets/sceneviewwidget.h"
 
 float Globals::animFrameTime = 0;
 Project* Globals::project = Project::createNew();
+SceneViewWidget* Globals::sceneViewWidget = nullptr;

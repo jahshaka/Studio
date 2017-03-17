@@ -1,5 +1,5 @@
 {
-    "name": "Brick Ground",
+    "name": "Brick",
     "icon": "../../materials/brick_ground.png",
     "diffuseTexture": "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_COLOR.png",
     "normalTexture": "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_NRM.png",

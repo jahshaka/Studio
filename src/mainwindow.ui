@@ -1,0 +1,1163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>994</width>
+    <height>483</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>JahshakaVR</string>
+  </property>
+  <property name="windowIcon">
+   <iconset resource="../icons.qrc">
+    <normaloff>:/app/icons/logo03.svg</normaloff>:/app/icons/logo03.svg</iconset>
+  </property>
+  <property name="windowOpacity">
+   <double>1.000000000000000</double>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">* {
+    color: #BBB;
+}
+
+QMenu {
+    background-color: #212121;
+}
+
+QMenu::item {
+    /* sets background of menu item. set this to something non-transparent
+        if you want menu color and menu item color to be different */
+    background-color: #212121;
+}
+
+QMenu::item:selected { /* when user selects item using mouse or keyboard */
+    background-color: #3498db;
+}
+
+QMenu::indicator::unchecked {
+    background-color: #303030;
+    border: 3px solid #212121;
+}
+
+QMenu::indicator::checked {
+    background-color: #bbb;
+    border: 3px solid #212121;
+}
+
+/*
+*
+* Tree View Widget ============================================================================
+*
+*/
+
+QTreeView::item {
+   padding: 2px;
+}
+
+QTreeView {
+	selection-background-color: #3498db;
+}
+
+/*QTreeView::item:hover {
+    background: #42b5e8;
+}*/
+
+/*QTreeView::item:selected {
+    background: #BBB;
+	color: green;
+}*/
+
+QTreeView::item:selected:active{
+    background-color: #3498db;
+	color: #BBB;
+}
+
+/*QTreeView::item:selected:!active {
+    background: #BBB;
+}*/
+
+/*
+*=== DropDown Style Settings ==================================================
+*/
+
+QComboBox {
+    background: #4D4D4D;
+	color: #BBB;
+	border:  0;
+}
+
+QComboBox QAbstractItemView {
+   background-color: #212121; 
+    selection-background-color: red;
+	border: 0;
+	outline: none;
+}
+
+QComboBox::drop-down {
+	border:  0;
+	/*background: #4D4D4D; */
+}
+
+QComboBox::down-arrow {
+	image: url(:app/icons/dropdown.png);
+	width: 18px;
+	height: 14px;
+ }
+
+/* Double Spin Box */
+QDoubleSpinBox {
+   /*	padding-right: 15px; /* make room for the arrows */
+    border-width: 3px;
+	/*border-right: 18px solid #1e1e1e; /* hide a 1px gap */
+	background-color: #404040;
+	selection-color: #BBB;
+    /*border-image: url(:/app/images/frame.png) 4; */
+    color: #BBB;
+}
+
+QDoubleSpinBox:hover {
+    border: 1px solid rgb(30, 144, 255); 
+}
+
+QDoubleSpinBox::up-button {
+	background-color: #4d4d4d;
+    subcontrol-origin: border;
+    subcontrol-position: top right; /* position at the top right corner */
+	
+    width: 15px; /* 16 + 2*1px border-width = 15px padding + 3px parent border */
+    border-image: url(:/app/icons/chevron-arrow-up.svg);
+    border-width: 1px;
+}
+
+QDoubleSpinBox::up-button:hover {
+    background-color: rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::up-button:pressed {
+    background-color: rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::down-button {
+	background-color: #4d4d4d;
+    subcontrol-origin: border;
+    subcontrol-position: bottom right; /* position at bottom right corner */
+	margin-top: -1px;
+    width: 15px;
+    border-image: url(:/app/icons/chevron-arrow-down.svg);
+    border-width: 1px;
+    border-top-width: 1px;
+}
+
+QDoubleSpinBox::down-button:hover {
+    background-color: rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::down-button:pressed {
+    background-color: rgb(30, 144, 255);
+}
+
+/* ==== VR === */
+
+QPushButton#vrButton {
+	border: none;
+	background-color: rgba(255, 255, 255, 0);
+}
+
+QPushButton#vrButton[vrMode=&quot;1&quot;] {
+	background-color: #e74c3c;
+}
+
+QPushButton#vrButton[vrMode=&quot;2&quot;] {
+	background-color: #2980b9;
+}
+
+QPushButton#vrButton:hover {
+	background-color: #3498db;
+}
+
+/* ================== */
+
+ QScrollBar:vertical {
+     background-color: #212121;
+     width: 18px;
+     margin: 22px 0 22px 0;
+ }
+
+ QScrollBar::handle:vertical {
+	background-color: #444;
+     min-height: 20px;
+     margin-left: 2px;
+     margin-right: 2px;
+ }
+
+QScrollBar::handle:vertical:hover {
+	background-color: #555;
+	min-height: 20px;
+	margin-left: 2px;
+	margin-right: 2px;
+}
+
+QScrollBar::add-line:vertical {
+	background-color: #444;
+	height: 20px;
+	border: 2px solid #212121;
+	border-width: 2px 2px  0 2px;
+	subcontrol-position: bottom;
+	subcontrol-origin: margin;
+ }
+
+QScrollBar::sub-line:vertical {
+    background-color: #444;
+	height: 20px;
+	border: 2px solid #212121;
+	border-width: 0 2px 2px 2px;
+	subcontrol-position: top;
+	subcontrol-origin: margin;
+ }
+
+QScrollBar::up-arrow:vertical {
+    image: url(:/app/icons/up-arrow.svg);
+}
+
+QScrollBar::up-arrow:vertical:hover {
+    background-color: #555;
+}
+
+QScrollBar::down-arrow:vertical {
+    image: url(:/app/icons/down-arrow.svg);
+}
+
+QScrollBar::down-arrow:vertical:hover {
+    background-color: #555;
+}
+
+/* ========================== */
+
+QWidget#sceneTree {
+	background-color: #303030;
+}
+
+QMainWindow {
+	background-color: #1e1e1e;
+}
+
+QDockWidget::title {
+	padding: 2px;
+	background-color: #212121;
+	text-align: center;
+}
+
+QDockWidget {
+	titlebar-close-icon: url(:app/icons/close.svg);
+	titlebar-normal-icon: url(:app/icons/plus.svg);
+}
+
+QDockWidget::close-button, QDockWidget::float-button {
+	icon-size: 14px;
+}
+
+QMenuBar {
+    background-color:  #303030;
+    padding: 5px 5px 0px 5px;
+	border: 1px soild black;
+	opacity: 0.5;
+}
+
+QMenuBar::item {
+    /* spacing: 3px; */
+    /* spacing between menu bar items */
+     padding: 1px 8px;
+     background:  transparent;
+ }
+
+ QMenuBar::item:selected { /* when selected using mouse or keyboard */
+     background: #212121;
+ }
+
+/*
+*
+* Labels, Buttons ============================================================================
+*
+*/
+
+QPushButton  {
+    border: none;
+    background-color: #212121;
+}
+
+QPushButton:hover {
+    background-color: #555;
+}
+
+QToolButton {
+    border: none;
+    background-color: #212121;
+}
+
+QToolButton:hover{
+    background-color: #555;
+}
+
+QToolTip {
+    padding: 2px;
+	border: 0;
+    background: black;
+   	opacity: 200;
+}
+
+QLabel {
+	color: #BBB;
+}
+
+/* =============================================== */
+QToolBar &gt; QToolButton, QWidget#vrButton {
+    background-color: #212121;
+    border: 1px solid #1e1e1e;
+    border-radius: 2px;
+    padding: 8px;
+    width: 16px;
+    height: 16px;
+    margin: 8px;
+}
+
+QToolBar {
+    background:  #303030;
+   /* spacing: 4px; /* spacing between items in the tool bar */
+    min-height: 52px;
+    border-top: 1px solid #1e1e1e;
+    border-bottom: 1px solid #1e1e1e;
+}
+
+QToolBar::separator:horizontal {
+    background-color: #272727;
+    width: 1px;
+    margin-left: 6px;
+	margin-right: 6px;
+}
+
+QTabWidget::tab-bar {
+    /*min-width:  48px; */
+}
+
+QTabBar::close-button {
+   /*  image: url(:icons/icons/delete_smol.png); */
+    /*subcontrol-position: left;*/
+}
+
+QTabWidget::pane {
+	margin: -1px;
+	border-top: 1px solid #1e1e1e;
+}
+
+QTabBar::tab:selected {
+	background-color: #303030;
+	border-bottom: 1px solid #303030;
+}
+
+QTabBar::tab {
+	background-color: #4d4d4d;
+	min-width: 108px;
+    	min-height: 24px;
+    padding-bottom: 1px;
+   /* border-top: 1px solid #1e1e1e; */
+ 	border-right: 1px solid #1e1e1e;
+	border-bottom: 1px solid #1e1e1e;
+}
+
+/* special override */
+QWidget#addBtn, QWidget#deleteBtn {
+	background-color: #4D4D4D;
+}
+
+QWidget#addBtn:hover, QWidget#deleteBtn:hover {
+	background-color: #555;
+}
+
+QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
+	background-color: #444;
+} </string>
+  </property>
+  <property name="iconSize">
+   <size>
+    <width>30</width>
+    <height>30</height>
+   </size>
+  </property>
+  <property name="dockNestingEnabled">
+   <bool>false</bool>
+  </property>
+  <property name="unifiedTitleAndToolBarOnMac">
+   <bool>false</bool>
+  </property>
+  <widget class="QWidget" name="viewportLayout">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <layout class="QGridLayout" name="gridLayout">
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <property name="verticalSpacing">
+     <number>0</number>
+    </property>
+    <item row="0" column="0">
+     <widget class="QWidget" name="backgroundscene" native="true">
+      <layout class="QVBoxLayout" name="verticalLayout_2">
+       <property name="spacing">
+        <number>0</number>
+       </property>
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QWidget" name="widget" native="true">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>16777215</width>
+           <height>32</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background: #212121</string>
+         </property>
+         <layout class="QHBoxLayout" name="horizontalLayout">
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <spacer name="horizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="checkBox">
+            <property name="text">
+             <string>Realtime Preview</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QWidget" name="sceneContainer" native="true">
+         <property name="focusPolicy">
+          <enum>Qt::ClickFocus</enum>
+         </property>
+         <property name="styleSheet">
+          <string notr="true"/>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="MenuBar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>994</width>
+     <height>30</height>
+    </rect>
+   </property>
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+   <property name="minimumSize">
+    <size>
+     <width>0</width>
+     <height>30</height>
+    </size>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <widget class="QMenu" name="menuOpenRecent">
+     <property name="title">
+      <string>Open Recent</string>
+     </property>
+     <addaction name="actionBlank"/>
+    </widget>
+    <addaction name="actionNew"/>
+    <addaction name="actionLoad"/>
+    <addaction name="menuOpenRecent"/>
+    <addaction name="separator"/>
+    <addaction name="actionSave"/>
+    <addaction name="actionSave_As"/>
+    <addaction name="separator"/>
+    <addaction name="actionPreferences"/>
+    <addaction name="actionExit"/>
+   </widget>
+   <widget class="QMenu" name="menuHelp">
+    <property name="title">
+     <string>Help</string>
+    </property>
+    <addaction name="actionAbout"/>
+    <addaction name="actionLicense"/>
+    <addaction name="separator"/>
+    <addaction name="actionOpenWebsite"/>
+    <addaction name="actionBlog"/>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuHelp"/>
+  </widget>
+  <widget class="QDockWidget" name="sceneHierarchyDock">
+   <property name="minimumSize">
+    <size>
+     <width>320</width>
+     <height>89</height>
+    </size>
+   </property>
+   <property name="maximumSize">
+    <size>
+     <width>524287</width>
+     <height>524287</height>
+    </size>
+   </property>
+   <property name="floating">
+    <bool>false</bool>
+   </property>
+   <property name="windowTitle">
+    <string>Scene Outliner</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>1</number>
+   </attribute>
+   <widget class="SceneHeirarchyWidget" name="sceneHierarchy">
+    <property name="minimumSize">
+     <size>
+      <width>320</width>
+      <height>0</height>
+     </size>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">:hover {
+    border: 1px solid #3498db;
+}</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QDockWidget" name="AnimationDock">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+   <property name="minimumSize">
+    <size>
+     <width>65</width>
+     <height>37</height>
+    </size>
+   </property>
+   <property name="maximumSize">
+    <size>
+     <width>524287</width>
+     <height>524287</height>
+    </size>
+   </property>
+   <property name="windowTitle">
+    <string>Animation</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>8</number>
+   </attribute>
+   <widget class="QWidget" name="animationWidgetContents">
+    <property name="minimumSize">
+     <size>
+      <width>0</width>
+      <height>0</height>
+     </size>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QWidget#animationWidgetContents {
+	border: 1px solid #1e1e1e;
+	background: #212121;
+}
+
+QWidget#animationWidgetContents:hover {
+    border: 1px solid #3498db;
+}</string>
+    </property>
+    <layout class="QGridLayout" name="gridLayout_5">
+     <property name="leftMargin">
+      <number>1</number>
+     </property>
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>1</number>
+     </property>
+     <property name="bottomMargin">
+      <number>0</number>
+     </property>
+     <property name="spacing">
+      <number>0</number>
+     </property>
+     <item row="0" column="0">
+      <widget class="AnimationWidget" name="animationtimeline"/>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QDockWidget" name="PropertiesDock">
+   <property name="minimumSize">
+    <size>
+     <width>396</width>
+     <height>137</height>
+    </size>
+   </property>
+   <property name="maximumSize">
+    <size>
+     <width>524287</width>
+     <height>524287</height>
+    </size>
+   </property>
+   <property name="styleSheet">
+    <string notr="true"/>
+   </property>
+   <property name="windowTitle">
+    <string>Properties</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>2</number>
+   </attribute>
+   <widget class="QWidget" name="dockWidgetContents">
+    <property name="minimumSize">
+     <size>
+      <width>396</width>
+      <height>0</height>
+     </size>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QWidget:dockWidgetContents {
+	border: 1px solid #212121;
+}
+
+:hover{
+    border: 1px solid #3498db;
+}</string>
+    </property>
+    <layout class="QVBoxLayout" name="verticalLayout_3">
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
+     <property name="bottomMargin">
+      <number>0</number>
+     </property>
+     <item>
+      <widget class="QScrollArea" name="propertiesWidget">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QScrollBar {
+	border: 0;
+}</string>
+       </property>
+       <property name="lineWidth">
+        <number>1</number>
+       </property>
+       <property name="sizeAdjustPolicy">
+        <enum>QAbstractScrollArea::AdjustToContents</enum>
+       </property>
+       <property name="widgetResizable">
+        <bool>true</bool>
+       </property>
+       <widget class="SceneNodePropertiesWidget" name="sceneNodeProperties">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>0</y>
+          <width>394</width>
+          <height>290</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">border: 0</string>
+        </property>
+       </widget>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QToolBar" name="ToolBar">
+   <property name="windowTitle">
+    <string>ToolBar</string>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">QToolButton
+{ 
+}
+
+QToolButton:disabled 
+{ 
+}
+
+QToolButton:pressed  
+{
+}
+
+QToolButton:focus    
+{
+}
+
+QToolButton:hover
+{
+}
+
+QToolButton:checked
+{
+	background-color: #2980b9;
+}</string>
+   </property>
+   <attribute name="toolBarArea">
+    <enum>TopToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+   <addaction name="actionUndo"/>
+   <addaction name="actionRedo"/>
+   <addaction name="separator"/>
+   <addaction name="actionTranslate"/>
+   <addaction name="actionRotate"/>
+   <addaction name="actionScale"/>
+   <addaction name="separator"/>
+   <addaction name="actionGlobalSpace"/>
+   <addaction name="actionLocalSpace"/>
+   <addaction name="separator"/>
+   <addaction name="actionFreeCamera"/>
+   <addaction name="actionArcballCam"/>
+  </widget>
+  <widget class="QDockWidget" name="PresetsDock">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+   <property name="minimumSize">
+    <size>
+     <width>396</width>
+     <height>87</height>
+    </size>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">background: #212121</string>
+   </property>
+   <property name="windowTitle">
+    <string>Presets</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>8</number>
+   </attribute>
+   <widget class="QWidget" name="dockContents">
+    <property name="sizePolicy">
+     <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+      <horstretch>0</horstretch>
+      <verstretch>0</verstretch>
+     </sizepolicy>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>396</width>
+      <height>0</height>
+     </size>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <layout class="QGridLayout" name="gridLayout_2">
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
+     <property name="bottomMargin">
+      <number>0</number>
+     </property>
+     <item row="0" column="0">
+      <widget class="QTabWidget" name="tabWidget">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="currentIndex">
+        <number>0</number>
+       </property>
+       <widget class="QWidget" name="MP_Layout">
+        <attribute name="title">
+         <string>Materials</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout_3">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item row="0" column="0">
+          <widget class="MaterialSets" name="materialPresets" native="true">
+           <property name="styleSheet">
+            <string notr="true">border: 0</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="S_Layout">
+        <attribute name="title">
+         <string>Skyboxes</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout_6">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <property name="spacing">
+          <number>11</number>
+         </property>
+         <item row="0" column="0">
+          <widget class="SkyPresets" name="skyPresets" native="true">
+           <property name="styleSheet">
+            <string notr="true">border: 0</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="M_Layout">
+        <attribute name="title">
+         <string>Models</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout_4">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item row="0" column="0">
+          <widget class="ModelPresets" name="modelPresets" native="true">
+           <property name="styleSheet">
+            <string notr="true">border: 0</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <action name="actionSave">
+   <property name="text">
+    <string>Save</string>
+   </property>
+  </action>
+  <action name="actionLoad">
+   <property name="text">
+    <string>Open</string>
+   </property>
+  </action>
+  <action name="actionSave_As">
+   <property name="text">
+    <string>Save As..</string>
+   </property>
+  </action>
+  <action name="actionNew">
+   <property name="text">
+    <string>New</string>
+   </property>
+  </action>
+  <action name="actionPreferences">
+   <property name="text">
+    <string>Preferences</string>
+   </property>
+  </action>
+  <action name="actionExit">
+   <property name="text">
+    <string>Exit</string>
+   </property>
+  </action>
+  <action name="actionAbout">
+   <property name="text">
+    <string>About</string>
+   </property>
+  </action>
+  <action name="actionLicense">
+   <property name="text">
+    <string>License</string>
+   </property>
+  </action>
+  <action name="actionOpenWebsite">
+   <property name="text">
+    <string>Visit Website</string>
+   </property>
+  </action>
+  <action name="actionBlog">
+   <property name="text">
+    <string>Blog</string>
+   </property>
+  </action>
+  <action name="actionBlank">
+   <property name="text">
+    <string>blank</string>
+   </property>
+  </action>
+  <action name="actionUndo">
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/undo.png</normaloff>:/app/icons/undo.png</iconset>
+   </property>
+   <property name="text">
+    <string>Undo</string>
+   </property>
+  </action>
+  <action name="actionRedo">
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/redo.svg</normaloff>:/app/icons/redo.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Redo</string>
+   </property>
+  </action>
+  <action name="actionTranslate">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/tranlate arrow.svg</normaloff>
+     <normalon>:/app/icons/tranlate arrow.svg</normalon>
+     <activeon>:/app/icons/tranlate arrow.svg</activeon>
+     <selectedon>:/app/icons/tranlate arrow.svg</selectedon>:/app/icons/tranlate arrow.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Translate Tool</string>
+   </property>
+  </action>
+  <action name="actionRotate">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/rotate-to-right.svg</normaloff>:/app/icons/rotate-to-right.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Rotate Tool</string>
+   </property>
+  </action>
+  <action name="actionScale">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/expand-arrows.svg</normaloff>:/app/icons/expand-arrows.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Scale Tool</string>
+   </property>
+  </action>
+  <action name="actionGlobalSpace">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/world.svg</normaloff>:/app/icons/world.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Global Space</string>
+   </property>
+  </action>
+  <action name="actionLocalSpace">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/sceneobject.svg</normaloff>:/app/icons/sceneobject.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Local Space</string>
+   </property>
+  </action>
+  <action name="actionFreeCamera">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/people.svg</normaloff>:/app/icons/people.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Free Camera</string>
+   </property>
+  </action>
+  <action name="actionArcballCam">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/app/icons/local.svg</normaloff>:/app/icons/local.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Arcball Camera</string>
+   </property>
+   <property name="toolTip">
+    <string>Arcball Camera</string>
+   </property>
+  </action>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>AnimationWidget</class>
+   <extends>QFrame</extends>
+   <header>src/widgets/animationwidget.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>MaterialSets</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/materialsets.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>SceneHeirarchyWidget</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/sceneheirarchywidget.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>SceneNodePropertiesWidget</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/scenenodepropertieswidget.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ModelPresets</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/modelpresets.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>SkyPresets</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/skypresets.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources>
+  <include location="../icons.qrc"/>
+ </resources>
+ <connections/>
+</ui>
