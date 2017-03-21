@@ -23,23 +23,26 @@ For more information see the LICENSE file
 #include "keyframelabelwidget.h"
 #include "keyframelabeltreewidget.h"
 #include "keyframelabel.h"
+#include "animationwidgetdata.h"
 #include <QMenu>
 #include <math.h>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QVariant>
 
+void KeyFrameWidget::setAnimWidgetData(AnimationWidgetData *value)
+{
+    animWidgetData = value;
+}
+
 KeyFrameWidget::KeyFrameWidget(QWidget* parent):
     QWidget(parent)
 {
-    //this->setGeometry(0,0,800,500);
-
     bgColor = QColor::fromRgb(50,50,50);
     propColor = QColor::fromRgb(70, 70, 70, 50);
     itemColor = QColor::fromRgb(255,255,255);
 
     maxTimeInSeconds = 30;
-    cursorPos = 0;
 
     linePen = QPen(itemColor);
     cursorPen = QPen(QColor::fromRgb(142,45,197));
@@ -51,13 +54,6 @@ KeyFrameWidget::KeyFrameWidget(QWidget* parent):
 
     scaleRatio = 30;
 
-    //obj = nullptr;
-    rangeStart = 0;
-    rangeEnd = 100;
-
-    minRange = 10;
-    maxRange = 1000;
-
     leftButtonDown = false;
     middleButtonDown = false;
     rightButtonDown = false;
@@ -68,12 +64,6 @@ KeyFrameWidget::KeyFrameWidget(QWidget* parent):
 void KeyFrameWidget::setSceneNode(iris::SceneNodePtr node)
 {
     obj = node;
-}
-
-void KeyFrameWidget::setMaxTimeInSeconds(float time)
-{
-    maxTimeInSeconds = time;
-    this->setGeometry(this->x(),this->y(),time*scaleRatio,this->height());
 }
 
 void KeyFrameWidget::adjustLength()
@@ -133,7 +123,7 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
     auto cursorPen = QPen(QColor::fromRgb(142,45,197));
     cursorPen.setWidth(3);
     paint.setPen(cursorPen);
-    auto cursorScreenPos = timeToPos(cursorPos);
+    auto cursorScreenPos = timeToPos(animWidgetData->cursorPosInSeconds);
     paint.drawLine(cursorScreenPos,0,cursorScreenPos,widgetHeight);
 
 }
@@ -210,21 +200,22 @@ void KeyFrameWidget::drawBackgroundLines(QPainter& paint)
 
     //find increment automatically
     float increment = 10.0f;//start on the smallest level
-    auto range = rangeEnd-rangeStart;
-    while(increment*10<range)
-        increment*=10;
-    float smallIncrement = increment/10.0f;
+    auto range = animWidgetData->rangeEnd - animWidgetData->rangeStart;
+    while(increment * 10 < range)
+        increment *= 10;
+    float smallIncrement = increment / 10.0f;
 
-    float startTime = rangeStart - fmod(rangeStart,increment)-increment;
-    float endTime = rangeEnd - fmod(rangeEnd,increment)+increment;
+    float startTime = animWidgetData->rangeStart - fmod(animWidgetData->rangeStart, increment) - increment;
+    float endTime = animWidgetData->rangeEnd - fmod(animWidgetData->rangeEnd, increment) + increment;
 
+    int widgetWidth = this->geometry().width();
     int widgetHeight = this->geometry().height();
 
     //small increments
     paint.setPen(smallPen);
     for(float x=startTime;x<endTime;x+=smallIncrement)
     {
-        int screenPos = timeToPos(x);
+        int screenPos = animWidgetData->timeToPos(x, widgetWidth);
         paint.drawLine(screenPos,0,screenPos,widgetHeight);
     }
 
@@ -232,22 +223,9 @@ void KeyFrameWidget::drawBackgroundLines(QPainter& paint)
     paint.setPen(bigPen);
     for(float x=startTime;x<endTime;x+=increment)
     {
-        int screenPos = timeToPos(x);
+        int screenPos = animWidgetData->timeToPos(x, widgetWidth);
         paint.drawLine(screenPos,0,screenPos,widgetHeight);
-
-        int timeInSeconds = (int)x;
-        int secs = timeInSeconds%60;
-        int mins = timeInSeconds/60;
-        int hours = timeInSeconds/3600;
-
-        /*
-        paint.drawText(screenPos+3,widgetHeight-5,QString("%1:%2:%3")
-                       .arg(hours,2,10,QLatin1Char('0'))
-                       .arg(mins,2,10,QLatin1Char('0'))
-                       .arg(secs,2,10,QLatin1Char('0')));
-        */
     }
-
 }
 
 void KeyFrameWidget::mousePressEvent(QMouseEvent* evt)
@@ -321,15 +299,17 @@ void KeyFrameWidget::mouseMoveEvent(QMouseEvent* evt)
     if(middleButtonDown)
     {
         auto timeDiff = posToTime(evt->x()) - posToTime(mousePos.x());
-        rangeStart-=timeDiff;
-        rangeEnd-=timeDiff;
+        animWidgetData->rangeStart-=timeDiff;
+        animWidgetData->rangeEnd-=timeDiff;
 
-        emit timeRangeChanged(rangeStart, rangeEnd);
+        //emit timeRangeChanged(rangeStart, rangeEnd);
+
+        animWidgetData->refreshWidgets();
     }
 
 
     mousePos = evt->pos();
-    this->repaint();
+    //this->repaint();
 }
 
 void KeyFrameWidget::wheelEvent(QWheelEvent* evt)
@@ -341,66 +321,20 @@ void KeyFrameWidget::wheelEvent(QWheelEvent* evt)
     float scale = 1.0f-sign*0.2f;
 
     float timeSpacePivot = posToTime(evt->x());
-    rangeStart = timeSpacePivot+(rangeStart-timeSpacePivot)*scale;
-    rangeEnd = timeSpacePivot+(rangeEnd-timeSpacePivot)*scale;
+    animWidgetData->rangeStart = timeSpacePivot+(animWidgetData->rangeStart-timeSpacePivot) * scale;
+    animWidgetData->rangeEnd = timeSpacePivot+(animWidgetData->rangeEnd-timeSpacePivot) * scale;
 
-    //min start
-    emit timeRangeChanged(rangeStart, rangeEnd);
-
-    this->repaint();
-}
-
-
-float KeyFrameWidget::getTimeAtCursor()
-{
-    return cursorPos;
-}
-
-void KeyFrameWidget::setTime(float time)
-{
-    cursorPos = time;
-    this->repaint();
-}
-
-void KeyFrameWidget::setTimeRange(float start,float end)
-{
-    rangeStart = start;
-    rangeEnd = end;
-    this->repaint();
-}
-
-void KeyFrameWidget::setStartTime(float start)
-{
-    rangeStart = start;
-    this->repaint();
-}
-
-void KeyFrameWidget::setEndTime(float end)
-{
-    rangeEnd = end;
-    this->repaint();
-}
-
-float KeyFrameWidget::getStartTimeRange()
-{
-    return rangeStart;
-}
-
-float KeyFrameWidget::getEndTimeRange()
-{
-    return rangeEnd;
+    animWidgetData->refreshWidgets();
 }
 
 int KeyFrameWidget::timeToPos(float timeInSeconds)
 {
-    float timeSpacePos = (timeInSeconds-rangeStart)/(rangeEnd-rangeStart);
-    return (int)(timeSpacePos*this->geometry().width());
+    return animWidgetData->timeToPos(timeInSeconds, this->width());
 }
 
 float KeyFrameWidget::posToTime(int xpos)
 {
-    float range = rangeEnd-rangeStart;
-    return rangeStart+range*((float)xpos/this->geometry().width());
+    return animWidgetData->posToTime(xpos, this->width());
 }
 
 float KeyFrameWidget::distanceSquared(float x1,float y1,float x2,float y2)
@@ -443,9 +377,4 @@ iris::FloatKey* KeyFrameWidget::getSelectedKey(int x,int y)
 void KeyFrameWidget::setLabelWidget(KeyFrameLabelTreeWidget *value)
 {
     labelWidget = value;
-}
-
-void KeyFrameWidget::cursorTimeChanged(float timeInSeconds)
-{
-    setTime(timeInSeconds);
 }

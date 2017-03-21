@@ -27,6 +27,7 @@ For more information see the LICENSE file
 
 #include "keyframewidget.h"
 #include "keyframecurvewidget.h"
+#include "animationwidgetdata.h"
 
 
 AnimationWidget::AnimationWidget(QWidget *parent) :
@@ -35,12 +36,16 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    animWidgetData = new AnimationWidgetData();
+
     keyFrameWidget = new KeyFrameWidget(this);
     keyFrameWidget->setLabelWidget(ui->keylabelView);
+    keyFrameWidget->setAnimWidgetData(animWidgetData);
     //keyFrameWidget->hide();
 
     curveWidget = new KeyFrameCurveWidget();
     curveWidget->hide();
+    curveWidget->setAnimWidgetData(animWidgetData);
 
     auto gridLayout = new QGridLayout();
     gridLayout->setMargin(0);
@@ -48,6 +53,9 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     gridLayout->addWidget(keyFrameWidget);
     gridLayout->addWidget(curveWidget);
     ui->keyFrameHolder->setLayout(gridLayout);
+
+    animWidgetData->addDisplayWidget(keyFrameWidget);
+    animWidgetData->addDisplayWidget(curveWidget);
 
     //ui->keywidgetView->setLabelWidget(ui->keylabelView);
     ui->keylabelView->setAnimWidget(this);
@@ -68,8 +76,6 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     //connect(ui->keywidgetView,SIGNAL(cursorTimeChanged(float)),this,SLOT(onObjectAnimationTimeChanged(float)));
     connect(ui->timeline,SIGNAL(cursorMoved(float)),this,SLOT(onSceneAnimationTimeChanged(float)));
     connect(ui->timeline,SIGNAL(cursorMoved(float)),keyFrameWidget,SLOT(cursorTimeChanged(float)));
-    connect(ui->timeline,SIGNAL(timeRangeChanged(float,float)),keyFrameWidget,SLOT(setTimeRange(float,float)));
-    connect(keyFrameWidget,SIGNAL(timeRangeChanged(float,float)),ui->timeline,SLOT(setTimeRange(float,float)));
 
     //dopesheet and curve buttons
     connect(ui->dopeSheetBtn,SIGNAL(pressed()),this,SLOT(showKeyFrameWidget()));
@@ -137,16 +143,19 @@ void AnimationWidget::updateAnim()
     timeAtCursor += elapsedTimer->nsecsElapsed()/(1000.0f*1000.0f*1000.0f);
     elapsedTimer->restart();
 
-    keyFrameWidget->setTime(timeAtCursor);
-    ui->timeline->setTime(timeAtCursor);
+    //ui->timeline->setTime(timeAtCursor);
+    animWidgetData->cursorPosInSeconds = timeAtCursor;
+    animWidgetData->refreshWidgets();
+
     onObjectAnimationTimeChanged(timeAtCursor);
 }
 
 void AnimationWidget::startTimer()
 {
     if (!timer->isActive()) {
-        timeAtCursor = keyFrameWidget->getTimeAtCursor();
-        startedTime = timeAtCursor;
+        //timeAtCursor = keyFrameWidget->getTimeAtCursor();
+        //startedTime = timeAtCursor;
+        startedTime = animWidgetData->cursorPosInSeconds;
 
         timer->start(timerSpeed);
         elapsedTimer->start();

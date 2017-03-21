@@ -19,6 +19,7 @@ For more information see the LICENSE file
 //#include "../scenegraph/scenenodes.h"
 #include "../irisgl/src/core/scenenode.h"
 
+class AnimationWidgetData;
 
 //https://kernelcoder.wordpress.com/2010/08/25/how-to-insert-ruler-scale-type-widget-into-a-qabstractscrollarea-type-widget/
 class TimelineWidget:public QWidget
@@ -35,19 +36,14 @@ private:
     QPoint clickPos;
     QPoint mousePos;
 
+    AnimationWidgetData* animWidgetData;
+
 public:
     QColor bgColor;
     QColor itemColor;
 
     QPen linePen;
     QPen cursorPen;
-
-    //raneg of time being viewed in seconds
-    float rangeStart;
-    float rangeEnd;
-
-    //indicates current time at cursor in seconds
-    float cursorPos;
 
     bool dragging;
     //int scaleRatio;
@@ -61,21 +57,10 @@ public:
 
     TimelineWidget(QWidget* parent);
 
-    float getStartTimeRange();
-    float getEndTimeRange();
-
     void showHighlight(float start,float end);
     void hideHighlight();
 
     void setSceneNode(iris::SceneNodePtr node);
-
-    float getTimeAtCursor();
-
-    //void setMaxTimeInSeconds(float time);
-    void setStartTime(float start);
-    void setEndTime(float end);
-    void setTime(float time);
-    void setCursorPos(float timeInSeconds);
 
     void paintEvent(QPaintEvent *painter);
     void mousePressEvent(QMouseEvent* evt);
@@ -84,12 +69,7 @@ public:
     void resizeEvent(QResizeEvent* event);
     void wheelEvent(QWheelEvent* evt);
 
-signals:
-    void cursorMoved(float timeInSeconds);
-    void timeRangeChanged(float timeStart, float timeEnd);
-
-public slots:
-    void setTimeRange(float start,float end);
+    void setAnimWidgetData(AnimationWidgetData *value);
 
 };
 
