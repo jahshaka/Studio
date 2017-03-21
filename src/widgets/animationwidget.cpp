@@ -81,6 +81,7 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
 
     if (!!node) {
         scene = node->scene;
+        ui->sceneNodeName->setText(node->name);
 
         animableProperties = node->getAnimableProperties();
 
@@ -95,9 +96,17 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
             menu->addAction(action);
         }
 
-        animation = node->animation;
+        animation = node->getAnimation();
         connect(menu, SIGNAL(triggered(QAction*)), this ,SLOT(addPropertyKey(QAction*)));
         ui->insertFrame->setMenu(menu);
+
+        // add list of animations to combo box
+        auto animList = QStringList();
+        for (auto anim : node->getAnimations()) {
+
+        }
+
+        ui->animList->addItems(animList);
     } else {
         ui->insertFrame->setMenu(new QMenu());
         animation.clear();
@@ -156,7 +165,7 @@ void AnimationWidget::repaintViews()
 void AnimationWidget::removeProperty(QString propertyName)
 {
     if (!!node) {
-        node->animation->removePropertyAnim(propertyName);
+        node->getAnimation()->removePropertyAnim(propertyName);
         ui->keylabelView->removeProperty(propertyName);
 
         this->repaintViews();
@@ -196,7 +205,7 @@ iris::PropertyAnim *AnimationWidget::createPropertyAnim(const iris::AnimableProp
 void AnimationWidget::setLooping(bool loop)
 {
     if (!!node) {
-        node->animation->setLooping(loop);
+        node->getAnimation()->setLooping(loop);
     }
 }
 

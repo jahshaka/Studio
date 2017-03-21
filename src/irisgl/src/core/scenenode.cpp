@@ -64,6 +64,31 @@ long SceneNode::getNodeId()
     return nodeId;
 }
 
+void SceneNode::addAnimation(AnimationPtr anim)
+{
+    animations.insert(anim->getName(), anim);
+}
+
+QList<AnimationPtr> SceneNode::getAnimations()
+{
+    return animations.values();
+}
+
+void SceneNode::setAnimation(AnimationPtr anim)
+{
+    animation = anim;
+}
+
+AnimationPtr SceneNode::getAnimation()
+{
+    return animation;
+}
+
+bool SceneNode::hasActiveAnimation()
+{
+    return !!animation;
+}
+
 QList<AnimableProperty> SceneNode::getAnimableProperties()
 {
     QList<AnimableProperty> props;

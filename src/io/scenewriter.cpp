@@ -168,7 +168,8 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sc
 
 void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePtr sceneNode)
 {
-    auto anim = sceneNode->animation;
+    // todo: add all animations
+    auto anim = sceneNode->getAnimation();
     if(!anim)
         return;
 
