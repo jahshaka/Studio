@@ -352,6 +352,26 @@ QWidget#controls &gt; QToolButton:hover {
                </property>
               </spacer>
              </item>
+             <item>
+              <widget class="QWidget" name="widget_8" native="true">
+               <layout class="QHBoxLayout">
+                <item>
+                 <widget class="QPushButton" name="curvesBtn">
+                  <property name="text">
+                   <string>Curves</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="dopeSheetBtn">
+                  <property name="text">
+                   <string>DopeSheet</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
             </layout>
            </widget>
           </item>
