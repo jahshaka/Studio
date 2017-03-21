@@ -48,7 +48,7 @@ KeyFrameLabelWidget::KeyFrameLabelWidget(QWidget* parent):
 void KeyFrameLabelWidget::setSceneNode(iris::SceneNodePtr node)
 {
     obj = node;
-    if (!!obj && !!obj->animation) {
+    if (!!obj && obj->hasActiveAnimation()) {
         //this->setKeyFrameSet(obj->animation->keyFrameSet);
     } else {
         this->clearKeyFrameSet();
@@ -92,7 +92,7 @@ void KeyFrameLabelWidget::clearKeyFrameSet()
 
 void KeyFrameLabelWidget::resetKeyFrames()
 {
-    if (!!obj && !!obj->animation) {
+    if (!!obj && obj->hasActiveAnimation()) {
         //this->setKeyFrameSet(obj->animation->keyFrameSet);
     }
 }

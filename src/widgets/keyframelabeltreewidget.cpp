@@ -60,7 +60,7 @@ void KeyFrameLabelTreeWidget::setSceneNode(iris::SceneNodePtr node)
         return;
 
     // refresh tree
-    auto animation = node->animation;
+    auto animation = node->getAnimation();
     for(auto prop : animation->properties) {
         // add prop to tree
         //switch(prop->)
@@ -70,7 +70,7 @@ void KeyFrameLabelTreeWidget::setSceneNode(iris::SceneNodePtr node)
 
 void KeyFrameLabelTreeWidget::addProperty(QString propName)
 {
-    auto prop = node->animation->properties[propName];
+    auto prop = node->getAnimation()->properties[propName];
     addPropertyToTree(prop);
 }
 

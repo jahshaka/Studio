@@ -244,7 +244,7 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
     if(framesArray.isEmpty())
         return;
 
-    auto animation = iris::Animation::create("");
+    auto animation = iris::Animation::create("Default");
 
     /*
     for(auto frameValue:framesArray)
@@ -269,7 +269,8 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
     }
     */
 
-    sceneNode->animation = animation;
+    sceneNode->addAnimation(animation);
+    sceneNode->setAnimation(animation);
 }
 
 /**

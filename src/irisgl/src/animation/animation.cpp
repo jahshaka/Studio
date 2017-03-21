@@ -23,6 +23,7 @@ Animation::Animation(QString name)
     this->name = name;
     loop = false;
     length = 1.0f;
+    frameRate = 60;
 }
 
 Animation::~Animation()
@@ -100,6 +101,16 @@ ColorPropertyAnim *Animation::getColorPropertyAnim(QString name)
 bool Animation::hasPropertyAnim(QString name)
 {
     return properties.contains(name);
+}
+
+int Animation::getFrameRate() const
+{
+    return frameRate;
+}
+
+void Animation::setFrameRate(int value)
+{
+    frameRate = value;
 }
 
 }

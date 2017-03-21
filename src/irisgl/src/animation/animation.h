@@ -25,6 +25,9 @@ class Animation
     QString name;
     bool loop;
     float length;
+
+    // sample rate
+    int frameRate;
 public:
 
     //QMap preserves insertion order,QHash doesnt
@@ -59,6 +62,9 @@ public:
 
     bool getLooping() const;
     void setLooping(bool value);
+
+    int getFrameRate() const;
+    void setFrameRate(int value);
 };
 
 }
