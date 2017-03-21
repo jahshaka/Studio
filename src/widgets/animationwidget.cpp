@@ -25,6 +25,9 @@ For more information see the LICENSE file
 #include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/core/scene.h"
 
+#include "keyframewidget.h"
+#include "keyframecurvewidget.h"
+
 
 AnimationWidget::AnimationWidget(QWidget *parent) :
     QWidget(parent),
@@ -32,18 +35,30 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    ui->keywidgetView->setLabelWidget(ui->keylabelView);
+    keyFrameWidget = new KeyFrameWidget(this);
+    keyFrameWidget->setLabelWidget(ui->keylabelView);
+    //keyFrameWidget->hide();
+
+    curveWidget = new KeyFrameCurveWidget();
+    curveWidget->hide();
+
+    auto gridLayout = new QGridLayout();
+    gridLayout->setMargin(0);
+    gridLayout->setSpacing(0);
+    gridLayout->addWidget(keyFrameWidget);
+    gridLayout->addWidget(curveWidget);
+    ui->keyFrameHolder->setLayout(gridLayout);
+
+    //ui->keywidgetView->setLabelWidget(ui->keylabelView);
     ui->keylabelView->setAnimWidget(this);
 
     //timer
     timer = new QTimer(this);
-    //timer = new QElapsedTimer(this);
     connect(timer,SIGNAL(timeout()),this,SLOT(updateAnim()));
     elapsedTimer = new QElapsedTimer();
 
     timeAtCursor = 0;
     timerSpeed = 1.0f/60;//60 fps
-    //startedTime = ui->timeline->getTimeAtCursor();
     loopAnim = false;
 
     //buttons that affect timer
@@ -52,9 +67,13 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
 
     //connect(ui->keywidgetView,SIGNAL(cursorTimeChanged(float)),this,SLOT(onObjectAnimationTimeChanged(float)));
     connect(ui->timeline,SIGNAL(cursorMoved(float)),this,SLOT(onSceneAnimationTimeChanged(float)));
-    connect(ui->timeline,SIGNAL(cursorMoved(float)),ui->keywidgetView,SLOT(cursorTimeChanged(float)));
-    connect(ui->timeline,SIGNAL(timeRangeChanged(float,float)),ui->keywidgetView,SLOT(setTimeRange(float,float)));
-    connect(ui->keywidgetView,SIGNAL(timeRangeChanged(float,float)),ui->timeline,SLOT(setTimeRange(float,float)));
+    connect(ui->timeline,SIGNAL(cursorMoved(float)),keyFrameWidget,SLOT(cursorTimeChanged(float)));
+    connect(ui->timeline,SIGNAL(timeRangeChanged(float,float)),keyFrameWidget,SLOT(setTimeRange(float,float)));
+    connect(keyFrameWidget,SIGNAL(timeRangeChanged(float,float)),ui->timeline,SLOT(setTimeRange(float,float)));
+
+    //dopesheet and curve buttons
+    connect(ui->dopeSheetBtn,SIGNAL(pressed()),this,SLOT(showKeyFrameWidget()));
+    connect(ui->curvesBtn,SIGNAL(pressed()),this,SLOT(showCurveWidget()));
 
     mainTimeline = nullptr;
 }
@@ -71,11 +90,11 @@ void AnimationWidget::setScene(iris::ScenePtr scene)
 
 void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
 {
-    ui->keywidgetView->setSceneNode(node);
+    keyFrameWidget->setSceneNode(node);
     //ui->timeline->setSceneNode(node);
     ui->keylabelView->setSceneNode(node);
 
-    ui->keywidgetView->repaint();
+    keyFrameWidget->repaint();
     ui->keylabelView->repaint();
     this->node = node;
 
@@ -118,7 +137,7 @@ void AnimationWidget::updateAnim()
     timeAtCursor += elapsedTimer->nsecsElapsed()/(1000.0f*1000.0f*1000.0f);
     elapsedTimer->restart();
 
-    ui->keywidgetView->setTime(timeAtCursor);
+    keyFrameWidget->setTime(timeAtCursor);
     ui->timeline->setTime(timeAtCursor);
     onObjectAnimationTimeChanged(timeAtCursor);
 }
@@ -126,7 +145,7 @@ void AnimationWidget::updateAnim()
 void AnimationWidget::startTimer()
 {
     if (!timer->isActive()) {
-        timeAtCursor = ui->keywidgetView->getTimeAtCursor();
+        timeAtCursor = keyFrameWidget->getTimeAtCursor();
         startedTime = timeAtCursor;
 
         timer->start(timerSpeed);
@@ -157,9 +176,9 @@ void AnimationWidget::fixLayout()
 
 void AnimationWidget::repaintViews()
 {
-    //ui->timeline->repaint();
-    ui->keywidgetView->repaint();
-    ui->keylabelView->repaint();
+    ui->timeline->repaint();
+    keyFrameWidget->repaint();
+    //ui->keylabelView->repaint();
 }
 
 void AnimationWidget::removeProperty(QString propertyName)
@@ -285,5 +304,17 @@ void AnimationWidget::onSceneAnimationTimeChanged(float timeInSeconds)
     {
         scene->updateSceneAnimation(timeInSeconds);
     }
+}
+
+void AnimationWidget::showKeyFrameWidget()
+{
+    keyFrameWidget->show();
+    curveWidget->hide();
+}
+
+void AnimationWidget::showCurveWidget()
+{
+    keyFrameWidget->hide();
+    curveWidget->show();
 }
 
