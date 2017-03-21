@@ -238,13 +238,13 @@ QWidget#controls &gt; QToolButton:hover {
               <number>9</number>
              </property>
              <property name="topMargin">
-              <number>9</number>
+              <number>3</number>
              </property>
              <property name="rightMargin">
               <number>9</number>
              </property>
              <property name="bottomMargin">
-              <number>9</number>
+              <number>3</number>
              </property>
              <item>
               <widget class="QWidget" name="widget_11" native="true">
@@ -416,7 +416,7 @@ QWidget#controls &gt; QToolButton:hover {
         </widget>
        </item>
        <item>
-        <widget class="KeyFrameWidget" name="keywidgetView" native="true">
+        <widget class="QWidget" name="keyFrameHolder" native="true">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
            <horstretch>0</horstretch>
@@ -432,12 +432,6 @@ QWidget#controls &gt; QToolButton:hover {
   </layout>
  </widget>
  <customwidgets>
-  <customwidget>
-   <class>KeyFrameWidget</class>
-   <extends>QWidget</extends>
-   <header>src/widgets/keyframewidget.h</header>
-   <container>1</container>
-  </customwidget>
   <customwidget>
    <class>TimelineWidget</class>
    <extends>QWidget</extends>

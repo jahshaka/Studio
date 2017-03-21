@@ -26,6 +26,9 @@ class QMenu;
 class QTreeWidget;
 class QTreeWidgetItem;
 
+class KeyFrameWidget;
+class KeyFrameCurveWidget;
+
 namespace Ui
 {
     class AnimationWidget;
@@ -45,6 +48,8 @@ class AnimationWidget : public QWidget
     bool loopAnim;
 
     TimelineWidget* mainTimeline;
+    KeyFrameWidget* keyFrameWidget;
+    KeyFrameCurveWidget* curveWidget;
 
     QMenu* addMenu;
     QMenu* deleteMenu;
@@ -96,6 +101,9 @@ private slots:
 
     void onObjectAnimationTimeChanged(float timeInSeconds);
     void onSceneAnimationTimeChanged(float timeInSeconds);
+
+    void showKeyFrameWidget();
+    void showCurveWidget();
 
 private:
     float timeAtCursor;
