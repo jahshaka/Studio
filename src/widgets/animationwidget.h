@@ -28,6 +28,7 @@ class QTreeWidgetItem;
 
 class KeyFrameWidget;
 class KeyFrameCurveWidget;
+class AnimationWidgetData;
 
 namespace Ui
 {
@@ -56,6 +57,8 @@ class AnimationWidget : public QWidget
 
     QList<iris::AnimableProperty> animableProperties;
     iris::AnimationPtr animation;
+
+    AnimationWidgetData* animWidgetData;
 public:
     explicit AnimationWidget(QWidget *parent = 0);
     ~AnimationWidget();

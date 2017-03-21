@@ -184,7 +184,8 @@ HEADERS  += src/mainwindow.h \
     src/constants.h \
     src/widgets/keyframelabel.h \
     src/uimanager.h \
-    src/widgets/keyframecurvewidget.h
+    src/widgets/keyframecurvewidget.h \
+    src/widgets/animationwidgetdata.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

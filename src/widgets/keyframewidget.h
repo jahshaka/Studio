@@ -31,6 +31,7 @@ class KeyFrameLabelTreeWidget;
 
 class QTreeWidget;
 class QTreeWidgetItem;
+class AnimationWidgetData;
 
 class KeyFrameWidget:public QWidget
 {
@@ -54,16 +55,6 @@ private:
 
     float maxTimeInSeconds;
 
-    //the range is in the time space
-    float rangeStart;
-    float rangeEnd;
-
-    float minRange;
-    float maxRange;
-
-    //indicates time at cursor
-    float cursorPos;
-
     bool dragging;
     int scaleRatio;
 
@@ -78,24 +69,18 @@ private:
     bool rightButtonDown;
 
     KeyFrameLabelTreeWidget *labelWidget;
+    AnimationWidgetData* animWidgetData;
 
 public:
     KeyFrameWidget(QWidget* parent);
 
     void setSceneNode(iris::SceneNodePtr node);
-    void setMaxTimeInSeconds(float time);
     void adjustLength();
 
     float getStartTimeRange();
     float getEndTimeRange();
 
     float getTimeAtCursor();
-    //void setMaxTimeInSeconds(float time);
-
-    void setStartTime(float start);
-    void setEndTime(float end);
-    void setTime(float time);
-    //void setCursorPos(int x);
 
     void drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetItem* item, int& yTop);
     void drawBackgroundLines(QPainter& paint);
@@ -110,9 +95,7 @@ public:
 
     void setLabelWidget(KeyFrameLabelTreeWidget *value);
 
-public slots:
-    void cursorTimeChanged(float timeInSeconds);
-    void setTimeRange(float start,float end);
+    void setAnimWidgetData(AnimationWidgetData *value);
 
 signals:
     void timeRangeChanged(float timeStart, float timeEnd);
