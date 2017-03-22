@@ -71,6 +71,9 @@ public:
 
     void setAnimWidgetData(AnimationWidgetData *value);
 
+signals:
+    void cursorMoved(float);
+
 };
 
 

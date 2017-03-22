@@ -56,8 +56,7 @@ public:
     float posToTime(int xpos, int widgetWidth)
     {
         float range = rangeEnd - rangeStart;
-        return rangeStart + range * widgetWidth;
-    }
+        return rangeStart + range * ((float)xpos / widgetWidth);    }
 
 };
 

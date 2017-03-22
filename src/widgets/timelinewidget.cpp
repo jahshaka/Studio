@@ -46,6 +46,8 @@ TimelineWidget::TimelineWidget(QWidget* parent):
     leftButtonDown = false;
     middleButtonDown = false;
     rightButtonDown = false;
+
+    animWidgetData = nullptr;
 }
 
 void TimelineWidget::showHighlight(float start,float end)
@@ -65,6 +67,9 @@ void TimelineWidget::hideHighlight()
 void TimelineWidget::paintEvent(QPaintEvent *painter)
 {
     Q_UNUSED(painter);
+
+    if (!animWidgetData)
+        return;
 
     int widgetWidth = this->geometry().width();
     int widgetHeight = this->geometry().height();
@@ -180,9 +185,11 @@ void TimelineWidget::mouseReleaseEvent(QMouseEvent* evt)
 
 void TimelineWidget::mouseMoveEvent(QMouseEvent* evt)
 {
-    if(dragging)
+    if(leftButtonDown)
     {
         animWidgetData->cursorPosInSeconds = posToTime(evt->x());
+        cursorMoved(animWidgetData->cursorPosInSeconds);
+        animWidgetData->refreshWidgets();
     }
 
     if(middleButtonDown)

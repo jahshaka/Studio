@@ -14,6 +14,8 @@ KeyFrameCurveWidget::KeyFrameCurveWidget(QWidget *parent) :
     ui(new Ui::KeyFrameCurveWidget)
 {
     ui->setupUi(this);
+
+    animWidgetData = nullptr;
 }
 
 KeyFrameCurveWidget::~KeyFrameCurveWidget()
@@ -30,6 +32,9 @@ void KeyFrameCurveWidget::setLabelWidget(KeyFrameLabelTreeWidget *value)
 void KeyFrameCurveWidget::paintEvent(QPaintEvent *painter)
 {
     Q_UNUSED(painter);
+
+    if (!animWidgetData)
+        return;
 
     int widgetWidth = this->geometry().width();
     int widgetHeight = this->geometry().height();
