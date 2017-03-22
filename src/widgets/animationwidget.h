@@ -109,7 +109,7 @@ private slots:
     void showCurveWidget();
 
 private:
-    float timeAtCursor;
+    //float timeAtCursor;
     float timerSpeed;
     Ui::AnimationWidget *ui;
 };

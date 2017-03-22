@@ -47,6 +47,8 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     curveWidget->hide();
     curveWidget->setAnimWidgetData(animWidgetData);
 
+    ui->timeline->setAnimWidgetData(animWidgetData);
+
     auto gridLayout = new QGridLayout();
     gridLayout->setMargin(0);
     gridLayout->setSpacing(0);
@@ -56,6 +58,7 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
 
     animWidgetData->addDisplayWidget(keyFrameWidget);
     animWidgetData->addDisplayWidget(curveWidget);
+    animWidgetData->addDisplayWidget(ui->timeline);
 
     //ui->keywidgetView->setLabelWidget(ui->keylabelView);
     ui->keylabelView->setAnimWidget(this);
@@ -65,7 +68,7 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     connect(timer,SIGNAL(timeout()),this,SLOT(updateAnim()));
     elapsedTimer = new QElapsedTimer();
 
-    timeAtCursor = 0;
+    //timeAtCursor = 0;
     timerSpeed = 1.0f/60;//60 fps
     loopAnim = false;
 
@@ -75,7 +78,7 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
 
     //connect(ui->keywidgetView,SIGNAL(cursorTimeChanged(float)),this,SLOT(onObjectAnimationTimeChanged(float)));
     connect(ui->timeline,SIGNAL(cursorMoved(float)),this,SLOT(onSceneAnimationTimeChanged(float)));
-    connect(ui->timeline,SIGNAL(cursorMoved(float)),keyFrameWidget,SLOT(cursorTimeChanged(float)));
+    //connect(ui->timeline,SIGNAL(cursorMoved(float)),keyFrameWidget,SLOT(cursorTimeChanged(float)));
 
     //dopesheet and curve buttons
     connect(ui->dopeSheetBtn,SIGNAL(pressed()),this,SLOT(showKeyFrameWidget()));
@@ -140,14 +143,11 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
 
 void AnimationWidget::updateAnim()
 {
-    timeAtCursor += elapsedTimer->nsecsElapsed()/(1000.0f*1000.0f*1000.0f);
+    animWidgetData->cursorPosInSeconds += elapsedTimer->nsecsElapsed()/(1000.0f*1000.0f*1000.0f);
     elapsedTimer->restart();
-
-    //ui->timeline->setTime(timeAtCursor);
-    animWidgetData->cursorPosInSeconds = timeAtCursor;
     animWidgetData->refreshWidgets();
 
-    onObjectAnimationTimeChanged(timeAtCursor);
+    onObjectAnimationTimeChanged(animWidgetData->cursorPosInSeconds);
 }
 
 void AnimationWidget::startTimer()
@@ -165,7 +165,7 @@ void AnimationWidget::startTimer()
 void AnimationWidget::stopTimer()
 {
     if (timer->isActive()) {
-        timeAtCursor = startedTime;
+        animWidgetData->cursorPosInSeconds = startedTime;
         timer->stop();
     }
 }
@@ -264,26 +264,26 @@ void AnimationWidget::addPropertyKey(QAction *action)
     {
         auto value = val.toFloat();
         anim->getKeyFrames()[0].keyFrame->
-                addKey(value,this->timeAtCursor);
+                addKey(value, animWidgetData->cursorPosInSeconds);
     }
         break;
     case iris::AnimablePropertyType::Vector3:
     {
         auto value = val.value<QVector3D>();
         auto frames =  anim->getKeyFrames();
-        frames[0].keyFrame->addKey(value.x(), this->timeAtCursor);
-        frames[1].keyFrame->addKey(value.y(), this->timeAtCursor);
-        frames[2].keyFrame->addKey(value.z(), this->timeAtCursor);
+        frames[0].keyFrame->addKey(value.x(), animWidgetData->cursorPosInSeconds);
+        frames[1].keyFrame->addKey(value.y(), animWidgetData->cursorPosInSeconds);
+        frames[2].keyFrame->addKey(value.z(), animWidgetData->cursorPosInSeconds);
     }
         break;
     case iris::AnimablePropertyType::Color:
     {
         auto value = val.value<QColor>();
         auto frames =  anim->getKeyFrames();
-        frames[0].keyFrame->addKey(value.redF(),    this->timeAtCursor);
-        frames[1].keyFrame->addKey(value.greenF(),  this->timeAtCursor);
-        frames[2].keyFrame->addKey(value.blueF(),   this->timeAtCursor);
-        frames[3].keyFrame->addKey(value.alphaF(),  this->timeAtCursor);
+        frames[0].keyFrame->addKey(value.redF(),    animWidgetData->cursorPosInSeconds);
+        frames[1].keyFrame->addKey(value.greenF(),  animWidgetData->cursorPosInSeconds);
+        frames[2].keyFrame->addKey(value.blueF(),   animWidgetData->cursorPosInSeconds);
+        frames[3].keyFrame->addKey(value.alphaF(),  animWidgetData->cursorPosInSeconds);
     }
         break;
     }
@@ -308,7 +308,7 @@ void AnimationWidget::onObjectAnimationTimeChanged(float timeInSeconds)
 
 void AnimationWidget::onSceneAnimationTimeChanged(float timeInSeconds)
 {
-    this->timeAtCursor = timeInSeconds;
+    animWidgetData->cursorPosInSeconds = timeInSeconds;
     if(!!scene)
     {
         scene->updateSceneAnimation(timeInSeconds);

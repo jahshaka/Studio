@@ -59,6 +59,7 @@ KeyFrameWidget::KeyFrameWidget(QWidget* parent):
     rightButtonDown = false;
 
     labelWidget = nullptr;
+    animWidgetData = nullptr;
 }
 
 void KeyFrameWidget::setSceneNode(iris::SceneNodePtr node)
@@ -73,6 +74,9 @@ void KeyFrameWidget::adjustLength()
 void KeyFrameWidget::paintEvent(QPaintEvent *painter)
 {
     Q_UNUSED(painter);
+
+    if (!animWidgetData)
+        return;
 
     int widgetWidth = this->geometry().width();
     int widgetHeight = this->geometry().height();
@@ -289,13 +293,11 @@ void KeyFrameWidget::mouseMoveEvent(QMouseEvent* evt)
         auto timeDiff = posToTime(evt->x())-posToTime(mousePos.x());
         selectedKey->time+=timeDiff;
     }
-    /*
     else if(leftButtonDown)
     {
-        cursorPos = posToTime(evt->x());
-        emit cursorTimeChanged(cursorPos);
+        animWidgetData->cursorPosInSeconds = posToTime(evt->x());
+        //emit cursorTimeChanged(animWidgetData->cursorPosInSeconds);
     }
-    */
     if(middleButtonDown)
     {
         auto timeDiff = posToTime(evt->x()) - posToTime(mousePos.x());
@@ -305,6 +307,8 @@ void KeyFrameWidget::mouseMoveEvent(QMouseEvent* evt)
         //emit timeRangeChanged(rangeStart, rangeEnd);
 
         animWidgetData->refreshWidgets();
+
+        qDebug() << "middle button dragged";
     }
 
 
@@ -329,12 +333,12 @@ void KeyFrameWidget::wheelEvent(QWheelEvent* evt)
 
 int KeyFrameWidget::timeToPos(float timeInSeconds)
 {
-    return animWidgetData->timeToPos(timeInSeconds, this->width());
+    return animWidgetData->timeToPos(timeInSeconds, this->geometry().width());
 }
 
 float KeyFrameWidget::posToTime(int xpos)
 {
-    return animWidgetData->posToTime(xpos, this->width());
+    return animWidgetData->posToTime(xpos, this->geometry().width());
 }
 
 float KeyFrameWidget::distanceSquared(float x1,float y1,float x2,float y2)
