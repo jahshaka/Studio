@@ -140,9 +140,18 @@ void KeyFrameCurveWidget::mouseMoveEvent(QMouseEvent *evt)
     }
     if(middleButtonDown)
     {
+        // move time
         auto timeDiff = posToTime(evt->x()) - posToTime(mousePos.x());
         animWidgetData->rangeStart-=timeDiff;
         animWidgetData->rangeEnd-=timeDiff;
+
+        // move value
+        auto widgetHeight = this->geometry().height();
+        auto valDiff = animWidgetData->posToValue(evt->y(), widgetHeight) -
+                       animWidgetData->posToValue(mousePos.y(), widgetHeight);
+
+        animWidgetData->minValue -= valDiff;
+        animWidgetData->maxValue -= valDiff;
 
         animWidgetData->refreshWidgets();
     }
