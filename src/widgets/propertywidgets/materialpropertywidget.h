@@ -74,7 +74,8 @@ protected slots:
     void onTextureScaleChanged(float scale);
 
     void onCustomSliderChanged(QWidget*);
-//    void onCustomTextureChanged(QWidget*);
+    void onCustomColorChanged(QWidget*);
+    void onCustomTextureChanged(QWidget*);
 //    void onCustomComboChanged(QWidget*);
 
     void onMaterialSelectorChanged(const QString&);
@@ -100,8 +101,6 @@ private:
 
     HFloatSliderWidget* textureScale;
 
-    // 2
-    int allocated;
     HFloatSliderWidget* customSliders[12];
     TexturePickerWidget* customTextures[12];
     ComboBoxWidget* customCombo[12];
@@ -112,6 +111,8 @@ private:
 
     /// NEW
     std::vector<iris::MatStruct<HFloatSliderWidget*>> sliderUniforms;
+    std::vector<iris::MatStruct<ColorValueWidget*>> colorUniforms;
+    std::vector<iris::MatStruct<TexturePickerWidget*>> textureUniforms;
 };
 
 #endif // MATERIALPROPERTYWIDGET_H

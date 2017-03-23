@@ -18,14 +18,14 @@
         "property2": {
             "name"      : "Diffuse Texture",
             "type"      : "texture",
-            "value"     : "C:/Users/iKlsR/Desktop/OLD/southside.png",
+            "value"     : "",
             "uniform"   : "u_diffuseTexture",
             "toggle"    : "u_useDiffuseTex"
         },
         "property3": {
             "name"      : "Specular Color",
             "type"      : "color",
-            "value"     : "#FFF",
+            "value"     : "#000",
             "uniform"   : "u_material.specular",
             "toggle"    : "u_useSpecularTex"
         },
@@ -74,7 +74,7 @@
             "end"       : 1,
             "uniform"   : "u_reflectionInfluence"
         },
-        "property9": {
+        "property10": {
             "name"      : "Texture Scale",
             "type"      : "slider",
             "value"     : 1,

@@ -47,13 +47,16 @@ public:
     std::vector<QString> textureUniform;
 
     // the new structures
-    std::map<QString, QString> colorUniforms;
+//    std::map<QString, QString> colorUniforms;
 //    std::map<QString, float> sliderUniforms;
     std::map<QString, bool> boolUniforms;
-    std::map<QString, QString> textureUniforms;
-    std::map<QString, bool> textureToggleUniforms;
+//    std::map<QString, QString> textureUniforms;
+//    std::map<QString, bool> textureToggleUniforms;
 
     std::vector<MatStruct<float>> sliderUniforms;
+    std::vector<MatStruct<QColor>> colorUniforms;
+    std::vector<MatStruct<QString>> textureUniforms;
+    std::vector<MatStruct<bool>> textureToggleUniforms;
 
     void setTextureWithUniform(QString, QString);
 
