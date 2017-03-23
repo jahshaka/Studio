@@ -307,8 +307,6 @@ void KeyFrameWidget::mouseMoveEvent(QMouseEvent* evt)
         //emit timeRangeChanged(rangeStart, rangeEnd);
 
         animWidgetData->refreshWidgets();
-
-        qDebug() << "middle button dragged";
     }
 
 
