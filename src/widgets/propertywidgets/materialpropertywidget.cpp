@@ -33,7 +33,9 @@ void MaterialPropertyWidget::parseJahShader(const QJsonObject &jahShader)
     auto shaderName = jahShader["name"].toString();
     auto uniforms = jahShader["uniforms"].toObject();
 
-    allocated = 0;
+    // this value doesn't need to be in some sequential order
+    // it just needs to be different for every widget added
+    int allocated = 0;
 
     for (auto childObj : uniforms) {
         if (childObj.toObject()["type"] == "slider") {
@@ -41,12 +43,7 @@ void MaterialPropertyWidget::parseJahShader(const QJsonObject &jahShader)
             auto uni    = childObj.toObject()["uniform"].toString();
             auto start  = (float) childObj.toObject()["start"].toDouble();
             auto end    = (float) childObj.toObject()["end"].toDouble();
-            auto value  = (float) childObj.toObject()["value"].toDouble();
-//            customSliders[allocated] = this->addFloatValueSlider(text, start, end);
-//            customSliders[allocated]->index = allocated;
-//            allocated++;
 
-//            materialSliders.insert(std::make_pair(uni, this->addFloatValueSlider(text, start, end)));
             sliderUniforms.push_back(
                         iris::make_mat_struct(allocated,
                                               uni,
@@ -56,41 +53,39 @@ void MaterialPropertyWidget::parseJahShader(const QJsonObject &jahShader)
         }
     }
 
-//    int ctr = 0;
-//    for (auto childObj : uniforms) {
-//        if (childObj.toObject()["type"] == "combo") {
-//            auto text   = childObj.toObject()["name"].toString();
-//            customCombo[ctr] = this->addComboBox(text);
-//            customCombo[ctr]->addItem("Cheese");
-//            customCombo[ctr]->index = ctr;
-//        }
-//    }
+    allocated = 0;
 
-//    int ctr3 = 0;
-//    for (auto childObj : uniforms) {
-//        if (childObj.toObject()["type"] == "color") {
-//            auto text   = childObj.toObject()["name"].toString();
-//            auto color  = childObj.toObject()["value"].toString();
-//            customColor[ctr3] = this->addColorPicker(text);
-//            QColor col;
-//            col.setNamedColor(color);
-//            customColor[ctr3]->setColor(Qt::red);
-//            customColor[ctr3]->index = ctr;
-//        }
-//    }
+    for (auto childObj : uniforms) {
+        if (childObj.toObject()["type"] == "color") {
+            auto text   = childObj.toObject()["name"].toString();
 
-//    int ctr2 = 0;
-//    for (auto childObj : uniforms) {
-//        if (childObj.toObject()["type"] == "texture") {
-//            auto text   = childObj.toObject()["name"].toString();
-//            auto value  = childObj.toObject()["value"].toString();
-//            customTextures[ctr2] = this->addTexturePicker(text);
-//            if (!value.isEmpty()) {
-//                customTextures[ctr2]->setTexture(value);
-//            }
-//            customTextures[ctr2]->index = ctr;
-//        }
-//    }
+            colorUniforms.push_back(
+                        iris::make_mat_struct(allocated,
+                                              "",
+                                              addColorPicker(text)));
+            colorUniforms.back().value->index = allocated;
+            colorUniforms.back().value->getPicker()->index = allocated;
+            allocated++;
+        }
+    }
+
+    allocated = 0;
+
+    for (auto childObj : uniforms) {
+        if (childObj.toObject()["type"] == "texture") {
+            auto text   = childObj.toObject()["name"].toString();
+            auto uni    = childObj.toObject()["uniform"].toString();
+            auto value  = childObj.toObject()["value"].toString();
+
+            textureUniforms.push_back(
+                        iris::make_mat_struct(allocated,
+                                              uni,
+                                              addTexturePicker(text)));
+
+            textureUniforms.back().value->index = allocated;
+            allocated++;
+        }
+    }
 }
 
 void MaterialPropertyWidget::setupDefaultMaterial()
@@ -145,6 +140,7 @@ void MaterialPropertyWidget::setupCustomMaterial()
 {
     parseJahShader(materialReader->getParsedShader());
 
+    // sliders
     QSignalMapper *signalMapper = new QSignalMapper(this);
 
     auto sit = sliderUniforms.begin();
@@ -156,17 +152,60 @@ void MaterialPropertyWidget::setupCustomMaterial()
 
     connect(signalMapper, SIGNAL(mapped(QWidget*)), SLOT(onCustomSliderChanged(QWidget*)));
 
+    // colors
+    QSignalMapper *signalMapper2 = new QSignalMapper(this);
+
+    auto ccit = colorUniforms.begin();
+    while (ccit != colorUniforms.end()) {
+        connect(ccit->value->getPicker(), SIGNAL(onColorChanged(QColor)), signalMapper2, SLOT(map()));
+        signalMapper2->setMapping(ccit->value->getPicker(), ccit->value->getPicker());
+        ++ccit;
+    }
+
+    connect(signalMapper2, SIGNAL(mapped(QWidget*)), SLOT(onCustomColorChanged(QWidget*)));
+
+    // textures
+    QSignalMapper *signalMapper21 = new QSignalMapper(this);
+
+    auto ccit2 = textureUniforms.begin();
+    while (ccit2 != textureUniforms.end()) {
+        connect(ccit2->value, SIGNAL(valueChanged(QString)), signalMapper21, SLOT(map()));
+        signalMapper21->setMapping(ccit2->value, ccit2->value);
+        ++ccit2;
+    }
+
+    connect(signalMapper21, SIGNAL(mapped(QWidget*)), SLOT(onCustomTextureChanged(QWidget*)));
+
     // iterate both (different typed) maps in lockstep...
     // we get the value from the material and set the widget value
     // this works because the maps are ordered by key
     // TODO do this up at signal mapper boi
     // the order is not necessarilly right ok...
+    // SLIDERS
     auto mat = sliderUniforms.begin();
     auto mit = customMaterial->sliderUniforms.begin();
     while (mat != sliderUniforms.end()) {
         mat->value->setValue(mit->value);
         ++mat;
         ++mit;
+    }
+
+    // COLORS
+    auto cat = colorUniforms.begin();
+    auto mit2 = customMaterial->colorUniforms.begin();
+    while (cat != colorUniforms.end()) {
+        cat->value->setColorValue(mit2->value);
+        ++cat;
+        ++mit2;
+    }
+
+    // TExTURES
+    auto tat = textureUniforms.begin();
+    auto mit22 = customMaterial->textureUniforms.begin();
+    while (tat != textureUniforms.end()) {
+        tat->value->setTexture(mit22->value);
+        ++tat;
+        ++mit22;
     }
 }
 
@@ -213,7 +252,7 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
             setupDefaultMaterial();
 
             auto mat = this->material;
-            //todo: ensure material isnt null
+            //TODO: ensure material isnt null
 
             ambientColor->setColorValue(mat->getAmbientColor());
 
@@ -256,9 +295,34 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
 void MaterialPropertyWidget::onCustomSliderChanged(QWidget *t)
 {
     auto changedIndex = dynamic_cast<HFloatSliderWidget*>(t);
-    qDebug() << changedIndex->getValue();
     if (!!customMaterial) {
         customMaterial->sliderUniforms[changedIndex->index].value = changedIndex->getValue();
+    }
+}
+
+void MaterialPropertyWidget::onCustomColorChanged(QWidget *t)
+{
+    auto changedIndex = dynamic_cast<ColorPickerWidget*>(t);
+    if (!!customMaterial) {
+        customMaterial->colorUniforms[changedIndex->index].value = changedIndex->getColor();
+    }
+}
+
+void MaterialPropertyWidget::onCustomTextureChanged(QWidget *t)
+{
+    auto changedIndex = dynamic_cast<TexturePickerWidget*>(t);
+    if (!!customMaterial) {
+        // TODO smarten this up a bit, doesn't need to a be an if
+        if (changedIndex->getTexturePath().isEmpty() || changedIndex->getTexturePath().isNull()) {
+            customMaterial->textureToggleUniforms[changedIndex->index].value = false;
+            customMaterial->textureUniforms[changedIndex->index].value = "";
+            customMaterial->setTextureWithUniform(textureUniforms[changedIndex->index].uniform, "");
+        } else {
+            customMaterial->textureToggleUniforms[changedIndex->index].value = true;
+            customMaterial->textureUniforms[changedIndex->index].value = changedIndex->getTexturePath();
+            customMaterial->setTextureWithUniform(textureUniforms[changedIndex->index].uniform,
+                                                  changedIndex->getTexturePath());
+        }
     }
 }
 

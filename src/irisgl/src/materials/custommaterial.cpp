@@ -54,20 +54,23 @@ void CustomMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
      Material::begin(gl, scene);
 
     // @todo, figure out a way for the default material to mix values... the ambient for one
-//    std::map<QString, QString>::iterator cit = colorUniforms.begin();
-//    while (cit != colorUniforms.end()) {
+    auto cit = colorUniforms.begin();
+    while (cit != colorUniforms.end()) {
 //        QColor color;
-//        color.setNamedColor(cit->second);
-//        program->setUniformValue(cit->first.toStdString().c_str(),
-//                                 QVector3D(color.redF(), color.greenF(), color.blueF()));
-//        cit++;
-//    }
+//        color.setNamedColor(cit->value);
+//        qDebug() << cit->uniform << " " << cit->value.name();
+        program->setUniformValue(cit->uniform.toStdString().c_str(),
+                                 QVector3D(cit->value.redF(),
+                                           cit->value.greenF(),
+                                           cit->value.blueF()));
+        cit++;
+    }
 
     // set slider uniforms
     auto sit = sliderUniforms.begin();
     while (sit != sliderUniforms.end()) {
         program->setUniformValue(sit->uniform.toStdString().c_str(), sit->value);
-        sit++;
+        ++sit;
     }
 
     // set bool uniforms
@@ -77,19 +80,12 @@ void CustomMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
 //        bit++;
 //    }
 
-    // set texture uniforms if set
-//    std::map<QString, QString>::iterator tit = textureUniforms.begin();
-//    while (tit != textureUniforms.end()) {
-//        setTextureWithUniform(tit->first, tit->second);
-//        tit++;
-//    }
-
     // set texture toggle uniforms
-//    std::map<QString, bool>::iterator ttit = textureToggleUniforms.begin();
-//    while (ttit != textureToggleUniforms.end()) {
-//        setUniformValue(ttit->first.toStdString().c_str(), ttit->second);
-//        ttit++;
-//    }
+    auto ttit = textureToggleUniforms.begin();
+    while (ttit != textureToggleUniforms.end()) {
+        setUniformValue(ttit->uniform.toStdString().c_str(), ttit->value);
+        ++ttit;
+    }
 
 //    bindTextures(gl);
 
@@ -141,33 +137,61 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
 
     int allocated = 0;
 
+    // DON'T KEEP ON PUSHING BACK OVER AND OVER
+
     for (auto childObj : uniforms) {
-        if (childObj.toObject()["type"] == "slider") {
-            sliderUniforms.push_back(
-                        make_mat_struct(allocated,
-                                        childObj.toObject()["uniform"].toString(),
-                                        (float) childObj.toObject()["value"].toDouble()));
-            allocated++;
+        if (sliderUniforms.size() < 4) {
+            if (childObj.toObject()["type"] == "slider") {
+                sliderUniforms.push_back(
+                            make_mat_struct(allocated,
+                                            childObj.toObject()["uniform"].toString(),
+                                            (float) childObj.toObject()["value"].toDouble()));
+                allocated++;
+            }
         }
+    }
 
-//        else if (childObj.toObject()["type"] == "color") {
-//            colorUniforms.insert(std::make_pair(childObj.toObject()["uniform"].toString(),
-//                                                childObj.toObject()["value"].toString()));
-//        }
 
-//        else if (childObj.toObject()["type"] == "texture") {
-//            auto textureValue = childObj.toObject()["value"].toString();
+    allocated = 0;
 
-//            textureUniforms.insert(std::make_pair(childObj.toObject()["uniform"].toString(),
-//                                                  textureValue));
+    for (auto childObj : uniforms) {
+        if (colorUniforms.size() < 3) {
+            if (childObj.toObject()["type"] == "color") {
+                QColor col;
+                col.setNamedColor(childObj.toObject()["value"].toString());
+                    colorUniforms.push_back(
+                                iris::make_mat_struct(allocated,
+                                                      childObj.toObject()["uniform"].toString(),
+                                                      col));
+                    allocated++;
+            }
+        }
+    }
 
-//            if (!textureValue.isEmpty()) {
-//                setTextureWithUniform(childObj.toObject()["uniform"].toString(), textureValue);
-//            }
+    allocated = 0;
 
-//            textureToggleUniforms.insert(std::make_pair(childObj.toObject()["toggle"].toString(),
-//                                                        !textureValue.isEmpty()));
-//        }
+    for (auto childObj : uniforms) {
+        if (textureUniforms.size() < 4) {
+            if (childObj.toObject()["type"] == "texture") {
+                auto textureValue = childObj.toObject()["value"].toString();
+
+                textureUniforms.push_back(
+                            iris::make_mat_struct(allocated,
+                                                  childObj.toObject()["uniform"].toString(),
+                                                  textureValue));
+
+                textureToggleUniforms.push_back(
+                            iris::make_mat_struct(allocated,
+                                                  childObj.toObject()["toggle"].toString(),
+                                                  !textureValue.isEmpty()));
+
+                if (!textureValue.isEmpty()) {
+                    setTextureWithUniform(childObj.toObject()["uniform"].toString(), textureValue);
+                }
+
+                allocated++;
+            }
+        }
     }
 
     this->setRenderLayer((int) RenderLayer::Opaque);
