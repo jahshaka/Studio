@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include <QSignalMapper>
 #include <QLayout>
 
+#include "../../src/graphics/material.h"
+
 namespace iris {
     class SceneNode;
     class MeshNode;
@@ -27,6 +29,7 @@ namespace iris {
     class DefaultMaterial;
     class CustomMaterial;
 }
+
 class MaterialReader;
 
 /**
@@ -69,7 +72,10 @@ protected slots:
     void onReflectionInfluenceChanged(float intensity);
 
     void onTextureScaleChanged(float scale);
-    void onCustomSliderChanged(QWidget *t);
+
+    void onCustomSliderChanged(QWidget*);
+//    void onCustomTextureChanged(QWidget*);
+//    void onCustomComboChanged(QWidget*);
 
     void onMaterialSelectorChanged(const QString&);
 
@@ -97,6 +103,15 @@ private:
     // 2
     int allocated;
     HFloatSliderWidget* customSliders[12];
+    TexturePickerWidget* customTextures[12];
+    ComboBoxWidget* customCombo[12];
+    ColorValueWidget* customColor[12];
+
+    std::map<QString, HFloatSliderWidget*> materialSliders;
+//    std::map<QString, float> sliderUniforms;
+
+    /// NEW
+    std::vector<iris::MatStruct<HFloatSliderWidget*>> sliderUniforms;
 };
 
 #endif // MATERIALPROPERTYWIDGET_H

@@ -31,11 +31,25 @@ enum class RenderLayer : int
     Overlay = 5000
 };
 
-struct MaterialTexture
-{
+struct MaterialTexture {
     Texture2DPtr texture;
     QString name;
 };
+
+// this is a "compact" structure to hold properties that we need
+// to share with widets and other accessor classes now and future
+template<typename T>
+struct MatStruct {
+    int     id;
+    QString uniform;
+    T       value;
+};
+
+template<typename T>
+MatStruct<T> make_mat_struct(int id, QString uniform, T value) {
+    MatStruct<T> mStruct = { id, uniform, value };
+    return mStruct;
+}
 
 class Material
 {
@@ -47,19 +61,14 @@ public:
     bool acceptsLighting;
     int numTextures;
 
-    Material()
-    {
+    Material() {
         acceptsLighting = true;
         numTextures = 0;
     }
 
-    virtual ~Material()
-    {
+    virtual ~Material() {}
 
-    }
-
-    void setRenderLayer(int layer)
-    {
+    void setRenderLayer(int layer) {
         this->renderLayer = layer;
     }
 
@@ -109,8 +118,7 @@ public:
     void createProgramFromShaderSource(QString vsFile,QString fsFile);
 
     template<typename T>
-    void setUniformValue(QString name,T value)
-    {
+    void setUniformValue(QString name,T value) {
         program->setUniformValue(name.toStdString().c_str(), value);
     }
 

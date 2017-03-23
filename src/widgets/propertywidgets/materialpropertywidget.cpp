@@ -38,15 +38,59 @@ void MaterialPropertyWidget::parseJahShader(const QJsonObject &jahShader)
     for (auto childObj : uniforms) {
         if (childObj.toObject()["type"] == "slider") {
             auto text   = childObj.toObject()["name"].toString();
+            auto uni    = childObj.toObject()["uniform"].toString();
             auto start  = (float) childObj.toObject()["start"].toDouble();
             auto end    = (float) childObj.toObject()["end"].toDouble();
             auto value  = (float) childObj.toObject()["value"].toDouble();
-            customSliders[allocated] = this->addFloatValueSlider(text, start, end);
+//            customSliders[allocated] = this->addFloatValueSlider(text, start, end);
+//            customSliders[allocated]->index = allocated;
+//            allocated++;
 
-            customSliders[allocated]->index = allocated;
+//            materialSliders.insert(std::make_pair(uni, this->addFloatValueSlider(text, start, end)));
+            sliderUniforms.push_back(
+                        iris::make_mat_struct(allocated,
+                                              uni,
+                                              addFloatValueSlider(text, start, end)));
+            sliderUniforms.back().value->index = allocated;
             allocated++;
         }
     }
+
+//    int ctr = 0;
+//    for (auto childObj : uniforms) {
+//        if (childObj.toObject()["type"] == "combo") {
+//            auto text   = childObj.toObject()["name"].toString();
+//            customCombo[ctr] = this->addComboBox(text);
+//            customCombo[ctr]->addItem("Cheese");
+//            customCombo[ctr]->index = ctr;
+//        }
+//    }
+
+//    int ctr3 = 0;
+//    for (auto childObj : uniforms) {
+//        if (childObj.toObject()["type"] == "color") {
+//            auto text   = childObj.toObject()["name"].toString();
+//            auto color  = childObj.toObject()["value"].toString();
+//            customColor[ctr3] = this->addColorPicker(text);
+//            QColor col;
+//            col.setNamedColor(color);
+//            customColor[ctr3]->setColor(Qt::red);
+//            customColor[ctr3]->index = ctr;
+//        }
+//    }
+
+//    int ctr2 = 0;
+//    for (auto childObj : uniforms) {
+//        if (childObj.toObject()["type"] == "texture") {
+//            auto text   = childObj.toObject()["name"].toString();
+//            auto value  = childObj.toObject()["value"].toString();
+//            customTextures[ctr2] = this->addTexturePicker(text);
+//            if (!value.isEmpty()) {
+//                customTextures[ctr2]->setTexture(value);
+//            }
+//            customTextures[ctr2]->index = ctr;
+//        }
+//    }
 }
 
 void MaterialPropertyWidget::setupDefaultMaterial()
@@ -99,18 +143,31 @@ void MaterialPropertyWidget::setupDefaultMaterial()
 
 void MaterialPropertyWidget::setupCustomMaterial()
 {
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/Glass.json"));
     parseJahShader(materialReader->getParsedShader());
 
-    QSignalMapper *signalMapper = new QSignalMapper (this);
-    for (int i = 0; i < allocated; i++) {
-        // @TODO, somewhat fine as it is built in but there is
-        // surely a cleaner way to go about this...
-        connect(customSliders[i],       SIGNAL(valueChanged(float)), signalMapper, SLOT(map()));
-        signalMapper->setMapping(customSliders[i], customSliders[i]);
+    QSignalMapper *signalMapper = new QSignalMapper(this);
+
+    auto sit = sliderUniforms.begin();
+    while (sit != sliderUniforms.end()) {
+        connect(sit->value, SIGNAL(valueChanged(float)), signalMapper, SLOT(map()));
+        signalMapper->setMapping(sit->value, sit->value);
+        ++sit;
     }
 
-    connect(signalMapper, SIGNAL(mapped(QWidget*)), SLOT(onCustomSliderChanged(QWidget *)));
+    connect(signalMapper, SIGNAL(mapped(QWidget*)), SLOT(onCustomSliderChanged(QWidget*)));
+
+    // iterate both (different typed) maps in lockstep...
+    // we get the value from the material and set the widget value
+    // this works because the maps are ordered by key
+    // TODO do this up at signal mapper boi
+    // the order is not necessarilly right ok...
+    auto mat = sliderUniforms.begin();
+    auto mit = customMaterial->sliderUniforms.begin();
+    while (mat != sliderUniforms.end()) {
+        mat->value->setValue(mit->value);
+        ++mat;
+        ++mit;
+    }
 }
 
 void MaterialPropertyWidget::setupShaderSelector()
@@ -133,6 +190,7 @@ void MaterialPropertyWidget::setupShaderSelector()
 MaterialPropertyWidget::MaterialPropertyWidget(QSharedPointer<iris::SceneNode> sceneNode, QWidget *parent)
 {
     materialReader = new MaterialReader();
+    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/Default.json"));
 
     if (!!sceneNode) {
         this->meshNode = sceneNode.staticCast<iris::MeshNode>();
@@ -184,13 +242,9 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
             this->meshNode = sceneNode.staticCast<iris::MeshNode>();
             this->customMaterial = meshNode->getCustomMaterial().staticCast<iris::CustomMaterial>();
 
+            this->customMaterial->generate(materialReader->getParsedShader());
+
             setupCustomMaterial();
-
-            for (int i = 0; i < allocated; i++) {
-                customSliders[i]->setValue(customMaterial->sliderValues[i]);
-            }
-
-            this->customMaterial->initializeDefaultValues(materialReader->getParsedShader());
         } else {
             this->meshNode.clear();
             this->customMaterial.clear();
@@ -202,8 +256,9 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
 void MaterialPropertyWidget::onCustomSliderChanged(QWidget *t)
 {
     auto changedIndex = dynamic_cast<HFloatSliderWidget*>(t);
+    qDebug() << changedIndex->getValue();
     if (!!customMaterial) {
-        customMaterial->sliderValues[changedIndex->index] = changedIndex->getValue();
+        customMaterial->sliderUniforms[changedIndex->index].value = changedIndex->getValue();
     }
 }
 
@@ -243,7 +298,7 @@ void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
         // this isn't magic, there are values but it's not possible to get them yet
         // finalHeight = minimum_height + (widgets * height) +
         //              (widgetCount * heights) + topMargin + bottomMargin;
-        int finalHeight = 30 + (3 * 28) + (3 * 6) + 9 + 9;
+        int finalHeight = 30 + (4 * 28) + (4 * 6) + 9 + 9;
 
         setHeight(finalHeight - 30);
 

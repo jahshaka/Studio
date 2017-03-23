@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include <QOpenGLShaderProgram>
 #include <QColor>
 #include <vector>
+#include <map>
 
 class QOpenGLFunctions_3_2_Core;
 
@@ -34,18 +35,33 @@ public:
     void begin(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
     void end(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
 
-    float sliderValues[12];
-    float uniformValue[12];
-    QString uniformName[12];
-    int allocated;
-    void initializeDefaultValues(const QJsonObject &jahShader);
+    void generate(const QJsonObject &jahShader);
+
+    std::vector<float> sliderValues;
+    std::vector<QString> uniformName;
+
+    std::vector<QColor> colorValue;
+    std::vector<QString> colorUniform;
+
+    std::vector<QString> textureName;
+    std::vector<QString> textureUniform;
+
+    // the new structures
+    std::map<QString, QString> colorUniforms;
+//    std::map<QString, float> sliderUniforms;
+    std::map<QString, bool> boolUniforms;
+    std::map<QString, QString> textureUniforms;
+    std::map<QString, bool> textureToggleUniforms;
+
+    std::vector<MatStruct<float>> sliderUniforms;
+
+    void setTextureWithUniform(QString, QString);
 
     static CustomMaterialPtr create();
 
 private:
     CustomMaterial();
-
-    Texture2DPtr texture;
+    Texture2DPtr intermediateTexture;
 };
 
 }
