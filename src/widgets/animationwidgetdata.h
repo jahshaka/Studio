@@ -24,13 +24,13 @@ public:
     AnimationWidgetData()
     {
         rangeStart = -5;
-        rangeEnd = 100;
+        rangeEnd = 70;
 
         minRange = 10;
         maxRange = 1000;
 
-        minValue = -1.0f;
-        maxValue = 1.0f;
+        minValue = -11.0f;
+        maxValue = 11.0f;
 
         cursorPosInSeconds = 0.0f;
     }
@@ -56,7 +56,20 @@ public:
     float posToTime(int xpos, int widgetWidth)
     {
         float range = rangeEnd - rangeStart;
-        return rangeStart + range * ((float)xpos / widgetWidth);    }
+        return rangeStart + range * ((float)xpos / widgetWidth);
+    }
+
+    int valueToPos(float timeInSeconds, int widgetHeight)
+    {
+        float timeSpacePos = 1.0f - (timeInSeconds - minValue) / (maxValue - minValue);
+        return (int)(timeSpacePos * widgetHeight);
+    }
+
+    float posToValue(int ypos, int widgetHeight)
+    {
+        float range = maxValue - minValue;
+        return range - (minValue + range * ((float)ypos / widgetHeight));
+    }
 
 };
 
