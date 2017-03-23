@@ -28,6 +28,7 @@ class ColorValueWidget : public QWidget
 
     QString _title;
 public:
+    int index;
     explicit ColorValueWidget(QWidget *parent = 0);
     ~ColorValueWidget();
     Ui::ColorValueWidget *ui;

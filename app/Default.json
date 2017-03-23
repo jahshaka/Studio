@@ -1,0 +1,89 @@
+{
+    "name": "Refractive Shader",
+    "preview": false,
+    "ordered": false,
+    "uniforms": {
+        "property": {
+            "name"      : "Ambient Color",
+            "type"      : "color",
+            "value"     : "#000",
+            "uniform"   : "u_material.ambient"
+        },
+        "property1": {
+            "name"      : "Diffuse Color",
+            "type"      : "color",
+            "value"     : "#FFF",
+            "uniform"   : "u_material.diffuse"
+        },
+        "property2": {
+            "name"      : "Diffuse Texture",
+            "type"      : "texture",
+            "value"     : "C:/Users/iKlsR/Desktop/OLD/southside.png",
+            "uniform"   : "u_diffuseTexture",
+            "toggle"    : "u_useDiffuseTex"
+        },
+        "property3": {
+            "name"      : "Specular Color",
+            "type"      : "color",
+            "value"     : "#FFF",
+            "uniform"   : "u_material.specular",
+            "toggle"    : "u_useSpecularTex"
+        },
+        "property4": {
+            "name"      : "Specular Texture",
+            "type"      : "texture",
+            "value"     : "",
+            "uniform"   : "u_specularTexture",
+            "toggle"    : "u_useSpecularTex"
+        },
+        "property5": {
+            "name"      : "Shininess",
+            "type"      : "slider",
+            "value"     : 20,
+            "start"     : 0,
+            "end"       : 512,
+            "uniform"   : "u_material.shininess"
+        },
+        "property6": {
+            "name"      : "Normal Texture",
+            "type"      : "texture",
+            "value"     : "",
+            "uniform"   : "u_normalTexture",
+            "toggle"    : "u_useNormalTex"
+        },
+        "property7": {
+            "name"      : "Normal Intensity",
+            "type"      : "slider",
+            "value"     : 0,
+            "start"     : -1,
+            "end"       : 1,
+            "uniform"   : "u_normalIntensity"
+        },
+        "property8": {
+            "name"      : "Reflection Texture",
+            "type"      : "texture",
+            "value"     : "",
+            "uniform"   : "u_reflectionTexture",
+            "toggle"    : "u_useReflectionTex"
+        },
+        "property9": {
+            "name"      : "Reflection Influence",
+            "type"      : "slider",
+            "value"     : 0,
+            "start"     : 0,
+            "end"       : 1,
+            "uniform"   : "u_reflectionInfluence"
+        },
+        "property9": {
+            "name"      : "Texture Scale",
+            "type"      : "slider",
+            "value"     : 1,
+            "start"     : 0,
+            "end"       : 16,
+            "uniform"   : "u_textureScale"
+        }
+    },
+    "builtin": true,
+    "vertex_shader": ":assets/shaders/default_material.vert",
+    "fragment_shader": ":assets/shaders/default_material.frag"
+}
