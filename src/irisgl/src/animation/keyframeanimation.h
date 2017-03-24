@@ -45,8 +45,8 @@ public:
     TangentType leftTangent;
     TangentType rightTangent;
 
-    QVector2D leftHandle;
-    QVector2D rightHandle;
+    float leftSlope;
+    float rightSlope;
 
     inline bool operator< ( const T& rhs)
     {

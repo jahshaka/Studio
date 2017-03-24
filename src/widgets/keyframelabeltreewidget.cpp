@@ -197,6 +197,15 @@ void KeyFrameLabelTreeWidget::clearSubPropertyKeyFrame(QString propertyName, QSt
 
 }
 
+QTreeWidgetItem *KeyFrameLabelTreeWidget::getSelectedTreeItem()
+{
+    auto items = ui->treeWidget->selectedItems();
+    if (items.size() == 0)
+        return nullptr;
+
+    return items[0];
+}
+
 void KeyFrameLabelTreeWidget::setAnimWidget(AnimationWidget *value)
 {
     animWidget = value;
