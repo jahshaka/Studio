@@ -31,6 +31,16 @@ struct KeyFrameData
     QString subPropertyName;
     iris::FloatKeyFrame* keyFrame;
     //iris::PropertyAnim *prop;
+
+    bool isSubProperty()
+    {
+        return !subPropertyName.isEmpty();
+    }
+
+    bool isProperty()
+    {
+        return subPropertyName.isEmpty();
+    }
 };
 
 Q_DECLARE_METATYPE(KeyFrameData)
@@ -67,6 +77,7 @@ public slots:
     void clearPropertyKeyFrame(QString propertyName);
     void clearSubPropertyKeyFrame(QString propertyName, QString subPropertyName);
 
+    QTreeWidgetItem* getSelectedTreeItem();
 private:
     Ui::KeyFrameLabelTreeWidget *ui;
     iris::SceneNodePtr node;

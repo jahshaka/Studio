@@ -23,6 +23,8 @@ class KeyFrameCurveWidget : public QWidget
     QPen linePen;
     QPen cursorPen;
 
+    QPen curvePen;
+
     KeyFrameLabelTreeWidget *labelWidget;
     AnimationWidgetData* animWidgetData;
 
@@ -30,8 +32,11 @@ class KeyFrameCurveWidget : public QWidget
     iris::SceneNodePtr obj;
     QPoint mousePos;
     QPoint clickPos;
+    float keyPointRadius;
 
     iris::FloatKey* selectedKey;
+
+    QList<iris::FloatKeyFrame*> keyFrames;
 
     bool leftButtonDown;
     bool middleButtonDown;
@@ -56,6 +61,17 @@ public:
 
 private:
     void drawGrid(QPainter& paint);
+    void drawKeyFrames(QPainter& paint);
+    void drawKeys(QPainter& paint);
+    void drawKeyHandles(QPainter& paint);
+
+    iris::FloatKey* getKeyAt(int x, int y);
+    QPoint getLeftTangentHandlePoint(iris::FloatKey* key);
+    QPoint getRightTangentHandlePoint(iris::FloatKey* key);
+    QPoint getKeyFramePoint(iris::FloatKey* key);
+
+private slots:
+    void selectedCurveChanged();
 
 private:
     Ui::KeyFrameCurveWidget *ui;

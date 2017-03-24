@@ -44,8 +44,9 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     //keyFrameWidget->hide();
 
     curveWidget = new KeyFrameCurveWidget();
-    curveWidget->hide();
+    curveWidget->setLabelWidget(ui->keylabelView);
     curveWidget->setAnimWidgetData(animWidgetData);
+    curveWidget->hide();
 
     ui->timeline->setAnimWidgetData(animWidgetData);
 
