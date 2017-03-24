@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "../graphics/material.h"
 #include "../irisglfwd.h"
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QOpenGLShaderProgram>
 #include <QColor>
 #include <vector>

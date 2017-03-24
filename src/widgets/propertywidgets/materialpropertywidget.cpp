@@ -28,62 +28,41 @@ For more information see the LICENSE file
 
 void MaterialPropertyWidget::parseJahShader(const QJsonObject &jahShader)
 {
-    // @TODO: add some check here to escape early
+    /// TODO: add some check here to escape early
 
-    auto shaderName = jahShader["name"].toString();
-    auto uniforms = jahShader["uniforms"].toObject();
+    auto widgetProps = jahShader["uniforms"].toArray();
 
-    // this value doesn't need to be in some sequential order
-    // it just needs to be different for every widget added
-    int allocated = 0;
+    for (int propIndex = 0; propIndex < widgetProps.size(); propIndex++) {
+        auto prop = widgetProps[propIndex].toObject();
 
-    for (auto childObj : uniforms) {
-        if (childObj.toObject()["type"] == "slider") {
-            auto text   = childObj.toObject()["name"].toString();
-            auto uni    = childObj.toObject()["uniform"].toString();
-            auto start  = (float) childObj.toObject()["start"].toDouble();
-            auto end    = (float) childObj.toObject()["end"].toDouble();
+        auto name       = prop["name"].toString();
+        auto uniform    = prop["uniform"].toString();
 
-            sliderUniforms.push_back(
-                        iris::make_mat_struct(allocated,
-                                              uni,
-                                              addFloatValueSlider(text, start, end)));
-            sliderUniforms.back().value->index = allocated;
-            allocated++;
+        if (prop["type"] == "slider") {
+            auto start  = (float) prop["start"].toDouble();
+            auto end    = (float) prop["end"].toDouble();
+
+            sliderUniforms.push_back(iris::make_mat_struct(sliderUniforms.size() - 1,
+                                                           uniform,
+                                                           addFloatValueSlider(name, start, end)));
+            sliderUniforms.back().value->index = sliderUniforms.size() - 1;
         }
-    }
 
-    allocated = 0;
-
-    for (auto childObj : uniforms) {
-        if (childObj.toObject()["type"] == "color") {
-            auto text   = childObj.toObject()["name"].toString();
-
+        if (prop["type"] == "color") {
             colorUniforms.push_back(
-                        iris::make_mat_struct(allocated,
-                                              "",
-                                              addColorPicker(text)));
-            colorUniforms.back().value->index = allocated;
-            colorUniforms.back().value->getPicker()->index = allocated;
-            allocated++;
+                        iris::make_mat_struct(colorUniforms.size() - 1,
+                                              uniform,
+                                              addColorPicker(name)));
+            colorUniforms.back().value->index = colorUniforms.size() - 1;
+            colorUniforms.back().value->getPicker()->index = colorUniforms.size() - 1;
         }
-    }
 
-    allocated = 0;
-
-    for (auto childObj : uniforms) {
-        if (childObj.toObject()["type"] == "texture") {
-            auto text   = childObj.toObject()["name"].toString();
-            auto uni    = childObj.toObject()["uniform"].toString();
-            auto value  = childObj.toObject()["value"].toString();
-
+        if (prop["type"] == "texture") {
             textureUniforms.push_back(
-                        iris::make_mat_struct(allocated,
-                                              uni,
-                                              addTexturePicker(text)));
-
-            textureUniforms.back().value->index = allocated;
-            allocated++;
+                        iris::make_mat_struct(textureUniforms.size() - 1,
+                                              uniform,
+                                              addTexturePicker(name)));
+            textureUniforms.back().value->index = textureUniforms.size() - 1;
         }
     }
 }
@@ -311,6 +290,7 @@ void MaterialPropertyWidget::onCustomColorChanged(QWidget *t)
 void MaterialPropertyWidget::onCustomTextureChanged(QWidget *t)
 {
     auto changedIndex = dynamic_cast<TexturePickerWidget*>(t);
+
     if (!!customMaterial) {
         // TODO smarten this up a bit, doesn't need to a be an if
         if (changedIndex->getTexturePath().isEmpty() || changedIndex->getTexturePath().isNull()) {

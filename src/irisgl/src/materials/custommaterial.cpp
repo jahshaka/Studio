@@ -133,63 +133,60 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
                                       IrisUtils::getAbsoluteAssetPath(fragPath));
     }
 
-    auto uniforms = jahShader["uniforms"].toObject();
+    auto widgetProps = jahShader["uniforms"].toArray();
 
-    int allocated = 0;
+    /// TODO remove this when the default material is deleted.
+    int sliderMax = 0, textureMax = 0, colorMax = 0;
 
-    // DON'T KEEP ON PUSHING BACK OVER AND OVER
+    for (int i = 0; i < widgetProps.size(); i++) {
+        auto prop = widgetProps[i].toObject();
+        if (prop["type"] == "slider") {
+            sliderMax++;
+        }
 
-    for (auto childObj : uniforms) {
-        if (sliderUniforms.size() < 4) {
-            if (childObj.toObject()["type"] == "slider") {
-                sliderUniforms.push_back(
-                            make_mat_struct(allocated,
-                                            childObj.toObject()["uniform"].toString(),
-                                            (float) childObj.toObject()["value"].toDouble()));
-                allocated++;
-            }
+        if (prop["type"] == "color") {
+            colorMax++;
+        }
+
+        if (prop["type"] == "texture") {
+            textureMax++;
         }
     }
 
+    for (int propIndex = 0; propIndex < widgetProps.size(); propIndex++) {
 
-    allocated = 0;
+        auto prop = widgetProps[propIndex].toObject();
+        auto uniform    = prop["uniform"].toString();
 
-    for (auto childObj : uniforms) {
-        if (colorUniforms.size() < 3) {
-            if (childObj.toObject()["type"] == "color") {
+        if (sliderUniforms.size() < sliderMax) {
+            if (prop["type"] == "slider") {
+                auto value = (float) prop["value"].toDouble();
+                sliderUniforms.push_back(make_mat_struct(textureUniforms.size(), uniform, value));
+            }
+        }
+
+        if (colorUniforms.size() < colorMax) {
+            if (prop["type"] == "color") {
                 QColor col;
-                col.setNamedColor(childObj.toObject()["value"].toString());
-                    colorUniforms.push_back(
-                                iris::make_mat_struct(allocated,
-                                                      childObj.toObject()["uniform"].toString(),
-                                                      col));
-                    allocated++;
+                col.setNamedColor(prop["value"].toString());
+                colorUniforms.push_back(iris::make_mat_struct(textureUniforms.size(), uniform, col));
             }
         }
-    }
 
-    allocated = 0;
+        if (textureUniforms.size() < textureMax) {
+            qDebug() << textureUniforms.size();
+            if (prop["type"] == "texture") {
+                auto textureValue = prop["value"].toString();
 
-    for (auto childObj : uniforms) {
-        if (textureUniforms.size() < 4) {
-            if (childObj.toObject()["type"] == "texture") {
-                auto textureValue = childObj.toObject()["value"].toString();
-
-                textureUniforms.push_back(
-                            iris::make_mat_struct(allocated,
-                                                  childObj.toObject()["uniform"].toString(),
-                                                  textureValue));
-
+                textureUniforms.push_back(iris::make_mat_struct(textureUniforms.size(), uniform, textureValue));
                 textureToggleUniforms.push_back(
-                            iris::make_mat_struct(allocated,
-                                                  childObj.toObject()["toggle"].toString(),
+                            iris::make_mat_struct(textureUniforms.size(),
+                                                  prop["toggle"].toString(),
                                                   !textureValue.isEmpty()));
 
                 if (!textureValue.isEmpty()) {
-                    setTextureWithUniform(childObj.toObject()["uniform"].toString(), textureValue);
+                    setTextureWithUniform(uniform, textureValue);
                 }
-
-                allocated++;
             }
         }
     }
