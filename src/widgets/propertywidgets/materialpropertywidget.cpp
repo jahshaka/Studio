@@ -21,16 +21,18 @@ For more information see the LICENSE file
 
 #include "../../irisgl/src/graphics/texture2d.h"
 #include "../../irisgl/src/scenegraph/meshnode.h"
-#include "../../irisgl/src/materials/defaultmaterial.h"
 #include "../../irisgl/src/materials/custommaterial.h"
 
 #include "../../io/materialreader.hpp"
 
-void MaterialPropertyWidget::parseJahShader(const QJsonObject &jahShader)
+void MaterialPropertyWidget::createWidgets(const QJsonObject &jahShader)
 {
     /// TODO: add some check here to escape early
-
     auto widgetProps = jahShader["uniforms"].toArray();
+
+    sliderUniforms.clear();
+    colorUniforms.clear();
+    textureUniforms.clear();
 
     for (int propIndex = 0; propIndex < widgetProps.size(); propIndex++) {
         auto prop = widgetProps[propIndex].toObject();
@@ -67,57 +69,9 @@ void MaterialPropertyWidget::parseJahShader(const QJsonObject &jahShader)
     }
 }
 
-void MaterialPropertyWidget::setupDefaultMaterial()
-{
-    ambientColor        = this->addColorPicker("Ambient Color");
-    diffuseColor        = this->addColorPicker("Diffuse Color");
-    diffuseTexture      = this->addTexturePicker("Diffuse Texture");
-    specularColor       = this->addColorPicker("Specular Color");
-    specularTexture     = this->addTexturePicker("Specular Texture");
-    shininess           = this->addFloatValueSlider("Shininess", 0, 100.f);
-    normalTexture       = this->addTexturePicker("Normal Texture");
-    normalIntensity     = this->addFloatValueSlider("Normal Intensity", -1.f, 1.f);
-    reflectionTexture   = this->addTexturePicker("Reflection Texture");
-    reflectionInfluence = this->addFloatValueSlider("Reflection Influence", 0, 1.f);
-    textureScale        = this->addFloatValueSlider("Texture Scale", 0, 10.f);
-
-    connect(ambientColor->getPicker(),  SIGNAL(onColorChanged(QColor)),
-            this,                       SLOT(onAmbientColorChanged(QColor)));
-
-    connect(diffuseColor->getPicker(),  SIGNAL(onColorChanged(QColor)),
-            this,                       SLOT(onDiffuseColorChanged(QColor)));
-
-    connect(diffuseTexture,             SIGNAL(valueChanged(QString)),
-            this,                       SLOT(onDiffuseTextureChanged(QString)));
-
-    connect(specularColor->getPicker(), SIGNAL(onColorChanged(QColor)),
-            this,                       SLOT(onSpecularColorChanged(QColor)));
-
-    connect(specularTexture,            SIGNAL(valueChanged(QString)),
-            this,                       SLOT(onSpecularTextureChanged(QString)));
-
-    connect(shininess,                  SIGNAL(valueChanged(float)),
-            this,                       SLOT(onShininessChanged(float)));
-
-    connect(normalTexture,              SIGNAL(valueChanged(QString)),
-            this,                       SLOT(onNormalTextureChanged(QString)));
-
-    connect(normalIntensity,            SIGNAL(valueChanged(float)),
-            this,                       SLOT(onNormalIntensityChanged(float)));
-
-    connect(reflectionTexture,          SIGNAL(valueChanged(QString)),
-            this,                       SLOT(onReflectionTextureChanged(QString)));
-
-    connect(reflectionInfluence,        SIGNAL(valueChanged(float)),
-            this,                       SLOT(onReflectionInfluenceChanged(float)));
-
-    connect(textureScale,               SIGNAL(valueChanged(float)),
-            this,                       SLOT(onTextureScaleChanged(float)));
-}
-
 void MaterialPropertyWidget::setupCustomMaterial()
 {
-    parseJahShader(materialReader->getParsedShader());
+    createWidgets(this->customMaterial->getShaderFile());
 
     // sliders
     QSignalMapper *signalMapper = new QSignalMapper(this);
@@ -190,16 +144,16 @@ void MaterialPropertyWidget::setupCustomMaterial()
 
 void MaterialPropertyWidget::setupShaderSelector()
 {
-    // load these from a directory in the future...
+    // TODO load these from a directory in the future...
     materialSelector = this->addComboBox("Shader");
-    materialSelector->addItem("Default Shader");
-//    materialSelector->addItem("Environment Surface Shader");
 
-//    if (meshNode->getMaterialType() == 1) {
-        materialSelector->setCurrentItem("Default Shader");
-//    } else {
-//        materialSelector->setCurrentItem("Environment Surface Shader");
-//    }
+    QDir dir(IrisUtils::getAbsoluteAssetPath("app/shader_defs/"));
+    for (auto shaderName : dir.entryList(QDir::Files)) {
+        materialSelector->addItem(QFileInfo(shaderName).baseName());
+    }
+
+//    qDebug() << this->customMaterial->name;
+    materialSelector->setCurrentItem(this->customMaterial->name);
 
     connect(materialSelector,   SIGNAL(currentIndexChanged(QString)),
             this,               SLOT(onMaterialSelectorChanged(QString)));
@@ -207,69 +161,35 @@ void MaterialPropertyWidget::setupShaderSelector()
 
 MaterialPropertyWidget::MaterialPropertyWidget(QSharedPointer<iris::SceneNode> sceneNode, QWidget *parent)
 {
-    materialReader = new MaterialReader();
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
-
-    if (!!sceneNode) {
-        this->meshNode = sceneNode.staticCast<iris::MeshNode>();
-    }
+//    if (!!sceneNode) {
+//        this->meshNode = sceneNode.staticCast<iris::MeshNode>();
+//    }
 }
 
 void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         this->meshNode = sceneNode.staticCast<iris::MeshNode>();
+        this->customMaterial = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
+
+        qDebug() << this->customMaterial->textureUniforms[0].value;
     }
 
     setupShaderSelector();
 
-//    if (this->meshNode->getMaterialType() == 1) {
-//        if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-//            this->meshNode = sceneNode.staticCast<iris::MeshNode>();
-//            this->material = meshNode->getMaterial().staticCast<iris::DefaultMaterial>();
+    if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+        materialReader = new MaterialReader();
+        materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/" + this->customMaterial->name + ".json"));
 
-//            setupDefaultMaterial();
+        this->customMaterial->generate(materialReader->getParsedShader());
 
-//            auto mat = this->material;
-//            //TODO: ensure material isnt null
+        setupCustomMaterial();
 
-//            ambientColor->setColorValue(mat->getAmbientColor());
-
-//            diffuseColor->setColorValue(mat->getDiffuseColor());
-//            diffuseTexture->setTexture(mat->getDiffuseTextureSource());
-
-//            specularColor->setColorValue(mat->getSpecularColor());
-//            specularTexture->setTexture(mat->getSpecularTextureSource());
-//            shininess->setValue(mat->getShininess());
-
-//            normalTexture->setTexture(mat->getNormalTextureSource());
-//            normalIntensity->setValue(mat->getNormalIntensity());
-
-//            reflectionTexture->setTexture(mat->getReflectionTextureSource());
-//            reflectionInfluence->setValue(mat->getReflectionInfluence());
-
-//            textureScale->setValue(mat->getTextureScale());
-//        } else {
-//            this->meshNode.clear();
-//            this->material.clear();
-//            return;
-//        }
-//    } else if (this->meshNode->getMaterialType() == 2) {
-
-        if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            this->meshNode = sceneNode.staticCast<iris::MeshNode>();
-            this->customMaterial = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
-
-            this->customMaterial->generate(materialReader->getParsedShader());
-            setupCustomMaterial();
-//            this->customMaterial->updateTextureAndToggleUniform(0, IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"));
-
-        } else {
-            this->meshNode.clear();
-            this->customMaterial.clear();
-            return;
-        }
-//    }
+    } else {
+        this->meshNode.clear();
+        this->customMaterial.clear();
+        return;
+    }
 }
 
 void MaterialPropertyWidget::onCustomSliderChanged(QWidget *t)
@@ -309,18 +229,15 @@ void MaterialPropertyWidget::onCustomTextureChanged(QWidget *t)
 
 void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
 {
-//    if (!!this->meshNode) {
-//        if (text == "Default Shader") {
-//            this->meshNode->setMaterialType(1);
-//            this->meshNode->setActiveMaterial(1);
+    qDebug() << text;
+//    this->meshNode->customMaterial = iris::CustomMaterial::create();
+//    this->customMaterial->textureUniforms.clear();
+//    this->customMaterial->textureToggleUniforms.clear();
+    this->customMaterial->name = text;
+//    materialSelector->setCurrentItem(text);
 
-//        } else {
-//            this->meshNode->setMaterialType(2);
-//            this->meshNode->setActiveMaterial(2);
-//        }
-//    }
-
-    if (text == "Default Shader") {
+//    if (text == "Default Shader") {
+        // collect the height in the widget boi
         this->clearPanel(this->layout());
 
         resetHeight();
@@ -333,7 +250,7 @@ void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
         this->setMaximumHeight(finalHeight);
 
         this->setSceneNode(this->meshNode);
-    }
+//    }
 //    } else if (text == "Environment Surface Shader") {
 
 //        this->clearPanel(this->layout());
@@ -352,87 +269,4 @@ void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
 
 //        this->setSceneNode(this->meshNode);
 //    }
-}
-
-void MaterialPropertyWidget::onAmbientColorChanged(QColor color)
-{
-    if (!!material) {
-        material->setAmbientColor(color);
-    }
-}
-
-void MaterialPropertyWidget::onDiffuseColorChanged(QColor color)
-{
-    if (!!material) {
-        material->setDiffuseColor(color);
-    }
-}
-
-void MaterialPropertyWidget::onDiffuseTextureChanged(QString texture)
-{
-    if (!!material) {
-        if (texture.isEmpty() || texture.isNull()) {
-            material->setDiffuseTexture(iris::Texture2D::null());
-        } else {
-            material->setDiffuseTexture(iris::Texture2D::load(texture));
-        }
-    }
-}
-
-void MaterialPropertyWidget::onSpecularColorChanged(QColor color)
-{
-    if (!!material) {
-        material->setSpecularColor(color);
-    }
-}
-
-void MaterialPropertyWidget::onSpecularTextureChanged(QString texture)
-{
-    if (!!material) {
-        material->setSpecularTexture(iris::Texture2D::load(texture));
-    }
-}
-
-void MaterialPropertyWidget::onShininessChanged(float shininess)
-{
-    if (!!material) {
-        material->setShininess(shininess);
-    }
-}
-
-void MaterialPropertyWidget::onNormalTextureChanged(QString texture)
-{
-    if (!!material) {
-        material->setNormalTexture(iris::Texture2D::load(texture));
-    }
-}
-
-void MaterialPropertyWidget::onNormalIntensityChanged(float intensity)
-{
-    if (!!material) {
-        material->setNormalIntensity(intensity);
-    }
-}
-
-// @TODO -rework or remove
-void MaterialPropertyWidget::onReflectionTextureChanged(QString texture)
-{
-    if (!!material) {
-        material->setReflectionTexture(iris::Texture2D::load(texture));
-    }
-}
-
-// @TODO -rework or remove
-void MaterialPropertyWidget::onReflectionInfluenceChanged(float influence)
-{
-    if (!!material) {
-        material->setReflectionInfluence(influence);
-    }
-}
-
-void MaterialPropertyWidget::onTextureScaleChanged(float scale)
-{
-    if (!!material) {
-        material->setTextureScale(scale);
-    }
 }

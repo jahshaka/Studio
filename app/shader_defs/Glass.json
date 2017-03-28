@@ -1,35 +1,32 @@
 {
-    "name": "Refractive Shader",
+    "name": "Glass",
     "preview": false,
-    "uniforms": {
-        "property": {
+    "uniforms": [
+        {
             "name"      : "Fresnel",
             "type"      : "slider",
             "value"     : 0.5,
             "start"     : 0,
             "end"       : 1,
             "uniform"   : "u_fresnel_factor"
-        },
-        "property2": {
+        }, {
             "name"      : "Influence",
             "type"      : "slider",
             "value"     : 0.5,
             "start"     : 0,
             "end"       : 1,
             "uniform"   : "u_strength"
-        },
-        "property3": {
+        }, {
             "name"      : "Diffuse",
             "type"      : "texture",
-            "value"     : "app/content/textures/front.jpg",
+            "value"     : "",
             "uniform"   : "u_diffuse"
-        },
-        "property4": {
+        }, {
             "name"      : "Skyboxes",
             "type"      : "combo",
             "value"     : "generated"
         }
-    },
+    ],
     "builtin": false,
     "vertex_shader": "app/shaders/custom.vert",
     "fragment_shader": "app/shaders/custom.frag"

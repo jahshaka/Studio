@@ -14,19 +14,18 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QSharedPointer>
-#include "../accordianbladewidget.h"
 
 #include <QJsonObject>
 #include <QSignalMapper>
 #include <QLayout>
 
+#include "../accordianbladewidget.h"
 #include "../../src/graphics/material.h"
 
 namespace iris {
     class SceneNode;
     class MeshNode;
     class Material;
-    class DefaultMaterial;
     class CustomMaterial;
 }
 
@@ -45,71 +44,27 @@ public:
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
     QSharedPointer<iris::MeshNode> meshNode;
 
-    QSharedPointer<iris::DefaultMaterial> material;
     QSharedPointer<iris::CustomMaterial> customMaterial;
 
     MaterialReader* materialReader;
-    void parseJahShader(const QJsonObject &jahShader);
+    void createWidgets(const QJsonObject &jahShader);
 
     void setupDefaultMaterial();
     void setupCustomMaterial();
     void setupShaderSelector();
 
 protected slots:
-    void onAmbientColorChanged(QColor color);
-
-    void onDiffuseColorChanged(QColor color);
-    void onDiffuseTextureChanged(QString texture);
-
-    void onSpecularColorChanged(QColor color);
-    void onSpecularTextureChanged(QString texture);
-    void onShininessChanged(float shininess);
-
-    void onNormalTextureChanged(QString texture);
-    void onNormalIntensityChanged(float intensity);
-
-    void onReflectionTextureChanged(QString texture);
-    void onReflectionInfluenceChanged(float intensity);
-
-    void onTextureScaleChanged(float scale);
-
     void onCustomSliderChanged(QWidget*);
     void onCustomColorChanged(QWidget*);
     void onCustomTextureChanged(QWidget*);
-//    void onCustomComboChanged(QWidget*);
 
     void onMaterialSelectorChanged(const QString&);
 
 private:
-    QString currentMaterial;
     ComboBoxWidget* materialSelector;
 
-    ColorValueWidget* ambientColor;
-
-    ColorValueWidget* diffuseColor;
-    TexturePickerWidget* diffuseTexture;
-
-    ColorValueWidget* specularColor;
-    TexturePickerWidget* specularTexture;
-    HFloatSliderWidget* shininess;
-
-    TexturePickerWidget* normalTexture;
-    HFloatSliderWidget* normalIntensity;
-
-    TexturePickerWidget* reflectionTexture;
-    HFloatSliderWidget* reflectionInfluence;
-
-    HFloatSliderWidget* textureScale;
-
-    HFloatSliderWidget* customSliders[12];
-    TexturePickerWidget* customTextures[12];
-    ComboBoxWidget* customCombo[12];
-    ColorValueWidget* customColor[12];
-
     std::map<QString, HFloatSliderWidget*> materialSliders;
-//    std::map<QString, float> sliderUniforms;
 
-    /// NEW
     std::vector<iris::MatStruct<HFloatSliderWidget*>> sliderUniforms;
     std::vector<iris::MatStruct<ColorValueWidget*>> colorUniforms;
     std::vector<iris::MatStruct<TexturePickerWidget*>> textureUniforms;
