@@ -152,8 +152,6 @@ void KeyFrameCurveWidget::mousePressEvent(QMouseEvent *evt)
                 dragHandleType = DragHandleType::None;
         }
 
-
-
         this->repaint();
     }
 }
@@ -165,8 +163,34 @@ void KeyFrameCurveWidget::mouseReleaseEvent(QMouseEvent *evt)
 
     if(mousePos==clickPos && evt->button() == Qt::RightButton)
     {
-        QMenu menu;
-        menu.addAction("delete");
+        auto key = this->getKeyAt(mousePos.x(),mousePos.y());
+
+        if (key != nullptr) {
+            QMenu menu;
+            menu.addAction("Delete");
+            menu.addSeparator();
+
+            auto handleMenu = new QMenu("Handles");
+            //handleMenu.setTitle("Handles");
+            handleMenu->addAction("Auto");
+            handleMenu->addAction("Broken");
+            handleMenu->addAction("Flat");
+            menu.addMenu(handleMenu);
+
+            auto leftTangent = new QMenu("Left Tangent");
+            leftTangent->addAction("Free");
+            leftTangent->addAction("Linear");
+            leftTangent->addAction("Constant");
+            menu.addMenu(leftTangent);
+
+            auto rightTangent = new QMenu("Right Tangent");
+            rightTangent->addAction("Free");
+            rightTangent->addAction("Linear");
+            rightTangent->addAction("Constant");
+            menu.addMenu(rightTangent);
+
+            menu.exec(this->mapToGlobal(mousePos));
+        }
     }
 
     if(evt->button() == Qt::LeftButton)
@@ -211,13 +235,16 @@ void KeyFrameCurveWidget::mouseMoveEvent(QMouseEvent *evt)
 
             if(relVec.x() <= 0)
                 selectedKey->leftSlope = relVec.y() / -relVec.x();
-            else if(relVec.y() < 0)
-                selectedKey->leftSlope = -100000000;
-            else
-                selectedKey->leftSlope = 100000000;
+            else {
+                if(relVec.y() < 0)
+                    selectedKey->leftSlope = -100000000;
+                else
+                    selectedKey->leftSlope = 100000000;
+            }
 
-            //qDebug() << "relVec: " << relVec;
-            //qDebug() << "slope: " << selectedKey->leftSlope;
+            if (selectedKey->handleMode == iris::HandleMode::Joined) {
+                selectedKey->rightSlope = -selectedKey->leftSlope;
+            }
 
         } else if(dragHandleType == DragHandleType::RightTangent) {
             // move handle and recalc tangent
@@ -236,6 +263,10 @@ void KeyFrameCurveWidget::mouseMoveEvent(QMouseEvent *evt)
                 selectedKey->rightSlope = -100000000;
             else
                 selectedKey->rightSlope = 100000000;
+
+            if (selectedKey->handleMode == iris::HandleMode::Joined) {
+                selectedKey->leftSlope = -selectedKey->rightSlope;
+            }
         }
 
         this->repaint();

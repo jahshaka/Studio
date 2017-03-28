@@ -32,7 +32,14 @@ enum class KeyFrameType
 enum class TangentType
 {
     Free,
-    Linear
+    Linear,
+    Constant
+};
+
+enum class HandleMode
+{
+    Joined,
+    Broken
 };
 
 template<typename T>
@@ -47,6 +54,8 @@ public:
 
     float leftSlope;
     float rightSlope;
+
+    HandleMode handleMode;
 
     inline bool operator< ( const T& rhs)
     {
