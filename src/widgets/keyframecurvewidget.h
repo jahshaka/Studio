@@ -12,6 +12,14 @@ class KeyFrameCurveWidget;
 class KeyFrameLabelTreeWidget;
 class AnimationWidgetData;
 
+enum class DragHandleType
+{
+    None,
+    Point,
+    LeftTangent,
+    RightTangent
+};
+
 class KeyFrameCurveWidget : public QWidget
 {
     Q_OBJECT
@@ -33,6 +41,9 @@ class KeyFrameCurveWidget : public QWidget
     QPoint mousePos;
     QPoint clickPos;
     float keyPointRadius;
+    float handlePointRadius;
+    float handleLength;
+    DragHandleType dragHandleType;
 
     iris::FloatKey* selectedKey;
 
@@ -69,6 +80,10 @@ private:
     QPoint getLeftTangentHandlePoint(iris::FloatKey* key);
     QPoint getRightTangentHandlePoint(iris::FloatKey* key);
     QPoint getKeyFramePoint(iris::FloatKey* key);
+
+    // checks if point at x and y hits handle
+    bool isLeftHandleHit(iris::FloatKey* key, int x, int y);
+    bool isRightHandleHit(iris::FloatKey* key, int x, int y);
 
 private slots:
     void selectedCurveChanged();

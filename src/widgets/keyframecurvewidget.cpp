@@ -22,16 +22,10 @@
 #include <QTreeWidgetItem>
 #include <QVariant>
 
-enum class CurveHandleType
-{
-    Point,
-    LeftTangent,
-    RigtTangent
-};
 
 struct CurveHandle
 {
-    CurveHandleType type;
+    //CurveHandleType type;
     iris::FloatKey* key;
 };
 
@@ -57,6 +51,8 @@ KeyFrameCurveWidget::KeyFrameCurveWidget(QWidget *parent) :
     curvePen = QPen(QColor::fromRgb(255,255,255));
     curvePen.setWidth(5);
 
+    dragHandleType = DragHandleType::None;
+
     setMouseTracking(true);
 
     dragging = false;
@@ -72,6 +68,8 @@ KeyFrameCurveWidget::KeyFrameCurveWidget(QWidget *parent) :
 
     // point's diameter
     keyPointRadius = 7;
+    handlePointRadius = keyPointRadius - 2;
+    handleLength = 50;
 }
 
 KeyFrameCurveWidget::~KeyFrameCurveWidget()
@@ -128,9 +126,34 @@ void KeyFrameCurveWidget::mousePressEvent(QMouseEvent *evt)
     if(evt->button() == Qt::RightButton)
         rightButtonDown = true;
 
-    if(evt->button() == Qt::LeftButton)
-    {
-        this->selectedKey = this->getKeyAt(mousePos.x(),mousePos.y());
+    if(evt->button() == Qt::LeftButton) {
+        // This means a key is selected and the handles are showing
+        // Check for a handle hits first
+        if (selectedKey != nullptr) {
+
+            if (isLeftHandleHit(selectedKey, mousePos.x(), mousePos.y())) {
+                dragHandleType = DragHandleType::LeftTangent;
+            } else if(isRightHandleHit(selectedKey, mousePos.x(), mousePos.y())) {
+                dragHandleType = DragHandleType::RightTangent;
+            } else {
+                this->selectedKey = this->getKeyAt(mousePos.x(),mousePos.y());
+                if( selectedKey != nullptr )
+                    dragHandleType = DragHandleType::Point;
+                else
+                    dragHandleType = DragHandleType::None;
+            }
+
+        } else {
+            this->selectedKey = this->getKeyAt(mousePos.x(),mousePos.y());
+
+            if( selectedKey != nullptr )
+                dragHandleType = DragHandleType::Point;
+            else
+                dragHandleType = DragHandleType::None;
+        }
+
+
+
         this->repaint();
     }
 }
@@ -160,13 +183,55 @@ void KeyFrameCurveWidget::mouseMoveEvent(QMouseEvent *evt)
 
     if(leftButtonDown && selectedKey!=nullptr)
     {
-        //key dragging
-        auto timeDiff = posToTime(evt->x())-posToTime(mousePos.x());
-        selectedKey->time += timeDiff;
 
-        auto valDiff = animWidgetData->posToValue(evt->y(), widgetHeight) -
-                       animWidgetData->posToValue(mousePos.y(), widgetHeight);
-        selectedKey->value += valDiff;
+        if(dragHandleType == DragHandleType::Point) {
+            //key dragging
+            auto timeDiff = posToTime(evt->x())-posToTime(mousePos.x());
+            selectedKey->time += timeDiff;
+
+            auto valDiff = animWidgetData->posToValue(evt->y(), widgetHeight) -
+                           animWidgetData->posToValue(mousePos.y(), widgetHeight);
+            selectedKey->value += valDiff;
+        } else if (dragHandleType == DragHandleType::LeftTangent) {
+            // move handle and recalc tangent
+            // this is all performed in the space of the canvas
+            auto point = getLeftTangentHandlePoint(selectedKey);
+            auto diff = evt->pos() - mousePos;
+            point += diff;
+
+            // now normalize and recalc tangent
+            //auto relPos = point - getKeyFramePoint(selectedKey);
+            auto relPos = mousePos - getKeyFramePoint(selectedKey);
+            auto relVec = QVector2D(relPos.x(),relPos.y()).normalized();
+
+            if(relVec.x() <= 0)
+                selectedKey->leftSlope = relVec.y() / -relVec.x();
+            else if(relVec.y() < 0)
+                selectedKey->leftSlope = -100000000;
+            else
+                selectedKey->leftSlope = 100000000;
+
+            //qDebug() << "relVec: " << relVec;
+            //qDebug() << "slope: " << selectedKey->leftSlope;
+
+        } else if(dragHandleType == DragHandleType::RightTangent) {
+            // move handle and recalc tangent
+            // this is all performed in the space of the canvas
+            auto point = getRightTangentHandlePoint(selectedKey);
+            auto diff = evt->pos() - mousePos;
+            point += diff;
+
+            // now normalize and recalc tangent
+            auto relPos = mousePos - getKeyFramePoint(selectedKey);
+            auto relVec = QVector2D(relPos.x(),relPos.y()).normalized();
+
+            if(relVec.x() >= 0)
+                selectedKey->rightSlope = relVec.y() / relVec.x();
+            else if(relVec.y() < 0)
+                selectedKey->rightSlope = -100000000;
+            else
+                selectedKey->rightSlope = 100000000;
+        }
 
         this->repaint();
     }
@@ -291,7 +356,7 @@ void KeyFrameCurveWidget::drawKeyFrames(QPainter &paint)
 
             QPainterPath path;
             path.moveTo(ap);
-            path.cubicTo(ap + QPoint(third, 0),bp - QPoint(third, 0),bp);
+            path.cubicTo(ap + QPoint(third, third * a->rightSlope),bp - QPoint(third, third * -b->leftSlope),bp);
 
             paint.drawPath(path);
         }
@@ -319,17 +384,19 @@ void KeyFrameCurveWidget::drawKeys(QPainter &paint)
             if (a == selectedKey) {
                 // draw handles
 
+                paint.setPen(Qt::white);
+
                 // left handle
                 auto handlePoint = getLeftTangentHandlePoint(a);
 
                 paint.drawLine(ap, handlePoint);
 
                 paint.setBrush(defaultBrush);
-                paint.drawEllipse(handlePoint, keyPointRadius - 2, keyPointRadius -2);
+                paint.drawEllipse(handlePoint, keyPointRadius - 1, keyPointRadius -1);
 
                 paint.setBrush(innerBrush);
-                paint.drawEllipse(handlePoint, (keyPointRadius - 4),
-                                               (keyPointRadius - 4));
+                paint.drawEllipse(handlePoint, (keyPointRadius - 2),
+                                               (keyPointRadius - 2));
 
                 // right handle
                 handlePoint = getRightTangentHandlePoint(a);
@@ -337,11 +404,13 @@ void KeyFrameCurveWidget::drawKeys(QPainter &paint)
                 paint.drawLine(ap, handlePoint);
 
                 paint.setBrush(defaultBrush);
-                paint.drawEllipse(handlePoint, keyPointRadius - 2, keyPointRadius -2);
+                paint.drawEllipse(handlePoint, keyPointRadius - 1, keyPointRadius -1);
 
                 paint.setBrush(innerBrush);
-                paint.drawEllipse(handlePoint, (keyPointRadius - 4),
-                                               (keyPointRadius - 4));
+                paint.drawEllipse(handlePoint, (keyPointRadius - 2),
+                                               (keyPointRadius - 2));
+
+                paint.setPen(Qt::NoPen);
 
 
             }
@@ -390,13 +459,13 @@ iris::FloatKey* KeyFrameCurveWidget::getKeyAt(int x, int y)
 
 QPoint KeyFrameCurveWidget::getLeftTangentHandlePoint(iris::FloatKey *key)
 {
-    auto offset = QVector2D(-1, key->leftSlope).normalized() * 30;
+    auto offset = QVector2D(-1, key->leftSlope).normalized() * handleLength;
     return QPoint(offset.x(), offset.y()) + getKeyFramePoint(key);
 }
 
 QPoint KeyFrameCurveWidget::getRightTangentHandlePoint(iris::FloatKey *key)
 {
-    auto offset = QVector2D(1, key->leftSlope).normalized() * 30;
+    auto offset = QVector2D(1, key->rightSlope).normalized() * handleLength;
     return QPoint(offset.x(), offset.y()) + getKeyFramePoint(key);
 }
 
@@ -404,6 +473,24 @@ QPoint KeyFrameCurveWidget::getKeyFramePoint(iris::FloatKey *key)
 {
     return QPoint(animWidgetData->timeToPos(key->time, this->geometry().width()),
                   animWidgetData->valueToPos(key->value, this->geometry().height()));
+}
+
+bool KeyFrameCurveWidget::isLeftHandleHit(iris::FloatKey* key, int x, int y)
+{
+    auto pos = getLeftTangentHandlePoint(key);
+    if (QVector2D(pos).distanceToPoint(QVector2D(x,y)) <= handlePointRadius)
+        return true;
+
+    return false;
+}
+
+bool KeyFrameCurveWidget::isRightHandleHit(iris::FloatKey* key, int x, int y)
+{
+    auto pos = getRightTangentHandlePoint(key);
+    if (QVector2D(pos).distanceToPoint(QVector2D(x,y)) <= handlePointRadius)
+        return true;
+
+    return false;
 }
 
 void KeyFrameCurveWidget::selectedCurveChanged()
