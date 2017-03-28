@@ -49,6 +49,24 @@ void CustomMaterial::setTextureWithUniform(QString textureUniformName, QString t
     }
 }
 
+void CustomMaterial::setTextureWithBool(QString uniform, bool value)
+{
+    textureToggleUniforms.push_back(
+                iris::make_mat_struct(textureToggleUniforms.size(),
+                                      uniform,
+                                      value));
+
+//    if (!textureValue.isEmpty()) {
+//        setTextureWithUniform(uniform, textureValue);
+//    }
+}
+
+void CustomMaterial::updateTextureAndToggleUniform(int index, QString textureUni)
+{
+    textureUniforms[index].value = textureUni;
+    setTextureWithUniform(textureUniforms[index].uniform, textureUni);
+}
+
 void CustomMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
 {
      Material::begin(gl, scene);
@@ -79,6 +97,8 @@ void CustomMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
 //        program->setUniformValue(bit->first.toStdString().c_str(), bit->second);
 //        bit++;
 //    }
+
+//    program->setUniformValue("u_useDiffuseTex", true);
 
     // set texture toggle uniforms
     auto ttit = textureToggleUniforms.begin();
@@ -173,8 +193,9 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
             }
         }
 
+        /// TODO - find a way to set default textures? do we even want to do this?
         if (textureUniforms.size() < textureMax) {
-            qDebug() << textureUniforms.size();
+//            qDebug() << textureUniforms.size();
             if (prop["type"] == "texture") {
                 auto textureValue = prop["value"].toString();
 

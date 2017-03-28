@@ -193,13 +193,13 @@ void MaterialPropertyWidget::setupShaderSelector()
     // load these from a directory in the future...
     materialSelector = this->addComboBox("Shader");
     materialSelector->addItem("Default Shader");
-    materialSelector->addItem("Environment Surface Shader");
+//    materialSelector->addItem("Environment Surface Shader");
 
-    if (meshNode->getMaterialType() == 1) {
+//    if (meshNode->getMaterialType() == 1) {
         materialSelector->setCurrentItem("Default Shader");
-    } else {
-        materialSelector->setCurrentItem("Environment Surface Shader");
-    }
+//    } else {
+//        materialSelector->setCurrentItem("Environment Surface Shader");
+//    }
 
     connect(materialSelector,   SIGNAL(currentIndexChanged(QString)),
             this,               SLOT(onMaterialSelectorChanged(QString)));
@@ -208,7 +208,7 @@ void MaterialPropertyWidget::setupShaderSelector()
 MaterialPropertyWidget::MaterialPropertyWidget(QSharedPointer<iris::SceneNode> sceneNode, QWidget *parent)
 {
     materialReader = new MaterialReader();
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/Default.json"));
+    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
 
     if (!!sceneNode) {
         this->meshNode = sceneNode.staticCast<iris::MeshNode>();
@@ -223,52 +223,53 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
 
     setupShaderSelector();
 
-    if (this->meshNode->getMaterialType() == 1) {
+//    if (this->meshNode->getMaterialType() == 1) {
+//        if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+//            this->meshNode = sceneNode.staticCast<iris::MeshNode>();
+//            this->material = meshNode->getMaterial().staticCast<iris::DefaultMaterial>();
+
+//            setupDefaultMaterial();
+
+//            auto mat = this->material;
+//            //TODO: ensure material isnt null
+
+//            ambientColor->setColorValue(mat->getAmbientColor());
+
+//            diffuseColor->setColorValue(mat->getDiffuseColor());
+//            diffuseTexture->setTexture(mat->getDiffuseTextureSource());
+
+//            specularColor->setColorValue(mat->getSpecularColor());
+//            specularTexture->setTexture(mat->getSpecularTextureSource());
+//            shininess->setValue(mat->getShininess());
+
+//            normalTexture->setTexture(mat->getNormalTextureSource());
+//            normalIntensity->setValue(mat->getNormalIntensity());
+
+//            reflectionTexture->setTexture(mat->getReflectionTextureSource());
+//            reflectionInfluence->setValue(mat->getReflectionInfluence());
+
+//            textureScale->setValue(mat->getTextureScale());
+//        } else {
+//            this->meshNode.clear();
+//            this->material.clear();
+//            return;
+//        }
+//    } else if (this->meshNode->getMaterialType() == 2) {
+
         if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             this->meshNode = sceneNode.staticCast<iris::MeshNode>();
-            this->material = meshNode->getMaterial().staticCast<iris::DefaultMaterial>();
-
-            setupDefaultMaterial();
-
-            auto mat = this->material;
-            //TODO: ensure material isnt null
-
-            ambientColor->setColorValue(mat->getAmbientColor());
-
-            diffuseColor->setColorValue(mat->getDiffuseColor());
-            diffuseTexture->setTexture(mat->getDiffuseTextureSource());
-
-            specularColor->setColorValue(mat->getSpecularColor());
-            specularTexture->setTexture(mat->getSpecularTextureSource());
-            shininess->setValue(mat->getShininess());
-
-            normalTexture->setTexture(mat->getNormalTextureSource());
-            normalIntensity->setValue(mat->getNormalIntensity());
-
-            reflectionTexture->setTexture(mat->getReflectionTextureSource());
-            reflectionInfluence->setValue(mat->getReflectionInfluence());
-
-            textureScale->setValue(mat->getTextureScale());
-        } else {
-            this->meshNode.clear();
-            this->material.clear();
-            return;
-        }
-    } else if (this->meshNode->getMaterialType() == 2) {
-
-        if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            this->meshNode = sceneNode.staticCast<iris::MeshNode>();
-            this->customMaterial = meshNode->getCustomMaterial().staticCast<iris::CustomMaterial>();
+            this->customMaterial = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
 
             this->customMaterial->generate(materialReader->getParsedShader());
-
             setupCustomMaterial();
+//            this->customMaterial->updateTextureAndToggleUniform(0, IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"));
+
         } else {
             this->meshNode.clear();
             this->customMaterial.clear();
             return;
         }
-    }
+//    }
 }
 
 void MaterialPropertyWidget::onCustomSliderChanged(QWidget *t)
@@ -308,16 +309,16 @@ void MaterialPropertyWidget::onCustomTextureChanged(QWidget *t)
 
 void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
 {
-    if (!!this->meshNode) {
-        if (text == "Default Shader") {
-            this->meshNode->setMaterialType(1);
-            this->meshNode->setActiveMaterial(1);
+//    if (!!this->meshNode) {
+//        if (text == "Default Shader") {
+//            this->meshNode->setMaterialType(1);
+//            this->meshNode->setActiveMaterial(1);
 
-        } else {
-            this->meshNode->setMaterialType(2);
-            this->meshNode->setActiveMaterial(2);
-        }
-    }
+//        } else {
+//            this->meshNode->setMaterialType(2);
+//            this->meshNode->setActiveMaterial(2);
+//        }
+//    }
 
     if (text == "Default Shader") {
         this->clearPanel(this->layout());
@@ -332,25 +333,25 @@ void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
         this->setMaximumHeight(finalHeight);
 
         this->setSceneNode(this->meshNode);
-
-    } else if (text == "Environment Surface Shader") {
-
-        this->clearPanel(this->layout());
-
-        resetHeight();
-
-        // this isn't magic, there are values but it's not possible to get them yet
-        // finalHeight = minimum_height + (widgets * height) +
-        //              (widgetCount * heights) + topMargin + bottomMargin;
-        int finalHeight = 30 + (4 * 28) + (4 * 6) + 9 + 9;
-
-        setHeight(finalHeight - 30);
-
-        this->setMinimumHeight(finalHeight);
-        this->setMaximumHeight(finalHeight);
-
-        this->setSceneNode(this->meshNode);
     }
+//    } else if (text == "Environment Surface Shader") {
+
+//        this->clearPanel(this->layout());
+
+//        resetHeight();
+
+//        // this isn't magic, there are values but it's not possible to get them yet
+//        // finalHeight = minimum_height + (widgets * height) +
+//        //              (widgetCount * heights) + topMargin + bottomMargin;
+//        int finalHeight = 30 + (4 * 28) + (4 * 6) + 9 + 9;
+
+//        setHeight(finalHeight - 30);
+
+//        this->setMinimumHeight(finalHeight);
+//        this->setMaximumHeight(finalHeight);
+
+//        this->setSceneNode(this->meshNode);
+//    }
 }
 
 void MaterialPropertyWidget::onAmbientColorChanged(QColor color)
