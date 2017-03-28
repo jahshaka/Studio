@@ -192,6 +192,11 @@ void KeyFrameCurveWidget::mouseMoveEvent(QMouseEvent *evt)
             auto valDiff = animWidgetData->posToValue(evt->y(), widgetHeight) -
                            animWidgetData->posToValue(mousePos.y(), widgetHeight);
             selectedKey->value += valDiff;
+
+            // resort keys
+            for(auto frame : keyFrames)
+                frame->sortKeys();
+
         } else if (dragHandleType == DragHandleType::LeftTangent) {
             // move handle and recalc tangent
             // this is all performed in the space of the canvas
