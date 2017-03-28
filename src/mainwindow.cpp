@@ -78,6 +78,8 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
 
+#include <src/io/materialreader.hpp>
+
 enum class VRButtonMode : int
 {
     Default = 0,
@@ -279,6 +281,15 @@ QString MainWindow::getAbsoluteAssetPath(QString relToApp)
     return path;
 }
 
+/// TODO load default scene from file
+///
+
+iris::ScenePtr MainWindow::loadDefaultScene()
+{
+
+}
+
+// don't use this anymore --- use method above
 iris::ScenePtr MainWindow::createDefaultScene()
 {
     auto scene = iris::Scene::create();
@@ -302,13 +313,20 @@ iris::ScenePtr MainWindow::createDefaultScene()
     node->setPickable(false);
     node->setShadowEnabled(false);
 
-    auto m = iris::DefaultMaterial::create();
+    MaterialReader *materialReader = new MaterialReader();
+    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
+
+    auto m = iris::CustomMaterial::create();
+    m->generate(materialReader->getParsedShader());
+    m->setTextureWithBool("u_useDiffuseTex", true);
+    m->updateTextureAndToggleUniform(0, getAbsoluteAssetPath("app/content/textures/tile.png"));
     node->setMaterial(m);
-    m->setDiffuseColor(QColor(255, 255, 255));
-    m->setDiffuseTexture(iris::Texture2D::load(getAbsoluteAssetPath("app/content/textures/tile.png")));
-    m->setShininess(0);
-    m->setSpecularColor(QColor(0, 0, 0));
-    m->setTextureScale(4);
+//    node->setActiveMaterial(2);
+//    m->setDiffuseColor(QColor(255, 255, 255));
+//    m->setDiffuseTexture(iris::Texture2D::load(getAbsoluteAssetPath("app/content/textures/tile.png")));
+//    m->setShininess(0);
+//    m->setSpecularColor(QColor(0, 0, 0));
+//    m->setTextureScale(4);
 
     scene->rootNode->addChild(node);
 
@@ -949,10 +967,15 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
 
 //        if (!meshNode->getMaterial()) {
 //            if (meshNode->materialType == 1) {
-                auto mat = iris::DefaultMaterial::create();
-                meshNode->setMaterial(mat);
 
-                meshNode->setActiveMaterial(1);
+        MaterialReader *materialReader = new MaterialReader();
+        materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/Default.json"));
+
+        auto mat = iris::CustomMaterial::create();
+        mat->generate(materialReader->getParsedShader());
+        meshNode->setMaterial(mat);
+
+//        meshNode->setActiveMaterial(2);
 //            } else {
 //                auto mat = iris::CustomMaterial::create();
 //                meshNode->setMaterial(mat);

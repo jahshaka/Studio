@@ -60,6 +60,9 @@ public:
     std::vector<MatStruct<bool>> textureToggleUniforms;
 
     void setTextureWithUniform(QString, QString);
+    void setTextureWithBool(QString, bool);
+
+    void updateTextureAndToggleUniform(int, QString);
 
     static CustomMaterialPtr create();
 
