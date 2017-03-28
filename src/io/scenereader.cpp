@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include <QJsonValueRef>
 #include <QJsonDocument>
 
+#include "materialreader.hpp"
 #include "scenereader.h"
 
 #include "../editor/editordata.h"
@@ -356,37 +357,47 @@ iris::LightType SceneReader::getLightTypeFromName(QString lightType)
  */
 iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 {
-    if(nodeObj["material"].isNull())
-    {
-        return iris::DefaultMaterial::create();
+    if (nodeObj["material"].isNull()) {
+        return iris::CustomMaterial::create();
     }
 
-    QJsonObject matObj = nodeObj["material"].toObject();
-    auto material = iris::DefaultMaterial::create();
+    auto mat = nodeObj["material"].toObject();
 
-    auto colObj = matObj["ambientColor"].toObject();
-    material->setAmbientColor(readColor(colObj));
+    MaterialReader *materialReader = new MaterialReader();
+    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/" + mat["name"].toString() + ".json"));
 
-    colObj = matObj["diffuseColor"].toObject();
-    material->setDiffuseColor(readColor(colObj));
+    auto m = iris::CustomMaterial::create();
+    m->generate(materialReader->getParsedShader());
 
-    auto tex = matObj["diffuseTexture"].toString("");
-    if(!tex.isEmpty()) material->setDiffuseTexture(iris::Texture2D::load(getAbsolutePath(tex)));
+    // some if check here, the preset file should denote what is read/written.
+    // maybe use the uniform names as keys
+    m->updateTextureAndToggleUniform(0, IrisUtils::getAbsoluteAssetPath(mat["diffuseTexture"].toString()));
 
-    tex = matObj["normalTexture"].toString("");
-    if(!tex.isEmpty()) material->setNormalTexture(iris::Texture2D::load(getAbsolutePath(tex)));
+//    QJsonObject matObj = nodeObj["material"].toObject();
+//    auto material = iris::DefaultMaterial::create();
 
-    colObj = matObj["specularColor"].toObject();
-    material->setSpecularColor(readColor(colObj));
-    material->setShininess((float)matObj["shininess"].toDouble(0.0f));
+//    auto colObj = matObj["ambientColor"].toObject();
+//    material->setAmbientColor(readColor(colObj));
 
-    tex = matObj["specularTexture"].toString("");
-    if(!tex.isEmpty()) material->setSpecularTexture(iris::Texture2D::load(getAbsolutePath(tex)));
+//    colObj = matObj["diffuseColor"].toObject();
+//    material->setDiffuseColor(readColor(colObj));
 
-    material->setTextureScale((float)matObj["textureScale"].toDouble(1.0f));
+//    auto tex = matObj["diffuseTexture"].toString("");
+//    if(!tex.isEmpty()) material->setDiffuseTexture(iris::Texture2D::load(getAbsolutePath(tex)));
 
-    return material;
+//    tex = matObj["normalTexture"].toString("");
+//    if(!tex.isEmpty()) material->setNormalTexture(iris::Texture2D::load(getAbsolutePath(tex)));
 
+//    colObj = matObj["specularColor"].toObject();
+//    material->setSpecularColor(readColor(colObj));
+//    material->setShininess((float)matObj["shininess"].toDouble(0.0f));
+
+//    tex = matObj["specularTexture"].toString("");
+//    if(!tex.isEmpty()) material->setSpecularTexture(iris::Texture2D::load(getAbsolutePath(tex)));
+
+//    material->setTextureScale((float)matObj["textureScale"].toDouble(1.0f));
+
+    return m;
 }
 
 /**

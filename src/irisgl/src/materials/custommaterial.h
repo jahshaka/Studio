@@ -33,6 +33,11 @@ public:
     void setTexture(Texture2DPtr tex);
     Texture2DPtr getTexture();
 
+    QJsonObject jahShaderMaster;
+    QJsonObject getShaderFile() const {
+        return jahShaderMaster;
+    }
+
     void begin(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
     void end(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
 
@@ -59,9 +64,9 @@ public:
     std::vector<MatStruct<QString>> textureUniforms;
     std::vector<MatStruct<bool>> textureToggleUniforms;
 
-    void setTextureWithUniform(QString, QString);
-    void setTextureWithBool(QString, bool);
+    QString name;
 
+    void setTextureWithUniform(QString, QString);
     void updateTextureAndToggleUniform(int, QString);
 
     static CustomMaterialPtr create();

@@ -85,9 +85,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             lightPropView->setPanelTitle("Light");
             lightPropView->setSceneNode(sceneNode);
 
-            materialPropView = new MaterialPropertyWidget(sceneNode);
-            materialPropView->setPanelTitle("Material");
-            materialPropView->setSceneNode(sceneNode);
+            // try to move back mat prop here
 
             emitterPropView = new EmitterPropertyWidget();
             emitterPropView->setPanelTitle("Emitter");
@@ -105,6 +103,10 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                 }
 
                 case iris::SceneNodeType::Mesh: {
+                    materialPropView = new MaterialPropertyWidget(sceneNode);
+                    materialPropView->setPanelTitle("Material");
+                    materialPropView->setSceneNode(sceneNode);
+
                     layout->addWidget(meshPropView);
                     // layout->addWidget(nodePropView);
                     layout->addWidget(materialPropView);

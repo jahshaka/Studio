@@ -1,7 +1,6 @@
 {
-    "name": "Refractive Shader",
+    "name": "Default",
     "preview": false,
-    "ordered": false,
     "uniforms": [
         {
             "name"      : "Ambient Color",
@@ -34,7 +33,7 @@
         }, {
             "name"      : "Shininess",
             "type"      : "slider",
-            "value"     : 20,
+            "value"     : 24,
             "start"     : 0,
             "end"       : 512,
             "uniform"   : "u_material.shininess"

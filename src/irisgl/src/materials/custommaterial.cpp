@@ -49,22 +49,11 @@ void CustomMaterial::setTextureWithUniform(QString textureUniformName, QString t
     }
 }
 
-void CustomMaterial::setTextureWithBool(QString uniform, bool value)
+void CustomMaterial::updateTextureAndToggleUniform(int index, QString uniform)
 {
-    textureToggleUniforms.push_back(
-                iris::make_mat_struct(textureToggleUniforms.size(),
-                                      uniform,
-                                      value));
-
-//    if (!textureValue.isEmpty()) {
-//        setTextureWithUniform(uniform, textureValue);
-//    }
-}
-
-void CustomMaterial::updateTextureAndToggleUniform(int index, QString textureUni)
-{
-    textureUniforms[index].value = textureUni;
-    setTextureWithUniform(textureUniforms[index].uniform, textureUni);
+    textureToggleUniforms[index].value = !uniform.isEmpty() || !uniform.isNull();
+    textureUniforms[index].value = uniform;
+    setTextureWithUniform(textureUniforms[index].uniform, uniform);
 }
 
 void CustomMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
@@ -72,60 +61,30 @@ void CustomMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
      Material::begin(gl, scene);
 
     // @todo, figure out a way for the default material to mix values... the ambient for one
-    auto cit = colorUniforms.begin();
-    while (cit != colorUniforms.end()) {
-//        QColor color;
-//        color.setNamedColor(cit->value);
-//        qDebug() << cit->uniform << " " << cit->value.name();
-        program->setUniformValue(cit->uniform.toStdString().c_str(),
-                                 QVector3D(cit->value.redF(),
-                                           cit->value.greenF(),
-                                           cit->value.blueF()));
-        cit++;
+    auto colorIterator = colorUniforms.begin();
+    while (colorIterator != colorUniforms.end()) {
+        program->setUniformValue(colorIterator->uniform.toStdString().c_str(),
+                                 QVector3D(colorIterator->value.redF(),
+                                           colorIterator->value.greenF(),
+                                           colorIterator->value.blueF()));
+        colorIterator++;
     }
 
     // set slider uniforms
-    auto sit = sliderUniforms.begin();
-    while (sit != sliderUniforms.end()) {
-        program->setUniformValue(sit->uniform.toStdString().c_str(), sit->value);
-        ++sit;
+    auto sliderIterator = sliderUniforms.begin();
+    while (sliderIterator != sliderUniforms.end()) {
+        program->setUniformValue(sliderIterator->uniform.toStdString().c_str(),
+                                 sliderIterator->value);
+        ++sliderIterator;
     }
-
-    // set bool uniforms
-//    std::map<QString, bool>::iterator bit = boolUniforms.begin();
-//    while (bit != boolUniforms.end()) {
-//        program->setUniformValue(bit->first.toStdString().c_str(), bit->second);
-//        bit++;
-//    }
-
-//    program->setUniformValue("u_useDiffuseTex", true);
 
     // set texture toggle uniforms
-    auto ttit = textureToggleUniforms.begin();
-    while (ttit != textureToggleUniforms.end()) {
-        setUniformValue(ttit->uniform.toStdString().c_str(), ttit->value);
-        ++ttit;
+    auto textureToggleIterator = textureToggleUniforms.begin();
+    while (textureToggleIterator != textureToggleUniforms.end()) {
+        setUniformValue(textureToggleIterator->uniform.toStdString().c_str(),
+                        textureToggleIterator->value);
+        ++textureToggleIterator;
     }
-
-//    bindTextures(gl);
-
-//    program->setUniformValue("u_material.diffuse",QVector3D(diffuseColor.redF(),diffuseColor.greenF(),diffuseColor.blueF()));
-//    const QColor& sceneAmbient = scene->ambientColor;
-//    auto finalAmbient = QVector3D(ambientColor.redF() + sceneAmbient.redF(),
-//                                  ambientColor.greenF() + sceneAmbient.greenF(),
-//                                  ambientColor.blueF() + sceneAmbient.blueF());
-//    program->setUniformValue("u_material.ambient",finalAmbient);
-//    program->setUniformValue("u_material.specular",QVector3D(specularColor.redF(),specularColor.greenF(),specularColor.blueF()));
-//    program->setUniformValue("u_material.shininess",shininess);
-
-//    program->setUniformValue("u_textureScale", this->textureScale);
-//    program->setUniformValue("u_normalIntensity",normalIntensity);
-//    program->setUniformValue("u_reflectionInfluence",reflectionInfluence);
-
-//    program->setUniformValue("u_useDiffuseTex",useDiffuseTex);
-//    program->setUniformValue("u_useNormalTex",useNormalTex);
-//    program->setUniformValue("u_useSpecularTex",useSpecularTex);
-//    program->setUniformValue("u_useReflectionTex",useReflectionTex);
 }
 
 void CustomMaterial::end(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
@@ -134,13 +93,12 @@ void CustomMaterial::end(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
 }
 
 /*
- * some notes about this function, the material isn't destroyed until the object is
+ * some notes about this function, the material isn't destroyed until the object is.
  * this function will get called everytime we cast a material when we select a node
- * using a map keeps our uniforms the same size so we don't add to it again
- *
  */
 void CustomMaterial::generate(const QJsonObject &jahShader)
 {
+    name = jahShader["name"].toString();
     auto useBuiltinShader = jahShader["builtin"].toBool();
 
     auto vertPath = jahShader["vertex_shader"].toString();
@@ -155,37 +113,35 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
 
     auto widgetProps = jahShader["uniforms"].toArray();
 
-    /// TODO remove this when the default material is deleted.
-    int sliderMax = 0, textureMax = 0, colorMax = 0;
+    /// TODO see if this can be removed this when the default material is deleted.
+    unsigned sliderSize, textureSize, colorSize;
+    sliderSize = textureSize = colorSize = 0;
 
     for (int i = 0; i < widgetProps.size(); i++) {
         auto prop = widgetProps[i].toObject();
-        if (prop["type"] == "slider") {
-            sliderMax++;
-        }
-
-        if (prop["type"] == "color") {
-            colorMax++;
-        }
-
-        if (prop["type"] == "texture") {
-            textureMax++;
-        }
+        if (prop["type"] == "slider")   sliderSize++;
+        if (prop["type"] == "color")    colorSize++;
+        if (prop["type"] == "texture")  textureSize++;
     }
+
+    sliderUniforms.clear();
+    colorUniforms.clear();
+    textureUniforms.clear();
+    textureToggleUniforms.clear();
 
     for (int propIndex = 0; propIndex < widgetProps.size(); propIndex++) {
 
         auto prop = widgetProps[propIndex].toObject();
-        auto uniform    = prop["uniform"].toString();
+        auto uniform = prop["uniform"].toString();
 
-        if (sliderUniforms.size() < sliderMax) {
+        if (sliderUniforms.size() < sliderSize) {
             if (prop["type"] == "slider") {
                 auto value = (float) prop["value"].toDouble();
                 sliderUniforms.push_back(make_mat_struct(textureUniforms.size(), uniform, value));
             }
         }
 
-        if (colorUniforms.size() < colorMax) {
+        if (colorUniforms.size() < colorSize) {
             if (prop["type"] == "color") {
                 QColor col;
                 col.setNamedColor(prop["value"].toString());
@@ -193,24 +149,29 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
             }
         }
 
-        /// TODO - find a way to set default textures? do we even want to do this?
-        if (textureUniforms.size() < textureMax) {
-//            qDebug() << textureUniforms.size();
+        // TODO - find an efficient way to set default textures. Do we even want to do this?
+        if (textureUniforms.size() < textureSize) {
             if (prop["type"] == "texture") {
                 auto textureValue = prop["value"].toString();
 
-                textureUniforms.push_back(iris::make_mat_struct(textureUniforms.size(), uniform, textureValue));
+                textureUniforms.push_back(iris::make_mat_struct(textureUniforms.size(),
+                                                                uniform,
+                                                                textureValue));
+
                 textureToggleUniforms.push_back(
                             iris::make_mat_struct(textureUniforms.size(),
                                                   prop["toggle"].toString(),
                                                   !textureValue.isEmpty()));
 
+                // this will be set to false most if not all the time, see TODO above
                 if (!textureValue.isEmpty()) {
                     setTextureWithUniform(uniform, textureValue);
                 }
             }
         }
     }
+
+    jahShaderMaster = jahShader;
 
     this->setRenderLayer((int) RenderLayer::Opaque);
 }

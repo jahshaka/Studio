@@ -282,14 +282,12 @@ QString MainWindow::getAbsoluteAssetPath(QString relToApp)
 }
 
 /// TODO load default scene from file
-///
-
 iris::ScenePtr MainWindow::loadDefaultScene()
 {
 
 }
 
-// don't use this anymore --- use method above
+// don't use this entirely anymore --- use method above
 iris::ScenePtr MainWindow::createDefaultScene()
 {
     auto scene = iris::Scene::create();
@@ -314,11 +312,10 @@ iris::ScenePtr MainWindow::createDefaultScene()
     node->setShadowEnabled(false);
 
     MaterialReader *materialReader = new MaterialReader();
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
+    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Glass.json"));
 
     auto m = iris::CustomMaterial::create();
     m->generate(materialReader->getParsedShader());
-    m->setTextureWithBool("u_useDiffuseTex", true);
     m->updateTextureAndToggleUniform(0, getAbsoluteAssetPath("app/content/textures/tile.png"));
     node->setMaterial(m);
 //    node->setActiveMaterial(2);
@@ -965,23 +962,12 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
     if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
-//        if (!meshNode->getMaterial()) {
-//            if (meshNode->materialType == 1) {
-
         MaterialReader *materialReader = new MaterialReader();
-        materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/Default.json"));
+        materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
 
         auto mat = iris::CustomMaterial::create();
         mat->generate(materialReader->getParsedShader());
         meshNode->setMaterial(mat);
-
-//        meshNode->setActiveMaterial(2);
-//            } else {
-//                auto mat = iris::CustomMaterial::create();
-//                meshNode->setMaterial(mat);
-//            }
-
-//        }
     }
 
     scene->getRootNode()->addChild(sceneNode);
