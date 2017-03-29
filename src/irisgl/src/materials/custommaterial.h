@@ -68,8 +68,12 @@ public:
 
     void setTextureWithUniform(QString, QString);
     void updateTextureAndToggleUniform(int, QString);
+    void updateFloatAndUniform(int, float);
+    void updateColorAndUniform(int, QColor);
 
     static CustomMaterialPtr create();
+
+    void purge();
 
 private:
     CustomMaterial();

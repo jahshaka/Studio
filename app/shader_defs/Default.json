@@ -21,7 +21,7 @@
         }, {
             "name"      : "Specular Color",
             "type"      : "color",
-            "value"     : "#000",
+            "value"     : "#FFF",
             "uniform"   : "u_material.specular",
             "toggle"    : "u_useSpecularTex"
         }, {

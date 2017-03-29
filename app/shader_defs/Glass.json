@@ -20,7 +20,8 @@
             "name"      : "Diffuse",
             "type"      : "texture",
             "value"     : "",
-            "uniform"   : "u_diffuse"
+            "uniform"   : "u_diffuse",
+            "toggle"    : "u_useDiffuse"
         }, {
             "name"      : "Skyboxes",
             "type"      : "combo",

@@ -30,9 +30,22 @@ void MaterialPropertyWidget::createWidgets(const QJsonObject &jahShader)
     /// TODO: add some check here to escape early
     auto widgetProps = jahShader["uniforms"].toArray();
 
-    sliderUniforms.clear();
-    colorUniforms.clear();
-    textureUniforms.clear();
+//    sliderUniforms.clear();
+//    colorUniforms.clear();
+//    textureUniforms.clear();
+
+//    qDebug() << widgetProps.size();
+
+    /// TODO see if this can be removed this when the default material is deleted.
+    unsigned sliderSize, textureSize, colorSize;
+    sliderSize = textureSize = colorSize = 0;
+
+    for (int i = 0; i < widgetProps.size(); i++) {
+        auto prop = widgetProps[i].toObject();
+        if (prop["type"] == "slider")   sliderSize++;
+        if (prop["type"] == "color")    colorSize++;
+        if (prop["type"] == "texture")  textureSize++;
+    }
 
     for (int propIndex = 0; propIndex < widgetProps.size(); propIndex++) {
         auto prop = widgetProps[propIndex].toObject();
@@ -40,31 +53,37 @@ void MaterialPropertyWidget::createWidgets(const QJsonObject &jahShader)
         auto name       = prop["name"].toString();
         auto uniform    = prop["uniform"].toString();
 
-        if (prop["type"] == "slider") {
-            auto start  = (float) prop["start"].toDouble();
-            auto end    = (float) prop["end"].toDouble();
+        if (sliderUniforms.size() < sliderSize) {
+            if (prop["type"] == "slider") {
+                auto start  = (float) prop["start"].toDouble();
+                auto end    = (float) prop["end"].toDouble();
 
-            sliderUniforms.push_back(iris::make_mat_struct(sliderUniforms.size() - 1,
-                                                           uniform,
-                                                           addFloatValueSlider(name, start, end)));
-            sliderUniforms.back().value->index = sliderUniforms.size() - 1;
+                sliderUniforms.push_back(iris::make_mat_struct(sliderUniforms.size() - 1,
+                                                               uniform,
+                                                               addFloatValueSlider(name, start, end)));
+                sliderUniforms.back().value->index = sliderUniforms.size() - 1;
+            }
         }
 
-        if (prop["type"] == "color") {
-            colorUniforms.push_back(
-                        iris::make_mat_struct(colorUniforms.size() - 1,
-                                              uniform,
-                                              addColorPicker(name)));
-            colorUniforms.back().value->index = colorUniforms.size() - 1;
-            colorUniforms.back().value->getPicker()->index = colorUniforms.size() - 1;
+        if (colorUniforms.size() < colorSize) {
+            if (prop["type"] == "color") {
+                colorUniforms.push_back(
+                            iris::make_mat_struct(colorUniforms.size() - 1,
+                                                  uniform,
+                                                  addColorPicker(name)));
+                colorUniforms.back().value->index = colorUniforms.size() - 1;
+                colorUniforms.back().value->getPicker()->index = colorUniforms.size() - 1;
+            }
         }
 
-        if (prop["type"] == "texture") {
-            textureUniforms.push_back(
-                        iris::make_mat_struct(textureUniforms.size() - 1,
-                                              uniform,
-                                              addTexturePicker(name)));
-            textureUniforms.back().value->index = textureUniforms.size() - 1;
+        if (textureUniforms.size() < textureSize) {
+            if (prop["type"] == "texture") {
+                textureUniforms.push_back(
+                            iris::make_mat_struct(textureUniforms.size() - 1,
+                                                  uniform,
+                                                  addTexturePicker(name)));
+                textureUniforms.back().value->index = textureUniforms.size() - 1;
+            }
         }
     }
 }
@@ -152,18 +171,15 @@ void MaterialPropertyWidget::setupShaderSelector()
         materialSelector->addItem(QFileInfo(shaderName).baseName());
     }
 
-//    qDebug() << this->customMaterial->name;
     materialSelector->setCurrentItem(this->customMaterial->name);
 
     connect(materialSelector,   SIGNAL(currentIndexChanged(QString)),
             this,               SLOT(onMaterialSelectorChanged(QString)));
 }
 
-MaterialPropertyWidget::MaterialPropertyWidget(QSharedPointer<iris::SceneNode> sceneNode, QWidget *parent)
+MaterialPropertyWidget::MaterialPropertyWidget(QWidget *parent)
 {
-//    if (!!sceneNode) {
-//        this->meshNode = sceneNode.staticCast<iris::MeshNode>();
-//    }
+
 }
 
 void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
@@ -171,8 +187,6 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         this->meshNode = sceneNode.staticCast<iris::MeshNode>();
         this->customMaterial = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
-
-        qDebug() << this->customMaterial->textureUniforms[0].value;
     }
 
     setupShaderSelector();
@@ -180,11 +194,8 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         materialReader = new MaterialReader();
         materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/" + this->customMaterial->name + ".json"));
-
         this->customMaterial->generate(materialReader->getParsedShader());
-
         setupCustomMaterial();
-
     } else {
         this->meshNode.clear();
         this->customMaterial.clear();
@@ -227,9 +238,20 @@ void MaterialPropertyWidget::onCustomTextureChanged(QWidget *t)
     }
 }
 
+void MaterialPropertyWidget::purge()
+{
+    sliderUniforms.clear();
+    colorUniforms.clear();
+    textureUniforms.clear();
+}
+
 void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
 {
-    qDebug() << text;
+    // only clear when we are switching mats, not on every select
+    this->customMaterial->purge();
+
+    this->purge();
+//    qDebug() << text;
 //    this->meshNode->customMaterial = iris::CustomMaterial::create();
 //    this->customMaterial->textureUniforms.clear();
 //    this->customMaterial->textureToggleUniforms.clear();

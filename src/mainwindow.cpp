@@ -312,11 +312,12 @@ iris::ScenePtr MainWindow::createDefaultScene()
     node->setShadowEnabled(false);
 
     MaterialReader *materialReader = new MaterialReader();
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Glass.json"));
+    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
 
     auto m = iris::CustomMaterial::create();
     m->generate(materialReader->getParsedShader());
     m->updateTextureAndToggleUniform(0, getAbsoluteAssetPath("app/content/textures/tile.png"));
+    m->updateFloatAndUniform(0, 0);
     node->setMaterial(m);
 //    node->setActiveMaterial(2);
 //    m->setDiffuseColor(QColor(255, 255, 255));
