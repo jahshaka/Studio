@@ -370,9 +370,10 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
 //        m_logger->enableMessages();
 //    }
 
-    auto scene = this->createDefaultScene();
-
-    this->setScene(scene);
+//    auto scene = this->createDefaultScene();
+    qDebug() << IrisUtils::getAbsoluteAssetPath("scenes/startup.jah");
+    openProject(IrisUtils::getAbsoluteAssetPath("scenes/startup.jah"));
+//    this->setScene(scene);
     setupVrUi();
 }
 
@@ -587,6 +588,7 @@ void MainWindow::loadScene()
     if(filename.isEmpty() || filename.isNull())
         return;
 
+    qDebug() << filename;
 
     openProject(filename);
 }
@@ -624,29 +626,37 @@ void MainWindow::applyMaterialPreset(MaterialPreset* preset)
 
     auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
 
-    auto mat = iris::DefaultMaterial::create();
-    mat->setAmbientColor(preset->ambientColor);
+    MaterialReader *materialReader = new MaterialReader();
+    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
 
-    mat->setDiffuseColor(preset->diffuseColor);
-    if(!preset->diffuseTexture.isEmpty())
-        mat->setDiffuseTexture(iris::Texture2D::load(preset->diffuseTexture));
+    auto m = iris::CustomMaterial::create();
+    m->generate(materialReader->getParsedShader());
 
-    mat->setSpecularColor(preset->specularColor);
-    if(!preset->specularTexture.isEmpty())
-        mat->setSpecularTexture(iris::Texture2D::load(preset->specularTexture));
-    mat->setShininess(preset->shininess);
+    qDebug() << "needs rework!";
 
-    if(!preset->normalTexture.isEmpty())
-        mat->setNormalTexture(iris::Texture2D::load(preset->normalTexture));
-    mat->setNormalIntensity(preset->normalIntensity);
 
-    if(!preset->reflectionTexture.isEmpty())
-        mat->setReflectionTexture(iris::Texture2D::load(preset->reflectionTexture));
-    mat->setReflectionInfluence(preset->reflectionInfluence);
+//    mat->setAmbientColor(preset->ambientColor);
 
-    mat->setTextureScale(preset->textureScale);
+//    mat->setDiffuseColor(preset->diffuseColor);
+//    if(!preset->diffuseTexture.isEmpty())
+//        mat->setDiffuseTexture(iris::Texture2D::load(preset->diffuseTexture));
 
-    meshNode->setMaterial(mat);
+//    mat->setSpecularColor(preset->specularColor);
+//    if(!preset->specularTexture.isEmpty())
+//        mat->setSpecularTexture(iris::Texture2D::load(preset->specularTexture));
+//    mat->setShininess(preset->shininess);
+
+//    if(!preset->normalTexture.isEmpty())
+//        mat->setNormalTexture(iris::Texture2D::load(preset->normalTexture));
+//    mat->setNormalIntensity(preset->normalIntensity);
+
+//    if(!preset->reflectionTexture.isEmpty())
+//        mat->setReflectionTexture(iris::Texture2D::load(preset->reflectionTexture));
+//    mat->setReflectionInfluence(preset->reflectionInfluence);
+
+//    mat->setTextureScale(preset->textureScale);
+
+    meshNode->setMaterial(m);
 
     //todo: update node's material without updating the whole ui
     this->ui->sceneNodeProperties->refreshMaterial();

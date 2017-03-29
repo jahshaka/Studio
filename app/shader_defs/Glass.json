@@ -16,16 +16,6 @@
             "start"     : 0,
             "end"       : 1,
             "uniform"   : "u_strength"
-        }, {
-            "name"      : "Diffuse",
-            "type"      : "texture",
-            "value"     : "",
-            "uniform"   : "u_diffuse",
-            "toggle"    : "u_useDiffuse"
-        }, {
-            "name"      : "Skyboxes",
-            "type"      : "combo",
-            "value"     : "generated"
         }
     ],
     "builtin": false,

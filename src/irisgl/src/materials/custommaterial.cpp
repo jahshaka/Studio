@@ -109,6 +109,7 @@ void CustomMaterial::end(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
 void CustomMaterial::generate(const QJsonObject &jahShader)
 {
     name = jahShader["name"].toString();
+
     auto useBuiltinShader = jahShader["builtin"].toBool();
 
     auto vertPath = jahShader["vertex_shader"].toString();
