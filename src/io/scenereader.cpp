@@ -297,13 +297,13 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
 {
     auto lightNode = iris::LightNode::create();
 
-    lightNode->setLightType(getLightTypeFromName(nodeObj["lightType"].toString("point")));
+    lightNode->setLightType(getLightTypeFromName(nodeObj["lightType"].toString()));
     lightNode->intensity = (float)nodeObj["intensity"].toDouble(1.0f);
-    lightNode->distance = (float)nodeObj["radius"].toDouble(1.0f);
+    lightNode->distance = (float)nodeObj["distance"].toDouble(1.0f);
     lightNode->spotCutOff = (float)nodeObj["spotCutOff"].toDouble(30.0f);
     lightNode->color = readColor(nodeObj["color"].toObject());
 
-    //todo: move this to the sceneview widget or somewhere more appropriate
+    //TODO: move this to the sceneview widget or somewhere more appropriate
     if(lightNode->lightType == iris::LightType::Directional)
         lightNode->icon = iris::Texture2D::load(IrisUtils::getAbsoluteAssetPath("app/icons/light.png"));
     else
