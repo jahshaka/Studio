@@ -172,13 +172,13 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
     sceneNodeObj["animation"] = animObj;
 }
 
-void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject,iris::MeshNodePtr meshNode)
+void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode)
 {
-    //todo: handle generated meshes properly
+    // TODO: handle generated meshes properly
+    // ???? sure...
     sceneNodeObject["mesh"] = getRelativePath(meshNode->meshPath);
     sceneNodeObject["meshIndex"] = meshNode->meshIndex;
     sceneNodeObject["pickable"] = meshNode->pickable;
-    sceneNodeObject["materialType"] = meshNode->getMaterialType();
 
     auto cullMode = meshNode->getFaceCullingMode();
     switch (cullMode) {
@@ -196,18 +196,11 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject,iris::MeshNodePtr m
         break;
     }
 
-    //todo: check if material actually exists
-//    if (meshNode->getMaterialType() == 2) {
-//        auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
-//        QJsonObject matObj;
-//        writeSceneNodeMaterial(matObj, mat);
-//        sceneNodeObject["material"] = matObj;
-//    } else {
-        auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
-        QJsonObject matObj;
-        writeSceneNodeMaterial(matObj, mat);
-        sceneNodeObject["material"] = matObj;
-//    }
+    // todo: check if material actually exists
+    auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
+    QJsonObject matObj;
+    writeSceneNodeMaterial(matObj, mat);
+    sceneNodeObject["material"] = matObj;
 }
 
 void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode)
@@ -234,32 +227,17 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMateri
     matObj["name"] = mat->name;
 
     for (auto s : mat->colorUniforms) {
-        matObj[s.uniform] = s.value.name();
+        matObj[s.name] = s.value.name();
     }
 
+    // TODO - nick can you fix these path path things... too many. idk
     for (auto s : mat->textureUniforms) {
-        matObj[s.uniform] = s.value;
+        matObj[s.name] = getRelativePath(s.value);
     }
 
     for (auto s : mat->sliderUniforms) {
-        matObj[s.uniform] = s.value;
+        matObj[s.name] = s.value;
     }
-//    matObj["ambientColor"] = jsonColor(mat->getAmbientColor());
-
-//    matObj["diffuseColor"] = jsonColor(mat->getDiffuseColor());
-//    matObj["diffuseTexture"] = getRelativePath(mat->getDiffuseTextureSource());
-
-//    matObj["specularColor"] = jsonColor(mat->getSpecularColor());
-//    matObj["specularTexture"] = getRelativePath(mat->getSpecularTextureSource());
-//    matObj["shininess"] = mat->getShininess();
-
-//    matObj["normalTexture"] = getRelativePath(mat->getNormalTextureSource());
-//    matObj["normalIntensity"] = mat->getNormalIntensity();
-
-//    matObj["reflectionTexture"] = getRelativePath(mat->getReflectionTextureSource());
-//    matObj["reflectionInfluence"] = mat->getReflectionInfluence();
-
-//    matObj["textureScale"] = mat->getTextureScale();
 }
 
 QJsonObject SceneWriter::jsonColor(QColor color)

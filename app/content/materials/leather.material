@@ -1,21 +1,12 @@
 {
-    "name": "Leather",
-    "icon": "../../materials/leather.png",
-    "diffuseTexture": "presets/leather/Leather_02_UV_H_CM_1_COLOR.png",
-    "normalTexture": "presets/leather/Leather_02_UV_H_CM_1_NRM.png",
-    "specularTexture": "presets/leather/Leather_02_UV_H_CM_1_SPEC.png",
-    "textureScale": 2,
-    "diffuseColor": {
-        "r": 255,
-        "g": 255,
-        "b": 255,
-        "a": 255
-    },
-    "specularColor": {
-        "r": 64,
-        "g": 64,
-        "b": 64,
-        "a": 255
-    },
-    "shininess": 84
+    "name"              : "Leather",
+    "material_type"     : "Default",
+    "icon"              : "../../materials/leather.png",
+    "diffuseTexture"    : "presets/leather/Leather_02_UV_H_CM_1_COLOR.png",
+    "normalTexture"     : "presets/leather/Leather_02_UV_H_CM_1_NRM.png",
+    "specularTexture"   : "presets/leather/Leather_02_UV_H_CM_1_SPEC.png",
+    "textureScale"      : 2,
+    "diffuseColor"      : "#FFF",
+    "specularColor"     : "#444",
+    "shininess"         : 84
 }

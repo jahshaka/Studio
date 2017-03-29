@@ -43,28 +43,14 @@ public:
 
     void generate(const QJsonObject &jahShader);
 
-    std::vector<float> sliderValues;
-    std::vector<QString> uniformName;
-
-    std::vector<QColor> colorValue;
-    std::vector<QString> colorUniform;
-
-    std::vector<QString> textureName;
-    std::vector<QString> textureUniform;
-
-    // the new structures
-//    std::map<QString, QString> colorUniforms;
-//    std::map<QString, float> sliderUniforms;
     std::map<QString, bool> boolUniforms;
-//    std::map<QString, QString> textureUniforms;
-//    std::map<QString, bool> textureToggleUniforms;
-
     std::vector<MatStruct<float>> sliderUniforms;
     std::vector<MatStruct<QColor>> colorUniforms;
     std::vector<MatStruct<QString>> textureUniforms;
     std::vector<MatStruct<bool>> textureToggleUniforms;
 
     QString name;
+    int finalSize;
 
     void setTextureWithUniform(QString, QString);
     void updateTextureAndToggleUniform(int, QString);

@@ -3,72 +3,83 @@
     "preview": false,
     "uniforms": [
         {
-            "name"      : "Ambient Color",
-            "type"      : "color",
-            "value"     : "#000",
-            "uniform"   : "u_material.ambient"
+            "displayName"   : "Ambient Color",
+            "name"          : "ambientColor",
+            "type"          : "color",
+            "value"         : "#353535",
+            "uniform"       : "u_material.ambient"
         }, {
-            "name"      : "Diffuse Color",
-            "type"      : "color",
-            "value"     : "#FFF",
-            "uniform"   : "u_material.diffuse"
+            "displayName"   : "Diffuse Color",
+            "name"          : "diffuseColor",
+            "type"          : "color",
+            "value"         : "#FFF",
+            "uniform"       : "u_material.diffuse"
         }, {
-            "name"      : "Diffuse Texture",
-            "type"      : "texture",
-            "value"     : "",
-            "uniform"   : "u_diffuseTexture",
-            "toggle"    : "u_useDiffuseTex"
+            "displayName"   : "Diffuse Texture",
+            "name"          : "diffuseTexture",
+            "type"          : "texture",
+            "value"         : "",
+            "uniform"       : "u_diffuseTexture",
+            "toggle"        : "u_useDiffuseTex"
         }, {
-            "name"      : "Specular Color",
-            "type"      : "color",
-            "value"     : "#FFF",
-            "uniform"   : "u_material.specular"
+            "displayName"   : "Specular Color",
+            "name"          : "specularColor",
+            "type"          : "color",
+            "value"         : "#FFF",
+            "uniform"       : "u_material.specular"
         }, {
-            "name"      : "Specular Texture",
-            "type"      : "texture",
-            "value"     : "",
-            "uniform"   : "u_specularTexture",
-            "toggle"    : "u_useSpecularTex"
+            "displayName"   : "Specular Texture",
+            "name"          : "specularTexture",
+            "type"          : "texture",
+            "value"         : "",
+            "uniform"       : "u_specularTexture",
+            "toggle"        : "u_useSpecularTex"
         }, {
-            "name"      : "Shininess",
-            "type"      : "slider",
-            "value"     : 24,
-            "start"     : 0,
-            "end"       : 512,
-            "uniform"   : "u_material.shininess"
+            "displayName"   : "Shininess",
+            "name"          : "shininess",
+            "type"          : "slider",
+            "value"         : 0,
+            "start"         : 0,
+            "end"           : 512,
+            "uniform"       : "u_material.shininess"
         }, {
-            "name"      : "Normal Texture",
-            "type"      : "texture",
-            "value"     : "",
-            "uniform"   : "u_normalTexture",
-            "toggle"    : "u_useNormalTex"
+            "displayName"   : "Normal Texture",
+            "name"          : "normalTexture",
+            "type"          : "texture",
+            "value"         : "",
+            "uniform"       : "u_normalTexture",
+            "toggle"        : "u_useNormalTex"
         }, {
-            "name"      : "Normal Intensity",
-            "type"      : "slider",
-            "value"     : 0,
-            "start"     : -1,
-            "end"       : 1,
-            "uniform"   : "u_normalIntensity"
+            "displayName"   : "Normal Intensity",
+            "name"          : "normalIntensity",
+            "type"          : "slider",
+            "value"         : 0,
+            "start"         : -1,
+            "end"           : 1,
+            "uniform"       : "u_normalIntensity"
         }, {
-            "name"      : "Reflection Texture",
-            "type"      : "texture",
-            "value"     : "",
-            "uniform"   : "u_reflectionTexture",
-            "toggle"    : "u_useReflectionTex"
+            "displayName"   : "Reflection Texture",
+            "name"          : "reflectionTexture",
+            "type"          : "texture",
+            "value"         : "",
+            "uniform"       : "u_reflectionTexture",
+            "toggle"        : "u_useReflectionTex"
         }, {
-            "name"      : "Reflection Influence",
-            "type"      : "slider",
-            "value"     : 0,
-            "start"     : 0,
-            "end"       : 1,
-            "uniform"   : "u_reflectionInfluence"
+            "displayName"   : "Reflection Influence",
+            "name"          : "reflectionInfluence",
+            "type"          : "slider",
+            "value"         : 0,
+            "start"         : 0,
+            "end"           : 1,
+            "uniform"       : "u_reflectionInfluence"
         }, {
-            "name"      : "Texture Scale",
-            "type"      : "slider",
-            "value"     : 1,
-            "start"     : 0,
-            "end"       : 16,
-            "uniform"   : "u_textureScale"
+            "displayName"   : "Texture Scale",
+            "name"          : "textureScale",
+            "type"          : "slider",
+            "value"         : 1,
+            "start"         : 0,
+            "end"           : 16,
+            "uniform"       : "u_textureScale"
         }
     ],
     "builtin": true,

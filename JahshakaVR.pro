@@ -206,14 +206,9 @@ win32: RC_ICONS = icon.ico
 # http://stackoverflow.com/questions/32631084/create-dir-copy-files-with-qmake
 !equals(PWD, $$OUT_PWD) {
     # http://stackoverflow.com/a/39234363
-    moveassets.commands     = $(COPY_DIR) \"$$shell_path($$PWD/assets)\"
-                            \"$$shell_path($$OUT_PWD/assets)\"
-
-    movecontent.commands    = $(COPY_DIR) \"$$shell_path($$PWD/app)\"
-                            \"$$shell_path($$OUT_PWD/app)\"
-
-    movescenes.commands     = $(COPY_DIR) \"$$shell_path($$PWD/scenes)\"
-                            \"$$shell_path($$OUT_PWD/scenes)\"
+    moveassets.commands  = $(COPY_DIR) \"$$shell_path($$PWD/assets)\" \"$$shell_path($$OUT_PWD/assets)\"
+    movecontent.commands = $(COPY_DIR) \"$$shell_path($$PWD/app)\"    \"$$shell_path($$OUT_PWD/app)\"
+    movescenes.commands  = $(COPY_DIR) \"$$shell_path($$PWD/scenes)\" \"$$shell_path($$OUT_PWD/scenes)\"
 
     first.depends = $(first) moveassets movecontent movescenes
     export(first.depends)

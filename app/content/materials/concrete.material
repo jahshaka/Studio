@@ -1,21 +1,12 @@
 {
-    "name": "Concrete",
-    "icon": "../../materials/old_painted_metal.png",
-    "diffuseTexture": "presets/concrete/Old_Painted_UV_H_CM_1_COLOR.png",
-    "normalTexture": "presets/concrete/Old_Painted_UV_H_CM_1_NRM.png",
-    "specularTexture": "presets/concrete/Old_Painted_UV_H_CM_1_SPEC.png",
-    "textureScale": 4,
-    "diffuseColor": {
-        "r": 255,
-        "g": 255,
-        "b": 255,
-        "a": 255
-    },
-    "specularColor": {
-        "r": 255,
-        "g": 255,
-        "b": 255,
-        "a": 255
-    },
-    "shininess": 50
+    "name"              : "Concrete",
+    "material_type"     : "Default",
+    "icon"              : "../../materials/old_painted_metal.png",
+    "diffuseTexture"    : "presets/concrete/Old_Painted_UV_H_CM_1_COLOR.png",
+    "normalTexture"     : "presets/concrete/Old_Painted_UV_H_CM_1_NRM.png",
+    "specularTexture"   : "presets/concrete/Old_Painted_UV_H_CM_1_SPEC.png",
+    "textureScale"      : 4,
+    "diffuseColor"      : "#FFF",
+    "specularColor"     : "#FFF",
+    "shininess"         : 50
 }

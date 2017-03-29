@@ -41,13 +41,14 @@ struct MaterialTexture {
 template<typename T>
 struct MatStruct {
     int     id;
+    QString name;
     QString uniform;
     T       value;
 };
 
 template<typename T>
-MatStruct<T> make_mat_struct(int id, QString uniform, T value) {
-    MatStruct<T> mStruct = { id, uniform, value };
+MatStruct<T> make_mat_struct(int id, QString name, QString uniform, T value) {
+    MatStruct<T> mStruct = { id, name, uniform, value };
     return mStruct;
 }
 

@@ -30,12 +30,6 @@ void MaterialPropertyWidget::createWidgets(const QJsonObject &jahShader)
     /// TODO: add some check here to escape early
     auto widgetProps = jahShader["uniforms"].toArray();
 
-//    sliderUniforms.clear();
-//    colorUniforms.clear();
-//    textureUniforms.clear();
-
-//    qDebug() << widgetProps.size();
-
     /// TODO see if this can be removed this when the default material is deleted.
     unsigned sliderSize, textureSize, colorSize;
     sliderSize = textureSize = colorSize = 0;
@@ -50,8 +44,9 @@ void MaterialPropertyWidget::createWidgets(const QJsonObject &jahShader)
     for (int propIndex = 0; propIndex < widgetProps.size(); propIndex++) {
         auto prop = widgetProps[propIndex].toObject();
 
-        auto name       = prop["name"].toString();
-        auto uniform    = prop["uniform"].toString();
+        auto displayName = prop["displayName"].toString();
+        auto uniform     = prop["uniform"].toString();
+        auto name        = prop["name"].toString();
 
         if (sliderUniforms.size() < sliderSize) {
             if (prop["type"] == "slider") {
@@ -59,8 +54,10 @@ void MaterialPropertyWidget::createWidgets(const QJsonObject &jahShader)
                 auto end    = (float) prop["end"].toDouble();
 
                 sliderUniforms.push_back(iris::make_mat_struct(sliderUniforms.size() - 1,
+                                                               name,
                                                                uniform,
-                                                               addFloatValueSlider(name, start, end)));
+                                                               addFloatValueSlider(displayName,
+                                                                                   start, end)));
                 sliderUniforms.back().value->index = sliderUniforms.size() - 1;
             }
         }
@@ -69,8 +66,9 @@ void MaterialPropertyWidget::createWidgets(const QJsonObject &jahShader)
             if (prop["type"] == "color") {
                 colorUniforms.push_back(
                             iris::make_mat_struct(colorUniforms.size() - 1,
+                                                  name,
                                                   uniform,
-                                                  addColorPicker(name)));
+                                                  addColorPicker(displayName)));
                 colorUniforms.back().value->index = colorUniforms.size() - 1;
                 colorUniforms.back().value->getPicker()->index = colorUniforms.size() - 1;
             }
@@ -80,8 +78,9 @@ void MaterialPropertyWidget::createWidgets(const QJsonObject &jahShader)
             if (prop["type"] == "texture") {
                 textureUniforms.push_back(
                             iris::make_mat_struct(textureUniforms.size() - 1,
+                                                  name,
                                                   uniform,
-                                                  addTexturePicker(name)));
+                                                  addTexturePicker(displayName)));
                 textureUniforms.back().value->index = textureUniforms.size() - 1;
             }
         }
@@ -155,15 +154,23 @@ void MaterialPropertyWidget::setupCustomMaterial()
     auto tat = textureUniforms.begin();
     auto mit22 = customMaterial->textureUniforms.begin();
     while (tat != textureUniforms.end()) {
-        tat->value->setTexture(mit22->value);
+        if (!mit22->value.isEmpty()) {
+            tat->value->setTexture(mit22->value);
+        } else {
+            tat->value->setTexture("");
+        }
         ++tat;
         ++mit22;
     }
 }
 
+void MaterialPropertyWidget::forceShaderRefresh(const QString &matName)
+{
+    emit onMaterialSelectorChanged(matName);
+}
+
 void MaterialPropertyWidget::setupShaderSelector()
 {
-    // TODO load these from a directory in the future...
     materialSelector = this->addComboBox("Shader");
 
     QDir dir(IrisUtils::getAbsoluteAssetPath("app/shader_defs/"));
@@ -193,7 +200,8 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
 
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         materialReader = new MaterialReader();
-        materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/" + this->customMaterial->name + ".json"));
+        materialReader->readJahShader(
+                    IrisUtils::getAbsoluteAssetPath("app/shader_defs/" + this->customMaterial->name + ".json"));
         this->customMaterial->generate(materialReader->getParsedShader());
         setupCustomMaterial();
     } else {
@@ -249,46 +257,17 @@ void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
 {
     // only clear when we are switching mats, not on every select
     this->customMaterial->purge();
-
     this->purge();
-//    qDebug() << text;
-//    this->meshNode->customMaterial = iris::CustomMaterial::create();
-//    this->customMaterial->textureUniforms.clear();
-//    this->customMaterial->textureToggleUniforms.clear();
+
+    this->clearPanel(this->layout());
+
     this->customMaterial->name = text;
-//    materialSelector->setCurrentItem(text);
+    this->setSceneNode(this->meshNode);
+    int finalHeight = this->customMaterial->finalSize;
 
-//    if (text == "Default Shader") {
-        // collect the height in the widget boi
-        this->clearPanel(this->layout());
+    resetHeight();
+    setHeight(finalHeight);
 
-        resetHeight();
-
-        int finalHeight = 30 + (8 * 28) /* narrows */ + (4 * 108) /* pickers */ + (12 * 6) + 9 + 9;
-
-        setHeight(finalHeight - 30);
-
-        this->setMinimumHeight(finalHeight);
-        this->setMaximumHeight(finalHeight);
-
-        this->setSceneNode(this->meshNode);
-//    }
-//    } else if (text == "Environment Surface Shader") {
-
-//        this->clearPanel(this->layout());
-
-//        resetHeight();
-
-//        // this isn't magic, there are values but it's not possible to get them yet
-//        // finalHeight = minimum_height + (widgets * height) +
-//        //              (widgetCount * heights) + topMargin + bottomMargin;
-//        int finalHeight = 30 + (4 * 28) + (4 * 6) + 9 + 9;
-
-//        setHeight(finalHeight - 30);
-
-//        this->setMinimumHeight(finalHeight);
-//        this->setMaximumHeight(finalHeight);
-
-//        this->setSceneNode(this->meshNode);
-//    }
+    this->setMinimumHeight(finalHeight);
+    this->setMaximumHeight(finalHeight);
 }

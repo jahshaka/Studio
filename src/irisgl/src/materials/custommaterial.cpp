@@ -23,21 +23,16 @@ CustomMaterial::CustomMaterial()
 
 void CustomMaterial::setTexture(Texture2DPtr tex)
 {
-//    texture = tex;
-//    if (!!tex) {
-//        addTexture("skybox", tex);
-//    } else {
-//        this->removeTexture("skybox");
-//    }
+
 }
 
-// @TODO GET TEXTURE FROM MAP BY NAME...
+// TODO GET TEXTURE FROM MAP BY NAME...
 Texture2DPtr CustomMaterial::getTexture()
 {
-//    return texture;
+
 }
 
-// @TODO clean up how this is set and used
+// TODO clean up how this is set and used
 void CustomMaterial::setTextureWithUniform(QString textureUniformName, QString texturePath)
 {
     intermediateTexture = iris::Texture2D::load(texturePath);
@@ -51,7 +46,7 @@ void CustomMaterial::setTextureWithUniform(QString textureUniformName, QString t
 
 void CustomMaterial::updateTextureAndToggleUniform(int index, QString uniform)
 {
-    textureToggleUniforms[index].value = !uniform.isEmpty() || !uniform.isNull();
+    textureToggleUniforms[index].value = !uniform.isEmpty();
     textureUniforms[index].value = uniform;
     setTextureWithUniform(textureUniforms[index].uniform, uniform);
 }
@@ -70,7 +65,7 @@ void CustomMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
 {
      Material::begin(gl, scene);
 
-    // @todo, figure out a way for the default material to mix values... the ambient for one
+    // TODO, figure out a way for the default material to mix values... the ambient for one
     auto colorIterator = colorUniforms.begin();
     while (colorIterator != colorUniforms.end()) {
         program->setUniformValue(colorIterator->uniform.toStdString().c_str(),
@@ -139,11 +134,13 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
 
         auto prop = widgetProps[propIndex].toObject();
         auto uniform = prop["uniform"].toString();
+        auto name = prop["name"].toString();
 
         if (sliderUniforms.size() < sliderSize) {
             if (prop["type"] == "slider") {
                 auto value = (float) prop["value"].toDouble();
-                sliderUniforms.push_back(make_mat_struct(textureUniforms.size(), uniform, value));
+                sliderUniforms.push_back(make_mat_struct(textureUniforms.size(),
+                                                         name, uniform, value));
             }
         }
 
@@ -151,7 +148,8 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
             if (prop["type"] == "color") {
                 QColor col;
                 col.setNamedColor(prop["value"].toString());
-                colorUniforms.push_back(iris::make_mat_struct(textureUniforms.size(), uniform, col));
+                colorUniforms.push_back(iris::make_mat_struct(textureUniforms.size(),
+                                                              name, uniform, col));
             }
         }
 
@@ -161,23 +159,26 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
                 auto textureValue = prop["value"].toString();
 
                 textureUniforms.push_back(iris::make_mat_struct(textureUniforms.size(),
-                                                                uniform,
-                                                                textureValue));
+                                                                name, uniform, textureValue));
 
                 textureToggleUniforms.push_back(
                             iris::make_mat_struct(textureUniforms.size(),
+                                                  name,
                                                   prop["toggle"].toString(),
                                                   !textureValue.isEmpty()));
 
                 // this will be set to false most if not all the time, see TODO above
-                if (!textureValue.isEmpty()) {
-                    setTextureWithUniform(uniform, textureValue);
-                }
+                //  if (!textureValue.isEmpty()) {
+                //      setTextureWithUniform(uniform, textureValue);
+                //  }
             }
         }
     }
 
     jahShaderMaster = jahShader;
+    // not magic, the widget heights won't change for a while so lazy ok for now or fetch them...
+    finalSize = 30 + (sliderSize + 1 + colorSize) * 28
+                   + (textureSize * 108) + ((widgetProps.size() + 1) * 6) + 9 + 9;
 
     this->setRenderLayer((int) RenderLayer::Opaque);
 }
