@@ -56,6 +56,16 @@ void CustomMaterial::updateTextureAndToggleUniform(int index, QString uniform)
     setTextureWithUniform(textureUniforms[index].uniform, uniform);
 }
 
+void CustomMaterial::updateFloatAndUniform(int index, float value)
+{
+    sliderUniforms[index].value = value;
+}
+
+void CustomMaterial::updateColorAndUniform(int index, QColor color)
+{
+    colorUniforms[index].value = color;
+}
+
 void CustomMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
 {
      Material::begin(gl, scene);
@@ -124,11 +134,6 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
         if (prop["type"] == "texture")  textureSize++;
     }
 
-    sliderUniforms.clear();
-    colorUniforms.clear();
-    textureUniforms.clear();
-    textureToggleUniforms.clear();
-
     for (int propIndex = 0; propIndex < widgetProps.size(); propIndex++) {
 
         auto prop = widgetProps[propIndex].toObject();
@@ -174,6 +179,14 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
     jahShaderMaster = jahShader;
 
     this->setRenderLayer((int) RenderLayer::Opaque);
+}
+
+void CustomMaterial::purge()
+{
+    sliderUniforms.clear();
+    colorUniforms.clear();
+    textureUniforms.clear();
+    textureToggleUniforms.clear();
 }
 
 CustomMaterialPtr CustomMaterial::create()

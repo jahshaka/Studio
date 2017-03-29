@@ -39,7 +39,7 @@ class MaterialPropertyWidget : public AccordianBladeWidget
     Q_OBJECT
 
 public:
-    MaterialPropertyWidget(QSharedPointer<iris::SceneNode> sceneNode, QWidget *parent = nullptr);
+    MaterialPropertyWidget(QWidget *parent = nullptr);
 
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
     QSharedPointer<iris::MeshNode> meshNode;
@@ -52,6 +52,8 @@ public:
     void setupDefaultMaterial();
     void setupCustomMaterial();
     void setupShaderSelector();
+
+    void purge();
 
 protected slots:
     void onCustomSliderChanged(QWidget*);
