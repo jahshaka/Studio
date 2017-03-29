@@ -19,6 +19,7 @@ struct MaterialPreset
 {
     QString name;
     QString icon;
+    QString type;
 
     QColor ambientColor;
 

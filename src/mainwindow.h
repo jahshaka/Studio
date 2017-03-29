@@ -102,7 +102,7 @@ public:
     SettingsManager* getSettingsManager();
 
     iris::ScenePtr getScene();
-    void openProject(QString project);
+    void openProject(QString project, bool startupLoad = false);
     //void setGizmoTransformMode(GizmoTransformMode mode);
 
     /**

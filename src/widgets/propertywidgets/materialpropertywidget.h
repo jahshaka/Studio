@@ -47,6 +47,7 @@ public:
     QSharedPointer<iris::CustomMaterial> customMaterial;
 
     MaterialReader* materialReader;
+
     void createWidgets(const QJsonObject &jahShader);
 
     void setupDefaultMaterial();
@@ -54,6 +55,7 @@ public:
     void setupShaderSelector();
 
     void purge();
+    void forceShaderRefresh(const QString &matName);
 
 protected slots:
     void onCustomSliderChanged(QWidget*);
@@ -65,11 +67,9 @@ protected slots:
 private:
     ComboBoxWidget* materialSelector;
 
-    std::map<QString, HFloatSliderWidget*> materialSliders;
-
-    std::vector<iris::MatStruct<HFloatSliderWidget*>> sliderUniforms;
-    std::vector<iris::MatStruct<ColorValueWidget*>> colorUniforms;
-    std::vector<iris::MatStruct<TexturePickerWidget*>> textureUniforms;
+    std::vector<iris::MatStruct<HFloatSliderWidget*>>   sliderUniforms;
+    std::vector<iris::MatStruct<ColorValueWidget*>>     colorUniforms;
+    std::vector<iris::MatStruct<TexturePickerWidget*>>  textureUniforms;
 };
 
 #endif // MATERIALPROPERTYWIDGET_H

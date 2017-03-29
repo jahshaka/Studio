@@ -1,21 +1,12 @@
 {
-    "name": "Marble",
-    "icon": "../../materials/marble_tile.png",
-    "diffuseTexture": "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_COLOR.png",
-    "normalTexture": "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_NRM.png",
-    "specularTexture": "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_SPEC.png",
-    "textureScale": 4,
-    "diffuseColor": {
-        "r": 255,
-        "g": 255,
-        "b": 255,
-        "a": 255
-    },
-    "specularColor": {
-        "r": 255,
-        "g": 255,
-        "b": 255,
-        "a": 255
-    },
-    "shininess": 3
+    "name"              : "Marble",
+    "material_type"     : "Default",
+    "icon"              : "../../materials/marble_tile.png",
+    "diffuseTexture"    : "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_COLOR.png",
+    "normalTexture"     : "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_NRM.png",
+    "specularTexture"   : "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_SPEC.png",
+    "textureScale"      : 4,
+    "diffuseColor"      : "#FFF",
+    "specularColor"     : "#FFF",
+    "shininess"         : 3
 }

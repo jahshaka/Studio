@@ -250,30 +250,18 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 
     auto source = nodeObj["mesh"].toString("");
     auto meshIndex = nodeObj["meshIndex"].toInt(0);
-    auto materialType = nodeObj["materialType"].toInt(0);
     auto pickable = nodeObj["pickable"].toBool();
-    if(!source.isEmpty())
-    {
-        qDebug() << "test 1 " << source;
-        qDebug() << "test 2" << IrisUtils::getAbsoluteAssetPath(source);
-        auto mesh = getMesh(IrisUtils::getAbsoluteAssetPath(source),meshIndex);
+
+    if (!source.isEmpty()) {
+        auto mesh = getMesh(IrisUtils::getAbsoluteAssetPath(source), meshIndex);
         meshNode->setMesh(mesh);
         meshNode->setPickable(pickable);
-        meshNode->setMaterialType(materialType);
         meshNode->meshPath = source;
         meshNode->meshIndex = meshIndex;
     }
 
-    //material
     auto material = readMaterial(nodeObj);
-    if (materialType == 1) {
-        meshNode->setMaterial(material);
-    } else {
-        auto customMat = iris::CustomMaterial::create();
-        meshNode->setMaterial(material);
-        meshNode->setCustomMaterial(customMat);
-        meshNode->setActiveMaterial(2);
-    }
+    meshNode->setMaterial(material);
 
     auto faceCullingMode = nodeObj["faceCullingMode"].toString("back");
 
@@ -283,7 +271,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         meshNode->setFaceCullingMode(iris::FaceCullingMode::Front);
     } else if (faceCullingMode == "frontandback") {
         meshNode->setFaceCullingMode(iris::FaceCullingMode::FrontAndBack);
-    } else { //none
+    } else {
         meshNode->setFaceCullingMode(iris::FaceCullingMode::None);
     }
 
@@ -373,58 +361,30 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
     auto m = iris::CustomMaterial::create();
     m->generate(materialReader->getParsedShader());
 
-    //////////////////////////////////
-
-    // some if check here, the preset file should denote what is read/written.
-    // maybe use the uniform names as keys
-
     int cCtr = 0;
     for (auto s : m->colorUniforms) {
         QColor col;
-        col.setNamedColor(mat[s.uniform].toString());
+        col.setNamedColor(mat[s.name].toString());
         m->updateColorAndUniform(cCtr, col);
         cCtr++;
     }
 
     int tCtr = 0;
     for (auto s : m->textureUniforms) {
-        m->updateTextureAndToggleUniform(tCtr,
-                                         IrisUtils::getAbsoluteAssetPath(mat[s.uniform].toString()));
+        auto tex = mat[s.name].toString();
+        if (!tex.isEmpty()) {
+            tex = getAbsolutePath(mat[s.name].toString());
+            qDebug() << "TEX " << tex;
+        }
+        m->updateTextureAndToggleUniform(tCtr, tex);
         tCtr++;
     }
 
-    // update sliders
     int sCtr = 0;
     for (auto s : m->sliderUniforms) {
-        m->updateFloatAndUniform(sCtr, mat[s.uniform].toDouble());
+        m->updateFloatAndUniform(sCtr, mat[s.name].toDouble());
         sCtr++;
     }
-
-//    for (auto uniform : uniforms) qDebug() << uniform.toObject()["name"].toString();
-
-//    QJsonObject matObj = nodeObj["material"].toObject();
-//    auto material = iris::DefaultMaterial::create();
-
-//    auto colObj = matObj["ambientColor"].toObject();
-//    material->setAmbientColor(readColor(colObj));
-
-//    colObj = matObj["diffuseColor"].toObject();
-//    material->setDiffuseColor(readColor(colObj));
-
-//    auto tex = matObj["diffuseTexture"].toString("");
-//    if(!tex.isEmpty()) material->setDiffuseTexture(iris::Texture2D::load(getAbsolutePath(tex)));
-
-//    tex = matObj["normalTexture"].toString("");
-//    if(!tex.isEmpty()) material->setNormalTexture(iris::Texture2D::load(getAbsolutePath(tex)));
-
-//    colObj = matObj["specularColor"].toObject();
-//    material->setSpecularColor(readColor(colObj));
-//    material->setShininess((float)matObj["shininess"].toDouble(0.0f));
-
-//    tex = matObj["specularTexture"].toString("");
-//    if(!tex.isEmpty()) material->setSpecularTexture(iris::Texture2D::load(getAbsolutePath(tex)));
-
-//    material->setTextureScale((float)matObj["textureScale"].toDouble(1.0f));
 
     return m;
 }
@@ -438,23 +398,19 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
  */
 iris::Mesh* SceneReader::getMesh(QString filePath,int index)
 {
-    //if the mesh is already in the hashmap then it was already loaded, just return the indexed mesh
-    if(meshes.contains(filePath))
-    {
+    // if the mesh is already in the hashmap then it was already loaded, just return the indexed mesh
+    if (meshes.contains(filePath)) {
         auto meshList = meshes[filePath];
-        if(index < meshList.size())
-            return meshList[index];
-
-        return nullptr;//maybe the mesh was modified after the file was saved
+        if (index < meshList.size()) return meshList[index];
+        // maybe the mesh was modified after the file was saved
+        return nullptr;
     }
-    else
-    {
+
+    else {
         auto meshList = iris::GraphicsHelper::loadAllMeshesFromFile(filePath);
         meshes.insert(filePath,meshList);
-
-        if(index < meshList.size())
-            return meshList[index];
-
-        return nullptr;//maybe the mesh was modified after the file was saved
+        if (index < meshList.size()) return meshList[index];
+        // maybe the mesh was modified after the file was saved
+        return nullptr;
     }
 }

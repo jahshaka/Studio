@@ -15,8 +15,7 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include "assetiobase.h"
 
-namespace iris
-{
+namespace iris {
     class Material;
 }
 
@@ -29,6 +28,8 @@ class MaterialPresetReader:public AssetIOBase
 {
 public:
     MaterialPresetReader();
+
+    QJsonObject getMatPreset(const QString &filename);
 
     MaterialPreset* readMaterialPreset(QString filename);
 };

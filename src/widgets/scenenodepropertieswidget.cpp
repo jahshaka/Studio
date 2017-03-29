@@ -137,11 +137,10 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
     }
 }
 
-void SceneNodePropertiesWidget::refreshMaterial()
+void SceneNodePropertiesWidget::refreshMaterial(const QString &matName)
 {
     if (!!sceneNode && sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
-        materialPropView->clearPanel(materialPropView->layout());
-        materialPropView->setSceneNode(sceneNode);
+        materialPropView->forceShaderRefresh(matName);
     }
 }
 
