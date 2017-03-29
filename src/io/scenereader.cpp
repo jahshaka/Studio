@@ -254,7 +254,9 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     auto pickable = nodeObj["pickable"].toBool();
     if(!source.isEmpty())
     {
-        auto mesh = getMesh(getAbsolutePath(source),meshIndex);
+        qDebug() << "test 1 " << source;
+        qDebug() << "test 2" << IrisUtils::getAbsoluteAssetPath(source);
+        auto mesh = getMesh(IrisUtils::getAbsoluteAssetPath(source),meshIndex);
         meshNode->setMesh(mesh);
         meshNode->setPickable(pickable);
         meshNode->setMaterialType(materialType);
@@ -364,14 +366,41 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
     auto mat = nodeObj["material"].toObject();
 
     MaterialReader *materialReader = new MaterialReader();
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/" + mat["name"].toString() + ".json"));
+    QString path =  "app/shader_defs/" + mat["name"].toString() + ".json";
+
+    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath(path));
 
     auto m = iris::CustomMaterial::create();
     m->generate(materialReader->getParsedShader());
 
+    //////////////////////////////////
+
     // some if check here, the preset file should denote what is read/written.
     // maybe use the uniform names as keys
-    m->updateTextureAndToggleUniform(0, IrisUtils::getAbsoluteAssetPath(mat["diffuseTexture"].toString()));
+
+    int cCtr = 0;
+    for (auto s : m->colorUniforms) {
+        QColor col;
+        col.setNamedColor(mat[s.uniform].toString());
+        m->updateColorAndUniform(cCtr, col);
+        cCtr++;
+    }
+
+    int tCtr = 0;
+    for (auto s : m->textureUniforms) {
+        m->updateTextureAndToggleUniform(tCtr,
+                                         IrisUtils::getAbsoluteAssetPath(mat[s.uniform].toString()));
+        tCtr++;
+    }
+
+    // update sliders
+    int sCtr = 0;
+    for (auto s : m->sliderUniforms) {
+        m->updateFloatAndUniform(sCtr, mat[s.uniform].toDouble());
+        sCtr++;
+    }
+
+//    for (auto uniform : uniforms) qDebug() << uniform.toObject()["name"].toString();
 
 //    QJsonObject matObj = nodeObj["material"].toObject();
 //    auto material = iris::DefaultMaterial::create();
