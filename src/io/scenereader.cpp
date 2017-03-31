@@ -374,7 +374,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
         auto tex = mat[s.name].toString();
         if (!tex.isEmpty()) {
             tex = getAbsolutePath(mat[s.name].toString());
-            qDebug() << "TEX " << tex;
+            // qDebug() << "TEX " << tex;
         }
         m->updateTextureAndToggleUniform(tCtr, tex);
         tCtr++;

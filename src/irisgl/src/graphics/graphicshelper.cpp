@@ -21,6 +21,9 @@ For more information see the LICENSE file
 #include "assimp/vector3.h"
 #include "assimp/quaternion.h"
 
+#include <QFile>
+#include <QFileInfo>
+
 #include "../graphics/vertexlayout.h"
 
 namespace iris
@@ -29,10 +32,14 @@ namespace iris
 QOpenGLShaderProgram* GraphicsHelper::loadShader(QString vsPath,QString fsPath)
 {
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile(vsPath);
+    auto vsShader = loadAndProcessShader(vsPath);
+    qDebug() << vsShader;
+    vshader->compileSourceFile(vsShader);
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile(fsPath);
+    auto fsShader = loadAndProcessShader(fsPath);
+    qDebug() << fsShader;
+    fshader->compileSourceFile(fsShader);
 
     auto program = new QOpenGLShaderProgram;
     program->addShader(vshader);
@@ -49,6 +56,44 @@ QOpenGLShaderProgram* GraphicsHelper::loadShader(QString vsPath,QString fsPath)
     program->link();
 
     return program;
+}
+
+QString GraphicsHelper::loadAndProcessShader(QString shaderPath)
+{
+    QRegExp internalFileInclude("\\<(.+\\\\)*((.+)\\.(.+))\\>");
+    QRegExp externalFileInclude("\\\"(.+\\\\)*((.+)\\.(.+))\\\"");
+
+    QFile file(shaderPath);
+    file.open(QIODevice::ReadOnly | QIODevice::Text);
+
+    auto text = file.readAll();
+    auto lines = text.split('\n');
+
+    for (int i = 0; i < lines.count(); ++i) {
+        if (lines[i].startsWith("#pragma include")) {
+            QString includeFile = "";
+            int pos = 0;
+            if( (pos = internalFileInclude.indexIn(lines[i], 0)) != -1) {
+                auto filename = internalFileInclude.cap(2);
+                includeFile = ":assets/shaders/"+filename;
+            } else if( (pos = externalFileInclude.indexIn(lines[i], 0)) != -1) {
+                auto filename = externalFileInclude.cap(2);
+                includeFile = QFileInfo(shaderPath).absolutePath() + "/" + filename;
+            }
+
+            // remove line with pragma
+            lines.removeAt(i);
+
+            auto included = loadAndProcessShader(includeFile);
+            lines.insert(i, included.toUtf8());
+
+            // todo: include file index in line directive?
+            auto lineDirective = QString("#line %1").arg(i + 2);
+            lines.insert(i + 1, lineDirective.toUtf8());
+        }
+    }
+
+    return lines.join('\n');
 }
 
 QList<iris::Mesh*> GraphicsHelper::loadAllMeshesFromFile(QString filePath)
