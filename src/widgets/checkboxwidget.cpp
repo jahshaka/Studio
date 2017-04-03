@@ -17,7 +17,7 @@ CheckBoxWidget::CheckBoxWidget(QWidget* parent) : QWidget(parent), ui(new Ui::Ch
 {
     ui->setupUi(this);
 
-    connect(ui->checkBox,SIGNAL(stateChanged(int)),SLOT(onCheckboxValueChanged(int)));
+    connect(ui->checkBox, SIGNAL(stateChanged(int)), SLOT(onCheckboxValueChanged(int)));
 }
 
 CheckBoxWidget::~CheckBoxWidget()
@@ -28,6 +28,11 @@ CheckBoxWidget::~CheckBoxWidget()
 void CheckBoxWidget::setValue(bool val)
 {
     ui->checkBox->setChecked(val);
+}
+
+bool CheckBoxWidget::getValue()
+{
+    return ui->checkBox->checkState();
 }
 
 void CheckBoxWidget::setLabel(QString label)

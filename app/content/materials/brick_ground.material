@@ -1,21 +1,13 @@
 {
-    "name": "Brick",
-    "icon": "../../materials/brick_ground.png",
-    "diffuseTexture": "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_COLOR.png",
-    "normalTexture": "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_NRM.png",
-    "specularTexture": "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_SPEC.png",
-    "textureScale": 4,
-    "diffuseColor": {
-        "r": 255,
-        "g": 255,
-        "b": 255,
-        "a": 255
-    },
-    "specularColor": {
-        "r": 70,
-        "g": 70,
-        "b": 70,
-        "a": 255
-    },
-    "shininess": 3
+    "name"              : "Brick",
+    "material_type"     : "Default",
+    "icon"              : "../../materials/brick_ground.png",
+    "diffuseTexture"    : "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_COLOR.png",
+    "normalTexture"     : "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_NRM.png",
+    "specularTexture"   : "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_SPEC.png",
+    "textureScale"      : 4,
+    "ambientColor"      : "#FFF",
+    "diffuseColor"      : "#FFF",
+    "specularColor"     : "#555",
+    "shininess"         : 3
 }

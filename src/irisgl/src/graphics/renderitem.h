@@ -13,8 +13,9 @@ For more information see the LICENSE file
 #define RENDERITEM_H
 
 #include "../irisglfwd.h"
-#include "material.h"
 #include <QMatrix4x4>
+
+class QOpenGLShaderProgram;
 
 namespace iris
 {
@@ -29,11 +30,44 @@ enum class FaceCullingMode
     FrontAndBack
 };
 
+enum class BlendType
+{
+    None,
+    Normal,
+    Add
+};
+
 enum class RenderItemType
 {
     None,
     Mesh,
     ParticleSystem
+};
+
+struct RenderStates
+{
+    int renderLayer;
+    BlendType blendType;
+    bool zWrite;
+    bool depthTest;
+    FaceCullingMode cullMode;
+    bool fogEnabled;
+    bool castShadows;
+    bool receiveShadows;
+    bool receiveLighting;
+
+    RenderStates()
+    {
+        renderLayer = 0;
+        blendType = BlendType::None;
+        zWrite = true;
+        depthTest = true;
+        cullMode = FaceCullingMode::Back;
+        fogEnabled = true;
+        castShadows = true;
+        receiveShadows = true;
+        receiveLighting = true;
+    }
 };
 
 struct RenderItem
@@ -47,7 +81,8 @@ struct RenderItem
 
     QOpenGLShaderProgram* shaderProgram;
 
-    FaceCullingMode faceCullingMode;
+    //states
+    RenderStates renderStates;
 
     //sort order for render layer
     //used if no material is specified
@@ -57,7 +92,6 @@ struct RenderItem
         type = RenderItemType::None,
         //renderLayer = (int)RenderLayer::Opaque;
         worldMatrix.setToIdentity();
-        faceCullingMode = FaceCullingMode::Back;
     }
 };
 
