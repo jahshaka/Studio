@@ -59,7 +59,8 @@ QString AssetIOBase::getAbsolutePath(QString filename)
 
 QColor AssetIOBase::readColor(const QJsonObject& colorObj)
 {
-    if (colorObj.isEmpty()) {
+    if(colorObj.isEmpty())
+    {
         return QColor();
     }
 

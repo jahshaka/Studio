@@ -93,9 +93,6 @@ void TexturePickerWidget::on_pushButton_clicked()
     ui->dimensions->clear();
     ui->texture->clear();
 
-    // new
-    filePath.clear();
-
     emit valueChanged(QString::null);
 }
 

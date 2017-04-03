@@ -20,7 +20,8 @@ For more information see the LICENSE file
 namespace iris
 {
 
-enum class SceneNodeType {
+enum class SceneNodeType
+{
     Empty,
     ParticleSystem,
     Mesh,
@@ -61,6 +62,8 @@ public:
 
     bool pickable;
     bool shadowEnabled;
+
+    int materialType;
 
     friend class Renderer;
     friend class Scene;
@@ -121,6 +124,14 @@ public:
 
     bool getShadowEnabled() {
         return shadowEnabled;
+    }
+
+    int getMaterialType() {
+        return materialType;
+    }
+
+    void setMaterialType(int type) {
+        materialType = type;
     }
 
     SceneNodeType getSceneNodeType();

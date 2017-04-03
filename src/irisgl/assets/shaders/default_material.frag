@@ -31,8 +31,6 @@ uniform sampler2D u_reflectionTexture;
 uniform float u_reflectionInfluence;
 uniform bool u_useReflectionTex;
 
-uniform bool u_useAlpha;
-
 in vec2 v_texCoord;
 in vec3 v_normal;
 in vec3 v_worldPos;
@@ -220,10 +218,8 @@ void main()
 
     vec3 col = u_material.diffuse;
 
-    if (u_useDiffuseTex) {
-        col = col * texture(u_diffuseTexture, v_texCoord).rgb;
-        if (u_useAlpha && texture(u_diffuseTexture, v_texCoord).a < 0.5) discard;
-    }
+    if(u_useDiffuseTex)
+        col = col * texture(u_diffuseTexture,v_texCoord).rgb;
 
     if(u_useSpecularTex)
         specular = specular * texture(u_specularTexture,v_texCoord).rgb;
@@ -249,5 +245,10 @@ void main()
         finalColor = mix(finalColor,u_fogData.color.rgb,fogFactor);
     }
 
-    fragColor = vec4(finalColor, 1.0);
+    /*
+    gl_FragColor = vec4(finalColor
+                ,
+                1.0);
+                */
+    fragColor = vec4(finalColor,1.0); // + CascadeIndicator;
 }

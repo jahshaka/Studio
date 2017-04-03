@@ -1,11 +1,20 @@
 {
-    "name"                  : "Silver",
-    "material_type"         : "Default",
-    "icon"                  : "../../materials/silver.png",
-    "reflectionTexture"     : "../textures/hamarikyu.jpg",
-    "reflectionInfluence"   : 0.13,
-    "textureScale"          : 1,
-    "diffuseColor"          : "#FFF",
-    "specularColor"         : "#222",
-    "shininess"             : 0
+    "name": "Silver",
+    "icon": "../../materials/silver.png",
+    "reflectionTexture": "../textures/hamarikyu.jpg",
+    "reflectionInfluence":0.13,
+    "textureScale": 1,
+    "diffuseColor": {
+        "r": 200,
+        "g": 200,
+        "b": 200,
+        "a": 255
+    },
+    "specularColor": {
+        "r": 8,
+        "g": 8,
+        "b": 8,
+        "a": 255
+    },
+    "shininess": 0
 }

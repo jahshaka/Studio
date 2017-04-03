@@ -304,12 +304,11 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             iris::MaterialPtr mat;
 
             // if a material is set then use it and gets its shaderprogram
-
             if (!!item->material) {
                 mat = item->material;
                 program = mat->program;
 
-                mat->begin(gl, scene);
+                mat->begin(gl,scene);
             } else {
               program = item->shaderProgram;
             }
