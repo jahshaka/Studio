@@ -85,6 +85,7 @@ void MeshNode::setMaterial(MaterialPtr material)
     this->material = material;
 //    setActiveMaterial(1);
     renderItem->material = material;
+    renderItem->renderStates = material->renderStates;
 }
 
 void MeshNode::setCustomMaterial(MaterialPtr material)
@@ -110,7 +111,7 @@ void MeshNode::submitRenderItems()
 
     if (!!material) {
         renderItem->renderLayer = material->renderLayer;
-        renderItem->faceCullingMode = faceCullingMode;
+        //renderItem->faceCullingMode = faceCullingMode;
     }
 
     this->scene->geometryRenderList.append(renderItem);

@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define MATERIAL_H
 
 #include "../irisglfwd.h"
+#include "renderitem.h"
 #include <QOpenGLShaderProgram>
 
 class QOpenGLShaderProgram;
@@ -52,6 +53,8 @@ MatStruct<T> make_mat_struct(int id, QString name, QString uniform, T value) {
     return mStruct;
 }
 
+
+
 class Material
 {
 public:
@@ -61,6 +64,7 @@ public:
 
     bool acceptsLighting;
     int numTextures;
+    RenderStates renderStates;
 
     Material() {
         acceptsLighting = true;
