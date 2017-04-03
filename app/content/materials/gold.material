@@ -1,11 +1,20 @@
 {
-    "name"                  : "Gold",
-    "material_type"         : "Default",
-    "icon"                  : "../../materials/gold.png",
-    "reflectionTexture"     : "../textures/hamarikyu.jpg",
-    "reflectionInfluence"   : 0.13,
-    "textureScale"          : 1,
-    "diffuseColor"          : "#ffc411",
-    "specularColor"         : "#111",
-    "shininess"             : 0
+    "name": "Gold",
+    "icon": "../../materials/gold.png",
+    "reflectionTexture": "../textures/hamarikyu.jpg",
+    "reflectionInfluence":0.13,
+    "textureScale": 1,
+    "diffuseColor": {
+        "r": 255,
+        "g": 196,
+        "b": 17,
+        "a": 255
+    },
+    "specularColor": {
+        "r": 8,
+        "g": 8,
+        "b": 8,
+        "a": 255
+    },
+    "shininess": 0
 }

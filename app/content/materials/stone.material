@@ -1,12 +1,21 @@
 {
-    "name"              : "Stone Wall",
-    "material_type"     : "Default",
-    "icon"              : "../../materials/stone.png",
-    "diffuseTexture"    : "presets/stone/Stone_04_UV_H_CM_1_COLOR.png",
-    "normalTexture"     : "presets/stone/Stone_04_UV_H_CM_1_NRM.png",
-    "specularTexture"   : "presets/stone/Stone_04_UV_H_CM_1_SPEC.png",
-    "textureScale"      : 4,
-    "diffuseColor"      : "#FFF",
-    "specularColor"     : "#FFF",
-    "shininess"         : 0
+    "name": "Stone Wall",
+    "icon": "../../materials/stone.png",
+    "diffuseTexture": "presets/stone/Stone_04_UV_H_CM_1_COLOR.png",
+    "normalTexture": "presets/stone/Stone_04_UV_H_CM_1_NRM.png",
+    "specularTexture": "presets/stone/Stone_04_UV_H_CM_1_SPEC.png",
+    "textureScale": 4,
+    "diffuseColor": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+    },
+    "specularColor": {
+        "r": 8,
+        "g": 8,
+        "b": 8,
+        "a": 255
+    },
+    "shininess": 0
 }

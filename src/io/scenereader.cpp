@@ -19,7 +19,6 @@ For more information see the LICENSE file
 #include <QJsonValueRef>
 #include <QJsonDocument>
 
-#include "materialreader.hpp"
 #include "scenereader.h"
 
 #include "../editor/editordata.h"
@@ -250,18 +249,28 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 
     auto source = nodeObj["mesh"].toString("");
     auto meshIndex = nodeObj["meshIndex"].toInt(0);
+    auto materialType = nodeObj["materialType"].toInt(0);
     auto pickable = nodeObj["pickable"].toBool();
-
-    if (!source.isEmpty()) {
-        auto mesh = getMesh(IrisUtils::getAbsoluteAssetPath(source), meshIndex);
+    if(!source.isEmpty())
+    {
+        auto mesh = getMesh(getAbsolutePath(source),meshIndex);
         meshNode->setMesh(mesh);
         meshNode->setPickable(pickable);
+        meshNode->setMaterialType(materialType);
         meshNode->meshPath = source;
         meshNode->meshIndex = meshIndex;
     }
 
+    //material
     auto material = readMaterial(nodeObj);
-    meshNode->setMaterial(material);
+    if (materialType == 1) {
+        meshNode->setMaterial(material);
+    } else {
+        auto customMat = iris::CustomMaterial::create();
+        meshNode->setMaterial(material);
+        meshNode->setCustomMaterial(customMat);
+        meshNode->setActiveMaterial(2);
+    }
 
     auto faceCullingMode = nodeObj["faceCullingMode"].toString("back");
 
@@ -271,7 +280,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         meshNode->setFaceCullingMode(iris::FaceCullingMode::Front);
     } else if (faceCullingMode == "frontandback") {
         meshNode->setFaceCullingMode(iris::FaceCullingMode::FrontAndBack);
-    } else {
+    } else { //none
         meshNode->setFaceCullingMode(iris::FaceCullingMode::None);
     }
 
@@ -287,13 +296,13 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
 {
     auto lightNode = iris::LightNode::create();
 
-    lightNode->setLightType(getLightTypeFromName(nodeObj["lightType"].toString()));
+    lightNode->setLightType(getLightTypeFromName(nodeObj["lightType"].toString("point")));
     lightNode->intensity = (float)nodeObj["intensity"].toDouble(1.0f);
-    lightNode->distance = (float)nodeObj["distance"].toDouble(1.0f);
+    lightNode->distance = (float)nodeObj["radius"].toDouble(1.0f);
     lightNode->spotCutOff = (float)nodeObj["spotCutOff"].toDouble(30.0f);
     lightNode->color = readColor(nodeObj["color"].toObject());
 
-    //TODO: move this to the sceneview widget or somewhere more appropriate
+    //todo: move this to the sceneview widget or somewhere more appropriate
     if(lightNode->lightType == iris::LightType::Directional)
         lightNode->icon = iris::Texture2D::load(IrisUtils::getAbsoluteAssetPath("app/icons/light.png"));
     else
@@ -347,46 +356,37 @@ iris::LightType SceneReader::getLightTypeFromName(QString lightType)
  */
 iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 {
-    if (nodeObj["material"].isNull()) {
-        return iris::CustomMaterial::create();
+    if(nodeObj["material"].isNull())
+    {
+        return iris::DefaultMaterial::create();
     }
 
-    auto mat = nodeObj["material"].toObject();
+    QJsonObject matObj = nodeObj["material"].toObject();
+    auto material = iris::DefaultMaterial::create();
 
-    MaterialReader *materialReader = new MaterialReader();
-    QString path =  "app/shader_defs/" + mat["name"].toString() + ".json";
+    auto colObj = matObj["ambientColor"].toObject();
+    material->setAmbientColor(readColor(colObj));
 
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath(path));
+    colObj = matObj["diffuseColor"].toObject();
+    material->setDiffuseColor(readColor(colObj));
 
-    auto m = iris::CustomMaterial::create();
-    m->generate(materialReader->getParsedShader());
+    auto tex = matObj["diffuseTexture"].toString("");
+    if(!tex.isEmpty()) material->setDiffuseTexture(iris::Texture2D::load(getAbsolutePath(tex)));
 
-    int cCtr = 0;
-    for (auto s : m->colorUniforms) {
-        QColor col;
-        col.setNamedColor(mat[s.name].toString());
-        m->updateColorAndUniform(cCtr, col);
-        cCtr++;
-    }
+    tex = matObj["normalTexture"].toString("");
+    if(!tex.isEmpty()) material->setNormalTexture(iris::Texture2D::load(getAbsolutePath(tex)));
 
-    int tCtr = 0;
-    for (auto s : m->textureUniforms) {
-        auto tex = mat[s.name].toString();
-        if (!tex.isEmpty()) {
-            tex = getAbsolutePath(mat[s.name].toString());
-            qDebug() << "TEX " << tex;
-        }
-        m->updateTextureAndToggleUniform(tCtr, tex);
-        tCtr++;
-    }
+    colObj = matObj["specularColor"].toObject();
+    material->setSpecularColor(readColor(colObj));
+    material->setShininess((float)matObj["shininess"].toDouble(0.0f));
 
-    int sCtr = 0;
-    for (auto s : m->sliderUniforms) {
-        m->updateFloatAndUniform(sCtr, mat[s.name].toDouble());
-        sCtr++;
-    }
+    tex = matObj["specularTexture"].toString("");
+    if(!tex.isEmpty()) material->setSpecularTexture(iris::Texture2D::load(getAbsolutePath(tex)));
 
-    return m;
+    material->setTextureScale((float)matObj["textureScale"].toDouble(1.0f));
+
+    return material;
+
 }
 
 /**
@@ -398,19 +398,23 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
  */
 iris::Mesh* SceneReader::getMesh(QString filePath,int index)
 {
-    // if the mesh is already in the hashmap then it was already loaded, just return the indexed mesh
-    if (meshes.contains(filePath)) {
+    //if the mesh is already in the hashmap then it was already loaded, just return the indexed mesh
+    if(meshes.contains(filePath))
+    {
         auto meshList = meshes[filePath];
-        if (index < meshList.size()) return meshList[index];
-        // maybe the mesh was modified after the file was saved
-        return nullptr;
-    }
+        if(index < meshList.size())
+            return meshList[index];
 
-    else {
+        return nullptr;//maybe the mesh was modified after the file was saved
+    }
+    else
+    {
         auto meshList = iris::GraphicsHelper::loadAllMeshesFromFile(filePath);
         meshes.insert(filePath,meshList);
-        if (index < meshList.size()) return meshList[index];
-        // maybe the mesh was modified after the file was saved
-        return nullptr;
+
+        if(index < meshList.size())
+            return meshList[index];
+
+        return nullptr;//maybe the mesh was modified after the file was saved
     }
 }

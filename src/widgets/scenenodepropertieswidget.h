@@ -48,7 +48,7 @@ public:
     /**
      * Updates material properties if active scene node is a mesh
      */
-    void refreshMaterial(const QString &matName);
+    void refreshMaterial();
 
 private:
     void clearLayout(QLayout*);

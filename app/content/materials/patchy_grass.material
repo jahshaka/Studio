@@ -1,12 +1,21 @@
 {
-    "name"              : "Grass 2",
-    "material_type"     : "Default",
-    "icon"              : "../../materials/patchy_grass.png",
-    "diffuseTexture"    : "presets/patchy_grass/patchygrass_1_COLOR.png",
-    "normalTexture"     : "presets/patchy_grass/patchygrass_1_NRM.png",
-    "specularTexture"   : "presets/patchy_grass/patchygrass_1_SPEC.png",
-    "textureScale"      : 3,
-    "diffuseColor"      : "#FFF",
-    "specularColor"     : "#FFF",
-    "shininess"         : 0
+    "name": "Grass 2",
+    "icon": "../../materials/patchy_grass.png",
+    "diffuseTexture": "presets/patchy_grass/patchygrass_1_COLOR.png",
+    "normalTexture": "presets/patchy_grass/patchygrass_1_NRM.png",
+    "specularTexture": "presets/patchy_grass/patchygrass_1_SPEC.png",
+    "textureScale": 3,
+    "diffuseColor": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+    },
+    "specularColor": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+    },
+    "shininess": 0
 }

@@ -1,11 +1,20 @@
 {
-    "name"              : "Grass",
-    "material_type"     : "Default",
-    "icon"              : "../../materials/grass.png",
-    "diffuseTexture"    : "presets/grass/Grass_03_UV_H_CM_1_COLOR.png",
-    "specularTexture"   : "presets/grass/Grass_03_UV_H_CM_1_SPEC.png",
-    "textureScale"      : 4,
-    "diffuseColor"      : "#FFF",
-    "specularColor"     : "#FFF",
-    "shininess"         : 0
+    "name": "Grass",
+    "icon": "../../materials/grass.png",
+    "diffuseTexture": "presets/grass/Grass_03_UV_H_CM_1_COLOR.png",
+    "specularTexture": "presets/grass/Grass_03_UV_H_CM_1_SPEC.png",
+    "textureScale": 4,
+    "diffuseColor": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+    },
+    "specularColor": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+    },
+    "shininess": 0
 }
