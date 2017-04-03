@@ -21,17 +21,6 @@ CustomMaterial::CustomMaterial()
     setRenderLayer((int) RenderLayer::Opaque);
 }
 
-void CustomMaterial::setTexture(Texture2DPtr tex)
-{
-
-}
-
-// TODO GET TEXTURE FROM MAP BY NAME...
-Texture2DPtr CustomMaterial::getTexture()
-{
-
-}
-
 // TODO clean up how this is set and used
 void CustomMaterial::setTextureWithUniform(QString textureUniformName, QString texturePath)
 {
@@ -61,6 +50,11 @@ void CustomMaterial::updateColorAndUniform(int index, QColor color)
     colorUniforms[index].value = color;
 }
 
+QJsonObject CustomMaterial::getShaderFile() const
+{
+    return jahShaderMaster;
+}
+
 void CustomMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
 {
      Material::begin(gl, scene);
@@ -83,6 +77,14 @@ void CustomMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
         ++sliderIterator;
     }
 
+    // set bool uniforms
+    auto boolIterator = boolUniforms.begin();
+    while (boolIterator != boolUniforms.end()) {
+        program->setUniformValue(boolIterator->uniform.toStdString().c_str(),
+                                 boolIterator->value);
+        ++boolIterator;
+    }
+
     // set texture toggle uniforms
     auto textureToggleIterator = textureToggleUniforms.begin();
     while (textureToggleIterator != textureToggleUniforms.end()) {
@@ -103,7 +105,7 @@ void CustomMaterial::end(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
  */
 void CustomMaterial::generate(const QJsonObject &jahShader)
 {
-    name = jahShader["name"].toString();
+    setMaterialName(jahShader["name"].toString());
 
     auto useBuiltinShader = jahShader["builtin"].toBool();
 
@@ -120,13 +122,14 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
     auto widgetProps = jahShader["uniforms"].toArray();
 
     /// TODO see if this can be removed this when the default material is deleted.
-    unsigned sliderSize, textureSize, colorSize;
-    sliderSize = textureSize = colorSize = 0;
+    unsigned sliderSize, textureSize, colorSize, boolSize;
+    sliderSize = textureSize = colorSize = boolSize = 0;
 
     for (int i = 0; i < widgetProps.size(); i++) {
         auto prop = widgetProps[i].toObject();
         if (prop["type"] == "slider")   sliderSize++;
         if (prop["type"] == "color")    colorSize++;
+        if (prop["type"] == "checkbox") boolSize++;
         if (prop["type"] == "texture")  textureSize++;
     }
 
@@ -150,6 +153,14 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
                 col.setNamedColor(prop["value"].toString());
                 colorUniforms.push_back(iris::make_mat_struct(textureUniforms.size(),
                                                               name, uniform, col));
+            }
+        }
+
+        if (boolUniforms.size() < boolSize) {
+            if (prop["type"] == "checkbox") {
+                auto state = prop["value"].toBool();
+                boolUniforms.push_back(iris::make_mat_struct(boolUniforms.size(),
+                                                             name, uniform, state));
             }
         }
 
@@ -177,7 +188,8 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
 
     jahShaderMaster = jahShader;
     // not magic, the widget heights won't change for a while so lazy ok for now or fetch them...
-    finalSize = 30 + (sliderSize + 1 + colorSize) * 28
+    // the 30 is for the blade padding, the one is for the mandatory slider, 6 is spacing, 9 padd
+    finalSize = 30 + (sliderSize + boolSize + colorSize + 1) * 28
                    + (textureSize * 108) + ((widgetProps.size() + 1) * 6) + 9 + 9;
 
     this->setRenderLayer((int) RenderLayer::Opaque);
@@ -187,8 +199,24 @@ void CustomMaterial::purge()
 {
     sliderUniforms.clear();
     colorUniforms.clear();
+    boolUniforms.clear();
     textureUniforms.clear();
     textureToggleUniforms.clear();
+}
+
+void CustomMaterial::setMaterialName(const QString &name)
+{
+    materialName = name;
+}
+
+QString CustomMaterial::getMaterialName() const
+{
+    return materialName;
+}
+
+int CustomMaterial::getCalculatedPropHeight() const
+{
+    return finalSize;
 }
 
 CustomMaterialPtr CustomMaterial::create()

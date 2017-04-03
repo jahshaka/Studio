@@ -224,7 +224,7 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
 
 void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat)
 {
-    matObj["name"] = mat->name;
+    matObj["name"] = mat->getMaterialName();
 
     for (auto s : mat->colorUniforms) {
         matObj[s.name] = s.value.name();

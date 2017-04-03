@@ -61,6 +61,7 @@ protected slots:
     void onCustomSliderChanged(QWidget*);
     void onCustomColorChanged(QWidget*);
     void onCustomTextureChanged(QWidget*);
+    void onCheckBoxStateChanged(QWidget*);
 
     void onMaterialSelectorChanged(const QString&);
 
@@ -69,6 +70,7 @@ private:
 
     std::vector<iris::MatStruct<HFloatSliderWidget*>>   sliderUniforms;
     std::vector<iris::MatStruct<ColorValueWidget*>>     colorUniforms;
+    std::vector<iris::MatStruct<CheckBoxWidget*>>       boolUniforms;
     std::vector<iris::MatStruct<TexturePickerWidget*>>  textureUniforms;
 };
 

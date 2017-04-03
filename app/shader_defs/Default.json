@@ -80,6 +80,12 @@
             "start"         : 0,
             "end"           : 16,
             "uniform"       : "u_textureScale"
+        }, {
+            "displayName"   : "Use Alpha",
+            "name"          : "useAlpha",
+            "type"          : "checkbox",
+            "value"         : false,
+            "uniform"       : "u_useAlpha"
         }
     ],
     "builtin": true,
