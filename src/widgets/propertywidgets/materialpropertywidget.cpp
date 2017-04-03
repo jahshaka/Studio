@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "../comboboxwidget.h"
 #include "../colorpickerwidget.h"
 #include "../colorvaluewidget.h"
+#include "../checkboxwidget.h"
 #include "../texturepickerwidget.h"
 #include "../labelwidget.h"
 
@@ -31,13 +32,14 @@ void MaterialPropertyWidget::createWidgets(const QJsonObject &jahShader)
     auto widgetProps = jahShader["uniforms"].toArray();
 
     /// TODO see if this can be removed this when the default material is deleted.
-    unsigned sliderSize, textureSize, colorSize;
-    sliderSize = textureSize = colorSize = 0;
+    unsigned sliderSize, textureSize, colorSize, boolSize;
+    sliderSize = textureSize = colorSize = boolSize = 0;
 
     for (int i = 0; i < widgetProps.size(); i++) {
         auto prop = widgetProps[i].toObject();
         if (prop["type"] == "slider")   sliderSize++;
         if (prop["type"] == "color")    colorSize++;
+        if (prop["type"] == "checkbox") boolSize++;
         if (prop["type"] == "texture")  textureSize++;
     }
 
@@ -74,6 +76,18 @@ void MaterialPropertyWidget::createWidgets(const QJsonObject &jahShader)
             }
         }
 
+        if (boolUniforms.size() < boolSize) {
+            if (prop["type"] == "checkbox") {
+                auto value = prop["value"].toBool();
+                boolUniforms.push_back(
+                            iris::make_mat_struct(boolUniforms.size() - 1,
+                                                  name,
+                                                  uniform,
+                                                  addCheckBox(displayName, value)));
+                boolUniforms.back().value->index = boolUniforms.size() - 1;
+            }
+        }
+
         if (textureUniforms.size() < textureSize) {
             if (prop["type"] == "texture") {
                 textureUniforms.push_back(
@@ -92,75 +106,87 @@ void MaterialPropertyWidget::setupCustomMaterial()
     createWidgets(this->customMaterial->getShaderFile());
 
     // sliders
-    QSignalMapper *signalMapper = new QSignalMapper(this);
-
-    auto sit = sliderUniforms.begin();
-    while (sit != sliderUniforms.end()) {
-        connect(sit->value, SIGNAL(valueChanged(float)), signalMapper, SLOT(map()));
-        signalMapper->setMapping(sit->value, sit->value);
-        ++sit;
+    QSignalMapper *sliderMapper = new QSignalMapper(this);
+    auto sliderIter = sliderUniforms.begin();
+    while (sliderIter != sliderUniforms.end()) {
+        connect(sliderIter->value, SIGNAL(valueChanged(float)), sliderMapper, SLOT(map()));
+        sliderMapper->setMapping(sliderIter->value, sliderIter->value);
+        ++sliderIter;
     }
-
-    connect(signalMapper, SIGNAL(mapped(QWidget*)), SLOT(onCustomSliderChanged(QWidget*)));
+    connect(sliderMapper, SIGNAL(mapped(QWidget*)), SLOT(onCustomSliderChanged(QWidget*)));
 
     // colors
-    QSignalMapper *signalMapper2 = new QSignalMapper(this);
-
-    auto ccit = colorUniforms.begin();
-    while (ccit != colorUniforms.end()) {
-        connect(ccit->value->getPicker(), SIGNAL(onColorChanged(QColor)), signalMapper2, SLOT(map()));
-        signalMapper2->setMapping(ccit->value->getPicker(), ccit->value->getPicker());
-        ++ccit;
+    QSignalMapper *colorMapper = new QSignalMapper(this);
+    auto colorIter = colorUniforms.begin();
+    while (colorIter != colorUniforms.end()) {
+        connect(colorIter->value->getPicker(),  SIGNAL(onColorChanged(QColor)),
+                colorMapper,                    SLOT(map()));
+        colorMapper->setMapping(colorIter->value->getPicker(), colorIter->value->getPicker());
+        ++colorIter;
     }
+    connect(colorMapper, SIGNAL(mapped(QWidget*)), SLOT(onCustomColorChanged(QWidget*)));
 
-    connect(signalMapper2, SIGNAL(mapped(QWidget*)), SLOT(onCustomColorChanged(QWidget*)));
+    // bools
+    QSignalMapper *boolMapper = new QSignalMapper(this);
+    auto boolIter = boolUniforms.begin();
+    while (boolIter != boolUniforms.end()) {
+        connect(boolIter->value, SIGNAL(valueChanged(bool)), boolMapper, SLOT(map()));
+        boolMapper->setMapping(boolIter->value, boolIter->value);
+        ++boolIter;
+    }
+    connect(boolMapper, SIGNAL(mapped(QWidget*)), SLOT(onCheckBoxStateChanged(QWidget*)));
 
     // textures
-    QSignalMapper *signalMapper21 = new QSignalMapper(this);
-
-    auto ccit2 = textureUniforms.begin();
-    while (ccit2 != textureUniforms.end()) {
-        connect(ccit2->value, SIGNAL(valueChanged(QString)), signalMapper21, SLOT(map()));
-        signalMapper21->setMapping(ccit2->value, ccit2->value);
-        ++ccit2;
+    QSignalMapper *textureMapper = new QSignalMapper(this);
+    auto texIter = textureUniforms.begin();
+    while (texIter != textureUniforms.end()) {
+        connect(texIter->value, SIGNAL(valueChanged(QString)), textureMapper, SLOT(map()));
+        textureMapper->setMapping(texIter->value, texIter->value);
+        ++texIter;
     }
-
-    connect(signalMapper21, SIGNAL(mapped(QWidget*)), SLOT(onCustomTextureChanged(QWidget*)));
+    connect(textureMapper, SIGNAL(mapped(QWidget*)), SLOT(onCustomTextureChanged(QWidget*)));
 
     // iterate both (different typed) maps in lockstep...
     // we get the value from the material and set the widget value
-    // this works because the maps are ordered by key
-    // TODO do this up at signal mapper boi
-    // the order is not necessarilly right ok...
+
     // SLIDERS
-    auto mat = sliderUniforms.begin();
-    auto mit = customMaterial->sliderUniforms.begin();
-    while (mat != sliderUniforms.end()) {
-        mat->value->setValue(mit->value);
-        ++mat;
-        ++mit;
+    sliderIter = sliderUniforms.begin();
+    auto sIter = customMaterial->sliderUniforms.begin();
+    while (sliderIter != sliderUniforms.end()) {
+        sliderIter->value->setValue(sIter->value);
+        ++sIter;
+        ++sliderIter;
     }
 
     // COLORS
-    auto cat = colorUniforms.begin();
-    auto mit2 = customMaterial->colorUniforms.begin();
-    while (cat != colorUniforms.end()) {
-        cat->value->setColorValue(mit2->value);
-        ++cat;
-        ++mit2;
+    colorIter = colorUniforms.begin();
+    auto cIter = customMaterial->colorUniforms.begin();
+    while (colorIter != colorUniforms.end()) {
+        colorIter->value->setColorValue(cIter->value);
+        ++colorIter;
+        ++cIter;
+    }
+
+    // BOOLS
+    boolIter = boolUniforms.begin();
+    auto bIter = customMaterial->boolUniforms.begin();
+    while (boolIter != boolUniforms.end()) {
+        boolIter->value->setValue(bIter->value);
+        ++boolIter;
+        ++bIter;
     }
 
     // TExTURES
-    auto tat = textureUniforms.begin();
-    auto mit22 = customMaterial->textureUniforms.begin();
-    while (tat != textureUniforms.end()) {
-        if (!mit22->value.isEmpty()) {
-            tat->value->setTexture(mit22->value);
+    texIter = textureUniforms.begin();
+    auto tIter = customMaterial->textureUniforms.begin();
+    while (texIter != textureUniforms.end()) {
+        if (!tIter->value.isEmpty()) {
+            texIter->value->setTexture(tIter->value);
         } else {
-            tat->value->setTexture("");
+            texIter->value->setTexture("");
         }
-        ++tat;
-        ++mit22;
+        ++texIter;
+        ++tIter;
     }
 }
 
@@ -178,7 +204,7 @@ void MaterialPropertyWidget::setupShaderSelector()
         materialSelector->addItem(QFileInfo(shaderName).baseName());
     }
 
-    materialSelector->setCurrentItem(this->customMaterial->name);
+    materialSelector->setCurrentItem(this->customMaterial->getMaterialName());
 
     connect(materialSelector,   SIGNAL(currentIndexChanged(QString)),
             this,               SLOT(onMaterialSelectorChanged(QString)));
@@ -201,7 +227,8 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         materialReader = new MaterialReader();
         materialReader->readJahShader(
-                    IrisUtils::getAbsoluteAssetPath("app/shader_defs/" + this->customMaterial->name + ".json"));
+                    IrisUtils::getAbsoluteAssetPath(
+                        "app/shader_defs/" + this->customMaterial->getMaterialName() + ".json"));
         this->customMaterial->generate(materialReader->getParsedShader());
         setupCustomMaterial();
     } else {
@@ -224,6 +251,14 @@ void MaterialPropertyWidget::onCustomColorChanged(QWidget *t)
     auto changedIndex = dynamic_cast<ColorPickerWidget*>(t);
     if (!!customMaterial) {
         customMaterial->colorUniforms[changedIndex->index].value = changedIndex->getColor();
+    }
+}
+
+void MaterialPropertyWidget::onCheckBoxStateChanged(QWidget *t)
+{
+    auto changedIndex = dynamic_cast<CheckBoxWidget*>(t);
+    if (!!customMaterial) {
+        customMaterial->boolUniforms[changedIndex->index].value = changedIndex->getValue();
     }
 }
 
@@ -250,6 +285,7 @@ void MaterialPropertyWidget::purge()
 {
     sliderUniforms.clear();
     colorUniforms.clear();
+    boolUniforms.clear();
     textureUniforms.clear();
 }
 
@@ -261,9 +297,9 @@ void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
 
     this->clearPanel(this->layout());
 
-    this->customMaterial->name = text;
+    this->customMaterial->setMaterialName(text);
     this->setSceneNode(this->meshNode);
-    int finalHeight = this->customMaterial->finalSize;
+    int finalHeight = this->customMaterial->getCalculatedPropHeight();
 
     resetHeight();
     setHeight(finalHeight);

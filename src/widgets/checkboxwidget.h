@@ -24,6 +24,7 @@ class CheckBoxWidget : public QWidget
     Q_OBJECT
 
 public:
+    int index;
     explicit CheckBoxWidget(QWidget *parent = 0);
     ~CheckBoxWidget();
 
@@ -33,6 +34,7 @@ public:
      * @param val
      */
     void setValue(bool val);
+    bool getValue();
 
     /**
      * Sets the label for the property
