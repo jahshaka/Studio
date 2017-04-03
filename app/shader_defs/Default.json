@@ -1,6 +1,18 @@
 {
-    "name": "Default",
-    "preview": false,
+    "name"          : "Default",
+    "preview"       : false,
+
+    "zWrite"        : true,
+    "depthTest"     : true,
+    "blendMode"     : "none",
+    "cullMode"      : "back",
+
+    "renderLayer"   : "opaque",
+    "fog"           : true,
+    "castShadows"   : true,
+    "receiveShadows": true,
+    "lighting"      : true,
+
     "uniforms": [
         {
             "displayName"   : "Ambient Color",

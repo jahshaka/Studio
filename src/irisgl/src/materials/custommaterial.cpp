@@ -112,6 +112,8 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
     auto vertPath = jahShader["vertex_shader"].toString();
     auto fragPath = jahShader["fragment_shader"].toString();
 
+    setBaseMaterialProperties(jahShader);
+
     if (useBuiltinShader) {
         createProgramFromShaderSource(vertPath, fragPath);
     } else {
@@ -191,8 +193,6 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
     // the 30 is for the blade padding, the one is for the mandatory slider, 6 is spacing, 9 padd
     finalSize = 30 + (sliderSize + boolSize + colorSize + 1) * 28
                    + (textureSize * 108) + ((widgetProps.size() + 1) * 6) + 9 + 9;
-
-    this->setRenderLayer((int) RenderLayer::Opaque);
 }
 
 void CustomMaterial::purge()
@@ -207,6 +207,57 @@ void CustomMaterial::purge()
 void CustomMaterial::setMaterialName(const QString &name)
 {
     materialName = name;
+}
+
+void CustomMaterial::setBaseMaterialProperties(const QJsonObject &jahShader)
+{
+    auto renderLayer    = jahShader["renderLayer"].toString("opaque");
+    auto blendType      = jahShader["blendMode"].toString();
+    auto zwrite         = jahShader["zWrite"].toBool(true);
+    auto depthTest      = jahShader["depthTest"].toBool(true);
+    auto cullMode       = jahShader["cullMode"].toString("back");
+    auto fog            = jahShader["fog"].toBool(true);
+    auto castShadows    = jahShader["castShadows"].toBool(true);
+    auto receiveShadows = jahShader["receiveShadows"].toBool(true);
+    auto lighting       = jahShader["lighting"].toBool(true);
+
+    //renderStates.blendType = !blendType.isEmpty() ? blendType : "alphablend";
+    renderStates.zWrite = zwrite;
+    renderStates.depthTest = depthTest;
+    renderStates.fogEnabled = fog;
+    renderStates.castShadows = castShadows;
+    renderStates.receiveShadows = receiveShadows;
+    renderStates.receiveLighting = lighting;
+
+    if (renderLayer == "alphaTested") {
+        setRenderLayer((int) RenderLayer::AlphaTested);
+    } else if (renderLayer == "opaque") {
+        setRenderLayer((int) RenderLayer::Background);
+    } else if (renderLayer == "overlay") {
+        setRenderLayer((int) RenderLayer::Overlay);
+    } else if (renderLayer == "transparent") {
+        setRenderLayer((int) RenderLayer::Transparent);
+    } else {
+        setRenderLayer((int) RenderLayer::Opaque);
+    }
+
+    if (cullMode == "front") {
+        renderStates.cullMode = FaceCullingMode::Front;
+    } else if (cullMode == "back") {
+        renderStates.cullMode = FaceCullingMode::Back;
+    } else if (cullMode == "frontAndBack") {
+        renderStates.cullMode = FaceCullingMode::FrontAndBack;
+    } else {
+        renderStates.cullMode = FaceCullingMode::None;
+    }
+
+    if (blendType == "normal") {
+        renderStates.blendType = BlendType::Normal;
+    } else if (blendType == "add") {
+        renderStates.blendType = BlendType::Add;
+    } else {
+        renderStates.blendType = BlendType::None;
+    }
 }
 
 QString CustomMaterial::getMaterialName() const

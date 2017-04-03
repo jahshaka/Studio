@@ -42,6 +42,7 @@ public:
     QJsonObject getShaderFile() const;
     void purge();
     void setMaterialName(const QString&);
+    void setBaseMaterialProperties(const QJsonObject&);
     QString getMaterialName() const;
     int getCalculatedPropHeight() const;
 
