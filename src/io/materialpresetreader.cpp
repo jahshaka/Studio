@@ -21,6 +21,19 @@ MaterialPresetReader::MaterialPresetReader()
 
 }
 
+QJsonObject MaterialPresetReader::getMatPreset(const QString &filename)
+{
+    this->setAssetPath(filename);
+
+    QFile file(filename);
+    file.open(QIODevice::ReadOnly);
+
+    auto data = file.readAll();
+    auto doc = QJsonDocument::fromJson(data);
+
+    return doc.object();
+}
+
 MaterialPreset* MaterialPresetReader::readMaterialPreset(QString filename)
 {
     this->setAssetPath(filename);
@@ -41,18 +54,24 @@ MaterialPreset* MaterialPresetReader::readMaterialPreset(QString filename)
     if(!icon.isEmpty())
         material->icon = getAbsolutePath(icon);
 
-    auto colObj = matObj["ambientColor"].toObject();
-    material->ambientColor = readColor(colObj);
+    material->type = matObj["material_type"].toString();
 
-    colObj = matObj["diffuseColor"].toObject();
-    material->diffuseColor = readColor(colObj);
+    auto colObj = matObj["ambientColor"].toString();
+    QColor col;
+    col.setNamedColor(colObj);
+    material->ambientColor = col;
+
+    colObj = matObj["diffuseColor"].toString();
+    col.setNamedColor(colObj);
+    material->diffuseColor = col;
 
     auto tex = matObj["diffuseTexture"].toString("");
     if(!tex.isEmpty())
         material->diffuseTexture = getAbsolutePath(tex);
 
-    colObj = matObj["specularColor"].toObject();
-    material->specularColor = readColor(colObj);
+    colObj = matObj["specularColor"].toString();
+    col.setNamedColor(colObj);
+    material->specularColor = col;
     material->shininess = (float)matObj["shininess"].toDouble(0.0f);
 
     tex = matObj["specularTexture"].toString("");

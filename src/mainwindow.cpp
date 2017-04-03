@@ -78,6 +78,8 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
 
+#include <src/io/materialreader.hpp>
+
 enum class VRButtonMode : int
 {
     Default = 0,
@@ -279,6 +281,13 @@ QString MainWindow::getAbsoluteAssetPath(QString relToApp)
     return path;
 }
 
+/// TODO load default scene from file
+iris::ScenePtr MainWindow::loadDefaultScene()
+{
+
+}
+
+// don't use this entirely anymore --- use method above
 iris::ScenePtr MainWindow::createDefaultScene()
 {
     auto scene = iris::Scene::create();
@@ -302,13 +311,24 @@ iris::ScenePtr MainWindow::createDefaultScene()
     node->setPickable(false);
     node->setShadowEnabled(false);
 
-    auto m = iris::DefaultMaterial::create();
+    MaterialReader *materialReader = new MaterialReader();
+    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
+
+    auto m = iris::CustomMaterial::create();
+    m->generate(materialReader->getParsedShader());
+    m->updateTextureAndToggleUniform(0, getAbsoluteAssetPath("app/content/textures/tile.png"));
+    m->updateColorAndUniform(0, QColor(0, 0, 0));
+    m->updateColorAndUniform(1, QColor(255, 255, 255));
+    m->updateFloatAndUniform(0, 16);
+//    m->updateFloatAndUniform(1, 16);
+    m->updateFloatAndUniform(3, 4);
     node->setMaterial(m);
-    m->setDiffuseColor(QColor(255, 255, 255));
-    m->setDiffuseTexture(iris::Texture2D::load(getAbsoluteAssetPath("app/content/textures/tile.png")));
-    m->setShininess(0);
-    m->setSpecularColor(QColor(0, 0, 0));
-    m->setTextureScale(4);
+//    node->setActiveMaterial(2);
+//    m->setDiffuseColor(QColor(255, 255, 255));
+//    m->setDiffuseTexture(iris::Texture2D::load(getAbsoluteAssetPath("app/content/textures/tile.png")));
+//    m->setShininess(0);
+//    m->setSpecularColor(QColor(0, 0, 0));
+//    m->setTextureScale(4);
 
     scene->rootNode->addChild(node);
 
@@ -355,7 +375,7 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
 //    }
 
     auto scene = this->createDefaultScene();
-
+//    openProject(IrisUtils::getAbsoluteAssetPath("scenes/startup.jah"), true);
     this->setScene(scene);
     setupVrUi();
 }
@@ -571,11 +591,12 @@ void MainWindow::loadScene()
     if(filename.isEmpty() || filename.isNull())
         return;
 
+    qDebug() << filename;
 
     openProject(filename);
 }
 
-void MainWindow::openProject(QString filename)
+void MainWindow::openProject(QString filename, bool startupLoad)
 {
     this->sceneView->makeCurrent();
     //remove current scene first
@@ -592,48 +613,48 @@ void MainWindow::openProject(QString filename)
     if(editorData != nullptr)
         sceneView->setEditorData(editorData);
 
-    Globals::project->setFilePath(filename);
-    this->setProjectTitle(Globals::project->getProjectName());
-
-    settings->addRecentlyOpenedScene(filename);
+    /// TODO - add option to overwrite default scene or go back to factory default (strtup.j)
+//    if (!startupLoad) {
+        Globals::project->setFilePath(filename);
+        this->setProjectTitle(Globals::project->getProjectName());
+        settings->addRecentlyOpenedScene(filename);
+//    }
 
     delete reader;
-
 }
 
-void MainWindow::applyMaterialPreset(MaterialPreset* preset)
+/// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
+void MainWindow::applyMaterialPreset(MaterialPreset *preset)
 {
-    if(!activeSceneNode || activeSceneNode->sceneNodeType!=iris::SceneNodeType::Mesh)
-        return;
+    if (!activeSceneNode || activeSceneNode->sceneNodeType!=iris::SceneNodeType::Mesh) return;
 
     auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
 
-    auto mat = iris::DefaultMaterial::create();
-    mat->setAmbientColor(preset->ambientColor);
+    MaterialReader *materialReader = new MaterialReader();
+    // TODO - set the type for a preset in the .material file and remove the hardcoded mess here
+    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
 
-    mat->setDiffuseColor(preset->diffuseColor);
-    if(!preset->diffuseTexture.isEmpty())
-        mat->setDiffuseTexture(iris::Texture2D::load(preset->diffuseTexture));
+    auto m = iris::CustomMaterial::create();
+    m->generate(materialReader->getParsedShader());
 
-    mat->setSpecularColor(preset->specularColor);
-    if(!preset->specularTexture.isEmpty())
-        mat->setSpecularTexture(iris::Texture2D::load(preset->specularTexture));
-    mat->setShininess(preset->shininess);
+    m->updateTextureAndToggleUniform(0, preset->diffuseTexture);
+    m->updateTextureAndToggleUniform(1, preset->specularTexture);
+    m->updateTextureAndToggleUniform(2, preset->normalTexture);
+    m->updateTextureAndToggleUniform(3, preset->reflectionTexture);
 
-    if(!preset->normalTexture.isEmpty())
-        mat->setNormalTexture(iris::Texture2D::load(preset->normalTexture));
-    mat->setNormalIntensity(preset->normalIntensity);
+    m->updateColorAndUniform(0, preset->ambientColor);
+    m->updateColorAndUniform(1, preset->diffuseColor);
+    m->updateColorAndUniform(2, preset->specularColor);
 
-    if(!preset->reflectionTexture.isEmpty())
-        mat->setReflectionTexture(iris::Texture2D::load(preset->reflectionTexture));
-    mat->setReflectionInfluence(preset->reflectionInfluence);
+    m->updateFloatAndUniform(0, preset->shininess);
+    m->updateFloatAndUniform(1, preset->normalIntensity);
+    m->updateFloatAndUniform(2, preset->reflectionInfluence);
+    m->updateFloatAndUniform(3, preset->textureScale);
 
-    mat->setTextureScale(preset->textureScale);
+    meshNode->setMaterial(m);
 
-    meshNode->setMaterial(mat);
-
-    //todo: update node's material without updating the whole ui
-    this->ui->sceneNodeProperties->refreshMaterial();
+    // TODO: update node's material without updating the whole ui
+    this->ui->sceneNodeProperties->refreshMaterial(preset->type);
 }
 
 /**
@@ -947,18 +968,12 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
     if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
-//        if (!meshNode->getMaterial()) {
-//            if (meshNode->materialType == 1) {
-                auto mat = iris::DefaultMaterial::create();
-                meshNode->setMaterial(mat);
+        MaterialReader *materialReader = new MaterialReader();
+        materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
 
-                meshNode->setActiveMaterial(1);
-//            } else {
-//                auto mat = iris::CustomMaterial::create();
-//                meshNode->setMaterial(mat);
-//            }
-
-//        }
+        auto mat = iris::CustomMaterial::create();
+        mat->generate(materialReader->getParsedShader());
+        meshNode->setMaterial(mat);
     }
 
     scene->getRootNode()->addChild(sceneNode);
@@ -1039,6 +1054,7 @@ void MainWindow::updateSceneSettings()
 void MainWindow::newScene()
 {
     this->sceneView->makeCurrent();
+//    openProject(IrisUtils::getAbsoluteAssetPath("scenes/startup.jah"), true);
     auto scene = this->createDefaultScene();
     this->setScene(scene);
     this->sceneView->resetEditorCam();

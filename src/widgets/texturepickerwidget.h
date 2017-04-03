@@ -28,6 +28,7 @@ private slots:
     void on_pushButton_clicked();
 
 public:
+    int index;
     QString filename, filePath;
 
     explicit TexturePickerWidget(QWidget *parent = 0);

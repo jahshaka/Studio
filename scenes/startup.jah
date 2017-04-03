@@ -1,0 +1,194 @@
+{
+    "editor": {
+        "camera": {
+            "angle": 45,
+            "farClip": 1000,
+            "nearClip": 0.10000000149011612,
+            "pos": {
+                "x": 0,
+                "y": 8,
+                "z": 24
+            },
+            "rot": {
+                "x": -5.000000953674316,
+                "y": 0,
+                "z": 0
+            }
+        }
+    },
+    "scene": {
+        "ambientColor": {
+            "a": 255,
+            "b": 96,
+            "g": 96,
+            "r": 96
+        },
+        "fogColor": {
+            "a": 255,
+            "b": 72,
+            "g": 72,
+            "r": 72
+        },
+        "fogEnabled": true,
+        "fogEnd": 180,
+        "fogStart": 100,
+        "rootNode": {
+            "animation": {
+                "frames": [
+                ],
+                "length": 1,
+                "loop": false,
+                "name": "Animation"
+            },
+            "children": [
+                {
+                    "animation": {
+                        "frames": [
+                        ],
+                        "length": 1,
+                        "loop": false,
+                        "name": "Animation"
+                    },
+                    "children": [
+                    ],
+                    "faceCullingMode": "back",
+                    "material": {
+                        "name": "Default",
+                        "ambientColor": "#000",
+                        "diffuseColor": "#FFF",
+                        "diffuseTexture": "app/content/textures/tile.png",
+                        "normalIntensity": 1,
+                        "normalTexture": "",
+                        "reflectionInfluence": 0,
+                        "reflectionTexture": "",
+                        "shininess": 0,
+                        "specularColor": "#FFF",
+                        "specularTexture": "",
+                        "textureScale": 4
+                    },
+                    "mesh": "app/models/ground.obj",
+                    "meshIndex": 0,
+                    "name": "Ground",
+                    "pickable": false,
+                    "pos": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    },
+                    "rot": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    },
+                    "scale": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "mesh"
+                },
+                {
+                    "animation": {
+                        "frames": [
+                        ],
+                        "length": 1,
+                        "loop": false,
+                        "name": "Animation"
+                    },
+                    "children": [
+                    ],
+                    "color": {
+                        "a": 255,
+                        "b": 255,
+                        "g": 255,
+                        "r": 255
+                    },
+                    "distance": 10,
+                    "intensity": 1,
+                    "lightType": "directional",
+                    "name": "Directional Light",
+                    "pos": {
+                        "x": 4,
+                        "y": 4,
+                        "z": 0
+                    },
+                    "rot": {
+                        "x": 15.000001907348633,
+                        "y": 0,
+                        "z": 0
+                    },
+                    "scale": {
+                        "x": 1,
+                        "y": 1,
+                        "z": 1
+                    },
+                    "spotCutOff": 30,
+                    "type": "light"
+                },
+                {
+                    "animation": {
+                        "frames": [
+                        ],
+                        "length": 1,
+                        "loop": false,
+                        "name": "Animation"
+                    },
+                    "children": [
+                    ],
+                    "color": {
+                        "a": 255,
+                        "b": 255,
+                        "g": 255,
+                        "r": 255
+                    },
+                    "distance": 10,
+                    "intensity": 1,
+                    "lightType": "point",
+                    "name": "Point Light",
+                    "pos": {
+                        "x": -3,
+                        "y": 4,
+                        "z": 0
+                    },
+                    "rot": {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                    },
+                    "scale": {
+                        "x": 1,
+                        "y": 1,
+                        "z": 1
+                    },
+                    "spotCutOff": 30,
+                    "type": "light"
+                }
+            ],
+            "name": "World",
+            "pos": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+            },
+            "rot": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+            },
+            "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+            },
+            "type": "empty"
+        },
+        "skyColor": {
+            "a": 255,
+            "b": 72,
+            "g": 72,
+            "r": 72
+        },
+        "skyTexture": ""
+    },
+    "version": "0.1"
+}

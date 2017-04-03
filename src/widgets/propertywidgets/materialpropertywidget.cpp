@@ -16,186 +16,225 @@ For more information see the LICENSE file
 #include "../comboboxwidget.h"
 #include "../colorpickerwidget.h"
 #include "../colorvaluewidget.h"
+#include "../checkboxwidget.h"
 #include "../texturepickerwidget.h"
 #include "../labelwidget.h"
 
 #include "../../irisgl/src/graphics/texture2d.h"
 #include "../../irisgl/src/scenegraph/meshnode.h"
-#include "../../irisgl/src/materials/defaultmaterial.h"
 #include "../../irisgl/src/materials/custommaterial.h"
 
 #include "../../io/materialreader.hpp"
 
-void MaterialPropertyWidget::parseJahShader(const QJsonObject &jahShader)
+void MaterialPropertyWidget::createWidgets(const QJsonObject &jahShader)
 {
-    // @TODO: add some check here to escape early
+    /// TODO: add some check here to escape early
+    auto widgetProps = jahShader["uniforms"].toArray();
 
-    auto shaderName = jahShader["name"].toString();
-    auto uniforms = jahShader["uniforms"].toObject();
+    /// TODO see if this can be removed this when the default material is deleted.
+    unsigned sliderSize, textureSize, colorSize, boolSize;
+    sliderSize = textureSize = colorSize = boolSize = 0;
 
-    allocated = 0;
+    for (int i = 0; i < widgetProps.size(); i++) {
+        auto prop = widgetProps[i].toObject();
+        if (prop["type"] == "slider")   sliderSize++;
+        if (prop["type"] == "color")    colorSize++;
+        if (prop["type"] == "checkbox") boolSize++;
+        if (prop["type"] == "texture")  textureSize++;
+    }
 
-    for (auto childObj : uniforms) {
-        if (childObj.toObject()["type"] == "slider") {
-            auto text   = childObj.toObject()["name"].toString();
-            auto start  = (float) childObj.toObject()["start"].toDouble();
-            auto end    = (float) childObj.toObject()["end"].toDouble();
-            auto value  = (float) childObj.toObject()["value"].toDouble();
-            customSliders[allocated] = this->addFloatValueSlider(text, start, end);
+    for (int propIndex = 0; propIndex < widgetProps.size(); propIndex++) {
+        auto prop = widgetProps[propIndex].toObject();
 
-            customSliders[allocated]->index = allocated;
-            allocated++;
+        auto displayName = prop["displayName"].toString();
+        auto uniform     = prop["uniform"].toString();
+        auto name        = prop["name"].toString();
+
+        if (sliderUniforms.size() < sliderSize) {
+            if (prop["type"] == "slider") {
+                auto start  = (float) prop["start"].toDouble();
+                auto end    = (float) prop["end"].toDouble();
+
+                sliderUniforms.push_back(iris::make_mat_struct(sliderUniforms.size() - 1,
+                                                               name,
+                                                               uniform,
+                                                               addFloatValueSlider(displayName,
+                                                                                   start, end)));
+                sliderUniforms.back().value->index = sliderUniforms.size() - 1;
+            }
+        }
+
+        if (colorUniforms.size() < colorSize) {
+            if (prop["type"] == "color") {
+                colorUniforms.push_back(
+                            iris::make_mat_struct(colorUniforms.size() - 1,
+                                                  name,
+                                                  uniform,
+                                                  addColorPicker(displayName)));
+                colorUniforms.back().value->index = colorUniforms.size() - 1;
+                colorUniforms.back().value->getPicker()->index = colorUniforms.size() - 1;
+            }
+        }
+
+        if (boolUniforms.size() < boolSize) {
+            if (prop["type"] == "checkbox") {
+                auto value = prop["value"].toBool();
+                boolUniforms.push_back(
+                            iris::make_mat_struct(boolUniforms.size() - 1,
+                                                  name,
+                                                  uniform,
+                                                  addCheckBox(displayName, value)));
+                boolUniforms.back().value->index = boolUniforms.size() - 1;
+            }
+        }
+
+        if (textureUniforms.size() < textureSize) {
+            if (prop["type"] == "texture") {
+                textureUniforms.push_back(
+                            iris::make_mat_struct(textureUniforms.size() - 1,
+                                                  name,
+                                                  uniform,
+                                                  addTexturePicker(displayName)));
+                textureUniforms.back().value->index = textureUniforms.size() - 1;
+            }
         }
     }
 }
 
-void MaterialPropertyWidget::setupDefaultMaterial()
-{
-    ambientColor        = this->addColorPicker("Ambient Color");
-    diffuseColor        = this->addColorPicker("Diffuse Color");
-    diffuseTexture      = this->addTexturePicker("Diffuse Texture");
-    specularColor       = this->addColorPicker("Specular Color");
-    specularTexture     = this->addTexturePicker("Specular Texture");
-    shininess           = this->addFloatValueSlider("Shininess", 0, 100.f);
-    normalTexture       = this->addTexturePicker("Normal Texture");
-    normalIntensity     = this->addFloatValueSlider("Normal Intensity", -1.f, 1.f);
-    reflectionTexture   = this->addTexturePicker("Reflection Texture");
-    reflectionInfluence = this->addFloatValueSlider("Reflection Influence", 0, 1.f);
-    textureScale        = this->addFloatValueSlider("Texture Scale", 0, 10.f);
-
-    connect(ambientColor->getPicker(),  SIGNAL(onColorChanged(QColor)),
-            this,                       SLOT(onAmbientColorChanged(QColor)));
-
-    connect(diffuseColor->getPicker(),  SIGNAL(onColorChanged(QColor)),
-            this,                       SLOT(onDiffuseColorChanged(QColor)));
-
-    connect(diffuseTexture,             SIGNAL(valueChanged(QString)),
-            this,                       SLOT(onDiffuseTextureChanged(QString)));
-
-    connect(specularColor->getPicker(), SIGNAL(onColorChanged(QColor)),
-            this,                       SLOT(onSpecularColorChanged(QColor)));
-
-    connect(specularTexture,            SIGNAL(valueChanged(QString)),
-            this,                       SLOT(onSpecularTextureChanged(QString)));
-
-    connect(shininess,                  SIGNAL(valueChanged(float)),
-            this,                       SLOT(onShininessChanged(float)));
-
-    connect(normalTexture,              SIGNAL(valueChanged(QString)),
-            this,                       SLOT(onNormalTextureChanged(QString)));
-
-    connect(normalIntensity,            SIGNAL(valueChanged(float)),
-            this,                       SLOT(onNormalIntensityChanged(float)));
-
-    connect(reflectionTexture,          SIGNAL(valueChanged(QString)),
-            this,                       SLOT(onReflectionTextureChanged(QString)));
-
-    connect(reflectionInfluence,        SIGNAL(valueChanged(float)),
-            this,                       SLOT(onReflectionInfluenceChanged(float)));
-
-    connect(textureScale,               SIGNAL(valueChanged(float)),
-            this,                       SLOT(onTextureScaleChanged(float)));
-}
-
 void MaterialPropertyWidget::setupCustomMaterial()
 {
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/Glass.json"));
-    parseJahShader(materialReader->getParsedShader());
+    createWidgets(this->customMaterial->getShaderFile());
 
-    QSignalMapper *signalMapper = new QSignalMapper (this);
-    for (int i = 0; i < allocated; i++) {
-        // @TODO, somewhat fine as it is built in but there is
-        // surely a cleaner way to go about this...
-        connect(customSliders[i],       SIGNAL(valueChanged(float)), signalMapper, SLOT(map()));
-        signalMapper->setMapping(customSliders[i], customSliders[i]);
+    // sliders
+    QSignalMapper *sliderMapper = new QSignalMapper(this);
+    auto sliderIter = sliderUniforms.begin();
+    while (sliderIter != sliderUniforms.end()) {
+        connect(sliderIter->value, SIGNAL(valueChanged(float)), sliderMapper, SLOT(map()));
+        sliderMapper->setMapping(sliderIter->value, sliderIter->value);
+        ++sliderIter;
+    }
+    connect(sliderMapper, SIGNAL(mapped(QWidget*)), SLOT(onCustomSliderChanged(QWidget*)));
+
+    // colors
+    QSignalMapper *colorMapper = new QSignalMapper(this);
+    auto colorIter = colorUniforms.begin();
+    while (colorIter != colorUniforms.end()) {
+        connect(colorIter->value->getPicker(),  SIGNAL(onColorChanged(QColor)),
+                colorMapper,                    SLOT(map()));
+        colorMapper->setMapping(colorIter->value->getPicker(), colorIter->value->getPicker());
+        ++colorIter;
+    }
+    connect(colorMapper, SIGNAL(mapped(QWidget*)), SLOT(onCustomColorChanged(QWidget*)));
+
+    // bools
+    QSignalMapper *boolMapper = new QSignalMapper(this);
+    auto boolIter = boolUniforms.begin();
+    while (boolIter != boolUniforms.end()) {
+        connect(boolIter->value, SIGNAL(valueChanged(bool)), boolMapper, SLOT(map()));
+        boolMapper->setMapping(boolIter->value, boolIter->value);
+        ++boolIter;
+    }
+    connect(boolMapper, SIGNAL(mapped(QWidget*)), SLOT(onCheckBoxStateChanged(QWidget*)));
+
+    // textures
+    QSignalMapper *textureMapper = new QSignalMapper(this);
+    auto texIter = textureUniforms.begin();
+    while (texIter != textureUniforms.end()) {
+        connect(texIter->value, SIGNAL(valueChanged(QString)), textureMapper, SLOT(map()));
+        textureMapper->setMapping(texIter->value, texIter->value);
+        ++texIter;
+    }
+    connect(textureMapper, SIGNAL(mapped(QWidget*)), SLOT(onCustomTextureChanged(QWidget*)));
+
+    // iterate both (different typed) maps in lockstep...
+    // we get the value from the material and set the widget value
+
+    // SLIDERS
+    sliderIter = sliderUniforms.begin();
+    auto sIter = customMaterial->sliderUniforms.begin();
+    while (sliderIter != sliderUniforms.end()) {
+        sliderIter->value->setValue(sIter->value);
+        ++sIter;
+        ++sliderIter;
     }
 
-    connect(signalMapper, SIGNAL(mapped(QWidget*)), SLOT(onCustomSliderChanged(QWidget *)));
+    // COLORS
+    colorIter = colorUniforms.begin();
+    auto cIter = customMaterial->colorUniforms.begin();
+    while (colorIter != colorUniforms.end()) {
+        colorIter->value->setColorValue(cIter->value);
+        ++colorIter;
+        ++cIter;
+    }
+
+    // BOOLS
+    boolIter = boolUniforms.begin();
+    auto bIter = customMaterial->boolUniforms.begin();
+    while (boolIter != boolUniforms.end()) {
+        boolIter->value->setValue(bIter->value);
+        ++boolIter;
+        ++bIter;
+    }
+
+    // TExTURES
+    texIter = textureUniforms.begin();
+    auto tIter = customMaterial->textureUniforms.begin();
+    while (texIter != textureUniforms.end()) {
+        if (!tIter->value.isEmpty()) {
+            texIter->value->setTexture(tIter->value);
+        } else {
+            texIter->value->setTexture("");
+        }
+        ++texIter;
+        ++tIter;
+    }
+}
+
+void MaterialPropertyWidget::forceShaderRefresh(const QString &matName)
+{
+    emit onMaterialSelectorChanged(matName);
 }
 
 void MaterialPropertyWidget::setupShaderSelector()
 {
-    // load these from a directory in the future...
     materialSelector = this->addComboBox("Shader");
-    materialSelector->addItem("Default Shader");
-    materialSelector->addItem("Environment Surface Shader");
 
-    if (meshNode->getMaterialType() == 1) {
-        materialSelector->setCurrentItem("Default Shader");
-    } else {
-        materialSelector->setCurrentItem("Environment Surface Shader");
+    QDir dir(IrisUtils::getAbsoluteAssetPath("app/shader_defs/"));
+    for (auto shaderName : dir.entryList(QDir::Files)) {
+        materialSelector->addItem(QFileInfo(shaderName).baseName());
     }
+
+    materialSelector->setCurrentItem(this->customMaterial->getMaterialName());
 
     connect(materialSelector,   SIGNAL(currentIndexChanged(QString)),
             this,               SLOT(onMaterialSelectorChanged(QString)));
 }
 
-MaterialPropertyWidget::MaterialPropertyWidget(QSharedPointer<iris::SceneNode> sceneNode, QWidget *parent)
+MaterialPropertyWidget::MaterialPropertyWidget(QWidget *parent)
 {
-    materialReader = new MaterialReader();
 
-    if (!!sceneNode) {
-        this->meshNode = sceneNode.staticCast<iris::MeshNode>();
-    }
 }
 
 void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         this->meshNode = sceneNode.staticCast<iris::MeshNode>();
+        this->customMaterial = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
     }
 
     setupShaderSelector();
 
-    if (this->meshNode->getMaterialType() == 1) {
-        if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            this->meshNode = sceneNode.staticCast<iris::MeshNode>();
-            this->material = meshNode->getMaterial().staticCast<iris::DefaultMaterial>();
-
-            setupDefaultMaterial();
-
-            auto mat = this->material;
-            //todo: ensure material isnt null
-
-            ambientColor->setColorValue(mat->getAmbientColor());
-
-            diffuseColor->setColorValue(mat->getDiffuseColor());
-            diffuseTexture->setTexture(mat->getDiffuseTextureSource());
-
-            specularColor->setColorValue(mat->getSpecularColor());
-            specularTexture->setTexture(mat->getSpecularTextureSource());
-            shininess->setValue(mat->getShininess());
-
-            normalTexture->setTexture(mat->getNormalTextureSource());
-            normalIntensity->setValue(mat->getNormalIntensity());
-
-            reflectionTexture->setTexture(mat->getReflectionTextureSource());
-            reflectionInfluence->setValue(mat->getReflectionInfluence());
-
-            textureScale->setValue(mat->getTextureScale());
-        } else {
-            this->meshNode.clear();
-            this->material.clear();
-            return;
-        }
-    } else if (this->meshNode->getMaterialType() == 2) {
-
-        if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            this->meshNode = sceneNode.staticCast<iris::MeshNode>();
-            this->customMaterial = meshNode->getCustomMaterial().staticCast<iris::CustomMaterial>();
-
-            setupCustomMaterial();
-
-            for (int i = 0; i < allocated; i++) {
-                customSliders[i]->setValue(customMaterial->sliderValues[i]);
-            }
-
-            this->customMaterial->initializeDefaultValues(materialReader->getParsedShader());
-        } else {
-            this->meshNode.clear();
-            this->customMaterial.clear();
-            return;
-        }
+    if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+        materialReader = new MaterialReader();
+        materialReader->readJahShader(
+                    IrisUtils::getAbsoluteAssetPath(
+                        "app/shader_defs/" + this->customMaterial->getMaterialName() + ".json"));
+        this->customMaterial->generate(materialReader->getParsedShader());
+        setupCustomMaterial();
+    } else {
+        this->meshNode.clear();
+        this->customMaterial.clear();
+        return;
     }
 }
 
@@ -203,136 +242,68 @@ void MaterialPropertyWidget::onCustomSliderChanged(QWidget *t)
 {
     auto changedIndex = dynamic_cast<HFloatSliderWidget*>(t);
     if (!!customMaterial) {
-        customMaterial->sliderValues[changedIndex->index] = changedIndex->getValue();
+        customMaterial->sliderUniforms[changedIndex->index].value = changedIndex->getValue();
     }
+}
+
+void MaterialPropertyWidget::onCustomColorChanged(QWidget *t)
+{
+    auto changedIndex = dynamic_cast<ColorPickerWidget*>(t);
+    if (!!customMaterial) {
+        customMaterial->colorUniforms[changedIndex->index].value = changedIndex->getColor();
+    }
+}
+
+void MaterialPropertyWidget::onCheckBoxStateChanged(QWidget *t)
+{
+    auto changedIndex = dynamic_cast<CheckBoxWidget*>(t);
+    if (!!customMaterial) {
+        customMaterial->boolUniforms[changedIndex->index].value = changedIndex->getValue();
+    }
+}
+
+void MaterialPropertyWidget::onCustomTextureChanged(QWidget *t)
+{
+    auto changedIndex = dynamic_cast<TexturePickerWidget*>(t);
+
+    if (!!customMaterial) {
+        // TODO smarten this up a bit, doesn't need to a be an if
+        if (changedIndex->getTexturePath().isEmpty() || changedIndex->getTexturePath().isNull()) {
+            customMaterial->textureToggleUniforms[changedIndex->index].value = false;
+            customMaterial->textureUniforms[changedIndex->index].value = "";
+            customMaterial->setTextureWithUniform(textureUniforms[changedIndex->index].uniform, "");
+        } else {
+            customMaterial->textureToggleUniforms[changedIndex->index].value = true;
+            customMaterial->textureUniforms[changedIndex->index].value = changedIndex->getTexturePath();
+            customMaterial->setTextureWithUniform(textureUniforms[changedIndex->index].uniform,
+                                                  changedIndex->getTexturePath());
+        }
+    }
+}
+
+void MaterialPropertyWidget::purge()
+{
+    sliderUniforms.clear();
+    colorUniforms.clear();
+    boolUniforms.clear();
+    textureUniforms.clear();
 }
 
 void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
 {
-    if (!!this->meshNode) {
-        if (text == "Default Shader") {
-            this->meshNode->setMaterialType(1);
-            this->meshNode->setActiveMaterial(1);
+    // only clear when we are switching mats, not on every select
+    this->customMaterial->purge();
+    this->purge();
 
-        } else {
-            this->meshNode->setMaterialType(2);
-            this->meshNode->setActiveMaterial(2);
-        }
-    }
+    this->clearPanel(this->layout());
 
-    if (text == "Default Shader") {
-        this->clearPanel(this->layout());
+    this->customMaterial->setMaterialName(text);
+    this->setSceneNode(this->meshNode);
+    int finalHeight = this->customMaterial->getCalculatedPropHeight();
 
-        resetHeight();
+    resetHeight();
+    setHeight(finalHeight);
 
-        int finalHeight = 30 + (8 * 28) /* narrows */ + (4 * 108) /* pickers */ + (12 * 6) + 9 + 9;
-
-        setHeight(finalHeight - 30);
-
-        this->setMinimumHeight(finalHeight);
-        this->setMaximumHeight(finalHeight);
-
-        this->setSceneNode(this->meshNode);
-
-    } else if (text == "Environment Surface Shader") {
-
-        this->clearPanel(this->layout());
-
-        resetHeight();
-
-        // this isn't magic, there are values but it's not possible to get them yet
-        // finalHeight = minimum_height + (widgets * height) +
-        //              (widgetCount * heights) + topMargin + bottomMargin;
-        int finalHeight = 30 + (3 * 28) + (3 * 6) + 9 + 9;
-
-        setHeight(finalHeight - 30);
-
-        this->setMinimumHeight(finalHeight);
-        this->setMaximumHeight(finalHeight);
-
-        this->setSceneNode(this->meshNode);
-    }
-}
-
-void MaterialPropertyWidget::onAmbientColorChanged(QColor color)
-{
-    if (!!material) {
-        material->setAmbientColor(color);
-    }
-}
-
-void MaterialPropertyWidget::onDiffuseColorChanged(QColor color)
-{
-    if (!!material) {
-        material->setDiffuseColor(color);
-    }
-}
-
-void MaterialPropertyWidget::onDiffuseTextureChanged(QString texture)
-{
-    if (!!material) {
-        if (texture.isEmpty() || texture.isNull()) {
-            material->setDiffuseTexture(iris::Texture2D::null());
-        } else {
-            material->setDiffuseTexture(iris::Texture2D::load(texture));
-        }
-    }
-}
-
-void MaterialPropertyWidget::onSpecularColorChanged(QColor color)
-{
-    if (!!material) {
-        material->setSpecularColor(color);
-    }
-}
-
-void MaterialPropertyWidget::onSpecularTextureChanged(QString texture)
-{
-    if (!!material) {
-        material->setSpecularTexture(iris::Texture2D::load(texture));
-    }
-}
-
-void MaterialPropertyWidget::onShininessChanged(float shininess)
-{
-    if (!!material) {
-        material->setShininess(shininess);
-    }
-}
-
-void MaterialPropertyWidget::onNormalTextureChanged(QString texture)
-{
-    if (!!material) {
-        material->setNormalTexture(iris::Texture2D::load(texture));
-    }
-}
-
-void MaterialPropertyWidget::onNormalIntensityChanged(float intensity)
-{
-    if (!!material) {
-        material->setNormalIntensity(intensity);
-    }
-}
-
-// @TODO -rework or remove
-void MaterialPropertyWidget::onReflectionTextureChanged(QString texture)
-{
-    if (!!material) {
-        material->setReflectionTexture(iris::Texture2D::load(texture));
-    }
-}
-
-// @TODO -rework or remove
-void MaterialPropertyWidget::onReflectionInfluenceChanged(float influence)
-{
-    if (!!material) {
-        material->setReflectionInfluence(influence);
-    }
-}
-
-void MaterialPropertyWidget::onTextureScaleChanged(float scale)
-{
-    if (!!material) {
-        material->setTextureScale(scale);
-    }
+    this->setMinimumHeight(finalHeight);
+    this->setMaximumHeight(finalHeight);
 }
