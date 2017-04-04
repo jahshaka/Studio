@@ -33,13 +33,11 @@ QOpenGLShaderProgram* GraphicsHelper::loadShader(QString vsPath,QString fsPath)
 {
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
     auto vsShader = loadAndProcessShader(vsPath);
-    qDebug() << vsShader;
-    vshader->compileSourceFile(vsShader);
+    vshader->compileSourceCode(vsShader);
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
     auto fsShader = loadAndProcessShader(fsPath);
-    qDebug() << fsShader;
-    fshader->compileSourceFile(fsShader);
+    fshader->compileSourceCode(fsShader);
 
     auto program = new QOpenGLShaderProgram;
     program->addShader(vshader);
