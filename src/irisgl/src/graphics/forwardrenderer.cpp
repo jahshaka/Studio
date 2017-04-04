@@ -304,39 +304,49 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             iris::MaterialPtr mat;
 
             // if a material is set then use it and gets its shaderprogram
+
             if (!!item->material) {
                 mat = item->material;
                 program = mat->program;
 
-                mat->begin(gl,scene);
+                mat->begin(gl, scene);
             } else {
-              program = item->shaderProgram;
+                program = item->shaderProgram;
             }
 
-            //send transform and light data
-            program->setUniformValue("u_worldMatrix", item->worldMatrix);
-            program->setUniformValue("u_viewMatrix",renderData->viewMatrix);
-            program->setUniformValue("u_projMatrix",renderData->projMatrix);
-            program->setUniformValue("u_normalMatrix",item->worldMatrix.normalMatrix());
+            // send transform and light data
+            program->setUniformValue("u_worldMatrix",   item->worldMatrix);
+            program->setUniformValue("u_viewMatrix",    renderData->viewMatrix);
+            program->setUniformValue("u_projMatrix",    renderData->projMatrix);
+            program->setUniformValue("u_normalMatrix",  item->worldMatrix.normalMatrix());
 
-            program->setUniformValue("u_eyePos",renderData->eyePos);
+            program->setUniformValue("u_eyePos",        renderData->eyePos);
 
-            program->setUniformValue("u_fogData.color",renderData->fogColor);
-            program->setUniformValue("u_fogData.start",renderData->fogStart);
-            program->setUniformValue("u_fogData.end",renderData->fogEnd);
-            program->setUniformValue("u_fogData.enabled",renderData->fogEnabled);
+            if (item->renderStates.fogEnabled && scene->fogEnabled ) {
+                program->setUniformValue("u_fogData.color", renderData->fogColor);
+                program->setUniformValue("u_fogData.start", renderData->fogStart);
+                program->setUniformValue("u_fogData.end",   renderData->fogEnd);
 
-            program->setUniformValue("u_shadowMap", 2);
-            program->setUniformValue("u_shadowEnabled", scene->shadowEnabled);
+                program->setUniformValue("u_fogData.enabled", true);
+            } else {
+                program->setUniformValue("u_fogData.enabled", false);
+            }
+
+            if (item->renderStates.receiveShadows && scene->shadowEnabled) {
+                program->setUniformValue("u_shadowMap", 2);
+                program->setUniformValue("u_shadowEnabled", true);
+            } else {
+                program->setUniformValue("u_shadowEnabled", false);
+            }
 
             gl->glActiveTexture(GL_TEXTURE2);
             gl->glBindTexture(GL_TEXTURE_2D, shadowDepthMap);
 
-            program->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
-            program->setUniformValue("u_lightCount",lightCount);
+            program->setUniformValue("u_lightSpaceMatrix",  lightSpaceMatrix);
+            program->setUniformValue("u_lightCount",        lightCount);
 
             // only materials get lights passed to it
-            if (!!mat) {
+            if ( item->renderStates.receiveLighting ) {
                 for (int i=0;i<lightCount;i++)
                 {
                     QString lightPrefix = QString("u_lights[%0].").arg(i);
@@ -367,8 +377,8 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 
             // set culling state
             // FaceCullingMode::Back is the default state
-            if (item->faceCullingMode != FaceCullingMode::Back) {
-               switch(item->faceCullingMode) {
+            if (item->renderStates.cullMode != FaceCullingMode::Back) {
+               switch(item->renderStates.cullMode) {
                 case FaceCullingMode::Front:
                     gl->glCullFace(GL_FRONT);
                 break;
@@ -381,6 +391,14 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                }
             }
 
+            if (!item->renderStates.zWrite) {
+                gl->glDepthMask(false);
+            }
+
+            if (!item->renderStates.depthTest) {
+                gl->glDisable(GL_DEPTH_TEST);
+            }
+
             item->mesh->draw(gl, program);
 
             if (!!mat) {
@@ -388,10 +406,18 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             }
 
             // change back culling state
-            if (item->faceCullingMode != FaceCullingMode::Back) {
+            if (item->renderStates.cullMode != FaceCullingMode::Back) {
                 gl->glCullFace(GL_BACK);
-            } else if(item->faceCullingMode != FaceCullingMode::None) {
+            } else if(item->renderStates.cullMode != FaceCullingMode::None) {
                 gl->glEnable(GL_CULL_FACE);
+            }
+
+            if (!item->renderStates.zWrite) {
+                gl->glDepthMask(true);
+            }
+
+            if (!item->renderStates.depthTest) {
+                gl->glEnable(GL_DEPTH_TEST);
             }
         }
         else if(item->type == iris::RenderItemType::ParticleSystem) {
@@ -405,8 +431,7 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 
 void ForwardRenderer::renderSky(RenderData* renderData)
 {
-    if(scene->skyMesh == nullptr)
-        return;
+    if (scene->skyMesh == nullptr) return;
 
     gl->glDepthMask(false);
 

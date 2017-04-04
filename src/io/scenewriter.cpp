@@ -26,7 +26,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/viewernode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../irisgl/src/scenegraph/particlesystemnode.h"
-#include "../irisgl/src/materials/defaultmaterial.h"
+#include "../irisgl/src/materials/custommaterial.h"
 #include "../irisgl/src/animation/animation.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
@@ -172,13 +172,13 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
     sceneNodeObj["animation"] = animObj;
 }
 
-void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject,iris::MeshNodePtr meshNode)
+void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode)
 {
-    //todo: handle generated meshes properly
+    // TODO: handle generated meshes properly
+    // ???? sure...
     sceneNodeObject["mesh"] = getRelativePath(meshNode->meshPath);
     sceneNodeObject["meshIndex"] = meshNode->meshIndex;
     sceneNodeObject["pickable"] = meshNode->pickable;
-    sceneNodeObject["materialType"] = meshNode->getMaterialType();
 
     auto cullMode = meshNode->getFaceCullingMode();
     switch (cullMode) {
@@ -196,18 +196,11 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject,iris::MeshNodePtr m
         break;
     }
 
-    //todo: check if material actually exists
-//    if (meshNode->getMaterialType() == 2) {
-//        auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
-//        QJsonObject matObj;
-//        writeSceneNodeMaterial(matObj, mat);
-//        sceneNodeObject["material"] = matObj;
-//    } else {
-        auto mat = meshNode->getMaterial().staticCast<iris::DefaultMaterial>();
-        QJsonObject matObj;
-        writeSceneNodeMaterial(matObj, mat);
-        sceneNodeObject["material"] = matObj;
-//    }
+    // todo: check if material actually exists
+    auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
+    QJsonObject matObj;
+    writeSceneNodeMaterial(matObj, mat);
+    sceneNodeObject["material"] = matObj;
 }
 
 void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode)
@@ -229,30 +222,22 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["texture"]              = node->texture->getSource();
 }
 
-void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj,iris::DefaultMaterialPtr mat)
+void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat)
 {
-    matObj["ambientColor"] = jsonColor(mat->getAmbientColor());
+    matObj["name"] = mat->getMaterialName();
 
-    matObj["diffuseColor"] = jsonColor(mat->getDiffuseColor());
-    matObj["diffuseTexture"] = getRelativePath(mat->getDiffuseTextureSource());
+    for (auto s : mat->colorUniforms) {
+        matObj[s.name] = s.value.name();
+    }
 
-    matObj["specularColor"] = jsonColor(mat->getSpecularColor());
-    matObj["specularTexture"] = getRelativePath(mat->getSpecularTextureSource());
-    matObj["shininess"] = mat->getShininess();
+    // TODO - nick can you fix these path path things... too many. idk
+    for (auto s : mat->textureUniforms) {
+        matObj[s.name] = getRelativePath(s.value);
+    }
 
-    matObj["normalTexture"] = getRelativePath(mat->getNormalTextureSource());
-    matObj["normalIntensity"] = mat->getNormalIntensity();
-
-    matObj["reflectionTexture"] = getRelativePath(mat->getReflectionTextureSource());
-    matObj["reflectionInfluence"] = mat->getReflectionInfluence();
-
-    matObj["textureScale"] = mat->getTextureScale();
-}
-
-void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj,iris::CustomMaterialPtr mat)
-{
-//    matObj["diffuseColor"] = jsonColor(mat->getDiffuseColor());
-//    matObj["diffuseTexture"] = getRelativePath(mat->getDiffuseTextureSource());
+    for (auto s : mat->sliderUniforms) {
+        matObj[s.name] = s.value;
+    }
 }
 
 QJsonObject SceneWriter::jsonColor(QColor color)

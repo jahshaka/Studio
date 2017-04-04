@@ -26,6 +26,7 @@ public:
     explicit ComboBoxWidget(QWidget *parent = 0);
     ~ComboBoxWidget();
 
+    int index;
     void setLabel(const QString&);
     void addItem(const QString&);
     QString getCurrentItem();

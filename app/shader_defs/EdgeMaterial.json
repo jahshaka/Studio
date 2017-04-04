@@ -1,0 +1,39 @@
+{
+    "name": "EdgeMaterial",
+    "preview": false,
+    "uniforms": [
+        {
+            "displayName"   : "Color",
+            "name"          : "color",
+            "type"          : "color",
+            "value"         : "#ffffff",
+            "uniform"       : "u_color"
+        },
+        {
+            "displayName"   : "Edge Color",
+            "name"          : "edge_color",
+            "type"          : "color",
+            "value"         : "#ffffff",
+            "uniform"       : "u_edgeColor"
+        },
+        {
+            "displayName"   : "Diffuse Texture",
+            "name"          : "diffuseTex",
+            "type"          : "texture",
+            "uniform"       : "u_diffuseTex",
+            "toggle"        : "u_useDiffuseTex"
+        },
+        {
+            "displayName"   : "Fresnel Pow",
+            "name"          : "fresnelPow",
+            "type"          : "slider",
+            "uniform"       : "u_fresnelPow",
+            "value"         : 1.2,
+            "start"         : 1.0,
+            "end"           : 4
+        }
+    ],
+    "builtin": false,
+    "vertex_shader": ":assets/shaders/surface.vert",
+    "fragment_shader": "app/shaders/diffuse_surface.frag"
+}

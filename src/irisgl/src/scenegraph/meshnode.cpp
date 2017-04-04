@@ -42,9 +42,9 @@ MeshNode::MeshNode() {
     renderItem = new RenderItem();
     renderItem->type = RenderItemType::Mesh;
 
-    materialType = 1;
+//    materialType = 2;
 
-    this->customMaterial = iris::CustomMaterial::create();
+//    this->customMaterial = iris::CustomMaterial::create();
     faceCullingMode = FaceCullingMode::Back;
 }
 
@@ -85,23 +85,24 @@ void MeshNode::setMaterial(MaterialPtr material)
     this->material = material;
 //    setActiveMaterial(1);
     renderItem->material = material;
+    renderItem->renderStates = material->renderStates;
 }
 
 void MeshNode::setCustomMaterial(MaterialPtr material)
 {
-    this->customMaterial = material;
+//    this->customMaterial = material;
 //    renderItem->material = customMaterial;
 }
 
 void MeshNode::setActiveMaterial(int type)
 {
-    if (type == 1) {
-        renderItem->material = material;
-        materialType = 1;
-    } else {
-        renderItem->material = customMaterial;
-        materialType = 2;
-    }
+//    if (type == 1) {
+//        renderItem->material = material;
+//        materialType = 1;
+//    } else {
+//        renderItem->material = customMaterial;
+//        materialType = 2;
+//    }
 }
 
 void MeshNode::submitRenderItems()
@@ -110,7 +111,7 @@ void MeshNode::submitRenderItems()
 
     if (!!material) {
         renderItem->renderLayer = material->renderLayer;
-        renderItem->faceCullingMode = faceCullingMode;
+        //renderItem->faceCullingMode = faceCullingMode;
     }
 
     this->scene->geometryRenderList.append(renderItem);

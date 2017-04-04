@@ -17,22 +17,6 @@ For more information see the LICENSE file
 #define PI2 6.28318530718
 #define RECIPROCAL_PI2 0.15915494
 
-uniform sampler2D u_diffuseTexture;
-uniform bool u_useDiffuseTex;
-
-uniform sampler2D u_normalTexture;
-uniform bool u_useNormalTex;
-uniform float u_normalIntensity;
-
-uniform sampler2D u_specularTexture;
-uniform bool u_useSpecularTex;
-
-uniform sampler2D u_reflectionTexture;
-uniform float u_reflectionInfluence;
-uniform bool u_useReflectionTex;
-
-uniform bool u_useAlpha;
-
 in vec2 v_texCoord;
 in vec3 v_normal;
 in vec3 v_worldPos;
@@ -111,12 +95,11 @@ struct Material
     vec3 diffuse;
     vec3 specular;
     float shininess;
+    vec3 normal;
     vec3 ambient;
+    vec3 emission;
+    float alpha;
 };
-
-//uniform vec3 mat_diffuse;
-
-uniform Material u_material;
 
 struct Fog
 {
@@ -141,20 +124,37 @@ vec2 envMapEquirect(vec3 wcNormal) {
     return envMapEquirect(wcNormal, -1.0);
 }
 
+vec3 NormalMapToWorldNormal(sampler2D tex, vec2 texCoord)
+{
+    vec3 texNorm = (texture(tex,texCoord).xyz-0.5)*2;
+    return normalize(v_tanToWorld*texNorm);
+}
+
+// normal should be in world space
+float Fresnel(vec3 normal, float power)
+{
+    vec3 I = normalize(u_eyePos-v_worldPos);
+    return pow(dot(normal, I), power);
+}
+
+void surface(inout Material material);
+
 void main()
 {
+    Material material;
+    material.diffuse = vec3(0, 0, 0);
+    material.specular = vec3(0, 0, 0);
+    material.shininess = 0.0f;
+    material.normal = v_normal;
+    material.ambient = vec3(0, 0, 0);
+    material.emission = vec3(0, 0, 0);
+    material.alpha = 1.0f;
+
+    surface(material);
+
     vec3 diffuse = vec3(0);
-    vec3 specular = vec3(0);
-
-    vec3 normal = v_normal;
-
-    //normal mapping
-    if(u_useNormalTex)
-    {
-        vec3 texNorm = (texture(u_normalTexture,v_texCoord).xyz-0.5)*2;
-        normal = normalize(v_tanToWorld*texNorm);
-        //normal = mix(normal,vec3(0,0,0),u_normalIntensity);
-    }
+    vec3 specular = vec3(0);    
+    vec3 normal = material.normal;
 
     vec3 v = normalize(u_eyePos-v_worldPos);
     float spotCutoff = 1.0;
@@ -163,7 +163,7 @@ void main()
     {
         float ndl = 0.0;
         vec3 n = normalize(normal);
-        vec3 lightDir = u_lights[i].position-v_worldPos;//unnormlaized
+        vec3 lightDir = u_lights[i].position-v_worldPos;//unnormalized
         vec3 l = normalize(lightDir);
         float atten = 1.0;
 
@@ -207,40 +207,23 @@ void main()
 
         float spec = 0.0;
 
-        if (ndl > 0.0 && u_material.shininess > 0.0) {
-            float normFactor = (u_material.shininess + 2.0) / 2.0;//todo: find a better alternative
+        if (ndl > 0.0 && material.shininess > 0.0) {
+            float normFactor = (material.shininess + 2.0) / 2.0;//todo: find a better alternative
             vec3 r = reflect(-l, n);
-            spec = normFactor*pow(max(dot(r, v), 0.0), u_material.shininess)*spotCutoff;
-            //spec = pow(max(dot(r, v), 0.0), 0.7f);
+            spec = normFactor*pow(max(dot(r, v), 0.0), material.shininess)*spotCutoff;
         }
 
         diffuse += atten*ndl*u_lights[i].intensity*u_lights[i].color.rgb;
         specular += atten*spec* u_lights[i].intensity * u_lights[i].color.rgb;
     }
 
-    vec3 col = u_material.diffuse;
-
-    if (u_useDiffuseTex) {
-        col = col * texture(u_diffuseTexture, v_texCoord).rgb;
-        if (u_useAlpha && texture(u_diffuseTexture, v_texCoord).a < 0.5) discard;
-    }
-
-    if(u_useSpecularTex)
-        specular = specular * texture(u_specularTexture,v_texCoord).rgb;
+    vec3 col = material.diffuse;
 
     float ShadowFactor = u_shadowEnabled ? CalcShadowMap(FragPosLightSpace) : 1.0;
 
-    vec3 finalColor = (u_material.ambient + (ShadowFactor *
-                      (diffuse + (u_material.specular * specular)))) * col;
+    vec3 finalColor = (material.ambient + material.emission + (ShadowFactor *
+                      (diffuse * col + (material.specular * specular))));
 
-    if(u_useReflectionTex)
-    {
-        vec3 incidentRay = normalize(v_worldPos-u_eyePos);
-        vec3 reflVec = reflect(incidentRay,normal);
-        vec3 reflCol = texture(u_reflectionTexture, envMapEquirect(normalize(reflVec))).rgb;
-
-        finalColor = mix(finalColor,reflCol,u_reflectionInfluence);
-    }
 
     if(u_fogData.enabled)
     {
@@ -249,5 +232,5 @@ void main()
         finalColor = mix(finalColor,u_fogData.color.rgb,fogFactor);
     }
 
-    fragColor = vec4(finalColor, 1.0);
+    fragColor = vec4(finalColor, material.alpha);
 }

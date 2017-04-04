@@ -14,19 +14,21 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QSharedPointer>
-#include "../accordianbladewidget.h"
 
 #include <QJsonObject>
 #include <QSignalMapper>
 #include <QLayout>
 
+#include "../accordianbladewidget.h"
+#include "../../src/graphics/material.h"
+
 namespace iris {
     class SceneNode;
     class MeshNode;
     class Material;
-    class DefaultMaterial;
     class CustomMaterial;
 }
+
 class MaterialReader;
 
 /**
@@ -37,66 +39,39 @@ class MaterialPropertyWidget : public AccordianBladeWidget
     Q_OBJECT
 
 public:
-    MaterialPropertyWidget(QSharedPointer<iris::SceneNode> sceneNode, QWidget *parent = nullptr);
+    MaterialPropertyWidget(QWidget *parent = nullptr);
 
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
     QSharedPointer<iris::MeshNode> meshNode;
 
-    QSharedPointer<iris::DefaultMaterial> material;
     QSharedPointer<iris::CustomMaterial> customMaterial;
 
     MaterialReader* materialReader;
-    void parseJahShader(const QJsonObject &jahShader);
+
+    void createWidgets(const QJsonObject &jahShader);
 
     void setupDefaultMaterial();
     void setupCustomMaterial();
     void setupShaderSelector();
 
+    void purge();
+    void forceShaderRefresh(const QString &matName);
+
 protected slots:
-    void onAmbientColorChanged(QColor color);
-
-    void onDiffuseColorChanged(QColor color);
-    void onDiffuseTextureChanged(QString texture);
-
-    void onSpecularColorChanged(QColor color);
-    void onSpecularTextureChanged(QString texture);
-    void onShininessChanged(float shininess);
-
-    void onNormalTextureChanged(QString texture);
-    void onNormalIntensityChanged(float intensity);
-
-    void onReflectionTextureChanged(QString texture);
-    void onReflectionInfluenceChanged(float intensity);
-
-    void onTextureScaleChanged(float scale);
-    void onCustomSliderChanged(QWidget *t);
+    void onCustomSliderChanged(QWidget*);
+    void onCustomColorChanged(QWidget*);
+    void onCustomTextureChanged(QWidget*);
+    void onCheckBoxStateChanged(QWidget*);
 
     void onMaterialSelectorChanged(const QString&);
 
 private:
-    QString currentMaterial;
     ComboBoxWidget* materialSelector;
 
-    ColorValueWidget* ambientColor;
-
-    ColorValueWidget* diffuseColor;
-    TexturePickerWidget* diffuseTexture;
-
-    ColorValueWidget* specularColor;
-    TexturePickerWidget* specularTexture;
-    HFloatSliderWidget* shininess;
-
-    TexturePickerWidget* normalTexture;
-    HFloatSliderWidget* normalIntensity;
-
-    TexturePickerWidget* reflectionTexture;
-    HFloatSliderWidget* reflectionInfluence;
-
-    HFloatSliderWidget* textureScale;
-
-    // 2
-    int allocated;
-    HFloatSliderWidget* customSliders[12];
+    std::vector<iris::MatStruct<HFloatSliderWidget*>>   sliderUniforms;
+    std::vector<iris::MatStruct<ColorValueWidget*>>     colorUniforms;
+    std::vector<iris::MatStruct<CheckBoxWidget*>>       boolUniforms;
+    std::vector<iris::MatStruct<TexturePickerWidget*>>  textureUniforms;
 };
 
 #endif // MATERIALPROPERTYWIDGET_H

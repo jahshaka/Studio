@@ -18,7 +18,7 @@
         <file>assets/shaders/viewer.vert</file>
         <file>assets/textures/default_particle.jpg</file>
         <file>assets/models/cube.obj</file>
-        <file>assets/shaders/custom.frag</file>
-        <file>assets/shaders/custom.vert</file>
+        <file>assets/shaders/surface.vert</file>
+        <file>assets/shaders/surface.frag</file>
     </qresource>
 </RCC>

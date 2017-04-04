@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include <QWidget>
 
 namespace Ui {
-class ColorValueWidget;
+    class ColorValueWidget;
 }
 
 class ColorPickerWidget;
@@ -27,7 +27,9 @@ class ColorValueWidget : public QWidget
     Q_PROPERTY(QString title READ getTitle WRITE setTitle)
 
     QString _title;
+
 public:
+    int index;
     explicit ColorValueWidget(QWidget *parent = 0);
     ~ColorValueWidget();
     Ui::ColorValueWidget *ui;

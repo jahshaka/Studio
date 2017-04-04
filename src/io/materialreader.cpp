@@ -24,9 +24,11 @@ bool MaterialReader::readJahShader(const QString &filePath)
     file.open(QIODevice::ReadOnly);
 
     auto data = file.readAll();
+    file.close();
     auto doc = QJsonDocument::fromJson(data);
 
     parsedShader = doc.object();
+
 //    parseJahShader(doc.object());
 }
 
