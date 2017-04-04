@@ -114,12 +114,13 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
 
     setBaseMaterialProperties(jahShader);
 
-    if (useBuiltinShader) {
-        createProgramFromShaderSource(vertPath, fragPath);
-    } else {
-        createProgramFromShaderSource(IrisUtils::getAbsoluteAssetPath(vertPath),
-                                      IrisUtils::getAbsoluteAssetPath(fragPath));
-    }
+    if(!vertPath.startsWith(":"))
+        vertPath = IrisUtils::getAbsoluteAssetPath(vertPath);
+
+    if(!fragPath.startsWith(":"))
+        fragPath = IrisUtils::getAbsoluteAssetPath(fragPath);
+
+    createProgramFromShaderSource(vertPath, fragPath);
 
     auto widgetProps = jahShader["uniforms"].toArray();
 

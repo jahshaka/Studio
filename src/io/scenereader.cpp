@@ -253,7 +253,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     auto pickable = nodeObj["pickable"].toBool();
 
     if (!source.isEmpty()) {
-        auto mesh = getMesh(IrisUtils::getAbsoluteAssetPath(source), meshIndex);
+        auto mesh = getMesh(getAbsolutePath(source), meshIndex);
         meshNode->setMesh(mesh);
         meshNode->setPickable(pickable);
         meshNode->meshPath = source;
