@@ -30,6 +30,8 @@ For more information see the LICENSE file
 #include "ui_labelwidget.h"
 #include "filepickerwidget.h"
 #include "ui_filepickerwidget.h"
+#include "propertywidget.h"
+#include "ui_propertywidget.h"
 
 AccordianBladeWidget::AccordianBladeWidget(QWidget* parent) :
     QWidget(parent),
@@ -138,6 +140,15 @@ FilePickerWidget* AccordianBladeWidget::addFilePicker(const QString &name)
 
     ui->contentpane->layout()->addWidget(filePicker);
     return filePicker;
+}
+
+PropertyWidget *AccordianBladeWidget::addPropertyWidget()
+{
+    PropertyWidget *props = new PropertyWidget;
+    minimum_height += props->height() + stretch;
+
+    ui->contentpane->layout()->addWidget(props);
+    return props;
 }
 
 HFloatSliderWidget* AccordianBladeWidget::addFloatValueSlider(

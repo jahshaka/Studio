@@ -27,6 +27,7 @@ class ComboBoxWidget;
 class TextInputWidget;
 class LabelWidget;
 class FilePickerWidget;
+class PropertyWidget;
 
 #include <QLayout>
 
@@ -48,6 +49,8 @@ public:
     TextInputWidget*        addTextInput(const QString&);
     LabelWidget*            addLabel(const QString&, const QString&);
     FilePickerWidget*       addFilePicker(const QString&);
+
+    PropertyWidget*         addPropertyWidget();
 
     void setPanelTitle(const QString&);
     void expand();
