@@ -125,5 +125,6 @@ void Texture2D::resize(int width, int height)
     texture->setSize(width, height);
     texture->create();
     texture->allocateStorage();
+}
 
 }

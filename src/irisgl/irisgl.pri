@@ -57,7 +57,8 @@ HEADERS += \
     $$PWD/src/graphics/postprocess.h \
     $$PWD/src/graphics/postprocessmanager.h \
     $$PWD/src/graphics/rendertexture.h \
-    $$PWD/src/graphics/rendertarget.h
+    $$PWD/src/graphics/rendertarget.h \
+    $$PWD/src/postprocesses/bloompostprocess.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)

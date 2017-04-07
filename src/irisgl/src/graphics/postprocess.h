@@ -10,8 +10,10 @@ namespace iris
 
 class PostProcessPass
 {
-    Texture2DPtr outTexture;
+    Texture2DPtr output;
     QOpenGLShader* shader;
+    QString name;
+
 public:
     void Process()
     {
@@ -22,7 +24,7 @@ public:
 class PostProcess
 {
 public:
-    void Process()
+    virtual void process()
     {
 
     }
