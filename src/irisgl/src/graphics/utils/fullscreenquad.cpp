@@ -60,9 +60,10 @@ FullScreenQuad::~FullScreenQuad()
     delete mesh;
 }
 
-void FullScreenQuad::draw(QOpenGLFunctions_3_2_Core* gl)
+void FullScreenQuad::draw(QOpenGLFunctions_3_2_Core* gl, bool flipY)
 {
-    //shader->bind();
+    gl->glUseProgram(shader->programId());
+    gl->glUniform1i(gl->glGetUniformLocation(shader->programId(), "flipY"), flipY);
     mesh->draw(gl,shader);
 }
 

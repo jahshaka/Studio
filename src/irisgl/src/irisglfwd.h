@@ -51,6 +51,7 @@ class ViewerMaterial;
 class CustomMaterial;
 class RenderItem;
 class PickingResult;
+class RenderTarget;
 template<typename T> class Key;
 typedef Key<float> FloatKey;
 
@@ -73,6 +74,7 @@ typedef QSharedPointer<ViewerMaterial> ViewerMaterialPtr;
 typedef QSharedPointer<CustomMaterial> CustomMaterialPtr;
 typedef QSharedPointer<ViewerNode> ViewerNodePtr;
 typedef QSharedPointer<ParticleSystemNode> ParticleSystemNodePtr;
+typedef QSharedPointer<RenderTarget> RenderTargetPtr;
 
 
 

@@ -58,6 +58,8 @@ public:
      */
     static Texture2DPtr create(QImage image);
 
+    static Texture2DPtr create(int width, int height);
+
     /**
      * Returns the path to the source file of the texture
      * @return
@@ -67,6 +69,7 @@ public:
     }
 
     static Texture2DPtr createCubeMap(QString, QString, QString, QString, QString, QString, QImage *i = nullptr);
+    void resize(int width, int height);
 
 private:
     Texture2D(QOpenGLTexture* tex)

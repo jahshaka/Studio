@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "utils/billboard.h"
 #include "utils/fullscreenquad.h"
 #include "texture2d.h"
+#include "rendertarget.h"
 #include "../vr/vrdevice.h"
 #include "../vr/vrmanager.h"
 #include "../core/irisutils.h"
@@ -62,6 +63,10 @@ ForwardRenderer::ForwardRenderer()
 
     vrDevice = VrManager::getDefaultDevice();
     vrDevice->initialize();
+
+    renderTarget = RenderTarget::create(800, 800);
+    sceneRenderTexture = Texture2D::create(800, 800);
+    renderTarget->addTexture(sceneRenderTexture);
 }
 
 void ForwardRenderer::generateShadowBuffer(GLuint size)
@@ -128,6 +133,15 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     }
 
     gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
+
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    //gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+
+    //todo: remember to remove this!
+    renderTarget->resize(vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale, true);
+
+    renderTarget->bind();
+    gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     //enable all attrib arrays
@@ -145,6 +159,17 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     // STEP 5: RENDER SELECTED OBJECT
     if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
+
+    renderTarget->unbind();
+
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+
+    // draw fs quad
+    gl->glViewport(0, 0, vp->width, vp->height);
+    gl->glActiveTexture(GL_TEXTURE0);
+    sceneRenderTexture->bind();
+    fsQuad->draw(gl);
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
 
     //clear lists
     scene->geometryRenderList.clear();

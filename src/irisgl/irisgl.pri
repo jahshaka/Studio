@@ -54,6 +54,10 @@ HEADERS += \
     $$PWD/src/graphics/iviewsource.h \
     $$PWD/src/materials/custommaterial.h \
     $$PWD/src/materials/propertytype.h
+    $$PWD/src/graphics/postprocess.h \
+    $$PWD/src/graphics/postprocessmanager.h \
+    $$PWD/src/graphics/rendertexture.h \
+    $$PWD/src/graphics/rendertarget.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -85,7 +89,8 @@ SOURCES += \
     $$PWD/src/scenegraph/particlesystemnode.cpp \
     $$PWD/src/vr/vrmanager.cpp \
     $$PWD/src/math/mathhelper.cpp \
-    $$PWD/src/materials/custommaterial.cpp
+    $$PWD/src/materials/custommaterial.cpp \
+    $$PWD/src/graphics/rendertarget.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QOpenGLContext>
 #include <QSharedPointer>
 #include "../libovr/Include/OVR_CAPI_GL.h"
+#include "../irisglfwd.h"
 
 #include "particle.h"
 #include "particlerender.h"
@@ -63,6 +64,9 @@ class ForwardRenderer
     QOpenGLShaderProgram* emitterShader;
 
     VrDevice* vrDevice;
+
+    RenderTargetPtr renderTarget;
+    Texture2DPtr sceneRenderTexture;
 
 public:
 
