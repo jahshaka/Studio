@@ -145,7 +145,7 @@ FilePickerWidget* AccordianBladeWidget::addFilePicker(const QString &name)
 PropertyWidget *AccordianBladeWidget::addPropertyWidget()
 {
     PropertyWidget *props = new PropertyWidget;
-    minimum_height += props->height() + stretch;
+//    minimum_height += props->height() + stretch;
 
     ui->contentpane->layout()->addWidget(props);
     return props;

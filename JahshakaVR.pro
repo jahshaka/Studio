@@ -162,8 +162,7 @@ HEADERS  += src/mainwindow.h \
     src/io/materialreader.hpp \
     src/widgets/filepickerwidget.h \
     src/widgets/propertywidgets/meshpropertywidget.h \
-    src/widgets/propertywidget.h \
-    src/widgets/propertytype.h
+    src/widgets/propertywidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

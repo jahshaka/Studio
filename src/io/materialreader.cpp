@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "materialreader.hpp"
 #include <QDebug>
 
+int MaterialReader::uuid = 0;
+
 MaterialReader::MaterialReader()
 {
 
@@ -28,24 +30,78 @@ bool MaterialReader::readJahShader(const QString &filePath)
     auto doc = QJsonDocument::fromJson(data);
 
     parsedShader = doc.object();
-
-//    parseJahShader(doc.object());
 }
 
-void MaterialReader::parseJahShader(const QJsonObject &jahShader)
+QJsonObject MaterialReader::getParsedShader()
 {
-    // @TODO: add some early check here to escape early
+    return parsedShader;
+}
 
-    auto shaderName = jahShader["name"].toString();
-    auto uniforms = jahShader["uniforms"].toObject();
+QList<Property*> MaterialReader::getPropertyList()
+{
+    QList<Property*> properties;
 
-//    QJsonArray children = rootNode["children"].toArray();
+    auto widgetProps = parsedShader["uniforms"].toArray();
 
-    for (auto childObj : uniforms) {
-        if (childObj.toObject()["type"] == "slider") {
+    for (auto property : widgetProps) {
+        if (property.toObject()["type"].toString() == "float") {
+            auto prop = new FloatProperty();
 
+            prop->id            = ++uuid;
+            prop->name          = property.toObject()["name"].toString();
+            prop->displayName   = property.toObject()["displayName"].toString();
+
+            properties.append(prop);
+        }
+
+        else if (property.toObject()["type"].toString() == "color") {
+            auto prop = new ColorProperty;
+
+            prop->id            = ++uuid;
+            prop->name          = property.toObject()["name"].toString();
+            prop->displayName   = property.toObject()["displayName"].toString();
+
+            properties.append(prop);
+        }
+
+        else if (property.toObject()["type"].toString() == "bool") {
+            auto prop = new BoolProperty;
+
+            prop->id            = ++uuid;
+            prop->name          = property.toObject()["name"].toString();
+            prop->displayName   = property.toObject()["displayName"].toString();
+
+            properties.append(prop);
+        }
+
+        else if (property.toObject()["type"].toString() == "texture") {
+            auto prop = new TextureProperty;
+
+            prop->id            = ++uuid;
+            prop->name          = property.toObject()["name"].toString();
+            prop->displayName   = property.toObject()["displayName"].toString();
+
+            properties.append(prop);
+        }
+
+        else if (property.toObject()["type"].toString() == "file") {
+            auto prop = new FileProperty;
+
+            prop->id            = ++uuid;
+            prop->name          = property.toObject()["name"].toString();
+            prop->displayName   = property.toObject()["displayName"].toString();
+
+            properties.append(prop);
+        }
+
+        else if (property.toObject()["type"].toString() == "vec3") {
+            auto prop = new Vec3Property;
+            prop->id            = ++uuid;
+            prop->type          = PropertyType::Vec3;
+
+            properties.append(prop);
         }
     }
 
-    qDebug() << shaderName;
+    return properties;
 }

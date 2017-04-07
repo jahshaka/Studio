@@ -58,6 +58,10 @@ public:
     void clearPanel(QLayout *layout);
     int minimum_height, stretch;
 
+    void stepHeight(int h) {
+        this->minimum_height += h;
+    }
+
     void resetHeight() {
         this->minimum_height = 0;
     }

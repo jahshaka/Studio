@@ -20,22 +20,7 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QWidget#AccordionBladeWidget {
-	background-color: #212121;
-}
-
-QWidget#bg {
-	background-color: #4D4D4D;
-}
-
-QPushButton#toggle {
-	background-color: #4D4D4D;
-    border: 0;
-}
-
-QLabel#content_title {
-	background-color: #4D4D4D;
-}</string>
+   <string notr="true"/>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="leftMargin">
@@ -65,8 +50,17 @@ QLabel#content_title {
       <property name="spacing">
        <number>6</number>
       </property>
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
       <property name="topMargin">
-       <number>9</number>
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
       </property>
      </layout>
     </widget>
