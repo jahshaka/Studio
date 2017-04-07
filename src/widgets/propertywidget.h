@@ -33,6 +33,13 @@ public:
     TexturePickerWidget *addTexturePicker(const QString& name);
     FilePickerWidget    *addFilePicker(const QString &name);
 
+    void addFloatProperty(Property*);
+    void addIntProperty(Property*);
+    void addColorProperty(Property*);
+    void addBoolProperty(Property*);
+    void addTextureProperty(Property*);
+    void addFileProperty(Property*);
+
 private:
     Ui::PropertyWidget *ui;
     QList<Property*> properties;

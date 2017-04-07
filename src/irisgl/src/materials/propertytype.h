@@ -22,12 +22,17 @@ enum PropertyType
 
 struct Property
 {
-    unsigned id;
-    QString displayName;
-    QString name;
-    PropertyType type;
+    unsigned            id;
+    QString             displayName;
+    QString             name;
+    PropertyType        type;
 
-    virtual QVariant getValue() = 0;
+    virtual QVariant    getValue() = 0;
+};
+
+class PropertyListener
+{
+    virtual void onPropertyChanged(Property*) = 0;
 };
 
 struct BoolProperty : public Property

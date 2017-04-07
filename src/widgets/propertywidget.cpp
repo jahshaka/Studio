@@ -87,30 +87,98 @@ FilePickerWidget* PropertyWidget::addFilePicker(const QString &name)
     return filePicker;
 }
 
+void PropertyWidget::addFloatProperty(Property *prop)
+{
+    auto floatProp = static_cast<FloatProperty*>(prop);
+    ui->contentpane->layout()->addWidget(addFloatValueSlider(floatProp->displayName,
+                                                             floatProp->minValue,
+                                                             floatProp->maxValue));
+    properties.append(prop);
+}
+
+void PropertyWidget::addIntProperty(Property *prop)
+{
+    auto intProp = static_cast<IntProperty*>(prop);
+    ui->contentpane->layout()->addWidget(addFloatValueSlider(intProp->displayName,
+                                                             intProp->minValue,
+                                                             intProp->maxValue));
+    properties.append(prop);
+}
+
+void PropertyWidget::addColorProperty(Property *prop)
+{
+    auto colorProp = static_cast<ColorProperty*>(prop);
+    ui->contentpane->layout()->addWidget(addColorPicker(colorProp->displayName));
+    properties.append(prop);
+}
+
+void PropertyWidget::addBoolProperty(Property *prop)
+{
+    auto boolProp = static_cast<BoolProperty*>(prop);
+    ui->contentpane->layout()->addWidget(addCheckBox(boolProp->displayName));
+    properties.append(prop);
+}
+
+void PropertyWidget::addTextureProperty(Property *prop)
+{
+    auto textureProp = static_cast<TextureProperty*>(prop);
+    ui->contentpane->layout()->addWidget(addTexturePicker(textureProp->displayName));
+    properties.append(prop);
+}
+
+void PropertyWidget::addFileProperty(Property *prop)
+{
+    auto fileProp = static_cast<FileProperty*>(prop);
+    ui->contentpane->layout()->addWidget(addFilePicker(fileProp->displayName));
+    properties.append(prop);
+}
+
 void PropertyWidget::setProperties(QList<Property*> properties)
 {
     for (auto prop : properties) {
         switch (prop->type) {
-            case PropertyType::Float:
-                ui->contentpane->layout()->addWidget(addFloatValueSlider(prop->displayName, 10, 20));
+        case PropertyType::Float:
+            addFloatProperty(prop);
+        break;
+
+        case PropertyType::Int:
+            addIntProperty(prop);
+        break;
+
+        case PropertyType::Color:
+            addColorProperty(prop);
+        break;
+
+        case PropertyType::Bool:
+            addBoolProperty(prop);
+        break;
+
+        case PropertyType::Texture:
+            addTextureProperty(prop);
+        break;
+
+        case PropertyType::File:
+            addFileProperty(prop);
+        break;
+
+        case PropertyType::List: {
             break;
-            case PropertyType::Color:
-                ui->contentpane->layout()->addWidget(addColorPicker(prop->displayName));
+        }
+
+        case PropertyType::Vec2: {
             break;
-            case PropertyType::Bool:
-                ui->contentpane->layout()->addWidget(addCheckBox(prop->displayName));
+        }
+
+        case PropertyType::Vec3: {
             break;
-            case PropertyType::Texture:
-                ui->contentpane->layout()->addWidget(addTexturePicker(prop->displayName));
-            break;
-            case PropertyType::File:
-                ui->contentpane->layout()->addWidget(addFilePicker(prop->displayName));
-            break;
-            default: break;
+        }
+
+        case PropertyType::None:
+        default: break;
         }
     }
 
-    num_props = properties.size();
+    this->properties = properties;
 }
 
 void PropertyWidget::update()
@@ -120,5 +188,5 @@ void PropertyWidget::update()
 
 int PropertyWidget::getHeight()
 {
-    return minimum_height + (num_props * 6) /* spacing */;
+    return minimum_height + (properties.size() * 6) /* magic spacing */;
 }

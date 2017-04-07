@@ -50,6 +50,8 @@ QList<Property*> MaterialReader::getPropertyList()
             prop->id            = ++uuid;
             prop->name          = property.toObject()["name"].toString();
             prop->displayName   = property.toObject()["displayName"].toString();
+            prop->minValue      = property.toObject()["start"].toDouble();
+            prop->maxValue      = property.toObject()["end"].toDouble();
 
             properties.append(prop);
         }
