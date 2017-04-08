@@ -11,11 +11,10 @@ For more information see the LICENSE file
 
 #include "hfloatsliderwidget.h"
 #include "ui_hfloatsliderwidget.h"
-#include <QDebug>
 
-HFloatSliderWidget::HFloatSliderWidget(QWidget* parent)
-    : QWidget(parent),
-      ui(new Ui::HFloatSliderWidget)
+HFloatSliderWidget::HFloatSliderWidget(QWidget* parent) :
+    BaseWidget(parent),
+    ui(new Ui::HFloatSliderWidget)
 {
     ui->setupUi(this);
     connect(ui->spinbox,    SIGNAL(valueChanged(double)),   SLOT(onValueSpinboxChanged(double)));
@@ -25,6 +24,8 @@ HFloatSliderWidget::HFloatSliderWidget(QWidget* parent)
     ui->slider->setRange(0, precision);
 
     this->setRange(0, 100.f);
+
+    type = WidgetType::FloatWidget;
 }
 
 HFloatSliderWidget::~HFloatSliderWidget()
@@ -64,7 +65,6 @@ void  HFloatSliderWidget::setValue( float value )
 
         emit valueChanged(value);
     }
-
 }
 
 float HFloatSliderWidget::getValue()

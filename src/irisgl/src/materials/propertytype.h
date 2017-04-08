@@ -32,6 +32,7 @@ struct Property
 
 class PropertyListener
 {
+public:
     virtual void onPropertyChanged(Property*) = 0;
 };
 
@@ -107,6 +108,7 @@ struct TextureProperty : public Property
 struct FileProperty : public Property
 {
     QString value;
+    QString suffix;
 
     FileProperty () {
         type = PropertyType::File;

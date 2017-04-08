@@ -11,13 +11,14 @@ For more information see the LICENSE file
 
 #include "checkboxwidget.h"
 #include "ui_checkboxwidget.h"
-#include <QCheckBox>
 
-CheckBoxWidget::CheckBoxWidget(QWidget* parent) : QWidget(parent), ui(new Ui::CheckBoxWidget)
+CheckBoxWidget::CheckBoxWidget(QWidget* parent) : BaseWidget(parent), ui(new Ui::CheckBoxWidget)
 {
     ui->setupUi(this);
 
     connect(ui->checkBox, SIGNAL(stateChanged(int)), SLOT(onCheckboxValueChanged(int)));
+
+    type = WidgetType::BoolWidget;
 }
 
 CheckBoxWidget::~CheckBoxWidget()

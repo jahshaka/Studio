@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #ifndef FILEPICKERWIDGET_H
 #define FILEPICKERWIDGET_H
 
+#include "basewidget.h"
+
 #include <QWidget>
 #include <QLabel>
 
@@ -19,7 +21,7 @@ namespace Ui {
     class FilePickerWidget;
 }
 
-class FilePickerWidget : public QWidget
+class FilePickerWidget : public BaseWidget
 {
     Q_OBJECT
 
@@ -28,7 +30,7 @@ private slots:
 void filePicker();
 
 public:
-
+    int index;
     QString filename;
     QString filepath;
     QString suffix;

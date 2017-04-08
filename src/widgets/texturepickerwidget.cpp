@@ -16,7 +16,7 @@ For more information see the LICENSE file
 #include "../core/thumbnailmanager.h"
 
 TexturePickerWidget::TexturePickerWidget(QWidget* parent) :
-    QWidget(parent),
+    BaseWidget(parent),
     ui(new Ui::TexturePickerWidget)
 {
     ui->setupUi(this);
@@ -24,6 +24,8 @@ TexturePickerWidget::TexturePickerWidget(QWidget* parent) :
     connect(ui->load, SIGNAL(pressed()), SLOT(changeTextureMap()));
 
     this->ui->texture->installEventFilter(this);
+
+    type = WidgetType::TextureWidget;
 }
 
 TexturePickerWidget::~TexturePickerWidget()

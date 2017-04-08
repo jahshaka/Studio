@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #ifndef COLORVALUEWIDGET_H
 #define COLORVALUEWIDGET_H
 
-#include <QWidget>
+#include "basewidget.h"
 
 namespace Ui {
     class ColorValueWidget;
@@ -20,7 +20,7 @@ namespace Ui {
 
 class ColorPickerWidget;
 
-class ColorValueWidget : public QWidget
+class ColorValueWidget : public BaseWidget
 {
     Q_OBJECT
 

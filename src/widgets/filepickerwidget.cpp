@@ -9,19 +9,21 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <Qt>
+#include <QFileDialog>
+
 #include "filepickerwidget.h"
 #include "ui_filepickerwidget.h"
-#include "qfiledialog.h"
-#include <Qt>
-#include <QDebug>
 
 FilePickerWidget::FilePickerWidget(QWidget *parent) :
-    QWidget(parent),
+    BaseWidget(parent),
     ui(new Ui::FilePickerWidget)
 {
     ui->setupUi(this);
 
     connect(ui->load, SIGNAL(pressed()), this, SLOT(filePicker()));
+
+    type = WidgetType::FileWidget;
 }
 
 FilePickerWidget::~FilePickerWidget()

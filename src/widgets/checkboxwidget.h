@@ -12,14 +12,15 @@ For more information see the LICENSE file
 #ifndef CHECKBOXPROPERTY_H
 #define CHECKBOXPROPERTY_H
 
-#include <QWidget>
 #include <QCheckBox>
+
+#include "basewidget.h"
 
 namespace Ui {
     class CheckBoxWidget;
 }
 
-class CheckBoxWidget : public QWidget
+class CheckBoxWidget : public BaseWidget
 {
     Q_OBJECT
 

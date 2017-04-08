@@ -14,7 +14,9 @@ class CheckBoxWidget;
 class TexturePickerWidget;
 class FilePickerWidget;
 
-class PropertyWidget : public QWidget
+class BaseWidget;
+
+class PropertyWidget : public QWidget, PropertyListener
 {
     Q_OBJECT
 
@@ -24,14 +26,13 @@ public:
 
     void addProperty(const Property*);
     void setProperties(QList<Property*>);
-    void update();
     int getHeight();
 
-    HFloatSliderWidget  *addFloatValueSlider(const QString&, float start, float end);
+    HFloatSliderWidget  *addFloatValueSlider(const QString&, float min, float max);
     ColorValueWidget    *addColorPicker(const QString&);
-    CheckBoxWidget      *addCheckBox(const QString& title);
-    TexturePickerWidget *addTexturePicker(const QString& name);
-    FilePickerWidget    *addFilePicker(const QString &name);
+    CheckBoxWidget      *addCheckBox(const QString&);
+    TexturePickerWidget *addTexturePicker(const QString&);
+    FilePickerWidget    *addFilePicker(const QString &name, const QString &suffix);
 
     void addFloatProperty(Property*);
     void addIntProperty(Property*);
@@ -40,10 +41,17 @@ public:
     void addTextureProperty(Property*);
     void addFileProperty(Property*);
 
+    void setListener(PropertyListener*);
+
+signals:
+    void onPropertyChanged(Property*);
+
 private:
-    Ui::PropertyWidget *ui;
     QList<Property*> properties;
-    int minimum_height, stretch, num_props;
+    PropertyListener *listener;
+    int progressiveHeight, stretch;
+
+    Ui::PropertyWidget *ui;
 };
 
 #endif // PROPERTYWIDGET_H

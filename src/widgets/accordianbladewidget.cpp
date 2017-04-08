@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "accordianbladewidget.h"
 #include "ui_accordianbladewidget.h"
+
 #include "hfloatsliderwidget.h"
 #include "ui_hfloatsliderwidget.h"
 #include "colorvaluewidget.h"
@@ -145,8 +146,6 @@ FilePickerWidget* AccordianBladeWidget::addFilePicker(const QString &name)
 PropertyWidget *AccordianBladeWidget::addPropertyWidget()
 {
     PropertyWidget *props = new PropertyWidget;
-//    minimum_height += props->height() + stretch;
-
     ui->contentpane->layout()->addWidget(props);
     return props;
 }

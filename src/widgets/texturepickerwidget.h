@@ -12,14 +12,15 @@ For more information see the LICENSE file
 #ifndef TEXTUREPICKERWIDGET_H
 #define TEXTUREPICKERWIDGET_H
 
-#include <QWidget>
+#include "basewidget.h"
+
 #include <QLabel>
 
 namespace Ui {
     class TexturePickerWidget;
 }
 
-class TexturePickerWidget : public QWidget
+class TexturePickerWidget : public BaseWidget
 {
     Q_OBJECT
 
