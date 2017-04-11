@@ -37,6 +37,8 @@ For more information see the LICENSE file
 #include "../vr/vrdevice.h"
 #include "../vr/vrmanager.h"
 #include "../core/irisutils.h"
+#include "postprocess.h"
+#include "postprocessmanager.h"
 
 #include <QOpenGLContext>
 #include "../libovr/Include/OVR_CAPI_GL.h"
@@ -66,7 +68,11 @@ ForwardRenderer::ForwardRenderer()
 
     renderTarget = RenderTarget::create(800, 800);
     sceneRenderTexture = Texture2D::create(800, 800);
+    finalRenderTexture = Texture2D::create(800, 800);
     renderTarget->addTexture(sceneRenderTexture);
+
+    postMan = new PostProcessManager();
+    postContext = new PostProcessContext();
 }
 
 void ForwardRenderer::generateShadowBuffer(GLuint size)
@@ -139,6 +145,7 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     //todo: remember to remove this!
     renderTarget->resize(vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale, true);
+    finalRenderTexture->resize(vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
 
     renderTarget->bind();
     gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
@@ -162,12 +169,17 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     renderTarget->unbind();
 
+    postContext->sceneTexture = sceneRenderTexture;
+    postContext->finalTexture = finalRenderTexture;
+    postMan->process(postContext);
+
     gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
 
     // draw fs quad
-    gl->glViewport(0, 0, vp->width, vp->height);
+    gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
     gl->glActiveTexture(GL_TEXTURE0);
-    sceneRenderTexture->bind();
+    //sceneRenderTexture->bind();
+    postContext->finalTexture->bind();
     fsQuad->draw(gl);
     gl->glBindTexture(GL_TEXTURE_2D, 0);
 

@@ -108,7 +108,7 @@ Texture2DPtr Texture2D::create(int width, int height)
     texture->setSize(width, height);
     texture->setFormat(QOpenGLTexture::RGBAFormat);
     texture->setMinMagFilters(QOpenGLTexture::Linear, QOpenGLTexture::Linear);
-    //texture->setWrapMode(QOpenGLTexture::ClampToEdge);
+    texture->setWrapMode(QOpenGLTexture::ClampToEdge);
     if (!texture->create())
         qDebug() << "Error creating texture";
     texture->allocateStorage();
@@ -122,6 +122,7 @@ void Texture2D::resize(int width, int height)
     texture->destroy();
     texture->setFormat(QOpenGLTexture::RGBAFormat);
     texture->setMinMagFilters(QOpenGLTexture::Linear, QOpenGLTexture::Linear);
+    texture->setWrapMode(QOpenGLTexture::ClampToEdge);
     texture->setSize(width, height);
     texture->create();
     texture->allocateStorage();

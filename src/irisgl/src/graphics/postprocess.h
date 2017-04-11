@@ -15,16 +15,20 @@ class PostProcessPass
     QString name;
 
 public:
-    void Process()
+    void process()
     {
 
     }
 };
 
+class PostProcessContext;
+
 class PostProcess
 {
 public:
-    virtual void process()
+    bool enabled;
+
+    virtual void process(PostProcessContext* ctx)
     {
 
     }

@@ -58,7 +58,9 @@ HEADERS += \
     $$PWD/src/graphics/postprocessmanager.h \
     $$PWD/src/graphics/rendertexture.h \
     $$PWD/src/graphics/rendertarget.h \
-    $$PWD/src/postprocesses/bloompostprocess.h
+    $$PWD/src/postprocesses/bloompostprocess.h \
+    $$PWD/src/postprocesses/coloroverlaypostprocess.h \
+    $$PWD/src/postprocesses/radialblurpostprocess.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -91,7 +93,11 @@ SOURCES += \
     $$PWD/src/vr/vrmanager.cpp \
     $$PWD/src/math/mathhelper.cpp \
     $$PWD/src/materials/custommaterial.cpp \
-    $$PWD/src/graphics/rendertarget.cpp
+    $$PWD/src/graphics/rendertarget.cpp \
+    $$PWD/src/graphics/postprocessmanager.cpp \
+    $$PWD/src/postprocesses/coloroverlaypostprocess.cpp \
+    $$PWD/src/postprocesses/radialblurpostprocess.cpp \
+    $$PWD/src/postprocesses/bloompostprocess.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

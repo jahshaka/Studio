@@ -38,6 +38,8 @@ class BillboardMaterial;
 class Billboard;
 class FullScreenQuad;
 class VrDevice;
+class PostProcessManager;
+class PostProcessContext;
 
 /**
  * This is a basic forward renderer.
@@ -63,10 +65,14 @@ class ForwardRenderer
     QOpenGLShaderProgram* particleShader;
     QOpenGLShaderProgram* emitterShader;
 
+    PostProcessManager* postMan;
+    PostProcessContext* postContext;
+
     VrDevice* vrDevice;
 
     RenderTargetPtr renderTarget;
     Texture2DPtr sceneRenderTexture;
+    Texture2DPtr finalRenderTexture;
 
 public:
 

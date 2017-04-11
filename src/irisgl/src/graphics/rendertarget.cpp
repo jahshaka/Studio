@@ -95,6 +95,16 @@ void RenderTarget::clearTextures()
     textures.clear();
 }
 
+void RenderTarget::clearRenderBuffer()
+{
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, fboId);
+    gl->glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, 0);
+
+    checkStatus();
+
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 void RenderTarget::bind()
 {
     gl->glBindFramebuffer(GL_FRAMEBUFFER, fboId);

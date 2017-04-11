@@ -67,4 +67,10 @@ void FullScreenQuad::draw(QOpenGLFunctions_3_2_Core* gl, bool flipY)
     mesh->draw(gl,shader);
 }
 
+void FullScreenQuad::draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* shader)
+{
+    shader->bind();
+    mesh->draw(gl,shader);
+}
+
 }

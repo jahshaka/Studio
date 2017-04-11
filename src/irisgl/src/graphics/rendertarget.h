@@ -36,6 +36,7 @@ public:
 
     void clearTextures();
     void clearDepthTexture();
+    void clearRenderBuffer();
 
     void bind();
     void unbind();

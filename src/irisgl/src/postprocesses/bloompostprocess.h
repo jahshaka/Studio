@@ -1,8 +1,10 @@
 #ifndef BLOOMPOSTPROCESS_H
 #define BLOOMPOSTPROCESS_H
 
-#include "../irisglfwd.h"
 #include "../graphics/postprocess.h"
+#include <QVector3D>
+
+class QOpenGLShaderProgram;
 
 namespace iris
 {
@@ -12,20 +14,17 @@ class PostProcessContext;
 class BloomPostProcess : public PostProcess
 {
 public:
+    QOpenGLShaderProgram* thresholdShader;
+    QOpenGLShaderProgram* blurShader;
+    QOpenGLShaderProgram* combineShader;
 
-    PostProcessPass* hBlurPass;
-    PostProcessPass* vBlurPass;
-    PostProcessPass* combinePass;
+    Texture2DPtr threshold;
+    Texture2DPtr hBlur;
+    Texture2DPtr vBlur;
 
-    BloomPostProcess()
-    {
-        HBlurPass
-    }
+    BloomPostProcess();
 
-    virtual void process(PostProcessContext* context) override
-    {
-
-    }
+    virtual void process(PostProcessContext* context) override;
 
 };
 
