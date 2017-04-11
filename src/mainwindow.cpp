@@ -292,7 +292,6 @@ iris::ScenePtr MainWindow::createDefaultScene()
 {
     auto scene = iris::Scene::create();
 
-
     auto cam = iris::CameraNode::create();
     cam->pos = QVector3D(6, 12, 14);
     cam->rot = QQuaternion::fromEulerAngles(-80,0,0);
@@ -584,16 +583,22 @@ void MainWindow::saveSceneAs()
 
 void MainWindow::loadScene()
 {
+    QString dir = QApplication::applicationDirPath() + "/scenes/";
+    auto filename = QFileDialog::getOpenFileName(this, "Open Scene File", dir, "Jashaka Scene (*.jah)");
 
-    QString dir = QApplication::applicationDirPath()+"/scenes/";
-    auto filename = QFileDialog::getOpenFileName(this,"Open Scene File",dir,"Jashaka Scene (*.jah)");
-
-    if(filename.isEmpty() || filename.isNull())
-        return;
-
-    qDebug() << filename;
+    if (filename.isEmpty() || filename.isNull()) return;
 
     openProject(filename);
+}
+
+QString MainWindow::loadSceneDelegate()
+{
+    QString dir = QApplication::applicationDirPath() + "/scenes/";
+    auto filename = QFileDialog::getOpenFileName(this, "Open Scene File", dir, "Jashaka Scene (*.jah)");
+
+    if (filename.isEmpty() || filename.isNull()) return "";
+
+    return filename;
 }
 
 void MainWindow::openProject(QString filename, bool startupLoad)
@@ -1059,6 +1064,31 @@ void MainWindow::newScene()
     this->setScene(scene);
     this->sceneView->resetEditorCam();
     this->sceneView->doneCurrent();
+}
+
+void MainWindow::newProject(const QString &filename, const QString &projectPath)
+{
+    newScene();
+
+    auto pPath = projectPath + '/' + filename;
+
+    // make a dir and the subfolders...
+    QDir dir(pPath);
+    if (!dir.exists()) {
+        dir.mkpath(".");
+    }
+
+    // make proj folders
+    QList<QString> projFolders = { "Textures", "Models", "Shaders", "Materials", "Scenes" };
+    for (auto folder : projFolders) {
+        QDir dir(pPath + '/' + folder);
+        dir.mkpath(".");
+    }
+
+    Globals::project->setFilePath(pPath + '/Scenes/' + filename + '.jah');
+//    this->setProjectTitle(Globals::project->getProjectName());
+    this->setProjectTitle(Globals::project->getProjectName());
+    settings->addRecentlyOpenedScene(filename);
 }
 
 void MainWindow::showAboutDialog()
