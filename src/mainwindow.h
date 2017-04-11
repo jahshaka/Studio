@@ -194,11 +194,13 @@ public slots:
     void saveScene();
     void saveSceneAs();
     void loadScene();
+    QString loadSceneDelegate();
     void openRecentFile();
 
     void showPreferences();
     void exitApp();
     void newScene();
+    void newProject(const QString&, const QString&);
 
     void showAboutDialog();
     void showLicenseDialog();

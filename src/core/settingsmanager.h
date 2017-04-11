@@ -34,12 +34,11 @@ public:
 
     SettingsManager(QString fileName = "settings.ini") {
         recentlyOpenedFilesSize = 5;
-        auto path = fileName;
-        loadSettings(path);
+        loadSettings(fileName);
     }
 
     void loadSettings(QString path) {
-        settings = new QSettings(path,QSettings::IniFormat);
+        settings = new QSettings(path, QSettings::IniFormat);
     }
 
     void setValue(QString name, QVariant value) {

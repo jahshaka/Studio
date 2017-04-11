@@ -5,6 +5,8 @@
 #include "../mainwindow.h"
 #include "../core/settingsmanager.h"
 
+#include "../dialogs/newprojectdialog.h"
+
 #include "projectdialog.h"
 #include "ui_projectdialog.h"
 
@@ -23,13 +25,12 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
         QApplication::setFont(QFont("Open Sans", 9));
     }
 
-    connect(ui->newProject, SIGNAL(pressed()), SLOT(newScene()));
+    connect(ui->newProject,     SIGNAL(pressed()), SLOT(newScene()));
+    connect(ui->openProject,    SIGNAL(pressed()), SLOT(openProject()));
 
     window = new MainWindow;
 
     auto sm = window->getSettingsManager();
-//    qDebug() << sm->getRecentlyOpenedScenes();
-
     ui->listWidget->addItems(sm->getRecentlyOpenedScenes());
 }
 
@@ -40,9 +41,27 @@ ProjectDialog::~ProjectDialog()
 
 void ProjectDialog::newScene()
 {
+    NewProjectDialog dialog;
+
+    dialog.exec();
+
+    auto projectName = dialog.getProjectInfo().projectName;
+    auto projectPath = dialog.getProjectInfo().projectPath;
+
+    if (!projectName.isEmpty() || !projectName.isNull()) {
+        window->showMaximized();
+        window->newProject(projectName, projectPath);
+
+        this->close();
+        // emit accepted();
+    }
+}
+
+void ProjectDialog::openProject()
+{
+    auto project = window->loadSceneDelegate();
     window->showMaximized();
-    window->newScene();
+    window->openProject(project);
 
     this->close();
-    emit this->accepted();
 }

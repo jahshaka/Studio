@@ -21,6 +21,7 @@ public:
 
 protected slots:
     void newScene();
+    void openProject();
 
 private:
     Ui::ProjectDialog *ui;
