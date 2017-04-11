@@ -65,15 +65,6 @@ class JahRenderer;
 class GizmoHitData;
 class AdvancedGizmoHandle;
 class MaterialPreset;
-/*
-namespace iris
-{
-    class SceneNode;
-    class Scene;
-
-    //typedef SharedPO
-}
-*/
 
 class QOpenGLFunctions_3_2_Core;
 

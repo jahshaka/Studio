@@ -89,7 +89,8 @@ SOURCES += src/main.cpp\
     src/widgets/propertywidgets/meshpropertywidget.cpp \
     src/widgets/propertywidget.cpp \
     src/widgets/propertywidgets/postprocesspropertywidget.cpp \
-    src/widgets/postprocesseswidget.cpp
+    src/widgets/postprocesseswidget.cpp \
+    src/widgets/projectdialog.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -167,7 +168,8 @@ HEADERS  += src/mainwindow.h \
     src/widgets/propertywidget.h \
     src/widgets/basewidget.h \
     src/widgets/propertywidgets/postprocesspropertywidget.h \
-    src/widgets/postprocesseswidget.h
+    src/widgets/postprocesseswidget.h \
+    src/widgets/projectdialog.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -198,7 +200,8 @@ FORMS    += \
     src/widgets/texturepickerwidget.ui \
     src/widgets/filepickerwidget.ui \
     src/widgets/propertywidget.ui \
-    src/widgets/postprocesseswidget.ui
+    src/widgets/postprocesseswidget.ui \
+    src/dialogs/projectdialog.ui
 
 RESOURCES += \
     shaders.qrc \
