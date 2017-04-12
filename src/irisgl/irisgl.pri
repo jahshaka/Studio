@@ -52,7 +52,8 @@ HEADERS += \
     $$PWD/src/scenegraph/particlesystemnode.h \
     $$PWD/src/vr/vrmanager.h \
     $$PWD/src/graphics/iviewsource.h \
-    $$PWD/src/materials/custommaterial.h
+    $$PWD/src/materials/custommaterial.h \
+    $$PWD/src/materials/propertytype.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)

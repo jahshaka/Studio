@@ -86,7 +86,8 @@ SOURCES += src/main.cpp\
     src/widgets/texturepickerwidget.cpp \
     src/io/materialreader.cpp \
     src/widgets/filepickerwidget.cpp \
-    src/widgets/propertywidgets/meshpropertywidget.cpp
+    src/widgets/propertywidgets/meshpropertywidget.cpp \
+    src/widgets/propertywidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -160,7 +161,9 @@ HEADERS  += src/mainwindow.h \
     src/widgets/texturepickerwidget.h \
     src/io/materialreader.hpp \
     src/widgets/filepickerwidget.h \
-    src/widgets/propertywidgets/meshpropertywidget.h
+    src/widgets/propertywidgets/meshpropertywidget.h \
+    src/widgets/propertywidget.h \
+    src/widgets/basewidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -189,7 +192,8 @@ FORMS    += \
     src/widgets/comboboxwidget.ui \
     src/widgets/hfloatsliderwidget.ui \
     src/widgets/texturepickerwidget.ui \
-    src/widgets/filepickerwidget.ui
+    src/widgets/filepickerwidget.ui \
+    src/widgets/propertywidget.ui
 
 RESOURCES += \
     shaders.qrc \
