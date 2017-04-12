@@ -53,7 +53,7 @@ HEADERS += \
     $$PWD/src/vr/vrmanager.h \
     $$PWD/src/graphics/iviewsource.h \
     $$PWD/src/materials/custommaterial.h \
-    $$PWD/src/materials/propertytype.h
+    $$PWD/src/materials/propertytype.h \
     $$PWD/src/graphics/postprocess.h \
     $$PWD/src/graphics/postprocessmanager.h \
     $$PWD/src/graphics/rendertexture.h \

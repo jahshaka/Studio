@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include <QLayout>
 
 #include "../accordianbladewidget.h"
-#include "../../src/graphics/material.h"
+#include "../../irisgl/src/graphics/material.h"
 
 namespace iris {
     class SceneNode;

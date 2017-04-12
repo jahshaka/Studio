@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include <QHash>
 
-#include "../irisgl.h"
+#include "../irisgl/src/irisglfwd.h"
 
 namespace iris
 {

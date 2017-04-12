@@ -81,7 +81,7 @@ void PropertyWidget::addFloatProperty(Property *prop)
     ui->contentpane->layout()->addWidget(fltWidget);
     properties.append(prop);
 
-    connect(fltWidget, HFloatSliderWidget::valueChanged, this, [this, fltProp](float value) {
+    connect(fltWidget, &HFloatSliderWidget::valueChanged, this, [this, fltProp](float value) {
         fltProp->value = value;
 
         if (listener) {
@@ -112,7 +112,7 @@ void PropertyWidget::addColorProperty(Property *prop)
     ui->contentpane->layout()->addWidget(colorWidget);
     properties.append(prop);
 
-    connect(colorWidget->getPicker(), ColorPickerWidget::onColorChanged, this,
+    connect(colorWidget->getPicker(), &ColorPickerWidget::onColorChanged, this,
            [this, colorProp](QColor value)
     {
         colorProp->value = value;
@@ -135,7 +135,7 @@ void PropertyWidget::addBoolProperty(Property *prop)
     ui->contentpane->layout()->addWidget(boolWidget);
     properties.append(prop);
 
-    connect(boolWidget, CheckBoxWidget::valueChanged, this, [this, boolProp](bool value) {
+    connect(boolWidget, &CheckBoxWidget::valueChanged, this, [this, boolProp](bool value) {
         boolProp->value = value;
 
         if (listener) {
@@ -156,7 +156,7 @@ void PropertyWidget::addTextureProperty(Property *prop)
     ui->contentpane->layout()->addWidget(textureWidget);
     properties.append(prop);
 
-    connect(textureWidget, TexturePickerWidget::valueChanged, this,
+    connect(textureWidget, &TexturePickerWidget::valueChanged, this,
            [this, textureProp](QString value)
     {
         textureProp->value = value;
@@ -179,7 +179,7 @@ void PropertyWidget::addFileProperty(Property *prop)
     ui->contentpane->layout()->addWidget(fileWidget);
     properties.append(prop);
 
-    connect(fileWidget, FilePickerWidget::onPathChanged, this, [this, fileProp](QString value) {
+    connect(fileWidget, &FilePickerWidget::onPathChanged, this, [this, fileProp](QString value) {
         fileProp->value = value;
 
         if (listener) {

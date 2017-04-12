@@ -14,7 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QHash>
-#include "../irisglfwd.h"
+#include "../irisgl/src/irisglfwd.h"
 
 namespace Ui {
 class KeyFrameLabelTreeWidget;
