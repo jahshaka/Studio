@@ -26,5 +26,6 @@
         <file>assets/shaders/postprocesses/bloom_threshold.fs</file>
         <file>assets/shaders/postprocesses/bloom_combine.fs</file>
         <file>assets/shaders/postprocesses/bloom_blur.fs</file>
+        <file>assets/shaders/postprocesses/greyscale.fs</file>
     </qresource>
 </RCC>
