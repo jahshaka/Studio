@@ -61,7 +61,8 @@ HEADERS += \
     $$PWD/src/postprocesses/bloompostprocess.h \
     $$PWD/src/postprocesses/coloroverlaypostprocess.h \
     $$PWD/src/postprocesses/radialblurpostprocess.h \
-    $$PWD/src/postprocesses/greyscalepostprocess.h
+    $$PWD/src/postprocesses/greyscalepostprocess.h \
+    $$PWD/src/postprocesses/ssaopostprocess.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -99,7 +100,8 @@ SOURCES += \
     $$PWD/src/postprocesses/coloroverlaypostprocess.cpp \
     $$PWD/src/postprocesses/radialblurpostprocess.cpp \
     $$PWD/src/postprocesses/bloompostprocess.cpp \
-    $$PWD/src/postprocesses/greyscalepostprocess.cpp
+    $$PWD/src/postprocesses/greyscalepostprocess.cpp \
+    $$PWD/src/postprocesses/ssaopostprocess.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

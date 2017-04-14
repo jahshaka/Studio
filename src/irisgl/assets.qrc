@@ -27,5 +27,7 @@
         <file>assets/shaders/postprocesses/bloom_combine.fs</file>
         <file>assets/shaders/postprocesses/bloom_blur.fs</file>
         <file>assets/shaders/postprocesses/greyscale.fs</file>
+        <file>assets/textures/random_normal.png</file>
+        <file>assets/shaders/postprocesses/ssao.fs</file>
     </qresource>
 </RCC>

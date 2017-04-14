@@ -102,11 +102,11 @@ Texture2DPtr Texture2D::createCubeMap(QString posX, QString negX,
 }
 
 // https://github.com/qt/qt3d/blob/50457f2025f3d38234bd4b27b086e75e4267f68e/tests/auto/render/graphicshelpergl4/tst_graphicshelpergl4.cpp#L303
-Texture2DPtr Texture2D::create(int width, int height)
+Texture2DPtr Texture2D::create(int width, int height,QOpenGLTexture::TextureFormat texFormat )
 {
     auto texture = new QOpenGLTexture(QOpenGLTexture::Target2D);
     texture->setSize(width, height);
-    texture->setFormat(QOpenGLTexture::RGBAFormat);
+    texture->setFormat(texFormat);
     texture->setMinMagFilters(QOpenGLTexture::Linear, QOpenGLTexture::Linear);
     texture->setWrapMode(QOpenGLTexture::ClampToEdge);
     if (!texture->create())
@@ -118,11 +118,18 @@ Texture2DPtr Texture2D::create(int width, int height)
 
 void Texture2D::resize(int width, int height)
 {
+    auto texFormat = texture->format();
+    auto minFilter = texture->minificationFilter();
+    auto magFilter = texture->magnificationFilter();
+    auto wrapModeS = texture->wrapMode(QOpenGLTexture::DirectionS);
+    auto wrapModeT = texture->wrapMode(QOpenGLTexture::DirectionT);
+
     //return;
     texture->destroy();
-    texture->setFormat(QOpenGLTexture::RGBAFormat);
-    texture->setMinMagFilters(QOpenGLTexture::Linear, QOpenGLTexture::Linear);
-    texture->setWrapMode(QOpenGLTexture::ClampToEdge);
+    texture->setFormat(texFormat);
+    texture->setMinMagFilters(minFilter, magFilter);
+    texture->setWrapMode(QOpenGLTexture::DirectionS, wrapModeS);
+    texture->setWrapMode(QOpenGLTexture::DirectionT, wrapModeT);
     texture->setSize(width, height);
     texture->create();
     texture->allocateStorage();

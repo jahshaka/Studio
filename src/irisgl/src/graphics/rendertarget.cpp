@@ -77,6 +77,9 @@ void RenderTarget::resize(int width, int height, bool resizeTextures)
         for( auto texture : textures) {
             texture->resize(width, height);
         }
+
+        if (!!depthTexture)
+            depthTexture->resize(width, height);
     }
 }
 
@@ -85,9 +88,10 @@ void RenderTarget::addTexture(Texture2DPtr tex)
     textures.append(tex);
 }
 
-void RenderTarget::addDepthTexture(Texture2DPtr depthTex)
+void RenderTarget::setDepthTexture(Texture2DPtr depthTex)
 {
-    // todo
+    clearRenderBuffer();
+    depthTexture = depthTex;
 }
 
 void RenderTarget::clearTextures()
@@ -115,6 +119,9 @@ void RenderTarget::bind()
         gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+i, GL_TEXTURE_2D, texture->getTextureId(), 0);
         i++;
     }
+
+    if (!!depthTexture)
+        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture->getTextureId(), 0);
 
     checkStatus();
 }

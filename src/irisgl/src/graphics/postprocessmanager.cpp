@@ -11,6 +11,7 @@
 #include "../postprocesses/radialblurpostprocess.h"
 #include "../postprocesses/bloompostprocess.h"
 #include "../postprocesses/greyscalepostprocess.h"
+#include "../postprocesses/ssaopostprocess.h"
 
 namespace iris
 {
@@ -24,7 +25,8 @@ PostProcessManager::PostProcessManager()
     //postProcesses.append(new ColorOverlayPostProcess());
     //postProcesses.append(new RadialBlurPostProcess());
     //postProcesses.append(new BloomPostProcess());
-    postProcesses.append(new GreyscalePostProcess());
+    //postProcesses.append(new GreyscalePostProcess());
+    postProcesses.append(new SSAOPostProcess());
 }
 
 void PostProcessManager::blit(iris::Texture2DPtr source, iris::Texture2DPtr dest, QOpenGLShaderProgram *shader)

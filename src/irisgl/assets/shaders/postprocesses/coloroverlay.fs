@@ -10,6 +10,6 @@ out vec4 fragColor;
 void main()
 {
 	vec4 color = texture(u_sceneTexture, v_texCoord);
-        //fragColor = vec4(color.rgb * u_colorOverlay, color.a);
-        fragColor = vec4(color.rgb * vec3(1.0,0.1f,0.1f), color.a);
+        fragColor = vec4(color.rgb * u_colorOverlay, color.a);
+        //fragColor = vec4(color.rgb * vec3(1.0,0.1f,0.1f), color.a);
 }

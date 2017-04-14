@@ -68,8 +68,10 @@ ForwardRenderer::ForwardRenderer()
 
     renderTarget = RenderTarget::create(800, 800);
     sceneRenderTexture = Texture2D::create(800, 800);
+    depthRenderTexture = Texture2D::createDepth(800, 800);
     finalRenderTexture = Texture2D::create(800, 800);
     renderTarget->addTexture(sceneRenderTexture);
+    renderTarget->setDepthTexture(depthRenderTexture);
 
     postMan = new PostProcessManager();
     postContext = new PostProcessContext();
@@ -164,12 +166,10 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     // STEP 4: RENDER BILLBOARD ICONS
     renderBillboardIcons(renderData);
 
-    // STEP 5: RENDER SELECTED OBJECT
-    if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
-
     renderTarget->unbind();
 
     postContext->sceneTexture = sceneRenderTexture;
+    postContext->depthTexture = depthRenderTexture;
     postContext->finalTexture = finalRenderTexture;
     postMan->process(postContext);
 
@@ -182,6 +182,9 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     postContext->finalTexture->bind();
     fsQuad->draw(gl);
     gl->glBindTexture(GL_TEXTURE_2D, 0);
+
+    // STEP 5: RENDER SELECTED OBJECT
+    if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
 
     //clear lists
     scene->geometryRenderList.clear();

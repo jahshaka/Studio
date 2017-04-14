@@ -72,6 +72,7 @@ class ForwardRenderer
 
     RenderTargetPtr renderTarget;
     Texture2DPtr sceneRenderTexture;
+    Texture2DPtr depthRenderTexture;
     Texture2DPtr finalRenderTexture;
 
 public:

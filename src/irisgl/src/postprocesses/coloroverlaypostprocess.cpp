@@ -26,7 +26,8 @@ ColorOverlayPostProcess::ColorOverlayPostProcess()
     shader = GraphicsHelper::loadShader(":assets/shaders/postprocesses/default.vs",
                                         ":assets/shaders/postprocesses/coloroverlay.fs");
 
-    setOverlayColor(QColor(255,200,200));
+    //setOverlayColor(QColor(255,200,200));
+    setOverlayColor(QColor(255,255,255));
 }
 
 void ColorOverlayPostProcess::process(iris::PostProcessContext *ctx)

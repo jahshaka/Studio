@@ -32,7 +32,7 @@ public:
     void resize(int width, int height, bool resizeTextures);
 
     void addTexture(Texture2DPtr tex);
-    void addDepthTexture(Texture2DPtr depthTex);
+    void setDepthTexture(Texture2DPtr depthTex);
 
     void clearTextures();
     void clearDepthTexture();
