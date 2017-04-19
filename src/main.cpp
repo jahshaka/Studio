@@ -71,6 +71,9 @@ int main(int argc, char *argv[])
     ProjectDialog projectDialog;
     projectDialog.show();
 
+//    MainWindow window;
+//    window.showMaximized();
+
     app.processEvents();
 
     splash.hide();

@@ -194,7 +194,7 @@ public slots:
     void saveScene();
     void saveSceneAs();
     void loadScene();
-    QString loadSceneDelegate();
+//    QString loadSceneDelegate();
     void openRecentFile();
 
     void showPreferences();

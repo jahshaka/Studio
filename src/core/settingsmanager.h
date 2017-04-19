@@ -32,7 +32,8 @@ public:
 
     int recentlyOpenedFilesSize;
 
-    SettingsManager(QString fileName = "settings.ini") {
+    // TODO -- allow changing this location, portable or system
+    SettingsManager(QString fileName = "jahsettings.ini") {
         recentlyOpenedFilesSize = 5;
         loadSettings(fileName);
     }

@@ -92,7 +92,8 @@ SOURCES += src/main.cpp\
     src/widgets/postprocesseswidget.cpp \
     src/widgets/projectdialog.cpp \
     src/widgets/projectdialog.cpp \
-    src/dialogs/newprojectdialog.cpp
+    src/dialogs/newprojectdialog.cpp \
+    src/widgets/assetwidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -173,7 +174,8 @@ HEADERS  += src/mainwindow.h \
     src/widgets/postprocesseswidget.h \
     src/widgets/projectdialog.h \
     src/widgets/projectdialog.h \
-    src/dialogs/newprojectdialog.h
+    src/dialogs/newprojectdialog.h \
+    src/widgets/assetwidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -207,7 +209,8 @@ FORMS    += \
     src/widgets/postprocesseswidget.ui \
     src/dialogs/projectdialog.ui \
     src/dialogs/projectdialog.ui \
-    src/dialogs/newprojectdialog.ui
+    src/dialogs/newprojectdialog.ui \
+    src/widgets/assetwidget.ui
 
 RESOURCES += \
     shaders.qrc \

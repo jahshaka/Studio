@@ -10,7 +10,11 @@
 #include "projectdialog.h"
 #include "ui_projectdialog.h"
 
+#include "../core/project.h"
+#include "../globals.h"
+
 #include <QDebug>
+#include <QFileDialog>
 
 ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::ProjectDialog)
 {
@@ -28,10 +32,10 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
     connect(ui->newProject,     SIGNAL(pressed()), SLOT(newScene()));
     connect(ui->openProject,    SIGNAL(pressed()), SLOT(openProject()));
 
-    window = new MainWindow;
+//    window = new MainWindow;
 
-    auto sm = window->getSettingsManager();
-    ui->listWidget->addItems(sm->getRecentlyOpenedScenes());
+//    auto sm = window->getSettingsManager();
+//    ui->listWidget->addItems(sm->getRecentlyOpenedScenes());
 }
 
 ProjectDialog::~ProjectDialog()
@@ -41,27 +45,47 @@ ProjectDialog::~ProjectDialog()
 
 void ProjectDialog::newScene()
 {
-    NewProjectDialog dialog;
+//    NewProjectDialog dialog;
 
-    dialog.exec();
+//    dialog.exec();
 
-    auto projectName = dialog.getProjectInfo().projectName;
-    auto projectPath = dialog.getProjectInfo().projectPath;
+//    auto projectName = dialog.getProjectInfo().projectName;
+//    auto projectPath = dialog.getProjectInfo().projectPath;
 
-    if (!projectName.isEmpty() || !projectName.isNull()) {
-        window->showMaximized();
-        window->newProject(projectName, projectPath);
+//    if (!projectName.isEmpty() || !projectName.isNull()) {
+//        window->showMaximized();
+//        window->newProject(projectName, projectPath);
 
-        this->close();
-        // emit accepted();
-    }
+//        this->close();
+//        // emit accepted();
+//    }
 }
 
 void ProjectDialog::openProject()
 {
-    auto project = window->loadSceneDelegate();
+    auto project = loadSceneDelegate();
+
+    // hacky as fuck, fix please TODO
+    // use a FOLDER approach like Unity? can we detect if folder is a project like it does??
+    QFileInfo finfo = QFileInfo(project);
+    QDir dirr = finfo.absoluteDir();
+    dirr.cdUp();
+    Globals::project->updateProjectPath(dirr.absolutePath());
+
+    window = new MainWindow;
     window->showMaximized();
     window->openProject(project);
 
     this->close();
 }
+
+QString ProjectDialog::loadSceneDelegate()
+{
+    QString dir = QApplication::applicationDirPath() + "/scenes/";
+    auto filename = QFileDialog::getOpenFileName(this, "Open Scene File", dir, "Jashaka Scene (*.jah)");
+
+    if (filename.isEmpty() || filename.isNull()) return "";
+
+    return filename;
+}
+

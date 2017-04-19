@@ -196,7 +196,7 @@ MainWindow::MainWindow(QWidget *parent) :
     //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
     ui->ToolBar->addWidget(vrButton);
 
-//    ui->AnimationDock->hide();
+    ui->AnimationDock->hide();
 //    ui->PresetsDock->hide();
 }
 
@@ -608,15 +608,15 @@ void MainWindow::loadScene()
     openProject(filename);
 }
 
-QString MainWindow::loadSceneDelegate()
-{
-    QString dir = QApplication::applicationDirPath() + "/scenes/";
-    auto filename = QFileDialog::getOpenFileName(this, "Open Scene File", dir, "Jashaka Scene (*.jah)");
+//QString MainWindow::loadSceneDelegate()
+//{
+//    QString dir = QApplication::applicationDirPath() + "/scenes/";
+//    auto filename = QFileDialog::getOpenFileName(this, "Open Scene File", dir, "Jashaka Scene (*.jah)");
 
-    if (filename.isEmpty() || filename.isNull()) return "";
+//    if (filename.isEmpty() || filename.isNull()) return "";
 
-    return filename;
-}
+//    return filename;
+//}
 
 void MainWindow::openProject(QString filename, bool startupLoad)
 {
