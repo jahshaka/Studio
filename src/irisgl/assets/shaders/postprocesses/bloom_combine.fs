@@ -16,7 +16,7 @@ void main()
 	vec4 blur = texture(u_hBlurTexture, v_texCoord);
 	blur += texture(u_vBlurTexture, v_texCoord);
 
-	color += blur;
+        color += blur * vec4(0.5);
 
 	fragColor = color;
 }

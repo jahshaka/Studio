@@ -9,6 +9,8 @@ class QOpenGLShaderProgram;
 namespace iris
 {
 
+class BloomPostProcess;
+typedef QSharedPointer<BloomPostProcess> BloomPostProcessPtr;
 class PostProcessContext;
 
 class BloomPostProcess : public PostProcess
@@ -25,6 +27,11 @@ public:
     BloomPostProcess();
 
     virtual void process(PostProcessContext* context) override;
+
+    virtual QList<Property*> getProperties() override;
+    virtual void setProperty(Property* prop) override;
+
+    static BloomPostProcessPtr create();
 
 };
 
