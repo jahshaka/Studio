@@ -74,6 +74,7 @@ For more information see the LICENSE file
 
 #include "widgets/sceneviewwidget.h"
 #include "core/materialpreset.h"
+#include "widgets/postprocesseswidget.h"
 
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
@@ -92,6 +93,8 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    createPostProcessDockWidget();
+
     this->setWindowTitle("Jahshaka VR");
 
     QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
@@ -360,6 +363,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
 void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
 {
+    postProcessWidget->setPostProcessMgr(sceneView->getRenderer()->getPostProcessManager());
 
 //    auto m_logger = new QOpenGLDebugLogger( this );
 
@@ -492,6 +496,18 @@ void MainWindow::setupHelpMenu()
     connect(ui->actionAbout,        SIGNAL(triggered(bool)), this, SLOT(showAboutDialog()));
     connect(ui->actionBlog,         SIGNAL(triggered(bool)), this, SLOT(openBlogUrl()));
     connect(ui->actionOpenWebsite,  SIGNAL(triggered(bool)), this, SLOT(openWebsiteUrl()));
+}
+
+void MainWindow::createPostProcessDockWidget()
+{
+    postProcessDockWidget = new QDockWidget(this);
+    postProcessWidget = new PostProcessesWidget();
+    //postProcessWidget->setWindowTitle("Post Processes");
+    postProcessDockWidget->setWidget(postProcessWidget);
+    postProcessDockWidget->setWindowTitle("PostProcesses");
+    //postProcessDockWidget->setFloating(true);
+    this->addDockWidget(Qt::RightDockWidgetArea, postProcessDockWidget);
+
 }
 
 void MainWindow::setProjectTitle(QString projectTitle)

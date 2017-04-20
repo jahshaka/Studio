@@ -3,15 +3,20 @@
 #include "../../irisgl/src/graphics/postprocess.h"
 #include "../propertywidget.h"
 
+#include "../../irisgl/src/materials/propertytype.h"
+
+#include <QDebug>
+
 PostProcessPropertyWidget::PostProcessPropertyWidget()
 {
-    auto prop = this->addPropertyWidget();
-    prop->setListener(this);
+    propWidget = this->addPropertyWidget();
+    propWidget->setListener(this);
 }
 
 void PostProcessPropertyWidget::setPostProcess(iris::PostProcessPtr postProcess)
 {
-    //this->setProperties(postProcess->getProperties());
+    this->postProcess = postProcess;
+    propWidget->setProperties(postProcess->getProperties());
 }
 
 void PostProcessPropertyWidget::onPropertyChanged(iris::Property *prop)

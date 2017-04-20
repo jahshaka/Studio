@@ -71,9 +71,9 @@ FilePickerWidget* PropertyWidget::addFilePicker(const QString &name, const QStri
     return filePicker;
 }
 
-void PropertyWidget::addFloatProperty(Property *prop)
+void PropertyWidget::addFloatProperty(iris::Property *prop)
 {
-    auto fltProp = static_cast<FloatProperty*>(prop);
+    auto fltProp = static_cast<iris::FloatProperty*>(prop);
     auto fltWidget = addFloatValueSlider(fltProp->displayName, fltProp->minValue, fltProp->maxValue);
 
     fltWidget->index = prop->id;
@@ -92,9 +92,9 @@ void PropertyWidget::addFloatProperty(Property *prop)
     });
 }
 
-void PropertyWidget::addIntProperty(Property *prop)
+void PropertyWidget::addIntProperty(iris::Property *prop)
 {
-    auto intProp = static_cast<IntProperty*>(prop);
+    auto intProp = static_cast<iris::IntProperty*>(prop);
     auto intWidget = addFloatValueSlider(intProp->displayName, intProp->minValue, intProp->maxValue);
 
     intWidget->index = prop->id;
@@ -102,9 +102,9 @@ void PropertyWidget::addIntProperty(Property *prop)
     properties.append(prop);
 }
 
-void PropertyWidget::addColorProperty(Property *prop)
+void PropertyWidget::addColorProperty(iris::Property *prop)
 {
-    auto colorProp = static_cast<ColorProperty*>(prop);
+    auto colorProp = static_cast<iris::ColorProperty*>(prop);
     auto colorWidget = addColorPicker(colorProp->displayName);
 
     colorWidget->index = prop->id;
@@ -125,9 +125,9 @@ void PropertyWidget::addColorProperty(Property *prop)
     });
 }
 
-void PropertyWidget::addBoolProperty(Property *prop)
+void PropertyWidget::addBoolProperty(iris::Property *prop)
 {
-    auto boolProp = static_cast<BoolProperty*>(prop);
+    auto boolProp = static_cast<iris::BoolProperty*>(prop);
     auto boolWidget = addCheckBox(boolProp->displayName);
 
     boolWidget->index = prop->id;
@@ -146,9 +146,9 @@ void PropertyWidget::addBoolProperty(Property *prop)
     });
 }
 
-void PropertyWidget::addTextureProperty(Property *prop)
+void PropertyWidget::addTextureProperty(iris::Property *prop)
 {
-    auto textureProp = static_cast<TextureProperty*>(prop);
+    auto textureProp = static_cast<iris::TextureProperty*>(prop);
     auto textureWidget = addTexturePicker(textureProp->displayName);
 
     textureWidget->index = prop->id;
@@ -169,9 +169,9 @@ void PropertyWidget::addTextureProperty(Property *prop)
     });
 }
 
-void PropertyWidget::addFileProperty(Property *prop)
+void PropertyWidget::addFileProperty(iris::Property *prop)
 {
-    auto fileProp = static_cast<FileProperty*>(prop);
+    auto fileProp = static_cast<iris::FileProperty*>(prop);
     auto fileWidget = addFilePicker(fileProp->displayName, fileProp->suffix);
 
     fileWidget->index = prop->id;
@@ -190,7 +190,7 @@ void PropertyWidget::addFileProperty(Property *prop)
     });
 }
 
-void PropertyWidget::setListener(PropertyListener *listener)
+void PropertyWidget::setListener(iris::PropertyListener *listener)
 {
     this->listener = listener;
 }
@@ -200,47 +200,46 @@ void PropertyWidget::updatePane()
 
 }
 
-void PropertyWidget::setProperties(QList<Property*> properties)
+void PropertyWidget::setProperties(QList<iris::Property*> properties)
 {
-    for (auto prop : properties) {
+    for (auto prop : properties)
         switch (prop->type) {
-            case PropertyType::Float:
+            case iris::PropertyType::Float:
                 addFloatProperty(prop);
             break;
 
-            case PropertyType::Int:
+            case iris::PropertyType::Int:
                 addIntProperty(prop);
             break;
 
-            case PropertyType::Color:
+            case iris::PropertyType::Color:
                 addColorProperty(prop);
             break;
 
-            case PropertyType::Bool:
+            case iris::PropertyType::Bool:
                 addBoolProperty(prop);
             break;
 
-            case PropertyType::Texture:
+            case iris::PropertyType::Texture:
                 addTextureProperty(prop);
             break;
 
-            case PropertyType::File:
+            case iris::PropertyType::File:
                 addFileProperty(prop);
             break;
 
-            case PropertyType::List:
+            case iris::PropertyType::List:
             break;
 
-            case PropertyType::Vec2:
+            case iris::PropertyType::Vec2:
             break;
 
-            case PropertyType::Vec3:
+            case iris::PropertyType::Vec3:
             break;
 
-            case PropertyType::None:
+            case iris::PropertyType::None:
             default: break;
         }
-    }
 
     updatePane();
 

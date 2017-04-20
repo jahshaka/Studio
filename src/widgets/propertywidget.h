@@ -16,7 +16,7 @@ class FilePickerWidget;
 
 class BaseWidget;
 
-class PropertyWidget : public QWidget, PropertyListener
+class PropertyWidget : public QWidget, iris::PropertyListener
 {
     Q_OBJECT
 
@@ -24,8 +24,8 @@ public:
     explicit PropertyWidget(QWidget *parent = 0);
     ~PropertyWidget();
 
-    void addProperty(const Property*);
-    void setProperties(QList<Property*>);
+    void addProperty(const iris::Property*);
+    void setProperties(QList<iris::Property*>);
     int getHeight();
 
     HFloatSliderWidget  *addFloatValueSlider(const QString&, float min, float max);
@@ -34,21 +34,21 @@ public:
     TexturePickerWidget *addTexturePicker(const QString&);
     FilePickerWidget    *addFilePicker(const QString &name, const QString &suffix);
 
-    void addFloatProperty(Property*);
-    void addIntProperty(Property*);
-    void addColorProperty(Property*);
-    void addBoolProperty(Property*);
-    void addTextureProperty(Property*);
-    void addFileProperty(Property*);
+    void addFloatProperty(iris::Property*);
+    void addIntProperty(iris::Property*);
+    void addColorProperty(iris::Property*);
+    void addBoolProperty(iris::Property*);
+    void addTextureProperty(iris::Property*);
+    void addFileProperty(iris::Property*);
 
-    void setListener(PropertyListener*);
+    void setListener(iris::PropertyListener*);
 
 signals:
-    void onPropertyChanged(Property*);
+    void onPropertyChanged(iris::Property*);
 
 private:
-    QList<Property*> properties;
-    PropertyListener *listener;
+    QList<iris::Property*> properties;
+    iris::PropertyListener *listener;
     int progressiveHeight, stretch;
 
     void updatePane();

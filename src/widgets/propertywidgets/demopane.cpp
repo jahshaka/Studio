@@ -42,9 +42,9 @@ DemoPane::DemoPane()
 
     propWidget = this->addPropertyWidget();
 
-    auto props = QList<Property*>();
+    auto props = QList<iris::Property*>();
 
-    auto fltProp = new FloatProperty();
+    auto fltProp = new iris::FloatProperty();
     fltProp->displayName = "Test Float Prop";
     fltProp->name = "fltProp";
     fltProp->maxValue = 10;

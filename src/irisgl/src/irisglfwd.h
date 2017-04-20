@@ -52,6 +52,9 @@ class CustomMaterial;
 class RenderItem;
 class PickingResult;
 class RenderTarget;
+class PostProcess;
+class PostProcessContext;
+class PostProcessManager;
 template<typename T> class Key;
 typedef Key<float> FloatKey;
 
@@ -75,6 +78,8 @@ typedef QSharedPointer<CustomMaterial> CustomMaterialPtr;
 typedef QSharedPointer<ViewerNode> ViewerNodePtr;
 typedef QSharedPointer<ParticleSystemNode> ParticleSystemNodePtr;
 typedef QSharedPointer<RenderTarget> RenderTargetPtr;
+typedef QSharedPointer<PostProcess> PostProcessPtr;
+typedef QSharedPointer<PostProcessManager> PostProcessManagerPtr;
 
 
 
