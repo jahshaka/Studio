@@ -37,8 +37,8 @@ For more information see the LICENSE file
 #include "../vr/vrdevice.h"
 #include "../vr/vrmanager.h"
 #include "../core/irisutils.h"
-#include "postprocess.h"
 #include "postprocessmanager.h"
+#include "postprocess.h"
 
 #include <QOpenGLContext>
 #include "../libovr/Include/OVR_CAPI_GL.h"
@@ -73,7 +73,7 @@ ForwardRenderer::ForwardRenderer()
     renderTarget->addTexture(sceneRenderTexture);
     renderTarget->setDepthTexture(depthRenderTexture);
 
-    postMan = new PostProcessManager();
+    postMan = PostProcessManager::create();
     postContext = new PostProcessContext();
 }
 
@@ -306,6 +306,11 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
 
    scene->geometryRenderList.clear();
    scene->shadowRenderList.clear();
+}
+
+PostProcessManagerPtr ForwardRenderer::getPostProcessManager()
+{
+    return postMan;
 }
 
 bool ForwardRenderer::isVrSupported()

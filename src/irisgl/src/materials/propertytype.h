@@ -6,7 +6,10 @@
 #include <QVector2D>
 #include <QVector3D>
 
-enum PropertyType
+namespace iris
+{
+
+enum class PropertyType
 {
     None,
     Bool,
@@ -160,5 +163,7 @@ struct Vec3Property : public Property
         return value;
     }
 };
+
+}
 
 #endif // PROPERTYTYPE_H

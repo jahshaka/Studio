@@ -115,6 +115,8 @@ public:
     void startPlayingScene();
     void stopPlayingScene();
 
+    iris::ForwardRendererPtr getRenderer() const;
+
 protected:
     void initializeGL();
     bool eventFilter(QObject *obj, QEvent *event);

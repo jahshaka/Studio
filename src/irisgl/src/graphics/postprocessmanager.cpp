@@ -1,5 +1,6 @@
 #include <QOpenGLContext>
 #include <QOpenGLFunctions_3_2_Core>
+#include <QSharedPointer>
 
 #include "postprocessmanager.h"
 #include "rendertarget.h"
@@ -24,9 +25,24 @@ PostProcessManager::PostProcessManager()
 
     //postProcesses.append(new ColorOverlayPostProcess());
     //postProcesses.append(new RadialBlurPostProcess());
-    //postProcesses.append(new BloomPostProcess());
+    //postProcesses.append(QSharedPointer<PostProcess>(new BloomPostProcess()));
     //postProcesses.append(new GreyscalePostProcess());
-    postProcesses.append(new SSAOPostProcess());
+    //postProcesses.append(new SSAOPostProcess());
+}
+
+PostProcessManagerPtr PostProcessManager::create()
+{
+    return PostProcessManagerPtr(new PostProcessManager());
+}
+
+void PostProcessManager::addPostProcess(PostProcessPtr process)
+{
+    postProcesses.append(process);
+}
+
+void PostProcessManager::setPostProcesses(QList<PostProcessPtr> processes)
+{
+    this->postProcesses = processes;
 }
 
 void PostProcessManager::blit(iris::Texture2DPtr source, iris::Texture2DPtr dest, QOpenGLShaderProgram *shader)

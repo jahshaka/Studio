@@ -5,6 +5,11 @@
 #include "../../irisgl/src/irisglfwd.h"
 #include "../../irisgl/src/materials/propertytype.h"
 
+#include "../hfloatsliderwidget.h"
+
+
+class PropertyWidget;
+
 class PostProcessPropertyWidget :
         public AccordianBladeWidget,
         public iris::PropertyListener
@@ -18,6 +23,8 @@ public:
     // PropertyListener interface
 public:
     void onPropertyChanged(iris::Property *);
+    PropertyWidget* propWidget;
+    HFloatSliderWidget* slider;
 };
 
 #endif // POSTPROCESSPROPERTYWIDGET_H

@@ -2,11 +2,14 @@
 #define POSTPROCESS_H
 
 #include "../irisglfwd.h"
+#include <QEnableSharedFromThis>
 
 class QOpenGLShader;
 
 namespace iris
 {
+
+class Property;
 
 class PostProcessPass
 {
@@ -23,12 +26,22 @@ public:
 
 class PostProcessContext;
 
-class PostProcess
+class PostProcess : public QEnableSharedFromThis<PostProcess>
 {
 public:
     bool enabled;
 
     virtual void process(PostProcessContext* ctx)
+    {
+
+    }
+
+    virtual QList<Property*> getProperties()
+    {
+        return QList<Property*>();
+    }
+
+    virtual void setProperty(Property* prop)
     {
 
     }

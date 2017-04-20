@@ -65,7 +65,7 @@ class ForwardRenderer
     QOpenGLShaderProgram* particleShader;
     QOpenGLShaderProgram* emitterShader;
 
-    PostProcessManager* postMan;
+    PostProcessManagerPtr postMan;
     PostProcessContext* postContext;
 
     VrDevice* vrDevice;
@@ -95,6 +95,8 @@ public:
     //all scenenodes' transform should be updated before calling this functions
     void renderScene(float delta, Viewport* vp);
     void renderSceneVr(float delta, Viewport* vp);
+
+    PostProcessManagerPtr getPostProcessManager();
 
     static ForwardRendererPtr create();
 
