@@ -75,23 +75,35 @@
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
-     <widget class="QTreeWidget" name="assetTree"/>
+     <widget class="QTreeWidget" name="assetTree">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>0</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="headerHidden">
+       <bool>true</bool>
+      </property>
+      <column>
+       <property name="text">
+        <string notr="true">1</string>
+       </property>
+      </column>
+     </widget>
      <widget class="QListWidget" name="assetView">
-      <item>
-       <property name="text">
-        <string>item</string>
-       </property>
-      </item>
-      <item>
-       <property name="text">
-        <string>other item</string>
-       </property>
-      </item>
-      <item>
-       <property name="text">
-        <string>other other item</string>
-       </property>
-      </item>
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+        <horstretch>1</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
      </widget>
     </widget>
    </item>

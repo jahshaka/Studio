@@ -5,6 +5,7 @@ namespace Ui {
     class AssetWidget;
 }
 
+#include <QListWidget>
 #include <QTreeWidgetItem>
 #include <QWidget>
 
@@ -21,6 +22,21 @@ public:
     void populateAssetTree();
     void addTreeRoot(const QString& name, const QString &desc = nullptr);
     void addTreeChild(QTreeWidgetItem *parent, const QString& name, const QString &desc = nullptr);
+    void addItem(const QString &asset);
+    void updateAssetView(const QString &path);
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event);
+
+protected slots:
+    void treeItemSelected(QTreeWidgetItem* item);
+    void treeItemChanged(QTreeWidgetItem* item,int index);
+    void sceneTreeCustomContextMenu(const QPoint &);
+    void sceneViewCustomContextMenu(const QPoint &);
+
+    void assetViewClicked(QListWidgetItem*);
+
+    void deleteFolder();
 
 private:
     Ui::AssetWidget *ui;
