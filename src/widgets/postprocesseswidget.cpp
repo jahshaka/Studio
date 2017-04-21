@@ -59,8 +59,8 @@ void PostProcessesWidget::addPostProcess(QAction* action)
         postProcessMgr->addPostProcess(bloom);
         widget->setPostProcess(bloom);
 
-        ui->content->layout()->addWidget(widget);
-//        ((QVBoxLayout*)ui->content->layout())->insertWidget(0,widget);
+//        ui->content->layout()->addWidget(widget);
+        ((QVBoxLayout*)ui->content->layout())->insertWidget(postProcesses.size()-1,widget);
     } else if (action->text()=="Radial Blur") {
         auto widget = new PostProcessPropertyWidget();
         widget->expand();
@@ -69,7 +69,7 @@ void PostProcessesWidget::addPostProcess(QAction* action)
         widget->setPostProcess(bloom);
         postProcessMgr->addPostProcess(bloom);
 
-        ui->content->layout()->addWidget(widget);
-//        ((QVBoxLayout*)ui->content->layout())->insertWidget(0,widget);
+        //ui->content->layout()->addWidget(widget);
+        ((QVBoxLayout*)ui->content->layout())->insertWidget(postProcesses.size()-1,widget);
     }
 }
