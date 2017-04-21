@@ -11,6 +11,8 @@
 #include "filepickerwidget.h"
 #include "ui_filepickerwidget.h"
 
+#include <QDebug>
+
 PropertyWidget::PropertyWidget(QWidget *parent) : QWidget(parent), ui(new Ui::PropertyWidget)
 {
     ui->setupUi(this);
@@ -193,6 +195,11 @@ void PropertyWidget::setListener(PropertyListener *listener)
     this->listener = listener;
 }
 
+void PropertyWidget::updatePane()
+{
+
+}
+
 void PropertyWidget::setProperties(QList<Property*> properties)
 {
     for (auto prop : properties) {
@@ -234,6 +241,8 @@ void PropertyWidget::setProperties(QList<Property*> properties)
             default: break;
         }
     }
+
+    updatePane();
 
     this->properties = properties;
 }

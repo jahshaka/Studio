@@ -51,6 +51,8 @@ private:
     PropertyListener *listener;
     int progressiveHeight, stretch;
 
+    void updatePane();
+
     Ui::PropertyWidget *ui;
 };
 
