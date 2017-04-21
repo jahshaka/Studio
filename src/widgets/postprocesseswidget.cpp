@@ -35,7 +35,7 @@ PostProcessesWidget::PostProcessesWidget(QWidget *parent) :
 
     auto layout = new QVBoxLayout();
     layout->setMargin(0);
-//    layout->addStretch();
+    layout->addStretch();
     ui->content->setLayout(layout);
 }
 

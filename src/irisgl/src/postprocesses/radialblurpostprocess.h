@@ -17,6 +17,7 @@ class RadialBlurPostProcess : public PostProcess
     QOpenGLShaderProgram* shader;
 
     float blurSize;
+    Texture2DPtr final;
 public:
     RadialBlurPostProcess();
 

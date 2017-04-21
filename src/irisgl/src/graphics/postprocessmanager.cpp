@@ -73,6 +73,8 @@ void PostProcessManager::process(PostProcessContext *context)
 {
     context->manager = this;
 
+    blit(context->sceneTexture, context->finalTexture);
+
     for (auto process : postProcesses) {
         process->process(context);
     }

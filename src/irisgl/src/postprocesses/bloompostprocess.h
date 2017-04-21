@@ -23,6 +23,7 @@ public:
     Texture2DPtr threshold;
     Texture2DPtr hBlur;
     Texture2DPtr vBlur;
+    Texture2DPtr final;
 
     BloomPostProcess();
 

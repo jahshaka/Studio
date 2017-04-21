@@ -30,6 +30,7 @@ BloomPostProcess::BloomPostProcess()
     threshold = Texture2D::create(100, 100);
     hBlur = Texture2D::create(100, 100);
     vBlur = Texture2D::create(100, 100);
+    final = Texture2D::create(100, 100);
 }
 
 void BloomPostProcess::process(iris::PostProcessContext *ctx)
@@ -38,6 +39,7 @@ void BloomPostProcess::process(iris::PostProcessContext *ctx)
     auto screenWidth = ctx->sceneTexture->texture->width();
     auto screenHeight = ctx->sceneTexture->texture->height();
 
+    final->resize(screenWidth, screenHeight);
     threshold->resize(screenWidth/4, screenHeight/4);
     hBlur->resize(screenWidth/4, screenHeight/4);
     vBlur->resize(screenWidth/4, screenHeight/4);
@@ -92,9 +94,11 @@ void BloomPostProcess::process(iris::PostProcessContext *ctx)
 
     vBlur->bind(2);
     combineShader->setUniformValue("u_vBlurTexture", 2);
-    ctx->manager->blit(Texture2D::null(), ctx->finalTexture, combineShader);
+    ctx->manager->blit(Texture2D::null(), final, combineShader);
     //ctx->manager->blit(hBlur, ctx->finalTexture, nullptr);
     combineShader->release();
+
+    ctx->manager->blit(final, ctx->finalTexture);
 }
 
 QList<Property *> BloomPostProcess::getProperties()

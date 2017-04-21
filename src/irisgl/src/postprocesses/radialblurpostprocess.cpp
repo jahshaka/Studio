@@ -7,6 +7,7 @@
 #include "../graphics/postprocess.h"
 #include "../graphics/graphicshelper.h"
 #include "../materials/propertytype.h"
+#include "../graphics/texture2d.h"
 
 namespace iris
 {
@@ -16,14 +17,22 @@ RadialBlurPostProcess::RadialBlurPostProcess()
     shader = GraphicsHelper::loadShader(":assets/shaders/postprocesses/default.vs",
                                         ":assets/shaders/postprocesses/radial_blur.fs");
     blurSize = 1.0f;
+
+    final = Texture2D::create(100, 100);
 }
 
 void RadialBlurPostProcess::process(PostProcessContext *ctx)
 {
+    auto screenWidth = ctx->sceneTexture->texture->width();
+    auto screenHeight = ctx->sceneTexture->texture->height();
+    final->resize(screenWidth, screenHeight);
+
     shader->bind();
     shader->setUniformValue("u_sceneTexture", 0);
     shader->setUniformValue("u_blurSize", blurSize);
-    ctx->manager->blit(ctx->sceneTexture, ctx->finalTexture, shader);
+    ctx->manager->blit(ctx->finalTexture, final, shader);
+
+    ctx->manager->blit(final, ctx->finalTexture, shader);
 
     shader->release();
 }
