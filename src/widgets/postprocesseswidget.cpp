@@ -58,6 +58,8 @@ void PostProcessesWidget::addPostProcess(QAction* action)
         postProcesses.append(bloom);
         postProcessMgr->addPostProcess(bloom);
         widget->setPostProcess(bloom);
+        widget->setPanelTitle("Bloom");
+
 
 //        ui->content->layout()->addWidget(widget);
         ((QVBoxLayout*)ui->content->layout())->insertWidget(postProcesses.size()-1,widget);
@@ -68,6 +70,7 @@ void PostProcessesWidget::addPostProcess(QAction* action)
         postProcesses.append(bloom);
         widget->setPostProcess(bloom);
         postProcessMgr->addPostProcess(bloom);
+        widget->setPanelTitle("Radial Blur");
 
         //ui->content->layout()->addWidget(widget);
         ((QVBoxLayout*)ui->content->layout())->insertWidget(postProcesses.size()-1,widget);

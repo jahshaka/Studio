@@ -25,6 +25,11 @@ public:
     Texture2DPtr vBlur;
     Texture2DPtr final;
 
+    float bloomThreshold;
+    float bloomStrength;
+    float dirtStrength;
+    Texture2DPtr dirtyLens;
+
     BloomPostProcess();
 
     virtual void process(PostProcessContext* context) override;
