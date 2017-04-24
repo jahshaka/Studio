@@ -560,7 +560,7 @@ void MainWindow::saveScene()
     {
         auto filename = Globals::project->getFilePath();
         auto writer = new SceneWriter();
-        writer->writeScene(filename,scene,sceneView->getEditorData());
+        writer->writeScene(filename, scene, sceneView->getRenderer()->getPostProcessManager(), sceneView->getEditorData());
 
         settings->addRecentlyOpenedScene(filename);
 
@@ -570,7 +570,7 @@ void MainWindow::saveScene()
     {
         auto filename = QFileDialog::getSaveFileName(this,"Save Scene","","Jashaka Scene (*.jah)");
         auto writer = new SceneWriter();
-        writer->writeScene(filename,scene,sceneView->getEditorData());
+        writer->writeScene(filename, scene, sceneView->getRenderer()->getPostProcessManager(), sceneView->getEditorData());
 
         Globals::project->setFilePath(filename);
         this->setProjectTitle(Globals::project->getProjectName());
@@ -588,7 +588,7 @@ void MainWindow::saveSceneAs()
     QString dir = QApplication::applicationDirPath()+"/scenes/";
     auto filename = QFileDialog::getSaveFileName(this,"Save Scene",dir,"Jashaka Scene (*.jah)");
     auto writer = new SceneWriter();
-    writer->writeScene(filename,scene,sceneView->getEditorData());
+    writer->writeScene(filename, scene, sceneView->getRenderer()->getPostProcessManager(), sceneView->getEditorData());
 
     Globals::project->setFilePath(filename);
     this->setProjectTitle(Globals::project->getProjectName());

@@ -28,10 +28,11 @@ class EditorData;
 class SceneWriter : public AssetIOBase
 {
 public:
-    void writeScene(QString filePath,iris::ScenePtr scene,EditorData* ediorData = nullptr);
+    void writeScene(QString filePath,iris::ScenePtr scene, iris::PostProcessManagerPtr postMan, EditorData* ediorData = nullptr);
 
 private:
     void writeScene(QJsonObject& projectObj, iris::ScenePtr scene);
+    void writePostProcessData(QJsonObject& projectObj, iris::PostProcessManagerPtr postMan);
     void writeEditorData(QJsonObject& projectObj, EditorData* ediorData = nullptr);
     void writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr node);
     void writeAnimationData(QJsonObject& sceneNodeObj, iris::SceneNodePtr node);

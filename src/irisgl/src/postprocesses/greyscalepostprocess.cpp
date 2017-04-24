@@ -12,6 +12,7 @@ namespace iris
 
 GreyscalePostProcess::GreyscalePostProcess()
 {
+    name = "greyscale";
     shader = GraphicsHelper::loadShader(":assets/shaders/postprocesses/default.vs",
                                         ":assets/shaders/postprocesses/greyscale.fs");
 }

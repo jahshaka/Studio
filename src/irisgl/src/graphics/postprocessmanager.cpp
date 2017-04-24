@@ -45,6 +45,11 @@ void PostProcessManager::setPostProcesses(QList<PostProcessPtr> processes)
     this->postProcesses = processes;
 }
 
+QList<PostProcessPtr> PostProcessManager::getPostProcesses()
+{
+    return postProcesses;
+}
+
 void PostProcessManager::blit(iris::Texture2DPtr source, iris::Texture2DPtr dest, QOpenGLShaderProgram *shader)
 {
     initRenderTarget();

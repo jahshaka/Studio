@@ -12,6 +12,7 @@ namespace iris
 
 SSAOPostProcess::SSAOPostProcess()
 {
+    name = "ssao";
     shader = GraphicsHelper::loadShader(":assets/shaders/postprocesses/default.vs",
                                         ":assets/shaders/postprocesses/ssao.fs");
 

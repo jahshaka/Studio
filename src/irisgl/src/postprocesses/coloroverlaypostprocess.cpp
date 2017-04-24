@@ -23,6 +23,8 @@ void ColorOverlayPostProcess::setOverlayColor(const QColor &value)
 
 ColorOverlayPostProcess::ColorOverlayPostProcess()
 {
+    name = "color_overlay";
+
     shader = GraphicsHelper::loadShader(":assets/shaders/postprocesses/default.vs",
                                         ":assets/shaders/postprocesses/coloroverlay.fs");
 

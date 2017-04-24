@@ -14,6 +14,8 @@ namespace iris
 
 RadialBlurPostProcess::RadialBlurPostProcess()
 {
+    name = "radial_blur";
+
     shader = GraphicsHelper::loadShader(":assets/shaders/postprocesses/default.vs",
                                         ":assets/shaders/postprocesses/radial_blur.fs");
     blurSize = 1.0f;

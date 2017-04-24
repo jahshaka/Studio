@@ -62,7 +62,8 @@ HEADERS += \
     $$PWD/src/postprocesses/coloroverlaypostprocess.h \
     $$PWD/src/postprocesses/radialblurpostprocess.h \
     $$PWD/src/postprocesses/greyscalepostprocess.h \
-    $$PWD/src/postprocesses/ssaopostprocess.h
+    $$PWD/src/postprocesses/ssaopostprocess.h \
+    $$PWD/src/postprocesses/materialpostprocess.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)

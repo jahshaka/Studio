@@ -18,6 +18,8 @@ namespace iris
 
 BloomPostProcess::BloomPostProcess()
 {
+    name = "bloom";
+
     thresholdShader = GraphicsHelper::loadShader(":assets/shaders/postprocesses/default.vs",
                                         ":assets/shaders/postprocesses/bloom_threshold.fs");
 
