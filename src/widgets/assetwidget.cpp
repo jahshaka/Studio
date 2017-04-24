@@ -34,15 +34,19 @@ AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWid
     ui->assetView->setViewMode(QListWidget::IconMode);
     ui->assetView->setIconSize(QSize(88, 88));
     ui->assetView->setResizeMode(QListWidget::Adjust);
+//    ui->assetView->setSpacing(4);
     ui->assetView->setMovement(QListView::Static);
     ui->assetView->setSelectionBehavior(QAbstractItemView::SelectItems);
-    ui->assetView->setSelectionMode(QAbstractItemView::SingleSelection);
+    ui->assetView->setSelectionMode(QAbstractItemView::MultiSelection);
 
     connect(ui->assetView,  SIGNAL(itemClicked(QListWidgetItem*)),
             this,           SLOT(assetViewClicked(QListWidgetItem*)));
 
     connect(ui->assetView,  SIGNAL(customContextMenuRequested(const QPoint&)),
             this,           SLOT(sceneViewCustomContextMenu(const QPoint&)));
+
+    connect(ui->assetView,  SIGNAL(itemDoubleClicked(QListWidgetItem*)),
+            this,           SLOT(assetViewDblClicked(QListWidgetItem*)));
 }
 
 AssetWidget::~AssetWidget()
@@ -53,52 +57,46 @@ AssetWidget::~AssetWidget()
 void AssetWidget::populateAssetTree()
 {
     // TODO - revamp this, the actual project directory is up one level. ok
-//    qDebug() << "PROJECT " << Globals::project->getProjectFolder();
+    auto rootTreeItem = new QTreeWidgetItem();
+    rootTreeItem->setText(0, "Assets");
+    updateTree(rootTreeItem, Globals::project->getProjectFolder());
 
-    QDir projDir = Globals::project->getProjectFolder();
+    ui->assetTree->clear();
+    ui->assetTree->addTopLevelItem(rootTreeItem);
+    ui->assetTree->expandItem(rootTreeItem);
+}
 
-    for (auto topLevel : projDir.entryList(QDir::NoDotAndDotDot | QDir::Dirs)) {
-        addTreeRoot(topLevel, projDir.path() + '/' + topLevel);
+void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
+{
+    QDir dir(path);
+    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+    foreach (const QFileInfo &file, files) {
+        if (!file.fileName().startsWith('.')) {
+            auto item = new QTreeWidgetItem();
+            item->setData(0, Qt::DisplayRole, file.fileName());
+            item->setData(0, Qt::UserRole, file.absoluteFilePath());
+            parent->addChild(item);
+            updateTree(item, file.absoluteFilePath());
+        }
     }
-}
-
-void AssetWidget::addTreeRoot(const QString &name, const QString &desc)
-{
-    auto item = new QTreeWidgetItem(ui->assetTree);
-    item->setText(0, name);
-    item->setData(0, Qt::UserRole, desc);
-
-//    addTreeChild(item, "HMMM", "uncle!!!!");
-}
-
-void AssetWidget::addTreeChild(QTreeWidgetItem *parent, const QString &name, const QString &desc)
-{
-    auto item = new QTreeWidgetItem();
-    item->setData(0, Qt::DisplayRole, name);
-    item->setData(0, Qt::UserRole, desc);
-
-    parent->addChild(item);
 }
 
 void AssetWidget::addItem(const QString &asset)
 {
-    auto name = QFileInfo(asset).baseName();
+    QFileInfo file(asset);
+    auto name = file.baseName();
     if (name.length() > 10) {
         name.truncate(8);
         name += "...";
     }
 
-    QFileInfo file(asset);
     QIcon icon;
     QListWidgetItem *item;
 
     if (file.isDir()) {
-        QDir meta(Globals::project->getProjectFolder());
-        meta.cdUp();
-        QString p = meta.path() + "/.metadata/folder.png";
-        // TODO - store these assets in the application folder, these don't need to be per project!
-        icon = QIcon(p);
+        icon = QIcon(":/app/icons/folder-symbol.svg");
         item = new QListWidgetItem(icon, name);
+        item->setData(Qt::UserRole, file.absolutePath());
     } else {
         QImage img(asset);
         QPixmap pixmap;
@@ -119,7 +117,6 @@ void AssetWidget::updateAssetView(const QString &path)
     QDir dir(path);
     for (auto file : dir.entryList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
         addItem(path + '/' + file);
-        // ui->assetView->addItem(QFileInfo(file).baseName());
     }
 }
 
@@ -130,13 +127,7 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 
 void AssetWidget::treeItemSelected(QTreeWidgetItem *item)
 {
-    auto data = item->data(0, Qt::DisplayRole).toString();
-    auto path = item->data(0, Qt::UserRole).toString();
-
-    updateAssetView(path);
-
-//    ui->assetView->addItem(data);
-//    ui->assetView->addItem(path);
+    updateAssetView(item->data(0, Qt::UserRole).toString());
 }
 
 void AssetWidget::treeItemChanged(QTreeWidgetItem* item, int column)
@@ -150,10 +141,20 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 
     if (!index.isValid()) return;
 
-    auto item = ui->assetTree->itemAt(pos);
+    assetItem.item = ui->assetTree->itemAt(pos);
+    assetItem.selectedPath = assetItem.item->data(0, Qt::UserRole).toString();
 
     QMenu menu;
     QAction *action;
+
+    QMenu *createMenu = menu.addMenu("Create");
+    action = new QAction(QIcon(), "New Folder", this);
+    connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
+    createMenu->addAction(action);
+
+    action = new QAction(QIcon(), "Open in Explorer", this);
+    connect(action, SIGNAL(triggered()), this, SLOT(openAtFolder()));
+    menu.addAction(action);
 
     action = new QAction(QIcon(), "Delete", this);
     connect(action, SIGNAL(triggered()), this, SLOT(deleteFolder()));
@@ -166,16 +167,26 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 {
     QModelIndex index = ui->assetView->indexAt(pos);
 
-    if (!index.isValid()) return;
-
-    auto item = ui->assetView->itemAt(pos);
-
     QMenu menu;
     QAction *action;
 
-    action = new QAction(QIcon(), "Delete", this);
-    connect(action, SIGNAL(triggered()), this, SLOT(deleteFolder()));
-    menu.addAction(action);
+    if (index.isValid()) {
+        auto item = ui->assetView->itemAt(pos);
+        assetItem.selectedPath = item->data(Qt::UserRole).toString();
+
+        action = new QAction(QIcon(), "Delete", this);
+        connect(action, SIGNAL(triggered()), this, SLOT(deleteFolder()));
+        menu.addAction(action);
+    } else {
+        QMenu *createMenu = menu.addMenu("Create");
+        action = new QAction(QIcon(), "New Folder", this);
+        connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
+        createMenu->addAction(action);
+
+        action = new QAction(QIcon(), "Open in Explorer", this);
+        connect(action, SIGNAL(triggered()), this, SLOT(openAtFolder()));
+        menu.addAction(action);
+    }
 
     menu.exec(ui->assetView->mapToGlobal(pos));
 }
@@ -185,7 +196,34 @@ void AssetWidget::assetViewClicked(QListWidgetItem *item)
     qDebug() << item->text();
 }
 
+void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
+{
+    QFileInfo path(item->data(Qt::UserRole).toString());
+    if (path.isDir()) {
+        // do something
+    }
+}
+
 void AssetWidget::deleteFolder()
+{
+    QDir dir(assetItem.selectedPath);
+    if (dir.removeRecursively()) {
+        auto item = assetItem.item;
+        delete item->parent()->takeChild(item->parent()->indexOfChild(item));
+    }
+}
+
+void AssetWidget::openAtFolder()
+{
+
+}
+
+void AssetWidget::createFolder()
+{
+
+}
+
+void AssetWidget::importAsset()
 {
 
 }

@@ -6,12 +6,39 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>836</width>
-    <height>432</height>
+    <width>720</width>
+    <height>256</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QPushButton {
+    background-color: #4D4D4D;
+    color: #DEDEDE;
+    border: 0;
+	padding: 2px 8px;
+}
+
+QPushButton:hover {
+    background-color: #555;
+}
+
+QPushButton:pressed {
+    background-color: #444;
+}
+
+QSlider::groove:horizontal {
+   /* height: 8px; /* the groove expands to the size of the slider by default. by giving it a height, it has a fixed size */
+    background: #404040;
+}
+
+QSlider::handle:horizontal {
+    background: #AFAFAF;
+    width: 10px;
+    margin: -2px 0; /* handle is placed by default on the contents rect of the groove. Expand outside the groove */
+}</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="leftMargin">
@@ -26,6 +53,9 @@
    <property name="bottomMargin">
     <number>0</number>
    </property>
+   <property name="verticalSpacing">
+    <number>0</number>
+   </property>
    <item row="0" column="0">
     <widget class="QWidget" name="headerTEMP" native="true">
      <property name="sizePolicy">
@@ -36,26 +66,45 @@
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout">
       <property name="leftMargin">
-       <number>0</number>
+       <number>7</number>
       </property>
       <property name="topMargin">
        <number>7</number>
       </property>
       <property name="rightMargin">
-       <number>0</number>
+       <number>7</number>
       </property>
       <property name="bottomMargin">
-       <number>0</number>
+       <number>7</number>
       </property>
+      <item>
+       <spacer name="horizontalSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
       <item>
        <widget class="QPushButton" name="pushButton">
         <property name="text">
-         <string>PushButton</string>
+         <string>ReScan Assets</string>
         </property>
        </widget>
       </item>
       <item>
        <widget class="QSlider" name="horizontalSlider">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
@@ -66,11 +115,8 @@
    </item>
    <item row="1" column="0">
     <widget class="QSplitter" name="splitter">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
+     <property name="styleSheet">
+      <string notr="true">background: #303030</string>
      </property>
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
@@ -104,6 +150,35 @@
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
+     </widget>
+     <widget class="QWidget" name="widget" native="true">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="label">
+         <property name="text">
+          <string>File Info Here</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </widget>
    </item>
