@@ -32,4 +32,9 @@ void SSAOPostProcess::process(PostProcessContext *ctx)
     shader->release();
 }
 
+SSAOPostProcessPtr SSAOPostProcess::create()
+{
+    return SSAOPostProcessPtr(new SSAOPostProcess());
+}
+
 }

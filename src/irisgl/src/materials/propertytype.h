@@ -31,6 +31,7 @@ struct Property
     PropertyType        type;
 
     virtual QVariant    getValue() = 0;
+    virtual void        setValue(QVariant val) = 0;
 };
 
 class PropertyListener
@@ -45,10 +46,15 @@ struct BoolProperty : public Property
 
     BoolProperty () {
         type = PropertyType::Bool;
+        value = false;
     }
 
     QVariant getValue() {
         return value;
+    }
+
+    void getValue(QVariant val) {
+        value = val.toBool();
     }
 };
 
@@ -65,6 +71,10 @@ struct IntProperty : public Property
     QVariant getValue() {
         return value;
     }
+
+    void setValue(QVariant val) {
+        value = val.toInt();
+    }
 };
 
 struct FloatProperty : public Property
@@ -80,6 +90,10 @@ struct FloatProperty : public Property
     QVariant getValue() {
         return value;
     }
+
+    void setValue(QVariant val) {
+        value = (float)val.toDouble();
+    }
 };
 
 struct ColorProperty : public Property
@@ -93,6 +107,10 @@ struct ColorProperty : public Property
     QVariant getValue() {
         return value;
     }
+
+    void setValue(QVariant val) {
+        value = val.value<QColor>();
+    }
 };
 
 struct TextureProperty : public Property
@@ -105,6 +123,10 @@ struct TextureProperty : public Property
 
     QVariant getValue() {
         return value;
+    }
+
+    void setValue(QVariant val) {
+        value = val.toString();
     }
 };
 
@@ -120,6 +142,10 @@ struct FileProperty : public Property
     QVariant getValue() {
         return value;
     }
+
+    void setValue(QVariant val) {
+        value = val.toString();
+    }
 };
 
 struct ListProperty : public Property
@@ -133,6 +159,10 @@ struct ListProperty : public Property
 
     QVariant getValue() {
         return value;
+    }
+
+    void setValue(QVariant val) {
+        value = val.toStringList();
     }
 };
 
@@ -149,6 +179,10 @@ struct Vec2Property : public Property
     QVariant getValue() {
         return value;
     }
+
+    void setValue(QVariant val) {
+        value = val.value<QVector2D>();
+    }
 };
 
 struct Vec3Property : public Property
@@ -161,6 +195,10 @@ struct Vec3Property : public Property
 
     QVariant getValue() {
         return value;
+    }
+
+    void setValue(QVariant val) {
+        value = val.value<QVector3D>();
     }
 };
 

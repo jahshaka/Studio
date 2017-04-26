@@ -21,6 +21,11 @@ void ColorOverlayPostProcess::setOverlayColor(const QColor &value)
     col = QVector3D(value.redF(), value.greenF(), value.blueF());
 }
 
+ColorOverlayPostProcessPtr ColorOverlayPostProcess::create()
+{
+    return ColorOverlayPostProcessPtr(new ColorOverlayPostProcess());
+}
+
 ColorOverlayPostProcess::ColorOverlayPostProcess()
 {
     name = "color_overlay";

@@ -8,6 +8,9 @@ class QOpenGLShaderProgram;
 
 namespace  iris {
 
+class ColorOverlayPostProcess;
+typedef QSharedPointer<ColorOverlayPostProcess> ColorOverlayPostProcessPtr;
+
 class ColorOverlayPostProcess : public PostProcess
 {
     QColor overlayColor;
@@ -20,6 +23,8 @@ public:
 
     QColor getOverlayColor() const;
     void setOverlayColor(const QColor &value);
+
+    static ColorOverlayPostProcessPtr create();
 };
 
 }

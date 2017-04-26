@@ -34,13 +34,23 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/particlesystemnode.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/materials/custommaterial.h"
+#include "../irisgl/src/materials/propertytype.h"
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/graphicshelper.h"
 #include "../irisgl/src/animation/animation.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
+#include "../irisgl/src/graphics/postprocess.h"
+#include "../irisgl/src/graphics/postprocessmanager.h"
 
-iris::ScenePtr SceneReader::readScene(QString filePath, EditorData** editorData)
+#include "../irisgl/src/postprocesses/bloompostprocess.h"
+#include "../irisgl/src/postprocesses/coloroverlaypostprocess.h"
+#include "../irisgl/src/postprocesses/greyscalepostprocess.h"
+#include "../irisgl/src/postprocesses/materialpostprocess.h"
+#include "../irisgl/src/postprocesses/radialblurpostprocess.h"
+#include "../irisgl/src/postprocesses/ssaopostprocess.h"
+
+iris::ScenePtr SceneReader::readScene(QString filePath, iris::PostProcessManagerPtr postMan, EditorData** editorData)
 {
     dir = AssetIOBase::getDirFromFileName(filePath);
     QFile file(filePath);
@@ -53,6 +63,8 @@ iris::ScenePtr SceneReader::readScene(QString filePath, EditorData** editorData)
     auto scene = readScene(projectObj);
     if(editorData)
         *editorData = readEditorData(projectObj);
+
+    readPostProcessData(projectObj, postMan);
 
     return scene;
 }
@@ -79,6 +91,49 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
 
 
     return editorData;
+}
+
+void SceneReader::readPostProcessData(QJsonObject &projectObj, iris::PostProcessManagerPtr postMan)
+{
+
+    if (projectObj.contains("postprocesses")) {
+        auto processListObj = projectObj["postprocesses"].toArray();
+
+        for (auto processVal : processListObj) {
+            auto processObj = processVal.toObject();
+            auto name = processObj["name"].toString("");
+
+            iris::PostProcessPtr process;
+
+            if(name == "bloom")
+               process = iris::BloomPostProcess::create();
+            if(name == "color_overlay")
+               process = iris::ColorOverlayPostProcess::create();
+            //if(name == "greyscale")
+            //   process = iris::GreyscalePostProcess::create();
+            if(name == "radial_blur")
+               process = iris::RadialBlurPostProcess::create();
+            if(name == "ssao")
+               process = iris::SSAOPostProcess::create();
+            //if(name == "material")
+            //   process = iris::MaterialPostProcess::create();
+
+            if (!!process) {
+                auto propertyObj = processObj["properties"].toObject();
+                auto props = process->getProperties();
+                for ( auto prop : props) {
+
+                    if (propertyObj.contains(prop->name)) {
+
+                        prop->setValue(propertyObj[prop->name].toVariant());
+                        process->setProperty(prop);
+                    }
+                }
+            }
+
+            postMan->addPostProcess(process);
+        }
+    }
 }
 
 iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)

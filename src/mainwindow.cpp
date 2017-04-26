@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "irisgl/src/graphics/texture2d.h"
 #include "irisgl/src/animation/keyframeset.h"
 #include "irisgl/src/animation/keyframeanimation.h"
+#include "irisgl/src/graphics/postprocessmanager.h"
 
 #include <QFontDatabase>
 #include <QOpenGLContext>
@@ -623,9 +624,12 @@ void MainWindow::openProject(QString filename, bool startupLoad)
 
     EditorData* editorData = nullptr;
 
-    auto scene = reader->readScene(filename,&editorData);
+    auto postMan = sceneView->getRenderer()->getPostProcessManager();
+    postMan->clearPostProcesses();
+    auto scene = reader->readScene(filename, postMan, &editorData);
     this->sceneView->doneCurrent();
     setScene(scene);
+
     if(editorData != nullptr)
         sceneView->setEditorData(editorData);
 

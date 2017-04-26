@@ -35,6 +35,7 @@ public:
     void addPostProcess(PostProcessPtr process);
     void setPostProcesses(QList<PostProcessPtr> processes);
     QList<PostProcessPtr> getPostProcesses();
+    void clearPostProcesses();
 
     void blit(Texture2DPtr source, Texture2DPtr dest, QOpenGLShaderProgram* program = nullptr);
 

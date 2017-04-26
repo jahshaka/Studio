@@ -8,6 +8,9 @@ class QOpenGLShaderProgram;
 
 namespace iris {
 
+class SSAOPostProcess;
+typedef QSharedPointer<SSAOPostProcess> SSAOPostProcessPtr;
+
 class SSAOPostProcess : public PostProcess
 {
     QOpenGLShaderProgram* shader;
@@ -15,6 +18,8 @@ class SSAOPostProcess : public PostProcess
 public:
     SSAOPostProcess();
     virtual void process(PostProcessContext* ctx) override;
+
+    static SSAOPostProcessPtr create();
 };
 
 }
