@@ -88,11 +88,11 @@ struct FloatProperty : public Property
     }
 
     QVariant getValue() {
-        return value;
+        return QVariant::fromValue(value);
     }
 
     void setValue(QVariant val) {
-        value = (float)val.toDouble();
+        value = val.toFloat();
     }
 };
 

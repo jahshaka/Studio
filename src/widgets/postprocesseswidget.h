@@ -16,6 +16,8 @@ public:
     explicit PostProcessesWidget(QWidget *parent = 0);
     ~PostProcessesWidget();
 
+    void clear();
+    void clearLayout(QLayout *layout);
     void setPostProcessMgr(const iris::PostProcessManagerPtr &value);
 
 private slots:

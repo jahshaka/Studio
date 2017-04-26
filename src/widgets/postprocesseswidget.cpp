@@ -29,8 +29,33 @@ PostProcessesWidget::PostProcessesWidget(QWidget *parent) :
 
     connect(processList, SIGNAL(triggered(QAction*)), this, SLOT(addPostProcess(QAction*)));
 
+    clear();
+}
+
+PostProcessesWidget::~PostProcessesWidget()
+{
+    delete ui;
+}
+
+void PostProcessesWidget::clearLayout(QLayout *layout)
+{
+    while (auto item = layout->takeAt(0)) {
+        if (auto widget = item->widget()) widget->deleteLater();
+
+        if (auto childLayout = item->layout()) {
+            this->clearLayout(childLayout);
+        }
+
+        delete item;
+    }
+
+    delete layout;
+}
+
+void PostProcessesWidget::clear()
+{
     if (ui->content->layout()) {
-        delete ui->content->layout();
+        clearLayout(ui->content->layout());
     }
 
     auto layout = new QVBoxLayout();
@@ -39,14 +64,25 @@ PostProcessesWidget::PostProcessesWidget(QWidget *parent) :
     ui->content->setLayout(layout);
 }
 
-PostProcessesWidget::~PostProcessesWidget()
+void PostProcessesWidget::setPostProcessMgr(const iris::PostProcessManagerPtr &postMan)
 {
-    delete ui;
-}
+    clear();
 
-void PostProcessesWidget::setPostProcessMgr(const iris::PostProcessManagerPtr &value)
-{
-    postProcessMgr = value;
+    postProcessMgr = postMan;
+
+    int i = 0;
+    for (auto process : postMan->getPostProcesses()) {
+        auto widget = new PostProcessPropertyWidget();
+        widget->expand();
+
+        postProcesses.append(process);
+        widget->setPostProcess(process);
+        widget->setPanelTitle(process->getDisplayName());
+
+        ((QVBoxLayout*)ui->content->layout())->insertWidget(i, widget);
+
+        i++;
+    }
 }
 
 void PostProcessesWidget::addPostProcess(QAction* action)
@@ -60,8 +96,6 @@ void PostProcessesWidget::addPostProcess(QAction* action)
         widget->setPostProcess(bloom);
         widget->setPanelTitle("Bloom");
 
-
-//        ui->content->layout()->addWidget(widget);
         ((QVBoxLayout*)ui->content->layout())->insertWidget(postProcesses.size()-1,widget);
     } else if (action->text()=="Radial Blur") {
         auto widget = new PostProcessPropertyWidget();
@@ -72,7 +106,6 @@ void PostProcessesWidget::addPostProcess(QAction* action)
         postProcessMgr->addPostProcess(bloom);
         widget->setPanelTitle("Radial Blur");
 
-        //ui->content->layout()->addWidget(widget);
         ((QVBoxLayout*)ui->content->layout())->insertWidget(postProcesses.size()-1,widget);
     }
 }

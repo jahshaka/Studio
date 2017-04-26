@@ -19,6 +19,7 @@ namespace iris
 BloomPostProcess::BloomPostProcess()
 {
     name = "bloom";
+    displayName = "Bloom";
 
     thresholdShader = GraphicsHelper::loadShader(":assets/shaders/postprocesses/default.vs",
                                         ":assets/shaders/postprocesses/bloom_threshold.fs");
@@ -142,7 +143,7 @@ QList<Property *> BloomPostProcess::getProperties()
     auto texProp = new TextureProperty();
     texProp->displayName = "Dirty Lens";
     texProp->name = "dirty_lens";
-    texProp->value = "";
+    texProp->value = dirtyLens->getSource();
     props.append(texProp);
 
     prop = new FloatProperty();

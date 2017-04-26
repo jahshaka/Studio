@@ -31,10 +31,16 @@ class PostProcess : public QEnableSharedFromThis<PostProcess>
 public:
     bool enabled;
     QString name;
+    QString displayName;
 
     QString getName()
     {
         return name;
+    }
+
+    QString getDisplayName()
+    {
+        return displayName;
     }
 
     virtual void process(PostProcessContext* ctx)

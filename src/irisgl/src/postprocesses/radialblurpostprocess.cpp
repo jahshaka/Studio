@@ -15,6 +15,7 @@ namespace iris
 RadialBlurPostProcess::RadialBlurPostProcess()
 {
     name = "radial_blur";
+    displayName = "Radial Blur";
 
     shader = GraphicsHelper::loadShader(":assets/shaders/postprocesses/default.vs",
                                         ":assets/shaders/postprocesses/radial_blur.fs");
@@ -46,7 +47,7 @@ QList<Property *> RadialBlurPostProcess::getProperties()
     auto prop = new FloatProperty();
     prop->displayName = "Blur Scale";
     prop->name = "blur_scale";
-    prop->value = 1.0f;
+    prop->value = blurSize;
     prop->minValue = 0.1f;
     prop->maxValue = 10.0f;
     //prop->id = 1;

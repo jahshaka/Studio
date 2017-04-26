@@ -29,6 +29,7 @@ ColorOverlayPostProcessPtr ColorOverlayPostProcess::create()
 ColorOverlayPostProcess::ColorOverlayPostProcess()
 {
     name = "color_overlay";
+    displayName = "Color Overlay";
 
     shader = GraphicsHelper::loadShader(":assets/shaders/postprocesses/default.vs",
                                         ":assets/shaders/postprocesses/coloroverlay.fs");

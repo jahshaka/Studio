@@ -630,6 +630,8 @@ void MainWindow::openProject(QString filename, bool startupLoad)
     this->sceneView->doneCurrent();
     setScene(scene);
 
+    postProcessWidget->setPostProcessMgr(postMan);
+
     if(editorData != nullptr)
         sceneView->setEditorData(editorData);
 
