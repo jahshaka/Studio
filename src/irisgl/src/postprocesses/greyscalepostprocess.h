@@ -14,6 +14,7 @@ typedef QSharedPointer<GreyscalePostProcess> GreyscalePostProcessPtr;
 class GreyscalePostProcess : public PostProcess
 {
     QOpenGLShaderProgram* shader;
+    Texture2DPtr final;
 public:
     GreyscalePostProcess();
 

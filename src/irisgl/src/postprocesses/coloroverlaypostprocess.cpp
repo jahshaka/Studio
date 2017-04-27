@@ -6,6 +6,7 @@
 #include "../graphics/postprocessmanager.h"
 #include "../graphics/postprocess.h"
 #include "../graphics/graphicshelper.h"
+#include "../graphics/texture2d.h"
 #include "../materials/propertytype.h"
 
 namespace iris
@@ -37,15 +38,24 @@ ColorOverlayPostProcess::ColorOverlayPostProcess()
 
     //setOverlayColor(QColor(255,200,200));
     setOverlayColor(QColor(255,255,255));
+
+    final = Texture2D::create(100, 100);
 }
 
 void ColorOverlayPostProcess::process(iris::PostProcessContext *ctx)
 {
+    //todo: only resize of the sizes are different
+    auto screenWidth = ctx->sceneTexture->texture->width();
+    auto screenHeight = ctx->sceneTexture->texture->height();
+    final->resize(screenWidth, screenHeight);
+
     shader->bind();
     shader->setUniformValue("u_colorOverlay", col);
     shader->setUniformValue("u_sceneTexture", 0);
-    ctx->manager->blit(ctx->sceneTexture, ctx->finalTexture, shader);
+    ctx->manager->blit(ctx->sceneTexture, final, shader);
     shader->release();
+
+    ctx->manager->blit(final, ctx->finalTexture);
 }
 
 QList<Property *> ColorOverlayPostProcess::getProperties()

@@ -16,6 +16,7 @@ class ColorOverlayPostProcess : public PostProcess
     QColor overlayColor;
     QVector3D col;
     QOpenGLShaderProgram* shader;
+    Texture2DPtr final;
 public:
     ColorOverlayPostProcess();
 
