@@ -20,12 +20,12 @@ float far = 1000.0; //Z-far
 int samples = 5; //samples on the first ring (3 - 5)
 int rings = 5; //ring count (3 - 5)
 
-float radius = 0.2; //ao radius
+uniform float radius; //ao radius
 
-float diffarea = 0.5; //self-shadowing reduction
-float gdisplace = 0.4; //gauss bell center
+uniform float diffarea; //self-shadowing reduction
+uniform float gdisplace; //gauss bell center
 
-float lumInfluence = 0.8; //how much luminance affects occlusion
+uniform float lumInfluence; //how much luminance affects occlusion
 
 bool noise = false; //use noise instead of pattern for sample dithering?
 bool onlyAO = false; //use only ambient occlusion pass?
@@ -137,9 +137,9 @@ void main(void)
   float lum = dot(color.rgb, lumcoeff);
   vec3 luminance = vec3(lum, lum, lum);
   
-  //fragColor = vec4(vec3(color*mix(vec3(ao),vec3(1.0),luminance*lumInfluence)),1.0); //mix(color*ao, white, luminance)
-  fragColor = vec4(color*vec3(ao),1.0);
+  fragColor = vec4(vec3(color*mix(vec3(ao),vec3(1.0),luminance*lumInfluence)),1.0); //mix(color*ao, white, luminance)
+  //fragColor = vec4(color*vec3(ao),1.0);
   //fragColor = vec4(color,1.0);
-  if(onlyAO)
-  fragColor = vec4(vec3(mix(vec3(ao),vec3(1.0),luminance*lumInfluence)),1.0); //ambient occlusion only
+  //if(onlyAO)
+  //fragColor = vec4(vec3(mix(vec3(ao),vec3(1.0),luminance*lumInfluence)),1.0); //ambient occlusion only
 }

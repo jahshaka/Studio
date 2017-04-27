@@ -6,9 +6,13 @@
 #include "ui_postprocesseswidget.h"
 #include "propertywidgets/postprocesspropertywidget.h"
 
+#include "../irisgl/src/graphics/postprocess.h"
 #include "../irisgl/src/graphics/postprocessmanager.h"
 #include "../irisgl/src/postprocesses/bloompostprocess.h"
 #include "../irisgl/src/postprocesses/radialblurpostprocess.h"
+#include "../irisgl/src/postprocesses/ssaopostprocess.h"
+#include "../irisgl/src/postprocesses/greyscalepostprocess.h"
+#include "../irisgl/src/postprocesses/coloroverlaypostprocess.h"
 
 #include <QDebug>
 
@@ -87,24 +91,28 @@ void PostProcessesWidget::setPostProcessMgr(const iris::PostProcessManagerPtr &p
 
 void PostProcessesWidget::addPostProcess(QAction* action)
 {
-    if (action->text()=="Bloom") {
-        auto widget = new PostProcessPropertyWidget();
-        widget->expand();
-        auto bloom = iris::BloomPostProcess::create();
-        postProcesses.append(bloom);
-        postProcessMgr->addPostProcess(bloom);
-        widget->setPostProcess(bloom);
-        widget->setPanelTitle("Bloom");
+    iris::PostProcessPtr process;
 
-        ((QVBoxLayout*)ui->content->layout())->insertWidget(postProcesses.size()-1,widget);
+    if (action->text()=="Bloom") {
+        process = iris::BloomPostProcess::create();
     } else if (action->text()=="Radial Blur") {
+        process = iris::RadialBlurPostProcess::create();
+    } else if (action->text()=="GreyScale") {
+        process = iris::GreyscalePostProcess::create();
+    } else if (action->text()=="Color Overlay") {
+        process = iris::ColorOverlayPostProcess::create();
+    } else if (action->text()=="SSAO") {
+        process = iris::SSAOPostProcess::create();
+    }
+
+    if (!!process) {
         auto widget = new PostProcessPropertyWidget();
         widget->expand();
-        auto bloom = iris::RadialBlurPostProcess::create();
-        postProcesses.append(bloom);
-        widget->setPostProcess(bloom);
-        postProcessMgr->addPostProcess(bloom);
-        widget->setPanelTitle("Radial Blur");
+
+        postProcesses.append(process);
+        postProcessMgr->addPostProcess(process);
+        widget->setPostProcess(process);
+        widget->setPanelTitle(process->getDisplayName());
 
         ((QVBoxLayout*)ui->content->layout())->insertWidget(postProcesses.size()-1,widget);
     }

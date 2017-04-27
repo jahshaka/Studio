@@ -8,6 +8,9 @@ class QOpenGLShaderProgram;
 
 namespace  iris {
 
+class GreyscalePostProcess;
+typedef QSharedPointer<GreyscalePostProcess> GreyscalePostProcessPtr;
+
 class GreyscalePostProcess : public PostProcess
 {
     QOpenGLShaderProgram* shader;
@@ -15,6 +18,8 @@ public:
     GreyscalePostProcess();
 
     virtual void process(PostProcessContext* ctx) override;
+
+    static GreyscalePostProcessPtr create();
 };
 
 }

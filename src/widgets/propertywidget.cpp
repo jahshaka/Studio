@@ -100,6 +100,7 @@ void PropertyWidget::addIntProperty(iris::Property *prop)
     intWidget->index = prop->id;
     ui->contentpane->layout()->addWidget(intWidget);
     properties.append(prop);
+
 }
 
 void PropertyWidget::addColorProperty(iris::Property *prop)

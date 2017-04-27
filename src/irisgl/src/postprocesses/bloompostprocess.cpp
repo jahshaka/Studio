@@ -143,7 +143,7 @@ QList<Property *> BloomPostProcess::getProperties()
     auto texProp = new TextureProperty();
     texProp->displayName = "Dirty Lens";
     texProp->name = "dirty_lens";
-    texProp->value = dirtyLens->getSource();
+    texProp->value = (!dirtyLens)?"":dirtyLens->getSource();
     props.append(texProp);
 
     prop = new FloatProperty();

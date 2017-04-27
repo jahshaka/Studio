@@ -26,6 +26,11 @@ void GreyscalePostProcess::process(iris::PostProcessContext *ctx)
     shader->release();
 }
 
+GreyscalePostProcessPtr GreyscalePostProcess::create()
+{
+    return GreyscalePostProcessPtr(new GreyscalePostProcess());
+}
+
 }
 
 
