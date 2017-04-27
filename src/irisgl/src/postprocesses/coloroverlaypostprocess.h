@@ -21,6 +21,9 @@ public:
 
     virtual void process(PostProcessContext* ctx) override;
 
+    QList<Property *> getProperties();
+    void setProperty(Property *prop) override;
+
     QColor getOverlayColor() const;
     void setOverlayColor(const QColor &value);
 
