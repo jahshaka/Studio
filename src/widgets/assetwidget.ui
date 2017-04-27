@@ -38,7 +38,24 @@ QSlider::handle:horizontal {
     background: #AFAFAF;
     width: 10px;
     margin: -2px 0; /* handle is placed by default on the contents rect of the groove. Expand outside the groove */
-}</string>
+}
+
+/* Works for both QListView and QListWidget */
+QListView::item {
+    /* Won't work without borders set */
+    border: 0;
+    padding: 10px;
+}
+
+/* For icon only */
+/*QListView::icon {
+    left: 10px;
+}*/
+
+/* For text only */
+/*QListView::text {
+    left: 10px;
+}*/</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="leftMargin">
@@ -91,24 +108,14 @@ QSlider::handle:horizontal {
        </spacer>
       </item>
       <item>
-       <widget class="QPushButton" name="pushButton">
+       <widget class="QLabel" name="srchLabel">
         <property name="text">
-         <string>ReScan Assets</string>
+         <string>Search</string>
         </property>
        </widget>
       </item>
       <item>
-       <widget class="QSlider" name="horizontalSlider">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-       </widget>
+       <widget class="QLineEdit" name="searchBar"/>
       </item>
      </layout>
     </widget>
@@ -149,6 +156,15 @@ QSlider::handle:horizontal {
         <horstretch>1</horstretch>
         <verstretch>0</verstretch>
        </sizepolicy>
+      </property>
+      <property name="editTriggers">
+       <set>QAbstractItemView::NoEditTriggers</set>
+      </property>
+      <property name="iconSize">
+       <size>
+        <width>0</width>
+        <height>0</height>
+       </size>
       </property>
      </widget>
      <widget class="QWidget" name="widget" native="true">

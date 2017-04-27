@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "qfiledialog.h"
 #include <Qt>
 #include "../core/thumbnailmanager.h"
+#include "../widgets/assetpickerwidget.h"
 
 TexturePickerWidget::TexturePickerWidget(QWidget* parent) :
     BaseWidget(parent),
@@ -21,7 +22,8 @@ TexturePickerWidget::TexturePickerWidget(QWidget* parent) :
 {
     ui->setupUi(this);
 
-    connect(ui->load, SIGNAL(pressed()), SLOT(changeTextureMap()));
+//    connect(ui->load, SIGNAL(pressed()), SLOT(changeTextureMap()));
+    connect(ui->load, SIGNAL(pressed()), SLOT(pickTextureMap()));
 
     this->ui->texture->installEventFilter(this);
 
@@ -45,6 +47,13 @@ void TexturePickerWidget::changeTextureMap()
     if (file.isEmpty() || file.isNull()) return;
 
     this->setLabelImage(ui->texture, file);
+}
+
+void TexturePickerWidget::pickTextureMap()
+{
+    auto widget = new AssetPickerWidget(AssetType::Texture);
+
+    connect(widget, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(changeMap(QListWidgetItem*)));
 }
 
 QString TexturePickerWidget::loadTexture()
@@ -99,6 +108,12 @@ void TexturePickerWidget::on_pushButton_clicked()
     filePath.clear();
 
     emit valueChanged(QString::null);
+}
+
+void TexturePickerWidget::changeMap(QListWidgetItem *item)
+{
+    qDebug() << item->data(Qt::UserRole).toString();
+    setLabelImage(ui->texture, item->data(Qt::UserRole).toString());
 }
 
 void TexturePickerWidget::setTexture(QString path)

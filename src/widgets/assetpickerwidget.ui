@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>AssetPickerWidget</class>
+ <widget class="QWidget" name="AssetPickerWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>396</width>
+    <height>480</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QPushButton {
+    background-color: #4D4D4D;
+    color: #DEDEDE;
+    border: 0;
+	padding: 2px 8px;
+}
+
+QPushButton:hover {
+    background-color: #555;
+}
+
+QPushButton:pressed {
+    background-color: #444;
+}
+
+QSlider::groove:horizontal {
+   /* height: 8px; /* the groove expands to the size of the slider by default. by giving it a height, it has a fixed size */
+    background: #404040;
+}
+
+QSlider::handle:horizontal {
+    background: #AFAFAF;
+    width: 10px;
+    margin: -2px 0; /* handle is placed by default on the contents rect of the groove. Expand outside the groove */
+}
+
+QListView {
+	background: #303030;
+	border: 0;
+}
+
+/* Works for both QListView and QListWidget */
+QListView::item {
+    /* Won't work without borders set */
+    border: 0;
+    padding: 4px;
+}
+
+/* For icon only */
+/*QListView::icon {
+    left: 10px;
+}*/
+
+/* For text only */
+/*QListView::text {
+    left: 10px;
+}*/</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <property name="leftMargin">
+    <number>7</number>
+   </property>
+   <property name="topMargin">
+    <number>7</number>
+   </property>
+   <property name="rightMargin">
+    <number>7</number>
+   </property>
+   <property name="bottomMargin">
+    <number>7</number>
+   </property>
+   <property name="spacing">
+    <number>7</number>
+   </property>
+   <item row="0" column="0">
+    <widget class="QPushButton" name="scanBtn">
+     <property name="text">
+      <string>Refresh</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QListWidget" name="assetView"/>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

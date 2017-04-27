@@ -8,6 +8,9 @@ namespace Ui {
 #include <QListWidget>
 #include <QTreeWidgetItem>
 #include <QWidget>
+#include <QFileDialog>
+
+#include "../io/assetmanager.h"
 
 // TODO - https://stackoverflow.com/questions/19465812/how-can-i-insert-qdockwidget-as-tab
 
@@ -27,6 +30,7 @@ public:
 
     void populateAssetTree();
     void updateTree(QTreeWidgetItem* parentTreeItem, QString path);
+    void walkFileSystem(QString folder, QString path);
     void addItem(const QString &asset);
     void updateAssetView(const QString &path);
 
@@ -36,10 +40,19 @@ protected:
 protected slots:
     void treeItemSelected(QTreeWidgetItem* item);
     void treeItemChanged(QTreeWidgetItem* item,int index);
+
     void sceneTreeCustomContextMenu(const QPoint &);
     void sceneViewCustomContextMenu(const QPoint &);
     void assetViewClicked(QListWidgetItem*);
     void assetViewDblClicked(QListWidgetItem*);
+
+    void updateAssetItem();
+
+    void renameTreeItem();
+    void renameViewItem();
+
+    void searchAssets(QString);
+    void OnLstItemsCommitData(QWidget*);
 
     void deleteFolder();
     void openAtFolder();

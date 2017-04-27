@@ -2,6 +2,7 @@
 #include "ui_assetwidget.h"
 
 #include "../../src/irisgl/src/core/irisutils.h"
+#include "../core/thumbnailmanager.h"
 #include "../core/project.h"
 #include "../globals.h"
 
@@ -30,14 +31,14 @@ AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWid
 
     // assetView section
     ui->assetView->setContextMenuPolicy(Qt::CustomContextMenu);
-
     ui->assetView->setViewMode(QListWidget::IconMode);
+//    ui->assetView->setUniformItemSizes(true);
+//    ui->assetView->setWordWrap(true);
     ui->assetView->setIconSize(QSize(88, 88));
     ui->assetView->setResizeMode(QListWidget::Adjust);
-//    ui->assetView->setSpacing(4);
     ui->assetView->setMovement(QListView::Static);
     ui->assetView->setSelectionBehavior(QAbstractItemView::SelectItems);
-    ui->assetView->setSelectionMode(QAbstractItemView::MultiSelection);
+    ui->assetView->setSelectionMode(QAbstractItemView::SingleSelection);
 
     connect(ui->assetView,  SIGNAL(itemClicked(QListWidgetItem*)),
             this,           SLOT(assetViewClicked(QListWidgetItem*)));
@@ -47,6 +48,16 @@ AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWid
 
     connect(ui->assetView,  SIGNAL(itemDoubleClicked(QListWidgetItem*)),
             this,           SLOT(assetViewDblClicked(QListWidgetItem*)));
+
+    connect(ui->assetView->itemDelegate(),  &QAbstractItemDelegate::commitData,
+            this,                           &AssetWidget::OnLstItemsCommitData);
+
+    // other
+    connect(ui->searchBar,  SIGNAL(textChanged(QString)),
+            this,           SLOT(searchAssets(QString)));
+
+    QDir d(Globals::project->getProjectFolder());
+    walkFileSystem("", d.absolutePath());
 }
 
 AssetWidget::~AssetWidget()
@@ -81,30 +92,75 @@ void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
     }
 }
 
+void AssetWidget::walkFileSystem(QString folder, QString path)
+{
+    QDir dir(path);
+    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs);
+    foreach (const QFileInfo &file, files) {
+        // TODO - maybe add some OS centric code to check for hidden folder
+        if (!file.fileName().startsWith('.')) {
+            // TODO -- get type from extension if is a file
+            if (file.isFile()) {
+                AssetType type;
+
+                if (file.suffix() == "jpg" || file.suffix() == "png" || file.suffix() == "bmp") {
+                    type = AssetType::Texture;
+                }
+
+                auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
+                QPixmap pixmap = QPixmap::fromImage(*thumb->thumb);
+                AssetManager::assets.append(new Asset(type,
+                                        file.absoluteFilePath(),
+                                        file.fileName(),
+                                        pixmap));
+            } else {
+                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
+                QPixmap pixmap = QPixmap::fromImage(*thumb->thumb);
+                AssetManager::assets.append(new Asset(AssetType::Invalid,
+                                        file.absoluteFilePath(),
+                                        file.fileName(),
+                                        pixmap));
+            }
+
+            if (file.isDir()) {
+                walkFileSystem("", file.absoluteFilePath());
+            }
+        }
+    }
+}
+
 void AssetWidget::addItem(const QString &asset)
 {
     QFileInfo file(asset);
     auto name = file.baseName();
-    if (name.length() > 10) {
-        name.truncate(8);
-        name += "...";
-    }
+
+//    if (name.length() > 10) {
+//        name.truncate(8);
+//        name += "...";
+//    }
 
     QIcon icon;
     QListWidgetItem *item;
 
     if (file.isDir()) {
-        icon = QIcon(":/app/icons/folder-symbol.svg");
-        item = new QListWidgetItem(icon, name);
-        item->setData(Qt::UserRole, file.absolutePath());
-    } else {
-        QImage img(asset);
+        // QImage img(asset);
+        // icon = QIcon(pixmap);
+        auto t = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
         QPixmap pixmap;
-        pixmap = pixmap.fromImage(img.scaled(88, 88, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
-        icon = QIcon(pixmap);
-        item = new QListWidgetItem(icon, name);
+        pixmap = pixmap.fromImage(*t->thumb);
+        item = new QListWidgetItem(QIcon(pixmap), name);
+    } else {
+        icon = QIcon(":/app/icons/folder-symbol.svg");
+        auto t = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 128, 128);
+        QPixmap pixmap;
+        pixmap = pixmap.fromImage(*t->thumb);
+        item = new QListWidgetItem(QIcon(pixmap), name);
+        item->setData(Qt::UserRole, file.absolutePath());
     }
 
+    item->setSizeHint(QSize(128, 128));
+    item->setTextAlignment(Qt::AlignCenter);
+    item->setFlags(item->flags() | Qt::ItemIsEditable);
     ui->assetView->addItem(item);
 }
 
@@ -127,10 +183,12 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 
 void AssetWidget::treeItemSelected(QTreeWidgetItem *item)
 {
+    assetItem.item = item;
+    assetItem.selectedPath = item->data(0, Qt::UserRole).toString();
     updateAssetView(item->data(0, Qt::UserRole).toString());
 }
 
-void AssetWidget::treeItemChanged(QTreeWidgetItem* item, int column)
+void AssetWidget::treeItemChanged(QTreeWidgetItem *item, int column)
 {
 
 }
@@ -152,9 +210,17 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
     connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
     createMenu->addAction(action);
 
-    action = new QAction(QIcon(), "Open in Explorer", this);
-    connect(action, SIGNAL(triggered()), this, SLOT(openAtFolder()));
+//    action = new QAction(QIcon(), "Open in Explorer", this);
+//    connect(action, SIGNAL(triggered()), this, SLOT(openAtFolder()));
+//    menu.addAction(action);
+
+    action = new QAction(QIcon(), "Import Asset", this);
+    connect(action, SIGNAL(triggered()), this, SLOT(importAsset()));
     menu.addAction(action);
+
+//    action = new QAction(QIcon(), "Rename", this);
+//    connect(action, SIGNAL(triggered()), this, SLOT(renameTreeItem()));
+//    menu.addAction(action);
 
     action = new QAction(QIcon(), "Delete", this);
     connect(action, SIGNAL(triggered()), this, SLOT(deleteFolder()));
@@ -174,6 +240,10 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
         auto item = ui->assetView->itemAt(pos);
         assetItem.selectedPath = item->data(Qt::UserRole).toString();
 
+//        action = new QAction(QIcon(), "Rename", this);
+//        connect(action, SIGNAL(triggered()), this, SLOT(renameViewItem()));
+//        menu.addAction(action);
+
         action = new QAction(QIcon(), "Delete", this);
         connect(action, SIGNAL(triggered()), this, SLOT(deleteFolder()));
         menu.addAction(action);
@@ -183,9 +253,13 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
         connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
         createMenu->addAction(action);
 
-        action = new QAction(QIcon(), "Open in Explorer", this);
-        connect(action, SIGNAL(triggered()), this, SLOT(openAtFolder()));
+        action = new QAction(QIcon(), "Import Asset", this);
+        connect(action, SIGNAL(triggered()), this, SLOT(importAsset()));
         menu.addAction(action);
+
+//        action = new QAction(QIcon(), "Open in Explorer", this);
+//        connect(action, SIGNAL(triggered()), this, SLOT(openAtFolder()));
+//        menu.addAction(action);
     }
 
     menu.exec(ui->assetView->mapToGlobal(pos));
@@ -201,6 +275,45 @@ void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
     QFileInfo path(item->data(Qt::UserRole).toString());
     if (path.isDir()) {
         // do something
+    }
+}
+
+void AssetWidget::updateAssetItem()
+{
+
+}
+
+void AssetWidget::renameTreeItem()
+{
+
+}
+
+void AssetWidget::renameViewItem()
+{
+
+}
+
+void AssetWidget::searchAssets(QString searchString)
+{
+    ui->assetView->clear();
+
+    if (!searchString.isEmpty()) {
+        for (auto item : AssetManager::assets) {
+            if (item->fileName.contains(searchString)) {
+                addItem(item->path);
+            }
+        }
+    } else {
+        updateAssetView(assetItem.selectedPath);
+    }
+}
+
+void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
+{
+    QString folderName = reinterpret_cast<QLineEdit*>(listItem)->text();
+    QDir dir(assetItem.selectedPath + '/' + folderName);
+    if (!dir.exists()) {
+        dir.mkpath(".");
     }
 }
 
@@ -220,10 +333,25 @@ void AssetWidget::openAtFolder()
 
 void AssetWidget::createFolder()
 {
+    QIcon icon = QIcon(":/app/icons/folder-symbol.svg");
+    QListWidgetItem *item = new QListWidgetItem(icon, "New Folder");
+    item->setData(Qt::UserRole, "");    // null until we confirm
+    item->setFlags(item->flags() | Qt::ItemIsEditable);
 
+    ui->assetView->addItem(item);
+    ui->assetView->editItem(item);
 }
 
 void AssetWidget::importAsset()
 {
+    QString dir = QApplication::applicationDirPath();
+    auto fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
 
+    if (!assetItem.selectedPath.isEmpty()) {
+        foreach (const QFileInfo &file, fileNames) {
+            QFile::copy(file.absoluteFilePath(), assetItem.selectedPath + '/' + file.fileName());
+        }
+
+        updateAssetView(assetItem.selectedPath);
+    }
 }
