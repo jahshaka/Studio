@@ -45,20 +45,9 @@ QListView {
 	border: 0;
 }
 
-/* Works for both QListView and QListWidget */
-QListView::item {
-    /* Won't work without borders set */
-    border: 0;
-    padding: 4px;
-}
-
 QListWidget {
 	background: #404040;
 	color: #CECECE;
-}
-
-QListWidget::item {
-	padding: 6px;
 }
 
 QListView::item:selected {
@@ -136,30 +125,63 @@ QScrollBar::down-arrow:vertical:hover {
 }*/</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <property name="leftMargin">
-    <number>7</number>
-   </property>
-   <property name="topMargin">
-    <number>7</number>
-   </property>
-   <property name="rightMargin">
-    <number>7</number>
-   </property>
-   <property name="bottomMargin">
-    <number>7</number>
-   </property>
-   <property name="spacing">
-    <number>7</number>
-   </property>
    <item row="0" column="0">
-    <widget class="QPushButton" name="scanBtn">
-     <property name="text">
-      <string>Refresh</string>
-     </property>
-    </widget>
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <widget class="QLabel" name="label">
+       <property name="text">
+        <string>Search</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="searchBar"/>
+     </item>
+     <item>
+      <widget class="QPushButton" name="viewButton">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="icon">
+        <iconset>
+         <normalon>:/app/icons/view-list-button.svg</normalon>
+         <activeon>:/app/icons/list-button-with-3-elements.svg</activeon>
+        </iconset>
+       </property>
+       <property name="checkable">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="scanBtn">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="text">
+        <string>Refresh</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
    <item row="1" column="0">
-    <widget class="QListWidget" name="assetView"/>
+    <widget class="QListWidget" name="assetView">
+     <property name="styleSheet">
+      <string notr="true">QScrollBar:vertical {
+	background: #1e1e1e;
+}</string>
+     </property>
+    </widget>
    </item>
   </layout>
  </widget>

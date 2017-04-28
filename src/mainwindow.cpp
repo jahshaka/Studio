@@ -1111,7 +1111,10 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
     //    auto filename = Globals::project->getFilePath();
     auto writer = new SceneWriter();
-    writer->writeScene(str, scene, sceneView->getEditorData());
+    writer->writeScene(str,
+                       scene,
+                       sceneView->getRenderer()->getPostProcessManager(),
+                       sceneView->getEditorData());
 
     //    settings->addRecentlyOpenedScene(filename);
 //    this->setProjectTitle(Globals::project->getProjectName());

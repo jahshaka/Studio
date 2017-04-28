@@ -90,12 +90,11 @@ SOURCES += src/main.cpp\
     src/widgets/propertywidget.cpp \
     src/widgets/propertywidgets/postprocesspropertywidget.cpp \
     src/widgets/postprocesseswidget.cpp \
-    src/widgets/projectdialog.cpp \
+    src/dialogs/projectdialog.cpp \
     src/dialogs/newprojectdialog.cpp \
     src/widgets/assetwidget.cpp \
     src/io/assetmanager.cpp \
-    src/widgets/assetpickerwidget.cpp \
-    src/dialogs/projectdialog.cpp
+    src/widgets/assetpickerwidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -174,12 +173,11 @@ HEADERS  += src/mainwindow.h \
     src/widgets/basewidget.h \
     src/widgets/propertywidgets/postprocesspropertywidget.h \
     src/widgets/postprocesseswidget.h \
-    src/widgets/projectdialog.h \
+    src/dialogs/projectdialog.h \
     src/dialogs/newprojectdialog.h \
     src/widgets/assetwidget.h \
     src/io/assetmanager.h \
-    src/widgets/assetpickerwidget.h \
-    src/dialogs/projectdialog.h
+    src/widgets/assetpickerwidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

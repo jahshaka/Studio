@@ -17,9 +17,6 @@ AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWid
     ui->assetTree->viewport()->installEventFilter(this);
     ui->assetTree->setContextMenuPolicy(Qt::CustomContextMenu);
 
-    // it's important that this get's called after the project dialog has OK'd
-    populateAssetTree();
-
     connect(ui->assetTree,  SIGNAL(itemClicked(QTreeWidgetItem*, int)),
             this,           SLOT(treeItemSelected(QTreeWidgetItem*)));
 
@@ -58,6 +55,9 @@ AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWid
 
     QDir d(Globals::project->getProjectFolder());
     walkFileSystem("", d.absolutePath());
+
+    // it's important that this get's called after the project dialog has OK'd
+    populateAssetTree();
 }
 
 AssetWidget::~AssetWidget()
@@ -77,6 +77,12 @@ void AssetWidget::populateAssetTree()
     ui->assetTree->clear();
     ui->assetTree->addTopLevelItem(rootTreeItem);
     ui->assetTree->expandItem(rootTreeItem);
+
+//    if (ui->assetTree->selectedItems().size() == 0 && ui->assetTree->topLevelItemCount()) {
+//        ui->assetTree->topLevelItem(ui->assetTree->topLevelItemCount() - 1)->setSelected(true);
+//    }
+    updateAssetView(rootTreeItem->data(0, Qt::UserRole).toString());
+    rootTreeItem->setSelected(true);
 }
 
 void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)

@@ -51,62 +51,6 @@ QListView::item {
     padding: 10px;
 }
 
-/* ================== */
-
- QScrollBar:vertical {
-     background-color: #212121;
-     width: 18px;
-     margin: 22px 0 22px 0;
- }
-
- QScrollBar::handle:vertical {
-	background-color: #444;
-     min-height: 20px;
-     margin-left: 2px;
-     margin-right: 2px;
- }
-
-QScrollBar::handle:vertical:hover {
-	background-color: #555;
-	min-height: 20px;
-	margin-left: 2px;
-	margin-right: 2px;
-}
-
-QScrollBar::add-line:vertical {
-	background-color: #444;
-	height: 20px;
-	border: 2px solid #212121;
-	border-width: 2px 2px  0 2px;
-	subcontrol-position: bottom;
-	subcontrol-origin: margin;
- }
-
-QScrollBar::sub-line:vertical {
-    background-color: #444;
-	height: 20px;
-	border: 2px solid #212121;
-	border-width: 0 2px 2px 2px;
-	subcontrol-position: top;
-	subcontrol-origin: margin;
- }
-
-QScrollBar::up-arrow:vertical {
-    image: url(:/app/icons/up-arrow.svg);
-}
-
-QScrollBar::up-arrow:vertical:hover {
-    background-color: #555;
-}
-
-QScrollBar::down-arrow:vertical {
-    image: url(:/app/icons/down-arrow.svg);
-}
-
-QScrollBar::down-arrow:vertical:hover {
-    background-color: #555;
-}
-
 QListWidget::item {
 	color: #CECECE;
 }
@@ -213,6 +157,11 @@ QListView::item:selected {
         <height>0</height>
        </size>
       </property>
+      <property name="styleSheet">
+       <string notr="true">QScrollBar:vertical {
+	background: #1e1e1e;
+}</string>
+      </property>
       <property name="headerHidden">
        <bool>true</bool>
       </property>
@@ -228,6 +177,11 @@ QListView::item:selected {
         <horstretch>1</horstretch>
         <verstretch>0</verstretch>
        </sizepolicy>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">QScrollBar:vertical {
+	background: #1e1e1e;
+}</string>
       </property>
       <property name="editTriggers">
        <set>QAbstractItemView::NoEditTriggers</set>

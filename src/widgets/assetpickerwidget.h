@@ -17,11 +17,13 @@ public:
     AssetPickerWidget(AssetType type, QDialog *parent = nullptr);
     ~AssetPickerWidget();
 
-    void populateWidget();
+    void populateWidget(QString filter = nullptr);
 
 public slots:
     void assetViewDblClicked(QListWidgetItem*);
     void refreshList();
+    void changeView(bool);
+    void searchAssets(QString);
 
 signals:
     void itemDoubleClicked(QListWidgetItem*);

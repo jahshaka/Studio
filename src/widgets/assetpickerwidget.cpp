@@ -8,13 +8,25 @@ AssetPickerWidget::AssetPickerWidget(AssetType type, QDialog *parent) :
 {
     ui->setupUi(this);
 
+    setWindowTitle("Select Asset");
+    ui->viewButton->setCheckable(true);
+    ui->viewButton->setToolTip("Toggle icon view");
+
     connect(ui->assetView,  SIGNAL(itemDoubleClicked(QListWidgetItem*)),
             this,           SLOT(assetViewDblClicked(QListWidgetItem*)));
 
     connect(ui->scanBtn,    SIGNAL(pressed()), this, SLOT(refreshList()));
+    connect(ui->viewButton, SIGNAL(toggled(bool)), this, SLOT(changeView(bool)));
+
+    connect(ui->searchBar,  SIGNAL(textChanged(QString)),
+            this,           SLOT(searchAssets(QString)));
 
     this->type = type;
     populateWidget();
+
+    ui->assetView->setViewMode(QListWidget::ListMode);
+    ui->assetView->setIconSize(QSize(32, 32));
+    ui->assetView->setSpacing(4);
 
     this->show();
 }
@@ -24,7 +36,7 @@ AssetPickerWidget::~AssetPickerWidget()
     delete ui;
 }
 
-void AssetPickerWidget::populateWidget()
+void AssetPickerWidget::populateWidget(QString filter)
 {
     for (auto asset : AssetManager::assets) {
         QPixmap pixmap;
@@ -44,7 +56,14 @@ void AssetPickerWidget::populateWidget()
 
             auto item = new QListWidgetItem(QIcon(pixmap), asset->fileName);
             item->setData(Qt::UserRole, asset->path);
-            ui->assetView->addItem(item);
+
+            if (filter.isEmpty()) {
+                ui->assetView->addItem(item);
+            } else {
+                if (asset->fileName.contains(filter)) {
+                    ui->assetView->addItem(item);
+                }
+            }
         }
     }
 }
@@ -59,6 +78,38 @@ void AssetPickerWidget::refreshList()
 {
     ui->assetView->clear();
     populateWidget();
+}
+
+void AssetPickerWidget::changeView(bool toggle)
+{
+    if (toggle) {
+        ui->assetView->setViewMode(QListWidget::IconMode);
+        ui->assetView->setIconSize(QSize(88, 88));
+        ui->assetView->setResizeMode(QListWidget::Adjust);
+//        ui->assetView->setMovement(QListView::Static);
+//        ui->assetView->setSelectionBehavior(QAbstractItemView::SelectItems);
+        ui->assetView->setSelectionMode(QAbstractItemView::SingleSelection);
+
+        for (int i = 0; i < ui->assetView->count(); ++i) {
+            auto item = ui->assetView->item(i);
+            item->setSizeHint(QSize(128, 128));
+        }
+    } else {
+        ui->assetView->setViewMode(QListWidget::ListMode);
+        ui->assetView->setIconSize(QSize(32, 32));
+        ui->assetView->setSpacing(4);
+
+        for (int i = 0; i < ui->assetView->count(); ++i) {
+            auto item = ui->assetView->item(i);
+            item->setSizeHint(QSize(32, 32));
+        }
+    }
+}
+
+void AssetPickerWidget::searchAssets(QString searchString)
+{
+    ui->assetView->clear();
+    populateWidget(searchString);
 }
 
 bool AssetPickerWidget::eventFilter(QObject *watched, QEvent *event)
