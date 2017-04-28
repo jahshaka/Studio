@@ -45,6 +45,7 @@ class AnimationWidget;
 class TexturedPlaneLayerWidget;
 class WorldLayerWidget;
 class EndlessPlaneLayerWidget;
+class PostProcessesWidget;
 
 class MaterialWidget;
 class TransformGizmo;
@@ -131,6 +132,7 @@ private:
     void setupHelpMenu();
 
     //ui setup
+    void createPostProcessDockWidget();
     void setupLayerButtonMenu();
     void initLightLayerUi();
     void initTorusLayerUi();
@@ -257,6 +259,8 @@ private:
     EndlessPlaneLayerWidget* endlessPlaneLayerWidget;
     MaterialWidget* materialWidget;
     AnimationWidget* animWidget;
+    PostProcessesWidget* postProcessWidget;
+    QDockWidget* postProcessDockWidget;
 
     Qt::MouseButton mouseButton;
     QPoint mousePressPos;

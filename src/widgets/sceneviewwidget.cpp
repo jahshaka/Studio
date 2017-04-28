@@ -665,4 +665,9 @@ void SceneViewWidget::stopPlayingScene()
     scene->updateSceneAnimation(0.0f);
 }
 
+iris::ForwardRendererPtr SceneViewWidget::getRenderer() const
+{
+    return renderer;
+}
+
 

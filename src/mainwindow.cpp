@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "irisgl/src/graphics/texture2d.h"
 #include "irisgl/src/animation/keyframeset.h"
 #include "irisgl/src/animation/keyframeanimation.h"
+#include "irisgl/src/graphics/postprocessmanager.h"
 
 #include <QFontDatabase>
 #include <QOpenGLContext>
@@ -74,6 +75,7 @@ For more information see the LICENSE file
 
 #include "widgets/sceneviewwidget.h"
 #include "core/materialpreset.h"
+#include "widgets/postprocesseswidget.h"
 
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
@@ -92,6 +94,8 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    createPostProcessDockWidget();
+
     this->setWindowTitle("Jahshaka VR");
 
     QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
@@ -360,6 +364,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
 void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
 {
+    postProcessWidget->setPostProcessMgr(sceneView->getRenderer()->getPostProcessManager());
 
 //    auto m_logger = new QOpenGLDebugLogger( this );
 
@@ -494,6 +499,18 @@ void MainWindow::setupHelpMenu()
     connect(ui->actionOpenWebsite,  SIGNAL(triggered(bool)), this, SLOT(openWebsiteUrl()));
 }
 
+void MainWindow::createPostProcessDockWidget()
+{
+    postProcessDockWidget = new QDockWidget(this);
+    postProcessWidget = new PostProcessesWidget();
+    //postProcessWidget->setWindowTitle("Post Processes");
+    postProcessDockWidget->setWidget(postProcessWidget);
+    postProcessDockWidget->setWindowTitle("PostProcesses");
+    //postProcessDockWidget->setFloating(true);
+    this->addDockWidget(Qt::RightDockWidgetArea, postProcessDockWidget);
+
+}
+
 void MainWindow::setProjectTitle(QString projectTitle)
 {
     this->setWindowTitle(projectTitle + " - Jahshaka");
@@ -544,7 +561,7 @@ void MainWindow::saveScene()
     {
         auto filename = Globals::project->getFilePath();
         auto writer = new SceneWriter();
-        writer->writeScene(filename,scene,sceneView->getEditorData());
+        writer->writeScene(filename, scene, sceneView->getRenderer()->getPostProcessManager(), sceneView->getEditorData());
 
         settings->addRecentlyOpenedScene(filename);
 
@@ -554,7 +571,7 @@ void MainWindow::saveScene()
     {
         auto filename = QFileDialog::getSaveFileName(this,"Save Scene","","Jashaka Scene (*.jah)");
         auto writer = new SceneWriter();
-        writer->writeScene(filename,scene,sceneView->getEditorData());
+        writer->writeScene(filename, scene, sceneView->getRenderer()->getPostProcessManager(), sceneView->getEditorData());
 
         Globals::project->setFilePath(filename);
         this->setProjectTitle(Globals::project->getProjectName());
@@ -572,7 +589,7 @@ void MainWindow::saveSceneAs()
     QString dir = QApplication::applicationDirPath()+"/scenes/";
     auto filename = QFileDialog::getSaveFileName(this,"Save Scene",dir,"Jashaka Scene (*.jah)");
     auto writer = new SceneWriter();
-    writer->writeScene(filename,scene,sceneView->getEditorData());
+    writer->writeScene(filename, scene, sceneView->getRenderer()->getPostProcessManager(), sceneView->getEditorData());
 
     Globals::project->setFilePath(filename);
     this->setProjectTitle(Globals::project->getProjectName());
@@ -607,9 +624,14 @@ void MainWindow::openProject(QString filename, bool startupLoad)
 
     EditorData* editorData = nullptr;
 
-    auto scene = reader->readScene(filename,&editorData);
+    auto postMan = sceneView->getRenderer()->getPostProcessManager();
+    postMan->clearPostProcesses();
+    auto scene = reader->readScene(filename, postMan, &editorData);
     this->sceneView->doneCurrent();
     setScene(scene);
+
+    postProcessWidget->setPostProcessMgr(postMan);
+
     if(editorData != nullptr)
         sceneView->setEditorData(editorData);
 

@@ -20,5 +20,14 @@
         <file>assets/models/cube.obj</file>
         <file>assets/shaders/surface.vert</file>
         <file>assets/shaders/surface.frag</file>
+        <file>assets/shaders/postprocesses/coloroverlay.fs</file>
+        <file>assets/shaders/postprocesses/radial_blur.fs</file>
+        <file>assets/shaders/postprocesses/default.vs</file>
+        <file>assets/shaders/postprocesses/bloom_threshold.fs</file>
+        <file>assets/shaders/postprocesses/bloom_combine.fs</file>
+        <file>assets/shaders/postprocesses/bloom_blur.fs</file>
+        <file>assets/shaders/postprocesses/greyscale.fs</file>
+        <file>assets/textures/random_normal.png</file>
+        <file>assets/shaders/postprocesses/ssao.fs</file>
     </qresource>
 </RCC>

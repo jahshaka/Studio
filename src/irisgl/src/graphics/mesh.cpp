@@ -65,7 +65,12 @@ Mesh::Mesh(aiMesh* mesh)
     triMesh->triangles.reserve(mesh->mNumFaces);
     for(unsigned i = 0; i < mesh->mNumFaces; i++)
     {
+
         auto face = mesh->mFaces[i];
+
+        if (face.mNumIndices!=3)
+            continue;
+
         indices.append(face.mIndices[0]);
         indices.append(face.mIndices[1]);
         indices.append(face.mIndices[2]);

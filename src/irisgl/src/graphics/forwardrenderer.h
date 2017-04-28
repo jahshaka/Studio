@@ -14,7 +14,8 @@ For more information see the LICENSE file
 
 #include <QOpenGLContext>
 #include <QSharedPointer>
-#include "../libovr/Include/OVR_CAPI_GL.h"
+//#include "../libovr/Include/OVR_CAPI_GL.h"
+#include "../irisglfwd.h"
 
 #include "particle.h"
 #include "particlerender.h"
@@ -37,6 +38,8 @@ class BillboardMaterial;
 class Billboard;
 class FullScreenQuad;
 class VrDevice;
+class PostProcessManager;
+class PostProcessContext;
 
 /**
  * This is a basic forward renderer.
@@ -62,7 +65,15 @@ class ForwardRenderer
     QOpenGLShaderProgram* particleShader;
     QOpenGLShaderProgram* emitterShader;
 
+    PostProcessManagerPtr postMan;
+    PostProcessContext* postContext;
+
     VrDevice* vrDevice;
+
+    RenderTargetPtr renderTarget;
+    Texture2DPtr sceneRenderTexture;
+    Texture2DPtr depthRenderTexture;
+    Texture2DPtr finalRenderTexture;
 
 public:
 
@@ -84,6 +95,8 @@ public:
     //all scenenodes' transform should be updated before calling this functions
     void renderScene(float delta, Viewport* vp);
     void renderSceneVr(float delta, Viewport* vp);
+
+    PostProcessManagerPtr getPostProcessManager();
 
     static ForwardRendererPtr create();
 

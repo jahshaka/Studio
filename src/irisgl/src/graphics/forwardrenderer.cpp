@@ -33,9 +33,12 @@ For more information see the LICENSE file
 #include "utils/billboard.h"
 #include "utils/fullscreenquad.h"
 #include "texture2d.h"
+#include "rendertarget.h"
 #include "../vr/vrdevice.h"
 #include "../vr/vrmanager.h"
 #include "../core/irisutils.h"
+#include "postprocessmanager.h"
+#include "postprocess.h"
 
 #include <QOpenGLContext>
 #include "../libovr/Include/OVR_CAPI_GL.h"
@@ -62,6 +65,16 @@ ForwardRenderer::ForwardRenderer()
 
     vrDevice = VrManager::getDefaultDevice();
     vrDevice->initialize();
+
+    renderTarget = RenderTarget::create(800, 800);
+    sceneRenderTexture = Texture2D::create(800, 800);
+    depthRenderTexture = Texture2D::createDepth(800, 800);
+    finalRenderTexture = Texture2D::create(800, 800);
+    renderTarget->addTexture(sceneRenderTexture);
+    renderTarget->setDepthTexture(depthRenderTexture);
+
+    postMan = PostProcessManager::create();
+    postContext = new PostProcessContext();
 }
 
 void ForwardRenderer::generateShadowBuffer(GLuint size)
@@ -128,6 +141,16 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     }
 
     gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
+
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    //gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+
+    //todo: remember to remove this!
+    renderTarget->resize(vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale, true);
+    finalRenderTexture->resize(vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
+
+    renderTarget->bind();
+    gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     //enable all attrib arrays
@@ -142,6 +165,23 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     // STEP 4: RENDER BILLBOARD ICONS
     renderBillboardIcons(renderData);
+
+    renderTarget->unbind();
+
+    postContext->sceneTexture = sceneRenderTexture;
+    postContext->depthTexture = depthRenderTexture;
+    postContext->finalTexture = finalRenderTexture;
+    postMan->process(postContext);
+
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+
+    // draw fs quad
+    gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
+    gl->glActiveTexture(GL_TEXTURE0);
+    //sceneRenderTexture->bind();
+    postContext->finalTexture->bind();
+    fsQuad->draw(gl);
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
 
     // STEP 5: RENDER SELECTED OBJECT
     if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
@@ -266,6 +306,11 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
 
    scene->geometryRenderList.clear();
    scene->shadowRenderList.clear();
+}
+
+PostProcessManagerPtr ForwardRenderer::getPostProcessManager()
+{
+    return postMan;
 }
 
 bool ForwardRenderer::isVrSupported()
