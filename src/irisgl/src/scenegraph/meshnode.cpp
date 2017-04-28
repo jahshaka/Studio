@@ -116,6 +116,7 @@ void MeshNode::submitRenderItems()
 
     if (!!material) {
         renderItem->renderLayer = material->renderLayer;
+        renderItem->renderStates = material->renderStates;
         //renderItem->faceCullingMode = faceCullingMode;
     }
 
