@@ -17,10 +17,11 @@ public:
     AssetPickerWidget(AssetType type, QDialog *parent = nullptr);
     ~AssetPickerWidget();
 
-    void populateWidget(AssetType);
+    void populateWidget();
 
 public slots:
     void assetViewDblClicked(QListWidgetItem*);
+    void refreshList();
 
 signals:
     void itemDoubleClicked(QListWidgetItem*);
@@ -30,6 +31,7 @@ protected:
 
 private:
     Ui::AssetPickerWidget *ui;
+    AssetType type;
 };
 
 #endif // ASSETPICKERWIDGET_H

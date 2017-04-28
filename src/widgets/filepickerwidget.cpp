@@ -15,6 +15,8 @@ For more information see the LICENSE file
 #include "filepickerwidget.h"
 #include "ui_filepickerwidget.h"
 
+#include "assetpickerwidget.h"
+
 FilePickerWidget::FilePickerWidget(QWidget *parent) :
     BaseWidget(parent),
     ui(new Ui::FilePickerWidget)
@@ -33,19 +35,33 @@ FilePickerWidget::~FilePickerWidget()
 
 void FilePickerWidget::filePicker()
 {
-    auto file = openFile();
+    auto picker = new AssetPickerWidget(AssetType::Object);
+    connect(picker, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(pickFile(QListWidgetItem*)));
+//    auto file = openFile();
 
-    if (file.isNull() || file.isEmpty()) return;
-    else {
-        QFileInfo fileInfo(file);
-        filename = fileInfo.fileName();
-        filepath = fileInfo.filePath();
-        ui->filename->setText(filename);
-        ui->filename->setToolTip(filepath);
-        ui->filename->scroll(ui->filename->width(), 0);
+//    if (file.isNull() || file.isEmpty()) return;
+//    else {
+//        QFileInfo fileInfo(file);
+//        filename = fileInfo.fileName();
+//        filepath = fileInfo.filePath();
+//        ui->filename->setText(filename);
+//        ui->filename->setToolTip(filepath);
+//        ui->filename->scroll(ui->filename->width(), 0);
 
-        emit onPathChanged(filepath);
-    }
+//        emit onPathChanged(filepath);
+    //    }
+}
+
+void FilePickerWidget::pickFile(QListWidgetItem *item)
+{
+    QFileInfo fileInfo(item->data(Qt::UserRole).toString());
+    filename = fileInfo.fileName();
+    filepath = fileInfo.filePath();
+    ui->filename->setText(filename);
+    ui->filename->setToolTip(filepath);
+    ui->filename->scroll(ui->filename->width(), 0);
+
+    emit onPathChanged(filepath);
 }
 
 QString FilePickerWidget::getFilepath() const

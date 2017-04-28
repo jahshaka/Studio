@@ -70,6 +70,7 @@ void AssetWidget::populateAssetTree()
     // TODO - revamp this, the actual project directory is up one level. ok
     auto rootTreeItem = new QTreeWidgetItem();
     rootTreeItem->setText(0, "Assets");
+    rootTreeItem->setIcon(0, QIcon(":/app/icons/folder-symbol.svg"));
     rootTreeItem->setData(0, Qt::UserRole, Globals::project->getProjectFolder());
     updateTree(rootTreeItem, Globals::project->getProjectFolder());
 

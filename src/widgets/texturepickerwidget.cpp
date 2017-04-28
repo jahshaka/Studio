@@ -52,7 +52,6 @@ void TexturePickerWidget::changeTextureMap()
 void TexturePickerWidget::pickTextureMap()
 {
     auto widget = new AssetPickerWidget(AssetType::Texture);
-
     connect(widget, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(changeMap(QListWidgetItem*)));
 }
 
@@ -92,7 +91,7 @@ void TexturePickerWidget::setLabelImage(QLabel* label, QString file, bool emitSi
 bool TexturePickerWidget::eventFilter(QObject *object, QEvent *ev)
 {
     if (object == ui->texture && ev->type() == QEvent::MouseButtonRelease) {
-        changeTextureMap();
+        pickTextureMap();
     }
 
     return false;
@@ -112,7 +111,6 @@ void TexturePickerWidget::on_pushButton_clicked()
 
 void TexturePickerWidget::changeMap(QListWidgetItem *item)
 {
-    qDebug() << item->data(Qt::UserRole).toString();
     setLabelImage(ui->texture, item->data(Qt::UserRole).toString());
 }
 

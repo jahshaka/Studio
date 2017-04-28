@@ -121,6 +121,8 @@ void ProjectDialog::openRecentProject(QListWidgetItem *item)
     window = new MainWindow;
     window->showMaximized();
     window->openProject(item->text());
+
+    this->close();
 }
 
 SettingsManager *ProjectDialog::getSettingsManager()
