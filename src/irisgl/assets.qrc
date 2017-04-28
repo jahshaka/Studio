@@ -30,5 +30,6 @@
         <file>assets/textures/random_normal.png</file>
         <file>assets/shaders/postprocesses/ssao.fs</file>
         <file>assets/models/head2.obj</file>
+        <file>assets/shaders/utils.frag</file>
     </qresource>
 </RCC>
