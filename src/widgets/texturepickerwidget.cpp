@@ -59,7 +59,7 @@ QString TexturePickerWidget::loadTexture()
 {
     QString dir = QApplication::applicationDirPath();
     return QFileDialog::getOpenFileName(this, "Open Texture File",
-                                        dir, "Image Files (*.png *.jpg *.bmp)");
+                                        "", "Image Files (*.png *.jpg *.bmp)");
 }
 
 void TexturePickerWidget::setLabelImage(QLabel* label, QString file, bool emitSignal)
