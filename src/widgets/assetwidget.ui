@@ -29,6 +29,10 @@ QPushButton:pressed {
     background-color: #444;
 }
 
+QSplitter::handle {
+	background: #1e1e1e;
+}
+
 QSlider::groove:horizontal {
    /* height: 8px; /* the groove expands to the size of the slider by default. by giving it a height, it has a fixed size */
     background: #404040;

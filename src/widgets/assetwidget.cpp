@@ -362,6 +362,19 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
     if (!dir.exists()) {
         dir.mkpath(".");
     }
+
+    auto child = ui->assetTree->currentItem();
+
+    if (child) {    // should always be set but just in case
+        auto branch = new QTreeWidgetItem();
+        branch->setIcon(0, QIcon(":/app/icons/folder-symbol.svg"));
+        branch->setText(0, folderName);
+        branch->setData(0, Qt::UserRole, assetItem.selectedPath + '/' + folderName);
+        child->addChild(branch);
+
+        ui->assetTree->clearSelection();
+        branch->setSelected(true);
+    }
 }
 
 void AssetWidget::deleteTreeFolder()
