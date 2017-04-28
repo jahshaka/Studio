@@ -26,7 +26,7 @@ QPushButton:hover {
 
 QListWidget {
 	background: #404040;
-	color: #DEDEDE;
+	color: #CECECE;
 }
 
 QListWidget::item {
@@ -34,7 +34,9 @@ QListWidget::item {
 }
 
 QListView::item:selected {
-    border: 1px solid #6a6ea9;
+    border: 1px solid #3498db;
+	background: #3498db;
+	color: #CECECE;
 }</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
@@ -47,7 +49,7 @@ QListView::item:selected {
       <number>11</number>
      </property>
      <property name="bottomMargin">
-      <number>11</number>
+      <number>0</number>
      </property>
      <item>
       <widget class="QLabel" name="logo">

@@ -47,6 +47,74 @@ QListView::item {
     padding: 10px;
 }
 
+/* ================== */
+
+ QScrollBar:vertical {
+     background-color: #212121;
+     width: 18px;
+     margin: 22px 0 22px 0;
+ }
+
+ QScrollBar::handle:vertical {
+	background-color: #444;
+     min-height: 20px;
+     margin-left: 2px;
+     margin-right: 2px;
+ }
+
+QScrollBar::handle:vertical:hover {
+	background-color: #555;
+	min-height: 20px;
+	margin-left: 2px;
+	margin-right: 2px;
+}
+
+QScrollBar::add-line:vertical {
+	background-color: #444;
+	height: 20px;
+	border: 2px solid #212121;
+	border-width: 2px 2px  0 2px;
+	subcontrol-position: bottom;
+	subcontrol-origin: margin;
+ }
+
+QScrollBar::sub-line:vertical {
+    background-color: #444;
+	height: 20px;
+	border: 2px solid #212121;
+	border-width: 0 2px 2px 2px;
+	subcontrol-position: top;
+	subcontrol-origin: margin;
+ }
+
+QScrollBar::up-arrow:vertical {
+    image: url(:/app/icons/up-arrow.svg);
+}
+
+QScrollBar::up-arrow:vertical:hover {
+    background-color: #555;
+}
+
+QScrollBar::down-arrow:vertical {
+    image: url(:/app/icons/down-arrow.svg);
+}
+
+QScrollBar::down-arrow:vertical:hover {
+    background-color: #555;
+}
+
+QListWidget::item {
+	color: #CECECE;
+}
+
+QListView::item:selected {
+    border: 1px solid #3498db;
+	background: #3498db;
+	color: #CECECE;
+}
+
+/* ========================== */
+
 /* For icon only */
 /*QListView::icon {
     left: 10px;
@@ -95,6 +163,16 @@ QListView::item {
        <number>7</number>
       </property>
       <item>
+       <widget class="QLabel" name="srchLabel">
+        <property name="text">
+         <string>Search</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="searchBar"/>
+      </item>
+      <item>
        <spacer name="horizontalSpacer">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
@@ -106,16 +184,6 @@ QListView::item {
          </size>
         </property>
        </spacer>
-      </item>
-      <item>
-       <widget class="QLabel" name="srchLabel">
-        <property name="text">
-         <string>Search</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLineEdit" name="searchBar"/>
       </item>
      </layout>
     </widget>
@@ -166,35 +234,6 @@ QListView::item {
         <height>0</height>
        </size>
       </property>
-     </widget>
-     <widget class="QWidget" name="widget" native="true">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <layout class="QVBoxLayout" name="verticalLayout">
-       <property name="leftMargin">
-        <number>0</number>
-       </property>
-       <property name="topMargin">
-        <number>0</number>
-       </property>
-       <property name="rightMargin">
-        <number>0</number>
-       </property>
-       <property name="bottomMargin">
-        <number>0</number>
-       </property>
-       <item>
-        <widget class="QLabel" name="label">
-         <property name="text">
-          <string>File Info Here</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
      </widget>
     </widget>
    </item>

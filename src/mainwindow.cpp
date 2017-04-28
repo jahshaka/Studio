@@ -1094,18 +1094,18 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
     auto pPath = projectPath + '/' + filename;
 
-    // make a dir and the subfolders...
-    QDir dir(pPath);
-    if (!dir.exists()) {
-        dir.mkpath(".");
-    }
+//    // make a dir and the subfolders...
+//    QDir dir(pPath);
+//    if (!dir.exists()) {
+//        dir.mkpath(".");
+//    }
 
-    // make proj folders
-    QList<QString> projFolders = { "Textures", "Models", "Shaders", "Materials", "Scenes" };
-    for (auto folder : projFolders) {
-        QDir dir(pPath + '/' + folder);
-        dir.mkpath(".");
-    }
+//    // make proj folders
+//    QList<QString> projFolders = { "Textures", "Models", "Shaders", "Materials", "Scenes" };
+//    for (auto folder : projFolders) {
+//        QDir dir(pPath + '/' + folder);
+//        dir.mkpath(".");
+//    }
 
     auto str = pPath + "/Scenes/" + filename + ".jah";
 
@@ -1114,13 +1114,9 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
     writer->writeScene(str, scene, sceneView->getEditorData());
 
     //    settings->addRecentlyOpenedScene(filename);
-
-    Globals::project->setFilePath(str);
 //    this->setProjectTitle(Globals::project->getProjectName());
     this->setProjectTitle(Globals::project->getProjectName());
     settings->addRecentlyOpenedScene(str);
-
-
 
     delete writer;
 }

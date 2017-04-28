@@ -17,6 +17,7 @@ namespace Ui {
 struct AssetItem {
     QString selectedPath;
     QTreeWidgetItem *item;
+    QListWidgetItem *wItem;
     // add one for assetView...
 };
 
@@ -54,7 +55,8 @@ protected slots:
     void searchAssets(QString);
     void OnLstItemsCommitData(QWidget*);
 
-    void deleteFolder();
+    void deleteTreeFolder();
+    void deleteViewFolder();
     void openAtFolder();
     void createFolder();
     void importAsset();

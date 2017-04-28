@@ -17,7 +17,7 @@ For more information see the LICENSE file
 
 #include "mainwindow.h"
 #include "dialogs/infodialog.h"
-#include "widgets/projectdialog.h"
+#include "dialogs/projectdialog.h"
 #include "core/settingsmanager.h"
 
 int main(int argc, char *argv[])

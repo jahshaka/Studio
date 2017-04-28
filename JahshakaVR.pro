@@ -94,7 +94,8 @@ SOURCES += src/main.cpp\
     src/dialogs/newprojectdialog.cpp \
     src/widgets/assetwidget.cpp \
     src/io/assetmanager.cpp \
-    src/widgets/assetpickerwidget.cpp
+    src/widgets/assetpickerwidget.cpp \
+    src/dialogs/projectdialog.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -177,7 +178,8 @@ HEADERS  += src/mainwindow.h \
     src/dialogs/newprojectdialog.h \
     src/widgets/assetwidget.h \
     src/io/assetmanager.h \
-    src/widgets/assetpickerwidget.h
+    src/widgets/assetpickerwidget.h \
+    src/dialogs/projectdialog.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

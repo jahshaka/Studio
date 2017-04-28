@@ -15,6 +15,8 @@ enum AssetType {
     SoundClip,
     Music,
     ParticleSystem,
+    File,
+    Folder,
     Scene,
     Animation,
     Object,
