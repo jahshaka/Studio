@@ -21,6 +21,8 @@ struct AssetItem {
     // add one for assetView...
 };
 
+#define     ID_ROLE     0x0111
+
 class AssetWidget : public QWidget
 {
     Q_OBJECT

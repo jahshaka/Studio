@@ -88,26 +88,25 @@ void ProjectDialog::openProject()
 {
     auto project = loadSceneDelegate();
 
-    // TODO use a FOLDER approach like Unity? can we detect if folder is a project like it does??
-    QFileInfo finfo = QFileInfo(project);
-    QDir dirr = finfo.absoluteDir();
-    dirr.cdUp();
-    Globals::project->updateProjectPath(dirr.absolutePath());
+    if (!project.isEmpty()) {
+        // TODO use a FOLDER approach like Unity? can we detect if folder is a project like it does??
+        QFileInfo finfo = QFileInfo(project);
+        QDir dirr = finfo.absoluteDir();
+        dirr.cdUp();
+        Globals::project->updateProjectPath(dirr.absolutePath());
 
-    window = new MainWindow;
-    window->showMaximized();
-    window->openProject(project);
+        window = new MainWindow;
+        window->showMaximized();
+        window->openProject(project);
 
-    this->close();
+        this->close();
+    }
 }
 
 QString ProjectDialog::loadSceneDelegate()
 {
     QString dir = QApplication::applicationDirPath() + "/scenes/";
     auto filename = QFileDialog::getOpenFileName(this, "Open Scene File", dir, "Jashaka Scene (*.jah)");
-
-    if (filename.isEmpty() || filename.isNull()) return "";
-
     return filename;
 }
 

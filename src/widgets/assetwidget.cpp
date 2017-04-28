@@ -90,6 +90,7 @@ void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
             item->setIcon(0, QIcon(pixmap));
             item->setData(0, Qt::DisplayRole, file.fileName());
             item->setData(0, Qt::UserRole, file.absoluteFilePath());
+//            item->setData(0, ID_ROLE, );
             parent->addChild(item);
             updateTree(item, file.absoluteFilePath());
         }
@@ -301,9 +302,26 @@ void AssetWidget::assetViewClicked(QListWidgetItem *item)
 
 void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
 {
+    // TODO - depending on file type, we can open mini dialogs for texture preview
+    // Or we can directly add model files to the scene
     QFileInfo path(item->data(Qt::UserRole).toString() + '/' + item->text());
+
+    QString str = item->data(Qt::UserRole).toString() + '/' + item->text();
+
     if (path.isDir()) {
         updateAssetView(item->data(Qt::UserRole).toString() + '/' + item->text());
+
+        QTreeWidgetItemIterator it(ui->assetTree);
+        while (*it) {
+            if ((*it)->data(0, Qt::UserRole) == str) {
+                ui->assetTree->clearSelection();
+                (*it)->setSelected(true);
+                ui->assetTree->expandItem((*it));
+                break;
+            }
+
+            ++it;
+        }
     }
 }
 
