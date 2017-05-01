@@ -29,5 +29,6 @@
         <file>assets/shaders/postprocesses/greyscale.fs</file>
         <file>assets/textures/random_normal.png</file>
         <file>assets/shaders/postprocesses/ssao.fs</file>
+        <file>assets/models/head2.obj</file>
     </qresource>
 </RCC>

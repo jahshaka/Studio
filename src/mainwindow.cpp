@@ -156,7 +156,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(sceneView, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
             this, SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
-//    connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
+    connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
 
     // toolbar stuff
     connect(ui->actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
@@ -1143,16 +1143,16 @@ void MainWindow::scaleGizmo()
     sceneView->setGizmoScale();
 }
 
-//void MainWindow::onPlaySceneButton()
-//{
-//    if(ui->playSceneBtn->text() == "PLAY")
-//    {
-//        this->sceneView->startPlayingScene();
-//        ui->playSceneBtn->setText("STOP");
-//    }
-//    else
-//    {
-//        this->sceneView->stopPlayingScene();
-//        ui->playSceneBtn->setText("PLAY");
-//    }
-//}
+void MainWindow::onPlaySceneButton()
+{
+    if(ui->playSceneBtn->text() == "PLAY")
+    {
+        this->sceneView->startPlayingScene();
+        ui->playSceneBtn->setText("STOP");
+    }
+    else
+    {
+        this->sceneView->stopPlayingScene();
+        ui->playSceneBtn->setText("PLAY");
+    }
+}

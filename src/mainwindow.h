@@ -232,7 +232,7 @@ private slots:
     void rotateGizmo();
     void scaleGizmo();
 
-//    void onPlaySceneButton();
+    void onPlaySceneButton();
 
 private:
     Ui::MainWindow *ui;

@@ -236,13 +236,13 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
     QMatrix4x4 viewTransform = scene->camera->globalTransform;
     //viewTransform.setToIdentity();
 
-    /*
+
     if(!!scene->vrViewer) {
         viewerPos = scene->vrViewer->getGlobalPosition();
         viewScale = scene->vrViewer->getViewScale();
         viewTransform = scene->vrViewer->globalTransform;
     }
-    */
+
 
     if (scene->shadowEnabled) {
         gl->glViewport(0, 0, 4096, 4096);
