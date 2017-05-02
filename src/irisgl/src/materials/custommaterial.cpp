@@ -59,6 +59,10 @@ void CustomMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
 {
      Material::begin(gl, scene);
 
+     for (auto prop : this->properties) {
+         program->setUniformValue(prop->uniform.toStdString().c_str(), prop->getValue().toFloat());
+     }
+
     // TODO, figure out a way for the default material to mix values... the ambient for one
     auto colorIterator = colorUniforms.begin();
     while (colorIterator != colorUniforms.end()) {
@@ -70,12 +74,12 @@ void CustomMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
     }
 
     // set slider uniforms
-    auto sliderIterator = sliderUniforms.begin();
-    while (sliderIterator != sliderUniforms.end()) {
-        program->setUniformValue(sliderIterator->uniform.toStdString().c_str(),
-                                 sliderIterator->value);
-        ++sliderIterator;
-    }
+//    auto sliderIterator = sliderUniforms.begin();
+//    while (sliderIterator != sliderUniforms.end()) {
+//        program->setUniformValue(sliderIterator->uniform.toStdString().c_str(),
+//                                 sliderIterator->value);
+//        ++sliderIterator;
+//    }
 
     // set bool uniforms
     auto boolIterator = boolUniforms.begin();
@@ -194,6 +198,11 @@ void CustomMaterial::generate(const QJsonObject &jahShader)
     // the 30 is for the blade padding, the one is for the mandatory slider, 6 is spacing, 9 padd
     finalSize = 30 + (sliderSize + boolSize + colorSize + 1) * 28
                    + (textureSize * 108) + ((widgetProps.size() + 1) * 6) + 9 + 9;
+
+
+    // can we simply get the uniforms from the file... toggle as well
+    // we don't need to read the value in the material property widget...
+    // we just need the uniforms to match the objects being returned
 }
 
 void CustomMaterial::purge()

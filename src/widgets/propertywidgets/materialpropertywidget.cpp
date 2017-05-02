@@ -9,9 +9,9 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "../accordianbladewidget.h"
-
 #include "materialpropertywidget.h"
+
+#include "../accordianbladewidget.h"
 #include "../hfloatsliderwidget.h"
 #include "../comboboxwidget.h"
 #include "../colorpickerwidget.h"
@@ -19,10 +19,12 @@ For more information see the LICENSE file
 #include "../checkboxwidget.h"
 #include "../texturepickerwidget.h"
 #include "../labelwidget.h"
+#include "../propertywidget.h"
 
 #include "../../irisgl/src/graphics/texture2d.h"
 #include "../../irisgl/src/scenegraph/meshnode.h"
 #include "../../irisgl/src/materials/custommaterial.h"
+#include "../../irisgl/src/materials/propertytype.h"
 
 #include "../../io/materialreader.hpp"
 
@@ -215,6 +217,33 @@ MaterialPropertyWidget::MaterialPropertyWidget(QWidget *parent)
 
 }
 
+void MaterialPropertyWidget::handleMat(const QJsonObject &jahShader)
+{
+    materialPropWidget = this->addPropertyWidget();
+    materialPropWidget->setListener(this);
+
+    /// TODO: add some check here to escape early
+    auto widgetProps = jahShader["uniforms"].toArray();
+
+    for (int i = 0; i < widgetProps.size(); i++) {
+        auto prop = widgetProps[i].toObject();
+
+        if (prop["type"] == "slider")  {
+            auto fltProp = new iris::FloatProperty;
+            fltProp->id             = i;
+            fltProp->displayName    = prop["displayName"].toString();
+            fltProp->name           = prop["name"].toString();
+            fltProp->minValue       = prop["start"].toDouble();
+            fltProp->maxValue       = prop["end"].toDouble();
+            fltProp->uniform        = prop["uniform"].toString();
+
+            materialPropWidget->addFloatProperty(fltProp);
+        }
+    }
+
+    this->customMaterial->setProperties(materialPropWidget->getProperties());
+}
+
 void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
@@ -230,7 +259,9 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
                     IrisUtils::getAbsoluteAssetPath(
                         "app/shader_defs/" + this->customMaterial->getMaterialName() + ".json"));
         this->customMaterial->generate(materialReader->getParsedShader());
-        setupCustomMaterial();
+
+        handleMat(this->customMaterial->getShaderFile());
+//        setupCustomMaterial();
     } else {
         this->meshNode.clear();
         this->customMaterial.clear();
@@ -306,4 +337,11 @@ void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
 
     this->setMinimumHeight(finalHeight);
     this->setMaximumHeight(finalHeight);
+}
+
+void MaterialPropertyWidget::onPropertyChanged(iris::Property *prop)
+{
+    if (prop->name == "shininess") {
+        qDebug() << prop->getValue();
+    }
 }

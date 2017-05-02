@@ -28,6 +28,7 @@ struct Property
     unsigned            id;
     QString             displayName;
     QString             name;
+    QString             uniform;
     PropertyType        type;
 
     virtual QVariant    getValue() = 0;

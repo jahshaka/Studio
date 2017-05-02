@@ -12,14 +12,16 @@ For more information see the LICENSE file
 #ifndef CUSTOMMATERIAL_H
 #define CUSTOMMATERIAL_H
 
-#include "../graphics/material.h"
-#include "../irisglfwd.h"
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QOpenGLShaderProgram>
 #include <QColor>
 #include <vector>
 #include <map>
+
+#include "../graphics/material.h"
+#include "../irisglfwd.h"
+#include "propertytype.h"
 
 class QOpenGLFunctions_3_2_Core;
 
@@ -53,6 +55,12 @@ public:
     std::vector<MatStruct<bool>>    textureToggleUniforms;
 
     static CustomMaterialPtr create();
+
+    QList<Property*> properties;
+
+    void setProperties(QList<Property*> props) {
+        this->properties = props;
+    }
 
 private:
     CustomMaterial();

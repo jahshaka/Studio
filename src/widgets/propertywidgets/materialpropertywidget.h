@@ -21,6 +21,7 @@ For more information see the LICENSE file
 
 #include "../accordianbladewidget.h"
 #include "../../irisgl/src/graphics/material.h"
+#include "../../irisgl/src/materials/propertytype.h"
 
 namespace iris {
     class SceneNode;
@@ -30,11 +31,12 @@ namespace iris {
 }
 
 class MaterialReader;
+class PropertyWidget;
 
 /**
  *  Displays properties for materials
  */
-class MaterialPropertyWidget : public AccordianBladeWidget
+class MaterialPropertyWidget : public AccordianBladeWidget, iris::PropertyListener
 {
     Q_OBJECT
 
@@ -57,6 +59,10 @@ public:
     void purge();
     void forceShaderRefresh(const QString &matName);
 
+
+    ///// NEW
+    void test();
+
 protected slots:
     void onCustomSliderChanged(QWidget*);
     void onCustomColorChanged(QWidget*);
@@ -72,6 +78,12 @@ private:
     std::vector<iris::MatStruct<ColorValueWidget*>>     colorUniforms;
     std::vector<iris::MatStruct<CheckBoxWidget*>>       boolUniforms;
     std::vector<iris::MatStruct<TexturePickerWidget*>>  textureUniforms;
+
+    /// NEW NEW NEW NEW! NEW ! NEW?
+public:
+    void onPropertyChanged(iris::Property*);
+    PropertyWidget* materialPropWidget;
+    void handleMat(const QJsonObject &jahShader);
 };
 
 #endif // MATERIALPROPERTYWIDGET_H
