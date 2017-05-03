@@ -291,6 +291,9 @@ iris::ScenePtr MainWindow::loadDefaultScene()
 
 }
 
+#define DIFFUSE_SLOT "diffuseTex"
+#define SHININESS_SLOT "shininess"
+
 // don't use this entirely anymore --- use method above
 iris::ScenePtr MainWindow::createDefaultScene()
 {
@@ -319,19 +322,8 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     auto m = iris::CustomMaterial::create();
     m->generate(materialReader->getParsedShader());
-    m->updateTextureAndToggleUniform(0, getAbsoluteAssetPath("app/content/textures/tile.png"));
-    m->updateColorAndUniform(0, QColor(0, 0, 0));
-    m->updateColorAndUniform(1, QColor(255, 255, 255));
-    m->updateFloatAndUniform(0, 16);
-//    m->updateFloatAndUniform(1, 16);
-    m->updateFloatAndUniform(3, 4);
+    m->updateTextureAndToggleUniform("u_diffuseTexture", getAbsoluteAssetPath("app/content/textures/tile.png"));
     node->setMaterial(m);
-//    node->setActiveMaterial(2);
-//    m->setDiffuseColor(QColor(255, 255, 255));
-//    m->setDiffuseTexture(iris::Texture2D::load(getAbsoluteAssetPath("app/content/textures/tile.png")));
-//    m->setShininess(0);
-//    m->setSpecularColor(QColor(0, 0, 0));
-//    m->setTextureScale(4);
 
     scene->rootNode->addChild(node);
 

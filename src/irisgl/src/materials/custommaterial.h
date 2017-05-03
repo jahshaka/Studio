@@ -39,6 +39,9 @@ public:
 
     void setTextureWithUniform(QString, QString);
     void updateTextureAndToggleUniform(int, QString);
+    void updateTextureAndToggleUniform(QString, QString);
+
+    void updateShaderUniform(QString, QVariant);
     void updateFloatAndUniform(int, float);
     void updateColorAndUniform(int, QColor);
     QJsonObject getShaderFile() const;
@@ -61,6 +64,7 @@ public:
     void setProperties(QList<Property*> props) {
         this->properties = props;
     }
+
 
 private:
     CustomMaterial();

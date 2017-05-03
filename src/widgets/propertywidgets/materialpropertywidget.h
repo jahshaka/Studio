@@ -41,7 +41,7 @@ class MaterialPropertyWidget : public AccordianBladeWidget, iris::PropertyListen
     Q_OBJECT
 
 public:
-    MaterialPropertyWidget(QWidget *parent = nullptr);
+    MaterialPropertyWidget();
 
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
     QSharedPointer<iris::MeshNode> meshNode;
@@ -50,40 +50,22 @@ public:
 
     MaterialReader* materialReader;
 
-    void createWidgets(const QJsonObject &jahShader);
-
-    void setupDefaultMaterial();
     void setupCustomMaterial();
     void setupShaderSelector();
 
-    void purge();
     void forceShaderRefresh(const QString &matName);
 
 
-    ///// NEW
-    void test();
-
 protected slots:
-    void onCustomSliderChanged(QWidget*);
-    void onCustomColorChanged(QWidget*);
-    void onCustomTextureChanged(QWidget*);
-    void onCheckBoxStateChanged(QWidget*);
-
     void onMaterialSelectorChanged(const QString&);
 
 private:
     ComboBoxWidget* materialSelector;
 
-    std::vector<iris::MatStruct<HFloatSliderWidget*>>   sliderUniforms;
-    std::vector<iris::MatStruct<ColorValueWidget*>>     colorUniforms;
-    std::vector<iris::MatStruct<CheckBoxWidget*>>       boolUniforms;
-    std::vector<iris::MatStruct<TexturePickerWidget*>>  textureUniforms;
-
-    /// NEW NEW NEW NEW! NEW ! NEW?
 public:
     void onPropertyChanged(iris::Property*);
     PropertyWidget* materialPropWidget;
-    void handleMat(const QJsonObject &jahShader);
+    void handleMat();
 };
 
 #endif // MATERIALPROPERTYWIDGET_H
