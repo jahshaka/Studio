@@ -116,7 +116,6 @@ public:
     void stopPlayingScene();
 
     iris::ForwardRendererPtr getRenderer() const;
-    void saveFrameBuffer(QString filepath);
 
 protected:
     void initializeGL();
