@@ -670,4 +670,9 @@ iris::ForwardRendererPtr SceneViewWidget::getRenderer() const
     return renderer;
 }
 
+void SceneViewWidget::saveFrameBuffer(QString filePath)
+{
+    auto image = this->grabFramebuffer();
+    image.save(filePath);
+}
 
