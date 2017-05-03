@@ -30,7 +30,6 @@ For more information see the LICENSE file
 #include "../irisgl/src/geometry/trimesh.h"
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/viewport.h"
-#include "../irisgl/src/graphics/postprocess.h"
 #include "../irisgl/src/graphics/utils/fullscreenquad.h"
 #include "../irisgl/src/math/intersectionhelper.h"
 #include "../irisgl/src/vr/vrmanager.h"
@@ -341,7 +340,6 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 
 void SceneViewWidget::mouseReleaseEvent(QMouseEvent *e)
 {
-    this->saveFrameBuffer("/home/nicolas/Desktop/screenshot.png");
     if (e->button() == Qt::RightButton) {
         dragging = false;
     }
@@ -670,12 +668,6 @@ void SceneViewWidget::stopPlayingScene()
 iris::ForwardRendererPtr SceneViewWidget::getRenderer() const
 {
     return renderer;
-}
-
-void SceneViewWidget::saveFrameBuffer(QString filePath)
-{
-    auto image = this->grabFramebuffer();
-    image.save(filePath);
 }
 
 
