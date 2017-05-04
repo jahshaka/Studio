@@ -43,18 +43,18 @@ void AssetPickerWidget::populateWidget(QString filter)
 
         if (asset->type == type) {
             QFileInfo file(asset->fileName);
+            auto item = new QListWidgetItem(asset->fileName);
+
             if (file.suffix() == "jpg" || file.suffix() == "png" || file.suffix() == "bmp") {
                 auto thumb = ThumbnailManager::createThumbnail(asset->path, 128, 128);
                 pixmap = QPixmap::fromImage(*thumb->thumb);
+                item->setIcon(QIcon(pixmap));
             } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
-                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/user-account-box.svg", 128, 128);
-                pixmap = QPixmap::fromImage(*thumb->thumb);
+                item->setIcon(QIcon(":/app/icons/user-account-box.svg"));
             } else {
-                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
-                pixmap = QPixmap::fromImage(*thumb->thumb);
+                item->setIcon(QIcon(":/app/icons/google-drive-file.svg"));
             }
 
-            auto item = new QListWidgetItem(QIcon(pixmap), asset->fileName);
             item->setData(Qt::UserRole, asset->path);
 
             if (filter.isEmpty()) {

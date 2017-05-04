@@ -91,13 +91,10 @@ void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
     QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
     foreach (const QFileInfo &file, files) {
         if (!file.fileName().startsWith('.')) {
-            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
-            QPixmap pixmap = QPixmap::fromImage(*thumb->thumb);
             auto item = new QTreeWidgetItem();
-            item->setIcon(0, QIcon(pixmap));
+            item->setIcon(0, QIcon(":/app/icons/folder-symbol.svg"));
             item->setData(0, Qt::DisplayRole, file.fileName());
             item->setData(0, Qt::UserRole, file.absoluteFilePath());
-//            item->setData(0, ID_ROLE, );
             parent->addChild(item);
             updateTree(item, file.absoluteFilePath());
         }
@@ -155,41 +152,31 @@ void AssetWidget::addItem(const QString &asset)
     QFileInfo file(asset);
     auto name = file.baseName();
 
-//    if (name.length() > 10) {
-//        name.truncate(8);
-//        name += "...";
-//    }
-
     QIcon icon;
     QListWidgetItem *item;
 
     if (file.isDir()) {
-        // QImage img(asset);
-        // icon = QIcon(pixmap);
-        auto t = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
-        QPixmap pixmap;
-        pixmap = pixmap.fromImage(*t->thumb);
-        item = new QListWidgetItem(QIcon(pixmap), name);
+        item = new QListWidgetItem(QIcon(":/app/icons/folder-symbol.svg"), name);
         item->setData(Qt::UserRole, file.absolutePath());
     } else {
         AssetType type;
         QPixmap pixmap;
 
+        item = new QListWidgetItem(name);
+
         if (file.suffix() == "jpg" || file.suffix() == "png" || file.suffix() == "bmp") {
+            type = AssetType::Texture;
             auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
             pixmap = QPixmap::fromImage(*thumb->thumb);
-            type = AssetType::Texture;
+            item->setIcon(QIcon(pixmap));
         } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
-            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/user-account-box.svg", 128, 128);
             type = AssetType::Object;
-            pixmap = QPixmap::fromImage(*thumb->thumb);
+            item->setIcon(QIcon(":/app/icons/user-account-box.svg"));
         } else {
-            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
             type = AssetType::File;
-            pixmap = QPixmap::fromImage(*thumb->thumb);
+            item->setIcon(QIcon(":/app/icons/google-drive-file.svg"));
         }
 
-        item = new QListWidgetItem(QIcon(pixmap), name);
         item->setData(Qt::UserRole, file.absolutePath());
     }
 
