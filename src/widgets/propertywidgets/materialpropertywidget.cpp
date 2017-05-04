@@ -21,124 +21,79 @@ For more information see the LICENSE file
 #include "../labelwidget.h"
 #include "../propertywidget.h"
 
+#include "../../constants.h"
+
 #include "../../irisgl/src/graphics/texture2d.h"
 #include "../../irisgl/src/scenegraph/meshnode.h"
 #include "../../irisgl/src/materials/custommaterial.h"
 #include "../../irisgl/src/materials/propertytype.h"
 
-#include "../../io/materialreader.hpp"
-
-void MaterialPropertyWidget::setupCustomMaterial()
-{
-    // textures
-//    QSignalMapper *textureMapper = new QSignalMapper(this);
-//    auto texIter = textureUniforms.begin();
-//    while (texIter != textureUniforms.end()) {
-//        connect(texIter->value, SIGNAL(valueChanged(QString)), textureMapper, SLOT(map()));
-//        textureMapper->setMapping(texIter->value, texIter->value);
-//        ++texIter;
-//    }
-//    connect(textureMapper, SIGNAL(mapped(QWidget*)), SLOT(onCustomTextureChanged(QWidget*)));
-
-//    // TExTURES
-//    texIter = textureUniforms.begin();
-//    auto tIter = customMaterial->textureUniforms.begin();
-//    while (texIter != textureUniforms.end()) {
-//        if (!tIter->value.isEmpty()) {
-//            texIter->value->setTexture(tIter->value);
-//        } else {
-//            texIter->value->setTexture("");
-//        }
-//        ++texIter;
-//        ++tIter;
-//    }
-}
-
-void MaterialPropertyWidget::forceShaderRefresh(const QString &matName)
-{
-    emit onMaterialSelectorChanged(matName);
-}
-
-void MaterialPropertyWidget::setupShaderSelector()
-{
-    materialSelector = this->addComboBox("Shader");
-
-    QDir dir(IrisUtils::getAbsoluteAssetPath("app/shader_defs/"));
-    for (auto shaderName : dir.entryList(QDir::Files)) {
-        materialSelector->addItem(QFileInfo(shaderName).baseName());
-    }
-
-    materialSelector->setCurrentItem(this->customMaterial->getMaterialName());
-
-    connect(materialSelector,   SIGNAL(currentIndexChanged(QString)),
-            this,               SLOT(onMaterialSelectorChanged(QString)));
-}
-
-MaterialPropertyWidget::MaterialPropertyWidget()
-{
-
-}
-
-void MaterialPropertyWidget::handleMat()
-{
-    materialPropWidget = this->addPropertyWidget();
-    materialPropWidget->setListener(this);
-    materialPropWidget->setProperties(this->customMaterial->properties);
-}
-
 void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-        this->meshNode = sceneNode.staticCast<iris::MeshNode>();
-        this->customMaterial = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
+        meshNode = sceneNode.staticCast<iris::MeshNode>();
+        material = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
     }
 
     setupShaderSelector();
 
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         // TODO - properly update only when requested
+        auto shaderName = Constants::SHADER_DEFS + material->getName() + ".json";
+        material->generate(IrisUtils::getAbsoluteAssetPath(shaderName));
+        setWidgetProperties();
+    }
 
-        materialReader = new MaterialReader();
-        materialReader->readJahShader(
-                    IrisUtils::getAbsoluteAssetPath(
-                        "app/shader_defs/" + this->customMaterial->getMaterialName() + ".json"));
-        this->customMaterial->generate(materialReader->getParsedShader());
-
-        handleMat();
-//        setupCustomMaterial();
-    } else {
-        this->meshNode.clear();
-        this->customMaterial.clear();
+    else {
+        meshNode.clear();
+        material.clear();
         return;
     }
 }
 
-void MaterialPropertyWidget::onMaterialSelectorChanged(const QString &text)
+void MaterialPropertyWidget::forceShaderRefresh(const QString &materialName)
 {
-    // only clear when we are switching mats, not on every select
-    this->customMaterial->purge();
-
-    this->clearPanel(this->layout());
-
-    this->customMaterial->setMaterialName(text);
-    this->setSceneNode(this->meshNode);
-
-//    int finalHeight = this->customMaterial->getCalculatedPropHeight();
-
-//    this->setMinimumHeight(0);
-//    this->setMaximumHeight(50);
+    emit materialChanged(materialName);
 }
 
-void MaterialPropertyWidget::onPropertyChanged(iris::Property *property)
+void MaterialPropertyWidget::setWidgetProperties()
 {
-    for (auto prop : customMaterial->properties) {
-        if (prop->name == property->name) {
-            prop->setValue(property->getValue());
-        }
+    materialPropWidget = this->addPropertyWidget();
+    materialPropWidget->setListener(this);
+    materialPropWidget->setProperties(material->properties);
+}
 
-        // special case for textures since we have to generate a new one
-        if (property->type == iris::PropertyType::Texture) {
-            customMaterial->updateTextureAndToggleUniform(property->uniform, property->getValue().toString());
-        }
+void MaterialPropertyWidget::materialChanged(const QString &text)
+{
+    material->purge();
+    clearPanel(this->layout());
+    material->setName(text);
+    setSceneNode(meshNode);
+}
+
+void MaterialPropertyWidget::setupShaderSelector()
+{
+    materialSelector = this->addComboBox("Shader");
+
+    QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS));
+    for (auto shaderName : dir.entryList(QDir::Files)) {
+        materialSelector->addItem(QFileInfo(shaderName).baseName());
+    }
+
+    materialSelector->setCurrentItem(material->getName());
+
+    connect(materialSelector,   SIGNAL(currentIndexChanged(QString)),
+            this,               SLOT(materialChanged(QString)));
+}
+
+void MaterialPropertyWidget::onPropertyChanged(iris::Property *prop)
+{
+    for (auto property : material->properties) {
+        if (property->name == prop->name) property->setValue(prop->getValue());
+    }
+
+    // special case for textures since we have to generate these
+    if (prop->type == iris::PropertyType::Texture) {
+        material->setTextureWithUniform(prop->uniform, prop->getValue().toString());
     }
 }

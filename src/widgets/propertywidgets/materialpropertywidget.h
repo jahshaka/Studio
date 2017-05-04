@@ -13,11 +13,6 @@ For more information see the LICENSE file
 #define MATERIALPROPERTYWIDGET_H
 
 #include <QWidget>
-#include <QSharedPointer>
-
-#include <QJsonObject>
-#include <QSignalMapper>
-#include <QLayout>
 
 #include "../accordianbladewidget.h"
 #include "../../irisgl/src/graphics/material.h"
@@ -30,7 +25,6 @@ namespace iris {
     class CustomMaterial;
 }
 
-class MaterialReader;
 class PropertyWidget;
 
 /**
@@ -41,31 +35,24 @@ class MaterialPropertyWidget : public AccordianBladeWidget, iris::PropertyListen
     Q_OBJECT
 
 public:
-    MaterialPropertyWidget();
+    MaterialPropertyWidget() = default;
+    QSharedPointer<iris::CustomMaterial> material;
 
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
-    QSharedPointer<iris::MeshNode> meshNode;
-
-    QSharedPointer<iris::CustomMaterial> customMaterial;
-
-    MaterialReader* materialReader;
-
-    void setupCustomMaterial();
-    void setupShaderSelector();
-
-    void forceShaderRefresh(const QString &matName);
+    void forceShaderRefresh(const QString&);
+    void setWidgetProperties();
 
 
 protected slots:
-    void onMaterialSelectorChanged(const QString&);
+    void materialChanged(const QString&);
 
 private:
+    QSharedPointer<iris::MeshNode> meshNode;
     ComboBoxWidget* materialSelector;
-
-public:
-    void onPropertyChanged(iris::Property*);
     PropertyWidget* materialPropWidget;
-    void handleMat();
+
+    void setupShaderSelector();
+    void onPropertyChanged(iris::Property*);
 };
 
 #endif // MATERIALPROPERTYWIDGET_H

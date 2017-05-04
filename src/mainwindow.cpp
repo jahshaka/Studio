@@ -80,7 +80,7 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
 
-#include <src/io/materialreader.hpp>
+#include "constants.h"
 
 enum class VRButtonMode : int
 {
@@ -291,9 +291,6 @@ iris::ScenePtr MainWindow::loadDefaultScene()
 
 }
 
-#define DIFFUSE_SLOT "diffuseTex"
-#define SHININESS_SLOT "shininess"
-
 // don't use this entirely anymore --- use method above
 iris::ScenePtr MainWindow::createDefaultScene()
 {
@@ -317,12 +314,10 @@ iris::ScenePtr MainWindow::createDefaultScene()
     node->setPickable(false);
     node->setShadowEnabled(false);
 
-    MaterialReader *materialReader = new MaterialReader();
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
-
     auto m = iris::CustomMaterial::create();
-    m->generate(materialReader->getParsedShader());
-    m->updateTextureAndToggleUniform("u_diffuseTexture", getAbsoluteAssetPath("app/content/textures/tile.png"));
+    m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
+    m->updateShaderUniform("u_diffuseTexture", getAbsoluteAssetPath("app/content/textures/tile.png"));
+    m->updateShaderUniform("u_textureScale", 4.f);
     node->setMaterial(m);
 
     scene->rootNode->addChild(node);
@@ -650,26 +645,24 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
 
     auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
 
-    MaterialReader *materialReader = new MaterialReader();
-    // TODO - set the type for a preset in the .material file and remove the hardcoded mess here
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
-
+    // TODO - set the TYPE for a preset in the .material file so we can have other preset types
+    // only works for the default material at the moment...
     auto m = iris::CustomMaterial::create();
-    m->generate(materialReader->getParsedShader());
+    m->generate(getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
 
-    m->updateTextureAndToggleUniform(0, preset->diffuseTexture);
-    m->updateTextureAndToggleUniform(1, preset->specularTexture);
-    m->updateTextureAndToggleUniform(2, preset->normalTexture);
-    m->updateTextureAndToggleUniform(3, preset->reflectionTexture);
+    m->updateShaderUniform("u_diffuseTexture", preset->diffuseTexture);
+    m->updateShaderUniform("u_specularTexture", preset->specularTexture);
+    m->updateShaderUniform("u_normalTexture", preset->normalTexture);
+    m->updateShaderUniform("u_reflectionTexture", preset->reflectionTexture);
 
-    m->updateColorAndUniform(0, preset->ambientColor);
-    m->updateColorAndUniform(1, preset->diffuseColor);
-    m->updateColorAndUniform(2, preset->specularColor);
+    m->updateShaderUniform("ambientColor", preset->ambientColor);
+    m->updateShaderUniform("diffuseColor", preset->diffuseColor);
+    m->updateShaderUniform("specularColor", preset->specularColor);
 
-    m->updateFloatAndUniform(0, preset->shininess);
-    m->updateFloatAndUniform(1, preset->normalIntensity);
-    m->updateFloatAndUniform(2, preset->reflectionInfluence);
-    m->updateFloatAndUniform(3, preset->textureScale);
+    m->updateShaderUniform("u_material.shininess", preset->shininess);
+    m->updateShaderUniform("u_normalIntensity", preset->normalIntensity);
+    m->updateShaderUniform("u_reflectionInfluence", preset->reflectionInfluence);
+    m->updateShaderUniform("u_textureScale", preset->textureScale);
 
     meshNode->setMaterial(m);
 
@@ -988,11 +981,8 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
     if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
-        MaterialReader *materialReader = new MaterialReader();
-        materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
-
         auto mat = iris::CustomMaterial::create();
-        mat->generate(materialReader->getParsedShader());
+        mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
         meshNode->setMaterial(mat);
     }
 

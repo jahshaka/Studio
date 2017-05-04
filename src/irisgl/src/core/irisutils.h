@@ -18,8 +18,7 @@ For more information see the LICENSE file
 class IrisUtils
 {
 public:
-    static QString getAbsoluteAssetPath(QString relToApp)
-    {
+    static QString getAbsoluteAssetPath(QString relToApp) {
         QDir basePath = QDir(QCoreApplication::applicationDirPath());
     #if defined(WIN32) && defined(QT_DEBUG)
         basePath.cdUp();

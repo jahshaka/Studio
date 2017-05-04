@@ -22,6 +22,8 @@ For more information see the LICENSE file
 #include "materialreader.hpp"
 #include "scenereader.h"
 
+#include "../constants.h"
+
 #include "../editor/editordata.h"
 
 #include "../irisgl/src/core/scene.h"
@@ -402,43 +404,34 @@ iris::LightType SceneReader::getLightTypeFromName(QString lightType)
  */
 iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 {
-    if (nodeObj["material"].isNull()) {
-        return iris::CustomMaterial::create();
-    }
+    if (nodeObj["material"].isNull()) return iris::CustomMaterial::create();
 
     auto mat = nodeObj["material"].toObject();
-
-    MaterialReader *materialReader = new MaterialReader();
-    QString path =  "app/shader_defs/" + mat["name"].toString() + ".json";
-
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath(path));
-
     auto m = iris::CustomMaterial::create();
-    m->generate(materialReader->getParsedShader());
+    m->generate(IrisUtils::getAbsoluteAssetPath(SHADER_DEFS + mat["name"].toString() + ".json"));
 
-    int cCtr = 0;
-    for (auto s : m->colorUniforms) {
-        QColor col;
-        col.setNamedColor(mat[s.name].toString());
-        m->updateColorAndUniform(cCtr, col);
-        cCtr++;
-    }
-
-    int tCtr = 0;
-    for (auto s : m->textureUniforms) {
-        auto tex = mat[s.name].toString();
-        if (!tex.isEmpty()) {
-            tex = getAbsolutePath(mat[s.name].toString());
-            // qDebug() << "TEX " << tex;
+    for (auto prop : m->properties) {
+        if (prop->type == iris::PropertyType::Bool) {
+            m->updateShaderUniform(prop->uniform, mat[prop->name].toBool());
         }
-        m->updateTextureAndToggleUniform(tCtr, tex);
-        tCtr++;
-    }
 
-    int sCtr = 0;
-    for (auto s : m->sliderUniforms) {
-        m->updateFloatAndUniform(sCtr, mat[s.name].toDouble());
-        sCtr++;
+        if (prop->type == iris::PropertyType::Float) {
+            m->updateShaderUniform(prop->uniform, mat[prop->name].toVariant().toFloat());
+        }
+
+        if (prop->type == iris::PropertyType::Color) {
+            QColor col;
+            col.setNamedColor(mat[prop->name].toString());
+            m->updateShaderUniform(prop->uniform, col);
+        }
+
+        if (prop->type == iris::PropertyType::Texture) {
+            auto textureStr = !mat[prop->name].toString().isEmpty()
+                    ? getAbsolutePath(mat[prop->name].toString())
+                    : QString();
+
+            m->updateShaderUniform(prop->uniform, textureStr);
+        }
     }
 
     return m;
