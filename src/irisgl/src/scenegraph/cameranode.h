@@ -100,7 +100,7 @@ public:
 private:
     CameraNode()
     {
-        angle = 45;
+        angle = 55;
         nearClip = 0.1f;
         farClip = 1000.0f;
         aspectRatio = 1.0f;//assumes a square viewport by default
