@@ -451,10 +451,10 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 
                 if (item->renderStates.blendType == BlendType::Normal)
                 {
-                    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+                    gl->glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
                 } else if(item->renderStates.blendType == BlendType::Add)
                 {
-                    glBlendFunc(GL_ONE,GL_ONE);
+                    gl->glBlendFunc(GL_ONE,GL_ONE);
                 }
                 //todo: add more types
             }
