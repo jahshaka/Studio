@@ -316,8 +316,8 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-    m->updateShaderUniform("u_diffuseTexture", getAbsoluteAssetPath("app/content/textures/tile.png"));
-    m->updateShaderUniform("u_textureScale", 4.f);
+    m->setValue("diffuseTexture", getAbsoluteAssetPath("app/content/textures/tile.png"));
+    m->setValue("textureScale", 4.f);
     node->setMaterial(m);
 
     scene->rootNode->addChild(node);
@@ -542,8 +542,6 @@ void MainWindow::stopAnimWidget()
 
 void MainWindow::saveScene()
 {
-    qDebug()<<"saving scene";
-
     if(Globals::project->isSaved())
     {
         auto filename = Globals::project->getFilePath();
@@ -650,19 +648,19 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
     auto m = iris::CustomMaterial::create();
     m->generate(getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
 
-    m->updateShaderUniform("u_diffuseTexture", preset->diffuseTexture);
-    m->updateShaderUniform("u_specularTexture", preset->specularTexture);
-    m->updateShaderUniform("u_normalTexture", preset->normalTexture);
-    m->updateShaderUniform("u_reflectionTexture", preset->reflectionTexture);
+    m->setValue("diffuseTexture", preset->diffuseTexture);
+    m->setValue("specularTexture", preset->specularTexture);
+    m->setValue("normalTexture", preset->normalTexture);
+    m->setValue("reflectionTexture", preset->reflectionTexture);
 
-    m->updateShaderUniform("ambientColor", preset->ambientColor);
-    m->updateShaderUniform("diffuseColor", preset->diffuseColor);
-    m->updateShaderUniform("specularColor", preset->specularColor);
+    m->setValue("ambientColor", preset->ambientColor);
+    m->setValue("diffuseColor", preset->diffuseColor);
+    m->setValue("specularColor", preset->specularColor);
 
-    m->updateShaderUniform("u_material.shininess", preset->shininess);
-    m->updateShaderUniform("u_normalIntensity", preset->normalIntensity);
-    m->updateShaderUniform("u_reflectionInfluence", preset->reflectionInfluence);
-    m->updateShaderUniform("u_textureScale", preset->textureScale);
+    m->setValue("shininess", preset->shininess);
+    m->setValue("normalIntensity", preset->normalIntensity);
+    m->setValue("reflectionInfluence", preset->reflectionInfluence);
+    m->setValue("textureScale", preset->textureScale);
 
     meshNode->setMaterial(m);
 

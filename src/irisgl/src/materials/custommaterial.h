@@ -31,7 +31,7 @@ public:
 
     void generate(const QString&);
     void setTextureWithUniform(const QString&, const QString&);
-    void updateShaderUniform(const QString&, const QVariant&);
+    void setValue(const QString&, const QVariant&);
     void setBaseMaterialProperties(const QJsonObject&);
     void setName(const QString&);
     void setProperties(QList<Property*> props);

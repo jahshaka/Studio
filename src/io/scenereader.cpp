@@ -52,6 +52,8 @@ For more information see the LICENSE file
 #include "../irisgl/src/postprocesses/radialblurpostprocess.h"
 #include "../irisgl/src/postprocesses/ssaopostprocess.h"
 
+#include "../constants.h"
+
 iris::ScenePtr SceneReader::readScene(QString filePath, iris::PostProcessManagerPtr postMan, EditorData** editorData)
 {
     dir = AssetIOBase::getDirFromFileName(filePath);
@@ -408,29 +410,21 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 
     auto mat = nodeObj["material"].toObject();
     auto m = iris::CustomMaterial::create();
-    m->generate(IrisUtils::getAbsoluteAssetPath(SHADER_DEFS + mat["name"].toString() + ".json"));
+    m->generate(IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS + mat["name"].toString() + ".json"));
 
     for (auto prop : m->properties) {
-        if (prop->type == iris::PropertyType::Bool) {
-            m->updateShaderUniform(prop->uniform, mat[prop->name].toBool());
-        }
+        if(mat.contains(prop->name)) {
+            if (prop->type == iris::PropertyType::Texture) {
+                auto textureStr = !mat[prop->name].toString().isEmpty()
+                        ? getAbsolutePath(mat[prop->name].toString())
+                        : QString();
 
-        if (prop->type == iris::PropertyType::Float) {
-            m->updateShaderUniform(prop->uniform, mat[prop->name].toVariant().toFloat());
-        }
-
-        if (prop->type == iris::PropertyType::Color) {
-            QColor col;
-            col.setNamedColor(mat[prop->name].toString());
-            m->updateShaderUniform(prop->uniform, col);
-        }
-
-        if (prop->type == iris::PropertyType::Texture) {
-            auto textureStr = !mat[prop->name].toString().isEmpty()
-                    ? getAbsolutePath(mat[prop->name].toString())
-                    : QString();
-
-            m->updateShaderUniform(prop->uniform, textureStr);
+                m->setValue(prop->name, textureStr);
+            }
+            else
+            {
+                m->setValue(prop->name, mat[prop->name].toVariant());
+            }
         }
     }
 

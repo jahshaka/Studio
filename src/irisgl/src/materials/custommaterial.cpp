@@ -30,29 +30,20 @@ void CustomMaterial::setTextureWithUniform(const QString &uniform, const QString
     }
 }
 
-void CustomMaterial::updateShaderUniform(const QString &uniform, const QVariant &value)
+void CustomMaterial::setValue(const QString &name, const QVariant &value)
 {
     for (auto prop : this->properties) {
-        if (prop->uniform == uniform) {
-            auto type = static_cast<QMetaType::Type>(value.type());
+        if (prop->name == name) {
 
-            if (type == QMetaType::Bool) {
-                prop->setValue(value.toBool());
-            }
-
-            else if (type == QMetaType::Float) {
-                prop->setValue(value.toFloat());
-            }
-
-            else if (type == QMetaType::QColor) {
-                prop->setValue(value.value<QColor>());
-            }
-
-            else if (type == QMetaType::QString) {
+            if (prop->type == iris::PropertyType::Texture) {
                 auto _prop = static_cast<TextureProperty*>(prop);
                 _prop->toggle = !value.toString().isEmpty();
                 prop->setValue(value.toString());
-                setTextureWithUniform(uniform, value.toString());
+                setTextureWithUniform(prop->uniform, value.toString());
+            }
+
+            else {
+                prop->setValue(value);
             }
         }
     }
