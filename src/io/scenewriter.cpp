@@ -255,19 +255,24 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
 
 void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat)
 {
-    matObj["name"] = mat->getMaterialName();
+    matObj["name"] = mat->getName();
 
-    for (auto s : mat->colorUniforms) {
-        matObj[s.name] = s.value.name();
-    }
+    for (auto prop : mat->properties) {
+        if (prop->type == iris::PropertyType::Bool) {
+            matObj[prop->name] = prop->getValue().toBool();
+        }
 
-    // TODO - nick can you fix these path path things... too many. idk
-    for (auto s : mat->textureUniforms) {
-        matObj[s.name] = getRelativePath(s.value);
-    }
+        if (prop->type == iris::PropertyType::Float) {
+            matObj[prop->name] = prop->getValue().toFloat();
+        }
 
-    for (auto s : mat->sliderUniforms) {
-        matObj[s.name] = s.value;
+        if (prop->type == iris::PropertyType::Color) {
+            matObj[prop->name] = prop->getValue().value<QColor>().name();
+        }
+
+        if (prop->type == iris::PropertyType::Texture) {
+            matObj[prop->name] = getRelativePath(prop->getValue().toString());
+        }
     }
 }
 

@@ -22,6 +22,8 @@ For more information see the LICENSE file
 #include "materialreader.hpp"
 #include "scenereader.h"
 
+#include "../constants.h"
+
 #include "../editor/editordata.h"
 
 #include "../irisgl/src/core/scene.h"
@@ -49,6 +51,8 @@ For more information see the LICENSE file
 #include "../irisgl/src/postprocesses/materialpostprocess.h"
 #include "../irisgl/src/postprocesses/radialblurpostprocess.h"
 #include "../irisgl/src/postprocesses/ssaopostprocess.h"
+
+#include "../constants.h"
 
 iris::ScenePtr SceneReader::readScene(QString filePath, iris::PostProcessManagerPtr postMan, EditorData** editorData)
 {
@@ -402,43 +406,26 @@ iris::LightType SceneReader::getLightTypeFromName(QString lightType)
  */
 iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 {
-    if (nodeObj["material"].isNull()) {
-        return iris::CustomMaterial::create();
-    }
+    if (nodeObj["material"].isNull()) return iris::CustomMaterial::create();
 
     auto mat = nodeObj["material"].toObject();
-
-    MaterialReader *materialReader = new MaterialReader();
-    QString path =  "app/shader_defs/" + mat["name"].toString() + ".json";
-
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath(path));
-
     auto m = iris::CustomMaterial::create();
-    m->generate(materialReader->getParsedShader());
+    m->generate(IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS + mat["name"].toString() + ".json"));
 
-    int cCtr = 0;
-    for (auto s : m->colorUniforms) {
-        QColor col;
-        col.setNamedColor(mat[s.name].toString());
-        m->updateColorAndUniform(cCtr, col);
-        cCtr++;
-    }
+    for (auto prop : m->properties) {
+        if(mat.contains(prop->name)) {
+            if (prop->type == iris::PropertyType::Texture) {
+                auto textureStr = !mat[prop->name].toString().isEmpty()
+                        ? getAbsolutePath(mat[prop->name].toString())
+                        : QString();
 
-    int tCtr = 0;
-    for (auto s : m->textureUniforms) {
-        auto tex = mat[s.name].toString();
-        if (!tex.isEmpty()) {
-            tex = getAbsolutePath(mat[s.name].toString());
-            // qDebug() << "TEX " << tex;
+                m->setValue(prop->name, textureStr);
+            }
+            else
+            {
+                m->setValue(prop->name, mat[prop->name].toVariant());
+            }
         }
-        m->updateTextureAndToggleUniform(tCtr, tex);
-        tCtr++;
-    }
-
-    int sCtr = 0;
-    for (auto s : m->sliderUniforms) {
-        m->updateFloatAndUniform(sCtr, mat[s.name].toDouble());
-        sCtr++;
     }
 
     return m;

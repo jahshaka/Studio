@@ -9,6 +9,10 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QJsonDocument>
+
 #include "custommaterial.h"
 #include "../graphics/texture2d.h"
 #include "../core/irisutils.h"
@@ -16,81 +20,74 @@ For more information see the LICENSE file
 namespace iris
 {
 
-CustomMaterial::CustomMaterial()
+void CustomMaterial::setTextureWithUniform(const QString &uniform, const QString &texturePath)
 {
-    setRenderLayer((int) RenderLayer::Opaque);
-}
-
-// TODO clean up how this is set and used
-void CustomMaterial::setTextureWithUniform(QString textureUniformName, QString texturePath)
-{
-    intermediateTexture = iris::Texture2D::load(texturePath);
-
-    if (!!intermediateTexture) {
-        addTexture(textureUniformName, intermediateTexture);
+    auto texture = iris::Texture2D::load(texturePath);
+    if (!!texture) {
+        addTexture(uniform, texture);
     } else {
-        removeTexture(textureUniformName);
+        removeTexture(uniform);
     }
 }
 
-void CustomMaterial::updateTextureAndToggleUniform(int index, QString uniform)
+void CustomMaterial::setValue(const QString &name, const QVariant &value)
 {
-    textureToggleUniforms[index].value = !uniform.isEmpty();
-    textureUniforms[index].value = uniform;
-    setTextureWithUniform(textureUniforms[index].uniform, uniform);
+    for (auto prop : this->properties) {
+        if (prop->name == name) {
+
+            if (prop->type == iris::PropertyType::Texture) {
+                auto _prop = static_cast<TextureProperty*>(prop);
+                _prop->toggle = !value.toString().isEmpty();
+                prop->setValue(value.toString());
+                setTextureWithUniform(prop->uniform, value.toString());
+            }
+
+            else {
+                prop->setValue(value);
+            }
+        }
+    }
 }
 
-void CustomMaterial::updateFloatAndUniform(int index, float value)
+void CustomMaterial::setUniformValues(Property *prop)
 {
-    sliderUniforms[index].value = value;
+    if (prop->type == PropertyType::Bool) {
+        program->setUniformValue(prop->uniform.toStdString().c_str(), prop->getValue().toBool());
+    }
+
+    if (prop->type == PropertyType::Float) {
+        program->setUniformValue(prop->uniform.toStdString().c_str(), prop->getValue().toFloat());
+    }
+
+    // TODO, figure out a way for the default material to mix values... the ambient for one
+    if (prop->type == PropertyType::Color) {
+        program->setUniformValue(prop->uniform.toStdString().c_str(),
+                                 QVector3D(prop->getValue().value<QColor>().redF(),
+                                           prop->getValue().value<QColor>().greenF(),
+                                           prop->getValue().value<QColor>().blueF()));
+    }
+
+    if (prop->type == iris::PropertyType::Texture) {
+        auto tprop = static_cast<TextureProperty*>(prop);
+        program->setUniformValue(tprop->toggleValue.toStdString().c_str(), tprop->toggle);
+    }
 }
 
-void CustomMaterial::updateColorAndUniform(int index, QColor color)
+QJsonObject CustomMaterial::loadShaderFromDisk(const QString &filePath)
 {
-    colorUniforms[index].value = color;
-}
-
-QJsonObject CustomMaterial::getShaderFile() const
-{
-    return jahShaderMaster;
+    QFile file(filePath);
+    file.open(QIODevice::ReadOnly);
+    auto data = file.readAll();
+    file.close();
+    return QJsonDocument::fromJson(data).object();
 }
 
 void CustomMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
 {
-     Material::begin(gl, scene);
+    Material::begin(gl, scene);
 
-    // TODO, figure out a way for the default material to mix values... the ambient for one
-    auto colorIterator = colorUniforms.begin();
-    while (colorIterator != colorUniforms.end()) {
-        program->setUniformValue(colorIterator->uniform.toStdString().c_str(),
-                                 QVector3D(colorIterator->value.redF(),
-                                           colorIterator->value.greenF(),
-                                           colorIterator->value.blueF()));
-        colorIterator++;
-    }
-
-    // set slider uniforms
-    auto sliderIterator = sliderUniforms.begin();
-    while (sliderIterator != sliderUniforms.end()) {
-        program->setUniformValue(sliderIterator->uniform.toStdString().c_str(),
-                                 sliderIterator->value);
-        ++sliderIterator;
-    }
-
-    // set bool uniforms
-    auto boolIterator = boolUniforms.begin();
-    while (boolIterator != boolUniforms.end()) {
-        program->setUniformValue(boolIterator->uniform.toStdString().c_str(),
-                                 boolIterator->value);
-        ++boolIterator;
-    }
-
-    // set texture toggle uniforms
-    auto textureToggleIterator = textureToggleUniforms.begin();
-    while (textureToggleIterator != textureToggleUniforms.end()) {
-        setUniformValue(textureToggleIterator->uniform.toStdString().c_str(),
-                        textureToggleIterator->value);
-        ++textureToggleIterator;
+    for (auto prop : this->properties) {
+        setUniformValues(prop);
     }
 }
 
@@ -99,113 +96,97 @@ void CustomMaterial::end(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
     Material::end(gl, scene);
 }
 
-/*
- * some notes about this function, the material isn't destroyed until the object is.
- * this function will get called everytime we cast a material when we select a node
- */
-void CustomMaterial::generate(const QJsonObject &jahShader)
+void CustomMaterial::generate(const QString &fileName)
 {
-    setMaterialName(jahShader["name"].toString());
+    auto jahShader = loadShaderFromDisk(fileName);
 
-    auto useBuiltinShader = jahShader["builtin"].toBool();
+    setName(jahShader["name"].toString());
 
     auto vertPath = jahShader["vertex_shader"].toString();
     auto fragPath = jahShader["fragment_shader"].toString();
 
     setBaseMaterialProperties(jahShader);
 
-    if(!vertPath.startsWith(":"))
-        vertPath = IrisUtils::getAbsoluteAssetPath(vertPath);
-
-    if(!fragPath.startsWith(":"))
-        fragPath = IrisUtils::getAbsoluteAssetPath(fragPath);
+    if (!vertPath.startsWith(":")) vertPath = IrisUtils::getAbsoluteAssetPath(vertPath);
+    if (!fragPath.startsWith(":")) fragPath = IrisUtils::getAbsoluteAssetPath(fragPath);
 
     createProgramFromShaderSource(vertPath, fragPath);
 
     auto widgetProps = jahShader["uniforms"].toArray();
 
-    /// TODO see if this can be removed this when the default material is deleted.
-    unsigned sliderSize, textureSize, colorSize, boolSize;
-    sliderSize = textureSize = colorSize = boolSize = 0;
-
     for (int i = 0; i < widgetProps.size(); i++) {
         auto prop = widgetProps[i].toObject();
-        if (prop["type"] == "slider")   sliderSize++;
-        if (prop["type"] == "color")    colorSize++;
-        if (prop["type"] == "checkbox") boolSize++;
-        if (prop["type"] == "texture")  textureSize++;
+
+        auto displayName    = prop["displayName"].toString();
+        auto name           = prop["name"].toString();
+        auto uniform        = prop["uniform"].toString();
+
+        if (prop["type"] == "float") {
+            auto fltProp = new iris::FloatProperty;
+            fltProp->id             = i;
+            fltProp->displayName    = displayName;
+            fltProp->name           = name;
+            fltProp->minValue       = prop["min"].toDouble();
+            fltProp->maxValue       = prop["max"].toDouble();
+            fltProp->uniform        = uniform;
+            fltProp->value          = prop["value"].toDouble();
+
+            if (properties.size() < widgetProps.size()) {
+                this->properties.append(fltProp);
+            }
+        }
+
+        if (prop["type"] == "bool") {
+            auto blProp = new iris::BoolProperty;
+            blProp->id              = i;
+            blProp->displayName     = displayName;
+            blProp->name            = name;
+            blProp->uniform         = uniform;
+            blProp->value           = prop["value"].toBool();
+
+            if (properties.size() < widgetProps.size()) {
+                this->properties.append(blProp);
+            }
+        }
+
+        if (prop["type"] == "texture") {
+            auto texProp = new iris::TextureProperty;
+            texProp->id             = i;
+            texProp->displayName    = displayName;
+            texProp->name           = name;
+            texProp->uniform        = uniform;
+            texProp->toggleValue    = prop["toggle"].toString();
+            texProp->value          = prop["value"].toString();
+
+            if (properties.size() < widgetProps.size()) {
+                this->properties.append(texProp);
+            }
+        }
+
+        if (prop["type"] == "color") {
+            auto clrProp = new iris::ColorProperty;
+            clrProp->id             = i;
+            clrProp->displayName    = displayName;
+            clrProp->name           = name;
+            clrProp->uniform        = uniform;
+
+            QColor col;
+            col.setNamedColor(prop["value"].toString());
+            clrProp->value          = col;
+
+            if (properties.size() < widgetProps.size()) {
+                this->properties.append(clrProp);
+            }
+        }
     }
-
-    for (int propIndex = 0; propIndex < widgetProps.size(); propIndex++) {
-
-        auto prop = widgetProps[propIndex].toObject();
-        auto uniform = prop["uniform"].toString();
-        auto name = prop["name"].toString();
-
-        if (sliderUniforms.size() < sliderSize) {
-            if (prop["type"] == "slider") {
-                auto value = (float) prop["value"].toDouble();
-                sliderUniforms.push_back(make_mat_struct(textureUniforms.size(),
-                                                         name, uniform, value));
-            }
-        }
-
-        if (colorUniforms.size() < colorSize) {
-            if (prop["type"] == "color") {
-                QColor col;
-                col.setNamedColor(prop["value"].toString());
-                colorUniforms.push_back(iris::make_mat_struct(textureUniforms.size(),
-                                                              name, uniform, col));
-            }
-        }
-
-        if (boolUniforms.size() < boolSize) {
-            if (prop["type"] == "checkbox") {
-                auto state = prop["value"].toBool();
-                boolUniforms.push_back(iris::make_mat_struct(boolUniforms.size(),
-                                                             name, uniform, state));
-            }
-        }
-
-        // TODO - find an efficient way to set default textures. Do we even want to do this?
-        if (textureUniforms.size() < textureSize) {
-            if (prop["type"] == "texture") {
-                auto textureValue = prop["value"].toString();
-
-                textureUniforms.push_back(iris::make_mat_struct(textureUniforms.size(),
-                                                                name, uniform, textureValue));
-
-                textureToggleUniforms.push_back(
-                            iris::make_mat_struct(textureUniforms.size(),
-                                                  name,
-                                                  prop["toggle"].toString(),
-                                                  !textureValue.isEmpty()));
-
-                // this will be set to false most if not all the time, see TODO above
-                //  if (!textureValue.isEmpty()) {
-                //      setTextureWithUniform(uniform, textureValue);
-                //  }
-            }
-        }
-    }
-
-    jahShaderMaster = jahShader;
-    // not magic, the widget heights won't change for a while so lazy ok for now or fetch them...
-    // the 30 is for the blade padding, the one is for the mandatory slider, 6 is spacing, 9 padd
-    finalSize = 30 + (sliderSize + boolSize + colorSize + 1) * 28
-                   + (textureSize * 108) + ((widgetProps.size() + 1) * 6) + 9 + 9;
 }
 
 void CustomMaterial::purge()
 {
-    sliderUniforms.clear();
-    colorUniforms.clear();
-    boolUniforms.clear();
-    textureUniforms.clear();
-    textureToggleUniforms.clear();
+    this->properties.clear();
 }
 
-void CustomMaterial::setMaterialName(const QString &name)
+void CustomMaterial::setName(const QString &name)
 {
     materialName = name;
 }
@@ -222,13 +203,12 @@ void CustomMaterial::setBaseMaterialProperties(const QJsonObject &jahShader)
     auto receiveShadows = jahShader["receiveShadows"].toBool(true);
     auto lighting       = jahShader["lighting"].toBool(true);
 
-    //renderStates.blendType = !blendType.isEmpty() ? blendType : "alphablend";
-    renderStates.zWrite = zwrite;
-    renderStates.depthTest = depthTest;
-    renderStates.fogEnabled = fog;
-    renderStates.castShadows = castShadows;
-    renderStates.receiveShadows = receiveShadows;
-    renderStates.receiveLighting = lighting;
+    renderStates.zWrite             = zwrite;
+    renderStates.depthTest          = depthTest;
+    renderStates.fogEnabled         = fog;
+    renderStates.castShadows        = castShadows;
+    renderStates.receiveShadows     = receiveShadows;
+    renderStates.receiveLighting    = lighting;
 
     if (renderLayer == "alphaTested") {
         setRenderLayer((int) RenderLayer::AlphaTested);
@@ -261,19 +241,19 @@ void CustomMaterial::setBaseMaterialProperties(const QJsonObject &jahShader)
     }
 }
 
-QString CustomMaterial::getMaterialName() const
+QString CustomMaterial::getName() const
 {
     return materialName;
-}
-
-int CustomMaterial::getCalculatedPropHeight() const
-{
-    return finalSize;
 }
 
 CustomMaterialPtr CustomMaterial::create()
 {
     return CustomMaterialPtr(new CustomMaterial());
+}
+
+void CustomMaterial::setProperties(QList<Property*> props)
+{
+    this->properties = props;
 }
 
 }

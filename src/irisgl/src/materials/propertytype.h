@@ -28,6 +28,7 @@ struct Property
     unsigned            id;
     QString             displayName;
     QString             name;
+    QString             uniform;
     PropertyType        type;
 
     virtual QVariant    getValue() = 0;
@@ -53,7 +54,7 @@ struct BoolProperty : public Property
         return value;
     }
 
-    void getValue(QVariant val) {
+    void setValue(QVariant val) {
         value = val.toBool();
     }
 };
@@ -116,9 +117,12 @@ struct ColorProperty : public Property
 struct TextureProperty : public Property
 {
     QString value;
+    QString toggleValue;
+    bool toggle;
 
     TextureProperty () {
         type = PropertyType::Texture;
+        toggle = false;
     }
 
     QVariant getValue() {
@@ -127,6 +131,7 @@ struct TextureProperty : public Property
 
     void setValue(QVariant val) {
         value = val.toString();
+        toggle = !value.isEmpty();
     }
 };
 

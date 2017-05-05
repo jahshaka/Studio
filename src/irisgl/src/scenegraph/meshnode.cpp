@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QDir>
 
 #include "meshnode.h"
@@ -33,6 +35,7 @@ For more information see the LICENSE file
 #include "../core/scene.h"
 #include "../core/scenenode.h"
 #include "../core/irisutils.h"
+
 
 namespace iris
 {
@@ -163,15 +166,8 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
             auto m = scene->mMaterials[mesh->mMaterialIndex];
             auto dir = QFileInfo(filePath).absoluteDir().absolutePath();
 
-//            auto meshMat = iris::MaterialHelper::createMaterial(m, dir);
-//            if(!!meshMat)
-//                meshNode->setMaterial(meshMat);
-//            else
-//                meshNode->setMaterial(iris::DefaultMaterial::create());
-
-            auto shader = readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
             auto m2 = iris::CustomMaterial::create();
-            m2->generate(shader);
+            m2->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
             if (!!m2) {
                 meshNode->setMaterial(m2);
             } else {
@@ -248,14 +244,8 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath)
         node->meshPath = filePath;
         node->meshIndex = 0;
 
-        //mesh->mMaterialIndex is always >= 0
-//        auto m = scene->mMaterials[mesh->mMaterialIndex];
-//        auto dir = QFileInfo(filePath).absoluteDir().absolutePath();
-//        auto meshMat = MaterialHelper::createMaterial(m,dir);
-
-        auto shader = readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
         auto m = iris::CustomMaterial::create();
-        m->generate(shader);
+        m->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
         if (!!m) {
             node->setMaterial(m);
         }

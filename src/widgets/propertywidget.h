@@ -26,6 +26,7 @@ public:
 
     void addProperty(const iris::Property*);
     void setProperties(QList<iris::Property*>);
+    QList<iris::Property*> getProperties() { return properties; }
     int getHeight();
 
     HFloatSliderWidget  *addFloatValueSlider(const QString&, float min, float max);

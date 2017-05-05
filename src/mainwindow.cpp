@@ -80,7 +80,7 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
 
-#include <src/io/materialreader.hpp>
+#include "constants.h"
 
 enum class VRButtonMode : int
 {
@@ -314,24 +314,11 @@ iris::ScenePtr MainWindow::createDefaultScene()
     node->setPickable(false);
     node->setShadowEnabled(false);
 
-    MaterialReader *materialReader = new MaterialReader();
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
-
     auto m = iris::CustomMaterial::create();
-    m->generate(materialReader->getParsedShader());
-    m->updateTextureAndToggleUniform(0, getAbsoluteAssetPath("app/content/textures/tile.png"));
-    m->updateColorAndUniform(0, QColor(0, 0, 0));
-    m->updateColorAndUniform(1, QColor(255, 255, 255));
-    m->updateFloatAndUniform(0, 16);
-//    m->updateFloatAndUniform(1, 16);
-    m->updateFloatAndUniform(3, 4);
+    m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
+    m->setValue("diffuseTexture", getAbsoluteAssetPath("app/content/textures/tile.png"));
+    m->setValue("textureScale", 4.f);
     node->setMaterial(m);
-//    node->setActiveMaterial(2);
-//    m->setDiffuseColor(QColor(255, 255, 255));
-//    m->setDiffuseTexture(iris::Texture2D::load(getAbsoluteAssetPath("app/content/textures/tile.png")));
-//    m->setShininess(0);
-//    m->setSpecularColor(QColor(0, 0, 0));
-//    m->setTextureScale(4);
 
     scene->rootNode->addChild(node);
 
@@ -506,7 +493,8 @@ void MainWindow::createPostProcessDockWidget()
     postProcessDockWidget->setWidget(postProcessWidget);
     postProcessDockWidget->setWindowTitle("PostProcesses");
     //postProcessDockWidget->setFloating(true);
-    this->addDockWidget(Qt::RightDockWidgetArea, postProcessDockWidget);
+    postProcessDockWidget->setHidden(true);
+//    this->addDockWidget(Qt::RightDockWidgetArea, postProcessDockWidget);
 
 }
 
@@ -554,8 +542,6 @@ void MainWindow::stopAnimWidget()
 
 void MainWindow::saveScene()
 {
-    qDebug()<<"saving scene";
-
     if(Globals::project->isSaved())
     {
         auto filename = Globals::project->getFilePath();
@@ -657,26 +643,24 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
 
     auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
 
-    MaterialReader *materialReader = new MaterialReader();
-    // TODO - set the type for a preset in the .material file and remove the hardcoded mess here
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
-
+    // TODO - set the TYPE for a preset in the .material file so we can have other preset types
+    // only works for the default material at the moment...
     auto m = iris::CustomMaterial::create();
-    m->generate(materialReader->getParsedShader());
+    m->generate(getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
 
-    m->updateTextureAndToggleUniform(0, preset->diffuseTexture);
-    m->updateTextureAndToggleUniform(1, preset->specularTexture);
-    m->updateTextureAndToggleUniform(2, preset->normalTexture);
-    m->updateTextureAndToggleUniform(3, preset->reflectionTexture);
+    m->setValue("diffuseTexture", preset->diffuseTexture);
+    m->setValue("specularTexture", preset->specularTexture);
+    m->setValue("normalTexture", preset->normalTexture);
+    m->setValue("reflectionTexture", preset->reflectionTexture);
 
-    m->updateColorAndUniform(0, preset->ambientColor);
-    m->updateColorAndUniform(1, preset->diffuseColor);
-    m->updateColorAndUniform(2, preset->specularColor);
+    m->setValue("ambientColor", preset->ambientColor);
+    m->setValue("diffuseColor", preset->diffuseColor);
+    m->setValue("specularColor", preset->specularColor);
 
-    m->updateFloatAndUniform(0, preset->shininess);
-    m->updateFloatAndUniform(1, preset->normalIntensity);
-    m->updateFloatAndUniform(2, preset->reflectionInfluence);
-    m->updateFloatAndUniform(3, preset->textureScale);
+    m->setValue("shininess", preset->shininess);
+    m->setValue("normalIntensity", preset->normalIntensity);
+    m->setValue("reflectionInfluence", preset->reflectionInfluence);
+    m->setValue("textureScale", preset->textureScale);
 
     meshNode->setMaterial(m);
 
@@ -995,11 +979,8 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
     if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
-        MaterialReader *materialReader = new MaterialReader();
-        materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
-
         auto mat = iris::CustomMaterial::create();
-        mat->generate(materialReader->getParsedShader());
+        mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
         meshNode->setMaterial(mat);
     }
 

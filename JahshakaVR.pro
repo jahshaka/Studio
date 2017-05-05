@@ -177,7 +177,8 @@ HEADERS  += src/mainwindow.h \
     src/dialogs/newprojectdialog.h \
     src/widgets/assetwidget.h \
     src/io/assetmanager.h \
-    src/widgets/assetpickerwidget.h
+    src/widgets/assetpickerwidget.h \
+    src/constants.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
