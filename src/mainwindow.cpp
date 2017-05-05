@@ -494,7 +494,7 @@ void MainWindow::createPostProcessDockWidget()
     postProcessDockWidget->setWindowTitle("PostProcesses");
     //postProcessDockWidget->setFloating(true);
     postProcessDockWidget->setHidden(true);
-//    this->addDockWidget(Qt::RightDockWidgetArea, postProcessDockWidget);
+    this->addDockWidget(Qt::RightDockWidgetArea, postProcessDockWidget);
 
 }
 

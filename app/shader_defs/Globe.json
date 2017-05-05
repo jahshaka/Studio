@@ -47,11 +47,11 @@
         {
             "displayName"   : "Fresnel Pow",
             "name"          : "fresnelPow",
-            "type"          : "slider",
+            "type"          : "float",
             "uniform"       : "u_fresnelPow",
             "value"         : 1.2,
-            "start"         : 1.0,
-            "end"           : 4
+            "min"         	: 1.0,
+            "max"           : 4
         }
     ],
     "builtin": false,
