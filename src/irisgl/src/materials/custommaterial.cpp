@@ -121,13 +121,13 @@ void CustomMaterial::generate(const QString &fileName)
         auto name           = prop["name"].toString();
         auto uniform        = prop["uniform"].toString();
 
-        if (prop["type"] == "slider") {
+        if (prop["type"] == "float") {
             auto fltProp = new iris::FloatProperty;
             fltProp->id             = i;
             fltProp->displayName    = displayName;
             fltProp->name           = name;
-            fltProp->minValue       = prop["start"].toDouble();
-            fltProp->maxValue       = prop["end"].toDouble();
+            fltProp->minValue       = prop["min"].toDouble();
+            fltProp->maxValue       = prop["max"].toDouble();
             fltProp->uniform        = uniform;
             fltProp->value          = prop["value"].toDouble();
 
@@ -136,7 +136,7 @@ void CustomMaterial::generate(const QString &fileName)
             }
         }
 
-        if (prop["type"] == "checkbox") {
+        if (prop["type"] == "bool") {
             auto blProp = new iris::BoolProperty;
             blProp->id              = i;
             blProp->displayName     = displayName;

@@ -5,7 +5,7 @@
         {
             "displayName"   : "Refractivity",
             "name"          : "refractivity",
-            "type"          : "slider",
+            "type"          : "float",
             "value"         : 0.5,
             "start"         : 0,
             "end"           : 1,
@@ -13,7 +13,7 @@
         }, {
             "displayName"   : "Influence",
             "name"          : "Influence",
-            "type"          : "slider",
+            "type"          : "float",
             "value"         : 0.5,
             "start"         : 0,
             "end"           : 1,
