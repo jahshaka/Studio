@@ -28,5 +28,6 @@
         <file>app/shaders/particle.frag</file>
         <file>app/shaders/emitter.frag</file>
         <file>app/shaders/emitter.vert</file>
+        <file>app/shaders/globe_surface.frag</file>
     </qresource>
 </RCC>

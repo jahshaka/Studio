@@ -1,0 +1,60 @@
+{
+    "name": "Globe",
+    "preview": false,
+    "uniforms": [
+        {
+            "displayName"   : "Color",
+            "name"          : "color",
+            "type"          : "color",
+            "value"         : "#ffffff",
+            "uniform"       : "u_color"
+        },
+        {
+            "displayName"   : "Albeda Texture",
+            "name"          : "diffuseTex",
+            "type"          : "texture",
+            "uniform"       : "u_diffuseTex",
+            "toggle"        : "u_useDiffuseTex"
+        },
+        {
+            "displayName"   : "Ocean Texture",
+            "name"          : "oceanTex",
+            "type"          : "texture",
+            "uniform"       : "u_specularTex",
+            "toggle"        : "u_useSpecularTex"
+        },
+        {
+            "displayName"   : "Normal Texture",
+            "name"          : "normalTex",
+            "type"          : "texture",
+            "uniform"       : "u_normalTex",
+            "toggle"        : "u_useNormalTex"
+        },
+        {
+            "displayName"   : "Night Texture",
+            "name"          : "nightTex",
+            "type"          : "texture",
+            "uniform"       : "u_nightTex",
+            "toggle"        : "u_useNightTex"
+        },
+        {
+            "displayName"   : "Atmosphere Color",
+            "name"          : "edge_color",
+            "type"          : "color",
+            "value"         : "#ffffff",
+            "uniform"       : "u_edgeColor"
+        },
+        {
+            "displayName"   : "Fresnel Pow",
+            "name"          : "fresnelPow",
+            "type"          : "float",
+            "uniform"       : "u_fresnelPow",
+            "value"         : 1.2,
+            "min"         	: 1.0,
+            "max"           : 4
+        }
+    ],
+    "builtin": false,
+    "vertex_shader": ":assets/shaders/surface.vert",
+    "fragment_shader": "app/shaders/globe_surface.frag"
+}

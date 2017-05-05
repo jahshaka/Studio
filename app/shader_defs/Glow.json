@@ -1,0 +1,29 @@
+{
+    "name": "Glow",
+    "preview": false,
+    "cullMode":"front",
+    "renderLayer":"transparent",
+    "castShadows":"false",
+    "blendMode":"normal",
+    "uniforms": [
+        {
+            "displayName"   : "Color",
+            "name"          : "color",
+            "type"          : "color",
+            "value"         : "#ffffff",
+            "uniform"       : "u_color"
+        },
+        {
+            "displayName"   : "Intensity",
+            "name"          : "intensity",
+            "type"          : "float",
+            "value"         : 1.0,
+            "min"           : 0.0,
+            "max"           : 2.0,
+            "uniform"       : "u_intensity"
+        }
+    ],
+    "builtin": false,
+    "vertex_shader": ":assets/shaders/surface.vert",
+    "fragment_shader": "app/shaders/glow.frag"
+}

@@ -382,43 +382,27 @@ QMatrix4x4 VrDevice::getEyeViewMatrix(int eye, QVector3D pivot, QMatrix4x4 trans
 {
     Vector3f origin = Vector3f(pivot.x(),pivot.y(),pivot.z());
 
-    /*
-    Matrix4f rollPitchYaw = Matrix4f::RotationY(0);
-    Matrix4f finalRollPitchYaw = rollPitchYaw * Matrix4f(frameData->eyeRenderPose[eye].Orientation);
-    Vector3f finalUp = finalRollPitchYaw.Transform(Vector3f(0, 1, 0));
-    Vector3f finalForward = finalRollPitchYaw.Transform(Vector3f(0, 0, -1));
-
-    auto fd = frameData->eyeRenderPose[eye].Position;
-    auto framePos = Vector3f(fd.x, fd.y, fd.z);
-    //Vector3f shiftedEyePos = origin + rollPitchYaw.Transform(framePos * scale);
-    Vector3f shiftedEyePos = rollPitchYaw.Transform(framePos);
-
-    Vector3f forward = shiftedEyePos + finalForward;
-
-    QMatrix4x4 view;
-    view.setToIdentity();
-    view.lookAt(QVector3D(shiftedEyePos.x,shiftedEyePos.y,shiftedEyePos.z),
-                QVector3D(forward.x,forward.y,forward.z),
-                QVector3D(finalUp.x,finalUp.y,finalUp.z));
-    */
-
     auto r = frameData->eyeRenderPose[eye].Orientation;
-    auto finalYawPitchRoll = QMatrix4x4(QQuaternion(r.w, r.x, r.y, r.z).toRotationMatrix());
-    auto finalUp = finalYawPitchRoll * QVector3D(0, 1, 0);
-    auto finalForward = finalYawPitchRoll * QVector3D(0, 0, -1);
+    auto localRot = QQuaternion(r.w, r.x, r.y, r.z).toRotationMatrix();
+    auto globalRotation = QMatrix4x4(transform.normalMatrix() * localRot);
+    // up is a direction
+    auto localUp = globalRotation * QVector3D(0, 1, 0);
+    auto localForward = globalRotation * QVector3D(0, 0, -1);
 
     auto fd = frameData->eyeRenderPose[eye].Position;
     auto framePos = QVector3D(fd.x, fd.y, fd.z);
     auto shiftedEyePos = framePos;
-    qDebug() << shiftedEyePos;
-    //auto forward = shiftedEyePos + finalForward;
-    auto forward = shiftedEyePos + finalForward;
+
+    auto globalPos = transform * shiftedEyePos;
+    auto globalForward = globalPos + localForward;
+
 
     QMatrix4x4 view;
     view.setToIdentity();
-    view.lookAt(transform * shiftedEyePos,
-                transform * forward,
-                QQuaternion::fromRotationMatrix(transform.normalMatrix()) * finalUp);
+
+    view.lookAt(globalPos,
+                globalForward,
+                localUp);
 
     return view;
 
