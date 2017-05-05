@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QMouseEvent>
 #include <QtMath>
 #include <QDebug>
+#include <QMimeData>
 #include <QElapsedTimer>
 
 #include "../irisgl/src/irisgl.h"
@@ -87,6 +88,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     elapsedTimer = new QElapsedTimer();
     playScene = false;
     animTime = 0.0f;
+
+    setAcceptDrops(true);
 }
 
 void SceneViewWidget::resetEditorCam()
@@ -238,32 +241,7 @@ void SceneViewWidget::resizeGL(int width, int height)
 
 bool SceneViewWidget::eventFilter(QObject *obj, QEvent *event)
 {
-    /*
-    QEvent::Type type = event->type();
-
-    if (type == QEvent::MouseMove) {
-        QMouseEvent* evt = static_cast<QMouseEvent*>(event);
-        mouseMoveEvent(evt);
-        return false;
-    } else if (type == QEvent::MouseButtonPress) {
-        QMouseEvent* evt = static_cast<QMouseEvent*>(event);
-        mousePressEvent(evt);
-        return false;
-    } else if (type == QEvent::MouseButtonRelease) {
-        QMouseEvent* evt = static_cast<QMouseEvent*>(event);
-        mouseReleaseEvent(evt);
-        return false;
-    } else if (type == QEvent::KeyPress) {
-        qDebug()<<"key press!";
-        return false;
-    } else if (type == QEvent::KeyRelease) {
-        qDebug()<<"key release!";
-        return false;
-    }
-    */
-
     return QWidget::eventFilter(obj, event);
-
 }
 
 QVector3D SceneViewWidget::calculateMouseRay(const QPointF& pos)

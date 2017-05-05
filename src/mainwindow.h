@@ -167,7 +167,7 @@ public slots:
     void addCylinder();
     void addEmpty();
     void addViewer();
-    void addMesh();
+    void addMesh(const QString &path = "");
     void addTexturedPlane();
     void addViewPoint();
 

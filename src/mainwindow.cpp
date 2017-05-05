@@ -96,6 +96,9 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     createPostProcessDockWidget();
 
+    ui->sceneContainer->setAcceptDrops(true);
+    ui->sceneContainer->installEventFilter(this);
+
     this->setWindowTitle("Jahshaka VR");
 
     QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
@@ -415,8 +418,40 @@ bool MainWindow::handleMouseWheel(QWheelEvent *event)
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
     Q_UNUSED(obj)
+    const QString mimeType = "application/x-qabstractitemmodeldatalist";
 
     switch (event->type()) {
+    case QEvent::DragEnter: {
+        if (obj == ui->sceneContainer) {
+            auto evt = static_cast<QDragEnterEvent*>(event);
+            if (evt->mimeData()->hasFormat(mimeType)) {
+                evt->acceptProposedAction();
+            } else {
+                evt->ignore();
+            }
+        }
+        break;
+    }
+
+    case QEvent::Drop: {
+        if (obj == ui->sceneContainer) {
+            auto evt = static_cast<QDragEnterEvent*>(event);
+            QByteArray encoded = evt->mimeData()->data(mimeType);
+            QDataStream stream(&encoded, QIODevice::ReadOnly);
+            QMap<int, QVariant> roleDataMap;
+            while (!stream.atEnd()) {
+                int row, col;
+                stream >> row >> col >> roleDataMap;
+            }
+
+            addMesh(roleDataMap.value(Qt::UserRole).toString() + '/' +
+                    roleDataMap.value(Qt::DisplayRole).toString() + ".obj");
+
+            evt->acceptProposedAction();
+        }
+        break;
+    }
+
     case QEvent::KeyPress: {
         break;
     }
@@ -896,11 +931,17 @@ void MainWindow::addParticleSystem()
     addNodeToScene(node);
 }
 
-void MainWindow::addMesh()
+void MainWindow::addMesh(const QString &path)
 {
-    QString dir = QApplication::applicationDirPath() + "/assets/models/";
-    auto filename = QFileDialog::getOpenFileName(this, "Load Mesh",
-                                                 dir, "Mesh Files (*.obj *.fbx *.3ds)");
+    QString filename;
+    if (path.isEmpty()) {
+        QString dir = QApplication::applicationDirPath() + "/assets/models/";
+        filename = QFileDialog::getOpenFileName(this, "Load Mesh",
+                                                     dir, "Mesh Files (*.obj *.fbx *.3ds)");
+    } else {
+        filename = path;
+    }
+
     auto nodeName = QFileInfo(filename).baseName();
     if (filename.isEmpty()) return;
 
