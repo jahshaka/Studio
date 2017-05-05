@@ -8,12 +8,14 @@
 
 #include <QDebug>
 #include <QDir>
+#include <QDrag>
 #include <QMenu>
+#include <QMimeData>
 
 AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
     ui->setupUi(this);
-
+    ui->assetView->viewport()->installEventFilter(this);
     ui->assetTree->viewport()->installEventFilter(this);
     ui->assetTree->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -36,6 +38,14 @@ AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWid
     ui->assetView->setMovement(QListView::Static);
     ui->assetView->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->assetView->setSelectionMode(QAbstractItemView::SingleSelection);
+
+    ui->assetView->setDragEnabled(true);
+    ui->assetView->setDragDropMode(QAbstractItemView::DragDrop);
+//    ui->assetView->viewport()->setAcceptDrops(true);
+    ui->assetView->setDropIndicatorShown(true);
+//    ui->sceneTree->setDragDropMode(QAbstractItemView::InternalMove);
+//    ui->assetView->setFocusPolicy();
+//    ui->assetView->setMouseTracking(true);
 
     connect(ui->assetView,  SIGNAL(itemClicked(QListWidgetItem*)),
             this,           SLOT(assetViewClicked(QListWidgetItem*)));
@@ -200,8 +210,62 @@ void AssetWidget::updateAssetView(const QString &path)
 
 bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 {
+    if (event->type() == QEvent::DragMove) {
+//        if (watched == ui->assetView->viewport()) {
+            auto evt = static_cast<QMouseEvent*>(event);
+
+//            if (evt->button() != Qt::LeftButton) return false;
+//            if (ui->assetView->currentItem() == nullptr) return false;
+
+            auto item = ui->assetView->currentItem();
+            if (item) {
+                QDrag *drag = new QDrag(this);
+                QMimeData *mimeData = new QMimeData;
+                mimeData->setText(item->text());
+//                mimeData->setData("text/plain", QByteArray(item->text().toStdString().c_str()));
+                drag->setMimeData(mimeData);
+
+                drag->exec();
+//                drag->start(Qt::CopyAction | Qt::MoveAction);
+
+                qDebug() << "working";
+            }
+//        }
+    }
+
     return QObject::eventFilter(watched, event);
 }
+
+void AssetWidget::handleMouseMoveEvent(QMouseEvent *event)
+{
+//    qDebug() << "working;";
+}
+
+//void AssetWidget::mousePressEvent(QMouseEvent *event)
+//{
+//    if (event->button() == Qt::LeftButton) {
+//        qDebug() << "working";
+//    }
+//}
+
+//void AssetWidget::mouseMoveEvent(QMouseEvent *event)
+//{
+//    if (event->button() != Qt::LeftButton) return;
+//    if (ui->assetView->currentItem() == nullptr) return;
+
+//    QDrag *drag = new QDrag(this);
+//    QMimeData *mimeData = new QMimeData;
+
+////    mimeData-
+//    drag->start(Qt::CopyAction | Qt::MoveAction);
+
+//    qDebug() << "working";
+//}
+
+//void AssetWidget::dragMoveEvent(QDragMoveEvent *event)
+//{
+//    qDebug() << "working";
+//}
 
 void AssetWidget::treeItemSelected(QTreeWidgetItem *item)
 {

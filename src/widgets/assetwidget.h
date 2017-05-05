@@ -39,6 +39,10 @@ public:
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
+//    void mousePressEvent(QMouseEvent*);
+//    void mouseMoveEvent(QMouseEvent*);
+//    void dragMoveEvent(QDragMoveEvent*);
+    void handleMouseMoveEvent(QMouseEvent *event);
 
 protected slots:
     void treeItemSelected(QTreeWidgetItem* item);

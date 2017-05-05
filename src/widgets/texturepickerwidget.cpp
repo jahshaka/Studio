@@ -16,18 +16,22 @@ For more information see the LICENSE file
 #include "../core/thumbnailmanager.h"
 #include "../widgets/assetpickerwidget.h"
 
+#include <QMimeData>
+#include <QStandardItemModel>
+
 TexturePickerWidget::TexturePickerWidget(QWidget* parent) :
     BaseWidget(parent),
     ui(new Ui::TexturePickerWidget)
 {
     ui->setupUi(this);
 
-//    connect(ui->load, SIGNAL(pressed()), SLOT(changeTextureMap()));
     connect(ui->load, SIGNAL(pressed()), SLOT(pickTextureMap()));
 
     this->ui->texture->installEventFilter(this);
 
     type = WidgetType::TextureWidget;
+
+    setAcceptDrops(true);
 }
 
 TexturePickerWidget::~TexturePickerWidget()
@@ -40,12 +44,38 @@ QString TexturePickerWidget::getTexturePath()
     return filePath;
 }
 
+void TexturePickerWidget::dragEnterEvent(QDragEnterEvent *event)
+{
+    const QString mimeType = "application/x-qabstractitemmodeldatalist";
+    if (event->mimeData()->hasFormat(mimeType)) {
+        event->acceptProposedAction();
+    } else {
+        event->ignore();
+    }
+}
+
+void TexturePickerWidget::dropEvent(QDropEvent *event)
+{
+    // http://stackoverflow.com/a/2747369/996468
+    const QString mimeType = "application/x-qabstractitemmodeldatalist";
+    QByteArray encoded = event->mimeData()->data(mimeType);
+    QDataStream stream(&encoded, QIODevice::ReadOnly);
+    QMap<int, QVariant> roleDataMap;
+    while (!stream.atEnd()) {
+        int row, col;
+        stream >> row >> col >> roleDataMap;
+    }
+
+    changeMap(roleDataMap.value(Qt::UserRole).toString() + '/' +
+              roleDataMap.value(Qt::DisplayRole).toString());
+
+    event->acceptProposedAction();
+}
+
 void TexturePickerWidget::changeTextureMap()
 {
     auto file = loadTexture();
-
     if (file.isEmpty() || file.isNull()) return;
-
     this->setLabelImage(ui->texture, file);
 }
 
@@ -112,6 +142,11 @@ void TexturePickerWidget::on_pushButton_clicked()
 void TexturePickerWidget::changeMap(QListWidgetItem *item)
 {
     setLabelImage(ui->texture, item->data(Qt::UserRole).toString());
+}
+
+void TexturePickerWidget::changeMap(const QString &texturePath)
+{
+    setLabelImage(ui->texture, texturePath);
 }
 
 void TexturePickerWidget::setTexture(QString path)
