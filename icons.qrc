@@ -41,5 +41,10 @@
         <file>app/icons/down_arrow_check.png</file>
         <file>app/icons/up_arrow_check.png</file>
         <file>app/icons/link-symbol.svg</file>
+        <file>app/icons/folder-symbol.svg</file>
+        <file>app/icons/google-drive-file.svg</file>
+        <file>app/icons/user-account-box.svg</file>
+        <file>app/icons/list-button-with-3-elements.svg</file>
+        <file>app/icons/view-list-button.svg</file>
     </qresource>
 </RCC>

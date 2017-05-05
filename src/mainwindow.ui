@@ -92,7 +92,7 @@ QComboBox {
 }
 
 QComboBox QAbstractItemView {
-   background-color: #212121; 
+   background-color: #212121;
     selection-background-color: red;
 	border: 0;
 	outline: none;
@@ -121,14 +121,14 @@ QDoubleSpinBox {
 }
 
 QDoubleSpinBox:hover {
-    border: 1px solid rgb(30, 144, 255); 
+    border: 1px solid rgb(30, 144, 255);
 }
 
 QDoubleSpinBox::up-button {
 	background-color: #4d4d4d;
     subcontrol-origin: border;
     subcontrol-position: top right; /* position at the top right corner */
-	
+
     width: 15px; /* 16 + 2*1px border-width = 15px padding + 3px parent border */
     border-image: url(:/app/icons/chevron-arrow-up.svg);
     border-width: 1px;
@@ -515,8 +515,8 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1153</width>
-     <height>30</height>
+     <width>994</width>
+     <height>32</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -618,6 +618,9 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
      <width>524287</width>
      <height>524287</height>
     </size>
+   </property>
+   <property name="floating">
+    <bool>false</bool>
    </property>
    <property name="windowTitle">
     <string>Animation</string>
@@ -767,18 +770,18 @@ QWidget#animationWidgetContents:hover {
    </property>
    <property name="styleSheet">
     <string notr="true">QToolButton
-{ 
-}
-
-QToolButton:disabled 
-{ 
-}
-
-QToolButton:pressed  
 {
 }
 
-QToolButton:focus    
+QToolButton:disabled
+{
+}
+
+QToolButton:pressed
+{
+}
+
+QToolButton:focus
 {
 }
 
@@ -825,6 +828,9 @@ QToolButton:checked
    </property>
    <property name="styleSheet">
     <string notr="true">background: #212121</string>
+   </property>
+   <property name="allowedAreas">
+    <set>Qt::AllDockWidgetAreas</set>
    </property>
    <property name="windowTitle">
     <string>Presets</string>
@@ -957,6 +963,39 @@ QToolButton:checked
         </layout>
        </widget>
       </widget>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QDockWidget" name="AssetsDock">
+   <property name="features">
+    <set>QDockWidget::AllDockWidgetFeatures</set>
+   </property>
+   <property name="allowedAreas">
+    <set>Qt::AllDockWidgetAreas</set>
+   </property>
+   <property name="windowTitle">
+    <string>Assets</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>8</number>
+   </attribute>
+   <widget class="QWidget" name="assetWidgetContents">
+    <layout class="QGridLayout" name="gridLayout_7">
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
+     <property name="bottomMargin">
+      <number>0</number>
+     </property>
+     <item row="0" column="0">
+      <widget class="AssetWidget" name="assetWidget" native="true"/>
      </item>
     </layout>
    </widget>
@@ -1160,6 +1199,12 @@ QToolButton:checked
    <class>SkyPresets</class>
    <extends>QWidget</extends>
    <header>src/widgets/skypresets.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>AssetWidget</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/assetwidget.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

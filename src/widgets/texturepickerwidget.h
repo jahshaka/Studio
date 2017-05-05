@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "basewidget.h"
 
 #include <QLabel>
+#include <QListWidgetItem>
 
 namespace Ui {
     class TexturePickerWidget;
@@ -26,7 +27,10 @@ class TexturePickerWidget : public BaseWidget
 
 private slots:
     void changeTextureMap();
+    void pickTextureMap();
     void on_pushButton_clicked();
+
+    void changeMap(QListWidgetItem*);
 
 public:
     int index;

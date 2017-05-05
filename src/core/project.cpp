@@ -54,10 +54,11 @@ QString Project::getProjectFolder()
     return folderPath;
 }
 
-
+// TODO - repurpose this and all paths
 Project* Project::createNew()
 {
     auto project = new Project;
+    // TODO - change this! overwriting in mainwindow for now
     project->folderPath = QDir::currentPath();
     project->fileName = "";
     project->projectName = "Untitled";

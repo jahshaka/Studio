@@ -15,6 +15,7 @@ For more information see the LICENSE file
 
 class Project
 {
+public:
     QString folderPath;
     QString fileName;
     QString projectName;
@@ -30,6 +31,10 @@ public:
     QString getFileName();
     QString getProjectName();
     QString getProjectFolder();
+
+    void updateProjectPath(QString p) {
+        this->folderPath = p;
+    }
 
     static Project* createNew();
 };

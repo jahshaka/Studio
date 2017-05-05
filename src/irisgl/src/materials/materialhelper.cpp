@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include <QDir>
+#include <QJsonObject>
 
 #include "materialhelper.h"
 #include "../irisglfwd.h"
