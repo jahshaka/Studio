@@ -378,13 +378,13 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             }
 
             if (item->renderStates.receiveShadows && scene->shadowEnabled) {
-                program->setUniformValue("u_shadowMap", 2);
+                program->setUniformValue("u_shadowMap", 8);
                 program->setUniformValue("u_shadowEnabled", true);
             } else {
                 program->setUniformValue("u_shadowEnabled", false);
             }
 
-            gl->glActiveTexture(GL_TEXTURE2);
+            gl->glActiveTexture(GL_TEXTURE8);
             gl->glBindTexture(GL_TEXTURE_2D, shadowDepthMap);
 
             program->setUniformValue("u_lightSpaceMatrix",  lightSpaceMatrix);
@@ -444,10 +444,26 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                 gl->glDisable(GL_DEPTH_TEST);
             }
 
+            if (item->renderStates.blendType != BlendType::None) {
+                 gl->glEnable(GL_BLEND);
+
+                 if (item->renderStates.blendType == BlendType::Normal) {
+                     gl->glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+                 } else if(item->renderStates.blendType == BlendType::Add) {
+                     gl->glBlendFunc(GL_ONE,GL_ONE);
+                 }
+
+                 //todo: add more types
+             }
+
             item->mesh->draw(gl, program);
 
             if (!!mat) {
                 mat->end(gl,scene);
+            }
+
+            if (item->renderStates.blendType!=BlendType::None) {
+                gl->glDisable(GL_BLEND);
             }
 
             // change back culling state
