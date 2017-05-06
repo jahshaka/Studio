@@ -98,6 +98,8 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->sceneContainer->setAcceptDrops(true);
     ui->sceneContainer->installEventFilter(this);
+    ui->assetWidget->setAcceptDrops(true);
+    ui->assetWidget->installEventFilter(this);
 
     this->setWindowTitle("Jahshaka VR");
 
@@ -201,6 +203,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->AnimationDock->hide();
 //    ui->PresetsDock->hide();
+
 }
 
 void MainWindow::setupVrUi()
@@ -422,20 +425,27 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
     switch (event->type()) {
     case QEvent::DragEnter: {
+        auto evt = static_cast<QDragEnterEvent*>(event);
+
         if (obj == ui->sceneContainer) {
-            auto evt = static_cast<QDragEnterEvent*>(event);
             if (evt->mimeData()->hasFormat(mimeType)) {
                 evt->acceptProposedAction();
             } else {
                 evt->ignore();
             }
         }
+
+//        if (obj == ui->assetWidget) {
+//            if (evt->mimeData()->hasUrls()) {
+//                evt->acceptProposedAction();
+//            }
+//        }
         break;
     }
 
     case QEvent::Drop: {
         if (obj == ui->sceneContainer) {
-            auto evt = static_cast<QDragEnterEvent*>(event);
+            auto evt = static_cast<QDropEvent*>(event);
             QByteArray encoded = evt->mimeData()->data(mimeType);
             QDataStream stream(&encoded, QIODevice::ReadOnly);
             QMap<int, QVariant> roleDataMap;
@@ -449,6 +459,16 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
             evt->acceptProposedAction();
         }
+
+//        if (obj == ui->assetWidget) {
+//            auto evt = static_cast<QDropEvent*>(event);
+//            QList<QUrl> droppedUrls = evt->mimeData()->urls();
+//            for (auto url : droppedUrls) {
+//                auto fileInfo = QFileInfo(url.toLocalFile());
+//                qDebug() << fileInfo.absoluteFilePath();
+//            }
+//            evt->acceptProposedAction();
+//        }
         break;
     }
 

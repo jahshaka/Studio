@@ -42,7 +42,7 @@ AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWid
     ui->assetView->setDragEnabled(true);
     ui->assetView->setDragDropMode(QAbstractItemView::DragDrop);
 //    ui->assetView->viewport()->setAcceptDrops(true);
-    ui->assetView->setDropIndicatorShown(true);
+//    ui->assetView->setDropIndicatorShown(true);
 //    ui->sceneTree->setDragDropMode(QAbstractItemView::InternalMove);
 //    ui->assetView->setFocusPolicy();
 //    ui->assetView->setMouseTracking(true);
@@ -212,7 +212,7 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 {
     if (event->type() == QEvent::DragMove) {
 //        if (watched == ui->assetView->viewport()) {
-            auto evt = static_cast<QMouseEvent*>(event);
+            auto evt = static_cast<QDragMoveEvent*>(event);
 
 //            if (evt->button() != Qt::LeftButton) return false;
 //            if (ui->assetView->currentItem() == nullptr) return false;
@@ -231,9 +231,32 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
                 qDebug() << "working";
             }
 //        }
+            this->dragMoveEvent(evt);
     }
 
     return QObject::eventFilter(watched, event);
+}
+
+void AssetWidget::dragEnterEvent(QDragEnterEvent *evt)
+{
+    qDebug() << "hit";
+    if (evt->mimeData()->hasUrls()) {
+        evt->acceptProposedAction();
+    }
+}
+
+void AssetWidget::dropEvent(QDropEvent *evt)
+{
+    QList<QUrl> droppedUrls = evt->mimeData()->urls();
+    QStringList list;
+    for (auto url : droppedUrls) {
+        auto fileInfo = QFileInfo(url.toLocalFile());
+        list << fileInfo.absoluteFilePath();
+    }
+
+    importAsset(list);
+
+    evt->acceptProposedAction();
 }
 
 void AssetWidget::handleMouseMoveEvent(QMouseEvent *event)
@@ -469,10 +492,14 @@ void AssetWidget::createFolder()
     ui->assetView->editItem(item);
 }
 
-void AssetWidget::importAsset()
+void AssetWidget::importAsset(const QStringList &path)
 {
-    QString dir = QApplication::applicationDirPath();
-    auto fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
+    QStringList fileNames;
+    if (path.isEmpty()) {
+        fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
+    } else {
+        fileNames = path;
+    }
 
     if (!assetItem.selectedPath.isEmpty()) {
         foreach (const QFileInfo &file, fileNames) {

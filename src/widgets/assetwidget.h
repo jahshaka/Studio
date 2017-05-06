@@ -42,6 +42,8 @@ protected:
 //    void mousePressEvent(QMouseEvent*);
 //    void mouseMoveEvent(QMouseEvent*);
 //    void dragMoveEvent(QDragMoveEvent*);
+    void dragEnterEvent(QDragEnterEvent*);
+    void dropEvent(QDropEvent*);
     void handleMouseMoveEvent(QMouseEvent *event);
 
 protected slots:
@@ -65,7 +67,7 @@ protected slots:
     void deleteViewFolder();
     void openAtFolder();
     void createFolder();
-    void importAsset();
+    void importAsset(const QStringList &path);
 
 private:
     Ui::AssetWidget *ui;
