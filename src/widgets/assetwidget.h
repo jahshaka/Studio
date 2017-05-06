@@ -67,6 +67,7 @@ protected slots:
     void deleteViewFolder();
     void openAtFolder();
     void createFolder();
+    void importAssetB();
     void importAsset(const QStringList &path);
 
 private:

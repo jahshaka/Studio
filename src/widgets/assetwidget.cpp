@@ -63,6 +63,8 @@ AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWid
     connect(ui->searchBar,  SIGNAL(textChanged(QString)),
             this,           SLOT(searchAssets(QString)));
 
+    connect(ui->importBtn,  SIGNAL(pressed()), SLOT(importAssetB()));
+
     QDir d(Globals::project->getProjectFolder());
     walkFileSystem("", d.absolutePath());
 
@@ -239,7 +241,6 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 
 void AssetWidget::dragEnterEvent(QDragEnterEvent *evt)
 {
-    qDebug() << "hit";
     if (evt->mimeData()->hasUrls()) {
         evt->acceptProposedAction();
     }
@@ -490,6 +491,12 @@ void AssetWidget::createFolder()
 
     ui->assetView->addItem(item);
     ui->assetView->editItem(item);
+}
+
+void AssetWidget::importAssetB()
+{
+    auto fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
+    importAsset(fileNames);
 }
 
 void AssetWidget::importAsset(const QStringList &path)

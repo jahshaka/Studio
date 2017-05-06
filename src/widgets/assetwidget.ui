@@ -133,6 +133,13 @@ QListView::item:selected {
         </property>
        </spacer>
       </item>
+      <item>
+       <widget class="QPushButton" name="importBtn">
+        <property name="text">
+         <string>Import Asset</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
