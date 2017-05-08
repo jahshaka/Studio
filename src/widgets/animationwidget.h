@@ -55,7 +55,8 @@ class AnimationWidget : public QWidget
     QMenu* addMenu;
     QMenu* deleteMenu;
 
-    QList<iris::AnimableProperty> animableProperties;
+    QList<iris::Property*> nodeProperties;
+    QList<iris::Property*> matProperties;
     iris::AnimationPtr animation;
 
     AnimationWidgetData* animWidgetData;
@@ -88,7 +89,7 @@ public:
     void clearPropertyKeys(QString propertyName);
 
 private:
-    iris::PropertyAnim* createPropertyAnim(const iris::AnimableProperty& prop);
+    iris::PropertyAnim* createPropertyAnim(iris::Property* prop);
 
 public slots:
     void setLooping(bool loop);

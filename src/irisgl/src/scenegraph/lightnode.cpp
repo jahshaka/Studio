@@ -4,36 +4,62 @@
 #include "../animation/keyframeset.h"
 #include "../animation/animation.h"
 #include "../animation/propertyanim.h"
+#include "../materials/propertytype.h"
 
 namespace iris
 {
 
-QList<AnimableProperty> LightNode::getAnimableProperties()
+QList<Property*> LightNode::getProperties()
 {
-    auto props = SceneNode::getAnimableProperties();
-    props.append(AnimableProperty("LightColor", AnimablePropertyType::Color));
-    props.append(AnimableProperty("Intensity", AnimablePropertyType::Float));
-    props.append(AnimableProperty("Distance", AnimablePropertyType::Float));
-    props.append(AnimableProperty("SpotCutOff", AnimablePropertyType::Float));
-    props.append(AnimableProperty("SpotCutOffSoftness", AnimablePropertyType::Float));
+    auto props = QList<Property*>();
+
+    auto colorProp = new ColorProperty();
+    colorProp->displayName = "Light Color";
+    colorProp->name = "lightColor";
+    colorProp->value = color;
+    props.append(colorProp);
+
+    auto prop = new FloatProperty();
+    prop->displayName = "Intensity";
+    prop->name = "intensity";
+    prop->value = intensity;
+    props.append(prop);
+
+    prop = new FloatProperty();
+    prop->displayName = "Distance";
+    prop->name = "distance";
+    prop->value = distance;
+    props.append(prop);
+
+    prop = new FloatProperty();
+    prop->displayName = "Spot CutOff";
+    prop->name = "spotCutOff";
+    prop->value = spotCutOff;
+    props.append(prop);
+
+    prop = new FloatProperty();
+    prop->displayName = "Spot CutOff Softness";
+    prop->name = "spotCutOffSoftness";
+    prop->value = spotCutOffSoftness;
+    props.append(prop);
 
     return props;
 }
 
-QVariant LightNode::getAnimPropertyValue(QString valueName)
+QVariant LightNode::getPropertyValue(QString valueName)
 {
-    if(valueName == "Intensity")
+    if(valueName == "intensity")
         return intensity;
-    if(valueName == "LightColor")
+    if(valueName == "lightColor")
         return color;
-    if(valueName == "Distance")
+    if(valueName == "distance")
         return distance;
-    if(valueName == "SpotCutOff")
+    if(valueName == "spotCutOff")
         return spotCutOff;
-    if(valueName == "SpotCutOffSoftness")
+    if(valueName == "spotCutOffSoftness")
         return spotCutOffSoftness;
 
-    return SceneNode::getAnimPropertyValue(valueName);
+    return SceneNode::getPropertyValue(valueName);
 }
 
 void LightNode::updateAnimation(float time)

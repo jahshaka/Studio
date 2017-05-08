@@ -52,6 +52,7 @@ class CustomMaterial;
 class RenderItem;
 class PickingResult;
 class RenderTarget;
+class Property;
 class PostProcess;
 class PostProcessContext;
 class PostProcessManager;

@@ -65,9 +65,9 @@ void MeshNode::setFaceCullingMode(const FaceCullingMode &value)
     faceCullingMode = value;
 }
 
-QList<AnimableProperty> MeshNode::getAnimableProperties()
+QList<Property*> MeshNode::getProperties()
 {
-    auto props = SceneNode::getAnimableProperties();
+    auto props = SceneNode::getProperties();
 
     // @todo: extract properties from material
 
