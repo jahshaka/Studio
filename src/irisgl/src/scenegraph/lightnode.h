@@ -83,8 +83,8 @@ public:
         return dir.toVector3D();
     }
 
-    virtual QList<AnimableProperty> getAnimableProperties() override;
-    virtual QVariant getAnimPropertyValue(QString valueName) override;
+    virtual QList<Property*> getProperties() override;
+    virtual QVariant getPropertyValue(QString valueName) override;
 
     void updateAnimation(float time) override;
 

@@ -46,7 +46,7 @@ public:
         return MeshNodePtr(new MeshNode());
     }
 
-    virtual QList<AnimableProperty> getAnimableProperties() override;
+    virtual QList<Property*> getProperties() override;
 
     /**
      * Some model contains multiple meshes with child-parent relationships. This funtion Loads the model as a scene

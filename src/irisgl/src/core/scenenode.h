@@ -29,6 +29,7 @@ enum class SceneNodeType {
     Viewer
 };
 
+class Property;
 class Animation;
 class PropertyAnim;
 typedef QSharedPointer<Animation> AnimationPtr;
@@ -89,8 +90,8 @@ public:
     AnimationPtr getAnimation();
     bool hasActiveAnimation();
 
-    virtual QList<AnimableProperty> getAnimableProperties();
-    virtual QVariant getAnimPropertyValue(QString valueName);
+    virtual QList<Property*> getProperties();
+    virtual QVariant getPropertyValue(QString valueName);
 
     /*
     * This function should return an exact copy of this node

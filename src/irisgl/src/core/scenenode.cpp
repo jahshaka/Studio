@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "../animation/propertyanim.h"
 #include "../animation/animableproperty.h"
 #include "../animation/keyframeanimation.h"
+#include "../materials/propertytype.h"
 
 namespace iris
 {
@@ -89,25 +90,41 @@ bool SceneNode::hasActiveAnimation()
     return !!animation;
 }
 
-QList<AnimableProperty> SceneNode::getAnimableProperties()
+QList<Property*> SceneNode::getProperties()
 {
-    QList<AnimableProperty> props;
-    props.append(AnimableProperty("Position",AnimablePropertyType::Vector3));
-    props.append(AnimableProperty("Rotation",AnimablePropertyType::Vector3));
-    props.append(AnimableProperty("Scale",AnimablePropertyType::Vector3));
+    auto props = QList<Property*>();
+
+    auto prop = new Vec3Property();
+    prop->displayName = "Position";
+    prop->name = "position";
+    prop->value = pos;
+    props.append(prop);
+
+    prop = new Vec3Property();
+    prop->displayName = "Rotation";
+    prop->name = "rotation";
+    prop->value = rot.toEulerAngles();
+    props.append(prop);
+
+    prop = new Vec3Property();
+    prop->displayName = "Scale";
+    prop->name = "scale";
+    prop->value = scale;
+    props.append(prop);
+
 
     return props;
 }
 
-QVariant SceneNode::getAnimPropertyValue(QString valueName)
+QVariant SceneNode::getPropertyValue(QString valueName)
 {
-    if(valueName == "Position")
+    if(valueName == "position")
         return pos;
 
-    if(valueName == "Rotation")
+    if(valueName == "rotation")
         return rot.toEulerAngles();
 
-    if(valueName == "Scale")
+    if(valueName == "scale")
         return scale;
 
     return QVariant();

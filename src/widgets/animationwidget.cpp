@@ -116,14 +116,14 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
         scene = node->scene;
         ui->sceneNodeName->setText(node->name);
 
-        animableProperties = node->getAnimableProperties();
+        nodeProperties = node->getProperties();
 
         // rebuild menu
         auto menu = new QMenu();
         int index = 0;
-        for (auto prop : animableProperties) {
+        for (auto prop : nodeProperties) {
             auto action = new QAction();
-            action->setText(prop.name);
+            action->setText(prop->name);
             action->setData(index++);
 
             menu->addAction(action);
@@ -229,20 +229,20 @@ void AnimationWidget::clearPropertyKeys(QString propertyName)
 
 }
 
-iris::PropertyAnim *AnimationWidget::createPropertyAnim(const iris::AnimableProperty& prop)
+iris::PropertyAnim *AnimationWidget::createPropertyAnim(iris::Property* prop)
 {
     iris::PropertyAnim* anim;
 
-    switch (prop.type) {
-    case iris::AnimablePropertyType::Float:
+    switch (prop->type) {
+    case iris::PropertyType::Float:
         anim = new iris::FloatPropertyAnim();
     break;
 
-    case iris::AnimablePropertyType::Vector3:
+    case iris::PropertyType::Vec3:
         anim = new iris::Vector3DPropertyAnim();
     break;
 
-    case iris::AnimablePropertyType::Color:
+    case iris::PropertyType::Color:
         anim = new iris::ColorPropertyAnim();
     break;
 
@@ -250,7 +250,7 @@ iris::PropertyAnim *AnimationWidget::createPropertyAnim(const iris::AnimableProp
         Q_ASSERT(false);
     }
 
-    anim->setName(prop.name);
+    anim->setName(prop->name);
     return anim;
 }
 
@@ -267,31 +267,31 @@ void AnimationWidget::addPropertyKey(QAction *action)
         return;
 
     auto index = action->data().toInt();
-    auto animProp = animableProperties[index];
+    auto animProp = nodeProperties[index];
 
     // Get or create property
     iris::PropertyAnim* anim;
-    if (animation->hasPropertyAnim(animProp.name))
+    if (animation->hasPropertyAnim(animProp->name))
     {
-        anim = animation->getPropertyAnim(animProp.name);
+        anim = animation->getPropertyAnim(animProp->name);
     } else {
         anim = createPropertyAnim(animProp);
-        anim->setName(animProp.name);
+        anim->setName(animProp->name);
         animation->addPropertyAnim(anim);
-        ui->keylabelView->addProperty(animProp.name);
+        ui->keylabelView->addProperty(animProp->name);
     }
 
-    auto val = node->getAnimPropertyValue(animProp.name);
+    auto val = node->getPropertyValue(animProp->name);
 
-    switch (animProp.type) {
-    case iris::AnimablePropertyType::Float:
+    switch (animProp->type) {
+    case iris::PropertyType::Float:
     {
         auto value = val.toFloat();
         anim->getKeyFrames()[0].keyFrame->
                 addKey(value, animWidgetData->cursorPosInSeconds);
     }
         break;
-    case iris::AnimablePropertyType::Vector3:
+    case iris::PropertyType::Vec3:
     {
         auto value = val.value<QVector3D>();
         auto frames =  anim->getKeyFrames();
@@ -300,7 +300,7 @@ void AnimationWidget::addPropertyKey(QAction *action)
         frames[2].keyFrame->addKey(value.z(), animWidgetData->cursorPosInSeconds);
     }
         break;
-    case iris::AnimablePropertyType::Color:
+    case iris::PropertyType::Color:
     {
         auto value = val.value<QColor>();
         auto frames =  anim->getKeyFrames();
