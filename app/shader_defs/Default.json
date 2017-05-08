@@ -50,9 +50,9 @@
             "displayName"   : "Shininess",
             "name"          : "shininess",
             "type"          : "float",
+            "value"         : 0,
             "min"           : 0,
-            "max"           : 0,
-            "end"           : 512,
+            "max"           : 512,
             "uniform"       : "u_material.shininess"
         }, {
             "displayName"   : "Normal Texture",
