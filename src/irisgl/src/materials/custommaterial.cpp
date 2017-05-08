@@ -256,4 +256,9 @@ void CustomMaterial::setProperties(QList<Property*> props)
     this->properties = props;
 }
 
+QList<Property *> CustomMaterial::getProperties()
+{
+    return this->properties;
+}
+
 }

@@ -24,6 +24,10 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/animableproperty.h"
 #include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/core/scene.h"
+#include "../irisgl/src/scenegraph/meshnode.h"
+
+#include "../irisgl/src/graphics/material.h"
+#include "../irisgl/src/materials/custommaterial.h"
 
 #include "keyframewidget.h"
 #include "keyframecurvewidget.h"
@@ -123,6 +127,25 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
             action->setData(index++);
 
             menu->addAction(action);
+        }
+
+        // add materials
+        if (node->sceneNodeType == iris::SceneNodeType::Mesh ) {
+            int index = 0;
+            auto mat = node.staticCast<iris::MeshNode>()->getMaterial().staticCast<iris::CustomMaterial>();
+            auto props = mat->getProperties();
+
+            auto matMenu = new QMenu("Material");
+
+            for(auto prop : props) {
+                auto action = new QAction();
+                action->setText(prop->displayName);
+                action->setData(index++);
+
+                matMenu->addAction(action);
+            }
+
+            menu->addMenu(matMenu);
         }
 
         animation = node->getAnimation();
