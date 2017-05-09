@@ -141,7 +141,7 @@ private:
 
     //void addSceneNodeToSelectedTreeItem(QTreeWidget* sceneTree,SceneNode* newNode,bool addToSelected,QIcon icon);
     void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
-    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = true);
+    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
 
     void setupDefaultScene();
 
@@ -168,7 +168,7 @@ public slots:
     void addCylinder();
     void addEmpty();
     void addViewer();
-    void addMesh(const QString &path = "", QVector3D ppos = QVector3D());
+    void addMesh(const QString &path = "", bool ignore = false, QVector3D ppos = QVector3D());
     void addTexturedPlane();
     void addViewPoint();
     void addDragPlaceholder();

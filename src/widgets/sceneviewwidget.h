@@ -126,6 +126,7 @@ public:
     QVector3D finalHitPoint;
     QVector3D Offset;
     void updateRPI(QVector3D pos, QVector3D r);
+    void doObjectPicking(const QPointF& point);
 
 protected:
     void initializeGL();
@@ -137,7 +138,6 @@ protected:
     void focusOutEvent(QFocusEvent* event);
 
     // does raycasting from the mouse's screen position.
-    void doObjectPicking(const QPointF& point);
     void doGizmoPicking(const QPointF& point);
 
 private slots:

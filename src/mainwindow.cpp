@@ -422,14 +422,26 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             auto evt = static_cast<QDragMoveEvent*>(event);
 
             if (obj == ui->sceneContainer) {
+                auto info = QFileInfo(evt->mimeData()->text());
+
                 if (!!activeSceneNode) {
-                    activeSceneNode->pos += sceneView->Offset;
+                    if (info.suffix() == "obj") {
+                        activeSceneNode->pos += sceneView->Offset;
+                    }
+                }
+
+                if (info.suffix() != "obj") {
+                    sceneView->doObjectPicking(evt->posF());
                 }
             }
+
+//            break;
         }
 
         case QEvent::DragEnter: {
             auto evt = static_cast<QDragEnterEvent*>(event);
+
+//            sceneNodeSelected(iris::SceneNodePtr());
 
             if (obj == ui->sceneContainer) {
                 if (evt->mimeData()->hasText()) {
@@ -438,12 +450,15 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     evt->ignore();
                 }
 
-                if (!activeSceneNode) {
-                    addDragPlaceholder();
-                }
+                auto info = QFileInfo(evt->mimeData()->text());
+                if (info.suffix() == "obj") {
+                    if (!activeSceneNode) {
+                        addDragPlaceholder();
+                    }
 
-                sceneView->updateRPI(sceneView->editorCam->pos,
-                                     sceneView->calculateMouseRay(evt->posF()));
+                    sceneView->updateRPI(sceneView->editorCam->pos,
+                                         sceneView->calculateMouseRay(evt->posF()));
+                }
             }
 
             break;
@@ -453,9 +468,18 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             if (obj == ui->sceneContainer) {
                 auto evt = static_cast<QDropEvent*>(event);
 
-                auto ppos = activeSceneNode->pos;
-                deleteNode();
-                addMesh(evt->mimeData()->text(), ppos);
+                auto info = QFileInfo(evt->mimeData()->text());
+                if (info.suffix() == "obj") {
+                    auto ppos = activeSceneNode->pos;
+                    deleteNode();
+                    addMesh(evt->mimeData()->text(), true, ppos);
+                }
+
+                if (!!activeSceneNode && info.suffix() != "obj") {
+                    auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
+                    auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
+                    mat->setValue("diffuseTexture", evt->mimeData()->text());
+                }
 
                 evt->acceptProposedAction();
             }
@@ -469,6 +493,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             if (obj == ui->sceneContainer) {
                 sceneView->mousePressEvent(static_cast<QMouseEvent*>(event));
             }
+
             break;
         }
 
@@ -944,7 +969,7 @@ void MainWindow::addParticleSystem()
     addNodeToScene(node);
 }
 
-void MainWindow::addMesh(const QString &path, QVector3D ppos)
+void MainWindow::addMesh(const QString &path, bool ignore, QVector3D ppos)
 {
     QString filename;
     if (path.isEmpty()) {
@@ -969,7 +994,7 @@ void MainWindow::addMesh(const QString &path, QVector3D ppos)
     node->pos = ppos;
 
     // todo: load material data
-    addNodeToScene(node, false);
+    addNodeToScene(node, ignore);
 }
 
 void MainWindow::addViewPoint()
@@ -986,7 +1011,7 @@ void MainWindow::addDragPlaceholder()
     node->setName("Arrow");
 //    m->setValue("diffuseTexture", getAbsoluteAssetPath("app/content/textures/tile.png"));
 
-    addNodeToScene(node, false);
+    addNodeToScene(node, true);
 }
 
 void MainWindow::addTexturedPlane()
@@ -1013,7 +1038,6 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
             auto mat = iris::DefaultMaterial::create();
             meshNode->setMaterial(mat);
         }
-
     }
 
     if (!!activeSceneNode) {
@@ -1038,7 +1062,7 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
     }
 
     // @TODO: add this to a constants file
-    if (ignore) {
+    if (!ignore) {
         const float spawnDist = 10.0f;
         auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, -1.0f, -spawnDist));
         offset += sceneView->editorCam->pos;
