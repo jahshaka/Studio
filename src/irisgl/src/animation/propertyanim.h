@@ -12,6 +12,7 @@ class AnimFrameInfo;
 struct PropertyAnimInfo
 {
     QString name;
+    // keyFrame isnt owned by this class
     FloatKeyFrame* keyFrame = nullptr;
 
     PropertyAnimInfo(QString name, FloatKeyFrame* keyFrame);
