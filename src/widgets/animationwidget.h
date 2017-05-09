@@ -78,6 +78,7 @@ public:
     void fixLayout();
 
     void repaintViews();
+    void refreshAnimationList();
 
     //startRange and endRange are in seconds
     void setTimeViewRange(float startRange,float endRange);
@@ -93,6 +94,7 @@ private:
 
 public slots:
     void setLooping(bool loop);
+    void addAnimation();
 
 private slots:
     void addPropertyKey(QAction* action);
@@ -108,6 +110,8 @@ private slots:
 
     void showKeyFrameWidget();
     void showCurveWidget();
+
+    void animationChanged(QString name);
 
 private:
     //float timeAtCursor;

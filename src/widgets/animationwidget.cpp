@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "keyframewidget.h"
 #include "keyframecurvewidget.h"
 #include "animationwidgetdata.h"
+#include "../dialogs/getnamedialog.h"
 
 
 AnimationWidget::AnimationWidget(QWidget *parent) :
@@ -39,6 +40,9 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     ui(new Ui::AnimationWidget)
 {
     ui->setupUi(this);
+
+    connect(ui->addAnimBtn,SIGNAL(clicked(bool)), this, SLOT(addAnimation()));
+    connect(ui->animList,SIGNAL(currentTextChanged(QString)), this, SLOT(animationChanged(QString)));
 
     animWidgetData = new AnimationWidgetData();
 
@@ -109,6 +113,7 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
     ui->keylabelView->setSceneNode(node);
 
     keyFrameWidget->repaint();
+    curveWidget->repaint();
     ui->keylabelView->repaint();
     this->node = node;
 
@@ -155,7 +160,7 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
         // add list of animations to combo box
         auto animList = QStringList();
         for (auto anim : node->getAnimations()) {
-
+            animList.append(anim->getName());
         }
 
         ui->animList->addItems(animList);
@@ -209,9 +214,23 @@ void AnimationWidget::fixLayout()
 
 void AnimationWidget::repaintViews()
 {
-    ui->timeline->repaint();
     keyFrameWidget->repaint();
-    //ui->keylabelView->repaint();
+    //curveWidget->repaint();
+    ui->keylabelView->repaint();
+}
+
+void AnimationWidget::refreshAnimationList()
+{
+    ui->animList->clear();
+    auto animList = QStringList();
+    for (auto anim : node->getAnimations()) {
+        animList.append(anim->getName());
+    }
+
+    ui->animList->addItems(animList);
+
+    //set active anim to current naim
+    ui->animList->setCurrentIndex(animList.size()-1);
 }
 
 void AnimationWidget::removeProperty(QString propertyName)
@@ -259,6 +278,29 @@ void AnimationWidget::setLooping(bool loop)
     if (!!node) {
         node->getAnimation()->setLooping(loop);
     }
+}
+
+void AnimationWidget::addAnimation()
+{
+    if(!node)
+        return;
+
+    GetNameDialog dialog;
+    dialog.setWindowTitle("New Animation Name");
+    dialog.exec();
+
+    auto name = dialog.getName();
+    animation = iris::Animation::create(name);
+
+    node->addAnimation(animation);
+    node->setAnimation(animation);
+
+    // todo: create method for updating views
+    //this->setSceneNode(node);
+
+    this->repaintViews();
+    ui->keylabelView->setActiveAnimation(animation);
+    this->refreshAnimationList();
 }
 
 void AnimationWidget::addPropertyKey(QAction *action)
@@ -349,5 +391,18 @@ void AnimationWidget::showCurveWidget()
 {
     keyFrameWidget->hide();
     curveWidget->show();
+}
+
+void AnimationWidget::animationChanged(QString name)
+{
+    auto animList = node->getAnimations();
+    for (auto anim : animList)
+    {
+        if (anim->getName() == name) {
+            node->setAnimation(anim);
+            ui->keylabelView->setActiveAnimation(anim);
+            this->repaintViews();
+        }
+    }
 }
 
