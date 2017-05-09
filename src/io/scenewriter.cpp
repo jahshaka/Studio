@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/animation.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
+#include "../irisgl/src/animation/propertyanim.h"
 #include "../irisgl/src/graphics/postprocess.h"
 #include "../irisgl/src/graphics/postprocessmanager.h"
 
@@ -171,15 +172,59 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sc
 
 void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePtr sceneNode)
 {
-    // todo: add all animations
-    auto anim = sceneNode->getAnimation();
-    if(!anim)
-        return;
+    auto activeAnim = sceneNode->getAnimation();
+    if (!!activeAnim)
+        sceneNodeObj["activeAnimation"] = activeAnim->getName();
 
-    QJsonObject animObj;
-    animObj["name"] = anim->getName();
-    animObj["length"] = anim->getLength();
-    animObj["loop"] = anim->getLooping();
+
+    // todo: add all animations
+    auto animations = sceneNode->getAnimations();
+    QJsonArray animListObj;
+
+    for (auto anim : animations) {
+        QJsonObject animObj;
+        animObj["name"] = anim->getName();
+        animObj["length"] = anim->getLength();
+        animObj["loop"] = anim->getLooping();
+
+        auto animPropListObj = QJsonArray();
+
+        for (auto propName: anim->properties.keys()) {
+            auto prop = anim->properties[propName];
+            auto propObj = QJsonObject();
+            propObj["name"] = propName;
+
+            auto keyFrames = prop->getKeyFrames();
+            if(keyFrames.size()==1)
+                propObj["type"] = "float";
+            if(keyFrames.size()==3)
+                propObj["type"] = "vector3";
+            if(keyFrames.size()==4)
+                propObj["type"] = "color";
+
+            for (auto animInfo : keyFrames) {
+                auto keyFrameObj = QJsonObject();
+
+                auto keyFrame = animInfo.keyFrame;
+                keyFrameObj["name"] = animInfo.name;
+
+                auto keysListObj = QJsonArray();
+                for (auto key : keyFrame->keys) {
+                    auto keyObj = QJsonObject();
+                    keyObj["time"] = key->time;
+                }
+                keyFrameObj["keys"] = keysListObj;
+            }
+
+            animPropListObj.append(propObj);
+        }
+
+        animObj["properties"] = animPropListObj;
+
+        animListObj.append(animObj);
+    }
+
+    sceneNodeObj["animations"] = animListObj;
 
     /*
     QJsonArray frames;
