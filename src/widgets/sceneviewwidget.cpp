@@ -270,6 +270,29 @@ QVector3D SceneViewWidget::calculateMouseRay(const QPointF& pos)
     return final_ray_coords.normalized();
 }
 
+void SceneViewWidget::updateRPI(QVector3D pos, QVector3D r) {
+    QVector3D ray = (r * 1024 - pos).normalized();
+    auto translatePlaneNormal = QVector3D(0, 1, 0);
+    float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
+
+    if (nDotR != 0.0f) {
+        float distance = (QVector3D::dotProduct(
+                              translatePlaneNormal,
+                              pos) + translatePlaneD) / nDotR;
+        QVector3D Point = ray * distance + pos;
+        Offset = Point - finalHitPoint;
+
+//        if (true /* check if we are in drag place mode */) {
+//            Offset = QVector3D(Offset.x(), 0, 0);
+//        }
+
+//        currentNode->pos += Offset;
+//        lastSelectedNode->pos += Offset;
+
+        finalHitPoint = Point;
+    }
+}
+
 void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
 {
     // @ISSUE - only fired when mouse is dragged
@@ -304,6 +327,22 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
             viewportGizmo->isGizmoHit(editorCam, e->localPos(), this->calculateMouseRay(e->localPos()));
             viewportGizmo->isHandleHit();
         }
+
+        // temp ---------------------------------
+        auto translatePlaneNormal = QVector3D(0, 1, 0);
+        auto pos = editorCam->pos;
+        auto r = calculateMouseRay(e->localPos() * 1024.f);
+
+        translatePlaneD = -QVector3D::dotProduct(translatePlaneNormal, finalHitPoint);
+
+        QVector3D ray = (r - pos).normalized();
+        float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
+
+        if (nDotR != 0.0f) {
+            float distance = (QVector3D::dotProduct(translatePlaneNormal, pos) + translatePlaneD) / nDotR;
+            finalHitPoint = ray * distance + pos; // initial hit
+        }
+        // end temp -----------------------------
 
         // if we don't have a selected node prioritize object picking
         if (selectedNode.isNull()) {

@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include <QDropEvent>
 #include <QMimeData>
 #include <QSharedPointer>
+#include <QVector3D>
 #include "irisgl/src/irisglfwd.h"
 
 namespace Ui {
@@ -140,7 +141,7 @@ private:
 
     //void addSceneNodeToSelectedTreeItem(QTreeWidget* sceneTree,SceneNode* newNode,bool addToSelected,QIcon icon);
     void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
-    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode);
+    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = true);
 
     void setupDefaultScene();
 
@@ -167,9 +168,10 @@ public slots:
     void addCylinder();
     void addEmpty();
     void addViewer();
-    void addMesh(const QString &path = "");
+    void addMesh(const QString &path = "", QVector3D ppos = QVector3D());
     void addTexturedPlane();
     void addViewPoint();
+    void addDragPlaceholder();
 
     //context menu functions
     void duplicateNode();

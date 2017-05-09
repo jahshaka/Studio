@@ -162,7 +162,7 @@ void AssetWidget::walkFileSystem(QString folder, QString path)
 void AssetWidget::addItem(const QString &asset)
 {
     QFileInfo file(asset);
-    auto name = file.baseName();
+    auto name = file.fileName();
 
     QIcon icon;
     QListWidgetItem *item;
@@ -212,28 +212,42 @@ void AssetWidget::updateAssetView(const QString &path)
 
 bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 {
-    if (event->type() == QEvent::DragMove) {
-//        if (watched == ui->assetView->viewport()) {
-            auto evt = static_cast<QDragMoveEvent*>(event);
+    if (watched == ui->assetView->viewport()) {
+        switch (event->type()) {
+            case QEvent::MouseButtonPress: {
+                auto evt = static_cast<QMouseEvent*>(event);
+                if (evt->button() == Qt::LeftButton) {
+                    startPos = evt->pos();
+                }
 
-//            if (evt->button() != Qt::LeftButton) return false;
-//            if (ui->assetView->currentItem() == nullptr) return false;
-
-            auto item = ui->assetView->currentItem();
-            if (item) {
-                QDrag *drag = new QDrag(this);
-                QMimeData *mimeData = new QMimeData;
-                mimeData->setText(item->text());
-//                mimeData->setData("text/plain", QByteArray(item->text().toStdString().c_str()));
-                drag->setMimeData(mimeData);
-
-                drag->exec();
-//                drag->start(Qt::CopyAction | Qt::MoveAction);
-
-                qDebug() << "working";
+                AssetWidget::mousePressEvent(evt);
+                break;
             }
-//        }
-            this->dragMoveEvent(evt);
+
+            case QEvent::MouseMove: {
+                auto evt = static_cast<QMouseEvent*>(event);
+                if (evt->buttons() & Qt::LeftButton) {
+                    int distance = (evt->pos() - startPos).manhattanLength();
+                    if (distance >= QApplication::startDragDistance()) {
+                        auto item = ui->assetView->currentItem();
+                        if (item) {
+                            QDrag *drag = new QDrag(this);
+                            QMimeData *mimeData = new QMimeData;
+                            mimeData->setText(item->data(Qt::UserRole).toString() + '/' +
+                                              item->data(Qt::DisplayRole).toString());
+                            drag->setMimeData(mimeData);
+
+                            // only hide for object models
+//                            drag->setPixmap(QPixmap());
+                            drag->start(Qt::CopyAction | Qt::MoveAction);
+                        }
+                    }
+                }
+
+                AssetWidget::mouseMoveEvent(evt);
+                break;
+            }
+        }
     }
 
     return QObject::eventFilter(watched, event);
@@ -259,37 +273,6 @@ void AssetWidget::dropEvent(QDropEvent *evt)
 
     evt->acceptProposedAction();
 }
-
-void AssetWidget::handleMouseMoveEvent(QMouseEvent *event)
-{
-//    qDebug() << "working;";
-}
-
-//void AssetWidget::mousePressEvent(QMouseEvent *event)
-//{
-//    if (event->button() == Qt::LeftButton) {
-//        qDebug() << "working";
-//    }
-//}
-
-//void AssetWidget::mouseMoveEvent(QMouseEvent *event)
-//{
-//    if (event->button() != Qt::LeftButton) return;
-//    if (ui->assetView->currentItem() == nullptr) return;
-
-//    QDrag *drag = new QDrag(this);
-//    QMimeData *mimeData = new QMimeData;
-
-////    mimeData-
-//    drag->start(Qt::CopyAction | Qt::MoveAction);
-
-//    qDebug() << "working";
-//}
-
-//void AssetWidget::dragMoveEvent(QDragMoveEvent *event)
-//{
-//    qDebug() << "working";
-//}
 
 void AssetWidget::treeItemSelected(QTreeWidgetItem *item)
 {
@@ -366,7 +349,7 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
         createMenu->addAction(action);
 
         action = new QAction(QIcon(), "Import Asset", this);
-        connect(action, SIGNAL(triggered()), this, SLOT(importAsset()));
+        connect(action, SIGNAL(triggered()), this, SLOT(importAssetB()));
         menu.addAction(action);
 
         // action = new QAction(QIcon(), "Open in Explorer", this);

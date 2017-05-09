@@ -118,11 +118,18 @@ public:
     iris::ForwardRendererPtr getRenderer() const;
     void saveFrameBuffer(QString filePath);
 
+    QVector3D calculateMouseRay(const QPointF& pos);
+    void mousePressEvent(QMouseEvent* evt);
+    void mouseMoveEvent(QMouseEvent* evt);
+
+    float translatePlaneD;
+    QVector3D finalHitPoint;
+    QVector3D Offset;
+    void updateRPI(QVector3D pos, QVector3D r);
+
 protected:
     void initializeGL();
     bool eventFilter(QObject *obj, QEvent *event);
-    void mousePressEvent(QMouseEvent* evt);
-    void mouseMoveEvent(QMouseEvent* evt);
     void mouseReleaseEvent(QMouseEvent* evt);
     void wheelEvent(QWheelEvent *event);
     void keyPressEvent(QKeyEvent *event);
@@ -137,6 +144,7 @@ private slots:
     void paintGL();
     void updateScene(bool once = false);
     void resizeGL(int width, int height);
+
 
 private:
     void doLightPicking(const QVector3D& segStart,
@@ -167,8 +175,6 @@ private:
     bool initialH;
 
     void initialize();
-
-    QVector3D calculateMouseRay(const QPointF& pos);
 
     GizmoInstance* translationGizmo;
     RotationGizmo* rotationGizmo;

@@ -39,12 +39,8 @@ public:
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
-//    void mousePressEvent(QMouseEvent*);
-//    void mouseMoveEvent(QMouseEvent*);
-//    void dragMoveEvent(QDragMoveEvent*);
     void dragEnterEvent(QDragEnterEvent*);
     void dropEvent(QDropEvent*);
-    void handleMouseMoveEvent(QMouseEvent *event);
 
 protected slots:
     void treeItemSelected(QTreeWidgetItem* item);
@@ -73,6 +69,7 @@ protected slots:
 private:
     Ui::AssetWidget *ui;
     AssetItem assetItem;
+    QPoint startPos;
 };
 
 #endif // ASSETWIDGET_H

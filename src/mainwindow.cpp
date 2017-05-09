@@ -392,9 +392,6 @@ bool MainWindow::handleMousePress(QMouseEvent *event)
     mouseButton = event->button();
     mousePressPos = event->pos();
 
-    //if(event->button() == Qt::LeftButton)
-    //    gizmo->onMousePress(event->x(),event->y());
-
     return true;
 }
 
@@ -406,8 +403,6 @@ bool MainWindow::handleMouseRelease(QMouseEvent *event)
 bool MainWindow::handleMouseMove(QMouseEvent *event)
 {
     mousePos = event->pos();
-
-    //gizmo->onMouseMove(event->x(),event->y());
 
     return false;
 }
@@ -421,78 +416,76 @@ bool MainWindow::handleMouseWheel(QWheelEvent *event)
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
     Q_UNUSED(obj)
-    const QString mimeType = "application/x-qabstractitemmodeldatalist";
 
     switch (event->type()) {
-    case QEvent::DragEnter: {
-        auto evt = static_cast<QDragEnterEvent*>(event);
+        case QEvent::DragMove: {
+            auto evt = static_cast<QDragMoveEvent*>(event);
 
-        if (obj == ui->sceneContainer) {
-            if (evt->mimeData()->hasFormat(mimeType)) {
+            if (obj == ui->sceneContainer) {
+                if (!!activeSceneNode) {
+                    activeSceneNode->pos += sceneView->Offset;
+                }
+            }
+        }
+
+        case QEvent::DragEnter: {
+            auto evt = static_cast<QDragEnterEvent*>(event);
+
+            if (obj == ui->sceneContainer) {
+                if (evt->mimeData()->hasText()) {
+                    evt->acceptProposedAction();
+                } else {
+                    evt->ignore();
+                }
+
+                if (!activeSceneNode) {
+                    addDragPlaceholder();
+                }
+
+                sceneView->updateRPI(sceneView->editorCam->pos,
+                                     sceneView->calculateMouseRay(evt->posF()));
+            }
+
+            break;
+        }
+
+        case QEvent::Drop: {
+            if (obj == ui->sceneContainer) {
+                auto evt = static_cast<QDropEvent*>(event);
+
+                auto ppos = activeSceneNode->pos;
+                deleteNode();
+                addMesh(evt->mimeData()->text(), ppos);
+
                 evt->acceptProposedAction();
-            } else {
-                evt->ignore();
-            }
-        }
-
-//        if (obj == ui->assetWidget) {
-//            if (evt->mimeData()->hasUrls()) {
-//                evt->acceptProposedAction();
-//            }
-//        }
-        break;
-    }
-
-    case QEvent::Drop: {
-        if (obj == ui->sceneContainer) {
-            auto evt = static_cast<QDropEvent*>(event);
-            QByteArray encoded = evt->mimeData()->data(mimeType);
-            QDataStream stream(&encoded, QIODevice::ReadOnly);
-            QMap<int, QVariant> roleDataMap;
-            while (!stream.atEnd()) {
-                int row, col;
-                stream >> row >> col >> roleDataMap;
             }
 
-            addMesh(roleDataMap.value(Qt::UserRole).toString() + '/' +
-                    roleDataMap.value(Qt::DisplayRole).toString() + ".obj");
-
-            evt->acceptProposedAction();
+            break;
         }
 
-//        if (obj == ui->assetWidget) {
-//            auto evt = static_cast<QDropEvent*>(event);
-//            QList<QUrl> droppedUrls = evt->mimeData()->urls();
-//            for (auto url : droppedUrls) {
-//                auto fileInfo = QFileInfo(url.toLocalFile());
-//                qDebug() << fileInfo.absoluteFilePath();
-//            }
-//            evt->acceptProposedAction();
-//        }
-        break;
-    }
+        case QEvent::MouseButtonPress: {
+            if (obj == surface) return handleMousePress(static_cast<QMouseEvent*>(event));
 
-    case QEvent::KeyPress: {
-        break;
-    }
-    case QEvent::MouseButtonPress:
-        if (obj == surface)
-            return handleMousePress(static_cast<QMouseEvent *>(event));
-        break;
-    case QEvent::MouseButtonRelease:
-        if (obj == surface)
-            return handleMouseRelease(static_cast<QMouseEvent *>(event));
-        break;
-    case QEvent::MouseMove:
-        if (obj == surface)
-            return handleMouseMove(static_cast<QMouseEvent *>(event));
-        break;
-    case QEvent::Wheel:
-        if (obj == surface)
-            return handleMouseWheel(static_cast<QWheelEvent *>(event));
-        break;
-    default:
-        break;
+            if (obj == ui->sceneContainer) {
+                sceneView->mousePressEvent(static_cast<QMouseEvent*>(event));
+            }
+            break;
+        }
+
+        case QEvent::MouseButtonRelease:
+            if (obj == surface) return handleMouseRelease(static_cast<QMouseEvent*>(event));
+            break;
+
+        case QEvent::MouseMove:
+            if (obj == surface) return handleMouseMove(static_cast<QMouseEvent*>(event));
+            break;
+
+        case QEvent::Wheel:
+            if (obj == surface) return handleMouseWheel(static_cast<QWheelEvent*>(event));
+            break;
+
+        default:
+            break;
     }
 
     return false;
@@ -951,7 +944,7 @@ void MainWindow::addParticleSystem()
     addNodeToScene(node);
 }
 
-void MainWindow::addMesh(const QString &path)
+void MainWindow::addMesh(const QString &path, QVector3D ppos)
 {
     QString filename;
     if (path.isEmpty()) {
@@ -973,14 +966,27 @@ void MainWindow::addMesh(const QString &path)
 
 //    node->materialType = 2;
     node->setName(nodeName);
+    node->pos = ppos;
 
     // todo: load material data
-    addNodeToScene(node);
+    addNodeToScene(node, false);
 }
 
 void MainWindow::addViewPoint()
 {
 
+}
+
+void MainWindow::addDragPlaceholder()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::MeshNode::create();
+    node->scale = QVector3D(.5f, .5f, .5f);
+    node->setMesh(getAbsoluteAssetPath("app/content/primitives/arrow.obj"));
+    node->setName("Arrow");
+//    m->setValue("diffuseTexture", getAbsoluteAssetPath("app/content/textures/tile.png"));
+
+    addNodeToScene(node, false);
 }
 
 void MainWindow::addTexturedPlane()
@@ -1022,8 +1028,9 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
 /**
  * adds sceneNode directly to the scene's rootNode
  * applied default material to mesh if one isnt present
+ * ignore set to false means we only add it visually, usually to discard it afterw
  */
-void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
+void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore)
 {
     if (!scene) {
         // @TODO: set alert that a scene needs to be set before this can be done
@@ -1031,10 +1038,12 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
     }
 
     // @TODO: add this to a constants file
-    const float spawnDist = 10.0f;
-    auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, -1.0f, -spawnDist));
-    offset += sceneView->editorCam->pos;
-    sceneNode->pos = offset;
+    if (ignore) {
+        const float spawnDist = 10.0f;
+        auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, -1.0f, -spawnDist));
+        offset += sceneView->editorCam->pos;
+        sceneNode->pos = offset;
+    }
 
     // apply default material to mesh nodes
     if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
@@ -1042,11 +1051,16 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
 
         auto mat = iris::CustomMaterial::create();
         mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
+        if (!ignore) {
+            mat->renderStates.blendType = iris::BlendType::Normal;
+        }
         meshNode->setMaterial(mat);
     }
 
     scene->getRootNode()->addChild(sceneNode);
-    ui->sceneHierarchy->repopulateTree();
+    if (!ignore) {
+        ui->sceneHierarchy->repopulateTree();
+    }
     sceneNodeSelected(sceneNode);
 }
 

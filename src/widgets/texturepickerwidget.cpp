@@ -24,13 +24,10 @@ TexturePickerWidget::TexturePickerWidget(QWidget* parent) :
     ui(new Ui::TexturePickerWidget)
 {
     ui->setupUi(this);
-
-    connect(ui->load, SIGNAL(pressed()), SLOT(pickTextureMap()));
-
     this->ui->texture->installEventFilter(this);
-
     type = WidgetType::TextureWidget;
 
+    connect(ui->load, SIGNAL(pressed()), SLOT(pickTextureMap()));
     setAcceptDrops(true);
 }
 
@@ -46,8 +43,8 @@ QString TexturePickerWidget::getTexturePath()
 
 void TexturePickerWidget::dragEnterEvent(QDragEnterEvent *event)
 {
-    const QString mimeType = "application/x-qabstractitemmodeldatalist";
-    if (event->mimeData()->hasFormat(mimeType)) {
+//    const QString mimeType = "application/x-qabstractitemmodeldatalist";
+    if (event->mimeData()->hasText()) {
         event->acceptProposedAction();
     } else {
         event->ignore();
@@ -58,16 +55,15 @@ void TexturePickerWidget::dropEvent(QDropEvent *event)
 {
     // http://stackoverflow.com/a/2747369/996468
     const QString mimeType = "application/x-qabstractitemmodeldatalist";
-    QByteArray encoded = event->mimeData()->data(mimeType);
-    QDataStream stream(&encoded, QIODevice::ReadOnly);
-    QMap<int, QVariant> roleDataMap;
-    while (!stream.atEnd()) {
-        int row, col;
-        stream >> row >> col >> roleDataMap;
-    }
+//    QByteArray encoded = event->mimeData()->data(mimeType);
+//    QDataStream stream(&encoded, QIODevice::ReadOnly);
+//    QMap<int, QVariant> roleDataMap;
+//    while (!stream.atEnd()) {
+//        int row, col;
+//        stream >> row >> col >> roleDataMap;
+//    }
 
-    changeMap(roleDataMap.value(Qt::UserRole).toString() + '/' +
-              roleDataMap.value(Qt::DisplayRole).toString());
+    changeMap(event->mimeData()->text());
 
     event->acceptProposedAction();
 }
