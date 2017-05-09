@@ -54,6 +54,7 @@ public:
     ~KeyFrameLabelTreeWidget();
 
     void setSceneNode(iris::SceneNodePtr node);
+    void setActiveAnimation(iris::AnimationPtr anim);
 
     // propName must be a name
     void addProperty(QString propName);

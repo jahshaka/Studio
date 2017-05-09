@@ -232,15 +232,15 @@ void SceneNode::updateAnimation(float time)
     }
     */
 
-    if (animation->hasPropertyAnim("Position")) {
-        pos = animation->getVector3PropertyAnim("Position")->getValue(time);
+    if (animation->hasPropertyAnim("position")) {
+        pos = animation->getVector3PropertyAnim("position")->getValue(time);
     }
-    if (animation->hasPropertyAnim("Rotation")) {
-        auto r = animation->getVector3PropertyAnim("Rotation")->getValue(time);
+    if (animation->hasPropertyAnim("rotation")) {
+        auto r = animation->getVector3PropertyAnim("rotation")->getValue(time);
         rot = QQuaternion::fromEulerAngles(r);
     }
-    if (animation->hasPropertyAnim("Scale")) {
-        scale = animation->getVector3PropertyAnim("Scale")->getValue(time);
+    if (animation->hasPropertyAnim("scale")) {
+        scale = animation->getVector3PropertyAnim("scale")->getValue(time);
     }
 
     for (auto child : children) {

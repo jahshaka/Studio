@@ -54,17 +54,25 @@ void KeyFrameLabelTreeWidget::setSceneNode(iris::SceneNodePtr node)
 {
     this->node = node;
 
-    ui->treeWidget->clear();
-
-    if (!node)
+    if (!node) {
+        setActiveAnimation(iris::AnimationPtr());
         return;
+    }
 
     // refresh tree
     auto animation = node->getAnimation();
-    for(auto prop : animation->properties) {
-        // add prop to tree
-        //switch(prop->)
-        addPropertyToTree(prop);
+    setActiveAnimation(animation);
+}
+
+void KeyFrameLabelTreeWidget::setActiveAnimation(iris::AnimationPtr animation)
+{
+    ui->treeWidget->clear();
+    if (!!animation) {
+        for(auto prop : animation->properties) {
+            // add prop to tree
+            //switch(prop->)
+            addPropertyToTree(prop);
+        }
     }
 }
 
