@@ -12,6 +12,7 @@
 
 #include "../core/project.h"
 #include "../globals.h"
+#include "../constants.h"
 
 #include <QDebug>
 #include <QFileDialog>
@@ -29,14 +30,11 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
         QApplication::setFont(QFont("Open Sans", 9));
     }
 
-//    ui->listWidget->viewport()->installEventFilter(this);
-
     connect(ui->newProject,     SIGNAL(pressed()), SLOT(newScene()));
     connect(ui->openProject,    SIGNAL(pressed()), SLOT(openProject()));
     connect(ui->listWidget,     SIGNAL(itemDoubleClicked(QListWidgetItem*)),
             this,               SLOT(openRecentProject(QListWidgetItem*)));
 
-//    window = new MainWindow;
     settings = SettingsManager::getDefaultManager();
     ui->listWidget->addItems(settings->getRecentlyOpenedScenes());
 }
@@ -57,7 +55,7 @@ void ProjectDialog::newScene()
 
     if (!projectName.isEmpty() || !projectName.isNull()) {
         auto pPath = projectPath + '/' + projectName;
-        auto str = pPath + "/Scenes/" + projectName + ".jah";
+        auto str = pPath + "/Scenes/" + projectName + Constants::JAH_EXT;
 
         Globals::project->setFilePath(str);
         Globals::project->updateProjectPath(pPath);
@@ -68,19 +66,27 @@ void ProjectDialog::newScene()
             dir.mkpath(".");
         }
 
-        // make proj folders
-        QList<QString> projFolders = { "Textures", "Models", "Shaders", "Materials", "Scenes" };
-        for (auto folder : projFolders) {
+        for (auto folder : Constants::PROJECT_DIRS) {
             QDir dir(pPath + '/' + folder);
             dir.mkpath(".");
         }
 
+        // copy default scene to new project and open that as the new project
+        QFile::copy(IrisUtils::getAbsoluteAssetPath("scenes/startup/tile.png"),
+                    pPath + "/Textures/" + "tile.png");
+
+        QFile::copy(IrisUtils::getAbsoluteAssetPath("scenes/startup/ground.obj"),
+                    pPath + "/Models/" + "ground.obj");
+
+        QFile::copy(IrisUtils::getAbsoluteAssetPath("scenes/startup/startup.jah"),
+                    pPath + "/Scenes/" + projectName + Constants::JAH_EXT);
+
         window = new MainWindow;
         window->showMaximized();
-        window->newProject(projectName, projectPath);
+//        window->newProject(projectName, projectPath);
+        window->openProject(str);
 
         this->close();
-        // emit accepted();
     }
 }
 

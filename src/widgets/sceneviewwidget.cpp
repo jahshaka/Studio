@@ -688,7 +688,6 @@ void SceneViewWidget::setGizmoScale()
     viewportGizmo->lastSelectedNode = selectedNode;
 }
 
-
 void SceneViewWidget::setEditorData(EditorData* data)
 {
     editorCam = data->editorCamera;

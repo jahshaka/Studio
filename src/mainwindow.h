@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QModelIndex>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QDrag>
 #include <QSharedPointer>
 #include <QVector3D>
 #include "irisgl/src/irisglfwd.h"

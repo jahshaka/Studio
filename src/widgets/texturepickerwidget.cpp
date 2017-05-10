@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "../widgets/assetpickerwidget.h"
 
 #include <QMimeData>
+#include <QDrag>
 #include <QStandardItemModel>
 
 TexturePickerWidget::TexturePickerWidget(QWidget* parent) :

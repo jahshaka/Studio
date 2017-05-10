@@ -1079,7 +1079,7 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
 
         auto mat = iris::CustomMaterial::create();
         mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-        if (!ignore) {
+        if (ignore) {
             mat->renderStates.blendType = iris::BlendType::Normal;
         }
         meshNode->setMaterial(mat);
