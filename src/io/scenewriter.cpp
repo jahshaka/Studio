@@ -199,6 +199,7 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
             if(keyFrames.size()==4)
                 propObj["type"] = "color";
 
+            QJsonArray keyFrameList;
             for (auto animInfo : keyFrames) {
                 auto keyFrameObj = QJsonObject();
 
@@ -209,9 +210,22 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
                 for (auto key : keyFrame->keys) {
                     auto keyObj = QJsonObject();
                     keyObj["time"] = key->time;
+                    keyObj["value"] = key->value;
+
+                    keyObj["leftSlope"] = key->leftSlope;
+                    keyObj["rightSlope"] = key->rightSlope;
+
+                    keyObj["leftTangentType"] = this->getKeyTangentTypeName(key->leftTangent);
+                    keyObj["rightTangentType"] = this->getKeyTangentTypeName(key->rightTangent);
+
+                    keyObj["handleMode"] = this->getKeyHandleModeName(key->handleMode);
+
+                    keysListObj.append(keyObj);
                 }
                 keyFrameObj["keys"] = keysListObj;
+                keyFrameList.append(keyFrameObj);
             }
+            propObj["keyFrames"] = keyFrameList;
 
             animPropListObj.append(propObj);
         }
@@ -384,5 +398,31 @@ QString SceneWriter::getLightNodeTypeName(iris::LightType lightType)
             return "spot";
         default:
             return "none";
+    }
+}
+
+QString SceneWriter::getKeyTangentTypeName(iris::TangentType tangentType)
+{
+    switch (tangentType) {
+    case iris::TangentType::Free:
+        return "free";
+    case iris::TangentType::Linear:
+        return "linear";
+    case iris::TangentType::Constant:
+        return "constant";
+    default:
+        return "free";
+    }
+}
+
+QString SceneWriter::getKeyHandleModeName(iris::HandleMode handleMode)
+{
+    switch (handleMode) {
+    case iris::HandleMode::Joined:
+        return "joined";
+    case iris::HandleMode::Broken:
+        return "broken";
+    default:
+        return "joined";
     }
 }
