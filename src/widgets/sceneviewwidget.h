@@ -125,19 +125,21 @@ public:
     float translatePlaneD;
     QVector3D finalHitPoint;
     QVector3D Offset;
+    iris::SceneNodePtr activeNode;
     void updateRPI(QVector3D pos, QVector3D r);
-    void doObjectPicking(const QPointF& point);
+    void doActiveObjectPicking(const QPointF& point);
 
 protected:
     void initializeGL();
     bool eventFilter(QObject *obj, QEvent *event);
-    void mouseReleaseEvent(QMouseEvent* evt);
+    void mouseReleaseEvent(QMouseEvent* event);
     void wheelEvent(QWheelEvent *event);
     void keyPressEvent(QKeyEvent *event);
     void keyReleaseEvent(QKeyEvent *event);
     void focusOutEvent(QFocusEvent* event);
 
     // does raycasting from the mouse's screen position.
+    void doObjectPicking(const QPointF& point);
     void doGizmoPicking(const QPointF& point);
 
 private slots:

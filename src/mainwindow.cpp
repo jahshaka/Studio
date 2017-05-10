@@ -431,7 +431,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 }
 
                 if (info.suffix() != "obj") {
-                    sceneView->doObjectPicking(evt->posF());
+                    sceneView->doActiveObjectPicking(evt->posF());
                 }
             }
 
@@ -452,8 +452,10 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
                 auto info = QFileInfo(evt->mimeData()->text());
                 if (info.suffix() == "obj") {
-                    if (!activeSceneNode) {
+
+                    if (dragging) {
                         addDragPlaceholder();
+                        dragging = !dragging;
                     }
 
                     sceneView->updateRPI(sceneView->editorCam->pos,
@@ -470,6 +472,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
                 auto info = QFileInfo(evt->mimeData()->text());
                 if (info.suffix() == "obj") {
+//                    dragging = false;
                     auto ppos = activeSceneNode->pos;
                     deleteNode();
                     addMesh(evt->mimeData()->text(), true, ppos);
@@ -488,6 +491,8 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         }
 
         case QEvent::MouseButtonPress: {
+            dragging = true;
+
             if (obj == surface) return handleMousePress(static_cast<QMouseEvent*>(event));
 
             if (obj == ui->sceneContainer) {
@@ -1009,7 +1014,6 @@ void MainWindow::addDragPlaceholder()
     node->scale = QVector3D(.5f, .5f, .5f);
     node->setMesh(getAbsoluteAssetPath("app/content/primitives/arrow.obj"));
     node->setName("Arrow");
-//    m->setValue("diffuseTexture", getAbsoluteAssetPath("app/content/textures/tile.png"));
 
     addNodeToScene(node, true);
 }

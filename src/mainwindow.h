@@ -261,6 +261,7 @@ private:
     QPoint mousePressPos;
     QPoint mouseReleasePos;
     QPoint mousePos;
+    bool dragging;
 
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;
