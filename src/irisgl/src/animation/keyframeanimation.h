@@ -115,7 +115,7 @@ public:
         length = last->time;
     }
 
-    void addKey(T value,double time)
+    Key<T>* addKey(T value,double time)
     {
         auto key = new Key<T>();
         key->value = value;
@@ -124,6 +124,7 @@ public:
 
         //todo: make this faster
         this->sortKeys();
+        return key;
     }
 
     bool hasKeys()

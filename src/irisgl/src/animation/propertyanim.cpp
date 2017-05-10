@@ -25,6 +25,18 @@ QList<PropertyAnimInfo> FloatPropertyAnim::getKeyFrames()
     return frames;
 }
 
+FloatKeyFrame *FloatPropertyAnim::getKeyFrame(QString name)
+{
+    //returns keyframe regardless of name
+    return keyFrame;
+}
+
+FloatKeyFrame *FloatPropertyAnim::getKeyFrame(int index)
+{
+    if (index == 0) return keyFrame;
+    return nullptr;
+}
+
 Vector3DPropertyAnim::Vector3DPropertyAnim()
 {
     keyFrames[0] = new FloatKeyFrame();
@@ -53,6 +65,23 @@ QList<PropertyAnimInfo> Vector3DPropertyAnim::getKeyFrames()
     frames.append(PropertyAnimInfo("Y",keyFrames[1]));
     frames.append(PropertyAnimInfo("Z",keyFrames[2]));
     return frames;
+}
+
+FloatKeyFrame *Vector3DPropertyAnim::getKeyFrame(QString name)
+{
+    if (name=="X") return keyFrames[0];
+    if (name=="Y") return keyFrames[1];
+    if (name=="Z") return keyFrames[2];
+
+    return nullptr;
+}
+
+FloatKeyFrame *Vector3DPropertyAnim::getKeyFrame(int index)
+{
+    if (index < 0 || index > 3)
+        return nullptr;
+
+    return keyFrames[index];
 }
 
 ColorPropertyAnim::ColorPropertyAnim()
@@ -86,6 +115,24 @@ QList<PropertyAnimInfo> ColorPropertyAnim::getKeyFrames()
     frames.append(PropertyAnimInfo("B",keyFrames[2]));
     frames.append(PropertyAnimInfo("A",keyFrames[3]));
     return frames;
+}
+
+FloatKeyFrame *ColorPropertyAnim::getKeyFrame(QString name)
+{
+    if (name=="R") return keyFrames[0];
+    if (name=="G") return keyFrames[1];
+    if (name=="B") return keyFrames[2];
+    if (name=="A") return keyFrames[3];
+
+    return nullptr;
+}
+
+FloatKeyFrame *ColorPropertyAnim::getKeyFrame(int index)
+{
+    if (index < 0 || index > 4)
+        return nullptr;
+
+    return keyFrames[index];
 }
 
 PropertyAnimInfo::PropertyAnimInfo(QString name, FloatKeyFrame *keyFrame)

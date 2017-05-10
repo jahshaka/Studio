@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/irisglfwd.h"
 #include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
+#include "../irisgl/src/animation/keyframeanimation.h"
 
 class EditorData;
 
@@ -78,6 +79,8 @@ public:
     iris::ParticleSystemNodePtr createParticleSystem(QJsonObject& nodeObj);
 
     iris::LightType getLightTypeFromName(QString lightType);
+    iris::TangentType getTangentTypeFromName(QString tangentType);
+    iris::HandleMode getHandleModeFromName(QString handleMode);
 
     /**
      * Extracts material from node's json object.

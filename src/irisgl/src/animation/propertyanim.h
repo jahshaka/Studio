@@ -29,6 +29,16 @@ public:
         return list;
     }
 
+    virtual FloatKeyFrame* getKeyFrame(QString name)
+    {
+        return nullptr;
+    }
+
+    virtual FloatKeyFrame* getKeyFrame(int index)
+    {
+        return nullptr;
+    }
+
     QString getName() const;
     void setName(const QString &value);
 };
@@ -42,6 +52,8 @@ public:
 
     float getValue(float time);
     virtual QList<PropertyAnimInfo> getKeyFrames() override;
+    virtual FloatKeyFrame* getKeyFrame(QString name) override;
+    virtual FloatKeyFrame* getKeyFrame(int index) override;
 };
 
 class Vector3DPropertyAnim : public PropertyAnim
@@ -53,6 +65,8 @@ public:
 
     QVector3D getValue(float time);
     virtual QList<PropertyAnimInfo> getKeyFrames() override;
+    virtual FloatKeyFrame* getKeyFrame(QString name) override;
+    virtual FloatKeyFrame* getKeyFrame(int index) override;
 };
 
 class ColorPropertyAnim : public PropertyAnim
@@ -64,6 +78,8 @@ public:
 
     QColor getValue(float time);
     virtual QList<PropertyAnimInfo> getKeyFrames() override;
+    virtual FloatKeyFrame* getKeyFrame(QString name) override;
+    virtual FloatKeyFrame* getKeyFrame(int index) override;
 };
 
 }
