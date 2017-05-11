@@ -835,7 +835,7 @@ void MainWindow::addPlane()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsoluteAssetPath("app/content/primitives/plane.obj"));
+    node->setMesh(":/app/content/primitives/plane.obj");
     node->setFaceCullingMode(iris::FaceCullingMode::None);
     node->setName("Plane");
 
@@ -847,7 +847,7 @@ void MainWindow::addCone()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsoluteAssetPath("app/content/primitives/cone.obj"));
+    node->setMesh(":/app/content/primitives/cone.obj");
     node->setName("Cone");
 
     addNodeToScene(node);
@@ -860,7 +860,7 @@ void MainWindow::addCube()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsoluteAssetPath("app/content/primitives/cube.obj"));
+    node->setMesh(":/app/content/primitives/cube.obj");
     node->setName("Cube");
 
     addNodeToScene(node);
@@ -873,7 +873,7 @@ void MainWindow::addTorus()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsoluteAssetPath("app/content/primitives/torus.obj"));
+    node->setMesh(":/app/content/primitives/torus.obj");
     node->setName("Torus");
 
     addNodeToScene(node);
@@ -886,7 +886,7 @@ void MainWindow::addSphere()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsoluteAssetPath("app/content/primitives/sphere.obj"));
+    node->setMesh(":/app/content/primitives/sphere.obj");
     node->setName("Sphere");
 
     addNodeToScene(node);
@@ -899,7 +899,7 @@ void MainWindow::addCylinder()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsoluteAssetPath("app/content/primitives/cylinder.obj"));
+    node->setMesh(":/app/content/primitives/cylinder.obj");
     node->setName("Cylinder");
 
     addNodeToScene(node);
@@ -910,7 +910,7 @@ void MainWindow::addPointLight()
     this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Point);
-    node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
+    node->icon = iris::Texture2D::load(":/app/icons/bulb.png");
     node->setName("Point Light");
     node->intensity = 1.0f;
     node->distance = 40.0f;
@@ -923,7 +923,7 @@ void MainWindow::addSpotLight()
     this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Spot);
-    node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
+    node->icon = iris::Texture2D::load(":/app/icons/bulb.png");
     node->setName("Spot Light");
 
     addNodeToScene(node);
@@ -935,7 +935,7 @@ void MainWindow::addDirectionalLight()
     this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Directional);
-    node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
+    node->icon = iris::Texture2D::load(":/app/icons/bulb.png");
     node->setName("Directional Light");
 
     addNodeToScene(node);

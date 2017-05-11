@@ -174,6 +174,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->fogStart = sceneObj["fogStart"].toDouble(100);
     scene->fogEnd = sceneObj["fogEnd"].toDouble(120);
     scene->fogEnabled = sceneObj["fogEnabled"].toBool(true);
+    scene->shadowEnabled = sceneObj["shadowEnabled"].toBool(true);
 
     auto rootNode = sceneObj["rootNode"].toObject();
     QJsonArray children = rootNode["children"].toArray();
@@ -309,11 +310,15 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 
     auto source = nodeObj["mesh"].toString("");
     auto meshIndex = nodeObj["meshIndex"].toInt(0);
-    auto pickable = nodeObj["pickable"].toBool();
+    auto pickable = nodeObj["pickable"].toBool(true);
 
     if (!source.isEmpty()) {
         auto mesh = getMesh(getAbsolutePath(source), meshIndex);
-        meshNode->setMesh(mesh);
+        if (source.startsWith(":")) {
+            meshNode->setMesh(source);
+        } else {
+            meshNode->setMesh(mesh);
+        }
         meshNode->setPickable(pickable);
         meshNode->meshPath = source;
         meshNode->meshIndex = meshIndex;
@@ -353,10 +358,12 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->color = readColor(nodeObj["color"].toObject());
 
     //TODO: move this to the sceneview widget or somewhere more appropriate
-    if(lightNode->lightType == iris::LightType::Directional)
-        lightNode->icon = iris::Texture2D::load(IrisUtils::getAbsoluteAssetPath("app/icons/light.png"));
-    else
-        lightNode->icon = iris::Texture2D::load(IrisUtils::getAbsoluteAssetPath("app/icons/bulb.png"));
+    if (lightNode->lightType == iris::LightType::Directional) {
+        lightNode->icon = iris::Texture2D::load(":/app/icons/light.png");
+    } else {
+        lightNode->icon = iris::Texture2D::load(":/app/icons/bulb.png");
+    }
+
     lightNode->iconSize = 0.5f;
 
     return lightNode;
@@ -413,16 +420,14 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS + mat["name"].toString() + ".json"));
 
     for (auto prop : m->properties) {
-        if(mat.contains(prop->name)) {
+        if (mat.contains(prop->name)) {
             if (prop->type == iris::PropertyType::Texture) {
                 auto textureStr = !mat[prop->name].toString().isEmpty()
-                        ? getAbsolutePath(mat[prop->name].toString())
-                        : QString();
+                                  ? getAbsolutePath(mat[prop->name].toString())
+                                  : QString();
 
                 m->setValue(prop->name, textureStr);
-            }
-            else
-            {
+            } else {
                 m->setValue(prop->name, mat[prop->name].toVariant());
             }
         }
@@ -438,7 +443,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
  * @param index
  * @return
  */
-iris::Mesh* SceneReader::getMesh(QString filePath,int index)
+iris::Mesh* SceneReader::getMesh(QString filePath, int index)
 {
     // if the mesh is already in the hashmap then it was already loaded, just return the indexed mesh
     if (meshes.contains(filePath)) {

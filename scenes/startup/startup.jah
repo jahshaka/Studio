@@ -34,6 +34,7 @@
         "fogEnabled": true,
         "fogEnd": 180,
         "fogStart": 100,
+        "shadowEnabled": true,
         "rootNode": {
             "animation": {
                 "frames": [

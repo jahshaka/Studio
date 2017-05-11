@@ -78,6 +78,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj,iris::ScenePtr scene)
     sceneObj["fogStart"] = scene->fogStart;
     sceneObj["fogEnd"] = scene->fogEnd;
     sceneObj["fogEnabled"] = scene->fogEnabled;
+    sceneObj["shadowEnabled"] = scene->shadowEnabled;
 
 
     QJsonObject rootNodeObj;
