@@ -12,5 +12,6 @@
         <file>app/content/primitives/plane.obj</file>
         <file>app/content/primitives/sphere.obj</file>
         <file>app/content/primitives/torus.obj</file>
+        <file>app/content/primitives/arrow.obj</file>
     </qresource>
 </RCC>

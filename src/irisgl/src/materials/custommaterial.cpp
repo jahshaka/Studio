@@ -73,6 +73,17 @@ void CustomMaterial::setUniformValues(Property *prop)
     }
 }
 
+QString CustomMaterial::firstTextureSlot() const
+{
+    for (auto prop : properties) {
+        if (prop->type == PropertyType::Texture) {
+            return prop->name;
+        }
+    }
+
+    return QString();
+}
+
 QJsonObject CustomMaterial::loadShaderFromDisk(const QString &filePath)
 {
     QFile file(filePath);

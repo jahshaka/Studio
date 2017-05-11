@@ -39,6 +39,7 @@ public:
     void purge();
 
     QString getName() const;
+    QString firstTextureSlot() const;
     int getCalculatedPropHeight() const;
 
     static CustomMaterialPtr create();

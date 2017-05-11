@@ -32,7 +32,6 @@ For more information see the LICENSE file
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/viewport.h"
 #include "../irisgl/src/graphics/utils/fullscreenquad.h"
-#include "../irisgl/src/math/intersectionhelper.h"
 #include "../irisgl/src/vr/vrmanager.h"
 #include "../irisgl/src/vr/vrdevice.h"
 
@@ -88,6 +87,10 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     elapsedTimer = new QElapsedTimer();
     playScene = false;
     animTime = 0.0f;
+
+    sceneFloor = iris::IntersectionHelper::computePlaneND(QVector3D(100,  0,  100),
+                                                          QVector3D(-100, 0,  100),
+                                                          QVector3D(0,    0, -100));
 
     setAcceptDrops(true);
 }
@@ -270,30 +273,18 @@ QVector3D SceneViewWidget::calculateMouseRay(const QPointF& pos)
     return final_ray_coords.normalized();
 }
 
-void SceneViewWidget::updateRPI(QVector3D pos, QVector3D r) {
-    QVector3D ray = (r * 1024 - pos).normalized();
-    auto translatePlaneNormal = QVector3D(0, 1, 0);
-    float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
-
-    if (nDotR != 0.0f) {
-        float distance = (QVector3D::dotProduct(
-                              translatePlaneNormal,
-                              pos) + translatePlaneD) / nDotR;
-        QVector3D Point = ray * distance + pos;
-        Offset = Point - finalHitPoint;
-
-//        if (true /* check if we are in drag place mode */) {
-//            Offset = QVector3D(Offset.x(), 0, 0);
-//        }
-
-//        currentNode->pos += Offset;
-//        lastSelectedNode->pos += Offset;
-
-        finalHitPoint = Point;
+bool SceneViewWidget::updateRPI(QVector3D pos, QVector3D r) {
+    float t;
+    QVector3D q;
+    if (iris::IntersectionHelper::intersectSegmentPlane(pos, (r * 1024), sceneFloor, t, q)) {
+        Offset = q;
+        return true;
     }
+
+    return false;
 }
 
-void SceneViewWidget::doActiveObjectPicking(const QPointF &point)
+bool SceneViewWidget::doActiveObjectPicking(const QPointF &point)
 {
     editorCam->updateCameraMatrices();
 
@@ -304,26 +295,19 @@ void SceneViewWidget::doActiveObjectPicking(const QPointF &point)
     QList<PickingResult> hitList;
     doScenePicking(scene->getRootNode(), segStart, segEnd, hitList);
 
-    if (hitList.size() == 0) {
-        // no hits, deselect last selected object in viewport and heirarchy
-        emit sceneNodeSelected(iris::SceneNodePtr());
-        return;
-    }
+    if (hitList.size() == 0) return false;
 
-    // if the size of the list is 1 we know it was the only one so return early
     if (hitList.size() == 1) {
-        viewportGizmo->lastSelectedNode = hitList[0].hitNode;
-        emit sceneNodeSelected(hitList[0].hitNode);
-        return;
+        hit = hitList.last().hitPoint;
+        return true;
     }
 
-    // sort by distance to camera then return the closest hit node
     qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
         return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
     });
 
-    viewportGizmo->lastSelectedNode = hitList.last().hitNode;
-    emit sceneNodeSelected(hitList.last().hitNode);
+    hit = hitList.last().hitPoint;
+    return true;
 }
 
 void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
@@ -362,23 +346,20 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
         }
 
         // temp ---------------------------------
-        auto translatePlaneNormal = QVector3D(0, 1, 0);
-        auto pos = editorCam->pos;
-        auto r = calculateMouseRay(e->localPos() * 1024.f);
+//        auto translatePlaneNormal = QVector3D(0, 0, 1);
+//        auto pos = editorCam->pos;
+//        auto r = calculateMouseRay(e->localPos() * 1024.f);
 
-        translatePlaneD = -QVector3D::dotProduct(translatePlaneNormal, finalHitPoint);
+//        translatePlaneD = -QVector3D::dotProduct(translatePlaneNormal, finalHitPoint);
 
-        QVector3D ray = (r - pos).normalized();
-        float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
+//        QVector3D ray = (r - pos).normalized();
+//        float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
 
         // temp temp
-        finalHitPoint = QVector3D(0.1, 0, 0.5);
-
-        if (nDotR != 0.0f) {
-            float distance = (QVector3D::dotProduct(translatePlaneNormal, pos) + translatePlaneD) / nDotR;
-            finalHitPoint = ray * distance + pos; // initial hit
-            qDebug() << finalHitPoint;
-        }
+//        if (nDotR != 0.0f) {
+//            float distance = (QVector3D::dotProduct(translatePlaneNormal, pos) + translatePlaneD) / nDotR;
+//            finalHitPoint = ray * distance + pos; // initial hit
+//        }
         // end temp -----------------------------
 
         // if we don't have a selected node prioritize object picking
@@ -430,7 +411,7 @@ void SceneViewWidget::focusOutEvent(QFocusEvent* event)
     KeyboardState::reset();
 }
 
-void SceneViewWidget::doObjectPicking(const QPointF& point)
+void SceneViewWidget::doObjectPicking(const QPointF& point, bool skipLights)
 {
     editorCam->updateCameraMatrices();
 
@@ -440,7 +421,9 @@ void SceneViewWidget::doObjectPicking(const QPointF& point)
 
     QList<PickingResult> hitList;
     doScenePicking(scene->getRootNode(), segStart, segEnd, hitList);
-    doLightPicking(segStart, segEnd, hitList);
+    if (!skipLights) {
+        doLightPicking(segStart, segEnd, hitList);
+    }
 
     if (hitList.size() == 0) {
         // no hits, deselect last selected object in viewport and heirarchy

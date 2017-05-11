@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include <QHash>
 
 #include "../irisgl/src/irisglfwd.h"
+#include "../irisgl/src/math/intersectionhelper.h"
 
 namespace iris
 {
@@ -125,9 +126,11 @@ public:
     float translatePlaneD;
     QVector3D finalHitPoint;
     QVector3D Offset;
-    iris::SceneNodePtr activeNode;
-    void updateRPI(QVector3D pos, QVector3D r);
-    void doActiveObjectPicking(const QPointF& point);
+    QVector3D hit;
+    iris::SceneNodePtr activeDragNode;
+    bool updateRPI(QVector3D pos, QVector3D r);
+    bool doActiveObjectPicking(const QPointF& point);
+    void doObjectPicking(const QPointF& point, bool skipLights = false);
 
 protected:
     void initializeGL();
@@ -139,7 +142,6 @@ protected:
     void focusOutEvent(QFocusEvent* event);
 
     // does raycasting from the mouse's screen position.
-    void doObjectPicking(const QPointF& point);
     void doGizmoPicking(const QPointF& point);
 
 private slots:
@@ -189,6 +191,7 @@ private:
     iris::FullScreenQuad* fsQuad;
 
     bool playScene;
+    iris::Plane sceneFloor;
     float animTime;
 
 signals:

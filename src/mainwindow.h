@@ -169,7 +169,7 @@ public slots:
     void addCylinder();
     void addEmpty();
     void addViewer();
-    void addMesh(const QString &path = "", bool ignore = false, QVector3D ppos = QVector3D());
+    void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
     void addTexturedPlane();
     void addViewPoint();
     void addDragPlaceholder();
