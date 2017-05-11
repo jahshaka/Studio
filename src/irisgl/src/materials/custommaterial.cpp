@@ -98,7 +98,10 @@ void CustomMaterial::end(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
 
 void CustomMaterial::generate(const QString &fileName)
 {
-    auto jahShader = loadShaderFromDisk(fileName);
+    auto fileInfo = QFileInfo(fileName);
+    auto shaderName = fileName;
+    if (fileInfo.suffix().isEmpty()) shaderName += ".shader";
+    auto jahShader = loadShaderFromDisk(shaderName);
 
     setName(jahShader["name"].toString());
 

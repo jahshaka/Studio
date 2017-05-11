@@ -417,7 +417,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 
     auto mat = nodeObj["material"].toObject();
     auto m = iris::CustomMaterial::create();
-    m->generate(IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS + mat["name"].toString() + ".json"));
+    m->generate(IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS + mat["name"].toString()));
 
     for (auto prop : m->properties) {
         if (mat.contains(prop->name)) {
