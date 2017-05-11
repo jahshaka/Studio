@@ -157,13 +157,7 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
         connect(menu, SIGNAL(triggered(QAction*)), this ,SLOT(addPropertyKey(QAction*)));
         ui->insertFrame->setMenu(menu);
 
-        // add list of animations to combo box
-        auto animList = QStringList();
-        for (auto anim : node->getAnimations()) {
-            animList.append(anim->getName());
-        }
-
-        ui->animList->addItems(animList);
+        refreshAnimationList();
     } else {
         ui->insertFrame->setMenu(new QMenu());
         animation.clear();
@@ -229,8 +223,10 @@ void AnimationWidget::refreshAnimationList()
 
     ui->animList->addItems(animList);
 
-    //set active anim to current naim
-    ui->animList->setCurrentIndex(animList.size()-1);
+    if (animList.size()>0) {
+        //set active anim to current anim
+        ui->animList->setCurrentIndex(animList.size()-1);
+    }
 }
 
 void AnimationWidget::removeProperty(QString propertyName)
