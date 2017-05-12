@@ -249,5 +249,5 @@ void main()
         finalColor = mix(finalColor,u_fogData.color.rgb,fogFactor);
     }
 
-    fragColor = vec4(finalColor, 1.0);
+    fragColor = vec4(finalColor, 0.65);
 }

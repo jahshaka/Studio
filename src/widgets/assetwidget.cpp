@@ -8,12 +8,15 @@
 
 #include <QDebug>
 #include <QDir>
+#include <QDrag>
 #include <QMenu>
+#include <QMimeData>
+#include <QMouseEvent>
 
 AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
     ui->setupUi(this);
-
+    ui->assetView->viewport()->installEventFilter(this);
     ui->assetTree->viewport()->installEventFilter(this);
     ui->assetTree->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -37,6 +40,14 @@ AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWid
     ui->assetView->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->assetView->setSelectionMode(QAbstractItemView::SingleSelection);
 
+    ui->assetView->setDragEnabled(true);
+    ui->assetView->setDragDropMode(QAbstractItemView::DragDrop);
+//    ui->assetView->viewport()->setAcceptDrops(true);
+//    ui->assetView->setDropIndicatorShown(true);
+//    ui->sceneTree->setDragDropMode(QAbstractItemView::InternalMove);
+//    ui->assetView->setFocusPolicy();
+//    ui->assetView->setMouseTracking(true);
+
     connect(ui->assetView,  SIGNAL(itemClicked(QListWidgetItem*)),
             this,           SLOT(assetViewClicked(QListWidgetItem*)));
 
@@ -52,6 +63,8 @@ AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWid
     // other
     connect(ui->searchBar,  SIGNAL(textChanged(QString)),
             this,           SLOT(searchAssets(QString)));
+
+    connect(ui->importBtn,  SIGNAL(pressed()), SLOT(importAssetB()));
 
     QDir d(Globals::project->getProjectFolder());
     walkFileSystem("", d.absolutePath());
@@ -121,6 +134,10 @@ void AssetWidget::walkFileSystem(QString folder, QString path)
                     auto thumb = ThumbnailManager::createThumbnail(":/app/icons/user-account-box.svg", 128, 128);
                     type = AssetType::Object;
                     pixmap = QPixmap::fromImage(*thumb->thumb);
+                } else if (file.suffix() == "shader") {
+                    auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                    type = AssetType::Shader;
+                    pixmap = QPixmap::fromImage(*thumb->thumb);
                 } else {
                     auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
                     type = AssetType::File;
@@ -150,7 +167,7 @@ void AssetWidget::walkFileSystem(QString folder, QString path)
 void AssetWidget::addItem(const QString &asset)
 {
     QFileInfo file(asset);
-    auto name = file.baseName();
+    auto name = file.fileName();
 
     QIcon icon;
     QListWidgetItem *item;
@@ -172,6 +189,9 @@ void AssetWidget::addItem(const QString &asset)
         } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
             type = AssetType::Object;
             item->setIcon(QIcon(":/app/icons/user-account-box.svg"));
+        } else if (file.suffix() == "shader") {
+            type = AssetType::Shader;
+            item->setIcon(QIcon(":/app/icons/google-drive-file.svg"));
         } else {
             type = AssetType::File;
             item->setIcon(QIcon(":/app/icons/google-drive-file.svg"));
@@ -200,7 +220,66 @@ void AssetWidget::updateAssetView(const QString &path)
 
 bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 {
+    if (watched == ui->assetView->viewport()) {
+        switch (event->type()) {
+            case QEvent::MouseButtonPress: {
+                auto evt = static_cast<QMouseEvent*>(event);
+                if (evt->button() == Qt::LeftButton) {
+                    startPos = evt->pos();
+                }
+
+                AssetWidget::mousePressEvent(evt);
+                break;
+            }
+
+            case QEvent::MouseMove: {
+                auto evt = static_cast<QMouseEvent*>(event);
+                if (evt->buttons() & Qt::LeftButton) {
+                    int distance = (evt->pos() - startPos).manhattanLength();
+                    if (distance >= QApplication::startDragDistance()) {
+                        auto item = ui->assetView->currentItem();
+                        if (item) {
+                            QDrag *drag = new QDrag(this);
+                            QMimeData *mimeData = new QMimeData;
+                            mimeData->setText(item->data(Qt::UserRole).toString() + '/' +
+                                              item->data(Qt::DisplayRole).toString());
+                            drag->setMimeData(mimeData);
+
+                            // only hide for object models
+//                            drag->setPixmap(QPixmap());
+                            drag->start(Qt::CopyAction | Qt::MoveAction);
+                        }
+                    }
+                }
+
+                AssetWidget::mouseMoveEvent(evt);
+                break;
+            }
+        }
+    }
+
     return QObject::eventFilter(watched, event);
+}
+
+void AssetWidget::dragEnterEvent(QDragEnterEvent *evt)
+{
+    if (evt->mimeData()->hasUrls()) {
+        evt->acceptProposedAction();
+    }
+}
+
+void AssetWidget::dropEvent(QDropEvent *evt)
+{
+    QList<QUrl> droppedUrls = evt->mimeData()->urls();
+    QStringList list;
+    for (auto url : droppedUrls) {
+        auto fileInfo = QFileInfo(url.toLocalFile());
+        list << fileInfo.absoluteFilePath();
+    }
+
+    importAsset(list);
+
+    evt->acceptProposedAction();
 }
 
 void AssetWidget::treeItemSelected(QTreeWidgetItem *item)
@@ -278,7 +357,7 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
         createMenu->addAction(action);
 
         action = new QAction(QIcon(), "Import Asset", this);
-        connect(action, SIGNAL(triggered()), this, SLOT(importAsset()));
+        connect(action, SIGNAL(triggered()), this, SLOT(importAssetB()));
         menu.addAction(action);
 
         // action = new QAction(QIcon(), "Open in Explorer", this);
@@ -405,10 +484,20 @@ void AssetWidget::createFolder()
     ui->assetView->editItem(item);
 }
 
-void AssetWidget::importAsset()
+void AssetWidget::importAssetB()
 {
-    QString dir = QApplication::applicationDirPath();
     auto fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
+    importAsset(fileNames);
+}
+
+void AssetWidget::importAsset(const QStringList &path)
+{
+    QStringList fileNames;
+    if (path.isEmpty()) {
+        fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
+    } else {
+        fileNames = path;
+    }
 
     if (!assetItem.selectedPath.isEmpty()) {
         foreach (const QFileInfo &file, fileNames) {
@@ -425,6 +514,10 @@ void AssetWidget::importAsset()
                 } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
                     auto thumb = ThumbnailManager::createThumbnail(":/app/icons/user-account-box.svg", 128, 128);
                     type = AssetType::Object;
+                    pixmap = QPixmap::fromImage(*thumb->thumb);
+                }  else if (file.suffix() == "shader") {
+                    auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                    type = AssetType::Shader;
                     pixmap = QPixmap::fromImage(*thumb->thumb);
                 } else {
                     auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);

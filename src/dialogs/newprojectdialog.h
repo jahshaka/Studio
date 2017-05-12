@@ -5,7 +5,7 @@
 
 namespace Ui {
     class NewProjectDialog;
-};
+}
 
 struct ProjectInfo {
     QString projectName;
@@ -25,8 +25,7 @@ public:
 protected slots:
     void setProjectPath();
     void createNewProject();
-
-    void confirm();
+    void confirmProjectCreation();
 
 private:
     Ui::NewProjectDialog *ui;

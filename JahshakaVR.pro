@@ -223,7 +223,8 @@ RESOURCES += \
     models.qrc \
     textures.qrc \
     modelpresets.qrc \
-    fonts.qrc
+    fonts.qrc \
+    skies.qrc
 
 win32: RC_ICONS = icon.ico
 
@@ -232,12 +233,14 @@ win32: RC_ICONS = icon.ico
     # http://stackoverflow.com/a/39234363
     moveassets.commands  = $(COPY_DIR) \"$$shell_path($$PWD/assets)\" \"$$shell_path($$OUT_PWD/assets)\"
     movecontent.commands = $(COPY_DIR) \"$$shell_path($$PWD/app)\"    \"$$shell_path($$OUT_PWD/app)\"
+    movescenes.commands  = $(COPY_DIR) \"$$shell_path($$PWD/scenes)\" \"$$shell_path($$OUT_PWD/scenes)\"
 
-    first.depends = $(first) moveassets movecontent
+    first.depends = $(first) moveassets movecontent movescenes
     export(first.depends)
     export(movecontent.commands)
     export(moveassets.commands)
-    QMAKE_EXTRA_TARGETS += first moveassets movecontent
+    export(movescenes.commands)
+    QMAKE_EXTRA_TARGETS += first moveassets movecontent movescenes
 }
 
 include(src/irisgl/irisgl.pri)

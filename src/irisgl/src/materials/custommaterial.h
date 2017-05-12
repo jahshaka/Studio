@@ -29,7 +29,7 @@ public:
     void begin(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
     void end(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
 
-    void generate(const QString&);
+    void generate(const QString&, bool project = false);
     void setTextureWithUniform(const QString&, const QString&);
     void setValue(const QString&, const QVariant&);
     void setBaseMaterialProperties(const QJsonObject&);
@@ -39,6 +39,7 @@ public:
     void purge();
 
     QString getName() const;
+    QString firstTextureSlot() const;
     int getCalculatedPropHeight() const;
 
     static CustomMaterialPtr create();

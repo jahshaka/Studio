@@ -73,6 +73,17 @@ void CustomMaterial::setUniformValues(Property *prop)
     }
 }
 
+QString CustomMaterial::firstTextureSlot() const
+{
+    for (auto prop : properties) {
+        if (prop->type == PropertyType::Texture) {
+            return prop->name;
+        }
+    }
+
+    return QString();
+}
+
 QJsonObject CustomMaterial::loadShaderFromDisk(const QString &filePath)
 {
     QFile file(filePath);
@@ -96,9 +107,12 @@ void CustomMaterial::end(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
     Material::end(gl, scene);
 }
 
-void CustomMaterial::generate(const QString &fileName)
+void CustomMaterial::generate(const QString &fileName, bool project)
 {
-    auto jahShader = loadShaderFromDisk(fileName);
+    auto fileInfo = QFileInfo(fileName);
+    auto shaderName = fileName;
+    if (fileInfo.suffix().isEmpty()) shaderName += ".shader";
+    auto jahShader = loadShaderFromDisk(shaderName);
 
     setName(jahShader["name"].toString());
 
@@ -107,8 +121,13 @@ void CustomMaterial::generate(const QString &fileName)
 
     setBaseMaterialProperties(jahShader);
 
-    if (!vertPath.startsWith(":")) vertPath = IrisUtils::getAbsoluteAssetPath(vertPath);
-    if (!fragPath.startsWith(":")) fragPath = IrisUtils::getAbsoluteAssetPath(fragPath);
+    if (!project) {
+        if (!vertPath.startsWith(":")) vertPath = IrisUtils::getAbsoluteAssetPath(vertPath);
+        if (!fragPath.startsWith(":")) fragPath = IrisUtils::getAbsoluteAssetPath(fragPath);
+    } else {
+        if (!vertPath.startsWith(":")) vertPath = QDir(fileInfo.absolutePath()).filePath(vertPath);
+        if (!fragPath.startsWith(":")) fragPath = QDir(fileInfo.absolutePath()).filePath(fragPath);
+    }
 
     createProgramFromShaderSource(vertPath, fragPath);
 

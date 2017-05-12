@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QMouseEvent>
 #include <QtMath>
 #include <QDebug>
+#include <QMimeData>
 #include <QElapsedTimer>
 
 #include "../irisgl/src/irisgl.h"
@@ -31,7 +32,6 @@ For more information see the LICENSE file
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/viewport.h"
 #include "../irisgl/src/graphics/utils/fullscreenquad.h"
-#include "../irisgl/src/math/intersectionhelper.h"
 #include "../irisgl/src/vr/vrmanager.h"
 #include "../irisgl/src/vr/vrdevice.h"
 
@@ -87,6 +87,12 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     elapsedTimer = new QElapsedTimer();
     playScene = false;
     animTime = 0.0f;
+
+    sceneFloor = iris::IntersectionHelper::computePlaneND(QVector3D(100,  0,  100),
+                                                          QVector3D(-100, 0,  100),
+                                                          QVector3D(0,    0, -100));
+
+    setAcceptDrops(true);
 }
 
 void SceneViewWidget::resetEditorCam()
@@ -238,32 +244,7 @@ void SceneViewWidget::resizeGL(int width, int height)
 
 bool SceneViewWidget::eventFilter(QObject *obj, QEvent *event)
 {
-    /*
-    QEvent::Type type = event->type();
-
-    if (type == QEvent::MouseMove) {
-        QMouseEvent* evt = static_cast<QMouseEvent*>(event);
-        mouseMoveEvent(evt);
-        return false;
-    } else if (type == QEvent::MouseButtonPress) {
-        QMouseEvent* evt = static_cast<QMouseEvent*>(event);
-        mousePressEvent(evt);
-        return false;
-    } else if (type == QEvent::MouseButtonRelease) {
-        QMouseEvent* evt = static_cast<QMouseEvent*>(event);
-        mouseReleaseEvent(evt);
-        return false;
-    } else if (type == QEvent::KeyPress) {
-        qDebug()<<"key press!";
-        return false;
-    } else if (type == QEvent::KeyRelease) {
-        qDebug()<<"key release!";
-        return false;
-    }
-    */
-
     return QWidget::eventFilter(obj, event);
-
 }
 
 QVector3D SceneViewWidget::calculateMouseRay(const QPointF& pos)
@@ -290,6 +271,43 @@ QVector3D SceneViewWidget::calculateMouseRay(const QPointF& pos)
     QVector3D final_ray_coords = QVector3D(world_coords);
 
     return final_ray_coords.normalized();
+}
+
+bool SceneViewWidget::updateRPI(QVector3D pos, QVector3D r) {
+    float t;
+    QVector3D q;
+    if (iris::IntersectionHelper::intersectSegmentPlane(pos, (r * 1024), sceneFloor, t, q)) {
+        Offset = q;
+        return true;
+    }
+
+    return false;
+}
+
+bool SceneViewWidget::doActiveObjectPicking(const QPointF &point)
+{
+    editorCam->updateCameraMatrices();
+
+    auto segStart = this->editorCam->pos;
+    auto rayDir = this->calculateMouseRay(point) * 1024;
+    auto segEnd = segStart + rayDir;
+
+    QList<PickingResult> hitList;
+    doScenePicking(scene->getRootNode(), segStart, segEnd, hitList);
+
+    if (hitList.size() == 0) return false;
+
+    if (hitList.size() == 1) {
+        hit = hitList.last().hitPoint;
+        return true;
+    }
+
+    qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
+        return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
+    });
+
+    hit = hitList.last().hitPoint;
+    return true;
 }
 
 void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
@@ -326,6 +344,23 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
             viewportGizmo->isGizmoHit(editorCam, e->localPos(), this->calculateMouseRay(e->localPos()));
             viewportGizmo->isHandleHit();
         }
+
+        // temp ---------------------------------
+//        auto translatePlaneNormal = QVector3D(0, 0, 1);
+//        auto pos = editorCam->pos;
+//        auto r = calculateMouseRay(e->localPos() * 1024.f);
+
+//        translatePlaneD = -QVector3D::dotProduct(translatePlaneNormal, finalHitPoint);
+
+//        QVector3D ray = (r - pos).normalized();
+//        float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
+
+        // temp temp
+//        if (nDotR != 0.0f) {
+//            float distance = (QVector3D::dotProduct(translatePlaneNormal, pos) + translatePlaneD) / nDotR;
+//            finalHitPoint = ray * distance + pos; // initial hit
+//        }
+        // end temp -----------------------------
 
         // if we don't have a selected node prioritize object picking
         if (selectedNode.isNull()) {
@@ -376,7 +411,7 @@ void SceneViewWidget::focusOutEvent(QFocusEvent* event)
     KeyboardState::reset();
 }
 
-void SceneViewWidget::doObjectPicking(const QPointF& point)
+void SceneViewWidget::doObjectPicking(const QPointF& point, bool skipLights)
 {
     editorCam->updateCameraMatrices();
 
@@ -386,7 +421,9 @@ void SceneViewWidget::doObjectPicking(const QPointF& point)
 
     QList<PickingResult> hitList;
     doScenePicking(scene->getRootNode(), segStart, segEnd, hitList);
-    doLightPicking(segStart, segEnd, hitList);
+    if (!skipLights) {
+        doLightPicking(segStart, segEnd, hitList);
+    }
 
     if (hitList.size() == 0) {
         // no hits, deselect last selected object in viewport and heirarchy
@@ -634,7 +671,6 @@ void SceneViewWidget::setGizmoScale()
     viewportGizmo->lastSelectedNode = selectedNode;
 }
 
-
 void SceneViewWidget::setEditorData(EditorData* data)
 {
     editorCam = data->editorCamera;
@@ -672,7 +708,9 @@ iris::ForwardRendererPtr SceneViewWidget::getRenderer() const
 
 void SceneViewWidget::saveFrameBuffer(QString filePath)
 {
+    auto vp = viewport;
     auto image = this->grabFramebuffer();
-    image.save(filePath);
+    auto image2 = image.scaled(512, 512, Qt::KeepAspectRatio);
+    image2.save(filePath);
 }
 

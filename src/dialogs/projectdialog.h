@@ -21,9 +21,8 @@ public:
 
     MainWindow *window;
 
-    QString loadSceneDelegate();
-
     void setSettingsManager(SettingsManager* settings);
+    QString loadProjectDelegate();
     SettingsManager* getSettingsManager();
     SettingsManager* settings;
 
