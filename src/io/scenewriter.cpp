@@ -39,7 +39,9 @@ For more information see the LICENSE file
 #include "assetiobase.h"
 
 
-void SceneWriter::writeScene(QString filePath,iris::ScenePtr scene, iris::PostProcessManagerPtr postMan,EditorData* editorData)
+void SceneWriter::writeScene(QString filePath,iris::ScenePtr scene,
+                             iris::PostProcessManagerPtr postMan,
+                             EditorData* editorData)
 {
     dir = AssetIOBase::getDirFromFileName(filePath);
     QFile file(filePath);

@@ -33,23 +33,21 @@ class SceneReader : public AssetIOBase
     QHash<QString,QList<iris::Mesh*>> meshes;
 
 public:
-    iris::ScenePtr readScene(QString filePath, iris::PostProcessManagerPtr postMan,EditorData** editorData = nullptr);
-
-    iris::ScenePtr readScene(QJsonObject& projectObj);
-
-    EditorData* readEditorData(QJsonObject& projectObj);
-
-    void readPostProcessData(QJsonObject& projectObj, iris::PostProcessManagerPtr postMan);
+    iris::ScenePtr readScene(QString filePath,
+                             iris::PostProcessManagerPtr postMan,
+                             EditorData **editorData = nullptr);
+    iris::ScenePtr readScene(QJsonObject &projectObj);
+    EditorData* readEditorData(QJsonObject &projectObj);
+    void readPostProcessData(QJsonObject &projectObj, iris::PostProcessManagerPtr postMan);
 
     /**
      * Creates scene node from json data
      * @param nodeObj
      * @return
      */
-    iris::SceneNodePtr readSceneNode(QJsonObject& nodeObj);
+    iris::SceneNodePtr readSceneNode(QJsonObject &nodeObj);
 
-
-    void readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr sceneNode);
+    void readAnimationData(QJsonObject &nodeObj, iris::SceneNodePtr sceneNode);
 
     /**
      * Reads pos, rot and scale properties from json object
@@ -57,25 +55,25 @@ public:
      * @param nodeObj
      * @param sceneNode
      */
-    void readSceneNodeTransform(QJsonObject& nodeObj,iris::SceneNodePtr sceneNode);
+    void readSceneNodeTransform(QJsonObject &nodeObj, iris::SceneNodePtr sceneNode);
 
     /**
      * Creates mesh using scene node data
      * @param nodeObj
      * @return
      */
-    iris::MeshNodePtr createMesh(QJsonObject& nodeObj);
+    iris::MeshNodePtr createMesh(QJsonObject &nodeObj);
 
     /**
      * Creates light from light node data
      * @param nodeObj
      * @return
      */
-    iris::LightNodePtr createLight(QJsonObject& nodeObj);
+    iris::LightNodePtr createLight(QJsonObject &nodeObj);
 
-    iris::ViewerNodePtr createViewer(QJsonObject& nodeObj);
+    iris::ViewerNodePtr createViewer(QJsonObject &nodeObj);
 
-    iris::ParticleSystemNodePtr createParticleSystem(QJsonObject& nodeObj);
+    iris::ParticleSystemNodePtr createParticleSystem(QJsonObject &nodeObj);
 
     iris::LightType getLightTypeFromName(QString lightType);
 
@@ -85,7 +83,7 @@ public:
      * @param nodeObj
      * @return
      */
-    iris::MaterialPtr readMaterial(QJsonObject& nodeObj);
+    iris::MaterialPtr readMaterial(QJsonObject &nodeObj);
 
     /**
      * Returns mesh from mesh file at index
@@ -94,7 +92,7 @@ public:
      * @param index
      * @return
      */
-    iris::Mesh* getMesh(QString filePath,int index);
+    iris::Mesh* getMesh(QString filePath, int index);
 };
 
 #endif // SCENEREADER_H

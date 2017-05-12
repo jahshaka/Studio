@@ -708,7 +708,9 @@ iris::ForwardRendererPtr SceneViewWidget::getRenderer() const
 
 void SceneViewWidget::saveFrameBuffer(QString filePath)
 {
+    auto vp = viewport;
     auto image = this->grabFramebuffer();
-    image.save(filePath);
+    auto image2 = image.scaled(512, 512, Qt::KeepAspectRatio);
+    image2.save(filePath);
 }
 

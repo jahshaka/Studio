@@ -25,16 +25,13 @@ public:
 public:
     Project();
     void setFilePath(QString filePath);
+    void setProjectPath(const QString&);
     bool isSaved();
 
     QString getFilePath();
     QString getFileName();
     QString getProjectName();
     QString getProjectFolder();
-
-    void updateProjectPath(QString p) {
-        this->folderPath = p;
-    }
 
     static Project* createNew();
 };

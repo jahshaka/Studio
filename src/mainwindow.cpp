@@ -636,27 +636,30 @@ void MainWindow::stopAnimWidget()
 
 void MainWindow::saveScene()
 {
-    if(Globals::project->isSaved())
-    {
+    if (Globals::project->isSaved()) {
         auto filename = Globals::project->getFilePath();
         auto writer = new SceneWriter();
-        writer->writeScene(filename, scene, sceneView->getRenderer()->getPostProcessManager(), sceneView->getEditorData());
-
-        settings->addRecentlyOpenedScene(filename);
-
+        writer->writeScene(filename,
+                           scene,
+                           sceneView->getRenderer()->getPostProcessManager(),
+                           sceneView->getEditorData());
+        // settings->addRecentlyOpenedScene(filename);
+        // sceneView->saveFrameBuffer("viewport.jpg");
         delete writer;
     }
-    else
-    {
-        auto filename = QFileDialog::getSaveFileName(this,"Save Scene","","Jashaka Scene (*.jah)");
+
+    else {
+        auto filename = QFileDialog::getSaveFileName(this, "Save Scene", "", "Jashaka Scene (*.jah)");
         auto writer = new SceneWriter();
-        writer->writeScene(filename, scene, sceneView->getRenderer()->getPostProcessManager(), sceneView->getEditorData());
+        writer->writeScene(filename,
+                           scene,
+                           sceneView->getRenderer()->getPostProcessManager(),
+                           sceneView->getEditorData());
 
         Globals::project->setFilePath(filename);
         this->setProjectTitle(Globals::project->getProjectName());
-
-        settings->addRecentlyOpenedScene(filename);
-
+        // settings->addRecentlyOpenedScene(filename);
+        // sceneView->saveFrameBuffer("viewport.jpg");
         delete writer;
     }
 
@@ -717,15 +720,12 @@ void MainWindow::openProject(QString filename, bool startupLoad)
 
     postProcessWidget->setPostProcessMgr(postMan);
 
-    if(editorData != nullptr)
+    if (editorData != nullptr) {
         sceneView->setEditorData(editorData);
+    }
 
-    /// TODO - add option to overwrite default scene or go back to factory default (strtup.j)
-//    if (!startupLoad) {
-        Globals::project->setFilePath(filename);
-        this->setProjectTitle(Globals::project->getProjectName());
-        settings->addRecentlyOpenedScene(filename);
-//    }
+    Globals::project->setFilePath(filename);
+    this->setProjectTitle(Globals::project->getProjectName());
 
     delete reader;
 }

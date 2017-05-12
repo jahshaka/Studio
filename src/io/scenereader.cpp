@@ -54,7 +54,9 @@ For more information see the LICENSE file
 
 #include "../constants.h"
 
-iris::ScenePtr SceneReader::readScene(QString filePath, iris::PostProcessManagerPtr postMan, EditorData** editorData)
+iris::ScenePtr SceneReader::readScene(QString filePath,
+                                      iris::PostProcessManagerPtr postMan,
+                                      EditorData **editorData)
 {
     dir = AssetIOBase::getDirFromFileName(filePath);
     QFile file(filePath);
