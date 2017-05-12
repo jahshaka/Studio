@@ -223,7 +223,8 @@ RESOURCES += \
     models.qrc \
     textures.qrc \
     modelpresets.qrc \
-    fonts.qrc
+    fonts.qrc \
+    skies.qrc
 
 win32: RC_ICONS = icon.ico
 

@@ -68,7 +68,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj,iris::ScenePtr scene)
 
     //scene properties
     if (!!scene->skyTexture) {
-        sceneObj["skyTexture"] = /*this->getRelativePath(*/scene->skyTexture->getSource();//);
+        sceneObj["skyTexture"] = getRelativePath(scene->skyTexture->getSource());//);
     } else {
         sceneObj["skyTexture"] = "";
     }
