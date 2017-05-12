@@ -11,6 +11,7 @@
 #include <QDrag>
 #include <QMenu>
 #include <QMimeData>
+#include <QMouseEvent>
 
 AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {

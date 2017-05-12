@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include <QMimeData>
 #include <QDrag>
 #include <QStandardItemModel>
+#include <QDragEnterEvent>
 
 TexturePickerWidget::TexturePickerWidget(QWidget* parent) :
     BaseWidget(parent),
