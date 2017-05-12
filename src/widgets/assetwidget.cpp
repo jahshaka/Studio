@@ -133,6 +133,10 @@ void AssetWidget::walkFileSystem(QString folder, QString path)
                     auto thumb = ThumbnailManager::createThumbnail(":/app/icons/user-account-box.svg", 128, 128);
                     type = AssetType::Object;
                     pixmap = QPixmap::fromImage(*thumb->thumb);
+                } else if (file.suffix() == "shader") {
+                    auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                    type = AssetType::Shader;
+                    pixmap = QPixmap::fromImage(*thumb->thumb);
                 } else {
                     auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
                     type = AssetType::File;
@@ -184,6 +188,9 @@ void AssetWidget::addItem(const QString &asset)
         } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
             type = AssetType::Object;
             item->setIcon(QIcon(":/app/icons/user-account-box.svg"));
+        } else if (file.suffix() == "shader") {
+            type = AssetType::Shader;
+            item->setIcon(QIcon(":/app/icons/google-drive-file.svg"));
         } else {
             type = AssetType::File;
             item->setIcon(QIcon(":/app/icons/google-drive-file.svg"));
@@ -506,6 +513,10 @@ void AssetWidget::importAsset(const QStringList &path)
                 } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
                     auto thumb = ThumbnailManager::createThumbnail(":/app/icons/user-account-box.svg", 128, 128);
                     type = AssetType::Object;
+                    pixmap = QPixmap::fromImage(*thumb->thumb);
+                }  else if (file.suffix() == "shader") {
+                    auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                    type = AssetType::Shader;
                     pixmap = QPixmap::fromImage(*thumb->thumb);
                 } else {
                     auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);

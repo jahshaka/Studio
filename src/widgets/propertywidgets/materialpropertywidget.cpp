@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "../propertywidget.h"
 
 #include "../../constants.h"
+#include "../../io/assetiobase.h"
 
 #include "../../irisgl/src/graphics/texture2d.h"
 #include "../../irisgl/src/scenegraph/meshnode.h"
@@ -40,7 +41,18 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         // TODO - properly update only when requested
         auto shaderName = Constants::SHADER_DEFS + material->getName();
-        material->generate(IrisUtils::getAbsoluteAssetPath(shaderName));
+        auto shaderFile = QFileInfo(shaderName);
+        if (shaderFile.exists()) {
+            material->generate(IrisUtils::getAbsoluteAssetPath(shaderName));
+        } else {
+            for (auto asset : AssetManager::assets) {
+                if (asset->type == AssetType::Shader) {
+                    if (asset->fileName == material->getName() + ".shader") {
+                        material->generate(asset->path, true);
+                    }
+                }
+            }
+        }
         setWidgetProperties();
     }
 
@@ -78,6 +90,12 @@ void MaterialPropertyWidget::setupShaderSelector()
     QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS));
     for (auto shaderName : dir.entryList(QDir::Files)) {
         materialSelector->addItem(QFileInfo(shaderName).baseName());
+    }
+
+    for (auto asset : AssetManager::assets) {
+        if (asset->type == AssetType::Shader) {
+            materialSelector->addItem(QFileInfo(asset->fileName).baseName());
+        }
     }
 
     materialSelector->setCurrentItem(material->getName());

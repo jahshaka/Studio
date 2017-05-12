@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 
+#include "../../io/assetmanager.h"
 #include "../accordianbladewidget.h"
 #include "../../irisgl/src/graphics/material.h"
 #include "../../irisgl/src/materials/propertytype.h"
