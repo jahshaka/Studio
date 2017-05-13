@@ -21,6 +21,7 @@ For more information see the LICENSE file
 
 #include "materialreader.hpp"
 #include "scenereader.h"
+#include "assetmanager.h"
 
 #include "../constants.h"
 
@@ -419,7 +420,23 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 
     auto mat = nodeObj["material"].toObject();
     auto m = iris::CustomMaterial::create();
-    m->generate(IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS + mat["name"].toString()));
+    auto shaderName = Constants::SHADER_DEFS + mat["name"].toString() + ".shader";
+    auto shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(shaderName));
+    m->setName(mat["name"].toString());
+
+
+    if (shaderFile.exists()) {
+        m->generate(shaderFile.absoluteFilePath());
+    } else {
+        for (auto asset : AssetManager::assets) {
+            if (asset->type == AssetType::Shader) {
+                if (asset->fileName == mat["name"].toString() + ".shader") {
+                    qDebug() << asset->path;
+                    m->generate(asset->path, true);
+                }
+            }
+        }
+    }
 
     for (auto prop : m->properties) {
         if (mat.contains(prop->name)) {
