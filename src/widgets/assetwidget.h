@@ -39,6 +39,8 @@ public:
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
+    void dragEnterEvent(QDragEnterEvent*);
+    void dropEvent(QDropEvent*);
 
 protected slots:
     void treeItemSelected(QTreeWidgetItem* item);
@@ -61,11 +63,13 @@ protected slots:
     void deleteViewFolder();
     void openAtFolder();
     void createFolder();
-    void importAsset();
+    void importAssetB();
+    void importAsset(const QStringList &path);
 
 private:
     Ui::AssetWidget *ui;
     AssetItem assetItem;
+    QPoint startPos;
 };
 
 #endif // ASSETWIDGET_H

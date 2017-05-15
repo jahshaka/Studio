@@ -21,7 +21,7 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui
     }
 
     connect(ui->browseProject, SIGNAL(pressed()), SLOT(setProjectPath()));
-    connect(ui->createProject, SIGNAL(pressed()), SLOT(confirm()));
+    connect(ui->createProject, SIGNAL(pressed()), SLOT(confirmProjectCreation()));
 }
 
 NewProjectDialog::~NewProjectDialog()
@@ -37,7 +37,6 @@ ProjectInfo NewProjectDialog::getProjectInfo()
 
 void NewProjectDialog::setProjectPath()
 {
-//    QString dir = QApplication::applicationDirPath() + "/scenes/";
     QFileDialog projectDir;
     projectPath = projectDir.getExistingDirectory();
     ui->projectPath->setText(projectPath);
@@ -48,7 +47,7 @@ void NewProjectDialog::createNewProject()
     projectName = ui->projectName->text();
 }
 
-void NewProjectDialog::confirm()
+void NewProjectDialog::confirmProjectCreation()
 {
     createNewProject();
 

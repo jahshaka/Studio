@@ -7,6 +7,8 @@ in vec3 v_worldPos;
 in vec3 v_normal;
 uniform vec3 u_eyePos;
 
+out vec4 fragColor;
+
 vec2 matcap(vec3 eye, vec3 normal) {
     vec3 reflected = reflect(eye, normal);
     float m = 2.8284271247461903 * sqrt( reflected.z+1.0 );
@@ -23,8 +25,8 @@ void main() {
     vec3 base = texture2D( u_matTexture, N ).rgb;
 
     if (u_useMatTexture) {
-        gl_FragColor = vec4(base, 1.0);
+        fragColor = vec4(base, 1.0);
     } else {
-        gl_FragColor = vec4(1, 1, 0, 0.1);
+        fragColor = vec4(1, 1, 0, 0.1);
     }
 }

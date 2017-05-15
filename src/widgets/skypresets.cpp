@@ -18,6 +18,8 @@ For more information see the LICENSE file
 #include "../irisgl/src/core/irisutils.h"
 #include "../irisgl/src/graphics/texture2d.h"
 
+#include <QResource>
+
 SkyPresets::SkyPresets(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::SkyPresets)
@@ -39,15 +41,15 @@ SkyPresets::SkyPresets(QWidget *parent) :
 //    addSky(":/app/content/skies/vp_sky_v2_033.jpg", "Sky 3");
 //    addSky(":/app/content/skies/vp_sky_v2_002_test.jpg", "Fading Sky");
 
-    QString cove = IrisUtils::getAbsoluteAssetPath("app/content/textures/front.jpg");
-    QString dessert = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/ame_desert/front.png");
-    QString lake = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/yokohama/front.jpg");
-    QString field = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/field/front.jpg");
-    QString creek = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/creek/front.jpg");
+    QString cove = ":/app/contente/skies/alternative/cove/front.jpg";
+    QString dessert = ":/app/content/skies/alternative/ame_desert/front.png";
+    QString lake = ":/app/content/skies/alternative/yokohama/front.jpg";
+    QString field = ":/app/content/skies/alternative/field/front.jpg";
+    QString creek = ":/app/content/skies/alternative/creek/front.jpg";
 
 //    alternativeSkies.append(x1);
     addCubeSky(cove, "Cove");
-    addCubeSky(dessert, "Dessert");
+    addCubeSky(dessert, "Hamarikyu");
     addCubeSky(lake, "Bay");
     addCubeSky(field, "Field");
     addCubeSky(creek, "Creek");

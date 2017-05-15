@@ -177,7 +177,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
             auto dir = QFileInfo(filePath).absoluteDir().absolutePath();
 
             auto m2 = iris::CustomMaterial::create();
-            m2->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
+            m2->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
             if (!!m2) {
                 meshNode->setMaterial(m2);
             } else {
@@ -255,7 +255,7 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath)
         node->meshIndex = 0;
 
         auto m = iris::CustomMaterial::create();
-        m->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
+        m->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
         if (!!m) {
             node->setMaterial(m);
         }

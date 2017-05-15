@@ -31,6 +31,7 @@ private slots:
     void on_pushButton_clicked();
 
     void changeMap(QListWidgetItem*);
+    void changeMap(const QString&);
 
 public:
     int index;
@@ -45,6 +46,9 @@ public:
     bool eventFilter(QObject *object, QEvent *ev);
     void setTexture(QString path);
     QString getTexturePath();
+
+    void dragEnterEvent(QDragEnterEvent*);
+    void dropEvent(QDropEvent*);
 
 signals:
     void valueChanged( QString value);

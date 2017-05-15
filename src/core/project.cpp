@@ -23,10 +23,15 @@ void Project::setFilePath(QString filePath)
     QFileInfo info(filePath);
 
     this->filePath = filePath;
-    folderPath = info.absolutePath();
+    // folderPath = info.absolutePath();
     projectName = info.baseName();
     fileName = info.completeBaseName();
     _saved = true;
+}
+
+void Project::setProjectPath(const QString &path)
+{
+    this->folderPath = path;
 }
 
 bool Project::isSaved()

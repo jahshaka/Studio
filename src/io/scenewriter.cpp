@@ -40,7 +40,9 @@ For more information see the LICENSE file
 #include "assetiobase.h"
 
 
-void SceneWriter::writeScene(QString filePath,iris::ScenePtr scene, iris::PostProcessManagerPtr postMan,EditorData* editorData)
+void SceneWriter::writeScene(QString filePath,iris::ScenePtr scene,
+                             iris::PostProcessManagerPtr postMan,
+                             EditorData* editorData)
 {
     dir = AssetIOBase::getDirFromFileName(filePath);
     QFile file(filePath);
@@ -67,7 +69,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj,iris::ScenePtr scene)
 
     //scene properties
     if (!!scene->skyTexture) {
-        sceneObj["skyTexture"] = /*this->getRelativePath(*/scene->skyTexture->getSource();//);
+        sceneObj["skyTexture"] = getRelativePath(scene->skyTexture->getSource());//);
     } else {
         sceneObj["skyTexture"] = "";
     }
@@ -79,6 +81,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj,iris::ScenePtr scene)
     sceneObj["fogStart"] = scene->fogStart;
     sceneObj["fogEnd"] = scene->fogEnd;
     sceneObj["fogEnabled"] = scene->fogEnabled;
+    sceneObj["shadowEnabled"] = scene->shadowEnabled;
 
 
     QJsonObject rootNodeObj;
