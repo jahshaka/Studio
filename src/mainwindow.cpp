@@ -205,9 +205,9 @@ MainWindow::MainWindow(QWidget *parent) :
     //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
     ui->ToolBar->addWidget(vrButton);
 
-    ui->AnimationDock->hide();
-//    ui->PresetsDock->hide();
-
+//    ui->AnimationDock->hide();
+    ui->assetWidget->hide();
+    ui->PresetsDock->hide();
 }
 
 void MainWindow::setupVrUi()

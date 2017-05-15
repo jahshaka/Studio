@@ -15,12 +15,51 @@
   </property>
   <property name="styleSheet">
    <string notr="true">QPushButton {
-	border: 0;
-	background-color: rgba(255, 255, 255, 0);
+    background-color: #4D4D4D;
+    color: #DEDEDE;
+    border: 0;
+	padding: 2px 8px;
 }
 
 QPushButton:hover {
-	background-color: rgb(30, 144, 255);
+    background-color: #555;
+}
+
+QPushButton:pressed {
+    background-color: #444;
+}
+
+#widget_11 &gt; QPushButton {
+	padding: 4px;
+	background: transparent;
+}
+
+#insertFrame {
+	padding-right: 4px;
+}
+/*
+#insertFrame {
+    background-color: #4D4D4D;
+    color: #DEDEDE;
+    border: 0;
+	padding: 2px 8px;
+}
+
+#insertFrame:hover {
+    background-color: #555;
+}
+
+#insertFrame:pressed {
+    background-color: #444;
+}
+*/
+
+#widget_11 &gt; #stopBtn {
+	height: 10px;
+	width: 12px;
+	margin-left: -2px;
+	margin-right: 5px;
+	background: transparent;
 }
 
 QWidget#controls &gt; QToolButton {
@@ -54,12 +93,18 @@ QWidget#controls &gt; QToolButton:hover {
    </property>
    <item row="0" column="0">
     <widget class="QSplitter" name="splitter">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
      <widget class="QWidget" name="widget" native="true">
       <property name="sizePolicy">
-       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+       <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
         <horstretch>0</horstretch>
         <verstretch>0</verstretch>
        </sizepolicy>
@@ -107,6 +152,9 @@ QWidget#controls &gt; QToolButton:hover {
           <item>
            <widget class="QWidget" name="widget_6" native="true">
             <layout class="QHBoxLayout" name="horizontalLayout">
+             <property name="bottomMargin">
+              <number>11</number>
+             </property>
              <item>
               <widget class="QComboBox" name="animList">
                <property name="sizePolicy">
@@ -126,14 +174,14 @@ QWidget#controls &gt; QToolButton:hover {
              <item>
               <widget class="QPushButton" name="deleteAnimBtn">
                <property name="text">
-                <string>X</string>
+                <string>Delete</string>
                </property>
               </widget>
              </item>
              <item>
-              <widget class="QToolButton" name="addAnimBtn">
+              <widget class="QPushButton" name="addAnimBtn">
                <property name="text">
-                <string>+</string>
+                <string>New</string>
                </property>
               </widget>
              </item>
@@ -143,6 +191,12 @@ QWidget#controls &gt; QToolButton:hover {
           <item>
            <widget class="QWidget" name="widget_5" native="true">
             <layout class="QHBoxLayout" name="horizontalLayout_2">
+             <property name="topMargin">
+              <number>9</number>
+             </property>
+             <property name="bottomMargin">
+              <number>7</number>
+             </property>
              <item>
               <widget class="QLabel" name="sceneNodeName">
                <property name="sizePolicy">
@@ -159,7 +213,7 @@ QWidget#controls &gt; QToolButton:hover {
              <item>
               <widget class="QToolButton" name="insertFrame">
                <property name="text">
-                <string>Insert Keyframe</string>
+                <string>Insert Keyframe  </string>
                </property>
                <property name="popupMode">
                 <enum>QToolButton::InstantPopup</enum>
@@ -189,8 +243,8 @@ QWidget#controls &gt; QToolButton:hover {
      </widget>
      <widget class="QWidget" name="widget_2" native="true">
       <property name="sizePolicy">
-       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-        <horstretch>2</horstretch>
+       <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+        <horstretch>0</horstretch>
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
@@ -235,22 +289,22 @@ QWidget#controls &gt; QToolButton:hover {
               <number>6</number>
              </property>
              <property name="leftMargin">
-              <number>9</number>
+              <number>0</number>
              </property>
              <property name="topMargin">
-              <number>3</number>
+              <number>0</number>
              </property>
              <property name="rightMargin">
-              <number>9</number>
+              <number>0</number>
              </property>
              <property name="bottomMargin">
-              <number>3</number>
+              <number>0</number>
              </property>
              <item>
               <widget class="QWidget" name="widget_11" native="true">
                <property name="maximumSize">
                 <size>
-                 <width>300</width>
+                 <width>16777215</width>
                  <height>16777215</height>
                 </size>
                </property>
