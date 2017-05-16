@@ -98,7 +98,8 @@ SOURCES += src/main.cpp\
     src/widgets/keyframelabel.cpp \
     src/uimanager.cpp \
     src/widgets/keyframecurvewidget.cpp \
-    src/dialogs/getnamedialog.cpp
+    src/dialogs/getnamedialog.cpp \
+    src/widgets/createanimationwidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -187,7 +188,8 @@ HEADERS  += src/mainwindow.h \
     src/uimanager.h \
     src/widgets/keyframecurvewidget.h \
     src/widgets/animationwidgetdata.h \
-    src/dialogs/getnamedialog.h
+    src/dialogs/getnamedialog.h \
+    src/widgets/createanimationwidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -225,7 +227,8 @@ FORMS    += \
     src/widgets/assetpickerwidget.ui \
     src/widgets/keyframelabel.ui \
     src/widgets/keyframecurvewidget.ui \
-    src/dialogs/getnamedialog.ui
+    src/dialogs/getnamedialog.ui \
+    src/widgets/createanimationwidget.ui
 
 RESOURCES += \
     shaders.qrc \

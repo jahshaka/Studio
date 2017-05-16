@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "keyframewidget.h"
 #include "keyframecurvewidget.h"
 #include "animationwidgetdata.h"
+#include "createanimationwidget.h"
 #include "../dialogs/getnamedialog.h"
 
 
@@ -55,6 +56,11 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     curveWidget->setLabelWidget(ui->keylabelView);
     curveWidget->setAnimWidgetData(animWidgetData);
     curveWidget->hide();
+
+    createAnimWidget = new CreateAnimationWidget();
+    connect(createAnimWidget->getCreateButton(),SIGNAL(clicked(bool)), this, SLOT(addAnimation()));
+    createAnimWidget->hide();
+    this->layout()->addWidget(createAnimWidget);
 
     ui->timeline->setAnimWidgetData(animWidgetData);
 
@@ -108,6 +114,10 @@ void AnimationWidget::setScene(iris::ScenePtr scene)
 
 void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
 {
+    // the root node cannot have an animation, so its treated as null
+    if (!!node && node->isRootNode())
+        node = iris::SceneNodePtr();
+
     keyFrameWidget->setSceneNode(node);
     //ui->timeline->setSceneNode(node);
     ui->keylabelView->setSceneNode(node);
@@ -121,47 +131,69 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
         scene = node->scene;
         ui->sceneNodeName->setText(node->name);
 
-        nodeProperties = node->getProperties();
+        if(node->getAnimations().count() == 0) {
+            showCreateAnimWidget();
+            updateCreationWidgetMessage(node);
+        }
+        else {
+            nodeProperties = node->getProperties();
+            buildPropertiesMenu();
 
-        // rebuild menu
-        auto menu = new QMenu();
-        int index = 0;
-        for (auto prop : nodeProperties) {
-            auto action = new QAction();
-            action->setText(prop->name);
-            action->setData(index++);
-
-            menu->addAction(action);
+            animation = node->getAnimation();
+            refreshAnimationList();
+            showKeyFrameWidget();
+            hideCreateAnimWidget();
         }
 
-        // add materials
-        if (node->sceneNodeType == iris::SceneNodeType::Mesh ) {
-            int index = 0;
-            auto mat = node.staticCast<iris::MeshNode>()->getMaterial().staticCast<iris::CustomMaterial>();
-            auto props = mat->getProperties();
-
-            auto matMenu = new QMenu("Material");
-
-            for(auto prop : props) {
-                auto action = new QAction();
-                action->setText(prop->displayName);
-                action->setData(index++);
-
-                matMenu->addAction(action);
-            }
-
-            menu->addMenu(matMenu);
-        }
-
-        animation = node->getAnimation();
-        connect(menu, SIGNAL(triggered(QAction*)), this ,SLOT(addPropertyKey(QAction*)));
-        ui->insertFrame->setMenu(menu);
-
-        refreshAnimationList();
     } else {
         ui->insertFrame->setMenu(new QMenu());
         animation.clear();
+
+        showCreateAnimWidget();
+        updateCreationWidgetMessage(node);
     }
+}
+
+void AnimationWidget::buildPropertiesMenu()
+{
+    // rebuild menu
+    auto menu = new QMenu();
+    int index = 0;
+    for (auto prop : nodeProperties) {
+        auto action = new QAction();
+        action->setText(prop->name);
+        action->setData(index++);
+
+        menu->addAction(action);
+    }
+
+    // todo: add materials
+//    if (node->sceneNodeType == iris::SceneNodeType::Mesh ) {
+//        int index = 0;
+//        auto mat = node.staticCast<iris::MeshNode>()->getMaterial().staticCast<iris::CustomMaterial>();
+//        auto props = mat->getProperties();
+
+//        auto matMenu = new QMenu("Material");
+
+//        for(auto prop : props) {
+//            auto action = new QAction();
+//            action->setText(prop->displayName);
+//            action->setData(index++);
+
+//            matMenu->addAction(action);
+//        }
+
+//        menu->addMenu(matMenu);
+//    }
+
+
+    connect(menu, SIGNAL(triggered(QAction*)), this ,SLOT(addPropertyKey(QAction*)));
+    ui->insertFrame->setMenu(menu);
+}
+
+void AnimationWidget::clearPropertiesMenu()
+{
+    ui->insertFrame->setMenu(nullptr);
 }
 
 void AnimationWidget::updateAnim()
@@ -229,6 +261,11 @@ void AnimationWidget::refreshAnimationList()
     }
 }
 
+void AnimationWidget::clearAnimationList()
+{
+    ui->animList->clear();
+}
+
 void AnimationWidget::removeProperty(QString propertyName)
 {
     if (!!node) {
@@ -283,7 +320,8 @@ void AnimationWidget::addAnimation()
 
     GetNameDialog dialog;
     dialog.setWindowTitle("New Animation Name");
-    dialog.exec();
+    if (dialog.exec() == QDialog::Rejected)
+        return;
 
     auto name = dialog.getName();
     animation = iris::Animation::create(name);
@@ -297,6 +335,10 @@ void AnimationWidget::addAnimation()
     this->repaintViews();
     ui->keylabelView->setActiveAnimation(animation);
     this->refreshAnimationList();
+    this->buildPropertiesMenu();
+
+    //hide Create Animation widget if it's showing
+    this->hideCreateAnimWidget();
 }
 
 void AnimationWidget::addPropertyKey(QAction *action)
@@ -387,6 +429,28 @@ void AnimationWidget::showCurveWidget()
 {
     keyFrameWidget->hide();
     curveWidget->show();
+}
+
+void AnimationWidget::hideCreateAnimWidget()
+{
+    createAnimWidget->hide();
+    ui->splitter->show();// main splitter
+}
+
+void AnimationWidget::showCreateAnimWidget()
+{
+    createAnimWidget->show();
+    ui->splitter->hide();// main splitter
+}
+
+void AnimationWidget::updateCreationWidgetMessage(iris::SceneNodePtr node)
+{
+    if (!node) {
+        createAnimWidget->hideButton();
+    } else {
+        createAnimWidget->showButton();
+        createAnimWidget->setButtonText("Create Animation for "+node->getName());
+    }
 }
 
 void AnimationWidget::animationChanged(QString name)

@@ -29,6 +29,7 @@ class QTreeWidgetItem;
 class KeyFrameWidget;
 class KeyFrameCurveWidget;
 class AnimationWidgetData;
+class CreateAnimationWidget;
 
 namespace Ui
 {
@@ -51,6 +52,7 @@ class AnimationWidget : public QWidget
     TimelineWidget* mainTimeline;
     KeyFrameWidget* keyFrameWidget;
     KeyFrameCurveWidget* curveWidget;
+    CreateAnimationWidget* createAnimWidget;
 
     QMenu* addMenu;
     QMenu* deleteMenu;
@@ -66,6 +68,8 @@ public:
 
     void setScene(iris::ScenePtr scene);
     void setSceneNode(iris::SceneNodePtr node);
+    void buildPropertiesMenu();
+    void clearPropertiesMenu();
 
     void setMainTimelineWidget(TimelineWidget* tl)
     {
@@ -79,6 +83,7 @@ public:
 
     void repaintViews();
     void refreshAnimationList();
+    void clearAnimationList();
 
     //startRange and endRange are in seconds
     void setTimeViewRange(float startRange,float endRange);
@@ -110,6 +115,10 @@ private slots:
 
     void showKeyFrameWidget();
     void showCurveWidget();
+
+    void hideCreateAnimWidget();
+    void showCreateAnimWidget();
+    void updateCreationWidgetMessage(iris::SceneNodePtr node);
 
     void animationChanged(QString name);
 
