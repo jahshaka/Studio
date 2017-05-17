@@ -173,14 +173,18 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sc
 void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePtr sceneNode)
 {
     auto activeAnim = sceneNode->getAnimation();
-    if (!!activeAnim)
-        sceneNodeObj["activeAnimation"] = activeAnim->getName();
 
-
-    // todo: add all animations
     auto animations = sceneNode->getAnimations();
     QJsonArray animListObj;
 
+    if (!!activeAnim)
+        sceneNodeObj["activeAnimation"] = animations.indexOf(activeAnim);
+    else
+        sceneNodeObj["activeAnimation"] = -1;
+        //sceneNodeObj["activeAnimation"] = activeAnim->getName();
+
+
+    // todo: add all animations
     for (auto anim : animations) {
         QJsonObject animObj;
         animObj["name"] = anim->getName();

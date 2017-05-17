@@ -238,7 +238,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr sceneNode)
 {
     auto animList = nodeObj["animations"].toArray();
-    auto activeAnim = nodeObj["activeAnimation"].toString();
+    auto activeAnimIndex = nodeObj["activeAnimation"].toInt(-1);
 
     for (auto animVal : animList) {
         auto animObj = animVal.toObject();
@@ -296,10 +296,12 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
         }
 
         sceneNode->addAnimation(animation);
-        if (animation->getName() == activeAnim)
-            sceneNode->setAnimation(animation);
+        //if (animation->getName() == activeAnim)
+        //    sceneNode->setAnimation(animation);
     }
-
+    if (activeAnimIndex != -1) {
+        sceneNode->setAnimation(sceneNode->getAnimations()[activeAnimIndex]);
+    }
 }
 
 /**
