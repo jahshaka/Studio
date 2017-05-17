@@ -37,7 +37,7 @@ typedef QSharedPointer<Animation> AnimationPtr;
 class SceneNode : public QEnableSharedFromThis<SceneNode>
 {
 protected:
-    QMap<QString, AnimationPtr> animations;
+    QList<AnimationPtr> animations;
     AnimationPtr animation;
 
 public:
@@ -89,6 +89,8 @@ public:
     void setAnimation(AnimationPtr anim);
     AnimationPtr getAnimation();
     bool hasActiveAnimation();
+    void deleteAnimation(int index);
+    void deleteAnimation(AnimationPtr anim);
 
     virtual QList<Property*> getProperties();
     virtual QVariant getPropertyValue(QString valueName);

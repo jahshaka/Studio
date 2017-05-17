@@ -15,7 +15,7 @@ public:
     explicit GetNameDialog(QWidget *parent = 0);
     ~GetNameDialog();
 
-    void getName(QString name);
+    void setName(QString name);
     QString getName();
 
 private:

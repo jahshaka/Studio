@@ -43,6 +43,7 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     ui->setupUi(this);
 
     connect(ui->addAnimBtn,SIGNAL(clicked(bool)), this, SLOT(addAnimation()));
+    connect(ui->deleteAnimBtn,SIGNAL(clicked(bool)), this, SLOT(deleteAnimation()));
     connect(ui->animList,SIGNAL(currentTextChanged(QString)), this, SLOT(animationChanged(QString)));
 
     animWidgetData = new AnimationWidgetData();
@@ -114,6 +115,9 @@ void AnimationWidget::setScene(iris::ScenePtr scene)
 
 void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
 {
+    // at times the timer could still be running when another object is clicked on
+    timer->stop();
+
     // the root node cannot have an animation, so its treated as null
     if (!!node && node->isRootNode())
         node = iris::SceneNodePtr();
@@ -128,6 +132,7 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
     this->node = node;
 
     if (!!node) {
+        nodeProperties = node->getProperties();
         scene = node->scene;
         ui->sceneNodeName->setText(node->name);
 
@@ -136,7 +141,6 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
             updateCreationWidgetMessage(node);
         }
         else {
-            nodeProperties = node->getProperties();
             buildPropertiesMenu();
 
             animation = node->getAnimation();
@@ -319,6 +323,7 @@ void AnimationWidget::addAnimation()
         return;
 
     GetNameDialog dialog;
+    dialog.setName("Animation"+node->getAnimations().count());
     dialog.setWindowTitle("New Animation Name");
     if (dialog.exec() == QDialog::Rejected)
         return;
@@ -339,6 +344,14 @@ void AnimationWidget::addAnimation()
 
     //hide Create Animation widget if it's showing
     this->hideCreateAnimWidget();
+}
+
+void AnimationWidget::deleteAnimation()
+{
+    node->deleteAnimation(node->getAnimation());
+
+    //refresh ui
+    this->setSceneNode(node);
 }
 
 void AnimationWidget::addPropertyKey(QAction *action)

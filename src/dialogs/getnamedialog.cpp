@@ -13,9 +13,10 @@ GetNameDialog::~GetNameDialog()
     delete ui;
 }
 
-void GetNameDialog::getName(QString name)
+void GetNameDialog::setName(QString name)
 {
     ui->lineEdit->setText(name);
+    ui->lineEdit->selectAll();
 }
 
 QString GetNameDialog::getName()

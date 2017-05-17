@@ -100,6 +100,7 @@ private:
 public slots:
     void setLooping(bool loop);
     void addAnimation();
+    void deleteAnimation();
 
 private slots:
     void addPropertyKey(QAction* action);

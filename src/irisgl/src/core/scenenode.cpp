@@ -42,7 +42,7 @@ SceneNode::SceneNode():
     globalTransform.setToIdentity();
 
     //keyFrameSet = KeyFrameSet::create();
-    animation = iris::Animation::create("");
+    //animation = iris::Animation::create("");
 }
 
 SceneNodePtr SceneNode::create()
@@ -67,12 +67,12 @@ long SceneNode::getNodeId()
 
 void SceneNode::addAnimation(AnimationPtr anim)
 {
-    animations.insert(anim->getName(), anim);
+    animations.append(anim);
 }
 
 QList<AnimationPtr> SceneNode::getAnimations()
 {
-    return animations.values();
+    return animations;
 }
 
 void SceneNode::setAnimation(AnimationPtr anim)
@@ -88,6 +88,16 @@ AnimationPtr SceneNode::getAnimation()
 bool SceneNode::hasActiveAnimation()
 {
     return !!animation;
+}
+
+void SceneNode::deleteAnimation(int index)
+{
+    animations.removeAt(index);
+}
+
+void SceneNode::deleteAnimation(AnimationPtr anim)
+{
+    animations.removeOne(anim);
 }
 
 QList<Property*> SceneNode::getProperties()
@@ -232,15 +242,17 @@ void SceneNode::updateAnimation(float time)
     }
     */
 
-    if (animation->hasPropertyAnim("position")) {
-        pos = animation->getVector3PropertyAnim("position")->getValue(time);
-    }
-    if (animation->hasPropertyAnim("rotation")) {
-        auto r = animation->getVector3PropertyAnim("rotation")->getValue(time);
-        rot = QQuaternion::fromEulerAngles(r);
-    }
-    if (animation->hasPropertyAnim("scale")) {
-        scale = animation->getVector3PropertyAnim("scale")->getValue(time);
+    if (!!animation) {
+        if (animation->hasPropertyAnim("position")) {
+            pos = animation->getVector3PropertyAnim("position")->getValue(time);
+        }
+        if (animation->hasPropertyAnim("rotation")) {
+            auto r = animation->getVector3PropertyAnim("rotation")->getValue(time);
+            rot = QQuaternion::fromEulerAngles(r);
+        }
+        if (animation->hasPropertyAnim("scale")) {
+            scale = animation->getVector3PropertyAnim("scale")->getValue(time);
+        }
     }
 
     for (auto child : children) {
