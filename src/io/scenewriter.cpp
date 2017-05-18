@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/animation.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
+#include "../irisgl/src/animation/propertyanim.h"
 #include "../irisgl/src/graphics/postprocess.h"
 #include "../irisgl/src/graphics/postprocessmanager.h"
 
@@ -171,15 +172,79 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sc
 
 void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePtr sceneNode)
 {
-    auto anim = sceneNode->animation;
-    if(!anim)
-        return;
+    auto activeAnim = sceneNode->getAnimation();
 
-    QJsonObject animObj;
-    animObj["name"] = anim->name;
-    animObj["length"] = anim->length;
-    animObj["loop"] = anim->loop;
+    auto animations = sceneNode->getAnimations();
+    QJsonArray animListObj;
 
+    if (!!activeAnim)
+        sceneNodeObj["activeAnimation"] = animations.indexOf(activeAnim);
+    else
+        sceneNodeObj["activeAnimation"] = -1;
+        //sceneNodeObj["activeAnimation"] = activeAnim->getName();
+
+
+    // todo: add all animations
+    for (auto anim : animations) {
+        QJsonObject animObj;
+        animObj["name"] = anim->getName();
+        animObj["length"] = anim->getLength();
+        animObj["loop"] = anim->getLooping();
+
+        auto animPropListObj = QJsonArray();
+
+        for (auto propName: anim->properties.keys()) {
+            auto prop = anim->properties[propName];
+            auto propObj = QJsonObject();
+            propObj["name"] = propName;
+
+            auto keyFrames = prop->getKeyFrames();
+            if(keyFrames.size()==1)
+                propObj["type"] = "float";
+            if(keyFrames.size()==3)
+                propObj["type"] = "vector3";
+            if(keyFrames.size()==4)
+                propObj["type"] = "color";
+
+            QJsonArray keyFrameList;
+            for (auto animInfo : keyFrames) {
+                auto keyFrameObj = QJsonObject();
+
+                auto keyFrame = animInfo.keyFrame;
+                keyFrameObj["name"] = animInfo.name;
+
+                auto keysListObj = QJsonArray();
+                for (auto key : keyFrame->keys) {
+                    auto keyObj = QJsonObject();
+                    keyObj["time"] = key->time;
+                    keyObj["value"] = key->value;
+
+                    keyObj["leftSlope"] = key->leftSlope;
+                    keyObj["rightSlope"] = key->rightSlope;
+
+                    keyObj["leftTangentType"] = this->getKeyTangentTypeName(key->leftTangent);
+                    keyObj["rightTangentType"] = this->getKeyTangentTypeName(key->rightTangent);
+
+                    keyObj["handleMode"] = this->getKeyHandleModeName(key->handleMode);
+
+                    keysListObj.append(keyObj);
+                }
+                keyFrameObj["keys"] = keysListObj;
+                keyFrameList.append(keyFrameObj);
+            }
+            propObj["keyFrames"] = keyFrameList;
+
+            animPropListObj.append(propObj);
+        }
+
+        animObj["properties"] = animPropListObj;
+
+        animListObj.append(animObj);
+    }
+
+    sceneNodeObj["animations"] = animListObj;
+
+    /*
     QJsonArray frames;
     for(auto frameName:anim->keyFrameSet->keyFrames.keys())
     {
@@ -201,9 +266,11 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
         frames.append(frameObj);
     }
 
+
     animObj["frames"] = frames;
 
     sceneNodeObj["animation"] = animObj;
+    */
 }
 
 void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode)
@@ -338,5 +405,31 @@ QString SceneWriter::getLightNodeTypeName(iris::LightType lightType)
             return "spot";
         default:
             return "none";
+    }
+}
+
+QString SceneWriter::getKeyTangentTypeName(iris::TangentType tangentType)
+{
+    switch (tangentType) {
+    case iris::TangentType::Free:
+        return "free";
+    case iris::TangentType::Linear:
+        return "linear";
+    case iris::TangentType::Constant:
+        return "constant";
+    default:
+        return "free";
+    }
+}
+
+QString SceneWriter::getKeyHandleModeName(iris::HandleMode handleMode)
+{
+    switch (handleMode) {
+    case iris::HandleMode::Joined:
+        return "joined";
+    case iris::HandleMode::Broken:
+        return "broken";
+    default:
+        return "joined";
     }
 }

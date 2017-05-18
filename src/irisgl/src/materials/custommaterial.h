@@ -35,6 +35,7 @@ public:
     void setBaseMaterialProperties(const QJsonObject&);
     void setName(const QString&);
     void setProperties(QList<Property*> props);
+    QList<Property*> getProperties();
     void setUniformValues(Property*);
     void purge();
 

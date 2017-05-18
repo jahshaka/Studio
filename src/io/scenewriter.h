@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 //#include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
+#include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/irisglfwd.h"
 
 class EditorData;
@@ -47,6 +48,8 @@ private:
 
     QString getSceneNodeTypeName(iris::SceneNodeType nodeType);
     QString getLightNodeTypeName(iris::LightType lightType);
+    QString getKeyTangentTypeName(iris::TangentType tangentType);
+    QString getKeyHandleModeName(iris::HandleMode handleMode);
 };
 
 #endif // SCENEWRITER_H

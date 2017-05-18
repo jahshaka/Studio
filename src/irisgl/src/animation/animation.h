@@ -13,25 +13,58 @@ For more information see the LICENSE file
 #define ANIMATION_H
 
 #include "../irisglfwd.h"
+#include <QMap>
 
 namespace iris
 {
 
+class PropertyAnim;
+
 class Animation
 {
-public:
     QString name;
     bool loop;
     float length;
 
-    KeyFrameSetPtr keyFrameSet;
+    // sample rate
+    int frameRate;
+public:
 
-    Animation();
+    //QMap preserves insertion order,QHash doesnt
+    QMap<QString,PropertyAnim*> properties;
 
-    static AnimationPtr create()
+    explicit Animation(QString name = "Animation");
+    ~Animation();
+
+    void addPropertyAnim(PropertyAnim* anim);
+    void removePropertyAnim(QString name);
+
+    PropertyAnim* getPropertyAnim(QString name);
+
+    FloatPropertyAnim* getFloatPropertyAnim(QString name);
+
+    Vector3DPropertyAnim* getVector3PropertyAnim(QString name);
+
+    ColorPropertyAnim* getColorPropertyAnim(QString name);
+
+    bool hasPropertyAnim(QString name);
+
+    static AnimationPtr create(QString name)
     {
-        return AnimationPtr(new Animation());
+        return AnimationPtr(new Animation(name));
     }
+
+    QString getName() const;
+    void setName(const QString &value);
+
+    float getLength() const;
+    void setLength(float value);
+
+    bool getLooping() const;
+    void setLooping(bool value);
+
+    int getFrameRate() const;
+    void setFrameRate(int value);
 };
 
 }

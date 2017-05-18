@@ -52,9 +52,16 @@ class CustomMaterial;
 class RenderItem;
 class PickingResult;
 class RenderTarget;
+class Property;
 class PostProcess;
 class PostProcessContext;
 class PostProcessManager;
+class PropertyAnim;
+class PropertyAnimInfo;
+class FloatPropertyAnim;
+class Vector3DPropertyAnim;
+class ColorPropertyAnim;
+class AnimableProperty;
 template<typename T> class Key;
 typedef Key<float> FloatKey;
 

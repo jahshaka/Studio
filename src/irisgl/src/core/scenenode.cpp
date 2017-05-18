@@ -13,7 +13,10 @@ For more information see the LICENSE file
 #include "scene.h"
 #include "../animation/keyframeset.h"
 #include "../animation/animation.h"
+#include "../animation/propertyanim.h"
+#include "../animation/animableproperty.h"
 #include "../animation/keyframeanimation.h"
+#include "../materials/propertytype.h"
 
 namespace iris
 {
@@ -39,7 +42,7 @@ SceneNode::SceneNode():
     globalTransform.setToIdentity();
 
     //keyFrameSet = KeyFrameSet::create();
-    animation = iris::Animation::create();
+    //animation = iris::Animation::create("");
 }
 
 SceneNodePtr SceneNode::create()
@@ -60,6 +63,81 @@ void SceneNode::setName(QString name)
 long SceneNode::getNodeId()
 {
     return nodeId;
+}
+
+void SceneNode::addAnimation(AnimationPtr anim)
+{
+    animations.append(anim);
+}
+
+QList<AnimationPtr> SceneNode::getAnimations()
+{
+    return animations;
+}
+
+void SceneNode::setAnimation(AnimationPtr anim)
+{
+    animation = anim;
+}
+
+AnimationPtr SceneNode::getAnimation()
+{
+    return animation;
+}
+
+bool SceneNode::hasActiveAnimation()
+{
+    return !!animation;
+}
+
+void SceneNode::deleteAnimation(int index)
+{
+    animations.removeAt(index);
+}
+
+void SceneNode::deleteAnimation(AnimationPtr anim)
+{
+    animations.removeOne(anim);
+}
+
+QList<Property*> SceneNode::getProperties()
+{
+    auto props = QList<Property*>();
+
+    auto prop = new Vec3Property();
+    prop->displayName = "Position";
+    prop->name = "position";
+    prop->value = pos;
+    props.append(prop);
+
+    prop = new Vec3Property();
+    prop->displayName = "Rotation";
+    prop->name = "rotation";
+    prop->value = rot.toEulerAngles();
+    props.append(prop);
+
+    prop = new Vec3Property();
+    prop->displayName = "Scale";
+    prop->name = "scale";
+    prop->value = scale;
+    props.append(prop);
+
+
+    return props;
+}
+
+QVariant SceneNode::getPropertyValue(QString valueName)
+{
+    if(valueName == "position")
+        return pos;
+
+    if(valueName == "rotation")
+        return rot.toEulerAngles();
+
+    if(valueName == "scale")
+        return scale;
+
+    return QVariant();
 }
 
 SceneNodeType SceneNode::getSceneNodeType()
@@ -131,6 +209,7 @@ bool SceneNode::isRootNode()
 
 void SceneNode::updateAnimation(float time)
 {
+    /*
     //@todo: cache transformation animations for faster lookup
     auto keyFrameSet = animation->keyFrameSet;
 
@@ -158,6 +237,24 @@ void SceneNode::updateAnimation(float time)
         scale.setZ(keyFrameSet->getKeyFrame("Scale Z")->getValueAt(time));
 
     //update children
+    for (auto child : children) {
+        child->updateAnimation(time);
+    }
+    */
+
+    if (!!animation) {
+        if (animation->hasPropertyAnim("position")) {
+            pos = animation->getVector3PropertyAnim("position")->getValue(time);
+        }
+        if (animation->hasPropertyAnim("rotation")) {
+            auto r = animation->getVector3PropertyAnim("rotation")->getValue(time);
+            rot = QQuaternion::fromEulerAngles(r);
+        }
+        if (animation->hasPropertyAnim("scale")) {
+            scale = animation->getVector3PropertyAnim("scale")->getValue(time);
+        }
+    }
+
     for (auto child : children) {
         child->updateAnimation(time);
     }

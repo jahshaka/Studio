@@ -19,6 +19,8 @@ For more information see the LICENSE file
 #include <QQuaternion>
 #include <QColor>
 
+#include "../math/bezierhelper.h"
+
 namespace iris
 {
 
@@ -32,7 +34,14 @@ enum class KeyFrameType
 enum class TangentType
 {
     Free,
-    Linear
+    Linear,
+    Constant
+};
+
+enum class HandleMode
+{
+    Joined,
+    Broken
 };
 
 template<typename T>
@@ -45,8 +54,10 @@ public:
     TangentType leftTangent;
     TangentType rightTangent;
 
-    QVector2D leftHandle;
-    QVector2D rightHandle;
+    float leftSlope;
+    float rightSlope;
+
+    HandleMode handleMode;
 
     inline bool operator< ( const T& rhs)
     {
@@ -58,6 +69,7 @@ template <typename T> bool KeyCompare(const Key<T> * const & a, const Key<T> * c
 {
    return a->time < b->time;
 }
+
 
 template<typename T>
 class KeyFrame
@@ -103,7 +115,7 @@ public:
         length = last->time;
     }
 
-    void addKey(T value,double time)
+    Key<T>* addKey(T value,double time)
     {
         auto key = new Key<T>();
         key->value = value;
@@ -112,6 +124,7 @@ public:
 
         //todo: make this faster
         this->sortKeys();
+        return key;
     }
 
     bool hasKeys()
@@ -126,32 +139,46 @@ public:
 
     T getValueAt(double time,T defaultVal)
     {
-        Key<T>* first = Q_NULLPTR;
-        Key<T>* last = Q_NULLPTR;
+        Key<T>* leftKey = Q_NULLPTR;
+        Key<T>* rightKey = Q_NULLPTR;
 
         //why bother with a copy?
         T val = defaultVal;
 
-        this->getKeyFramesAtTime(&first,&last,time);
+        this->getKeyFramesAtTime(&leftKey,&rightKey,time);
 
-        if(first!=Q_NULLPTR && last==Q_NULLPTR)
+        if(leftKey!=Q_NULLPTR && rightKey==Q_NULLPTR)
         {
-            val = first->value;
+            val = leftKey->value;
         }
 
-        if(first!=Q_NULLPTR && last!=Q_NULLPTR)
+        if(leftKey!=Q_NULLPTR && rightKey!=Q_NULLPTR)
         {
             //linearly interpolate between frames
             float t =0;
-            float frameDiff = last->time - first->time;
+            float timeDiff = rightKey->time - leftKey->time;
 
             //frameDiff could be 0!!
-            if(frameDiff != 0)
+            if(timeDiff != 0)
             {
-                t = (time-first->time)/frameDiff;
+                t = (time-leftKey->time)/timeDiff;
             }
 
-            val = interpolate(first->value,last->value,t);
+            if(leftKey->rightTangent == TangentType::Constant ||
+               rightKey->leftTangent == TangentType::Constant) {
+                val = leftKey->value;
+            } else {
+
+                // 1D beziers are a third of the distance apart
+                float third = timeDiff * 0.333333f;
+
+                val = BezierHelper::calculateBezier(leftKey->value,
+                                                    leftKey->value + (leftKey->rightSlope * third * timeDiff),
+                                                    rightKey->value - (rightKey->leftSlope * third * timeDiff),
+                                                    rightKey->value,
+                                                    t);
+                //val = interpolate(leftKey->value,rightKey->value,t2);
+            }
         }
 
         return val;

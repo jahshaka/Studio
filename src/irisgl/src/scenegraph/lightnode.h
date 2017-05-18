@@ -83,6 +83,11 @@ public:
         return dir.toVector3D();
     }
 
+    virtual QList<Property*> getProperties() override;
+    virtual QVariant getPropertyValue(QString valueName) override;
+
+    void updateAnimation(float time) override;
+
 private:
     LightNode()
     {

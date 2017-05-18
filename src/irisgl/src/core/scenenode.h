@@ -29,11 +29,17 @@ enum class SceneNodeType {
     Viewer
 };
 
+class Property;
 class Animation;
+class PropertyAnim;
 typedef QSharedPointer<Animation> AnimationPtr;
 
 class SceneNode : public QEnableSharedFromThis<SceneNode>
 {
+protected:
+    QList<AnimationPtr> animations;
+    AnimationPtr animation;
+
 public:
     // cached local and global transform
     QMatrix4x4 localTransform;
@@ -51,8 +57,6 @@ public:
     ScenePtr scene;
     SceneNodePtr parent;
     QList<SceneNodePtr> children;
-
-    AnimationPtr animation;
 
     // editor specific
     bool duplicable;
@@ -79,6 +83,17 @@ public:
     bool isDuplicable() {
         return duplicable;
     }
+
+    void addAnimation(AnimationPtr anim);
+    QList<AnimationPtr> getAnimations();
+    void setAnimation(AnimationPtr anim);
+    AnimationPtr getAnimation();
+    bool hasActiveAnimation();
+    void deleteAnimation(int index);
+    void deleteAnimation(AnimationPtr anim);
+
+    virtual QList<Property*> getProperties();
+    virtual QVariant getPropertyValue(QString valueName);
 
     /*
     * This function should return an exact copy of this node

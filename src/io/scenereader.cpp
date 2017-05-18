@@ -43,6 +43,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/animation.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
+#include "../irisgl/src/animation/propertyanim.h"
 #include "../irisgl/src/graphics/postprocess.h"
 #include "../irisgl/src/graphics/postprocessmanager.h"
 
@@ -236,38 +237,71 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 
 void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr sceneNode)
 {
-    auto animObj = nodeObj["animation"].toObject();
-    if(animObj.isEmpty())
-        return;
+    auto animList = nodeObj["animations"].toArray();
+    auto activeAnimIndex = nodeObj["activeAnimation"].toInt(-1);
 
-    auto framesArray = animObj["frames"].toArray();
-    if(framesArray.isEmpty())
-        return;
+    for (auto animVal : animList) {
+        auto animObj = animVal.toObject();
 
-    auto animation = iris::Animation::create();
+        auto name = animObj["name"].toString();
+        auto animation = iris::Animation::create(name);
+        animation->setLength(animObj["length"].toDouble());
+        animation->setLooping(animObj["loop"].toBool());
 
-    for(auto frameValue:framesArray)
-    {
-        auto frameObj = frameValue.toObject();
+        auto propList = animObj["properties"].toArray();
+        for (auto propVal : propList) {
+            auto propObj = propVal.toObject();
+            auto name = propObj["name"].toString();
+            auto type = propObj["type"].toString();
 
-        auto frame = new iris::FloatKeyFrame();
-        frame->name = frameObj["name"].toString("Frame");
+            iris::PropertyAnim* propAnim;
+            if(type=="float")
+                propAnim = new iris::FloatPropertyAnim();
+            else if(type=="vector3")
+                propAnim = new iris::Vector3DPropertyAnim();
+            else
+                propAnim = new iris::ColorPropertyAnim();
+
+            propAnim->setName(name);
+
+            auto keyFrameList = propObj["keyFrames"].toArray();
+            int index = 0;
+            for (auto keyFrameVal : keyFrameList) {
+                auto keyFrameObj = keyFrameVal.toObject();
+                auto name = keyFrameObj["name"].toString();
+
+                auto keyList = keyFrameObj["keys"].toArray();
+                auto keyFrame = propAnim->getKeyFrame(index);
+
+                for (auto keyVal : keyList) {
+                    auto keyObj = keyVal.toObject();
+                    auto time = keyObj["time"].toDouble();
+                    auto val = keyObj["value"].toDouble();
+                    auto key = keyFrame->addKey(val, time);
+
+                    key->leftSlope = keyObj["leftSlope"].toDouble();
+                    key->rightSlope = keyObj["rightSlope"].toDouble();
+
+                    key->leftTangent = getTangentTypeFromName(keyObj["leftTangent"].toString());
+                    key->rightTangent = getTangentTypeFromName(keyObj["rightTangent"].toString());
+
+                    key->handleMode = getHandleModeFromName(keyObj["handleMode"].toString());
+                }
 
 
-        auto keysObj = frameObj["keys"].toArray();
-        for(auto keyValue:keysObj)
-        {
-            auto keyObj = keyValue.toObject();
-            float time = keyObj["time"].toDouble(0);
-            float value = keyObj["value"].toDouble(0);
-            frame->addKey(value,time);
+                index++;
+            }
+
+            animation->addPropertyAnim(propAnim);
         }
-        animation->keyFrameSet->keyFrames.insert(frame->name,frame);
-        animation->length = animObj["length"].toDouble(1);
-        animation->loop = animObj["loop"].toBool(false);
-    }
 
-    sceneNode->animation = animation;
+        sceneNode->addAnimation(animation);
+        //if (animation->getName() == activeAnim)
+        //    sceneNode->setAnimation(animation);
+    }
+    if (activeAnimIndex != -1) {
+        sceneNode->setAnimation(sceneNode->getAnimations()[activeAnimIndex]);
+    }
 }
 
 /**
@@ -406,6 +440,28 @@ iris::LightType SceneReader::getLightTypeFromName(QString lightType)
     if (lightType == "spot")        return iris::LightType::Spot;
 
     return iris::LightType::Point;
+}
+
+iris::TangentType SceneReader::getTangentTypeFromName(QString tangentType)
+{
+    if (tangentType=="free")
+        return iris::TangentType::Free;
+    else if (tangentType=="linear")
+        return iris::TangentType::Linear;
+    else if (tangentType=="constant")
+        return iris::TangentType::Constant;
+
+    return iris::TangentType::Free;
+}
+
+iris::HandleMode SceneReader::getHandleModeFromName(QString handleMode)
+{
+    if (handleMode=="joined")
+        return iris::HandleMode::Joined;
+    else if (handleMode=="broken")
+        return iris::HandleMode::Broken;
+
+    return iris::HandleMode::Joined;
 }
 
 /**

@@ -81,6 +81,8 @@ For more information see the LICENSE file
 #include "io/scenereader.h"
 
 #include "constants.h"
+#include <src/io/materialreader.hpp>
+#include "uimanager.h"
 
 enum class VRButtonMode : int
 {
@@ -109,6 +111,8 @@ MainWindow::MainWindow(QWidget *parent) :
         QFontDatabase::addApplicationFontFromData(fontFile.readAll());
         QApplication::setFont(QFont("Open Sans", 9));
     }
+
+    UiManager::setAnimationWidget(ui->animationtimeline);
 
     settings = SettingsManager::getDefaultManager();
     prefsDialog = new PreferencesDialog(settings);
@@ -200,9 +204,6 @@ MainWindow::MainWindow(QWidget *parent) :
     vrButton->setObjectName("vrButton");
     //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
     ui->ToolBar->addWidget(vrButton);
-
-    ui->AnimationDock->hide();
-//    ui->PresetsDock->hide();
 
 }
 
