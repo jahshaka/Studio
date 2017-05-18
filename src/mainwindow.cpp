@@ -84,6 +84,7 @@ For more information see the LICENSE file
 #include "constants.h"
 #include <src/io/materialreader.hpp>
 #include "uimanager.h"
+#include "core/database/database.h"
 
 enum class VRButtonMode : int
 {
@@ -206,6 +207,10 @@ MainWindow::MainWindow(QWidget *parent) :
     //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
     ui->ToolBar->addWidget(vrButton);
 
+    ui->AnimationDock->hide();
+//    ui->PresetsDock->hide();
+
+    setupProjectDB();
 }
 
 void MainWindow::setupVrUi()
@@ -636,35 +641,42 @@ void MainWindow::stopAnimWidget()
     animWidget->stopAnimation();
 }
 
+void MainWindow::setupProjectDB()
+{
+    db = new Database();
+}
+
 void MainWindow::saveScene()
 {
-    if (Globals::project->isSaved()) {
-        auto filename = Globals::project->getFilePath();
-        auto writer = new SceneWriter();
-        writer->writeScene(filename,
-                           scene,
-                           sceneView->getRenderer()->getPostProcessManager(),
-                           sceneView->getEditorData());
-        // settings->addRecentlyOpenedScene(filename);
-        // sceneView->saveFrameBuffer("viewport.jpg");
-        delete writer;
-    }
+    auto writer = new SceneWriter();
+    auto blob = writer->getSceneObject(Globals::project->getFilePath(),
+                                       scene,
+                                       sceneView->getRenderer()->getPostProcessManager(),
+                                       sceneView->getEditorData());
+    db->updateScene(blob);
 
-    else {
-        auto filename = QFileDialog::getSaveFileName(this, "Save Scene", "", "Jashaka Scene (*.jah)");
-        auto writer = new SceneWriter();
-        writer->writeScene(filename,
-                           scene,
-                           sceneView->getRenderer()->getPostProcessManager(),
-                           sceneView->getEditorData());
+//    if (Globals::project->isSaved()) {
+//        auto filename = Globals::project->getFilePath();
+//        auto writer = new SceneWriter();
+//        writer->writeScene(filename,
+//                           scene,
+//                           sceneView->getRenderer()->getPostProcessManager(),
+//                           sceneView->getEditorData());
+//        delete writer;
+//    }
 
-        Globals::project->setFilePath(filename);
-        this->setProjectTitle(Globals::project->getProjectName());
-        // settings->addRecentlyOpenedScene(filename);
-        // sceneView->saveFrameBuffer("viewport.jpg");
-        delete writer;
-    }
+//    else {
+//        auto filename = QFileDialog::getSaveFileName(this, "Save Scene", "", "Jashaka Scene (*.jah)");
+//        auto writer = new SceneWriter();
+//        writer->writeScene(filename,
+//                           scene,
+//                           sceneView->getRenderer()->getPostProcessManager(),
+//                           sceneView->getEditorData());
 
+//        Globals::project->setFilePath(filename);
+//        this->setProjectTitle(Globals::project->getProjectName());
+//        delete writer;
+//    }
 }
 
 void MainWindow::saveSceneAs()
@@ -716,7 +728,7 @@ void MainWindow::openProject(QString filename, bool startupLoad)
 
     auto postMan = sceneView->getRenderer()->getPostProcessManager();
     postMan->clearPostProcesses();
-    auto scene = reader->readScene(filename, postMan, &editorData);
+    auto scene = reader->readScene(filename, db->getSceneBlob(), postMan, &editorData);
     this->sceneView->doneCurrent();
     setScene(scene);
 

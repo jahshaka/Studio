@@ -15,21 +15,17 @@
 #
 #-------------------------------------------------
 
-#QT  +=  3dcore 3drender 3dinput 3dquick 3dlogic 3dextras
-QT       += core gui
+QT      += core gui sql
+CONFIG  += c++11
 
-
-CONFIG += c++11
-
-#needed to fix resource compilation error in visual studio
-#http://stackoverflow.com/questions/28426240/qt-compiler-is-out-of-heap-space
-CONFIG += resources_big
+# needed to fix resource compilation error in visual studio
+# http://stackoverflow.com/questions/28426240/qt-compiler-is-out-of-heap-space
+CONFIG  += resources_big
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 TARGET = JahshakaVR
 TEMPLATE = app
-
 
 SOURCES += src/main.cpp\
     src/mainwindow.cpp \
@@ -99,7 +95,8 @@ SOURCES += src/main.cpp\
     src/uimanager.cpp \
     src/widgets/keyframecurvewidget.cpp \
     src/dialogs/getnamedialog.cpp \
-    src/widgets/createanimationwidget.cpp
+    src/widgets/createanimationwidget.cpp \
+    src/core/database/database.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -189,7 +186,8 @@ HEADERS  += src/mainwindow.h \
     src/widgets/keyframecurvewidget.h \
     src/widgets/animationwidgetdata.h \
     src/dialogs/getnamedialog.h \
-    src/widgets/createanimationwidget.h
+    src/widgets/createanimationwidget.h \
+    src/core/database/database.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

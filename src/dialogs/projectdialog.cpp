@@ -14,6 +14,7 @@
 #include "ui_projectdialog.h"
 
 #include "../core/project.h"
+#include "../core/database/database.h"
 #include "../globals.h"
 #include "../constants.h"
 
@@ -40,6 +41,8 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
 
     settings = SettingsManager::getDefaultManager();
     ui->listWidget->addItems(settings->getRecentlyOpenedScenes());
+
+//    db = new Database();
 }
 
 ProjectDialog::~ProjectDialog()

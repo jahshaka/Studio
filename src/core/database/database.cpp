@@ -10,37 +10,35 @@
 Database::Database()
 {
     if (!QSqlDatabase::isDriverAvailable(Constants::DB_DRIVER)) {
-        qErrnoWarning("DB driver not present!");
+        qCritical("DB driver not present!");
     }
 
     db = QSqlDatabase::addDatabase(Constants::DB_DRIVER);
     db.setDatabaseName(IrisUtils::getAbsoluteAssetPath(Constants::DB_PATH));
 
     if (!db.open()) {
-        qDebug() << "ERROR: " << db.lastError();
+        qCritical() << "ERROR: " << db.lastError();
     }
 
-    fetchRecord("");
+//    fetchRecord("");
 
+//    // test
+//    QJsonObject projectObj;
+//    QJsonObject activeObj;
+//    activeObj["path"] = "Scenes/Path";
+//    activeObj["thumbnail"] = "thumb.jpg";
+//    activeObj["version"] = 0.3;
+//    projectObj["activeProject"] = activeObj;
+//    QJsonDocument projectSln(projectObj);
 
-    // test
-    QJsonObject projectObj;
-    QJsonObject activeObj;
-    activeObj["path"] = "Scenes/Path";
-    activeObj["thumbnail"] = "thumb.jpg";
-    activeObj["version"] = 0.3;
-    projectObj["activeProject"] = activeObj;
-    QJsonDocument projectSln(projectObj);
-
-//    qDebug() << projectSln.toBinaryData()
-    QSqlQuery query;
-    query.prepare("insert into test_table (name, scene) values ('dragons', :sceneBlob)");
-    query.bindValue(":sceneBlob", projectSln.toBinaryData());
-    if( !query.exec() ) {
-            qDebug() << "Error inserting image into table:\n" << query.lastError();
-    } else {
-        qDebug() << "got it in";
-    }
+//    QSqlQuery query;
+//    query.prepare("insert into test_table (name, scene) values ('dragons', :sceneBlob)");
+//    query.bindValue(":sceneBlob", projectSln.toBinaryData());
+//    if( !query.exec() ) {
+//        qDebug() << "Error inserting image into table:\n" << query.lastError();
+//    } else {
+//        qDebug() << "got it in";
+//    }
 }
 
 bool Database::fetchRecord(const QString &name)
@@ -60,4 +58,34 @@ bool Database::fetchRecord(const QString &name)
     }
 
     return false;
+}
+
+void Database::updateScene(const QByteArray &sceneBlob)
+{
+    QSqlQuery query;
+    query.prepare("UPDATE test_table SET scene = :blob WHERE name = :name");
+    query.bindValue(":blob", sceneBlob);
+    query.bindValue(":name", "dragons");
+
+    if (query.exec()) {
+        qDebug() << "updated scene";
+    } else {
+        qDebug() << "there was an error mans " + query.lastError().text();
+    }
+}
+
+QByteArray Database::getSceneBlob() const
+{
+    QSqlQuery query;
+    query.prepare("SELECT scene FROM test_table WHERE name = :name");
+    query.bindValue(":name", "dragons");
+
+    if (query.exec()) {
+        qDebug() << "got blob scene";
+        if (query.first()) {
+            return query.value(0).toByteArray();
+        }
+    } else {
+        qDebug() << "there was an error mans " + query.lastError().text();
+    }
 }

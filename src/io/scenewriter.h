@@ -30,6 +30,10 @@ class SceneWriter : public AssetIOBase
 {
 public:
     void writeScene(QString filePath,iris::ScenePtr scene, iris::PostProcessManagerPtr postMan, EditorData* ediorData = nullptr);
+    QByteArray getSceneObject(QString filePath,
+                              iris::ScenePtr scene,
+                              iris::PostProcessManagerPtr postMan,
+                              EditorData *editorData);
 
 private:
     void writeScene(QJsonObject& projectObj, iris::ScenePtr scene);

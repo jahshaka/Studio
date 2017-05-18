@@ -37,6 +37,10 @@ public:
     iris::ScenePtr readScene(QString filePath,
                              iris::PostProcessManagerPtr postMan,
                              EditorData **editorData = nullptr);
+    iris::ScenePtr readScene(QString filePath,
+                             const QByteArray &sceneBlob,
+                             iris::PostProcessManagerPtr postMan,
+                             EditorData **editorData = nullptr);
     iris::ScenePtr readScene(QJsonObject &projectObj);
     EditorData* readEditorData(QJsonObject &projectObj);
     void readPostProcessData(QJsonObject &projectObj, iris::PostProcessManagerPtr postMan);

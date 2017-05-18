@@ -15,6 +15,9 @@ namespace Constants
     const QStringList PROJECT_DIRS  = { "Textures", "Models", "Shaders", "Materials", "Scenes" };
     const QString SHADER_DEFS       = "/app/shader_defs/";
     const QString DEFAULT_SHADER    = "/app/shader_defs/Default.shader";
+
+    const QString DB_DRIVER         = "QSQLITE";
+    const QString DB_PATH           = "/scenes/default.db";
 }
 
 #endif // CONSTANTS_H

@@ -38,6 +38,7 @@ For more information see the LICENSE file
 
 #include "scenewriter.h"
 #include "assetiobase.h"
+#include "../constants.h"
 
 
 void SceneWriter::writeScene(QString filePath,iris::ScenePtr scene,
@@ -61,6 +62,30 @@ void SceneWriter::writeScene(QString filePath,iris::ScenePtr scene,
     QJsonDocument saveDoc(projectObj);
     file.write(saveDoc.toJson());
     file.close();
+}
+
+QByteArray SceneWriter::getSceneObject(QString filePath,
+                                       iris::ScenePtr scene,
+                                       iris::PostProcessManagerPtr postMan,
+                                       EditorData *editorData)
+{
+    dir = AssetIOBase::getDirFromFileName(filePath);
+    QJsonObject projectObj;
+    projectObj["version"] = Constants::CONTENT_VERSION;
+
+    writeScene(projectObj, scene);
+
+    if (editorData != nullptr) {
+        writeEditorData(projectObj, editorData);
+    }
+
+    if (!!postMan) {
+        writePostProcessData(projectObj, postMan);
+    }
+
+    qDebug() << projectObj;
+
+    return QJsonDocument(projectObj).toBinaryData();
 }
 
 void SceneWriter::writeScene(QJsonObject& projectObj,iris::ScenePtr scene)

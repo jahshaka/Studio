@@ -13,6 +13,9 @@ public:
 
     bool fetchRecord(const QString &name);
 
+    void updateScene(const QByteArray &sceneBlob);
+    QByteArray getSceneBlob() const;
+
 private:
     QSqlDatabase db;
 };
