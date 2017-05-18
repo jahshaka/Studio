@@ -27,9 +27,7 @@ class SkeletalAnimation
 {
     SkeletalAnimation(){}
 public:
-    QMap<QString, QScopedPointer<BoneAnimation>> boneAnimations;
-
-    SkeletalAnimation();
+    QMap<QString, QSharedPointer<BoneAnimation>> boneAnimations;
 
     // takes ownership of boneAnim
     void addBoneAnimation(QString boneName,BoneAnimation* boneAnim);

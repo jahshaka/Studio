@@ -3,14 +3,9 @@
 
 namespace iris {
 
-SkeletalAnimation::SkeletalAnimation()
-{
-
-}
-
 void SkeletalAnimation::addBoneAnimation(QString boneName, iris::BoneAnimation *boneAnim)
 {
-    boneAnimations.insert(boneName, QScopedPointer<BoneAnimation>(boneAnim));
+    boneAnimations.insert(boneName, QSharedPointer<BoneAnimation>(boneAnim));
 }
 
 }

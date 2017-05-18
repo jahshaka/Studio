@@ -93,12 +93,12 @@ Mesh::Mesh(aiMesh* mesh)
 
             for (auto j = 0;j<bone->mNumWeights ; j++) {
                 auto weight = bone->mWeights[i];
-                var baseIndex = weight.mVertexId * MAX_BONE_INDICES;
+                auto baseIndex = weight.mVertexId * MAX_BONE_INDICES;
                 // find empty slot and set weight
                 for(int k = 0; k<MAX_BONE_INDICES; k++) {
                     if(boneWeights[baseIndex + k] == 0) {
                         // an empty weight means an empty slot
-                        boneIndex[baseIndex + k] = i;// bone index in array
+                        boneIndices[baseIndex + k] = i;// bone index in array
                         boneWeights[baseIndex + k] = weight.mWeight;
                     }
                 }
@@ -275,17 +275,17 @@ Mesh *Mesh::loadAnimatedMesh(QString filePath)
             // extract tracks
             for (auto k = 0; k<nodeAnim->mNumPositionKeys; k++) {
                 auto key = nodeAnim->mPositionKeys[k];
-                boneAnim->posKeys->addKey(QVector3D(key.mValue.x, key.mValue.y, key.mValue.z), key.time);
+                boneAnim->posKeys->addKey(QVector3D(key.mValue.x, key.mValue.y, key.mValue.z), key.mTime);
             }
 
             for (auto k = 0; k<nodeAnim->mNumRotationKeys; k++) {
                 auto key = nodeAnim->mRotationKeys[k];
-                boneAnim->rotKeys->addKey(QQuaternion(key.mValue.w, key.mValue.x, key.mValue.y, key.mValue.z), key.time);
+                boneAnim->rotKeys->addKey(QQuaternion(key.mValue.w, key.mValue.x, key.mValue.y, key.mValue.z), key.mTime);
             }
 
             for (auto k = 0; k<nodeAnim->mNumScalingKeys; k++) {
                 auto key = nodeAnim->mScalingKeys[k];
-                boneAnim->scaleKeys->addKey(QVector3D(key.mValue.x, key.mValue.y, key.mValue.z), key.time);
+                boneAnim->scaleKeys->addKey(QVector3D(key.mValue.x, key.mValue.y, key.mValue.z), key.mTime);
             }
 
             skelAnim->addBoneAnimation(nodeName, boneAnim);
@@ -294,6 +294,7 @@ Mesh *Mesh::loadAnimatedMesh(QString filePath)
         mesh->addSkeletalAnimation(animName, skelAnim);
     }
 
+    return mesh;
 }
 
 Mesh* Mesh::create(void* data,int dataSize,int numVerts,VertexLayout* vertexLayout)

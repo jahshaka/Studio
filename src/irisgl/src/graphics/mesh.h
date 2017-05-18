@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <qopengl.h>
 #include <QColor>
 #include "../irisglfwd.h"
+#include "../animation/skeletalanimation.h"
 
 class aiMesh;
 class QOpenGLBuffer;
