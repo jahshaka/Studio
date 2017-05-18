@@ -25,10 +25,30 @@ For more information see the LICENSE file
 
 #include "vertexlayout.h"
 #include "../geometry/trimesh.h"
+#include "skeleton.h"
+#include "../animation/skeletalanimation.h"
 
 namespace iris
 {
 
+QMatrix4x4 aiMatrixToQMatrix(aiMatrix4x4 aiMat) {
+    aiVector3D pos,scale;
+    aiQuaternion rot;
+
+    aiMat.Decompose(scale,rot,pos);
+
+    rot.Normalize();
+
+    QMatrix4x4 mat;
+    mat.setToIdentity();
+    mat.translate(QVector3D(pos.x, pos.y, pos.z));
+    mat.rotate(QQuaternion(rot.w, rot.x, rot.y, rot.z));
+    mat.scale(QVector3D(scale.x, scale.y, scale.z));
+
+    return mat;
+}
+
+// http://ogldev.atspace.co.uk/www/tutorial38/tutorial38.html
 Mesh::Mesh(aiMesh* mesh)
 {
     lastShaderId = -1;
@@ -56,6 +76,50 @@ Mesh::Mesh(aiMesh* mesh)
         this->addVertexArray(VertexAttribUsage::Normal, (void*)mesh->mNormals, sizeof(aiVector3D) * mesh->mNumVertices, GL_FLOAT,3);
     if(mesh->HasTangentsAndBitangents())
         this->addVertexArray(VertexAttribUsage::Tangent, (void*)mesh->mTangents, sizeof(aiVector3D) * mesh->mNumVertices, GL_FLOAT,3);
+
+    if (mesh->HasBones()) {
+        // bone weights for skeletal animation
+    #define MAX_BONE_INDICES 4
+        QVector<int> boneIndices;
+        boneIndices.reserve(MAX_BONE_INDICES * mesh->mNumVertices);
+        boneIndices.fill(0);
+        QVector<float> boneWeights;
+        boneWeights.reserve(MAX_BONE_INDICES * mesh->mNumVertices);
+        boneWeights.fill(0);
+
+
+        for (auto i = 0;i<mesh->mNumBones; i++) {
+            auto bone = mesh->mBones[i];
+
+            for (auto j = 0;j<bone->mNumWeights ; j++) {
+                auto weight = bone->mWeights[i];
+                var baseIndex = weight.mVertexId * MAX_BONE_INDICES;
+                // find empty slot and set weight
+                for(int k = 0; k<MAX_BONE_INDICES; k++) {
+                    if(boneWeights[baseIndex + k] == 0) {
+                        // an empty weight means an empty slot
+                        boneIndex[baseIndex + k] = i;// bone index in array
+                        boneWeights[baseIndex + k] = weight.mWeight;
+                    }
+                }
+            }
+        }
+
+        this->addVertexArray(VertexAttribUsage::BoneIndices, (void*)boneIndices.data(), sizeof(int) * boneIndices.size(), GL_FLOAT, MAX_BONE_INDICES);
+        this->addVertexArray(VertexAttribUsage::BoneWeights, (void*)boneWeights.data(), sizeof(float) * boneIndices.size(), GL_FLOAT, MAX_BONE_INDICES);
+
+        // create skeleton and add animations
+        auto skel = Skeleton::create();
+        for (auto i = 0;i<mesh->mNumBones; i++) {
+            auto meshBone = mesh->mBones[i];
+
+            auto bone = Bone::create(QString(meshBone->mName.C_Str()));
+            bone->inversePoseMatrix = aiMatrixToQMatrix(meshBone->mOffsetMatrix);
+
+            skel->addBone(bone);
+        }
+
+    }
 
     gl->glBindVertexArray(vao);
     // Assimp doesnt give the indices in an array
@@ -119,6 +183,16 @@ Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
     usesIndexBuffer = false;
 }
 
+SkeletonPtr Mesh::getSkeleton()
+{
+    return skeleton;
+}
+
+void Mesh::addSkeletalAnimation(QString name, SkeletalAnimationPtr anim)
+{
+    skeletalAnimations.insert(name, anim);
+}
+
 void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,Material* mat,GLenum primitiveMode)
 {
     draw(gl,mat->program,primitiveMode);
@@ -164,6 +238,62 @@ Mesh* Mesh::loadMesh(QString filePath)
     auto mesh = scene->mMeshes[0];
 
     return new Mesh(mesh);
+}
+
+Mesh *Mesh::loadAnimatedMesh(QString filePath)
+{
+    Assimp::Importer importer;
+    const aiScene *scene;
+
+    if (filePath.startsWith(":") || filePath.startsWith("qrc:")) {
+        // loads mesh from resource
+        QFile file(filePath);
+        file.open(QIODevice::ReadOnly);
+        auto data = file.readAll();
+        scene = importer.ReadFileFromMemory((void*)data.data(),
+                                            data.length(),
+                                            aiProcessPreset_TargetRealtime_Fast);
+    } else {
+        scene = importer.ReadFile(filePath.toStdString().c_str(),
+                                  aiProcessPreset_TargetRealtime_Fast);
+    }
+
+    //extract animations from scene
+    auto mesh = new Mesh(scene->mMeshes[0]);
+
+    for (int i = 0; i<scene->mNumAnimations; i++) {
+        auto anim = scene->mAnimations[i];
+        auto animName = QString(anim->mName.C_Str());
+        auto skelAnim = SkeletalAnimation::create();
+
+        for (auto j = 0; j<anim->mNumChannels; j++) {
+            auto nodeAnim = anim->mChannels[j];
+
+            auto nodeName = QString(nodeAnim->mNodeName.C_Str());
+            auto boneAnim = new BoneAnimation();
+
+            // extract tracks
+            for (auto k = 0; k<nodeAnim->mNumPositionKeys; k++) {
+                auto key = nodeAnim->mPositionKeys[k];
+                boneAnim->posKeys->addKey(QVector3D(key.mValue.x, key.mValue.y, key.mValue.z), key.time);
+            }
+
+            for (auto k = 0; k<nodeAnim->mNumRotationKeys; k++) {
+                auto key = nodeAnim->mRotationKeys[k];
+                boneAnim->rotKeys->addKey(QQuaternion(key.mValue.w, key.mValue.x, key.mValue.y, key.mValue.z), key.time);
+            }
+
+            for (auto k = 0; k<nodeAnim->mNumScalingKeys; k++) {
+                auto key = nodeAnim->mScalingKeys[k];
+                boneAnim->scaleKeys->addKey(QVector3D(key.mValue.x, key.mValue.y, key.mValue.z), key.time);
+            }
+
+            skelAnim->addBoneAnimation(nodeName, boneAnim);
+        }
+
+        mesh->addSkeletalAnimation(animName, skelAnim);
+    }
+
 }
 
 Mesh* Mesh::create(void* data,int dataSize,int numVerts,VertexLayout* vertexLayout)

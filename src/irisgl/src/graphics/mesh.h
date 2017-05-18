@@ -36,7 +36,9 @@ enum class VertexAttribUsage : int
     Normal = 5,
     Tangent = 6,
     BiTangent = 7,
-    Count = 8
+    BoneIndices = 8,
+    BoneWeights = 9,
+    Count = 10
 };
 
 struct MeshMaterialData
@@ -68,9 +70,11 @@ public:
 
 };
 
+//todo: switch to using mesh pointer
 class Mesh
 {
-
+    SkeletonPtr skeleton;
+    QMap<QString, SkeletalAnimationPtr> skeletalAnimations;
 public:
     QOpenGLFunctions_3_2_Core* gl;
     GLuint vao;
@@ -95,10 +99,16 @@ public:
         return triMesh;
     }
 
+
+    SkeletonPtr getSkeleton();
+
+    void addSkeletalAnimation(QString name, SkeletalAnimationPtr anim);
+
     void draw(QOpenGLFunctions_3_2_Core* gl, Material* mat, GLenum primitiveMode = GL_TRIANGLES);
     void draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* mat, GLenum primitiveMode = GL_TRIANGLES);
 
     static Mesh* loadMesh(QString filePath);
+    static Mesh* loadAnimatedMesh(QString filePath);
 
     //assumed ownership of vertexLayout
     static Mesh* create(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);

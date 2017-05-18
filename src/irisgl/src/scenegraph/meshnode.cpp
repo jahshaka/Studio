@@ -227,7 +227,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
     sceneNode->scale = QVector3D(scale.x,scale.y,scale.z);
 
     rot.Normalize();
-    sceneNode->rot = QQuaternion(rot.w,rot.x,rot.y,rot.z);//not sure if this is correct
+    sceneNode->rot = QQuaternion(rot.w,rot.x,rot.y,rot.z);
 
     for(unsigned i=0;i<node->mNumChildren;i++)
     {

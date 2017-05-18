@@ -59,6 +59,8 @@ public:
      */
     static SceneNodePtr loadAsSceneFragment(QString path, std::function<MaterialPtr(MeshMaterialData& data)> createMaterialFunc);
 
+    static SceneNodePtr loadAsAnimatedModel(QString path);
+
     void setMesh(QString source);
     void setMesh(Mesh* mesh);
 
