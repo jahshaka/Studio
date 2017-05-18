@@ -323,7 +323,8 @@ void AnimationWidget::addAnimation()
         return;
 
     GetNameDialog dialog;
-    dialog.setName("Animation"+node->getAnimations().count());
+    auto defaultName = QString("Animation%1").arg(node->getAnimations().count()+1);
+    dialog.setName(defaultName);
     dialog.setWindowTitle("New Animation Name");
     if (dialog.exec() == QDialog::Rejected)
         return;
