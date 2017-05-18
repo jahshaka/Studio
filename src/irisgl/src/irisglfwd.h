@@ -62,6 +62,9 @@ class FloatPropertyAnim;
 class Vector3DPropertyAnim;
 class ColorPropertyAnim;
 class AnimableProperty;
+class Bone;
+class Skeleton;
+class SkeletalAnimation;
 template<typename T> class Key;
 typedef Key<float> FloatKey;
 
@@ -87,6 +90,9 @@ typedef QSharedPointer<ParticleSystemNode> ParticleSystemNodePtr;
 typedef QSharedPointer<RenderTarget> RenderTargetPtr;
 typedef QSharedPointer<PostProcess> PostProcessPtr;
 typedef QSharedPointer<PostProcessManager> PostProcessManagerPtr;
+typedef QSharedPointer<Bone> BonePtr;
+typedef QSharedPointer<Skeleton> SkeletonPtr;
+typedef QSharedPointer<SkeletalAnimation> SkeletalAnimationPtr;
 
 
 
