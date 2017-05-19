@@ -1,6 +1,8 @@
 #include "database.h"
 #include "../../constants.h"
 #include "../../irisgl/src/core/irisutils.h"
+#include "../../core/project.h"
+#include "../../globals.h"
 
 #include <QDebug>
 #include <QJsonDocument>
@@ -14,31 +16,19 @@ Database::Database()
     }
 
     db = QSqlDatabase::addDatabase(Constants::DB_DRIVER);
-    db.setDatabaseName(IrisUtils::getAbsoluteAssetPath(Constants::DB_PATH));
+}
 
-    if (!db.open()) {
-        qCritical() << "ERROR: " << db.lastError();
+Database::~Database()
+{
+    db.close();
+    qDebug() << "db closed";
+}
+
+void Database::executeAndCheckQuery(QSqlQuery &query)
+{
+    if (!query.exec()) {
+        qDebug() << "Query failed to execute: " + query.lastError().text();
     }
-
-//    fetchRecord("");
-
-//    // test
-//    QJsonObject projectObj;
-//    QJsonObject activeObj;
-//    activeObj["path"] = "Scenes/Path";
-//    activeObj["thumbnail"] = "thumb.jpg";
-//    activeObj["version"] = 0.3;
-//    projectObj["activeProject"] = activeObj;
-//    QJsonDocument projectSln(projectObj);
-
-//    QSqlQuery query;
-//    query.prepare("insert into test_table (name, scene) values ('dragons', :sceneBlob)");
-//    query.bindValue(":sceneBlob", projectSln.toBinaryData());
-//    if( !query.exec() ) {
-//        qDebug() << "Error inserting image into table:\n" << query.lastError();
-//    } else {
-//        qDebug() << "got it in";
-//    }
 }
 
 bool Database::fetchRecord(const QString &name)
@@ -60,25 +50,60 @@ bool Database::fetchRecord(const QString &name)
     return false;
 }
 
+void Database::initializeDatabase(QString name)
+{
+    db.setDatabaseName(name);
+    if (!db.open()) {
+        qDebug() << "Couldn't open a DB connection. " << db.lastError();
+    }
+}
+
+void Database::createProject(QString projectName)
+{
+    QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_ROOT_TABLE + " ("
+                     "    name    VARCHAR(32),"
+                     "    scene   BLOB,"
+                     "    version VARCHAR(8),"
+                     "    hash    VARCHAR(32) PRIMARY KEY"
+                     ")";
+
+    QSqlQuery query;
+    query.prepare(schema);
+    executeAndCheckQuery(query);
+}
+
+void Database::insertScene(const QString &projectName, const QByteArray &sceneBlob)
+{
+    // TODO - revisit this
+    auto hash = QString(QCryptographicHash::hash(projectName.toLocal8Bit(),
+                                                 QCryptographicHash::Md5).toHex());
+
+    QSqlQuery query;
+    query.prepare("INSERT INTO " + Constants::DB_ROOT_TABLE + " (name, scene, version, hash)"
+                  "VALUES (:name, :scene, :version, :hash)");
+    query.bindValue(":name",    projectName);
+    query.bindValue(":scene",   sceneBlob);
+    query.bindValue(":version", Constants::CONTENT_VERSION);
+    query.bindValue(":hash",    hash);
+
+    executeAndCheckQuery(query);
+}
+
 void Database::updateScene(const QByteArray &sceneBlob)
 {
     QSqlQuery query;
-    query.prepare("UPDATE test_table SET scene = :blob WHERE name = :name");
-    query.bindValue(":blob", sceneBlob);
-    query.bindValue(":name", "dragons");
+    query.prepare("UPDATE " + Constants::DB_ROOT_TABLE + " SET scene = :blob WHERE name = :name");
+    query.bindValue(":blob",    sceneBlob);
+    query.bindValue(":name",    Globals::project->getProjectName());
 
-    if (query.exec()) {
-        qDebug() << "updated scene";
-    } else {
-        qDebug() << "there was an error mans " + query.lastError().text();
-    }
+    executeAndCheckQuery(query);
 }
 
 QByteArray Database::getSceneBlob() const
 {
     QSqlQuery query;
-    query.prepare("SELECT scene FROM test_table WHERE name = :name");
-    query.bindValue(":name", "dragons");
+    query.prepare("SELECT scene FROM " + Constants::DB_ROOT_TABLE + " WHERE name = ?");
+    query.addBindValue(Globals::project->getProjectName());
 
     if (query.exec()) {
         qDebug() << "got blob scene";
@@ -86,6 +111,8 @@ QByteArray Database::getSceneBlob() const
             return query.value(0).toByteArray();
         }
     } else {
-        qDebug() << "there was an error mans " + query.lastError().text();
+        qDebug() << "There was an error getting the blob! " + query.lastError().text();
     }
+
+    return QByteArray();
 }

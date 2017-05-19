@@ -96,7 +96,8 @@ SOURCES += src/main.cpp\
     src/widgets/keyframecurvewidget.cpp \
     src/dialogs/getnamedialog.cpp \
     src/widgets/createanimationwidget.cpp \
-    src/core/database/database.cpp
+    src/core/database/database.cpp \
+    src/core/database/projectdatabase.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -187,7 +188,8 @@ HEADERS  += src/mainwindow.h \
     src/widgets/animationwidgetdata.h \
     src/dialogs/getnamedialog.h \
     src/widgets/createanimationwidget.h \
-    src/core/database/database.h
+    src/core/database/database.h \
+    src/core/database/projectdatabase.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

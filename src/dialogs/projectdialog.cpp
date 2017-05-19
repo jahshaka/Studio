@@ -61,10 +61,10 @@ void ProjectDialog::newScene()
 
     if (!projectName.isEmpty() || !projectName.isNull()) {
         auto fullProjectPath = QDir(projectPath).filePath(projectName);
-        auto slnName = projectName + Constants::PROJ_EXT;
-        auto jahFile = QDir(fullProjectPath + "/Scenes").filePath(projectName + Constants::JAH_EXT);
+        auto slnName = QDir(fullProjectPath).filePath(projectName + Constants::PROJ_EXT);
+//        auto jahFile = QDir(fullProjectPath + "/Scenes").filePath(projectName + Constants::JAH_EXT);
 
-        Globals::project->setFilePath(jahFile);
+        Globals::project->setFilePath(slnName);
         Globals::project->setProjectPath(fullProjectPath);
 
         // make a dir and the default subfolders
@@ -77,32 +77,32 @@ void ProjectDialog::newScene()
         }
 
         // copy default scene to new project and open that as the new project
-        QFile::copy(IrisUtils::getAbsoluteAssetPath("scenes/startup/tile.png"),
-                    QDir(fullProjectPath + "/Textures").filePath("tile.png"));
+//        QFile::copy(IrisUtils::getAbsoluteAssetPath("scenes/startup/tile.png"),
+//                    QDir(fullProjectPath + "/Textures").filePath("tile.png"));
 
-        QFile::copy(IrisUtils::getAbsoluteAssetPath("scenes/startup/ground.obj"),
-                    QDir(fullProjectPath + "/Models").filePath("ground.obj"));
+//        QFile::copy(IrisUtils::getAbsoluteAssetPath("scenes/startup/ground.obj"),
+//                    QDir(fullProjectPath + "/Models").filePath("ground.obj"));
 
-        QFile::copy(IrisUtils::getAbsoluteAssetPath("scenes/startup/startup.jah"), jahFile);
+//        QFile::copy(IrisUtils::getAbsoluteAssetPath("scenes/startup/startup.jah"), jahFile);
 
-        QFile slnFile(QDir(Globals::project->getProjectFolder()).filePath(slnName));
-        slnFile.open(QIODevice::WriteOnly | QIODevice::Truncate);
+//        QFile slnFile(QDir(Globals::project->getProjectFolder()).filePath(slnName));
+//        slnFile.open(QIODevice::WriteOnly | QIODevice::Truncate);
 
-        QJsonObject projectObj;
-        QJsonObject activeObj;
-        activeObj["path"] = "Scenes/" + projectName + Constants::JAH_EXT;
-        activeObj["thumbnail"] = "";
-        activeObj["version"] = Constants::CONTENT_VERSION;
-        projectObj["activeProject"] = activeObj;
-        QJsonDocument projectSln(projectObj);
-        slnFile.write(projectSln.toJson());
-        slnFile.close();
+//        QJsonObject projectObj;
+//        QJsonObject activeObj;
+//        activeObj["path"] = "Scenes/" + projectName + Constants::JAH_EXT;
+//        activeObj["thumbnail"] = "";
+//        activeObj["version"] = Constants::CONTENT_VERSION;
+//        projectObj["activeProject"] = activeObj;
+//        QJsonDocument projectSln(projectObj);
+//        slnFile.write(projectSln.toJson());
+//        slnFile.close();
 
         window = new MainWindow;
         window->showMaximized();
-        // window->newProject(projectName, projectPath);
-        window->openProject(jahFile);
-        settings->addRecentlyOpenedScene(fullProjectPath);
+        window->newProject(projectName, fullProjectPath);
+//        window->openProject(jahFile);
+//        settings->addRecentlyOpenedScene(fullProjectPath);
 
         this->close();
     }
@@ -118,18 +118,18 @@ void ProjectDialog::openProject()
         auto projectName = QDir(projectPath).filePath(projectDir + Constants::PROJ_EXT);
 
         // TODO - move this to a utils class or something
-        QFile file(projectName);
-        file.open(QIODevice::ReadOnly);
-        auto data = file.readAll();
-        file.close();
-        auto projectObject = QJsonDocument::fromJson(data).object();
-        auto activeObject = projectObject["activeProject"].toObject();
+//        QFile file(projectName);
+//        file.open(QIODevice::ReadOnly);
+//        auto data = file.readAll();
+//        file.close();
+//        auto projectObject = QJsonDocument::fromJson(data).object();
+//        auto activeObject = projectObject["activeProject"].toObject();
 
         window = new MainWindow;
         window->showMaximized();
-        window->openProject(QDir(projectPath).filePath(activeObject["path"].toString()));
+        window->openProject(projectName);
 
-        settings->addRecentlyOpenedScene(projectPath);
+//        settings->addRecentlyOpenedScene(projectPath);
         this->close();
     }
 
