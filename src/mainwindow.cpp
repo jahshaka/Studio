@@ -995,6 +995,16 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
         //materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
         //mat->generate(materialReader->getParsedShader());
         mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+        mat->setValue("diffuseColor", data.diffuseColor);
+        mat->setValue("specularColor", data.specularColor);
+        mat->setValue("ambientColor", data.ambientColor);
+        mat->setValue("emissionColor", data.emissionColor);
+
+        mat->setValue("shininess", data.shininess);
+
+        mat->setValue("diffuseTexture", data.diffuseTexture);
+        mat->setValue("specularTexture", data.specularTexture);
+        mat->setValue("normalTexture", data.normalTexture);
 
         return mat;
     });

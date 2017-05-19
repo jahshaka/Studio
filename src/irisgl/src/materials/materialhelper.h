@@ -14,24 +14,12 @@ For more information see the LICENSE file
 
 #include "../irisglfwd.h"
 #include <QColor>
+#include "../graphics/mesh.h"
 
 class aiMaterial;
 
 namespace iris
 {
-
-struct MeshMaterialData
-{
-    QColor diffuseColor;
-    QColor specularColor;
-    QColor ambientColor;
-    QColor emissionColor;
-    float shininess;
-
-    QString diffuseTexture;
-    QString specularTexture;
-    QString normalTexture;
-};
 
 class MaterialHelper
 {

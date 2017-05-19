@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "assimp/quaternion.h"
 #include "defaultmaterial.h"
 #include "../graphics/texture2d.h"
+#include "../graphics/mesh.h"
 
 namespace iris
 {
