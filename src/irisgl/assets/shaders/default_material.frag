@@ -105,6 +105,7 @@ uniform Light u_lights[MAX_LIGHTS];
 uniform int u_lightCount;
 
 uniform vec3 u_eyePos;
+uniform vec3 u_sceneAmbient; 
 
 struct Material
 {
@@ -230,7 +231,7 @@ void main()
 
     float ShadowFactor = u_shadowEnabled ? CalcShadowMap(FragPosLightSpace) : 1.0;
 
-    vec3 finalColor = (u_material.ambient + (ShadowFactor *
+    vec3 finalColor = ((u_material.ambient * u_sceneAmbient) + (ShadowFactor *
                       (diffuse + (u_material.specular * specular)))) * col;
 
     if(u_useReflectionTex)

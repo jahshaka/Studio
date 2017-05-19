@@ -366,6 +366,9 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             program->setUniformValue("u_normalMatrix",  item->worldMatrix.normalMatrix());
 
             program->setUniformValue("u_eyePos",        renderData->eyePos);
+            program->setUniformValue("u_sceneAmbient",  QVector3D(scene->ambientColor.redF(),
+                                                                  scene->ambientColor.greenF(),
+                                                                  scene->ambientColor.blueF()));
 
             if (item->renderStates.fogEnabled && scene->fogEnabled ) {
                 program->setUniformValue("u_fogData.color", renderData->fogColor);
