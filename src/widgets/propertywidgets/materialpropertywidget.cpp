@@ -40,7 +40,7 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
 
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         // TODO - properly update only when requested
-        auto shaderName = Constants::SHADER_DEFS + material->getName();
+        auto shaderName = Constants::SHADER_DEFS + material->getName() + ".shader";
         auto shaderFile = QFileInfo(shaderName);
         if (shaderFile.exists()) {
             material->generate(IrisUtils::getAbsoluteAssetPath(shaderName));
