@@ -81,10 +81,10 @@ Mesh::Mesh(aiMesh* mesh)
         // bone weights for skeletal animation
     #define MAX_BONE_INDICES 4
         QVector<int> boneIndices;
-        boneIndices.reserve(MAX_BONE_INDICES * mesh->mNumVertices);
+        boneIndices.resize(MAX_BONE_INDICES * mesh->mNumVertices);
         boneIndices.fill(0);
         QVector<float> boneWeights;
-        boneWeights.reserve(MAX_BONE_INDICES * mesh->mNumVertices);
+        boneWeights.resize(MAX_BONE_INDICES * mesh->mNumVertices);
         boneWeights.fill(0);
 
 
@@ -92,21 +92,25 @@ Mesh::Mesh(aiMesh* mesh)
             auto bone = mesh->mBones[i];
 
             for (auto j = 0;j<bone->mNumWeights ; j++) {
-                auto weight = bone->mWeights[i];
+                auto weight = bone->mWeights[j];
                 auto baseIndex = weight.mVertexId * MAX_BONE_INDICES;
+                qDebug() << weight.mVertexId << " - " << weight.mWeight;
                 // find empty slot and set weight
                 for(int k = 0; k<MAX_BONE_INDICES; k++) {
-                    if(boneWeights[baseIndex + k] == 0) {
-                        // an empty weight means an empty slot
-                        boneIndices[baseIndex + k] = i;// bone index in array
-                        boneWeights[baseIndex + k] = weight.mWeight;
+                    if (baseIndex + k < boneWeights.size()) { //just in case
+                        if(boneWeights[baseIndex + k] == 0) {
+                            // an empty weight means an empty slot
+                            boneIndices[baseIndex + k] = i;// bone index in array
+                            boneWeights[baseIndex + k] = weight.mWeight;
+                            break;
+                        }
                     }
                 }
             }
         }
 
         this->addVertexArray(VertexAttribUsage::BoneIndices, (void*)boneIndices.data(), sizeof(int) * boneIndices.size(), GL_FLOAT, MAX_BONE_INDICES);
-        this->addVertexArray(VertexAttribUsage::BoneWeights, (void*)boneWeights.data(), sizeof(float) * boneIndices.size(), GL_FLOAT, MAX_BONE_INDICES);
+        this->addVertexArray(VertexAttribUsage::BoneWeights, (void*)boneWeights.data(), sizeof(float) * boneWeights.size(), GL_FLOAT, MAX_BONE_INDICES);
 
         // create skeleton and add animations
         auto skel = Skeleton::create();
