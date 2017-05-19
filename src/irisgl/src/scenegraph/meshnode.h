@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef MESHNODE_H
 #define MESHNODE_H
 
+#include <functional>
 #include "../irisglfwd.h"
 #include "../core/scenenode.h"
 #include "../core/irisutils.h"
@@ -22,6 +23,7 @@ namespace iris
 {
 
 class RenderItem;
+struct MeshMaterialData;
 
 class MeshNode : public SceneNode
 {
@@ -55,7 +57,7 @@ public:
      * @param path
      * @return
      */
-    static SceneNodePtr loadAsSceneFragment(QString path);
+    static SceneNodePtr loadAsSceneFragment(QString path, std::function<MaterialPtr(MeshMaterialData& data)> createMaterialFunc);
 
     void setMesh(QString source);
     void setMesh(Mesh* mesh);

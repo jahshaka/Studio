@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QString>
 #include <qopengl.h>
+#include <QColor>
 #include "../irisglfwd.h"
 
 class aiMesh;
@@ -36,6 +37,19 @@ enum class VertexAttribUsage : int
     Tangent = 6,
     BiTangent = 7,
     Count = 8
+};
+
+struct MeshMaterialData
+{
+    QColor diffuseColor;
+    QColor specularColor;
+    QColor ambientColor;
+    QColor emissionColor;
+    float shininess;
+
+    QString diffuseTexture;
+    QString specularTexture;
+    QString normalTexture;
 };
 
 class VertexArrayData

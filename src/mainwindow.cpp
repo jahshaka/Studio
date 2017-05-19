@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include "irisgl/src/scenegraph/lightnode.h"
 #include "irisgl/src/scenegraph/viewernode.h"
 #include "irisgl/src/scenegraph/particlesystemnode.h"
+#include "irisgl/src/scenegraph/meshnode.h"
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/materials/custommaterial.h"
 #include "irisgl/src/graphics/forwardrenderer.h"
@@ -987,7 +988,26 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
     if (filename.isEmpty()) return;
 
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::loadAsSceneFragment(filename);
+    auto node = iris::MeshNode::loadAsSceneFragment(filename,[](iris::MeshMaterialData& data)
+    {
+        auto mat = iris::CustomMaterial::create();
+        //MaterialReader *materialReader = new MaterialReader();
+        //materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+        //mat->generate(materialReader->getParsedShader());
+        mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+        mat->setValue("diffuseColor", data.diffuseColor);
+        mat->setValue("specularColor", data.specularColor);
+        mat->setValue("ambientColor", data.ambientColor);
+        mat->setValue("emissionColor", data.emissionColor);
+
+        mat->setValue("shininess", data.shininess);
+
+        mat->setValue("diffuseTexture", data.diffuseTexture);
+        mat->setValue("specularTexture", data.specularTexture);
+        mat->setValue("normalTexture", data.normalTexture);
+
+        return mat;
+    });
 
     // model file may be invalid so null gets returned
     if (!node) return;
