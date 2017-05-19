@@ -431,7 +431,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 if (!!activeSceneNode) {
                     sceneView->hideGizmo();
 
-                    if (info.suffix() == "obj") {
+                    if (isModelExtension(info.suffix())) {
                         if (sceneView->doActiveObjectPicking(evt->posF())) {
                             activeSceneNode->pos = sceneView->hit;
                         } else if (sceneView->updateRPI(sceneView->editorCam->pos,
@@ -448,7 +448,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     }
                 }
 
-                if (info.suffix() != "obj") {
+                if (!isModelExtension(info.suffix())) {
                     sceneView->doObjectPicking(evt->posF(), true);
                 }
             }
@@ -467,7 +467,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 }
 
                 auto info = QFileInfo(evt->mimeData()->text());
-                if (info.suffix() == "obj") {
+                if (isModelExtension(info.suffix())) {
 
                     if (dragging) {
                         // TODO swap this with the actual model later on
@@ -491,13 +491,13 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     evt->ignore();
                 }
 
-                if (info.suffix() == "obj") {
+                if (isModelExtension(info.suffix())) {
                     auto ppos = activeSceneNode->pos;
                     deleteNode();
                     addMesh(evt->mimeData()->text(), true, ppos);
                 }
 
-                if (!!activeSceneNode && info.suffix() != "obj") {
+                if (!!activeSceneNode && !isModelExtension(info.suffix())) {
                     auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
                     auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
 
@@ -1166,6 +1166,15 @@ void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
     event->accept();
 }
 
+bool MainWindow::isModelExtension(QString extension)
+{
+    if(extension == "obj" ||
+       extension == "3ds" ||
+       extension == "fbx" ||
+       extension == "dae")
+        return true;
+    return false;
+}
 
 QIcon MainWindow::getIconFromSceneNodeType(SceneNodeType type)
 {
