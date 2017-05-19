@@ -13,17 +13,31 @@ For more information see the LICENSE file
 #define MATERIALHELPER_H
 
 #include "../irisglfwd.h"
+#include <QColor>
 
 class aiMaterial;
 
 namespace iris
 {
 
+struct MeshMaterialData
+{
+    QColor diffuseColor;
+    QColor specularColor;
+    QColor ambientColor;
+    QColor emissionColor;
+    float shininess;
+
+    QString diffuseTexture;
+    QString specularTexture;
+    QString normalTexture;
+};
+
 class MaterialHelper
 {
 public:
     static DefaultMaterialPtr createMaterial(aiMaterial* aiMat, QString assetPath);
-
+    static void extractMaterialData(aiMaterial* aiMat, QString assetPath, MeshMaterialData& data);
 };
 
 }

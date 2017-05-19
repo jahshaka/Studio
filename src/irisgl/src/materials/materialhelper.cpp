@@ -77,4 +77,26 @@ DefaultMaterialPtr MaterialHelper::createMaterial(aiMaterial* aiMat,QString asse
     return mat;
 }
 
+void MaterialHelper::extractMaterialData(aiMaterial *aiMat, QString assetPath, MeshMaterialData& mat)
+{
+    mat.diffuseColor = getAiMaterialColor(aiMat, AI_MATKEY_COLOR_DIFFUSE);
+    mat.specularColor = getAiMaterialColor(aiMat, AI_MATKEY_COLOR_SPECULAR);
+    mat.ambientColor = getAiMaterialColor(aiMat, AI_MATKEY_COLOR_AMBIENT);
+    mat.emissionColor = getAiMaterialColor(aiMat,AI_MATKEY_COLOR_EMISSIVE);
+
+    mat.shininess = getAiMaterialFloat(aiMat, AI_MATKEY_SHININESS);
+
+    if(!assetPath.isEmpty())
+    {
+        auto diffuseTex = getAiMaterialTexture(aiMat, aiTextureType_DIFFUSE);
+        mat.diffuseTexture = QDir::cleanPath(assetPath + QDir::separator() + diffuseTex);
+
+        auto specularTex = getAiMaterialTexture(aiMat, aiTextureType_SPECULAR);
+        mat.specularTexture = QDir::cleanPath(assetPath + QDir::separator() + specularTex);
+
+        auto normalsTex = getAiMaterialTexture(aiMat, aiTextureType_NORMALS);
+        mat.normalTexture = QDir::cleanPath(assetPath + QDir::separator() + normalsTex);
+    }
+}
+
 }
