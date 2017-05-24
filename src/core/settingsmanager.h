@@ -32,14 +32,14 @@ public:
 
     int recentlyOpenedFilesSize;
 
-    SettingsManager(QString fileName = "settings.ini") {
+    // TODO -- allow changing this location, portable or system
+    SettingsManager(QString fileName = "jahsettings.ini") {
         recentlyOpenedFilesSize = 5;
-        auto path = fileName;
-        loadSettings(path);
+        loadSettings(fileName);
     }
 
     void loadSettings(QString path) {
-        settings = new QSettings(path,QSettings::IniFormat);
+        settings = new QSettings(path, QSettings::IniFormat);
     }
 
     void setValue(QString name, QVariant value) {

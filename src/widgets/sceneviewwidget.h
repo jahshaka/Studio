@@ -20,7 +20,8 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include <QHash>
 
-#include "../irisgl.h"
+#include "../irisgl/src/irisglfwd.h"
+#include "../irisgl/src/math/intersectionhelper.h"
 
 namespace iris
 {
@@ -115,25 +116,39 @@ public:
     void startPlayingScene();
     void stopPlayingScene();
 
+    iris::ForwardRendererPtr getRenderer() const;
+    void saveFrameBuffer(QString filePath);
+
+    QVector3D calculateMouseRay(const QPointF& pos);
+    void mousePressEvent(QMouseEvent* evt);
+    void mouseMoveEvent(QMouseEvent* evt);
+
+    float translatePlaneD;
+    QVector3D finalHitPoint;
+    QVector3D Offset;
+    QVector3D hit;
+    iris::SceneNodePtr activeDragNode;
+    bool updateRPI(QVector3D pos, QVector3D r);
+    bool doActiveObjectPicking(const QPointF& point);
+    void doObjectPicking(const QPointF& point, bool skipLights = false);
+
 protected:
     void initializeGL();
     bool eventFilter(QObject *obj, QEvent *event);
-    void mousePressEvent(QMouseEvent* evt);
-    void mouseMoveEvent(QMouseEvent* evt);
-    void mouseReleaseEvent(QMouseEvent* evt);
+    void mouseReleaseEvent(QMouseEvent* event);
     void wheelEvent(QWheelEvent *event);
     void keyPressEvent(QKeyEvent *event);
     void keyReleaseEvent(QKeyEvent *event);
     void focusOutEvent(QFocusEvent* event);
 
     // does raycasting from the mouse's screen position.
-    void doObjectPicking(const QPointF& point);
     void doGizmoPicking(const QPointF& point);
 
 private slots:
     void paintGL();
     void updateScene(bool once = false);
     void resizeGL(int width, int height);
+
 
 private:
     void doLightPicking(const QVector3D& segStart,
@@ -165,8 +180,6 @@ private:
 
     void initialize();
 
-    QVector3D calculateMouseRay(const QPointF& pos);
-
     GizmoInstance* translationGizmo;
     RotationGizmo* rotationGizmo;
     ScaleGizmo* scaleGizmo;
@@ -178,6 +191,7 @@ private:
     iris::FullScreenQuad* fsQuad;
 
     bool playScene;
+    iris::Plane sceneFloor;
     float animTime;
 
 signals:

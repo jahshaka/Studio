@@ -66,7 +66,7 @@ private:
     WorldPropertyWidget* worldPropView;
     FogPropertyWidget*  fogPropView;
     MeshPropertyWidget* meshPropView;
-    // DemoPane* demoPane;
+     DemoPane* demoPane;
 };
 
 #endif // PROPERTYWIDGET_H

@@ -9,19 +9,23 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <Qt>
+#include <QFileDialog>
+
 #include "filepickerwidget.h"
 #include "ui_filepickerwidget.h"
-#include "qfiledialog.h"
-#include <Qt>
-#include <QDebug>
+
+#include "assetpickerwidget.h"
 
 FilePickerWidget::FilePickerWidget(QWidget *parent) :
-    QWidget(parent),
+    BaseWidget(parent),
     ui(new Ui::FilePickerWidget)
 {
     ui->setupUi(this);
 
     connect(ui->load, SIGNAL(pressed()), this, SLOT(filePicker()));
+
+    type = WidgetType::FileWidget;
 }
 
 FilePickerWidget::~FilePickerWidget()
@@ -31,19 +35,33 @@ FilePickerWidget::~FilePickerWidget()
 
 void FilePickerWidget::filePicker()
 {
-    auto file = openFile();
+    auto picker = new AssetPickerWidget(AssetType::Object);
+    connect(picker, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(pickFile(QListWidgetItem*)));
+//    auto file = openFile();
 
-    if (file.isNull() || file.isEmpty()) return;
-    else {
-        QFileInfo fileInfo(file);
-        filename = fileInfo.fileName();
-        filepath = fileInfo.filePath();
-        ui->filename->setText(filename);
-        ui->filename->setToolTip(filepath);
-        ui->filename->scroll(ui->filename->width(), 0);
+//    if (file.isNull() || file.isEmpty()) return;
+//    else {
+//        QFileInfo fileInfo(file);
+//        filename = fileInfo.fileName();
+//        filepath = fileInfo.filePath();
+//        ui->filename->setText(filename);
+//        ui->filename->setToolTip(filepath);
+//        ui->filename->scroll(ui->filename->width(), 0);
 
-        emit onPathChanged(filepath);
-    }
+//        emit onPathChanged(filepath);
+    //    }
+}
+
+void FilePickerWidget::pickFile(QListWidgetItem *item)
+{
+    QFileInfo fileInfo(item->data(Qt::UserRole).toString());
+    filename = fileInfo.fileName();
+    filepath = fileInfo.filePath();
+    ui->filename->setText(filename);
+    ui->filename->setToolTip(filepath);
+    ui->filename->scroll(ui->filename->width(), 0);
+
+    emit onPathChanged(filepath);
 }
 
 QString FilePickerWidget::getFilepath() const

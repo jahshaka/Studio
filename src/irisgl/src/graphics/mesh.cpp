@@ -65,7 +65,12 @@ Mesh::Mesh(aiMesh* mesh)
     triMesh->triangles.reserve(mesh->mNumFaces);
     for(unsigned i = 0; i < mesh->mNumFaces; i++)
     {
+
         auto face = mesh->mFaces[i];
+
+        if (face.mNumIndices!=3)
+            continue;
+
         indices.append(face.mIndices[0]);
         indices.append(face.mIndices[1]);
         indices.append(face.mIndices[2]);
@@ -143,17 +148,18 @@ Mesh* Mesh::loadMesh(QString filePath)
     Assimp::Importer importer;
     const aiScene *scene;
 
-    if(filePath.startsWith(":") || filePath.startsWith("qrc:"))
-    {
+    if (filePath.startsWith(":") || filePath.startsWith("qrc:")) {
         // loads mesh from resource
         QFile file(filePath);
         file.open(QIODevice::ReadOnly);
         auto data = file.readAll();
-        scene = importer.ReadFileFromMemory((void*)data.data(), data.length(), aiProcessPreset_TargetRealtime_Fast);
+        scene = importer.ReadFileFromMemory((void*)data.data(),
+                                            data.length(),
+                                            aiProcessPreset_TargetRealtime_Fast);
+    } else {
+        scene = importer.ReadFile(filePath.toStdString().c_str(),
+                                  aiProcessPreset_TargetRealtime_Fast);
     }
-    else
-        scene = importer.ReadFile(filePath.toStdString().c_str(),aiProcessPreset_TargetRealtime_Fast);
-
 
     auto mesh = scene->mMeshes[0];
 

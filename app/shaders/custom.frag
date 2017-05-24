@@ -28,6 +28,7 @@ const float R0 = ((air - glass) * (air - glass)) / ((air + glass) * (air + glass
 
 uniform float u_refractive_factor;
 uniform float u_influence;
+uniform float u_alpha;
 
 void main()
 {
@@ -44,5 +45,5 @@ void main()
 
     vec4 mixedTr = mix(refr_color, refl_color, u_influence);
 
-    fragColor = mixedTr; // texture(skybox, R);
+    fragColor = vec4(mixedTr.rgb, u_alpha); // texture(skybox, R);
 }

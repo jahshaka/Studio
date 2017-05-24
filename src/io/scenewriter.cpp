@@ -19,6 +19,7 @@ For more information see the LICENSE file
 
 #include "../editor/editordata.h"
 
+#include "../irisgl/src/irisgl.h"
 #include "../irisgl/src/core/scene.h"
 #include "../irisgl/src/core/scenenode.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
@@ -27,15 +28,20 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../irisgl/src/scenegraph/particlesystemnode.h"
 #include "../irisgl/src/materials/custommaterial.h"
+#include "../irisgl/src/materials/propertytype.h"
 #include "../irisgl/src/animation/animation.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
+#include "../irisgl/src/graphics/postprocess.h"
+#include "../irisgl/src/graphics/postprocessmanager.h"
 
 #include "scenewriter.h"
 #include "assetiobase.h"
 
 
-void SceneWriter::writeScene(QString filePath,iris::ScenePtr scene,EditorData* editorData)
+void SceneWriter::writeScene(QString filePath,iris::ScenePtr scene,
+                             iris::PostProcessManagerPtr postMan,
+                             EditorData* editorData)
 {
     dir = AssetIOBase::getDirFromFileName(filePath);
     QFile file(filePath);
@@ -46,6 +52,10 @@ void SceneWriter::writeScene(QString filePath,iris::ScenePtr scene,EditorData* e
     writeScene(projectObj, scene);
     if(editorData != nullptr)
         writeEditorData(projectObj, editorData);
+
+    if (!!postMan) {
+        writePostProcessData(projectObj, postMan);
+    }
 
     QJsonDocument saveDoc(projectObj);
     file.write(saveDoc.toJson());
@@ -58,7 +68,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj,iris::ScenePtr scene)
 
     //scene properties
     if (!!scene->skyTexture) {
-        sceneObj["skyTexture"] = /*this->getRelativePath(*/scene->skyTexture->getSource();//);
+        sceneObj["skyTexture"] = getRelativePath(scene->skyTexture->getSource());//);
     } else {
         sceneObj["skyTexture"] = "";
     }
@@ -70,6 +80,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj,iris::ScenePtr scene)
     sceneObj["fogStart"] = scene->fogStart;
     sceneObj["fogEnd"] = scene->fogEnd;
     sceneObj["fogEnabled"] = scene->fogEnabled;
+    sceneObj["shadowEnabled"] = scene->shadowEnabled;
 
 
     QJsonObject rootNodeObj;
@@ -77,6 +88,29 @@ void SceneWriter::writeScene(QJsonObject& projectObj,iris::ScenePtr scene)
     sceneObj["rootNode"] = rootNodeObj;
 
     projectObj["scene"] = sceneObj;
+}
+
+void SceneWriter::writePostProcessData(QJsonObject &projectObj, iris::PostProcessManagerPtr postMan)
+{
+    QJsonArray processesObj;
+
+    for(auto process : postMan->getPostProcesses()) {
+        QJsonObject processObj;
+
+        processObj["name"] = process->getName();
+
+        QJsonObject props;
+
+        for ( auto prop : process->getProperties()) {
+            props.insert(prop->name, QJsonValue::fromVariant(prop->getValue()));
+        }
+
+        processObj["properties"] = props;
+
+        processesObj.append(processObj);
+    }
+
+    projectObj["postprocesses"] = processesObj;
 }
 
 void SceneWriter::writeEditorData(QJsonObject& projectObj,EditorData* editorData)
@@ -224,19 +258,24 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
 
 void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat)
 {
-    matObj["name"] = mat->getMaterialName();
+    matObj["name"] = mat->getName();
 
-    for (auto s : mat->colorUniforms) {
-        matObj[s.name] = s.value.name();
-    }
+    for (auto prop : mat->properties) {
+        if (prop->type == iris::PropertyType::Bool) {
+            matObj[prop->name] = prop->getValue().toBool();
+        }
 
-    // TODO - nick can you fix these path path things... too many. idk
-    for (auto s : mat->textureUniforms) {
-        matObj[s.name] = getRelativePath(s.value);
-    }
+        if (prop->type == iris::PropertyType::Float) {
+            matObj[prop->name] = prop->getValue().toFloat();
+        }
 
-    for (auto s : mat->sliderUniforms) {
-        matObj[s.name] = s.value;
+        if (prop->type == iris::PropertyType::Color) {
+            matObj[prop->name] = prop->getValue().value<QColor>().name();
+        }
+
+        if (prop->type == iris::PropertyType::Texture) {
+            matObj[prop->name] = getRelativePath(prop->getValue().toString());
+        }
     }
 }
 

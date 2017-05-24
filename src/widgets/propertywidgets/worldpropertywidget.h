@@ -14,8 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QSharedPointer>
-#include "../irisglfwd.h"
-#include "../graphics/texture2d.h"
+#include "../../irisgl/src/irisglfwd.h"
 #include "../accordianbladewidget.h"
 
 namespace iris {

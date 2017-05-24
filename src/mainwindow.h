@@ -17,7 +17,9 @@ For more information see the LICENSE file
 #include <QModelIndex>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QDrag>
 #include <QSharedPointer>
+#include <QVector3D>
 #include "irisgl/src/irisglfwd.h"
 
 namespace Ui {
@@ -45,6 +47,7 @@ class AnimationWidget;
 class TexturedPlaneLayerWidget;
 class WorldLayerWidget;
 class EndlessPlaneLayerWidget;
+class PostProcessesWidget;
 
 class MaterialWidget;
 class TransformGizmo;
@@ -64,15 +67,6 @@ class JahRenderer;
 class GizmoHitData;
 class AdvancedGizmoHandle;
 class MaterialPreset;
-/*
-namespace iris
-{
-    class SceneNode;
-    class Scene;
-
-    //typedef SharedPO
-}
-*/
 
 class QOpenGLFunctions_3_2_Core;
 
@@ -131,6 +125,7 @@ private:
     void setupHelpMenu();
 
     //ui setup
+    void createPostProcessDockWidget();
     void setupLayerButtonMenu();
     void initLightLayerUi();
     void initTorusLayerUi();
@@ -147,7 +142,7 @@ private:
 
     //void addSceneNodeToSelectedTreeItem(QTreeWidget* sceneTree,SceneNode* newNode,bool addToSelected,QIcon icon);
     void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
-    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode);
+    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
 
     void setupDefaultScene();
 
@@ -174,9 +169,10 @@ public slots:
     void addCylinder();
     void addEmpty();
     void addViewer();
-    void addMesh();
+    void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
     void addTexturedPlane();
     void addViewPoint();
+    void addDragPlaceholder();
 
     //context menu functions
     void duplicateNode();
@@ -201,11 +197,13 @@ public slots:
     void saveScene();
     void saveSceneAs();
     void loadScene();
+//    QString loadSceneDelegate();
     void openRecentFile();
 
     void showPreferences();
     void exitApp();
     void newScene();
+    void newProject(const QString&, const QString&);
 
     void showAboutDialog();
     void showLicenseDialog();
@@ -230,7 +228,7 @@ private slots:
     void rotateGizmo();
     void scaleGizmo();
 
-//    void onPlaySceneButton();
+    void onPlaySceneButton();
 
 private:
     Ui::MainWindow *ui;
@@ -257,11 +255,14 @@ private:
     EndlessPlaneLayerWidget* endlessPlaneLayerWidget;
     MaterialWidget* materialWidget;
     AnimationWidget* animWidget;
+    PostProcessesWidget* postProcessWidget;
+    QDockWidget* postProcessDockWidget;
 
     Qt::MouseButton mouseButton;
     QPoint mousePressPos;
     QPoint mouseReleasePos;
     QPoint mousePos;
+    bool dragging;
 
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;

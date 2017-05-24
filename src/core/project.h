@@ -15,6 +15,7 @@ For more information see the LICENSE file
 
 class Project
 {
+public:
     QString folderPath;
     QString fileName;
     QString projectName;
@@ -24,6 +25,7 @@ class Project
 public:
     Project();
     void setFilePath(QString filePath);
+    void setProjectPath(const QString&);
     bool isSaved();
 
     QString getFilePath();

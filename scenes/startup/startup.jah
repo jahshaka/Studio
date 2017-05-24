@@ -6,16 +6,18 @@
             "nearClip": 0.10000000149011612,
             "pos": {
                 "x": 0,
-                "y": 8,
-                "z": 24
+                "y": 5.6275224685668945,
+                "z": 14.172601699829102
             },
             "rot": {
-                "x": -5.000000953674316,
+                "x": -5.000001907348633,
                 "y": 0,
                 "z": 0
             }
         }
     },
+    "postprocesses": [
+    ],
     "scene": {
         "ambientColor": {
             "a": 255,
@@ -32,6 +34,7 @@
         "fogEnabled": true,
         "fogEnd": 180,
         "fogStart": 100,
+        "shadowEnabled": true,
         "rootNode": {
             "animation": {
                 "frames": [
@@ -53,20 +56,21 @@
                     ],
                     "faceCullingMode": "back",
                     "material": {
+                        "ambientColor": "#000000",
+                        "diffuseColor": "#ffffff",
+                        "diffuseTexture": "../Textures/tile.png",
                         "name": "Default",
-                        "ambientColor": "#000",
-                        "diffuseColor": "#FFF",
-                        "diffuseTexture": "app/content/textures/tile.png",
-                        "normalIntensity": 1,
+                        "normalIntensity": 0,
                         "normalTexture": "",
                         "reflectionInfluence": 0,
                         "reflectionTexture": "",
                         "shininess": 0,
-                        "specularColor": "#FFF",
+                        "specularColor": "#ffffff",
                         "specularTexture": "",
-                        "textureScale": 4
+                        "textureScale": 4,
+                        "useAlpha": false
                     },
-                    "mesh": "app/models/ground.obj",
+                    "mesh": "../Models/ground.obj",
                     "meshIndex": 0,
                     "name": "Ground",
                     "pickable": false,
@@ -113,7 +117,7 @@
                         "z": 0
                     },
                     "rot": {
-                        "x": 15.000001907348633,
+                        "x": 15.000003814697266,
                         "y": 0,
                         "z": 0
                     },

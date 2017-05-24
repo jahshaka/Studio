@@ -10,6 +10,9 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QDir>
 
 #include "meshnode.h"
@@ -31,6 +34,8 @@ For more information see the LICENSE file
 
 #include "../core/scene.h"
 #include "../core/scenenode.h"
+#include "../core/irisutils.h"
+
 
 namespace iris
 {
@@ -121,6 +126,16 @@ void MeshNode::submitRenderItems()
     }
 }
 
+QJsonObject readJahShader(const QString &filePath)
+{
+    QFile file(filePath);
+    file.open(QIODevice::ReadOnly);
+
+    auto data = file.readAll();
+    file.close();
+    return QJsonDocument::fromJson(data).object();
+}
+
 /**
  * Recursively builds a SceneNode/MeshNode heirarchy from the aiScene of the loaded model
  * todo: read and apply material data
@@ -151,11 +166,13 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
             auto m = scene->mMaterials[mesh->mMaterialIndex];
             auto dir = QFileInfo(filePath).absoluteDir().absolutePath();
 
-            auto meshMat = iris::MaterialHelper::createMaterial(m, dir);
-            if(!!meshMat)
-                meshNode->setMaterial(meshMat);
-            else
-                meshNode->setMaterial(iris::DefaultMaterial::create());
+            auto m2 = iris::CustomMaterial::create();
+            m2->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+            if (!!m2) {
+                meshNode->setMaterial(m2);
+            } else {
+                meshNode->setMaterial(iris::CustomMaterial::create());
+            }
 
         }
         sceneNode = meshNode;
@@ -217,27 +234,21 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath)
     Assimp::Importer importer;
     const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(),aiProcessPreset_TargetRealtime_Fast);
 
-    if(!scene)
-        return QSharedPointer<iris::MeshNode>(nullptr);
+    if (!scene) return QSharedPointer<iris::MeshNode>(nullptr);
+    if (scene->mNumMeshes == 0) return QSharedPointer<iris::MeshNode>(nullptr);
 
-    if(scene->mNumMeshes==0)
-        return QSharedPointer<iris::MeshNode>(nullptr);
-
-    if(scene->mNumMeshes==1)
-    {
+    if (scene->mNumMeshes == 1) {
         auto mesh = scene->mMeshes[0];
         auto node = iris::MeshNode::create();
         node->setMesh(new Mesh(scene->mMeshes[0]));
         node->meshPath = filePath;
         node->meshIndex = 0;
 
-        //mesh->mMaterialIndex is always >= 0
-        auto m = scene->mMaterials[mesh->mMaterialIndex];
-        auto dir = QFileInfo(filePath).absoluteDir().absolutePath();
-
-        auto meshMat = MaterialHelper::createMaterial(m,dir);
-        if(!!meshMat)
-            node->setMaterial(meshMat);
+        auto m = iris::CustomMaterial::create();
+        m->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+        if (!!m) {
+            node->setMaterial(m);
+        }
 
         return node;
     }

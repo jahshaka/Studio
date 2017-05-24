@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "irisgl/src/graphics/texture2d.h"
 #include "irisgl/src/animation/keyframeset.h"
 #include "irisgl/src/animation/keyframeanimation.h"
+#include "irisgl/src/graphics/postprocessmanager.h"
 
 #include <QFontDatabase>
 #include <QOpenGLContext>
@@ -74,11 +75,12 @@ For more information see the LICENSE file
 
 #include "widgets/sceneviewwidget.h"
 #include "core/materialpreset.h"
+#include "widgets/postprocesseswidget.h"
 
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
 
-#include <src/io/materialreader.hpp>
+#include "constants.h"
 
 enum class VRButtonMode : int
 {
@@ -92,6 +94,13 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    createPostProcessDockWidget();
+
+    ui->sceneContainer->setAcceptDrops(true);
+    ui->sceneContainer->installEventFilter(this);
+    ui->assetWidget->setAcceptDrops(true);
+    ui->assetWidget->installEventFilter(this);
+
     this->setWindowTitle("Jahshaka VR");
 
     QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
@@ -152,7 +161,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(sceneView, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
             this, SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
-//    connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
+    connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
 
     // toolbar stuff
     connect(ui->actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
@@ -192,8 +201,9 @@ MainWindow::MainWindow(QWidget *parent) :
     //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
     ui->ToolBar->addWidget(vrButton);
 
-//    ui->AnimationDock->hide();
+    ui->AnimationDock->hide();
 //    ui->PresetsDock->hide();
+
 }
 
 void MainWindow::setupVrUi()
@@ -292,7 +302,6 @@ iris::ScenePtr MainWindow::createDefaultScene()
 {
     auto scene = iris::Scene::create();
 
-
     auto cam = iris::CameraNode::create();
     cam->pos = QVector3D(6, 12, 14);
     cam->rot = QQuaternion::fromEulerAngles(-80,0,0);
@@ -311,24 +320,11 @@ iris::ScenePtr MainWindow::createDefaultScene()
     node->setPickable(false);
     node->setShadowEnabled(false);
 
-    MaterialReader *materialReader = new MaterialReader();
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
-
     auto m = iris::CustomMaterial::create();
-    m->generate(materialReader->getParsedShader());
-    m->updateTextureAndToggleUniform(0, getAbsoluteAssetPath("app/content/textures/tile.png"));
-    m->updateColorAndUniform(0, QColor(0, 0, 0));
-    m->updateColorAndUniform(1, QColor(255, 255, 255));
-    m->updateFloatAndUniform(0, 16);
-//    m->updateFloatAndUniform(1, 16);
-    m->updateFloatAndUniform(3, 4);
+    m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
+    m->setValue("diffuseTexture", getAbsoluteAssetPath("app/content/textures/tile.png"));
+    m->setValue("textureScale", 4.f);
     node->setMaterial(m);
-//    node->setActiveMaterial(2);
-//    m->setDiffuseColor(QColor(255, 255, 255));
-//    m->setDiffuseTexture(iris::Texture2D::load(getAbsoluteAssetPath("app/content/textures/tile.png")));
-//    m->setShininess(0);
-//    m->setSpecularColor(QColor(0, 0, 0));
-//    m->setTextureScale(4);
 
     scene->rootNode->addChild(node);
 
@@ -360,6 +356,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
 void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
 {
+    postProcessWidget->setPostProcessMgr(sceneView->getRenderer()->getPostProcessManager());
 
 //    auto m_logger = new QOpenGLDebugLogger( this );
 
@@ -395,9 +392,6 @@ bool MainWindow::handleMousePress(QMouseEvent *event)
     mouseButton = event->button();
     mousePressPos = event->pos();
 
-    //if(event->button() == Qt::LeftButton)
-    //    gizmo->onMousePress(event->x(),event->y());
-
     return true;
 }
 
@@ -410,8 +404,6 @@ bool MainWindow::handleMouseMove(QMouseEvent *event)
 {
     mousePos = event->pos();
 
-    //gizmo->onMouseMove(event->x(),event->y());
-
     return false;
 }
 
@@ -423,30 +415,123 @@ bool MainWindow::handleMouseWheel(QWheelEvent *event)
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
-    Q_UNUSED(obj)
-
     switch (event->type()) {
-    case QEvent::KeyPress: {
-        break;
-    }
-    case QEvent::MouseButtonPress:
-        if (obj == surface)
-            return handleMousePress(static_cast<QMouseEvent *>(event));
-        break;
-    case QEvent::MouseButtonRelease:
-        if (obj == surface)
-            return handleMouseRelease(static_cast<QMouseEvent *>(event));
-        break;
-    case QEvent::MouseMove:
-        if (obj == surface)
-            return handleMouseMove(static_cast<QMouseEvent *>(event));
-        break;
-    case QEvent::Wheel:
-        if (obj == surface)
-            return handleMouseWheel(static_cast<QWheelEvent *>(event));
-        break;
-    default:
-        break;
+        case QEvent::DragMove: {
+            auto evt = static_cast<QDragMoveEvent*>(event);
+            if (obj == ui->sceneContainer) {
+                auto info = QFileInfo(evt->mimeData()->text());
+
+                if (!!activeSceneNode) {
+                    sceneView->hideGizmo();
+
+                    if (info.suffix() == "obj") {
+                        if (sceneView->doActiveObjectPicking(evt->posF())) {
+                            activeSceneNode->pos = sceneView->hit;
+                        } else if (sceneView->updateRPI(sceneView->editorCam->pos,
+                                                        sceneView->calculateMouseRay(evt->posF())))
+                        {
+                            activeSceneNode->pos = sceneView->Offset;
+                        } else {
+                            ////////////////////////////////////////
+                            const float spawnDist = 10.0f;
+                            auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, -1.0f, -spawnDist));
+                            offset += sceneView->editorCam->pos;
+                            activeSceneNode->pos = offset;
+                        }
+                    }
+                }
+
+                if (info.suffix() != "obj") {
+                    sceneView->doObjectPicking(evt->posF(), true);
+                }
+            }
+        }
+
+        case QEvent::DragEnter: {
+            auto evt = static_cast<QDragEnterEvent*>(event);
+
+            sceneView->hideGizmo();
+
+            if (obj == ui->sceneContainer) {
+                if (evt->mimeData()->hasText()) {
+                    evt->acceptProposedAction();
+                } else {
+                    evt->ignore();
+                }
+
+                auto info = QFileInfo(evt->mimeData()->text());
+                if (info.suffix() == "obj") {
+
+                    if (dragging) {
+                        // TODO swap this with the actual model later on
+                        addDragPlaceholder();
+                        dragging = !dragging;
+                    }
+                }
+            }
+
+            break;
+        }
+
+        case QEvent::Drop: {
+            if (obj == ui->sceneContainer) {
+                auto evt = static_cast<QDropEvent*>(event);
+
+                auto info = QFileInfo(evt->mimeData()->text());
+                if (evt->mimeData()->hasText()) {
+                    evt->acceptProposedAction();
+                } else {
+                    evt->ignore();
+                }
+
+                if (info.suffix() == "obj") {
+                    auto ppos = activeSceneNode->pos;
+                    deleteNode();
+                    addMesh(evt->mimeData()->text(), true, ppos);
+                }
+
+                if (!!activeSceneNode && info.suffix() != "obj") {
+                    auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
+                    auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
+
+                    if (!mat->firstTextureSlot().isEmpty()) {
+                        mat->setValue(mat->firstTextureSlot(), evt->mimeData()->text());
+                    }
+                }
+            }
+
+            break;
+        }
+
+        case QEvent::MouseButtonPress: {
+            dragging = true;
+
+            if (obj == surface) return handleMousePress(static_cast<QMouseEvent*>(event));
+
+            if (obj == ui->sceneContainer) {
+                sceneView->mousePressEvent(static_cast<QMouseEvent*>(event));
+            }
+
+            break;
+        }
+
+        case QEvent::MouseButtonRelease: {
+            if (obj == surface) return handleMouseRelease(static_cast<QMouseEvent*>(event));
+            break;
+        }
+
+        case QEvent::MouseMove: {
+            if (obj == surface) return handleMouseMove(static_cast<QMouseEvent*>(event));
+            break;
+        }
+
+        case QEvent::Wheel: {
+            if (obj == surface) return handleMouseWheel(static_cast<QWheelEvent*>(event));
+            break;
+        }
+
+        default:
+            break;
     }
 
     return false;
@@ -494,6 +579,19 @@ void MainWindow::setupHelpMenu()
     connect(ui->actionOpenWebsite,  SIGNAL(triggered(bool)), this, SLOT(openWebsiteUrl()));
 }
 
+void MainWindow::createPostProcessDockWidget()
+{
+    postProcessDockWidget = new QDockWidget(this);
+    postProcessWidget = new PostProcessesWidget();
+    //postProcessWidget->setWindowTitle("Post Processes");
+    postProcessDockWidget->setWidget(postProcessWidget);
+    postProcessDockWidget->setWindowTitle("PostProcesses");
+    //postProcessDockWidget->setFloating(true);
+    postProcessDockWidget->setHidden(true);
+//    this->addDockWidget(Qt::RightDockWidgetArea, postProcessDockWidget);
+
+}
+
 void MainWindow::setProjectTitle(QString projectTitle)
 {
     this->setWindowTitle(projectTitle + " - Jahshaka");
@@ -538,29 +636,30 @@ void MainWindow::stopAnimWidget()
 
 void MainWindow::saveScene()
 {
-    qDebug()<<"saving scene";
-
-    if(Globals::project->isSaved())
-    {
+    if (Globals::project->isSaved()) {
         auto filename = Globals::project->getFilePath();
         auto writer = new SceneWriter();
-        writer->writeScene(filename,scene,sceneView->getEditorData());
-
-        settings->addRecentlyOpenedScene(filename);
-
+        writer->writeScene(filename,
+                           scene,
+                           sceneView->getRenderer()->getPostProcessManager(),
+                           sceneView->getEditorData());
+        // settings->addRecentlyOpenedScene(filename);
+        // sceneView->saveFrameBuffer("viewport.jpg");
         delete writer;
     }
-    else
-    {
-        auto filename = QFileDialog::getSaveFileName(this,"Save Scene","","Jashaka Scene (*.jah)");
+
+    else {
+        auto filename = QFileDialog::getSaveFileName(this, "Save Scene", "", "Jashaka Scene (*.jah)");
         auto writer = new SceneWriter();
-        writer->writeScene(filename,scene,sceneView->getEditorData());
+        writer->writeScene(filename,
+                           scene,
+                           sceneView->getRenderer()->getPostProcessManager(),
+                           sceneView->getEditorData());
 
         Globals::project->setFilePath(filename);
         this->setProjectTitle(Globals::project->getProjectName());
-
-        settings->addRecentlyOpenedScene(filename);
-
+        // settings->addRecentlyOpenedScene(filename);
+        // sceneView->saveFrameBuffer("viewport.jpg");
         delete writer;
     }
 
@@ -572,7 +671,7 @@ void MainWindow::saveSceneAs()
     QString dir = QApplication::applicationDirPath()+"/scenes/";
     auto filename = QFileDialog::getSaveFileName(this,"Save Scene",dir,"Jashaka Scene (*.jah)");
     auto writer = new SceneWriter();
-    writer->writeScene(filename,scene,sceneView->getEditorData());
+    writer->writeScene(filename, scene, sceneView->getRenderer()->getPostProcessManager(), sceneView->getEditorData());
 
     Globals::project->setFilePath(filename);
     this->setProjectTitle(Globals::project->getProjectName());
@@ -584,17 +683,23 @@ void MainWindow::saveSceneAs()
 
 void MainWindow::loadScene()
 {
+    QString dir = QApplication::applicationDirPath() + "/scenes/";
+    auto filename = QFileDialog::getOpenFileName(this, "Open Scene File", dir, "Jashaka Scene (*.jah)");
 
-    QString dir = QApplication::applicationDirPath()+"/scenes/";
-    auto filename = QFileDialog::getOpenFileName(this,"Open Scene File",dir,"Jashaka Scene (*.jah)");
-
-    if(filename.isEmpty() || filename.isNull())
-        return;
-
-    qDebug() << filename;
+    if (filename.isEmpty() || filename.isNull()) return;
 
     openProject(filename);
 }
+
+//QString MainWindow::loadSceneDelegate()
+//{
+//    QString dir = QApplication::applicationDirPath() + "/scenes/";
+//    auto filename = QFileDialog::getOpenFileName(this, "Open Scene File", dir, "Jashaka Scene (*.jah)");
+
+//    if (filename.isEmpty() || filename.isNull()) return "";
+
+//    return filename;
+//}
 
 void MainWindow::openProject(QString filename, bool startupLoad)
 {
@@ -607,18 +712,20 @@ void MainWindow::openProject(QString filename, bool startupLoad)
 
     EditorData* editorData = nullptr;
 
-    auto scene = reader->readScene(filename,&editorData);
+    auto postMan = sceneView->getRenderer()->getPostProcessManager();
+    postMan->clearPostProcesses();
+    auto scene = reader->readScene(filename, postMan, &editorData);
     this->sceneView->doneCurrent();
     setScene(scene);
-    if(editorData != nullptr)
-        sceneView->setEditorData(editorData);
 
-    /// TODO - add option to overwrite default scene or go back to factory default (strtup.j)
-//    if (!startupLoad) {
-        Globals::project->setFilePath(filename);
-        this->setProjectTitle(Globals::project->getProjectName());
-        settings->addRecentlyOpenedScene(filename);
-//    }
+    postProcessWidget->setPostProcessMgr(postMan);
+
+    if (editorData != nullptr) {
+        sceneView->setEditorData(editorData);
+    }
+
+    Globals::project->setFilePath(filename);
+    this->setProjectTitle(Globals::project->getProjectName());
 
     delete reader;
 }
@@ -630,26 +737,24 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
 
     auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
 
-    MaterialReader *materialReader = new MaterialReader();
-    // TODO - set the type for a preset in the .material file and remove the hardcoded mess here
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
-
+    // TODO - set the TYPE for a preset in the .material file so we can have other preset types
+    // only works for the default material at the moment...
     auto m = iris::CustomMaterial::create();
-    m->generate(materialReader->getParsedShader());
+    m->generate(getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
 
-    m->updateTextureAndToggleUniform(0, preset->diffuseTexture);
-    m->updateTextureAndToggleUniform(1, preset->specularTexture);
-    m->updateTextureAndToggleUniform(2, preset->normalTexture);
-    m->updateTextureAndToggleUniform(3, preset->reflectionTexture);
+    m->setValue("diffuseTexture", preset->diffuseTexture);
+    m->setValue("specularTexture", preset->specularTexture);
+    m->setValue("normalTexture", preset->normalTexture);
+    m->setValue("reflectionTexture", preset->reflectionTexture);
 
-    m->updateColorAndUniform(0, preset->ambientColor);
-    m->updateColorAndUniform(1, preset->diffuseColor);
-    m->updateColorAndUniform(2, preset->specularColor);
+    m->setValue("ambientColor", preset->ambientColor);
+    m->setValue("diffuseColor", preset->diffuseColor);
+    m->setValue("specularColor", preset->specularColor);
 
-    m->updateFloatAndUniform(0, preset->shininess);
-    m->updateFloatAndUniform(1, preset->normalIntensity);
-    m->updateFloatAndUniform(2, preset->reflectionInfluence);
-    m->updateFloatAndUniform(3, preset->textureScale);
+    m->setValue("shininess", preset->shininess);
+    m->setValue("normalIntensity", preset->normalIntensity);
+    m->setValue("reflectionInfluence", preset->reflectionInfluence);
+    m->setValue("textureScale", preset->textureScale);
 
     meshNode->setMaterial(m);
 
@@ -746,10 +851,9 @@ void MainWindow::addPlane()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsoluteAssetPath("app/content/primitives/plane.obj"));
+    node->setMesh(":/app/content/primitives/plane.obj");
     node->setFaceCullingMode(iris::FaceCullingMode::None);
     node->setName("Plane");
-
     addNodeToScene(node);
 }
 
@@ -758,9 +862,8 @@ void MainWindow::addCone()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsoluteAssetPath("app/content/primitives/cone.obj"));
+    node->setMesh(":/app/content/primitives/cone.obj");
     node->setName("Cone");
-
     addNodeToScene(node);
 }
 
@@ -771,9 +874,8 @@ void MainWindow::addCube()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsoluteAssetPath("app/content/primitives/cube.obj"));
+    node->setMesh(":/app/content/primitives/cube.obj");
     node->setName("Cube");
-
     addNodeToScene(node);
 }
 
@@ -784,9 +886,8 @@ void MainWindow::addTorus()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsoluteAssetPath("app/content/primitives/torus.obj"));
+    node->setMesh(":/app/content/primitives/torus.obj");
     node->setName("Torus");
-
     addNodeToScene(node);
 }
 
@@ -797,9 +898,8 @@ void MainWindow::addSphere()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsoluteAssetPath("app/content/primitives/sphere.obj"));
+    node->setMesh(":/app/content/primitives/sphere.obj");
     node->setName("Sphere");
-
     addNodeToScene(node);
 }
 
@@ -810,7 +910,7 @@ void MainWindow::addCylinder()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsoluteAssetPath("app/content/primitives/cylinder.obj"));
+    node->setMesh(":/app/content/primitives/cylinder.obj");
     node->setName("Cylinder");
 
     addNodeToScene(node);
@@ -821,11 +921,10 @@ void MainWindow::addPointLight()
     this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Point);
-    node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
+    node->icon = iris::Texture2D::load(":/app/icons/bulb.png");
     node->setName("Point Light");
     node->intensity = 1.0f;
     node->distance = 40.0f;
-
     addNodeToScene(node);
 }
 
@@ -834,9 +933,8 @@ void MainWindow::addSpotLight()
     this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Spot);
-    node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
+    node->icon = iris::Texture2D::load(":/app/icons/bulb.png");
     node->setName("Spot Light");
-
     addNodeToScene(node);
 }
 
@@ -846,9 +944,8 @@ void MainWindow::addDirectionalLight()
     this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Directional);
-    node->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
+    node->icon = iris::Texture2D::load(":/app/icons/bulb.png");
     node->setName("Directional Light");
-
     addNodeToScene(node);
 }
 
@@ -857,7 +954,6 @@ void MainWindow::addEmpty()
     this->sceneView->makeCurrent();
     auto node = iris::SceneNode::create();
     node->setName("Empty");
-
     addNodeToScene(node);
 }
 
@@ -866,30 +962,26 @@ void MainWindow::addViewer()
     this->sceneView->makeCurrent();
     auto node = iris::ViewerNode::create();
     node->setName("Viewer");
-
     addNodeToScene(node);
 }
 
 void MainWindow::addParticleSystem()
 {
     this->sceneView->makeCurrent();
-    /*
-    auto node = iris::MeshNode::create();
-    node->setMesh(getAbsoluteAssetPath("app/content/primitives/cube.obj"));
-    node->setName("Emitter");
-    node->sceneNodeType = iris::SceneNodeType::ParticleSystem;
-    */
-
     auto node = iris::ParticleSystemNode::create();
     node->setName("Particle System");
     addNodeToScene(node);
 }
 
-void MainWindow::addMesh()
+void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 {
-    QString dir = QApplication::applicationDirPath() + "/assets/models/";
-    auto filename = QFileDialog::getOpenFileName(this, "Load Mesh",
-                                                 dir, "Mesh Files (*.obj *.fbx *.3ds)");
+    QString filename;
+    if (path.isEmpty()) {
+        filename = QFileDialog::getOpenFileName(this, "Load Mesh", "Mesh Files (*.obj *.fbx *.3ds)");
+    } else {
+        filename = path;
+    }
+
     auto nodeName = QFileInfo(filename).baseName();
     if (filename.isEmpty()) return;
 
@@ -901,14 +993,25 @@ void MainWindow::addMesh()
 
 //    node->materialType = 2;
     node->setName(nodeName);
+    node->pos = position;
 
     // todo: load material data
-    addNodeToScene(node);
+    addNodeToScene(node, ignore);
 }
 
 void MainWindow::addViewPoint()
 {
 
+}
+
+void MainWindow::addDragPlaceholder()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::MeshNode::create();
+    node->scale = QVector3D(.5f, .5f, .5f);
+    node->setMesh(":app/content/primitives/arrow.obj");
+    node->setName("Arrow");
+    addNodeToScene(node, true);
 }
 
 void MainWindow::addTexturedPlane()
@@ -935,7 +1038,6 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
             auto mat = iris::DefaultMaterial::create();
             meshNode->setMaterial(mat);
         }
-
     }
 
     if (!!activeSceneNode) {
@@ -950,8 +1052,9 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
 /**
  * adds sceneNode directly to the scene's rootNode
  * applied default material to mesh if one isnt present
+ * ignore set to false means we only add it visually, usually to discard it afterw
  */
-void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
+void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore)
 {
     if (!scene) {
         // @TODO: set alert that a scene needs to be set before this can be done
@@ -959,25 +1062,24 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
     }
 
     // @TODO: add this to a constants file
-    const float spawnDist = 10.0f;
-    auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, -1.0f, -spawnDist));
-    offset += sceneView->editorCam->pos;
-    sceneNode->pos = offset;
+    if (!ignore) {
+        const float spawnDist = 10.0f;
+        auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, -1.0f, -spawnDist));
+        offset += sceneView->editorCam->pos;
+        sceneNode->pos = offset;
+    }
 
     // apply default material to mesh nodes
     if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
-        MaterialReader *materialReader = new MaterialReader();
-        materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.json"));
-
         auto mat = iris::CustomMaterial::create();
-        mat->generate(materialReader->getParsedShader());
+        mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
         meshNode->setMaterial(mat);
     }
 
     scene->getRootNode()->addChild(sceneNode);
-    ui->sceneHierarchy->repopulateTree();
+    if (!ignore) ui->sceneHierarchy->repopulateTree();
     sceneNodeSelected(sceneNode);
 }
 
@@ -1061,6 +1163,42 @@ void MainWindow::newScene()
     this->sceneView->doneCurrent();
 }
 
+void MainWindow::newProject(const QString &filename, const QString &projectPath)
+{
+    newScene();
+
+    auto pPath = projectPath + '/' + filename;
+
+//    // make a dir and the subfolders...
+//    QDir dir(pPath);
+//    if (!dir.exists()) {
+//        dir.mkpath(".");
+//    }
+
+//    // make proj folders
+//    QList<QString> projFolders = { "Textures", "Models", "Shaders", "Materials", "Scenes" };
+//    for (auto folder : projFolders) {
+//        QDir dir(pPath + '/' + folder);
+//        dir.mkpath(".");
+//    }
+
+    auto str = pPath + "/Scenes/" + filename + ".jah";
+
+    //    auto filename = Globals::project->getFilePath();
+    auto writer = new SceneWriter();
+    writer->writeScene(str,
+                       scene,
+                       sceneView->getRenderer()->getPostProcessManager(),
+                       sceneView->getEditorData());
+
+    //    settings->addRecentlyOpenedScene(filename);
+//    this->setProjectTitle(Globals::project->getProjectName());
+    this->setProjectTitle(Globals::project->getProjectName());
+    settings->addRecentlyOpenedScene(str);
+
+    delete writer;
+}
+
 void MainWindow::showAboutDialog()
 {
     aboutDialog->exec();
@@ -1121,16 +1259,16 @@ void MainWindow::scaleGizmo()
     sceneView->setGizmoScale();
 }
 
-//void MainWindow::onPlaySceneButton()
-//{
-//    if(ui->playSceneBtn->text() == "PLAY")
-//    {
-//        this->sceneView->startPlayingScene();
-//        ui->playSceneBtn->setText("STOP");
-//    }
-//    else
-//    {
-//        this->sceneView->stopPlayingScene();
-//        ui->playSceneBtn->setText("PLAY");
-//    }
-//}
+void MainWindow::onPlaySceneButton()
+{
+    if(ui->playSceneBtn->text() == "PLAY")
+    {
+        this->sceneView->startPlayingScene();
+        ui->playSceneBtn->setText("STOP");
+    }
+    else
+    {
+        this->sceneView->stopPlayingScene();
+        ui->playSceneBtn->setText("PLAY");
+    }
+}

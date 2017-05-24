@@ -21,6 +21,9 @@ For more information see the LICENSE file
 
 #include "materialreader.hpp"
 #include "scenereader.h"
+#include "assetmanager.h"
+
+#include "../constants.h"
 
 #include "../editor/editordata.h"
 
@@ -34,13 +37,27 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/particlesystemnode.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/materials/custommaterial.h"
+#include "../irisgl/src/materials/propertytype.h"
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/graphicshelper.h"
 #include "../irisgl/src/animation/animation.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
+#include "../irisgl/src/graphics/postprocess.h"
+#include "../irisgl/src/graphics/postprocessmanager.h"
 
-iris::ScenePtr SceneReader::readScene(QString filePath, EditorData** editorData)
+#include "../irisgl/src/postprocesses/bloompostprocess.h"
+#include "../irisgl/src/postprocesses/coloroverlaypostprocess.h"
+#include "../irisgl/src/postprocesses/greyscalepostprocess.h"
+#include "../irisgl/src/postprocesses/materialpostprocess.h"
+#include "../irisgl/src/postprocesses/radialblurpostprocess.h"
+#include "../irisgl/src/postprocesses/ssaopostprocess.h"
+
+#include "../constants.h"
+
+iris::ScenePtr SceneReader::readScene(QString filePath,
+                                      iris::PostProcessManagerPtr postMan,
+                                      EditorData **editorData)
 {
     dir = AssetIOBase::getDirFromFileName(filePath);
     QFile file(filePath);
@@ -53,6 +70,8 @@ iris::ScenePtr SceneReader::readScene(QString filePath, EditorData** editorData)
     auto scene = readScene(projectObj);
     if(editorData)
         *editorData = readEditorData(projectObj);
+
+    readPostProcessData(projectObj, postMan);
 
     return scene;
 }
@@ -79,6 +98,49 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
 
 
     return editorData;
+}
+
+void SceneReader::readPostProcessData(QJsonObject &projectObj, iris::PostProcessManagerPtr postMan)
+{
+
+    if (projectObj.contains("postprocesses")) {
+        auto processListObj = projectObj["postprocesses"].toArray();
+
+        for (auto processVal : processListObj) {
+            auto processObj = processVal.toObject();
+            auto name = processObj["name"].toString("");
+
+            iris::PostProcessPtr process;
+
+            if(name == "bloom")
+               process = iris::BloomPostProcess::create();
+            if(name == "color_overlay")
+               process = iris::ColorOverlayPostProcess::create();
+            //if(name == "greyscale")
+            //   process = iris::GreyscalePostProcess::create();
+            if(name == "radial_blur")
+               process = iris::RadialBlurPostProcess::create();
+            if(name == "ssao")
+               process = iris::SSAOPostProcess::create();
+            //if(name == "material")
+            //   process = iris::MaterialPostProcess::create();
+
+            if (!!process) {
+                auto propertyObj = processObj["properties"].toObject();
+                auto props = process->getProperties();
+                for ( auto prop : props) {
+
+                    if (propertyObj.contains(prop->name)) {
+
+                        prop->setValue(propertyObj[prop->name].toVariant());
+                        process->setProperty(prop);
+                    }
+                }
+            }
+
+            postMan->addPostProcess(process);
+        }
+    }
 }
 
 iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
@@ -115,6 +177,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->fogStart = sceneObj["fogStart"].toDouble(100);
     scene->fogEnd = sceneObj["fogEnd"].toDouble(120);
     scene->fogEnabled = sceneObj["fogEnabled"].toBool(true);
+    scene->shadowEnabled = sceneObj["shadowEnabled"].toBool(true);
 
     auto rootNode = sceneObj["rootNode"].toObject();
     QJsonArray children = rootNode["children"].toArray();
@@ -250,11 +313,15 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 
     auto source = nodeObj["mesh"].toString("");
     auto meshIndex = nodeObj["meshIndex"].toInt(0);
-    auto pickable = nodeObj["pickable"].toBool();
+    auto pickable = nodeObj["pickable"].toBool(true);
 
     if (!source.isEmpty()) {
         auto mesh = getMesh(getAbsolutePath(source), meshIndex);
-        meshNode->setMesh(mesh);
+        if (source.startsWith(":")) {
+            meshNode->setMesh(source);
+        } else {
+            meshNode->setMesh(mesh);
+        }
         meshNode->setPickable(pickable);
         meshNode->meshPath = source;
         meshNode->meshIndex = meshIndex;
@@ -294,10 +361,12 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->color = readColor(nodeObj["color"].toObject());
 
     //TODO: move this to the sceneview widget or somewhere more appropriate
-    if(lightNode->lightType == iris::LightType::Directional)
-        lightNode->icon = iris::Texture2D::load(IrisUtils::getAbsoluteAssetPath("app/icons/light.png"));
-    else
-        lightNode->icon = iris::Texture2D::load(IrisUtils::getAbsoluteAssetPath("app/icons/bulb.png"));
+    if (lightNode->lightType == iris::LightType::Directional) {
+        lightNode->icon = iris::Texture2D::load(":/app/icons/light.png");
+    } else {
+        lightNode->icon = iris::Texture2D::load(":/app/icons/bulb.png");
+    }
+
     lightNode->iconSize = 0.5f;
 
     return lightNode;
@@ -347,43 +416,40 @@ iris::LightType SceneReader::getLightTypeFromName(QString lightType)
  */
 iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 {
-    if (nodeObj["material"].isNull()) {
-        return iris::CustomMaterial::create();
-    }
+    if (nodeObj["material"].isNull()) return iris::CustomMaterial::create();
 
     auto mat = nodeObj["material"].toObject();
-
-    MaterialReader *materialReader = new MaterialReader();
-    QString path =  "app/shader_defs/" + mat["name"].toString() + ".json";
-
-    materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath(path));
-
     auto m = iris::CustomMaterial::create();
-    m->generate(materialReader->getParsedShader());
+    auto shaderName = Constants::SHADER_DEFS + mat["name"].toString() + ".shader";
+    auto shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(shaderName));
+    m->setName(mat["name"].toString());
 
-    int cCtr = 0;
-    for (auto s : m->colorUniforms) {
-        QColor col;
-        col.setNamedColor(mat[s.name].toString());
-        m->updateColorAndUniform(cCtr, col);
-        cCtr++;
-    }
 
-    int tCtr = 0;
-    for (auto s : m->textureUniforms) {
-        auto tex = mat[s.name].toString();
-        if (!tex.isEmpty()) {
-            tex = getAbsolutePath(mat[s.name].toString());
-            // qDebug() << "TEX " << tex;
+    if (shaderFile.exists()) {
+        m->generate(shaderFile.absoluteFilePath());
+    } else {
+        for (auto asset : AssetManager::assets) {
+            if (asset->type == AssetType::Shader) {
+                if (asset->fileName == mat["name"].toString() + ".shader") {
+                    qDebug() << asset->path;
+                    m->generate(asset->path, true);
+                }
+            }
         }
-        m->updateTextureAndToggleUniform(tCtr, tex);
-        tCtr++;
     }
 
-    int sCtr = 0;
-    for (auto s : m->sliderUniforms) {
-        m->updateFloatAndUniform(sCtr, mat[s.name].toDouble());
-        sCtr++;
+    for (auto prop : m->properties) {
+        if (mat.contains(prop->name)) {
+            if (prop->type == iris::PropertyType::Texture) {
+                auto textureStr = !mat[prop->name].toString().isEmpty()
+                                  ? getAbsolutePath(mat[prop->name].toString())
+                                  : QString();
+
+                m->setValue(prop->name, textureStr);
+            } else {
+                m->setValue(prop->name, mat[prop->name].toVariant());
+            }
+        }
     }
 
     return m;
@@ -396,7 +462,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
  * @param index
  * @return
  */
-iris::Mesh* SceneReader::getMesh(QString filePath,int index)
+iris::Mesh* SceneReader::getMesh(QString filePath, int index)
 {
     // if the mesh is already in the hashmap then it was already loaded, just return the indexed mesh
     if (meshes.contains(filePath)) {

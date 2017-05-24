@@ -49,10 +49,10 @@
         }, {
             "displayName"   : "Shininess",
             "name"          : "shininess",
-            "type"          : "slider",
+            "type"          : "float",
             "value"         : 0,
-            "start"         : 0,
-            "end"           : 512,
+            "min"           : 0,
+            "max"           : 512,
             "uniform"       : "u_material.shininess"
         }, {
             "displayName"   : "Normal Texture",
@@ -64,10 +64,10 @@
         }, {
             "displayName"   : "Normal Intensity",
             "name"          : "normalIntensity",
-            "type"          : "slider",
+            "type"          : "float",
             "value"         : 0,
-            "start"         : -1,
-            "end"           : 1,
+            "min"           : -1,
+            "max"           : 1,
             "uniform"       : "u_normalIntensity"
         }, {
             "displayName"   : "Reflection Texture",
@@ -79,23 +79,23 @@
         }, {
             "displayName"   : "Reflection Influence",
             "name"          : "reflectionInfluence",
-            "type"          : "slider",
+            "type"          : "float",
             "value"         : 0,
-            "start"         : 0,
-            "end"           : 1,
+            "min"           : 0,
+            "max"           : 1,
             "uniform"       : "u_reflectionInfluence"
         }, {
             "displayName"   : "Texture Scale",
             "name"          : "textureScale",
-            "type"          : "slider",
+            "type"          : "float",
             "value"         : 1,
-            "start"         : 0,
-            "end"           : 16,
+            "min"           : 0,
+            "max"           : 16,
             "uniform"       : "u_textureScale"
         }, {
             "displayName"   : "Use Alpha",
             "name"          : "useAlpha",
-            "type"          : "checkbox",
+            "type"          : "bool",
             "value"         : false,
             "uniform"       : "u_useAlpha"
         }

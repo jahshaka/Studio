@@ -52,7 +52,18 @@ HEADERS += \
     $$PWD/src/scenegraph/particlesystemnode.h \
     $$PWD/src/vr/vrmanager.h \
     $$PWD/src/graphics/iviewsource.h \
-    $$PWD/src/materials/custommaterial.h
+    $$PWD/src/materials/custommaterial.h \
+    $$PWD/src/materials/propertytype.h \
+    $$PWD/src/graphics/postprocess.h \
+    $$PWD/src/graphics/postprocessmanager.h \
+    $$PWD/src/graphics/rendertexture.h \
+    $$PWD/src/graphics/rendertarget.h \
+    $$PWD/src/postprocesses/bloompostprocess.h \
+    $$PWD/src/postprocesses/coloroverlaypostprocess.h \
+    $$PWD/src/postprocesses/radialblurpostprocess.h \
+    $$PWD/src/postprocesses/greyscalepostprocess.h \
+    $$PWD/src/postprocesses/ssaopostprocess.h \
+    $$PWD/src/postprocesses/materialpostprocess.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -84,7 +95,14 @@ SOURCES += \
     $$PWD/src/scenegraph/particlesystemnode.cpp \
     $$PWD/src/vr/vrmanager.cpp \
     $$PWD/src/math/mathhelper.cpp \
-    $$PWD/src/materials/custommaterial.cpp
+    $$PWD/src/materials/custommaterial.cpp \
+    $$PWD/src/graphics/rendertarget.cpp \
+    $$PWD/src/graphics/postprocessmanager.cpp \
+    $$PWD/src/postprocesses/coloroverlaypostprocess.cpp \
+    $$PWD/src/postprocesses/radialblurpostprocess.cpp \
+    $$PWD/src/postprocesses/bloompostprocess.cpp \
+    $$PWD/src/postprocesses/greyscalepostprocess.cpp \
+    $$PWD/src/postprocesses/ssaopostprocess.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

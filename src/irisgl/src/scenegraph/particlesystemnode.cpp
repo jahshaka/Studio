@@ -64,8 +64,12 @@ ParticleSystemNode::ParticleSystemNode() {
     renderItem->type = RenderItemType::ParticleSystem;
 
     boundsRenderItem = new RenderItem();
-    //boundsRenderItem->mesh = Mesh::loadMesh(":assets/models/cube.obj");
-    //boundsRenderItem->material = LineMaterial::create();
+    boundsRenderItem->mesh = Mesh::loadMesh(":assets/models/cube.obj");
+
+    auto mat = DefaultMaterial::create();
+    mat->setDiffuseColor(QColor(255, 255, 255));
+    mat->setAmbientColor(QColor(255, 255, 255));
+    boundsRenderItem->material = mat;
 }
 
 ParticleSystemNode::~ParticleSystemNode()
@@ -92,7 +96,7 @@ void ParticleSystemNode::submitRenderItems()
     renderItem->renderLayer = (int)RenderLayer::Transparent;
 
     this->scene->geometryRenderList.append(renderItem);
-    //this->scene->geometryRenderList.append(boundsRenderItem);
+    this->scene->geometryRenderList.append(boundsRenderItem);
 }
 
 void ParticleSystemNode::generateParticles(float delta) {

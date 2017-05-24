@@ -12,13 +12,13 @@ For more information see the LICENSE file
 #ifndef HFLOATSLIDERWIDGET_H
 #define HFLOATSLIDERWIDGET_H
 
-#include <QWidget>
+#include "basewidget.h"
 
 namespace Ui {
     class HFloatSliderWidget;
 }
 
-class HFloatSliderWidget : public QWidget
+class HFloatSliderWidget : public BaseWidget
 {
     Q_OBJECT
 
