@@ -322,7 +322,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     // second node
     auto node = iris::MeshNode::create();
     node->setMesh(":/app/models/ground.obj");
-    node->pos = QVector3D(0, -.1f, 0); // don't overlap. ok.
+    node->pos = QVector3D(0, 1e-4, 0); // prevent z-fighting with the default plane
     node->setName("Ground");
     node->setPickable(false);
     node->setShadowEnabled(false);
