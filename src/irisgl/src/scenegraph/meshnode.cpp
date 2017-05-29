@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QJsonValue>
 #include <QDir>
 
+#include "../irisglfwd.h"
 #include "meshnode.h"
 #include "../graphics/mesh.h"
 #include "assimp/postprocess.h"
@@ -37,6 +38,8 @@ For more information see the LICENSE file
 #include "../core/scenenode.h"
 #include "../core/irisutils.h"
 #include "../animation/animableproperty.h"
+
+#include "../graphics/skeleton.h"
 
 namespace iris
 {
@@ -136,6 +139,18 @@ void MeshNode::submitRenderItems()
     }
 }
 
+void MeshNode::updateAnimation(float time)
+{
+    if (mesh->hasSkeletalAnimations() && mesh->hasSkeleton())
+    {
+        auto skel = mesh->getSkeleton();
+        auto anim = mesh->getSkeletalAnimations().values()[0];
+        skel->applyAnimation(anim, time);
+    }
+
+    SceneNode::updateAnimation(time);
+}
+
 QJsonObject readJahShader(const QString &filePath)
 {
     QFile file(filePath);
@@ -168,7 +183,11 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
         // aside from that, iris currently only renders meshes
         if(mesh->HasPositions())
         {
-            meshNode->setMesh(new Mesh(mesh));
+            auto meshObj = new Mesh(mesh);
+            auto skel = Mesh::extractSkeleton(mesh, scene);
+            meshObj->setSkeleton(skel);
+
+            meshNode->setMesh(meshObj);
             meshNode->name = QString(mesh->mName.C_Str());
             meshNode->meshPath = filePath;
             meshNode->meshIndex = node->mMeshes[0];
@@ -194,13 +213,16 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
         for(unsigned i=0;i<node->mNumMeshes;i++)
         {
             auto mesh = scene->mMeshes[node->mMeshes[i]];
+            auto meshObj = new Mesh(mesh);
+            auto skel = Mesh::extractSkeleton(mesh, scene);
+            meshObj->setSkeleton(skel);
 
             auto meshNode = iris::MeshNode::create();
             meshNode->name = QString(mesh->mName.C_Str());
             meshNode->meshPath = filePath;
             meshNode->meshIndex = node->mMeshes[i];
 
-            meshNode->setMesh(new Mesh(mesh));
+            meshNode->setMesh(meshObj);
             sceneNode->addChild(meshNode);
 
             //apply material
@@ -250,7 +272,16 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath,
     if (scene->mNumMeshes == 1) {
         auto mesh = scene->mMeshes[0];
         auto node = iris::MeshNode::create();
-        node->setMesh(new Mesh(scene->mMeshes[0]));
+
+        auto meshObj = new Mesh(mesh);
+        auto anims = Mesh::extractAnimations(scene);
+        for(auto animName : anims.keys())
+            meshObj->addSkeletalAnimation(animName, anims[animName]);
+
+        auto skel = Mesh::extractSkeleton(mesh, scene);
+        meshObj->setSkeleton(skel);
+
+        node->setMesh(meshObj);
         node->meshPath = filePath;
         node->meshIndex = 0;
 
