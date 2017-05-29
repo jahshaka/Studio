@@ -150,7 +150,7 @@ void main()
     material.ambient = vec3(0, 0, 0);
     material.emission = vec3(0, 0, 0);
     material.alpha = 1.0f;
-
+ 
     surface(material);
 
     // ambient is scaled to the scene's ambient
