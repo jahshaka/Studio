@@ -68,7 +68,8 @@ HEADERS += \
     $$PWD/src/animation/animableproperty.h \
     $$PWD/src/utils/hashedlist.h \
     $$PWD/src/graphics/skeleton.h \
-    $$PWD/src/animation/skeletalanimation.h
+    $$PWD/src/animation/skeletalanimation.h \
+    $$PWD/src/animation/floatcurve.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -110,7 +111,8 @@ SOURCES += \
     $$PWD/src/postprocesses/ssaopostprocess.cpp \
     $$PWD/src/animation/propertyanim.cpp \
     $$PWD/src/scenegraph/lightnode.cpp \
-    $$PWD/src/animation/skeletalanimation.cpp
+    $$PWD/src/animation/skeletalanimation.cpp \
+    $$PWD/src/graphics/skeleton.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc
