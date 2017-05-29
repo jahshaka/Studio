@@ -3,6 +3,7 @@
 #include "../../irisgl/src/core/irisutils.h"
 #include "../../core/project.h"
 #include "../../globals.h"
+#include "../guidmanager.h"
 
 #include <QDebug>
 #include <QJsonDocument>
@@ -11,17 +12,13 @@
 
 Database::Database()
 {
-    if (!QSqlDatabase::isDriverAvailable(Constants::DB_DRIVER)) {
-        qCritical("DB driver not present!");
-    }
-
+    if (!QSqlDatabase::isDriverAvailable(Constants::DB_DRIVER)) qCritical("DB driver not present!");
     db = QSqlDatabase::addDatabase(Constants::DB_DRIVER);
 }
 
 Database::~Database()
 {
     db.close();
-    qDebug() << "db closed";
 }
 
 void Database::executeAndCheckQuery(QSqlQuery &query)
@@ -33,21 +30,21 @@ void Database::executeAndCheckQuery(QSqlQuery &query)
 
 bool Database::fetchRecord(const QString &name)
 {
-    QSqlQuery query;
-    query.prepare("select * from test_table");
+//    QSqlQuery query;
+//    query.prepare("select * from test_table");
 
-    if (query.exec()) {
-        int idName = query.record().indexOf("name");
+//    if (query.exec()) {
+//        int idName = query.record().indexOf("name");
 
-        while (query.next()) {
-           QString name = query.value(idName).toString();
-           qDebug() << name;
-        }
+//        while (query.next()) {
+//           QString name = query.value(idName).toString();
+//           qDebug() << name;
+//        }
 
-        return true;
-    }
+//        return true;
+//    }
 
-    return false;
+//    return false;
 }
 
 void Database::initializeDatabase(QString name)
@@ -74,17 +71,13 @@ void Database::createProject(QString projectName)
 
 void Database::insertScene(const QString &projectName, const QByteArray &sceneBlob)
 {
-    // TODO - revisit this
-    auto hash = QString(QCryptographicHash::hash(projectName.toLocal8Bit(),
-                                                 QCryptographicHash::Md5).toHex());
-
     QSqlQuery query;
     query.prepare("INSERT INTO " + Constants::DB_ROOT_TABLE + " (name, scene, version, hash)"
                   "VALUES (:name, :scene, :version, :hash)");
     query.bindValue(":name",    projectName);
     query.bindValue(":scene",   sceneBlob);
     query.bindValue(":version", Constants::CONTENT_VERSION);
-    query.bindValue(":hash",    hash);
+    query.bindValue(":hash",    GUIDManager::generateGUID());
 
     executeAndCheckQuery(query);
 }

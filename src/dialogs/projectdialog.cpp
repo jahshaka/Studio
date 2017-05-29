@@ -21,9 +21,13 @@
 #include <QDebug>
 #include <QFileDialog>
 
+#include "../core/guidmanager.h"
+
 ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::ProjectDialog)
 {
     ui->setupUi(this);
+
+    qDebug() << GUIDManager::generateGUID();
 
     this->setWindowTitle("Jahshaka VR");
 
