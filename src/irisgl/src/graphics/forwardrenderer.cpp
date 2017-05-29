@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "../scenegraph/particlesystemnode.h"
 #include "../materials/viewermaterial.h"
 #include "mesh.h"
+#include "skeleton.h"
 #include "graphicshelper.h"
 #include "renderdata.h"
 #include "material.h"
@@ -108,7 +109,7 @@ ForwardRendererPtr ForwardRenderer::create()
     return ForwardRendererPtr(new ForwardRenderer());
 }
 
-// all scene's transform should be updated
+// all scenenode's transform should be updated
 void ForwardRenderer::renderScene(float delta, Viewport* vp)
 {
     auto ctx = QOpenGLContext::currentContext();
@@ -363,6 +364,12 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             program->setUniformValue("u_worldMatrix",   item->worldMatrix);
             program->setUniformValue("u_viewMatrix",    renderData->viewMatrix);
             program->setUniformValue("u_projMatrix",    renderData->projMatrix);
+
+            if  (item->mesh->hasSkeleton()) {
+                auto boneTransforms = item->mesh->getSkeleton()->boneTransforms;
+                program->setUniformValueArray("u_bones", boneTransforms.data(), boneTransforms.size());
+            }
+
             program->setUniformValue("u_normalMatrix",  item->worldMatrix.normalMatrix());
 
             program->setUniformValue("u_eyePos",        renderData->eyePos);
