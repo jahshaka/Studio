@@ -1,0 +1,61 @@
+#include "../irisglfwd.h"
+#include "skeleton.h"
+#include "../animation/skeletalanimation.h"
+#include <functional>
+
+namespace iris
+{
+
+BonePtr Skeleton::getBone(QString name)
+{
+    if (boneMap.contains(name))
+        return bones[boneMap[name]];
+    return BonePtr();// null
+}
+
+void Skeleton::applyAnimation(iris::SkeletalAnimationPtr anim, float time)
+{
+    for (auto boneName : anim->boneAnimations.keys()) {
+        auto boneAnim = anim->boneAnimations[boneName];
+
+        if ( boneMap.contains(boneName))
+        {
+            auto bone = bones[boneMap[boneName]];
+
+
+            auto pos = boneAnim->posKeys->getValueAt(time);
+            auto rot = boneAnim->rotKeys->getValueAt(time);
+            auto scale = boneAnim->scaleKeys->getValueAt(time);
+
+
+            bone->localMatrix.setToIdentity();
+            bone->localMatrix.translate(pos);
+            bone->localMatrix.rotate(rot);
+            bone->localMatrix.scale(scale);
+        }
+    }
+
+    //recursively calculate final transform
+    std::function<void(BonePtr)> calcFinalTransform;
+    calcFinalTransform = [&calcFinalTransform](BonePtr bone)
+    {
+        for (auto child : bone->childBones) {
+            child->transformMatrix = bone->transformMatrix * child->localMatrix;
+            child->skinMatrix = child->transformMatrix * child->inversePoseMatrix;
+            //qDebug() << child->transformMatrix;
+            calcFinalTransform(child);
+        }
+    };
+
+    auto rootBone = bones[0];//its assumed that the first bone is the root bone
+    rootBone->transformMatrix = rootBone->localMatrix;
+    rootBone->skinMatrix =rootBone->transformMatrix * rootBone->inversePoseMatrix;
+    calcFinalTransform(rootBone);
+
+    //assign transforms to list
+    for (auto i = 0; i < bones.size(); i++) {
+        boneTransforms[i] = bones[i]->skinMatrix;
+    }
+}
+
+}

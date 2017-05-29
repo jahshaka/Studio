@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "../animation/skeletalanimation.h"
 
 class aiMesh;
+class aiScene;
 class QOpenGLBuffer;
 class QOpenGLFunctions_3_2_Core;
 class QOpenGLShaderProgram;
@@ -101,15 +102,20 @@ public:
     }
 
 
+    bool hasSkeleton();
     SkeletonPtr getSkeleton();
 
     void addSkeletalAnimation(QString name, SkeletalAnimationPtr anim);
+    QMap<QString, SkeletalAnimationPtr> getSkeletalAnimations();
+    bool hasSkeletalAnimations();
 
     void draw(QOpenGLFunctions_3_2_Core* gl, Material* mat, GLenum primitiveMode = GL_TRIANGLES);
     void draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* mat, GLenum primitiveMode = GL_TRIANGLES);
 
     static Mesh* loadMesh(QString filePath);
     static Mesh* loadAnimatedMesh(QString filePath);
+    static SkeletonPtr extractSkeleton(const aiMesh* mesh, const aiScene* scene);
+    static QMap<QString, SkeletalAnimationPtr> extractAnimations(const aiScene* scene);
 
     //assumed ownership of vertexLayout
     static Mesh* create(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
@@ -126,6 +132,8 @@ public:
     Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
 
     ~Mesh();
+
+    void setSkeleton(const SkeletonPtr &value);
 
 private:
     void addVertexArray(VertexAttribUsage usage,void* data,int size,GLenum type,int numComponents);

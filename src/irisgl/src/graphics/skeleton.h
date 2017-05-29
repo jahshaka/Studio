@@ -13,8 +13,18 @@ class Bone
     Bone(){}
 public:
     QString name;
-    QMatrix4x4 inversePoseMatrix;
-    QMatrix4x4 transformMatrix;
+    QMatrix4x4 inversePoseMatrix;// skeleton space
+    QMatrix4x4 transformMatrix;// skeleton space
+    QMatrix4x4 localMatrix;// local space
+
+    QMatrix4x4 skinMatrix;// final transform sent to the shader
+
+    QList<BonePtr> childBones;
+
+    void addChild(BonePtr bone)
+    {
+        childBones.append(bone);
+    }
 
     static BonePtr create(QString name = "")
     {
@@ -22,6 +32,8 @@ public:
         bone->name = name;
         bone->inversePoseMatrix.setToIdentity();
         bone->transformMatrix.setToIdentity();
+        bone->localMatrix.setToIdentity();
+        bone->skinMatrix.setToIdentity();
         return BonePtr(bone);
     }
 };
@@ -33,17 +45,28 @@ public:
     QMap<QString, int> boneMap;
     QList<BonePtr> bones;
 
+    BonePtr getBone(QString name);
+    QVector<QMatrix4x4> boneTransforms;
+
     void addBone(BonePtr bone)
     {
         bones.append(bone);
         boneMap.insert(bone->name, bones.size()-1);
+
+        QMatrix4x4 transform;
+        transform.setToIdentity();
+        boneTransforms.append(transform);
     }
+
+    void applyAnimation(SkeletalAnimationPtr anim, float time);
 
     static SkeletonPtr create()
     {
         return SkeletonPtr(new Skeleton());
     }
 };
+
+
 
 }
 #endif // SKELETON_H
