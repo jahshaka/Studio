@@ -211,6 +211,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
     {
         //otherwise, add meshes as child nodes
         sceneNode = QSharedPointer<iris::SceneNode>(new iris::SceneNode());
+        sceneNode->name = QString(node->mName.C_Str());
 
         for(unsigned i=0;i<node->mNumMeshes;i++)
         {
