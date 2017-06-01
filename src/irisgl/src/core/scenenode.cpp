@@ -11,12 +11,18 @@ For more information see the LICENSE file
 
 #include "scenenode.h"
 #include "scene.h"
+#include "../graphics/mesh.h"
+#include "../graphics/skeleton.h"
+#include "../scenegraph/meshnode.h"
 #include "../animation/keyframeset.h"
 #include "../animation/animation.h"
 #include "../animation/propertyanim.h"
 #include "../animation/animableproperty.h"
 #include "../animation/keyframeanimation.h"
+#include "../animation/skeletalanimation.h"
 #include "../materials/propertytype.h"
+
+#include <functional>
 
 namespace iris
 {
@@ -41,6 +47,8 @@ SceneNode::SceneNode():
     localTransform.setToIdentity();
     globalTransform.setToIdentity();
 
+    attached = false;
+
     //keyFrameSet = KeyFrameSet::create();
     //animation = iris::Animation::create("");
 }
@@ -63,6 +71,16 @@ void SceneNode::setName(QString name)
 long SceneNode::getNodeId()
 {
     return nodeId;
+}
+
+bool SceneNode::isAttached()
+{
+    return attached;
+}
+
+void SceneNode::setAttached(bool attached)
+{
+    this->attached = attached;
 }
 
 void SceneNode::addAnimation(AnimationPtr anim)
