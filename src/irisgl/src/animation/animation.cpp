@@ -12,11 +12,22 @@ For more information see the LICENSE file
 #include "animation.h"
 #include "keyframeset.h"
 #include "propertyanim.h"
+#include "skeletalanimation.h"
 #include "../irisglfwd.h"
 #include <QDebug>
 
 namespace iris
 {
+
+SkeletalAnimationPtr Animation::getSkeletalAnimation() const
+{
+    return skeletalAnimation;
+}
+
+bool Animation::hasSkeletalAnimation()
+{
+    return !!skeletalAnimation;
+}
 
 Animation::Animation(QString name)
 {
@@ -101,6 +112,13 @@ ColorPropertyAnim *Animation::getColorPropertyAnim(QString name)
 bool Animation::hasPropertyAnim(QString name)
 {
     return properties.contains(name);
+}
+
+AnimationPtr Animation::createFromSkeletalAnimation(SkeletalAnimationPtr skelAnim)
+{
+    auto anim = new Animation(skelAnim->name);
+    anim->skeletalAnimation = skelAnim;
+    return AnimationPtr(anim);
 }
 
 int Animation::getFrameRate() const
