@@ -27,6 +27,10 @@ class SkeletalAnimation
 {
     SkeletalAnimation(){}
 public:
+    // both read-only
+    QString name;
+    QString source;
+
     QMap<QString, QSharedPointer<BoneAnimation>> boneAnimations;
 
     // takes ownership of boneAnim

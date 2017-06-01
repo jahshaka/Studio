@@ -115,7 +115,7 @@ public:
     static Mesh* loadMesh(QString filePath);
     static Mesh* loadAnimatedMesh(QString filePath);
     static SkeletonPtr extractSkeleton(const aiMesh* mesh, const aiScene* scene);
-    static QMap<QString, SkeletalAnimationPtr> extractAnimations(const aiScene* scene);
+    static QMap<QString, SkeletalAnimationPtr> extractAnimations(const aiScene* scene, QString source = "");
 
     //assumed ownership of vertexLayout
     static Mesh* create(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
