@@ -15,11 +15,19 @@ BonePtr Skeleton::getBone(QString name)
 
 void Skeleton::applyAnimation(iris::SkeletalAnimationPtr anim, float time)
 {
+    for (auto i = 0; i < bones.size(); i++) {
+        bones[i]->transformMatrix.setToIdentity();
+        bones[i]->localMatrix.setToIdentity();
+        bones[i]->skinMatrix.setToIdentity();
+    }
+
+    //qDebug() << "== Animation Begin ==";
     for (auto boneName : anim->boneAnimations.keys()) {
         auto boneAnim = anim->boneAnimations[boneName];
-
+        //qDebug()<< boneName;
         if ( boneMap.contains(boneName))
         {
+            //qDebug()<< boneName <<" verified";
             auto bone = bones[boneMap[boneName]];
 
 
@@ -33,7 +41,12 @@ void Skeleton::applyAnimation(iris::SkeletalAnimationPtr anim, float time)
             bone->localMatrix.rotate(rot);
             bone->localMatrix.scale(scale);
         }
+        else
+        {
+            //qDebug()<< boneName <<" unverified";
+        }
     }
+    //qDebug() << "== Animation End ==";
 
     //recursively calculate final transform
     std::function<void(BonePtr)> calcFinalTransform;
@@ -47,10 +60,15 @@ void Skeleton::applyAnimation(iris::SkeletalAnimationPtr anim, float time)
         }
     };
 
-    auto rootBone = bones[0];//its assumed that the first bone is the root bone
+    //auto rootBone = bones[0];//its assumed that the first bone is the root bone
+    //auto rootBone = this->getRootBone();
+    auto roots = this->getRootBones();
+    for (auto rootBone : roots) {
     rootBone->transformMatrix = rootBone->localMatrix;
+    //rootBone->transformMatrix.setToIdentity();
     rootBone->skinMatrix =rootBone->transformMatrix * rootBone->inversePoseMatrix;
     calcFinalTransform(rootBone);
+    }
 
     //assign transforms to list
     for (auto i = 0; i < bones.size(); i++) {

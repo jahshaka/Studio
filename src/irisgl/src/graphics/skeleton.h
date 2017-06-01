@@ -8,7 +8,7 @@
 namespace iris
 {
 
-class Bone
+class Bone : public QEnableSharedFromThis<Bone>
 {
     Bone(){}
 public:
@@ -20,9 +20,11 @@ public:
     QMatrix4x4 skinMatrix;// final transform sent to the shader
 
     QList<BonePtr> childBones;
+    BonePtr parentBone;
 
     void addChild(BonePtr bone)
     {
+        bone->parentBone = this->sharedFromThis();
         childBones.append(bone);
     }
 
@@ -56,6 +58,23 @@ public:
         QMatrix4x4 transform;
         transform.setToIdentity();
         boneTransforms.append(transform);
+    }
+
+    BonePtr getRootBone()
+    {
+        for(auto bone : bones)
+            if(!bone->parentBone)
+                return bone;
+    }
+
+    QList<BonePtr> getRootBones()
+    {
+        QList<BonePtr> roots;
+        for(auto bone : bones)
+            if(!bone->parentBone)
+                roots.append(bone);
+
+        return roots;
     }
 
     void applyAnimation(SkeletalAnimationPtr anim, float time);
