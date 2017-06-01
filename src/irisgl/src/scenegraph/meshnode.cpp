@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "../materials/materialhelper.h"
 #include "../graphics/renderitem.h"
 #include "../animation/animableproperty.h"
+#include "../animation/animation.h"
 
 #include "../core/scene.h"
 #include "../core/scenenode.h"
@@ -277,9 +278,15 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath,
         auto node = iris::MeshNode::create();
 
         auto meshObj = new Mesh(mesh);
-        auto anims = Mesh::extractAnimations(scene);
-        for(auto animName : anims.keys())
-            meshObj->addSkeletalAnimation(animName, anims[animName]);
+
+        //todo: use relative path from scene root
+        auto anims = Mesh::extractAnimations(scene, filePath);
+        for(auto animName : anims.keys()) {
+            // meshObj->addSkeletalAnimation(animName, anims[animName]);
+            auto anim = Animation::createFromSkeletalAnimation(anims[animName]);
+            node->addAnimation(anim);
+            node->setAnimation(anim);
+        }
 
         auto skel = Mesh::extractSkeleton(mesh, scene);
         meshObj->setSkeleton(skel);
@@ -301,6 +308,15 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath,
     }
 
     auto node = _buildScene(scene,scene->mRootNode,filePath, createMaterialFunc);
+
+    //extract animations and add them one by one
+    //todo: use relative path from scene root
+    auto anims = Mesh::extractAnimations(scene, filePath);
+    for(auto animName : anims.keys()) {
+        auto anim = Animation::createFromSkeletalAnimation(anims[animName]);
+        node->addAnimation(anim);
+        node->setAnimation(anim);
+    }
 
     return node;
 }
