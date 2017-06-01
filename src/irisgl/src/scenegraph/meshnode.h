@@ -88,7 +88,7 @@ public:
     SceneNodePtr createDuplicate() override;
     virtual void submitRenderItems() override;
 
-    void updateAnimation(float time) override;
+    //void updateAnimation(float time) override;
 
     FaceCullingMode getFaceCullingMode() const;
     void setFaceCullingMode(const FaceCullingMode &value);

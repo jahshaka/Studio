@@ -139,6 +139,7 @@ void MeshNode::submitRenderItems()
     }
 }
 
+/*
 void MeshNode::updateAnimation(float time)
 {
     if (mesh->hasSkeletalAnimations() && mesh->hasSkeleton())
@@ -148,8 +149,9 @@ void MeshNode::updateAnimation(float time)
         skel->applyAnimation(anim, time);
     }
 
-    SceneNode::updateAnimation(time);
+    //SceneNode::updateAnimation(time);
 }
+*/
 
 QJsonObject readJahShader(const QString &filePath)
 {
