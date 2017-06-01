@@ -253,6 +253,37 @@ void SceneNode::updateAnimation(float time)
         if (animation->hasPropertyAnim("scale")) {
             scale = animation->getVector3PropertyAnim("scale")->getValue(time);
         }
+
+        if (animation->hasSkeletalAnimation()) {
+            // recursively update the animation
+            std::function<void(SkeletalAnimationPtr anim, SceneNodePtr node)> func;
+            func = [&func, time](SkeletalAnimationPtr anim, SceneNodePtr node)
+            {
+                if (anim->boneAnimations.contains(node->name)) {
+                    auto boneAnim = anim->boneAnimations[node->name];
+
+                    node->pos = boneAnim->posKeys->getValueAt(time);
+                    node->rot = boneAnim->rotKeys->getValueAt(time);
+                    node->scale = boneAnim->scaleKeys->getValueAt(time);
+                }
+
+                // if node is a mesh, apply animation to skeleton
+                if (node->sceneNodeType == SceneNodeType::Mesh) {
+                    auto meshNode = node.staticCast<MeshNode>();
+                    auto mesh = meshNode->getMesh();
+                    if (mesh != nullptr && mesh->hasSkeleton()) {
+                        mesh->getSkeleton()->applyAnimation(anim, time);
+                    }
+                }
+
+                for(auto child : node->children) {
+                    func(anim, child);
+                }
+            };
+
+            func(animation->getSkeletalAnimation(), this->sharedFromThis());
+        }
+
     }
 
     for (auto child : children) {
