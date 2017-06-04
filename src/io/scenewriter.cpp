@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
 #include "../irisgl/src/animation/propertyanim.h"
+#include "../irisgl/src/animation/skeletalanimation.h"
 #include "../irisgl/src/graphics/postprocess.h"
 #include "../irisgl/src/graphics/postprocessmanager.h"
 
@@ -264,38 +265,18 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
 
         animObj["properties"] = animPropListObj;
 
+        if (anim->hasSkeletalAnimation()) {
+            auto skelAnim = anim->getSkeletalAnimation();
+            QJsonObject skelObj;
+            skelObj["source"] = skelAnim->source;
+            skelObj["name"] = skelAnim->name;
+            animObj["skeletalAnimation"] = skelObj;
+        }
+
         animListObj.append(animObj);
     }
 
     sceneNodeObj["animations"] = animListObj;
-
-    /*
-    QJsonArray frames;
-    for(auto frameName:anim->keyFrameSet->keyFrames.keys())
-    {
-        auto frame = anim->keyFrameSet->keyFrames[frameName];
-
-        QJsonObject frameObj;
-        QJsonArray keys;
-        for(auto key:frame->keys)
-        {
-            QJsonObject keyObj;
-            keyObj["time"] = key->time;
-            keyObj["value"] = key->value;
-
-            keys.append(keyObj);
-        }
-
-        frameObj["keys"] = keys;
-        frameObj["name"] = frameName;
-        frames.append(frameObj);
-    }
-
-
-    animObj["frames"] = frames;
-
-    sceneNodeObj["animation"] = animObj;
-    */
 }
 
 void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode)
