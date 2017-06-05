@@ -57,7 +57,7 @@ public:
      * @param path
      * @return
      */
-    static SceneNodePtr loadAsSceneFragment(QString path, std::function<MaterialPtr(MeshMaterialData& data)> createMaterialFunc);
+    static SceneNodePtr loadAsSceneFragment(QString path, std::function<MaterialPtr(Mesh* mesh, MeshMaterialData& data)> createMaterialFunc);
 
     static SceneNodePtr loadAsAnimatedModel(QString path);
 

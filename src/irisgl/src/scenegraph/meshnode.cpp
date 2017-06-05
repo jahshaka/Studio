@@ -172,7 +172,7 @@ QJsonObject readJahShader(const QString &filePath)
  * @return
  */
 QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QString filePath,
-                                            std::function<MaterialPtr(MeshMaterialData& data)> createMaterialFunc)
+                                            std::function<MaterialPtr(Mesh* mesh, MeshMaterialData& data)> createMaterialFunc)
 {
     QSharedPointer<iris::SceneNode> sceneNode;// = QSharedPointer<iris::SceneNode>(new iris::SceneNode());
 
@@ -201,7 +201,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
 
             MeshMaterialData meshMat;
             MaterialHelper::extractMaterialData(m, dir, meshMat);
-            auto mat = createMaterialFunc(meshMat);
+            auto mat = createMaterialFunc(meshObj, meshMat);
             if (!!mat)
                 meshNode->setMaterial(mat);
 
@@ -236,7 +236,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
 
             MeshMaterialData meshMat;
             MaterialHelper::extractMaterialData(m, dir, meshMat);
-            auto mat = createMaterialFunc(meshMat);
+            auto mat = createMaterialFunc(meshObj, meshMat);
             if (!!mat)
                 meshNode->setMaterial(mat);
         }
@@ -265,7 +265,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
 }
 
 QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath,
-                                                              std::function<MaterialPtr(MeshMaterialData& data)> createMaterialFunc)
+                                                              std::function<MaterialPtr(Mesh* mesh, MeshMaterialData& data)> createMaterialFunc)
 {
     Assimp::Importer importer;
     const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(),aiProcessPreset_TargetRealtime_Fast);
@@ -300,7 +300,7 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath,
 
         MeshMaterialData meshMat;
         MaterialHelper::extractMaterialData(m, dir, meshMat);
-        auto mat = createMaterialFunc(meshMat);
+        auto mat = createMaterialFunc(meshObj, meshMat);
         if (!!mat)
             node->setMaterial(mat);
 
