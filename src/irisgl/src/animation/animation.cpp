@@ -29,6 +29,11 @@ bool Animation::hasSkeletalAnimation()
     return !!skeletalAnimation;
 }
 
+void Animation::setSkeletalAnimation(const SkeletalAnimationPtr &value)
+{
+    skeletalAnimation = value;
+}
+
 Animation::Animation(QString name)
 {
     this->name = name;

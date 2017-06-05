@@ -76,6 +76,7 @@ public:
 
     SkeletalAnimationPtr getSkeletalAnimation() const;
     bool hasSkeletalAnimation();
+    void setSkeletalAnimation(const SkeletalAnimationPtr &value);
 };
 
 }
