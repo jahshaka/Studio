@@ -1013,9 +1013,9 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
         //materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
         //mat->generate(materialReader->getParsedShader());
         if (mesh->hasSkeleton())
-            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
-        else
             mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
+        else
+            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
         mat->setValue("diffuseColor", data.diffuseColor);
         mat->setValue("specularColor", data.specularColor);
@@ -1024,9 +1024,14 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 
         mat->setValue("shininess", data.shininess);
 
-        mat->setValue("diffuseTexture", data.diffuseTexture);
-        mat->setValue("specularTexture", data.specularTexture);
-        mat->setValue("normalTexture", data.normalTexture);
+        if (QFile(data.diffuseTexture).exists())
+            mat->setValue("diffuseTexture", data.diffuseTexture);
+
+        if (QFile(data.specularTexture).exists())
+            mat->setValue("specularTexture", data.specularTexture);
+
+        if (QFile(data.normalTexture).exists())
+            mat->setValue("normalTexture", data.normalTexture);
 
         return mat;
     });
@@ -1117,10 +1122,11 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
     // apply default material to mesh nodes
     if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
-
-        auto mat = iris::CustomMaterial::create();
-        mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-        meshNode->setMaterial(mat);
+        if (!meshNode->getMaterial()) {
+            auto mat = iris::CustomMaterial::create();
+            mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
+            meshNode->setMaterial(mat);
+        }
     }
 
     scene->getRootNode()->addChild(sceneNode);
