@@ -433,17 +433,20 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
                     if (isModelExtension(info.suffix())) {
                         if (sceneView->doActiveObjectPicking(evt->posF())) {
-                            activeSceneNode->pos = sceneView->hit;
+                            //activeSceneNode->pos = sceneView->hit;
+                            dragScenePos = sceneView->hit;
                         } else if (sceneView->updateRPI(sceneView->editorCam->pos,
                                                         sceneView->calculateMouseRay(evt->posF())))
                         {
-                            activeSceneNode->pos = sceneView->Offset;
+                            //activeSceneNode->pos = sceneView->Offset;
+                            dragScenePos = sceneView->Offset;
                         } else {
                             ////////////////////////////////////////
                             const float spawnDist = 10.0f;
                             auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, -1.0f, -spawnDist));
                             offset += sceneView->editorCam->pos;
-                            activeSceneNode->pos = offset;
+                            //activeSceneNode->pos = offset;
+                            dragScenePos = offset;
                         }
                     }
                 }
@@ -492,8 +495,9 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 }
 
                 if (isModelExtension(info.suffix())) {
-                    auto ppos = activeSceneNode->pos;
-                    deleteNode();
+                    //auto ppos = activeSceneNode->pos;
+                    auto ppos = dragScenePos;
+                    //deleteNode();
                     addMesh(evt->mimeData()->text(), true, ppos);
                 }
 
@@ -1002,13 +1006,17 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
     if (filename.isEmpty()) return;
 
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::loadAsSceneFragment(filename,[](iris::MeshMaterialData& data)
+    auto node = iris::MeshNode::loadAsSceneFragment(filename,[](iris::Mesh* mesh, iris::MeshMaterialData& data)
     {
         auto mat = iris::CustomMaterial::create();
         //MaterialReader *materialReader = new MaterialReader();
         //materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
         //mat->generate(materialReader->getParsedShader());
-        mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+        if (mesh->hasSkeleton())
+            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+        else
+            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
+
         mat->setValue("diffuseColor", data.diffuseColor);
         mat->setValue("specularColor", data.specularColor);
         mat->setValue("ambientColor", data.ambientColor);
@@ -1041,12 +1049,14 @@ void MainWindow::addViewPoint()
 
 void MainWindow::addDragPlaceholder()
 {
+    /*
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
     node->scale = QVector3D(.5f, .5f, .5f);
     node->setMesh(":app/content/primitives/arrow.obj");
     node->setName("Arrow");
     addNodeToScene(node, true);
+    */
 }
 
 void MainWindow::addTexturedPlane()

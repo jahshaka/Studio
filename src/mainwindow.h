@@ -270,6 +270,7 @@ private:
     QPoint mouseReleasePos;
     QPoint mousePos;
     bool dragging;
+    QVector3D dragScenePos;
 
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;
