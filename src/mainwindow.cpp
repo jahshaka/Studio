@@ -1124,7 +1124,7 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
     }
 
     scene->getRootNode()->addChild(sceneNode);
-    if (!ignore) ui->sceneHierarchy->repopulateTree();
+    ui->sceneHierarchy->repopulateTree();
     sceneNodeSelected(sceneNode);
 }
 
