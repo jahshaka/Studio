@@ -155,7 +155,7 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     //enable all attrib arrays
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < (int)iris::VertexAttribUsage::Count; i++) {
         gl->glEnableVertexAttribArray(i);
     }
 
@@ -358,6 +358,7 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                 mat->begin(gl, scene);
             } else {
                 program = item->shaderProgram;
+                program->bind();
             }
 
             // send transform and light data
