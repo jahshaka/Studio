@@ -14,9 +14,10 @@ For more information see the LICENSE file
 
 #include <QString>
 #include <QList>
+#include "../irisglfwd.h"
 
 class QOpenGLShaderProgram;
-
+class aiScene;
 
 namespace iris
 {
@@ -36,6 +37,10 @@ public:
      * @return
      */
     static QList<Mesh*> loadAllMeshesFromFile(QString filePath);
+
+    static void loadAllMeshesAndAnimationsFromFile(QString filePath, QList<Mesh*>& meshes, QMap<QString, SkeletalAnimationPtr>& animations);
+
+    static QList<Mesh*> loadAllMeshesFromAssimpScene(const aiScene* scene);
 };
 
 }
