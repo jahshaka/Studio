@@ -99,7 +99,6 @@ QByteArray Database::getSceneBlob() const
     query.addBindValue(Globals::project->getProjectName());
 
     if (query.exec()) {
-        qDebug() << "got blob scene";
         if (query.first()) {
             return query.value(0).toByteArray();
         }

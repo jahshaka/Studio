@@ -27,8 +27,6 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
 {
     ui->setupUi(this);
 
-    qDebug() << GUIDManager::generateGUID();
-
     this->setWindowTitle("Jahshaka VR");
 
     QFile fontFile(IrisUtils::getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
@@ -122,11 +120,13 @@ QString ProjectDialog::loadProjectDelegate()
 
 void ProjectDialog::openRecentProject(QListWidgetItem *item)
 {
-    Globals::project->setProjectPath(item->text());
+    auto projectFile = QFileInfo(item->text());
+    auto projectPath = projectFile.absolutePath();
+    Globals::project->setProjectPath(projectPath);
 
     window = new MainWindow;
     window->showMaximized();
-    window->openProject(item->text());
+    window->openProject(projectFile.absoluteFilePath());
 
     this->close();
 }

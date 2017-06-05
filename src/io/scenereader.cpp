@@ -86,8 +86,6 @@ iris::ScenePtr SceneReader::readScene(QString filePath,
     auto doc = QJsonDocument::fromBinaryData(sceneBlob);
     auto projectObj = doc.object();
 
-    qDebug() << projectObj;
-
     auto scene = readScene(projectObj);
 
     if (editorData) *editorData = readEditorData(projectObj);
