@@ -199,8 +199,8 @@ void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
     gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, shadowFBO);
     gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthMap, 0);
 
-    shadowShader->bind();
 
+    QOpenGLShaderProgram* shader;
     for (auto light : scene->lights) {
         if (light->lightType == iris::LightType::Directional) {
 
@@ -211,13 +211,28 @@ void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
                              QVector3D(0.0f, 1.0f, 0.0f));
             QMatrix4x4 lightSpaceMatrix = lightProjection * lightView;
 
-            shadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
-
             for (auto& item : scene->shadowRenderList) {
-                shadowShader->setUniformValue("u_worldMatrix", item->worldMatrix);
+
 
                 if (item->type == iris::RenderItemType::Mesh) {
-                    item->mesh->draw(gl, shadowShader);
+                    if  (item->mesh->hasSkeleton()) {
+                        auto boneTransforms = item->mesh->getSkeleton()->boneTransforms;
+                        skinnedShadowShader->bind();
+                        skinnedShadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
+                        skinnedShadowShader->setUniformValue("u_worldMatrix", item->worldMatrix);
+                        skinnedShadowShader->setUniformValueArray("u_bones", boneTransforms.data(), boneTransforms.size());
+                        shader = skinnedShadowShader;
+
+                    } else {
+                        shadowShader->bind();
+                        shadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
+                        shadowShader->setUniformValue("u_worldMatrix", item->worldMatrix);
+                        shader = shadowShader;
+                    }
+
+
+
+                    item->mesh->draw(gl, shader);
                 }
             }
         }
@@ -631,6 +646,9 @@ void ForwardRenderer::createLineShader()
 
 void ForwardRenderer::createShadowShader()
 {
+    skinnedShadowShader = GraphicsHelper::loadShader(":assets/shaders/skinned_shadow_map.vert",
+                                                    ":assets/shaders/shadow_map.frag");
+
     shadowShader = GraphicsHelper::loadShader(":assets/shaders/shadow_map.vert",
                                               ":assets/shaders/shadow_map.frag");
 

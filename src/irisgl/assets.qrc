@@ -31,5 +31,6 @@
         <file>assets/shaders/postprocesses/ssao.fs</file>
         <file>assets/models/head2.obj</file>
         <file>assets/shaders/skinned_material.vert</file>
+        <file>assets/shaders/skinned_shadow_map.vert</file>
     </qresource>
 </RCC>

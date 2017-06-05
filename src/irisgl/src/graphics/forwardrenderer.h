@@ -62,6 +62,7 @@ class ForwardRenderer
     QSharedPointer<SceneNode> selectedSceneNode;
     QOpenGLShaderProgram* lineShader;
     QOpenGLShaderProgram* shadowShader;
+    QOpenGLShaderProgram* skinnedShadowShader;
     QOpenGLShaderProgram* particleShader;
     QOpenGLShaderProgram* emitterShader;
 

@@ -46,7 +46,7 @@ void main()
     //mat4 boneMatrix = u_bones[int(a_boneIndices.x)];
     //float totalWeights = a_boneWeights[0] + a_boneWeights[1] + a_boneWeights[2] + a_boneWeights[3];
 
-    v_worldPos = (u_worldMatrix*vec4(a_pos,1.0)).xyz;
+    v_worldPos = (u_worldMatrix*boneMatrix*vec4(a_pos,1.0)).xyz;
     //gl_Position = matrix*vec4(a_pos,1.0);
     gl_Position = u_projMatrix*u_viewMatrix*u_worldMatrix*boneMatrix*vec4(a_pos,1.0);
     //gl_Position = u_projMatrix*u_viewMatrix*u_worldMatrix*vec4(a_pos, 1.0);
