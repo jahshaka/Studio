@@ -10,6 +10,7 @@ namespace Ui {
 
 class MainWindow;
 class SettingsManager;
+class Database;
 
 class ProjectDialog : public QDialog
 {
@@ -36,6 +37,7 @@ protected slots:
 
 private:
     Ui::ProjectDialog *ui;
+    Database *db;
 };
 
 #endif // PROJECTDIALOG_H

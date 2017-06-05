@@ -78,7 +78,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     //camController = orbitalCam;
 
     editorCam = iris::CameraNode::create();
-    editorCam->pos = QVector3D(0, 8, 24);
+    editorCam->pos = QVector3D(0, 5, 14);
     editorCam->rot = QQuaternion::fromEulerAngles(-5, 0, 0);
     camController->setCamera(editorCam);
 
@@ -88,16 +88,16 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     playScene = false;
     animTime = 0.0f;
 
-    sceneFloor = iris::IntersectionHelper::computePlaneND(QVector3D(100,  0,  100),
+    sceneFloor = iris::IntersectionHelper::computePlaneND(QVector3D( 100, 0,  100),
                                                           QVector3D(-100, 0,  100),
-                                                          QVector3D(0,    0, -100));
+                                                          QVector3D(   0, 0, -100));
 
     setAcceptDrops(true);
 }
 
 void SceneViewWidget::resetEditorCam()
 {
-    editorCam->pos = QVector3D(0, 5, 7);
+    editorCam->pos = QVector3D(0, 5, 14);
     editorCam->rot = QQuaternion::fromEulerAngles(-5, 0, 0);
     camController->setCamera(editorCam);
 }

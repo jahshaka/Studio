@@ -14,11 +14,14 @@
 #include "ui_projectdialog.h"
 
 #include "../core/project.h"
+#include "../core/database/database.h"
 #include "../globals.h"
 #include "../constants.h"
 
 #include <QDebug>
 #include <QFileDialog>
+
+#include "../core/guidmanager.h"
 
 ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::ProjectDialog)
 {
@@ -58,10 +61,9 @@ void ProjectDialog::newScene()
 
     if (!projectName.isEmpty() || !projectName.isNull()) {
         auto fullProjectPath = QDir(projectPath).filePath(projectName);
-        auto slnName = projectName + Constants::PROJ_EXT;
-        auto jahFile = QDir(fullProjectPath + "/Scenes").filePath(projectName + Constants::JAH_EXT);
+        auto slnName = QDir(fullProjectPath).filePath(projectName + Constants::PROJ_EXT);
 
-        Globals::project->setFilePath(jahFile);
+        Globals::project->setFilePath(slnName);
         Globals::project->setProjectPath(fullProjectPath);
 
         // make a dir and the default subfolders
@@ -73,33 +75,10 @@ void ProjectDialog::newScene()
             dir.mkpath(".");
         }
 
-        // copy default scene to new project and open that as the new project
-        QFile::copy(IrisUtils::getAbsoluteAssetPath("scenes/startup/tile.png"),
-                    QDir(fullProjectPath + "/Textures").filePath("tile.png"));
-
-        QFile::copy(IrisUtils::getAbsoluteAssetPath("scenes/startup/ground.obj"),
-                    QDir(fullProjectPath + "/Models").filePath("ground.obj"));
-
-        QFile::copy(IrisUtils::getAbsoluteAssetPath("scenes/startup/startup.jah"), jahFile);
-
-        QFile slnFile(QDir(Globals::project->getProjectFolder()).filePath(slnName));
-        slnFile.open(QIODevice::WriteOnly | QIODevice::Truncate);
-
-        QJsonObject projectObj;
-        QJsonObject activeObj;
-        activeObj["path"] = "Scenes/" + projectName + Constants::JAH_EXT;
-        activeObj["thumbnail"] = "";
-        activeObj["version"] = Constants::CONTENT_VERSION;
-        projectObj["activeProject"] = activeObj;
-        QJsonDocument projectSln(projectObj);
-        slnFile.write(projectSln.toJson());
-        slnFile.close();
-
         window = new MainWindow;
         window->showMaximized();
-        // window->newProject(projectName, projectPath);
-        window->openProject(jahFile);
-        settings->addRecentlyOpenedScene(fullProjectPath);
+        window->newProject(projectName, fullProjectPath);
+        settings->addRecentlyOpenedScene(slnName);
 
         this->close();
     }
@@ -107,26 +86,17 @@ void ProjectDialog::newScene()
 
 void ProjectDialog::openProject()
 {
-    auto projectPath = loadProjectDelegate();
+    auto projectFile = QFileInfo(loadProjectDelegate());
+    auto projectPath = projectFile.absolutePath();
 
     if (!projectPath.isEmpty()) {
-        auto projectDir = projectPath.split('/').last();
         Globals::project->setProjectPath(projectPath);
-        auto projectName = QDir(projectPath).filePath(projectDir + Constants::PROJ_EXT);
-
-        // TODO - move this to a utils class or something
-        QFile file(projectName);
-        file.open(QIODevice::ReadOnly);
-        auto data = file.readAll();
-        file.close();
-        auto projectObject = QJsonDocument::fromJson(data).object();
-        auto activeObject = projectObject["activeProject"].toObject();
 
         window = new MainWindow;
         window->showMaximized();
-        window->openProject(QDir(projectPath).filePath(activeObject["path"].toString()));
+        window->openProject(projectFile.absoluteFilePath());
 
-        settings->addRecentlyOpenedScene(projectPath);
+        settings->addRecentlyOpenedScene(projectFile.absoluteFilePath());
         this->close();
     }
 
@@ -143,17 +113,20 @@ void ProjectDialog::openProject()
 
 QString ProjectDialog::loadProjectDelegate()
 {
-    auto projectFoler = QFileDialog::getExistingDirectory(this, "Select Project Folder");
-    return projectFoler;
+    auto projectFileName = QFileDialog::getOpenFileName(this, "Select Project Folder",
+                                                        nullptr, "Jahshaka Project File (*.project)");
+    return projectFileName;
 }
 
 void ProjectDialog::openRecentProject(QListWidgetItem *item)
 {
-    Globals::project->setProjectPath(item->text());
+    auto projectFile = QFileInfo(item->text());
+    auto projectPath = projectFile.absolutePath();
+    Globals::project->setProjectPath(projectPath);
 
     window = new MainWindow;
     window->showMaximized();
-    window->openProject(item->text() + "/Scenes/" + item->text().split('/').last() + Constants::JAH_EXT);
+    window->openProject(projectFile.absoluteFilePath());
 
     this->close();
 }

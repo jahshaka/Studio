@@ -72,6 +72,8 @@ class QOpenGLFunctions_3_2_Core;
 
 enum class SceneNodeType;
 
+class Database;
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -85,6 +87,8 @@ public:
 
     void setSceneAnimTime(float time);
     void stopAnimWidget();
+
+    void setupProjectDB();
 
     bool handleMousePress(QMouseEvent *event);
     bool handleMouseRelease(QMouseEvent *event);
@@ -272,6 +276,8 @@ private:
     QActionGroup* transformGroup;
     QActionGroup* transformSpaceGroup;
     QActionGroup* cameraGroup;
+
+    Database *db;
 
     bool vrMode;
     QPushButton* vrButton;

@@ -84,6 +84,7 @@ For more information see the LICENSE file
 #include "constants.h"
 #include <src/io/materialreader.hpp>
 #include "uimanager.h"
+#include "core/database/database.h"
 
 enum class VRButtonMode : int
 {
@@ -206,6 +207,10 @@ MainWindow::MainWindow(QWidget *parent) :
     //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
     ui->ToolBar->addWidget(vrButton);
 
+    ui->AnimationDock->hide();
+//    ui->PresetsDock->hide();
+
+    setupProjectDB();
 }
 
 void MainWindow::setupVrUi()
@@ -304,20 +309,20 @@ iris::ScenePtr MainWindow::createDefaultScene()
 {
     auto scene = iris::Scene::create();
 
-    auto cam = iris::CameraNode::create();
-    cam->pos = QVector3D(6, 12, 14);
-    cam->rot = QQuaternion::fromEulerAngles(-80,0,0);
-    cam->update(0);
+//    auto cam = iris::CameraNode::create();
+//    cam->pos = QVector3D(6, 12, 14);
+//    cam->rot = QQuaternion::fromEulerAngles(-80,0,0);
+//    cam->update(0);
 
-    scene->setCamera(cam);
+//    scene->setCamera(cam);
 
     scene->setSkyColor(QColor(72, 72, 72));
     scene->setAmbientColor(QColor(96, 96, 96));
 
     // second node
     auto node = iris::MeshNode::create();
-    node->setMesh(getAbsoluteAssetPath("app/models/ground.obj"));
-    node->scale = QVector3D(.5, .5, .5);
+    node->setMesh(":/app/models/ground.obj");
+    node->pos = QVector3D(0, 1e-4, 0); // prevent z-fighting with the default plane
     node->setName("Ground");
     node->setPickable(false);
     node->setShadowEnabled(false);
@@ -337,15 +342,15 @@ iris::ScenePtr MainWindow::createDefaultScene()
     dlight->pos = QVector3D(4, 4, 0);
     dlight->rot = QQuaternion::fromEulerAngles(15, 0, 0);
     dlight->intensity = 1;
-    dlight->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/light.png"));
+    dlight->icon = iris::Texture2D::load(":/app/icons/light.png");
 
     auto plight = iris::LightNode::create();
     plight->setLightType(iris::LightType::Point);
      scene->rootNode->addChild(plight);
     plight->setName("Point Light");
-    plight->pos = QVector3D(-3, 4, 0);
+    plight->pos = QVector3D(-4, 4, 0);
     plight->intensity = 1;
-    plight->icon = iris::Texture2D::load(getAbsoluteAssetPath("app/icons/bulb.png"));
+    plight->icon = iris::Texture2D::load(":/app/icons/bulb.png");
 
     // fog params
     scene->fogColor = QColor(72, 72, 72);
@@ -373,9 +378,9 @@ void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2
 //        m_logger->enableMessages();
 //    }
 
-    auto scene = this->createDefaultScene();
+//    auto scene = this->createDefaultScene();
 //    openProject(IrisUtils::getAbsoluteAssetPath("scenes/startup.jah"), true);
-    this->setScene(scene);
+//    this->setScene(scene);
     setupVrUi();
 }
 
@@ -636,35 +641,42 @@ void MainWindow::stopAnimWidget()
     animWidget->stopAnimation();
 }
 
+void MainWindow::setupProjectDB()
+{
+    db = new Database();
+}
+
 void MainWindow::saveScene()
 {
-    if (Globals::project->isSaved()) {
-        auto filename = Globals::project->getFilePath();
-        auto writer = new SceneWriter();
-        writer->writeScene(filename,
-                           scene,
-                           sceneView->getRenderer()->getPostProcessManager(),
-                           sceneView->getEditorData());
-        // settings->addRecentlyOpenedScene(filename);
-        // sceneView->saveFrameBuffer("viewport.jpg");
-        delete writer;
-    }
+    auto writer = new SceneWriter();
+    auto blob = writer->getSceneObject(Globals::project->getFilePath(),
+                                       scene,
+                                       sceneView->getRenderer()->getPostProcessManager(),
+                                       sceneView->getEditorData());
+    db->updateScene(blob);
 
-    else {
-        auto filename = QFileDialog::getSaveFileName(this, "Save Scene", "", "Jashaka Scene (*.jah)");
-        auto writer = new SceneWriter();
-        writer->writeScene(filename,
-                           scene,
-                           sceneView->getRenderer()->getPostProcessManager(),
-                           sceneView->getEditorData());
+//    if (Globals::project->isSaved()) {
+//        auto filename = Globals::project->getFilePath();
+//        auto writer = new SceneWriter();
+//        writer->writeScene(filename,
+//                           scene,
+//                           sceneView->getRenderer()->getPostProcessManager(),
+//                           sceneView->getEditorData());
+//        delete writer;
+//    }
 
-        Globals::project->setFilePath(filename);
-        this->setProjectTitle(Globals::project->getProjectName());
-        // settings->addRecentlyOpenedScene(filename);
-        // sceneView->saveFrameBuffer("viewport.jpg");
-        delete writer;
-    }
+//    else {
+//        auto filename = QFileDialog::getSaveFileName(this, "Save Scene", "", "Jashaka Scene (*.jah)");
+//        auto writer = new SceneWriter();
+//        writer->writeScene(filename,
+//                           scene,
+//                           sceneView->getRenderer()->getPostProcessManager(),
+//                           sceneView->getEditorData());
 
+//        Globals::project->setFilePath(filename);
+//        this->setProjectTitle(Globals::project->getProjectName());
+//        delete writer;
+//    }
 }
 
 void MainWindow::saveSceneAs()
@@ -714,9 +726,14 @@ void MainWindow::openProject(QString filename, bool startupLoad)
 
     EditorData* editorData = nullptr;
 
+    db->initializeDatabase(filename);
+
+    Globals::project->setFilePath(filename);
+    this->setProjectTitle(Globals::project->getProjectName());
+
     auto postMan = sceneView->getRenderer()->getPostProcessManager();
     postMan->clearPostProcesses();
-    auto scene = reader->readScene(filename, postMan, &editorData);
+    auto scene = reader->readScene(filename, db->getSceneBlob(), postMan, &editorData);
     this->sceneView->doneCurrent();
     setScene(scene);
 
@@ -725,9 +742,6 @@ void MainWindow::openProject(QString filename, bool startupLoad)
     if (editorData != nullptr) {
         sceneView->setEditorData(editorData);
     }
-
-    Globals::project->setFilePath(filename);
-    this->setProjectTitle(Globals::project->getProjectName());
 
     delete reader;
 }
@@ -1188,34 +1202,25 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 {
     newScene();
 
-    auto pPath = projectPath + '/' + filename;
+    auto pPath = QDir(projectPath).filePath(filename + Constants::PROJ_EXT);
 
-//    // make a dir and the subfolders...
-//    QDir dir(pPath);
-//    if (!dir.exists()) {
-//        dir.mkpath(".");
-//    }
+    db->initializeDatabase(pPath);
+    db->createProject(Constants::DB_ROOT_TABLE);
 
-//    // make proj folders
-//    QList<QString> projFolders = { "Textures", "Models", "Shaders", "Materials", "Scenes" };
-//    for (auto folder : projFolders) {
-//        QDir dir(pPath + '/' + folder);
-//        dir.mkpath(".");
-//    }
-
-    auto str = pPath + "/Scenes/" + filename + ".jah";
-
-    //    auto filename = Globals::project->getFilePath();
     auto writer = new SceneWriter();
-    writer->writeScene(str,
-                       scene,
-                       sceneView->getRenderer()->getPostProcessManager(),
-                       sceneView->getEditorData());
+    auto sceneObject = writer->getSceneObject(pPath,
+                                              this->scene,
+                                              sceneView->getRenderer()->getPostProcessManager(),
+                                              sceneView->getEditorData());
+//    db->updateScene(sceneObject);
+    db->insertScene(filename, sceneObject);
+//    writer->writeScene(str,
+//                       scene,
+//                       sceneView->getRenderer()->getPostProcessManager(),
+//                       sceneView->getEditorData());
 
-    //    settings->addRecentlyOpenedScene(filename);
-//    this->setProjectTitle(Globals::project->getProjectName());
     this->setProjectTitle(Globals::project->getProjectName());
-    settings->addRecentlyOpenedScene(str);
+//    settings->addRecentlyOpenedScene(str);
 
     delete writer;
 }

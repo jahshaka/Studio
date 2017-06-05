@@ -77,6 +77,23 @@ iris::ScenePtr SceneReader::readScene(QString filePath,
     return scene;
 }
 
+iris::ScenePtr SceneReader::readScene(QString filePath,
+                                      const QByteArray &sceneBlob,
+                                      iris::PostProcessManagerPtr postMan,
+                                      EditorData **editorData)
+{
+    dir = AssetIOBase::getDirFromFileName(filePath);
+    auto doc = QJsonDocument::fromBinaryData(sceneBlob);
+    auto projectObj = doc.object();
+
+    auto scene = readScene(projectObj);
+
+    if (editorData) *editorData = readEditorData(projectObj);
+    readPostProcessData(projectObj, postMan);
+
+    return scene;
+}
+
 EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
 {
     if(projectObj["editor"].isNull())
