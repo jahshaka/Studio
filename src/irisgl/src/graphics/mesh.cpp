@@ -65,7 +65,8 @@ Mesh::Mesh(aiMesh* mesh)
     gl->glGenVertexArrays(1,&vao);
 
     if(!mesh->HasPositions())
-        throw QString("Mesh has no positions!!");
+        return;
+        //throw QString("Mesh has no positions!!");
 
     this->addVertexArray(VertexAttribUsage::Position, (void*)mesh->mVertices, sizeof(aiVector3D) * mesh->mNumVertices, GL_FLOAT,3);
 
@@ -155,6 +156,9 @@ Mesh::Mesh(aiMesh* mesh)
     gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     usesIndexBuffer = true;
 
+    // the true size
+    int numVerts = indices.size();
+
 }
 
 //todo: extract trimesh from data
@@ -227,6 +231,7 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLen
     gl->glBindVertexArray(vao);
     if(usesIndexBuffer)
     {
+        //qDebug()<<indexBuffer;
         gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer);
         gl->glDrawElements(GL_TRIANGLES,numVerts,GL_UNSIGNED_INT,0);
         gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
