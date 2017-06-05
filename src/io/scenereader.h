@@ -28,10 +28,14 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/keyframeanimation.h"
 
 class EditorData;
+class aiScene;
 
 class SceneReader : public AssetIOBase
 {
     QHash<QString,QList<iris::Mesh*>> meshes;
+    QSet<QString> assimpScenes;
+    QHash<QString,QMap<QString, iris::SkeletalAnimationPtr>> animations;
+
 
 public:
     iris::ScenePtr readScene(QString filePath,
@@ -92,6 +96,9 @@ public:
      */
     iris::MaterialPtr readMaterial(QJsonObject &nodeObj);
 
+    // extracts meshes and animations from model file
+    void extractAssetsFromAssimpScene(QString filePath);
+
     /**
      * Returns mesh from mesh file at index
      * if the mesh doesnt exist, nullptr is returned
@@ -100,6 +107,8 @@ public:
      * @return
      */
     iris::Mesh* getMesh(QString filePath, int index);
+
+    iris::SkeletalAnimationPtr getSkeletalAnimation(QString filePath, QString animName);
 };
 
 #endif // SCENEREADER_H
