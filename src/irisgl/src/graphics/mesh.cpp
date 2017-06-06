@@ -313,6 +313,7 @@ SkeletonPtr Mesh::extractSkeleton(const aiMesh *mesh, const aiScene *scene)
 
         auto bone = Bone::create(QString(meshBone->mName.C_Str()));
         bone->inversePoseMatrix = aiMatrixToQMatrix(meshBone->mOffsetMatrix);
+        bone->poseMatrix = bone->inversePoseMatrix.inverted();
 
         skel->addBone(bone);
     }
