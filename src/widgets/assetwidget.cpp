@@ -106,7 +106,7 @@ void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
     QDir dir(path);
     QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
     foreach (const QFileInfo &file, files) {
-        if (!file.fileName().startsWith('.')) {
+        if (file.fileName() != "Metadata") {
             auto item = new QTreeWidgetItem();
             item->setIcon(0, QIcon(":/app/icons/folder-symbol.svg"));
             item->setData(0, Qt::DisplayRole, file.fileName());

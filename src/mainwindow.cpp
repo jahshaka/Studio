@@ -658,6 +658,7 @@ void MainWindow::saveScene()
                                        sceneView->getRenderer()->getPostProcessManager(),
                                        sceneView->getEditorData());
     db->updateScene(blob);
+    sceneView->saveFrameBuffer(Globals::project->getProjectFolder() + "/Metadata/preview.png");
 
 //    if (Globals::project->isSaved()) {
 //        auto filename = Globals::project->getFilePath();
@@ -685,18 +686,17 @@ void MainWindow::saveScene()
 
 void MainWindow::saveSceneAs()
 {
+//    QString dir = QApplication::applicationDirPath()+"/scenes/";
+//    auto filename = QFileDialog::getSaveFileName(this,"Save Scene",dir,"Jashaka Scene (*.jah)");
+//    auto writer = new SceneWriter();
+//    writer->writeScene(filename, scene, sceneView->getRenderer()->getPostProcessManager(), sceneView->getEditorData());
 
-    QString dir = QApplication::applicationDirPath()+"/scenes/";
-    auto filename = QFileDialog::getSaveFileName(this,"Save Scene",dir,"Jashaka Scene (*.jah)");
-    auto writer = new SceneWriter();
-    writer->writeScene(filename, scene, sceneView->getRenderer()->getPostProcessManager(), sceneView->getEditorData());
+//    Globals::project->setFilePath(filename);
+//    this->setProjectTitle(Globals::project->getProjectName());
 
-    Globals::project->setFilePath(filename);
-    this->setProjectTitle(Globals::project->getProjectName());
+//    settings->addRecentlyOpenedScene(filename);
 
-    settings->addRecentlyOpenedScene(filename);
-
-    delete writer;
+//    delete writer;
 }
 
 void MainWindow::loadScene()

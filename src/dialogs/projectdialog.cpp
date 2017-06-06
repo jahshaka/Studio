@@ -36,13 +36,33 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
         QApplication::setFont(QFont("Open Sans", 9));
     }
 
+    ui->listWidget->setViewMode(QListWidget::IconMode);
+    ui->listWidget->setIconSize(QSize(256, 256));
+    ui->listWidget->setResizeMode(QListWidget::Adjust);
+    ui->listWidget->setMovement(QListView::Static);
+    ui->listWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
+    ui->listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
+
     connect(ui->newProject,     SIGNAL(pressed()), SLOT(newScene()));
     connect(ui->openProject,    SIGNAL(pressed()), SLOT(openProject()));
     connect(ui->listWidget,     SIGNAL(itemDoubleClicked(QListWidgetItem*)),
             this,               SLOT(openRecentProject(QListWidgetItem*)));
 
     settings = SettingsManager::getDefaultManager();
-    ui->listWidget->addItems(settings->getRecentlyOpenedScenes());
+
+    for (auto recentItem : settings->getRecentlyOpenedScenes()) {
+        auto item = new QListWidgetItem();
+        item->setData(Qt::UserRole, recentItem);
+        item->setToolTip(recentItem);
+        auto fn = QFileInfo(recentItem);
+        if (QFile::exists(fn.absolutePath() + "/Metadata/preview.png")) {
+            item->setIcon(QIcon(fn.absolutePath() + "/Metadata/preview.png"));
+        } else {
+            item->setIcon(QIcon(":/app/images/no_preview.png"));
+        }
+        item->setText(fn.baseName());
+        ui->listWidget->addItem(item);
+    }
 }
 
 ProjectDialog::~ProjectDialog()
@@ -79,6 +99,7 @@ void ProjectDialog::newScene()
         window->showMaximized();
         window->newProject(projectName, fullProjectPath);
         settings->addRecentlyOpenedScene(slnName);
+        settings->setValue("last_wd", projectPath);
 
         this->close();
     }
@@ -120,12 +141,13 @@ QString ProjectDialog::loadProjectDelegate()
 
 void ProjectDialog::openRecentProject(QListWidgetItem *item)
 {
-    auto projectFile = QFileInfo(item->text());
+    auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
     auto projectPath = projectFile.absolutePath();
     Globals::project->setProjectPath(projectPath);
 
     window = new MainWindow;
     window->showMaximized();
+
     window->openProject(projectFile.absoluteFilePath());
 
     this->close();

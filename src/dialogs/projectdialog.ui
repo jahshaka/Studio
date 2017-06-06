@@ -6,15 +6,23 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>600</height>
+    <width>1096</width>
+    <height>625</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Project Screen</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QPushButton {
+   <string notr="true">QToolTip {
+	color: #DEDEDE;
+    padding: 2px;
+	border: 0;
+    background: black;
+   	opacity: 200;
+}
+
+QPushButton {
 	border: 0;
 	background: #444;
 	padding: 8px;
@@ -40,6 +48,9 @@ QListView::item:selected {
 }</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
    <item row="1" column="0">
     <layout class="QVBoxLayout" name="verticalLayout">
      <property name="leftMargin">
@@ -57,12 +68,21 @@ QListView::item:selected {
         <string notr="true">font-size: 32px;</string>
        </property>
        <property name="text">
-        <string>JahshakaVR</string>
+        <string/>
+       </property>
+       <property name="pixmap">
+        <pixmap resource="../../images.qrc">:/app/images/sidepanelimage.jpg</pixmap>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="newProject">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>64</height>
+        </size>
+       </property>
        <property name="text">
         <string>New Project</string>
        </property>
@@ -85,7 +105,17 @@ QListView::item:selected {
     </widget>
    </item>
    <item row="1" column="1">
-    <widget class="QListWidget" name="listWidget"/>
+    <widget class="QListWidget" name="listWidget">
+     <property name="styleSheet">
+      <string notr="true">QListWidget {
+	padding-left: 16px;
+	padding-top: 24px;
+}</string>
+     </property>
+     <property name="resizeMode">
+      <enum>QListView::Adjust</enum>
+     </property>
+    </widget>
    </item>
    <item row="2" column="0" colspan="2">
     <widget class="QDialogButtonBox" name="buttonBox">
@@ -99,7 +129,9 @@ QListView::item:selected {
    </item>
   </layout>
  </widget>
- <resources/>
+ <resources>
+  <include location="../../images.qrc"/>
+ </resources>
  <connections>
   <connection>
    <sender>buttonBox</sender>
