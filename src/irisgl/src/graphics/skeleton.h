@@ -14,6 +14,7 @@ class Bone : public QEnableSharedFromThis<Bone>
 public:
     QString name;
     QMatrix4x4 inversePoseMatrix;// skeleton space
+    QMatrix4x4 poseMatrix;// skeleton space
     QMatrix4x4 transformMatrix;// skeleton space
     QMatrix4x4 localMatrix;// local space
 
@@ -33,6 +34,7 @@ public:
         auto bone = new Bone();
         bone->name = name;
         bone->inversePoseMatrix.setToIdentity();
+        bone->poseMatrix.setToIdentity();
         bone->transformMatrix.setToIdentity();
         bone->localMatrix.setToIdentity();
         bone->skinMatrix.setToIdentity();
@@ -78,6 +80,8 @@ public:
     }
 
     void applyAnimation(SkeletalAnimationPtr anim, float time);
+
+    void applyAnimation(QMatrix4x4 inverseMeshMatrix, QMap<QString, QMatrix4x4> skeletonSpaceMatrices);
 
     static SkeletonPtr create()
     {

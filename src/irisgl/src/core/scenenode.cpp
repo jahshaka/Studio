@@ -227,39 +227,6 @@ bool SceneNode::isRootNode()
 
 void SceneNode::updateAnimation(float time)
 {
-    /*
-    //@todo: cache transformation animations for faster lookup
-    auto keyFrameSet = animation->keyFrameSet;
-
-    if(keyFrameSet->hasKeyFrame("Translation X"))
-        pos.setX(keyFrameSet->getKeyFrame("Translation X")->getValueAt(time));
-    if(keyFrameSet->hasKeyFrame("Translation Y"))
-        pos.setY(keyFrameSet->getKeyFrame("Translation Y")->getValueAt(time));
-    if(keyFrameSet->hasKeyFrame("Translation Z"))
-        pos.setZ(keyFrameSet->getKeyFrame("Translation Z")->getValueAt(time));
-
-    auto rotEuler = rot.toEulerAngles();
-    if(keyFrameSet->hasKeyFrame("Rotation X"))
-        rotEuler.setX(keyFrameSet->getKeyFrame("Rotation X")->getValueAt(time));
-    if(keyFrameSet->hasKeyFrame("Rotation Y"))
-        rotEuler.setY(keyFrameSet->getKeyFrame("Rotation Y")->getValueAt(time));
-    if(keyFrameSet->hasKeyFrame("Rotation Z"))
-        rotEuler.setZ(keyFrameSet->getKeyFrame("Rotation Z")->getValueAt(time));
-    rot = QQuaternion::fromEulerAngles(rotEuler);
-
-    if(keyFrameSet->hasKeyFrame("Scale X"))
-        scale.setX(keyFrameSet->getKeyFrame("Scale X")->getValueAt(time));
-    if(keyFrameSet->hasKeyFrame("Scale Y"))
-        scale.setY(keyFrameSet->getKeyFrame("Scale Y")->getValueAt(time));
-    if(keyFrameSet->hasKeyFrame("Scale Z"))
-        scale.setZ(keyFrameSet->getKeyFrame("Scale Z")->getValueAt(time));
-
-    //update children
-    for (auto child : children) {
-        child->updateAnimation(time);
-    }
-    */
-
     if (!!animation) {
 
         time = animation->getSampleTime(time);
@@ -275,40 +242,83 @@ void SceneNode::updateAnimation(float time)
         }
 
         if (animation->hasSkeletalAnimation()) {
-            // recursively update the animation
-            std::function<void(SkeletalAnimationPtr anim, SceneNodePtr node)> func;
-            func = [&func, time](SkeletalAnimationPtr anim, SceneNodePtr node)
+            QMap<QString, QMatrix4x4> skeletonSpaceMatrices;
+            // The skeleton begins at this node, the root
+
+            // recursively update the animation for each node
+            std::function<void(SkeletalAnimationPtr anim, SceneNodePtr node, QMatrix4x4 parentTransform)> animateHierarchy;
+            animateHierarchy = [&animateHierarchy, time, &skeletonSpaceMatrices](SkeletalAnimationPtr anim, SceneNodePtr node, QMatrix4x4 parentTransform)
             {
+                // skeleton-space transform of current node
+                QMatrix4x4 skelTrans;
+                skelTrans.setToIdentity();
+
                 if (anim->boneAnimations.contains(node->name)) {
                     auto boneAnim = anim->boneAnimations[node->name];
 
                     node->pos = boneAnim->posKeys->getValueAt(time);
                     node->rot = boneAnim->rotKeys->getValueAt(time);
                     node->scale = boneAnim->scaleKeys->getValueAt(time);
+
+                    //auto localTrans = node->getLocalTransform(); //calculates the local transform matrix
+                    //skelTrans = parentTransform * localTrans; //skeleton space transform
+                    //skeletonSpaceMatrices.insert(node->name, skelTrans);
+                }
+                else {
+                    //skelTrans = parentTransform;
+                    //skeletonSpaceMatrices.insert(node->name, skelTrans);
                 }
 
+                auto localTrans = node->getLocalTransform(); //calculates the local transform matrix
+                skelTrans = parentTransform * localTrans; //skeleton space transform
+                skeletonSpaceMatrices.insert(node->name, skelTrans);
+
                 // if node is a mesh, apply animation to skeleton
-                if (node->sceneNodeType == SceneNodeType::Mesh) {
-                    auto meshNode = node.staticCast<MeshNode>();
-                    auto mesh = meshNode->getMesh();
-                    if (mesh != nullptr && mesh->hasSkeleton()) {
-                        mesh->getSkeleton()->applyAnimation(anim, time);
+//                if (node->sceneNodeType == SceneNodeType::Mesh) {
+//                    auto meshNode = node.staticCast<MeshNode>();
+//                    auto mesh = meshNode->getMesh();
+//                    if (mesh != nullptr && mesh->hasSkeleton()) {
+//                        mesh->getSkeleton()->applyAnimation(anim, time);
+//                    }
+//                }
+
+                for(auto child : node->children) {
+                    animateHierarchy(anim, child, skelTrans);
+                }
+            };
+
+            QMatrix4x4 rootTransform;
+            rootTransform.setToIdentity();
+            animateHierarchy(animation->getSkeletalAnimation(), this->sharedFromThis(), rootTransform);
+
+            //recursively apply animation for each mesh in heirarchy
+            std::function<void(SceneNodePtr node)> animateMeshes;
+            animateMeshes = [&skeletonSpaceMatrices, &animateMeshes](SceneNodePtr node){
+                if (skeletonSpaceMatrices.contains(node->name)) {
+                    if (node->sceneNodeType == SceneNodeType::Mesh) {
+                        auto meshNode = node.staticCast<MeshNode>();
+                        auto mesh = meshNode->getMesh();
+                        if (mesh != nullptr && mesh->hasSkeleton()) {
+                            auto inverseMeshMatrix = skeletonSpaceMatrices[node->name].inverted();
+                            mesh->getSkeleton()->applyAnimation(inverseMeshMatrix, skeletonSpaceMatrices);
+                        }
                     }
                 }
 
                 for(auto child : node->children) {
-                    func(anim, child);
+                    animateMeshes(child);
                 }
             };
-
-            func(animation->getSkeletalAnimation(), this->sharedFromThis());
+            animateMeshes(this->sharedFromThis());
         }
-
     }
+
+    // child nodes are already animated
 
     for (auto child : children) {
         child->updateAnimation(time);
     }
+
 }
 
 void SceneNode::update(float dt)

@@ -126,7 +126,11 @@ void MeshNode::setActiveMaterial(int type)
 
 void MeshNode::submitRenderItems()
 {
-    renderItem->worldMatrix = this->globalTransform;
+    if(!!rootBone) {
+        renderItem->worldMatrix = rootBone->globalTransform;
+    }
+    else
+        renderItem->worldMatrix = this->globalTransform;
 
     if (!!material) {
         renderItem->renderLayer = material->renderLayer;
@@ -171,7 +175,7 @@ QJsonObject readJahShader(const QString &filePath)
  * @param node
  * @return
  */
-QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QString filePath,
+QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,SceneNodePtr rootBone, QString filePath,
                                             std::function<MaterialPtr(Mesh* mesh, MeshMaterialData& data)> createMaterialFunc)
 {
     QSharedPointer<iris::SceneNode> sceneNode;// = QSharedPointer<iris::SceneNode>(new iris::SceneNode());
@@ -206,6 +210,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
                 meshNode->setMaterial(mat);
 
         }
+        meshNode->rootBone = rootBone;
         sceneNode = meshNode;
     }
     else
@@ -255,9 +260,14 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
     rot.Normalize();
     sceneNode->rot = QQuaternion(rot.w,rot.x,rot.y,rot.z);
 
+    // this is probably the first node in the heirarchy
+    // set it as the rootBone
+    if (!rootBone)
+        rootBone = sceneNode;
+
     for(unsigned i=0;i<node->mNumChildren;i++)
     {
-        auto child = _buildScene(scene,node->mChildren[i],filePath, createMaterialFunc);
+        auto child = _buildScene(scene, node->mChildren[i], rootBone, filePath, createMaterialFunc);
         sceneNode->addChild(child);
     }
 
@@ -307,7 +317,7 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath,
         return node;
     }
 
-    auto node = _buildScene(scene,scene->mRootNode,filePath, createMaterialFunc);
+    auto node = _buildScene(scene,scene->mRootNode, SceneNodePtr(), filePath, createMaterialFunc);
 
     //extract animations and add them one by one
     //todo: use relative path from scene root

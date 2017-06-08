@@ -44,6 +44,10 @@ public:
 
     RenderItem* renderItem;
 
+    // For animated meshes, the rootBone's transform is what will be used as its transform
+    // Since all its animations are based at the rootBone
+    SceneNodePtr rootBone;
+
     static MeshNodePtr create() {
         return MeshNodePtr(new MeshNode());
     }
