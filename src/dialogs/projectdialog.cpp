@@ -43,9 +43,18 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
     ui->listWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
 
+    ui->demoList->setViewMode(QListWidget::IconMode);
+    ui->demoList->setIconSize(QSize(256, 256));
+    ui->demoList->setResizeMode(QListWidget::Adjust);
+    ui->demoList->setMovement(QListView::Static);
+    ui->demoList->setSelectionBehavior(QAbstractItemView::SelectItems);
+    ui->demoList->setSelectionMode(QAbstractItemView::SingleSelection);
+
     connect(ui->newProject,     SIGNAL(pressed()), SLOT(newScene()));
     connect(ui->openProject,    SIGNAL(pressed()), SLOT(openProject()));
     connect(ui->listWidget,     SIGNAL(itemDoubleClicked(QListWidgetItem*)),
+            this,               SLOT(openRecentProject(QListWidgetItem*)));
+    connect(ui->demoList,       SIGNAL(itemDoubleClicked(QListWidgetItem*)),
             this,               SLOT(openRecentProject(QListWidgetItem*)));
 
     settings = SettingsManager::getDefaultManager();
@@ -62,6 +71,21 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
         }
         item->setText(fn.baseName());
         ui->listWidget->addItem(item);
+    }
+
+    QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
+    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+    foreach (const QFileInfo &file, files) {
+        auto item = new QListWidgetItem();
+        item->setToolTip(file.absoluteFilePath());
+        item->setData(Qt::DisplayRole, file.baseName());
+        item->setData(Qt::UserRole, file.absoluteFilePath() + "/" + file.baseName() + Constants::PROJ_EXT);
+        if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
+            item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
+        } else {
+            item->setIcon(QIcon(":/app/images/no_preview.png"));
+        }
+        ui->demoList->addItem(item);
     }
 }
 

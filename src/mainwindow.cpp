@@ -329,7 +329,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-    m->setValue("diffuseTexture", getAbsoluteAssetPath("app/content/textures/tile.png"));
+    m->setValue("diffuseTexture", ":/app/content/textures/tile.png");
     m->setValue("textureScale", 4.f);
     node->setMaterial(m);
 
