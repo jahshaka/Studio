@@ -24,6 +24,7 @@ public:
 
     void setSettingsManager(SettingsManager* settings);
     QString loadProjectDelegate();
+    bool copyDirectoryFiles(const QString &fromDir, const QString &toDir, bool coverFileIfExist);
     SettingsManager* getSettingsManager();
     SettingsManager* settings;
 
@@ -34,6 +35,7 @@ protected slots:
     void newScene();
     void openProject();
     void openRecentProject(QListWidgetItem*);
+    void openSampleProject(QListWidgetItem*);
 
 private:
     Ui::ProjectDialog *ui;

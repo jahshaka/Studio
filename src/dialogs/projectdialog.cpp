@@ -55,7 +55,7 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
     connect(ui->listWidget,     SIGNAL(itemDoubleClicked(QListWidgetItem*)),
             this,               SLOT(openRecentProject(QListWidgetItem*)));
     connect(ui->demoList,       SIGNAL(itemDoubleClicked(QListWidgetItem*)),
-            this,               SLOT(openRecentProject(QListWidgetItem*)));
+            this,               SLOT(openSampleProject(QListWidgetItem*)));
 
     settings = SettingsManager::getDefaultManager();
 
@@ -158,7 +158,7 @@ void ProjectDialog::openProject()
 
 QString ProjectDialog::loadProjectDelegate()
 {
-    auto projectFileName = QFileDialog::getOpenFileName(this, "Select Project Folder",
+    auto projectFileName = QFileDialog::getOpenFileName(this, "Select Project File",
                                                         nullptr, "Jahshaka Project File (*.project)");
     return projectFileName;
 }
@@ -173,6 +173,68 @@ void ProjectDialog::openRecentProject(QListWidgetItem *item)
     window->showMaximized();
 
     window->openProject(projectFile.absoluteFilePath());
+
+    this->close();
+}
+
+bool ProjectDialog::copyDirectoryFiles(const QString &fromDir, const QString &toDir, bool coverFileIfExist)
+{
+    QDir sourceDir(fromDir);
+    QDir targetDir(toDir);
+    if(!targetDir.exists()){    /* if directory don't exists, build it */
+        if(!targetDir.mkdir(targetDir.absolutePath()))
+            return false;
+    }
+
+    QFileInfoList fileInfoList = sourceDir.entryInfoList();
+    foreach(QFileInfo fileInfo, fileInfoList){
+        if(fileInfo.fileName() == "." || fileInfo.fileName() == "..")
+            continue;
+
+        if(fileInfo.isDir()){    /* if it is directory, copy recursively*/
+            if(!copyDirectoryFiles(fileInfo.filePath(),
+                targetDir.filePath(fileInfo.fileName()),
+                coverFileIfExist))
+                return false;
+        }
+        else{            /* if coverFileIfExist == true, remove old file first */
+            if(coverFileIfExist && targetDir.exists(fileInfo.fileName())){
+                targetDir.remove(fileInfo.fileName());
+            }
+
+            // files copy
+            if(!QFile::copy(fileInfo.filePath(),
+                targetDir.filePath(fileInfo.fileName()))){
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
+void ProjectDialog::openSampleProject(QListWidgetItem *item)
+{
+    auto projectFolder = QFileDialog::getExistingDirectory(nullptr, "Select Copy Directory");
+
+    if (!projectFolder.isEmpty()) {
+        auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
+
+        QString dest = QDir(projectFolder).filePath(projectFile.baseName());
+        if (this->copyDirectoryFiles(projectFile.absolutePath(), dest, true)) {
+
+            auto newProjectFile = QFileInfo(dest);
+            auto projectPath = QDir(newProjectFile.absolutePath()).filePath(projectFile.baseName());
+            Globals::project->setProjectPath(projectPath);
+
+            auto sln = QDir(projectPath).filePath(projectFile.fileName());
+
+            window = new MainWindow;
+            window->showMaximized();
+            window->openProject(sln);
+
+            settings->addRecentlyOpenedScene(sln);
+        }
+    }
 
     this->close();
 }
