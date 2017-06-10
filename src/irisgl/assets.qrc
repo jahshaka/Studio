@@ -32,5 +32,6 @@
         <file>assets/models/head2.obj</file>
         <file>assets/shaders/skinned_material.vert</file>
         <file>assets/shaders/skinned_shadow_map.vert</file>
+        <file>assets/shaders/skinned_color.vert</file>
     </qresource>
 </RCC>

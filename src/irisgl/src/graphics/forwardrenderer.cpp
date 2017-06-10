@@ -574,20 +574,30 @@ void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
 }
 
 // http://gamedev.stackexchange.com/questions/59361/opengl-get-the-outline-of-multiple-overlapping-objects
-void ForwardRenderer::renderSelectedNode(RenderData* renderData,QSharedPointer<SceneNode> node)
+void ForwardRenderer::renderSelectedNode(RenderData* renderData, SceneNodePtr node)
 {
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         auto meshNode = node.staticCast<iris::MeshNode>();
 
         if (meshNode->mesh != nullptr) {
-            lineShader->bind();
+            QOpenGLShaderProgram* shader;
+            if(meshNode->mesh->hasSkeleton())
+                shader = skinnedLineShader;
+            else
+                shader = lineShader;
 
-            lineShader->setUniformValue("u_worldMatrix",    node->globalTransform);
-            lineShader->setUniformValue("u_viewMatrix",     renderData->viewMatrix);
-            lineShader->setUniformValue("u_projMatrix",     renderData->projMatrix);
-            lineShader->setUniformValue("u_normalMatrix",   node->globalTransform.normalMatrix());
-            lineShader->setUniformValue("color",            scene->outlineColor);
+            shader->bind();
 
+            shader->setUniformValue("u_worldMatrix",    node->globalTransform);
+            shader->setUniformValue("u_viewMatrix",     renderData->viewMatrix);
+            shader->setUniformValue("u_projMatrix",     renderData->projMatrix);
+            shader->setUniformValue("u_normalMatrix",   node->globalTransform.normalMatrix());
+            shader->setUniformValue("color",            scene->outlineColor);
+
+            if(meshNode->mesh->hasSkeleton()) {
+                auto boneTransforms = meshNode->mesh->getSkeleton()->boneTransforms;
+                shader->setUniformValueArray("u_bones",          boneTransforms.data(), boneTransforms.size());
+            }
 
             // STEP 1: DRAW STENCIL OF THE FILLED POLYGON
             // sets default stencil value to 0
@@ -633,6 +643,10 @@ void ForwardRenderer::renderSelectedNode(RenderData* renderData,QSharedPointer<S
             gl->glPolygonMode(GL_FRONT, GL_FILL);
         }
     }
+
+    for(auto childNode : node->children) {
+        renderSelectedNode( renderData, childNode);
+    }
 }
 
 void ForwardRenderer::createLineShader()
@@ -642,6 +656,12 @@ void ForwardRenderer::createLineShader()
 
     lineShader->bind();
     lineShader->setUniformValue("color",QColor(240,240,255,255));
+
+    skinnedLineShader = GraphicsHelper::loadShader(":assets/shaders/skinned_color.vert",
+                                              ":assets/shaders/color.frag");
+
+    skinnedLineShader->bind();
+    skinnedLineShader->setUniformValue("color",QColor(240,240,255,255));
 }
 
 void ForwardRenderer::createShadowShader()
