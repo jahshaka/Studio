@@ -228,6 +228,8 @@ bool SceneNode::isRootNode()
 void SceneNode::updateAnimation(float time)
 {
     if (!!animation) {
+
+        time = animation->getSampleTime(time);
         if (animation->hasPropertyAnim("position")) {
             pos = animation->getVector3PropertyAnim("position")->getValue(time);
         }

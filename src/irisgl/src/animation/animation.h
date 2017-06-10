@@ -34,8 +34,8 @@ class Animation
 
     // sample rate
     int frameRate;
-public:
 
+public:
     QMap<QString,PropertyAnim*> properties;
     SkeletalAnimationPtr skeletalAnimation;
 
@@ -77,6 +77,12 @@ public:
     SkeletalAnimationPtr getSkeletalAnimation() const;
     bool hasSkeletalAnimation();
     void setSkeletalAnimation(const SkeletalAnimationPtr &value);
+
+    // Calculate the time the animation keyframes should be sampled at
+    // It takes looping into consideration
+    float getSampleTime(float time);
+
+    void calculateAnimationLength();
 };
 
 }

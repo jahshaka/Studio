@@ -21,6 +21,8 @@ public:
     {
 
     }
+
+    float getLength();
 };
 
 class SkeletalAnimation

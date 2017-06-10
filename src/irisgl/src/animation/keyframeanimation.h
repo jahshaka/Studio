@@ -98,11 +98,6 @@ public:
         return length;
     }
 
-    void setLenth(float seconds)
-    {
-        length = seconds;
-    }
-
     void autoAdjustLength()
     {
         if(keys.size()==0)
@@ -129,6 +124,9 @@ public:
         {
             this->sortKeys();
         }
+
+        // update length
+        length = keys[keys.size() - 1]->time;
 
         return key;
     }
