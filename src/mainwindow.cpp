@@ -1040,7 +1040,7 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
     if (!node) return;
 
 //    node->materialType = 2;
-    node->setName(nodeName);
+    //node->setName(nodeName);
     node->pos = position;
 
     // todo: load material data
@@ -1129,7 +1129,7 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
         }
     }
 
-    scene->getRootNode()->addChild(sceneNode);
+    scene->getRootNode()->addChild(sceneNode, false);
     ui->sceneHierarchy->repopulateTree();
     sceneNodeSelected(sceneNode);
 }

@@ -255,30 +255,14 @@ void SceneNode::updateAnimation(float time)
                     auto boneAnim = anim->boneAnimations[node->name];
 
                     node->pos = boneAnim->posKeys->getValueAt(time);
-                    node->rot = boneAnim->rotKeys->getValueAt(time);
+                    node->rot = boneAnim->rotKeys->getValueAt(time).normalized();
+                    //node->scale = QVector3D(1,1,1);
                     node->scale = boneAnim->scaleKeys->getValueAt(time);
-
-                    //auto localTrans = node->getLocalTransform(); //calculates the local transform matrix
-                    //skelTrans = parentTransform * localTrans; //skeleton space transform
-                    //skeletonSpaceMatrices.insert(node->name, skelTrans);
-                }
-                else {
-                    //skelTrans = parentTransform;
-                    //skeletonSpaceMatrices.insert(node->name, skelTrans);
                 }
 
                 auto localTrans = node->getLocalTransform(); //calculates the local transform matrix
                 skelTrans = parentTransform * localTrans; //skeleton space transform
                 skeletonSpaceMatrices.insert(node->name, skelTrans);
-
-                // if node is a mesh, apply animation to skeleton
-//                if (node->sceneNodeType == SceneNodeType::Mesh) {
-//                    auto meshNode = node.staticCast<MeshNode>();
-//                    auto mesh = meshNode->getMesh();
-//                    if (mesh != nullptr && mesh->hasSkeleton()) {
-//                        mesh->getSkeleton()->applyAnimation(anim, time);
-//                    }
-//                }
 
                 for(auto child : node->children) {
                     animateHierarchy(anim, child, skelTrans);
@@ -286,37 +270,73 @@ void SceneNode::updateAnimation(float time)
             };
 
             QMatrix4x4 rootTransform;
-            rootTransform.setToIdentity();
+            //rootTransform.setToIdentity();
+            rootTransform = this->getLocalTransform();
             animateHierarchy(animation->getSkeletalAnimation(), this->sharedFromThis(), rootTransform);
 
-            //recursively apply animation for each mesh in heirarchy
-            std::function<void(SceneNodePtr node)> animateMeshes;
-            animateMeshes = [&skeletonSpaceMatrices, &animateMeshes](SceneNodePtr node){
-                if (skeletonSpaceMatrices.contains(node->name)) {
-                    if (node->sceneNodeType == SceneNodeType::Mesh) {
-                        auto meshNode = node.staticCast<MeshNode>();
-                        auto mesh = meshNode->getMesh();
-                        if (mesh != nullptr && mesh->hasSkeleton()) {
-                            auto inverseMeshMatrix = skeletonSpaceMatrices[node->name].inverted();
-                            mesh->getSkeleton()->applyAnimation(inverseMeshMatrix, skeletonSpaceMatrices);
-                        }
-                    }
-                }
-
-                for(auto child : node->children) {
-                    animateMeshes(child);
-                }
-            };
-            animateMeshes(this->sharedFromThis());
+            applyAnimationPose(this->sharedFromThis(), skeletonSpaceMatrices);
         }
     }
-
-    // child nodes are already animated
 
     for (auto child : children) {
         child->updateAnimation(time);
     }
+}
 
+void SceneNode::applyDefaultPose()
+{
+    if (!!animation) {
+    if (animation->hasSkeletalAnimation()) {
+        QMap<QString, QMatrix4x4> skeletonSpaceMatrices;
+        // The skeleton begins at this node, the root
+
+        // recursively update the animation for each node
+        std::function<void(SkeletalAnimationPtr anim, SceneNodePtr node, QMatrix4x4 parentTransform)> animateHierarchy;
+        animateHierarchy = [&animateHierarchy, &skeletonSpaceMatrices](SkeletalAnimationPtr anim, SceneNodePtr node, QMatrix4x4 parentTransform)
+        {
+            // skeleton-space transform of current node
+            QMatrix4x4 skelTrans;
+            skelTrans.setToIdentity();
+
+            auto localTrans = node->getLocalTransform(); //calculates the local transform matrix
+            skelTrans = parentTransform * localTrans; //skeleton space transform
+            skeletonSpaceMatrices.insert(node->name, skelTrans);
+
+            for(auto child : node->children) {
+                animateHierarchy(anim, child, skelTrans);
+            }
+        };
+
+        QMatrix4x4 rootTransform;
+        rootTransform.setToIdentity();
+        rootTransform = this->getLocalTransform();
+        animateHierarchy(animation->getSkeletalAnimation(), this->sharedFromThis(), rootTransform);
+
+        applyAnimationPose(this->sharedFromThis(), skeletonSpaceMatrices);
+    }
+    }
+
+    for (auto child : children) {
+        child->applyDefaultPose();
+    }
+}
+
+void SceneNode::applyAnimationPose(SceneNodePtr node, QMap<QString, QMatrix4x4> skeletonSpaceMatrices)
+{
+    if (skeletonSpaceMatrices.contains(node->name)) {
+        if (node->sceneNodeType == SceneNodeType::Mesh) {
+            auto meshNode = node.staticCast<MeshNode>();
+            auto mesh = meshNode->getMesh();
+            if (mesh != nullptr && mesh->hasSkeleton()) {
+                auto inverseMeshMatrix = skeletonSpaceMatrices[node->name].inverted();
+                mesh->getSkeleton()->applyAnimation(inverseMeshMatrix, skeletonSpaceMatrices);
+            }
+        }
+    }
+
+    for(auto child : node->children) {
+        applyAnimationPose(child, skeletonSpaceMatrices);
+    }
 }
 
 void SceneNode::update(float dt)

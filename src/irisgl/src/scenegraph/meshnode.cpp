@@ -126,10 +126,10 @@ void MeshNode::setActiveMaterial(int type)
 
 void MeshNode::submitRenderItems()
 {
-    if(!!rootBone) {
-        renderItem->worldMatrix = rootBone->globalTransform;
-    }
-    else
+    //if(!!rootBone) {
+    //    renderItem->worldMatrix = rootBone->globalTransform;
+    //}
+    //else
         renderItem->worldMatrix = this->globalTransform;
 
     if (!!material) {
@@ -257,7 +257,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,Sc
     sceneNode->pos = QVector3D(pos.x,pos.y,pos.z);
     sceneNode->scale = QVector3D(scale.x,scale.y,scale.z);
 
-    rot.Normalize();
+    //rot.Normalize();
     sceneNode->rot = QQuaternion(rot.w,rot.x,rot.y,rot.z);
 
     // this is probably the first node in the heirarchy
@@ -268,7 +268,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,Sc
     for(unsigned i=0;i<node->mNumChildren;i++)
     {
         auto child = _buildScene(scene, node->mChildren[i], rootBone, filePath, createMaterialFunc);
-        sceneNode->addChild(child);
+        sceneNode->addChild(child, false);
     }
 
     return sceneNode;
@@ -327,6 +327,13 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath,
         node->addAnimation(anim);
         node->setAnimation(anim);
     }
+
+    //reset root to identity
+    //node->pos = QVector3D();
+    //node->rot = QQuaternion();
+    //node->scale = QVector3D(1,1,1);
+
+    node->applyDefaultPose();
 
     return node;
 }
