@@ -36,10 +36,16 @@ protected slots:
     void openProject();
     void openRecentProject(QListWidgetItem*);
     void openSampleProject(QListWidgetItem*);
+    void listWidgetCustomContextMenu(const QPoint&);
+
+    void removeFromList();
+    void deleteProject();
 
 private:
     Ui::ProjectDialog *ui;
     Database *db;
+
+    QListWidgetItem *currentItem;
 };
 
 #endif // PROJECTDIALOG_H

@@ -20,6 +20,7 @@
 
 #include <QDebug>
 #include <QFileDialog>
+#include <QMenu>
 
 #include "../core/guidmanager.h"
 
@@ -43,6 +44,8 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
     ui->listWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
 
+    ui->listWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+
     ui->demoList->setViewMode(QListWidget::IconMode);
     ui->demoList->setIconSize(QSize(256, 256));
     ui->demoList->setResizeMode(QListWidget::Adjust);
@@ -54,6 +57,8 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
     connect(ui->openProject,    SIGNAL(pressed()), SLOT(openProject()));
     connect(ui->listWidget,     SIGNAL(itemDoubleClicked(QListWidgetItem*)),
             this,               SLOT(openRecentProject(QListWidgetItem*)));
+    connect(ui->listWidget,     SIGNAL(customContextMenuRequested(const QPoint&)),
+            this,               SLOT(listWidgetCustomContextMenu(const QPoint&)));
     connect(ui->demoList,       SIGNAL(itemDoubleClicked(QListWidgetItem*)),
             this,               SLOT(openSampleProject(QListWidgetItem*)));
 
@@ -221,7 +226,7 @@ bool ProjectDialog::copyDirectoryFiles(const QString &fromDir, const QString &to
 
 void ProjectDialog::openSampleProject(QListWidgetItem *item)
 {
-    auto projectFolder = QFileDialog::getExistingDirectory(nullptr, "Select directory to copy project to");
+    auto projectFolder = QFileDialog::getExistingDirectory(nullptr, "Select directory to copy project");
 
     if (!projectFolder.isEmpty()) {
         auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
@@ -246,6 +251,51 @@ void ProjectDialog::openSampleProject(QListWidgetItem *item)
     this->close();
 }
 
+void ProjectDialog::listWidgetCustomContextMenu(const QPoint &pos)
+{
+    QModelIndex index = ui->listWidget->indexAt(pos);
+
+    QMenu menu;
+    QAction *action;
+
+    if (index.isValid()) {
+        currentItem = ui->listWidget->itemAt(pos);
+//        assetItem.selectedPath = item->data(Qt::UserRole).toString();
+
+        action = new QAction(QIcon(), "Remove from recent list", this);
+        connect(action, SIGNAL(triggered()), this, SLOT(removeFromList()));
+        menu.addAction(action);
+
+        action = new QAction(QIcon(), "Delete project", this);
+        connect(action, SIGNAL(triggered()), this, SLOT(deleteProject()));
+        menu.addAction(action);
+    }
+
+    menu.exec(ui->listWidget->mapToGlobal(pos));
+}
+
+void ProjectDialog::removeFromList()
+{
+    auto selectedInfo = QFileInfo(currentItem->data(Qt::UserRole).toString());
+    delete ui->listWidget->takeItem(ui->listWidget->row(currentItem));
+    settings->removeRecentlyOpenedEntry(selectedInfo.absoluteFilePath());
+
+    if (!ui->listWidget->count()) {
+        ui->label->show();
+        ui->listWidget->hide();
+    }
+}
+
+void ProjectDialog::deleteProject()
+{
+    auto selectedInfo = QFileInfo(currentItem->data(Qt::UserRole).toString());
+
+    QDir dir(selectedInfo.absolutePath());
+    if (dir.removeRecursively()) {
+        removeFromList();
+    }
+}
+
 SettingsManager *ProjectDialog::getSettingsManager()
 {
     return settings;
@@ -255,4 +305,3 @@ bool ProjectDialog::eventFilter(QObject *watched, QEvent *event)
 {
     return QObject::eventFilter(watched, event);
 }
-
