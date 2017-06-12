@@ -326,7 +326,7 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["blendMode"]            = node->useAdditive;
     sceneNodeObject["lifeLength"]           = node->lifeLength;
     sceneNodeObject["speed"]                = node->speed;
-    sceneNodeObject["texture"]              = node->texture->getSource();
+    sceneNodeObject["texture"]              = getRelativePath(node->texture->getSource());
 }
 
 void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat)
