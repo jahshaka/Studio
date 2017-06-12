@@ -12,16 +12,63 @@ For more information see the LICENSE file
 #include "animation.h"
 #include "keyframeset.h"
 #include "propertyanim.h"
+#include "skeletalanimation.h"
 #include "../irisglfwd.h"
 #include <QDebug>
 
 namespace iris
 {
 
+SkeletalAnimationPtr Animation::getSkeletalAnimation() const
+{
+    return skeletalAnimation;
+}
+
+bool Animation::hasSkeletalAnimation()
+{
+    return !!skeletalAnimation;
+}
+
+void Animation::setSkeletalAnimation(const SkeletalAnimationPtr &value)
+{
+    skeletalAnimation = value;
+    calculateAnimationLength();
+}
+
+float Animation::getSampleTime(float time)
+{
+    if (loop) {
+        return fmod(time, length);
+    }
+
+    return time;
+}
+
+void Animation::calculateAnimationLength()
+{
+    float maxLength = 0;
+    // calculate length of keys
+    for (auto propAnim : properties) {
+        for (auto& frames : propAnim->getKeyFrames()) {
+            auto length = frames.keyFrame->getLength();
+            maxLength = qMax(maxLength, length);
+        }
+    }
+
+    // calculate length of each bone in the skeletal animation
+    if (!!skeletalAnimation) {
+        for (auto boneAnim : skeletalAnimation->boneAnimations) {
+            maxLength = qMax(maxLength, boneAnim->getLength());
+        }
+    }
+
+    length = maxLength;
+}
+
 Animation::Animation(QString name)
 {
     this->name = name;
-    loop = false;
+    loop = true;
     length = 1.0f;
     frameRate = 60;
 }
@@ -65,6 +112,7 @@ void Animation::addPropertyAnim(PropertyAnim *anim)
     //Q_ASSERT(!properties.contains(name));
     
     properties.insert(anim->getName(), anim);
+    calculateAnimationLength();
 }
 
 void Animation::removePropertyAnim(QString name)
@@ -101,6 +149,13 @@ ColorPropertyAnim *Animation::getColorPropertyAnim(QString name)
 bool Animation::hasPropertyAnim(QString name)
 {
     return properties.contains(name);
+}
+
+AnimationPtr Animation::createFromSkeletalAnimation(SkeletalAnimationPtr skelAnim)
+{
+    auto anim = new Animation(skelAnim->name);
+    anim->setSkeletalAnimation(skelAnim);
+    return AnimationPtr(anim);
 }
 
 int Animation::getFrameRate() const

@@ -40,6 +40,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/materials/propertytype.h"
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/graphicshelper.h"
+#include "../irisgl/src/graphics/mesh.h"
 #include "../irisgl/src/animation/animation.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/keyframeset.h"
@@ -312,6 +313,13 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
             animation->addPropertyAnim(propAnim);
         }
 
+        if (animObj.contains("skeletalAnimation")) {
+            auto skelAnim = animObj["skeletalAnimation"].toObject();
+
+            auto skel = this->getSkeletalAnimation(skelAnim["source"].toString(), skelAnim["name"].toString());
+            animation->setSkeletalAnimation(skel);
+        }
+
         sceneNode->addAnimation(animation);
         //if (animation->getName() == activeAnim)
         //    sceneNode->setAnimation(animation);
@@ -528,6 +536,21 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
     return m;
 }
 
+void SceneReader::extractAssetsFromAssimpScene(QString filePath)
+{
+    if (!assimpScenes.contains(filePath)) {
+//        auto meshList = iris::GraphicsHelper::loadAllMeshesFromFile(filePath);
+//        auto anims = iris::Mesh::extractAnimations(scene, filePath);
+        QList<iris::Mesh*> meshList;
+        QMap<QString, iris::SkeletalAnimationPtr> anims;
+        iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(filePath, meshList, anims);
+
+        meshes.insert(filePath,meshList);
+        assimpScenes.insert(filePath);
+        animations.insert(filePath, anims);
+    }
+}
+
 /**
  * Returns mesh from mesh file at index
  * if the mesh doesnt exist, nullptr is returned
@@ -537,19 +560,22 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
  */
 iris::Mesh* SceneReader::getMesh(QString filePath, int index)
 {
-    // if the mesh is already in the hashmap then it was already loaded, just return the indexed mesh
-    if (meshes.contains(filePath)) {
-        auto meshList = meshes[filePath];
-        if (index < meshList.size()) return meshList[index];
-        // maybe the mesh was modified after the file was saved
-        return nullptr;
-    }
+    extractAssetsFromAssimpScene(filePath);
 
-    else {
-        auto meshList = iris::GraphicsHelper::loadAllMeshesFromFile(filePath);
-        meshes.insert(filePath,meshList);
-        if (index < meshList.size()) return meshList[index];
-        // maybe the mesh was modified after the file was saved
-        return nullptr;
-    }
+    // if the mesh is already in the hashmap then it was already loaded, just return the indexed mesh=
+    auto meshList = meshes[filePath];
+    if (index < meshList.size()) return meshList[index];
+
+    // maybe the mesh was modified after the file was saved
+    return nullptr;
+}
+
+iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(QString filePath, QString animName)
+{
+    extractAssetsFromAssimpScene(filePath);
+
+    auto animMap = animations[filePath];
+    if (animMap.contains(animName)) return animMap[animName];
+
+    return iris::SkeletalAnimationPtr();
 }

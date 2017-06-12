@@ -163,6 +163,9 @@ private:
     void dropEvent(QDropEvent* event) override;
     void dragLeaveEvent(QDragLeaveEvent* event) override;
 
+    // determines if file extension is that of a model (obj, fbx, 3ds)
+    bool isModelExtension(QString extension);
+
 public slots:
     //scenegraph
     void addPlane();
@@ -267,6 +270,7 @@ private:
     QPoint mouseReleasePos;
     QPoint mousePos;
     bool dragging;
+    QVector3D dragScenePos;
 
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;

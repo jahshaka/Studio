@@ -431,24 +431,27 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 if (!!activeSceneNode) {
                     sceneView->hideGizmo();
 
-                    if (info.suffix() == "obj") {
+                    if (isModelExtension(info.suffix())) {
                         if (sceneView->doActiveObjectPicking(evt->posF())) {
-                            activeSceneNode->pos = sceneView->hit;
+                            //activeSceneNode->pos = sceneView->hit;
+                            dragScenePos = sceneView->hit;
                         } else if (sceneView->updateRPI(sceneView->editorCam->pos,
                                                         sceneView->calculateMouseRay(evt->posF())))
                         {
-                            activeSceneNode->pos = sceneView->Offset;
+                            //activeSceneNode->pos = sceneView->Offset;
+                            dragScenePos = sceneView->Offset;
                         } else {
                             ////////////////////////////////////////
                             const float spawnDist = 10.0f;
                             auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, -1.0f, -spawnDist));
                             offset += sceneView->editorCam->pos;
-                            activeSceneNode->pos = offset;
+                            //activeSceneNode->pos = offset;
+                            dragScenePos = offset;
                         }
                     }
                 }
 
-                if (info.suffix() != "obj") {
+                if (!isModelExtension(info.suffix())) {
                     sceneView->doObjectPicking(evt->posF(), true);
                 }
             }
@@ -467,7 +470,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 }
 
                 auto info = QFileInfo(evt->mimeData()->text());
-                if (info.suffix() == "obj") {
+                if (isModelExtension(info.suffix())) {
 
                     if (dragging) {
                         // TODO swap this with the actual model later on
@@ -491,13 +494,14 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     evt->ignore();
                 }
 
-                if (info.suffix() == "obj") {
-                    auto ppos = activeSceneNode->pos;
-                    deleteNode();
+                if (isModelExtension(info.suffix())) {
+                    //auto ppos = activeSceneNode->pos;
+                    auto ppos = dragScenePos;
+                    //deleteNode();
                     addMesh(evt->mimeData()->text(), true, ppos);
                 }
 
-                if (!!activeSceneNode && info.suffix() != "obj") {
+                if (!!activeSceneNode && !isModelExtension(info.suffix())) {
                     auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
                     auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
 
@@ -1002,13 +1006,17 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
     if (filename.isEmpty()) return;
 
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::loadAsSceneFragment(filename,[](iris::MeshMaterialData& data)
+    auto node = iris::MeshNode::loadAsSceneFragment(filename,[](iris::Mesh* mesh, iris::MeshMaterialData& data)
     {
         auto mat = iris::CustomMaterial::create();
         //MaterialReader *materialReader = new MaterialReader();
         //materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
         //mat->generate(materialReader->getParsedShader());
-        mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+        if (mesh->hasSkeleton())
+            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
+        else
+            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+
         mat->setValue("diffuseColor", data.diffuseColor);
         mat->setValue("specularColor", data.specularColor);
         mat->setValue("ambientColor", data.ambientColor);
@@ -1016,9 +1024,14 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 
         mat->setValue("shininess", data.shininess);
 
-        mat->setValue("diffuseTexture", data.diffuseTexture);
-        mat->setValue("specularTexture", data.specularTexture);
-        mat->setValue("normalTexture", data.normalTexture);
+        if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
+            mat->setValue("diffuseTexture", data.diffuseTexture);
+
+        if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
+            mat->setValue("specularTexture", data.specularTexture);
+
+        if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
+            mat->setValue("normalTexture", data.normalTexture);
 
         return mat;
     });
@@ -1027,7 +1040,7 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
     if (!node) return;
 
 //    node->materialType = 2;
-    node->setName(nodeName);
+    //node->setName(nodeName);
     node->pos = position;
 
     // todo: load material data
@@ -1041,12 +1054,14 @@ void MainWindow::addViewPoint()
 
 void MainWindow::addDragPlaceholder()
 {
+    /*
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
     node->scale = QVector3D(.5f, .5f, .5f);
     node->setMesh(":app/content/primitives/arrow.obj");
     node->setName("Arrow");
     addNodeToScene(node, true);
+    */
 }
 
 void MainWindow::addTexturedPlane()
@@ -1107,14 +1122,15 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
     // apply default material to mesh nodes
     if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
-
-        auto mat = iris::CustomMaterial::create();
-        mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-        meshNode->setMaterial(mat);
+        if (!meshNode->getMaterial()) {
+            auto mat = iris::CustomMaterial::create();
+            mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
+            meshNode->setMaterial(mat);
+        }
     }
 
-    scene->getRootNode()->addChild(sceneNode);
-    if (!ignore) ui->sceneHierarchy->repopulateTree();
+    scene->getRootNode()->addChild(sceneNode, false);
+    ui->sceneHierarchy->repopulateTree();
     sceneNodeSelected(sceneNode);
 }
 
@@ -1166,6 +1182,15 @@ void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
     event->accept();
 }
 
+bool MainWindow::isModelExtension(QString extension)
+{
+    if(extension == "obj" ||
+       extension == "3ds" ||
+       extension == "fbx" ||
+       extension == "dae")
+        return true;
+    return false;
+}
 
 QIcon MainWindow::getIconFromSceneNodeType(SceneNodeType type)
 {

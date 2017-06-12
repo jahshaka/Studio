@@ -61,7 +61,9 @@ class ForwardRenderer
      */
     QSharedPointer<SceneNode> selectedSceneNode;
     QOpenGLShaderProgram* lineShader;
+    QOpenGLShaderProgram* skinnedLineShader;
     QOpenGLShaderProgram* shadowShader;
+    QOpenGLShaderProgram* skinnedShadowShader;
     QOpenGLShaderProgram* particleShader;
     QOpenGLShaderProgram* emitterShader;
 
@@ -110,7 +112,7 @@ private:
     void renderNode(RenderData* renderData, ScenePtr node);
     void renderSky(RenderData* renderData);
     void renderBillboardIcons(RenderData* renderData);
-    void renderSelectedNode(RenderData* renderData, QSharedPointer<SceneNode> node);
+    void renderSelectedNode(RenderData* renderData, SceneNodePtr node);
 
     void createLineShader();
     void createParticleShader();

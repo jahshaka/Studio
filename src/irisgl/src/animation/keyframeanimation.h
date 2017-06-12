@@ -98,11 +98,6 @@ public:
         return length;
     }
 
-    void setLenth(float seconds)
-    {
-        length = seconds;
-    }
-
     void autoAdjustLength()
     {
         if(keys.size()==0)
@@ -122,8 +117,17 @@ public:
         key->time = time;
         keys.push_back(key);
 
-        //todo: make this faster
-        this->sortKeys();
+        // if the new key's time isnt greater than the last key's time,
+        // do a sort
+        if(keys.size() >= 2 &&
+           keys[keys.size()-2]->time > keys[keys.size()-1]->time)
+        {
+            this->sortKeys();
+        }
+
+        // update length
+        length = keys[keys.size() - 1]->time;
+
         return key;
     }
 
@@ -164,20 +168,19 @@ public:
                 t = (time-leftKey->time)/timeDiff;
             }
 
-            if(leftKey->rightTangent == TangentType::Constant ||
-               rightKey->leftTangent == TangentType::Constant) {
-                val = leftKey->value;
-            } else {
+            if(leftKey!=Q_NULLPTR && rightKey!=Q_NULLPTR)
+            {
+                //linearly interpolate between frames
+                float t =0;
+                float timeDiff = rightKey->time - leftKey->time;
 
-                // 1D beziers are a third of the distance apart
-                float third = timeDiff * 0.333333f;
+                //frameDiff could be 0!!
+                if(timeDiff != 0)
+                {
+                    t = (time-leftKey->time)/timeDiff;
+                }
 
-                val = BezierHelper::calculateBezier(leftKey->value,
-                                                    leftKey->value + (leftKey->rightSlope * third * timeDiff),
-                                                    rightKey->value - (rightKey->leftSlope * third * timeDiff),
-                                                    rightKey->value,
-                                                    t);
-                //val = interpolate(leftKey->value,rightKey->value,t2);
+                val = interpolate(leftKey->value, rightKey->value, t);
             }
         }
 
@@ -257,6 +260,7 @@ public:
 protected:
     virtual T interpolate(T a,T b,float t)=0;
 };
+
 
 //typedef Key<float> FloatKey;
 

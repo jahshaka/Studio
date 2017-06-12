@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QJsonValue>
 #include <QDir>
 
+#include "../irisglfwd.h"
 #include "meshnode.h"
 #include "../graphics/mesh.h"
 #include "assimp/postprocess.h"
@@ -32,11 +33,14 @@ For more information see the LICENSE file
 #include "../materials/materialhelper.h"
 #include "../graphics/renderitem.h"
 #include "../animation/animableproperty.h"
+#include "../animation/animation.h"
 
 #include "../core/scene.h"
 #include "../core/scenenode.h"
 #include "../core/irisutils.h"
 #include "../animation/animableproperty.h"
+
+#include "../graphics/skeleton.h"
 
 namespace iris
 {
@@ -122,7 +126,11 @@ void MeshNode::setActiveMaterial(int type)
 
 void MeshNode::submitRenderItems()
 {
-    renderItem->worldMatrix = this->globalTransform;
+    //if(!!rootBone) {
+    //    renderItem->worldMatrix = rootBone->globalTransform;
+    //}
+    //else
+        renderItem->worldMatrix = this->globalTransform;
 
     if (!!material) {
         renderItem->renderLayer = material->renderLayer;
@@ -135,6 +143,20 @@ void MeshNode::submitRenderItems()
         this->scene->shadowRenderList.append(renderItem);
     }
 }
+
+/*
+void MeshNode::updateAnimation(float time)
+{
+    if (mesh->hasSkeletalAnimations() && mesh->hasSkeleton())
+    {
+        auto skel = mesh->getSkeleton();
+        auto anim = mesh->getSkeletalAnimations().values()[0];
+        skel->applyAnimation(anim, time);
+    }
+
+    //SceneNode::updateAnimation(time);
+}
+*/
 
 QJsonObject readJahShader(const QString &filePath)
 {
@@ -153,8 +175,8 @@ QJsonObject readJahShader(const QString &filePath)
  * @param node
  * @return
  */
-QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QString filePath,
-                                            std::function<MaterialPtr(MeshMaterialData& data)> createMaterialFunc)
+QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,SceneNodePtr rootBone, QString filePath,
+                                            std::function<MaterialPtr(Mesh* mesh, MeshMaterialData& data)> createMaterialFunc)
 {
     QSharedPointer<iris::SceneNode> sceneNode;// = QSharedPointer<iris::SceneNode>(new iris::SceneNode());
 
@@ -168,7 +190,11 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
         // aside from that, iris currently only renders meshes
         if(mesh->HasPositions())
         {
-            meshNode->setMesh(new Mesh(mesh));
+            auto meshObj = new Mesh(mesh);
+            auto skel = Mesh::extractSkeleton(mesh, scene);
+            meshObj->setSkeleton(skel);
+
+            meshNode->setMesh(meshObj);
             meshNode->name = QString(mesh->mName.C_Str());
             meshNode->meshPath = filePath;
             meshNode->meshIndex = node->mMeshes[0];
@@ -179,28 +205,33 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
 
             MeshMaterialData meshMat;
             MaterialHelper::extractMaterialData(m, dir, meshMat);
-            auto mat = createMaterialFunc(meshMat);
+            auto mat = createMaterialFunc(meshObj, meshMat);
             if (!!mat)
                 meshNode->setMaterial(mat);
 
         }
+        meshNode->rootBone = rootBone;
         sceneNode = meshNode;
     }
     else
     {
         //otherwise, add meshes as child nodes
         sceneNode = QSharedPointer<iris::SceneNode>(new iris::SceneNode());
+        sceneNode->name = QString(node->mName.C_Str());
 
         for(unsigned i=0;i<node->mNumMeshes;i++)
         {
             auto mesh = scene->mMeshes[node->mMeshes[i]];
+            auto meshObj = new Mesh(mesh);
+            auto skel = Mesh::extractSkeleton(mesh, scene);
+            meshObj->setSkeleton(skel);
 
             auto meshNode = iris::MeshNode::create();
             meshNode->name = QString(mesh->mName.C_Str());
             meshNode->meshPath = filePath;
             meshNode->meshIndex = node->mMeshes[i];
 
-            meshNode->setMesh(new Mesh(mesh));
+            meshNode->setMesh(meshObj);
             sceneNode->addChild(meshNode);
 
             //apply material
@@ -210,7 +241,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
 
             MeshMaterialData meshMat;
             MaterialHelper::extractMaterialData(m, dir, meshMat);
-            auto mat = createMaterialFunc(meshMat);
+            auto mat = createMaterialFunc(meshObj, meshMat);
             if (!!mat)
                 meshNode->setMaterial(mat);
         }
@@ -226,20 +257,25 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,QS
     sceneNode->pos = QVector3D(pos.x,pos.y,pos.z);
     sceneNode->scale = QVector3D(scale.x,scale.y,scale.z);
 
-    rot.Normalize();
-    sceneNode->rot = QQuaternion(rot.w,rot.x,rot.y,rot.z);//not sure if this is correct
+    //rot.Normalize();
+    sceneNode->rot = QQuaternion(rot.w,rot.x,rot.y,rot.z);
+
+    // this is probably the first node in the heirarchy
+    // set it as the rootBone
+    if (!rootBone)
+        rootBone = sceneNode;
 
     for(unsigned i=0;i<node->mNumChildren;i++)
     {
-        auto child = _buildScene(scene,node->mChildren[i],filePath, createMaterialFunc);
-        sceneNode->addChild(child);
+        auto child = _buildScene(scene, node->mChildren[i], rootBone, filePath, createMaterialFunc);
+        sceneNode->addChild(child, false);
     }
 
     return sceneNode;
 }
 
 QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath,
-                                                              std::function<MaterialPtr(MeshMaterialData& data)> createMaterialFunc)
+                                                              std::function<MaterialPtr(Mesh* mesh, MeshMaterialData& data)> createMaterialFunc)
 {
     Assimp::Importer importer;
     const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(),aiProcessPreset_TargetRealtime_Fast);
@@ -250,7 +286,22 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath,
     if (scene->mNumMeshes == 1) {
         auto mesh = scene->mMeshes[0];
         auto node = iris::MeshNode::create();
-        node->setMesh(new Mesh(scene->mMeshes[0]));
+
+        auto meshObj = new Mesh(mesh);
+
+        //todo: use relative path from scene root
+        auto anims = Mesh::extractAnimations(scene, filePath);
+        for(auto animName : anims.keys()) {
+            // meshObj->addSkeletalAnimation(animName, anims[animName]);
+            auto anim = Animation::createFromSkeletalAnimation(anims[animName]);
+            node->addAnimation(anim);
+            node->setAnimation(anim);
+        }
+
+        auto skel = Mesh::extractSkeleton(mesh, scene);
+        meshObj->setSkeleton(skel);
+
+        node->setMesh(meshObj);
         node->meshPath = filePath;
         node->meshIndex = 0;
 
@@ -259,14 +310,30 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath,
 
         MeshMaterialData meshMat;
         MaterialHelper::extractMaterialData(m, dir, meshMat);
-        auto mat = createMaterialFunc(meshMat);
+        auto mat = createMaterialFunc(meshObj, meshMat);
         if (!!mat)
             node->setMaterial(mat);
 
         return node;
     }
 
-    auto node = _buildScene(scene,scene->mRootNode,filePath, createMaterialFunc);
+    auto node = _buildScene(scene,scene->mRootNode, SceneNodePtr(), filePath, createMaterialFunc);
+
+    //extract animations and add them one by one
+    //todo: use relative path from scene root
+    auto anims = Mesh::extractAnimations(scene, filePath);
+    for(auto animName : anims.keys()) {
+        auto anim = Animation::createFromSkeletalAnimation(anims[animName]);
+        node->addAnimation(anim);
+        node->setAnimation(anim);
+    }
+
+    //reset root to identity
+    //node->pos = QVector3D();
+    //node->rot = QQuaternion();
+    //node->scale = QVector3D(1,1,1);
+
+    node->applyDefaultPose();
 
     return node;
 }

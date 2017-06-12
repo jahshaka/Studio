@@ -20,6 +20,12 @@ namespace iris
 
 class PropertyAnim;
 
+enum class AnimationType
+{
+    Property,
+    Skeletal
+};
+
 class Animation
 {
     QString name;
@@ -28,10 +34,10 @@ class Animation
 
     // sample rate
     int frameRate;
-public:
 
-    //QMap preserves insertion order,QHash doesnt
+public:
     QMap<QString,PropertyAnim*> properties;
+    SkeletalAnimationPtr skeletalAnimation;
 
     explicit Animation(QString name = "Animation");
     ~Animation();
@@ -54,6 +60,8 @@ public:
         return AnimationPtr(new Animation(name));
     }
 
+    static AnimationPtr createFromSkeletalAnimation(SkeletalAnimationPtr skelAnim);
+
     QString getName() const;
     void setName(const QString &value);
 
@@ -65,6 +73,16 @@ public:
 
     int getFrameRate() const;
     void setFrameRate(int value);
+
+    SkeletalAnimationPtr getSkeletalAnimation() const;
+    bool hasSkeletalAnimation();
+    void setSkeletalAnimation(const SkeletalAnimationPtr &value);
+
+    // Calculate the time the animation keyframes should be sampled at
+    // It takes looping into consideration
+    float getSampleTime(float time);
+
+    void calculateAnimationLength();
 };
 
 }

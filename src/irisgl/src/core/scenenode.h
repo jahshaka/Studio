@@ -69,6 +69,13 @@ public:
     friend class Renderer;
     friend class Scene;
 
+    // If a node is attached to parents then it inherits animations
+    // It also cant have its own animation
+    // Attached nodes are usually nodes created from model files
+    // The scenenode is a part of the heirarchy of the model's structure
+    // so its attached to the root node of the model
+    bool attached;
+
 public:
     SceneNode();
     virtual ~SceneNode() {}
@@ -83,6 +90,9 @@ public:
     bool isDuplicable() {
         return duplicable;
     }
+
+    bool isAttached();
+    void setAttached(bool attached);
 
     void addAnimation(AnimationPtr anim);
     QList<AnimationPtr> getAnimations();
@@ -161,6 +171,8 @@ public:
      */
     virtual void update(float dt);
     virtual void updateAnimation(float time);
+    void applyDefaultPose();
+    void applyAnimationPose(SceneNodePtr node, QMap<QString, QMatrix4x4> skeletonSpaceMatrices);
 
     /*
      * This is the function used to add render items

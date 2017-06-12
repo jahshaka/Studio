@@ -16,8 +16,10 @@ For more information see the LICENSE file
 #include <qopengl.h>
 #include <QColor>
 #include "../irisglfwd.h"
+#include "../animation/skeletalanimation.h"
 
 class aiMesh;
+class aiScene;
 class QOpenGLBuffer;
 class QOpenGLFunctions_3_2_Core;
 class QOpenGLShaderProgram;
@@ -36,7 +38,9 @@ enum class VertexAttribUsage : int
     Normal = 5,
     Tangent = 6,
     BiTangent = 7,
-    Count = 8
+    BoneIndices = 8,
+    BoneWeights = 9,
+    Count = 10
 };
 
 struct MeshMaterialData
@@ -68,9 +72,11 @@ public:
 
 };
 
+//todo: switch to using mesh pointer
 class Mesh
 {
-
+    SkeletonPtr skeleton;
+    QMap<QString, SkeletalAnimationPtr> skeletalAnimations;
 public:
     QOpenGLFunctions_3_2_Core* gl;
     GLuint vao;
@@ -95,10 +101,21 @@ public:
         return triMesh;
     }
 
+
+    bool hasSkeleton();
+    SkeletonPtr getSkeleton();
+
+    void addSkeletalAnimation(QString name, SkeletalAnimationPtr anim);
+    QMap<QString, SkeletalAnimationPtr> getSkeletalAnimations();
+    bool hasSkeletalAnimations();
+
     void draw(QOpenGLFunctions_3_2_Core* gl, Material* mat, GLenum primitiveMode = GL_TRIANGLES);
     void draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* mat, GLenum primitiveMode = GL_TRIANGLES);
 
     static Mesh* loadMesh(QString filePath);
+    static Mesh* loadAnimatedMesh(QString filePath);
+    static SkeletonPtr extractSkeleton(const aiMesh* mesh, const aiScene* scene);
+    static QMap<QString, SkeletalAnimationPtr> extractAnimations(const aiScene* scene, QString source = "");
 
     //assumed ownership of vertexLayout
     static Mesh* create(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
@@ -115,6 +132,8 @@ public:
     Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
 
     ~Mesh();
+
+    void setSkeleton(const SkeletonPtr &value);
 
 private:
     void addVertexArray(VertexAttribUsage usage,void* data,int size,GLenum type,int numComponents);

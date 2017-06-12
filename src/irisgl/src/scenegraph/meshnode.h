@@ -44,6 +44,10 @@ public:
 
     RenderItem* renderItem;
 
+    // For animated meshes, the rootBone's transform is what will be used as its transform
+    // Since all its animations are based at the rootBone
+    SceneNodePtr rootBone;
+
     static MeshNodePtr create() {
         return MeshNodePtr(new MeshNode());
     }
@@ -57,7 +61,9 @@ public:
      * @param path
      * @return
      */
-    static SceneNodePtr loadAsSceneFragment(QString path, std::function<MaterialPtr(MeshMaterialData& data)> createMaterialFunc);
+    static SceneNodePtr loadAsSceneFragment(QString path, std::function<MaterialPtr(Mesh* mesh, MeshMaterialData& data)> createMaterialFunc);
+
+    static SceneNodePtr loadAsAnimatedModel(QString path);
 
     void setMesh(QString source);
     void setMesh(Mesh* mesh);
@@ -85,6 +91,8 @@ public:
 
     SceneNodePtr createDuplicate() override;
     virtual void submitRenderItems() override;
+
+    //void updateAnimation(float time) override;
 
     FaceCullingMode getFaceCullingMode() const;
     void setFaceCullingMode(const FaceCullingMode &value);
