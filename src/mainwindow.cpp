@@ -575,6 +575,9 @@ void MainWindow::setupFileMenu()
     connect(ui->actionNew,          SIGNAL(triggered(bool)), this, SLOT(newScene()));
 
     connect(prefsDialog,  SIGNAL(PreferencesDialogClosed()), this, SLOT(updateSceneSettings()));
+
+    // until we decide how to manage scenes better
+    ui->actionSave_As->setDisabled(true);
 }
 
 void MainWindow::setupViewMenu()

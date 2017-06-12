@@ -59,18 +59,25 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
 
     settings = SettingsManager::getDefaultManager();
 
-    for (auto recentItem : settings->getRecentlyOpenedScenes()) {
-        auto item = new QListWidgetItem();
-        item->setData(Qt::UserRole, recentItem);
-        item->setToolTip(recentItem);
-        auto fn = QFileInfo(recentItem);
-        if (QFile::exists(fn.absolutePath() + "/Metadata/preview.png")) {
-            item->setIcon(QIcon(fn.absolutePath() + "/Metadata/preview.png"));
-        } else {
-            item->setIcon(QIcon(":/app/images/no_preview.png"));
+    ui->label->hide();
+
+    if (settings->getRecentlyOpenedScenes().count()) {
+        for (auto recentItem : settings->getRecentlyOpenedScenes()) {
+            auto item = new QListWidgetItem();
+            item->setData(Qt::UserRole, recentItem);
+            item->setToolTip(recentItem);
+            auto fn = QFileInfo(recentItem);
+            if (QFile::exists(fn.absolutePath() + "/Metadata/preview.png")) {
+                item->setIcon(QIcon(fn.absolutePath() + "/Metadata/preview.png"));
+            } else {
+                item->setIcon(QIcon(":/app/images/no_preview.png"));
+            }
+            item->setText(fn.baseName());
+            ui->listWidget->addItem(item);
         }
-        item->setText(fn.baseName());
-        ui->listWidget->addItem(item);
+    } else {
+        ui->listWidget->hide();
+        ui->label->show();
     }
 
     QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
@@ -214,7 +221,7 @@ bool ProjectDialog::copyDirectoryFiles(const QString &fromDir, const QString &to
 
 void ProjectDialog::openSampleProject(QListWidgetItem *item)
 {
-    auto projectFolder = QFileDialog::getExistingDirectory(nullptr, "Select Copy Directory");
+    auto projectFolder = QFileDialog::getExistingDirectory(nullptr, "Select directory to copy project to");
 
     if (!projectFolder.isEmpty()) {
         auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
