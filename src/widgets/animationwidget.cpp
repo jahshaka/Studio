@@ -45,6 +45,7 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     connect(ui->addAnimBtn,SIGNAL(clicked(bool)), this, SLOT(addAnimation()));
     connect(ui->deleteAnimBtn,SIGNAL(clicked(bool)), this, SLOT(deleteAnimation()));
     connect(ui->animList,SIGNAL(currentTextChanged(QString)), this, SLOT(animationChanged(QString)));
+    connect(ui->loopCheckBox,SIGNAL(clicked(bool)), this, SLOT(setLooping(bool)));
 
     animWidgetData = new AnimationWidgetData();
 
@@ -147,6 +148,7 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
             refreshAnimationList();
             showKeyFrameWidget();
             hideCreateAnimWidget();
+            ui->loopCheckBox->setChecked(animation->getLooping());
         }
 
     } else {
