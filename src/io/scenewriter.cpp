@@ -159,6 +159,7 @@ void SceneWriter::writeEditorData(QJsonObject& projectObj,EditorData* editorData
 void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sceneNode)
 {
     sceneNodeObj["name"] = sceneNode->getName();
+    sceneNodeObj["attached"] = sceneNode->isAttached();
     sceneNodeObj["type"] = getSceneNodeTypeName(sceneNode->sceneNodeType);
 
     sceneNodeObj["pos"] = jsonVector3(sceneNode->pos);
