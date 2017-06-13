@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>793</width>
-    <height>256</height>
+    <width>1133</width>
+    <height>327</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -391,6 +391,13 @@ QWidget#controls &gt; QToolButton:hover {
                  </widget>
                 </item>
                </layout>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="loopCheckBox">
+               <property name="text">
+                <string>Loop</string>
+               </property>
               </widget>
              </item>
              <item>

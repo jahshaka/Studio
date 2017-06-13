@@ -452,7 +452,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 }
 
                 if (!isModelExtension(info.suffix())) {
-                    sceneView->doObjectPicking(evt->posF(), true);
+                    sceneView->doObjectPicking(evt->posF(), iris::SceneNodePtr(), true);
                 }
             }
         }

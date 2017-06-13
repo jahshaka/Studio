@@ -240,6 +240,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 
     //read name
     sceneNode->name = nodeObj["name"].toString("");
+    sceneNode->setAttached(nodeObj["attached"].toBool());
 
     QJsonArray children = nodeObj["children"].toArray();
     for(auto childObj:children)

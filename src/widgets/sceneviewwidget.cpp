@@ -329,6 +329,7 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
 
 void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 {
+    auto lastSelected = selectedNode;
     prevMousePos = e->localPos();
 
     if (e->button() == Qt::RightButton) {
@@ -364,7 +365,7 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 
         // if we don't have a selected node prioritize object picking
         if (selectedNode.isNull()) {
-            this->doObjectPicking(e->localPos());
+            this->doObjectPicking(e->localPos(), lastSelected);
         }
     }
 
@@ -411,7 +412,7 @@ void SceneViewWidget::focusOutEvent(QFocusEvent* event)
     KeyboardState::reset();
 }
 
-void SceneViewWidget::doObjectPicking(const QPointF& point, bool skipLights)
+void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool skipLights)
 {
     editorCam->updateCameraMatrices();
 
@@ -432,19 +433,59 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, bool skipLights)
     }
 
     // if the size of the list is 1 we know it was the only one so return early
-    if (hitList.size() == 1) {
-        viewportGizmo->lastSelectedNode = hitList[0].hitNode;
-        emit sceneNodeSelected(hitList[0].hitNode);
-        return;
-    }
+//    if (hitList.size() == 1) {
+//        viewportGizmo->lastSelectedNode = hitList[0].hitNode;
+//        emit sceneNodeSelected(hitList[0].hitNode);
+//        return;
+//    }
 
     // sort by distance to camera then return the closest hit node
     qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
         return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
     });
 
-    viewportGizmo->lastSelectedNode = hitList.last().hitNode;
-    emit sceneNodeSelected(hitList.last().hitNode);
+    auto pickedNode = hitList.last().hitNode;
+    iris::SceneNodePtr lastSelectedRoot;
+
+    if (!!lastSelectedNode) {
+        lastSelectedRoot = lastSelectedNode;
+        while (lastSelectedRoot->isAttached())
+            lastSelectedRoot = lastSelectedRoot->parent;
+    }
+
+    auto pickedRoot = hitList.last().hitNode;
+    while (pickedRoot->isAttached())
+        pickedRoot = pickedRoot->parent;
+
+
+
+    if (!lastSelectedNode || // if the user clicked away then the root should be reselected
+         pickedRoot != lastSelectedRoot)  // if both are under, or is, the same root then pick the actual object
+        pickedNode = pickedRoot;// if not then pick the root node
+
+    /*
+    auto pickedNode = hitList.last().hitNode;
+    // climb tree to object's root (in the case of an imported model)
+    iris::SceneNodePtr rootObject;
+    if (pickedNode != lastSelectedNode && pickedNode->isAttached()) {
+        rootObject = pickedNode;
+        // climb the tree to root object
+        while (rootObject->isAttached()) {
+            rootObject = rootObject->parent;
+        }
+
+        // if rootObject is selectedNode, then use the pickedNode, else use the rootObject
+        if (rootObject == lastSelectedNode)
+            pickedNode = hitList.last().hitNode;
+        else
+            pickedNode = rootObject;
+    }
+    */
+
+    //viewportGizmo->lastSelectedNode = hitList.last().hitNode;
+    //emit sceneNodeSelected(hitList.last().hitNode);
+    viewportGizmo->lastSelectedNode = pickedNode;
+    emit sceneNodeSelected(pickedNode);
 }
 
 void SceneViewWidget::doGizmoPicking(const QPointF& point)
