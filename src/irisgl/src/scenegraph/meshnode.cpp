@@ -271,6 +271,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,Sc
         sceneNode->addChild(child, false);
     }
 
+    sceneNode->setAttached(true);
     return sceneNode;
 }
 
@@ -318,6 +319,7 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath,
     }
 
     auto node = _buildScene(scene,scene->mRootNode, SceneNodePtr(), filePath, createMaterialFunc);
+    node->setAttached(false); // root of object shouldnt be attached
 
     //extract animations and add them one by one
     //todo: use relative path from scene root
