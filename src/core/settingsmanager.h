@@ -14,6 +14,9 @@ For more information see the LICENSE file
 
 #include <QSettings>
 #include <QVariant>
+#include <QDir>
+
+#include "../globals.h"
 
 class SettingsManager
 {
@@ -34,8 +37,8 @@ public:
 
     // TODO -- allow changing this location, portable or system
     SettingsManager(QString fileName = "jahsettings.ini") {
-        recentlyOpenedFilesSize = 5;
-        loadSettings(fileName);
+        recentlyOpenedFilesSize = 9;
+        loadSettings(QDir(Globals::appWorkingDir).filePath(fileName));
     }
 
     void loadSettings(QString path) {
@@ -51,7 +54,21 @@ public:
     }
 
     QStringList getRecentlyOpenedScenes() {
-        return settings->value("recent_files",QStringList()).toStringList();
+        return settings->value("recent_files", QStringList()).toStringList();
+    }
+
+    void removeRecentlyOpenedEntry(const QString &entry) {
+        auto list = settings->value("recent_files", QStringList()).toStringList();
+
+        if (list.contains(entry)) {
+            list.removeAt(list.indexOf(entry));
+        }
+
+        if (list.count()) {
+            settings->setValue("recent_files", list);
+        } else {
+            settings->remove("recent_files");
+        }
     }
 
     void addRecentlyOpenedScene(QString path) {

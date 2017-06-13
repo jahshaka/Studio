@@ -20,6 +20,7 @@
 
 #include <QDebug>
 #include <QFileDialog>
+#include <QMenu>
 
 #include "../core/guidmanager.h"
 
@@ -36,13 +37,68 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
         QApplication::setFont(QFont("Open Sans", 9));
     }
 
+    ui->listWidget->setViewMode(QListWidget::IconMode);
+    ui->listWidget->setIconSize(QSize(256, 256));
+    ui->listWidget->setResizeMode(QListWidget::Adjust);
+    ui->listWidget->setMovement(QListView::Static);
+    ui->listWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
+    ui->listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
+
+    ui->listWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+
+    ui->demoList->setViewMode(QListWidget::IconMode);
+    ui->demoList->setIconSize(QSize(256, 256));
+    ui->demoList->setResizeMode(QListWidget::Adjust);
+    ui->demoList->setMovement(QListView::Static);
+    ui->demoList->setSelectionBehavior(QAbstractItemView::SelectItems);
+    ui->demoList->setSelectionMode(QAbstractItemView::SingleSelection);
+
     connect(ui->newProject,     SIGNAL(pressed()), SLOT(newScene()));
     connect(ui->openProject,    SIGNAL(pressed()), SLOT(openProject()));
     connect(ui->listWidget,     SIGNAL(itemDoubleClicked(QListWidgetItem*)),
             this,               SLOT(openRecentProject(QListWidgetItem*)));
+    connect(ui->listWidget,     SIGNAL(customContextMenuRequested(const QPoint&)),
+            this,               SLOT(listWidgetCustomContextMenu(const QPoint&)));
+    connect(ui->demoList,       SIGNAL(itemDoubleClicked(QListWidgetItem*)),
+            this,               SLOT(openSampleProject(QListWidgetItem*)));
 
     settings = SettingsManager::getDefaultManager();
-    ui->listWidget->addItems(settings->getRecentlyOpenedScenes());
+
+    ui->label->hide();
+
+    if (settings->getRecentlyOpenedScenes().count()) {
+        for (auto recentItem : settings->getRecentlyOpenedScenes()) {
+            auto item = new QListWidgetItem();
+            item->setData(Qt::UserRole, recentItem);
+            item->setToolTip(recentItem);
+            auto fn = QFileInfo(recentItem);
+            if (QFile::exists(fn.absolutePath() + "/Metadata/preview.png")) {
+                item->setIcon(QIcon(fn.absolutePath() + "/Metadata/preview.png"));
+            } else {
+                item->setIcon(QIcon(":/app/images/no_preview.png"));
+            }
+            item->setText(fn.baseName());
+            ui->listWidget->addItem(item);
+        }
+    } else {
+        ui->listWidget->hide();
+        ui->label->show();
+    }
+
+    QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
+    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+    foreach (const QFileInfo &file, files) {
+        auto item = new QListWidgetItem();
+        item->setToolTip(file.absoluteFilePath());
+        item->setData(Qt::DisplayRole, file.baseName());
+        item->setData(Qt::UserRole, file.absoluteFilePath() + "/" + file.baseName() + Constants::PROJ_EXT);
+        if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
+            item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
+        } else {
+            item->setIcon(QIcon(":/app/images/no_preview.png"));
+        }
+        ui->demoList->addItem(item);
+    }
 }
 
 ProjectDialog::~ProjectDialog()
@@ -79,6 +135,7 @@ void ProjectDialog::newScene()
         window->showMaximized();
         window->newProject(projectName, fullProjectPath);
         settings->addRecentlyOpenedScene(slnName);
+        settings->setValue("last_wd", projectPath);
 
         this->close();
     }
@@ -113,22 +170,130 @@ void ProjectDialog::openProject()
 
 QString ProjectDialog::loadProjectDelegate()
 {
-    auto projectFileName = QFileDialog::getOpenFileName(this, "Select Project Folder",
+    auto projectFileName = QFileDialog::getOpenFileName(this, "Select Project File",
                                                         nullptr, "Jahshaka Project File (*.project)");
     return projectFileName;
 }
 
 void ProjectDialog::openRecentProject(QListWidgetItem *item)
 {
-    auto projectFile = QFileInfo(item->text());
+    auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
     auto projectPath = projectFile.absolutePath();
     Globals::project->setProjectPath(projectPath);
 
     window = new MainWindow;
     window->showMaximized();
+
     window->openProject(projectFile.absoluteFilePath());
 
     this->close();
+}
+
+bool ProjectDialog::copyDirectoryFiles(const QString &fromDir, const QString &toDir, bool coverFileIfExist)
+{
+    QDir sourceDir(fromDir);
+    QDir targetDir(toDir);
+    if(!targetDir.exists()){    /* if directory don't exists, build it */
+        if(!targetDir.mkdir(targetDir.absolutePath()))
+            return false;
+    }
+
+    QFileInfoList fileInfoList = sourceDir.entryInfoList();
+    foreach(QFileInfo fileInfo, fileInfoList){
+        if(fileInfo.fileName() == "." || fileInfo.fileName() == "..")
+            continue;
+
+        if(fileInfo.isDir()){    /* if it is directory, copy recursively*/
+            if(!copyDirectoryFiles(fileInfo.filePath(),
+                targetDir.filePath(fileInfo.fileName()),
+                coverFileIfExist))
+                return false;
+        }
+        else{            /* if coverFileIfExist == true, remove old file first */
+            if(coverFileIfExist && targetDir.exists(fileInfo.fileName())){
+                targetDir.remove(fileInfo.fileName());
+            }
+
+            // files copy
+            if(!QFile::copy(fileInfo.filePath(),
+                targetDir.filePath(fileInfo.fileName()))){
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
+void ProjectDialog::openSampleProject(QListWidgetItem *item)
+{
+    auto projectFolder = QFileDialog::getExistingDirectory(nullptr, "Select directory to copy project");
+
+    if (!projectFolder.isEmpty()) {
+        auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
+
+        QString dest = QDir(projectFolder).filePath(projectFile.baseName());
+        if (this->copyDirectoryFiles(projectFile.absolutePath(), dest, true)) {
+
+            auto newProjectFile = QFileInfo(dest);
+            auto projectPath = QDir(newProjectFile.absolutePath()).filePath(projectFile.baseName());
+            Globals::project->setProjectPath(projectPath);
+
+            auto sln = QDir(projectPath).filePath(projectFile.fileName());
+
+            window = new MainWindow;
+            window->showMaximized();
+            window->openProject(sln);
+
+            settings->addRecentlyOpenedScene(sln);
+        }
+    }
+
+    this->close();
+}
+
+void ProjectDialog::listWidgetCustomContextMenu(const QPoint &pos)
+{
+    QModelIndex index = ui->listWidget->indexAt(pos);
+
+    QMenu menu;
+    QAction *action;
+
+    if (index.isValid()) {
+        currentItem = ui->listWidget->itemAt(pos);
+//        assetItem.selectedPath = item->data(Qt::UserRole).toString();
+
+        action = new QAction(QIcon(), "Remove from recent list", this);
+        connect(action, SIGNAL(triggered()), this, SLOT(removeFromList()));
+        menu.addAction(action);
+
+        action = new QAction(QIcon(), "Delete project", this);
+        connect(action, SIGNAL(triggered()), this, SLOT(deleteProject()));
+        menu.addAction(action);
+    }
+
+    menu.exec(ui->listWidget->mapToGlobal(pos));
+}
+
+void ProjectDialog::removeFromList()
+{
+    auto selectedInfo = QFileInfo(currentItem->data(Qt::UserRole).toString());
+    delete ui->listWidget->takeItem(ui->listWidget->row(currentItem));
+    settings->removeRecentlyOpenedEntry(selectedInfo.absoluteFilePath());
+
+    if (!ui->listWidget->count()) {
+        ui->label->show();
+        ui->listWidget->hide();
+    }
+}
+
+void ProjectDialog::deleteProject()
+{
+    auto selectedInfo = QFileInfo(currentItem->data(Qt::UserRole).toString());
+
+    QDir dir(selectedInfo.absolutePath());
+    if (dir.removeRecursively()) {
+        removeFromList();
+    }
 }
 
 SettingsManager *ProjectDialog::getSettingsManager()
@@ -140,4 +305,3 @@ bool ProjectDialog::eventFilter(QObject *watched, QEvent *event)
 {
     return QObject::eventFilter(watched, event);
 }
-

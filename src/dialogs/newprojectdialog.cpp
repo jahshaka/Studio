@@ -3,10 +3,12 @@
 #include <QFontDatabase>
 
 #include "src/irisgl/src/core/irisutils.h"
+#include "../core/settingsmanager.h"
 
 #include "newprojectdialog.h"
 #include "ui_newprojectdialog.h"
 
+#include <QDebug>
 NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::NewProjectDialog)
 {
     ui->setupUi(this);
@@ -20,8 +22,15 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui
         QApplication::setFont(QFont("Open Sans", 9));
     }
 
+    settingsManager = SettingsManager::getDefaultManager();
+
     connect(ui->browseProject, SIGNAL(pressed()), SLOT(setProjectPath()));
     connect(ui->createProject, SIGNAL(pressed()), SLOT(confirmProjectCreation()));
+
+    lastValue = settingsManager->getValue("last_wd", "").toString();
+    if (!lastValue.isEmpty()) {
+        ui->projectPath->setText(lastValue);
+    }
 }
 
 NewProjectDialog::~NewProjectDialog()
@@ -38,7 +47,7 @@ ProjectInfo NewProjectDialog::getProjectInfo()
 void NewProjectDialog::setProjectPath()
 {
     QFileDialog projectDir;
-    projectPath = projectDir.getExistingDirectory();
+    projectPath = projectDir.getExistingDirectory(nullptr, "Select project dir", lastValue);
     ui->projectPath->setText(projectPath);
 }
 

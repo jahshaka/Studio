@@ -6,15 +6,23 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>600</height>
+    <width>1100</width>
+    <height>625</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Project Screen</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QPushButton {
+   <string notr="true">QToolTip {
+	color: #DEDEDE;
+    padding: 2px;
+	border: 0;
+    background: black;
+   	opacity: 200;
+}
+
+QPushButton {
 	border: 0;
 	background: #444;
 	padding: 8px;
@@ -27,67 +35,223 @@ QPushButton:hover {
 QListWidget {
 	background: #404040;
 	color: #CECECE;
+	padding-left: 16px;
+	padding-top: 24px;
 }
 
 QListWidget::item {
+	border: 0;
 	padding: 6px;
+	margin-bottom: 6px;
+	margin-right: 6px;
 }
 
-QListView::item:selected {
-    border: 1px solid #3498db;
-	background: #3498db;
+QListWidget::item:hover {
+	border: 0;
+	padding: 6px;
+	margin-bottom: 6px;
+	margin-right: 6px;
+	/*border: 4px solid #4898ff;*/
+	background: rgba(71, 151, 255, 0.3);
+}
+
+QListWidget::item:selected {
+	border: 0;
+	padding: 6px;
+	margin-bottom: 6px;
+	margin-right: 6px;
+	background: #4998ff;
 	color: #CECECE;
+}
+
+QTabWidget::tab-bar {
+    /*min-width:  48px; */
+}
+
+QTabBar::close-button {
+   /*  image: url(:icons/icons/delete_smol.png); */
+    /*subcontrol-position: left;*/
+}
+
+QTabWidget::pane {
+	margin: -1px;
+	/*border-top: 1px solid #1e1e1e;*/
+}
+
+QTabBar::tab:selected {
+	background-color: #404040;
+	/*border-bottom: 1px solid #303030;*/
+}
+
+QTabBar::tab {
+	background-color: #4d4d4d;
+	min-width: 152px;
+    min-height: 32px;
+    padding-bottom: 1px;
+   /* border-top: 1px solid #1e1e1e; */
+	/*border-top: 1px solid #1e1e1e; */
+ 	/*border-right: 1px solid #1e1e1e;*/
+	/*border-bottom: 1px solid #1e1e1e;*/
 }</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="1" column="0">
-    <layout class="QVBoxLayout" name="verticalLayout">
-     <property name="leftMargin">
-      <number>11</number>
+   <item row="0" column="0">
+    <widget class="QWidget" name="widget" native="true">
+     <property name="styleSheet">
+      <string notr="true">#newProject {
+	background: #4898ff;
+}
+
+#newProject:hover {
+	background-color: #51a1d6;
+}
+
+QWidget#addBtn:pressed {
+	background-color: #1e77b3;
+} </string>
      </property>
-     <property name="rightMargin">
-      <number>11</number>
-     </property>
-     <property name="bottomMargin">
-      <number>0</number>
-     </property>
-     <item>
-      <widget class="QLabel" name="logo">
-       <property name="styleSheet">
-        <string notr="true">font-size: 32px;</string>
-       </property>
-       <property name="text">
-        <string>JahshakaVR</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="newProject">
-       <property name="text">
-        <string>New Project</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="openProject">
-       <property name="text">
-        <string>Open Project</string>
-       </property>
-      </widget>
-     </item>
-    </layout>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="logo">
+        <property name="text">
+         <string/>
+        </property>
+        <property name="pixmap">
+         <pixmap resource="../../images.qrc">:/app/images/sidepanelimage.jpg</pixmap>
+        </property>
+        <property name="scaledContents">
+         <bool>true</bool>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="newProject">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>64</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>New Project</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="openProject">
+        <property name="text">
+         <string>Open Project</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
    </item>
    <item row="0" column="1">
-    <widget class="QLabel" name="head">
-     <property name="text">
-      <string>Recently Opened</string>
+    <widget class="QTabWidget" name="tabWidget">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+       <horstretch>3</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
      </property>
+     <property name="styleSheet">
+      <string notr="true">border: 0</string>
+     </property>
+     <property name="currentIndex">
+      <number>0</number>
+     </property>
+     <widget class="QWidget" name="recent">
+      <property name="styleSheet">
+       <string notr="true">border: 0</string>
+      </property>
+      <attribute name="title">
+       <string>Recent Projects</string>
+      </attribute>
+      <layout class="QGridLayout" name="gridLayout_2">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item row="0" column="0">
+        <widget class="QLabel" name="label">
+         <property name="enabled">
+          <bool>true</bool>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background: #404040</string>
+         </property>
+         <property name="lineWidth">
+          <number>0</number>
+         </property>
+         <property name="text">
+          <string>There are no recent projects to display, how about creating one?</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QListWidget" name="listWidget">
+         <property name="styleSheet">
+          <string notr="true"/>
+         </property>
+         <property name="frameShadow">
+          <enum>QFrame::Plain</enum>
+         </property>
+         <property name="resizeMode">
+          <enum>QListView::Adjust</enum>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="demos">
+      <attribute name="title">
+       <string>Sample Projects</string>
+      </attribute>
+      <layout class="QGridLayout" name="gridLayout_3">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item row="1" column="0">
+        <widget class="QListWidget" name="demoList"/>
+       </item>
+      </layout>
+     </widget>
     </widget>
    </item>
    <item row="1" column="1">
-    <widget class="QListWidget" name="listWidget"/>
-   </item>
-   <item row="2" column="0" colspan="2">
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
@@ -99,7 +263,9 @@ QListView::item:selected {
    </item>
   </layout>
  </widget>
- <resources/>
+ <resources>
+  <include location="../../images.qrc"/>
+ </resources>
  <connections>
   <connection>
    <sender>buttonBox</sender>

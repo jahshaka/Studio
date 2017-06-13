@@ -7,5 +7,6 @@
         <file>app/images/splash.svg</file>
         <file>app/images/splashv2.jpg</file>
         <file>app/images/frame.png</file>
+        <file>app/images/no_preview.png</file>
     </qresource>
 </RCC>

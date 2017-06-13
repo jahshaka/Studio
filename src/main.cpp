@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "dialogs/infodialog.h"
 #include "dialogs/projectdialog.h"
 #include "core/settingsmanager.h"
+#include "globals.h"
 
 int main(int argc, char *argv[])
 {
@@ -67,6 +68,8 @@ int main(int argc, char *argv[])
     auto image = QPixmap(":/app/images/splashv2.jpg");
     splash.setPixmap(image);
     splash.show();
+
+    Globals::appWorkingDir = QApplication::applicationDirPath();
 
     ProjectDialog projectDialog;
     projectDialog.show();

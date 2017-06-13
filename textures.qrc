@@ -1,9 +1,5 @@
 <RCC>
     <qresource prefix="/">
-        <file>app/content/skies/default.png</file>
-        <file>app/content/skies/vp_sky_v2_002.jpg</file>
-        <file>app/content/skies/vp_sky_v2_032.jpg</file>
-        <file>app/content/skies/vp_sky_v2_033.jpg</file>
-        <file>app/content/skies/vp_sky_v2_002_test.jpg</file>
+        <file>app/content/textures/tile.png</file>
     </qresource>
 </RCC>

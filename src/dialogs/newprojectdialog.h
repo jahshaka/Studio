@@ -12,6 +12,8 @@ struct ProjectInfo {
     QString projectPath;
 };
 
+class SettingsManager;
+
 class NewProjectDialog : public QDialog
 {
     Q_OBJECT
@@ -31,6 +33,8 @@ private:
     Ui::NewProjectDialog *ui;
     QString projectName,
             projectPath;
+    SettingsManager *settingsManager;
+    QString lastValue;
 };
 
 #endif // NEWPROJECTDIALOG_H
