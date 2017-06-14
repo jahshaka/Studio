@@ -3,7 +3,7 @@
 
 #include "../accordianbladewidget.h"
 #include "../../irisgl/src/irisglfwd.h"
-#include "../../irisgl/src/materials/propertytype.h"
+#include "../../irisgl/src/core/property.h"
 
 #include "../hfloatsliderwidget.h"
 

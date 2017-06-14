@@ -7,7 +7,7 @@
 #include <QMouseEvent>
 #include <vector>
 //#include "../scenegraph/scenenodes.h"
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/animation/keyframeset.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/animation.h"

@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include <QtMath>
 
 #include "../irisgl/src/irisgl.h"
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/core/irisutils.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 

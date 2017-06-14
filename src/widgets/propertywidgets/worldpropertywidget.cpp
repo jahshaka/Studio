@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "worldpropertywidget.h"
 #include "../texturepickerwidget.h"
-#include "../../irisgl/src/core/scene.h"
+#include "../../irisgl/src/scenegraph/scene.h"
 #include "../../irisgl/src/core/irisutils.h"
 #include "../../irisgl/src/materials/defaultskymaterial.h"
 

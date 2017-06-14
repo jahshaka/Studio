@@ -21,7 +21,7 @@ For more information see the LICENSE file
 #include <QElapsedTimer>
 
 #include "../irisgl/src/irisgl.h"
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"

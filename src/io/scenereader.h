@@ -23,7 +23,7 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 
 #include "../irisgl/src/irisglfwd.h"
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
 

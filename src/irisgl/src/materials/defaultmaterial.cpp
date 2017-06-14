@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #include "../graphics/texture.h"
 #include "../graphics/texture2d.h"
 #include "../materials/defaultmaterial.h"
-#include "../core/scene.h"
+#include "../scenegraph/scene.h"
 #include "../core/irisutils.h"
 #include <QFile>
 #include <QTextStream>

@@ -1,10 +1,10 @@
 #include "lightnode.h"
-#include "../core/scenenode.h"
+#include "../scenegraph/scenenode.h"
 #include "../animation/animableproperty.h"
 #include "../animation/keyframeset.h"
 #include "../animation/animation.h"
 #include "../animation/propertyanim.h"
-#include "../materials/propertytype.h"
+#include "../core/property.h"
 
 namespace iris
 {

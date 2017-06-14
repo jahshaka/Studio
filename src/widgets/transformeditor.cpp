@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #include "transformeditor.h"
 #include "ui_transformeditor.h"
 
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 
 TransformEditor::TransformEditor(QWidget* parent) :
     QWidget(parent),

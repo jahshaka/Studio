@@ -3,7 +3,7 @@
 #include "../../irisgl/src/graphics/postprocess.h"
 #include "../propertywidget.h"
 
-#include "../../irisgl/src/materials/propertytype.h"
+#include "../../irisgl/src/core/property.h"
 
 #include <QDebug>
 

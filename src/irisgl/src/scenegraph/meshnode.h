@@ -14,7 +14,7 @@ For more information see the LICENSE file
 
 #include <functional>
 #include "../irisglfwd.h"
-#include "../core/scenenode.h"
+#include "../scenegraph/scenenode.h"
 #include "../core/irisutils.h"
 #include "../graphics/texture2d.h"
 #include "../graphics/renderitem.h"

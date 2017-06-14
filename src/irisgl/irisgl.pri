@@ -10,8 +10,6 @@
 #**************************************************************************
 
 HEADERS += \
-    $$PWD/src/core/scene.h \
-    $$PWD/src/core/scenenode.h \
     $$PWD/src/animation/nodekeyframe.h \
     $$PWD/src/animation/keyframeanimation.h \
     $$PWD/src/scenegraph/lightnode.h \
@@ -53,7 +51,6 @@ HEADERS += \
     $$PWD/src/vr/vrmanager.h \
     $$PWD/src/graphics/iviewsource.h \
     $$PWD/src/materials/custommaterial.h \
-    $$PWD/src/materials/propertytype.h \
     $$PWD/src/graphics/postprocess.h \
     $$PWD/src/graphics/postprocessmanager.h \
     $$PWD/src/graphics/rendertexture.h \
@@ -69,7 +66,10 @@ HEADERS += \
     $$PWD/src/utils/hashedlist.h \
     $$PWD/src/graphics/skeleton.h \
     $$PWD/src/animation/skeletalanimation.h \
-    $$PWD/src/animation/floatcurve.h
+    $$PWD/src/animation/floatcurve.h \
+    $$PWD/src/scenegraph/scene.h \
+    $$PWD/src/scenegraph/scenenode.h \
+    $$PWD/src/core/property.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -77,9 +77,7 @@ include(src/libovr/libovr.pri)
 SOURCES += \
     $$PWD/src/graphics/mesh.cpp \
     $$PWD/src/materials/defaultmaterial.cpp \
-    $$PWD/src/core/scene.cpp \
     $$PWD/src/scenegraph/meshnode.cpp \
-    $$PWD/src/core/scenenode.cpp \
     $$PWD/src/graphics/forwardrenderer.cpp \
     $$PWD/src/graphics/graphicshelper.cpp \
     $$PWD/src/graphics/utils/billboard.cpp \
@@ -112,7 +110,9 @@ SOURCES += \
     $$PWD/src/animation/propertyanim.cpp \
     $$PWD/src/scenegraph/lightnode.cpp \
     $$PWD/src/animation/skeletalanimation.cpp \
-    $$PWD/src/graphics/skeleton.cpp
+    $$PWD/src/graphics/skeleton.cpp \
+    $$PWD/src/scenegraph/scene.cpp \
+    $$PWD/src/scenegraph/scenenode.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

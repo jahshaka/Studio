@@ -10,8 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "forwardrenderer.h"
-#include "../core/scene.h"
-#include "../core/scenenode.h"
+#include "../scenegraph/scene.h"
+#include "../scenegraph/scenenode.h"
 #include "../scenegraph/cameranode.h"
 #include "../scenegraph/meshnode.h"
 #include "../scenegraph/lightnode.h"

@@ -2,7 +2,7 @@
 #define PROPERTYWIDGET_H
 
 #include <QWidget>
-#include "../irisgl/src/materials/propertytype.h"
+#include "../irisgl/src/core/property.h"
 
 namespace Ui {
     class PropertyWidget;

@@ -18,7 +18,7 @@ For more information see the LICENSE file
 #include "../labelwidget.h"
 #include "../filepickerwidget.h"
 
-#include "../../src/materials/propertytype.h"
+#include "../../src/core/property.h"
 #include "../propertywidget.h"
 
 #include <QDebug>

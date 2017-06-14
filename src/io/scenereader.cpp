@@ -27,8 +27,8 @@ For more information see the LICENSE file
 
 #include "../editor/editordata.h"
 
-#include "../irisgl/src/core/scene.h"
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scene.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/core/irisutils.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
@@ -37,7 +37,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/particlesystemnode.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/materials/custommaterial.h"
-#include "../irisgl/src/materials/propertytype.h"
+#include "../irisgl/src/core/property.h"
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/graphicshelper.h"
 #include "../irisgl/src/graphics/mesh.h"

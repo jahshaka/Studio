@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include "../animation/animableproperty.h"
 #include "../animation/keyframeanimation.h"
 #include "../animation/skeletalanimation.h"
-#include "../materials/propertytype.h"
+#include "../core/property.h"
 
 #include <functional>
 
