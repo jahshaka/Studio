@@ -412,7 +412,13 @@ void SceneViewWidget::focusOutEvent(QFocusEvent* event)
     KeyboardState::reset();
 }
 
-void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool skipLights)
+/*
+ * if @selectRootObject is false then it will return the exact picked object
+ * else it will compared the roots of the current and previously selected objects
+ * @selectRootObject is usually true for picking using the mouse
+ * It's false for when dragging a texture to an object
+ */
+void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject, bool skipLights)
 {
     editorCam->updateCameraMatrices();
 
@@ -447,21 +453,23 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr l
     auto pickedNode = hitList.last().hitNode;
     iris::SceneNodePtr lastSelectedRoot;
 
-    if (!!lastSelectedNode) {
-        lastSelectedRoot = lastSelectedNode;
-        while (lastSelectedRoot->isAttached())
-            lastSelectedRoot = lastSelectedRoot->parent;
+    if (selectRootObject) {
+        if (!!lastSelectedNode) {
+            lastSelectedRoot = lastSelectedNode;
+            while (lastSelectedRoot->isAttached())
+                lastSelectedRoot = lastSelectedRoot->parent;
+        }
+
+        auto pickedRoot = hitList.last().hitNode;
+        while (pickedRoot->isAttached())
+            pickedRoot = pickedRoot->parent;
+
+
+
+        if (!lastSelectedNode || // if the user clicked away then the root should be reselected
+             pickedRoot != lastSelectedRoot)  // if both are under, or is, the same root then pick the actual object
+            pickedNode = pickedRoot;// if not then pick the root node
     }
-
-    auto pickedRoot = hitList.last().hitNode;
-    while (pickedRoot->isAttached())
-        pickedRoot = pickedRoot->parent;
-
-
-
-    if (!lastSelectedNode || // if the user clicked away then the root should be reselected
-         pickedRoot != lastSelectedRoot)  // if both are under, or is, the same root then pick the actual object
-        pickedNode = pickedRoot;// if not then pick the root node
 
     /*
     auto pickedNode = hitList.last().hitNode;
