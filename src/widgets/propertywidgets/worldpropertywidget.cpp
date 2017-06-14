@@ -59,41 +59,29 @@ WorldPropertyWidget::WorldPropertyWidget()
 void WorldPropertyWidget::viewTextureSlotChanged(const QString &text)
 {
     if (text == "Front") {
-        if (!skyBoxTextures[0].isEmpty()) {
-            skyTexture->setTexture(skyBoxTextures[0]);
-        } else {
-            skyTexture->setTexture("");
-        }
+        skyTexture->setTexture(scene->skyBoxTextures[0].isEmpty()
+                ? QString()
+                : scene->skyBoxTextures[0]);
     } else if (text == "Back") {
-        if (!skyBoxTextures[1].isEmpty()) {
-            skyTexture->setTexture(skyBoxTextures[1]);
-        } else {
-            skyTexture->setTexture("");
-        }
+        skyTexture->setTexture(scene->skyBoxTextures[1].isEmpty()
+                ? QString()
+                : scene->skyBoxTextures[1]);
     } else if (text == "Top") {
-        if (!skyBoxTextures[2].isEmpty()) {
-            skyTexture->setTexture(skyBoxTextures[2]);
-        } else {
-            skyTexture->setTexture("");
-        }
+        skyTexture->setTexture(scene->skyBoxTextures[2].isEmpty()
+                ? QString()
+                : scene->skyBoxTextures[2]);
     } else if (text == "Bottom") {
-        if (!skyBoxTextures[3].isEmpty()) {
-            skyTexture->setTexture(skyBoxTextures[3]);
-        } else {
-            skyTexture->setTexture("");
-        }
+        skyTexture->setTexture(scene->skyBoxTextures[3].isEmpty()
+                ? QString()
+                : scene->skyBoxTextures[3]);
     } else if (text == "Left") {
-        if (!skyBoxTextures[4].isEmpty()) {
-            skyTexture->setTexture(skyBoxTextures[4]);
-        } else {
-            skyTexture->setTexture("");
-        }
+        skyTexture->setTexture(scene->skyBoxTextures[4].isEmpty()
+                ? QString()
+                : scene->skyBoxTextures[4]);
     } else if (text == "Right") {
-        if (!skyBoxTextures[5].isEmpty()) {
-            skyTexture->setTexture(skyBoxTextures[5]);
-        } else {
-            skyTexture->setTexture("");
-        }
+        skyTexture->setTexture(scene->skyBoxTextures[5].isEmpty()
+                ? QString()
+                : scene->skyBoxTextures[5]);
     }
 }
 
@@ -101,54 +89,54 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
-//        auto skyTex = scene->skyTexture;
-//        if (!!skyTex) {
-//            skyTexture->setTexture(skyTex->getSource());
-//        }
+
+        for (int i = 0; i < 6; i++) {
+            skyBoxTextures[i] = scene->skyBoxTextures[i];
+        }
+
+        // always set the first one - hack
+        skyTexture->setTexture(scene->skyBoxTextures[0].isEmpty()
+                ? QString()
+                : scene->skyBoxTextures[0]);
 
         skyColor->setColorValue(scene->skyColor);
         ambientColor->setColorValue(scene->ambientColor);
     } else {
         this->scene.clear();
-        //return;
-        //todo: clear ui
     }
 }
 
 void WorldPropertyWidget::onSkyTextureChanged(QString texPath)
 {
     if (viewSelector->getCurrentItem() == "Front") {
-        skyBoxTextures[0] = texPath;
+        scene->skyBoxTextures[0] = texPath;
     } else if (viewSelector->getCurrentItem() == "Back") {
-        skyBoxTextures[1] = texPath;
+        scene->skyBoxTextures[1] = texPath;
     } else if (viewSelector->getCurrentItem() == "Top") {
-        skyBoxTextures[2] = texPath;
+        scene->skyBoxTextures[2] = texPath;
     } else if (viewSelector->getCurrentItem() == "Bottom") {
-        skyBoxTextures[3] = texPath;
+        scene->skyBoxTextures[3] = texPath;
     } else if (viewSelector->getCurrentItem() == "Left") {
-        skyBoxTextures[4] = texPath;
+        scene->skyBoxTextures[4] = texPath;
     } else if (viewSelector->getCurrentItem() == "Right") {
-        skyBoxTextures[5] = texPath;
+        scene->skyBoxTextures[5] = texPath;
     }
 
-    if (texPath.isEmpty()) {
-//        scene->setSkyTexture(iris::Texture2DPtr());
-    } else {
-//        scene->setSkyTexture(iris::Texture2D::load(texPath,false));
-
-        auto pixel = IrisUtils::getAbsoluteAssetPath("app/content/textures/bottom.jpg");
-
-        QImage *info = new QImage(texPath);
-
-        auto y1 = !skyBoxTextures[2].isEmpty() ? skyBoxTextures[2] : pixel;
-        auto y2 = !skyBoxTextures[3].isEmpty() ? skyBoxTextures[3] : pixel;
-        auto z1 = !skyBoxTextures[0].isEmpty() ? skyBoxTextures[0] : pixel;
-        auto z2 = !skyBoxTextures[1].isEmpty() ? skyBoxTextures[1] : pixel;
-        auto x1 = !skyBoxTextures[4].isEmpty() ? skyBoxTextures[4] : pixel;
-        auto x2 = !skyBoxTextures[5].isEmpty() ? skyBoxTextures[5] : pixel;
-
-        scene->setSkyTexture(iris::Texture2D::createCubeMap(x1, x1, y1, y2, z1, z2, info));
+    QImage *info;
+    for (int i = 0; i < 6; i++) {
+        if (!scene->skyBoxTextures[i].isEmpty()) {
+            info = new QImage(scene->skyBoxTextures[i]);
+            break;
+        }
     }
+
+    scene->setSkyTexture(iris::Texture2D::createCubeMap(scene->skyBoxTextures[0],
+                                                        scene->skyBoxTextures[1],
+                                                        scene->skyBoxTextures[2],
+                                                        scene->skyBoxTextures[3],
+                                                        scene->skyBoxTextures[4],
+                                                        scene->skyBoxTextures[5],
+                                                        info));
 }
 
 void WorldPropertyWidget::onSkyColorChanged(QColor color)

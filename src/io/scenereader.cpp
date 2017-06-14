@@ -170,25 +170,43 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     auto sceneObj = projectObj["scene"].toObject();
 
     //read properties
-    auto skyTexPath = sceneObj["skyTexture"].toString("");
-    if(!skyTexPath.isEmpty())
-    {
-        auto fInfo = QFileInfo(skyTexPath);
-        auto path = fInfo.path();
-        auto ext = fInfo.suffix();
+    auto skyBox = sceneObj["skyBox"].toObject();
 
-        auto x1 = path + "/left." + ext;
-        auto x2 = path + "/right." + ext;
-        auto y1 = path + "/top." + ext;
-        auto y2 = path + "/bottom." + ext;
-        auto z1 = path + "/front." + ext;
-        auto z2 = path + "/back." + ext;
+    auto front = !skyBox["front"].toString("").isEmpty()
+            ? getAbsolutePath(skyBox["front"].toString())
+            : QString();
+    auto back = !skyBox["back"].toString("").isEmpty()
+            ? getAbsolutePath(skyBox["back"].toString())
+            : QString();
+    auto top = !skyBox["top"].toString("").isEmpty()
+            ? getAbsolutePath(skyBox["top"].toString())
+            : QString();
+    auto bottom = !skyBox["bottom"].toString("").isEmpty()
+            ? getAbsolutePath(skyBox["bottom"].toString())
+            : QString();
+    auto left = !skyBox["left"].toString("").isEmpty()
+            ? getAbsolutePath(skyBox["left"].toString())
+            : QString();
+    auto right = !skyBox["right"].toString("").isEmpty()
+            ? getAbsolutePath(skyBox["right"].toString())
+            : QString();
 
-//        skyTexPath = this->getAbsolutePath(skyTexPath);
-//        scene->setSkyTexture(iris::Texture2D::load(skyTexPath,false));
-        scene->setSkyTexture(iris::Texture2D::createCubeMap(x1, x2, y1, y2, z1, z2));
-        scene->setSkyTextureSource(z1);
+    QString sides[6] = {front, back, top, bottom, left, right};
+
+    QImage *info;
+    bool useTex = false;
+    for (int i = 0; i < 6; i++) {
+        if (!sides[i].isEmpty()) {
+            info = new QImage(sides[i]);
+            useTex = true;
+            break;
+        }
     }
+
+    if (useTex) {
+        scene->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
+    }
+
     scene->setSkyColor(this->readColor(sceneObj["skyColor"].toObject()));
     scene->setAmbientColor(this->readColor(sceneObj["ambientColor"].toObject()));
 

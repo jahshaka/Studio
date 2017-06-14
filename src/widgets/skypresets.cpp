@@ -35,19 +35,12 @@ SkyPresets::SkyPresets(QWidget *parent) :
     ui->skyList->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->skyList->setSelectionMode(QAbstractItemView::SingleSelection);
 
-//    addSky(":/app/content/skies/vp_sky_v2_033.jpg", "Sky 3");
-//    addSky(":/app/content/skies/vp_sky_v2_002.jpg", "Sky 1");
-//    addSky(":/app/content/skies/vp_sky_v2_032.jpg", "Sky 2");
-//    addSky(":/app/content/skies/vp_sky_v2_033.jpg", "Sky 3");
-//    addSky(":/app/content/skies/vp_sky_v2_002_test.jpg", "Fading Sky");
-
-    QString cove = ":/app/contente/skies/alternative/cove/front.jpg";
+    QString cove = ":/app/content/skies/alternative/cove/front.jpg";
     QString dessert = ":/app/content/skies/alternative/ame_desert/front.png";
     QString lake = ":/app/content/skies/alternative/yokohama/front.jpg";
     QString field = ":/app/content/skies/alternative/field/front.jpg";
     QString creek = ":/app/content/skies/alternative/creek/front.jpg";
 
-//    alternativeSkies.append(x1);
     addCubeSky(cove, "Cove");
     addCubeSky(dessert, "Hamarikyu");
     addCubeSky(lake, "Bay");
@@ -98,7 +91,16 @@ void SkyPresets::applyCubeSky(QListWidgetItem* item)
     auto z1 = path + "/front." + ext;
     auto z2 = path + "/back." + ext;
 
-    mainWindow->getScene()->setSkyTexture(iris::Texture2D::createCubeMap(x1, x2, y1, y2, z1, z2));
+    mainWindow->getScene()->skyBoxTextures[0] = z1;
+    mainWindow->getScene()->skyBoxTextures[1] = z2;
+    mainWindow->getScene()->skyBoxTextures[2] = y1;
+    mainWindow->getScene()->skyBoxTextures[3] = y2;
+    mainWindow->getScene()->skyBoxTextures[4] = x1;
+    mainWindow->getScene()->skyBoxTextures[5] = x2;
+
+    auto img = new QImage(z1);
+
+    mainWindow->getScene()->setSkyTexture(iris::Texture2D::createCubeMap(z1, z2, y1, y2, x1, x2, img));
     mainWindow->getScene()->setSkyTextureSource(z1);
     mainWindow->getScene()->setSkyColor(QColor(255, 255, 255));
 }
