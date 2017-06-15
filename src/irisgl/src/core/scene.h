@@ -67,6 +67,8 @@ public:
     QVector<RenderItem*> geometryRenderList;
     QVector<RenderItem*> shadowRenderList;
 
+    QString skyBoxTextures[6];
+
     /*
      * customizations that can be passed in and applied to a scene. ideally these
      * should or can be GLOBAL but a scene is the highest prioritized obj atm...

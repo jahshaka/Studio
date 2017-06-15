@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1100</width>
+    <width>1115</width>
     <height>625</height>
    </rect>
   </property>
@@ -14,7 +14,11 @@
    <string>Project Screen</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QToolTip {
+   <string notr="true">#ProjectDialog {
+	background: #161a1b;
+}
+
+QToolTip {
 	color: #DEDEDE;
     padding: 2px;
 	border: 0;
@@ -40,23 +44,23 @@ QListWidget {
 }
 
 QListWidget::item {
-	border: 0;
+	border: 4px solid transparent;
 	padding: 6px;
 	margin-bottom: 6px;
 	margin-right: 6px;
+	outline: none;
 }
 
 QListWidget::item:hover {
-	border: 0;
 	padding: 6px;
 	margin-bottom: 6px;
 	margin-right: 6px;
-	/*border: 4px solid #4898ff;*/
-	background: rgba(71, 151, 255, 0.3);
+	border: 4px solid #4898ff;
+	/*background: rgba(71, 151, 255, 0.3);*/
 }
 
 QListWidget::item:selected {
-	border: 0;
+	border: 4px solid transparent;
 	padding: 6px;
 	margin-bottom: 6px;
 	margin-right: 6px;
@@ -85,8 +89,8 @@ QTabBar::tab:selected {
 
 QTabBar::tab {
 	background-color: #4d4d4d;
-	min-width: 152px;
-    min-height: 32px;
+	min-width: 170px;
+    min-height: 42px;
     padding-bottom: 1px;
    /* border-top: 1px solid #1e1e1e; */
 	/*border-top: 1px solid #1e1e1e; */
@@ -94,71 +98,22 @@ QTabBar::tab {
 	/*border-bottom: 1px solid #1e1e1e;*/
 }</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout">
-   <item row="0" column="0">
-    <widget class="QWidget" name="widget" native="true">
-     <property name="styleSheet">
-      <string notr="true">#newProject {
-	background: #4898ff;
-}
-
-#newProject:hover {
-	background-color: #51a1d6;
-}
-
-QWidget#addBtn:pressed {
-	background-color: #1e77b3;
-} </string>
-     </property>
-     <layout class="QVBoxLayout" name="verticalLayout">
-      <property name="leftMargin">
-       <number>0</number>
-      </property>
-      <property name="topMargin">
-       <number>0</number>
-      </property>
-      <property name="bottomMargin">
-       <number>0</number>
-      </property>
-      <item>
-       <widget class="QLabel" name="logo">
-        <property name="text">
-         <string/>
-        </property>
-        <property name="pixmap">
-         <pixmap resource="../../images.qrc">:/app/images/sidepanelimage.jpg</pixmap>
-        </property>
-        <property name="scaledContents">
-         <bool>true</bool>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="newProject">
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>64</height>
-         </size>
-        </property>
-        <property name="text">
-         <string>New Project</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="openProject">
-        <property name="text">
-         <string>Open Project</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
+  <layout class="QGridLayout" name="gridLayout" rowstretch="0">
+   <property name="leftMargin">
+    <number>11</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>11</number>
+   </property>
+   <property name="bottomMargin">
+    <number>11</number>
+   </property>
+   <property name="horizontalSpacing">
+    <number>0</number>
+   </property>
    <item row="0" column="1">
     <widget class="QTabWidget" name="tabWidget">
      <property name="sizePolicy">
@@ -220,6 +175,12 @@ QWidget#addBtn:pressed {
          <property name="frameShadow">
           <enum>QFrame::Plain</enum>
          </property>
+         <property name="lineWidth">
+          <number>0</number>
+         </property>
+         <property name="autoScroll">
+          <bool>false</bool>
+         </property>
          <property name="resizeMode">
           <enum>QListView::Adjust</enum>
          </property>
@@ -251,14 +212,74 @@ QWidget#addBtn:pressed {
      </widget>
     </widget>
    </item>
-   <item row="1" column="1">
-    <widget class="QDialogButtonBox" name="buttonBox">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
+   <item row="0" column="0">
+    <widget class="QWidget" name="widget" native="true">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
      </property>
-     <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel</set>
+     <property name="styleSheet">
+      <string notr="true">#newProject {
+	background: #4898ff;
+}
+
+#newProject:hover {
+	background-color: #51a1d6;
+}
+
+QWidget#addBtn:pressed {
+	background-color: #1e77b3;
+} </string>
      </property>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="logo">
+        <property name="text">
+         <string/>
+        </property>
+        <property name="pixmap">
+         <pixmap resource="../../images.qrc">:/app/images/sidepanelimage.jpg</pixmap>
+        </property>
+        <property name="scaledContents">
+         <bool>false</bool>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="newProject">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>New Project</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="openProject">
+        <property name="text">
+         <string>Open Project</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </widget>
    </item>
   </layout>
@@ -266,38 +287,5 @@ QWidget#addBtn:pressed {
  <resources>
   <include location="../../images.qrc"/>
  </resources>
- <connections>
-  <connection>
-   <sender>buttonBox</sender>
-   <signal>accepted()</signal>
-   <receiver>ProjectDialog</receiver>
-   <slot>accept()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>248</x>
-     <y>254</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>157</x>
-     <y>274</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>buttonBox</sender>
-   <signal>rejected()</signal>
-   <receiver>ProjectDialog</receiver>
-   <slot>reject()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>316</x>
-     <y>260</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>286</x>
-     <y>274</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <connections/>
 </ui>
