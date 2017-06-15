@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include "../geometry/trimesh.h"
 #include "skeleton.h"
 #include "../animation/skeletalanimation.h"
+#include "../geometry/boundingsphere.h"
 
 #include <functional>
 
@@ -63,6 +64,8 @@ Mesh::Mesh(aiMesh* mesh)
     numFaces = mesh->mNumFaces;
 
     gl->glGenVertexArrays(1,&vao);
+
+    boundingSphere = new BoundingSphere();
 
     if(!mesh->HasPositions())
         return;
@@ -148,6 +151,11 @@ Mesh::Mesh(aiMesh* mesh)
         triMesh->addTriangle(QVector3D(a.x, a.y, a.z),
                              QVector3D(b.x, b.y, b.z),
                              QVector3D(c.x, c.y, c.z));
+
+        // redundant, but good enough for now
+        boundingSphere->expand(a);
+        boundingSphere->expand(b);
+        boundingSphere->expand(c);
     }
 
     gl->glGenBuffers(1, &indexBuffer);

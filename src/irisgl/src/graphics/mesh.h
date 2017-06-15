@@ -18,12 +18,13 @@ For more information see the LICENSE file
 #include "../irisglfwd.h"
 #include "../animation/skeletalanimation.h"
 
+
 class aiMesh;
 class aiScene;
 class QOpenGLBuffer;
 class QOpenGLFunctions_3_2_Core;
 class QOpenGLShaderProgram;
-
+class BoundingSphere;
 
 namespace iris
 {
@@ -82,6 +83,8 @@ public:
     GLuint vao;
     GLuint indexBuffer;
     bool usesIndexBuffer;
+
+    BoundingSphere* boundingSphere;
 
     // will cause problems if a shader was freed and gl gives the
     // id to another shader
