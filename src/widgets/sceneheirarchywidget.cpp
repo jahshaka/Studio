@@ -18,8 +18,8 @@ For more information see the LICENSE file
 
 
 
-#include "../irisgl/src/core/scene.h"
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scene.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 #include "../mainwindow.h"
 
 SceneHeirarchyWidget::SceneHeirarchyWidget(QWidget *parent) :

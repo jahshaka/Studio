@@ -14,7 +14,7 @@ For more information see the LICENSE file
 
 #include "gizmoinstance.h"
 #include "gizmohandle.h"
-#include "../irisgl/src/core/scene.h"
+#include "../irisgl/src/scenegraph/scene.h"
 #include "../irisgl/src/graphics/graphicshelper.h"
 
 class TranslationGizmo : public GizmoInstance

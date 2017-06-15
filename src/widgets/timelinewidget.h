@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include <QPainter>
 #include <QMouseEvent>
 //#include "../scenegraph/scenenodes.h"
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 
 class AnimationWidgetData;
 

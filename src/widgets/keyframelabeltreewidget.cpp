@@ -19,7 +19,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/keyframeset.h"
 #include "../irisgl/src/animation/animation.h"
 #include "../irisgl/src/animation/propertyanim.h"
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 
 #include "animationwidget.h"
 

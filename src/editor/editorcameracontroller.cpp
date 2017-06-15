@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "editorcameracontroller.h"
 #include <QVector3D>
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include <qmath.h>
 #include <math.h>

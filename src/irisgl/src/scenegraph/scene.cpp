@@ -19,7 +19,7 @@ For more information see the LICENSE file
 #include "../graphics/renderitem.h"
 #include "../materials/defaultskymaterial.h"
 #include "../geometry/trimesh.h"
-#include "irisutils.h"
+#include "../core/irisutils.h"
 
 namespace iris
 {

@@ -10,8 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "viewernode.h"
-#include "../core/scene.h"
-#include "../core/scenenode.h"
+#include "../scenegraph/scene.h"
+#include "../scenegraph/scenenode.h"
 #include "../graphics/mesh.h"
 #include "../materials/viewermaterial.h"
 #include "../materials/defaultmaterial.h"

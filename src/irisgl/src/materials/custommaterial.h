@@ -14,7 +14,7 @@ For more information see the LICENSE file
 
 #include "../graphics/material.h"
 #include "../irisglfwd.h"
-#include "propertytype.h"
+#include "../core/property.h"
 
 class QOpenGLFunctions_3_2_Core;
 

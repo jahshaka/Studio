@@ -35,8 +35,8 @@ For more information see the LICENSE file
 #include "../animation/animableproperty.h"
 #include "../animation/animation.h"
 
-#include "../core/scene.h"
-#include "../core/scenenode.h"
+#include "../scenegraph/scene.h"
+#include "../scenegraph/scenenode.h"
 #include "../core/irisutils.h"
 #include "../animation/animableproperty.h"
 

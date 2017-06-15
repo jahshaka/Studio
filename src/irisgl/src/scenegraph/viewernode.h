@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define VIEWERNODE_H
 
 #include "../irisglfwd.h"
-#include "../core/scenenode.h"
+#include "../scenegraph/scenenode.h"
 
 namespace iris
 {
