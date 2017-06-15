@@ -69,7 +69,8 @@ HEADERS += \
     $$PWD/src/animation/floatcurve.h \
     $$PWD/src/scenegraph/scene.h \
     $$PWD/src/scenegraph/scenenode.h \
-    $$PWD/src/core/property.h
+    $$PWD/src/core/property.h \
+    $$PWD/src/geometry/boundingsphere.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
