@@ -184,6 +184,7 @@ public:
 private:
     void setParent(SceneNodePtr node);
     void setScene(ScenePtr scene);
+    void removeFromScene();
 
     static long generateNodeId();
     static long nextId;

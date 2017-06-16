@@ -1,6 +1,7 @@
 #include "frustum.h"
 #include "plane.h"
 #include "boundingsphere.h"
+#include <QMatrix4x4>
 
 namespace iris {
 

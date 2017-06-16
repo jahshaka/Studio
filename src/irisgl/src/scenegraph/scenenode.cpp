@@ -176,8 +176,10 @@ void SceneNode::addChild(SceneNodePtr node, bool keepTransform)
 
     children.append(node);
     node->setParent(self);
-    node->setScene(self->scene);
-    scene->addNode(node);
+    if (!!scene) {
+        node->setScene(self->scene);
+        scene->addNode(node);
+    }
 
     if (keepTransform) {
         // @TODO: ensure global transform is calculated
@@ -370,18 +372,28 @@ void SceneNode::setParent(SceneNodePtr node)
 
 void SceneNode::setScene(ScenePtr scene)
 {
-    this->scene = scene;
+    // should not already be a part of scene
+    Q_ASSERT(!this->scene);
 
-    // the scene could be null, as in the case of a tree being built
-    // before being added to the scene
-    // @WARN -- this actually breaks the tree...
-    // if (!!scene) {
-    //     scene->addNode(sharedFromThis());
-    // }
+    this->scene = scene;
 
     // add children
     for (auto& child : children) {
         child->setScene(scene);
+    }
+}
+
+void SceneNode::removeFromScene()
+{
+    // should already have a scene to be removed from
+    Q_ASSERT(!!this->scene);
+
+    this->scene->removeNode(this->sharedFromThis());
+    this->scene.clear();
+
+    // add children
+    for (auto& child : children) {
+        child->removeFromScene();
     }
 }
 

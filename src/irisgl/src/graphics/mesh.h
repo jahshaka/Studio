@@ -24,10 +24,12 @@ class aiScene;
 class QOpenGLBuffer;
 class QOpenGLFunctions_3_2_Core;
 class QOpenGLShaderProgram;
-class BoundingSphere;
+
 
 namespace iris
 {
+
+class BoundingSphere;
 
 enum class VertexAttribUsage : int
 {

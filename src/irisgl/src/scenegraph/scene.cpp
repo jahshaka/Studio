@@ -163,9 +163,20 @@ void Scene::rayCast(const QSharedPointer<iris::SceneNode>& sceneNode,
 
 void Scene::addNode(SceneNodePtr node)
 {
+    if (!!node->scene)
+    {
+        //qDebug() << "Node already has scene";
+        //throw "Node already has scene";
+    }
+
     if (node->sceneNodeType == SceneNodeType::Light) {
         auto light = node.staticCast<iris::LightNode>();
         lights.append(light);
+    }
+
+    if (node->sceneNodeType == SceneNodeType::Mesh) {
+        auto mesh = node.staticCast<iris::MeshNode>();
+        meshes.append(mesh);
     }
 
     if(node->sceneNodeType == SceneNodeType::Viewer && vrViewer.isNull())
@@ -178,6 +189,10 @@ void Scene::removeNode(SceneNodePtr node)
 {
     if (node->sceneNodeType == SceneNodeType::Light) {
         lights.removeOne(node.staticCast<iris::LightNode>());
+    }
+
+    if (node->sceneNodeType == SceneNodeType::Mesh) {
+        meshes.removeOne(node.staticCast<iris::MeshNode>());
     }
 
     // if this node is the scene's viewer then reset the scene's viewer to null

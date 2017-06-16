@@ -153,9 +153,9 @@ Mesh::Mesh(aiMesh* mesh)
                              QVector3D(c.x, c.y, c.z));
 
         // redundant, but good enough for now
-        boundingSphere->expand(a);
-        boundingSphere->expand(b);
-        boundingSphere->expand(c);
+        boundingSphere->expand(QVector3D(a.x, a.y, a.z));
+        boundingSphere->expand(QVector3D(b.x, b.y, b.z));
+        boundingSphere->expand(QVector3D(c.x, c.y, c.z));
     }
 
     gl->glGenBuffers(1, &indexBuffer);

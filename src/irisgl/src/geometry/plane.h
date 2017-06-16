@@ -21,6 +21,7 @@ public:
     QVector3D normal;
     float d;
 
+    Plane();
     Plane(QVector3D planeNormal, float distance);
 
     SphereClassification classifySphere(BoundingSphere* sphere);

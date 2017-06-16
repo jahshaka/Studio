@@ -1,6 +1,8 @@
 #ifndef FRUSTUM_H
 #define FRUSTUM_H
 
+#include <QList>
+#include <QMatrix4x4>
 #include "plane.h"
 
 namespace iris {

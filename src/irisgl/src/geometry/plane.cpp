@@ -22,6 +22,12 @@ SphereClassification Plane::classifySphere(BoundingSphere *sphere)
 
 }
 
+Plane::Plane()
+{
+    normal = QVector3D(0, 1, 0);
+    d = 0;
+}
+
 Plane::Plane(QVector3D planeNormal, float distance)
 {
     normal = planeNormal;
