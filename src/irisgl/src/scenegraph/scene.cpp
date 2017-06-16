@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "../scenegraph/cameranode.h"
 #include "../scenegraph/viewernode.h"
 #include "../scenegraph/meshnode.h"
+#include "../scenegraph/particlesystemnode.h"
 #include "../graphics/mesh.h"
 #include "../graphics/renderitem.h"
 #include "../materials/defaultskymaterial.h"
@@ -56,6 +57,9 @@ Scene::Scene()
     fogEnabled = true;
 
     ambientColor = QColor(64, 64, 64);
+
+    meshes.reserve(100);
+    particleSystems.reserve(100);
 
     //reserve 1000 items initially
     geometryRenderList.reserve(1000);
@@ -103,6 +107,15 @@ void Scene::update(float dt)
     if (!!camera) {
         camera->update(dt);
         camera->updateCameraMatrices();
+    }
+
+    // add items to renderlist
+    for(auto& mesh : meshes) {
+        mesh->submitRenderItems();
+    }
+
+    for(auto& particle : particleSystems) {
+        particle->submitRenderItems();
     }
 
     this->geometryRenderList.append(skyRenderItem);

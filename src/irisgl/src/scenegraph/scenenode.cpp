@@ -178,7 +178,7 @@ void SceneNode::addChild(SceneNodePtr node, bool keepTransform)
     node->setParent(self);
     if (!!scene) {
         node->setScene(self->scene);
-        scene->addNode(node);
+        //scene->addNode(node);
     }
 
     if (keepTransform) {
@@ -361,8 +361,8 @@ void SceneNode::update(float dt)
         child->update(dt);
     }
 
-    if (this->visible)
-        submitRenderItems();
+    //if (this->visible)
+    //    submitRenderItems();
 }
 
 void SceneNode::setParent(SceneNodePtr node)
@@ -376,6 +376,7 @@ void SceneNode::setScene(ScenePtr scene)
     Q_ASSERT(!this->scene);
 
     this->scene = scene;
+    this->scene->addNode(this->sharedFromThis());
 
     // add children
     for (auto& child : children) {
