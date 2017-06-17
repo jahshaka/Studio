@@ -108,8 +108,8 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     camera->angle = (float)camObj["angle"].toDouble(45.f);
     camera->nearClip = (float)camObj["nearClip"].toDouble(1.f);
     camera->farClip = (float)camObj["farClip"].toDouble(100.f);
-    camera->pos = readVector3(camObj["pos"].toObject());
-    camera->rot = QQuaternion::fromEulerAngles(readVector3(camObj["rot"].toObject()));
+    camera->setLocalPos(readVector3(camObj["pos"].toObject()));
+    camera->setLocalRot(QQuaternion::fromEulerAngles(readVector3(camObj["rot"].toObject())));
 
     auto editorData = new EditorData();
     editorData->editorCamera = camera;
@@ -359,24 +359,24 @@ void SceneReader::readSceneNodeTransform(QJsonObject& nodeObj,iris::SceneNodePtr
     auto pos = nodeObj["pos"].toObject();
     if(!pos.isEmpty())
     {
-        sceneNode->pos = readVector3(pos);
+        sceneNode->setLocalPos(readVector3(pos));
     }
 
     auto rot = nodeObj["rot"].toObject();
     if(!rot.isEmpty())
     {
         //the rotation is stored as euler angles
-        sceneNode->rot = QQuaternion::fromEulerAngles(readVector3(rot));
+        sceneNode->setLocalRot(QQuaternion::fromEulerAngles(readVector3(rot)));
     }
 
     auto scale = nodeObj["scale"].toObject();
     if(!scale.isEmpty())
     {
-        sceneNode->scale = readVector3(scale);
+        sceneNode->setLocalScale(readVector3(scale));
     }
     else
     {
-        sceneNode->scale = QVector3D(1,1,1);
+        sceneNode->setLocalScale(QVector3D(1,1,1));
     }
 }
 

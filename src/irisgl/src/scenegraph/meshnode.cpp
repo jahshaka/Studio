@@ -254,11 +254,11 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,Sc
 
     //auto transform = node->mTransformation;
     node->mTransformation.Decompose(scale,rot,pos);
-    sceneNode->pos = QVector3D(pos.x,pos.y,pos.z);
-    sceneNode->scale = QVector3D(scale.x,scale.y,scale.z);
+    sceneNode->setLocalPos(QVector3D(pos.x,pos.y,pos.z));
+    sceneNode->setLocalScale(QVector3D(scale.x,scale.y,scale.z));
 
     //rot.Normalize();
-    sceneNode->rot = QQuaternion(rot.w,rot.x,rot.y,rot.z);
+    sceneNode->setLocalRot(QQuaternion(rot.w,rot.x,rot.y,rot.z));
 
     // this is probably the first node in the heirarchy
     // set it as the rootBone

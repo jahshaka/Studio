@@ -49,6 +49,9 @@ SceneNode::SceneNode():
 
     attached = false;
 
+    transformDirty = true;
+    hasDirtyChildren = true;
+
     //keyFrameSet = KeyFrameSet::create();
     //animation = iris::Animation::create("");
 }
@@ -71,6 +74,42 @@ void SceneNode::setName(QString name)
 long SceneNode::getNodeId()
 {
     return nodeId;
+}
+
+void SceneNode::setLocalPos(QVector3D pos)
+{
+    this->pos = pos;
+    setTransformDirty();
+}
+
+void SceneNode::setLocalRot(QQuaternion rot)
+{
+    this->rot = rot;
+    setTransformDirty();
+}
+
+void SceneNode::setLocalScale(QVector3D scale)
+{
+    this->scale = scale;
+    setTransformDirty();
+}
+
+void SceneNode::setTransformDirty()
+{
+    transformDirty = true;
+    if (!!parent)
+    {
+        parent->setHasDirtyChildren();
+    }
+}
+
+void SceneNode::setHasDirtyChildren()
+{
+    hasDirtyChildren = true;
+    if (!!parent)
+    {
+        parent->setHasDirtyChildren();
+    }
 }
 
 bool SceneNode::isAttached()
@@ -345,20 +384,24 @@ void SceneNode::applyAnimationPose(SceneNodePtr node, QMap<QString, QMatrix4x4> 
 
 void SceneNode::update(float dt)
 {
-    localTransform.setToIdentity();
+    if (transformDirty) {
+        localTransform.setToIdentity();
 
-    localTransform.translate(pos);
-    localTransform.rotate(rot);
-    localTransform.scale(scale);
+        localTransform.translate(pos);
+        localTransform.rotate(rot);
+        localTransform.scale(scale);
 
-    if (!!parent) {
-        globalTransform = this->parent->globalTransform * localTransform;
-    } else {
-        globalTransform = localTransform;
+        if (!!parent) {
+            globalTransform = this->parent->globalTransform * localTransform;
+        } else {
+            globalTransform = localTransform;
+        }
     }
 
-    for (auto child : children) {
-        child->update(dt);
+    if (hasDirtyChildren) {
+        for (auto child : children) {
+            child->update(dt);
+        }
     }
 
     //if (this->visible)

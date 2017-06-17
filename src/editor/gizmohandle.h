@@ -83,7 +83,8 @@ public:
     }
 
     void setHandlePosition(const QVector3D& position) {
-         gizmoHandle->pos = this->handlePosition = position;
+        this->handlePosition = position;
+        gizmoHandle->setLocalPos(position);
     }
 
     QVector3D getHandlePosition() const {
@@ -99,7 +100,8 @@ public:
     }
 
     void setHandleRotation(const QVector3D& rotation) {
-        gizmoHandle->rot = this->handleRotation = QQuaternion::fromEulerAngles(rotation);
+        this->handleRotation = QQuaternion::fromEulerAngles(rotation);
+        gizmoHandle->setLocalRot(this->handleRotation);
     }
 
     QQuaternion getHandleRotation() const {

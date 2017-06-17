@@ -78,8 +78,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     //camController = orbitalCam;
 
     editorCam = iris::CameraNode::create();
-    editorCam->pos = QVector3D(0, 5, 14);
-    editorCam->rot = QQuaternion::fromEulerAngles(-5, 0, 0);
+    editorCam->setLocalPos(QVector3D(0, 5, 14));
+    editorCam->setLocalRot(QQuaternion::fromEulerAngles(-5, 0, 0));
     camController->setCamera(editorCam);
 
     viewportMode = ViewportMode::Editor;
@@ -97,8 +97,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
 void SceneViewWidget::resetEditorCam()
 {
-    editorCam->pos = QVector3D(0, 5, 14);
-    editorCam->rot = QQuaternion::fromEulerAngles(-5, 0, 0);
+    editorCam->setLocalPos(QVector3D(0, 5, 14));
+    editorCam->setLocalRot(QQuaternion::fromEulerAngles(-5, 0, 0));
     camController->setCamera(editorCam);
 }
 
@@ -288,7 +288,7 @@ bool SceneViewWidget::doActiveObjectPicking(const QPointF &point)
 {
     editorCam->updateCameraMatrices();
 
-    auto segStart = this->editorCam->pos;
+    auto segStart = this->editorCam->getLocalPos();
     auto rayDir = this->calculateMouseRay(point) * 1024;
     auto segEnd = segStart + rayDir;
 
@@ -317,7 +317,7 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     QPointF dir = localPos - prevMousePos;
 
     if (e->buttons() == Qt::LeftButton && !!viewportGizmo->currentNode) {
-         viewportGizmo->update(editorCam->pos, calculateMouseRay(localPos));
+         viewportGizmo->update(editorCam->getLocalPos(), calculateMouseRay(localPos));
     }
 
     if (camController != nullptr) {
@@ -422,7 +422,7 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr l
 {
     editorCam->updateCameraMatrices();
 
-    auto segStart = this->editorCam->pos;
+    auto segStart = this->editorCam->getLocalPos();
     auto rayDir = this->calculateMouseRay(point) * 1024;
     auto segEnd = segStart + rayDir;
 
@@ -500,7 +500,7 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
 {
     editorCam->updateCameraMatrices();
 
-    auto segStart = this->editorCam->pos;
+    auto segStart = this->editorCam->getLocalPos();
     auto rayDir = this->calculateMouseRay(point) * 1024;
     auto segEnd = segStart + rayDir;
 
@@ -524,7 +524,7 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
 
     viewportGizmo->currentNode = hitList.last().hitNode;
 
-    viewportGizmo->onMousePress(editorCam->pos, this->calculateMouseRay(point) * 1024);
+    viewportGizmo->onMousePress(editorCam->getLocalPos(), this->calculateMouseRay(point) * 1024);
 }
 
 void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,
@@ -618,7 +618,7 @@ void SceneViewWidget::doLightPicking(const QVector3D& segStart,
     for (auto light: scene->lights) {
         if (iris::IntersectionHelper::raySphereIntersects(segStart,
                                                           rayDir,
-                                                          light->pos,
+                                                          light->getLocalPos(),
                                                           lightRadius,
                                                           t, hitPoint))
         {
