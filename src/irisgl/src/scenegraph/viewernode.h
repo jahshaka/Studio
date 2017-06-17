@@ -28,7 +28,7 @@ class ViewerNode : public SceneNode
     ViewerNode();
 
 public:
-    Mesh* headModel;
+    MeshPtr headModel;
     ViewerMaterialPtr material;
 
     void setViewScale(float scale);

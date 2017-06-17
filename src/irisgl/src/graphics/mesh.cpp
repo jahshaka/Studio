@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "../irisglfwd.h"
 #include "mesh.h"
 #include "material.h"
 
@@ -251,7 +252,7 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLen
     gl->glBindVertexArray(0);
 }
 
-Mesh* Mesh::loadMesh(QString filePath)
+MeshPtr Mesh::loadMesh(QString filePath)
 {
     Assimp::Importer importer;
     const aiScene *scene;
@@ -282,10 +283,10 @@ Mesh* Mesh::loadMesh(QString filePath)
         meshObj->addSkeletalAnimation(animName, anims[animName]);
     }
 
-    return meshObj;
+    return MeshPtr(meshObj);
 }
 
-Mesh *Mesh::loadAnimatedMesh(QString filePath)
+MeshPtr Mesh::loadAnimatedMesh(QString filePath)
 {
     Assimp::Importer importer;
     const aiScene *scene;
@@ -306,7 +307,7 @@ Mesh *Mesh::loadAnimatedMesh(QString filePath)
     //extract animations from scene
     auto mesh = new Mesh(scene->mMeshes[0]);
 
-    return mesh;
+    return MeshPtr(mesh);
 }
 
 SkeletonPtr Mesh::extractSkeleton(const aiMesh *mesh, const aiScene *scene)

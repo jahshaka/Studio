@@ -52,7 +52,7 @@ public:
     QList<MeshNodePtr> meshes;
     QList<ParticleSystemNodePtr> particleSystems;
 
-    Mesh* skyMesh;
+    MeshPtr skyMesh;
     Texture2DPtr skyTexture;
     QColor skyColor;
     QColor ambientColor;

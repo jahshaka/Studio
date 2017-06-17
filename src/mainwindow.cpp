@@ -1009,7 +1009,7 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
     if (filename.isEmpty()) return;
 
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::loadAsSceneFragment(filename,[](iris::Mesh* mesh, iris::MeshMaterialData& data)
+    auto node = iris::MeshNode::loadAsSceneFragment(filename,[](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
         auto mat = iris::CustomMaterial::create();
         //MaterialReader *materialReader = new MaterialReader();

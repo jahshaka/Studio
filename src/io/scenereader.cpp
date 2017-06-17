@@ -560,7 +560,7 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
     if (!assimpScenes.contains(filePath)) {
 //        auto meshList = iris::GraphicsHelper::loadAllMeshesFromFile(filePath);
 //        auto anims = iris::Mesh::extractAnimations(scene, filePath);
-        QList<iris::Mesh*> meshList;
+        QList<iris::MeshPtr> meshList;
         QMap<QString, iris::SkeletalAnimationPtr> anims;
         iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(filePath, meshList, anims);
 
@@ -577,7 +577,7 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
  * @param index
  * @return
  */
-iris::Mesh* SceneReader::getMesh(QString filePath, int index)
+iris::MeshPtr SceneReader::getMesh(QString filePath, int index)
 {
     extractAssetsFromAssimpScene(filePath);
 
@@ -586,7 +586,7 @@ iris::Mesh* SceneReader::getMesh(QString filePath, int index)
     if (index < meshList.size()) return meshList[index];
 
     // maybe the mesh was modified after the file was saved
-    return nullptr;
+    return iris::MeshPtr();
 }
 
 iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(QString filePath, QString animName)

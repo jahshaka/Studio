@@ -72,6 +72,7 @@ typedef QSharedPointer<iris::Animation> AnimationPtr;
 typedef QSharedPointer<Shader> ShaderPtr;
 typedef QSharedPointer<Scene> ScenePtr;
 typedef QSharedPointer<SceneNode> SceneNodePtr;
+typedef QSharedPointer<Mesh> MeshPtr;
 typedef QSharedPointer<Material> MaterialPtr;
 typedef QSharedPointer<DefaultMaterial> DefaultMaterialPtr;
 typedef QSharedPointer<LightNode> LightNodePtr;

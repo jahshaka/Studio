@@ -46,7 +46,7 @@ namespace iris
 {
 
 MeshNode::MeshNode() {
-    mesh = nullptr;
+    //mesh = nullptr;
     sceneNodeType = SceneNodeType::Mesh;
 
     renderItem = new RenderItem();
@@ -88,13 +88,13 @@ void MeshNode::setMesh(QString source)
 }
 
 //should not be used on plain scene meshes
-void MeshNode::setMesh(Mesh* mesh)
+void MeshNode::setMesh(MeshPtr mesh)
 {
     this->mesh = mesh;
     renderItem->mesh = mesh;
 }
 
-Mesh* MeshNode::getMesh()
+MeshPtr MeshNode::getMesh()
 {
     return mesh;
 }
@@ -176,7 +176,7 @@ QJsonObject readJahShader(const QString &filePath)
  * @return
  */
 QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,SceneNodePtr rootBone, QString filePath,
-                                            std::function<MaterialPtr(Mesh* mesh, MeshMaterialData& data)> createMaterialFunc)
+                                            std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc)
 {
     QSharedPointer<iris::SceneNode> sceneNode;// = QSharedPointer<iris::SceneNode>(new iris::SceneNode());
 
@@ -190,7 +190,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,Sc
         // aside from that, iris currently only renders meshes
         if(mesh->HasPositions())
         {
-            auto meshObj = new Mesh(mesh);
+            auto meshObj = MeshPtr(new Mesh(mesh));
             auto skel = Mesh::extractSkeleton(mesh, scene);
             meshObj->setSkeleton(skel);
 
@@ -222,7 +222,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,Sc
         for(unsigned i=0;i<node->mNumMeshes;i++)
         {
             auto mesh = scene->mMeshes[node->mMeshes[i]];
-            auto meshObj = new Mesh(mesh);
+            auto meshObj = MeshPtr(new Mesh(mesh));
             auto skel = Mesh::extractSkeleton(mesh, scene);
             meshObj->setSkeleton(skel);
 
@@ -276,7 +276,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,Sc
 }
 
 QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath,
-                                                              std::function<MaterialPtr(Mesh* mesh, MeshMaterialData& data)> createMaterialFunc)
+                                                              std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc)
 {
     Assimp::Importer importer;
     const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(),aiProcessPreset_TargetRealtime_Fast);
@@ -288,7 +288,7 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath,
         auto mesh = scene->mMeshes[0];
         auto node = iris::MeshNode::create();
 
-        auto meshObj = new Mesh(mesh);
+        auto meshObj = MeshPtr(new Mesh(mesh));
 
         //todo: use relative path from scene root
         auto anims = Mesh::extractAnimations(scene, filePath);

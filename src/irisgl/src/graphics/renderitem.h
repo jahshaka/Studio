@@ -74,7 +74,7 @@ struct RenderItem
 {
     RenderItemType type;
     MaterialPtr material;
-    Mesh* mesh;
+    MeshPtr mesh;
 
     QMatrix4x4 worldMatrix;
     SceneNodePtr sceneNode;

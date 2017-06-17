@@ -28,7 +28,7 @@ struct MeshMaterialData;
 class MeshNode : public SceneNode
 {
 public:
-    Mesh* mesh;
+    MeshPtr mesh;
 
     QString meshPath;
 
@@ -61,14 +61,14 @@ public:
      * @param path
      * @return
      */
-    static SceneNodePtr loadAsSceneFragment(QString path, std::function<MaterialPtr(Mesh* mesh, MeshMaterialData& data)> createMaterialFunc);
+    static SceneNodePtr loadAsSceneFragment(QString path, std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc);
 
     static SceneNodePtr loadAsAnimatedModel(QString path);
 
     void setMesh(QString source);
-    void setMesh(Mesh* mesh);
+    void setMesh(MeshPtr mesh);
 
-    Mesh* getMesh();
+    MeshPtr getMesh();
 
     void setMaterial(MaterialPtr material);
     void setCustomMaterial(MaterialPtr material);

@@ -117,8 +117,8 @@ public:
     void draw(QOpenGLFunctions_3_2_Core* gl, Material* mat, GLenum primitiveMode = GL_TRIANGLES);
     void draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* mat, GLenum primitiveMode = GL_TRIANGLES);
 
-    static Mesh* loadMesh(QString filePath);
-    static Mesh* loadAnimatedMesh(QString filePath);
+    static MeshPtr loadMesh(QString filePath);
+    static MeshPtr loadAnimatedMesh(QString filePath);
     static SkeletonPtr extractSkeleton(const aiMesh* mesh, const aiScene* scene);
     static QMap<QString, SkeletalAnimationPtr> extractAnimations(const aiScene* scene, QString source = "");
 
@@ -145,7 +145,7 @@ private:
     void addIndexArray(void* data,int size,GLenum type);
 };
 
-typedef QSharedPointer<Mesh> MeshPtr;
+//typedef QSharedPointer<Mesh> MeshPtr;
 
 }
 
