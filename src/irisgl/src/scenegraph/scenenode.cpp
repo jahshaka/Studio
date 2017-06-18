@@ -254,8 +254,9 @@ void SceneNode::removeChild(SceneNodePtr node)
 {
     children.removeOne(node);
     node->parent = QSharedPointer<SceneNode>(nullptr);
-    node->setScene(QSharedPointer<Scene>(nullptr));
-    scene->removeNode(node);
+    //node->setScene(QSharedPointer<Scene>(nullptr));
+    //scene->removeNode(node);
+    node->removeFromScene();
 }
 
 bool SceneNode::isRootNode()
