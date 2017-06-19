@@ -40,14 +40,16 @@ protected:
     QList<AnimationPtr> animations;
     AnimationPtr animation;
 
+    QVector3D pos;
+    QVector3D scale;
+    QQuaternion rot;
+
+    bool transformDirty;
+    bool hasDirtyChildren;
 public:
     // cached local and global transform
     QMatrix4x4 localTransform;
     QMatrix4x4 globalTransform;
-
-    QVector3D pos;
-    QVector3D scale;
-    QQuaternion rot;
 
     SceneNodeType sceneNodeType;
 
@@ -90,6 +92,28 @@ public:
     bool isDuplicable() {
         return duplicable;
     }
+
+    QVector3D getLocalPos()
+    {
+        return pos;
+    }
+
+    QQuaternion getLocalRot()
+    {
+        return rot;
+    }
+
+    QVector3D getLocalScale()
+    {
+        return scale;
+    }
+
+    void setLocalPos(QVector3D pos);
+    void setLocalRot(QQuaternion rot);
+    void setLocalScale(QVector3D scale);
+
+    void setTransformDirty();
+    void setHasDirtyChildren();
 
     bool isAttached();
     void setAttached(bool attached);
@@ -184,6 +208,7 @@ public:
 private:
     void setParent(SceneNodePtr node);
     void setScene(ScenePtr scene);
+    void removeFromScene();
 
     static long generateNodeId();
     static long nextId;

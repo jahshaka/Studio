@@ -49,6 +49,9 @@ SceneNode::SceneNode():
 
     attached = false;
 
+    transformDirty = true;
+    hasDirtyChildren = true;
+
     //keyFrameSet = KeyFrameSet::create();
     //animation = iris::Animation::create("");
 }
@@ -71,6 +74,42 @@ void SceneNode::setName(QString name)
 long SceneNode::getNodeId()
 {
     return nodeId;
+}
+
+void SceneNode::setLocalPos(QVector3D pos)
+{
+    this->pos = pos;
+    setTransformDirty();
+}
+
+void SceneNode::setLocalRot(QQuaternion rot)
+{
+    this->rot = rot;
+    setTransformDirty();
+}
+
+void SceneNode::setLocalScale(QVector3D scale)
+{
+    this->scale = scale;
+    setTransformDirty();
+}
+
+void SceneNode::setTransformDirty()
+{
+    transformDirty = true;
+    if (!!parent)
+    {
+        parent->setHasDirtyChildren();
+    }
+}
+
+void SceneNode::setHasDirtyChildren()
+{
+    hasDirtyChildren = true;
+    if (!!parent)
+    {
+        parent->setHasDirtyChildren();
+    }
 }
 
 bool SceneNode::isAttached()
@@ -176,8 +215,10 @@ void SceneNode::addChild(SceneNodePtr node, bool keepTransform)
 
     children.append(node);
     node->setParent(self);
-    node->setScene(self->scene);
-    scene->addNode(node);
+    if (!!scene) {
+        node->setScene(self->scene);
+        //scene->addNode(node);
+    }
 
     if (keepTransform) {
         // @TODO: ensure global transform is calculated
@@ -213,8 +254,9 @@ void SceneNode::removeChild(SceneNodePtr node)
 {
     children.removeOne(node);
     node->parent = QSharedPointer<SceneNode>(nullptr);
-    node->setScene(QSharedPointer<Scene>(nullptr));
-    scene->removeNode(node);
+    //node->setScene(QSharedPointer<Scene>(nullptr));
+    //scene->removeNode(node);
+    node->removeFromScene();
 }
 
 bool SceneNode::isRootNode()
@@ -343,24 +385,28 @@ void SceneNode::applyAnimationPose(SceneNodePtr node, QMap<QString, QMatrix4x4> 
 
 void SceneNode::update(float dt)
 {
-    localTransform.setToIdentity();
+    if (transformDirty) {
+        localTransform.setToIdentity();
 
-    localTransform.translate(pos);
-    localTransform.rotate(rot);
-    localTransform.scale(scale);
+        localTransform.translate(pos);
+        localTransform.rotate(rot);
+        localTransform.scale(scale);
 
-    if (!!parent) {
-        globalTransform = this->parent->globalTransform * localTransform;
-    } else {
-        globalTransform = localTransform;
+        if (!!parent) {
+            globalTransform = this->parent->globalTransform * localTransform;
+        } else {
+            globalTransform = localTransform;
+        }
     }
 
-    for (auto child : children) {
-        child->update(dt);
+    if (hasDirtyChildren) {
+        for (auto child : children) {
+            child->update(dt);
+        }
     }
 
-    if (this->visible)
-        submitRenderItems();
+    //if (this->visible)
+    //    submitRenderItems();
 }
 
 void SceneNode::setParent(SceneNodePtr node)
@@ -370,18 +416,29 @@ void SceneNode::setParent(SceneNodePtr node)
 
 void SceneNode::setScene(ScenePtr scene)
 {
-    this->scene = scene;
+    // should not already be a part of scene
+    Q_ASSERT(!this->scene);
 
-    // the scene could be null, as in the case of a tree being built
-    // before being added to the scene
-    // @WARN -- this actually breaks the tree...
-    // if (!!scene) {
-    //     scene->addNode(sharedFromThis());
-    // }
+    this->scene = scene;
+    this->scene->addNode(this->sharedFromThis());
 
     // add children
     for (auto& child : children) {
         child->setScene(scene);
+    }
+}
+
+void SceneNode::removeFromScene()
+{
+    // should already have a scene to be removed from
+    Q_ASSERT(!!this->scene);
+
+    this->scene->removeNode(this->sharedFromThis());
+    this->scene.clear();
+
+    // add children
+    for (auto& child : children) {
+        child->removeFromScene();
     }
 }
 

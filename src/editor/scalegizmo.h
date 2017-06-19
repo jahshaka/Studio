@@ -68,11 +68,11 @@ public:
     }
 
     void updateTransforms(const QVector3D& pos) {
-        scale = gizmoSize * ((pos - lastSelectedNode->pos).length() / qTan(45.0f / 2.0f));
+        scale = gizmoSize * ((pos - lastSelectedNode->getLocalPos()).length() / qTan(45.0f / 2.0f));
 
         for (int i = 0; i < 3; i++) {
-            handles[i]->gizmoHandle->pos = lastSelectedNode->getGlobalPosition();
-            handles[i]->gizmoHandle->scale = QVector3D(scale, scale, scale);
+            handles[i]->gizmoHandle->setLocalPos(lastSelectedNode->getGlobalPosition());
+            handles[i]->gizmoHandle->setLocalScale(QVector3D(scale, scale, scale));
         }
     }
 
@@ -96,7 +96,7 @@ public:
                 Offset = QVector3D(0, 0, Offset.z());
             }
 
-            lastSelectedNode->scale += Offset;
+            lastSelectedNode->setLocalScale( lastSelectedNode->getLocalScale() + Offset);
 
             finalHitPoint = Point;
         }
@@ -138,13 +138,13 @@ public:
             widgetPos.translate(this->currentNode->getGlobalPosition());
             widgetPos.scale(scale);
             for (int i = 0; i < 3; i++) {
-                handles[i]->gizmoHandle->pos = this->currentNode->getGlobalPosition();
+                handles[i]->gizmoHandle->setLocalPos(this->currentNode->getGlobalPosition());
             }
         } else if (!!this->lastSelectedNode) {
             widgetPos.translate(this->lastSelectedNode->getGlobalPosition());
             widgetPos.scale(scale);
             for (int i = 0; i < 3; i++) {
-                handles[i]->gizmoHandle->pos = this->lastSelectedNode->getGlobalPosition();
+                handles[i]->gizmoHandle->setLocalPos(this->lastSelectedNode->getGlobalPosition());
             }
         }
 
@@ -207,7 +207,7 @@ public:
     void isGizmoHit(const iris::CameraNodePtr& camera, const QPointF& pos, const QVector3D& rayDir) {
         camera->updateCameraMatrices();
 
-        auto segStart = camera->pos;
+        auto segStart = camera->getLocalPos();
         auto segEnd = segStart + rayDir * 1024;
 
         QList<PickingResult> hitList;

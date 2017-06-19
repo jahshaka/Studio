@@ -36,11 +36,11 @@ public:
      * @param filePath
      * @return
      */
-    static QList<Mesh*> loadAllMeshesFromFile(QString filePath);
+    static QList<MeshPtr> loadAllMeshesFromFile(QString filePath);
 
-    static void loadAllMeshesAndAnimationsFromFile(QString filePath, QList<Mesh*>& meshes, QMap<QString, SkeletalAnimationPtr>& animations);
+    static void loadAllMeshesAndAnimationsFromFile(QString filePath, QList<MeshPtr>& meshes, QMap<QString, SkeletalAnimationPtr>& animations);
 
-    static QList<Mesh*> loadAllMeshesFromAssimpScene(const aiScene* scene);
+    static QList<MeshPtr> loadAllMeshesFromAssimpScene(const aiScene* scene);
 };
 
 }

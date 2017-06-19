@@ -46,7 +46,7 @@ namespace iris
 {
 
 MeshNode::MeshNode() {
-    mesh = nullptr;
+    //mesh = nullptr;
     sceneNodeType = SceneNodeType::Mesh;
 
     renderItem = new RenderItem();
@@ -88,13 +88,13 @@ void MeshNode::setMesh(QString source)
 }
 
 //should not be used on plain scene meshes
-void MeshNode::setMesh(Mesh* mesh)
+void MeshNode::setMesh(MeshPtr mesh)
 {
     this->mesh = mesh;
     renderItem->mesh = mesh;
 }
 
-Mesh* MeshNode::getMesh()
+MeshPtr MeshNode::getMesh()
 {
     return mesh;
 }
@@ -126,22 +126,36 @@ void MeshNode::setActiveMaterial(int type)
 
 void MeshNode::submitRenderItems()
 {
-    //if(!!rootBone) {
-    //    renderItem->worldMatrix = rootBone->globalTransform;
-    //}
-    //else
-        renderItem->worldMatrix = this->globalTransform;
+    if (visible) {
+        //if(!!rootBone) {
+        //    renderItem->worldMatrix = rootBone->globalTransform;
+        //}
+        //else
+            renderItem->worldMatrix = this->globalTransform;
+            renderItem->cullable = true;
+            renderItem->boundingSphere.pos = this->globalTransform.column(3).toVector3D();
+            renderItem->boundingSphere.radius = mesh->boundingSphere->radius * getMeshRadius();
 
-    if (!!material) {
-        renderItem->renderLayer = material->renderLayer;
-        //renderItem->faceCullingMode = faceCullingMode;
+        if (!!material) {
+            renderItem->renderLayer = material->renderLayer;
+            //renderItem->faceCullingMode = faceCullingMode;
+        }
+
+        this->scene->geometryRenderList.append(renderItem);
+
+        if (this->getShadowEnabled()) {
+            this->scene->shadowRenderList.append(renderItem);
+        }
     }
+}
 
-    this->scene->geometryRenderList.append(renderItem);
+float MeshNode::getMeshRadius()
+{
+    float scaleX = globalTransform.column(0).toVector3D().length();
+    float scaleY = globalTransform.column(1).toVector3D().length();
+    float scaleZ = globalTransform.column(2).toVector3D().length();
 
-    if (this->getShadowEnabled()) {
-        this->scene->shadowRenderList.append(renderItem);
-    }
+    return qMax(qMax(scaleX, scaleY), scaleZ);
 }
 
 /*
@@ -176,7 +190,7 @@ QJsonObject readJahShader(const QString &filePath)
  * @return
  */
 QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,SceneNodePtr rootBone, QString filePath,
-                                            std::function<MaterialPtr(Mesh* mesh, MeshMaterialData& data)> createMaterialFunc)
+                                            std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc)
 {
     QSharedPointer<iris::SceneNode> sceneNode;// = QSharedPointer<iris::SceneNode>(new iris::SceneNode());
 
@@ -190,7 +204,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,Sc
         // aside from that, iris currently only renders meshes
         if(mesh->HasPositions())
         {
-            auto meshObj = new Mesh(mesh);
+            auto meshObj = MeshPtr(new Mesh(mesh));
             auto skel = Mesh::extractSkeleton(mesh, scene);
             meshObj->setSkeleton(skel);
 
@@ -222,7 +236,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,Sc
         for(unsigned i=0;i<node->mNumMeshes;i++)
         {
             auto mesh = scene->mMeshes[node->mMeshes[i]];
-            auto meshObj = new Mesh(mesh);
+            auto meshObj = MeshPtr(new Mesh(mesh));
             auto skel = Mesh::extractSkeleton(mesh, scene);
             meshObj->setSkeleton(skel);
 
@@ -254,11 +268,11 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,Sc
 
     //auto transform = node->mTransformation;
     node->mTransformation.Decompose(scale,rot,pos);
-    sceneNode->pos = QVector3D(pos.x,pos.y,pos.z);
-    sceneNode->scale = QVector3D(scale.x,scale.y,scale.z);
+    sceneNode->setLocalPos(QVector3D(pos.x,pos.y,pos.z));
+    sceneNode->setLocalScale(QVector3D(scale.x,scale.y,scale.z));
 
     //rot.Normalize();
-    sceneNode->rot = QQuaternion(rot.w,rot.x,rot.y,rot.z);
+    sceneNode->setLocalRot(QQuaternion(rot.w,rot.x,rot.y,rot.z));
 
     // this is probably the first node in the heirarchy
     // set it as the rootBone
@@ -276,7 +290,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,Sc
 }
 
 QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath,
-                                                              std::function<MaterialPtr(Mesh* mesh, MeshMaterialData& data)> createMaterialFunc)
+                                                              std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc)
 {
     Assimp::Importer importer;
     const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(),aiProcessPreset_TargetRealtime_Fast);
@@ -288,7 +302,7 @@ QSharedPointer<iris::SceneNode> MeshNode::loadAsSceneFragment(QString filePath,
         auto mesh = scene->mMeshes[0];
         auto node = iris::MeshNode::create();
 
-        auto meshObj = new Mesh(mesh);
+        auto meshObj = MeshPtr(new Mesh(mesh));
 
         //todo: use relative path from scene root
         auto anims = Mesh::extractAnimations(scene, filePath);

@@ -32,7 +32,7 @@ class aiScene;
 
 class SceneReader : public AssetIOBase
 {
-    QHash<QString,QList<iris::Mesh*>> meshes;
+    QHash<QString,QList<iris::MeshPtr>> meshes;
     QSet<QString> assimpScenes;
     QHash<QString,QMap<QString, iris::SkeletalAnimationPtr>> animations;
 
@@ -106,7 +106,7 @@ public:
      * @param index
      * @return
      */
-    iris::Mesh* getMesh(QString filePath, int index);
+    iris::MeshPtr getMesh(QString filePath, int index);
 
     iris::SkeletalAnimationPtr getSkeletalAnimation(QString filePath, QString animName);
 };

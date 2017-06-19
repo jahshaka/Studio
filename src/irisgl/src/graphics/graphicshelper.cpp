@@ -97,7 +97,7 @@ QString GraphicsHelper::loadAndProcessShader(QString shaderPath)
     return lines.join('\n');
 }
 
-QList<iris::Mesh*> GraphicsHelper::loadAllMeshesFromFile(QString filePath)
+QList<iris::MeshPtr> GraphicsHelper::loadAllMeshesFromFile(QString filePath)
 {
     Assimp::Importer importer;
     const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(), aiProcessPreset_TargetRealtime_Fast);
@@ -105,7 +105,7 @@ QList<iris::Mesh*> GraphicsHelper::loadAllMeshesFromFile(QString filePath)
     return loadAllMeshesFromAssimpScene(scene);
 }
 
-void GraphicsHelper::loadAllMeshesAndAnimationsFromFile(QString filePath, QList<Mesh *> &meshes, QMap<QString, SkeletalAnimationPtr> &animations)
+void GraphicsHelper::loadAllMeshesAndAnimationsFromFile(QString filePath, QList<MeshPtr> &meshes, QMap<QString, SkeletalAnimationPtr> &animations)
 {
     Assimp::Importer importer;
     const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(), aiProcessPreset_TargetRealtime_Fast);
@@ -116,16 +116,16 @@ void GraphicsHelper::loadAllMeshesAndAnimationsFromFile(QString filePath, QList<
     }
 }
 
-QList<Mesh *> GraphicsHelper::loadAllMeshesFromAssimpScene(const aiScene *scene)
+QList<MeshPtr> GraphicsHelper::loadAllMeshesFromAssimpScene(const aiScene *scene)
 {
-    QList<Mesh*> meshes;
+    QList<MeshPtr> meshes;
 
     if(scene)
     {
         for(unsigned i = 0; i < scene->mNumMeshes; i++)
         {
             auto m = scene->mMeshes[i];
-            auto mesh = new Mesh(m);
+            auto mesh = iris::MeshPtr(new Mesh(m));
             if (m->HasBones()) {
                 auto skel = Mesh::extractSkeleton(m, scene);
                 mesh->setSkeleton(skel);

@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "../irisglfwd.h"
 #include "../animation/skeletalanimation.h"
 
+
 class aiMesh;
 class aiScene;
 class QOpenGLBuffer;
@@ -27,6 +28,8 @@ class QOpenGLShaderProgram;
 
 namespace iris
 {
+
+class BoundingSphere;
 
 enum class VertexAttribUsage : int
 {
@@ -83,6 +86,8 @@ public:
     GLuint indexBuffer;
     bool usesIndexBuffer;
 
+    BoundingSphere* boundingSphere;
+
     // will cause problems if a shader was freed and gl gives the
     // id to another shader
     GLuint lastShaderId;
@@ -112,8 +117,8 @@ public:
     void draw(QOpenGLFunctions_3_2_Core* gl, Material* mat, GLenum primitiveMode = GL_TRIANGLES);
     void draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* mat, GLenum primitiveMode = GL_TRIANGLES);
 
-    static Mesh* loadMesh(QString filePath);
-    static Mesh* loadAnimatedMesh(QString filePath);
+    static MeshPtr loadMesh(QString filePath);
+    static MeshPtr loadAnimatedMesh(QString filePath);
     static SkeletonPtr extractSkeleton(const aiMesh* mesh, const aiScene* scene);
     static QMap<QString, SkeletalAnimationPtr> extractAnimations(const aiScene* scene, QString source = "");
 
@@ -140,7 +145,7 @@ private:
     void addIndexArray(void* data,int size,GLenum type);
 };
 
-typedef QSharedPointer<Mesh> MeshPtr;
+//typedef QSharedPointer<Mesh> MeshPtr;
 
 }
 

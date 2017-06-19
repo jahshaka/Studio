@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "../irisglfwd.h"
 #include "../graphics/texture2d.h"
 #include "../materials/defaultskymaterial.h"
+#include "../geometry/frustum.h"
 
 namespace iris
 {
@@ -48,8 +49,10 @@ public:
     ViewerNodePtr vrViewer;
 
     QList<LightNodePtr> lights;
+    QList<MeshNodePtr> meshes;
+    QList<ParticleSystemNodePtr> particleSystems;
 
-    Mesh* skyMesh;
+    MeshPtr skyMesh;
     Texture2DPtr skyTexture;
     QColor skyColor;
     QColor ambientColor;

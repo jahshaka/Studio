@@ -160,8 +160,8 @@ void SceneWriter::writeEditorData(QJsonObject& projectObj,EditorData* editorData
     cameraObj["angle"] = cam->angle;
     cameraObj["nearClip"] = cam->nearClip;
     cameraObj["farClip"] = cam->farClip;
-    cameraObj["pos"] = jsonVector3(editorData->editorCamera->pos);
-    cameraObj["rot"] = jsonVector3(editorData->editorCamera->rot.toEulerAngles());
+    cameraObj["pos"] = jsonVector3(editorData->editorCamera->getLocalPos());
+    cameraObj["rot"] = jsonVector3(editorData->editorCamera->getLocalRot().toEulerAngles());
 
     editorObj["camera"] = cameraObj;
     projectObj["editor"] = editorObj;
@@ -173,10 +173,10 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sc
     sceneNodeObj["attached"] = sceneNode->isAttached();
     sceneNodeObj["type"] = getSceneNodeTypeName(sceneNode->sceneNodeType);
 
-    sceneNodeObj["pos"] = jsonVector3(sceneNode->pos);
-    auto rot = sceneNode->rot.toEulerAngles();
+    sceneNodeObj["pos"] = jsonVector3(sceneNode->getLocalPos());
+    auto rot = sceneNode->getLocalRot().toEulerAngles();
     sceneNodeObj["rot"] = jsonVector3(rot);
-    sceneNodeObj["scale"] = jsonVector3(sceneNode->scale);
+    sceneNodeObj["scale"] = jsonVector3(sceneNode->getLocalScale());
 
 
     //todo: write data specific to node type

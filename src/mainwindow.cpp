@@ -322,7 +322,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     // second node
     auto node = iris::MeshNode::create();
     node->setMesh(":/app/models/ground.obj");
-    node->pos = QVector3D(0, 1e-4, 0); // prevent z-fighting with the default plane
+    node->setLocalPos(QVector3D(0, 1e-4, 0)); // prevent z-fighting with the default plane
     node->setName("Ground");
     node->setPickable(false);
     node->setShadowEnabled(false);
@@ -339,8 +339,8 @@ iris::ScenePtr MainWindow::createDefaultScene()
     dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
     dlight->setName("Directional Light");
-    dlight->pos = QVector3D(4, 4, 0);
-    dlight->rot = QQuaternion::fromEulerAngles(15, 0, 0);
+    dlight->setLocalPos(QVector3D(4, 4, 0));
+    dlight->setLocalRot(QQuaternion::fromEulerAngles(15, 0, 0));
     dlight->intensity = 1;
     dlight->icon = iris::Texture2D::load(":/app/icons/light.png");
 
@@ -348,7 +348,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     plight->setLightType(iris::LightType::Point);
      scene->rootNode->addChild(plight);
     plight->setName("Point Light");
-    plight->pos = QVector3D(-4, 4, 0);
+    plight->setLocalPos(QVector3D(-4, 4, 0));
     plight->intensity = 1;
     plight->icon = iris::Texture2D::load(":/app/icons/bulb.png");
 
@@ -435,7 +435,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                         if (sceneView->doActiveObjectPicking(evt->posF())) {
                             //activeSceneNode->pos = sceneView->hit;
                             dragScenePos = sceneView->hit;
-                        } else if (sceneView->updateRPI(sceneView->editorCam->pos,
+                        } else if (sceneView->updateRPI(sceneView->editorCam->getLocalPos(),
                                                         sceneView->calculateMouseRay(evt->posF())))
                         {
                             //activeSceneNode->pos = sceneView->Offset;
@@ -443,8 +443,8 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                         } else {
                             ////////////////////////////////////////
                             const float spawnDist = 10.0f;
-                            auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, -1.0f, -spawnDist));
-                            offset += sceneView->editorCam->pos;
+                            auto offset = sceneView->editorCam->getLocalRot().rotatedVector(QVector3D(0, -1.0f, -spawnDist));
+                            offset += sceneView->editorCam->getLocalPos();
                             //activeSceneNode->pos = offset;
                             dragScenePos = offset;
                         }
@@ -1009,7 +1009,7 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
     if (filename.isEmpty()) return;
 
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::loadAsSceneFragment(filename,[](iris::Mesh* mesh, iris::MeshMaterialData& data)
+    auto node = iris::MeshNode::loadAsSceneFragment(filename,[](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
         auto mat = iris::CustomMaterial::create();
         //MaterialReader *materialReader = new MaterialReader();
@@ -1044,7 +1044,7 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 
 //    node->materialType = 2;
     //node->setName(nodeName);
-    node->pos = position;
+    node->setLocalPos(position);
 
     // todo: load material data
     addNodeToScene(node, ignore);
@@ -1117,9 +1117,9 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
     // @TODO: add this to a constants file
     if (!ignore) {
         const float spawnDist = 10.0f;
-        auto offset = sceneView->editorCam->rot.rotatedVector(QVector3D(0, -1.0f, -spawnDist));
-        offset += sceneView->editorCam->pos;
-        sceneNode->pos = offset;
+        auto offset = sceneView->editorCam->getLocalRot().rotatedVector(QVector3D(0, -1.0f, -spawnDist));
+        offset += sceneView->editorCam->getLocalPos();
+        sceneNode->setLocalPos(offset);
     }
 
     // apply default material to mesh nodes

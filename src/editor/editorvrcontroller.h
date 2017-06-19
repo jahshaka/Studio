@@ -19,13 +19,13 @@ For more information see the LICENSE file
 class EditorVrController : public CameraControllerBase
 {
 public:
-    iris::Mesh* leftHandMesh;
-    iris::Mesh* rightHandMesh;
+    iris::MeshPtr leftHandMesh;
+    iris::MeshPtr rightHandMesh;
 
     iris::RenderItem* leftHandRenderItem;
     iris::RenderItem* rightHandRenderItem;
 
-    iris::Mesh* beamMesh;
+    iris::MeshPtr beamMesh;
     iris::RenderItem* leftBeamRenderItem;
     iris::RenderItem* rightBeamRenderItem;
 
@@ -44,8 +44,8 @@ public:
 
     EditorVrController();
 
-    void setScene(iris::ScenePtr scene)
-;
+    void setScene(iris::ScenePtr scene);
+
     void updateCameraRot();
 
     void update(float dt);

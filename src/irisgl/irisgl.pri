@@ -69,7 +69,10 @@ HEADERS += \
     $$PWD/src/animation/floatcurve.h \
     $$PWD/src/scenegraph/scene.h \
     $$PWD/src/scenegraph/scenenode.h \
-    $$PWD/src/core/property.h
+    $$PWD/src/core/property.h \
+    $$PWD/src/geometry/boundingsphere.h \
+    $$PWD/src/geometry/plane.h \
+    $$PWD/src/geometry/frustum.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -112,7 +115,9 @@ SOURCES += \
     $$PWD/src/animation/skeletalanimation.cpp \
     $$PWD/src/graphics/skeleton.cpp \
     $$PWD/src/scenegraph/scene.cpp \
-    $$PWD/src/scenegraph/scenenode.cpp
+    $$PWD/src/scenegraph/scenenode.cpp \
+    $$PWD/src/geometry/plane.cpp \
+    $$PWD/src/geometry/frustum.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "../irisglfwd.h"
 #include "mesh.h"
 #include "material.h"
 
@@ -27,6 +28,7 @@ For more information see the LICENSE file
 #include "../geometry/trimesh.h"
 #include "skeleton.h"
 #include "../animation/skeletalanimation.h"
+#include "../geometry/boundingsphere.h"
 
 #include <functional>
 
@@ -63,6 +65,8 @@ Mesh::Mesh(aiMesh* mesh)
     numFaces = mesh->mNumFaces;
 
     gl->glGenVertexArrays(1,&vao);
+
+    boundingSphere = new BoundingSphere();
 
     if(!mesh->HasPositions())
         return;
@@ -148,6 +152,11 @@ Mesh::Mesh(aiMesh* mesh)
         triMesh->addTriangle(QVector3D(a.x, a.y, a.z),
                              QVector3D(b.x, b.y, b.z),
                              QVector3D(c.x, c.y, c.z));
+
+        // redundant, but good enough for now
+        boundingSphere->expand(QVector3D(a.x, a.y, a.z));
+        boundingSphere->expand(QVector3D(b.x, b.y, b.z));
+        boundingSphere->expand(QVector3D(c.x, c.y, c.z));
     }
 
     gl->glGenBuffers(1, &indexBuffer);
@@ -243,7 +252,7 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLen
     gl->glBindVertexArray(0);
 }
 
-Mesh* Mesh::loadMesh(QString filePath)
+MeshPtr Mesh::loadMesh(QString filePath)
 {
     Assimp::Importer importer;
     const aiScene *scene;
@@ -274,10 +283,10 @@ Mesh* Mesh::loadMesh(QString filePath)
         meshObj->addSkeletalAnimation(animName, anims[animName]);
     }
 
-    return meshObj;
+    return MeshPtr(meshObj);
 }
 
-Mesh *Mesh::loadAnimatedMesh(QString filePath)
+MeshPtr Mesh::loadAnimatedMesh(QString filePath)
 {
     Assimp::Importer importer;
     const aiScene *scene;
@@ -298,7 +307,7 @@ Mesh *Mesh::loadAnimatedMesh(QString filePath)
     //extract animations from scene
     auto mesh = new Mesh(scene->mMeshes[0]);
 
-    return mesh;
+    return MeshPtr(mesh);
 }
 
 SkeletonPtr Mesh::extractSkeleton(const aiMesh *mesh, const aiScene *scene)
