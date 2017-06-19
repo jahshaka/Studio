@@ -211,6 +211,9 @@ MainWindow::MainWindow(QWidget *parent) :
 //    ui->PresetsDock->hide();
 
     setupProjectDB();
+
+    undoStack = new QUndoStack(this);
+    UiManager::undoStack = undoStack;
 }
 
 void MainWindow::setupVrUi()

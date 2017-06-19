@@ -34,6 +34,7 @@ class QStandardItemModel;
 class QTreeWidgetItem;
 class QTreeWidget;
 class QIcon;
+class QUndoStack;
 
 //custom ui
 class TransformSlidersUi;
@@ -282,6 +283,8 @@ private:
     QActionGroup* cameraGroup;
 
     Database *db;
+
+    QUndoStack* undoStack;
 
     bool vrMode;
     QPushButton* vrButton;
