@@ -126,22 +126,36 @@ void MeshNode::setActiveMaterial(int type)
 
 void MeshNode::submitRenderItems()
 {
-    //if(!!rootBone) {
-    //    renderItem->worldMatrix = rootBone->globalTransform;
-    //}
-    //else
-        renderItem->worldMatrix = this->globalTransform;
+    if (visible) {
+        //if(!!rootBone) {
+        //    renderItem->worldMatrix = rootBone->globalTransform;
+        //}
+        //else
+            renderItem->worldMatrix = this->globalTransform;
+            renderItem->cullable = true;
+            renderItem->boundingSphere.pos = this->globalTransform.column(3).toVector3D();
+            renderItem->boundingSphere.radius = mesh->boundingSphere->radius * getMeshRadius();
 
-    if (!!material) {
-        renderItem->renderLayer = material->renderLayer;
-        //renderItem->faceCullingMode = faceCullingMode;
+        if (!!material) {
+            renderItem->renderLayer = material->renderLayer;
+            //renderItem->faceCullingMode = faceCullingMode;
+        }
+
+        this->scene->geometryRenderList.append(renderItem);
+
+        if (this->getShadowEnabled()) {
+            this->scene->shadowRenderList.append(renderItem);
+        }
     }
+}
 
-    this->scene->geometryRenderList.append(renderItem);
+float MeshNode::getMeshRadius()
+{
+    float scaleX = globalTransform.column(0).toVector3D().length();
+    float scaleY = globalTransform.column(1).toVector3D().length();
+    float scaleZ = globalTransform.column(2).toVector3D().length();
 
-    if (this->getShadowEnabled()) {
-        this->scene->shadowRenderList.append(renderItem);
-    }
+    return qMax(qMax(scaleX, scaleY), scaleZ);
 }
 
 /*

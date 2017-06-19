@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include <QOpenGLFunctions_3_2_Core>
 #include <QSharedPointer>
 #include <QOpenGLTexture>
+#include <QMatrix4x4>
 #include "viewport.h"
 #include "utils/billboard.h"
 #include "utils/fullscreenquad.h"
@@ -40,6 +41,9 @@ For more information see the LICENSE file
 #include "../core/irisutils.h"
 #include "postprocessmanager.h"
 #include "postprocess.h"
+
+#include "../geometry/frustum.h"
+#include "../geometry/boundingsphere.h"
 
 #include <QOpenGLContext>
 #include "../libovr/Include/OVR_CAPI_GL.h"
@@ -124,6 +128,8 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     renderData->projMatrix = cam->projMatrix;
     renderData->viewMatrix = cam->viewMatrix;
     renderData->eyePos = cam->globalTransform.column(3).toVector3D();
+
+    renderData->frustum.build(cam->projMatrix * cam->viewMatrix);
 
     renderData->fogColor = scene->fogColor;
     renderData->fogStart = scene->fogStart;
@@ -360,6 +366,16 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 
     for (auto& item : scene->geometryRenderList) {
         if (item->type == iris::RenderItemType::Mesh) {
+
+            if (item->cullable) {
+                auto sphere = item->boundingSphere;
+                //sphere->pos = item->worldMatrix.column(3).toVector3D();
+
+                if (!renderData->frustum.isSphereInside(&sphere)) {
+                    //qDebug() << "culled";
+                    continue;
+                }
+            }
 
             QOpenGLShaderProgram* program = nullptr;
             iris::MaterialPtr mat;

@@ -26,6 +26,7 @@ class LightNode;
 class ViewerNode;
 class ParticleSystemNode;
 class Mesh;
+class Frustum;
 class Material;
 class MeshNode;
 class VrDevice;
