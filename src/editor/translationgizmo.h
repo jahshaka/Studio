@@ -219,7 +219,7 @@ public:
         handles[(int) AxisHandle::Z]->setHandleColor(QColor(37, 118, 235));
 
         //add command here
-        if (!!hitNode) {
+        if (!!lastSelectedNode) {
             auto endTransform = lastSelectedNode->getLocalTransform();
             // reset the transform because the command will re-apply the transform
             lastSelectedNode->setLocalTransform(hitTransform);

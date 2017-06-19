@@ -90,6 +90,7 @@ public:
     void stopAnimWidget();
 
     void setupProjectDB();
+    void setupUndoRedo();
 
     bool handleMousePress(QMouseEvent *event);
     bool handleMouseRelease(QMouseEvent *event);
@@ -230,6 +231,9 @@ public slots:
 
     void vrButtonClicked(bool);
     void updateSceneSettings();
+
+    void undo();
+    void redo();
 
 private slots:
     void translateGizmo();

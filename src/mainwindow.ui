@@ -565,8 +565,8 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <property name="title">
      <string>Edit</string>
     </property>
-    <addaction name="actionUndo_2"/>
-    <addaction name="actionRedo_2"/>
+    <addaction name="actionEditUndo"/>
+    <addaction name="actionEditRedo"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
@@ -1171,12 +1171,12 @@ QToolButton:checked
     <string>Arcball Camera</string>
    </property>
   </action>
-  <action name="actionUndo_2">
+  <action name="actionEditUndo">
    <property name="text">
     <string>Undo</string>
    </property>
   </action>
-  <action name="actionRedo_2">
+  <action name="actionEditRedo">
    <property name="text">
     <string>Redo</string>
    </property>

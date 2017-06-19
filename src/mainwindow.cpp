@@ -213,8 +213,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     setupProjectDB();
 
-    undoStack = new QUndoStack(this);
-    UiManager::undoStack = undoStack;
+    setupUndoRedo();
 }
 
 void MainWindow::setupVrUi()
@@ -655,6 +654,18 @@ void MainWindow::stopAnimWidget()
 void MainWindow::setupProjectDB()
 {
     db = new Database();
+}
+
+void MainWindow::setupUndoRedo()
+{
+    undoStack = new QUndoStack(this);
+    UiManager::undoStack = undoStack;
+
+    connect(ui->actionUndo, SIGNAL(triggered(bool)), this, SLOT(undo()));
+    connect(ui->actionEditUndo, SIGNAL(triggered(bool)), this, SLOT(undo()));
+
+    connect(ui->actionRedo, SIGNAL(triggered(bool)), this, SLOT(redo()));
+    connect(ui->actionEditRedo, SIGNAL(triggered(bool)), this, SLOT(redo()));
 }
 
 void MainWindow::saveScene()
@@ -1218,6 +1229,18 @@ void MainWindow::updateSceneSettings()
 {
     scene->setOutlineWidth(prefsDialog->worldSettings->outlineWidth);
     scene->setOutlineColor(prefsDialog->worldSettings->outlineColor);
+}
+
+void MainWindow::undo()
+{
+    if (undoStack->canUndo())
+        undoStack->undo();
+}
+
+void MainWindow::redo()
+{
+    if (undoStack->canRedo())
+        undoStack->redo();
 }
 
 void MainWindow::newScene()
