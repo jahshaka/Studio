@@ -139,7 +139,7 @@ void SceneViewWidget::setSelectedNode(iris::SceneNodePtr sceneNode)
     renderer->setSelectedSceneNode(sceneNode);
 
     if (viewportGizmo != nullptr) {
-        viewportGizmo->lastSelectedNode = sceneNode;
+        viewportGizmo->setLastSelectedNode(sceneNode);
     }
 }
 
@@ -152,8 +152,8 @@ void SceneViewWidget::clearSelectedNode()
 void SceneViewWidget::updateScene(bool once)
 {
     // update and draw the 3d manipulation gizmo
-    if (!!viewportGizmo->lastSelectedNode) {
-        if (!viewportGizmo->lastSelectedNode->isRootNode()) {
+    if (!!viewportGizmo->getLastSelectedNode()) {
+        if (!viewportGizmo->getLastSelectedNode()->isRootNode()) {
             if (viewportMode != ViewportMode::VR) {
                 viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
                 viewportGizmo->render(editorCam->viewMatrix, editorCam->projMatrix);
@@ -492,7 +492,7 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr l
 
     //viewportGizmo->lastSelectedNode = hitList.last().hitNode;
     //emit sceneNodeSelected(hitList.last().hitNode);
-    viewportGizmo->lastSelectedNode = pickedNode;
+    viewportGizmo->setLastSelectedNode(pickedNode);
     emit sceneNodeSelected(pickedNode);
 }
 
@@ -508,7 +508,7 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
     doMeshPicking(viewportGizmo->getRootNode(), segStart, segEnd, hitList);
 
     if (hitList.size() == 0) {
-        viewportGizmo->lastSelectedNode = iris::SceneNodePtr();
+        viewportGizmo->setLastSelectedNode(iris::SceneNodePtr());
         viewportGizmo->currentNode = iris::SceneNodePtr();
         emit sceneNodeSelected(iris::SceneNodePtr());
         return;
@@ -690,7 +690,7 @@ void SceneViewWidget::setTransformOrientationGlobal()
 
 void SceneViewWidget::hideGizmo()
 {
-    viewportGizmo->lastSelectedNode = iris::SceneNodePtr();
+    viewportGizmo->setLastSelectedNode(iris::SceneNodePtr());
 }
 
 void SceneViewWidget::setGizmoLoc()
@@ -699,7 +699,7 @@ void SceneViewWidget::setGizmoLoc()
     transformMode = viewportGizmo->getTransformOrientation();
     viewportGizmo = translationGizmo;
     viewportGizmo->setTransformOrientation(transformMode);
-    viewportGizmo->lastSelectedNode = selectedNode;
+    viewportGizmo->setLastSelectedNode(selectedNode);
 }
 
 void SceneViewWidget::setGizmoRot()
@@ -708,7 +708,7 @@ void SceneViewWidget::setGizmoRot()
     transformMode = viewportGizmo->getTransformOrientation();
     viewportGizmo = rotationGizmo;
     viewportGizmo->setTransformOrientation(transformMode);
-    viewportGizmo->lastSelectedNode = selectedNode;
+    viewportGizmo->setLastSelectedNode(selectedNode);
 }
 
 void SceneViewWidget::setGizmoScale()
@@ -717,7 +717,7 @@ void SceneViewWidget::setGizmoScale()
     transformMode = viewportGizmo->getTransformOrientation();
     viewportGizmo = scaleGizmo;
     viewportGizmo->setTransformOrientation(transformMode);
-    viewportGizmo->lastSelectedNode = selectedNode;
+    viewportGizmo->setLastSelectedNode(selectedNode);
 }
 
 void SceneViewWidget::setEditorData(EditorData* data)

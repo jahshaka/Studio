@@ -247,8 +247,7 @@ public:
 
         hitNode = hitList.last().hitNode;
         lastHitAxis = hitNode->getName();
-        // record transform when hit for undo/redo
-        hitTransform = hitNode->getLocalTransform();
+        hitTransform = lastSelectedNode->getLocalTransform();
     }
 
     void doMeshPicking(const QSharedPointer<iris::SceneNode>& sceneNode,

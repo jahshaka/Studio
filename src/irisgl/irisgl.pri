@@ -72,7 +72,8 @@ HEADERS += \
     $$PWD/src/core/property.h \
     $$PWD/src/geometry/boundingsphere.h \
     $$PWD/src/geometry/plane.h \
-    $$PWD/src/geometry/frustum.h
+    $$PWD/src/geometry/frustum.h \
+    $$PWD/src/math/transform.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)

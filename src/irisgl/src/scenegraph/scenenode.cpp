@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "../animation/keyframeanimation.h"
 #include "../animation/skeletalanimation.h"
 #include "../core/property.h"
+#include "../math/mathhelper.h"
 
 #include <functional>
 
@@ -96,11 +97,7 @@ void SceneNode::setLocalScale(QVector3D scale)
 
 void SceneNode::setLocalTransform(QMatrix4x4 transformMatrix)
 {
-    pos = transformMatrix.column(3).toVector3D();
-    rot = QQuaternion::fromRotationMatrix(transformMatrix.normalMatrix());
-    scale.setX(transformMatrix.column(0).toVector3D().length());
-    scale.setY(transformMatrix.column(1).toVector3D().length());
-    scale.setZ(transformMatrix.column(2).toVector3D().length());
+    MathHelper::decomposeMatrix(transformMatrix, pos, rot, scale);
     setTransformDirty();
 }
 
