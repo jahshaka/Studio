@@ -192,6 +192,11 @@ void Scene::addNode(SceneNodePtr node)
         meshes.append(mesh);
     }
 
+    if (node->sceneNodeType == SceneNodeType::ParticleSystem) {
+        auto particleSystem = node.staticCast<iris::ParticleSystemNode>();
+        particleSystems.append(particleSystem);
+    }
+
     if(node->sceneNodeType == SceneNodeType::Viewer && vrViewer.isNull())
     {
         vrViewer = node.staticCast<iris::ViewerNode>();
@@ -206,6 +211,10 @@ void Scene::removeNode(SceneNodePtr node)
 
     if (node->sceneNodeType == SceneNodeType::Mesh) {
         meshes.removeOne(node.staticCast<iris::MeshNode>());
+    }
+
+    if (node->sceneNodeType == SceneNodeType::ParticleSystem) {
+        particleSystems.removeOne(node.staticCast<iris::ParticleSystemNode>());
     }
 
     // if this node is the scene's viewer then reset the scene's viewer to null
