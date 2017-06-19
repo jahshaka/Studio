@@ -1,18 +1,19 @@
 #include "transfrormscenenodecommand.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 
 TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node, QMatrix4x4 localTransform)
 {
     sceneNode = node;
-    oldTransform = node->getLocalTransformMatrix();
+    oldTransform = node->getLocalTransform();
     newTransform = localTransform;
 }
 
 void TransformSceneNodeCommand::undo()
 {
-    node->setLocalTransform(oldTransform);
+    sceneNode->setLocalTransform(oldTransform);
 }
 
 void TransformSceneNodeCommand::redo()
 {
-    node->setLocalTransform(newTransform);
+    sceneNode->setLocalTransform(newTransform);
 }

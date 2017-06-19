@@ -2,6 +2,7 @@
 
 
 AnimationWidget *UiManager::animationWidget = nullptr;
+QUndoStack *UiManager::undoStack = nullptr;
 
 AnimationWidget *UiManager::getAnimationWidget()
 {

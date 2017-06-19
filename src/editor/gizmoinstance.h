@@ -32,6 +32,7 @@ public:
     QSharedPointer<iris::CameraNode> camera;
     QSharedPointer<iris::SceneNode> hitNode;
     QString lastHitAxis;
+    QMatrix4x4 hitTransform;
 
     QString transformOrientation;
 

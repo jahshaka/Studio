@@ -94,6 +94,16 @@ void SceneNode::setLocalScale(QVector3D scale)
     setTransformDirty();
 }
 
+void SceneNode::setLocalTransform(QMatrix4x4 transformMatrix)
+{
+    pos = transformMatrix.column(3).toVector3D();
+    rot = QQuaternion::fromRotationMatrix(transformMatrix.normalMatrix());
+    scale.setX(transformMatrix.column(0).toVector3D().length());
+    scale.setY(transformMatrix.column(1).toVector3D().length());
+    scale.setZ(transformMatrix.column(2).toVector3D().length());
+    setTransformDirty();
+}
+
 void SceneNode::setTransformDirty()
 {
     transformDirty = true;

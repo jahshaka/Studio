@@ -112,6 +112,8 @@ public:
     void setLocalRot(QQuaternion rot);
     void setLocalScale(QVector3D scale);
 
+    void setLocalTransform(QMatrix4x4 transformMatrix);
+
     void setTransformDirty();
     void setHasDirtyChildren();
 

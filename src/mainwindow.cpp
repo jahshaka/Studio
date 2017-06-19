@@ -42,6 +42,7 @@ For more information see the LICENSE file
 #include <QKeyEvent>
 #include <QMessageBox>
 #include <QOpenGLDebugLogger>
+#include <QUndoStack>
 
 #include <QFileDialog>
 

@@ -515,8 +515,8 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>994</width>
-     <height>32</height>
+     <width>1153</width>
+     <height>30</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -561,7 +561,15 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <addaction name="actionOpenWebsite"/>
     <addaction name="actionBlog"/>
    </widget>
+   <widget class="QMenu" name="menuEdit">
+    <property name="title">
+     <string>Edit</string>
+    </property>
+    <addaction name="actionUndo_2"/>
+    <addaction name="actionRedo_2"/>
+   </widget>
    <addaction name="menuFile"/>
+   <addaction name="menuEdit"/>
    <addaction name="menuHelp"/>
   </widget>
   <widget class="QDockWidget" name="sceneHierarchyDock">
@@ -752,7 +760,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>582</height>
+          <height>578</height>
          </rect>
         </property>
         <property name="styleSheet">
@@ -1161,6 +1169,16 @@ QToolButton:checked
    </property>
    <property name="toolTip">
     <string>Arcball Camera</string>
+   </property>
+  </action>
+  <action name="actionUndo_2">
+   <property name="text">
+    <string>Undo</string>
+   </property>
+  </action>
+  <action name="actionRedo_2">
+   <property name="text">
+    <string>Redo</string>
    </property>
   </action>
  </widget>
