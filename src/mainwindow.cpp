@@ -663,9 +663,11 @@ void MainWindow::setupUndoRedo()
 
     connect(ui->actionUndo, SIGNAL(triggered(bool)), this, SLOT(undo()));
     connect(ui->actionEditUndo, SIGNAL(triggered(bool)), this, SLOT(undo()));
+    ui->actionEditUndo->setShortcuts(QKeySequence::Undo);
 
     connect(ui->actionRedo, SIGNAL(triggered(bool)), this, SLOT(redo()));
     connect(ui->actionEditRedo, SIGNAL(triggered(bool)), this, SLOT(redo()));
+    ui->actionEditRedo->setShortcuts(QKeySequence::Redo);
 }
 
 void MainWindow::saveScene()
