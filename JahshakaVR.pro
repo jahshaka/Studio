@@ -15,7 +15,7 @@
 #
 #-------------------------------------------------
 
-QT      += core gui sql
+QT      += core gui concurrent sql
 CONFIG  += c++11
 
 # needed to fix resource compilation error in visual studio
@@ -103,6 +103,7 @@ SOURCES += src/main.cpp\
     src/commands/changematerialpropertycommand.cpp \
     src/commands/addscenenodecommand.cpp \
     src/commands/deletescenenodecommand.cpp
+    src/dialogs/progressdialog.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -200,6 +201,7 @@ HEADERS  += src/mainwindow.h \
     src/commands/changematerialpropertycommand.h \
     src/commands/addscenenodecommand.h \
     src/commands/deletescenenodecommand.h
+    src/dialogs/progressdialog.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -238,7 +240,8 @@ FORMS    += \
     src/widgets/keyframelabel.ui \
     src/widgets/keyframecurvewidget.ui \
     src/dialogs/getnamedialog.ui \
-    src/widgets/createanimationwidget.ui
+    src/widgets/createanimationwidget.ui \
+    src/dialogs/progressdialog.ui
 
 RESOURCES += \
     shaders.qrc \
