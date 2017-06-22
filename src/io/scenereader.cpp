@@ -558,15 +558,16 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 void SceneReader::extractAssetsFromAssimpScene(QString filePath)
 {
     if (!assimpScenes.contains(filePath)) {
-//        auto meshList = iris::GraphicsHelper::loadAllMeshesFromFile(filePath);
-//        auto anims = iris::Mesh::extractAnimations(scene, filePath);
         QList<iris::MeshPtr> meshList;
-        QMap<QString, iris::SkeletalAnimationPtr> anims;
-        iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(filePath, meshList, anims);
+        QMap<QString, iris::SkeletalAnimationPtr> animationss;
+        iris::GraphicsHelper::loadAllMeshesAndAnimationsFromStore<Asset*>(AssetManager::assets,
+                                                                          filePath,
+                                                                          meshList,
+                                                                          animationss);
 
         meshes.insert(filePath,meshList);
         assimpScenes.insert(filePath);
-        animations.insert(filePath, anims);
+        animations.insert(filePath, animationss);
     }
 }
 

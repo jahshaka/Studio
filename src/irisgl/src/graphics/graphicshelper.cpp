@@ -12,10 +12,8 @@ For more information see the LICENSE file
 #include "graphicshelper.h"
 #include <QOpenGLShaderProgram>
 
-#include "../graphics/mesh.h"
 #include "assimp/postprocess.h"
 #include "assimp/Importer.hpp"
-#include "assimp/scene.h"
 #include "assimp/mesh.h"
 #include "assimp/matrix4x4.h"
 #include "assimp/vector3.h"
@@ -120,10 +118,8 @@ QList<MeshPtr> GraphicsHelper::loadAllMeshesFromAssimpScene(const aiScene *scene
 {
     QList<MeshPtr> meshes;
 
-    if(scene)
-    {
-        for(unsigned i = 0; i < scene->mNumMeshes; i++)
-        {
+    if (scene) {
+        for (unsigned i = 0; i < scene->mNumMeshes; i++) {
             auto m = scene->mMeshes[i];
             auto mesh = iris::MeshPtr(new Mesh(m));
             if (m->HasBones()) {
@@ -132,8 +128,6 @@ QList<MeshPtr> GraphicsHelper::loadAllMeshesFromAssimpScene(const aiScene *scene
             }
             meshes.append(mesh);
         }
-
-        //delete scene;
     }
 
     return meshes;
