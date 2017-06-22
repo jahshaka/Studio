@@ -39,6 +39,8 @@ class PropertyListener
 {
 public:
     virtual void onPropertyChanged(Property*) = 0;
+    virtual void onPropertyChangeStart(Property*) = 0;
+    virtual void onPropertyChangeEnd(Property*) = 0;
 };
 
 struct BoolProperty : public Property

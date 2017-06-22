@@ -23,3 +23,11 @@ void PostProcessPropertyWidget::onPropertyChanged(iris::Property *prop)
 {
     postProcess->setProperty(prop);
 }
+
+void PostProcessPropertyWidget::onPropertyChangeStart(iris::Property* prop)
+{
+}
+
+void PostProcessPropertyWidget::onPropertyChangeEnd(iris::Property* prop)
+{
+}

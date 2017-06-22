@@ -19,6 +19,8 @@ HFloatSliderWidget::HFloatSliderWidget(QWidget* parent) :
     ui->setupUi(this);
     connect(ui->spinbox,    SIGNAL(valueChanged(double)),   SLOT(onValueSpinboxChanged(double)));
     connect(ui->slider,     SIGNAL(valueChanged(int)),      SLOT(onValueSliderChanged(int)));
+    connect(ui->slider,     SIGNAL(sliderPressed()),        SLOT(sliderPressed()));
+    connect(ui->slider,     SIGNAL(sliderReleased()),       SLOT(sliderReleased()));
 
     precision = 1000.f;
     ui->slider->setRange(0, precision);
@@ -96,4 +98,14 @@ void HFloatSliderWidget::onValueSpinboxChanged(double val)
     ui->slider->blockSignals(false);
 
     emit valueChanged(this->value);
+}
+
+void HFloatSliderWidget::sliderPressed()
+{
+    emit valueChangeStart(this->value);
+}
+
+void HFloatSliderWidget::sliderReleased()
+{
+    emit valueChangeEnd(this->value);
 }

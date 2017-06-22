@@ -46,6 +46,8 @@ public:
 
 signals:
     void onPropertyChanged(iris::Property*);
+    void onPropertyChangeStart(iris::Property*);
+    void onPropertyChangeEnd(iris::Property*);
 
 private:
     QList<iris::Property*> properties;

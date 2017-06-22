@@ -90,6 +90,26 @@ void PropertyWidget::addFloatProperty(iris::Property *prop)
 
         emit onPropertyChanged(fltProp);
     });
+
+    connect(fltWidget, &HFloatSliderWidget::valueChangeStart, this, [this, fltProp](float value) {
+        fltProp->value = value;
+
+        if (listener) {
+            listener->onPropertyChangeStart(fltProp);
+        }
+
+        emit onPropertyChanged(fltProp);
+    });
+
+    connect(fltWidget, &HFloatSliderWidget::valueChangeEnd, this, [this, fltProp](float value) {
+        fltProp->value = value;
+
+        if (listener) {
+            listener->onPropertyChangeEnd(fltProp);
+        }
+
+        emit onPropertyChanged(fltProp);
+    });
 }
 
 void PropertyWidget::addIntProperty(iris::Property *prop)
