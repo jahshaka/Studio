@@ -33,9 +33,9 @@
 #include <QtConcurrent/QtConcurrent>
 #include <chrono>
 
-void swampDrain(QVector<ModelData> &bin, const QVector<ModelData> &binLaden)
+void reducer(QVector<ModelData> &accum, const QVector<ModelData> &interm)
 {
-  bin.append(binLaden);
+    accum.append(interm);
 }
 
 ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::ProjectDialog)
@@ -169,7 +169,7 @@ void ProjectDialog::openProject()
 //        window->showMaximized();
 //        window->openProject(projectFile.absoluteFilePath());
 
-//        settings->addRecentlyOpenedScene(projectFile.absoluteFilePath());
+        settings->addRecentlyOpenedScene(projectFile.absoluteFilePath());
 //        this->close();
     }
 
@@ -198,6 +198,8 @@ void ProjectDialog::openRecentProject(QListWidgetItem *item)
     Globals::project->setProjectPath(projectPath);
 
     prepareStore(projectFile.absoluteFilePath());
+
+    settings->addRecentlyOpenedScene(projectFile.absoluteFilePath());
 
 //    window = new MainWindow;
 //    window->showMaximized();
@@ -258,9 +260,10 @@ void ProjectDialog::openSampleProject(QListWidgetItem *item)
 
             auto sln = QDir(projectPath).filePath(projectFile.fileName());
 
-            window = new MainWindow;
-            window->showMaximized();
-            window->openProject(sln);
+            prepareStore(sln);
+//            window = new MainWindow;
+//            window->showMaximized();
+//            window->openProject(sln);
 
             settings->addRecentlyOpenedScene(sln);
         }
@@ -418,7 +421,7 @@ bool ProjectDialog::prepareStore(QString path)
 
       // Start the computation.
       AssetWidgetConcurrentWrapper loadWrapper(this);
-      auto future = QtConcurrent::mappedReduced(fileNames, loadWrapper, swampDrain, QtConcurrent::SequentialReduce);
+      auto future = QtConcurrent::mappedReduced(fileNames, loadWrapper, reducer, QtConcurrent::SequentialReduce);
   //    auto future = QtConcurrent::mapped(fileNames, AssetWidgetConcurrentWrapper2(this));
       futureWatcher->setFuture(future);
 
