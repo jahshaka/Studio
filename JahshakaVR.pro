@@ -99,7 +99,8 @@ SOURCES += src/main.cpp\
     src/core/database/database.cpp \
     src/core/database/projectdatabase.cpp \
     src/core/guidmanager.cpp \
-    src/commands/transfrormscenenodecommand.cpp
+    src/commands/transfrormscenenodecommand.cpp \
+    src/commands/changematerialpropertycommand.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -193,7 +194,8 @@ HEADERS  += src/mainwindow.h \
     src/core/database/database.h \
     src/core/database/projectdatabase.h \
     src/core/guidmanager.h \
-    src/commands/transfrormscenenodecommand.h
+    src/commands/transfrormscenenodecommand.h \
+    src/commands/changematerialpropertycommand.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
