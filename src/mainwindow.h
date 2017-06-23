@@ -118,6 +118,10 @@ public:
      */
     QString getAbsoluteAssetPath(QString relToApp);
 
+    void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
+    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
+    void repopulateSceneTree();
+
 private:
 
     /**
@@ -145,10 +149,6 @@ private:
     //void populateTree(QStandardItem* treeNode,SceneNode* sceneNode);
     //void populateTree(QTreeWidgetItem* treeNode,SceneNode* sceneNode);
     void deselectTreeItems();
-
-    //void addSceneNodeToSelectedTreeItem(QTreeWidget* sceneTree,SceneNode* newNode,bool addToSelected,QIcon icon);
-    void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
-    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
 
     void setupDefaultScene();
 

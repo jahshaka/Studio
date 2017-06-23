@@ -87,6 +87,8 @@ For more information see the LICENSE file
 #include "uimanager.h"
 #include "core/database/database.h"
 
+#include "commands/addscenenodecommand.h"
+
 enum class VRButtonMode : int
 {
     Default = 0,
@@ -1149,9 +1151,18 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
         }
     }
 
+    /*
     scene->getRootNode()->addChild(sceneNode, false);
     ui->sceneHierarchy->repopulateTree();
     sceneNodeSelected(sceneNode);
+    */
+    auto cmd = new AddSceneNodeCommand(this, scene->getRootNode(), sceneNode);
+    UiManager::undoStack->push(cmd);
+}
+
+void MainWindow::repopulateSceneTree()
+{
+    ui->sceneHierarchy->repopulateTree();
 }
 
 void MainWindow::duplicateNode()
