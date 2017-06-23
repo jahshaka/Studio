@@ -181,6 +181,7 @@ public:
      * @param keepTransform keeps visual transform
      */
     void addChild(SceneNodePtr node, bool keepTransform = true);
+    void insertChild(int position, SceneNodePtr node, bool keepTransform = true);
     void removeFromParent();
     void removeChild(SceneNodePtr node);
 

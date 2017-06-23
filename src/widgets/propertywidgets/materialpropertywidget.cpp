@@ -127,6 +127,5 @@ void MaterialPropertyWidget::onPropertyChangeStart(iris::Property* prop)
 
 void MaterialPropertyWidget::onPropertyChangeEnd(iris::Property* prop)
 {
-    qDebug() << "Property End" << prop->getValue();
     UiManager::undoStack->push(new ChangeMaterialPropertyCommand(material, prop->name, startValue, prop->getValue()));
 }

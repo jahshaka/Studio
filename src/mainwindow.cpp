@@ -88,6 +88,7 @@ For more information see the LICENSE file
 #include "core/database/database.h"
 
 #include "commands/addscenenodecommand.h"
+#include "commands/deletescenenodecommand.h"
 
 enum class VRButtonMode : int
 {
@@ -1180,11 +1181,15 @@ void MainWindow::duplicateNode()
 void MainWindow::deleteNode()
 {
     if (!!activeSceneNode) {
+        /*
         activeSceneNode->removeFromParent();
         ui->sceneHierarchy->repopulateTree();
         sceneView->clearSelectedNode();
         ui->sceneNodeProperties->setSceneNode(QSharedPointer<iris::SceneNode>(nullptr));
         sceneView->hideGizmo();
+        */
+        auto cmd = new DeleteSceneNodeCommand(this, activeSceneNode->parent, activeSceneNode);
+        UiManager::undoStack->push(cmd);
     }
 }
 

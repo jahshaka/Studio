@@ -211,6 +211,11 @@ SceneNodeType SceneNode::getSceneNodeType()
 
 void SceneNode::addChild(SceneNodePtr node, bool keepTransform)
 {
+    insertChild(children.size(), node, keepTransform);
+}
+
+void SceneNode::insertChild(int position, SceneNodePtr node, bool keepTransform)
+{
     auto initialGlobalTransform = node->getGlobalTransform();
 
     if (!!node->parent) {
@@ -220,7 +225,7 @@ void SceneNode::addChild(SceneNodePtr node, bool keepTransform)
     // @TODO: check if child is already a node
     auto self = sharedFromThis();
 
-    children.append(node);
+    children.insert(position, node);
     node->setParent(self);
     if (!!scene) {
         node->setScene(self->scene);
