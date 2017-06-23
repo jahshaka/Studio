@@ -254,6 +254,7 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLen
 
 MeshPtr Mesh::loadMesh(QString filePath)
 {
+    // legacy -- update TODO
     Assimp::Importer importer;
     const aiScene *scene;
 

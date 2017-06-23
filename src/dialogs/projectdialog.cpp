@@ -459,7 +459,7 @@ void ProjectDialog::walkFileSystem(QString folder, QString path)
                   auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
                   pixmap = QPixmap::fromImage(*thumb->thumb);
                   type = AssetType::Texture;
-              } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
+              } else if (file.suffix() == "obj" || file.suffix() == "fbx" || file.suffix() == "dae") {
                   auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
                   type = AssetType::Object;
                   pixmap = QPixmap::fromImage(*thumb->thumb);
