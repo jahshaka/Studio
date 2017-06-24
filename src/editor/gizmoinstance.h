@@ -18,10 +18,12 @@ class QOpenGLFunctions_3_2_Core;
 
 class GizmoInstance
 {
+protected:
+    QSharedPointer<iris::SceneNode> lastSelectedNode;
 public:
     QOpenGLFunctions_3_2_Core *gl;
 
-    QSharedPointer<iris::SceneNode> lastSelectedNode;
+
     QSharedPointer<iris::SceneNode> currentNode;
     QVector3D finalHitPoint;
     QVector3D translatePlaneNormal;
@@ -32,6 +34,7 @@ public:
     QSharedPointer<iris::CameraNode> camera;
     QSharedPointer<iris::SceneNode> hitNode;
     QString lastHitAxis;
+    QMatrix4x4 hitTransform;
 
     QString transformOrientation;
 
@@ -58,6 +61,20 @@ public:
     virtual void onMouseRelease() = 0;
 
     virtual void isGizmoHit(const iris::CameraNodePtr&, const QPointF&, const QVector3D&) = 0;
+
+    void setLastSelectedNode(const QSharedPointer<iris::SceneNode> &value)
+    {
+        lastSelectedNode = value;
+        if (!!lastSelectedNode)
+            hitTransform = lastSelectedNode->getLocalTransform();
+        else
+            hitTransform.setToIdentity();
+    }
+
+    QSharedPointer<iris::SceneNode> getLastSelectedNode() const
+    {
+        return lastSelectedNode;
+    }
 };
 
 #endif // GIZMOINSTANCE_H

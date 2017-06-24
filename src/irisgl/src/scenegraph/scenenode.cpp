@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "../animation/keyframeanimation.h"
 #include "../animation/skeletalanimation.h"
 #include "../core/property.h"
+#include "../math/mathhelper.h"
 
 #include <functional>
 
@@ -91,6 +92,12 @@ void SceneNode::setLocalRot(QQuaternion rot)
 void SceneNode::setLocalScale(QVector3D scale)
 {
     this->scale = scale;
+    setTransformDirty();
+}
+
+void SceneNode::setLocalTransform(QMatrix4x4 transformMatrix)
+{
+    MathHelper::decomposeMatrix(transformMatrix, pos, rot, scale);
     setTransformDirty();
 }
 
@@ -204,6 +211,11 @@ SceneNodeType SceneNode::getSceneNodeType()
 
 void SceneNode::addChild(SceneNodePtr node, bool keepTransform)
 {
+    insertChild(children.size(), node, keepTransform);
+}
+
+void SceneNode::insertChild(int position, SceneNodePtr node, bool keepTransform)
+{
     auto initialGlobalTransform = node->getGlobalTransform();
 
     if (!!node->parent) {
@@ -213,7 +225,7 @@ void SceneNode::addChild(SceneNodePtr node, bool keepTransform)
     // @TODO: check if child is already a node
     auto self = sharedFromThis();
 
-    children.append(node);
+    children.insert(position, node);
     node->setParent(self);
     if (!!scene) {
         node->setScene(self->scene);

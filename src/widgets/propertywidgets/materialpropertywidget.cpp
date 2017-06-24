@@ -29,6 +29,9 @@ For more information see the LICENSE file
 #include "../../irisgl/src/materials/custommaterial.h"
 #include "../../irisgl/src/core/property.h"
 
+#include "../../uimanager.h"
+#include "../../commands/changematerialpropertycommand.h"
+
 void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
@@ -114,4 +117,15 @@ void MaterialPropertyWidget::onPropertyChanged(iris::Property *prop)
     if (prop->type == iris::PropertyType::Texture) {
         material->setTextureWithUniform(prop->uniform, prop->getValue().toString());
     }
+
+}
+
+void MaterialPropertyWidget::onPropertyChangeStart(iris::Property* prop)
+{
+    startValue = prop->getValue();
+}
+
+void MaterialPropertyWidget::onPropertyChangeEnd(iris::Property* prop)
+{
+    UiManager::undoStack->push(new ChangeMaterialPropertyCommand(material, prop->name, startValue, prop->getValue()));
 }

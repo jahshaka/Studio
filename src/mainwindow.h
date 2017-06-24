@@ -34,6 +34,7 @@ class QStandardItemModel;
 class QTreeWidgetItem;
 class QTreeWidget;
 class QIcon;
+class QUndoStack;
 
 //custom ui
 class TransformSlidersUi;
@@ -89,6 +90,7 @@ public:
     void stopAnimWidget();
 
     void setupProjectDB();
+    void setupUndoRedo();
 
     bool handleMousePress(QMouseEvent *event);
     bool handleMouseRelease(QMouseEvent *event);
@@ -115,6 +117,10 @@ public:
      * @return
      */
     QString getAbsoluteAssetPath(QString relToApp);
+
+    void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
+    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
+    void repopulateSceneTree();
 
 private:
 
@@ -143,10 +149,6 @@ private:
     //void populateTree(QStandardItem* treeNode,SceneNode* sceneNode);
     //void populateTree(QTreeWidgetItem* treeNode,SceneNode* sceneNode);
     void deselectTreeItems();
-
-    //void addSceneNodeToSelectedTreeItem(QTreeWidget* sceneTree,SceneNode* newNode,bool addToSelected,QIcon icon);
-    void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
-    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
 
     void setupDefaultScene();
 
@@ -230,6 +232,9 @@ public slots:
     void vrButtonClicked(bool);
     void updateSceneSettings();
 
+    void undo();
+    void redo();
+
 private slots:
     void translateGizmo();
     void rotateGizmo();
@@ -282,6 +287,8 @@ private:
     QActionGroup* cameraGroup;
 
     Database *db;
+
+    QUndoStack* undoStack;
 
     bool vrMode;
     QPushButton* vrButton;

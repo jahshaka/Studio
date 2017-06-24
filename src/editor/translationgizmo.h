@@ -12,10 +12,15 @@ For more information see the LICENSE file
 #ifndef TRANSLATIONGIZMO_H
 #define TRANSLATIONGIZMO_H
 
+#include <QUndoStack>
+
 #include "gizmoinstance.h"
 #include "gizmohandle.h"
 #include "../irisgl/src/scenegraph/scene.h"
 #include "../irisgl/src/graphics/graphicshelper.h"
+#include "../uimanager.h"
+#include "../commands/transfrormscenenodecommand.h"
+
 
 class TranslationGizmo : public GizmoInstance
 {
@@ -212,6 +217,14 @@ public:
         handles[(int) AxisHandle::X]->setHandleColor(QColor(231, 76, 60));
         handles[(int) AxisHandle::Y]->setHandleColor(QColor(46, 224, 113));
         handles[(int) AxisHandle::Z]->setHandleColor(QColor(37, 118, 235));
+
+        //add command here
+        if (!!lastSelectedNode) {
+            auto endTransform = lastSelectedNode->getLocalTransform();
+            // reset the transform because the command will re-apply the transform
+            lastSelectedNode->setLocalTransform(hitTransform);
+            UiManager::undoStack->push(new TransformSceneNodeCommand(lastSelectedNode, endTransform));
+        }
     }
 
     void isGizmoHit(const iris::CameraNodePtr& camera, const QPointF& pos, const QVector3D& rayDir) {
@@ -234,6 +247,7 @@ public:
 
         hitNode = hitList.last().hitNode;
         lastHitAxis = hitNode->getName();
+        hitTransform = lastSelectedNode->getLocalTransform();
     }
 
     void doMeshPicking(const QSharedPointer<iris::SceneNode>& sceneNode,

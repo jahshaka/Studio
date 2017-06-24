@@ -98,7 +98,11 @@ SOURCES += src/main.cpp\
     src/widgets/createanimationwidget.cpp \
     src/core/database/database.cpp \
     src/core/database/projectdatabase.cpp \
-    src/core/guidmanager.cpp
+    src/core/guidmanager.cpp \
+    src/commands/transfrormscenenodecommand.cpp \
+    src/commands/changematerialpropertycommand.cpp \
+    src/commands/addscenenodecommand.cpp \
+    src/commands/deletescenenodecommand.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -191,7 +195,11 @@ HEADERS  += src/mainwindow.h \
     src/widgets/createanimationwidget.h \
     src/core/database/database.h \
     src/core/database/projectdatabase.h \
-    src/core/guidmanager.h
+    src/core/guidmanager.h \
+    src/commands/transfrormscenenodecommand.h \
+    src/commands/changematerialpropertycommand.h \
+    src/commands/addscenenodecommand.h \
+    src/commands/deletescenenodecommand.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

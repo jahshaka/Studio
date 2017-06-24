@@ -42,6 +42,7 @@ For more information see the LICENSE file
 #include <QKeyEvent>
 #include <QMessageBox>
 #include <QOpenGLDebugLogger>
+#include <QUndoStack>
 
 #include <QFileDialog>
 
@@ -85,6 +86,9 @@ For more information see the LICENSE file
 #include <src/io/materialreader.hpp>
 #include "uimanager.h"
 #include "core/database/database.h"
+
+#include "commands/addscenenodecommand.h"
+#include "commands/deletescenenodecommand.h"
 
 enum class VRButtonMode : int
 {
@@ -211,6 +215,8 @@ MainWindow::MainWindow(QWidget *parent) :
 //    ui->PresetsDock->hide();
 
     setupProjectDB();
+
+    setupUndoRedo();
 }
 
 void MainWindow::setupVrUi()
@@ -651,6 +657,20 @@ void MainWindow::stopAnimWidget()
 void MainWindow::setupProjectDB()
 {
     db = new Database();
+}
+
+void MainWindow::setupUndoRedo()
+{
+    undoStack = new QUndoStack(this);
+    UiManager::undoStack = undoStack;
+
+    connect(ui->actionUndo, SIGNAL(triggered(bool)), this, SLOT(undo()));
+    connect(ui->actionEditUndo, SIGNAL(triggered(bool)), this, SLOT(undo()));
+    ui->actionEditUndo->setShortcuts(QKeySequence::Undo);
+
+    connect(ui->actionRedo, SIGNAL(triggered(bool)), this, SLOT(redo()));
+    connect(ui->actionEditRedo, SIGNAL(triggered(bool)), this, SLOT(redo()));
+    ui->actionEditRedo->setShortcuts(QKeySequence::Redo);
 }
 
 void MainWindow::saveScene()
@@ -1132,9 +1152,18 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
         }
     }
 
+    /*
     scene->getRootNode()->addChild(sceneNode, false);
     ui->sceneHierarchy->repopulateTree();
     sceneNodeSelected(sceneNode);
+    */
+    auto cmd = new AddSceneNodeCommand(this, scene->getRootNode(), sceneNode);
+    UiManager::undoStack->push(cmd);
+}
+
+void MainWindow::repopulateSceneTree()
+{
+    ui->sceneHierarchy->repopulateTree();
 }
 
 void MainWindow::duplicateNode()
@@ -1152,11 +1181,15 @@ void MainWindow::duplicateNode()
 void MainWindow::deleteNode()
 {
     if (!!activeSceneNode) {
+        /*
         activeSceneNode->removeFromParent();
         ui->sceneHierarchy->repopulateTree();
         sceneView->clearSelectedNode();
         ui->sceneNodeProperties->setSceneNode(QSharedPointer<iris::SceneNode>(nullptr));
         sceneView->hideGizmo();
+        */
+        auto cmd = new DeleteSceneNodeCommand(this, activeSceneNode->parent, activeSceneNode);
+        UiManager::undoStack->push(cmd);
     }
 }
 
@@ -1214,6 +1247,18 @@ void MainWindow::updateSceneSettings()
 {
     scene->setOutlineWidth(prefsDialog->worldSettings->outlineWidth);
     scene->setOutlineColor(prefsDialog->worldSettings->outlineColor);
+}
+
+void MainWindow::undo()
+{
+    if (undoStack->canUndo())
+        undoStack->undo();
+}
+
+void MainWindow::redo()
+{
+    if (undoStack->canRedo())
+        undoStack->redo();
 }
 
 void MainWindow::newScene()

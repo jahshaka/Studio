@@ -53,7 +53,12 @@ private:
     PropertyWidget* materialPropWidget;
 
     void setupShaderSelector();
-    void onPropertyChanged(iris::Property*);
+    void onPropertyChanged(iris::Property*) override;
+    void onPropertyChangeStart(iris::Property*) override;
+    void onPropertyChangeEnd(iris::Property*) override;
+
+    // for undo/redo
+    QVariant startValue;
 };
 
 #endif // MATERIALPROPERTYWIDGET_H
