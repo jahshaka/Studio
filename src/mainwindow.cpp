@@ -111,12 +111,12 @@ MainWindow::MainWindow(QWidget *parent) :
 
     this->setWindowTitle("Jahshaka VR");
 
-    QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
-    if (fontFile.exists()) {
-        fontFile.open(QIODevice::ReadOnly);
-        QFontDatabase::addApplicationFontFromData(fontFile.readAll());
-        QApplication::setFont(QFont("Open Sans", 9));
-    }
+//    QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
+//    if (fontFile.exists()) {
+//        fontFile.open(QIODevice::ReadOnly);
+//        QFontDatabase::addApplicationFontFromData(fontFile.readAll());
+//        QApplication::setFont(QFont("Open Sans", 9));
+//    }
 
     UiManager::setAnimationWidget(ui->animationtimeline);
 

@@ -3,6 +3,10 @@
 
 #include <QDialog>
 #include <QListWidgetItem>
+#include <QFutureWatcher>
+#include <QProgressDialog>
+
+#include "progressdialog.h"
 
 namespace Ui {
     class ProjectDialog;
@@ -11,6 +15,15 @@ namespace Ui {
 class MainWindow;
 class SettingsManager;
 class Database;
+
+class aiScene;
+
+ struct ModelData {
+     ModelData() = default;
+     ModelData(QString p, const aiScene *ai) : path(p), data(ai) {}
+     QString path;
+     const aiScene *data;
+ };
 
 class ProjectDialog : public QDialog
 {
@@ -27,6 +40,10 @@ public:
     bool copyDirectoryFiles(const QString &fromDir, const QString &toDir, bool coverFileIfExist);
     SettingsManager* getSettingsManager();
     SettingsManager* settings;
+    bool prepareStore(QString path);
+    void walkFileSystem(QString folder, QString path);
+    QVector<ModelData> fetchModel(const QString &path);
+
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
@@ -41,11 +58,28 @@ protected slots:
     void removeFromList();
     void deleteProject();
 
+    void handleDone();
+    void handleDoneFuture();
+
 private:
     Ui::ProjectDialog *ui;
     Database *db;
 
     QListWidgetItem *currentItem;
+//    QProgressDialog *dialog;
+    QString pathToOpen;
+    QFutureWatcher<QVector<ModelData>> *futureWatcher;
+
+    QSharedPointer<ProgressDialog> progressDialog;
+};
+
+struct AssetWidgetConcurrentWrapper {
+    ProjectDialog *instance;
+    typedef QVector<ModelData> result_type;
+    AssetWidgetConcurrentWrapper(ProjectDialog *inst) : instance(inst) {}
+        result_type operator()(const QString &data) {
+        return instance->fetchModel(data);
+    }
 };
 
 #endif // PROJECTDIALOG_H

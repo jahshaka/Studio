@@ -22,7 +22,21 @@
 #include <QFileDialog>
 #include <QMenu>
 
+#include "../core/thumbnailmanager.h"
+
 #include "../core/guidmanager.h"
+#include "../io/assetmanager.h"
+
+#include <QFutureWatcher>
+#include <QProgressDialog>
+#include <QThread>
+#include <QtConcurrent/QtConcurrent>
+#include <chrono>
+
+void reducer(QVector<ModelData> &accum, const QVector<ModelData> &interm)
+{
+    accum.append(interm);
+}
 
 ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::ProjectDialog)
 {
@@ -30,12 +44,12 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
 
     this->setWindowTitle("Jahshaka VR");
 
-    QFile fontFile(IrisUtils::getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
-    if (fontFile.exists()) {
-        fontFile.open(QIODevice::ReadOnly);
-        QFontDatabase::addApplicationFontFromData(fontFile.readAll());
-        QApplication::setFont(QFont("Open Sans", 9));
-    }
+//    QFile fontFile(IrisUtils::getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
+//    if (fontFile.exists()) {
+//        fontFile.open(QIODevice::ReadOnly);
+//        QFontDatabase::addApplicationFontFromData(fontFile.readAll());
+//        QApplication::setFont(QFont("Open Sans", 9));
+//    }
 
     ui->listWidget->setViewMode(QListWidget::IconMode);
     ui->listWidget->setIconSize(QSize(256, 256));
@@ -149,12 +163,14 @@ void ProjectDialog::openProject()
     if (!projectPath.isEmpty()) {
         Globals::project->setProjectPath(projectPath);
 
-        window = new MainWindow;
-        window->showMaximized();
-        window->openProject(projectFile.absoluteFilePath());
+
+        prepareStore(projectFile.absoluteFilePath());
+//        window = new MainWindow;
+//        window->showMaximized();
+//        window->openProject(projectFile.absoluteFilePath());
 
         settings->addRecentlyOpenedScene(projectFile.absoluteFilePath());
-        this->close();
+//        this->close();
     }
 
     else {
@@ -181,12 +197,16 @@ void ProjectDialog::openRecentProject(QListWidgetItem *item)
     auto projectPath = projectFile.absolutePath();
     Globals::project->setProjectPath(projectPath);
 
-    window = new MainWindow;
-    window->showMaximized();
+    prepareStore(projectFile.absoluteFilePath());
 
-    window->openProject(projectFile.absoluteFilePath());
+    settings->addRecentlyOpenedScene(projectFile.absoluteFilePath());
 
-    this->close();
+//    window = new MainWindow;
+//    window->showMaximized();
+
+//    window->openProject(projectFile.absoluteFilePath());
+
+//    this->close();
 }
 
 bool ProjectDialog::copyDirectoryFiles(const QString &fromDir, const QString &toDir, bool coverFileIfExist)
@@ -240,9 +260,10 @@ void ProjectDialog::openSampleProject(QListWidgetItem *item)
 
             auto sln = QDir(projectPath).filePath(projectFile.fileName());
 
-            window = new MainWindow;
-            window->showMaximized();
-            window->openProject(sln);
+            prepareStore(sln);
+//            window = new MainWindow;
+//            window->showMaximized();
+//            window->openProject(sln);
 
             settings->addRecentlyOpenedScene(sln);
         }
@@ -296,9 +317,206 @@ void ProjectDialog::deleteProject()
     }
 }
 
+void ProjectDialog::handleDone()
+{
+    progressDialog->setRange(0, 0);
+
+    progressDialog->setLabelText(QString("Populating scene..."));
+
+     for (auto item : futureWatcher->result()) {
+         for (int i = 0; i < AssetManager::assets.count(); i++) {
+             if (AssetManager::assets[i]->path == item.path) {
+                AssimpObject *ao = new AssimpObject(item.data, item.path);
+                AssetObject *model = new AssetObject(ao, item.path);
+
+                QVariant v;
+                v.setValue(ao);
+
+                AssetManager::assets[i] = model;
+             }
+         }
+     }
+
+     this->close();
+
+     progressDialog->setLabelText(QString("Initializing interface..."));
+
+     window = new MainWindow;
+     window->showMaximized();
+     window->setVisible(false);
+
+     progressDialog->close();
+
+//     progressDialog->reset();
+     window->openProject(pathToOpen);
+ //    window->showMaximized();
+     window->setVisible(true);
+
+}
+
+void ProjectDialog::handleDoneFuture()
+{
+
+}
+
 SettingsManager *ProjectDialog::getSettingsManager()
 {
     return settings;
+}
+
+bool ProjectDialog::prepareStore(QString path)
+{
+    pathToOpen = path;
+
+    // populate asset list
+    QDir d(Globals::project->getProjectFolder());
+    walkFileSystem("", d.absolutePath());
+
+    // models to thread import
+    // Prepare the vector.
+      QStringList fileNames;
+
+      // start the magic
+      for (auto asset : AssetManager::assets) {
+          if (asset->type == AssetType::Object) {
+  //            QFile file(asset->path);
+  //            file.open(QFile::ReadOnly);
+  //            asset->data = file.readAll();
+  //            file.close();
+
+              fileNames.append(asset->path);
+
+  //            AssetManager::modelAssets.append(static_cast<AssetModel*>(asset));
+          }
+      }
+
+      std::chrono::time_point<std::chrono::system_clock> start, end;
+      start = std::chrono::system_clock::now();
+
+  //    for (auto asset : AssetManager::modelAssets) {
+  //        qDebug() << "cracking a cold one open with " << asset->fileName;
+  //        Assimp::Importer importer;
+  //        const aiScene *scene = importer.ReadFileFromMemory((void*) asset->data.data(),
+  //                                                           asset->data.length(),
+  //                                                           aiProcessPreset_TargetRealtime_Fast);
+  //    }
+  //    4 seconds
+
+  //    // Create a progress dialog.
+//      dialog = new QProgressDialog;
+      progressDialog = QSharedPointer<ProgressDialog>(new ProgressDialog);
+  //    QProgressDialog dialog;
+  //    dialog.setLabelText(QString("Progressing using %1 thread(s)...").arg(QThread::idealThreadCount()));
+      progressDialog->setLabelText("Loading assets...");
+
+      // Create a QFutureWatcher and connect signals and slots.
+      futureWatcher = new QFutureWatcher<QVector<ModelData>>();
+
+      QObject::connect(futureWatcher, SIGNAL(finished()), SLOT(handleDone()));
+      QObject::connect(futureWatcher, SIGNAL(finished()), SLOT(handleDoneFuture()));
+      QObject::connect(futureWatcher, SIGNAL(finished()), futureWatcher, SLOT(deleteLater()));
+//      QObject::connect(progressDialog.data(), SIGNAL(canceled()), futureWatcher, SLOT(cancel()));
+      QObject::connect(futureWatcher, SIGNAL(progressRangeChanged(int,int)), progressDialog.data(), SLOT(setRange(int, int)));
+      QObject::connect(futureWatcher, SIGNAL(progressValueChanged(int)), progressDialog.data(), SLOT(setValue(int)));
+
+      // Start the computation.
+      AssetWidgetConcurrentWrapper loadWrapper(this);
+      auto future = QtConcurrent::mappedReduced(fileNames, loadWrapper, reducer, QtConcurrent::SequentialReduce);
+  //    auto future = QtConcurrent::mapped(fileNames, AssetWidgetConcurrentWrapper2(this));
+      futureWatcher->setFuture(future);
+
+      // Display the dialog and start the event loop.
+//      dialog->exec();
+      progressDialog->exec();
+
+      futureWatcher->waitForFinished();
+
+      // Query the future to check if was canceled.
+  //    qDebug() << "Canceled?" << futureWatcher.future().isCanceled();
+
+      end = std::chrono::system_clock::now();
+
+      std::chrono::duration<double> elapsed_seconds = end - start;
+      std::time_t end_time = std::chrono::system_clock::to_time_t(end);
+
+      qDebug() << "\nfinished computation at " << std::ctime(&end_time)
+               << "elapsed time: " << elapsed_seconds.count() << "s\n";
+}
+
+void ProjectDialog::walkFileSystem(QString folder, QString path)
+{
+  QDir dir(path);
+  QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs);
+  foreach (const QFileInfo &file, files) {
+      // TODO - maybe add some OS centric code to check for hidden folder
+      if (file.suffix() != Constants::PROJ_EXT) {
+          // TODO -- get type from extension if is a file
+          if (file.isFile()) {
+              AssetType type;
+              QPixmap pixmap;
+
+              if (file.suffix() == "jpg" || file.suffix() == "png" || file.suffix() == "bmp") {
+                  auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
+                  pixmap = QPixmap::fromImage(*thumb->thumb);
+                  type = AssetType::Texture;
+              } else if (file.suffix() == "obj" || file.suffix() == "fbx" || file.suffix() == "dae") {
+                  auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                  type = AssetType::Object;
+                  pixmap = QPixmap::fromImage(*thumb->thumb);
+              } else if (file.suffix() == "shader") {
+                  auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                  type = AssetType::Shader;
+                  pixmap = QPixmap::fromImage(*thumb->thumb);
+              } else {
+                  auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                  type = AssetType::File;
+                  pixmap = QPixmap::fromImage(*thumb->thumb);
+              }
+
+              auto asset = new AssetVariant;
+              asset->type = type;
+              asset->fileName = file.fileName();
+              asset->path = file.absoluteFilePath();
+              asset->thumbnail = pixmap;
+
+              AssetManager::assets.append(asset);
+          } else {
+              auto thumb = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
+              QPixmap pixmap = QPixmap::fromImage(*thumb->thumb);
+
+              auto asset = new AssetFolder;
+              asset->fileName = file.fileName();
+              asset->path = file.absoluteFilePath();
+              asset->thumbnail = pixmap;
+
+              AssetManager::assets.append(asset);
+          }
+
+          if (file.isDir()) {
+              walkFileSystem("", file.absoluteFilePath());
+          }
+      }
+  }
+}
+
+QVector<ModelData> ProjectDialog::fetchModel(const QString &filePath)
+{
+  QVector<ModelData> sceneVec;
+  QFile file(filePath);
+  file.open(QFile::ReadOnly);
+  auto data = file.readAll();
+//    qDebug() << "called???";
+
+  auto importer = new Assimp::Importer;
+//    const aiScene *scene = importer->ReadFile(filePath.toStdString().c_str(),
+//                                             aiProcessPreset_TargetRealtime_Fast);
+
+  const aiScene *scene = importer->ReadFileFromMemory((void*) data.data(),
+                                                      data.length(),
+                                                      aiProcessPreset_TargetRealtime_Fast);
+  ModelData d = { filePath, scene };
+  sceneVec.append(d);
+  return sceneVec;
 }
 
 bool ProjectDialog::eventFilter(QObject *watched, QEvent *event)

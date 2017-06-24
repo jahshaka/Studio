@@ -14,7 +14,13 @@
    <string>Project Screen</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">#ProjectDialog {
+   <string notr="true">#sampleWarn {
+	border: 0;
+	padding: 4px;
+	margin: 0;
+}
+
+#ProjectDialog {
 	background: #161a1b;
 }
 
@@ -189,6 +195,9 @@ QTabBar::tab {
       </layout>
      </widget>
      <widget class="QWidget" name="demos">
+      <property name="styleSheet">
+       <string notr="true">background: #404040</string>
+      </property>
       <attribute name="title">
        <string>Sample Projects</string>
       </attribute>
@@ -205,8 +214,21 @@ QTabBar::tab {
        <property name="bottomMargin">
         <number>0</number>
        </property>
-       <item row="1" column="0">
+       <item row="2" column="0">
         <widget class="QListWidget" name="demoList"/>
+       </item>
+       <item row="3" column="0">
+        <widget class="QLabel" name="sampleWarn">
+         <property name="lineWidth">
+          <number>0</number>
+         </property>
+         <property name="text">
+          <string>Sample projects shown here are READ ONLY! Opening a sample will prompt you for a directory to copy to and allow modification.</string>
+         </property>
+         <property name="indent">
+          <number>-1</number>
+         </property>
+        </widget>
        </item>
       </layout>
      </widget>
