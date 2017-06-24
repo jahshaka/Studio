@@ -102,7 +102,7 @@ SOURCES += src/main.cpp\
     src/commands/transfrormscenenodecommand.cpp \
     src/commands/changematerialpropertycommand.cpp \
     src/commands/addscenenodecommand.cpp \
-    src/commands/deletescenenodecommand.cpp
+    src/commands/deletescenenodecommand.cpp \
     src/dialogs/progressdialog.cpp
 
 HEADERS  += src/mainwindow.h \
@@ -200,7 +200,7 @@ HEADERS  += src/mainwindow.h \
     src/commands/transfrormscenenodecommand.h \
     src/commands/changematerialpropertycommand.h \
     src/commands/addscenenodecommand.h \
-    src/commands/deletescenenodecommand.h
+    src/commands/deletescenenodecommand.h \
     src/dialogs/progressdialog.h
 
 FORMS    += \

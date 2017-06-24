@@ -29,6 +29,7 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui
 
     lastValue = settingsManager->getValue("last_wd", "").toString();
     if (!lastValue.isEmpty()) {
+        projectPath = lastValue;
         ui->projectPath->setText(lastValue);
     }
 }
