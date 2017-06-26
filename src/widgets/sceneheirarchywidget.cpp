@@ -286,25 +286,35 @@ void SceneHeirarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
                                         QSharedPointer<iris::SceneNode> sceneNode)
 {
     for (auto childNode : sceneNode->children) {
-        if (childNode->name != "Arrow") {
-            auto childTreeItem = new QTreeWidgetItem();
-            childTreeItem->setText(0, childNode->getName());
-            childTreeItem->setData(1, Qt::UserRole,QVariant::fromValue(childNode->getNodeId()));
-            // childNode->setIcon(0,this->getIconFromSceneNodeType(node->sceneNodeType));
-            childTreeItem->setFlags(childTreeItem->flags() | Qt::ItemIsUserCheckable);
-            childTreeItem->setCheckState(0, Qt::Checked);
+        auto childTreeItem = createTreeItems(childNode);
 
-            // if (!node->isVisible()) childNode->setCheckState(0,Qt::Unchecked);
+        parentTreeItem->addChild(childTreeItem);
 
-            parentTreeItem->addChild(childTreeItem);
+        // sceneTreeItems.insert(node->getEntity()->id(),childNode);
+        nodeList.insert(childNode->getNodeId(), childNode);
+        treeItemList.insert(childNode->getNodeId(), childTreeItem);
 
-            // sceneTreeItems.insert(node->getEntity()->id(),childNode);
-            nodeList.insert(childNode->getNodeId(), childNode);
-            treeItemList.insert(childNode->getNodeId(), childTreeItem);
-
-            populateTree(childTreeItem, childNode);
-        }
+        populateTree(childTreeItem, childNode);
     }
+}
+
+QTreeWidgetItem *SceneHeirarchyWidget::createTreeItems(iris::SceneNodePtr node)
+{
+    auto childTreeItem = new QTreeWidgetItem();
+    childTreeItem->setText(0, node->getName());
+    childTreeItem->setData(1, Qt::UserRole,QVariant::fromValue(node->getNodeId()));
+    // childNode->setIcon(0,this->getIconFromSceneNodeType(node->sceneNodeType));
+    childTreeItem->setFlags(childTreeItem->flags() | Qt::ItemIsUserCheckable);
+    childTreeItem->setCheckState(0, Qt::Checked);
+
+    return childTreeItem;
+}
+
+void SceneHeirarchyWidget::insertChild(iris::SceneNodePtr childNode)
+{
+    auto parentTreeItem = treeItemList[childNode->parent->nodeId];
+    auto childItem = createTreeItems(childNode);
+    parentTreeItem->insertChild(childNode->parent->children.indexOf(childNode),childItem);
 }
 
 SceneHeirarchyWidget::~SceneHeirarchyWidget()

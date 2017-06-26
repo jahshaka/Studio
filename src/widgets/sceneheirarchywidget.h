@@ -56,9 +56,19 @@ protected slots:
     void deleteNode();
     void duplicateNode();
 
+    /**
+     * @brief Inserts item into tree under the parent
+     * This functions assumes the child node is already a part of the scene and has a parent
+     * already displayed in the scene
+     * @param childNode
+     */
+    void insertChild(iris::SceneNodePtr childNode);
+
 private:
     void repopulateTree();
     void populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode);
+
+    QTreeWidgetItem* createTreeItems(iris::SceneNodePtr node);
 
     // maps scene nodes to their widgetitems
     QMap<long, QSharedPointer<iris::SceneNode>> nodeList;
