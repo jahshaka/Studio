@@ -17,6 +17,7 @@ For more information see the LICENSE file
 
 #include <QSharedPointer>
 //#include "animation/keyframeanimation.h"
+#include "core/logger.h"
 
 namespace iris
 {
