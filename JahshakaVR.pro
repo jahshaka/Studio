@@ -27,6 +27,11 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 TARGET = JahshakaVR
 TEMPLATE = app
 
+OBJECTS_DIR = generated_files
+MOC_DIR     = generated_files
+UI_DIR      = generated_files
+RCC_DIR     = generated_files
+
 SOURCES += src/main.cpp\
     src/mainwindow.cpp \
     src/widgets/colorvaluewidget.cpp \
