@@ -97,7 +97,7 @@ QScrollBar::sub-line:vertical {
  }
 
 QScrollBar::up-arrow:vertical {
-    image: url(:/app/icons/up-arrow.svg);
+    image: url(:/icons/up-arrow.svg);
 }
 
 QScrollBar::up-arrow:vertical:hover {
@@ -105,7 +105,7 @@ QScrollBar::up-arrow:vertical:hover {
 }
 
 QScrollBar::down-arrow:vertical {
-    image: url(:/app/icons/down-arrow.svg);
+    image: url(:/icons/down-arrow.svg);
 }
 
 QScrollBar::down-arrow:vertical:hover {
@@ -150,8 +150,8 @@ QScrollBar::down-arrow:vertical:hover {
        </property>
        <property name="icon">
         <iconset>
-         <normalon>:/app/icons/view-list-button.svg</normalon>
-         <activeon>:/app/icons/list-button-with-3-elements.svg</activeon>
+         <normalon>:/icons/view-list-button.svg</normalon>
+         <activeon>:/icons/list-button-with-3-elements.svg</activeon>
         </iconset>
        </property>
        <property name="checkable">

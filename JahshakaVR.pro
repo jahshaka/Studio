@@ -253,17 +253,21 @@ FORMS    += \
     src/widgets/screenshotwidget.ui
 
 RESOURCES += \
-    shaders.qrc \
-    icons.qrc \
+    app/shaders.qrc \
+    app/icons.qrc \
+    app/images.qrc \
+    app/materials.qrc \
+    app/models.qrc \
+    app/textures.qrc \
+    app/modelpresets.qrc \
+    app/fonts.qrc \
+    app/skies.qrc \
+    app/images.qrc \
     images.qrc \
-    materials.qrc \
-    models.qrc \
-    textures.qrc \
-    modelpresets.qrc \
-    fonts.qrc \
-    skies.qrc
+    images.qrc \
+    images.qrc
 
-win32: RC_ICONS = icon.ico
+win32: RC_ICONS = app/icons/icon.ico
 
 # http://stackoverflow.com/questions/32631084/create-dir-copy-files-with-qmake
 !equals(PWD, $$OUT_PWD) {

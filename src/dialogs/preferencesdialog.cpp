@@ -30,6 +30,24 @@ PreferencesDialog::PreferencesDialog(SettingsManager* settings) :
     setupPages();
 }
 
+void PreferencesDialog::setupList()
+{
+    auto list = ui->listWidget;
+    list->setFlow(QListView::TopToBottom);
+    list->setViewMode(QListView::IconMode);
+    list->setMovement(QListView::Static);
+
+    QListWidgetItem *item = new QListWidgetItem(ui->listWidget);
+    item->setIcon(QIcon(":/icons/world.svg"));
+    item->setText(tr("Editor"));
+    item->setSizeHint(QSize(80, 80));
+    item->setTextAlignment(Qt::AlignHCenter);
+    item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
+
+    connect(ui->listWidget, SIGNAL(currentItemChanged(QListWidgetItem*, QListWidgetItem*)),
+            this, SLOT(pageChanged(QListWidgetItem*, QListWidgetItem*)));
+}
+
 void PreferencesDialog::setupPages()
 {
     // can we elimate this to be more permanent? why (was/is) this dynamic really?

@@ -1,0 +1,32 @@
+<RCC>
+    <qresource prefix="/">
+        <file>shaders/advanced.frag</file>
+        <file>shaders/advanced.vert</file>
+        <file>shaders/billboard.frag</file>
+        <file>shaders/billboard.vert</file>
+        <file>shaders/color.frag</file>
+        <file>shaders/color.vert</file>
+        <file>shaders/endless_plane.frag</file>
+        <file>shaders/endless_plane.vert</file>
+        <file>shaders/equisky.frag</file>
+        <file>shaders/equisky.vert</file>
+        <file>shaders/flat.frag</file>
+        <file>shaders/flat.vert</file>
+        <file>shaders/gizmo.frag</file>
+        <file>shaders/gizmo.vert</file>
+        <file>shaders/reflective_material.frag</file>
+        <file>shaders/reflective_material.vert</file>
+        <file>shaders/refractive_material.frag</file>
+        <file>shaders/refractive_material.vert</file>
+        <file>shaders/simple.frag</file>
+        <file>shaders/simple.vert</file>
+        <file>shaders/defaultsky.vert</file>
+        <file>shaders/defaultsky.frag</file>
+        <file>shaders/fullscreen.frag</file>
+        <file>shaders/fullscreen.vert</file>
+        <file>shaders/particle.vert</file>
+        <file>shaders/particle.frag</file>
+        <file>shaders/emitter.frag</file>
+        <file>shaders/emitter.vert</file>
+    </qresource>
+</RCC>

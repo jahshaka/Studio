@@ -91,7 +91,7 @@ ProjectDialog::ProjectDialog(bool mainWindowActive, QDialog *parent) : QDialog(p
             if (QFile::exists(fn.absolutePath() + "/Metadata/preview.png")) {
                 item->setIcon(QIcon(fn.absolutePath() + "/Metadata/preview.png"));
             } else {
-                item->setIcon(QIcon(":/app/images/no_preview.png"));
+                item->setIcon(QIcon(":/images/no_preview.png"));
             }
             item->setText(fn.baseName());
             ui->listWidget->addItem(item);
@@ -111,7 +111,7 @@ ProjectDialog::ProjectDialog(bool mainWindowActive, QDialog *parent) : QDialog(p
         if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
             item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
         } else {
-            item->setIcon(QIcon(":/app/images/no_preview.png"));
+            item->setIcon(QIcon(":/images/no_preview.png"));
         }
         ui->demoList->addItem(item);
     }
@@ -508,15 +508,15 @@ void ProjectDialog::walkFileSystem(QString folder, QString path)
                   pixmap = QPixmap::fromImage(*thumb->thumb);
                   type = AssetType::Texture;
               } else if (file.suffix() == "obj" || file.suffix() == "fbx" || file.suffix() == "dae") {
-                  auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                  auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
                   type = AssetType::Object;
                   pixmap = QPixmap::fromImage(*thumb->thumb);
               } else if (file.suffix() == "shader") {
-                  auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                  auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
                   type = AssetType::Shader;
                   pixmap = QPixmap::fromImage(*thumb->thumb);
               } else {
-                  auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                  auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
                   type = AssetType::File;
                   pixmap = QPixmap::fromImage(*thumb->thumb);
               }
@@ -529,7 +529,7 @@ void ProjectDialog::walkFileSystem(QString folder, QString path)
 
               AssetManager::assets.append(asset);
           } else {
-              auto thumb = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
+              auto thumb = ThumbnailManager::createThumbnail(":/icons/folder-symbol.svg", 128, 128);
               QPixmap pixmap = QPixmap::fromImage(*thumb->thumb);
 
               auto asset = new AssetFolder;

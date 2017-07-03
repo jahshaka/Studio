@@ -35,11 +35,11 @@ SkyPresets::SkyPresets(QWidget *parent) :
     ui->skyList->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->skyList->setSelectionMode(QAbstractItemView::SingleSelection);
 
-    QString cove = ":/app/content/skies/alternative/cove/front.jpg";
-    QString dessert = ":/app/content/skies/alternative/ame_desert/front.png";
-    QString lake = ":/app/content/skies/alternative/yokohama/front.jpg";
-    QString field = ":/app/content/skies/alternative/field/front.jpg";
-    QString creek = ":/app/content/skies/alternative/creek/front.jpg";
+    QString cove = ":/content/skies/alternative/cove/front.jpg";
+    QString dessert = ":/content/skies/alternative/ame_desert/front.png";
+    QString lake = ":/content/skies/alternative/yokohama/front.jpg";
+    QString field = ":/content/skies/alternative/field/front.jpg";
+    QString creek = ":/content/skies/alternative/creek/front.jpg";
 
     addCubeSky(cove, "Cove");
     addCubeSky(dessert, "Hamarikyu");

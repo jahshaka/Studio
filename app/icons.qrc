@@ -1,0 +1,53 @@
+<RCC>
+    <qresource prefix="/">
+        <file>icons/add-2.svg</file>
+        <file>icons/add-plus-button.svg</file>
+        <file>icons/bulb.png</file>
+        <file>icons/chevron-arrow-down.svg</file>
+        <file>icons/chevron-arrow-up.svg</file>
+        <file>icons/clear-button.svg</file>
+        <file>icons/close.svg</file>
+        <file>icons/delete.png</file>
+        <file>icons/down_arrow_check.png</file>
+        <file>icons/down-arrow.svg</file>
+        <file>icons/dropdown.png</file>
+        <file>icons/drop-down-arrow.svg</file>
+        <file>icons/end.svg</file>
+        <file>icons/error.svg</file>
+        <file>icons/expand-arrows.svg</file>
+        <file>icons/expand-button.svg</file>
+        <file>icons/fastforward.svg</file>
+        <file>icons/fastreverse.svg</file>
+        <file>icons/folder-symbol.svg</file>
+        <file>icons/google-drive-file.svg</file>
+        <file>icons/icon.ico</file>
+        <file>icons/import.svg</file>
+        <file>icons/light.png</file>
+        <file>icons/link-symbol.svg</file>
+        <file>icons/list-button-with-3-elements.svg</file>
+        <file>icons/local.svg</file>
+        <file>icons/logo01.png</file>
+        <file>icons/logo02.png</file>
+        <file>icons/logo03.svg</file>
+        <file>icons/people.svg</file>
+        <file>icons/play.svg</file>
+        <file>icons/play-arrow.svg</file>
+        <file>icons/plus.svg</file>
+        <file>icons/redo.svg</file>
+        <file>icons/reverse.svg</file>
+        <file>icons/right-chevron.svg</file>
+        <file>icons/rotate-to-right.svg</file>
+        <file>icons/sceneobject.svg</file>
+        <file>icons/start.svg</file>
+        <file>icons/stop.svg</file>
+        <file>icons/tranlate arrow.svg</file>
+        <file>icons/translate-arrow.svg</file>
+        <file>icons/undo.png</file>
+        <file>icons/up_arrow_check.png</file>
+        <file>icons/up-arrow.svg</file>
+        <file>icons/user-account-box.svg</file>
+        <file>icons/view-list-button.svg</file>
+        <file>icons/virtual-reality.svg</file>
+        <file>icons/world.svg</file>
+    </qresource>
+</RCC>

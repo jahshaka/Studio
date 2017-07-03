@@ -1,5 +1,5 @@
 <RCC>
     <qresource prefix="/">
-        <file>app/fonts/OpenSans-Bold.ttf</file>
+        <file>fonts/OpenSans-Semibold.ttf</file>
     </qresource>
 </RCC>

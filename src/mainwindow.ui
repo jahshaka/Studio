@@ -14,8 +14,8 @@
    <string>JahshakaVR</string>
   </property>
   <property name="windowIcon">
-   <iconset resource="../icons.qrc">
-    <normaloff>:/app/icons/logo03.svg</normaloff>:/app/icons/logo03.svg</iconset>
+   <iconset resource="../app/icons.qrc">
+    <normaloff>:/icons/logo03.svg</normaloff>:/icons/logo03.svg</iconset>
   </property>
   <property name="windowOpacity">
    <double>1.000000000000000</double>
@@ -114,7 +114,7 @@ QComboBox::drop-down {
 }
 
 QComboBox::down-arrow {
-	image: url(:app/icons/dropdown.png);
+	image: url(:/icons/dropdown.png);
 	width: 18px;
 	height: 14px;
  }
@@ -126,7 +126,7 @@ QDoubleSpinBox {
 	/*border-right: 18px solid #1e1e1e; /* hide a 1px gap */
 	background-color: #404040;
 	selection-color: #BBB;
-    /*border-image: url(:/app/images/frame.png) 4; */
+    /*border-image: url(:/images/frame.png) 4; */
     color: #BBB;
 }
 
@@ -140,7 +140,7 @@ QDoubleSpinBox::up-button {
     subcontrol-position: top right; /* position at the top right corner */
 
     width: 15px; /* 16 + 2*1px border-width = 15px padding + 3px parent border */
-    border-image: url(:/app/icons/chevron-arrow-up.svg);
+    border-image: url(:/icons/chevron-arrow-up.svg);
     border-width: 1px;
 }
 
@@ -158,7 +158,7 @@ QDoubleSpinBox::down-button {
     subcontrol-position: bottom right; /* position at bottom right corner */
 	margin-top: -1px;
     width: 15px;
-    border-image: url(:/app/icons/chevron-arrow-down.svg);
+    border-image: url(:/icons/chevron-arrow-down.svg);
     border-width: 1px;
     border-top-width: 1px;
 }
@@ -231,7 +231,7 @@ QScrollBar::sub-line:vertical {
  }
 
 QScrollBar::up-arrow:vertical {
-    image: url(:/app/icons/up-arrow.svg);
+    image: url(:/icons/up-arrow.svg);
 }
 
 QScrollBar::up-arrow:vertical:hover {
@@ -239,7 +239,7 @@ QScrollBar::up-arrow:vertical:hover {
 }
 
 QScrollBar::down-arrow:vertical {
-    image: url(:/app/icons/down-arrow.svg);
+    image: url(:/icons/down-arrow.svg);
 }
 
 QScrollBar::down-arrow:vertical:hover {
@@ -263,8 +263,8 @@ QDockWidget::title {
 }
 
 QDockWidget {
-	titlebar-close-icon: url(:app/icons/close.svg);
-	titlebar-normal-icon: url(:app/icons/plus.svg);
+	titlebar-close-icon: url(:/icons/close.svg);
+	titlebar-normal-icon: url(:/icons/plus.svg);
 }
 
 QDockWidget::close-button, QDockWidget::float-button {
@@ -1103,8 +1103,8 @@ QToolButton:checked
   </action>
   <action name="actionUndo">
    <property name="icon">
-    <iconset resource="../icons.qrc">
-     <normaloff>:/app/icons/undo.png</normaloff>:/app/icons/undo.png</iconset>
+    <iconset resource="../app/icons.qrc">
+     <normaloff>:/icons/undo.png</normaloff>:/icons/undo.png</iconset>
    </property>
    <property name="text">
     <string>Undo</string>
@@ -1112,8 +1112,8 @@ QToolButton:checked
   </action>
   <action name="actionRedo">
    <property name="icon">
-    <iconset resource="../icons.qrc">
-     <normaloff>:/app/icons/redo.svg</normaloff>:/app/icons/redo.svg</iconset>
+    <iconset resource="../app/icons.qrc">
+     <normaloff>:/icons/redo.svg</normaloff>:/icons/redo.svg</iconset>
    </property>
    <property name="text">
     <string>Redo</string>
@@ -1124,11 +1124,11 @@ QToolButton:checked
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset resource="../icons.qrc">
-     <normaloff>:/app/icons/tranlate arrow.svg</normaloff>
-     <normalon>:/app/icons/tranlate arrow.svg</normalon>
-     <activeon>:/app/icons/tranlate arrow.svg</activeon>
-     <selectedon>:/app/icons/tranlate arrow.svg</selectedon>:/app/icons/tranlate arrow.svg</iconset>
+    <iconset resource="../app/icons.qrc">
+     <normaloff>:/icons/tranlate arrow.svg</normaloff>
+     <normalon>:/icons/tranlate arrow.svg</normalon>
+     <activeon>:/icons/tranlate arrow.svg</activeon>
+     <selectedon>:/icons/tranlate arrow.svg</selectedon>:/icons/tranlate arrow.svg</iconset>
    </property>
    <property name="text">
     <string>Translate Tool</string>
@@ -1139,8 +1139,8 @@ QToolButton:checked
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset resource="../icons.qrc">
-     <normaloff>:/app/icons/rotate-to-right.svg</normaloff>:/app/icons/rotate-to-right.svg</iconset>
+    <iconset resource="../app/icons.qrc">
+     <normaloff>:/icons/rotate-to-right.svg</normaloff>:/icons/rotate-to-right.svg</iconset>
    </property>
    <property name="text">
     <string>Rotate Tool</string>
@@ -1151,8 +1151,8 @@ QToolButton:checked
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset resource="../icons.qrc">
-     <normaloff>:/app/icons/expand-arrows.svg</normaloff>:/app/icons/expand-arrows.svg</iconset>
+    <iconset resource="../app/icons.qrc">
+     <normaloff>:/icons/expand-arrows.svg</normaloff>:/icons/expand-arrows.svg</iconset>
    </property>
    <property name="text">
     <string>Scale Tool</string>
@@ -1163,8 +1163,8 @@ QToolButton:checked
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset resource="../icons.qrc">
-     <normaloff>:/app/icons/world.svg</normaloff>:/app/icons/world.svg</iconset>
+    <iconset resource="../app/icons.qrc">
+     <normaloff>:/icons/world.svg</normaloff>:/icons/world.svg</iconset>
    </property>
    <property name="text">
     <string>Global Space</string>
@@ -1175,8 +1175,8 @@ QToolButton:checked
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset resource="../icons.qrc">
-     <normaloff>:/app/icons/sceneobject.svg</normaloff>:/app/icons/sceneobject.svg</iconset>
+    <iconset resource="../app/icons.qrc">
+     <normaloff>:/icons/sceneobject.svg</normaloff>:/icons/sceneobject.svg</iconset>
    </property>
    <property name="text">
     <string>Local Space</string>
@@ -1187,8 +1187,8 @@ QToolButton:checked
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset resource="../icons.qrc">
-     <normaloff>:/app/icons/people.svg</normaloff>:/app/icons/people.svg</iconset>
+    <iconset resource="../app/icons.qrc">
+     <normaloff>:/icons/people.svg</normaloff>:/icons/people.svg</iconset>
    </property>
    <property name="text">
     <string>Free Camera</string>
@@ -1199,8 +1199,8 @@ QToolButton:checked
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset resource="../icons.qrc">
-     <normaloff>:/app/icons/local.svg</normaloff>:/app/icons/local.svg</iconset>
+    <iconset resource="../app/icons.qrc">
+     <normaloff>:/icons/local.svg</normaloff>:/icons/local.svg</iconset>
    </property>
    <property name="text">
     <string>Arcball Camera</string>
@@ -1345,7 +1345,7 @@ QToolButton:checked
   </customwidget>
  </customwidgets>
  <resources>
-  <include location="../icons.qrc"/>
+  <include location="../app/icons.qrc"/>
  </resources>
  <connections/>
 </ui>

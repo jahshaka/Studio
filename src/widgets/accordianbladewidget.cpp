@@ -48,7 +48,7 @@ AccordianBladeWidget::AccordianBladeWidget(QWidget* parent) :
 
     connect(ui->toggle, SIGNAL(toggled(bool)), SLOT(onPanelToggled()));
 
-    ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); }"
+    ui->toggle->setStyleSheet("QPushButton { border-image: url(:/icons/right-chevron.svg); }"
                               "QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
     ui->contentpane->setVisible(false);
 }
@@ -76,13 +76,13 @@ void AccordianBladeWidget::clearPanel(QLayout *layout)
 void AccordianBladeWidget::onPanelToggled()
 {
     if (ui->contentpane->isVisible()) {
-        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); }"
+        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/icons/right-chevron.svg); }"
                                   "QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
 
         ui->contentpane->setVisible(false);
         this->setMinimumHeight(ui->bg->height());
     } else {
-        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/chevron-arrow-down.svg); }"
+        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/icons/chevron-arrow-down.svg); }"
                                   "QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
 
         expand();

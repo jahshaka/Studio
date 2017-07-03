@@ -83,6 +83,22 @@ QLineEdit {
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
+        <property name="minimumSize">
+         <size>
+          <width>150</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>90</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">background-image: url(:/images/sidepanelimage_info.jpg);
+</string>
+        </property>
         <property name="text">
          <string>Apply Changes</string>
         </property>
@@ -125,7 +141,7 @@ QLineEdit {
          <string/>
         </property>
         <property name="pixmap">
-         <pixmap resource="../../images.qrc">:/app/images/sidepanelimage.jpg</pixmap>
+         <pixmap>:/app/images/sidepanelimage.jpg</pixmap>
         </property>
        </widget>
       </item>
@@ -150,8 +166,6 @@ QLineEdit {
    </item>
   </layout>
  </widget>
- <resources>
-  <include location="../../images.qrc"/>
- </resources>
+ <resources/>
  <connections/>
 </ui>

@@ -221,7 +221,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->ToolBar->addWidget(empty);
 
     vrButton = new QPushButton();
-    QIcon ico(":/app/icons/virtual-reality.svg");
+    QIcon ico(":/icons/virtual-reality.svg");
     vrButton->setIcon(ico);
     vrButton->setObjectName("vrButton");
     //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
@@ -338,7 +338,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     // second node
     auto node = iris::MeshNode::create();
-    node->setMesh(":/app/models/ground.obj");
+    node->setMesh(":/models/ground.obj");
     node->setLocalPos(QVector3D(0, 1e-4, 0)); // prevent z-fighting with the default plane
     node->setName("Ground");
     node->setPickable(false);
@@ -346,7 +346,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-    m->setValue("diffuseTexture", ":/app/content/textures/tile.png");
+    m->setValue("diffuseTexture", ":/content/textures/tile.png");
     m->setValue("textureScale", 4.f);
     node->setMaterial(m);
 
@@ -359,7 +359,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     dlight->setLocalPos(QVector3D(4, 4, 0));
     dlight->setLocalRot(QQuaternion::fromEulerAngles(15, 0, 0));
     dlight->intensity = 1;
-    dlight->icon = iris::Texture2D::load(":/app/icons/light.png");
+    dlight->icon = iris::Texture2D::load(":/icons/light.png");
 
     auto plight = iris::LightNode::create();
     plight->setLightType(iris::LightType::Point);
@@ -367,7 +367,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     plight->setName("Point Light");
     plight->setLocalPos(QVector3D(-4, 4, 0));
     plight->intensity = 1;
-    plight->icon = iris::Texture2D::load(":/app/icons/bulb.png");
+    plight->icon = iris::Texture2D::load(":/icons/bulb.png");
 
     // fog params
     scene->fogColor = QColor(72, 72, 72);
@@ -968,7 +968,7 @@ void MainWindow::addPlane()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(":/app/content/primitives/plane.obj");
+    node->setMesh(":/content/primitives/plane.obj");
     node->setFaceCullingMode(iris::FaceCullingMode::None);
     node->setName("Plane");
     addNodeToScene(node);
@@ -979,7 +979,7 @@ void MainWindow::addCone()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(":/app/content/primitives/cone.obj");
+    node->setMesh(":/content/primitives/cone.obj");
     node->setName("Cone");
     addNodeToScene(node);
 }
@@ -991,7 +991,7 @@ void MainWindow::addCube()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(":/app/content/primitives/cube.obj");
+    node->setMesh(":/content/primitives/cube.obj");
     node->setName("Cube");
     addNodeToScene(node);
 }
@@ -1003,7 +1003,7 @@ void MainWindow::addTorus()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(":/app/content/primitives/torus.obj");
+    node->setMesh(":/content/primitives/torus.obj");
     node->setName("Torus");
     addNodeToScene(node);
 }
@@ -1015,7 +1015,7 @@ void MainWindow::addSphere()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(":/app/content/primitives/sphere.obj");
+    node->setMesh(":/content/primitives/sphere.obj");
     node->setName("Sphere");
     addNodeToScene(node);
 }
@@ -1027,7 +1027,7 @@ void MainWindow::addCylinder()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(":/app/content/primitives/cylinder.obj");
+    node->setMesh(":/content/primitives/cylinder.obj");
     node->setName("Cylinder");
 
     addNodeToScene(node);
@@ -1038,7 +1038,7 @@ void MainWindow::addPointLight()
     this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Point);
-    node->icon = iris::Texture2D::load(":/app/icons/bulb.png");
+    node->icon = iris::Texture2D::load(":/icons/bulb.png");
     node->setName("Point Light");
     node->intensity = 1.0f;
     node->distance = 40.0f;
@@ -1050,7 +1050,7 @@ void MainWindow::addSpotLight()
     this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Spot);
-    node->icon = iris::Texture2D::load(":/app/icons/bulb.png");
+    node->icon = iris::Texture2D::load(":/icons/bulb.png");
     node->setName("Spot Light");
     addNodeToScene(node);
 }
@@ -1061,7 +1061,7 @@ void MainWindow::addDirectionalLight()
     this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Directional);
-    node->icon = iris::Texture2D::load(":/app/icons/bulb.png");
+    node->icon = iris::Texture2D::load(":/icons/bulb.png");
     node->setName("Directional Light");
     addNodeToScene(node);
 }

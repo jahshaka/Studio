@@ -331,7 +331,7 @@ QWidget#controls &gt; QToolButton:hover {
                   </property>
                   <property name="icon">
                    <iconset resource="../../icons.qrc">
-                    <normaloff>:/app/icons/start.svg</normaloff>:/app/icons/start.svg</iconset>
+                    <normaloff>:/icons/start.svg</normaloff>:/icons/start.svg</iconset>
                   </property>
                  </widget>
                 </item>
@@ -342,7 +342,7 @@ QWidget#controls &gt; QToolButton:hover {
                   </property>
                   <property name="icon">
                    <iconset resource="../../icons.qrc">
-                    <normaloff>:/app/icons/fastreverse.svg</normaloff>:/app/icons/fastreverse.svg</iconset>
+                    <normaloff>:/icons/fastreverse.svg</normaloff>:/icons/fastreverse.svg</iconset>
                   </property>
                  </widget>
                 </item>
@@ -353,7 +353,7 @@ QWidget#controls &gt; QToolButton:hover {
                   </property>
                   <property name="icon">
                    <iconset resource="../../icons.qrc">
-                    <normaloff>:/app/icons/play-arrow.svg</normaloff>:/app/icons/play-arrow.svg</iconset>
+                    <normaloff>:/icons/play-arrow.svg</normaloff>:/icons/play-arrow.svg</iconset>
                   </property>
                  </widget>
                 </item>
@@ -364,7 +364,7 @@ QWidget#controls &gt; QToolButton:hover {
                   </property>
                   <property name="icon">
                    <iconset resource="../../icons.qrc">
-                    <normaloff>:/app/icons/stop.svg</normaloff>:/app/icons/stop.svg</iconset>
+                    <normaloff>:/icons/stop.svg</normaloff>:/icons/stop.svg</iconset>
                   </property>
                  </widget>
                 </item>
@@ -375,7 +375,7 @@ QWidget#controls &gt; QToolButton:hover {
                   </property>
                   <property name="icon">
                    <iconset resource="../../icons.qrc">
-                    <normaloff>:/app/icons/fastforward.svg</normaloff>:/app/icons/fastforward.svg</iconset>
+                    <normaloff>:/icons/fastforward.svg</normaloff>:/icons/fastforward.svg</iconset>
                   </property>
                  </widget>
                 </item>
@@ -386,7 +386,7 @@ QWidget#controls &gt; QToolButton:hover {
                   </property>
                   <property name="icon">
                    <iconset resource="../../icons.qrc">
-                    <normaloff>:/app/icons/end.svg</normaloff>:/app/icons/end.svg</iconset>
+                    <normaloff>:/icons/end.svg</normaloff>:/icons/end.svg</iconset>
                   </property>
                  </widget>
                 </item>
@@ -507,7 +507,7 @@ QWidget#controls &gt; QToolButton:hover {
   </customwidget>
  </customwidgets>
  <resources>
-  <include location="../../icons.qrc"/>
+  <include location="../../app/icons.qrc"/>
  </resources>
  <connections/>
 </ui>

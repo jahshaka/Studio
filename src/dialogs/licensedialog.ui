@@ -32,8 +32,8 @@
    <string>Dialog</string>
   </property>
   <property name="windowIcon">
-   <iconset resource="../../icons.qrc">
-    <normaloff>:/app/icons/logo03.svg</normaloff>:/app/icons/logo03.svg</iconset>
+   <iconset resource="../../app/icons.qrc">
+    <normaloff>:/icons/logo03.svg</normaloff>:/icons/logo03.svg</iconset>
   </property>
   <property name="styleSheet">
    <string notr="true">#LicenseDialog {
@@ -149,6 +149,26 @@ QScrollBar::down-arrow:vertical:hover {
      <property name="spacing">
       <number>0</number>
      </property>
+     <item>
+      <widget class="QWidget" name="widget_3" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>150</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">background-image: url(:/images/sidepanelimage_info.jpg);
+background-repeat: no-repeat;</string>
+       </property>
+      </widget>
+     </item>
      <item>
       <widget class="QTextBrowser" name="textBrowser">
        <property name="font">
@@ -904,8 +924,12 @@ p, li { white-space: pre-wrap; }
   </layout>
  </widget>
  <resources>
+<<<<<<< HEAD
   <include location="../../icons.qrc"/>
   <include location="../../images.qrc"/>
+=======
+  <include location="../../app/icons.qrc"/>
+>>>>>>> Reorganize all resource asssets and their usage
  </resources>
  <connections/>
 </ui>

@@ -95,6 +95,11 @@ QPushButton:hover {
        </widget>
       </item>
      </layout>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(36, 36, 36);
+background-image: url(:/images/sidepanelimage_info.jpg);
+background-repeat: no-repeat;</string>
+     </property>
     </widget>
    </item>
    <item row="0" column="1">

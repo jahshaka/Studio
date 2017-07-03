@@ -63,7 +63,7 @@
      </property>
      <property name="styleSheet">
       <string notr="true">background-color: rgb(36, 36, 36);
-background-image: url(:/app/images/sidepanelimage_info.jpg);
+background-image: url(:/images/sidepanelimage_info.jpg);
 background-repeat: no-repeat;</string>
      </property>
     </widget>
@@ -173,8 +173,8 @@ border-style: inset;
                <string>Visit Website</string>
               </property>
               <property name="icon">
-               <iconset resource="../../icons.qrc">
-                <normaloff>:/app/icons/world.svg</normaloff>:/app/icons/world.svg</iconset>
+               <iconset resource="../../app/icons.qrc">
+                <normaloff>:/icons/world.svg</normaloff>:/icons/world.svg</iconset>
               </property>
               <property name="iconSize">
                <size>
@@ -211,8 +211,8 @@ border-style: inset;
                <string>View Tutorials</string>
               </property>
               <property name="icon">
-               <iconset resource="../../icons.qrc">
-                <normaloff>:/app/icons/educational-video.svg</normaloff>:/app/icons/educational-video.svg</iconset>
+               <iconset>
+                <normaloff>:/icons/educational-video.svg</normaloff>:/icons/educational-video.svg</iconset>
               </property>
               <property name="iconSize">
                <size>
@@ -374,14 +374,14 @@ QListView::item:selected {
 	 margin-right: 2px;
  }
 
- QScrollBar::add-line:vertical { 
+ QScrollBar::add-line:vertical {
 	 background-color: rgb(180, 180, 180);
      height: 30px;
      subcontrol-position: bottom;
      subcontrol-origin: margin;
  }
 
- QScrollBar::sub-line:vertical { 
+ QScrollBar::sub-line:vertical {
 	 background-color: rgb(180, 180, 180);
      height: 30px;
      subcontrol-position: top;
@@ -503,7 +503,7 @@ color: rgb(115, 115, 115);
   </layout>
  </widget>
  <resources>
-  <include location="../../icons.qrc"/>
+  <include location="../../app/icons.qrc"/>
  </resources>
  <connections/>
 </ui>
