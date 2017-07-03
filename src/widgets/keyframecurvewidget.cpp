@@ -428,11 +428,11 @@ void KeyFrameCurveWidget::drawKeys(QPainter &paint)
                 paint.drawLine(ap, handlePoint);
 
                 paint.setBrush(defaultBrush);
-                paint.drawEllipse(handlePoint, keyPointRadius - 1, keyPointRadius -1);
+                paint.drawEllipse(handlePoint, (int)keyPointRadius - 1, (int)keyPointRadius -1);
 
                 paint.setBrush(innerBrush);
-                paint.drawEllipse(handlePoint, (keyPointRadius - 2),
-                                               (keyPointRadius - 2));
+                paint.drawEllipse(handlePoint, ((int)keyPointRadius - 2),
+                                               ((int)keyPointRadius - 2));
 
                 // right handle
                 handlePoint = getRightTangentHandlePoint(a);
@@ -440,11 +440,11 @@ void KeyFrameCurveWidget::drawKeys(QPainter &paint)
                 paint.drawLine(ap, handlePoint);
 
                 paint.setBrush(defaultBrush);
-                paint.drawEllipse(handlePoint, keyPointRadius - 1, keyPointRadius -1);
+                paint.drawEllipse(handlePoint, (int)keyPointRadius - 1, (int)keyPointRadius -1);
 
                 paint.setBrush(innerBrush);
-                paint.drawEllipse(handlePoint, (keyPointRadius - 2),
-                                               (keyPointRadius - 2));
+                paint.drawEllipse(handlePoint, ((int)keyPointRadius - 2),
+                                               ((int)keyPointRadius - 2));
 
                 paint.setPen(Qt::NoPen);
 
@@ -452,11 +452,11 @@ void KeyFrameCurveWidget::drawKeys(QPainter &paint)
             }
 
             paint.setBrush(defaultBrush);
-            paint.drawEllipse(ap, keyPointRadius, keyPointRadius);
+            paint.drawEllipse(ap, (int)keyPointRadius, (int)keyPointRadius);
 
             paint.setBrush(innerBrush);
-            paint.drawEllipse(ap, (keyPointRadius - 2),
-                                  (keyPointRadius - 2));
+            paint.drawEllipse(ap, ((int)keyPointRadius - 2),
+                                  ((int)keyPointRadius - 2));
 
 
         }

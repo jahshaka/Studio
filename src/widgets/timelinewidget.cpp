@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "timelinewidget.h"
 #include <QtMath>
+#include <cmath>
 
 #include "animationwidgetdata.h"
 
