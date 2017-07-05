@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "skeletalanimation.h"
 #include "../irisglfwd.h"
 #include <QDebug>
+#include <cmath>
 
 namespace iris
 {

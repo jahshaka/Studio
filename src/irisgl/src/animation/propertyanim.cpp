@@ -46,7 +46,10 @@ Vector3DPropertyAnim::Vector3DPropertyAnim()
 
 Vector3DPropertyAnim::~Vector3DPropertyAnim()
 {
-    delete[] keyFrames;
+    //delete[] keyFrames;
+    delete keyFrames[0];
+    delete keyFrames[1];
+    delete keyFrames[2];
 }
 
 QVector3D Vector3DPropertyAnim::getValue(float time)
@@ -94,7 +97,11 @@ ColorPropertyAnim::ColorPropertyAnim()
 
 ColorPropertyAnim::~ColorPropertyAnim()
 {
-    delete[] keyFrames;
+    //delete[] keyFrames;
+    delete keyFrames[0];
+    delete keyFrames[1];
+    delete keyFrames[2];
+    delete keyFrames[3];
 }
 
 QColor ColorPropertyAnim::getValue(float time)
