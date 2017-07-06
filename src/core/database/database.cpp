@@ -1,5 +1,6 @@
 #include "database.h"
 #include "../../constants.h"
+#include "../../irisgl/src/irisglfwd.h"
 #include "../../irisgl/src/core/irisutils.h"
 #include "../../core/project.h"
 #include "../../globals.h"
@@ -12,7 +13,8 @@
 
 Database::Database()
 {
-    if (!QSqlDatabase::isDriverAvailable(Constants::DB_DRIVER)) qCritical("DB driver not present!");
+    qDebug() << QSqlDatabase::drivers();
+    if (!QSqlDatabase::isDriverAvailable(Constants::DB_DRIVER)) irisLog("DB driver not present!");
     db = QSqlDatabase::addDatabase(Constants::DB_DRIVER);
 }
 
@@ -24,7 +26,7 @@ Database::~Database()
 void Database::executeAndCheckQuery(QSqlQuery &query)
 {
     if (!query.exec()) {
-        qDebug() << "Query failed to execute: " + query.lastError().text();
+        irisLog("Query failed to execute: " + query.lastError().text());
     }
 }
 
@@ -51,7 +53,7 @@ void Database::initializeDatabase(QString name)
 {
     db.setDatabaseName(name);
     if (!db.open()) {
-        qDebug() << "Couldn't open a DB connection. " << db.lastError();
+        irisLog( "Couldn't open a DB connection. " + db.lastError().text());
     }
 }
 
@@ -103,7 +105,7 @@ QByteArray Database::getSceneBlob() const
             return query.value(0).toByteArray();
         }
     } else {
-        qDebug() << "There was an error getting the blob! " + query.lastError().text();
+        irisLog("There was an error getting the blob! " + query.lastError().text());
     }
 
     return QByteArray();

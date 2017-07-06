@@ -531,7 +531,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
         for (auto asset : AssetManager::assets) {
             if (asset->type == AssetType::Shader) {
                 if (asset->fileName == mat["name"].toString() + ".shader") {
-                    qDebug() << asset->path;
+                    //qDebug() << asset->path;
                     m->generate(asset->path, true);
                 }
             }

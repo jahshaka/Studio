@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "irisgl/src/animation/keyframeset.h"
 #include "irisgl/src/animation/keyframeanimation.h"
 #include "irisgl/src/graphics/postprocessmanager.h"
+#include "irisgl/src/core/logger.h"
 
 #include <QFontDatabase>
 #include <QOpenGLContext>
@@ -102,6 +103,8 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
+    iris::Logger::getSingleton()->init(getAbsoluteAssetPath("log.txt"));
     createPostProcessDockWidget();
 
     ui->sceneContainer->setAcceptDrops(true);

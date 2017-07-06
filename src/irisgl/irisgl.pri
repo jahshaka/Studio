@@ -73,7 +73,8 @@ HEADERS += \
     $$PWD/src/geometry/boundingsphere.h \
     $$PWD/src/geometry/plane.h \
     $$PWD/src/geometry/frustum.h \
-    $$PWD/src/math/transform.h
+    $$PWD/src/math/transform.h \
+    $$PWD/src/core/logger.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -118,7 +119,8 @@ SOURCES += \
     $$PWD/src/scenegraph/scene.cpp \
     $$PWD/src/scenegraph/scenenode.cpp \
     $$PWD/src/geometry/plane.cpp \
-    $$PWD/src/geometry/frustum.cpp
+    $$PWD/src/geometry/frustum.cpp \
+    $$PWD/src/core/logger.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc
