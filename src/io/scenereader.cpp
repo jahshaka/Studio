@@ -420,6 +420,8 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         meshNode->setFaceCullingMode(iris::FaceCullingMode::None);
     }
 
+    meshNode->applyDefaultPose();
+
     return meshNode;
 }
 
