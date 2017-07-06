@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>348</width>
+    <width>400</width>
     <height>128</height>
    </rect>
   </property>
@@ -74,7 +74,7 @@
        <widget class="QPushButton" name="resetBtn">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-          <horstretch>2</horstretch>
+          <horstretch>1</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
@@ -264,7 +264,7 @@
             </size>
            </property>
            <property name="decimals">
-            <number>1</number>
+            <number>4</number>
            </property>
            <property name="minimum">
             <double>-512.000000000000000</double>
@@ -283,7 +283,7 @@
             </size>
            </property>
            <property name="decimals">
-            <number>1</number>
+            <number>4</number>
            </property>
            <property name="minimum">
             <double>-512.000000000000000</double>
@@ -302,7 +302,7 @@
             </size>
            </property>
            <property name="decimals">
-            <number>1</number>
+            <number>4</number>
            </property>
            <property name="minimum">
             <double>-512.000000000000000</double>
@@ -382,7 +382,7 @@
             </size>
            </property>
            <property name="decimals">
-            <number>1</number>
+            <number>4</number>
            </property>
            <property name="minimum">
             <double>-512.000000000000000</double>
@@ -401,7 +401,7 @@
             </size>
            </property>
            <property name="decimals">
-            <number>1</number>
+            <number>4</number>
            </property>
            <property name="minimum">
             <double>-512.000000000000000</double>
@@ -420,7 +420,7 @@
             </size>
            </property>
            <property name="decimals">
-            <number>1</number>
+            <number>4</number>
            </property>
            <property name="minimum">
             <double>-512.000000000000000</double>
@@ -559,7 +559,7 @@
             </size>
            </property>
            <property name="decimals">
-            <number>1</number>
+            <number>4</number>
            </property>
            <property name="minimum">
             <double>-512.000000000000000</double>
@@ -578,7 +578,7 @@
             </size>
            </property>
            <property name="decimals">
-            <number>1</number>
+            <number>4</number>
            </property>
            <property name="minimum">
             <double>-512.000000000000000</double>
@@ -597,7 +597,7 @@
             </size>
            </property>
            <property name="decimals">
-            <number>1</number>
+            <number>4</number>
            </property>
            <property name="minimum">
             <double>-512.000000000000000</double>
