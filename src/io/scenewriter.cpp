@@ -84,7 +84,7 @@ QByteArray SceneWriter::getSceneObject(QString filePath,
         writePostProcessData(projectObj, postMan);
     }
 
-//    qDebug() << projectObj;
+    //qDebug() << projectObj;
 
     return QJsonDocument(projectObj).toBinaryData();
 }
