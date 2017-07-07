@@ -11,7 +11,7 @@
 
 #include "../irisgl/src/graphics/graphicshelper.h"
 
-enum AssetType {
+enum class AssetType {
     Shader,
     Material,
     Mesh,
@@ -48,11 +48,11 @@ struct AssetVariant : public Asset
     }
 
     virtual QVariant getValue() {
-
+        return QVariant();
     }
 
     virtual void setValue(QVariant val) {
-
+        Q_UNUSED(val);
     }
 };
 
@@ -64,11 +64,11 @@ struct AssetFile : public Asset
     }
 
     virtual QVariant getValue() {
-
+        return QVariant();
     }
 
     virtual void setValue(QVariant val) {
-
+        Q_UNUSED(val)
     }
 };
 
@@ -80,11 +80,11 @@ struct AssetFolder : public Asset
     }
 
     virtual QVariant getValue() {
-
+        return QVariant();
     }
 
     virtual void setValue(QVariant val) {
-
+        Q_UNUSED(val);
     }
 };
 

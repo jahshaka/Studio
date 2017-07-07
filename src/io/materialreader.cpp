@@ -16,7 +16,7 @@ MaterialReader::MaterialReader()
 
 }
 
-bool MaterialReader::readJahShader(const QString &filePath)
+void MaterialReader::readJahShader(const QString &filePath)
 {
     dir = AssetIOBase::getDirFromFileName(filePath);
     QFile file(filePath);

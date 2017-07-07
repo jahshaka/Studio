@@ -95,16 +95,16 @@ Mesh::Mesh(aiMesh* mesh)
         boneWeights.fill(0);
 
 
-        for (auto i = 0;i<mesh->mNumBones; i++) {
+        for (unsigned i = 0;i<mesh->mNumBones; i++) {
             auto bone = mesh->mBones[i];
 
-            for (auto j = 0;j<bone->mNumWeights ; j++) {
+            for (unsigned j = 0;j<bone->mNumWeights ; j++) {
                 auto weight = bone->mWeights[j];
                 auto baseIndex = weight.mVertexId * MAX_BONE_INDICES;
                 //qDebug() << weight.mVertexId << " - " << i << " - " << weight.mWeight;
                 // find empty slot and set weight
-                for(int k = 0; k<MAX_BONE_INDICES; k++) {
-                    if (baseIndex + k < boneWeights.size()) { //just in case
+                for(unsigned k = 0; k<MAX_BONE_INDICES; k++) {
+                    if (baseIndex + k < (unsigned)boneWeights.size()) { //just in case
                         if(boneWeights[baseIndex + k] == 0) {
                             // an empty weight means an empty slot
                             boneIndices[baseIndex + k] = i;// bone index in array
@@ -318,7 +318,7 @@ SkeletonPtr Mesh::extractSkeleton(const aiMesh *mesh, const aiScene *scene)
 
     // create skeleton and add animations
     auto skel = Skeleton::create();
-    for (auto i = 0;i<mesh->mNumBones; i++) {
+    for (unsigned i = 0;i<mesh->mNumBones; i++) {
         auto meshBone = mesh->mBones[i];
 
         auto bone = Bone::create(QString(meshBone->mName.C_Str()));

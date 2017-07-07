@@ -40,7 +40,7 @@ public:
     bool copyDirectoryFiles(const QString &fromDir, const QString &toDir, bool coverFileIfExist);
     SettingsManager* getSettingsManager();
     SettingsManager* settings;
-    bool prepareStore(QString path);
+    void prepareStore(QString path);
     void walkFileSystem(QString folder, QString path);
     QVector<ModelData> fetchModel(const QString &path);
 

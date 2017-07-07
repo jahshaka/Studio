@@ -15,7 +15,7 @@ public:
 
     void executeAndCheckQuery(QSqlQuery&);
 
-    bool fetchRecord(const QString &name);
+    void fetchRecord(const QString &name);
 
     void initializeDatabase(QString name);
 

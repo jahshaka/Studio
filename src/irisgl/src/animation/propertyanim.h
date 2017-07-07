@@ -41,6 +41,11 @@ public:
 
     QString getName() const;
     void setName(const QString &value);
+
+    virtual ~PropertyAnim()
+    {
+
+    }
 };
 
 class FloatPropertyAnim : public PropertyAnim

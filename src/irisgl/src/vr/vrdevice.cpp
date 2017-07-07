@@ -380,7 +380,7 @@ bool VrDevice::isHeadMounted()
 
 QMatrix4x4 VrDevice::getEyeViewMatrix(int eye, QVector3D pivot, QMatrix4x4 transform)
 {
-    Vector3f origin = Vector3f(pivot.x(),pivot.y(),pivot.z());
+    //Vector3f origin = Vector3f(pivot.x(),pivot.y(),pivot.z());
 
     /*
     Matrix4f rollPitchYaw = Matrix4f::RotationY(0);
