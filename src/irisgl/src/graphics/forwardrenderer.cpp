@@ -42,6 +42,8 @@ For more information see the LICENSE file
 #include "postprocessmanager.h"
 #include "postprocess.h"
 
+#include "../core/performancetimer.h"
+
 #include "../geometry/frustum.h"
 #include "../geometry/boundingsphere.h"
 
@@ -80,6 +82,8 @@ ForwardRenderer::ForwardRenderer()
 
     postMan = PostProcessManager::create();
     postContext = new PostProcessContext();
+
+    perfTimer = new PerformanceTimer();
 }
 
 void ForwardRenderer::generateShadowBuffer(GLuint size)
@@ -116,10 +120,12 @@ ForwardRendererPtr ForwardRenderer::create()
 // all scenenode's transform should be updated
 void ForwardRenderer::renderScene(float delta, Viewport* vp)
 {
+    perfTimer->start("total");
     auto ctx = QOpenGLContext::currentContext();
     auto cam = scene->camera;
 
     // STEP 1: RENDER SCENE
+    perfTimer->start("render_scene");
     renderData->scene = scene;
 
     cam->setAspectRatio(vp->getAspectRatio());
@@ -167,12 +173,17 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     renderNode(renderData, scene);
 
+    perfTimer->end("render_scene");
+
     // STEP 2: RENDER SKY
     //renderSky(renderData);
 
     // STEP 4: RENDER BILLBOARD ICONS
+    perfTimer->start("render_icons");
     renderBillboardIcons(renderData);
+    perfTimer->end("render_icons");
 
+    perfTimer->start("render_post");
     renderTarget->unbind();
 
     postContext->sceneTexture = sceneRenderTexture;
@@ -189,6 +200,7 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     postContext->finalTexture->bind();
     fsQuad->draw(gl);
     gl->glBindTexture(GL_TEXTURE_2D, 0);
+    perfTimer->end("render_post");
 
     // STEP 5: RENDER SELECTED OBJECT
     if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
@@ -196,6 +208,11 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     //clear lists
     scene->geometryRenderList.clear();
     scene->shadowRenderList.clear();
+
+    perfTimer->end("total");
+
+    perfTimer->report();
+    perfTimer->reset();
 }
 
 void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)

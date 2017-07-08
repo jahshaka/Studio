@@ -40,6 +40,7 @@ class FullScreenQuad;
 class VrDevice;
 class PostProcessManager;
 class PostProcessContext;
+class PerformanceTimer;
 
 /**
  * This is a basic forward renderer.
@@ -76,6 +77,8 @@ class ForwardRenderer
     Texture2DPtr sceneRenderTexture;
     Texture2DPtr depthRenderTexture;
     Texture2DPtr finalRenderTexture;
+
+    PerformanceTimer* perfTimer;
 
 public:
 
