@@ -74,7 +74,8 @@ HEADERS += \
     $$PWD/src/geometry/plane.h \
     $$PWD/src/geometry/frustum.h \
     $$PWD/src/math/transform.h \
-    $$PWD/src/core/logger.h
+    $$PWD/src/core/logger.h \
+    $$PWD/src/core/performancetimer.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
