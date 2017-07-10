@@ -138,7 +138,7 @@ QWidget#texture {
         <property name="maximumSize">
          <size>
           <width>108</width>
-          <height>16777215</height>
+          <height>108</height>
          </size>
         </property>
         <property name="cursor">

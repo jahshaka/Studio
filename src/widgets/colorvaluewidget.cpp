@@ -13,12 +13,12 @@ For more information see the LICENSE file
 #include "ui_colorvaluewidget.h"
 
 ColorValueWidget::ColorValueWidget(QWidget *parent) :
-    QWidget(parent),
+    BaseWidget(parent),
     ui(new Ui::ColorValueWidget)
 {
     ui->setupUi(this);
 
-    //connect(ui->widget,SIGNAL())
+    type = WidgetType::ColorWidget;
 }
 
 ColorValueWidget::~ColorValueWidget()

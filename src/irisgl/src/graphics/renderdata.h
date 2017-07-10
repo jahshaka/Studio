@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define RENDERDATA_H
 
 #include "../irisglfwd.h"
+#include "../geometry/frustum.h"
 #include <QColor>
 
 namespace iris
@@ -23,6 +24,7 @@ struct RenderData
     ScenePtr scene;
     MaterialPtr material;
 
+    iris::Frustum frustum;
     QMatrix4x4 viewMatrix;
     QMatrix4x4 projMatrix;
 

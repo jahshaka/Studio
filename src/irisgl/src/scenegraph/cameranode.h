@@ -14,7 +14,7 @@ For more information see the LICENSE file
 
 #include <QMatrix4x4>
 #include "../irisglfwd.h"
-#include "../core/scenenode.h"
+#include "../scenegraph/scenenode.h"
 
 namespace iris
 {

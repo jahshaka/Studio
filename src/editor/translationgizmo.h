@@ -12,10 +12,15 @@ For more information see the LICENSE file
 #ifndef TRANSLATIONGIZMO_H
 #define TRANSLATIONGIZMO_H
 
+#include <QUndoStack>
+
 #include "gizmoinstance.h"
 #include "gizmohandle.h"
-#include "../irisgl/src/core/scene.h"
+#include "../irisgl/src/scenegraph/scene.h"
 #include "../irisgl/src/graphics/graphicshelper.h"
+#include "../uimanager.h"
+#include "../commands/transfrormscenenodecommand.h"
+
 
 class TranslationGizmo : public GizmoInstance
 {
@@ -77,16 +82,16 @@ public:
     }
 
     void updateTransforms(const QVector3D& pos) {
-        scale = gizmoSize * ((pos - lastSelectedNode->pos).length() / qTan(45.0f / 2.0f));
+        scale = gizmoSize * ((pos - lastSelectedNode->getLocalPos()).length() / qTan(45.0f / 2.0f));
 
         for (int i = 0; i < 3; i++) {
-            handles[i]->gizmoHandle->pos = lastSelectedNode->getGlobalPosition();
+            handles[i]->gizmoHandle->setLocalPos(lastSelectedNode->getGlobalPosition());
 //            if (transformOrientation == "Local") {
 //                handles[i]->gizmoHandle->rot = lastSelectedNode->rot;
 //            } else {
 //                handles[i]->gizmoHandle->rot = QQuaternion();
 //            }
-            handles[i]->gizmoHandle->scale = QVector3D(scale, scale, scale);
+            handles[i]->gizmoHandle->setLocalScale(QVector3D(scale, scale, scale));
         }
     }
 
@@ -110,8 +115,8 @@ public:
                 Offset = QVector3D(0, 0, Offset.z());
             }
 
-            currentNode->pos += Offset;
-            lastSelectedNode->pos += Offset;
+            currentNode->setLocalPos( currentNode->getLocalPos() + Offset);
+            lastSelectedNode->setLocalPos( lastSelectedNode->getLocalPos() + Offset);
 
             finalHitPoint = Point;
         }
@@ -143,11 +148,11 @@ public:
 
         if (!!this->currentNode) {
             for (int i = 0; i < 3; i++) {
-                handles[i]->gizmoHandle->pos = currentNode->pos;
+                handles[i]->gizmoHandle->setLocalPos(currentNode->getLocalPos());
             }
         } else {
             for (int i = 0; i < 3; i++) {
-                handles[i]->gizmoHandle->pos = lastSelectedNode->getGlobalPosition();
+                handles[i]->gizmoHandle->setLocalPos(lastSelectedNode->getGlobalPosition());
             }
         }
 
@@ -160,7 +165,7 @@ public:
             QMatrix4x4 widgetPos;
             widgetPos.setToIdentity();
 
-            widgetPos.translate(handles[i]->gizmoHandle->pos);
+            widgetPos.translate(handles[i]->gizmoHandle->getLocalPos());
 //            widgetPos.rotate(handles[i]->gizmoHandle->rot);
             widgetPos.scale(scale);
 
@@ -212,12 +217,20 @@ public:
         handles[(int) AxisHandle::X]->setHandleColor(QColor(231, 76, 60));
         handles[(int) AxisHandle::Y]->setHandleColor(QColor(46, 224, 113));
         handles[(int) AxisHandle::Z]->setHandleColor(QColor(37, 118, 235));
+
+        //add command here
+        if (!!lastSelectedNode) {
+            auto endTransform = lastSelectedNode->getLocalTransform();
+            // reset the transform because the command will re-apply the transform
+            lastSelectedNode->setLocalTransform(hitTransform);
+            UiManager::undoStack->push(new TransformSceneNodeCommand(lastSelectedNode, endTransform));
+        }
     }
 
     void isGizmoHit(const iris::CameraNodePtr& camera, const QPointF& pos, const QVector3D& rayDir) {
         camera->updateCameraMatrices();
 
-        auto segStart = camera->pos;
+        auto segStart = camera->getLocalPos();
         auto segEnd = segStart + rayDir * 1024;
 
         QList<PickingResult> hitList;
@@ -234,6 +247,7 @@ public:
 
         hitNode = hitList.last().hitNode;
         lastHitAxis = hitNode->getName();
+        hitTransform = lastSelectedNode->getLocalTransform();
     }
 
     void doMeshPicking(const QSharedPointer<iris::SceneNode>& sceneNode,

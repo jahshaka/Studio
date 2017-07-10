@@ -23,10 +23,15 @@ void Project::setFilePath(QString filePath)
     QFileInfo info(filePath);
 
     this->filePath = filePath;
-    folderPath = info.absolutePath();
+    // folderPath = info.absolutePath();
     projectName = info.baseName();
     fileName = info.completeBaseName();
     _saved = true;
+}
+
+void Project::setProjectPath(const QString &path)
+{
+    this->folderPath = path;
 }
 
 bool Project::isSaved()
@@ -54,10 +59,11 @@ QString Project::getProjectFolder()
     return folderPath;
 }
 
-
+// TODO - repurpose this and all paths
 Project* Project::createNew()
 {
     auto project = new Project;
+    // TODO - change this! overwriting in mainwindow for now
     project->folderPath = QDir::currentPath();
     project->fileName = "";
     project->projectName = "Untitled";

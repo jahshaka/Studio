@@ -12,20 +12,26 @@ For more information see the LICENSE file
 #ifndef TEXTUREPICKERWIDGET_H
 #define TEXTUREPICKERWIDGET_H
 
-#include <QWidget>
+#include "basewidget.h"
+
 #include <QLabel>
+#include <QListWidgetItem>
 
 namespace Ui {
     class TexturePickerWidget;
 }
 
-class TexturePickerWidget : public QWidget
+class TexturePickerWidget : public BaseWidget
 {
     Q_OBJECT
 
 private slots:
     void changeTextureMap();
+    void pickTextureMap();
     void on_pushButton_clicked();
+
+    void changeMap(QListWidgetItem*);
+    void changeMap(const QString&);
 
 public:
     int index;
@@ -40,6 +46,9 @@ public:
     bool eventFilter(QObject *object, QEvent *ev);
     void setTexture(QString path);
     QString getTexturePath();
+
+    void dragEnterEvent(QDragEnterEvent*);
+    void dropEvent(QDropEvent*);
 
 signals:
     void valueChanged( QString value);

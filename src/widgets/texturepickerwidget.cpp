@@ -14,16 +14,23 @@ For more information see the LICENSE file
 #include "qfiledialog.h"
 #include <Qt>
 #include "../core/thumbnailmanager.h"
+#include "../widgets/assetpickerwidget.h"
+
+#include <QMimeData>
+#include <QDrag>
+#include <QStandardItemModel>
+#include <QDragEnterEvent>
 
 TexturePickerWidget::TexturePickerWidget(QWidget* parent) :
-    QWidget(parent),
+    BaseWidget(parent),
     ui(new Ui::TexturePickerWidget)
 {
     ui->setupUi(this);
-
-    connect(ui->load, SIGNAL(pressed()), SLOT(changeTextureMap()));
-
     this->ui->texture->installEventFilter(this);
+    type = WidgetType::TextureWidget;
+
+    connect(ui->load, SIGNAL(pressed()), SLOT(pickTextureMap()));
+    setAcceptDrops(true);
 }
 
 TexturePickerWidget::~TexturePickerWidget()
@@ -36,13 +43,44 @@ QString TexturePickerWidget::getTexturePath()
     return filePath;
 }
 
+void TexturePickerWidget::dragEnterEvent(QDragEnterEvent *event)
+{
+//    const QString mimeType = "application/x-qabstractitemmodeldatalist";
+    if (event->mimeData()->hasText()) {
+        event->acceptProposedAction();
+    } else {
+        event->ignore();
+    }
+}
+
+void TexturePickerWidget::dropEvent(QDropEvent *event)
+{
+    // http://stackoverflow.com/a/2747369/996468
+    const QString mimeType = "application/x-qabstractitemmodeldatalist";
+//    QByteArray encoded = event->mimeData()->data(mimeType);
+//    QDataStream stream(&encoded, QIODevice::ReadOnly);
+//    QMap<int, QVariant> roleDataMap;
+//    while (!stream.atEnd()) {
+//        int row, col;
+//        stream >> row >> col >> roleDataMap;
+//    }
+
+    changeMap(event->mimeData()->text());
+
+    event->acceptProposedAction();
+}
+
 void TexturePickerWidget::changeTextureMap()
 {
     auto file = loadTexture();
-
     if (file.isEmpty() || file.isNull()) return;
-
     this->setLabelImage(ui->texture, file);
+}
+
+void TexturePickerWidget::pickTextureMap()
+{
+    auto widget = new AssetPickerWidget(AssetType::Texture);
+    connect(widget, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(changeMap(QListWidgetItem*)));
 }
 
 QString TexturePickerWidget::loadTexture()
@@ -81,7 +119,7 @@ void TexturePickerWidget::setLabelImage(QLabel* label, QString file, bool emitSi
 bool TexturePickerWidget::eventFilter(QObject *object, QEvent *ev)
 {
     if (object == ui->texture && ev->type() == QEvent::MouseButtonRelease) {
-        changeTextureMap();
+        pickTextureMap();
     }
 
     return false;
@@ -99,10 +137,22 @@ void TexturePickerWidget::on_pushButton_clicked()
     emit valueChanged(QString::null);
 }
 
+void TexturePickerWidget::changeMap(QListWidgetItem *item)
+{
+    setLabelImage(ui->texture, item->data(Qt::UserRole).toString());
+}
+
+void TexturePickerWidget::changeMap(const QString &texturePath)
+{
+    setLabelImage(ui->texture, texturePath);
+}
+
 void TexturePickerWidget::setTexture(QString path)
 {
     if (path.isNull() || path.isEmpty()) {
         ui->texture->clear();
+        ui->imagename->clear();
+        ui->dimensions->clear();
     } else {
         setLabelImage(ui->texture, path, false);
     }

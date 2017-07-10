@@ -12,13 +12,13 @@ For more information see the LICENSE file
 #ifndef HFLOATSLIDERWIDGET_H
 #define HFLOATSLIDERWIDGET_H
 
-#include <QWidget>
+#include "basewidget.h"
 
 namespace Ui {
     class HFloatSliderWidget;
 }
 
-class HFloatSliderWidget : public QWidget
+class HFloatSliderWidget : public BaseWidget
 {
     Q_OBJECT
 
@@ -40,9 +40,15 @@ public:
 signals:
     void valueChanged(float);
 
+    void valueChangeStart(float);
+    void valueChangeEnd(float);
+
 private slots:
     void onValueSliderChanged(int);
     void onValueSpinboxChanged(double);
+
+    void sliderPressed();
+    void sliderReleased();
 };
 
 #endif // HFLOATSLIDERWIDGET_H

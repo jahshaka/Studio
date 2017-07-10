@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define TEXTURE_H
 
 #include <QSharedPointer>
+#include <qopengl.h>
 
 class QOpenGLTexture;
 
@@ -25,6 +26,7 @@ public:
     QOpenGLTexture* texture;
     QString source;
 
+    GLuint getTextureId();
     void bind();
     void bind(int index);
 };

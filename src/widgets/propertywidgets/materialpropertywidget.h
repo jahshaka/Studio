@@ -13,14 +13,11 @@ For more information see the LICENSE file
 #define MATERIALPROPERTYWIDGET_H
 
 #include <QWidget>
-#include <QSharedPointer>
 
-#include <QJsonObject>
-#include <QSignalMapper>
-#include <QLayout>
-
+#include "../../io/assetmanager.h"
 #include "../accordianbladewidget.h"
-#include "../../src/graphics/material.h"
+#include "../../irisgl/src/graphics/material.h"
+#include "../../irisgl/src/core/property.h"
 
 namespace iris {
     class SceneNode;
@@ -29,49 +26,39 @@ namespace iris {
     class CustomMaterial;
 }
 
-class MaterialReader;
+class PropertyWidget;
 
 /**
  *  Displays properties for materials
  */
-class MaterialPropertyWidget : public AccordianBladeWidget
+class MaterialPropertyWidget : public AccordianBladeWidget, iris::PropertyListener
 {
     Q_OBJECT
 
 public:
-    MaterialPropertyWidget(QWidget *parent = nullptr);
+    MaterialPropertyWidget() = default;
+    QSharedPointer<iris::CustomMaterial> material;
 
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
-    QSharedPointer<iris::MeshNode> meshNode;
+    void forceShaderRefresh(const QString&);
+    void setWidgetProperties();
 
-    QSharedPointer<iris::CustomMaterial> customMaterial;
-
-    MaterialReader* materialReader;
-
-    void createWidgets(const QJsonObject &jahShader);
-
-    void setupDefaultMaterial();
-    void setupCustomMaterial();
-    void setupShaderSelector();
-
-    void purge();
-    void forceShaderRefresh(const QString &matName);
 
 protected slots:
-    void onCustomSliderChanged(QWidget*);
-    void onCustomColorChanged(QWidget*);
-    void onCustomTextureChanged(QWidget*);
-    void onCheckBoxStateChanged(QWidget*);
-
-    void onMaterialSelectorChanged(const QString&);
+    void materialChanged(const QString&);
 
 private:
+    QSharedPointer<iris::MeshNode> meshNode;
     ComboBoxWidget* materialSelector;
+    PropertyWidget* materialPropWidget;
 
-    std::vector<iris::MatStruct<HFloatSliderWidget*>>   sliderUniforms;
-    std::vector<iris::MatStruct<ColorValueWidget*>>     colorUniforms;
-    std::vector<iris::MatStruct<CheckBoxWidget*>>       boolUniforms;
-    std::vector<iris::MatStruct<TexturePickerWidget*>>  textureUniforms;
+    void setupShaderSelector();
+    void onPropertyChanged(iris::Property*) override;
+    void onPropertyChangeStart(iris::Property*) override;
+    void onPropertyChangeEnd(iris::Property*) override;
+
+    // for undo/redo
+    QVariant startValue;
 };
 
 #endif // MATERIALPROPERTYWIDGET_H

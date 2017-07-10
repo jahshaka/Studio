@@ -23,6 +23,13 @@ class QElapsedTimer;
 class TimelineWidget;
 
 class QMenu;
+class QTreeWidget;
+class QTreeWidgetItem;
+
+class KeyFrameWidget;
+class KeyFrameCurveWidget;
+class AnimationWidgetData;
+class CreateAnimationWidget;
 
 namespace Ui
 {
@@ -43,48 +50,30 @@ class AnimationWidget : public QWidget
     bool loopAnim;
 
     TimelineWidget* mainTimeline;
+    KeyFrameWidget* keyFrameWidget;
+    KeyFrameCurveWidget* curveWidget;
+    CreateAnimationWidget* createAnimWidget;
 
     QMenu* addMenu;
     QMenu* deleteMenu;
+
+    QList<iris::Property*> nodeProperties;
+    QList<iris::Property*> matProperties;
+    iris::AnimationPtr animation;
+
+    AnimationWidgetData* animWidgetData;
 public:
     explicit AnimationWidget(QWidget *parent = 0);
     ~AnimationWidget();
 
     void setScene(iris::ScenePtr scene);
     void setSceneNode(iris::SceneNodePtr node);
+    void buildPropertiesMenu();
+    void clearPropertiesMenu();
 
     void setMainTimelineWidget(TimelineWidget* tl)
     {
         mainTimeline = tl;
-    }
-
-    void showHighlight()
-    {
-        /*
-        if(node==nullptr)
-            return;
-
-        if(mainTimeline==nullptr)
-            return;
-        mainTimeline->showHighlight(node->animStartTime,node->animStartTime+node->animLength);
-        */
-    }
-
-    void hideHighlight()
-    {
-        /*
-        if(node==nullptr)
-            return;
-        mainTimeline->hideHighlight();
-        */
-    }
-
-    void setAnimStartTime(int second)
-    {
-        /*
-        if(node!=nullptr)
-            node->setAnimStartTime(second);
-            */
     }
 
     void setAnimLength(float length);
@@ -93,64 +82,49 @@ public:
     void fixLayout();
 
     void repaintViews();
+    void refreshAnimationList();
+    void clearAnimationList();
 
     //startRange and endRange are in seconds
     void setTimeViewRange(float startRange,float endRange);
 
     //sets cursor position at time
     void setCursorPositionAtTime(float timeInSeconds);
+
+    void removeProperty(QString propertyName);
+    void clearPropertyKeys(QString propertyName);
+
 private:
-
-    void removeNodeSpecificActions();
-
-    //add actions
-    QAction* addLightColorKeyAction;
-    QAction* addLightIntensityKeyAction;
-    QAction* addSceneBackgroundColorKeyAction;
-    QAction* addSceneActiveCameraKeyAction;
-
-    //deletion actions
-    QAction* deleteLightColorKeysAction;
-    QAction* deleteLightIntensityKeysAction;
+    iris::PropertyAnim* createPropertyAnim(iris::Property* prop);
 
 public slots:
-    void setLooping(bool loop)
-    {
-        loopAnim = loop;
-        //node->loopAnim = loop;
-    }
+    void setLooping(bool loop);
+    void addAnimation();
+    void deleteAnimation();
 
 private slots:
-    void addPosKey();
-    void addRotKey();
-    void addScaleKey();
-    void addPosRotKey();
-    void addPosRotScaleKey();
-
-    void addLightColorKey();
-    void addLightIntensityKey();
-    void deleteLightColorKeys();
-    void deleteLightIntensityKeys();
-
-    void addSceneBackgroundColorKey();
-    void addSceneActiveCameraKey();
-
-    void deletePosKeys();
-    void deleteScaleKeys();
-    void deleteRotKeys();
-    void deleteAllKeys();
+    void addPropertyKey(QAction* action);
 
     void updateAnim();
     void startTimer();
     void stopTimer();
 
     void timeEditChanged(QTime);
-    void setAnimstart(int time);
 
     void onObjectAnimationTimeChanged(float timeInSeconds);
     void onSceneAnimationTimeChanged(float timeInSeconds);
+
+    void showKeyFrameWidget();
+    void showCurveWidget();
+
+    void hideCreateAnimWidget();
+    void showCreateAnimWidget();
+    void updateCreationWidgetMessage(iris::SceneNodePtr node);
+
+    void animationChanged(QString name);
+
 private:
-    float time;
+    //float timeAtCursor;
     float timerSpeed;
     Ui::AnimationWidget *ui;
 };

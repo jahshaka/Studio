@@ -15,6 +15,11 @@ For more information see the LICENSE file
 namespace iris
 {
 
+GLuint Texture::getTextureId()
+{
+    return texture->textureId();
+}
+
 void Texture::bind()
 {
     texture->bind();

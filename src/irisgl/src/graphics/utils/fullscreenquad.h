@@ -27,7 +27,8 @@ public:
     FullScreenQuad();
     ~FullScreenQuad();
 
-    void draw(QOpenGLFunctions_3_2_Core* gl);
+    void draw(QOpenGLFunctions_3_2_Core* gl, bool flipY = false);
+    void draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* shader);
 
     QOpenGLShaderProgram* shader;
     Mesh* mesh;

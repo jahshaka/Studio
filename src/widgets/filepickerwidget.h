@@ -12,23 +12,26 @@ For more information see the LICENSE file
 #ifndef FILEPICKERWIDGET_H
 #define FILEPICKERWIDGET_H
 
+#include "basewidget.h"
+
 #include <QWidget>
 #include <QLabel>
+#include <QListWidgetItem>
 
 namespace Ui {
     class FilePickerWidget;
 }
 
-class FilePickerWidget : public QWidget
+class FilePickerWidget : public BaseWidget
 {
     Q_OBJECT
 
 private slots:
-
-void filePicker();
+    void filePicker();
+    void pickFile(QListWidgetItem*);
 
 public:
-
+    int index;
     QString filename;
     QString filepath;
     QString suffix;
@@ -45,6 +48,7 @@ public:
     void setFilepath(const QString &value);
 
 signals:
+    void pressed();
     void onPathChanged(const QString&);
 
 private:

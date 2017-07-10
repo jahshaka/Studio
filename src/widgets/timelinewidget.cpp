@@ -14,38 +14,41 @@ For more information see the LICENSE file
 #include <QDebug>
 #include <QPainter>
 #include <QMouseEvent>
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 #include "timelinewidget.h"
 #include <QtMath>
+#include <cmath>
+
+#include "animationwidgetdata.h"
 
 //https://kernelcoder.wordpress.com/2010/08/25/how-to-insert-ruler-scale-type-widget-into-a-qabstractscrollarea-type-widget/
 TimelineWidget::TimelineWidget(QWidget* parent):
     QWidget(parent)
 {
+    QSizePolicy sizePolicy;
+    sizePolicy.setHorizontalPolicy(QSizePolicy::Fixed);
+    sizePolicy.setVerticalPolicy(QSizePolicy::Preferred);
+    this->setSizePolicy(sizePolicy);
+    this->setGeometry(0, 0, 100, 21);
 
     bgColor = QColor::fromRgb(30,30,30);
     itemColor = QColor::fromRgb(255,255,255);
 
-    //maxTimeInSeconds = 30;
-    cursorPos = 10;
-
     linePen = QPen(itemColor);
-    cursorPen = QPen(QColor::fromRgb(142,45,197));
+    cursorPen = QPen(QColor::fromRgb(255,0,0));
     cursorPen.setWidth(3);
 
     setMouseTracking(true);
 
     dragging = false;
 
-    //node=nullptr;
     drawHighlight = false;
-
-    rangeStart = 0;
-    rangeEnd = 100;
 
     leftButtonDown = false;
     middleButtonDown = false;
     rightButtonDown = false;
+
+    animWidgetData = nullptr;
 }
 
 void TimelineWidget::showHighlight(float start,float end)
@@ -62,53 +65,12 @@ void TimelineWidget::hideHighlight()
     this->repaint();
 }
 
-void TimelineWidget::setSceneNode(iris::SceneNodePtr node)
-{
-    this->node = node;
-}
-
-float TimelineWidget::getTimeAtCursor()
-{
-    return posToTime(cursorPos);
-}
-
-void TimelineWidget::setTime(float time)
-{
-    this->setCursorPos(timeToPos(time));
-}
-
-void TimelineWidget::setTimeRange(float start,float end)
-{
-    rangeStart = start;
-    rangeEnd = end;
-    this->repaint();
-}
-
-void TimelineWidget::setStartTime(float start)
-{
-    rangeStart = start;
-    this->repaint();
-}
-
-void TimelineWidget::setEndTime(float end)
-{
-    rangeEnd = end;
-    this->repaint();
-}
-
-float TimelineWidget::getStartTimeRange()
-{
-    return rangeStart;
-}
-
-float TimelineWidget::getEndTimeRange()
-{
-    return rangeEnd;
-}
-
 void TimelineWidget::paintEvent(QPaintEvent *painter)
 {
     Q_UNUSED(painter);
+
+    if (!animWidgetData)
+        return;
 
     int widgetWidth = this->geometry().width();
     int widgetHeight = this->geometry().height();
@@ -116,11 +78,11 @@ void TimelineWidget::paintEvent(QPaintEvent *painter)
     QPainter paint(this);
 
     //black bg
-    paint.fillRect(0,0,widgetWidth,widgetHeight,bgColor);
+    //paint.fillRect(0,0,widgetWidth,widgetHeight,bgColor);
 
     // draws the dark part of the bottom of the frame
     paint.setPen(QColor::fromRgb(100,100,100));
-    paint.fillRect(0,0,widgetWidth,widgetHeight/2,QColor::fromRgb(50,50,50));
+    paint.fillRect(0,0,widgetWidth,widgetHeight,QColor::fromRgb(80, 80, 80));
     paint.setPen(linePen);
 
     QPen smallPen = QPen(QColor::fromRgb(55,55,55));
@@ -129,19 +91,22 @@ void TimelineWidget::paintEvent(QPaintEvent *painter)
 
     //find increment automatically
     float increment = 10.0f;//start on the smallest level
-    auto range = rangeEnd-rangeStart;
+    auto range = animWidgetData->rangeEnd - animWidgetData->rangeStart;
     while(increment*10<range)
         increment*=10;
 
-    float startTime = rangeStart - fmod(rangeStart,increment)-increment;
-    float endTime = rangeEnd - fmod(rangeEnd,increment)+increment;
+    float startTime = animWidgetData->rangeStart - fmod(animWidgetData->rangeStart, increment) - increment;
+    float endTime = animWidgetData->rangeEnd - fmod(animWidgetData->rangeEnd, increment) + increment;
 
     //big increments
     paint.setPen(bigPen);
     for(float x=startTime;x<endTime;x+=increment)
     {
         int screenPos = timeToPos(x);
-        paint.drawLine(screenPos,0,screenPos,widgetHeight);
+        paint.drawLine(screenPos,
+                       widgetHeight - widgetHeight/3.0f,
+                       screenPos,
+                       widgetHeight);
 
         int timeInSeconds = (int)x;
 
@@ -167,28 +132,22 @@ void TimelineWidget::paintEvent(QPaintEvent *painter)
 
     //cursor
     paint.setPen(cursorPen);
-    paint.drawLine(cursorPos,0,cursorPos,widgetHeight);
+    paint.drawLine(timeToPos(animWidgetData->cursorPosInSeconds), 0, timeToPos(animWidgetData->cursorPosInSeconds), widgetHeight);
 }
 
 int TimelineWidget::timeToPos(float timeInSeconds)
 {
-    float timeSpacePos = (timeInSeconds-rangeStart)/(rangeEnd-rangeStart);
-    return (int)(timeSpacePos*this->geometry().width());
+    return animWidgetData->timeToPos(timeInSeconds, this->width());
 }
 
 float TimelineWidget::posToTime(int xpos)
 {
-    float range = rangeEnd-rangeStart;
-    return rangeStart+range*((float)xpos/this->geometry().width());
+    return animWidgetData->posToTime(xpos, this->width());
 }
 
-void TimelineWidget::setCursorPos(float timeInSeconds)
+void TimelineWidget::setAnimWidgetData(AnimationWidgetData *value)
 {
-    //assuming x is local
-    cursorPos = timeInSeconds;
-
-    this->repaint();
-    emit cursorMoved(timeInSeconds);
+    animWidgetData = value;
 }
 
 void TimelineWidget::mousePressEvent(QMouseEvent* evt)
@@ -206,7 +165,8 @@ void TimelineWidget::mousePressEvent(QMouseEvent* evt)
 
     if(evt->button() == Qt::LeftButton)
     {
-        setCursorPos(posToTime(evt->x()));
+        dragging = true;
+        animWidgetData->cursorPosInSeconds = posToTime(evt->x());
     }
 }
 
@@ -226,22 +186,24 @@ void TimelineWidget::mouseReleaseEvent(QMouseEvent* evt)
 
 void TimelineWidget::mouseMoveEvent(QMouseEvent* evt)
 {
-    if(dragging)
+    if(leftButtonDown)
     {
-        setCursorPos(evt->x());
+        animWidgetData->cursorPosInSeconds = posToTime(evt->x());
+        cursorMoved(animWidgetData->cursorPosInSeconds);
+        animWidgetData->refreshWidgets();
     }
 
     if(middleButtonDown)
     {
         //qDebug()<<"middle mouse dragging"<<endl;
-        auto timeDiff = posToTime(evt->x())-posToTime(cursorPos);
-        rangeStart-=timeDiff;
-        rangeEnd-=timeDiff;
+        auto timeDiff = posToTime(evt->x()) - posToTime(mousePos.x());
+        animWidgetData->rangeStart-=timeDiff;
+        animWidgetData->rangeEnd-=timeDiff;
+
+        animWidgetData->refreshWidgets();
     }
 
-    cursorPos = evt->x();
     mousePos = evt->pos();
-    this->repaint();
 }
 
 void TimelineWidget::wheelEvent(QWheelEvent* evt)
@@ -250,13 +212,13 @@ void TimelineWidget::wheelEvent(QWheelEvent* evt)
     float sign = delta<0?-1:1;
 
     //0.2f here is the zoom speed
-    float scale = 1.0f - sign * 0.2f;
+    float scale = 1.0f-sign*0.2f;
 
     float timeSpacePivot = posToTime(evt->x());
-    rangeStart = timeSpacePivot+(rangeStart-timeSpacePivot)*scale;
-    rangeEnd = timeSpacePivot+(rangeEnd-timeSpacePivot)*scale;
+    animWidgetData->rangeStart = timeSpacePivot+(animWidgetData->rangeStart-timeSpacePivot) * scale;
+    animWidgetData->rangeEnd = timeSpacePivot+(animWidgetData->rangeEnd-timeSpacePivot) * scale;
 
-    this->repaint();
+    animWidgetData->refreshWidgets();
 }
 
 void TimelineWidget::resizeEvent(QResizeEvent* event)

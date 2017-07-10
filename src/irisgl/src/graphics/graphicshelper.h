@@ -14,13 +14,32 @@ For more information see the LICENSE file
 
 #include <QString>
 #include <QList>
+#include "../irisglfwd.h"
+#include "../graphics/mesh.h"
+#include "assimp/scene.h"
 
 class QOpenGLShaderProgram;
 
+class AssimpObject {
+public:
+    AssimpObject() {}
+    AssimpObject(const aiScene *ai, QString p) : scene(ai), path(p) {}
+    AssimpObject(const AssimpObject &ao) {}
+    const aiScene *getSceneData() const { return scene; }
+    QString getPath() { return path; }
+    ~AssimpObject() {}
+
+private:
+    const aiScene *scene;
+    QString path;
+};
+
+Q_DECLARE_METATYPE(AssimpObject)
+Q_DECLARE_METATYPE(AssimpObject*)
 
 namespace iris
 {
-class Mesh;
+
 class GraphicsHelper
 {
 public:
@@ -35,7 +54,37 @@ public:
      * @param filePath
      * @return
      */
-    static QList<Mesh*> loadAllMeshesFromFile(QString filePath);
+    static QList<MeshPtr> loadAllMeshesFromFile(QString filePath);
+
+    static void loadAllMeshesAndAnimationsFromFile(QString filePath,
+                                                   QList<MeshPtr> &meshes,
+                                                   QMap<QString, SkeletalAnimationPtr> &animations);
+
+    template <typename F>
+    static void loadAllMeshesAndAnimationsFromStore(const QList<F> &store,
+                                                    QString filePath,
+                                                    QList<MeshPtr> &meshes,
+                                                    QMap<QString, SkeletalAnimationPtr> &animations)
+     {
+         for (F ao : store) {
+             if (ao->path == filePath) {
+                QVariant aoVariant;
+                aoVariant.setValue(ao->getValue());
+
+                const aiScene* scene = aoVariant.value<AssimpObject*>()->getSceneData();
+
+                if (scene != nullptr) {
+                    meshes = loadAllMeshesFromAssimpScene(scene);
+                    animations = Mesh::extractAnimations(scene, filePath);
+                }
+
+                break;
+             }
+         }
+     }
+
+
+    static QList<MeshPtr> loadAllMeshesFromAssimpScene(const aiScene* scene);
 };
 
 }

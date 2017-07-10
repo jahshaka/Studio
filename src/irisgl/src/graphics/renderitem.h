@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define RENDERITEM_H
 
 #include "../irisglfwd.h"
+#include "../geometry/boundingsphere.h"
 #include <QMatrix4x4>
 
 class QOpenGLShaderProgram;
@@ -74,7 +75,7 @@ struct RenderItem
 {
     RenderItemType type;
     MaterialPtr material;
-    Mesh* mesh;
+    MeshPtr mesh;
 
     QMatrix4x4 worldMatrix;
     SceneNodePtr sceneNode;
@@ -83,6 +84,9 @@ struct RenderItem
 
     //states
     RenderStates renderStates;
+
+    bool cullable = false;
+    BoundingSphere boundingSphere;
 
     //sort order for render layer
     //used if no material is specified

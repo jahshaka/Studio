@@ -10,8 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "viewernode.h"
-#include "../core/scene.h"
-#include "../core/scenenode.h"
+#include "../scenegraph/scene.h"
+#include "../scenegraph/scenenode.h"
 #include "../graphics/mesh.h"
 #include "../materials/viewermaterial.h"
 #include "../materials/defaultmaterial.h"
@@ -26,11 +26,11 @@ namespace iris
 ViewerNode::ViewerNode()
 {
     this->sceneNodeType = SceneNodeType::Viewer;
-    this->headModel = Mesh::loadMesh(":/assets/models/head.obj");
+    this->headModel = Mesh::loadMesh(":/assets/models/head2.obj");
     this->material = ViewerMaterial::create();
     this->material->setTexture(Texture2D::load(":/assets/models/head.png"));
 
-    this->setViewScale(5.0f);
+    this->setViewScale(1.0f);
 
     renderItem = new RenderItem();
     renderItem->type = RenderItemType::Mesh;

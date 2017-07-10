@@ -10,8 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "forwardrenderer.h"
-#include "../core/scene.h"
-#include "../core/scenenode.h"
+#include "../scenegraph/scene.h"
+#include "../scenegraph/scenenode.h"
 #include "../scenegraph/cameranode.h"
 #include "../scenegraph/meshnode.h"
 #include "../scenegraph/lightnode.h"
@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "../scenegraph/particlesystemnode.h"
 #include "../materials/viewermaterial.h"
 #include "mesh.h"
+#include "skeleton.h"
 #include "graphicshelper.h"
 #include "renderdata.h"
 #include "material.h"
@@ -29,13 +30,20 @@ For more information see the LICENSE file
 #include <QOpenGLFunctions_3_2_Core>
 #include <QSharedPointer>
 #include <QOpenGLTexture>
+#include <QMatrix4x4>
 #include "viewport.h"
 #include "utils/billboard.h"
 #include "utils/fullscreenquad.h"
 #include "texture2d.h"
+#include "rendertarget.h"
 #include "../vr/vrdevice.h"
 #include "../vr/vrmanager.h"
 #include "../core/irisutils.h"
+#include "postprocessmanager.h"
+#include "postprocess.h"
+
+#include "../geometry/frustum.h"
+#include "../geometry/boundingsphere.h"
 
 #include <QOpenGLContext>
 #include "../libovr/Include/OVR_CAPI_GL.h"
@@ -62,6 +70,16 @@ ForwardRenderer::ForwardRenderer()
 
     vrDevice = VrManager::getDefaultDevice();
     vrDevice->initialize();
+
+    renderTarget = RenderTarget::create(800, 800);
+    sceneRenderTexture = Texture2D::create(800, 800);
+    depthRenderTexture = Texture2D::createDepth(800, 800);
+    finalRenderTexture = Texture2D::create(800, 800);
+    renderTarget->addTexture(sceneRenderTexture);
+    renderTarget->setDepthTexture(depthRenderTexture);
+
+    postMan = PostProcessManager::create();
+    postContext = new PostProcessContext();
 }
 
 void ForwardRenderer::generateShadowBuffer(GLuint size)
@@ -95,7 +113,7 @@ ForwardRendererPtr ForwardRenderer::create()
     return ForwardRendererPtr(new ForwardRenderer());
 }
 
-// all scene's transform should be updated
+// all scenenode's transform should be updated
 void ForwardRenderer::renderScene(float delta, Viewport* vp)
 {
     auto ctx = QOpenGLContext::currentContext();
@@ -110,6 +128,8 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     renderData->projMatrix = cam->projMatrix;
     renderData->viewMatrix = cam->viewMatrix;
     renderData->eyePos = cam->globalTransform.column(3).toVector3D();
+
+    renderData->frustum.build(cam->projMatrix * cam->viewMatrix);
 
     renderData->fogColor = scene->fogColor;
     renderData->fogStart = scene->fogStart;
@@ -128,10 +148,20 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     }
 
     gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
+
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    //gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+
+    //todo: remember to remove this!
+    renderTarget->resize(vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale, true);
+    finalRenderTexture->resize(vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
+
+    renderTarget->bind();
+    gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     //enable all attrib arrays
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < (int)iris::VertexAttribUsage::Count; i++) {
         gl->glEnableVertexAttribArray(i);
     }
 
@@ -142,6 +172,23 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     // STEP 4: RENDER BILLBOARD ICONS
     renderBillboardIcons(renderData);
+
+    renderTarget->unbind();
+
+    postContext->sceneTexture = sceneRenderTexture;
+    postContext->depthTexture = depthRenderTexture;
+    postContext->finalTexture = finalRenderTexture;
+    postMan->process(postContext);
+
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+
+    // draw fs quad
+    gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
+    gl->glActiveTexture(GL_TEXTURE0);
+    //sceneRenderTexture->bind();
+    postContext->finalTexture->bind();
+    fsQuad->draw(gl);
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
 
     // STEP 5: RENDER SELECTED OBJECT
     if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
@@ -158,8 +205,8 @@ void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
     gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, shadowFBO);
     gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthMap, 0);
 
-    shadowShader->bind();
 
+    QOpenGLShaderProgram* shader;
     for (auto light : scene->lights) {
         if (light->lightType == iris::LightType::Directional) {
 
@@ -170,13 +217,28 @@ void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
                              QVector3D(0.0f, 1.0f, 0.0f));
             QMatrix4x4 lightSpaceMatrix = lightProjection * lightView;
 
-            shadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
-
             for (auto& item : scene->shadowRenderList) {
-                shadowShader->setUniformValue("u_worldMatrix", item->worldMatrix);
+
 
                 if (item->type == iris::RenderItemType::Mesh) {
-                    item->mesh->draw(gl, shadowShader);
+                    if  (item->mesh->hasSkeleton()) {
+                        auto boneTransforms = item->mesh->getSkeleton()->boneTransforms;
+                        skinnedShadowShader->bind();
+                        skinnedShadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
+                        skinnedShadowShader->setUniformValue("u_worldMatrix", item->worldMatrix);
+                        skinnedShadowShader->setUniformValueArray("u_bones", boneTransforms.data(), boneTransforms.size());
+                        shader = skinnedShadowShader;
+
+                    } else {
+                        shadowShader->bind();
+                        shadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
+                        shadowShader->setUniformValue("u_worldMatrix", item->worldMatrix);
+                        shader = shadowShader;
+                    }
+
+
+
+                    item->mesh->draw(gl, shader);
                 }
             }
         }
@@ -192,17 +254,17 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
         return;
 
     QVector3D viewerPos = scene->camera->getGlobalPosition();
-    float viewScale = scene->camera->getVrViewScale();
+    //float viewScale = scene->camera->getVrViewScale();
     QMatrix4x4 viewTransform = scene->camera->globalTransform;
     //viewTransform.setToIdentity();
 
-    /*
+
     if(!!scene->vrViewer) {
         viewerPos = scene->vrViewer->getGlobalPosition();
-        viewScale = scene->vrViewer->getViewScale();
+        //viewScale = scene->vrViewer->getViewScale();
         viewTransform = scene->vrViewer->globalTransform;
     }
-    */
+
 
     if (scene->shadowEnabled) {
         gl->glViewport(0, 0, 4096, 4096);
@@ -268,6 +330,11 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
    scene->shadowRenderList.clear();
 }
 
+PostProcessManagerPtr ForwardRenderer::getPostProcessManager()
+{
+    return postMan;
+}
+
 bool ForwardRenderer::isVrSupported()
 {
     return vrDevice->isVrSupported();
@@ -300,6 +367,16 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
     for (auto& item : scene->geometryRenderList) {
         if (item->type == iris::RenderItemType::Mesh) {
 
+            if (item->cullable) {
+                auto sphere = item->boundingSphere;
+                //sphere->pos = item->worldMatrix.column(3).toVector3D();
+
+                if (!renderData->frustum.isSphereInside(&sphere)) {
+                    //qDebug() << "culled";
+                    continue;
+                }
+            }
+
             QOpenGLShaderProgram* program = nullptr;
             iris::MaterialPtr mat;
 
@@ -312,15 +389,25 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                 mat->begin(gl, scene);
             } else {
                 program = item->shaderProgram;
+                program->bind();
             }
 
             // send transform and light data
             program->setUniformValue("u_worldMatrix",   item->worldMatrix);
             program->setUniformValue("u_viewMatrix",    renderData->viewMatrix);
             program->setUniformValue("u_projMatrix",    renderData->projMatrix);
+
+            if  (item->mesh->hasSkeleton()) {
+                auto boneTransforms = item->mesh->getSkeleton()->boneTransforms;
+                program->setUniformValueArray("u_bones", boneTransforms.data(), boneTransforms.size());
+            }
+
             program->setUniformValue("u_normalMatrix",  item->worldMatrix.normalMatrix());
 
             program->setUniformValue("u_eyePos",        renderData->eyePos);
+            program->setUniformValue("u_sceneAmbient",  QVector3D(scene->ambientColor.redF(),
+                                                                  scene->ambientColor.greenF(),
+                                                                  scene->ambientColor.blueF()));
 
             if (item->renderStates.fogEnabled && scene->fogEnabled ) {
                 program->setUniformValue("u_fogData.color", renderData->fogColor);
@@ -333,13 +420,13 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             }
 
             if (item->renderStates.receiveShadows && scene->shadowEnabled) {
-                program->setUniformValue("u_shadowMap", 2);
+                program->setUniformValue("u_shadowMap", 8);
                 program->setUniformValue("u_shadowEnabled", true);
             } else {
                 program->setUniformValue("u_shadowEnabled", false);
             }
 
-            gl->glActiveTexture(GL_TEXTURE2);
+            gl->glActiveTexture(GL_TEXTURE8);
             gl->glBindTexture(GL_TEXTURE_2D, shadowDepthMap);
 
             program->setUniformValue("u_lightSpaceMatrix",  lightSpaceMatrix);
@@ -388,6 +475,8 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                case FaceCullingMode::None:
                    gl->glDisable(GL_CULL_FACE);
                break;
+               default:
+               break;
                }
             }
 
@@ -399,10 +488,26 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                 gl->glDisable(GL_DEPTH_TEST);
             }
 
+            if (item->renderStates.blendType != BlendType::None) {
+                 gl->glEnable(GL_BLEND);
+
+                 if (item->renderStates.blendType == BlendType::Normal) {
+                     gl->glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+                 } else if(item->renderStates.blendType == BlendType::Add) {
+                     gl->glBlendFunc(GL_ONE,GL_ONE);
+                 }
+
+                 //todo: add more types
+             }
+
             item->mesh->draw(gl, program);
 
             if (!!mat) {
                 mat->end(gl,scene);
+            }
+
+            if (item->renderStates.blendType!=BlendType::None) {
+                gl->glDisable(GL_BLEND);
             }
 
             // change back culling state
@@ -487,20 +592,30 @@ void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
 }
 
 // http://gamedev.stackexchange.com/questions/59361/opengl-get-the-outline-of-multiple-overlapping-objects
-void ForwardRenderer::renderSelectedNode(RenderData* renderData,QSharedPointer<SceneNode> node)
+void ForwardRenderer::renderSelectedNode(RenderData* renderData, SceneNodePtr node)
 {
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         auto meshNode = node.staticCast<iris::MeshNode>();
 
         if (meshNode->mesh != nullptr) {
-            lineShader->bind();
+            QOpenGLShaderProgram* shader;
+            if(meshNode->mesh->hasSkeleton())
+                shader = skinnedLineShader;
+            else
+                shader = lineShader;
 
-            lineShader->setUniformValue("u_worldMatrix",    node->globalTransform);
-            lineShader->setUniformValue("u_viewMatrix",     renderData->viewMatrix);
-            lineShader->setUniformValue("u_projMatrix",     renderData->projMatrix);
-            lineShader->setUniformValue("u_normalMatrix",   node->globalTransform.normalMatrix());
-            lineShader->setUniformValue("color",            scene->outlineColor);
+            shader->bind();
 
+            shader->setUniformValue("u_worldMatrix",    node->globalTransform);
+            shader->setUniformValue("u_viewMatrix",     renderData->viewMatrix);
+            shader->setUniformValue("u_projMatrix",     renderData->projMatrix);
+            shader->setUniformValue("u_normalMatrix",   node->globalTransform.normalMatrix());
+            shader->setUniformValue("color",            scene->outlineColor);
+
+            if(meshNode->mesh->hasSkeleton()) {
+                auto boneTransforms = meshNode->mesh->getSkeleton()->boneTransforms;
+                shader->setUniformValueArray("u_bones",          boneTransforms.data(), boneTransforms.size());
+            }
 
             // STEP 1: DRAW STENCIL OF THE FILLED POLYGON
             // sets default stencil value to 0
@@ -546,6 +661,10 @@ void ForwardRenderer::renderSelectedNode(RenderData* renderData,QSharedPointer<S
             gl->glPolygonMode(GL_FRONT, GL_FILL);
         }
     }
+
+    for(auto childNode : node->children) {
+        renderSelectedNode( renderData, childNode);
+    }
 }
 
 void ForwardRenderer::createLineShader()
@@ -555,10 +674,19 @@ void ForwardRenderer::createLineShader()
 
     lineShader->bind();
     lineShader->setUniformValue("color",QColor(240,240,255,255));
+
+    skinnedLineShader = GraphicsHelper::loadShader(":assets/shaders/skinned_color.vert",
+                                              ":assets/shaders/color.frag");
+
+    skinnedLineShader->bind();
+    skinnedLineShader->setUniformValue("color",QColor(240,240,255,255));
 }
 
 void ForwardRenderer::createShadowShader()
 {
+    skinnedShadowShader = GraphicsHelper::loadShader(":assets/shaders/skinned_shadow_map.vert",
+                                                    ":assets/shaders/shadow_map.frag");
+
     shadowShader = GraphicsHelper::loadShader(":assets/shaders/shadow_map.vert",
                                               ":assets/shaders/shadow_map.frag");
 

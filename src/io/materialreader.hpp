@@ -12,31 +12,28 @@ For more information see the LICENSE file
 #ifndef MATERIALREADER_HPP
 #define MATERIALREADER_HPP
 
-#include <QSharedPointer>
-#include "assetiobase.h"
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
-#include <QJsonObject>
 #include <QJsonValue>
+#include <QJsonObject>
 #include <QJsonValueRef>
 #include <QJsonDocument>
+#include <QSharedPointer>
 
 #include "../irisgl/src/irisglfwd.h"
+#include "assetiobase.h"
 
 class MaterialReader : public AssetIOBase
 {
 public:
     MaterialReader();
 
-    QJsonObject parsedShader;
-    bool readJahShader(const QString &filePath);
-    void parseJahShader(const QJsonObject&);
-    QJsonObject getParsedShader() {
-        return parsedShader;
-    }
+    void readJahShader(const QString &filePath);
+    QJsonObject getParsedShader();
 
-    // return texture
+private:
+    QJsonObject parsedShader;
 };
 
 #endif // MATERIALREADER_HPP
