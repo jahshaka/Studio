@@ -364,7 +364,7 @@ SettingsManager *ProjectDialog::getSettingsManager()
     return settings;
 }
 
-bool ProjectDialog::prepareStore(QString path)
+void ProjectDialog::prepareStore(QString path)
 {
     pathToOpen = path;
 

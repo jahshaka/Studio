@@ -58,6 +58,11 @@ public:
 
     }
 
+    virtual ~PostProcess()
+    {
+
+    }
+
 };
 
 }

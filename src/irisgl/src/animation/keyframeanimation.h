@@ -159,13 +159,13 @@ public:
         if(leftKey!=Q_NULLPTR && rightKey!=Q_NULLPTR)
         {
             //linearly interpolate between frames
-            float t =0;
+            //float t =0;
             float timeDiff = rightKey->time - leftKey->time;
 
             //frameDiff could be 0!!
             if(timeDiff != 0)
             {
-                t = (time-leftKey->time)/timeDiff;
+                //t = (time-leftKey->time)/timeDiff;
             }
 
             if(leftKey!=Q_NULLPTR && rightKey!=Q_NULLPTR)

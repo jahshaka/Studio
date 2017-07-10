@@ -30,7 +30,7 @@ void Database::executeAndCheckQuery(QSqlQuery &query)
     }
 }
 
-bool Database::fetchRecord(const QString &name)
+void Database::fetchRecord(const QString &name)
 {
 //    QSqlQuery query;
 //    query.prepare("select * from test_table");

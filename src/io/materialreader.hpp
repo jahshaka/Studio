@@ -29,7 +29,7 @@ class MaterialReader : public AssetIOBase
 public:
     MaterialReader();
 
-    bool readJahShader(const QString &filePath);
+    void readJahShader(const QString &filePath);
     QJsonObject getParsedShader();
 
 private:

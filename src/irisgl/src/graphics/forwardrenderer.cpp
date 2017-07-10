@@ -254,14 +254,14 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
         return;
 
     QVector3D viewerPos = scene->camera->getGlobalPosition();
-    float viewScale = scene->camera->getVrViewScale();
+    //float viewScale = scene->camera->getVrViewScale();
     QMatrix4x4 viewTransform = scene->camera->globalTransform;
     //viewTransform.setToIdentity();
 
 
     if(!!scene->vrViewer) {
         viewerPos = scene->vrViewer->getGlobalPosition();
-        viewScale = scene->vrViewer->getViewScale();
+        //viewScale = scene->vrViewer->getViewScale();
         viewTransform = scene->vrViewer->globalTransform;
     }
 
@@ -474,6 +474,8 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                break;
                case FaceCullingMode::None:
                    gl->glDisable(GL_CULL_FACE);
+               break;
+               default:
                break;
                }
             }

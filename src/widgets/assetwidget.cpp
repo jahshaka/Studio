@@ -182,24 +182,24 @@ void AssetWidget::addItem(const QString &asset)
         item = new QListWidgetItem(QIcon(":/app/icons/folder-symbol.svg"), name);
         item->setData(Qt::UserRole, file.absolutePath());
     } else {
-        AssetType type;
+        //AssetType type = AssetType::Invalid;
         QPixmap pixmap;
 
         item = new QListWidgetItem(name);
 
         if (file.suffix() == "jpg" || file.suffix() == "png" || file.suffix() == "bmp") {
-            type = AssetType::Texture;
+            //type = AssetType::Texture;
             auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
             pixmap = QPixmap::fromImage(*thumb->thumb);
             item->setIcon(QIcon(pixmap));
         } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
-            type = AssetType::Object;
+            //type = AssetType::Object;
             item->setIcon(QIcon(":/app/icons/google-drive-file.svg"));
         } else if (file.suffix() == "shader") {
-            type = AssetType::Shader;
+            //type = AssetType::Shader;
             item->setIcon(QIcon(":/app/icons/google-drive-file.svg"));
         } else {
-            type = AssetType::File;
+            //type = AssetType::File;
             item->setIcon(QIcon(":/app/icons/google-drive-file.svg"));
         }
 

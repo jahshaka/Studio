@@ -406,6 +406,8 @@ void AnimationWidget::addPropertyKey(QAction *action)
         frames[3].keyFrame->addKey(value.alphaF(),  animWidgetData->cursorPosInSeconds);
     }
         break;
+    default:
+        break;
     }
 
 

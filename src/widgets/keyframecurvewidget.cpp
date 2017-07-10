@@ -370,7 +370,7 @@ void KeyFrameCurveWidget::drawKeyFrames(QPainter &paint)
     auto widgetHeight = this->geometry().height();
 
     for (auto keyFrame : keyFrames) {
-        for( int i = 0; i<keyFrame->keys.size() - 1; i++) {
+        for( unsigned i = 0; i<keyFrame->keys.size() - 1; i++) {
             iris::FloatKey* a = keyFrame->keys[i];
             iris::FloatKey* b = keyFrame->keys[i+1];
 
@@ -411,7 +411,7 @@ void KeyFrameCurveWidget::drawKeys(QPainter &paint)
 
     paint.setPen(Qt::NoPen);
     for (auto keyFrame : keyFrames) {
-        for( int i = 0; i<keyFrame->keys.size(); i++) {
+        for( unsigned i = 0; i<keyFrame->keys.size(); i++) {
             iris::FloatKey* a = keyFrame->keys[i];
 
             QPoint ap = QPoint(animWidgetData->timeToPos(a->time, widgetWidth),
@@ -477,7 +477,7 @@ iris::FloatKey* KeyFrameCurveWidget::getKeyAt(int x, int y)
     //qDebug() << mousePos;
 
     for (auto keyFrame : keyFrames) {
-        for( int i = 0; i<keyFrame->keys.size(); i++) {
+        for( unsigned i = 0; i<keyFrame->keys.size(); i++) {
             iris::FloatKey* a = keyFrame->keys[i];
 
             auto ap = QVector2D(animWidgetData->timeToPos(a->time, widgetWidth),

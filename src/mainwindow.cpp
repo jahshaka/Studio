@@ -308,12 +308,6 @@ QString MainWindow::getAbsoluteAssetPath(QString relToApp)
     return path;
 }
 
-/// TODO load default scene from file
-iris::ScenePtr MainWindow::loadDefaultScene()
-{
-
-}
-
 // don't use this entirely anymore --- use method above
 iris::ScenePtr MainWindow::createDefaultScene()
 {
