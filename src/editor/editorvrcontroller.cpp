@@ -16,8 +16,8 @@ For more information see the LICENSE file
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/vr/vrdevice.h"
 #include "../irisgl/src/vr/vrmanager.h"
-#include "../irisgl/src/core/scene.h"
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scene.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/core/irisutils.h"
 #include "../irisgl/src/math/mathhelper.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
@@ -82,36 +82,40 @@ void EditorVrController::update(float dt)
     auto x = QVector3D::crossProduct(forwardVector,upVector).normalized();
     auto z = QVector3D::crossProduct(upVector,x).normalized();
 
+    auto camPos = camera->getLocalPos();
     // left
     if(KeyboardState::isKeyDown(Qt::Key_Left) ||KeyboardState::isKeyDown(Qt::Key_A) )
-        camera->pos -= x * linearSpeed;
+        camPos -= x * linearSpeed;
 
     // right
     if(KeyboardState::isKeyDown(Qt::Key_Right) ||KeyboardState::isKeyDown(Qt::Key_D) )
-        camera->pos += x * linearSpeed;
+        camPos += x * linearSpeed;
 
     // up
     if(KeyboardState::isKeyDown(Qt::Key_Up) ||KeyboardState::isKeyDown(Qt::Key_W) )
-        camera->pos += z * linearSpeed;
+        camPos += z * linearSpeed;
 
     // down
     if(KeyboardState::isKeyDown(Qt::Key_Down) ||KeyboardState::isKeyDown(Qt::Key_S) )
-        camera->pos -= z * linearSpeed;
+        camPos -= z * linearSpeed;
+
+    camera->setLocalPos(camPos);
 
     // touch controls
     auto leftTouch = vrDevice->getTouchController(0);
     if (leftTouch->isTracking()) {
         auto dir = leftTouch->GetThumbstick();
-        camera->pos += x * linearSpeed * dir.x() * 2;
-        camera->pos += z * linearSpeed * dir.y() * 2;
+        camPos += x * linearSpeed * dir.x() * 2;
+        camPos += z * linearSpeed * dir.y() * 2;
 
 
         if(leftTouch->isButtonDown(iris::VrTouchInput::Y))
-            camera->pos += QVector3D(0, linearSpeed, 0);
+            camPos += QVector3D(0, linearSpeed, 0);
         if(leftTouch->isButtonDown(iris::VrTouchInput::X))
-            camera->pos += QVector3D(0, -linearSpeed, 0);
+            camPos += QVector3D(0, -linearSpeed, 0);
 
-        camera->rot = QQuaternion();
+        camera->setLocalPos(camPos);
+        camera->setLocalRot(QQuaternion());
         camera->update(0);
 
 
@@ -173,12 +177,19 @@ void EditorVrController::update(float dt)
             // calculate position relative to parent
             auto localTransform = leftPickedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
 
+            QVector3D pos, scale;
+            QQuaternion rot;
             // decompose matrix to assign pos, rot and scale
             iris::MathHelper::decomposeMatrix(localTransform,
-                                              leftPickedNode->pos,
-                                              leftPickedNode->rot,
-                                              leftPickedNode->scale);
-            leftPickedNode->rot.normalize();
+                                              pos,
+                                              rot,
+                                              scale);
+
+            leftPickedNode->setLocalPos(pos);
+            rot.normalize();
+            leftPickedNode->setLocalRot(rot);
+            leftPickedNode->setLocalScale(scale);
+
 
             // @todo: force recalculatioin of global transform
             // leftPickedNode->update(0);// bad!

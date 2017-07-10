@@ -17,7 +17,9 @@ For more information see the LICENSE file
 #include <QModelIndex>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QDrag>
 #include <QSharedPointer>
+#include <QVector3D>
 #include "irisgl/src/irisglfwd.h"
 
 namespace Ui {
@@ -32,6 +34,7 @@ class QStandardItemModel;
 class QTreeWidgetItem;
 class QTreeWidget;
 class QIcon;
+class QUndoStack;
 
 //custom ui
 class TransformSlidersUi;
@@ -45,6 +48,7 @@ class AnimationWidget;
 class TexturedPlaneLayerWidget;
 class WorldLayerWidget;
 class EndlessPlaneLayerWidget;
+class PostProcessesWidget;
 
 class MaterialWidget;
 class TransformGizmo;
@@ -64,19 +68,12 @@ class JahRenderer;
 class GizmoHitData;
 class AdvancedGizmoHandle;
 class MaterialPreset;
-/*
-namespace iris
-{
-    class SceneNode;
-    class Scene;
-
-    //typedef SharedPO
-}
-*/
 
 class QOpenGLFunctions_3_2_Core;
 
 enum class SceneNodeType;
+
+class Database;
 
 class MainWindow : public QMainWindow
 {
@@ -91,6 +88,9 @@ public:
 
     void setSceneAnimTime(float time);
     void stopAnimWidget();
+
+    void setupProjectDB();
+    void setupUndoRedo();
 
     bool handleMousePress(QMouseEvent *event);
     bool handleMouseRelease(QMouseEvent *event);
@@ -118,6 +118,10 @@ public:
      */
     QString getAbsoluteAssetPath(QString relToApp);
 
+    void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
+    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
+    void repopulateSceneTree();
+
 private:
 
     /**
@@ -131,6 +135,7 @@ private:
     void setupHelpMenu();
 
     //ui setup
+    void createPostProcessDockWidget();
     void setupLayerButtonMenu();
     void initLightLayerUi();
     void initTorusLayerUi();
@@ -144,10 +149,6 @@ private:
     //void populateTree(QStandardItem* treeNode,SceneNode* sceneNode);
     //void populateTree(QTreeWidgetItem* treeNode,SceneNode* sceneNode);
     void deselectTreeItems();
-
-    //void addSceneNodeToSelectedTreeItem(QTreeWidget* sceneTree,SceneNode* newNode,bool addToSelected,QIcon icon);
-    void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
-    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode);
 
     void setupDefaultScene();
 
@@ -164,6 +165,9 @@ private:
     void dropEvent(QDropEvent* event) override;
     void dragLeaveEvent(QDragLeaveEvent* event) override;
 
+    // determines if file extension is that of a model (obj, fbx, 3ds)
+    bool isModelExtension(QString extension);
+
 public slots:
     //scenegraph
     void addPlane();
@@ -174,9 +178,10 @@ public slots:
     void addCylinder();
     void addEmpty();
     void addViewer();
-    void addMesh();
+    void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
     void addTexturedPlane();
     void addViewPoint();
+    void addDragPlaceholder();
 
     //context menu functions
     void duplicateNode();
@@ -201,18 +206,19 @@ public slots:
     void saveScene();
     void saveSceneAs();
     void loadScene();
+//    QString loadSceneDelegate();
     void openRecentFile();
 
     void showPreferences();
     void exitApp();
     void newScene();
+    void newProject(const QString&, const QString&);
 
     void showAboutDialog();
     void showLicenseDialog();
     void openBlogUrl();
     void openWebsiteUrl();
 
-    iris::ScenePtr loadDefaultScene();
     iris::ScenePtr createDefaultScene();
     void initializeGraphics(SceneViewWidget* widget, QOpenGLFunctions_3_2_Core* gl);
 
@@ -225,12 +231,15 @@ public slots:
     void vrButtonClicked(bool);
     void updateSceneSettings();
 
+    void undo();
+    void redo();
+
 private slots:
     void translateGizmo();
     void rotateGizmo();
     void scaleGizmo();
 
-//    void onPlaySceneButton();
+    void onPlaySceneButton();
 
 private:
     Ui::MainWindow *ui;
@@ -257,11 +266,15 @@ private:
     EndlessPlaneLayerWidget* endlessPlaneLayerWidget;
     MaterialWidget* materialWidget;
     AnimationWidget* animWidget;
+    PostProcessesWidget* postProcessWidget;
+    QDockWidget* postProcessDockWidget;
 
     Qt::MouseButton mouseButton;
     QPoint mousePressPos;
     QPoint mouseReleasePos;
     QPoint mousePos;
+    bool dragging;
+    QVector3D dragScenePos;
 
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;
@@ -271,6 +284,10 @@ private:
     QActionGroup* transformGroup;
     QActionGroup* transformSpaceGroup;
     QActionGroup* cameraGroup;
+
+    Database *db;
+
+    QUndoStack* undoStack;
 
     bool vrMode;
     QPushButton* vrButton;

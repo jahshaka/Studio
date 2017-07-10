@@ -41,14 +41,16 @@ protected slots:
     // ---
 
 private:
-    HFloatSliderWidget* demoSlider;
-    ColorValueWidget* demoColor;
-    CheckBoxWidget* demoCheck;
-    ComboBoxWidget* demoCombo;
-    TexturePickerWidget* demoPicker;
-    TextInputWidget* demoInput;
-    LabelWidget* demoLabel;
-    FilePickerWidget* demoFile;
+    HFloatSliderWidget *demoSlider;
+    ColorValueWidget *demoColor;
+    CheckBoxWidget *demoCheck;
+    ComboBoxWidget *demoCombo;
+    TexturePickerWidget *demoPicker;
+    TextInputWidget *demoInput;
+    LabelWidget *demoLabel;
+    FilePickerWidget *demoFile;
+
+    PropertyWidget *propWidget;
 };
 
 #endif // DEMOPANE_H

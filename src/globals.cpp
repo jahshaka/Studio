@@ -14,5 +14,6 @@ For more information see the LICENSE file
 #include "widgets/sceneviewwidget.h"
 
 float Globals::animFrameTime = 0;
+QString Globals::appWorkingDir = QString();
 Project* Globals::project = Project::createNew();
 SceneViewWidget* Globals::sceneViewWidget = nullptr;

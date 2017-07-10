@@ -30,12 +30,16 @@ void VertexLayout::addAttrib(VertexAttribUsage usage,int type,int count,int size
     stride += sizeInBytes;
 }
 
+// https://stackoverflow.com/a/30106751
+#define BUFFER_OFFSET(i) ((char*)nullptr+(i))
+
 void VertexLayout::bind()
 {
     int offset = 0;
     for(auto attrib: attribs)
     {
-        gl->glVertexAttribPointer((GLuint)attrib.usage, attrib.count, attrib.type, GL_FALSE, stride, (GLvoid*)offset);
+        //gl->glVertexAttribPointer((GLuint)attrib.usage, attrib.count, (GLenum)attrib.type, GL_FALSE, stride, (void*)offset);
+        gl->glVertexAttribPointer((GLuint)attrib.usage, attrib.count, (GLenum)attrib.type, GL_FALSE, stride, BUFFER_OFFSET(offset));
         gl->glEnableVertexAttribArray((int)attrib.usage);
         offset += attrib.sizeInBytes;
     }

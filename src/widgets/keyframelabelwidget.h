@@ -19,8 +19,15 @@ For more information see the LICENSE file
 #include <vector>
 #include "../irisgl/src/irisglfwd.h"
 
+namespace Ui {
+    class KeyFrameLabelWidget;
+}
+class KeyFrameLabel;
+
 class KeyFrameLabelWidget:public QWidget
 {
+    Q_OBJECT
+
     QColor bgColor;
     QColor itemColor;
 
@@ -30,10 +37,27 @@ public:
     KeyFrameLabelWidget(QWidget* parent);
 
     void setSceneNode(iris::SceneNodePtr node);
+    void setKeyFrameSet(iris::KeyFrameSetPtr frameSet);
+    void clearKeyFrameSet();
+    void resetKeyFrames();
 
-    void paintEvent(QPaintEvent *painter);
+    //void resizeEvent(QResizeEvent* evt);
+    bool eventFilter(QObject *obj, QEvent *evt);
 
-    void drawFrameLabel(QString name,QPainter* paint,int yBottom);
+    QList<KeyFrameLabel *> getLabels() const;
+
+private slots:
+    void scrollValueChanged(int val);
+
+private:
+    /*
+     * Deletes all items in layout
+     */
+    void clearLayout(QLayout* layout);
+
+private:
+    Ui::KeyFrameLabelWidget* ui;
+    QList<KeyFrameLabel*> labels;
 };
 
 #endif // KEYFRAMELABELWIDGET_H

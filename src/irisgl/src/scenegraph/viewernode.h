@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define VIEWERNODE_H
 
 #include "../irisglfwd.h"
-#include "../core/scenenode.h"
+#include "../scenegraph/scenenode.h"
 
 namespace iris
 {
@@ -28,7 +28,7 @@ class ViewerNode : public SceneNode
     ViewerNode();
 
 public:
-    Mesh* headModel;
+    MeshPtr headModel;
     ViewerMaterialPtr material;
 
     void setViewScale(float scale);

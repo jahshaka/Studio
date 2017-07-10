@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include <QOpenGLTexture>
 
 #include <QOpenGLContext>
-#include "../libovr/Include/OVR_CAPI_GL.h"
+//#include "../libovr/Include/OVR_CAPI_GL.h"
 #include "../libovr/Include/Extras/OVR_Math.h"
 
 using namespace OVR;
@@ -134,7 +134,7 @@ void VrDevice::initialize()
 
     createMirrorFbo(800, 600);
 
-    setTrackingOrigin(VrTrackingOrigin::FloorLevel);
+    setTrackingOrigin(VrTrackingOrigin::EyeLevel);
 
     vrSupported = true;
 }
@@ -380,7 +380,7 @@ bool VrDevice::isHeadMounted()
 
 QMatrix4x4 VrDevice::getEyeViewMatrix(int eye, QVector3D pivot, QMatrix4x4 transform)
 {
-    Vector3f origin = Vector3f(pivot.x(),pivot.y(),pivot.z());
+    //Vector3f origin = Vector3f(pivot.x(),pivot.y(),pivot.z());
 
     /*
     Matrix4f rollPitchYaw = Matrix4f::RotationY(0);
@@ -410,6 +410,7 @@ QMatrix4x4 VrDevice::getEyeViewMatrix(int eye, QVector3D pivot, QMatrix4x4 trans
     auto fd = frameData->eyeRenderPose[eye].Position;
     auto framePos = QVector3D(fd.x, fd.y, fd.z);
     auto shiftedEyePos = framePos;
+    qDebug() << shiftedEyePos;
     //auto forward = shiftedEyePos + finalForward;
     auto forward = shiftedEyePos + finalForward;
 

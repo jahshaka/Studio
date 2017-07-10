@@ -12,10 +12,8 @@ For more information see the LICENSE file
 #include "graphicshelper.h"
 #include <QOpenGLShaderProgram>
 
-#include "../graphics/mesh.h"
 #include "assimp/postprocess.h"
 #include "assimp/Importer.hpp"
-#include "assimp/scene.h"
 #include "assimp/mesh.h"
 #include "assimp/matrix4x4.h"
 #include "assimp/vector3.h"
@@ -50,6 +48,9 @@ QOpenGLShaderProgram* GraphicsHelper::loadShader(QString vsPath,QString fsPath)
     program->bindAttributeLocation("a_texCoord3",(int)VertexAttribUsage::TexCoord3);
     program->bindAttributeLocation("a_normal",(int)VertexAttribUsage::Normal);
     program->bindAttributeLocation("a_tangent",(int)VertexAttribUsage::Tangent);
+    program->bindAttributeLocation("a_boneIndices",(int)VertexAttribUsage::BoneIndices);
+    program->bindAttributeLocation("a_boneWeights",(int)VertexAttribUsage::BoneWeights);
+
 
     program->link();
 
@@ -94,18 +95,37 @@ QString GraphicsHelper::loadAndProcessShader(QString shaderPath)
     return lines.join('\n');
 }
 
-QList<iris::Mesh*> GraphicsHelper::loadAllMeshesFromFile(QString filePath)
+QList<iris::MeshPtr> GraphicsHelper::loadAllMeshesFromFile(QString filePath)
 {
-    QList<Mesh*> meshes;
-
     Assimp::Importer importer;
     const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(), aiProcessPreset_TargetRealtime_Fast);
 
-    if(scene)
-    {
-        for(unsigned i = 0; i < scene->mNumMeshes; i++)
-        {
-            auto mesh = new Mesh(scene->mMeshes[i]);
+    return loadAllMeshesFromAssimpScene(scene);
+}
+
+void GraphicsHelper::loadAllMeshesAndAnimationsFromFile(QString filePath, QList<MeshPtr> &meshes, QMap<QString, SkeletalAnimationPtr> &animations)
+{
+    Assimp::Importer importer;
+    const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(), aiProcessPreset_TargetRealtime_Fast);
+
+    if (scene != nullptr) {
+        meshes = loadAllMeshesFromAssimpScene(scene);
+        animations = Mesh::extractAnimations(scene, filePath);
+    }
+}
+
+QList<MeshPtr> GraphicsHelper::loadAllMeshesFromAssimpScene(const aiScene *scene)
+{
+    QList<MeshPtr> meshes;
+
+    if (scene) {
+        for (unsigned i = 0; i < scene->mNumMeshes; i++) {
+            auto m = scene->mMeshes[i];
+            auto mesh = iris::MeshPtr(new Mesh(m));
+            if (m->HasBones()) {
+                auto skel = Mesh::extractSkeleton(m, scene);
+                mesh->setSkeleton(skel);
+            }
             meshes.append(mesh);
         }
     }

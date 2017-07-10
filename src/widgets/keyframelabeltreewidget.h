@@ -14,13 +14,37 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QHash>
-#include "../irisglfwd.h"
+#include "../irisgl/src/irisglfwd.h"
 
 namespace Ui {
 class KeyFrameLabelTreeWidget;
 }
 
 class KeyFrameGroup;
+class QTreeWidget;
+class QTreeWidgetItem;
+class AnimationWidget;
+
+struct KeyFrameData
+{
+    QString propertyName;
+    QString subPropertyName;
+    iris::FloatKeyFrame* keyFrame;
+    //iris::PropertyAnim *prop;
+
+    bool isSubProperty()
+    {
+        return !subPropertyName.isEmpty();
+    }
+
+    bool isProperty()
+    {
+        return subPropertyName.isEmpty();
+    }
+};
+
+Q_DECLARE_METATYPE(KeyFrameData)
+
 class KeyFrameLabelTreeWidget : public QWidget
 {
     Q_OBJECT
@@ -30,11 +54,42 @@ public:
     ~KeyFrameLabelTreeWidget();
 
     void setSceneNode(iris::SceneNodePtr node);
+    void setActiveAnimation(iris::AnimationPtr anim);
 
+    // propName must be a name
+    void addProperty(QString propName);
+
+    QTreeWidget* getTree();
+
+    void setAnimWidget(AnimationWidget *value);
+
+private:
+    void addPropertyToTree(iris::PropertyAnim* prop);
+
+public slots:
+    void itemCollapsed(QTreeWidgetItem* item);
+    void itemExpanded(QTreeWidgetItem* item);
+
+    void customContextMenuRequested(const QPoint&);
+
+    void onTreeItemContextMenu(QAction* action);
+
+    void removeProperty(QString propertyName);
+    void clearPropertyKeyFrame(QString propertyName);
+    void clearSubPropertyKeyFrame(QString propertyName, QString subPropertyName);
+
+    QTreeWidgetItem* getSelectedTreeItem();
 private:
     Ui::KeyFrameLabelTreeWidget *ui;
     iris::SceneNodePtr node;
     QHash<QString,KeyFrameGroup*> groups;
+    AnimationWidget* animWidget;
+
+    QTreeWidgetItem* rightClickedItem;
+
+    // context menu actions
+    QAction* removePropertyAction;
+    QAction* clearKeyFrameAction;
 
     void parseKeyFramesToGroups(iris::KeyFrameSetPtr frameSet);
 

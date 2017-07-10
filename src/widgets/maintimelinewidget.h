@@ -44,15 +44,6 @@ public:
     TimelineWidget* getTimeline();
 
 private slots:
-    void updateTime();
-    void startTimer();
-    void stopTimer();
-    void fastForward();
-    void fastRewind();
-    void play();
-    void rewind();
-    void skipToEnd();
-    void skipToStart();
 
     void animLengthChanged(int timeInSeconds);
 

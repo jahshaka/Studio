@@ -11,20 +11,23 @@ For more information see the LICENSE file
 
 #include "hfloatsliderwidget.h"
 #include "ui_hfloatsliderwidget.h"
-#include <QDebug>
 
-HFloatSliderWidget::HFloatSliderWidget(QWidget* parent)
-    : QWidget(parent),
-      ui(new Ui::HFloatSliderWidget)
+HFloatSliderWidget::HFloatSliderWidget(QWidget* parent) :
+    BaseWidget(parent),
+    ui(new Ui::HFloatSliderWidget)
 {
     ui->setupUi(this);
     connect(ui->spinbox,    SIGNAL(valueChanged(double)),   SLOT(onValueSpinboxChanged(double)));
     connect(ui->slider,     SIGNAL(valueChanged(int)),      SLOT(onValueSliderChanged(int)));
+    connect(ui->slider,     SIGNAL(sliderPressed()),        SLOT(sliderPressed()));
+    connect(ui->slider,     SIGNAL(sliderReleased()),       SLOT(sliderReleased()));
 
     precision = 1000.f;
     ui->slider->setRange(0, precision);
 
     this->setRange(0, 100.f);
+
+    type = WidgetType::FloatWidget;
 }
 
 HFloatSliderWidget::~HFloatSliderWidget()
@@ -64,7 +67,6 @@ void  HFloatSliderWidget::setValue( float value )
 
         emit valueChanged(value);
     }
-
 }
 
 float HFloatSliderWidget::getValue()
@@ -96,4 +98,14 @@ void HFloatSliderWidget::onValueSpinboxChanged(double val)
     ui->slider->blockSignals(false);
 
     emit valueChanged(this->value);
+}
+
+void HFloatSliderWidget::sliderPressed()
+{
+    emit valueChangeStart(this->value);
+}
+
+void HFloatSliderWidget::sliderReleased()
+{
+    emit valueChangeEnd(this->value);
 }

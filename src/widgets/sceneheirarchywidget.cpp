@@ -18,8 +18,8 @@ For more information see the LICENSE file
 
 
 
-#include "../irisgl/src/core/scene.h"
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scene.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 #include "../mainwindow.h"
 
 SceneHeirarchyWidget::SceneHeirarchyWidget(QWidget *parent) :
@@ -286,22 +286,24 @@ void SceneHeirarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
                                         QSharedPointer<iris::SceneNode> sceneNode)
 {
     for (auto childNode : sceneNode->children) {
-        auto childTreeItem = new QTreeWidgetItem();
-        childTreeItem->setText(0, childNode->getName());
-        childTreeItem->setData(1, Qt::UserRole,QVariant::fromValue(childNode->getNodeId()));
-        // childNode->setIcon(0,this->getIconFromSceneNodeType(node->sceneNodeType));
-        childTreeItem->setFlags(childTreeItem->flags() | Qt::ItemIsUserCheckable);
-        childTreeItem->setCheckState(0, Qt::Checked);
+        if (childNode->name != "Arrow") {
+            auto childTreeItem = new QTreeWidgetItem();
+            childTreeItem->setText(0, childNode->getName());
+            childTreeItem->setData(1, Qt::UserRole,QVariant::fromValue(childNode->getNodeId()));
+            // childNode->setIcon(0,this->getIconFromSceneNodeType(node->sceneNodeType));
+            childTreeItem->setFlags(childTreeItem->flags() | Qt::ItemIsUserCheckable);
+            childTreeItem->setCheckState(0, Qt::Checked);
 
-        // if (!node->isVisible()) childNode->setCheckState(0,Qt::Unchecked);
+            // if (!node->isVisible()) childNode->setCheckState(0,Qt::Unchecked);
 
-        parentTreeItem->addChild(childTreeItem);
+            parentTreeItem->addChild(childTreeItem);
 
-        // sceneTreeItems.insert(node->getEntity()->id(),childNode);
-        nodeList.insert(childNode->getNodeId(), childNode);
-        treeItemList.insert(childNode->getNodeId(), childTreeItem);
+            // sceneTreeItems.insert(node->getEntity()->id(),childNode);
+            nodeList.insert(childNode->getNodeId(), childNode);
+            treeItemList.insert(childNode->getNodeId(), childTreeItem);
 
-        populateTree(childTreeItem, childNode);
+            populateTree(childTreeItem, childNode);
+        }
     }
 }
 

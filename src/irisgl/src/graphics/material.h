@@ -37,24 +37,6 @@ struct MaterialTexture {
     QString name;
 };
 
-// this is a "compact" structure to hold properties that we need
-// to share with widets and other accessor classes now and future
-template<typename T>
-struct MatStruct {
-    int     id;
-    QString name;
-    QString uniform;
-    T       value;
-};
-
-template<typename T>
-MatStruct<T> make_mat_struct(int id, QString name, QString uniform, T value) {
-    MatStruct<T> mStruct = { id, name, uniform, value };
-    return mStruct;
-}
-
-
-
 class Material
 {
 public:

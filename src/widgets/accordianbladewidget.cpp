@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "accordianbladewidget.h"
 #include "ui_accordianbladewidget.h"
+
 #include "hfloatsliderwidget.h"
 #include "ui_hfloatsliderwidget.h"
 #include "colorvaluewidget.h"
@@ -30,7 +31,11 @@ For more information see the LICENSE file
 #include "ui_labelwidget.h"
 #include "filepickerwidget.h"
 #include "ui_filepickerwidget.h"
+#include "propertywidget.h"
+#include "ui_propertywidget.h"
 
+
+// TODO - omit height calculation
 AccordianBladeWidget::AccordianBladeWidget(QWidget* parent) :
     QWidget(parent),
     ui(new Ui::AccordianBladeWidget)
@@ -38,7 +43,7 @@ AccordianBladeWidget::AccordianBladeWidget(QWidget* parent) :
     ui->setupUi(this);
 
     stretch = 0;
-    setMinimumHeight( ui->bg->height());
+    setMinimumHeight(ui->bg->height());
     minimum_height = minimumHeight();
 
     connect(ui->toggle, SIGNAL(toggled(bool)), SLOT(onPanelToggled()));
@@ -66,8 +71,6 @@ void AccordianBladeWidget::clearPanel(QLayout *layout)
 
         delete item;
     }
-
-//    delete layout;
 }
 
 void AccordianBladeWidget::onPanelToggled()
@@ -140,6 +143,13 @@ FilePickerWidget* AccordianBladeWidget::addFilePicker(const QString &name)
     return filePicker;
 }
 
+PropertyWidget *AccordianBladeWidget::addPropertyWidget()
+{
+    PropertyWidget *props = new PropertyWidget;
+    ui->contentpane->layout()->addWidget(props);
+    return props;
+}
+
 HFloatSliderWidget* AccordianBladeWidget::addFloatValueSlider(
         const QString& name,
         float start,
@@ -204,14 +214,14 @@ void AccordianBladeWidget::expand()
 {
     // this is a tad bit hacky and there is definitely a better way to do this automatically
     // for now, we calculate and set the accordion height including spacing and margins
-    int widgetCount = ui->contentpane->layout()->count();
-    int topMargin, bottomMargin;
-    int spacing = ui->contentpane->layout()->spacing();
-    ui->contentpane->layout()->getContentsMargins(nullptr, &topMargin, nullptr, &bottomMargin);
-    int finalHeight = minimum_height + (widgetCount * spacing) + topMargin + bottomMargin;
+    // int widgetCount = ui->contentpane->layout()->count();
+    // int topMargin, bottomMargin;
+    // int spacing = ui->contentpane->layout()->spacing();
+    // ui->contentpane->layout()->getContentsMargins(nullptr, &topMargin, nullptr, &bottomMargin);
+    // int finalHeight = minimum_height + (widgetCount * spacing) + topMargin + bottomMargin;
 
-    this->setMinimumHeight(finalHeight);
-    this->setMaximumHeight(finalHeight);
+    this->setMinimumHeight(0);
+    // this->setMaximumHeight(finalHeight);
 
     ui->contentpane->setVisible(true);
 }

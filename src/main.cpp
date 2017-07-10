@@ -9,14 +9,17 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "mainwindow.h"
 #include <QApplication>
 #include <QPalette>
 #include <QStyleFactory>
 #include <QSplashScreen>
 #include <QSurfaceFormat>
+
+#include "mainwindow.h"
 #include "dialogs/infodialog.h"
+#include "dialogs/projectdialog.h"
 #include "core/settingsmanager.h"
+#include "globals.h"
 
 int main(int argc, char *argv[])
 {
@@ -61,17 +64,21 @@ int main(int argc, char *argv[])
     palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(135, 135, 135));
     app.setPalette(palette);
 
-    //splah screen
     QSplashScreen splash;
     auto image = QPixmap(":/app/images/splashv2.jpg");
     splash.setPixmap(image);
     splash.show();
 
+    Globals::appWorkingDir = QApplication::applicationDirPath();
+
+    ProjectDialog projectDialog;
+    projectDialog.show();
+
+//    MainWindow window;
+//    window.showMaximized();
+
     app.processEvents();
 
-    //draw main window maximized
-    MainWindow window;
-    window.showMaximized();
     splash.hide();
 
     //show info dialog is settings stipulate so

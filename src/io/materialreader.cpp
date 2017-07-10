@@ -10,14 +10,13 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "materialreader.hpp"
-#include <QDebug>
 
 MaterialReader::MaterialReader()
 {
 
 }
 
-bool MaterialReader::readJahShader(const QString &filePath)
+void MaterialReader::readJahShader(const QString &filePath)
 {
     dir = AssetIOBase::getDirFromFileName(filePath);
     QFile file(filePath);
@@ -28,24 +27,9 @@ bool MaterialReader::readJahShader(const QString &filePath)
     auto doc = QJsonDocument::fromJson(data);
 
     parsedShader = doc.object();
-
-//    parseJahShader(doc.object());
 }
 
-void MaterialReader::parseJahShader(const QJsonObject &jahShader)
+QJsonObject MaterialReader::getParsedShader()
 {
-    // @TODO: add some early check here to escape early
-
-    auto shaderName = jahShader["name"].toString();
-    auto uniforms = jahShader["uniforms"].toObject();
-
-//    QJsonArray children = rootNode["children"].toArray();
-
-    for (auto childObj : uniforms) {
-        if (childObj.toObject()["type"] == "slider") {
-
-        }
-    }
-
-    qDebug() << shaderName;
+    return parsedShader;
 }
