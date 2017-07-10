@@ -570,6 +570,12 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
         meshes.insert(filePath,meshList);
         assimpScenes.insert(filePath);
         animations.insert(filePath, animationss);
+
+//        auto relPath = QDir(Globals::project->folderPath).relativeFilePath(filename);
+//        for(auto anim : node->getAnimations()) {
+//            if (!!anim->skeletalAnimation)
+//                anim->skeletalAnimation->source = relPath;
+//        }
     }
 }
 
@@ -594,9 +600,16 @@ iris::MeshPtr SceneReader::getMesh(QString filePath, int index)
 
 iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(QString filePath, QString animName)
 {
+    auto relPath = filePath;
+    filePath = this->getAbsolutePath(filePath);
     extractAssetsFromAssimpScene(filePath);
 
     auto animMap = animations[filePath];
+
+    //reset relative paths for animations since they have the absolute path
+    for(auto anim : animMap)
+        anim->source = relPath;
+
     if (animMap.contains(animName)) return animMap[animName];
 
     return iris::SkeletalAnimationPtr();

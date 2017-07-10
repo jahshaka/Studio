@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include "irisgl/src/graphics/texture2d.h"
 #include "irisgl/src/animation/keyframeset.h"
 #include "irisgl/src/animation/keyframeanimation.h"
+#include "irisgl/src/animation/animation.h"
 #include "irisgl/src/graphics/postprocessmanager.h"
 #include "irisgl/src/core/logger.h"
 
@@ -1064,6 +1065,13 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 
     // model file may be invalid so null gets returned
     if (!node) return;
+
+    // rename animation sources to relative paths
+    auto relPath = QDir(Globals::project->folderPath).relativeFilePath(filename);
+    for(auto anim : node->getAnimations()) {
+        if (!!anim->skeletalAnimation)
+            anim->skeletalAnimation->source = relPath;
+    }
 
 //    node->materialType = 2;
     //node->setName(nodeName);
