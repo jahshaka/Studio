@@ -75,7 +75,9 @@ HEADERS += \
     $$PWD/src/geometry/frustum.h \
     $$PWD/src/math/transform.h \
     $$PWD/src/core/logger.h \
-    $$PWD/src/core/performancetimer.h
+    $$PWD/src/core/performancetimer.h \
+    $$PWD/src/graphics/renderlist.h \
+    $$PWD/src/graphics/renderstates.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -121,7 +123,9 @@ SOURCES += \
     $$PWD/src/scenegraph/scenenode.cpp \
     $$PWD/src/geometry/plane.cpp \
     $$PWD/src/geometry/frustum.cpp \
-    $$PWD/src/core/logger.cpp
+    $$PWD/src/core/logger.cpp \
+    $$PWD/src/graphics/renderlist.cpp \
+    $$PWD/src/graphics/renderitem.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc
