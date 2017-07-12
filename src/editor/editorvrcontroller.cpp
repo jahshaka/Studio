@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/math/mathhelper.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../core/keyboardstate.h"
+#include "../graphics/renderlist.h"
 #include <QtMath>
 
 
@@ -201,14 +202,14 @@ void EditorVrController::update(float dt)
             rightBeamRenderItem->worldMatrix.scale(1, 1,(dist /*  * (1.0f / 0.55f )*/));// todo: remove magic 0.55
         }
 
-        scene->geometryRenderList.append(leftHandRenderItem);
-        scene->geometryRenderList.append(rightHandRenderItem);
+        scene->geometryRenderList->add(leftHandRenderItem);
+        scene->geometryRenderList->add(rightHandRenderItem);
     }
 
     auto rightTouch = vrDevice->getTouchController(1);
     if (rightTouch->isTracking()) {
-        scene->geometryRenderList.append(leftBeamRenderItem);
-        scene->geometryRenderList.append(rightBeamRenderItem);
+        scene->geometryRenderList->add(leftBeamRenderItem);
+        scene->geometryRenderList->add(rightBeamRenderItem);
     }
 }
 

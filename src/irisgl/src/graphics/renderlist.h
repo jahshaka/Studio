@@ -26,6 +26,8 @@ public:
 
     void clear();
 
+    void sort();
+
     ~RenderList();
 };
 

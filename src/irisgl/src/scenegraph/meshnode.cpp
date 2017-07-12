@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include "../animation/animableproperty.h"
 
 #include "../graphics/skeleton.h"
+#include "../graphics/renderlist.h"
 
 namespace iris
 {
@@ -141,10 +142,10 @@ void MeshNode::submitRenderItems()
             //renderItem->faceCullingMode = faceCullingMode;
         }
 
-        this->scene->geometryRenderList.append(renderItem);
+        this->scene->geometryRenderList->add(renderItem);
 
         if (this->getShadowEnabled()) {
-            this->scene->shadowRenderList.append(renderItem);
+            this->scene->shadowRenderList->add(renderItem);
         }
     }
 }
