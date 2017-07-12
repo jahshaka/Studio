@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "../irisglfwd.h"
 #include "../geometry/boundingsphere.h"
 #include <QMatrix4x4>
+#include "renderstates.h"
 
 class QOpenGLShaderProgram;
 
@@ -23,52 +24,11 @@ namespace iris
 
 class Mesh;
 
-enum class FaceCullingMode
-{
-    None,
-    Front,
-    Back,
-    FrontAndBack
-};
-
-enum class BlendType
-{
-    None,
-    Normal,
-    Add
-};
-
 enum class RenderItemType
 {
     None,
     Mesh,
     ParticleSystem
-};
-
-struct RenderStates
-{
-    int renderLayer;
-    BlendType blendType;
-    bool zWrite;
-    bool depthTest;
-    FaceCullingMode cullMode;
-    bool fogEnabled;
-    bool castShadows;
-    bool receiveShadows;
-    bool receiveLighting;
-
-    RenderStates()
-    {
-        renderLayer = 0;
-        blendType = BlendType::None;
-        zWrite = true;
-        depthTest = true;
-        cullMode = FaceCullingMode::Back;
-        fogEnabled = true;
-        castShadows = true;
-        receiveShadows = true;
-        receiveLighting = true;
-    }
 };
 
 struct RenderItem
@@ -93,10 +53,12 @@ struct RenderItem
     int renderLayer;
 
     RenderItem() {
-        type = RenderItemType::None,
+        type = RenderItemType::None;
         //renderLayer = (int)RenderLayer::Opaque;
         worldMatrix.setToIdentity();
     }
+
+    void reset();
 };
 
 }
