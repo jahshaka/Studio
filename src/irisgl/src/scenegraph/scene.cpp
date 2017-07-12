@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "../materials/defaultskymaterial.h"
 #include "../geometry/trimesh.h"
 #include "../core/irisutils.h"
+#include "../graphics/renderlist.h"
 
 namespace iris
 {
@@ -61,9 +62,9 @@ Scene::Scene()
     meshes.reserve(100);
     particleSystems.reserve(100);
 
-    //reserve 1000 items initially
-    geometryRenderList.reserve(1000);
-    shadowRenderList.reserve(1000);
+    geometryRenderList = new RenderList();
+    shadowRenderList = new RenderList();
+    gizmoRenderList = new RenderList();
 }
 
 void Scene::setSkyTexture(Texture2DPtr tex)
@@ -118,7 +119,7 @@ void Scene::update(float dt)
         particle->submitRenderItems();
     }
 
-    this->geometryRenderList.append(skyRenderItem);
+    this->geometryRenderList->add(skyRenderItem);
 }
 
 void Scene::render()

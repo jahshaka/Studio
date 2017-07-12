@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "../graphics/renderitem.h"
 #include "../graphics/particle.h"
 #include "../graphics/particlerender.h"
+#include "../graphics/renderlist.h"
 
 #include "../scenegraph/scene.h"
 #include "../scenegraph/scenenode.h"
@@ -95,8 +96,8 @@ void ParticleSystemNode::submitRenderItems()
     renderItem->worldMatrix = this->globalTransform;
     renderItem->renderLayer = (int)RenderLayer::Transparent;
 
-    this->scene->geometryRenderList.append(renderItem);
-    this->scene->geometryRenderList.append(boundsRenderItem);
+    this->scene->geometryRenderList->add(renderItem);
+    this->scene->geometryRenderList->add(boundsRenderItem);
 }
 
 void ParticleSystemNode::generateParticles(float delta) {

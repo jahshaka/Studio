@@ -70,6 +70,13 @@ void RenderList::clear()
     used.clear();
 }
 
+void RenderList::sort()
+{
+    qSort(renderList.begin(), renderList.end(), [](const RenderItem* a, const RenderItem* b) {
+        return a->renderLayer < b->renderLayer;
+    });
+}
+
 RenderList::~RenderList()
 {
 
