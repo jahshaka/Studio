@@ -10,8 +10,6 @@
 #**************************************************************************
 
 HEADERS += \
-    $$PWD/src/core/scene.h \
-    $$PWD/src/core/scenenode.h \
     $$PWD/src/animation/nodekeyframe.h \
     $$PWD/src/animation/keyframeanimation.h \
     $$PWD/src/scenegraph/lightnode.h \
@@ -53,7 +51,6 @@ HEADERS += \
     $$PWD/src/vr/vrmanager.h \
     $$PWD/src/graphics/iviewsource.h \
     $$PWD/src/materials/custommaterial.h \
-    $$PWD/src/materials/propertytype.h \
     $$PWD/src/graphics/postprocess.h \
     $$PWD/src/graphics/postprocessmanager.h \
     $$PWD/src/graphics/rendertexture.h \
@@ -63,7 +60,21 @@ HEADERS += \
     $$PWD/src/postprocesses/radialblurpostprocess.h \
     $$PWD/src/postprocesses/greyscalepostprocess.h \
     $$PWD/src/postprocesses/ssaopostprocess.h \
-    $$PWD/src/postprocesses/materialpostprocess.h
+    $$PWD/src/postprocesses/materialpostprocess.h \
+    $$PWD/src/animation/propertyanim.h \
+    $$PWD/src/animation/animableproperty.h \
+    $$PWD/src/utils/hashedlist.h \
+    $$PWD/src/graphics/skeleton.h \
+    $$PWD/src/animation/skeletalanimation.h \
+    $$PWD/src/animation/floatcurve.h \
+    $$PWD/src/scenegraph/scene.h \
+    $$PWD/src/scenegraph/scenenode.h \
+    $$PWD/src/core/property.h \
+    $$PWD/src/geometry/boundingsphere.h \
+    $$PWD/src/geometry/plane.h \
+    $$PWD/src/geometry/frustum.h \
+    $$PWD/src/math/transform.h \
+    $$PWD/src/core/logger.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -71,9 +82,7 @@ include(src/libovr/libovr.pri)
 SOURCES += \
     $$PWD/src/graphics/mesh.cpp \
     $$PWD/src/materials/defaultmaterial.cpp \
-    $$PWD/src/core/scene.cpp \
     $$PWD/src/scenegraph/meshnode.cpp \
-    $$PWD/src/core/scenenode.cpp \
     $$PWD/src/graphics/forwardrenderer.cpp \
     $$PWD/src/graphics/graphicshelper.cpp \
     $$PWD/src/graphics/utils/billboard.cpp \
@@ -102,7 +111,16 @@ SOURCES += \
     $$PWD/src/postprocesses/radialblurpostprocess.cpp \
     $$PWD/src/postprocesses/bloompostprocess.cpp \
     $$PWD/src/postprocesses/greyscalepostprocess.cpp \
-    $$PWD/src/postprocesses/ssaopostprocess.cpp
+    $$PWD/src/postprocesses/ssaopostprocess.cpp \
+    $$PWD/src/animation/propertyanim.cpp \
+    $$PWD/src/scenegraph/lightnode.cpp \
+    $$PWD/src/animation/skeletalanimation.cpp \
+    $$PWD/src/graphics/skeleton.cpp \
+    $$PWD/src/scenegraph/scene.cpp \
+    $$PWD/src/scenegraph/scenenode.cpp \
+    $$PWD/src/geometry/plane.cpp \
+    $$PWD/src/geometry/frustum.cpp \
+    $$PWD/src/core/logger.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

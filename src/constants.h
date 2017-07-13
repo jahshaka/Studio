@@ -9,12 +9,16 @@
 
 namespace Constants
 {
-    const float CONTENT_VERSION     = 0.3;
+    const QString CONTENT_VERSION   = "0.3beta";
     const QString JAH_EXT           = ".jah";
     const QString PROJ_EXT          = ".project";
-    const QStringList PROJECT_DIRS  = { "Textures", "Models", "Shaders", "Materials", "Scenes" };
+    const QStringList PROJECT_DIRS  = { "Textures", "Models", "Shaders", "Materials", "Metadata" };
     const QString SHADER_DEFS       = "/app/shader_defs/";
     const QString DEFAULT_SHADER    = "/app/shader_defs/Default.shader";
+    const QString SAMPLES_FOLDER    = "/scenes";
+
+    const QString DB_DRIVER         = "QSQLITE";
+    const QString DB_ROOT_TABLE     = "JAH_PROJECT";
 }
 
 #endif // CONSTANTS_H

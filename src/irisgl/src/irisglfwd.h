@@ -17,6 +17,7 @@ For more information see the LICENSE file
 
 #include <QSharedPointer>
 //#include "animation/keyframeanimation.h"
+#include "core/logger.h"
 
 namespace iris
 {
@@ -26,6 +27,7 @@ class LightNode;
 class ViewerNode;
 class ParticleSystemNode;
 class Mesh;
+class Frustum;
 class Material;
 class MeshNode;
 class VrDevice;
@@ -52,9 +54,19 @@ class CustomMaterial;
 class RenderItem;
 class PickingResult;
 class RenderTarget;
+class Property;
 class PostProcess;
 class PostProcessContext;
 class PostProcessManager;
+class PropertyAnim;
+class PropertyAnimInfo;
+class FloatPropertyAnim;
+class Vector3DPropertyAnim;
+class ColorPropertyAnim;
+class AnimableProperty;
+class Bone;
+class Skeleton;
+class SkeletalAnimation;
 template<typename T> class Key;
 typedef Key<float> FloatKey;
 
@@ -62,6 +74,7 @@ typedef QSharedPointer<iris::Animation> AnimationPtr;
 typedef QSharedPointer<Shader> ShaderPtr;
 typedef QSharedPointer<Scene> ScenePtr;
 typedef QSharedPointer<SceneNode> SceneNodePtr;
+typedef QSharedPointer<Mesh> MeshPtr;
 typedef QSharedPointer<Material> MaterialPtr;
 typedef QSharedPointer<DefaultMaterial> DefaultMaterialPtr;
 typedef QSharedPointer<LightNode> LightNodePtr;
@@ -80,6 +93,9 @@ typedef QSharedPointer<ParticleSystemNode> ParticleSystemNodePtr;
 typedef QSharedPointer<RenderTarget> RenderTargetPtr;
 typedef QSharedPointer<PostProcess> PostProcessPtr;
 typedef QSharedPointer<PostProcessManager> PostProcessManagerPtr;
+typedef QSharedPointer<Bone> BonePtr;
+typedef QSharedPointer<Skeleton> SkeletonPtr;
+typedef QSharedPointer<SkeletalAnimation> SkeletalAnimationPtr;
 
 
 

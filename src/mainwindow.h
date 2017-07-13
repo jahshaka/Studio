@@ -34,6 +34,7 @@ class QStandardItemModel;
 class QTreeWidgetItem;
 class QTreeWidget;
 class QIcon;
+class QUndoStack;
 
 //custom ui
 class TransformSlidersUi;
@@ -72,6 +73,8 @@ class QOpenGLFunctions_3_2_Core;
 
 enum class SceneNodeType;
 
+class Database;
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -85,6 +88,9 @@ public:
 
     void setSceneAnimTime(float time);
     void stopAnimWidget();
+
+    void setupProjectDB();
+    void setupUndoRedo();
 
     bool handleMousePress(QMouseEvent *event);
     bool handleMouseRelease(QMouseEvent *event);
@@ -111,6 +117,10 @@ public:
      * @return
      */
     QString getAbsoluteAssetPath(QString relToApp);
+
+    void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
+    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
+    void repopulateSceneTree();
 
 private:
 
@@ -140,10 +150,6 @@ private:
     //void populateTree(QTreeWidgetItem* treeNode,SceneNode* sceneNode);
     void deselectTreeItems();
 
-    //void addSceneNodeToSelectedTreeItem(QTreeWidget* sceneTree,SceneNode* newNode,bool addToSelected,QIcon icon);
-    void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
-    void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
-
     void setupDefaultScene();
 
     void resizeEvent(QResizeEvent* event);
@@ -158,6 +164,9 @@ private:
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
     void dragLeaveEvent(QDragLeaveEvent* event) override;
+
+    // determines if file extension is that of a model (obj, fbx, 3ds)
+    bool isModelExtension(QString extension);
 
 public slots:
     //scenegraph
@@ -210,7 +219,6 @@ public slots:
     void openBlogUrl();
     void openWebsiteUrl();
 
-    iris::ScenePtr loadDefaultScene();
     iris::ScenePtr createDefaultScene();
     void initializeGraphics(SceneViewWidget* widget, QOpenGLFunctions_3_2_Core* gl);
 
@@ -222,6 +230,9 @@ public slots:
 
     void vrButtonClicked(bool);
     void updateSceneSettings();
+
+    void undo();
+    void redo();
 
 private slots:
     void translateGizmo();
@@ -263,6 +274,7 @@ private:
     QPoint mouseReleasePos;
     QPoint mousePos;
     bool dragging;
+    QVector3D dragScenePos;
 
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;
@@ -272,6 +284,10 @@ private:
     QActionGroup* transformGroup;
     QActionGroup* transformSpaceGroup;
     QActionGroup* cameraGroup;
+
+    Database *db;
+
+    QUndoStack* undoStack;
 
     bool vrMode;
     QPushButton* vrButton;

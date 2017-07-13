@@ -14,7 +14,7 @@ For more information see the LICENSE file
 
 #include "QColor"
 #include "../irisglfwd.h"
-#include "../core/scenenode.h"
+#include "../scenegraph/scenenode.h"
 
 namespace iris
 {
@@ -82,6 +82,11 @@ public:
 
         return dir.toVector3D();
     }
+
+    virtual QList<Property*> getProperties() override;
+    virtual QVariant getPropertyValue(QString valueName) override;
+
+    void updateAnimation(float time) override;
 
 private:
     LightNode()

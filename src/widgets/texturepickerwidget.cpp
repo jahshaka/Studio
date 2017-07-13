@@ -151,6 +151,8 @@ void TexturePickerWidget::setTexture(QString path)
 {
     if (path.isNull() || path.isEmpty()) {
         ui->texture->clear();
+        ui->imagename->clear();
+        ui->dimensions->clear();
     } else {
         setLabelImage(ui->texture, path, false);
     }

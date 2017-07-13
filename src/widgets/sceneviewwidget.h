@@ -130,7 +130,7 @@ public:
     iris::SceneNodePtr activeDragNode;
     bool updateRPI(QVector3D pos, QVector3D r);
     bool doActiveObjectPicking(const QPointF& point);
-    void doObjectPicking(const QPointF& point, bool skipLights = false);
+    void doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject = true, bool skipLights = false);
 
 protected:
     void initializeGL();

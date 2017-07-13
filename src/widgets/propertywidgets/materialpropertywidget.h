@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include "../../io/assetmanager.h"
 #include "../accordianbladewidget.h"
 #include "../../irisgl/src/graphics/material.h"
-#include "../../irisgl/src/materials/propertytype.h"
+#include "../../irisgl/src/core/property.h"
 
 namespace iris {
     class SceneNode;
@@ -53,7 +53,12 @@ private:
     PropertyWidget* materialPropWidget;
 
     void setupShaderSelector();
-    void onPropertyChanged(iris::Property*);
+    void onPropertyChanged(iris::Property*) override;
+    void onPropertyChangeStart(iris::Property*) override;
+    void onPropertyChangeEnd(iris::Property*) override;
+
+    // for undo/redo
+    QVariant startValue;
 };
 
 #endif // MATERIALPROPERTYWIDGET_H

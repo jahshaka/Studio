@@ -5,6 +5,7 @@
 #include "../core/thumbnailmanager.h"
 #include "../core/project.h"
 #include "../globals.h"
+#include "../constants.h"
 
 #include <QDebug>
 #include <QDir>
@@ -96,6 +97,9 @@ void AssetWidget::populateAssetTree()
 //    }
     updateAssetView(rootTreeItem->data(0, Qt::UserRole).toString());
     rootTreeItem->setSelected(true);
+
+    assetItem.item = rootTreeItem;
+    assetItem.selectedPath = rootTreeItem->data(0, Qt::UserRole).toString();
 }
 
 void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
@@ -103,14 +107,12 @@ void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
     QDir dir(path);
     QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
     foreach (const QFileInfo &file, files) {
-        if (!file.fileName().startsWith('.')) {
-            auto item = new QTreeWidgetItem();
-            item->setIcon(0, QIcon(":/app/icons/folder-symbol.svg"));
-            item->setData(0, Qt::DisplayRole, file.fileName());
-            item->setData(0, Qt::UserRole, file.absoluteFilePath());
-            parent->addChild(item);
-            updateTree(item, file.absoluteFilePath());
-        }
+        auto item = new QTreeWidgetItem();
+        item->setIcon(0, QIcon(":/app/icons/folder-symbol.svg"));
+        item->setData(0, Qt::DisplayRole, file.fileName());
+        item->setData(0, Qt::UserRole, file.absoluteFilePath());
+        parent->addChild(item);
+        updateTree(item, file.absoluteFilePath());
     }
 }
 
@@ -120,46 +122,50 @@ void AssetWidget::walkFileSystem(QString folder, QString path)
     QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs);
     foreach (const QFileInfo &file, files) {
         // TODO - maybe add some OS centric code to check for hidden folder
-        if (!file.fileName().startsWith('.')) {
-            // TODO -- get type from extension if is a file
-            if (file.isFile()) {
-                AssetType type;
-                QPixmap pixmap;
+        // TODO -- get type from extension if is a file
+        if (file.isFile() && file.suffix() != Constants::PROJ_EXT) {
+            AssetType type;
+            QPixmap pixmap;
 
-                if (file.suffix() == "jpg" || file.suffix() == "png" || file.suffix() == "bmp") {
-                    auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
-                    pixmap = QPixmap::fromImage(*thumb->thumb);
-                    type = AssetType::Texture;
-                } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
-                    auto thumb = ThumbnailManager::createThumbnail(":/app/icons/user-account-box.svg", 128, 128);
-                    type = AssetType::Object;
-                    pixmap = QPixmap::fromImage(*thumb->thumb);
-                } else if (file.suffix() == "shader") {
-                    auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
-                    type = AssetType::Shader;
-                    pixmap = QPixmap::fromImage(*thumb->thumb);
-                } else {
-                    auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
-                    type = AssetType::File;
-                    pixmap = QPixmap::fromImage(*thumb->thumb);
-                }
-
-                AssetManager::assets.append(new Asset(type,
-                                        file.absoluteFilePath(),
-                                        file.fileName(),
-                                        pixmap));
+            if (file.suffix() == "jpg" || file.suffix() == "png" || file.suffix() == "bmp") {
+                auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
+                pixmap = QPixmap::fromImage(*thumb->thumb);
+                type = AssetType::Texture;
+            } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
+                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                type = AssetType::Object;
+                pixmap = QPixmap::fromImage(*thumb->thumb);
+            } else if (file.suffix() == "shader") {
+                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                type = AssetType::Shader;
+                pixmap = QPixmap::fromImage(*thumb->thumb);
             } else {
-                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
-                QPixmap pixmap = QPixmap::fromImage(*thumb->thumb);
-                AssetManager::assets.append(new Asset(AssetType::Folder,
-                                        file.absoluteFilePath(),
-                                        file.fileName(),
-                                        pixmap));
+                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                type = AssetType::File;
+                pixmap = QPixmap::fromImage(*thumb->thumb);
             }
 
-            if (file.isDir()) {
-                walkFileSystem("", file.absoluteFilePath());
-            }
+            auto asset = new AssetVariant;
+            asset->type = type;
+            asset->fileName = file.fileName();
+            asset->path = file.absoluteFilePath();
+            asset->thumbnail = pixmap;
+
+            AssetManager::assets.append(asset);
+        } else {
+            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
+            QPixmap pixmap = QPixmap::fromImage(*thumb->thumb);
+
+            auto asset = new AssetFolder;
+            asset->fileName = file.fileName();
+            asset->path = file.absoluteFilePath();
+            asset->thumbnail = pixmap;
+
+            AssetManager::assets.append(asset);
+        }
+
+        if (file.isDir()) {
+            walkFileSystem("", file.absoluteFilePath());
         }
     }
 }
@@ -176,24 +182,24 @@ void AssetWidget::addItem(const QString &asset)
         item = new QListWidgetItem(QIcon(":/app/icons/folder-symbol.svg"), name);
         item->setData(Qt::UserRole, file.absolutePath());
     } else {
-        AssetType type;
+        //AssetType type = AssetType::Invalid;
         QPixmap pixmap;
 
         item = new QListWidgetItem(name);
 
         if (file.suffix() == "jpg" || file.suffix() == "png" || file.suffix() == "bmp") {
-            type = AssetType::Texture;
+            //type = AssetType::Texture;
             auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
             pixmap = QPixmap::fromImage(*thumb->thumb);
             item->setIcon(QIcon(pixmap));
         } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
-            type = AssetType::Object;
-            item->setIcon(QIcon(":/app/icons/user-account-box.svg"));
+            //type = AssetType::Object;
+            item->setIcon(QIcon(":/app/icons/google-drive-file.svg"));
         } else if (file.suffix() == "shader") {
-            type = AssetType::Shader;
+            //type = AssetType::Shader;
             item->setIcon(QIcon(":/app/icons/google-drive-file.svg"));
         } else {
-            type = AssetType::File;
+            //type = AssetType::File;
             item->setIcon(QIcon(":/app/icons/google-drive-file.svg"));
         }
 
@@ -203,7 +209,11 @@ void AssetWidget::addItem(const QString &asset)
     item->setSizeHint(QSize(128, 128));
     item->setTextAlignment(Qt::AlignCenter);
     item->setFlags(item->flags() | Qt::ItemIsEditable);
-    ui->assetView->addItem(item);
+
+    QString str = Constants::PROJ_EXT;
+    if (file.suffix() != str.remove(0, 1)) {
+        ui->assetView->addItem(item);
+    }
 }
 
 void AssetWidget::updateAssetView(const QString &path)
@@ -255,6 +265,8 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
                 AssetWidget::mouseMoveEvent(evt);
                 break;
             }
+
+            default: break;
         }
     }
 
@@ -378,15 +390,16 @@ void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
     // TODO - depending on file type, we can open mini dialogs for texture preview
     // Or we can directly add model files to the scene
     QFileInfo path(item->data(Qt::UserRole).toString() + '/' + item->text());
-
-    QString str = item->data(Qt::UserRole).toString() + '/' + item->text();
+    auto pathStr = path.absoluteFilePath();
 
     if (path.isDir()) {
-        updateAssetView(item->data(Qt::UserRole).toString() + '/' + item->text());
+        updateAssetView(pathStr);
+        assetItem.wItem = item;
+        assetItem.selectedPath = pathStr;
 
         QTreeWidgetItemIterator it(ui->assetTree);
         while (*it) {
-            if ((*it)->data(0, Qt::UserRole) == str) {
+            if ((*it)->data(0, Qt::UserRole) == pathStr) {
                 ui->assetTree->clearSelection();
                 (*it)->setSelected(true);
                 ui->assetTree->expandItem((*it));
@@ -503,7 +516,7 @@ void AssetWidget::importAsset(const QStringList &path)
         foreach (const QFileInfo &file, fileNames) {
             QFile::copy(file.absoluteFilePath(), assetItem.selectedPath + '/' + file.fileName());
 
-            if (file.isFile()) {
+            if (file.isFile() && file.suffix() != Constants::PROJ_EXT) {
                 AssetType type;
                 QPixmap pixmap;
 
@@ -525,10 +538,13 @@ void AssetWidget::importAsset(const QStringList &path)
                     pixmap = QPixmap::fromImage(*thumb->thumb);
                 }
 
-                AssetManager::assets.append(new Asset(type,
-                                            file.absoluteFilePath(),
-                                            file.fileName(),
-                                            pixmap));
+                auto asset = new AssetVariant;
+                asset->type = type;
+                asset->fileName = file.fileName();
+                asset->path = file.absoluteFilePath();
+                asset->thumbnail = pixmap;
+
+                AssetManager::assets.append(asset);
             }
         }
 

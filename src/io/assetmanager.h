@@ -5,8 +5,13 @@
 #include <QList>
 #include <QPixmap>
 
+#include "../irisgl/src/assimp/include/assimp/Importer.hpp"
+#include "../irisgl/src/assimp/include/assimp/scene.h"
+#include "../irisgl/src/assimp/include/assimp/postprocess.h"
 
-enum AssetType {
+#include "../irisgl/src/graphics/graphicshelper.h"
+
+enum class AssetType {
     Shader,
     Material,
     Mesh,
@@ -20,27 +25,91 @@ enum AssetType {
     Scene,
     Animation,
     Object,
-    Invalid
+    Invalid,
+    Variant
 };
 
 struct Asset {
-    AssetType type;
+    AssetType           type;
+    QString             path;
+    QString             fileName;
+    QPixmap             thumbnail;
+    bool                deletable;
 
-    // path relative to project root
-    QString path;
-    QString fileName;
+    virtual QVariant    getValue() = 0;
+    virtual void        setValue(QVariant val) = 0;
+};
 
-    // default value is null
-    QPixmap thumbnail;
-    bool deletable;
+struct AssetVariant : public Asset
+{
+    AssetVariant() {
+        type = AssetType::Variant;
+        deletable = true;
+    }
 
-    Asset(AssetType type, QString path, QString fileName, QPixmap pmap) {
-        this->type = type;
-        this->path = path;
-        this->fileName = fileName;
-        this->thumbnail = pmap;
+    virtual QVariant getValue() {
+        return QVariant();
+    }
 
-        deletable = false;
+    virtual void setValue(QVariant val) {
+        Q_UNUSED(val);
+    }
+};
+
+struct AssetFile : public Asset
+{
+    AssetFile() {
+        type = AssetType::File;
+        deletable = true;
+    }
+
+    virtual QVariant getValue() {
+        return QVariant();
+    }
+
+    virtual void setValue(QVariant val) {
+        Q_UNUSED(val)
+    }
+};
+
+struct AssetFolder : public Asset
+{
+    AssetFolder() {
+        type = AssetType::Folder;
+        deletable = true;
+    }
+
+    virtual QVariant getValue() {
+        return QVariant();
+    }
+
+    virtual void setValue(QVariant val) {
+        Q_UNUSED(val);
+    }
+};
+
+// note that this class is not able to be used for queued signal-slot connections
+// not needed at the moment nor should it be in the foreseeable future
+struct AssetObject : public Asset
+{
+    // this is a metatype so we can use aiScene's in variants
+    AssimpObject *ao;
+
+    AssetObject(AssimpObject *a, QString p) : ao(a) {
+        type = AssetType::Object;
+        path = p;
+        deletable = true;
+    }
+
+    virtual QVariant getValue() override {
+        QVariant v;
+        v.setValue(ao);
+        return v;
+    }
+
+    virtual void setValue(QVariant value) {
+        // look into getting rid of the ptr
+        // ao = value.value<AssimpObject*>();
     }
 };
 

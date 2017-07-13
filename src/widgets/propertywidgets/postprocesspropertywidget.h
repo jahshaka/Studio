@@ -3,7 +3,7 @@
 
 #include "../accordianbladewidget.h"
 #include "../../irisgl/src/irisglfwd.h"
-#include "../../irisgl/src/materials/propertytype.h"
+#include "../../irisgl/src/core/property.h"
 
 #include "../hfloatsliderwidget.h"
 
@@ -22,7 +22,10 @@ public:
 
     // PropertyListener interface
 public:
-    void onPropertyChanged(iris::Property *);
+    void onPropertyChanged(iris::Property*) override;
+    void onPropertyChangeStart(iris::Property*) override;
+    void onPropertyChangeEnd(iris::Property*) override;
+
     PropertyWidget* propWidget;
     HFloatSliderWidget* slider;
 };

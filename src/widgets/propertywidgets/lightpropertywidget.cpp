@@ -17,8 +17,8 @@ For more information see the LICENSE file
 #include "../colorpickerwidget.h"
 #include "../colorvaluewidget.h"
 
-#include "../../irisgl/src/core/scene.h"
-#include "../../irisgl/src/core/scenenode.h"
+#include "../../irisgl/src/scenegraph/scene.h"
+#include "../../irisgl/src/scenegraph/scenenode.h"
 #include "../../irisgl/src/scenegraph/lightnode.h"
 
 

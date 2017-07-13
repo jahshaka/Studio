@@ -13,6 +13,8 @@ For more information see the LICENSE file
 #define MATERIALHELPER_H
 
 #include "../irisglfwd.h"
+#include <QColor>
+#include "../graphics/mesh.h"
 
 class aiMaterial;
 
@@ -23,7 +25,7 @@ class MaterialHelper
 {
 public:
     static DefaultMaterialPtr createMaterial(aiMaterial* aiMat, QString assetPath);
-
+    static void extractMaterialData(aiMaterial* aiMat, QString assetPath, MeshMaterialData& data);
 };
 
 }

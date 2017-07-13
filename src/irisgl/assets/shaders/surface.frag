@@ -89,6 +89,7 @@ uniform Light u_lights[MAX_LIGHTS];
 uniform int u_lightCount;
 
 uniform vec3 u_eyePos;
+uniform vec3 u_sceneAmbient;
 
 struct Material
 {
@@ -149,8 +150,11 @@ void main()
     material.ambient = vec3(0, 0, 0);
     material.emission = vec3(0, 0, 0);
     material.alpha = 1.0f;
-
+ 
     surface(material);
+
+    // ambient is scaled to the scene's ambient
+    material.ambient *= u_sceneAmbient;
 
     vec3 diffuse = vec3(0);
     vec3 specular = vec3(0);    

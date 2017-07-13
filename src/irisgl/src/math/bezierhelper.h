@@ -34,6 +34,24 @@ public:
 
       return p;
     }
+
+    static float calculateBezier(float p0, float p1, float p2, float p3, float t)
+    {
+        auto p01 = lerp(p0, p1, t);
+        auto p12 = lerp(p1, p2, t);
+        auto p23 = lerp(p2, p3, t);
+        auto p012 = lerp(p01, p12, t);
+        auto p123 = lerp(p12, p23, t);
+        auto final = lerp(p012, p123, t);
+
+        return final;
+    }
+
+    template<class T, class U>
+    static float lerp(const T& a,const T& b, const U& t)
+    {
+        return a + ((b - a) * t);
+    }
 };
 
 

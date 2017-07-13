@@ -46,5 +46,7 @@
         <file>app/icons/user-account-box.svg</file>
         <file>app/icons/list-button-with-3-elements.svg</file>
         <file>app/icons/view-list-button.svg</file>
+        <file>app/icons/add-plus-button.svg</file>
+        <file>app/icons/clear-button.svg</file>
     </qresource>
 </RCC>

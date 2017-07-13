@@ -21,7 +21,7 @@ For more information see the LICENSE file
 #include <QElapsedTimer>
 
 #include "../irisgl/src/irisgl.h"
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
@@ -78,8 +78,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     //camController = orbitalCam;
 
     editorCam = iris::CameraNode::create();
-    editorCam->pos = QVector3D(0, 8, 24);
-    editorCam->rot = QQuaternion::fromEulerAngles(-5, 0, 0);
+    editorCam->setLocalPos(QVector3D(0, 5, 14));
+    editorCam->setLocalRot(QQuaternion::fromEulerAngles(-5, 0, 0));
     camController->setCamera(editorCam);
 
     viewportMode = ViewportMode::Editor;
@@ -88,17 +88,17 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     playScene = false;
     animTime = 0.0f;
 
-    sceneFloor = iris::IntersectionHelper::computePlaneND(QVector3D(100,  0,  100),
+    sceneFloor = iris::IntersectionHelper::computePlaneND(QVector3D( 100, 0,  100),
                                                           QVector3D(-100, 0,  100),
-                                                          QVector3D(0,    0, -100));
+                                                          QVector3D(   0, 0, -100));
 
     setAcceptDrops(true);
 }
 
 void SceneViewWidget::resetEditorCam()
 {
-    editorCam->pos = QVector3D(0, 5, 7);
-    editorCam->rot = QQuaternion::fromEulerAngles(-5, 0, 0);
+    editorCam->setLocalPos(QVector3D(0, 5, 14));
+    editorCam->setLocalRot(QQuaternion::fromEulerAngles(-5, 0, 0));
     camController->setCamera(editorCam);
 }
 
@@ -139,7 +139,7 @@ void SceneViewWidget::setSelectedNode(iris::SceneNodePtr sceneNode)
     renderer->setSelectedSceneNode(sceneNode);
 
     if (viewportGizmo != nullptr) {
-        viewportGizmo->lastSelectedNode = sceneNode;
+        viewportGizmo->setLastSelectedNode(sceneNode);
     }
 }
 
@@ -152,8 +152,8 @@ void SceneViewWidget::clearSelectedNode()
 void SceneViewWidget::updateScene(bool once)
 {
     // update and draw the 3d manipulation gizmo
-    if (!!viewportGizmo->lastSelectedNode) {
-        if (!viewportGizmo->lastSelectedNode->isRootNode()) {
+    if (!!viewportGizmo->getLastSelectedNode()) {
+        if (!viewportGizmo->getLastSelectedNode()->isRootNode()) {
             if (viewportMode != ViewportMode::VR) {
                 viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
                 viewportGizmo->render(editorCam->viewMatrix, editorCam->projMatrix);
@@ -288,7 +288,7 @@ bool SceneViewWidget::doActiveObjectPicking(const QPointF &point)
 {
     editorCam->updateCameraMatrices();
 
-    auto segStart = this->editorCam->pos;
+    auto segStart = this->editorCam->getLocalPos();
     auto rayDir = this->calculateMouseRay(point) * 1024;
     auto segEnd = segStart + rayDir;
 
@@ -317,7 +317,7 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     QPointF dir = localPos - prevMousePos;
 
     if (e->buttons() == Qt::LeftButton && !!viewportGizmo->currentNode) {
-         viewportGizmo->update(editorCam->pos, calculateMouseRay(localPos));
+         viewportGizmo->update(editorCam->getLocalPos(), calculateMouseRay(localPos));
     }
 
     if (camController != nullptr) {
@@ -329,6 +329,7 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
 
 void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 {
+    auto lastSelected = selectedNode;
     prevMousePos = e->localPos();
 
     if (e->button() == Qt::RightButton) {
@@ -364,7 +365,7 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 
         // if we don't have a selected node prioritize object picking
         if (selectedNode.isNull()) {
-            this->doObjectPicking(e->localPos());
+            this->doObjectPicking(e->localPos(), lastSelected);
         }
     }
 
@@ -411,11 +412,17 @@ void SceneViewWidget::focusOutEvent(QFocusEvent* event)
     KeyboardState::reset();
 }
 
-void SceneViewWidget::doObjectPicking(const QPointF& point, bool skipLights)
+/*
+ * if @selectRootObject is false then it will return the exact picked object
+ * else it will compared the roots of the current and previously selected objects
+ * @selectRootObject is usually true for picking using the mouse
+ * It's false for when dragging a texture to an object
+ */
+void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject, bool skipLights)
 {
     editorCam->updateCameraMatrices();
 
-    auto segStart = this->editorCam->pos;
+    auto segStart = this->editorCam->getLocalPos();
     auto rayDir = this->calculateMouseRay(point) * 1024;
     auto segEnd = segStart + rayDir;
 
@@ -432,26 +439,68 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, bool skipLights)
     }
 
     // if the size of the list is 1 we know it was the only one so return early
-    if (hitList.size() == 1) {
-        viewportGizmo->lastSelectedNode = hitList[0].hitNode;
-        emit sceneNodeSelected(hitList[0].hitNode);
-        return;
-    }
+//    if (hitList.size() == 1) {
+//        viewportGizmo->lastSelectedNode = hitList[0].hitNode;
+//        emit sceneNodeSelected(hitList[0].hitNode);
+//        return;
+//    }
 
     // sort by distance to camera then return the closest hit node
     qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
         return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
     });
 
-    viewportGizmo->lastSelectedNode = hitList.last().hitNode;
-    emit sceneNodeSelected(hitList.last().hitNode);
+    auto pickedNode = hitList.last().hitNode;
+    iris::SceneNodePtr lastSelectedRoot;
+
+    if (selectRootObject) {
+        if (!!lastSelectedNode) {
+            lastSelectedRoot = lastSelectedNode;
+            while (lastSelectedRoot->isAttached())
+                lastSelectedRoot = lastSelectedRoot->parent;
+        }
+
+        auto pickedRoot = hitList.last().hitNode;
+        while (pickedRoot->isAttached())
+            pickedRoot = pickedRoot->parent;
+
+
+
+        if (!lastSelectedNode || // if the user clicked away then the root should be reselected
+             pickedRoot != lastSelectedRoot)  // if both are under, or is, the same root then pick the actual object
+            pickedNode = pickedRoot;// if not then pick the root node
+    }
+
+    /*
+    auto pickedNode = hitList.last().hitNode;
+    // climb tree to object's root (in the case of an imported model)
+    iris::SceneNodePtr rootObject;
+    if (pickedNode != lastSelectedNode && pickedNode->isAttached()) {
+        rootObject = pickedNode;
+        // climb the tree to root object
+        while (rootObject->isAttached()) {
+            rootObject = rootObject->parent;
+        }
+
+        // if rootObject is selectedNode, then use the pickedNode, else use the rootObject
+        if (rootObject == lastSelectedNode)
+            pickedNode = hitList.last().hitNode;
+        else
+            pickedNode = rootObject;
+    }
+    */
+
+    //viewportGizmo->lastSelectedNode = hitList.last().hitNode;
+    //emit sceneNodeSelected(hitList.last().hitNode);
+    viewportGizmo->setLastSelectedNode(pickedNode);
+    emit sceneNodeSelected(pickedNode);
 }
 
 void SceneViewWidget::doGizmoPicking(const QPointF& point)
 {
     editorCam->updateCameraMatrices();
 
-    auto segStart = this->editorCam->pos;
+    auto segStart = this->editorCam->getLocalPos();
     auto rayDir = this->calculateMouseRay(point) * 1024;
     auto segEnd = segStart + rayDir;
 
@@ -459,7 +508,7 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
     doMeshPicking(viewportGizmo->getRootNode(), segStart, segEnd, hitList);
 
     if (hitList.size() == 0) {
-        viewportGizmo->lastSelectedNode = iris::SceneNodePtr();
+        viewportGizmo->setLastSelectedNode(iris::SceneNodePtr());
         viewportGizmo->currentNode = iris::SceneNodePtr();
         emit sceneNodeSelected(iris::SceneNodePtr());
         return;
@@ -475,7 +524,7 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
 
     viewportGizmo->currentNode = hitList.last().hitNode;
 
-    viewportGizmo->onMousePress(editorCam->pos, this->calculateMouseRay(point) * 1024);
+    viewportGizmo->onMousePress(editorCam->getLocalPos(), this->calculateMouseRay(point) * 1024);
 }
 
 void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,
@@ -569,7 +618,7 @@ void SceneViewWidget::doLightPicking(const QVector3D& segStart,
     for (auto light: scene->lights) {
         if (iris::IntersectionHelper::raySphereIntersects(segStart,
                                                           rayDir,
-                                                          light->pos,
+                                                          light->getLocalPos(),
                                                           lightRadius,
                                                           t, hitPoint))
         {
@@ -641,7 +690,7 @@ void SceneViewWidget::setTransformOrientationGlobal()
 
 void SceneViewWidget::hideGizmo()
 {
-    viewportGizmo->lastSelectedNode = iris::SceneNodePtr();
+    viewportGizmo->setLastSelectedNode(iris::SceneNodePtr());
 }
 
 void SceneViewWidget::setGizmoLoc()
@@ -650,7 +699,7 @@ void SceneViewWidget::setGizmoLoc()
     transformMode = viewportGizmo->getTransformOrientation();
     viewportGizmo = translationGizmo;
     viewportGizmo->setTransformOrientation(transformMode);
-    viewportGizmo->lastSelectedNode = selectedNode;
+    viewportGizmo->setLastSelectedNode(selectedNode);
 }
 
 void SceneViewWidget::setGizmoRot()
@@ -659,7 +708,7 @@ void SceneViewWidget::setGizmoRot()
     transformMode = viewportGizmo->getTransformOrientation();
     viewportGizmo = rotationGizmo;
     viewportGizmo->setTransformOrientation(transformMode);
-    viewportGizmo->lastSelectedNode = selectedNode;
+    viewportGizmo->setLastSelectedNode(selectedNode);
 }
 
 void SceneViewWidget::setGizmoScale()
@@ -668,7 +717,7 @@ void SceneViewWidget::setGizmoScale()
     transformMode = viewportGizmo->getTransformOrientation();
     viewportGizmo = scaleGizmo;
     viewportGizmo->setTransformOrientation(transformMode);
-    viewportGizmo->lastSelectedNode = selectedNode;
+    viewportGizmo->setLastSelectedNode(selectedNode);
 }
 
 void SceneViewWidget::setEditorData(EditorData* data)
@@ -710,7 +759,16 @@ void SceneViewWidget::saveFrameBuffer(QString filePath)
 {
     auto vp = viewport;
     auto image = this->grabFramebuffer();
-    auto image2 = image.scaled(512, 512, Qt::KeepAspectRatio);
-    image2.save(filePath);
-}
 
+    if (image.height() > image.width()) {
+        QImage copy;
+        copy = image.copy(0, (int) image.height() / 3, 256, 128);
+        copy.save(filePath);
+    }
+    else {
+        auto regular = image.scaled(256, 256,
+                                    Qt::KeepAspectRatioByExpanding,
+                                    Qt::SmoothTransformation);
+        regular.save(filePath);
+    }
+}

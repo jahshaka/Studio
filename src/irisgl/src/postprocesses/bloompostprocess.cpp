@@ -7,7 +7,7 @@
 #include "../graphics/postprocess.h"
 #include "../graphics/graphicshelper.h"
 #include "../graphics/texture2d.h"
-#include "../materials/propertytype.h"
+#include "../core/property.h"
 
 #define BLUR_HORIZONTAL 0
 #define BLUR_VERTICAL 1

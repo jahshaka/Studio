@@ -26,8 +26,8 @@ For more information see the LICENSE file
 #include "../graphics/particle.h"
 #include "../graphics/particlerender.h"
 
-#include "../core/scene.h"
-#include "../core/scenenode.h"
+#include "../scenegraph/scene.h"
+#include "../scenegraph/scenenode.h"
 
 namespace iris
 {

@@ -2,7 +2,7 @@
 #define PROPERTYWIDGET_H
 
 #include <QWidget>
-#include "../irisgl/src/materials/propertytype.h"
+#include "../irisgl/src/core/property.h"
 
 namespace Ui {
     class PropertyWidget;
@@ -46,6 +46,8 @@ public:
 
 signals:
     void onPropertyChanged(iris::Property*);
+    void onPropertyChangeStart(iris::Property*);
+    void onPropertyChangeEnd(iris::Property*);
 
 private:
     QList<iris::Property*> properties;

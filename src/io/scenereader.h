@@ -23,17 +23,26 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 
 #include "../irisgl/src/irisglfwd.h"
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
+#include "../irisgl/src/animation/keyframeanimation.h"
 
 class EditorData;
+class aiScene;
 
 class SceneReader : public AssetIOBase
 {
-    QHash<QString,QList<iris::Mesh*>> meshes;
+    QHash<QString,QList<iris::MeshPtr>> meshes;
+    QSet<QString> assimpScenes;
+    QHash<QString,QMap<QString, iris::SkeletalAnimationPtr>> animations;
+
 
 public:
     iris::ScenePtr readScene(QString filePath,
+                             iris::PostProcessManagerPtr postMan,
+                             EditorData **editorData = nullptr);
+    iris::ScenePtr readScene(QString filePath,
+                             const QByteArray &sceneBlob,
                              iris::PostProcessManagerPtr postMan,
                              EditorData **editorData = nullptr);
     iris::ScenePtr readScene(QJsonObject &projectObj);
@@ -76,6 +85,8 @@ public:
     iris::ParticleSystemNodePtr createParticleSystem(QJsonObject &nodeObj);
 
     iris::LightType getLightTypeFromName(QString lightType);
+    iris::TangentType getTangentTypeFromName(QString tangentType);
+    iris::HandleMode getHandleModeFromName(QString handleMode);
 
     /**
      * Extracts material from node's json object.
@@ -85,6 +96,9 @@ public:
      */
     iris::MaterialPtr readMaterial(QJsonObject &nodeObj);
 
+    // extracts meshes and animations from model file
+    void extractAssetsFromAssimpScene(QString filePath);
+
     /**
      * Returns mesh from mesh file at index
      * if the mesh doesnt exist, nullptr is returned
@@ -92,7 +106,9 @@ public:
      * @param index
      * @return
      */
-    iris::Mesh* getMesh(QString filePath, int index);
+    iris::MeshPtr getMesh(QString filePath, int index);
+
+    iris::SkeletalAnimationPtr getSkeletalAnimation(QString filePath, QString animName);
 };
 
 #endif // SCENEREADER_H

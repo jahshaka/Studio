@@ -14,14 +14,16 @@ For more information see the LICENSE file
 
 #include <QVector3D>
 #include <qmath.h>
+#include "../geometry/plane.h"
 
 namespace iris
 {
-
+/*
 struct Plane {
     QVector3D n; // Plane normal. Points x on the plane satisfy Dot(n,x) = d
     float d; // d = dot(n,p) for a given point p on the plane
 };
+*/
 
 class IntersectionHelper
 {
@@ -29,7 +31,7 @@ public:
     // Given three noncollinear points (ordered ccw), compute plane equation
     static Plane computePlaneND(QVector3D a, QVector3D b, QVector3D c) {
         Plane p = { QVector3D::crossProduct(b - a, c - a).normalized(),
-                    QVector3D::dotProduct(p.n, a) };
+                    QVector3D::dotProduct(p.normal, a) };
         return p;
     }
 
@@ -66,7 +68,7 @@ public:
     static int intersectSegmentPlane(QVector3D a, QVector3D b, Plane p, float &t, QVector3D &q) {
         // Compute the t value for the directed line ab intersecting the plane
         QVector3D ab = b - a;
-        t = (p.d - QVector3D::dotProduct(p.n, a)) / QVector3D::dotProduct(p.n, ab);
+        t = (p.d - QVector3D::dotProduct(p.normal, a)) / QVector3D::dotProduct(p.normal, ab);
         // If t in [0..1] compute and return intersection point
         if (t >= 0.0f && t <= 1.0f) {
             q = a + t * ab;

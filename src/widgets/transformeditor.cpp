@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #include "transformeditor.h"
 #include "ui_transformeditor.h"
 
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 
 TransformEditor::TransformEditor(QWidget* parent) :
     QWidget(parent),
@@ -52,9 +52,10 @@ void TransformEditor::onResetBtnClicked()
         yRotChanged(0);
         zRotChanged(0);
 
-        xScaleChanged(defaultStateNode->scale.x());
-        yScaleChanged(defaultStateNode->scale.x());
-        zScaleChanged(defaultStateNode->scale.x());
+        auto scale = defaultStateNode->getLocalScale();
+        xScaleChanged(scale.x());
+        yScaleChanged(scale.y());
+        zScaleChanged(scale.z());
 
         ui->xpos->setValue(0);
         ui->ypos->setValue(0);
@@ -64,9 +65,9 @@ void TransformEditor::onResetBtnClicked()
         ui->yrot->setValue(0);
         ui->zrot->setValue(0);
 
-        ui->xscale->setValue(defaultStateNode->scale.x());
-        ui->yscale->setValue(defaultStateNode->scale.y());
-        ui->zscale->setValue(defaultStateNode->scale.z());
+        ui->xscale->setValue(scale.x());
+        ui->yscale->setValue(scale.y());
+        ui->zscale->setValue(scale.z());
     }
 }
 
@@ -75,39 +76,47 @@ void TransformEditor::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
     this->sceneNode = defaultStateNode = sceneNode;
 
     if (!!sceneNode) {
-        ui->xpos->setValue(sceneNode->pos.x());
-        ui->ypos->setValue(sceneNode->pos.y());
-        ui->zpos->setValue(sceneNode->pos.z());
+        auto pos = sceneNode->getLocalPos();
+        ui->xpos->setValue(pos.x());
+        ui->ypos->setValue(pos.y());
+        ui->zpos->setValue(pos.z());
 
-        auto rot = sceneNode->rot.toEulerAngles();
+        auto rot = sceneNode->getLocalRot().toEulerAngles();
         ui->xrot->setValue(rot.x());
         ui->yrot->setValue(rot.y());
         ui->zrot->setValue(rot.z());
 
-        ui->xscale->setValue(sceneNode->scale.x());
-        ui->yscale->setValue(sceneNode->scale.y());
-        ui->zscale->setValue(sceneNode->scale.z());
+        auto scale = sceneNode->getLocalScale();
+        ui->xscale->setValue(scale.x());
+        ui->yscale->setValue(scale.y());
+        ui->zscale->setValue(scale.z());
     }
 }
 
 void TransformEditor::xPosChanged(double value)
 {
     if (!!sceneNode) {
-        sceneNode->pos.setX(value);
+        auto pos = sceneNode->getLocalPos();
+        pos.setX(value);
+        sceneNode->setLocalPos(pos);
     }
 }
 
 void TransformEditor::yPosChanged(double value)
 {
     if (!!sceneNode) {
-        sceneNode->pos.setY(value);
+        auto pos = sceneNode->getLocalPos();
+        pos.setY(value);
+        sceneNode->setLocalPos(pos);
     }
 }
 
 void TransformEditor::zPosChanged(double value)
 {
     if (!!sceneNode) {
-        sceneNode->pos.setZ(value);
+        auto pos = sceneNode->getLocalPos();
+        pos.setZ(value);
+        sceneNode->setLocalPos(pos);
     }
 }
 
@@ -117,27 +126,27 @@ void TransformEditor::zPosChanged(double value)
 void TransformEditor::xRotChanged(double value)
 {
     if (!!sceneNode) {
-        auto rot = sceneNode->rot.toEulerAngles();
+        auto rot = sceneNode->getLocalRot().toEulerAngles();
         rot.setX(value);
-        sceneNode->rot = QQuaternion::fromEulerAngles(rot);
+        sceneNode->setLocalRot(QQuaternion::fromEulerAngles(rot));
     }
 }
 
 void TransformEditor::yRotChanged(double value)
 {
     if (!!sceneNode) {
-        auto rot = sceneNode->rot.toEulerAngles();
+        auto rot = sceneNode->getLocalRot().toEulerAngles();
         rot.setY(value);
-        sceneNode->rot = QQuaternion::fromEulerAngles(rot);
+        sceneNode->setLocalRot(QQuaternion::fromEulerAngles(rot));
     }
 }
 
 void TransformEditor::zRotChanged(double value)
 {
     if (!!sceneNode) {
-        auto rot = sceneNode->rot.toEulerAngles();
+        auto rot = sceneNode->getLocalRot().toEulerAngles();
         rot.setZ(value);
-        sceneNode->rot = QQuaternion::fromEulerAngles(rot);
+        sceneNode->setLocalRot(QQuaternion::fromEulerAngles(rot));
     }
 }
 
@@ -147,21 +156,27 @@ void TransformEditor::zRotChanged(double value)
 void TransformEditor::xScaleChanged(double value)
 {
     if (!!sceneNode) {
-        sceneNode->scale.setX(value);
+        auto scale = sceneNode->getLocalScale();
+        scale.setX(value);
+        sceneNode->setLocalScale(scale);
     }
 }
 
 void TransformEditor::yScaleChanged(double value)
 {
     if (!!sceneNode) {
-        sceneNode->scale.setY(value);
+        auto scale = sceneNode->getLocalScale();
+        scale.setY(value);
+        sceneNode->setLocalScale(scale);
     }
 }
 
 void TransformEditor::zScaleChanged(double value)
 {
     if (!!sceneNode) {
-        sceneNode->scale.setZ(value);
+        auto scale = sceneNode->getLocalScale();
+        scale.setZ(value);
+        sceneNode->setLocalScale(scale);
     }
 }
 

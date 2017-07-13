@@ -27,7 +27,10 @@ For more information see the LICENSE file
 #include "../../irisgl/src/graphics/texture2d.h"
 #include "../../irisgl/src/scenegraph/meshnode.h"
 #include "../../irisgl/src/materials/custommaterial.h"
-#include "../../irisgl/src/materials/propertytype.h"
+#include "../../irisgl/src/core/property.h"
+
+#include "../../uimanager.h"
+#include "../../commands/changematerialpropertycommand.h"
 
 void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
@@ -40,10 +43,10 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
 
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         // TODO - properly update only when requested
-        auto shaderName = Constants::SHADER_DEFS + material->getName();
-        auto shaderFile = QFileInfo(shaderName);
+        auto shaderName = Constants::SHADER_DEFS + material->getName() + ".shader";
+        auto shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(shaderName));
         if (shaderFile.exists()) {
-            material->generate(IrisUtils::getAbsoluteAssetPath(shaderName));
+            material->generate(shaderFile.absoluteFilePath());
         } else {
             for (auto asset : AssetManager::assets) {
                 if (asset->type == AssetType::Shader) {
@@ -114,4 +117,15 @@ void MaterialPropertyWidget::onPropertyChanged(iris::Property *prop)
     if (prop->type == iris::PropertyType::Texture) {
         material->setTextureWithUniform(prop->uniform, prop->getValue().toString());
     }
+
+}
+
+void MaterialPropertyWidget::onPropertyChangeStart(iris::Property* prop)
+{
+    startValue = prop->getValue();
+}
+
+void MaterialPropertyWidget::onPropertyChangeEnd(iris::Property* prop)
+{
+    UiManager::undoStack->push(new ChangeMaterialPropertyCommand(material, prop->name, startValue, prop->getValue()));
 }

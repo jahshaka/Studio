@@ -6,7 +6,7 @@
 #include "../graphics/postprocess.h"
 #include "../graphics/graphicshelper.h"
 #include "../graphics/texture2d.h"
-#include "../materials/propertytype.h"
+#include "../core/property.h"
 
 namespace iris
 {

@@ -40,9 +40,15 @@ public:
 signals:
     void valueChanged(float);
 
+    void valueChangeStart(float);
+    void valueChangeEnd(float);
+
 private slots:
     void onValueSliderChanged(int);
     void onValueSpinboxChanged(double);
+
+    void sliderPressed();
+    void sliderReleased();
 };
 
 #endif // HFLOATSLIDERWIDGET_H

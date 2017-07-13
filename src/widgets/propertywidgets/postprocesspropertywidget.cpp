@@ -3,7 +3,7 @@
 #include "../../irisgl/src/graphics/postprocess.h"
 #include "../propertywidget.h"
 
-#include "../../irisgl/src/materials/propertytype.h"
+#include "../../irisgl/src/core/property.h"
 
 #include <QDebug>
 
@@ -22,4 +22,12 @@ void PostProcessPropertyWidget::setPostProcess(iris::PostProcessPtr postProcess)
 void PostProcessPropertyWidget::onPropertyChanged(iris::Property *prop)
 {
     postProcess->setProperty(prop);
+}
+
+void PostProcessPropertyWidget::onPropertyChangeStart(iris::Property* prop)
+{
+}
+
+void PostProcessPropertyWidget::onPropertyChangeEnd(iris::Property* prop)
+{
 }

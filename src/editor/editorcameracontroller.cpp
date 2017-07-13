@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "editorcameracontroller.h"
 #include <QVector3D>
-#include "../irisgl/src/core/scenenode.h"
+#include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include <qmath.h>
 #include <math.h>
@@ -41,11 +41,11 @@ void EditorCameraController::setCamera(CameraNodePtr cam)
 {
     this->camera = cam;
 
-    auto viewVec = cam->rot.rotatedVector(QVector3D(0,0,-1));//default forward is -z
+    auto viewVec = cam->getLocalRot().rotatedVector(QVector3D(0,0,-1));//default forward is -z
     viewVec.normalize();
 
     float roll;
-    cam->rot.getEulerAngles(&pitch,&yaw,&roll);
+    cam->getLocalRot().getEulerAngles(&pitch,&yaw,&roll);
 
     this->updateCameraRot();
 }
@@ -125,8 +125,8 @@ void EditorCameraController::onMouseMove(int x,int y)
     {
         //translate camera
         float dragSpeed = 0.01f;
-        auto dir = camera->rot.rotatedVector(QVector3D(x*dragSpeed,-y*dragSpeed,0));
-        camera->pos += dir;
+        auto dir = camera->getLocalRot().rotatedVector(QVector3D(x*dragSpeed,-y*dragSpeed,0));
+        camera->setLocalPos( camera->getLocalPos() + dir);
 
         camera->update(0);//force calculation of global transform. find a better way to do this
     }
@@ -149,8 +149,9 @@ void EditorCameraController::onMouseMove(int x,int y)
 void EditorCameraController::onMouseWheel(int delta)
 {
     auto zoomSpeed = 0.01f;
-    auto forward = camera->rot.rotatedVector(QVector3D(0,0,-1));
-    camera->pos += forward*zoomSpeed*delta;
+    auto forward = camera->getLocalRot().rotatedVector(QVector3D(0,0,-1));
+    auto movement = camera->getLocalPos() + forward*zoomSpeed*delta;
+    camera->setLocalPos(movement);
 }
 
 /**
@@ -162,30 +163,33 @@ void EditorCameraController::updateCameraRot()
     //QQuaternion pitchQuat = QQuaternion::fromEulerAngles(pitch,0,0);
 
     //camera->rot = yawQuat*pitchQuat;
-    camera->rot = QQuaternion::fromEulerAngles(pitch,yaw,0);
+    camera->setLocalRot(QQuaternion::fromEulerAngles(pitch,yaw,0));
     camera->update(0);
 }
 
 void EditorCameraController::update(float dt)
 {
     const QVector3D upVector(0, 1, 0);
-    auto forwardVector = camera->rot.rotatedVector(QVector3D(0, 0, -1));
+    auto forwardVector = camera->getLocalRot().rotatedVector(QVector3D(0, 0, -1));
     auto x = QVector3D::crossProduct(forwardVector,upVector).normalized();
     auto z = QVector3D::crossProduct(upVector,x).normalized();
 
+    auto camPos = camera->getLocalPos();
     // left
     if(KeyboardState::isKeyDown(Qt::Key_Left) ||KeyboardState::isKeyDown(Qt::Key_A) )
-        camera->pos -= x * linearSpeed;
+        camPos -= x * linearSpeed;
 
     // right
     if(KeyboardState::isKeyDown(Qt::Key_Right) ||KeyboardState::isKeyDown(Qt::Key_D) )
-        camera->pos += x * linearSpeed;
+        camPos += x * linearSpeed;
 
     // up
     if(KeyboardState::isKeyDown(Qt::Key_Up) ||KeyboardState::isKeyDown(Qt::Key_W) )
-        camera->pos += z * linearSpeed;
+        camPos += z * linearSpeed;
 
     // down
     if(KeyboardState::isKeyDown(Qt::Key_Down) ||KeyboardState::isKeyDown(Qt::Key_S) )
-        camera->pos -= z * linearSpeed;
+        camPos -= z * linearSpeed;
+
+    camera->setLocalPos(camPos);
 }

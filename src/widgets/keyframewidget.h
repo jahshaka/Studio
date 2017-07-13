@@ -26,6 +26,13 @@ namespace iris
     class SceneNode;
 }
 
+class KeyFrameLabelWidget;
+class KeyFrameLabelTreeWidget;
+
+class QTreeWidget;
+class QTreeWidgetItem;
+class AnimationWidgetData;
+
 class KeyFrameWidget:public QWidget
 {
     Q_OBJECT
@@ -40,22 +47,13 @@ class KeyFrameWidget:public QWidget
 
 private:
     QColor bgColor;
+    QColor propColor;
     QColor itemColor;
 
     QPen linePen;
     QPen cursorPen;
 
     float maxTimeInSeconds;
-
-    //the range is in the time space
-    float rangeStart;
-    float rangeEnd;
-
-    float minRange;
-    float maxRange;
-
-    //indicates time at cursor
-    float cursorPos;
 
     bool dragging;
     int scaleRatio;
@@ -70,25 +68,21 @@ private:
     bool middleButtonDown;
     bool rightButtonDown;
 
+    KeyFrameLabelTreeWidget *labelWidget;
+    AnimationWidgetData* animWidgetData;
+
 public:
     KeyFrameWidget(QWidget* parent);
 
     void setSceneNode(iris::SceneNodePtr node);
-    void setMaxTimeInSeconds(float time);
     void adjustLength();
 
     float getStartTimeRange();
     float getEndTimeRange();
 
     float getTimeAtCursor();
-    //void setMaxTimeInSeconds(float time);
-    void setTimeRange(float start,float end);
-    void setStartTime(float start);
-    void setEndTime(float end);
-    void setTime(float time);
-    //void setCursorPos(int x);
 
-    void drawFrame(QPainter& paint,iris::FloatKeyFrame* keyFrame,int y);
+    void drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetItem* item, int& yTop);
     void drawBackgroundLines(QPainter& paint);
     int getXPosFromSeconds(float seconds);
 
@@ -99,8 +93,12 @@ public:
     //void resizeEvent(QResizeEvent* event);
     void paintEvent(QPaintEvent *painter);
 
+    void setLabelWidget(KeyFrameLabelTreeWidget *value);
+
+    void setAnimWidgetData(AnimationWidgetData *value);
+
 signals:
-    void cursorTimeChanged(float timeInSeconds);
+    void timeRangeChanged(float timeStart, float timeEnd);
 
 private:
     /**
