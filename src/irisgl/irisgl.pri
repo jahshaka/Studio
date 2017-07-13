@@ -77,7 +77,8 @@ HEADERS += \
     $$PWD/src/core/logger.h \
     $$PWD/src/core/performancetimer.h \
     $$PWD/src/graphics/renderlist.h \
-    $$PWD/src/graphics/renderstates.h
+    $$PWD/src/graphics/renderstates.h \
+    $$PWD/src/graphics/utils/linemeshbuilder.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -125,7 +126,8 @@ SOURCES += \
     $$PWD/src/geometry/frustum.cpp \
     $$PWD/src/core/logger.cpp \
     $$PWD/src/graphics/renderlist.cpp \
-    $$PWD/src/graphics/renderitem.cpp
+    $$PWD/src/graphics/renderitem.cpp \
+    $$PWD/src/graphics/utils/linemeshbuilder.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc
