@@ -4,11 +4,13 @@
 
 #include "src/irisgl/src/core/irisutils.h"
 #include "../core/settingsmanager.h"
+#include "../constants.h"
 
 #include "newprojectdialog.h"
 #include "ui_newprojectdialog.h"
 
-#include <QDebug>
+#include <QStandardPaths>
+
 NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::NewProjectDialog)
 {
     ui->setupUi(this);
@@ -24,14 +26,21 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui
 
     settingsManager = SettingsManager::getDefaultManager();
 
-    connect(ui->browseProject, SIGNAL(pressed()), SLOT(setProjectPath()));
+    ui->projectPath->setDisabled(true);
+
+//    connect(ui->browseProject, SIGNAL(pressed()), SLOT(setProjectPath()));
     connect(ui->createProject, SIGNAL(pressed()), SLOT(confirmProjectCreation()));
 
-    lastValue = settingsManager->getValue("last_wd", "").toString();
-    if (!lastValue.isEmpty()) {
-        projectPath = lastValue;
-        ui->projectPath->setText(lastValue);
-    }
+//    lastValue = settingsManager->getValue("last_wd", "").toString();
+//    if (!lastValue.isEmpty()) {
+//        projectPath = lastValue;
+//        ui->projectPath->setText(lastValue);
+//    } else {
+        auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                    + Constants::PROJECT_FOLDER;
+        projectPath = settingsManager->getValue("default_directory", path).toString();
+        ui->projectPath->setText(projectPath);
+//    }
 }
 
 NewProjectDialog::~NewProjectDialog()
