@@ -13,14 +13,18 @@
 
 Database::Database()
 {
-    qDebug() << QSqlDatabase::drivers();
+    // qDebug() << QSqlDatabase::drivers();
     if (!QSqlDatabase::isDriverAvailable(Constants::DB_DRIVER)) irisLog("DB driver not present!");
+
     db = QSqlDatabase::addDatabase(Constants::DB_DRIVER);
 }
 
 Database::~Database()
 {
+    auto connection = db.connectionName();
     db.close();
+    db = QSqlDatabase();
+    db.removeDatabase(connection);
 }
 
 void Database::executeAndCheckQuery(QSqlQuery &query)
@@ -55,6 +59,14 @@ void Database::initializeDatabase(QString name)
     if (!db.open()) {
         irisLog( "Couldn't open a DB connection. " + db.lastError().text());
     }
+}
+
+void Database::closeDb()
+{
+    auto connection = db.connectionName();
+    db.close();
+    db = QSqlDatabase();
+    db.removeDatabase(connection);
 }
 
 void Database::createProject(QString projectName)

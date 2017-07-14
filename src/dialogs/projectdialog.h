@@ -5,6 +5,7 @@
 #include <QListWidgetItem>
 #include <QFutureWatcher>
 #include <QProgressDialog>
+#include <QSqlDatabase>
 
 #include "progressdialog.h"
 
@@ -44,6 +45,7 @@ public:
     void walkFileSystem(QString folder, QString path);
     QVector<ModelData> fetchModel(const QString &path);
 
+    bool newInstance(Database *db);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
@@ -61,6 +63,8 @@ protected slots:
     void handleDone();
     void handleDoneFuture();
 
+    void newSceneRequested();
+
 private:
     Ui::ProjectDialog *ui;
     Database *db;
@@ -71,6 +75,7 @@ private:
     QFutureWatcher<QVector<ModelData>> *futureWatcher;
 
     QSharedPointer<ProgressDialog> progressDialog;
+    bool isNewProject;
 };
 
 struct AssetWidgetConcurrentWrapper {

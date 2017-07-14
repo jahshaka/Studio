@@ -74,7 +74,7 @@ class QOpenGLFunctions_3_2_Core;
 enum class SceneNodeType;
 
 class Database;
-
+#include <QDebug>
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -82,7 +82,6 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
-
 
     void setProjectTitle(QString projectTitle);
 
@@ -212,6 +211,7 @@ public slots:
     void showPreferences();
     void exitApp();
     void newScene();
+    void newSceneProject();
     void newProject(const QString&, const QString&);
 
     void showAboutDialog();

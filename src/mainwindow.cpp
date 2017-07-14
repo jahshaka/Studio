@@ -75,6 +75,8 @@ For more information see the LICENSE file
 #include "dialogs/licensedialog.h"
 #include "dialogs/aboutdialog.h"
 
+#include "dialogs/projectdialog.h"
+
 #include "helpers/collisionhelper.h"
 
 #include "widgets/sceneviewwidget.h"
@@ -219,7 +221,6 @@ MainWindow::MainWindow(QWidget *parent) :
 //    ui->PresetsDock->hide();
 
     setupProjectDB();
-
     setupUndoRedo();
 }
 
@@ -554,34 +555,33 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
 void MainWindow::setupFileMenu()
 {
-    // add recent files
-    auto recent = settings->getRecentlyOpenedScenes();
+//    auto recent = settings->getRecentlyOpenedScenes();
 
-    if (recent.size() == 0) {
-        ui->menuOpenRecent->setEnabled(false);
-    } else {
-        ui->menuOpenRecent->setEnabled(true);
-        ui->menuOpenRecent->clear();
+//    if (recent.size() == 0) {
+//        ui->menuOpenRecent->setEnabled(false);
+//    } else {
+//        ui->menuOpenRecent->setEnabled(true);
+//        ui->menuOpenRecent->clear();
 
-        for (auto item : recent) {
-            auto action = new QAction(item, ui->menuOpenRecent);
-            action->setData(item);
-            connect(action,SIGNAL(triggered(bool)), this, SLOT(openRecentFile()));
-            ui->menuOpenRecent->addAction(action);
-        }
-    }
+//        for (auto item : recent) {
+//            auto action = new QAction(item, ui->menuOpenRecent);
+//            action->setData(item);
+//            connect(action,SIGNAL(triggered(bool)), this, SLOT(openRecentFile()));
+//            ui->menuOpenRecent->addAction(action);
+//        }
+//    }
 
     connect(ui->actionSave,         SIGNAL(triggered(bool)), this, SLOT(saveScene()));
-    connect(ui->actionSave_As,      SIGNAL(triggered(bool)), this, SLOT(saveSceneAs()));
-    connect(ui->actionLoad,         SIGNAL(triggered(bool)), this, SLOT(loadScene()));
+//    connect(ui->actionSave_As,      SIGNAL(triggered(bool)), this, SLOT(saveSceneAs()));
+//    connect(ui->actionLoad,         SIGNAL(triggered(bool)), this, SLOT(loadScene()));
     connect(ui->actionExit,         SIGNAL(triggered(bool)), this, SLOT(exitApp()));
     connect(ui->actionPreferences,  SIGNAL(triggered(bool)), this, SLOT(showPreferences()));
-    connect(ui->actionNew,          SIGNAL(triggered(bool)), this, SLOT(newScene()));
+    connect(ui->actionNew,          SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
 
     connect(prefsDialog,  SIGNAL(PreferencesDialogClosed()), this, SLOT(updateSceneSettings()));
 
     // until we decide how to manage scenes better
-    ui->actionSave_As->setDisabled(true);
+//    ui->actionSave_As->setDisabled(true);
 }
 
 void MainWindow::setupViewMenu()
@@ -1269,11 +1269,21 @@ void MainWindow::redo()
 void MainWindow::newScene()
 {
     this->sceneView->makeCurrent();
-//    openProject(IrisUtils::getAbsoluteAssetPath("scenes/startup.jah"), true);
     auto scene = this->createDefaultScene();
     this->setScene(scene);
     this->sceneView->resetEditorCam();
     this->sceneView->doneCurrent();
+}
+
+void MainWindow::newSceneProject()
+{
+    // save current scene
+    ProjectDialog projectDialog;
+    bool newInstance = projectDialog.newInstance(db);
+
+    if (newInstance) {
+        this->close();
+    }
 }
 
 void MainWindow::newProject(const QString &filename, const QString &projectPath)
@@ -1325,6 +1335,7 @@ void MainWindow::openWebsiteUrl()
 
 MainWindow::~MainWindow()
 {
+    this->db->closeDb();
     delete ui;
 }
 
