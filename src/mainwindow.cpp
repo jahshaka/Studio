@@ -158,6 +158,7 @@ MainWindow::MainWindow(QWidget *parent) :
     sceneView->setFocusPolicy(Qt::ClickFocus);
     sceneView->setFocus();
     Globals::sceneViewWidget = sceneView;
+    UiManager::setSceneViewWidget(sceneView);
 
     QGridLayout* layout = new QGridLayout(ui->sceneContainer);
     layout->addWidget(sceneView);
@@ -1367,12 +1368,14 @@ void MainWindow::onPlaySceneButton()
 {
     if(ui->playSceneBtn->text() == "PLAY")
     {
-        this->sceneView->startPlayingScene();
+        //this->sceneView->startPlayingScene();
+        UiManager::enterPlayMode();
         ui->playSceneBtn->setText("STOP");
     }
     else
     {
-        this->sceneView->stopPlayingScene();
+        //this->sceneView->stopPlayingScene();
+        UiManager::enterEditMode();
         ui->playSceneBtn->setText("PLAY");
     }
 }

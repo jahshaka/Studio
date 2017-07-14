@@ -154,8 +154,8 @@ void SceneViewWidget::updateScene(bool once)
     // update and draw the 3d manipulation gizmo
     if (!!viewportGizmo->getLastSelectedNode()) {
         if (!viewportGizmo->getLastSelectedNode()->isRootNode()) {
-            if (viewportMode != ViewportMode::VR) {
-                viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
+            viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
+            if (viewportMode != ViewportMode::VR && UiManager::sceneMode == SceneMode::EditMode) {
                 viewportGizmo->render(editorCam->viewMatrix, editorCam->projMatrix);
             }
         }
