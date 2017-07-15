@@ -226,7 +226,7 @@ void SceneViewWidget::renderScene()
         if (viewportMode == ViewportMode::Editor) {
             renderer->renderScene(dt, viewport);
         } else {
-            renderer->renderSceneVr(dt, viewport);
+            renderer->renderSceneVr(dt, viewport, UiManager::sceneMode == SceneMode::PlayMode);
         }
 
         this->updateScene();
