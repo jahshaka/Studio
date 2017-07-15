@@ -45,11 +45,9 @@ public:
     WorldSettings* worldSettings;
 
 private:
-    void setupList();
     void setupPages();
 
 private slots:
-    void pageChanged(QListWidgetItem* prev, QListWidgetItem* cur);
     void closeDialog();
 
 private:

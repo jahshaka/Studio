@@ -22,7 +22,7 @@ class SettingsManager;
 class WorldSettings : public QWidget
 {
     Q_OBJECT
-    SettingsManager* settings;
+    SettingsManager *settings;
 
 public:
     explicit WorldSettings(SettingsManager* settings);
@@ -30,17 +30,16 @@ public:
 
     int outlineWidth;
     QColor outlineColor;
+    QString defaultProjectDirectory;
 
-    void setupDefaultSceneOptions();
-    void setupGizmoOptions();
+    void setupDirectoryDefaults();
     void setupOutline();
 
 private slots:
-    void onGizmoOptionChosen(int index);
-    void onDefaultSceneChosen();
-
     void outlineWidthChanged(int width);
     void outlineColorChanged(QColor color);
+    void changeDefaultDirectory();
+    void projectDirectoryChanged(QString path);
 
 public:
     Ui::WorldSettings *ui;

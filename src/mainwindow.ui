@@ -535,18 +535,8 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <property name="title">
      <string>File</string>
     </property>
-    <widget class="QMenu" name="menuOpenRecent">
-     <property name="title">
-      <string>Open Recent</string>
-     </property>
-     <addaction name="actionBlank"/>
-    </widget>
     <addaction name="actionNew"/>
-    <addaction name="actionLoad"/>
-    <addaction name="menuOpenRecent"/>
-    <addaction name="separator"/>
     <addaction name="actionSave"/>
-    <addaction name="actionSave_As"/>
     <addaction name="separator"/>
     <addaction name="actionPreferences"/>
     <addaction name="actionExit"/>

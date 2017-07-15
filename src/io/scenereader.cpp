@@ -204,6 +204,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     }
 
     if (useTex) {
+        scene->skyBoxTextures[0] = front;
+        scene->skyBoxTextures[1] = back;
+        scene->skyBoxTextures[2] = top;
+        scene->skyBoxTextures[3] = bottom;
+        scene->skyBoxTextures[4] = left;
+        scene->skyBoxTextures[5] = right;
         scene->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
     }
 

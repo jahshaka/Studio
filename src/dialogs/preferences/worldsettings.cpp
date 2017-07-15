@@ -11,7 +11,9 @@ For more information see the LICENSE file
 #include "worldsettings.h"
 #include "ui_worldsettings.h"
 #include "../../core/settingsmanager.h"
-#include <QDebug>
+#include "../../constants.h"
+#include <QFileDialog>
+#include <QStandardPaths>
 
 WorldSettings::WorldSettings(SettingsManager* settings) :
     QWidget(nullptr),
@@ -21,14 +23,7 @@ WorldSettings::WorldSettings(SettingsManager* settings) :
 
     this->settings = settings;
 
-    connect(ui->matrixRadio, SIGNAL(toggled(bool)),
-            this, SLOT(onDefaultSceneChosen()));
-
-    connect(ui->gridRadio, SIGNAL(toggled(bool)),
-            this, SLOT(onDefaultSceneChosen()));
-
-    connect(ui->comboBox, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(onGizmoOptionChosen(int)));
+    connect(ui->browseProject, SIGNAL(pressed()), SLOT(changeDefaultDirectory()));
 
     connect(ui->outlineWidth, SIGNAL(valueChanged(int)),
             this, SLOT(outlineWidthChanged(int)));
@@ -36,30 +31,27 @@ WorldSettings::WorldSettings(SettingsManager* settings) :
     connect(ui->outlineColor, SIGNAL(onColorChanged(QColor)),
             this, SLOT(outlineColorChanged(QColor)));
 
-    setupDefaultSceneOptions();
-    setupGizmoOptions();
+    connect(ui->projectDefault, SIGNAL(textChanged(QString)),
+            this, SLOT(projectDirectoryChanged(QString)));
+
+    setupDirectoryDefaults();
     setupOutline();
-}
-
-void WorldSettings::setupGizmoOptions()
-{
-    auto value = settings->getValue("gizmo_style", 0);
-    auto index = value.toString().toInt();
-
-    ui->comboBox->addItem("Thick");
-    ui->comboBox->addItem("Slim");
-    ui->comboBox->addItem("VR(Experimental)");
-
-    ui->comboBox->setCurrentIndex(index);
 }
 
 void WorldSettings::setupOutline()
 {
-    outlineWidth = settings->getValue("outline_width", 5).toInt();
-    outlineColor = settings->getValue("outline_color", "#C8C8FF").toString();
+    outlineWidth = settings->getValue("outline_width", 6).toInt();
+    outlineColor = settings->getValue("outline_color", "#3498db").toString();
 
     ui->outlineWidth->setValue(outlineWidth);
     ui->outlineColor->setColor(outlineColor);
+}
+
+void WorldSettings::changeDefaultDirectory()
+{
+    QFileDialog projectDir;
+    defaultProjectDirectory = projectDir.getExistingDirectory(nullptr, "Select project dir", "");
+    ui->projectDefault->setText(defaultProjectDirectory);
 }
 
 void WorldSettings::outlineWidthChanged(int width)
@@ -74,35 +66,22 @@ void WorldSettings::outlineColorChanged(QColor color)
     outlineColor = color;
 }
 
-void WorldSettings::setupDefaultSceneOptions()
+void WorldSettings::projectDirectoryChanged(QString path)
 {
-    auto defaultScene = settings->getValue("default_scene", "matrix").toString();
-
-    if (defaultScene == "matrix") {
-        ui->matrixRadio->setChecked(true);
-    } else {
-        ui->gridRadio->setChecked(true);
-    }
-}
-
-void WorldSettings::onGizmoOptionChosen(int index)
-{
-    //auto index = this->ui->comboBox->currentIndex();
-    settings->setValue("gizmo_style", index);
-
-    //todo: modify appearance in scene
-}
-
-void WorldSettings::onDefaultSceneChosen()
-{
-    if (ui->matrixRadio->isChecked()) {
-        settings->setValue("default_scene", "matrix");
-    } else {
-        settings->setValue("default_scene", "grid");
-    }
+    settings->setValue("default_directory", path);
+    defaultProjectDirectory = path;
 }
 
 WorldSettings::~WorldSettings()
 {
     delete ui;
+}
+
+void WorldSettings::setupDirectoryDefaults()
+{
+    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                + Constants::PROJECT_FOLDER;
+    defaultProjectDirectory = settings->getValue("default_directory", path).toString();
+
+    ui->projectDefault->setText(defaultProjectDirectory);
 }

@@ -14,15 +14,16 @@ public:
     ~Database();
 
     void executeAndCheckQuery(QSqlQuery&);
-
     void fetchRecord(const QString &name);
-
     void initializeDatabase(QString name);
+    void closeDb();
 
     void createProject(QString projectName);
     void insertScene(const QString &projectName, const QByteArray &sceneBlob);
     void updateScene(const QByteArray &sceneBlob);
     QByteArray getSceneBlob() const;
+
+    QSqlDatabase getDb() { return db; }
 
 private:
     QSqlDatabase db;

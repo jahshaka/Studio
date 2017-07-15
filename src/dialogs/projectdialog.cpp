@@ -113,6 +113,8 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
         }
         ui->demoList->addItem(item);
     }
+
+    isNewProject = false;
 }
 
 ProjectDialog::~ProjectDialog()
@@ -149,8 +151,9 @@ void ProjectDialog::newScene()
         window->showMaximized();
         window->newProject(projectName, fullProjectPath);
         settings->addRecentlyOpenedScene(slnName);
-        settings->setValue("last_wd", projectPath);
+//        settings->setValue("last_wd", projectPath);
 
+        emit accepted();
         this->close();
     }
 }
@@ -171,6 +174,7 @@ void ProjectDialog::openProject()
 
         settings->addRecentlyOpenedScene(projectFile.absoluteFilePath());
 //        this->close();
+        emit accepted();
     }
 
     else {
@@ -207,6 +211,7 @@ void ProjectDialog::openRecentProject(QListWidgetItem *item)
 //    window->openProject(projectFile.absoluteFilePath());
 
 //    this->close();
+    emit accepted();
 }
 
 bool ProjectDialog::copyDirectoryFiles(const QString &fromDir, const QString &toDir, bool coverFileIfExist)
@@ -246,30 +251,58 @@ bool ProjectDialog::copyDirectoryFiles(const QString &fromDir, const QString &to
 
 void ProjectDialog::openSampleProject(QListWidgetItem *item)
 {
-    auto projectFolder = QFileDialog::getExistingDirectory(nullptr, "Select directory to copy project");
+    auto projectFolder = QFileDialog::getExistingDirectory(nullptr,
+                                                           "Select directory to copy project",
+                                                           settings->getValue("default_directory", "").toString());
 
-    if (!projectFolder.isEmpty()) {
-        auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
+    if (QDir(projectFolder + "/" + item->data(Qt::DisplayRole).toString()).exists()) {
+        QMessageBox::StandardButton reply;
+        reply = QMessageBox::question(this, "Project Path not Empty", "Project already Exists! Overwrite?",
+                                        QMessageBox::Yes|QMessageBox::No);
+        if (reply == QMessageBox::Yes) {
+            if (!projectFolder.isEmpty()) {
+                auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
 
-        QString dest = QDir(projectFolder).filePath(projectFile.baseName());
-        if (this->copyDirectoryFiles(projectFile.absolutePath(), dest, true)) {
+                QString dest = QDir(projectFolder).filePath(projectFile.baseName());
+                if (this->copyDirectoryFiles(projectFile.absolutePath(), dest, true)) {
 
-            auto newProjectFile = QFileInfo(dest);
-            auto projectPath = QDir(newProjectFile.absolutePath()).filePath(projectFile.baseName());
-            Globals::project->setProjectPath(projectPath);
+                    auto newProjectFile = QFileInfo(dest);
+                    auto projectPath = QDir(newProjectFile.absolutePath()).filePath(projectFile.baseName());
+                    Globals::project->setProjectPath(projectPath);
 
-            auto sln = QDir(projectPath).filePath(projectFile.fileName());
+                    auto sln = QDir(projectPath).filePath(projectFile.fileName());
 
-            prepareStore(sln);
-//            window = new MainWindow;
-//            window->showMaximized();
-//            window->openProject(sln);
+                    prepareStore(sln);
 
-            settings->addRecentlyOpenedScene(sln);
+                    settings->addRecentlyOpenedScene(sln);
+                }
+
+                emit accepted();
+                this->close();
+            }
+        }
+    } else {
+        if (!projectFolder.isEmpty()) {
+            auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
+
+            QString dest = QDir(projectFolder).filePath(projectFile.baseName());
+            if (this->copyDirectoryFiles(projectFile.absolutePath(), dest, true)) {
+
+                auto newProjectFile = QFileInfo(dest);
+                auto projectPath = QDir(newProjectFile.absolutePath()).filePath(projectFile.baseName());
+                Globals::project->setProjectPath(projectPath);
+
+                auto sln = QDir(projectPath).filePath(projectFile.fileName());
+
+                prepareStore(sln);
+
+                settings->addRecentlyOpenedScene(sln);
+            }
+
+            emit accepted();
+            this->close();
         }
     }
-
-    this->close();
 }
 
 void ProjectDialog::listWidgetCustomContextMenu(const QPoint &pos)
@@ -359,6 +392,11 @@ void ProjectDialog::handleDoneFuture()
 
 }
 
+void ProjectDialog::newSceneRequested()
+{
+   isNewProject = true;
+}
+
 SettingsManager *ProjectDialog::getSettingsManager()
 {
     return settings;
@@ -390,8 +428,8 @@ void ProjectDialog::prepareStore(QString path)
           }
       }
 
-      std::chrono::time_point<std::chrono::system_clock> start, end;
-      start = std::chrono::system_clock::now();
+//      std::chrono::time_point<std::chrono::system_clock> start, end;
+//      start = std::chrono::system_clock::now();
 
   //    for (auto asset : AssetManager::modelAssets) {
   //        qDebug() << "cracking a cold one open with " << asset->fileName;
@@ -434,13 +472,13 @@ void ProjectDialog::prepareStore(QString path)
       // Query the future to check if was canceled.
   //    qDebug() << "Canceled?" << futureWatcher.future().isCanceled();
 
-      end = std::chrono::system_clock::now();
+//      end = std::chrono::system_clock::now();
 
-      std::chrono::duration<double> elapsed_seconds = end - start;
-      std::time_t end_time = std::chrono::system_clock::to_time_t(end);
+//      std::chrono::duration<double> elapsed_seconds = end - start;
+//      std::time_t end_time = std::chrono::system_clock::to_time_t(end);
 
-      qDebug() << "\nfinished computation at " << std::ctime(&end_time)
-               << "elapsed time: " << elapsed_seconds.count() << "s\n";
+//      qDebug() << "\nfinished computation at " << std::ctime(&end_time)
+//               << "elapsed time: " << elapsed_seconds.count() << "s\n";
 }
 
 void ProjectDialog::walkFileSystem(QString folder, QString path)
@@ -517,6 +555,13 @@ QVector<ModelData> ProjectDialog::fetchModel(const QString &filePath)
   ModelData d = { filePath, scene };
   sceneVec.append(d);
   return sceneVec;
+}
+
+bool ProjectDialog::newInstance(Database *db)
+{
+    connect(this, SIGNAL(accepted()), SLOT(newSceneRequested()));
+    ProjectDialog::exec();
+    return isNewProject;
 }
 
 bool ProjectDialog::eventFilter(QObject *watched, QEvent *event)
