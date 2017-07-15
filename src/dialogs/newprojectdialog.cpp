@@ -10,6 +10,7 @@
 #include "ui_newprojectdialog.h"
 
 #include <QStandardPaths>
+#include <QMessageBox>
 
 NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::NewProjectDialog)
 {
@@ -68,8 +69,18 @@ void NewProjectDialog::createNewProject()
 
 void NewProjectDialog::confirmProjectCreation()
 {
-    createNewProject();
-
-    this->close();
-    emit accepted();
+    if (QDir(projectPath + '/' + ui->projectName->text()).exists()) {
+        QMessageBox::StandardButton reply;
+        reply = QMessageBox::question(this, "Project Path not Empty", "Project already Exists! Overwrite?",
+                                        QMessageBox::Yes|QMessageBox::No);
+        if (reply == QMessageBox::Yes) {
+            createNewProject();
+            this->close();
+            emit accepted();
+        }
+    } else {
+        createNewProject();
+        this->close();
+        emit accepted();
+    }
 }
