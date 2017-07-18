@@ -36,14 +36,20 @@ For more information see the LICENSE file
 #include "utils/fullscreenquad.h"
 #include "texture2d.h"
 #include "rendertarget.h"
+#include "renderlist.h"
 #include "../vr/vrdevice.h"
 #include "../vr/vrmanager.h"
 #include "../core/irisutils.h"
 #include "postprocessmanager.h"
 #include "postprocess.h"
 
+#include "../core/performancetimer.h"
+
 #include "../geometry/frustum.h"
 #include "../geometry/boundingsphere.h"
+
+#include "utils/shapehelper.h"
+#include "../materials/colormaterial.h"
 
 #include <QOpenGLContext>
 #include "../libovr/Include/OVR_CAPI_GL.h"
@@ -80,6 +86,8 @@ ForwardRenderer::ForwardRenderer()
 
     postMan = PostProcessManager::create();
     postContext = new PostProcessContext();
+
+    perfTimer = new PerformanceTimer();
 }
 
 void ForwardRenderer::generateShadowBuffer(GLuint size)
@@ -116,10 +124,12 @@ ForwardRendererPtr ForwardRenderer::create()
 // all scenenode's transform should be updated
 void ForwardRenderer::renderScene(float delta, Viewport* vp)
 {
+    //perfTimer->start("total");
     auto ctx = QOpenGLContext::currentContext();
     auto cam = scene->camera;
 
     // STEP 1: RENDER SCENE
+    //perfTimer->start("render_scene");
     renderData->scene = scene;
 
     cam->setAspectRatio(vp->getAspectRatio());
@@ -167,12 +177,19 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     renderNode(renderData, scene);
 
+    //perfTimer->end("render_scene");
+
+    // render lights as spheres for testing
+
     // STEP 2: RENDER SKY
     //renderSky(renderData);
 
     // STEP 4: RENDER BILLBOARD ICONS
+    //perfTimer->start("render_icons");
     renderBillboardIcons(renderData);
+    //perfTimer->end("render_icons");
 
+    //perfTimer->start("render_post");
     renderTarget->unbind();
 
     postContext->sceneTexture = sceneRenderTexture;
@@ -189,13 +206,20 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     postContext->finalTexture->bind();
     fsQuad->draw(gl);
     gl->glBindTexture(GL_TEXTURE_2D, 0);
+    //perfTimer->end("render_post");
 
     // STEP 5: RENDER SELECTED OBJECT
     if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
 
     //clear lists
-    scene->geometryRenderList.clear();
-    scene->shadowRenderList.clear();
+    scene->geometryRenderList->clear();
+    scene->shadowRenderList->clear();
+    scene->gizmoRenderList->clear();
+
+    //perfTimer->end("total");
+
+    //perfTimer->report();
+    //perfTimer->reset();
 }
 
 void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
@@ -217,7 +241,7 @@ void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
                              QVector3D(0.0f, 1.0f, 0.0f));
             QMatrix4x4 lightSpaceMatrix = lightProjection * lightView;
 
-            for (auto& item : scene->shadowRenderList) {
+            for (auto& item : scene->shadowRenderList->getItems()) {
 
 
                 if (item->type == iris::RenderItemType::Mesh) {
@@ -326,8 +350,9 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
    fsQuad->draw(gl);
    gl->glBindTexture(GL_TEXTURE_2D,0);
 
-   scene->geometryRenderList.clear();
-   scene->shadowRenderList.clear();
+   scene->geometryRenderList->clear();
+   scene->shadowRenderList->clear();
+   scene->gizmoRenderList->clear();
 }
 
 PostProcessManagerPtr ForwardRenderer::getPostProcessManager()
@@ -359,12 +384,12 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
     auto lightCount = renderData->scene->lights.size();
 
     //sort render list
-    //qsort(scene->geometryRenderList,scene->geometryRenderList.size(),)
-    qSort(scene->geometryRenderList.begin(), scene->geometryRenderList.end(), [](const RenderItem* a, const RenderItem* b) {
-        return a->renderLayer < b->renderLayer;
-    });
+//    qSort(scene->geometryRenderList.begin(), scene->geometryRenderList.end(), [](const RenderItem* a, const RenderItem* b) {
+//        return a->renderLayer < b->renderLayer;
+//    });
+    scene->geometryRenderList->sort();
 
-    for (auto& item : scene->geometryRenderList) {
+    for (auto& item : scene->geometryRenderList->getItems()) {
         if (item->type == iris::RenderItemType::Mesh) {
 
             if (item->cullable) {

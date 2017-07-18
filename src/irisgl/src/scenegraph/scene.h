@@ -22,6 +22,7 @@ namespace iris
 {
 
 class RenderItem;
+class RenderList;
 
 enum class SceneRenderFlags : int
 {
@@ -67,8 +68,9 @@ public:
 
     bool shadowEnabled;
 
-    QVector<RenderItem*> geometryRenderList;
-    QVector<RenderItem*> shadowRenderList;
+    RenderList* geometryRenderList;
+    RenderList* shadowRenderList;
+    RenderList* gizmoRenderList;// for gizmos and lines
 
     QString skyBoxTextures[6];
 
