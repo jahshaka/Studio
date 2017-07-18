@@ -132,6 +132,7 @@ void SceneViewWidget::initialize()
 void SceneViewWidget::initLightAssets()
 {
     pointLightMesh = iris::ShapeHelper::createWireSphere(1.0f);
+    spotLightMesh = iris::ShapeHelper::createWireCone(1.0f);
     lineMat = iris::ColorMaterial::create();
 }
 
@@ -150,6 +151,17 @@ void SceneViewWidget::addLightShapesToScene()
             mat.translate(light->getGlobalPosition());
             mat.scale(light->distance);
             scene->geometryRenderList->submitMesh(pointLightMesh, lineMat, mat);
+        }
+        else if ( light->lightType == iris::LightType::Spot) {
+            mat.setToIdentity();
+            mat.translate(light->getGlobalPosition());
+            mat.rotate(QQuaternion::fromRotationMatrix(light->getGlobalTransform().normalMatrix()));
+            auto radius = qCos(qDegreesToRadians(light->spotCutOff - 90)); //90 is max spot cutoff(180) / 2
+
+            mat.scale(radius, 1.0 - radius, radius);
+            mat.scale(light->distance);
+
+            scene->geometryRenderList->submitMesh(spotLightMesh, lineMat, mat);
         }
     }
 }
