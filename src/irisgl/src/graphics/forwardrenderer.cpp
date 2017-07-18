@@ -89,7 +89,8 @@ ForwardRenderer::ForwardRenderer()
 
     perfTimer = new PerformanceTimer();
 
-    sphereMesh = ShapeHelper::createWireSphere();
+    //sphereMesh = ShapeHelper::createWireSphere();
+    sphereMesh = ShapeHelper::createWireCube();
     colorMat = ColorMaterial::create();
 }
 
