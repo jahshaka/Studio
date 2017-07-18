@@ -5,10 +5,31 @@
 namespace iris
 {
 
-MeshPtr ShapeHelper::createWireCube()
+MeshPtr ShapeHelper::createWireCube(float size)
 {
+    auto halfSize = size / 2;
     LineMeshBuilder builder;
-    return MeshPtr();
+
+    //builder.addLine(QVector3D(halfSize, halfSize, halfSize), QVector3D(halfSize, halfSize, halfSize));
+    // build 4 columns
+    builder.addLine(QVector3D(-halfSize, halfSize, -halfSize), QVector3D(-halfSize, halfSize, halfSize));
+    builder.addLine(QVector3D(-halfSize, -halfSize, -halfSize), QVector3D(-halfSize, -halfSize, halfSize));
+    builder.addLine(QVector3D(halfSize, -halfSize, -halfSize), QVector3D(halfSize, -halfSize, halfSize));
+    builder.addLine(QVector3D(halfSize, halfSize, -halfSize), QVector3D(halfSize, halfSize, halfSize));
+
+    // top
+    builder.addLine(QVector3D(-halfSize, halfSize, halfSize), QVector3D(-halfSize, -halfSize, halfSize));
+    builder.addLine(QVector3D(-halfSize, -halfSize, halfSize), QVector3D(halfSize, -halfSize, halfSize));
+    builder.addLine(QVector3D(halfSize, -halfSize, halfSize), QVector3D(halfSize, halfSize, halfSize));
+    builder.addLine(QVector3D(halfSize, halfSize, halfSize), QVector3D(-halfSize, halfSize, halfSize));
+
+    // bottom
+    builder.addLine(QVector3D(-halfSize, halfSize, -halfSize), QVector3D(-halfSize, -halfSize, -halfSize));
+    builder.addLine(QVector3D(-halfSize, -halfSize, -halfSize), QVector3D(halfSize, -halfSize, -halfSize));
+    builder.addLine(QVector3D(halfSize, -halfSize, -halfSize), QVector3D(halfSize, halfSize, -halfSize));
+    builder.addLine(QVector3D(halfSize, halfSize, -halfSize), QVector3D(-halfSize, halfSize, -halfSize));
+
+    return builder.build();
 }
 
 MeshPtr ShapeHelper::createWireSphere(float radius)
