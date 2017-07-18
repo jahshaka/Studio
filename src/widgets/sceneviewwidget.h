@@ -204,7 +204,7 @@ private:
     iris::MaterialPtr lineMat;
 
     void initLightAssets();
-    iris::MeshPtr createDirLightMesh(float radius = 1);
+    iris::MeshPtr createDirLightMesh(float radius = 1.0);
     void addLightShapesToScene();
 
 signals:
