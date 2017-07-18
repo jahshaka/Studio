@@ -88,10 +88,6 @@ ForwardRenderer::ForwardRenderer()
     postContext = new PostProcessContext();
 
     perfTimer = new PerformanceTimer();
-
-    //sphereMesh = ShapeHelper::createWireSphere();
-    sphereMesh = ShapeHelper::createWireCube();
-    colorMat = ColorMaterial::create();
 }
 
 void ForwardRenderer::generateShadowBuffer(GLuint size)
@@ -128,18 +124,12 @@ ForwardRendererPtr ForwardRenderer::create()
 // all scenenode's transform should be updated
 void ForwardRenderer::renderScene(float delta, Viewport* vp)
 {
-    perfTimer->start("total");
+    //perfTimer->start("total");
     auto ctx = QOpenGLContext::currentContext();
     auto cam = scene->camera;
 
-    // add lights to list
-    for(auto light : scene->lights)
-    {
-        scene->geometryRenderList->submitMesh(sphereMesh, colorMat, light->getGlobalTransform());
-    }
-
     // STEP 1: RENDER SCENE
-    perfTimer->start("render_scene");
+    //perfTimer->start("render_scene");
     renderData->scene = scene;
 
     cam->setAspectRatio(vp->getAspectRatio());
@@ -187,7 +177,7 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     renderNode(renderData, scene);
 
-    perfTimer->end("render_scene");
+    //perfTimer->end("render_scene");
 
     // render lights as spheres for testing
 
@@ -195,11 +185,11 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     //renderSky(renderData);
 
     // STEP 4: RENDER BILLBOARD ICONS
-    perfTimer->start("render_icons");
+    //perfTimer->start("render_icons");
     renderBillboardIcons(renderData);
-    perfTimer->end("render_icons");
+    //perfTimer->end("render_icons");
 
-    perfTimer->start("render_post");
+    //perfTimer->start("render_post");
     renderTarget->unbind();
 
     postContext->sceneTexture = sceneRenderTexture;
@@ -216,7 +206,7 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     postContext->finalTexture->bind();
     fsQuad->draw(gl);
     gl->glBindTexture(GL_TEXTURE_2D, 0);
-    perfTimer->end("render_post");
+    //perfTimer->end("render_post");
 
     // STEP 5: RENDER SELECTED OBJECT
     if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
@@ -226,10 +216,10 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     scene->shadowRenderList->clear();
     scene->gizmoRenderList->clear();
 
-    perfTimer->end("total");
+    //perfTimer->end("total");
 
-    perfTimer->report();
-    perfTimer->reset();
+    //perfTimer->report();
+    //perfTimer->reset();
 }
 
 void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
