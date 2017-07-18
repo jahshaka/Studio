@@ -79,7 +79,8 @@ HEADERS += \
     $$PWD/src/graphics/renderlist.h \
     $$PWD/src/graphics/renderstates.h \
     $$PWD/src/graphics/utils/linemeshbuilder.h \
-    $$PWD/src/graphics/utils/shapehelper.h
+    $$PWD/src/graphics/utils/shapehelper.h \
+    $$PWD/src/materials/colormaterial.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -129,7 +130,8 @@ SOURCES += \
     $$PWD/src/graphics/renderlist.cpp \
     $$PWD/src/graphics/renderitem.cpp \
     $$PWD/src/graphics/utils/linemeshbuilder.cpp \
-    $$PWD/src/graphics/utils/shapehelper.cpp
+    $$PWD/src/graphics/utils/shapehelper.cpp \
+    $$PWD/src/materials/colormaterial.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc
