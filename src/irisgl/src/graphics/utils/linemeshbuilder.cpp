@@ -17,6 +17,8 @@ MeshPtr LineMeshBuilder::build()
     layout->addAttrib(VertexAttribUsage::Position, GL_FLOAT, 3, sizeof(float)*3);
 
     auto mesh = Mesh::create(lineData.data(), lineData.size() * sizeof(QVector3D), lineData.size(), layout);
+    mesh->setPrimitiveMode(PrimitiveMode::Lines);
+    return MeshPtr(mesh);
 }
 
 }

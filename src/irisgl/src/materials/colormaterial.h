@@ -2,9 +2,15 @@
 #define COLORMATERIAL_H
 
 #include "../irisglfwd.h"
+#include "../graphics/material.h"
+#include <QColor>
+
 class QOpenGLFunctions_3_2_Core;
 namespace iris
 {
+
+class ColorMaterial;
+typedef QSharedPointer<ColorMaterial> ColorMaterialPtr;
 
 class ColorMaterial : public Material
 {
@@ -24,6 +30,8 @@ public:
 private:
     ColorMaterial();
 };
+
+
 
 }
 
