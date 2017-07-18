@@ -11,7 +11,7 @@ class ShapeHelper
 public:
 
     static MeshPtr createWireCube();
-    static MeshPtr createWireSphere();
+    static MeshPtr createWireSphere(float radius = 0.5);
 };
 
 }
