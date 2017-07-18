@@ -48,6 +48,9 @@ For more information see the LICENSE file
 #include "../geometry/frustum.h"
 #include "../geometry/boundingsphere.h"
 
+#include "utils/shapehelper.h"
+#include "../materials/colormaterial.h"
+
 #include <QOpenGLContext>
 #include "../libovr/Include/OVR_CAPI_GL.h"
 #include "../libovr/Include/Extras/OVR_Math.h"
@@ -85,6 +88,9 @@ ForwardRenderer::ForwardRenderer()
     postContext = new PostProcessContext();
 
     perfTimer = new PerformanceTimer();
+
+    sphereMesh = ShapeHelper::createWireSphere();
+    colorMat = ColorMaterial::create();
 }
 
 void ForwardRenderer::generateShadowBuffer(GLuint size)
@@ -124,6 +130,12 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     perfTimer->start("total");
     auto ctx = QOpenGLContext::currentContext();
     auto cam = scene->camera;
+
+    // add lights to list
+    for(auto light : scene->lights)
+    {
+        scene->geometryRenderList->submitMesh(sphereMesh, colorMat, light->getGlobalTransform());
+    }
 
     // STEP 1: RENDER SCENE
     perfTimer->start("render_scene");
@@ -175,6 +187,8 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     renderNode(renderData, scene);
 
     perfTimer->end("render_scene");
+
+    // render lights as spheres for testing
 
     // STEP 2: RENDER SKY
     //renderSky(renderData);

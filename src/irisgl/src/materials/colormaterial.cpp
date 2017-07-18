@@ -16,7 +16,6 @@ void ColorMaterial::setColor(const QColor &value)
 void ColorMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
 {
     Material::begin(gl, scene);
-
     program->setUniformValue("color", color);
 }
 
@@ -30,6 +29,9 @@ ColorMaterial::ColorMaterial()
     this->acceptsLighting = false;
     this->setRenderLayer((int)RenderLayer::Opaque);
     color = QColor(255, 255, 255);
+
+    createProgramFromShaderSource(":/assets/shaders/color.vert",
+                                  ":/assets/shaders/color.frag");
 }
 
 

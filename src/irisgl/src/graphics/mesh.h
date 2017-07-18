@@ -75,12 +75,22 @@ public:
 
 };
 
+enum class PrimitiveMode
+{
+    Triangles,
+    Lines,
+    LineLoop
+};
+
 //todo: switch to using mesh pointer
 class Mesh
 {
     SkeletonPtr skeleton;
     QMap<QString, SkeletalAnimationPtr> skeletalAnimations;
+
+    GLenum glPrimitive;
 public:
+    PrimitiveMode primitiveMode;
     QOpenGLFunctions_3_2_Core* gl;
     GLuint vao;
     GLuint indexBuffer;
@@ -114,8 +124,8 @@ public:
     QMap<QString, SkeletalAnimationPtr> getSkeletalAnimations();
     bool hasSkeletalAnimations();
 
-    void draw(QOpenGLFunctions_3_2_Core* gl, Material* mat, GLenum primitiveMode = GL_TRIANGLES);
-    void draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* mat, GLenum primitiveMode = GL_TRIANGLES);
+    void draw(QOpenGLFunctions_3_2_Core* gl, Material* mat);
+    void draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* mat);
 
     static MeshPtr loadMesh(QString filePath);
     static MeshPtr loadAnimatedMesh(QString filePath);
@@ -139,6 +149,9 @@ public:
     ~Mesh();
 
     void setSkeleton(const SkeletonPtr &value);
+
+    PrimitiveMode getPrimitiveMode() const;
+    void setPrimitiveMode(const PrimitiveMode &value);
 
 private:
     void addVertexArray(VertexAttribUsage usage,void* data,int size,GLenum type,int numComponents);
