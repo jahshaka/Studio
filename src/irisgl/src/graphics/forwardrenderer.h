@@ -131,9 +131,6 @@ private:
     //editor-specific
     iris::Billboard* billboard;
     FullScreenQuad* fsQuad;
-
-    MeshPtr sphereMesh;
-    MaterialPtr colorMat;
 };
 
 }
