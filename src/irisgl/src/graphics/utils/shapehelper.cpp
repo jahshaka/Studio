@@ -11,7 +11,7 @@ MeshPtr ShapeHelper::createWireCube()
     return MeshPtr();
 }
 
-MeshPtr ShapeHelper::createWireSphere()
+MeshPtr ShapeHelper::createWireSphere(float radius)
 {
     LineMeshBuilder builder;
 
@@ -23,10 +23,10 @@ MeshPtr ShapeHelper::createWireSphere()
     for(int i=0;i<divisions;i++)
     {
         float angle = i * arcWidth;
-        QVector3D a = QVector3D(qSin(qDegreesToRadians(angle)), qCos(qDegreesToRadians(angle)), 0);
+        QVector3D a = QVector3D(qSin(qDegreesToRadians(angle)), qCos(qDegreesToRadians(angle)), 0) * radius;
 
         angle = (i+1) * arcWidth;
-        QVector3D b = QVector3D(qSin(qDegreesToRadians(angle)), qCos(qDegreesToRadians(angle)), 0);
+        QVector3D b = QVector3D(qSin(qDegreesToRadians(angle)), qCos(qDegreesToRadians(angle)), 0) * radius;
 
         builder.addLine(a, b);
     }
@@ -35,10 +35,10 @@ MeshPtr ShapeHelper::createWireSphere()
     for(int i=0;i<divisions;i++)
     {
         float angle = i * arcWidth;
-        QVector3D a = QVector3D(qSin(qDegreesToRadians(angle)), 0, qCos(qDegreesToRadians(angle)));
+        QVector3D a = QVector3D(qSin(qDegreesToRadians(angle)), 0, qCos(qDegreesToRadians(angle))) * radius;
 
         angle = (i+1) * arcWidth;
-        QVector3D b = QVector3D(qSin(qDegreesToRadians(angle)), 0, qCos(qDegreesToRadians(angle)));
+        QVector3D b = QVector3D(qSin(qDegreesToRadians(angle)), 0, qCos(qDegreesToRadians(angle))) * radius;
 
         builder.addLine(a, b);
     }
@@ -47,10 +47,10 @@ MeshPtr ShapeHelper::createWireSphere()
     for(int i=0;i<divisions;i++)
     {
         float angle = i * arcWidth;
-        QVector3D a = QVector3D(0, qSin(qDegreesToRadians(angle)), qCos(qDegreesToRadians(angle)));
+        QVector3D a = QVector3D(0, qSin(qDegreesToRadians(angle)), qCos(qDegreesToRadians(angle))) * radius;
 
         angle = (i+1) * arcWidth;
-        QVector3D b = QVector3D(0, qSin(qDegreesToRadians(angle)), qCos(qDegreesToRadians(angle)));
+        QVector3D b = QVector3D(0, qSin(qDegreesToRadians(angle)), qCos(qDegreesToRadians(angle))) * radius;
 
         builder.addLine(a, b);
     }
