@@ -198,6 +198,15 @@ private:
     iris::Plane sceneFloor;
     float animTime;
 
+    iris::MeshPtr pointLightMesh;
+    iris::MeshPtr dirLightMesh;
+    iris::MeshPtr spotLightMesh;
+    iris::MaterialPtr lineMat;
+
+    void initLightAssets();
+    iris::MeshPtr createDirLightMesh();
+    void addLightShapesToScene();
+
 signals:
     void initializeGraphics(SceneViewWidget* widget,
                             QOpenGLFunctions_3_2_Core* gl);

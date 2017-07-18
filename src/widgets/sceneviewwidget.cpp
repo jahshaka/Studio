@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/geometry/trimesh.h"
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/viewport.h"
+#include "../irisgl/src/graphics/renderlist.h"
 #include "../irisgl/src/graphics/utils/fullscreenquad.h"
 #include "../irisgl/src/vr/vrmanager.h"
 #include "../irisgl/src/vr/vrdevice.h"
@@ -48,6 +49,9 @@ For more information see the LICENSE file
 #include "../editor/scalegizmo.h"
 
 #include "../core/keyboardstate.h"
+
+#include "../irisgl/src/graphics/utils/shapehelper.h"
+#include "../irisgl/src/materials/colormaterial.h"
 
 SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 {
@@ -121,6 +125,33 @@ void SceneViewWidget::initialize()
 
     // has to be initialized here since it loads assets
     vrCam = new EditorVrController();
+
+    initLightAssets();
+}
+
+void SceneViewWidget::initLightAssets()
+{
+    pointLightMesh = iris::ShapeHelper::createWireSphere(1.0f);
+    lineMat = iris::ColorMaterial::create();
+}
+
+iris::MeshPtr SceneViewWidget::createDirLightMesh()
+{
+    return iris::MeshPtr();
+}
+
+void SceneViewWidget::addLightShapesToScene()
+{
+    QMatrix4x4 mat;
+
+    for(auto light : scene->lights) {
+        if ( light->lightType == iris::LightType::Point) {
+            mat.setToIdentity();
+            mat.translate(light->getGlobalPosition());
+            mat.scale(light->distance);
+            scene->geometryRenderList->submitMesh(pointLightMesh, lineMat, mat);
+        }
+    }
 }
 
 void SceneViewWidget::setScene(iris::ScenePtr scene)
@@ -229,6 +260,8 @@ void SceneViewWidget::renderScene()
             for (auto view : scene->viewers)
                 view->submitRenderItems();
         }
+        // todo: ensure it doesnt display these shapes in play mode
+        addLightShapesToScene();
 
         if (viewportMode == ViewportMode::Editor) {
             renderer->renderScene(dt, viewport);
