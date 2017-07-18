@@ -135,7 +135,6 @@ void SceneViewWidget::initLightAssets()
     pointLightMesh = iris::ShapeHelper::createWireSphere(1.0f);
     spotLightMesh = iris::ShapeHelper::createWireCone(1.0f);
     dirLightMesh = createDirLightMesh();
-
     lineMat = iris::ColorMaterial::create();
 }
 
