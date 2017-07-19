@@ -51,6 +51,7 @@ For more information see the LICENSE file
 #include "../core/keyboardstate.h"
 
 #include "../irisgl/src/graphics/utils/shapehelper.h"
+#include "../irisgl/src/graphics/utils/linemeshbuilder.h"
 #include "../irisgl/src/materials/colormaterial.h"
 
 SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
@@ -133,12 +134,38 @@ void SceneViewWidget::initLightAssets()
 {
     pointLightMesh = iris::ShapeHelper::createWireSphere(1.0f);
     spotLightMesh = iris::ShapeHelper::createWireCone(1.0f);
+    dirLightMesh = createDirLightMesh();
+
     lineMat = iris::ColorMaterial::create();
 }
 
-iris::MeshPtr SceneViewWidget::createDirLightMesh()
+iris::MeshPtr SceneViewWidget::createDirLightMesh(float baseRadius)
 {
-    return iris::MeshPtr();
+    iris::LineMeshBuilder builder;
+
+    int divisions = 36;
+    float arcWidth = 360.0f/divisions;
+
+    // XZ plane
+    for(int i=0;i<divisions;i++)
+    {
+        float angle = i * arcWidth;
+        QVector3D a = QVector3D(qSin(qDegreesToRadians(angle)), 0, qCos(qDegreesToRadians(angle))) * baseRadius;
+
+        angle = (i+1) * arcWidth;
+        QVector3D b = QVector3D(qSin(qDegreesToRadians(angle)), 0, qCos(qDegreesToRadians(angle))) * baseRadius;
+
+        builder.addLine(a, b);
+    }
+
+    float halfSize = 0.5f;
+
+    builder.addLine(QVector3D(-halfSize, 0, -halfSize), QVector3D(-halfSize, -2, -halfSize));
+    builder.addLine(QVector3D(halfSize, 0, -halfSize), QVector3D(halfSize, -2, -halfSize));
+    builder.addLine(QVector3D(halfSize, 0, halfSize), QVector3D(halfSize, -2, halfSize));
+    builder.addLine(QVector3D(-halfSize, 0, halfSize), QVector3D(-halfSize, -2, halfSize));
+
+    return builder.build();
 }
 
 void SceneViewWidget::addLightShapesToScene()
@@ -162,6 +189,13 @@ void SceneViewWidget::addLightShapesToScene()
             mat.scale(light->distance);
 
             scene->geometryRenderList->submitMesh(spotLightMesh, lineMat, mat);
+        }
+        else if ( light->lightType == iris::LightType::Directional) {
+            mat.setToIdentity();
+            mat.translate(light->getGlobalPosition());
+            mat.rotate(QQuaternion::fromRotationMatrix(light->getGlobalTransform().normalMatrix()));
+
+            scene->geometryRenderList->submitMesh(dirLightMesh, lineMat, mat);
         }
     }
 }
