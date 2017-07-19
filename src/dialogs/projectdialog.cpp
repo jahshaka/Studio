@@ -252,9 +252,14 @@ bool ProjectDialog::copyDirectoryFiles(const QString &fromDir, const QString &to
 
 void ProjectDialog::openSampleProject(QListWidgetItem *item)
 {
-    auto projectFolder = QFileDialog::getExistingDirectory(nullptr,
-                                                           "Select directory to copy project",
-                                                           settings->getValue("default_directory", "").toString());
+    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                + Constants::PROJECT_FOLDER;
+    auto projectFolder = settings->getValue("default_directory", path).toString();
+
+    QDir targetDir(projectFolder);
+    if(!targetDir.exists()){    /* if directory don't exists, build it */
+        targetDir.mkdir(targetDir.absolutePath());
+    }
 
     if (QDir(projectFolder + "/" + item->data(Qt::DisplayRole).toString()).exists()) {
         QMessageBox::StandardButton reply;
