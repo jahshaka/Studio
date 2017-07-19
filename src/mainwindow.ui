@@ -478,7 +478,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
           <item>
            <widget class="QPushButton" name="playSceneBtn">
             <property name="text">
-             <string>PLAY</string>
+             <string>PLAY SCENE</string>
             </property>
            </widget>
           </item>
