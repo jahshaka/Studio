@@ -36,7 +36,7 @@ public:
     void setupOutline();
 
 private slots:
-    void outlineWidthChanged(int width);
+    void outlineWidthChanged(double width);
     void outlineColorChanged(QColor color);
     void changeDefaultDirectory();
     void projectDirectoryChanged(QString path);

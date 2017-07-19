@@ -599,7 +599,7 @@ void MainWindow::setupHelpMenu()
 {
     connect(ui->actionLicense,      SIGNAL(triggered(bool)), this, SLOT(showLicenseDialog()));
     connect(ui->actionAbout,        SIGNAL(triggered(bool)), this, SLOT(showAboutDialog()));
-    connect(ui->actionBlog,         SIGNAL(triggered(bool)), this, SLOT(openBlogUrl()));
+    connect(ui->actionFacebook,     SIGNAL(triggered(bool)), this, SLOT(openFacebookUrl()));
     connect(ui->actionOpenWebsite,  SIGNAL(triggered(bool)), this, SLOT(openWebsiteUrl()));
 }
 
@@ -1379,9 +1379,9 @@ void MainWindow::showLicenseDialog()
     licenseDialog->exec();
 }
 
-void MainWindow::openBlogUrl()
+void MainWindow::openFacebookUrl()
 {
-    QDesktopServices::openUrl(QUrl("http://www.jahshaka.com/category/blog/"));
+    QDesktopServices::openUrl(QUrl("https://www.facebook.com/jahshakafx/"));
 }
 
 void MainWindow::openWebsiteUrl()

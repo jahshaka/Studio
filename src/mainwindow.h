@@ -218,7 +218,7 @@ public slots:
 
     void showAboutDialog();
     void showLicenseDialog();
-    void openBlogUrl();
+    void openFacebookUrl();
     void openWebsiteUrl();
 
     iris::ScenePtr createDefaultScene();
