@@ -6,14 +6,68 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>452</width>
-    <height>73</height>
+    <width>634</width>
+    <height>99</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout">
+  <property name="styleSheet">
+   <string notr="true">
+/* Double Spin Box */
+QDoubleSpinBox {
+   /*	padding-right: 15px; /* make room for the arrows */
+    border-width: 3px;
+	/*border-right: 18px solid #1e1e1e; /* hide a 1px gap */
+	background-color: #404040;
+	selection-color: #BBB;
+    /*border-image: url(:/app/images/frame.png) 4; */
+    color: #BBB;
+}
+
+QDoubleSpinBox:hover {
+    border: 1px solid rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::up-button {
+	background-color: #4d4d4d;
+    subcontrol-origin: border;
+    subcontrol-position: top right; /* position at the top right corner */
+
+    width: 15px; /* 16 + 2*1px border-width = 15px padding + 3px parent border */
+    border-image: url(:/app/icons/chevron-arrow-up.svg);
+    border-width: 1px;
+}
+
+QDoubleSpinBox::up-button:hover {
+    background-color: rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::up-button:pressed {
+    background-color: rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::down-button {
+	background-color: #4d4d4d;
+    subcontrol-origin: border;
+    subcontrol-position: bottom right; /* position at bottom right corner */
+	margin-top: -1px;
+    width: 15px;
+    border-image: url(:/app/icons/chevron-arrow-down.svg);
+    border-width: 1px;
+    border-top-width: 1px;
+}
+
+QDoubleSpinBox::down-button:hover {
+    background-color: rgb(30, 144, 255);
+}
+
+QDoubleSpinBox::down-button:pressed {
+    background-color: rgb(30, 144, 255);
+}</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
    <property name="leftMargin">
     <number>0</number>
    </property>
@@ -26,7 +80,10 @@
    <property name="bottomMargin">
     <number>0</number>
    </property>
-   <item>
+   <property name="spacing">
+    <number>8</number>
+   </property>
+   <item row="0" column="0">
     <layout class="QHBoxLayout" name="horizontalLayout_3">
      <item>
       <widget class="QLabel" name="label_3">
@@ -42,12 +99,18 @@
       </widget>
      </item>
      <item>
-      <widget class="QSpinBox" name="outlineWidth">
-       <property name="maximum">
-        <number>10</number>
+      <widget class="QDoubleSpinBox" name="outlineWidth">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
        </property>
-       <property name="value">
-        <number>5</number>
+       <property name="decimals">
+        <number>0</number>
+       </property>
+       <property name="maximum">
+        <double>10.000000000000000</double>
        </property>
       </widget>
      </item>
@@ -98,7 +161,7 @@
      </item>
     </layout>
    </item>
-   <item>
+   <item row="1" column="0">
     <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
       <widget class="QLabel" name="label">
@@ -108,7 +171,11 @@
       </widget>
      </item>
      <item>
-      <widget class="QLineEdit" name="projectDefault"/>
+      <widget class="QLineEdit" name="projectDefault">
+       <property name="frame">
+        <bool>false</bool>
+       </property>
+      </widget>
      </item>
      <item>
       <widget class="QToolButton" name="browseProject">

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1153</width>
-    <height>775</height>
+    <width>1087</width>
+    <height>390</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -49,8 +49,14 @@ QMenu::indicator::checked {
     border: 3px solid #212121;
 }
 
-QMessageBox QPushButton {
-	background: red;
+QMessageBox QPushButton  {
+    border: none;
+    background-color: #212121;
+	padding: 4px 12px;
+}
+
+QMessageBox QPushButton:hover {
+    background-color: #555;
 }
 
 /*
@@ -519,7 +525,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1153</width>
+     <width>1087</width>
      <height>30</height>
     </rect>
    </property>
@@ -553,7 +559,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <addaction name="actionLicense"/>
     <addaction name="separator"/>
     <addaction name="actionOpenWebsite"/>
-    <addaction name="actionBlog"/>
+    <addaction name="actionFacebook"/>
    </widget>
    <widget class="QMenu" name="menuEdit">
     <property name="title">
@@ -764,7 +770,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>582</height>
+          <height>197</height>
          </rect>
         </property>
         <property name="styleSheet">
@@ -1054,7 +1060,7 @@ QToolButton:checked
   </action>
   <action name="actionOpenWebsite">
    <property name="text">
-    <string>Visit Website</string>
+    <string>Website</string>
    </property>
   </action>
   <action name="actionBlog">
@@ -1203,6 +1209,11 @@ QToolButton:checked
   <action name="actionOpen">
    <property name="text">
     <string>Open</string>
+   </property>
+  </action>
+  <action name="actionFacebook">
+   <property name="text">
+    <string>Facebook</string>
    </property>
   </action>
  </widget>
