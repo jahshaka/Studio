@@ -69,11 +69,11 @@ float ViewerNode::getViewScale()
 
 void ViewerNode::submitRenderItems()
 {
-    /*
+
     renderItem->worldMatrix = this->globalTransform;
     scene->geometryRenderList->add(renderItem);
 
-
+    /*
     auto device = VrManager::getDefaultDevice();
 
     QMatrix4x4 world;

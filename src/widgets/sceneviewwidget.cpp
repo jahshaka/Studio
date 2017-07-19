@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
+#include "../irisgl/src/scenegraph/viewernode.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/graphics/forwardrenderer.h"
 #include "../irisgl/src/graphics/mesh.h"
@@ -224,8 +225,9 @@ void SceneViewWidget::renderScene()
         scene->update(dt);
 
         // insert vr head
-        if (UiManager::sceneMode != SceneMode::PlayMode) {
-
+        if (UiManager::sceneMode != SceneMode::PlayMode || viewportMode != ViewportMode::VR) {
+            for (auto view : scene->viewers)
+                view->submitRenderItems();
         }
 
         if (viewportMode == ViewportMode::Editor) {
