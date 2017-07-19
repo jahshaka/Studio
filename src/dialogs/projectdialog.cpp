@@ -148,6 +148,7 @@ void ProjectDialog::newScene()
         }
 
         window = new MainWindow;
+        window->setAttribute(Qt::WA_DeleteOnClose);
         window->showMaximized();
         window->newProject(projectName, fullProjectPath);
         settings->addRecentlyOpenedScene(slnName);

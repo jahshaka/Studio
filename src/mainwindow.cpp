@@ -572,12 +572,17 @@ void MainWindow::setupFileMenu()
 //        }
 //    }
 
-    connect(ui->actionSave,         SIGNAL(triggered(bool)), this, SLOT(saveScene()));
+    connect(ui->actionSave,             SIGNAL(triggered(bool)), this, SLOT(saveScene()));
 //    connect(ui->actionSave_As,      SIGNAL(triggered(bool)), this, SLOT(saveSceneAs()));
 //    connect(ui->actionLoad,         SIGNAL(triggered(bool)), this, SLOT(loadScene()));
-    connect(ui->actionExit,         SIGNAL(triggered(bool)), this, SLOT(exitApp()));
-    connect(ui->actionPreferences,  SIGNAL(triggered(bool)), this, SLOT(showPreferences()));
-    connect(ui->actionNew,          SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
+    connect(ui->actionExit,             SIGNAL(triggered(bool)), this, SLOT(exitApp()));
+    connect(ui->actionPreferences,      SIGNAL(triggered(bool)), this, SLOT(showPreferences()));
+    connect(ui->actionNewProject,       SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
+    connect(ui->actionManage_Projects,  SIGNAL(triggered(bool)), this, SLOT(projectManager()));
+
+    connect(ui->actionOpen,     SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
+    connect(ui->actionClose,    SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
+    connect(ui->actionDelete,   SIGNAL(triggered(bool)), this, SLOT(deleteProject()));
 
     connect(prefsDialog,  SIGNAL(PreferencesDialogClosed()), this, SLOT(updateSceneSettings()));
 
@@ -1277,6 +1282,56 @@ void MainWindow::newScene()
 }
 
 void MainWindow::newSceneProject()
+{
+    if (!UiManager::undoStack->isClean()) {
+        QMessageBox::StandardButton reply;
+        reply = QMessageBox::question(this,
+                                      "Unsaved Changes",
+                                      "There are unsaved changes, save first?",
+                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+        if (reply == QMessageBox::Yes) {
+            saveScene();
+            this->close();
+            projectManager();
+        } else if (reply == QMessageBox::No) {
+            this->close();
+            projectManager();
+        }
+    } else {
+        this->close();
+        projectManager();
+    }
+}
+
+void MainWindow::deleteProject()
+{
+    QMessageBox::StandardButton reply;
+    reply = QMessageBox::question(this,
+                                  "Deleting Project",
+                                  "Are you sure you want to delete this project?",
+                                  QMessageBox::Yes | QMessageBox::Cancel);
+    if (reply == QMessageBox::Yes) {
+        this->db->closeDb();
+        delete ui;
+
+        this->close();
+
+        QDir dir(Globals::project->folderPath);
+        if (dir.removeRecursively()) {
+            settings->removeRecentlyOpenedEntry(Globals::project->filePath);
+        } else {
+            QMessageBox::StandardButton err;
+            err = QMessageBox::warning(this,
+                                       "Delete failed",
+                                       "Failed to remove project, please delete manually",
+                                       QMessageBox::Ok);
+        }
+
+        projectManager();
+    }
+}
+
+void MainWindow::projectManager()
 {
     // save current scene
     ProjectDialog projectDialog;

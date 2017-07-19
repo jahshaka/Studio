@@ -212,6 +212,8 @@ public slots:
     void exitApp();
     void newScene();
     void newSceneProject();
+    void deleteProject();
+    void projectManager();
     void newProject(const QString&, const QString&);
 
     void showAboutDialog();
