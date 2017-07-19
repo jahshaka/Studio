@@ -427,7 +427,7 @@ void SceneViewWidget::focusOutEvent(QFocusEvent* event)
  * @selectRootObject is usually true for picking using the mouse
  * It's false for when dragging a texture to an object
  */
-void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject, bool skipLights)
+void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject, bool skipLights, bool skipViewers)
 {
     editorCam->updateCameraMatrices();
 
@@ -439,6 +439,10 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr l
     doScenePicking(scene->getRootNode(), segStart, segEnd, hitList);
     if (!skipLights) {
         doLightPicking(segStart, segEnd, hitList);
+    }
+
+    if (!skipViewers) {
+        doViewerPicking(segStart, segEnd, hitList);
     }
 
     if (hitList.size() == 0) {
@@ -633,6 +637,35 @@ void SceneViewWidget::doLightPicking(const QVector3D& segStart,
         {
             PickingResult pick;
             pick.hitNode = light.staticCast<iris::SceneNode>();
+            pick.hitPoint = hitPoint;
+            pick.distanceFromCameraSqrd = (hitPoint-editorCam->getGlobalPosition()).lengthSquared();
+
+            hitList.append(pick);
+        }
+    }
+}
+
+void SceneViewWidget::doViewerPicking(const QVector3D& segStart,
+                                     const QVector3D& segEnd,
+                                     QList<PickingResult>& hitList)
+{
+    const float headRadius = 0.5f;
+
+    auto rayDir = (segEnd-segStart);
+    float segLengthSqrd = rayDir.lengthSquared();
+    rayDir.normalize();
+    QVector3D hitPoint;
+    float t;
+
+    for (auto viewer: scene->viewers) {
+        if (iris::IntersectionHelper::raySphereIntersects(segStart,
+                                                          rayDir,
+                                                          viewer->getGlobalPosition(),
+                                                          headRadius,
+                                                          t, hitPoint))
+        {
+            PickingResult pick;
+            pick.hitNode = viewer.staticCast<iris::SceneNode>();
             pick.hitPoint = hitPoint;
             pick.distanceFromCameraSqrd = (hitPoint-editorCam->getGlobalPosition()).lengthSquared();
 
