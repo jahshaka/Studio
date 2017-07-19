@@ -38,7 +38,7 @@ void reducer(QVector<ModelData> &accum, const QVector<ModelData> &interm)
     accum.append(interm);
 }
 
-ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::ProjectDialog)
+ProjectDialog::ProjectDialog(bool mainWindowActive, QDialog *parent) : QDialog(parent), ui(new Ui::ProjectDialog)
 {
     ui->setupUi(this);
 
@@ -50,6 +50,8 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
 //        QFontDatabase::addApplicationFontFromData(fontFile.readAll());
 //        QApplication::setFont(QFont("Open Sans", 9));
 //    }
+
+    isMainWindowActive = mainWindowActive;
 
     ui->listWidget->setViewMode(QListWidget::IconMode);
     ui->listWidget->setIconSize(QSize(256, 256));
@@ -326,9 +328,11 @@ void ProjectDialog::listWidgetCustomContextMenu(const QPoint &pos)
         connect(action, SIGNAL(triggered()), this, SLOT(removeFromList()));
         menu.addAction(action);
 
-        action = new QAction(QIcon(), "Delete project", this);
-        connect(action, SIGNAL(triggered()), this, SLOT(deleteProject()));
-        menu.addAction(action);
+        if (!isMainWindowActive) {
+            action = new QAction(QIcon(), "Delete project", this);
+            connect(action, SIGNAL(triggered()), this, SLOT(deleteProject()));
+            menu.addAction(action);
+        }
     }
 
     menu.exec(ui->listWidget->mapToGlobal(pos));

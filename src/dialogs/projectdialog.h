@@ -31,7 +31,7 @@ class ProjectDialog : public QDialog
     Q_OBJECT
 
 public:
-    ProjectDialog(QDialog *parent = nullptr);
+    ProjectDialog(bool mainWindowActive = false, QDialog *parent = nullptr);
     ~ProjectDialog();
 
     MainWindow *window;
@@ -76,6 +76,7 @@ private:
 
     QSharedPointer<ProgressDialog> progressDialog;
     bool isNewProject;
+    bool isMainWindowActive;
 };
 
 struct AssetWidgetConcurrentWrapper {
