@@ -572,12 +572,17 @@ void MainWindow::setupFileMenu()
 //        }
 //    }
 
-    connect(ui->actionSave,         SIGNAL(triggered(bool)), this, SLOT(saveScene()));
+    connect(ui->actionSave,             SIGNAL(triggered(bool)), this, SLOT(saveScene()));
 //    connect(ui->actionSave_As,      SIGNAL(triggered(bool)), this, SLOT(saveSceneAs()));
 //    connect(ui->actionLoad,         SIGNAL(triggered(bool)), this, SLOT(loadScene()));
-    connect(ui->actionExit,         SIGNAL(triggered(bool)), this, SLOT(exitApp()));
-    connect(ui->actionPreferences,  SIGNAL(triggered(bool)), this, SLOT(showPreferences()));
-    connect(ui->actionNew,          SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
+    connect(ui->actionExit,             SIGNAL(triggered(bool)), this, SLOT(exitApp()));
+    connect(ui->actionPreferences,      SIGNAL(triggered(bool)), this, SLOT(showPreferences()));
+    connect(ui->actionNewProject,       SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
+    connect(ui->actionManage_Projects,  SIGNAL(triggered(bool)), this, SLOT(callProjectManager()));
+
+    connect(ui->actionOpen,     SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
+    connect(ui->actionClose,    SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
+    connect(ui->actionDelete,   SIGNAL(triggered(bool)), this, SLOT(deleteProject()));
 
     connect(prefsDialog,  SIGNAL(PreferencesDialogClosed()), this, SLOT(updateSceneSettings()));
 
@@ -594,7 +599,7 @@ void MainWindow::setupHelpMenu()
 {
     connect(ui->actionLicense,      SIGNAL(triggered(bool)), this, SLOT(showLicenseDialog()));
     connect(ui->actionAbout,        SIGNAL(triggered(bool)), this, SLOT(showAboutDialog()));
-    connect(ui->actionBlog,         SIGNAL(triggered(bool)), this, SLOT(openBlogUrl()));
+    connect(ui->actionFacebook,     SIGNAL(triggered(bool)), this, SLOT(openFacebookUrl()));
     connect(ui->actionOpenWebsite,  SIGNAL(triggered(bool)), this, SLOT(openWebsiteUrl()));
 }
 
@@ -1278,8 +1283,68 @@ void MainWindow::newScene()
 
 void MainWindow::newSceneProject()
 {
+    if (!UiManager::undoStack->isClean()) {
+        QMessageBox::StandardButton reply;
+        reply = QMessageBox::question(this,
+                                      "Unsaved Changes",
+                                      "There are unsaved changes, save first?",
+                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+        if (reply == QMessageBox::Yes) {
+            saveScene();
+            this->db->closeDb();
+            delete ui;
+            this->close();
+            projectManager();
+        } else if (reply == QMessageBox::No) {
+            this->db->closeDb();
+            delete ui;
+            this->close();
+            projectManager();
+        }
+    } else {
+        this->db->closeDb();
+        delete ui;
+        this->close();
+        projectManager();
+    }
+}
+
+void MainWindow::deleteProject()
+{
+    QMessageBox::StandardButton reply;
+    reply = QMessageBox::question(this,
+                                  "Deleting Project",
+                                  "Are you sure you want to delete this project?",
+                                  QMessageBox::Yes | QMessageBox::Cancel);
+    if (reply == QMessageBox::Yes) {
+        this->db->closeDb();
+        delete ui;
+        this->close();
+
+        QDir dir(Globals::project->folderPath);
+        if (dir.removeRecursively()) {
+            settings->removeRecentlyOpenedEntry(Globals::project->filePath);
+        } else {
+            QMessageBox::StandardButton err;
+            err = QMessageBox::warning(this,
+                                       "Delete failed",
+                                       "Failed to remove project, please delete manually",
+                                       QMessageBox::Ok);
+        }
+
+        projectManager();
+    }
+}
+
+void MainWindow::callProjectManager()
+{
+    projectManager(true);
+}
+
+void MainWindow::projectManager(bool mainWindowActive)
+{
     // save current scene
-    ProjectDialog projectDialog;
+    ProjectDialog projectDialog(mainWindowActive);
     bool newInstance = projectDialog.newInstance(db);
 
     if (newInstance) {
@@ -1324,9 +1389,9 @@ void MainWindow::showLicenseDialog()
     licenseDialog->exec();
 }
 
-void MainWindow::openBlogUrl()
+void MainWindow::openFacebookUrl()
 {
-    QDesktopServices::openUrl(QUrl("http://www.jahshaka.com/category/blog/"));
+    QDesktopServices::openUrl(QUrl("https://www.facebook.com/jahshakafx/"));
 }
 
 void MainWindow::openWebsiteUrl()

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1153</width>
-    <height>775</height>
+    <width>1087</width>
+    <height>390</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -47,6 +47,16 @@ QMenu::indicator::unchecked {
 QMenu::indicator::checked {
     background-color: #bbb;
     border: 3px solid #212121;
+}
+
+QMessageBox QPushButton  {
+    border: none;
+    background-color: #212121;
+	padding: 4px 12px;
+}
+
+QMessageBox QPushButton:hover {
+    background-color: #555;
 }
 
 /*
@@ -515,7 +525,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1153</width>
+     <width>1087</width>
      <height>30</height>
     </rect>
    </property>
@@ -533,10 +543,10 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
    </property>
    <widget class="QMenu" name="menuFile">
     <property name="title">
-     <string>File</string>
+     <string>Jahshaka</string>
     </property>
-    <addaction name="actionNew"/>
-    <addaction name="actionSave"/>
+    <addaction name="actionNewProject"/>
+    <addaction name="actionManage_Projects"/>
     <addaction name="separator"/>
     <addaction name="actionPreferences"/>
     <addaction name="actionExit"/>
@@ -549,7 +559,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <addaction name="actionLicense"/>
     <addaction name="separator"/>
     <addaction name="actionOpenWebsite"/>
-    <addaction name="actionBlog"/>
+    <addaction name="actionFacebook"/>
    </widget>
    <widget class="QMenu" name="menuEdit">
     <property name="title">
@@ -558,7 +568,17 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <addaction name="actionEditUndo"/>
     <addaction name="actionEditRedo"/>
    </widget>
+   <widget class="QMenu" name="menuFile_2">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <addaction name="actionOpen"/>
+    <addaction name="actionSave"/>
+    <addaction name="actionClose"/>
+    <addaction name="actionDelete"/>
+   </widget>
    <addaction name="menuFile"/>
+   <addaction name="menuFile_2"/>
    <addaction name="menuEdit"/>
    <addaction name="menuHelp"/>
   </widget>
@@ -750,7 +770,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>578</height>
+          <height>197</height>
          </rect>
         </property>
         <property name="styleSheet">
@@ -1013,9 +1033,9 @@ QToolButton:checked
     <string>Save As..</string>
    </property>
   </action>
-  <action name="actionNew">
+  <action name="actionNewProject">
    <property name="text">
-    <string>New</string>
+    <string>New Project</string>
    </property>
   </action>
   <action name="actionPreferences">
@@ -1040,7 +1060,7 @@ QToolButton:checked
   </action>
   <action name="actionOpenWebsite">
    <property name="text">
-    <string>Visit Website</string>
+    <string>Website</string>
    </property>
   </action>
   <action name="actionBlog">
@@ -1169,6 +1189,31 @@ QToolButton:checked
   <action name="actionEditRedo">
    <property name="text">
     <string>Redo</string>
+   </property>
+  </action>
+  <action name="actionManage_Projects">
+   <property name="text">
+    <string>Manage Projects</string>
+   </property>
+  </action>
+  <action name="actionClose">
+   <property name="text">
+    <string>Close</string>
+   </property>
+  </action>
+  <action name="actionDelete">
+   <property name="text">
+    <string>Delete</string>
+   </property>
+  </action>
+  <action name="actionOpen">
+   <property name="text">
+    <string>Open</string>
+   </property>
+  </action>
+  <action name="actionFacebook">
+   <property name="text">
+    <string>Facebook</string>
    </property>
   </action>
  </widget>

@@ -38,7 +38,7 @@ void reducer(QVector<ModelData> &accum, const QVector<ModelData> &interm)
     accum.append(interm);
 }
 
-ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::ProjectDialog)
+ProjectDialog::ProjectDialog(bool mainWindowActive, QDialog *parent) : QDialog(parent), ui(new Ui::ProjectDialog)
 {
     ui->setupUi(this);
 
@@ -50,6 +50,8 @@ ProjectDialog::ProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Proj
 //        QFontDatabase::addApplicationFontFromData(fontFile.readAll());
 //        QApplication::setFont(QFont("Open Sans", 9));
 //    }
+
+    isMainWindowActive = mainWindowActive;
 
     ui->listWidget->setViewMode(QListWidget::IconMode);
     ui->listWidget->setIconSize(QSize(256, 256));
@@ -148,6 +150,7 @@ void ProjectDialog::newScene()
         }
 
         window = new MainWindow;
+        window->setAttribute(Qt::WA_DeleteOnClose);
         window->showMaximized();
         window->newProject(projectName, fullProjectPath);
         settings->addRecentlyOpenedScene(slnName);
@@ -251,9 +254,14 @@ bool ProjectDialog::copyDirectoryFiles(const QString &fromDir, const QString &to
 
 void ProjectDialog::openSampleProject(QListWidgetItem *item)
 {
-    auto projectFolder = QFileDialog::getExistingDirectory(nullptr,
-                                                           "Select directory to copy project",
-                                                           settings->getValue("default_directory", "").toString());
+    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                + Constants::PROJECT_FOLDER;
+    auto projectFolder = settings->getValue("default_directory", path).toString();
+
+    QDir targetDir(projectFolder);
+    if(!targetDir.exists()){    /* if directory don't exists, build it */
+        targetDir.mkdir(targetDir.absolutePath());
+    }
 
     if (QDir(projectFolder + "/" + item->data(Qt::DisplayRole).toString()).exists()) {
         QMessageBox::StandardButton reply;
@@ -320,9 +328,11 @@ void ProjectDialog::listWidgetCustomContextMenu(const QPoint &pos)
         connect(action, SIGNAL(triggered()), this, SLOT(removeFromList()));
         menu.addAction(action);
 
-        action = new QAction(QIcon(), "Delete project", this);
-        connect(action, SIGNAL(triggered()), this, SLOT(deleteProject()));
-        menu.addAction(action);
+        if (!isMainWindowActive) {
+            action = new QAction(QIcon(), "Delete project", this);
+            connect(action, SIGNAL(triggered()), this, SLOT(deleteProject()));
+            menu.addAction(action);
+        }
     }
 
     menu.exec(ui->listWidget->mapToGlobal(pos));

@@ -212,11 +212,14 @@ public slots:
     void exitApp();
     void newScene();
     void newSceneProject();
+    void deleteProject();
+    void callProjectManager();
+    void projectManager(bool mainWindowActive = false);
     void newProject(const QString&, const QString&);
 
     void showAboutDialog();
     void showLicenseDialog();
-    void openBlogUrl();
+    void openFacebookUrl();
     void openWebsiteUrl();
 
     iris::ScenePtr createDefaultScene();

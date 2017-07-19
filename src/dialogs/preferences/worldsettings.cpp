@@ -25,8 +25,8 @@ WorldSettings::WorldSettings(SettingsManager* settings) :
 
     connect(ui->browseProject, SIGNAL(pressed()), SLOT(changeDefaultDirectory()));
 
-    connect(ui->outlineWidth, SIGNAL(valueChanged(int)),
-            this, SLOT(outlineWidthChanged(int)));
+    connect(ui->outlineWidth, SIGNAL(valueChanged(double)),
+            this, SLOT(outlineWidthChanged(double)));
 
     connect(ui->outlineColor, SIGNAL(onColorChanged(QColor)),
             this, SLOT(outlineColorChanged(QColor)));
@@ -54,9 +54,9 @@ void WorldSettings::changeDefaultDirectory()
     ui->projectDefault->setText(defaultProjectDirectory);
 }
 
-void WorldSettings::outlineWidthChanged(int width)
+void WorldSettings::outlineWidthChanged(double width)
 {
-    settings->setValue("outline_width", width);
+    settings->setValue("outline_width", (int) width);
     outlineWidth = width;
 }
 
