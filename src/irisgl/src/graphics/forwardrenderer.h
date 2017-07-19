@@ -99,7 +99,7 @@ public:
 
     //all scenenodes' transform should be updated before calling this functions
     void renderScene(float delta, Viewport* vp);
-    void renderSceneVr(float delta, Viewport* vp);
+    void renderSceneVr(float delta, Viewport* vp, bool useViewer = true);
 
     PostProcessManagerPtr getPostProcessManager();
 

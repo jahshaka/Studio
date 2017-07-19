@@ -154,8 +154,8 @@ void SceneViewWidget::updateScene(bool once)
     // update and draw the 3d manipulation gizmo
     if (!!viewportGizmo->getLastSelectedNode()) {
         if (!viewportGizmo->getLastSelectedNode()->isRootNode()) {
-            if (viewportMode != ViewportMode::VR) {
-                viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
+            viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
+            if (viewportMode != ViewportMode::VR && UiManager::sceneMode == SceneMode::EditMode) {
                 viewportGizmo->render(editorCam->viewMatrix, editorCam->projMatrix);
             }
         }
@@ -226,7 +226,7 @@ void SceneViewWidget::renderScene()
         if (viewportMode == ViewportMode::Editor) {
             renderer->renderScene(dt, viewport);
         } else {
-            renderer->renderSceneVr(dt, viewport);
+            renderer->renderSceneVr(dt, viewport, UiManager::sceneMode == SceneMode::PlayMode);
         }
 
         this->updateScene();
@@ -339,33 +339,35 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
     if (e->button() == Qt::LeftButton) {
         editorCam->updateCameraMatrices();
 
-        this->doGizmoPicking(e->localPos());
+        if (viewportMode == ViewportMode::Editor) {
+            this->doGizmoPicking(e->localPos());
 
-        if (!!selectedNode) {
-            viewportGizmo->isGizmoHit(editorCam, e->localPos(), this->calculateMouseRay(e->localPos()));
-            viewportGizmo->isHandleHit();
-        }
+            if (!!selectedNode) {
+                viewportGizmo->isGizmoHit(editorCam, e->localPos(), this->calculateMouseRay(e->localPos()));
+                viewportGizmo->isHandleHit();
+            }
 
-        // temp ---------------------------------
-//        auto translatePlaneNormal = QVector3D(0, 0, 1);
-//        auto pos = editorCam->pos;
-//        auto r = calculateMouseRay(e->localPos() * 1024.f);
+            // temp ---------------------------------
+    //        auto translatePlaneNormal = QVector3D(0, 0, 1);
+    //        auto pos = editorCam->pos;
+    //        auto r = calculateMouseRay(e->localPos() * 1024.f);
 
-//        translatePlaneD = -QVector3D::dotProduct(translatePlaneNormal, finalHitPoint);
+    //        translatePlaneD = -QVector3D::dotProduct(translatePlaneNormal, finalHitPoint);
 
-//        QVector3D ray = (r - pos).normalized();
-//        float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
+    //        QVector3D ray = (r - pos).normalized();
+    //        float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
 
-        // temp temp
-//        if (nDotR != 0.0f) {
-//            float distance = (QVector3D::dotProduct(translatePlaneNormal, pos) + translatePlaneD) / nDotR;
-//            finalHitPoint = ray * distance + pos; // initial hit
-//        }
-        // end temp -----------------------------
+            // temp temp
+    //        if (nDotR != 0.0f) {
+    //            float distance = (QVector3D::dotProduct(translatePlaneNormal, pos) + translatePlaneD) / nDotR;
+    //            finalHitPoint = ray * distance + pos; // initial hit
+    //        }
+            // end temp -----------------------------
 
-        // if we don't have a selected node prioritize object picking
-        if (selectedNode.isNull()) {
-            this->doObjectPicking(e->localPos(), lastSelected);
+            // if we don't have a selected node prioritize object picking
+            if (selectedNode.isNull()) {
+                this->doObjectPicking(e->localPos(), lastSelected);
+            }
         }
     }
 

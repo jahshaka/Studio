@@ -271,7 +271,7 @@ void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
     shadowShader->release();
 }
 
-void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
+void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
 {
     auto ctx = QOpenGLContext::currentContext();
     if(!vrDevice->isVrSupported())
@@ -283,7 +283,7 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
     //viewTransform.setToIdentity();
 
 
-    if(!!scene->vrViewer) {
+    if(!!scene->vrViewer && useViewer) {
         viewerPos = scene->vrViewer->getGlobalPosition();
         //viewScale = scene->vrViewer->getViewScale();
         viewTransform = scene->vrViewer->globalTransform;
