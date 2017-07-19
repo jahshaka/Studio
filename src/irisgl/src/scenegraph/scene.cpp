@@ -198,9 +198,13 @@ void Scene::addNode(SceneNodePtr node)
         particleSystems.append(particleSystem);
     }
 
-    if(node->sceneNodeType == SceneNodeType::Viewer && vrViewer.isNull())
+    if(node->sceneNodeType == SceneNodeType::Viewer)
     {
-        vrViewer = node.staticCast<iris::ViewerNode>();
+        auto viewer = node.staticCast<iris::ViewerNode>();
+        viewers.append(viewer);
+
+        if ( vrViewer.isNull())
+            vrViewer = viewer;
     }
 }
 
@@ -218,9 +222,17 @@ void Scene::removeNode(SceneNodePtr node)
         particleSystems.removeOne(node.staticCast<iris::ParticleSystemNode>());
     }
 
-    // if this node is the scene's viewer then reset the scene's viewer to null
-    if (vrViewer == node.staticCast<iris::ViewerNode>()) {
-        vrViewer.reset();
+    if (node->sceneNodeType == SceneNodeType::Viewer) {
+        auto viewer = node.staticCast<iris::ViewerNode>();
+        viewers.removeOne(viewer);
+
+        // remove viewer and replace it if more viewers are available
+        if ( vrViewer == viewer) {
+            if(viewers.count()==0)
+                vrViewer.reset();
+            else
+                vrViewer = viewers[viewers.count()-1];
+        }
     }
 
     for (auto& child : node->children) {
