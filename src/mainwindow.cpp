@@ -578,7 +578,7 @@ void MainWindow::setupFileMenu()
     connect(ui->actionExit,             SIGNAL(triggered(bool)), this, SLOT(exitApp()));
     connect(ui->actionPreferences,      SIGNAL(triggered(bool)), this, SLOT(showPreferences()));
     connect(ui->actionNewProject,       SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
-    connect(ui->actionManage_Projects,  SIGNAL(triggered(bool)), this, SLOT(projectManager()));
+    connect(ui->actionManage_Projects,  SIGNAL(triggered(bool)), this, SLOT(callProjectManager()));
 
     connect(ui->actionOpen,     SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
     connect(ui->actionClose,    SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
@@ -1291,13 +1291,19 @@ void MainWindow::newSceneProject()
                                       QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
         if (reply == QMessageBox::Yes) {
             saveScene();
+            this->db->closeDb();
+            delete ui;
             this->close();
             projectManager();
         } else if (reply == QMessageBox::No) {
+            this->db->closeDb();
+            delete ui;
             this->close();
             projectManager();
         }
     } else {
+        this->db->closeDb();
+        delete ui;
         this->close();
         projectManager();
     }
@@ -1313,7 +1319,6 @@ void MainWindow::deleteProject()
     if (reply == QMessageBox::Yes) {
         this->db->closeDb();
         delete ui;
-
         this->close();
 
         QDir dir(Globals::project->folderPath);
@@ -1331,10 +1336,15 @@ void MainWindow::deleteProject()
     }
 }
 
-void MainWindow::projectManager()
+void MainWindow::callProjectManager()
+{
+    projectManager(true);
+}
+
+void MainWindow::projectManager(bool mainWindowActive)
 {
     // save current scene
-    ProjectDialog projectDialog;
+    ProjectDialog projectDialog(mainWindowActive);
     bool newInstance = projectDialog.newInstance(db);
 
     if (newInstance) {
