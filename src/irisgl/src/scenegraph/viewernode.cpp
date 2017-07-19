@@ -69,6 +69,7 @@ float ViewerNode::getViewScale()
 
 void ViewerNode::submitRenderItems()
 {
+    /*
     renderItem->worldMatrix = this->globalTransform;
     scene->geometryRenderList->add(renderItem);
 
@@ -90,6 +91,7 @@ void ViewerNode::submitRenderItems()
 
     scene->geometryRenderList->add(leftHandenderItem);
     scene->geometryRenderList->add(rightHandRenderItem);
+    */
 }
 
 ViewerNodePtr ViewerNode::create()

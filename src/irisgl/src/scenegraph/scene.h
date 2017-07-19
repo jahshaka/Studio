@@ -52,6 +52,7 @@ public:
     QList<LightNodePtr> lights;
     QList<MeshNodePtr> meshes;
     QList<ParticleSystemNodePtr> particleSystems;
+    QList<ViewerNodePtr> viewers;
 
     MeshPtr skyMesh;
     Texture2DPtr skyTexture;

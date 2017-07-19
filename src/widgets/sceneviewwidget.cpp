@@ -223,6 +223,11 @@ void SceneViewWidget::renderScene()
 
         scene->update(dt);
 
+        // insert vr head
+        if (UiManager::sceneMode != SceneMode::PlayMode) {
+
+        }
+
         if (viewportMode == ViewportMode::Editor) {
             renderer->renderScene(dt, viewport);
         } else {
