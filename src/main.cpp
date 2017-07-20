@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include <QStyleFactory>
 #include <QSplashScreen>
 #include <QSurfaceFormat>
+#include <QThread>
 
 #include "mainwindow.h"
 #include "dialogs/infodialog.h"
@@ -68,6 +69,8 @@ int main(int argc, char *argv[])
     auto image = QPixmap(":/app/images/splashv2.jpg");
     splash.setPixmap(image);
     splash.show();
+
+    QThread::sleep(.9f);    // cool!
 
     Globals::appWorkingDir = QApplication::applicationDirPath();
 
