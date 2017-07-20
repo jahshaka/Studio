@@ -42,7 +42,7 @@ ProjectDialog::ProjectDialog(bool mainWindowActive, QDialog *parent) : QDialog(p
 {
     ui->setupUi(this);
 
-    this->setWindowTitle("Jahshaka VR");
+    this->setWindowTitle("Jahshaka");
 
 //    QFile fontFile(IrisUtils::getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
 //    if (fontFile.exists()) {
