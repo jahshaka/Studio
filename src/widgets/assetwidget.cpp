@@ -107,12 +107,14 @@ void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
     QDir dir(path);
     QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
     foreach (const QFileInfo &file, files) {
-        auto item = new QTreeWidgetItem();
-        item->setIcon(0, QIcon(":/app/icons/folder-symbol.svg"));
-        item->setData(0, Qt::DisplayRole, file.fileName());
-        item->setData(0, Qt::UserRole, file.absoluteFilePath());
-        parent->addChild(item);
-        updateTree(item, file.absoluteFilePath());
+        if (file.baseName() != "Metadata") {
+            auto item = new QTreeWidgetItem();
+            item->setIcon(0, QIcon(":/app/icons/folder-symbol.svg"));
+            item->setData(0, Qt::DisplayRole, file.fileName());
+            item->setData(0, Qt::UserRole, file.absoluteFilePath());
+            parent->addChild(item);
+            updateTree(item, file.absoluteFilePath());
+        }
     }
 }
 
@@ -152,7 +154,7 @@ void AssetWidget::walkFileSystem(QString folder, QString path)
             asset->thumbnail = pixmap;
 
             AssetManager::assets.append(asset);
-        } else {
+        } else {           
             auto thumb = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
             QPixmap pixmap = QPixmap::fromImage(*thumb->thumb);
 
@@ -224,7 +226,9 @@ void AssetWidget::updateAssetView(const QString &path)
     // set to new view path by itering path dir
     QDir dir(path);
     for (auto file : dir.entryList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
-        addItem(path + '/' + file);
+        if (file != "Metadata") {
+            addItem(path + '/' + file);
+        }
     }
 }
 

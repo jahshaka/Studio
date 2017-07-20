@@ -107,6 +107,11 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    QFont font;
+    font.setFamily(font.defaultFamily());
+    font.setPointSize(font.pointSize() * devicePixelRatio());
+    setFont(font);
+
     iris::Logger::getSingleton()->init(getAbsoluteAssetPath("log.txt"));
     createPostProcessDockWidget();
 
@@ -218,8 +223,7 @@ MainWindow::MainWindow(QWidget *parent) :
     //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
     ui->ToolBar->addWidget(vrButton);
 
-    ui->AnimationDock->hide();
-//    ui->PresetsDock->hide();
+    tabifyDockWidget(ui->AnimationDock, ui->AssetsDock);
 
     setupProjectDB();
     setupUndoRedo();
@@ -585,6 +589,26 @@ void MainWindow::setupFileMenu()
     connect(ui->actionDelete,   SIGNAL(triggered(bool)), this, SLOT(deleteProject()));
 
     connect(prefsDialog,  SIGNAL(PreferencesDialogClosed()), this, SLOT(updateSceneSettings()));
+
+    connect(ui->actionOutliner, &QAction::toggled, [this](bool set) {
+        ui->sceneHierarchyDock->setVisible(set);
+    });
+
+    connect(ui->actionProperties, &QAction::toggled, [this](bool set) {
+        ui->PropertiesDock->setVisible(set);
+    });
+
+    connect(ui->actionAnimation, &QAction::toggled, [this](bool set) {
+        ui->AnimationDock->setVisible(set);
+    });
+
+    connect(ui->actionAssets, &QAction::toggled, [this](bool set) {
+        ui->AssetsDock->setVisible(set);
+    });
+
+    connect(ui->actionPresets, &QAction::toggled, [this](bool set) {
+        ui->PresetsDock->setVisible(set);
+    });
 
     // until we decide how to manage scenes better
 //    ui->actionSave_As->setDisabled(true);
