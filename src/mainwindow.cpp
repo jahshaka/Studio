@@ -585,6 +585,26 @@ void MainWindow::setupFileMenu()
 
     connect(prefsDialog,  SIGNAL(PreferencesDialogClosed()), this, SLOT(updateSceneSettings()));
 
+    connect(ui->actionOutliner, &ui->actionOutliner->toggled, [this](bool set) {
+        ui->sceneHierarchyDock->setVisible(set);
+    });
+
+    connect(ui->actionProperties, &ui->actionProperties->toggled, [this](bool set) {
+        ui->PropertiesDock->setVisible(set);
+    });
+
+    connect(ui->actionAnimation, &ui->actionAnimation->toggled, [this](bool set) {
+        ui->AnimationDock->setVisible(set);
+    });
+
+    connect(ui->actionAssets, &ui->actionAssets->toggled, [this](bool set) {
+        ui->AssetsDock->setVisible(set);
+    });
+
+    connect(ui->actionPresets, &ui->actionPresets->toggled, [this](bool set) {
+        ui->PresetsDock->setVisible(set);
+    });
+
     // until we decide how to manage scenes better
 //    ui->actionSave_As->setDisabled(true);
 }
