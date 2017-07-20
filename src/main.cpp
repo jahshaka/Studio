@@ -65,12 +65,18 @@ int main(int argc, char *argv[])
     palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(135, 135, 135));
     app.setPalette(palette);
 
+//    QFont font;
+//    font.setFamily(font.defaultFamily());
+//    font.setPointSizeF(font.pointSizeF() + 2.f);
+//    app.setFont(font);
+//    QGuiApplication::setFont(font);
+
     QSplashScreen splash;
     auto image = QPixmap(":/app/images/splashv2.jpg");
     splash.setPixmap(image);
     splash.show();
 
-    QThread::sleep(.9f);    // cool!
+    QThread::sleep(4.9f);    // cool!
 
     Globals::appWorkingDir = QApplication::applicationDirPath();
 

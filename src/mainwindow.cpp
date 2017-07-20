@@ -107,6 +107,11 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    QFont font;
+    font.setFamily(font.defaultFamily());
+    font.setPointSize(font.pointSize() * devicePixelRatio());
+    setFont(font);
+
     iris::Logger::getSingleton()->init(getAbsoluteAssetPath("log.txt"));
     createPostProcessDockWidget();
 
@@ -585,23 +590,23 @@ void MainWindow::setupFileMenu()
 
     connect(prefsDialog,  SIGNAL(PreferencesDialogClosed()), this, SLOT(updateSceneSettings()));
 
-    connect(ui->actionOutliner, &ui->actionOutliner->toggled, [this](bool set) {
+    connect(ui->actionOutliner, &QAction::toggled, [this](bool set) {
         ui->sceneHierarchyDock->setVisible(set);
     });
 
-    connect(ui->actionProperties, &ui->actionProperties->toggled, [this](bool set) {
+    connect(ui->actionProperties, &QAction::toggled, [this](bool set) {
         ui->PropertiesDock->setVisible(set);
     });
 
-    connect(ui->actionAnimation, &ui->actionAnimation->toggled, [this](bool set) {
+    connect(ui->actionAnimation, &QAction::toggled, [this](bool set) {
         ui->AnimationDock->setVisible(set);
     });
 
-    connect(ui->actionAssets, &ui->actionAssets->toggled, [this](bool set) {
+    connect(ui->actionAssets, &QAction::toggled, [this](bool set) {
         ui->AssetsDock->setVisible(set);
     });
 
-    connect(ui->actionPresets, &ui->actionPresets->toggled, [this](bool set) {
+    connect(ui->actionPresets, &QAction::toggled, [this](bool set) {
         ui->PresetsDock->setVisible(set);
     });
 
