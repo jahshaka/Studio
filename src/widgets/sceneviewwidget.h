@@ -130,7 +130,7 @@ public:
     iris::SceneNodePtr activeDragNode;
     bool updateRPI(QVector3D pos, QVector3D r);
     bool doActiveObjectPicking(const QPointF& point);
-    void doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject = true, bool skipLights = false);
+    void doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject = true, bool skipLights = false, bool skipViewers = false);
 
 protected:
     void initializeGL();
@@ -152,6 +152,10 @@ private slots:
 
 private:
     void doLightPicking(const QVector3D& segStart,
+                        const QVector3D& segEnd,
+                        QList<PickingResult>& hitList);
+
+    void doViewerPicking(const QVector3D& segStart,
                         const QVector3D& segEnd,
                         QList<PickingResult>& hitList);
 

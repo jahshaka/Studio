@@ -649,7 +649,7 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 {
     Q_UNUSED(event);
 
-    float aspectRatio = ui->sceneContainer->width()/(float)ui->sceneContainer->height();
+    //float aspectRatio = ui->sceneContainer->width()/(float)ui->sceneContainer->height();
     //editorCam->lens()->setPerspectiveProjection(45.0f, aspectRatio, 0.1f, 1000.0f);
 }
 
@@ -1442,7 +1442,7 @@ void MainWindow::scaleGizmo()
 
 void MainWindow::onPlaySceneButton()
 {
-    if(ui->playSceneBtn->text() == "PLAY")
+    if(ui->playSceneBtn->text() == "PLAY SCENE")
     {
         //this->sceneView->startPlayingScene();
         UiManager::enterPlayMode();
@@ -1452,6 +1452,6 @@ void MainWindow::onPlaySceneButton()
     {
         //this->sceneView->stopPlayingScene();
         UiManager::enterEditMode();
-        ui->playSceneBtn->setText("PLAY");
+        ui->playSceneBtn->setText("PLAY SCENE");
     }
 }
