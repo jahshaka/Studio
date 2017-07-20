@@ -306,7 +306,8 @@ void SceneViewWidget::renderScene()
                 view->submitRenderItems();
         }
         // todo: ensure it doesnt display these shapes in play mode
-        addLightShapesToScene();
+        if (viewportMode != ViewportMode::VR || UiManager::sceneMode != SceneMode::PlayMode)
+            addLightShapesToScene();
 
         if (viewportMode == ViewportMode::Editor) {
             renderer->renderScene(dt, viewport);
