@@ -447,6 +447,7 @@ void AnimationWidget::showCurveWidget()
 {
     keyFrameWidget->hide();
     curveWidget->show();
+    ui->keylabelView->highlightDefaultProperty();
 }
 
 void AnimationWidget::hideCreateAnimWidget()

@@ -56,6 +56,9 @@ public:
     void setSceneNode(iris::SceneNodePtr node);
     void setActiveAnimation(iris::AnimationPtr anim);
 
+    // highlights first property if none is selected
+    void highlightDefaultProperty();
+
     // propName must be a name
     void addProperty(QString propName);
 

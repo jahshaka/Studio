@@ -70,6 +70,8 @@ public:
     int timeToPos(float timeInSeconds);
     float posToTime(int xpos);
 
+    void showEvent(QShowEvent* event);
+
 private:
     void drawGrid(QPainter& paint);
     void drawKeyFrames(QPainter& paint);

@@ -76,6 +76,15 @@ void KeyFrameLabelTreeWidget::setActiveAnimation(iris::AnimationPtr animation)
     }
 }
 
+void KeyFrameLabelTreeWidget::highlightDefaultProperty()
+{
+    if (ui->treeWidget->selectedItems().size() == 0) {
+        auto root = ui->treeWidget->invisibleRootItem();
+        if (root->childCount()!=0)
+            root->child(0)->setSelected(true);
+    }
+}
+
 void KeyFrameLabelTreeWidget::addProperty(QString propName)
 {
     auto prop = node->getAnimation()->properties[propName];

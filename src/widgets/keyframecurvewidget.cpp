@@ -562,3 +562,11 @@ float KeyFrameCurveWidget::posToTime(int xpos)
 {
     return animWidgetData->posToTime(xpos, this->geometry().width());
 }
+
+void KeyFrameCurveWidget::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent( event );
+
+    // highlight a keyframe if none is highlighted so curves can show
+
+}
