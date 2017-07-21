@@ -81,6 +81,7 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
     int widgetWidth = this->geometry().width();
     int widgetHeight = this->geometry().height();
     QPainter paint(this);
+    paint.setRenderHint(QPainter::Antialiasing, true);
 
     //black bg
     paint.fillRect(0,0,widgetWidth,widgetHeight,bgColor);
@@ -137,7 +138,7 @@ void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetIt
     auto data = item->data(0,Qt::UserRole).value<KeyFrameData>();
     auto height = tree->visualItemRect(item).height();
 
-    float penSize = 14;
+    float penSize = 7;
     float penSizeSquared = 7*7;
 
     QPen pen(QColor::fromRgb(255,255,255));
@@ -153,28 +154,34 @@ void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetIt
     highlightPen.setCapStyle(Qt::RoundCap);
     auto halfHeight = + height / 2.0f;
 
+    auto defaultBrush = QBrush(QColor::fromRgb(255, 255, 255), Qt::SolidPattern);
+    auto innerBrush = QBrush(QColor::fromRgb(155, 155, 155), Qt::SolidPattern);
+    auto highlightBrush = QBrush(QColor::fromRgb(155, 155, 155), Qt::SolidPattern);
+    paint.setPen(Qt::white);
+
     if (data.keyFrame != nullptr) {
         for(auto key:data.keyFrame->keys)
         {
             int xpos = this->timeToPos(key->time);
 
             float distSqrd = distanceSquared(xpos, yTop + halfHeight, mousePos.x(), mousePos.y());
+            auto point = QPoint(xpos, yTop + height / 2.0f);
 
             if(distSqrd < penSizeSquared)
             {
-                paint.setPen(highlightPen);
-                paint.drawPoint(xpos, yTop + height / 2.0f);
+                paint.setBrush(highlightBrush);
+                paint.drawEllipse(point, penSize, penSize);
 
-                paint.setPen(innerPen);
-                paint.drawPoint(xpos, yTop + height / 2.0f);
+                paint.setBrush(innerBrush);
+                paint.drawEllipse(point, penSize-2, penSize-2);
             }
             else
             {
-                paint.setPen(pen);
-                paint.drawPoint(xpos, yTop + height / 2.0f);
+                paint.setBrush(defaultBrush);
+                paint.drawEllipse(point, penSize, penSize);
 
-                paint.setPen(innerPen);
-                paint.drawPoint(xpos, yTop + height / 2.0f);
+                paint.setBrush(innerBrush);
+                paint.drawEllipse(point, penSize-2, penSize-2);
             }
         }
     } else {
