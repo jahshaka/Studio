@@ -225,6 +225,9 @@ MainWindow::MainWindow(QWidget *parent) :
 
     tabifyDockWidget(ui->AnimationDock, ui->AssetsDock);
 
+    restoreGeometry(settings->getValue("geometry", "").toByteArray());
+    restoreState(settings->getValue("windowState", "").toByteArray());
+
     setupProjectDB();
     setupUndoRedo();
 }
@@ -675,6 +678,13 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 
     //float aspectRatio = ui->sceneContainer->width()/(float)ui->sceneContainer->height();
     //editorCam->lens()->setPerspectiveProjection(45.0f, aspectRatio, 0.1f, 1000.0f);
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    settings->setValue("geometry", saveGeometry());
+    settings->setValue("windowState", saveState());
+    QMainWindow::closeEvent(event);
 }
 
 void MainWindow::stopAnimWidget()
