@@ -159,6 +159,7 @@ void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetIt
     auto highlightBrush = QBrush(QColor::fromRgb(155, 155, 155), Qt::SolidPattern);
     paint.setPen(Qt::white);
 
+
     if (data.keyFrame != nullptr) {
         for(auto key:data.keyFrame->keys)
         {

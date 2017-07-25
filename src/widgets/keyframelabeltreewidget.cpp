@@ -116,6 +116,7 @@ void KeyFrameLabelTreeWidget::addPropertyToTree(iris::PropertyAnim *prop)
         frameData.keyFrame = nullptr;
         frameData.propertyName = prop->getName();
         frameData.subPropertyName = "";
+        frameData.summaryKeys = calculateSummaryKeys(prop, frameData);
         treeItem->setData(0,Qt::UserRole,QVariant::fromValue(frameData));
 
         for (auto frame : frames) {
@@ -221,6 +222,30 @@ QTreeWidgetItem *KeyFrameLabelTreeWidget::getSelectedTreeItem()
         return nullptr;
 
     return items[0];
+}
+
+void KeyFrameLabelTreeWidget::calculateSummaryKeys(iris::PropertyAnim *prop, KeyFrameData &keyFrameData)
+{
+    // start fresh
+    keyFrameData.summaryKeys.clear();
+
+    auto frames = prop->getKeyFrames();
+
+    for ( auto frame : frames) {
+        auto keyFrame = frame.keyFrame;
+        for( auto key : keyFrame->keys) {
+            // add key to keyframe
+            auto& summaryKeys = keyFrameData.summaryKeys;
+            if (!summaryKeys.contains(key.time)) {
+                SummaryKey sumKey;
+                sumKey.propertyName = prop->getName();
+                sumKey.keys.append(key);
+                summaryKeys.insert(key.time, sumKey);
+            } else {
+                summaryKeys[key.time].keys.append(key);
+            }
+        }
+    }
 }
 
 void KeyFrameLabelTreeWidget::setAnimWidget(AnimationWidget *value)

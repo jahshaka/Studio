@@ -30,7 +30,14 @@ struct KeyFrameData
     QString propertyName;
     QString subPropertyName;
     iris::FloatKeyFrame* keyFrame;
+    QMap<float,SummaryKey> summaryKeys;
     //iris::PropertyAnim *prop;
+
+    KeyFrameData()
+    {
+        keyFrame = nullptr;
+        summaryKeys = nullptr;
+    }
 
     bool isSubProperty()
     {
@@ -41,6 +48,15 @@ struct KeyFrameData
     {
         return subPropertyName.isEmpty();
     }
+};
+
+struct SummaryKey
+{
+    QString propertyName;
+
+    // the time is the key here
+    QList<iris::FloatKey*> keys;
+
 };
 
 Q_DECLARE_METATYPE(KeyFrameData)
@@ -97,6 +113,8 @@ private:
     void parseKeyFramesToGroups(iris::KeyFrameSetPtr frameSet);
 
     void buildTreeFromKeyFrameGroups(QHash<QString,KeyFrameGroup*> groups);
+
+    void calculateSummaryKeys(iris::PropertyAnim *prop, KeyFrameData& keyFrameData);
 };
 
 #endif // KEYFRAMELABELTREEWIDGET_H
