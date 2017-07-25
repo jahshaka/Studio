@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/geometry/trimesh.h"
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/viewport.h"
+#include "../irisgl/src/graphics/renderlist.h"
 #include "../irisgl/src/graphics/utils/fullscreenquad.h"
 #include "../irisgl/src/vr/vrmanager.h"
 #include "../irisgl/src/vr/vrdevice.h"
@@ -48,6 +49,10 @@ For more information see the LICENSE file
 #include "../editor/scalegizmo.h"
 
 #include "../core/keyboardstate.h"
+
+#include "../irisgl/src/graphics/utils/shapehelper.h"
+#include "../irisgl/src/graphics/utils/linemeshbuilder.h"
+#include "../irisgl/src/materials/colormaterial.h"
 
 SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 {
@@ -121,6 +126,77 @@ void SceneViewWidget::initialize()
 
     // has to be initialized here since it loads assets
     vrCam = new EditorVrController();
+
+    initLightAssets();
+}
+
+void SceneViewWidget::initLightAssets()
+{
+    pointLightMesh = iris::ShapeHelper::createWireSphere(1.0f);
+    spotLightMesh = iris::ShapeHelper::createWireCone(1.0f);
+    dirLightMesh = createDirLightMesh();
+    lineMat = iris::ColorMaterial::create();
+}
+
+iris::MeshPtr SceneViewWidget::createDirLightMesh(float baseRadius)
+{
+    iris::LineMeshBuilder builder;
+
+    int divisions = 36;
+    float arcWidth = 360.0f/divisions;
+
+    // XZ plane
+    for(int i=0;i<divisions;i++)
+    {
+        float angle = i * arcWidth;
+        QVector3D a = QVector3D(qSin(qDegreesToRadians(angle)), 0, qCos(qDegreesToRadians(angle))) * baseRadius;
+
+        angle = (i+1) * arcWidth;
+        QVector3D b = QVector3D(qSin(qDegreesToRadians(angle)), 0, qCos(qDegreesToRadians(angle))) * baseRadius;
+
+        builder.addLine(a, b);
+    }
+
+    float halfSize = 0.5f;
+
+    builder.addLine(QVector3D(-halfSize, 0, -halfSize), QVector3D(-halfSize, -2, -halfSize));
+    builder.addLine(QVector3D(halfSize, 0, -halfSize), QVector3D(halfSize, -2, -halfSize));
+    builder.addLine(QVector3D(halfSize, 0, halfSize), QVector3D(halfSize, -2, halfSize));
+    builder.addLine(QVector3D(-halfSize, 0, halfSize), QVector3D(-halfSize, -2, halfSize));
+
+    return builder.build();
+}
+
+void SceneViewWidget::addLightShapesToScene()
+{
+    QMatrix4x4 mat;
+
+    for(auto light : scene->lights) {
+        if ( light->lightType == iris::LightType::Point) {
+            mat.setToIdentity();
+            mat.translate(light->getGlobalPosition());
+            mat.scale(light->distance);
+            scene->geometryRenderList->submitMesh(pointLightMesh, lineMat, mat);
+        }
+        else if ( light->lightType == iris::LightType::Spot) {
+            mat.setToIdentity();
+            mat.translate(light->getGlobalPosition());
+            mat.rotate(QQuaternion::fromRotationMatrix(light->getGlobalTransform().normalMatrix()));
+            auto radius = qCos(qDegreesToRadians(light->spotCutOff - 90)); //90 is max spot cutoff(180) / 2
+
+            mat.scale(radius, 1.0 - radius, radius);
+            mat.scale(light->distance);
+
+            scene->geometryRenderList->submitMesh(spotLightMesh, lineMat, mat);
+        }
+        else if ( light->lightType == iris::LightType::Directional) {
+            mat.setToIdentity();
+            mat.translate(light->getGlobalPosition());
+            mat.rotate(QQuaternion::fromRotationMatrix(light->getGlobalTransform().normalMatrix()));
+
+            scene->geometryRenderList->submitMesh(dirLightMesh, lineMat, mat);
+        }
+    }
 }
 
 void SceneViewWidget::setScene(iris::ScenePtr scene)
@@ -229,6 +305,10 @@ void SceneViewWidget::renderScene()
             for (auto view : scene->viewers)
                 view->submitRenderItems();
         }
+        // todo: ensure it doesnt display these shapes in play mode
+        //if (viewportMode != ViewportMode::VR || UiManager::sceneMode != SceneMode::PlayMode)
+        if (UiManager::sceneMode != SceneMode::PlayMode)
+            addLightShapesToScene();
 
         if (viewportMode == ViewportMode::Editor) {
             renderer->renderScene(dt, viewport);

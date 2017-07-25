@@ -79,4 +79,39 @@ MeshPtr ShapeHelper::createWireSphere(float radius)
     return builder.build();
 }
 
+MeshPtr ShapeHelper::createWireCone(float baseRadius)
+{
+    LineMeshBuilder builder;
+
+    int divisions = 36;
+    float arcWidth = 360.0f/divisions;
+
+    // XZ plane
+    for(int i=0;i<divisions;i++)
+    {
+        float angle = i * arcWidth;
+        QVector3D a = QVector3D(qSin(qDegreesToRadians(angle)), -1, qCos(qDegreesToRadians(angle))) * baseRadius;
+
+        angle = (i+1) * arcWidth;
+        QVector3D b = QVector3D(qSin(qDegreesToRadians(angle)), -1, qCos(qDegreesToRadians(angle))) * baseRadius;
+
+        builder.addLine(a, b);
+    }
+
+    // lines from base to center
+    divisions = 4;
+    arcWidth = 360.0f/divisions;
+    for(int i=0;i<divisions;i++)
+    {
+        float angle = i * arcWidth;
+        QVector3D a = QVector3D(qSin(qDegreesToRadians(angle)), -1, qCos(qDegreesToRadians(angle))) * baseRadius;
+
+        QVector3D b = QVector3D(0, 0, 0);
+
+        builder.addLine(a, b);
+    }
+
+    return builder.build();
+}
+
 }
