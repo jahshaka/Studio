@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QHash>
+#include <QMap>
 #include "../irisgl/src/irisglfwd.h"
 
 namespace Ui {
@@ -24,6 +25,14 @@ class KeyFrameGroup;
 class QTreeWidget;
 class QTreeWidgetItem;
 class AnimationWidget;
+
+struct SummaryKey
+{
+    QString propertyName;
+
+    // the time is the key here
+    QList<iris::FloatKey*> keys;
+};
 
 struct KeyFrameData
 {
@@ -36,7 +45,6 @@ struct KeyFrameData
     KeyFrameData()
     {
         keyFrame = nullptr;
-        summaryKeys = nullptr;
     }
 
     bool isSubProperty()
@@ -48,15 +56,6 @@ struct KeyFrameData
     {
         return subPropertyName.isEmpty();
     }
-};
-
-struct SummaryKey
-{
-    QString propertyName;
-
-    // the time is the key here
-    QList<iris::FloatKey*> keys;
-
 };
 
 Q_DECLARE_METATYPE(KeyFrameData)

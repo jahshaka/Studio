@@ -185,8 +185,32 @@ void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetIt
                 paint.drawEllipse(point, penSize-2, penSize-2);
             }
         }
-    } else {
-        paint.fillRect(0, yTop, this->width(), height, propColor);
+    } else if(data.isProperty()){ // draw summary keys
+        //paint.fillRect(0, yTop, this->width(), height, propColor);
+        for(auto keyTime:data.summaryKeys.keys())
+        {
+            int xpos = this->timeToPos(keyTime);
+
+            float distSqrd = distanceSquared(xpos, yTop + halfHeight, mousePos.x(), mousePos.y());
+            auto point = QPoint(xpos, yTop + height / 2.0f);
+
+            if(distSqrd < penSizeSquared)
+            {
+                paint.setBrush(highlightBrush);
+                paint.drawEllipse(point, penSize, penSize);
+
+                paint.setBrush(innerBrush);
+                paint.drawEllipse(point, penSize-2, penSize-2);
+            }
+            else
+            {
+                paint.setBrush(defaultBrush);
+                paint.drawEllipse(point, penSize, penSize);
+
+                paint.setBrush(innerBrush);
+                paint.drawEllipse(point, penSize-2, penSize-2);
+            }
+        }
     }
 
     QPen smallPen = QPen(QColor::fromRgb(55,55,55));
