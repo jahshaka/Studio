@@ -248,8 +248,46 @@ void KeyFrameLabelTreeWidget::calculateSummaryKeys(iris::PropertyAnim *prop, Key
     }
 }
 
+void KeyFrameLabelTreeWidget::recalcPropertySummaryKeys(QString name)
+{
+    auto prop = node->getAnimation()->getPropertyAnim(name);
+    auto frameData = getPropertyKeyFrameData(name);
+
+    calculateSummaryKeys(prop, frameData);
+    setPropertyKeyFrameData(name, frameData);
+}
+
 void KeyFrameLabelTreeWidget::setAnimWidget(AnimationWidget *value)
 {
     animWidget = value;
+}
+
+KeyFrameData KeyFrameLabelTreeWidget::getPropertyKeyFrameData(QString propName)
+{
+    for (int i=0; i<  ui->treeWidget->invisibleRootItem()->childCount(); i++) {
+
+        auto item = ui->treeWidget->invisibleRootItem()->child(i);
+        auto data = item->data(0, Qt::UserRole).value<KeyFrameData>();
+
+        if (data.propertyName == propName) {
+            return data;
+        }
+    }
+
+    // shouldnt be here
+    Q_ASSERT(false);
+}
+
+void KeyFrameLabelTreeWidget::setPropertyKeyFrameData(QString propName, KeyFrameData keyFrameData)
+{
+    for (int i=0; i<  ui->treeWidget->invisibleRootItem()->childCount(); i++) {
+
+        auto item = ui->treeWidget->invisibleRootItem()->child(i);
+        auto data = item->data(0, Qt::UserRole).value<KeyFrameData>();
+
+        if (data.propertyName == propName) {
+            item->setData(0, Qt::UserRole, QVariant::fromValue(keyFrameData));
+        }
+    }
 }
 

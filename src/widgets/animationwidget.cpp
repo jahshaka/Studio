@@ -410,6 +410,8 @@ void AnimationWidget::addPropertyKey(QAction *action)
         break;
     }
 
+    // recalc summary keys for this property
+    ui->keylabelView->recalcPropertySummaryKeys(animProp->name);
 
     this->repaintViews();
 }

@@ -80,6 +80,9 @@ public:
     QTreeWidget* getTree();
 
     void setAnimWidget(AnimationWidget *value);
+    KeyFrameData getPropertyKeyFrameData(QString propName);
+    void setPropertyKeyFrameData(QString propName, KeyFrameData keyFrameData);
+    void recalcPropertySummaryKeys(QString name);
 
 private:
     void addPropertyToTree(iris::PropertyAnim* prop);
@@ -114,6 +117,7 @@ private:
     void buildTreeFromKeyFrameGroups(QHash<QString,KeyFrameGroup*> groups);
 
     void calculateSummaryKeys(iris::PropertyAnim *prop, KeyFrameData& keyFrameData);
+
 };
 
 #endif // KEYFRAMELABELTREEWIDGET_H
