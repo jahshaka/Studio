@@ -554,6 +554,29 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
     return false;
 }
 
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    event->ignore();
+
+    if (UiManager::isUndoStackDirty()) {
+        QMessageBox::StandardButton reply;
+        reply = QMessageBox::question(this,
+                                      "Unsaved Changes",
+                                      "There are unsaved changes, save before closing?",
+                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+        if (reply == QMessageBox::Yes) {
+            saveScene();
+            event->accept();
+            this->close();
+        } else if (reply == QMessageBox::No) {
+            event->accept();
+            this->close();
+        }
+    } else {
+        event->accept();
+    }
+}
+
 void MainWindow::setupFileMenu()
 {
 //    auto recent = settings->getRecentlyOpenedScenes();
@@ -1315,7 +1338,7 @@ void MainWindow::newScene()
 
 void MainWindow::newSceneProject()
 {
-    if (!UiManager::isUndoStackDirty()) {
+    if (UiManager::isUndoStackDirty()) {
         QMessageBox::StandardButton reply;
         reply = QMessageBox::question(this,
                                       "Unsaved Changes",

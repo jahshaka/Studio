@@ -95,6 +95,8 @@ public:
     bool handleMouseWheel(QWheelEvent *event);
     bool eventFilter(QObject *obj, QEvent *event);
 
+    virtual void closeEvent(QCloseEvent *event);
+
     void setSettingsManager(SettingsManager* settings);
     SettingsManager* getSettingsManager();
 
