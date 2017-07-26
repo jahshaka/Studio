@@ -23,7 +23,7 @@ InfoDialog::InfoDialog(QWidget *parent) :
     ui(new Ui::InfoDialog)
 {
     ui->setupUi(this);
-    this->setWindowTitle("Jahshaka VR");
+    this->setWindowTitle("Jahshaka");
 
     /*
      * List Widget for sample files

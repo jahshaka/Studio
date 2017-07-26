@@ -120,7 +120,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->assetWidget->setAcceptDrops(true);
     ui->assetWidget->installEventFilter(this);
 
-    this->setWindowTitle("Jahshaka VR");
+    this->setWindowTitle("Jahshaka");
 
 //    QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
 //    if (fontFile.exists()) {
