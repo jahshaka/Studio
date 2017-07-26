@@ -83,8 +83,6 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
-    void setProjectTitle(QString projectTitle);
-
     void setSceneAnimTime(float time);
     void stopAnimWidget();
 
