@@ -119,9 +119,9 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addParticleSystem()));
 
     //MESHES
-    action = new QAction("Load Model", this);
-    addMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addMesh()));
+//    action = new QAction("Load Model", this);
+//    addMenu->addAction(action);
+//    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addMesh()));
 
     //VIEWPOINT
     /*

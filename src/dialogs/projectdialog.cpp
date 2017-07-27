@@ -194,7 +194,7 @@ void ProjectDialog::openProject()
 QString ProjectDialog::loadProjectDelegate()
 {
     auto projectFileName = QFileDialog::getOpenFileName(this, "Select Project File",
-                                                        nullptr, "Jahshaka Project File (*.project)");
+                                                        nullptr, "Jahshaka Project File (*.jah)");
     return projectFileName;
 }
 
