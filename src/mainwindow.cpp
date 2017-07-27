@@ -120,8 +120,6 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->assetWidget->setAcceptDrops(true);
     ui->assetWidget->installEventFilter(this);
 
-    this->setWindowTitle("Jahshaka VR");
-
 //    QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
 //    if (fontFile.exists()) {
 //        fontFile.open(QIODevice::ReadOnly);
@@ -153,8 +151,6 @@ MainWindow::MainWindow(QWidget *parent) :
     // TIMER
     timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(updateAnim()));
-
-    setProjectTitle(Globals::project->getProjectName());
 
     // initialzie scene view
     //sceneView = new SceneViewWidget(this);
@@ -561,6 +557,29 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
     return false;
 }
 
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    event->ignore();
+
+    if (UiManager::isUndoStackDirty()) {
+        QMessageBox::StandardButton reply;
+        reply = QMessageBox::question(this,
+                                      "Unsaved Changes",
+                                      "There are unsaved changes, save before closing?",
+                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+        if (reply == QMessageBox::Yes) {
+            saveScene();
+            event->accept();
+            this->close();
+        } else if (reply == QMessageBox::No) {
+            event->accept();
+            this->close();
+        }
+    } else {
+        event->accept();
+    }
+}
+
 void MainWindow::setupFileMenu()
 {
 //    auto recent = settings->getRecentlyOpenedScenes();
@@ -643,11 +662,6 @@ void MainWindow::createPostProcessDockWidget()
 
 }
 
-void MainWindow::setProjectTitle(QString projectTitle)
-{
-    this->setWindowTitle(projectTitle + " - Jahshaka");
-}
-
 void MainWindow::sceneTreeCustomContextMenu(const QPoint& pos)
 {
 }
@@ -700,14 +714,31 @@ void MainWindow::setupProjectDB()
 void MainWindow::setupUndoRedo()
 {
     undoStack = new QUndoStack(this);
-    UiManager::undoStack = undoStack;
+    UiManager::setUndoStack(undoStack);
+    UiManager::mainWindow = this;
 
-    connect(ui->actionUndo, SIGNAL(triggered(bool)), this, SLOT(undo()));
-    connect(ui->actionEditUndo, SIGNAL(triggered(bool)), this, SLOT(undo()));
+    connect(ui->actionUndo, &QAction::triggered, [this]() {
+        undo();
+        UiManager::updateWindowTitle();
+    });
+
+    connect(ui->actionEditUndo, &QAction::triggered, [this]() {
+        undo();
+        UiManager::updateWindowTitle();
+    });
+
     ui->actionEditUndo->setShortcuts(QKeySequence::Undo);
 
-    connect(ui->actionRedo, SIGNAL(triggered(bool)), this, SLOT(redo()));
-    connect(ui->actionEditRedo, SIGNAL(triggered(bool)), this, SLOT(redo()));
+    connect(ui->actionRedo, &QAction::triggered, [this]() {
+        redo();
+        UiManager::updateWindowTitle();
+    });
+
+    connect(ui->actionEditRedo, &QAction::triggered, [this]() {
+        redo();
+        UiManager::updateWindowTitle();
+    });
+
     ui->actionEditRedo->setShortcuts(QKeySequence::Redo);
 }
 
@@ -794,7 +825,7 @@ void MainWindow::openProject(QString filename, bool startupLoad)
     db->initializeDatabase(filename);
 
     Globals::project->setFilePath(filename);
-    this->setProjectTitle(Globals::project->getProjectName());
+    UiManager::updateWindowTitle();
 
     auto postMan = sceneView->getRenderer()->getPostProcessManager();
     postMan->clearPostProcesses();
@@ -1203,7 +1234,7 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
     sceneNodeSelected(sceneNode);
     */
     auto cmd = new AddSceneNodeCommand(this, scene->getRootNode(), sceneNode);
-    UiManager::undoStack->push(cmd);
+    UiManager::pushUndoStack(cmd);
 }
 
 void MainWindow::repopulateSceneTree()
@@ -1234,7 +1265,7 @@ void MainWindow::deleteNode()
         sceneView->hideGizmo();
         */
         auto cmd = new DeleteSceneNodeCommand(this, activeSceneNode->parent, activeSceneNode);
-        UiManager::undoStack->push(cmd);
+        UiManager::pushUndoStack(cmd);
     }
 }
 
@@ -1317,7 +1348,7 @@ void MainWindow::newScene()
 
 void MainWindow::newSceneProject()
 {
-    if (!UiManager::undoStack->isClean()) {
+    if (UiManager::isUndoStackDirty()) {
         QMessageBox::StandardButton reply;
         reply = QMessageBox::question(this,
                                       "Unsaved Changes",
@@ -1407,7 +1438,7 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 //                       sceneView->getRenderer()->getPostProcessManager(),
 //                       sceneView->getEditorData());
 
-    this->setProjectTitle(Globals::project->getProjectName());
+    UiManager::updateWindowTitle();
 //    settings->addRecentlyOpenedScene(str);
 
     delete writer;

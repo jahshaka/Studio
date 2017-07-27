@@ -3,6 +3,7 @@
 
 class AnimationWidget;
 class QUndoStack;
+class QUndoCommand;
 class MainWindow;
 class SceneViewWidget;
 
@@ -15,7 +16,6 @@ enum class SceneMode
 class UiManager
 {
 public:
-    static QUndoStack* undoStack;
     static AnimationWidget* animationWidget;
     static SceneViewWidget* sceneViewWidget;
 
@@ -28,8 +28,18 @@ public:
     static void enterPlayMode();
     static void enterEditMode();
 
+    static MainWindow *mainWindow;
+    static void updateWindowTitle();
+
+    static bool isUndoStackDirty();
+    static void setUndoStack(QUndoStack*);
+    static void pushUndoStack(QUndoCommand*);
+    static void popUndoStack();
+
     static SceneMode sceneMode;
 
+private:
+    static QUndoStack* undoStack;
 };
 
 #endif // UIMANAGER_H

@@ -208,7 +208,7 @@ public:
             auto endTransform = lastSelectedNode->getLocalTransform();
             // reset the transform because the command will re-apply the transform
             lastSelectedNode->setLocalTransform(hitTransform);
-            UiManager::undoStack->push(new TransformSceneNodeCommand(lastSelectedNode, endTransform));
+            UiManager::pushUndoStack(new TransformSceneNodeCommand(lastSelectedNode, endTransform));
         }
     }
 

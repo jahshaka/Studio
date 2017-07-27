@@ -83,8 +83,6 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
-    void setProjectTitle(QString projectTitle);
-
     void setSceneAnimTime(float time);
     void stopAnimWidget();
 
@@ -96,6 +94,8 @@ public:
     bool handleMouseMove(QMouseEvent *event);
     bool handleMouseWheel(QWheelEvent *event);
     bool eventFilter(QObject *obj, QEvent *event);
+
+    virtual void closeEvent(QCloseEvent *event);
 
     void setSettingsManager(SettingsManager* settings);
     SettingsManager* getSettingsManager();
