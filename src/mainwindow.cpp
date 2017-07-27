@@ -578,6 +578,9 @@ void MainWindow::closeEvent(QCloseEvent *event)
     } else {
         event->accept();
     }
+
+    settings->setValue("geometry", saveGeometry());
+    settings->setValue("windowState", saveState());
 }
 
 void MainWindow::setupFileMenu()
@@ -692,13 +695,6 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 
     //float aspectRatio = ui->sceneContainer->width()/(float)ui->sceneContainer->height();
     //editorCam->lens()->setPerspectiveProjection(45.0f, aspectRatio, 0.1f, 1000.0f);
-}
-
-void MainWindow::closeEvent(QCloseEvent *event)
-{
-    settings->setValue("geometry", saveGeometry());
-    settings->setValue("windowState", saveState());
-    QMainWindow::closeEvent(event);
 }
 
 void MainWindow::stopAnimWidget()

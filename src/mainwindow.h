@@ -152,7 +152,6 @@ private:
     void setupDefaultScene();
 
     void resizeEvent(QResizeEvent* event);
-    void closeEvent(QCloseEvent* event);
 
     QIcon getIconFromSceneNodeType(SceneNodeType type);
 
