@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QVector2D>
 #include <QSharedPointer>
 #include "../irisgl/src/irisglfwd.h"
+#include "keyframelabeltreewidget.h"
 
 namespace iris
 {
@@ -32,6 +33,47 @@ class KeyFrameLabelTreeWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
 class AnimationWidgetData;
+
+enum class DopeKeyType
+{
+    Null,
+    FloatKey,
+    SummaryKey
+};
+
+struct DopeKey
+{
+    DopeKeyType keyType;
+    iris::FloatKey* floatKey;
+    SummaryKey summaryKey;
+
+    DopeKey()
+    {
+        None;
+    }
+
+    explicit DopeKey(iris::FloatKey* floatKey)
+    {
+        this->floatKey = floatKey;
+        keyType = DopeKeyType::FloatKey;
+    }
+
+    explicit DopeKey(SummaryKey summaryKey)
+    {
+        this->summaryKey = summaryKey;
+        keyType = DopeKeyType::FloatKey;
+    }
+
+    bool isNull()
+    {
+        return keyType = DopeKeyType::Null;
+    }
+
+    static DopeKey Null()
+    {
+        return DopeKey();
+    }
+};
 
 class KeyFrameWidget:public QWidget
 {
@@ -62,7 +104,8 @@ private:
     QPoint mousePos;
     QPoint clickPos;
 
-    iris::FloatKey* selectedKey;
+    //iris::FloatKey* selectedKey;
+    DopeKey selectedKey;
 
     bool leftButtonDown;
     bool middleButtonDown;
@@ -109,7 +152,8 @@ private:
     float posToTime(int xpos);
     int timeToPos(float timeInSeconds);
 
-    iris::FloatKey* getSelectedKey(int x,int y);
+    DopeKey getSelectedKey(int x,int y);
+    DopeKey getSelectedKey(QTreeWidget* item,QTreeWidgetItem* item, int& yTop);
 };
 
 #endif // KEYFRAMEWIDGET_H

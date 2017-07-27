@@ -378,7 +378,7 @@ float KeyFrameWidget::distanceSquared(float x1,float y1,float x2,float y2)
     return dx*dx + dy*dy;
 }
 
-iris::FloatKey* KeyFrameWidget::getSelectedKey(int x,int y)
+DopeKey KeyFrameWidget::getSelectedKey(int x,int y)
 {
     /*
     if(!obj)
@@ -405,7 +405,64 @@ iris::FloatKey* KeyFrameWidget::getSelectedKey(int x,int y)
     }
     */
 
-    return nullptr;
+    int widgetWidth = this->geometry().width();
+    int widgetHeight = this->geometry().height();
+
+    auto mousePos = QVector2D(x, y);
+    //qDebug() << mousePos;
+
+    for( int i = 0; i < tree->invisibleRootItem()->childCount(); ++i ) {
+        auto item = tree->invisibleRootItem()->child(i);
+
+        auto dopeKey = getSelectedKey(tree, item, top );
+        return dopeKey;
+    }
+
+    return DopeKey::Null();
+}
+
+DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* item,QTreeWidgetItem *item, int &yTop)
+{
+    auto penSizeSquared = 7*7;
+
+    auto data = item->data(0,Qt::UserRole).value<KeyFrameData>();
+    auto height = tree->visualItemRect(item).height();
+
+    if (data.keyFrame != nullptr) {
+        for(auto key:data.keyFrame->keys)
+        {
+            int xpos = this->timeToPos(key->time);
+
+            auto point = QPoint(xpos, yTop + height / 2.0f);
+            if(point.distanceToPoint(mousePos) <= keyPointRadius)
+                return DopeKey(key);
+        }
+    } else if(data.isProperty()){ // draw summary keys
+        //paint.fillRect(0, yTop, this->width(), height, propColor);
+        for(auto keyTime:data.summaryKeys.keys())
+        {
+            int xpos = this->timeToPos(keyTime);
+
+            auto point = QPoint(xpos, yTop + height / 2.0f);
+            if(point.distanceToPoint(mousePos) <= keyPointRadius)
+                return DopeKey(data.summaryKeys[keyTime]);
+
+        }
+    }
+
+    yTop += height;
+
+    if (item->isExpanded()) {
+        for( int i = 0; i < item->childCount(); ++i ) {
+            auto childItem = item->child(i);
+
+            auto key = getSelectedKey(tree, childItem, yTop );
+            if (key)
+                return key;
+        }
+    }
+
+    return DopeKey::Null();
 }
 
 void KeyFrameWidget::setLabelWidget(KeyFrameLabelTreeWidget *value)
