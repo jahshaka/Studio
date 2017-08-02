@@ -319,11 +319,12 @@ void KeyFrameWidget::mouseReleaseEvent(QMouseEvent* evt)
 
 void KeyFrameWidget::mouseMoveEvent(QMouseEvent* evt)
 {
-    if(leftButtonDown && selectedKey!=nullptr)
+    if(leftButtonDown && !selectedKey.isNull())
     {
         //key dragging
         auto timeDiff = posToTime(evt->x())-posToTime(mousePos.x());
-        selectedKey->time+=timeDiff;
+        selectedKey.move(timeDiff);
+        this->repaint();
     }
     else if(leftButtonDown)
     {
@@ -411,6 +412,8 @@ DopeKey KeyFrameWidget::getSelectedKey(int x,int y)
     auto mousePos = QVector2D(x, y);
     //qDebug() << mousePos;
 
+    auto top = 0;
+    auto tree = labelWidget->getTree();
     for( int i = 0; i < tree->invisibleRootItem()->childCount(); ++i ) {
         auto item = tree->invisibleRootItem()->child(i);
 
@@ -421,9 +424,9 @@ DopeKey KeyFrameWidget::getSelectedKey(int x,int y)
     return DopeKey::Null();
 }
 
-DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* item,QTreeWidgetItem *item, int &yTop)
+DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* tree,QTreeWidgetItem *item, int &yTop)
 {
-    auto penSizeSquared = 7*7;
+    auto keyPointRadius = 7*7;
 
     auto data = item->data(0,Qt::UserRole).value<KeyFrameData>();
     auto height = tree->visualItemRect(item).height();
@@ -433,8 +436,8 @@ DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* item,QTreeWidgetItem *item, 
         {
             int xpos = this->timeToPos(key->time);
 
-            auto point = QPoint(xpos, yTop + height / 2.0f);
-            if(point.distanceToPoint(mousePos) <= keyPointRadius)
+            auto point = QVector2D(xpos, yTop + height / 2.0f);
+            if(point.distanceToPoint(QVector2D(mousePos)) <= keyPointRadius)
                 return DopeKey(key);
         }
     } else if(data.isProperty()){ // draw summary keys
@@ -443,8 +446,8 @@ DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* item,QTreeWidgetItem *item, 
         {
             int xpos = this->timeToPos(keyTime);
 
-            auto point = QPoint(xpos, yTop + height / 2.0f);
-            if(point.distanceToPoint(mousePos) <= keyPointRadius)
+            auto point = QVector2D(xpos, yTop + height / 2.0f);
+            if(point.distanceToPoint(QVector2D(mousePos)) <= keyPointRadius)
                 return DopeKey(data.summaryKeys[keyTime]);
 
         }
@@ -457,7 +460,7 @@ DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* item,QTreeWidgetItem *item, 
             auto childItem = item->child(i);
 
             auto key = getSelectedKey(tree, childItem, yTop );
-            if (key)
+            if (!key.isNull())
                 return key;
         }
     }
@@ -468,4 +471,14 @@ DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* item,QTreeWidgetItem *item, 
 void KeyFrameWidget::setLabelWidget(KeyFrameLabelTreeWidget *value)
 {
     labelWidget = value;
+}
+
+void DopeKey::move(float timeIncr)
+{
+    if (keyType == DopeKeyType::FloatKey)
+        floatKey->time += timeIncr;
+    else if(keyType == DopeKeyType::SummaryKey) {
+        for(auto key : summaryKey.keys)
+            key->time += timeIncr;
+    }
 }

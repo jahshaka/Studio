@@ -9,6 +9,8 @@ namespace Ui {
 class KeyFrameCurveWidget;
 }
 
+class QTreeWidgetItems;
+
 class KeyFrameLabelTreeWidget;
 class AnimationWidgetData;
 
@@ -79,7 +81,6 @@ private:
     void drawKeyHandles(QPainter& paint);
 
     iris::FloatKey* getKeyAt(int x, int y);
-    iris::FloatKey* getKeyAt(QTreewidgetItem* item, int& yTop);
     QPoint getLeftTangentHandlePoint(iris::FloatKey* key);
     QPoint getRightTangentHandlePoint(iris::FloatKey* key);
     QPoint getKeyFramePoint(iris::FloatKey* key);

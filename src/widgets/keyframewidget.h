@@ -44,16 +44,18 @@ enum class DopeKeyType
 struct DopeKey
 {
     DopeKeyType keyType;
-    iris::FloatKey* floatKey;
+    iris::FloatKey* floatKey = nullptr;
     SummaryKey summaryKey;
 
     DopeKey()
     {
-        None;
+        keyType = DopeKeyType::Null;
     }
 
     explicit DopeKey(iris::FloatKey* floatKey)
     {
+        Q_ASSERT(floatKey!=nullptr);
+
         this->floatKey = floatKey;
         keyType = DopeKeyType::FloatKey;
     }
@@ -61,12 +63,14 @@ struct DopeKey
     explicit DopeKey(SummaryKey summaryKey)
     {
         this->summaryKey = summaryKey;
-        keyType = DopeKeyType::FloatKey;
+        keyType = DopeKeyType::SummaryKey;
     }
+
+    void move(float timeIncr);
 
     bool isNull()
     {
-        return keyType = DopeKeyType::Null;
+        return keyType == DopeKeyType::Null;
     }
 
     static DopeKey Null()
@@ -153,7 +157,7 @@ private:
     int timeToPos(float timeInSeconds);
 
     DopeKey getSelectedKey(int x,int y);
-    DopeKey getSelectedKey(QTreeWidget* item,QTreeWidgetItem* item, int& yTop);
+    DopeKey getSelectedKey(QTreeWidget* tree,QTreeWidgetItem* item, int& yTop);
 };
 
 #endif // KEYFRAMEWIDGET_H
