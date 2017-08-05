@@ -71,9 +71,9 @@ void PostProcessManager::blit(iris::Texture2DPtr source, iris::Texture2DPtr dest
         source->bind(0);
 
     if (shader)
-        fsQuad->draw(gl, shader);
+        fsQuad->draw(shader);
     else
-        fsQuad->draw(gl);
+        fsQuad->draw();
 
     renderTarget->unbind();
     renderTarget->clearTextures();

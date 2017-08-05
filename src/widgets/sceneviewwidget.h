@@ -85,6 +85,7 @@ class SceneViewWidget : public QOpenGLWidget,
     iris::CameraNodePtr viewerCamera;
     iris::RenderTargetPtr viewerRT;
     iris::Texture2DPtr viewerTex;
+    iris::FullScreenQuad* viewerQuad;
 public:
     iris::CameraNodePtr editorCam;
 

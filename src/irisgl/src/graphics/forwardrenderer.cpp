@@ -186,10 +186,11 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
     // draw fs quad
     rt->bind();
     gl->glViewport(0, 0, rt->getWidth(), rt->getHeight());
+    gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     gl->glActiveTexture(GL_TEXTURE0);
 
     postContext->finalTexture->bind();
-    fsQuad->draw(gl);
+    fsQuad->draw();
     gl->glBindTexture(GL_TEXTURE_2D, 0);
     rt->unbind();
 
@@ -283,7 +284,7 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     gl->glActiveTexture(GL_TEXTURE0);
     //sceneRenderTexture->bind();
     postContext->finalTexture->bind();
-    fsQuad->draw(gl);
+    fsQuad->draw();
     gl->glBindTexture(GL_TEXTURE_2D, 0);
     //perfTimer->end("render_post");
 
