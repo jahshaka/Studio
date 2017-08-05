@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/viewport.h"
 #include "../irisgl/src/graphics/renderlist.h"
+#include "../irisgl/src/graphics/rendertarget.h"
 #include "../irisgl/src/graphics/utils/fullscreenquad.h"
 #include "../irisgl/src/vr/vrmanager.h"
 #include "../irisgl/src/vr/vrdevice.h"
@@ -253,6 +254,11 @@ void SceneViewWidget::initializeGL()
     initialize();
     fsQuad = new iris::FullScreenQuad();
 
+    viewerCamera = iris::CameraNode::create();
+    viewerRT = iris::RenderTarget::create(500, 500);
+    viewerTex = iris::Texture2D::create(500, 500);
+    viewerRT->addTexture(viewerTex);
+
     emit initializeGraphics(this, this);
 
     auto timer = new QTimer(this);
@@ -309,6 +315,14 @@ void SceneViewWidget::renderScene()
         //if (viewportMode != ViewportMode::VR || UiManager::sceneMode != SceneMode::PlayMode)
         if (UiManager::sceneMode != SceneMode::PlayMode)
             addLightShapesToScene();
+
+        // render thumbnail to texture
+        if (!!selectedNode) {
+            if (selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
+                viewerCamera->setLocalTransform(selectedNode->getGlobalTransform());
+                renderer->renderSceneToRenderTarget(viewerRT, viewerCamera);
+            }
+        }
 
         if (viewportMode == ViewportMode::Editor) {
             renderer->renderScene(dt, viewport);

@@ -121,10 +121,9 @@ ForwardRendererPtr ForwardRenderer::create()
     return ForwardRendererPtr(new ForwardRenderer());
 }
 
-void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, bool clearRenderLists)
+void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePtr cam, bool clearRenderLists)
 {
     auto ctx = QOpenGLContext::currentContext();
-    auto cam = scene->camera;
 
     // STEP 1: RENDER SCENE
     renderData->scene = scene;

@@ -80,6 +80,11 @@ class SceneViewWidget : public QOpenGLWidget,
     ViewportMode viewportMode;
 
     QElapsedTimer* elapsedTimer;
+
+    // for displaying thumbnail of viewer
+    iris::CameraNodePtr viewerCamera;
+    iris::RenderTargetPtr viewerRT;
+    iris::Texture2DPtr viewerTex;
 public:
     iris::CameraNodePtr editorCam;
 
