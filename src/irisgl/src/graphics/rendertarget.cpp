@@ -6,6 +6,16 @@
 namespace iris
 {
 
+int RenderTarget::getWidth() const
+{
+    return width;
+}
+
+int RenderTarget::getHeight() const
+{
+    return height;
+}
+
 RenderTarget::RenderTarget(int width, int height):
     width(width),
     height(height)
