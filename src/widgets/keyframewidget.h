@@ -126,6 +126,13 @@ private:
     KeyFrameLabelTreeWidget *labelWidget;
     AnimationWidgetData* animWidgetData;
 
+    // pens and brushes
+    QBrush defaultBrush;
+    QBrush innerBrush;
+    QBrush highlightBrush;
+
+    int keyPointSize;
+
 public:
     KeyFrameWidget(QWidget* parent);
 
@@ -147,6 +154,7 @@ public:
     void wheelEvent(QWheelEvent* evt);
     //void resizeEvent(QResizeEvent* event);
     void paintEvent(QPaintEvent *painter);
+    void drawPoint(QPainter& paint, QPoint point, bool isHighlight = false);
 
     void setLabelWidget(KeyFrameLabelTreeWidget *value);
 

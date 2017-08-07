@@ -62,6 +62,12 @@ KeyFrameWidget::KeyFrameWidget(QWidget* parent):
 
     labelWidget = nullptr;
     animWidgetData = nullptr;
+
+    defaultBrush = QBrush(QColor::fromRgb(255, 255, 255), Qt::SolidPattern);
+    innerBrush = QBrush(QColor::fromRgb(155, 155, 155), Qt::SolidPattern);
+    highlightBrush = QBrush(QColor::fromRgb(155, 155, 155), Qt::SolidPattern);
+
+    keyPointSize = 7;
 }
 
 void KeyFrameWidget::setSceneNode(iris::SceneNodePtr node)
@@ -72,6 +78,7 @@ void KeyFrameWidget::setSceneNode(iris::SceneNodePtr node)
 void KeyFrameWidget::adjustLength()
 {
 }
+
 
 void KeyFrameWidget::paintEvent(QPaintEvent *painter)
 {
@@ -101,22 +108,6 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
     int ypos = 0;
 
     if (labelWidget != nullptr) {
-        /*
-        auto frameSet = obj->animation->keyFrameSet;
-
-        for (auto frame:frameSet->keyFrames) {
-            drawFrame(paint,frame,ypos+=frameHeight);
-        }
-        */
-        /*
-        auto labels = labelWidget->getLabels();
-        for (auto label : labels) {
-            drawFrame(paint, label->getKeyFrame(),ypos,label->height());
-
-            ypos+=label->height();
-        }
-        */
-
         auto top = 0;
         auto tree = labelWidget->getTree();
         for( int i = 0; i < tree->invisibleRootItem()->childCount(); ++i ) {
@@ -135,32 +126,32 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
 
 }
 
+void KeyFrameWidget::drawPoint(QPainter& paint, QPoint point, bool isHighlight)
+{
+    if (isHighlight) {
+        paint.setPen(QColor::fromRgb(255, 255, 255));
+        paint.setBrush(highlightBrush);
+        paint.drawEllipse(point, keyPointSize, keyPointSize);
+
+        paint.setBrush(innerBrush);
+        paint.drawEllipse(point, keyPointSize-2, keyPointSize-2);
+    } else {
+        paint.setPen(Qt::white);
+        paint.setBrush(defaultBrush);
+        paint.drawEllipse(point, keyPointSize, keyPointSize);
+
+        paint.setBrush(innerBrush);
+        paint.drawEllipse(point, keyPointSize-2, keyPointSize-2);
+    }
+}
+
 void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetItem* item, int& yTop)
 {
     auto data = item->data(0,Qt::UserRole).value<KeyFrameData>();
     auto height = tree->visualItemRect(item).height();
 
-    float penSize = 7;
-    float penSizeSquared = 7*7;
-
-    QPen pen(QColor::fromRgb(255,255,255));
-    pen.setWidth(penSize);
-    pen.setCapStyle(Qt::RoundCap);
-
-    QPen innerPen(QColor::fromRgb(155,155,155));
-    innerPen.setWidth(penSize-4);
-    innerPen.setCapStyle(Qt::RoundCap);
-
-    QPen highlightPen(QColor::fromRgb(100,100,100));
-    highlightPen.setWidth(penSize);
-    highlightPen.setCapStyle(Qt::RoundCap);
+    float penSizeSquared = keyPointSize * keyPointSize;
     auto halfHeight = + height / 2.0f;
-
-    auto defaultBrush = QBrush(QColor::fromRgb(255, 255, 255), Qt::SolidPattern);
-    auto innerBrush = QBrush(QColor::fromRgb(155, 155, 155), Qt::SolidPattern);
-    auto highlightBrush = QBrush(QColor::fromRgb(155, 155, 155), Qt::SolidPattern);
-    paint.setPen(Qt::white);
-
 
     if (data.keyFrame != nullptr) {
         for(auto key:data.keyFrame->keys)
@@ -172,19 +163,11 @@ void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetIt
 
             if(distSqrd < penSizeSquared)
             {
-                paint.setBrush(highlightBrush);
-                paint.drawEllipse(point, penSize, penSize);
-
-                paint.setBrush(innerBrush);
-                paint.drawEllipse(point, penSize-2, penSize-2);
+                drawPoint(paint, point, true);
             }
             else
             {
-                paint.setBrush(defaultBrush);
-                paint.drawEllipse(point, penSize, penSize);
-
-                paint.setBrush(innerBrush);
-                paint.drawEllipse(point, penSize-2, penSize-2);
+                drawPoint(paint, point);
             }
         }
     } else if(data.isProperty()){ // draw summary keys
@@ -198,26 +181,14 @@ void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetIt
 
             if(distSqrd < penSizeSquared)
             {
-                paint.setBrush(highlightBrush);
-                paint.drawEllipse(point, penSize, penSize);
-
-                paint.setBrush(innerBrush);
-                paint.drawEllipse(point, penSize-2, penSize-2);
+                drawPoint(paint, point, true);
             }
             else
             {
-                paint.setBrush(defaultBrush);
-                paint.drawEllipse(point, penSize, penSize);
-
-                paint.setBrush(innerBrush);
-                paint.drawEllipse(point, penSize-2, penSize-2);
+                drawPoint(paint, point);
             }
         }
     }
-
-    QPen smallPen = QPen(QColor::fromRgb(55,55,55));
-    paint.setPen(smallPen);
-    paint.drawLine(0, yTop + height, this->width(), yTop + height);
 
     yTop += height;
 
@@ -389,30 +360,6 @@ float KeyFrameWidget::distanceSquared(float x1,float y1,float x2,float y2)
 
 DopeKey KeyFrameWidget::getSelectedKey(int x,int y)
 {
-    /*
-    if(!obj)
-        return nullptr;
-
-    float penSizeSquared = 7*7;
-
-    int frameHeight = 20;
-    int ypos = -20;
-    for(auto keyFrame:obj->animation->keyFrameSet->keyFrames)
-    {
-        ypos+=frameHeight;
-        for(auto key:keyFrame->keys)
-        {
-            int xpos = this->timeToPos(key->time);
-
-            float distSqrd = distanceSquared(xpos,ypos+10,x,y);
-
-            if(distSqrd < penSizeSquared)
-            {
-                return key;
-            }
-        }
-    }
-    */
 
     int widgetWidth = this->geometry().width();
     int widgetHeight = this->geometry().height();
@@ -434,7 +381,7 @@ DopeKey KeyFrameWidget::getSelectedKey(int x,int y)
 
 DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* tree,QTreeWidgetItem *item, int &yTop)
 {
-    auto keyPointRadius = 7;//*7;
+    //auto keyPointRadius = 7;//*7;
 
     auto data = item->data(0,Qt::UserRole).value<KeyFrameData>();
     auto height = tree->visualItemRect(item).height();
@@ -445,7 +392,7 @@ DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* tree,QTreeWidgetItem *item, 
             int xpos = this->timeToPos(key->time);
 
             auto point = QVector2D(xpos, yTop + height / 2.0f);
-            if(point.distanceToPoint(QVector2D(mousePos)) <= keyPointRadius)
+            if(point.distanceToPoint(QVector2D(mousePos)) <= keyPointSize)
                 return DopeKey(key, data.propertyName, data.subPropertyName);
         }
     } else if(data.isProperty()){ // draw summary keys
@@ -455,7 +402,7 @@ DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* tree,QTreeWidgetItem *item, 
             int xpos = this->timeToPos(keyTime);
 
             auto point = QVector2D(xpos, yTop + height / 2.0f);
-            if(point.distanceToPoint(QVector2D(mousePos)) <= keyPointRadius)
+            if(point.distanceToPoint(QVector2D(mousePos)) <= keyPointSize)
                 return DopeKey(data.summaryKeys[keyTime], data.propertyName, data.subPropertyName);
 
         }
