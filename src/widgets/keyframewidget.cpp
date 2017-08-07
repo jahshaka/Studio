@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/keyframeset.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/animation.h"
+#include "../irisgl/src/animation/propertyanim.h"
 #include "keyframewidget.h"
 #include "keyframelabelwidget.h"
 #include "keyframelabeltreewidget.h"
@@ -35,6 +36,34 @@ For more information see the LICENSE file
 void KeyFrameWidget::setAnimWidgetData(AnimationWidgetData *value)
 {
     animWidgetData = value;
+}
+
+void KeyFrameWidget::deleteContextKey()
+{
+    auto anim = obj->getAnimation();
+
+    auto propAnim = anim->getPropertyAnim(contextKey.propertyName);
+    if (propAnim != nullptr) {
+        if (contextKey.keyType == DopeKeyType::FloatKey) {
+            auto frame = propAnim->getKeyFrame(contextKey.subPropertyName);
+            frame->removeKey(contextKey.floatKey);
+
+            labelWidget->recalcPropertySummaryKeys(contextKey.propertyName);
+        } else if (contextKey.keyType == DopeKeyType::SummaryKey) {
+            // loop through all keys and try to remove them from all each property
+            // n^2, but its the best we can do right now
+            for( auto key : contextKey.summaryKey.keys) {
+                for( auto frame : propAnim->getKeyFrames()) {
+                    frame.keyFrame->removeKey(key);
+                }
+            }
+
+            labelWidget->recalcPropertySummaryKeys(contextKey.propertyName);
+        }
+    }
+
+    contextKey = DopeKey::Null();
+
 }
 
 KeyFrameWidget::KeyFrameWidget(QWidget* parent):
@@ -271,22 +300,27 @@ void KeyFrameWidget::mouseReleaseEvent(QMouseEvent* evt)
 
     if(mousePos==clickPos && evt->button() == Qt::RightButton)
     {
-        //qDebug()<<"Context Menu"<<endl;
+        contextKey = this->getSelectedKey(mousePos.x(),mousePos.y());
 
-        //show context menu
-        QMenu menu;
+        if (!contextKey.isNull()) {
+            //show context menu
+            QMenu menu;
 
-        menu.addAction("delete");
-        //menu.exec();
+            auto deleteAction = menu.addAction("Delete");
+            connect(deleteAction, SIGNAL(triggered(bool)), this, SLOT(deleteContextKey()));
+
+            menu.exec(this->mapToGlobal(mousePos));
+        }
     }
 
-    if(evt->button() == Qt::LeftButton)
+    if(evt->button() == Qt::LeftButton) {
         leftButtonDown = false;
+        selectedKey = DopeKey::Null();
+    }
     if(evt->button() == Qt::MiddleButton)
         middleButtonDown = false;
     if(evt->button() == Qt::RightButton)
         rightButtonDown = false;
-
 
 }
 

@@ -201,7 +201,8 @@ HEADERS  += src/mainwindow.h \
     src/commands/changematerialpropertycommand.h \
     src/commands/addscenenodecommand.h \
     src/commands/deletescenenodecommand.h \
-    src/dialogs/progressdialog.h
+    src/dialogs/progressdialog.h \
+    src/commands/deleteanimationkeycommand.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

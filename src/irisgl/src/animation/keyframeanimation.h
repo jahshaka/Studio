@@ -76,7 +76,7 @@ class KeyFrame
 {
 public:
     QString name;
-    std::vector<Key<T>*> keys;
+    QVector<Key<T>*> keys;
     float length;//in seconds
 
     KeyFrame()
@@ -108,6 +108,11 @@ public:
         //get last key and use that to determine length
         auto last = keys.end().c;
         length = last->time;
+    }
+
+    void removeKey(Key<T>* key)
+    {
+        keys.removeOne(key);
     }
 
     Key<T>* addKey(T value,double time)

@@ -118,6 +118,7 @@ private:
 
     //iris::FloatKey* selectedKey;
     DopeKey selectedKey;
+    DopeKey contextKey;
 
     bool leftButtonDown;
     bool middleButtonDown;
@@ -162,6 +163,9 @@ public:
 
 signals:
     void timeRangeChanged(float timeStart, float timeEnd);
+
+protected slots:
+    void deleteContextKey();
 
 private:
     /**
