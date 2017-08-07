@@ -138,18 +138,20 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
         ui->sceneNodeName->setText(node->name);
 
         if(node->getAnimations().count() == 0) {
-            showCreateAnimWidget();
-            updateCreationWidgetMessage(node);
+            //showCreateAnimWidget();
+            //updateCreationWidgetMessage(node);
+            auto newAnim = iris::Animation::create("Animation");
+            node->addAnimation(newAnim);
+            node->setAnimation(newAnim);
         }
-        else {
-            buildPropertiesMenu();
 
-            animation = node->getAnimation();
-            refreshAnimationList();
-            showKeyFrameWidget();
-            hideCreateAnimWidget();
-            ui->loopCheckBox->setChecked(animation->getLooping());
-        }
+        buildPropertiesMenu();
+
+        animation = node->getAnimation();
+        refreshAnimationList();
+        showKeyFrameWidget();
+        hideCreateAnimWidget();
+        ui->loopCheckBox->setChecked(animation->getLooping());
 
     } else {
         ui->insertFrame->setMenu(new QMenu());
