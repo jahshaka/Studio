@@ -291,3 +291,8 @@ void KeyFrameLabelTreeWidget::setPropertyKeyFrameData(QString propName, KeyFrame
     }
 }
 
+
+float SummaryKey::getTime()
+{
+    return keys[0]->time;
+}

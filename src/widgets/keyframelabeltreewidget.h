@@ -32,6 +32,8 @@ struct SummaryKey
 
     // the time is the key here
     QList<iris::FloatKey*> keys;
+
+    float getTime();
 };
 
 struct KeyFrameData

@@ -24,6 +24,8 @@ For more information see the LICENSE file
 #include "keyframelabeltreewidget.h"
 #include "keyframelabel.h"
 #include "animationwidgetdata.h"
+#include "../uimanager.h"
+#include "animationwidget.h"
 #include <QMenu>
 #include <math.h>
 #include <QTreeWidget>
@@ -187,9 +189,9 @@ void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetIt
         }
     } else if(data.isProperty()){ // draw summary keys
         //paint.fillRect(0, yTop, this->width(), height, propColor);
-        for(auto keyTime:data.summaryKeys.keys())
+        for(auto& key:data.summaryKeys)
         {
-            int xpos = this->timeToPos(keyTime);
+            int xpos = this->timeToPos(key.getTime());
 
             float distSqrd = distanceSquared(xpos, yTop + halfHeight, mousePos.x(), mousePos.y());
             auto point = QPoint(xpos, yTop + height / 2.0f);
@@ -324,6 +326,12 @@ void KeyFrameWidget::mouseMoveEvent(QMouseEvent* evt)
         //key dragging
         auto timeDiff = posToTime(evt->x())-posToTime(mousePos.x());
         selectedKey.move(timeDiff);
+        if(selectedKey.keyType == DopeKeyType::FloatKey)
+        {
+            // recalculate summary keys
+            // todo: recalc only summary keys for this key's property
+            labelWidget->recalcPropertySummaryKeys(selectedKey.propertyName);
+        }
         this->repaint();
     }
     else if(leftButtonDown)
@@ -426,7 +434,7 @@ DopeKey KeyFrameWidget::getSelectedKey(int x,int y)
 
 DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* tree,QTreeWidgetItem *item, int &yTop)
 {
-    auto keyPointRadius = 7*7;
+    auto keyPointRadius = 7;//*7;
 
     auto data = item->data(0,Qt::UserRole).value<KeyFrameData>();
     auto height = tree->visualItemRect(item).height();
@@ -438,7 +446,7 @@ DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* tree,QTreeWidgetItem *item, 
 
             auto point = QVector2D(xpos, yTop + height / 2.0f);
             if(point.distanceToPoint(QVector2D(mousePos)) <= keyPointRadius)
-                return DopeKey(key);
+                return DopeKey(key, data.propertyName, data.subPropertyName);
         }
     } else if(data.isProperty()){ // draw summary keys
         //paint.fillRect(0, yTop, this->width(), height, propColor);
@@ -448,7 +456,7 @@ DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* tree,QTreeWidgetItem *item, 
 
             auto point = QVector2D(xpos, yTop + height / 2.0f);
             if(point.distanceToPoint(QVector2D(mousePos)) <= keyPointRadius)
-                return DopeKey(data.summaryKeys[keyTime]);
+                return DopeKey(data.summaryKeys[keyTime], data.propertyName, data.subPropertyName);
 
         }
     }

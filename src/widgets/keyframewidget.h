@@ -47,23 +47,31 @@ struct DopeKey
     iris::FloatKey* floatKey = nullptr;
     SummaryKey summaryKey;
 
+    QString propertyName;
+    QString subPropertyName;
+
     DopeKey()
     {
         keyType = DopeKeyType::Null;
     }
 
-    explicit DopeKey(iris::FloatKey* floatKey)
+    explicit DopeKey(iris::FloatKey* floatKey, QString propName, QString subPropName)
     {
         Q_ASSERT(floatKey!=nullptr);
 
         this->floatKey = floatKey;
         keyType = DopeKeyType::FloatKey;
+        this->propertyName = propName;
+        this->subPropertyName = subPropName;
+
     }
 
-    explicit DopeKey(SummaryKey summaryKey)
+    explicit DopeKey(SummaryKey summaryKey, QString propName, QString subPropName)
     {
         this->summaryKey = summaryKey;
         keyType = DopeKeyType::SummaryKey;
+        this->propertyName = propName;
+        this->subPropertyName = subPropName;
     }
 
     void move(float timeIncr);
