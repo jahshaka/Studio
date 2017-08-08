@@ -114,11 +114,18 @@ void RenderTarget::resize(int width, int height, bool resizeTextures)
 
 void RenderTarget::addTexture(Texture2DPtr tex)
 {
+    Q_ASSERT_X(width==tex->getWidth() && height==tex->getHeight(),
+               "RenderTarget",
+               "Size of attached texture should be the same as size of render target");
     textures.append(tex);
 }
 
 void RenderTarget::setDepthTexture(Texture2DPtr depthTex)
 {
+    Q_ASSERT_X(width==depthTex->getWidth() && height==depthTex->getHeight(),
+               "RenderTarget",
+               "Size of attached depth texture should be the same as size of render target");
+
     clearRenderBuffer();
     depthTexture = depthTex;
 }
