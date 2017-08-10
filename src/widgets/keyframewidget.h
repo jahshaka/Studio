@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QVector2D>
 #include <QSharedPointer>
 #include "../irisgl/src/irisglfwd.h"
+#include "keyframelabeltreewidget.h"
 
 namespace iris
 {
@@ -32,6 +33,59 @@ class KeyFrameLabelTreeWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
 class AnimationWidgetData;
+
+enum class DopeKeyType
+{
+    Null,
+    FloatKey,
+    SummaryKey
+};
+
+struct DopeKey
+{
+    DopeKeyType keyType;
+    iris::FloatKey* floatKey = nullptr;
+    SummaryKey summaryKey;
+
+    QString propertyName;
+    QString subPropertyName;
+
+    DopeKey()
+    {
+        keyType = DopeKeyType::Null;
+    }
+
+    explicit DopeKey(iris::FloatKey* floatKey, QString propName, QString subPropName)
+    {
+        Q_ASSERT(floatKey!=nullptr);
+
+        this->floatKey = floatKey;
+        keyType = DopeKeyType::FloatKey;
+        this->propertyName = propName;
+        this->subPropertyName = subPropName;
+
+    }
+
+    explicit DopeKey(SummaryKey summaryKey, QString propName, QString subPropName)
+    {
+        this->summaryKey = summaryKey;
+        keyType = DopeKeyType::SummaryKey;
+        this->propertyName = propName;
+        this->subPropertyName = subPropName;
+    }
+
+    void move(float timeIncr);
+
+    bool isNull()
+    {
+        return keyType == DopeKeyType::Null;
+    }
+
+    static DopeKey Null()
+    {
+        return DopeKey();
+    }
+};
 
 class KeyFrameWidget:public QWidget
 {
@@ -62,7 +116,9 @@ private:
     QPoint mousePos;
     QPoint clickPos;
 
-    iris::FloatKey* selectedKey;
+    //iris::FloatKey* selectedKey;
+    DopeKey selectedKey;
+    DopeKey contextKey;
 
     bool leftButtonDown;
     bool middleButtonDown;
@@ -70,6 +126,13 @@ private:
 
     KeyFrameLabelTreeWidget *labelWidget;
     AnimationWidgetData* animWidgetData;
+
+    // pens and brushes
+    QBrush defaultBrush;
+    QBrush innerBrush;
+    QBrush highlightBrush;
+
+    int keyPointSize;
 
 public:
     KeyFrameWidget(QWidget* parent);
@@ -92,6 +155,7 @@ public:
     void wheelEvent(QWheelEvent* evt);
     //void resizeEvent(QResizeEvent* event);
     void paintEvent(QPaintEvent *painter);
+    void drawPoint(QPainter& paint, QPoint point, bool isHighlight = false);
 
     void setLabelWidget(KeyFrameLabelTreeWidget *value);
 
@@ -99,6 +163,9 @@ public:
 
 signals:
     void timeRangeChanged(float timeStart, float timeEnd);
+
+protected slots:
+    void deleteContextKey();
 
 private:
     /**
@@ -109,7 +176,8 @@ private:
     float posToTime(int xpos);
     int timeToPos(float timeInSeconds);
 
-    iris::FloatKey* getSelectedKey(int x,int y);
+    DopeKey getSelectedKey(int x,int y);
+    DopeKey getSelectedKey(QTreeWidget* tree,QTreeWidgetItem* item, int& yTop);
 };
 
 #endif // KEYFRAMEWIDGET_H
