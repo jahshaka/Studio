@@ -262,10 +262,7 @@ RESOURCES += \
     app/modelpresets.qrc \
     app/fonts.qrc \
     app/skies.qrc \
-    app/images.qrc \
-    images.qrc \
-    images.qrc \
-    images.qrc
+    app/images.qrc
 
 win32: RC_ICONS = app/icons/icon.ico
 

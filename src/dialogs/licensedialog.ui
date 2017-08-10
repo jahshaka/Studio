@@ -924,12 +924,8 @@ p, li { white-space: pre-wrap; }
   </layout>
  </widget>
  <resources>
-<<<<<<< HEAD
-  <include location="../../icons.qrc"/>
-  <include location="../../images.qrc"/>
-=======
+  <include location="../../app/images.qrc"/>
   <include location="../../app/icons.qrc"/>
->>>>>>> Reorganize all resource asssets and their usage
  </resources>
  <connections/>
 </ui>
