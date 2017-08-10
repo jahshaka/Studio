@@ -15,7 +15,7 @@ vec3 gammaCorrect(vec3 linear)
 
 in vec2 v_texCoord;
 uniform sampler2D u_screenTex;
-uniform bool u_gammaCorrect = true;
+uniform bool u_gammaCorrect = false;
 
 out vec4 fragColor;
 void main()

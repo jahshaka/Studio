@@ -4,7 +4,7 @@
 
 #define FXAA_PC 1
 #define FXAA_GLSL_130 1
-#define FXAA_QUALITY__PRESET 12
+#define FXAA_QUALITY__PRESET 39
 
 // required for textureGather and textureGatherOffset
 #extension GL_ARB_gpu_shader5 : enable

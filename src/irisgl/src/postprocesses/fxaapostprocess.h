@@ -22,7 +22,16 @@ public:
     QOpenGLShaderProgram* tonemapShader;
     QOpenGLShaderProgram* fxaaShader;
 
+    // between 1 and 5
+    int quality;
+
     FxaaPostProcess();
+
+    QList<Property *> getProperties();
+    void setProperty(Property *prop) override;
+
+    void setQuality(int quality);
+    int getQuality();
 
     virtual void process(PostProcessContext* ctx) override;
 

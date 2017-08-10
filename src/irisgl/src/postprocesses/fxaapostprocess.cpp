@@ -26,6 +26,37 @@ FxaaPostProcess::FxaaPostProcess()
 
     tonemapTex = Texture2D::create(100, 100);
     fxaaTex = Texture2D::create(100, 100);
+
+    quality = 1;
+}
+
+QList<Property *> FxaaPostProcess::getProperties()
+{
+    auto props = QList<Property*>();
+
+    auto prop = new IntProperty();
+    prop->displayName = "Quality";
+    prop->name = "quality";
+    prop->value = quality;
+    props.append(prop);
+
+    return props;
+}
+
+void FxaaPostProcess::setProperty(Property *prop)
+{
+    if(prop->name == "quality")
+        this->setQuality(prop->getValue().toInt());
+}
+
+void FxaaPostProcess::setQuality(int quality)
+{
+    this->quality = quality;
+}
+
+int FxaaPostProcess::getQuality()
+{
+    return quality;
 }
 
 void FxaaPostProcess::process(PostProcessContext *ctx)
