@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/graphics/texture2d.h"
 #include "../irisgl/src/graphics/viewport.h"
 #include "../irisgl/src/graphics/renderlist.h"
+#include "../irisgl/src/graphics/rendertarget.h"
 #include "../irisgl/src/graphics/utils/fullscreenquad.h"
 #include "../irisgl/src/vr/vrmanager.h"
 #include "../irisgl/src/vr/vrdevice.h"
@@ -253,6 +254,12 @@ void SceneViewWidget::initializeGL()
     initialize();
     fsQuad = new iris::FullScreenQuad();
 
+    viewerCamera = iris::CameraNode::create();
+    viewerRT = iris::RenderTarget::create(500, 500);
+    viewerTex = iris::Texture2D::create(500, 500);
+    viewerRT->addTexture(viewerTex);
+    viewerQuad = new iris::FullScreenQuad();
+
     emit initializeGraphics(this, this);
 
     auto timer = new QTimer(this);
@@ -298,6 +305,13 @@ void SceneViewWidget::renderScene()
             scene->updateSceneAnimation(animTime);
         }
 
+        // hide viewer so it doesnt show up in rt
+        bool viewerVisible = true;
+
+        if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
+            viewerVisible = selectedNode->isVisible();
+            selectedNode->hide();
+        }
         scene->update(dt);
 
         // insert vr head
@@ -310,10 +324,44 @@ void SceneViewWidget::renderScene()
         if (UiManager::sceneMode != SceneMode::PlayMode)
             addLightShapesToScene();
 
+        // render thumbnail to texture
+        if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
+            viewerCamera->setLocalTransform(selectedNode->getGlobalTransform());
+            viewerCamera->update(0); // update transformation of camera
+
+            // resize render target to fix aspect ratio
+            viewerRT->resize(this->width(), this->height(), true);
+
+            renderer->renderSceneToRenderTarget(viewerRT, viewerCamera);
+
+            // restore viewer visibility state
+            if (viewerVisible) {
+                selectedNode->show();
+
+                // let it show back in regular scene rendering mode
+                // i know this looks like a hack, but it'll
+                // have to do until we find a better way to do this
+                selectedNode->submitRenderItems();
+            }
+        }
+
+
+
         if (viewportMode == ViewportMode::Editor) {
             renderer->renderScene(dt, viewport);
         } else {
             renderer->renderSceneVr(dt, viewport, UiManager::sceneMode == SceneMode::PlayMode);
+        }
+
+        if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
+            QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>()->glClear(GL_DEPTH_BUFFER_BIT);
+            QMatrix4x4 mat;
+            mat.setToIdentity();
+            mat.translate(0.75, -0.75, 0);
+            mat.scale(0.2, 0.2, 0);
+            viewerTex->bind(0);
+            viewerQuad->matrix = mat;
+            viewerQuad->draw();
         }
 
         this->updateScene();

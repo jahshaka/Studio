@@ -121,7 +121,87 @@ ForwardRendererPtr ForwardRenderer::create()
     return ForwardRendererPtr(new ForwardRenderer());
 }
 
-// all scenenode's transform should be updated
+void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePtr cam, bool clearRenderLists)
+{
+    auto ctx = QOpenGLContext::currentContext();
+
+    // STEP 1: RENDER SCENE
+    renderData->scene = scene;
+
+    cam->setAspectRatio(rt->getWidth()/(float)rt->getHeight());
+    cam->updateCameraMatrices();
+
+    renderData->projMatrix = cam->projMatrix;
+    renderData->viewMatrix = cam->viewMatrix;
+    renderData->eyePos = cam->globalTransform.column(3).toVector3D();
+
+    renderData->frustum.build(cam->projMatrix * cam->viewMatrix);
+
+    renderData->fogColor = scene->fogColor;
+    renderData->fogStart = scene->fogStart;
+    renderData->fogEnd = scene->fogEnd;
+    renderData->fogEnabled = scene->fogEnabled;
+
+    if (scene->shadowEnabled) {
+        gl->glViewport(0, 0, 4096, 4096);
+        gl->glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
+        gl->glClear(GL_DEPTH_BUFFER_BIT);
+        gl->glCullFace(GL_FRONT);
+        renderShadows(scene);
+        gl->glCullFace(GL_BACK);
+        gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+    }
+
+    //gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
+
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    //gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+
+    //todo: remember to remove this!
+    renderTarget->resize(rt->getWidth(), rt->getHeight(), true);
+    finalRenderTexture->resize(rt->getWidth(), rt->getHeight());
+
+    renderTarget->bind();
+    gl->glViewport(0, 0, rt->getWidth(), rt->getHeight());
+    gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    //enable all attrib arrays
+    for (int i = 0; i < (int)iris::VertexAttribUsage::Count; i++) {
+        gl->glEnableVertexAttribArray(i);
+    }
+
+    renderNode(renderData, scene);
+    renderBillboardIcons(renderData);
+
+    renderTarget->unbind();
+
+    postContext->sceneTexture = sceneRenderTexture;
+    postContext->depthTexture = depthRenderTexture;
+    postContext->finalTexture = finalRenderTexture;
+    postMan->process(postContext);
+
+    //gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+
+    // draw fs quad
+    rt->bind();
+    gl->glViewport(0, 0, rt->getWidth(), rt->getHeight());
+    gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    gl->glActiveTexture(GL_TEXTURE0);
+
+    postContext->finalTexture->bind();
+    fsQuad->draw();
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
+    rt->unbind();
+
+    //clear lists
+    if (clearRenderLists) {
+        scene->geometryRenderList->clear();
+        scene->shadowRenderList->clear();
+        scene->gizmoRenderList->clear();
+    }
+}
+
 void ForwardRenderer::renderScene(float delta, Viewport* vp)
 {
     //perfTimer->start("total");
@@ -204,7 +284,7 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     gl->glActiveTexture(GL_TEXTURE0);
     //sceneRenderTexture->bind();
     postContext->finalTexture->bind();
-    fsQuad->draw(gl);
+    fsQuad->draw();
     gl->glBindTexture(GL_TEXTURE_2D, 0);
     //perfTimer->end("render_post");
 

@@ -6,6 +6,16 @@
 namespace iris
 {
 
+int RenderTarget::getWidth() const
+{
+    return width;
+}
+
+int RenderTarget::getHeight() const
+{
+    return height;
+}
+
 RenderTarget::RenderTarget(int width, int height):
     width(width),
     height(height)
@@ -69,6 +79,9 @@ void RenderTarget::checkStatus()
 
 void RenderTarget::resize(int width, int height, bool resizeTextures)
 {
+    this->width = width;
+    this->height = height;
+
     gl->glBindRenderbuffer(GL_RENDERBUFFER, renderBufferId);
     gl->glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
     gl->glBindRenderbuffer(GL_RENDERBUFFER, 0);
