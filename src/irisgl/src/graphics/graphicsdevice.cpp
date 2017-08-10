@@ -3,9 +3,32 @@
 #include "graphicsdevice.h"
 #include "rendertarget.h"
 #include "texture2d.h"
+#include "vertexlayout.h"
 
 namespace iris
 {
+
+VertexBuffer::VertexBuffer(GraphicsDevicePtr device, VertexLayout vertexLayout)
+{
+    this->device = device;
+    this->vertexLayout = vertexLayout;
+    device->getGL()->glGenBuffers(1, &bufferId);
+}
+
+void VertexBuffer::setData(void *data, unsigned int sizeInBytes)
+{
+    memcpy(this->data, data, sizeInBytes);
+
+    auto gl = device->getGL();
+    gl->glBindBuffer(GL_ARRAY_BUFFER, bufferId);
+    gl->glBufferData(GL_ARRAY_BUFFER, sizeInBytes, data, GL_STATIC_DRAW);
+    gl->glBindBuffer(GL_ARRAY_BUFFER, bufferId);
+}
+
+QOpenGLFunctions_3_2_Core *GraphicsDevice::getGL() const
+{
+    return gl;
+}
 
 GraphicsDevice::GraphicsDevice()
 {
@@ -93,6 +116,8 @@ void GraphicsDevice::clearTexture(int target)
     gl->glBindTexture(GL_TEXTURE_2D, 0);
     gl->glActiveTexture(GL_TEXTURE0);
 }
+
+
 
 
 

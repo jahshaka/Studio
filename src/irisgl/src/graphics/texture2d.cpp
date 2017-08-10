@@ -156,5 +156,14 @@ Texture2D::Texture2D(QOpenGLTexture *tex)
     gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
 }
 
+int Texture2D::getWidth()
+{
+    return texture->width();
+}
+
+int Texture2D::getHeight()
+{
+    return texture->height();
+}
 
 }

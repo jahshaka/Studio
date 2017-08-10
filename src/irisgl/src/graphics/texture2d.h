@@ -79,6 +79,9 @@ public:
 
     QPixmap readData();
 
+    int getWidth();
+    int getHeight();
+
 private:
     Texture2D(QOpenGLTexture* tex);
 

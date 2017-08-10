@@ -135,6 +135,11 @@ void RenderTarget::clearTextures()
     textures.clear();
 }
 
+void RenderTarget::clearDepthTexture()
+{
+    depthTexture.reset();
+}
+
 void RenderTarget::clearRenderBuffer()
 {
     gl->glBindFramebuffer(GL_FRAMEBUFFER, fboId);

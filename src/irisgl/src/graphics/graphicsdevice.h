@@ -3,17 +3,53 @@
 
 #include "../irisglfwd.h"
 #include <QOpenGLFunctions_3_2_Core>
+#include <QRect>
+#include <QStack>
+#include "vertexlayout.h"
 
 class QOpenGLContext;
 
 namespace iris
 {
 
+class GraphicsDevice;
+typedef QSharedPointer<GraphicsDevice> GraphicsDevicePtr;
+class VertexBuffer;
+typedef QSharedPointer<VertexBuffer> VertexBufferPtr;
+class IndexBuffer;
+typedef QSharedPointer<IndexBuffer> IndexBufferPtr;
+
 class VertexBuffer
+{
+    friend class GraphicsDevice;
+public:
+    void* data;
+    GLuint bufferId;
+    VertexLayout vertexLayout;
+    GraphicsDevicePtr device;
+
+    VertexBuffer(GraphicsDevicePtr device, VertexLayout vertexLayout);
+
+    template<typename T>
+    void setData(T* data, unsigned int sizeInBytes)
+    {
+        setData((void*) data, sizeInBytes);
+    }
+
+    void setData(void* data, unsigned int sizeinBytes);
+};
+
+class IndexBuffer
 {
 public:
     void* data;
     GLuint bufferId;
+
+    template<typename T>
+    void setData(T* data, unsigned int sizeInBytes)
+    {
+        memcpy(this->data, data, sizeInBytes);
+    }
 };
 
 /*
@@ -49,6 +85,7 @@ public:
     void setIndexBuffer(IndexBufferPtr indexBuffer);
 
     void drawPrimitives(GLenum primitiveType,int start, int count);
+    QOpenGLFunctions_3_2_Core *getGL() const;
 };
 
 }
