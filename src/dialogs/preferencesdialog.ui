@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>770</width>
-    <height>441</height>
+    <height>447</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -15,26 +15,26 @@
   </property>
   <property name="styleSheet">
    <string notr="true">#PreferencesDialog {
-	background: rgb(23, 26, 27);
+  background: rgb(23, 26, 27);
 }
 
 QPushButton, QToolButton {
-	border: 0;
-	padding: 5px 15px;
-	background: #444;
+  border: 0;
+  padding: 5px 15px;
+  background: #444;
 }
 
 QPushButton::hover {
-	background: #555;
+  background: #555;
 }
 
 QToolButton::hover {
-	background: #555;
+  background: #555;
 }
 
 QLineEdit {
-	background: #404040;
-	padding: 5px;
+  background: #404040;
+  padding: 5px;
 }</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
@@ -83,22 +83,6 @@ QLineEdit {
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
-        <property name="minimumSize">
-         <size>
-          <width>150</width>
-          <height>0</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>90</width>
-          <height>16777215</height>
-         </size>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">background-image: url(:/images/sidepanelimage_info.jpg);
-</string>
-        </property>
         <property name="text">
          <string>Apply Changes</string>
         </property>
@@ -141,7 +125,7 @@ QLineEdit {
          <string/>
         </property>
         <property name="pixmap">
-         <pixmap>:/app/images/sidepanelimage.jpg</pixmap>
+         <pixmap resource="../../app/images.qrc">:/images/sidepanelimage.jpg</pixmap>
         </property>
        </widget>
       </item>
@@ -166,6 +150,8 @@ QLineEdit {
    </item>
   </layout>
  </widget>
- <resources/>
+ <resources>
+  <include location="../../app/images.qrc"/>
+ </resources>
  <connections/>
 </ui>

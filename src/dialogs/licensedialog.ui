@@ -90,7 +90,7 @@ QScrollBar::sub-line:vertical {
  }
 
 QScrollBar::up-arrow:vertical {
-    image: url(:/app/icons/up-arrow.svg);
+    image: url(:/icons/up-arrow.svg);
 }
 
 QScrollBar::up-arrow:vertical:hover {
@@ -98,7 +98,7 @@ QScrollBar::up-arrow:vertical:hover {
 }
 
 QScrollBar::down-arrow:vertical {
-    image: url(:/app/icons/down-arrow.svg);
+    image: url(:/icons/down-arrow.svg);
 }
 
 QScrollBar::down-arrow:vertical:hover {
@@ -137,7 +137,7 @@ QScrollBar::down-arrow:vertical:hover {
          <string/>
         </property>
         <property name="pixmap">
-         <pixmap resource="../../images.qrc">:/app/images/sidepanelimage.jpg</pixmap>
+         <pixmap resource="../../app/images.qrc">:/images/sidepanelimage.jpg</pixmap>
         </property>
        </widget>
       </item>
@@ -149,26 +149,6 @@ QScrollBar::down-arrow:vertical:hover {
      <property name="spacing">
       <number>0</number>
      </property>
-     <item>
-      <widget class="QWidget" name="widget_3" native="true">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>150</width>
-         <height>0</height>
-        </size>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">background-image: url(:/images/sidepanelimage_info.jpg);
-background-repeat: no-repeat;</string>
-       </property>
-      </widget>
-     </item>
      <item>
       <widget class="QTextBrowser" name="textBrowser">
        <property name="font">
