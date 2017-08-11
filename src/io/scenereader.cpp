@@ -54,6 +54,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/postprocesses/materialpostprocess.h"
 #include "../irisgl/src/postprocesses/radialblurpostprocess.h"
 #include "../irisgl/src/postprocesses/ssaopostprocess.h"
+#include "../irisgl/src/postprocesses/fxaapostprocess.h"
 
 #include "../constants.h"
 
@@ -141,6 +142,8 @@ void SceneReader::readPostProcessData(QJsonObject &projectObj, iris::PostProcess
                process = iris::RadialBlurPostProcess::create();
             if(name == "ssao")
                process = iris::SSAOPostProcess::create();
+            if(name == "fxaa")
+               process = iris::FxaaPostProcess::create();
             //if(name == "material")
             //   process = iris::MaterialPostProcess::create();
 

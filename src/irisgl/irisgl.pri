@@ -80,7 +80,8 @@ HEADERS += \
     $$PWD/src/graphics/renderstates.h \
     $$PWD/src/graphics/utils/linemeshbuilder.h \
     $$PWD/src/graphics/utils/shapehelper.h \
-    $$PWD/src/materials/colormaterial.h
+    $$PWD/src/materials/colormaterial.h \
+    $$PWD/src/postprocesses/fxaapostprocess.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -131,7 +132,8 @@ SOURCES += \
     $$PWD/src/graphics/renderitem.cpp \
     $$PWD/src/graphics/utils/linemeshbuilder.cpp \
     $$PWD/src/graphics/utils/shapehelper.cpp \
-    $$PWD/src/materials/colormaterial.cpp
+    $$PWD/src/materials/colormaterial.cpp \
+    $$PWD/src/postprocesses/fxaapostprocess.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc
