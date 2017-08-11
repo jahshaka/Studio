@@ -5,6 +5,8 @@ namespace Ui {
     class ProjectManager;
 }
 
+class SettingsManager;
+
 #include <QListWidget>
 #include <QTreeWidgetItem>
 #include <QWidget>
@@ -18,8 +20,14 @@ public:
     ProjectManager(QWidget *parent = nullptr);
     ~ProjectManager();
 
+protected slots:
+    void listWidgetCustomContextMenu(const QPoint&);
+    void removeFromList();
+    void deleteProject();
+
 private:
     Ui::ProjectManager *ui;
+    SettingsManager* settings;
 };
 
 #endif // PROJECTMANAGER_H
