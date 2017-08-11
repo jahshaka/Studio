@@ -260,6 +260,10 @@ void SceneViewWidget::initializeGL()
     viewerRT->addTexture(viewerTex);
     viewerQuad = new iris::FullScreenQuad();
 
+    screenshotRT = iris::RenderTarget::create(500, 500);
+    screenshotTex = iris::Texture2D::create(500, 500);
+    screenshotRT->addTexture(screenshotTex);
+
     emit initializeGraphics(this, this);
 
     auto timer = new QTimer(this);
@@ -635,6 +639,14 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr l
     //emit sceneNodeSelected(hitList.last().hitNode);
     viewportGizmo->setLastSelectedNode(pickedNode);
     emit sceneNodeSelected(pickedNode);
+}
+
+QImage SceneViewWidget::takeScreenshot()
+{
+    this->makeCurrent();
+    screenshotRT->resize(1280, 720, true);
+    renderer->renderSceneToRenderTarget(screenshotRT, editorCam, false);
+    this->doneCurrent();
 }
 
 void SceneViewWidget::doGizmoPicking(const QPointF& point)

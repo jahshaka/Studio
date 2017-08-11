@@ -86,6 +86,10 @@ class SceneViewWidget : public QOpenGLWidget,
     iris::RenderTargetPtr viewerRT;
     iris::Texture2DPtr viewerTex;
     iris::FullScreenQuad* viewerQuad;
+
+    // for screenshots
+    iris::RenderTargetPtr screenshotRT;
+    iris::Texture2DPtr screenshotTex;
 public:
     iris::CameraNodePtr editorCam;
 
@@ -138,6 +142,7 @@ public:
     bool doActiveObjectPicking(const QPointF& point);
     void doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject = true, bool skipLights = false, bool skipViewers = false);
 
+    QImage takeScreenshot();
 protected:
     void initializeGL();
     bool eventFilter(QObject *obj, QEvent *event);

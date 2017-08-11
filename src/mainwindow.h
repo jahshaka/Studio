@@ -237,6 +237,8 @@ public slots:
     void undo();
     void redo();
 
+    void takeScreenshot();
+
 private slots:
     void translateGizmo();
     void rotateGizmo();

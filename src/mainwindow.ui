@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1087</width>
-    <height>390</height>
+    <width>1190</width>
+    <height>705</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -473,6 +473,13 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
            <number>0</number>
           </property>
           <item>
+           <widget class="QPushButton" name="screenshotBtn">
+            <property name="text">
+             <string>ScreenShot</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <spacer name="horizontalSpacer">
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
@@ -525,7 +532,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1087</width>
+     <width>1190</width>
      <height>30</height>
     </rect>
    </property>
@@ -781,7 +788,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>197</height>
+          <height>346</height>
          </rect>
         </property>
         <property name="styleSheet">
@@ -865,7 +872,7 @@ QToolButton:checked
     <string>Presets</string>
    </property>
    <attribute name="dockWidgetArea">
-    <number>8</number>
+    <number>2</number>
    </attribute>
    <widget class="QWidget" name="dockContents">
     <property name="sizePolicy">
