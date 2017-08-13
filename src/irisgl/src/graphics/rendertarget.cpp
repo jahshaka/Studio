@@ -16,6 +16,22 @@ int RenderTarget::getHeight() const
     return height;
 }
 
+// https://stackoverflow.com/questions/17347129/opengl-qt-render-to-texture-and-display-it-back
+// todo: add options for floating point textures and other internal formats besides GL_RGBA
+QImage RenderTarget::toImage()
+{
+    const int pixelSize = 4;// GL_RGBA
+    uchar* pixels = new uchar[this->width * this->height * pixelSize];
+
+    bind();
+    glReadPixels( 0,0,  this->width, this->height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    unbind();
+
+    auto image = QImage(pixels, this->width, this->height, QImage::Format_ARGB32);
+    image = image.rgbSwapped();
+    return image.mirrored(false, true);
+}
+
 RenderTarget::RenderTarget(int width, int height):
     width(width),
     height(height)

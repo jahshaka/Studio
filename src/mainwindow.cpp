@@ -207,6 +207,8 @@ MainWindow::MainWindow(QWidget *parent) :
     cameraGroup->addAction(ui->actionArcballCam);
     ui->actionFreeCamera->setChecked(true);
 
+    connect(ui->screenshotBtn, SIGNAL(pressed()), this, SLOT(takeScreenshot()));
+
     // this acts as a spacer
     QWidget* empty = new QWidget();
     empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -1331,6 +1333,12 @@ void MainWindow::redo()
 {
     if (undoStack->canRedo())
         undoStack->redo();
+}
+
+void MainWindow::takeScreenshot()
+{
+    auto img = sceneView->takeScreenshot();
+    img.save("/home/nicolas/Desktop/screen.png");
 }
 
 void MainWindow::newScene()

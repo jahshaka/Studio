@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "texture2d.h"
 #include <QDebug>
+#include <QOpenGLFunctions_3_2_Core>
 
 namespace iris
 {
@@ -148,5 +149,12 @@ void Texture2D::resize(int width, int height)
     texture->create();
     texture->allocateStorage();
 }
+
+Texture2D::Texture2D(QOpenGLTexture *tex)
+{
+    this->texture = tex;
+    gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+}
+
 
 }

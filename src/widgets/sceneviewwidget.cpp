@@ -645,8 +645,13 @@ QImage SceneViewWidget::takeScreenshot()
 {
     this->makeCurrent();
     screenshotRT->resize(1280, 720, true);
+    scene->update(0);
     renderer->renderSceneToRenderTarget(screenshotRT, editorCam, false);
+
+    auto img = screenshotRT->toImage();
     this->doneCurrent();
+
+    return img;
 }
 
 void SceneViewWidget::doGizmoPicking(const QPointF& point)
