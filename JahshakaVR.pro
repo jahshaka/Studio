@@ -103,7 +103,8 @@ SOURCES += src/main.cpp\
     src/commands/changematerialpropertycommand.cpp \
     src/commands/addscenenodecommand.cpp \
     src/commands/deletescenenodecommand.cpp \
-    src/dialogs/progressdialog.cpp
+    src/dialogs/progressdialog.cpp \
+    src/widgets/screenshotwidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -202,7 +203,8 @@ HEADERS  += src/mainwindow.h \
     src/commands/addscenenodecommand.h \
     src/commands/deletescenenodecommand.h \
     src/dialogs/progressdialog.h \
-    src/commands/deleteanimationkeycommand.h
+    src/commands/deleteanimationkeycommand.h \
+    src/widgets/screenshotwidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -242,7 +244,8 @@ FORMS    += \
     src/widgets/keyframecurvewidget.ui \
     src/dialogs/getnamedialog.ui \
     src/widgets/createanimationwidget.ui \
-    src/dialogs/progressdialog.ui
+    src/dialogs/progressdialog.ui \
+    src/widgets/screenshotwidget.ui
 
 RESOURCES += \
     shaders.qrc \
