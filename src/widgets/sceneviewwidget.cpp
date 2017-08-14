@@ -641,10 +641,10 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr l
     emit sceneNodeSelected(pickedNode);
 }
 
-QImage SceneViewWidget::takeScreenshot()
+QImage SceneViewWidget::takeScreenshot(int width, int height)
 {
     this->makeCurrent();
-    screenshotRT->resize(1280, 720, true);
+    screenshotRT->resize(width, height, true);
     scene->update(0);
     renderer->renderSceneToRenderTarget(screenshotRT, editorCam, false);
 

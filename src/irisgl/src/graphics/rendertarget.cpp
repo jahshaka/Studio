@@ -24,7 +24,7 @@ QImage RenderTarget::toImage()
     uchar* pixels = new uchar[this->width * this->height * pixelSize];
 
     bind();
-    glReadPixels( 0,0,  this->width, this->height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    gl->glReadPixels( 0,0,  this->width, this->height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     unbind();
 
     auto image = QImage(pixels, this->width, this->height, QImage::Format_ARGB32);

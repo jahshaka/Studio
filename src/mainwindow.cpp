@@ -94,6 +94,8 @@ For more information see the LICENSE file
 #include "commands/addscenenodecommand.h"
 #include "commands/deletescenenodecommand.h"
 
+#include "widgets/screenshotwidget.h"
+
 enum class VRButtonMode : int
 {
     Default = 0,
@@ -1338,7 +1340,9 @@ void MainWindow::redo()
 void MainWindow::takeScreenshot()
 {
     auto img = sceneView->takeScreenshot();
-    img.save("/home/nicolas/Desktop/screen.png");
+    ScreenshotWidget screenshotWidget;
+    screenshotWidget.setImage(img);
+    screenshotWidget.exec();
 }
 
 void MainWindow::newScene()
