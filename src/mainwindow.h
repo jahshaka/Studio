@@ -86,6 +86,7 @@ public:
     void setSceneAnimTime(float time);
     void stopAnimWidget();
 
+    void initialize();
     void setupProjectDB();
     void setupUndoRedo();
 
@@ -101,7 +102,7 @@ public:
     SettingsManager* getSettingsManager();
 
     iris::ScenePtr getScene();
-    void openProject(QString project, bool startupLoad = false);
+
     //void setGizmoTransformMode(GizmoTransformMode mode);
 
     /**
@@ -221,6 +222,8 @@ public slots:
     void showLicenseDialog();
     void openFacebookUrl();
     void openWebsiteUrl();
+
+    void openProject(QString project);
 
     iris::ScenePtr createDefaultScene();
     void initializeGraphics(SceneViewWidget* widget, QOpenGLFunctions_3_2_Core* gl);

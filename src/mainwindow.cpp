@@ -75,13 +75,13 @@ For more information see the LICENSE file
 #include "dialogs/licensedialog.h"
 #include "dialogs/aboutdialog.h"
 
-#include "dialogs/projectdialog.h"
-
 #include "helpers/collisionhelper.h"
 
 #include "widgets/sceneviewwidget.h"
 #include "core/materialpreset.h"
 #include "widgets/postprocesseswidget.h"
+
+#include "widgets/projectmanager.h"
 
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
@@ -104,9 +104,7 @@ enum class VRButtonMode : int
     VRMode
 };
 
-MainWindow::MainWindow(QWidget *parent) :
-    QMainWindow(parent),
-    ui(new Ui::MainWindow)
+MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
 
@@ -156,11 +154,8 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(timer, SIGNAL(timeout()), this, SLOT(updateAnim()));
 
     // initialzie scene view
-    //sceneView = new SceneViewWidget(this);
-    //sceneView->setParent(this);
     sceneView = new SceneViewWidget(ui->sceneContainer);
     sceneView->setParent(ui->sceneContainer);
-    //auto focusPolicy = sceneView->focusPolicy();
     sceneView->setFocusPolicy(Qt::ClickFocus);
     sceneView->setFocus();
     Globals::sceneViewWidget = sceneView;
@@ -183,6 +178,15 @@ MainWindow::MainWindow(QWidget *parent) :
             this, SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
     connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
+
+    // pm
+    auto pm = new ProjectManager(this, this);
+    QGridLayout* playout = new QGridLayout(ui->pmContainer);
+    playout->addWidget(pm);
+    playout->setMargin(0);
+    ui->pmContainer->setLayout(playout);
+
+    connect(pm, SIGNAL(fileToOpen(QString)), SLOT(openProject(QString)));
 
     // toolbar stuff
     connect(ui->actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
@@ -234,6 +238,11 @@ MainWindow::MainWindow(QWidget *parent) :
 
     setupProjectDB();
     setupUndoRedo();
+}
+
+void MainWindow::initialize()
+{
+
 }
 
 void MainWindow::setupVrUi()
@@ -815,7 +824,7 @@ void MainWindow::loadScene()
 //    return filename;
 //}
 
-void MainWindow::openProject(QString filename, bool startupLoad)
+void MainWindow::openProject(QString filename)
 {
     this->sceneView->makeCurrent();
     //remove current scene first
@@ -843,6 +852,9 @@ void MainWindow::openProject(QString filename, bool startupLoad)
         sceneView->setEditorData(editorData);
         ui->wireCheck->setChecked(editorData->showLightWires);
     }
+
+    // SWITCH
+    ui->contentWidget->setCurrentIndex(0);
 
     delete reader;
 }
@@ -1430,12 +1442,12 @@ void MainWindow::callProjectManager()
 void MainWindow::projectManager(bool mainWindowActive)
 {
     // save current scene
-    ProjectDialog projectDialog(mainWindowActive);
-    bool newInstance = projectDialog.newInstance(db);
+//    ProjectDialog projectDialog(mainWindowActive);
+//    bool newInstance = projectDialog.newInstance(db);
 
-    if (newInstance) {
-        this->close();
-    }
+//    if (newInstance) {
+//        this->close();
+//    }
 }
 
 void MainWindow::newProject(const QString &filename, const QString &projectPath)

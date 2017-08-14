@@ -18,7 +18,6 @@ For more information see the LICENSE file
 
 #include "mainwindow.h"
 #include "dialogs/infodialog.h"
-#include "dialogs/projectdialog.h"
 #include "core/settingsmanager.h"
 #include "globals.h"
 
@@ -80,11 +79,11 @@ int main(int argc, char *argv[])
 
     Globals::appWorkingDir = QApplication::applicationDirPath();
 
-    ProjectDialog projectDialog;
-    projectDialog.show();
+//    ProjectDialog projectDialog;
+//    projectDialog.show();
 
-//    MainWindow window;
-//    window.showMaximized();
+    MainWindow window;
+    window.showMaximized();
 
     app.processEvents();
 

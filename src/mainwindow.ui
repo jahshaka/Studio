@@ -617,7 +617,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
          </widget>
         </item>
         <item row="1" column="0">
-         <widget class="ProjectManager" name="pmContainer" native="true"/>
+         <widget class="QWidget" name="pmContainer" native="true"/>
         </item>
        </layout>
       </widget>
@@ -1429,6 +1429,9 @@ QToolButton:checked
    <class>ProjectManager</class>
    <extends>QWidget</extends>
    <header>src/widgets/projectmanager.h</header>
+   <class>AssetWidget</class>
+   <extends>QWidget</extends>
+   <header>src/widgets/assetwidget.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

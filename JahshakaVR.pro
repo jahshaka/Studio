@@ -91,7 +91,6 @@ SOURCES += src/main.cpp\
     src/widgets/propertywidget.cpp \
     src/widgets/propertywidgets/postprocesspropertywidget.cpp \
     src/widgets/postprocesseswidget.cpp \
-    src/dialogs/projectdialog.cpp \
     src/dialogs/newprojectdialog.cpp \
     src/widgets/assetwidget.cpp \
     src/io/assetmanager.cpp \
@@ -189,7 +188,6 @@ HEADERS  += src/mainwindow.h \
     src/widgets/basewidget.h \
     src/widgets/propertywidgets/postprocesspropertywidget.h \
     src/widgets/postprocesseswidget.h \
-    src/dialogs/projectdialog.h \
     src/dialogs/newprojectdialog.h \
     src/widgets/assetwidget.h \
     src/io/assetmanager.h \
@@ -243,7 +241,6 @@ FORMS    += \
     src/widgets/filepickerwidget.ui \
     src/widgets/propertywidget.ui \
     src/widgets/postprocesseswidget.ui \
-    src/dialogs/projectdialog.ui \
     src/dialogs/newprojectdialog.ui \
     src/widgets/assetwidget.ui \
     src/widgets/assetpickerwidget.ui \
