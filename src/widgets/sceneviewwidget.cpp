@@ -95,6 +95,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     playScene = false;
     animTime = 0.0f;
 
+    showLightWires = true;
+
     sceneFloor = iris::IntersectionHelper::computePlaneND(QVector3D( 100, 0,  100),
                                                           QVector3D(-100, 0,  100),
                                                           QVector3D(   0, 0, -100));
@@ -129,6 +131,16 @@ void SceneViewWidget::initialize()
     vrCam = new EditorVrController();
 
     initLightAssets();
+}
+
+bool SceneViewWidget::getShowLightWires() const
+{
+    return showLightWires;
+}
+
+void SceneViewWidget::setShowLightWires(bool value)
+{
+    showLightWires = value;
 }
 
 void SceneViewWidget::initLightAssets()
@@ -325,7 +337,7 @@ void SceneViewWidget::renderScene()
         }
         // todo: ensure it doesnt display these shapes in play mode
         //if (viewportMode != ViewportMode::VR || UiManager::sceneMode != SceneMode::PlayMode)
-        if (UiManager::sceneMode != SceneMode::PlayMode)
+        if (UiManager::sceneMode != SceneMode::PlayMode && showLightWires)
             addLightShapesToScene();
 
         // render thumbnail to texture
@@ -913,6 +925,7 @@ void SceneViewWidget::setEditorData(EditorData* data)
     orbitalCam->distFromPivot = data->distFromPivot;
     scene->setCamera(editorCam);
     camController->setCamera(editorCam);
+    showLightWires = data->showLightWires;
 }
 
 EditorData* SceneViewWidget::getEditorData()
@@ -920,6 +933,7 @@ EditorData* SceneViewWidget::getEditorData()
     auto data = new EditorData();
     data->editorCamera = editorCam;
     data->distFromPivot = orbitalCam->distFromPivot;
+    data->showLightWires = showLightWires;
 
     return data;
 }

@@ -484,6 +484,9 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
             <property name="text">
              <string>Light Wireframes</string>
             </property>
+            <property name="tristate">
+             <bool>false</bool>
+            </property>
            </widget>
           </item>
           <item>
