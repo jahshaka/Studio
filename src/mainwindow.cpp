@@ -94,6 +94,8 @@ For more information see the LICENSE file
 #include "commands/addscenenodecommand.h"
 #include "commands/deletescenenodecommand.h"
 
+#include "widgets/screenshotwidget.h"
+
 enum class VRButtonMode : int
 {
     Default = 0,
@@ -206,6 +208,8 @@ MainWindow::MainWindow(QWidget *parent) :
     cameraGroup->addAction(ui->actionFreeCamera);
     cameraGroup->addAction(ui->actionArcballCam);
     ui->actionFreeCamera->setChecked(true);
+
+    connect(ui->screenshotBtn, SIGNAL(pressed()), this, SLOT(takeScreenshot()));
 
     // this acts as a spacer
     QWidget* empty = new QWidget();
@@ -1331,6 +1335,14 @@ void MainWindow::redo()
 {
     if (undoStack->canRedo())
         undoStack->redo();
+}
+
+void MainWindow::takeScreenshot()
+{
+    auto img = sceneView->takeScreenshot();
+    ScreenshotWidget screenshotWidget;
+    screenshotWidget.setImage(img);
+    screenshotWidget.exec();
 }
 
 void MainWindow::newScene()
