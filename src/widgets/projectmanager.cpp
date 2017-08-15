@@ -41,8 +41,8 @@ ProjectManager::ProjectManager(MainWindow *window, QWidget *parent) : QWidget(pa
     ui->listWidget->setFlow(QListView::LeftToRight);
     ui->listWidget->setViewMode(QListWidget::IconMode);
     ui->listWidget->setSpacing(24);
-    ui->listWidget->setIconSize(QSize(212, 152));
-    ui->listWidget->setIconSize(QSize(196, 152));
+//    ui->listWidget->setIconSize(QSize(212, 152));
+//    ui->listWidget->setIconSize(QSize(196, 152));
     ui->listWidget->setResizeMode(QListWidget::Adjust);
     ui->listWidget->setMovement(QListView::Static);
     ui->listWidget->setSelectionBehavior(QAbstractItemView::SelectItems);

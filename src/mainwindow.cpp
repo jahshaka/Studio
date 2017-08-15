@@ -763,7 +763,26 @@ void MainWindow::saveScene()
                                        sceneView->getRenderer()->getPostProcessManager(),
                                        sceneView->getEditorData());
     db->updateScene(blob);
-    sceneView->saveFrameBuffer(Globals::project->getProjectFolder() + "/Metadata/preview.png");
+
+    auto img = sceneView->takeScreenshot(800, 600);
+    img.save(Globals::project->getProjectFolder() + "/Metadata/preview.png");
+
+//    auto vp = viewport;
+//    auto image = this->grabFramebuffer();
+
+//    if (image.height() > image.width()) {
+//        QImage copy;
+//        copy = image.copy(0, (int) image.height() / 3, 256, 128);
+//        copy.save(filePath);
+//    }
+//    else {
+//        auto regular = image.scaled(256, 256,
+//                                    Qt::KeepAspectRatioByExpanding,
+//                                    Qt::SmoothTransformation);
+//        regular.save(filePath);
+//    }
+
+//    sceneView->saveFrameBuffer(Globals::project->getProjectFolder() + "/Metadata/preview.png");
 
 //    if (Globals::project->isSaved()) {
 //        auto filename = Globals::project->getFilePath();
