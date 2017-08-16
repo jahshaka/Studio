@@ -845,6 +845,9 @@ void MainWindow::loadScene()
 
 void MainWindow::openProject(QString filename)
 {
+    // SWITCH
+    ui->contentWidget->setCurrentIndex(0);
+
     this->sceneView->makeCurrent();
     //remove current scene first
     this->removeScene();
@@ -863,6 +866,7 @@ void MainWindow::openProject(QString filename)
     postMan->clearPostProcesses();
     auto scene = reader->readScene(filename, db->getSceneBlob(), postMan, &editorData);
     this->sceneView->doneCurrent();
+
     setScene(scene);
 
     postProcessWidget->setPostProcessMgr(postMan);
@@ -871,9 +875,6 @@ void MainWindow::openProject(QString filename)
         sceneView->setEditorData(editorData);
         ui->wireCheck->setChecked(editorData->showLightWires);
     }
-
-    // SWITCH
-    ui->contentWidget->setCurrentIndex(0);
 
     delete reader;
 }

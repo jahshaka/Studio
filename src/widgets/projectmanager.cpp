@@ -24,6 +24,7 @@
 #include "../io/assetmanager.h"
 
 #include <QDebug>
+#include <QMenu>
 
 void reducer(QVector<ModelData> &accum, const QVector<ModelData> &interm)
 {
@@ -40,9 +41,10 @@ ProjectManager::ProjectManager(MainWindow *window, QWidget *parent) : QWidget(pa
 
     ui->listWidget->setFlow(QListView::LeftToRight);
     ui->listWidget->setViewMode(QListWidget::IconMode);
-    ui->listWidget->setSpacing(24);
-//    ui->listWidget->setIconSize(QSize(212, 152));
-//    ui->listWidget->setIconSize(QSize(196, 152));
+//    ui->listWidget->setSpacing(12);
+//    ui->listWidget->setIconSize(QSize(192, 160));
+    ui->listWidget->setUniformItemSizes(true);
+    ui->listWidget->setSizeAdjustPolicy(QListWidget::AdjustToContents);
     ui->listWidget->setResizeMode(QListWidget::Adjust);
     ui->listWidget->setMovement(QListView::Static);
     ui->listWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
@@ -80,25 +82,22 @@ void ProjectManager::listWidgetCustomContextMenu(const QPoint &pos)
 {
     QModelIndex index = ui->listWidget->indexAt(pos);
 
-//    QMenu menu;
-//    QAction *action;
+    QMenu menu;
+    QAction *action;
 
-//    if (index.isValid()) {
-//        currentItem = ui->listWidget->itemAt(pos);
-////        assetItem.selectedPath = item->data(Qt::UserRole).toString();
+    if (index.isValid()) {
+        currentItem = ui->listWidget->itemAt(pos);
+//        assetItem.selectedPath = item->data(Qt::UserRole).toString();
 
-//        action = new QAction(QIcon(), "Remove from recent list", this);
-//        connect(action, SIGNAL(triggered()), this, SLOT(removeFromList()));
-//        menu.addAction(action);
+        // check if current project is open first
+        if (true) {
+            action = new QAction(QIcon(), "Delete project", this);
+            connect(action, SIGNAL(triggered()), this, SLOT(deleteProject()));
+            menu.addAction(action);
+        }
+    }
 
-//        if (!isMainWindowActive) {
-//            action = new QAction(QIcon(), "Delete project", this);
-//            connect(action, SIGNAL(triggered()), this, SLOT(deleteProject()));
-//            menu.addAction(action);
-//        }
-//    }
-
-//    menu.exec(ui->listWidget->mapToGlobal(pos));
+    menu.exec(ui->listWidget->mapToGlobal(pos));
 }
 
 void ProjectManager::removeFromList()
@@ -115,13 +114,15 @@ void ProjectManager::removeFromList()
 
 void ProjectManager::deleteProject()
 {
-//    auto selectedInfo = QFileInfo(currentItem->data(Qt::UserRole).toString());
+    auto selectedInfo = QFileInfo(currentItem->data(Qt::UserRole).toString());
 
-//    QDir dir(selectedInfo.absolutePath());
-//    if (dir.removeRecursively()) {
-//        removeFromList();
-    //    }
+    QDir dir(selectedInfo.absolutePath());
+
+    if (dir.removeRecursively()) {
+        delete ui->listWidget->takeItem(ui->listWidget->row(currentItem));
+    }
 }
+
 
 void ProjectManager::openProject()
 {
