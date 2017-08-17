@@ -19,6 +19,7 @@ class EditorData
 public:
     iris::CameraNodePtr editorCamera;
     float distFromPivot;
+    bool showLightWires;
 };
 
 #endif // EDITORDATA_H

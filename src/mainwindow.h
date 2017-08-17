@@ -238,6 +238,7 @@ public slots:
     void redo();
 
     void takeScreenshot();
+    void toggleLightWires(bool state);
 
 private slots:
     void translateGizmo();
