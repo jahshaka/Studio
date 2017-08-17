@@ -95,7 +95,11 @@ For more information see the LICENSE file
 #include "commands/deletescenenodecommand.h"
 
 #include "widgets/screenshotwidget.h"
+<<<<<<< HEAD
 #include "editor/editordata.h"
+=======
+#include "widgets/assetwidget.h"
+>>>>>>> Repurpose AssetWidget and defer initialization
 
 enum class VRButtonMode : int
 {
@@ -186,7 +190,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     playout->setMargin(0);
     ui->pmContainer->setLayout(playout);
 
+    assetWidget = new AssetWidget(this);
+
+    QGridLayout *asLayout = new QGridLayout(ui->assetWidget);
+//    sceneView->setParent(ui->sceneContainer);
+    asLayout->addWidget(assetWidget);
+    asLayout->setMargin(0);
+    ui->assetWidget->setLayout(asLayout);
+
     connect(pm, SIGNAL(fileToOpen(QString)), SLOT(openProject(QString)));
+    connect(assetWidget, SIGNAL(startManager()), SLOT(startManagerMain()));
 
     // toolbar stuff
     connect(ui->actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
@@ -875,6 +888,8 @@ void MainWindow::openProject(QString filename)
         sceneView->setEditorData(editorData);
         ui->wireCheck->setChecked(editorData->showLightWires);
     }
+
+    assetWidget->trigger();
 
     delete reader;
 }

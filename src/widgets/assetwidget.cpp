@@ -16,62 +16,68 @@
 
 AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
-//    ui->setupUi(this);
-//    ui->assetView->viewport()->installEventFilter(this);
-//    ui->assetTree->viewport()->installEventFilter(this);
-//    ui->assetTree->setContextMenuPolicy(Qt::CustomContextMenu);
 
-//    connect(ui->assetTree,  SIGNAL(itemClicked(QTreeWidgetItem*, int)),
-//            this,           SLOT(treeItemSelected(QTreeWidgetItem*)));
+}
 
-//    connect(ui->assetTree,  SIGNAL(itemChanged(QTreeWidgetItem*, int)),
-//            this,           SLOT(treeItemChanged(QTreeWidgetItem*, int)));
+void AssetWidget::trigger()
+{
+    ui->setupUi(this);
 
-//    connect(ui->assetTree,  SIGNAL(customContextMenuRequested(const QPoint&)),
-//            this,           SLOT(sceneTreeCustomContextMenu(const QPoint&)));
+    ui->assetView->viewport()->installEventFilter(this);
+    ui->assetTree->viewport()->installEventFilter(this);
+    ui->assetTree->setContextMenuPolicy(Qt::CustomContextMenu);
 
-//    // assetView section
-//    ui->assetView->setContextMenuPolicy(Qt::CustomContextMenu);
-//    ui->assetView->setViewMode(QListWidget::IconMode);
-////    ui->assetView->setUniformItemSizes(true);
-////    ui->assetView->setWordWrap(true);
-//    ui->assetView->setIconSize(QSize(88, 88));
-//    ui->assetView->setResizeMode(QListWidget::Adjust);
-//    ui->assetView->setMovement(QListView::Static);
-//    ui->assetView->setSelectionBehavior(QAbstractItemView::SelectItems);
-//    ui->assetView->setSelectionMode(QAbstractItemView::SingleSelection);
+    connect(ui->assetTree,  SIGNAL(itemClicked(QTreeWidgetItem*, int)),
+            this,           SLOT(treeItemSelected(QTreeWidgetItem*)));
 
-//    ui->assetView->setDragEnabled(true);
-//    ui->assetView->setDragDropMode(QAbstractItemView::DragDrop);
-////    ui->assetView->viewport()->setAcceptDrops(true);
-////    ui->assetView->setDropIndicatorShown(true);
-////    ui->sceneTree->setDragDropMode(QAbstractItemView::InternalMove);
-////    ui->assetView->setFocusPolicy();
-////    ui->assetView->setMouseTracking(true);
+    connect(ui->assetTree,  SIGNAL(itemChanged(QTreeWidgetItem*, int)),
+            this,           SLOT(treeItemChanged(QTreeWidgetItem*, int)));
 
-//    connect(ui->assetView,  SIGNAL(itemClicked(QListWidgetItem*)),
-//            this,           SLOT(assetViewClicked(QListWidgetItem*)));
+    connect(ui->assetTree,  SIGNAL(customContextMenuRequested(const QPoint&)),
+            this,           SLOT(sceneTreeCustomContextMenu(const QPoint&)));
 
-//    connect(ui->assetView,  SIGNAL(customContextMenuRequested(const QPoint&)),
-//            this,           SLOT(sceneViewCustomContextMenu(const QPoint&)));
+    // assetView section
+    ui->assetView->setContextMenuPolicy(Qt::CustomContextMenu);
+    ui->assetView->setViewMode(QListWidget::IconMode);
+//    ui->assetView->setUniformItemSizes(true);
+//    ui->assetView->setWordWrap(true);
+    ui->assetView->setIconSize(QSize(88, 88));
+    ui->assetView->setResizeMode(QListWidget::Adjust);
+    ui->assetView->setMovement(QListView::Static);
+    ui->assetView->setSelectionBehavior(QAbstractItemView::SelectItems);
+    ui->assetView->setSelectionMode(QAbstractItemView::SingleSelection);
 
-//    connect(ui->assetView,  SIGNAL(itemDoubleClicked(QListWidgetItem*)),
-//            this,           SLOT(assetViewDblClicked(QListWidgetItem*)));
+    ui->assetView->setDragEnabled(true);
+    ui->assetView->setDragDropMode(QAbstractItemView::DragDrop);
+//    ui->assetView->viewport()->setAcceptDrops(true);
+//    ui->assetView->setDropIndicatorShown(true);
+//    ui->sceneTree->setDragDropMode(QAbstractItemView::InternalMove);
+//    ui->assetView->setFocusPolicy();
+//    ui->assetView->setMouseTracking(true);
 
-//    connect(ui->assetView->itemDelegate(),  &QAbstractItemDelegate::commitData,
-//            this,                           &AssetWidget::OnLstItemsCommitData);
+    connect(ui->assetView,  SIGNAL(itemClicked(QListWidgetItem*)),
+            this,           SLOT(assetViewClicked(QListWidgetItem*)));
 
-//    // other
-//    connect(ui->searchBar,  SIGNAL(textChanged(QString)),
-//            this,           SLOT(searchAssets(QString)));
+    connect(ui->assetView,  SIGNAL(customContextMenuRequested(const QPoint&)),
+            this,           SLOT(sceneViewCustomContextMenu(const QPoint&)));
 
-//    connect(ui->importBtn,  SIGNAL(pressed()), SLOT(importAssetB()));
+    connect(ui->assetView,  SIGNAL(itemDoubleClicked(QListWidgetItem*)),
+            this,           SLOT(assetViewDblClicked(QListWidgetItem*)));
 
-//    QDir d(Globals::project->getProjectFolder());
-//    walkFileSystem("", d.absolutePath());
+    connect(ui->assetView->itemDelegate(),  &QAbstractItemDelegate::commitData,
+            this,                           &AssetWidget::OnLstItemsCommitData);
 
-//    // it's important that this get's called after the project dialog has OK'd
-//    populateAssetTree();
+    // other
+    connect(ui->searchBar,  SIGNAL(textChanged(QString)),
+            this,           SLOT(searchAssets(QString)));
+
+    connect(ui->importBtn,  SIGNAL(pressed()), SLOT(importAssetB()));
+
+    QDir d(Globals::project->getProjectFolder());
+    walkFileSystem("", d.absolutePath());
+
+    // it's important that this get's called after the project dialog has OK'd
+    populateAssetTree();
 }
 
 AssetWidget::~AssetWidget()

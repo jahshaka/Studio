@@ -68,6 +68,7 @@ class JahRenderer;
 class GizmoHitData;
 class AdvancedGizmoHandle;
 class MaterialPreset;
+class AssetWidget;
 
 class QOpenGLFunctions_3_2_Core;
 
@@ -295,6 +296,7 @@ private:
     QActionGroup* cameraGroup;
 
     Database *db;
+    AssetWidget *assetWidget;
 
     QUndoStack* undoStack;
 

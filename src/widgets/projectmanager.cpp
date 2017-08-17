@@ -172,11 +172,13 @@ void ProjectManager::handleDone()
 
      this->close();
 
-     progressDialog->setLabelText(QString("Initializing interface..."));
+     progressDialog->setLabelText(QString("Initializing panels..."));
 
 //     window = new MainWindow;
 //     window->showMaximized();
 //     window->setVisible(false);
+
+     emit fileToOpen(pathToOpen);
 
      progressDialog->close();
 
@@ -184,8 +186,6 @@ void ProjectManager::handleDone()
 //     window->openProject(pathToOpen);
  //    window->showMaximized();
 //     window->setVisible(true);
-
-     emit fileToOpen(pathToOpen);
 }
 
 void ProjectManager::handleDoneFuture()

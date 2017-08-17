@@ -36,6 +36,7 @@ public:
     void walkFileSystem(QString folder, QString path);
     void addItem(const QString &asset);
     void updateAssetView(const QString &path);
+    void trigger();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
@@ -45,6 +46,7 @@ protected:
 protected slots:
     void treeItemSelected(QTreeWidgetItem* item);
     void treeItemChanged(QTreeWidgetItem* item,int index);
+
 
     void sceneTreeCustomContextMenu(const QPoint &);
     void sceneViewCustomContextMenu(const QPoint &);
