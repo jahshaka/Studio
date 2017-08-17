@@ -184,22 +184,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
 
     // pm
-    auto pm = new ProjectManager(this, this);
-    QGridLayout* playout = new QGridLayout(ui->pmContainer);
-    playout->addWidget(pm);
-    playout->setMargin(0);
-    ui->pmContainer->setLayout(playout);
+//    pm = new ProjectManager(this);
+//    QGridLayout* playout = new QGridLayout(ui->pmContainer);
+//    playout->addWidget(pm);
+//    playout->setMargin(0);
+//    ui->pmContainer->setLayout(playout);
 
     assetWidget = new AssetWidget(this);
 
     QGridLayout *asLayout = new QGridLayout(ui->assetWidget);
-//    sceneView->setParent(ui->sceneContainer);
     asLayout->addWidget(assetWidget);
     asLayout->setMargin(0);
     ui->assetWidget->setLayout(asLayout);
 
-    connect(pm, SIGNAL(fileToOpen(QString)), SLOT(openProject(QString)));
-    connect(assetWidget, SIGNAL(startManager()), SLOT(startManagerMain()));
+    connect(ui->pmContainer, SIGNAL(fileToOpen(QString)), SLOT(openProject(QString)));
+
+    connect(ui->contentWidget, SIGNAL(currentChanged(int)), SLOT(tabsChanged(int)));
 
     // toolbar stuff
     connect(ui->actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
@@ -1403,6 +1403,13 @@ void MainWindow::takeScreenshot()
 void MainWindow::toggleLightWires(bool state)
 {
     sceneView->setShowLightWires(state);
+}
+
+void MainWindow::tabsChanged(int index)
+{
+    if (index == 1) {
+//        pm->test();
+    }
 }
 
 void MainWindow::newScene()

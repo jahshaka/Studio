@@ -617,7 +617,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
          </widget>
         </item>
         <item row="1" column="0">
-         <widget class="QWidget" name="pmContainer" native="true"/>
+         <widget class="ProjectManager" name="pmContainer" native="true"/>
         </item>
        </layout>
       </widget>

@@ -65,6 +65,8 @@ class AboutDialog;
 
 class JahRenderer;
 
+class ProjectManager;
+
 class GizmoHitData;
 class AdvancedGizmoHandle;
 class MaterialPreset;
@@ -243,6 +245,7 @@ public slots:
 
     void takeScreenshot();
     void toggleLightWires(bool state);
+    void tabsChanged(int);
 
 private slots:
     void translateGizmo();
@@ -297,6 +300,7 @@ private:
 
     Database *db;
     AssetWidget *assetWidget;
+    ProjectManager *pm;
 
     QUndoStack* undoStack;
 

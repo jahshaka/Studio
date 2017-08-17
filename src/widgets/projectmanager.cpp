@@ -31,11 +31,11 @@ void reducer(QVector<ModelData> &accum, const QVector<ModelData> &interm)
     accum.append(interm);
 }
 
-ProjectManager::ProjectManager(MainWindow *window, QWidget *parent) : QWidget(parent), ui(new Ui::ProjectManager)
+ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::ProjectManager)
 {
     ui->setupUi(this);
 
-    window = window;
+    settings = SettingsManager::getDefaultManager();
 
     ui->listWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -50,26 +50,7 @@ ProjectManager::ProjectManager(MainWindow *window, QWidget *parent) : QWidget(pa
     ui->listWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
 
-    settings = SettingsManager::getDefaultManager();
-
-    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-    auto projectFolder = settings->getValue("default_directory", path).toString();
-
-    QDir dir(projectFolder);
-    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
-
-    foreach (const QFileInfo &file, files) {
-        auto item = new QListWidgetItem();
-        item->setToolTip(file.absoluteFilePath());
-        item->setData(Qt::DisplayRole, file.baseName());
-        item->setData(Qt::UserRole, file.absoluteFilePath() + "/" + file.baseName() + Constants::PROJ_EXT);
-        if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
-            item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
-        } else {
-            item->setIcon(QIcon(":/app/images/no_preview.png"));
-        }
-        ui->listWidget->addItem(item);
-    }
+    update();
 
     connect(ui->deleteProject,  SIGNAL(pressed()), SLOT(deleteProject()));
     connect(ui->listWidget,     SIGNAL(itemDoubleClicked(QListWidgetItem*)),
@@ -170,22 +151,13 @@ void ProjectManager::handleDone()
          }
      }
 
-     this->close();
+//     this->close();
 
      progressDialog->setLabelText(QString("Initializing panels..."));
-
-//     window = new MainWindow;
-//     window->showMaximized();
-//     window->setVisible(false);
 
      emit fileToOpen(pathToOpen);
 
      progressDialog->close();
-
-//     progressDialog->reset();
-//     window->openProject(pathToOpen);
- //    window->showMaximized();
-//     window->setVisible(true);
 }
 
 void ProjectManager::handleDoneFuture()
@@ -193,10 +165,34 @@ void ProjectManager::handleDoneFuture()
 
 }
 
-//QString ProjectManager::fileToOpen(QString &str)
-//{
-//    return str;
-//}
+void ProjectManager::update()
+{
+    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+    auto projectFolder = settings->getValue("default_directory", path).toString();
+
+    QDir dir(projectFolder);
+    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+
+    foreach (const QFileInfo &file, files) {
+        auto item = new QListWidgetItem();
+        item->setToolTip(file.absoluteFilePath());
+        item->setData(Qt::DisplayRole, file.baseName());
+        item->setData(Qt::UserRole, file.absoluteFilePath() + "/" + file.baseName() + Constants::PROJ_EXT);
+        if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
+            item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
+        } else {
+            item->setIcon(QIcon(":/app/images/no_preview.png"));
+        }
+        ui->listWidget->addItem(item);
+    }
+}
+
+void ProjectManager::test()
+{
+    qDebug() << "what";
+//    ui->listWidget->setVisible(true);
+    this->repaint();
+}
 
 void ProjectManager::prepareStore(QString path)
 {

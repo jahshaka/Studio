@@ -34,12 +34,15 @@ class ProjectManager : public QWidget
     Q_OBJECT
 
 public:
-    ProjectManager(MainWindow *window, QWidget *parent = nullptr);
+    ProjectManager(QWidget *parent = nullptr);
     ~ProjectManager();
 
     void prepareStore(QString path);
     void walkFileSystem(QString folder, QString path);
     QVector<ModelData> fetchModel(const QString &path);
+    void update();
+
+    void test();
 
 protected slots:
     void listWidgetCustomContextMenu(const QPoint&);
@@ -50,6 +53,7 @@ protected slots:
 
     void handleDone();
     void handleDoneFuture();
+
 
 signals:
     void fileToOpen(const QString& str);
