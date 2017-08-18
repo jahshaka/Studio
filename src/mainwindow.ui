@@ -480,6 +480,16 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
            </widget>
           </item>
           <item>
+           <widget class="QCheckBox" name="wireCheck">
+            <property name="text">
+             <string>Light Wireframes</string>
+            </property>
+            <property name="tristate">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
            <spacer name="horizontalSpacer">
             <property name="orientation">
              <enum>Qt::Horizontal</enum>

@@ -115,6 +115,7 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     auto editorData = new EditorData();
     editorData->editorCamera = camera;
     editorData->distFromPivot = (float)camObj["distanceFromPivot"].toDouble(5.0f);
+    editorData->showLightWires = editorObj["showLightWires"].toBool();
 
 
     return editorData;
