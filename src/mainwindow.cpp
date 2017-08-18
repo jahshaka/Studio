@@ -81,7 +81,7 @@ For more information see the LICENSE file
 #include "core/materialpreset.h"
 #include "widgets/postprocesseswidget.h"
 
-#include "src/widgets/projectmanager.h"
+#include "widgets/projectmanager.h"
 
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
@@ -195,6 +195,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->assetWidget->setLayout(asLayout);
 
     connect(ui->pmContainer, SIGNAL(fileToOpen(QString)), SLOT(openProject(QString)));
+    connect(ui->pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
 
     connect(ui->contentWidget, SIGNAL(currentChanged(int)), SLOT(tabsChanged(int)));
 
@@ -586,25 +587,26 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    event->ignore();
+    event->accept();
+//    event->ignore();
 
-    if (UiManager::isUndoStackDirty()) {
-        QMessageBox::StandardButton reply;
-        reply = QMessageBox::question(this,
-                                      "Unsaved Changes",
-                                      "There are unsaved changes, save before closing?",
-                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
-        if (reply == QMessageBox::Yes) {
-            saveScene();
-            event->accept();
-            this->close();
-        } else if (reply == QMessageBox::No) {
-            event->accept();
-            this->close();
-        }
-    } else {
-        event->accept();
-    }
+//    if (UiManager::isUndoStackDirty()) {
+//        QMessageBox::StandardButton reply;
+//        reply = QMessageBox::question(this,
+//                                      "Unsaved Changes",
+//                                      "There are unsaved changes, save before closing?",
+//                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+//        if (reply == QMessageBox::Yes) {
+//            saveScene();
+//            event->accept();
+//            this->close();
+//        } else if (reply == QMessageBox::No) {
+//            event->accept();
+//            this->close();
+//        }
+//    } else {
+//        event->accept();
+//    }
 
     settings->setValue("geometry", saveGeometry());
     settings->setValue("windowState", saveState());
@@ -774,7 +776,7 @@ void MainWindow::saveScene()
                                        sceneView->getEditorData());
     db->updateScene(blob);
 
-    auto img = sceneView->takeScreenshot(512, 256);
+    auto img = sceneView->takeScreenshot(512, 512);
     img.save(Globals::project->getProjectFolder() + "/Metadata/preview.png");
 
 //    auto vp = viewport;
@@ -1491,6 +1493,7 @@ void MainWindow::projectManager(bool mainWindowActive)
 
 void MainWindow::newProject(const QString &filename, const QString &projectPath)
 {
+    ui->contentWidget->setCurrentIndex(0);
     newScene();
 
     auto pPath = QDir(projectPath).filePath(filename + Constants::PROJ_EXT);
@@ -1513,7 +1516,45 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
     UiManager::updateWindowTitle();
 //    settings->addRecentlyOpenedScene(str);
 
+    assetWidget->trigger();
+
     delete writer;
+
+
+//    // SWITCH
+//    ui->contentWidget->setCurrentIndex(0);
+
+//    this->sceneView->makeCurrent();
+//    //remove current scene first
+//    this->removeScene();
+
+//    //load new scene
+//    auto reader = new SceneReader();
+
+//    EditorData* editorData = nullptr;
+
+//    db->initializeDatabase(filename);
+
+//    Globals::project->setFilePath(filename);
+//    UiManager::updateWindowTitle();
+
+//    auto postMan = sceneView->getRenderer()->getPostProcessManager();
+//    postMan->clearPostProcesses();
+//    auto scene = reader->readScene(filename, db->getSceneBlob(), postMan, &editorData);
+//    this->sceneView->doneCurrent();
+
+//    setScene(scene);
+
+//    postProcessWidget->setPostProcessMgr(postMan);
+
+//    if (editorData != nullptr) {
+//        sceneView->setEditorData(editorData);
+//        ui->wireCheck->setChecked(editorData->showLightWires);
+//    }
+
+//    assetWidget->trigger();
+
+//    delete reader;
 }
 
 void MainWindow::showAboutDialog()

@@ -26,6 +26,7 @@ class SettingsManager;
 #include <QTreeWidgetItem>
 #include <QWidget>
 #include <QFileDialog>
+#include <QMessageBox>
 
 class MainWindow;
 
@@ -40,7 +41,10 @@ public:
     void prepareStore(QString path);
     void walkFileSystem(QString folder, QString path);
     QVector<ModelData> fetchModel(const QString &path);
+    bool copyDirectoryFiles(const QString &fromDir, const QString &toDir, bool coverFileIfExist);
     void update();
+
+    QString loadProjectDelegate();
 
     void test();
     void resizeEvent(QResizeEvent*);
@@ -50,21 +54,22 @@ protected slots:
     void removeFromList();
     void deleteProject();
     void openProject();
+    void openSampleProject(QListWidgetItem*);
     void renameItem(QListWidgetItem*);
     void openRecentProject(QListWidgetItem*);
+    void newProject();
 
     void renameProject();
+    void updateCurrentItem(QListWidgetItem*);
 
     void handleDone();
     void handleDoneFuture();
-
-    void browser();
-    void samples();
 
     void OnLstItemsCommitData(QWidget*);
 
 signals:
     void fileToOpen(const QString& str);
+    void fileToCreate(const QString& str, const QString& str2);
 
 private:
     Ui::ProjectManager *ui;

@@ -499,15 +499,15 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
                </widget>
               </item>
               <item>
-                 <widget class="QCheckBox" name="wireCheck">
-                  <property name="text">
-                   <string>Light Wireframes</string>
-                  </property>
-                  <property name="tristate">
-                   <bool>false</bool>
-                  </property>
-                 </widget>
-                </item>
+               <widget class="QCheckBox" name="wireCheck">
+                <property name="text">
+                 <string>Light Wireframes</string>
+                </property>
+                <property name="tristate">
+                 <bool>false</bool>
+                </property>
+               </widget>
+              </item>
               <item>
                <spacer name="horizontalSpacer">
                 <property name="orientation">
@@ -562,7 +562,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
          <number>0</number>
         </property>
         <property name="topMargin">
-         <number>0</number>
+         <number>6</number>
         </property>
         <property name="rightMargin">
          <number>0</number>
@@ -571,52 +571,6 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
          <number>0</number>
         </property>
         <item row="0" column="0">
-         <widget class="QWidget" name="widget_2" native="true">
-          <property name="minimumSize">
-           <size>
-            <width>0</width>
-            <height>0</height>
-           </size>
-          </property>
-          <property name="maximumSize">
-           <size>
-            <width>16777215</width>
-            <height>32</height>
-           </size>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">background: #212121</string>
-          </property>
-          <layout class="QHBoxLayout" name="horizontalLayout_2">
-           <property name="leftMargin">
-            <number>0</number>
-           </property>
-           <property name="topMargin">
-            <number>0</number>
-           </property>
-           <property name="rightMargin">
-            <number>0</number>
-           </property>
-           <property name="bottomMargin">
-            <number>0</number>
-           </property>
-           <item>
-            <spacer name="horizontalSpacer_2">
-             <property name="orientation">
-              <enum>Qt::Horizontal</enum>
-             </property>
-             <property name="sizeHint" stdset="0">
-              <size>
-               <width>40</width>
-               <height>20</height>
-              </size>
-             </property>
-            </spacer>
-           </item>
-          </layout>
-         </widget>
-        </item>
-        <item row="1" column="0">
          <widget class="ProjectManager" name="pmContainer" native="true"/>
         </item>
        </layout>
@@ -650,8 +604,6 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <property name="title">
      <string>Jahshaka</string>
     </property>
-    <addaction name="actionNewProject"/>
-    <addaction name="actionManage_Projects"/>
     <addaction name="separator"/>
     <addaction name="actionPreferences"/>
     <addaction name="actionExit"/>
@@ -886,7 +838,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>332</height>
+          <height>335</height>
          </rect>
         </property>
         <property name="styleSheet">
@@ -1429,10 +1381,6 @@ QToolButton:checked
    <class>ProjectManager</class>
    <extends>QWidget</extends>
    <header>src/widgets/projectmanager.h</header>
-   <class>AssetWidget</class>
-   <extends>QWidget</extends>
-   <header>src/widgets/assetwidget.h</header>
-   <container>1</container>
   </customwidget>
  </customwidgets>
  <resources>

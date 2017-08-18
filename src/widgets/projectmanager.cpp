@@ -15,6 +15,7 @@
 #include "../mainwindow.h"
 #include "../core/project.h"
 #include "../core/database/database.h"
+#include "../dialogs/newprojectdialog.h"
 #include "../globals.h"
 #include "../constants.h"
 
@@ -48,6 +49,7 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
     ui->listWidget->setMovement(QListView::Static);
     ui->listWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
+    ui->listWidget->setSelectionRectVisible(false);
 
 //    connect(ui->listWidget, SIGNAL(objectNameChanged(QString)),
 //            SLOT(renameItem(QString)));
@@ -55,7 +57,7 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
     connect(ui->listWidget->itemDelegate(), &QAbstractItemDelegate::commitData,
             this,                           &ProjectManager::OnLstItemsCommitData);
 
-//    ui->listWidget->setIconSize(QSize(336, 256));
+    ui->listWidget->setIconSize(QSize(212, 212));
 
     ui->listWidget_2->setFlow(QListView::LeftToRight);
     ui->listWidget_2->setViewMode(QListWidget::IconMode);
@@ -66,18 +68,21 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
     ui->listWidget_2->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->listWidget_2->setSelectionMode(QAbstractItemView::SingleSelection);
 
-    connect(ui->browser, SIGNAL(pressed()), SLOT(browser()));
-    connect(ui->samples, SIGNAL(pressed()), SLOT(samples()));
-
-    ui->browser->setStyleSheet("background: #4898ff");
+    connect(ui->newProject, SIGNAL(pressed()), SLOT(newProject()));
+    connect(ui->openProject, SIGNAL(pressed()), SLOT(openProject()));
+    connect(ui->deleteProject, SIGNAL(pressed()), SLOT(deleteProject()));
 
     update();
 
     connect(ui->deleteProject,  SIGNAL(pressed()), SLOT(deleteProject()));
+    connect(ui->listWidget,     SIGNAL(itemClicked(QListWidgetItem*)),
+            this,               SLOT(updateCurrentItem(QListWidgetItem*)));
     connect(ui->listWidget,     SIGNAL(itemDoubleClicked(QListWidgetItem*)),
             this,               SLOT(openRecentProject(QListWidgetItem*)));
     connect(ui->listWidget,     SIGNAL(customContextMenuRequested(const QPoint&)),
             this,               SLOT(listWidgetCustomContextMenu(const QPoint&)));
+    connect(ui->listWidget_2,   SIGNAL(itemDoubleClicked(QListWidgetItem*)),
+            this,               SLOT(openSampleProject(QListWidgetItem*)));
 }
 
 void ProjectManager::update()
@@ -99,7 +104,7 @@ void ProjectManager::update()
             item->setIcon(QIcon(":/app/images/no_preview.png"));
         }
 
-//        item->setSizeHint(QSize(256, 256));
+//        item->setSizeHint(QSize(3, 256));
         item->setFlags(item->flags() | Qt::ItemIsEditable);
         ui->listWidget->addItem(item);
     }
@@ -173,19 +178,145 @@ void ProjectManager::removeFromList()
 
 void ProjectManager::deleteProject()
 {
-    auto selectedInfo = QFileInfo(currentItem->data(Qt::UserRole).toString());
+    if (currentItem != nullptr) {
+        auto selectedInfo = QFileInfo(currentItem->data(Qt::UserRole).toString());
 
-    QDir dir(selectedInfo.absolutePath());
+        QDir dir(selectedInfo.absolutePath());
 
-    if (dir.removeRecursively()) {
-        delete ui->listWidget->takeItem(ui->listWidget->row(currentItem));
+        if (dir.removeRecursively()) {
+            delete ui->listWidget->takeItem(ui->listWidget->row(currentItem));
+        }
+    }
+}
+
+void ProjectManager::openProject()
+{
+    auto projectFile = QFileInfo(loadProjectDelegate());
+    auto projectPath = projectFile.absolutePath();
+
+    if (!projectPath.isEmpty()) {
+//        Globals::project->setProjectPath(projectPath);
+        Globals::project->setProjectPath(projectPath);
+
+        prepareStore(projectFile.absoluteFilePath());
+
+//        prepareStore(projectFile.absoluteFilePath());
+//        window = new MainWindow;
+//        window->showMaximized();
+//        window->openProject(projectFile.absoluteFilePath());
+
+//        settings->addRecentlyOpenedScene(projectFile.absoluteFilePath());
+//        this->close();
+//        emit accepted();
+
+    }
+
+    else {
+        // QMessageBox msgBox;
+        // msgBox.setStyleSheet("QLabel { width: 128px; }");
+        // msgBox.setIcon(QMessageBox::Warning);
+        // msgBox.setText("Unable to locate project!");
+        // msgBox.setInformativeText("You did not select a folder or the path is invalid");
+        // msgBox.setStandardButtons(QMessageBox::Ok);
+        // msgBox.exec();
     }
 }
 
 
-void ProjectManager::openProject()
+bool ProjectManager::copyDirectoryFiles(const QString &fromDir, const QString &toDir, bool coverFileIfExist)
 {
+    QDir sourceDir(fromDir);
+    QDir targetDir(toDir);
+    if(!targetDir.exists()){    /* if directory don't exists, build it */
+        if(!targetDir.mkdir(targetDir.absolutePath()))
+            return false;
+    }
 
+    QFileInfoList fileInfoList = sourceDir.entryInfoList();
+    foreach(QFileInfo fileInfo, fileInfoList){
+        if(fileInfo.fileName() == "." || fileInfo.fileName() == "..")
+            continue;
+
+        if(fileInfo.isDir()){    /* if it is directory, copy recursively*/
+            if(!copyDirectoryFiles(fileInfo.filePath(),
+                targetDir.filePath(fileInfo.fileName()),
+                coverFileIfExist))
+                return false;
+        }
+        else{            /* if coverFileIfExist == true, remove old file first */
+            if(coverFileIfExist && targetDir.exists(fileInfo.fileName())){
+                targetDir.remove(fileInfo.fileName());
+            }
+
+            // files copy
+            if(!QFile::copy(fileInfo.filePath(),
+                targetDir.filePath(fileInfo.fileName()))){
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
+void ProjectManager::openSampleProject(QListWidgetItem *item)
+{
+    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                    + Constants::PROJECT_FOLDER;
+    auto projectFolder = settings->getValue("default_directory", path).toString();
+
+    QDir targetDir(projectFolder);
+    if(!targetDir.exists()){    /* if directory don't exists, build it */
+        targetDir.mkdir(targetDir.absolutePath());
+    }
+
+    if (QDir(projectFolder + "/" + item->data(Qt::DisplayRole).toString()).exists()) {
+        QMessageBox::StandardButton reply;
+        reply = QMessageBox::question(this, "Project Path not Empty", "Project already Exists! Overwrite?",
+                                        QMessageBox::Yes|QMessageBox::No);
+        if (reply == QMessageBox::Yes) {
+            if (!projectFolder.isEmpty()) {
+                auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
+
+                QString dest = QDir(projectFolder).filePath(projectFile.baseName());
+                if (this->copyDirectoryFiles(projectFile.absolutePath(), dest, true)) {
+
+                    auto newProjectFile = QFileInfo(dest);
+                    auto projectPath = QDir(newProjectFile.absolutePath()).filePath(projectFile.baseName());
+                    Globals::project->setProjectPath(projectPath);
+
+                    auto sln = QDir(projectPath).filePath(projectFile.fileName());
+
+                    prepareStore(sln);
+
+                    settings->addRecentlyOpenedScene(sln);
+                }
+
+//                emit accepted();
+//                this->close();
+            }
+        }
+    } else {
+        if (!projectFolder.isEmpty()) {
+            auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
+
+            QString dest = QDir(projectFolder).filePath(projectFile.baseName());
+            if (this->copyDirectoryFiles(projectFile.absolutePath(), dest, true)) {
+
+                auto newProjectFile = QFileInfo(dest);
+                auto projectPath = QDir(newProjectFile.absolutePath()).filePath(projectFile.baseName());
+                Globals::project->setProjectPath(projectPath);
+
+                auto sln = QDir(projectPath).filePath(projectFile.fileName());
+
+                prepareStore(sln);
+
+                settings->addRecentlyOpenedScene(sln);
+            }
+
+//            emit accepted();
+//            this->close();
+        }
+    }
 }
 
 void ProjectManager::renameItem(QListWidgetItem *item)
@@ -214,9 +345,64 @@ void ProjectManager::openRecentProject(QListWidgetItem *item)
     // switch to viewport tab
 }
 
+QString ProjectManager::loadProjectDelegate()
+{
+    auto projectFileName = QFileDialog::getOpenFileName(this, "Select Project File",
+                                                        nullptr, "Jahshaka Project File (*.jah)");
+    return projectFileName;
+}
+
+void ProjectManager::newProject()
+{
+    NewProjectDialog dialog;
+
+    dialog.exec();
+
+    auto projectName = dialog.getProjectInfo().projectName;
+    auto projectPath = dialog.getProjectInfo().projectPath;
+
+    if (!projectName.isEmpty() || !projectName.isNull()) {
+        auto fullProjectPath = QDir(projectPath).filePath(projectName);
+        auto slnName = QDir(fullProjectPath).filePath(projectName + Constants::PROJ_EXT);
+
+        Globals::project->setFilePath(slnName);
+        Globals::project->setProjectPath(fullProjectPath);
+
+        // make a dir and the default subfolders
+        QDir projectDir(fullProjectPath);
+        if (!projectDir.exists()) projectDir.mkpath(".");
+
+        for (auto folder : Constants::PROJECT_DIRS) {
+            QDir dir(QDir(fullProjectPath).filePath(folder));
+            dir.mkpath(".");
+        }
+
+        emit fileToCreate(projectName, fullProjectPath);
+
+//        window = new MainWindow;
+//        window->setAttribute(Qt::WA_DeleteOnClose);
+//        window->showMaximized();
+//        window->newProject(projectName, fullProjectPath);
+//        settings->addRecentlyOpenedScene(slnName);
+//        settings->setValue("last_wd", projectPath);
+
+//        emit accepted();
+//        this->close();
+    }
+}
+
 void ProjectManager::renameProject()
 {
     ui->listWidget->editItem(currentItem);
+}
+
+void ProjectManager::updateCurrentItem(QListWidgetItem *item)
+{
+    currentItem = item;
+
+    auto icon = item->icon();
+    ui->name->setText(item->text());
+    ui->preview->setPixmap(icon.pixmap(QSize(212, 212)));
 }
 
 void ProjectManager::handleDone()
@@ -251,20 +437,6 @@ void ProjectManager::handleDone()
 void ProjectManager::handleDoneFuture()
 {
 
-}
-
-void ProjectManager::browser()
-{
-    ui->stackedWidget->setCurrentIndex(0);
-    ui->samples->setStyleSheet("background: #444");
-    ui->browser->setStyleSheet("background: #4898ff");
-}
-
-void ProjectManager::samples()
-{
-    ui->stackedWidget->setCurrentIndex(1);
-    ui->samples->setStyleSheet("background: #4898ff");
-    ui->browser->setStyleSheet("background: #444");
 }
 
 void ProjectManager::OnLstItemsCommitData(QWidget *listItem)

@@ -18,6 +18,11 @@
 	background: #212121;
 }
 
+#listWidget {
+	padding-top: 4px;
+	padding-left: 2px;
+}
+
 QPushButton, QToolButton {
 	border: 0;
 	padding: 6px;
@@ -65,7 +70,7 @@ QListWidget::item:selected {
 	color: #CECECE;
 }</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout">
+  <layout class="QGridLayout" name="gridLayout_3">
    <property name="leftMargin">
     <number>0</number>
    </property>
@@ -78,16 +83,22 @@ QListWidget::item:selected {
    <property name="bottomMargin">
     <number>0</number>
    </property>
-   <property name="spacing">
-    <number>0</number>
-   </property>
-   <item row="0" column="0">
-    <widget class="QStackedWidget" name="stackedWidget">
+   <item row="1" column="0">
+    <widget class="QTabWidget" name="tabWidget">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
      <property name="currentIndex">
       <number>0</number>
      </property>
-     <widget class="QWidget" name="page_3">
-      <layout class="QGridLayout" name="gridLayout_2">
+     <widget class="QWidget" name="tab">
+      <attribute name="title">
+       <string>Projects</string>
+      </attribute>
+      <layout class="QGridLayout" name="gridLayout">
        <property name="leftMargin">
         <number>0</number>
        </property>
@@ -136,8 +147,11 @@ QListWidget::item:selected {
        </item>
       </layout>
      </widget>
-     <widget class="QWidget" name="page_4">
-      <layout class="QGridLayout" name="gridLayout_3">
+     <widget class="QWidget" name="tab_2">
+      <attribute name="title">
+       <string>Samples</string>
+      </attribute>
+      <layout class="QGridLayout" name="gridLayout_2">
        <property name="leftMargin">
         <number>0</number>
        </property>
@@ -185,49 +199,49 @@ QListWidget::item:selected {
         </widget>
        </item>
       </layout>
+      <zorder>stackedWidget</zorder>
+      <zorder>listWidget_2</zorder>
      </widget>
     </widget>
    </item>
-   <item row="0" column="1">
-    <widget class="QWidget" name="widget" native="true">
+   <item row="1" column="1">
+    <widget class="QWidget" name="widget_2" native="true">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-       <horstretch>1</horstretch>
+       <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
      <property name="minimumSize">
       <size>
-       <width>128</width>
+       <width>233</width>
        <height>0</height>
       </size>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout">
-      <property name="topMargin">
-       <number>0</number>
-      </property>
-      <property name="rightMargin">
-       <number>0</number>
-      </property>
-      <property name="bottomMargin">
-       <number>0</number>
-      </property>
       <item>
-       <widget class="QPushButton" name="browser">
+       <widget class="QPushButton" name="newProject">
         <property name="text">
-         <string>Browser</string>
+         <string>New</string>
         </property>
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="samples">
+       <widget class="QPushButton" name="openProject">
         <property name="text">
-         <string>Samples</string>
+         <string>Open</string>
         </property>
        </widget>
       </item>
       <item>
-       <spacer name="verticalSpacer">
+       <widget class="QPushButton" name="deleteProject">
+        <property name="text">
+         <string>Delete</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="verticalSpacer_2">
         <property name="orientation">
          <enum>Qt::Vertical</enum>
         </property>
@@ -240,26 +254,65 @@ QListWidget::item:selected {
        </spacer>
       </item>
       <item>
-       <widget class="QPushButton" name="openProject">
-        <property name="text">
-         <string>Open</string>
+       <layout class="QGridLayout" name="gridLayout_5">
+        <property name="leftMargin">
+         <number>4</number>
         </property>
-       </widget>
+        <property name="rightMargin">
+         <number>4</number>
+        </property>
+        <item row="0" column="0">
+         <widget class="QLabel" name="preview">
+          <property name="scaledContents">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
       <item>
-       <widget class="QPushButton" name="removeProject">
+       <widget class="QLabel" name="name">
+        <property name="font">
+         <font>
+          <pointsize>11</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
         <property name="text">
-         <string>Remove</string>
+         <string>No project selected</string>
+        </property>
+        <property name="indent">
+         <number>1</number>
         </property>
        </widget>
       </item>
-      <item>
-       <widget class="QPushButton" name="deleteProject">
-        <property name="text">
-         <string>Delete</string>
-        </property>
-       </widget>
-      </item>
+     </layout>
+     <zorder>verticalSpacer_2</zorder>
+     <zorder>preview</zorder>
+     <zorder>preview</zorder>
+     <zorder>gridLayoutWidget</zorder>
+     <zorder>openProject</zorder>
+     <zorder>deleteProject</zorder>
+     <zorder>name</zorder>
+     <zorder>newProject</zorder>
+    </widget>
+   </item>
+   <item row="0" column="0" colspan="2">
+    <widget class="QWidget" name="widget" native="true">
+     <layout class="QHBoxLayout" name="horizontalLayout_2">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
      </layout>
     </widget>
    </item>
