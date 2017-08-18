@@ -71,10 +71,10 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
     connect(ui->newProject, SIGNAL(pressed()), SLOT(newProject()));
     connect(ui->openProject, SIGNAL(pressed()), SLOT(openProject()));
     connect(ui->deleteProject, SIGNAL(pressed()), SLOT(deleteProject()));
+    connect(ui->renameButton, SIGNAL(pressed()), SLOT(renameProject()));
 
     update();
 
-    connect(ui->deleteProject,  SIGNAL(pressed()), SLOT(deleteProject()));
     connect(ui->listWidget,     SIGNAL(itemClicked(QListWidgetItem*)),
             this,               SLOT(updateCurrentItem(QListWidgetItem*)));
     connect(ui->listWidget,     SIGNAL(itemDoubleClicked(QListWidgetItem*)),
@@ -147,6 +147,15 @@ void ProjectManager::listWidgetCustomContextMenu(const QPoint &pos)
 
     if (index.isValid()) {
         currentItem = ui->listWidget->itemAt(pos);
+
+        folder = currentItem->data(Qt::UserRole).toString();
+        auto f = QFileInfo(folder);
+        folder = f.absolutePath();
+
+        auto icon = currentItem->icon();
+        ui->name->setText(currentItem->text());
+        ui->preview->setPixmap(icon.pixmap(QSize(212, 212)));
+
 //        assetItem.selectedPath = item->data(Qt::UserRole).toString();
 
         // check if current project is open first
@@ -178,13 +187,15 @@ void ProjectManager::removeFromList()
 
 void ProjectManager::deleteProject()
 {
-    if (currentItem != nullptr) {
-        auto selectedInfo = QFileInfo(currentItem->data(Qt::UserRole).toString());
+    if (!folder.isEmpty()) {
+        QDir dir(folder);
 
-        QDir dir(selectedInfo.absolutePath());
-
-        if (dir.removeRecursively()) {
-            delete ui->listWidget->takeItem(ui->listWidget->row(currentItem));
+        if (dir.exists()) {
+            if (dir.removeRecursively()) {
+                if (currentItem) {
+                    delete ui->listWidget->takeItem(ui->listWidget->row(currentItem));
+                }
+            }
         }
     }
 }
@@ -398,7 +409,9 @@ void ProjectManager::renameProject()
 
 void ProjectManager::updateCurrentItem(QListWidgetItem *item)
 {
-    currentItem = item;
+    folder = item->data(Qt::UserRole).toString();
+    auto f = QFileInfo(folder);
+    folder = f.absolutePath();
 
     auto icon = item->icon();
     ui->name->setText(item->text());
@@ -442,7 +455,7 @@ void ProjectManager::handleDoneFuture()
 void ProjectManager::OnLstItemsCommitData(QWidget *listItem)
 {
     QString folderName = reinterpret_cast<QLineEdit*>(listItem)->text();
-    qDebug() << folderName;
+//    qDebug() << folderName;
 
 //    QDir dir(assetItem.selectedPath + '/' + folderName);
 //    if (!dir.exists()) {

@@ -77,6 +77,8 @@ private:
 
     MainWindow *window;
 
+    QString folder;
+
 //    Database *db;
 
     QListWidgetItem *currentItem;
