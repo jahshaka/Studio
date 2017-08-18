@@ -81,7 +81,7 @@ For more information see the LICENSE file
 #include "core/materialpreset.h"
 #include "widgets/postprocesseswidget.h"
 
-#include "widgets/projectmanager.h"
+#include "src/widgets/projectmanager.h"
 
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
@@ -95,11 +95,8 @@ For more information see the LICENSE file
 #include "commands/deletescenenodecommand.h"
 
 #include "widgets/screenshotwidget.h"
-<<<<<<< HEAD
 #include "editor/editordata.h"
-=======
 #include "widgets/assetwidget.h"
->>>>>>> Repurpose AssetWidget and defer initialization
 
 enum class VRButtonMode : int
 {
@@ -777,7 +774,7 @@ void MainWindow::saveScene()
                                        sceneView->getEditorData());
     db->updateScene(blob);
 
-    auto img = sceneView->takeScreenshot(800, 600);
+    auto img = sceneView->takeScreenshot(512, 256);
     img.save(Globals::project->getProjectFolder() + "/Metadata/preview.png");
 
 //    auto vp = viewport;

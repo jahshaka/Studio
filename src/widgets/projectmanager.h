@@ -43,17 +43,25 @@ public:
     void update();
 
     void test();
+    void resizeEvent(QResizeEvent*);
 
 protected slots:
     void listWidgetCustomContextMenu(const QPoint&);
     void removeFromList();
     void deleteProject();
     void openProject();
+    void renameItem(QListWidgetItem*);
     void openRecentProject(QListWidgetItem*);
+
+    void renameProject();
 
     void handleDone();
     void handleDoneFuture();
 
+    void browser();
+    void samples();
+
+    void OnLstItemsCommitData(QWidget*);
 
 signals:
     void fileToOpen(const QString& str);

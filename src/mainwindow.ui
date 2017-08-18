@@ -365,8 +365,8 @@ QTabWidget::pane {
 }
 
 QTabBar::tab:selected {
-    background-color: #303030;
-    border-bottom: 2px solid #3498db;
+	background-color: #303030;
+	border-bottom: 2px solid #3498db;
 }
 
 QTabBar::tab {

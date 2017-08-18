@@ -14,7 +14,7 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">#listWidget {
+   <string notr="true">#listWidget, #listWidget_2 {
 	background: #212121;
 }
 
@@ -32,12 +32,13 @@ QToolButton::hover {
 	background: #555;
 }
 
+/*
 QListWidget {
 	background: #404040;
 	color: #CECECE;
 	padding-left: 16px;
 	padding-top: 24px;
-}
+}*/
 
 QListWidget::item {
 	border: 4px solid transparent;
@@ -82,6 +83,9 @@ QListWidget::item:selected {
    </property>
    <item row="0" column="0">
     <widget class="QStackedWidget" name="stackedWidget">
+     <property name="currentIndex">
+      <number>0</number>
+     </property>
      <widget class="QWidget" name="page_3">
       <layout class="QGridLayout" name="gridLayout_2">
        <property name="leftMargin">
@@ -199,15 +203,24 @@ QListWidget::item:selected {
       </size>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout">
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
       <item>
-       <widget class="QPushButton" name="pushButton">
+       <widget class="QPushButton" name="browser">
         <property name="text">
          <string>Browser</string>
         </property>
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="pushButton_2">
+       <widget class="QPushButton" name="samples">
         <property name="text">
          <string>Samples</string>
         </property>

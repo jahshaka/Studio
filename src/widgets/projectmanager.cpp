@@ -24,6 +24,7 @@
 #include "../io/assetmanager.h"
 
 #include <QDebug>
+#include <QLineEdit>
 #include <QMenu>
 
 void reducer(QVector<ModelData> &accum, const QVector<ModelData> &interm)
@@ -41,14 +42,34 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
 
     ui->listWidget->setFlow(QListView::LeftToRight);
     ui->listWidget->setViewMode(QListWidget::IconMode);
-//    ui->listWidget->setSpacing(12);
-//    ui->listWidget->setIconSize(QSize(192, 160));
     ui->listWidget->setUniformItemSizes(true);
     ui->listWidget->setSizeAdjustPolicy(QListWidget::AdjustToContents);
     ui->listWidget->setResizeMode(QListWidget::Adjust);
     ui->listWidget->setMovement(QListView::Static);
     ui->listWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
+
+//    connect(ui->listWidget, SIGNAL(objectNameChanged(QString)),
+//            SLOT(renameItem(QString)));
+
+    connect(ui->listWidget->itemDelegate(), &QAbstractItemDelegate::commitData,
+            this,                           &ProjectManager::OnLstItemsCommitData);
+
+//    ui->listWidget->setIconSize(QSize(336, 256));
+
+    ui->listWidget_2->setFlow(QListView::LeftToRight);
+    ui->listWidget_2->setViewMode(QListWidget::IconMode);
+    ui->listWidget_2->setUniformItemSizes(true);
+    ui->listWidget_2->setSizeAdjustPolicy(QListWidget::AdjustToContents);
+    ui->listWidget_2->setResizeMode(QListWidget::Adjust);
+    ui->listWidget_2->setMovement(QListView::Static);
+    ui->listWidget_2->setSelectionBehavior(QAbstractItemView::SelectItems);
+    ui->listWidget_2->setSelectionMode(QAbstractItemView::SingleSelection);
+
+    connect(ui->browser, SIGNAL(pressed()), SLOT(browser()));
+    connect(ui->samples, SIGNAL(pressed()), SLOT(samples()));
+
+    ui->browser->setStyleSheet("background: #4898ff");
 
     update();
 
@@ -57,6 +78,59 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
             this,               SLOT(openRecentProject(QListWidgetItem*)));
     connect(ui->listWidget,     SIGNAL(customContextMenuRequested(const QPoint&)),
             this,               SLOT(listWidgetCustomContextMenu(const QPoint&)));
+}
+
+void ProjectManager::update()
+{
+    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+    auto projectFolder = settings->getValue("default_directory", path).toString();
+
+    QDir dir(projectFolder);
+    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+
+    foreach (const QFileInfo &file, files) {
+        auto item = new QListWidgetItem();
+        item->setToolTip(file.absoluteFilePath());
+        item->setData(Qt::DisplayRole, file.baseName());
+        item->setData(Qt::UserRole, file.absoluteFilePath() + "/" + file.baseName() + Constants::PROJ_EXT);
+        if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
+            item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
+        } else {
+            item->setIcon(QIcon(":/app/images/no_preview.png"));
+        }
+
+//        item->setSizeHint(QSize(256, 256));
+        item->setFlags(item->flags() | Qt::ItemIsEditable);
+        ui->listWidget->addItem(item);
+    }
+
+    QDir dir2(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
+        QFileInfoList files2 = dir2.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+        foreach (const QFileInfo &file, files2) {
+            auto item = new QListWidgetItem();
+            item->setToolTip(file.absoluteFilePath());
+            item->setData(Qt::DisplayRole, file.baseName());
+            item->setData(Qt::UserRole, file.absoluteFilePath() + "/" + file.baseName() + Constants::PROJ_EXT);
+            if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
+                item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
+            } else {
+                item->setIcon(QIcon(":/app/images/no_preview.png"));
+            }
+            ui->listWidget_2->addItem(item);
+        }
+}
+
+void ProjectManager::resizeEvent(QResizeEvent *event)
+{
+//    qDebug() << event->size().width();
+
+//    if (event->size().width() <= 874) {
+//        ui->listWidget->setIconSize(QSize(312, 256));
+//        ui->listWidget->setGridSize(QSize(336, 256));
+//    } else {
+//        ui->listWidget->setIconSize(QSize(256, 256));
+////        ui->listWidget->setGridSize(QSize(event->size().width() / 3, 256));
+//    }
 }
 
 void ProjectManager::listWidgetCustomContextMenu(const QPoint &pos)
@@ -71,11 +145,15 @@ void ProjectManager::listWidgetCustomContextMenu(const QPoint &pos)
 //        assetItem.selectedPath = item->data(Qt::UserRole).toString();
 
         // check if current project is open first
-        if (true) {
-            action = new QAction(QIcon(), "Delete project", this);
+        if (currentItem->data(Qt::DisplayRole).toString() != Globals::project->getProjectName()) {
+            action = new QAction(QIcon(), "Delete", this);
             connect(action, SIGNAL(triggered()), this, SLOT(deleteProject()));
             menu.addAction(action);
         }
+
+        action = new QAction(QIcon(), "Rename", this);
+        connect(action, SIGNAL(triggered()), this, SLOT(renameProject()));
+        menu.addAction(action);
     }
 
     menu.exec(ui->listWidget->mapToGlobal(pos));
@@ -110,6 +188,11 @@ void ProjectManager::openProject()
 
 }
 
+void ProjectManager::renameItem(QListWidgetItem *item)
+{
+
+}
+
 void ProjectManager::openRecentProject(QListWidgetItem *item)
 {
     auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
@@ -129,6 +212,11 @@ void ProjectManager::openRecentProject(QListWidgetItem *item)
 //    emit accepted();
 
     // switch to viewport tab
+}
+
+void ProjectManager::renameProject()
+{
+    ui->listWidget->editItem(currentItem);
 }
 
 void ProjectManager::handleDone()
@@ -165,26 +253,42 @@ void ProjectManager::handleDoneFuture()
 
 }
 
-void ProjectManager::update()
+void ProjectManager::browser()
 {
-    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-    auto projectFolder = settings->getValue("default_directory", path).toString();
+    ui->stackedWidget->setCurrentIndex(0);
+    ui->samples->setStyleSheet("background: #444");
+    ui->browser->setStyleSheet("background: #4898ff");
+}
 
-    QDir dir(projectFolder);
-    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+void ProjectManager::samples()
+{
+    ui->stackedWidget->setCurrentIndex(1);
+    ui->samples->setStyleSheet("background: #4898ff");
+    ui->browser->setStyleSheet("background: #444");
+}
 
-    foreach (const QFileInfo &file, files) {
-        auto item = new QListWidgetItem();
-        item->setToolTip(file.absoluteFilePath());
-        item->setData(Qt::DisplayRole, file.baseName());
-        item->setData(Qt::UserRole, file.absoluteFilePath() + "/" + file.baseName() + Constants::PROJ_EXT);
-        if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
-            item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
-        } else {
-            item->setIcon(QIcon(":/app/images/no_preview.png"));
-        }
-        ui->listWidget->addItem(item);
-    }
+void ProjectManager::OnLstItemsCommitData(QWidget *listItem)
+{
+    QString folderName = reinterpret_cast<QLineEdit*>(listItem)->text();
+    qDebug() << folderName;
+
+//    QDir dir(assetItem.selectedPath + '/' + folderName);
+//    if (!dir.exists()) {
+//        dir.mkpath(".");
+//    }
+
+//    auto child = ui->assetTree->currentItem();
+
+//    if (child) {    // should always be set but just in case
+//        auto branch = new QTreeWidgetItem();
+//        branch->setIcon(0, QIcon(":/app/icons/folder-symbol.svg"));
+//        branch->setText(0, folderName);
+//        branch->setData(0, Qt::UserRole, assetItem.selectedPath + '/' + folderName);
+//        child->addChild(branch);
+
+//        ui->assetTree->clearSelection();
+//        branch->setSelected(true);
+//    }
 }
 
 void ProjectManager::test()
