@@ -1346,6 +1346,9 @@ void MainWindow::takeScreenshot()
 {
     auto img = sceneView->takeScreenshot();
     ScreenshotWidget screenshotWidget;
+    screenshotWidget.setMaximumWidth(1280);
+    screenshotWidget.setMaximumHeight(720);
+    screenshotWidget.layout()->setSizeConstraint(QLayout::SetNoConstraint);
     screenshotWidget.setImage(img);
     screenshotWidget.exec();
 }

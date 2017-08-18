@@ -9,6 +9,7 @@ ScreenshotWidget::ScreenshotWidget(QWidget *parent) :
     ui->setupUi(this);
 
     this->setWindowTitle("Screenshot");
+    ui->label->setScaledContents(true);
 
     connect(ui->saveButton, SIGNAL(pressed()), this, SLOT(saveImage()));
     connect(ui->closeButton, SIGNAL(pressed()), this, SLOT(close()));
