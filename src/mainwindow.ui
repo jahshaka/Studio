@@ -798,7 +798,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>332</height>
+          <height>346</height>
          </rect>
         </property>
         <property name="styleSheet">
