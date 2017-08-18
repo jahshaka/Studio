@@ -154,7 +154,6 @@ void SceneWriter::writePostProcessData(QJsonObject &projectObj, iris::PostProces
 void SceneWriter::writeEditorData(QJsonObject& projectObj,EditorData* editorData)
 {
     QJsonObject editorObj;
-    editorObj["showLightWires"] = editorData->showLightWires;
 
     QJsonObject cameraObj;
     auto cam = editorData->editorCamera;
