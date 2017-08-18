@@ -143,9 +143,6 @@ public:
     void doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject = true, bool skipLights = false, bool skipViewers = false);
 
     QImage takeScreenshot(int width=1920, int height=1080);
-    bool getShowLightWires() const;
-    void setShowLightWires(bool value);
-
 protected:
     void initializeGL();
     bool eventFilter(QObject *obj, QEvent *event);
@@ -216,8 +213,6 @@ private:
     iris::MeshPtr dirLightMesh;
     iris::MeshPtr spotLightMesh;
     iris::MaterialPtr lineMat;
-
-    bool showLightWires;
 
     void initLightAssets();
     iris::MeshPtr createDirLightMesh(float radius = 1.0);

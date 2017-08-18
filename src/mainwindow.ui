@@ -480,16 +480,6 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
            </widget>
           </item>
           <item>
-           <widget class="QCheckBox" name="wireCheck">
-            <property name="text">
-             <string>Light Wireframes</string>
-            </property>
-            <property name="tristate">
-             <bool>false</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
            <spacer name="horizontalSpacer">
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
@@ -798,7 +788,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>332</height>
+          <height>346</height>
          </rect>
         </property>
         <property name="styleSheet">

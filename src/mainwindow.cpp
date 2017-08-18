@@ -95,7 +95,6 @@ For more information see the LICENSE file
 #include "commands/deletescenenodecommand.h"
 
 #include "widgets/screenshotwidget.h"
-#include "editor/editordata.h"
 
 enum class VRButtonMode : int
 {
@@ -211,9 +210,6 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->actionFreeCamera->setChecked(true);
 
     connect(ui->screenshotBtn, SIGNAL(pressed()), this, SLOT(takeScreenshot()));
-
-    ui->wireCheck->setChecked(sceneView->getShowLightWires());
-    connect(ui->wireCheck, SIGNAL(toggled(bool)), this, SLOT(toggleLightWires(bool)));
 
     // this acts as a spacer
     QWidget* empty = new QWidget();
@@ -841,7 +837,6 @@ void MainWindow::openProject(QString filename, bool startupLoad)
 
     if (editorData != nullptr) {
         sceneView->setEditorData(editorData);
-        ui->wireCheck->setChecked(editorData->showLightWires);
     }
 
     delete reader;
@@ -1348,11 +1343,6 @@ void MainWindow::takeScreenshot()
     ScreenshotWidget screenshotWidget;
     screenshotWidget.setImage(img);
     screenshotWidget.exec();
-}
-
-void MainWindow::toggleLightWires(bool state)
-{
-    sceneView->setShowLightWires(state);
 }
 
 void MainWindow::newScene()
