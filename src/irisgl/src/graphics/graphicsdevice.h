@@ -73,6 +73,7 @@ public:
     void setRenderTarget(QList<Texture2DPtr> colorTargets, Texture2DPtr depthTarget);
     void clearRenderTarget();
 
+    void clear(QColor color);
     void clear(GLuint bits);
     void clear(GLuint bits, QColor color, float depth=1.0f, int stencil=0);
 
@@ -86,6 +87,8 @@ public:
 
     void drawPrimitives(GLenum primitiveType,int start, int count);
     QOpenGLFunctions_3_2_Core *getGL() const;
+
+    static GraphicsDevicePtr create();
 };
 
 }

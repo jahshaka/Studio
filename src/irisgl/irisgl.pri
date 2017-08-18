@@ -82,7 +82,8 @@ HEADERS += \
     $$PWD/src/graphics/utils/shapehelper.h \
     $$PWD/src/materials/colormaterial.h \
     $$PWD/src/postprocesses/fxaapostprocess.h \
-    $$PWD/src/graphics/graphicsdevice.h
+    $$PWD/src/graphics/graphicsdevice.h \
+    $$PWD/src/widgets/renderwidget.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -135,7 +136,8 @@ SOURCES += \
     $$PWD/src/graphics/utils/shapehelper.cpp \
     $$PWD/src/materials/colormaterial.cpp \
     $$PWD/src/postprocesses/fxaapostprocess.cpp \
-    $$PWD/src/graphics/graphicsdevice.cpp
+    $$PWD/src/graphics/graphicsdevice.cpp \
+    $$PWD/src/widgets/renderwidget.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

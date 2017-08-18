@@ -30,6 +30,11 @@ QOpenGLFunctions_3_2_Core *GraphicsDevice::getGL() const
     return gl;
 }
 
+GraphicsDevicePtr GraphicsDevice::create()
+{
+    return GraphicsDevicePtr(new GraphicsDevice());
+}
+
 GraphicsDevice::GraphicsDevice()
 {
     context = QOpenGLContext::currentContext();
@@ -88,6 +93,11 @@ void GraphicsDevice::clearRenderTarget()
 
         activeRT.reset();
     }
+}
+
+void GraphicsDevice::clear(QColor color)
+{
+    clear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT, color);
 }
 
 void GraphicsDevice::clear(GLuint bits)
