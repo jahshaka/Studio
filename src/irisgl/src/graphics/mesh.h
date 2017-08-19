@@ -34,16 +34,17 @@ class BoundingSphere;
 enum class VertexAttribUsage : int
 {
     Position = 0,
-    TexCoord0 = 1,
-    TexCoord1 = 2,
-    TexCoord2 = 3,
-    TexCoord3 = 4,
-    Normal = 5,
-    Tangent = 6,
-    BiTangent = 7,
-    BoneIndices = 8,
-    BoneWeights = 9,
-    Count = 10
+    Color = 1,
+    TexCoord0 = 2,
+    TexCoord1 = 3,
+    TexCoord2 = 4,
+    TexCoord3 = 5,
+    Normal = 6,
+    Tangent = 7,
+    BiTangent = 8,
+    BoneIndices = 9,
+    BoneWeights = 10,
+    Count = 11
 };
 
 struct MeshMaterialData

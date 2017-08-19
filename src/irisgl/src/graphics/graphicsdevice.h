@@ -24,11 +24,16 @@ class VertexBuffer
     friend class GraphicsDevice;
 public:
     void* data;
+    int dataSize;
+
     GLuint bufferId;
     VertexLayout vertexLayout;
     GraphicsDevicePtr device;
 
-    VertexBuffer(GraphicsDevicePtr device, VertexLayout vertexLayout);
+    static VertexBufferPtr create(GraphicsDevicePtr device, VertexLayout vertexLayout)
+    {
+        return VertexBufferPtr(new VertexBuffer(device, vertexLayout));
+    }
 
     template<typename T>
     void setData(T* data, unsigned int sizeInBytes)
@@ -37,6 +42,9 @@ public:
     }
 
     void setData(void* data, unsigned int sizeinBytes);
+
+private:
+    VertexBuffer(GraphicsDevicePtr device, VertexLayout vertexLayout);
 };
 
 class IndexBuffer
@@ -61,13 +69,25 @@ class GraphicsDevice
     QOpenGLFunctions_3_2_Core* gl;
     QOpenGLContext* context;
 
-    QStack<QRect> viewportStack;
+    QRect viewport;
     RenderTargetPtr _internalRT;
     RenderTargetPtr activeRT;
 
-    QList<TexturePtr> textureUnits;
+    QVector<TexturePtr> textureUnits;
+    QVector<VertexBufferPtr> vertexBuffers;
+    IndexBufferPtr indexBuffers;
+
+    // apparently gl needs at least one to be set
+    // before you can render
+    GLuint defautVAO;
+
+    ShaderPtr activeShader;
+
 public:
     GraphicsDevice();
+
+    void setViewport(const QRect& vp);
+    QRect getViewport();
 
     void setRenderTarget(RenderTargetPtr renderTarget);
     void setRenderTarget(QList<Texture2DPtr> colorTargets, Texture2DPtr depthTarget);

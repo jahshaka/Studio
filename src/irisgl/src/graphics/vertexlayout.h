@@ -42,6 +42,8 @@ public:
 
     void addAttrib(VertexAttribUsage usage, int type, int count, int sizeInBytes);
 
+    int getStride();
+
     //todo: make this more efficient
     void bind();
     void unbind();

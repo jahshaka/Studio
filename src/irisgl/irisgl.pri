@@ -83,7 +83,8 @@ HEADERS += \
     $$PWD/src/materials/colormaterial.h \
     $$PWD/src/postprocesses/fxaapostprocess.h \
     $$PWD/src/graphics/graphicsdevice.h \
-    $$PWD/src/widgets/renderwidget.h
+    $$PWD/src/widgets/renderwidget.h \
+    $$PWD/src/graphics/spritebatch.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -137,7 +138,8 @@ SOURCES += \
     $$PWD/src/materials/colormaterial.cpp \
     $$PWD/src/postprocesses/fxaapostprocess.cpp \
     $$PWD/src/graphics/graphicsdevice.cpp \
-    $$PWD/src/widgets/renderwidget.cpp
+    $$PWD/src/widgets/renderwidget.cpp \
+    $$PWD/src/graphics/spritebatch.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

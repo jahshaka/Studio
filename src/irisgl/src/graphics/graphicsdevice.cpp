@@ -4,6 +4,9 @@
 #include "rendertarget.h"
 #include "texture2d.h"
 #include "vertexlayout.h"
+#include "shader.h"
+
+#include <QOpenGLShaderProgram>
 
 namespace iris
 {
@@ -17,12 +20,12 @@ VertexBuffer::VertexBuffer(GraphicsDevicePtr device, VertexLayout vertexLayout)
 
 void VertexBuffer::setData(void *data, unsigned int sizeInBytes)
 {
-    memcpy(this->data, data, sizeInBytes);
+    //memcpy(this->data, data, sizeInBytes);
 
     auto gl = device->getGL();
     gl->glBindBuffer(GL_ARRAY_BUFFER, bufferId);
     gl->glBufferData(GL_ARRAY_BUFFER, sizeInBytes, data, GL_STATIC_DRAW);
-    gl->glBindBuffer(GL_ARRAY_BUFFER, bufferId);
+    gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 QOpenGLFunctions_3_2_Core *GraphicsDevice::getGL() const
@@ -43,6 +46,19 @@ GraphicsDevice::GraphicsDevice()
     // 8 texture units by default
     for(int i =0;i<8;i++)
         textureUnits.append(TexturePtr());
+
+    gl->glGenVertexArrays(1, &defautVAO);
+}
+
+void GraphicsDevice::setViewport(const QRect& vp)
+{
+    viewport = vp;
+    gl->glViewport(vp.x(), vp.y(), vp.width(),vp.height());
+}
+
+QRect GraphicsDevice::getViewport()
+{
+    return viewport;
 }
 
 void GraphicsDevice::setRenderTarget(RenderTargetPtr renderTarget)
@@ -113,10 +129,19 @@ void GraphicsDevice::clear(GLuint bits, QColor color, float depth, int stencil)
     gl->glClear(bits);
 }
 
+void GraphicsDevice::setShader(ShaderPtr shader)
+{
+    activeShader = shader;
+    shader->program->bind();
+}
+
 void GraphicsDevice::setTexture(int target, Texture2DPtr texture)
 {
     gl->glActiveTexture(GL_TEXTURE0+target);
-    gl->glBindTexture(GL_TEXTURE_2D, texture->getTextureId());
+    if (!!texture)
+        gl->glBindTexture(GL_TEXTURE_2D, texture->getTextureId());
+    else
+        gl->glBindTexture(GL_TEXTURE_2D, 0);
     gl->glActiveTexture(GL_TEXTURE0);
 }
 
@@ -125,6 +150,24 @@ void GraphicsDevice::clearTexture(int target)
     gl->glActiveTexture(GL_TEXTURE0+target);
     gl->glBindTexture(GL_TEXTURE_2D, 0);
     gl->glActiveTexture(GL_TEXTURE0);
+}
+
+void GraphicsDevice::setVertexBuffer(VertexBufferPtr vertexBuffer)
+{
+    vertexBuffers.clear();
+    vertexBuffers.append(vertexBuffer);
+}
+
+void GraphicsDevice::drawPrimitives(GLenum primitiveType, int start, int count)
+{
+    gl->glBindVertexArray(defautVAO);
+    for(auto buffer : vertexBuffers) {
+        gl->glBindBuffer(GL_ARRAY_BUFFER, buffer->bufferId);
+        buffer->vertexLayout.bind();
+    }
+
+    gl->glDrawArrays(primitiveType, start, count);
+    gl->glBindVertexArray(0);
 }
 
 

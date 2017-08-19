@@ -21,7 +21,7 @@ class RenderWidget : public QOpenGLWidget,
 protected:
     GraphicsDevicePtr device;
     //ContentManagerPtr content;
-    //SpriteBatchPtr spriteBatch;
+    SpriteBatchPtr spriteBatch;
 public:
     explicit RenderWidget(QWidget *parent);
     void initializeGL();

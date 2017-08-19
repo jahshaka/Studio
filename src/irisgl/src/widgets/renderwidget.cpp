@@ -1,4 +1,5 @@
 #include "renderwidget.h"
+#include "../graphics/spritebatch.h"
 #include <QTimer>
 #include <QElapsedTimer>
 
@@ -47,9 +48,12 @@ void RenderWidget::initializeGL()
     initializeOpenGLFunctions();
 
     device = GraphicsDevice::create();
+    spriteBatch = SpriteBatch::create(device);
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
+
+    device->setViewport(this->geometry());
 
     start();
 
@@ -58,7 +62,7 @@ void RenderWidget::initializeGL()
     updateTimer->start();
 
     elapsedTimer->start();
-    qDebug()<<"initializing";
+    //qDebug()<<"initializing";
 }
 
 void RenderWidget::paintGL()

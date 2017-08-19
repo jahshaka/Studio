@@ -42,6 +42,7 @@ QOpenGLShaderProgram* GraphicsHelper::loadShader(QString vsPath,QString fsPath)
     program->addShader(fshader);
 
     program->bindAttributeLocation("a_pos",(int)VertexAttribUsage::Position);
+    program->bindAttributeLocation("a_color",(int)VertexAttribUsage::Color);
     program->bindAttributeLocation("a_texCoord",(int)VertexAttribUsage::TexCoord0);
     program->bindAttributeLocation("a_texCoord1",(int)VertexAttribUsage::TexCoord1);
     program->bindAttributeLocation("a_texCoord2",(int)VertexAttribUsage::TexCoord2);

@@ -77,6 +77,7 @@ Shader::Shader(QOpenGLFunctions_3_2_Core* gl,QString vertexShader,QString fragme
     program->addShader(fshader);
 
     program->bindAttributeLocation("a_pos",(int)VertexAttribUsage::Position);
+    program->bindAttributeLocation("a_color",(int)VertexAttribUsage::Color);
     program->bindAttributeLocation("a_texCoord",(int)VertexAttribUsage::TexCoord0);
     program->bindAttributeLocation("a_texCoord1",(int)VertexAttribUsage::TexCoord1);
     program->bindAttributeLocation("a_texCoord2",(int)VertexAttribUsage::TexCoord2);
