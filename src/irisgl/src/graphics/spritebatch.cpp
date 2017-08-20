@@ -73,6 +73,7 @@ void SpriteBatch::end()
     auto gl = graphics->getGL();
     gl->glDisable(GL_CULL_FACE);
     gl->glEnable(GL_BLEND);
+    gl->glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 
     // build vbo and submit
     while(items.size()>0) {
