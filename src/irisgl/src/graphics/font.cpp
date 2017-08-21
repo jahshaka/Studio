@@ -6,20 +6,22 @@
 #include <QPixmap>
 #include <QPainter>
 #include <QMap>
+#include <QDebug>
 
 namespace iris
 {
 
+// https://github.com/libgdx/libgdx/blob/master/extensions/gdx-freetype/src/com/badlogic/gdx/graphics/g2d/freetype/FreeTypeFontGenerator.java
 Font::Font(GraphicsDevicePtr graphics, QString fontName)
 {
     this->graphics = graphics;
-    font = QFont("Arial",8);
+    font = QFont("Arial",16);
     metrics = new QFontMetrics(font);
 
 //    Glyph glyph;
 //    createGlyph(QChar('a'),glyph);
 //    glyphs.insert(QChar('a'),glyph);
-    QString chars = " abcdefghijklmnopqrstuvwxyzBCDEFGHIJKLMNOPQRSTUVWXZY1234567890._-/!A";
+    QString chars = " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890\"!`?'.,;:()[]{}<>|/@\\^$€-%+=#_&~*";
 
     for(auto chr : chars) {
         Glyph glyph;
@@ -43,7 +45,7 @@ void Font::createGlyph(QChar chr, Glyph &glyph)
     painter.setFont(font);
     painter.setPen(QColor(255, 255, 255, 255));
     painter.setBrush(QBrush(QColor(255, 255, 255, 255)));
-    painter.drawText(0, charHeight, chr);
+    painter.drawText(0, metrics->ascent(), chr);
     painter.end();
 
     // convert luminance to alpha to make texture blend properly
@@ -51,7 +53,8 @@ void Font::createGlyph(QChar chr, Glyph &glyph)
     for(int x = 0;x<image.width(); x++) {
         for(int y = 0;y<image.height(); y++) {
             auto pixel = image.pixelColor(x,y);
-            if (pixel.alpha()!=0) {
+            //qDebug()<<pixel.alpha();
+            if (pixel.alpha()>0) {
                 // make pixel white and use luminance as alpha
                 // can just use red() since r,g and b are the same
                 image.setPixelColor(x,y,QColor(255, 255, 255, pixel.red()));
