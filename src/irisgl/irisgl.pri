@@ -84,7 +84,8 @@ HEADERS += \
     $$PWD/src/postprocesses/fxaapostprocess.h \
     $$PWD/src/graphics/graphicsdevice.h \
     $$PWD/src/widgets/renderwidget.h \
-    $$PWD/src/graphics/spritebatch.h
+    $$PWD/src/graphics/spritebatch.h \
+    $$PWD/src/graphics/font.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -139,7 +140,8 @@ SOURCES += \
     $$PWD/src/postprocesses/fxaapostprocess.cpp \
     $$PWD/src/graphics/graphicsdevice.cpp \
     $$PWD/src/widgets/renderwidget.cpp \
-    $$PWD/src/graphics/spritebatch.cpp
+    $$PWD/src/graphics/spritebatch.cpp \
+    $$PWD/src/graphics/font.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

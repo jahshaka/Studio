@@ -2,6 +2,7 @@
 #include "graphicsdevice.h"
 #include "shader.h"
 #include "texture2d.h"
+#include "font.h"
 #include <QVector>
 #include <QMatrix4x4>
 #include <QOpenGLShaderProgram>
@@ -62,6 +63,19 @@ void SpriteBatch::draw(Texture2DPtr texture, QVector2D pos, QColor color)
                   0);
 }
 
+void SpriteBatch::drawString(FontPtr font, QString text, QVector2D pos, QColor color)
+{
+    int advance = 0;
+    int spacing = 0;
+    for(auto chr : text) {
+        auto& glyph = font->glyphs[chr];
+        draw(glyph.tex, pos, color);
+
+        //advance += glyph.width + spacing;
+        pos.setX(pos.x() + glyph.width + spacing);
+    }
+}
+
 void SpriteBatch::end()
 {
     int vertexCount = 0;
@@ -74,6 +88,7 @@ void SpriteBatch::end()
     gl->glDisable(GL_CULL_FACE);
     gl->glEnable(GL_BLEND);
     gl->glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    gl->glBlendFunc(GL_ONE,GL_ONE); // works well with fonts
 
     // build vbo and submit
     while(items.size()>0) {

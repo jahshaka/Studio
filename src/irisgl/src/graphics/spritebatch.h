@@ -42,7 +42,8 @@ public:
 
     void begin();
     void draw(Texture2DPtr texture, QRect rect, QColor color);
-    void draw(Texture2DPtr texture, QVector2D rect, QColor color);
+    void draw(Texture2DPtr texture, QVector2D pos, QColor color);
+    void drawString(FontPtr font, QString text, QVector2D pos, QColor color);
     void end();
 
 private:

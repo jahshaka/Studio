@@ -74,6 +74,7 @@ class VertexBuffer;
 class IndexBuffer;
 class GraphicsDevice;
 class SpriteBatch;
+class Font;
 
 typedef QSharedPointer<iris::Animation> AnimationPtr;
 typedef QSharedPointer<Shader> ShaderPtr;
@@ -105,6 +106,7 @@ typedef QSharedPointer<VertexBuffer> VertexBufferPtr;
 typedef QSharedPointer<IndexBuffer> IndexBufferPtr;
 typedef QSharedPointer<GraphicsDevice> GraphicsDevicePtr;
 typedef QSharedPointer<SpriteBatch> SpriteBatchPtr;
+typedef QSharedPointer<Font> FontPtr;
 
 
 

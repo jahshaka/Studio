@@ -82,6 +82,9 @@ public:
     int getWidth();
     int getHeight();
 
+    void setFilters(QOpenGLTexture::Filter minFilter, QOpenGLTexture::Filter magFilter);
+    void setWrapMode(QOpenGLTexture::WrapMode wrapS, QOpenGLTexture::WrapMode wrapT);
+
 private:
     Texture2D(QOpenGLTexture* tex);
 

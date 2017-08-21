@@ -166,4 +166,19 @@ int Texture2D::getHeight()
     return texture->height();
 }
 
+void Texture2D::setFilters(QOpenGLTexture::Filter minFilter, QOpenGLTexture::Filter magFilter)
+{
+    texture->bind();
+    texture->setMinMagFilters(minFilter, magFilter);
+    texture->release();
+}
+
+void Texture2D::setWrapMode(QOpenGLTexture::WrapMode wrapS, QOpenGLTexture::WrapMode wrapT)
+{
+    texture->bind();
+    texture->setWrapMode(QOpenGLTexture::DirectionS, wrapS);
+    texture->setWrapMode(QOpenGLTexture::DirectionT, wrapT);
+    texture->release();
+}
+
 }
