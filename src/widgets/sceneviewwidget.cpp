@@ -55,6 +55,8 @@ For more information see the LICENSE file
 #include "../irisgl/src/graphics/utils/linemeshbuilder.h"
 #include "../irisgl/src/materials/colormaterial.h"
 
+#include "../editor/thumbnailgenerator.h"
+
 SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 {
     dragging = false;
@@ -277,6 +279,8 @@ void SceneViewWidget::initializeGL()
     screenshotRT->addTexture(screenshotTex);
 
     emit initializeGraphics(this, this);
+
+    auto thumbGen = new ThumbnialGenerator();
 
     auto timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(update()));
