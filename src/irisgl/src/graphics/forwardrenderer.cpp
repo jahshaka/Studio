@@ -801,10 +801,10 @@ void ForwardRenderer::createShadowShader()
 void ForwardRenderer::createParticleShader()
 {
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile(":app/shaders/particle.vert");
+    vshader->compileSourceFile(":/shaders/particle.vert");
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile(":app/shaders/particle.frag");
+    fshader->compileSourceFile(":/shaders/particle.frag");
 
     particleShader = new QOpenGLShaderProgram;
     particleShader->addShader(vshader);
@@ -817,8 +817,8 @@ void ForwardRenderer::createParticleShader()
 
 void ForwardRenderer::createEmitterShader()
 {
-    emitterShader = GraphicsHelper::loadShader(":app/shaders/emitter.vert",
-                                               ":app/shaders/emitter.frag");
+    emitterShader = GraphicsHelper::loadShader(":/shaders/emitter.vert",
+                                               ":/shaders/emitter.frag");
 }
 
 ForwardRenderer::~ForwardRenderer()

@@ -85,8 +85,8 @@
          <string>Add</string>
         </property>
         <property name="icon">
-         <iconset resource="../../icons.qrc">
-          <normaloff>:/app/icons/add-2.svg</normaloff>:/app/icons/add-2.svg</iconset>
+         <iconset>
+          <normaloff>:/icons/add-2.svg</normaloff>:/icons/add-2.svg</iconset>
         </property>
         <property name="popupMode">
          <enum>QToolButton::MenuButtonPopup</enum>
@@ -120,8 +120,8 @@
          <string>Delete</string>
         </property>
         <property name="icon">
-         <iconset resource="../../icons.qrc">
-          <normaloff>:/app/icons/error.svg</normaloff>:/app/icons/error.svg</iconset>
+         <iconset>
+          <normaloff>:/icons/error.svg</normaloff>:/icons/error.svg</iconset>
         </property>
        </widget>
       </item>
@@ -161,8 +161,6 @@
    </item>
   </layout>
  </widget>
- <resources>
-  <include location="../../icons.qrc"/>
- </resources>
+ <resources/>
  <connections/>
 </ui>

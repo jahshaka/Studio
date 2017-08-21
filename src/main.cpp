@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
 
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication app(argc, argv);
-    app.setWindowIcon(QIcon(":/app/images/logo.png"));
+    app.setWindowIcon(QIcon(":/images/logo.png"));
 
     QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication::setDesktopSettingsAware(false);
@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
 //    QGuiApplication::setFont(font);
 
     QSplashScreen splash;
-    auto image = QPixmap(":/app/images/splashv2.jpg");
+    auto image = QPixmap(":/images/splashv2.jpg");
     splash.setPixmap(image);
     splash.show();
 

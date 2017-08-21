@@ -27,6 +27,11 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 TARGET = JahshakaVR
 TEMPLATE = app
 
+OBJECTS_DIR = generated_files
+MOC_DIR     = generated_files
+UI_DIR      = generated_files
+RCC_DIR     = generated_files
+
 SOURCES += src/main.cpp\
     src/mainwindow.cpp \
     src/widgets/colorvaluewidget.cpp \
@@ -248,17 +253,18 @@ FORMS    += \
     src/widgets/screenshotwidget.ui
 
 RESOURCES += \
-    shaders.qrc \
-    icons.qrc \
-    images.qrc \
-    materials.qrc \
-    models.qrc \
-    textures.qrc \
-    modelpresets.qrc \
-    fonts.qrc \
-    skies.qrc
+    app/shaders.qrc \
+    app/icons.qrc \
+    app/images.qrc \
+    app/materials.qrc \
+    app/models.qrc \
+    app/textures.qrc \
+    app/modelpresets.qrc \
+    app/fonts.qrc \
+    app/skies.qrc \
+    app/images.qrc
 
-win32: RC_ICONS = icon.ico
+win32: RC_ICONS = app/icons/icon.ico
 
 # http://stackoverflow.com/questions/32631084/create-dir-copy-files-with-qmake
 !equals(PWD, $$OUT_PWD) {

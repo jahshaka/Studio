@@ -32,8 +32,8 @@
    <string>Dialog</string>
   </property>
   <property name="windowIcon">
-   <iconset resource="../../icons.qrc">
-    <normaloff>:/app/icons/logo03.svg</normaloff>:/app/icons/logo03.svg</iconset>
+   <iconset resource="../../app/icons.qrc">
+    <normaloff>:/icons/logo03.svg</normaloff>:/icons/logo03.svg</iconset>
   </property>
   <property name="styleSheet">
    <string notr="true">#LicenseDialog {
@@ -90,7 +90,7 @@ QScrollBar::sub-line:vertical {
  }
 
 QScrollBar::up-arrow:vertical {
-    image: url(:/app/icons/up-arrow.svg);
+    image: url(:/icons/up-arrow.svg);
 }
 
 QScrollBar::up-arrow:vertical:hover {
@@ -98,7 +98,7 @@ QScrollBar::up-arrow:vertical:hover {
 }
 
 QScrollBar::down-arrow:vertical {
-    image: url(:/app/icons/down-arrow.svg);
+    image: url(:/icons/down-arrow.svg);
 }
 
 QScrollBar::down-arrow:vertical:hover {
@@ -137,7 +137,7 @@ QScrollBar::down-arrow:vertical:hover {
          <string/>
         </property>
         <property name="pixmap">
-         <pixmap resource="../../images.qrc">:/app/images/sidepanelimage.jpg</pixmap>
+         <pixmap resource="../../app/images.qrc">:/images/sidepanelimage.jpg</pixmap>
         </property>
        </widget>
       </item>
@@ -904,8 +904,8 @@ p, li { white-space: pre-wrap; }
   </layout>
  </widget>
  <resources>
-  <include location="../../icons.qrc"/>
-  <include location="../../images.qrc"/>
+  <include location="../../app/images.qrc"/>
+  <include location="../../app/icons.qrc"/>
  </resources>
  <connections/>
 </ui>

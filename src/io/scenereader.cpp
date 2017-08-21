@@ -452,9 +452,9 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
 
     //TODO: move this to the sceneview widget or somewhere more appropriate
     if (lightNode->lightType == iris::LightType::Directional) {
-        lightNode->icon = iris::Texture2D::load(":/app/icons/light.png");
+        lightNode->icon = iris::Texture2D::load(":/icons/light.png");
     } else {
-        lightNode->icon = iris::Texture2D::load(":/app/icons/bulb.png");
+        lightNode->icon = iris::Texture2D::load(":/icons/bulb.png");
     }
 
     lightNode->iconSize = 0.5f;

@@ -274,7 +274,7 @@ QWidget#addBtn:pressed {
          <string/>
         </property>
         <property name="pixmap">
-         <pixmap resource="../../images.qrc">:/app/images/sidepanelimage.jpg</pixmap>
+         <pixmap resource="../../app/images.qrc">:/images/sidepanelimage.jpg</pixmap>
         </property>
         <property name="scaledContents">
          <bool>false</bool>
@@ -310,7 +310,7 @@ QWidget#addBtn:pressed {
   </layout>
  </widget>
  <resources>
-  <include location="../../images.qrc"/>
+  <include location="../../app/images.qrc"/>
  </resources>
  <connections/>
 </ui>
