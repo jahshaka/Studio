@@ -46,6 +46,20 @@ void Font::createGlyph(QChar chr, Glyph &glyph)
     painter.drawText(0, charHeight, chr);
     painter.end();
 
+    // convert luminance to alpha to make texture blend properly
+    // when using GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA
+    for(int x = 0;x<image.width(); x++) {
+        for(int y = 0;y<image.height(); y++) {
+            auto pixel = image.pixelColor(x,y);
+            if (pixel.alpha()!=0) {
+                // make pixel white and use luminance as alpha
+                // can just use red() since r,g and b are the same
+                image.setPixelColor(x,y,QColor(255, 255, 255, pixel.red()));
+            }
+
+        }
+    }
+
     //auto gl = device->getGL();
     //QImage image = pixmap->toImage();
     image.save("/home/nicolas/Desktop/image.png");
