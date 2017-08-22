@@ -12,13 +12,68 @@
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/materials/custommaterial.h"
 
+#include <QMutex>
+#include <QMutexLocker>
+
+void RenderThread::requestThumbnail(const ThumbnailRequest &request)
+{
+    QMutexLocker(&requestMutex);
+    requests.append(request);
+}
+
 void RenderThread::run()
 {
     context->makeCurrent(surface);
+    initScene();
+
+    renderTarget = iris::RenderTarget::create(500, 500);
+    tex = iris::Texture2D::create(500, 500);
+    renderTarget->addTexture(tex);
+
+    while(true) {
+        ThumbnailRequest request;
+        bool hasRequest = false;
+        {
+            QMutexLocker(requestMutex);
+            if(requests.size()>0)
+            {
+                request = requests.takeFirst();
+                hasRequest = true;
+            }
+        }
+
+        if (hasRequest) {
+
+            prepareScene(request);
+            scene->rootNode->addChild(meshNode);
+
+            scene->update(0);
+            renderer->renderSceneToRenderTarget(renderTarget, cam, false);
+
+            cleanupScene();
+            //meshNode->
+
+            // save contents to file
+            auto img = renderTarget->toImage();
+            //todo: strip alpha channel from image
+            img.save("/home/nicolas/Desktop/screenshot_thumb.jpg");
+
+            ThumbnailResult result;
+            result.id = request.id;
+            result.type = request.type;
+            result.path = request.path;
+            result.thumbnail = img;
+            emit thumbnailComplete(result);
+        }
+    }
+}
+
+void RenderThread::initScene()
+{
     auto gl = context->versionFunctions<QOpenGLFunctions_3_2_Core>();
     gl->glEnable(GL_DEPTH_TEST);
     gl->glEnable(GL_CULL_FACE);
-    gl->glDisable(GL_BLEND);
+    //gl->glDisable(GL_BLEND);
 
     renderer = iris::ForwardRenderer::create();
     scene = iris::Scene::create();
@@ -27,7 +82,7 @@ void RenderThread::run()
     // create scene and renderer
     cam = iris::CameraNode::create();
     cam->setLocalPos(QVector3D(0, 5, 14));
-    cam->setLocalRot(QQuaternion::fromEulerAngles(-30, 0, 0));
+    cam->setLocalRot(QQuaternion::fromEulerAngles(-20, 0, 0));
 
     scene->setSkyColor(QColor(255, 72, 72));
     scene->setAmbientColor(QColor(255, 255, 255));
@@ -50,7 +105,7 @@ void RenderThread::run()
     m->setValue("useAlpha", false);
     node->setMaterial(m);
 
-    scene->rootNode->addChild(node);
+    //scene->rootNode->addChild(node);
 
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
@@ -74,26 +129,58 @@ void RenderThread::run()
     scene->fogEnabled = false;
     scene->shadowEnabled = false;
 
-
-    renderTarget = iris::RenderTarget::create(500, 500);
-    tex = iris::Texture2D::create(500, 500);
-    renderTarget->addTexture(tex);
-
-    //renderTarget->bind();
-    // render scene to fbo
-    gl->glClearColor(255,0,0,255);
-    gl->glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-    gl->glViewport(0,0,500,500);
-    scene->update(0);
     cam->update(0);// necessary!
+}
 
-    renderer->renderSceneToRenderTarget(renderTarget, cam, false);
-    //renderTarget->unbind();
+void RenderThread::prepareScene(const ThumbnailRequest &request)
+{
+    if(request.type == ThumbnailRequestType::Mesh)
+    {
+        // load mesh as scene
+        meshNode = iris::MeshNode::loadAsSceneFragment(request.path,[](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+        {
+            auto mat = iris::CustomMaterial::create();
+            if (mesh->hasSkeleton())
+                mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
+            else
+                mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
-    // save contents to file
-    auto img = renderTarget->toImage();
-    //todo: strip alpha channel from image
-    img.save("/home/nicolas/Desktop/screenshot_thumb.jpg");
+            mat->setValue("diffuseColor", data.diffuseColor);
+            mat->setValue("specularColor", data.specularColor);
+            mat->setValue("ambientColor", data.ambientColor);
+            mat->setValue("emissionColor", data.emissionColor);
+
+            mat->setValue("shininess", data.shininess);
+
+            if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
+                mat->setValue("diffuseTexture", data.diffuseTexture);
+
+            if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
+                mat->setValue("specularTexture", data.specularTexture);
+
+            if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
+                mat->setValue("normalTexture", data.normalTexture);
+
+            return mat;
+        });
+
+        scene->rootNode->addChild(meshNode);
+
+        // apply default material
+    }
+    else
+    {
+        // load sphere model
+
+        // load material
+
+        // apply
+    }
+}
+
+void RenderThread::cleanupScene()
+{
+    scene->rootNode->removeChild(meshNode);
 }
 
 ThumbnialGenerator::ThumbnialGenerator()
@@ -117,6 +204,11 @@ ThumbnialGenerator::ThumbnialGenerator()
     renderThread->surface = surface;
 
     renderThread->start();
+}
+
+void ThumbnialGenerator::requestThumbnail(ThumbnailRequestType type, QString path, QString id)
+{
+
 }
 
 void ThumbnialGenerator::run()
