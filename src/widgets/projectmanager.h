@@ -12,6 +12,8 @@ namespace Ui {
 }
 
 class aiScene;
+class GridWidget;
+class DynamicGrid;
 
 struct ModelData {
     ModelData() = default;
@@ -62,6 +64,9 @@ protected slots:
     void renameProject();
     void updateCurrentItem(QListWidgetItem*);
 
+    void myProjects();
+    void sampleProjects();
+
     void handleDone();
     void handleDoneFuture();
 
@@ -89,6 +94,8 @@ private:
     QSharedPointer<ProgressDialog> progressDialog;
     bool isNewProject;
     bool isMainWindowActive;
+
+    DynamicGrid *dynamicGrid;
 };
 
 struct AssetWidgetConcurrentWrapper {

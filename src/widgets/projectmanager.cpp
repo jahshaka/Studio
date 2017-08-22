@@ -24,6 +24,9 @@
 #include "../core/guidmanager.h"
 #include "../io/assetmanager.h"
 
+#include "dynamicgrid.h"
+#include "gridwidget.h"
+
 #include <QDebug>
 #include <QLineEdit>
 #include <QMenu>
@@ -36,6 +39,8 @@ void reducer(QVector<ModelData> &accum, const QVector<ModelData> &interm)
 ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::ProjectManager)
 {
     ui->setupUi(this);
+
+    ui->controls->setVisible(false);
 
     settings = SettingsManager::getDefaultManager();
 
@@ -73,7 +78,10 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
     connect(ui->deleteProject, SIGNAL(pressed()), SLOT(deleteProject()));
     connect(ui->renameButton, SIGNAL(pressed()), SLOT(renameProject()));
 
-    update();
+    connect(ui->projects, SIGNAL(pressed()), SLOT(myProjects()));
+    connect(ui->samples, SIGNAL(pressed()), SLOT(sampleProjects()));
+
+    ui->projects->setStyleSheet("background: #4998ff");
 
     connect(ui->listWidget,     SIGNAL(itemClicked(QListWidgetItem*)),
             this,               SLOT(updateCurrentItem(QListWidgetItem*)));
@@ -83,6 +91,27 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
             this,               SLOT(listWidgetCustomContextMenu(const QPoint&)));
     connect(ui->listWidget_2,   SIGNAL(itemDoubleClicked(QListWidgetItem*)),
             this,               SLOT(openSampleProject(QListWidgetItem*)));
+
+    dynamicGrid = new DynamicGrid(this);
+
+//    QList<QString> path;
+
+//    QDirIterator it(":/images", QDirIterator::Subdirectories);
+//    while (it.hasNext()) {
+//        path.push_back(it.next());
+//    }
+
+////    dynamicGrid->addToGridView(new GridItem());
+//    for (int i = 0; i < path.size(); ++i) {
+//        dynamicGrid->addToGridView(new GridWidget(path[i]), i);
+//    }
+
+    update();
+
+    QGridLayout *layout = new QGridLayout();
+    layout->addWidget(dynamicGrid);
+
+    ui->pmcont->setLayout(layout);
 }
 
 void ProjectManager::update()
@@ -92,6 +121,12 @@ void ProjectManager::update()
 
     QDir dir(projectFolder);
     QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+
+    int i = 0;
+    foreach (const QFileInfo &file, files) {
+        dynamicGrid->addToGridView(new GridWidget(file.absoluteFilePath() + "/Metadata/preview.png"), i);
+        i++;
+    }
 
     foreach (const QFileInfo &file, files) {
         auto item = new QListWidgetItem();
@@ -416,6 +451,20 @@ void ProjectManager::updateCurrentItem(QListWidgetItem *item)
     auto icon = item->icon();
     ui->name->setText(item->text());
     ui->preview->setPixmap(icon.pixmap(QSize(212, 212)));
+}
+
+void ProjectManager::myProjects()
+{
+    ui->projects->setStyleSheet("background: #4998ff");
+    ui->samples->setStyleSheet("background: #444");
+    ui->stackedWidget->setCurrentIndex(0);
+}
+
+void ProjectManager::sampleProjects()
+{
+    ui->samples->setStyleSheet("background: #4998ff");
+    ui->projects->setStyleSheet("background: #444");
+    ui->stackedWidget->setCurrentIndex(1);
 }
 
 void ProjectManager::handleDone()

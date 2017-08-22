@@ -14,8 +14,13 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">#listWidget, #listWidget_2 {
-	background: #212121;
+   <string notr="true">#samples, #projects {
+	padding: 8px;
+	color: white;
+}
+
+#listWidget, #listWidget_2 {
+	background: #fff;
 }
 
 #listWidget {
@@ -70,65 +75,60 @@ QListWidget::item:selected {
 	color: #CECECE;
 }</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout_3">
+  <layout class="QGridLayout" name="gridLayout">
    <item row="0" column="0" colspan="2">
-    <layout class="QHBoxLayout" name="horizontalLayout">
-     <item>
-      <spacer name="horizontalSpacer">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item>
-      <widget class="QPushButton" name="newProject">
-       <property name="text">
-        <string>          New          </string>
-       </property>
-      </widget>
-     </item>
-    </layout>
-   </item>
-   <item row="1" column="0">
-    <widget class="QWidget" name="widget" native="true">
-     <layout class="QHBoxLayout" name="horizontalLayout_2">
-      <property name="leftMargin">
-       <number>0</number>
-      </property>
-      <property name="topMargin">
-       <number>0</number>
-      </property>
-      <property name="rightMargin">
-       <number>0</number>
-      </property>
-      <property name="bottomMargin">
-       <number>0</number>
-      </property>
+    <widget class="QWidget" name="top" native="true">
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <spacer name="horizontalSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="projects">
+        <property name="text">
+         <string>My Projects</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="samples">
+        <property name="text">
+         <string>Sample Projects</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="horizontalSpacer_2">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
      </layout>
     </widget>
    </item>
-   <item row="2" column="0">
-    <widget class="QTabWidget" name="tabWidget">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
+   <item row="1" column="0">
+    <widget class="QStackedWidget" name="stackedWidget">
      <property name="currentIndex">
       <number>0</number>
      </property>
-     <widget class="QWidget" name="tab">
-      <attribute name="title">
-       <string>Projects</string>
-      </attribute>
-      <layout class="QGridLayout" name="gridLayout">
+     <widget class="QWidget" name="page">
+      <layout class="QGridLayout" name="gridLayout_2">
        <property name="leftMargin">
         <number>0</number>
        </property>
@@ -144,44 +144,25 @@ QListWidget::item:selected {
        <property name="spacing">
         <number>0</number>
        </property>
-       <item row="0" column="0">
-        <widget class="QListWidget" name="listWidget">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-           <horstretch>3</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="frameShape">
-          <enum>QFrame::NoFrame</enum>
-         </property>
-         <property name="frameShadow">
-          <enum>QFrame::Plain</enum>
-         </property>
-         <property name="lineWidth">
-          <number>0</number>
-         </property>
-         <property name="iconSize">
-          <size>
-           <width>256</width>
-           <height>120</height>
-          </size>
-         </property>
-         <property name="spacing">
-          <number>0</number>
-         </property>
-         <property name="viewMode">
-          <enum>QListView::IconMode</enum>
-         </property>
-        </widget>
+       <item row="0" column="1">
+        <widget class="QWidget" name="pmcont" native="true"/>
        </item>
       </layout>
      </widget>
-     <widget class="QWidget" name="tab_2">
-      <attribute name="title">
-       <string>Samples</string>
-      </attribute>
-      <layout class="QGridLayout" name="gridLayout_2">
+     <widget class="QWidget" name="page_3">
+      <widget class="QListWidget" name="listWidget">
+       <property name="geometry">
+        <rect>
+         <x>220</x>
+         <y>200</y>
+         <width>256</width>
+         <height>192</height>
+        </rect>
+       </property>
+      </widget>
+     </widget>
+     <widget class="QWidget" name="page_2">
+      <layout class="QGridLayout" name="gridLayout_3">
        <property name="leftMargin">
         <number>0</number>
        </property>
@@ -232,8 +213,8 @@ QListWidget::item:selected {
      </widget>
     </widget>
    </item>
-   <item row="2" column="1">
-    <widget class="QWidget" name="widget_2" native="true">
+   <item row="1" column="1">
+    <widget class="QWidget" name="controls" native="true">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
        <horstretch>0</horstretch>
@@ -282,19 +263,6 @@ QListWidget::item:selected {
        </layout>
       </item>
       <item>
-       <spacer name="verticalSpacer_2">
-        <property name="orientation">
-         <enum>Qt::Vertical</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>20</width>
-          <height>40</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item>
        <widget class="QPushButton" name="openProject">
         <property name="text">
          <string>Open</string>
@@ -315,12 +283,19 @@ QListWidget::item:selected {
         </property>
        </widget>
       </item>
+      <item>
+       <widget class="QPushButton" name="newProject">
+        <property name="text">
+         <string>          New          </string>
+        </property>
+       </widget>
+      </item>
      </layout>
      <zorder>openProject</zorder>
      <zorder>deleteProject</zorder>
-     <zorder>verticalSpacer_2</zorder>
      <zorder>name</zorder>
      <zorder>renameButton</zorder>
+     <zorder>newProject</zorder>
     </widget>
    </item>
   </layout>

@@ -109,7 +109,9 @@ SOURCES += src/main.cpp\
     src/commands/deletescenenodecommand.cpp \
     src/dialogs/progressdialog.cpp \
     src/widgets/screenshotwidget.cpp \
-    src/widgets/projectmanager.cpp
+    src/widgets/projectmanager.cpp \
+    src/widgets/dynamicgrid.cpp \
+    src/widgets/gridwidget.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -209,7 +211,9 @@ HEADERS  += src/mainwindow.h \
     src/dialogs/progressdialog.h \
     src/commands/deleteanimationkeycommand.h \
     src/widgets/screenshotwidget.h \
-    src/widgets/projectmanager.h
+    src/widgets/projectmanager.h \
+    src/widgets/dynamicgrid.h \
+    src/widgets/gridwidget.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \

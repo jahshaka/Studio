@@ -776,7 +776,7 @@ void MainWindow::saveScene()
                                        sceneView->getEditorData());
     db->updateScene(blob);
 
-    auto img = sceneView->takeScreenshot(512, 512);
+    auto img = sceneView->takeScreenshot(800, 400);
     img.save(Globals::project->getProjectFolder() + "/Metadata/preview.png");
 
 //    auto vp = viewport;
