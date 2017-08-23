@@ -7,6 +7,7 @@
 #include <QOpenGLContext>
 #include <QOpenGLFunctions_3_2_Core>
 #include <QMutex>
+#include <QImage>
 
 enum class ThumbnailRequestType
 {
@@ -32,6 +33,7 @@ struct ThumbnailResult
 
 class RenderThread : public QThread
 {
+    Q_OBJECT
 public:
     QOffscreenSurface *surface;
     QOpenGLContext *context;
@@ -65,11 +67,15 @@ signals:
 };
 
 // http://doc.qt.io/qt-5/qtquick-scenegraph-textureinthread-threadrenderer-cpp.html
-class ThumbnialGenerator
+class ThumbnailGenerator
 {
-    RenderThread* renderThread;
+    static ThumbnailGenerator* instance;
+    ThumbnailGenerator();
 public:
-    ThumbnialGenerator();
+    RenderThread* renderThread;
+
+    static ThumbnailGenerator* getSingleton();
+
     void requestThumbnail(ThumbnailRequestType type, QString path, QString id = "");
 };
 

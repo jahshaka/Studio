@@ -5,6 +5,7 @@
 
 #include "../irisgl/src/graphics/rendertarget.h"
 #include "../irisgl/src/graphics/texture2d.h"
+#include "../irisgl/src/graphics/mesh.h"
 #include "../irisgl/src/graphics/forwardrenderer.h"
 #include "../irisgl/src/scenegraph/scene.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
@@ -15,9 +16,11 @@
 #include <QMutex>
 #include <QMutexLocker>
 
+ThumbnailGenerator* ThumbnailGenerator::instance = nullptr;
+
 void RenderThread::requestThumbnail(const ThumbnailRequest &request)
 {
-    QMutexLocker(&requestMutex);
+    QMutexLocker locker(&requestMutex);
     requests.append(request);
 }
 
@@ -31,10 +34,11 @@ void RenderThread::run()
     renderTarget->addTexture(tex);
 
     while(true) {
+        //qDebug()<<"rendering";
         ThumbnailRequest request;
         bool hasRequest = false;
         {
-            QMutexLocker(requestMutex);
+            QMutexLocker locker(&requestMutex);
             if(requests.size()>0)
             {
                 request = requests.takeFirst();
@@ -63,6 +67,7 @@ void RenderThread::run()
             result.type = request.type;
             result.path = request.path;
             result.thumbnail = img;
+
             emit thumbnailComplete(result);
         }
     }
@@ -81,8 +86,8 @@ void RenderThread::initScene()
 
     // create scene and renderer
     cam = iris::CameraNode::create();
-    cam->setLocalPos(QVector3D(0, 5, 14));
-    cam->setLocalRot(QQuaternion::fromEulerAngles(-20, 0, 0));
+    cam->setLocalPos(QVector3D(14, 14, 14));
+    cam->setLocalRot(QQuaternion::fromEulerAngles(-45, 45, 0));
 
     scene->setSkyColor(QColor(255, 72, 72));
     scene->setAmbientColor(QColor(255, 255, 255));
@@ -90,7 +95,7 @@ void RenderThread::initScene()
     // second node
     auto node = iris::MeshNode::create();
     node->setMesh(":/models/cube.obj");
-    node->setLocalPos(QVector3D(0, 0, 0)); // prevent z-fighting with the default plane
+    node->setLocalPos(QVector3D(0, 0, 0));
     node->setName("Ground");
     node->setPickable(false);
     node->setShadowEnabled(false);
@@ -114,7 +119,7 @@ void RenderThread::initScene()
     dlight->setLocalPos(QVector3D(4, 4, 0));
     dlight->setLocalRot(QQuaternion::fromEulerAngles(15, 0, 0));
     dlight->intensity = 1;
-    dlight->icon = iris::Texture2D::load(":/icons/light.png");
+    //dlight->icon = iris::Texture2D::load(":/icons/light.png");
 
     auto plight = iris::LightNode::create();
     plight->setLightType(iris::LightType::Point);
@@ -122,7 +127,7 @@ void RenderThread::initScene()
     plight->setName("Point Light");
     plight->setLocalPos(QVector3D(-4, 4, 0));
     plight->intensity = 1;
-    plight->icon = iris::Texture2D::load(":/icons/bulb.png");
+    //plight->icon = iris::Texture2D::load(":/icons/bulb.png");
 
     // fog params
     scene->fogColor = QColor(72, 72, 72);
@@ -162,7 +167,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
                 mat->setValue("normalTexture", data.normalTexture);
 
             return mat;
-        });
+        }).staticCast<iris::MeshNode>();
 
         scene->rootNode->addChild(meshNode);
 
@@ -183,16 +188,25 @@ void RenderThread::cleanupScene()
     scene->rootNode->removeChild(meshNode);
 }
 
-ThumbnialGenerator::ThumbnialGenerator()
+ThumbnailGenerator::ThumbnailGenerator()
 {
     renderThread = new RenderThread();
 
     auto curCtx = QOpenGLContext::currentContext();
-    curCtx->doneCurrent();
+    if (curCtx != nullptr)
+        curCtx->doneCurrent();
+
+    QSurfaceFormat format;
+    format.setDepthBufferSize(32);
+    format.setMajorVersion(3);
+    format.setMinorVersion(2);
+    format.setProfile(QSurfaceFormat::CoreProfile);
+    //format.setOption();
+    format.setSamples(1);
 
     auto context = new QOpenGLContext();
-    context->setFormat(curCtx->format());
-    context->setShareContext(curCtx);
+    context->setFormat(format);
+    //context->setShareContext(curCtx);
     context->create();
     context->moveToThread(renderThread);
     renderThread->context = context;
@@ -206,12 +220,24 @@ ThumbnialGenerator::ThumbnialGenerator()
     renderThread->start();
 }
 
-void ThumbnialGenerator::requestThumbnail(ThumbnailRequestType type, QString path, QString id)
+ThumbnailGenerator *ThumbnailGenerator::getSingleton()
 {
+    if(instance==nullptr)
+        instance = new ThumbnailGenerator();
 
+    return instance;
 }
 
-void ThumbnialGenerator::run()
+void ThumbnailGenerator::requestThumbnail(ThumbnailRequestType type, QString path, QString id)
 {
-    //renderThread->start();
+    ThumbnailRequest req;
+    req.type = type;
+    req.path = path;
+    req.id = id;
+    renderThread->requestThumbnail(req);
 }
+
+//void ThumbnialGenerator::run()
+//{
+//    //renderThread->start();
+//}

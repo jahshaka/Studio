@@ -50,6 +50,7 @@ class RotationGizmo;
 class ScaleGizmo;
 
 class EditorData;
+class ThumbnailGenerator;
 
 enum class ViewportMode
 {
@@ -92,6 +93,8 @@ class SceneViewWidget : public QOpenGLWidget,
     iris::Texture2DPtr screenshotTex;
 public:
     iris::CameraNodePtr editorCam;
+
+    ThumbnailGenerator* thumbGen;
 
     explicit SceneViewWidget(QWidget *parent);
 

@@ -6,6 +6,9 @@
 #include "../core/project.h"
 #include "../globals.h"
 #include "../constants.h"
+#include "../uimanager.h"
+#include "../widgets/sceneviewwidget.h"
+#include "../editor/thumbnailgenerator.h"
 
 #include <QDebug>
 #include <QDir>
@@ -78,6 +81,9 @@ void AssetWidget::trigger()
 
     // it's important that this get's called after the project dialog has OK'd
     populateAssetTree();
+
+    //UiManager::sceneViewWidget->thumbGen-
+    //connect(UiManager::sceneViewWidget->thumbGen->renderThread, SIGNAL(thumbnailComplete(ThumbnailResult)), this)
 }
 
 AssetWidget::~AssetWidget()
@@ -158,6 +164,10 @@ void AssetWidget::walkFileSystem(QString folder, QString path)
             asset->fileName = file.fileName();
             asset->path = file.absoluteFilePath();
             asset->thumbnail = pixmap;
+
+            //submit to have thumbnail generated
+            if (asset->type == AssetType::Object)
+                ThumbnailGenerator::getSingleton()->requestThumbnail(ThumbnailRequestType::Mesh,asset->path,asset->path);
 
             AssetManager::assets.append(asset);
         } else {
@@ -554,10 +564,24 @@ void AssetWidget::importAsset(const QStringList &path)
                 asset->path = file.absoluteFilePath();
                 asset->thumbnail = pixmap;
 
+                if (asset->type == AssetType::Object)
+                    ThumbnailGenerator::getSingleton()->requestThumbnail(ThumbnailRequestType::Mesh,asset->path,asset->path);
+
                 AssetManager::assets.append(asset);
             }
         }
 
         updateAssetView(assetItem.selectedPath);
+    }
+}
+
+void AssetWidget::onThumbnailResult(const ThumbnailResult &result)
+{
+    for(auto& asset : AssetManager::assets) {
+        if (asset->path == result.id) {
+            asset->thumbnail = QPixmap::fromImage(result.thumbnail);
+            // refresh ui
+            this->repaint();
+        }
     }
 }

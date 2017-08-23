@@ -104,6 +104,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
                                                           QVector3D(   0, 0, -100));
 
     setAcceptDrops(true);
+
+    thumbGen = nullptr;
 }
 
 void SceneViewWidget::resetEditorCam()
@@ -280,7 +282,8 @@ void SceneViewWidget::initializeGL()
 
     emit initializeGraphics(this, this);
 
-    auto thumbGen = new ThumbnialGenerator();
+    //thumbGen = new ThumbnialGenerator();
+    thumbGen = ThumbnailGenerator::getSingleton();
 
     auto timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(update()));
