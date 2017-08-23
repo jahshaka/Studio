@@ -43,7 +43,7 @@ public:
 
     iris::ForwardRendererPtr renderer;
     iris::ScenePtr scene;
-    iris::MeshNodePtr meshNode;
+    iris::SceneNodePtr sceneNode;
 
     iris::CameraNodePtr cam;
     iris::CustomMaterialPtr material;
@@ -61,6 +61,7 @@ public:
 
 private:
     //ThumbnailRequest& getRequest();
+    float getBoundingRadius(iris::SceneNodePtr node);
 
 signals:
     void thumbnailComplete(const ThumbnailResult& result);

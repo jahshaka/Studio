@@ -49,7 +49,7 @@ void RenderThread::run()
         if (hasRequest) {
 
             prepareScene(request);
-            scene->rootNode->addChild(meshNode);
+            scene->rootNode->addChild(sceneNode);
 
             scene->update(0);
             renderer->renderSceneToRenderTarget(renderTarget, cam, false);
@@ -86,15 +86,16 @@ void RenderThread::initScene()
 
     // create scene and renderer
     cam = iris::CameraNode::create();
-    cam->setLocalPos(QVector3D(14, 14, 14));
-    cam->setLocalRot(QQuaternion::fromEulerAngles(-45, 45, 0));
+    cam->setLocalPos(QVector3D(1, 1, 5));
+    //cam->setLocalRot(QQuaternion::fromEulerAngles(-45, 45, 0));
+    cam->lookAt(QVector3D(0,0.5f,0));
 
-    scene->setSkyColor(QColor(255, 72, 72));
+    scene->setSkyColor(QColor(50, 50, 50));
     scene->setAmbientColor(QColor(255, 255, 255));
 
     // second node
     auto node = iris::MeshNode::create();
-    node->setMesh(":/models/cube.obj");
+    node->setMesh(":/models/ground.obj");
     node->setLocalPos(QVector3D(0, 0, 0));
     node->setName("Ground");
     node->setPickable(false);
@@ -142,7 +143,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
     if(request.type == ThumbnailRequestType::Mesh)
     {
         // load mesh as scene
-        meshNode = iris::MeshNode::loadAsSceneFragment(request.path,[](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+        sceneNode = iris::MeshNode::loadAsSceneFragment(request.path,[](iris::MeshPtr mesh, iris::MeshMaterialData& data)
         {
             auto mat = iris::CustomMaterial::create();
             if (mesh->hasSkeleton())
@@ -167,9 +168,17 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
                 mat->setValue("normalTexture", data.normalTexture);
 
             return mat;
-        }).staticCast<iris::MeshNode>();
+        });
 
-        scene->rootNode->addChild(meshNode);
+        scene->rootNode->addChild(sceneNode);
+
+        // fit object in view
+        auto boundRadius = getBoundingRadius(sceneNode);
+
+
+        cam->setLocalPos(QVector3D(1, 1, 5).normalized()*(boundRadius+5));
+        cam->lookAt(QVector3D(0, boundRadius/2.0f, 0));
+        cam->update(0);
 
         // apply default material
     }
@@ -185,7 +194,20 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 
 void RenderThread::cleanupScene()
 {
-    scene->rootNode->removeChild(meshNode);
+    scene->rootNode->removeChild(sceneNode);
+}
+
+float RenderThread::getBoundingRadius(iris::SceneNodePtr node)
+{
+    auto radius = 0.0f;
+    if(node->sceneNodeType== iris::SceneNodeType::Mesh)
+        radius = node.staticCast<iris::MeshNode>()->getMesh()->boundingSphere->radius;
+
+    for(auto child : node->children) {
+        radius = qMax(radius, getBoundingRadius(child));
+    }
+
+    return radius;
 }
 
 ThumbnailGenerator::ThumbnailGenerator()
