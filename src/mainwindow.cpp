@@ -197,7 +197,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(ui->pmContainer, SIGNAL(fileToOpen(QString)), SLOT(openProject(QString)));
     connect(ui->pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
 
-    connect(ui->contentWidget, SIGNAL(currentChanged(int)), SLOT(tabsChanged(int)));
+//    connect(ui->contentWidget, SIGNAL(currentChanged(int)), SLOT(tabsChanged(int)));
 
     // toolbar stuff
     connect(ui->actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
@@ -249,6 +249,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     setupProjectDB();
     setupUndoRedo();
+
+
+    // hide all
+    ui->AnimationDock->hide();
+    ui->PropertiesDock->hide();
+    ui->sceneHierarchyDock->hide();
+    ui->AssetsDock->hide();
+    ui->MenuBar->hide();
+    ui->PresetsDock->hide();
+    ui->ToolBar->hide();
+
+    ui->backgroundscene->hide();
 }
 
 void MainWindow::initialize()
@@ -858,7 +870,7 @@ void MainWindow::loadScene()
 void MainWindow::openProject(QString filename)
 {
     // SWITCH
-    ui->contentWidget->setCurrentIndex(0);
+//    ui->contentWidget->setCurrentIndex(0);
 
     this->sceneView->makeCurrent();
     //remove current scene first
@@ -1493,7 +1505,7 @@ void MainWindow::projectManager(bool mainWindowActive)
 
 void MainWindow::newProject(const QString &filename, const QString &projectPath)
 {
-    ui->contentWidget->setCurrentIndex(0);
+//    ui->contentWidget->setCurrentIndex(0);
     newScene();
 
     auto pPath = QDir(projectPath).filePath(filename + Constants::PROJ_EXT);

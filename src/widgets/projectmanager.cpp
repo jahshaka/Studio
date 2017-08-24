@@ -40,57 +40,57 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
 {
     ui->setupUi(this);
 
-    ui->controls->setVisible(false);
+//    ui->controls->setVisible(false);
 
     settings = SettingsManager::getDefaultManager();
 
-    ui->listWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+//    ui->listWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 
-    ui->listWidget->setFlow(QListView::LeftToRight);
-    ui->listWidget->setViewMode(QListWidget::IconMode);
-    ui->listWidget->setUniformItemSizes(true);
-    ui->listWidget->setSizeAdjustPolicy(QListWidget::AdjustToContents);
-    ui->listWidget->setResizeMode(QListWidget::Adjust);
-    ui->listWidget->setMovement(QListView::Static);
-    ui->listWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
-    ui->listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
-    ui->listWidget->setSelectionRectVisible(false);
+//    ui->listWidget->setFlow(QListView::LeftToRight);
+//    ui->listWidget->setViewMode(QListWidget::IconMode);
+//    ui->listWidget->setUniformItemSizes(true);
+//    ui->listWidget->setSizeAdjustPolicy(QListWidget::AdjustToContents);
+//    ui->listWidget->setResizeMode(QListWidget::Adjust);
+//    ui->listWidget->setMovement(QListView::Static);
+//    ui->listWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
+//    ui->listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
+//    ui->listWidget->setSelectionRectVisible(false);
 
 //    connect(ui->listWidget, SIGNAL(objectNameChanged(QString)),
 //            SLOT(renameItem(QString)));
 
-    connect(ui->listWidget->itemDelegate(), &QAbstractItemDelegate::commitData,
-            this,                           &ProjectManager::OnLstItemsCommitData);
+//    connect(ui->listWidget->itemDelegate(), &QAbstractItemDelegate::commitData,
+//            this,                           &ProjectManager::OnLstItemsCommitData);
 
-    ui->listWidget->setIconSize(QSize(212, 212));
+//    ui->listWidget->setIconSize(QSize(212, 212));
 
-    ui->listWidget_2->setFlow(QListView::LeftToRight);
-    ui->listWidget_2->setViewMode(QListWidget::IconMode);
-    ui->listWidget_2->setUniformItemSizes(true);
-    ui->listWidget_2->setSizeAdjustPolicy(QListWidget::AdjustToContents);
-    ui->listWidget_2->setResizeMode(QListWidget::Adjust);
-    ui->listWidget_2->setMovement(QListView::Static);
-    ui->listWidget_2->setSelectionBehavior(QAbstractItemView::SelectItems);
-    ui->listWidget_2->setSelectionMode(QAbstractItemView::SingleSelection);
+//    ui->listWidget_2->setFlow(QListView::LeftToRight);
+//    ui->listWidget_2->setViewMode(QListWidget::IconMode);
+//    ui->listWidget_2->setUniformItemSizes(true);
+//    ui->listWidget_2->setSizeAdjustPolicy(QListWidget::AdjustToContents);
+//    ui->listWidget_2->setResizeMode(QListWidget::Adjust);
+//    ui->listWidget_2->setMovement(QListView::Static);
+//    ui->listWidget_2->setSelectionBehavior(QAbstractItemView::SelectItems);
+//    ui->listWidget_2->setSelectionMode(QAbstractItemView::SingleSelection);
 
-    connect(ui->newProject, SIGNAL(pressed()), SLOT(newProject()));
-    connect(ui->openProject, SIGNAL(pressed()), SLOT(openProject()));
-    connect(ui->deleteProject, SIGNAL(pressed()), SLOT(deleteProject()));
-    connect(ui->renameButton, SIGNAL(pressed()), SLOT(renameProject()));
+//    connect(ui->newProject, SIGNAL(pressed()), SLOT(newProject()));
+//    connect(ui->openProject, SIGNAL(pressed()), SLOT(openProject()));
+//    connect(ui->deleteProject, SIGNAL(pressed()), SLOT(deleteProject()));
+//    connect(ui->renameButton, SIGNAL(pressed()), SLOT(renameProject()));
 
-    connect(ui->projects, SIGNAL(pressed()), SLOT(myProjects()));
-    connect(ui->samples, SIGNAL(pressed()), SLOT(sampleProjects()));
+//    connect(ui->projects, SIGNAL(pressed()), SLOT(myProjects()));
+//    connect(ui->samples, SIGNAL(pressed()), SLOT(sampleProjects()));
 
-    ui->projects->setStyleSheet("background: #4998ff");
+//    ui->projects->setStyleSheet("background: #4998ff");
 
-    connect(ui->listWidget,     SIGNAL(itemClicked(QListWidgetItem*)),
-            this,               SLOT(updateCurrentItem(QListWidgetItem*)));
-    connect(ui->listWidget,     SIGNAL(itemDoubleClicked(QListWidgetItem*)),
-            this,               SLOT(openRecentProject(QListWidgetItem*)));
-    connect(ui->listWidget,     SIGNAL(customContextMenuRequested(const QPoint&)),
-            this,               SLOT(listWidgetCustomContextMenu(const QPoint&)));
-    connect(ui->listWidget_2,   SIGNAL(itemDoubleClicked(QListWidgetItem*)),
-            this,               SLOT(openSampleProject(QListWidgetItem*)));
+//    connect(ui->listWidget,     SIGNAL(itemClicked(QListWidgetItem*)),
+//            this,               SLOT(updateCurrentItem(QListWidgetItem*)));
+//    connect(ui->listWidget,     SIGNAL(itemDoubleClicked(QListWidgetItem*)),
+//            this,               SLOT(openRecentProject(QListWidgetItem*)));
+//    connect(ui->listWidget,     SIGNAL(customContextMenuRequested(const QPoint&)),
+//            this,               SLOT(listWidgetCustomContextMenu(const QPoint&)));
+//    connect(ui->listWidget_2,   SIGNAL(itemDoubleClicked(QListWidgetItem*)),
+//            this,               SLOT(openSampleProject(QListWidgetItem*)));
 
     dynamicGrid = new DynamicGrid(this);
 
@@ -110,6 +110,7 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
 
     QGridLayout *layout = new QGridLayout();
     layout->addWidget(dynamicGrid);
+    layout->setMargin(0);
 
     ui->pmcont->setLayout(layout);
 }
@@ -128,36 +129,36 @@ void ProjectManager::update()
         i++;
     }
 
-    foreach (const QFileInfo &file, files) {
-        auto item = new QListWidgetItem();
-        item->setToolTip(file.absoluteFilePath());
-        item->setData(Qt::DisplayRole, file.baseName());
-        item->setData(Qt::UserRole, file.absoluteFilePath() + "/" + file.baseName() + Constants::PROJ_EXT);
-        if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
-            item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
-        } else {
-            item->setIcon(QIcon(":/app/images/no_preview.png"));
-        }
+//    foreach (const QFileInfo &file, files) {
+//        auto item = new QListWidgetItem();
+//        item->setToolTip(file.absoluteFilePath());
+//        item->setData(Qt::DisplayRole, file.baseName());
+//        item->setData(Qt::UserRole, file.absoluteFilePath() + "/" + file.baseName() + Constants::PROJ_EXT);
+//        if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
+//            item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
+//        } else {
+//            item->setIcon(QIcon(":/app/images/no_preview.png"));
+//        }
 
-//        item->setSizeHint(QSize(3, 256));
-        item->setFlags(item->flags() | Qt::ItemIsEditable);
-        ui->listWidget->addItem(item);
-    }
+////        item->setSizeHint(QSize(3, 256));
+//        item->setFlags(item->flags() | Qt::ItemIsEditable);
+//        ui->listWidget->addItem(item);
+//    }
 
-    QDir dir2(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
-        QFileInfoList files2 = dir2.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
-        foreach (const QFileInfo &file, files2) {
-            auto item = new QListWidgetItem();
-            item->setToolTip(file.absoluteFilePath());
-            item->setData(Qt::DisplayRole, file.baseName());
-            item->setData(Qt::UserRole, file.absoluteFilePath() + "/" + file.baseName() + Constants::PROJ_EXT);
-            if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
-                item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
-            } else {
-                item->setIcon(QIcon(":/app/images/no_preview.png"));
-            }
-            ui->listWidget_2->addItem(item);
-        }
+//    QDir dir2(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
+//        QFileInfoList files2 = dir2.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+//        foreach (const QFileInfo &file, files2) {
+//            auto item = new QListWidgetItem();
+//            item->setToolTip(file.absoluteFilePath());
+//            item->setData(Qt::DisplayRole, file.baseName());
+//            item->setData(Qt::UserRole, file.absoluteFilePath() + "/" + file.baseName() + Constants::PROJ_EXT);
+//            if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
+//                item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
+//            } else {
+//                item->setIcon(QIcon(":/app/images/no_preview.png"));
+//            }
+//            ui->listWidget_2->addItem(item);
+//        }
 }
 
 void ProjectManager::resizeEvent(QResizeEvent *event)
@@ -175,37 +176,37 @@ void ProjectManager::resizeEvent(QResizeEvent *event)
 
 void ProjectManager::listWidgetCustomContextMenu(const QPoint &pos)
 {
-    QModelIndex index = ui->listWidget->indexAt(pos);
+//    QModelIndex index = ui->listWidget->indexAt(pos);
 
-    QMenu menu;
-    QAction *action;
+//    QMenu menu;
+//    QAction *action;
 
-    if (index.isValid()) {
-        currentItem = ui->listWidget->itemAt(pos);
+//    if (index.isValid()) {
+//        currentItem = ui->listWidget->itemAt(pos);
 
-        folder = currentItem->data(Qt::UserRole).toString();
-        auto f = QFileInfo(folder);
-        folder = f.absolutePath();
+//        folder = currentItem->data(Qt::UserRole).toString();
+//        auto f = QFileInfo(folder);
+//        folder = f.absolutePath();
 
-        auto icon = currentItem->icon();
-        ui->name->setText(currentItem->text());
-        ui->preview->setPixmap(icon.pixmap(QSize(212, 212)));
+//        auto icon = currentItem->icon();
+////        ui->name->setText(currentItem->text());
+////        ui->preview->setPixmap(icon.pixmap(QSize(212, 212)));
 
-//        assetItem.selectedPath = item->data(Qt::UserRole).toString();
+////        assetItem.selectedPath = item->data(Qt::UserRole).toString();
 
-        // check if current project is open first
-        if (currentItem->data(Qt::DisplayRole).toString() != Globals::project->getProjectName()) {
-            action = new QAction(QIcon(), "Delete", this);
-            connect(action, SIGNAL(triggered()), this, SLOT(deleteProject()));
-            menu.addAction(action);
-        }
+//        // check if current project is open first
+//        if (currentItem->data(Qt::DisplayRole).toString() != Globals::project->getProjectName()) {
+//            action = new QAction(QIcon(), "Delete", this);
+//            connect(action, SIGNAL(triggered()), this, SLOT(deleteProject()));
+//            menu.addAction(action);
+//        }
 
-        action = new QAction(QIcon(), "Rename", this);
-        connect(action, SIGNAL(triggered()), this, SLOT(renameProject()));
-        menu.addAction(action);
-    }
+//        action = new QAction(QIcon(), "Rename", this);
+//        connect(action, SIGNAL(triggered()), this, SLOT(renameProject()));
+//        menu.addAction(action);
+//    }
 
-    menu.exec(ui->listWidget->mapToGlobal(pos));
+//    menu.exec(ui->listWidget->mapToGlobal(pos));
 }
 
 void ProjectManager::removeFromList()
@@ -222,17 +223,17 @@ void ProjectManager::removeFromList()
 
 void ProjectManager::deleteProject()
 {
-    if (!folder.isEmpty()) {
-        QDir dir(folder);
+//    if (!folder.isEmpty()) {
+//        QDir dir(folder);
 
-        if (dir.exists()) {
-            if (dir.removeRecursively()) {
-                if (currentItem) {
-                    delete ui->listWidget->takeItem(ui->listWidget->row(currentItem));
-                }
-            }
-        }
-    }
+//        if (dir.exists()) {
+//            if (dir.removeRecursively()) {
+//                if (currentItem) {
+//                    delete ui->listWidget->takeItem(ui->listWidget->row(currentItem));
+//                }
+//            }
+//        }
+//    }
 }
 
 void ProjectManager::openProject()
@@ -439,7 +440,7 @@ void ProjectManager::newProject()
 
 void ProjectManager::renameProject()
 {
-    ui->listWidget->editItem(currentItem);
+//    ui->listWidget->editItem(currentItem);
 }
 
 void ProjectManager::updateCurrentItem(QListWidgetItem *item)
@@ -448,23 +449,23 @@ void ProjectManager::updateCurrentItem(QListWidgetItem *item)
     auto f = QFileInfo(folder);
     folder = f.absolutePath();
 
-    auto icon = item->icon();
-    ui->name->setText(item->text());
-    ui->preview->setPixmap(icon.pixmap(QSize(212, 212)));
+//    auto icon = item->icon();
+//    ui->name->setText(item->text());
+//    ui->preview->setPixmap(icon.pixmap(QSize(212, 212)));
 }
 
 void ProjectManager::myProjects()
 {
-    ui->projects->setStyleSheet("background: #4998ff");
-    ui->samples->setStyleSheet("background: #444");
-    ui->stackedWidget->setCurrentIndex(0);
+//    ui->projects->setStyleSheet("background: #4998ff");
+//    ui->samples->setStyleSheet("background: #444");
+//    ui->stackedWidget->setCurrentIndex(0);
 }
 
 void ProjectManager::sampleProjects()
 {
-    ui->samples->setStyleSheet("background: #4998ff");
-    ui->projects->setStyleSheet("background: #444");
-    ui->stackedWidget->setCurrentIndex(1);
+//    ui->samples->setStyleSheet("background: #4998ff");
+//    ui->projects->setStyleSheet("background: #444");
+//    ui->stackedWidget->setCurrentIndex(1);
 }
 
 void ProjectManager::handleDone()
