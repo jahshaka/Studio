@@ -15,7 +15,7 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 
     setAlignment(Qt::AlignHCenter);
 
-    gridWidget = new QWidget(this);
+    gridWidget = new QWidget(parent);
     gridWidget->setObjectName("gridWidget");
     setWidget(gridWidget);
 //    setStyleSheet("background: #1e1e1e");
@@ -24,9 +24,11 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
     baseSize = QSize(460, 215);
     tileSize = baseSize * 0.6;
 
+    offset = 10;
+
     gridLayout = new QGridLayout(gridWidget);
     gridLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
-    gridLayout->setRowMinimumHeight(0, 10);
+    gridLayout->setRowMinimumHeight(0, offset);
 
     gridWidget->setLayout(gridLayout);
 }
@@ -35,7 +37,9 @@ void DynamicGrid::addToGridView(GridWidget *item, int count)
 {
     ItemGridWidget *gameGridItem = new ItemGridWidget(item, tileSize, gridWidget);
 
-    int columnCount = viewport()->width() / (tileSize.width() + 10);
+    connect(gameGridItem, SIGNAL(doubleClicked(ItemGridWidget*)), parent, SLOT(openProjectFromWidget(ItemGridWidget*)));
+
+    int columnCount = viewport()->width() / (tileSize.width() + offset);
 
     if (columnCount == 0) columnCount = 1;
 
@@ -54,7 +58,7 @@ void DynamicGrid::scaleTile(int scale)
     tileSize.setWidth(s.width());
     tileSize.setHeight(s.height());
 
-    int columnCount = lastWidth / (tileSize.width() + 10);
+    int columnCount = lastWidth / (tileSize.width() + offset);
 
     int gridCount = gridLayout->count();
     QList<ItemGridWidget*> gridItems;
@@ -75,7 +79,7 @@ void DynamicGrid::resizeEvent(QResizeEvent *event)
 {
     lastWidth = event->size().width();
 
-    int check = event->size().width() / (tileSize.width() + 10);
+    int check = event->size().width() / (tileSize.width() + offset);
     bool autoAdjustColumns = true;
 
     if (autoAdjustColumns && check != autoColumnCount && check != 0) {
@@ -87,7 +91,7 @@ void DynamicGrid::resizeEvent(QResizeEvent *event)
 
 void DynamicGrid::updateGridColumns(int width)
 {
-    int columnCount = width / (tileSize.width() + 10);
+    int columnCount = width / (tileSize.width() + offset);
 
     int gridCount = gridLayout->count();
     QList<ItemGridWidget*> gridItems;

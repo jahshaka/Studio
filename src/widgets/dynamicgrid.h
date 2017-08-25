@@ -17,6 +17,7 @@ public:
     QSize baseSize;
     int lastWidth;
     int scale;
+    int offset;
     void scaleTile(int);
 
     void resetView();

@@ -14,7 +14,17 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QSlider::groove:horizontal {
+   <string notr="true">#newProject {
+	background: #4898ff;
+	color: white;
+}
+
+#newProject:hover {
+	background-color: #51a1d6;
+}
+
+
+QSlider::groove:horizontal {
    /* height: 8px; /* the groove expands to the size of the slider by default. by giving it a height, it has a fixed size */
     background: #404040;
 }
@@ -23,6 +33,10 @@ QSlider::handle:horizontal {
     background: #AFAFAF;
     width: 10px;
     margin: -2px 0; /* handle is placed by default on the contents rect of the groove. Expand outside the groove */
+}
+
+#newProject {
+
 }
 
 #samples, #projects {
@@ -88,16 +102,16 @@ QListWidget::item:selected {
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="leftMargin">
-    <number>9</number>
+    <number>0</number>
    </property>
    <property name="topMargin">
     <number>9</number>
    </property>
    <property name="rightMargin">
-    <number>9</number>
+    <number>0</number>
    </property>
    <property name="bottomMargin">
-    <number>9</number>
+    <number>0</number>
    </property>
    <item row="0" column="0">
     <widget class="QWidget" name="widget" native="true">
@@ -121,17 +135,24 @@ QListWidget::item:selected {
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout">
       <property name="leftMargin">
-       <number>0</number>
+       <number>9</number>
       </property>
       <property name="topMargin">
        <number>0</number>
       </property>
       <property name="rightMargin">
-       <number>0</number>
+       <number>9</number>
       </property>
       <property name="bottomMargin">
        <number>0</number>
       </property>
+      <item>
+       <widget class="QLabel" name="label_3">
+        <property name="text">
+         <string>Recent Projects</string>
+        </property>
+       </widget>
+      </item>
       <item>
        <spacer name="horizontalSpacer">
         <property name="orientation">
@@ -148,7 +169,7 @@ QListWidget::item:selected {
       <item>
        <widget class="QLabel" name="label_2">
         <property name="text">
-         <string>Grid Scale</string>
+         <string>Tile Scale</string>
         </property>
        </widget>
       </item>
@@ -191,30 +212,41 @@ QListWidget::item:selected {
      <property name="minimumSize">
       <size>
        <width>0</width>
-       <height>32</height>
+       <height>0</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
        <width>16777215</width>
-       <height>32</height>
+       <height>64</height>
       </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">#browseProjects {
+	background: transparent;
+	font-size: 9px;
+	font-weight: bold;
+}
+
+#browseProjects::hover {
+	color: #3498db;
+}</string>
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout_2">
       <property name="leftMargin">
-       <number>0</number>
+       <number>9</number>
       </property>
       <property name="topMargin">
-       <number>0</number>
+       <number>9</number>
       </property>
       <property name="rightMargin">
-       <number>0</number>
+       <number>9</number>
       </property>
       <property name="bottomMargin">
-       <number>0</number>
+       <number>9</number>
       </property>
       <item>
-       <widget class="QLabel" name="label">
+       <widget class="QPushButton" name="browseProjects">
         <property name="text">
          <string>Browse sample projects...</string>
         </property>
@@ -232,6 +264,13 @@ QListWidget::item:selected {
          </size>
         </property>
        </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="newProject">
+        <property name="text">
+         <string>+ Create New Scene</string>
+        </property>
+       </widget>
       </item>
      </layout>
     </widget>

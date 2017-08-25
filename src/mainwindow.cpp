@@ -788,7 +788,7 @@ void MainWindow::saveScene()
                                        sceneView->getEditorData());
     db->updateScene(blob);
 
-    auto img = sceneView->takeScreenshot(800, 400);
+    auto img = sceneView->takeScreenshot(Constants::TILE_SIZE.width(), Constants::TILE_SIZE.height());
     img.save(Globals::project->getProjectFolder() + "/Metadata/preview.png");
 
 //    auto vp = viewport;
@@ -871,6 +871,16 @@ void MainWindow::openProject(QString filename)
 {
     // SWITCH
 //    ui->contentWidget->setCurrentIndex(0);
+
+    ui->AnimationDock->show();
+    ui->PropertiesDock->show();
+    ui->sceneHierarchyDock->show();
+    ui->AssetsDock->show();
+    ui->MenuBar->show();
+    ui->PresetsDock->show();
+    ui->ToolBar->show();
+
+    ui->backgroundscene->show();
 
     this->sceneView->makeCurrent();
     //remove current scene first
@@ -1506,6 +1516,17 @@ void MainWindow::projectManager(bool mainWindowActive)
 void MainWindow::newProject(const QString &filename, const QString &projectPath)
 {
 //    ui->contentWidget->setCurrentIndex(0);
+
+    ui->AnimationDock->show();
+    ui->PropertiesDock->show();
+    ui->sceneHierarchyDock->show();
+    ui->AssetsDock->show();
+    ui->MenuBar->show();
+    ui->PresetsDock->show();
+    ui->ToolBar->show();
+
+    ui->backgroundscene->show();
+
     newScene();
 
     auto pPath = QDir(projectPath).filePath(filename + Constants::PROJ_EXT);

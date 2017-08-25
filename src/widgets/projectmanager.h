@@ -14,6 +14,7 @@ namespace Ui {
 class aiScene;
 class GridWidget;
 class DynamicGrid;
+class ItemGridWidget;
 
 struct ModelData {
     ModelData() = default;
@@ -74,6 +75,9 @@ protected slots:
 
     void OnLstItemsCommitData(QWidget*);
 
+    void openSampleBrowser();
+    void openProjectFromWidget(ItemGridWidget *widget);
+
 signals:
     void fileToOpen(const QString& str);
     void fileToCreate(const QString& str, const QString& str2);
@@ -98,6 +102,7 @@ private:
     bool isMainWindowActive;
 
     DynamicGrid *dynamicGrid;
+    QDialog sampleDialog;
 };
 
 struct AssetWidgetConcurrentWrapper {

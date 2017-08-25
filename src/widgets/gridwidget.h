@@ -11,6 +11,7 @@ public:
     explicit GridWidget(QString path, QWidget *parent = Q_NULLPTR);
     QPixmap image;
     QString path;
+    QString projectName;
 };
 
 #endif // GRIDWIDGET_H

@@ -28,8 +28,11 @@
 #include "gridwidget.h"
 
 #include <QDebug>
+#include <QGraphicsDropShadowEffect>
 #include <QLineEdit>
 #include <QMenu>
+
+#include "itemgridwidget.hpp"
 
 void reducer(QVector<ModelData> &accum, const QVector<ModelData> &interm)
 {
@@ -45,6 +48,8 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
     settings = SettingsManager::getDefaultManager();
 
     connect(ui->horizontalSlider, SIGNAL(valueChanged(int)), SLOT(scaleTile(int)));
+
+    connect(ui->newProject, SIGNAL(pressed()), SLOT(newProject()));
 
 //    ui->listWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -96,6 +101,17 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
 
     dynamicGrid = new DynamicGrid(this);
 
+    ui->browseProjects->setCursor(Qt::PointingHandCursor);
+    connect(ui->browseProjects, SIGNAL(pressed()), SLOT(openSampleBrowser()));
+//    ui->label_2->setCursor(Qt::PointingHandCursor);
+
+    ui->label_3->setStyleSheet("font-weight: bold; font-size: 13px");
+//    QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect;
+//    shadow->setColor(Qt::white);
+//    shadow->setOffset(0);
+//    shadow->setBlurRadius(1.f);
+//    ui->label_3->setGraphicsEffect(shadow);
+
 //    QList<QString> path;
 
 //    QDirIterator it(":/images", QDirIterator::Subdirectories);
@@ -117,6 +133,19 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
     ui->pmcont->setLayout(layout);
 }
 
+void ProjectManager::openProjectFromWidget(ItemGridWidget *widget)
+{
+    auto projectFile = QFileInfo(widget->projectName);
+    auto projectPath = projectFile.absolutePath();
+    Globals::project->setProjectPath(projectPath);
+
+    prepareStore(projectFile.absoluteFilePath());
+
+    this->close();
+
+//    settings->addRecentlyOpenedScene(projectFile.absoluteFilePath());
+}
+
 void ProjectManager::update()
 {
     auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
@@ -127,7 +156,8 @@ void ProjectManager::update()
 
     int i = 0;
     foreach (const QFileInfo &file, files) {
-        dynamicGrid->addToGridView(new GridWidget(file.absoluteFilePath() + "/Metadata/preview.png"), i);
+//        qDebug() << file.absoluteFilePath();
+        dynamicGrid->addToGridView(new GridWidget(file.absoluteFilePath()), i);
         i++;
     }
 
@@ -337,11 +367,13 @@ void ProjectManager::openSampleProject(QListWidgetItem *item)
 
                     prepareStore(sln);
 
-                    settings->addRecentlyOpenedScene(sln);
+//                    settings->addRecentlyOpenedScene(sln);
                 }
 
 //                emit accepted();
 //                this->close();
+
+                sampleDialog.close();
             }
         }
     } else {
@@ -359,11 +391,12 @@ void ProjectManager::openSampleProject(QListWidgetItem *item)
 
                 prepareStore(sln);
 
-                settings->addRecentlyOpenedScene(sln);
+//                settings->addRecentlyOpenedScene(sln);
             }
 
 //            emit accepted();
 //            this->close();
+            sampleDialog.close();
         }
     }
 }
@@ -437,6 +470,8 @@ void ProjectManager::newProject()
 
 //        emit accepted();
 //        this->close();
+
+        this->hide();
     }
 }
 
@@ -502,6 +537,8 @@ void ProjectManager::handleDone()
      emit fileToOpen(pathToOpen);
 
      progressDialog->close();
+
+     this->hide();
 }
 
 void ProjectManager::handleDoneFuture()
@@ -530,14 +567,61 @@ void ProjectManager::OnLstItemsCommitData(QWidget *listItem)
 
 //        ui->assetTree->clearSelection();
 //        branch->setSelected(true);
-//    }
+    //    }
+}
+
+void ProjectManager::openSampleBrowser()
+{
+    sampleDialog.setFixedSize(640, 480);
+    sampleDialog.setWindowFlags(sampleDialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
+    sampleDialog.setWindowTitle("Jahshaka Sample Browser");
+
+    QGridLayout *layout = new QGridLayout();
+    QListWidget *sampleList = new QListWidget();
+    sampleList->setObjectName("sampleList");
+
+    sampleList->setStyleSheet("QListWidgetItem { padding: 12px; }");
+
+    sampleList->setSizeAdjustPolicy(QListWidget::AdjustToContents);
+    sampleList->setSpacing(4);
+    sampleList->setResizeMode(QListWidget::Adjust);
+    sampleList->setMovement(QListView::Static);
+    sampleList->setIconSize(QSize(100, 50));
+//    ui->sampleList->setSelectionBehavior(QAbstractItemView::SelectItems);
+//    ui->sampleList->setSelectionMode(QAbstractItemView::SingleSelection);
+
+    QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
+    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+
+    foreach (const QFileInfo &file, files) {
+        auto item = new QListWidgetItem();
+        item->setToolTip(file.absoluteFilePath());
+        item->setData(Qt::DisplayRole, file.baseName());
+        item->setData(Qt::UserRole, file.absoluteFilePath() + "/" + file.baseName() + Constants::PROJ_EXT);
+
+        if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
+            item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
+        } else {
+            item->setIcon(QIcon(":/app/images/preview.png"));
+        }
+
+        sampleList->addItem(item);
+    }
+
+    connect(sampleList, SIGNAL(itemDoubleClicked(QListWidgetItem*)), SLOT(openSampleProject(QListWidgetItem*)));
+
+    layout->addWidget(sampleList);
+    layout->setMargin(0);
+
+    sampleDialog.setLayout(layout);
+    sampleDialog.exec();
 }
 
 void ProjectManager::test()
 {
-    qDebug() << "what";
+//    qDebug() << "what";
 //    ui->listWidget->setVisible(true);
-    this->repaint();
+//    this->repaint();
 }
 
 void ProjectManager::prepareStore(QString path)
