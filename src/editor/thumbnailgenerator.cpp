@@ -202,7 +202,7 @@ float RenderThread::getBoundingRadius(iris::SceneNodePtr node)
 {
     auto radius = 0.0f;
     if(node->sceneNodeType== iris::SceneNodeType::Mesh)
-        radius = node.staticCast<iris::MeshNode>()->getMesh()->boundingSphere->radius;
+        radius = node.staticCast<iris::MeshNode>()->getMesh()->boundingSphere.radius;
 
     for(auto child : node->children) {
         radius = qMax(radius, getBoundingRadius(child));

@@ -466,7 +466,7 @@ void Mesh::addIndexArray(void* data,int size,GLenum type)
 // https://github.com/playcanvas/engine/blob/master/src/shape/bounding-sphere.js#L30
 // bounding sphere wont necessarily be at the center of the mesh's origin
 // the true positon in world space would be the bounds's center plus the mesh's absolute position
-BoundingSphere *Mesh::calculateBoundingSphere(const aiMesh *mesh)
+BoundingSphere Mesh::calculateBoundingSphere(const aiMesh *mesh)
 {
     // find average pos
     aiVector3D averagePos;// = mesh->mVertices[0];
@@ -498,9 +498,9 @@ BoundingSphere *Mesh::calculateBoundingSphere(const aiMesh *mesh)
             maxDistSqrd = dist;
     }
 
-    auto sphere = new BoundingSphere();
-    sphere->pos = QVector3D(averagePos.x, averagePos.y, averagePos.x);
-    sphere->radius = qSqrt(maxDistSqrd);
+    BoundingSphere sphere;
+    sphere.pos = QVector3D(averagePos.x, averagePos.y, averagePos.x);
+    sphere.radius = qSqrt(maxDistSqrd);
     return sphere;
 }
 
