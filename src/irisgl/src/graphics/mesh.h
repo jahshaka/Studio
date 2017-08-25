@@ -154,6 +154,8 @@ public:
 private:
     void addVertexArray(VertexAttribUsage usage,void* data,int size,GLenum type,int numComponents);
     void addIndexArray(void* data,int size,GLenum type);
+
+    static BoundingSphere* calculateBoundingSphere(const aiMesh* mesh);
 };
 
 //typedef QSharedPointer<Mesh> MeshPtr;

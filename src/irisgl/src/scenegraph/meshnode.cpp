@@ -134,7 +134,8 @@ void MeshNode::submitRenderItems()
         //else
             renderItem->worldMatrix = this->globalTransform;
             renderItem->cullable = true;
-            renderItem->boundingSphere.pos = this->globalTransform.column(3).toVector3D();
+            //renderItem->boundingSphere.pos = this->globalTransform.column(3).toVector3D() + mesh->boundingSphere->pos;
+            renderItem->boundingSphere.pos = this->globalTransform * mesh->boundingSphere->pos;
             renderItem->boundingSphere.radius = mesh->boundingSphere->radius * getMeshRadius();
 
         if (!!material) {
