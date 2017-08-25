@@ -83,7 +83,8 @@ void AssetWidget::trigger()
     populateAssetTree();
 
     //UiManager::sceneViewWidget->thumbGen-
-    //connect(UiManager::sceneViewWidget->thumbGen->renderThread, SIGNAL(thumbnailComplete(ThumbnailResult)), this)
+    connect(ThumbnailGenerator::getSingleton()->renderThread, SIGNAL(thumbnailComplete(ThumbnailResult*)),
+            this, SLOT(onThumbnailResult(ThumbnailResult*)));// since the signal will be emitted from another thread
 }
 
 AssetWidget::~AssetWidget()
@@ -169,7 +170,8 @@ void AssetWidget::walkFileSystem(QString folder, QString path)
             if (asset->type == AssetType::Object)
                 ThumbnailGenerator::getSingleton()->requestThumbnail(ThumbnailRequestType::Mesh,asset->path,asset->path);
 
-            AssetManager::assets.append(asset);
+
+            AssetManager::addAsset(asset);
         } else {
             auto thumb = ThumbnailManager::createThumbnail(":/icons/folder-symbol.svg", 128, 128);
             QPixmap pixmap = QPixmap::fromImage(*thumb->thumb);
@@ -179,7 +181,7 @@ void AssetWidget::walkFileSystem(QString folder, QString path)
             asset->path = file.absoluteFilePath();
             asset->thumbnail = pixmap;
 
-            AssetManager::assets.append(asset);
+            AssetManager::addAsset(asset);
         }
 
         if (file.isDir()) {
@@ -213,6 +215,10 @@ void AssetWidget::addItem(const QString &asset)
         } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
             //type = AssetType::Object;
             item->setIcon(QIcon(":/icons/google-drive-file.svg"));
+            //qDebug()<<file.absoluteFilePath();
+            auto asset = AssetManager::getAssetByPath(file.absoluteFilePath());
+            if (asset!=nullptr)
+                item->setIcon(QIcon(asset->thumbnail));
         } else if (file.suffix() == "shader") {
             //type = AssetType::Shader;
             item->setIcon(QIcon(":/icons/google-drive-file.svg"));
@@ -451,7 +457,7 @@ void AssetWidget::searchAssets(QString searchString)
     ui->assetView->clear();
 
     if (!searchString.isEmpty()) {
-        for (auto item : AssetManager::assets) {
+        for (auto item : AssetManager::getAssets()) {
             if (item->fileName.contains(searchString)) {
                 addItem(item->path);
             }
@@ -567,7 +573,7 @@ void AssetWidget::importAsset(const QStringList &path)
                 if (asset->type == AssetType::Object)
                     ThumbnailGenerator::getSingleton()->requestThumbnail(ThumbnailRequestType::Mesh,asset->path,asset->path);
 
-                AssetManager::assets.append(asset);
+                AssetManager::addAsset(asset);
             }
         }
 
@@ -575,13 +581,17 @@ void AssetWidget::importAsset(const QStringList &path)
     }
 }
 
-void AssetWidget::onThumbnailResult(const ThumbnailResult &result)
+void AssetWidget::onThumbnailResult(ThumbnailResult* result)
 {
-    for(auto& asset : AssetManager::assets) {
-        if (asset->path == result.id) {
-            asset->thumbnail = QPixmap::fromImage(result.thumbnail);
-            // refresh ui
-            this->repaint();
+    for(auto& asset : AssetManager::getAssets()) {
+        if (asset->path == result->id) {
+            //qDebug()<<asset->path;
+            asset->thumbnail = QPixmap::fromImage(result->thumbnail);
+
+            //auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
+            //asset->thumbnail = QPixmap::fromImage(*thumb->thumb);
         }
     }
+
+    delete result;
 }

@@ -69,12 +69,14 @@ protected slots:
     void importAssetB();
     void importAsset(const QStringList &path);
 
-    void onThumbnailResult(const ThumbnailResult& result);
+    void onThumbnailResult(ThumbnailResult* result);
 
 private:
     Ui::AssetWidget *ui;
     AssetItem assetItem;
     QPoint startPos;
+
+    QString currentPath;
 };
 
 #endif // ASSETWIDGET_H

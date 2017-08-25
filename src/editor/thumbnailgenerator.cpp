@@ -34,6 +34,8 @@ void RenderThread::run()
     renderTarget->addTexture(tex);
 
     while(true) {
+        //exec(); // handle event loops
+
         //qDebug()<<"rendering";
         ThumbnailRequest request;
         bool hasRequest = false;
@@ -49,10 +51,10 @@ void RenderThread::run()
         if (hasRequest) {
 
             prepareScene(request);
-            scene->rootNode->addChild(sceneNode);
+            //scene->rootNode->addChild(sceneNode);
 
             scene->update(0);
-            renderer->renderSceneToRenderTarget(renderTarget, cam, false);
+            renderer->renderSceneToRenderTarget(renderTarget, cam, true);
 
             cleanupScene();
             //meshNode->
@@ -62,11 +64,11 @@ void RenderThread::run()
             //todo: strip alpha channel from image
             img.save("/home/nicolas/Desktop/screenshot_thumb.jpg");
 
-            ThumbnailResult result;
-            result.id = request.id;
-            result.type = request.type;
-            result.path = request.path;
-            result.thumbnail = img;
+            auto result = new ThumbnailResult;
+            result->id = request.id;
+            result->type = request.type;
+            result->path = request.path;
+            result->thumbnail = img;
 
             emit thumbnailComplete(result);
         }
@@ -90,7 +92,7 @@ void RenderThread::initScene()
     //cam->setLocalRot(QQuaternion::fromEulerAngles(-45, 45, 0));
     cam->lookAt(QVector3D(0,0.5f,0));
 
-    scene->setSkyColor(QColor(50, 50, 50));
+    scene->setSkyColor(QColor(100, 100, 100));
     scene->setAmbientColor(QColor(255, 255, 255));
 
     // second node
@@ -118,7 +120,7 @@ void RenderThread::initScene()
     scene->rootNode->addChild(dlight);
     dlight->setName("Directional Light");
     dlight->setLocalPos(QVector3D(4, 4, 0));
-    dlight->setLocalRot(QQuaternion::fromEulerAngles(15, 0, 0));
+    dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 0, 0));
     dlight->intensity = 1;
     //dlight->icon = iris::Texture2D::load(":/icons/light.png");
 
@@ -176,11 +178,9 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
         auto boundRadius = getBoundingRadius(sceneNode);
 
 
-        cam->setLocalPos(QVector3D(1, 1, 5).normalized()*(boundRadius+5));
+        cam->setLocalPos(QVector3D(1, 1, 5).normalized()*(boundRadius+2));
         cam->lookAt(QVector3D(0, boundRadius/2.0f, 0));
         cam->update(0);
-
-        // apply default material
     }
     else
     {
@@ -194,7 +194,8 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 
 void RenderThread::cleanupScene()
 {
-    scene->rootNode->removeChild(sceneNode);
+    //scene->rootNode->removeChild(sceneNode);
+    sceneNode->removeFromParent();
 }
 
 float RenderThread::getBoundingRadius(iris::SceneNodePtr node)

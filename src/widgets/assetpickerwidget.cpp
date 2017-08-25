@@ -38,7 +38,7 @@ AssetPickerWidget::~AssetPickerWidget()
 
 void AssetPickerWidget::populateWidget(QString filter)
 {
-    for (auto asset : AssetManager::assets) {
+    for (auto asset : AssetManager::getAssets()) {
         QPixmap pixmap;
 
         if (asset->type == type) {

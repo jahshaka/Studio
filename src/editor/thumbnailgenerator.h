@@ -59,12 +59,14 @@ public:
     void prepareScene(const ThumbnailRequest& request);
     void cleanupScene();
 
+signals:
+    void thumbnailComplete(ThumbnailResult* result);
+
 private:
     //ThumbnailRequest& getRequest();
     float getBoundingRadius(iris::SceneNodePtr node);
 
-signals:
-    void thumbnailComplete(const ThumbnailResult& result);
+
 };
 
 // http://doc.qt.io/qt-5/qtquick-scenegraph-textureinthread-threadrenderer-cpp.html
