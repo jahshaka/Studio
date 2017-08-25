@@ -14,7 +14,18 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">#samples, #projects {
+   <string notr="true">QSlider::groove:horizontal {
+   /* height: 8px; /* the groove expands to the size of the slider by default. by giving it a height, it has a fixed size */
+    background: #404040;
+}
+
+QSlider::handle:horizontal {
+    background: #AFAFAF;
+    width: 10px;
+    margin: -2px 0; /* handle is placed by default on the contents rect of the groove. Expand outside the groove */
+}
+
+#samples, #projects {
 	padding: 8px;
 	color: white;
 }
@@ -76,6 +87,18 @@ QListWidget::item:selected {
 }</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
+   <property name="leftMargin">
+    <number>9</number>
+   </property>
+   <property name="topMargin">
+    <number>9</number>
+   </property>
+   <property name="rightMargin">
+    <number>9</number>
+   </property>
+   <property name="bottomMargin">
+    <number>9</number>
+   </property>
    <item row="0" column="0">
     <widget class="QWidget" name="widget" native="true">
      <property name="sizePolicy">
@@ -116,14 +139,36 @@ QListWidget::item:selected {
         </property>
         <property name="sizeHint" stdset="0">
          <size>
-          <width>379</width>
+          <width>500</width>
           <height>20</height>
          </size>
         </property>
        </spacer>
       </item>
       <item>
+       <widget class="QLabel" name="label_2">
+        <property name="text">
+         <string>Grid Scale</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QSlider" name="horizontalSlider">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimum">
+         <number>1</number>
+        </property>
+        <property name="maximum">
+         <number>10</number>
+        </property>
+        <property name="value">
+         <number>6</number>
+        </property>
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
@@ -168,6 +213,13 @@ QListWidget::item:selected {
       <property name="bottomMargin">
        <number>0</number>
       </property>
+      <item>
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Browse sample projects...</string>
+        </property>
+       </widget>
+      </item>
       <item>
        <spacer name="horizontalSpacer_2">
         <property name="orientation">

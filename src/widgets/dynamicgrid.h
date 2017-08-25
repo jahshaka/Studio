@@ -13,6 +13,13 @@ class DynamicGrid : public QScrollArea
 public:
     explicit DynamicGrid(QWidget *parent = Q_NULLPTR);
     void addToGridView(GridWidget *item, int count);
+    QSize tileSize;
+    QSize baseSize;
+    int lastWidth;
+    int scale;
+    void scaleTile(int);
+
+    void resetView();
 
 protected:
     void resizeEvent(QResizeEvent *event);

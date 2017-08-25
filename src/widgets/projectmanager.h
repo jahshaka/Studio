@@ -67,6 +67,8 @@ protected slots:
     void myProjects();
     void sampleProjects();
 
+    void scaleTile(int);
+
     void handleDone();
     void handleDoneFuture();
 

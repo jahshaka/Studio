@@ -44,6 +44,8 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
 
     settings = SettingsManager::getDefaultManager();
 
+    connect(ui->horizontalSlider, SIGNAL(valueChanged(int)), SLOT(scaleTile(int)));
+
 //    ui->listWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 
 //    ui->listWidget->setFlow(QListView::LeftToRight);
@@ -465,7 +467,12 @@ void ProjectManager::sampleProjects()
 {
 //    ui->samples->setStyleSheet("background: #4998ff");
 //    ui->projects->setStyleSheet("background: #444");
-//    ui->stackedWidget->setCurrentIndex(1);
+    //    ui->stackedWidget->setCurrentIndex(1);
+}
+
+void ProjectManager::scaleTile(int scale)
+{
+    dynamicGrid->scaleTile(scale);
 }
 
 void ProjectManager::handleDone()
