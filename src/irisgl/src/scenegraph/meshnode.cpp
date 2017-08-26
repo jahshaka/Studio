@@ -160,6 +160,14 @@ float MeshNode::getMeshRadius()
     return qMax(qMax(scaleX, scaleY), scaleZ);
 }
 
+BoundingSphere MeshNode::getTransformedBoundingSphere()
+{
+    BoundingSphere boundingSphere;
+    boundingSphere.pos = this->globalTransform * mesh->boundingSphere.pos;
+    boundingSphere.radius = mesh->boundingSphere.radius * getMeshRadius();
+    return boundingSphere;
+}
+
 /*
 void MeshNode::updateAnimation(float time)
 {

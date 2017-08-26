@@ -16,6 +16,8 @@
 #include <QMutex>
 #include <QMutexLocker>
 
+#include <QtMath>
+
 ThumbnailGenerator* ThumbnailGenerator::instance = nullptr;
 
 void RenderThread::requestThumbnail(const ThumbnailRequest &request)
@@ -120,7 +122,7 @@ void RenderThread::initScene()
     scene->rootNode->addChild(dlight);
     dlight->setName("Directional Light");
     dlight->setLocalPos(QVector3D(4, 4, 0));
-    dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 0, 0));
+    dlight->setLocalRot(QQuaternion::fromEulerAngles(-45, 0, 0));
     dlight->intensity = 1;
     //dlight->icon = iris::Texture2D::load(":/icons/light.png");
 
@@ -175,11 +177,29 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
         scene->rootNode->addChild(sceneNode);
 
         // fit object in view
-        auto boundRadius = getBoundingRadius(sceneNode);
+        QList<iris::BoundingSphere> spheres;
+        getBoundingSpheres(sceneNode, spheres);
+        iris::BoundingSphere bound;
+
+        //merge bounding spheres
+        if (spheres.count() == 0) {
+            bound.pos = QVector3D(0,0,0);
+            bound.radius = 1;
+        } else if (spheres.count() == 1) {
+            bound = spheres[0];
+        } else {
+            bound.pos = QVector3D(0,0,0);
+            bound.radius = 1;
+
+            for(auto& sphere : spheres) {
+                bound = iris::BoundingSphere::merge(bound, sphere);
+            }
+        }
 
 
-        cam->setLocalPos(QVector3D(1, 1, 5).normalized()*(boundRadius+2));
-        cam->lookAt(QVector3D(0, boundRadius/2.0f, 0));
+        float dist = (bound.radius*1.2) / qTan(qDegreesToRadians(cam->angle/2.0f));
+        cam->setLocalPos(QVector3D(0, bound.pos.y(), -dist));
+        cam->lookAt(bound.pos);
         cam->update(0);
     }
     else
@@ -209,6 +229,18 @@ float RenderThread::getBoundingRadius(iris::SceneNodePtr node)
     }
 
     return radius;
+}
+
+void RenderThread::getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere> &spheres)
+{
+    if(node->sceneNodeType== iris::SceneNodeType::Mesh) {
+        auto sphere = node.staticCast<iris::MeshNode>()->getTransformedBoundingSphere();
+        spheres.append(sphere);
+    }
+
+    for(auto child : node->children) {
+        getBoundingSpheres(child, spheres);
+    }
 }
 
 ThumbnailGenerator::ThumbnailGenerator()

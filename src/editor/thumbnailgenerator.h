@@ -65,7 +65,7 @@ signals:
 private:
     //ThumbnailRequest& getRequest();
     float getBoundingRadius(iris::SceneNodePtr node);
-
+    void getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere>& spheres);
 
 };
 
