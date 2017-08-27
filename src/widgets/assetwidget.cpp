@@ -217,8 +217,10 @@ void AssetWidget::addItem(const QString &asset)
             item->setIcon(QIcon(":/icons/google-drive-file.svg"));
             //qDebug()<<file.absoluteFilePath();
             auto asset = AssetManager::getAssetByPath(file.absoluteFilePath());
-            if (asset!=nullptr)
-                item->setIcon(QIcon(asset->thumbnail));
+            if (asset!=nullptr) {
+                if (!asset->thumbnail.isNull())
+                    item->setIcon(QIcon(asset->thumbnail));
+            }
         } else if (file.suffix() == "shader") {
             //type = AssetType::Shader;
             item->setIcon(QIcon(":/icons/google-drive-file.svg"));
@@ -587,6 +589,12 @@ void AssetWidget::onThumbnailResult(ThumbnailResult* result)
         if (asset->path == result->id) {
             //qDebug()<<asset->path;
             asset->thumbnail = QPixmap::fromImage(result->thumbnail);
+
+            // find item and update its icon
+            auto items = ui->assetView->findItems(asset->fileName, Qt::MatchExactly);
+            if (items.count() > 0) {
+                items[0]->setIcon(asset->thumbnail);
+            }
 
             //auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
             //asset->thumbnail = QPixmap::fromImage(*thumb->thumb);

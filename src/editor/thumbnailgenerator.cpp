@@ -63,8 +63,6 @@ void RenderThread::run()
 
             // save contents to file
             auto img = renderTarget->toImage();
-            //todo: strip alpha channel from image
-            img.save("/home/nicolas/Desktop/screenshot_thumb.jpg");
 
             auto result = new ThumbnailResult;
             result->id = request.id;
