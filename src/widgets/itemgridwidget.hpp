@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QLabel>
 #include <QGridLayout>
+#include <QLineEdit>
 
 class GridWidget;
 
@@ -18,19 +19,45 @@ public:
 
     void setTileSize(QSize size);
     void updateImage();
+    void updateLabel(QString);
+    QString labelText;
 
-    QWidget *get();
+protected slots:
+    void showControls();
+    void hideControls();
+    void removeProject();
+    void editProject();
+    void projectContextMenu(const QPoint&);
+
+    void openProject();
+    void renameProject();
+    void closeProject();
+    void deleteProject();
+
+    void renameFromWidgetStr(QString);
 
 protected:
 //    void keyPressEvent(QKeyEvent* event);
-    void mousePressEvent(QMouseEvent *event);
-    void mouseDoubleClickEvent(QMouseEvent *event);
+    void enterEvent(QEvent*);
+    void leaveEvent(QEvent*);
+    void mousePressEvent(QMouseEvent*);
+    void mouseDoubleClickEvent(QMouseEvent*);
 
 signals:
 //    void arrowPressed(QWidget *current, QString keypress);
 //    void enterPressed(QWidget *current);
-    void singleClicked(ItemGridWidget *current);
-    void doubleClicked(ItemGridWidget *current);
+    void hovered();
+    void left();
+    void edit(ItemGridWidget*);
+    void remove(ItemGridWidget*);
+    void singleClicked(ItemGridWidget*);
+    void doubleClicked(ItemGridWidget*);
+
+
+    void openFromWidget(ItemGridWidget*);
+    void renameFromWidget(ItemGridWidget*);
+    void closeFromWidget(ItemGridWidget*);
+    void deleteFromWidget(ItemGridWidget*);
 
 private:
 //    QWidget *gameGridItem;

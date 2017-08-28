@@ -3,8 +3,13 @@
 #include <QDebug>
 #include <QFileInfo>
 #include <QGraphicsDropShadowEffect>
+#include <QLineEdit>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPushButton>
+
+#include "../dialogs/renameprojectdialog.h"
+
 ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : QWidget(parent)
 {
     tileSize = size;
@@ -24,6 +29,7 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
     gameGridLayout->setRowMinimumHeight(1, tileSize.height());
 
     gridImageLabel = new QLabel(this);
+    gridImageLabel->setObjectName("image");
     gridImageLabel->setMinimumHeight(tileSize.height());
     gridImageLabel->setMinimumWidth(tileSize.width());
 
@@ -39,6 +45,7 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
     gridTextLabel->setStyleSheet("QLabel { font-weight: bold; color: white; font-size: 11px; }");
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+//    gridTextLabel->setTextInteractionFlags(Qt::TextEditorInteraction);
 
     gameGridLayout->addWidget(gridTextLabel, 2, 1);
 
@@ -51,31 +58,45 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
     gameGridLayout->addWidget(gridImageLabel, 1, 1);
 
     options = new QWidget(this);
-    // check these constants
-//    options->setMaximumHeight(32);
-    options->setStyleSheet("background: red");
+//    // check these constants
+//    options->setStyleSheet("background: red");
     options->setMinimumWidth(tileSize.width());
     options->setMaximumWidth(tileSize.width());
 
     QVBoxLayout *vlayout = new QVBoxLayout();
-    auto padding = new QWidget(this);
-    padding->setMaximumHeight(64);
+//    vlayout->setMargin(0);
+//    vlayout->setSpacing(0);
+    auto padding = new QWidget();
 
     QHBoxLayout *olayout = new QHBoxLayout();
+    olayout->setMargin(0);
+    olayout->setSpacing(0);
+
     auto editButton = new QPushButton("Edit");
+    editButton->setObjectName("editButton");
     editButton->setCursor(Qt::PointingHandCursor);
+    editButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white } QPushButton::hover { font-size: 12px }");
     olayout->addWidget(editButton);
     auto spacer = new QLabel("|");
     spacer->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    spacer->setStyleSheet("background: transparent");
     olayout->addWidget(spacer);
     auto deleteButton = new QPushButton("Delete");
     deleteButton->setCursor(Qt::PointingHandCursor);
+    deleteButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold;  color: white} QPushButton::hover { font-size: 12px }");
     olayout->addWidget(deleteButton);
 
-    options->setLayout(olayout);
+    auto controls = new QWidget();
+    controls->setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #3498db, stop:1 #2283c3); border-radius: 1px");
+    controls->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    controls->setFixedHeight(32);
+    controls->setLayout(olayout);
 
-//    vlayout->addWidget(padding);
-//    vlayout->addWidget(options);
+    vlayout->addWidget(padding);
+    vlayout->addWidget(controls);
+
+    options->setLayout(vlayout);
+    options->hide();
 
     gameGridLayout->addWidget(options, 1, 1);
 
@@ -87,6 +108,16 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
 
     setLayout(gameGridLayout);
     setMinimumHeight(this->sizeHint().height());
+
+    connect(editButton, SIGNAL(pressed()), SLOT(editProject()));
+    connect(deleteButton, SIGNAL(pressed()), SLOT(removeProject()));
+
+    connect(this, SIGNAL(hovered()), SLOT(showControls()));
+    connect(this, SIGNAL(left()), SLOT(hideControls()));
+
+    setContextMenuPolicy(Qt::CustomContextMenu);
+
+    connect(this, SIGNAL(customContextMenuRequested(const QPoint&)), SLOT(projectContextMenu(QPoint)));
 
 //    connect(this, SIGNAL(singleClicked(QWidget*)), this, SLOT(highlightGridWidget(QWidget*)));
 //    connect(this, SIGNAL(doubleClicked(QWidget*)), parent, SLOT(openProjectFromWidget(QWidget*)));
@@ -116,6 +147,8 @@ void ItemGridWidget::setTileSize(QSize size)
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
 
+    options->setMaximumWidth(tileSize.width());
+
     setMinimumHeight(this->sizeHint().height());
 }
 
@@ -124,9 +157,43 @@ void ItemGridWidget::updateImage()
 
 }
 
-QWidget *ItemGridWidget::get()
+void ItemGridWidget::updateLabel(QString text)
 {
-//    return gameGridItem;
+    this->gridTextLabel->setText(text);
+}
+
+void ItemGridWidget::showControls()
+{
+    options->show();
+}
+
+void ItemGridWidget::hideControls()
+{
+    options->hide();
+}
+
+void ItemGridWidget::removeProject()
+{
+    emit remove(this);
+}
+
+void ItemGridWidget::editProject()
+{
+    emit edit(this);
+}
+
+void ItemGridWidget::enterEvent(QEvent *event)
+{
+    // this->setStyleSheet("#image { border: 2px solid #3498db }");
+    QWidget::enterEvent(event);
+    emit hovered();
+}
+
+void ItemGridWidget::leaveEvent(QEvent *event)
+{
+    // this->setStyleSheet("#image { border: none }");
+    QWidget::leaveEvent(event);
+    emit left();
 }
 
 //void ItemGridWidget::keyPressEvent(QKeyEvent *event)
@@ -157,4 +224,59 @@ void ItemGridWidget::mouseDoubleClickEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton)
         emit doubleClicked(this);
+}
+
+void ItemGridWidget::projectContextMenu(const QPoint &pos)
+{
+    QMenu menu("Context Menu", this);
+
+    QAction open("Open", this);
+    connect(&open, SIGNAL(triggered()), this, SLOT(openProject()));
+    menu.addAction(&open);
+
+    QAction rename("Rename", this);
+    connect(&rename, SIGNAL(triggered()), this, SLOT(renameProject()));
+    menu.addAction(&rename);
+
+    QAction close("Close", this);
+    connect(&close, SIGNAL(triggered()), this, SLOT(closeProject()));
+    menu.addAction(&close);
+
+    menu.addSeparator();
+
+    QAction del("Delete", this);
+    connect(&del, SIGNAL(triggered()), this, SLOT(deleteProject()));
+    menu.addAction(&del);
+
+    menu.exec(mapToGlobal(pos));
+}
+
+void ItemGridWidget::openProject()
+{
+    emit openFromWidget(this);
+}
+
+void ItemGridWidget::renameProject()
+{
+    auto renameDialog = new RenameProjectDialog();
+
+    connect(renameDialog, SIGNAL(newTextEmit(QString)), SLOT(renameFromWidgetStr(QString)));
+
+    renameDialog->show();
+}
+
+void ItemGridWidget::closeProject()
+{
+    emit closeFromWidget(this);
+}
+
+void ItemGridWidget::deleteProject()
+{
+    emit deleteFromWidget(this);
+}
+
+void ItemGridWidget::renameFromWidgetStr(QString text)
+{
+    this->labelText = text;
+    emit renameFromWidget(this);
 }
