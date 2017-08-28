@@ -120,7 +120,7 @@ void RenderThread::initScene()
     scene->rootNode->addChild(dlight);
     dlight->setName("Directional Light");
     dlight->setLocalPos(QVector3D(4, 4, 0));
-    dlight->setLocalRot(QQuaternion::fromEulerAngles(-45, 0, 0));
+    dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 0, 0));
     dlight->intensity = 1;
     //dlight->icon = iris::Texture2D::load(":/icons/light.png");
 
@@ -196,7 +196,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 
 
         float dist = (bound.radius*1.2) / qTan(qDegreesToRadians(cam->angle/2.0f));
-        cam->setLocalPos(QVector3D(0, bound.pos.y(), -dist));
+        cam->setLocalPos(QVector3D(0, bound.pos.y(), dist));
         cam->lookAt(bound.pos);
         cam->update(0);
     }
