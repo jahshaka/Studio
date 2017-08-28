@@ -112,7 +112,8 @@ SOURCES += src/main.cpp\
     src/widgets/projectmanager.cpp \
     src/widgets/dynamicgrid.cpp \
     src/widgets/gridwidget.cpp \
-    src/widgets/itemgridwidget.cpp
+    src/widgets/itemgridwidget.cpp \
+    src/dialogs/renameprojectdialog.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -215,7 +216,8 @@ HEADERS  += src/mainwindow.h \
     src/widgets/projectmanager.h \
     src/widgets/dynamicgrid.h \
     src/widgets/gridwidget.h \
-    src/widgets/itemgridwidget.hpp
+    src/widgets/itemgridwidget.hpp \
+    src/dialogs/renameprojectdialog.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -256,7 +258,8 @@ FORMS    += \
     src/widgets/createanimationwidget.ui \
     src/dialogs/progressdialog.ui \
     src/widgets/screenshotwidget.ui \
-    src/widgets/projectmanager.ui
+    src/widgets/projectmanager.ui \
+    src/dialogs/renameprojectdialog.ui
 
 RESOURCES += \
     app/shaders.qrc \

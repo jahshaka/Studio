@@ -76,7 +76,10 @@ protected slots:
     void OnLstItemsCommitData(QWidget*);
 
     void openSampleBrowser();
-    void openProjectFromWidget(ItemGridWidget *widget);
+    void openProjectFromWidget(ItemGridWidget*);
+    void renameProjectFromWidget(ItemGridWidget*);
+    void closeProjectFromWidget(ItemGridWidget*);
+    void deleteProjectFromWidget(ItemGridWidget*);
 
 signals:
     void fileToOpen(const QString& str);

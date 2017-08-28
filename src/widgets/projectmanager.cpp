@@ -142,8 +142,21 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget)
     prepareStore(projectFile.absoluteFilePath());
 
     this->close();
+}
 
-//    settings->addRecentlyOpenedScene(projectFile.absoluteFilePath());
+void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
+{
+    widget->updateLabel(widget->labelText);
+}
+
+void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
+{
+
+}
+
+void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
+{
+    widget->deleteLater();
 }
 
 void ProjectManager::update()

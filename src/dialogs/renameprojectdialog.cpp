@@ -1,6 +1,22 @@
-#include "renameprojectdialog.hpp"
+#include "renameprojectdialog.h"
+#include "ui_renameprojectdialog.h"
 
-renameprojectdialog::renameprojectdialog()
+RenameProjectDialog::RenameProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::RenameProjectDialog)
 {
+    ui->setupUi(this);
+    setWindowTitle("Rename Project");
+    setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
+    connect(ui->ok, SIGNAL(pressed()), SLOT(newText()));
+}
+
+RenameProjectDialog::~RenameProjectDialog()
+{
+    delete ui;
+}
+
+void RenameProjectDialog::newText()
+{
+    emit newTextEmit(ui->lineEdit->text());
+    this->close();
 }

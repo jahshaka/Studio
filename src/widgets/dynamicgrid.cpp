@@ -37,7 +37,14 @@ void DynamicGrid::addToGridView(GridWidget *item, int count)
 {
     ItemGridWidget *gameGridItem = new ItemGridWidget(item, tileSize, gridWidget);
 
+    gameGridItem->setContextMenuPolicy(Qt::CustomContextMenu);
+
+    connect(gameGridItem, SIGNAL(edit(ItemGridWidget*)), parent, SLOT(openProjectFromWidget(ItemGridWidget*)));
+    connect(gameGridItem, SIGNAL(remove(ItemGridWidget*)), parent, SLOT(deleteProjectFromWidget(ItemGridWidget*)));
     connect(gameGridItem, SIGNAL(doubleClicked(ItemGridWidget*)), parent, SLOT(openProjectFromWidget(ItemGridWidget*)));
+    connect(gameGridItem, SIGNAL(openFromWidget(ItemGridWidget*)), parent, SLOT(openProjectFromWidget(ItemGridWidget*)));
+    connect(gameGridItem, SIGNAL(renameFromWidget(ItemGridWidget*)), parent, SLOT(renameProjectFromWidget(ItemGridWidget*)));
+    connect(gameGridItem, SIGNAL(deleteFromWidget(ItemGridWidget*)), parent, SLOT(deleteProjectFromWidget(ItemGridWidget*)));
 
     int columnCount = viewport()->width() / (tileSize.width() + offset);
 
