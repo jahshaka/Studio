@@ -104,8 +104,6 @@ public:
 
     VertexArrayData vertexArrays[(int)VertexAttribUsage::Count];
 
-    QOpenGLBuffer* vbo;
-
     VertexLayout* vertexLayout;
     int numVerts;
     int numFaces;
