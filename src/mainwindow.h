@@ -246,6 +246,7 @@ public slots:
     void takeScreenshot();
     void toggleLightWires(bool state);
     void tabsChanged(int);
+    void showProjectManager();
 
 private slots:
     void translateGizmo();
@@ -300,12 +301,14 @@ private:
 
     Database *db;
     AssetWidget *assetWidget;
-    ProjectManager *pm;
+    ProjectManager *pmContainer;
 
     QUndoStack* undoStack;
 
     bool vrMode;
     QPushButton* vrButton;
+    QPushButton* pmButton;
+    QMainWindow *dialog;
 };
 
 #endif // MAINWINDOW_H

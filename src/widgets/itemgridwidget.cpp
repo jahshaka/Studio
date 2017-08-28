@@ -17,11 +17,12 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
 
     projectName = item->projectName;
     auto fileName = QFileInfo(projectName);
+    name = fileName.baseName();
 
     setParent(parent);
 
-    setMinimumWidth(tileSize.width() + 10);
-    setMaximumWidth(tileSize.width() + 10);
+    setMinimumWidth(tileSize.width());
+    setMaximumWidth(tileSize.width());
 
     gameGridLayout = new QGridLayout(this);
     gameGridLayout->setColumnStretch(0, 1);
@@ -72,18 +73,18 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
     olayout->setMargin(0);
     olayout->setSpacing(0);
 
-    auto editButton = new QPushButton("Edit");
+    auto editButton = new QPushButton("Open");
     editButton->setObjectName("editButton");
     editButton->setCursor(Qt::PointingHandCursor);
-    editButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white } QPushButton::hover { font-size: 12px }");
+    editButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white }");
     olayout->addWidget(editButton);
     auto spacer = new QLabel("|");
     spacer->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    spacer->setStyleSheet("background: transparent");
+    spacer->setStyleSheet("background: transparent; color: white");
     olayout->addWidget(spacer);
     auto deleteButton = new QPushButton("Delete");
     deleteButton->setCursor(Qt::PointingHandCursor);
-    deleteButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold;  color: white} QPushButton::hover { font-size: 12px }");
+    deleteButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold;  color: white}");
     olayout->addWidget(deleteButton);
 
     auto controls = new QWidget();
@@ -103,7 +104,7 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
     QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect;
     shadow->setColor(Qt::black);
     shadow->setOffset(0);
-    shadow->setBlurRadius(10.f);
+    shadow->setBlurRadius(12.f);
     setGraphicsEffect(shadow);
 
     setLayout(gameGridLayout);
@@ -128,8 +129,8 @@ void ItemGridWidget::setTileSize(QSize size)
 {
     tileSize = size;
 
-    setMinimumWidth(tileSize.width() + 10);
-    setMaximumWidth(tileSize.width() + 10);
+    setMinimumWidth(tileSize.width());
+    setMaximumWidth(tileSize.width());
 
     gameGridLayout->setColumnStretch(0, 1);
     gameGridLayout->setColumnStretch(3, 1);

@@ -43,13 +43,28 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
 {
     ui->setupUi(this);
 
+    setWindowTitle("Project Manager");
+
 //    ui->controls->setVisible(false);
 
     settings = SettingsManager::getDefaultManager();
 
-    connect(ui->horizontalSlider, SIGNAL(valueChanged(int)), SLOT(scaleTile(int)));
+    connect(ui->comboBox, SIGNAL(currentTextChanged(QString)), SLOT(scaleTile(QString)));
 
     connect(ui->newProject, SIGNAL(pressed()), SLOT(newProject()));
+
+    searchTimer = new QTimer(this);
+    searchTimer->setSingleShot(true);   // timer can only fire once after started
+
+    connect(searchTimer, &QTimer::timeout, this, [this]() {
+        dynamicGrid->searchTiles(searchTerm.toLower());
+    });
+
+//    connect(ui->lineEdit, SIGNAL(textChanged(QString)), SLOT(searchProjects(QString)));
+    connect(ui->lineEdit, &QLineEdit::textChanged, this, [this](const QString &searchTerm) {
+        this->searchTerm = searchTerm;
+        searchTimer->start(100);
+    });
 
 //    ui->listWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -105,7 +120,7 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
     connect(ui->browseProjects, SIGNAL(pressed()), SLOT(openSampleBrowser()));
 //    ui->label_2->setCursor(Qt::PointingHandCursor);
 
-    ui->label_3->setStyleSheet("font-weight: bold; font-size: 13px");
+//    ui->label_3->setStyleSheet("font-weight: bold; font-size: 13px");
 //    QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect;
 //    shadow->setColor(Qt::white);
 //    shadow->setOffset(0);
@@ -130,6 +145,7 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
     layout->addWidget(dynamicGrid);
     layout->setMargin(0);
 
+    ui->pmcont->setStyleSheet("border: none");
     ui->pmcont->setLayout(layout);
 }
 
@@ -146,7 +162,28 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget)
 
 void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
 {
-    widget->updateLabel(widget->labelText);
+    auto finfo = QFileInfo(widget->projectName);
+    auto originalFile = widget->projectName;
+    auto projectPath = finfo.absolutePath();
+
+    QDir baseDir(projectPath);
+    baseDir.cdUp();
+
+
+    QDir dir;
+    auto fileRename = dir.rename(originalFile, projectPath + "/" + widget->labelText + Constants::PROJ_EXT);
+    auto dirRename = dir.rename(projectPath, baseDir.absolutePath() + "/" + widget->labelText);
+//    QDir nf;
+//    auto proRename = nf.rename(originalFile, widget->labelText);
+    if (dirRename && fileRename) {
+        widget->updateLabel(widget->labelText);
+    } else {
+        QMessageBox::StandardButton err;
+        err = QMessageBox::warning(this,
+                                   "Rename failed",
+                                   "Failed to rename project, please try again or rename manually",
+                                   QMessageBox::Ok);
+    }
 }
 
 void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
@@ -156,7 +193,32 @@ void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
 
 void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
 {
-    widget->deleteLater();
+    auto finfo = QFileInfo(widget->projectName);
+    auto projectPath = finfo.absolutePath();
+
+    QMessageBox::StandardButton reply;
+    reply = QMessageBox::question(this,
+                                  "Deleting Project",
+                                  "Are you sure you want to delete this project?",
+                                  QMessageBox::Yes | QMessageBox::Cancel);
+    if (reply == QMessageBox::Yes) {
+        QDir dir(projectPath);
+        if (dir.removeRecursively()) {
+            dynamicGrid->deleteTile(widget);
+            delete widget;
+        } else {
+            QMessageBox::StandardButton err;
+            err = QMessageBox::warning(this,
+                                       "Delete failed",
+                                       "Failed to remove project, please try again or delete manually",
+                                       QMessageBox::Ok);
+        }
+    }
+}
+
+void ProjectManager::searchProjects()
+{
+    dynamicGrid->searchTiles(ui->lineEdit->text());
 }
 
 void ProjectManager::update()
@@ -169,41 +231,9 @@ void ProjectManager::update()
 
     int i = 0;
     foreach (const QFileInfo &file, files) {
-//        qDebug() << file.absoluteFilePath();
         dynamicGrid->addToGridView(new GridWidget(file.absoluteFilePath()), i);
         i++;
     }
-
-//    foreach (const QFileInfo &file, files) {
-//        auto item = new QListWidgetItem();
-//        item->setToolTip(file.absoluteFilePath());
-//        item->setData(Qt::DisplayRole, file.baseName());
-//        item->setData(Qt::UserRole, file.absoluteFilePath() + "/" + file.baseName() + Constants::PROJ_EXT);
-//        if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
-//            item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
-//        } else {
-//            item->setIcon(QIcon(":/app/images/no_preview.png"));
-//        }
-
-////        item->setSizeHint(QSize(3, 256));
-//        item->setFlags(item->flags() | Qt::ItemIsEditable);
-//        ui->listWidget->addItem(item);
-//    }
-
-//    QDir dir2(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
-//        QFileInfoList files2 = dir2.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
-//        foreach (const QFileInfo &file, files2) {
-//            auto item = new QListWidgetItem();
-//            item->setToolTip(file.absoluteFilePath());
-//            item->setData(Qt::DisplayRole, file.baseName());
-//            item->setData(Qt::UserRole, file.absoluteFilePath() + "/" + file.baseName() + Constants::PROJ_EXT);
-//            if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
-//                item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
-//            } else {
-//                item->setIcon(QIcon(":/app/images/no_preview.png"));
-//            }
-//            ui->listWidget_2->addItem(item);
-//        }
 }
 
 void ProjectManager::resizeEvent(QResizeEvent *event)
@@ -216,7 +246,12 @@ void ProjectManager::resizeEvent(QResizeEvent *event)
 //    } else {
 //        ui->listWidget->setIconSize(QSize(256, 256));
 ////        ui->listWidget->setGridSize(QSize(event->size().width() / 3, 256));
-//    }
+    //    }
+}
+
+void ProjectManager::closeEvent(QCloseEvent *event)
+{
+//    qDebug() << "nice";
 }
 
 void ProjectManager::listWidgetCustomContextMenu(const QPoint &pos)
@@ -518,9 +553,15 @@ void ProjectManager::sampleProjects()
     //    ui->stackedWidget->setCurrentIndex(1);
 }
 
-void ProjectManager::scaleTile(int scale)
+void ProjectManager::scaleTile(QString scale)
 {
     dynamicGrid->scaleTile(scale);
+}
+
+void ProjectManager::searchTiles(QString search)
+{
+//    auto srch = search.toLower();
+//    dynamicGrid->searchTiles(srch);
 }
 
 void ProjectManager::handleDone()

@@ -325,7 +325,7 @@ QLabel {
 }
 
 /* =============================================== */
-QToolBar &gt; QToolButton, QWidget#vrButton {
+QToolBar &gt; QToolButton, QWidget#vrButton, #pmButton {
     background-color: #212121;
     border: 1px solid #1e1e1e;
     border-radius: 2px;
@@ -333,6 +333,10 @@ QToolBar &gt; QToolButton, QWidget#vrButton {
     width: 16px;
     height: 16px;
     margin: 8px;
+}
+
+QPushButton#pmButton:hover {
+    background-color: #3498db;
 }
 
 QToolBar {
@@ -421,9 +425,6 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <property name="bottomMargin">
      <number>0</number>
     </property>
-    <item row="0" column="0">
-     <widget class="ProjectManager" name="pmContainer" native="true"/>
-    </item>
     <item row="1" column="0">
      <widget class="QWidget" name="backgroundscene" native="true">
       <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -531,6 +532,9 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
        </item>
       </layout>
      </widget>
+    </item>
+    <item row="0" column="0">
+     <widget class="ProjectManager" name="pmContainer" native="true"/>
     </item>
    </layout>
   </widget>
@@ -793,7 +797,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>332</height>
+          <height>335</height>
          </rect>
         </property>
         <property name="styleSheet">

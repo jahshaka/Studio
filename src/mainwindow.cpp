@@ -181,11 +181,21 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
 
     // pm
-//    pm = new ProjectManager(this);
+    pmContainer = new ProjectManager();
+//    dialog = new QMainWindow(this);
+//    auto layout3 = new QVBoxLayout();
+//    dialog->setCentralWidget(pmContainer);
+//    layout3->setMargin(0);
+//    layout3->addWidget(pmContainer);
+//    dialog->setWindowFlags(dialog->windowFlags() | Qt::WindowMaximizeButtonHint | Qt::WindowMinimizeButtonHint);
+//    dialog->setLayout(layout3);
+//    connect(dialog, SIGNAL(aboutToQ))
+//    pmContainer->hide();
 //    QGridLayout* playout = new QGridLayout(ui->pmContainer);
 //    playout->addWidget(pm);
 //    playout->setMargin(0);
 //    ui->pmContainer->setLayout(playout);
+//    dialog->hide();
 
     assetWidget = new AssetWidget(this);
 
@@ -196,6 +206,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     connect(ui->pmContainer, SIGNAL(fileToOpen(QString)), SLOT(openProject(QString)));
     connect(ui->pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
+
+    connect(pmContainer, SIGNAL(fileToOpen(QString)), SLOT(openProject(QString)));
+    connect(pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
 
 //    connect(ui->contentWidget, SIGNAL(currentChanged(int)), SLOT(tabsChanged(int)));
 
@@ -235,11 +248,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     ui->ToolBar->addWidget(empty);
 
+    pmButton = new QPushButton();
+    QIcon ico(":/icons/list-button-with-3-elements.svg");
+    pmButton->setIcon(ico);
+    pmButton->setObjectName("pmButton");
+
+    connect(pmButton, SIGNAL(pressed()), SLOT(showProjectManager()));
+
     vrButton = new QPushButton();
-    QIcon ico(":/icons/virtual-reality.svg");
-    vrButton->setIcon(ico);
+    QIcon icovr(":/icons/virtual-reality.svg");
+    vrButton->setIcon(icovr);
     vrButton->setObjectName("vrButton");
     //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
+    ui->ToolBar->addWidget(pmButton);
     ui->ToolBar->addWidget(vrButton);
 
     tabifyDockWidget(ui->AnimationDock, ui->AssetsDock);
@@ -1431,6 +1452,11 @@ void MainWindow::tabsChanged(int index)
     if (index == 1) {
 //        pm->test();
     }
+}
+
+void MainWindow::showProjectManager()
+{
+    pmContainer->showMaximized();
 }
 
 void MainWindow::newScene()

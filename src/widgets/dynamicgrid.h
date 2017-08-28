@@ -5,6 +5,7 @@
 
 class QGridLayout;
 class GridWidget;
+class ItemGridWidget;
 
 class DynamicGrid : public QScrollArea
 {
@@ -16,9 +17,14 @@ public:
     QSize tileSize;
     QSize baseSize;
     int lastWidth;
+    QList<ItemGridWidget*> originalItems;
     int scale;
     int offset;
-    void scaleTile(int);
+    float scl;
+    void scaleTile(QString);
+    void searchTiles(QString);
+
+    void deleteTile(ItemGridWidget*);
 
     void resetView();
 

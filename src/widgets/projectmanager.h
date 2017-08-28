@@ -51,6 +51,7 @@ public:
 
     void test();
     void resizeEvent(QResizeEvent*);
+    void closeEvent(QCloseEvent*);
 
 protected slots:
     void listWidgetCustomContextMenu(const QPoint&);
@@ -68,7 +69,8 @@ protected slots:
     void myProjects();
     void sampleProjects();
 
-    void scaleTile(int);
+    void scaleTile(QString);
+    void searchTiles(QString);
 
     void handleDone();
     void handleDoneFuture();
@@ -81,6 +83,8 @@ protected slots:
     void closeProjectFromWidget(ItemGridWidget*);
     void deleteProjectFromWidget(ItemGridWidget*);
 
+    void searchProjects();
+
 signals:
     void fileToOpen(const QString& str);
     void fileToCreate(const QString& str, const QString& str2);
@@ -92,6 +96,9 @@ private:
     MainWindow *window;
 
     QString folder;
+
+    QTimer *searchTimer;
+    QString searchTerm;
 
 //    Database *db;
 

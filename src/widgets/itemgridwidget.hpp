@@ -16,6 +16,7 @@ public:
     explicit ItemGridWidget(GridWidget *item, QSize size, QWidget *parent = Q_NULLPTR);
     QSize tileSize;
     QString projectName;
+    QString name;
 
     void setTileSize(QSize size);
     void updateImage();

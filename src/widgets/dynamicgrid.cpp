@@ -37,6 +37,8 @@ void DynamicGrid::addToGridView(GridWidget *item, int count)
 {
     ItemGridWidget *gameGridItem = new ItemGridWidget(item, tileSize, gridWidget);
 
+    originalItems.push_back(gameGridItem);
+
     gameGridItem->setContextMenuPolicy(Qt::CustomContextMenu);
 
     connect(gameGridItem, SIGNAL(edit(ItemGridWidget*)), parent, SLOT(openProjectFromWidget(ItemGridWidget*)));
@@ -54,12 +56,18 @@ void DynamicGrid::addToGridView(GridWidget *item, int count)
     gridWidget->adjustSize();
 }
 
-void DynamicGrid::scaleTile(int scale)
+void DynamicGrid::scaleTile(QString scale)
 {
-    float scl = 0;
-    scl = scale / 10.f;
-//    auto w = baseSize.width() + (scale * 4);
-//    auto h = baseSize.height() + (scale * 4);
+    if (scale == "Small") {
+        scl = 3 / 10.f;
+    } else if (scale == "Large") {
+        scl = 8 / 10.f;
+    } else if (scale == "Huge") {
+        scl = 1.f;
+    } else {
+        scl = 6 / 10.f;
+    }
+
     QSize s = baseSize * (scl);
 
     tileSize.setWidth(s.width());
@@ -67,19 +75,103 @@ void DynamicGrid::scaleTile(int scale)
 
     int columnCount = lastWidth / (tileSize.width() + offset);
 
-    int gridCount = gridLayout->count();
-    QList<ItemGridWidget*> gridItems;
-    for (int count = 0; count < gridCount; count++)
-        gridItems << static_cast<ItemGridWidget*>(gridLayout->takeAt(0)->widget());
+//    int gridCount = gridLayout->count();
+//    QList<ItemGridWidget*> gridItems;
+//    for (int count = 0; count < gridCount; count++)
+//        gridItems << static_cast<ItemGridWidget*>(gridLayout->takeAt(0)->widget());
 
     int count = 0;
-    foreach(ItemGridWidget *gridItem, gridItems) {
+    foreach(ItemGridWidget *gridItem, originalItems) {
         gridItem->setTileSize(tileSize);
         gridLayout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
         count++;
     }
 
     gridWidget->adjustSize();
+}
+
+void DynamicGrid::searchTiles(QString searchString)
+{
+    // TODO - constant settings size
+    QSize s = baseSize * (0.6);
+
+    tileSize.setWidth(s.width());
+    tileSize.setHeight(s.height());
+
+    int columnCount = lastWidth / (tileSize.width() + offset);
+
+//    QLayoutItem *gridItem;
+//    while ((gridItem = gridLayout->takeAt(0)) != NULL)
+//    {
+//        delete gridItem->widget();
+//        delete gridItem;
+//    }
+
+//    gridLayout = new QGridLayout(gridWidget);
+//    gridLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
+//    gridLayout->setRowMinimumHeight(0, offset);
+
+//    gridWidget->setLayout(gridLayout);
+
+//    int gridCount = gridLayout->count();
+//    QList<ItemGridWidget*> gridItems;
+//    for (int count = 0; count < gridCount; count++) {
+//        gridItems << static_cast<ItemGridWidget*>(gridLayout->takeAt(0)->widget());
+//    }
+
+//    QList<ItemGridWidget*> displayItems;
+
+    int count = 0;
+    if (!searchString.isEmpty()) {
+        foreach(ItemGridWidget *gridItem, originalItems) {
+            if (gridItem->name.toLower().contains(searchString)) {
+//                qDebug() << "matched " << gridItem->name;
+                gridItem->setVisible(true);
+                gridItem->setTileSize(tileSize);
+                gridLayout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
+                count++;
+            } else {
+                gridItem->setVisible(false);
+            }
+        }
+    } else {
+        foreach(ItemGridWidget *gridItem, originalItems) {
+            if (gridItem->name.toLower().contains(searchString)) {
+//                qDebug() << "matched " << gridItem->name;
+                gridItem->setVisible(true);
+                gridItem->setTileSize(tileSize);
+                gridLayout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
+                count++;
+            }
+        }
+    }
+
+    gridWidget->adjustSize();
+}
+
+void DynamicGrid::deleteTile(ItemGridWidget *widget)
+{
+//    QLayoutItem *gridItem;
+//    while ((gridItem = gridLayout->takeAt(0)) != NULL) {
+//        delete gridItem->widget();
+//        delete gridItem;
+//    }
+
+    QMutableListIterator<ItemGridWidget*> it(originalItems);
+    while (it.hasNext()) {
+        if (it.next()->projectName == widget->projectName) it.remove();
+    }
+
+    updateGridColumns(lastWidth);
+
+////    QList<ItemGridWidget*> gridItems;
+//    for (auto item : originalItems) {
+//        if (item->projectName == widget->projectName) {
+////            item->deleteLater();
+//            originalItems.removeOne(item);
+//        }
+////        gridItems << static_cast<ItemGridWidget*>(gridLayout->takeAt(0)->widget());
+//    }
 }
 
 void DynamicGrid::resizeEvent(QResizeEvent *event)
@@ -100,13 +192,13 @@ void DynamicGrid::updateGridColumns(int width)
 {
     int columnCount = width / (tileSize.width() + offset);
 
-    int gridCount = gridLayout->count();
-    QList<ItemGridWidget*> gridItems;
-    for (int count = 0; count < gridCount; count++)
-        gridItems << static_cast<ItemGridWidget*>(gridLayout->takeAt(0)->widget());
+//    int gridCount = gridLayout->count();
+//    QList<ItemGridWidget*> gridItems;
+//    for (int count = 0; count < gridCount; count++)
+//        gridItems << static_cast<ItemGridWidget*>(gridLayout->takeAt(0)->widget());
 
     int count = 0;
-    foreach(ItemGridWidget *gridItem, gridItems) {
+    foreach(ItemGridWidget *gridItem, originalItems) {
         gridLayout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
         count++;
     }
