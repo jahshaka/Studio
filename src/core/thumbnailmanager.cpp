@@ -24,26 +24,40 @@ QSharedPointer<Thumbnail> ThumbnailManager::createThumbnail(QString filename, in
     // assumes file exist for now
     QFileInfo fileInfo(filename);
     auto lastModified = fileInfo.lastModified();
-    auto hash = filename+lastModified.toMSecsSinceEpoch();
+    auto hash = filename+lastModified.toMSecsSinceEpoch()+QString("-")+width+QString("-")+height;
 
-    if (ThumbnailManager::thumbnails.contains(filename)) {
-        return ThumbnailManager::thumbnails[filename];
+    if (ThumbnailManager::thumbnails.contains(hash)) {
+        return ThumbnailManager::thumbnails[hash];
     }
+
+    QImage image;
+    if (cachedImages.contains(filename))
+        image = cachedImages[filename];
+    else {
+        image = QImage(filename);
+    }
+
 
     auto thumb = new Thumbnail;
     thumb->filePath = filename;
-
-    QImage image(filename);
     thumb->thumbSize = QSize(width, height);
     thumb->originalSize = image.size();
     thumb->thumb = new QImage(image.scaled(thumb->thumbSize, Qt::KeepAspectRatioByExpanding));
 
 
     auto thumbPtr = QSharedPointer<Thumbnail>(thumb);
-    ThumbnailManager::thumbnails.insert(filename, thumbPtr);
+    ThumbnailManager::thumbnails.insert(hash, thumbPtr);
 
     return thumbPtr;
 }
 
+void ThumbnailManager::cacheImage(QString filename, QImage image)
+{
+    cachedImages.insert(filename, image);
+}
+
 QHash<QString, QSharedPointer<Thumbnail>> ThumbnailManager::thumbnails =
         QHash<QString, QSharedPointer<Thumbnail>>();
+
+QHash<QString, QImage> ThumbnailManager::cachedImages =
+        QHash<QString, QImage>();

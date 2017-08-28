@@ -43,6 +43,10 @@ class ThumbnailManager
 public:
     static QSharedPointer<Thumbnail> createThumbnail(QString filename, int width, int height);
     static QHash<QString, QSharedPointer<Thumbnail>> thumbnails;
+
+    static void cacheImage(QString filename, QImage image);
+    // this is for images generated at runtime that dont have physical files associated with them
+    static QHash<QString, QImage> cachedImages;
 };
 
 

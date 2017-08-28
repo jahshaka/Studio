@@ -118,19 +118,27 @@ void RenderThread::initScene()
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
-    dlight->setName("Directional Light");
-    dlight->setLocalPos(QVector3D(4, 4, 0));
-    dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 0, 0));
+    dlight->setName("Key Light");
+    dlight->setLocalRot(QQuaternion::fromEulerAngles(45, -45, 0));
     dlight->intensity = 1;
     //dlight->icon = iris::Texture2D::load(":/icons/light.png");
 
     auto plight = iris::LightNode::create();
-    plight->setLightType(iris::LightType::Point);
+    plight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(plight);
-    plight->setName("Point Light");
-    plight->setLocalPos(QVector3D(-4, 4, 0));
+    plight->setName("Fill Light");
+    dlight->setLocalRot(QQuaternion::fromEulerAngles(90, 180, 90));
     plight->intensity = 1;
+    plight->color = QColor(255, 200, 200);
     //plight->icon = iris::Texture2D::load(":/icons/bulb.png");
+
+    plight = iris::LightNode::create();
+    plight->setLightType(iris::LightType::Directional);
+    scene->rootNode->addChild(plight);
+    plight->setName("Rim Light");
+    dlight->setLocalRot(QQuaternion::fromEulerAngles(60, 0, 0));
+    plight->intensity = 1;
+    plight->color = QColor(200, 222, 200);
 
     // fog params
     scene->fogColor = QColor(72, 72, 72);
@@ -138,6 +146,7 @@ void RenderThread::initScene()
     scene->shadowEnabled = false;
 
     cam->update(0);// necessary!
+    scene->update(0);
 }
 
 void RenderThread::prepareScene(const ThumbnailRequest &request)
