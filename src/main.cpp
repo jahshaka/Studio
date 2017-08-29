@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
     splash.setPixmap(image);
     splash.show();
 
-    QThread::sleep(0.5f);    // cool!
+    // QThread::sleep(0.5f);    // cool!
 
     Globals::appWorkingDir = QApplication::applicationDirPath();
 

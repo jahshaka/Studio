@@ -271,6 +271,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupProjectDB();
     setupUndoRedo();
 
+#ifdef QT_DEBUG
+    setWindowTitle("Jahshaka 0.3a - Developer Build");
+#endif
 
     // hide all
     ui->AnimationDock->hide();

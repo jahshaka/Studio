@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>JahshakaVR</string>
+   <string>Jahshaka</string>
   </property>
   <property name="styleSheet">
    <string notr="true">#ProgressDialog {

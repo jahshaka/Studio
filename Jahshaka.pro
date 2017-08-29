@@ -24,7 +24,7 @@ CONFIG  += resources_big
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-TARGET = JahshakaVR
+TARGET = Jahshaka
 TEMPLATE = app
 
 OBJECTS_DIR = generated_files
