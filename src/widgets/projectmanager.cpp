@@ -626,23 +626,21 @@ void ProjectManager::OnLstItemsCommitData(QWidget *listItem)
 
 void ProjectManager::openSampleBrowser()
 {
-    sampleDialog.setFixedSize(640, 480);
+    sampleDialog.setFixedSize(Constants::TILE_SIZE * 1.66);
     sampleDialog.setWindowFlags(sampleDialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
     sampleDialog.setWindowTitle("Jahshaka Sample Browser");
 
     QGridLayout *layout = new QGridLayout();
     QListWidget *sampleList = new QListWidget();
     sampleList->setObjectName("sampleList");
-
-    sampleList->setStyleSheet("QListWidgetItem { padding: 12px; }");
-
+    sampleList->setStyleSheet("#sampleList { background-color: #1e1e1e; padding: 8px; border: none } QListWidgetItem { padding: 12px; }");
+    sampleList->setViewMode(QListWidget::IconMode);
     sampleList->setSizeAdjustPolicy(QListWidget::AdjustToContents);
     sampleList->setSpacing(4);
     sampleList->setResizeMode(QListWidget::Adjust);
     sampleList->setMovement(QListView::Static);
-    sampleList->setIconSize(QSize(100, 50));
-//    ui->sampleList->setSelectionBehavior(QAbstractItemView::SelectItems);
-//    ui->sampleList->setSelectionMode(QAbstractItemView::SingleSelection);
+    sampleList->setIconSize(Constants::TILE_SIZE * 0.5);
+    sampleList->setSelectionMode(QAbstractItemView::SingleSelection);
 
     QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
     QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
@@ -664,8 +662,13 @@ void ProjectManager::openSampleBrowser()
 
     connect(sampleList, SIGNAL(itemDoubleClicked(QListWidgetItem*)), SLOT(openSampleProject(QListWidgetItem*)));
 
+    auto instructions = new QLabel("Double click on a sample project to open it in the editor");
+    instructions->setObjectName("instructions");
+    instructions->setStyleSheet("#instructions { border: none; background: #1e1e1e; padding: 10px; font-size: 12px }");
+    layout->addWidget(instructions);
     layout->addWidget(sampleList);
     layout->setMargin(0);
+    layout->setSpacing(0);
 
     sampleDialog.setLayout(layout);
     sampleDialog.exec();

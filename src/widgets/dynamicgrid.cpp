@@ -21,6 +21,7 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 //    setStyleSheet("background: #1e1e1e");
 
     scale = 6;
+    scl = scale / 10.f;
     baseSize = QSize(460, 215);
     tileSize = baseSize * 0.6;
 
@@ -48,7 +49,7 @@ void DynamicGrid::addToGridView(GridWidget *item, int count)
     connect(gameGridItem, SIGNAL(renameFromWidget(ItemGridWidget*)), parent, SLOT(renameProjectFromWidget(ItemGridWidget*)));
     connect(gameGridItem, SIGNAL(deleteFromWidget(ItemGridWidget*)), parent, SLOT(deleteProjectFromWidget(ItemGridWidget*)));
 
-    int columnCount = viewport()->width() / (tileSize.width() + offset);
+    int columnCount = viewport()->width() / (tileSize.width());
 
     if (columnCount == 0) columnCount = 1;
 
@@ -73,7 +74,7 @@ void DynamicGrid::scaleTile(QString scale)
     tileSize.setWidth(s.width());
     tileSize.setHeight(s.height());
 
-    int columnCount = lastWidth / (tileSize.width() + offset);
+    int columnCount = lastWidth / (tileSize.width());
 
 //    int gridCount = gridLayout->count();
 //    QList<ItemGridWidget*> gridItems;
@@ -93,12 +94,12 @@ void DynamicGrid::scaleTile(QString scale)
 void DynamicGrid::searchTiles(QString searchString)
 {
     // TODO - constant settings size
-    QSize s = baseSize * (0.6);
+    QSize s = baseSize * (scl);
 
     tileSize.setWidth(s.width());
     tileSize.setHeight(s.height());
 
-    int columnCount = lastWidth / (tileSize.width() + offset);
+    int columnCount = lastWidth / (tileSize.width());
 
 //    QLayoutItem *gridItem;
 //    while ((gridItem = gridLayout->takeAt(0)) != NULL)
@@ -178,7 +179,7 @@ void DynamicGrid::resizeEvent(QResizeEvent *event)
 {
     lastWidth = event->size().width();
 
-    int check = event->size().width() / (tileSize.width() + offset);
+    int check = event->size().width() / (tileSize.width());
     bool autoAdjustColumns = true;
 
     if (autoAdjustColumns && check != autoColumnCount && check != 0) {
@@ -190,7 +191,7 @@ void DynamicGrid::resizeEvent(QResizeEvent *event)
 
 void DynamicGrid::updateGridColumns(int width)
 {
-    int columnCount = width / (tileSize.width() + offset);
+    int columnCount = width / (tileSize.width());
 
 //    int gridCount = gridLayout->count();
 //    QList<ItemGridWidget*> gridItems;
