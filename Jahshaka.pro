@@ -24,7 +24,7 @@ CONFIG  += resources_big
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-TARGET = JahshakaVR
+TARGET = Jahshaka
 TEMPLATE = app
 
 OBJECTS_DIR = generated_files
@@ -91,7 +91,6 @@ SOURCES += src/main.cpp\
     src/widgets/propertywidget.cpp \
     src/widgets/propertywidgets/postprocesspropertywidget.cpp \
     src/widgets/postprocesseswidget.cpp \
-    src/dialogs/projectdialog.cpp \
     src/dialogs/newprojectdialog.cpp \
     src/widgets/assetwidget.cpp \
     src/io/assetmanager.cpp \
@@ -109,7 +108,12 @@ SOURCES += src/main.cpp\
     src/commands/addscenenodecommand.cpp \
     src/commands/deletescenenodecommand.cpp \
     src/dialogs/progressdialog.cpp \
-    src/widgets/screenshotwidget.cpp
+    src/widgets/screenshotwidget.cpp \
+    src/widgets/projectmanager.cpp \
+    src/widgets/dynamicgrid.cpp \
+    src/widgets/gridwidget.cpp \
+    src/widgets/itemgridwidget.cpp \
+    src/dialogs/renameprojectdialog.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -188,7 +192,6 @@ HEADERS  += src/mainwindow.h \
     src/widgets/basewidget.h \
     src/widgets/propertywidgets/postprocesspropertywidget.h \
     src/widgets/postprocesseswidget.h \
-    src/dialogs/projectdialog.h \
     src/dialogs/newprojectdialog.h \
     src/widgets/assetwidget.h \
     src/io/assetmanager.h \
@@ -209,7 +212,12 @@ HEADERS  += src/mainwindow.h \
     src/commands/deletescenenodecommand.h \
     src/dialogs/progressdialog.h \
     src/commands/deleteanimationkeycommand.h \
-    src/widgets/screenshotwidget.h
+    src/widgets/screenshotwidget.h \
+    src/widgets/projectmanager.h \
+    src/widgets/dynamicgrid.h \
+    src/widgets/gridwidget.h \
+    src/widgets/itemgridwidget.hpp \
+    src/dialogs/renameprojectdialog.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -241,7 +249,6 @@ FORMS    += \
     src/widgets/filepickerwidget.ui \
     src/widgets/propertywidget.ui \
     src/widgets/postprocesseswidget.ui \
-    src/dialogs/projectdialog.ui \
     src/dialogs/newprojectdialog.ui \
     src/widgets/assetwidget.ui \
     src/widgets/assetpickerwidget.ui \
@@ -250,7 +257,9 @@ FORMS    += \
     src/dialogs/getnamedialog.ui \
     src/widgets/createanimationwidget.ui \
     src/dialogs/progressdialog.ui \
-    src/widgets/screenshotwidget.ui
+    src/widgets/screenshotwidget.ui \
+    src/widgets/projectmanager.ui \
+    src/dialogs/renameprojectdialog.ui
 
 RESOURCES += \
     app/shaders.qrc \

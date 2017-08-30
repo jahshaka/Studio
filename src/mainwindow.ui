@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>JahshakaVR</string>
+   <string>Jahshaka</string>
   </property>
   <property name="windowIcon">
    <iconset resource="../app/icons.qrc">
@@ -52,7 +52,7 @@ QMenu::indicator::checked {
 QMessageBox QPushButton  {
     border: none;
     background-color: #212121;
-	padding: 4px 12px;
+    padding: 4px 12px;
 }
 
 QMessageBox QPushButton:hover {
@@ -70,7 +70,7 @@ QTreeView::item {
 }
 
 QTreeView {
-	selection-background-color: #3498db;
+    selection-background-color: #3498db;
 }
 
 /*QTreeView::item:hover {
@@ -79,12 +79,12 @@ QTreeView {
 
 /*QTreeView::item:selected {
     background: #BBB;
-	color: green;
+    color: green;
 }*/
 
 QTreeView::item:selected:active{
     background-color: #3498db;
-	color: #BBB;
+    color: #BBB;
 }
 
 /*QTreeView::item:selected:!active {
@@ -97,20 +97,20 @@ QTreeView::item:selected:active{
 
 QComboBox {
     background: #4D4D4D;
-	color: #BBB;
-	border:  0;
+    color: #BBB;
+    border:  0;
 }
 
 QComboBox QAbstractItemView {
    background-color: #212121;
     selection-background-color: red;
-	border: 0;
-	outline: none;
+    border: 0;
+    outline: none;
 }
 
 QComboBox::drop-down {
-	border:  0;
-	/*background: #4D4D4D; */
+    border:  0;
+    /*background: #4D4D4D; */
 }
 
 QComboBox::down-arrow {
@@ -121,7 +121,7 @@ QComboBox::down-arrow {
 
 /* Double Spin Box */
 QDoubleSpinBox {
-   /*	padding-right: 15px; /* make room for the arrows */
+   /*   padding-right: 15px; /* make room for the arrows */
     border-width: 3px;
 	/*border-right: 18px solid #1e1e1e; /* hide a 1px gap */
 	background-color: #404040;
@@ -135,7 +135,7 @@ QDoubleSpinBox:hover {
 }
 
 QDoubleSpinBox::up-button {
-	background-color: #4d4d4d;
+    background-color: #4d4d4d;
     subcontrol-origin: border;
     subcontrol-position: top right; /* position at the top right corner */
 
@@ -153,10 +153,10 @@ QDoubleSpinBox::up-button:pressed {
 }
 
 QDoubleSpinBox::down-button {
-	background-color: #4d4d4d;
+    background-color: #4d4d4d;
     subcontrol-origin: border;
     subcontrol-position: bottom right; /* position at bottom right corner */
-	margin-top: -1px;
+    margin-top: -1px;
     width: 15px;
     border-image: url(:/icons/chevron-arrow-down.svg);
     border-width: 1px;
@@ -174,20 +174,20 @@ QDoubleSpinBox::down-button:pressed {
 /* ==== VR === */
 
 QPushButton#vrButton {
-	border: none;
-	background-color: rgba(255, 255, 255, 0);
+    border: none;
+    background-color: rgba(255, 255, 255, 0);
 }
 
 QPushButton#vrButton[vrMode=&quot;1&quot;] {
-	background-color: #e74c3c;
+    background-color: #e74c3c;
 }
 
 QPushButton#vrButton[vrMode=&quot;2&quot;] {
-	background-color: #2980b9;
+    background-color: #2980b9;
 }
 
 QPushButton#vrButton:hover {
-	background-color: #3498db;
+    background-color: #3498db;
 }
 
 /* ================== */
@@ -199,35 +199,35 @@ QPushButton#vrButton:hover {
  }
 
  QScrollBar::handle:vertical {
-	background-color: #444;
+    background-color: #444;
      min-height: 20px;
      margin-left: 2px;
      margin-right: 2px;
  }
 
 QScrollBar::handle:vertical:hover {
-	background-color: #555;
-	min-height: 20px;
-	margin-left: 2px;
-	margin-right: 2px;
+    background-color: #555;
+    min-height: 20px;
+    margin-left: 2px;
+    margin-right: 2px;
 }
 
 QScrollBar::add-line:vertical {
-	background-color: #444;
-	height: 20px;
-	border: 2px solid #212121;
-	border-width: 2px 2px  0 2px;
-	subcontrol-position: bottom;
-	subcontrol-origin: margin;
+    background-color: #444;
+    height: 20px;
+    border: 2px solid #212121;
+    border-width: 2px 2px  0 2px;
+    subcontrol-position: bottom;
+    subcontrol-origin: margin;
  }
 
 QScrollBar::sub-line:vertical {
     background-color: #444;
-	height: 20px;
-	border: 2px solid #212121;
-	border-width: 0 2px 2px 2px;
-	subcontrol-position: top;
-	subcontrol-origin: margin;
+    height: 20px;
+    border: 2px solid #212121;
+    border-width: 0 2px 2px 2px;
+    subcontrol-position: top;
+    subcontrol-origin: margin;
  }
 
 QScrollBar::up-arrow:vertical {
@@ -249,17 +249,17 @@ QScrollBar::down-arrow:vertical:hover {
 /* ========================== */
 
 QWidget#sceneTree {
-	background-color: #303030;
+    background-color: #303030;
 }
 
 QMainWindow {
-	background-color: #1e1e1e;
+    background-color: #1e1e1e;
 }
 
 QDockWidget::title {
-	padding: 2px;
-	background-color: #212121;
-	text-align: center;
+    padding: 2px;
+    background-color: #212121;
+    text-align: center;
 }
 
 QDockWidget {
@@ -268,14 +268,14 @@ QDockWidget {
 }
 
 QDockWidget::close-button, QDockWidget::float-button {
-	icon-size: 14px;
+    icon-size: 14px;
 }
 
 QMenuBar {
     background-color:  #303030;
     padding: 5px 5px 0px 5px;
-	border: 1px soild black;
-	opacity: 0.5;
+    border: 1px soild black;
+    opacity: 0.5;
 }
 
 QMenuBar::item {
@@ -315,17 +315,17 @@ QToolButton:hover{
 
 QToolTip {
     padding: 2px;
-	border: 0;
+    border: 0;
     background: black;
-   	opacity: 200;
+    opacity: 200;
 }
 
 QLabel {
-	color: #BBB;
+    color: #BBB;
 }
 
 /* =============================================== */
-QToolBar &gt; QToolButton, QWidget#vrButton {
+QToolBar &gt; QToolButton, QWidget#vrButton, #pmButton {
     background-color: #212121;
     border: 1px solid #1e1e1e;
     border-radius: 2px;
@@ -333,6 +333,10 @@ QToolBar &gt; QToolButton, QWidget#vrButton {
     width: 16px;
     height: 16px;
     margin: 8px;
+}
+
+QPushButton#pmButton:hover {
+    background-color: #3498db;
 }
 
 QToolBar {
@@ -347,7 +351,7 @@ QToolBar::separator:horizontal {
     background-color: #272727;
     width: 1px;
     margin-left: 6px;
-	margin-right: 6px;
+    margin-right: 6px;
 }
 
 QTabWidget::tab-bar {
@@ -360,36 +364,36 @@ QTabBar::close-button {
 }
 
 QTabWidget::pane {
-	margin: -1px;
-	border-top: 1px solid #1e1e1e;
+    margin: -1px;
+    border-top: 1px solid #1e1e1e;
 }
 
 QTabBar::tab:selected {
 	background-color: #303030;
-	border-bottom: 1px solid #303030;
+	border-bottom: 2px solid #3498db;
 }
 
 QTabBar::tab {
-	background-color: #4d4d4d;
-	min-width: 108px;
-    	min-height: 24px;
+    background-color: #4d4d4d;
+    min-width: 108px;
+        min-height: 24px;
     padding-bottom: 1px;
    /* border-top: 1px solid #1e1e1e; */
- 	border-right: 1px solid #1e1e1e;
-	border-bottom: 1px solid #1e1e1e;
+    border-right: 1px solid #1e1e1e;
+    border-bottom: 1px solid #1e1e1e;
 }
 
 /* special override */
 QWidget#addBtn, QWidget#deleteBtn {
-	background-color: #4D4D4D;
+    background-color: #4D4D4D;
 }
 
 QWidget#addBtn:hover, QWidget#deleteBtn:hover {
-	background-color: #555;
+    background-color: #555;
 }
 
 QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
-	background-color: #444;
+    background-color: #444;
 } </string>
   </property>
   <property name="iconSize">
@@ -421,10 +425,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <property name="bottomMargin">
      <number>0</number>
     </property>
-    <property name="verticalSpacing">
-     <number>0</number>
-    </property>
-    <item row="0" column="0">
+    <item row="1" column="0">
      <widget class="QWidget" name="backgroundscene" native="true">
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <property name="spacing">
@@ -527,13 +528,13 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
          <property name="focusPolicy">
           <enum>Qt::ClickFocus</enum>
          </property>
-         <property name="styleSheet">
-          <string notr="true"/>
-         </property>
         </widget>
        </item>
       </layout>
      </widget>
+    </item>
+    <item row="0" column="0">
+     <widget class="ProjectManager" name="pmContainer" native="true"/>
     </item>
    </layout>
   </widget>
@@ -562,8 +563,6 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <property name="title">
      <string>Jahshaka</string>
     </property>
-    <addaction name="actionNewProject"/>
-    <addaction name="actionManage_Projects"/>
     <addaction name="separator"/>
     <addaction name="actionPreferences"/>
     <addaction name="actionExit"/>
@@ -683,8 +682,8 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     </property>
     <property name="styleSheet">
      <string notr="true">QWidget#animationWidgetContents {
-	border: 1px solid #1e1e1e;
-	background: #212121;
+    border: 1px solid #1e1e1e;
+    background: #212121;
 }
 
 QWidget#animationWidgetContents:hover {
@@ -744,7 +743,7 @@ QWidget#animationWidgetContents:hover {
     </property>
     <property name="styleSheet">
      <string notr="true">QWidget:dockWidgetContents {
-	border: 1px solid #212121;
+    border: 1px solid #212121;
 }
 
 :hover{
@@ -774,13 +773,13 @@ QWidget#animationWidgetContents:hover {
        </property>
        <property name="minimumSize">
         <size>
-         <width>0</width>
+         <width>396</width>
          <height>0</height>
         </size>
        </property>
        <property name="styleSheet">
         <string notr="true">QScrollBar {
-	border: 0;
+    border: 0;
 }</string>
        </property>
        <property name="lineWidth">
@@ -798,7 +797,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>346</height>
+          <height>335</height>
          </rect>
         </property>
         <property name="styleSheet">
@@ -837,7 +836,7 @@ QToolButton:hover
 
 QToolButton:checked
 {
-	background-color: #2980b9;
+    background-color: #2980b9;
 }</string>
    </property>
    <attribute name="toolBarArea">
@@ -1041,7 +1040,7 @@ QToolButton:checked
       <number>0</number>
      </property>
      <item row="0" column="0">
-      <widget class="AssetWidget" name="assetWidget" native="true"/>
+      <widget class="QWidget" name="assetWidget" native="true"/>
      </item>
     </layout>
    </widget>
@@ -1338,10 +1337,9 @@ QToolButton:checked
    <container>1</container>
   </customwidget>
   <customwidget>
-   <class>AssetWidget</class>
+   <class>ProjectManager</class>
    <extends>QWidget</extends>
-   <header>src/widgets/assetwidget.h</header>
-   <container>1</container>
+   <header>src/widgets/projectmanager.h</header>
   </customwidget>
  </customwidgets>
  <resources>

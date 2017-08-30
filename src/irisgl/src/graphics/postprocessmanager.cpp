@@ -30,6 +30,7 @@ PostProcessManager::PostProcessManager()
     //postProcesses.append(new GreyscalePostProcess());
     //postProcesses.append(new SSAOPostProcess());
     //postProcesses.append(FxaaPostProcess::create());
+    postProcesses.append(FxaaPostProcess::create());
 }
 
 PostProcessManagerPtr PostProcessManager::create()
@@ -55,7 +56,6 @@ QList<PostProcessPtr> PostProcessManager::getPostProcesses()
 void PostProcessManager::clearPostProcesses()
 {
     postProcesses.clear();
-    postProcesses.append(FxaaPostProcess::create());
 }
 
 void PostProcessManager::blit(iris::Texture2DPtr source, iris::Texture2DPtr dest, QOpenGLShaderProgram *shader)

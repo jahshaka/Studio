@@ -8,5 +8,6 @@
         <file>images/splash.png</file>
         <file>images/splash.svg</file>
         <file>images/splashv2.jpg</file>
+        <file>images/preview.png</file>
     </qresource>
 </RCC>

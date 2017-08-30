@@ -16,7 +16,13 @@
 
 AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
+
+}
+
+void AssetWidget::trigger()
+{
     ui->setupUi(this);
+
     ui->assetView->viewport()->installEventFilter(this);
     ui->assetTree->viewport()->installEventFilter(this);
     ui->assetTree->setContextMenuPolicy(Qt::CustomContextMenu);

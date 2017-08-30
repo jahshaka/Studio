@@ -65,9 +65,12 @@ class AboutDialog;
 
 class JahRenderer;
 
+class ProjectManager;
+
 class GizmoHitData;
 class AdvancedGizmoHandle;
 class MaterialPreset;
+class AssetWidget;
 
 class QOpenGLFunctions_3_2_Core;
 
@@ -86,6 +89,7 @@ public:
     void setSceneAnimTime(float time);
     void stopAnimWidget();
 
+    void initialize();
     void setupProjectDB();
     void setupUndoRedo();
 
@@ -101,7 +105,7 @@ public:
     SettingsManager* getSettingsManager();
 
     iris::ScenePtr getScene();
-    void openProject(QString project, bool startupLoad = false);
+
     //void setGizmoTransformMode(GizmoTransformMode mode);
 
     /**
@@ -222,6 +226,8 @@ public slots:
     void openFacebookUrl();
     void openWebsiteUrl();
 
+    void openProject(QString project);
+
     iris::ScenePtr createDefaultScene();
     void initializeGraphics(SceneViewWidget* widget, QOpenGLFunctions_3_2_Core* gl);
 
@@ -239,6 +245,8 @@ public slots:
 
     void takeScreenshot();
     void toggleLightWires(bool state);
+    void tabsChanged(int);
+    void showProjectManager();
 
 private slots:
     void translateGizmo();
@@ -292,11 +300,15 @@ private:
     QActionGroup* cameraGroup;
 
     Database *db;
+    AssetWidget *assetWidget;
+    ProjectManager *pmContainer;
 
     QUndoStack* undoStack;
 
     bool vrMode;
     QPushButton* vrButton;
+    QPushButton* pmButton;
+    QMainWindow *dialog;
 };
 
 #endif // MAINWINDOW_H

@@ -18,7 +18,6 @@ For more information see the LICENSE file
 
 #include "mainwindow.h"
 #include "dialogs/infodialog.h"
-#include "dialogs/projectdialog.h"
 #include "core/settingsmanager.h"
 #include "globals.h"
 
@@ -76,15 +75,15 @@ int main(int argc, char *argv[])
     splash.setPixmap(image);
     splash.show();
 
-    QThread::sleep(0.5f);    // cool!
+    // QThread::sleep(0.5f);    // cool!
 
     Globals::appWorkingDir = QApplication::applicationDirPath();
 
-    ProjectDialog projectDialog;
-    projectDialog.show();
+//    ProjectDialog projectDialog;
+//    projectDialog.show();
 
-//    MainWindow window;
-//    window.showMaximized();
+    MainWindow window;
+    window.showMaximized();
 
     app.processEvents();
 
