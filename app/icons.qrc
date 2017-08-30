@@ -49,5 +49,6 @@
         <file>icons/view-list-button.svg</file>
         <file>icons/virtual-reality.svg</file>
         <file>icons/world.svg</file>
+        <file>icons/camera.svg</file>
     </qresource>
 </RCC>

@@ -461,22 +461,32 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
           <string notr="true">background: #212121</string>
          </property>
          <layout class="QHBoxLayout" name="horizontalLayout">
+          <property name="spacing">
+           <number>12</number>
+          </property>
           <property name="leftMargin">
-           <number>0</number>
+           <number>9</number>
           </property>
           <property name="topMargin">
            <number>0</number>
           </property>
           <property name="rightMargin">
-           <number>0</number>
+           <number>9</number>
           </property>
           <property name="bottomMargin">
            <number>0</number>
           </property>
           <item>
            <widget class="QPushButton" name="screenshotBtn">
+            <property name="toolTip">
+             <string>Take a screenshot of the scene</string>
+            </property>
             <property name="text">
-             <string>ScreenShot</string>
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset resource="../app/icons.qrc">
+              <normaloff>:/icons/camera.svg</normaloff>:/icons/camera.svg</iconset>
             </property>
            </widget>
           </item>
@@ -507,16 +517,6 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
            <widget class="QPushButton" name="playSceneBtn">
             <property name="text">
              <string>PLAY SCENE</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QCheckBox" name="checkBox">
-            <property name="text">
-             <string>Realtime Preview</string>
-            </property>
-            <property name="checked">
-             <bool>true</bool>
             </property>
            </widget>
           </item>
@@ -797,7 +797,7 @@ QWidget#animationWidgetContents:hover {
           <x>0</x>
           <y>0</y>
           <width>394</width>
-          <height>335</height>
+          <height>332</height>
          </rect>
         </property>
         <property name="styleSheet">
