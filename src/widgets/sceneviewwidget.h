@@ -67,8 +67,7 @@ struct PickingResult
     float distanceFromCameraSqrd;
 };
 
-class SceneViewWidget : public QOpenGLWidget,
-                        protected QOpenGLFunctions_3_2_Core
+class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
 {
     Q_OBJECT
 
@@ -96,7 +95,7 @@ public:
 
     ThumbnailGenerator* thumbGen;
 
-    explicit SceneViewWidget(QWidget *parent);
+    explicit SceneViewWidget(QWidget *parent = Q_NULLPTR);
 
     void setScene(iris::ScenePtr scene);
     void setSelectedNode(iris::SceneNodePtr sceneNode);
@@ -130,7 +129,6 @@ public:
     void stopPlayingScene();
 
     iris::ForwardRendererPtr getRenderer() const;
-    void saveFrameBuffer(QString filePath);
 
     QVector3D calculateMouseRay(const QPointF& pos);
     void mousePressEvent(QMouseEvent* evt);

@@ -59,32 +59,29 @@ For more information see the LICENSE file
 
 SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 {
-    dragging = false;
-
     QSurfaceFormat format;
     format.setDepthBufferSize(32);
     format.setMajorVersion(3);
     format.setMinorVersion(2);
+    format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
     format.setProfile(QSurfaceFormat::CoreProfile);
-    //format.setOption();
     format.setSamples(1);
-
     setFormat(format);
+
     // needed in order to get mouse events
     setMouseTracking(true);
-    // needed in order to get key events
-    // http://stackoverflow.com/a/7879484/991834
+
+    // needed in order to get key events http://stackoverflow.com/a/7879484/991834
     setFocusPolicy(Qt::ClickFocus);
+    setAcceptDrops(true);
 
     viewport = new iris::Viewport();
 
-    //camController = nullptr;
     defaultCam = new EditorCameraController();
     orbitalCam = new OrbitalCameraController();
 
     camController = defaultCam;
     prevCamController = defaultCam;
-    //camController = orbitalCam;
 
     editorCam = iris::CameraNode::create();
     editorCam->setLocalPos(QVector3D(0, 5, 14));
@@ -97,6 +94,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     playScene = false;
     animTime = 0.0f;
 
+    dragging = false;
     showLightWires = false;
 
     sceneFloor = iris::IntersectionHelper::computePlaneND(QVector3D( 100, 0,  100),
@@ -104,7 +102,6 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
                                                           QVector3D(   0, 0, -100));
 
     setAcceptDrops(true);
-
     thumbGen = nullptr;
 }
 
@@ -163,12 +160,11 @@ iris::MeshPtr SceneViewWidget::createDirLightMesh(float baseRadius)
     float arcWidth = 360.0f/divisions;
 
     // XZ plane
-    for(int i=0;i<divisions;i++)
-    {
+    for (int i = 0 ; i < divisions; i++) {
         float angle = i * arcWidth;
         QVector3D a = QVector3D(qSin(qDegreesToRadians(angle)), 0, qCos(qDegreesToRadians(angle))) * baseRadius;
 
-        angle = (i+1) * arcWidth;
+        angle = (i + 1) * arcWidth;
         QVector3D b = QVector3D(qSin(qDegreesToRadians(angle)), 0, qCos(qDegreesToRadians(angle))) * baseRadius;
 
         builder.addLine(a, b);
@@ -188,25 +184,25 @@ void SceneViewWidget::addLightShapesToScene()
 {
     QMatrix4x4 mat;
 
-    for(auto light : scene->lights) {
-        if ( light->lightType == iris::LightType::Point) {
+    for (auto light : scene->lights) {
+        if (light->lightType == iris::LightType::Point) {
             mat.setToIdentity();
             mat.translate(light->getGlobalPosition());
             mat.scale(light->distance);
             scene->geometryRenderList->submitMesh(pointLightMesh, lineMat, mat);
         }
-        else if ( light->lightType == iris::LightType::Spot) {
+        else if (light->lightType == iris::LightType::Spot) {
             mat.setToIdentity();
             mat.translate(light->getGlobalPosition());
             mat.rotate(QQuaternion::fromRotationMatrix(light->getGlobalTransform().normalMatrix()));
-            auto radius = qCos(qDegreesToRadians(light->spotCutOff - 90)); //90 is max spot cutoff(180) / 2
+            auto radius = qCos(qDegreesToRadians(light->spotCutOff - 90)); // 90 is max spot cutoff (180) / 2
 
             mat.scale(radius, 1.0 - radius, radius);
             mat.scale(light->distance);
 
             scene->geometryRenderList->submitMesh(spotLightMesh, lineMat, mat);
         }
-        else if ( light->lightType == iris::LightType::Directional) {
+        else if (light->lightType == iris::LightType::Directional) {
             mat.setToIdentity();
             mat.translate(light->getGlobalPosition());
             mat.rotate(QQuaternion::fromRotationMatrix(light->getGlobalTransform().normalMatrix()));
@@ -258,6 +254,8 @@ void SceneViewWidget::updateScene(bool once)
 
 void SceneViewWidget::initializeGL()
 {
+    QOpenGLWidget::initializeGL();
+
     makeCurrent();
 
     initializeOpenGLFunctions();
@@ -296,13 +294,11 @@ void SceneViewWidget::paintGL()
 {
     makeCurrent();
 
-    if(iris::VrManager::getDefaultDevice()->isHeadMounted() &&
-            viewportMode != ViewportMode::VR)
-    {
+    if (iris::VrManager::getDefaultDevice()->isHeadMounted() && viewportMode != ViewportMode::VR) {
         // set to vr mode automatically if a headset is detected
         this->setViewportMode(ViewportMode::VR);
     }
-    else if(!iris::VrManager::getDefaultDevice()->isHeadMounted() &&
+    else if (!iris::VrManager::getDefaultDevice()->isHeadMounted() &&
             viewportMode == ViewportMode::VR)
     {
         this->setViewportMode(ViewportMode::Editor);
@@ -320,10 +316,9 @@ void SceneViewWidget::renderScene()
     elapsedTimer->restart();
 
     if (!!renderer && !!scene) {
-
         this->camController->update(dt);
-        if(playScene)
-        {
+
+        if (playScene) {
             animTime += dt;
             scene->updateSceneAnimation(animTime);
         }
@@ -335,6 +330,7 @@ void SceneViewWidget::renderScene()
             viewerVisible = selectedNode->isVisible();
             selectedNode->hide();
         }
+
         scene->update(dt);
 
         // insert vr head
@@ -342,10 +338,9 @@ void SceneViewWidget::renderScene()
             for (auto view : scene->viewers)
                 view->submitRenderItems();
         }
-        // todo: ensure it doesnt display these shapes in play mode
-        //if (viewportMode != ViewportMode::VR || UiManager::sceneMode != SceneMode::PlayMode)
-        if (UiManager::sceneMode != SceneMode::PlayMode && showLightWires)
-            addLightShapesToScene();
+
+        // TODO: ensure it doesnt display these shapes in play mode (Nick)
+        if (UiManager::sceneMode != SceneMode::PlayMode && showLightWires) addLightShapesToScene();
 
         // render thumbnail to texture
         if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
@@ -367,8 +362,6 @@ void SceneViewWidget::renderScene()
                 selectedNode->submitRenderItems();
             }
         }
-
-
 
         if (viewportMode == ViewportMode::Editor) {
             renderer->renderScene(dt, viewport);
@@ -394,7 +387,7 @@ void SceneViewWidget::renderScene()
 void SceneViewWidget::resizeGL(int width, int height)
 {
     // we do an explicit call to glViewport(...) in forwardrenderer
-    // with the "good DPI" values so it is not needed here initially
+    // with the "good DPI" values so it is not needed here initially (iKlsR)
     viewport->pixelRatioScale = devicePixelRatio();
     viewport->width = width;
     viewport->height = height;
@@ -434,6 +427,7 @@ QVector3D SceneViewWidget::calculateMouseRay(const QPointF& pos)
 bool SceneViewWidget::updateRPI(QVector3D pos, QVector3D r) {
     float t;
     QVector3D q;
+
     if (iris::IntersectionHelper::intersectSegmentPlane(pos, (r * 1024), sceneFloor, t, q)) {
         Offset = q;
         return true;
@@ -504,23 +498,6 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
                 viewportGizmo->isGizmoHit(editorCam, e->localPos(), this->calculateMouseRay(e->localPos()));
                 viewportGizmo->isHandleHit();
             }
-
-            // temp ---------------------------------
-    //        auto translatePlaneNormal = QVector3D(0, 0, 1);
-    //        auto pos = editorCam->pos;
-    //        auto r = calculateMouseRay(e->localPos() * 1024.f);
-
-    //        translatePlaneD = -QVector3D::dotProduct(translatePlaneNormal, finalHitPoint);
-
-    //        QVector3D ray = (r - pos).normalized();
-    //        float nDotR = -QVector3D::dotProduct(translatePlaneNormal, ray);
-
-            // temp temp
-    //        if (nDotR != 0.0f) {
-    //            float distance = (QVector3D::dotProduct(translatePlaneNormal, pos) + translatePlaneD) / nDotR;
-    //            finalHitPoint = ray * distance + pos; // initial hit
-    //        }
-            // end temp -----------------------------
 
             // if we don't have a selected node prioritize object picking
             if (selectedNode.isNull()) {
@@ -602,13 +579,6 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr l
         return;
     }
 
-    // if the size of the list is 1 we know it was the only one so return early
-//    if (hitList.size() == 1) {
-//        viewportGizmo->lastSelectedNode = hitList[0].hitNode;
-//        emit sceneNodeSelected(hitList[0].hitNode);
-//        return;
-//    }
-
     // sort by distance to camera then return the closest hit node
     qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
         return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
@@ -630,32 +600,11 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr l
 
 
 
-        if (!lastSelectedNode || // if the user clicked away then the root should be reselected
-             pickedRoot != lastSelectedRoot)  // if both are under, or is, the same root then pick the actual object
-            pickedNode = pickedRoot;// if not then pick the root node
+        if (!lastSelectedNode ||            // if the user clicked away then the root should be reselected
+            pickedRoot != lastSelectedRoot) // if both are under, or is, the same root then pick the actual object
+            pickedNode = pickedRoot;        // if not then pick the root node
     }
 
-    /*
-    auto pickedNode = hitList.last().hitNode;
-    // climb tree to object's root (in the case of an imported model)
-    iris::SceneNodePtr rootObject;
-    if (pickedNode != lastSelectedNode && pickedNode->isAttached()) {
-        rootObject = pickedNode;
-        // climb the tree to root object
-        while (rootObject->isAttached()) {
-            rootObject = rootObject->parent;
-        }
-
-        // if rootObject is selectedNode, then use the pickedNode, else use the rootObject
-        if (rootObject == lastSelectedNode)
-            pickedNode = hitList.last().hitNode;
-        else
-            pickedNode = rootObject;
-    }
-    */
-
-    //viewportGizmo->lastSelectedNode = hitList.last().hitNode;
-    //emit sceneNodeSelected(hitList.last().hitNode);
     viewportGizmo->setLastSelectedNode(pickedNode);
     emit sceneNodeSelected(pickedNode);
 }
@@ -696,11 +645,8 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
     });
 
     viewportGizmo->finalHitPoint = hitList.last().hitPoint;
-
     viewportGizmo->setPlaneOrientation(hitList.last().hitNode->getName());
-
     viewportGizmo->currentNode = hitList.last().hitNode;
-
     viewportGizmo->onMousePress(editorCam->getLocalPos(), this->calculateMouseRay(point) * 1024);
 }
 
@@ -714,8 +660,7 @@ void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& scen
     {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
         auto mesh = meshNode->getMesh();
-        if(mesh != nullptr)
-        {
+        if (mesh != nullptr) {
             auto triMesh = meshNode->getMesh()->getTriMesh();
 
             // transform segment to local space
@@ -861,18 +806,14 @@ void SceneViewWidget::setViewportMode(ViewportMode viewportMode)
 {
     this->viewportMode = viewportMode;
 
-    //return;
     // switch cam to vr mode
-    if(viewportMode == ViewportMode::VR)
-    {
+    if (viewportMode == ViewportMode::VR) {
         prevCamController = camController;
         camController = vrCam;
         camController->setCamera(editorCam);
         camController->resetMouseStates();
-
     }
-    else
-    {
+    else {
         camController = prevCamController;
         camController->setCamera(editorCam);
         camController->resetMouseStates();
@@ -961,22 +902,4 @@ void SceneViewWidget::stopPlayingScene()
 iris::ForwardRendererPtr SceneViewWidget::getRenderer() const
 {
     return renderer;
-}
-
-void SceneViewWidget::saveFrameBuffer(QString filePath)
-{
-    auto vp = viewport;
-    auto image = this->grabFramebuffer();
-
-    if (image.height() > image.width()) {
-        QImage copy;
-        copy = image.copy(0, (int) image.height() / 3, 256, 128);
-        copy.save(filePath);
-    }
-    else {
-        auto regular = image.scaled(256, 256,
-                                    Qt::KeepAspectRatioByExpanding,
-                                    Qt::SmoothTransformation);
-        regular.save(filePath);
-    }
 }
