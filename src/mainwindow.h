@@ -119,7 +119,7 @@ public:
      * @param relToApp file path relative to application
      * @return
      */
-    QString getAbsoluteAssetPath(QString relToApp);
+    QString getAbsoluteAssetPath(QString pathRelativeToApp);
 
     void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
     void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
@@ -127,12 +127,10 @@ public:
 
 private:
 
-    /**
-     * Sets up the button for vr
-     */
+    // sets up the button for vr
     void setupVrUi();
 
-    //menus
+    // menus
     void setupFileMenu();
     void setupViewMenu();
     void setupHelpMenu();
