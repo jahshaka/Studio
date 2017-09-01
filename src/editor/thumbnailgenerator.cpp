@@ -24,6 +24,8 @@ void RenderThread::requestThumbnail(const ThumbnailRequest &request)
 {
     QMutexLocker locker(&requestMutex);
     requests.append(request);
+    requestsAvailable.release();
+    locker.unlock();
 }
 
 void RenderThread::run()
@@ -35,22 +37,21 @@ void RenderThread::run()
     tex = iris::Texture2D::create(500, 500);
     renderTarget->addTexture(tex);
 
-    while(true) {
-        //exec(); // handle event loops
+    shutdown = false;
 
-        //qDebug()<<"rendering";
-        ThumbnailRequest request;
-        bool hasRequest = false;
-        {
+    while(!shutdown) {
+        requestsAvailable.acquire();
+
+        // the size still has to be checked because there is a case where the size
+        // of the requests isnt equal to the available locks in the semaphore i.e.
+        // when the thread needs to die but the semaphore is waiting for a lock in order
+        // to continue execution
+        if (requests.size()>0){
+
+            //qDebug()<<"rendering";
             QMutexLocker locker(&requestMutex);
-            if(requests.size()>0)
-            {
-                request = requests.takeFirst();
-                hasRequest = true;
-            }
-        }
-
-        if (hasRequest) {
+            auto request = requests.takeFirst();
+            locker.unlock();
 
             prepareScene(request);
             //scene->rootNode->addChild(sceneNode);
@@ -73,6 +74,12 @@ void RenderThread::run()
             emit thumbnailComplete(result);
         }
     }
+
+    // move to main thread to be cleaned up
+    // all ui objects must be destroyed on the main thread
+    auto mainThread = qApp->instance()->thread();
+    context->moveToThread(mainThread);
+    surface->moveToThread(mainThread);
 }
 
 void RenderThread::initScene()
@@ -297,6 +304,13 @@ void ThumbnailGenerator::requestThumbnail(ThumbnailRequestType type, QString pat
     req.path = path;
     req.id = id;
     renderThread->requestThumbnail(req);
+}
+
+void ThumbnailGenerator::shutdown()
+{
+    renderThread->shutdown = true;
+    renderThread->requestsAvailable.release();// release 1 so the thread's main loop continues;
+    renderThread->wait();
 }
 
 //void ThumbnialGenerator::run()

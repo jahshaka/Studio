@@ -46,7 +46,7 @@ RenderTarget::RenderTarget(int width, int height):
 
     gl->glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, renderBufferId);
 
-    checkStatus();
+    //checkStatus();
 
     gl->glBindRenderbuffer(GL_RENDERBUFFER, 0);
     gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
