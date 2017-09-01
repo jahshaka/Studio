@@ -646,6 +646,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
     settings->setValue("geometry", saveGeometry());
     settings->setValue("windowState", saveState());
+
+    ThumbnailGenerator::getSingleton()->shutdown();
 }
 
 void MainWindow::setupFileMenu()

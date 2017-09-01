@@ -7,6 +7,7 @@
 #include <QOpenGLContext>
 #include <QOpenGLFunctions_3_2_Core>
 #include <QMutex>
+#include <QSemaphore>
 #include <QImage>
 
 enum class ThumbnailRequestType
@@ -50,6 +51,9 @@ public:
 
     QMutex requestMutex;
     QList<ThumbnailRequest> requests;
+    QSemaphore requestsAvailable;
+
+    bool shutdown;
 
     void requestThumbnail(const ThumbnailRequest& request);
 
@@ -80,6 +84,9 @@ public:
     static ThumbnailGenerator* getSingleton();
 
     void requestThumbnail(ThumbnailRequestType type, QString path, QString id = "");
+
+    // must be called to properly shutdown ui components
+    void shutdown();
 };
 
 #endif // THUMBNAILGENERATOR_H
