@@ -227,7 +227,7 @@ public slots:
     void openProject(QString project);
 
     iris::ScenePtr createDefaultScene();
-    void initializeGraphics(SceneViewWidget* widget, QOpenGLFunctions_3_2_Core* gl);
+    void initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*);
 
     void useFreeCamera();
     void useArcballCam();
