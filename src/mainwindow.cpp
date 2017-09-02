@@ -136,6 +136,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->modelPresets->setMainWindow(this);
     ui->skyPresets->setMainWindow(this);
 
+    ui->sceneHierarchy->setMainWindow(this);
+
     camControl = nullptr;
     vrMode = false;
 
@@ -148,35 +150,30 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(updateAnim()));
 
-    // initialzie scene view
     sceneView = new SceneViewWidget(ui->backgroundscene);
-//    sceneView->setParent(ui->backgroundscene);
+    sceneView->setParent(ui->backgroundscene);
     sceneView->setFocusPolicy(Qt::ClickFocus);
     sceneView->setFocus();
     Globals::sceneViewWidget = sceneView;
     UiManager::setSceneViewWidget(sceneView);
 
-    QGridLayout* layout = new QGridLayout();
+    QGridLayout* layout = new QGridLayout(ui->sceneContainer);
     layout->addWidget(sceneView);
     layout->setMargin(0);
     ui->sceneContainer->setLayout(layout);
 
-    connect(sceneView, SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),
-            SLOT(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)));
+    connect(sceneView,  SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),
+            this,       SLOT(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)));
 
-    ui->sceneHierarchy->setMainWindow(this);
+    connect(sceneView,  SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
+            this,       SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
     connect(ui->sceneHierarchy, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
-            this, SLOT(sceneNodeSelected(iris::SceneNodePtr)));
+            this,               SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
-    connect(sceneView, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
-            this, SLOT(sceneNodeSelected(iris::SceneNodePtr)));
+    connect(ui->playSceneBtn, SIGNAL(clicked(bool)), SLOT(onPlaySceneButton()));
 
-    connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
-
-    // pm
     pmContainer = new ProjectManager();
-
 
     assetWidget = new AssetWidget;
 
@@ -375,26 +372,10 @@ iris::ScenePtr MainWindow::createDefaultScene()
     return scene;
 }
 
-void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
+void MainWindow::initializeGraphics(SceneViewWidget *widget, QOpenGLFunctions_3_2_Core *gl)
 {
-    postProcessWidget->setPostProcessMgr(sceneView->getRenderer()->getPostProcessManager());
-
-//    auto m_logger = new QOpenGLDebugLogger( this );
-
-//    connect( m_logger, &QOpenGLDebugLogger::messageLogged,this,
-//             [](QOpenGLDebugMessage msg)
-//    {
-//        auto message = msg.message();
-//    });
-
-//    if ( m_logger->initialize() ) {
-//        m_logger->startLogging( QOpenGLDebugLogger::SynchronousLogging );
-//        m_logger->enableMessages();
-//    }
-
-//    auto scene = this->createDefaultScene();
-//    openProject(IrisUtils::getAbsoluteAssetPath("scenes/startup.jah"), true);
-//    this->setScene(scene);
+    Q_UNUSED(gl);
+    postProcessWidget->setPostProcessMgr(widget->getRenderer()->getPostProcessManager());
     setupVrUi();
 }
 
