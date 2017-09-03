@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <qwindow.h>
 #include <qsurface.h>
+#include <QScrollArea>
 
 //#include "irisgl/src/irisgl.h"
 #include "irisgl/src/scenegraph/meshnode.h"
@@ -101,6 +102,7 @@ For more information see the LICENSE file
 #include "../src/dialogs/newprojectdialog.h"
 
 #include "../src/widgets/sceneheirarchywidget.h"
+#include "../src/widgets/scenenodepropertieswidget.h"
 
 enum class VRButtonMode : int
 {
@@ -184,7 +186,31 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(sceneHeirarchyWidget, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
             this,           SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
-    this->addDockWidget(Qt::LeftDockWidgetArea, sceneHeirarchyDock);
+
+    // Since this widget can be longer than there is screen space, we need to add a QScrollArea
+    // For this to also work, we need a "holder widget" that will have a layout and the scroll area
+    sceneNodePropertiesDock = new QDockWidget("Properties");
+    sceneNodePropertiesDock->setObjectName(QStringLiteral("sceneNodePropertiesDock"));
+    sceneNodePropertiesWidget = new SceneNodePropertiesWidget();
+    sceneNodePropertiesWidget->setObjectName(QStringLiteral("sceneNodePropertiesWidget"));
+
+    auto dockWidgetContents = new QWidget();
+
+    auto sceneNodeScrollArea = new QScrollArea(dockWidgetContents);
+    sceneNodeScrollArea->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
+    sceneNodeScrollArea->setWidget(sceneNodePropertiesWidget);
+    sceneNodeScrollArea->setWidgetResizable(true);
+
+    auto sceneNodeLayout = new QVBoxLayout(dockWidgetContents);
+    sceneNodeLayout->setContentsMargins(0, 0, 0, 0);
+    sceneNodeLayout->addWidget(sceneNodeScrollArea);
+
+    dockWidgetContents->setLayout(sceneNodeLayout);
+
+    sceneNodePropertiesDock->setWidget(dockWidgetContents);
+
+    addDockWidget(Qt::LeftDockWidgetArea, sceneHeirarchyDock);
+    addDockWidget(Qt::RightDockWidgetArea, sceneNodePropertiesDock);
 
     QGridLayout *asLayout = new QGridLayout;
     asLayout->addWidget(assetWidget);
@@ -599,7 +625,7 @@ void MainWindow::setupFileMenu()
     });
 
     connect(ui->actionProperties, &QAction::toggled, [this](bool set) {
-        ui->PropertiesDock->setVisible(set);
+        sceneNodePropertiesDock->setVisible(set);
     });
 
     connect(ui->actionAnimation, &QAction::toggled, [this](bool set) {
@@ -803,7 +829,7 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
     meshNode->setMaterial(m);
 
     // TODO: update node's material without updating the whole ui
-    this->ui->sceneNodeProperties->refreshMaterial(preset->type);
+    this->sceneNodePropertiesWidget->refreshMaterial(preset->type);
 }
 
 /**
@@ -865,7 +891,7 @@ void MainWindow::sceneNodeSelected(iris::SceneNodePtr sceneNode)
     activeSceneNode = sceneNode;
 
     sceneView->setSelectedNode(sceneNode);
-    ui->sceneNodeProperties->setSceneNode(sceneNode);
+    this->sceneNodePropertiesWidget->setSceneNode(sceneNode);
     this->sceneHeirarchyWidget->setSelectedNode(sceneNode);
     ui->animationtimeline->setSceneNode(sceneNode);
 }
