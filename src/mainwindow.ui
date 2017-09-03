@@ -606,42 +606,6 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
    <addaction name="menuView"/>
    <addaction name="menuHelp"/>
   </widget>
-  <widget class="QDockWidget" name="sceneHierarchyDock">
-   <property name="minimumSize">
-    <size>
-     <width>320</width>
-     <height>89</height>
-    </size>
-   </property>
-   <property name="maximumSize">
-    <size>
-     <width>524287</width>
-     <height>524287</height>
-    </size>
-   </property>
-   <property name="floating">
-    <bool>false</bool>
-   </property>
-   <property name="windowTitle">
-    <string>Scene Outliner</string>
-   </property>
-   <attribute name="dockWidgetArea">
-    <number>1</number>
-   </attribute>
-   <widget class="SceneHeirarchyWidget" name="sceneHierarchy">
-    <property name="minimumSize">
-     <size>
-      <width>320</width>
-      <height>0</height>
-     </size>
-    </property>
-    <property name="styleSheet">
-     <string notr="true">:hover {
-    border: 1px solid #3498db;
-}</string>
-    </property>
-   </widget>
-  </widget>
   <widget class="QDockWidget" name="AnimationDock">
    <property name="sizePolicy">
     <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -1307,12 +1271,6 @@ QToolButton:checked
    <class>MaterialSets</class>
    <extends>QWidget</extends>
    <header>src/widgets/materialsets.h</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>SceneHeirarchyWidget</class>
-   <extends>QWidget</extends>
-   <header>src/widgets/sceneheirarchywidget.h</header>
    <container>1</container>
   </customwidget>
   <customwidget>
