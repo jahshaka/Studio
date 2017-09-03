@@ -357,7 +357,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     auto plight = iris::LightNode::create();
     plight->setLightType(iris::LightType::Point);
-     scene->rootNode->addChild(plight);
+    scene->rootNode->addChild(plight);
     plight->setName("Point Light");
     plight->setLocalPos(QVector3D(-4, 4, 0));
     plight->intensity = 1;
@@ -728,16 +728,9 @@ void MainWindow::loadScene()
 
 void MainWindow::openProject(QString filename)
 {
-    // SWITCH
-    ui->AnimationDock->show();
-    ui->PropertiesDock->show();
-    ui->sceneHierarchyDock->show();
-    ui->AssetsDock->show();
-    ui->MenuBar->show();
-    ui->PresetsDock->show();
-    ui->ToolBar->show();
-
-    ui->backgroundscene->show();
+    if (!this->isVisible()) {
+        this->showMaximized();
+    }
 
     this->sceneView->makeCurrent();
     //remove current scene first
@@ -1289,7 +1282,7 @@ void MainWindow::showProjectManager()
 
 void MainWindow::newScene()
 {
-    this->show();
+    this->showMaximized();
 
     this->sceneView->makeCurrent();
     auto scene = this->createDefaultScene();
