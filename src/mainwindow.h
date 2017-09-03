@@ -72,6 +72,7 @@ class GizmoHitData;
 class AdvancedGizmoHandle;
 class MaterialPreset;
 class AssetWidget;
+class SceneNodePropertiesWidget;
 
 class QOpenGLFunctions_3_2_Core;
 
@@ -311,6 +312,9 @@ private:
 
     QDockWidget *sceneHeirarchyDock;
     SceneHeirarchyWidget *sceneHeirarchyWidget;
+
+    QDockWidget *sceneNodePropertiesDock;
+    SceneNodePropertiesWidget *sceneNodePropertiesWidget;
 };
 
 #endif // MAINWINDOW_H
