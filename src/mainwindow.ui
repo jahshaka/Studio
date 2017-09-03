@@ -425,7 +425,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <property name="bottomMargin">
      <number>0</number>
     </property>
-    <item row="1" column="0">
+    <item row="0" column="0">
      <widget class="QWidget" name="backgroundscene" native="true">
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <property name="spacing">
@@ -444,7 +444,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
         <number>0</number>
        </property>
        <item>
-        <widget class="QWidget" name="widget" native="true">
+        <widget class="QWidget" name="controlBar" native="true">
          <property name="minimumSize">
           <size>
            <width>0</width>
@@ -532,9 +532,6 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
        </item>
       </layout>
      </widget>
-    </item>
-    <item row="0" column="0">
-     <widget class="ProjectManager" name="pmContainer" native="true"/>
     </item>
    </layout>
   </widget>
@@ -1335,11 +1332,6 @@ QToolButton:checked
    <extends>QWidget</extends>
    <header>src/widgets/skypresets.h</header>
    <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>ProjectManager</class>
-   <extends>QWidget</extends>
-   <header>src/widgets/projectmanager.h</header>
   </customwidget>
  </customwidgets>
  <resources>
