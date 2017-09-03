@@ -56,6 +56,7 @@ class AdvancedTransformGizmo;
 class TransformWidget;
 
 class SceneViewWidget;
+class SceneHeirarchyWidget;
 
 class EditorCameraController;
 class SettingsManager;
@@ -307,6 +308,9 @@ private:
     QPushButton* vrButton;
     QPushButton* pmButton;
     QMainWindow *dialog;
+
+    QDockWidget *sceneHeirarchyDock;
+    SceneHeirarchyWidget *sceneHeirarchyWidget;
 };
 
 #endif // MAINWINDOW_H

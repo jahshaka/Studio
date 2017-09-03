@@ -100,6 +100,8 @@ For more information see the LICENSE file
 
 #include "../src/dialogs/newprojectdialog.h"
 
+#include "../src/widgets/sceneheirarchywidget.h"
+
 enum class VRButtonMode : int
 {
     Default = 0,
@@ -136,8 +138,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->modelPresets->setMainWindow(this);
     ui->skyPresets->setMainWindow(this);
 
-    ui->sceneHierarchy->setMainWindow(this);
-
     camControl = nullptr;
     vrMode = false;
 
@@ -168,14 +168,23 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(sceneView,  SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
             this,       SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
-    connect(ui->sceneHierarchy, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
-            this,               SLOT(sceneNodeSelected(iris::SceneNodePtr)));
-
     connect(ui->playSceneBtn, SIGNAL(clicked(bool)), SLOT(onPlaySceneButton()));
 
     pmContainer = new ProjectManager();
 
     assetWidget = new AssetWidget;
+
+    sceneHeirarchyDock = new QDockWidget("Hierarchy");
+    sceneHeirarchyDock->setObjectName(QStringLiteral("sceneHierarchyDock"));
+    sceneHeirarchyWidget = new SceneHeirarchyWidget();
+    sceneHeirarchyDock->setObjectName(QStringLiteral("sceneHierarchyWidget"));
+    sceneHeirarchyDock->setWidget(sceneHeirarchyWidget);
+    sceneHeirarchyWidget->setMainWindow(this);
+
+    connect(sceneHeirarchyWidget, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
+            this,           SLOT(sceneNodeSelected(iris::SceneNodePtr)));
+
+    this->addDockWidget(Qt::LeftDockWidgetArea, sceneHeirarchyDock);
 
     QGridLayout *asLayout = new QGridLayout;
     asLayout->addWidget(assetWidget);
@@ -586,7 +595,7 @@ void MainWindow::setupFileMenu()
     connect(prefsDialog,  SIGNAL(PreferencesDialogClosed()), this, SLOT(updateSceneSettings()));
 
     connect(ui->actionOutliner, &QAction::toggled, [this](bool set) {
-        ui->sceneHierarchyDock->setVisible(set);
+        sceneHeirarchyDock->setVisible(set);
     });
 
     connect(ui->actionProperties, &QAction::toggled, [this](bool set) {
@@ -643,7 +652,7 @@ void MainWindow::renameNode()
     dialog.exec();
 
     activeSceneNode->setName(dialog.getName());
-    this->ui->sceneHierarchy->repopulateTree();
+    this->sceneHeirarchyWidget->repopulateTree();
 }
 
 void MainWindow::updateGizmoTransform()
@@ -825,7 +834,7 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 {
     this->scene = scene;
     this->sceneView->setScene(scene);
-    ui->sceneHierarchy->setScene(scene);
+    this->sceneHeirarchyWidget->setScene(scene);
 
     // interim...
     updateSceneSettings();
@@ -857,7 +866,7 @@ void MainWindow::sceneNodeSelected(iris::SceneNodePtr sceneNode)
 
     sceneView->setSelectedNode(sceneNode);
     ui->sceneNodeProperties->setSceneNode(sceneNode);
-    ui->sceneHierarchy->setSelectedNode(sceneNode);
+    this->sceneHeirarchyWidget->setSelectedNode(sceneNode);
     ui->animationtimeline->setSceneNode(sceneNode);
 }
 
@@ -1110,7 +1119,7 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
         scene->getRootNode()->addChild(sceneNode);
     }
 
-    ui->sceneHierarchy->repopulateTree();
+    this->sceneHeirarchyWidget->repopulateTree();
 }
 
 /**
@@ -1154,7 +1163,7 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
 
 void MainWindow::repopulateSceneTree()
 {
-    ui->sceneHierarchy->repopulateTree();
+    this->sceneHeirarchyWidget->repopulateTree();
 }
 
 void MainWindow::duplicateNode()
@@ -1165,7 +1174,7 @@ void MainWindow::duplicateNode()
     auto node = activeSceneNode->duplicate();
     activeSceneNode->parent->addChild(node, false);
 
-    ui->sceneHierarchy->repopulateTree();
+    this->sceneHeirarchyWidget->repopulateTree();
     sceneNodeSelected(node);
 }
 
