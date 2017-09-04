@@ -19,11 +19,6 @@
 
 AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
-
-}
-
-void AssetWidget::trigger()
-{
     ui->setupUi(this);
 
     ui->assetView->viewport()->installEventFilter(this);
@@ -39,11 +34,8 @@ void AssetWidget::trigger()
     connect(ui->assetTree,  SIGNAL(customContextMenuRequested(const QPoint&)),
             this,           SLOT(sceneTreeCustomContextMenu(const QPoint&)));
 
-    // assetView section
     ui->assetView->setContextMenuPolicy(Qt::CustomContextMenu);
     ui->assetView->setViewMode(QListWidget::IconMode);
-//    ui->assetView->setUniformItemSizes(true);
-//    ui->assetView->setWordWrap(true);
     ui->assetView->setIconSize(QSize(88, 88));
     ui->assetView->setResizeMode(QListWidget::Adjust);
     ui->assetView->setMovement(QListView::Static);
@@ -52,11 +44,6 @@ void AssetWidget::trigger()
 
     ui->assetView->setDragEnabled(true);
     ui->assetView->setDragDropMode(QAbstractItemView::DragDrop);
-//    ui->assetView->viewport()->setAcceptDrops(true);
-//    ui->assetView->setDropIndicatorShown(true);
-//    ui->sceneTree->setDragDropMode(QAbstractItemView::InternalMove);
-//    ui->assetView->setFocusPolicy();
-//    ui->assetView->setMouseTracking(true);
 
     connect(ui->assetView,  SIGNAL(itemClicked(QListWidgetItem*)),
             this,           SLOT(assetViewClicked(QListWidgetItem*)));
@@ -70,21 +57,23 @@ void AssetWidget::trigger()
     connect(ui->assetView->itemDelegate(),  &QAbstractItemDelegate::commitData,
             this,                           &AssetWidget::OnLstItemsCommitData);
 
-    // other
     connect(ui->searchBar,  SIGNAL(textChanged(QString)),
             this,           SLOT(searchAssets(QString)));
 
     connect(ui->importBtn,  SIGNAL(pressed()), SLOT(importAssetB()));
 
+    // The signal will be emitted from another thread (Nick)
+    connect(ThumbnailGenerator::getSingleton()->renderThread, SIGNAL(thumbnailComplete(ThumbnailResult*)),
+            this,                                             SLOT(onThumbnailResult(ThumbnailResult*)));
+}
+
+void AssetWidget::trigger()
+{
     QDir d(Globals::project->getProjectFolder());
     walkFileSystem("", d.absolutePath());
 
-    // it's important that this get's called after the project dialog has OK'd
+    // It's important that this get's called after a project has been loaded (iKlsR)
     populateAssetTree();
-
-    //UiManager::sceneViewWidget->thumbGen-
-    connect(ThumbnailGenerator::getSingleton()->renderThread, SIGNAL(thumbnailComplete(ThumbnailResult*)),
-            this, SLOT(onThumbnailResult(ThumbnailResult*)));// since the signal will be emitted from another thread
 }
 
 AssetWidget::~AssetWidget()
@@ -105,9 +94,6 @@ void AssetWidget::populateAssetTree()
     ui->assetTree->addTopLevelItem(rootTreeItem);
     ui->assetTree->expandItem(rootTreeItem);
 
-//    if (ui->assetTree->selectedItems().size() == 0 && ui->assetTree->topLevelItemCount()) {
-//        ui->assetTree->topLevelItem(ui->assetTree->topLevelItemCount() - 1)->setSelected(true);
-//    }
     updateAssetView(rootTreeItem->data(0, Qt::UserRole).toString());
     rootTreeItem->setSelected(true);
 
