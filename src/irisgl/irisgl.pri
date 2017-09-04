@@ -85,7 +85,8 @@ HEADERS += \
     $$PWD/src/graphics/graphicsdevice.h \
     $$PWD/src/widgets/renderwidget.h \
     $$PWD/src/graphics/spritebatch.h \
-    $$PWD/src/graphics/font.h
+    $$PWD/src/graphics/font.h \
+    $$PWD/src/graphics/blendstate.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)

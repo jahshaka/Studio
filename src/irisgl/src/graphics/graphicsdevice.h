@@ -6,6 +6,7 @@
 #include <QRect>
 #include <QStack>
 #include "vertexlayout.h"
+#include "blendstate.h"
 
 class QOpenGLContext;
 
@@ -83,6 +84,9 @@ class GraphicsDevice
 
     ShaderPtr activeShader;
 
+    bool latsBlendEnabled;
+    BlendState lastBlendState;
+
 public:
     GraphicsDevice();
 
@@ -104,6 +108,8 @@ public:
     void setVertexBuffer(VertexBufferPtr vertexBuffer);
     void setVertexBuffers(QList<VertexBufferPtr> vertexBuffers);
     void setIndexBuffer(IndexBufferPtr indexBuffer);
+
+    void setBlendState(const BlendState& blendState);
 
     void drawPrimitives(GLenum primitiveType,int start, int count);
     QOpenGLFunctions_3_2_Core *getGL() const;

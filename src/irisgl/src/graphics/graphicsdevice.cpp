@@ -158,6 +158,49 @@ void GraphicsDevice::setVertexBuffer(VertexBufferPtr vertexBuffer)
     vertexBuffers.append(vertexBuffer);
 }
 
+void GraphicsDevice::setBlendState(const BlendState &blendState)
+{
+    bool blendEnabled = true;
+    if(blendState.colorSourceBlend == GL_ONE &&
+       blendState.colorDestBlend == GL_ZERO &&
+       blendState.alphaSourceBlend == GL_ONE &&
+       blendState.alphaDestBlend == GL_ZERO) {
+        blendEnabled = false;
+    }
+
+    this->lastBlendEnabled = blendEnabled;
+    if (blendEnabled)
+        gl->glEnable(GL_BLEND);
+    else
+        gl->glDisable(GL_BLEND);
+
+    // update blend equations
+    if (lastBlendState.alphaBlendEquation != blendState.alphaBlendEquation ||
+        lastBlendState.colorBlendEquation != blendState.colorBlendEquation) {
+
+        gl->glBlendEquationSeparate(blendState.colorBlendEquation, blendState.alphaBlendEquation);
+        lastBlendState.alphaBlendEquation = blendState.alphaBlendEquation;
+        lastBlendState.colorBlendEquation = blendState.colorBlendEquation;
+    }
+
+    // update blend functions
+    if(lastBlendState.colorSourceBlend != blendState.colorSourceBlend ||
+       lastBlendState.colorDestBlend != blendState.colorDestBlend ||
+       lastBlendState.alphaSourceBlend != blendState.alphaSourceBlend ||
+       lastBlendState.alphaDestBlend != blendState.alphaDestBlend)
+    {
+        gl->glBlendFuncSeparate(blendState.colorSourceBlend,
+                                blendState.colorDestBlend,
+                                blendState.alphaSourceBlend,
+                                blendState.alphaDestBlend);
+
+        lastBlendState.colorSourceBlend = blendState.colorSourceBlend;
+        lastBlendState.colorDestBlend = blendState.colorDestBlend;
+        lastBlendState.alphaSourceBlend = blendState.alphaSourceBlend;
+        lastBlendState.alphaDestBlend = blendState.alphaDestBlend;
+    }
+}
+
 void GraphicsDevice::drawPrimitives(GLenum primitiveType, int start, int count)
 {
     gl->glBindVertexArray(defautVAO);
