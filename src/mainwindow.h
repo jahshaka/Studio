@@ -320,6 +320,9 @@ private:
 
     QDockWidget *assetDock;
     AssetWidget *assetWidget;
+
+    QDockWidget *animationDock;
+    AnimationWidget *animationWidget;
 };
 
 #endif // MAINWINDOW_H
