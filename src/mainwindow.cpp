@@ -129,8 +129,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     ui->sceneContainer->setAcceptDrops(true);
     ui->sceneContainer->installEventFilter(this);
-    ui->assetWidget->setAcceptDrops(true);
-    ui->assetWidget->installEventFilter(this);
 
     UiManager::setAnimationWidget(ui->animationtimeline);
 
@@ -172,8 +170,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(ui->playSceneBtn, SIGNAL(clicked(bool)), SLOT(onPlaySceneButton()));
 
     pmContainer = new ProjectManager();
-
-    assetWidget = new AssetWidget;
 
     sceneHeirarchyDock = new QDockWidget("Hierarchy");
     sceneHeirarchyDock->setObjectName(QStringLiteral("sceneHierarchyDock"));
@@ -238,14 +234,24 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     presetsDock->setWidget(presetDockContents);
 
+    assetDock = new QDockWidget;
+    assetDock->setObjectName(QStringLiteral("assetDock"));
+
+    assetWidget = new AssetWidget;
+    assetWidget->setAcceptDrops(true);
+    assetWidget->installEventFilter(this);
+
+    auto assetDockContents = new QWidget;
+
+    auto assetsLayout = new QGridLayout(assetDockContents);
+    assetsLayout->addWidget(assetWidget);
+    assetsLayout->setContentsMargins(0, 0, 0, 0);
+    assetDock->setWidget(assetDockContents);
+
     addDockWidget(Qt::LeftDockWidgetArea, sceneHeirarchyDock);
     addDockWidget(Qt::RightDockWidgetArea, sceneNodePropertiesDock);
     addDockWidget(Qt::RightDockWidgetArea, presetsDock);
-
-    QGridLayout *asLayout = new QGridLayout;
-    asLayout->addWidget(assetWidget);
-    asLayout->setMargin(0);
-    ui->assetWidget->setLayout(asLayout);
+    addDockWidget(Qt::BottomDockWidgetArea, assetDock);
 
     connect(pmContainer, SIGNAL(fileToOpen(QString)), SLOT(openProject(QString)));
     connect(pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
@@ -301,7 +307,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->ToolBar->addWidget(pmButton);
     ui->ToolBar->addWidget(vrButton);
 
-    tabifyDockWidget(ui->AnimationDock, ui->AssetsDock);
+//    tabifyDockWidget(ui->AnimationDock, ui->AssetsDock);
 
     restoreGeometry(settings->getValue("geometry", "").toByteArray());
     restoreState(settings->getValue("windowState", "").toByteArray());
@@ -667,7 +673,7 @@ void MainWindow::setupFileMenu()
     });
 
     connect(ui->actionAssets, &QAction::toggled, [this](bool set) {
-        ui->AssetsDock->setVisible(set);
+        assetDock->setVisible(set);
     });
 }
 

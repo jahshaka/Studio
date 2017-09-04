@@ -29,7 +29,7 @@ class AssetWidget : public QWidget
     Q_OBJECT
 
 public:
-    AssetWidget(QWidget *parent = nullptr);
+    explicit AssetWidget(QWidget *parent = Q_NULLPTR);
     ~AssetWidget();
 
     void populateAssetTree();
