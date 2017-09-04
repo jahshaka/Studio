@@ -104,6 +104,10 @@ For more information see the LICENSE file
 #include "../src/widgets/sceneheirarchywidget.h"
 #include "../src/widgets/scenenodepropertieswidget.h"
 
+#include "../src/widgets/materialsets.h"
+#include "../src/widgets/modelpresets.h"
+#include "../src/widgets/skypresets.h"
+
 enum class VRButtonMode : int
 {
     Default = 0,
@@ -134,11 +138,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     prefsDialog = new PreferencesDialog(settings);
     aboutDialog = new AboutDialog();
     licenseDialog = new LicenseDialog();
-
-    // ui->animationtimeline->setMainWindow(this);
-    ui->materialPresets->setMainWindow(this);
-    ui->modelPresets->setMainWindow(this);
-    ui->skyPresets->setMainWindow(this);
 
     camControl = nullptr;
     vrMode = false;
@@ -178,7 +177,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     sceneHeirarchyDock = new QDockWidget("Hierarchy");
     sceneHeirarchyDock->setObjectName(QStringLiteral("sceneHierarchyDock"));
-    sceneHeirarchyWidget = new SceneHeirarchyWidget();
+    sceneHeirarchyWidget = new SceneHeirarchyWidget;
+    sceneHeirarchyWidget->setMinimumWidth(396);
     sceneHeirarchyDock->setObjectName(QStringLiteral("sceneHierarchyWidget"));
     sceneHeirarchyDock->setWidget(sceneHeirarchyWidget);
     sceneHeirarchyWidget->setMainWindow(this);
@@ -191,26 +191,56 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     // For this to also work, we need a "holder widget" that will have a layout and the scroll area
     sceneNodePropertiesDock = new QDockWidget("Properties");
     sceneNodePropertiesDock->setObjectName(QStringLiteral("sceneNodePropertiesDock"));
-    sceneNodePropertiesWidget = new SceneNodePropertiesWidget();
+    sceneNodePropertiesWidget = new SceneNodePropertiesWidget;
+    sceneNodePropertiesWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     sceneNodePropertiesWidget->setObjectName(QStringLiteral("sceneNodePropertiesWidget"));
 
-    auto dockWidgetContents = new QWidget();
+    auto sceneNodeDockWidgetContents = new QWidget();
 
-    auto sceneNodeScrollArea = new QScrollArea(dockWidgetContents);
+    auto sceneNodeScrollArea = new QScrollArea(sceneNodeDockWidgetContents);
+    sceneNodeScrollArea->setMinimumWidth(396);
     sceneNodeScrollArea->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
     sceneNodeScrollArea->setWidget(sceneNodePropertiesWidget);
     sceneNodeScrollArea->setWidgetResizable(true);
 
-    auto sceneNodeLayout = new QVBoxLayout(dockWidgetContents);
+    auto sceneNodeLayout = new QVBoxLayout(sceneNodeDockWidgetContents);
     sceneNodeLayout->setContentsMargins(0, 0, 0, 0);
     sceneNodeLayout->addWidget(sceneNodeScrollArea);
 
-    dockWidgetContents->setLayout(sceneNodeLayout);
+    sceneNodeDockWidgetContents->setLayout(sceneNodeLayout);
 
-    sceneNodePropertiesDock->setWidget(dockWidgetContents);
+    sceneNodePropertiesDock->setWidget(sceneNodeDockWidgetContents);
+
+    // presets
+    presetsDock = new QDockWidget("Presets");
+    presetsDock->setObjectName(QStringLiteral("presetsDock"));
+
+    auto presetDockContents = new QWidget;
+
+//    auto materialPresetsLayout = new
+    auto materialPresets = new MaterialSets;
+    materialPresets->setMainWindow(this);
+    auto skyPresets = new SkyPresets;
+    skyPresets->setMainWindow(this);
+    auto modelPresets = new ModelPresets;
+    modelPresets->setMainWindow(this);
+
+    presetsTabWidget = new QTabWidget;
+    presetsTabWidget->setMinimumWidth(396);
+    presetsTabWidget->addTab(materialPresets, "Materials");
+    presetsTabWidget->addTab(skyPresets, "Skyboxes");
+    presetsTabWidget->addTab(modelPresets, "Primitives");
+    presetsTabWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+
+    auto presetsLayout = new QGridLayout(presetDockContents);
+    presetsLayout->setContentsMargins(0, 0, 0, 0);
+    presetsLayout->addWidget(presetsTabWidget);
+
+    presetsDock->setWidget(presetDockContents);
 
     addDockWidget(Qt::LeftDockWidgetArea, sceneHeirarchyDock);
     addDockWidget(Qt::RightDockWidgetArea, sceneNodePropertiesDock);
+    addDockWidget(Qt::RightDockWidgetArea, presetsDock);
 
     QGridLayout *asLayout = new QGridLayout;
     asLayout->addWidget(assetWidget);
@@ -628,16 +658,16 @@ void MainWindow::setupFileMenu()
         sceneNodePropertiesDock->setVisible(set);
     });
 
+    connect(ui->actionPresets, &QAction::toggled, [this](bool set) {
+        presetsDock->setVisible(set);
+    });
+
     connect(ui->actionAnimation, &QAction::toggled, [this](bool set) {
         ui->AnimationDock->setVisible(set);
     });
 
     connect(ui->actionAssets, &QAction::toggled, [this](bool set) {
         ui->AssetsDock->setVisible(set);
-    });
-
-    connect(ui->actionPresets, &QAction::toggled, [this](bool set) {
-        ui->PresetsDock->setVisible(set);
     });
 }
 

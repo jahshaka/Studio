@@ -315,6 +315,9 @@ private:
 
     QDockWidget *sceneNodePropertiesDock;
     SceneNodePropertiesWidget *sceneNodePropertiesWidget;
+
+    QDockWidget *presetsDock;
+    QTabWidget *presetsTabWidget;
 };
 
 #endif // MAINWINDOW_H
