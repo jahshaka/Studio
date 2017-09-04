@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include <QColor>
 #include "../irisglfwd.h"
 #include "../animation/skeletalanimation.h"
-
+#include "../geometry/boundingsphere.h"
 
 class aiMesh;
 class aiScene;
@@ -96,7 +96,7 @@ public:
     GLuint indexBuffer;
     bool usesIndexBuffer;
 
-    BoundingSphere* boundingSphere;
+    BoundingSphere boundingSphere;
 
     // will cause problems if a shader was freed and gl gives the
     // id to another shader
@@ -154,6 +154,8 @@ public:
 private:
     void addVertexArray(VertexAttribUsage usage,void* data,int size,GLenum type,int numComponents);
     void addIndexArray(void* data,int size,GLenum type);
+
+    static BoundingSphere calculateBoundingSphere(const aiMesh* mesh);
 };
 
 //typedef QSharedPointer<Mesh> MeshPtr;

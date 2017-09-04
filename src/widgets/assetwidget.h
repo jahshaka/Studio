@@ -11,6 +11,7 @@ namespace Ui {
 #include <QFileDialog>
 
 #include "../io/assetmanager.h"
+#include "../editor/thumbnailgenerator.h"
 
 // TODO - https://stackoverflow.com/questions/19465812/how-can-i-insert-qdockwidget-as-tab
 
@@ -68,10 +69,14 @@ protected slots:
     void importAssetB();
     void importAsset(const QStringList &path);
 
+    void onThumbnailResult(ThumbnailResult* result);
+
 private:
     Ui::AssetWidget *ui;
     AssetItem assetItem;
     QPoint startPos;
+
+    QString currentPath;
 };
 
 #endif // ASSETWIDGET_H

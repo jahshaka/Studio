@@ -683,13 +683,14 @@ void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
         if(!!icon)
         {
             icon->texture->bind();
+            billboard->draw(gl);
         }
         else
         {
             gl->glBindTexture(GL_TEXTURE_2D,0);
         }
 
-        billboard->draw(gl);
+
     }
     gl->glDisable(GL_BLEND);
 

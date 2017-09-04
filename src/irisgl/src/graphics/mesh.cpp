@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QOpenGLBuffer>
 #include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLTexture>
+#include <QtMath>
 
 #include "vertexlayout.h"
 #include "../geometry/trimesh.h"
@@ -65,8 +66,6 @@ Mesh::Mesh(aiMesh* mesh)
     numFaces = mesh->mNumFaces;
 
     gl->glGenVertexArrays(1,&vao);
-
-    boundingSphere = new BoundingSphere();
 
     if(!mesh->HasPositions())
         return;
@@ -152,11 +151,6 @@ Mesh::Mesh(aiMesh* mesh)
         triMesh->addTriangle(QVector3D(a.x, a.y, a.z),
                              QVector3D(b.x, b.y, b.z),
                              QVector3D(c.x, c.y, c.z));
-
-        // redundant, but good enough for now
-        boundingSphere->expand(QVector3D(a.x, a.y, a.z));
-        boundingSphere->expand(QVector3D(b.x, b.y, b.z));
-        boundingSphere->expand(QVector3D(c.x, c.y, c.z));
     }
 
     gl->glGenBuffers(1, &indexBuffer);
@@ -170,6 +164,7 @@ Mesh::Mesh(aiMesh* mesh)
 
     this->setPrimitiveMode(PrimitiveMode::Triangles);
 
+    boundingSphere = calculateBoundingSphere(mesh);
 }
 
 //todo: extract trimesh from data
@@ -466,6 +461,47 @@ void Mesh::addVertexArray(VertexAttribUsage usage,void* dataPtr,int size,GLenum 
 void Mesh::addIndexArray(void* data,int size,GLenum type)
 {
 
+}
+
+// https://github.com/playcanvas/engine/blob/master/src/shape/bounding-sphere.js#L30
+// bounding sphere wont necessarily be at the center of the mesh's origin
+// the true positon in world space would be the bounds's center plus the mesh's absolute position
+BoundingSphere Mesh::calculateBoundingSphere(const aiMesh *mesh)
+{
+    // find average pos
+    aiVector3D averagePos;// = mesh->mVertices[0];
+    aiVector3D sum(0,0,0);
+
+    for(unsigned int i =0;i<mesh->mNumVertices;i++) {
+        sum += mesh->mVertices[i];
+
+        if (i%100 == 0) {
+            sum /= mesh->mNumVertices;
+            averagePos += sum;
+            sum = aiVector3D(0,0,0);
+        }
+    }
+
+    sum/=mesh->mNumVertices;
+    averagePos += sum;
+
+    //averagePos = averagePos/mesh->mNumVertices;
+
+    // find furthest distance
+    float maxDistSqrd = 0;
+    for(unsigned int i =0;i<mesh->mNumVertices;i++) {
+        auto vert = mesh->mVertices[i];
+        auto diff = vert-averagePos;
+        auto dist = diff.SquareLength();
+
+        if (dist > maxDistSqrd)
+            maxDistSqrd = dist;
+    }
+
+    BoundingSphere sphere;
+    sphere.pos = QVector3D(averagePos.x, averagePos.y, averagePos.x);
+    sphere.radius = qSqrt(maxDistSqrd);
+    return sphere;
 }
 
 }

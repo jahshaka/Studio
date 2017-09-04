@@ -6,6 +6,9 @@
 #include "../core/project.h"
 #include "../globals.h"
 #include "../constants.h"
+#include "../uimanager.h"
+#include "../widgets/sceneviewwidget.h"
+#include "../editor/thumbnailgenerator.h"
 
 #include <QDebug>
 #include <QDir>
@@ -15,11 +18,6 @@
 #include <QMouseEvent>
 
 AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
-{
-
-}
-
-void AssetWidget::trigger()
 {
     ui->setupUi(this);
 
@@ -36,11 +34,8 @@ void AssetWidget::trigger()
     connect(ui->assetTree,  SIGNAL(customContextMenuRequested(const QPoint&)),
             this,           SLOT(sceneTreeCustomContextMenu(const QPoint&)));
 
-    // assetView section
     ui->assetView->setContextMenuPolicy(Qt::CustomContextMenu);
     ui->assetView->setViewMode(QListWidget::IconMode);
-//    ui->assetView->setUniformItemSizes(true);
-//    ui->assetView->setWordWrap(true);
     ui->assetView->setIconSize(QSize(88, 88));
     ui->assetView->setResizeMode(QListWidget::Adjust);
     ui->assetView->setMovement(QListView::Static);
@@ -49,11 +44,6 @@ void AssetWidget::trigger()
 
     ui->assetView->setDragEnabled(true);
     ui->assetView->setDragDropMode(QAbstractItemView::DragDrop);
-//    ui->assetView->viewport()->setAcceptDrops(true);
-//    ui->assetView->setDropIndicatorShown(true);
-//    ui->sceneTree->setDragDropMode(QAbstractItemView::InternalMove);
-//    ui->assetView->setFocusPolicy();
-//    ui->assetView->setMouseTracking(true);
 
     connect(ui->assetView,  SIGNAL(itemClicked(QListWidgetItem*)),
             this,           SLOT(assetViewClicked(QListWidgetItem*)));
@@ -67,16 +57,22 @@ void AssetWidget::trigger()
     connect(ui->assetView->itemDelegate(),  &QAbstractItemDelegate::commitData,
             this,                           &AssetWidget::OnLstItemsCommitData);
 
-    // other
     connect(ui->searchBar,  SIGNAL(textChanged(QString)),
             this,           SLOT(searchAssets(QString)));
 
     connect(ui->importBtn,  SIGNAL(pressed()), SLOT(importAssetB()));
 
+    // The signal will be emitted from another thread (Nick)
+    connect(ThumbnailGenerator::getSingleton()->renderThread, SIGNAL(thumbnailComplete(ThumbnailResult*)),
+            this,                                             SLOT(onThumbnailResult(ThumbnailResult*)));
+}
+
+void AssetWidget::trigger()
+{
     QDir d(Globals::project->getProjectFolder());
     walkFileSystem("", d.absolutePath());
 
-    // it's important that this get's called after the project dialog has OK'd
+    // It's important that this get's called after a project has been loaded (iKlsR)
     populateAssetTree();
 }
 
@@ -98,9 +94,6 @@ void AssetWidget::populateAssetTree()
     ui->assetTree->addTopLevelItem(rootTreeItem);
     ui->assetTree->expandItem(rootTreeItem);
 
-//    if (ui->assetTree->selectedItems().size() == 0 && ui->assetTree->topLevelItemCount()) {
-//        ui->assetTree->topLevelItem(ui->assetTree->topLevelItemCount() - 1)->setSelected(true);
-//    }
     updateAssetView(rootTreeItem->data(0, Qt::UserRole).toString());
     rootTreeItem->setSelected(true);
 
@@ -159,7 +152,12 @@ void AssetWidget::walkFileSystem(QString folder, QString path)
             asset->path = file.absoluteFilePath();
             asset->thumbnail = pixmap;
 
-            AssetManager::assets.append(asset);
+            //submit to have thumbnail generated
+            if (asset->type == AssetType::Object)
+                ThumbnailGenerator::getSingleton()->requestThumbnail(ThumbnailRequestType::Mesh,asset->path,asset->path);
+
+
+            AssetManager::addAsset(asset);
         } else {
             auto thumb = ThumbnailManager::createThumbnail(":/icons/folder-symbol.svg", 128, 128);
             QPixmap pixmap = QPixmap::fromImage(*thumb->thumb);
@@ -169,7 +167,7 @@ void AssetWidget::walkFileSystem(QString folder, QString path)
             asset->path = file.absoluteFilePath();
             asset->thumbnail = pixmap;
 
-            AssetManager::assets.append(asset);
+            AssetManager::addAsset(asset);
         }
 
         if (file.isDir()) {
@@ -203,6 +201,12 @@ void AssetWidget::addItem(const QString &asset)
         } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
             //type = AssetType::Object;
             item->setIcon(QIcon(":/icons/google-drive-file.svg"));
+            //qDebug()<<file.absoluteFilePath();
+            auto asset = AssetManager::getAssetByPath(file.absoluteFilePath());
+            if (asset!=nullptr) {
+                if (!asset->thumbnail.isNull())
+                    item->setIcon(QIcon(asset->thumbnail));
+            }
         } else if (file.suffix() == "shader") {
             //type = AssetType::Shader;
             item->setIcon(QIcon(":/icons/google-drive-file.svg"));
@@ -441,7 +445,7 @@ void AssetWidget::searchAssets(QString searchString)
     ui->assetView->clear();
 
     if (!searchString.isEmpty()) {
-        for (auto item : AssetManager::assets) {
+        for (auto item : AssetManager::getAssets()) {
             if (item->fileName.contains(searchString)) {
                 addItem(item->path);
             }
@@ -554,10 +558,34 @@ void AssetWidget::importAsset(const QStringList &path)
                 asset->path = file.absoluteFilePath();
                 asset->thumbnail = pixmap;
 
-                AssetManager::assets.append(asset);
+                if (asset->type == AssetType::Object)
+                    ThumbnailGenerator::getSingleton()->requestThumbnail(ThumbnailRequestType::Mesh,asset->path,asset->path);
+
+                AssetManager::addAsset(asset);
             }
         }
 
         updateAssetView(assetItem.selectedPath);
     }
+}
+
+void AssetWidget::onThumbnailResult(ThumbnailResult* result)
+{
+    for(auto& asset : AssetManager::getAssets()) {
+        if (asset->path == result->id) {
+            //qDebug()<<asset->path;
+            asset->thumbnail = QPixmap::fromImage(result->thumbnail);
+
+            // find item and update its icon
+            auto items = ui->assetView->findItems(asset->fileName, Qt::MatchExactly);
+            if (items.count() > 0) {
+                items[0]->setIcon(asset->thumbnail);
+            }
+
+            //auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
+            //asset->thumbnail = QPixmap::fromImage(*thumb->thumb);
+        }
+    }
+
+    delete result;
 }

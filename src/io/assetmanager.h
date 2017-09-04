@@ -115,9 +115,18 @@ struct AssetObject : public Asset
 
 class AssetManager
 {
+
+    //static QMap<QString, Asset*> assetsByPath;
 public:
-    AssetManager();
     static QList<Asset*> assets;
+    static QList<Asset*>& getAssets();
+    static void addAsset(Asset* asset);
+
+    // returns asset by path
+    // return null if no asset exists
+    static Asset* getAssetByPath(QString absolutePath);
+
+
 };
 
 #endif // ASSETMANAGER_H

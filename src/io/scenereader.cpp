@@ -540,7 +540,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
     if (shaderFile.exists()) {
         m->generate(shaderFile.absoluteFilePath());
     } else {
-        for (auto asset : AssetManager::assets) {
+        for (auto asset : AssetManager::getAssets()) {
             if (asset->type == AssetType::Shader) {
                 if (asset->fileName == mat["name"].toString() + ".shader") {
                     //qDebug() << asset->path;
@@ -572,7 +572,7 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
     if (!assimpScenes.contains(filePath)) {
         QList<iris::MeshPtr> meshList;
         QMap<QString, iris::SkeletalAnimationPtr> animationss;
-        iris::GraphicsHelper::loadAllMeshesAndAnimationsFromStore<Asset*>(AssetManager::assets,
+        iris::GraphicsHelper::loadAllMeshesAndAnimationsFromStore<Asset*>(AssetManager::getAssets(),
                                                                           filePath,
                                                                           meshList,
                                                                           animationss);

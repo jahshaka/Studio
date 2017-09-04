@@ -46,7 +46,7 @@ RenderTarget::RenderTarget(int width, int height):
 
     gl->glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, renderBufferId);
 
-    checkStatus();
+    //checkStatus();
 
     gl->glBindRenderbuffer(GL_RENDERBUFFER, 0);
     gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -133,7 +133,7 @@ void RenderTarget::clearRenderBuffer()
     gl->glBindFramebuffer(GL_FRAMEBUFFER, fboId);
     gl->glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, 0);
 
-    checkStatus();
+    //checkStatus();
 
     gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -152,7 +152,7 @@ void RenderTarget::bind()
     if (!!depthTexture)
         gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture->getTextureId(), 0);
 
-    checkStatus();
+    //checkStatus();
 }
 
 void RenderTarget::unbind()

@@ -134,8 +134,9 @@ void MeshNode::submitRenderItems()
         //else
             renderItem->worldMatrix = this->globalTransform;
             renderItem->cullable = true;
-            renderItem->boundingSphere.pos = this->globalTransform.column(3).toVector3D();
-            renderItem->boundingSphere.radius = mesh->boundingSphere->radius * getMeshRadius();
+            //renderItem->boundingSphere.pos = this->globalTransform.column(3).toVector3D() + mesh->boundingSphere->pos;
+            renderItem->boundingSphere.pos = this->globalTransform * mesh->boundingSphere.pos;
+            renderItem->boundingSphere.radius = mesh->boundingSphere.radius * getMeshRadius();
 
         if (!!material) {
             renderItem->renderLayer = material->renderLayer;
@@ -157,6 +158,14 @@ float MeshNode::getMeshRadius()
     float scaleZ = globalTransform.column(2).toVector3D().length();
 
     return qMax(qMax(scaleX, scaleY), scaleZ);
+}
+
+BoundingSphere MeshNode::getTransformedBoundingSphere()
+{
+    BoundingSphere boundingSphere;
+    boundingSphere.pos = this->globalTransform * mesh->boundingSphere.pos;
+    boundingSphere.radius = mesh->boundingSphere.radius * getMeshRadius();
+    return boundingSphere;
 }
 
 /*

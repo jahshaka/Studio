@@ -197,9 +197,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 //    ui->pmContainer->setLayout(playout);
 //    dialog->hide();
 
-    assetWidget = new AssetWidget(this);
+    assetWidget = new AssetWidget;
 
-    QGridLayout *asLayout = new QGridLayout(ui->assetWidget);
+    QGridLayout *asLayout = new QGridLayout;
     asLayout->addWidget(assetWidget);
     asLayout->setMargin(0);
     ui->assetWidget->setLayout(asLayout);
@@ -646,6 +646,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
     settings->setValue("geometry", saveGeometry());
     settings->setValue("windowState", saveState());
+
+    ThumbnailGenerator::getSingleton()->shutdown();
 }
 
 void MainWindow::setupFileMenu()

@@ -69,6 +69,7 @@ class Skeleton;
 class SkeletalAnimation;
 template<typename T> class Key;
 typedef Key<float> FloatKey;
+class BoundingSphere;
 
 typedef QSharedPointer<iris::Animation> AnimationPtr;
 typedef QSharedPointer<Shader> ShaderPtr;
