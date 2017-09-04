@@ -27,6 +27,7 @@ public:
 
     static void enterPlayMode();
     static void enterEditMode();
+    static bool isScenePlaying;
 
     static MainWindow *mainWindow;
     static void updateWindowTitle();

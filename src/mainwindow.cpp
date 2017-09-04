@@ -1507,12 +1507,16 @@ void MainWindow::scaleGizmo()
 
 void MainWindow::onPlaySceneButton()
 {
-    if (ui->playSceneBtn->text() == "PLAY SCENE") {
+    UiManager::isScenePlaying = !UiManager::isScenePlaying;
+
+    if (UiManager::isScenePlaying) {
         UiManager::enterPlayMode();
-        ui->playSceneBtn->setText("STOP");
+        ui->playSceneBtn->setToolTip("Stop playing");
+        ui->playSceneBtn->setIcon(QIcon(":/icons/g_stop.svg"));
     }
     else {
         UiManager::enterEditMode();
-        ui->playSceneBtn->setText("PLAY SCENE");
+        ui->playSceneBtn->setToolTip("Play scene");
+        ui->playSceneBtn->setIcon(QIcon(":/icons/g_play.svg"));
     }
 }

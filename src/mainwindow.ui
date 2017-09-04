@@ -114,7 +114,7 @@ QComboBox::drop-down {
 }
 
 QComboBox::down-arrow {
-	image: url(:/icons/dropdown.png);
+	image: url(:/icons/down_arrow_check.png);
 	width: 18px;
 	height: 14px;
  }
@@ -481,6 +481,9 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
             <property name="toolTip">
              <string>Take a screenshot of the scene</string>
             </property>
+            <property name="toolTipDuration">
+             <number>0</number>
+            </property>
             <property name="text">
              <string/>
             </property>
@@ -515,8 +518,21 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
           </item>
           <item>
            <widget class="QPushButton" name="playSceneBtn">
+            <property name="cursor">
+             <cursorShape>PointingHandCursor</cursorShape>
+            </property>
+            <property name="toolTip">
+             <string>Play scene</string>
+            </property>
+            <property name="toolTipDuration">
+             <number>0</number>
+            </property>
             <property name="text">
-             <string>PLAY SCENE</string>
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset resource="../app/icons.qrc">
+              <normaloff>:/icons/g_play.svg</normaloff>:/icons/g_play.svg</iconset>
             </property>
            </widget>
           </item>
