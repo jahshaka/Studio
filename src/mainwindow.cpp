@@ -47,6 +47,7 @@ For more information see the LICENSE file
 #include <QOpenGLDebugLogger>
 #include <QUndoStack>
 
+#include <QDockWidget>
 #include <QFileDialog>
 
 #include <QTreeWidgetItem>
@@ -130,8 +131,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->sceneContainer->setAcceptDrops(true);
     ui->sceneContainer->installEventFilter(this);
 
-    UiManager::setAnimationWidget(ui->animationtimeline);
-
     settings = SettingsManager::getDefaultManager();
     prefsDialog = new PreferencesDialog(settings);
     aboutDialog = new AboutDialog();
@@ -145,9 +144,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupHelpMenu();
 
     this->setupLayerButtonMenu();
-
-    timer = new QTimer(this);
-    connect(timer, SIGNAL(timeout()), this, SLOT(updateAnim()));
 
     sceneView = new SceneViewWidget(ui->backgroundscene);
     sceneView->setParent(ui->backgroundscene);
@@ -248,10 +244,26 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     assetsLayout->setContentsMargins(0, 0, 0, 0);
     assetDock->setWidget(assetDockContents);
 
+    animationDock = new QDockWidget;
+    animationWidget = new AnimationWidget;
+    animationWidget->setObjectName(QStringLiteral("animationDock"));
+    UiManager::setAnimationWidget(animationWidget);
+
+    auto animationDockContents = new QWidget;
+    auto animationLayout = new QGridLayout(animationDockContents);
+    animationLayout->setContentsMargins(0, 0, 0, 0);
+    animationLayout->addWidget(animationWidget);
+
+    animationDock->setWidget(animationDockContents);
+
+    timer = new QTimer(this);
+    connect(timer, SIGNAL(timeout()), this, SLOT(updateAnim()));
+
     addDockWidget(Qt::LeftDockWidgetArea, sceneHeirarchyDock);
     addDockWidget(Qt::RightDockWidgetArea, sceneNodePropertiesDock);
     addDockWidget(Qt::RightDockWidgetArea, presetsDock);
     addDockWidget(Qt::BottomDockWidgetArea, assetDock);
+    addDockWidget(Qt::BottomDockWidgetArea, animationDock);
 
     connect(pmContainer, SIGNAL(fileToOpen(QString)), SLOT(openProject(QString)));
     connect(pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
@@ -669,7 +681,7 @@ void MainWindow::setupFileMenu()
     });
 
     connect(ui->actionAnimation, &QAction::toggled, [this](bool set) {
-        ui->AnimationDock->setVisible(set);
+        animationDock->setVisible(set);
     });
 
     connect(ui->actionAssets, &QAction::toggled, [this](bool set) {
@@ -929,7 +941,7 @@ void MainWindow::sceneNodeSelected(iris::SceneNodePtr sceneNode)
     sceneView->setSelectedNode(sceneNode);
     this->sceneNodePropertiesWidget->setSceneNode(sceneNode);
     this->sceneHeirarchyWidget->setSelectedNode(sceneNode);
-    ui->animationtimeline->setSceneNode(sceneNode);
+    animationWidget->setSceneNode(sceneNode);
 }
 
 

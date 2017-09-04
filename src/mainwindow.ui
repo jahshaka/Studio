@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1190</width>
-    <height>705</height>
+    <width>640</width>
+    <height>480</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -556,7 +556,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1190</width>
+     <width>640</width>
      <height>30</height>
     </rect>
    </property>
@@ -621,73 +621,6 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
    <addaction name="menuEdit"/>
    <addaction name="menuView"/>
    <addaction name="menuHelp"/>
-  </widget>
-  <widget class="QDockWidget" name="AnimationDock">
-   <property name="sizePolicy">
-    <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-     <horstretch>0</horstretch>
-     <verstretch>0</verstretch>
-    </sizepolicy>
-   </property>
-   <property name="minimumSize">
-    <size>
-     <width>65</width>
-     <height>37</height>
-    </size>
-   </property>
-   <property name="maximumSize">
-    <size>
-     <width>524287</width>
-     <height>524287</height>
-    </size>
-   </property>
-   <property name="floating">
-    <bool>false</bool>
-   </property>
-   <property name="windowTitle">
-    <string>Animation</string>
-   </property>
-   <attribute name="dockWidgetArea">
-    <number>8</number>
-   </attribute>
-   <widget class="QWidget" name="animationWidgetContents">
-    <property name="minimumSize">
-     <size>
-      <width>0</width>
-      <height>0</height>
-     </size>
-    </property>
-    <property name="styleSheet">
-     <string notr="true">QWidget#animationWidgetContents {
-    border: 1px solid #1e1e1e;
-    background: #212121;
-}
-
-QWidget#animationWidgetContents:hover {
-    border: 1px solid #3498db;
-}</string>
-    </property>
-    <layout class="QGridLayout" name="gridLayout_5">
-     <property name="leftMargin">
-      <number>1</number>
-     </property>
-     <property name="topMargin">
-      <number>0</number>
-     </property>
-     <property name="rightMargin">
-      <number>1</number>
-     </property>
-     <property name="bottomMargin">
-      <number>0</number>
-     </property>
-     <property name="spacing">
-      <number>0</number>
-     </property>
-     <item row="0" column="0">
-      <widget class="AnimationWidget" name="animationtimeline"/>
-     </item>
-    </layout>
-   </widget>
   </widget>
   <widget class="QToolBar" name="ToolBar">
    <property name="windowTitle">
@@ -992,14 +925,6 @@ QToolButton:checked
    </property>
   </action>
  </widget>
- <customwidgets>
-  <customwidget>
-   <class>AnimationWidget</class>
-   <extends>QFrame</extends>
-   <header>src/widgets/animationwidget.h</header>
-   <container>1</container>
-  </customwidget>
- </customwidgets>
  <resources>
   <include location="../app/icons.qrc"/>
  </resources>
