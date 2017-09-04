@@ -30,6 +30,7 @@ void RenderThread::requestThumbnail(const ThumbnailRequest &request)
 
 void RenderThread::run()
 {
+    this->setPriority(QThread::LowestPriority);
     context->makeCurrent(surface);
     initScene();
 
@@ -73,6 +74,7 @@ void RenderThread::run()
 
             emit thumbnailComplete(result);
         }
+
     }
 
     // move to main thread to be cleaned up
