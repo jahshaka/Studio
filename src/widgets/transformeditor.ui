@@ -36,17 +36,17 @@ QWidget#TransformEditor {
 
 #xplabel, #xrlabel, #xslabel {
     background: #c0392b;
-	padding: 4px;
+	padding: 3px;
 }
 
 #yplabel, #yrlabel, #yslabel {
     background: #27ae60;
-	padding: 4px;
+	padding: 3px;
 }
 
 #zplabel, #zrlabel, #zslabel {
     background: #2980b9;
-	padding: 4px;
+	padding: 3px;
 }</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
