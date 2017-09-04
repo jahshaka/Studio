@@ -84,7 +84,7 @@ class GraphicsDevice
 
     ShaderPtr activeShader;
 
-    bool latsBlendEnabled;
+    bool lastBlendEnabled;
     BlendState lastBlendState;
 
 public:

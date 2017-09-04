@@ -48,6 +48,9 @@ GraphicsDevice::GraphicsDevice()
         textureUnits.append(TexturePtr());
 
     gl->glGenVertexArrays(1, &defautVAO);
+
+    //set default blend state
+    this->setBlendState(BlendState::Opaque);
 }
 
 void GraphicsDevice::setViewport(const QRect& vp)

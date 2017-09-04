@@ -142,7 +142,8 @@ SOURCES += \
     $$PWD/src/graphics/graphicsdevice.cpp \
     $$PWD/src/widgets/renderwidget.cpp \
     $$PWD/src/graphics/spritebatch.cpp \
-    $$PWD/src/graphics/font.cpp
+    $$PWD/src/graphics/font.cpp \
+    $$PWD/src/graphics/blendstate.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

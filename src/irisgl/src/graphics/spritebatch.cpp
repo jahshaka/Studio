@@ -3,6 +3,7 @@
 #include "shader.h"
 #include "texture2d.h"
 #include "font.h"
+#include "blendstate.h"
 #include <QVector>
 #include <QMatrix4x4>
 #include <QOpenGLShaderProgram>
@@ -86,10 +87,10 @@ void SpriteBatch::end()
     // testing
     auto gl = graphics->getGL();
     gl->glDisable(GL_CULL_FACE);
-    gl->glEnable(GL_BLEND);
     gl->glDisable(GL_DEPTH_TEST);
-    gl->glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-    //gl->glBlendFunc(GL_ONE,GL_ONE); // works well with fonts
+    //gl->glEnable(GL_BLEND);
+    //gl->glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    graphics->setBlendState(BlendState::AlphaBlend);
 
     // build vbo and submit
     while(items.size()>0) {
