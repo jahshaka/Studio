@@ -5,6 +5,7 @@
 
 class QGridLayout;
 class GridWidget;
+class SettingsManager;
 class ItemGridWidget;
 
 class DynamicGrid : public QScrollArea
@@ -34,10 +35,12 @@ protected:
 private:
     void updateGridColumns(int width);
     int autoColumnCount;
+    QSize sizeFromString(QString);
 
     QWidget *parent;
     QWidget *gridWidget;
     QGridLayout *gridLayout;
+    SettingsManager *settings;
 };
 
 #endif // DYNAMICGRID_H
