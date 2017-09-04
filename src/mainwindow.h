@@ -300,7 +300,6 @@ private:
     QActionGroup* cameraGroup;
 
     Database *db;
-    AssetWidget *assetWidget;
     ProjectManager *pmContainer;
 
     QUndoStack* undoStack;
@@ -318,6 +317,9 @@ private:
 
     QDockWidget *presetsDock;
     QTabWidget *presetsTabWidget;
+
+    QDockWidget *assetDock;
+    AssetWidget *assetWidget;
 };
 
 #endif // MAINWINDOW_H
