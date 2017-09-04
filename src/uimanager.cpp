@@ -15,6 +15,8 @@ SceneMode UiManager::sceneMode = SceneMode::EditMode;
 
 MainWindow *UiManager::mainWindow = nullptr;
 
+bool UiManager::isScenePlaying = false;
+
 SceneViewWidget *UiManager::getSceneViewWidget()
 {
     return sceneViewWidget;
