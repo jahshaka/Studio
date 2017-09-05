@@ -222,7 +222,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     presetsTabWidget->addTab(materialPresets, "Materials");
     presetsTabWidget->addTab(skyPresets, "Skyboxes");
     presetsTabWidget->addTab(modelPresets, "Primitives");
-    presetsTabWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    presetDockContents->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
 
     auto presetsLayout = new QGridLayout(presetDockContents);
     presetsLayout->setContentsMargins(0, 0, 0, 0);
@@ -230,7 +230,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     presetsDock->setWidget(presetDockContents);
 
-    assetDock = new QDockWidget;
+    assetDock = new QDockWidget("Asset Browser");
     assetDock->setObjectName(QStringLiteral("assetDock"));
 
     assetWidget = new AssetWidget;
@@ -244,9 +244,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     assetsLayout->setContentsMargins(0, 0, 0, 0);
     assetDock->setWidget(assetDockContents);
 
-    animationDock = new QDockWidget;
+    animationDock = new QDockWidget("Timeline");
+    animationDock->setObjectName(QStringLiteral("animationDock"));
     animationWidget = new AnimationWidget;
-    animationWidget->setObjectName(QStringLiteral("animationDock"));
     UiManager::setAnimationWidget(animationWidget);
 
     auto animationDockContents = new QWidget;
@@ -261,9 +261,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     addDockWidget(Qt::LeftDockWidgetArea, sceneHeirarchyDock);
     addDockWidget(Qt::RightDockWidgetArea, sceneNodePropertiesDock);
-    addDockWidget(Qt::RightDockWidgetArea, presetsDock);
+
     addDockWidget(Qt::BottomDockWidgetArea, assetDock);
     addDockWidget(Qt::BottomDockWidgetArea, animationDock);
+    addDockWidget(Qt::BottomDockWidgetArea, presetsDock);
+    tabifyDockWidget(animationDock, assetDock);
 
     connect(pmContainer, SIGNAL(fileToOpen(QString)), SLOT(openProject(QString)));
     connect(pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
@@ -318,8 +320,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
     ui->ToolBar->addWidget(pmButton);
     ui->ToolBar->addWidget(vrButton);
-
-//    tabifyDockWidget(ui->AnimationDock, ui->AssetsDock);
 
     restoreGeometry(settings->getValue("geometry", "").toByteArray());
     restoreState(settings->getValue("windowState", "").toByteArray());
