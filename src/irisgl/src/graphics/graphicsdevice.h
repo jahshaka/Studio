@@ -7,6 +7,7 @@
 #include <QStack>
 #include "vertexlayout.h"
 #include "blendstate.h"
+#include "depthstate.h"
 
 class QOpenGLContext;
 
@@ -79,13 +80,15 @@ class GraphicsDevice
     IndexBufferPtr indexBuffers;
 
     // apparently gl needs at least one to be set
-    // before you can render
+    // before you can render anything
     GLuint defautVAO;
 
     ShaderPtr activeShader;
 
     bool lastBlendEnabled;
     BlendState lastBlendState;
+
+    DepthState lastDepthState;
 
 public:
     GraphicsDevice();
@@ -110,6 +113,7 @@ public:
     void setIndexBuffer(IndexBufferPtr indexBuffer);
 
     void setBlendState(const BlendState& blendState);
+    void setDepthState(const DepthState& depthStencil);
 
     void drawPrimitives(GLenum primitiveType,int start, int count);
     QOpenGLFunctions_3_2_Core *getGL() const;

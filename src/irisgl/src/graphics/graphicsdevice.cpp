@@ -49,8 +49,9 @@ GraphicsDevice::GraphicsDevice()
 
     gl->glGenVertexArrays(1, &defautVAO);
 
-    //set default blend state
+    //set default blend and depth state
     this->setBlendState(BlendState::Opaque);
+    this->setDepthState(DepthState::Default);
 }
 
 void GraphicsDevice::setViewport(const QRect& vp)
@@ -201,6 +202,34 @@ void GraphicsDevice::setBlendState(const BlendState &blendState)
         lastBlendState.colorDestBlend = blendState.colorDestBlend;
         lastBlendState.alphaSourceBlend = blendState.alphaSourceBlend;
         lastBlendState.alphaDestBlend = blendState.alphaDestBlend;
+    }
+}
+
+void GraphicsDevice::setDepthState(const DepthState &depthStencil)
+{
+    // depth test
+    if (lastDepthState.depthBufferEnabled != depthStencil.depthBufferEnabled)
+    {
+        if (depthStencil.depthBufferEnabled)
+            gl->glEnable(GL_DEPTH_TEST);
+        else
+            gl->glDisable(GL_DEPTH_TEST);
+
+        lastDepthState.depthBufferEnabled = depthStencil.depthBufferEnabled;
+    }
+
+    // depth write
+    if (lastDepthState.depthWriteEnabled != depthStencil.depthWriteEnabled)
+    {
+        gl->glDepthMask(depthStencil.depthWriteEnabled);
+        lastDepthState.depthWriteEnabled = depthStencil.depthWriteEnabled;
+    }
+
+    // depth func
+    if (lastDepthState.depthCompareFunc != depthStencil.depthCompareFunc)
+    {
+        gl->glDepthFunc(depthStencil.depthCompareFunc);
+        lastDepthState.depthCompareFunc = depthStencil.depthCompareFunc;
     }
 }
 
