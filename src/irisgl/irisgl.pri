@@ -87,7 +87,8 @@ HEADERS += \
     $$PWD/src/graphics/spritebatch.h \
     $$PWD/src/graphics/font.h \
     $$PWD/src/graphics/blendstate.h \
-    $$PWD/src/graphics/depthstate.h
+    $$PWD/src/graphics/depthstate.h \
+    $$PWD/src/graphics/rasterizerstate.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -145,7 +146,8 @@ SOURCES += \
     $$PWD/src/graphics/spritebatch.cpp \
     $$PWD/src/graphics/font.cpp \
     $$PWD/src/graphics/blendstate.cpp \
-    $$PWD/src/graphics/depthstate.cpp
+    $$PWD/src/graphics/depthstate.cpp \
+    $$PWD/src/graphics/rasterizerstate.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

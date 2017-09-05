@@ -52,6 +52,7 @@ GraphicsDevice::GraphicsDevice()
     //set default blend and depth state
     this->setBlendState(BlendState::Opaque);
     this->setDepthState(DepthState::Default);
+    this->setRasterizerState(RasterizerState::CullCounterClockwise);
 }
 
 void GraphicsDevice::setViewport(const QRect& vp)
@@ -230,6 +231,31 @@ void GraphicsDevice::setDepthState(const DepthState &depthStencil)
     {
         gl->glDepthFunc(depthStencil.depthCompareFunc);
         lastDepthState.depthCompareFunc = depthStencil.depthCompareFunc;
+    }
+}
+
+void GraphicsDevice::setRasterizerState(const RasterizerState &rasterState)
+{
+    // culling
+    if (lastRasterState.cullMode != rasterState.cullMode) {
+        if (rasterState.cullMode == CullMode::None)
+            gl->glDisable(GL_CULL_FACE);
+        else {
+            gl->glEnable(GL_CULL_FACE);
+
+            if (rasterState.cullMode == CullMode::CullClockwise)
+                gl->glFrontFace(GL_CW);
+            else
+                gl->glFrontFace(GL_CCW);
+        }
+
+        lastRasterState.cullMode = rasterState.cullMode;
+    }
+
+    // polygon fill
+    if (lastRasterState.fillMode != rasterState.fillMode) {
+        gl->glPolygonMode(GL_FRONT_AND_BACK, rasterState.fillMode);
+        lastRasterState.fillMode = rasterState.fillMode;
     }
 }
 

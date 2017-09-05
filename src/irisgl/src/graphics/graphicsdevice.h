@@ -8,6 +8,7 @@
 #include "vertexlayout.h"
 #include "blendstate.h"
 #include "depthstate.h"
+#include "rasterizerstate.h"
 
 class QOpenGLContext;
 
@@ -87,8 +88,8 @@ class GraphicsDevice
 
     bool lastBlendEnabled;
     BlendState lastBlendState;
-
     DepthState lastDepthState;
+    RasterizerState lastRasterState;
 
 public:
     GraphicsDevice();
@@ -114,6 +115,7 @@ public:
 
     void setBlendState(const BlendState& blendState);
     void setDepthState(const DepthState& depthStencil);
+    void setRasterizerState(const RasterizerState& rasterState);
 
     void drawPrimitives(GLenum primitiveType,int start, int count);
     QOpenGLFunctions_3_2_Core *getGL() const;
