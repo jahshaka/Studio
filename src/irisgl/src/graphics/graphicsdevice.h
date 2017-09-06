@@ -113,9 +113,9 @@ public:
     void setVertexBuffers(QList<VertexBufferPtr> vertexBuffers);
     void setIndexBuffer(IndexBufferPtr indexBuffer);
 
-    void setBlendState(const BlendState& blendState);
-    void setDepthState(const DepthState& depthStencil);
-    void setRasterizerState(const RasterizerState& rasterState);
+    void setBlendState(const BlendState& blendState, bool force = false);
+    void setDepthState(const DepthState& depthStencil, bool force = false);
+    void setRasterizerState(const RasterizerState& rasterState, bool force = false);
 
     void drawPrimitives(GLenum primitiveType,int start, int count);
     QOpenGLFunctions_3_2_Core *getGL() const;

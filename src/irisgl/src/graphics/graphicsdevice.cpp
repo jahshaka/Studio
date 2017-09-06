@@ -50,9 +50,9 @@ GraphicsDevice::GraphicsDevice()
     gl->glGenVertexArrays(1, &defautVAO);
 
     //set default blend and depth state
-    this->setBlendState(BlendState::Opaque);
-    this->setDepthState(DepthState::Default);
-    this->setRasterizerState(RasterizerState::CullCounterClockwise);
+    this->setBlendState(BlendState::Opaque, true);
+    this->setDepthState(DepthState::Default, true);
+    this->setRasterizerState(RasterizerState::CullCounterClockwise, true);
 }
 
 void GraphicsDevice::setViewport(const QRect& vp)
@@ -163,7 +163,7 @@ void GraphicsDevice::setVertexBuffer(VertexBufferPtr vertexBuffer)
     vertexBuffers.append(vertexBuffer);
 }
 
-void GraphicsDevice::setBlendState(const BlendState &blendState)
+void GraphicsDevice::setBlendState(const BlendState &blendState, bool force)
 {
     bool blendEnabled = true;
     if(blendState.colorSourceBlend == GL_ONE &&
@@ -173,15 +173,17 @@ void GraphicsDevice::setBlendState(const BlendState &blendState)
         blendEnabled = false;
     }
 
+    if (force || this->lastBlendEnabled != blendEnabled) {
+        if (blendEnabled)
+            gl->glEnable(GL_BLEND);
+        else
+            gl->glDisable(GL_BLEND);
+    }
     this->lastBlendEnabled = blendEnabled;
-    if (blendEnabled)
-        gl->glEnable(GL_BLEND);
-    else
-        gl->glDisable(GL_BLEND);
 
     // update blend equations
-    if (lastBlendState.alphaBlendEquation != blendState.alphaBlendEquation ||
-        lastBlendState.colorBlendEquation != blendState.colorBlendEquation) {
+    if (force || (lastBlendState.alphaBlendEquation != blendState.alphaBlendEquation ||
+        lastBlendState.colorBlendEquation != blendState.colorBlendEquation)) {
 
         gl->glBlendEquationSeparate(blendState.colorBlendEquation, blendState.alphaBlendEquation);
         lastBlendState.alphaBlendEquation = blendState.alphaBlendEquation;
@@ -189,10 +191,10 @@ void GraphicsDevice::setBlendState(const BlendState &blendState)
     }
 
     // update blend functions
-    if(lastBlendState.colorSourceBlend != blendState.colorSourceBlend ||
+    if(force || (lastBlendState.colorSourceBlend != blendState.colorSourceBlend ||
        lastBlendState.colorDestBlend != blendState.colorDestBlend ||
        lastBlendState.alphaSourceBlend != blendState.alphaSourceBlend ||
-       lastBlendState.alphaDestBlend != blendState.alphaDestBlend)
+       lastBlendState.alphaDestBlend != blendState.alphaDestBlend))
     {
         gl->glBlendFuncSeparate(blendState.colorSourceBlend,
                                 blendState.colorDestBlend,
@@ -206,10 +208,10 @@ void GraphicsDevice::setBlendState(const BlendState &blendState)
     }
 }
 
-void GraphicsDevice::setDepthState(const DepthState &depthStencil)
+void GraphicsDevice::setDepthState(const DepthState &depthStencil, bool force)
 {
     // depth test
-    if (lastDepthState.depthBufferEnabled != depthStencil.depthBufferEnabled)
+    if (force || (lastDepthState.depthBufferEnabled != depthStencil.depthBufferEnabled))
     {
         if (depthStencil.depthBufferEnabled)
             gl->glEnable(GL_DEPTH_TEST);
@@ -220,24 +222,24 @@ void GraphicsDevice::setDepthState(const DepthState &depthStencil)
     }
 
     // depth write
-    if (lastDepthState.depthWriteEnabled != depthStencil.depthWriteEnabled)
+    if (force || (lastDepthState.depthWriteEnabled != depthStencil.depthWriteEnabled))
     {
         gl->glDepthMask(depthStencil.depthWriteEnabled);
         lastDepthState.depthWriteEnabled = depthStencil.depthWriteEnabled;
     }
 
     // depth func
-    if (lastDepthState.depthCompareFunc != depthStencil.depthCompareFunc)
+    if (force || (lastDepthState.depthCompareFunc != depthStencil.depthCompareFunc))
     {
         gl->glDepthFunc(depthStencil.depthCompareFunc);
         lastDepthState.depthCompareFunc = depthStencil.depthCompareFunc;
     }
 }
 
-void GraphicsDevice::setRasterizerState(const RasterizerState &rasterState)
+void GraphicsDevice::setRasterizerState(const RasterizerState &rasterState, bool force)
 {
     // culling
-    if (lastRasterState.cullMode != rasterState.cullMode) {
+    if (force || (lastRasterState.cullMode != rasterState.cullMode)) {
         if (rasterState.cullMode == CullMode::None)
             gl->glDisable(GL_CULL_FACE);
         else {
@@ -253,7 +255,7 @@ void GraphicsDevice::setRasterizerState(const RasterizerState &rasterState)
     }
 
     // polygon fill
-    if (lastRasterState.fillMode != rasterState.fillMode) {
+    if (force || (lastRasterState.fillMode != rasterState.fillMode)) {
         gl->glPolygonMode(GL_FRONT_AND_BACK, rasterState.fillMode);
         lastRasterState.fillMode = rasterState.fillMode;
     }
