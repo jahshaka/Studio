@@ -31,11 +31,12 @@ public:
     QMap<QChar, Glyph> glyphs;
     GraphicsDevicePtr graphics;
 
-    Font(GraphicsDevicePtr graphics, QString fontName);
+    Font(GraphicsDevicePtr graphics, QString fontName, int fontSize);
 
     void createGlyph(QChar chr, Glyph& glyph);
 
-    static FontPtr create(GraphicsDevicePtr graphics);
+    static FontPtr create(GraphicsDevicePtr graphics, int size = 16);
+    static FontPtr create(GraphicsDevicePtr graphics, QString fontName, int size = 16);
 };
 
 }

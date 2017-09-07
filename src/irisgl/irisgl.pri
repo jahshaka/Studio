@@ -88,7 +88,8 @@ HEADERS += \
     $$PWD/src/graphics/font.h \
     $$PWD/src/graphics/blendstate.h \
     $$PWD/src/graphics/depthstate.h \
-    $$PWD/src/graphics/rasterizerstate.h
+    $$PWD/src/graphics/rasterizerstate.h \
+    $$PWD/src/content/contentmanager.h
 
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
@@ -147,7 +148,8 @@ SOURCES += \
     $$PWD/src/graphics/font.cpp \
     $$PWD/src/graphics/blendstate.cpp \
     $$PWD/src/graphics/depthstate.cpp \
-    $$PWD/src/graphics/rasterizerstate.cpp
+    $$PWD/src/graphics/rasterizerstate.cpp \
+    $$PWD/src/content/contentmanager.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

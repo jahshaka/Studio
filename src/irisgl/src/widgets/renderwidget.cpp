@@ -1,5 +1,6 @@
 #include "renderwidget.h"
 #include "../graphics/spritebatch.h"
+#include "../content/contentmanager.h"
 #include <QTimer>
 #include <QElapsedTimer>
 
@@ -48,6 +49,7 @@ void RenderWidget::initializeGL()
     initializeOpenGLFunctions();
 
     device = GraphicsDevice::create();
+    content = ContentManager::create(device);
     spriteBatch = SpriteBatch::create(device);
 
     glEnable(GL_DEPTH_TEST);

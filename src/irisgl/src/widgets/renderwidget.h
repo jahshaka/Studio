@@ -20,7 +20,7 @@ class RenderWidget : public QOpenGLWidget,
     QTimer* updateTimer;
 protected:
     GraphicsDevicePtr device;
-    //ContentManagerPtr content;
+    ContentManagerPtr content;
     SpriteBatchPtr spriteBatch;
 public:
     explicit RenderWidget(QWidget *parent);

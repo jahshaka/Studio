@@ -12,10 +12,10 @@ namespace iris
 {
 
 // https://github.com/libgdx/libgdx/blob/master/extensions/gdx-freetype/src/com/badlogic/gdx/graphics/g2d/freetype/FreeTypeFontGenerator.java
-Font::Font(GraphicsDevicePtr graphics, QString fontName)
+Font::Font(GraphicsDevicePtr graphics, QString fontName, int fontSize)
 {
     this->graphics = graphics;
-    font = QFont("Arial",16);
+    font = QFont(fontName, fontSize);
     metrics = new QFontMetrics(font);
 
 //    Glyph glyph;
@@ -72,15 +72,16 @@ void Font::createGlyph(QChar chr, Glyph &glyph)
     glyph.tex->setFilters(QOpenGLTexture::Nearest, QOpenGLTexture::Nearest);
     glyph.width = charWidth;
     glyph.height = charHeight;
-    //glyph.pixmap = pixmap;
-
-    //delete pixmap;
 }
 
-FontPtr Font::create(GraphicsDevicePtr graphics)
+FontPtr Font::create(GraphicsDevicePtr graphics, int size)
 {
-    return FontPtr(new Font(graphics, ""));
+    return FontPtr(new Font(graphics, "Arial", size));
 }
 
+FontPtr Font::create(GraphicsDevicePtr graphics, QString fontName, int size)
+{
+    return FontPtr(new Font(graphics, fontName, size));
+}
 
 }
