@@ -125,8 +125,8 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
     paint.fillRect(0,0,widgetWidth,widgetHeight,bgColor);
 
     // dont draw any lines if no scenenode is selected
-    if(!obj)
-        return;
+    //if(!obj)
+    //    return;
 
     //cosmetic
     drawBackgroundLines(paint);

@@ -85,6 +85,8 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     connect(timer,SIGNAL(timeout()),this,SLOT(updateAnim()));
     elapsedTimer = new QElapsedTimer();
 
+    ui->sceneNodeName->setText("");
+
     //timeAtCursor = 0;
     timerSpeed = 1.0f/60;//60 fps
     loopAnim = false;
@@ -119,8 +121,7 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
     // at times the timer could still be running when another object is clicked on
     timer->stop();
 
-    // the root node cannot have an animation, so its treated as null
-    if (!!node && node->isRootNode())
+    if (!!node)
         node = iris::SceneNodePtr();
 
     keyFrameWidget->setSceneNode(node);
@@ -156,9 +157,10 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
     } else {
         ui->insertFrame->setMenu(new QMenu());
         animation.clear();
+        ui->sceneNodeName->setText("");
 
-        showCreateAnimWidget();
-        updateCreationWidgetMessage(node);
+        //showCreateAnimWidget();
+        //updateCreationWidgetMessage(node);
     }
 }
 
