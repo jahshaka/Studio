@@ -104,6 +104,8 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     connect(ui->curvesBtn,SIGNAL(pressed()),this,SLOT(showCurveWidget()));
 
     mainTimeline = nullptr;
+    playIcon = QIcon(":/icons/play.svg");
+    pauseIcon = QIcon(":/icons/pause.svg");
 }
 
 AnimationWidget::~AnimationWidget()
@@ -120,9 +122,6 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
 {
     // at times the timer could still be running when another object is clicked on
     timer->stop();
-
-    if (!!node)
-        node = iris::SceneNodePtr();
 
     keyFrameWidget->setSceneNode(node);
     //ui->timeline->setSceneNode(node);
@@ -215,6 +214,7 @@ void AnimationWidget::updateAnim()
     onObjectAnimationTimeChanged(animWidgetData->cursorPosInSeconds);
 }
 
+// called when the play button is hit
 void AnimationWidget::startTimer()
 {
     if (!timer->isActive()) {
@@ -224,6 +224,13 @@ void AnimationWidget::startTimer()
 
         timer->start(timerSpeed);
         elapsedTimer->start();
+        ui->playBtn->setIcon(pauseIcon);
+    } else
+    {
+        // do a pause
+        ui->playBtn->setIcon(playIcon);
+        animWidgetData->refreshWidgets();
+        timer->stop();
     }
 }
 
@@ -231,7 +238,9 @@ void AnimationWidget::stopTimer()
 {
     if (timer->isActive()) {
         animWidgetData->cursorPosInSeconds = startedTime;
+        animWidgetData->refreshWidgets();
         timer->stop();
+        ui->playBtn->setIcon(playIcon);
     }
 }
 
