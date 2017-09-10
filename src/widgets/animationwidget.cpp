@@ -106,6 +106,9 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     mainTimeline = nullptr;
     playIcon = QIcon(":/icons/play.svg");
     pauseIcon = QIcon(":/icons/pause.svg");
+
+    // null scene node
+    setSceneNode(iris::SceneNodePtr());
 }
 
 AnimationWidget::~AnimationWidget()
@@ -153,10 +156,20 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
         hideCreateAnimWidget();
         ui->loopCheckBox->setChecked(animation->getLooping());
 
+        // enable ui
+        ui->deleteAnimBtn->setEnabled(true);
+        ui->insertFrame->setEnabled(true);
+        ui->addAnimBtn->setEnabled(true);
+
     } else {
         ui->insertFrame->setMenu(new QMenu());
         animation.clear();
         ui->sceneNodeName->setText("");
+
+        // disable ui
+        ui->deleteAnimBtn->setEnabled(false);
+        ui->insertFrame->setEnabled(false);
+        ui->addAnimBtn->setEnabled(false);
 
         //showCreateAnimWidget();
         //updateCreationWidgetMessage(node);
