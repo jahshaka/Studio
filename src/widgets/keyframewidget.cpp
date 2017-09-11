@@ -147,8 +147,8 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
     }
 
     //cursor
-    auto cursorPen = QPen(QColor::fromRgb(142,45,197));
-    cursorPen.setWidth(3);
+    auto cursorPen = QPen(QColor::fromRgb(255, 255, 255));
+    cursorPen.setWidth(1);
     paint.setPen(cursorPen);
     auto cursorScreenPos = timeToPos(animWidgetData->cursorPosInSeconds);
     paint.drawLine(cursorScreenPos,0,cursorScreenPos,widgetHeight);
