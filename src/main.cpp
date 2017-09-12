@@ -34,11 +34,11 @@ int main(int argc, char *argv[])
 #endif
 
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+    QApplication::setAttribute(Qt::AA_UseDesktopOpenGL);
+    QApplication::setDesktopSettingsAware(false);
     QApplication app(argc, argv);
     app.setWindowIcon(QIcon(":/images/logo.png"));
-
-    QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-    QApplication::setDesktopSettingsAware(false);
 
     // TODO - try to get rid of this in the future (iKlsR)
     // https://gist.github.com/skyrpex/5547015
