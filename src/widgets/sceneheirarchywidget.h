@@ -44,18 +44,6 @@ public:
 
     void setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode);
 
-protected:
-    bool eventFilter(QObject *watched, QEvent *event);
-
-protected slots:
-    void treeItemSelected(QTreeWidgetItem* item);
-    void treeItemChanged(QTreeWidgetItem* item,int index);
-    void sceneTreeCustomContextMenu(const QPoint &);
-
-    void renameNode();
-    void deleteNode();
-    void duplicateNode();
-
     /**
      * @brief Inserts item into tree under the parent
      * This function assumes the child node is already a part of the scene and has a parent
@@ -75,6 +63,18 @@ protected slots:
      * @param childNode
      */
     void removeChild(iris::SceneNodePtr childNode);
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event);
+
+protected slots:
+    void treeItemSelected(QTreeWidgetItem* item);
+    void treeItemChanged(QTreeWidgetItem* item,int index);
+    void sceneTreeCustomContextMenu(const QPoint &);
+
+    void renameNode();
+    void deleteNode();
+    void duplicateNode();
 
 private:
     void repopulateTree();

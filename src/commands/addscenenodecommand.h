@@ -5,6 +5,7 @@
 #include "../irisglfwd.h"
 
 class MainWindow;
+class SceneHeirarchyWidget;
 
 class AddSceneNodeCommand : public QUndoCommand
 {
@@ -12,8 +13,9 @@ class AddSceneNodeCommand : public QUndoCommand
     iris::SceneNodePtr parentNode;
     iris::SceneNodePtr sceneNode;
     MainWindow* mainWindow;
+    SceneHeirarchyWidget* sceneWidget;
 public:
-    AddSceneNodeCommand(MainWindow* mainWindow, iris::SceneNodePtr parentNode, iris::SceneNodePtr sceneNode);
+    AddSceneNodeCommand(MainWindow* mainWindow, SceneHeirarchyWidget* sceneWidget, iris::SceneNodePtr parentNode, iris::SceneNodePtr sceneNode);
 
     void undo() override;
     void redo() override;

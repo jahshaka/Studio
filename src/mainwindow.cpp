@@ -1232,7 +1232,7 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
     ui->sceneHierarchy->repopulateTree();
     sceneNodeSelected(sceneNode);
     */
-    auto cmd = new AddSceneNodeCommand(this, scene->getRootNode(), sceneNode);
+    auto cmd = new AddSceneNodeCommand(this, ui->sceneHierarchy, scene->getRootNode(), sceneNode);
     UiManager::pushUndoStack(cmd);
 }
 
@@ -1263,7 +1263,7 @@ void MainWindow::deleteNode()
         ui->sceneNodeProperties->setSceneNode(QSharedPointer<iris::SceneNode>(nullptr));
         sceneView->hideGizmo();
         */
-        auto cmd = new DeleteSceneNodeCommand(this, activeSceneNode->parent, activeSceneNode);
+        auto cmd = new DeleteSceneNodeCommand(this, ui->sceneHierarchy, activeSceneNode->parent, activeSceneNode);
         UiManager::pushUndoStack(cmd);
     }
 }

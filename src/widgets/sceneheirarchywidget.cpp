@@ -318,7 +318,12 @@ void SceneHeirarchyWidget::insertChild(iris::SceneNodePtr childNode)
 
     // add to lists
     nodeList.insert(childNode->getNodeId(), childNode);
-    treeItemList.insert(childNode->getNodeId(), childTreeItem);
+    treeItemList.insert(childNode->getNodeId(), childItem);
+
+    // recursively add children
+    for(auto child: childNode->children) {
+        insertChild(child);
+    }
 }
 
 void SceneHeirarchyWidget::removeChild(iris::SceneNodePtr childNode)
