@@ -11,7 +11,7 @@ namespace iris
 
 QList<Property*> LightNode::getProperties()
 {
-    auto props = QList<Property*>();
+    auto props = SceneNode::getProperties();
 
     auto colorProp = new ColorProperty();
     colorProp->displayName = "Light Color";
@@ -65,16 +65,16 @@ QVariant LightNode::getPropertyValue(QString valueName)
 void LightNode::updateAnimation(float time)
 {
     if (!!animation) {
-        if(animation->hasPropertyAnim("Intensity"))
-            intensity = animation->getFloatPropertyAnim("Intensity")->getValue(time);
-        if(animation->hasPropertyAnim("LightColor"))
-            color = animation->getColorPropertyAnim("LightColor")->getValue(time);
-        if(animation->hasPropertyAnim("Distance"))
-            distance = animation->getFloatPropertyAnim("Distance")->getValue(time);
-        if(animation->hasPropertyAnim("SpotCutOff"))
-            spotCutOff = animation->getFloatPropertyAnim("SpotCutOff")->getValue(time);
-        if(animation->hasPropertyAnim("SpotCutOffSoftness"))
-            spotCutOffSoftness = animation->getFloatPropertyAnim("SpotCutOffSoftness")->getValue(time);
+        if(animation->hasPropertyAnim("intensity"))
+            intensity = animation->getFloatPropertyAnim("intensity")->getValue(time);
+        if(animation->hasPropertyAnim("lightColor"))
+            color = animation->getColorPropertyAnim("lightColor")->getValue(time);
+        if(animation->hasPropertyAnim("distance"))
+            distance = animation->getFloatPropertyAnim("distance")->getValue(time);
+        if(animation->hasPropertyAnim("spotCutOff"))
+            spotCutOff = animation->getFloatPropertyAnim("spotCutOff")->getValue(time);
+        if(animation->hasPropertyAnim("spotCutOffSoftness"))
+            spotCutOffSoftness = animation->getFloatPropertyAnim("spotCutOffSoftness")->getValue(time);
     }
 
     SceneNode::updateAnimation(time);

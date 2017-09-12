@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QTime>
 #include <QSharedPointer>
+#include <QIcon>
 //#include "ui_animationwidget.h"
 #include "../irisgl/src/irisglfwd.h"
 
@@ -45,6 +46,9 @@ class AnimationWidget : public QWidget
     QTimer* timer;
     //http://stackoverflow.com/questions/17571717/accessing-the-elapsed-seconds-of-a-qtimer
     QElapsedTimer* elapsedTimer;
+
+    QIcon playIcon;
+    QIcon pauseIcon;
 
     float startedTime;
     bool loopAnim;

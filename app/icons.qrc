@@ -50,5 +50,6 @@
         <file>icons/virtual-reality.svg</file>
         <file>icons/world.svg</file>
         <file>icons/camera.svg</file>
+        <file>icons/pause.svg</file>
     </qresource>
 </RCC>

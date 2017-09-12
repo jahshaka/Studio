@@ -85,6 +85,8 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     connect(timer,SIGNAL(timeout()),this,SLOT(updateAnim()));
     elapsedTimer = new QElapsedTimer();
 
+    ui->sceneNodeName->setText("");
+
     //timeAtCursor = 0;
     timerSpeed = 1.0f/60;//60 fps
     loopAnim = false;
@@ -102,6 +104,11 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     connect(ui->curvesBtn,SIGNAL(pressed()),this,SLOT(showCurveWidget()));
 
     mainTimeline = nullptr;
+    playIcon = QIcon(":/icons/play.svg");
+    pauseIcon = QIcon(":/icons/pause.svg");
+
+    // null scene node
+    setSceneNode(iris::SceneNodePtr());
 }
 
 AnimationWidget::~AnimationWidget()
@@ -118,10 +125,6 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
 {
     // at times the timer could still be running when another object is clicked on
     timer->stop();
-
-    // the root node cannot have an animation, so its treated as null
-    if (!!node && node->isRootNode())
-        node = iris::SceneNodePtr();
 
     keyFrameWidget->setSceneNode(node);
     //ui->timeline->setSceneNode(node);
@@ -153,12 +156,23 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
         hideCreateAnimWidget();
         ui->loopCheckBox->setChecked(animation->getLooping());
 
+        // enable ui
+        ui->deleteAnimBtn->setEnabled(true);
+        ui->insertFrame->setEnabled(true);
+        ui->addAnimBtn->setEnabled(true);
+
     } else {
         ui->insertFrame->setMenu(new QMenu());
         animation.clear();
+        ui->sceneNodeName->setText("");
 
-        showCreateAnimWidget();
-        updateCreationWidgetMessage(node);
+        // disable ui
+        ui->deleteAnimBtn->setEnabled(false);
+        ui->insertFrame->setEnabled(false);
+        ui->addAnimBtn->setEnabled(false);
+
+        //showCreateAnimWidget();
+        //updateCreationWidgetMessage(node);
     }
 }
 
@@ -213,6 +227,7 @@ void AnimationWidget::updateAnim()
     onObjectAnimationTimeChanged(animWidgetData->cursorPosInSeconds);
 }
 
+// called when the play button is hit
 void AnimationWidget::startTimer()
 {
     if (!timer->isActive()) {
@@ -222,6 +237,13 @@ void AnimationWidget::startTimer()
 
         timer->start(timerSpeed);
         elapsedTimer->start();
+        ui->playBtn->setIcon(pauseIcon);
+    } else
+    {
+        // do a pause
+        ui->playBtn->setIcon(playIcon);
+        animWidgetData->refreshWidgets();
+        timer->stop();
     }
 }
 
@@ -229,7 +251,9 @@ void AnimationWidget::stopTimer()
 {
     if (timer->isActive()) {
         animWidgetData->cursorPosInSeconds = startedTime;
+        animWidgetData->refreshWidgets();
         timer->stop();
+        ui->playBtn->setIcon(playIcon);
     }
 }
 
