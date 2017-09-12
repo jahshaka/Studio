@@ -14,9 +14,36 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">#lineEdit {
+   <string notr="true">#header {
+	background: #111;
+	border-bottom: 1px solid black;
+}
+
+#worlds_menu, #tutorial_menu {
+	font-size: 17px;
+	padding: 12px;
+}
+
+#worlds_menu {
+	border-bottom-width: 4px;
+	border-bottom-style: solid;
+	border-color: white;
+	border-radius: 0px;
+}
+
+#tutorial_menu {
+	color: #777;
+}
+
+#ProjectManager {
+	background: #1a1a1a;
+}
+
+#lineEdit {
+	font-size: 11px;
+	background: #222;
 	padding: 4px;
-border: 0;
+	border: 0;
 }
 
 QComboBox {
@@ -147,6 +174,9 @@ QListWidget::item:selected {
    <property name="bottomMargin">
     <number>0</number>
    </property>
+   <property name="verticalSpacing">
+    <number>0</number>
+   </property>
    <item row="0" column="0">
     <widget class="QWidget" name="header" native="true">
      <property name="sizePolicy">
@@ -158,7 +188,7 @@ QListWidget::item:selected {
      <property name="minimumSize">
       <size>
        <width>0</width>
-       <height>48</height>
+       <height>54</height>
       </size>
      </property>
      <property name="maximumSize">
@@ -168,18 +198,9 @@ QListWidget::item:selected {
       </size>
      </property>
      <property name="styleSheet">
-      <string notr="true">#header {
-	background: #1e1e1e;
-	border-bottom: 1px solid black;
-}
-
-QLabel {
-	font-size: 16px;
-	font-weight: 500;
-	padding: 8px;
-}</string>
+      <string notr="true"/>
      </property>
-     <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0">
+     <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,0,0">
       <property name="leftMargin">
        <number>0</number>
       </property>
@@ -193,9 +214,35 @@ QLabel {
        <number>0</number>
       </property>
       <item>
-       <widget class="QLabel" name="label_3">
+       <spacer name="horizontalSpacer_4">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QLabel" name="worlds_menu">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
         <property name="text">
          <string>Worlds</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="tutorial_menu">
+        <property name="text">
+         <string>Community</string>
         </property>
        </widget>
       </item>
@@ -248,7 +295,7 @@ QLabel {
          <number>0</number>
         </property>
         <property name="topMargin">
-         <number>0</number>
+         <number>9</number>
         </property>
         <property name="rightMargin">
          <number>0</number>
@@ -256,6 +303,19 @@ QLabel {
         <property name="bottomMargin">
          <number>0</number>
         </property>
+        <item>
+         <spacer name="horizontalSpacer_5">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
         <item>
          <widget class="QLineEdit" name="lineEdit">
           <property name="placeholderText">
@@ -276,10 +336,57 @@ QLabel {
           </property>
          </spacer>
         </item>
+       </layout>
+      </widget>
+     </item>
+     <item row="2" column="0">
+      <widget class="QWidget" name="widget_2" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">#aaaaaabrowseProjects {
+	background: transparent;
+	font-size: 9px;
+	font-weight: bold;
+}
+
+#aaaaabrowseProjects::hover {
+	color: #3498db;
+}</string>
+       </property>
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>3</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
         <item>
          <widget class="QLabel" name="label_2">
           <property name="text">
-           <string>Tile Size</string>
+           <string>Preview Size</string>
           </property>
          </widget>
         </item>
@@ -331,53 +438,6 @@ QLabel {
           </item>
          </widget>
         </item>
-       </layout>
-      </widget>
-     </item>
-     <item row="2" column="0">
-      <widget class="QWidget" name="widget_2" native="true">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>0</width>
-         <height>0</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>16777215</width>
-         <height>32</height>
-        </size>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">#aaaaaabrowseProjects {
-	background: transparent;
-	font-size: 9px;
-	font-weight: bold;
-}
-
-#aaaaabrowseProjects::hover {
-	color: #3498db;
-}</string>
-       </property>
-       <layout class="QHBoxLayout" name="horizontalLayout_2">
-        <property name="leftMargin">
-         <number>0</number>
-        </property>
-        <property name="topMargin">
-         <number>3</number>
-        </property>
-        <property name="rightMargin">
-         <number>0</number>
-        </property>
-        <property name="bottomMargin">
-         <number>0</number>
-        </property>
         <item>
          <spacer name="horizontalSpacer_2">
           <property name="orientation">

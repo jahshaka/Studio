@@ -20,7 +20,7 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
     gridWidget = new QWidget(parent);
     gridWidget->setObjectName("gridWidget");
     setWidget(gridWidget);
-//    setStyleSheet("background: #1e1e1e");
+    setStyleSheet("background: transparent");
 
     offset = 10;
     settings = SettingsManager::getDefaultManager();

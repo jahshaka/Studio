@@ -62,7 +62,7 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
 
 //    setFont(font);
 
-    setWindowTitle("Project Manager");
+    setWindowTitle("Jahshaka Desktop");
 
 //    ui->controls->setVisible(false);
 
