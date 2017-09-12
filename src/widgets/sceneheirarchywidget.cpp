@@ -315,6 +315,21 @@ void SceneHeirarchyWidget::insertChild(iris::SceneNodePtr childNode)
     auto parentTreeItem = treeItemList[childNode->parent->nodeId];
     auto childItem = createTreeItems(childNode);
     parentTreeItem->insertChild(childNode->parent->children.indexOf(childNode),childItem);
+
+    // add to lists
+    nodeList.insert(childNode->getNodeId(), childNode);
+    treeItemList.insert(childNode->getNodeId(), childTreeItem);
+}
+
+void SceneHeirarchyWidget::removeChild(iris::SceneNodePtr childNode)
+{
+    // remove from heirarchy
+    auto nodeTreeItem = treeItemList[childNode->nodeId];
+    nodeTreeItem->parent()->removeChild(nodeTreeItem);
+
+    // remove from lists
+    nodeList.remove(childNode->getNodeId());
+    treeItemList.remove(childNode->getNodeId());
 }
 
 SceneHeirarchyWidget::~SceneHeirarchyWidget()
