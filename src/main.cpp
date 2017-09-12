@@ -14,11 +14,13 @@ For more information see the LICENSE file
 #include <QStyleFactory>
 #include <QSplashScreen>
 #include <QSurfaceFormat>
+#include <QFontDatabase>
 
 #include "mainwindow.h"
 #include "dialogs/infodialog.h"
 #include "core/settingsmanager.h"
 #include "globals.h"
+#include "constants.h"
 
 int main(int argc, char *argv[])
 {
@@ -39,6 +41,17 @@ int main(int argc, char *argv[])
     QApplication::setDesktopSettingsAware(false);
     QApplication app(argc, argv);
     app.setWindowIcon(QIcon(":/images/logo.png"));
+
+// use nicer font on platforms with poor defaults, Mac has really nice font rendering (iKlsR)
+#if defined(Q_OS_WIN) || defined(Q_OS_UNIX)
+    int id = QFontDatabase::addApplicationFont(":/fonts/DroidSans.ttf");
+    if (id != -1) {
+        QString family = QFontDatabase::applicationFontFamilies(id).at(0);
+        QFont monospace(family, Constants::UI_FONT_SIZE);
+        monospace.setStyleStrategy(QFont::PreferAntialias);
+        QApplication::setFont(monospace);
+    }
+#endif
 
     // TODO - try to get rid of this in the future (iKlsR)
     // https://gist.github.com/skyrpex/5547015
