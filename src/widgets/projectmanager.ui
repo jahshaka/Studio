@@ -14,7 +14,66 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">#header {
+   <string notr="true">
+/* ================== */
+
+ QScrollBar:vertical {
+     background-color: #212121;
+     width: 18px;
+     margin: 22px 0 22px 0;
+ }
+
+ QScrollBar::handle:vertical {
+    background-color: #444;
+     min-height: 20px;
+     margin-left: 2px;
+     margin-right: 2px;
+ }
+
+QScrollBar::handle:vertical:hover {
+    background-color: #555;
+    min-height: 20px;
+    margin-left: 2px;
+    margin-right: 2px;
+}
+
+QScrollBar::add-line:vertical {
+    background-color: #444;
+    height: 20px;
+    border: 2px solid #212121;
+    border-width: 2px 2px  0 2px;
+    subcontrol-position: bottom;
+    subcontrol-origin: margin;
+ }
+
+QScrollBar::sub-line:vertical {
+    background-color: #444;
+    height: 20px;
+    border: 2px solid #212121;
+    border-width: 0 2px 2px 2px;
+    subcontrol-position: top;
+    subcontrol-origin: margin;
+ }
+
+QScrollBar::up-arrow:vertical {
+    image: url(:/icons/up-arrow.svg);
+}
+
+QScrollBar::up-arrow:vertical:hover {
+    background-color: #555;
+}
+
+QScrollBar::down-arrow:vertical {
+    image: url(:/icons/down-arrow.svg);
+}
+
+QScrollBar::down-arrow:vertical:hover {
+    background-color: #555;
+}
+
+/* ========================== */
+
+#header {
 	background: #111;
 	border-bottom: 1px solid black;
 }
@@ -41,7 +100,7 @@
 
 #lineEdit {
 	font-size: 11px;
-	background: #222;
+	background: #2f2f2f;
 	padding: 4px;
 	border: 0;
 }
@@ -200,7 +259,7 @@ QListWidget::item:selected {
      <property name="styleSheet">
       <string notr="true"/>
      </property>
-     <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,0,0">
+     <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,0">
       <property name="leftMargin">
        <number>0</number>
       </property>
@@ -214,7 +273,7 @@ QListWidget::item:selected {
        <number>0</number>
       </property>
       <item>
-       <spacer name="horizontalSpacer_4">
+       <spacer name="horizontalSpacer">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
@@ -240,20 +299,13 @@ QListWidget::item:selected {
        </widget>
       </item>
       <item>
-       <widget class="QLabel" name="tutorial_menu">
-        <property name="text">
-         <string>Community</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <spacer name="horizontalSpacer">
+       <spacer name="horizontalSpacer_4">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
         <property name="sizeHint" stdset="0">
          <size>
-          <width>500</width>
+          <width>40</width>
           <height>20</height>
          </size>
         </property>
@@ -304,7 +356,7 @@ QListWidget::item:selected {
          <number>0</number>
         </property>
         <item>
-         <spacer name="horizontalSpacer_5">
+         <spacer name="horizontalSpacer_3">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
           </property>
@@ -319,18 +371,18 @@ QListWidget::item:selected {
         <item>
          <widget class="QLineEdit" name="lineEdit">
           <property name="placeholderText">
-           <string>Search projects...</string>
+           <string>Search recent worlds...</string>
           </property>
          </widget>
         </item>
         <item>
-         <spacer name="horizontalSpacer_3">
+         <spacer name="horizontalSpacer_5">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
           </property>
           <property name="sizeHint" stdset="0">
            <size>
-            <width>300</width>
+            <width>40</width>
             <height>20</height>
            </size>
           </property>
@@ -454,14 +506,14 @@ QListWidget::item:selected {
         <item>
          <widget class="QPushButton" name="browseProjects">
           <property name="text">
-           <string>Browse sample projects...</string>
+           <string>Browse sample worlds...</string>
           </property>
          </widget>
         </item>
         <item>
          <widget class="QPushButton" name="newProject">
           <property name="text">
-           <string>+ Create New Scene</string>
+           <string>+ Create New World</string>
           </property>
          </widget>
         </item>

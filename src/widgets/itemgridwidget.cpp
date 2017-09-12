@@ -43,7 +43,7 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
 //    QString textHex = getColor(SETTINGS.value("Grid/labelcolor","White").toString()).name();
 //    int fontSize = getGridSize("font");
 
-    gridTextLabel->setStyleSheet("QLabel { font-weight: bold; color: white; font-size: 11px; }");
+    gridTextLabel->setStyleSheet("QLabel { font-weight: bold; color: #ddd; font-size: 11px; }");
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
 //    gridTextLabel->setTextInteractionFlags(Qt::TextEditorInteraction);
@@ -116,6 +116,7 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
     connect(this, SIGNAL(hovered()), SLOT(showControls()));
     connect(this, SIGNAL(left()), SLOT(hideControls()));
 
+    setCursor(Qt::PointingHandCursor);
     setContextMenuPolicy(Qt::CustomContextMenu);
 
     connect(this, SIGNAL(customContextMenuRequested(const QPoint&)), SLOT(projectContextMenu(QPoint)));
