@@ -30,6 +30,7 @@
 #include <QDebug>
 #include <QGraphicsDropShadowEffect>
 #include <QLineEdit>
+#include <QFontDatabase>
 #include <QMenu>
 
 #include "itemgridwidget.hpp"
@@ -42,6 +43,24 @@ void reducer(QVector<ModelData> &accum, const QVector<ModelData> &interm)
 ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::ProjectManager)
 {
     ui->setupUi(this);
+
+//    int id = QFontDatabase::addApplicationFont(":/fonts/Roboto-Medium.ttf");
+////    QMessageBox::information(NULL,"Message",QString::number(id));  // this shows id is 0.
+
+//        QFile fontFile(IrisUtils::getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
+//        if (fontFile.exists()) {
+//            fontFile.open(QIODevice::ReadOnly);
+//            QFontDatabase::addApplicationFontFromData(fontFile.readAll());
+//            QApplication::setFont(QFont("Open Sans", 9));
+//        }
+
+//    QFont font;
+//    font.setFamily("Roboto");
+//    font.setPointSize(30);
+//    ui->commandLinkButton->setFont(font);
+//    ui->commandLinkButton->setText("\uf021"); // this shows the Refresh icon.
+
+//    setFont(font);
 
     setWindowTitle("Project Manager");
 
@@ -82,6 +101,8 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
     QGridLayout *layout = new QGridLayout();
     layout->addWidget(dynamicGrid);
     layout->setMargin(0);
+
+
 
     ui->pmcont->setStyleSheet("border: none");
     ui->pmcont->setLayout(layout);
