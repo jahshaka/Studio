@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>494</width>
+    <width>429</width>
     <height>128</height>
    </rect>
   </property>
@@ -166,10 +166,37 @@ QWidget#TransformEditor {
            <item>
             <widget class="QDoubleSpinBox" name="xpos">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+              <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>84</width>
+               <height>0</height>
+              </size>
+             </property>
+             <property name="wrapping">
+              <bool>false</bool>
+             </property>
+             <property name="frame">
+              <bool>true</bool>
+             </property>
+             <property name="readOnly">
+              <bool>false</bool>
+             </property>
+             <property name="buttonSymbols">
+              <enum>QAbstractSpinBox::UpDownArrows</enum>
+             </property>
+             <property name="accelerated">
+              <bool>true</bool>
+             </property>
+             <property name="keyboardTracking">
+              <bool>false</bool>
+             </property>
+             <property name="showGroupSeparator" stdset="0">
+              <bool>false</bool>
              </property>
              <property name="decimals">
               <number>4</number>
@@ -214,10 +241,16 @@ QWidget#TransformEditor {
            <item>
             <widget class="QDoubleSpinBox" name="ypos">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+              <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>84</width>
+               <height>0</height>
+              </size>
              </property>
              <property name="decimals">
               <number>4</number>
@@ -262,10 +295,16 @@ QWidget#TransformEditor {
            <item>
             <widget class="QDoubleSpinBox" name="zpos">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+              <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>84</width>
+               <height>0</height>
+              </size>
              </property>
              <property name="decimals">
               <number>4</number>
@@ -374,10 +413,16 @@ QWidget#TransformEditor {
            <item>
             <widget class="QDoubleSpinBox" name="xrot">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+              <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>84</width>
+               <height>0</height>
+              </size>
              </property>
              <property name="decimals">
               <number>4</number>
@@ -422,10 +467,16 @@ QWidget#TransformEditor {
            <item>
             <widget class="QDoubleSpinBox" name="yrot">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+              <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>84</width>
+               <height>0</height>
+              </size>
              </property>
              <property name="decimals">
               <number>4</number>
@@ -470,10 +521,16 @@ QWidget#TransformEditor {
            <item>
             <widget class="QDoubleSpinBox" name="zrot">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+              <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>84</width>
+               <height>0</height>
+              </size>
              </property>
              <property name="decimals">
               <number>4</number>
@@ -582,10 +639,16 @@ QWidget#TransformEditor {
            <item>
             <widget class="QDoubleSpinBox" name="xscale">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+              <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>84</width>
+               <height>0</height>
+              </size>
              </property>
              <property name="decimals">
               <number>4</number>
@@ -630,10 +693,16 @@ QWidget#TransformEditor {
            <item>
             <widget class="QDoubleSpinBox" name="yscale">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+              <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>84</width>
+               <height>0</height>
+              </size>
              </property>
              <property name="decimals">
               <number>4</number>
@@ -678,10 +747,16 @@ QWidget#TransformEditor {
            <item>
             <widget class="QDoubleSpinBox" name="zscale">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+              <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>84</width>
+               <height>0</height>
+              </size>
              </property>
              <property name="decimals">
               <number>4</number>
