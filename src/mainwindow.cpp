@@ -311,7 +311,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     pmButton->setIcon(ico);
     pmButton->setObjectName("pmButton");
 
-    connect(pmButton, SIGNAL(pressed()), SLOT(showProjectManager()));
+    connect(pmButton, SIGNAL(clicked(bool)), SLOT(showProjectManagerInternal(bool)));
 
     vrButton = new QPushButton();
     QIcon icovr(":/icons/virtual-reality.svg");
@@ -627,26 +627,26 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    event->accept();
-//    event->ignore();
+//    event->accept();
+    event->ignore();
 
-//    if (UiManager::isUndoStackDirty()) {
-//        QMessageBox::StandardButton reply;
-//        reply = QMessageBox::question(this,
-//                                      "Unsaved Changes",
-//                                      "There are unsaved changes, save before closing?",
-//                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
-//        if (reply == QMessageBox::Yes) {
-//            saveScene();
-//            event->accept();
-//            this->close();
-//        } else if (reply == QMessageBox::No) {
-//            event->accept();
-//            this->close();
-//        }
-//    } else {
-//        event->accept();
-//    }
+    if (UiManager::isUndoStackDirty()) {
+        QMessageBox::StandardButton reply;
+        reply = QMessageBox::question(this,
+                                      "Unsaved Changes",
+                                      "There are unsaved changes, save before closing?",
+                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+        if (reply == QMessageBox::Yes) {
+            saveScene();
+            event->accept();
+            this->close();
+        } else if (reply == QMessageBox::No) {
+            event->accept();
+            this->close();
+        }
+    } else {
+        event->accept();
+    }
 
     settings->setValue("geometry", saveGeometry());
     settings->setValue("windowState", saveState());
@@ -662,9 +662,9 @@ void MainWindow::setupFileMenu()
     connect(ui->actionNewProject,       SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
     connect(ui->actionManage_Projects,  SIGNAL(triggered(bool)), this, SLOT(callProjectManager()));
 
-    connect(ui->actionOpen,     SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
-    connect(ui->actionClose,    SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
-    connect(ui->actionDelete,   SIGNAL(triggered(bool)), this, SLOT(deleteProject()));
+//    connect(ui->actionOpen,     SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
+    connect(ui->actionClose,    SIGNAL(triggered(bool)), this, SLOT(showProjectManagerInternal(bool)));
+//    connect(ui->actionDelete,   SIGNAL(triggered(bool)), this, SLOT(deleteProject()));
 
     connect(prefsDialog,  SIGNAL(PreferencesDialogClosed()), this, SLOT(updateSceneSettings()));
 
@@ -1360,6 +1360,14 @@ void MainWindow::tabsChanged(int index)
 
 void MainWindow::showProjectManager()
 {
+    pmContainer->showMaximized();
+}
+
+void MainWindow::showProjectManagerInternal(bool running)
+{
+    Q_UNUSED(running);
+    saveScene();
+    hide();
     pmContainer->showMaximized();
 }
 
