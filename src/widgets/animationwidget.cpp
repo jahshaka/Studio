@@ -104,8 +104,10 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     connect(ui->curvesBtn,SIGNAL(pressed()),this,SLOT(showCurveWidget()));
 
     mainTimeline = nullptr;
-    playIcon = QIcon(":/icons/play.svg");
+    playIcon = QIcon(":/icons/play-arrow.svg");
     pauseIcon = QIcon(":/icons/pause.svg");
+
+    ui->dopeSheetBtn->setStyleSheet("background: #2980b9");
 
     // null scene node
     setSceneNode(iris::SceneNodePtr());
@@ -160,8 +162,9 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
         ui->deleteAnimBtn->setEnabled(true);
         ui->insertFrame->setEnabled(true);
         ui->addAnimBtn->setEnabled(true);
-
-    } else {
+        ui->animList->setEnabled(true);
+    }
+    else {
         ui->insertFrame->setMenu(new QMenu());
         animation.clear();
         ui->sceneNodeName->setText("");
@@ -170,9 +173,7 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
         ui->deleteAnimBtn->setEnabled(false);
         ui->insertFrame->setEnabled(false);
         ui->addAnimBtn->setEnabled(false);
-
-        //showCreateAnimWidget();
-        //updateCreationWidgetMessage(node);
+        ui->animList->setEnabled(false);
     }
 }
 
@@ -469,6 +470,9 @@ void AnimationWidget::showKeyFrameWidget()
 {
     keyFrameWidget->show();
     curveWidget->hide();
+
+    ui->dopeSheetBtn->setStyleSheet("background: #2980b9");
+    ui->curvesBtn->setStyleSheet("background: #555");
 }
 
 void AnimationWidget::showCurveWidget()
@@ -476,6 +480,9 @@ void AnimationWidget::showCurveWidget()
     keyFrameWidget->hide();
     curveWidget->show();
     ui->keylabelView->highlightDefaultProperty();
+
+    ui->curvesBtn->setStyleSheet("background: #2980b9");
+    ui->dopeSheetBtn->setStyleSheet("background: #555;");
 }
 
 void AnimationWidget::hideCreateAnimWidget()

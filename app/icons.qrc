@@ -59,5 +59,10 @@
         <file>icons/check-unchecked.png</file>
         <file>icons/add_object.svg</file>
         <file>icons/delete_object.svg</file>
+        <file>icons/anim_skip_right.svg</file>
+        <file>icons/anim_skip_left.svg</file>
+        <file>icons/anim_forward_right.svg</file>
+        <file>icons/anim_forward_left.svg</file>
+        <file>icons/down_arrow_check_disabled.png</file>
     </qresource>
 </RCC>
