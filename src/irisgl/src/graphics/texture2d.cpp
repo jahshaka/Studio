@@ -133,6 +133,9 @@ Texture2DPtr Texture2D::create(int width, int height,QOpenGLTexture::TextureForm
 
 void Texture2D::resize(int width, int height)
 {
+    if(texture->width() == width && texture->height() == height)
+        return;
+
     auto texFormat = texture->format();
     auto minFilter = texture->minificationFilter();
     auto magFilter = texture->magnificationFilter();

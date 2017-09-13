@@ -37,6 +37,7 @@ For more information see the LICENSE file
 #include "texture2d.h"
 #include "rendertarget.h"
 #include "renderlist.h"
+#include "graphicsdevice.h"
 #include "../vr/vrdevice.h"
 #include "../vr/vrmanager.h"
 #include "../core/irisutils.h"
@@ -63,6 +64,7 @@ namespace iris
 ForwardRenderer::ForwardRenderer()
 {
     this->gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+    graphics = GraphicsDevice::create();
     renderData = new RenderData();
 
     billboard = new Billboard(gl);

@@ -49,6 +49,7 @@ class PerformanceTimer;
 class ForwardRenderer
 {
     QOpenGLFunctions_3_2_Core* gl;
+    GraphicsDevicePtr graphics;
     RenderData* renderData;
 
     /**

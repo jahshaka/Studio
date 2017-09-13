@@ -95,6 +95,9 @@ void RenderTarget::checkStatus()
 
 void RenderTarget::resize(int width, int height, bool resizeTextures)
 {
+    if (this->width == width && this->height == height)
+        return;
+
     this->width = width;
     this->height = height;
 
