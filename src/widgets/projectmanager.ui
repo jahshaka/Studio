@@ -99,7 +99,7 @@ QScrollBar::down-arrow:vertical:hover {
 }
 
 #lineEdit {
-	font-size: 11px;
+	font-size: 15px;
 	background: #2f2f2f;
 	padding: 4px;
 	border: 0;
@@ -339,6 +339,12 @@ QListWidget::item:selected {
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>0</height>
+        </size>
+       </property>
        <property name="styleSheet">
         <string notr="true"/>
        </property>
@@ -371,7 +377,7 @@ QListWidget::item:selected {
         <item>
          <widget class="QLineEdit" name="lineEdit">
           <property name="placeholderText">
-           <string>Search recent worlds...</string>
+           <string>🔍 Search recent worlds...</string>
           </property>
          </widget>
         </item>

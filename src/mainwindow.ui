@@ -274,9 +274,7 @@ QScrollBar::down-arrow:vertical:hover {
 
 /* ========================== */
 
-QWidget#sceneTree {
-    background-color: #303030;
-}
+
 
 QMainWindow {
     background-color: #1e1e1e;
@@ -527,7 +525,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
           <item>
            <widget class="QCheckBox" name="wireCheck">
             <property name="text">
-             <string>Light Wireframes</string>
+             <string>Viewport Wireframes</string>
             </property>
             <property name="tristate">
              <bool>false</bool>
@@ -575,6 +573,16 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
          <property name="focusPolicy">
           <enum>Qt::ClickFocus</enum>
          </property>
+         <widget class="QTextBrowser" name="textBrowser">
+          <property name="geometry">
+           <rect>
+            <x>820</x>
+            <y>-20</y>
+            <width>256</width>
+            <height>192</height>
+           </rect>
+          </property>
+         </widget>
         </widget>
        </item>
       </layout>

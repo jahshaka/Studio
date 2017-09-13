@@ -16,6 +16,19 @@
   <property name="styleSheet">
    <string notr="true">QWidget#sceneTree {
 	background-color: #303030;
+	border-top: 1px solid #111;
+}
+
+#addBtn, #deleteBtn {
+	padding: 4px;
+}
+
+#addBtn {
+	border: 0;
+}
+
+#deleteBtn {
+	border-left: 1px solid #333;
 }</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
@@ -50,7 +63,7 @@
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout">
       <property name="spacing">
-       <number>2</number>
+       <number>0</number>
       </property>
       <property name="leftMargin">
        <number>0</number>
@@ -78,15 +91,12 @@
           <height>0</height>
          </size>
         </property>
-        <property name="styleSheet">
-         <string notr="true">border: 0</string>
-        </property>
         <property name="text">
          <string>Add</string>
         </property>
         <property name="icon">
-         <iconset>
-          <normaloff>:/icons/add-2.svg</normaloff>:/icons/add-2.svg</iconset>
+         <iconset resource="../../app/icons.qrc">
+          <normaloff>:/icons/add_object.svg</normaloff>:/icons/add_object.svg</iconset>
         </property>
         <property name="popupMode">
          <enum>QToolButton::MenuButtonPopup</enum>
@@ -113,15 +123,12 @@
           <height>0</height>
          </size>
         </property>
-        <property name="styleSheet">
-         <string notr="true">border: 0</string>
-        </property>
         <property name="text">
          <string>Delete</string>
         </property>
         <property name="icon">
-         <iconset>
-          <normaloff>:/icons/error.svg</normaloff>:/icons/error.svg</iconset>
+         <iconset resource="../../app/icons.qrc">
+          <normaloff>:/icons/delete_object.svg</normaloff>:/icons/delete_object.svg</iconset>
         </property>
        </widget>
       </item>
@@ -161,6 +168,8 @@
    </item>
   </layout>
  </widget>
- <resources/>
+ <resources>
+  <include location="../../app/icons.qrc"/>
+ </resources>
  <connections/>
 </ui>

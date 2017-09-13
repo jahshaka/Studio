@@ -57,5 +57,7 @@
         <file>icons/popout.png</file>
         <file>icons/check-checked.png</file>
         <file>icons/check-unchecked.png</file>
+        <file>icons/add_object.svg</file>
+        <file>icons/delete_object.svg</file>
     </qresource>
 </RCC>
