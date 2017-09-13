@@ -263,12 +263,16 @@ QDockWidget::title {
 }
 
 QDockWidget {
-	titlebar-close-icon: url(:/icons/close.svg);
-	titlebar-normal-icon: url(:/icons/plus.svg);
+	titlebar-close-icon: url(:/icons/close.png);
+	titlebar-normal-icon: url(:/icons/popout.png);
 }
 
 QDockWidget::close-button, QDockWidget::float-button {
     icon-size: 14px;
+}
+
+QDockWidget::close-button::hover, QDockWidget::float-button::hover {
+	border: 0;
 }
 
 QMenuBar {
