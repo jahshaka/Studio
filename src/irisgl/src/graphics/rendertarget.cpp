@@ -114,9 +114,13 @@ void RenderTarget::resize(int width, int height, bool resizeTextures)
 
 void RenderTarget::addTexture(Texture2DPtr tex)
 {
-    Q_ASSERT_X(width==tex->getWidth() && height==tex->getHeight(),
+    if (textures.count()!=0) {
+        // this assertion should only hold true if this isnt the first texture
+        Q_ASSERT_X(width==tex->getWidth() && height==tex->getHeight(),
                "RenderTarget",
                "Size of attached texture should be the same as size of render target");
+    }
+
     textures.append(tex);
 }
 
