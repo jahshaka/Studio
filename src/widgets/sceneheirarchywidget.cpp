@@ -279,7 +279,8 @@ void SceneHeirarchyWidget::repopulateTree()
 
     ui->sceneTree->clear();
     ui->sceneTree->addTopLevelItem(rootTreeItem);
-    ui->sceneTree->expandAll();
+    ui->sceneTree->expandItem(rootTreeItem);
+    //ui->sceneTree->expandAll();
 }
 
 void SceneHeirarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
