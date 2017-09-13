@@ -55,5 +55,7 @@
         <file>icons/g_stop.svg</file>
         <file>icons/close.png</file>
         <file>icons/popout.png</file>
+        <file>icons/check-checked.png</file>
+        <file>icons/check-unchecked.png</file>
     </qresource>
 </RCC>

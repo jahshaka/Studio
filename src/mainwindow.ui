@@ -21,7 +21,24 @@
    <double>1.000000000000000</double>
   </property>
   <property name="styleSheet">
-   <string notr="true">QMainWindow::separator {
+   <string notr="true">QCheckBox {
+    spacing: 5px;
+}
+
+QCheckBox::indicator {
+    width: 20px;
+    height: 20px;
+}
+
+QCheckBox::indicator::unchecked {
+	image: url(:/icons/check-unchecked.png);
+}
+
+QCheckBox::indicator::checked {	
+	image: url(:/icons/check-checked.png);
+}
+
+QMainWindow::separator {
     width: 1px;
     height: 0px;
     margin: 0px;
@@ -79,6 +96,7 @@ QTreeView::item {
 
 QTreeView {
     selection-background-color: #3498db;
+	border: 0;
 }
 
 /*QTreeView::item:hover {
@@ -265,7 +283,8 @@ QMainWindow {
 }
 
 QDockWidget::title {
-    padding: 2px;
+	/*border-top: 1px solid black;*/
+    padding: 4px;
     background-color: #212121;
     text-align: center;
 }
@@ -285,15 +304,15 @@ QDockWidget::close-button::hover, QDockWidget::float-button::hover {
 
 QMenuBar {
     background-color:  #303030;
-    padding: 5px 5px 0px 5px;
-    border: 1px soild black;
+    padding:  5px;
+   /*  border: 1px solid black; */
     opacity: 0.5;
 }
 
 QMenuBar::item {
     /* spacing: 3px; */
     /* spacing between menu bar items */
-     padding: 1px 8px;
+    /* padding: 0 8px; */
      background:  transparent;
  }
 
@@ -355,8 +374,8 @@ QToolBar {
     background:  #303030;
    /* spacing: 4px; /* spacing between items in the tool bar */
     min-height: 52px;
-    border-top: 1px solid #1e1e1e;
-    border-bottom: 1px solid #1e1e1e;
+    border-top: 1px solid black;
+    border-bottom: 1px solid black;
 }
 
 QToolBar::separator:horizontal {
