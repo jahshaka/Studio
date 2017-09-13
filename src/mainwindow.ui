@@ -21,7 +21,15 @@
    <double>1.000000000000000</double>
   </property>
   <property name="styleSheet">
-   <string notr="true">* {
+   <string notr="true">QMainWindow::separator {
+    width: 1px;
+    height: 0px;
+    margin: 0px;
+    padding: 0px;
+	background: black;
+}
+
+* {
     color: #BBB;
 }
 
