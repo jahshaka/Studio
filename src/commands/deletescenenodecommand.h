@@ -12,10 +12,8 @@ class DeleteSceneNodeCommand : public QUndoCommand
     iris::SceneNodePtr parentNode;
     iris::SceneNodePtr sceneNode;
     int position;
-    MainWindow* mainWindow;
-    SceneHeirarchyWidget* sceneWidget;
 public:
-    DeleteSceneNodeCommand(MainWindow* mainWindow, SceneHeirarchyWidget* sceneWidget, iris::SceneNodePtr parentNode, iris::SceneNodePtr sceneNode);
+    DeleteSceneNodeCommand(iris::SceneNodePtr parentNode, iris::SceneNodePtr sceneNode);
 
     void undo() override;
     void redo() override;

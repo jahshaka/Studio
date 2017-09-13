@@ -7,13 +7,13 @@
 #include <QUndoStack>
 #include <QUndoCommand>
 
+MainWindow *UiManager::mainWindow = nullptr;
 AnimationWidget *UiManager::animationWidget = nullptr;
 SceneViewWidget *UiManager::sceneViewWidget = nullptr;
+SceneHeirarchyWidget *UiManager::sceneHeirarchyWidget = nullptr;
 
 QUndoStack *UiManager::undoStack = nullptr;
 SceneMode UiManager::sceneMode = SceneMode::EditMode;
-
-MainWindow *UiManager::mainWindow = nullptr;
 
 bool UiManager::isScenePlaying = false;
 
