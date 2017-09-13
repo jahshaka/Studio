@@ -145,6 +145,12 @@ QComboBox::down-arrow {
 	height: 14px;
  }
 
+QComboBox::down-arrow:!enabled {
+	image: url(:/icons/down_arrow_check_disabled.png);
+	width: 18px;
+	height: 14px;
+ }
+
 /* Double Spin Box */
 QDoubleSpinBox {
    /*   padding-right: 15px; /* make room for the arrows */
@@ -288,6 +294,7 @@ QDockWidget::title {
 }
 
 QDockWidget {
+	border: 0;
 	titlebar-close-icon: url(:/icons/close.png);
 	titlebar-normal-icon: url(:/icons/popout.png);
 }
@@ -387,6 +394,12 @@ QTabWidget::tab-bar {
     /*min-width:  48px; */
 }
 
+/* https://stackoverflow.com/a/33006868/996468 */
+QTabBar {
+	background-color: transparent;
+	qproperty-drawBase:0;
+}
+
 QTabBar::close-button {
    /*  image: url(:icons/icons/delete_smol.png); */
     /*subcontrol-position: left;*/
@@ -395,6 +408,7 @@ QTabBar::close-button {
 QTabWidget::pane {
     margin: -1px;
     border-top: 1px solid #1e1e1e;
+	border-bottom: 1px solid #1e1e1e;
 }
 
 QTabBar::tab:selected {
@@ -405,11 +419,11 @@ QTabBar::tab:selected {
 QTabBar::tab {
     background-color: #4d4d4d;
     min-width: 108px;
-        min-height: 24px;
+	min-height: 24px;
     padding-bottom: 1px;
    /* border-top: 1px solid #1e1e1e; */
     border-right: 1px solid #1e1e1e;
-    border-bottom: 1px solid #1e1e1e;
+    border-bottom: 1px solid transparent;
 }
 
 /* special override */

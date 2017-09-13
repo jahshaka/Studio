@@ -191,6 +191,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     auto sceneNodeScrollArea = new QScrollArea(sceneNodeDockWidgetContents);
     sceneNodeScrollArea->setMinimumWidth(396);
+    sceneNodeScrollArea->setStyleSheet("border: 0");
     sceneNodeScrollArea->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
     sceneNodeScrollArea->setWidget(sceneNodePropertiesWidget);
     sceneNodeScrollArea->setWidgetResizable(true);
