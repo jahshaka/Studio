@@ -389,9 +389,15 @@ void SceneViewWidget::renderScene()
     }
 
     // render fps
-    float fps = 1.0/dt;
+    float fps = 1.0 / dt;
+    float ms = 1000.f / fps;
     spriteBatch->begin();
-    spriteBatch->drawString(font, QString("fps: %1").arg(fps), QVector2D(0, 0), QColor(255, 255, 255));
+    spriteBatch->drawString(font,
+                            QString("Frametime: %1ms (%2fps)")
+                                .arg(QString::number(ms, 'f', 1))
+                                .arg(QString::number(fps, 'f', 1)),
+                            QVector2D(8, 8),
+                            QColor(255, 255, 255));
     spriteBatch->end();
 
 }
