@@ -34,6 +34,8 @@ For more information see the LICENSE file
 #include "../irisgl/src/graphics/viewport.h"
 #include "../irisgl/src/graphics/renderlist.h"
 #include "../irisgl/src/graphics/rendertarget.h"
+#include "../irisgl/src/graphics/font.h"
+#include "../irisgl/src/graphics/spritebatch.h"
 #include "../irisgl/src/graphics/utils/fullscreenquad.h"
 #include "../irisgl/src/vr/vrmanager.h"
 #include "../irisgl/src/vr/vrdevice.h"
@@ -264,6 +266,8 @@ void SceneViewWidget::initializeGL()
     glEnable(GL_CULL_FACE);
 
     renderer = iris::ForwardRenderer::create();
+    spriteBatch = iris::SpriteBatch::create(renderer->getGraphicsDevice());
+    font = iris::Font::create(renderer->getGraphicsDevice(), 10);
 
     initialize();
     fsQuad = new iris::FullScreenQuad();
@@ -305,6 +309,7 @@ void SceneViewWidget::paintGL()
     }
 
     renderScene();
+
 }
 
 void SceneViewWidget::renderScene()
@@ -382,6 +387,13 @@ void SceneViewWidget::renderScene()
 
         this->updateScene();
     }
+
+    // render fps
+    float fps = 1.0/dt;
+    spriteBatch->begin();
+    spriteBatch->drawString(font, QString("fps: %1").arg(fps), QVector2D(0, 0), QColor(255, 255, 255));
+    spriteBatch->end();
+
 }
 
 void SceneViewWidget::resizeGL(int width, int height)

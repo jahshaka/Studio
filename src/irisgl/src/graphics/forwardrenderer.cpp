@@ -38,6 +38,8 @@ For more information see the LICENSE file
 #include "rendertarget.h"
 #include "renderlist.h"
 #include "graphicsdevice.h"
+#include "spritebatch.h"
+#include "font.h"
 #include "../vr/vrdevice.h"
 #include "../vr/vrmanager.h"
 #include "../core/irisutils.h"
@@ -65,6 +67,7 @@ ForwardRenderer::ForwardRenderer()
 {
     this->gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
     graphics = GraphicsDevice::create();
+
     renderData = new RenderData();
 
     billboard = new Billboard(gl);
@@ -121,6 +124,11 @@ void ForwardRenderer::generateShadowBuffer(GLuint size)
 ForwardRendererPtr ForwardRenderer::create()
 {
     return ForwardRendererPtr(new ForwardRenderer());
+}
+
+GraphicsDevicePtr ForwardRenderer::getGraphicsDevice()
+{
+    return graphics;
 }
 
 void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePtr cam, bool clearRenderLists)
@@ -210,6 +218,11 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     auto ctx = QOpenGLContext::currentContext();
     auto cam = scene->camera;
 
+    // reset states
+    graphics->setBlendState(BlendState::Opaque);
+    graphics->setDepthState(DepthState::Default);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+
     // STEP 1: RENDER SCENE
     //perfTimer->start("render_scene");
     renderData->scene = scene;
@@ -249,13 +262,21 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     finalRenderTexture->resize(vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
 
     renderTarget->bind();
-    gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
-    gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    //gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
+    //gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    graphics->setViewport(QRect(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale));
+    graphics->clear(QColor(0, 0, 0));
+    //gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     //enable all attrib arrays
     for (int i = 0; i < (int)iris::VertexAttribUsage::Count; i++) {
         gl->glEnableVertexAttribArray(i);
     }
+
+    // reset states
+    graphics->setBlendState(BlendState::Opaque);
+    graphics->setDepthState(DepthState::Default);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
 
     renderNode(renderData, scene);
 
@@ -282,13 +303,18 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
 
     // draw fs quad
-    gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
+    //gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
+    graphics->setViewport(QRect(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale));
+    graphics->clear(QColor(0,0,0));
+
+    graphics->setBlendState(BlendState::Opaque);
+    graphics->setDepthState(DepthState::Default);
+    graphics->setRasterizerState(RasterizerState::CullNone);
+
     gl->glActiveTexture(GL_TEXTURE0);
-    //sceneRenderTexture->bind();
     postContext->finalTexture->bind();
     fsQuad->draw();
     gl->glBindTexture(GL_TEXTURE_2D, 0);
-    //perfTimer->end("render_post");
 
     // STEP 5: RENDER SELECTED OBJECT
     if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);

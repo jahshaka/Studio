@@ -46,6 +46,7 @@ void SpriteBatch::begin()
     auto rect = graphics->getViewport();
     proj.setToIdentity();
     proj.ortho(0, rect.width(),rect.height(), 0, -10, 10);
+    //proj.ortho(0, 500, 0, 300, -10, 10);
 
     spriteShader->program->setUniformValue("u_viewMatrix", view);
     spriteShader->program->setUniformValue("u_projMatrix", proj);
@@ -86,9 +87,11 @@ void SpriteBatch::end()
 
     // testing
     auto gl = graphics->getGL();
-    graphics->setRasterizerState(RasterizerState::CullClockwise);
+    graphics->setRasterizerState(RasterizerState::CullNone);
     graphics->setDepthState(DepthState::None);
     graphics->setBlendState(BlendState::AlphaBlend);
+
+    graphics->setShader(spriteShader);
 
     // build vbo and submit
     while(items.size()>0) {
