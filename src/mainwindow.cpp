@@ -308,7 +308,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->ToolBar->addWidget(empty);
 
     pmButton = new QPushButton();
-    QIcon ico(":/icons/list-button-with-3-elements.svg");
+    QIcon ico(":/icons/home.svg");
     pmButton->setIcon(ico);
     pmButton->setObjectName("pmButton");
 

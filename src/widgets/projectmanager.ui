@@ -14,7 +14,11 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">
+   <string notr="true">#label {
+	background: #303030;
+	padding: 4px;
+}
+
 /* ================== */
 
  QScrollBar:vertical {
@@ -109,7 +113,6 @@ QComboBox {
     background: #4D4D4D;
     color: #BBB;
     border:  0;
-
 }
 
 QComboBox:item {
@@ -349,6 +352,9 @@ QListWidget::item:selected {
         <string notr="true"/>
        </property>
        <layout class="QHBoxLayout" name="horizontalLayout_3">
+        <property name="spacing">
+         <number>0</number>
+        </property>
         <property name="leftMargin">
          <number>0</number>
         </property>
@@ -375,9 +381,34 @@ QListWidget::item:selected {
          </spacer>
         </item>
         <item>
+         <widget class="QLabel" name="label">
+          <property name="maximumSize">
+           <size>
+            <width>28</width>
+            <height>28</height>
+           </size>
+          </property>
+          <property name="styleSheet">
+           <string notr="true"/>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+          <property name="pixmap">
+           <pixmap resource="../../app/icons.qrc">:/icons/search.svg</pixmap>
+          </property>
+          <property name="scaledContents">
+           <bool>true</bool>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QLineEdit" name="lineEdit">
           <property name="placeholderText">
-           <string>🔍 Search recent worlds...</string>
+           <string>Search recent worlds...</string>
           </property>
          </widget>
         </item>
@@ -530,6 +561,8 @@ QListWidget::item:selected {
    </item>
   </layout>
  </widget>
- <resources/>
+ <resources>
+  <include location="../../app/icons.qrc"/>
+ </resources>
  <connections/>
 </ui>
