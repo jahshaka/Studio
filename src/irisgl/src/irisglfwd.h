@@ -70,6 +70,12 @@ class SkeletalAnimation;
 template<typename T> class Key;
 typedef Key<float> FloatKey;
 class BoundingSphere;
+class VertexBuffer;
+class IndexBuffer;
+class GraphicsDevice;
+class ContentManager;
+class SpriteBatch;
+class Font;
 
 typedef QSharedPointer<iris::Animation> AnimationPtr;
 typedef QSharedPointer<Shader> ShaderPtr;
@@ -97,6 +103,12 @@ typedef QSharedPointer<PostProcessManager> PostProcessManagerPtr;
 typedef QSharedPointer<Bone> BonePtr;
 typedef QSharedPointer<Skeleton> SkeletonPtr;
 typedef QSharedPointer<SkeletalAnimation> SkeletalAnimationPtr;
+typedef QSharedPointer<VertexBuffer> VertexBufferPtr;
+typedef QSharedPointer<IndexBuffer> IndexBufferPtr;
+typedef QSharedPointer<GraphicsDevice> GraphicsDevicePtr;
+typedef QSharedPointer<ContentManager> ContentManagerPtr;
+typedef QSharedPointer<SpriteBatch> SpriteBatchPtr;
+typedef QSharedPointer<Font> FontPtr;
 
 
 

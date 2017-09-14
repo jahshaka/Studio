@@ -90,6 +90,10 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
     // for screenshots
     iris::RenderTargetPtr screenshotRT;
     iris::Texture2DPtr screenshotTex;
+
+    // for rendering text
+    iris::SpriteBatchPtr spriteBatch;
+    iris::FontPtr font;
 public:
     iris::CameraNodePtr editorCam;
 

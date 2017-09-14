@@ -36,5 +36,7 @@
         <file>assets/shaders/postprocesses/fxaa3_11.h</file>
         <file>assets/shaders/postprocesses/tonemapping.fs</file>
         <file>assets/shaders/postprocesses/aa.fs</file>
+        <file>assets/shaders/sprite.vert</file>
+        <file>assets/shaders/sprite.frag</file>
     </qresource>
 </RCC>

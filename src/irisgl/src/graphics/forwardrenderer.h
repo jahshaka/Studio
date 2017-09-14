@@ -49,6 +49,8 @@ class PerformanceTimer;
 class ForwardRenderer
 {
     QOpenGLFunctions_3_2_Core* gl;
+    GraphicsDevicePtr graphics;
+
     RenderData* renderData;
 
     /**
@@ -81,6 +83,8 @@ class ForwardRenderer
     PerformanceTimer* perfTimer;
 
 public:
+
+    GraphicsDevicePtr getGraphicsDevice();
 
     /**
      * Sets selected scene node. If this node is a mesh, it is rendered in wireframe mode

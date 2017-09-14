@@ -30,6 +30,11 @@ void VertexLayout::addAttrib(VertexAttribUsage usage,int type,int count,int size
     stride += sizeOfAttribInBytes;
 }
 
+int VertexLayout::getStride()
+{
+    return stride;
+}
+
 // https://stackoverflow.com/a/30106751
 #define BUFFER_OFFSET(i) ((char*)nullptr+(i))
 
