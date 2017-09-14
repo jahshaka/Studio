@@ -66,5 +66,8 @@
         <file>icons/down_arrow_check_disabled.png</file>
         <file>icons/home.svg</file>
         <file>icons/search.svg</file>
+        <file>icons/popout.svg</file>
+        <file>icons/thandleh.png</file>
+        <file>icons/thandlev.png</file>
     </qresource>
 </RCC>
