@@ -128,9 +128,9 @@ void GraphicsDevice::clear(GLuint bits)
 
 void GraphicsDevice::clear(GLuint bits, QColor color, float depth, int stencil)
 {
-    glClearColor(color.redF(), color.greenF(), color.blueF(), color.alphaF());
-    glClearDepth(depth);
-    glClearStencil(stencil);
+    gl->glClearColor(color.redF(), color.greenF(), color.blueF(), color.alphaF());
+    gl->glClearDepth(depth);
+    gl->glClearStencil(stencil);
     gl->glClear(bits);
 }
 
