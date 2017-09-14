@@ -121,7 +121,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->setupUi(this);
 
     UiManager::mainWindow = this;
-    UiManager::sceneHeirarchyWidget = ui->sceneHierarchy;
 
     QFont font;
     font.setFamily(font.defaultFamily());
@@ -177,6 +176,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     sceneHeirarchyDock->setObjectName(QStringLiteral("sceneHierarchyWidget"));
     sceneHeirarchyDock->setWidget(sceneHeirarchyWidget);
     sceneHeirarchyWidget->setMainWindow(this);
+
+    UiManager::sceneHeirarchyWidget = sceneHeirarchyWidget;
 
     connect(sceneHeirarchyWidget, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
             this,           SLOT(sceneNodeSelected(iris::SceneNodePtr)));
