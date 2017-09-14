@@ -120,6 +120,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 {
     ui->setupUi(this);
 
+    UiManager::mainWindow = this;
+
     QFont font;
     font.setFamily(font.defaultFamily());
     font.setPointSize(font.pointSize() * devicePixelRatio());
@@ -174,6 +176,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     sceneHeirarchyDock->setObjectName(QStringLiteral("sceneHierarchyWidget"));
     sceneHeirarchyDock->setWidget(sceneHeirarchyWidget);
     sceneHeirarchyWidget->setMainWindow(this);
+
+    UiManager::sceneHeirarchyWidget = sceneHeirarchyWidget;
 
     connect(sceneHeirarchyWidget, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
             this,           SLOT(sceneNodeSelected(iris::SceneNodePtr)));
@@ -1232,7 +1236,7 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
     ui->sceneHierarchy->repopulateTree();
     sceneNodeSelected(sceneNode);
     */
-    auto cmd = new AddSceneNodeCommand(this, scene->getRootNode(), sceneNode);
+    auto cmd = new AddSceneNodeCommand(scene->getRootNode(), sceneNode);
     UiManager::pushUndoStack(cmd);
 }
 
@@ -1263,7 +1267,7 @@ void MainWindow::deleteNode()
         ui->sceneNodeProperties->setSceneNode(QSharedPointer<iris::SceneNode>(nullptr));
         sceneView->hideGizmo();
         */
-        auto cmd = new DeleteSceneNodeCommand(this, activeSceneNode->parent, activeSceneNode);
+        auto cmd = new DeleteSceneNodeCommand(activeSceneNode->parent, activeSceneNode);
         UiManager::pushUndoStack(cmd);
     }
 }

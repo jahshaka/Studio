@@ -44,6 +44,26 @@ public:
 
     void setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode);
 
+    /**
+     * @brief Inserts item into tree under the parent
+     * This function assumes the child node is already a part of the scene and has a parent
+     * already displayed in the scenetree
+     * The node will be added to the nodeList and new tree item added to the treeItemList
+     * This function should be used when a new node is created and needs to be added to the
+     * scene tree heirarchy without having to repopulate the entire scene tree.
+     * @param childNode
+     */
+    void insertChild(iris::SceneNodePtr childNode);
+
+    /**
+     * @brief removeChild
+     * This function is the opposite of insertChild.
+     * It removes a child node's tree item from the scene heirarchym, nodeList and treeItemList
+     * THIS FUNCTION DOES NOT REMOVE THE childNode FROM ITS PARENT SCENE NODE
+     * @param childNode
+     */
+    void removeChild(iris::SceneNodePtr childNode);
+
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
 
@@ -59,6 +79,8 @@ protected slots:
 private:
     void repopulateTree();
     void populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode);
+
+    QTreeWidgetItem* createTreeItems(iris::SceneNodePtr node);
 
     // maps scene nodes to their widgetitems
     QMap<long, QSharedPointer<iris::SceneNode>> nodeList;

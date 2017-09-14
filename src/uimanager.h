@@ -6,6 +6,7 @@ class QUndoStack;
 class QUndoCommand;
 class MainWindow;
 class SceneViewWidget;
+class SceneHeirarchyWidget;
 
 enum class SceneMode
 {
@@ -16,8 +17,10 @@ enum class SceneMode
 class UiManager
 {
 public:
+    static MainWindow* mainWindow;
     static AnimationWidget* animationWidget;
     static SceneViewWidget* sceneViewWidget;
+    static SceneHeirarchyWidget* sceneHeirarchyWidget;
 
     static AnimationWidget *getAnimationWidget();
     static void setAnimationWidget(AnimationWidget *value);
@@ -29,7 +32,6 @@ public:
     static void enterEditMode();
     static bool isScenePlaying;
 
-    static MainWindow *mainWindow;
     static void updateWindowTitle();
 
     static bool isUndoStackDirty();
