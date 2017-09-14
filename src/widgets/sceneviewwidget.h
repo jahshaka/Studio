@@ -94,6 +94,7 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
     // for rendering text
     iris::SpriteBatchPtr spriteBatch;
     iris::FontPtr font;
+    float fontSize;
 public:
     iris::CameraNodePtr editorCam;
 
