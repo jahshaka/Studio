@@ -9,5 +9,6 @@
         <file>images/splash.svg</file>
         <file>images/splashv2.jpg</file>
         <file>images/preview.png</file>
+        <file>images/splashv3.png</file>
     </qresource>
 </RCC>

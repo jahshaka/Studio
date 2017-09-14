@@ -30,6 +30,7 @@
 #include <QDebug>
 #include <QGraphicsDropShadowEffect>
 #include <QLineEdit>
+#include <QFontDatabase>
 #include <QMenu>
 
 #include "itemgridwidget.hpp"
@@ -43,11 +44,31 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
 {
     ui->setupUi(this);
 
-    setWindowTitle("Project Manager");
+//    int id = QFontDatabase::addApplicationFont(":/fonts/Roboto-Medium.ttf");
+////    QMessageBox::information(NULL,"Message",QString::number(id));  // this shows id is 0.
+
+//        QFile fontFile(IrisUtils::getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
+//        if (fontFile.exists()) {
+//            fontFile.open(QIODevice::ReadOnly);
+//            QFontDatabase::addApplicationFontFromData(fontFile.readAll());
+//            QApplication::setFont(QFont("Open Sans", 9));
+//        }
+
+//    QFont font;
+//    font.setFamily("Roboto");
+//    font.setPointSize(30);
+//    ui->commandLinkButton->setFont(font);
+//    ui->commandLinkButton->setText("\uf021"); // this shows the Refresh icon.
+
+//    setFont(font);
+
+    setWindowTitle("Jahshaka Desktop");
 
 //    ui->controls->setVisible(false);
 
     settings = SettingsManager::getDefaultManager();
+
+    ui->comboBox->setCurrentText(settings->getValue("tileSize", "Normal").toString());
 
     connect(ui->comboBox, SIGNAL(currentTextChanged(QString)), SLOT(scaleTile(QString)));
 
@@ -66,84 +87,22 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
         searchTimer->start(100);
     });
 
-//    ui->listWidget->setContextMenuPolicy(Qt::CustomContextMenu);
-
-//    ui->listWidget->setFlow(QListView::LeftToRight);
-//    ui->listWidget->setViewMode(QListWidget::IconMode);
-//    ui->listWidget->setUniformItemSizes(true);
-//    ui->listWidget->setSizeAdjustPolicy(QListWidget::AdjustToContents);
-//    ui->listWidget->setResizeMode(QListWidget::Adjust);
-//    ui->listWidget->setMovement(QListView::Static);
-//    ui->listWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
-//    ui->listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
-//    ui->listWidget->setSelectionRectVisible(false);
-
-//    connect(ui->listWidget, SIGNAL(objectNameChanged(QString)),
-//            SLOT(renameItem(QString)));
-
-//    connect(ui->listWidget->itemDelegate(), &QAbstractItemDelegate::commitData,
-//            this,                           &ProjectManager::OnLstItemsCommitData);
-
-//    ui->listWidget->setIconSize(QSize(212, 212));
-
-//    ui->listWidget_2->setFlow(QListView::LeftToRight);
-//    ui->listWidget_2->setViewMode(QListWidget::IconMode);
-//    ui->listWidget_2->setUniformItemSizes(true);
-//    ui->listWidget_2->setSizeAdjustPolicy(QListWidget::AdjustToContents);
-//    ui->listWidget_2->setResizeMode(QListWidget::Adjust);
-//    ui->listWidget_2->setMovement(QListView::Static);
-//    ui->listWidget_2->setSelectionBehavior(QAbstractItemView::SelectItems);
-//    ui->listWidget_2->setSelectionMode(QAbstractItemView::SingleSelection);
-
-//    connect(ui->newProject, SIGNAL(pressed()), SLOT(newProject()));
-//    connect(ui->openProject, SIGNAL(pressed()), SLOT(openProject()));
-//    connect(ui->deleteProject, SIGNAL(pressed()), SLOT(deleteProject()));
-//    connect(ui->renameButton, SIGNAL(pressed()), SLOT(renameProject()));
-
-//    connect(ui->projects, SIGNAL(pressed()), SLOT(myProjects()));
-//    connect(ui->samples, SIGNAL(pressed()), SLOT(sampleProjects()));
-
-//    ui->projects->setStyleSheet("background: #4998ff");
-
-//    connect(ui->listWidget,     SIGNAL(itemClicked(QListWidgetItem*)),
-//            this,               SLOT(updateCurrentItem(QListWidgetItem*)));
-//    connect(ui->listWidget,     SIGNAL(itemDoubleClicked(QListWidgetItem*)),
-//            this,               SLOT(openRecentProject(QListWidgetItem*)));
-//    connect(ui->listWidget,     SIGNAL(customContextMenuRequested(const QPoint&)),
-//            this,               SLOT(listWidgetCustomContextMenu(const QPoint&)));
-//    connect(ui->listWidget_2,   SIGNAL(itemDoubleClicked(QListWidgetItem*)),
-//            this,               SLOT(openSampleProject(QListWidgetItem*)));
+    connect(ui->comboBox, &QComboBox::currentTextChanged, [this](const QString &changedText) {
+        settings->setValue("tileSize", changedText);
+    });
 
     dynamicGrid = new DynamicGrid(this);
 
     ui->browseProjects->setCursor(Qt::PointingHandCursor);
     connect(ui->browseProjects, SIGNAL(pressed()), SLOT(openSampleBrowser()));
-//    ui->label_2->setCursor(Qt::PointingHandCursor);
-
-//    ui->label_3->setStyleSheet("font-weight: bold; font-size: 13px");
-//    QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect;
-//    shadow->setColor(Qt::white);
-//    shadow->setOffset(0);
-//    shadow->setBlurRadius(1.f);
-//    ui->label_3->setGraphicsEffect(shadow);
-
-//    QList<QString> path;
-
-//    QDirIterator it(":/images", QDirIterator::Subdirectories);
-//    while (it.hasNext()) {
-//        path.push_back(it.next());
-//    }
-
-////    dynamicGrid->addToGridView(new GridItem());
-//    for (int i = 0; i < path.size(); ++i) {
-//        dynamicGrid->addToGridView(new GridWidget(path[i]), i);
-//    }
 
     update();
 
     QGridLayout *layout = new QGridLayout();
     layout->addWidget(dynamicGrid);
     layout->setMargin(0);
+
+
 
     ui->pmcont->setStyleSheet("border: none");
     ui->pmcont->setLayout(layout);

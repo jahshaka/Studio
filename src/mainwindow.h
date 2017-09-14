@@ -56,6 +56,7 @@ class AdvancedTransformGizmo;
 class TransformWidget;
 
 class SceneViewWidget;
+class SceneHeirarchyWidget;
 
 class EditorCameraController;
 class SettingsManager;
@@ -71,6 +72,7 @@ class GizmoHitData;
 class AdvancedGizmoHandle;
 class MaterialPreset;
 class AssetWidget;
+class SceneNodePropertiesWidget;
 
 class QOpenGLFunctions_3_2_Core;
 
@@ -119,7 +121,7 @@ public:
      * @param relToApp file path relative to application
      * @return
      */
-    QString getAbsoluteAssetPath(QString relToApp);
+    QString getAbsoluteAssetPath(QString pathRelativeToApp);
 
     void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
     void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
@@ -127,12 +129,10 @@ public:
 
 private:
 
-    /**
-     * Sets up the button for vr
-     */
+    // sets up the button for vr
     void setupVrUi();
 
-    //menus
+    // menus
     void setupFileMenu();
     void setupViewMenu();
     void setupHelpMenu();
@@ -229,7 +229,7 @@ public slots:
     void openProject(QString project);
 
     iris::ScenePtr createDefaultScene();
-    void initializeGraphics(SceneViewWidget* widget, QOpenGLFunctions_3_2_Core* gl);
+    void initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*);
 
     void useFreeCamera();
     void useArcballCam();
@@ -247,6 +247,7 @@ public slots:
     void toggleLightWires(bool state);
     void tabsChanged(int);
     void showProjectManager();
+    void showProjectManagerInternal(bool);
 
 private slots:
     void translateGizmo();
@@ -300,7 +301,6 @@ private:
     QActionGroup* cameraGroup;
 
     Database *db;
-    AssetWidget *assetWidget;
     ProjectManager *pmContainer;
 
     QUndoStack* undoStack;
@@ -309,6 +309,21 @@ private:
     QPushButton* vrButton;
     QPushButton* pmButton;
     QMainWindow *dialog;
+
+    QDockWidget *sceneHeirarchyDock;
+    SceneHeirarchyWidget *sceneHeirarchyWidget;
+
+    QDockWidget *sceneNodePropertiesDock;
+    SceneNodePropertiesWidget *sceneNodePropertiesWidget;
+
+    QDockWidget *presetsDock;
+    QTabWidget *presetsTabWidget;
+
+    QDockWidget *assetDock;
+    AssetWidget *assetWidget;
+
+    QDockWidget *animationDock;
+    AnimationWidget *animationWidget;
 };
 
 #endif // MAINWINDOW_H

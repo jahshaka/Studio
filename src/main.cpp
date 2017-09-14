@@ -14,35 +14,47 @@ For more information see the LICENSE file
 #include <QStyleFactory>
 #include <QSplashScreen>
 #include <QSurfaceFormat>
-#include <QThread>
+#include <QFontDatabase>
 
 #include "mainwindow.h"
 #include "dialogs/infodialog.h"
 #include "core/settingsmanager.h"
 #include "globals.h"
+#include "constants.h"
 
 int main(int argc, char *argv[])
 {
-    // fixes issue on osx where the SceneView widget shows up blank
-    // causes freezing on linux for some reason
+    // Fixes issue on osx where the SceneView widget shows up blank
+    // Causes freezing on linux for some reason (Nick)
 #ifdef Q_OS_MAC
     QSurfaceFormat format;
     format.setDepthBufferSize(32);
     format.setMajorVersion(3);
     format.setMinorVersion(2);
     format.setProfile(QSurfaceFormat::CoreProfile);
-
     QSurfaceFormat::setDefaultFormat(format);
 #endif
 
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+    QApplication::setAttribute(Qt::AA_UseDesktopOpenGL);
+    QApplication::setDesktopSettingsAware(false);
     QApplication app(argc, argv);
     app.setWindowIcon(QIcon(":/images/logo.png"));
 
-    QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-    QApplication::setDesktopSettingsAware(false);
+// use nicer font on platforms with poor defaults, Mac has really nice font rendering (iKlsR)
+#if defined(Q_OS_WIN) || defined(Q_OS_UNIX)
+    int id = QFontDatabase::addApplicationFont(":/fonts/DroidSans.ttf");
+    if (id != -1) {
+        QString family = QFontDatabase::applicationFontFamilies(id).at(0);
+        QFont monospace(family, Constants::UI_FONT_SIZE);
+        monospace.setStyleStrategy(QFont::PreferAntialias);
+        QApplication::setFont(monospace);
+    }
+#endif
 
-    //https://gist.github.com/skyrpex/5547015
+    // TODO - try to get rid of this in the future (iKlsR)
+    // https://gist.github.com/skyrpex/5547015
     app.setStyle(QStyleFactory::create("fusion"));
     QPalette palette;
     palette.setColor(QPalette::Window, QColor(48, 48, 48));
@@ -64,41 +76,29 @@ int main(int argc, char *argv[])
     palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(135, 135, 135));
     app.setPalette(palette);
 
-//    QFont font;
-//    font.setFamily(font.defaultFamily());
-//    font.setPointSizeF(font.pointSizeF() + 2.f);
-//    app.setFont(font);
-//    QGuiApplication::setFont(font);
-
     QSplashScreen splash;
-    auto image = QPixmap(":/images/splashv2.jpg");
-    splash.setPixmap(image);
+    auto pixmap = QPixmap(":/images/splashv3.png");
+    splash.setPixmap(pixmap.scaled(815, 480, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     splash.show();
 
-    // QThread::sleep(0.5f);    // cool!
-
     Globals::appWorkingDir = QApplication::applicationDirPath();
-
-//    ProjectDialog projectDialog;
-//    projectDialog.show();
-
-    MainWindow window;
-    window.showMaximized();
-
     app.processEvents();
 
-    splash.hide();
+    // Create our main app window but hide it at the same time while showing the Desktop first
+    // Set the attribute to render invisible while running as normal then hiding it after
+    // This is all to make SceneViewWidget's initializeGL trigger OR a way to force the UI to
+    // update when hidden, either way we want the Desktop to be the opening widget for now (iKlsR)
+    // Logic seems weird but works thanks to https://stackoverflow.com/a/8768138/996468
+    MainWindow window;
+    window.setAttribute(Qt::WA_DontShowOnScreen);
+    window.show();
+    window.hide();
+    window.showProjectManager();
 
-    //show info dialog is settings stipulate so
-    /*
-    auto settings = window.getSettingsManager();
-    if(settings->getValue("show_info_dialog_on_start",QVariant::fromValue(true)).value<bool>() == true)
-    {
-        InfoDialog dialog;
-        dialog.setMainWindow(&window);
-        dialog.setModal(true);
-        dialog.exec();
-    }
-    */
+    // Make our window render as normal going forward
+    window.setAttribute(Qt::WA_DontShowOnScreen, false);
+
+    splash.finish(&window);
+
     return app.exec();
 }

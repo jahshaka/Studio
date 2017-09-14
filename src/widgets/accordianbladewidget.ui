@@ -22,6 +22,7 @@
   <property name="styleSheet">
    <string notr="true">QWidget#AccordionBladeWidget {
 	background-color: #212121;
+	border: 0;
 }
 
 QWidget#bg {

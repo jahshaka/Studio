@@ -15,6 +15,8 @@ SceneMode UiManager::sceneMode = SceneMode::EditMode;
 
 MainWindow *UiManager::mainWindow = nullptr;
 
+bool UiManager::isScenePlaying = false;
+
 SceneViewWidget *UiManager::getSceneViewWidget()
 {
     return sceneViewWidget;
@@ -51,11 +53,11 @@ void UiManager::enterEditMode()
 
 void UiManager::updateWindowTitle()
 {
-    if (UiManager::isUndoStackDirty()) {
-        UiManager::mainWindow->setWindowTitle("Jahshaka* - " + Globals::project->getFileName());
-    } else {
+//    if (UiManager::isUndoStackDirty()) {
+//        UiManager::mainWindow->setWindowTitle("Jahshaka* - " + Globals::project->getFileName());
+//    } else {
         UiManager::mainWindow->setWindowTitle("Jahshaka - " + Globals::project->getFileName());
-    }
+//    }
 }
 
 bool UiManager::isUndoStackDirty()
@@ -71,7 +73,7 @@ void UiManager::setUndoStack(QUndoStack *undoStack)
 void UiManager::pushUndoStack(QUndoCommand *command)
 {
     UiManager::undoStack->push(command);
-    UiManager::mainWindow->setWindowTitle("Jahshaka* - " + Globals::project->getFileName());
+//    UiManager::mainWindow->setWindowTitle("Jahshaka* - " + Globals::project->getFileName());
 }
 
 // not really used

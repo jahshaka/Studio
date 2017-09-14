@@ -44,7 +44,7 @@ QLineEdit {
       <item row="0" column="0">
        <widget class="QLabel" name="pName">
         <property name="text">
-         <string>Project Name</string>
+         <string>World Name</string>
         </property>
        </widget>
       </item>
@@ -68,7 +68,7 @@ QLineEdit {
       <item row="2" column="1">
        <widget class="QPushButton" name="createProject">
         <property name="text">
-         <string>Create Project</string>
+         <string>Create World</string>
         </property>
        </widget>
       </item>

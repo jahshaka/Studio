@@ -18,6 +18,7 @@ namespace Constants
     const QString SAMPLES_FOLDER    = "/scenes";
     const QString PROJECT_FOLDER    = "/JahProjects";
     const QSize   TILE_SIZE         = QSize(460, 215);
+    const int     UI_FONT_SIZE      = 10;
 
     const QString DB_DRIVER         = "QSQLITE";
     const QString DB_ROOT_TABLE     = "JAH_PROJECT";
