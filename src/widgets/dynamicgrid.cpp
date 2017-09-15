@@ -22,6 +22,8 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
     setWidget(gridWidget);
     setStyleSheet("background: transparent");
 
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
     offset = 10;
     settings = SettingsManager::getDefaultManager();
     tileSize = sizeFromString(settings->getValue("tileSize", "Normal").toString());
