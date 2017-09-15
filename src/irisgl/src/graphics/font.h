@@ -3,6 +3,7 @@
 
 #include "../irisglfwd.h"
 #include <QFont>
+#include <QFontMetrics>
 #include <QChar>
 #include <QPixmap>
 #include <QMap>
@@ -27,7 +28,7 @@ class Font
 {
 public:
     QFont font;
-    QFontMetrics* metrics;
+    //QFontMetrics metrics;
     QMap<QChar, Glyph> glyphs;
     GraphicsDevicePtr graphics;
 
