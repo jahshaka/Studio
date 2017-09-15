@@ -289,7 +289,7 @@ void SceneViewWidget::initializeGL()
 
     auto timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(update()));
-    timer->start();
+    timer->start(17);
 
     this->elapsedTimer->start();
 }
