@@ -21,160 +21,7 @@
    <double>1.000000000000000</double>
   </property>
   <property name="styleSheet">
-   <string notr="true">QTabWidget {
-
-}
-
-QTabWidget::tab-bar {
-    /*min-width:  48px; */
-}
-
-/* https://stackoverflow.com/a/33006868/996468 */
-QTabBar {
-	background-color: transparent;
-	qproperty-drawBase: 0;
-	border-top: 1px solid #111;
-}
-
-QTabBar::close-button {
-
-}
-
-QTabWidget::pane {
-
-}
-
-QTabBar::tab::top {
-    background-color: #4d4d4d;
-    min-width: 108px;
-	min-height: 24px;
-    border-right: 1px solid #1e1e1e;
-    border-bottom: 1px solid transparent;
-}
-
-QTabBar::tab:bottom {
-    background-color: #4d4d4d;
-    min-width: 108px;
-	min-height: 24px;
-    border-right: 1px solid #1e1e1e;
-    border-top: 1px solid #111;
-}
-
-QTabBar::tab:top:selected {
-	 background-color: #303030;
-	border-bottom: 2px solid #3498db;
-}
-
-QTabBar::tab:bottom:selected {
-	background-color: #303030;
-	border-bottom: 2px solid #3498db;
-}
-
-QDockWidget::title {
-    background-color: #202020;
-    text-align: center;
-	border-bottom: 1px solid black;
-}
-
-QDockWidget {
-    border: 0;
-    titlebar-close-icon: url(:/icons/close.svg);
-    titlebar-normal-icon: url(:/icons/popout.svg);
-}
-
-QDockWidget::close-button, QDockWidget::float-button {
-    icon-size: 20px;
-}
-
-/* ================== */
-
-QScrollBar:vertical {
-    background: #17181a;
-	width: 16px;
-	border-left: 1px solid black;
-}
-
-QScrollBar::handle:vertical {
-    background: #5A5F66;
-	border: 1px solid black;
-	min-height: 32px;
-	margin: 2px 1px 2px 1px;
-	border-radius: 6px;
-	/*border-radius: 5px;	/* this appears to be tied to the (width of the scrollbar / 2) */
-}
-
-QScrollBar::handle:vertical:hover {
-    background-color: #6b6f77;
-}
-
-QScrollBar::add-page:vertical,  QScrollBar::sub-page:vertical {
-    background: #17181a;
-}
-
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-      border: none;
-      background: none;
-}
-
-/*
- QScrollBar:vertical {
-     background-color: #212121;
-     width: 18px;
-     margin: 22px 0 22px 0;
- }
-
- QScrollBar::handle:vertical {
-    background-color: #444;
-     min-height: 20px;
-     margin-left: 2px;
-     margin-right: 2px;
- }
-
-QScrollBar::handle:vertical:hover {
-    background-color: #555;
-    min-height: 20px;
-    margin-left: 2px;
-    margin-right: 2px;
-}
-
-QScrollBar::add-line:vertical {
-    background-color: #444;
-    height: 20px;
-    border: 2px solid #212121;
-    border-width: 2px 2px  0 2px;
-    subcontrol-position: bottom;
-    subcontrol-origin: margin;
- }
-
-QScrollBar::sub-line:vertical {
-    background-color: #444;
-    height: 20px;
-    border: 2px solid #212121;
-    border-width: 0 2px 2px 2px;
-    subcontrol-position: top;
-    subcontrol-origin: margin;
- }
-
-QScrollBar::up-arrow:vertical {
-    image: url(:/icons/up-arrow.svg);
-}
-
-QScrollBar::up-arrow:vertical:hover {
-    background-color: #555;
-}
-
-QScrollBar::down-arrow:vertical {
-    image: url(:/icons/down-arrow.svg);
-}
-
-QScrollBar::down-arrow:vertical:hover {
-    background-color: #555;
-}
-*/
-
-/* ========================== */
-
-QCheckBox {
+   <string notr="true">QCheckBox {
     spacing: 5px;
 }
 
@@ -375,14 +222,95 @@ QPushButton#vrButton:hover {
     background-color: #3498db;
 }
 
+/* ================== */
+
+ QScrollBar:vertical {
+     background-color: #212121;
+     width: 18px;
+     margin: 22px 0 22px 0;
+ }
+
+ QScrollBar::handle:vertical {
+    background-color: #444;
+     min-height: 20px;
+     margin-left: 2px;
+     margin-right: 2px;
+ }
+
+QScrollBar::handle:vertical:hover {
+    background-color: #555;
+    min-height: 20px;
+    margin-left: 2px;
+    margin-right: 2px;
+}
+
+QScrollBar::add-line:vertical {
+    background-color: #444;
+    height: 20px;
+    border: 2px solid #212121;
+    border-width: 2px 2px  0 2px;
+    subcontrol-position: bottom;
+    subcontrol-origin: margin;
+ }
+
+QScrollBar::sub-line:vertical {
+    background-color: #444;
+    height: 20px;
+    border: 2px solid #212121;
+    border-width: 0 2px 2px 2px;
+    subcontrol-position: top;
+    subcontrol-origin: margin;
+ }
+
+QScrollBar::up-arrow:vertical {
+    image: url(:/icons/up-arrow.svg);
+}
+
+QScrollBar::up-arrow:vertical:hover {
+    background-color: #555;
+}
+
+QScrollBar::down-arrow:vertical {
+    image: url(:/icons/down-arrow.svg);
+}
+
+QScrollBar::down-arrow:vertical:hover {
+    background-color: #555;
+}
+
+/* ========================== */
+
+
+
 QMainWindow {
     background-color: #1e1e1e;
+}
+
+QDockWidget::title {
+	/*border-top: 1px solid black;*/
+    padding: 7px;
+    background-color: #212121;
+    text-align: center;
+}
+
+QDockWidget {
+	border: 0;
+	titlebar-close-icon: url(:/icons/close.png);
+	titlebar-normal-icon: url(:/icons/popout.png);
+}
+
+QDockWidget::close-button, QDockWidget::float-button {
+    icon-size: 20px;
+}
+
+QDockWidget::close-button::hover, QDockWidget::float-button::hover {
+	border: 0;
 }
 
 QMenuBar {
     background-color:  #303030;
     padding:  5px;
-    border-bottom: 1px solid black;
+   /*  border: 1px solid black; */
     opacity: 0.5;
 }
 
@@ -451,17 +379,8 @@ QToolBar {
     background:  #303030;
    /* spacing: 4px; /* spacing between items in the tool bar */
     min-height: 52px;
+    border-top: 1px solid black;
     border-bottom: 1px solid black;
-}
-
-QToolBar::handle:horizontal {
-    image: url(:/icons/thandleh.png);
-	width: 24px;
-}
-
-QToolBar::handle:vertical {
-    image: url(:/icons/thandlev.png);
-	height: 24px;
 }
 
 QToolBar::separator:horizontal {
@@ -469,6 +388,42 @@ QToolBar::separator:horizontal {
     width: 1px;
     margin-left: 6px;
     margin-right: 6px;
+}
+
+QTabWidget::tab-bar {
+    /*min-width:  48px; */
+}
+
+/* https://stackoverflow.com/a/33006868/996468 */
+QTabBar {
+	background-color: transparent;
+	qproperty-drawBase:0;
+}
+
+QTabBar::close-button {
+   /*  image: url(:icons/icons/delete_smol.png); */
+    /*subcontrol-position: left;*/
+}
+
+QTabWidget::pane {
+    margin: -1px;
+    border-top: 1px solid #1e1e1e;
+	border-bottom: 1px solid #1e1e1e;
+}
+
+QTabBar::tab:selected {
+	background-color: #303030;
+	border-bottom: 2px solid #3498db;
+}
+
+QTabBar::tab {
+    background-color: #4d4d4d;
+    min-width: 108px;
+	min-height: 24px;
+    padding-bottom: 1px;
+   /* border-top: 1px solid #1e1e1e; */
+    border-right: 1px solid #1e1e1e;
+    border-bottom: 1px solid transparent;
 }
 
 /* special override */
@@ -533,12 +488,6 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
        </property>
        <item>
         <widget class="QWidget" name="controlBar" native="true">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
          <property name="minimumSize">
           <size>
            <width>0</width>
@@ -548,14 +497,11 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
          <property name="maximumSize">
           <size>
            <width>16777215</width>
-           <height>26</height>
+           <height>29</height>
           </size>
          </property>
          <property name="styleSheet">
-          <string notr="true">#controlBar {
-	background: #212121;
-	border-bottom: 1px solid black;
-}</string>
+          <string notr="true">background: #212121</string>
          </property>
          <layout class="QHBoxLayout" name="horizontalLayout">
           <property name="spacing">
@@ -775,12 +721,6 @@ QToolButton:checked
    <addaction name="separator"/>
    <addaction name="actionFreeCamera"/>
    <addaction name="actionArcballCam"/>
-  </widget>
-  <widget class="QDockWidget" name="dockWidget">
-   <attribute name="dockWidgetArea">
-    <number>1</number>
-   </attribute>
-   <widget class="QWidget" name="dockWidgetContents"/>
   </widget>
   <action name="actionSave">
    <property name="text">
