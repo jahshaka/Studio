@@ -350,7 +350,7 @@ inline double Asin(double x) { return (x > 1.0) ? MATH_DOUBLE_PIOVER2 : (x < -1.
 #if defined(_MSC_VER)
     inline int isnan(double x) { return ::_isnan(x); }
 #elif !defined(isnan) // Some libraries #define isnan.
-    inline int isnan(double x) { return ::isnan(x); }
+    //inline int isnan(double x) { return ::isnan(x); }
 #endif
 
 template<class T>

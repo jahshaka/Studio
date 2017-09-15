@@ -87,6 +87,8 @@ class VrDevice
 {
     friend class VrManager;
     VrDevice();
+
+    bool initialized;
 public:
     void initialize();
     void setTrackingOrigin(VrTrackingOrigin trackingOrigin);

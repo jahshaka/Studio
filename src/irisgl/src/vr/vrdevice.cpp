@@ -95,6 +95,8 @@ VrDevice::VrDevice()
 
     touchControllers[0] = new VrTouchController(0);
     touchControllers[1] = new VrTouchController(1);
+
+    initialized = false;
 }
 
 bool VrDevice::isVrSupported()
@@ -104,6 +106,9 @@ bool VrDevice::isVrSupported()
 
 void VrDevice::initialize()
 {
+    if (initialized)
+        return;
+
     ovrResult result = ovr_Initialize(nullptr);
     if (!OVR_SUCCESS(result)) {
         //qDebug()<<"Failed to initialize libOVR.";
@@ -137,6 +142,7 @@ void VrDevice::initialize()
     setTrackingOrigin(VrTrackingOrigin::EyeLevel);
 
     vrSupported = true;
+    initialized = true;
 }
 
 void VrDevice::setTrackingOrigin(VrTrackingOrigin trackingOrigin)
