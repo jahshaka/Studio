@@ -147,6 +147,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     this->setupLayerButtonMenu();
 
+    if (devicePixelRatio() > 1) {
+        ui->controlBar->setFixedHeight(ui->controlBar->height() - devicePixelRatio());
+    }
+
     sceneView = new SceneViewWidget(ui->backgroundscene);
     sceneView->setParent(ui->backgroundscene);
     sceneView->setFocusPolicy(Qt::ClickFocus);
@@ -160,7 +164,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->sceneContainer->setLayout(layout);
 
     connect(sceneView,  SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),
-            this,       SLOT(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)));
+            this,       SLOT(initializeGraphics(SceneViewWidget*,   QOpenGLFunctions_3_2_Core*)));
 
     connect(sceneView,  SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
             this,       SLOT(sceneNodeSelected(iris::SceneNodePtr)));
@@ -214,7 +218,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     auto presetDockContents = new QWidget;
 
-//    auto materialPresetsLayout = new
     auto materialPresets = new MaterialSets;
     materialPresets->setMainWindow(this);
     auto skyPresets = new SkyPresets;
@@ -266,7 +269,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     addDockWidget(Qt::LeftDockWidgetArea, sceneHeirarchyDock);
     addDockWidget(Qt::RightDockWidgetArea, sceneNodePropertiesDock);
-
     addDockWidget(Qt::BottomDockWidgetArea, assetDock);
     addDockWidget(Qt::BottomDockWidgetArea, animationDock);
     addDockWidget(Qt::BottomDockWidgetArea, presetsDock);
