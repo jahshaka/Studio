@@ -106,22 +106,25 @@ bool VrDevice::isVrSupported()
 
 void VrDevice::initialize()
 {
-    if (initialized)
-        return;
+    // Oculus only gives one session per application it seems
+    // so this part must only be done once
+    // The graphics resources however must be recreated for each new opengl context
+    if (initialized){
+        ovrResult result = ovr_Initialize(nullptr);
+        if (!OVR_SUCCESS(result)) {
+            //qDebug()<<"Failed to initialize libOVR.";
+            return;
+        }
 
-    ovrResult result = ovr_Initialize(nullptr);
-    if (!OVR_SUCCESS(result)) {
-        //qDebug()<<"Failed to initialize libOVR.";
-        return;
+        result = ovr_Create(&session, &luid);
+        if (!OVR_SUCCESS(result)) {
+            qDebug() << "Could not create libOVR session!";
+            return;
+        }
+
+        hmdDesc = ovr_GetHmdDesc(session);
+        initialized = true;
     }
-
-    result = ovr_Create(&session, &luid);
-    if (!OVR_SUCCESS(result)) {
-        qDebug() << "Could not create libOVR session!";
-        return;
-    }
-
-    hmdDesc = ovr_GetHmdDesc(session);
 
     // intialize framebuffers necessary for rendering to the hmd
     for (int eye = 0; eye < 2; ++eye) {
@@ -142,7 +145,6 @@ void VrDevice::initialize()
     setTrackingOrigin(VrTrackingOrigin::EyeLevel);
 
     vrSupported = true;
-    initialized = true;
 }
 
 void VrDevice::setTrackingOrigin(VrTrackingOrigin trackingOrigin)
