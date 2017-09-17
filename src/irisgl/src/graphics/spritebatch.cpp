@@ -87,9 +87,10 @@ void SpriteBatch::end()
 
     // testing
     auto gl = graphics->getGL();
-    graphics->setRasterizerState(RasterizerState::CullNone);
-    graphics->setDepthState(DepthState::None);
-    graphics->setBlendState(BlendState::AlphaBlend);
+    // remmeber to unforce these
+    graphics->setRasterizerState(RasterizerState::CullNone, true);
+    graphics->setDepthState(DepthState::None, true);
+    graphics->setBlendState(BlendState::AlphaBlend, true);
 
     graphics->setShader(spriteShader);
 

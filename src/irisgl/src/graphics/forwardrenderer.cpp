@@ -135,6 +135,11 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
 {
     auto ctx = QOpenGLContext::currentContext();
 
+    // reset states
+    graphics->setBlendState(BlendState::Opaque);
+    graphics->setDepthState(DepthState::Default);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+
     // STEP 1: RENDER SCENE
     renderData->scene = scene;
 
@@ -163,10 +168,7 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
         gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
     }
 
-    //gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
-
     gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    //gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
 
     //todo: remember to remove this!
     renderTarget->resize(rt->getWidth(), rt->getHeight(), true);
@@ -181,6 +183,11 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
         gl->glEnableVertexAttribArray(i);
     }
 
+    // reset states
+    graphics->setBlendState(BlendState::Opaque);
+    graphics->setDepthState(DepthState::Default);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+
     renderNode(renderData, scene);
     renderBillboardIcons(renderData);
 
@@ -191,13 +198,16 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
     postContext->finalTexture = finalRenderTexture;
     postMan->process(postContext);
 
-    //gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
 
     // draw fs quad
     rt->bind();
     gl->glViewport(0, 0, rt->getWidth(), rt->getHeight());
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     gl->glActiveTexture(GL_TEXTURE0);
+
+    graphics->setBlendState(BlendState::Opaque);
+    graphics->setDepthState(DepthState::Default);
+    graphics->setRasterizerState(RasterizerState::CullNone);
 
     postContext->finalTexture->bind();
     fsQuad->draw();
@@ -255,18 +265,13 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
 
     gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    //gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
 
-    //todo: remember to remove this!
     renderTarget->resize(vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale, true);
     finalRenderTexture->resize(vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
 
     renderTarget->bind();
-    //gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
-    //gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     graphics->setViewport(QRect(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale));
     graphics->clear(QColor(0, 0, 0));
-    //gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     //enable all attrib arrays
     for (int i = 0; i < (int)iris::VertexAttribUsage::Count; i++) {
@@ -282,13 +287,6 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     //perfTimer->end("render_scene");
 
-    // render lights as spheres for testing
-
-    // STEP 2: RENDER SKY
-    //renderSky(renderData);
-
-    // STEP 4: RENDER BILLBOARD ICONS
-    //perfTimer->start("render_icons");
     renderBillboardIcons(renderData);
     //perfTimer->end("render_icons");
 
@@ -303,7 +301,6 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
 
     // draw fs quad
-    //gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
     graphics->setViewport(QRect(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale));
     graphics->clear(QColor(0,0,0));
 
@@ -317,7 +314,7 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     gl->glBindTexture(GL_TEXTURE_2D, 0);
 
     // STEP 5: RENDER SELECTED OBJECT
-    if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
+    //if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
 
     //clear lists
     scene->geometryRenderList->clear();
@@ -386,14 +383,11 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
         return;
 
     QVector3D viewerPos = scene->camera->getGlobalPosition();
-    //float viewScale = scene->camera->getVrViewScale();
     QMatrix4x4 viewTransform = scene->camera->globalTransform;
-    //viewTransform.setToIdentity();
 
 
     if(!!scene->vrViewer && useViewer) {
         viewerPos = scene->vrViewer->getGlobalPosition();
-        //viewScale = scene->vrViewer->getViewScale();
         viewTransform = scene->vrViewer->globalTransform;
     }
 
@@ -424,11 +418,6 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
 
         //STEP 1: RENDER SCENE
         renderData->scene = scene;
-
-        //camera->setAspectRatio(vp->getAspectRatio());
-        //camera->updateCameraMatrices();
-
-        //renderData->eyePos = camera->globalTransform.column(3).toVector3D();
         renderData->eyePos = viewerPos;
 
         renderData->fogColor = scene->fogColor;
@@ -437,12 +426,6 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
         renderData->fogEnabled = scene->fogEnabled;
 
         renderNode(renderData,scene);
-
-        //STEP 2: RENDER SKY
-        //renderSky(renderData);
-
-        //renderParticles(renderData, delta, scene->rootNode);
-
 
         vrDevice->endEye(eye);
     }
@@ -491,10 +474,6 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 
     auto lightCount = renderData->scene->lights.size();
 
-    //sort render list
-//    qSort(scene->geometryRenderList.begin(), scene->geometryRenderList.end(), [](const RenderItem* a, const RenderItem* b) {
-//        return a->renderLayer < b->renderLayer;
-//    });
     scene->geometryRenderList->sort();
 
     for (auto& item : scene->geometryRenderList->getItems()) {
