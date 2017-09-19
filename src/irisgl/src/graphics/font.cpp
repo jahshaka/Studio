@@ -40,7 +40,7 @@ void Font::createGlyph(QChar chr, Glyph &glyph)
     int charHeight = metrics.height();
     // This adjustment has to be made for high dpi devices
     // where qt automatically adds extra padding around the text
-    auto padding = (1 - qApp->devicePixelRatio()) * 2;
+    auto padding = (qApp->devicePixelRatio() - 1) * 2;
     charWidth += padding;
     charHeight += padding;
 
