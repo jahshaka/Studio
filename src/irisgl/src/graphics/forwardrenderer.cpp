@@ -391,6 +391,10 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
         viewTransform = scene->vrViewer->globalTransform;
     }
 
+    // reset states
+    graphics->setBlendState(BlendState::Opaque);
+    graphics->setDepthState(DepthState::Default);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
 
     if (scene->shadowEnabled) {
         gl->glViewport(0, 0, 4096, 4096);
@@ -425,6 +429,11 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
         renderData->fogEnd = scene->fogEnd;
         renderData->fogEnabled = scene->fogEnabled;
 
+        // reset states
+        graphics->setBlendState(BlendState::Opaque);
+        graphics->setDepthState(DepthState::Default);
+        graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+
         renderNode(renderData,scene);
 
         vrDevice->endEye(eye);
@@ -437,6 +446,11 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
 
    gl->glViewport(0, 0, vp->width,vp->height);
    gl->glActiveTexture(GL_TEXTURE0);
+
+   graphics->setBlendState(BlendState::Opaque);
+   graphics->setDepthState(DepthState::Default);
+   graphics->setRasterizerState(RasterizerState::CullNone);
+
    vrDevice->bindMirrorTextureId();
    fsQuad->draw(gl);
    gl->glBindTexture(GL_TEXTURE_2D,0);

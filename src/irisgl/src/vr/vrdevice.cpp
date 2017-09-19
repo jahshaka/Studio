@@ -95,6 +95,8 @@ VrDevice::VrDevice()
 
     touchControllers[0] = new VrTouchController(0);
     touchControllers[1] = new VrTouchController(1);
+
+    initialized = false;
 }
 
 bool VrDevice::isVrSupported()
@@ -104,19 +106,25 @@ bool VrDevice::isVrSupported()
 
 void VrDevice::initialize()
 {
-    ovrResult result = ovr_Initialize(nullptr);
-    if (!OVR_SUCCESS(result)) {
-        //qDebug()<<"Failed to initialize libOVR.";
-        return;
-    }
+    // Oculus only gives one session per application it seems
+    // so this part must only be done once
+    // The graphics resources however must be recreated for each new opengl context
+    if (initialized){
+        ovrResult result = ovr_Initialize(nullptr);
+        if (!OVR_SUCCESS(result)) {
+            //qDebug()<<"Failed to initialize libOVR.";
+            return;
+        }
 
-    result = ovr_Create(&session, &luid);
-    if (!OVR_SUCCESS(result)) {
-        qDebug() << "Could not create libOVR session!";
-        return;
-    }
+        result = ovr_Create(&session, &luid);
+        if (!OVR_SUCCESS(result)) {
+            qDebug() << "Could not create libOVR session!";
+            return;
+        }
 
-    hmdDesc = ovr_GetHmdDesc(session);
+        hmdDesc = ovr_GetHmdDesc(session);
+        initialized = true;
+    }
 
     // intialize framebuffers necessary for rendering to the hmd
     for (int eye = 0; eye < 2; ++eye) {
