@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "sceneviewwidget.h"
+#include "../constants.h"
 #include <QTimer>
 
 #include <QOpenGLShaderProgram>
@@ -289,9 +290,9 @@ void SceneViewWidget::initializeGL()
     //thumbGen = new ThumbnialGenerator();
     thumbGen = ThumbnailGenerator::getSingleton();
 
-    auto timer = new QTimer(this);
+    timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(update()));
-    timer->start(17);
+    timer->start(Constants::FPS_60);
 
     this->elapsedTimer->start();
 }
@@ -303,11 +304,13 @@ void SceneViewWidget::paintGL()
     if (iris::VrManager::getDefaultDevice()->isHeadMounted() && viewportMode != ViewportMode::VR) {
         // set to vr mode automatically if a headset is detected
         this->setViewportMode(ViewportMode::VR);
+        timer->setInterval(Constants::FPS_90); // 90 fps for vr
     }
     else if (!iris::VrManager::getDefaultDevice()->isHeadMounted() &&
             viewportMode == ViewportMode::VR)
     {
         this->setViewportMode(ViewportMode::Editor);
+        timer->setInterval(Constants::FPS_60); // 60 for regular
     }
 
     renderScene();

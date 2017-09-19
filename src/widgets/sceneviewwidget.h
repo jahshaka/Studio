@@ -42,6 +42,7 @@ class CameraControllerBase;
 class EditorVrController;
 class OrbitalCameraController;
 class QElapsedTimer;
+class QTimer;
 
 class GizmoInstance;
 class ViewportGizmo;
@@ -80,6 +81,7 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
     ViewportMode viewportMode;
 
     QElapsedTimer* elapsedTimer;
+    QTimer* timer;
 
     // for displaying thumbnail of viewer
     iris::CameraNodePtr viewerCamera;
