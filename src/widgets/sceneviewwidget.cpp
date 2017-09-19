@@ -395,7 +395,7 @@ void SceneViewWidget::renderScene()
     float ms = 1000.f / fps;
     spriteBatch->begin();
     spriteBatch->drawString(font,
-                            QString("Frametime: %1ms (%2fps)")
+                            QString("%1ms (%2fps)")
                                 .arg(QString::number(ms, 'f', 1))
                                 .arg(QString::number(fps, 'f', 1)),
                             QVector2D(8, 8),
