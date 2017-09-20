@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QOpenGLContext>
 //#include "../libovr/Include/OVR_CAPI_GL.h"
 #include "../libovr/Include/Extras/OVR_Math.h"
+#include "../core/logger.h"
 
 using namespace OVR;
 
@@ -114,13 +115,13 @@ void VrDevice::initialize()
     if (!initialized){
         ovrResult result = ovr_Initialize(nullptr);
         if (!OVR_SUCCESS(result)) {
-            //qDebug()<<"Failed to initialize libOVR.";
+            Logger::getSingleton()->warn("Failed to initialize libOVR.");
             return;
         }
 
         result = ovr_Create(&session, &luid);
         if (!OVR_SUCCESS(result)) {
-            qDebug() << "Could not create libOVR session!";
+            Logger::getSingleton()->warn("Could not create libOVR session!");
             return;
         }
 
@@ -184,8 +185,6 @@ ovrTextureSwapChain VrDevice::createTextureChain(ovrSession session,
                                                  int width,
                                                  int height)
 {
-    //ovrTextureSwapChain swapChain;
-
     ovrTextureSwapChainDesc desc = {};
     desc.Type = ovrTexture_2D;
     desc.ArraySize = 1;
@@ -198,14 +197,14 @@ ovrTextureSwapChain VrDevice::createTextureChain(ovrSession session,
 
     ovrResult result = ovr_CreateTextureSwapChainGL(session, &desc, &swapChain);
     if (!OVR_SUCCESS(result)) {
-        qDebug()<<"could not create swap chain!";
+        Logger::getSingleton()->warn("could not create swap chain!");
         return nullptr;
     }
 
     int length = 0;
     result = ovr_GetTextureSwapChainLength(session, swapChain, &length);
     if (!OVR_SUCCESS(result)) {
-        qDebug()<<"could not get swapchain length!";
+        Logger::getSingleton()->warn("could not get swapchain length!");
         return nullptr;
     }
 
@@ -229,8 +228,6 @@ GLuint VrDevice::createMirrorFbo(int width,int height)
     if (mirrorTexture != nullptr)
         ovr_DestroyMirrorTexture(session, mirrorTexture);
 
-    //ovrMirrorTexture mirrorTexture = nullptr;
-
     ovrMirrorTextureDesc desc;
     memset(&desc, 0, sizeof(desc));
     //todo: use actual viewport size
@@ -242,7 +239,7 @@ GLuint VrDevice::createMirrorFbo(int width,int height)
     ovrResult result = ovr_CreateMirrorTextureGL(session, &desc, &mirrorTexture);
     if (!OVR_SUCCESS(result))
     {
-        qDebug()<< "Failed to create mirror texture.";
+        Logger::getSingleton()->warn("Failed to create mirror texture.");
         return 0;
     }
 
@@ -279,11 +276,8 @@ void VrDevice::beginFrame()
         if( !OVR_SUCCESS(ovr_GetInputState(session,
                                            i == 0? ovrControllerType_LTouch : ovrControllerType_RTouch,
                                            &touchControllers[i]->inputState))) {
-            // @todo: log error
+            Logger::getSingleton()->warn(QString("Unable to get input state of controller %1").arg(i));
         }
-
-        //touchControllers[i]->isBeingTracked = (hmdState.HandStatusFlags[i] & ovrStatus_PositionTracked) == ovrStatus_PositionTracked;
-        //touchControllers[i]->isBeingTracked = (hmdState.HandStatusFlags[i] & ovrStatus_OrientationTracked);
     }
 
     auto contTypes = ovr_GetConnectedControllerTypes(session);
@@ -319,7 +313,7 @@ void VrDevice::endFrame()
 
     if (!OVR_SUCCESS(result))
     {
-        qDebug()<<"error submitting frame"<<endl;
+        Logger::getSingleton()->warn(QString("Error submitting frame to hmd!"));
     }
 
     frameIndex++;
@@ -392,34 +386,11 @@ bool VrDevice::isHeadMounted()
     ovrSessionStatus sessionStatus;
 
     ovr_GetSessionStatus(session, &sessionStatus);
-    //qDebug() <<"tracking state: "<< sessionStatus;
     return sessionStatus.HmdMounted;
 }
 
 QMatrix4x4 VrDevice::getEyeViewMatrix(int eye, QVector3D pivot, QMatrix4x4 transform)
 {
-    //Vector3f origin = Vector3f(pivot.x(),pivot.y(),pivot.z());
-
-    /*
-    Matrix4f rollPitchYaw = Matrix4f::RotationY(0);
-    Matrix4f finalRollPitchYaw = rollPitchYaw * Matrix4f(frameData->eyeRenderPose[eye].Orientation);
-    Vector3f finalUp = finalRollPitchYaw.Transform(Vector3f(0, 1, 0));
-    Vector3f finalForward = finalRollPitchYaw.Transform(Vector3f(0, 0, -1));
-
-    auto fd = frameData->eyeRenderPose[eye].Position;
-    auto framePos = Vector3f(fd.x, fd.y, fd.z);
-    //Vector3f shiftedEyePos = origin + rollPitchYaw.Transform(framePos * scale);
-    Vector3f shiftedEyePos = rollPitchYaw.Transform(framePos);
-
-    Vector3f forward = shiftedEyePos + finalForward;
-
-    QMatrix4x4 view;
-    view.setToIdentity();
-    view.lookAt(QVector3D(shiftedEyePos.x,shiftedEyePos.y,shiftedEyePos.z),
-                QVector3D(forward.x,forward.y,forward.z),
-                QVector3D(finalUp.x,finalUp.y,finalUp.z));
-    */
-
     auto r = frameData->eyeRenderPose[eye].Orientation;
     auto finalYawPitchRoll = QMatrix4x4(QQuaternion(r.w, r.x, r.y, r.z).toRotationMatrix());
     auto finalUp = finalYawPitchRoll * QVector3D(0, 1, 0);
@@ -445,13 +416,12 @@ QMatrix4x4 VrDevice::getEyeViewMatrix(int eye, QVector3D pivot, QMatrix4x4 trans
 QMatrix4x4 VrDevice::getEyeProjMatrix(int eye,float nearClip,float farClip)
 {
     QMatrix4x4 proj;
-    proj.setToIdentity();//not needed
+    proj.setToIdentity();
     Matrix4f eyeProj = ovrMatrix4f_Projection(hmdDesc.DefaultEyeFov[eye],
                                               nearClip,
                                               farClip,
                                               ovrProjection_None);
 
-    //todo: put in
     for (int r = 0; r < 4; r++) {
         for (int c = 0;c < 4; c++) {
             proj(r, c) = eyeProj.M[r][c];
