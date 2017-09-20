@@ -96,6 +96,8 @@ VrDevice::VrDevice()
     touchControllers[0] = new VrTouchController(0);
     touchControllers[1] = new VrTouchController(1);
 
+    mirrorTexture = nullptr;
+
     initialized = false;
 }
 
@@ -109,7 +111,7 @@ void VrDevice::initialize()
     // Oculus only gives one session per application it seems
     // so this part must only be done once
     // The graphics resources however must be recreated for each new opengl context
-    if (initialized){
+    if (!initialized){
         ovrResult result = ovr_Initialize(nullptr);
         if (!OVR_SUCCESS(result)) {
             //qDebug()<<"Failed to initialize libOVR.";
@@ -196,12 +198,16 @@ ovrTextureSwapChain VrDevice::createTextureChain(ovrSession session,
 
     ovrResult result = ovr_CreateTextureSwapChainGL(session, &desc, &swapChain);
     if (!OVR_SUCCESS(result)) {
-        //qDebug()<<"could not create swap chain!";
+        qDebug()<<"could not create swap chain!";
         return nullptr;
     }
 
     int length = 0;
-    ovr_GetTextureSwapChainLength(session, swapChain, &length);
+    result = ovr_GetTextureSwapChainLength(session, swapChain, &length);
+    if (!OVR_SUCCESS(result)) {
+        qDebug()<<"could not get swapchain length!";
+        return nullptr;
+    }
 
     for (int i = 0; i < length; ++i) {
         GLuint chainTexId;
@@ -219,7 +225,11 @@ ovrTextureSwapChain VrDevice::createTextureChain(ovrSession session,
 
 GLuint VrDevice::createMirrorFbo(int width,int height)
 {
-    ovrMirrorTexture mirrorTexture = nullptr;
+    // delete current mirror texture
+    if (mirrorTexture != nullptr)
+        ovr_DestroyMirrorTexture(session, mirrorTexture);
+
+    //ovrMirrorTexture mirrorTexture = nullptr;
 
     ovrMirrorTextureDesc desc;
     memset(&desc, 0, sizeof(desc));
@@ -418,7 +428,7 @@ QMatrix4x4 VrDevice::getEyeViewMatrix(int eye, QVector3D pivot, QMatrix4x4 trans
     auto fd = frameData->eyeRenderPose[eye].Position;
     auto framePos = QVector3D(fd.x, fd.y, fd.z);
     auto shiftedEyePos = framePos;
-    qDebug() << shiftedEyePos;
+    //qDebug() << shiftedEyePos;
     //auto forward = shiftedEyePos + finalForward;
     auto forward = shiftedEyePos + finalForward;
 
