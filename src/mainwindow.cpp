@@ -839,11 +839,14 @@ void MainWindow::openProject(QString filename)
     auto postMan = sceneView->getRenderer()->getPostProcessManager();
     postMan->clearPostProcesses();
     auto scene = reader->readScene(filename, db->getSceneBlob(), postMan, &editorData);
-    this->sceneView->doneCurrent();
+
 
     setScene(scene);
 
-    postProcessWidget->setPostProcessMgr(postMan);
+    // use new post process that has fxaa by default
+    // @todo: remember to find a better replacement
+    postProcessWidget->setPostProcessMgr(iris::PostProcessManager::create());
+    this->sceneView->doneCurrent();
 
     if (editorData != nullptr) {
         sceneView->setEditorData(editorData);
