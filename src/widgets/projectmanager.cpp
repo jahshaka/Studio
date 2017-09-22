@@ -102,8 +102,6 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
     layout->addWidget(dynamicGrid);
     layout->setMargin(0);
 
-
-
     ui->pmcont->setStyleSheet("border: none");
     ui->pmcont->setLayout(layout);
 }
@@ -198,6 +196,23 @@ void ProjectManager::update()
 
     QDir dir(projectFolder);
     QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+
+    int i = 0;
+    foreach (const QFileInfo &file, files) {
+        dynamicGrid->addToGridView(new GridWidget(file.absoluteFilePath()), i);
+        i++;
+    }
+}
+
+void ProjectManager::updateAfter()
+{
+    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+    auto projectFolder = settings->getValue("default_directory", path).toString();
+
+    QDir dir(projectFolder);
+    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+
+    dynamicGrid->resetView();
 
     int i = 0;
     foreach (const QFileInfo &file, files) {

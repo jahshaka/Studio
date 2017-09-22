@@ -115,6 +115,13 @@ void DynamicGrid::deleteTile(ItemGridWidget *widget)
     updateGridColumns(lastWidth);
 }
 
+void DynamicGrid::resetView()
+{
+    for (int i = 0; i < gridLayout->count(); i++) {
+       gridLayout->itemAt(i)->widget()->deleteLater();
+    }
+}
+
 void DynamicGrid::resizeEvent(QResizeEvent *event)
 {
     lastWidth = event->size().width();
