@@ -202,6 +202,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     sceneNodeScrollArea->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
     sceneNodeScrollArea->setWidget(sceneNodePropertiesWidget);
     sceneNodeScrollArea->setWidgetResizable(true);
+    sceneNodeScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
     auto sceneNodeLayout = new QVBoxLayout(sceneNodeDockWidgetContents);
     sceneNodeLayout->setContentsMargins(0, 0, 0, 0);

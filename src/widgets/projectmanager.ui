@@ -516,7 +516,7 @@ QListWidget::item:selected {
         <item>
          <widget class="QPushButton" name="browseProjects">
           <property name="text">
-           <string>Browse sample worlds...</string>
+           <string>Create Sample World</string>
           </property>
          </widget>
         </item>
