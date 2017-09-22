@@ -1448,6 +1448,7 @@ void MainWindow::showProjectManagerInternal(bool running)
     saveScene();
     hide();
     pmContainer->showMaximized();
+    pmContainer->updateAfter();
 }
 
 void MainWindow::newScene()

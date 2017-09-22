@@ -46,6 +46,7 @@ public:
     QVector<ModelData> fetchModel(const QString &path);
     bool copyDirectoryFiles(const QString &fromDir, const QString &toDir, bool coverFileIfExist);
     void update();
+    void updateAfter();
 
     QString loadProjectDelegate();
 
