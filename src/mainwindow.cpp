@@ -329,8 +329,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->ToolBar->addWidget(pmButton);
     ui->ToolBar->addWidget(vrButton);
 
-    restoreGeometry(settings->getValue("geometry", "").toByteArray());
-    restoreState(settings->getValue("windowState", "").toByteArray());
+    if (!UiManager::playMode) {
+        restoreGeometry(settings->getValue("geometry", "").toByteArray());
+        restoreState(settings->getValue("windowState", "").toByteArray());
+    }
 
     setupProjectDB();
     setupUndoRedo();
@@ -656,8 +658,10 @@ void MainWindow::closeEvent(QCloseEvent *event)
         event->accept();
     }
 
-    settings->setValue("geometry", saveGeometry());
-    settings->setValue("windowState", saveState());
+    if (!UiManager::playMode) {
+        settings->setValue("geometry", saveGeometry());
+        settings->setValue("windowState", saveState());
+    }
 
     ThumbnailGenerator::getSingleton()->shutdown();
 }
@@ -841,6 +845,7 @@ void MainWindow::openProject(QString filename)
     postMan->clearPostProcesses();
     auto scene = reader->readScene(filename, db->getSceneBlob(), postMan, &editorData);
 
+    toggleWidgets(true);
     setScene(scene);
 
     // use new post process that has fxaa by default
@@ -882,6 +887,7 @@ void MainWindow::playProject(QString filename)
     postMan->clearPostProcesses();
     auto scene = reader->readScene(filename, db->getSceneBlob(), postMan, &editorData);
 
+    UiManager::playMode = true;
     toggleWidgets(false);
 
     setScene(scene);

@@ -16,6 +16,7 @@ QUndoStack *UiManager::undoStack = nullptr;
 SceneMode UiManager::sceneMode = SceneMode::EditMode;
 
 bool UiManager::isScenePlaying = false;
+bool UiManager::playMode = false;
 
 SceneViewWidget *UiManager::getSceneViewWidget()
 {
