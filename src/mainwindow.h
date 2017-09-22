@@ -227,6 +227,9 @@ public slots:
     void openWebsiteUrl();
 
     void openProject(QString project);
+    void playProject(QString project);
+
+    void toggleWidgets(bool toggle);
 
     iris::ScenePtr createDefaultScene();
     void initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*);

@@ -142,7 +142,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     vrMode = false;
 
     setupFileMenu();
-    setupViewMenu();
     setupHelpMenu();
 
     this->setupLayerButtonMenu();
@@ -275,6 +274,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     tabifyDockWidget(animationDock, assetDock);
 
     connect(pmContainer, SIGNAL(fileToOpen(QString)), SLOT(openProject(QString)));
+    connect(pmContainer, SIGNAL(fileToPlay(QString)), SLOT(playProject(QString)));
     connect(pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
 
     // toolbar stuff
@@ -328,11 +328,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->ToolBar->addWidget(pmButton);
     ui->ToolBar->addWidget(vrButton);
 
-    restoreGeometry(settings->getValue("geometry", "").toByteArray());
-    restoreState(settings->getValue("windowState", "").toByteArray());
+//    if (!UiManager::playMode) {
+//        restoreGeometry(settings->getValue("geometry", "").toByteArray());
+//        restoreState(settings->getValue("windowState", "").toByteArray());
+//    }
 
     setupProjectDB();
     setupUndoRedo();
+
+    // this ties to hidden geometry so should come at the end
+    setupViewMenu();
 
 #ifdef QT_DEBUG
     setWindowTitle("Jahshaka 0.3a - Developer Build");
@@ -655,8 +660,10 @@ void MainWindow::closeEvent(QCloseEvent *event)
         event->accept();
     }
 
-    settings->setValue("geometry", saveGeometry());
-    settings->setValue("windowState", saveState());
+//    if (!UiManager::playMode) {
+//        settings->setValue("geometry", saveGeometry());
+//        settings->setValue("windowState", saveState());
+//    }
 
     ThumbnailGenerator::getSingleton()->shutdown();
 }
@@ -674,7 +681,10 @@ void MainWindow::setupFileMenu()
 //    connect(ui->actionDelete,   SIGNAL(triggered(bool)), this, SLOT(deleteProject()));
 
     connect(prefsDialog,  SIGNAL(PreferencesDialogClosed()), this, SLOT(updateSceneSettings()));
+}
 
+void MainWindow::setupViewMenu()
+{
     connect(ui->actionOutliner, &QAction::toggled, [this](bool set) {
         sceneHeirarchyDock->setVisible(set);
     });
@@ -694,11 +704,6 @@ void MainWindow::setupFileMenu()
     connect(ui->actionAssets, &QAction::toggled, [this](bool set) {
         assetDock->setVisible(set);
     });
-}
-
-void MainWindow::setupViewMenu()
-{
-
 }
 
 void MainWindow::setupHelpMenu()
@@ -840,6 +845,50 @@ void MainWindow::openProject(QString filename)
     postMan->clearPostProcesses();
     auto scene = reader->readScene(filename, db->getSceneBlob(), postMan, &editorData);
 
+    toggleWidgets(true);
+    setScene(scene);
+
+    // use new post process that has fxaa by default
+    // @todo: remember to find a better replacement
+    postProcessWidget->setPostProcessMgr(iris::PostProcessManager::create());
+    this->sceneView->doneCurrent();
+
+    if (editorData != nullptr) {
+        sceneView->setEditorData(editorData);
+        ui->wireCheck->setChecked(editorData->showLightWires);
+    }
+
+    assetWidget->trigger();
+
+    delete reader;
+}
+
+void MainWindow::playProject(QString filename)
+{
+    if (!this->isVisible()) {
+        this->showMaximized();
+    }
+
+    this->sceneView->makeCurrent();
+    //remove current scene first
+    this->removeScene();
+
+    //load new scene
+    auto reader = new SceneReader();
+
+    EditorData* editorData = nullptr;
+
+    db->initializeDatabase(filename);
+
+    Globals::project->setFilePath(filename);
+    UiManager::updateWindowTitle();
+
+    auto postMan = sceneView->getRenderer()->getPostProcessManager();
+    postMan->clearPostProcesses();
+    auto scene = reader->readScene(filename, db->getSceneBlob(), postMan, &editorData);
+
+    UiManager::playMode = true;
+    toggleWidgets(false);
 
     setScene(scene);
 
@@ -856,6 +905,15 @@ void MainWindow::openProject(QString filename)
     assetWidget->trigger();
 
     delete reader;
+}
+
+void MainWindow::toggleWidgets(bool toggle)
+{
+    sceneHeirarchyDock->setVisible(toggle);
+    sceneNodePropertiesDock->setVisible(toggle);
+    presetsDock->setVisible(toggle);
+    assetDock->setVisible(toggle);
+    animationDock->setVisible(toggle);
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
