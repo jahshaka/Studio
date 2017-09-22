@@ -22,6 +22,14 @@ For more information see the LICENSE file
 #include "globals.h"
 #include "constants.h"
 
+// Hints that a dedicated GPU should be used whenever possible
+// https://stackoverflow.com/a/39047129/991834
+extern "C"
+{
+  __declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
+  __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+}
+
 int main(int argc, char *argv[])
 {
     // Fixes issue on osx where the SceneView widget shows up blank
