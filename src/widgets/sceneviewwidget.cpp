@@ -107,7 +107,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     setAcceptDrops(true);
     thumbGen = nullptr;
 
-    fontSize = 10;
+    fontSize = 20;
 }
 
 void SceneViewWidget::resetEditorCam()
@@ -270,7 +270,7 @@ void SceneViewWidget::initializeGL()
 
     renderer = iris::ForwardRenderer::create();
     spriteBatch = iris::SpriteBatch::create(renderer->getGraphicsDevice());
-    font = iris::Font::create(renderer->getGraphicsDevice(), fontSize * devicePixelRatio());
+    font = iris::Font::create(renderer->getGraphicsDevice(), fontSize);
 
     initialize();
     fsQuad = new iris::FullScreenQuad();
