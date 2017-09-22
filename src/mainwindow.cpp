@@ -1035,6 +1035,16 @@ void MainWindow::addPlane()
     addNodeToScene(node);
 }
 
+void MainWindow::addGround()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::MeshNode::create();
+    node->setMesh(":/models/ground.obj");
+    node->setFaceCullingMode(iris::FaceCullingMode::None);
+    node->setName("Ground");
+    addNodeToScene(node);
+}
+
 
 void MainWindow::addCone()
 {

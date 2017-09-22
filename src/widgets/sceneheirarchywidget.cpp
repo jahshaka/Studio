@@ -91,6 +91,10 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     primtiveMenu->addAction(action);
     connect(action,SIGNAL(triggered()),mainWindow,SLOT(addPlane()));
 
+    action = new QAction("Ground", this);
+    primtiveMenu->addAction(action);
+    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addGround()));
+
     //LIGHTS
     auto lightMenu = addMenu->addMenu("Light");
     action = new QAction("Point", this);
