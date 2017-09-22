@@ -133,6 +133,7 @@ private:
     int eyeHeight;
     long long frameIndex;
 
+    ovrMirrorTexture mirrorTexture;
     GLuint vr_mirrorFbo;
     GLuint vr_mirrorTexId;
 
