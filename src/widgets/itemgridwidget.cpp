@@ -73,15 +73,28 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
     olayout->setMargin(0);
     olayout->setSpacing(0);
 
-    auto editButton = new QPushButton("Open");
+    auto playButton = new QPushButton("Play");
+    playButton->setObjectName("playButton");
+    playButton->setCursor(Qt::PointingHandCursor);
+    playButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white }");
+    olayout->addWidget(playButton);
+
+//    auto spacer2 = new QLabel("|");
+//    spacer2->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+//    spacer2->setStyleSheet("background: transparent; color: white");
+//    olayout->addWidget(spacer2);
+
+    auto editButton = new QPushButton("Edit");
     editButton->setObjectName("editButton");
     editButton->setCursor(Qt::PointingHandCursor);
     editButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white }");
     olayout->addWidget(editButton);
-    auto spacer = new QLabel("|");
-    spacer->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    spacer->setStyleSheet("background: transparent; color: white");
-    olayout->addWidget(spacer);
+
+//    auto spacer = new QLabel("|");
+//    spacer->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+//    spacer->setStyleSheet("background: transparent; color: white");
+//    olayout->addWidget(spacer);
+
     auto deleteButton = new QPushButton("Delete");
     deleteButton->setCursor(Qt::PointingHandCursor);
     deleteButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold;  color: white}");
@@ -110,6 +123,7 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
     setLayout(gameGridLayout);
     setMinimumHeight(this->sizeHint().height());
 
+    connect(playButton, SIGNAL(pressed()), SLOT(playProject()));
     connect(editButton, SIGNAL(pressed()), SLOT(editProject()));
     connect(deleteButton, SIGNAL(pressed()), SLOT(removeProject()));
 
@@ -251,6 +265,11 @@ void ItemGridWidget::projectContextMenu(const QPoint &pos)
     menu.addAction(&del);
 
     menu.exec(mapToGlobal(pos));
+}
+
+void ItemGridWidget::playProject()
+{
+    emit playFromWidget(this);
 }
 
 void ItemGridWidget::openProject()

@@ -30,6 +30,7 @@ protected slots:
     void editProject();
     void projectContextMenu(const QPoint&);
 
+    void playProject();
     void openProject();
     void renameProject();
     void closeProject();
@@ -54,7 +55,7 @@ signals:
     void singleClicked(ItemGridWidget*);
     void doubleClicked(ItemGridWidget*);
 
-
+    void playFromWidget(ItemGridWidget*);
     void openFromWidget(ItemGridWidget*);
     void renameFromWidget(ItemGridWidget*);
     void closeFromWidget(ItemGridWidget*);

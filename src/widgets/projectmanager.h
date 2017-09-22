@@ -41,7 +41,7 @@ public:
     ProjectManager(QWidget *parent = nullptr);
     ~ProjectManager();
 
-    void prepareStore(QString path);
+    void prepareStore(QString path, bool playMode = false);
     void walkFileSystem(QString folder, QString path);
     QVector<ModelData> fetchModel(const QString &path);
     bool copyDirectoryFiles(const QString &fromDir, const QString &toDir, bool coverFileIfExist);
@@ -73,12 +73,14 @@ protected slots:
     void searchTiles(QString);
 
     void handleDone();
+    void handleDonePlay();
     void handleDoneFuture();
 
     void OnLstItemsCommitData(QWidget*);
 
     void openSampleBrowser();
     void openProjectFromWidget(ItemGridWidget*);
+    void playProjectFromWidget(ItemGridWidget*);
     void renameProjectFromWidget(ItemGridWidget*);
     void closeProjectFromWidget(ItemGridWidget*);
     void deleteProjectFromWidget(ItemGridWidget*);
@@ -87,6 +89,7 @@ protected slots:
 
 signals:
     void fileToOpen(const QString& str);
+    void fileToPlay(const QString& str);
     void fileToCreate(const QString& str, const QString& str2);
 
 private:
