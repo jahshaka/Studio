@@ -142,7 +142,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     vrMode = false;
 
     setupFileMenu();
-    setupViewMenu();
     setupHelpMenu();
 
     this->setupLayerButtonMenu();
@@ -329,13 +328,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->ToolBar->addWidget(pmButton);
     ui->ToolBar->addWidget(vrButton);
 
-    if (!UiManager::playMode) {
-        restoreGeometry(settings->getValue("geometry", "").toByteArray());
-        restoreState(settings->getValue("windowState", "").toByteArray());
-    }
+//    if (!UiManager::playMode) {
+//        restoreGeometry(settings->getValue("geometry", "").toByteArray());
+//        restoreState(settings->getValue("windowState", "").toByteArray());
+//    }
 
     setupProjectDB();
     setupUndoRedo();
+
+    // this ties to hidden geometry so should come at the end
+    setupViewMenu();
 
 #ifdef QT_DEBUG
     setWindowTitle("Jahshaka 0.3a - Developer Build");
@@ -658,10 +660,10 @@ void MainWindow::closeEvent(QCloseEvent *event)
         event->accept();
     }
 
-    if (!UiManager::playMode) {
-        settings->setValue("geometry", saveGeometry());
-        settings->setValue("windowState", saveState());
-    }
+//    if (!UiManager::playMode) {
+//        settings->setValue("geometry", saveGeometry());
+//        settings->setValue("windowState", saveState());
+//    }
 
     ThumbnailGenerator::getSingleton()->shutdown();
 }
@@ -679,7 +681,10 @@ void MainWindow::setupFileMenu()
 //    connect(ui->actionDelete,   SIGNAL(triggered(bool)), this, SLOT(deleteProject()));
 
     connect(prefsDialog,  SIGNAL(PreferencesDialogClosed()), this, SLOT(updateSceneSettings()));
+}
 
+void MainWindow::setupViewMenu()
+{
     connect(ui->actionOutliner, &QAction::toggled, [this](bool set) {
         sceneHeirarchyDock->setVisible(set);
     });
@@ -699,11 +704,6 @@ void MainWindow::setupFileMenu()
     connect(ui->actionAssets, &QAction::toggled, [this](bool set) {
         assetDock->setVisible(set);
     });
-}
-
-void MainWindow::setupViewMenu()
-{
-
 }
 
 void MainWindow::setupHelpMenu()
