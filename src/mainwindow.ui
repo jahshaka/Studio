@@ -720,6 +720,9 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <addaction name="actionAnimation"/>
     <addaction name="actionAssets"/>
     <addaction name="actionPresets"/>
+    <addaction name="separator"/>
+    <addaction name="actionClose_All"/>
+    <addaction name="actionRestore_All"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuFile_2"/>
@@ -1027,6 +1030,16 @@ QToolButton:checked
    </property>
    <property name="text">
     <string>Presets</string>
+   </property>
+  </action>
+  <action name="actionClose_All">
+   <property name="text">
+    <string>Close All</string>
+   </property>
+  </action>
+  <action name="actionRestore_All">
+   <property name="text">
+    <string>Restore All</string>
    </property>
   </action>
  </widget>
