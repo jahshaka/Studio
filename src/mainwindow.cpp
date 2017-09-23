@@ -202,6 +202,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     sceneNodeScrollArea->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
     sceneNodeScrollArea->setWidget(sceneNodePropertiesWidget);
     sceneNodeScrollArea->setWidgetResizable(true);
+    sceneNodeScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
     auto sceneNodeLayout = new QVBoxLayout(sceneNodeDockWidgetContents);
     sceneNodeLayout->setContentsMargins(0, 0, 0, 0);
@@ -704,6 +705,14 @@ void MainWindow::setupViewMenu()
     connect(ui->actionAssets, &QAction::toggled, [this](bool set) {
         assetDock->setVisible(set);
     });
+
+    connect(ui->actionClose_All, &QAction::triggered, [this]() {
+        toggleWidgets(false);
+    });
+
+    connect(ui->actionRestore_All, &QAction::triggered, [this]() {
+        toggleWidgets(true);
+    });
 }
 
 void MainWindow::setupHelpMenu()
@@ -905,15 +914,6 @@ void MainWindow::playProject(QString filename)
     assetWidget->trigger();
 
     delete reader;
-}
-
-void MainWindow::toggleWidgets(bool toggle)
-{
-    sceneHeirarchyDock->setVisible(toggle);
-    sceneNodePropertiesDock->setVisible(toggle);
-    presetsDock->setVisible(toggle);
-    assetDock->setVisible(toggle);
-    animationDock->setVisible(toggle);
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
@@ -1429,6 +1429,15 @@ void MainWindow::toggleLightWires(bool state)
     sceneView->setShowLightWires(state);
 }
 
+void MainWindow::toggleWidgets(bool state)
+{
+    sceneHeirarchyDock->setVisible(state);
+    sceneNodePropertiesDock->setVisible(state);
+    presetsDock->setVisible(state);
+    assetDock->setVisible(state);
+    animationDock->setVisible(state);
+}
+
 void MainWindow::tabsChanged(int index)
 {
     if (index == 1) {
@@ -1447,6 +1456,7 @@ void MainWindow::showProjectManagerInternal(bool running)
     saveScene();
     hide();
     pmContainer->showMaximized();
+    pmContainer->updateAfter();
 }
 
 void MainWindow::newScene()

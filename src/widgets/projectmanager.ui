@@ -398,6 +398,13 @@ QListWidget::item:selected {
           </property>
          </spacer>
         </item>
+        <item>
+         <widget class="QLabel" name="label_3">
+          <property name="text">
+           <string>Version: 0.4</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
      </item>
@@ -516,7 +523,7 @@ QListWidget::item:selected {
         <item>
          <widget class="QPushButton" name="browseProjects">
           <property name="text">
-           <string>Browse sample worlds...</string>
+           <string>Create Sample World</string>
           </property>
          </widget>
         </item>
