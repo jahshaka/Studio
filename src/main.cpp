@@ -24,11 +24,13 @@ For more information see the LICENSE file
 
 // Hints that a dedicated GPU should be used whenever possible
 // https://stackoverflow.com/a/39047129/991834
+#ifdef Q_OS_WIN
 extern "C"
 {
   __declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
   __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 }
+#endif
 
 int main(int argc, char *argv[])
 {
