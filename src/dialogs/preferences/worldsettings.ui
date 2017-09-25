@@ -196,7 +196,7 @@ QDoubleSpinBox::down-button:pressed {
       </widget>
      </item>
      <item>
-      <widget class="QCheckBox" name="checkBox">
+      <widget class="QCheckBox" name="showFPS">
        <property name="text">
         <string/>
        </property>

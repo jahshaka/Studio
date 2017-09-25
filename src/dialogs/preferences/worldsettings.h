@@ -31,6 +31,7 @@ public:
     int outlineWidth;
     QColor outlineColor;
     QString defaultProjectDirectory;
+    bool showFps;
 
     void setupDirectoryDefaults();
     void setupOutline();
@@ -38,6 +39,7 @@ public:
 private slots:
     void outlineWidthChanged(double width);
     void outlineColorChanged(QColor color);
+    void showFpsChanged(bool show);
     void changeDefaultDirectory();
     void projectDirectoryChanged(QString path);
 

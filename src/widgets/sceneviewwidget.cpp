@@ -59,6 +59,12 @@ For more information see the LICENSE file
 #include "../irisgl/src/materials/colormaterial.h"
 
 #include "../editor/thumbnailgenerator.h"
+#include "../core/settingsmanager.h"
+
+void SceneViewWidget::setShowFps(bool value)
+{
+    showFps = value;
+}
 
 SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 {
@@ -108,6 +114,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     thumbGen = nullptr;
 
     fontSize = 20;
+    showFps = SettingsManager::getDefaultManager()->getValue("show_fps", true).toBool();
 }
 
 void SceneViewWidget::resetEditorCam()
@@ -394,15 +401,17 @@ void SceneViewWidget::renderScene()
     }
 
     // render fps
-    float fps = 1.0 / dt;
-    float ms = 1000.f / fps;
     spriteBatch->begin();
-    spriteBatch->drawString(font,
-                            QString("%1ms (%2fps)")
-                                .arg(QString::number(ms, 'f', 1))
-                                .arg(QString::number(fps, 'f', 1)),
-                            QVector2D(8, 8),
-                            QColor(255, 255, 255));
+    if (showFps) {
+        float fps = 1.0 / dt;
+        float ms = 1000.f / fps;
+        spriteBatch->drawString(font,
+                                QString("%1ms (%2fps)")
+                                    .arg(QString::number(ms, 'f', 1))
+                                    .arg(QString::number(fps, 'f', 1)),
+                                QVector2D(8, 8),
+                                QColor(255, 255, 255));
+    }
     spriteBatch->end();
 
 }

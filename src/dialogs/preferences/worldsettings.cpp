@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "ui_worldsettings.h"
 #include "../../core/settingsmanager.h"
 #include "../../constants.h"
+#include "../../uimanager.h"
+#include "../../widgets/sceneviewwidget.h"
 #include <QFileDialog>
 #include <QStandardPaths>
 
@@ -34,6 +36,9 @@ WorldSettings::WorldSettings(SettingsManager* settings) :
     connect(ui->projectDefault, SIGNAL(textChanged(QString)),
             this, SLOT(projectDirectoryChanged(QString)));
 
+    connect(ui->showFPS, SIGNAL(toggled(bool)),
+            this, SLOT(showFpsChanged(bool)));
+
     setupDirectoryDefaults();
     setupOutline();
 }
@@ -42,9 +47,11 @@ void WorldSettings::setupOutline()
 {
     outlineWidth = settings->getValue("outline_width", 6).toInt();
     outlineColor = settings->getValue("outline_color", "#3498db").toString();
+    showFps = settings->getValue("show_fps", true).toBool();
 
     ui->outlineWidth->setValue(outlineWidth);
     ui->outlineColor->setColor(outlineColor);
+    ui->showFPS->setChecked(showFps);
 }
 
 void WorldSettings::changeDefaultDirectory()
@@ -64,6 +71,13 @@ void WorldSettings::outlineColorChanged(QColor color)
 {
     settings->setValue("outline_color", color.name());
     outlineColor = color;
+}
+
+void WorldSettings::showFpsChanged(bool show)
+{
+    showFps = show;
+    if (UiManager::sceneViewWidget)
+        UiManager::sceneViewWidget->setShowFps(show);
 }
 
 void WorldSettings::projectDirectoryChanged(QString path)
