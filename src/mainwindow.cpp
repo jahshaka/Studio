@@ -1431,6 +1431,7 @@ void MainWindow::toggleLightWires(bool state)
 
 void MainWindow::toggleWidgets(bool state)
 {
+    ui->ToolBar->setVisible(state);
     sceneHeirarchyDock->setVisible(state);
     sceneNodePropertiesDock->setVisible(state);
     presetsDock->setVisible(state);

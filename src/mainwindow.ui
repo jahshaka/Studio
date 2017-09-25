@@ -71,6 +71,7 @@ QTabBar::tab:bottom:selected {
 }
 
 QDockWidget::title {
+	icon-size: 20px;
     background-color: #202020;
     text-align: center;
 	border-bottom: 1px solid black;
@@ -78,6 +79,7 @@ QDockWidget::title {
 
 QDockWidget {
     border: 0;
+	icon-size: 20px;
     titlebar-close-icon: url(:/icons/close.svg);
     titlebar-normal-icon: url(:/icons/popout.svg);
 }
@@ -85,6 +87,13 @@ QDockWidget {
 QDockWidget::close-button, QDockWidget::float-button {
     icon-size: 20px;
 }
+
+QDockWidget::close-button:hover, QDockWidget::float-button:hover {
+	background: transparent;
+	icon-size: 20px;
+	border: 0;
+}
+
 
 /* ================== */
 
@@ -581,6 +590,9 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
             <property name="toolTipDuration">
              <number>0</number>
             </property>
+            <property name="styleSheet">
+             <string notr="true">background: transparent; border: 0</string>
+            </property>
             <property name="text">
              <string/>
             </property>
@@ -624,12 +636,18 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
             <property name="toolTipDuration">
              <number>0</number>
             </property>
+            <property name="styleSheet">
+             <string notr="true">background: transparent; border: 0</string>
+            </property>
             <property name="text">
              <string/>
             </property>
             <property name="icon">
              <iconset resource="../app/icons.qrc">
               <normaloff>:/icons/g_play.svg</normaloff>:/icons/g_play.svg</iconset>
+            </property>
+            <property name="flat">
+             <bool>true</bool>
             </property>
            </widget>
           </item>
