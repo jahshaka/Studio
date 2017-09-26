@@ -344,7 +344,8 @@ void SceneViewWidget::renderScene()
         scene->update(dt);
 
         // insert vr head
-        if (UiManager::sceneMode != SceneMode::PlayMode || viewportMode != ViewportMode::VR) {
+        qDebug()<<(UiManager::sceneMode == SceneMode::EditMode);
+        if ((UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)) {
             for (auto view : scene->viewers)
                 view->submitRenderItems();
         }
@@ -369,7 +370,8 @@ void SceneViewWidget::renderScene()
                 // let it show back in regular scene rendering mode
                 // i know this looks like a hack, but it'll
                 // have to do until we find a better way to do this
-                selectedNode->submitRenderItems();
+                if (UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)
+                    selectedNode->submitRenderItems();
             }
         }
 
