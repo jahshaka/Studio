@@ -114,7 +114,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     thumbGen = nullptr;
 
     fontSize = 20;
-    showFps = SettingsManager::getDefaultManager()->getValue("show_fps", true).toBool();
+    showFps = SettingsManager::getDefaultManager()->getValue("show_fps", false).toBool();
 }
 
 void SceneViewWidget::resetEditorCam()

@@ -47,7 +47,7 @@ void WorldSettings::setupOutline()
 {
     outlineWidth = settings->getValue("outline_width", 6).toInt();
     outlineColor = settings->getValue("outline_color", "#3498db").toString();
-    showFps = settings->getValue("show_fps", true).toBool();
+    showFps = settings->getValue("show_fps", false).toBool();
 
     ui->outlineWidth->setValue(outlineWidth);
     ui->outlineColor->setColor(outlineColor);
