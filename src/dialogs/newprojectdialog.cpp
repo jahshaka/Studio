@@ -31,6 +31,7 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui
 
 //    connect(ui->browseProject, SIGNAL(pressed()), SLOT(setProjectPath()));
     connect(ui->createProject, SIGNAL(pressed()), SLOT(confirmProjectCreation()));
+    connect(ui->cancel, SIGNAL(pressed()), SLOT(close()));
 
 //    lastValue = settingsManager->getValue("last_wd", "").toString();
 //    if (!lastValue.isEmpty()) {

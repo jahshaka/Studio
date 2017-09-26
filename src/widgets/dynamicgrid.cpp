@@ -117,9 +117,22 @@ void DynamicGrid::deleteTile(ItemGridWidget *widget)
 
 void DynamicGrid::resetView()
 {
-    for (int i = 0; i < gridLayout->count(); i++) {
-       gridLayout->itemAt(i)->widget()->deleteLater();
+    QMutableListIterator<ItemGridWidget*> it(originalItems);
+    while (it.hasNext()) {
+        if (it.next()) {
+            it.remove();
+//            updateGridColumns(lastWidth);
+        }
     }
+
+    QLayoutItem *gridItem;
+        while ((gridItem = gridLayout->takeAt(0)) != NULL)
+        {
+            delete gridItem->widget();
+            delete gridItem;
+        }
+
+    originalItems.clear();
 }
 
 void DynamicGrid::resizeEvent(QResizeEvent *event)

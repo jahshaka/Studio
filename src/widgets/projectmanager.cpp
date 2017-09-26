@@ -173,7 +173,7 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
         QDir dir(projectPath);
         if (dir.removeRecursively()) {
             dynamicGrid->deleteTile(widget);
-            delete widget;
+//            delete widget;
         } else {
             QMessageBox::StandardButton err;
             err = QMessageBox::warning(this,

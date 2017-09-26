@@ -14,7 +14,22 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">#label {
+   <string notr="true">QMenu {
+    background-color: #212121;
+}
+
+QMenu::item {
+    /* sets background of menu item. set this to something non-transparent
+        if you want menu color and menu item color to be different */
+    background-color: #212121;
+}
+
+QMenu::item:selected { /* when user selects item using mouse or keyboard */
+    background-color: #3498db;
+	color: white;
+}
+
+#label {
 	background: #303030;
 	padding: 4px;
 }

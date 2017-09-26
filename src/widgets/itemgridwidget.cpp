@@ -95,10 +95,10 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
 //    spacer->setStyleSheet("background: transparent; color: white");
 //    olayout->addWidget(spacer);
 
-    auto deleteButton = new QPushButton("Delete");
-    deleteButton->setCursor(Qt::PointingHandCursor);
-    deleteButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold;  color: white}");
-    olayout->addWidget(deleteButton);
+//    auto deleteButton = new QPushButton("Delete");
+//    deleteButton->setCursor(Qt::PointingHandCursor);
+//    deleteButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold;  color: white}");
+//    olayout->addWidget(deleteButton);
 
     auto controls = new QWidget();
     controls->setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #3498db, stop:1 #2283c3); border-radius: 1px");
@@ -125,7 +125,7 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
 
     connect(playButton, SIGNAL(pressed()), SLOT(playProject()));
     connect(editButton, SIGNAL(pressed()), SLOT(editProject()));
-    connect(deleteButton, SIGNAL(pressed()), SLOT(removeProject()));
+//    connect(deleteButton, SIGNAL(pressed()), SLOT(removeProject()));
 
     connect(this, SIGNAL(hovered()), SLOT(showControls()));
     connect(this, SIGNAL(left()), SLOT(hideControls()));
@@ -258,7 +258,7 @@ void ItemGridWidget::projectContextMenu(const QPoint &pos)
     connect(&close, SIGNAL(triggered()), this, SLOT(closeProject()));
     menu.addAction(&close);
 
-    menu.addSeparator();
+//    menu.addSeparator();
 
     QAction del("Delete", this);
     connect(&del, SIGNAL(triggered()), this, SLOT(deleteProject()));

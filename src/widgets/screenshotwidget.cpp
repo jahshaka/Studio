@@ -28,7 +28,6 @@ void ScreenshotWidget::setImage(const QImage &value)
 
 void ScreenshotWidget::saveImage()
 {
-    //QFileDialog::getSaveFileName(this, "Save Scene", "", "Jashaka Scene (*.jah)");
     auto filePath = QFileDialog::getSaveFileName(this, "Choose image path","screenshot.png","Supported Image Formats (*.jpg, *.png)");
 
     if (filePath.isEmpty() || filePath.isNull()) return;
