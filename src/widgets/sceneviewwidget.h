@@ -97,6 +97,7 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
     iris::SpriteBatchPtr spriteBatch;
     iris::FontPtr font;
     float fontSize;
+    bool showFps;
 public:
     iris::CameraNodePtr editorCam;
 
@@ -153,6 +154,8 @@ public:
     QImage takeScreenshot(int width=1920, int height=1080);
     bool getShowLightWires() const;
     void setShowLightWires(bool value);
+
+    void setShowFps(bool value);
 
 protected:
     void initializeGL();
