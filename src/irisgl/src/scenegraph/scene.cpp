@@ -104,7 +104,7 @@ void Scene::update(float dt)
 {
     rootNode->update(dt);
 
-    // cameras aren't always be a part of the scene hierarchy, so their matrices are updated here
+    // cameras aren't always a part of the scene hierarchy, so their matrices are updated here
     if (!!camera) {
         camera->update(dt);
         camera->updateCameraMatrices();

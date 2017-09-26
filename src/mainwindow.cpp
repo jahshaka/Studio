@@ -913,6 +913,8 @@ void MainWindow::playProject(QString filename)
 
     assetWidget->trigger();
 
+    onPlaySceneButton();
+
     delete reader;
 }
 

@@ -93,6 +93,8 @@ ForwardRenderer::ForwardRenderer()
     postContext = new PostProcessContext();
 
     perfTimer = new PerformanceTimer();
+
+    renderLightBillboards = true;
 }
 
 void ForwardRenderer::generateShadowBuffer(GLuint size)
@@ -189,7 +191,9 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
     graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
 
     renderNode(renderData, scene);
-    renderBillboardIcons(renderData);
+
+    if (renderLightBillboards)
+        renderBillboardIcons(renderData);
 
     renderTarget->unbind();
 
@@ -286,8 +290,8 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     renderNode(renderData, scene);
 
     //perfTimer->end("render_scene");
-
-    renderBillboardIcons(renderData);
+    if (renderLightBillboards)
+        renderBillboardIcons(renderData);
     //perfTimer->end("render_icons");
 
     //perfTimer->start("render_post");
