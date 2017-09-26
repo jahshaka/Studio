@@ -84,6 +84,8 @@ class ForwardRenderer
 
 public:
 
+    bool renderLightBillboards;
+
     GraphicsDevicePtr getGraphicsDevice();
 
     /**

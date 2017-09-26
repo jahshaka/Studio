@@ -344,10 +344,12 @@ void SceneViewWidget::renderScene()
         scene->update(dt);
 
         // insert vr head
-        qDebug()<<(UiManager::sceneMode == SceneMode::EditMode);
         if ((UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)) {
+            renderer->renderLightBillboards = true;
             for (auto view : scene->viewers)
                 view->submitRenderItems();
+        } else {
+            renderer->renderLightBillboards = false;
         }
 
         // TODO: ensure it doesnt display these shapes in play mode (Nick)
@@ -639,7 +641,9 @@ QImage SceneViewWidget::takeScreenshot(int width, int height)
     this->makeCurrent();
     screenshotRT->resize(width, height, true);
     scene->update(0);
+    renderer->renderLightBillboards = false;
     renderer->renderSceneToRenderTarget(screenshotRT, editorCam, false);
+    renderer->renderLightBillboards = true;
 
     auto img = screenshotRT->toImage();
     this->doneCurrent();
