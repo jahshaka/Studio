@@ -21,7 +21,6 @@ Jahshaka brings you the future of immersive digital content creation with the le
 ## Features:
  - View scenes in virtual reality via the Oculus Rift
  - Build and share your scenes with the world
- - A powerful post-processing effects system
  - Particle system
  - Animation Editor
  - Skeletal Animation
