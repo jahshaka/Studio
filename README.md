@@ -46,8 +46,7 @@ Jahshaka brings you the future of immersive digital content creation with the le
 - Run
 
 ## Credits
-Royalty-free images from [Pixabay](https://pixabay.com/)
-Various Icons sourced from [flaticon](http://www.flaticon.com/) and [the noun project](https://thenounproject.com/)
+Royalty-free images from [Pixabay](https://pixabay.com/). Various icons sourced from [flaticon](http://www.flaticon.com/) and [the noun project](https://thenounproject.com/). Specific corresponding READMEs and licenses in respective folders for free/open source assets used.
 
 ## License(GPLv3)
     http://www.jahshaka.com
