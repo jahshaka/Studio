@@ -128,9 +128,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setFont(font);
 
 #ifdef QT_DEBUG
-    iris::Logger::getSingleton()->init(getAbsoluteAssetPath("log.txt"));
+    iris::Logger::getSingleton()->init(getAbsoluteAssetPath("jahshaka.log"));
 #else
-    iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/log.txt");
+    iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/jahshaka.log");
 #endif
 
     createPostProcessDockWidget();
