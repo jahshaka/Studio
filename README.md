@@ -31,9 +31,6 @@ Jahshaka brings you the future of immersive digital content creation with the le
 
 ## Screenshots
 
-#### Post Processing
-![](https://i.imgur.com/C4R8nWM.png)
-
 #### Particle System
 ![](https://i.imgur.com/XjXUnUx.gif)
 
