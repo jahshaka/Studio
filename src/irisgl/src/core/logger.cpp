@@ -27,7 +27,7 @@ void Logger::init(QString logFilePath)
 void Logger::info(QString text)
 {
     if (out != nullptr) {
-        *out << "[info]: "<<text;
+        *out << "[info]: "<<text<<"\n";
         out->flush();
     }
     qInfo() << text;
@@ -36,7 +36,7 @@ void Logger::info(QString text)
 void Logger::warn(QString text)
 {
     if (out != nullptr) {
-        *out << "[warn]: "<<text;
+        *out << "[warn]: "<<text<<"\n";
         out->flush();
     }
     qWarning() << text;
@@ -45,7 +45,7 @@ void Logger::warn(QString text)
 void Logger::error(QString text)
 {
     if (out != nullptr) {
-        *out << "[error]: "<<text;
+        *out << "[error]: "<<text<<"\n";
         out->flush();
     }
     qCritical() << text;
