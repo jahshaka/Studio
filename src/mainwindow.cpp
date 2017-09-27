@@ -127,7 +127,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     font.setPointSize(font.pointSize() * devicePixelRatio());
     setFont(font);
 
+#ifdef QT_DEBUG
     iris::Logger::getSingleton()->init(getAbsoluteAssetPath("log.txt"));
+#else
+    iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/log.txt");
+#endif
+
     createPostProcessDockWidget();
 
     ui->sceneContainer->setAcceptDrops(true);
