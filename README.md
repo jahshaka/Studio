@@ -21,12 +21,12 @@ Jahshaka brings you the future of immersive digital content creation with the le
 ## Features:
  - View scenes in virtual reality via the Oculus Rift
  - Build and share your scenes with the world
- - Particle system
+ - Particle System
  - Animation Editor
  - Skeletal Animation
  - Realtime Dynamic Shadows
  - Powerful Extensible Material System
- - Asset manager with 3d model previews
+ - Asset Manager
  - Custom Shaders and more&hellip;
 
 ## Screenshots
@@ -38,15 +38,19 @@ Jahshaka brings you the future of immersive digital content creation with the le
 ![](https://i.imgur.com/qTVhlPp.gif)
 
 ## Building From Source
+
+### Requirements
 - You will require Qt version 5.7 or greater
 - A C++ compiler with support for C++11 or later (choose a compiler for your OS when installing the Qt SDK)
 - Qt Creator (also comes with the Qt SDK, latest version recommended)
+
+### Build steps
 - Clone the repo from the project page or download a zipped copy of the source for a specific version from the Releases tab
 - Open the `.pro` file in Qt Creator
 - Run
 
 ## Credits
-Royalty-free images from [Pixabay](https://pixabay.com/). Various icons sourced from [flaticon](http://www.flaticon.com/) and [the noun project](https://thenounproject.com/). Specific corresponding READMEs and licenses in respective folders for free/open source assets used.
+Royalty-free images from [Pixabay](https://pixabay.com/). Various icons sourced from [flaticon](http://www.flaticon.com/) and [the noun project](https://thenounproject.com/). Specific corresponding READMEs and licenses in their respective folders for free/open source assets used.
 
 ## License(GPLv3)
     http://www.jahshaka.com
