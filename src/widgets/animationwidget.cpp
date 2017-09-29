@@ -437,6 +437,8 @@ void AnimationWidget::addPropertyKey(QAction *action)
         break;
     }
 
+    animation->calculateAnimationLength();
+
     // recalc summary keys for this property
     ui->keylabelView->recalcPropertySummaryKeys(animProp->name);
 
