@@ -23,6 +23,9 @@ namespace Constants
     const QString DB_DRIVER         = "QSQLITE";
     const QString DB_ROOT_TABLE     = "JAH_PROJECT";
 
+    const QString DB_PROJECTS_TABLE = "projects";
+    const QString DB_THUMBS_TABLE   = "thumbnails";
+
     const int FPS_90                = 11;// milliseconds
     const int FPS_60                = 17;// milliseconds
 }

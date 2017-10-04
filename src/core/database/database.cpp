@@ -69,6 +69,30 @@ void Database::closeDb()
     db.removeDatabase(connection);
 }
 
+// sbm
+
+// offer to change the location in the future maybe?
+void Database::createGlobalDb() {
+    QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_PROJECTS_TABLE + " ("
+                     "    name              VARCHAR(128),"
+                     "    thumbnail         BLOB,"
+                     "    last_accessed     DATETIME,"
+                     "    last_written      DATETIME,"
+                     "    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
+                     "    scene             BLOB,"
+                     "    version           VARCHAR(8),"
+                     "    description       TEXT,"
+                     "    url               TEXT,"
+                     "    hash              VARCHAR(32) PRIMARY KEY"
+                     ")";
+
+    QSqlQuery query;
+    query.prepare(schema);
+    executeAndCheckQuery(query);
+}
+
+// esbmv
+
 void Database::createProject(QString projectName)
 {
     QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_ROOT_TABLE + " ("

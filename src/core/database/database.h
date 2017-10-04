@@ -18,6 +18,8 @@ public:
     void initializeDatabase(QString name);
     void closeDb();
 
+    void createGlobalDb();
+
     void createProject(QString projectName);
     void insertScene(const QString &projectName, const QByteArray &sceneBlob);
     void updateScene(const QByteArray &sceneBlob);
