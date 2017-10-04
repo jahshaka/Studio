@@ -175,7 +175,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     connect(ui->playSceneBtn, SIGNAL(clicked(bool)), SLOT(onPlaySceneButton()));
 
-    pmContainer = new ProjectManager();
+    setupProjectDB();
+
+    pmContainer = new ProjectManager(db);
 
     sceneHeirarchyDock = new QDockWidget("Hierarchy");
     sceneHeirarchyDock->setObjectName(QStringLiteral("sceneHierarchyDock"));
@@ -339,7 +341,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 //        restoreState(settings->getValue("windowState", "").toByteArray());
 //    }
 
-    setupProjectDB();
     setupUndoRedo();
 
     // this ties to hidden geometry so should come at the end
@@ -775,6 +776,10 @@ void MainWindow::stopAnimWidget()
 void MainWindow::setupProjectDB()
 {
     db = new Database();
+
+    // new
+    db->initializeDatabase("C:/Users/iKlsR/Desktop/ProjectDatabase.db");
+    db->createGlobalDb();
 }
 
 void MainWindow::setupUndoRedo()
@@ -1549,15 +1554,15 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
     auto pPath = QDir(projectPath).filePath(filename + Constants::PROJ_EXT);
 
-    db->initializeDatabase(pPath);
-    db->createProject(Constants::DB_ROOT_TABLE);
+//    db->initializeDatabase(pPath);
+//    db->createProject(Constants::DB_ROOT_TABLE);
 
     auto writer = new SceneWriter();
     auto sceneObject = writer->getSceneObject(pPath,
                                               this->scene,
                                               sceneView->getRenderer()->getPostProcessManager(),
                                               sceneView->getEditorData());
-    db->insertScene(filename, sceneObject);
+    db->insertSceneGlobal(filename, sceneObject);
 
     UiManager::updateWindowTitle();
 
