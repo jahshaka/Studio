@@ -15,6 +15,7 @@ class aiScene;
 class GridWidget;
 class DynamicGrid;
 class ItemGridWidget;
+class Database;
 
 struct ModelData {
     ModelData() = default;
@@ -38,7 +39,7 @@ class ProjectManager : public QWidget
     Q_OBJECT
 
 public:
-    ProjectManager(QWidget *parent = nullptr);
+    ProjectManager(Database *handle, QWidget *parent = nullptr);
     ~ProjectManager();
 
     void prepareStore(QString path, bool playMode = false);
@@ -104,7 +105,7 @@ private:
     QTimer *searchTimer;
     QString searchTerm;
 
-//    Database *db;
+    Database *db;
 
     QListWidgetItem *currentItem;
 //    QProgressDialog *dialog;

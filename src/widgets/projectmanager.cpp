@@ -40,7 +40,7 @@ void reducer(QVector<ModelData> &accum, const QVector<ModelData> &interm)
     accum.append(interm);
 }
 
-ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::ProjectManager)
+ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::ProjectManager)
 {
     ui->setupUi(this);
 
@@ -63,6 +63,8 @@ ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
 //    setFont(font);
 
     setWindowTitle("Jahshaka Desktop");
+
+    this->db = handle;
 
 //    ui->controls->setVisible(false);
 
@@ -194,12 +196,12 @@ void ProjectManager::update()
     auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
     auto projectFolder = settings->getValue("default_directory", path).toString();
 
-    QDir dir(projectFolder);
-    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+//    QDir dir(projectFolder);
+//    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
 
     int i = 0;
-    foreach (const QFileInfo &file, files) {
-        dynamicGrid->addToGridView(new GridWidget(file.absoluteFilePath()), i);
+    foreach (const QStringList &record, db->fetchProjects()) {
+        dynamicGrid->addToGridView(new GridWidget(projectFolder + "/" + record.first()), i);
         i++;
     }
 }
@@ -209,14 +211,14 @@ void ProjectManager::updateAfter()
     auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
     auto projectFolder = settings->getValue("default_directory", path).toString();
 
-    QDir dir(projectFolder);
-    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+//    QDir dir(projectFolder);
+//    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
 
     dynamicGrid->resetView();
 
     int i = 0;
-    foreach (const QFileInfo &file, files) {
-        dynamicGrid->addToGridView(new GridWidget(file.absoluteFilePath()), i);
+    foreach (const QStringList &record, db->fetchProjects()) {
+        dynamicGrid->addToGridView(new GridWidget(projectFolder + "/" + record.first()), i);
         i++;
     }
 }
