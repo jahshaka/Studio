@@ -138,9 +138,9 @@ void TimelineWidget::paintEvent(QPaintEvent *painter)
     paint.drawLine(cursorX, 0, cursorX, widgetHeight);
 
     // draw cursor's "handle"
-    int handleWidth = 16;
+    int handleWidth = 10;
     int halfHandleWidth = handleWidth/2;
-    int handleHeight = 8;
+    int handleHeight = 15;
 
     QPainterPath path;
     path.moveTo(cursorX - halfHandleWidth, 0);
