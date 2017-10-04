@@ -837,7 +837,7 @@ void MainWindow::loadScene()
 
     if (filename.isEmpty() || filename.isNull()) return;
 
-    openProject(filename);
+//    openProject(filename);
 }
 
 void MainWindow::openProject(QString filename)
@@ -855,14 +855,14 @@ void MainWindow::openProject(QString filename)
 
     EditorData* editorData = nullptr;
 
-    db->initializeDatabase(filename);
+    // db->initializeDatabase(filename);
 
     Globals::project->setFilePath(filename);
     UiManager::updateWindowTitle();
 
     auto postMan = sceneView->getRenderer()->getPostProcessManager();
     postMan->clearPostProcesses();
-    auto scene = reader->readScene(filename, db->getSceneBlob(), postMan, &editorData);
+    auto scene = reader->readScene(filename, db->getSceneBlobGlobal(), postMan, &editorData);
 
     toggleWidgets(true);
     setScene(scene);
@@ -981,7 +981,7 @@ void MainWindow::openRecentFile()
         return;
     }
 
-    this->openProject(filename);
+//    this->openProject(filename);
 }
 
 void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
