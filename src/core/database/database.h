@@ -19,6 +19,10 @@ public:
     void closeDb();
 
     void createGlobalDb();
+    void insertSceneGlobal(const QString &projectName, const QByteArray &sceneBlob);
+    QVector<QStringList> fetchProjects();
+    QByteArray getSceneBlobGlobal() const;
+    void updateSceneGlobal(const QByteArray &sceneBlob);
 
     void createProject(QString projectName);
     void insertScene(const QString &projectName, const QByteArray &sceneBlob);

@@ -820,7 +820,7 @@ void MainWindow::saveScene()
                                        scene,
                                        sceneView->getRenderer()->getPostProcessManager(),
                                        sceneView->getEditorData());
-    db->updateScene(blob);
+    db->updateSceneGlobal(blob);
 
     auto img = sceneView->takeScreenshot(Constants::TILE_SIZE.width(), Constants::TILE_SIZE.height());
     img.save(Globals::project->getProjectFolder() + "/Metadata/preview.png");

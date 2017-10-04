@@ -91,6 +91,65 @@ void Database::createGlobalDb() {
     executeAndCheckQuery(query);
 }
 
+void Database::insertSceneGlobal(const QString &projectName, const QByteArray &sceneBlob)
+{
+    QSqlQuery query;
+    query.prepare("INSERT INTO " + Constants::DB_PROJECTS_TABLE + " (name, scene, version, hash)"
+                  "VALUES (:name, :scene, :version, :hash)");
+    query.bindValue(":name",    projectName);
+    query.bindValue(":scene",   sceneBlob);
+    query.bindValue(":version", Constants::CONTENT_VERSION);
+    query.bindValue(":hash",    GUIDManager::generateGUID());
+
+    executeAndCheckQuery(query);
+}
+
+QVector<QStringList> Database::fetchProjects()
+{
+    QSqlQuery query;
+    query.prepare("SELECT name, hash FROM " + Constants::DB_PROJECTS_TABLE);
+    executeAndCheckQuery(query);
+
+    QVector<QStringList> list;
+    while (query.next()) {
+        QSqlRecord record = query.record();
+        QStringList row;
+        for (int i = 0; i < record.count(); i++) {
+            row << record.value(i).toString();
+        }
+        list.append(row);
+    }
+
+    return list;
+}
+
+QByteArray Database::getSceneBlobGlobal() const
+{
+    QSqlQuery query;
+    query.prepare("SELECT scene FROM " + Constants::DB_PROJECTS_TABLE + " WHERE name = ?");
+    query.addBindValue(Globals::project->getProjectName());
+
+    if (query.exec()) {
+        if (query.first()) {
+            return query.value(0).toByteArray();
+        }
+    } else {
+        irisLog("There was an error getting the blob! " + query.lastError().text());
+    }
+
+    return QByteArray();
+}
+
+void Database::updateSceneGlobal(const QByteArray &sceneBlob)
+{
+    QSqlQuery query;
+    query.prepare("UPDATE " + Constants::DB_PROJECTS_TABLE + " SET scene = :blob WHERE name = :name");
+    query.bindValue(":blob",    sceneBlob);
+    query.bindValue(":name",    Globals::project->getProjectName());
+
+    executeAndCheckQuery(query);
+}
+
 // esbmv
 
 void Database::createProject(QString projectName)
