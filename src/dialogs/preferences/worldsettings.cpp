@@ -57,8 +57,9 @@ void WorldSettings::setupOutline()
 void WorldSettings::changeDefaultDirectory()
 {
     QFileDialog projectDir;
-    defaultProjectDirectory = projectDir.getExistingDirectory(nullptr, "Select project dir", "");
-    ui->projectDefault->setText(defaultProjectDirectory);
+    defaultProjectDirectory = projectDir.getExistingDirectory(nullptr, "Select project dir", defaultProjectDirectory);
+    if (!defaultProjectDirectory.isNull())
+        ui->projectDefault->setText(defaultProjectDirectory);
 }
 
 void WorldSettings::outlineWidthChanged(double width)
