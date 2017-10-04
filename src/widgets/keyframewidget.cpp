@@ -184,7 +184,10 @@ void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetIt
     float penSizeSquared = keyPointSize * keyPointSize;
     auto halfHeight = + height / 2.0f;
 
+
     if (data.keyFrame != nullptr) {
+        paint.fillRect(0, yTop, width(), height,QBrush(QColor(0,0,0,15)));
+
         for(auto key:data.keyFrame->keys)
         {
             int xpos = this->timeToPos(key->time);
@@ -202,7 +205,7 @@ void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetIt
             }
         }
     } else if(data.isProperty()){ // draw summary keys
-        //paint.fillRect(0, yTop, this->width(), height, propColor);
+        paint.fillRect(0, yTop, width(), height,QBrush(QColor(0,0,0,40)));
         for(auto& key:data.summaryKeys)
         {
             int xpos = this->timeToPos(key.getTime());
