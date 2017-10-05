@@ -73,7 +73,7 @@ void Database::closeDb()
 // offer to change the location in the future maybe?
 void Database::createGlobalDb() {
     QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_PROJECTS_TABLE + " ("
-                     "    name              VARCHAR(32),"
+                     "    name              VARCHAR(64),"
                      "    thumbnail         BLOB,"
                      "    last_accessed     DATETIME,"
                      "    last_written      DATETIME,"
@@ -92,10 +92,11 @@ void Database::createGlobalDb() {
 
 void Database::createGlobalDbThumbs() {
     QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_THUMBS_TABLE + " ("
+                     "    name              VARCHAR(128),"
                      "    world_guid        VARCHAR(32),"
                      "    thumbnail         BLOB,"
                      "    last_written      DATETIME,"
-                     "    hash              VARCHAR(16) PRIMARY KEY"
+                     "    hash              VARCHAR(16),"
                      "    guid              VARCHAR(32) PRIMARY KEY"
                      ")";
 
@@ -107,20 +108,52 @@ void Database::createGlobalDbThumbs() {
 void Database::insertSceneGlobal(const QString &projectName, const QByteArray &sceneBlob)
 {
     QSqlQuery query;
-    query.prepare("INSERT INTO " + Constants::DB_PROJECTS_TABLE + " (name, scene, version, hash)"
+    query.prepare("INSERT INTO " + Constants::DB_PROJECTS_TABLE + " (name, scene, version, guid)"
                   "VALUES (:name, :scene, :version, :hash)");
     query.bindValue(":name",    projectName);
     query.bindValue(":scene",   sceneBlob);
     query.bindValue(":version", Constants::CONTENT_VERSION);
-    query.bindValue(":hash",    GUIDManager::generateGUID());
+    query.bindValue(":guid",    GUIDManager::generateGUID());
 
     executeAndCheckQuery(query, "insertSceneGlobal");
+}
+
+void Database::insertThumbnailGlobal(const QString &world_guid,
+                                     const QString &name,
+                                     const QByteArray &thumbnail)
+{
+    QSqlQuery query;
+    query.prepare("INSERT INTO " + Constants::DB_THUMBS_TABLE + " (world_guid, name, thumbnail, guid)"
+                  "VALUES (:world_guid, :name, :thumbnail, :guid)");
+    query.bindValue(":world_guid",  world_guid);
+    query.bindValue(":thumbnail",   thumbnail);
+    query.bindValue(":name",        name);
+    query.bindValue(":guid",        GUIDManager::generateGUID());
+
+    executeAndCheckQuery(query, "insertThumbnailGlobal");
+}
+
+bool Database::hasCachedThumbnail(const QString &name)
+{
+    QSqlQuery query;
+    query.prepare("SELECT EXISTS (SELECT 1 FROM " + Constants::DB_THUMBS_TABLE + " WHERE name = ? LIMIT 1)");
+    query.addBindValue(name);
+
+    if (query.exec()) {
+        if (query.first()) {
+            return query.record().value(0).toBool();
+        }
+    } else {
+        qDebug() << "hasCachedThumbnail failed! " + query.lastError().text();
+    }
+
+    return false;
 }
 
 QVector<QStringList> Database::fetchProjects()
 {
     QSqlQuery query;
-    query.prepare("SELECT name, hash FROM " + Constants::DB_PROJECTS_TABLE);
+    query.prepare("SELECT name, guid FROM " + Constants::DB_PROJECTS_TABLE);
     executeAndCheckQuery(query, "fetchProjects");
 
     QVector<QStringList> list;
@@ -148,6 +181,25 @@ QByteArray Database::getSceneBlobGlobal() const
         }
     } else {
         irisLog("There was an error getting the blob! " + query.lastError().text());
+    }
+
+    return QByteArray();
+}
+
+QByteArray Database::fetchCachedThumbnail(const QString &name) const
+{
+    QSqlQuery query;
+    query.prepare("SELECT thumbnail FROM " + Constants::DB_THUMBS_TABLE + " WHERE name = ?");
+    query.addBindValue(name);
+
+    if (query.exec()) {
+        if (query.first()) {
+            return query.value(0).toByteArray();
+        }
+    } else {
+        irisLog(
+            "There was an error fetching a thumbnail for a model (" + name + ")" + query.lastError().text()
+        );
     }
 
     return QByteArray();
