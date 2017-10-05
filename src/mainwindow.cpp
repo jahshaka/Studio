@@ -248,7 +248,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     assetDock = new QDockWidget("Asset Browser");
     assetDock->setObjectName(QStringLiteral("assetDock"));
 
-    assetWidget = new AssetWidget;
+    assetWidget = new AssetWidget(db);
     assetWidget->setAcceptDrops(true);
     assetWidget->installEventFilter(this);
 
@@ -779,6 +779,7 @@ void MainWindow::setupProjectDB()
     // new
     db->initializeDatabase("C:/Users/iKlsR/Desktop/ProjectDatabase.db");
     db->createGlobalDb();
+    db->createGlobalDbThumbs();
 }
 
 void MainWindow::setupUndoRedo()
