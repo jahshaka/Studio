@@ -13,12 +13,13 @@ public:
     Database();
     ~Database();
 
-    void executeAndCheckQuery(QSqlQuery&);
+    void executeAndCheckQuery(QSqlQuery&, const QString&);
     void fetchRecord(const QString &name);
     void initializeDatabase(QString name);
     void closeDb();
 
     void createGlobalDb();
+    void createGlobalDbThumbs();
     void insertSceneGlobal(const QString &projectName, const QByteArray &sceneBlob);
     QVector<QStringList> fetchProjects();
     QByteArray getSceneBlobGlobal() const;

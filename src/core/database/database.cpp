@@ -13,7 +13,6 @@
 
 Database::Database()
 {
-    // qDebug() << QSqlDatabase::drivers();
     if (!QSqlDatabase::isDriverAvailable(Constants::DB_DRIVER)) irisLog("DB driver not present!");
 
     db = QSqlDatabase::addDatabase(Constants::DB_DRIVER);
@@ -27,10 +26,10 @@ Database::~Database()
     db.removeDatabase(connection);
 }
 
-void Database::executeAndCheckQuery(QSqlQuery &query)
+void Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
 {
     if (!query.exec()) {
-        irisLog("Query failed to execute: " + query.lastError().text());
+        irisLog(name + " + Query failed to execute: " + query.lastError().text());
     }
 }
 
@@ -74,21 +73,35 @@ void Database::closeDb()
 // offer to change the location in the future maybe?
 void Database::createGlobalDb() {
     QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_PROJECTS_TABLE + " ("
-                     "    name              VARCHAR(128),"
+                     "    name              VARCHAR(32),"
                      "    thumbnail         BLOB,"
                      "    last_accessed     DATETIME,"
                      "    last_written      DATETIME,"
                      "    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
                      "    scene             BLOB,"
-                     "    version           VARCHAR(8),"
+                     "    version           REAL,"
                      "    description       TEXT,"
                      "    url               TEXT,"
-                     "    hash              VARCHAR(32) PRIMARY KEY"
+                     "    guid              VARCHAR(32) PRIMARY KEY"
                      ")";
 
     QSqlQuery query;
     query.prepare(schema);
-    executeAndCheckQuery(query);
+    executeAndCheckQuery(query, "createGlobalDb");
+}
+
+void Database::createGlobalDbThumbs() {
+    QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_THUMBS_TABLE + " ("
+                     "    world_guid        VARCHAR(32),"
+                     "    thumbnail         BLOB,"
+                     "    last_written      DATETIME,"
+                     "    hash              VARCHAR(16) PRIMARY KEY"
+                     "    guid              VARCHAR(32) PRIMARY KEY"
+                     ")";
+
+    QSqlQuery query;
+    query.prepare(schema);
+    executeAndCheckQuery(query, "createGlobalDbThumbs");
 }
 
 void Database::insertSceneGlobal(const QString &projectName, const QByteArray &sceneBlob)
@@ -101,14 +114,14 @@ void Database::insertSceneGlobal(const QString &projectName, const QByteArray &s
     query.bindValue(":version", Constants::CONTENT_VERSION);
     query.bindValue(":hash",    GUIDManager::generateGUID());
 
-    executeAndCheckQuery(query);
+    executeAndCheckQuery(query, "insertSceneGlobal");
 }
 
 QVector<QStringList> Database::fetchProjects()
 {
     QSqlQuery query;
     query.prepare("SELECT name, hash FROM " + Constants::DB_PROJECTS_TABLE);
-    executeAndCheckQuery(query);
+    executeAndCheckQuery(query, "fetchProjects");
 
     QVector<QStringList> list;
     while (query.next()) {
@@ -147,7 +160,7 @@ void Database::updateSceneGlobal(const QByteArray &sceneBlob)
     query.bindValue(":blob",    sceneBlob);
     query.bindValue(":name",    Globals::project->getProjectName());
 
-    executeAndCheckQuery(query);
+    executeAndCheckQuery(query, "updateSceneGlobal");
 }
 
 // esbmv
@@ -163,7 +176,7 @@ void Database::createProject(QString projectName)
 
     QSqlQuery query;
     query.prepare(schema);
-    executeAndCheckQuery(query);
+    executeAndCheckQuery(query, "createProject");
 }
 
 void Database::insertScene(const QString &projectName, const QByteArray &sceneBlob)
@@ -176,7 +189,7 @@ void Database::insertScene(const QString &projectName, const QByteArray &sceneBl
     query.bindValue(":version", Constants::CONTENT_VERSION);
     query.bindValue(":hash",    GUIDManager::generateGUID());
 
-    executeAndCheckQuery(query);
+    executeAndCheckQuery(query, "insertScene");
 }
 
 void Database::updateScene(const QByteArray &sceneBlob)
@@ -186,7 +199,7 @@ void Database::updateScene(const QByteArray &sceneBlob)
     query.bindValue(":blob",    sceneBlob);
     query.bindValue(":name",    Globals::project->getProjectName());
 
-    executeAndCheckQuery(query);
+    executeAndCheckQuery(query, "updateScene");
 }
 
 QByteArray Database::getSceneBlob() const
