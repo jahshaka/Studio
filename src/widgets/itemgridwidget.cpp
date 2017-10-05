@@ -195,7 +195,7 @@ void ItemGridWidget::removeProject()
 
 void ItemGridWidget::editProject()
 {
-    emit edit(this);
+    emit openFromWidget(this, false);
 }
 
 void ItemGridWidget::enterEvent(QEvent *event)
@@ -269,12 +269,12 @@ void ItemGridWidget::projectContextMenu(const QPoint &pos)
 
 void ItemGridWidget::playProject()
 {
-    emit playFromWidget(this);
+    emit openFromWidget(this, true);
 }
 
 void ItemGridWidget::openProject()
 {
-    emit openFromWidget(this);
+    emit openFromWidget(this, false);
 }
 
 void ItemGridWidget::renameProject()

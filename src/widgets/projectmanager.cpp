@@ -108,13 +108,13 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     ui->pmcont->setLayout(layout);
 }
 
-void ProjectManager::openProjectFromWidget(ItemGridWidget *widget)
+void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
 {
     auto projectFile = QFileInfo(widget->projectName);
     auto projectPath = projectFile.absolutePath();
     Globals::project->setProjectPath(projectPath);
 
-    prepareStore(projectFile.absoluteFilePath());
+    prepareStore(projectFile.absoluteFilePath(), playMode);
 
     this->close();
 }
@@ -575,38 +575,7 @@ void ProjectManager::handleDone()
 
      progressDialog->setLabelText(QString("Initializing panels..."));
 
-     emit fileToOpen(pathToOpen);
-
-     progressDialog->close();
-
-     this->hide();
-}
-
-void ProjectManager::handleDonePlay()
-{
-    progressDialog->setRange(0, 0);
-
-    progressDialog->setLabelText(QString("Populating scene..."));
-
-     for (auto item : futureWatcher->result()) {
-         for (int i = 0; i < AssetManager::assets.count(); i++) {
-             if (AssetManager::assets[i]->path == item.path) {
-                AssimpObject *ao = new AssimpObject(item.data, item.path);
-                AssetObject *model = new AssetObject(ao, item.path);
-
-                QVariant v;
-                v.setValue(ao);
-
-                AssetManager::assets[i] = model;
-             }
-         }
-     }
-
-//     this->close();
-
-     progressDialog->setLabelText(QString("Initializing panels..."));
-
-     emit fileToPlay(pathToOpen);
+     emit fileToOpen(pathToOpen, openInPlayMode);
 
      progressDialog->close();
 
@@ -702,6 +671,7 @@ void ProjectManager::test()
 void ProjectManager::prepareStore(QString path, bool playMode)
 {
     pathToOpen = path;
+    this->openInPlayMode = playMode;
 
     // populate asset list
     QDir d(Globals::project->getProjectFolder());
@@ -747,11 +717,7 @@ void ProjectManager::prepareStore(QString path, bool playMode)
       // Create a QFutureWatcher and connect signals and slots.
       futureWatcher = new QFutureWatcher<QVector<ModelData>>();
 
-      if (playMode) {
-          QObject::connect(futureWatcher, SIGNAL(finished()), SLOT(handleDonePlay()));
-      } else {
-          QObject::connect(futureWatcher, SIGNAL(finished()), SLOT(handleDone()));
-      }
+      QObject::connect(futureWatcher, SIGNAL(finished()), SLOT(handleDone()));
 
       QObject::connect(futureWatcher, SIGNAL(finished()), SLOT(handleDoneFuture()));
       QObject::connect(futureWatcher, SIGNAL(finished()), futureWatcher, SLOT(deleteLater()));

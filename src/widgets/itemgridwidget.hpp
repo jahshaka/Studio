@@ -50,13 +50,12 @@ signals:
 //    void enterPressed(QWidget *current);
     void hovered();
     void left();
-    void edit(ItemGridWidget*);
+    //void edit(ItemGridWidget*, bool playMode);
     void remove(ItemGridWidget*);
     void singleClicked(ItemGridWidget*);
     void doubleClicked(ItemGridWidget*);
 
-    void playFromWidget(ItemGridWidget*);
-    void openFromWidget(ItemGridWidget*);
+    void openFromWidget(ItemGridWidget*, bool playMode);
     void renameFromWidget(ItemGridWidget*);
     void closeFromWidget(ItemGridWidget*);
     void deleteFromWidget(ItemGridWidget*);

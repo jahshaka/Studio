@@ -75,13 +75,12 @@ protected slots:
     void searchTiles(QString);
 
     void handleDone();
-    void handleDonePlay();
     void handleDoneFuture();
 
     void OnLstItemsCommitData(QWidget*);
 
     void openSampleBrowser();
-    void openProjectFromWidget(ItemGridWidget*);
+    void openProjectFromWidget(ItemGridWidget*, bool playMode);
     void playProjectFromWidget(ItemGridWidget*);
     void renameProjectFromWidget(ItemGridWidget*);
     void closeProjectFromWidget(ItemGridWidget*);
@@ -89,9 +88,12 @@ protected slots:
 
     void searchProjects();
 
+private:
+    friend DynamicGrid;
+    bool openInPlayMode;
+
 signals:
-    void fileToOpen(const QString& str);
-    void fileToPlay(const QString& str);
+    void fileToOpen(const QString& str, bool playMode);
     void fileToCreate(const QString& str, const QString& str2);
 
 private:

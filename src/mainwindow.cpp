@@ -281,8 +281,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     addDockWidget(Qt::BottomDockWidgetArea, presetsDock);
     tabifyDockWidget(animationDock, assetDock);
 
-    connect(pmContainer, SIGNAL(fileToOpen(QString)), SLOT(openProject(QString)));
-    connect(pmContainer, SIGNAL(fileToPlay(QString)), SLOT(playProject(QString)));
+    connect(pmContainer, SIGNAL(fileToOpen(QString, bool)), SLOT(openProject(QString, bool)));
     connect(pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
 
     // toolbar stuff
@@ -840,7 +839,7 @@ void MainWindow::loadScene()
 //    openProject(filename);
 }
 
-void MainWindow::openProject(QString filename)
+void MainWindow::openProject(QString filename, bool playMode)
 {
     if (!this->isVisible()) {
         this->showMaximized();
@@ -864,50 +863,9 @@ void MainWindow::openProject(QString filename)
     postMan->clearPostProcesses();
     auto scene = reader->readScene(filename, db->getSceneBlobGlobal(), postMan, &editorData);
 
-    toggleWidgets(true);
-    setScene(scene);
-
-    // use new post process that has fxaa by default
-    // @todo: remember to find a better replacement
-    postProcessWidget->setPostProcessMgr(iris::PostProcessManager::create());
-    this->sceneView->doneCurrent();
-
-    if (editorData != nullptr) {
-        sceneView->setEditorData(editorData);
-        ui->wireCheck->setChecked(editorData->showLightWires);
-    }
-
-    assetWidget->trigger();
-
-    delete reader;
-}
-
-void MainWindow::playProject(QString filename)
-{
-    if (!this->isVisible()) {
-        this->showMaximized();
-    }
-
-    this->sceneView->makeCurrent();
-    //remove current scene first
-    this->removeScene();
-
-    //load new scene
-    auto reader = new SceneReader();
-
-    EditorData* editorData = nullptr;
-
-    db->initializeDatabase(filename);
-
-    Globals::project->setFilePath(filename);
-    UiManager::updateWindowTitle();
-
-    auto postMan = sceneView->getRenderer()->getPostProcessManager();
-    postMan->clearPostProcesses();
-    auto scene = reader->readScene(filename, db->getSceneBlob(), postMan, &editorData);
-
-    UiManager::playMode = true;
-    toggleWidgets(false);
+    // playMode is basically fullscreen mode for now
+    UiManager::playMode = playMode;
+    toggleWidgets(!playMode);
 
     setScene(scene);
 
@@ -923,9 +881,10 @@ void MainWindow::playProject(QString filename)
 
     assetWidget->trigger();
 
-    onPlaySceneButton();
-
     delete reader;
+
+    // autoplay scenes immediately
+    if (playMode) onPlaySceneButton();
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj

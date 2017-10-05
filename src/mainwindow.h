@@ -227,8 +227,7 @@ public slots:
     void openFacebookUrl();
     void openWebsiteUrl();
 
-    void openProject(QString project);
-    void playProject(QString project);
+    void openProject(QString project, bool playMode = false);
 
     void toggleWidgets(bool toggle);
 
