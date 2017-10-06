@@ -93,6 +93,8 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
         settings->setValue("tileSize", changedText);
     });
 
+    connect(ui->importWorld, &QPushButton::pressed, [this]() { emit importProject(); });
+
     dynamicGrid = new DynamicGrid(this);
 
     ui->browseProjects->setCursor(Qt::PointingHandCursor);
@@ -193,32 +195,20 @@ void ProjectManager::searchProjects()
 
 void ProjectManager::update()
 {
-    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-    auto projectFolder = settings->getValue("default_directory", path).toString();
-
-//    QDir dir(projectFolder);
-//    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
-
     int i = 0;
-    foreach (const QStringList &record, db->fetchProjects()) {
-        dynamicGrid->addToGridView(new GridWidget(projectFolder + "/" + record.first()), i);
+    foreach (const ProjectTileData &record, db->fetchProjects()) {
+        dynamicGrid->addToGridView(new GridWidget(record), i);
         i++;
     }
 }
 
 void ProjectManager::updateAfter()
 {
-    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-    auto projectFolder = settings->getValue("default_directory", path).toString();
-
-//    QDir dir(projectFolder);
-//    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
-
     dynamicGrid->resetView();
 
     int i = 0;
-    foreach (const QStringList &record, db->fetchProjects()) {
-        dynamicGrid->addToGridView(new GridWidget(projectFolder + "/" + record.first()), i);
+    foreach (const ProjectTileData &record, db->fetchProjects()) {
+        dynamicGrid->addToGridView(new GridWidget(record), i);
         i++;
     }
 }

@@ -89,12 +89,13 @@ protected slots:
     void searchProjects();
 
 private:
-    friend DynamicGrid;
+    friend DynamicGrid;     // is this going to be a problem?
     bool openInPlayMode;
 
 signals:
     void fileToOpen(const QString& str, bool playMode);
     void fileToCreate(const QString& str, const QString& str2);
+    void importProject();
 
 private:
     Ui::ProjectManager *ui;
