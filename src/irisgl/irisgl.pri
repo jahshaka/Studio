@@ -9,6 +9,7 @@
 #For more information see the LICENSE file
 #**************************************************************************
 
+include(src/zip/zip.pri)
 include(src/ziplib/ziplib.pri)
 include(src/assimp/assimp.pri)
 include(src/libovr/libovr.pri)
