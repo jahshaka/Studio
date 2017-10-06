@@ -1432,11 +1432,12 @@ void MainWindow::importSceneFromZip()
 
         zip_close(zip);
 
-        db->importProject(QDir(temporaryDir.path()).filePath(importProjectName));
-        Globals::project->setProjectPath(pDir);
-
-        pmContainer->hide();
-        openProject(pDir);
+        auto open = db->importProject(QDir(temporaryDir.path()).filePath(importProjectName));
+        if (open) {
+            Globals::project->setProjectPath(pDir);
+            pmContainer->hide();
+            openProject(pDir);
+        }
     }
 
     temporaryDir.remove();

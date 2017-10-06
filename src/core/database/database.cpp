@@ -10,6 +10,8 @@
 #include <QJsonObject>
 #include <QSqlRecord>
 
+#include <QMessageBox>
+
 Database::Database()
 {
     if (!QSqlDatabase::isDriverAvailable(Constants::DB_DRIVER)) irisLog("DB driver not present!");
@@ -283,7 +285,7 @@ void Database::createExportScene(const QString &outTempFilePath)
     dbe.close();
 }
 
-QString Database::importProject(const QString &inFilePath)
+bool Database::importProject(const QString &inFilePath)
 {
     QSqlDatabase dbe = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "myUniqueSQLITEImportConnection");
     dbe.setDatabaseName(inFilePath + ".db");
@@ -308,20 +310,55 @@ QString Database::importProject(const QString &inFilePath)
 
     dbe.close();
 
-    // main
-    QSqlQuery query3;
-    query3.prepare("INSERT INTO " + Constants::DB_PROJECTS_TABLE + " (name, scene, thumbnail, guid)"
-                  "VALUES (:name, :scene, :thumbnail, :guid)");
-    query3.bindValue(":name",       sceneName);
-    query3.bindValue(":scene",      sceneBlob);
-    query3.bindValue(":thumbnail",  sceneThumb);
-    query3.bindValue(":guid",       sceneGuid);
+    QSqlQuery query2;
+    query2.prepare("SELECT EXISTS (SELECT 1 FROM " + Constants::DB_PROJECTS_TABLE + " WHERE guid = ? LIMIT 1)");
+    query2.addBindValue(sceneGuid);
 
-    executeAndCheckQuery(query3, "insertSceneGlobal");
+    bool exists = false;
+    if (query2.exec()) {
+        if (query2.first()) {
+            exists = query2.record().value(0).toBool();
+        }
+    } else {
+        qDebug() << "hasExistingProject failed! " + query2.lastError().text();
+    }
 
-    Globals::project->setProjectGuid(sceneGuid);
+    if (exists) {
+        QMessageBox::StandardButton reply;
+        reply = QMessageBox::question(Q_NULLPTR,
+                                      "Project Exists",
+                                      "This project already exists, Replace it?",
+                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+        if (reply == QMessageBox::Yes) {
+            QSqlQuery query31;
+            query31.prepare("UPDATE " + Constants::DB_PROJECTS_TABLE + " SET scene = ?, thumbnail = ? WHERE guid = ?");
+            query31.addBindValue(sceneBlob);
+            query31.addBindValue(sceneThumb);
+            query31.addBindValue(sceneGuid);
 
-    return sceneName;
+            executeAndCheckQuery(query31, "updateinsertSceneGlobal");
+
+            Globals::project->setProjectGuid(sceneGuid);
+            return true;
+        } else if (reply == QMessageBox::No) {
+            return false;
+        }
+    } else {
+        QSqlQuery query3;
+        query3.prepare("INSERT INTO " + Constants::DB_PROJECTS_TABLE + " (name, scene, thumbnail, guid)"
+                      "VALUES (:name, :scene, :thumbnail, :guid)");
+        query3.bindValue(":name",       sceneName);
+        query3.bindValue(":scene",      sceneBlob);
+        query3.bindValue(":thumbnail",  sceneThumb);
+        query3.bindValue(":guid",       sceneGuid);
+
+        executeAndCheckQuery(query3, "insertSceneGlobal");
+
+        Globals::project->setProjectGuid(sceneGuid);
+        return true;
+    }
+
+    return false;
 }
 
 // esbmv
