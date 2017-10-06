@@ -112,11 +112,6 @@ For more information see the LICENSE file
 #include "../src/widgets/modelpresets.h"
 #include "../src/widgets/skypresets.h"
 
-#include "../ZipLib/ZipFile.h"
-#include "../ZipLib/streams/memstream.h"
-
-#include "../ZipLib/methods/Bzip2Method.h"
-
 #include "src/irisgl/src/zip/zip.h"
 
 enum class VRButtonMode : int
