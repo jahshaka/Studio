@@ -289,6 +289,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(pmContainer, SIGNAL(fileToOpen(QString, bool)), SLOT(openProject(QString, bool)));
     connect(pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
     connect(pmContainer, SIGNAL(importProject()), SLOT(importSceneFromZip()));
+    connect(pmContainer, SIGNAL(exportProject()), SLOT(exportSceneAsZip()));
 
     // toolbar stuff
     connect(ui->actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
@@ -1429,6 +1430,10 @@ void MainWindow::importSceneFromZip()
         }
 
         zip_close(zip);
+
+        db->importProject(QDir(temporaryDir.path()).filePath(importProjectName));
+        Globals::project->setProjectPath(pDir);
+        openProject(pDir);
     }
 
     temporaryDir.remove();

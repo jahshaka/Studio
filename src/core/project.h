@@ -20,18 +20,21 @@ public:
     QString fileName;
     QString projectName;
     QString filePath;
+    QString guid;
 
     bool _saved;
 public:
     Project();
     void setFilePath(QString filePath);
     void setProjectPath(const QString&);
+    void setProjectGuid(const QString&);
     bool isSaved();
 
     QString getFilePath();
     QString getFileName();
     QString getProjectName();
     QString getProjectFolder();
+    QString getProjectGuid();
 
     static Project* createNew();
 };

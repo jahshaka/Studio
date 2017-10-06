@@ -115,10 +115,17 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
     auto projectFile = QFileInfo(widget->projectName);
     auto projectPath = projectFile.absolutePath();
     Globals::project->setProjectPath(projectPath);
+    Globals::project->setProjectGuid(widget->guid);
 
     prepareStore(projectFile.absoluteFilePath(), playMode);
 
     this->close();
+}
+
+void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
+{
+    Globals::project->setProjectGuid(widget->guid);
+    emit exportProject();
 }
 
 void ProjectManager::playProjectFromWidget(ItemGridWidget *widget)

@@ -13,6 +13,7 @@ public:
     QPixmap image;
     QString path;
     QString projectName;
+    QString guid;
 };
 
 #endif // GRIDWIDGET_H

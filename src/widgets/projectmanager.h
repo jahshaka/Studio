@@ -81,6 +81,7 @@ protected slots:
 
     void openSampleBrowser();
     void openProjectFromWidget(ItemGridWidget*, bool playMode);
+    void exportProjectFromWidget(ItemGridWidget*);
     void playProjectFromWidget(ItemGridWidget*);
     void renameProjectFromWidget(ItemGridWidget*);
     void closeProjectFromWidget(ItemGridWidget*);
@@ -96,6 +97,7 @@ signals:
     void fileToOpen(const QString& str, bool playMode);
     void fileToCreate(const QString& str, const QString& str2);
     void importProject();
+    void exportProject();
 
 private:
     Ui::ProjectManager *ui;

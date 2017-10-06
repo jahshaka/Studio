@@ -20,4 +20,5 @@ GridWidget::GridWidget(ProjectTileData tileData, QWidget *parent) : QWidget(pare
     }
 
     projectName = this->path + "/" + tileData.name + ".jah";
+    guid = tileData.guid;
 }
