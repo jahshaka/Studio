@@ -1,24 +1,24 @@
 #include "gridwidget.h"
 
-#include "../core/settingsmanager.h"
-#include "../constants.h"
+#include <QFileInfo>
+#include <QDebug>
 
-GridWidget::GridWidget(ProjectTileData tileData, QWidget *parent) : QWidget(parent)
+GridWidget::GridWidget(QString path, QWidget *parent) : QWidget(parent)
 {
-    auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-    auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
-
     setFocusPolicy(Qt::StrongFocus);
 
-    this->path = QDir(projectFolder).filePath(tileData.name);
+    this->path = path;
+    auto img = QFileInfo(path + "/Metadata/preview.png");
 
-    if (!tileData.thumbnail.isEmpty() || !tileData.thumbnail.isNull()) {
-        QPixmap cachedPixmap;
-        if (cachedPixmap.loadFromData(tileData.thumbnail, "PNG")) image = cachedPixmap;
+    if (img.exists()) {
+        image = QPixmap::fromImage(QImage(img.absoluteFilePath()));
     } else {
         image = QPixmap::fromImage(QImage(":/images/preview.png"));
     }
 
-    projectName = this->path + "/" + tileData.name + ".jah";
-    guid = tileData.guid;
+
+    QFileInfo finfo = QFileInfo(path);
+//    qDebug() << finfo.baseName();
+
+    projectName = path + "/" + finfo.baseName() + ".jah";
 }

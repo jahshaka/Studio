@@ -47,11 +47,8 @@ For more information see the LICENSE file
 #include <QOpenGLDebugLogger>
 #include <QUndoStack>
 
-#include <QBuffer>
-#include <QDirIterator>
 #include <QDockWidget>
 #include <QFileDialog>
-#include <QTemporaryDir>
 
 #include <QTreeWidgetItem>
 
@@ -111,8 +108,6 @@ For more information see the LICENSE file
 #include "../src/widgets/materialsets.h"
 #include "../src/widgets/modelpresets.h"
 #include "../src/widgets/skypresets.h"
-
-#include "src/irisgl/src/zip/zip.h"
 
 enum class VRButtonMode : int
 {
@@ -180,9 +175,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     connect(ui->playSceneBtn, SIGNAL(clicked(bool)), SLOT(onPlaySceneButton()));
 
-    setupProjectDB();
-
-    pmContainer = new ProjectManager(db);
+    pmContainer = new ProjectManager();
 
     sceneHeirarchyDock = new QDockWidget("Hierarchy");
     sceneHeirarchyDock->setObjectName(QStringLiteral("sceneHierarchyDock"));
@@ -194,8 +187,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     UiManager::sceneHeirarchyWidget = sceneHeirarchyWidget;
 
-    connect(sceneHeirarchyWidget,   SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
-            this,                   SLOT(sceneNodeSelected(iris::SceneNodePtr)));
+    connect(sceneHeirarchyWidget, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
+            this,           SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
 
     // Since this widget can be longer than there is screen space, we need to add a QScrollArea
@@ -253,7 +246,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     assetDock = new QDockWidget("Asset Browser");
     assetDock->setObjectName(QStringLiteral("assetDock"));
 
-    assetWidget = new AssetWidget(db);
+    assetWidget = new AssetWidget;
     assetWidget->setAcceptDrops(true);
     assetWidget->installEventFilter(this);
 
@@ -286,10 +279,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     addDockWidget(Qt::BottomDockWidgetArea, presetsDock);
     tabifyDockWidget(animationDock, assetDock);
 
-    connect(pmContainer, SIGNAL(fileToOpen(QString, bool)), SLOT(openProject(QString, bool)));
+    connect(pmContainer, SIGNAL(fileToOpen(QString)), SLOT(openProject(QString)));
+    connect(pmContainer, SIGNAL(fileToPlay(QString)), SLOT(playProject(QString)));
     connect(pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
-    connect(pmContainer, SIGNAL(importProject()), SLOT(importSceneFromZip()));
-    connect(pmContainer, SIGNAL(exportProject()), SLOT(exportSceneAsZip()));
 
     // toolbar stuff
     connect(ui->actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
@@ -347,6 +339,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 //        restoreState(settings->getValue("windowState", "").toByteArray());
 //    }
 
+    setupProjectDB();
     setupUndoRedo();
 
     // this ties to hidden geometry so should come at the end
@@ -689,8 +682,6 @@ void MainWindow::setupFileMenu()
     connect(ui->actionNewProject,       SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
     connect(ui->actionManage_Projects,  SIGNAL(triggered(bool)), this, SLOT(callProjectManager()));
 
-    connect(ui->actionExport,           SIGNAL(triggered(bool)), this, SLOT(exportSceneAsZip()));
-
 //    connect(ui->actionOpen,     SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
     connect(ui->actionClose,    SIGNAL(triggered(bool)), this, SLOT(showProjectManagerInternal(bool)));
 //    connect(ui->actionDelete,   SIGNAL(triggered(bool)), this, SLOT(deleteProject()));
@@ -783,13 +774,7 @@ void MainWindow::stopAnimWidget()
 
 void MainWindow::setupProjectDB()
 {
-    auto path = QDir(QStandardPaths::writableLocation(QStandardPaths::DataLocation))
-                .filePath(Constants::JAH_DATABASE);
-
     db = new Database();
-    db->initializeDatabase(path);
-    db->createGlobalDb();
-    db->createGlobalDbThumbs();
 }
 
 void MainWindow::setupUndoRedo()
@@ -830,14 +815,10 @@ void MainWindow::saveScene()
                                        scene,
                                        sceneView->getRenderer()->getPostProcessManager(),
                                        sceneView->getEditorData());
+    db->updateScene(blob);
 
     auto img = sceneView->takeScreenshot(Constants::TILE_SIZE.width(), Constants::TILE_SIZE.height());
-    QByteArray thumb;
-    QBuffer buffer(&thumb);
-    buffer.open(QIODevice::WriteOnly);
-    img.save(&buffer, "PNG");
-    db->updateSceneGlobal(blob, thumb);
-    //img.save(Globals::project->getProjectFolder() + "/Metadata/preview.png");
+    img.save(Globals::project->getProjectFolder() + "/Metadata/preview.png");
 }
 
 void MainWindow::saveSceneAs()
@@ -851,10 +832,10 @@ void MainWindow::loadScene()
 
     if (filename.isEmpty() || filename.isNull()) return;
 
-//    openProject(filename);
+    openProject(filename);
 }
 
-void MainWindow::openProject(QString filename, bool playMode)
+void MainWindow::openProject(QString filename)
 {
     if (!this->isVisible()) {
         this->showMaximized();
@@ -869,19 +850,16 @@ void MainWindow::openProject(QString filename, bool playMode)
 
     EditorData* editorData = nullptr;
 
-    // db->initializeDatabase(filename);
+    db->initializeDatabase(filename);
 
     Globals::project->setFilePath(filename);
     UiManager::updateWindowTitle();
 
     auto postMan = sceneView->getRenderer()->getPostProcessManager();
     postMan->clearPostProcesses();
-    auto scene = reader->readScene(filename, db->getSceneBlobGlobal(), postMan, &editorData);
+    auto scene = reader->readScene(filename, db->getSceneBlob(), postMan, &editorData);
 
-    // playMode is basically fullscreen mode for now
-    UiManager::playMode = playMode;
-    toggleWidgets(!playMode);
-
+    toggleWidgets(true);
     setScene(scene);
 
     // use new post process that has fxaa by default
@@ -897,9 +875,52 @@ void MainWindow::openProject(QString filename, bool playMode)
     assetWidget->trigger();
 
     delete reader;
+}
 
-    // autoplay scenes immediately
-    if (playMode) onPlaySceneButton();
+void MainWindow::playProject(QString filename)
+{
+    if (!this->isVisible()) {
+        this->showMaximized();
+    }
+
+    this->sceneView->makeCurrent();
+    //remove current scene first
+    this->removeScene();
+
+    //load new scene
+    auto reader = new SceneReader();
+
+    EditorData* editorData = nullptr;
+
+    db->initializeDatabase(filename);
+
+    Globals::project->setFilePath(filename);
+    UiManager::updateWindowTitle();
+
+    auto postMan = sceneView->getRenderer()->getPostProcessManager();
+    postMan->clearPostProcesses();
+    auto scene = reader->readScene(filename, db->getSceneBlob(), postMan, &editorData);
+
+    UiManager::playMode = true;
+    toggleWidgets(false);
+
+    setScene(scene);
+
+    // use new post process that has fxaa by default
+    // @todo: remember to find a better replacement
+    postProcessWidget->setPostProcessMgr(iris::PostProcessManager::create());
+    this->sceneView->doneCurrent();
+
+    if (editorData != nullptr) {
+        sceneView->setEditorData(editorData);
+        ui->wireCheck->setChecked(editorData->showLightWires);
+    }
+
+    assetWidget->trigger();
+
+    onPlaySceneButton();
+
+    delete reader;
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
@@ -955,7 +976,7 @@ void MainWindow::openRecentFile()
         return;
     }
 
-//    this->openProject(filename);
+    this->openProject(filename);
 }
 
 void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
@@ -1366,162 +1387,6 @@ bool MainWindow::isModelExtension(QString extension)
     return false;
 }
 
-QString importProjectName;
-QStringList fileNames;
-int on_extract_entry(const char *filename, void *arg) {
-    QFileInfo fInfo(filename);
-    if (fInfo.suffix() == "db") {
-        importProjectName = fInfo.baseName();
-    } else {
-        fileNames.append(filename);
-    }
-
-    return 0;
-}
-
-void MainWindow::importSceneFromZip()
-{
-    auto filename = QFileDialog::getOpenFileName(this,      "Import World",
-                                                 nullptr,   "Jahshaka Project (*.zip)");
-
-    if (filename.isEmpty() || filename.isNull()) return;
-
-    // get the current project working directory
-    auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
-                                 Constants::PROJECT_FOLDER);
-    auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
-
-    // create a temporary directory and extract our project into it
-    // we need a sure way to get the project name, so we have to extract it first and check the blob
-    QTemporaryDir temporaryDir;
-    temporaryDir.setAutoRemove(false);
-    if (temporaryDir.isValid()) {
-        zip_extract(filename.toStdString().c_str(),
-                    temporaryDir.path().toStdString().c_str(),
-                    on_extract_entry,
-                    Q_NULLPTR);
-    }
-
-    // now extract the project to the default projects directory with the name
-    if (!importProjectName.isEmpty() || !importProjectName.isNull()) {
-        auto pDir = QDir(defaultProjectDirectory).filePath(importProjectName);
-        QDir workingTempDirectory(temporaryDir.path());
-
-        QDir dirMaker;
-        dirMaker.mkdir(pDir);
-
-        struct zip_t *zip = zip_open(filename.toStdString().c_str(), 0, 'r');
-
-        for (int i = 0; i < fileNames.count(); i++) {
-            QFileInfo fInfo(fileNames[i]);
-            auto file = QString(workingTempDirectory.relativeFilePath(fileNames[i])).toStdString().c_str();
-
-            // we need to pay special attention to directories since we want to create empty ones as well
-            // also directories need to exist prior to a file being written
-            if (fInfo.isDir()) {
-                dirMaker.mkdir(QDir(pDir).filePath(file));
-            }
-            else {
-                zip_entry_open(zip, file);
-                zip_entry_fread(zip, QDir(pDir).filePath(file).toStdString().c_str());
-            }
-
-            // we close each entry after a successful write
-            zip_entry_close(zip);
-        }
-
-        zip_close(zip);
-
-        auto open = db->importProject(QDir(temporaryDir.path()).filePath(importProjectName));
-        if (open) {
-            Globals::project->setProjectPath(pDir);
-            pmContainer->hide();
-            openProject(pDir);
-        }
-    }
-
-    temporaryDir.remove();
-}
-
-void MainWindow::exportSceneAsZip()
-{
-    // get the export file path from a save dialog
-    auto filePath = QFileDialog::getSaveFileName(
-                        this,
-                        "Choose export path",
-                        Globals::project->getProjectName() + "_" + Constants::DEF_EXPORT_FILE,
-                        "Supported Export Formats (*.zip)"
-                    );
-
-    if (filePath.isEmpty() || filePath.isNull()) return;
-
-    // Maybe in the future one could add a way to using an in memory database
-    // and saving saving that as a blob which can be put into the zip as bytes (iKlsR)
-    // prepare our export database with the current scene, use the os temp location and remove after
-    db->createExportScene(QStandardPaths::writableLocation(QStandardPaths::TempLocation));
-
-    // get the current project working directory
-    auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
-                                 Constants::PROJECT_FOLDER);
-    auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
-    auto pDir = IrisUtils::join(defaultProjectDirectory, Globals::project->getProjectName());
-
-    // get all the files and directories in the project working directory
-    QDir workingProjectDirectory(pDir);
-    QDirIterator projectDirIterator(pDir,
-                                    QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
-                                    QDirIterator::Subdirectories);
-
-    QVector<QString> fileNames;
-    while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
-
-    // open a basic zip file for writing, maybe change compression level later (iKlsR)
-    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
-
-    for (int i = 0; i < fileNames.count(); i++) {
-        QFileInfo fInfo(fileNames[i]);
-
-        // we need to pay special attention to directories since we want to write empty ones as well
-        if (fInfo.isDir()) {
-            zip_entry_open(
-                zip,
-                /* will only create directory if / is appended */
-                QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
-            );
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-        else {
-            zip_entry_open(
-                zip,
-                workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
-            );
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-
-        // we close each entry after a successful write
-        zip_entry_close(zip);
-    }
-
-    // finally add our exported scene
-    zip_entry_open(zip, QString(Globals::project->getProjectName() + ".db").toStdString().c_str());
-    zip_entry_fwrite(
-        zip,
-        QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
-            .filePath(Globals::project->getProjectName() + ".db").toStdString().c_str()
-    );
-    zip_entry_close(zip);
-
-    // close our now exported file
-    zip_close(zip);
-
-    // remove the temporary db created
-    QDir tempFile;
-    tempFile.remove(
-        QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
-            .filePath(Globals::project->getProjectName() + ".db")
-    );
-}
-
 QIcon MainWindow::getIconFromSceneNodeType(SceneNodeType type)
 {
     return QIcon();
@@ -1686,15 +1551,15 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
     auto pPath = QDir(projectPath).filePath(filename + Constants::PROJ_EXT);
 
-//    db->initializeDatabase(pPath);
-//    db->createProject(Constants::DB_ROOT_TABLE);
+    db->initializeDatabase(pPath);
+    db->createProject(Constants::DB_ROOT_TABLE);
 
     auto writer = new SceneWriter();
     auto sceneObject = writer->getSceneObject(pPath,
                                               this->scene,
                                               sceneView->getRenderer()->getPostProcessManager(),
                                               sceneView->getEditorData());
-    db->insertSceneGlobal(filename, sceneObject);
+    db->insertScene(filename, sceneObject);
 
     UiManager::updateWindowTitle();
 

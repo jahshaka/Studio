@@ -9,9 +9,7 @@
 #include "../uimanager.h"
 #include "../widgets/sceneviewwidget.h"
 #include "../editor/thumbnailgenerator.h"
-#include "../core/database/database.h"
 
-#include <QBuffer>
 #include <QDebug>
 #include <QDir>
 #include <QDrag>
@@ -19,11 +17,9 @@
 #include <QMimeData>
 #include <QMouseEvent>
 
-AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
+AssetWidget::AssetWidget(QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
     ui->setupUi(this);
-
-    this->db = handle;
 
     ui->assetView->viewport()->installEventFilter(this);
     ui->assetTree->viewport()->installEventFilter(this);
@@ -156,13 +152,10 @@ void AssetWidget::walkFileSystem(QString folder, QString path)
             asset->path = file.absoluteFilePath();
             asset->thumbnail = pixmap;
 
-            if (asset->type == AssetType::Object) {
-                if (!db->hasCachedThumbnail(asset->fileName)) {
-                    ThumbnailGenerator::getSingleton()->requestThumbnail(
-                        ThumbnailRequestType::Mesh, asset->path, asset->path
-                    );
-                }
-            }
+            //submit to have thumbnail generated
+            if (asset->type == AssetType::Object)
+                ThumbnailGenerator::getSingleton()->requestThumbnail(ThumbnailRequestType::Mesh,asset->path,asset->path);
+
 
             AssetManager::addAsset(asset);
         } else {
@@ -207,21 +200,12 @@ void AssetWidget::addItem(const QString &asset)
             item->setIcon(QIcon(pixmap));
         } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
             //type = AssetType::Object;
-            // todo do this once into the list instead of per item maybe...
-            if (db->hasCachedThumbnail(file.fileName())) {
-                QPixmap cachedPixmap;
-                const QByteArray blob = db->fetchCachedThumbnail(file.fileName());
-                if (cachedPixmap.loadFromData(blob, "PNG")) {
-                    item->setIcon(QIcon(cachedPixmap));
-                }
-            }
-            else {
-                item->setIcon(QIcon(":/icons/google-drive-file.svg"));
-                auto asset = AssetManager::getAssetByPath(file.absoluteFilePath());
-                if (asset!=nullptr) {
-                    if (!asset->thumbnail.isNull())
-                        item->setIcon(QIcon(asset->thumbnail));
-                }
+            item->setIcon(QIcon(":/icons/google-drive-file.svg"));
+            //qDebug()<<file.absoluteFilePath();
+            auto asset = AssetManager::getAssetByPath(file.absoluteFilePath());
+            if (asset!=nullptr) {
+                if (!asset->thumbnail.isNull())
+                    item->setIcon(QIcon(asset->thumbnail));
             }
         } else if (file.suffix() == "shader") {
             //type = AssetType::Shader;
@@ -574,11 +558,8 @@ void AssetWidget::importAsset(const QStringList &path)
                 asset->path = file.absoluteFilePath();
                 asset->thumbnail = pixmap;
 
-                if (asset->type == AssetType::Object) {
-                    ThumbnailGenerator::getSingleton()->requestThumbnail(
-                        ThumbnailRequestType::Mesh, asset->path, asset->path
-                    );
-                }
+                if (asset->type == AssetType::Object)
+                    ThumbnailGenerator::getSingleton()->requestThumbnail(ThumbnailRequestType::Mesh,asset->path,asset->path);
 
                 AssetManager::addAsset(asset);
             }
@@ -590,21 +571,19 @@ void AssetWidget::importAsset(const QStringList &path)
 
 void AssetWidget::onThumbnailResult(ThumbnailResult* result)
 {
-    for (auto& asset : AssetManager::getAssets()) {
+    for(auto& asset : AssetManager::getAssets()) {
         if (asset->path == result->id) {
+            //qDebug()<<asset->path;
             asset->thumbnail = QPixmap::fromImage(result->thumbnail);
-
-            QByteArray bytes;
-            QBuffer buffer(&bytes);
-            buffer.open(QIODevice::WriteOnly);
-            asset->thumbnail.save(&buffer, "PNG");
-            db->insertThumbnailGlobal("GGBOIS", asset->fileName, bytes);
 
             // find item and update its icon
             auto items = ui->assetView->findItems(asset->fileName, Qt::MatchExactly);
             if (items.count() > 0) {
                 items[0]->setIcon(asset->thumbnail);
             }
+
+            //auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
+            //asset->thumbnail = QPixmap::fromImage(*thumb->thumb);
         }
     }
 

@@ -53,11 +53,6 @@ int main(int argc, char *argv[])
     QApplication::setDesktopSettingsAware(false);
     QApplication app(argc, argv);
     app.setWindowIcon(QIcon(":/images/logo.png"));
-    app.setApplicationName("Jahshaka");
-
-    auto dataPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
-    QDir dataDir(dataPath);
-    if (!dataDir.exists()) dataDir.mkpath(dataPath);
 
 // use nicer font on platforms with poor defaults, Mac has really nice font rendering (iKlsR)
 #if defined(Q_OS_WIN) || defined(Q_OS_UNIX)

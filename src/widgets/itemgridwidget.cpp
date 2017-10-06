@@ -18,7 +18,6 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
     projectName = item->projectName;
     auto fileName = QFileInfo(projectName);
     name = fileName.baseName();
-    guid = item->guid;
 
     setParent(parent);
 
@@ -196,7 +195,7 @@ void ItemGridWidget::removeProject()
 
 void ItemGridWidget::editProject()
 {
-    emit openFromWidget(this, false);
+    emit edit(this);
 }
 
 void ItemGridWidget::enterEvent(QEvent *event)
@@ -251,10 +250,6 @@ void ItemGridWidget::projectContextMenu(const QPoint &pos)
     connect(&open, SIGNAL(triggered()), this, SLOT(openProject()));
     menu.addAction(&open);
 
-    QAction exportProj("Export", this);
-    connect(&exportProj, SIGNAL(triggered()), this, SLOT(exportProject()));
-    menu.addAction(&exportProj);
-
     QAction rename("Rename", this);
     connect(&rename, SIGNAL(triggered()), this, SLOT(renameProject()));
     menu.addAction(&rename);
@@ -274,17 +269,12 @@ void ItemGridWidget::projectContextMenu(const QPoint &pos)
 
 void ItemGridWidget::playProject()
 {
-    emit openFromWidget(this, true);
-}
-
-void ItemGridWidget::exportProject()
-{
-    emit exportFromWidget(this);
+    emit playFromWidget(this);
 }
 
 void ItemGridWidget::openProject()
 {
-    emit openFromWidget(this, false);
+    emit openFromWidget(this);
 }
 
 void ItemGridWidget::renameProject()

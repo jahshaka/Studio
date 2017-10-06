@@ -15,7 +15,6 @@ class aiScene;
 class GridWidget;
 class DynamicGrid;
 class ItemGridWidget;
-class Database;
 
 struct ModelData {
     ModelData() = default;
@@ -39,7 +38,7 @@ class ProjectManager : public QWidget
     Q_OBJECT
 
 public:
-    ProjectManager(Database *handle, QWidget *parent = nullptr);
+    ProjectManager(QWidget *parent = nullptr);
     ~ProjectManager();
 
     void prepareStore(QString path, bool playMode = false);
@@ -75,13 +74,13 @@ protected slots:
     void searchTiles(QString);
 
     void handleDone();
+    void handleDonePlay();
     void handleDoneFuture();
 
     void OnLstItemsCommitData(QWidget*);
 
     void openSampleBrowser();
-    void openProjectFromWidget(ItemGridWidget*, bool playMode);
-    void exportProjectFromWidget(ItemGridWidget*);
+    void openProjectFromWidget(ItemGridWidget*);
     void playProjectFromWidget(ItemGridWidget*);
     void renameProjectFromWidget(ItemGridWidget*);
     void closeProjectFromWidget(ItemGridWidget*);
@@ -89,15 +88,10 @@ protected slots:
 
     void searchProjects();
 
-private:
-    friend DynamicGrid;     // is this going to be a problem?
-    bool openInPlayMode;
-
 signals:
-    void fileToOpen(const QString& str, bool playMode);
+    void fileToOpen(const QString& str);
+    void fileToPlay(const QString& str);
     void fileToCreate(const QString& str, const QString& str2);
-    void importProject();
-    void exportProject();
 
 private:
     Ui::ProjectManager *ui;
@@ -110,7 +104,7 @@ private:
     QTimer *searchTimer;
     QString searchTerm;
 
-    Database *db;
+//    Database *db;
 
     QListWidgetItem *currentItem;
 //    QProgressDialog *dialog;

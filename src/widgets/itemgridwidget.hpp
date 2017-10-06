@@ -17,7 +17,6 @@ public:
     QSize tileSize;
     QString projectName;
     QString name;
-    QString guid;
 
     void setTileSize(QSize size);
     void updateImage();
@@ -33,7 +32,6 @@ protected slots:
 
     void playProject();
     void openProject();
-    void exportProject();
     void renameProject();
     void closeProject();
     void deleteProject();
@@ -52,13 +50,13 @@ signals:
 //    void enterPressed(QWidget *current);
     void hovered();
     void left();
-    //void edit(ItemGridWidget*, bool playMode);
+    void edit(ItemGridWidget*);
     void remove(ItemGridWidget*);
     void singleClicked(ItemGridWidget*);
     void doubleClicked(ItemGridWidget*);
 
-    void openFromWidget(ItemGridWidget*, bool playMode);
-    void exportFromWidget(ItemGridWidget*);
+    void playFromWidget(ItemGridWidget*);
+    void openFromWidget(ItemGridWidget*);
     void renameFromWidget(ItemGridWidget*);
     void closeFromWidget(ItemGridWidget*);
     void deleteFromWidget(ItemGridWidget*);
