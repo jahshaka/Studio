@@ -285,7 +285,7 @@ void KeyFrameWidget::mousePressEvent(QMouseEvent* evt)
     if(evt->button() == Qt::RightButton)
         rightButtonDown = true;
 
-    if(mousePos==clickPos && evt->button() == Qt::LeftButton)
+    if(evt->button() == Qt::LeftButton)
     {
         this->selectedKey = this->getSelectedKey(mousePos.x(),mousePos.y());
     }
@@ -321,6 +321,12 @@ void KeyFrameWidget::mouseReleaseEvent(QMouseEvent* evt)
     if(evt->button() == Qt::LeftButton) {
         leftButtonDown = false;
         selectedKey = DopeKey::Null();
+
+        // recalculate animation length
+        if (!!obj && obj->hasActiveAnimation()) {
+            auto anim = obj->getAnimation();
+            anim->calculateAnimationLength();
+        }
     }
     if(evt->button() == Qt::MiddleButton)
         middleButtonDown = false;
