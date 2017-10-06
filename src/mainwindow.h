@@ -258,6 +258,8 @@ private slots:
     void scaleGizmo();
 
     void onPlaySceneButton();
+    void enterEditMode();
+    void enterPlayMode();
 
 private:
     Ui::MainWindow *ui;
