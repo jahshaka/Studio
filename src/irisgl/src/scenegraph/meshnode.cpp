@@ -133,14 +133,17 @@ void MeshNode::submitRenderItems()
         //}
         //else
             renderItem->worldMatrix = this->globalTransform;
-            if (!!mesh && mesh->hasSkeletalAnimations())
+            if (!!mesh && mesh->hasSkeletalAnimations()) {
                 renderItem->cullable = false;
+            }
             else
                 renderItem->cullable = true;
-            //renderItem->boundingSphere.pos = this->globalTransform.column(3).toVector3D() + mesh->boundingSphere->pos;
-            renderItem->boundingSphere.pos = this->globalTransform * mesh->boundingSphere.pos;
-            renderItem->boundingSphere.radius = mesh->boundingSphere.radius * getMeshRadius();
 
+            if (!!mesh && renderItem->cullable) {
+                //renderItem->boundingSphere.pos = this->globalTransform.column(3).toVector3D() + mesh->boundingSphere->pos;
+                renderItem->boundingSphere.pos = this->globalTransform * mesh->boundingSphere.pos;
+                renderItem->boundingSphere.radius = mesh->boundingSphere.radius * getMeshRadius();
+            }
         if (!!material) {
             renderItem->renderLayer = material->renderLayer;
             //renderItem->faceCullingMode = faceCullingMode;
