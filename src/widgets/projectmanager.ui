@@ -166,7 +166,7 @@ QSlider::handle:horizontal {
 
 QPushButton, QToolButton {
 	border: 0;
-	padding: 6px;
+	padding: 8px 10px;
 	background: #444;
 }
 
@@ -537,8 +537,21 @@ QListWidget::item:selected {
         </item>
         <item>
          <widget class="QPushButton" name="browseProjects">
+          <property name="styleSheet">
+           <string notr="true">background: transparent</string>
+          </property>
           <property name="text">
            <string>Create Sample World</string>
+          </property>
+          <property name="flat">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="importWorld">
+          <property name="text">
+           <string>Import World</string>
           </property>
          </widget>
         </item>
