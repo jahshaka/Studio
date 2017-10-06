@@ -172,6 +172,9 @@ private:
     bool isModelExtension(QString extension);
 
 public slots:
+    void importSceneFromZip();
+    void exportSceneAsZip();
+
     //scenegraph
     void addPlane();
     void addGround();
