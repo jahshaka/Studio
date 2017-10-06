@@ -1461,6 +1461,8 @@ void MainWindow::showProjectManager()
 void MainWindow::showProjectManagerInternal(bool running)
 {
     Q_UNUSED(running);
+    if (UiManager::isScenePlaying)
+        enterEditMode();// exit play mode
     saveScene();
     hide();
     pmContainer->showMaximized();
@@ -1629,16 +1631,26 @@ void MainWindow::scaleGizmo()
 
 void MainWindow::onPlaySceneButton()
 {
-    UiManager::isScenePlaying = !UiManager::isScenePlaying;
-
     if (UiManager::isScenePlaying) {
-        UiManager::enterPlayMode();
-        ui->playSceneBtn->setToolTip("Stop playing");
-        ui->playSceneBtn->setIcon(QIcon(":/icons/g_stop.svg"));
+        enterEditMode();
     }
     else {
-        UiManager::enterEditMode();
-        ui->playSceneBtn->setToolTip("Play scene");
-        ui->playSceneBtn->setIcon(QIcon(":/icons/g_play.svg"));
+        enterPlayMode();
     }
+}
+
+void MainWindow::enterEditMode()
+{
+    UiManager::isScenePlaying = false;
+    UiManager::enterEditMode();
+    ui->playSceneBtn->setToolTip("Play scene");
+    ui->playSceneBtn->setIcon(QIcon(":/icons/g_play.svg"));
+}
+
+void MainWindow::enterPlayMode()
+{
+    UiManager::isScenePlaying = true;
+    UiManager::enterPlayMode();
+    ui->playSceneBtn->setToolTip("Stop playing");
+    ui->playSceneBtn->setIcon(QIcon(":/icons/g_stop.svg"));
 }
