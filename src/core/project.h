@@ -36,4 +36,10 @@ public:
     static Project* createNew();
 };
 
+struct ProjectTileData {
+    QString     name;
+    QByteArray  thumbnail;
+    QString     guid;
+};
+
 #endif // PROJECT_H
