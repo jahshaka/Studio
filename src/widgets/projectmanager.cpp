@@ -40,7 +40,7 @@ void reducer(QVector<ModelData> &accum, const QVector<ModelData> &interm)
     accum.append(interm);
 }
 
-ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::ProjectManager)
+ProjectManager::ProjectManager(QWidget *parent) : QWidget(parent), ui(new Ui::ProjectManager)
 {
     ui->setupUi(this);
 
@@ -63,8 +63,6 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 //    setFont(font);
 
     setWindowTitle("Jahshaka Desktop");
-
-    this->db = handle;
 
 //    ui->controls->setVisible(false);
 
@@ -93,8 +91,6 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
         settings->setValue("tileSize", changedText);
     });
 
-    connect(ui->importWorld, &QPushButton::pressed, [this]() { emit importProject(); });
-
     dynamicGrid = new DynamicGrid(this);
 
     ui->browseProjects->setCursor(Qt::PointingHandCursor);
@@ -110,22 +106,15 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     ui->pmcont->setLayout(layout);
 }
 
-void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
+void ProjectManager::openProjectFromWidget(ItemGridWidget *widget)
 {
     auto projectFile = QFileInfo(widget->projectName);
     auto projectPath = projectFile.absolutePath();
     Globals::project->setProjectPath(projectPath);
-    Globals::project->setProjectGuid(widget->guid);
 
-    prepareStore(projectFile.absoluteFilePath(), playMode);
+    prepareStore(projectFile.absoluteFilePath());
 
     this->close();
-}
-
-void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
-{
-    Globals::project->setProjectGuid(widget->guid);
-    emit exportProject();
 }
 
 void ProjectManager::playProjectFromWidget(ItemGridWidget *widget)
@@ -184,9 +173,7 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
         QDir dir(projectPath);
         if (dir.removeRecursively()) {
             dynamicGrid->deleteTile(widget);
-            Globals::project->setProjectGuid(widget->guid);
-            db->deleteProject();
-            delete widget;
+//            delete widget;
         } else {
             QMessageBox::StandardButton err;
             err = QMessageBox::warning(this,
@@ -204,20 +191,32 @@ void ProjectManager::searchProjects()
 
 void ProjectManager::update()
 {
+    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+    auto projectFolder = settings->getValue("default_directory", path).toString();
+
+    QDir dir(projectFolder);
+    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+
     int i = 0;
-    foreach (const ProjectTileData &record, db->fetchProjects()) {
-        dynamicGrid->addToGridView(new GridWidget(record), i);
+    foreach (const QFileInfo &file, files) {
+        dynamicGrid->addToGridView(new GridWidget(file.absoluteFilePath()), i);
         i++;
     }
 }
 
 void ProjectManager::updateAfter()
 {
+    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+    auto projectFolder = settings->getValue("default_directory", path).toString();
+
+    QDir dir(projectFolder);
+    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+
     dynamicGrid->resetView();
 
     int i = 0;
-    foreach (const ProjectTileData &record, db->fetchProjects()) {
-        dynamicGrid->addToGridView(new GridWidget(record), i);
+    foreach (const QFileInfo &file, files) {
+        dynamicGrid->addToGridView(new GridWidget(file.absoluteFilePath()), i);
         i++;
     }
 }
@@ -574,7 +573,38 @@ void ProjectManager::handleDone()
 
      progressDialog->setLabelText(QString("Initializing panels..."));
 
-     emit fileToOpen(pathToOpen, openInPlayMode);
+     emit fileToOpen(pathToOpen);
+
+     progressDialog->close();
+
+     this->hide();
+}
+
+void ProjectManager::handleDonePlay()
+{
+    progressDialog->setRange(0, 0);
+
+    progressDialog->setLabelText(QString("Populating scene..."));
+
+     for (auto item : futureWatcher->result()) {
+         for (int i = 0; i < AssetManager::assets.count(); i++) {
+             if (AssetManager::assets[i]->path == item.path) {
+                AssimpObject *ao = new AssimpObject(item.data, item.path);
+                AssetObject *model = new AssetObject(ao, item.path);
+
+                QVariant v;
+                v.setValue(ao);
+
+                AssetManager::assets[i] = model;
+             }
+         }
+     }
+
+//     this->close();
+
+     progressDialog->setLabelText(QString("Initializing panels..."));
+
+     emit fileToPlay(pathToOpen);
 
      progressDialog->close();
 
@@ -670,7 +700,6 @@ void ProjectManager::test()
 void ProjectManager::prepareStore(QString path, bool playMode)
 {
     pathToOpen = path;
-    this->openInPlayMode = playMode;
 
     // populate asset list
     QDir d(Globals::project->getProjectFolder());
@@ -716,7 +745,11 @@ void ProjectManager::prepareStore(QString path, bool playMode)
       // Create a QFutureWatcher and connect signals and slots.
       futureWatcher = new QFutureWatcher<QVector<ModelData>>();
 
-      QObject::connect(futureWatcher, SIGNAL(finished()), SLOT(handleDone()));
+      if (playMode) {
+          QObject::connect(futureWatcher, SIGNAL(finished()), SLOT(handleDonePlay()));
+      } else {
+          QObject::connect(futureWatcher, SIGNAL(finished()), SLOT(handleDone()));
+      }
 
       QObject::connect(futureWatcher, SIGNAL(finished()), SLOT(handleDoneFuture()));
       QObject::connect(futureWatcher, SIGNAL(finished()), futureWatcher, SLOT(deleteLater()));

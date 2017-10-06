@@ -34,11 +34,6 @@ void Project::setProjectPath(const QString &path)
     this->folderPath = path;
 }
 
-void Project::setProjectGuid(const QString &guid)
-{
-    this->guid = guid;
-}
-
 bool Project::isSaved()
 {
     return _saved;
@@ -62,11 +57,6 @@ QString Project::getProjectName()
 QString Project::getProjectFolder()
 {
     return folderPath;
-}
-
-QString Project::getProjectGuid()
-{
-    return guid;
 }
 
 // TODO - repurpose this and all paths

@@ -9,10 +9,6 @@
 #For more information see the LICENSE file
 #**************************************************************************
 
-include(src/zip/zip.pri)
-include(src/assimp/assimp.pri)
-include(src/libovr/libovr.pri)
-
 HEADERS += \
     $$PWD/src/animation/nodekeyframe.h \
     $$PWD/src/animation/keyframeanimation.h \
@@ -94,6 +90,9 @@ HEADERS += \
     $$PWD/src/graphics/depthstate.h \
     $$PWD/src/graphics/rasterizerstate.h \
     $$PWD/src/content/contentmanager.h
+
+include(src/assimp/assimp.pri)
+include(src/libovr/libovr.pri)
 
 SOURCES += \
     $$PWD/src/graphics/mesh.cpp \

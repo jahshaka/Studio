@@ -7,11 +7,13 @@ gcc {
                             -Wunused-but-set-variable
 
     QMAKE_CXXFLAGS_WARN_ON = $$QMAKE_CFLAGS_WARN_ON
+
+    #QMAKE_CFLAGS_WARN_ON += -Wincompatible-pointer-types
 }
 
 DEFINES += ASSIMP_BUILD_NO_C4D_IMPORTER ASSIMP_BUILD_NO_COMPRESSED_IFC ASSIMP_BUILD_NO_Q3BSP_IMPORTER \
             ASSIMP_BUILD_NO_GLTF_EXPORTER ASSIMP_BUILD_NO_EXPORT ASSIMP_BUILD_NO_GLTF_IMPORTER \
-            ASSIMP_BUILD_NO_IFC_IMPORTER ASSIMP_BUILD_NO_OPENGEX_IMPORTER ASSIMP_BUILD_NO_OWN_ZLIB
+            ASSIMP_BUILD_NO_IFC_IMPORTER ASSIMP_BUILD_NO_OPENGEX_IMPORTER
 
 VPATH += \
         $$PWD \
@@ -499,7 +501,7 @@ SOURCES += \
     $$PWD/contrib/unzip/ioapi.c \
     $$PWD/contrib/unzip/unzip.c \
     $$PWD/contrib/zlib/adler32.c \
-    #$$PWD/contrib/zlib/compress.c \
+    $$PWD/contrib/zlib/compress.c \
     $$PWD/contrib/zlib/crc32.c \
     $$PWD/contrib/zlib/deflate.c \
     $$PWD/contrib/zlib/gzclose.c \
@@ -514,3 +516,5 @@ SOURCES += \
     $$PWD/contrib/zlib/uncompr.c \
     $$PWD/contrib/zlib/zutil.c \
     $$PWD/code/Version.cpp
+
+DISTFILES +=

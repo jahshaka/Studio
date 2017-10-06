@@ -42,14 +42,13 @@ For more information see the LICENSE file
 #include "../constants.h"
 
 
-void SceneWriter::writeScene(QString filePath,
-                             iris::ScenePtr scene,
+void SceneWriter::writeScene(QString filePath,iris::ScenePtr scene,
                              iris::PostProcessManagerPtr postMan,
                              EditorData* editorData)
 {
     dir = AssetIOBase::getDirFromFileName(filePath);
     QFile file(filePath);
-    file.open(QIODevice::WriteOnly | QIODevice::Truncate);
+    file.open(QIODevice::WriteOnly|QIODevice::Truncate);
 
     QJsonObject projectObj;
     projectObj["version"] = "0.1";
