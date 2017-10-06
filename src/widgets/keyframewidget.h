@@ -106,6 +106,7 @@ private:
 
     QPen linePen;
     QPen cursorPen;
+    QPen pointPen;
 
     float maxTimeInSeconds;
 

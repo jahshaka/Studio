@@ -79,6 +79,9 @@ KeyFrameWidget::KeyFrameWidget(QWidget* parent):
     cursorPen = QPen(QColor::fromRgb(142,45,197));
     cursorPen.setWidth(3);
 
+    pointPen = QPen(QColor::fromRgb(0, 0, 0));
+    pointPen.setWidth(1);
+
     setMouseTracking(true);
 
     dragging = false;
@@ -96,7 +99,7 @@ KeyFrameWidget::KeyFrameWidget(QWidget* parent):
     innerBrush = QBrush(QColor::fromRgb(155, 155, 155), Qt::SolidPattern);
     highlightBrush = QBrush(QColor::fromRgb(155, 155, 155), Qt::SolidPattern);
 
-    keyPointSize = 7;
+    keyPointSize = 8;
 }
 
 void KeyFrameWidget::setSceneNode(iris::SceneNodePtr node)
@@ -157,20 +160,19 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
 
 void KeyFrameWidget::drawPoint(QPainter& paint, QPoint point, bool isHighlight)
 {
+    int halfHandleWidth = keyPointSize;
+    QPainterPath path;
+    path.moveTo(point.x() - halfHandleWidth, point.y());
+    path.lineTo(point.x() , point.y() - halfHandleWidth);
+    path.lineTo(point.x() + halfHandleWidth, point.y());
+    path.lineTo(point.x() , point.y() + halfHandleWidth);
+
     if (isHighlight) {
-        paint.setPen(QColor::fromRgb(255, 255, 255));
-        paint.setBrush(highlightBrush);
-        paint.drawEllipse(point, keyPointSize, keyPointSize);
-
-        paint.setBrush(innerBrush);
-        paint.drawEllipse(point, keyPointSize-2, keyPointSize-2);
+        paint.fillPath(path, highlightBrush);
+        paint.strokePath(path, pointPen);
     } else {
-        paint.setPen(Qt::white);
-        paint.setBrush(defaultBrush);
-        paint.drawEllipse(point, keyPointSize, keyPointSize);
-
-        paint.setBrush(innerBrush);
-        paint.drawEllipse(point, keyPointSize-2, keyPointSize-2);
+        paint.fillPath(path, defaultBrush);
+        paint.strokePath(path, pointPen);
     }
 }
 
@@ -182,7 +184,10 @@ void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetIt
     float penSizeSquared = keyPointSize * keyPointSize;
     auto halfHeight = + height / 2.0f;
 
+
     if (data.keyFrame != nullptr) {
+        paint.fillRect(0, yTop, width(), height,QBrush(QColor(0,0,0,15)));
+
         for(auto key:data.keyFrame->keys)
         {
             int xpos = this->timeToPos(key->time);
@@ -200,7 +205,7 @@ void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetIt
             }
         }
     } else if(data.isProperty()){ // draw summary keys
-        //paint.fillRect(0, yTop, this->width(), height, propColor);
+        paint.fillRect(0, yTop, width(), height,QBrush(QColor(0,0,0,40)));
         for(auto& key:data.summaryKeys)
         {
             int xpos = this->timeToPos(key.getTime());
@@ -280,7 +285,7 @@ void KeyFrameWidget::mousePressEvent(QMouseEvent* evt)
     if(evt->button() == Qt::RightButton)
         rightButtonDown = true;
 
-    if(mousePos==clickPos && evt->button() == Qt::LeftButton)
+    if(evt->button() == Qt::LeftButton)
     {
         this->selectedKey = this->getSelectedKey(mousePos.x(),mousePos.y());
     }
@@ -316,6 +321,12 @@ void KeyFrameWidget::mouseReleaseEvent(QMouseEvent* evt)
     if(evt->button() == Qt::LeftButton) {
         leftButtonDown = false;
         selectedKey = DopeKey::Null();
+
+        // recalculate animation length
+        if (!!obj && obj->hasActiveAnimation()) {
+            auto anim = obj->getAnimation();
+            anim->calculateAnimationLength();
+        }
     }
     if(evt->button() == Qt::MiddleButton)
         middleButtonDown = false;
