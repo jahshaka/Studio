@@ -783,10 +783,11 @@ void MainWindow::stopAnimWidget()
 
 void MainWindow::setupProjectDB()
 {
-    db = new Database();
+    auto path = QDir(QStandardPaths::writableLocation(QStandardPaths::DataLocation))
+                .filePath(Constants::JAH_DATABASE);
 
-    // new
-    db->initializeDatabase("C:/Users/iKlsR/Desktop/ProjectDatabase.db");
+    db = new Database();
+    db->initializeDatabase(path);
     db->createGlobalDb();
     db->createGlobalDbThumbs();
 }
@@ -1433,6 +1434,8 @@ void MainWindow::importSceneFromZip()
 
         db->importProject(QDir(temporaryDir.path()).filePath(importProjectName));
         Globals::project->setProjectPath(pDir);
+
+        pmContainer->hide();
         openProject(pDir);
     }
 

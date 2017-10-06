@@ -104,6 +104,14 @@ void Database::createGlobalDbThumbs() {
     executeAndCheckQuery(query, "createGlobalDbThumbs");
 }
 
+void Database::deleteProject()
+{
+    QSqlQuery query;
+    query.prepare("DELETE FROM " + Constants::DB_PROJECTS_TABLE + " WHERE guid = ?");
+    query.addBindValue(Globals::project->getProjectGuid());
+    executeAndCheckQuery(query, "deleteProject");
+}
+
 void Database::insertSceneGlobal(const QString &projectName, const QByteArray &sceneBlob)
 {
     QSqlQuery query;
