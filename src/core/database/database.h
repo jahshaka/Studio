@@ -7,16 +7,33 @@
 #include <QSqlQuery>
 #include <QCryptographicHash>
 
+#include "../../core/project.h"
+
 class Database
 {
 public:
     Database();
     ~Database();
 
-    void executeAndCheckQuery(QSqlQuery&);
+    void executeAndCheckQuery(QSqlQuery&, const QString&);
     void fetchRecord(const QString &name);
     void initializeDatabase(QString name);
     void closeDb();
+
+    void createGlobalDb();
+    void createGlobalDbThumbs();
+    void deleteProject();
+    void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob);
+    void insertThumbnailGlobal(const QString &world_guid,
+                               const QString &name,
+                               const QByteArray &thumbnail);
+    bool hasCachedThumbnail(const QString& name);
+    QVector<ProjectTileData> fetchProjects();
+    QByteArray getSceneBlobGlobal() const;
+    QByteArray fetchCachedThumbnail(const QString& name) const;
+    void updateSceneGlobal(const QByteArray &sceneBlob, const QByteArray &thumbnail);
+    void createExportScene(const QString& outTempFilePath);
+    bool importProject(const QString& inFilePath);
 
     void createProject(QString projectName);
     void insertScene(const QString &projectName, const QByteArray &sceneBlob);

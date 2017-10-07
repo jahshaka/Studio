@@ -134,13 +134,13 @@ void InfoDialog::openRecentProject()
 void InfoDialog::openSample(QListWidgetItem* item)
 {
     auto filePath = item->data(Qt::UserRole).value<QString>();
-    window->openProject(filePath);
+//    window->openProject(filePath);
 }
 
 void InfoDialog::openProject(QListWidgetItem* item)
 {
     auto filePath = item->data(Qt::UserRole).value<QString>();
-    window->openProject(filePath);
+//    window->openProject(filePath);
 
     this->close();
 }
