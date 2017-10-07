@@ -25,7 +25,6 @@
 #include "../io/assetmanager.h"
 
 #include "dynamicgrid.h"
-#include "gridwidget.h"
 
 #include <QDebug>
 #include <QGraphicsDropShadowEffect>
@@ -112,25 +111,25 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
 void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
 {
-    auto projectFile = QFileInfo(widget->projectName);
+    auto projectFile = QFileInfo(widget->tileData.name);
     auto projectPath = projectFile.absolutePath();
     Globals::project->setProjectPath(projectPath);
-    Globals::project->setProjectGuid(widget->guid);
+    Globals::project->setProjectGuid(widget->tileData.guid);
 
     prepareStore(projectFile.absoluteFilePath(), playMode);
 
-    this->close();
+//    this->close();
 }
 
 void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
 {
-    Globals::project->setProjectGuid(widget->guid);
+    Globals::project->setProjectGuid(widget->tileData.guid);
     emit exportProject();
 }
 
 void ProjectManager::playProjectFromWidget(ItemGridWidget *widget)
 {
-    auto projectFile = QFileInfo(widget->projectName);
+    auto projectFile = QFileInfo(widget->tileData.name);
     auto projectPath = projectFile.absolutePath();
     Globals::project->setProjectPath(projectPath);
 
@@ -141,8 +140,8 @@ void ProjectManager::playProjectFromWidget(ItemGridWidget *widget)
 
 void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
 {
-    auto finfo = QFileInfo(widget->projectName);
-    auto originalFile = widget->projectName;
+    auto finfo = QFileInfo(widget->tileData.name);
+    auto originalFile = widget->tileData.name;
     auto projectPath = finfo.absolutePath();
 
     QDir baseDir(projectPath);
@@ -172,7 +171,7 @@ void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
 
 void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
 {
-    auto finfo = QFileInfo(widget->projectName);
+    auto finfo = QFileInfo(widget->tileData.name);
     auto projectPath = finfo.absolutePath();
 
     QMessageBox::StandardButton reply;
@@ -184,7 +183,7 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
         QDir dir(projectPath);
         if (dir.removeRecursively()) {
             dynamicGrid->deleteTile(widget);
-            Globals::project->setProjectGuid(widget->guid);
+            Globals::project->setProjectGuid(widget->tileData.guid);
             db->deleteProject();
             delete widget;
         } else {
@@ -206,7 +205,7 @@ void ProjectManager::update()
 {
     int i = 0;
     foreach (const ProjectTileData &record, db->fetchProjects()) {
-        dynamicGrid->addToGridView(new GridWidget(record), i);
+        dynamicGrid->addToGridView(record, i);
         i++;
     }
 }
@@ -217,7 +216,7 @@ void ProjectManager::updateAfter()
 
     int i = 0;
     foreach (const ProjectTileData &record, db->fetchProjects()) {
-        dynamicGrid->addToGridView(new GridWidget(record), i);
+        dynamicGrid->addToGridView(record, i);
         i++;
     }
 }
@@ -578,7 +577,7 @@ void ProjectManager::handleDone()
 
      progressDialog->close();
 
-     this->hide();
+//     this->hide();
 }
 
 void ProjectManager::handleDoneFuture()

@@ -3,7 +3,7 @@ DEPENDPATH += $$PWD \
 
 HEADERS += \
         $$PWD/zip.h \
-        $$PWD/minizip.h
+        $$PWD/miniz.h
 
 SOURCES += \
         $$PWD/zip.c

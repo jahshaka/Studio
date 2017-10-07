@@ -856,10 +856,6 @@ void MainWindow::loadScene()
 
 void MainWindow::openProject(QString filename, bool playMode)
 {
-    if (!this->isVisible()) {
-        this->showMaximized();
-    }
-
     this->sceneView->makeCurrent();
     //remove current scene first
     this->removeScene();
@@ -900,6 +896,13 @@ void MainWindow::openProject(QString filename, bool playMode)
 
     // autoplay scenes immediately
     if (playMode) onPlaySceneButton();
+
+    if (!this->isVisible()) {
+        QTimer::singleShot(0, [=]() {
+            showMaximized();
+            pmContainer->hide();
+        });
+    }
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj

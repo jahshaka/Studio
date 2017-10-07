@@ -1,5 +1,4 @@
 #include "dynamicgrid.h"
-#include "gridwidget.h"
 #include <QGraphicsDropShadowEffect>
 #include <QGridLayout>
 #include <QLabel>
@@ -36,9 +35,14 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
     gridWidget->setLayout(gridLayout);
 }
 
-void DynamicGrid::addToGridView(GridWidget *item, int count)
+void DynamicGrid::addToGridView(ProjectTileData tileData, int count)
 {
-    ItemGridWidget *gameGridItem = new ItemGridWidget(item, tileSize, gridWidget);
+    auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+    auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
+    auto projectName = QDir(projectFolder).filePath(tileData.name) + "/" + tileData.name + ".jah";
+    tileData.name = projectName;
+
+    ItemGridWidget *gameGridItem = new ItemGridWidget(tileData, tileSize, gridWidget);
 
     originalItems.push_back(gameGridItem);
 
@@ -98,7 +102,7 @@ void DynamicGrid::searchTiles(QString searchString)
     int count = 0;
     if (!searchString.isEmpty()) {
         foreach(ItemGridWidget *gridItem, originalItems) {
-            if (gridItem->name.toLower().contains(searchString)) {
+            if (gridItem->tileData.name.toLower().contains(searchString)) {
                 gridItem->setVisible(true);
                 gridItem->setTileSize(tileSize);
                 gridLayout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
@@ -123,7 +127,7 @@ void DynamicGrid::deleteTile(ItemGridWidget *widget)
 {
     QMutableListIterator<ItemGridWidget*> it(originalItems);
     while (it.hasNext()) {
-        if (it.next()->projectName == widget->projectName) it.remove();
+        if (it.next()->tileData.name == widget->tileData.name) it.remove();
     }
 
     updateGridColumns(lastWidth);

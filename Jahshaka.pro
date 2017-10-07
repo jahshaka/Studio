@@ -111,7 +111,6 @@ SOURCES += src/main.cpp\
     src/widgets/screenshotwidget.cpp \
     src/widgets/projectmanager.cpp \
     src/widgets/dynamicgrid.cpp \
-    src/widgets/gridwidget.cpp \
     src/widgets/itemgridwidget.cpp \
     src/dialogs/renameprojectdialog.cpp \
     src/editor/thumbnailgenerator.cpp
@@ -216,7 +215,6 @@ HEADERS  += src/mainwindow.h \
     src/widgets/screenshotwidget.h \
     src/widgets/projectmanager.h \
     src/widgets/dynamicgrid.h \
-    src/widgets/gridwidget.h \
     src/widgets/itemgridwidget.hpp \
     src/dialogs/renameprojectdialog.h \
     src/editor/thumbnailgenerator.h

@@ -1,5 +1,4 @@
 #include "itemgridwidget.hpp"
-#include "gridwidget.h"
 #include <QDebug>
 #include <QFileInfo>
 #include <QGraphicsDropShadowEffect>
@@ -10,17 +9,14 @@
 
 #include "../dialogs/renameprojectdialog.h"
 
-ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : QWidget(parent)
+ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *parent) : QWidget(parent)
 {
-    tileSize = size;
     this->parent = parent;
-
-    projectName = item->projectName;
-    auto fileName = QFileInfo(projectName);
-    name = fileName.baseName();
-    guid = item->guid;
-
     setParent(parent);
+
+    tileSize = size;
+
+    this->tileData = tileData;
 
     setMinimumWidth(tileSize.width());
     setMaximumWidth(tileSize.width());
@@ -39,7 +35,7 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
 
     //Don't allow label to be wider than image
     gridTextLabel->setMaximumWidth(tileSize.width());
-    gridTextLabel->setText(fileName.baseName());
+    gridTextLabel->setText(tileData.name);
 
 //    QString textHex = getColor(SETTINGS.value("Grid/labelcolor","White").toString()).name();
 //    int fontSize = getGridSize("font");
@@ -51,8 +47,16 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
 
     gameGridLayout->addWidget(gridTextLabel, 2, 1);
 
-    oimage = item->image;
-    image = item->image.scaled(tileSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    QPixmap pixmap;
+    if (!tileData.thumbnail.isEmpty() || !tileData.thumbnail.isNull()) {
+        QPixmap cachedPixmap;
+        if (cachedPixmap.loadFromData(tileData.thumbnail, "PNG")) pixmap = cachedPixmap;
+    } else {
+        pixmap = QPixmap::fromImage(QImage(":/images/preview.png"));
+    }
+
+    oimage = pixmap;
+    image = pixmap.scaled(tileSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
     gridImageLabel->setPixmap(image);
     gridImageLabel->setAlignment(Qt::AlignCenter);

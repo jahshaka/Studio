@@ -2,11 +2,12 @@
 #define DYNAMICGRID_H
 
 #include <QScrollArea>
+#include "../core/project.h"
 
 class QGridLayout;
-class GridWidget;
 class SettingsManager;
 class ItemGridWidget;
+
 
 class DynamicGrid : public QScrollArea
 {
@@ -14,7 +15,7 @@ class DynamicGrid : public QScrollArea
 
 public:
     explicit DynamicGrid(QWidget *parent = Q_NULLPTR);
-    void addToGridView(GridWidget *item, int count);
+    void addToGridView(ProjectTileData tileData, int count);
     QSize tileSize;
     QSize baseSize;
     int lastWidth;
