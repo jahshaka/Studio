@@ -10,6 +10,7 @@
 #include "itemgridwidget.hpp"
 #include "../constants.h"
 #include "../core/settingsmanager.h"
+#include "projectmanager.h"
 
 DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 {
@@ -43,13 +44,26 @@ void DynamicGrid::addToGridView(GridWidget *item, int count)
 
     gameGridItem->setContextMenuPolicy(Qt::CustomContextMenu);
 
-    connect(gameGridItem, SIGNAL(edit(ItemGridWidget*)), parent, SLOT(openProjectFromWidget(ItemGridWidget*)));
-    connect(gameGridItem, SIGNAL(remove(ItemGridWidget*)), parent, SLOT(deleteProjectFromWidget(ItemGridWidget*)));
-    connect(gameGridItem, SIGNAL(doubleClicked(ItemGridWidget*)), parent, SLOT(openProjectFromWidget(ItemGridWidget*)));
-    connect(gameGridItem, SIGNAL(playFromWidget(ItemGridWidget*)), parent, SLOT(playProjectFromWidget(ItemGridWidget*)));
-    connect(gameGridItem, SIGNAL(openFromWidget(ItemGridWidget*)), parent, SLOT(openProjectFromWidget(ItemGridWidget*)));
-    connect(gameGridItem, SIGNAL(renameFromWidget(ItemGridWidget*)), parent, SLOT(renameProjectFromWidget(ItemGridWidget*)));
-    connect(gameGridItem, SIGNAL(deleteFromWidget(ItemGridWidget*)), parent, SLOT(deleteProjectFromWidget(ItemGridWidget*)));
+    // remember that parent is the ProjectManager, we delegate or emit up
+    connect(gameGridItem,   SIGNAL(openFromWidget(ItemGridWidget*, bool)),
+            parent,         SLOT(openProjectFromWidget(ItemGridWidget*, bool)));
+
+    connect(gameGridItem,   SIGNAL(remove(ItemGridWidget*)),
+            parent,         SLOT(deleteProjectFromWidget(ItemGridWidget*)));
+
+    connect(gameGridItem,   SIGNAL(exportFromWidget(ItemGridWidget*)),
+            parent,         SLOT(exportProjectFromWidget(ItemGridWidget*)));
+
+    // lambdas! we can do this instead of using classic syntax & forcing dblClick to accept 2 args
+    connect(gameGridItem,   &ItemGridWidget::doubleClicked, parent, [this](ItemGridWidget *item) {
+        static_cast<ProjectManager*>(parent)->openProjectFromWidget(item, false);
+    });
+
+    connect(gameGridItem,   SIGNAL(renameFromWidget(ItemGridWidget*)),
+            parent,         SLOT(renameProjectFromWidget(ItemGridWidget*)));
+
+    connect(gameGridItem,   SIGNAL(deleteFromWidget(ItemGridWidget*)),
+            parent,         SLOT(deleteProjectFromWidget(ItemGridWidget*)));
 
     int columnCount = viewport()->width() / (tileSize.width());
 

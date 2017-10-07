@@ -5,6 +5,8 @@ namespace Ui {
     class AssetWidget;
 }
 
+class Database;
+
 #include <QListWidget>
 #include <QTreeWidgetItem>
 #include <QWidget>
@@ -29,7 +31,7 @@ class AssetWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit AssetWidget(QWidget *parent = Q_NULLPTR);
+    explicit AssetWidget(Database *handle, QWidget *parent = Q_NULLPTR);
     ~AssetWidget();
 
     void populateAssetTree();
@@ -75,6 +77,8 @@ private:
     Ui::AssetWidget *ui;
     AssetItem assetItem;
     QPoint startPos;
+
+    Database *db;
 
     QString currentPath;
 };
