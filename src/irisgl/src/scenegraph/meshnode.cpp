@@ -133,8 +133,9 @@ void MeshNode::submitRenderItems()
         //}
         //else
             renderItem->cullable = false;
-            /*
+
             renderItem->worldMatrix = this->globalTransform;
+            /*
             if (!!mesh && mesh->hasSkeletalAnimations()) {
                 renderItem->cullable = false;
             }
