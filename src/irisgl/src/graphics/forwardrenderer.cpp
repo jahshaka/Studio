@@ -317,8 +317,9 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     fsQuad->draw();
     gl->glBindTexture(GL_TEXTURE_2D, 0);
 
+    graphics->clear(GL_DEPTH_BUFFER_BIT);
     // STEP 5: RENDER SELECTED OBJECT
-    //if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
+    if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
 
     //clear lists
     scene->geometryRenderList->clear();
