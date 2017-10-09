@@ -22,52 +22,50 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *pa
     setMaximumWidth(tileSize.width());
 
     gameGridLayout = new QGridLayout(this);
-    gameGridLayout->setColumnStretch(0, 1);
-    gameGridLayout->setColumnStretch(3, 1);
-    gameGridLayout->setRowMinimumHeight(1, tileSize.height());
+    gameGridLayout->setVerticalSpacing(5);
+//    gameGridLayout->setColumnStretch(0, 1);
+//    gameGridLayout->setColumnStretch(3, 1);
+//    gameGridLayout->setRowMinimumHeight(1, tileSize.height());
 
     gridImageLabel = new QLabel(this);
     gridImageLabel->setObjectName("image");
-    gridImageLabel->setMinimumHeight(tileSize.height());
-    gridImageLabel->setMinimumWidth(tileSize.width());
+//    gridImageLabel->setMinimumHeight(tileSize.height());
+//    gridImageLabel->setMinimumWidth(tileSize.width());
 
     gridTextLabel = new QLabel(this);
 
-    //Don't allow label to be wider than image
-    gridTextLabel->setMaximumWidth(tileSize.width());
-    gridTextLabel->setText(tileData.name);
+//    //Don't allow label to be wider than image
+//    gridTextLabel->setMaximumWidth(tileSize.width());
+    gridTextLabel->setText(QFileInfo(tileData.name).baseName());
 
-//    QString textHex = getColor(SETTINGS.value("Grid/labelcolor","White").toString()).name();
-//    int fontSize = getGridSize("font");
+////    QString textHex = getColor(SETTINGS.value("Grid/labelcolor","White").toString()).name();
+////    int fontSize = getGridSize("font");
 
     gridTextLabel->setStyleSheet("QLabel { font-weight: bold; color: #ddd; font-size: 11px; }");
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
-//    gridTextLabel->setTextInteractionFlags(Qt::TextEditorInteraction);
+////    gridTextLabel->setTextInteractionFlags(Qt::TextEditorInteraction);
 
-    gameGridLayout->addWidget(gridTextLabel, 2, 1);
 
-    QPixmap pixmap;
-    if (!tileData.thumbnail.isEmpty() || !tileData.thumbnail.isNull()) {
+////    QPixmap pixmap;
+////    if (!tileData.thumbnail.isEmpty() || !tileData.thumbnail.isNull()) {
         QPixmap cachedPixmap;
-        if (cachedPixmap.loadFromData(tileData.thumbnail, "PNG")) pixmap = cachedPixmap;
-    } else {
-        pixmap = QPixmap::fromImage(QImage(":/images/preview.png"));
-    }
+        cachedPixmap.loadFromData(tileData.thumbnail, "PNG");
+////    } else {
+////        pixmap = QPixmap::fromImage(QImage(":/images/preview.png"));
+////    }
 
-    oimage = pixmap;
-    image = pixmap.scaled(tileSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    oimage = cachedPixmap;
+    image = cachedPixmap.scaled(tileSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
     gridImageLabel->setPixmap(image);
     gridImageLabel->setAlignment(Qt::AlignCenter);
 
-    gameGridLayout->addWidget(gridImageLabel, 1, 1);
-
     options = new QWidget(this);
 //    // check these constants
 //    options->setStyleSheet("background: red");
-    options->setMinimumWidth(tileSize.width());
-    options->setMaximumWidth(tileSize.width());
+//    options->setMinimumWidth(tileSize.width());
+//    options->setMaximumWidth(tileSize.width());
 
     QVBoxLayout *vlayout = new QVBoxLayout();
 //    vlayout->setMargin(0);
@@ -106,7 +104,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *pa
 //    olayout->addWidget(deleteButton);
 
     auto controls = new QWidget();
-    controls->setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #3498db, stop:1 #2283c3); border-radius: 1px");
+    controls->setStyleSheet("background: rgba(32, 32, 32, 164); border-radius: 1px");
     controls->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     controls->setFixedHeight(32);
     controls->setLayout(olayout);
@@ -117,7 +115,9 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *pa
     options->setLayout(vlayout);
     options->hide();
 
-    gameGridLayout->addWidget(options, 1, 1);
+    gameGridLayout->addWidget(gridImageLabel, 0, 0);
+    gameGridLayout->addWidget(options, 0, 0);
+    gameGridLayout->addWidget(gridTextLabel, 1, 0);
 
     QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect;
     shadow->setColor(Qt::black);
@@ -138,6 +138,8 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *pa
     setCursor(Qt::PointingHandCursor);
     setContextMenuPolicy(Qt::CustomContextMenu);
 
+//    setStyleSheet("border: 1px solid red");
+
     connect(this, SIGNAL(customContextMenuRequested(const QPoint&)), SLOT(projectContextMenu(QPoint)));
 
 //    connect(this, SIGNAL(singleClicked(QWidget*)), this, SLOT(highlightGridWidget(QWidget*)));
@@ -152,23 +154,23 @@ void ItemGridWidget::setTileSize(QSize size)
     setMinimumWidth(tileSize.width());
     setMaximumWidth(tileSize.width());
 
-    gameGridLayout->setColumnStretch(0, 1);
-    gameGridLayout->setColumnStretch(3, 1);
-    gameGridLayout->setRowMinimumHeight(1, tileSize.height());
+//    gameGridLayout->setColumnStretch(0, 1);
+//    gameGridLayout->setColumnStretch(3, 1);
+//    gameGridLayout->setRowMinimumHeight(1, tileSize.height());
 
-    gridImageLabel->setMinimumHeight(tileSize.height());
-    gridImageLabel->setMinimumWidth(tileSize.width());
+//    gridImageLabel->setMinimumHeight(tileSize.height());
+//    gridImageLabel->setMinimumWidth(tileSize.width());
 
-    auto img = oimage.scaled(tileSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    auto img = oimage.scaled(tileSize, Qt::KeepAspectRatio, Qt::FastTransformation);
 
     gridImageLabel->setPixmap(img);
     gridImageLabel->setAlignment(Qt::AlignCenter);
 
-    gridTextLabel->setMaximumWidth(tileSize.width());
+//    gridTextLabel->setMaximumWidth(tileSize.width());
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
 
-    options->setMaximumWidth(tileSize.width());
+//    options->setMaximumWidth(tileSize.width());
 
     setMinimumHeight(this->sizeHint().height());
 }

@@ -203,10 +203,9 @@ void ProjectManager::searchProjects()
 
 void ProjectManager::update()
 {
-    int i = 0;
-    foreach (const ProjectTileData &record, db->fetchProjects()) {
-        dynamicGrid->addToGridView(record, i);
-        i++;
+    auto first = db->fetchProjects();
+    for (int i = 0; i < 10; i++) {
+        dynamicGrid->addToGridView(first.first(), i);
     }
 }
 

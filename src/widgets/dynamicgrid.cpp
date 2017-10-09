@@ -17,22 +17,25 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 
     setAlignment(Qt::AlignHCenter);
 
-    gridWidget = new QWidget(parent);
+    gridWidget = new QWidget(this);
     gridWidget->setObjectName("gridWidget");
     setWidget(gridWidget);
     setStyleSheet("background: transparent");
 
-    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+//    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
     offset = 10;
     settings = SettingsManager::getDefaultManager();
     tileSize = sizeFromString(settings->getValue("tileSize", "Normal").toString());
 
     gridLayout = new QGridLayout(gridWidget);
-    gridLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
-    gridLayout->setRowMinimumHeight(0, offset);
+//    gridLayout->setSpacing(20);
+//    gridLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
+//    gridLayout->setRowMinimumHeight(0, offset);
 
     gridWidget->setLayout(gridLayout);
+
+//    setStyleSheet("border: 1px solid yellow");
 }
 
 void DynamicGrid::addToGridView(ProjectTileData tileData, int count)
@@ -156,6 +159,9 @@ void DynamicGrid::resetView()
 void DynamicGrid::resizeEvent(QResizeEvent *event)
 {
     lastWidth = event->size().width();
+
+    gridWidget->setMinimumWidth(viewport()->width());
+    gridWidget->setMaximumWidth(viewport()->width());
 
     int check = event->size().width() / (tileSize.width());
     bool autoAdjustColumns = true;
