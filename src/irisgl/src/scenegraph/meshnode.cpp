@@ -132,13 +132,15 @@ void MeshNode::submitRenderItems()
         //    renderItem->worldMatrix = rootBone->globalTransform;
         //}
         //else
+            renderItem->cullable = false;
+            /*
             renderItem->worldMatrix = this->globalTransform;
             if (!!mesh && mesh->hasSkeletalAnimations()) {
                 renderItem->cullable = false;
             }
             else
                 renderItem->cullable = true;
-
+            */
             if (!!mesh && renderItem->cullable) {
                 //renderItem->boundingSphere.pos = this->globalTransform.column(3).toVector3D() + mesh->boundingSphere->pos;
                 renderItem->boundingSphere.pos = this->globalTransform * mesh->boundingSphere.pos;
