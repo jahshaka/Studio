@@ -63,7 +63,7 @@ using namespace OVR;
 namespace iris
 {
 
-ForwardRenderer::ForwardRenderer()
+ForwardRenderer::ForwardRenderer(bool supportsVr)
 {
     this->gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
     graphics = GraphicsDevice::create();
@@ -79,8 +79,10 @@ ForwardRenderer::ForwardRenderer()
 
     generateShadowBuffer(4096);
 
-    vrDevice = VrManager::getDefaultDevice();
-    vrDevice->initialize();
+    if (supportsVr) {
+        vrDevice = VrManager::getDefaultDevice();
+        vrDevice->initialize();
+    }
 
     renderTarget = RenderTarget::create(800, 800);
     sceneRenderTexture = Texture2D::create(800, 800);
@@ -123,9 +125,9 @@ void ForwardRenderer::generateShadowBuffer(GLuint size)
     // check status at end
 }
 
-ForwardRendererPtr ForwardRenderer::create()
+ForwardRendererPtr ForwardRenderer::create(bool useVr)
 {
-    return ForwardRendererPtr(new ForwardRenderer());
+    return ForwardRendererPtr(new ForwardRenderer(useVr));
 }
 
 GraphicsDevicePtr ForwardRenderer::getGraphicsDevice()
