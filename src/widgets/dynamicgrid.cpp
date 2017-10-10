@@ -30,12 +30,12 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 
     gridLayout = new QGridLayout(gridWidget);
 //    gridLayout->setSpacing(20);
-    gridLayout->setSizeConstraint(QLayout::SetNoConstraint);
+//    gridLayout->setSizeConstraint(QLayout::SetMinimumSize);
 //    gridLayout->setRowMinimumHeight(0, offset);
 
     gridWidget->setLayout(gridLayout);
 
-//    setStyleSheet("border: 1px solid yellow");
+    setStyleSheet("border: 1px solid yellow");
 }
 
 void DynamicGrid::addToGridView(ProjectTileData tileData, int count)

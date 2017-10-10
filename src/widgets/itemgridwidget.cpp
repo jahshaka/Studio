@@ -41,7 +41,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *pa
 ////    QString textHex = getColor(SETTINGS.value("Grid/labelcolor","White").toString()).name();
 ////    int fontSize = getGridSize("font");
 
-    gridTextLabel->setStyleSheet("QLabel { font-weight: bold; color: #ddd; font-size: 11px; }");
+    gridTextLabel->setStyleSheet("QLabel { font-weight: bold; color: #ddd; font-size: 12px; }");
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
 ////    gridTextLabel->setTextInteractionFlags(Qt::TextEditorInteraction);
@@ -104,7 +104,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *pa
 //    olayout->addWidget(deleteButton);
 
     auto controls = new QWidget();
-    controls->setStyleSheet("background: rgba(32, 32, 32, 164); border-radius: 1px");
+    controls->setStyleSheet("background: rgba(32, 32, 32, 180); border-radius: 1px");
     controls->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     controls->setFixedHeight(32);
     controls->setLayout(olayout);

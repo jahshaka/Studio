@@ -331,7 +331,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     pmButton->setIcon(ico);
     pmButton->setObjectName("pmButton");
 
-    connect(pmButton, SIGNAL(clicked(bool)), SLOT(showProjectManagerInternal(bool)));
+    connect(pmButton, SIGNAL(pressed()), SLOT(showProjectManagerInternal()));
+    connect(ui->homeBtn, SIGNAL(pressed()), SLOT(showProjectManagerInternal()));
 
     vrButton = new QPushButton();
     QIcon icovr(":/icons/virtual-reality.svg");
@@ -691,7 +692,7 @@ void MainWindow::setupFileMenu()
     connect(ui->actionExport,           SIGNAL(triggered(bool)), this, SLOT(exportSceneAsZip()));
 
 //    connect(ui->actionOpen,     SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
-    connect(ui->actionClose,    SIGNAL(triggered(bool)), this, SLOT(showProjectManagerInternal(bool)));
+    connect(ui->actionClose, &QAction::triggered, [this]() { showProjectManagerInternal(); });
 //    connect(ui->actionDelete,   SIGNAL(triggered(bool)), this, SLOT(deleteProject()));
 
     connect(prefsDialog,  SIGNAL(PreferencesDialogClosed()), this, SLOT(updateSceneSettings()));
@@ -875,6 +876,7 @@ void MainWindow::openProject(QString filename, bool playMode)
 
     // playMode is basically fullscreen mode for now
     UiManager::playMode = playMode;
+    ui->homeBtn->setVisible(playMode);
     toggleWidgets(!playMode);
 
     setScene(scene);
@@ -1518,15 +1520,13 @@ void MainWindow::showProjectManager()
     pmContainer->showMaximized();
 }
 
-void MainWindow::showProjectManagerInternal(bool running)
+void MainWindow::showProjectManagerInternal()
 {
-    Q_UNUSED(running);
-    if (UiManager::isScenePlaying)
-        enterEditMode();// exit play mode
+    if (UiManager::isScenePlaying) enterEditMode();
     saveScene();
     hide();
-    pmContainer->showMaximized();
     pmContainer->updateAfter();
+    pmContainer->showMaximized();
 }
 
 void MainWindow::newScene()

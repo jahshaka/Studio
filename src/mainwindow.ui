@@ -626,6 +626,20 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
            </spacer>
           </item>
           <item>
+           <widget class="QPushButton" name="homeBtn">
+            <property name="styleSheet">
+             <string notr="true">background: transparent; border: 0</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset resource="../app/icons.qrc">
+              <normaloff>:/icons/home.svg</normaloff>:/icons/home.svg</iconset>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QPushButton" name="playSceneBtn">
             <property name="cursor">
              <cursorShape>PointingHandCursor</cursorShape>

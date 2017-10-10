@@ -252,7 +252,7 @@ public slots:
     void toggleLightWires(bool state);
     void tabsChanged(int);
     void showProjectManager();
-    void showProjectManagerInternal(bool);
+    void showProjectManagerInternal();
 
 private slots:
     void translateGizmo();
