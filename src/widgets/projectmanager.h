@@ -64,6 +64,7 @@ protected slots:
     void renameItem(QListWidgetItem*);
     void openRecentProject(QListWidgetItem*);
     void newProject();
+    void importProjectFromFile();
 
     void renameProject();
     void updateCurrentItem(QListWidgetItem*);

@@ -30,7 +30,7 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 
     gridLayout = new QGridLayout(gridWidget);
 //    gridLayout->setSpacing(20);
-//    gridLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
+    gridLayout->setSizeConstraint(QLayout::SetNoConstraint);
 //    gridLayout->setRowMinimumHeight(0, offset);
 
     gridWidget->setLayout(gridLayout);

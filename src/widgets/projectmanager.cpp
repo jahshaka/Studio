@@ -24,6 +24,8 @@
 #include "../core/guidmanager.h"
 #include "../io/assetmanager.h"
 
+#include "src/irisgl/src/zip/zip.h"
+
 #include "dynamicgrid.h"
 
 #include <QDebug>
@@ -92,7 +94,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
         settings->setValue("tileSize", changedText);
     });
 
-    connect(ui->importWorld, &QPushButton::pressed, [this]() { emit importProject(); });
+    connect(ui->importWorld, SIGNAL(pressed()), SLOT(importProjectFromFile()));
 
     dynamicGrid = new DynamicGrid(this);
 
@@ -119,6 +121,90 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
     prepareStore(projectFile.absoluteFilePath(), playMode);
 
 //    this->close();
+}
+
+QString importProjectName;
+QStringList fileNames;
+int on_extract_entry(const char *filename, void *arg) {
+    QFileInfo fInfo(filename);
+    if (fInfo.suffix() == "db") {
+        importProjectName = fInfo.baseName();
+    } else {
+        fileNames.append(filename);
+    }
+
+    return 0;
+}
+
+void ProjectManager::importProjectFromFile()
+{
+    auto filename = QFileDialog::getOpenFileName(this,      "Import World",
+                                                 nullptr,   "Jahshaka Project (*.zip)");
+
+    if (filename.isEmpty() || filename.isNull()) return;
+
+    // get the current project working directory
+    auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
+                                 Constants::PROJECT_FOLDER);
+    auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
+
+    // create a temporary directory and extract our project into it
+    // we need a sure way to get the project name, so we have to extract it first and check the blob
+    QTemporaryDir temporaryDir;
+    temporaryDir.setAutoRemove(false);
+    if (temporaryDir.isValid()) {
+        zip_extract(filename.toStdString().c_str(),
+                    temporaryDir.path().toStdString().c_str(),
+                    on_extract_entry,
+                    Q_NULLPTR);
+    }
+
+    // now extract the project to the default projects directory with the name
+    if (!importProjectName.isEmpty() || !importProjectName.isNull()) {
+        auto pDir = QDir(defaultProjectDirectory).filePath(importProjectName);
+        QDir workingTempDirectory(temporaryDir.path());
+
+        QDir dirMaker;
+        dirMaker.mkdir(pDir);
+
+        struct zip_t *zip = zip_open(filename.toStdString().c_str(), 0, 'r');
+
+        for (int i = 0; i < fileNames.count(); i++) {
+            QFileInfo fInfo(fileNames[i]);
+            auto file = QString(workingTempDirectory.relativeFilePath(fileNames[i])).toStdString().c_str();
+
+            // we need to pay special attention to directories since we want to create empty ones as well
+            // also directories need to exist prior to a file being written
+            if (fInfo.isDir()) {
+                dirMaker.mkdir(QDir(pDir).filePath(file));
+            }
+            else {
+                zip_entry_open(zip, file);
+                zip_entry_fread(zip, QDir(pDir).filePath(file).toStdString().c_str());
+            }
+
+            // we close each entry after a successful write
+            zip_entry_close(zip);
+        }
+
+        zip_close(zip);
+
+        auto open = db->importProject(QDir(temporaryDir.path()).filePath(importProjectName));
+        if (open) {
+            Globals::project->setProjectPath(pDir);
+//            pmContainer->hide();
+//            openProject(pDir);
+
+//            auto projectFile = QFileInfo(widget->tileData.name);
+//            auto projectPath = projectFile.absolutePath();
+//            Globals::project->setProjectPath(projectPath);
+//            Globals::project->setProjectGuid(widget->tileData.guid);
+
+            prepareStore(QDir(pDir).filePath(importProjectName + ".jah"));
+        }
+    }
+
+    temporaryDir.remove();
 }
 
 void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
@@ -203,9 +289,10 @@ void ProjectManager::searchProjects()
 
 void ProjectManager::update()
 {
-    auto first = db->fetchProjects();
-    for (int i = 0; i < 10; i++) {
-        dynamicGrid->addToGridView(first.first(), i);
+    int i = 0;
+    foreach (const ProjectTileData &record, db->fetchProjects()) {
+        dynamicGrid->addToGridView(record, i);
+        i++;
     }
 }
 
