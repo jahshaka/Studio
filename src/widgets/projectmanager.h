@@ -42,47 +42,25 @@ public:
     ProjectManager(Database *handle, QWidget *parent = nullptr);
     ~ProjectManager();
 
-    void prepareStore(bool playMode = false);
-    void walkFileSystem(QString folder, QString path);
-    QVector<ModelData> fetchModel(const QString &path);
-    bool copyDirectoryFiles(const QString &fromDir, const QString &toDir, bool coverFileIfExist);
-    void update();
-    void updateAfter();
-
-    QString loadProjectDelegate();
-
-    void test();
-    void resizeEvent(QResizeEvent*);
-    void closeEvent(QCloseEvent*);
+    void populateDesktop(bool reset = false);
+    void cleanupOnClose();
+    QVector<ModelData> loadModel(const QString&);
 
 protected slots:
-    void listWidgetCustomContextMenu(const QPoint&);
-    void removeFromList();
-    void deleteProject();
     void openSampleProject(QListWidgetItem*);
-    void renameItem(QListWidgetItem*);
     void newProject();
     void importProjectFromFile();
 
-    void renameProject();
-    void updateCurrentItem(QListWidgetItem*);
+    void changePreviewSize(QString);
 
-    void myProjects();
-    void sampleProjects();
-
-    void scaleTile(QString);
-    void searchTiles(QString);
-
-    void handleDone();
-    void handleDoneFuture();
-
-    void OnLstItemsCommitData(QWidget*);
+    void finalizeProjectAssetLoad();
+    void finishedFutureWatcher();
 
     void openSampleBrowser();
+
     void openProjectFromWidget(ItemGridWidget*, bool playMode);
     void exportProjectFromWidget(ItemGridWidget*);
     void renameProjectFromWidget(ItemGridWidget*);
-    void closeProjectFromWidget(ItemGridWidget*);
     void deleteProjectFromWidget(ItemGridWidget*);
 
     void searchProjects();
@@ -98,21 +76,16 @@ signals:
     void exportProject();
 
 private:
+    void loadProjectAssets();
+    void walkProjectFolder(const QString&);
+
     Ui::ProjectManager *ui;
     SettingsManager* settings;
-
-    MainWindow *window;
-
-    QString folder;
 
     QTimer *searchTimer;
     QString searchTerm;
 
     Database *db;
-
-    QListWidgetItem *currentItem;
-//    QProgressDialog *dialog;
-    QString pathToOpen;
     QFutureWatcher<QVector<ModelData>> *futureWatcher;
 
     QSharedPointer<ProgressDialog> progressDialog;
@@ -128,7 +101,7 @@ struct AssetWidgetConcurrentWrapper {
     typedef QVector<ModelData> result_type;
     AssetWidgetConcurrentWrapper(ProjectManager *inst) : instance(inst) {}
         result_type operator()(const QString &data) {
-        return instance->fetchModel(data);
+        return instance->loadModel(data);
     }
 };
 

@@ -69,5 +69,6 @@
         <file>icons/popout.svg</file>
         <file>icons/thandleh.png</file>
         <file>icons/thandlev.png</file>
+        <file>icons/ic_folder.svg</file>
     </qresource>
 </RCC>

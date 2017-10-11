@@ -482,7 +482,7 @@ QListWidget::item:selected {
          </widget>
         </item>
         <item>
-         <widget class="QComboBox" name="comboBox">
+         <widget class="QComboBox" name="tilePreview">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
             <horstretch>0</horstretch>
@@ -573,7 +573,7 @@ QListWidget::item:selected {
       </widget>
      </item>
      <item row="1" column="0">
-      <widget class="QWidget" name="pmcont" native="true"/>
+      <widget class="QWidget" name="pmContainer" native="true"/>
      </item>
     </layout>
    </item>

@@ -47,16 +47,20 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *pa
 ////    gridTextLabel->setTextInteractionFlags(Qt::TextEditorInteraction);
 
 
-////    QPixmap pixmap;
-////    if (!tileData.thumbnail.isEmpty() || !tileData.thumbnail.isNull()) {
+    QPixmap pixmap;
+    if (!tileData.thumbnail.isEmpty() || !tileData.thumbnail.isNull()) {
         QPixmap cachedPixmap;
-        cachedPixmap.loadFromData(tileData.thumbnail, "PNG");
-////    } else {
-////        pixmap = QPixmap::fromImage(QImage(":/images/preview.png"));
-////    }
+        if (cachedPixmap.loadFromData(tileData.thumbnail, "PNG")) {
+            pixmap = cachedPixmap;
+        } else {
+            pixmap = QPixmap::fromImage(QImage(":/images/preview.png"));
+        }
+    } else {
+        pixmap = QPixmap::fromImage(QImage(":/images/preview.png"));
+    }
 
-    oimage = cachedPixmap;
-    image = cachedPixmap.scaled(tileSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    oimage = pixmap;
+    image = pixmap.scaled(tileSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
     gridImageLabel->setPixmap(image);
     gridImageLabel->setAlignment(Qt::AlignCenter);
@@ -175,11 +179,6 @@ void ItemGridWidget::setTileSize(QSize size)
     setMinimumHeight(this->sizeHint().height());
 }
 
-void ItemGridWidget::updateImage()
-{
-
-}
-
 void ItemGridWidget::updateLabel(QString text)
 {
     this->gridTextLabel->setText(text);
@@ -208,46 +207,27 @@ void ItemGridWidget::editProject()
 
 void ItemGridWidget::enterEvent(QEvent *event)
 {
-    // this->setStyleSheet("#image { border: 2px solid #3498db }");
     QWidget::enterEvent(event);
     emit hovered();
 }
 
 void ItemGridWidget::leaveEvent(QEvent *event)
 {
-    // this->setStyleSheet("#image { border: none }");
     QWidget::leaveEvent(event);
     emit left();
 }
 
-//void ItemGridWidget::keyPressEvent(QKeyEvent *event)
-//{
-//    if (event->key() == Qt::Key_Up)
-//        emit arrowPressed(this, "UP");
-//    else if (event->key() == Qt::Key_Down)
-//        emit arrowPressed(this, "DOWN");
-//    else if (event->key() == Qt::Key_Left)
-//        emit arrowPressed(this, "LEFT");
-//    else if (event->key() == Qt::Key_Right)
-//        emit arrowPressed(this, "RIGHT");
-//    else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
-//        emit enterPressed(this);
-//    else
-//        QWidget::keyPressEvent(event);
-//}
-
-
 void ItemGridWidget::mousePressEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton || event->button() == Qt::RightButton)
+    if (event->button() == Qt::LeftButton || event->button() == Qt::RightButton) {
         emit singleClicked(this);
+    }
 }
 
 
 void ItemGridWidget::mouseDoubleClickEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton)
-        emit doubleClicked(this);
+    if (event->button() == Qt::LeftButton) emit doubleClicked(this);
 }
 
 void ItemGridWidget::projectContextMenu(const QPoint &pos)
@@ -269,8 +249,6 @@ void ItemGridWidget::projectContextMenu(const QPoint &pos)
     QAction close("Close", this);
     connect(&close, SIGNAL(triggered()), this, SLOT(closeProject()));
     menu.addAction(&close);
-
-//    menu.addSeparator();
 
     QAction del("Delete", this);
     connect(&del, SIGNAL(triggered()), this, SLOT(deleteProject()));

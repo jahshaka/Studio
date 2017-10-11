@@ -685,7 +685,6 @@ void MainWindow::setupFileMenu()
     connect(ui->actionSave,         SIGNAL(triggered(bool)), this, SLOT(saveScene()));
     connect(ui->actionExit,         SIGNAL(triggered(bool)), this, SLOT(exitApp()));
     connect(ui->actionPreferences,  SIGNAL(triggered(bool)), this, SLOT(showPreferences()));
-    connect(ui->actionNewProject,   SIGNAL(triggered(bool)), this, SLOT(newSceneProject()));
     connect(prefsDialog,            SIGNAL(PreferencesDialogClosed()), SLOT(updateSceneSettings()));
     connect(ui->actionExport,       SIGNAL(triggered(bool)), this, SLOT(exportSceneAsZip()));
     connect(ui->actionClose,        &QAction::triggered, [this]() { showProjectManagerInternal(); });
