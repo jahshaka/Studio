@@ -23,6 +23,7 @@ public:
     void createGlobalDb();
     void createGlobalDbThumbs();
     void deleteProject();
+    void renameProject(const QString&);
     void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob);
     void insertThumbnailGlobal(const QString &world_guid,
                                const QString &name,

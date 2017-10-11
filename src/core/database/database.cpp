@@ -114,6 +114,15 @@ void Database::deleteProject()
     executeAndCheckQuery(query, "deleteProject");
 }
 
+void Database::renameProject(const QString &newName)
+{
+    QSqlQuery query;
+    query.prepare("UPDATE " + Constants::DB_PROJECTS_TABLE + " SET name = ? WHERE guid = ?");
+    query.addBindValue(newName);
+    query.addBindValue(Globals::project->getProjectGuid());
+    executeAndCheckQuery(query, "renameProject");
+}
+
 void Database::insertSceneGlobal(const QString &projectName, const QByteArray &sceneBlob)
 {
     QSqlQuery query;

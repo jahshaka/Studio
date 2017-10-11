@@ -214,21 +214,16 @@ void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
 
 void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
 {
-    auto finfo = QFileInfo(widget->tileData.name);
-    auto originalFile = widget->tileData.name;
-    auto projectPath = finfo.absolutePath();
-
-    QDir baseDir(projectPath);
-    baseDir.cdUp();
-
+    auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+    auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
 
     QDir dir;
-    auto fileRename = dir.rename(originalFile, projectPath + "/" + widget->labelText + Constants::PROJ_EXT);
-    auto dirRename = dir.rename(projectPath, baseDir.absolutePath() + "/" + widget->labelText);
-//    QDir nf;
-//    auto proRename = nf.rename(originalFile, widget->labelText);
-    if (dirRename && fileRename) {
+    auto dirRename = dir.rename(QDir(projectFolder).filePath(widget->tileData.name),
+                                QDir(projectFolder).filePath(widget->labelText));
+    if (dirRename) {
         widget->updateLabel(widget->labelText);
+        Globals::project->setProjectGuid(widget->tileData.guid);
+        db->renameProject(widget->labelText);
     } else {
         QMessageBox::StandardButton err;
         err = QMessageBox::warning(this,
