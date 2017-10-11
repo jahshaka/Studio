@@ -59,7 +59,7 @@ SOURCES += src/main.cpp\
     src/widgets/modelpresets.cpp \
     src/widgets/accordianbladewidget.cpp \
     src/widgets/transformeditor.cpp \
-    src/widgets/sceneheirarchywidget.cpp \
+    src/widgets/scenehierarchywidget.cpp \
     src/editor/cameracontrollerbase.cpp \
     src/widgets/skypresets.cpp \
     src/editor/orbitalcameracontroller.cpp \
@@ -148,7 +148,7 @@ HEADERS  += src/mainwindow.h \
     src/widgets/modelpresets.h \
     src/widgets/accordianbladewidget.h \
     src/widgets/transformeditor.h \
-    src/widgets/sceneheirarchywidget.h \
+    src/widgets/scenehierarchywidget.h \
     src/editor/orbitalcameracontroller.h \
     src/editor/cameracontrollerbase.h \
     src/widgets/skypresets.h \
@@ -234,7 +234,7 @@ FORMS    += \
     src/widgets/materialsets.ui \
     src/widgets/accordianbladewidget.ui \
     src/widgets/transformeditor.ui \
-    src/widgets/sceneheirarchywidget.ui \
+    src/widgets/scenehierarchywidget.ui \
     src/widgets/skypresets.ui \
     src/widgets/keyframelabelwidget.ui \
     src/widgets/keyframelabeltreewidget.ui \

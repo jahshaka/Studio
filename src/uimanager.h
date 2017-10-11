@@ -6,7 +6,7 @@ class QUndoStack;
 class QUndoCommand;
 class MainWindow;
 class SceneViewWidget;
-class SceneHeirarchyWidget;
+class SceneHierarchyWidget;
 
 enum class SceneMode
 {
@@ -20,7 +20,7 @@ public:
     static MainWindow* mainWindow;
     static AnimationWidget* animationWidget;
     static SceneViewWidget* sceneViewWidget;
-    static SceneHeirarchyWidget* sceneHeirarchyWidget;
+    static SceneHierarchyWidget* sceneHierarchyWidget;
 
     static AnimationWidget *getAnimationWidget();
     static void setAnimationWidget(AnimationWidget *value);

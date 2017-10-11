@@ -9,8 +9,8 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#ifndef SCENEHEIRARCHYWIDGET_H
-#define SCENEHEIRARCHYWIDGET_H
+#ifndef SCENEHIERARCHYWIDGET_H
+#define SCENEHIERARCHYWIDGET_H
 
 #include <QWidget>
 #include <QMap>
@@ -18,7 +18,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/irisglfwd.h"
 
 namespace Ui {
-class SceneHeirarchyWidget;
+class SceneHierarchyWidget;
 }
 
 namespace iris
@@ -30,14 +30,14 @@ namespace iris
 class QTreeWidgetItem;
 class MainWindow;
 
-class SceneHeirarchyWidget : public QWidget
+class SceneHierarchyWidget : public QWidget
 {
     Q_OBJECT
 
     friend class MainWindow;
 public:
-    explicit SceneHeirarchyWidget(QWidget *parent = 0);
-    ~SceneHeirarchyWidget();
+    explicit SceneHierarchyWidget(QWidget *parent = 0);
+    ~SceneHierarchyWidget();
 
     void setScene(QSharedPointer<iris::Scene> scene);
     void setMainWindow(MainWindow* mainWin);
@@ -89,7 +89,7 @@ private:
     QSharedPointer<iris::SceneNode> lastDraggedHiearchyItemSrc;
 
 private:
-    Ui::SceneHeirarchyWidget *ui;
+    Ui::SceneHierarchyWidget *ui;
     QSharedPointer<iris::Scene> scene;
     QSharedPointer<iris::SceneNode> selectedNode;
     MainWindow* mainWindow;

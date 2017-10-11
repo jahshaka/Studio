@@ -56,7 +56,7 @@ class AdvancedTransformGizmo;
 class TransformWidget;
 
 class SceneViewWidget;
-class SceneHeirarchyWidget;
+class SceneHierarchyWidget;
 
 class EditorCameraController;
 class SettingsManager;
@@ -318,7 +318,7 @@ private:
     QMainWindow *dialog;
 
     QDockWidget *sceneHeirarchyDock;
-    SceneHeirarchyWidget *sceneHeirarchyWidget;
+    SceneHierarchyWidget *sceneHierarchyWidget;
 
     QDockWidget *sceneNodePropertiesDock;
     SceneNodePropertiesWidget *sceneNodePropertiesWidget;

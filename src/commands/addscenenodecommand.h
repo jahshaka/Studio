@@ -5,7 +5,7 @@
 #include "../irisglfwd.h"
 
 class MainWindow;
-class SceneHeirarchyWidget;
+class SceneHierarchyWidget;
 
 class AddSceneNodeCommand : public QUndoCommand
 {

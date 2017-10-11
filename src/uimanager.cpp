@@ -7,12 +7,12 @@
 #include <QUndoStack>
 #include <QUndoCommand>
 
-MainWindow *UiManager::mainWindow = nullptr;
-AnimationWidget *UiManager::animationWidget = nullptr;
-SceneViewWidget *UiManager::sceneViewWidget = nullptr;
-SceneHeirarchyWidget *UiManager::sceneHeirarchyWidget = nullptr;
+MainWindow *UiManager::mainWindow = Q_NULLPTR;
+AnimationWidget *UiManager::animationWidget = Q_NULLPTR;
+SceneViewWidget *UiManager::sceneViewWidget = Q_NULLPTR;
+SceneHierarchyWidget *UiManager::sceneHierarchyWidget = Q_NULLPTR;
 
-QUndoStack *UiManager::undoStack = nullptr;
+QUndoStack *UiManager::undoStack = Q_NULLPTR;
 SceneMode UiManager::sceneMode = SceneMode::EditMode;
 
 bool UiManager::isScenePlaying = false;
@@ -42,14 +42,12 @@ void UiManager::enterPlayMode()
 {
     sceneViewWidget->startPlayingScene();
     sceneMode = SceneMode::PlayMode;
-    // disable ui
 }
 
 void UiManager::enterEditMode()
 {
     sceneViewWidget->stopPlayingScene();
     sceneMode = SceneMode::EditMode;
-    // enable ui
 }
 
 void UiManager::updateWindowTitle()
@@ -77,7 +75,7 @@ void UiManager::pushUndoStack(QUndoCommand *command)
 //    UiManager::mainWindow->setWindowTitle("Jahshaka* - " + Globals::project->getFileName());
 }
 
-// not really used
+// not really ever used...
 void UiManager::popUndoStack()
 {
     UiManager::undoStack->undo();

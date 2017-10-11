@@ -2,7 +2,7 @@
 #include "../uimanager.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "../mainwindow.h"
-#include "../widgets/sceneheirarchywidget.h"
+#include "../widgets/scenehierarchywidget.h"
 
 DeleteSceneNodeCommand::DeleteSceneNodeCommand(iris::SceneNodePtr parentNode, iris::SceneNodePtr sceneNode)
 {
@@ -14,13 +14,13 @@ DeleteSceneNodeCommand::DeleteSceneNodeCommand(iris::SceneNodePtr parentNode, ir
 void DeleteSceneNodeCommand::undo()
 {
     parentNode->insertChild(position, sceneNode, false);
-    UiManager::sceneHeirarchyWidget->insertChild(sceneNode);
+    UiManager::sceneHierarchyWidget->insertChild(sceneNode);
     UiManager::mainWindow->sceneNodeSelected(sceneNode);
 }
 
 void DeleteSceneNodeCommand::redo()
 {
-    UiManager::sceneHeirarchyWidget->removeChild(sceneNode);
+    UiManager::sceneHierarchyWidget->removeChild(sceneNode);
     sceneNode->removeFromParent();// important that this is done after!
     UiManager::mainWindow->sceneNodeSelected(iris::SceneNodePtr());
 }

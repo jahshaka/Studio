@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>SceneHeirarchyWidget</class>
- <widget class="QWidget" name="SceneHeirarchyWidget">
+ <class>SceneHierarchyWidget</class>
+ <widget class="QWidget" name="SceneHierarchyWidget">
   <property name="geometry">
    <rect>
     <x>0</x>

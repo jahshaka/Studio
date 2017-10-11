@@ -105,7 +105,7 @@ For more information see the LICENSE file
 
 #include "../src/dialogs/newprojectdialog.h"
 
-#include "../src/widgets/sceneheirarchywidget.h"
+#include "../src/widgets/scenehierarchywidget.h"
 #include "../src/widgets/scenenodepropertieswidget.h"
 
 #include "../src/widgets/materialsets.h"
@@ -186,15 +186,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     sceneHeirarchyDock = new QDockWidget("Hierarchy");
     sceneHeirarchyDock->setObjectName(QStringLiteral("sceneHierarchyDock"));
-    sceneHeirarchyWidget = new SceneHeirarchyWidget;
-    sceneHeirarchyWidget->setMinimumWidth(396);
+    sceneHierarchyWidget = new SceneHierarchyWidget;
+    sceneHierarchyWidget->setMinimumWidth(396);
     sceneHeirarchyDock->setObjectName(QStringLiteral("sceneHierarchyWidget"));
-    sceneHeirarchyDock->setWidget(sceneHeirarchyWidget);
-    sceneHeirarchyWidget->setMainWindow(this);
+    sceneHeirarchyDock->setWidget(sceneHierarchyWidget);
+    sceneHierarchyWidget->setMainWindow(this);
 
-    UiManager::sceneHeirarchyWidget = sceneHeirarchyWidget;
+    UiManager::sceneHierarchyWidget = sceneHierarchyWidget;
 
-    connect(sceneHeirarchyWidget,   SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
+    connect(sceneHierarchyWidget,   SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
             this,                   SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
 
@@ -761,7 +761,7 @@ void MainWindow::renameNode()
     dialog.exec();
 
     activeSceneNode->setName(dialog.getName());
-    this->sceneHeirarchyWidget->repopulateTree();
+    this->sceneHierarchyWidget->repopulateTree();
 }
 
 void MainWindow::updateGizmoTransform()
@@ -969,7 +969,7 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 {
     this->scene = scene;
     this->sceneView->setScene(scene);
-    this->sceneHeirarchyWidget->setScene(scene);
+    this->sceneHierarchyWidget->setScene(scene);
 
     // interim...
     updateSceneSettings();
@@ -1001,7 +1001,7 @@ void MainWindow::sceneNodeSelected(iris::SceneNodePtr sceneNode)
 
     sceneView->setSelectedNode(sceneNode);
     this->sceneNodePropertiesWidget->setSceneNode(sceneNode);
-    this->sceneHeirarchyWidget->setSelectedNode(sceneNode);
+    this->sceneHierarchyWidget->setSelectedNode(sceneNode);
     animationWidget->setSceneNode(sceneNode);
 }
 
@@ -1264,7 +1264,7 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
         scene->getRootNode()->addChild(sceneNode);
     }
 
-    this->sceneHeirarchyWidget->repopulateTree();
+    this->sceneHierarchyWidget->repopulateTree();
 }
 
 /**
@@ -1308,7 +1308,7 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
 
 void MainWindow::repopulateSceneTree()
 {
-    this->sceneHeirarchyWidget->repopulateTree();
+    this->sceneHierarchyWidget->repopulateTree();
 }
 
 void MainWindow::duplicateNode()
@@ -1319,7 +1319,7 @@ void MainWindow::duplicateNode()
     auto node = activeSceneNode->duplicate();
     activeSceneNode->parent->addChild(node, false);
 
-    this->sceneHeirarchyWidget->repopulateTree();
+    this->sceneHierarchyWidget->repopulateTree();
     sceneNodeSelected(node);
 }
 
