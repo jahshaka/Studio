@@ -253,7 +253,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     assetDock = new QDockWidget("Asset Browser");
     assetDock->setObjectName(QStringLiteral("assetDock"));
 
-    assetWidget = new AssetWidget(db);
+    assetWidget = new AssetWidget(db, this);
     assetWidget->setAcceptDrops(true);
     assetWidget->installEventFilter(this);
 

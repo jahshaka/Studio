@@ -73,9 +73,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 void AssetWidget::trigger()
 {
-    QDir d(Globals::project->getProjectFolder());
-    walkFileSystem("", d.absolutePath());
-
+    generateAssetThumbnails();
     // It's important that this get's called after a project has been loaded (iKlsR)
     populateAssetTree();
 }
@@ -107,78 +105,27 @@ void AssetWidget::populateAssetTree()
 
 void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
 {
-    QDir dir(path);
-    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
-    foreach (const QFileInfo &file, files) {
-        if (file.baseName() != "Metadata") {
-            auto item = new QTreeWidgetItem();
-            item->setIcon(0, QIcon(":/icons/folder-symbol.svg"));
-            item->setData(0, Qt::DisplayRole, file.fileName());
-            item->setData(0, Qt::UserRole, file.absoluteFilePath());
-            parent->addChild(item);
-            updateTree(item, file.absoluteFilePath());
-        }
+    QFileInfoList folders = QDir(path).entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
+    foreach (const QFileInfo &folder, folders) {
+        auto item = new QTreeWidgetItem();
+        item->setIcon(0, QIcon(":/icons/folder-symbol.svg"));
+        item->setData(0, Qt::DisplayRole, folder.fileName());
+        item->setData(0, Qt::UserRole, folder.absoluteFilePath());
+        parent->addChild(item);
+        updateTree(item, folder.absoluteFilePath());
     }
 }
 
-void AssetWidget::walkFileSystem(QString folder, QString path)
+void AssetWidget::generateAssetThumbnails()
 {
-    QDir dir(path);
-    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs);
-    foreach (const QFileInfo &file, files) {
-        // TODO - maybe add some OS centric code to check for hidden folder
-        // TODO -- get type from extension if is a file
-        if (file.isFile() && file.suffix() != Constants::PROJ_EXT) {
-            AssetType type;
-            QPixmap pixmap;
-
-            if (file.suffix() == "jpg" || file.suffix() == "png" || file.suffix() == "bmp") {
-                auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-                type = AssetType::Texture;
-            } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
-                auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
-                type = AssetType::Object;
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-            } else if (file.suffix() == "shader") {
-                auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
-                type = AssetType::Shader;
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-            } else {
-                auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
-                type = AssetType::File;
-                pixmap = QPixmap::fromImage(*thumb->thumb);
+    foreach (auto asset, AssetManager::assets) {
+        if (asset->type == AssetType::Object) {
+            // TODO - fetch a list and check that instead of hitting the db, low cost but better way
+            if (!db->hasCachedThumbnail(asset->fileName)) {
+                ThumbnailGenerator::getSingleton()->requestThumbnail(
+                    ThumbnailRequestType::Mesh, asset->path, asset->path
+                );
             }
-
-            auto asset = new AssetVariant;
-            asset->type = type;
-            asset->fileName = file.fileName();
-            asset->path = file.absoluteFilePath();
-            asset->thumbnail = pixmap;
-
-            if (asset->type == AssetType::Object) {
-                if (!db->hasCachedThumbnail(asset->fileName)) {
-                    ThumbnailGenerator::getSingleton()->requestThumbnail(
-                        ThumbnailRequestType::Mesh, asset->path, asset->path
-                    );
-                }
-            }
-
-            AssetManager::addAsset(asset);
-        } else {
-            auto thumb = ThumbnailManager::createThumbnail(":/icons/folder-symbol.svg", 128, 128);
-            QPixmap pixmap = QPixmap::fromImage(*thumb->thumb);
-
-            auto asset = new AssetFolder;
-            asset->fileName = file.fileName();
-            asset->path = file.absoluteFilePath();
-            asset->thumbnail = pixmap;
-
-            AssetManager::addAsset(asset);
-        }
-
-        if (file.isDir()) {
-            walkFileSystem("", file.absoluteFilePath());
         }
     }
 }
@@ -186,27 +133,21 @@ void AssetWidget::walkFileSystem(QString folder, QString path)
 void AssetWidget::addItem(const QString &asset)
 {
     QFileInfo file(asset);
-    auto name = file.fileName();
-
-    QIcon icon;
     QListWidgetItem *item;
 
     if (file.isDir()) {
-        item = new QListWidgetItem(QIcon(":/icons/folder-symbol.svg"), name);
+        item = new QListWidgetItem(QIcon(":/icons/folder-symbol.svg"), file.fileName());
         item->setData(Qt::UserRole, file.absolutePath());
     } else {
-        //AssetType type = AssetType::Invalid;
         QPixmap pixmap;
+        item = new QListWidgetItem(file.fileName());
 
-        item = new QListWidgetItem(name);
-
-        if (file.suffix() == "jpg" || file.suffix() == "png" || file.suffix() == "bmp") {
-            //type = AssetType::Texture;
+        if (Constants::IMAGE_EXTS.contains(file.suffix())) {
             auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
             pixmap = QPixmap::fromImage(*thumb->thumb);
             item->setIcon(QIcon(pixmap));
-        } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
-            //type = AssetType::Object;
+        }
+        else if (Constants::MODEL_EXTS.contains(file.suffix())) {
             // todo do this once into the list instead of per item maybe...
             if (db->hasCachedThumbnail(file.fileName())) {
                 QPixmap cachedPixmap;
@@ -218,16 +159,13 @@ void AssetWidget::addItem(const QString &asset)
             else {
                 item->setIcon(QIcon(":/icons/google-drive-file.svg"));
                 auto asset = AssetManager::getAssetByPath(file.absoluteFilePath());
-                if (asset!=nullptr) {
-                    if (!asset->thumbnail.isNull())
-                        item->setIcon(QIcon(asset->thumbnail));
+                if (asset != nullptr) {
+                    if (!asset->thumbnail.isNull()) item->setIcon(QIcon(asset->thumbnail));
                 }
             }
         } else if (file.suffix() == "shader") {
-            //type = AssetType::Shader;
             item->setIcon(QIcon(":/icons/google-drive-file.svg"));
         } else {
-            //type = AssetType::File;
             item->setIcon(QIcon(":/icons/google-drive-file.svg"));
         }
 
@@ -238,23 +176,16 @@ void AssetWidget::addItem(const QString &asset)
     item->setTextAlignment(Qt::AlignCenter);
     item->setFlags(item->flags() | Qt::ItemIsEditable);
 
-    QString str = Constants::PROJ_EXT;
-    if (file.suffix() != str.remove(0, 1)) {
-        ui->assetView->addItem(item);
-    }
+    ui->assetView->addItem(item);
 }
 
 void AssetWidget::updateAssetView(const QString &path)
 {
     // clear the old view
     ui->assetView->clear();
-
     // set to new view path by itering path dir
-    QDir dir(path);
-    for (auto file : dir.entryList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
-        if (file != "Metadata") {
-            addItem(path + '/' + file);
-        }
+    for (auto file : QDir(path).entryList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
+        addItem(QDir(path).filePath(file));
     }
 }
 
