@@ -8,4 +8,4 @@ HEADERS += \
 SOURCES += \
         $$PWD/zip.c
 
-CONFIG += c++11
+CONFIG += c++14

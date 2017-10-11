@@ -16,7 +16,7 @@
 #-------------------------------------------------
 
 QT      += core gui concurrent sql
-CONFIG  += c++11
+CONFIG  += c++14
 
 # needed to fix resource compilation error in visual studio
 # http://stackoverflow.com/questions/28426240/qt-compiler-is-out-of-heap-space
@@ -270,8 +270,7 @@ RESOURCES += \
     app/textures.qrc \
     app/modelpresets.qrc \
     app/fonts.qrc \
-    app/skies.qrc \
-    app/images.qrc
+    app/skies.qrc
 
 win32: RC_ICONS = app/icons/icon.ico
 
