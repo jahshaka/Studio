@@ -330,7 +330,9 @@ void ProjectManager::finalizeProjectAssetLoad()
         for (int i = 0; i < AssetManager::assets.count(); i++) {
             if (AssetManager::assets[i]->path == item.path) {
                 AssimpObject *ao = new AssimpObject(item.data, item.path);
-                AssetObject *model = new AssetObject(ao, item.path);
+                AssetObject *model = new AssetObject(ao,
+                                                     item.path,
+                                                     AssetManager::assets[i]->fileName);
 
                 QVariant v;
                 v.setValue(ao);
@@ -497,21 +499,21 @@ void ProjectManager::walkProjectFolder(const QString &projectPath)
 
 QVector<ModelData> ProjectManager::loadModel(const QString &filePath)
 {
-  QVector<ModelData> sceneVec;
-  QFile file(filePath);
-  file.open(QFile::ReadOnly);
-  auto data = file.readAll();
+    QVector<ModelData> sceneVec;
+    QFile file(filePath);
+    file.open(QFile::ReadOnly);
+    auto data = file.readAll();
 
-  auto importer = new Assimp::Importer;
-//    const aiScene *scene = importer->ReadFile(filePath.toStdString().c_str(),
-//                                             aiProcessPreset_TargetRealtime_Fast);
+    auto importer = new Assimp::Importer;
+    //    const aiScene *scene = importer->ReadFile(filePath.toStdString().c_str(),
+    //                                             aiProcessPreset_TargetRealtime_Fast);
 
-  const aiScene *scene = importer->ReadFileFromMemory((void*) data.data(),
+    const aiScene *scene = importer->ReadFileFromMemory((void*) data.data(),
                                                       data.length(),
                                                       aiProcessPreset_TargetRealtime_Fast);
-  ModelData d = { filePath, scene };
-  sceneVec.append(d);
-  return sceneVec;
+    ModelData d = { filePath, scene };
+    sceneVec.append(d);
+    return sceneVec;
 }
 
 ProjectManager::~ProjectManager()

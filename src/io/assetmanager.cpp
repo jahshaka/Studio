@@ -2,7 +2,7 @@
 
 QList<Asset*> AssetManager::assets;
 
-QList<Asset *> &AssetManager::getAssets()
+QList<Asset*> &AssetManager::getAssets()
 {
     return assets;
 }
