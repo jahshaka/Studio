@@ -18,6 +18,9 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui
 
     this->setWindowTitle("New World");
 
+    ui->createProject->setAutoDefault(true);
+    ui->createProject->setDefault(true);
+
 //    QFile fontFile(IrisUtils::getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
 //    if (fontFile.exists()) {
 //        fontFile.open(QIODevice::ReadOnly);

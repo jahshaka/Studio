@@ -14,7 +14,17 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QMenu {
+   <string notr="true">QMessageBox QPushButton  {
+    border: none;
+    background-color: #212121;
+    padding: 4px 16px;
+}
+
+QMessageBox QPushButton:hover {
+    background-color: #555;
+}
+
+QMenu {
     background-color: #212121;
 }
 

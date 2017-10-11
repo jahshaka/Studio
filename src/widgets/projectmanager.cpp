@@ -243,23 +243,22 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
     auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
     auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
 
-    QMessageBox::StandardButton reply;
-    reply = QMessageBox::question(this,
-                                  "Deleting Project",
-                                  "Are you sure you want to delete this project?",
-                                  QMessageBox::Yes | QMessageBox::Cancel);
-    if (reply == QMessageBox::Yes) {
-        QDir dir(QDir(projectFolder).filePath(widget->tileData.name));
-        if (dir.removeRecursively()) {
+    auto option = QMessageBox::question(this,
+                                        "Deleting Project",
+                                        "Are you sure you want to delete this project?",
+                                        QMessageBox::Yes | QMessageBox::Cancel);
+
+    if (option == QMessageBox::Yes) {
+        QDir dirToRemove(QDir(projectFolder).filePath(widget->tileData.name));
+        if (dirToRemove.removeRecursively()) {
             dynamicGrid->deleteTile(widget);
             Globals::project->setProjectGuid(widget->tileData.guid);
             db->deleteProject();
         } else {
-            QMessageBox::StandardButton err;
-            err = QMessageBox::warning(this,
-                                       "Delete failed",
-                                       "Failed to remove project, please try again or delete manually",
-                                       QMessageBox::Ok);
+            QMessageBox::warning(this,
+                                 "Delete Failed!",
+                                 "Failed to remove entire project folder, please try again!",
+                                 QMessageBox::Ok);
         }
     }
 }
