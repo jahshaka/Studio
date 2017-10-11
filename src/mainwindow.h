@@ -229,7 +229,7 @@ public slots:
     void openFacebookUrl();
     void openWebsiteUrl();
 
-    void openProject(QString project, bool playMode = false);
+    void openProject(bool playMode = false);
 
     void toggleWidgets(bool toggle);
 

@@ -58,33 +58,12 @@ For more information see the LICENSE file
 
 #include "../constants.h"
 
-iris::ScenePtr SceneReader::readScene(QString filePath,
-                                      iris::PostProcessManagerPtr postMan,
-                                      EditorData **editorData)
-{
-    dir = AssetIOBase::getDirFromFileName(filePath);
-    QFile file(filePath);
-    file.open(QIODevice::ReadOnly);
-
-    auto data = file.readAll();
-    auto doc = QJsonDocument::fromJson(data);
-
-    auto projectObj = doc.object();
-    auto scene = readScene(projectObj);
-    if(editorData)
-        *editorData = readEditorData(projectObj);
-
-    readPostProcessData(projectObj, postMan);
-
-    return scene;
-}
-
-iris::ScenePtr SceneReader::readScene(QString filePath,
+iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
                                       iris::PostProcessManagerPtr postMan,
                                       EditorData **editorData)
 {
-    dir = AssetIOBase::getDirFromFileName(filePath);
+    dir = projectPath;
     auto doc = QJsonDocument::fromBinaryData(sceneBlob);
     auto projectObj = doc.object();
 
@@ -93,7 +72,7 @@ iris::ScenePtr SceneReader::readScene(QString filePath,
     if (editorData) *editorData = readEditorData(projectObj);
     readPostProcessData(projectObj, postMan);
 
-    for(auto node : scene->rootNode->children) {
+    for (auto node : scene->rootNode->children) {
         node->applyDefaultPose();
     }
 
@@ -102,8 +81,7 @@ iris::ScenePtr SceneReader::readScene(QString filePath,
 
 EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
 {
-    if(projectObj["editor"].isNull())
-        return nullptr;
+    if (projectObj["editor"].isNull()) return nullptr;
 
     auto editorObj = projectObj["editor"].toObject();
 
@@ -120,7 +98,6 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     editorData->editorCamera = camera;
     editorData->distFromPivot = (float)camObj["distanceFromPivot"].toDouble(5.0f);
     editorData->showLightWires = editorObj["showLightWires"].toBool();
-
 
     return editorData;
 }

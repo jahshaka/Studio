@@ -42,7 +42,7 @@ public:
     ProjectManager(Database *handle, QWidget *parent = nullptr);
     ~ProjectManager();
 
-    void prepareStore(QString path, bool playMode = false);
+    void prepareStore(bool playMode = false);
     void walkFileSystem(QString folder, QString path);
     QVector<ModelData> fetchModel(const QString &path);
     bool copyDirectoryFiles(const QString &fromDir, const QString &toDir, bool coverFileIfExist);
@@ -59,10 +59,8 @@ protected slots:
     void listWidgetCustomContextMenu(const QPoint&);
     void removeFromList();
     void deleteProject();
-    void openProject();
     void openSampleProject(QListWidgetItem*);
     void renameItem(QListWidgetItem*);
-    void openRecentProject(QListWidgetItem*);
     void newProject();
     void importProjectFromFile();
 
@@ -83,7 +81,6 @@ protected slots:
     void openSampleBrowser();
     void openProjectFromWidget(ItemGridWidget*, bool playMode);
     void exportProjectFromWidget(ItemGridWidget*);
-    void playProjectFromWidget(ItemGridWidget*);
     void renameProjectFromWidget(ItemGridWidget*);
     void closeProjectFromWidget(ItemGridWidget*);
     void deleteProjectFromWidget(ItemGridWidget*);
@@ -95,7 +92,7 @@ private:
     bool openInPlayMode;
 
 signals:
-    void fileToOpen(const QString& str, bool playMode);
+    void fileToOpen(bool playMode);
     void fileToCreate(const QString& str, const QString& str2);
     void importProject();
     void exportProject();

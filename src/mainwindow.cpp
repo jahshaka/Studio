@@ -286,7 +286,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     addDockWidget(Qt::BottomDockWidgetArea, presetsDock);
     tabifyDockWidget(animationDock, assetDock);
 
-    connect(pmContainer, SIGNAL(fileToOpen(QString, bool)), SLOT(openProject(QString, bool)));
+    connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));
     connect(pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
     connect(pmContainer, SIGNAL(exportProject()), SLOT(exportSceneAsZip()));
 
@@ -826,7 +826,7 @@ void MainWindow::setupUndoRedo()
 void MainWindow::saveScene()
 {
     auto writer = new SceneWriter();
-    auto blob = writer->getSceneObject(Globals::project->getFilePath(),
+    auto blob = writer->getSceneObject(Globals::project->getProjectFolder(),
                                        scene,
                                        sceneView->getRenderer()->getPostProcessManager(),
                                        sceneView->getEditorData());
@@ -854,7 +854,7 @@ void MainWindow::loadScene()
 //    openProject(filename);
 }
 
-void MainWindow::openProject(QString filename, bool playMode)
+void MainWindow::openProject(bool playMode)
 {
     this->sceneView->makeCurrent();
     //remove current scene first
@@ -867,12 +867,15 @@ void MainWindow::openProject(QString filename, bool playMode)
 
     // db->initializeDatabase(filename);
 
-    Globals::project->setFilePath(filename);
     UiManager::updateWindowTitle();
 
     auto postMan = sceneView->getRenderer()->getPostProcessManager();
     postMan->clearPostProcesses();
-    auto scene = reader->readScene(filename, db->getSceneBlobGlobal(), postMan, &editorData);
+
+    auto scene = reader->readScene(Globals::project->getProjectFolder(),
+                                   db->getSceneBlobGlobal(),
+                                   postMan,
+                                   &editorData);
 
     // playMode is basically fullscreen mode for now
     UiManager::playMode = playMode;
@@ -1582,7 +1585,7 @@ void MainWindow::deleteProject()
 
         QDir dir(Globals::project->folderPath);
         if (dir.removeRecursively()) {
-            settings->removeRecentlyOpenedEntry(Globals::project->filePath);
+//            settings->removeRecentlyOpenedEntry(Globals::project->filePath);
         } else {
             QMessageBox::StandardButton err;
             err = QMessageBox::warning(this,

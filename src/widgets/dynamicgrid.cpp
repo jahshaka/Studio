@@ -35,16 +35,11 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 
     gridWidget->setLayout(gridLayout);
 
-    setStyleSheet("border: 1px solid yellow");
+//    setStyleSheet("border: 1px solid yellow");
 }
 
 void DynamicGrid::addToGridView(ProjectTileData tileData, int count)
 {
-    auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-    auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
-    auto projectName = QDir(projectFolder).filePath(tileData.name) + "/" + tileData.name + ".jah";
-    tileData.name = projectName;
-
     ItemGridWidget *gameGridItem = new ItemGridWidget(tileData, tileSize, gridWidget);
 
     originalItems.push_back(gameGridItem);

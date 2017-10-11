@@ -36,7 +36,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *pa
 
 //    //Don't allow label to be wider than image
 //    gridTextLabel->setMaximumWidth(tileSize.width());
-    gridTextLabel->setText(QFileInfo(tileData.name).baseName());
+    gridTextLabel->setText(tileData.name);
 
 ////    QString textHex = getColor(SETTINGS.value("Grid/labelcolor","White").toString()).name();
 ////    int fontSize = getGridSize("font");
@@ -104,7 +104,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *pa
 //    olayout->addWidget(deleteButton);
 
     auto controls = new QWidget();
-    controls->setStyleSheet("background: rgba(32, 32, 32, 180); border-radius: 1px");
+    controls->setStyleSheet("background: #2980b9; border-radius: 1px");
     controls->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     controls->setFixedHeight(32);
     controls->setLayout(olayout);

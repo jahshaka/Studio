@@ -113,14 +113,13 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
 void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
 {
-    auto projectFile = QFileInfo(widget->tileData.name);
-    auto projectPath = projectFile.absolutePath();
-    Globals::project->setProjectPath(projectPath);
+    auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+    auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
+
+    Globals::project->setProjectPath(QDir(projectFolder).filePath(widget->tileData.name));
     Globals::project->setProjectGuid(widget->tileData.guid);
 
-    prepareStore(projectFile.absoluteFilePath(), playMode);
-
-//    this->close();
+    prepareStore(playMode);
 }
 
 QString importProjectName;
@@ -200,7 +199,7 @@ void ProjectManager::importProjectFromFile()
 //            Globals::project->setProjectPath(projectPath);
 //            Globals::project->setProjectGuid(widget->tileData.guid);
 
-            prepareStore(QDir(pDir).filePath(importProjectName + ".jah"));
+            prepareStore();
         }
     }
 
@@ -211,17 +210,6 @@ void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
 {
     Globals::project->setProjectGuid(widget->tileData.guid);
     emit exportProject();
-}
-
-void ProjectManager::playProjectFromWidget(ItemGridWidget *widget)
-{
-    auto projectFile = QFileInfo(widget->tileData.name);
-    auto projectPath = projectFile.absolutePath();
-    Globals::project->setProjectPath(projectPath);
-
-    prepareStore(projectFile.absoluteFilePath(), true);
-
-    this->close();
 }
 
 void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
@@ -387,40 +375,6 @@ void ProjectManager::deleteProject()
 //    }
 }
 
-void ProjectManager::openProject()
-{
-    auto projectFile = QFileInfo(loadProjectDelegate());
-    auto projectPath = projectFile.absolutePath();
-
-    if (!projectPath.isEmpty()) {
-//        Globals::project->setProjectPath(projectPath);
-        Globals::project->setProjectPath(projectPath);
-
-        prepareStore(projectFile.absoluteFilePath());
-
-//        prepareStore(projectFile.absoluteFilePath());
-//        window = new MainWindow;
-//        window->showMaximized();
-//        window->openProject(projectFile.absoluteFilePath());
-
-//        settings->addRecentlyOpenedScene(projectFile.absoluteFilePath());
-//        this->close();
-//        emit accepted();
-
-    }
-
-    else {
-        // QMessageBox msgBox;
-        // msgBox.setStyleSheet("QLabel { width: 128px; }");
-        // msgBox.setIcon(QMessageBox::Warning);
-        // msgBox.setText("Unable to locate project!");
-        // msgBox.setInformativeText("You did not select a folder or the path is invalid");
-        // msgBox.setStandardButtons(QMessageBox::Ok);
-        // msgBox.exec();
-    }
-}
-
-
 bool ProjectManager::copyDirectoryFiles(const QString &fromDir, const QString &toDir, bool coverFileIfExist)
 {
     QDir sourceDir(fromDir);
@@ -458,92 +412,71 @@ bool ProjectManager::copyDirectoryFiles(const QString &fromDir, const QString &t
 
 void ProjectManager::openSampleProject(QListWidgetItem *item)
 {
-    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
-                    + Constants::PROJECT_FOLDER;
-    auto projectFolder = settings->getValue("default_directory", path).toString();
+//    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+//                    + Constants::PROJECT_FOLDER;
+//    auto projectFolder = settings->getValue("default_directory", path).toString();
 
-    QDir targetDir(projectFolder);
-    if(!targetDir.exists()){    /* if directory don't exists, build it */
-        targetDir.mkdir(targetDir.absolutePath());
-    }
+//    QDir targetDir(projectFolder);
+//    if(!targetDir.exists()){    /* if directory don't exists, build it */
+//        targetDir.mkdir(targetDir.absolutePath());
+//    }
 
-    if (QDir(projectFolder + "/" + item->data(Qt::DisplayRole).toString()).exists()) {
-        QMessageBox::StandardButton reply;
-        reply = QMessageBox::question(this, "Project Path not Empty", "Project already Exists! Overwrite?",
-                                        QMessageBox::Yes|QMessageBox::No);
-        if (reply == QMessageBox::Yes) {
-            if (!projectFolder.isEmpty()) {
-                auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
+//    if (QDir(projectFolder + "/" + item->data(Qt::DisplayRole).toString()).exists()) {
+//        QMessageBox::StandardButton reply;
+//        reply = QMessageBox::question(this, "Project Path not Empty", "Project already Exists! Overwrite?",
+//                                        QMessageBox::Yes|QMessageBox::No);
+//        if (reply == QMessageBox::Yes) {
+//            if (!projectFolder.isEmpty()) {
+//                auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
 
-                QString dest = QDir(projectFolder).filePath(projectFile.baseName());
-                if (this->copyDirectoryFiles(projectFile.absolutePath(), dest, true)) {
+//                QString dest = QDir(projectFolder).filePath(projectFile.baseName());
+//                if (this->copyDirectoryFiles(projectFile.absolutePath(), dest, true)) {
 
-                    auto newProjectFile = QFileInfo(dest);
-                    auto projectPath = QDir(newProjectFile.absolutePath()).filePath(projectFile.baseName());
-                    Globals::project->setProjectPath(projectPath);
+//                    auto newProjectFile = QFileInfo(dest);
+//                    auto projectPath = QDir(newProjectFile.absolutePath()).filePath(projectFile.baseName());
+//                    Globals::project->setProjectPath(projectPath);
 
-                    auto sln = QDir(projectPath).filePath(projectFile.fileName());
+//                    auto sln = QDir(projectPath).filePath(projectFile.fileName());
 
-                    prepareStore(sln);
+//                    prepareStore(sln);
 
-//                    settings->addRecentlyOpenedScene(sln);
-                }
+////                    settings->addRecentlyOpenedScene(sln);
+//                }
 
-//                emit accepted();
-//                this->close();
+////                emit accepted();
+////                this->close();
 
-                sampleDialog.close();
-            }
-        }
-    } else {
-        if (!projectFolder.isEmpty()) {
-            auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
+//                sampleDialog.close();
+//            }
+//        }
+//    } else {
+//        if (!projectFolder.isEmpty()) {
+//            auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
 
-            QString dest = QDir(projectFolder).filePath(projectFile.baseName());
-            if (this->copyDirectoryFiles(projectFile.absolutePath(), dest, true)) {
+//            QString dest = QDir(projectFolder).filePath(projectFile.baseName());
+//            if (this->copyDirectoryFiles(projectFile.absolutePath(), dest, true)) {
 
-                auto newProjectFile = QFileInfo(dest);
-                auto projectPath = QDir(newProjectFile.absolutePath()).filePath(projectFile.baseName());
-                Globals::project->setProjectPath(projectPath);
+//                auto newProjectFile = QFileInfo(dest);
+//                auto projectPath = QDir(newProjectFile.absolutePath()).filePath(projectFile.baseName());
+//                Globals::project->setProjectPath(projectPath);
 
-                auto sln = QDir(projectPath).filePath(projectFile.fileName());
+//                auto sln = QDir(projectPath).filePath(projectFile.fileName());
 
-                prepareStore(sln);
+//                prepareStore(sln);
 
-//                settings->addRecentlyOpenedScene(sln);
-            }
+////                settings->addRecentlyOpenedScene(sln);
+//            }
 
-//            emit accepted();
-//            this->close();
-            sampleDialog.close();
-        }
-    }
+////            emit accepted();
+////            this->close();
+//            sampleDialog.close();
+//        }
+//    }
 }
 
 void ProjectManager::renameItem(QListWidgetItem *item)
 {
 
-}
-
-void ProjectManager::openRecentProject(QListWidgetItem *item)
-{
-    auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
-    auto projectPath = projectFile.absolutePath();
-    Globals::project->setProjectPath(projectPath);
-
-    prepareStore(projectFile.absoluteFilePath());
-
-    settings->addRecentlyOpenedScene(projectFile.absoluteFilePath());
-
-//    window = new MainWindow;
-//    window->showMaximized();
-
-//    window->openProject(projectFile.absoluteFilePath());
-
-//    this->close();
-//    emit accepted();
-
-    // switch to viewport tab
 }
 
 QString ProjectManager::loadProjectDelegate()
@@ -564,9 +497,7 @@ void ProjectManager::newProject()
 
     if (!projectName.isEmpty() || !projectName.isNull()) {
         auto fullProjectPath = QDir(projectPath).filePath(projectName);
-        auto slnName = QDir(fullProjectPath).filePath(projectName + Constants::PROJ_EXT);
 
-        Globals::project->setFilePath(slnName);
         Globals::project->setProjectPath(fullProjectPath);
 
         // make a dir and the default subfolders
@@ -655,15 +586,11 @@ void ProjectManager::handleDone()
          }
      }
 
-//     this->close();
-
      progressDialog->setLabelText(QString("Initializing panels..."));
 
-     emit fileToOpen(pathToOpen, openInPlayMode);
+     emit fileToOpen(openInPlayMode);
 
      progressDialog->close();
-
-//     this->hide();
 }
 
 void ProjectManager::handleDoneFuture()
@@ -752,9 +679,8 @@ void ProjectManager::test()
 //    this->repaint();
 }
 
-void ProjectManager::prepareStore(QString path, bool playMode)
+void ProjectManager::prepareStore(bool playMode)
 {
-    pathToOpen = path;
     this->openInPlayMode = playMode;
 
     // populate asset list
