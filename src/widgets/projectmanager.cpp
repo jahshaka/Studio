@@ -245,8 +245,8 @@ void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
 
 void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
 {
-    auto finfo = QFileInfo(widget->tileData.name);
-    auto projectPath = finfo.absolutePath();
+    auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+    auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
 
     QMessageBox::StandardButton reply;
     reply = QMessageBox::question(this,
@@ -254,12 +254,11 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
                                   "Are you sure you want to delete this project?",
                                   QMessageBox::Yes | QMessageBox::Cancel);
     if (reply == QMessageBox::Yes) {
-        QDir dir(projectPath);
+        QDir dir(QDir(projectFolder).filePath(widget->tileData.name));
         if (dir.removeRecursively()) {
             dynamicGrid->deleteTile(widget);
             Globals::project->setProjectGuid(widget->tileData.guid);
             db->deleteProject();
-            delete widget;
         } else {
             QMessageBox::StandardButton err;
             err = QMessageBox::warning(this,

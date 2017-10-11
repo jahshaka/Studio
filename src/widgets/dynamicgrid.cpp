@@ -121,32 +121,46 @@ void DynamicGrid::searchTiles(QString searchString)
     gridWidget->adjustSize();
 }
 
-void DynamicGrid::deleteTile(ItemGridWidget *widget)
-{
-    QMutableListIterator<ItemGridWidget*> it(originalItems);
-    while (it.hasNext()) {
-        if (it.next()->tileData.name == widget->tileData.name) it.remove();
+/**
+ * Helper function. Deletes all child widgets of the given layout @a item.
+ */
+void deleteChildWidgets(QLayoutItem *item) {
+    if (item->layout()) {
+        // Process all child items recursively.
+        for (int i = 0; i < item->layout()->count(); i++) {
+            deleteChildWidgets(item->layout()->itemAt(i));
+        }
     }
 
-    updateGridColumns(lastWidth);
+    // delete item->widget();
+    item->widget()->deleteLater();
+}
+
+void DynamicGrid::deleteTile(ItemGridWidget *widget)
+{
+    int index = gridLayout->indexOf(widget);
+    if (index != -1) {
+        int row, col, col_span, row_span;
+        gridLayout->getItemPosition(index, &row, &col, &col_span, &row_span);
+
+        auto w = gridLayout->itemAtPosition(row, col)->widget();
+        auto idx = gridLayout->layout()->indexOf(w);
+        auto item = gridLayout->takeAt(idx);
+        deleteChildWidgets(item);
+        item->widget()->deleteLater();
+
+        originalItems.removeOne(widget);
+        updateGridColumns(lastWidth);
+    }
 }
 
 void DynamicGrid::resetView()
 {
-    QMutableListIterator<ItemGridWidget*> it(originalItems);
-    while (it.hasNext()) {
-        if (it.next()) {
-            it.remove();
-//            updateGridColumns(lastWidth);
-        }
-    }
-
     QLayoutItem *gridItem;
-        while ((gridItem = gridLayout->takeAt(0)) != NULL)
-        {
-            delete gridItem->widget();
-            delete gridItem;
-        }
+    while ((gridItem = gridLayout->takeAt(0)) != Q_NULLPTR) {
+        delete gridItem->widget();
+        delete gridItem;
+    }
 
     originalItems.clear();
 }
