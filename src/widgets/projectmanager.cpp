@@ -123,15 +123,9 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 }
 
 QString importProjectName;
-QStringList fileNames;
 int on_extract_entry(const char *filename, void *arg) {
     QFileInfo fInfo(filename);
-    if (fInfo.suffix() == "db") {
-        importProjectName = fInfo.baseName();
-    } else {
-        fileNames.append(filename);
-    }
-
+    if (fInfo.suffix() == "db") importProjectName = fInfo.baseName();
     return 0;
 }
 
@@ -150,7 +144,6 @@ void ProjectManager::importProjectFromFile()
     // create a temporary directory and extract our project into it
     // we need a sure way to get the project name, so we have to extract it first and check the blob
     QTemporaryDir temporaryDir;
-    temporaryDir.setAutoRemove(false);
     if (temporaryDir.isValid()) {
         zip_extract(filename.toStdString().c_str(),
                     temporaryDir.path().toStdString().c_str(),
@@ -161,44 +154,17 @@ void ProjectManager::importProjectFromFile()
     // now extract the project to the default projects directory with the name
     if (!importProjectName.isEmpty() || !importProjectName.isNull()) {
         auto pDir = QDir(defaultProjectDirectory).filePath(importProjectName);
-        QDir workingTempDirectory(temporaryDir.path());
 
-        QDir dirMaker;
-        dirMaker.mkdir(pDir);
-
-        struct zip_t *zip = zip_open(filename.toStdString().c_str(), 0, 'r');
-
-        for (int i = 0; i < fileNames.count(); i++) {
-            QFileInfo fInfo(fileNames[i]);
-            auto file = QString(workingTempDirectory.relativeFilePath(fileNames[i])).toStdString().c_str();
-
-            // we need to pay special attention to directories since we want to create empty ones as well
-            // also directories need to exist prior to a file being written
-            if (fInfo.isDir()) {
-                dirMaker.mkdir(QDir(pDir).filePath(file));
-            }
-            else {
-                zip_entry_open(zip, file);
-                zip_entry_fread(zip, QDir(pDir).filePath(file).toStdString().c_str());
-            }
-
-            // we close each entry after a successful write
-            zip_entry_close(zip);
+        zip_extract(filename.toStdString().c_str(), pDir.toStdString().c_str(), Q_NULLPTR, Q_NULLPTR);
+        QDir dir;
+        if (!dir.remove(QDir(pDir).filePath(importProjectName + ".db"))) {
+            // let's try again shall we...
+            remove(QDir(pDir).filePath(importProjectName + ".db").toStdString().c_str());
         }
-
-        zip_close(zip);
 
         auto open = db->importProject(QDir(temporaryDir.path()).filePath(importProjectName));
         if (open) {
             Globals::project->setProjectPath(pDir);
-//            pmContainer->hide();
-//            openProject(pDir);
-
-//            auto projectFile = QFileInfo(widget->tileData.name);
-//            auto projectPath = projectFile.absolutePath();
-//            Globals::project->setProjectPath(projectPath);
-//            Globals::project->setProjectGuid(widget->tileData.guid);
-
             prepareStore();
         }
     }

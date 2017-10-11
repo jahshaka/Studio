@@ -183,6 +183,7 @@ void ItemGridWidget::updateImage()
 void ItemGridWidget::updateLabel(QString text)
 {
     this->gridTextLabel->setText(text);
+    tileData.name = text;
 }
 
 void ItemGridWidget::showControls()
