@@ -22,7 +22,7 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
     setWidget(gridWidget);
     setStyleSheet("background: transparent");
 
-//    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
     offset = 10;
     settings = SettingsManager::getDefaultManager();
@@ -34,6 +34,7 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 //    gridLayout->setRowMinimumHeight(0, offset);
 
     gridWidget->setLayout(gridLayout);
+    gridLayout->setSpacing(12);
 
 //    setStyleSheet("border: 1px solid yellow");
 }
@@ -169,8 +170,8 @@ void DynamicGrid::resizeEvent(QResizeEvent *event)
 {
     lastWidth = event->size().width();
 
-    gridWidget->setMinimumWidth(viewport()->width());
-    gridWidget->setMaximumWidth(viewport()->width());
+//    gridWidget->setMinimumWidth(viewport()->width());
+//    gridWidget->setMaximumWidth(viewport()->width());
 
     int check = event->size().width() / (tileSize.width());
     bool autoAdjustColumns = true;
