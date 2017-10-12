@@ -360,7 +360,8 @@ void ProjectManager::openSampleBrowser()
     QGridLayout *layout = new QGridLayout();
     QListWidget *sampleList = new QListWidget();
     sampleList->setObjectName("sampleList");
-    sampleList->setStyleSheet("#sampleList { background-color: #1e1e1e; padding: 8px; border: none } QListWidgetItem { padding: 12px; }");
+    sampleList->setStyleSheet("#sampleList { background-color: #1e1e1e; padding: 8px; border: none } " \
+                              "QListWidgetItem { padding: 12px; }");
     sampleList->setViewMode(QListWidget::IconMode);
     sampleList->setSizeAdjustPolicy(QListWidget::AdjustToContents);
     sampleList->setSpacing(4);
@@ -509,8 +510,8 @@ QVector<ModelData> ProjectManager::loadModel(const QString &filePath)
     //                                             aiProcessPreset_TargetRealtime_Fast);
 
     const aiScene *scene = importer->ReadFileFromMemory((void*) data.data(),
-                                                      data.length(),
-                                                      aiProcessPreset_TargetRealtime_Fast);
+                                                        data.length(),
+                                                        aiProcessPreset_TargetRealtime_Fast);
     ModelData d = { filePath, scene };
     sceneVec.append(d);
     return sceneVec;

@@ -16,6 +16,7 @@
 #include <QDir>
 #include <QDrag>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
 
@@ -464,47 +465,40 @@ void AssetWidget::importAssetB()
     importAsset(fileNames);
 }
 
-void AssetWidget::importAsset(const QStringList &path)
+void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const QString &path)
 {
-    QStringList fileNames;
-    if (path.isEmpty()) {
-        fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
-    } else {
-        fileNames = path;
-    }
+    foreach (const QFileInfo &file, fileNames) {
+        if (file.isFile()) {
+            AssetType type;
+            QPixmap pixmap;
 
-    if (!assetItem.selectedPath.isEmpty()) {
-        foreach (const QFileInfo &file, fileNames) {
-            QFile::copy(file.absoluteFilePath(), assetItem.selectedPath + '/' + file.fileName());
+            if (Constants::IMAGE_EXTS.contains(file.suffix())) {
+                auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
+                pixmap = QPixmap::fromImage(*thumb->thumb);
+                type = AssetType::Texture;
+            } else if (Constants::MODEL_EXTS.contains(file.suffix())) {
+                auto thumb = ThumbnailManager::createThumbnail(":/icons/user-account-box.svg", 128, 128);
+                pixmap = QPixmap::fromImage(*thumb->thumb);
+                type = AssetType::Object;
+            }  else if (file.suffix() == "shader") {
+                auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
+                type = AssetType::Shader;
+                pixmap = QPixmap::fromImage(*thumb->thumb);
+            } else {
+                auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
+                type = AssetType::File;
+                pixmap = QPixmap::fromImage(*thumb->thumb);
+            }
 
-            if (file.isFile() && file.suffix() != Constants::PROJ_EXT) {
-                AssetType type;
-                QPixmap pixmap;
+            auto asset = new AssetVariant;
+            asset->type         = type;
+            asset->fileName     = file.fileName();
+            asset->path         = file.absoluteFilePath();
+            asset->thumbnail    = pixmap;
 
-                if (file.suffix() == "jpg" || file.suffix() == "png" || file.suffix() == "bmp") {
-                    auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
-                    pixmap = QPixmap::fromImage(*thumb->thumb);
-                    type = AssetType::Texture;
-                } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
-                    auto thumb = ThumbnailManager::createThumbnail(":/icons/user-account-box.svg", 128, 128);
-                    type = AssetType::Object;
-                    pixmap = QPixmap::fromImage(*thumb->thumb);
-                }  else if (file.suffix() == "shader") {
-                    auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
-                    type = AssetType::Shader;
-                    pixmap = QPixmap::fromImage(*thumb->thumb);
-                } else {
-                    auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
-                    type = AssetType::File;
-                    pixmap = QPixmap::fromImage(*thumb->thumb);
-                }
+            bool copyFile = QFile::copy(file.absoluteFilePath(), QDir(path).filePath(file.fileName()));
 
-                auto asset = new AssetVariant;
-                asset->type = type;
-                asset->fileName = file.fileName();
-                asset->path = file.absoluteFilePath();
-                asset->thumbnail = pixmap;
-
+            if (copyFile) {
                 if (asset->type == AssetType::Object) {
                     ThumbnailGenerator::getSingleton()->requestThumbnail(
                         ThumbnailRequestType::Mesh, asset->path, asset->path
@@ -512,9 +506,62 @@ void AssetWidget::importAsset(const QStringList &path)
                 }
 
                 AssetManager::addAsset(asset);
+            } else {
+                QString warningText = QString("Failed to import file %1. Possible reasons are:\n"
+                                              "1. It already exists\n"
+                                              "2. The file isn't valid")
+                                      .arg(file.fileName());
+
+                QMessageBox::warning(this, "Import failed", warningText, QMessageBox::Ok);
             }
         }
+        else {
+            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
+            auto asset = new AssetFolder;
+            asset->fileName     = file.fileName();
+            asset->path         = file.absoluteFilePath();
+            asset->thumbnail    = QPixmap::fromImage(*thumb->thumb);
 
+            // if we encounter a folder, create it and import files
+            QDir importDir(QDir(path).filePath(file.fileName()));
+            if (!importDir.exists()) {
+                importDir.mkpath(".");
+                AssetManager::addAsset(asset);
+                QStringList list;
+                foreach (auto item, QDir(file.absoluteFilePath())
+                                    .entryList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs))
+                {
+                    list << QDir(file.absoluteFilePath()).filePath(item);
+                }
+
+                QString targetDir = QDir(path).filePath(file.fileName());
+                createDirectoryStructure(list, targetDir);
+            }
+            else {
+                QString warningText = QString("Failed to create folder %1. Aborting import for this folder")
+                                      .arg(file.fileName());
+
+                QMessageBox::warning(this,
+                                     "Could not create folder",
+                                     warningText,
+                                     QMessageBox::Ok);
+                continue;
+            }
+        }
+    }
+}
+
+void AssetWidget::importAsset(const QStringList &path)
+{
+    QStringList fileNames;
+    if (path.isEmpty()) {   // this is hit when we call this function via import menu
+        fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
+    } else {
+        fileNames = path;
+    }
+
+    if (!assetItem.selectedPath.isEmpty()) {
+        createDirectoryStructure(fileNames, assetItem.selectedPath);
         updateAssetView(assetItem.selectedPath);
     }
 }

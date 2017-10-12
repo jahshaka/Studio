@@ -69,6 +69,7 @@ protected slots:
     void openAtFolder();
     void createFolder();
     void importAssetB();
+    void createDirectoryStructure(const QStringList&, const QString&);
     void importAsset(const QStringList &path);
 
     void onThumbnailResult(ThumbnailResult* result);
