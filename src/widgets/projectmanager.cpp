@@ -151,7 +151,12 @@ void ProjectManager::importProjectFromFile()
 
 void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
 {
+    auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+    auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
+
+    Globals::project->setProjectPath(QDir(projectFolder).filePath(widget->tileData.name));
     Globals::project->setProjectGuid(widget->tileData.guid);
+
     emit exportProject();
 }
 

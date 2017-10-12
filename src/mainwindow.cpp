@@ -1280,7 +1280,9 @@ void MainWindow::exportSceneAsZip()
 
     if (filePath.isEmpty() || filePath.isNull()) return;
 
-    saveScene();
+    if (!!scene) {
+        saveScene();
+    }
 
     // Maybe in the future one could add a way to using an in memory database
     // and saving saving that as a blob which can be put into the zip as bytes (iKlsR)
