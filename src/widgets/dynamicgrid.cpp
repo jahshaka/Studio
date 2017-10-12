@@ -1,5 +1,4 @@
 #include "dynamicgrid.h"
-#include "gridwidget.h"
 #include <QGraphicsDropShadowEffect>
 #include <QGridLayout>
 #include <QLabel>
@@ -18,7 +17,7 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 
     setAlignment(Qt::AlignHCenter);
 
-    gridWidget = new QWidget(parent);
+    gridWidget = new QWidget(this);
     gridWidget->setObjectName("gridWidget");
     setWidget(gridWidget);
     setStyleSheet("background: transparent");
@@ -30,15 +29,19 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
     tileSize = sizeFromString(settings->getValue("tileSize", "Normal").toString());
 
     gridLayout = new QGridLayout(gridWidget);
-    gridLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
-    gridLayout->setRowMinimumHeight(0, offset);
+//    gridLayout->setSpacing(20);
+//    gridLayout->setSizeConstraint(QLayout::SetMinimumSize);
+//    gridLayout->setRowMinimumHeight(0, offset);
 
     gridWidget->setLayout(gridLayout);
+    gridLayout->setSpacing(12);
+
+//    setStyleSheet("border: 1px solid yellow");
 }
 
-void DynamicGrid::addToGridView(GridWidget *item, int count)
+void DynamicGrid::addToGridView(ProjectTileData tileData, int count)
 {
-    ItemGridWidget *gameGridItem = new ItemGridWidget(item, tileSize, gridWidget);
+    ItemGridWidget *gameGridItem = new ItemGridWidget(tileData, tileSize, gridWidget);
 
     originalItems.push_back(gameGridItem);
 
@@ -98,7 +101,7 @@ void DynamicGrid::searchTiles(QString searchString)
     int count = 0;
     if (!searchString.isEmpty()) {
         foreach(ItemGridWidget *gridItem, originalItems) {
-            if (gridItem->name.toLower().contains(searchString)) {
+            if (gridItem->tileData.name.toLower().contains(searchString)) {
                 gridItem->setVisible(true);
                 gridItem->setTileSize(tileSize);
                 gridLayout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
@@ -119,32 +122,46 @@ void DynamicGrid::searchTiles(QString searchString)
     gridWidget->adjustSize();
 }
 
-void DynamicGrid::deleteTile(ItemGridWidget *widget)
-{
-    QMutableListIterator<ItemGridWidget*> it(originalItems);
-    while (it.hasNext()) {
-        if (it.next()->projectName == widget->projectName) it.remove();
+/**
+ * Helper function. Deletes all child widgets of the given layout @a item.
+ */
+void deleteChildWidgets(QLayoutItem *item) {
+    if (item->layout()) {
+        // Process all child items recursively.
+        for (int i = 0; i < item->layout()->count(); i++) {
+            deleteChildWidgets(item->layout()->itemAt(i));
+        }
     }
 
-    updateGridColumns(lastWidth);
+    // delete item->widget();
+    item->widget()->deleteLater();
+}
+
+void DynamicGrid::deleteTile(ItemGridWidget *widget)
+{
+    int index = gridLayout->indexOf(widget);
+    if (index != -1) {
+        int row, col, col_span, row_span;
+        gridLayout->getItemPosition(index, &row, &col, &col_span, &row_span);
+
+        auto w = gridLayout->itemAtPosition(row, col)->widget();
+        auto idx = gridLayout->layout()->indexOf(w);
+        auto item = gridLayout->takeAt(idx);
+        deleteChildWidgets(item);
+        item->widget()->deleteLater();
+
+        originalItems.removeOne(widget);
+        updateGridColumns(lastWidth);
+    }
 }
 
 void DynamicGrid::resetView()
 {
-    QMutableListIterator<ItemGridWidget*> it(originalItems);
-    while (it.hasNext()) {
-        if (it.next()) {
-            it.remove();
-//            updateGridColumns(lastWidth);
-        }
-    }
-
     QLayoutItem *gridItem;
-        while ((gridItem = gridLayout->takeAt(0)) != NULL)
-        {
-            delete gridItem->widget();
-            delete gridItem;
-        }
+    while ((gridItem = gridLayout->takeAt(0)) != Q_NULLPTR) {
+        delete gridItem->widget();
+        delete gridItem;
+    }
 
     originalItems.clear();
 }
@@ -152,6 +169,9 @@ void DynamicGrid::resetView()
 void DynamicGrid::resizeEvent(QResizeEvent *event)
 {
     lastWidth = event->size().width();
+
+//    gridWidget->setMinimumWidth(viewport()->width());
+//    gridWidget->setMaximumWidth(viewport()->width());
 
     int check = event->size().width() / (tileSize.width());
     bool autoAdjustColumns = true;

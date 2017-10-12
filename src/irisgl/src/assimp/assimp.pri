@@ -1,5 +1,5 @@
 CONFIG += exceptions rtti
-#QT_PRIVATE += zlib-private
+CONFIG += c++14
 
 gcc {
     QMAKE_CFLAGS_WARN_ON += -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable \

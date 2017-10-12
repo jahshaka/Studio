@@ -36,15 +36,15 @@ public:
 
     void populateAssetTree();
     void updateTree(QTreeWidgetItem* parentTreeItem, QString path);
-    void walkFileSystem(QString folder, QString path);
+    void generateAssetThumbnails();
     void addItem(const QString &asset);
     void updateAssetView(const QString &path);
     void trigger();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
-    void dragEnterEvent(QDragEnterEvent*);
-    void dropEvent(QDropEvent*);
+    void dragEnterEvent(QDragEnterEvent*) override;
+    void dropEvent(QDropEvent*) override;
 
 protected slots:
     void treeItemSelected(QTreeWidgetItem* item);
@@ -69,6 +69,7 @@ protected slots:
     void openAtFolder();
     void createFolder();
     void importAssetB();
+    void createDirectoryStructure(const QStringList&, const QString&);
     void importAsset(const QStringList &path);
 
     void onThumbnailResult(ThumbnailResult* result);

@@ -16,13 +16,13 @@ public:
     ~Database();
 
     void executeAndCheckQuery(QSqlQuery&, const QString&);
-    void fetchRecord(const QString &name);
     void initializeDatabase(QString name);
     void closeDb();
 
     void createGlobalDb();
     void createGlobalDbThumbs();
     void deleteProject();
+    void renameProject(const QString&);
     void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob);
     void insertThumbnailGlobal(const QString &world_guid,
                                const QString &name,
@@ -34,11 +34,6 @@ public:
     void updateSceneGlobal(const QByteArray &sceneBlob, const QByteArray &thumbnail);
     void createExportScene(const QString& outTempFilePath);
     bool importProject(const QString& inFilePath);
-
-    void createProject(QString projectName);
-    void insertScene(const QString &projectName, const QByteArray &sceneBlob);
-    void updateScene(const QByteArray &sceneBlob);
-    QByteArray getSceneBlob() const;
 
     QSqlDatabase getDb() { return db; }
 

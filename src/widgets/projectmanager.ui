@@ -14,7 +14,17 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QMenu {
+   <string notr="true">QMessageBox QPushButton  {
+    border: none;
+    background-color: #212121;
+    padding: 4px 16px;
+}
+
+QMessageBox QPushButton:hover {
+    background-color: #555;
+}
+
+QMenu {
     background-color: #212121;
 }
 
@@ -319,9 +329,6 @@ QListWidget::item:selected {
      <property name="bottomMargin">
       <number>9</number>
      </property>
-     <item row="1" column="0">
-      <widget class="QWidget" name="pmcont" native="true"/>
-     </item>
      <item row="0" column="0">
       <widget class="QWidget" name="widget_3" native="true">
        <property name="sizePolicy">
@@ -347,13 +354,13 @@ QListWidget::item:selected {
          <number>0</number>
         </property>
         <property name="topMargin">
-         <number>9</number>
+         <number>12</number>
         </property>
         <property name="rightMargin">
          <number>0</number>
         </property>
         <property name="bottomMargin">
-         <number>0</number>
+         <number>2</number>
         </property>
         <item>
          <spacer name="horizontalSpacer_3">
@@ -475,7 +482,7 @@ QListWidget::item:selected {
          </widget>
         </item>
         <item>
-         <widget class="QComboBox" name="comboBox">
+         <widget class="QComboBox" name="tilePreview">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
             <horstretch>0</horstretch>
@@ -564,6 +571,9 @@ QListWidget::item:selected {
         </item>
        </layout>
       </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QWidget" name="pmContainer" native="true"/>
      </item>
     </layout>
    </item>

@@ -6,18 +6,16 @@
 #include <QGridLayout>
 #include <QLineEdit>
 
-class GridWidget;
+#include "../core/project.h"
 
 class ItemGridWidget : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit ItemGridWidget(GridWidget *item, QSize size, QWidget *parent = Q_NULLPTR);
+    explicit ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *parent = Q_NULLPTR);
     QSize tileSize;
-    QString projectName;
-    QString name;
-    QString guid;
+    ProjectTileData tileData;
 
     void setTileSize(QSize size);
     void updateImage();

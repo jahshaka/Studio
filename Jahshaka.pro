@@ -16,7 +16,7 @@
 #-------------------------------------------------
 
 QT      += core gui concurrent sql
-CONFIG  += c++11
+CONFIG  += c++14
 
 # needed to fix resource compilation error in visual studio
 # http://stackoverflow.com/questions/28426240/qt-compiler-is-out-of-heap-space
@@ -59,7 +59,7 @@ SOURCES += src/main.cpp\
     src/widgets/modelpresets.cpp \
     src/widgets/accordianbladewidget.cpp \
     src/widgets/transformeditor.cpp \
-    src/widgets/sceneheirarchywidget.cpp \
+    src/widgets/scenehierarchywidget.cpp \
     src/editor/cameracontrollerbase.cpp \
     src/widgets/skypresets.cpp \
     src/editor/orbitalcameracontroller.cpp \
@@ -111,7 +111,6 @@ SOURCES += src/main.cpp\
     src/widgets/screenshotwidget.cpp \
     src/widgets/projectmanager.cpp \
     src/widgets/dynamicgrid.cpp \
-    src/widgets/gridwidget.cpp \
     src/widgets/itemgridwidget.cpp \
     src/dialogs/renameprojectdialog.cpp \
     src/editor/thumbnailgenerator.cpp
@@ -149,7 +148,7 @@ HEADERS  += src/mainwindow.h \
     src/widgets/modelpresets.h \
     src/widgets/accordianbladewidget.h \
     src/widgets/transformeditor.h \
-    src/widgets/sceneheirarchywidget.h \
+    src/widgets/scenehierarchywidget.h \
     src/editor/orbitalcameracontroller.h \
     src/editor/cameracontrollerbase.h \
     src/widgets/skypresets.h \
@@ -216,7 +215,6 @@ HEADERS  += src/mainwindow.h \
     src/widgets/screenshotwidget.h \
     src/widgets/projectmanager.h \
     src/widgets/dynamicgrid.h \
-    src/widgets/gridwidget.h \
     src/widgets/itemgridwidget.hpp \
     src/dialogs/renameprojectdialog.h \
     src/editor/thumbnailgenerator.h
@@ -236,7 +234,7 @@ FORMS    += \
     src/widgets/materialsets.ui \
     src/widgets/accordianbladewidget.ui \
     src/widgets/transformeditor.ui \
-    src/widgets/sceneheirarchywidget.ui \
+    src/widgets/scenehierarchywidget.ui \
     src/widgets/skypresets.ui \
     src/widgets/keyframelabelwidget.ui \
     src/widgets/keyframelabeltreewidget.ui \
@@ -272,8 +270,7 @@ RESOURCES += \
     app/textures.qrc \
     app/modelpresets.qrc \
     app/fonts.qrc \
-    app/skies.qrc \
-    app/images.qrc
+    app/skies.qrc
 
 win32: RC_ICONS = app/icons/icon.ico
 

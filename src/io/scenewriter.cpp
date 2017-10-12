@@ -66,12 +66,12 @@ void SceneWriter::writeScene(QString filePath,
     file.close();
 }
 
-QByteArray SceneWriter::getSceneObject(QString filePath,
+QByteArray SceneWriter::getSceneObject(QString projectPath,
                                        iris::ScenePtr scene,
                                        iris::PostProcessManagerPtr postMan,
                                        EditorData *editorData)
 {
-    dir = AssetIOBase::getDirFromFileName(filePath);
+    dir = projectPath;
     QJsonObject projectObj;
     projectObj["version"] = Constants::CONTENT_VERSION;
 

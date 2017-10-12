@@ -36,7 +36,6 @@ class QTreeWidget;
 class QIcon;
 class QUndoStack;
 
-//custom ui
 class TransformSlidersUi;
 class LightLayerWidget;
 class ModelLayerWidget;
@@ -56,7 +55,7 @@ class AdvancedTransformGizmo;
 class TransformWidget;
 
 class SceneViewWidget;
-class SceneHeirarchyWidget;
+class SceneHierarchyWidget;
 
 class EditorCameraController;
 class SettingsManager;
@@ -79,7 +78,6 @@ class QOpenGLFunctions_3_2_Core;
 enum class SceneNodeType;
 
 class Database;
-#include <QDebug>
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -144,18 +142,13 @@ private:
     void initTorusLayerUi();
 
     void setupPropertyUi();
-    //void setupPropertyTabs(SceneNode* node);
 
     void setupLayerManager();
 
     void rebuildTree();
-    //void populateTree(QStandardItem* treeNode,SceneNode* sceneNode);
-    //void populateTree(QTreeWidgetItem* treeNode,SceneNode* sceneNode);
     void deselectTreeItems();
 
     void setupDefaultScene();
-
-    void resizeEvent(QResizeEvent* event);
 
     QIcon getIconFromSceneNodeType(SceneNodeType type);
 
@@ -172,7 +165,6 @@ private:
     bool isModelExtension(QString extension);
 
 public slots:
-    void importSceneFromZip();
     void exportSceneAsZip();
 
     //scenegraph
@@ -186,8 +178,6 @@ public slots:
     void addEmpty();
     void addViewer();
     void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
-    void addTexturedPlane();
-    void addViewPoint();
     void addDragPlaceholder();
 
     //context menu functions
@@ -209,28 +199,19 @@ public slots:
 
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
 
-    //TORUS SLIDERS
     void saveScene();
-    void saveSceneAs();
-    void loadScene();
-//    QString loadSceneDelegate();
-    void openRecentFile();
 
     void showPreferences();
     void exitApp();
     void newScene();
-    void newSceneProject();
-    void deleteProject();
-    void callProjectManager();
-    void projectManager(bool mainWindowActive = false);
-    void newProject(const QString&, const QString&);
 
     void showAboutDialog();
     void showLicenseDialog();
     void openFacebookUrl();
     void openWebsiteUrl();
 
-    void openProject(QString project, bool playMode = false);
+    void newProject(const QString&, const QString&);
+    void openProject(bool playMode = false);
 
     void toggleWidgets(bool toggle);
 
@@ -251,9 +232,8 @@ public slots:
 
     void takeScreenshot();
     void toggleLightWires(bool state);
-    void tabsChanged(int);
     void showProjectManager();
-    void showProjectManagerInternal(bool);
+    void showProjectManagerInternal();
 
 private slots:
     void translateGizmo();
@@ -319,7 +299,7 @@ private:
     QMainWindow *dialog;
 
     QDockWidget *sceneHeirarchyDock;
-    SceneHeirarchyWidget *sceneHeirarchyWidget;
+    SceneHierarchyWidget *sceneHierarchyWidget;
 
     QDockWidget *sceneNodePropertiesDock;
     SceneNodePropertiesWidget *sceneNodePropertiesWidget;

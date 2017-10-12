@@ -34,33 +34,30 @@ QSlider::sub-page {
 
 QSlider::groove:horizontal {
     border: 0px solid transparent;
-    height: 2px;
+    height: 4px;
     background: #1e1e1e;
     margin: 2px 0;
 }
 
 QSlider::handle:horizontal {
     background-color: #CCC;
-	height: 4px;
-    width: 10px;
+    width: 12px;
     border: 1px solid #1e1e1e;
     margin: -5px 0px;
-    border-radius: 6px;
+    border-radius:7px;
 }
 
 QSlider::handle:horizontal:pressed {
     background-color: #AAA;
-	height: 4px;
-    width: 10px;
+    width: 12px;
     border: 1px solid #1e1e1e;
     margin: -5px 0px;
-    border-radius: 6px;
+    border-radius: 7px;
 }
 
 QSlider::handle:horizontal:disabled {
     background-color: #bbbbbb;
-    height: 2px;
-    width: 8px;
+    width: 12px;
     border: 0px solid transparent;
     margin: -1px -1px;
     border-radius: 4px;

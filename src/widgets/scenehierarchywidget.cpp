@@ -9,8 +9,8 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "sceneheirarchywidget.h"
-#include "ui_sceneheirarchywidget.h"
+#include "scenehierarchywidget.h"
+#include "ui_scenehierarchywidget.h"
 
 #include <QTreeWidgetItem>
 #include <QMenu>
@@ -22,9 +22,9 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "../mainwindow.h"
 
-SceneHeirarchyWidget::SceneHeirarchyWidget(QWidget *parent) :
+SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
     QWidget(parent),
-    ui(new Ui::SceneHeirarchyWidget)
+    ui(new Ui::SceneHierarchyWidget)
 {
     ui->setupUi(this);
 
@@ -55,14 +55,14 @@ SceneHeirarchyWidget::SceneHeirarchyWidget(QWidget *parent) :
 
 }
 
-void SceneHeirarchyWidget::setScene(QSharedPointer<iris::Scene> scene)
+void SceneHierarchyWidget::setScene(QSharedPointer<iris::Scene> scene)
 {
     //todo: cleanly remove previous scene
     this->scene = scene;
     this->repopulateTree();
 }
 
-void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
+void SceneHierarchyWidget::setMainWindow(MainWindow* mainWin)
 {
     mainWindow = mainWin;
 
@@ -140,7 +140,7 @@ void SceneHeirarchyWidget::setMainWindow(MainWindow* mainWin)
     connect(ui->deleteBtn, SIGNAL(clicked(bool)), mainWindow, SLOT(deleteNode()));
 }
 
-void SceneHeirarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode)
+void SceneHierarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     selectedNode = sceneNode;
 
@@ -157,7 +157,7 @@ void SceneHeirarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> scene
     }
 }
 
-bool SceneHeirarchyWidget::eventFilter(QObject *watched, QEvent *event)
+bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
 {
     // @TODO, handle multiple items later on
     if (event->type() == QEvent::Drop) {
@@ -188,7 +188,7 @@ bool SceneHeirarchyWidget::eventFilter(QObject *watched, QEvent *event)
     return QObject::eventFilter(watched, event);
 }
 
-void SceneHeirarchyWidget::treeItemSelected(QTreeWidgetItem* item)
+void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem* item)
 {
     long nodeId = item->data(1, Qt::UserRole).toLongLong();
     selectedNode = nodeList[nodeId];
@@ -196,7 +196,7 @@ void SceneHeirarchyWidget::treeItemSelected(QTreeWidgetItem* item)
     emit sceneNodeSelected(selectedNode);
 }
 
-void SceneHeirarchyWidget::treeItemChanged(QTreeWidgetItem* item, int column)
+void SceneHierarchyWidget::treeItemChanged(QTreeWidgetItem* item, int column)
 {
     long nodeId = item->data(1,Qt::UserRole).toLongLong();
     auto node = nodeList[nodeId];
@@ -208,7 +208,7 @@ void SceneHeirarchyWidget::treeItemChanged(QTreeWidgetItem* item, int column)
     }
 }
 
-void SceneHeirarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
+void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 {
     QModelIndex index = ui->sceneTree->indexAt(pos);
     if (!index.isValid()) {
@@ -246,24 +246,24 @@ void SceneHeirarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
     menu.exec(ui->sceneTree->mapToGlobal(pos));
 }
 
-void SceneHeirarchyWidget::renameNode()
+void SceneHierarchyWidget::renameNode()
 {
     //mainWindow->deleteNode();
     mainWindow->renameNode();
 }
 
-void SceneHeirarchyWidget::deleteNode()
+void SceneHierarchyWidget::deleteNode()
 {
     mainWindow->deleteNode();
     selectedNode.clear();
 }
 
-void SceneHeirarchyWidget::duplicateNode()
+void SceneHierarchyWidget::duplicateNode()
 {
     mainWindow->duplicateNode();
 }
 
-void SceneHeirarchyWidget::repopulateTree()
+void SceneHierarchyWidget::repopulateTree()
 {
     auto rootNode = scene->getRootNode();
     auto rootTreeItem = new QTreeWidgetItem();
@@ -287,7 +287,7 @@ void SceneHeirarchyWidget::repopulateTree()
     //ui->sceneTree->expandAll();
 }
 
-void SceneHeirarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
+void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
                                         QSharedPointer<iris::SceneNode> sceneNode)
 {
     for (auto childNode : sceneNode->children) {
@@ -303,7 +303,7 @@ void SceneHeirarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
     }
 }
 
-QTreeWidgetItem *SceneHeirarchyWidget::createTreeItems(iris::SceneNodePtr node)
+QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 {
     auto childTreeItem = new QTreeWidgetItem();
     childTreeItem->setText(0, node->getName());
@@ -315,7 +315,7 @@ QTreeWidgetItem *SceneHeirarchyWidget::createTreeItems(iris::SceneNodePtr node)
     return childTreeItem;
 }
 
-void SceneHeirarchyWidget::insertChild(iris::SceneNodePtr childNode)
+void SceneHierarchyWidget::insertChild(iris::SceneNodePtr childNode)
 {
     auto parentTreeItem = treeItemList[childNode->parent->nodeId];
     auto childItem = createTreeItems(childNode);
@@ -331,7 +331,7 @@ void SceneHeirarchyWidget::insertChild(iris::SceneNodePtr childNode)
     }
 }
 
-void SceneHeirarchyWidget::removeChild(iris::SceneNodePtr childNode)
+void SceneHierarchyWidget::removeChild(iris::SceneNodePtr childNode)
 {
     // remove from heirarchy
     auto nodeTreeItem = treeItemList[childNode->nodeId];
@@ -342,7 +342,7 @@ void SceneHeirarchyWidget::removeChild(iris::SceneNodePtr childNode)
     treeItemList.remove(childNode->getNodeId());
 }
 
-SceneHeirarchyWidget::~SceneHeirarchyWidget()
+SceneHierarchyWidget::~SceneHierarchyWidget()
 {
     delete ui;
 }

@@ -42,7 +42,8 @@ public:
 #ifdef QT_DEBUG
         loadSettings(QDir(Globals::appWorkingDir).filePath(fileName));
 #else
-        loadSettings(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/"+fileName);
+        loadSettings(QDir(QStandardPaths::writableLocation(QStandardPaths::DataLocation))
+                     .filePath(fileName));
 #endif
     }
 

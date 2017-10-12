@@ -101,6 +101,9 @@ QLineEdit {
           <property name="text">
            <string>Create World</string>
           </property>
+          <property name="default">
+           <bool>false</bool>
+          </property>
          </widget>
         </item>
        </layout>

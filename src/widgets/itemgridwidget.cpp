@@ -1,5 +1,4 @@
 #include "itemgridwidget.hpp"
-#include "gridwidget.h"
 #include <QDebug>
 #include <QFileInfo>
 #include <QGraphicsDropShadowEffect>
@@ -10,60 +9,67 @@
 
 #include "../dialogs/renameprojectdialog.h"
 
-ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : QWidget(parent)
+ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *parent) : QWidget(parent)
 {
-    tileSize = size;
     this->parent = parent;
-
-    projectName = item->projectName;
-    auto fileName = QFileInfo(projectName);
-    name = fileName.baseName();
-    guid = item->guid;
-
     setParent(parent);
+
+    tileSize = size;
+
+    this->tileData = tileData;
 
     setMinimumWidth(tileSize.width());
     setMaximumWidth(tileSize.width());
 
     gameGridLayout = new QGridLayout(this);
-    gameGridLayout->setColumnStretch(0, 1);
-    gameGridLayout->setColumnStretch(3, 1);
-    gameGridLayout->setRowMinimumHeight(1, tileSize.height());
+    gameGridLayout->setVerticalSpacing(5);
+//    gameGridLayout->setColumnStretch(0, 1);
+//    gameGridLayout->setColumnStretch(3, 1);
+//    gameGridLayout->setRowMinimumHeight(1, tileSize.height());
 
     gridImageLabel = new QLabel(this);
     gridImageLabel->setObjectName("image");
-    gridImageLabel->setMinimumHeight(tileSize.height());
-    gridImageLabel->setMinimumWidth(tileSize.width());
+//    gridImageLabel->setMinimumHeight(tileSize.height());
+//    gridImageLabel->setMinimumWidth(tileSize.width());
 
     gridTextLabel = new QLabel(this);
 
-    //Don't allow label to be wider than image
-    gridTextLabel->setMaximumWidth(tileSize.width());
-    gridTextLabel->setText(fileName.baseName());
+//    //Don't allow label to be wider than image
+//    gridTextLabel->setMaximumWidth(tileSize.width());
+    gridTextLabel->setText(tileData.name);
 
-//    QString textHex = getColor(SETTINGS.value("Grid/labelcolor","White").toString()).name();
-//    int fontSize = getGridSize("font");
+////    QString textHex = getColor(SETTINGS.value("Grid/labelcolor","White").toString()).name();
+////    int fontSize = getGridSize("font");
 
-    gridTextLabel->setStyleSheet("QLabel { font-weight: bold; color: #ddd; font-size: 11px; }");
+    gridTextLabel->setStyleSheet("QLabel { font-weight: bold; color: #ddd; font-size: 12px; }");
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
-//    gridTextLabel->setTextInteractionFlags(Qt::TextEditorInteraction);
+////    gridTextLabel->setTextInteractionFlags(Qt::TextEditorInteraction);
 
-    gameGridLayout->addWidget(gridTextLabel, 2, 1);
 
-    oimage = item->image;
-    image = item->image.scaled(tileSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    QPixmap pixmap;
+    if (!tileData.thumbnail.isEmpty() || !tileData.thumbnail.isNull()) {
+        QPixmap cachedPixmap;
+        if (cachedPixmap.loadFromData(tileData.thumbnail, "PNG")) {
+            pixmap = cachedPixmap;
+        } else {
+            pixmap = QPixmap::fromImage(QImage(":/images/preview.png"));
+        }
+    } else {
+        pixmap = QPixmap::fromImage(QImage(":/images/preview.png"));
+    }
+
+    oimage = pixmap;
+    image = pixmap.scaled(tileSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
     gridImageLabel->setPixmap(image);
     gridImageLabel->setAlignment(Qt::AlignCenter);
 
-    gameGridLayout->addWidget(gridImageLabel, 1, 1);
-
     options = new QWidget(this);
 //    // check these constants
 //    options->setStyleSheet("background: red");
-    options->setMinimumWidth(tileSize.width());
-    options->setMaximumWidth(tileSize.width());
+//    options->setMinimumWidth(tileSize.width());
+//    options->setMaximumWidth(tileSize.width());
 
     QVBoxLayout *vlayout = new QVBoxLayout();
 //    vlayout->setMargin(0);
@@ -102,7 +108,7 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
 //    olayout->addWidget(deleteButton);
 
     auto controls = new QWidget();
-    controls->setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #3498db, stop:1 #2283c3); border-radius: 1px");
+    controls->setStyleSheet("background: #2980b9; border-radius: 1px");
     controls->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     controls->setFixedHeight(32);
     controls->setLayout(olayout);
@@ -113,7 +119,9 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
     options->setLayout(vlayout);
     options->hide();
 
-    gameGridLayout->addWidget(options, 1, 1);
+    gameGridLayout->addWidget(gridImageLabel, 0, 0);
+    gameGridLayout->addWidget(options, 0, 0);
+    gameGridLayout->addWidget(gridTextLabel, 1, 0);
 
     QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect;
     shadow->setColor(Qt::black);
@@ -134,6 +142,8 @@ ItemGridWidget::ItemGridWidget(GridWidget *item, QSize size, QWidget *parent) : 
     setCursor(Qt::PointingHandCursor);
     setContextMenuPolicy(Qt::CustomContextMenu);
 
+//    setStyleSheet("border: 1px solid red");
+
     connect(this, SIGNAL(customContextMenuRequested(const QPoint&)), SLOT(projectContextMenu(QPoint)));
 
 //    connect(this, SIGNAL(singleClicked(QWidget*)), this, SLOT(highlightGridWidget(QWidget*)));
@@ -148,35 +158,31 @@ void ItemGridWidget::setTileSize(QSize size)
     setMinimumWidth(tileSize.width());
     setMaximumWidth(tileSize.width());
 
-    gameGridLayout->setColumnStretch(0, 1);
-    gameGridLayout->setColumnStretch(3, 1);
-    gameGridLayout->setRowMinimumHeight(1, tileSize.height());
+//    gameGridLayout->setColumnStretch(0, 1);
+//    gameGridLayout->setColumnStretch(3, 1);
+//    gameGridLayout->setRowMinimumHeight(1, tileSize.height());
 
-    gridImageLabel->setMinimumHeight(tileSize.height());
-    gridImageLabel->setMinimumWidth(tileSize.width());
+//    gridImageLabel->setMinimumHeight(tileSize.height());
+//    gridImageLabel->setMinimumWidth(tileSize.width());
 
-    auto img = oimage.scaled(tileSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    auto img = oimage.scaled(tileSize, Qt::KeepAspectRatio, Qt::FastTransformation);
 
     gridImageLabel->setPixmap(img);
     gridImageLabel->setAlignment(Qt::AlignCenter);
 
-    gridTextLabel->setMaximumWidth(tileSize.width());
+//    gridTextLabel->setMaximumWidth(tileSize.width());
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
 
-    options->setMaximumWidth(tileSize.width());
+//    options->setMaximumWidth(tileSize.width());
 
     setMinimumHeight(this->sizeHint().height());
-}
-
-void ItemGridWidget::updateImage()
-{
-
 }
 
 void ItemGridWidget::updateLabel(QString text)
 {
     this->gridTextLabel->setText(text);
+    tileData.name = text;
 }
 
 void ItemGridWidget::showControls()
@@ -201,46 +207,27 @@ void ItemGridWidget::editProject()
 
 void ItemGridWidget::enterEvent(QEvent *event)
 {
-    // this->setStyleSheet("#image { border: 2px solid #3498db }");
     QWidget::enterEvent(event);
     emit hovered();
 }
 
 void ItemGridWidget::leaveEvent(QEvent *event)
 {
-    // this->setStyleSheet("#image { border: none }");
     QWidget::leaveEvent(event);
     emit left();
 }
 
-//void ItemGridWidget::keyPressEvent(QKeyEvent *event)
-//{
-//    if (event->key() == Qt::Key_Up)
-//        emit arrowPressed(this, "UP");
-//    else if (event->key() == Qt::Key_Down)
-//        emit arrowPressed(this, "DOWN");
-//    else if (event->key() == Qt::Key_Left)
-//        emit arrowPressed(this, "LEFT");
-//    else if (event->key() == Qt::Key_Right)
-//        emit arrowPressed(this, "RIGHT");
-//    else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
-//        emit enterPressed(this);
-//    else
-//        QWidget::keyPressEvent(event);
-//}
-
-
 void ItemGridWidget::mousePressEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton || event->button() == Qt::RightButton)
+    if (event->button() == Qt::LeftButton || event->button() == Qt::RightButton) {
         emit singleClicked(this);
+    }
 }
 
 
 void ItemGridWidget::mouseDoubleClickEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton)
-        emit doubleClicked(this);
+    if (event->button() == Qt::LeftButton) emit doubleClicked(this);
 }
 
 void ItemGridWidget::projectContextMenu(const QPoint &pos)
@@ -262,8 +249,6 @@ void ItemGridWidget::projectContextMenu(const QPoint &pos)
     QAction close("Close", this);
     connect(&close, SIGNAL(triggered()), this, SLOT(closeProject()));
     menu.addAction(&close);
-
-//    menu.addSeparator();
 
     QAction del("Delete", this);
     connect(&del, SIGNAL(triggered()), this, SLOT(deleteProject()));

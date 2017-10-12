@@ -9,7 +9,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSqlRecord>
-
+#include <QDateTime>
 #include <QMessageBox>
 
 Database::Database()
@@ -34,25 +34,6 @@ void Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
     }
 }
 
-void Database::fetchRecord(const QString &name)
-{
-//    QSqlQuery query;
-//    query.prepare("select * from test_table");
-
-//    if (query.exec()) {
-//        int idName = query.record().indexOf("name");
-
-//        while (query.next()) {
-//           QString name = query.value(idName).toString();
-//           qDebug() << name;
-//        }
-
-//        return true;
-//    }
-
-//    return false;
-}
-
 void Database::initializeDatabase(QString name)
 {
     db.setDatabaseName(name);
@@ -69,9 +50,6 @@ void Database::closeDb()
     db.removeDatabase(connection);
 }
 
-// sbm
-
-// offer to change the location in the future maybe?
 void Database::createGlobalDb() {
     QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_PROJECTS_TABLE + " ("
                      "    name              VARCHAR(64),"
@@ -114,12 +92,22 @@ void Database::deleteProject()
     executeAndCheckQuery(query, "deleteProject");
 }
 
+void Database::renameProject(const QString &newName)
+{
+    QSqlQuery query;
+    query.prepare("UPDATE " + Constants::DB_PROJECTS_TABLE + " SET name = ? WHERE guid = ?");
+    query.addBindValue(newName);
+    query.addBindValue(Globals::project->getProjectGuid());
+    executeAndCheckQuery(query, "renameProject");
+}
+
 void Database::insertSceneGlobal(const QString &projectName, const QByteArray &sceneBlob)
 {
     QSqlQuery query;
     auto guid = GUIDManager::generateGUID();
-    query.prepare("INSERT INTO " + Constants::DB_PROJECTS_TABLE + " (name, scene, version, guid)"
-                  "VALUES (:name, :scene, :version, :guid)");
+    query.prepare("INSERT INTO " + Constants::DB_PROJECTS_TABLE                 +
+                  " (name, scene, version, last_accessed, last_written, guid)"   +
+                  " VALUES (:name, :scene, :version, datetime(), datetime(), :guid)");
     query.bindValue(":name",    projectName);
     query.bindValue(":scene",   sceneBlob);
     query.bindValue(":version", Constants::CONTENT_VERSION);
@@ -136,7 +124,7 @@ void Database::insertThumbnailGlobal(const QString &world_guid,
 {
     QSqlQuery query;
     query.prepare("INSERT INTO " + Constants::DB_THUMBS_TABLE + " (world_guid, name, thumbnail, guid)"
-                  "VALUES (:world_guid, :name, :thumbnail, :guid)");
+                  " VALUES (:world_guid, :name, :thumbnail, :guid)");
     query.bindValue(":world_guid",  world_guid);
     query.bindValue(":thumbnail",   thumbnail);
     query.bindValue(":name",        name);
@@ -156,7 +144,7 @@ bool Database::hasCachedThumbnail(const QString &name)
             return query.record().value(0).toBool();
         }
     } else {
-        qDebug() << "hasCachedThumbnail failed! " + query.lastError().text();
+        irisLog("hasCachedThumbnail query failed! " + query.lastError().text());
     }
 
     return false;
@@ -165,7 +153,7 @@ bool Database::hasCachedThumbnail(const QString &name)
 QVector<ProjectTileData> Database::fetchProjects()
 {
     QSqlQuery query;
-    query.prepare("SELECT name, thumbnail, guid FROM " + Constants::DB_PROJECTS_TABLE);
+    query.prepare("SELECT name, thumbnail, guid FROM " + Constants::DB_PROJECTS_TABLE + " ORDER BY last_written DESC");
     executeAndCheckQuery(query, "fetchProjects");
 
     QVector<ProjectTileData> tileData;
@@ -195,7 +183,7 @@ QByteArray Database::getSceneBlobGlobal() const
             return query.value(0).toByteArray();
         }
     } else {
-        irisLog("There was an error getting the blob! " + query.lastError().text());
+        irisLog("There was an error getting the scene blob! " + query.lastError().text());
     }
 
     return QByteArray();
@@ -223,7 +211,7 @@ QByteArray Database::fetchCachedThumbnail(const QString &name) const
 void Database::updateSceneGlobal(const QByteArray &sceneBlob, const QByteArray &thumbnail)
 {
     QSqlQuery query;
-    query.prepare("UPDATE " + Constants::DB_PROJECTS_TABLE + " SET scene = ?, thumbnail = ? WHERE guid = ?");
+    query.prepare("UPDATE " + Constants::DB_PROJECTS_TABLE + " SET scene = ?, last_written = datetime(), thumbnail = ? WHERE guid = ?");
     query.addBindValue(sceneBlob);
     query.addBindValue(thumbnail);
     query.addBindValue(Globals::project->getProjectGuid());
@@ -234,13 +222,13 @@ void Database::updateSceneGlobal(const QByteArray &sceneBlob, const QByteArray &
 void Database::createExportScene(const QString &outTempFilePath)
 {
     QSqlQuery query;
-    query.prepare("SELECT name, scene, thumbnail, guid FROM " + Constants::DB_PROJECTS_TABLE + " WHERE guid = ?");
+    query.prepare("SELECT name, scene, thumbnail, last_written, last_accessed, guid FROM " +
+                  Constants::DB_PROJECTS_TABLE + " WHERE guid = ?");
     query.addBindValue(Globals::project->getProjectGuid());
 
     if (query.exec()) {
         query.next();
     } else {
-        qDebug() << "createExportScene failed " + query.lastError().text();
         irisLog(
             "There was an error fetching a row to be exported " + query.lastError().text()
         );
@@ -249,7 +237,9 @@ void Database::createExportScene(const QString &outTempFilePath)
     auto sceneName  = query.value(0).toString();
     auto sceneBlob  = query.value(1).toByteArray();
     auto sceneThumb = query.value(2).toByteArray();
-    auto sceneGuid  = query.value(3).toString();
+    auto sceneLastW = query.value(3).toDateTime();
+    auto sceneLastA = query.value(4).toDateTime();
+    auto sceneGuid  = query.value(5).toString();
 
     QSqlDatabase dbe = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "myUniqueSQLITEConnection");
     dbe.setDatabaseName(QDir(outTempFilePath).filePath(Globals::project->getProjectName() + ".db"));
@@ -273,12 +263,15 @@ void Database::createExportScene(const QString &outTempFilePath)
     executeAndCheckQuery(query2, "createExportGlobalDb");
 
     QSqlQuery query3(dbe);
-    query3.prepare("INSERT INTO " + Constants::DB_PROJECTS_TABLE + " (name, scene, thumbnail, guid)"
-                  "VALUES (:name, :scene, :thumbnail, :guid)");
-    query3.bindValue(":name",       sceneName);
-    query3.bindValue(":scene",      sceneBlob);
-    query3.bindValue(":thumbnail",  sceneThumb);
-    query3.bindValue(":guid",       sceneGuid);
+    query3.prepare("INSERT INTO " + Constants::DB_PROJECTS_TABLE +
+                   " (name, scene, thumbnail, last_written, last_accessed, guid)" +
+                   " VALUES (:name, :scene, :thumbnail, :last_written, :last_accessed, :guid)");
+    query3.bindValue(":name",           sceneName);
+    query3.bindValue(":scene",          sceneBlob);
+    query3.bindValue(":thumbnail",      sceneThumb);
+    query3.bindValue(":last_written",   sceneLastW);
+    query3.bindValue(":last_accessed",  sceneLastA);
+    query3.bindValue(":guid",           sceneGuid);
 
     executeAndCheckQuery(query3, "insertSceneGlobal");
 
@@ -292,12 +285,11 @@ bool Database::importProject(const QString &inFilePath)
     dbe.open();
 
     QSqlQuery query(dbe);
-    query.prepare("SELECT name, scene, thumbnail, guid FROM " + Constants::DB_PROJECTS_TABLE);
+    query.prepare("SELECT name, scene, thumbnail, last_written, last_accessed, guid FROM " + Constants::DB_PROJECTS_TABLE);
 
     if (query.exec()) {
         query.next();
     } else {
-        qDebug() << "importProject failed " + query.lastError().text();
         irisLog(
             "There was an error fetching a record to be imported " + query.lastError().text()
         );
@@ -306,7 +298,9 @@ bool Database::importProject(const QString &inFilePath)
     auto sceneName  = query.value(0).toString();
     auto sceneBlob  = query.value(1).toByteArray();
     auto sceneThumb = query.value(2).toByteArray();
-    auto sceneGuid  = query.value(3).toString();
+    auto sceneLastW = query.value(3).toDateTime();
+    auto sceneLastA = query.value(4).toDateTime();
+    auto sceneGuid  = query.value(5).toString();
 
     dbe.close();
 
@@ -320,7 +314,7 @@ bool Database::importProject(const QString &inFilePath)
             exists = query2.record().value(0).toBool();
         }
     } else {
-        qDebug() << "hasExistingProject failed! " + query2.lastError().text();
+        irisLog("hasExistingProject query failed! " + query2.lastError().text());
     }
 
     if (exists) {
@@ -345,12 +339,15 @@ bool Database::importProject(const QString &inFilePath)
         }
     } else {
         QSqlQuery query3;
-        query3.prepare("INSERT INTO " + Constants::DB_PROJECTS_TABLE + " (name, scene, thumbnail, guid)"
-                      "VALUES (:name, :scene, :thumbnail, :guid)");
-        query3.bindValue(":name",       sceneName);
-        query3.bindValue(":scene",      sceneBlob);
-        query3.bindValue(":thumbnail",  sceneThumb);
-        query3.bindValue(":guid",       sceneGuid);
+        query3.prepare("INSERT INTO " + Constants::DB_PROJECTS_TABLE                    +
+                       " (name, scene, thumbnail, last_written, last_accessed, guid)"   +
+                       " VALUES (:name, :scene, :thumbnail, :last_written, :last_accessed, :guid)");
+        query3.bindValue(":name",           sceneName);
+        query3.bindValue(":scene",          sceneBlob);
+        query3.bindValue(":thumbnail",      sceneThumb);
+        query3.bindValue(":last_written",   sceneLastW);
+        query3.bindValue(":last_accessed",  sceneLastA);
+        query3.bindValue(":guid",           sceneGuid);
 
         executeAndCheckQuery(query3, "insertSceneGlobal");
 
@@ -359,60 +356,4 @@ bool Database::importProject(const QString &inFilePath)
     }
 
     return false;
-}
-
-// esbmv
-
-void Database::createProject(QString projectName)
-{
-    QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_ROOT_TABLE + " ("
-                     "    name    VARCHAR(32),"
-                     "    scene   BLOB,"
-                     "    version VARCHAR(8),"
-                     "    hash    VARCHAR(32) PRIMARY KEY"
-                     ")";
-
-    QSqlQuery query;
-    query.prepare(schema);
-    executeAndCheckQuery(query, "createProject");
-}
-
-void Database::insertScene(const QString &projectName, const QByteArray &sceneBlob)
-{
-    QSqlQuery query;
-    query.prepare("INSERT INTO " + Constants::DB_ROOT_TABLE + " (name, scene, version, hash)"
-                  "VALUES (:name, :scene, :version, :hash)");
-    query.bindValue(":name",    projectName);
-    query.bindValue(":scene",   sceneBlob);
-    query.bindValue(":version", Constants::CONTENT_VERSION);
-    query.bindValue(":hash",    GUIDManager::generateGUID());
-
-    executeAndCheckQuery(query, "insertScene");
-}
-
-void Database::updateScene(const QByteArray &sceneBlob)
-{
-    QSqlQuery query;
-    query.prepare("UPDATE " + Constants::DB_ROOT_TABLE + " SET scene = :blob WHERE name = :name");
-    query.bindValue(":blob",    sceneBlob);
-    query.bindValue(":name",    Globals::project->getProjectName());
-
-    executeAndCheckQuery(query, "updateScene");
-}
-
-QByteArray Database::getSceneBlob() const
-{
-    QSqlQuery query;
-    query.prepare("SELECT scene FROM " + Constants::DB_ROOT_TABLE + " WHERE name = ?");
-    query.addBindValue(Globals::project->getProjectName());
-
-    if (query.exec()) {
-        if (query.first()) {
-            return query.value(0).toByteArray();
-        }
-    } else {
-        irisLog("There was an error getting the blob! " + query.lastError().text());
-    }
-
-    return QByteArray();
 }
