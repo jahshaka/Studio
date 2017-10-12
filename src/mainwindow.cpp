@@ -746,7 +746,7 @@ void MainWindow::createPostProcessDockWidget()
     postProcessDockWidget->setWindowTitle("PostProcesses");
     // postProcessDockWidget->setFloating(true);
     postProcessDockWidget->setHidden(true);
-    // this->addDockWidget(Qt::RightDockWidgetArea, postProcessDockWidget);
+    this->addDockWidget(Qt::RightDockWidgetArea, postProcessDockWidget);
 
 }
 
@@ -886,7 +886,7 @@ void MainWindow::openProject(QString filename, bool playMode)
 
     // use new post process that has fxaa by default
     // @todo: remember to find a better replacement
-    postProcessWidget->setPostProcessMgr(iris::PostProcessManager::create());
+    postProcessWidget->setPostProcessMgr(postMan);
     this->sceneView->doneCurrent();
 
     if (editorData != nullptr) {
