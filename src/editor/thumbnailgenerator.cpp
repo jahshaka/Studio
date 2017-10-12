@@ -91,7 +91,7 @@ void RenderThread::initScene()
     gl->glEnable(GL_CULL_FACE);
     //gl->glDisable(GL_BLEND);
 
-    renderer = iris::ForwardRenderer::create();
+    renderer = iris::ForwardRenderer::create(false);
     scene = iris::Scene::create();
     renderer->setScene(scene);
 
