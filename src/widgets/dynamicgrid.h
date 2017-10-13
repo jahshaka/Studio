@@ -17,6 +17,7 @@ public:
     explicit DynamicGrid(QWidget *parent = Q_NULLPTR);
     void addToGridView(ProjectTileData tileData, int count);
     QSize tileSize;
+    QSize iconSize;
     QSize baseSize;
     int lastWidth;
     QList<ItemGridWidget*> originalItems;

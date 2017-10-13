@@ -9,42 +9,35 @@
 
 #include "../dialogs/renameprojectdialog.h"
 
-ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *parent) : QWidget(parent)
+ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QSize iSize, QWidget *parent) : QWidget(parent)
 {
     this->parent = parent;
     setParent(parent);
 
     tileSize = size;
+    iconSize = iSize;
 
     this->tileData = tileData;
 
     setMinimumWidth(tileSize.width());
     setMaximumWidth(tileSize.width());
 
+    setMouseTracking(true);
+
     gameGridLayout = new QGridLayout(this);
     gameGridLayout->setVerticalSpacing(5);
-//    gameGridLayout->setColumnStretch(0, 1);
-//    gameGridLayout->setColumnStretch(3, 1);
-//    gameGridLayout->setRowMinimumHeight(1, tileSize.height());
 
     gridImageLabel = new QLabel(this);
     gridImageLabel->setObjectName("image");
-//    gridImageLabel->setMinimumHeight(tileSize.height());
-//    gridImageLabel->setMinimumWidth(tileSize.width());
 
     gridTextLabel = new QLabel(this);
 
-//    //Don't allow label to be wider than image
-//    gridTextLabel->setMaximumWidth(tileSize.width());
+    // TODO - don't allow label to be wider than image
     gridTextLabel->setText(tileData.name);
-
-////    QString textHex = getColor(SETTINGS.value("Grid/labelcolor","White").toString()).name();
-////    int fontSize = getGridSize("font");
 
     gridTextLabel->setStyleSheet("QLabel { font-weight: bold; color: #ddd; font-size: 12px; }");
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
-////    gridTextLabel->setTextInteractionFlags(Qt::TextEditorInteraction);
 
 
     QPixmap pixmap;
@@ -66,55 +59,49 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *pa
     gridImageLabel->setAlignment(Qt::AlignCenter);
 
     options = new QWidget(this);
-//    // check these constants
-//    options->setStyleSheet("background: red");
-//    options->setMinimumWidth(tileSize.width());
-//    options->setMaximumWidth(tileSize.width());
 
     QVBoxLayout *vlayout = new QVBoxLayout();
-//    vlayout->setMargin(0);
-//    vlayout->setSpacing(0);
-    auto padding = new QWidget();
 
     QHBoxLayout *olayout = new QHBoxLayout();
     olayout->setMargin(0);
     olayout->setSpacing(0);
 
-    auto playButton = new QPushButton("Play");
+    playButton = new QPushButton();
+    playButton->installEventFilter(this);
     playButton->setObjectName("playButton");
+    playButton->setToolTip("Play world fullscreen");
+    playButton->setToolTipDuration(0);
     playButton->setCursor(Qt::PointingHandCursor);
-    playButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white }");
+    playButton->setIconSize(iconSize);
+    playButton->setIcon(QIcon(":/icons/tplay_alpha.svg"));
+    playButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white } QToolTip { padding: 2px; }");
     olayout->addWidget(playButton);
 
-//    auto spacer2 = new QLabel("|");
-//    spacer2->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-//    spacer2->setStyleSheet("background: transparent; color: white");
-//    olayout->addWidget(spacer2);
+    auto spacer = new QLabel("");
+    spacer->setMaximumWidth(10);
+    spacer->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    spacer->setStyleSheet("background: transparent; color: white");
+    olayout->addWidget(spacer);
 
-    auto editButton = new QPushButton("Edit");
+    editButton = new QPushButton();
+    editButton->installEventFilter(this);
     editButton->setObjectName("editButton");
+    editButton->setToolTip("Open world in editor");
+    editButton->setToolTipDuration(0);
     editButton->setCursor(Qt::PointingHandCursor);
-    editButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white }");
+    editButton->setIconSize(iconSize);
+    editButton->setIcon(QIcon(":/icons/tedit_alpha.svg"));
+    editButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white } QToolTip { padding: 2px; }");
     olayout->addWidget(editButton);
 
-//    auto spacer = new QLabel("|");
-//    spacer->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-//    spacer->setStyleSheet("background: transparent; color: white");
-//    olayout->addWidget(spacer);
-
-//    auto deleteButton = new QPushButton("Delete");
-//    deleteButton->setCursor(Qt::PointingHandCursor);
-//    deleteButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold;  color: white}");
-//    olayout->addWidget(deleteButton);
-
-    auto controls = new QWidget();
-    controls->setStyleSheet("background: #2980b9; border-radius: 1px");
+    controls = new QWidget();
+    controls->setStyleSheet("background: rgba(32, 32, 32, 190); border-radius: 4px;");
+    controls->setContentsMargins(iconSize.width() / 2, iconSize.width() / 2, iconSize.width() / 2, iconSize.width() / 2);
     controls->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    controls->setFixedHeight(32);
     controls->setLayout(olayout);
 
-    vlayout->addWidget(padding);
     vlayout->addWidget(controls);
+    vlayout->setAlignment(controls, Qt::AlignHCenter);
 
     options->setLayout(vlayout);
     options->hide();
@@ -134,7 +121,6 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *pa
 
     connect(playButton, SIGNAL(pressed()), SLOT(playProject()));
     connect(editButton, SIGNAL(pressed()), SLOT(editProject()));
-//    connect(deleteButton, SIGNAL(pressed()), SLOT(removeProject()));
 
     connect(this, SIGNAL(hovered()), SLOT(showControls()));
     connect(this, SIGNAL(left()), SLOT(hideControls()));
@@ -145,36 +131,27 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *pa
 //    setStyleSheet("border: 1px solid red");
 
     connect(this, SIGNAL(customContextMenuRequested(const QPoint&)), SLOT(projectContextMenu(QPoint)));
-
-//    connect(this, SIGNAL(singleClicked(QWidget*)), this, SLOT(highlightGridWidget(QWidget*)));
-//    connect(this, SIGNAL(doubleClicked(QWidget*)), parent, SLOT(openProjectFromWidget(QWidget*)));
-//    connect(gameGridItem, SIGNAL(customContextMenuRequested(const QPoint &)), parent, SLOT(showRomMenu(const QPoint &)));
 }
 
-void ItemGridWidget::setTileSize(QSize size)
+void ItemGridWidget::setTileSize(QSize size, QSize iSize)
 {
     tileSize = size;
+    iconSize = iSize;
+
+    controls->setContentsMargins(iconSize.width() / 2, iconSize.width() / 2, iconSize.width() / 2, iconSize.width() / 2);
+    playButton->setIconSize(iconSize);
+    editButton->setIconSize(iconSize);
 
     setMinimumWidth(tileSize.width());
     setMaximumWidth(tileSize.width());
-
-//    gameGridLayout->setColumnStretch(0, 1);
-//    gameGridLayout->setColumnStretch(3, 1);
-//    gameGridLayout->setRowMinimumHeight(1, tileSize.height());
-
-//    gridImageLabel->setMinimumHeight(tileSize.height());
-//    gridImageLabel->setMinimumWidth(tileSize.width());
 
     auto img = oimage.scaled(tileSize, Qt::KeepAspectRatio, Qt::FastTransformation);
 
     gridImageLabel->setPixmap(img);
     gridImageLabel->setAlignment(Qt::AlignCenter);
 
-//    gridTextLabel->setMaximumWidth(tileSize.width());
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
-
-//    options->setMaximumWidth(tileSize.width());
 
     setMinimumHeight(this->sizeHint().height());
 }
@@ -183,6 +160,43 @@ void ItemGridWidget::updateLabel(QString text)
 {
     this->gridTextLabel->setText(text);
     tileData.name = text;
+}
+
+bool ItemGridWidget::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == playButton) {
+        switch (event->type()) {
+            case QEvent::Enter: {
+                playButton->setIcon(QIcon(":/icons/tplay.svg"));
+                break;
+            }
+
+            case QEvent::Leave: {
+                playButton->setIcon(QIcon(":/icons/tplay_alpha.svg"));
+                break;
+            }
+
+            default: break;
+        }
+    }
+
+    if (watched == editButton) {
+        switch (event->type()) {
+            case QEvent::Enter: {
+                editButton->setIcon(QIcon(":/icons/tedit.svg"));
+                break;
+            }
+
+            case QEvent::Leave: {
+                editButton->setIcon(QIcon(":/icons/tedit_alpha.svg"));
+                break;
+            }
+
+            default: break;
+        }
+    }
+
+    return QObject::eventFilter(watched, event);
 }
 
 void ItemGridWidget::showControls()
@@ -245,10 +259,6 @@ void ItemGridWidget::projectContextMenu(const QPoint &pos)
     QAction rename("Rename", this);
     connect(&rename, SIGNAL(triggered()), this, SLOT(renameProject()));
     menu.addAction(&rename);
-
-    QAction close("Close", this);
-    connect(&close, SIGNAL(triggered()), this, SLOT(closeProject()));
-    menu.addAction(&close);
 
     QAction del("Delete", this);
     connect(&del, SIGNAL(triggered()), this, SLOT(deleteProject()));

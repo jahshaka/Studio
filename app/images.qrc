@@ -2,7 +2,6 @@
     <qresource prefix="/">
         <file>images/frame.png</file>
         <file>images/logo.png</file>
-        <file>images/no_preview.png</file>
         <file>images/sidepanelimage.jpg</file>
         <file>images/sidepanelimage_info.jpg</file>
         <file>images/splash.png</file>
