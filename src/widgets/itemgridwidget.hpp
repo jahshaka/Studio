@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QLabel>
 #include <QGridLayout>
+#include <QPushButton>
 #include <QLineEdit>
 
 #include "../core/project.h"
@@ -13,14 +14,20 @@ class ItemGridWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit ItemGridWidget(ProjectTileData tileData, QSize size, QWidget *parent = Q_NULLPTR);
+    explicit ItemGridWidget(ProjectTileData tileData, QSize size, QSize iSize, QWidget *parent = Q_NULLPTR);
     QSize tileSize;
+    QSize iconSize;
+    QPushButton *playButton;
+    QPushButton *editButton;
+    QWidget *controls;
     ProjectTileData tileData;
 
-    void setTileSize(QSize size);
+    void setTileSize(QSize size, QSize iSize);
     void updateImage();
     void updateLabel(QString);
     QString labelText;
+
+    bool eventFilter(QObject *watched, QEvent *event);
 
 protected slots:
     void showControls();

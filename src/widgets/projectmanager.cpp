@@ -106,12 +106,17 @@ int on_extract_entry(const char *filename, void *arg) {
     return 0;
 }
 
-void ProjectManager::importProjectFromFile()
+void ProjectManager::importProjectFromFile(const QString& file)
 {
-    auto filename = QFileDialog::getOpenFileName(this,      "Import World",
-                                                 nullptr,   "Jahshaka Project (*.zip)");
+    QString fileName;
+    if (file.isEmpty()) {
+        fileName = QFileDialog::getOpenFileName(this,       "Import World",
+                                                nullptr,    "Jahshaka Project (*.zip)");
 
-    if (filename.isEmpty() || filename.isNull()) return;
+        if (fileName.isEmpty() || fileName.isNull()) return;
+    } else {
+        fileName = file;
+    }
 
     // get the current project working directory
     auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
@@ -122,7 +127,7 @@ void ProjectManager::importProjectFromFile()
     // we need a sure way to get the project name, so we have to extract it first and check the blob
     QTemporaryDir temporaryDir;
     if (temporaryDir.isValid()) {
-        zip_extract(filename.toStdString().c_str(),
+        zip_extract(fileName.toStdString().c_str(),
                     temporaryDir.path().toStdString().c_str(),
                     on_extract_entry,
                     Q_NULLPTR);
@@ -132,7 +137,7 @@ void ProjectManager::importProjectFromFile()
     if (!importProjectName.isEmpty() || !importProjectName.isNull()) {
         auto pDir = QDir(defaultProjectDirectory).filePath(importProjectName);
 
-        zip_extract(filename.toStdString().c_str(), pDir.toStdString().c_str(), Q_NULLPTR, Q_NULLPTR);
+        zip_extract(fileName.toStdString().c_str(), pDir.toStdString().c_str(), Q_NULLPTR, Q_NULLPTR);
         QDir dir;
         if (!dir.remove(QDir(pDir).filePath(importProjectName + ".db"))) {
             // let's try again shall we...
@@ -229,66 +234,8 @@ void ProjectManager::cleanupOnClose()
 
 void ProjectManager::openSampleProject(QListWidgetItem *item)
 {
-//    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
-//                    + Constants::PROJECT_FOLDER;
-//    auto projectFolder = settings->getValue("default_directory", path).toString();
-
-//    QDir targetDir(projectFolder);
-//    if(!targetDir.exists()){    /* if directory don't exists, build it */
-//        targetDir.mkdir(targetDir.absolutePath());
-//    }
-
-//    if (QDir(projectFolder + "/" + item->data(Qt::DisplayRole).toString()).exists()) {
-//        QMessageBox::StandardButton reply;
-//        reply = QMessageBox::question(this, "Project Path not Empty", "Project already Exists! Overwrite?",
-//                                        QMessageBox::Yes|QMessageBox::No);
-//        if (reply == QMessageBox::Yes) {
-//            if (!projectFolder.isEmpty()) {
-//                auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
-
-//                QString dest = QDir(projectFolder).filePath(projectFile.baseName());
-//                if (this->copyDirectoryFiles(projectFile.absolutePath(), dest, true)) {
-
-//                    auto newProjectFile = QFileInfo(dest);
-//                    auto projectPath = QDir(newProjectFile.absolutePath()).filePath(projectFile.baseName());
-//                    Globals::project->setProjectPath(projectPath);
-
-//                    auto sln = QDir(projectPath).filePath(projectFile.fileName());
-
-//                    prepareStore(sln);
-
-////                    settings->addRecentlyOpenedScene(sln);
-//                }
-
-////                emit accepted();
-////                this->close();
-
-//                sampleDialog.close();
-//            }
-//        }
-//    } else {
-//        if (!projectFolder.isEmpty()) {
-//            auto projectFile = QFileInfo(item->data(Qt::UserRole).toString());
-
-//            QString dest = QDir(projectFolder).filePath(projectFile.baseName());
-//            if (this->copyDirectoryFiles(projectFile.absolutePath(), dest, true)) {
-
-//                auto newProjectFile = QFileInfo(dest);
-//                auto projectPath = QDir(newProjectFile.absolutePath()).filePath(projectFile.baseName());
-//                Globals::project->setProjectPath(projectPath);
-
-//                auto sln = QDir(projectPath).filePath(projectFile.fileName());
-
-//                prepareStore(sln);
-
-////                settings->addRecentlyOpenedScene(sln);
-//            }
-
-////            emit accepted();
-////            this->close();
-//            sampleDialog.close();
-//        }
-//    }
+    sampleDialog.close();
+    importProjectFromFile(item->data(Qt::UserRole).toString());
 }
 
 void ProjectManager::newProject()
@@ -365,8 +312,9 @@ void ProjectManager::openSampleBrowser()
     QGridLayout *layout = new QGridLayout();
     QListWidget *sampleList = new QListWidget();
     sampleList->setObjectName("sampleList");
-    sampleList->setStyleSheet("#sampleList { background-color: #1e1e1e; padding: 8px; border: none } " \
-                              "QListWidgetItem { padding: 12px; }");
+    sampleList->setStyleSheet("#sampleList { background-color: #1e1e1e; padding: 0 8px; border: none } " \
+                              "QListWidgetItem { padding: 12px; } "\
+                              "QToolTip { padding: 2px; border: 0; background: black; opacity: 200; }");
     sampleList->setViewMode(QListWidget::IconMode);
     sampleList->setSizeAdjustPolicy(QListWidget::AdjustToContents);
     sampleList->setSpacing(4);
@@ -375,29 +323,30 @@ void ProjectManager::openSampleBrowser()
     sampleList->setIconSize(Constants::TILE_SIZE * 0.5);
     sampleList->setSelectionMode(QAbstractItemView::SingleSelection);
 
+    QMap<QString, QString> samples;
+    samples.insert("preview/matcaps.png",   "Matcaps");
+    samples.insert("preview/particles.png", "Particles");
+    samples.insert("preview/skeletal.png",  "Skeletal Animation");
+    samples.insert("preview/world.png",     "World Background");
+
     QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
-    QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
 
-    foreach (const QFileInfo &file, files) {
+    QMap<QString, QString>::const_iterator it;
+    for (it = samples.begin(); it != samples.end(); ++it){
         auto item = new QListWidgetItem();
-        item->setToolTip(file.absoluteFilePath());
-        item->setData(Qt::DisplayRole, file.baseName());
-        item->setData(Qt::UserRole, file.absoluteFilePath() + "/" + file.baseName() + Constants::PROJ_EXT);
-
-        if (QFile::exists(file.absoluteFilePath() + "/Metadata/preview.png")) {
-            item->setIcon(QIcon(file.absoluteFilePath() + "/Metadata/preview.png"));
-        } else {
-            item->setIcon(QIcon(":/app/images/preview.png"));
-        }
-
+        item->setData(Qt::DisplayRole, it.value());
+        item->setData(Qt::UserRole, QDir(dir.absolutePath()).filePath(it.value()) + ".zip");
+        item->setToolTip(QDir(dir.absolutePath()).filePath(it.value()) + ".zip");
+        item->setIcon(QIcon(QDir(dir.absolutePath()).filePath(it.key())));
         sampleList->addItem(item);
     }
 
     connect(sampleList, SIGNAL(itemDoubleClicked(QListWidgetItem*)), SLOT(openSampleProject(QListWidgetItem*)));
 
-    auto instructions = new QLabel("Double click on a sample project to open it in the editor");
+    auto instructions = new QLabel("Double click on a sample world to import it in the editor");
     instructions->setObjectName("instructions");
-    instructions->setStyleSheet("#instructions { border: none; background: #1e1e1e; padding: 10px; font-size: 12px }");
+    instructions->setStyleSheet("#instructions { border: none; background: #1e1e1e; " \
+                                "padding: 10px; font-size: 12px }");
     layout->addWidget(instructions);
     layout->addWidget(sampleList);
     layout->setMargin(0);

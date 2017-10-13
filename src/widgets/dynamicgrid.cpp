@@ -41,7 +41,7 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 
 void DynamicGrid::addToGridView(ProjectTileData tileData, int count)
 {
-    ItemGridWidget *gameGridItem = new ItemGridWidget(tileData, tileSize, gridWidget);
+    ItemGridWidget *gameGridItem = new ItemGridWidget(tileData, tileSize, iconSize, gridWidget);
 
     originalItems.push_back(gameGridItem);
 
@@ -86,7 +86,7 @@ void DynamicGrid::scaleTile(QString scale)
 
     int count = 0;
     foreach(ItemGridWidget *gridItem, originalItems) {
-        gridItem->setTileSize(tileSize);
+        gridItem->setTileSize(tileSize, iconSize);
         gridLayout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
         count++;
     }
@@ -103,7 +103,7 @@ void DynamicGrid::searchTiles(QString searchString)
         foreach(ItemGridWidget *gridItem, originalItems) {
             if (gridItem->tileData.name.toLower().contains(searchString)) {
                 gridItem->setVisible(true);
-                gridItem->setTileSize(tileSize);
+                gridItem->setTileSize(tileSize, iconSize);
                 gridLayout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
                 count++;
             } else {
@@ -113,7 +113,7 @@ void DynamicGrid::searchTiles(QString searchString)
     } else {
         foreach (ItemGridWidget *gridItem, originalItems) {
             gridItem->setVisible(true);
-            gridItem->setTileSize(tileSize);
+            gridItem->setTileSize(tileSize, iconSize);
             gridLayout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
             count++;
         }
@@ -189,6 +189,7 @@ void DynamicGrid::updateGridColumns(int width)
 
     int count = 0;
     foreach(ItemGridWidget *gridItem, originalItems) {
+        gridItem->setTileSize(tileSize, iconSize);
         gridLayout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
         count++;
     }
@@ -199,7 +200,17 @@ void DynamicGrid::updateGridColumns(int width)
 QSize DynamicGrid::sizeFromString(QString size)
 {
     if (size == "Small") {
-        return Constants::TILE_SIZE * 0.3;
+        iconSize = QSize(22, 22);
+    } else if (size == "Large") {
+        iconSize = QSize(32, 32);
+    } else if (size == "Huge") {
+        iconSize = QSize(36, 36);
+    } else {
+        iconSize = QSize(28, 28);
+    }
+
+    if (size == "Small") {
+        return Constants::TILE_SIZE * 0.4;
     } else if (size == "Large") {
         return Constants::TILE_SIZE * 0.8;
     } else if (size == "Huge") {

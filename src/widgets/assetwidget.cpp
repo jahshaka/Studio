@@ -76,7 +76,7 @@ void AssetWidget::trigger()
 {
     generateAssetThumbnails();
     // It's important that this get's called after a project has been loaded (iKlsR)
-    populateAssetTree();
+    populateAssetTree(true);
 }
 
 AssetWidget::~AssetWidget()
@@ -84,12 +84,12 @@ AssetWidget::~AssetWidget()
     delete ui;
 }
 
-void AssetWidget::populateAssetTree()
+void AssetWidget::populateAssetTree(bool initialRun)
 {
     // TODO - revamp this, the actual project directory is up one level. ok
     auto rootTreeItem = new QTreeWidgetItem();
     rootTreeItem->setText(0, "Assets");
-    rootTreeItem->setIcon(0, QIcon(":/icons/folder-symbol.svg"));
+    rootTreeItem->setIcon(0, QIcon(":/icons/ic_folder.svg"));
     rootTreeItem->setData(0, Qt::UserRole, Globals::project->getProjectFolder());
     updateTree(rootTreeItem, Globals::project->getProjectFolder());
 
@@ -97,11 +97,12 @@ void AssetWidget::populateAssetTree()
     ui->assetTree->addTopLevelItem(rootTreeItem);
     ui->assetTree->expandItem(rootTreeItem);
 
-    updateAssetView(rootTreeItem->data(0, Qt::UserRole).toString());
-    rootTreeItem->setSelected(true);
-
-    assetItem.item = rootTreeItem;
-    assetItem.selectedPath = rootTreeItem->data(0, Qt::UserRole).toString();
+    if (initialRun) {
+        updateAssetView(rootTreeItem->data(0, Qt::UserRole).toString());
+        rootTreeItem->setSelected(true);
+        assetItem.item = rootTreeItem;
+        assetItem.selectedPath = rootTreeItem->data(0, Qt::UserRole).toString();
+    }
 }
 
 void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
@@ -109,7 +110,7 @@ void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
     QFileInfoList folders = QDir(path).entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
     foreach (const QFileInfo &folder, folders) {
         auto item = new QTreeWidgetItem();
-        item->setIcon(0, QIcon(":/icons/folder-symbol.svg"));
+        item->setIcon(0, QIcon(":/icons/ic_folder.svg"));
         item->setData(0, Qt::DisplayRole, folder.fileName());
         item->setData(0, Qt::UserRole, folder.absoluteFilePath());
         parent->addChild(item);
@@ -137,7 +138,7 @@ void AssetWidget::addItem(const QString &asset)
     QListWidgetItem *item;
 
     if (file.isDir()) {
-        item = new QListWidgetItem(QIcon(":/icons/folder-symbol.svg"), file.fileName());
+        item = new QListWidgetItem(QIcon(":/icons/ic_folder.svg"), file.fileName());
         item->setData(Qt::UserRole, file.absolutePath());
     } else {
         QPixmap pixmap;
@@ -158,16 +159,16 @@ void AssetWidget::addItem(const QString &asset)
                 }
             }
             else {
-                item->setIcon(QIcon(":/icons/google-drive-file.svg"));
+                item->setIcon(QIcon(":/icons/ic_file.svg"));
                 auto asset = AssetManager::getAssetByPath(file.absoluteFilePath());
                 if (asset != nullptr) {
                     if (!asset->thumbnail.isNull()) item->setIcon(QIcon(asset->thumbnail));
                 }
             }
         } else if (file.suffix() == "shader") {
-            item->setIcon(QIcon(":/icons/google-drive-file.svg"));
+            item->setIcon(QIcon(":/icons/ic_file.svg"));
         } else {
-            item->setIcon(QIcon(":/icons/google-drive-file.svg"));
+            item->setIcon(QIcon(":/icons/ic_file.svg"));
         }
 
         item->setData(Qt::UserRole, file.absolutePath());
@@ -347,29 +348,31 @@ void AssetWidget::assetViewClicked(QListWidgetItem *item)
     assetItem.wItem = item;
 }
 
+void AssetWidget::syncTreeAndView(const QString &path)
+{
+    QTreeWidgetItemIterator it(ui->assetTree);
+    while (*it) {
+        if ((*it)->data(0, Qt::UserRole) == path) {
+            ui->assetTree->clearSelection();
+            (*it)->setSelected(true);
+            ui->assetTree->expandItem((*it));
+            break;
+        }
+
+        ++it;
+    }
+}
+
 void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
 {
     // TODO - depending on file type, we can open mini dialogs for texture preview
     // Or we can directly add model files to the scene
-    QFileInfo path(item->data(Qt::UserRole).toString() + '/' + item->text());
-    auto pathStr = path.absoluteFilePath();
-
-    if (path.isDir()) {
-        updateAssetView(pathStr);
+    QFileInfo fInfo(QDir(item->data(Qt::UserRole).toString()).filePath(item->text()));
+    if (fInfo.isDir()) {
         assetItem.wItem = item;
-        assetItem.selectedPath = pathStr;
-
-        QTreeWidgetItemIterator it(ui->assetTree);
-        while (*it) {
-            if ((*it)->data(0, Qt::UserRole) == pathStr) {
-                ui->assetTree->clearSelection();
-                (*it)->setSelected(true);
-                ui->assetTree->expandItem((*it));
-                break;
-            }
-
-            ++it;
-        }
+        assetItem.selectedPath = fInfo.absoluteFilePath();
+        updateAssetView(fInfo.absoluteFilePath());
+        syncTreeAndView(fInfo.absoluteFilePath());
     }
 }
 
@@ -477,15 +480,15 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const Q
                 pixmap = QPixmap::fromImage(*thumb->thumb);
                 type = AssetType::Texture;
             } else if (Constants::MODEL_EXTS.contains(file.suffix())) {
-                auto thumb = ThumbnailManager::createThumbnail(":/icons/user-account-box.svg", 128, 128);
+                auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
                 pixmap = QPixmap::fromImage(*thumb->thumb);
                 type = AssetType::Object;
             }  else if (file.suffix() == "shader") {
-                auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
+                auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
                 type = AssetType::Shader;
                 pixmap = QPixmap::fromImage(*thumb->thumb);
             } else {
-                auto thumb = ThumbnailManager::createThumbnail(":/icons/google-drive-file.svg", 128, 128);
+                auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
                 type = AssetType::File;
                 pixmap = QPixmap::fromImage(*thumb->thumb);
             }
@@ -516,7 +519,7 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const Q
             }
         }
         else {
-            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
+            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/ic_folder.svg", 128, 128);
             auto asset = new AssetFolder;
             asset->fileName     = file.fileName();
             asset->path         = file.absoluteFilePath();
@@ -562,7 +565,10 @@ void AssetWidget::importAsset(const QStringList &path)
 
     if (!assetItem.selectedPath.isEmpty()) {
         createDirectoryStructure(fileNames, assetItem.selectedPath);
+        populateAssetTree(false);
         updateAssetView(assetItem.selectedPath);
+        // TODO - select the last imported directory!
+        syncTreeAndView(assetItem.selectedPath);
     }
 }
 

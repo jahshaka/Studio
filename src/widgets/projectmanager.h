@@ -49,7 +49,7 @@ public:
 protected slots:
     void openSampleProject(QListWidgetItem*);
     void newProject();
-    void importProjectFromFile();
+    void importProjectFromFile(const QString& file = QString());
 
     void changePreviewSize(QString);
 

@@ -70,5 +70,10 @@
         <file>icons/thandleh.png</file>
         <file>icons/thandlev.png</file>
         <file>icons/ic_folder.svg</file>
+        <file>icons/tedit.svg</file>
+        <file>icons/tplay.svg</file>
+        <file>icons/tedit_alpha.svg</file>
+        <file>icons/tplay_alpha.svg</file>
+        <file>icons/ic_file.svg</file>
     </qresource>
 </RCC>
