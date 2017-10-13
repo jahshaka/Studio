@@ -74,5 +74,6 @@
         <file>icons/tplay.svg</file>
         <file>icons/tedit_alpha.svg</file>
         <file>icons/tplay_alpha.svg</file>
+        <file>icons/ic_file.svg</file>
     </qresource>
 </RCC>
