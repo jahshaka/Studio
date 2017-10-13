@@ -76,7 +76,7 @@ void AssetWidget::trigger()
 {
     generateAssetThumbnails();
     // It's important that this get's called after a project has been loaded (iKlsR)
-    populateAssetTree();
+    populateAssetTree(true);
 }
 
 AssetWidget::~AssetWidget()
@@ -84,7 +84,7 @@ AssetWidget::~AssetWidget()
     delete ui;
 }
 
-void AssetWidget::populateAssetTree()
+void AssetWidget::populateAssetTree(bool initialRun)
 {
     // TODO - revamp this, the actual project directory is up one level. ok
     auto rootTreeItem = new QTreeWidgetItem();
@@ -97,11 +97,12 @@ void AssetWidget::populateAssetTree()
     ui->assetTree->addTopLevelItem(rootTreeItem);
     ui->assetTree->expandItem(rootTreeItem);
 
-    updateAssetView(rootTreeItem->data(0, Qt::UserRole).toString());
-    rootTreeItem->setSelected(true);
-
-    assetItem.item = rootTreeItem;
-    assetItem.selectedPath = rootTreeItem->data(0, Qt::UserRole).toString();
+    if (initialRun) {
+        updateAssetView(rootTreeItem->data(0, Qt::UserRole).toString());
+        rootTreeItem->setSelected(true);
+        assetItem.item = rootTreeItem;
+        assetItem.selectedPath = rootTreeItem->data(0, Qt::UserRole).toString();
+    }
 }
 
 void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
@@ -347,29 +348,31 @@ void AssetWidget::assetViewClicked(QListWidgetItem *item)
     assetItem.wItem = item;
 }
 
+void AssetWidget::syncTreeAndView(const QString &path)
+{
+    QTreeWidgetItemIterator it(ui->assetTree);
+    while (*it) {
+        if ((*it)->data(0, Qt::UserRole) == path) {
+            ui->assetTree->clearSelection();
+            (*it)->setSelected(true);
+            ui->assetTree->expandItem((*it));
+            break;
+        }
+
+        ++it;
+    }
+}
+
 void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
 {
     // TODO - depending on file type, we can open mini dialogs for texture preview
     // Or we can directly add model files to the scene
-    QFileInfo path(item->data(Qt::UserRole).toString() + '/' + item->text());
-    auto pathStr = path.absoluteFilePath();
-
-    if (path.isDir()) {
-        updateAssetView(pathStr);
+    QFileInfo fInfo(QDir(item->data(Qt::UserRole).toString()).filePath(item->text()));
+    if (fInfo.isDir()) {
         assetItem.wItem = item;
-        assetItem.selectedPath = pathStr;
-
-        QTreeWidgetItemIterator it(ui->assetTree);
-        while (*it) {
-            if ((*it)->data(0, Qt::UserRole) == pathStr) {
-                ui->assetTree->clearSelection();
-                (*it)->setSelected(true);
-                ui->assetTree->expandItem((*it));
-                break;
-            }
-
-            ++it;
-        }
+        assetItem.selectedPath = fInfo.absoluteFilePath();
+        updateAssetView(fInfo.absoluteFilePath());
+        syncTreeAndView(fInfo.absoluteFilePath());
     }
 }
 
@@ -562,7 +565,10 @@ void AssetWidget::importAsset(const QStringList &path)
 
     if (!assetItem.selectedPath.isEmpty()) {
         createDirectoryStructure(fileNames, assetItem.selectedPath);
+        populateAssetTree(false);
         updateAssetView(assetItem.selectedPath);
+        // TODO - select the last imported directory!
+        syncTreeAndView(assetItem.selectedPath);
     }
 }
 

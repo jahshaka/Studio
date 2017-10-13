@@ -34,9 +34,10 @@ public:
     explicit AssetWidget(Database *handle, QWidget *parent = Q_NULLPTR);
     ~AssetWidget();
 
-    void populateAssetTree();
+    void populateAssetTree(bool initialRun);
     void updateTree(QTreeWidgetItem* parentTreeItem, QString path);
     void generateAssetThumbnails();
+    void syncTreeAndView(const QString&);
     void addItem(const QString &asset);
     void updateAssetView(const QString &path);
     void trigger();

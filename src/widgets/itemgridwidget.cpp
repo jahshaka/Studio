@@ -69,8 +69,8 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QSize iSize
     playButton = new QPushButton();
     playButton->installEventFilter(this);
     playButton->setObjectName("playButton");
-    playButton->setToolTip("Play world fullscreen");
     playButton->setToolTipDuration(0);
+    playButton->setToolTip("Play world fullscreen");
     playButton->setCursor(Qt::PointingHandCursor);
     playButton->setIconSize(iconSize);
     playButton->setIcon(QIcon(":/icons/tplay_alpha.svg"));
@@ -86,8 +86,8 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QSize iSize
     editButton = new QPushButton();
     editButton->installEventFilter(this);
     editButton->setObjectName("editButton");
-    editButton->setToolTip("Open world in editor");
     editButton->setToolTipDuration(0);
+    editButton->setToolTip("Open world in editor");
     editButton->setCursor(Qt::PointingHandCursor);
     editButton->setIconSize(iconSize);
     editButton->setIcon(QIcon(":/icons/tedit_alpha.svg"));
