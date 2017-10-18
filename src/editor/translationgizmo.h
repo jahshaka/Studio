@@ -21,6 +21,11 @@ For more information see the LICENSE file
 #include "../uimanager.h"
 #include "../commands/transfrormscenenodecommand.h"
 
+class TranslationHandle : GizmoHandle
+{
+public:
+
+};
 
 class TranslationGizmo : public GizmoInstance
 {

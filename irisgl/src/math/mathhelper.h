@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QMatrix4x4>
 #include <QVector3D>
 #include <QQuaternion>
+#include <qmath.h>
 
 namespace iris
 {
@@ -50,6 +51,63 @@ public:
     template <typename T>
     static int sign(T val) {
         return (T(0) < val) - (val < T(0));
+    }
+
+
+    // Realtime Collision Detection, page 149
+    static float ClosestPointBetweenSegments(QVector3D p1, QVector3D q1, QVector3D p2, QVector3D q2,
+                                             float& s, float& t, QVector3D& c1, QVector3D& c2)
+    {
+        const float EPILSON = 0.0000000001f;
+        QVector3D d1 = q1 - p1;
+        QVector3D d2 = q2 - p2;
+        QVector3D r  = p1 - p2;
+        float a = QVector3D::dotProduct(d1, d1);
+        float e = QVector3D::dotProduct(d2, d2);
+        float f = QVector3D::dotProduct(d2, r);
+
+        if (a <= EPILSON && e <= EPILSON) {
+            s = 0;
+            t = 0;
+            c1 = p1;
+            c2 = p2;
+            return QVector3D::dotProduct(c1-c2, c1-c2);
+        }
+        if (a <= EPILSON) {
+            s = 0;
+            t = f/e;
+            t = qBound(0.0f, t, 1.0f);
+        } else {
+            float c = QVector3D::dotProduct(d1, r);
+            if (e <= EPILSON) {
+                t = 0;
+                s = qBound(0.0f, -c/a, 1.0f);
+            } else {
+                float b = QVector3D::dotProduct(d1, d2);
+                float denom = a*e - b*b;
+
+                if (denom != 0) {
+                    a = qBound(0.0f, (b*f - c*e)/denom, 1.0f);
+                } else {
+                    s = 0;
+                }
+
+                t = (b*s + f) / e;
+
+                if (t < 0) {
+                    t = 0;
+                    s = qBound(0.0f, -c/a, 1.0f);
+                } else if (t > 1) {
+                    t = 1.0f;
+                    s = qBound(0.0f, (b-c)/a, 1.0f);
+                }
+            }
+        }
+
+        c1 = p1 + d1 * s;
+        c2 = p2 + d2 * t;
+
+        return QVector3D::dotProduct(c1 - c2, c1 - c2);
     }
 };
 

@@ -182,7 +182,7 @@ protected:
 
 private slots:
     void paintGL();
-    void updateScene(bool once = false);
+    void renderGizmos(bool once = false);
     void resizeGL(int width, int height);
 
 

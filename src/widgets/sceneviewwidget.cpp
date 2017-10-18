@@ -276,7 +276,7 @@ void SceneViewWidget::clearSelectedNode()
     renderer->setSelectedSceneNode(selectedNode);
 }
 
-void SceneViewWidget::updateScene(bool once)
+void SceneViewWidget::renderGizmos(bool once)
 {
     // update and draw the 3d manipulation gizmo
     if (!!viewportGizmo->getLastSelectedNode()) {
@@ -451,7 +451,7 @@ void SceneViewWidget::renderScene()
             }
         }
 
-        this->updateScene();
+        this->renderGizmos();
     }
 
     // render fps
