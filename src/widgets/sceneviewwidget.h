@@ -220,11 +220,11 @@ private:
 
     void initialize();
 
-    GizmoInstance* translationGizmo;
-    RotationGizmo* rotationGizmo;
-    ScaleGizmo* scaleGizmo;
+    //GizmoInstance* translationGizmo;
+    //RotationGizmo* rotationGizmo;
+    //ScaleGizmo* scaleGizmo;
 
-    GizmoInstance* viewportGizmo;
+    //GizmoInstance* viewportGizmo;
     QString transformMode;
 
     iris::Viewport* viewport;

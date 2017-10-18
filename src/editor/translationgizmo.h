@@ -27,6 +27,8 @@ public:
 
 };
 
+
+/*
 class TranslationGizmo : public GizmoInstance
 {
 private:
@@ -291,5 +293,5 @@ public:
         }
     }
 };
-
+*/
 #endif // TRANSLATIONGIZMO_H

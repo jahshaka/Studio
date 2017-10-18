@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "gizmohandle.h"
 #include "../irisgl/src/graphics/graphicshelper.h"
 
+/*
 class ScaleGizmo : public GizmoInstance
 {
 private:
@@ -271,5 +272,5 @@ public:
         }
     }
 };
-
+*/
 #endif // SCALEGIZMO_H
