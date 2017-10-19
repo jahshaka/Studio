@@ -1438,6 +1438,7 @@ void MainWindow::toggleWidgets(bool state)
     presetsDock->setVisible(state);
     assetDock->setVisible(state);
     animationDock->setVisible(state);
+    ui->playerControls->setVisible(!state);
 }
 
 void MainWindow::showProjectManager()
