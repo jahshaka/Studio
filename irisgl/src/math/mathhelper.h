@@ -55,10 +55,10 @@ public:
 
 
     // Realtime Collision Detection, page 149
-    static float ClosestPointBetweenSegments(QVector3D p1, QVector3D q1, QVector3D p2, QVector3D q2,
+    static float closestPointBetweenSegments(QVector3D p1, QVector3D q1, QVector3D p2, QVector3D q2,
                                              float& s, float& t, QVector3D& c1, QVector3D& c2)
     {
-        const float EPILSON = 0.0000000001f;
+        const float EPILSON = 0.000001f;
         QVector3D d1 = q1 - p1;
         QVector3D d2 = q2 - p2;
         QVector3D r  = p1 - p2;
@@ -87,7 +87,7 @@ public:
                 float denom = a*e - b*b;
 
                 if (denom != 0) {
-                    a = qBound(0.0f, (b*f - c*e)/denom, 1.0f);
+                    s = qBound(0.0f, (b*f - c*e)/denom, 1.0f);
                 } else {
                     s = 0;
                 }

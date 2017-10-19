@@ -68,6 +68,11 @@ private:
 
 public:
 
+    GizmoHandle()
+    {
+
+    }
+
     GizmoHandle(const QString& objPath, const QString& name) {
         gizmoHandle = iris::MeshNode::create();
         gizmoHandle->setMesh(IrisUtils::getAbsoluteAssetPath(objPath));

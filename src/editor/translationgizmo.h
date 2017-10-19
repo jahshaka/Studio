@@ -17,14 +17,176 @@ For more information see the LICENSE file
 #include "gizmoinstance.h"
 #include "gizmohandle.h"
 #include "../irisgl/src/scenegraph/scene.h"
+#include "../irisgl/src/scenegraph/cameranode.h"
 #include "../irisgl/src/graphics/graphicshelper.h"
 #include "../uimanager.h"
 #include "../commands/transfrormscenenodecommand.h"
+#include "../../../irisgl/src/math/mathhelper.h"
+#include <QOpenGLFunctions_3_2_Core>
 
-class TranslationHandle : GizmoHandle
+class Gizmo;
+class TranslationHandle : public GizmoHandle
+{
+    public:
+    Gizmo* gizmo;
+
+    QVector3D handleExtent;// local extent of the gizmo
+
+    TranslationHandle()
+    {
+        handleExtent = QVector3D(1,0,0);
+    }
+
+    TranslationHandle(Gizmo* gizmo, QVector3D extent)
+    {
+        this->gizmo = gizmo;
+        handleExtent = extent;
+    }
+
+    bool isHit(QVector3D rayPos, QVector3D rayDir);
+    QVector3D getHitPos(QVector3D rayPos, QVector3D rayDir);
+};
+
+class Gizmo
 {
 public:
+    iris::SceneNodePtr selectedNode;
+    GizmoTransformSpace transformSpace;
 
+    Gizmo()
+    {
+        transformSpace = GizmoTransformSpace::Global;
+    }
+
+    // returns transform of the gizmo, not the scene node
+    // the transform is calculated based on the transform's space (local or global)
+    QMatrix4x4 getTransform()
+    {
+        //QMatrix4x4 trans;
+        //trans.setToIdentity();
+        //return trans;
+
+        if (transformSpace == GizmoTransformSpace::Global) {
+            QMatrix4x4 trans;
+            trans.setToIdentity();
+            trans.translate(selectedNode->getGlobalPosition());
+            return trans;
+        }else {
+            return selectedNode->getGlobalTransform();
+        }
+    }
+
+    virtual bool isHit(QVector3D rayPos, QVector3D rayDir)
+    {
+        return false;
+    }
+};
+
+class TranslationGizmo : public Gizmo
+{
+    iris::MeshPtr handleMesh;
+    //iris::ShaderPtr shader;
+    QOpenGLShaderProgram* shader;
+
+    TranslationHandle* handles[3];
+    //TranslationHandle* handle;
+
+    // initial hit position
+    QVector3D hitPos;
+    QVector3D nodeStartPos;
+
+    bool dragging;
+public:
+    TranslationGizmo():
+        Gizmo()
+    {
+        handle[0] = new TranslationHandle(this, QVector3D(1,0,0));
+        handle[1] = new TranslationHandle(this, QVector3D(0,1,0));
+        handle[2] = new TranslationHandle(this, QVector3D(0,0,1));
+
+        loadAssets();
+        //handle->setHandleColor(QColor(255, 255, 255));
+
+        dragging = false;
+    }
+
+    void loadAssets()
+    {
+        handleMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_x.obj"));
+
+        shader = iris::GraphicsHelper::loadShader(
+                    IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"),
+                    IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.frag"));
+    }
+
+    bool isDragging()
+    {
+        return dragging;
+    }
+
+    void startDragging(QVector3D rayPos, QVector3D rayDir)
+    {
+        hitPos = handle->getHitPos(rayPos, rayDir);
+        nodeStartPos = selectedNode->getGlobalPosition();
+        dragging = true;
+    }
+
+    void endDragging()
+    {
+        dragging = false;
+    }
+
+    void drag(QVector3D rayPos, QVector3D rayDir)
+    {
+        auto slidingPos = handle->getHitPos(rayPos, rayDir);
+
+        // move node along line
+        // do snapping here as well
+        auto diff = slidingPos - hitPos;
+
+        selectedNode->setLocalPos(nodeStartPos + diff);
+    }
+
+    bool isHit(QVector3D rayPos, QVector3D rayDir) override
+    {
+        for(auto i = 0; i< 3; i++) {
+            if (handle->isHit(rayPos, rayDir))
+            {
+                //handle->setHandleColor(QColor(255, 255, 255));
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    TranslationHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir)
+    {
+        TranslationHandle* closestHandle = nullptr;
+        float closestDistance = 0;
+
+        for(auto i = 0; i<3;i++)
+        {
+
+        }
+
+        return closestHandle;
+    }
+
+    void render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
+    {
+        gl->glClear(GL_DEPTH_BUFFER_BIT);
+        //gl->glDisable(GL_DEPTH_TEST);
+        shader->bind();
+        shader->setUniformValue("u_worldMatrix", this->getTransform());
+        shader->setUniformValue("u_viewMatrix", viewMatrix);
+        shader->setUniformValue("u_projMatrix", projMatrix);
+        shader->setUniformValue("showHalf", false);
+        shader->setUniformValue("color", handle->getHandleColor());
+        handleMesh->draw(gl, shader);
+
+        shader->release();
+    }
 };
 
 

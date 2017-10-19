@@ -159,6 +159,7 @@ void SceneViewWidget::initialize()
     viewportGizmo = translationGizmo;
     */
     transformMode = "Global";
+    gizmo = new TranslationGizmo();
 
     // has to be initialized here since it loads assets
     vrCam = new EditorVrController();
@@ -277,6 +278,9 @@ void SceneViewWidget::clearSelectedNode()
 
 void SceneViewWidget::renderGizmos(bool once)
 {
+    auto gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+    if (!!gizmo->selectedNode)
+        gizmo->render(gl, editorCam->viewMatrix, editorCam->projMatrix);
     /*
     // update and draw the 3d manipulation gizmo
     if (!!viewportGizmo->getLastSelectedNode()) {
@@ -568,6 +572,15 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     }
     */
 
+    if (e->buttons() == Qt::LeftButton && !!selectedNode) {
+         //viewportGizmo->update(editorCam->getLocalPos(), calculateMouseRay(localPos));
+        if (gizmo->isDragging()) {
+            QVector3D rayPos, rayDir;
+            this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
+            gizmo->drag(rayPos, rayDir);
+        }
+    }
+
     if (camController != nullptr) {
         camController->onMouseMove(-dir.x(), -dir.y());
     }
@@ -593,6 +606,10 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
             if (!!selectedNode) {
                 //viewportGizmo->isGizmoHit(editorCam, e->localPos(), this->calculateMouseRay(e->localPos()));
                 //viewportGizmo->isHandleHit();
+                //if (gizmo->isHit(rayPos, ))
+                QVector3D rayPos, rayDir;
+                this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
+                gizmo->startDragging(rayPos, rayDir);
             }
 
             // if we don't have a selected node prioritize object picking
@@ -616,6 +633,8 @@ void SceneViewWidget::mouseReleaseEvent(QMouseEvent *e)
     if (e->button() == Qt::LeftButton) {
         // maybe explicitly hard reset stuff related to picking here
         //viewportGizmo->onMouseRelease();
+        if (gizmo->isDragging())
+            gizmo->endDragging();
     }
 
     if (camController != nullptr) {
@@ -702,6 +721,7 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr l
     }
 
     //viewportGizmo->setLastSelectedNode(pickedNode);
+    gizmo->selectedNode = pickedNode;
     emit sceneNodeSelected(pickedNode);
 }
 
@@ -722,14 +742,23 @@ QImage SceneViewWidget::takeScreenshot(int width, int height)
 
 void SceneViewWidget::doGizmoPicking(const QPointF& point)
 {
-    emit sceneNodeSelected(iris::SceneNodePtr());
-    /*
     editorCam->updateCameraMatrices();
 
     auto segStart = this->editorCam->getLocalPos();
-    auto rayDir = this->calculateMouseRay(point) * 1024;
-    auto segEnd = segStart + rayDir;
+    auto rayDir = this->calculateMouseRay(point).normalized();// * 1024;
+    //auto segEnd = segStart + rayDir;
+    if (!!selectedNode) {
+        gizmo->selectedNode = selectedNode;
+        if (gizmo != nullptr && gizmo->isHit(segStart, rayDir)) {
 
+        } else {
+            emit sceneNodeSelected(iris::SceneNodePtr());
+            return;
+        }
+    }
+
+    //emit sceneNodeSelected(iris::SceneNodePtr());
+    /*
     QList<PickingResult> hitList;
     doMeshPicking(viewportGizmo->getRootNode(), segStart, segEnd, hitList);
 
@@ -775,6 +804,14 @@ void SceneViewWidget::restorePreviousCameraController()
     camController->resetMouseStates();
     camController->setCamera(editorCam);
     camController->start();
+}
+
+void SceneViewWidget::getMousePosAndRay(const QPointF& point, QVector3D &rayPos, QVector3D &rayDir)
+{
+    editorCam->updateCameraMatrices();
+
+    rayPos = this->editorCam->getLocalPos();
+    rayDir = this->calculateMouseRay(point).normalized();// * 1024;
 }
 
 void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,

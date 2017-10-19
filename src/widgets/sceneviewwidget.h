@@ -180,6 +180,8 @@ protected:
     void setCameraController(CameraControllerBase* controller);
     void restorePreviousCameraController();
 
+    void getMousePosAndRay(const QPointF& point, QVector3D& rayPos, QVector3D& rayDir);
+
 private slots:
     void paintGL();
     void renderGizmos(bool once = false);
@@ -220,6 +222,7 @@ private:
 
     void initialize();
 
+    TranslationGizmo* gizmo;
     //GizmoInstance* translationGizmo;
     //RotationGizmo* rotationGizmo;
     //ScaleGizmo* scaleGizmo;
