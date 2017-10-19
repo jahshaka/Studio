@@ -138,6 +138,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/jahshaka.log");
 #endif
 
+    connect(ui->worlds_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::DESKTOP); });
+    connect(ui->player_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::PLAYER); });
+    connect(ui->editor_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::EDITOR); });
+
     createPostProcessDockWidget();
 
     ui->sceneContainer->setAcceptDrops(true);
@@ -183,8 +187,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupProjectDB();
 
     pmContainer = new ProjectManager(db);
+    ui->stackedWidget->insertWidget(1, pmContainer);
 
-    sceneHeirarchyDock = new QDockWidget("Hierarchy");
+    sceneHeirarchyDock = new QDockWidget("Hierarchy", ui->backgroundscene);
     sceneHeirarchyDock->setObjectName(QStringLiteral("sceneHierarchyDock"));
     sceneHierarchyWidget = new SceneHierarchyWidget;
     sceneHierarchyWidget->setMinimumWidth(396);
@@ -200,13 +205,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     // Since this widget can be longer than there is screen space, we need to add a QScrollArea
     // For this to also work, we need a "holder widget" that will have a layout and the scroll area
-    sceneNodePropertiesDock = new QDockWidget("Properties");
+    sceneNodePropertiesDock = new QDockWidget("Properties", ui->backgroundscene);
     sceneNodePropertiesDock->setObjectName(QStringLiteral("sceneNodePropertiesDock"));
     sceneNodePropertiesWidget = new SceneNodePropertiesWidget;
     sceneNodePropertiesWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     sceneNodePropertiesWidget->setObjectName(QStringLiteral("sceneNodePropertiesWidget"));
 
-    auto sceneNodeDockWidgetContents = new QWidget();
+    auto sceneNodeDockWidgetContents = new QWidget(ui->backgroundscene);
 
     auto sceneNodeScrollArea = new QScrollArea(sceneNodeDockWidgetContents);
     sceneNodeScrollArea->setMinimumWidth(396);
@@ -225,7 +230,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     sceneNodePropertiesDock->setWidget(sceneNodeDockWidgetContents);
 
     // presets
-    presetsDock = new QDockWidget("Presets");
+    presetsDock = new QDockWidget("Presets", ui->backgroundscene);
     presetsDock->setObjectName(QStringLiteral("presetsDock"));
 
     auto presetDockContents = new QWidget;
@@ -250,7 +255,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     presetsDock->setWidget(presetDockContents);
 
-    assetDock = new QDockWidget("Asset Browser");
+    assetDock = new QDockWidget("Asset Browser", ui->backgroundscene);
     assetDock->setObjectName(QStringLiteral("assetDock"));
 
     assetWidget = new AssetWidget(db, this);
@@ -264,7 +269,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     assetsLayout->setContentsMargins(0, 0, 0, 0);
     assetDock->setWidget(assetDockContents);
 
-    animationDock = new QDockWidget("Timeline");
+    animationDock = new QDockWidget("Timeline", ui->backgroundscene);
     animationDock->setObjectName(QStringLiteral("animationDock"));
     animationWidget = new AnimationWidget;
     UiManager::setAnimationWidget(animationWidget);
@@ -332,7 +337,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     pmButton->setObjectName("pmButton");
 
     connect(pmButton, SIGNAL(pressed()), SLOT(showProjectManagerInternal()));
-    connect(ui->homeBtn, SIGNAL(pressed()), SLOT(showProjectManagerInternal()));
 
     vrButton = new QPushButton();
     QIcon icovr(":/icons/virtual-reality.svg");
@@ -351,6 +355,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     // this ties to hidden geometry so should come at the end
     setupViewMenu();
+
+    switchSpace(WindowSpaces::DESKTOP);
 
 #ifdef QT_DEBUG
     setWindowTitle("Jahshaka 0.3a - Developer Build");
@@ -803,6 +809,39 @@ void MainWindow::setupUndoRedo()
     ui->actionEditRedo->setShortcuts(QKeySequence::Redo);
 }
 
+void MainWindow::switchSpace(WindowSpaces space)
+{
+    switch (currentSpace = space) {
+        case WindowSpaces::DESKTOP: {
+            ui->stackedWidget->setCurrentIndex(1);
+            toggleWidgets(false);
+            ui->worlds_menu->setStyleSheet("border-color: white");
+            ui->editor_menu->setStyleSheet("border-color: #111");
+            ui->player_menu->setStyleSheet("border-color: #111");
+            break;
+        }
+
+        case WindowSpaces::EDITOR: {
+            ui->stackedWidget->setCurrentIndex(2);
+            toggleWidgets(true);
+            ui->worlds_menu->setStyleSheet("border-color: #111");
+            ui->editor_menu->setStyleSheet("border-color: white");
+            ui->player_menu->setStyleSheet("border-color: #111");
+            break;
+        }
+
+        case WindowSpaces::PLAYER: {
+            ui->stackedWidget->setCurrentIndex(2);
+            toggleWidgets(false);
+            ui->worlds_menu->setStyleSheet("border-color: #111");
+            ui->editor_menu->setStyleSheet("border-color: #111");
+            ui->player_menu->setStyleSheet("border-color: white");
+            break;
+        }
+        default: break;
+    }
+}
+
 void MainWindow::saveScene()
 {
     auto writer = new SceneWriter();
@@ -822,6 +861,8 @@ void MainWindow::saveScene()
 void MainWindow::openProject(bool playMode)
 {
     this->sceneView->makeCurrent();
+
+    // TODO - actually remove scenes - empty asset list, db cache and invalidate scene object
     this->removeScene();
 
     auto reader = new SceneReader();
@@ -837,15 +878,11 @@ void MainWindow::openProject(bool playMode)
                                    postMan,
                                    &editorData);
 
-    // playMode is basically fullscreen mode for now
     UiManager::playMode = playMode;
-    ui->homeBtn->setVisible(playMode);
-    toggleWidgets(!playMode);
-
     setScene(scene);
 
     // use new post process that has fxaa by default
-    // @todo: remember to find a better replacement
+    // TODO: remember to find a better replacement (Nick)
     postProcessWidget->setPostProcessMgr(postMan);
     this->sceneView->doneCurrent();
 
@@ -861,12 +898,7 @@ void MainWindow::openProject(bool playMode)
     // autoplay scenes immediately
     if (playMode) onPlaySceneButton();
 
-    if (!this->isVisible()) {
-        QTimer::singleShot(0, [=]() {
-            showMaximized();
-            pmContainer->hide();
-        });
-    }
+    UiManager::playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
@@ -1400,7 +1432,7 @@ void MainWindow::toggleLightWires(bool state)
 
 void MainWindow::toggleWidgets(bool state)
 {
-    ui->ToolBar->setVisible(state);
+    ui->ToolBar->setVisible(false);
     sceneHeirarchyDock->setVisible(state);
     sceneNodePropertiesDock->setVisible(state);
     presetsDock->setVisible(state);
