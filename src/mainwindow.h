@@ -77,6 +77,12 @@ class QOpenGLFunctions_3_2_Core;
 
 enum class SceneNodeType;
 
+enum WindowSpaces {
+    DESKTOP,
+    PLAYER,
+    EDITOR
+};
+
 class Database;
 class MainWindow : public QMainWindow
 {
@@ -92,6 +98,8 @@ public:
     void initialize();
     void setupProjectDB();
     void setupUndoRedo();
+
+    void switchSpace(WindowSpaces space);
 
     bool handleMousePress(QMouseEvent *event);
     bool handleMouseRelease(QMouseEvent *event);
@@ -312,6 +320,8 @@ private:
 
     QDockWidget *animationDock;
     AnimationWidget *animationWidget;
+
+    WindowSpaces currentSpace;
 };
 
 #endif // MAINWINDOW_H
