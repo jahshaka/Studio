@@ -98,8 +98,19 @@ int main(int argc, char *argv[])
     Globals::appWorkingDir = QApplication::applicationDirPath();
     app.processEvents();
 
+    // Create our main app window but hide it at the same time while showing the EDITOR first
+    // Set the attribute to render invisible while running as normal then hiding it after
+    // This is all to make SceneViewWidget's initializeGL trigger OR a way to force the UI to
+    // update when hidden, either way we want the Desktop to be the opening widget (iKlsR)
     MainWindow window;
-    window.showMaximized();
+    window.setAttribute(Qt::WA_DontShowOnScreen);
+    window.show();
+    window.grabOpenGLContextHack();
+    window.hide();
+
+    // Make our window render as normal going forward
+    window.setAttribute(Qt::WA_DontShowOnScreen, false);
+    window.goToDesktop();
 
     splash.finish(&window);
 

@@ -96,7 +96,8 @@ public:
     void setSceneAnimTime(float time);
     void stopAnimWidget();
 
-    void initialize();
+    void grabOpenGLContextHack();
+    void goToDesktop();
     void setupProjectDB();
     void setupUndoRedo();
 

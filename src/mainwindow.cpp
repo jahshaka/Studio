@@ -476,9 +476,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 #endif
 }
 
-void MainWindow::initialize()
+void MainWindow::grabOpenGLContextHack()
 {
+    switchSpace(WindowSpaces::PLAYER);
+}
 
+void MainWindow::goToDesktop()
+{
+    showMaximized();
+    switchSpace(WindowSpaces::DESKTOP);
 }
 
 void MainWindow::setupVrUi()
