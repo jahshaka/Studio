@@ -132,6 +132,36 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
       background: none;
 }
 
+/* ================== */
+
+QScrollBar:horizontal {
+	background: #17181a;
+	height: 16px;
+	border-left: 1px solid black;
+}
+
+QScrollBar::handle:horizontal {
+    background: #5A5F66;
+	border: 1px solid black;
+	min-widtg: 32px;
+	margin: 2px 1px 2px 1px;
+	border-radius: 6px;
+	/*border-radius: 5px;	/* this appears to be tied to the (width of the scrollbar / 2) */
+}
+
+QScrollBar::handle:horizontal:hover {
+    background-color: #6b6f77;
+}
+
+QScrollBar::add-page:horizontal,  QScrollBar::sub-page:horizontal {
+    background: #17181a;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+      border: none;
+      background: none;
+}
+
 /*
  QScrollBar:vertical {
      background-color: #212121;
@@ -231,6 +261,10 @@ QMenu::item {
 
 QMenu::item:selected { /* when user selects item using mouse or keyboard */
     background-color: #3498db;
+}
+
+QMenu::item:disabled { /* when user selects item using mouse or keyboard */
+	color: #555;
 }
 
 QMenu::indicator::unchecked {
@@ -931,6 +965,9 @@ QToolButton:checked
    </property>
   </action>
   <action name="actionClose">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="text">
     <string>Close</string>
    </property>
