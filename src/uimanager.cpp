@@ -50,6 +50,25 @@ void UiManager::enterEditMode()
     sceneMode = SceneMode::EditMode;
 }
 
+void UiManager::playScene()
+{
+    sceneViewWidget->startPlayingScene();
+    sceneMode = SceneMode::PlayMode;
+}
+
+void UiManager::pauseScene()
+{
+    sceneViewWidget->pausePlayingScene();
+    sceneMode = SceneMode::PlayMode;
+}
+
+void UiManager::restartScene()
+{
+    sceneMode = SceneMode::PlayMode;
+    sceneViewWidget->stopPlayingScene();
+    sceneViewWidget->startPlayingScene();
+}
+
 void UiManager::updateWindowTitle()
 {
 //    if (UiManager::isUndoStackDirty()) {

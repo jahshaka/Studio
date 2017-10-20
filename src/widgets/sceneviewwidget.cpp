@@ -927,7 +927,13 @@ EditorData* SceneViewWidget::getEditorData()
 void SceneViewWidget::startPlayingScene()
 {
     playScene = true;
-    animTime = 0.0f;
+    //animTime = 0.0f;
+}
+
+void SceneViewWidget::pausePlayingScene()
+{
+    playScene = false;
+    // time isnt reset
 }
 
 void SceneViewWidget::stopPlayingScene()
