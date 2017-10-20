@@ -134,6 +134,7 @@ public:
     EditorData* getEditorData();
 
     void startPlayingScene();
+    void pausePlayingScene();
     void stopPlayingScene();
 
     iris::ForwardRendererPtr getRenderer() const;

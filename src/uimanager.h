@@ -33,6 +33,11 @@ public:
     static bool isScenePlaying;
     static bool playMode;
 
+    // playing functions
+    static void playScene();
+    static void pauseScene();
+    static void restartScene();
+
     static void updateWindowTitle();
 
     static bool isUndoStackDirty();
