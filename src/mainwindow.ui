@@ -28,7 +28,7 @@
 
 #worlds_menu, #player_menu, #editor_menu {
 	font-size: 17px;
-	padding: 12px;
+	padding: 14px;
 	border-bottom-width: 4px;
 	border-bottom-style: solid;
 	border-color: #111;
