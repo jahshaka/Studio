@@ -9,7 +9,11 @@
 
 #include "../dialogs/renameprojectdialog.h"
 
-ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QSize iSize, QWidget *parent) : QWidget(parent)
+ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
+                               QSize size,
+                               QSize iSize,
+                               QWidget *parent,
+                               bool highlight) : QWidget(parent)
 {
     this->parent = parent;
     setParent(parent);
@@ -28,12 +32,19 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QSize iSize
     gameGridLayout->setVerticalSpacing(5);
 
     gridImageLabel = new QLabel(this);
-    gridImageLabel->setObjectName("image");
-
-    gridTextLabel = new QLabel(this);
 
     // TODO - don't allow label to be wider than image
-    gridTextLabel->setText(tileData.name);
+    gridTextLabel = new QLabel(this);
+
+    if (highlight) {
+        gridImageLabel->setStyleSheet("border: 3px dashed #3498db");
+        gridTextLabel->setText(tileData.name + " [ Open ]");
+    } else {
+        gridImageLabel->setStyleSheet("border: 3px solid rgba(0, 0, 0, 10%)");
+        gridTextLabel->setText(tileData.name);
+    }
+
+    gridImageLabel->setObjectName("image");
 
     // make things bigger at lower resolutions
     if (devicePixelRatio() > 1) {
@@ -80,13 +91,11 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QSize iSize
     playButton->setIconSize(iconSize);
     playButton->setIcon(QIcon(":/icons/tplay_alpha.svg"));
     playButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white } QToolTip { padding: 2px; }");
-    olayout->addWidget(playButton);
 
-    auto spacer = new QLabel("");
+    spacer = new QLabel("");
     spacer->setMaximumWidth(10);
     spacer->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     spacer->setStyleSheet("background: transparent; color: white");
-    olayout->addWidget(spacer);
 
     editButton = new QPushButton();
     editButton->installEventFilter(this);
@@ -97,7 +106,29 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QSize iSize
     editButton->setIconSize(iconSize);
     editButton->setIcon(QIcon(":/icons/tedit_alpha.svg"));
     editButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white } QToolTip { padding: 2px; }");
+
+    closeButton = new QPushButton();
+    closeButton->installEventFilter(this);
+    closeButton->setObjectName("closeButton");
+    closeButton->setToolTipDuration(0);
+    closeButton->setToolTip("Close open world");
+    closeButton->setCursor(Qt::PointingHandCursor);
+    closeButton->setIconSize(iconSize);
+    closeButton->setIcon(QIcon(":/icons/error_alpha.svg"));
+    closeButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white } QToolTip { padding: 2px; }");
+
+    if (highlight) {
+        playButton->setVisible(false);
+        spacer->setVisible(false);
+        editButton->setVisible(false);
+    } else {
+        closeButton->setVisible(false);
+    }
+
+    olayout->addWidget(playButton);
+    olayout->addWidget(spacer);
     olayout->addWidget(editButton);
+    olayout->addWidget(closeButton);
 
     controls = new QWidget();
     controls->setStyleSheet("background: rgba(32, 32, 32, 190); border-radius: 4px;");
@@ -115,17 +146,18 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QSize iSize
     gameGridLayout->addWidget(options, 0, 0);
     gameGridLayout->addWidget(gridTextLabel, 1, 0);
 
-    QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect;
-    shadow->setColor(Qt::black);
-    shadow->setOffset(0);
-    shadow->setBlurRadius(12.f);
-    setGraphicsEffect(shadow);
+//    QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect;
+//    shadow->setColor(Qt::black);
+//    shadow->setOffset(0);
+//    shadow->setBlurRadius(12.f);
+//    setGraphicsEffect(shadow);
 
     setLayout(gameGridLayout);
     setMinimumHeight(this->sizeHint().height());
 
     connect(playButton, SIGNAL(pressed()), SLOT(playProject()));
     connect(editButton, SIGNAL(pressed()), SLOT(editProject()));
+    connect(closeButton, SIGNAL(pressed()), SLOT(closeProject()));
 
     connect(this, SIGNAL(hovered()), SLOT(showControls()));
     connect(this, SIGNAL(left()), SLOT(hideControls()));
@@ -167,6 +199,17 @@ void ItemGridWidget::updateLabel(QString text)
     tileData.name = text;
 }
 
+void ItemGridWidget::removeHighlight()
+{
+    gridImageLabel->setStyleSheet("border: 3px solid rgba(0, 0, 0, 10%)");
+    gridTextLabel->setText(tileData.name);
+
+    playButton->setVisible(true);
+    spacer->setVisible(true);
+    editButton->setVisible(true);
+    closeButton->setVisible(false);
+}
+
 bool ItemGridWidget::eventFilter(QObject *watched, QEvent *event)
 {
     if (watched == playButton) {
@@ -201,6 +244,22 @@ bool ItemGridWidget::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
+    if (watched == closeButton) {
+        switch (event->type()) {
+            case QEvent::Enter: {
+                closeButton->setIcon(QIcon(":/icons/error.svg"));
+                break;
+            }
+
+            case QEvent::Leave: {
+                closeButton->setIcon(QIcon(":/icons/error_alpha.svg"));
+                break;
+            }
+
+            default: break;
+        }
+    }
+
     return QObject::eventFilter(watched, event);
 }
 
@@ -224,6 +283,12 @@ void ItemGridWidget::editProject()
     emit openFromWidget(this, false);
 }
 
+void ItemGridWidget::closeProject()
+{
+    this->removeHighlight();
+    emit closeFromWidget(this);
+}
+
 void ItemGridWidget::enterEvent(QEvent *event)
 {
     QWidget::enterEvent(event);
@@ -242,7 +307,6 @@ void ItemGridWidget::mousePressEvent(QMouseEvent *event)
         emit singleClicked(this);
     }
 }
-
 
 void ItemGridWidget::mouseDoubleClickEvent(QMouseEvent *event)
 {
@@ -294,11 +358,6 @@ void ItemGridWidget::renameProject()
     connect(renameDialog, SIGNAL(newTextEmit(QString)), SLOT(renameFromWidgetStr(QString)));
 
     renameDialog->show();
-}
-
-void ItemGridWidget::closeProject()
-{
-    emit closeFromWidget(this);
 }
 
 void ItemGridWidget::deleteProject()

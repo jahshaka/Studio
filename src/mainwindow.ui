@@ -143,7 +143,7 @@ QScrollBar:horizontal {
 QScrollBar::handle:horizontal {
     background: #5A5F66;
 	border: 1px solid black;
-	min-widtg: 32px;
+	min-width: 32px;
 	margin: 2px 1px 2px 1px;
 	border-radius: 6px;
 	/*border-radius: 5px;	/* this appears to be tied to the (width of the scrollbar / 2) */
@@ -667,28 +667,10 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <item row="1" column="0">
      <widget class="QStackedWidget" name="stackedWidget">
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="page"/>
-      <widget class="QWidget" name="page_2">
-       <layout class="QGridLayout" name="gridLayout_2">
-        <property name="leftMargin">
-         <number>0</number>
-        </property>
-        <property name="topMargin">
-         <number>0</number>
-        </property>
-        <property name="rightMargin">
-         <number>0</number>
-        </property>
-        <property name="bottomMargin">
-         <number>0</number>
-        </property>
-        <property name="spacing">
-         <number>0</number>
-        </property>
-       </layout>
-      </widget>
+      <widget class="QWidget" name="page_2"/>
      </widget>
     </item>
    </layout>

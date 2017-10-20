@@ -304,8 +304,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     pmContainer = new ProjectManager(db, this);
 
-    ui->stackedWidget->insertWidget(1, pmContainer);
-    ui->stackedWidget->insertWidget(2, viewPort);
+    ui->stackedWidget->insertWidget(0, pmContainer);
+    ui->stackedWidget->insertWidget(1, viewPort);
 
     sceneHeirarchyDock = new QDockWidget("Hierarchy", ui->viewportLayout);
     sceneHeirarchyDock->setObjectName(QStringLiteral("sceneHierarchyDock"));
@@ -410,6 +410,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     viewPort->tabifyDockWidget(animationDock, assetDock);
 
     connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));
+    connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
     connect(pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
     connect(pmContainer, SIGNAL(exportProject()), SLOT(exportSceneAsZip()));
 
@@ -444,19 +445,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     ui->ToolBar->addWidget(empty);
 
-    pmButton = new QPushButton();
-    QIcon ico(":/icons/home.svg");
-    pmButton->setIcon(ico);
-    pmButton->setObjectName("pmButton");
-
-    connect(pmButton, SIGNAL(pressed()), SLOT(showProjectManagerInternal()));
-
     vrButton = new QPushButton();
     QIcon icovr(":/icons/virtual-reality.svg");
     vrButton->setIcon(icovr);
     vrButton->setObjectName("vrButton");
     //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
-    ui->ToolBar->addWidget(pmButton);
     ui->ToolBar->addWidget(vrButton);
 
 //    if (!UiManager::playMode) {
@@ -778,24 +771,24 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 void MainWindow::closeEvent(QCloseEvent *event)
 {
     event->ignore();
-
-    if (UiManager::isUndoStackDirty()) {
-        QMessageBox::StandardButton reply;
-        reply = QMessageBox::question(this,
-                                      "Unsaved Changes",
-                                      "There are unsaved changes, save before closing?",
-                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
-        if (reply == QMessageBox::Yes) {
-            saveScene();
-            event->accept();
-            this->close();
-        } else if (reply == QMessageBox::No) {
-            event->accept();
-            this->close();
-        }
-    } else {
-        event->accept();
-    }
+    event->accept();
+//    if (UiManager::isUndoStackDirty()) {
+//        QMessageBox::StandardButton reply;
+//        reply = QMessageBox::question(this,
+//                                      "Unsaved Changes",
+//                                      "There are unsaved changes, save before closing?",
+//                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+//        if (reply == QMessageBox::Yes) {
+//            saveScene();
+//            event->accept();
+//            this->close();
+//        } else if (reply == QMessageBox::No) {
+//            event->accept();
+//            this->close();
+//        }
+//    } else {
+//        event->accept();
+//    }
 
 //    if (!UiManager::playMode) {
 //        settings->setValue("geometry", saveGeometry());
@@ -812,7 +805,7 @@ void MainWindow::setupFileMenu()
     connect(ui->actionPreferences,  SIGNAL(triggered(bool)), this, SLOT(showPreferences()));
     connect(prefsDialog,            SIGNAL(PreferencesDialogClosed()), SLOT(updateSceneSettings()));
     connect(ui->actionExport,       SIGNAL(triggered(bool)), this, SLOT(exportSceneAsZip()));
-    connect(ui->actionClose,        &QAction::triggered, [this]() { showProjectManagerInternal(); });
+    connect(ui->actionClose,        &QAction::triggered, [this](bool) { closeProject(); });
 }
 
 void MainWindow::setupViewMenu()
@@ -936,10 +929,12 @@ void MainWindow::switchSpace(WindowSpaces space)
 
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
-            ui->stackedWidget->setCurrentIndex(1);
+            if (UiManager::isSceneOpen) pmContainer->populateDesktop(true);
+            ui->stackedWidget->setCurrentIndex(0);
             toggleWidgets(false);
 
             ui->worlds_menu->setStyleSheet(selectedMenu);
+            ui->actionClose->setDisabled(true);
 
             if (UiManager::isSceneOpen) {
                 ui->editor_menu->setStyleSheet(unselectedMenu);
@@ -958,7 +953,7 @@ void MainWindow::switchSpace(WindowSpaces space)
         }
 
         case WindowSpaces::EDITOR: {
-            ui->stackedWidget->setCurrentIndex(2);
+            ui->stackedWidget->setCurrentIndex(1);
             toggleWidgets(true);
             ui->worlds_menu->setStyleSheet(unselectedMenu);
             ui->editor_menu->setStyleSheet(selectedMenu);
@@ -971,7 +966,7 @@ void MainWindow::switchSpace(WindowSpaces space)
         }
 
         case WindowSpaces::PLAYER: {
-            ui->stackedWidget->setCurrentIndex(2);
+            ui->stackedWidget->setCurrentIndex(1);
             toggleWidgets(false);
             ui->worlds_menu->setStyleSheet(unselectedMenu);
             ui->editor_menu->setStyleSheet(unselectedMenu);
@@ -1024,6 +1019,7 @@ void MainWindow::openProject(bool playMode)
 
     UiManager::playMode = playMode;
     UiManager::isSceneOpen = true;
+    ui->actionClose->setDisabled(false);
     setScene(scene);
 
     // use new post process that has fxaa by default
@@ -1048,6 +1044,20 @@ void MainWindow::openProject(bool playMode)
     }
 
     UiManager::playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+}
+
+void MainWindow::closeProject()
+{
+    UiManager::isSceneOpen = false;
+    UiManager::isScenePlaying = false;
+    ui->actionClose->setDisabled(false);
+    switchSpace(WindowSpaces::DESKTOP);
+
+    UiManager::clearUndoStack();
+    AssetManager::assets.clear();
+    // would prefer a cleaner state but this is pretty vanilla
+    this->setScene(iris::Scene::create());
+    scene.clear();
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
@@ -1590,11 +1600,6 @@ void MainWindow::toggleWidgets(bool state)
     playerControls->setVisible(!state);
 }
 
-void MainWindow::showProjectManager()
-{
-    pmContainer->showMaximized();
-}
-
 void MainWindow::showProjectManagerInternal()
 {
     if (UiManager::isUndoStackDirty()) {
@@ -1645,6 +1650,10 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
     UiManager::updateWindowTitle();
 
     assetWidget->trigger();
+
+    UiManager::isSceneOpen = true;
+    ui->actionClose->setDisabled(false);
+    switchSpace(WindowSpaces::EDITOR);
 
     delete writer;
 }

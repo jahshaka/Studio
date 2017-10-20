@@ -222,6 +222,7 @@ public slots:
 
     void newProject(const QString&, const QString&);
     void openProject(bool playMode = false);
+    void closeProject();
 
     void toggleWidgets(bool toggle);
 
@@ -242,7 +243,6 @@ public slots:
 
     void takeScreenshot();
     void toggleLightWires(bool state);
-    void showProjectManager();
     void showProjectManagerInternal();
 
 private slots:
@@ -305,7 +305,6 @@ private:
 
     bool vrMode;
     QPushButton* vrButton;
-    QPushButton* pmButton;
     QMainWindow *dialog;
 
     QDockWidget *sceneHeirarchyDock;
