@@ -15,6 +15,7 @@ SceneHierarchyWidget *UiManager::sceneHierarchyWidget = Q_NULLPTR;
 QUndoStack *UiManager::undoStack = Q_NULLPTR;
 SceneMode UiManager::sceneMode = SceneMode::EditMode;
 
+bool UiManager::isSceneOpen = false;
 bool UiManager::isScenePlaying = false;
 bool UiManager::playMode = false;
 

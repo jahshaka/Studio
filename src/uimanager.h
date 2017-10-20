@@ -30,6 +30,7 @@ public:
 
     static void enterPlayMode();
     static void enterEditMode();
+    static bool isSceneOpen;
     static bool isScenePlaying;
     static bool playMode;
 
