@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QDrag>
 #include <QSharedPointer>
 #include <QVector3D>
+#include <QCheckBox>
 #include "irisgl/src/irisglfwd.h"
 
 namespace Ui {
@@ -320,6 +321,14 @@ private:
 
     QDockWidget *animationDock;
     AnimationWidget *animationWidget;
+
+    QMainWindow *viewPort;
+    QWidget *sceneContainer;
+
+    QWidget *controlBar;
+    QWidget *playerControls;
+    QPushButton *playSceneBtn;
+    QCheckBox *wireCheckBtn;
 
     WindowSpaces currentSpace;
 };
