@@ -329,6 +329,9 @@ private:
     QWidget *playerControls;
     QPushButton *playSceneBtn;
     QCheckBox *wireCheckBtn;
+    QPushButton *restartBtn;
+    QPushButton *playBtn;
+    QPushButton *stopBtn;
 
     WindowSpaces currentSpace;
 };

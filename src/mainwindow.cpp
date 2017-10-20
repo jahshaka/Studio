@@ -211,21 +211,24 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     auto playerControlsLayout = new QHBoxLayout;
 
-    auto restartBtn = new QPushButton;
+    restartBtn = new QPushButton;
+    restartBtn->setCursor(Qt::PointingHandCursor);
     restartBtn->setToolTip("Restart playback");
     restartBtn->setToolTipDuration(-1);
     restartBtn->setStyleSheet("background: transparent");
     restartBtn->setIcon(QIcon(":/icons/rotate-to-right.svg"));
     restartBtn->setIconSize(QSize(16, 16));
 
-    auto playBtn = new QPushButton;
+    playBtn = new QPushButton;
+    playBtn->setCursor(Qt::PointingHandCursor);
     playBtn->setToolTip("Play the scene");
     playBtn->setToolTipDuration(-1);
     playBtn->setStyleSheet("background: transparent");
     playBtn->setIcon(QIcon(":/icons/g_play.svg"));
     playBtn->setIconSize(QSize(24, 24));
 
-    auto stopBtn = new QPushButton;
+    stopBtn = new QPushButton;
+    stopBtn->setCursor(Qt::PointingHandCursor);
     stopBtn->setToolTip("Stop playback");
     stopBtn->setToolTipDuration(-1);
     stopBtn->setStyleSheet("background: transparent");
@@ -240,6 +243,29 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     playerControlsLayout->addWidget(stopBtn);
     playerControlsLayout->addStretch();
 
+    connect(restartBtn, &QPushButton::pressed, [this]() {
+        playBtn->setToolTip("Pause the scene");
+        playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
+        UiManager::restartScene();
+    });
+
+    connect(playBtn, &QPushButton::pressed, [this]() {
+        if (UiManager::isScenePlaying) {
+            playBtn->setToolTip("Play the scene");
+            playBtn->setIcon(QIcon(":/icons/g_play.svg"));
+            UiManager::pauseScene();
+        } else {
+            playBtn->setToolTip("Pause the scene");
+            playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
+            UiManager::playScene();
+        }
+    });
+    connect(stopBtn, &QPushButton::pressed, [this]() {
+        playBtn->setToolTip("Play the scene");
+        playBtn->setIcon(QIcon(":/icons/g_play.svg"));
+        UiManager::stopScene();
+    });
+
     playerControls->setLayout(playerControlsLayout);
 
 
@@ -252,7 +278,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     container->setLayout(containerLayout);
 
     viewPort = new QMainWindow;
-    viewPort->setWindowFlag(Qt::Widget);
+    viewPort->setWindowFlags(Qt::Widget);
     viewPort->setCentralWidget(container);
 
     // end
@@ -1014,7 +1040,11 @@ void MainWindow::openProject(bool playMode)
     delete reader;
 
     // autoplay scenes immediately
-    if (playMode) onPlaySceneButton();
+    if (playMode) {
+        playBtn->setToolTip("Pause the scene");
+        playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
+        onPlaySceneButton();
+    }
 
     UiManager::playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
 }

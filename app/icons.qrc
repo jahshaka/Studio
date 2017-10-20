@@ -75,5 +75,6 @@
         <file>icons/tedit_alpha.svg</file>
         <file>icons/tplay_alpha.svg</file>
         <file>icons/ic_file.svg</file>
+        <file>icons/g_pause.svg</file>
     </qresource>
 </RCC>

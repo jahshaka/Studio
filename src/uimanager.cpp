@@ -51,23 +51,34 @@ void UiManager::enterEditMode()
     sceneMode = SceneMode::EditMode;
 }
 
+// TODO - check that the sceneMode being set here doesn't change anything anywhere else
+// There should be no need to set the mode, see about removing (iKlsR)
 void UiManager::playScene()
 {
-    sceneViewWidget->startPlayingScene();
+    isScenePlaying = true;
     sceneMode = SceneMode::PlayMode;
+    sceneViewWidget->startPlayingScene();
 }
 
 void UiManager::pauseScene()
 {
-    sceneViewWidget->pausePlayingScene();
+    isScenePlaying = false;
     sceneMode = SceneMode::PlayMode;
+    sceneViewWidget->pausePlayingScene();
 }
 
 void UiManager::restartScene()
 {
+    isScenePlaying = true;
     sceneMode = SceneMode::PlayMode;
     sceneViewWidget->stopPlayingScene();
     sceneViewWidget->startPlayingScene();
+}
+
+void UiManager::stopScene()
+{
+    isScenePlaying = false;
+    sceneViewWidget->stopPlayingScene();
 }
 
 void UiManager::updateWindowTitle()

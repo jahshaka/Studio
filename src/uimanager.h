@@ -38,6 +38,7 @@ public:
     static void playScene();
     static void pauseScene();
     static void restartScene();
+    static void stopScene();
 
     static void updateWindowTitle();
 
