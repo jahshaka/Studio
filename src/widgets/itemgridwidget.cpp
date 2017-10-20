@@ -35,7 +35,12 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData, QSize size, QSize iSize
     // TODO - don't allow label to be wider than image
     gridTextLabel->setText(tileData.name);
 
-    gridTextLabel->setStyleSheet("QLabel { font-weight: bold; color: #ddd; font-size: 12px; }");
+    // make things bigger at lower resolutions
+    if (devicePixelRatio() > 1) {
+        gridTextLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 12px;");
+    } else {
+        gridTextLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 15px;");
+    }
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
 

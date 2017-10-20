@@ -168,11 +168,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     controlBar = new QWidget;
     controlBar->setObjectName(QStringLiteral("controlBar"));
-    controlBar->setFixedHeight(26);
-
-    if (devicePixelRatio() > 1) {
-        controlBar->setFixedHeight(controlBar->height() - devicePixelRatio());
-    }
 
     auto container = new QWidget;
     auto containerLayout = new QVBoxLayout;
@@ -307,7 +302,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     setupProjectDB();
 
-    pmContainer = new ProjectManager(db);
+    pmContainer = new ProjectManager(db, this);
 
     ui->stackedWidget->insertWidget(1, pmContainer);
     ui->stackedWidget->insertWidget(2, viewPort);

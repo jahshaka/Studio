@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>746</width>
-    <height>503</height>
+    <width>800</width>
+    <height>400</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -39,7 +39,7 @@ QMenu::item:selected { /* when user selects item using mouse or keyboard */
 	color: white;
 }
 
-#label {
+#searchIcon {
 	background: #303030;
 	padding: 4px;
 }
@@ -75,27 +75,6 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
 
 /* ========================== */
 
-#header {
-	background: #111;
-	border-bottom: 1px solid black;
-}
-
-#worlds_menu, #tutorial_menu {
-	font-size: 17px;
-	padding: 12px;
-}
-
-#worlds_menu {
-	border-bottom-width: 4px;
-	border-bottom-style: solid;
-	border-color: white;
-	border-radius: 0px;
-}
-
-#tutorial_menu {
-	color: #777;
-}
-
 #ProjectManager {
 	background: #1a1a1a;
 }
@@ -111,6 +90,7 @@ QComboBox {
     background: #4D4D4D;
     color: #BBB;
     border:  0;
+	border-radius: 1px;
 }
 
 QComboBox:item {
@@ -118,7 +98,7 @@ QComboBox:item {
 }
 
 QComboBox QAbstractItemView {
-   background-color: #212121;
+	background-color: #212121;
     selection-background-color: red;
     border: 0;
     outline: none;
@@ -176,7 +156,7 @@ QSlider::handle:horizontal {
 
 QPushButton, QToolButton {
 	border: 0;
-	padding: 8px 10px;
+	padding: 8px 12px;
 	background: #444;
 	border-radius: 1px;
 }
@@ -253,9 +233,9 @@ QListWidget::item:selected {
       <number>9</number>
      </property>
      <item row="0" column="0">
-      <widget class="QWidget" name="widget_3" native="true">
+      <widget class="QWidget" name="miscPadding" native="true">
        <property name="sizePolicy">
-        <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
@@ -285,33 +265,23 @@ QListWidget::item:selected {
         <property name="bottomMargin">
          <number>2</number>
         </property>
-        <item>
-         <spacer name="horizontalSpacer_2">
-          <property name="orientation">
-           <enum>Qt::Horizontal</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>40</width>
-            <height>20</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-        <item>
-         <widget class="QLabel" name="label_3">
-          <property name="text">
-           <string>Version: 0.4</string>
-          </property>
-         </widget>
-        </item>
        </layout>
       </widget>
      </item>
-     <item row="2" column="0">
-      <widget class="QWidget" name="widget_2" native="true">
+     <item row="1" column="0">
+      <widget class="QWidget" name="pmContainer" native="true">
        <property name="sizePolicy">
-        <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>1</verstretch>
+        </sizepolicy>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="0">
+      <widget class="QWidget" name="desktopControls" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
@@ -325,7 +295,7 @@ QListWidget::item:selected {
        <property name="maximumSize">
         <size>
          <width>16777215</width>
-         <height>32</height>
+         <height>16777215</height>
         </size>
        </property>
        <property name="styleSheet">
@@ -340,22 +310,25 @@ QListWidget::item:selected {
 }</string>
        </property>
        <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <property name="spacing">
+         <number>6</number>
+        </property>
         <property name="leftMargin">
          <number>0</number>
         </property>
         <property name="topMargin">
-         <number>3</number>
+         <number>6</number>
         </property>
         <property name="rightMargin">
          <number>0</number>
         </property>
         <property name="bottomMargin">
-         <number>0</number>
+         <number>4</number>
         </property>
         <item>
-         <widget class="QLabel" name="label_2">
+         <widget class="QLabel" name="tilePreviewLabel">
           <property name="text">
-           <string>Preview Size</string>
+           <string>Tile Size</string>
           </property>
          </widget>
         </item>
@@ -370,7 +343,7 @@ QListWidget::item:selected {
           <property name="minimumSize">
            <size>
             <width>84</width>
-            <height>24</height>
+            <height>32</height>
            </size>
           </property>
           <property name="maximumSize">
@@ -408,23 +381,16 @@ QListWidget::item:selected {
          </widget>
         </item>
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout">
+         <layout class="QHBoxLayout" name="searchLayout">
           <property name="spacing">
            <number>0</number>
           </property>
           <item>
-           <widget class="QLineEdit" name="lineEdit">
-            <property name="placeholderText">
-             <string>Search recent worlds...</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="label">
+           <widget class="QLabel" name="searchIcon">
             <property name="maximumSize">
              <size>
-              <width>24</width>
-              <height>24</height>
+              <width>32</width>
+              <height>32</height>
              </size>
             </property>
             <property name="styleSheet">
@@ -444,6 +410,19 @@ QListWidget::item:selected {
             </property>
             <property name="indent">
              <number>-1</number>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="lineEdit">
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>32</height>
+             </size>
+            </property>
+            <property name="placeholderText">
+             <string>Search recent worlds...</string>
             </property>
            </widget>
           </item>
@@ -491,9 +470,6 @@ QListWidget::item:selected {
         </item>
        </layout>
       </widget>
-     </item>
-     <item row="1" column="0">
-      <widget class="QWidget" name="pmContainer" native="true"/>
      </item>
     </layout>
    </item>
