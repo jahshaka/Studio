@@ -45,8 +45,6 @@ int main(int argc, char *argv[])
     QSurfaceFormat::setDefaultFormat(format);
 #endif
 
-//    qputenv("QT_DEVICE_PIXEL_RATIO", QByteArray("2"));
-
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
     QApplication::setAttribute(Qt::AA_UseDesktopOpenGL);
@@ -70,8 +68,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
-    // TODO - try to get rid of this in the future (iKlsR)
-    // https://gist.github.com/skyrpex/5547015
+    // TODO - try to get rid of this in the future https://gist.github.com/skyrpex/5547015 (iKlsR)
     app.setStyle(QStyleFactory::create("fusion"));
     QPalette palette;
     palette.setColor(QPalette::Window, QColor(48, 48, 48));
@@ -94,27 +91,26 @@ int main(int argc, char *argv[])
     app.setPalette(palette);
 
     QSplashScreen splash;
-    auto pixmap = QPixmap(":/images/splashv2.png");
+    auto pixmap = QPixmap(":/images/splashv2.jpg");
     splash.setPixmap(pixmap);
-//    splash.setPixmap(pixmap.scaled(815, 480, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     splash.show();
 
     Globals::appWorkingDir = QApplication::applicationDirPath();
     app.processEvents();
 
-    // Create our main app window but hide it at the same time while showing the Desktop first
+    // Create our main app window but hide it at the same time while showing the EDITOR first
     // Set the attribute to render invisible while running as normal then hiding it after
     // This is all to make SceneViewWidget's initializeGL trigger OR a way to force the UI to
-    // update when hidden, either way we want the Desktop to be the opening widget for now (iKlsR)
-    // Logic seems weird but works thanks to https://stackoverflow.com/a/8768138/996468
+    // update when hidden, either way we want the Desktop to be the opening widget (iKlsR)
     MainWindow window;
     window.setAttribute(Qt::WA_DontShowOnScreen);
     window.show();
+    window.grabOpenGLContextHack();
     window.hide();
-    window.showProjectManager();
 
     // Make our window render as normal going forward
     window.setAttribute(Qt::WA_DontShowOnScreen, false);
+    window.goToDesktop();
 
     splash.finish(&window);
 
