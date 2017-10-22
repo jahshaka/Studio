@@ -17,7 +17,6 @@
    <string notr="true">#ModelPresets {
 	padding: 4px;
 	background: #303030;
-	border: 0;
 }</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
@@ -40,9 +39,6 @@
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">border: 0</string>
      </property>
     </widget>
    </item>

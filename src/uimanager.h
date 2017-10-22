@@ -30,7 +30,6 @@ public:
 
     static void enterPlayMode();
     static void enterEditMode();
-    static bool isSceneOpen;
     static bool isScenePlaying;
     static bool playMode;
 
@@ -38,12 +37,10 @@ public:
     static void playScene();
     static void pauseScene();
     static void restartScene();
-    static void stopScene();
 
     static void updateWindowTitle();
 
     static bool isUndoStackDirty();
-    static bool clearUndoStack();
     static void setUndoStack(QUndoStack*);
     static void pushUndoStack(QUndoCommand*);
     static void popUndoStack();

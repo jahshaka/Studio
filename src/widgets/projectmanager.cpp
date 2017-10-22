@@ -186,12 +186,6 @@ void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
     }
 }
 
-void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
-{
-    Q_UNUSED(widget);
-    emit closeProject();
-}
-
 void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
 {
     auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
@@ -313,18 +307,13 @@ void ProjectManager::openSampleBrowser()
 {
     sampleDialog.setFixedSize(Constants::TILE_SIZE * 1.66);
     sampleDialog.setWindowFlags(sampleDialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
-    sampleDialog.setWindowTitle("Sample Worlds");
+    sampleDialog.setWindowTitle("Jahshaka Sample Browser");
 
     QGridLayout *layout = new QGridLayout();
     QListWidget *sampleList = new QListWidget();
     sampleList->setObjectName("sampleList");
     sampleList->setStyleSheet("#sampleList { background-color: #1e1e1e; padding: 0 8px; border: none } " \
                               "QListWidgetItem { padding: 12px; } "\
-                              "QListView::item:selected { "\
-                              "    border: 1px solid #3498db; "\
-                               " background: #3498db; "\
-                               "  color: #CECECE; "\
-                              "} "\
                               "QToolTip { padding: 2px; border: 0; background: black; opacity: 200; }");
     sampleList->setViewMode(QListWidget::IconMode);
     sampleList->setSizeAdjustPolicy(QListWidget::AdjustToContents);
@@ -347,6 +336,7 @@ void ProjectManager::openSampleBrowser()
         auto item = new QListWidgetItem();
         item->setData(Qt::DisplayRole, it.value());
         item->setData(Qt::UserRole, QDir(dir.absolutePath()).filePath(it.value()) + ".zip");
+        item->setToolTip(QDir(dir.absolutePath()).filePath(it.value()) + ".zip");
         item->setIcon(QIcon(QDir(dir.absolutePath()).filePath(it.key())));
         sampleList->addItem(item);
     }
