@@ -263,4 +263,25 @@ void Scene::setOutlineColor(QColor color)
     outlineColor = color;
 }
 
+void Scene::cleanup()
+{
+    camera.clear();
+    rootNode.clear();
+    vrViewer.clear();
+
+    skyMesh.clear();
+    skyTexture.clear();
+    skyMaterial.clear();
+    delete skyRenderItem;
+
+    lights.clear();
+    meshes.clear();
+    particleSystems.clear();
+    viewers.clear();
+
+    delete geometryRenderList;
+    delete shadowRenderList;
+    delete gizmoRenderList;
+}
+
 }

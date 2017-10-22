@@ -149,6 +149,8 @@ public:
      * @param color
      */
     void setOutlineColor(QColor color);
+
+    void cleanup();
 };
 
 }
