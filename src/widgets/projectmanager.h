@@ -61,7 +61,6 @@ protected slots:
     void openProjectFromWidget(ItemGridWidget*, bool playMode);
     void exportProjectFromWidget(ItemGridWidget*);
     void renameProjectFromWidget(ItemGridWidget*);
-    void closeProjectFromWidget(ItemGridWidget*);
     void deleteProjectFromWidget(ItemGridWidget*);
 
     void searchProjects();
@@ -75,7 +74,6 @@ signals:
     void fileToCreate(const QString& str, const QString& str2);
     void importProject();
     void exportProject();
-    void closeProject();
 
 private:
     void loadProjectAssets();

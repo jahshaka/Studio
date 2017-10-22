@@ -21,19 +21,12 @@
    <double>1.000000000000000</double>
   </property>
   <property name="styleSheet">
-   <string notr="true">#header {
-	background: #111;
-	border-bottom: 1px solid black;
+   <string notr="true">QTabWidget {
+
 }
 
-#worlds_menu, #player_menu, #editor_menu {
-	font-size: 17px;
-	padding: 14px;
-	border-bottom-width: 4px;
-	border-bottom-style: solid;
-	border-color: #111;
-	border-radius: 0px;
-	background: transparent;
+QTabWidget::tab-bar {
+    /*min-width:  48px; */
 }
 
 /* https://stackoverflow.com/a/33006868/996468 */
@@ -128,36 +121,6 @@ QScrollBar::add-page:vertical,  QScrollBar::sub-page:vertical {
 }
 
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-      border: none;
-      background: none;
-}
-
-/* ================== */
-
-QScrollBar:horizontal {
-	background: #17181a;
-	height: 16px;
-	border-left: 1px solid black;
-}
-
-QScrollBar::handle:horizontal {
-    background: #5A5F66;
-	border: 1px solid black;
-	min-width: 32px;
-	margin: 2px 1px 2px 1px;
-	border-radius: 6px;
-	/*border-radius: 5px;	/* this appears to be tied to the (width of the scrollbar / 2) */
-}
-
-QScrollBar::handle:horizontal:hover {
-    background-color: #6b6f77;
-}
-
-QScrollBar::add-page:horizontal,  QScrollBar::sub-page:horizontal {
-    background: #17181a;
-}
-
-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
       border: none;
       background: none;
 }
@@ -261,10 +224,6 @@ QMenu::item {
 
 QMenu::item:selected { /* when user selects item using mouse or keyboard */
     background-color: #3498db;
-}
-
-QMenu::item:disabled { /* when user selects item using mouse or keyboard */
-	color: #555;
 }
 
 QMenu::indicator::unchecked {
@@ -563,35 +522,11 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     <property name="bottomMargin">
      <number>0</number>
     </property>
-    <property name="spacing">
-     <number>0</number>
-    </property>
     <item row="0" column="0">
-     <widget class="QWidget" name="header" native="true">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="minimumSize">
-       <size>
-        <width>0</width>
-        <height>54</height>
-       </size>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>16777215</width>
-        <height>16777215</height>
-       </size>
-      </property>
-      <property name="styleSheet">
-       <string notr="true"/>
-      </property>
-      <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,0,0,0">
+     <widget class="QWidget" name="backgroundscene" native="true">
+      <layout class="QVBoxLayout" name="verticalLayout_2">
        <property name="spacing">
-        <number>12</number>
+        <number>0</number>
        </property>
        <property name="leftMargin">
         <number>0</number>
@@ -606,71 +541,151 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
         <number>0</number>
        </property>
        <item>
-        <spacer name="horizontalSpacer_2">
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
+        <widget class="QWidget" name="controlBar" native="true">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
          </property>
-         <property name="sizeHint" stdset="0">
+         <property name="minimumSize">
           <size>
-           <width>40</width>
-           <height>20</height>
+           <width>0</width>
+           <height>0</height>
           </size>
          </property>
-        </spacer>
-       </item>
-       <item>
-        <widget class="QPushButton" name="worlds_menu">
-         <property name="cursor">
-          <cursorShape>PointingHandCursor</cursorShape>
-         </property>
-         <property name="text">
-          <string>Worlds</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="player_menu">
-         <property name="cursor">
-          <cursorShape>PointingHandCursor</cursorShape>
-         </property>
-         <property name="text">
-          <string>Player</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="editor_menu">
-         <property name="cursor">
-          <cursorShape>PointingHandCursor</cursorShape>
-         </property>
-         <property name="text">
-          <string>Editor</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <spacer name="horizontalSpacer_4">
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
+         <property name="maximumSize">
           <size>
-           <width>40</width>
-           <height>20</height>
+           <width>16777215</width>
+           <height>26</height>
           </size>
          </property>
-        </spacer>
+         <property name="styleSheet">
+          <string notr="true">#controlBar {
+	background: #212121;
+	border-bottom: 1px solid black;
+}</string>
+         </property>
+         <layout class="QHBoxLayout" name="horizontalLayout">
+          <property name="spacing">
+           <number>12</number>
+          </property>
+          <property name="leftMargin">
+           <number>9</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>9</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QPushButton" name="screenshotBtn">
+            <property name="toolTip">
+             <string>Take a screenshot of the scene</string>
+            </property>
+            <property name="toolTipDuration">
+             <number>0</number>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background: transparent; border: 0</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset resource="../app/icons.qrc">
+              <normaloff>:/icons/camera.svg</normaloff>:/icons/camera.svg</iconset>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="wireCheck">
+            <property name="text">
+             <string>Viewport Wireframes</string>
+            </property>
+            <property name="tristate">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="homeBtn">
+            <property name="styleSheet">
+             <string notr="true">background: transparent; border: 0</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset resource="../app/icons.qrc">
+              <normaloff>:/icons/home.svg</normaloff>:/icons/home.svg</iconset>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="playSceneBtn">
+            <property name="cursor">
+             <cursorShape>PointingHandCursor</cursorShape>
+            </property>
+            <property name="toolTip">
+             <string>Play scene</string>
+            </property>
+            <property name="toolTipDuration">
+             <number>0</number>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background: transparent; border: 0</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset resource="../app/icons.qrc">
+              <normaloff>:/icons/g_play.svg</normaloff>:/icons/g_play.svg</iconset>
+            </property>
+            <property name="flat">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QWidget" name="sceneContainer" native="true">
+         <property name="focusPolicy">
+          <enum>Qt::ClickFocus</enum>
+         </property>
+         <widget class="QTextBrowser" name="textBrowser">
+          <property name="geometry">
+           <rect>
+            <x>820</x>
+            <y>-20</y>
+            <width>256</width>
+            <height>192</height>
+           </rect>
+          </property>
+         </widget>
+        </widget>
        </item>
       </layout>
-     </widget>
-    </item>
-    <item row="1" column="0">
-     <widget class="QStackedWidget" name="stackedWidget">
-      <property name="currentIndex">
-       <number>0</number>
-      </property>
-      <widget class="QWidget" name="page"/>
-      <widget class="QWidget" name="page_2"/>
      </widget>
     </item>
    </layout>
@@ -947,9 +962,6 @@ QToolButton:checked
    </property>
   </action>
   <action name="actionClose">
-   <property name="enabled">
-    <bool>false</bool>
-   </property>
    <property name="text">
     <string>Close</string>
    </property>
