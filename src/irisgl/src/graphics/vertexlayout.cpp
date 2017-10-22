@@ -22,12 +22,17 @@ VertexLayout::VertexLayout()
     stride = 0;
 }
 
-void VertexLayout::addAttrib(VertexAttribUsage usage,int type,int count,int sizeInBytes)
+void VertexLayout::addAttrib(VertexAttribUsage usage,int type,int count,int sizeOfAttribInBytes)
 {
-    VertexAttribute attrib = {usage, type, count, sizeInBytes};
+    VertexAttribute attrib = {usage, type, count, sizeOfAttribInBytes};
     attribs.append(attrib);
 
-    stride += sizeInBytes;
+    stride += sizeOfAttribInBytes;
+}
+
+int VertexLayout::getStride()
+{
+    return stride;
 }
 
 // https://stackoverflow.com/a/30106751

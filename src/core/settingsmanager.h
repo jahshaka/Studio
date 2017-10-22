@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QSettings>
 #include <QVariant>
 #include <QDir>
+#include <QStandardPaths>
 
 #include "../globals.h"
 
@@ -38,7 +39,12 @@ public:
     // TODO -- allow changing this location, portable or system
     SettingsManager(QString fileName = "jahsettings.ini") {
         recentlyOpenedFilesSize = 9;
+#ifdef QT_DEBUG
         loadSettings(QDir(Globals::appWorkingDir).filePath(fileName));
+#else
+        loadSettings(QDir(QStandardPaths::writableLocation(QStandardPaths::DataLocation))
+                     .filePath(fileName));
+#endif
     }
 
     void loadSettings(QString path) {

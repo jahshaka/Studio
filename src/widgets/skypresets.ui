@@ -13,6 +13,12 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">QListWidget {
+	padding: 4px;
+	background: #303030;
+}</string>
+  </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="leftMargin">
     <number>0</number>
@@ -50,9 +56,6 @@
       <font>
        <pointsize>8</pointsize>
       </font>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">background-color: #303030</string>
      </property>
     </widget>
    </item>

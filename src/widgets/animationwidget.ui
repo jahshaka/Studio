@@ -14,11 +14,30 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QPushButton {
+   <string notr="true">QPushButton:!enabled, QToolButton:!enabled, QComboBox:!enabled {
+	background: #222;
+	color: #555;
+}
+
+QSplitter::handle {
+	background: black;
+}
+
+QPushButton {
     background-color: #4D4D4D;
     color: #DEDEDE;
     border: 0;
-	padding: 2px 8px;
+	padding: 4px 16px;
+}
+
+QComboBox {
+	padding: 4px 10px;
+}
+
+QToolButton {
+	border: 0;
+	background-color: #4D4D4D;
+	padding: 4px 21px;
 }
 
 QPushButton:hover {
@@ -53,6 +72,10 @@ QPushButton:pressed {
     background-color: #444;
 }
 */
+
+#curvesBtn, #dopeSheetBtn {
+	width: 64px;
+}
 
 #widget_11 &gt; #stopBtn {
 	height: 10px;
@@ -101,6 +124,9 @@ QWidget#controls &gt; QToolButton:hover {
      </property>
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="handleWidth">
+      <number>1</number>
      </property>
      <widget class="QWidget" name="widget" native="true">
       <property name="sizePolicy">
@@ -192,7 +218,7 @@ QWidget#controls &gt; QToolButton:hover {
            <widget class="QWidget" name="widget_5" native="true">
             <layout class="QHBoxLayout" name="horizontalLayout_2">
              <property name="topMargin">
-              <number>9</number>
+              <number>0</number>
              </property>
              <property name="bottomMargin">
               <number>7</number>
@@ -330,8 +356,8 @@ QWidget#controls &gt; QToolButton:hover {
                    <string/>
                   </property>
                   <property name="icon">
-                   <iconset resource="../../icons.qrc">
-                    <normaloff>:/app/icons/start.svg</normaloff>:/app/icons/start.svg</iconset>
+                   <iconset resource="../../app/icons.qrc">
+                    <normaloff>:/icons/anim_skip_left.svg</normaloff>:/icons/anim_skip_left.svg</iconset>
                   </property>
                  </widget>
                 </item>
@@ -341,8 +367,8 @@ QWidget#controls &gt; QToolButton:hover {
                    <string/>
                   </property>
                   <property name="icon">
-                   <iconset resource="../../icons.qrc">
-                    <normaloff>:/app/icons/fastreverse.svg</normaloff>:/app/icons/fastreverse.svg</iconset>
+                   <iconset resource="../../app/icons.qrc">
+                    <normaloff>:/icons/anim_forward_left.svg</normaloff>:/icons/anim_forward_left.svg</iconset>
                   </property>
                  </widget>
                 </item>
@@ -352,8 +378,8 @@ QWidget#controls &gt; QToolButton:hover {
                    <string/>
                   </property>
                   <property name="icon">
-                   <iconset resource="../../icons.qrc">
-                    <normaloff>:/app/icons/play-arrow.svg</normaloff>:/app/icons/play-arrow.svg</iconset>
+                   <iconset resource="../../app/icons.qrc">
+                    <normaloff>:/icons/play-arrow.svg</normaloff>:/icons/play-arrow.svg</iconset>
                   </property>
                  </widget>
                 </item>
@@ -363,8 +389,8 @@ QWidget#controls &gt; QToolButton:hover {
                    <string/>
                   </property>
                   <property name="icon">
-                   <iconset resource="../../icons.qrc">
-                    <normaloff>:/app/icons/stop.svg</normaloff>:/app/icons/stop.svg</iconset>
+                   <iconset resource="../../app/icons.qrc">
+                    <normaloff>:/icons/stop.svg</normaloff>:/icons/stop.svg</iconset>
                   </property>
                  </widget>
                 </item>
@@ -374,8 +400,8 @@ QWidget#controls &gt; QToolButton:hover {
                    <string/>
                   </property>
                   <property name="icon">
-                   <iconset resource="../../icons.qrc">
-                    <normaloff>:/app/icons/fastforward.svg</normaloff>:/app/icons/fastforward.svg</iconset>
+                   <iconset resource="../../app/icons.qrc">
+                    <normaloff>:/icons/anim_forward_right.svg</normaloff>:/icons/anim_forward_right.svg</iconset>
                   </property>
                  </widget>
                 </item>
@@ -385,8 +411,8 @@ QWidget#controls &gt; QToolButton:hover {
                    <string/>
                   </property>
                   <property name="icon">
-                   <iconset resource="../../icons.qrc">
-                    <normaloff>:/app/icons/end.svg</normaloff>:/app/icons/end.svg</iconset>
+                   <iconset resource="../../app/icons.qrc">
+                    <normaloff>:/icons/anim_skip_right.svg</normaloff>:/icons/anim_skip_right.svg</iconset>
                   </property>
                  </widget>
                 </item>
@@ -416,6 +442,9 @@ QWidget#controls &gt; QToolButton:hover {
              <item>
               <widget class="QWidget" name="widget_8" native="true">
                <layout class="QHBoxLayout">
+                <property name="spacing">
+                 <number>0</number>
+                </property>
                 <item>
                  <widget class="QPushButton" name="curvesBtn">
                   <property name="text">
@@ -465,7 +494,7 @@ QWidget#controls &gt; QToolButton:hover {
                <property name="minimumSize">
                 <size>
                  <width>0</width>
-                 <height>39</height>
+                 <height>35</height>
                 </size>
                </property>
               </widget>
@@ -483,6 +512,9 @@ QWidget#controls &gt; QToolButton:hover {
            <horstretch>0</horstretch>
            <verstretch>1</verstretch>
           </sizepolicy>
+         </property>
+         <property name="styleSheet">
+          <string notr="true"/>
          </property>
         </widget>
        </item>
@@ -507,7 +539,7 @@ QWidget#controls &gt; QToolButton:hover {
   </customwidget>
  </customwidgets>
  <resources>
-  <include location="../../icons.qrc"/>
+  <include location="../../app/icons.qrc"/>
  </resources>
  <connections/>
 </ui>

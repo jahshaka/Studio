@@ -9,6 +9,10 @@
 #For more information see the LICENSE file
 #**************************************************************************
 
+include(src/zip/zip.pri)
+include(src/assimp/assimp.pri)
+include(src/libovr/libovr.pri)
+
 HEADERS += \
     $$PWD/src/animation/nodekeyframe.h \
     $$PWD/src/animation/keyframeanimation.h \
@@ -74,10 +78,22 @@ HEADERS += \
     $$PWD/src/geometry/plane.h \
     $$PWD/src/geometry/frustum.h \
     $$PWD/src/math/transform.h \
-    $$PWD/src/core/logger.h
-
-include(src/assimp/assimp.pri)
-include(src/libovr/libovr.pri)
+    $$PWD/src/core/logger.h \
+    $$PWD/src/core/performancetimer.h \
+    $$PWD/src/graphics/renderlist.h \
+    $$PWD/src/graphics/renderstates.h \
+    $$PWD/src/graphics/utils/linemeshbuilder.h \
+    $$PWD/src/graphics/utils/shapehelper.h \
+    $$PWD/src/materials/colormaterial.h \
+    $$PWD/src/postprocesses/fxaapostprocess.h \
+    $$PWD/src/graphics/graphicsdevice.h \
+    $$PWD/src/widgets/renderwidget.h \
+    $$PWD/src/graphics/spritebatch.h \
+    $$PWD/src/graphics/font.h \
+    $$PWD/src/graphics/blendstate.h \
+    $$PWD/src/graphics/depthstate.h \
+    $$PWD/src/graphics/rasterizerstate.h \
+    $$PWD/src/content/contentmanager.h
 
 SOURCES += \
     $$PWD/src/graphics/mesh.cpp \
@@ -120,7 +136,21 @@ SOURCES += \
     $$PWD/src/scenegraph/scenenode.cpp \
     $$PWD/src/geometry/plane.cpp \
     $$PWD/src/geometry/frustum.cpp \
-    $$PWD/src/core/logger.cpp
+    $$PWD/src/core/logger.cpp \
+    $$PWD/src/graphics/renderlist.cpp \
+    $$PWD/src/graphics/renderitem.cpp \
+    $$PWD/src/graphics/utils/linemeshbuilder.cpp \
+    $$PWD/src/graphics/utils/shapehelper.cpp \
+    $$PWD/src/materials/colormaterial.cpp \
+    $$PWD/src/postprocesses/fxaapostprocess.cpp \
+    $$PWD/src/graphics/graphicsdevice.cpp \
+    $$PWD/src/widgets/renderwidget.cpp \
+    $$PWD/src/graphics/spritebatch.cpp \
+    $$PWD/src/graphics/font.cpp \
+    $$PWD/src/graphics/blendstate.cpp \
+    $$PWD/src/graphics/depthstate.cpp \
+    $$PWD/src/graphics/rasterizerstate.cpp \
+    $$PWD/src/content/contentmanager.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

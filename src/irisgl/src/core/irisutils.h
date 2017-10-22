@@ -31,6 +31,14 @@ public:
         auto path = QDir::cleanPath(basePath.absolutePath() + QDir::separator() + relToApp);
         return path;
     }
+
+    template<typename... Args>
+    static QString join(Args const&... args) {
+        QString result;
+        int unpack[]{ 0, (result += [=](QString const& s) { return s + "/"; }(args), 0) ... };
+        static_cast<void>(unpack);
+        return result;
+    }
 };
 
 #endif // IRISUTILS_H

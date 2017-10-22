@@ -1,0 +1,586 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ProjectManager</class>
+ <widget class="QWidget" name="ProjectManager">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>746</width>
+    <height>503</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QMessageBox QPushButton  {
+    border: none;
+    background-color: #212121;
+    padding: 4px 16px;
+}
+
+QMessageBox QPushButton:hover {
+    background-color: #555;
+}
+
+QMenu {
+    background-color: #212121;
+}
+
+QMenu::item {
+    /* sets background of menu item. set this to something non-transparent
+        if you want menu color and menu item color to be different */
+    background-color: #212121;
+}
+
+QMenu::item:selected { /* when user selects item using mouse or keyboard */
+    background-color: #3498db;
+	color: white;
+}
+
+#label {
+	background: #303030;
+	padding: 4px;
+}
+
+/* ================== */
+
+QScrollBar:vertical {
+    background: #17181a;
+	width: 16px;
+}
+
+QScrollBar::handle:vertical {
+    background: #5a5f66;
+	border: 1px solid black;
+	min-height: 32px;
+	margin: 2px;
+	border-radius: 6px;
+	/*border-radius: 5px;	/* this appears to be tied to the (width of the scrollbar / 2) */
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #6b6f77;
+}
+
+QScrollBar::add-page:vertical,  QScrollBar::sub-page:vertical {
+    background: #17181a;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+      border: none;
+      background: none;
+}
+
+/* ========================== */
+
+#header {
+	background: #111;
+	border-bottom: 1px solid black;
+}
+
+#worlds_menu, #tutorial_menu {
+	font-size: 17px;
+	padding: 12px;
+}
+
+#worlds_menu {
+	border-bottom-width: 4px;
+	border-bottom-style: solid;
+	border-color: white;
+	border-radius: 0px;
+}
+
+#tutorial_menu {
+	color: #777;
+}
+
+#ProjectManager {
+	background: #1a1a1a;
+}
+
+#lineEdit {
+	font-size: 15px;
+	background: #2f2f2f;
+	padding: 4px;
+	border: 0;
+}
+
+QComboBox {
+    background: #4D4D4D;
+    color: #BBB;
+    border:  0;
+}
+
+QComboBox:item {
+
+}
+
+QComboBox QAbstractItemView {
+   background-color: #212121;
+    selection-background-color: red;
+    border: 0;
+    outline: none;
+}
+
+QComboBox::drop-down {
+    border:  0;
+    /*background: #4D4D4D; */
+}
+
+QComboBox::down-arrow {
+	image: url(:/icons/down_arrow_check.png);
+	width: 18px;
+	height: 14px;
+ }
+
+#newProject {
+	background: #4898ff;
+	color: white;
+}
+
+#newProject:hover {
+	background-color: #51a1d6;
+}
+
+
+QSlider::groove:horizontal {
+   /* height: 8px; /* the groove expands to the size of the slider by default. by giving it a height, it has a fixed size */
+    background: #404040;
+}
+
+QSlider::handle:horizontal {
+    background: #AFAFAF;
+    width: 10px;
+    margin: -2px 0; /* handle is placed by default on the contents rect of the groove. Expand outside the groove */
+}
+
+#newProject {
+
+}
+
+#samples, #projects {
+	padding: 8px;
+	color: white;
+}
+
+#listWidget, #listWidget_2 {
+	background: #fff;
+}
+
+#listWidget {
+	padding-top: 4px;
+	padding-left: 2px;
+}
+
+QPushButton, QToolButton {
+	border: 0;
+	padding: 8px 10px;
+	background: #444;
+}
+
+QPushButton::hover {
+	background: #555;
+}
+
+QToolButton::hover {
+	background: #555;
+}
+
+/*
+QListWidget {
+	background: #404040;
+	color: #CECECE;
+	padding-left: 16px;
+	padding-top: 24px;
+}*/
+
+QListWidget::item {
+	border: 4px solid transparent;
+	padding: 6px;
+	margin-bottom: 6px;
+	margin-right: 6px;
+	outline: none;
+}
+
+QListWidget::item:hover {
+	padding: 6px;
+	margin-bottom: 6px;
+	margin-right: 6px;
+	border: 4px solid #4898ff;
+	/*background: rgba(71, 151, 255, 0.3);*/
+}
+
+QListWidget::item:selected {
+	border: 4px solid transparent;
+	padding: 6px;
+	margin-bottom: 6px;
+	margin-right: 6px;
+	background: #4998ff;
+	color: #CECECE;
+}</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout_2">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <property name="verticalSpacing">
+    <number>0</number>
+   </property>
+   <item row="0" column="0">
+    <widget class="QWidget" name="header" native="true">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>54</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>16777215</height>
+      </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,0">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <spacer name="horizontalSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QLabel" name="worlds_menu">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="text">
+         <string>Worlds</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="horizontalSpacer_4">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <layout class="QGridLayout" name="gridLayout">
+     <property name="leftMargin">
+      <number>9</number>
+     </property>
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>9</number>
+     </property>
+     <property name="bottomMargin">
+      <number>9</number>
+     </property>
+     <item row="0" column="0">
+      <widget class="QWidget" name="widget_3" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <layout class="QHBoxLayout" name="horizontalLayout_3">
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>12</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>2</number>
+        </property>
+        <item>
+         <spacer name="horizontalSpacer_3">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QLabel" name="label">
+          <property name="maximumSize">
+           <size>
+            <width>28</width>
+            <height>28</height>
+           </size>
+          </property>
+          <property name="styleSheet">
+           <string notr="true"/>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+          <property name="pixmap">
+           <pixmap resource="../../app/icons.qrc">:/icons/search.svg</pixmap>
+          </property>
+          <property name="scaledContents">
+           <bool>true</bool>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="lineEdit">
+          <property name="placeholderText">
+           <string>Search recent worlds...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer_5">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_3">
+          <property name="text">
+           <string>Version: 0.4</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item row="2" column="0">
+      <widget class="QWidget" name="widget_2" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">#aaaaaabrowseProjects {
+	background: transparent;
+	font-size: 9px;
+	font-weight: bold;
+}
+
+#aaaaabrowseProjects::hover {
+	color: #3498db;
+}</string>
+       </property>
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>3</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="label_2">
+          <property name="text">
+           <string>Preview Size</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="tilePreview">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>84</width>
+            <height>24</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="currentText">
+           <string>Normal</string>
+          </property>
+          <property name="currentIndex">
+           <number>1</number>
+          </property>
+          <item>
+           <property name="text">
+            <string>Small</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Normal</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Large</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Huge</string>
+           </property>
+          </item>
+         </widget>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer_2">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>379</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="browseProjects">
+          <property name="styleSheet">
+           <string notr="true">background: transparent</string>
+          </property>
+          <property name="text">
+           <string>Create Sample World</string>
+          </property>
+          <property name="flat">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="importWorld">
+          <property name="text">
+           <string>Import World</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="newProject">
+          <property name="text">
+           <string>+ Create New World</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QWidget" name="pmContainer" native="true"/>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources>
+  <include location="../../app/icons.qrc"/>
+ </resources>
+ <connections/>
+</ui>

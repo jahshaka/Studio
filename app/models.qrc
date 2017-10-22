@@ -1,0 +1,18 @@
+<RCC>
+    <qresource prefix="/">
+        <file>models/gear.obj</file>
+        <file>models/head.obj</file>
+        <file>models/head.png</file>
+        <file>models/rot_circle.obj</file>
+        <file>models/scale_arrow.obj</file>
+        <file>models/trans_arrow.obj</file>
+        <file>models/cube.obj</file>
+        <file>content/primitives/cube.obj</file>
+        <file>content/primitives/cylinder.obj</file>
+        <file>content/primitives/plane.obj</file>
+        <file>content/primitives/sphere.obj</file>
+        <file>content/primitives/torus.obj</file>
+        <file>content/primitives/arrow.obj</file>
+        <file>models/ground.obj</file>
+    </qresource>
+</RCC>

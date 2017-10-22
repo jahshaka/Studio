@@ -40,6 +40,7 @@ class FullScreenQuad;
 class VrDevice;
 class PostProcessManager;
 class PostProcessContext;
+class PerformanceTimer;
 
 /**
  * This is a basic forward renderer.
@@ -48,6 +49,8 @@ class PostProcessContext;
 class ForwardRenderer
 {
     QOpenGLFunctions_3_2_Core* gl;
+    GraphicsDevicePtr graphics;
+
     RenderData* renderData;
 
     /**
@@ -77,7 +80,13 @@ class ForwardRenderer
     Texture2DPtr depthRenderTexture;
     Texture2DPtr finalRenderTexture;
 
+    PerformanceTimer* perfTimer;
+
 public:
+
+    bool renderLightBillboards;
+
+    GraphicsDevicePtr getGraphicsDevice();
 
     /**
      * Sets selected scene node. If this node is a mesh, it is rendered in wireframe mode
@@ -95,19 +104,20 @@ public:
     }
 
     //all scenenodes' transform should be updated before calling this functions
+    void renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePtr cam, bool clearRenderLists = false);
     void renderScene(float delta, Viewport* vp);
-    void renderSceneVr(float delta, Viewport* vp);
+    void renderSceneVr(float delta, Viewport* vp, bool useViewer = true);
 
     PostProcessManagerPtr getPostProcessManager();
 
-    static ForwardRendererPtr create();
+    static ForwardRendererPtr create(bool useVr = true);
 
     bool isVrSupported();
 
     ~ForwardRenderer();
 
 private:
-    ForwardRenderer();
+    ForwardRenderer(bool supportsVr = true);
 
     void renderNode(RenderData* renderData, ScenePtr node);
     void renderSky(RenderData* renderData);

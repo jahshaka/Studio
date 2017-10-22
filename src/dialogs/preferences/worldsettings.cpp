@@ -11,7 +11,11 @@ For more information see the LICENSE file
 #include "worldsettings.h"
 #include "ui_worldsettings.h"
 #include "../../core/settingsmanager.h"
-#include <QDebug>
+#include "../../constants.h"
+#include "../../uimanager.h"
+#include "../../widgets/sceneviewwidget.h"
+#include <QFileDialog>
+#include <QStandardPaths>
 
 WorldSettings::WorldSettings(SettingsManager* settings) :
     QWidget(nullptr),
@@ -21,50 +25,46 @@ WorldSettings::WorldSettings(SettingsManager* settings) :
 
     this->settings = settings;
 
-    connect(ui->matrixRadio, SIGNAL(toggled(bool)),
-            this, SLOT(onDefaultSceneChosen()));
+    connect(ui->browseProject, SIGNAL(pressed()), SLOT(changeDefaultDirectory()));
 
-    connect(ui->gridRadio, SIGNAL(toggled(bool)),
-            this, SLOT(onDefaultSceneChosen()));
-
-    connect(ui->comboBox, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(onGizmoOptionChosen(int)));
-
-    connect(ui->outlineWidth, SIGNAL(valueChanged(int)),
-            this, SLOT(outlineWidthChanged(int)));
+    connect(ui->outlineWidth, SIGNAL(valueChanged(double)),
+            this, SLOT(outlineWidthChanged(double)));
 
     connect(ui->outlineColor, SIGNAL(onColorChanged(QColor)),
             this, SLOT(outlineColorChanged(QColor)));
 
-    setupDefaultSceneOptions();
-    setupGizmoOptions();
+    connect(ui->projectDefault, SIGNAL(textChanged(QString)),
+            this, SLOT(projectDirectoryChanged(QString)));
+
+    connect(ui->showFPS, SIGNAL(toggled(bool)),
+            this, SLOT(showFpsChanged(bool)));
+
+    setupDirectoryDefaults();
     setupOutline();
-}
-
-void WorldSettings::setupGizmoOptions()
-{
-    auto value = settings->getValue("gizmo_style", 0);
-    auto index = value.toString().toInt();
-
-    ui->comboBox->addItem("Thick");
-    ui->comboBox->addItem("Slim");
-    ui->comboBox->addItem("VR(Experimental)");
-
-    ui->comboBox->setCurrentIndex(index);
 }
 
 void WorldSettings::setupOutline()
 {
-    outlineWidth = settings->getValue("outline_width", 5).toInt();
-    outlineColor = settings->getValue("outline_color", "#C8C8FF").toString();
+    outlineWidth = settings->getValue("outline_width", 6).toInt();
+    outlineColor = settings->getValue("outline_color", "#3498db").toString();
+    showFps = settings->getValue("show_fps", false).toBool();
 
     ui->outlineWidth->setValue(outlineWidth);
     ui->outlineColor->setColor(outlineColor);
+    ui->showFPS->setChecked(showFps);
 }
 
-void WorldSettings::outlineWidthChanged(int width)
+void WorldSettings::changeDefaultDirectory()
 {
-    settings->setValue("outline_width", width);
+    QFileDialog projectDir;
+    defaultProjectDirectory = projectDir.getExistingDirectory(nullptr, "Select project dir", defaultProjectDirectory);
+    if (!defaultProjectDirectory.isNull())
+        ui->projectDefault->setText(defaultProjectDirectory);
+}
+
+void WorldSettings::outlineWidthChanged(double width)
+{
+    settings->setValue("outline_width", (int) width);
     outlineWidth = width;
 }
 
@@ -74,35 +74,29 @@ void WorldSettings::outlineColorChanged(QColor color)
     outlineColor = color;
 }
 
-void WorldSettings::setupDefaultSceneOptions()
+void WorldSettings::showFpsChanged(bool show)
 {
-    auto defaultScene = settings->getValue("default_scene", "matrix").toString();
-
-    if (defaultScene == "matrix") {
-        ui->matrixRadio->setChecked(true);
-    } else {
-        ui->gridRadio->setChecked(true);
-    }
+    showFps = show;
+    if (UiManager::sceneViewWidget)
+        UiManager::sceneViewWidget->setShowFps(show);
 }
 
-void WorldSettings::onGizmoOptionChosen(int index)
+void WorldSettings::projectDirectoryChanged(QString path)
 {
-    //auto index = this->ui->comboBox->currentIndex();
-    settings->setValue("gizmo_style", index);
-
-    //todo: modify appearance in scene
-}
-
-void WorldSettings::onDefaultSceneChosen()
-{
-    if (ui->matrixRadio->isChecked()) {
-        settings->setValue("default_scene", "matrix");
-    } else {
-        settings->setValue("default_scene", "grid");
-    }
+    settings->setValue("default_directory", path);
+    defaultProjectDirectory = path;
 }
 
 WorldSettings::~WorldSettings()
 {
     delete ui;
+}
+
+void WorldSettings::setupDirectoryDefaults()
+{
+    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                + Constants::PROJECT_FOLDER;
+    defaultProjectDirectory = settings->getValue("default_directory", path).toString();
+
+    ui->projectDefault->setText(defaultProjectDirectory);
 }

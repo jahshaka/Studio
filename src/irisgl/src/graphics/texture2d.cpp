@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "texture2d.h"
 #include <QDebug>
+#include <QOpenGLFunctions_3_2_Core>
 
 namespace iris
 {
@@ -132,6 +133,9 @@ Texture2DPtr Texture2D::create(int width, int height,QOpenGLTexture::TextureForm
 
 void Texture2D::resize(int width, int height)
 {
+    if(texture->width() == width && texture->height() == height)
+        return;
+
     auto texFormat = texture->format();
     auto minFilter = texture->minificationFilter();
     auto magFilter = texture->magnificationFilter();
@@ -147,6 +151,37 @@ void Texture2D::resize(int width, int height)
     texture->setSize(width, height);
     texture->create();
     texture->allocateStorage();
+}
+
+Texture2D::Texture2D(QOpenGLTexture *tex)
+{
+    this->texture = tex;
+    gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+}
+
+int Texture2D::getWidth()
+{
+    return texture->width();
+}
+
+int Texture2D::getHeight()
+{
+    return texture->height();
+}
+
+void Texture2D::setFilters(QOpenGLTexture::Filter minFilter, QOpenGLTexture::Filter magFilter)
+{
+    texture->bind();
+    texture->setMinMagFilters(minFilter, magFilter);
+    texture->release();
+}
+
+void Texture2D::setWrapMode(QOpenGLTexture::WrapMode wrapS, QOpenGLTexture::WrapMode wrapT)
+{
+    texture->bind();
+    texture->setWrapMode(QOpenGLTexture::DirectionS, wrapS);
+    texture->setWrapMode(QOpenGLTexture::DirectionT, wrapT);
+    texture->release();
 }
 
 }

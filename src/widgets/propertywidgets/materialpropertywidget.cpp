@@ -48,7 +48,7 @@ void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneN
         if (shaderFile.exists()) {
             material->generate(shaderFile.absoluteFilePath());
         } else {
-            for (auto asset : AssetManager::assets) {
+            for (auto asset : AssetManager::getAssets()) {
                 if (asset->type == AssetType::Shader) {
                     if (asset->fileName == material->getName() + ".shader") {
                         material->generate(asset->path, true);
@@ -95,7 +95,7 @@ void MaterialPropertyWidget::setupShaderSelector()
         materialSelector->addItem(QFileInfo(shaderName).baseName());
     }
 
-    for (auto asset : AssetManager::assets) {
+    for (auto asset : AssetManager::getAssets()) {
         if (asset->type == AssetType::Shader) {
             materialSelector->addItem(QFileInfo(asset->fileName).baseName());
         }
@@ -127,5 +127,5 @@ void MaterialPropertyWidget::onPropertyChangeStart(iris::Property* prop)
 
 void MaterialPropertyWidget::onPropertyChangeEnd(iris::Property* prop)
 {
-    UiManager::undoStack->push(new ChangeMaterialPropertyCommand(material, prop->name, startValue, prop->getValue()));
+    UiManager::pushUndoStack(new ChangeMaterialPropertyCommand(material, prop->name, startValue, prop->getValue()));
 }

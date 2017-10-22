@@ -38,10 +38,7 @@ class SceneReader : public AssetIOBase
 
 
 public:
-    iris::ScenePtr readScene(QString filePath,
-                             iris::PostProcessManagerPtr postMan,
-                             EditorData **editorData = nullptr);
-    iris::ScenePtr readScene(QString filePath,
+    iris::ScenePtr readScene(const QString &projectPath,
                              const QByteArray &sceneBlob,
                              iris::PostProcessManagerPtr postMan,
                              EditorData **editorData = nullptr);

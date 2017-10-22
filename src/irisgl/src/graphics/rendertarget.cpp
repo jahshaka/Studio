@@ -6,6 +6,32 @@
 namespace iris
 {
 
+int RenderTarget::getWidth() const
+{
+    return width;
+}
+
+int RenderTarget::getHeight() const
+{
+    return height;
+}
+
+// https://stackoverflow.com/questions/17347129/opengl-qt-render-to-texture-and-display-it-back
+// todo: add options for floating point textures and other internal formats besides GL_RGBA
+QImage RenderTarget::toImage()
+{
+    const int pixelSize = 4;// GL_RGBA
+    uchar* pixels = new uchar[this->width * this->height * pixelSize];
+
+    bind();
+    gl->glReadPixels( 0,0,  this->width, this->height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    unbind();
+
+    auto image = QImage(pixels, this->width, this->height, QImage::Format_ARGB32);
+    image = image.rgbSwapped();
+    return image.mirrored(false, true);
+}
+
 RenderTarget::RenderTarget(int width, int height):
     width(width),
     height(height)
@@ -20,7 +46,7 @@ RenderTarget::RenderTarget(int width, int height):
 
     gl->glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, renderBufferId);
 
-    checkStatus();
+    //checkStatus();
 
     gl->glBindRenderbuffer(GL_RENDERBUFFER, 0);
     gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -69,6 +95,12 @@ void RenderTarget::checkStatus()
 
 void RenderTarget::resize(int width, int height, bool resizeTextures)
 {
+    if (this->width == width && this->height == height)
+        return;
+
+    this->width = width;
+    this->height = height;
+
     gl->glBindRenderbuffer(GL_RENDERBUFFER, renderBufferId);
     gl->glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
     gl->glBindRenderbuffer(GL_RENDERBUFFER, 0);
@@ -85,11 +117,22 @@ void RenderTarget::resize(int width, int height, bool resizeTextures)
 
 void RenderTarget::addTexture(Texture2DPtr tex)
 {
+    if (textures.count()!=0) {
+        // this assertion should only hold true if this isnt the first texture
+        Q_ASSERT_X(width==tex->getWidth() && height==tex->getHeight(),
+               "RenderTarget",
+               "Size of attached texture should be the same as size of render target");
+    }
+
     textures.append(tex);
 }
 
 void RenderTarget::setDepthTexture(Texture2DPtr depthTex)
 {
+    Q_ASSERT_X(width==depthTex->getWidth() && height==depthTex->getHeight(),
+               "RenderTarget",
+               "Size of attached depth texture should be the same as size of render target");
+
     clearRenderBuffer();
     depthTexture = depthTex;
 }
@@ -99,12 +142,17 @@ void RenderTarget::clearTextures()
     textures.clear();
 }
 
+void RenderTarget::clearDepthTexture()
+{
+    depthTexture.reset();
+}
+
 void RenderTarget::clearRenderBuffer()
 {
     gl->glBindFramebuffer(GL_FRAMEBUFFER, fboId);
     gl->glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, 0);
 
-    checkStatus();
+    //checkStatus();
 
     gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -123,7 +171,7 @@ void RenderTarget::bind()
     if (!!depthTexture)
         gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture->getTextureId(), 0);
 
-    checkStatus();
+    //checkStatus();
 }
 
 void RenderTarget::unbind()

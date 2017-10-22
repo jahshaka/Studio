@@ -36,7 +36,6 @@ class QTreeWidget;
 class QIcon;
 class QUndoStack;
 
-//custom ui
 class TransformSlidersUi;
 class LightLayerWidget;
 class ModelLayerWidget;
@@ -56,6 +55,7 @@ class AdvancedTransformGizmo;
 class TransformWidget;
 
 class SceneViewWidget;
+class SceneHierarchyWidget;
 
 class EditorCameraController;
 class SettingsManager;
@@ -65,16 +65,19 @@ class AboutDialog;
 
 class JahRenderer;
 
+class ProjectManager;
+
 class GizmoHitData;
 class AdvancedGizmoHandle;
 class MaterialPreset;
+class AssetWidget;
+class SceneNodePropertiesWidget;
 
 class QOpenGLFunctions_3_2_Core;
 
 enum class SceneNodeType;
 
 class Database;
-
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -83,12 +86,10 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
-
-    void setProjectTitle(QString projectTitle);
-
     void setSceneAnimTime(float time);
     void stopAnimWidget();
 
+    void initialize();
     void setupProjectDB();
     void setupUndoRedo();
 
@@ -98,11 +99,13 @@ public:
     bool handleMouseWheel(QWheelEvent *event);
     bool eventFilter(QObject *obj, QEvent *event);
 
+    virtual void closeEvent(QCloseEvent *event);
+
     void setSettingsManager(SettingsManager* settings);
     SettingsManager* getSettingsManager();
 
     iris::ScenePtr getScene();
-    void openProject(QString project, bool startupLoad = false);
+
     //void setGizmoTransformMode(GizmoTransformMode mode);
 
     /**
@@ -116,7 +119,7 @@ public:
      * @param relToApp file path relative to application
      * @return
      */
-    QString getAbsoluteAssetPath(QString relToApp);
+    QString getAbsoluteAssetPath(QString pathRelativeToApp);
 
     void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
     void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
@@ -124,12 +127,10 @@ public:
 
 private:
 
-    /**
-     * Sets up the button for vr
-     */
+    // sets up the button for vr
     void setupVrUi();
 
-    //menus
+    // menus
     void setupFileMenu();
     void setupViewMenu();
     void setupHelpMenu();
@@ -141,18 +142,13 @@ private:
     void initTorusLayerUi();
 
     void setupPropertyUi();
-    //void setupPropertyTabs(SceneNode* node);
 
     void setupLayerManager();
 
     void rebuildTree();
-    //void populateTree(QStandardItem* treeNode,SceneNode* sceneNode);
-    //void populateTree(QTreeWidgetItem* treeNode,SceneNode* sceneNode);
     void deselectTreeItems();
 
     void setupDefaultScene();
-
-    void resizeEvent(QResizeEvent* event);
 
     QIcon getIconFromSceneNodeType(SceneNodeType type);
 
@@ -169,8 +165,11 @@ private:
     bool isModelExtension(QString extension);
 
 public slots:
+    void exportSceneAsZip();
+
     //scenegraph
     void addPlane();
+    void addGround();
     void addCone();
     void addCube();
     void addTorus();
@@ -179,8 +178,6 @@ public slots:
     void addEmpty();
     void addViewer();
     void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
-    void addTexturedPlane();
-    void addViewPoint();
     void addDragPlaceholder();
 
     //context menu functions
@@ -202,25 +199,24 @@ public slots:
 
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
 
-    //TORUS SLIDERS
     void saveScene();
-    void saveSceneAs();
-    void loadScene();
-//    QString loadSceneDelegate();
-    void openRecentFile();
 
     void showPreferences();
     void exitApp();
     void newScene();
-    void newProject(const QString&, const QString&);
 
     void showAboutDialog();
     void showLicenseDialog();
-    void openBlogUrl();
+    void openFacebookUrl();
     void openWebsiteUrl();
 
+    void newProject(const QString&, const QString&);
+    void openProject(bool playMode = false);
+
+    void toggleWidgets(bool toggle);
+
     iris::ScenePtr createDefaultScene();
-    void initializeGraphics(SceneViewWidget* widget, QOpenGLFunctions_3_2_Core* gl);
+    void initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*);
 
     void useFreeCamera();
     void useArcballCam();
@@ -234,12 +230,19 @@ public slots:
     void undo();
     void redo();
 
+    void takeScreenshot();
+    void toggleLightWires(bool state);
+    void showProjectManager();
+    void showProjectManagerInternal();
+
 private slots:
     void translateGizmo();
     void rotateGizmo();
     void scaleGizmo();
 
     void onPlaySceneButton();
+    void enterEditMode();
+    void enterPlayMode();
 
 private:
     Ui::MainWindow *ui;
@@ -286,11 +289,29 @@ private:
     QActionGroup* cameraGroup;
 
     Database *db;
+    ProjectManager *pmContainer;
 
     QUndoStack* undoStack;
 
     bool vrMode;
     QPushButton* vrButton;
+    QPushButton* pmButton;
+    QMainWindow *dialog;
+
+    QDockWidget *sceneHeirarchyDock;
+    SceneHierarchyWidget *sceneHierarchyWidget;
+
+    QDockWidget *sceneNodePropertiesDock;
+    SceneNodePropertiesWidget *sceneNodePropertiesWidget;
+
+    QDockWidget *presetsDock;
+    QTabWidget *presetsTabWidget;
+
+    QDockWidget *assetDock;
+    AssetWidget *assetWidget;
+
+    QDockWidget *animationDock;
+    AnimationWidget *animationWidget;
 };
 
 #endif // MAINWINDOW_H

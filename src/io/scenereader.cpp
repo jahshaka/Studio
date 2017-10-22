@@ -54,36 +54,16 @@ For more information see the LICENSE file
 #include "../irisgl/src/postprocesses/materialpostprocess.h"
 #include "../irisgl/src/postprocesses/radialblurpostprocess.h"
 #include "../irisgl/src/postprocesses/ssaopostprocess.h"
+#include "../irisgl/src/postprocesses/fxaapostprocess.h"
 
 #include "../constants.h"
 
-iris::ScenePtr SceneReader::readScene(QString filePath,
-                                      iris::PostProcessManagerPtr postMan,
-                                      EditorData **editorData)
-{
-    dir = AssetIOBase::getDirFromFileName(filePath);
-    QFile file(filePath);
-    file.open(QIODevice::ReadOnly);
-
-    auto data = file.readAll();
-    auto doc = QJsonDocument::fromJson(data);
-
-    auto projectObj = doc.object();
-    auto scene = readScene(projectObj);
-    if(editorData)
-        *editorData = readEditorData(projectObj);
-
-    readPostProcessData(projectObj, postMan);
-
-    return scene;
-}
-
-iris::ScenePtr SceneReader::readScene(QString filePath,
+iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
                                       iris::PostProcessManagerPtr postMan,
                                       EditorData **editorData)
 {
-    dir = AssetIOBase::getDirFromFileName(filePath);
+    dir = projectPath;
     auto doc = QJsonDocument::fromBinaryData(sceneBlob);
     auto projectObj = doc.object();
 
@@ -92,13 +72,16 @@ iris::ScenePtr SceneReader::readScene(QString filePath,
     if (editorData) *editorData = readEditorData(projectObj);
     readPostProcessData(projectObj, postMan);
 
+    for (auto node : scene->rootNode->children) {
+        node->applyDefaultPose();
+    }
+
     return scene;
 }
 
 EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
 {
-    if(projectObj["editor"].isNull())
-        return nullptr;
+    if (projectObj["editor"].isNull()) return nullptr;
 
     auto editorObj = projectObj["editor"].toObject();
 
@@ -114,7 +97,7 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     auto editorData = new EditorData();
     editorData->editorCamera = camera;
     editorData->distFromPivot = (float)camObj["distanceFromPivot"].toDouble(5.0f);
-
+    editorData->showLightWires = editorObj["showLightWires"].toBool();
 
     return editorData;
 }
@@ -141,6 +124,8 @@ void SceneReader::readPostProcessData(QJsonObject &projectObj, iris::PostProcess
                process = iris::RadialBlurPostProcess::create();
             if(name == "ssao")
                process = iris::SSAOPostProcess::create();
+            if(name == "fxaa")
+               process = iris::FxaaPostProcess::create();
             //if(name == "material")
             //   process = iris::MaterialPostProcess::create();
 
@@ -204,6 +189,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     }
 
     if (useTex) {
+        scene->skyBoxTextures[0] = front;
+        scene->skyBoxTextures[1] = back;
+        scene->skyBoxTextures[2] = top;
+        scene->skyBoxTextures[3] = bottom;
+        scene->skyBoxTextures[4] = left;
+        scene->skyBoxTextures[5] = right;
         scene->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
     }
 
@@ -442,9 +433,9 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
 
     //TODO: move this to the sceneview widget or somewhere more appropriate
     if (lightNode->lightType == iris::LightType::Directional) {
-        lightNode->icon = iris::Texture2D::load(":/app/icons/light.png");
+        lightNode->icon = iris::Texture2D::load(":/icons/light.png");
     } else {
-        lightNode->icon = iris::Texture2D::load(":/app/icons/bulb.png");
+        lightNode->icon = iris::Texture2D::load(":/icons/bulb.png");
     }
 
     lightNode->iconSize = 0.5f;
@@ -530,7 +521,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
     if (shaderFile.exists()) {
         m->generate(shaderFile.absoluteFilePath());
     } else {
-        for (auto asset : AssetManager::assets) {
+        for (auto asset : AssetManager::getAssets()) {
             if (asset->type == AssetType::Shader) {
                 if (asset->fileName == mat["name"].toString() + ".shader") {
                     //qDebug() << asset->path;
@@ -562,7 +553,7 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
     if (!assimpScenes.contains(filePath)) {
         QList<iris::MeshPtr> meshList;
         QMap<QString, iris::SkeletalAnimationPtr> animationss;
-        iris::GraphicsHelper::loadAllMeshesAndAnimationsFromStore<Asset*>(AssetManager::assets,
+        iris::GraphicsHelper::loadAllMeshesAndAnimationsFromStore<Asset*>(AssetManager::getAssets(),
                                                                           filePath,
                                                                           meshList,
                                                                           animationss);

@@ -36,7 +36,7 @@ ModelPresets::ModelPresets(QWidget *parent) :
 //    addItem("Cone","app/modelpresets/cone.png");
     addItem("Cube","app/modelpresets/cube.png");
     addItem("Cylinder","app/modelpresets/cylinder.png");
-    //addItem("IcoSphere",":/app/modelpresets/icosphere.png");
+    //addItem("IcoSphere",":/modelpresets/icosphere.png");
     addItem("Sphere","app/modelpresets/sphere.png");
     addItem("Torus","app/modelpresets/torus.png");
 

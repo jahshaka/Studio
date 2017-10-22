@@ -1,11 +1,12 @@
 #include "addscenenodecommand.h"
+#include "../uimanager.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "../mainwindow.h"
+#include "../widgets/scenehierarchywidget.h"
 
 
-AddSceneNodeCommand::AddSceneNodeCommand(MainWindow* mainWindow, iris::SceneNodePtr parentNode, iris::SceneNodePtr sceneNode)
+AddSceneNodeCommand::AddSceneNodeCommand(iris::SceneNodePtr parentNode, iris::SceneNodePtr sceneNode)
 {
-    this->mainWindow = mainWindow;
     this->parentNode = parentNode;
     this->sceneNode = sceneNode;
 }
@@ -13,13 +14,13 @@ AddSceneNodeCommand::AddSceneNodeCommand(MainWindow* mainWindow, iris::SceneNode
 void AddSceneNodeCommand::undo()
 {
     sceneNode->removeFromParent();
-    mainWindow->sceneNodeSelected(iris::SceneNodePtr());
-    mainWindow->repopulateSceneTree();
+    UiManager::sceneHierarchyWidget->removeChild(sceneNode);
+    UiManager::mainWindow->sceneNodeSelected(iris::SceneNodePtr());
 }
 
 void AddSceneNodeCommand::redo()
 {
-    parentNode->addChild(sceneNode);
-    mainWindow->sceneNodeSelected(sceneNode);
-    mainWindow->repopulateSceneTree();
+    parentNode->addChild(sceneNode, false);
+    UiManager::sceneHierarchyWidget->insertChild(sceneNode);
+    UiManager::mainWindow->sceneNodeSelected(sceneNode);
 }

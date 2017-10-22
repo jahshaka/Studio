@@ -92,6 +92,7 @@ public:
     SceneNodePtr createDuplicate() override;
     virtual void submitRenderItems() override;
     float getMeshRadius();
+    BoundingSphere getTransformedBoundingSphere();
 
     //void updateAnimation(float time) override;
 

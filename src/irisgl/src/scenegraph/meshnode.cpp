@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include "../animation/animableproperty.h"
 
 #include "../graphics/skeleton.h"
+#include "../graphics/renderlist.h"
 
 namespace iris
 {
@@ -131,20 +132,30 @@ void MeshNode::submitRenderItems()
         //    renderItem->worldMatrix = rootBone->globalTransform;
         //}
         //else
-            renderItem->worldMatrix = this->globalTransform;
-            renderItem->cullable = true;
-            renderItem->boundingSphere.pos = this->globalTransform.column(3).toVector3D();
-            renderItem->boundingSphere.radius = mesh->boundingSphere->radius * getMeshRadius();
+            renderItem->cullable = false;
 
+            renderItem->worldMatrix = this->globalTransform;
+            /*
+            if (!!mesh && mesh->hasSkeletalAnimations()) {
+                renderItem->cullable = false;
+            }
+            else
+                renderItem->cullable = true;
+            */
+            if (!!mesh && renderItem->cullable) {
+                //renderItem->boundingSphere.pos = this->globalTransform.column(3).toVector3D() + mesh->boundingSphere->pos;
+                renderItem->boundingSphere.pos = this->globalTransform * mesh->boundingSphere.pos;
+                renderItem->boundingSphere.radius = mesh->boundingSphere.radius * getMeshRadius();
+            }
         if (!!material) {
             renderItem->renderLayer = material->renderLayer;
             //renderItem->faceCullingMode = faceCullingMode;
         }
 
-        this->scene->geometryRenderList.append(renderItem);
+        this->scene->geometryRenderList->add(renderItem);
 
         if (this->getShadowEnabled()) {
-            this->scene->shadowRenderList.append(renderItem);
+            this->scene->shadowRenderList->add(renderItem);
         }
     }
 }
@@ -156,6 +167,14 @@ float MeshNode::getMeshRadius()
     float scaleZ = globalTransform.column(2).toVector3D().length();
 
     return qMax(qMax(scaleX, scaleY), scaleZ);
+}
+
+BoundingSphere MeshNode::getTransformedBoundingSphere()
+{
+    BoundingSphere boundingSphere;
+    boundingSphere.pos = this->globalTransform * mesh->boundingSphere.pos;
+    boundingSphere.radius = mesh->boundingSphere.radius * getMeshRadius();
+    return boundingSphere;
 }
 
 /*

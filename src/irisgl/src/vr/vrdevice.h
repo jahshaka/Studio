@@ -87,6 +87,8 @@ class VrDevice
 {
     friend class VrManager;
     VrDevice();
+
+    bool initialized;
 public:
     void initialize();
     void setTrackingOrigin(VrTrackingOrigin trackingOrigin);
@@ -131,6 +133,7 @@ private:
     int eyeHeight;
     long long frameIndex;
 
+    ovrMirrorTexture mirrorTexture;
     GLuint vr_mirrorFbo;
     GLuint vr_mirrorTexId;
 

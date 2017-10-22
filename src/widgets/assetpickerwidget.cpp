@@ -38,7 +38,7 @@ AssetPickerWidget::~AssetPickerWidget()
 
 void AssetPickerWidget::populateWidget(QString filter)
 {
-    for (auto asset : AssetManager::assets) {
+    for (auto asset : AssetManager::getAssets()) {
         QPixmap pixmap;
 
         if (asset->type == type) {
@@ -50,9 +50,9 @@ void AssetPickerWidget::populateWidget(QString filter)
                 pixmap = QPixmap::fromImage(*thumb->thumb);
                 item->setIcon(QIcon(pixmap));
             } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
-                item->setIcon(QIcon(":/app/icons/user-account-box.svg"));
+                item->setIcon(QIcon(":/icons/user-account-box.svg"));
             } else {
-                item->setIcon(QIcon(":/app/icons/google-drive-file.svg"));
+                item->setIcon(QIcon(":/icons/google-drive-file.svg"));
             }
 
             item->setData(Qt::UserRole, asset->path);

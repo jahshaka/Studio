@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #ifndef FULLSCREENQUAD_H
 #define FULLSCREENQUAD_H
 
+#include <QMatrix4x4>
+
 class QOpenGLFunctions_3_2_Core;
 class QOpenGLShaderProgram;
 
@@ -27,11 +29,13 @@ public:
     FullScreenQuad();
     ~FullScreenQuad();
 
-    void draw(QOpenGLFunctions_3_2_Core* gl, bool flipY = false);
-    void draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* shader);
+    void draw(bool flipY = false);
+    void draw(QOpenGLShaderProgram* shader);
 
     QOpenGLShaderProgram* shader;
     Mesh* mesh;
+    QMatrix4x4 matrix;
+    QOpenGLFunctions_3_2_Core* gl;
 };
 }
 

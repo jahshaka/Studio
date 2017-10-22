@@ -9,6 +9,8 @@ namespace Ui {
 class KeyFrameCurveWidget;
 }
 
+class QTreeWidgetItems;
+
 class KeyFrameLabelTreeWidget;
 class AnimationWidgetData;
 
@@ -69,6 +71,8 @@ public:
 
     int timeToPos(float timeInSeconds);
     float posToTime(int xpos);
+
+    void showEvent(QShowEvent* event);
 
 private:
     void drawGrid(QPainter& paint);

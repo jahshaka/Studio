@@ -7,14 +7,24 @@
     <x>0</x>
     <y>0</y>
     <width>640</width>
-    <height>133</height>
+    <height>112</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QLabel {
+   <string notr="true">#createProject {
+	background: #4898ff;
+	color: white;
+}
+
+#createProject:hover {
+	background-color: #51a1d6;
+}
+
+
+QLabel {
 	margin-right: 12px;
 }
 
@@ -44,7 +54,7 @@ QLineEdit {
       <item row="0" column="0">
        <widget class="QLabel" name="pName">
         <property name="text">
-         <string>Project Name</string>
+         <string>World Name</string>
         </property>
        </widget>
       </item>
@@ -63,29 +73,42 @@ QLineEdit {
         <item>
          <widget class="QLineEdit" name="projectPath"/>
         </item>
+       </layout>
+      </item>
+      <item row="2" column="1">
+       <layout class="QHBoxLayout" name="horizontalLayout_3">
         <item>
-         <widget class="QToolButton" name="browseProject">
+         <widget class="QPushButton" name="cancel">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>1</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
           <property name="text">
-           <string>...</string>
+           <string>Cancel</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="createProject">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>3</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>Create World</string>
+          </property>
+          <property name="default">
+           <bool>false</bool>
           </property>
          </widget>
         </item>
        </layout>
       </item>
-      <item row="2" column="1">
-       <widget class="QPushButton" name="createProject">
-        <property name="text">
-         <string>Create Project</string>
-        </property>
-       </widget>
-      </item>
      </layout>
-     <zorder>pName</zorder>
-     <zorder>projectName</zorder>
-     <zorder>createProject</zorder>
-     <zorder>horizontalLayoutWidget</zorder>
-     <zorder>lName</zorder>
-     <zorder>projectPath</zorder>
     </widget>
    </item>
   </layout>

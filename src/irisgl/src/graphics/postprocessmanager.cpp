@@ -13,6 +13,7 @@
 #include "../postprocesses/bloompostprocess.h"
 #include "../postprocesses/greyscalepostprocess.h"
 #include "../postprocesses/ssaopostprocess.h"
+#include "../postprocesses/fxaapostprocess.h"
 
 namespace iris
 {
@@ -28,6 +29,8 @@ PostProcessManager::PostProcessManager()
     //postProcesses.append(QSharedPointer<PostProcess>(new BloomPostProcess()));
     //postProcesses.append(new GreyscalePostProcess());
     //postProcesses.append(new SSAOPostProcess());
+    //postProcesses.append(FxaaPostProcess::create());
+    postProcesses.append(FxaaPostProcess::create());
 }
 
 PostProcessManagerPtr PostProcessManager::create()
@@ -65,15 +68,15 @@ void PostProcessManager::blit(iris::Texture2DPtr source, iris::Texture2DPtr dest
     renderTarget->bind();
 
     gl->glViewport(0, 0, dest->texture->width(), dest->texture->height());
-    gl->glClear(GL_COLOR_BUFFER_BIT);
+    gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if (!!source)
         source->bind(0);
 
     if (shader)
-        fsQuad->draw(gl, shader);
+        fsQuad->draw(shader);
     else
-        fsQuad->draw(gl);
+        fsQuad->draw();
 
     renderTarget->unbind();
     renderTarget->clearTextures();

@@ -1,10 +1,11 @@
 #include "deletescenenodecommand.h"
+#include "../uimanager.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "../mainwindow.h"
+#include "../widgets/scenehierarchywidget.h"
 
-DeleteSceneNodeCommand::DeleteSceneNodeCommand(MainWindow *mainWindow, iris::SceneNodePtr parentNode, iris::SceneNodePtr sceneNode)
+DeleteSceneNodeCommand::DeleteSceneNodeCommand(iris::SceneNodePtr parentNode, iris::SceneNodePtr sceneNode)
 {
-    this->mainWindow = mainWindow;
     this->parentNode = parentNode;
     this->sceneNode = sceneNode;
     this->position = parentNode->children.indexOf(sceneNode);
@@ -12,14 +13,14 @@ DeleteSceneNodeCommand::DeleteSceneNodeCommand(MainWindow *mainWindow, iris::Sce
 
 void DeleteSceneNodeCommand::undo()
 {
-    parentNode->insertChild(position, sceneNode);
-    mainWindow->sceneNodeSelected(sceneNode);
-    mainWindow->repopulateSceneTree();
+    parentNode->insertChild(position, sceneNode, false);
+    UiManager::sceneHierarchyWidget->insertChild(sceneNode);
+    UiManager::mainWindow->sceneNodeSelected(sceneNode);
 }
 
 void DeleteSceneNodeCommand::redo()
 {
-    sceneNode->removeFromParent();
-    mainWindow->sceneNodeSelected(iris::SceneNodePtr());
-    mainWindow->repopulateSceneTree();
+    UiManager::sceneHierarchyWidget->removeChild(sceneNode);
+    sceneNode->removeFromParent();// important that this is done after!
+    UiManager::mainWindow->sceneNodeSelected(iris::SceneNodePtr());
 }

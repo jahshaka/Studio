@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include <QColor>
 #include "../irisglfwd.h"
 #include "../animation/skeletalanimation.h"
-
+#include "../geometry/boundingsphere.h"
 
 class aiMesh;
 class aiScene;
@@ -34,16 +34,17 @@ class BoundingSphere;
 enum class VertexAttribUsage : int
 {
     Position = 0,
-    TexCoord0 = 1,
-    TexCoord1 = 2,
-    TexCoord2 = 3,
-    TexCoord3 = 4,
-    Normal = 5,
-    Tangent = 6,
-    BiTangent = 7,
-    BoneIndices = 8,
-    BoneWeights = 9,
-    Count = 10
+    Color = 1,
+    TexCoord0 = 2,
+    TexCoord1 = 3,
+    TexCoord2 = 4,
+    TexCoord3 = 5,
+    Normal = 6,
+    Tangent = 7,
+    BiTangent = 8,
+    BoneIndices = 9,
+    BoneWeights = 10,
+    Count = 11
 };
 
 struct MeshMaterialData
@@ -75,26 +76,34 @@ public:
 
 };
 
+enum class PrimitiveMode
+{
+    Triangles,
+    Lines,
+    LineLoop
+};
+
 //todo: switch to using mesh pointer
 class Mesh
 {
     SkeletonPtr skeleton;
     QMap<QString, SkeletalAnimationPtr> skeletalAnimations;
+
+    GLenum glPrimitive;
 public:
+    PrimitiveMode primitiveMode;
     QOpenGLFunctions_3_2_Core* gl;
     GLuint vao;
     GLuint indexBuffer;
     bool usesIndexBuffer;
 
-    BoundingSphere* boundingSphere;
+    BoundingSphere boundingSphere;
 
     // will cause problems if a shader was freed and gl gives the
     // id to another shader
     GLuint lastShaderId;
 
     VertexArrayData vertexArrays[(int)VertexAttribUsage::Count];
-
-    QOpenGLBuffer* vbo;
 
     VertexLayout* vertexLayout;
     int numVerts;
@@ -114,8 +123,8 @@ public:
     QMap<QString, SkeletalAnimationPtr> getSkeletalAnimations();
     bool hasSkeletalAnimations();
 
-    void draw(QOpenGLFunctions_3_2_Core* gl, Material* mat, GLenum primitiveMode = GL_TRIANGLES);
-    void draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* mat, GLenum primitiveMode = GL_TRIANGLES);
+    void draw(QOpenGLFunctions_3_2_Core* gl, Material* mat);
+    void draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* mat);
 
     static MeshPtr loadMesh(QString filePath);
     static MeshPtr loadAnimatedMesh(QString filePath);
@@ -140,9 +149,14 @@ public:
 
     void setSkeleton(const SkeletonPtr &value);
 
+    PrimitiveMode getPrimitiveMode() const;
+    void setPrimitiveMode(const PrimitiveMode &value);
+
 private:
     void addVertexArray(VertexAttribUsage usage,void* data,int size,GLenum type,int numComponents);
     void addIndexArray(void* data,int size,GLenum type);
+
+    static BoundingSphere calculateBoundingSphere(const aiMesh* mesh);
 };
 
 //typedef QSharedPointer<Mesh> MeshPtr;

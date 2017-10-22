@@ -8,7 +8,8 @@ HEADERS += \
     $$PWD/Include/OVR_Version.h \
     $$PWD/Include/Extras/OVR_CAPI_Util.h \
     $$PWD/Include/Extras/OVR_Math.h \
-    $$PWD/Include/Extras/OVR_StereoProjection.h
+    $$PWD/Include/Extras/OVR_StereoProjection.h \
+    $$PWD/Src/OVR_CAPI_Prototypes.h
 
 SOURCES += \
     $$PWD/Src/OVR_CAPI_Util.cpp \

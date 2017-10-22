@@ -22,6 +22,8 @@ HFloatSliderWidget::HFloatSliderWidget(QWidget* parent) :
     connect(ui->slider,     SIGNAL(sliderPressed()),        SLOT(sliderPressed()));
     connect(ui->slider,     SIGNAL(sliderReleased()),       SLOT(sliderReleased()));
 
+    setStyle(new CustomStyle(this->style()));
+
     precision = 1000.f;
     ui->slider->setRange(0, precision);
 
