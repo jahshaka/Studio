@@ -307,7 +307,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->stackedWidget->insertWidget(0, pmContainer);
     ui->stackedWidget->insertWidget(1, viewPort);
 
-    sceneHeirarchyDock = new QDockWidget("Hierarchy", ui->viewportLayout);
+    sceneHeirarchyDock = new QDockWidget("Hierarchy", viewPort);
     sceneHeirarchyDock->setObjectName(QStringLiteral("sceneHierarchyDock"));
     sceneHierarchyWidget = new SceneHierarchyWidget;
     sceneHierarchyWidget->setMinimumWidth(396);
@@ -462,10 +462,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     // this ties to hidden geometry so should come at the end
     setupViewMenu();
 
-    switchSpace(WindowSpaces::DESKTOP);
-
+    setWindowTitle("Jahshaka " + Constants::CONTENT_VERSION);
 #ifdef QT_DEBUG
-    setWindowTitle("Jahshaka 0.3a - Developer Build");
+    setWindowTitle(windowTitle() + " - Developer Build");
 #endif
 }
 
@@ -1051,12 +1050,13 @@ void MainWindow::closeProject()
     UiManager::isSceneOpen = false;
     UiManager::isScenePlaying = false;
     ui->actionClose->setDisabled(false);
+
     switchSpace(WindowSpaces::DESKTOP);
 
     UiManager::clearUndoStack();
     AssetManager::assets.clear();
-    // would prefer a cleaner state but this is pretty vanilla
-    this->setScene(iris::Scene::create());
+
+    scene->cleanup();
     scene.clear();
 }
 
