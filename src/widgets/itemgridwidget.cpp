@@ -117,21 +117,53 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     closeButton->setIcon(QIcon(":/icons/error_alpha.svg"));
     closeButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white } QToolTip { padding: 2px; }");
 
+    playContainer = new QWidget;
+    auto l = new QVBoxLayout;
+    l->setSpacing(0);
+    l->setMargin(0);
+    QLabel *playText = new QLabel("PLAY");
+    playText->setAlignment(Qt::AlignHCenter);
+    l->addWidget(playButton);
+    l->addWidget(playText);
+    playContainer->setLayout(l);
+
+    editContainer = new QWidget;
+    l = new QVBoxLayout;
+    l->setSpacing(0);
+    l->setMargin(0);
+    QLabel *editText = new QLabel("EDIT");
+    editText->setAlignment(Qt::AlignHCenter);
+    l->addWidget(editButton);
+    l->addWidget(editText);
+    editContainer->setLayout(l);
+
+    closeContainer = new QWidget;
+    l = new QVBoxLayout;
+    l->setSpacing(0);
+    l->setMargin(0);
+    QLabel *closeText = new QLabel("CLOSE");
+    closeText->setAlignment(Qt::AlignHCenter);
+    l->addWidget(closeButton);
+    l->addWidget(closeText);
+    closeContainer->setLayout(l);
+
     if (highlight) {
-        playButton->setVisible(false);
+        playContainer->setVisible(false);
         spacer->setVisible(false);
-        editButton->setVisible(false);
+        editContainer->setVisible(false);
     } else {
-        closeButton->setVisible(false);
+        closeContainer->setVisible(false);
     }
 
-    olayout->addWidget(playButton);
+    olayout->addWidget(playContainer);
     olayout->addWidget(spacer);
-    olayout->addWidget(editButton);
-    olayout->addWidget(closeButton);
+    olayout->addWidget(editContainer);
+    olayout->addWidget(closeContainer);
 
     controls = new QWidget();
-    controls->setStyleSheet("background: rgba(32, 32, 32, 190); border-radius: 4px;");
+    controls->setObjectName("fresh");
+    controls->setStyleSheet("#fresh { background: rgba(32, 32, 32, 190); border-radius: 4px; }"
+                            "QLabel { font-weight: bold; font-size: 12px }");
     controls->setContentsMargins(iconSize.width() / 2, iconSize.width() / 2, iconSize.width() / 2, iconSize.width() / 2);
     controls->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     controls->setLayout(olayout);
@@ -204,10 +236,10 @@ void ItemGridWidget::removeHighlight()
     gridImageLabel->setStyleSheet("border: 3px solid rgba(0, 0, 0, 10%)");
     gridTextLabel->setText(tileData.name);
 
-    playButton->setVisible(true);
+    playContainer->setVisible(true);
     spacer->setVisible(true);
-    editButton->setVisible(true);
-    closeButton->setVisible(false);
+    editContainer->setVisible(true);
+    closeContainer->setVisible(false);
 }
 
 bool ItemGridWidget::eventFilter(QObject *watched, QEvent *event)
