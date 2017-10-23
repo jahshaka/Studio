@@ -10,6 +10,7 @@
 #include "../constants.h"
 #include "../core/settingsmanager.h"
 #include "projectmanager.h"
+#include "../uimanager.h"
 
 DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 {
@@ -41,7 +42,8 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 
 void DynamicGrid::addToGridView(ProjectTileData tileData, int count)
 {
-    ItemGridWidget *gameGridItem = new ItemGridWidget(tileData, tileSize, iconSize, gridWidget);
+    bool highlight = UiManager::isSceneOpen && tileData.guid == Globals::project->getProjectGuid();
+    ItemGridWidget *gameGridItem = new ItemGridWidget(tileData, tileSize, iconSize, gridWidget, highlight);
 
     originalItems.push_back(gameGridItem);
 
@@ -50,6 +52,9 @@ void DynamicGrid::addToGridView(ProjectTileData tileData, int count)
     // remember that parent is the ProjectManager, we delegate or emit up
     connect(gameGridItem,   SIGNAL(openFromWidget(ItemGridWidget*, bool)),
             parent,         SLOT(openProjectFromWidget(ItemGridWidget*, bool)));
+
+    connect(gameGridItem,   SIGNAL(closeFromWidget(ItemGridWidget*)),
+            parent,         SLOT(closeProjectFromWidget(ItemGridWidget*)));
 
     connect(gameGridItem,   SIGNAL(remove(ItemGridWidget*)),
             parent,         SLOT(deleteProjectFromWidget(ItemGridWidget*)));

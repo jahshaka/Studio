@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QDrag>
 #include <QSharedPointer>
 #include <QVector3D>
+#include <QCheckBox>
 #include "irisgl/src/irisglfwd.h"
 
 namespace Ui {
@@ -77,6 +78,12 @@ class QOpenGLFunctions_3_2_Core;
 
 enum class SceneNodeType;
 
+enum WindowSpaces {
+    DESKTOP,
+    PLAYER,
+    EDITOR
+};
+
 class Database;
 class MainWindow : public QMainWindow
 {
@@ -89,9 +96,12 @@ public:
     void setSceneAnimTime(float time);
     void stopAnimWidget();
 
-    void initialize();
+    void grabOpenGLContextHack();
+    void goToDesktop();
     void setupProjectDB();
     void setupUndoRedo();
+
+    void switchSpace(WindowSpaces space);
 
     bool handleMousePress(QMouseEvent *event);
     bool handleMouseRelease(QMouseEvent *event);
@@ -212,6 +222,7 @@ public slots:
 
     void newProject(const QString&, const QString&);
     void openProject(bool playMode = false);
+    void closeProject();
 
     void toggleWidgets(bool toggle);
 
@@ -232,7 +243,6 @@ public slots:
 
     void takeScreenshot();
     void toggleLightWires(bool state);
-    void showProjectManager();
     void showProjectManagerInternal();
 
 private slots:
@@ -295,7 +305,6 @@ private:
 
     bool vrMode;
     QPushButton* vrButton;
-    QPushButton* pmButton;
     QMainWindow *dialog;
 
     QDockWidget *sceneHeirarchyDock;
@@ -312,6 +321,19 @@ private:
 
     QDockWidget *animationDock;
     AnimationWidget *animationWidget;
+
+    QMainWindow *viewPort;
+    QWidget *sceneContainer;
+
+    QWidget *controlBar;
+    QWidget *playerControls;
+    QPushButton *playSceneBtn;
+    QCheckBox *wireCheckBtn;
+    QPushButton *restartBtn;
+    QPushButton *playBtn;
+    QPushButton *stopBtn;
+
+    WindowSpaces currentSpace;
 };
 
 #endif // MAINWINDOW_H
