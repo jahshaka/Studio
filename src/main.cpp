@@ -97,6 +97,7 @@ int main(int argc, char *argv[])
 
     Globals::appWorkingDir = QApplication::applicationDirPath();
     app.processEvents();
+    //app.setOverrideCursor( QCursor( Qt::BlankCursor ) );
 
     // Create our main app window but hide it at the same time while showing the EDITOR first
     // Set the attribute to render invisible while running as normal then hiding it after

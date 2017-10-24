@@ -44,6 +44,7 @@ For more information see the LICENSE file
 #include "../editor/cameracontrollerbase.h"
 #include "../editor/editorcameracontroller.h"
 #include "../editor/orbitalcameracontroller.h"
+#include "../editor/viewercontroller.h"
 #include "../editor/editorvrcontroller.h"
 
 #include "../editor/editordata.h"
@@ -88,6 +89,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     defaultCam = new EditorCameraController();
     orbitalCam = new OrbitalCameraController();
+    viewerCam = new ViewerCameraController();
 
     camController = defaultCam;
     prevCamController = defaultCam;
@@ -688,6 +690,32 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
     viewportGizmo->onMousePress(editorCam->getLocalPos(), this->calculateMouseRay(point) * 1024);
 }
 
+void SceneViewWidget::setCameraController(CameraControllerBase *controller)
+{
+    camController->end();
+    prevCamController = camController;
+
+    camController = controller;
+    camController->resetMouseStates();
+    camController->setCamera(editorCam);
+    camController->start();
+
+}
+
+void SceneViewWidget::restorePreviousCameraController()
+{
+    camController->end();
+
+    // swap controllers
+    auto temp = camController;
+    camController = prevCamController;
+    prevCamController = temp;
+
+    camController->resetMouseStates();
+    camController->setCamera(editorCam);
+    camController->start();
+}
+
 void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,
                                      const QVector3D& segStart,
                                      const QVector3D& segEnd,
@@ -823,16 +851,12 @@ void SceneViewWidget::doViewerPicking(const QVector3D& segStart,
 
 void SceneViewWidget::setFreeCameraMode()
 {
-    camController = defaultCam;
-    camController->setCamera(editorCam);
-    camController->resetMouseStates();
+    setCameraController(defaultCam);
 }
 
 void SceneViewWidget::setArcBallCameraMode()
 {
-    camController = orbitalCam;
-    camController->setCamera(editorCam);
-    camController->resetMouseStates();
+    setCameraController(orbitalCam);
 }
 
 bool SceneViewWidget::isVrSupported()
@@ -926,6 +950,13 @@ EditorData* SceneViewWidget::getEditorData()
 
 void SceneViewWidget::startPlayingScene()
 {
+    // switch controllers
+    if (scene->viewers.count() > 0) {
+        viewerCam->setViewer(scene->viewers[0]);
+        setCameraController(viewerCam);
+    }
+
+
     playScene = true;
     //animTime = 0.0f;
 }
@@ -941,6 +972,8 @@ void SceneViewWidget::stopPlayingScene()
     playScene = false;
     animTime = 0.0f;
     scene->updateSceneAnimation(0.0f);
+
+    restorePreviousCameraController();
 }
 
 iris::ForwardRendererPtr SceneViewWidget::getRenderer() const
