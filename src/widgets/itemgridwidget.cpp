@@ -37,10 +37,18 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     gridTextLabel = new QLabel(this);
 
     if (highlight) {
-        gridImageLabel->setStyleSheet("border: 3px dashed #3498db");
+        if (devicePixelRatio() > 1) {
+            gridImageLabel->setStyleSheet("border: 3px dashed #3498db");
+        } else {
+            gridImageLabel->setStyleSheet("border: 5px dashed #3498db");
+        }
         gridTextLabel->setText(tileData.name + " [ Open ]");
     } else {
-        gridImageLabel->setStyleSheet("border: 3px solid rgba(0, 0, 0, 10%)");
+        if (devicePixelRatio() > 1) {
+            gridImageLabel->setStyleSheet("border: 3px solid rgba(0, 0, 0, 10%)");
+        } else {
+            gridImageLabel->setStyleSheet("border: 5px solid rgba(0, 0, 0, 10%)");
+        }
         gridTextLabel->setText(tileData.name);
     }
 
@@ -83,14 +91,14 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     olayout->setSpacing(0);
 
     playButton = new QPushButton();
-    playButton->installEventFilter(this);
     playButton->setObjectName("playButton");
     playButton->setToolTipDuration(0);
     playButton->setToolTip("Play world fullscreen");
     playButton->setCursor(Qt::PointingHandCursor);
     playButton->setIconSize(iconSize);
     playButton->setIcon(QIcon(":/icons/tplay_alpha.svg"));
-    playButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white } QToolTip { padding: 2px; }");
+    playButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white }"
+                              "QToolTip { padding: 2px; }");
 
     spacer = new QLabel("");
     spacer->setMaximumWidth(10);
@@ -98,54 +106,57 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     spacer->setStyleSheet("background: transparent; color: white");
 
     editButton = new QPushButton();
-    editButton->installEventFilter(this);
     editButton->setObjectName("editButton");
     editButton->setToolTipDuration(0);
     editButton->setToolTip("Open world in editor");
     editButton->setCursor(Qt::PointingHandCursor);
     editButton->setIconSize(iconSize);
     editButton->setIcon(QIcon(":/icons/tedit_alpha.svg"));
-    editButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white } QToolTip { padding: 2px; }");
+    editButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white }"
+                              "QToolTip { padding: 2px; }");
 
     closeButton = new QPushButton();
-    closeButton->installEventFilter(this);
     closeButton->setObjectName("closeButton");
     closeButton->setToolTipDuration(0);
     closeButton->setToolTip("Close open world");
     closeButton->setCursor(Qt::PointingHandCursor);
     closeButton->setIconSize(iconSize);
     closeButton->setIcon(QIcon(":/icons/error_alpha.svg"));
-    closeButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white } QToolTip { padding: 2px; }");
+    closeButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white }"
+                               "QToolTip { padding: 2px; }");
 
     playContainer = new QWidget;
     auto l = new QVBoxLayout;
     l->setSpacing(0);
     l->setMargin(0);
-    QLabel *playText = new QLabel("PLAY");
+    playText = new QLabel("PLAY");
     playText->setAlignment(Qt::AlignHCenter);
     l->addWidget(playButton);
     l->addWidget(playText);
     playContainer->setLayout(l);
+    playContainer->installEventFilter(this);
 
     editContainer = new QWidget;
     l = new QVBoxLayout;
     l->setSpacing(0);
     l->setMargin(0);
-    QLabel *editText = new QLabel("EDIT");
+    editText = new QLabel("EDIT");
     editText->setAlignment(Qt::AlignHCenter);
     l->addWidget(editButton);
     l->addWidget(editText);
     editContainer->setLayout(l);
+    editContainer->installEventFilter(this);
 
     closeContainer = new QWidget;
     l = new QVBoxLayout;
     l->setSpacing(0);
     l->setMargin(0);
-    QLabel *closeText = new QLabel("CLOSE");
+    closeText = new QLabel("CLOSE");
     closeText->setAlignment(Qt::AlignHCenter);
     l->addWidget(closeButton);
     l->addWidget(closeText);
     closeContainer->setLayout(l);
+    closeContainer->installEventFilter(this);
 
     if (highlight) {
         playContainer->setVisible(false);
@@ -164,7 +175,10 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     controls->setObjectName("fresh");
     controls->setStyleSheet("#fresh { background: rgba(32, 32, 32, 190); border-radius: 4px; }"
                             "QLabel { font-weight: bold; font-size: 12px }");
-    controls->setContentsMargins(iconSize.width() / 2, iconSize.width() / 2, iconSize.width() / 2, iconSize.width() / 2);
+    controls->setContentsMargins(iconSize.width() / 2,
+                                 iconSize.width() / 2,
+                                 iconSize.width() / 2,
+                                 iconSize.width() / 2);
     controls->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     controls->setLayout(olayout);
 
@@ -207,7 +221,10 @@ void ItemGridWidget::setTileSize(QSize size, QSize iSize)
     tileSize = size;
     iconSize = iSize;
 
-    controls->setContentsMargins(iconSize.width() / 2, iconSize.width() / 2, iconSize.width() / 2, iconSize.width() / 2);
+    controls->setContentsMargins(iconSize.width() / 2,
+                                 iconSize.width() / 2,
+                                 iconSize.width() / 2,
+                                 iconSize.width() / 2);
     playButton->setIconSize(iconSize);
     editButton->setIconSize(iconSize);
 
@@ -233,7 +250,11 @@ void ItemGridWidget::updateLabel(QString text)
 
 void ItemGridWidget::removeHighlight()
 {
-    gridImageLabel->setStyleSheet("border: 3px solid rgba(0, 0, 0, 10%)");
+    if (devicePixelRatio() > 1) {
+        gridImageLabel->setStyleSheet("border: 3px solid rgba(0, 0, 0, 10%)");
+    } else {
+        gridImageLabel->setStyleSheet("border: 5px solid rgba(0, 0, 0, 10%)");
+    }
     gridTextLabel->setText(tileData.name);
 
     playContainer->setVisible(true);
@@ -244,15 +265,17 @@ void ItemGridWidget::removeHighlight()
 
 bool ItemGridWidget::eventFilter(QObject *watched, QEvent *event)
 {
-    if (watched == playButton) {
+    if (watched == playContainer) {
         switch (event->type()) {
             case QEvent::Enter: {
                 playButton->setIcon(QIcon(":/icons/tplay.svg"));
+                playText->setStyleSheet("color: white");
                 break;
             }
 
             case QEvent::Leave: {
                 playButton->setIcon(QIcon(":/icons/tplay_alpha.svg"));
+                playText->setStyleSheet("color: rgba(255, 255, 255, 50%)");
                 break;
             }
 
@@ -260,15 +283,17 @@ bool ItemGridWidget::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
-    if (watched == editButton) {
+    if (watched == editContainer) {
         switch (event->type()) {
             case QEvent::Enter: {
                 editButton->setIcon(QIcon(":/icons/tedit.svg"));
+                editText->setStyleSheet("color: white");
                 break;
             }
 
             case QEvent::Leave: {
                 editButton->setIcon(QIcon(":/icons/tedit_alpha.svg"));
+                editText->setStyleSheet("color: rgba(255, 255, 255, 50%)");
                 break;
             }
 
@@ -276,15 +301,17 @@ bool ItemGridWidget::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
-    if (watched == closeButton) {
+    if (watched == closeContainer) {
         switch (event->type()) {
             case QEvent::Enter: {
                 closeButton->setIcon(QIcon(":/icons/error.svg"));
+                closeText->setStyleSheet("color: white");
                 break;
             }
 
             case QEvent::Leave: {
                 closeButton->setIcon(QIcon(":/icons/error_alpha.svg"));
+                closeText->setStyleSheet("color: rgba(255, 255, 255, 50%)");
                 break;
             }
 
