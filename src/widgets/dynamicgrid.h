@@ -26,7 +26,7 @@ public:
     float scl;
     void scaleTile(QString);
     void searchTiles(QString);
-
+    bool containsTiles();
     void deleteTile(ItemGridWidget*);
 
     void resetView();

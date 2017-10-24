@@ -43,6 +43,7 @@ public:
     ~ProjectManager();
 
     void populateDesktop(bool reset = false);
+    bool checkForEmptyState();
     void cleanupOnClose();
     QVector<ModelData> loadModel(const QString&);
 

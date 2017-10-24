@@ -127,6 +127,12 @@ void DynamicGrid::searchTiles(QString searchString)
     gridWidget->adjustSize();
 }
 
+bool DynamicGrid::containsTiles()
+{
+    if (gridLayout->count()) return true;
+    return false;
+}
+
 /**
  * Helper function. Deletes all child widgets of the given layout @a item.
  */

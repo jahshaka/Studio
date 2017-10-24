@@ -213,6 +213,7 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
             dynamicGrid->deleteTile(widget);
             Globals::project->setProjectGuid(widget->tileData.guid);
             db->deleteProject();
+            checkForEmptyState();
         } else {
             QMessageBox::warning(this,
                                  "Delete Failed!",
@@ -236,6 +237,19 @@ void ProjectManager::populateDesktop(bool reset)
         dynamicGrid->addToGridView(record, i);
         i++;
     }
+
+    checkForEmptyState();
+}
+
+bool ProjectManager::checkForEmptyState()
+{
+    if (dynamicGrid->containsTiles()) {
+        ui->stackedWidget->setCurrentIndex(0);
+        return false;
+    }
+
+    ui->stackedWidget->setCurrentIndex(1);
+    return true;
 }
 
 void ProjectManager::cleanupOnClose()
