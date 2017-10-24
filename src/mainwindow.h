@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include <QDropEvent>
 #include <QMimeData>
 #include <QDrag>
+#include <QToolBar>
 #include <QSharedPointer>
 #include <QVector3D>
 #include <QCheckBox>
@@ -177,6 +178,11 @@ private:
 public slots:
     void exportSceneAsZip();
 
+    void setupDockWidgets();
+    void setupViewPort();
+    void setupDesktop();
+    void setupToolBar();
+
     //scenegraph
     void addPlane();
     void addGround();
@@ -307,7 +313,7 @@ private:
     QPushButton* vrButton;
     QMainWindow *dialog;
 
-    QDockWidget *sceneHeirarchyDock;
+    QDockWidget *sceneHierarchyDock;
     SceneHierarchyWidget *sceneHierarchyWidget;
 
     QDockWidget *sceneNodePropertiesDock;
@@ -332,6 +338,8 @@ private:
     QPushButton *restartBtn;
     QPushButton *playBtn;
     QPushButton *stopBtn;
+
+    QToolBar *toolBar;
 
     WindowSpaces currentSpace;
 };

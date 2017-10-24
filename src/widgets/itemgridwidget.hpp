@@ -22,9 +22,15 @@ public:
     QSize tileSize;
     QSize iconSize;
     QPushButton *playButton;
+    QWidget *playContainer;
     QPushButton *editButton;
+    QWidget *editContainer;
     QLabel *spacer;
+    QLabel *playText;
+    QLabel *editText;
+    QLabel *closeText;
     QPushButton *closeButton;
+    QWidget *closeContainer;
     QWidget *controls;
     ProjectTileData tileData;
 
