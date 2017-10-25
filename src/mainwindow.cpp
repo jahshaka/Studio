@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include "irisgl/src/animation/animation.h"
 #include "irisgl/src/graphics/postprocessmanager.h"
 #include "irisgl/src/core/logger.h"
+#include "src/dialogs/donatedialog.h"
 
 #include <QFontDatabase>
 #include <QOpenGLContext>
@@ -475,6 +476,15 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     event->ignore();
     event->accept();
+
+//#ifndef QT_DEBUG
+    bool seen = getSettingsManager()->getValue("ddialog_seen", "false").toBool();
+    if (!seen) {
+        DonateDialog dialog;
+        dialog.exec();
+    }
+//#endif
+
 //    if (UiManager::isUndoStackDirty()) {
 //        QMessageBox::StandardButton reply;
 //        reply = QMessageBox::question(this,
