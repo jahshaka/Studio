@@ -27,6 +27,7 @@ Jahshaka brings you the future of immersive digital content creation with the le
  - Realtime Dynamic Shadows
  - Powerful Extensible Material System
  - Asset Manager
+ - Supports 4k displays
  - Custom Shaders and more&hellip;
 
 ## Screenshots
