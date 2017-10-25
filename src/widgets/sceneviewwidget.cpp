@@ -365,24 +365,30 @@ void SceneViewWidget::renderScene()
         if (UiManager::sceneMode != SceneMode::PlayMode && showLightWires) addLightShapesToScene();
 
         // render thumbnail to texture
-        if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
-            viewerCamera->setLocalTransform(selectedNode->getGlobalTransform());
-            viewerCamera->update(0); // update transformation of camera
+        if (!playScene && !!selectedNode) {
+            if (selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
+                viewerCamera->setLocalTransform(selectedNode->getGlobalTransform());
+                viewerCamera->update(0); // update transformation of camera
 
-            // resize render target to fix aspect ratio
-            viewerRT->resize(this->width(), this->height(), true);
+                // resize render target to fix aspect ratio
+                viewerRT->resize(this->width(), this->height(), true);
 
-            renderer->renderSceneToRenderTarget(viewerRT, viewerCamera);
+                renderer->renderSceneToRenderTarget(viewerRT, viewerCamera);
 
-            // restore viewer visibility state
-            if (viewerVisible) {
-                selectedNode->show();
+                // restore viewer visibility state
+                if (viewerVisible) {
+                    selectedNode->show();
 
-                // let it show back in regular scene rendering mode
-                // i know this looks like a hack, but it'll
-                // have to do until we find a better way to do this
-                if (UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)
-                    selectedNode->submitRenderItems();
+                    // let it show back in regular scene rendering mode
+                    // i know this looks like a hack, but it'll
+                    // have to do until we find a better way to do this
+                    if (UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)
+                        selectedNode->submitRenderItems();
+                }
+            }
+            else {
+                if (viewerVisible)
+                    selectedNode->show();
             }
         }
 
@@ -392,15 +398,18 @@ void SceneViewWidget::renderScene()
             renderer->renderSceneVr(dt, viewport, UiManager::sceneMode == SceneMode::PlayMode);
         }
 
-        if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
-            QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>()->glClear(GL_DEPTH_BUFFER_BIT);
-            QMatrix4x4 mat;
-            mat.setToIdentity();
-            mat.translate(0.75, -0.75, 0);
-            mat.scale(0.2, 0.2, 0);
-            viewerTex->bind(0);
-            viewerQuad->matrix = mat;
-            viewerQuad->draw();
+        // dont show thumbnail in play mode
+        if (!playScene) {
+            if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
+                QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>()->glClear(GL_DEPTH_BUFFER_BIT);
+                QMatrix4x4 mat;
+                mat.setToIdentity();
+                mat.translate(0.75, -0.75, 0);
+                mat.scale(0.2, 0.2, 0);
+                viewerTex->bind(0);
+                viewerQuad->matrix = mat;
+                viewerQuad->draw();
+            }
         }
 
         this->updateScene();
