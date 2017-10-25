@@ -182,6 +182,7 @@ public slots:
     void setupViewPort();
     void setupDesktop();
     void setupToolBar();
+    void setupShortcuts();
 
     //scenegraph
     void addPlane();

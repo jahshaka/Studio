@@ -59,6 +59,7 @@ For more information see the LICENSE file
 #include <QTimer>
 #include <math.h>
 #include <QDesktopServices>
+#include <QShortcut>
 
 #include "dialogs/loadmeshdialog.h"
 #include "core/surfaceview.h"
@@ -158,6 +159,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupDesktop();
     setupToolBar();
     setupDockWidgets();
+    setupShortcuts();
 
 //    if (!UiManager::playMode) {
 //        restoreGeometry(settings->getValue("geometry", "").toByteArray());
@@ -1586,6 +1588,23 @@ void MainWindow::setupToolBar()
     toolBar->addWidget(vrButton);
 
     viewPort->addToolBar(toolBar);
+}
+
+void MainWindow::setupShortcuts()
+{
+    // Translation, Rotation and Scaling gizmo shortcuts for
+    QShortcut *shortcut = new QShortcut(QKeySequence("t"),sceneView);
+    connect(shortcut, SIGNAL(activated()), this, SLOT(translateGizmo()));
+
+    shortcut = new QShortcut(QKeySequence("r"),sceneView);
+    connect(shortcut, SIGNAL(activated()), this, SLOT(rotateGizmo()));
+
+    shortcut = new QShortcut(QKeySequence("s"),sceneView);
+    connect(shortcut, SIGNAL(activated()), this, SLOT(scaleGizmo()));
+
+    // Save
+    shortcut = new QShortcut(QKeySequence("ctrl+s"),sceneView);
+    connect(shortcut, SIGNAL(activated()), this, SLOT(saveScene()));
 }
 
 QIcon MainWindow::getIconFromSceneNodeType(SceneNodeType type)
