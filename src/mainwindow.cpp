@@ -664,6 +664,8 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->player_menu->setStyleSheet(unselectedMenu);
             ui->player_menu->setDisabled(false);
             ui->player_menu->setCursor(Qt::PointingHandCursor);
+
+            playSceneBtn->show();
             break;
         }
 
@@ -678,6 +680,8 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->player_menu->setStyleSheet(selectedMenu);
             ui->player_menu->setDisabled(false);
             ui->player_menu->setCursor(Qt::PointingHandCursor);
+
+            playSceneBtn->hide();
             break;
         }
         default: break;

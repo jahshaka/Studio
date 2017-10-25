@@ -35,7 +35,9 @@ public:
     virtual void onMouseMove(int x,int y);
     virtual void onMouseWheel(int val);
 
+    virtual void start();
     virtual void update(float dt);
+    virtual void end();
 
     void resetMouseStates();
 
