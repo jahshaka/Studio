@@ -474,34 +474,38 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    event->ignore();
-    event->accept();
+    bool closing = false;
+
+    if (UiManager::isUndoStackDirty()) {
+        QMessageBox::StandardButton reply;
+        reply = QMessageBox::question(this,
+                                      "Unsaved Changes",
+                                      "There are unsaved changes, save before closing?",
+                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+        if (reply == QMessageBox::Yes) {
+            saveScene();
+            event->accept();
+            closing = true;
+        } else if (reply == QMessageBox::No) {
+            event->accept();
+            closing = true;
+        } else {
+            event->ignore();
+            return;
+        }
+    } else {
+        event->accept();
+        closing = true;
+    }
 
 //#ifndef QT_DEBUG
-    bool seen = getSettingsManager()->getValue("ddialog_seen", "false").toBool();
-    if (!seen) {
-        DonateDialog dialog;
-        dialog.exec();
+    if (closing) {
+        if (!getSettingsManager()->getValue("ddialog_seen", "false").toBool()) {
+            DonateDialog dialog;
+            dialog.exec();
+        }
     }
 //#endif
-
-//    if (UiManager::isUndoStackDirty()) {
-//        QMessageBox::StandardButton reply;
-//        reply = QMessageBox::question(this,
-//                                      "Unsaved Changes",
-//                                      "There are unsaved changes, save before closing?",
-//                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
-//        if (reply == QMessageBox::Yes) {
-//            saveScene();
-//            event->accept();
-//            this->close();
-//        } else if (reply == QMessageBox::No) {
-//            event->accept();
-//            this->close();
-//        }
-//    } else {
-//        event->accept();
-//    }
 
 //    if (!UiManager::playMode) {
 //        settings->setValue("geometry", saveGeometry());
