@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include "irisgl/src/animation/animation.h"
 #include "irisgl/src/graphics/postprocessmanager.h"
 #include "irisgl/src/core/logger.h"
+#include "src/dialogs/donatedialog.h"
 
 #include <QFontDatabase>
 #include <QOpenGLContext>
@@ -473,25 +474,38 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    event->ignore();
-    event->accept();
-//    if (UiManager::isUndoStackDirty()) {
-//        QMessageBox::StandardButton reply;
-//        reply = QMessageBox::question(this,
-//                                      "Unsaved Changes",
-//                                      "There are unsaved changes, save before closing?",
-//                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
-//        if (reply == QMessageBox::Yes) {
-//            saveScene();
-//            event->accept();
-//            this->close();
-//        } else if (reply == QMessageBox::No) {
-//            event->accept();
-//            this->close();
-//        }
-//    } else {
-//        event->accept();
-//    }
+    bool closing = false;
+
+    if (UiManager::isUndoStackDirty()) {
+        QMessageBox::StandardButton reply;
+        reply = QMessageBox::question(this,
+                                      "Unsaved Changes",
+                                      "There are unsaved changes, save before closing?",
+                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+        if (reply == QMessageBox::Yes) {
+            saveScene();
+            event->accept();
+            closing = true;
+        } else if (reply == QMessageBox::No) {
+            event->accept();
+            closing = true;
+        } else {
+            event->ignore();
+            return;
+        }
+    } else {
+        event->accept();
+        closing = true;
+    }
+
+//#ifndef QT_DEBUG
+    if (closing) {
+        if (!getSettingsManager()->getValue("ddialog_seen", "false").toBool()) {
+            DonateDialog dialog;
+            dialog.exec();
+        }
+    }
+//#endif
 
 //    if (!UiManager::playMode) {
 //        settings->setValue("geometry", saveGeometry());

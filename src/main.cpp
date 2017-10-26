@@ -91,8 +91,8 @@ int main(int argc, char *argv[])
     app.setPalette(palette);
 
     QSplashScreen splash;
-    auto pixmap = QPixmap(":/images/splashv2.jpg");
-    splash.setPixmap(pixmap);
+    auto pixmap = QPixmap(":/images/splashv3.png");
+    splash.setPixmap(pixmap.scaled(815, 480, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     splash.show();
 
     Globals::appWorkingDir = QApplication::applicationDirPath();

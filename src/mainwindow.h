@@ -50,6 +50,7 @@ class TexturedPlaneLayerWidget;
 class WorldLayerWidget;
 class EndlessPlaneLayerWidget;
 class PostProcessesWidget;
+class DonateDialog;
 
 class MaterialWidget;
 class TransformGizmo;
