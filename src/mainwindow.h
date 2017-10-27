@@ -174,7 +174,7 @@ private:
     void dragLeaveEvent(QDragLeaveEvent* event) override;
 
     // determines if file extension is that of a model (obj, fbx, 3ds)
-    bool isModelExtension(QString extension);
+    // bool isModelExtension(QString extension);
 
 public slots:
     void exportSceneAsZip();
