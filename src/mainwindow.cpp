@@ -186,6 +186,7 @@ void MainWindow::goToDesktop()
 
 void MainWindow::setupVrUi()
 {
+    /*
     vrButton->setToolTipDuration(0);
 
     if (sceneView->isVrSupported()) {
@@ -203,6 +204,7 @@ void MainWindow::setupVrUi()
     // needed to apply changes
     vrButton->style()->unpolish(vrButton);
     vrButton->style()->polish(vrButton);
+    */
 }
 
 /**
@@ -1598,13 +1600,13 @@ void MainWindow::setupToolBar()
     QWidget* empty = new QWidget();
     empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     toolBar->addWidget(empty);
-
+    /*
     vrButton = new QPushButton();
     QIcon icovr(":/icons/virtual-reality.svg");
     vrButton->setIcon(icovr);
     vrButton->setObjectName("vrButton");
     toolBar->addWidget(vrButton);
-
+    */
     viewPort->addToolBar(toolBar);
 }
 
