@@ -19,7 +19,7 @@ vec2 matcap(vec3 eye, vec3 normal) {
 void main() {
     //vec3 e = normalize(v_worldPos - u_eyePos);
     vec2 N = matcap(v_viewEyeDir, v_viewNormal);
-    vec3 base = texture2D( u_matTexture, N ).rgb;
+    vec3 base = texture( u_matTexture, N ).rgb;
 
     if (u_useMatTexture) {
         fragColor = vec4(base, 1.0);
