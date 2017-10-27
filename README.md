@@ -44,7 +44,7 @@ Jahshaka brings you the future of immersive digital content creation with the le
 ## Building From Source
 
 ### Requirements
-- Qt version 5.7 or greater is recommended *(earlier versions might work but aren't tested)*
+- Qt versions *5.7* or *5.9* are recommended *(other versions might work but aren't tested, 5.8 also has a bug on Windows)*
 - A C++ compiler with support for C++11 or later (choose a compiler for your OS when installing the Qt SDK, G++ or Clang recommended)
 - Qt Creator (also comes with the Qt SDK, latest version recommended)
 
