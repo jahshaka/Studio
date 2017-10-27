@@ -357,7 +357,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 if (!!activeSceneNode) {
                     sceneView->hideGizmo();
 
-                    if (isModelExtension(info.suffix())) {
+                    if (Constants::MODEL_EXTS.contains(info.suffix())) {
                         if (sceneView->doActiveObjectPicking(evt->posF())) {
                             //activeSceneNode->pos = sceneView->hit;
                             dragScenePos = sceneView->hit;
@@ -377,7 +377,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     }
                 }
 
-                if (!isModelExtension(info.suffix())) {
+                if (!Constants::MODEL_EXTS.contains(info.suffix())) {
                     sceneView->doObjectPicking(evt->posF(), iris::SceneNodePtr(), false, true);
                 }
             }
@@ -396,7 +396,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 }
 
                 auto info = QFileInfo(evt->mimeData()->text());
-                if (isModelExtension(info.suffix())) {
+                if (Constants::MODEL_EXTS.contains(info.suffix())) {
 
                     if (dragging) {
                         // TODO swap this with the actual model later on
@@ -420,14 +420,14 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     evt->ignore();
                 }
 
-                if (isModelExtension(info.suffix())) {
+                if (Constants::MODEL_EXTS.contains(info.suffix())) {
                     //auto ppos = activeSceneNode->pos;
                     auto ppos = dragScenePos;
                     //deleteNode();
                     addMesh(evt->mimeData()->text(), true, ppos);
                 }
 
-                if (!!activeSceneNode && !isModelExtension(info.suffix())) {
+                if (!!activeSceneNode && !Constants::MODEL_EXTS.contains(info.suffix())) {
                     auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
                     auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
 
@@ -992,7 +992,7 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 {
     QString filename;
     if (path.isEmpty()) {
-        filename = QFileDialog::getOpenFileName(this, "Load Mesh", "Mesh Files (*.obj *.fbx *.3ds)");
+        filename = QFileDialog::getOpenFileName(this, "Load Mesh", "Mesh Files (*.obj *.fbx *.3ds *.dae *.c4d *.blend)");
     } else {
         filename = path;
     }
@@ -1170,16 +1170,19 @@ void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
     event->accept();
 }
 
+/*
 bool MainWindow::isModelExtension(QString extension)
 {
-    if(extension == "obj" ||
-       extension == "3ds" ||
-       extension == "fbx" ||
-       extension == "dae")
+    if(extension == "obj"   ||
+       extension == "3ds"   ||
+       extension == "fbx"   ||
+       extension == "dae"   ||
+       extension == "blend" ||
+       extension == "c4d"   )
         return true;
     return false;
 }
-
+*/
 void MainWindow::exportSceneAsZip()
 {
     // get the export file path from a save dialog
