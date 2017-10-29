@@ -85,6 +85,7 @@ public:
 class TranslationGizmo : public Gizmo
 {
     iris::MeshPtr handleMesh;
+    QVector<iris::MeshPtr> handleMeshes;
     //iris::ShaderPtr shader;
     QOpenGLShaderProgram* shader;
 
@@ -94,25 +95,30 @@ class TranslationGizmo : public Gizmo
     // initial hit position
     QVector3D hitPos;
     QVector3D nodeStartPos;
+    TranslationHandle* draggedHandle;
+    int draggedHandleIndex;
 
     bool dragging;
 public:
     TranslationGizmo():
         Gizmo()
     {
-        handle[0] = new TranslationHandle(this, QVector3D(1,0,0));
-        handle[1] = new TranslationHandle(this, QVector3D(0,1,0));
-        handle[2] = new TranslationHandle(this, QVector3D(0,0,1));
+        handles[0] = new TranslationHandle(this, QVector3D(1,0,0));
+        handles[1] = new TranslationHandle(this, QVector3D(0,1,0));
+        handles[2] = new TranslationHandle(this, QVector3D(0,0,1));
 
         loadAssets();
         //handle->setHandleColor(QColor(255, 255, 255));
 
         dragging = false;
+        draggedHandle = nullptr;
     }
 
     void loadAssets()
     {
-        handleMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_x.obj"));
+        handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_x.obj")));
+        handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_y.obj")));
+        handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_z.obj")));
 
         shader = iris::GraphicsHelper::loadShader(
                     IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"),
@@ -126,7 +132,10 @@ public:
 
     void startDragging(QVector3D rayPos, QVector3D rayDir)
     {
-        hitPos = handle->getHitPos(rayPos, rayDir);
+        draggedHandle = getHitHandle(rayPos, rayDir);
+        if (draggedHandle == nullptr)
+            dragging = false; // end dragging if no handle was actually hit
+
         nodeStartPos = selectedNode->getGlobalPosition();
         dragging = true;
     }
@@ -138,7 +147,8 @@ public:
 
     void drag(QVector3D rayPos, QVector3D rayDir)
     {
-        auto slidingPos = handle->getHitPos(rayPos, rayDir);
+        qDebug()<<"sliding";
+        auto slidingPos = draggedHandle->getHitPos(rayPos, rayDir);
 
         // move node along line
         // do snapping here as well
@@ -150,7 +160,7 @@ public:
     bool isHit(QVector3D rayPos, QVector3D rayDir) override
     {
         for(auto i = 0; i< 3; i++) {
-            if (handle->isHit(rayPos, rayDir))
+            if (handles[i]->isHit(rayPos, rayDir))
             {
                 //handle->setHandleColor(QColor(255, 255, 255));
                 return true;
@@ -163,10 +173,16 @@ public:
     TranslationHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir)
     {
         TranslationHandle* closestHandle = nullptr;
-        float closestDistance = 0;
+        float closestDistance = 10000000;
 
         for(auto i = 0; i<3;i++)
         {
+            if (handles[i]->isHit(rayPos, rayDir)) {
+                hitPos = handles[i]->getHitPos(rayPos, rayDir);
+                if (hitPos.distanceToPoint(rayPos) < closestDistance) {
+                    closestHandle = handles[i];
+                }
+            }
 
         }
 
@@ -178,12 +194,17 @@ public:
         gl->glClear(GL_DEPTH_BUFFER_BIT);
         //gl->glDisable(GL_DEPTH_TEST);
         shader->bind();
-        shader->setUniformValue("u_worldMatrix", this->getTransform());
+
         shader->setUniformValue("u_viewMatrix", viewMatrix);
         shader->setUniformValue("u_projMatrix", projMatrix);
         shader->setUniformValue("showHalf", false);
-        shader->setUniformValue("color", handle->getHandleColor());
-        handleMesh->draw(gl, shader);
+
+        for(int i =0; i<3;i++) {
+            shader->setUniformValue("color", handles[i]->getHandleColor());
+            shader->setUniformValue("u_worldMatrix", this->getTransform());
+            //handles[i]->draw(gl, shader);
+            handleMeshes[i]->draw(gl, shader);
+        }
 
         shader->release();
     }

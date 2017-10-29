@@ -14,7 +14,7 @@ bool TranslationHandle::isHit(QVector3D rayPos, QVector3D rayDir)
     float s,t;
     QVector3D c1, c2;
     auto dist = iris::MathHelper::closestPointBetweenSegments(p1, q1, p2, q2, s,t,c1,c2);
-    if (dist < 1.0f) {
+    if (dist < 0.1f) {
         return true;
     }
 

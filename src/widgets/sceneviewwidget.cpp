@@ -575,6 +575,7 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     if (e->buttons() == Qt::LeftButton && !!selectedNode) {
          //viewportGizmo->update(editorCam->getLocalPos(), calculateMouseRay(localPos));
         if (gizmo->isDragging()) {
+            qDebug()<<"gizmo dragging";
             QVector3D rayPos, rayDir;
             this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
             gizmo->drag(rayPos, rayDir);
