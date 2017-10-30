@@ -833,6 +833,7 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 void MainWindow::removeScene()
 {
     sceneView->cleanup();
+    sceneNodePropertiesWidget->setSceneNode(iris::SceneNodePtr());
 }
 
 void MainWindow::setupPropertyUi()
