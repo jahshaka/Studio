@@ -252,7 +252,10 @@ void SceneViewWidget::setScene(iris::ScenePtr scene)
 void SceneViewWidget::setSelectedNode(iris::SceneNodePtr sceneNode)
 {
     selectedNode = sceneNode;
-    renderer->setSelectedSceneNode(sceneNode);
+    if (sceneNode == scene->getRootNode())
+        renderer->setSelectedSceneNode(iris::SceneNodePtr());
+    else
+        renderer->setSelectedSceneNode(sceneNode);
 
     if (viewportGizmo != nullptr) {
         viewportGizmo->setLastSelectedNode(sceneNode);
