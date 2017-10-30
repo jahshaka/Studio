@@ -67,6 +67,18 @@ void SceneViewWidget::setShowFps(bool value)
     showFps = value;
 }
 
+void SceneViewWidget::cleanup()
+{
+    scene.reset();
+    selectedNode.reset();
+    translationGizmo->setLastSelectedNode(iris::SceneNodePtr());
+    rotationGizmo->setLastSelectedNode(iris::SceneNodePtr());
+    scaleGizmo->setLastSelectedNode(iris::SceneNodePtr());
+
+    renderer->setScene(iris::ScenePtr());
+    renderer->setSelectedSceneNode(iris::SceneNodePtr());
+}
+
 SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 {
     QSurfaceFormat format;

@@ -161,6 +161,8 @@ public:
 
     void setShowFps(bool value);
 
+    void cleanup();
+
 protected:
     void initializeGL();
     bool eventFilter(QObject *obj, QEvent *event);
