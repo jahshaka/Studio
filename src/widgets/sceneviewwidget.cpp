@@ -67,6 +67,18 @@ void SceneViewWidget::setShowFps(bool value)
     showFps = value;
 }
 
+void SceneViewWidget::cleanup()
+{
+    scene.reset();
+    selectedNode.reset();
+    translationGizmo->setLastSelectedNode(iris::SceneNodePtr());
+    rotationGizmo->setLastSelectedNode(iris::SceneNodePtr());
+    scaleGizmo->setLastSelectedNode(iris::SceneNodePtr());
+
+    renderer->setScene(iris::ScenePtr());
+    renderer->setSelectedSceneNode(iris::SceneNodePtr());
+}
+
 SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 {
     QSurfaceFormat format;
@@ -240,7 +252,10 @@ void SceneViewWidget::setScene(iris::ScenePtr scene)
 void SceneViewWidget::setSelectedNode(iris::SceneNodePtr sceneNode)
 {
     selectedNode = sceneNode;
-    renderer->setSelectedSceneNode(sceneNode);
+    if (sceneNode == scene->getRootNode())
+        renderer->setSelectedSceneNode(iris::SceneNodePtr());
+    else
+        renderer->setSelectedSceneNode(sceneNode);
 
     if (viewportGizmo != nullptr) {
         viewportGizmo->setLastSelectedNode(sceneNode);
@@ -959,6 +974,9 @@ EditorData* SceneViewWidget::getEditorData()
 
 void SceneViewWidget::startPlayingScene()
 {
+    if (!scene)
+        return;
+
     // switch controllers
     if (scene->viewers.count() > 0) {
         viewerCam->setViewer(scene->viewers[0]);
@@ -980,6 +998,10 @@ void SceneViewWidget::stopPlayingScene()
 {
     playScene = false;
     animTime = 0.0f;
+
+    if (!scene)
+        return;
+
     scene->updateSceneAnimation(0.0f);
 
     restorePreviousCameraController();

@@ -684,6 +684,8 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->player_menu->setCursor(Qt::PointingHandCursor);
 
             playSceneBtn->show();
+            this->enterEditMode();
+            UiManager::sceneMode = SceneMode::EditMode;
             break;
         }
 
@@ -699,7 +701,9 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->player_menu->setDisabled(false);
             ui->player_menu->setCursor(Qt::PointingHandCursor);
 
+            UiManager::sceneMode = SceneMode::PlayMode;
             playSceneBtn->hide();
+            this->enterEditMode();
             break;
         }
         default: break;
@@ -830,6 +834,8 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 
 void MainWindow::removeScene()
 {
+    sceneView->cleanup();
+    sceneNodePropertiesWidget->setSceneNode(iris::SceneNodePtr());
 }
 
 void MainWindow::setupPropertyUi()
