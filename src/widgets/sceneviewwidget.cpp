@@ -974,6 +974,9 @@ EditorData* SceneViewWidget::getEditorData()
 
 void SceneViewWidget::startPlayingScene()
 {
+    if (!scene)
+        return;
+
     // switch controllers
     if (scene->viewers.count() > 0) {
         viewerCam->setViewer(scene->viewers[0]);
@@ -995,6 +998,10 @@ void SceneViewWidget::stopPlayingScene()
 {
     playScene = false;
     animTime = 0.0f;
+
+    if (!scene)
+        return;
+
     scene->updateSceneAnimation(0.0f);
 
     restorePreviousCameraController();

@@ -684,6 +684,7 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->player_menu->setCursor(Qt::PointingHandCursor);
 
             playSceneBtn->show();
+            this->enterEditMode();
             UiManager::sceneMode = SceneMode::EditMode;
             break;
         }
@@ -702,6 +703,7 @@ void MainWindow::switchSpace(WindowSpaces space)
 
             UiManager::sceneMode = SceneMode::PlayMode;
             playSceneBtn->hide();
+            this->enterEditMode();
             break;
         }
         default: break;
