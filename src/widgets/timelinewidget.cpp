@@ -35,8 +35,8 @@ TimelineWidget::TimelineWidget(QWidget* parent):
     itemColor = QColor::fromRgb(255,255,255);
 
     linePen = QPen(itemColor);
-    cursorPen = QPen(QColor::fromRgb(255,0,0));
-    cursorPen.setWidth(3);
+    cursorPen = QPen(QColor::fromRgb(255, 255, 255));
+    cursorPen.setWidth(1);
 
     setMouseTracking(true);
 
@@ -76,6 +76,8 @@ void TimelineWidget::paintEvent(QPaintEvent *painter)
     int widgetHeight = this->geometry().height();
 
     QPainter paint(this);
+    paint.setRenderHint(QPainter::Antialiasing);
+    paint.setRenderHint(QPainter::HighQualityAntialiasing);
 
     //black bg
     //paint.fillRect(0,0,widgetWidth,widgetHeight,bgColor);
@@ -131,8 +133,23 @@ void TimelineWidget::paintEvent(QPaintEvent *painter)
 
 
     //cursor
+    auto cursorX = timeToPos(animWidgetData->cursorPosInSeconds);
     paint.setPen(cursorPen);
-    paint.drawLine(timeToPos(animWidgetData->cursorPosInSeconds), 0, timeToPos(animWidgetData->cursorPosInSeconds), widgetHeight);
+    paint.drawLine(cursorX, 0, cursorX, widgetHeight);
+
+    // draw cursor's "handle"
+    int handleWidth = 10;
+    int halfHandleWidth = handleWidth/2;
+    int handleHeight = 15;
+
+    QPainterPath path;
+    path.moveTo(cursorX - halfHandleWidth, 0);
+    path.lineTo(cursorX + halfHandleWidth, 0);
+    path.lineTo(cursorX + halfHandleWidth, handleHeight);
+    path.lineTo(cursorX, handleHeight+5);
+    path.lineTo(cursorX - halfHandleWidth, handleHeight);
+    //path.lineTo();
+    paint.fillPath(path, QBrush(QColor(255, 255, 255)));
 }
 
 int TimelineWidget::timeToPos(float timeInSeconds)

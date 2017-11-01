@@ -12,9 +12,21 @@ For more information see the LICENSE file
 #include "cameranode.h"
 #include <QVector3D>
 #include <QPoint>
+#include <QMatrix4x4>
+#include "../math/mathhelper.h"
 
 namespace iris
 {
+
+void CameraNode::lookAt(QVector3D target)
+{
+    //todo: use global matrices
+    QMatrix4x4 matrix;
+    matrix.setToIdentity();
+    matrix.lookAt(pos, target, QVector3D(0,1,0));
+    matrix = matrix.inverted();
+    MathHelper::decomposeMatrix(matrix, pos, rot, scale);
+}
 
 QVector3D CameraNode::calculatePickingDirection(int viewPortWidth, int viewPortHeight,QPointF pos)
 {

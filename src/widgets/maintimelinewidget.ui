@@ -186,7 +186,7 @@ padding: 2px 2px 2px 2px;
            </property>
            <property name="icon">
             <iconset resource="../../icons.qrc">
-             <normaloff>:/app/icons/start.svg</normaloff>:/app/icons/start.svg</iconset>
+             <normaloff>:/icons/start.svg</normaloff>:/icons/start.svg</iconset>
            </property>
            <property name="iconSize">
             <size>
@@ -233,7 +233,7 @@ padding: 2px 2px 2px 2px;
            </property>
            <property name="icon">
             <iconset resource="../../icons.qrc">
-             <normaloff>:/app/icons/fastreverse.svg</normaloff>:/app/icons/fastreverse.svg</iconset>
+             <normaloff>:/icons/fastreverse.svg</normaloff>:/icons/fastreverse.svg</iconset>
            </property>
            <property name="iconSize">
             <size>
@@ -280,7 +280,7 @@ padding: 2px 2px 2px 2px;
            </property>
            <property name="icon">
             <iconset resource="../../icons.qrc">
-             <normaloff>:/app/icons/reverse.svg</normaloff>:/app/icons/reverse.svg</iconset>
+             <normaloff>:/icons/reverse.svg</normaloff>:/icons/reverse.svg</iconset>
            </property>
            <property name="iconSize">
             <size>
@@ -327,7 +327,7 @@ padding: 2px 2px 2px 2px;
            </property>
            <property name="icon">
             <iconset resource="../../icons.qrc">
-             <normaloff>:/app/icons/stop.svg</normaloff>:/app/icons/stop.svg</iconset>
+             <normaloff>:/icons/stop.svg</normaloff>:/icons/stop.svg</iconset>
            </property>
            <property name="iconSize">
             <size>
@@ -374,7 +374,7 @@ padding: 2px 2px 2px 2px;
            </property>
            <property name="icon">
             <iconset resource="../../icons.qrc">
-             <normaloff>:/app/icons/play.svg</normaloff>:/app/icons/play.svg</iconset>
+             <normaloff>:/icons/play.svg</normaloff>:/icons/play.svg</iconset>
            </property>
            <property name="iconSize">
             <size>
@@ -421,7 +421,7 @@ padding: 2px 2px 2px 2px;
            </property>
            <property name="icon">
             <iconset resource="../../icons.qrc">
-             <normaloff>:/app/icons/fastforward.svg</normaloff>:/app/icons/fastforward.svg</iconset>
+             <normaloff>:/icons/fastforward.svg</normaloff>:/icons/fastforward.svg</iconset>
            </property>
            <property name="iconSize">
             <size>
@@ -462,7 +462,7 @@ padding: 2px 2px 2px 2px;
            </property>
            <property name="icon">
             <iconset resource="../../icons.qrc">
-             <normaloff>:/app/icons/end.svg</normaloff>:/app/icons/end.svg</iconset>
+             <normaloff>:/icons/end.svg</normaloff>:/icons/end.svg</iconset>
            </property>
            <property name="iconSize">
             <size>
@@ -599,7 +599,7 @@ border-bottom: 1px solid #383838;
   </customwidget>
  </customwidgets>
  <resources>
-  <include location="../../icons.qrc"/>
+  <include location="../../app/icons.qrc"/>
  </resources>
  <connections/>
 </ui>

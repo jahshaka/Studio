@@ -19,11 +19,14 @@ For more information see the LICENSE file
 #include "../irisgl/src/animation/keyframeset.h"
 #include "../irisgl/src/animation/keyframeanimation.h"
 #include "../irisgl/src/animation/animation.h"
+#include "../irisgl/src/animation/propertyanim.h"
 #include "keyframewidget.h"
 #include "keyframelabelwidget.h"
 #include "keyframelabeltreewidget.h"
 #include "keyframelabel.h"
 #include "animationwidgetdata.h"
+#include "../uimanager.h"
+#include "animationwidget.h"
 #include <QMenu>
 #include <math.h>
 #include <QTreeWidget>
@@ -33,6 +36,34 @@ For more information see the LICENSE file
 void KeyFrameWidget::setAnimWidgetData(AnimationWidgetData *value)
 {
     animWidgetData = value;
+}
+
+void KeyFrameWidget::deleteContextKey()
+{
+    auto anim = obj->getAnimation();
+
+    auto propAnim = anim->getPropertyAnim(contextKey.propertyName);
+    if (propAnim != nullptr) {
+        if (contextKey.keyType == DopeKeyType::FloatKey) {
+            auto frame = propAnim->getKeyFrame(contextKey.subPropertyName);
+            frame->removeKey(contextKey.floatKey);
+
+            labelWidget->recalcPropertySummaryKeys(contextKey.propertyName);
+        } else if (contextKey.keyType == DopeKeyType::SummaryKey) {
+            // loop through all keys and try to remove them from all each property
+            // n^2, but its the best we can do right now
+            for( auto key : contextKey.summaryKey.keys) {
+                for( auto frame : propAnim->getKeyFrames()) {
+                    frame.keyFrame->removeKey(key);
+                }
+            }
+
+            labelWidget->recalcPropertySummaryKeys(contextKey.propertyName);
+        }
+    }
+
+    contextKey = DopeKey::Null();
+
 }
 
 KeyFrameWidget::KeyFrameWidget(QWidget* parent):
@@ -48,6 +79,9 @@ KeyFrameWidget::KeyFrameWidget(QWidget* parent):
     cursorPen = QPen(QColor::fromRgb(142,45,197));
     cursorPen.setWidth(3);
 
+    pointPen = QPen(QColor::fromRgb(0, 0, 0));
+    pointPen.setWidth(1);
+
     setMouseTracking(true);
 
     dragging = false;
@@ -60,6 +94,12 @@ KeyFrameWidget::KeyFrameWidget(QWidget* parent):
 
     labelWidget = nullptr;
     animWidgetData = nullptr;
+
+    defaultBrush = QBrush(QColor::fromRgb(255, 255, 255), Qt::SolidPattern);
+    innerBrush = QBrush(QColor::fromRgb(155, 155, 155), Qt::SolidPattern);
+    highlightBrush = QBrush(QColor::fromRgb(155, 155, 155), Qt::SolidPattern);
+
+    keyPointSize = 8;
 }
 
 void KeyFrameWidget::setSceneNode(iris::SceneNodePtr node)
@@ -71,6 +111,7 @@ void KeyFrameWidget::adjustLength()
 {
 }
 
+
 void KeyFrameWidget::paintEvent(QPaintEvent *painter)
 {
     Q_UNUSED(painter);
@@ -81,13 +122,14 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
     int widgetWidth = this->geometry().width();
     int widgetHeight = this->geometry().height();
     QPainter paint(this);
+    paint.setRenderHint(QPainter::Antialiasing, true);
 
     //black bg
     paint.fillRect(0,0,widgetWidth,widgetHeight,bgColor);
 
     // dont draw any lines if no scenenode is selected
-    if(!obj)
-        return;
+    //if(!obj)
+    //    return;
 
     //cosmetic
     drawBackgroundLines(paint);
@@ -98,22 +140,6 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
     int ypos = 0;
 
     if (labelWidget != nullptr) {
-        /*
-        auto frameSet = obj->animation->keyFrameSet;
-
-        for (auto frame:frameSet->keyFrames) {
-            drawFrame(paint,frame,ypos+=frameHeight);
-        }
-        */
-        /*
-        auto labels = labelWidget->getLabels();
-        for (auto label : labels) {
-            drawFrame(paint, label->getKeyFrame(),ypos,label->height());
-
-            ypos+=label->height();
-        }
-        */
-
         auto top = 0;
         auto tree = labelWidget->getTree();
         for( int i = 0; i < tree->invisibleRootItem()->childCount(); ++i ) {
@@ -124,12 +150,30 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
     }
 
     //cursor
-    auto cursorPen = QPen(QColor::fromRgb(142,45,197));
-    cursorPen.setWidth(3);
+    auto cursorPen = QPen(QColor::fromRgb(255, 255, 255));
+    cursorPen.setWidth(1);
     paint.setPen(cursorPen);
     auto cursorScreenPos = timeToPos(animWidgetData->cursorPosInSeconds);
     paint.drawLine(cursorScreenPos,0,cursorScreenPos,widgetHeight);
 
+}
+
+void KeyFrameWidget::drawPoint(QPainter& paint, QPoint point, bool isHighlight)
+{
+    int halfHandleWidth = keyPointSize;
+    QPainterPath path;
+    path.moveTo(point.x() - halfHandleWidth, point.y());
+    path.lineTo(point.x() , point.y() - halfHandleWidth);
+    path.lineTo(point.x() + halfHandleWidth, point.y());
+    path.lineTo(point.x() , point.y() + halfHandleWidth);
+
+    if (isHighlight) {
+        paint.fillPath(path, highlightBrush);
+        paint.strokePath(path, pointPen);
+    } else {
+        paint.fillPath(path, defaultBrush);
+        paint.strokePath(path, pointPen);
+    }
 }
 
 void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetItem* item, int& yTop)
@@ -137,53 +181,48 @@ void KeyFrameWidget::drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetIt
     auto data = item->data(0,Qt::UserRole).value<KeyFrameData>();
     auto height = tree->visualItemRect(item).height();
 
-    float penSize = 14;
-    float penSizeSquared = 7*7;
-
-    QPen pen(QColor::fromRgb(255,255,255));
-    pen.setWidth(penSize);
-    pen.setCapStyle(Qt::RoundCap);
-
-    QPen innerPen(QColor::fromRgb(155,155,155));
-    innerPen.setWidth(penSize-4);
-    innerPen.setCapStyle(Qt::RoundCap);
-
-    QPen highlightPen(QColor::fromRgb(100,100,100));
-    highlightPen.setWidth(penSize);
-    highlightPen.setCapStyle(Qt::RoundCap);
+    float penSizeSquared = keyPointSize * keyPointSize;
     auto halfHeight = + height / 2.0f;
 
+
     if (data.keyFrame != nullptr) {
+        paint.fillRect(0, yTop, width(), height,QBrush(QColor(0,0,0,15)));
+
         for(auto key:data.keyFrame->keys)
         {
             int xpos = this->timeToPos(key->time);
 
             float distSqrd = distanceSquared(xpos, yTop + halfHeight, mousePos.x(), mousePos.y());
+            auto point = QPoint(xpos, yTop + height / 2.0f);
 
             if(distSqrd < penSizeSquared)
             {
-                paint.setPen(highlightPen);
-                paint.drawPoint(xpos, yTop + height / 2.0f);
-
-                paint.setPen(innerPen);
-                paint.drawPoint(xpos, yTop + height / 2.0f);
+                drawPoint(paint, point, true);
             }
             else
             {
-                paint.setPen(pen);
-                paint.drawPoint(xpos, yTop + height / 2.0f);
-
-                paint.setPen(innerPen);
-                paint.drawPoint(xpos, yTop + height / 2.0f);
+                drawPoint(paint, point);
             }
         }
-    } else {
-        paint.fillRect(0, yTop, this->width(), height, propColor);
-    }
+    } else if(data.isProperty()){ // draw summary keys
+        paint.fillRect(0, yTop, width(), height,QBrush(QColor(0,0,0,40)));
+        for(auto& key:data.summaryKeys)
+        {
+            int xpos = this->timeToPos(key.getTime());
 
-    QPen smallPen = QPen(QColor::fromRgb(55,55,55));
-    paint.setPen(smallPen);
-    paint.drawLine(0, yTop + height, this->width(), yTop + height);
+            float distSqrd = distanceSquared(xpos, yTop + halfHeight, mousePos.x(), mousePos.y());
+            auto point = QPoint(xpos, yTop + height / 2.0f);
+
+            if(distSqrd < penSizeSquared)
+            {
+                drawPoint(paint, point, true);
+            }
+            else
+            {
+                drawPoint(paint, point);
+            }
+        }
+    }
 
     yTop += height;
 
@@ -246,7 +285,7 @@ void KeyFrameWidget::mousePressEvent(QMouseEvent* evt)
     if(evt->button() == Qt::RightButton)
         rightButtonDown = true;
 
-    if(mousePos==clickPos && evt->button() == Qt::LeftButton)
+    if(evt->button() == Qt::LeftButton)
     {
         this->selectedKey = this->getSelectedKey(mousePos.x(),mousePos.y());
     }
@@ -266,32 +305,50 @@ void KeyFrameWidget::mouseReleaseEvent(QMouseEvent* evt)
 
     if(mousePos==clickPos && evt->button() == Qt::RightButton)
     {
-        //qDebug()<<"Context Menu"<<endl;
+        contextKey = this->getSelectedKey(mousePos.x(),mousePos.y());
 
-        //show context menu
-        QMenu menu;
+        if (!contextKey.isNull()) {
+            //show context menu
+            QMenu menu;
 
-        menu.addAction("delete");
-        //menu.exec();
+            auto deleteAction = menu.addAction("Delete");
+            connect(deleteAction, SIGNAL(triggered(bool)), this, SLOT(deleteContextKey()));
+
+            menu.exec(this->mapToGlobal(mousePos));
+        }
     }
 
-    if(evt->button() == Qt::LeftButton)
+    if(evt->button() == Qt::LeftButton) {
         leftButtonDown = false;
+        selectedKey = DopeKey::Null();
+
+        // recalculate animation length
+        if (!!obj && obj->hasActiveAnimation()) {
+            auto anim = obj->getAnimation();
+            anim->calculateAnimationLength();
+        }
+    }
     if(evt->button() == Qt::MiddleButton)
         middleButtonDown = false;
     if(evt->button() == Qt::RightButton)
         rightButtonDown = false;
 
-
 }
 
 void KeyFrameWidget::mouseMoveEvent(QMouseEvent* evt)
 {
-    if(leftButtonDown && selectedKey!=nullptr)
+    if(leftButtonDown && !selectedKey.isNull())
     {
         //key dragging
         auto timeDiff = posToTime(evt->x())-posToTime(mousePos.x());
-        selectedKey->time+=timeDiff;
+        selectedKey.move(timeDiff);
+        if(selectedKey.keyType == DopeKeyType::FloatKey)
+        {
+            // recalculate summary keys
+            // todo: recalc only summary keys for this key's property
+            labelWidget->recalcPropertySummaryKeys(selectedKey.propertyName);
+        }
+        this->repaint();
     }
     else if(leftButtonDown)
     {
@@ -346,37 +403,82 @@ float KeyFrameWidget::distanceSquared(float x1,float y1,float x2,float y2)
     return dx*dx + dy*dy;
 }
 
-iris::FloatKey* KeyFrameWidget::getSelectedKey(int x,int y)
+DopeKey KeyFrameWidget::getSelectedKey(int x,int y)
 {
-    /*
-    if(!obj)
-        return nullptr;
 
-    float penSizeSquared = 7*7;
+    int widgetWidth = this->geometry().width();
+    int widgetHeight = this->geometry().height();
 
-    int frameHeight = 20;
-    int ypos = -20;
-    for(auto keyFrame:obj->animation->keyFrameSet->keyFrames)
-    {
-        ypos+=frameHeight;
-        for(auto key:keyFrame->keys)
+    auto mousePos = QVector2D(x, y);
+    //qDebug() << mousePos;
+
+    auto top = 0;
+    auto tree = labelWidget->getTree();
+    for( int i = 0; i < tree->invisibleRootItem()->childCount(); ++i ) {
+        auto item = tree->invisibleRootItem()->child(i);
+
+        auto dopeKey = getSelectedKey(tree, item, top );
+        return dopeKey;
+    }
+
+    return DopeKey::Null();
+}
+
+DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* tree,QTreeWidgetItem *item, int &yTop)
+{
+    //auto keyPointRadius = 7;//*7;
+
+    auto data = item->data(0,Qt::UserRole).value<KeyFrameData>();
+    auto height = tree->visualItemRect(item).height();
+
+    if (data.keyFrame != nullptr) {
+        for(auto key:data.keyFrame->keys)
         {
             int xpos = this->timeToPos(key->time);
 
-            float distSqrd = distanceSquared(xpos,ypos+10,x,y);
+            auto point = QVector2D(xpos, yTop + height / 2.0f);
+            if(point.distanceToPoint(QVector2D(mousePos)) <= keyPointSize)
+                return DopeKey(key, data.propertyName, data.subPropertyName);
+        }
+    } else if(data.isProperty()){ // draw summary keys
+        //paint.fillRect(0, yTop, this->width(), height, propColor);
+        for(auto keyTime:data.summaryKeys.keys())
+        {
+            int xpos = this->timeToPos(keyTime);
 
-            if(distSqrd < penSizeSquared)
-            {
-                return key;
-            }
+            auto point = QVector2D(xpos, yTop + height / 2.0f);
+            if(point.distanceToPoint(QVector2D(mousePos)) <= keyPointSize)
+                return DopeKey(data.summaryKeys[keyTime], data.propertyName, data.subPropertyName);
+
         }
     }
-    */
 
-    return nullptr;
+    yTop += height;
+
+    if (item->isExpanded()) {
+        for( int i = 0; i < item->childCount(); ++i ) {
+            auto childItem = item->child(i);
+
+            auto key = getSelectedKey(tree, childItem, yTop );
+            if (!key.isNull())
+                return key;
+        }
+    }
+
+    return DopeKey::Null();
 }
 
 void KeyFrameWidget::setLabelWidget(KeyFrameLabelTreeWidget *value)
 {
     labelWidget = value;
+}
+
+void DopeKey::move(float timeIncr)
+{
+    if (keyType == DopeKeyType::FloatKey)
+        floatKey->time += timeIncr;
+    else if(keyType == DopeKeyType::SummaryKey) {
+        for(auto key : summaryKey.keys)
+            key->time += timeIncr;
+    }
 }

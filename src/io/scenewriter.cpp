@@ -42,13 +42,14 @@ For more information see the LICENSE file
 #include "../constants.h"
 
 
-void SceneWriter::writeScene(QString filePath,iris::ScenePtr scene,
+void SceneWriter::writeScene(QString filePath,
+                             iris::ScenePtr scene,
                              iris::PostProcessManagerPtr postMan,
                              EditorData* editorData)
 {
     dir = AssetIOBase::getDirFromFileName(filePath);
     QFile file(filePath);
-    file.open(QIODevice::WriteOnly|QIODevice::Truncate);
+    file.open(QIODevice::WriteOnly | QIODevice::Truncate);
 
     QJsonObject projectObj;
     projectObj["version"] = "0.1";
@@ -65,12 +66,12 @@ void SceneWriter::writeScene(QString filePath,iris::ScenePtr scene,
     file.close();
 }
 
-QByteArray SceneWriter::getSceneObject(QString filePath,
+QByteArray SceneWriter::getSceneObject(QString projectPath,
                                        iris::ScenePtr scene,
                                        iris::PostProcessManagerPtr postMan,
                                        EditorData *editorData)
 {
-    dir = AssetIOBase::getDirFromFileName(filePath);
+    dir = projectPath;
     QJsonObject projectObj;
     projectObj["version"] = Constants::CONTENT_VERSION;
 
@@ -84,7 +85,7 @@ QByteArray SceneWriter::getSceneObject(QString filePath,
         writePostProcessData(projectObj, postMan);
     }
 
-    //qDebug() << projectObj;
+    // qDebug() << projectObj;
 
     return QJsonDocument(projectObj).toBinaryData();
 }
@@ -154,6 +155,7 @@ void SceneWriter::writePostProcessData(QJsonObject &projectObj, iris::PostProces
 void SceneWriter::writeEditorData(QJsonObject& projectObj,EditorData* editorData)
 {
     QJsonObject editorObj;
+    editorObj["showLightWires"] = editorData->showLightWires;
 
     QJsonObject cameraObj;
     auto cam = editorData->editorCamera;

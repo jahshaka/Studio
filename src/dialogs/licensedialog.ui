@@ -6,58 +6,149 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>500</height>
+    <width>785</width>
+    <height>441</height>
    </rect>
   </property>
   <property name="sizePolicy">
-   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
     <horstretch>0</horstretch>
     <verstretch>0</verstretch>
    </sizepolicy>
   </property>
   <property name="minimumSize">
    <size>
-    <width>800</width>
-    <height>500</height>
+    <width>0</width>
+    <height>0</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
-    <width>800</width>
-    <height>500</height>
+    <width>16777215</width>
+    <height>16777215</height>
    </size>
   </property>
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
   <property name="windowIcon">
-   <iconset resource="../../icons.qrc">
-    <normaloff>:/app/icons/logo03.svg</normaloff>:/app/icons/logo03.svg</iconset>
+   <iconset resource="../../app/icons.qrc">
+    <normaloff>:/icons/logo03.svg</normaloff>:/icons/logo03.svg</iconset>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout">
-   <item>
+  <property name="styleSheet">
+   <string notr="true">#LicenseDialog {
+	background: rgb(22, 26, 27);
+}
+
+QPushButton {
+	border: 0;
+	background: #444;
+	padding: 8px 24px;
+}
+
+QPushButton:hover {
+	background: #555;
+}
+
+
+QScrollBar:vertical {
+     background-color: #212121;
+     width: 18px;
+     margin: 22px 0 22px 0;
+ }
+
+ QScrollBar::handle:vertical {
+	background-color: #444;
+     min-height: 20px;
+     margin-left: 2px;
+     margin-right: 2px;
+ }
+
+QScrollBar::handle:vertical:hover {
+	background-color: #555;
+	min-height: 20px;
+	margin-left: 2px;
+	margin-right: 2px;
+}
+
+QScrollBar::add-line:vertical {
+	background-color: #444;
+	height: 20px;
+	border: 2px solid #212121;
+	border-width: 2px 2px  0 2px;
+	subcontrol-position: bottom;
+	subcontrol-origin: margin;
+ }
+
+QScrollBar::sub-line:vertical {
+    background-color: #444;
+	height: 20px;
+	border: 2px solid #212121;
+	border-width: 0 2px 2px 2px;
+	subcontrol-position: top;
+	subcontrol-origin: margin;
+ }
+
+QScrollBar::up-arrow:vertical {
+    image: url(:/icons/up-arrow.svg);
+}
+
+QScrollBar::up-arrow:vertical:hover {
+    background-color: #555;
+}
+
+QScrollBar::down-arrow:vertical {
+    image: url(:/icons/down-arrow.svg);
+}
+
+QScrollBar::down-arrow:vertical:hover {
+    background-color: #555;
+}
+</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>6</number>
+   </property>
+   <item row="0" column="0" rowspan="2">
+    <widget class="QWidget" name="widget_2" native="true">
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <property name="spacing">
+       <number>0</number>
+      </property>
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string/>
+        </property>
+        <property name="pixmap">
+         <pixmap resource="../../app/images.qrc">:/images/sidepanelimage.jpg</pixmap>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="0" column="1">
     <layout class="QHBoxLayout" name="horizontalLayout_2">
-     <item>
-      <widget class="QWidget" name="widget_3" native="true">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>150</width>
-         <height>0</height>
-        </size>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">background-image: url(:/app/images/sidepanelimage_info.jpg);
-background-repeat: no-repeat;</string>
-       </property>
-      </widget>
-     </item>
+     <property name="spacing">
+      <number>0</number>
+     </property>
      <item>
       <widget class="QTextBrowser" name="textBrowser">
        <property name="font">
@@ -66,7 +157,13 @@ background-repeat: no-repeat;</string>
         </font>
        </property>
        <property name="styleSheet">
-        <string notr="true">border: 1px solid black;</string>
+        <string notr="true">background: rgb(22, 26, 27);</string>
+       </property>
+       <property name="frameShape">
+        <enum>QFrame::NoFrame</enum>
+       </property>
+       <property name="frameShadow">
+        <enum>QFrame::Plain</enum>
        </property>
        <property name="html">
         <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
@@ -751,9 +848,24 @@ p, li { white-space: pre-wrap; }
      </item>
     </layout>
    </item>
-   <item>
+   <item row="1" column="1">
     <widget class="QWidget" name="widget" native="true">
      <layout class="QHBoxLayout" name="horizontalLayout">
+      <property name="spacing">
+       <number>0</number>
+      </property>
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
       <item>
        <spacer name="horizontalSpacer">
         <property name="orientation">
@@ -777,25 +889,9 @@ p, li { white-space: pre-wrap; }
         </property>
         <property name="minimumSize">
          <size>
-          <width>80</width>
-          <height>30</height>
+          <width>0</width>
+          <height>0</height>
          </size>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">QPushButton
-{
-background-color: rgba(155, 155, 155,0);
-border-radius:10px;
-border: 2px solid  rgb(223, 223, 223);
-color: rgb(255, 255, 255);
-}
-QPushButton:hover
-{
-background-color: rgb(223, 223, 223);
-border: 2px solid  rgb(223, 223, 223);
-color: rgb(115, 115, 115);
-}
-</string>
         </property>
         <property name="text">
          <string>Ok</string>
@@ -808,7 +904,8 @@ color: rgb(115, 115, 115);
   </layout>
  </widget>
  <resources>
-  <include location="../../icons.qrc"/>
+  <include location="../../app/images.qrc"/>
+  <include location="../../app/icons.qrc"/>
  </resources>
  <connections/>
 </ui>

@@ -18,6 +18,8 @@ For more information see the LICENSE file
 #include <QImage>
 #include "../irisglfwd.h"
 
+class QOpenGLFunctions_3_2_Core;
+
 namespace iris
 {
 
@@ -75,12 +77,20 @@ public:
     static Texture2DPtr createCubeMap(QString, QString, QString, QString, QString, QString, QImage *i = nullptr);
     void resize(int width, int height);
 
+    QPixmap readData();
+
+    int getWidth();
+    int getHeight();
+
+    void setFilters(QOpenGLTexture::Filter minFilter, QOpenGLTexture::Filter magFilter);
+    void setWrapMode(QOpenGLTexture::WrapMode wrapS, QOpenGLTexture::WrapMode wrapT);
+
 private:
-    Texture2D(QOpenGLTexture* tex)
-    {
-        this->texture = tex;
-    }
+    Texture2D(QOpenGLTexture* tex);
+
+    QOpenGLFunctions_3_2_Core* gl;
 };
+
 
 }
 

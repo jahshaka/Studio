@@ -5,12 +5,15 @@ namespace Ui {
     class AssetWidget;
 }
 
+class Database;
+
 #include <QListWidget>
 #include <QTreeWidgetItem>
 #include <QWidget>
 #include <QFileDialog>
 
 #include "../io/assetmanager.h"
+#include "../editor/thumbnailgenerator.h"
 
 // TODO - https://stackoverflow.com/questions/19465812/how-can-i-insert-qdockwidget-as-tab
 
@@ -28,23 +31,26 @@ class AssetWidget : public QWidget
     Q_OBJECT
 
 public:
-    AssetWidget(QWidget *parent = nullptr);
+    explicit AssetWidget(Database *handle, QWidget *parent = Q_NULLPTR);
     ~AssetWidget();
 
-    void populateAssetTree();
+    void populateAssetTree(bool initialRun);
     void updateTree(QTreeWidgetItem* parentTreeItem, QString path);
-    void walkFileSystem(QString folder, QString path);
+    void generateAssetThumbnails();
+    void syncTreeAndView(const QString&);
     void addItem(const QString &asset);
     void updateAssetView(const QString &path);
+    void trigger();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
-    void dragEnterEvent(QDragEnterEvent*);
-    void dropEvent(QDropEvent*);
+    void dragEnterEvent(QDragEnterEvent*) override;
+    void dropEvent(QDropEvent*) override;
 
 protected slots:
     void treeItemSelected(QTreeWidgetItem* item);
     void treeItemChanged(QTreeWidgetItem* item,int index);
+
 
     void sceneTreeCustomContextMenu(const QPoint &);
     void sceneViewCustomContextMenu(const QPoint &);
@@ -64,12 +70,19 @@ protected slots:
     void openAtFolder();
     void createFolder();
     void importAssetB();
+    void createDirectoryStructure(const QStringList&, const QString&);
     void importAsset(const QStringList &path);
+
+    void onThumbnailResult(ThumbnailResult* result);
 
 private:
     Ui::AssetWidget *ui;
     AssetItem assetItem;
     QPoint startPos;
+
+    Database *db;
+
+    QString currentPath;
 };
 
 #endif // ASSETWIDGET_H

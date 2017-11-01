@@ -42,6 +42,10 @@ public:
     void unbind();
 
     static RenderTargetPtr create(int width, int height);
+    int getWidth() const;
+    int getHeight() const;
+
+    QImage toImage();
 };
 
 }

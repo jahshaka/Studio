@@ -95,9 +95,10 @@ struct AssetObject : public Asset
     // this is a metatype so we can use aiScene's in variants
     AssimpObject *ao;
 
-    AssetObject(AssimpObject *a, QString p) : ao(a) {
+    AssetObject(AssimpObject *a, QString p, QString f) : ao(a) {
         type = AssetType::Object;
         path = p;
+        fileName = f;
         deletable = true;
     }
 
@@ -116,8 +117,15 @@ struct AssetObject : public Asset
 class AssetManager
 {
 public:
-    AssetManager();
     static QList<Asset*> assets;
+    static QList<Asset*>& getAssets();
+    static void addAsset(Asset* asset);
+
+    // returns asset by path
+    // return null if no asset exists
+    static Asset* getAssetByPath(QString absolutePath);
+
+
 };
 
 #endif // ASSETMANAGER_H

@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <qwindow.h>
 #include <qsurface.h>
+#include <QScrollArea>
 
 //#include "irisgl/src/irisgl.h"
 #include "irisgl/src/scenegraph/meshnode.h"
@@ -37,6 +38,7 @@ For more information see the LICENSE file
 #include "irisgl/src/animation/animation.h"
 #include "irisgl/src/graphics/postprocessmanager.h"
 #include "irisgl/src/core/logger.h"
+#include "src/dialogs/donatedialog.h"
 
 #include <QFontDatabase>
 #include <QOpenGLContext>
@@ -46,7 +48,11 @@ For more information see the LICENSE file
 #include <QOpenGLDebugLogger>
 #include <QUndoStack>
 
+#include <QBuffer>
+#include <QDirIterator>
+#include <QDockWidget>
 #include <QFileDialog>
+#include <QTemporaryDir>
 
 #include <QTreeWidgetItem>
 
@@ -54,6 +60,7 @@ For more information see the LICENSE file
 #include <QTimer>
 #include <math.h>
 #include <QDesktopServices>
+#include <QShortcut>
 
 #include "dialogs/loadmeshdialog.h"
 #include "core/surfaceview.h"
@@ -81,6 +88,8 @@ For more information see the LICENSE file
 #include "core/materialpreset.h"
 #include "widgets/postprocesseswidget.h"
 
+#include "widgets/projectmanager.h"
+
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
 
@@ -92,6 +101,21 @@ For more information see the LICENSE file
 #include "commands/addscenenodecommand.h"
 #include "commands/deletescenenodecommand.h"
 
+#include "widgets/screenshotwidget.h"
+#include "editor/editordata.h"
+#include "widgets/assetwidget.h"
+
+#include "../src/dialogs/newprojectdialog.h"
+
+#include "../src/widgets/scenehierarchywidget.h"
+#include "../src/widgets/scenenodepropertieswidget.h"
+
+#include "../src/widgets/materialsets.h"
+#include "../src/widgets/modelpresets.h"
+#include "../src/widgets/skypresets.h"
+
+#include "src/irisgl/src/zip/zip.h"
+
 enum class VRButtonMode : int
 {
     Default = 0,
@@ -99,150 +123,72 @@ enum class VRButtonMode : int
     VRMode
 };
 
-MainWindow::MainWindow(QWidget *parent) :
-    QMainWindow(parent),
-    ui(new Ui::MainWindow)
+MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    setWindowTitle("Jahshaka " + Constants::CONTENT_VERSION);
 
-    iris::Logger::getSingleton()->init(getAbsoluteAssetPath("log.txt"));
+    UiManager::mainWindow = this;
+
+    QFont font;
+    font.setFamily(font.defaultFamily());
+    font.setPointSize(font.pointSize() * devicePixelRatio());
+    setFont(font);
+
+#ifdef QT_DEBUG
+    iris::Logger::getSingleton()->init(getAbsoluteAssetPath("jahshaka.log"));
+    setWindowTitle(windowTitle() + " - Developer Build");
+#else
+    iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/jahshaka.log");
+#endif
+
     createPostProcessDockWidget();
-
-    ui->sceneContainer->setAcceptDrops(true);
-    ui->sceneContainer->installEventFilter(this);
-    ui->assetWidget->setAcceptDrops(true);
-    ui->assetWidget->installEventFilter(this);
-
-    this->setWindowTitle("Jahshaka VR");
-
-//    QFile fontFile(getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
-//    if (fontFile.exists()) {
-//        fontFile.open(QIODevice::ReadOnly);
-//        QFontDatabase::addApplicationFontFromData(fontFile.readAll());
-//        QApplication::setFont(QFont("Open Sans", 9));
-//    }
-
-    UiManager::setAnimationWidget(ui->animationtimeline);
 
     settings = SettingsManager::getDefaultManager();
     prefsDialog = new PreferencesDialog(settings);
     aboutDialog = new AboutDialog();
     licenseDialog = new LicenseDialog();
 
-    // ui->animationtimeline->setMainWindow(this);
-    ui->materialPresets->setMainWindow(this);
-    ui->modelPresets->setMainWindow(this);
-    ui->skyPresets->setMainWindow(this);
-
     camControl = nullptr;
     vrMode = false;
 
     setupFileMenu();
-    setupViewMenu();
     setupHelpMenu();
 
-    this->setupLayerButtonMenu();
-
-    // TIMER
-    timer = new QTimer(this);
-    connect(timer, SIGNAL(timeout()), this, SLOT(updateAnim()));
-
-    setProjectTitle(Globals::project->getProjectName());
-
-    // initialzie scene view
-    //sceneView = new SceneViewWidget(this);
-    //sceneView->setParent(this);
-    sceneView = new SceneViewWidget(ui->sceneContainer);
-    sceneView->setParent(ui->sceneContainer);
-    //auto focusPolicy = sceneView->focusPolicy();
-    sceneView->setFocusPolicy(Qt::ClickFocus);
-    sceneView->setFocus();
-    Globals::sceneViewWidget = sceneView;
-
-    QGridLayout* layout = new QGridLayout(ui->sceneContainer);
-    layout->addWidget(sceneView);
-    layout->setMargin(0);
-    ui->sceneContainer->setLayout(layout);
-
-    connect(sceneView, SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),
-            this, SLOT(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)));
-
-    ui->sceneHierarchy->setMainWindow(this);
-
-    connect(ui->sceneHierarchy, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
-            this, SLOT(sceneNodeSelected(iris::SceneNodePtr)));
-
-    connect(sceneView, SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
-            this, SLOT(sceneNodeSelected(iris::SceneNodePtr)));
-
-    connect(ui->playSceneBtn,SIGNAL(clicked(bool)),this,SLOT(onPlaySceneButton()));
-
-    // toolbar stuff
-    connect(ui->actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
-    connect(ui->actionRotate,       SIGNAL(triggered(bool)), SLOT(rotateGizmo()));
-    connect(ui->actionScale,        SIGNAL(triggered(bool)), SLOT(scaleGizmo()));
-
-    transformGroup = new QActionGroup(this);
-    transformGroup->addAction(ui->actionTranslate);
-    transformGroup->addAction(ui->actionRotate);
-    transformGroup->addAction(ui->actionScale);
-
-    connect(ui->actionGlobalSpace,  SIGNAL(triggered(bool)), SLOT(useGlobalTransform()));
-    connect(ui->actionLocalSpace,   SIGNAL(triggered(bool)), SLOT(useLocalTransform()));
-
-    transformSpaceGroup = new QActionGroup(this);
-    transformSpaceGroup->addAction(ui->actionGlobalSpace);
-    transformSpaceGroup->addAction(ui->actionLocalSpace);
-    ui->actionGlobalSpace->setChecked(true);
-
-    connect(ui->actionFreeCamera,   SIGNAL(triggered(bool)), SLOT(useFreeCamera()));
-    connect(ui->actionArcballCam,   SIGNAL(triggered(bool)), SLOT(useArcballCam()));
-
-    cameraGroup = new QActionGroup(this);
-    cameraGroup->addAction(ui->actionFreeCamera);
-    cameraGroup->addAction(ui->actionArcballCam);
-    ui->actionFreeCamera->setChecked(true);
-
-    // this acts as a spacer
-    QWidget* empty = new QWidget();
-    empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    ui->ToolBar->addWidget(empty);
-
-    vrButton = new QPushButton();
-    QIcon ico(":/app/icons/virtual-reality.svg");
-    vrButton->setIcon(ico);
-    vrButton->setObjectName("vrButton");
-    //but->setStyleSheet("background-color: #1e1e1e; padding: 8px; border: 1px solid black; margin: 8px;");
-    ui->ToolBar->addWidget(vrButton);
-
-    ui->AnimationDock->hide();
-//    ui->PresetsDock->hide();
-
+    setupViewPort();
     setupProjectDB();
+    setupDesktop();
+    setupToolBar();
+    setupDockWidgets();
+    setupShortcuts();
+
+//    if (!UiManager::playMode) {
+//        restoreGeometry(settings->getValue("geometry", "").toByteArray());
+//        restoreState(settings->getValue("windowState", "").toByteArray());
+//    }
 
     setupUndoRedo();
+
+    // this ties to hidden geometry so should come at the end
+    setupViewMenu();
+}
+
+void MainWindow::grabOpenGLContextHack()
+{
+    switchSpace(WindowSpaces::PLAYER);
+}
+
+void MainWindow::goToDesktop()
+{
+    showMaximized();
+    switchSpace(WindowSpaces::DESKTOP);
 }
 
 void MainWindow::setupVrUi()
 {
-//    ui->vrBtn->setToolTipDuration(0);
-//    if (sceneView->isVrSupported()) {
-//        ui->vrBtn->setEnabled(true);
-//        ui->vrBtn->setToolTip("Press to view the scene in vr");
-//        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Default);
-//    } else {
-//        ui->vrBtn->setEnabled(false);
-//        ui->vrBtn->setToolTip("No Oculus device detected");
-//        ui->vrBtn->setProperty("vrMode", (int) VRButtonMode::Disabled);
-//    }
-
-//    connect(ui->vrBtn, SIGNAL(clicked(bool)), SLOT(vrButtonClicked(bool)));
-
-//    //needed to apply changes
-//    ui->vrBtn->style()->unpolish(ui->vrBtn);
-//    ui->vrBtn->style()->polish(ui->vrBtn);
-
+    /*
     vrButton->setToolTipDuration(0);
+
     if (sceneView->isVrSupported()) {
         vrButton->setEnabled(true);
         vrButton->setToolTip("Press to view the scene in vr");
@@ -255,9 +201,10 @@ void MainWindow::setupVrUi()
 
     connect(vrButton, SIGNAL(clicked(bool)), SLOT(vrButtonClicked(bool)));
 
-    //needed to apply changes
+    // needed to apply changes
     vrButton->style()->unpolish(vrButton);
     vrButton->style()->polish(vrButton);
+    */
 }
 
 /**
@@ -272,17 +219,17 @@ void MainWindow::vrButtonClicked(bool)
         if (sceneView->getViewportMode()==ViewportMode::Editor) {
             sceneView->setViewportMode(ViewportMode::VR);
 
-            //highlight button blue
+            // highlight button blue
             vrButton->setProperty("vrMode",(int)VRButtonMode::VRMode);
         } else {
             sceneView->setViewportMode(ViewportMode::Editor);
 
-            //return button back to normal color
+            // return button back to normal color
             vrButton->setProperty("vrMode",(int)VRButtonMode::Default);
         }
     }
 
-    //needed to apply changes
+    // needed to apply changes
     vrButton->style()->unpolish(vrButton);
     vrButton->style()->polish(vrButton);
 }
@@ -292,7 +239,7 @@ iris::ScenePtr MainWindow::getScene()
     return scene;
 }
 
-QString MainWindow::getAbsoluteAssetPath(QString relToApp)
+QString MainWindow::getAbsoluteAssetPath(QString pathRelativeToApp)
 {
     QDir basePath = QDir(QCoreApplication::applicationDirPath());
 
@@ -304,36 +251,28 @@ QString MainWindow::getAbsoluteAssetPath(QString relToApp)
     basePath.cdUp();
 #endif
 
-    auto path = QDir::cleanPath(basePath.absolutePath() + QDir::separator() + relToApp);
+    auto path = QDir::cleanPath(basePath.absolutePath() + QDir::separator() + pathRelativeToApp);
     return path;
 }
 
-// don't use this entirely anymore --- use method above
 iris::ScenePtr MainWindow::createDefaultScene()
 {
     auto scene = iris::Scene::create();
-
-//    auto cam = iris::CameraNode::create();
-//    cam->pos = QVector3D(6, 12, 14);
-//    cam->rot = QQuaternion::fromEulerAngles(-80,0,0);
-//    cam->update(0);
-
-//    scene->setCamera(cam);
 
     scene->setSkyColor(QColor(72, 72, 72));
     scene->setAmbientColor(QColor(96, 96, 96));
 
     // second node
     auto node = iris::MeshNode::create();
-    node->setMesh(":/app/models/ground.obj");
-    node->setLocalPos(QVector3D(0, 1e-4, 0)); // prevent z-fighting with the default plane
+    node->setMesh(":/models/ground.obj");
+    node->setLocalPos(QVector3D(0, 1e-4, 0)); // prevent z-fighting with the default plane (iKlsR)
     node->setName("Ground");
     node->setPickable(false);
     node->setShadowEnabled(false);
 
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-    m->setValue("diffuseTexture", ":/app/content/textures/tile.png");
+    m->setValue("diffuseTexture", ":/content/textures/tile.png");
     m->setValue("textureScale", 4.f);
     node->setMaterial(m);
 
@@ -346,15 +285,15 @@ iris::ScenePtr MainWindow::createDefaultScene()
     dlight->setLocalPos(QVector3D(4, 4, 0));
     dlight->setLocalRot(QQuaternion::fromEulerAngles(15, 0, 0));
     dlight->intensity = 1;
-    dlight->icon = iris::Texture2D::load(":/app/icons/light.png");
+    dlight->icon = iris::Texture2D::load(":/icons/light.png");
 
     auto plight = iris::LightNode::create();
     plight->setLightType(iris::LightType::Point);
-     scene->rootNode->addChild(plight);
+    scene->rootNode->addChild(plight);
     plight->setName("Point Light");
     plight->setLocalPos(QVector3D(-4, 4, 0));
     plight->intensity = 1;
-    plight->icon = iris::Texture2D::load(":/app/icons/bulb.png");
+    plight->icon = iris::Texture2D::load(":/icons/bulb.png");
 
     // fog params
     scene->fogColor = QColor(72, 72, 72);
@@ -365,26 +304,10 @@ iris::ScenePtr MainWindow::createDefaultScene()
     return scene;
 }
 
-void MainWindow::initializeGraphics(SceneViewWidget* widget,QOpenGLFunctions_3_2_Core* gl)
+void MainWindow::initializeGraphics(SceneViewWidget *widget, QOpenGLFunctions_3_2_Core *gl)
 {
-    postProcessWidget->setPostProcessMgr(sceneView->getRenderer()->getPostProcessManager());
-
-//    auto m_logger = new QOpenGLDebugLogger( this );
-
-//    connect( m_logger, &QOpenGLDebugLogger::messageLogged,this,
-//             [](QOpenGLDebugMessage msg)
-//    {
-//        auto message = msg.message();
-//    });
-
-//    if ( m_logger->initialize() ) {
-//        m_logger->startLogging( QOpenGLDebugLogger::SynchronousLogging );
-//        m_logger->enableMessages();
-//    }
-
-//    auto scene = this->createDefaultScene();
-//    openProject(IrisUtils::getAbsoluteAssetPath("scenes/startup.jah"), true);
-//    this->setScene(scene);
+    Q_UNUSED(gl);
+    postProcessWidget->setPostProcessMgr(widget->getRenderer()->getPostProcessManager());
     setupVrUi();
 }
 
@@ -414,11 +337,10 @@ bool MainWindow::handleMouseRelease(QMouseEvent *event)
 bool MainWindow::handleMouseMove(QMouseEvent *event)
 {
     mousePos = event->pos();
-
     return false;
 }
 
-//todo: disable scrolling while doing gizmo transform
+// TODO - disable scrolling while doing gizmo transform ?
 bool MainWindow::handleMouseWheel(QWheelEvent *event)
 {
     return false;
@@ -429,13 +351,13 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
     switch (event->type()) {
         case QEvent::DragMove: {
             auto evt = static_cast<QDragMoveEvent*>(event);
-            if (obj == ui->sceneContainer) {
+            if (obj == sceneContainer) {
                 auto info = QFileInfo(evt->mimeData()->text());
 
                 if (!!activeSceneNode) {
                     sceneView->hideGizmo();
 
-                    if (isModelExtension(info.suffix())) {
+                    if (Constants::MODEL_EXTS.contains(info.suffix())) {
                         if (sceneView->doActiveObjectPicking(evt->posF())) {
                             //activeSceneNode->pos = sceneView->hit;
                             dragScenePos = sceneView->hit;
@@ -455,7 +377,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     }
                 }
 
-                if (!isModelExtension(info.suffix())) {
+                if (!Constants::MODEL_EXTS.contains(info.suffix())) {
                     sceneView->doObjectPicking(evt->posF(), iris::SceneNodePtr(), false, true);
                 }
             }
@@ -466,7 +388,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
             sceneView->hideGizmo();
 
-            if (obj == ui->sceneContainer) {
+            if (obj == sceneContainer) {
                 if (evt->mimeData()->hasText()) {
                     evt->acceptProposedAction();
                 } else {
@@ -474,7 +396,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 }
 
                 auto info = QFileInfo(evt->mimeData()->text());
-                if (isModelExtension(info.suffix())) {
+                if (Constants::MODEL_EXTS.contains(info.suffix())) {
 
                     if (dragging) {
                         // TODO swap this with the actual model later on
@@ -488,7 +410,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         }
 
         case QEvent::Drop: {
-            if (obj == ui->sceneContainer) {
+            if (obj == sceneContainer) {
                 auto evt = static_cast<QDropEvent*>(event);
 
                 auto info = QFileInfo(evt->mimeData()->text());
@@ -498,14 +420,14 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     evt->ignore();
                 }
 
-                if (isModelExtension(info.suffix())) {
+                if (Constants::MODEL_EXTS.contains(info.suffix())) {
                     //auto ppos = activeSceneNode->pos;
                     auto ppos = dragScenePos;
                     //deleteNode();
                     addMesh(evt->mimeData()->text(), true, ppos);
                 }
 
-                if (!!activeSceneNode && !isModelExtension(info.suffix())) {
+                if (!!activeSceneNode && !Constants::MODEL_EXTS.contains(info.suffix())) {
                     auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
                     auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
 
@@ -523,7 +445,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
             if (obj == surface) return handleMousePress(static_cast<QMouseEvent*>(event));
 
-            if (obj == ui->sceneContainer) {
+            if (obj == sceneContainer) {
                 sceneView->mousePressEvent(static_cast<QMouseEvent*>(event));
             }
 
@@ -552,48 +474,95 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
     return false;
 }
 
-void MainWindow::setupFileMenu()
+void MainWindow::closeEvent(QCloseEvent *event)
 {
-    // add recent files
-    auto recent = settings->getRecentlyOpenedScenes();
+    bool closing = false;
 
-    if (recent.size() == 0) {
-        ui->menuOpenRecent->setEnabled(false);
-    } else {
-        ui->menuOpenRecent->setEnabled(true);
-        ui->menuOpenRecent->clear();
-
-        for (auto item : recent) {
-            auto action = new QAction(item, ui->menuOpenRecent);
-            action->setData(item);
-            connect(action,SIGNAL(triggered(bool)), this, SLOT(openRecentFile()));
-            ui->menuOpenRecent->addAction(action);
+    if (UiManager::isUndoStackDirty()) {
+        QMessageBox::StandardButton reply;
+        reply = QMessageBox::question(this,
+                                      "Unsaved Changes",
+                                      "There are unsaved changes, save before closing?",
+                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+        if (reply == QMessageBox::Yes) {
+            saveScene();
+            event->accept();
+            closing = true;
+        } else if (reply == QMessageBox::No) {
+            event->accept();
+            closing = true;
+        } else {
+            event->ignore();
+            return;
         }
+    } else {
+        event->accept();
+        closing = true;
     }
 
+//#ifndef QT_DEBUG
+    if (closing) {
+        if (!getSettingsManager()->getValue("ddialog_seen", "false").toBool()) {
+            DonateDialog dialog;
+            dialog.exec();
+        }
+    }
+//#endif
+
+//    if (!UiManager::playMode) {
+//        settings->setValue("geometry", saveGeometry());
+//        settings->setValue("windowState", saveState());
+//    }
+
+    ThumbnailGenerator::getSingleton()->shutdown();
+}
+
+void MainWindow::setupFileMenu()
+{
     connect(ui->actionSave,         SIGNAL(triggered(bool)), this, SLOT(saveScene()));
-    connect(ui->actionSave_As,      SIGNAL(triggered(bool)), this, SLOT(saveSceneAs()));
-    connect(ui->actionLoad,         SIGNAL(triggered(bool)), this, SLOT(loadScene()));
     connect(ui->actionExit,         SIGNAL(triggered(bool)), this, SLOT(exitApp()));
     connect(ui->actionPreferences,  SIGNAL(triggered(bool)), this, SLOT(showPreferences()));
-    connect(ui->actionNew,          SIGNAL(triggered(bool)), this, SLOT(newScene()));
-
-    connect(prefsDialog,  SIGNAL(PreferencesDialogClosed()), this, SLOT(updateSceneSettings()));
-
-    // until we decide how to manage scenes better
-    ui->actionSave_As->setDisabled(true);
+    connect(prefsDialog,            SIGNAL(PreferencesDialogClosed()), SLOT(updateSceneSettings()));
+    connect(ui->actionExport,       SIGNAL(triggered(bool)), this, SLOT(exportSceneAsZip()));
+    connect(ui->actionClose,        &QAction::triggered, [this](bool) { closeProject(); });
 }
 
 void MainWindow::setupViewMenu()
 {
+    connect(ui->actionOutliner, &QAction::toggled, [this](bool set) {
+        sceneHierarchyDock->setVisible(set);
+    });
 
+    connect(ui->actionProperties, &QAction::toggled, [this](bool set) {
+        sceneNodePropertiesDock->setVisible(set);
+    });
+
+    connect(ui->actionPresets, &QAction::toggled, [this](bool set) {
+        presetsDock->setVisible(set);
+    });
+
+    connect(ui->actionAnimation, &QAction::toggled, [this](bool set) {
+        animationDock->setVisible(set);
+    });
+
+    connect(ui->actionAssets, &QAction::toggled, [this](bool set) {
+        assetDock->setVisible(set);
+    });
+
+    connect(ui->actionClose_All, &QAction::triggered, [this]() {
+        toggleWidgets(false);
+    });
+
+    connect(ui->actionRestore_All, &QAction::triggered, [this]() {
+        toggleWidgets(true);
+    });
 }
 
 void MainWindow::setupHelpMenu()
 {
     connect(ui->actionLicense,      SIGNAL(triggered(bool)), this, SLOT(showLicenseDialog()));
     connect(ui->actionAbout,        SIGNAL(triggered(bool)), this, SLOT(showAboutDialog()));
-    connect(ui->actionBlog,         SIGNAL(triggered(bool)), this, SLOT(openBlogUrl()));
+    connect(ui->actionFacebook,     SIGNAL(triggered(bool)), this, SLOT(openFacebookUrl()));
     connect(ui->actionOpenWebsite,  SIGNAL(triggered(bool)), this, SLOT(openWebsiteUrl()));
 }
 
@@ -601,18 +570,13 @@ void MainWindow::createPostProcessDockWidget()
 {
     postProcessDockWidget = new QDockWidget(this);
     postProcessWidget = new PostProcessesWidget();
-    //postProcessWidget->setWindowTitle("Post Processes");
+    // postProcessWidget->setWindowTitle("Post Processes");
     postProcessDockWidget->setWidget(postProcessWidget);
     postProcessDockWidget->setWindowTitle("PostProcesses");
-    //postProcessDockWidget->setFloating(true);
+    // postProcessDockWidget->setFloating(true);
     postProcessDockWidget->setHidden(true);
-//    this->addDockWidget(Qt::RightDockWidgetArea, postProcessDockWidget);
+    this->addDockWidget(Qt::RightDockWidgetArea, postProcessDockWidget);
 
-}
-
-void MainWindow::setProjectTitle(QString projectTitle)
-{
-    this->setWindowTitle(projectTitle + " - Jahshaka");
 }
 
 void MainWindow::sceneTreeCustomContextMenu(const QPoint& pos)
@@ -626,25 +590,7 @@ void MainWindow::renameNode()
     dialog.exec();
 
     activeSceneNode->setName(dialog.getName());
-    //item->setText(0,node->getName());
-
-    //for now
-    this->ui->sceneHierarchy->repopulateTree();
-
-}
-
-void MainWindow::updateGizmoTransform()
-{
-    //if(activeSceneNode==nullptr)
-    //    return;
-}
-
-void MainWindow::resizeEvent(QResizeEvent *event)
-{
-    Q_UNUSED(event);
-
-    float aspectRatio = ui->sceneContainer->width()/(float)ui->sceneContainer->height();
-    //editorCam->lens()->setPerspectiveProjection(45.0f, aspectRatio, 0.1f, 1000.0f);
+    this->sceneHierarchyWidget->repopulateTree();
 }
 
 void MainWindow::stopAnimWidget()
@@ -654,121 +600,194 @@ void MainWindow::stopAnimWidget()
 
 void MainWindow::setupProjectDB()
 {
+    auto path = QDir(QStandardPaths::writableLocation(QStandardPaths::DataLocation))
+                .filePath(Constants::JAH_DATABASE);
+
     db = new Database();
+    db->initializeDatabase(path);
+    db->createGlobalDb();
+    db->createGlobalDbThumbs();
 }
 
 void MainWindow::setupUndoRedo()
 {
     undoStack = new QUndoStack(this);
-    UiManager::undoStack = undoStack;
+    UiManager::setUndoStack(undoStack);
+    UiManager::mainWindow = this;
 
-    connect(ui->actionUndo, SIGNAL(triggered(bool)), this, SLOT(undo()));
-    connect(ui->actionEditUndo, SIGNAL(triggered(bool)), this, SLOT(undo()));
+    connect(ui->actionUndo, &QAction::triggered, [this]() {
+        undo();
+        UiManager::updateWindowTitle();
+    });
+
+    connect(ui->actionEditUndo, &QAction::triggered, [this]() {
+        undo();
+        UiManager::updateWindowTitle();
+    });
+
     ui->actionEditUndo->setShortcuts(QKeySequence::Undo);
 
-    connect(ui->actionRedo, SIGNAL(triggered(bool)), this, SLOT(redo()));
-    connect(ui->actionEditRedo, SIGNAL(triggered(bool)), this, SLOT(redo()));
+    connect(ui->actionRedo, &QAction::triggered, [this]() {
+        redo();
+        UiManager::updateWindowTitle();
+    });
+
+    connect(ui->actionEditRedo, &QAction::triggered, [this]() {
+        redo();
+        UiManager::updateWindowTitle();
+    });
+
     ui->actionEditRedo->setShortcuts(QKeySequence::Redo);
+}
+
+void MainWindow::switchSpace(WindowSpaces space)
+{
+   const QString disabledMenu   = "color: #444; border-color: #111";
+   const QString selectedMenu   = "border-color: white";
+   const QString unselectedMenu = "border-color: #111";
+
+    switch (currentSpace = space) {
+        case WindowSpaces::DESKTOP: {
+            if (UiManager::isSceneOpen) pmContainer->populateDesktop(true);
+            ui->stackedWidget->setCurrentIndex(0);
+            toggleWidgets(false);
+
+            ui->worlds_menu->setStyleSheet(selectedMenu);
+            ui->actionClose->setDisabled(true);
+
+            if (UiManager::isSceneOpen) {
+                ui->editor_menu->setStyleSheet(unselectedMenu);
+                ui->editor_menu->setDisabled(false);
+                ui->player_menu->setStyleSheet(unselectedMenu);
+                ui->player_menu->setDisabled(false);
+            } else {
+                ui->editor_menu->setStyleSheet(disabledMenu);
+                ui->editor_menu->setDisabled(true);
+                ui->editor_menu->setCursor(Qt::ArrowCursor);
+                ui->player_menu->setStyleSheet(disabledMenu);
+                ui->player_menu->setDisabled(true);
+                ui->player_menu->setCursor(Qt::ArrowCursor);
+            }
+            break;
+        }
+
+        case WindowSpaces::EDITOR: {
+            ui->stackedWidget->setCurrentIndex(1);
+            toggleWidgets(true);
+            toolBar->setVisible(true);
+            ui->worlds_menu->setStyleSheet(unselectedMenu);
+            ui->editor_menu->setStyleSheet(selectedMenu);
+            ui->editor_menu->setDisabled(false);
+            ui->editor_menu->setCursor(Qt::PointingHandCursor);
+            ui->player_menu->setStyleSheet(unselectedMenu);
+            ui->player_menu->setDisabled(false);
+            ui->player_menu->setCursor(Qt::PointingHandCursor);
+
+            playSceneBtn->show();
+            this->enterEditMode();
+            UiManager::sceneMode = SceneMode::EditMode;
+            break;
+        }
+
+        case WindowSpaces::PLAYER: {
+            ui->stackedWidget->setCurrentIndex(1);
+            toggleWidgets(false);
+            toolBar->setVisible(false);
+            ui->worlds_menu->setStyleSheet(unselectedMenu);
+            ui->editor_menu->setStyleSheet(unselectedMenu);
+            ui->editor_menu->setDisabled(false);
+            ui->editor_menu->setCursor(Qt::PointingHandCursor);
+            ui->player_menu->setStyleSheet(selectedMenu);
+            ui->player_menu->setDisabled(false);
+            ui->player_menu->setCursor(Qt::PointingHandCursor);
+
+            UiManager::sceneMode = SceneMode::PlayMode;
+            playSceneBtn->hide();
+            this->enterEditMode();
+            break;
+        }
+        default: break;
+    }
 }
 
 void MainWindow::saveScene()
 {
     auto writer = new SceneWriter();
-    auto blob = writer->getSceneObject(Globals::project->getFilePath(),
+    auto blob = writer->getSceneObject(Globals::project->getProjectFolder(),
                                        scene,
                                        sceneView->getRenderer()->getPostProcessManager(),
                                        sceneView->getEditorData());
-    db->updateScene(blob);
-    sceneView->saveFrameBuffer(Globals::project->getProjectFolder() + "/Metadata/preview.png");
 
-//    if (Globals::project->isSaved()) {
-//        auto filename = Globals::project->getFilePath();
-//        auto writer = new SceneWriter();
-//        writer->writeScene(filename,
-//                           scene,
-//                           sceneView->getRenderer()->getPostProcessManager(),
-//                           sceneView->getEditorData());
-//        delete writer;
-//    }
-
-//    else {
-//        auto filename = QFileDialog::getSaveFileName(this, "Save Scene", "", "Jashaka Scene (*.jah)");
-//        auto writer = new SceneWriter();
-//        writer->writeScene(filename,
-//                           scene,
-//                           sceneView->getRenderer()->getPostProcessManager(),
-//                           sceneView->getEditorData());
-
-//        Globals::project->setFilePath(filename);
-//        this->setProjectTitle(Globals::project->getProjectName());
-//        delete writer;
-//    }
+    auto img = sceneView->takeScreenshot(Constants::TILE_SIZE.width(), Constants::TILE_SIZE.height());
+    QByteArray thumb;
+    QBuffer buffer(&thumb);
+    buffer.open(QIODevice::WriteOnly);
+    img.save(&buffer, "PNG");
+    db->updateSceneGlobal(blob, thumb);
 }
 
-void MainWindow::saveSceneAs()
-{
-//    QString dir = QApplication::applicationDirPath()+"/scenes/";
-//    auto filename = QFileDialog::getSaveFileName(this,"Save Scene",dir,"Jashaka Scene (*.jah)");
-//    auto writer = new SceneWriter();
-//    writer->writeScene(filename, scene, sceneView->getRenderer()->getPostProcessManager(), sceneView->getEditorData());
-
-//    Globals::project->setFilePath(filename);
-//    this->setProjectTitle(Globals::project->getProjectName());
-
-//    settings->addRecentlyOpenedScene(filename);
-
-//    delete writer;
-}
-
-void MainWindow::loadScene()
-{
-    QString dir = QApplication::applicationDirPath() + "/scenes/";
-    auto filename = QFileDialog::getOpenFileName(this, "Open Scene File", dir, "Jashaka Scene (*.jah)");
-
-    if (filename.isEmpty() || filename.isNull()) return;
-
-    openProject(filename);
-}
-
-//QString MainWindow::loadSceneDelegate()
-//{
-//    QString dir = QApplication::applicationDirPath() + "/scenes/";
-//    auto filename = QFileDialog::getOpenFileName(this, "Open Scene File", dir, "Jashaka Scene (*.jah)");
-
-//    if (filename.isEmpty() || filename.isNull()) return "";
-
-//    return filename;
-//}
-
-void MainWindow::openProject(QString filename, bool startupLoad)
+void MainWindow::openProject(bool playMode)
 {
     this->sceneView->makeCurrent();
-    //remove current scene first
+
+    // TODO - actually remove scenes - empty asset list, db cache and invalidate scene object
     this->removeScene();
 
-    //load new scene
     auto reader = new SceneReader();
 
     EditorData* editorData = nullptr;
-
-    db->initializeDatabase(filename);
-
-    Globals::project->setFilePath(filename);
-    this->setProjectTitle(Globals::project->getProjectName());
+    UiManager::updateWindowTitle();
 
     auto postMan = sceneView->getRenderer()->getPostProcessManager();
     postMan->clearPostProcesses();
-    auto scene = reader->readScene(filename, db->getSceneBlob(), postMan, &editorData);
-    this->sceneView->doneCurrent();
+
+    auto scene = reader->readScene(Globals::project->getProjectFolder(),
+                                   db->getSceneBlobGlobal(),
+                                   postMan,
+                                   &editorData);
+
+    UiManager::playMode = playMode;
+    UiManager::isSceneOpen = true;
+    ui->actionClose->setDisabled(false);
     setScene(scene);
 
+    // use new post process that has fxaa by default
+    // TODO: remember to find a better replacement (Nick)
     postProcessWidget->setPostProcessMgr(postMan);
+    this->sceneView->doneCurrent();
 
     if (editorData != nullptr) {
         sceneView->setEditorData(editorData);
+        wireCheckBtn->setChecked(editorData->showLightWires);
     }
 
+    assetWidget->trigger();
+
     delete reader;
+
+    // autoplay scenes immediately
+    if (playMode) {
+        playBtn->setToolTip("Pause the scene");
+        playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
+        onPlaySceneButton();
+    }
+
+    UiManager::playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+}
+
+void MainWindow::closeProject()
+{
+    UiManager::isSceneOpen = false;
+    UiManager::isScenePlaying = false;
+    ui->actionClose->setDisabled(false);
+
+    switchSpace(WindowSpaces::DESKTOP);
+
+    UiManager::clearUndoStack();
+    AssetManager::assets.clear();
+
+    scene->cleanup();
+    scene.clear();
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
@@ -800,45 +819,14 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
     meshNode->setMaterial(m);
 
     // TODO: update node's material without updating the whole ui
-    this->ui->sceneNodeProperties->refreshMaterial(preset->type);
-}
-
-/**
- * @brief callback for "Recent Files" submenu actions
- * opens files directly, no file dialog
- * shows dialog box showing error if file doesnt exist anymore
- * @todo request if file should be saved
- * @param action
- */
-void MainWindow::openRecentFile()
-{
-    auto action = qobject_cast<QAction*>(sender());
-    auto filename = action->data().toString();
-    QFileInfo info(filename);
-
-    if(!info.exists())
-    {
-        QMessageBox box(this);
-        box.setText("unable not locate file '"+filename+"'");
-        box.exec();
-        return;
-    }
-
-    this->openProject(filename);
-
-    /*
-    Globals::project->setFilePath(filename);
-    this->setProjectTitle(Globals::project->getProjectName());
-
-    settings->addRecentlyOpenedScene(filename);
-    */
+    this->sceneNodePropertiesWidget->refreshMaterial(preset->type);
 }
 
 void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 {
     this->scene = scene;
     this->sceneView->setScene(scene);
-    ui->sceneHierarchy->setScene(scene);
+    this->sceneHierarchyWidget->setScene(scene);
 
     // interim...
     updateSceneSettings();
@@ -846,12 +834,13 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 
 void MainWindow::removeScene()
 {
+    sceneView->cleanup();
+    sceneNodePropertiesWidget->setSceneNode(iris::SceneNodePtr());
 }
 
 void MainWindow::setupPropertyUi()
 {
     animWidget = new AnimationWidget();
-    //animWidget->setMainTimelineWidget(ui->mainTimeline->getTimeline());
 }
 
 void MainWindow::sceneNodeSelected(QTreeWidgetItem* item)
@@ -866,18 +855,12 @@ void MainWindow::sceneTreeItemChanged(QTreeWidgetItem* item,int column)
 
 void MainWindow::sceneNodeSelected(iris::SceneNodePtr sceneNode)
 {
-    //show properties for scenenode
     activeSceneNode = sceneNode;
 
     sceneView->setSelectedNode(sceneNode);
-    ui->sceneNodeProperties->setSceneNode(sceneNode);
-    ui->sceneHierarchy->setSelectedNode(sceneNode);
-    ui->animationtimeline->setSceneNode(sceneNode);
-}
-
-
-void MainWindow::setupLayerButtonMenu()
-{
+    this->sceneNodePropertiesWidget->setSceneNode(sceneNode);
+    this->sceneHierarchyWidget->setSelectedNode(sceneNode);
+    animationWidget->setSceneNode(sceneNode);
 }
 
 void MainWindow::updateAnim()
@@ -892,66 +875,63 @@ void MainWindow::addPlane()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(":/app/content/primitives/plane.obj");
+    node->setMesh(":/content/primitives/plane.obj");
     node->setFaceCullingMode(iris::FaceCullingMode::None);
     node->setName("Plane");
     addNodeToScene(node);
 }
 
+void MainWindow::addGround()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::MeshNode::create();
+    node->setMesh(":/models/ground.obj");
+    node->setFaceCullingMode(iris::FaceCullingMode::None);
+    node->setName("Ground");
+    addNodeToScene(node);
+}
 
 void MainWindow::addCone()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(":/app/content/primitives/cone.obj");
+    node->setMesh(":/content/primitives/cone.obj");
     node->setName("Cone");
     addNodeToScene(node);
 }
 
-/**
- * Adds a cube to the current scene
- */
 void MainWindow::addCube()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(":/app/content/primitives/cube.obj");
+    node->setMesh(":/content/primitives/cube.obj");
     node->setName("Cube");
     addNodeToScene(node);
 }
 
-/**
- * Adds a torus to the current scene
- */
 void MainWindow::addTorus()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(":/app/content/primitives/torus.obj");
+    node->setMesh(":/content/primitives/torus.obj");
     node->setName("Torus");
     addNodeToScene(node);
 }
 
-/**
- * Adds a sphere to the current scene
- */
 void MainWindow::addSphere()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(":/app/content/primitives/sphere.obj");
+    node->setMesh(":/content/primitives/sphere.obj");
     node->setName("Sphere");
     addNodeToScene(node);
 }
 
-/**
- * Adds a cylinder to the current scene
- */
 void MainWindow::addCylinder()
 {
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::create();
-    node->setMesh(":/app/content/primitives/cylinder.obj");
+    node->setMesh(":/content/primitives/cylinder.obj");
     node->setName("Cylinder");
 
     addNodeToScene(node);
@@ -962,7 +942,7 @@ void MainWindow::addPointLight()
     this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Point);
-    node->icon = iris::Texture2D::load(":/app/icons/bulb.png");
+    node->icon = iris::Texture2D::load(":/icons/bulb.png");
     node->setName("Point Light");
     node->intensity = 1.0f;
     node->distance = 40.0f;
@@ -974,7 +954,7 @@ void MainWindow::addSpotLight()
     this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Spot);
-    node->icon = iris::Texture2D::load(":/app/icons/bulb.png");
+    node->icon = iris::Texture2D::load(":/icons/bulb.png");
     node->setName("Spot Light");
     addNodeToScene(node);
 }
@@ -985,7 +965,7 @@ void MainWindow::addDirectionalLight()
     this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Directional);
-    node->icon = iris::Texture2D::load(":/app/icons/bulb.png");
+    node->icon = iris::Texture2D::load(":/icons/bulb.png");
     node->setName("Directional Light");
     addNodeToScene(node);
 }
@@ -1018,21 +998,18 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 {
     QString filename;
     if (path.isEmpty()) {
-        filename = QFileDialog::getOpenFileName(this, "Load Mesh", "Mesh Files (*.obj *.fbx *.3ds)");
+        filename = QFileDialog::getOpenFileName(this, "Load Mesh", "Mesh Files (*.obj *.fbx *.3ds *.dae *.c4d *.blend)");
     } else {
         filename = path;
     }
 
-    auto nodeName = QFileInfo(filename).baseName();
     if (filename.isEmpty()) return;
 
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::loadAsSceneFragment(filename,[](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+    auto node = iris::MeshNode::loadAsSceneFragment(filename, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
         auto mat = iris::CustomMaterial::create();
         //MaterialReader *materialReader = new MaterialReader();
-        //materialReader->readJahShader(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
-        //mat->generate(materialReader->getParsedShader());
         if (mesh->hasSkeleton())
             mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
         else
@@ -1062,22 +1039,15 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 
     // rename animation sources to relative paths
     auto relPath = QDir(Globals::project->folderPath).relativeFilePath(filename);
-    for(auto anim : node->getAnimations()) {
+    for (auto anim : node->getAnimations()) {
         if (!!anim->skeletalAnimation)
             anim->skeletalAnimation->source = relPath;
     }
 
-//    node->materialType = 2;
-    //node->setName(nodeName);
     node->setLocalPos(position);
 
     // todo: load material data
     addNodeToScene(node, ignore);
-}
-
-void MainWindow::addViewPoint()
-{
-
 }
 
 void MainWindow::addDragPlaceholder()
@@ -1090,11 +1060,6 @@ void MainWindow::addDragPlaceholder()
     node->setName("Arrow");
     addNodeToScene(node, true);
     */
-}
-
-void MainWindow::addTexturedPlane()
-{
-
 }
 
 /**
@@ -1124,7 +1089,7 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
         scene->getRootNode()->addChild(sceneNode);
     }
 
-    ui->sceneHierarchy->repopulateTree();
+    this->sceneHierarchyWidget->repopulateTree();
 }
 
 /**
@@ -1157,18 +1122,13 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
         }
     }
 
-    /*
-    scene->getRootNode()->addChild(sceneNode, false);
-    ui->sceneHierarchy->repopulateTree();
-    sceneNodeSelected(sceneNode);
-    */
-    auto cmd = new AddSceneNodeCommand(this, scene->getRootNode(), sceneNode);
-    UiManager::undoStack->push(cmd);
+    auto cmd = new AddSceneNodeCommand(scene->getRootNode(), sceneNode);
+    UiManager::pushUndoStack(cmd);
 }
 
 void MainWindow::repopulateSceneTree()
 {
-    ui->sceneHierarchy->repopulateTree();
+    this->sceneHierarchyWidget->repopulateTree();
 }
 
 void MainWindow::duplicateNode()
@@ -1179,22 +1139,15 @@ void MainWindow::duplicateNode()
     auto node = activeSceneNode->duplicate();
     activeSceneNode->parent->addChild(node, false);
 
-    ui->sceneHierarchy->repopulateTree();
+    this->sceneHierarchyWidget->repopulateTree();
     sceneNodeSelected(node);
 }
 
 void MainWindow::deleteNode()
 {
     if (!!activeSceneNode) {
-        /*
-        activeSceneNode->removeFromParent();
-        ui->sceneHierarchy->repopulateTree();
-        sceneView->clearSelectedNode();
-        ui->sceneNodeProperties->setSceneNode(QSharedPointer<iris::SceneNode>(nullptr));
-        sceneView->hideGizmo();
-        */
-        auto cmd = new DeleteSceneNodeCommand(this, activeSceneNode->parent, activeSceneNode);
-        UiManager::undoStack->push(cmd);
+        auto cmd = new DeleteSceneNodeCommand(activeSceneNode->parent, activeSceneNode);
+        UiManager::pushUndoStack(cmd);
     }
 }
 
@@ -1223,14 +1176,464 @@ void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
     event->accept();
 }
 
+/*
 bool MainWindow::isModelExtension(QString extension)
 {
-    if(extension == "obj" ||
-       extension == "3ds" ||
-       extension == "fbx" ||
-       extension == "dae")
+    if(extension == "obj"   ||
+       extension == "3ds"   ||
+       extension == "fbx"   ||
+       extension == "dae"   ||
+       extension == "blend" ||
+       extension == "c4d"   )
         return true;
     return false;
+}
+*/
+void MainWindow::exportSceneAsZip()
+{
+    // get the export file path from a save dialog
+    auto filePath = QFileDialog::getSaveFileName(
+                        this,
+                        "Choose export path",
+                        Globals::project->getProjectName() + "_" + Constants::DEF_EXPORT_FILE,
+                        "Supported Export Formats (*.zip)"
+                    );
+
+    if (filePath.isEmpty() || filePath.isNull()) return;
+
+    if (!!scene) {
+        saveScene();
+    }
+
+    // Maybe in the future one could add a way to using an in memory database
+    // and saving saving that as a blob which can be put into the zip as bytes (iKlsR)
+    // prepare our export database with the current scene, use the os temp location and remove after
+    db->createExportScene(QStandardPaths::writableLocation(QStandardPaths::TempLocation));
+
+    // get the current project working directory
+    auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
+                                 Constants::PROJECT_FOLDER);
+    auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
+    auto pDir = IrisUtils::join(defaultProjectDirectory, Globals::project->getProjectName());
+
+    // get all the files and directories in the project working directory
+    QDir workingProjectDirectory(pDir);
+    QDirIterator projectDirIterator(pDir,
+                                    QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
+                                    QDirIterator::Subdirectories);
+
+    QVector<QString> fileNames;
+    while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
+
+    // open a basic zip file for writing, maybe change compression level later (iKlsR)
+    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
+
+    for (int i = 0; i < fileNames.count(); i++) {
+        QFileInfo fInfo(fileNames[i]);
+
+        // we need to pay special attention to directories since we want to write empty ones as well
+        if (fInfo.isDir()) {
+            zip_entry_open(
+                zip,
+                /* will only create directory if / is appended */
+                QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
+            );
+            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+        }
+        else {
+            zip_entry_open(
+                zip,
+                workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
+            );
+            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+        }
+
+        // we close each entry after a successful write
+        zip_entry_close(zip);
+    }
+
+    // finally add our exported scene
+    zip_entry_open(zip, QString(Globals::project->getProjectName() + ".db").toStdString().c_str());
+    zip_entry_fwrite(
+        zip,
+        QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
+            .filePath(Globals::project->getProjectName() + ".db").toStdString().c_str()
+    );
+    zip_entry_close(zip);
+
+    // close our now exported file
+    zip_close(zip);
+
+    // remove the temporary db created
+    QDir tempFile;
+    tempFile.remove(
+        QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
+            .filePath(Globals::project->getProjectName() + ".db")
+                );
+}
+
+void MainWindow::setupDockWidgets()
+{
+    // Hierarchy Dock
+    sceneHierarchyDock = new QDockWidget("Hierarchy", viewPort);
+    sceneHierarchyDock->setObjectName(QStringLiteral("sceneHierarchyDock"));
+    sceneHierarchyWidget = new SceneHierarchyWidget;
+    sceneHierarchyWidget->setMinimumWidth(396);
+    sceneHierarchyDock->setObjectName(QStringLiteral("sceneHierarchyWidget"));
+    sceneHierarchyDock->setWidget(sceneHierarchyWidget);
+    sceneHierarchyWidget->setMainWindow(this);
+
+    UiManager::sceneHierarchyWidget = sceneHierarchyWidget;
+
+    connect(sceneHierarchyWidget,   SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
+            this,                   SLOT(sceneNodeSelected(iris::SceneNodePtr)));
+
+    // Scene Node Properties Dock
+    // Since this widget can be longer than there is screen space, we need to add a QScrollArea
+    // For this to also work, we need a "holder widget" that will have a layout and the scroll area
+    sceneNodePropertiesDock = new QDockWidget("Properties", viewPort);
+    sceneNodePropertiesDock->setObjectName(QStringLiteral("sceneNodePropertiesDock"));
+    sceneNodePropertiesWidget = new SceneNodePropertiesWidget;
+    sceneNodePropertiesWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    sceneNodePropertiesWidget->setObjectName(QStringLiteral("sceneNodePropertiesWidget"));
+
+    QWidget *sceneNodeDockWidgetContents = new QWidget(viewPort);
+    QScrollArea *sceneNodeScrollArea = new QScrollArea(sceneNodeDockWidgetContents);
+    sceneNodeScrollArea->setMinimumWidth(396);
+    sceneNodeScrollArea->setStyleSheet("border: 0");
+    sceneNodeScrollArea->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
+    sceneNodeScrollArea->setWidget(sceneNodePropertiesWidget);
+    sceneNodeScrollArea->setWidgetResizable(true);
+    sceneNodeScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    QVBoxLayout *sceneNodeLayout = new QVBoxLayout(sceneNodeDockWidgetContents);
+    sceneNodeLayout->setContentsMargins(0, 0, 0, 0);
+    sceneNodeLayout->addWidget(sceneNodeScrollArea);
+    sceneNodeDockWidgetContents->setLayout(sceneNodeLayout);
+    sceneNodePropertiesDock->setWidget(sceneNodeDockWidgetContents);
+
+    // Presets Dock
+    presetsDock = new QDockWidget("Presets", viewPort);
+    presetsDock->setObjectName(QStringLiteral("presetsDock"));
+
+    QWidget *presetDockContents = new QWidget;
+    MaterialSets *materialPresets = new MaterialSets;
+    materialPresets->setMainWindow(this);
+    SkyPresets *skyPresets = new SkyPresets;
+    skyPresets->setMainWindow(this);
+    ModelPresets *modelPresets = new ModelPresets;
+    modelPresets->setMainWindow(this);
+
+    presetsTabWidget = new QTabWidget;
+    presetsTabWidget->setMinimumWidth(396);
+    presetsTabWidget->addTab(modelPresets, "Primitives");
+    presetsTabWidget->addTab(materialPresets, "Materials");
+    presetsTabWidget->addTab(skyPresets, "Skyboxes");
+    presetDockContents->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
+
+    QGridLayout *presetsLayout = new QGridLayout(presetDockContents);
+    presetsLayout->setContentsMargins(0, 0, 0, 0);
+    presetsLayout->addWidget(presetsTabWidget);
+    presetsDock->setWidget(presetDockContents);
+
+    // Asset Dock
+    assetDock = new QDockWidget("Asset Browser", viewPort);
+    assetDock->setObjectName(QStringLiteral("assetDock"));
+    assetWidget = new AssetWidget(db, viewPort);
+    assetWidget->setAcceptDrops(true);
+    assetWidget->installEventFilter(this);
+
+    QWidget *assetDockContents = new QWidget(viewPort);
+    QGridLayout *assetsLayout = new QGridLayout(assetDockContents);
+    assetsLayout->addWidget(assetWidget);
+    assetsLayout->setContentsMargins(0, 0, 0, 0);
+    assetDock->setWidget(assetDockContents);
+
+    // Animation Dock
+    animationDock = new QDockWidget("Timeline", viewPort);
+    animationDock->setObjectName(QStringLiteral("animationDock"));
+    animationWidget = new AnimationWidget;
+    UiManager::setAnimationWidget(animationWidget);
+
+    QWidget *animationDockContents = new QWidget;
+    QGridLayout *animationLayout = new QGridLayout(animationDockContents);
+    animationLayout->setContentsMargins(0, 0, 0, 0);
+    animationLayout->addWidget(animationWidget);
+
+    animationDock->setWidget(animationDockContents);
+
+    timer = new QTimer(this);
+    connect(timer, SIGNAL(timeout()), this, SLOT(updateAnim()));
+
+    viewPort->addDockWidget(Qt::LeftDockWidgetArea, sceneHierarchyDock);
+    viewPort->addDockWidget(Qt::RightDockWidgetArea, sceneNodePropertiesDock);
+    viewPort->addDockWidget(Qt::BottomDockWidgetArea, assetDock);
+    viewPort->addDockWidget(Qt::BottomDockWidgetArea, animationDock);
+    viewPort->addDockWidget(Qt::BottomDockWidgetArea, presetsDock);
+    viewPort->tabifyDockWidget(animationDock, assetDock);
+}
+
+void MainWindow::setupViewPort()
+{
+    connect(ui->worlds_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::DESKTOP); });
+    connect(ui->player_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::PLAYER); });
+    connect(ui->editor_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::EDITOR); });
+
+    sceneContainer = new QWidget;
+    QSizePolicy sceneContainerPolicy;
+    sceneContainerPolicy.setHorizontalPolicy(QSizePolicy::Preferred);
+    sceneContainerPolicy.setVerticalPolicy(QSizePolicy::Preferred);
+    sceneContainerPolicy.setVerticalStretch(1);
+    sceneContainer->setSizePolicy(sceneContainerPolicy);
+    sceneContainer->setAcceptDrops(true);
+    sceneContainer->installEventFilter(this);
+
+    controlBar = new QWidget;
+    controlBar->setObjectName(QStringLiteral("controlBar"));
+
+    auto container = new QWidget;
+    auto containerLayout = new QVBoxLayout;
+
+    auto screenShotBtn = new QPushButton;
+    screenShotBtn->setToolTip("Take a screenshot of the scene");
+    screenShotBtn->setToolTipDuration(-1);
+    screenShotBtn->setStyleSheet("background: transparent");
+    screenShotBtn->setIcon(QIcon(":/icons/camera.svg"));
+
+    wireCheckBtn = new QCheckBox("Viewport Wireframes");
+    wireCheckBtn->setCheckable(true);
+
+    connect(screenShotBtn, SIGNAL(pressed()), this, SLOT(takeScreenshot()));
+    connect(wireCheckBtn, SIGNAL(toggled(bool)), this, SLOT(toggleLightWires(bool)));
+
+    auto controlBarLayout = new QHBoxLayout;
+    playSceneBtn = new QPushButton;
+    playSceneBtn->setToolTip("Play scene");
+    playSceneBtn->setToolTipDuration(-1);
+    playSceneBtn->setStyleSheet("background: transparent");
+    playSceneBtn->setIcon(QIcon(":/icons/g_play.svg"));
+
+    controlBarLayout->setSpacing(8);
+    controlBarLayout->addWidget(screenShotBtn);
+    controlBarLayout->addWidget(wireCheckBtn);
+    controlBarLayout->addStretch();
+    controlBarLayout->addWidget(playSceneBtn);
+
+    controlBar->setLayout(controlBarLayout);
+    controlBar->setStyleSheet("#controlBar {  background: #1A1A1A; border-bottom: 1px solid black; }");
+
+    playerControls = new QWidget;
+    playerControls->setStyleSheet("background: #1A1A1A");
+
+    auto playerControlsLayout = new QHBoxLayout;
+
+    restartBtn = new QPushButton;
+    restartBtn->setCursor(Qt::PointingHandCursor);
+    restartBtn->setToolTip("Restart playback");
+    restartBtn->setToolTipDuration(-1);
+    restartBtn->setStyleSheet("background: transparent");
+    restartBtn->setIcon(QIcon(":/icons/rotate-to-right.svg"));
+    restartBtn->setIconSize(QSize(16, 16));
+
+    playBtn = new QPushButton;
+    playBtn->setCursor(Qt::PointingHandCursor);
+    playBtn->setToolTip("Play the scene");
+    playBtn->setToolTipDuration(-1);
+    playBtn->setStyleSheet("background: transparent");
+    playBtn->setIcon(QIcon(":/icons/g_play.svg"));
+    playBtn->setIconSize(QSize(24, 24));
+
+    stopBtn = new QPushButton;
+    stopBtn->setCursor(Qt::PointingHandCursor);
+    stopBtn->setToolTip("Stop playback");
+    stopBtn->setToolTipDuration(-1);
+    stopBtn->setStyleSheet("background: transparent");
+    stopBtn->setIcon(QIcon(":/icons/g_stop.svg"));
+    stopBtn->setIconSize(QSize(16, 16));
+
+    playerControlsLayout->setSpacing(12);
+    playerControlsLayout->setMargin(6);
+    playerControlsLayout->addStretch();
+    playerControlsLayout->addWidget(restartBtn);
+    playerControlsLayout->addWidget(playBtn);
+    playerControlsLayout->addWidget(stopBtn);
+    playerControlsLayout->addStretch();
+
+    connect(restartBtn, &QPushButton::pressed, [this]() {
+        playBtn->setToolTip("Pause the scene");
+        playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
+        UiManager::restartScene();
+    });
+
+    connect(playBtn, &QPushButton::pressed, [this]() {
+        if (UiManager::isScenePlaying) {
+            playBtn->setToolTip("Play the scene");
+            playBtn->setIcon(QIcon(":/icons/g_play.svg"));
+            UiManager::pauseScene();
+        } else {
+            playBtn->setToolTip("Pause the scene");
+            playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
+            UiManager::playScene();
+        }
+    });
+    connect(stopBtn, &QPushButton::pressed, [this]() {
+        playBtn->setToolTip("Play the scene");
+        playBtn->setIcon(QIcon(":/icons/g_play.svg"));
+        UiManager::stopScene();
+    });
+
+    playerControls->setLayout(playerControlsLayout);
+
+    containerLayout->setSpacing(0);
+    containerLayout->setMargin(0);
+    containerLayout->addWidget(controlBar);
+    containerLayout->addWidget(sceneContainer);
+    containerLayout->addWidget(playerControls);
+
+    container->setLayout(containerLayout);
+
+    viewPort = new QMainWindow;
+    viewPort->setWindowFlags(Qt::Widget);
+    viewPort->setCentralWidget(container);
+
+    sceneView = new SceneViewWidget(viewPort);
+    sceneView->setParent(viewPort);
+    sceneView->setFocusPolicy(Qt::ClickFocus);
+    sceneView->setFocus();
+    Globals::sceneViewWidget = sceneView;
+    UiManager::setSceneViewWidget(sceneView);
+
+    wireCheckBtn->setChecked(sceneView->getShowLightWires());
+
+    QGridLayout* layout = new QGridLayout;
+    layout->addWidget(sceneView);
+    layout->setMargin(0);
+    sceneContainer->setLayout(layout);
+
+    connect(sceneView,  SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),
+            this,       SLOT(initializeGraphics(SceneViewWidget*,   QOpenGLFunctions_3_2_Core*)));
+
+    connect(sceneView,  SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
+            this,       SLOT(sceneNodeSelected(iris::SceneNodePtr)));
+
+    connect(playSceneBtn, SIGNAL(clicked(bool)), SLOT(onPlaySceneButton()));
+}
+
+void MainWindow::setupDesktop()
+{
+    pmContainer = new ProjectManager(db, this);
+
+    ui->stackedWidget->addWidget(pmContainer);
+    ui->stackedWidget->addWidget(viewPort);
+
+    connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));
+    connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
+    connect(pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
+    connect(pmContainer, SIGNAL(exportProject()), SLOT(exportSceneAsZip()));
+}
+
+void MainWindow::setupToolBar()
+{
+    toolBar = new QToolBar;
+    QAction *actionTranslate = new QAction;
+    actionTranslate->setObjectName(QStringLiteral("actionTranslate"));
+    actionTranslate->setCheckable(true);
+    actionTranslate->setIcon(QIcon(":/icons/tranlate arrow.svg"));
+    toolBar->addAction(actionTranslate);
+
+    QAction *actionRotate = new QAction;
+    actionRotate->setObjectName(QStringLiteral("actionRotate"));
+    actionRotate->setCheckable(true);
+    actionRotate->setIcon(QIcon(":/icons/rotate-to-right.svg"));
+    toolBar->addAction(actionRotate);
+
+    QAction *actionScale = new QAction;
+    actionScale->setObjectName(QStringLiteral("actionScale"));
+    actionScale->setCheckable(true);
+    actionScale->setIcon(QIcon(":/icons/expand-arrows.svg"));
+    toolBar->addAction(actionScale);
+
+    toolBar->addSeparator();
+
+    QAction *actionGlobalSpace = new QAction;
+    actionGlobalSpace->setObjectName(QStringLiteral("actionGlobalSpace"));
+    actionGlobalSpace->setCheckable(true);
+    actionGlobalSpace->setIcon(QIcon(":/icons/world.svg"));
+    toolBar->addAction(actionGlobalSpace);
+
+    QAction *actionLocalSpace = new QAction;
+    actionLocalSpace->setObjectName(QStringLiteral("actionLocalSpace"));
+    actionLocalSpace->setCheckable(true);
+    actionLocalSpace->setIcon(QIcon(":/icons/sceneobject.svg"));
+    toolBar->addAction(actionLocalSpace);
+
+    toolBar->addSeparator();
+
+    QAction *actionFreeCamera = new QAction;
+    actionFreeCamera->setObjectName(QStringLiteral("actionFreeCamera"));
+    actionFreeCamera->setCheckable(true);
+    actionFreeCamera->setIcon(QIcon(":/icons/people.svg"));
+    toolBar->addAction(actionFreeCamera);
+
+    QAction *actionArcballCam = new QAction;
+    actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
+    actionArcballCam->setCheckable(true);
+    actionArcballCam->setIcon(QIcon(":/icons/local.svg"));
+    toolBar->addAction(actionArcballCam);
+
+    connect(actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
+    connect(actionRotate,       SIGNAL(triggered(bool)), SLOT(rotateGizmo()));
+    connect(actionScale,        SIGNAL(triggered(bool)), SLOT(scaleGizmo()));
+
+    transformGroup = new QActionGroup(viewPort);
+    transformGroup->addAction(actionTranslate);
+    transformGroup->addAction(actionRotate);
+    transformGroup->addAction(actionScale);
+
+    connect(actionGlobalSpace,  SIGNAL(triggered(bool)), SLOT(useGlobalTransform()));
+    connect(actionLocalSpace,   SIGNAL(triggered(bool)), SLOT(useLocalTransform()));
+
+    transformSpaceGroup = new QActionGroup(viewPort);
+    transformSpaceGroup->addAction(actionGlobalSpace);
+    transformSpaceGroup->addAction(actionLocalSpace);
+    ui->actionGlobalSpace->setChecked(true);
+
+    connect(actionFreeCamera,   SIGNAL(triggered(bool)), SLOT(useFreeCamera()));
+    connect(actionArcballCam,   SIGNAL(triggered(bool)), SLOT(useArcballCam()));
+
+    cameraGroup = new QActionGroup(viewPort);
+    cameraGroup->addAction(actionFreeCamera);
+    cameraGroup->addAction(actionArcballCam);
+    actionFreeCamera->setChecked(true);
+
+    // this acts as a spacer
+    QWidget* empty = new QWidget();
+    empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    toolBar->addWidget(empty);
+    /*
+    vrButton = new QPushButton();
+    QIcon icovr(":/icons/virtual-reality.svg");
+    vrButton->setIcon(icovr);
+    vrButton->setObjectName("vrButton");
+    toolBar->addWidget(vrButton);
+    */
+    viewPort->addToolBar(toolBar);
+}
+
+void MainWindow::setupShortcuts()
+{
+    // Translation, Rotation and Scaling gizmo shortcuts for
+    QShortcut *shortcut = new QShortcut(QKeySequence("t"),sceneView);
+    connect(shortcut, SIGNAL(activated()), this, SLOT(translateGizmo()));
+
+    shortcut = new QShortcut(QKeySequence("r"),sceneView);
+    connect(shortcut, SIGNAL(activated()), this, SLOT(rotateGizmo()));
+
+    shortcut = new QShortcut(QKeySequence("s"),sceneView);
+    connect(shortcut, SIGNAL(activated()), this, SLOT(scaleGizmo()));
+
+    // Save
+    shortcut = new QShortcut(QKeySequence("ctrl+s"),sceneView);
+    connect(shortcut, SIGNAL(activated()), this, SLOT(saveScene()));
 }
 
 QIcon MainWindow::getIconFromSceneNodeType(SceneNodeType type)
@@ -1256,20 +1659,68 @@ void MainWindow::updateSceneSettings()
 
 void MainWindow::undo()
 {
-    if (undoStack->canUndo())
-        undoStack->undo();
+    if (undoStack->canUndo()) undoStack->undo();
 }
 
 void MainWindow::redo()
 {
-    if (undoStack->canRedo())
-        undoStack->redo();
+    if (undoStack->canRedo()) undoStack->redo();
+}
+
+void MainWindow::takeScreenshot()
+{
+    auto img = sceneView->takeScreenshot();
+    ScreenshotWidget screenshotWidget;
+    screenshotWidget.setMaximumWidth(1280);
+    screenshotWidget.setMaximumHeight(720);
+    screenshotWidget.layout()->setSizeConstraint(QLayout::SetNoConstraint);
+    screenshotWidget.setImage(img);
+    screenshotWidget.exec();
+}
+
+void MainWindow::toggleLightWires(bool state)
+{
+    sceneView->setShowLightWires(state);
+}
+
+void MainWindow::toggleWidgets(bool state)
+{
+    sceneHierarchyDock->setVisible(state);
+    sceneNodePropertiesDock->setVisible(state);
+    presetsDock->setVisible(state);
+    assetDock->setVisible(state);
+    animationDock->setVisible(state);
+    playerControls->setVisible(!state);
+}
+
+void MainWindow::showProjectManagerInternal()
+{
+    if (UiManager::isUndoStackDirty()) {
+        QMessageBox::StandardButton option;
+        option = QMessageBox::question(this,
+                                       "Unsaved Changes",
+                                       "There are unsaved changes, save before closing?",
+                                       QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+
+        if (option == QMessageBox::Yes) {
+            saveScene();
+        } else if (option == QMessageBox::Cancel) {
+            return;
+        }
+    }
+
+    if (UiManager::isScenePlaying) enterEditMode();
+    hide();
+    pmContainer->populateDesktop(true);
+    pmContainer->showMaximized();
+    pmContainer->cleanupOnClose();
 }
 
 void MainWindow::newScene()
 {
+    this->showMaximized();
+
     this->sceneView->makeCurrent();
-//    openProject(IrisUtils::getAbsoluteAssetPath("scenes/startup.jah"), true);
     auto scene = this->createDefaultScene();
     this->setScene(scene);
     this->sceneView->resetEditorCam();
@@ -1282,23 +1733,20 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
     auto pPath = QDir(projectPath).filePath(filename + Constants::PROJ_EXT);
 
-    db->initializeDatabase(pPath);
-    db->createProject(Constants::DB_ROOT_TABLE);
-
     auto writer = new SceneWriter();
     auto sceneObject = writer->getSceneObject(pPath,
                                               this->scene,
                                               sceneView->getRenderer()->getPostProcessManager(),
                                               sceneView->getEditorData());
-//    db->updateScene(sceneObject);
-    db->insertScene(filename, sceneObject);
-//    writer->writeScene(str,
-//                       scene,
-//                       sceneView->getRenderer()->getPostProcessManager(),
-//                       sceneView->getEditorData());
+    db->insertSceneGlobal(filename, sceneObject);
 
-    this->setProjectTitle(Globals::project->getProjectName());
-//    settings->addRecentlyOpenedScene(str);
+    UiManager::updateWindowTitle();
+
+    assetWidget->trigger();
+
+    UiManager::isSceneOpen = true;
+    ui->actionClose->setDisabled(false);
+    switchSpace(WindowSpaces::EDITOR);
 
     delete writer;
 }
@@ -1313,9 +1761,9 @@ void MainWindow::showLicenseDialog()
     licenseDialog->exec();
 }
 
-void MainWindow::openBlogUrl()
+void MainWindow::openFacebookUrl()
 {
-    QDesktopServices::openUrl(QUrl("http://www.jahshaka.com/category/blog/"));
+    QDesktopServices::openUrl(QUrl("https://www.facebook.com/jahshakafx/"));
 }
 
 void MainWindow::openWebsiteUrl()
@@ -1325,6 +1773,7 @@ void MainWindow::openWebsiteUrl()
 
 MainWindow::~MainWindow()
 {
+    this->db->closeDb();
     delete ui;
 }
 
@@ -1365,14 +1814,26 @@ void MainWindow::scaleGizmo()
 
 void MainWindow::onPlaySceneButton()
 {
-    if(ui->playSceneBtn->text() == "PLAY")
-    {
-        this->sceneView->startPlayingScene();
-        ui->playSceneBtn->setText("STOP");
+    if (UiManager::isScenePlaying) {
+        enterEditMode();
     }
-    else
-    {
-        this->sceneView->stopPlayingScene();
-        ui->playSceneBtn->setText("PLAY");
+    else {
+        enterPlayMode();
     }
+}
+
+void MainWindow::enterEditMode()
+{
+    UiManager::isScenePlaying = false;
+    UiManager::enterEditMode();
+    playSceneBtn->setToolTip("Play scene");
+    playSceneBtn->setIcon(QIcon(":/icons/g_play.svg"));
+}
+
+void MainWindow::enterPlayMode()
+{
+    UiManager::isScenePlaying = true;
+    UiManager::enterPlayMode();
+    playSceneBtn->setToolTip("Stop playing");
+    playSceneBtn->setIcon(QIcon(":/icons/g_stop.svg"));
 }

@@ -13,8 +13,9 @@ For more information see the LICENSE file
 #define MATERIAL_H
 
 #include "../irisglfwd.h"
-#include "renderitem.h"
+//#include "renderitem.h"
 #include <QOpenGLShaderProgram>
+#include "renderstates.h"
 
 class QOpenGLShaderProgram;
 class QOpenGLTexture;
@@ -29,7 +30,8 @@ enum class RenderLayer : int
     Opaque = 2000,
     AlphaTested = 3000,
     Transparent = 4000,
-    Overlay = 5000
+    Overlay = 5000,
+    Gizmo = 6000//the scene depth is cleared before this pass
 };
 
 struct MaterialTexture {

@@ -41,7 +41,9 @@ class QOpenGLShaderProgram;
 class CameraControllerBase;
 class EditorVrController;
 class OrbitalCameraController;
+class ViewerCameraController;
 class QElapsedTimer;
+class QTimer;
 
 class GizmoInstance;
 class ViewportGizmo;
@@ -50,6 +52,7 @@ class RotationGizmo;
 class ScaleGizmo;
 
 class EditorData;
+class ThumbnailGenerator;
 
 enum class ViewportMode
 {
@@ -66,8 +69,7 @@ struct PickingResult
     float distanceFromCameraSqrd;
 };
 
-class SceneViewWidget : public QOpenGLWidget,
-                        protected QOpenGLFunctions_3_2_Core
+class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
 {
     Q_OBJECT
 
@@ -75,15 +77,35 @@ class SceneViewWidget : public QOpenGLWidget,
     CameraControllerBase* camController;
     EditorCameraController* defaultCam;
     OrbitalCameraController* orbitalCam;
+    ViewerCameraController* viewerCam;
     EditorVrController* vrCam;
 
     ViewportMode viewportMode;
 
     QElapsedTimer* elapsedTimer;
+    QTimer* timer;
+
+    // for displaying thumbnail of viewer
+    iris::CameraNodePtr viewerCamera;
+    iris::RenderTargetPtr viewerRT;
+    iris::Texture2DPtr viewerTex;
+    iris::FullScreenQuad* viewerQuad;
+
+    // for screenshots
+    iris::RenderTargetPtr screenshotRT;
+    iris::Texture2DPtr screenshotTex;
+
+    // for rendering text
+    iris::SpriteBatchPtr spriteBatch;
+    iris::FontPtr font;
+    float fontSize;
+    bool showFps;
 public:
     iris::CameraNodePtr editorCam;
 
-    explicit SceneViewWidget(QWidget *parent);
+    ThumbnailGenerator* thumbGen;
+
+    explicit SceneViewWidget(QWidget *parent = Q_NULLPTR);
 
     void setScene(iris::ScenePtr scene);
     void setSelectedNode(iris::SceneNodePtr sceneNode);
@@ -97,6 +119,7 @@ public:
 
     //switches to the arc ball editor camera controller
     void setArcBallCameraMode();
+    void setCameraController();
 
     bool isVrSupported();
     void setViewportMode(ViewportMode viewportMode);
@@ -114,10 +137,10 @@ public:
     EditorData* getEditorData();
 
     void startPlayingScene();
+    void pausePlayingScene();
     void stopPlayingScene();
 
     iris::ForwardRendererPtr getRenderer() const;
-    void saveFrameBuffer(QString filePath);
 
     QVector3D calculateMouseRay(const QPointF& pos);
     void mousePressEvent(QMouseEvent* evt);
@@ -130,7 +153,15 @@ public:
     iris::SceneNodePtr activeDragNode;
     bool updateRPI(QVector3D pos, QVector3D r);
     bool doActiveObjectPicking(const QPointF& point);
-    void doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject = true, bool skipLights = false);
+    void doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject = true, bool skipLights = false, bool skipViewers = false);
+
+    QImage takeScreenshot(int width=1920, int height=1080);
+    bool getShowLightWires() const;
+    void setShowLightWires(bool value);
+
+    void setShowFps(bool value);
+
+    void cleanup();
 
 protected:
     void initializeGL();
@@ -143,6 +174,8 @@ protected:
 
     // does raycasting from the mouse's screen position.
     void doGizmoPicking(const QPointF& point);
+    void setCameraController(CameraControllerBase* controller);
+    void restorePreviousCameraController();
 
 private slots:
     void paintGL();
@@ -152,6 +185,10 @@ private slots:
 
 private:
     void doLightPicking(const QVector3D& segStart,
+                        const QVector3D& segEnd,
+                        QList<PickingResult>& hitList);
+
+    void doViewerPicking(const QVector3D& segStart,
                         const QVector3D& segEnd,
                         QList<PickingResult>& hitList);
 
@@ -193,6 +230,17 @@ private:
     bool playScene;
     iris::Plane sceneFloor;
     float animTime;
+
+    iris::MeshPtr pointLightMesh;
+    iris::MeshPtr dirLightMesh;
+    iris::MeshPtr spotLightMesh;
+    iris::MaterialPtr lineMat;
+
+    bool showLightWires;
+
+    void initLightAssets();
+    iris::MeshPtr createDirLightMesh(float radius = 1.0);
+    void addLightShapesToScene();
 
 signals:
     void initializeGraphics(SceneViewWidget* widget,

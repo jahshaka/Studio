@@ -85,6 +85,8 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     connect(timer,SIGNAL(timeout()),this,SLOT(updateAnim()));
     elapsedTimer = new QElapsedTimer();
 
+    ui->sceneNodeName->setText("");
+
     //timeAtCursor = 0;
     timerSpeed = 1.0f/60;//60 fps
     loopAnim = false;
@@ -102,6 +104,13 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     connect(ui->curvesBtn,SIGNAL(pressed()),this,SLOT(showCurveWidget()));
 
     mainTimeline = nullptr;
+    playIcon = QIcon(":/icons/play-arrow.svg");
+    pauseIcon = QIcon(":/icons/pause.svg");
+
+    ui->dopeSheetBtn->setStyleSheet("background: #2980b9");
+
+    // null scene node
+    setSceneNode(iris::SceneNodePtr());
 }
 
 AnimationWidget::~AnimationWidget()
@@ -119,10 +128,6 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
     // at times the timer could still be running when another object is clicked on
     timer->stop();
 
-    // the root node cannot have an animation, so its treated as null
-    if (!!node && node->isRootNode())
-        node = iris::SceneNodePtr();
-
     keyFrameWidget->setSceneNode(node);
     //ui->timeline->setSceneNode(node);
     ui->keylabelView->setSceneNode(node);
@@ -138,25 +143,37 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
         ui->sceneNodeName->setText(node->name);
 
         if(node->getAnimations().count() == 0) {
-            showCreateAnimWidget();
-            updateCreationWidgetMessage(node);
-        }
-        else {
-            buildPropertiesMenu();
-
-            animation = node->getAnimation();
-            refreshAnimationList();
-            showKeyFrameWidget();
-            hideCreateAnimWidget();
-            ui->loopCheckBox->setChecked(animation->getLooping());
+            //showCreateAnimWidget();
+            //updateCreationWidgetMessage(node);
+            auto newAnim = iris::Animation::create("Animation");
+            node->addAnimation(newAnim);
+            node->setAnimation(newAnim);
         }
 
-    } else {
+        buildPropertiesMenu();
+
+        animation = node->getAnimation();
+        refreshAnimationList();
+        showKeyFrameWidget();
+        hideCreateAnimWidget();
+        ui->loopCheckBox->setChecked(animation->getLooping());
+
+        // enable ui
+        ui->deleteAnimBtn->setEnabled(true);
+        ui->insertFrame->setEnabled(true);
+        ui->addAnimBtn->setEnabled(true);
+        ui->animList->setEnabled(true);
+    }
+    else {
         ui->insertFrame->setMenu(new QMenu());
         animation.clear();
+        ui->sceneNodeName->setText("");
 
-        showCreateAnimWidget();
-        updateCreationWidgetMessage(node);
+        // disable ui
+        ui->deleteAnimBtn->setEnabled(false);
+        ui->insertFrame->setEnabled(false);
+        ui->addAnimBtn->setEnabled(false);
+        ui->animList->setEnabled(false);
     }
 }
 
@@ -211,6 +228,7 @@ void AnimationWidget::updateAnim()
     onObjectAnimationTimeChanged(animWidgetData->cursorPosInSeconds);
 }
 
+// called when the play button is hit
 void AnimationWidget::startTimer()
 {
     if (!timer->isActive()) {
@@ -220,6 +238,13 @@ void AnimationWidget::startTimer()
 
         timer->start(timerSpeed);
         elapsedTimer->start();
+        ui->playBtn->setIcon(pauseIcon);
+    } else
+    {
+        // do a pause
+        ui->playBtn->setIcon(playIcon);
+        animWidgetData->refreshWidgets();
+        timer->stop();
     }
 }
 
@@ -227,7 +252,9 @@ void AnimationWidget::stopTimer()
 {
     if (timer->isActive()) {
         animWidgetData->cursorPosInSeconds = startedTime;
+        animWidgetData->refreshWidgets();
         timer->stop();
+        ui->playBtn->setIcon(playIcon);
     }
 }
 
@@ -410,6 +437,10 @@ void AnimationWidget::addPropertyKey(QAction *action)
         break;
     }
 
+    animation->calculateAnimationLength();
+
+    // recalc summary keys for this property
+    ui->keylabelView->recalcPropertySummaryKeys(animProp->name);
 
     this->repaintViews();
 }
@@ -441,12 +472,19 @@ void AnimationWidget::showKeyFrameWidget()
 {
     keyFrameWidget->show();
     curveWidget->hide();
+
+    ui->dopeSheetBtn->setStyleSheet("background: #2980b9");
+    ui->curvesBtn->setStyleSheet("background: #555");
 }
 
 void AnimationWidget::showCurveWidget()
 {
     keyFrameWidget->hide();
     curveWidget->show();
+    ui->keylabelView->highlightDefaultProperty();
+
+    ui->curvesBtn->setStyleSheet("background: #2980b9");
+    ui->dopeSheetBtn->setStyleSheet("background: #555;");
 }
 
 void AnimationWidget::hideCreateAnimWidget()

@@ -1,7 +1,0 @@
-<RCC>
-    <qresource prefix="/">
-        <file>app/materials/grass.png</file>
-        <file>app/materials/oldtile.png</file>
-        <file>app/materials/shiny_red.png</file>
-    </qresource>
-</RCC>

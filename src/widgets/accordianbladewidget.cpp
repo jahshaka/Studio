@@ -48,8 +48,9 @@ AccordianBladeWidget::AccordianBladeWidget(QWidget* parent) :
 
     connect(ui->toggle, SIGNAL(toggled(bool)), SLOT(onPanelToggled()));
 
-    ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); }"
-                              "QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
+    // Most panels are by default set to expand so safe to assume dropdown state (iKlsR)
+    ui->toggle->setIcon(QIcon(":/icons/chevron-arrow-down.svg"));
+    ui->toggle->setIconSize(QSize(24, 24));
     ui->contentpane->setVisible(false);
 }
 
@@ -76,15 +77,11 @@ void AccordianBladeWidget::clearPanel(QLayout *layout)
 void AccordianBladeWidget::onPanelToggled()
 {
     if (ui->contentpane->isVisible()) {
-        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/right-chevron.svg); }"
-                                  "QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
-
+        ui->toggle->setIcon(QIcon(":/icons/right-chevron.svg"));
         ui->contentpane->setVisible(false);
         this->setMinimumHeight(ui->bg->height());
     } else {
-        ui->toggle->setStyleSheet("QPushButton { border-image: url(:/app/icons/chevron-arrow-down.svg); }"
-                                  "QPushButton:hover { background-color: rgb(30, 144, 255); border: none;}");
-
+        ui->toggle->setIcon(QIcon(":/icons/chevron-arrow-down.svg"));
         expand();
     }
 }

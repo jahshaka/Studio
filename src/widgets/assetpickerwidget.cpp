@@ -1,6 +1,7 @@
 #include "assetpickerwidget.h"
 #include "ui_assetpickerwidget.h"
 #include "../core/thumbnailmanager.h"
+#include "../constants.h"
 
 AssetPickerWidget::AssetPickerWidget(AssetType type, QDialog *parent) :
     QDialog(parent),
@@ -38,21 +39,21 @@ AssetPickerWidget::~AssetPickerWidget()
 
 void AssetPickerWidget::populateWidget(QString filter)
 {
-    for (auto asset : AssetManager::assets) {
+    for (auto asset : AssetManager::getAssets()) {
         QPixmap pixmap;
 
         if (asset->type == type) {
             QFileInfo file(asset->fileName);
             auto item = new QListWidgetItem(asset->fileName);
 
-            if (file.suffix() == "jpg" || file.suffix() == "png" || file.suffix() == "bmp") {
+            if (Constants::IMAGE_EXTS.contains(file.suffix())) {
                 auto thumb = ThumbnailManager::createThumbnail(asset->path, 128, 128);
                 pixmap = QPixmap::fromImage(*thumb->thumb);
                 item->setIcon(QIcon(pixmap));
-            } else if (file.suffix() == "obj" || file.suffix() == "fbx") {
-                item->setIcon(QIcon(":/app/icons/user-account-box.svg"));
+            } else if (Constants::MODEL_EXTS.contains(file.suffix())) {
+                item->setIcon(QIcon(":/icons/user-account-box.svg"));
             } else {
-                item->setIcon(QIcon(":/app/icons/google-drive-file.svg"));
+                item->setIcon(QIcon(":/icons/google-drive-file.svg"));
             }
 
             item->setData(Qt::UserRole, asset->path);

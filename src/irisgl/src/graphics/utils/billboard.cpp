@@ -60,7 +60,7 @@ Billboard::Billboard(QOpenGLFunctions_3_2_Core* gl,float size)
 
 void Billboard::draw(QOpenGLFunctions_3_2_Core* gl)
 {
-    mesh->draw(gl,program,GL_TRIANGLES);
+    mesh->draw(gl,program);
 }
 
 }

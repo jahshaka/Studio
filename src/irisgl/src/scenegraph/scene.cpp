@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "../materials/defaultskymaterial.h"
 #include "../geometry/trimesh.h"
 #include "../core/irisutils.h"
+#include "../graphics/renderlist.h"
 
 namespace iris
 {
@@ -61,9 +62,9 @@ Scene::Scene()
     meshes.reserve(100);
     particleSystems.reserve(100);
 
-    //reserve 1000 items initially
-    geometryRenderList.reserve(1000);
-    shadowRenderList.reserve(1000);
+    geometryRenderList = new RenderList();
+    shadowRenderList = new RenderList();
+    gizmoRenderList = new RenderList();
 }
 
 void Scene::setSkyTexture(Texture2DPtr tex)
@@ -103,7 +104,7 @@ void Scene::update(float dt)
 {
     rootNode->update(dt);
 
-    // cameras aren't always be a part of the scene hierarchy, so their matrices are updated here
+    // cameras aren't always a part of the scene hierarchy, so their matrices are updated here
     if (!!camera) {
         camera->update(dt);
         camera->updateCameraMatrices();
@@ -118,7 +119,7 @@ void Scene::update(float dt)
         particle->submitRenderItems();
     }
 
-    this->geometryRenderList.append(skyRenderItem);
+    this->geometryRenderList->add(skyRenderItem);
 }
 
 void Scene::render()
@@ -197,9 +198,13 @@ void Scene::addNode(SceneNodePtr node)
         particleSystems.append(particleSystem);
     }
 
-    if(node->sceneNodeType == SceneNodeType::Viewer && vrViewer.isNull())
+    if(node->sceneNodeType == SceneNodeType::Viewer)
     {
-        vrViewer = node.staticCast<iris::ViewerNode>();
+        auto viewer = node.staticCast<iris::ViewerNode>();
+        viewers.append(viewer);
+
+        if ( vrViewer.isNull())
+            vrViewer = viewer;
     }
 }
 
@@ -217,9 +222,17 @@ void Scene::removeNode(SceneNodePtr node)
         particleSystems.removeOne(node.staticCast<iris::ParticleSystemNode>());
     }
 
-    // if this node is the scene's viewer then reset the scene's viewer to null
-    if (vrViewer == node.staticCast<iris::ViewerNode>()) {
-        vrViewer.reset();
+    if (node->sceneNodeType == SceneNodeType::Viewer) {
+        auto viewer = node.staticCast<iris::ViewerNode>();
+        viewers.removeOne(viewer);
+
+        // remove viewer and replace it if more viewers are available
+        if ( vrViewer == viewer) {
+            if(viewers.count()==0)
+                vrViewer.reset();
+            else
+                vrViewer = viewers[viewers.count()-1];
+        }
     }
 
     for (auto& child : node->children) {
@@ -248,6 +261,27 @@ void Scene::setOutlineWidth(int width)
 void Scene::setOutlineColor(QColor color)
 {
     outlineColor = color;
+}
+
+void Scene::cleanup()
+{
+    camera.clear();
+    rootNode.clear();
+    vrViewer.clear();
+
+    skyMesh.clear();
+    skyTexture.clear();
+    skyMaterial.clear();
+    delete skyRenderItem;
+
+    lights.clear();
+    meshes.clear();
+    particleSystems.clear();
+    viewers.clear();
+
+    delete geometryRenderList;
+    delete shadowRenderList;
+    delete gizmoRenderList;
 }
 
 }

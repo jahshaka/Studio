@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QOpenGLBuffer>
 #include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLTexture>
+#include <QtMath>
 
 #include "vertexlayout.h"
 #include "../geometry/trimesh.h"
@@ -65,8 +66,6 @@ Mesh::Mesh(aiMesh* mesh)
     numFaces = mesh->mNumFaces;
 
     gl->glGenVertexArrays(1,&vao);
-
-    boundingSphere = new BoundingSphere();
 
     if(!mesh->HasPositions())
         return;
@@ -152,11 +151,6 @@ Mesh::Mesh(aiMesh* mesh)
         triMesh->addTriangle(QVector3D(a.x, a.y, a.z),
                              QVector3D(b.x, b.y, b.z),
                              QVector3D(c.x, c.y, c.z));
-
-        // redundant, but good enough for now
-        boundingSphere->expand(QVector3D(a.x, a.y, a.z));
-        boundingSphere->expand(QVector3D(b.x, b.y, b.z));
-        boundingSphere->expand(QVector3D(c.x, c.y, c.z));
     }
 
     gl->glGenBuffers(1, &indexBuffer);
@@ -168,6 +162,9 @@ Mesh::Mesh(aiMesh* mesh)
     // the true size
     int numVerts = indices.size();
 
+    this->setPrimitiveMode(PrimitiveMode::Triangles);
+
+    boundingSphere = calculateBoundingSphere(mesh);
 }
 
 //todo: extract trimesh from data
@@ -195,11 +192,37 @@ Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
     gl->glBindVertexArray(0);
 
     usesIndexBuffer = false;
+    this->setPrimitiveMode(PrimitiveMode::Triangles);
 }
 
 void Mesh::setSkeleton(const SkeletonPtr &value)
 {
     skeleton = value;
+}
+
+PrimitiveMode Mesh::getPrimitiveMode() const
+{
+    return primitiveMode;
+}
+
+void Mesh::setPrimitiveMode(const PrimitiveMode &value)
+{
+    primitiveMode = value;
+
+    switch (primitiveMode) {
+    case PrimitiveMode::Triangles:
+        glPrimitive = GL_TRIANGLES;
+        break;
+    case PrimitiveMode::Lines:
+        glPrimitive = GL_LINES;
+        break;
+    case PrimitiveMode::LineLoop:
+        glPrimitive = GL_LINE_LOOP;
+        break;
+    default:
+        glPrimitive = GL_TRIANGLES;
+        break;
+    }
 }
 
 bool Mesh::hasSkeleton()
@@ -227,12 +250,12 @@ bool Mesh::hasSkeletalAnimations()
     return skeletalAnimations.count() != 0;
 }
 
-void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,Material* mat,GLenum primitiveMode)
+void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,Material* mat)
 {
-    draw(gl,mat->program,primitiveMode);
+    draw(gl,mat->program);
 }
 
-void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLenum primitiveMode)
+void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program)
 {
     auto programId = program->programId();
     gl->glUseProgram(programId);
@@ -242,12 +265,12 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program,GLen
     {
         //qDebug()<<indexBuffer;
         gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer);
-        gl->glDrawElements(GL_TRIANGLES,numVerts,GL_UNSIGNED_INT,0);
+        gl->glDrawElements(glPrimitive,numVerts,GL_UNSIGNED_INT,0);
         gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
     }
     else
     {
-        gl->glDrawArrays(GL_TRIANGLES,0,numVerts);
+        gl->glDrawArrays(glPrimitive,0,numVerts);
     }
     gl->glBindVertexArray(0);
 }
@@ -408,7 +431,6 @@ Mesh* Mesh::create(void* data,int dataSize,int numVerts,VertexLayout* vertexLayo
 Mesh::~Mesh()
 {
     delete vertexLayout;
-    delete vbo;
     delete triMesh;
 }
 
@@ -439,6 +461,47 @@ void Mesh::addVertexArray(VertexAttribUsage usage,void* dataPtr,int size,GLenum 
 void Mesh::addIndexArray(void* data,int size,GLenum type)
 {
 
+}
+
+// https://github.com/playcanvas/engine/blob/master/src/shape/bounding-sphere.js#L30
+// bounding sphere wont necessarily be at the center of the mesh's origin
+// the true positon in world space would be the bounds's center plus the mesh's absolute position
+BoundingSphere Mesh::calculateBoundingSphere(const aiMesh *mesh)
+{
+    // find average pos
+    aiVector3D averagePos;// = mesh->mVertices[0];
+    aiVector3D sum(0,0,0);
+
+    for(unsigned int i =0;i<mesh->mNumVertices;i++) {
+        sum += mesh->mVertices[i];
+
+        if (i%100 == 0) {
+            sum /= mesh->mNumVertices;
+            averagePos += sum;
+            sum = aiVector3D(0,0,0);
+        }
+    }
+
+    sum/=mesh->mNumVertices;
+    averagePos += sum;
+
+    //averagePos = averagePos/mesh->mNumVertices;
+
+    // find furthest distance
+    float maxDistSqrd = 0;
+    for(unsigned int i =0;i<mesh->mNumVertices;i++) {
+        auto vert = mesh->mVertices[i];
+        auto diff = vert-averagePos;
+        auto dist = diff.SquareLength();
+
+        if (dist > maxDistSqrd)
+            maxDistSqrd = dist;
+    }
+
+    BoundingSphere sphere;
+    sphere.pos = QVector3D(averagePos.x, averagePos.y, averagePos.x);
+    sphere.radius = qSqrt(maxDistSqrd);
+    return sphere;
 }
 
 }

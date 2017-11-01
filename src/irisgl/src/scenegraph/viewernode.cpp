@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "../materials/defaultmaterial.h"
 #include "../graphics/texture2d.h"
 #include "../graphics/renderitem.h"
+#include "../graphics/renderlist.h"
 #include "../vr/vrdevice.h"
 #include "../vr/vrmanager.h"
 
@@ -68,10 +69,13 @@ float ViewerNode::getViewScale()
 
 void ViewerNode::submitRenderItems()
 {
+    if( !visible)
+        return;
+
     renderItem->worldMatrix = this->globalTransform;
-    scene->geometryRenderList.append(renderItem);
+    scene->geometryRenderList->add(renderItem);
 
-
+    /*
     auto device = VrManager::getDefaultDevice();
 
     QMatrix4x4 world;
@@ -87,8 +91,9 @@ void ViewerNode::submitRenderItems()
     world.scale(0.05f);
     rightHandRenderItem->worldMatrix = this->globalTransform * world;
 
-    scene->geometryRenderList.append(leftHandenderItem);
-    scene->geometryRenderList.append(rightHandRenderItem);
+    scene->geometryRenderList->add(leftHandenderItem);
+    scene->geometryRenderList->add(rightHandRenderItem);
+    */
 }
 
 ViewerNodePtr ViewerNode::create()

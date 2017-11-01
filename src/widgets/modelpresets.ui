@@ -13,6 +13,13 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">#ModelPresets {
+	padding: 4px;
+	background: #303030;
+	border: 0;
+}</string>
+  </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="leftMargin">
     <number>0</number>
@@ -35,7 +42,7 @@
       </sizepolicy>
      </property>
      <property name="styleSheet">
-      <string notr="true">background-color: #303030</string>
+      <string notr="true">border: 0</string>
      </property>
     </widget>
    </item>

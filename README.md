@@ -1,46 +1,62 @@
-<p align="center">
- <img src="https://snag.gy/OcwmDL.jpg" alt="Jahshaka Screenshot"/>
-</p>
 <div align="center">
-  <a href="http://www.jahshakavr.com/"> website </a> &bull; <a href="https://www.reddit.com/r/jahshaka/"> reddit </a> &bull; <a href="https://github.com/jahshaka/VR/releases"> releases</a>
+  <img src="https://i.imgur.com/17BeZha.png" width="400"></img>
 </div>
-<p align="center"><b>JahshakaVR brings you the future of immersive digital content creation with the leading free and open source digital content creation suite.</b></p>
+
+<br>
+
+<div align="center">
+  <a href="http://www.jahshakavr.com/">Website</a>
+  &nbsp;&nbsp;&bull;&nbsp;&nbsp;
+  <a href="https://www.reddit.com/r/jahshaka/">Reddit</a>
+  &nbsp;&nbsp;&bull;&nbsp;&nbsp;
+  <a href="https://github.com/jahshaka/VR/releases">Releases</a>
+</div>
+
+<br>
+
+Jahshaka brings you the future of immersive digital content creation with the leading free and open source digital content creation suite.
+
+![](https://i.imgur.com/TkSBItu.png)
 
 ## Features:
  - View scenes in virtual reality via the Oculus Rift
  - Build and share your scenes with the world
- - A powerful effects system
+ - Particle System
+ - Animation Editor
+ - Skeletal Animation
+ - Realtime Dynamic Shadows
+ - Powerful Extensible Material System
+ - Asset Manager
+ - Supports 4k displays
+ - Custom Shaders and more&hellip;
 
 ## Screenshots
-![](https://snag.gy/ia7kDK.jpg)
-![](https://snag.gy/lP9Z0T.jpg)
+
+#### Particle System
+![](https://i.imgur.com/XjXUnUx.gif)
+
+#### Skeletal Animation
+![](https://i.imgur.com/qTVhlPp.gif)
+
+#### Shader format
+![](https://i.imgur.com/sgaQpC8.png)
 
 ## Building From Source
-###Dependencies:
-- Qt 5.7
 
-###Steps:
-- Clone repository
-- Open .pro file in QtCreator
-- Run
+### Requirements
+- Qt versions *5.7* or *5.9* are recommended *(other versions might work but aren't tested, 5.8 also has a bug on Windows)*
+- A C++ compiler with support for C++11 or later (choose a compiler for your OS when installing the Qt SDK, G++ or Clang recommended)
+- Qt Creator (also comes with the Qt SDK, latest version recommended)
+
+### Build steps
+Stable (usually old releases are available by default), for up to date code, checkout the [`dev` branch](https://github.com/jahshaka/VR/tree/dev) instead of `master`
+
+- Clone the repo from the project page or download a zipped copy of the source for a specific version from the Releases tab
+- Open the `.pro` file in Qt Creator
+- Run the solution
 
 ## Credits
-####Skies
-Free ski textures from [VizPeople CCO Catalog](http://www.viz-people.com/portfolio/free-hdri-maps/)
-
-####Textures
-Royalty-free images from [Pixabay](https://pixabay.com/)
-
-####Icons:
-**Icomoon Free 1** by [icomoon](http://www.flaticon.com/authors/icomoon) at [flaticon](http://www.flaticon.com/)
-
-**Material Design** by [google](http://www.flaticon.com/authors/google) at [flaticon](http://www.flaticon.com/)
-
-**Various Icons** by [Freepik](http://www.flaticon.com/authors/freepik) at [flaticon](http://www.flaticon.com/)
-
-**Essential Set** by [Madebyoliver](http://www.flaticon.com/authors/madebyoliver) at [flaticon](http://www.flaticon.com/)
-
-**Multimedia Element Set** by [Hadrien](http://www.flaticon.com/authors/hadrien) at [flaticon](http://www.flaticon.com/)
+Royalty-free images from [Pixabay](https://pixabay.com/). Various icons sourced from [flaticon](http://www.flaticon.com/), [iconfinder](https://www.iconfinder.com/) under https://creativecommons.org/licenses/by/3.0/ and [the noun project](https://thenounproject.com/). Specific corresponding READMEs and licenses in their respective folders for free/open source assets used.
 
 ## License(GPLv3)
     http://www.jahshaka.com

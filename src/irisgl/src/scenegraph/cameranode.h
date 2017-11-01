@@ -60,6 +60,8 @@ public:
         this->fov = fov;
     }
 
+    void lookAt(QVector3D target);
+
     //update view and proj matrices
     void updateCameraMatrices()
     {

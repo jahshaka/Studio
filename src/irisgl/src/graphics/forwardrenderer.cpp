@@ -36,14 +36,23 @@ For more information see the LICENSE file
 #include "utils/fullscreenquad.h"
 #include "texture2d.h"
 #include "rendertarget.h"
+#include "renderlist.h"
+#include "graphicsdevice.h"
+#include "spritebatch.h"
+#include "font.h"
 #include "../vr/vrdevice.h"
 #include "../vr/vrmanager.h"
 #include "../core/irisutils.h"
 #include "postprocessmanager.h"
 #include "postprocess.h"
 
+#include "../core/performancetimer.h"
+
 #include "../geometry/frustum.h"
 #include "../geometry/boundingsphere.h"
+
+#include "utils/shapehelper.h"
+#include "../materials/colormaterial.h"
 
 #include <QOpenGLContext>
 #include "../libovr/Include/OVR_CAPI_GL.h"
@@ -54,9 +63,11 @@ using namespace OVR;
 namespace iris
 {
 
-ForwardRenderer::ForwardRenderer()
+ForwardRenderer::ForwardRenderer(bool supportsVr)
 {
     this->gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+    graphics = GraphicsDevice::create();
+
     renderData = new RenderData();
 
     billboard = new Billboard(gl);
@@ -68,8 +79,10 @@ ForwardRenderer::ForwardRenderer()
 
     generateShadowBuffer(4096);
 
-    vrDevice = VrManager::getDefaultDevice();
-    vrDevice->initialize();
+    if (supportsVr) {
+        vrDevice = VrManager::getDefaultDevice();
+        vrDevice->initialize();
+    }
 
     renderTarget = RenderTarget::create(800, 800);
     sceneRenderTexture = Texture2D::create(800, 800);
@@ -80,6 +93,10 @@ ForwardRenderer::ForwardRenderer()
 
     postMan = PostProcessManager::create();
     postContext = new PostProcessContext();
+
+    perfTimer = new PerformanceTimer();
+
+    renderLightBillboards = true;
 }
 
 void ForwardRenderer::generateShadowBuffer(GLuint size)
@@ -108,18 +125,122 @@ void ForwardRenderer::generateShadowBuffer(GLuint size)
     // check status at end
 }
 
-ForwardRendererPtr ForwardRenderer::create()
+ForwardRendererPtr ForwardRenderer::create(bool useVr)
 {
-    return ForwardRendererPtr(new ForwardRenderer());
+    return ForwardRendererPtr(new ForwardRenderer(useVr));
 }
 
-// all scenenode's transform should be updated
+GraphicsDevicePtr ForwardRenderer::getGraphicsDevice()
+{
+    return graphics;
+}
+
+void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePtr cam, bool clearRenderLists)
+{
+    auto ctx = QOpenGLContext::currentContext();
+
+    // reset states
+    graphics->setBlendState(BlendState::Opaque);
+    graphics->setDepthState(DepthState::Default);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+
+    // STEP 1: RENDER SCENE
+    renderData->scene = scene;
+
+    cam->setAspectRatio(rt->getWidth()/(float)rt->getHeight());
+    cam->updateCameraMatrices();
+
+    renderData->projMatrix = cam->projMatrix;
+    renderData->viewMatrix = cam->viewMatrix;
+    renderData->eyePos = cam->globalTransform.column(3).toVector3D();
+
+    renderData->frustum.build(cam->projMatrix * cam->viewMatrix);
+
+    renderData->fogColor = scene->fogColor;
+    renderData->fogStart = scene->fogStart;
+    renderData->fogEnd = scene->fogEnd;
+    renderData->fogEnabled = scene->fogEnabled;
+
+    if (scene->shadowEnabled) {
+        gl->glViewport(0, 0, 4096, 4096);
+        gl->glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
+        gl->glClear(GL_DEPTH_BUFFER_BIT);
+        gl->glCullFace(GL_FRONT);
+        renderShadows(scene);
+        gl->glCullFace(GL_BACK);
+        gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+    }
+
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    //todo: remember to remove this!
+    renderTarget->resize(rt->getWidth(), rt->getHeight(), true);
+    finalRenderTexture->resize(rt->getWidth(), rt->getHeight());
+
+    renderTarget->bind();
+    gl->glViewport(0, 0, rt->getWidth(), rt->getHeight());
+    gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    //enable all attrib arrays
+    for (int i = 0; i < (int)iris::VertexAttribUsage::Count; i++) {
+        gl->glEnableVertexAttribArray(i);
+    }
+
+    // reset states
+    graphics->setBlendState(BlendState::Opaque);
+    graphics->setDepthState(DepthState::Default);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+
+    renderNode(renderData, scene);
+
+    if (renderLightBillboards)
+        renderBillboardIcons(renderData);
+
+    renderTarget->unbind();
+
+    postContext->sceneTexture = sceneRenderTexture;
+    postContext->depthTexture = depthRenderTexture;
+    postContext->finalTexture = finalRenderTexture;
+    postMan->process(postContext);
+
+
+    // draw fs quad
+    rt->bind();
+    gl->glViewport(0, 0, rt->getWidth(), rt->getHeight());
+    gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    gl->glActiveTexture(GL_TEXTURE0);
+
+    graphics->setBlendState(BlendState::Opaque);
+    graphics->setDepthState(DepthState::Default);
+    graphics->setRasterizerState(RasterizerState::CullNone);
+
+    postContext->finalTexture->bind();
+    fsQuad->draw();
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
+    rt->unbind();
+
+    //clear lists
+    if (clearRenderLists) {
+        scene->geometryRenderList->clear();
+        scene->shadowRenderList->clear();
+        scene->gizmoRenderList->clear();
+    }
+}
+
 void ForwardRenderer::renderScene(float delta, Viewport* vp)
 {
+    //perfTimer->start("total");
     auto ctx = QOpenGLContext::currentContext();
     auto cam = scene->camera;
 
+    // reset states
+    graphics->setBlendState(BlendState::Opaque);
+    graphics->setDepthState(DepthState::Default);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+
     // STEP 1: RENDER SCENE
+    //perfTimer->start("render_scene");
     renderData->scene = scene;
 
     cam->setAspectRatio(vp->getAspectRatio());
@@ -150,29 +271,32 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
 
     gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    //gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
 
-    //todo: remember to remove this!
     renderTarget->resize(vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale, true);
     finalRenderTexture->resize(vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
 
     renderTarget->bind();
-    gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
-    gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    graphics->setViewport(QRect(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale));
+    graphics->clear(QColor(0, 0, 0));
 
     //enable all attrib arrays
     for (int i = 0; i < (int)iris::VertexAttribUsage::Count; i++) {
         gl->glEnableVertexAttribArray(i);
     }
 
+    // reset states
+    graphics->setBlendState(BlendState::Opaque);
+    graphics->setDepthState(DepthState::Default);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+
     renderNode(renderData, scene);
 
-    // STEP 2: RENDER SKY
-    //renderSky(renderData);
+    //perfTimer->end("render_scene");
+    if (renderLightBillboards)
+        renderBillboardIcons(renderData);
+    //perfTimer->end("render_icons");
 
-    // STEP 4: RENDER BILLBOARD ICONS
-    renderBillboardIcons(renderData);
-
+    //perfTimer->start("render_post");
     renderTarget->unbind();
 
     postContext->sceneTexture = sceneRenderTexture;
@@ -183,19 +307,31 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
 
     // draw fs quad
-    gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
+    graphics->setViewport(QRect(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale));
+    graphics->clear(QColor(0,0,0));
+
+    graphics->setBlendState(BlendState::Opaque);
+    graphics->setDepthState(DepthState::Default);
+    graphics->setRasterizerState(RasterizerState::CullNone);
+
     gl->glActiveTexture(GL_TEXTURE0);
-    //sceneRenderTexture->bind();
     postContext->finalTexture->bind();
-    fsQuad->draw(gl);
+    fsQuad->draw();
     gl->glBindTexture(GL_TEXTURE_2D, 0);
 
+    graphics->clear(GL_DEPTH_BUFFER_BIT);
     // STEP 5: RENDER SELECTED OBJECT
     if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
 
     //clear lists
-    scene->geometryRenderList.clear();
-    scene->shadowRenderList.clear();
+    scene->geometryRenderList->clear();
+    scene->shadowRenderList->clear();
+    scene->gizmoRenderList->clear();
+
+    //perfTimer->end("total");
+
+    //perfTimer->report();
+    //perfTimer->reset();
 }
 
 void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
@@ -217,7 +353,7 @@ void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
                              QVector3D(0.0f, 1.0f, 0.0f));
             QMatrix4x4 lightSpaceMatrix = lightProjection * lightView;
 
-            for (auto& item : scene->shadowRenderList) {
+            for (auto& item : scene->shadowRenderList->getItems()) {
 
 
                 if (item->type == iris::RenderItemType::Mesh) {
@@ -247,24 +383,25 @@ void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
     shadowShader->release();
 }
 
-void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
+void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
 {
     auto ctx = QOpenGLContext::currentContext();
     if(!vrDevice->isVrSupported())
         return;
 
     QVector3D viewerPos = scene->camera->getGlobalPosition();
-    //float viewScale = scene->camera->getVrViewScale();
     QMatrix4x4 viewTransform = scene->camera->globalTransform;
-    //viewTransform.setToIdentity();
 
 
-    if(!!scene->vrViewer) {
+    if(!!scene->vrViewer && useViewer) {
         viewerPos = scene->vrViewer->getGlobalPosition();
-        //viewScale = scene->vrViewer->getViewScale();
         viewTransform = scene->vrViewer->globalTransform;
     }
 
+    // reset states
+    graphics->setBlendState(BlendState::Opaque);
+    graphics->setDepthState(DepthState::Default);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
 
     if (scene->shadowEnabled) {
         gl->glViewport(0, 0, 4096, 4096);
@@ -292,11 +429,6 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
 
         //STEP 1: RENDER SCENE
         renderData->scene = scene;
-
-        //camera->setAspectRatio(vp->getAspectRatio());
-        //camera->updateCameraMatrices();
-
-        //renderData->eyePos = camera->globalTransform.column(3).toVector3D();
         renderData->eyePos = viewerPos;
 
         renderData->fogColor = scene->fogColor;
@@ -304,13 +436,12 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
         renderData->fogEnd = scene->fogEnd;
         renderData->fogEnabled = scene->fogEnabled;
 
+        // reset states
+        graphics->setBlendState(BlendState::Opaque);
+        graphics->setDepthState(DepthState::Default);
+        graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+
         renderNode(renderData,scene);
-
-        //STEP 2: RENDER SKY
-        //renderSky(renderData);
-
-        //renderParticles(renderData, delta, scene->rootNode);
-
 
         vrDevice->endEye(eye);
     }
@@ -322,12 +453,18 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp)
 
    gl->glViewport(0, 0, vp->width,vp->height);
    gl->glActiveTexture(GL_TEXTURE0);
+
+   graphics->setBlendState(BlendState::Opaque);
+   graphics->setDepthState(DepthState::Default);
+   graphics->setRasterizerState(RasterizerState::CullNone);
+
    vrDevice->bindMirrorTextureId();
    fsQuad->draw(gl);
    gl->glBindTexture(GL_TEXTURE_2D,0);
 
-   scene->geometryRenderList.clear();
-   scene->shadowRenderList.clear();
+   scene->geometryRenderList->clear();
+   scene->shadowRenderList->clear();
+   scene->gizmoRenderList->clear();
 }
 
 PostProcessManagerPtr ForwardRenderer::getPostProcessManager()
@@ -358,13 +495,9 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 
     auto lightCount = renderData->scene->lights.size();
 
-    //sort render list
-    //qsort(scene->geometryRenderList,scene->geometryRenderList.size(),)
-    qSort(scene->geometryRenderList.begin(), scene->geometryRenderList.end(), [](const RenderItem* a, const RenderItem* b) {
-        return a->renderLayer < b->renderLayer;
-    });
+    scene->geometryRenderList->sort();
 
-    for (auto& item : scene->geometryRenderList) {
+    for (auto& item : scene->geometryRenderList->getItems()) {
         if (item->type == iris::RenderItemType::Mesh) {
 
             if (item->cullable) {
@@ -578,13 +711,14 @@ void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
         if(!!icon)
         {
             icon->texture->bind();
+            billboard->draw(gl);
         }
         else
         {
             gl->glBindTexture(GL_TEXTURE_2D,0);
         }
 
-        billboard->draw(gl);
+
     }
     gl->glDisable(GL_BLEND);
 
@@ -593,6 +727,54 @@ void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
 
 // http://gamedev.stackexchange.com/questions/59361/opengl-get-the-outline-of-multiple-overlapping-objects
 void ForwardRenderer::renderSelectedNode(RenderData* renderData, SceneNodePtr node)
+{
+    // STEP 1: DRAW STENCIL OF THE FILLED POLYGON
+    // sets default stencil value to 0
+    gl->glClearStencil(0);
+    gl->glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    // this should be the default
+    gl->glPolygonMode(GL_FRONT, GL_FILL);
+
+    gl->glEnable(GL_STENCIL_TEST);
+
+    // works the same as the color and depth mask
+    gl->glStencilMask(1);
+    // test must always pass
+    gl->glStencilFunc(GL_ALWAYS, 1, OUTLINE_STENCIL_CHANNEL);
+    // GL_REPLACE for all becase a stencil value should always be written
+    gl->glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+    // disable drawing to color buffer
+    gl->glColorMask(0, 0 ,0, 0);
+
+    //meshNode->mesh->draw(gl, shader);
+    renderOutlineNode(renderData, node);
+
+    // STEP 2: DRAW MESH IN LINE MODE WITH A LINE WIDTH > 1 SO THE OUTLINE PASSES THE STENCIL TEST
+    gl->glPolygonMode(GL_FRONT, GL_LINE);
+    gl->glLineWidth(scene->outlineWidth);
+
+    /* the default stencil value is 0, if the stencil value at a pixel is 1 that means
+     * thats where the solid mesh was rendered. The line version should only be rendered
+     * where the stencil value is 0.
+     */
+    gl->glStencilFunc(GL_EQUAL, 0, OUTLINE_STENCIL_CHANNEL);
+    gl->glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+    // disables writing to stencil buffer
+    gl->glStencilMask(0);
+    // enable drawing to color buffer
+    gl->glColorMask(1, 1, 1, 1);
+
+    //meshNode->mesh->draw(gl, shader);
+    renderOutlineNode(renderData, node);
+
+    gl->glDisable(GL_STENCIL_TEST);
+
+    gl->glStencilMask(1);
+    gl->glLineWidth(1);
+    gl->glPolygonMode(GL_FRONT, GL_FILL);
+}
+
+void ForwardRenderer::renderOutlineNode(RenderData *renderData, SceneNodePtr node)
 {
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         auto meshNode = node.staticCast<iris::MeshNode>();
@@ -617,54 +799,18 @@ void ForwardRenderer::renderSelectedNode(RenderData* renderData, SceneNodePtr no
                 shader->setUniformValueArray("u_bones",          boneTransforms.data(), boneTransforms.size());
             }
 
-            // STEP 1: DRAW STENCIL OF THE FILLED POLYGON
-            // sets default stencil value to 0
-            gl->glClearStencil(0);
-            gl->glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-            // this should be the default
-            gl->glPolygonMode(GL_FRONT, GL_FILL);
-
-            gl->glEnable(GL_STENCIL_TEST);
-
-            // works the same as the color and depth mask
-            gl->glStencilMask(1);
-            // test must always pass
-            gl->glStencilFunc(GL_ALWAYS, 1, OUTLINE_STENCIL_CHANNEL);
-            // GL_REPLACE for all becase a stencil value should always be written
-            gl->glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-            // disable drawing to color buffer
-            gl->glColorMask(0, 0 ,0, 0);
-
-            meshNode->mesh->draw(gl,lineShader);
-
-            // STEP 2: DRAW MESH IN LINE MODE WITH A LINE WIDTH > 1 SO THE OUTLINE PASSES THE STENCIL TEST
-            gl->glPolygonMode(GL_FRONT, GL_LINE);
-            gl->glLineWidth(scene->outlineWidth);
-
-            /* the default stencil value is 0, if the stencil value at a pixel is 1 that means
-             * thats where the solid mesh was rendered. The line version should only be rendered
-             * where the stencil value is 0.
-             */
-            gl->glStencilFunc(GL_EQUAL, 0, OUTLINE_STENCIL_CHANNEL);
-            gl->glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-            // disables writing to stencil buffer
-            gl->glStencilMask(0);
-            // enable drawing to color buffer
-            gl->glColorMask(1, 1, 1, 1);
-
-            meshNode->mesh->draw(gl, lineShader);
-
-            gl->glDisable(GL_STENCIL_TEST);
-
-            gl->glStencilMask(1);
-            gl->glLineWidth(1);
-            gl->glPolygonMode(GL_FRONT, GL_FILL);
+            meshNode->mesh->draw(gl, shader);
         }
     }
 
     for(auto childNode : node->children) {
-        renderSelectedNode( renderData, childNode);
+        renderOutlineNode(renderData, childNode);
     }
+}
+
+void ForwardRenderer::renderOutlineLine(RenderData *renderData, SceneNodePtr node)
+{
+
 }
 
 void ForwardRenderer::createLineShader()
@@ -696,10 +842,10 @@ void ForwardRenderer::createShadowShader()
 void ForwardRenderer::createParticleShader()
 {
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile(":app/shaders/particle.vert");
+    vshader->compileSourceFile(":/shaders/particle.vert");
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile(":app/shaders/particle.frag");
+    fshader->compileSourceFile(":/shaders/particle.frag");
 
     particleShader = new QOpenGLShaderProgram;
     particleShader->addShader(vshader);
@@ -712,8 +858,8 @@ void ForwardRenderer::createParticleShader()
 
 void ForwardRenderer::createEmitterShader()
 {
-    emitterShader = GraphicsHelper::loadShader(":app/shaders/emitter.vert",
-                                               ":app/shaders/emitter.frag");
+    emitterShader = GraphicsHelper::loadShader(":/shaders/emitter.vert",
+                                               ":/shaders/emitter.frag");
 }
 
 ForwardRenderer::~ForwardRenderer()

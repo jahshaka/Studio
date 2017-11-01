@@ -1,3 +1,11 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="xMidYMid meet" viewBox="0 0 32 32"><defs><path d="M21.74 16L32 26.26L26.26 32L16 21.74L5.74 32L0 26.26L10.26 16L0 5.74L5.74 0L16 10.26L26.26 0L32 5.74L21.74 16Z" id="bfj1OiWx4"></path><clipPath id="clipgabkaW1Jf"><use xlink:href="#bfj1OiWx4" opacity="1"></use></clipPath></defs><g visibility="inherit"><g visibility="inherit"><g visibility="inherit"><use xlink:href="#bfj1OiWx4" opacity="1" fill="#ffffff" fill-opacity="1"></use><g clip-path="url(#clipgabkaW1Jf)"><use xlink:href="#bfj1OiWx4" opacity="1" fill-opacity="0" stroke="#7e6e60" stroke-width="0" stroke-opacity="1"></use></g></g></g></g></svg>
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 19.0.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 512 512" style="enable-background:new 0 0 512 512;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#FFFFFF;}
+</style>
+<path class="st0" d="M377.4,71.6l61.4,61.4c6.1,6.1,6.1,16.1,0,22.3l-99.7,99.7l99.4,99.4c6.1,6.1,6.1,16.1,0,22.2l-61.4,61.4
+	c-6.1,6.1-16.1,6.1-22.2,0l-99.4-99.4l-99,99c-6.1,6.1-16.1,6.1-22.2,0l-61.4-61.4c-6.1-6.1-6.1-16.1,0-22.2l99-99l-99.4-99.4
+	c-6.1-6.1-6.1-16.1,0-22.2L134,72c6.1-6.1,16.1-6.1,22.2,0l99.4,99.4l99.7-99.7C361.3,65.5,371.3,65.5,377.4,71.6L377.4,71.6z"/>
+</svg>

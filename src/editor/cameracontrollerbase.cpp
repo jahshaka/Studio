@@ -74,6 +74,11 @@ void CameraControllerBase::onMouseWheel(int val)
 
 }
 
+void CameraControllerBase::start()
+{
+    resetMouseStates();
+}
+
 void CameraControllerBase::resetMouseStates()
 {
     leftMouseDown = false;
@@ -82,6 +87,11 @@ void CameraControllerBase::resetMouseStates()
 }
 
 void CameraControllerBase::update(float dt)
+{
+
+}
+
+void CameraControllerBase::end()
 {
 
 }

@@ -50,9 +50,13 @@ FullScreenQuad::FullScreenQuad()
 
     mesh = new iris::Mesh(data.data(),data.size()*sizeof(float),6,layout);
 
+    matrix.setToIdentity();
+
     //todo: inline shader in code
     shader = GraphicsHelper::loadShader(":assets/shaders/fullscreen.vert",
                                         ":assets/shaders/fullscreen.frag");
+
+    gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
 }
 
 FullScreenQuad::~FullScreenQuad()
@@ -60,14 +64,15 @@ FullScreenQuad::~FullScreenQuad()
     delete mesh;
 }
 
-void FullScreenQuad::draw(QOpenGLFunctions_3_2_Core* gl, bool flipY)
+void FullScreenQuad::draw(bool flipY)
 {
     gl->glUseProgram(shader->programId());
     gl->glUniform1i(gl->glGetUniformLocation(shader->programId(), "flipY"), flipY);
+    shader->setUniformValue("matrix", matrix);
     mesh->draw(gl,shader);
 }
 
-void FullScreenQuad::draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* shader)
+void FullScreenQuad::draw(QOpenGLShaderProgram* shader)
 {
     shader->bind();
     mesh->draw(gl,shader);

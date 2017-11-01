@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QHash>
+#include <QMap>
 #include "../irisgl/src/irisglfwd.h"
 
 namespace Ui {
@@ -25,12 +26,28 @@ class QTreeWidget;
 class QTreeWidgetItem;
 class AnimationWidget;
 
+struct SummaryKey
+{
+    QString propertyName;
+
+    // the time is the key here
+    QList<iris::FloatKey*> keys;
+
+    float getTime();
+};
+
 struct KeyFrameData
 {
     QString propertyName;
     QString subPropertyName;
     iris::FloatKeyFrame* keyFrame;
+    QMap<float,SummaryKey> summaryKeys;
     //iris::PropertyAnim *prop;
+
+    KeyFrameData()
+    {
+        keyFrame = nullptr;
+    }
 
     bool isSubProperty()
     {
@@ -56,12 +73,18 @@ public:
     void setSceneNode(iris::SceneNodePtr node);
     void setActiveAnimation(iris::AnimationPtr anim);
 
+    // highlights first property if none is selected
+    void highlightDefaultProperty();
+
     // propName must be a name
     void addProperty(QString propName);
 
     QTreeWidget* getTree();
 
     void setAnimWidget(AnimationWidget *value);
+    KeyFrameData getPropertyKeyFrameData(QString propName);
+    void setPropertyKeyFrameData(QString propName, KeyFrameData keyFrameData);
+    void recalcPropertySummaryKeys(QString name);
 
 private:
     void addPropertyToTree(iris::PropertyAnim* prop);
@@ -94,6 +117,9 @@ private:
     void parseKeyFramesToGroups(iris::KeyFrameSetPtr frameSet);
 
     void buildTreeFromKeyFrameGroups(QHash<QString,KeyFrameGroup*> groups);
+
+    void calculateSummaryKeys(iris::PropertyAnim *prop, KeyFrameData& keyFrameData);
+
 };
 
 #endif // KEYFRAMELABELTREEWIDGET_H

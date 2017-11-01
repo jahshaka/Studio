@@ -14,6 +14,8 @@
 #if defined (_WIN32)
 #include <Unknwn.h>
 
+#if !defined(OVR_EXPORTING_CAPI)
+
 //-----------------------------------------------------------------------------------
 // ***** Direct3D Specific
 
@@ -25,7 +27,7 @@
 /// \param[in]  desc Specifies requested texture properties. See notes for more info about texture format.
 /// \param[in]  bindFlags Specifies what ovrTextureBindFlags the application requires for this texture chain.
 /// \param[out] out_TextureSwapChain Returns the created ovrTextureSwapChain, which will be valid upon a successful return value, else it will be NULL.
-///             This texture chain must be eventually destroyed via ovr_DestroyTextureSwapChain before destroying the HMD with ovr_Destroy.
+///             This texture chain must be eventually destroyed via ovr_DestroyTextureSwapChain before destroying the session with ovr_Destroy.
 ///
 /// \return Returns an ovrResult indicating success or failure. In the case of failure, use 
 ///         ovr_GetLastErrorInfo to get more information.
@@ -67,8 +69,8 @@ OVR_PUBLIC_FUNCTION(ovrResult) ovr_CreateTextureSwapChainDX(ovrSession session,
 ///
 /// <b>Example code</b>
 ///     \code{.cpp}
-///         ovr_GetTextureSwapChainBuffer(session, chain, 0, IID_ID3D11Texture2D, &d3d11Texture);
-///         ovr_GetTextureSwapChainBuffer(session, chain, 1, IID_PPV_ARGS(&dxgiResource));
+///         ovr_GetTextureSwapChainBufferDX(session, chain, 0, IID_ID3D11Texture2D, &d3d11Texture);
+///         ovr_GetTextureSwapChainBufferDX(session, chain, 1, IID_PPV_ARGS(&dxgiResource));
 ///     \endcode
 ///
 OVR_PUBLIC_FUNCTION(ovrResult) ovr_GetTextureSwapChainBufferDX(ovrSession session,
@@ -88,7 +90,7 @@ OVR_PUBLIC_FUNCTION(ovrResult) ovr_GetTextureSwapChainBufferDX(ovrSession sessio
 ///             which must be the same one the application renders to the textures with.
 /// \param[in]  desc Specifies requested texture properties. See notes for more info about texture format.
 /// \param[out] out_MirrorTexture Returns the created ovrMirrorTexture, which will be valid upon a successful return value, else it will be NULL.
-///             This texture must be eventually destroyed via ovr_DestroyMirrorTexture before destroying the HMD with ovr_Destroy.
+///             This texture must be eventually destroyed via ovr_DestroyMirrorTexture before destroying the session with ovr_Destroy.
 ///
 /// \return Returns an ovrResult indicating success or failure. In the case of failure, use 
 ///         ovr_GetLastErrorInfo to get more information.
@@ -101,6 +103,21 @@ OVR_PUBLIC_FUNCTION(ovrResult) ovr_GetTextureSwapChainBufferDX(ovrSession sessio
 /// ovrMirrorTextureDesc's Flags field. This will allow the application to bind a ShaderResourceView that is a linear format while the
 /// compositor continues to treat is as sRGB. Failure to do so will cause the compositor to apply unexpected gamma conversions leading to 
 /// gamma-curve artifacts.
+///
+///
+/// <b>Example code</b>
+///     \code{.cpp}
+///         ovrMirrorTexture     mirrorTexture = nullptr;
+///         ovrMirrorTextureDesc mirrorDesc = {};
+///         mirrorDesc.Format = OVR_FORMAT_R8G8B8A8_UNORM_SRGB;
+///         mirrorDesc.Width  = mirrorWindowWidth;
+///         mirrorDesc.Height = mirrorWindowHeight;
+///         ovrResult result = ovr_CreateMirrorTextureDX(session, d3d11Device, &mirrorDesc, &mirrorTexture);
+///         [...]
+///         // Destroy the texture when done with it.
+///         ovr_DestroyMirrorTexture(session, mirrorTexture);
+///         mirrorTexture = nullptr;
+///     \endcode
 ///
 /// \see ovr_GetMirrorTextureBufferDX
 /// \see ovr_DestroyMirrorTexture
@@ -120,11 +137,21 @@ OVR_PUBLIC_FUNCTION(ovrResult) ovr_CreateMirrorTextureDX(ovrSession session,
 /// \return Returns an ovrResult indicating success or failure. In the case of failure, use 
 ///         ovr_GetLastErrorInfo to get more information.
 ///
+/// <b>Example code</b>
+///     \code{.cpp}
+///         ID3D11Texture2D* d3d11Texture = nullptr;
+///         ovr_GetMirrorTextureBufferDX(session, mirrorTexture, IID_PPV_ARGS(&d3d11Texture));
+///         d3d11DeviceContext->CopyResource(d3d11TextureBackBuffer, d3d11Texture);
+///         d3d11Texture->Release();
+///         dxgiSwapChain->Present(0, 0);
+///     \endcode
+///
 OVR_PUBLIC_FUNCTION(ovrResult) ovr_GetMirrorTextureBufferDX(ovrSession session,
                                                             ovrMirrorTexture mirrorTexture,
                                                             IID iid,
                                                             void** out_Buffer);
 
+#endif // !defined(OVR_EXPORTING_CAPI)
 
 #endif // _WIN32
 
