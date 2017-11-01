@@ -190,6 +190,9 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
             return mat;
         });
 
+        if (!sceneNode)
+            return;
+
         scene->rootNode->addChild(sceneNode);
 
         // fit object in view
@@ -231,7 +234,8 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 void RenderThread::cleanupScene()
 {
     //scene->rootNode->removeChild(sceneNode);
-    sceneNode->removeFromParent();
+    if (!!sceneNode)
+        sceneNode->removeFromParent();
 }
 
 float RenderThread::getBoundingRadius(iris::SceneNodePtr node)

@@ -46,6 +46,11 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     ui->setupUi(this);
     db = handle;
 
+#ifdef Q_OS_WIN32
+//    setAttribute(Qt::WA_PaintOnScreen, true);
+    setAttribute(Qt::WA_NativeWindow, true);
+#endif
+
     setWindowTitle("Jahshaka Desktop");
 
     dynamicGrid = new DynamicGrid(this);
@@ -186,6 +191,12 @@ void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
     }
 }
 
+void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
+{
+    Q_UNUSED(widget);
+    emit closeProject();
+}
+
 void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
 {
     auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
@@ -202,6 +213,7 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
             dynamicGrid->deleteTile(widget);
             Globals::project->setProjectGuid(widget->tileData.guid);
             db->deleteProject();
+            checkForEmptyState();
         } else {
             QMessageBox::warning(this,
                                  "Delete Failed!",
@@ -225,6 +237,19 @@ void ProjectManager::populateDesktop(bool reset)
         dynamicGrid->addToGridView(record, i);
         i++;
     }
+
+    checkForEmptyState();
+}
+
+bool ProjectManager::checkForEmptyState()
+{
+    if (dynamicGrid->containsTiles()) {
+        ui->stackedWidget->setCurrentIndex(0);
+        return false;
+    }
+
+    ui->stackedWidget->setCurrentIndex(1);
+    return true;
 }
 
 void ProjectManager::cleanupOnClose()
@@ -307,13 +332,18 @@ void ProjectManager::openSampleBrowser()
 {
     sampleDialog.setFixedSize(Constants::TILE_SIZE * 1.66);
     sampleDialog.setWindowFlags(sampleDialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
-    sampleDialog.setWindowTitle("Jahshaka Sample Browser");
+    sampleDialog.setWindowTitle("Sample Worlds");
 
     QGridLayout *layout = new QGridLayout();
     QListWidget *sampleList = new QListWidget();
     sampleList->setObjectName("sampleList");
     sampleList->setStyleSheet("#sampleList { background-color: #1e1e1e; padding: 0 8px; border: none } " \
                               "QListWidgetItem { padding: 12px; } "\
+                              "QListView::item:selected { "\
+                              "    border: 1px solid #3498db; "\
+                               " background: #3498db; "\
+                               "  color: #CECECE; "\
+                              "} "\
                               "QToolTip { padding: 2px; border: 0; background: black; opacity: 200; }");
     sampleList->setViewMode(QListWidget::IconMode);
     sampleList->setSizeAdjustPolicy(QListWidget::AdjustToContents);
@@ -336,7 +366,6 @@ void ProjectManager::openSampleBrowser()
         auto item = new QListWidgetItem();
         item->setData(Qt::DisplayRole, it.value());
         item->setData(Qt::UserRole, QDir(dir.absolutePath()).filePath(it.value()) + ".zip");
-        item->setToolTip(QDir(dir.absolutePath()).filePath(it.value()) + ".zip");
         item->setIcon(QIcon(QDir(dir.absolutePath()).filePath(it.key())));
         sampleList->addItem(item);
     }

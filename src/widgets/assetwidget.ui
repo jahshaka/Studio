@@ -14,7 +14,20 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QPushButton {
+   <string notr="true">#assetTree {
+	border: 0;
+}
+
+#assetView {
+	border: 0;
+}
+
+QSplitter::handle:horizontal {
+    width: 1px;
+	background: black;
+}
+
+QPushButton {
     background-color: #4D4D4D;
     color: #DEDEDE;
     border: 0;
@@ -148,8 +161,17 @@ QListView::item:selected {
      <property name="styleSheet">
       <string notr="true">background: #303030</string>
      </property>
+     <property name="lineWidth">
+      <number>0</number>
+     </property>
+     <property name="midLineWidth">
+      <number>0</number>
+     </property>
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="handleWidth">
+      <number>1</number>
      </property>
      <widget class="QTreeWidget" name="assetTree">
       <property name="sizePolicy">

@@ -18,8 +18,10 @@ For more information see the LICENSE file
 #include <QDropEvent>
 #include <QMimeData>
 #include <QDrag>
+#include <QToolBar>
 #include <QSharedPointer>
 #include <QVector3D>
+#include <QCheckBox>
 #include "irisgl/src/irisglfwd.h"
 
 namespace Ui {
@@ -48,6 +50,7 @@ class TexturedPlaneLayerWidget;
 class WorldLayerWidget;
 class EndlessPlaneLayerWidget;
 class PostProcessesWidget;
+class DonateDialog;
 
 class MaterialWidget;
 class TransformGizmo;
@@ -77,6 +80,12 @@ class QOpenGLFunctions_3_2_Core;
 
 enum class SceneNodeType;
 
+enum WindowSpaces {
+    DESKTOP,
+    PLAYER,
+    EDITOR
+};
+
 class Database;
 class MainWindow : public QMainWindow
 {
@@ -89,9 +98,12 @@ public:
     void setSceneAnimTime(float time);
     void stopAnimWidget();
 
-    void initialize();
+    void grabOpenGLContextHack();
+    void goToDesktop();
     void setupProjectDB();
     void setupUndoRedo();
+
+    void switchSpace(WindowSpaces space);
 
     bool handleMousePress(QMouseEvent *event);
     bool handleMouseRelease(QMouseEvent *event);
@@ -162,10 +174,16 @@ private:
     void dragLeaveEvent(QDragLeaveEvent* event) override;
 
     // determines if file extension is that of a model (obj, fbx, 3ds)
-    bool isModelExtension(QString extension);
+    // bool isModelExtension(QString extension);
 
 public slots:
     void exportSceneAsZip();
+
+    void setupDockWidgets();
+    void setupViewPort();
+    void setupDesktop();
+    void setupToolBar();
+    void setupShortcuts();
 
     //scenegraph
     void addPlane();
@@ -212,6 +230,7 @@ public slots:
 
     void newProject(const QString&, const QString&);
     void openProject(bool playMode = false);
+    void closeProject();
 
     void toggleWidgets(bool toggle);
 
@@ -232,7 +251,6 @@ public slots:
 
     void takeScreenshot();
     void toggleLightWires(bool state);
-    void showProjectManager();
     void showProjectManagerInternal();
 
 private slots:
@@ -295,10 +313,9 @@ private:
 
     bool vrMode;
     QPushButton* vrButton;
-    QPushButton* pmButton;
     QMainWindow *dialog;
 
-    QDockWidget *sceneHeirarchyDock;
+    QDockWidget *sceneHierarchyDock;
     SceneHierarchyWidget *sceneHierarchyWidget;
 
     QDockWidget *sceneNodePropertiesDock;
@@ -312,6 +329,21 @@ private:
 
     QDockWidget *animationDock;
     AnimationWidget *animationWidget;
+
+    QMainWindow *viewPort;
+    QWidget *sceneContainer;
+
+    QWidget *controlBar;
+    QWidget *playerControls;
+    QPushButton *playSceneBtn;
+    QCheckBox *wireCheckBtn;
+    QPushButton *restartBtn;
+    QPushButton *playBtn;
+    QPushButton *stopBtn;
+
+    QToolBar *toolBar;
+
+    WindowSpaces currentSpace;
 };
 
 #endif // MAINWINDOW_H

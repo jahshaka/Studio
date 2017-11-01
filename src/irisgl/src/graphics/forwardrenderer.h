@@ -124,6 +124,9 @@ private:
     void renderBillboardIcons(RenderData* renderData);
     void renderSelectedNode(RenderData* renderData, SceneNodePtr node);
 
+    void renderOutlineNode(RenderData* renderData, SceneNodePtr node);
+    void renderOutlineLine(RenderData* renderData, SceneNodePtr node);
+
     void createLineShader();
     void createParticleShader();
     void createEmitterShader();

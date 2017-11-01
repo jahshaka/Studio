@@ -41,6 +41,7 @@ class QOpenGLShaderProgram;
 class CameraControllerBase;
 class EditorVrController;
 class OrbitalCameraController;
+class ViewerCameraController;
 class QElapsedTimer;
 class QTimer;
 
@@ -76,6 +77,7 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
     CameraControllerBase* camController;
     EditorCameraController* defaultCam;
     OrbitalCameraController* orbitalCam;
+    ViewerCameraController* viewerCam;
     EditorVrController* vrCam;
 
     ViewportMode viewportMode;
@@ -117,6 +119,7 @@ public:
 
     //switches to the arc ball editor camera controller
     void setArcBallCameraMode();
+    void setCameraController();
 
     bool isVrSupported();
     void setViewportMode(ViewportMode viewportMode);
@@ -158,6 +161,8 @@ public:
 
     void setShowFps(bool value);
 
+    void cleanup();
+
 protected:
     void initializeGL();
     bool eventFilter(QObject *obj, QEvent *event);
@@ -169,6 +174,8 @@ protected:
 
     // does raycasting from the mouse's screen position.
     void doGizmoPicking(const QPointF& point);
+    void setCameraController(CameraControllerBase* controller);
+    void restorePreviousCameraController();
 
 private slots:
     void paintGL();

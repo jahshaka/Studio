@@ -10,7 +10,7 @@
 
 namespace Constants
 {
-    const QString CONTENT_VERSION   = "0.4beta";
+    const QString CONTENT_VERSION   = "0.4a";
     const QString PROJ_EXT          = ".jah";
     const QStringList PROJECT_DIRS  = { "Textures", "Models", "Shaders", "Materials" };
     const QString SHADER_DEFS       = "/app/shader_defs/";
@@ -30,7 +30,7 @@ namespace Constants
     const QString DB_THUMBS_TABLE   = "thumbnails";
 
     const QList<QString> IMAGE_EXTS = { "png", "PNG", "jpg" };
-    const QList<QString> MODEL_EXTS = { "obj", "fbx", "dae" };
+    const QList<QString> MODEL_EXTS = { "obj", "fbx", "dae", "blend"};
 
     const int FPS_90                = 11; // milliseconds
     const int FPS_60                = 17; // milliseconds

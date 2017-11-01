@@ -14,17 +14,30 @@ class ItemGridWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit ItemGridWidget(ProjectTileData tileData, QSize size, QSize iSize, QWidget *parent = Q_NULLPTR);
+    explicit ItemGridWidget(ProjectTileData tileData,
+                            QSize size,
+                            QSize iSize,
+                            QWidget *parent = Q_NULLPTR,
+                            bool highlight = false);
     QSize tileSize;
     QSize iconSize;
     QPushButton *playButton;
+    QWidget *playContainer;
     QPushButton *editButton;
+    QWidget *editContainer;
+    QLabel *spacer;
+    QLabel *playText;
+    QLabel *editText;
+    QLabel *closeText;
+    QPushButton *closeButton;
+    QWidget *closeContainer;
     QWidget *controls;
     ProjectTileData tileData;
 
     void setTileSize(QSize size, QSize iSize);
     void updateImage();
     void updateLabel(QString);
+    void removeHighlight();
     QString labelText;
 
     bool eventFilter(QObject *watched, QEvent *event);

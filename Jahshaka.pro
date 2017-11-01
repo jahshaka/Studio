@@ -113,7 +113,10 @@ SOURCES += src/main.cpp\
     src/widgets/dynamicgrid.cpp \
     src/widgets/itemgridwidget.cpp \
     src/dialogs/renameprojectdialog.cpp \
-    src/editor/thumbnailgenerator.cpp
+    src/editor/thumbnailgenerator.cpp \
+    src/widgets/mainwindowviewport.cpp \
+    src/editor/viewercontroller.cpp \
+    src/dialogs/donatedialog.cpp
 
 HEADERS  += src/mainwindow.h \
     src/dialogs/renamelayerdialog.h \
@@ -217,7 +220,10 @@ HEADERS  += src/mainwindow.h \
     src/widgets/dynamicgrid.h \
     src/widgets/itemgridwidget.hpp \
     src/dialogs/renameprojectdialog.h \
-    src/editor/thumbnailgenerator.h
+    src/editor/thumbnailgenerator.h \
+    src/widgets/mainwindowviewport.h \
+    src/editor/viewercontroller.h \
+    src/dialogs/donatedialog.h
 
 FORMS    += \
     src/dialogs/renamelayerdialog.ui \
@@ -259,7 +265,8 @@ FORMS    += \
     src/dialogs/progressdialog.ui \
     src/widgets/screenshotwidget.ui \
     src/widgets/projectmanager.ui \
-    src/dialogs/renameprojectdialog.ui
+    src/dialogs/renameprojectdialog.ui \
+    src/dialogs/donate.ui
 
 RESOURCES += \
     app/shaders.qrc \

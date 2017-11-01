@@ -44,6 +44,7 @@ For more information see the LICENSE file
 #include "../editor/cameracontrollerbase.h"
 #include "../editor/editorcameracontroller.h"
 #include "../editor/orbitalcameracontroller.h"
+#include "../editor/viewercontroller.h"
 #include "../editor/editorvrcontroller.h"
 
 #include "../editor/editordata.h"
@@ -64,6 +65,18 @@ For more information see the LICENSE file
 void SceneViewWidget::setShowFps(bool value)
 {
     showFps = value;
+}
+
+void SceneViewWidget::cleanup()
+{
+    scene.reset();
+    selectedNode.reset();
+    translationGizmo->setLastSelectedNode(iris::SceneNodePtr());
+    rotationGizmo->setLastSelectedNode(iris::SceneNodePtr());
+    scaleGizmo->setLastSelectedNode(iris::SceneNodePtr());
+
+    renderer->setScene(iris::ScenePtr());
+    renderer->setSelectedSceneNode(iris::SceneNodePtr());
 }
 
 SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
@@ -88,6 +101,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     defaultCam = new EditorCameraController();
     orbitalCam = new OrbitalCameraController();
+    viewerCam = new ViewerCameraController();
 
     camController = defaultCam;
     prevCamController = defaultCam;
@@ -238,7 +252,10 @@ void SceneViewWidget::setScene(iris::ScenePtr scene)
 void SceneViewWidget::setSelectedNode(iris::SceneNodePtr sceneNode)
 {
     selectedNode = sceneNode;
-    renderer->setSelectedSceneNode(sceneNode);
+    if (sceneNode == scene->getRootNode())
+        renderer->setSelectedSceneNode(iris::SceneNodePtr());
+    else
+        renderer->setSelectedSceneNode(sceneNode);
 
     if (viewportGizmo != nullptr) {
         viewportGizmo->setLastSelectedNode(sceneNode);
@@ -363,24 +380,30 @@ void SceneViewWidget::renderScene()
         if (UiManager::sceneMode != SceneMode::PlayMode && showLightWires) addLightShapesToScene();
 
         // render thumbnail to texture
-        if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
-            viewerCamera->setLocalTransform(selectedNode->getGlobalTransform());
-            viewerCamera->update(0); // update transformation of camera
+        if (!playScene && !!selectedNode) {
+            if (selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
+                viewerCamera->setLocalTransform(selectedNode->getGlobalTransform());
+                viewerCamera->update(0); // update transformation of camera
 
-            // resize render target to fix aspect ratio
-            viewerRT->resize(this->width(), this->height(), true);
+                // resize render target to fix aspect ratio
+                viewerRT->resize(this->width(), this->height(), true);
 
-            renderer->renderSceneToRenderTarget(viewerRT, viewerCamera);
+                renderer->renderSceneToRenderTarget(viewerRT, viewerCamera);
 
-            // restore viewer visibility state
-            if (viewerVisible) {
-                selectedNode->show();
+                // restore viewer visibility state
+                if (viewerVisible) {
+                    selectedNode->show();
 
-                // let it show back in regular scene rendering mode
-                // i know this looks like a hack, but it'll
-                // have to do until we find a better way to do this
-                if (UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)
-                    selectedNode->submitRenderItems();
+                    // let it show back in regular scene rendering mode
+                    // i know this looks like a hack, but it'll
+                    // have to do until we find a better way to do this
+                    if (UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)
+                        selectedNode->submitRenderItems();
+                }
+            }
+            else {
+                if (viewerVisible)
+                    selectedNode->show();
             }
         }
 
@@ -390,15 +413,18 @@ void SceneViewWidget::renderScene()
             renderer->renderSceneVr(dt, viewport, UiManager::sceneMode == SceneMode::PlayMode);
         }
 
-        if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
-            QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>()->glClear(GL_DEPTH_BUFFER_BIT);
-            QMatrix4x4 mat;
-            mat.setToIdentity();
-            mat.translate(0.75, -0.75, 0);
-            mat.scale(0.2, 0.2, 0);
-            viewerTex->bind(0);
-            viewerQuad->matrix = mat;
-            viewerQuad->draw();
+        // dont show thumbnail in play mode
+        if (!playScene) {
+            if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
+                QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>()->glClear(GL_DEPTH_BUFFER_BIT);
+                QMatrix4x4 mat;
+                mat.setToIdentity();
+                mat.translate(0.75, -0.75, 0);
+                mat.scale(0.2, 0.2, 0);
+                viewerTex->bind(0);
+                viewerQuad->matrix = mat;
+                viewerQuad->draw();
+            }
         }
 
         this->updateScene();
@@ -688,6 +714,32 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
     viewportGizmo->onMousePress(editorCam->getLocalPos(), this->calculateMouseRay(point) * 1024);
 }
 
+void SceneViewWidget::setCameraController(CameraControllerBase *controller)
+{
+    camController->end();
+    prevCamController = camController;
+
+    camController = controller;
+    camController->resetMouseStates();
+    camController->setCamera(editorCam);
+    camController->start();
+
+}
+
+void SceneViewWidget::restorePreviousCameraController()
+{
+    camController->end();
+
+    // swap controllers
+    auto temp = camController;
+    camController = prevCamController;
+    prevCamController = temp;
+
+    camController->resetMouseStates();
+    camController->setCamera(editorCam);
+    camController->start();
+}
+
 void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,
                                      const QVector3D& segStart,
                                      const QVector3D& segEnd,
@@ -823,16 +875,12 @@ void SceneViewWidget::doViewerPicking(const QVector3D& segStart,
 
 void SceneViewWidget::setFreeCameraMode()
 {
-    camController = defaultCam;
-    camController->setCamera(editorCam);
-    camController->resetMouseStates();
+    setCameraController(defaultCam);
 }
 
 void SceneViewWidget::setArcBallCameraMode()
 {
-    camController = orbitalCam;
-    camController->setCamera(editorCam);
-    camController->resetMouseStates();
+    setCameraController(orbitalCam);
 }
 
 bool SceneViewWidget::isVrSupported()
@@ -926,6 +974,16 @@ EditorData* SceneViewWidget::getEditorData()
 
 void SceneViewWidget::startPlayingScene()
 {
+    if (!scene)
+        return;
+
+    // switch controllers
+    if (scene->viewers.count() > 0) {
+        viewerCam->setViewer(scene->viewers[0]);
+        setCameraController(viewerCam);
+    }
+
+
     playScene = true;
     //animTime = 0.0f;
 }
@@ -940,7 +998,13 @@ void SceneViewWidget::stopPlayingScene()
 {
     playScene = false;
     animTime = 0.0f;
+
+    if (!scene)
+        return;
+
     scene->updateSceneAnimation(0.0f);
+
+    restorePreviousCameraController();
 }
 
 iris::ForwardRendererPtr SceneViewWidget::getRenderer() const
