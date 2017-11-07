@@ -22,7 +22,7 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include <QVector3D>
 #include <QCheckBox>
-#include "irisgl/src/irisglfwd.h"
+#include "irisglfwd.h"
 
 namespace Ui {
     class MainWindow;
@@ -74,7 +74,9 @@ class GizmoHitData;
 class AdvancedGizmoHandle;
 class MaterialPreset;
 class AssetWidget;
-class SceneNodePropertiesWidget;
+// class SceneNodePropertiesWidget;
+
+#include "widgets/scenenodepropertieswidget.h"
 
 class QOpenGLFunctions_3_2_Core;
 

@@ -19,8 +19,9 @@ For more information see the LICENSE file
 #include "../animation/skeletalanimation.h"
 #include "../geometry/boundingsphere.h"
 
+#include "assimp/scene.h"
+
 class aiMesh;
-class aiScene;
 class QOpenGLBuffer;
 class QOpenGLFunctions_3_2_Core;
 class QOpenGLShaderProgram;
@@ -129,7 +130,50 @@ public:
     static MeshPtr loadMesh(QString filePath);
     static MeshPtr loadAnimatedMesh(QString filePath);
     static SkeletonPtr extractSkeleton(const aiMesh* mesh, const aiScene* scene);
-    static QMap<QString, SkeletalAnimationPtr> extractAnimations(const aiScene* scene, QString source = "");
+//    static QMap<QString, SkeletalAnimationPtr> extractAnimations(const aiScene* scene, QString source = "");
+    static QMap<QString, SkeletalAnimationPtr> extractAnimations(const aiScene *scene, QString source = "")
+    {
+        QMap<QString, SkeletalAnimationPtr> anims;
+
+        for (unsigned i = 0; i<scene->mNumAnimations; i++) {
+            auto anim = scene->mAnimations[i];
+            auto animName = QString(anim->mName.C_Str());
+            qDebug() << "Animation: " << animName;
+            auto skelAnim = SkeletalAnimation::create();
+            skelAnim->name = animName;
+            skelAnim->source = source;
+
+            for (unsigned j = 0; j<anim->mNumChannels; j++) {
+                auto nodeAnim = anim->mChannels[j];
+
+                auto nodeName = QString(nodeAnim->mNodeName.C_Str());
+                auto boneAnim = new BoneAnimation();
+
+                // extract tracks
+                for (unsigned k = 0; k<nodeAnim->mNumPositionKeys; k++) {
+                    auto key = nodeAnim->mPositionKeys[k];
+                    boneAnim->posKeys->addKey(QVector3D(key.mValue.x, key.mValue.y, key.mValue.z), key.mTime);
+                }
+
+                for (unsigned k = 0; k<nodeAnim->mNumRotationKeys; k++) {
+                    auto key = nodeAnim->mRotationKeys[k];
+                    boneAnim->rotKeys->addKey(QQuaternion(key.mValue.w, key.mValue.x, key.mValue.y, key.mValue.z), key.mTime);
+                }
+
+                for (unsigned k = 0; k<nodeAnim->mNumScalingKeys; k++) {
+                    auto key = nodeAnim->mScalingKeys[k];
+                    boneAnim->scaleKeys->addKey(QVector3D(key.mValue.x, key.mValue.y, key.mValue.z), key.mTime);
+                }
+
+                skelAnim->addBoneAnimation(nodeName, boneAnim);
+            }
+
+            anims.insert(animName, skelAnim);
+        }
+
+        return anims;
+    }
+
 
     //assumed ownership of vertexLayout
     static Mesh* create(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);

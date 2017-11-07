@@ -1,5 +1,5 @@
 #include "skeletalanimation.h"
-#include "SkeletonMeshBuilder.h"
+#include "../assimp/code/SkeletonMeshBuilder.h"
 #include "../animation/keyframeanimation.h"
 
 namespace iris {

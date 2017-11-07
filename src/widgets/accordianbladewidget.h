@@ -27,7 +27,8 @@ class ComboBoxWidget;
 class TextInputWidget;
 class LabelWidget;
 class FilePickerWidget;
-class PropertyWidget;
+// class PropertyWidget;
+#include "propertywidget.h"
 
 #include <QLayout>
 

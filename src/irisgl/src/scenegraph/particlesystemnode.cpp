@@ -13,6 +13,9 @@ For more information see the LICENSE file
 #include <QDir>
 
 #include <cmath>
+#ifndef M_PI
+	#define M_PI 3.14159265358979323846
+#endif
 
 #include "../math/mathhelper.h"
 #include "meshnode.h"

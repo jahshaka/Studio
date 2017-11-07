@@ -3,7 +3,7 @@
 
 #include <QVector>
 #include <QVector3D>
-#include "../irisglfwd.h"
+#include "irisglfwd.h"
 
 namespace iris {
 

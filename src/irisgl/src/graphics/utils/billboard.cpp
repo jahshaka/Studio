@@ -14,7 +14,7 @@ For more information see the LICENSE file
 #include <qopengl.h>
 #include <QOpenGLShader>
 #include <QOpenGLBuffer>
-#include "../core/irisutils.h"
+#include "../../core/irisutils.h"
 #include "../graphicshelper.h"
 #include "../mesh.h"
 #include "../vertexlayout.h"

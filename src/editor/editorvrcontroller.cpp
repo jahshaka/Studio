@@ -22,7 +22,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/math/mathhelper.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../core/keyboardstate.h"
-#include "../graphics/renderlist.h"
+#include "../irisgl/src/graphics/renderlist.h"
 #include <QtMath>
 
 

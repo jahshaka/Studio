@@ -13,11 +13,6 @@ RenderList::RenderList()
         pool.append(new RenderItem());
 }
 
-QVector<RenderItem*>& RenderList::getItems()
-{
-    return renderList;
-}
-
 void RenderList::add(RenderItem *item)
 {
     renderList.append(item);
@@ -40,6 +35,7 @@ RenderItem *RenderList::submitMesh(MeshPtr mesh, MaterialPtr mat, QMatrix4x4 wor
     item->worldMatrix = worldMatrix;
 
     renderList.append(item);
+	return item;
 }
 
 RenderItem *RenderList::submitMesh(MeshPtr mesh, QOpenGLShaderProgram *shader, QMatrix4x4 worldMatrix, int renderLayer)
@@ -59,6 +55,7 @@ RenderItem *RenderList::submitMesh(MeshPtr mesh, QOpenGLShaderProgram *shader, Q
     item->renderLayer = renderLayer;
 
     renderList.append(item);
+	return item;
 }
 
 void RenderList::clear()

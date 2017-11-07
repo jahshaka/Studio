@@ -16,7 +16,11 @@ class RenderList
     QVector<RenderItem*> renderList;
 public:
     RenderList();
-    QVector<RenderItem*>& getItems();
+//    QVector<RenderItem*>& getItems();
+    QVector<RenderItem*> getItems()
+    {
+        return renderList;
+    }
 
     void add(RenderItem* item);
 
