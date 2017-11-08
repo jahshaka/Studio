@@ -356,7 +356,7 @@ void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
             for (auto& item : scene->shadowRenderList->getItems()) {
 
 
-                if (item->type == iris::RenderItemType::Mesh) {
+                if (item->type == iris::RenderItemType::Mesh && !!item->mesh) {
                     if  (item->mesh->hasSkeleton()) {
                         auto boneTransforms = item->mesh->getSkeleton()->boneTransforms;
                         skinnedShadowShader->bind();
@@ -498,7 +498,7 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
     scene->geometryRenderList->sort();
 
     for (auto& item : scene->geometryRenderList->getItems()) {
-        if (item->type == iris::RenderItemType::Mesh) {
+        if (item->type == iris::RenderItemType::Mesh && !!item->mesh) {
 
             if (item->cullable) {
                 auto sphere = item->boundingSphere;
