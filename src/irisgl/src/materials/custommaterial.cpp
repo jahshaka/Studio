@@ -222,42 +222,45 @@ void CustomMaterial::setBaseMaterialProperties(const QJsonObject &jahShader)
     auto receiveShadows = jahShader["receiveShadows"].toBool(true);
     auto lighting       = jahShader["lighting"].toBool(true);
 
-    renderStates.zWrite             = zwrite;
-    renderStates.depthTest          = depthTest;
     renderStates.fogEnabled         = fog;
     renderStates.castShadows        = castShadows;
     renderStates.receiveShadows     = receiveShadows;
     renderStates.receiveLighting    = lighting;
 
     if (renderLayer == "alphaTested") {
-        setRenderLayer((int) RenderLayer::AlphaTested);
+        setRenderLayer(RenderLayer::AlphaTested);
     } else if (renderLayer == "opaque") {
-        setRenderLayer((int) RenderLayer::Background);
+        setRenderLayer(RenderLayer::Background);
     } else if (renderLayer == "overlay") {
-        setRenderLayer((int) RenderLayer::Overlay);
+        setRenderLayer(RenderLayer::Overlay);
     } else if (renderLayer == "transparent") {
-        setRenderLayer((int) RenderLayer::Transparent);
+        setRenderLayer(RenderLayer::Transparent);
     } else {
-        setRenderLayer((int) RenderLayer::Opaque);
+        setRenderLayer(RenderLayer::Opaque);
     }
 
     if (cullMode == "front") {
-        renderStates.cullMode = FaceCullingMode::Front;
+        renderStates.rasterState = RasterizerState::CullClockwise;
     } else if (cullMode == "back") {
-        renderStates.cullMode = FaceCullingMode::Back;
-    } else if (cullMode == "frontAndBack") {
-        renderStates.cullMode = FaceCullingMode::FrontAndBack;
+        renderStates.rasterState = RasterizerState::CullCounterClockwise;
+    } else if (cullMode == "none") {
+        renderStates.rasterState = RasterizerState::CullNone;
     } else {
-        renderStates.cullMode = FaceCullingMode::None;
+        renderStates.rasterState = RasterizerState::CullCounterClockwise;
     }
 
-    if (blendType == "normal") {
-        renderStates.blendType = BlendType::Normal;
-    } else if (blendType == "add") {
-        renderStates.blendType = BlendType::Add;
+    if (blendType == "normal" || blendType == "opaque") {
+        renderStates.blendState = BlendState::Opaque;
+    } else if (blendType == "add" || blendType == "additive") {
+        renderStates.blendState = BlendState::Additive;
+    } else if (blendType == "blend") {
+        renderStates.blendState = BlendState::AlphaBlend;
     } else {
-        renderStates.blendType = BlendType::None;
+        renderStates.blendState = BlendState::Opaque;
     }
+
+    renderStates.depthState.depthWriteEnabled = zwrite;
+    renderStates.depthState.depthBufferEnabled = depthTest;
 }
 
 QString CustomMaterial::getName() const

@@ -17,6 +17,13 @@ For more information see the LICENSE file
 namespace iris
 {
 
+int RenderLayer::Background = 1000;
+int RenderLayer::Opaque = 2000;
+int RenderLayer::AlphaTested = 3000;
+int RenderLayer::Transparent = 4000;
+int RenderLayer::Overlay = 5000;
+int RenderLayer::Gizmo = 6000;//the scene depth is cleared before this pass
+
 void Material::begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
 {
     this->program->bind();

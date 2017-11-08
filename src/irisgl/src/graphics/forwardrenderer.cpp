@@ -595,67 +595,15 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                 }
             }
 
-            // set culling state
-            // FaceCullingMode::Back is the default state
-            if (item->renderStates.cullMode != FaceCullingMode::Back) {
-               switch(item->renderStates.cullMode) {
-                case FaceCullingMode::Front:
-                    gl->glCullFace(GL_FRONT);
-                break;
-               case FaceCullingMode::FrontAndBack:
-                   gl->glCullFace(GL_FRONT_AND_BACK);
-               break;
-               case FaceCullingMode::None:
-                   gl->glDisable(GL_CULL_FACE);
-               break;
-               default:
-               break;
-               }
-            }
-
-            if (!item->renderStates.zWrite) {
-                gl->glDepthMask(false);
-            }
-
-            if (!item->renderStates.depthTest) {
-                gl->glDisable(GL_DEPTH_TEST);
-            }
-
-            if (item->renderStates.blendType != BlendType::None) {
-                 gl->glEnable(GL_BLEND);
-
-                 if (item->renderStates.blendType == BlendType::Normal) {
-                     gl->glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-                 } else if(item->renderStates.blendType == BlendType::Add) {
-                     gl->glBlendFunc(GL_ONE,GL_ONE);
-                 }
-
-                 //todo: add more types
-             }
+            // set render states
+            graphics->setRasterizerState(item->renderStates.rasterState);
+            graphics->setDepthState(item->renderStates.depthState);
+            graphics->setBlendState(item->renderStates.blendState);
 
             item->mesh->draw(gl, program);
 
             if (!!mat) {
                 mat->end(gl,scene);
-            }
-
-            if (item->renderStates.blendType!=BlendType::None) {
-                gl->glDisable(GL_BLEND);
-            }
-
-            // change back culling state
-            if (item->renderStates.cullMode != FaceCullingMode::Back) {
-                gl->glCullFace(GL_BACK);
-            } else if(item->renderStates.cullMode != FaceCullingMode::None) {
-                gl->glEnable(GL_CULL_FACE);
-            }
-
-            if (!item->renderStates.zWrite) {
-                gl->glDepthMask(true);
-            }
-
-            if (!item->renderStates.depthTest) {
-                gl->glEnable(GL_DEPTH_TEST);
             }
         }
         else if(item->type == iris::RenderItemType::ParticleSystem) {
