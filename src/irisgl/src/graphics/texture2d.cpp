@@ -131,6 +131,33 @@ Texture2DPtr Texture2D::create(int width, int height,QOpenGLTexture::TextureForm
     return QSharedPointer<Texture2D>(new Texture2D(texture));
 }
 
+Texture2DPtr Texture2D::createDepth(int width, int height)
+{
+    auto texture = new QOpenGLTexture(QOpenGLTexture::Target2D);
+    texture->setSize(width, height);
+    texture->setFormat(QOpenGLTexture::DepthFormat);
+    texture->setMinMagFilters(QOpenGLTexture::Linear, QOpenGLTexture::Linear);
+    texture->setComparisonMode(QOpenGLTexture::CompareNone);
+    texture->setWrapMode(QOpenGLTexture::ClampToEdge);
+    if (!texture->create())
+        qDebug() << "Error creating texture";
+    texture->allocateStorage(QOpenGLTexture::Depth,QOpenGLTexture::Float32);
+    /*
+    auto gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+    gl->glBindTexture(GL_TEXTURE_2D, texture->textureId());
+    gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32,
+                     width, height,
+                     0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
+    */
+    return Texture2DPtr(new Texture2D(texture));
+}
+
 void Texture2D::resize(int width, int height)
 {
     if(texture->width() == width && texture->height() == height)

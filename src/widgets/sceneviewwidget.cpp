@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/graphics/viewport.h"
 #include "../irisgl/src/graphics/renderlist.h"
 #include "../irisgl/src/graphics/rendertarget.h"
+#include "../irisgl/src/graphics/shadowmap.h"
 #include "../irisgl/src/graphics/font.h"
 #include "../irisgl/src/graphics/spritebatch.h"
 #include "../irisgl/src/graphics/utils/fullscreenquad.h"
@@ -251,6 +252,9 @@ void SceneViewWidget::setScene(iris::ScenePtr scene)
 
 void SceneViewWidget::setSelectedNode(iris::SceneNodePtr sceneNode)
 {
+    if (!scene)
+        return;
+
     selectedNode = sceneNode;
     if (sceneNode == scene->getRootNode())
         renderer->setSelectedSceneNode(iris::SceneNodePtr());
@@ -442,6 +446,13 @@ void SceneViewWidget::renderScene()
                                 QVector2D(8, 8),
                                 QColor(255, 255, 255));
     }
+
+//    if (!!scene) {
+//        for(auto light : scene->lights) {
+//            if (light->lightType == iris::LightType::Directional)
+//                spriteBatch->draw(light->shadowMap->shadowTexture,QRect(0,0,200,200),QColor(255,255,255,255));
+//        }
+//    }
     spriteBatch->end();
 
 }

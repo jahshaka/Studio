@@ -19,6 +19,8 @@ For more information see the LICENSE file
 namespace iris
 {
 
+class ShadowMap;
+
 enum class LightType:int
 {
     Point = 0,
@@ -33,6 +35,8 @@ public:
     QVector3D lightDir;
 
     LightType lightType;
+
+    ShadowMap* shadowMap;
 
     /**
      * light's radius. This is only used for pointlights.
@@ -89,20 +93,7 @@ public:
     void updateAnimation(float time) override;
 
 private:
-    LightNode()
-    {
-        this->sceneNodeType = SceneNodeType::Light;
-
-        lightType = LightType::Point;
-
-        distance = 10;
-        color = QColor(255, 255, 255);
-        intensity = 1.0f;
-        spotCutOff = 30.0f;
-        spotCutOffSoftness = 1.0f;
-
-        iconSize = 0.5f;
-    }
+    LightNode();
 
 
 };

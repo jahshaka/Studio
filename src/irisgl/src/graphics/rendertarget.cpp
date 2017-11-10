@@ -117,7 +117,11 @@ void RenderTarget::resize(int width, int height, bool resizeTextures)
 
 void RenderTarget::addTexture(Texture2DPtr tex)
 {
-    if (textures.count()!=0) {
+    if (textures.count()==0) {
+        width = tex->getWidth();
+        height = tex->getHeight();
+    }
+    else {
         // this assertion should only hold true if this isnt the first texture
         Q_ASSERT_X(width==tex->getWidth() && height==tex->getHeight(),
                "RenderTarget",

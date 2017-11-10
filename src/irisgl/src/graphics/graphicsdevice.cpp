@@ -49,6 +49,8 @@ GraphicsDevice::GraphicsDevice()
 
     gl->glGenVertexArrays(1, &defautVAO);
 
+    _internalRT = RenderTarget::create(1024,1024);
+
     //set default blend and depth state
     this->setBlendState(BlendState::Opaque, true);
     this->setDepthState(DepthState::Default, true);

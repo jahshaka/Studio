@@ -136,6 +136,8 @@ private:
 
     void createShadowShader();
     void renderShadows(ScenePtr node);
+    void renderDirectionalShadow(LightNodePtr lightNode,ScenePtr node);
+    void renderSpotlightShadow(LightNodePtr lightNode,ScenePtr node);
     void generateShadowBuffer(GLuint size = 1024);
 
     //editor-specific

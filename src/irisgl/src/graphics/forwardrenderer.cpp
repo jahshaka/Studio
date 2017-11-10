@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "renderdata.h"
 #include "material.h"
 #include "renderitem.h"
+#include "shadowmap.h"
 #include <QOpenGLContext>
 #include <QOpenGLShaderProgram>
 #include <QOpenGLFunctions>
@@ -102,7 +103,7 @@ ForwardRenderer::ForwardRenderer(bool supportsVr)
 void ForwardRenderer::generateShadowBuffer(GLuint size)
 {
     gl->glGenFramebuffers(1, &shadowFBO);
-
+/*
     gl->glGenTextures(1, &shadowDepthMap);
     gl->glBindTexture(GL_TEXTURE_2D, shadowDepthMap);
     gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32,
@@ -113,9 +114,9 @@ void ForwardRenderer::generateShadowBuffer(GLuint size)
     gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE);
     gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
+*/
     gl->glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
-    gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthMap, 0);
+    //gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthMap, 0);
 
     gl->glDrawBuffer(GL_NONE);
     gl->glReadBuffer(GL_NONE);
@@ -334,18 +335,20 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     //perfTimer->reset();
 }
 
-void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
+void ForwardRenderer::renderShadows(ScenePtr node)
 {
-    QMatrix4x4 lightView, lightProjection;
+//    QMatrix4x4 lightView, lightProjection;
 
-    gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, shadowFBO);
-    gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthMap, 0);
+//    gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, shadowFBO);
+//    gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthMap, 0);
 
 
-    QOpenGLShaderProgram* shader;
+//    QOpenGLShaderProgram* shader;
     for (auto light : scene->lights) {
         if (light->lightType == iris::LightType::Directional) {
 
+            renderDirectionalShadow(light, scene);
+            /*
             lightProjection.ortho(-128.0f, 128.0f, -64.0f, 64.0f, -64.0f, 128.0f);
 
             lightView.lookAt(QVector3D(0, 0, 0),
@@ -377,10 +380,63 @@ void ForwardRenderer::renderShadows(QSharedPointer<Scene> node)
                     item->mesh->draw(gl, shader);
                 }
             }
+            */
         }
     }
 
-    shadowShader->release();
+    //shadowShader->release();
+}
+
+void ForwardRenderer::renderDirectionalShadow(LightNodePtr light, ScenePtr node)
+{
+    //light->shadowMap = new ShadowMap();
+    graphics->setRenderTarget(QList<Texture2DPtr>(),light->shadowMap->shadowTexture);
+    //gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, shadowFBO);
+    //gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, light->shadowMap->shadowTexture->getTextureId(), 0);
+    //gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, light->shadowMap->shadowTexId, 0);
+    //gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthMap, 0);
+
+    int shadowSize = light->shadowMap->resolution;
+    graphics->setViewport(QRect(0, 0, shadowSize, shadowSize));
+    graphics->clear(QColor());
+    //gl->glClear(COLOR_BUFFER_BIT|DEPTH_BUFFER_BIT);
+    QMatrix4x4 lightProjection, lightView;
+    QOpenGLShaderProgram* shader;
+
+    lightProjection.ortho(-128.0f, 128.0f, -64.0f, 64.0f, -64.0f, 64.0f);
+
+    lightView.lookAt(QVector3D(0, 0, 0),
+                     light->getLightDir(),
+                     QVector3D(0.0f, 1.0f, 0.0f));
+    QMatrix4x4 lightSpaceMatrix = lightProjection * lightView;
+    light->shadowMap->shadowMatrix = lightSpaceMatrix;
+
+    for (auto& item : scene->shadowRenderList->getItems()) {
+
+
+        if (item->type == iris::RenderItemType::Mesh && !!item->mesh) {
+            if  (item->mesh->hasSkeleton()) {
+                auto boneTransforms = item->mesh->getSkeleton()->boneTransforms;
+                skinnedShadowShader->bind();
+                skinnedShadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
+                skinnedShadowShader->setUniformValue("u_worldMatrix", item->worldMatrix);
+                skinnedShadowShader->setUniformValueArray("u_bones", boneTransforms.data(), boneTransforms.size());
+                shader = skinnedShadowShader;
+
+            } else {
+                shadowShader->bind();
+                shadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
+                shadowShader->setUniformValue("u_worldMatrix", item->worldMatrix);
+                shader = shadowShader;
+            }
+
+
+
+            item->mesh->draw(gl, shader);
+        }
+    }
+    gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    //graphics->clearRenderTarget();
 }
 
 void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
@@ -513,7 +569,7 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             QOpenGLShaderProgram* program = nullptr;
             iris::MaterialPtr mat;
 
-            // if a material is set then use it and gets its shaderprogram
+            // if a material is set then use it and get its shaderprogram
 
             if (!!item->material) {
                 mat = item->material;
@@ -551,7 +607,7 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             } else {
                 program->setUniformValue("u_fogData.enabled", false);
             }
-
+            /*
             if (item->renderStates.receiveShadows && scene->shadowEnabled) {
                 program->setUniformValue("u_shadowMap", 8);
                 program->setUniformValue("u_shadowEnabled", true);
@@ -559,12 +615,14 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                 program->setUniformValue("u_shadowEnabled", false);
             }
 
+
             gl->glActiveTexture(GL_TEXTURE8);
             gl->glBindTexture(GL_TEXTURE_2D, shadowDepthMap);
 
             program->setUniformValue("u_lightSpaceMatrix",  lightSpaceMatrix);
+            */
             program->setUniformValue("u_lightCount",        lightCount);
-
+            int shadowIndex = 8;
             // only materials get lights passed to it
             if ( item->renderStates.receiveLighting ) {
                 for (int i=0;i<lightCount;i++)
@@ -592,6 +650,22 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                     mat->setUniformValue(lightPrefix+"constantAtten", 1.0f);
                     mat->setUniformValue(lightPrefix+"linearAtten", 0.0f);
                     mat->setUniformValue(lightPrefix+"quadtraticAtten", 1.0f);
+
+                    // shadow data
+                    mat->setUniformValue(lightPrefix+"shadowEnabled",
+                                         item->renderStates.receiveShadows &&
+                                         scene->shadowEnabled &&
+                                         light->lightType != iris::LightType::Point);
+                    mat->setUniformValue(lightPrefix+"shadowMap", shadowIndex);
+                    //mat->setUniformValue(QString("shadowMaps[%0].").arg(i), 8);
+                    mat->setUniformValue(lightPrefix+"shadowMatrix", light->shadowMap->shadowMatrix);
+
+                    graphics->setTexture(shadowIndex, light->shadowMap->shadowTexture);
+                    shadowIndex++;
+                    //shadowDepthMap
+                    //gl->glActiveTexture(GL_TEXTURE8);
+                    //gl->glBindTexture(GL_TEXTURE_2D, light->shadowMap->shadowTexId);
+                    //gl->glBindTexture(GL_TEXTURE_2D, shadowDepthMap);
                 }
             }
 
