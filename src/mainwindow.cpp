@@ -136,7 +136,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setFont(font);
 
 #ifdef QT_DEBUG
-    iris::Logger::getSingleton()->init(getAbsoluteAssetPath("jahshaka.log"));
+    iris::Logger::getSingleton()->init(IrisUtils::getAbsoluteAssetPath("jahshaka.log"));
     setWindowTitle(windowTitle() + " - Developer Build");
 #else
     iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/jahshaka.log");
@@ -239,22 +239,6 @@ iris::ScenePtr MainWindow::getScene()
     return scene;
 }
 
-QString MainWindow::getAbsoluteAssetPath(QString pathRelativeToApp)
-{
-    QDir basePath = QDir(QCoreApplication::applicationDirPath());
-
-#if defined(WIN32) && defined(QT_DEBUG)
-    basePath.cdUp();
-#elif defined(Q_OS_MAC)
-    basePath.cdUp();
-    basePath.cdUp();
-    basePath.cdUp();
-#endif
-
-    auto path = QDir::cleanPath(basePath.absolutePath() + QDir::separator() + pathRelativeToApp);
-    return path;
-}
-
 iris::ScenePtr MainWindow::createDefaultScene()
 {
     auto scene = iris::Scene::create();
@@ -272,7 +256,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-    m->setValue("diffuseTexture", ":/content/textures/tile.png");
+    m->setValue("diffuseTexture", IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"));
     m->setValue("textureScale", 4.f);
     node->setMaterial(m);
 
@@ -801,7 +785,7 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
     // TODO - set the TYPE for a preset in the .material file so we can have other preset types
     // only works for the default material at the moment...
     auto m = iris::CustomMaterial::create();
-    m->generate(getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
+    m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
 
     m->setValue("diffuseTexture", preset->diffuseTexture);
     m->setValue("specularTexture", preset->specularTexture);

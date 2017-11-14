@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #include "modelpresets.h"
 #include "ui_modelpresets.h"
 #include <QListWidgetItem>
-
+#include "../irisgl/src/core/irisutils.h"
 #include "../mainwindow.h"
 
 ModelPresets::ModelPresets(QWidget *parent) :
@@ -20,7 +20,6 @@ ModelPresets::ModelPresets(QWidget *parent) :
     ui(new Ui::ModelPresets)
 {
     ui->setupUi(this);
-
     mainWindow = nullptr;
 
     ui->modelsSets->setViewMode(QListWidget::IconMode);
@@ -30,15 +29,15 @@ ModelPresets::ModelPresets(QWidget *parent) :
     ui->modelsSets->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->modelsSets->setSelectionMode(QAbstractItemView::SingleSelection);
 
-    connect(ui->modelsSets,SIGNAL(doubleClicked(QModelIndex)),SLOT(onPrimitiveSelected(QModelIndex)));
+    connect(ui->modelsSets, SIGNAL(doubleClicked(QModelIndex)), SLOT(onPrimitiveSelected(QModelIndex)));
 
-    addItem("Plane","app/modelpresets/plane.png");
-//    addItem("Cone","app/modelpresets/cone.png");
-    addItem("Cube","app/modelpresets/cube.png");
-    addItem("Cylinder","app/modelpresets/cylinder.png");
-    //addItem("IcoSphere",":/modelpresets/icosphere.png");
-    addItem("Sphere","app/modelpresets/sphere.png");
-    addItem("Torus","app/modelpresets/torus.png");
+    addItem("Plane",    "app/modelpresets/plane.png");
+    // addItem("Cone",     "app/modelpresets/cone.png");
+    addItem("Cube",     "app/modelpresets/cube.png");
+    addItem("Cylinder", "app/modelpresets/cylinder.png");
+    // addItem("IcoSphere","app/modelpresets/icosphere.png");
+    addItem("Sphere",   "app/modelpresets/sphere.png");
+    addItem("Torus",    "app/modelpresets/torus.png");
 
 }
 
@@ -49,31 +48,23 @@ void ModelPresets::setMainWindow(MainWindow* mainWindow)
 
 void ModelPresets::onPrimitiveSelected(QModelIndex itemIndex)
 {
-    if(mainWindow==nullptr)
-        return;
+    if (mainWindow == Q_NULLPTR) return;
 
     auto item = ui->modelsSets->item(itemIndex.row());
     auto text = item->text();
 
-    if(text=="Plane")
-        mainWindow->addPlane();
-//    if(text=="Cone")
-//        mainWindow->addCone();
-    if(text=="Cube")
-        mainWindow->addCube();
-    if(text=="Cylinder")
-        mainWindow->addCylinder();
-    //if(text=="IcoSphere")
-    //    mainWindow->addIcoSphere();
-    if(text=="Sphere")
-        mainWindow->addSphere();
-    if(text=="Torus")
-        mainWindow->addTorus();
+    if (text == "Plane")    mainWindow->addPlane();
+    // if (text == "Cone") mainWindow->addCone();
+    if (text == "Cube")     mainWindow->addCube();
+    if (text == "Cylinder") mainWindow->addCylinder();
+    // if (text == "IcoSphere") mainWindow->addIcoSphere();
+    if (text == "Sphere")   mainWindow->addSphere();
+    if (text == "Torus")    mainWindow->addTorus();
 }
 
-void ModelPresets::addItem(QString name,QString path)
+void ModelPresets::addItem(QString name, QString path)
 {
-    QListWidgetItem* item = new QListWidgetItem(QIcon(mainWindow->getAbsoluteAssetPath(path)),name);
+    QListWidgetItem* item = new QListWidgetItem(QIcon(IrisUtils::getAbsoluteAssetPath(path)),name);
     ui->modelsSets->addItem(item);
 }
 
