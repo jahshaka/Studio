@@ -268,11 +268,8 @@ qt5_add_resources(QRCS
     ${CMAKE_SOURCE_DIR}/app/fonts.qrc
     ${CMAKE_SOURCE_DIR}/app/icons.qrc
     ${CMAKE_SOURCE_DIR}/app/images.qrc
-    ${CMAKE_SOURCE_DIR}/app/materials.qrc
-    ${CMAKE_SOURCE_DIR}/app/modelpresets.qrc
     ${CMAKE_SOURCE_DIR}/app/models.qrc
     ${CMAKE_SOURCE_DIR}/app/shaders.qrc 
-    ${CMAKE_SOURCE_DIR}/app/textures.qrc
 )
 
 # Disable compiler specific warnings if we are building with MSVC
@@ -283,7 +280,7 @@ if(MSVC)
     # set(CMAKE_SUPPRESS_REGENERATION true)
 endif()
 
-if(WIN32)
+if(WIN32 AND CMAKE_BUILD_TYPE STREQUAL Release)
     set(CMAKE_WIN32_EXECUTABLE ON)
 endif()
 
@@ -302,7 +299,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-add_executable(${CMAKE_PROJECT_NAME} src/main.cpp ${GL3W_SRC} ${SRCS} ${HEADERS_moc} ${QRCS})
+add_executable(${CMAKE_PROJECT_NAME} src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS})
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC src irisgl/src irisgl/src/assimp/include/ irisgl/src/libovr/include/)
 target_link_libraries(${CMAKE_PROJECT_NAME} Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets IrisGL ${OPENGL_LIBRARIES})
 
