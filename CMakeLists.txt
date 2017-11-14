@@ -8,6 +8,7 @@ find_package(Qt5 REQUIRED COMPONENTS Concurrent Widgets Sql Svg)
 
 include(UseModernCpp)
 include(CopyResources)
+include(BuildType)
 include(GnuInstallDirs)
 
 # set(CMAKE_AUTOMOC ON)
@@ -278,10 +279,19 @@ qt5_add_resources(QRCS
 # NOMINMAX - http://www.suodenjoki.dk/us/archive/2010/min-max.htm
 if(MSVC)
     add_definitions("-D_CRT_SECURE_NO_WARNINGS" "-DNOMINMAX")
+    # Disable ZERO_CHECK if need be
+    # set(CMAKE_SUPPRESS_REGENERATION true)
 endif()
 
 if(WIN32)
     set(CMAKE_WIN32_EXECUTABLE ON)
+endif()
+
+if(${CMAKE_CXX_COMPILER_ID} EQUAL MSVC)
+    set(DestDir ${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE})
+    # set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
+else()
+    set(DestDir ${CMAKE_BINARY_DIR}/bin)
 endif()
 
 # For convenience, put the shared files built from IrisGL along with the final binary
@@ -292,11 +302,11 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-add_executable(Jahshaka src/main.cpp ${GL3W_SRC} ${SRCS} ${HEADERS_moc} ${QRCS})
-target_include_directories(Jahshaka PUBLIC src irisgl/src irisgl/src/assimp/include/ irisgl/src/libovr/include/)
-target_link_libraries(Jahshaka Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets IrisGL ${OPENGL_LIBRARIES})
+add_executable(${CMAKE_PROJECT_NAME} src/main.cpp ${GL3W_SRC} ${SRCS} ${HEADERS_moc} ${QRCS})
+target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC src irisgl/src irisgl/src/assimp/include/ irisgl/src/libovr/include/)
+target_link_libraries(${CMAKE_PROJECT_NAME} Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets IrisGL ${OPENGL_LIBRARIES})
 
-set(DestDir ${CMAKE_BINARY_DIR}/bin)
+# Copies resources to DestDir
 copy_dirs(${PROJECT_SOURCE_DIR}/app)
 copy_dirs(${PROJECT_SOURCE_DIR}/assets)
 copy_dirs(${PROJECT_SOURCE_DIR}/scenes)
