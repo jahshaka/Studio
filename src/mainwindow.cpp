@@ -28,7 +28,7 @@ For more information see the LICENSE file
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/materials/custommaterial.h"
 #include "irisgl/src/graphics/forwardrenderer.h"
-#include "irisgl/src/graphics/mesh.h"
+// #include "irisgl/src/graphics/mesh.h"
 #include "irisgl/src/graphics/shader.h"
 #include "irisgl/src/graphics/texture2d.h"
 #include "irisgl/src/graphics/viewport.h"
@@ -114,7 +114,7 @@ For more information see the LICENSE file
 #include "../src/widgets/modelpresets.h"
 #include "../src/widgets/skypresets.h"
 
-#include "src/irisgl/src/zip/zip.h"
+#include "irisgl/src/zip/zip.h"
 
 enum class VRButtonMode : int
 {

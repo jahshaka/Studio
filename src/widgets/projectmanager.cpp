@@ -24,8 +24,8 @@
 #include "../core/guidmanager.h"
 #include "../io/assetmanager.h"
 
-#include "src/irisgl/src/zip/zip.h"
-#include "src/irisgl/src/assimp/include/assimp/Importer.hpp"
+#include "irisgl/src/zip/zip.h"
+#include "irisgl/src/assimp/include/assimp/Importer.hpp"
 
 #include "dynamicgrid.h"
 
