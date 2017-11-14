@@ -310,3 +310,5 @@ target_link_libraries(${CMAKE_PROJECT_NAME} Qt5::Concurrent Qt5::Sql Qt5::Svg Qt
 copy_dirs(${PROJECT_SOURCE_DIR}/app)
 copy_dirs(${PROJECT_SOURCE_DIR}/assets)
 copy_dirs(${PROJECT_SOURCE_DIR}/scenes)
+
+include(CopyDependencies)
