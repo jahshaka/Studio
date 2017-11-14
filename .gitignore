@@ -9,6 +9,8 @@
 *.so
 *.dll
 *.dylib
+*.db
+*.lib
 
 # Qt-es
 
@@ -26,18 +28,14 @@ Makefile*
 *build-*
 
 # QtCreator
-
 *.autosave
 
-#QtCtreator Qml
+# QtCtreator Qml
 *.qmlproject.user
 *.qmlproject.user.*
 
-#QtCtreator CMake
+# QtCtreator CMake
 CMakeLists.txt.user
-*.db
-assets/textures/Thumbs.db
-*.db
-assets/textures/Thumbs.db
-*.db
-assets/textures/Thumbs.db
+
+Visual Studio Code
+.vscode/
