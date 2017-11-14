@@ -1,34 +1,23 @@
-cmake_minimum_required(VERSION 2.8.11)
+cmake_minimum_required(VERSION 3.3 FATAL_ERROR)
 project(Jahshaka)
 
-# set(CMAKE_PREFIX_PATH "C:/Qt/5.9.2/msvc2017_64")
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 find_package(OpenGL REQUIRED) # is this needed?
-find_package(Qt5 COMPONENTS Widgets OpenGL Svg Sql Concurrent REQUIRED)
+find_package(Qt5 REQUIRED COMPONENTS Concurrent Widgets Sql Svg)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=c++11")
+include(UseModernCpp)
+include(CopyResources)
+include(GnuInstallDirs)
 
 # set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-include_directories(
-    "${PROJECT_BINARY_DIR}/src/"
-    "${PROJECT_SOURCE_DIR}/src/"
-    "${PROJECT_SOURCE_DIR}/irisgl/src"
-    "${PROJECT_BINARY_DIR}/irisgl/src/assimp/include/"
-    "${PROJECT_SOURCE_DIR}/irisgl/src/assimp/include/"
-    "${PROJECT_SOURCE_DIR}/irisgl/src"
-    "${PROJECT_SOURCE_DIR}/irisgl/src/libovr/include"
-)
-
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
 
-# target_link_libraries(${PROJECT_NAME} LINK_PUBLIC irisgl)
-# target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
-
-set(SOURCES
+set(SRCS
     src/main.cpp
     src/mainwindow.cpp 
     src/widgets/colorvaluewidget.cpp 
@@ -116,7 +105,7 @@ set(SOURCES
     src/dialogs/donatedialog.cpp
 )
 
-set (HEADERS
+set(HEADERS
     src/mainwindow.h 
     src/dialogs/renamelayerdialog.h 
     src/widgets/colorvaluewidget.h 
@@ -225,7 +214,8 @@ set (HEADERS
     src/dialogs/donatedialog.h
 )
 
-set (FORMS
+# Todo - trim these down to nothing eventually
+set(FORMS
     src/dialogs/renamelayerdialog.ui 
     src/widgets/colorvaluewidget.ui 
     src/widgets/colorpickerwidget.ui 
@@ -272,6 +262,7 @@ set (FORMS
 qt5_wrap_cpp(HEADERS_moc ${HEADERS})
 qt5_wrap_ui(UI_moc ${FORMS})
 
+# Todo - trim these down to nothing eventually
 qt5_add_resources(QRCS
     ${CMAKE_SOURCE_DIR}/app/fonts.qrc
     ${CMAKE_SOURCE_DIR}/app/icons.qrc
@@ -283,13 +274,29 @@ qt5_add_resources(QRCS
     ${CMAKE_SOURCE_DIR}/app/textures.qrc
 )
 
+# Disable compiler specific warnings if we are building with MSVC
+# NOMINMAX - http://www.suodenjoki.dk/us/archive/2010/min-max.htm
+if(MSVC)
+    add_definitions("-D_CRT_SECURE_NO_WARNINGS" "-DNOMINMAX")
+endif()
+
+if(WIN32)
+    set(CMAKE_WIN32_EXECUTABLE ON)
+endif()
+
+# For convenience, put the shared files built from IrisGL along with the final binary
+set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-# if(WIN32)
-#     set(CMAKE_WIN32_EXECUTABLE ON)
-# endif()
+add_executable(Jahshaka src/main.cpp ${GL3W_SRC} ${SRCS} ${HEADERS_moc} ${QRCS})
+target_include_directories(Jahshaka PUBLIC src irisgl/src irisgl/src/assimp/include/ irisgl/src/libovr/include/)
+target_link_libraries(Jahshaka Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets IrisGL ${OPENGL_LIBRARIES})
 
-add_executable(Jahshaka src/main.cpp ${GL3W_SRC} ${SOURCES} ${HEADERS_moc} ${QRCS})
-target_link_libraries (Jahshaka Qt5::Widgets Qt5::OpenGL Qt5::Svg Qt5::Sql Qt5::Concurrent IrisGL ${OPENGL_LIBRARIES})
+set(DestDir ${CMAKE_BINARY_DIR}/bin)
+copy_dirs(${PROJECT_SOURCE_DIR}/app)
+copy_dirs(${PROJECT_SOURCE_DIR}/assets)
+copy_dirs(${PROJECT_SOURCE_DIR}/scenes)

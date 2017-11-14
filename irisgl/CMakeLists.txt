@@ -1,35 +1,25 @@
-cmake_minimum_required(VERSION 3.4)
+cmake_minimum_required(VERSION 3.3 FATAL_ERROR)
 project(IrisGL)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/assimp/cmake-modules")
-
 find_package(OpenGL REQUIRED) # is this needed?
-find_package(Qt5 COMPONENTS Widgets OpenGL Sql Concurrent REQUIRED)
+find_package(Qt5 REQUIRED COMPONENTS Core OpenGL)
 
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-option(ASSIMP_BUILD_ASSIMP_TOOLS "" OFF)
-option(ASSIMP_BUILD_TESTS "" OFF)
-option(ASSIMP_NO_EXPORT "" ON)
-option(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT "" OFF)
-option(ASSIMP_BUILD_OBJ_IMPORTER "" ON)
-option(ASSIMP_BUILD_ZLIB "" ON)
+option(ASSIMP_BUILD_ASSIMP_TOOLS                "" OFF)
+option(ASSIMP_BUILD_TESTS                       "" OFF)
+option(ASSIMP_NO_EXPORT                         "" ON)
+option(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT    "" OFF)
+option(ASSIMP_BUILD_OBJ_IMPORTER                "" ON)
+option(ASSIMP_BUILD_FBX_IMPORTER                "" ON)
+option(ASSIMP_BUILD_COLLADA_IMPORTER            "" ON)
+option(ASSIMP_BUILD_ZLIB                        "" ON)
 
-# set variables that are needed
 add_subdirectory(src/assimp)
 
-include_directories(
-    "${PROJECT_BINARY_DIR}/src/"
-    "${PROJECT_SOURCE_DIR}/src/"
-    "${PROJECT_BINARY_DIR}/src/assimp/include/"
-    "${PROJECT_SOURCE_DIR}/src/assimp/include/"
-    "${PROJECT_SOURCE_DIR}/src"
-    "${PROJECT_SOURCE_DIR}/src/libovr/include"
-)
-
-set(SOURCES
+set(SRCS
     src/graphics/mesh.cpp
     src/materials/defaultmaterial.cpp
     src/scenegraph/meshnode.cpp
@@ -187,16 +177,23 @@ set (HEADERS
     src/zip/zip.h
 )
 
-qt5_add_resources(QRCS
-    assets.qrc
+qt5_wrap_cpp(HEADERS_moc ${HEADERS})
+qt5_add_resources(QRCS assets.qrc)
+
+# This will allow a .lib to be built alongside the dll, ((needed)) for MSVC
+if(WIN32 AND MSVC)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS 1)
+endif()
+
+add_library(IrisGL SHARED ${SRCS} ${HEADERS_moc} ${QRCS})
+
+# useful to move away from include_directories() - https://stackoverflow.com/a/38158071/996468
+# Note the DIRs that are included, assimp generates a config that we need to find in the build dir. L2
+target_include_directories(IrisGL PUBLIC
+    "${PROJECT_SOURCE_DIR}/src/"
+    "${PROJECT_BINARY_DIR}/src/assimp/include/"
+    "${PROJECT_SOURCE_DIR}/src/assimp/include/"
+    "${PROJECT_SOURCE_DIR}/src/libovr/include"
 )
 
-qt5_wrap_cpp(HEADERS_moc ${HEADERS})
-
-# set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-# set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-# set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
-set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS 1)
-add_library(IrisGL SHARED ${SOURCES} ${HEADERS_moc} ${QRCS})
-target_link_libraries (IrisGL Qt5::Widgets Qt5::OpenGL Qt5::Sql Qt5::Concurrent assimp ${OPENGL_LIBRARIES})
+target_link_libraries (IrisGL assimp Qt5::Core Qt5::OpenGL)
