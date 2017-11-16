@@ -47,11 +47,34 @@ const int TYPE_POINT = 0;
 const int TYPE_DIRECTIONAL = 1;
 const int TYPE_SPOT = 2;
 
+//const int SHADOW_NONE = 0;
+//const int SHADOW_HARD = 1;
+//const int SHADOW_SOFT = 2;
+//const int SHADOW_SOFTER = 3;
+
 //in vec4 FragPosLightSpace;
 //uniform sampler2D u_shadowMap;
 //uniform bool u_shadowEnabled;
+struct Light {
+    int type;
+    vec3 position;
+    vec3 ambient;
+    vec4 color;
+    float distance;
+    float intensity;
+    vec3 direction;
+    float cutOffAngle;
+    float cutOffSoftness;
+
+    sampler2D shadowMap;
+    bool shadowEnabled;
+    int shadowType;
+    mat4 shadowMatrix;
+};
 
 float SampleShadowMap(in sampler2D shadowMap, vec2 coords, float compare) {
+    if (coords.x < 0.0 || coords.x > 1.0 || coords.y < 0.0 || coords.y > 1.0)
+        return 1.0;
     return step(compare, texture(shadowMap, coords.xy).r);
 }
 
@@ -94,39 +117,36 @@ float CalcShadowMap(in sampler2D shadowMap, vec4 fragPosLightSpace) {
     return SampleShadowMapPCF(shadowMap, projCoords.xy, projCoords.z, texelSize);
 }
 
-/*
-float calcHardShadowMap(in Light light)
+float calcSoftShadowMap(in Light light, in vec4 lightSpacePos)
 {
-    return 0;
+    return CalcShadowMap(light.shadowMap, lightSpacePos);
+}
+
+float calcHardShadowMap(in Light light, in vec4 lightSpacePos)
+{
+    vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+    projCoords = projCoords * 0.5 + 0.5;
+    //return SampleShadowMap(light.shadowMap,projCoords.xy,projCoords.z);
+    if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
+        return 1.0;
+    if (projCoords.z > texture(light.shadowMap, projCoords.xy).r + 0.15)
+        return 0.0;
+    return 1.0;
 }
 
 
 //  Handles shadowing for lights with different shadowing types
-float calculateShadowFactor(in Light light)
+float calculateShadowFactor(in Light light, in vec3 worldPos)
 {
-    if (light.lightType==LIGHT_HARD)
-        return 0;
-    if (light.lightType==LIGHT_SOFT)
-        return 0;
+    vec4 lightSpacePos = light.shadowMatrix * vec4(v_worldPos, 1.0);
+    if (light.shadowType==SHADOW_HARD)
+        return calcHardShadowMap(light, lightSpacePos);
+    if (light.shadowType==SHADOW_SOFT)
+        return calcSoftShadowMap(light, lightSpacePos);
     return 1.0f;
 }
-*/
-struct Light {
-    int type;
-    vec3 position;
-    vec3 ambient;
-    vec4 color;
-    float distance;
-    float intensity;
-    vec3 direction;
-    float cutOffAngle;
-    float cutOffSoftness;
 
-    sampler2D shadowMap;
-    bool shadowEnabled;
-    int shadowType;
-    mat4 shadowMatrix;
-};
+
 
 uniform sampler2D shadowMaps[MAX_LIGHTS];
 
@@ -244,8 +264,9 @@ void main()
             //spec = pow(max(dot(r, v), 0.0), 0.7f);
         }
 
-        vec4 FragPosLightSpace = u_lights[i].shadowMatrix * vec4(v_worldPos, 1.0);
-        float shadowFactor = u_lights[i].shadowEnabled ? CalcShadowMap(u_lights[i].shadowMap,FragPosLightSpace) : 1.0;
+        //vec4 FragPosLightSpace = u_lights[i].shadowMatrix * vec4(v_worldPos, 1.0);
+        //float shadowFactor = u_lights[i].shadowEnabled ? CalcShadowMap(u_lights[i].shadowMap,FragPosLightSpace) : 1.0;
+        float shadowFactor = calculateShadowFactor(u_lights[i], v_worldPos);
 
         diffuse += atten*ndl*u_lights[i].intensity*u_lights[i].color.rgb*shadowFactor;
         specular += atten*spec* u_lights[i].intensity * u_lights[i].color.rgb*shadowFactor;

@@ -659,6 +659,7 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                     mat->setUniformValue(lightPrefix+"shadowMap", shadowIndex);
                     //mat->setUniformValue(QString("shadowMaps[%0].").arg(i), 8);
                     mat->setUniformValue(lightPrefix+"shadowMatrix", light->shadowMap->shadowMatrix);
+                    mat->setUniformValue(lightPrefix+"shadowType", (int)light->shadowMap->shadowType);
 
                     graphics->setTexture(shadowIndex, light->shadowMap->shadowTexture);
                     shadowIndex++;

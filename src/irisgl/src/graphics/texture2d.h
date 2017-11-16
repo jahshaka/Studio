@@ -62,6 +62,7 @@ public:
 
     static Texture2DPtr create(int width, int height,QOpenGLTexture::TextureFormat texFormat = QOpenGLTexture::RGBAFormat);
     static Texture2DPtr createDepth(int width, int height);
+    static Texture2DPtr createShadowDepth(int width, int height);
 //    {
 //        return create(width, height, QOpenGLTexture::DepthFormat);
 //    }

@@ -8,11 +8,12 @@
 namespace iris
 {
 
-enum class ShadowMapType
+enum class ShadowMapType : int
 {
-    None,
-    Hard,
-    Soft
+    None = 0,
+    Hard = 1,
+    Soft = 2,
+    Softer = 3
 };
 
 class ShadowMap

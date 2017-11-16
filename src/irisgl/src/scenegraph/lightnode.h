@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "QColor"
 #include "../irisglfwd.h"
 #include "../scenegraph/scenenode.h"
+#include "../graphics/shadowmap.h"
 
 namespace iris
 {

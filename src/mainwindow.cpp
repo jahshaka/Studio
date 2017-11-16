@@ -964,6 +964,7 @@ void MainWindow::addDirectionalLight()
 {
     this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
+    node->shadowMap->shadowType = iris::ShadowMapType::Soft;
     node->setLightType(iris::LightType::Directional);
     node->icon = iris::Texture2D::load(":/icons/bulb.png");
     node->setName("Directional Light");

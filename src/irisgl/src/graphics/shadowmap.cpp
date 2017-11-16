@@ -7,9 +7,9 @@ namespace iris
 
 ShadowMap::ShadowMap()
 {
-    shadowType = ShadowMapType::None;
+    shadowType = ShadowMapType::Hard;
     resolution = 1024;
-    shadowTexture = Texture2D::createDepth(resolution, resolution);
+    shadowTexture = Texture2D::createShadowDepth(resolution, resolution);
     bias = 0.01f;
     /*
     auto gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
