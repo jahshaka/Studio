@@ -129,7 +129,7 @@ float calcHardShadowMap(in Light light, in vec4 lightSpacePos)
     //return SampleShadowMap(light.shadowMap,projCoords.xy,projCoords.z);
     if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
         return 1.0;
-    if (projCoords.z > texture(light.shadowMap, projCoords.xy).r + 0.15)
+    if (projCoords.z > texture(light.shadowMap, projCoords.xy).r)
         return 0.0;
     return 1.0;
 }

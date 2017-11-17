@@ -403,7 +403,7 @@ void ForwardRenderer::renderDirectionalShadow(LightNodePtr light, ScenePtr node)
     QMatrix4x4 lightProjection, lightView;
     QOpenGLShaderProgram* shader;
 
-    lightProjection.ortho(-128.0f, 128.0f, -64.0f, 64.0f, -64.0f, 64.0f);
+    lightProjection.ortho(-128.0f, 128.0f, -64.0f, 64.0f, -64.0f, 128.0f);
 
     lightView.lookAt(QVector3D(0, 0, 0),
                      light->getLightDir(),

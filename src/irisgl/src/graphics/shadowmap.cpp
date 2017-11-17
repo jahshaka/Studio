@@ -8,7 +8,7 @@ namespace iris
 ShadowMap::ShadowMap()
 {
     shadowType = ShadowMapType::Hard;
-    resolution = 1024;
+    resolution = 1024*4;
     shadowTexture = Texture2D::createShadowDepth(resolution, resolution);
     bias = 0.01f;
     /*
