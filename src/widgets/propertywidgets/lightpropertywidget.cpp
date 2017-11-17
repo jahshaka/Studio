@@ -53,6 +53,15 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         intensity->setValue(lightNode->intensity);
         distance->setValue(lightNode->distance);
         spotCutOff->setValue(lightNode->spotCutOff);
+        spotCutOffSoftness->setValue(lightNode->spotCutOffSoftness);
+
+        if (lightNode->getLightType()==iris::LightType::Spot) {
+            spotCutOff->show();
+            spotCutOffSoftness->show();
+        } else {
+            spotCutOff->hide();
+            spotCutOffSoftness->hide();
+        }
     }
     else
     {
