@@ -82,6 +82,17 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         shadowSize->setCurrentItem(QString("%1").arg(lightNode->shadowMap->resolution));
         shadowType->setCurrentItem(evalShadowTypeName(lightNode->shadowMap->shadowType));
         shadowBias->setValue(lightNode->shadowMap->bias);
+
+        // hide shadow params for point lights
+        if (lightNode->getLightType()==iris::LightType::Point) {
+            shadowSize->hide();
+            shadowType->hide();
+            shadowBias->hide();
+        } else {
+            shadowSize->show();
+            shadowType->show();
+            shadowBias->show();
+        }
     }
     else
     {
