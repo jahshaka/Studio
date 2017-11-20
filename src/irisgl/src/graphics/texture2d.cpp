@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "texture2d.h"
 #include <QDebug>
 #include <QOpenGLFunctions_3_2_Core>
+#include "../core/logger.h"
 
 namespace iris
 {
@@ -24,13 +25,14 @@ Texture2DPtr Texture2D::load(QString path)
 Texture2DPtr Texture2D::load(QString path,bool flipY)
 {
     auto image = QImage(path);
-    if(flipY)
-        image = image.mirrored(false,true);
     if(image.isNull())
     {
-        qDebug()<<"error loading image: "<<path<<endl;
+        irisLog("error loading image: "+path);
         return Texture2DPtr(nullptr);
     }
+
+    if(flipY)
+        image = image.mirrored(false,true);
 
     auto tex = create(image);
     tex->source = path;

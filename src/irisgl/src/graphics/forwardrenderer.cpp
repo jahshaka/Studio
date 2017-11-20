@@ -337,54 +337,13 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
 void ForwardRenderer::renderShadows(ScenePtr node)
 {
-//    QMatrix4x4 lightView, lightProjection;
-
-//    gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, shadowFBO);
-//    gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthMap, 0);
-
-
-//    QOpenGLShaderProgram* shader;
     for (auto light : scene->lights) {
         if (light->lightType == iris::LightType::Directional) {
-
             renderDirectionalShadow(light, scene);
-            /*
-            lightProjection.ortho(-128.0f, 128.0f, -64.0f, 64.0f, -64.0f, 128.0f);
-
-            lightView.lookAt(QVector3D(0, 0, 0),
-                             light->getLightDir(),
-                             QVector3D(0.0f, 1.0f, 0.0f));
-            QMatrix4x4 lightSpaceMatrix = lightProjection * lightView;
-
-            for (auto& item : scene->shadowRenderList->getItems()) {
-
-
-                if (item->type == iris::RenderItemType::Mesh && !!item->mesh) {
-                    if  (item->mesh->hasSkeleton()) {
-                        auto boneTransforms = item->mesh->getSkeleton()->boneTransforms;
-                        skinnedShadowShader->bind();
-                        skinnedShadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
-                        skinnedShadowShader->setUniformValue("u_worldMatrix", item->worldMatrix);
-                        skinnedShadowShader->setUniformValueArray("u_bones", boneTransforms.data(), boneTransforms.size());
-                        shader = skinnedShadowShader;
-
-                    } else {
-                        shadowShader->bind();
-                        shadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
-                        shadowShader->setUniformValue("u_worldMatrix", item->worldMatrix);
-                        shader = shadowShader;
-                    }
-
-
-
-                    item->mesh->draw(gl, shader);
-                }
-            }
-            */
+        } else if (light->lightType == iris::LightType::Spot) {
+            renderSpotlightShadow(light, scene);
         }
     }
-
-    //shadowShader->release();
 }
 
 void ForwardRenderer::renderDirectionalShadow(LightNodePtr light, ScenePtr node)
@@ -435,8 +394,56 @@ void ForwardRenderer::renderDirectionalShadow(LightNodePtr light, ScenePtr node)
             item->mesh->draw(gl, shader);
         }
     }
-    gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-    //graphics->clearRenderTarget();
+    //gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    graphics->clearRenderTarget();
+}
+
+void ForwardRenderer::renderSpotlightShadow(LightNodePtr light, ScenePtr node)
+{
+    graphics->setRenderTarget(QList<Texture2DPtr>(),light->shadowMap->shadowTexture);
+    //gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, shadowFBO);
+    //gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, light->shadowMap->shadowTexture->getTextureId(), 0);
+    //gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, light->shadowMap->shadowTexId, 0);
+    //gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthMap, 0);
+
+    int shadowSize = light->shadowMap->resolution;
+    graphics->setViewport(QRect(0, 0, shadowSize, shadowSize));
+    graphics->clear(QColor());
+
+    QMatrix4x4 lightProjection, lightView;
+    QOpenGLShaderProgram* shader;
+
+    lightProjection.perspective(light->spotCutOff*2, 1,0.1f,light->distance);
+
+    lightView.lookAt(light->getGlobalPosition(),
+                     light->getGlobalPosition() + light->getLightDir() + QVector3D(0.0001,0.0001,0.0001),
+                     QVector3D(0.0f, 1.0f, 0.0f));
+    QMatrix4x4 lightSpaceMatrix = lightProjection * lightView;
+    light->shadowMap->shadowMatrix = lightSpaceMatrix;
+
+    for (auto& item : scene->shadowRenderList->getItems()) {
+
+
+        if (item->type == iris::RenderItemType::Mesh && !!item->mesh) {
+            if  (item->mesh->hasSkeleton()) {
+                auto boneTransforms = item->mesh->getSkeleton()->boneTransforms;
+                skinnedShadowShader->bind();
+                skinnedShadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
+                skinnedShadowShader->setUniformValue("u_worldMatrix", item->worldMatrix);
+                skinnedShadowShader->setUniformValueArray("u_bones", boneTransforms.data(), boneTransforms.size());
+                shader = skinnedShadowShader;
+
+            } else {
+                shadowShader->bind();
+                shadowShader->setUniformValue("u_lightSpaceMatrix", lightSpaceMatrix);
+                shadowShader->setUniformValue("u_worldMatrix", item->worldMatrix);
+                shader = shadowShader;
+            }
+
+            item->mesh->draw(gl, shader);
+        }
+    }
+    graphics->clearRenderTarget();
 }
 
 void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)

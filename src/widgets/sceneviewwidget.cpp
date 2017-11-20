@@ -449,7 +449,7 @@ void SceneViewWidget::renderScene()
 
 //    if (!!scene) {
 //        for(auto light : scene->lights) {
-//            if (light->lightType == iris::LightType::Directional)
+//            if (light->lightType == iris::LightType::Spot)
 //                spriteBatch->draw(light->shadowMap->shadowTexture,QRect(0,0,200,200),QColor(255,255,255,255));
 //        }
 //    }

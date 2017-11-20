@@ -449,7 +449,7 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     // ensure shadow map size isnt too big ro too small
     auto res = qBound(512, nodeObj["shadowSize"].toInt(1024), 4096);
     shadowMap->setResolution(res);
-    shadowMap->shadowType = evalShadowMapType(nodeObj["shadowSize"].toString());
+    shadowMap->shadowType = evalShadowMapType(nodeObj["shadowType"].toString());
 
     //TODO: move this to the sceneview widget or somewhere more appropriate
     if (lightNode->lightType == iris::LightType::Directional) {

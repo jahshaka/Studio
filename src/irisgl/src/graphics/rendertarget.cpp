@@ -180,6 +180,16 @@ void RenderTarget::bind()
 
 void RenderTarget::unbind()
 {
+    auto i = 0;
+    for(auto texture : textures)
+    {
+        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+i, GL_TEXTURE_2D, 0, 0);
+        i++;
+    }
+
+    if (!!depthTexture)
+        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
+
     gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 

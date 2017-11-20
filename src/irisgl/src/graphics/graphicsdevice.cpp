@@ -106,8 +106,9 @@ void GraphicsDevice::setRenderTarget(QList<Texture2DPtr> colorTargets, Texture2D
 void GraphicsDevice::clearRenderTarget()
 {
     // reset to default rt
-    gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
     if (!!activeRT) {
+        activeRT->unbind();
+
         // clear all textures from internal RT
         if (activeRT == _internalRT) {
             _internalRT->clearTextures();
@@ -116,6 +117,7 @@ void GraphicsDevice::clearRenderTarget()
 
         activeRT.reset();
     }
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void GraphicsDevice::clear(QColor color)
