@@ -366,7 +366,7 @@ void ForwardRenderer::renderDirectionalShadow(LightNodePtr light, ScenePtr node)
 
     lightView.lookAt(QVector3D(0, 0, 0),
                      light->getLightDir(),
-                     QVector3D(0.0f, 1.0f, 0.0f));
+                     QVector3D(0.0001f, 1.0001f, 0.0001f));
     QMatrix4x4 lightSpaceMatrix = lightProjection * lightView;
     light->shadowMap->shadowMatrix = lightSpaceMatrix;
 
@@ -659,14 +659,18 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                     mat->setUniformValue(lightPrefix+"quadtraticAtten", 1.0f);
 
                     // shadow data
-                    mat->setUniformValue(lightPrefix+"shadowEnabled",
-                                         item->renderStates.receiveShadows &&
-                                         scene->shadowEnabled &&
-                                         light->lightType != iris::LightType::Point);
+//                    mat->setUniformValue(lightPrefix+"shadowEnabled",
+//                                         item->renderStates.receiveShadows &&
+//                                         scene->shadowEnabled &&
+//                                         light->lightType != iris::LightType::Point);
                     mat->setUniformValue(lightPrefix+"shadowMap", shadowIndex);
                     //mat->setUniformValue(QString("shadowMaps[%0].").arg(i), 8);
                     mat->setUniformValue(lightPrefix+"shadowMatrix", light->shadowMap->shadowMatrix);
-                    mat->setUniformValue(lightPrefix+"shadowType", (int)light->shadowMap->shadowType);
+                    if (light->lightType == iris::LightType::Point)
+                        mat->setUniformValue(lightPrefix+"shadowType", (int)iris::ShadowMapType::None);
+                    else
+                        mat->setUniformValue(lightPrefix+"shadowType", (int)light->shadowMap->shadowType);
+
 
                     graphics->setTexture(shadowIndex, light->shadowMap->shadowTexture);
                     shadowIndex++;

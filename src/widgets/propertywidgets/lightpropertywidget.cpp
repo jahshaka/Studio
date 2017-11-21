@@ -42,7 +42,7 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     shadowSize->addItem("1024");
     shadowSize->addItem("2048");
     shadowSize->addItem("4096");
-    shadowBias = this->addFloatValueSlider("Shadow Bias",0,1);
+    //shadowBias = this->addFloatValueSlider("Shadow Bias",0,1);
 
     connect(lightColor->getPicker(),SIGNAL(onColorChanged(QColor)),this,SLOT(lightColorChanged(QColor)));
     connect(lightColor->getPicker(),SIGNAL(onSetColor(QColor)),this,SLOT(lightColorChanged(QColor)));
@@ -54,7 +54,7 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
 
     connect(shadowType, SIGNAL(currentIndexChanged(QString)), this, SLOT(shadowTypeChanged(QString)));
     connect(shadowSize, SIGNAL(currentIndexChanged(QString)), this, SLOT(shadowSizeChanged(QString)));
-    connect(shadowBias, SIGNAL(valueChanged(float)), this, SLOT(shadowBiasChanged(float)));
+    //connect(shadowBias, SIGNAL(valueChanged(float)), this, SLOT(shadowBiasChanged(float)));
 }
 
 void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
@@ -81,17 +81,17 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
 
         shadowSize->setCurrentItem(QString("%1").arg(lightNode->shadowMap->resolution));
         shadowType->setCurrentItem(evalShadowTypeName(lightNode->shadowMap->shadowType));
-        shadowBias->setValue(lightNode->shadowMap->bias);
+        //shadowBias->setValue(lightNode->shadowMap->bias);
 
         // hide shadow params for point lights
         if (lightNode->getLightType()==iris::LightType::Point) {
             shadowSize->hide();
             shadowType->hide();
-            shadowBias->hide();
+            //shadowBias->hide();
         } else {
             shadowSize->show();
             shadowType->show();
-            shadowBias->show();
+            //shadowBias->show();
         }
     }
     else
