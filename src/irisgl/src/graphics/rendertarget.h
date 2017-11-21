@@ -9,6 +9,8 @@ class QOpenGLFunctions_3_2_Core;
 namespace iris
 {
 
+//todo: clear fbo bindings, textures are still left bound
+// to fbo even tho they're removed from the texture list
 class RenderTarget
 {
     GLuint fboId;

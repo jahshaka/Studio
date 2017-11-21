@@ -294,6 +294,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     plight->setLocalPos(QVector3D(-4, 4, 0));
     plight->intensity = 1;
     plight->icon = iris::Texture2D::load(":/icons/bulb.png");
+    plight->setShadowEnabled(false);
 
     // fog params
     scene->fogColor = QColor(72, 72, 72);
@@ -964,6 +965,7 @@ void MainWindow::addDirectionalLight()
 {
     this->sceneView->makeCurrent();
     auto node = iris::LightNode::create();
+    node->shadowMap->shadowType = iris::ShadowMapType::Soft;
     node->setLightType(iris::LightType::Directional);
     node->icon = iris::Texture2D::load(":/icons/bulb.png");
     node->setName("Directional Light");

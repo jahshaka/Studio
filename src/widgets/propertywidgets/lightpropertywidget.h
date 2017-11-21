@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QSharedPointer>
 #include "../accordianbladewidget.h"
+#include "../../irisgl/src/scenegraph/lightnode.h"
 
 class ColorValueWidget;
 class ColorPickerWidget;
@@ -70,6 +71,14 @@ protected slots:
 
     void lightSpotCutoffSoftnessChanged(float spotCutOffSoftness);
 
+    void shadowTypeChanged(QString name);
+    void shadowSizeChanged(QString size);
+    void shadowBiasChanged(float bias);
+
+private:
+    QString evalShadowTypeName(iris::ShadowMapType shadowType);
+    iris::ShadowMapType evalShadowMapType(QString shadowType);
+
 private:
 
     QSharedPointer<iris::LightNode> lightNode;
@@ -80,6 +89,10 @@ private:
     HFloatSliderWidget* spotCutOffSoftness;
     HFloatSliderWidget* intensity;
     //EnumPicker* lightTypePicker;
+
+    ComboBoxWidget* shadowType;
+    ComboBoxWidget* shadowSize;
+    HFloatSliderWidget* shadowBias;
 };
 
 #endif // LIGHTPROPERTYWIDGET_H

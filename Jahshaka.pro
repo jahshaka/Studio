@@ -16,6 +16,7 @@
 #-------------------------------------------------
 
 QT      += core gui concurrent sql
+
 CONFIG  += c++14
 
 # needed to fix resource compilation error in visual studio

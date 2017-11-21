@@ -1,6 +1,10 @@
 #ifndef RENDERSTATES_H
 #define RENDERSTATES_H
 
+#include "blendstate.h"
+#include "rasterizerstate.h"
+#include "depthstate.h"
+
 namespace iris{
 
 enum class FaceCullingMode
@@ -11,20 +15,13 @@ enum class FaceCullingMode
     FrontAndBack
 };
 
-enum class BlendType
-{
-    None,
-    Normal,
-    Add
-};
-
 struct RenderStates
 {
     int renderLayer;
-    BlendType blendType;
-    bool zWrite;
-    bool depthTest;
-    FaceCullingMode cullMode;
+    BlendState blendState;
+    DepthState depthState;
+    RasterizerState rasterState;
+
     bool fogEnabled;
     bool castShadows;
     bool receiveShadows;
@@ -33,10 +30,10 @@ struct RenderStates
     RenderStates()
     {
         renderLayer = 0;
-        blendType = BlendType::None;
-        zWrite = true;
-        depthTest = true;
-        cullMode = FaceCullingMode::Back;
+        blendState = BlendState::Opaque;
+        depthState = DepthState::Default;
+        rasterState = RasterizerState::CullCounterClockwise;
+
         fogEnabled = true;
         castShadows = true;
         receiveShadows = true;

@@ -93,7 +93,8 @@ HEADERS += \
     $$PWD/src/graphics/blendstate.h \
     $$PWD/src/graphics/depthstate.h \
     $$PWD/src/graphics/rasterizerstate.h \
-    $$PWD/src/content/contentmanager.h
+    $$PWD/src/content/contentmanager.h \
+    $$PWD/src/graphics/shadowmap.h
 
 SOURCES += \
     $$PWD/src/graphics/mesh.cpp \
@@ -150,7 +151,8 @@ SOURCES += \
     $$PWD/src/graphics/blendstate.cpp \
     $$PWD/src/graphics/depthstate.cpp \
     $$PWD/src/graphics/rasterizerstate.cpp \
-    $$PWD/src/content/contentmanager.cpp
+    $$PWD/src/content/contentmanager.cpp \
+    $$PWD/src/graphics/shadowmap.cpp
 
 RESOURCES += \
     $$PWD/assets.qrc

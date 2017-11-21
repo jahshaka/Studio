@@ -387,6 +387,20 @@ QJsonObject SceneWriter::jsonVector3(QVector3D vec)
     return obj;
 }
 
+QString evalShadowTypeName(iris::ShadowMapType shadowType)
+{
+    switch(shadowType){
+    case iris::ShadowMapType::None:
+        return "none";
+    case iris::ShadowMapType::Hard:
+        return "hard";
+    case iris::ShadowMapType::Soft:
+        return "soft";
+    case iris::ShadowMapType::Softer:
+        return "softer";
+    }
+}
+
 void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr lightNode)
 {
     sceneNodeObject["lightType"] = getLightNodeTypeName(lightNode->lightType);
@@ -394,6 +408,12 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     sceneNodeObject["distance"] = lightNode->distance;
     sceneNodeObject["spotCutOff"] = lightNode->spotCutOff;
     sceneNodeObject["color"] = jsonColor(lightNode->color);
+
+    //shadow data
+    auto shadowMap = lightNode->shadowMap;
+    sceneNodeObject["shadowType"] = evalShadowTypeName(shadowMap->shadowType);
+    sceneNodeObject["shadowSize"] = shadowMap->resolution;
+    sceneNodeObject["shadowBias"] = shadowMap->bias;
 }
 
 QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)

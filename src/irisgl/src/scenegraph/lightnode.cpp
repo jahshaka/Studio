@@ -5,6 +5,7 @@
 #include "../animation/animation.h"
 #include "../animation/propertyanim.h"
 #include "../core/property.h"
+#include "../graphics/shadowmap.h"
 
 namespace iris
 {
@@ -78,6 +79,23 @@ void LightNode::updateAnimation(float time)
     }
 
     SceneNode::updateAnimation(time);
+}
+
+LightNode::LightNode()
+{
+    this->sceneNodeType = SceneNodeType::Light;
+
+    lightType = LightType::Point;
+
+    distance = 10;
+    color = QColor(255, 255, 255);
+    intensity = 1.0f;
+    spotCutOff = 30.0f;
+    spotCutOffSoftness = 1.0f;
+
+    iconSize = 0.5f;
+
+    shadowMap = new ShadowMap();
 }
 
 

@@ -416,6 +416,18 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     return meshNode;
 }
 
+iris::ShadowMapType evalShadowMapType(QString shadowType)
+{
+    if (shadowType=="hard")
+        return iris::ShadowMapType::Hard;
+    if (shadowType=="soft")
+        return iris::ShadowMapType::Soft;
+    if (shadowType=="softer")
+        return iris::ShadowMapType::Softer;
+
+    return iris::ShadowMapType::None;
+}
+
 /**
  * Creates light from light node data
  * @param nodeObj
@@ -430,6 +442,14 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->distance = (float)nodeObj["distance"].toDouble(1.0f);
     lightNode->spotCutOff = (float)nodeObj["spotCutOff"].toDouble(30.0f);
     lightNode->color = readColor(nodeObj["color"].toObject());
+
+    //shadow data
+    auto shadowMap = lightNode->shadowMap;
+    shadowMap->bias = (float)nodeObj["shadowBias"].toDouble(0.0015f);
+    // ensure shadow map size isnt too big ro too small
+    auto res = qBound(512, nodeObj["shadowSize"].toInt(1024), 4096);
+    shadowMap->setResolution(res);
+    shadowMap->shadowType = evalShadowMapType(nodeObj["shadowType"].toString());
 
     //TODO: move this to the sceneview widget or somewhere more appropriate
     if (lightNode->lightType == iris::LightType::Directional) {

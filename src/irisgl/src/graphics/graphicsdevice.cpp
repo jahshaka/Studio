@@ -49,6 +49,8 @@ GraphicsDevice::GraphicsDevice()
 
     gl->glGenVertexArrays(1, &defautVAO);
 
+    _internalRT = RenderTarget::create(1024,1024);
+
     //set default blend and depth state
     this->setBlendState(BlendState::Opaque, true);
     this->setDepthState(DepthState::Default, true);
@@ -104,8 +106,9 @@ void GraphicsDevice::setRenderTarget(QList<Texture2DPtr> colorTargets, Texture2D
 void GraphicsDevice::clearRenderTarget()
 {
     // reset to default rt
-    gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
     if (!!activeRT) {
+        activeRT->unbind();
+
         // clear all textures from internal RT
         if (activeRT == _internalRT) {
             _internalRT->clearTextures();
@@ -114,6 +117,7 @@ void GraphicsDevice::clearRenderTarget()
 
         activeRT.reset();
     }
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void GraphicsDevice::clear(QColor color)

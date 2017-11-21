@@ -53,6 +53,18 @@ void SpriteBatch::begin()
 
 }
 
+void SpriteBatch::draw(Texture2DPtr texture, QRect rect, QColor color)
+{
+    auto item = addItem();
+    item->tex = texture;
+
+    item->setData(rect.x(), rect.y(),
+                  rect.width(), rect.height(),
+                  color,
+                  QVector2D(0,0), QVector2D(1,1),
+                  0);
+}
+
 void SpriteBatch::draw(Texture2DPtr texture, QVector2D pos, QColor color)
 {
     auto item = addItem();
