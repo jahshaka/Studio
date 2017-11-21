@@ -27,10 +27,10 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     AccordianBladeWidget(parent)
 {
     lightColor = this->addColorPicker("Color");
-    intensity = this->addFloatValueSlider("Intensity",0,10);
-    distance = this->addFloatValueSlider("Distance",0,100);
-    spotCutOff = this->addFloatValueSlider("Spotlight CutOff",0,180);
-    spotCutOffSoftness = this->addFloatValueSlider("Spotlight Softness",0.1f,90);
+    intensity = this->addFloatValueSlider("Intensity", 0, 10.f);
+    distance = this->addFloatValueSlider("Distance", 0, 100.f);
+    spotCutOff = this->addFloatValueSlider("Spotlight CutOff", 0, 90.f);
+    spotCutOffSoftness = this->addFloatValueSlider("Spotlight Softness", .1f, 90.f);
 
     shadowType = this->addComboBox("Shadow Type");
     shadowType->addItem("None");
