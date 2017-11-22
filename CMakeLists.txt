@@ -7,7 +7,6 @@ find_package(OpenGL REQUIRED) # is this needed?
 find_package(Qt5 REQUIRED COMPONENTS Concurrent Widgets Sql Svg)
 
 include(UseModernCpp)
-include(CopyResources)
 include(BuildType)
 include(GnuInstallDirs)
 
@@ -284,7 +283,7 @@ if(WIN32 AND CMAKE_BUILD_TYPE STREQUAL Release)
     set(CMAKE_WIN32_EXECUTABLE ON)
 endif()
 
-if(${CMAKE_CXX_COMPILER_ID} EQUAL MSVC)
+if(${CMAKE_CXX_COMPILER_ID} STREQUAL MSVC)
     set(DestDir ${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE})
     # set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
 else()
@@ -292,6 +291,7 @@ else()
 endif()
 
 # For convenience, put the shared files built from IrisGL along with the final binary
+# Also note MSVC build path is different from GNU in that it containts the build type
 set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
@@ -303,9 +303,5 @@ add_executable(${CMAKE_PROJECT_NAME} src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS}
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC src irisgl/src irisgl/src/assimp/include/ irisgl/src/libovr/include/)
 target_link_libraries(${CMAKE_PROJECT_NAME} Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets IrisGL ${OPENGL_LIBRARIES})
 
-# Copies resources to DestDir
-copy_dirs(${PROJECT_SOURCE_DIR}/app)
-copy_dirs(${PROJECT_SOURCE_DIR}/assets)
-copy_dirs(${PROJECT_SOURCE_DIR}/scenes)
-
+include(CopyResources)
 include(CopyDependencies)

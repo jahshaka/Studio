@@ -1,5 +1,4 @@
-# Source from https://stackoverflow.com/q/697560/996468
-
+# Sourced from https://stackoverflow.com/q/697560/996468
 # Copy single files
 macro(copy_files files)
 foreach(file ${files})
@@ -17,3 +16,13 @@ foreach(dir ${dirs})
     file(COPY ${dirclean} DESTINATION ${DestDir})
 endforeach()
 endmacro()
+
+# Copy Jahshaka data folders after a successful build
+set(DataDirs app assets scenes)
+foreach(dir ${DataDirs})
+	add_custom_command(
+		TARGET Jahshaka POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+				${PROJECT_SOURCE_DIR}/${dir}
+				${DestDir}/${dir})
+endforeach()
