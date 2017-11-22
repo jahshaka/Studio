@@ -37,9 +37,10 @@ Makefile*
 # QtCtreator CMake
 CMakeLists.txt.user
 
-Visual Studio
+# Visual Studio
 .vs/
 .vscode/
+CmakeSettings.json
 
-Cmake Related
+# Cmake Related
 build/
