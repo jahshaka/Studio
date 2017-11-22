@@ -17,6 +17,10 @@ For more information see the LICENSE file
 #define PI2 6.28318530718
 #define RECIPROCAL_PI2 0.15915494
 
+#define SHADOW_NONE 0
+#define SHADOW_HARD 1
+#define SHADOW_SOFT 2
+
 uniform sampler2D u_diffuseTexture;
 uniform bool u_useDiffuseTex;
 
@@ -43,11 +47,34 @@ const int TYPE_POINT = 0;
 const int TYPE_DIRECTIONAL = 1;
 const int TYPE_SPOT = 2;
 
-in vec4 FragPosLightSpace;
-uniform sampler2D u_shadowMap;
-uniform bool u_shadowEnabled;
+//const int SHADOW_NONE = 0;
+//const int SHADOW_HARD = 1;
+//const int SHADOW_SOFT = 2;
+//const int SHADOW_SOFTER = 3;
 
-float SampleShadowMap(sampler2D shadowMap, vec2 coords, float compare) {
+//in vec4 FragPosLightSpace;
+//uniform sampler2D u_shadowMap;
+//uniform bool u_shadowEnabled;
+struct Light {
+    int type;
+    vec3 position;
+    vec3 ambient;
+    vec4 color;
+    float distance;
+    float intensity;
+    vec3 direction;
+    float cutOffAngle;
+    float cutOffSoftness;
+
+    sampler2D shadowMap;
+    bool shadowEnabled;
+    int shadowType;
+    mat4 shadowMatrix;
+};
+
+float SampleShadowMap(in sampler2D shadowMap, vec2 coords, float compare) {
+    if (coords.x < 0.0 || coords.x > 1.0 || coords.y < 0.0 || coords.y > 1.0)
+        return 1.0;
     return step(compare, texture(shadowMap, coords.xy).r);
 }
 
@@ -67,7 +94,7 @@ float SampleShadowMapLinear(sampler2D shadowMap, vec2 coords, float compare, vec
     return mix(mixA, mixB, fracPart.x);
 }
 
-float SampleShadowMapPCF(sampler2D shadowMap, vec2 coords, float compare, vec2 texelSize) {
+float SampleShadowMapPCF(in sampler2D shadowMap, vec2 coords, float compare, vec2 texelSize) {
     float result = 0;
 
     const float NUM_SAMPLES = 7.0;
@@ -83,24 +110,46 @@ float SampleShadowMapPCF(sampler2D shadowMap, vec2 coords, float compare, vec2 t
     return result / (NUM_SAMPLES * NUM_SAMPLES);
 }
 
-float CalcShadowMap(vec4 fragPosLightSpace) {
+float CalcShadowMap(in sampler2D shadowMap, vec4 fragPosLightSpace) {
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5;
-    vec2 texelSize = 1.0 / textureSize(u_shadowMap, 0);
-    return SampleShadowMapPCF(u_shadowMap, projCoords.xy, projCoords.z, texelSize);
+    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
+    return SampleShadowMapPCF(shadowMap, projCoords.xy, projCoords.z, texelSize);
 }
 
-struct Light {
-    int type;
-    vec3 position;
-    vec3 ambient;
-    vec4 color;
-    float distance;
-    float intensity;
-    vec3 direction;
-    float cutOffAngle;
-    float cutOffSoftness;
-};
+float calcSoftShadowMap(in Light light, in vec4 lightSpacePos)
+{
+    return CalcShadowMap(light.shadowMap, lightSpacePos);
+}
+
+float calcHardShadowMap(in Light light, in vec4 lightSpacePos)
+{
+    vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+    projCoords = projCoords * 0.5 + 0.5;
+    //return SampleShadowMap(light.shadowMap,projCoords.xy,projCoords.z);
+    if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
+        return 1.0;
+    if (projCoords.z > texture(light.shadowMap, projCoords.xy).r)
+        return 0.0;
+    return 1.0;
+}
+
+
+//  Handles shadowing for lights with different shadowing types
+float calculateShadowFactor(in Light light, in vec3 worldPos)
+{
+    vec4 lightSpacePos = light.shadowMatrix * vec4(v_worldPos, 1.0);
+    if (light.shadowType==SHADOW_HARD)
+        return calcHardShadowMap(light, lightSpacePos);
+    if (light.shadowType==SHADOW_SOFT)
+        return calcSoftShadowMap(light, lightSpacePos);
+    return 1.0f;
+}
+
+
+
+uniform sampler2D shadowMaps[MAX_LIGHTS];
+
 uniform Light u_lights[MAX_LIGHTS];
 uniform int u_lightCount;
 
@@ -215,8 +264,12 @@ void main()
             //spec = pow(max(dot(r, v), 0.0), 0.7f);
         }
 
-        diffuse += atten*ndl*u_lights[i].intensity*u_lights[i].color.rgb;
-        specular += atten*spec* u_lights[i].intensity * u_lights[i].color.rgb;
+        //vec4 FragPosLightSpace = u_lights[i].shadowMatrix * vec4(v_worldPos, 1.0);
+        //float shadowFactor = u_lights[i].shadowEnabled ? CalcShadowMap(u_lights[i].shadowMap,FragPosLightSpace) : 1.0;
+        float shadowFactor = calculateShadowFactor(u_lights[i], v_worldPos);
+
+        diffuse += atten*ndl*u_lights[i].intensity*u_lights[i].color.rgb*shadowFactor;
+        specular += atten*spec* u_lights[i].intensity * u_lights[i].color.rgb*shadowFactor;
     }
 
     vec3 col = u_material.diffuse;
@@ -229,9 +282,13 @@ void main()
     if(u_useSpecularTex)
         specular = specular * texture(u_specularTexture,v_texCoord).rgb;
 
+    /*
     float ShadowFactor = u_shadowEnabled ? CalcShadowMap(FragPosLightSpace) : 1.0;
 
     vec3 finalColor = ((u_material.ambient * u_sceneAmbient) + (ShadowFactor *
+                      (diffuse + (u_material.specular * specular)))) * col;
+    */
+    vec3 finalColor = ((u_material.ambient * u_sceneAmbient) + (
                       (diffuse + (u_material.specular * specular)))) * col;
 
     if(u_useReflectionTex)

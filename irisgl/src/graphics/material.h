@@ -24,14 +24,14 @@ class QOpenGLFunctions_3_2_Core;
 namespace iris
 {
 
-enum class RenderLayer : int
+struct RenderLayer
 {
-    Background = 1000,
-    Opaque = 2000,
-    AlphaTested = 3000,
-    Transparent = 4000,
-    Overlay = 5000,
-    Gizmo = 6000//the scene depth is cleared before this pass
+    static int Background;
+    static int Opaque;
+    static int AlphaTested;
+    static int Transparent;
+    static int Overlay;
+    static int Gizmo;//the scene depth is cleared before this pass
 };
 
 struct MaterialTexture {

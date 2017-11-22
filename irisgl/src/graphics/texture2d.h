@@ -61,10 +61,11 @@ public:
     static Texture2DPtr create(QImage image);
 
     static Texture2DPtr create(int width, int height,QOpenGLTexture::TextureFormat texFormat = QOpenGLTexture::RGBAFormat);
-    static Texture2DPtr createDepth(int width, int height)
-    {
-        return create(width, height, QOpenGLTexture::DepthFormat);
-    }
+    static Texture2DPtr createDepth(int width, int height);
+    static Texture2DPtr createShadowDepth(int width, int height);
+//    {
+//        return create(width, height, QOpenGLTexture::DepthFormat);
+//    }
 
     /**
      * Returns the path to the source file of the texture

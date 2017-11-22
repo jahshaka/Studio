@@ -45,7 +45,7 @@ void main()
     //vec3 v_bitangent = cross(v_normal,v_tangent);
     vec3 v_bitangent = cross(v_tangent,v_normal);
 
-    FragPosLightSpace = u_lightSpaceMatrix * vec4(v_worldPos, 1.0);
+    //FragPosLightSpace = u_lightSpaceMatrix * vec4(v_worldPos, 1.0);
 
     /*
       //actual world to tangent space

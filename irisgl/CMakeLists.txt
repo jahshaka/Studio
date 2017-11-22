@@ -36,6 +36,7 @@ set(SRCS
     src/graphics/vertexlayout.cpp
     src/graphics/shader.cpp
     src/graphics/texture.cpp
+    src/graphics/shadowmap.cpp
     src/animation/animation.cpp
     src/animation/keyframeset.cpp
     src/materials/materialhelper.cpp
@@ -70,6 +71,7 @@ set(SRCS
     src/graphics/graphicsdevice.cpp
     src/widgets/renderwidget.cpp
     src/graphics/spritebatch.cpp
+	src/graphics/renderstates.cpp
     src/graphics/font.cpp
     src/graphics/blendstate.cpp
     src/graphics/depthstate.cpp
@@ -87,6 +89,7 @@ set (HEADERS
     src/scenegraph/lightnode.h
     src/graphics/texture2d.h
     src/graphics/texture.h
+    src/graphics/shadowmap.h
     src/graphics/mesh.h
     src/graphics/material.h
     src/scenegraph/cameranode.h

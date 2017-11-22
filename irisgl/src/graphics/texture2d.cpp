@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "texture2d.h"
 #include <QDebug>
 #include <QOpenGLFunctions_3_2_Core>
+#include "../core/logger.h"
 
 namespace iris
 {
@@ -24,13 +25,14 @@ Texture2DPtr Texture2D::load(QString path)
 Texture2DPtr Texture2D::load(QString path,bool flipY)
 {
     auto image = QImage(path);
-    if(flipY)
-        image = image.mirrored(false,true);
     if(image.isNull())
     {
-        qDebug()<<"error loading image: "<<path<<endl;
+        irisLog("error loading image: "+path);
         return Texture2DPtr(nullptr);
     }
+
+    if(flipY)
+        image = image.mirrored(false,true);
 
     auto tex = create(image);
     tex->source = path;
@@ -129,6 +131,37 @@ Texture2DPtr Texture2D::create(int width, int height,QOpenGLTexture::TextureForm
     texture->allocateStorage();
 
     return QSharedPointer<Texture2D>(new Texture2D(texture));
+}
+
+Texture2DPtr Texture2D::createDepth(int width, int height)
+{
+    auto texture = new QOpenGLTexture(QOpenGLTexture::Target2D);
+    texture->setSize(width, height);
+    texture->setFormat(QOpenGLTexture::DepthFormat);
+    texture->setMinMagFilters(QOpenGLTexture::Linear, QOpenGLTexture::Linear);
+    texture->setComparisonMode(QOpenGLTexture::CompareNone);
+    texture->setWrapMode(QOpenGLTexture::ClampToEdge);
+    if (!texture->create())
+        qDebug() << "Error creating texture";
+    texture->allocateStorage(QOpenGLTexture::Depth,QOpenGLTexture::Float32);
+
+    return Texture2DPtr(new Texture2D(texture));
+}
+
+Texture2DPtr Texture2D::createShadowDepth(int width, int height)
+{
+    auto texture = new QOpenGLTexture(QOpenGLTexture::Target2D);
+    texture->setSize(width, height);
+    texture->setFormat(QOpenGLTexture::DepthFormat);
+    texture->setMinMagFilters(QOpenGLTexture::Linear, QOpenGLTexture::Linear);
+    texture->setComparisonMode(QOpenGLTexture::CompareNone);
+    texture->setWrapMode(QOpenGLTexture::ClampToEdge);
+    //texture->setBorderColor(255,255,255,255);
+    if (!texture->create())
+        qDebug() << "Error creating texture";
+    texture->allocateStorage(QOpenGLTexture::Depth,QOpenGLTexture::Float32);
+
+    return Texture2DPtr(new Texture2D(texture));
 }
 
 void Texture2D::resize(int width, int height)
