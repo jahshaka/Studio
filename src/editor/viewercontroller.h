@@ -1,7 +1,7 @@
 #ifndef VIEWERCONTROLLER_H
 #define VIEWERCONTROLLER_H
 
-#include "../../../irisgl/src/irisglfwd.h"
+#include "irisglfwd.h"
 #include <QQuaternion>
 #include <QVector3D>
 #include "cameracontrollerbase.h"

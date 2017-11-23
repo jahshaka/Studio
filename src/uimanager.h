@@ -43,7 +43,7 @@ public:
     static void updateWindowTitle();
 
     static bool isUndoStackDirty();
-    static bool clearUndoStack();
+    static void clearUndoStack();
     static void setUndoStack(QUndoStack*);
     static void pushUndoStack(QUndoCommand*);
     static void popUndoStack();

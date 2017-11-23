@@ -9,8 +9,8 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#ifndef PROPERTYWIDGET_H
-#define PROPERTYWIDGET_H
+#ifndef SCENENODEPROPERTYWIDGET_H
+#define SCENENODEPROPERTYWIDGET_H
 
 #include <QWidget>
 #include <QSharedPointer>

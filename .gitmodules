@@ -1,0 +1,3 @@
+[submodule "irisgl/src/assimp"]
+	path = irisgl/src/assimp
+	url = https://github.com/assimp/assimp.git

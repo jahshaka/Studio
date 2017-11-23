@@ -5,11 +5,13 @@
 #include <QList>
 #include <QPixmap>
 
-#include "../irisgl/src/assimp/include/assimp/Importer.hpp"
-#include "../irisgl/src/assimp/include/assimp/scene.h"
-#include "../irisgl/src/assimp/include/assimp/postprocess.h"
+// #include "../irisgl/src/assimp/include/assimp/Importer.hpp"
+// #include "../irisgl/src/assimp/include/assimp/scene.h"
+// #include "../irisgl/src/assimp/include/assimp/postprocess.h"
 
-#include "../irisgl/src/graphics/graphicshelper.h"
+class aiScene;
+
+#include "irisgl/src/graphics/graphicshelper.h"
 
 enum class AssetType {
     Shader,

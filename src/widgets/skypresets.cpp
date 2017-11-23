@@ -35,11 +35,11 @@ SkyPresets::SkyPresets(QWidget *parent) :
     ui->skyList->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->skyList->setSelectionMode(QAbstractItemView::SingleSelection);
 
-    QString cove = ":/content/skies/alternative/cove/front.jpg";
-    QString dessert = ":/content/skies/alternative/ame_desert/front.png";
-    QString lake = ":/content/skies/alternative/yokohama/front.jpg";
-    QString field = ":/content/skies/alternative/field/front.jpg";
-    QString creek = ":/content/skies/alternative/creek/front.jpg";
+    QString cove = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/cove/front.jpg");
+    QString dessert = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/ame_desert/front.png");
+    QString lake = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/yokohama/front.jpg");
+    QString field = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/field/front.jpg");
+    QString creek = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/creek/front.jpg");
 
     addCubeSky(cove, "Cove");
     addCubeSky(dessert, "Hamarikyu");

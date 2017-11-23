@@ -114,7 +114,7 @@ void RenderThread::initScene()
 
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-    m->setValue("diffuseTexture", ":/content/textures/tile.png");
+    m->setValue("diffuseTexture", IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"));
     //m->setValue("diffuseTexture", ":/content/skies/alternative/cove/back.jpg");
     m->setValue("textureScale", 4.f);
     //m->setValue("emission",QColor(255, 255, 255));

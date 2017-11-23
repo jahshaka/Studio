@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include <QJsonValue>
 #include <QJsonValueRef>
 #include <QJsonDocument>
+#include <QMap>
 
 #include "../irisgl/src/irisglfwd.h"
 #include "../irisgl/src/scenegraph/scenenode.h"

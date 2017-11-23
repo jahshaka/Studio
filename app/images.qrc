@@ -2,11 +2,6 @@
     <qresource prefix="/">
         <file>images/frame.png</file>
         <file>images/logo.png</file>
-        <file>images/sidepanelimage.jpg</file>
-        <file>images/sidepanelimage_info.jpg</file>
-        <file>images/splash.png</file>
-        <file>images/splash.svg</file>
-        <file>images/splashv2.jpg</file>
         <file>images/preview.png</file>
         <file>images/splashv3.png</file>
         <file>images/empty_canvas.png</file>

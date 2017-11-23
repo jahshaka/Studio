@@ -1,7 +1,7 @@
 #include "assetwidget.h"
 #include "ui_assetwidget.h"
 
-#include "../../src/irisgl/src/core/irisutils.h"
+#include "irisgl/src/core/irisutils.h"
 #include "../core/thumbnailmanager.h"
 #include "../core/project.h"
 #include "../globals.h"

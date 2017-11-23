@@ -70,7 +70,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
         if (cachedPixmap.loadFromData(tileData.thumbnail, "PNG")) {
             pixmap = cachedPixmap;
         } else {
-            pixmap = QPixmap::fromImage(QImage(":/images/preview.png"));
+            pixmap = QPixmap(":/images/preview.png");
         }
     } else {
         pixmap = QPixmap::fromImage(QImage(":/images/preview.png"));

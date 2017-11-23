@@ -95,7 +95,7 @@ bool UiManager::isUndoStackDirty()
     return !UiManager::undoStack->isClean();
 }
 
-bool UiManager::clearUndoStack()
+void UiManager::clearUndoStack()
 {
     UiManager::undoStack->clear();
 }
