@@ -65,7 +65,7 @@ public:
     }
 
     // realtime collision detection page 175
-    static int intersectSegmentPlane(QVector3D a, QVector3D b, Plane p, float &t, QVector3D &q) {
+    static int intersectSegmentPlane(QVector3D a, QVector3D b, const Plane& p, float &t, QVector3D &q) {
         // Compute the t value for the directed line ab intersecting the plane
         QVector3D ab = b - a;
         t = (p.d - QVector3D::dotProduct(p.normal, a)) / QVector3D::dotProduct(p.normal, ab);

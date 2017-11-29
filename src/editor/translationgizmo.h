@@ -16,22 +16,32 @@ For more information see the LICENSE file
 
 #include "gizmoinstance.h"
 #include "gizmohandle.h"
-#include "../irisgl/src/scenegraph/scene.h"
-#include "../irisgl/src/scenegraph/cameranode.h"
-#include "../irisgl/src/graphics/graphicshelper.h"
-#include "../uimanager.h"
+#include "irisgl/src/scenegraph/scene.h"
+#include "irisgl/src/scenegraph/cameranode.h"
+#include "irisgl/src/graphics/graphicshelper.h"
+#include "uimanager.h"
 #include "../commands/transfrormscenenodecommand.h"
-#include "../../../irisgl/src/math/mathhelper.h"
+#include "irisgl/src/math/mathhelper.h"
 #include <QOpenGLFunctions_3_2_Core>
 
 class Gizmo;
+
+enum class GizmoAxis
+{
+	X,
+	Y,
+	Z
+};
+
 class TranslationHandle : public GizmoHandle
 {
     public:
     Gizmo* gizmo;
 
+	GizmoAxis axis;
     QVector3D handleExtent;// local extent of the gizmo
-
+	QVector<QVector3D> planes;// for hit detection
+	/*
     TranslationHandle()
     {
         handleExtent = QVector3D(1,0,0);
@@ -42,6 +52,29 @@ class TranslationHandle : public GizmoHandle
         this->gizmo = gizmo;
         handleExtent = extent;
     }
+	*/
+	TranslationHandle(Gizmo* gizmo, GizmoAxis axis)
+	{
+		this->gizmo = gizmo;
+
+		switch (axis) {
+		case GizmoAxis::X:
+			handleExtent = QVector3D(1, 0, 0);
+			planes.append(QVector3D(0, 1, 0));
+			planes.append(QVector3D(0, 0, 1));
+			break;
+		case GizmoAxis::Y:
+			handleExtent = QVector3D(0, 1, 0);
+			planes.append(QVector3D(1, 0, 0));
+			planes.append(QVector3D(0, 0, 1));
+			break;
+		case GizmoAxis::Z:
+			handleExtent = QVector3D(0, 0, 1);
+			planes.append(QVector3D(1, 0, 0));
+			planes.append(QVector3D(0, 1, 0));
+			break;
+		}
+	}
 
     bool isHit(QVector3D rayPos, QVector3D rayDir);
     QVector3D getHitPos(QVector3D rayPos, QVector3D rayDir);
@@ -72,6 +105,7 @@ public:
             trans.translate(selectedNode->getGlobalPosition());
             return trans;
         }else {
+			//todo: remove scale
             return selectedNode->getGlobalTransform();
         }
     }
@@ -103,9 +137,9 @@ public:
     TranslationGizmo():
         Gizmo()
     {
-        handles[0] = new TranslationHandle(this, QVector3D(1,0,0));
-        handles[1] = new TranslationHandle(this, QVector3D(0,1,0));
-        handles[2] = new TranslationHandle(this, QVector3D(0,0,1));
+        handles[0] = new TranslationHandle(this, GizmoAxis::X);
+        handles[1] = new TranslationHandle(this, GizmoAxis::Y);
+        handles[2] = new TranslationHandle(this, GizmoAxis::Z);
 
         loadAssets();
         //handle->setHandleColor(QColor(255, 255, 255));
@@ -132,9 +166,12 @@ public:
 
     void startDragging(QVector3D rayPos, QVector3D rayDir)
     {
+		//qDebug() << "drag starting";
         draggedHandle = getHitHandle(rayPos, rayDir);
-        if (draggedHandle == nullptr)
-            dragging = false; // end dragging if no handle was actually hit
+		if (draggedHandle == nullptr) {
+			dragging = false; // end dragging if no handle was actually hit
+			return;
+		}
 
         nodeStartPos = selectedNode->getGlobalPosition();
         dragging = true;
@@ -147,7 +184,12 @@ public:
 
     void drag(QVector3D rayPos, QVector3D rayDir)
     {
-        qDebug()<<"sliding";
+		//qDebug() << "dragging";
+		if (draggedHandle == nullptr) {
+			//dragging = false;
+			return;
+		}
+        //qDebug()<<"sliding";
         auto slidingPos = draggedHandle->getHitPos(rayPos, rayDir);
 
         // move node along line
@@ -155,6 +197,7 @@ public:
         auto diff = slidingPos - hitPos;
 
         selectedNode->setLocalPos(nodeStartPos + diff);
+		//selectedNode->setLocalScale(diff * 0.1f)
     }
 
     bool isHit(QVector3D rayPos, QVector3D rayDir) override
@@ -178,7 +221,7 @@ public:
         for(auto i = 0; i<3;i++)
         {
             if (handles[i]->isHit(rayPos, rayDir)) {
-                hitPos = handles[i]->getHitPos(rayPos, rayDir);
+                hitPos = handles[i]->getHitPos(rayPos, rayDir);// bad, move hitPos to ref variable
                 if (hitPos.distanceToPoint(rayPos) < closestDistance) {
                     closestHandle = handles[i];
                 }
