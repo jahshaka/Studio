@@ -8,7 +8,7 @@ bool TranslationHandle::isHit(QVector3D rayPos, QVector3D rayDir)
 
     // calculate world space position of the segment representing the handle
     auto p1 = gizmoTrans * QVector3D(0,0,0);
-    auto q1 = gizmoTrans * handleExtent;
+    auto q1 = gizmoTrans * (handleExtent * handleLength * gizmo->getGizmoScale() * handleScale);
 
     auto p2 = rayPos;
     auto q2 = rayPos + rayDir * 1000;
@@ -16,7 +16,7 @@ bool TranslationHandle::isHit(QVector3D rayPos, QVector3D rayDir)
     float s,t;
     QVector3D c1, c2;
     auto dist = iris::MathHelper::closestPointBetweenSegments(p1, q1, p2, q2, s,t,c1,c2);
-    if (dist < 0.05f) {
+    if (dist < handleScale * gizmo->getGizmoScale() * handleScale) {
         return true;
     }
 
@@ -25,6 +25,7 @@ bool TranslationHandle::isHit(QVector3D rayPos, QVector3D rayDir)
 
 //todo: transform rayPos and rayDir to gizmo space first then back to world space
 // The rayPos and rayDir are in world space, convert them to gizmo space to do calculations then calculate them back
+// to world space when we're done
 QVector3D TranslationHandle::getHitPos(QVector3D rayPos, QVector3D rayDir)
 {
 	bool hit = false;
@@ -47,22 +48,13 @@ QVector3D TranslationHandle::getHitPos(QVector3D rayPos, QVector3D rayDir)
 			normal = -normal;
 
 		if (iris::IntersectionHelper::intersectSegmentPlane(rayPos, rayPos + rayDir * 10000000, iris::Plane(normal, 0), t, hitPos)) {
-			//qDebug() << qAbs(QVector3D::dotProduct(rayDir, normal));
-			if (qAbs(QVector3D::dotProduct(rayDir, normal)) < 0.01f)
+			// ignore planes at grazing angles
+			if (qAbs(QVector3D::dotProduct(rayDir, normal)) < 0.1f)
 				continue;
 			
-			//auto p = (-handleExtent * 10000);
-			// extend the handle a lot further
-			//auto q = (handleExtent * 10000);
-			//auto dir = q - p;
-			//auto hitDir = hitPos - p;
-			//auto proj = QVector3D::dotProduct(dir, hitDir);
-
-			//finalHitPos = p + dir * proj;
-			//finalHitPos = handleExtent * hitPos;
 			auto hitResult = handleExtent * hitPos;
 
-			// this isnt the first hit, if it's the closest one then use it
+			// this isnt the first hit, but if it's the closest one then use it
 			if (hit) {
 				if (rayPos.distanceToPoint(hitResult) < closestDist) {
 					finalHitPos = hitResult;
@@ -86,7 +78,7 @@ QVector3D TranslationHandle::getHitPos(QVector3D rayPos, QVector3D rayDir)
 		qDebug() << "no hit";
 		// no hit so move to max distance in view direction
 		float dominantExtent = iris::MathHelper::sign( QVector3D::dotProduct(rayDir.normalized(), handleExtent));// results in -1 or 1
-		finalHitPos = dominantExtent * handleExtent * -10000;
+		finalHitPos = dominantExtent * handleExtent * 10000;
 	}
 
 	// now convert it back to world space

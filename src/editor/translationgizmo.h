@@ -41,6 +41,10 @@ class TranslationHandle : public GizmoHandle
 	GizmoAxis axis;
     QVector3D handleExtent;// local extent of the gizmo
 	QVector<QVector3D> planes;// for hit detection
+	float handleScale = 0.1f;
+	float handleRadius = 0.05f;
+	float handleLength = 1.1f;
+
 	/*
     TranslationHandle()
     {
@@ -62,16 +66,19 @@ class TranslationHandle : public GizmoHandle
 			handleExtent = QVector3D(1, 0, 0);
 			planes.append(QVector3D(0, 1, 0));
 			planes.append(QVector3D(0, 0, 1));
+			setHandleColor(QColor(255, 0, 0));
 			break;
 		case GizmoAxis::Y:
 			handleExtent = QVector3D(0, 1, 0);
 			planes.append(QVector3D(1, 0, 0));
 			planes.append(QVector3D(0, 0, 1));
+			setHandleColor(QColor(0, 255, 0));
 			break;
 		case GizmoAxis::Z:
 			handleExtent = QVector3D(0, 0, 1);
 			planes.append(QVector3D(1, 0, 0));
 			planes.append(QVector3D(0, 1, 0));
+			setHandleColor(QColor(0, 0, 255));
 			break;
 		}
 	}
@@ -85,11 +92,27 @@ class Gizmo
 public:
     iris::SceneNodePtr selectedNode;
     GizmoTransformSpace transformSpace;
+	float gizmoScale;
 
     Gizmo()
     {
         transformSpace = GizmoTransformSpace::Global;
+		gizmoScale = 1.0f;
     }
+
+	// generic update function
+	virtual void updateSize(iris::CameraNodePtr camera)
+	{
+		if (!!selectedNode) {
+			float distToCam = (selectedNode->getGlobalPosition() - camera->getGlobalPosition()).length();
+			gizmoScale = distToCam / (qTan(camera->angle / 2.0f));
+		}
+	}
+
+	float getGizmoScale()
+	{
+		return gizmoScale;
+	}
 
     // returns transform of the gizmo, not the scene node
     // the transform is calculated based on the transform's space (local or global)
@@ -167,7 +190,7 @@ public:
     void startDragging(QVector3D rayPos, QVector3D rayDir)
     {
 		//qDebug() << "drag starting";
-        draggedHandle = getHitHandle(rayPos, rayDir);
+        draggedHandle = getHitHandle(rayPos, rayDir, hitPos);
 		if (draggedHandle == nullptr) {
 			dragging = false; // end dragging if no handle was actually hit
 			return;
@@ -213,7 +236,8 @@ public:
         return false;
     }
 
-    TranslationHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir)
+	// returns hit position of the hit handle
+    TranslationHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, QVector3D& hitPos)
     {
         TranslationHandle* closestHandle = nullptr;
         float closestDistance = 10000000;
@@ -221,12 +245,14 @@ public:
         for(auto i = 0; i<3;i++)
         {
             if (handles[i]->isHit(rayPos, rayDir)) {
-                hitPos = handles[i]->getHitPos(rayPos, rayDir);// bad, move hitPos to ref variable
-                if (hitPos.distanceToPoint(rayPos) < closestDistance) {
+                auto hit = handles[i]->getHitPos(rayPos, rayDir);// bad, move hitPos to ref variable
+				auto dist = hitPos.distanceToPoint(rayPos);
+				if (dist < closestDistance) {
                     closestHandle = handles[i];
+					closestDistance = dist;
+					hitPos = hit;
                 }
             }
-
         }
 
         return closestHandle;
@@ -243,8 +269,10 @@ public:
         shader->setUniformValue("showHalf", false);
 
         for(int i =0; i<3;i++) {
+			auto transform = this->getTransform();
+			transform.scale(getGizmoScale() * handles[i]->handleRadius);
             shader->setUniformValue("color", handles[i]->getHandleColor());
-            shader->setUniformValue("u_worldMatrix", this->getTransform());
+            shader->setUniformValue("u_worldMatrix", transform);
             //handles[i]->draw(gl, shader);
             handleMeshes[i]->draw(gl, shader);
         }

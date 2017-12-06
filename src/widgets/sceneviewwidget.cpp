@@ -279,8 +279,10 @@ void SceneViewWidget::clearSelectedNode()
 void SceneViewWidget::renderGizmos(bool once)
 {
     auto gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
-    if (!!gizmo->selectedNode)
-        gizmo->render(gl, editorCam->viewMatrix, editorCam->projMatrix);
+	if (!!gizmo->selectedNode) {
+		gizmo->updateSize(editorCam);
+		gizmo->render(gl, editorCam->viewMatrix, editorCam->projMatrix);
+	}
     /*
     // update and draw the 3d manipulation gizmo
     if (!!viewportGizmo->getLastSelectedNode()) {
@@ -587,6 +589,8 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     }
 
     prevMousePos = localPos;
+
+	gizmo->updateSize(editorCam);
 }
 
 void SceneViewWidget::mousePressEvent(QMouseEvent *e)
@@ -648,6 +652,8 @@ void SceneViewWidget::wheelEvent(QWheelEvent *event)
     if (camController != nullptr) {
         camController->onMouseWheel(event->delta());
     }
+
+	gizmo->updateSize(editorCam);
 }
 
 void SceneViewWidget::keyPressEvent(QKeyEvent *event)
