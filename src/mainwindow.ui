@@ -51,7 +51,7 @@ QToolButton:checked
 	border-bottom: 1px solid black;
 }
 
-#worlds_menu, #player_menu, #editor_menu {
+#worlds_menu, #player_menu, #editor_menu, #assets_menu {
 	font-size: 17px;
 	padding: 14px;
 	border-bottom-width: 4px;
@@ -558,7 +558,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
       <property name="styleSheet">
        <string notr="true"/>
       </property>
-      <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,0,0,0">
+      <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,0,0,0,0">
        <property name="spacing">
         <number>12</number>
        </property>
@@ -618,6 +618,13 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
         </widget>
        </item>
        <item>
+        <widget class="QPushButton" name="assets_menu">
+         <property name="text">
+          <string>Assets</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="horizontalSpacer_4">
          <property name="orientation">
           <enum>Qt::Horizontal</enum>
@@ -648,7 +655,7 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
      <x>0</x>
      <y>0</y>
      <width>640</width>
-     <height>35</height>
+     <height>41</height>
     </rect>
    </property>
    <property name="sizePolicy">

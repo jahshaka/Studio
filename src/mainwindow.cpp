@@ -12,11 +12,10 @@ For more information see the LICENSE file
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
-#include <qwindow.h>
-#include <qsurface.h>
+#include <QWindow>
+#include <QSurface>
 #include <QScrollArea>
 
-//#include "irisgl/src/irisgl.h"
 #include "irisgl/src/scenegraph/meshnode.h"
 #include "irisgl/src/scenegraph/cameranode.h"
 #include "irisgl/src/scenegraph/scene.h"
@@ -28,7 +27,6 @@ For more information see the LICENSE file
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/materials/custommaterial.h"
 #include "irisgl/src/graphics/forwardrenderer.h"
-// #include "irisgl/src/graphics/mesh.h"
 #include "irisgl/src/graphics/shader.h"
 #include "irisgl/src/graphics/texture2d.h"
 #include "irisgl/src/graphics/viewport.h"
@@ -113,6 +111,8 @@ For more information see the LICENSE file
 #include "../src/widgets/materialsets.h"
 #include "../src/widgets/modelpresets.h"
 #include "../src/widgets/skypresets.h"
+
+#include "../src/widgets/assetview.h"
 
 #include "irisgl/src/zip/zip.h"
 
@@ -650,6 +650,8 @@ void MainWindow::switchSpace(WindowSpaces space)
                 ui->editor_menu->setDisabled(false);
                 ui->player_menu->setStyleSheet(unselectedMenu);
                 ui->player_menu->setDisabled(false);
+                ui->assets_menu->setStyleSheet(unselectedMenu);
+                ui->assets_menu->setDisabled(false);
             } else {
                 ui->editor_menu->setStyleSheet(disabledMenu);
                 ui->editor_menu->setDisabled(true);
@@ -657,6 +659,9 @@ void MainWindow::switchSpace(WindowSpaces space)
                 ui->player_menu->setStyleSheet(disabledMenu);
                 ui->player_menu->setDisabled(true);
                 ui->player_menu->setCursor(Qt::ArrowCursor);
+                ui->assets_menu->setStyleSheet(disabledMenu);
+                ui->assets_menu->setDisabled(true);
+                ui->assets_menu->setCursor(Qt::ArrowCursor);
             }
             break;
         }
@@ -672,6 +677,9 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->player_menu->setStyleSheet(unselectedMenu);
             ui->player_menu->setDisabled(false);
             ui->player_menu->setCursor(Qt::PointingHandCursor);
+            ui->assets_menu->setStyleSheet(unselectedMenu);
+            ui->assets_menu->setDisabled(false);
+            ui->assets_menu->setCursor(Qt::PointingHandCursor);
 
             playSceneBtn->show();
             this->enterEditMode();
@@ -690,12 +698,33 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->player_menu->setStyleSheet(selectedMenu);
             ui->player_menu->setDisabled(false);
             ui->player_menu->setCursor(Qt::PointingHandCursor);
+            ui->assets_menu->setStyleSheet(unselectedMenu);
+            ui->assets_menu->setDisabled(false);
+            ui->assets_menu->setCursor(Qt::PointingHandCursor);
 
             UiManager::sceneMode = SceneMode::PlayMode;
             playSceneBtn->hide();
             this->enterEditMode();
             break;
         }
+
+        case WindowSpaces::ASSETS: {
+            ui->stackedWidget->setCurrentIndex(2);
+            ui->stackedWidget->currentWidget()->setFocus();
+    		toggleWidgets(false);
+    		toolBar->setVisible(false);
+    		ui->worlds_menu->setStyleSheet(unselectedMenu);
+    		ui->editor_menu->setStyleSheet(unselectedMenu);
+    		ui->player_menu->setStyleSheet(unselectedMenu);
+    		ui->assets_menu->setStyleSheet(selectedMenu);
+    		ui->assets_menu->setDisabled(false);
+    		ui->assets_menu->setCursor(Qt::PointingHandCursor);
+    		//UiManager::sceneMode = SceneMode::PlayMode;
+    		playSceneBtn->hide();
+    		//this->enterEditMode();
+    		break;
+    	}
+
         default: break;
     }
 }
@@ -1368,6 +1397,7 @@ void MainWindow::setupViewPort()
     connect(ui->worlds_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::DESKTOP); });
     connect(ui->player_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::PLAYER); });
     connect(ui->editor_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::EDITOR); });
+    connect(ui->assets_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::ASSETS); });
 
     sceneContainer = new QWidget;
     QSizePolicy sceneContainerPolicy;
@@ -1512,9 +1542,12 @@ void MainWindow::setupViewPort()
 void MainWindow::setupDesktop()
 {
     pmContainer = new ProjectManager(db, this);
+    _assetView = new AssetView(this);
+    _assetView->installEventFilter(this);
 
     ui->stackedWidget->addWidget(pmContainer);
     ui->stackedWidget->addWidget(viewPort);
+    ui->stackedWidget->addWidget(_assetView);
 
     connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));
     connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));

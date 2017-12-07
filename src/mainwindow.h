@@ -29,6 +29,7 @@ namespace Ui {
 }
 
 class SurfaceView;
+class AssetView;
 
 class QPushButton;
 class QStandardItem;
@@ -85,7 +86,8 @@ enum class SceneNodeType;
 enum WindowSpaces {
     DESKTOP,
     PLAYER,
-    EDITOR
+    EDITOR,
+    ASSETS
 };
 
 class Database;
@@ -344,6 +346,7 @@ private:
     QPushButton *stopBtn;
 
     QToolBar *toolBar;
+    AssetView *_assetView;
 
     WindowSpaces currentSpace;
 };
