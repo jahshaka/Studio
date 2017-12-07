@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QOpenGLDebugLogger>
 
 #include "../irisgl/src/irisgl.h"
+#include "../irisgl/src/scenegraph/scene.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
@@ -63,6 +64,7 @@ For more information see the LICENSE file
 
 #include "../editor/thumbnailgenerator.h"
 #include "../core/settingsmanager.h"
+#include "../uimanager.h"
 
 void SceneViewWidget::setShowFps(bool value)
 {
@@ -159,7 +161,8 @@ void SceneViewWidget::initialize()
     viewportGizmo = translationGizmo;
     */
     transformMode = "Global";
-    gizmo = new TranslationGizmo();
+    //gizmo = new TranslationGizmo();
+	gizmo = new ScaleGizmo();
 
     // has to be initialized here since it loads assets
     vrCam = new EditorVrController();
