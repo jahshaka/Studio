@@ -13,8 +13,8 @@ For more information see the LICENSE file
 #define SCALEGIZMO_H
 
 #include "gizmoinstance.h"
-#include "gizmohandle.h"
-#include "../irisgl/src/graphics/graphicshelper.h"
+#include "gizmo.h"
+#include "irisgl/src/graphics/graphicshelper.h"
 
 /*
 class ScaleGizmo : public GizmoInstance
