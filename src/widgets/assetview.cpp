@@ -25,6 +25,10 @@
 #include <QHeaderView>
 #include <QTreeWidgetItem>
 
+#include "assetviewgrid.h"
+#include "assetgriditem.h"
+#include "assetviewer.h"
+
 void AssetView::focusInEvent(QFocusEvent *event)
 {
 	Q_UNUSED(event);
@@ -80,7 +84,7 @@ AssetView::AssetView(QWidget *parent) : QWidget(parent)
 
 	localAssetsButton->toggle();
 
-	fastGrid = new FastGrid(this);
+	fastGrid = new AssetViewGrid(this);
 	fastGrid->installEventFilter(this);
 
     // gui
@@ -219,7 +223,7 @@ AssetView::AssetView(QWidget *parent) : QWidget(parent)
 	fastGrid->setVisible(false);
 	filterPane->setVisible(false);
 
-	connect(fastGrid, &FastGrid::gridCount, [this](int count) {
+	connect(fastGrid, &AssetViewGrid::gridCount, [this](int count) {
 		if (count > 0) {
 			filterPane->setVisible(true);
 			emptyGrid->setVisible(false);
@@ -263,6 +267,10 @@ AssetView::AssetView(QWidget *parent) : QWidget(parent)
 	addToLibrary->setStyleSheet("background: #2ecc71");
 	addToLibrary->setVisible(false);
 
+	addToProject = new QPushButton("Add to Project");
+	addToProject->setStyleSheet("background: #3498db");
+	addToProject->setVisible(false);
+
 	renameModel = new QLabel("Rename");
 	renameModelField = new QLineEdit();
 
@@ -287,6 +295,11 @@ AssetView::AssetView(QWidget *parent) : QWidget(parent)
 
 		renameWidget->setVisible(false);
 		addToLibrary->setVisible(false);
+		addToProject->setVisible(true);
+	});
+
+	connect(addToProject, &QPushButton::pressed, [this]() {
+		addToProject->setVisible(false);
 	});
 
 	connect(browseButton, &QPushButton::pressed, [=]() {
@@ -324,6 +337,8 @@ AssetView::AssetView(QWidget *parent) : QWidget(parent)
 	assetDropPadLayout->addWidget(nameField);
 	assetDropPadLayout->addWidget(typeField);
 	assetDropPadLayout->addWidget(uploadBtn);
+	assetDropPadLayout->addStretch();
+	assetDropPadLayout->addWidget(addToProject);
 	assetDropPad->setLayout(assetDropPadLayout);
     metaLayout->addWidget(assetDropPad);
 	metaLayout->addWidget(assetDetails);
@@ -396,7 +411,7 @@ AssetView::AssetView(QWidget *parent) : QWidget(parent)
 	);
 }
 
-void AssetView::fetchMetadata(Widget *widget)
+void AssetView::fetchMetadata(AssetGridItem *widget)
 {
 	metadataName->setText("Name: " + widget->metadata["name"].toString());
 	metadataType->setText("Type: " + QString::number(widget->metadata["type"].toInt()));
