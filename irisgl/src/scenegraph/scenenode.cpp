@@ -77,6 +77,14 @@ long SceneNode::getNodeId()
     return nodeId;
 }
 
+void SceneNode::rotate(QQuaternion rot, bool global)
+{
+	if (global)
+		this->rot = this->rot * rot;
+	else
+		this->rot = rot * this->rot;
+}
+
 void SceneNode::setLocalPos(QVector3D pos)
 {
     this->pos = pos;

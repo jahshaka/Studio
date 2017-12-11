@@ -162,7 +162,8 @@ void SceneViewWidget::initialize()
     */
     transformMode = "Global";
     //gizmo = new TranslationGizmo();
-	gizmo = new ScaleGizmo();
+	//gizmo = new ScaleGizmo();
+	gizmo = new RotationGizmo();
 
     // has to be initialized here since it loads assets
     vrCam = new EditorVrController();

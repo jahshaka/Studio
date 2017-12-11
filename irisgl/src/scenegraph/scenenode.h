@@ -108,6 +108,8 @@ public:
         return scale;
     }
 
+	void rotate(QQuaternion rot, bool global = false);
+
     void setLocalPos(QVector3D pos);
     void setLocalRot(QQuaternion rot);
     void setLocalScale(QVector3D scale);

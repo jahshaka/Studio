@@ -50,6 +50,7 @@ set(SRCS
 		src/editor/gizmo.cpp 
 		src/editor/translationgizmo.cpp 
 		src/editor/scalegizmo.cpp 
+		src/editor/rotationgizmo.cpp 
     src/widgets/skypresets.cpp 
     src/editor/orbitalcameracontroller.cpp 
     src/widgets/scenenodepropertieswidget.cpp 

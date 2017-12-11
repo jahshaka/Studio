@@ -12,9 +12,66 @@ For more information see the LICENSE file
 #ifndef ROTATIONGIZMO_H
 #define ROTATIONGIZMO_H
 
-#include "gizmoinstance.h"
+//#include "gizmoinstance.h"
 #include "gizmo.h"
 #include "irisgl/src/graphics/graphicshelper.h"
+#include "gizmo.h"
+#include "irisgl/src/graphics/graphicshelper.h"
+
+class RotationHandle : public GizmoHandle
+{
+public:
+	Gizmo* gizmo;
+
+	GizmoAxis axis;
+	QVector3D handleExtent;// local extent of the gizmo
+	QVector3D plane;// for hit detection
+	float handleScale = 0.1f;
+	float handleRadius = 3.0f;
+	float handleRadiusSize = 0.8f;
+
+	RotationHandle(Gizmo* gizmo, GizmoAxis axis);
+
+	bool isHit(QVector3D rayPos, QVector3D rayDir);
+	//QVector3D getHitPos(QVector3D rayPos, QVector3D rayDir);
+	bool getHitAngle(QVector3D rayPos, QVector3D rayDir, float& angle);
+};
+
+class RotationGizmo : public Gizmo
+{
+	iris::MeshPtr handleMesh;
+	QVector<iris::MeshPtr> handleMeshes;
+
+	QOpenGLShaderProgram* shader;
+
+	RotationHandle* handles[3];
+
+	// initial hit position
+	QVector3D hitPos;
+	float startAngle;
+	QQuaternion nodeStartRot;
+	RotationHandle* draggedHandle;
+	int draggedHandleIndex;
+
+	bool dragging;
+public:
+	RotationGizmo();
+
+	void loadAssets();
+
+	bool isDragging();
+	void startDragging(QVector3D rayPos, QVector3D rayDir);
+	void endDragging();
+	void drag(QVector3D rayPos, QVector3D rayDir);
+
+	bool isHit(QVector3D rayPos, QVector3D rayDir);
+
+	// hitPos is the hit position of the hit handle
+	RotationHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, float& hitAngle);
+	void render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
+};
+
+
 
 /*
 class RotationGizmo : public GizmoInstance

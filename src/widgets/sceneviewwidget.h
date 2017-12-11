@@ -223,7 +223,8 @@ private:
     void initialize();
 
     //TranslationGizmo* gizmo;
-	ScaleGizmo* gizmo;
+	//ScaleGizmo* gizmo;
+	RotationGizmo* gizmo;
     //GizmoInstance* translationGizmo;
     //RotationGizmo* rotationGizmo;
     //ScaleGizmo* scaleGizmo;
