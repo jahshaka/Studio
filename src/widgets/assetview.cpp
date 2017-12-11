@@ -51,6 +51,7 @@ AssetView::AssetView(QWidget *parent) : QWidget(parent)
 	_assetView = new QListWidget;
 
 	viewer = new AssetViewer(this);
+
 	sourceGroup = new QButtonGroup;
 	localAssetsButton = new QPushButton(tr(" Local Assets"));
 	localAssetsButton->setCheckable(true);
@@ -283,20 +284,20 @@ AssetView::AssetView(QWidget *parent) : QWidget(parent)
 	renameWidget->setLayout(renameLayout);
 	renameWidget->setVisible(false);
 
-	connect(addToLibrary, &QPushButton::pressed, [this]() {
-		QJsonObject object;
-		object["icon_url"] = "";
-		object["name"] = renameModelField->text();
+	//connect(addToLibrary, &QPushButton::pressed, [this]() {
+	//	QJsonObject object;
+	//	object["icon_url"] = "";
+	//	object["name"] = renameModelField->text();
 
-		// render thumb tho
-		fastGrid->addTo(object, viewer->takeScreenshot(512, 512), 0);
-		QApplication::processEvents();
-		fastGrid->updateGridColumns(fastGrid->lastWidth);
+	//	// render thumb tho
+	//	fastGrid->addTo(object, viewer->takeScreenshot(512, 512), 0);
+	//	QApplication::processEvents();
+	//	fastGrid->updateGridColumns(fastGrid->lastWidth);
 
-		renameWidget->setVisible(false);
-		addToLibrary->setVisible(false);
-		addToProject->setVisible(true);
-	});
+	//	renameWidget->setVisible(false);
+	//	addToLibrary->setVisible(false);
+	//	addToProject->setVisible(true);
+	//});
 
 	connect(addToProject, &QPushButton::pressed, [this]() {
 		addToProject->setVisible(false);
