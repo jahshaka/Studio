@@ -83,7 +83,9 @@ ForwardRenderer::ForwardRenderer(bool supportsVr)
     if (supportsVr) {
         vrDevice = VrManager::getDefaultDevice();
         vrDevice->initialize();
-    }
+	} else {
+		vrDevice = Q_NULLPTR;
+	}
 
     renderTarget = RenderTarget::create(800, 800);
     sceneRenderTexture = Texture2D::create(800, 800);
