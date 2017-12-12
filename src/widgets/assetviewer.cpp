@@ -1,7 +1,13 @@
 #include "assetviewer.h"
 
+#include "../core/project.h"
+#include "sceneviewwidget.h"
+
 #include "../constants.h"
+#include "../globals.h"
 #include "../core/keyboardstate.h"
+
+#include <QFileDialog>
 
 AssetViewer::AssetViewer(QWidget *parent) : QOpenGLWidget(parent)
 {
@@ -70,6 +76,10 @@ void AssetViewer::initializeGL()
     scene = iris::Scene::create();
     renderer->setScene(scene);
 
+	previewRT = iris::RenderTarget::create(640, 480);
+	screenshotTex = iris::Texture2D::create(640, 480);
+	previewRT->addTexture(screenshotTex);
+
     auto node = iris::MeshNode::create();
     node->setMesh(":/models/ground.obj");
     node->setLocalPos(QVector3D(0, 0, 0));
@@ -94,7 +104,7 @@ void AssetViewer::initializeGL()
     dlight->setLocalRot(QQuaternion::fromEulerAngles(45, -45, 0));
     dlight->intensity = 1;
 
-    scene->rootNode->addChild(node);
+    // scene->rootNode->addChild(node);
 
     defaultCam = new EditorCameraController();
     orbitalCam = new OrbitalCameraController();
@@ -167,9 +177,10 @@ void AssetViewer::mouseReleaseEvent(QMouseEvent *e)
 }
 
 void AssetViewer::loadModel(QString str) {
-	renderObject();
 	makeCurrent();
 	//mesh = iris::Mesh::loadMesh(str);
+	addMesh(str);
+	renderObject();
 	doneCurrent();
 }
 
@@ -184,6 +195,118 @@ void AssetViewer::resizeGL(int width, int height)
     viewport->pixelRatioScale = devicePixelRatio();
     viewport->width = width;
     viewport->height = height;
+}
+
+void AssetViewer::addMesh(const QString &path, bool ignore, QVector3D position)
+{
+	QString filename;
+	if (path.isEmpty()) {
+		filename = QFileDialog::getOpenFileName(this, "Load Mesh", "Mesh Files (*.obj *.fbx *.3ds *.dae *.c4d *.blend)");
+	}
+	else {
+		filename = path;
+	}
+
+	if (filename.isEmpty()) return;
+
+	// makeCurrent();
+
+	auto node = iris::MeshNode::loadAsSceneFragment(filename, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+	{
+		auto mat = iris::CustomMaterial::create();
+		//MaterialReader *materialReader = new MaterialReader();
+		if (mesh->hasSkeleton())
+			mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
+		else
+			mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+
+		mat->setValue("diffuseColor", data.diffuseColor);
+		mat->setValue("specularColor", data.specularColor);
+		mat->setValue("ambientColor", data.ambientColor);
+		mat->setValue("emissionColor", data.emissionColor);
+
+		mat->setValue("shininess", data.shininess);
+
+		if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
+			mat->setValue("diffuseTexture", data.diffuseTexture);
+
+		if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
+			mat->setValue("specularTexture", data.specularTexture);
+
+		if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
+			mat->setValue("normalTexture", data.normalTexture);
+
+		return mat;
+	});
+
+	// model file may be invalid so null gets returned
+	if (!node) return;
+
+	// rename animation sources to relative paths
+	auto relPath = QDir(Globals::project->folderPath).relativeFilePath(filename);
+	for (auto anim : node->getAnimations()) {
+		if (!!anim->skeletalAnimation)
+			anim->skeletalAnimation->source = relPath;
+	}
+
+	node->setLocalPos(position);
+
+	// todo: load material data
+	addNodeToScene(node, ignore);
+}
+
+/**
+* adds sceneNode directly to the scene's rootNode
+* applied default material to mesh if one isnt present
+* ignore set to false means we only add it visually, usually to discard it afterw
+*/
+void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore)
+{
+	if (!scene) {
+		// @TODO: set alert that a scene needs to be set before this can be done
+		return;
+	}
+
+	// @TODO: add this to a constants file
+	if (!ignore) {
+		const float spawnDist = 10.0f;
+		auto offset = camera->getLocalRot().rotatedVector(QVector3D(0, -1.0f, -spawnDist));
+		offset += camera->getLocalPos();
+		sceneNode->setLocalPos(offset);
+	}
+
+	// apply default material to mesh nodes
+	if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
+		auto meshNode = sceneNode.staticCast<iris::MeshNode>();
+		if (!meshNode->getMaterial()) {
+			auto mat = iris::CustomMaterial::create();
+			mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
+			meshNode->setMaterial(mat);
+		}
+	}
+
+	scene->rootNode->addChild(sceneNode);
+}
+
+QImage AssetViewer::takeScreenshot(int width, int height)
+{
+	//makeCurrent();
+	////previewRT->resize(width, height, true);
+	//auto img = previewRT->toImage();
+	//doneCurrent();
+	//return img;
+	makeCurrent();
+
+	previewRT->resize(width, height, true);
+	scene->update(0);
+	renderer->renderLightBillboards = false;
+	renderer->renderSceneToRenderTarget(previewRT, camera, false);
+	renderer->renderLightBillboards = true;
+
+	auto img = previewRT->toImage();
+	doneCurrent();
+
+	return img;
 }
 
 //AssetViewer::AssetViewer(QWidget *parent) : QOpenGLWidget(parent) {

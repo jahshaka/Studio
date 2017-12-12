@@ -24,6 +24,7 @@
 #include "irisgl/src/scenegraph/meshnode.h"
 #include "irisgl/src/graphics/viewport.h"
 #include "irisgl/src/materials/custommaterial.h"
+#include "irisgl/src/animation/animation.h"
 #include "irisglfwd.h"
 
 #include "../editor/editorcameracontroller.h"
@@ -51,6 +52,10 @@ public:
     void mouseReleaseEvent(QMouseEvent *e);
     void mouseMoveEvent(QMouseEvent *e);
 
+	void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
+	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore);
+	QImage takeScreenshot(int width, int height);
+
 private:
     QOpenGLFunctions_3_2_Core *gl;
     iris::ForwardRendererPtr renderer;
@@ -69,6 +74,9 @@ private:
 
     iris::Viewport* viewport;
     bool render;
+
+	iris::RenderTargetPtr previewRT;
+	iris::Texture2DPtr screenshotTex;
 
     //float getBoundingRadius(iris::SceneNodePtr node);
     //void getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere>& spheres);
