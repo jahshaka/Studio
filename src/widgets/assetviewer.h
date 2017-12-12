@@ -81,28 +81,3 @@ private:
     //float getBoundingRadius(iris::SceneNodePtr node);
     //void getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere>& spheres);
 };
-
-//class AssetViewer : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
-//{
-//public:
-//	AssetViewer(QWidget *parent);
-//	~AssetViewer();
-//
-//	void initializeGL();
-//	void update();
-//	void paintGL();
-//	void resizeGL(int w, int h);
-//
-//	void renderObject();
-//	void loadModel(QString str);
-//	QImage takeScreenshot(int width, int height);
-//
-//private:
-//	QElapsedTimer _elapsedTimer;
-//	QOpenGLFunctions_3_2_Core *gl;
-//	QOpenGLShaderProgram *program;
-//	iris::MeshPtr mesh;
-//	iris::RenderTargetPtr previewRT;
-//	iris::Texture2DPtr screenshotTex;
-//	bool render_;
-//};
