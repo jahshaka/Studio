@@ -23,6 +23,7 @@ For more information see the LICENSE file
 OrbitalCameraController::OrbitalCameraController()
 {
     distFromPivot = 15;
+    rotationSpeed = 1.f / 10.f;
 }
 
 QSharedPointer<iris::CameraNode>  OrbitalCameraController::getCamera()
@@ -47,17 +48,20 @@ void OrbitalCameraController::setCamera(QSharedPointer<iris::CameraNode>  cam)
     this->updateCameraRot();
 }
 
+void OrbitalCameraController::setRotationSpeed(float rotationSpeed)
+{
+    this->rotationSpeed = rotationSpeed;
+}
+
 void OrbitalCameraController::onMouseMove(int x,int y)
 {
-    if(rightMouseDown)
-    {
+    if (rightMouseDown) {
         //rotate camera
-        this->yaw += x/10.0f;
-        this->pitch += y/10.0f;
+        this->yaw += x * rotationSpeed;
+        this->pitch += y * rotationSpeed;
     }
 
-    if(middleMouseDown)
-    {
+    if (middleMouseDown) {
         //translate camera
         float dragSpeed = 0.01f;
         auto dir = camera->getLocalRot().rotatedVector(QVector3D(x*dragSpeed,-y*dragSpeed,0));

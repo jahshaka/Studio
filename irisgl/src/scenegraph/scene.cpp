@@ -42,6 +42,8 @@ Scene::Scene()
 //    QString z1 = IrisUtils::getAbsoluteAssetPath("app/content/textures/front.jpg");
 //    QString z2 = IrisUtils::getAbsoluteAssetPath("app/content/textures/back.jpg");
 
+    clearColor = QColor(0,0,0,0);
+    renderSky = true;
 //    skyTexture = Texture2D::createCubeMap(x1, x2, y1, y2, z1, z2);
     skyMaterial = DefaultSkyMaterial::create();
 //    skyMaterial->setSkyTexture(skyTexture);
@@ -119,7 +121,8 @@ void Scene::update(float dt)
         particle->submitRenderItems();
     }
 
-    this->geometryRenderList->add(skyRenderItem);
+    if (renderSky)
+        this->geometryRenderList->add(skyRenderItem);
 }
 
 void Scene::render()

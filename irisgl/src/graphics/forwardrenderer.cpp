@@ -138,7 +138,7 @@ GraphicsDevicePtr ForwardRenderer::getGraphicsDevice()
     return graphics;
 }
 
-void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePtr cam, bool clearRenderLists)
+void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePtr cam, bool clearRenderLists, bool applyPostProcesses)
 {
     auto ctx = QOpenGLContext::currentContext();
 
@@ -183,6 +183,7 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
 
     renderTarget->bind();
     gl->glViewport(0, 0, rt->getWidth(), rt->getHeight());
+    gl->glClearColor(scene->clearColor.redF(), scene->clearColor.greenF(), scene->clearColor.blueF(), scene->clearColor.alphaF());
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // reset states
@@ -197,15 +198,18 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
 
     renderTarget->unbind();
 
-    postContext->sceneTexture = sceneRenderTexture;
-    postContext->depthTexture = depthRenderTexture;
-    postContext->finalTexture = finalRenderTexture;
-    postMan->process(postContext);
+    if (applyPostProcesses) {
+        postContext->sceneTexture = sceneRenderTexture;
+        postContext->depthTexture = depthRenderTexture;
+        postContext->finalTexture = finalRenderTexture;
+        postMan->process(postContext);
+    }
 
 
     // draw fs quad
     rt->bind();
     gl->glViewport(0, 0, rt->getWidth(), rt->getHeight());
+    gl->glClearColor(0, 0, 0, 0);
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     gl->glActiveTexture(GL_TEXTURE0);
 
@@ -213,7 +217,11 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
     graphics->setDepthState(DepthState::Default);
     graphics->setRasterizerState(RasterizerState::CullNone);
 
-    postContext->finalTexture->bind();
+    if (applyPostProcesses)
+        postContext->finalTexture->bind();
+    else
+        sceneRenderTexture->bind();
+        
     fsQuad->draw();
     gl->glBindTexture(GL_TEXTURE_2D, 0);
     rt->unbind();
@@ -275,7 +283,7 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     renderTarget->bind();
     graphics->setViewport(QRect(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale));
-    graphics->clear(QColor(0, 0, 0));
+    graphics->clear(QColor(0, 0, 0, 0));
 
     // reset states
     graphics->setBlendState(BlendState::Opaque);

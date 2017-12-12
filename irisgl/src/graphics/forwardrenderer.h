@@ -104,7 +104,7 @@ public:
     }
 
     //all scenenodes' transform should be updated before calling this functions
-    void renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePtr cam, bool clearRenderLists = false);
+    void renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePtr cam, bool clearRenderLists = false, bool applyPostProcesses = true);
     void renderScene(float delta, Viewport* vp);
     void renderSceneVr(float delta, Viewport* vp, bool useViewer = true);
 
