@@ -28,6 +28,7 @@ namespace Constants
 
     const QString DB_PROJECTS_TABLE = "projects";
     const QString DB_THUMBS_TABLE   = "thumbnails";
+	const QString DB_ASSETS_TABLE	= "assets";
 
     const QList<QString> IMAGE_EXTS = { "png", "PNG", "jpg" };
     const QList<QString> MODEL_EXTS = { "obj", "fbx", "dae", "blend"};

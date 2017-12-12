@@ -32,6 +32,7 @@ enum AssetSource
 class AssetViewGrid;
 class AssetGridItem;
 class AssetViewer;
+class Database;
 
 class AssetView : public QWidget
 {
@@ -46,12 +47,13 @@ public:
 	QAbstractButton *localAssetsButton;
 	QAbstractButton *onlineAssetsButton;
 	AssetSource assetSource;
-	explicit AssetView(QWidget *parent = Q_NULLPTR);
+	AssetView(Database *handle, QWidget *parent = Q_NULLPTR);
 	~AssetView();
 	void focusInEvent(QFocusEvent *event);
 	bool eventFilter(QObject *watched, QEvent *event);
 
 private:
+	Database *db;
 	QSplitter *_splitter;
 	QWidget *_filterBar;
 	QWidget *_navPane;

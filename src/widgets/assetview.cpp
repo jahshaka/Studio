@@ -20,11 +20,12 @@
 
 #include <QtAlgorithms>
 #include <QFile>
-
+#include <QBuffer>>
 #include <QTreeWidget>
 #include <QHeaderView>
 #include <QTreeWidgetItem>
 
+#include "../core/database/database.h"
 #include "assetviewgrid.h"
 #include "assetgriditem.h"
 #include "assetviewer.h"
@@ -46,10 +47,9 @@ bool AssetView::eventFilter(QObject * watched, QEvent * event)
 	return QObject::eventFilter(watched, event);
 }
 
-AssetView::AssetView(QWidget *parent) : QWidget(parent)
+AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(parent)
 {
 	_assetView = new QListWidget;
-
 	viewer = new AssetViewer(this);
 
 	sourceGroup = new QButtonGroup;
@@ -161,16 +161,17 @@ AssetView::AssetView(QWidget *parent) : QWidget(parent)
 	typeObject->setIcon(QPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-purchase-order-50.png")));
 	typeObject->setIconSize(QSize(16, 16));
 
-	auto scriptObject = new QPushButton();
-	scriptObject->setAccessibleName("filterObj");
-	scriptObject->setIcon(QPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-music-50.png")));
-	scriptObject->setIconSize(QSize(16, 16));
-	scriptObject->setStyleSheet("border-top-right-radius: 2px; border-bottom-right-radius: 2px;");
+	//auto scriptObject = new QPushButton();
+	//scriptObject->setAccessibleName("filterObj");
+	//scriptObject->setIcon(QPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-music-50.png")));
+	//scriptObject->setIconSize(QSize(16, 16));
+	//scriptObject->setStyleSheet("border-top-right-radius: 2px; border-bottom-right-radius: 2px;");
 
 	auto imageObject = new QPushButton();
 	imageObject->setAccessibleName("filterObj");
 	imageObject->setIcon(QPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-picture-50.png")));
 	imageObject->setIconSize(QSize(16, 16));
+	imageObject->setStyleSheet("border-top-right-radius: 2px; border-bottom-right-radius: 2px;");
 
 	auto meshObject = new QPushButton();
 	meshObject->setAccessibleName("filterObj");
@@ -183,7 +184,7 @@ AssetView::AssetView(QWidget *parent) : QWidget(parent)
 	fgL->addWidget(meshObject);
 	fgL->addWidget(typeObject);
 	fgL->addWidget(imageObject);
-	fgL->addWidget(scriptObject);
+	//fgL->addWidget(scriptObject);
 	filterGroup->setLayout(fgL);
 	fgL->setMargin(0);
 	fgL->setSpacing(0);
@@ -229,6 +230,8 @@ AssetView::AssetView(QWidget *parent) : QWidget(parent)
 			filterPane->setVisible(true);
 			emptyGrid->setVisible(false);
 			fastGrid->setVisible(true);
+
+
 		}
 		else {
 			filterPane->setVisible(false);
@@ -236,6 +239,27 @@ AssetView::AssetView(QWidget *parent) : QWidget(parent)
 			fastGrid->setVisible(false);
 		}
 	});
+
+
+	// show assets
+	int i = 0;
+	foreach(const AssetTileData &record, db->fetchAssets()) {
+		QJsonObject object;
+		object["icon_url"] = "";
+		object["name"] = record.name;
+
+		QImage image;
+		image.loadFromData(record.thumbnail, "PNG");
+
+		qDebug() << record.name;
+
+		fastGrid->addTo(object, image, i);
+		i++;
+	}
+
+	//QApplication::processEvents();
+	fastGrid->updateGridColumns(fastGrid->lastWidth);
+
 
     _metadataPane = new QWidget; 
     QVBoxLayout *metaLayout = new QVBoxLayout;
@@ -289,10 +313,18 @@ AssetView::AssetView(QWidget *parent) : QWidget(parent)
 		object["icon_url"] = "";
 		object["name"] = renameModelField->text();
 
-		// render thumb tho
-		fastGrid->addTo(object, viewer->takeScreenshot(512, 512), 0);
+		auto thumbnail = viewer->takeScreenshot(512, 512);
+		fastGrid->addTo(object, thumbnail, 0);
 		QApplication::processEvents();
 		fastGrid->updateGridColumns(fastGrid->lastWidth);
+
+		// add to db
+		QByteArray bytes;
+		QBuffer buffer(&bytes);
+		buffer.open(QIODevice::WriteOnly);
+		thumbnail.save(&buffer, "PNG");
+
+		db->insertAssetGlobal(renameModelField->text(), bytes);
 
 		renameWidget->setVisible(false);
 		addToLibrary->setVisible(false);

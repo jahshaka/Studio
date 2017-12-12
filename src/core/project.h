@@ -40,4 +40,10 @@ struct ProjectTileData {
     QString     guid;
 };
 
+struct AssetTileData {
+	QString     name;
+	QByteArray  thumbnail;
+	QString     guid;
+};
+
 #endif // PROJECT_H

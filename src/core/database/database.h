@@ -21,14 +21,17 @@ public:
 
     void createGlobalDb();
     void createGlobalDbThumbs();
+	void createGlobalDbAssets();
     void deleteProject();
     void renameProject(const QString&);
+	void insertAssetGlobal(const QString&, const QByteArray &thumbnail);
     void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob);
     void insertThumbnailGlobal(const QString &world_guid,
                                const QString &name,
                                const QByteArray &thumbnail);
     bool hasCachedThumbnail(const QString& name);
     QVector<ProjectTileData> fetchProjects();
+	QVector<AssetTileData> fetchAssets();
     QByteArray getSceneBlobGlobal() const;
     QByteArray fetchCachedThumbnail(const QString& name) const;
     void updateSceneGlobal(const QByteArray &sceneBlob, const QByteArray &thumbnail);

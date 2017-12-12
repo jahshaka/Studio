@@ -596,6 +596,7 @@ void MainWindow::setupProjectDB()
     db = new Database();
     db->initializeDatabase(path);
     db->createGlobalDb();
+	db->createGlobalDbAssets();
     db->createGlobalDbThumbs();
 }
 
@@ -1542,7 +1543,7 @@ void MainWindow::setupViewPort()
 void MainWindow::setupDesktop()
 {
     pmContainer = new ProjectManager(db, this);
-    _assetView = new AssetView(this);
+    _assetView = new AssetView(db, this);
     _assetView->installEventFilter(this);
 
     ui->stackedWidget->addWidget(pmContainer);

@@ -582,7 +582,7 @@ void AssetWidget::onThumbnailResult(ThumbnailResult* result)
             QBuffer buffer(&bytes);
             buffer.open(QIODevice::WriteOnly);
             asset->thumbnail.save(&buffer, "PNG");
-            db->insertThumbnailGlobal("GGBOIS", asset->fileName, bytes);
+            db->insertThumbnailGlobal("null", asset->fileName, bytes);
 
             // find item and update its icon
             auto items = ui->assetView->findItems(asset->fileName, Qt::MatchExactly);

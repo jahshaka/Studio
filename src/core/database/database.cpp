@@ -84,6 +84,26 @@ void Database::createGlobalDbThumbs() {
     executeAndCheckQuery(query, "createGlobalDbThumbs");
 }
 
+void Database::createGlobalDbAssets() {
+	QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_ASSETS_TABLE + " ("
+		"    name              VARCHAR(128),"
+		"	 type			   INTEGER,"
+		"	 collection		   INTEGER,"
+		"	 times_used		   INTEGER,"	
+		"    world_guid        VARCHAR(32),"
+		"    thumbnail         BLOB,"
+		"    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
+		"    last_updated      DATETIME,"
+		"    hash              VARCHAR(16),"
+		"    version           REAL,"
+		"    guid              VARCHAR(32) PRIMARY KEY"
+		")";
+
+	QSqlQuery query;
+	query.prepare(schema);
+	executeAndCheckQuery(query, "createGlobalDbAssets");
+}
+
 void Database::deleteProject()
 {
     QSqlQuery query;
@@ -99,6 +119,23 @@ void Database::renameProject(const QString &newName)
     query.addBindValue(newName);
     query.addBindValue(Globals::project->getProjectGuid());
     executeAndCheckQuery(query, "renameProject");
+}
+
+void Database::insertAssetGlobal(const QString &assetName, const QByteArray &thumbnail)
+{
+	QSqlQuery query;
+	auto guid = GUIDManager::generateGUID();
+	query.prepare("INSERT INTO " + Constants::DB_ASSETS_TABLE +
+		" (name, thumbnail, version, date_created, last_updated, guid)" +
+		" VALUES (:name, :thumbnail, :version, datetime(), datetime(), :guid)");
+	query.bindValue(":name", assetName);
+	query.bindValue(":thumbnail", thumbnail);
+	query.bindValue(":version", Constants::CONTENT_VERSION);
+	query.bindValue(":guid", guid);
+
+	executeAndCheckQuery(query, "insertSceneAsset");
+
+	Globals::project->setProjectGuid(guid);
 }
 
 void Database::insertSceneGlobal(const QString &projectName, const QByteArray &sceneBlob)
@@ -170,6 +207,28 @@ QVector<ProjectTileData> Database::fetchProjects()
     }
 
     return tileData;
+}
+
+QVector<AssetTileData> Database::fetchAssets()
+{
+	QSqlQuery query;
+	query.prepare("SELECT name, thumbnail, guid FROM " + Constants::DB_ASSETS_TABLE + " ORDER BY name DESC");
+	executeAndCheckQuery(query, "fetchAssets");
+
+	QVector<AssetTileData> tileData;
+	while (query.next()) {
+		AssetTileData data;
+		QSqlRecord record = query.record();
+		for (int i = 0; i < record.count(); i++) {
+			data.name = record.value(0).toString();
+			data.thumbnail = record.value(1).toByteArray();
+			data.guid = record.value(2).toString();
+		}
+
+		tileData.push_back(data);
+	}
+
+	return tileData;
 }
 
 QByteArray Database::getSceneBlobGlobal() const

@@ -52,7 +52,10 @@ void AssetViewer::paintGL()
             scene->update(dt);
             renderer->renderScene(dt, viewport);
         }
-    }
+	}
+	else {
+		glClearColor(0.18, 0.18, 0.18, 1);
+	}
 
     doneCurrent();
 }
@@ -115,7 +118,7 @@ void AssetViewer::initializeGL()
 
     scene->setCamera(camera);
 
-    scene->setSkyColor(QColor(100, 100, 100));
+    scene->setSkyColor(QColor(25, 25, 25));
     scene->setAmbientColor(QColor(255, 255, 255));
 
     scene->fogColor = QColor(72, 72, 72);
