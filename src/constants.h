@@ -18,6 +18,7 @@ namespace Constants
     const QString SAMPLES_FOLDER    = "/scenes";
     const QString PROJECT_FOLDER    = "/JahProjects";
     const QString JAH_FOLDER        = "/Jahshaka";
+    const QString ASSET_FOLDER      = "/AssetStore";
     const QString JAH_DATABASE      = "JahLibrary.db";
     const QString DEF_EXPORT_FILE   = "export.zip";
     const QSize   TILE_SIZE         = QSize(460, 215);

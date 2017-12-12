@@ -28,6 +28,7 @@ void AssetViewGrid::addTo(QJsonObject details, QImage image, int count) {
 
 	connect(sampleWidget, &AssetGridItem::singleClicked, parent, [this](AssetGridItem *item) {
 		qobject_cast<AssetView*>(parent)->fetchMetadata(item);
+        emit selectedTile(item);
 	});
 
 	fastGrid->addWidget(sampleWidget, count / columnCount + 1, count % columnCount + 1);

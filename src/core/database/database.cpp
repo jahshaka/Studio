@@ -121,7 +121,7 @@ void Database::renameProject(const QString &newName)
     executeAndCheckQuery(query, "renameProject");
 }
 
-void Database::insertAssetGlobal(const QString &assetName, const QByteArray &thumbnail)
+QString Database::insertAssetGlobal(const QString &assetName, const QByteArray &thumbnail)
 {
 	QSqlQuery query;
 	auto guid = GUIDManager::generateGUID();
@@ -135,7 +135,7 @@ void Database::insertAssetGlobal(const QString &assetName, const QByteArray &thu
 
 	executeAndCheckQuery(query, "insertSceneAsset");
 
-	Globals::project->setProjectGuid(guid);
+    return guid;
 }
 
 void Database::insertSceneGlobal(const QString &projectName, const QByteArray &sceneBlob)

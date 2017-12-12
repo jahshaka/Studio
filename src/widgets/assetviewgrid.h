@@ -6,6 +6,8 @@
 #include <QJsonObject>
 #include <QResizeEvent>
 
+class AssetGridItem;
+
 class AssetViewGrid : public QScrollArea
 {
 	Q_OBJECT
@@ -28,6 +30,7 @@ private:
 
 signals:
 	void gridCount(int);
+    void selectedTile(AssetGridItem*);
 };
 
 #endif // ASSETVIEWGRID_HPP

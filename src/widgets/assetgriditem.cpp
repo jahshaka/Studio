@@ -61,15 +61,19 @@ void AssetGridItem::mousePressEvent(QMouseEvent *event) {
 }
 
 void AssetGridItem::dimHighlight() {
-	textLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 12px; background: #1e1e1e;"
-		"border-left: 3px solid rgba(0, 0, 0, 10%); border-bottom: 3px solid rgba(0, 0, 0, 10%); border-right: 3px solid rgba(0, 0, 0, 10%)");
-	gridImageLabel->setStyleSheet("border-left: 3px solid rgba(0, 0, 0, 10%); border-top: 3px solid rgba(0, 0, 0, 10%); border-right: 3px solid rgba(0, 0, 0, 10%)");
+    if (!selected) {
+        textLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 12px; background: #1e1e1e;"
+            "border-left: 3px solid rgba(0, 0, 0, 10%); border-bottom: 3px solid rgba(0, 0, 0, 10%); border-right: 3px solid rgba(0, 0, 0, 10%)");
+        gridImageLabel->setStyleSheet("border-left: 3px solid rgba(0, 0, 0, 10%); border-top: 3px solid rgba(0, 0, 0, 10%); border-right: 3px solid rgba(0, 0, 0, 10%)");
+    }
 }
 
 void AssetGridItem::noHighlight() {
-	textLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 12px; background: #1e1e1e;"
-		"border-left: 3px solid rgba(0, 0, 0, 3%); border-bottom: 3px solid rgba(0, 0, 0, 3%); border-right: 3px solid rgba(0, 0, 0, 3%)");
-	gridImageLabel->setStyleSheet("border-left: 3px solid rgba(0, 0, 0, 3%); border-top: 3px solid rgba(0, 0, 0, 3%); border-right: 3px solid rgba(0, 0, 0, 3%)");
+    if (!selected) {
+        textLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 12px; background: #1e1e1e;"
+            "border-left: 3px solid rgba(0, 0, 0, 3%); border-bottom: 3px solid rgba(0, 0, 0, 3%); border-right: 3px solid rgba(0, 0, 0, 3%)");
+        gridImageLabel->setStyleSheet("border-left: 3px solid rgba(0, 0, 0, 3%); border-top: 3px solid rgba(0, 0, 0, 3%); border-right: 3px solid rgba(0, 0, 0, 3%)");
+    }
 }
 
 void AssetGridItem::selectedHighlight(AssetGridItem*) {

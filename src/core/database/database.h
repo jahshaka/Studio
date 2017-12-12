@@ -24,7 +24,7 @@ public:
 	void createGlobalDbAssets();
     void deleteProject();
     void renameProject(const QString&);
-	void insertAssetGlobal(const QString&, const QByteArray &thumbnail);
+	QString insertAssetGlobal(const QString&, const QByteArray &thumbnail);
     void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob);
     void insertThumbnailGlobal(const QString &world_guid,
                                const QString &name,

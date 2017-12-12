@@ -33,6 +33,7 @@ class AssetViewGrid;
 class AssetGridItem;
 class AssetViewer;
 class Database;
+class SettingsManager;
 
 class AssetView : public QWidget
 {
@@ -91,7 +92,9 @@ private:
 
 	QJsonArray fetchedOnlineAssets;
 
+    SettingsManager* settings;
 	AssetViewer *viewer;
+    AssetGridItem *selectedGridItem;
 };
 
 #endif // ASSETVIEW_H

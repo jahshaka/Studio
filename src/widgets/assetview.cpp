@@ -17,7 +17,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
-
+#include <QStandardPaths>
 #include <QtAlgorithms>
 #include <QFile>
 #include <QBuffer>>
@@ -25,6 +25,9 @@
 #include <QHeaderView>
 #include <QTreeWidgetItem>
 
+#include "../globals.h"
+#include "../constants.h"
+#include "../core/settingsmanager.h"
 #include "../core/database/database.h"
 #include "assetviewgrid.h"
 #include "assetgriditem.h"
@@ -51,6 +54,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 {
 	_assetView = new QListWidget;
 	viewer = new AssetViewer(this);
+
+    settings = SettingsManager::getDefaultManager();
 
 	sourceGroup = new QButtonGroup;
 	localAssetsButton = new QPushButton(tr(" Local Assets"));
@@ -230,8 +235,6 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 			filterPane->setVisible(true);
 			emptyGrid->setVisible(false);
 			fastGrid->setVisible(true);
-
-
 		}
 		else {
 			filterPane->setVisible(false);
@@ -246,12 +249,11 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	foreach(const AssetTileData &record, db->fetchAssets()) {
 		QJsonObject object;
 		object["icon_url"] = "";
+        object["guid"] = record.guid;
 		object["name"] = record.name;
 
 		QImage image;
 		image.loadFromData(record.thumbnail, "PNG");
-
-		qDebug() << record.name;
 
 		fastGrid->addTo(object, image, i);
 		i++;
@@ -259,7 +261,6 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 	//QApplication::processEvents();
 	fastGrid->updateGridColumns(fastGrid->lastWidth);
-
 
     _metadataPane = new QWidget; 
     QVBoxLayout *metaLayout = new QVBoxLayout;
@@ -308,6 +309,11 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	renameWidget->setLayout(renameLayout);
 	renameWidget->setVisible(false);
 
+    connect(fastGrid, &AssetViewGrid::selectedTile, [this](AssetGridItem *gridItem) {
+        selectedGridItem = gridItem;
+        addToProject->setVisible(true);
+    });
+
 	connect(addToLibrary, &QPushButton::pressed, [this]() {
 		QJsonObject object;
 		object["icon_url"] = "";
@@ -324,15 +330,26 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		buffer.open(QIODevice::WriteOnly);
 		thumbnail.save(&buffer, "PNG");
 
-		db->insertAssetGlobal(renameModelField->text(), bytes);
+		QString guid = db->insertAssetGlobal(renameModelField->text(), bytes);
+        
+        auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
+        bool copyFile = QFile::copy(filename, QDir(assetPath).filePath(guid));
 
 		renameWidget->setVisible(false);
-		addToLibrary->setVisible(false);
-		addToProject->setVisible(true);
+		addToLibrary->setVisible(false);	
 	});
 
 	connect(addToProject, &QPushButton::pressed, [this]() {
-		addToProject->setVisible(false);
+		//addToProject->setVisible(false);
+        // get the current project working directory
+        auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
+            Constants::PROJECT_FOLDER);
+        auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
+        auto pDir = IrisUtils::join(defaultProjectDirectory, Globals::project->getProjectName());
+
+        auto guid = selectedGridItem->metadata["guid"].toString();
+        auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
+        bool copyFile = QFile::copy(QDir(assetPath).filePath(guid), QDir(pDir).filePath(guid));
 	});
 
 	connect(browseButton, &QPushButton::pressed, [=]() {
@@ -367,12 +384,13 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	assetDropPadLayout->addWidget(renameWidget);
 	assetDropPadLayout->addSpacing(4);
 	assetDropPadLayout->addWidget(addToLibrary);
-	assetDropPadLayout->addWidget(nameField);
-	assetDropPadLayout->addWidget(typeField);
-	assetDropPadLayout->addWidget(uploadBtn);
-	assetDropPadLayout->addStretch();
+	//assetDropPadLayout->addWidget(nameField);
+	//assetDropPadLayout->addWidget(typeField);
+	//assetDropPadLayout->addWidget(uploadBtn);
+	//assetDropPadLayout->addStretch();
 	assetDropPadLayout->addWidget(addToProject);
 	assetDropPad->setLayout(assetDropPadLayout);
+
     metaLayout->addWidget(assetDropPad);
 	metaLayout->addWidget(assetDetails);
 
