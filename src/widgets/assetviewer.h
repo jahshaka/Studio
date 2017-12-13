@@ -31,7 +31,7 @@
 #include "../editor/cameracontrollerbase.h"
 #include "../editor/orbitalcameracontroller.h"
 
-class AssetViewer : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
+class AssetViewer : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core, iris::IModelReadProgress
 {
     Q_OBJECT
 
@@ -56,6 +56,11 @@ public:
 	void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
 	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore);
 	QImage takeScreenshot(int width, int height);
+
+    float onProgress(float percentage) {
+        qDebug() << "loading at " << percentage;
+        return percentage;
+    }
 
 private:
     QOpenGLFunctions_3_2_Core *gl;

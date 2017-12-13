@@ -19,6 +19,9 @@ For more information see the LICENSE file
 #include "../graphics/texture2d.h"
 #include "../graphics/renderitem.h"
 
+#include "assimp/ProgressHandler.hpp"
+#include <QProgressBar>
+
 class aiScene;
 
 namespace iris
@@ -26,6 +29,34 @@ namespace iris
 
 class RenderItem;
 struct MeshMaterialData;
+
+class IModelReadProgress
+{
+public:
+    virtual float onProgress(float percentage) = 0;
+};
+
+class ModelProgressHandler : public Assimp::ProgressHandler
+{
+public:
+    IModelReadProgress *handler;
+    ModelProgressHandler() : ProgressHandler() {
+        handler = Q_NULLPTR;
+    }
+
+    void setHandler(IModelReadProgress* handler) {
+        this->handler = handler;
+    }
+
+    ~ModelProgressHandler() {
+
+    }
+
+    bool Update(float percentage) {
+        if (handler) handler->onProgress(percentage);
+        return 1;
+    }
+};
 
 class MeshNode : public SceneNode
 {
@@ -63,7 +94,7 @@ public:
      * @param path
      * @return
      */
-    static SceneNodePtr loadAsSceneFragment(QString path, std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc);
+    static SceneNodePtr loadAsSceneFragment(QString path, std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc, IModelReadProgress* progressReader = nullptr);
 
     static SceneNodePtr loadAsAnimatedModel(QString path);
 

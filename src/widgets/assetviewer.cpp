@@ -190,7 +190,6 @@ void AssetViewer::resetViewerCamera()
     camera->setLocalPos(QVector3D(1, 1, 3));
     camera->lookAt(QVector3D(0, 0.5f, 0));
     camController->setCamera(camera);
-
     orbitalCam->pivot = QVector3D(0, 0, 0);
     orbitalCam->distFromPivot = 5;
     orbitalCam->setRotationSpeed(.5f);
@@ -233,8 +232,7 @@ void AssetViewer::addMesh(const QString &path, bool ignore, QVector3D position)
 
 	// makeCurrent();
 
-	auto node = iris::MeshNode::loadAsSceneFragment(filename,[](iris::MeshPtr mesh, iris::MeshMaterialData& data)
-	{
+	auto node = iris::MeshNode::loadAsSceneFragment(filename, [](iris::MeshPtr mesh, iris::MeshMaterialData& data) {
 		auto mat = iris::CustomMaterial::create();
 		if (mesh->hasSkeleton())
 			mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
@@ -258,7 +256,7 @@ void AssetViewer::addMesh(const QString &path, bool ignore, QVector3D position)
 			mat->setValue("normalTexture", data.normalTexture);
 
 		return mat;
-	});
+	}, this);
 
 	// model file may be invalid so null gets returned
 	if (!node) return;
