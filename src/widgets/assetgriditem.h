@@ -28,17 +28,18 @@ public:
 	bool selected;
 	QJsonObject metadata;
 
+	AssetGridItem() = default;
 	AssetGridItem(QJsonObject details, QImage image, QWidget *parent = Q_NULLPTR);
 	void setTile(QPixmap pix);
+	void highlight(bool);
+	
 	void enterEvent(QEvent *event);
 	void leaveEvent(QEvent *event);
-
 	void mousePressEvent(QMouseEvent *event);
 
 public slots:
 	void dimHighlight();
 	void noHighlight();
-	void selectedHighlight(AssetGridItem*);
 
 signals:
 	void hovered();

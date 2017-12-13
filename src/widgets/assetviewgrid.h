@@ -13,7 +13,7 @@ class AssetViewGrid : public QScrollArea
 	Q_OBJECT
 
 public:
-	QGridLayout *fastGrid;
+	QGridLayout *_layout;
 	int lastWidth;
 	QWidget *parent;
 
@@ -23,10 +23,14 @@ public:
 
 	void addTo(QJsonObject details, QImage image, int count);
 	void resizeEvent(QResizeEvent *event);
+	void mousePressEvent(QMouseEvent*);
 	void updateGridColumns(int width);
+	void deselectAll();
 
 private:
+	int gridCounter;
 	QWidget *gridWidget;
+	QList<AssetGridItem*> originalItems;
 
 signals:
 	void gridCount(int);

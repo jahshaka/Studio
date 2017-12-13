@@ -91,7 +91,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	localAssetsButton->toggle();
 
 	fastGrid = new AssetViewGrid(this);
-	fastGrid->installEventFilter(this);
+	//fastGrid->installEventFilter(this);
 
     // gui
     _splitter = new QSplitter(this);
@@ -243,7 +243,6 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		}
 	});
 
-
 	// show assets
 	int i = 0;
 	foreach(const AssetTileData &record, db->fetchAssets()) {
@@ -310,8 +309,15 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	renameWidget->setVisible(false);
 
     connect(fastGrid, &AssetViewGrid::selectedTile, [this](AssetGridItem *gridItem) {
-        selectedGridItem = gridItem;
-        addToProject->setVisible(true);
+		fastGrid->deselectAll();
+
+		if (!gridItem->metadata.isEmpty()) {
+			selectedGridItem = gridItem;
+			addToProject->setVisible(true);
+			selectedGridItem->highlight(true);
+		}
+
+		fetchMetadata(gridItem);
     });
 
 	connect(addToLibrary, &QPushButton::pressed, [this]() {
@@ -403,6 +409,9 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	QSizePolicy policy2;
 	policy2.setVerticalPolicy(QSizePolicy::Preferred);
 	policy2.setHorizontalPolicy(QSizePolicy::Preferred);
+	metadataMissing = new QLabel("Nothing selected...");
+	metadataMissing->setStyleSheet("padding: 12px");
+	metadataMissing->setSizePolicy(policy2);
 	metadataName = new QLabel("Name: ");
 	metadataName->setSizePolicy(policy2);
 	metadataType = new QLabel("Type: ");
@@ -411,6 +420,13 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	metadataVisibility->setSizePolicy(policy2);
 	metadataCollection = new QLabel("Collection: ");
 	metadataCollection->setSizePolicy(policy2);
+
+	metadataName->setVisible(false);
+	metadataType->setVisible(false);
+	metadataVisibility->setVisible(false);
+	metadataCollection->setVisible(false);
+
+	l->addWidget(metadataMissing);
 	l->addWidget(metadataName);
 	l->addWidget(metadataType);
 	l->addWidget(metadataVisibility);
@@ -464,11 +480,30 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 void AssetView::fetchMetadata(AssetGridItem *widget)
 {
-	metadataName->setText("Name: " + widget->metadata["name"].toString());
-	metadataType->setText("Type: " + QString::number(widget->metadata["type"].toInt()));
-	QString pub = widget->metadata["is_public"].toBool() ? "true" : "false";
-	metadataVisibility->setText("Public: " + pub);
-	metadataCollection->setText("Collection: " + QString::number(widget->metadata["collection_id"].toInt()));
+	if (!widget->metadata.isEmpty()) {
+		metadataMissing->setVisible(false);
+
+		metadataName->setVisible(true);
+		metadataType->setVisible(true);
+		metadataVisibility->setVisible(true);
+		metadataCollection->setVisible(true);
+
+		metadataName->setText("Name: " + widget->metadata["name"].toString());
+		metadataType->setText("Type: " + QString::number(widget->metadata["type"].toInt()));
+		QString pub = widget->metadata["is_public"].toBool() ? "true" : "false";
+		metadataVisibility->setText("Public: " + pub);
+		metadataCollection->setText("Collection: " + QString::number(widget->metadata["collection_id"].toInt()));
+	}
+	else {
+		metadataMissing->setVisible(true);
+
+		addToProject->setVisible(false);
+
+		metadataName->setVisible(false);
+		metadataType->setVisible(false);
+		metadataVisibility->setVisible(false);
+		metadataCollection->setVisible(false);
+	}
 }
 
 AssetView::~AssetView()

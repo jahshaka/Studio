@@ -85,6 +85,7 @@ private:
 	QWidget *emptyGrid;
 	QWidget *filterPane;
 
+	QLabel *metadataMissing;
 	QLabel *metadataName;
 	QLabel *metadataType;
 	QLabel *metadataVisibility;

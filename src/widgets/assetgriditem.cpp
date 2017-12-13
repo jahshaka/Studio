@@ -35,7 +35,6 @@ AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QWidget *parent)
 
 	connect(this, SIGNAL(hovered()), SLOT(dimHighlight()));
 	connect(this, SIGNAL(left()), SLOT(noHighlight()));
-	connect(this, SIGNAL(singleClicked(AssetGridItem*)), SLOT(selectedHighlight(AssetGridItem*)));
 }
 
 void AssetGridItem::setTile(QPixmap pix) {
@@ -76,9 +75,14 @@ void AssetGridItem::noHighlight() {
     }
 }
 
-void AssetGridItem::selectedHighlight(AssetGridItem*) {
-	selected = true;
-	textLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 12px; background: #1e1e1e;"
-		"border-left: 3px solid #3498db; border-bottom: 3px solid #3498db; border-right: 3px solid #3498db");
-	gridImageLabel->setStyleSheet("border-left: 3px solid #3498db; border-top: 3px solid #3498db; border-right: 3px solid #3498db");
+void AssetGridItem::highlight(bool highlight) {
+	selected = highlight;
+	if (selected) {
+		textLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 12px; background: #1e1e1e;"
+			"border-left: 3px solid #3498db; border-bottom: 3px solid #3498db; border-right: 3px solid #3498db");
+		gridImageLabel->setStyleSheet("border-left: 3px solid #3498db; border-top: 3px solid #3498db; border-right: 3px solid #3498db");
+	}
+	else {
+		dimHighlight();
+	}
 }
