@@ -45,6 +45,7 @@ public:
     void resizeGL(int width, int height);
 
     void renderObject();
+    void resetViewerCamera();
     void loadModel(QString str);
 
     void wheelEvent(QWheelEvent *event);

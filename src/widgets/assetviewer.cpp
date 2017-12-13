@@ -86,14 +86,30 @@ void AssetViewer::initializeGL()
 
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
-    scene->rootNode->addChild(dlight);
     dlight->setName("Key Light");
-    dlight->setLocalRot(QQuaternion::fromEulerAngles(45, -45, 0));
+    dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 45, 0));
     dlight->intensity = 1;
     dlight->setShadowEnabled(true);
     dlight->shadowMap->shadowType = iris::ShadowMapType::None;
+    scene->rootNode->addChild(dlight);
 
-    // scene->rootNode->addChild(node);
+    auto plight = iris::LightNode::create();
+    plight->setLightType(iris::LightType::Point);
+    plight->setLocalPos(QVector3D(0, 0, -3));
+    plight->color = QColor(198, 198, 255);
+    plight->intensity = 1;
+    plight->setShadowEnabled(true);
+    plight->shadowMap->shadowType = iris::ShadowMapType::None;
+    scene->rootNode->addChild(plight);
+
+    auto blight = iris::LightNode::create();
+    blight->setLightType(iris::LightType::Point);
+    blight->setLocalPos(QVector3D(2, 2, 2));
+    blight->color = QColor(255, 255, 198);
+    blight->intensity = 0.67;
+    blight->setShadowEnabled(true);
+    blight->shadowMap->shadowType = iris::ShadowMapType::None;
+    scene->rootNode->addChild(blight);
 
     defaultCam = new EditorCameraController();
     orbitalCam = new OrbitalCameraController();
@@ -107,7 +123,6 @@ void AssetViewer::initializeGL()
     scene->setSkyColor(QColor(25, 25, 25));
     scene->setAmbientColor(QColor(255, 255, 255));
 
-    scene->fogColor = QColor(72, 72, 72);
     scene->fogEnabled = false;
     scene->shadowEnabled = false;
 
@@ -170,9 +185,23 @@ void AssetViewer::mouseReleaseEvent(QMouseEvent *e)
     }
 }
 
+void AssetViewer::resetViewerCamera()
+{
+    camera->setLocalPos(QVector3D(1, 1, 3));
+    camera->lookAt(QVector3D(0, 0.5f, 0));
+    camController->setCamera(camera);
+
+    orbitalCam->pivot = QVector3D(0, 0, 0);
+    orbitalCam->distFromPivot = 5;
+    orbitalCam->setRotationSpeed(.5f);
+    orbitalCam->updateCameraRot();
+    camera->update(0);
+}
+
 void AssetViewer::loadModel(QString str) {
 	makeCurrent();
-	addMesh(str);
+    resetViewerCamera();
+    addMesh(str);
 	renderObject();
 	doneCurrent();
 }
@@ -204,18 +233,17 @@ void AssetViewer::addMesh(const QString &path, bool ignore, QVector3D position)
 
 	// makeCurrent();
 
-	auto node = iris::MeshNode::loadAsSceneFragment(filename, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+	auto node = iris::MeshNode::loadAsSceneFragment(filename,[](iris::MeshPtr mesh, iris::MeshMaterialData& data)
 	{
 		auto mat = iris::CustomMaterial::create();
-		//MaterialReader *materialReader = new MaterialReader();
 		if (mesh->hasSkeleton())
 			mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
 		else
 			mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
-		mat->setValue("diffuseColor", data.diffuseColor);
+		mat->setValue("diffuseColor", QColor(155, 155, 155));
 		mat->setValue("specularColor", data.specularColor);
-		mat->setValue("ambientColor", data.ambientColor);
+		mat->setValue("ambientColor", QColor(100, 100, 100));
 		mat->setValue("emissionColor", data.emissionColor);
 
 		mat->setValue("shininess", data.shininess);
@@ -272,7 +300,15 @@ void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool
 		}
 	}
 
-	scene->rootNode->addChild(sceneNode);
+    if (scene->rootNode->hasChildren()) {
+        for (auto child : scene->rootNode->children) {
+            if (child->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+                child->removeFromParent();
+            }
+        }
+    }
+
+    scene->rootNode->addChild(sceneNode);
 }
 
 QImage AssetViewer::takeScreenshot(int width, int height)
