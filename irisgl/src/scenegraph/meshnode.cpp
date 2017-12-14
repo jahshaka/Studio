@@ -317,9 +317,8 @@ MeshNode::loadAsSceneFragment(QString filePath,
     ModelProgressHandler *handle = new ModelProgressHandler();
     handle->setHandler(progressReader);
     importer.SetProgressHandler(handle);
-    const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(),aiProcessPreset_TargetRealtime_Fast);
+    const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(), aiProcessPreset_TargetRealtime_Quality);
 
-    if (!scene) return QSharedPointer<iris::MeshNode>(nullptr);
     if (scene->mNumMeshes == 0) return QSharedPointer<iris::MeshNode>(nullptr);
     if (scene->mNumMeshes == 1) {
         auto mesh = scene->mMeshes[0];
@@ -329,7 +328,7 @@ MeshNode::loadAsSceneFragment(QString filePath,
 
         //todo: use relative path from scene root
         auto anims = Mesh::extractAnimations(scene, filePath);
-        for(auto animName : anims.keys()) {
+        for (auto animName : anims.keys()) {
             // meshObj->addSkeletalAnimation(animName, anims[animName]);
             auto anim = Animation::createFromSkeletalAnimation(anims[animName]);
             node->addAnimation(anim);
@@ -349,8 +348,7 @@ MeshNode::loadAsSceneFragment(QString filePath,
         MeshMaterialData meshMat;
         MaterialHelper::extractMaterialData(m, dir, meshMat);
         auto mat = createMaterialFunc(meshObj, meshMat);
-        if (!!mat)
-            node->setMaterial(mat);
+        if (!!mat) node->setMaterial(mat);
 
         return node;
     }

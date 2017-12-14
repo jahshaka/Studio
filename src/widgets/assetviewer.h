@@ -31,6 +31,8 @@
 #include "../editor/cameracontrollerbase.h"
 #include "../editor/orbitalcameracontroller.h"
 
+#include "dialogs/progressdialog.h"
+
 class AssetViewer : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core, iris::IModelReadProgress
 {
     Q_OBJECT
@@ -58,11 +60,15 @@ public:
 	QImage takeScreenshot(int width, int height);
 
     float onProgress(float percentage) {
-        qDebug() << "loading at " << percentage;
+        emit progressChanged(percentage * 100);
         return percentage;
     }
 
+signals:
+    void progressChanged(int);
+
 private:
+    ProgressDialog * pdialog;
     QOpenGLFunctions_3_2_Core *gl;
     iris::ForwardRendererPtr renderer;
     iris::ScenePtr scene;

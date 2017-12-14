@@ -33,5 +33,6 @@ void ProgressDialog::setRange(int min, int max)
 
 void ProgressDialog::setValue(int val)
 {
+    qDebug() << "aaa" << val;
     ui->progressBar->setValue(val);
 }

@@ -21,6 +21,7 @@ class QFocusEvent;
 #include <QScrollArea>
 #include <qdebug.h>
 #include <QLabel>
+#include <QOpenGLWidget>
 #include <QButtonGroup>
 
 enum AssetSource

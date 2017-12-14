@@ -94,7 +94,11 @@ public:
      * @param path
      * @return
      */
-    static SceneNodePtr loadAsSceneFragment(QString path, std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc, IModelReadProgress* progressReader = nullptr);
+    static SceneNodePtr loadAsSceneFragment(
+        QString path,
+        std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc,
+        IModelReadProgress* progressReader = Q_NULLPTR
+    );
 
     static SceneNodePtr loadAsAnimatedModel(QString path);
 

@@ -7,6 +7,7 @@
 #include "../globals.h"
 #include "../core/keyboardstate.h"
 
+#include <QApplication>
 #include <QFileDialog>
 
 AssetViewer::AssetViewer(QWidget *parent) : QOpenGLWidget(parent)
@@ -28,6 +29,12 @@ AssetViewer::AssetViewer(QWidget *parent) : QOpenGLWidget(parent)
 
     viewport = new iris::Viewport();
     render = false;
+
+    pdialog = new ProgressDialog();
+    pdialog->setWindowModality(Qt::WindowModal);
+    pdialog->setRange(0, 100);
+
+    connect(this, &AssetViewer::progressChanged, pdialog, &ProgressDialog::setValue);
 
     // needed in order to get mouse events
     setMouseTracking(true);
@@ -198,11 +205,15 @@ void AssetViewer::resetViewerCamera()
 }
 
 void AssetViewer::loadModel(QString str) {
+    //pdialog->setLabelText(tr("Importing model..."));
+    //pdialog->show();
+    //QApplication::processEvents();
 	makeCurrent();
     resetViewerCamera();
     addMesh(str);
 	renderObject();
 	doneCurrent();
+    //pdialog->close();
 }
 
 void AssetViewer::update() {
@@ -229,8 +240,6 @@ void AssetViewer::addMesh(const QString &path, bool ignore, QVector3D position)
 	}
 
 	if (filename.isEmpty()) return;
-
-	// makeCurrent();
 
 	auto node = iris::MeshNode::loadAsSceneFragment(filename, [](iris::MeshPtr mesh, iris::MeshMaterialData& data) {
 		auto mat = iris::CustomMaterial::create();
