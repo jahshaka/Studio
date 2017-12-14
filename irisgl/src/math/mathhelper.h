@@ -25,6 +25,8 @@ class MathHelper
 public:
 
     // https://github.com/MonoGame/MonoGame/blob/develop/MonoGame.Framework/Matrix.cs#L1455
+	// look into doing better decomposition:
+	// https://github.com/qt/qt3d/blob/fb18ee8f05ff36f517ef2248539fda8a79c33f0e/src/core/transforms/qmath3d_p.h
     static void decomposeMatrix(const QMatrix4x4& matrix, QVector3D& pos, QQuaternion& rot, QVector3D& scale)
     {
         pos = matrix.column(3).toVector3D();

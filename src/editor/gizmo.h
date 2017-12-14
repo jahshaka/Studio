@@ -106,18 +106,23 @@ public:
 
 class Gizmo
 {
-public:
+protected:
 	iris::SceneNodePtr selectedNode;
 	GizmoTransformSpace transformSpace;
 	float gizmoScale;
 
+public:
 	Gizmo();
 	virtual void updateSize(iris::CameraNodePtr camera);
 	float getGizmoScale();
 
+	virtual void setTransformSpace(GizmoTransformSpace transformSpace);
+	virtual void setSelectedNode(iris::SceneNodePtr node);
+	void clearSelectedNode();
+
 	// returns transform of the gizmo, not the scene node
 	// the transform is calculated based on the transform's space (local or global)
-	QMatrix4x4 getTransform();
+	virtual QMatrix4x4 getTransform();
 	virtual bool isHit(QVector3D rayPos, QVector3D rayDir);
 };
 

@@ -190,6 +190,7 @@ public:
 
     bool isRootNode();
 
+	QQuaternion getGlobalRotation();
     QVector3D getGlobalPosition();
     QMatrix4x4 getGlobalTransform();
     QMatrix4x4 getLocalTransform();

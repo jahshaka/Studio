@@ -15,8 +15,7 @@ For more information see the LICENSE file
 //#include "gizmoinstance.h"
 #include "gizmo.h"
 #include "irisgl/src/graphics/graphicshelper.h"
-#include "gizmo.h"
-#include "irisgl/src/graphics/graphicshelper.h"
+#include <QMatrix4x4>
 
 class RotationHandle : public GizmoHandle
 {
@@ -26,7 +25,7 @@ public:
 	GizmoAxis axis;
 	QVector3D handleExtent;// local extent of the gizmo
 	QVector3D plane;// for hit detection
-	float handleScale = 0.1f;
+	float handleScale = 0.02f;
 	float handleRadius = 3.0f;
 	float handleRadiusSize = 0.8f;
 
@@ -53,6 +52,7 @@ class RotationGizmo : public Gizmo
 	RotationHandle* draggedHandle;
 	int draggedHandleIndex;
 
+	QMatrix4x4 trans;
 	bool dragging;
 public:
 	RotationGizmo();
@@ -69,6 +69,10 @@ public:
 	// hitPos is the hit position of the hit handle
 	RotationHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, float& hitAngle);
 	void render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
+
+	QMatrix4x4 getTransform() override;
+	void setTransformSpace(GizmoTransformSpace transformSpace) override;
+	void setSelectedNode(iris::SceneNodePtr node) override;
 };
 
 

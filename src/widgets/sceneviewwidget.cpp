@@ -278,12 +278,13 @@ void SceneViewWidget::clearSelectedNode()
 {
     selectedNode.clear();
     renderer->setSelectedSceneNode(selectedNode);
+	gizmo->clearSelectedNode();
 }
 
 void SceneViewWidget::renderGizmos(bool once)
 {
     auto gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
-	if (!!gizmo->selectedNode) {
+	if (!!selectedNode) {
 		gizmo->updateSize(editorCam);
 		gizmo->render(gl, editorCam->viewMatrix, editorCam->projMatrix);
 	}
@@ -732,7 +733,7 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr l
     }
 
     //viewportGizmo->setLastSelectedNode(pickedNode);
-    gizmo->selectedNode = pickedNode;
+    gizmo->setSelectedNode(pickedNode);
     emit sceneNodeSelected(pickedNode);
 }
 
@@ -759,7 +760,7 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
     auto rayDir = this->calculateMouseRay(point).normalized();// * 1024;
     //auto segEnd = segStart + rayDir;
     if (!!selectedNode) {
-        gizmo->selectedNode = selectedNode;
+        gizmo->setSelectedNode(selectedNode);
         if (gizmo != nullptr && gizmo->isHit(segStart, rayDir)) {
 
         } else {

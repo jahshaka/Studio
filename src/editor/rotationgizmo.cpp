@@ -42,13 +42,13 @@ bool RotationHandle::isHit(QVector3D rayPos, QVector3D rayDir)
 	auto worldToGizmo = gizmoTransform.inverted();
 
 	rayPos = worldToGizmo * rayPos;
-	rayDir = QQuaternion::fromRotationMatrix(worldToGizmo.normalMatrix()) * rayDir;
+	rayDir = QQuaternion::fromRotationMatrix(worldToGizmo.normalMatrix()).normalized() * rayDir;
 
 	QVector3D hitPoint;
 	float hitDist;
 	if (iris::IntersectionHelper::intersectSegmentPlane(rayPos, rayPos + rayDir * 1000000, iris::Plane(plane, 0), hitDist, hitPoint)) {
-		float innerRadius = (handleRadius - (handleRadiusSize / 2.0f));// *handleScale * gizmo->getGizmoScale();
-		float outerRadius = (handleRadius + (handleRadiusSize / 2.0f));// *handleScale * gizmo->getGizmoScale();
+		float innerRadius = (handleRadius - (handleRadiusSize / 2.0f)) *handleScale * gizmo->getGizmoScale();
+		float outerRadius = (handleRadius + (handleRadiusSize / 2.0f)) *handleScale * gizmo->getGizmoScale();
 		float distToCenter = hitPoint.length();
 		//qDebug() << distToCenter;
 
@@ -69,43 +69,46 @@ bool RotationHandle::getHitAngle(QVector3D rayPos, QVector3D rayDir, float& angl
 	auto worldToGizmo = gizmoTransform.inverted();
 
 	rayPos = worldToGizmo * rayPos;
-	rayDir = QQuaternion::fromRotationMatrix(worldToGizmo.normalMatrix()) * rayDir;
+	rayDir = QQuaternion::fromRotationMatrix(worldToGizmo.normalMatrix()).normalized() * rayDir;
 
 	QVector3D hitPoint;
-	float hitDist;
+	float hitDist;	
+
+	// first test of the handle's facing plane
 	if (iris::IntersectionHelper::intersectSegmentPlane(rayPos, rayPos + rayDir * 1000000, iris::Plane(plane, 0), hitDist, hitPoint)) {
 		hitPoint.normalize();
-		qDebug() << hitPoint;
+	}
+	else {
+		// if the handle's plane miss, then test against plane that always faces the user
+		auto facingPlane = -(rayPos.normalized());
+		// this is a guaranteed hit since the plane is facing the ray source
+		iris::IntersectionHelper::intersectSegmentPlane(rayPos, rayPos + rayDir * 1000000, iris::Plane(facingPlane, 10000), hitDist, hitPoint);
+		hitPoint.normalize();
 
-		switch (axis)
-		{
-		case GizmoAxis::X:
-			angle = qAtan2(-hitPoint.y(), hitPoint.z());
-			qDebug() << angle;
-			break;
-		case GizmoAxis::Y:
-			angle = qAtan2(hitPoint.x(), hitPoint.z());
-			qDebug() << angle;
-			break;
-		case GizmoAxis::Z:
-			angle = qAtan2(hitPoint.y(), hitPoint.x());
-			qDebug() << angle;
-			break;
-		}
-
-		// flip rotation if behind plane normal
-		if (QVector3D::dotProduct(plane, rayDir) < 0) {
-			angle = -angle;
-		}
-
-		
-		angle = qRadiansToDegrees(angle);
-		qDebug() << angle;
-
-		return true;
+		// project to original handle's plane
+		auto d = QVector3D::dotProduct(plane, hitPoint);
+		hitPoint = hitPoint - plane*d;
 	}
 
-	return false;
+	switch (axis)
+	{
+	case GizmoAxis::X:
+		angle = -qAtan2(-hitPoint.y(), hitPoint.z());
+		//qDebug() << angle;
+		break;
+	case GizmoAxis::Y:
+		angle = -qAtan2(hitPoint.x(), hitPoint.z());
+		//qDebug() << angle;
+		break;
+	case GizmoAxis::Z:
+		angle = -qAtan2(hitPoint.y(), hitPoint.x());
+		//qDebug() << angle;
+		break;
+	}
+
+	angle = qRadiansToDegrees(angle);
+
+	return true;
 }
 
 RotationGizmo::RotationGizmo() :
@@ -125,8 +128,8 @@ RotationGizmo::RotationGizmo() :
 void RotationGizmo::loadAssets()
 {
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/rot_x.obj")));
-	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/rot_y.obj")));
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/rot_z.obj")));
+	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/rot_y.obj")));
 
 	shader = iris::GraphicsHelper::loadShader(
 		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"),
@@ -140,6 +143,7 @@ bool RotationGizmo::isDragging()
 
 void RotationGizmo::startDragging(QVector3D rayPos, QVector3D rayDir)
 {
+	trans = Gizmo::getTransform();
 	//qDebug() << "drag starting";
 	draggedHandle = getHitHandle(rayPos, rayDir, startAngle);
 	if (draggedHandle == nullptr) {
@@ -149,13 +153,14 @@ void RotationGizmo::startDragging(QVector3D rayPos, QVector3D rayDir)
 
 	draggedHandle->getHitAngle(rayPos, rayDir, startAngle);
 
-	nodeStartRot = selectedNode->getLocalRot();
+	nodeStartRot = selectedNode->getLocalRot().normalized();
 	dragging = true;
 }
 
 void RotationGizmo::endDragging()
 {
 	dragging = false;
+	draggedHandle = nullptr;
 }
 
 void RotationGizmo::drag(QVector3D rayPos, QVector3D rayDir)
@@ -188,11 +193,15 @@ void RotationGizmo::drag(QVector3D rayPos, QVector3D rayDir)
 
 	//qDebug() << rot.toEulerAngles();
 	//selectedNode->setLocalRot(nodeStartRot * rot);
-	selectedNode->setLocalRot(rot * nodeStartRot);
+	if (transformSpace == GizmoTransformSpace::Global)
+		selectedNode->setLocalRot(rot * nodeStartRot);
+	else
+		selectedNode->setLocalRot(nodeStartRot * rot);
 }
 
 bool RotationGizmo::isHit(QVector3D rayPos, QVector3D rayDir)
 {
+	trans = Gizmo::getTransform();
 	for (auto i = 0; i< 3; i++) {
 		if (handles[i]->isHit(rayPos, rayDir))
 		{
@@ -235,16 +244,50 @@ void RotationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix
 
 	shader->setUniformValue("u_viewMatrix", viewMatrix);
 	shader->setUniformValue("u_projMatrix", projMatrix);
-	shader->setUniformValue("showHalf", false);
+	shader->setUniformValue("showHalf", true);
 
-	for (int i = 0; i<3; i++) {
-		auto transform = this->getTransform();
-		//transform.scale(getGizmoScale() * handles[i]->handleScale);
-		shader->setUniformValue("color", handles[i]->getHandleColor());
-		shader->setUniformValue("u_worldMatrix", transform);
-		//handles[i]->draw(gl, shader);
-		handleMeshes[i]->draw(gl, shader);
+	if (dragging) {
+		for (int i = 0; i < 3; i++) {
+			if (handles[i] == draggedHandle) {
+				//auto transform = this->getTransform();
+				auto transform = Gizmo::getTransform();
+				transform.scale(getGizmoScale() * handles[i]->handleScale);
+				shader->setUniformValue("color", handles[i]->getHandleColor());
+				shader->setUniformValue("u_worldMatrix", transform);
+				//handles[i]->draw(gl, shader);
+				handleMeshes[i]->draw(gl, shader);
+			}
+		}
+	}
+	else
+	{
+		for (int i = 0; i < 3; i++) {
+			auto transform = Gizmo::getTransform();
+			transform.scale(getGizmoScale() * handles[i]->handleScale);
+			shader->setUniformValue("color", handles[i]->getHandleColor());
+			shader->setUniformValue("u_worldMatrix", transform);
+			//handles[i]->draw(gl, shader);
+			handleMeshes[i]->draw(gl, shader);
+		}
 	}
 
 	shader->release();
+}
+
+QMatrix4x4 RotationGizmo::getTransform()
+{
+	return trans;
+	//return Gizmo::getTransform();
+}
+
+void RotationGizmo::setTransformSpace(GizmoTransformSpace transformSpace)
+{
+	this->transformSpace = transformSpace;
+	trans = Gizmo::getTransform();
+}
+
+void RotationGizmo::setSelectedNode(iris::SceneNodePtr node)
+{
+	selectedNode = node;
+	trans = Gizmo::getTransform();
 }
