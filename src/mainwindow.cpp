@@ -338,136 +338,7 @@ bool MainWindow::handleMouseWheel(QWheelEvent *event)
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
-
     switch (event->type()) {
-        case QEvent::DragMove: {
-            auto evt = static_cast<QDragMoveEvent*>(event);
-            if (obj == sceneContainer) {
-				qDebug() << "me?";
-                auto info = QFileInfo(evt->mimeData()->text());
-				
-				QByteArray encoded = evt->mimeData()->data("application/x-qabstractitemmodeldatalist");
-				QDataStream stream(&encoded, QIODevice::ReadOnly);
-				QMap<int, QVariant> roleDataMap;
-				while (!stream.atEnd()) {
-					stream >> roleDataMap;
-				}
-	
-                if (!!activeSceneNode) {
-                    sceneView->hideGizmo();
-
-					// backwards compat for now
-                    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object))
-					{
-                        if (sceneView->doActiveObjectPicking(evt->posF())) {
-                            //activeSceneNode->pos = sceneView->hit;
-                            dragScenePos = sceneView->hit;
-                        } else if (sceneView->updateRPI(sceneView->editorCam->getLocalPos(),
-                                                        sceneView->calculateMouseRay(evt->posF())))
-                        {
-                            //activeSceneNode->pos = sceneView->Offset;
-                            dragScenePos = sceneView->Offset;
-                        } else {
-                            ////////////////////////////////////////
-                            const float spawnDist = 10.0f;
-                            auto offset = sceneView->editorCam->getLocalRot().rotatedVector(QVector3D(0, -1.0f, -spawnDist));
-                            offset += sceneView->editorCam->getLocalPos();
-                            //activeSceneNode->pos = offset;
-                            dragScenePos = offset;
-                        }
-                    }
-                }
-
-                if (roleDataMap.value(0).toInt() != static_cast<int>(ModelTypes::Object))
-				{
-                    sceneView->doObjectPicking(evt->posF(), iris::SceneNodePtr(), false, true);
-                }
-            }
-        }
-
-        case QEvent::DragEnter: {
-            auto evt = static_cast<QDragEnterEvent*>(event);
-
-            sceneView->hideGizmo();
-
-            if (obj == sceneContainer) {
-				QByteArray encoded = evt->mimeData()->data("application/x-qabstractitemmodeldatalist");
-				QDataStream stream(&encoded, QIODevice::ReadOnly);
-
-				QMap<int, QVariant> roleDataMap;
-				while (!stream.atEnd()) {
-					stream >> roleDataMap;
-				}
-
-				qDebug() << "OR me?";
-                //if (evt->mimeData()->hasText()) {
-				if (evt->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist"))
-                    evt->acceptProposedAction();
-
-                //auto info = QFileInfo(evt->mimeData()->text());
-                //if (Constants::MODEL_EXTS.contains(info.suffix())) {
-
-                //    if (dragging) {
-                //        // TODO swap this with the actual model later on
-                //        addDragPlaceholder();
-                //        dragging = !dragging;
-                //    }
-                //}
-            }
-
-            break;
-        }
-
-        case QEvent::Drop: {
-            if (obj == sceneContainer) {
-                auto evt = static_cast<QDropEvent*>(event);
-
-                //auto info = QFileInfo(evt->mimeData()->text());
-                //if (evt->mimeData()->hasText()) {
-                //    evt->acceptProposedAction();
-                //} else {
-                //    evt->ignore();
-                //}
-
-				//if (evt->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist")) {
-				//	evt->accept();
-					qDebug() << "fresh";
-				//}
-				//else {
-				//	evt->ignore();
-				//}
-				QByteArray encoded = evt->mimeData()->data("application/x-qabstractitemmodeldatalist");
-				QDataStream stream(&encoded, QIODevice::ReadOnly);
-				QMap<int, QVariant> roleDataMap;
-				while (!stream.atEnd()) {
-					stream >> roleDataMap;
-				}
-				qDebug() << roleDataMap;
-                if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object))
-				{
-                    //auto ppos = activeSceneNode->pos;
-                    auto ppos = dragScenePos;
-                    //deleteNode();
-					qDebug() << "nani?";
-					addMesh(roleDataMap.value(3).toString(), true, ppos);
-                }
-
-				// drag and drop material
-                //if (!!activeSceneNode && !Constants::MODEL_EXTS.contains(info.suffix())) {
-                //    auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
-                //    auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
-
-                //    if (!mat->firstTextureSlot().isEmpty()) {
-                //        mat->setValue(mat->firstTextureSlot(), evt->mimeData()->text());
-                //    }
-                //}
-
-				evt->acceptProposedAction();
-            }
-
-            break;
-        }
-
         case QEvent::MouseButtonPress: {
             dragging = true;
 
@@ -1568,6 +1439,10 @@ void MainWindow::setupViewPort()
     layout->addWidget(sceneView);
     layout->setMargin(0);
     sceneContainer->setLayout(layout);
+
+    connect(sceneView, &SceneViewWidget::addDroppedMesh, [this](QString path, bool v, QVector3D pos) {
+        addMesh(path, v, pos);
+    });
 
     connect(sceneView,  SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),
             this,       SLOT(initializeGraphics(SceneViewWidget*,   QOpenGLFunctions_3_2_Core*)));
