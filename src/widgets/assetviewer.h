@@ -90,6 +90,8 @@ private:
 	iris::RenderTargetPtr previewRT;
 	iris::Texture2DPtr screenshotTex;
 
-    //float getBoundingRadius(iris::SceneNodePtr node);
-    //void getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere>& spheres);
+    float getBoundingRadius(iris::SceneNodePtr node);
+    void getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere>& spheres);
+
+    QVector3D localPos, lookAt;
 };

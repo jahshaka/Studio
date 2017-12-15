@@ -194,10 +194,10 @@ void AssetViewer::mouseReleaseEvent(QMouseEvent *e)
 
 void AssetViewer::resetViewerCamera()
 {
-    camera->setLocalPos(QVector3D(1, 1, 3));
-    camera->lookAt(QVector3D(0, 0.5f, 0));
+    camera->setLocalPos(localPos);
+    camera->lookAt(lookAt);
     camController->setCamera(camera);
-    orbitalCam->pivot = QVector3D(0, 0, 0);
+    orbitalCam->pivot = QVector3D(lookAt);
     orbitalCam->distFromPivot = 5;
     orbitalCam->setRotationSpeed(.5f);
     orbitalCam->updateCameraRot();
@@ -209,8 +209,8 @@ void AssetViewer::loadModel(QString str) {
     pdialog->show();
     QApplication::processEvents();
 	makeCurrent();
-    resetViewerCamera();
     addMesh(str);
+    resetViewerCamera();
 	renderObject();
 	doneCurrent();
     pdialog->close();
@@ -316,6 +316,59 @@ void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool
     }
 
     scene->rootNode->addChild(sceneNode);
+
+    // fit object in view
+    QList<iris::BoundingSphere> spheres;
+    getBoundingSpheres(sceneNode, spheres);
+    iris::BoundingSphere bound;
+
+    //merge bounding spheres
+    if (spheres.count() == 0) {
+        bound.pos = QVector3D(0, 0, 0);
+        bound.radius = 1;
+    }
+    else if (spheres.count() == 1) {
+        bound = spheres[0];
+    }
+    else {
+        bound.pos = QVector3D(0, 0, 0);
+        bound.radius = 1;
+
+        for (auto& sphere : spheres) {
+            bound = iris::BoundingSphere::merge(bound, sphere);
+        }
+    }
+
+    float dist = (bound.radius * 1.2) / qTan(qDegreesToRadians(camera->angle / 2.0f));
+    lookAt = bound.pos;
+    localPos = QVector3D(0, bound.pos.y(), dist);
+    //camera->lookAt(bound.pos);
+    //camera->update(0);
+}
+
+float AssetViewer::getBoundingRadius(iris::SceneNodePtr node)
+{
+    auto radius = 0.0f;
+    if (node->sceneNodeType == iris::SceneNodeType::Mesh)
+        radius = node.staticCast<iris::MeshNode>()->getMesh()->boundingSphere.radius;
+
+    for (auto child : node->children) {
+        radius = qMax(radius, getBoundingRadius(child));
+    }
+
+    return radius;
+}
+
+void AssetViewer::getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere> &spheres)
+{
+    if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
+        auto sphere = node.staticCast<iris::MeshNode>()->getTransformedBoundingSphere();
+        spheres.append(sphere);
+    }
+
+    for (auto child : node->children) {
+        getBoundingSpheres(child, spheres);
+    }
 }
 
 QImage AssetViewer::takeScreenshot(int width, int height)
