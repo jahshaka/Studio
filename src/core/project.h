@@ -46,4 +46,26 @@ struct AssetTileData {
 	QString     guid;
 };
 
+struct AssetData {
+	QByteArray thumbnail;
+	short type;
+	QString guid;
+	QString name;
+};
+
+enum class ModelTypes {
+	Shader,
+	Material,
+	Texture,
+	Video,
+	Cubemap,
+	Object,
+	SoundEffect,
+	Music
+};
+
+#define	MODEL_GUID_ROLE	0x0113
+#define	MODEL_EXT_ROLE	0x0133
+#define	MODEL_TYPE_ROLE	0x0123
+
 #endif // PROJECT_H

@@ -205,15 +205,15 @@ void AssetViewer::resetViewerCamera()
 }
 
 void AssetViewer::loadModel(QString str) {
-    //pdialog->setLabelText(tr("Importing model..."));
-    //pdialog->show();
-    //QApplication::processEvents();
+    pdialog->setLabelText(tr("Importing model..."));
+    pdialog->show();
+    QApplication::processEvents();
 	makeCurrent();
     resetViewerCamera();
     addMesh(str);
 	renderObject();
 	doneCurrent();
-    //pdialog->close();
+    pdialog->close();
 }
 
 void AssetViewer::update() {

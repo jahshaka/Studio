@@ -14,7 +14,7 @@ AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QWidget *parent)
 	gridImageLabel->setAlignment(Qt::AlignCenter);
 
 	layout->addWidget(gridImageLabel, 0, 0);
-	textLabel = new QLabel(details["name"].toString());
+	textLabel = new QLabel(QFileInfo(details["name"].toString()).baseName());
 
 	textLabel->setWordWrap(true);
 	textLabel->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);

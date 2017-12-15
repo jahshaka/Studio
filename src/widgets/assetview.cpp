@@ -249,7 +249,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		QJsonObject object;
 		object["icon_url"] = "";
         object["guid"] = record.guid;
-		object["name"] = record.name;
+		object["name"] = QFileInfo(record.name).fileName();
 
 		QImage image;
 		image.loadFromData(record.thumbnail, "PNG");
@@ -262,6 +262,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	fastGrid->updateGridColumns(fastGrid->lastWidth);
 
     _metadataPane = new QWidget; 
+	_metadataPane->setObjectName(QStringLiteral("MetadataPane"));
     QVBoxLayout *metaLayout = new QVBoxLayout;
 	metaLayout->setMargin(0);
 	auto assetDropPad = new QWidget;
@@ -270,23 +271,16 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	QSizePolicy policy;
 	policy.setHorizontalPolicy(QSizePolicy::Expanding);
 	assetDropPad->setSizePolicy(policy);
-	auto assetDetails = new QWidget;
 	assetDropPad->setObjectName(QStringLiteral("assetDropPad"));
 	auto assetDropPadLayout = new QVBoxLayout;
 	QLabel *assetDropPadLabel = new QLabel("Drop model to import...");
+	assetDropPadLayout->setSpacing(4);
 	assetDropPadLabel->setObjectName(QStringLiteral("assetDropPadLabel"));
 	assetDropPadLabel->setAlignment(Qt::AlignHCenter);
+
 	assetDropPadLayout->addWidget(assetDropPadLabel);
-	assetDropPadLayout->addSpacing(4);
 	QPushButton *browseButton = new QPushButton("Browse for file...");
 	assetDropPadLayout->addWidget(browseButton);
-	// temp
-	nameField = new QLineEdit;
-	nameField->setVisible(false);
-	typeField = new QComboBox;
-	typeField->setVisible(false);
-	uploadBtn = new QPushButton("Upload");
-	uploadBtn->setVisible(false);
 
 	addToLibrary = new QPushButton("Add to Library");
 	addToLibrary->setStyleSheet("background: #2ecc71");
@@ -296,7 +290,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	addToProject->setStyleSheet("background: #3498db");
 	addToProject->setVisible(false);
 
-	renameModel = new QLabel("Rename");
+	renameModel = new QLabel("Rename:");
 	renameModelField = new QLineEdit();
 
 	renameWidget = new QWidget;
@@ -321,14 +315,12 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
     });
 
 	connect(addToLibrary, &QPushButton::pressed, [this]() {
+		QFileInfo fInfo(filename);
 		QJsonObject object;
 		object["icon_url"] = "";
-		object["name"] = renameModelField->text();
+		object["name"] = renameModelField->text() + "." + fInfo.suffix();
 
 		auto thumbnail = viewer->takeScreenshot(512, 512);
-		fastGrid->addTo(object, thumbnail, 0);
-		QApplication::processEvents();
-		fastGrid->updateGridColumns(fastGrid->lastWidth);
 
 		// add to db
 		QByteArray bytes;
@@ -336,10 +328,16 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		buffer.open(QIODevice::WriteOnly);
 		thumbnail.save(&buffer, "PNG");
 
-		QString guid = db->insertAssetGlobal(renameModelField->text(), bytes);
-        
+		// maybe actually check if Object?
+		QString guid = db->insertAssetGlobal(renameModelField->text() + "." + fInfo.suffix(), (int) ModelTypes::Object, bytes);
+		object["guid"] = guid;
+
         auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
-        bool copyFile = QFile::copy(filename, QDir(assetPath).filePath(guid));
+        bool copyFile = QFile::copy(filename, QDir(assetPath).filePath(guid + "." + fInfo.suffix()));
+
+		fastGrid->addTo(object, thumbnail, 0);
+		QApplication::processEvents();
+		fastGrid->updateGridColumns(fastGrid->lastWidth);
 
 		renameWidget->setVisible(false);
 		addToLibrary->setVisible(false);	
@@ -354,8 +352,25 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
         auto pDir = IrisUtils::join(defaultProjectDirectory, Globals::project->getProjectName());
 
         auto guid = selectedGridItem->metadata["guid"].toString();
+		QFileInfo fInfo(selectedGridItem->metadata["name"].toString());
+		QString object = guid + "." + fInfo.suffix();
         auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
-        bool copyFile = QFile::copy(QDir(assetPath).filePath(guid), QDir(pDir).filePath(guid));
+        
+		qDebug() << QDir(assetPath).filePath(object);
+		qDebug() << QDir(pDir).filePath(object);
+
+		if (!QFile::copy(QDir(assetPath).filePath(object), QDir(pDir).filePath(object))) {
+			QString warningText = QString("Failed to add asset %1. Possible reasons are:\n"
+				"1. It doesn't exist\n"
+				"2. The file isn't valid")
+				.arg(selectedGridItem->metadata["name"].toString());
+			QMessageBox::warning(this, "Asset Import Failed", warningText, QMessageBox::Ok);
+		}
+		else {
+			QString warningText = QString("Added asset %1 to your project!")
+				.arg(selectedGridItem->metadata["name"].toString());
+			QMessageBox::information(this, "Asset Import Successful", warningText, QMessageBox::Ok);
+		}
 	});
 
 	connect(browseButton, &QPushButton::pressed, [=]() {
@@ -377,30 +392,21 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 			split->setSizes(sizes);
 			split->setStretchFactor(0, 1);
 			split->setStretchFactor(1, 1);
-
-			if (assetSource == AssetSource::ONLINE) {
-				nameField->setVisible(true);
-				typeField->setVisible(true);
-				uploadBtn->setVisible(true);
-			}
 		}
 	});
 
-	assetDropPadLayout->addSpacing(4);
 	assetDropPadLayout->addWidget(renameWidget);
-	assetDropPadLayout->addSpacing(4);
 	assetDropPadLayout->addWidget(addToLibrary);
-	//assetDropPadLayout->addWidget(nameField);
-	//assetDropPadLayout->addWidget(typeField);
-	//assetDropPadLayout->addWidget(uploadBtn);
-	//assetDropPadLayout->addStretch();
-	assetDropPadLayout->addWidget(addToProject);
 	assetDropPad->setLayout(assetDropPadLayout);
 
     metaLayout->addWidget(assetDropPad);
-	metaLayout->addWidget(assetDetails);
 
 	metaLayout->addStretch();
+	auto projectSpecific = new QWidget;
+	auto ll = new QVBoxLayout;
+	ll->addWidget(addToProject);
+	projectSpecific->setLayout(ll);
+	metaLayout->addWidget(projectSpecific);
 	auto metadata = new QWidget;
 	//metadata->setFixedHeight(256);
 	auto l = new QVBoxLayout;
@@ -471,7 +477,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		"#assetDropPad				{}"
 		"#assetDropPadLabel			{ font-size: 14px; font-weight: bold; border: 4px dashed #1E1E1E; border-radius: 4px; "
 		"							  padding: 48px 36px; }"
-		"#assetDropPad QPushButton	{ font-size: 12px; font-weight: bold; padding: 8px; }"
+		"#assetDropPad, #MetadataPane QPushButton	{ font-size: 12px; font-weight: bold; padding: 8px; }"
 		"#assetDropPad QLineEdit	{ border: 1px solid #1E1E1E; border-radius: 2px;"
 		"							  font-size: 12px; font-weight: bold; background: #3B3B3B; padding: 6px 4px; }"
 		"#assetDropPad QLabel		{ font-size: 12px; font-weight: bold; }"

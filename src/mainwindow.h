@@ -349,6 +349,7 @@ private:
     AssetView *_assetView;
 
     WindowSpaces currentSpace;
+
 };
 
 #endif // MAINWINDOW_H

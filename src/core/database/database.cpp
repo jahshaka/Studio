@@ -121,15 +121,16 @@ void Database::renameProject(const QString &newName)
     executeAndCheckQuery(query, "renameProject");
 }
 
-QString Database::insertAssetGlobal(const QString &assetName, const QByteArray &thumbnail)
+QString Database::insertAssetGlobal(const QString &assetName, int type, const QByteArray &thumbnail)
 {
 	QSqlQuery query;
 	auto guid = GUIDManager::generateGUID();
 	query.prepare("INSERT INTO " + Constants::DB_ASSETS_TABLE +
-		" (name, thumbnail, version, date_created, last_updated, guid)" +
-		" VALUES (:name, :thumbnail, :version, datetime(), datetime(), :guid)");
+		" (name, thumbnail, type, version, date_created, last_updated, guid)" +
+		" VALUES (:name, :thumbnail, :type, :version, datetime(), datetime(), :guid)");
 	query.bindValue(":name", assetName);
 	query.bindValue(":thumbnail", thumbnail);
+	query.bindValue(":type", type);
 	query.bindValue(":version", Constants::CONTENT_VERSION);
 	query.bindValue(":guid", guid);
 
@@ -185,6 +186,29 @@ bool Database::hasCachedThumbnail(const QString &name)
     }
 
     return false;
+}
+
+QVector<AssetData> Database::fetchThumbnails()
+{
+	QSqlQuery query;
+	query.prepare("SELECT name, thumbnail, guid, type FROM " + Constants::DB_ASSETS_TABLE);
+	executeAndCheckQuery(query, "fetchAssetData");
+
+	QVector<AssetData> tileData;
+	while (query.next()) {
+		AssetData data;
+		QSqlRecord record = query.record();
+		for (int i = 0; i < record.count(); i++) {
+			data.name		= record.value(0).toString();
+			data.thumbnail	= record.value(1).toByteArray();
+			data.guid		= record.value(2).toString();
+			data.type		= record.value(3).toInt();
+		}
+
+		tileData.push_back(data);
+	}
+
+	return tileData;
 }
 
 QVector<ProjectTileData> Database::fetchProjects()

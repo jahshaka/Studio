@@ -7,7 +7,7 @@
 #include <QSqlQuery>
 #include <QCryptographicHash>
 
-#include "../../core/project.h"
+#include "../project.h"
 
 class Database
 {
@@ -24,12 +24,13 @@ public:
 	void createGlobalDbAssets();
     void deleteProject();
     void renameProject(const QString&);
-	QString insertAssetGlobal(const QString&, const QByteArray &thumbnail);
+	QString insertAssetGlobal(const QString&, int type, const QByteArray &thumbnail);
     void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob);
     void insertThumbnailGlobal(const QString &world_guid,
                                const QString &name,
                                const QByteArray &thumbnail);
     bool hasCachedThumbnail(const QString& name);
+	QVector<AssetData> fetchThumbnails();
     QVector<ProjectTileData> fetchProjects();
 	QVector<AssetTileData> fetchAssets();
     QByteArray getSceneBlobGlobal() const;

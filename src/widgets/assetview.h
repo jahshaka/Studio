@@ -70,11 +70,8 @@ private:
 	QVector<QByteArray> iconList;
 	QString filename;
 
-	QLineEdit *nameField;
-	QComboBox *typeField;
 	QPushButton *addToLibrary;
 	QPushButton *addToProject;
-	QPushButton *uploadBtn;
 	QLabel *renameModel;
 	QLineEdit *renameModelField;
 	QWidget *renameWidget;

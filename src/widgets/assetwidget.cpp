@@ -74,7 +74,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 void AssetWidget::trigger()
 {
-    generateAssetThumbnails();
+    // generateAssetThumbnails();
     // It's important that this get's called after a project has been loaded (iKlsR)
     populateAssetTree(true);
 }
@@ -144,34 +144,51 @@ void AssetWidget::addItem(const QString &asset)
         QPixmap pixmap;
         item = new QListWidgetItem(file.fileName());
 
-        if (Constants::IMAGE_EXTS.contains(file.suffix())) {
-            auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
-            pixmap = QPixmap::fromImage(*thumb->thumb);
-            item->setIcon(QIcon(pixmap));
-        }
-        else if (Constants::MODEL_EXTS.contains(file.suffix())) {
-            // todo do this once into the list instead of per item maybe...
-            if (db->hasCachedThumbnail(file.fileName())) {
-                QPixmap cachedPixmap;
-                const QByteArray blob = db->fetchCachedThumbnail(file.fileName());
-                if (cachedPixmap.loadFromData(blob, "PNG")) {
-                    item->setIcon(QIcon(cachedPixmap));
-                }
-            }
-            else {
-                item->setIcon(QIcon(":/icons/ic_file.svg"));
-                auto asset = AssetManager::getAssetByPath(file.absoluteFilePath());
-                if (asset != nullptr) {
-                    if (!asset->thumbnail.isNull()) item->setIcon(QIcon(asset->thumbnail));
-                }
-            }
-        } else if (file.suffix() == "shader") {
-            item->setIcon(QIcon(":/icons/ic_file.svg"));
-        } else {
-            item->setIcon(QIcon(":/icons/ic_file.svg"));
-        }
+		// we need our own search predicate since we have a vector that houses structs
+		QVector<AssetData>::iterator thumb = std::find_if(assetList.begin(),
+														  assetList.end(),
+													      find_asset_thumbnail(QFileInfo(file.fileName()).baseName()));
+		
+		if (Constants::IMAGE_EXTS.contains(file.suffix())) {
+			auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
+			pixmap = QPixmap::fromImage(*thumb->thumb);
+			item->setIcon(QIcon(pixmap));
+		}
+		else {
+			if (thumb) {
+				pixmap = QPixmap::fromImage(QImage::fromData(thumb->thumbnail));
+				item->setIcon(QIcon(pixmap));
+				item->setData(Qt::DisplayRole, QFileInfo(thumb->name).baseName());
+				item->setData(MODEL_EXT_ROLE, QFileInfo(thumb->name).suffix());
+				item->setData(MODEL_GUID_ROLE, thumb->guid);
+				item->setData(MODEL_TYPE_ROLE, thumb->type);
+			}
+			else if (Constants::MODEL_EXTS.contains(file.suffix())) {
+				// todo do this once into the list instead of per item maybe...
+				if (db->hasCachedThumbnail(file.fileName())) {
+					QPixmap cachedPixmap;
+					const QByteArray blob = db->fetchCachedThumbnail(file.fileName());
+					if (cachedPixmap.loadFromData(blob, "PNG")) {
+						item->setIcon(QIcon(cachedPixmap));
+					}
+				}
+				else {
+					item->setIcon(QIcon(":/icons/ic_file.svg"));
+					auto asset = AssetManager::getAssetByPath(file.absoluteFilePath());
+					if (asset != nullptr) {
+						if (!asset->thumbnail.isNull()) item->setIcon(QIcon(asset->thumbnail));
+					}
+				}
+			}
+			else if (file.suffix() == "shader") {
+				item->setIcon(QIcon(":/icons/ic_file.svg"));
+			}
+			else {
+				item->setIcon(QIcon(":/icons/ic_file.svg"));
+			}
+		}
 
-        item->setData(Qt::UserRole, file.absolutePath());
+		item->setData(Qt::UserRole, file.absolutePath());
     }
 
     item->setSizeHint(QSize(128, 128));
@@ -183,6 +200,10 @@ void AssetWidget::addItem(const QString &asset)
 
 void AssetWidget::updateAssetView(const QString &path)
 {
+	assetList = db->fetchThumbnails();
+
+	for (auto asset : assetList) qDebug() << asset.name;
+
     // clear the old view
     ui->assetView->clear();
     // set to new view path by itering path dir
@@ -211,16 +232,28 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
                     int distance = (evt->pos() - startPos).manhattanLength();
                     if (distance >= QApplication::startDragDistance()) {
                         auto item = ui->assetView->currentItem();
+						QDrag *drag = new QDrag(this);
+						QMimeData *mimeData = new QMimeData;
+						//QModelIndex index = ui->assetView->indexAt(evt->pos());
+						//auto item = static_cast<QListWidgetItem*>(index.internalPointer());
+						ui->assetView->clearSelection();
                         if (item) {
-                            QDrag *drag = new QDrag(this);
-                            QMimeData *mimeData = new QMimeData;
-                            mimeData->setText(item->data(Qt::UserRole).toString() + '/' +
-                                              item->data(Qt::DisplayRole).toString());
+  
+							QByteArray mdata;
+							QDataStream stream(&mdata, QIODevice::WriteOnly);
+							QMap<int, QVariant> roleDataMap;
+							qint8 assetType = item->data(MODEL_TYPE_ROLE).toInt();
+							QString name = item->data(Qt::DisplayRole).toString();
+							roleDataMap[0] = QVariant(assetType);
+							roleDataMap[1] = QVariant(name);
+							roleDataMap[3] = QDir(item->data(Qt::UserRole).toString()).filePath(item->data(MODEL_GUID_ROLE).toString() + "." + item->data(MODEL_EXT_ROLE).toString());
+							stream << roleDataMap;
+							mimeData->setData(QString("application/x-qabstractitemmodeldatalist"), mdata);
                             drag->setMimeData(mimeData);
 
                             // only hide for object models
-//                            drag->setPixmap(QPixmap());
-                            drag->start(Qt::CopyAction | Qt::MoveAction);
+                            //drag->setPixmap(QPixmap());
+                            drag->exec();
                         }
                     }
                 }
