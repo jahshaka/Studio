@@ -52,6 +52,7 @@ For more information see the LICENSE file
 
 #include "../editor/editordata.h"
 
+#include "../editor/gizmo.h"
 #include "../editor/translationgizmo.h"
 #include "../editor/rotationgizmo.h"
 #include "../editor/scalegizmo.h"
@@ -148,22 +149,22 @@ void SceneViewWidget::resetEditorCam()
 void SceneViewWidget::initialize()
 {
     initialH = true;
-    /*
-    translationGizmo = new TranslationGizmo(editorCam);
-    translationGizmo->createHandleShader();
+    
+    translationGizmo = new TranslationGizmo();
+    translationGizmo->loadAssets();
 
-    rotationGizmo = new RotationGizmo(editorCam);
-    rotationGizmo->createHandleShader();
+    rotationGizmo = new RotationGizmo();
+    rotationGizmo->loadAssets();
 
-    scaleGizmo = new ScaleGizmo(editorCam);
-    scaleGizmo->createHandleShader();
-
-    viewportGizmo = translationGizmo;
-    */
+    scaleGizmo = new ScaleGizmo();
+	scaleGizmo->loadAssets();
+	
+    //viewportGizmo = translationGizmo;
+    
     transformMode = "Global";
-    //gizmo = new TranslationGizmo();
+    gizmo = translationGizmo;
 	//gizmo = new ScaleGizmo();
-	gizmo = new RotationGizmo();
+	//gizmo = new RotationGizmo();
 
     // has to be initialized here since it loads assets
     vrCam = new EditorVrController();
@@ -1021,6 +1022,8 @@ void SceneViewWidget::setGizmoLoc()
     viewportGizmo->setTransformOrientation(transformMode);
     viewportGizmo->setLastSelectedNode(selectedNode);
     */
+	translationGizmo->setSelectedNode(selectedNode);
+	gizmo = translationGizmo;
 }
 
 void SceneViewWidget::setGizmoRot()
@@ -1032,6 +1035,8 @@ void SceneViewWidget::setGizmoRot()
     viewportGizmo->setTransformOrientation(transformMode);
     viewportGizmo->setLastSelectedNode(selectedNode);
     */
+	rotationGizmo->setSelectedNode(selectedNode);
+	gizmo = rotationGizmo;
 }
 
 void SceneViewWidget::setGizmoScale()
@@ -1043,6 +1048,8 @@ void SceneViewWidget::setGizmoScale()
     viewportGizmo->setTransformOrientation(transformMode);
     viewportGizmo->setLastSelectedNode(selectedNode);
     */
+	scaleGizmo->setSelectedNode(selectedNode);
+	gizmo = scaleGizmo;
 }
 
 void SceneViewWidget::setEditorData(EditorData* data)

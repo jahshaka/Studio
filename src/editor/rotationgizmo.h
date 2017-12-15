@@ -25,8 +25,9 @@ public:
 	GizmoAxis axis;
 	QVector3D handleExtent;// local extent of the gizmo
 	QVector3D plane;// for hit detection
-	float handleScale = 0.02f;
-	float handleRadius = 3.0f;
+	float handleScale = 0.08f;
+	//float handleRadius = 3.0f;
+	float handleRadius = 1.0f;
 	float handleRadiusSize = 0.8f;
 
 	RotationHandle(Gizmo* gizmo, GizmoAxis axis);
@@ -59,16 +60,16 @@ public:
 
 	void loadAssets();
 
-	bool isDragging();
-	void startDragging(QVector3D rayPos, QVector3D rayDir);
-	void endDragging();
-	void drag(QVector3D rayPos, QVector3D rayDir);
+	virtual bool isDragging();
+	virtual void startDragging(QVector3D rayPos, QVector3D rayDir);
+	virtual void endDragging();
+	virtual void drag(QVector3D rayPos, QVector3D rayDir);
 
-	bool isHit(QVector3D rayPos, QVector3D rayDir);
+	virtual bool isHit(QVector3D rayPos, QVector3D rayDir);
 
 	// hitPos is the hit position of the hit handle
 	RotationHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, float& hitAngle);
-	void render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
+	virtual void render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
 
 	QMatrix4x4 getTransform() override;
 	void setTransformSpace(GizmoTransformSpace transformSpace) override;

@@ -9,7 +9,7 @@
 
 Gizmo::Gizmo()
 {
-	transformSpace = GizmoTransformSpace::Global;
+	transformSpace = GizmoTransformSpace::Local;
 	gizmoScale = 1.0f;
 }
 

@@ -15,6 +15,7 @@
 ScaleHandle::ScaleHandle(Gizmo* gizmo, GizmoAxis axis)
 {
 	this->gizmo = gizmo;
+	this->axis = axis;
 
 	switch (axis) {
 	case GizmoAxis::X:
@@ -184,9 +185,23 @@ void ScaleGizmo::drag(QVector3D rayPos, QVector3D rayDir)
 
 	// move node along line
 	// do snapping here as well
-	auto diff = slidingPos - hitPos;
+	QVector3D diff = slidingPos - hitPos;
+
+	switch (draggedHandle->axis)
+	{
+	case GizmoAxis::X:
+		diff = QVector3D(diff.x(), 0, 0);
+		break;
+	case GizmoAxis::Y:
+		diff = QVector3D(0, diff.y(), 0);
+		break;
+	case GizmoAxis::Z:
+		diff = QVector3D(0, 0, diff.z());
+		break;
+	}
 
 	//selectedNode->setLocalPos(nodeStartPos + diff);
+	//qDebug() << startScale + diff;
 	selectedNode->setLocalScale(startScale + diff * 1.0f);
 }
 

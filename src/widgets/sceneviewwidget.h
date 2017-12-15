@@ -46,7 +46,7 @@ class QElapsedTimer;
 class QTimer;
 class QOpenGLDebugLogger;
 
-class GizmoInstance;
+class Gizmo;
 class ViewportGizmo;
 class TranslationGizmo;
 class RotationGizmo;
@@ -222,12 +222,13 @@ private:
 
     void initialize();
 
+	Gizmo* gizmo;
     //TranslationGizmo* gizmo;
 	//ScaleGizmo* gizmo;
-	RotationGizmo* gizmo;
-    //GizmoInstance* translationGizmo;
-    //RotationGizmo* rotationGizmo;
-    //ScaleGizmo* scaleGizmo;
+	//RotationGizmo* gizmo;
+    TranslationGizmo* translationGizmo;
+    RotationGizmo* rotationGizmo;
+    ScaleGizmo* scaleGizmo;
 
     //GizmoInstance* viewportGizmo;
     QString transformMode;

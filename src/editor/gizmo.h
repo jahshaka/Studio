@@ -18,6 +18,8 @@ For more information see the LICENSE file
 #include <QQuaternion>
 #include "irisgl/src/irisglfwd.h"
 
+class QOpenGLFunctions_3_2_Core;
+
 enum class GizmoAxis
 {
 	X,
@@ -124,6 +126,13 @@ public:
 	// the transform is calculated based on the transform's space (local or global)
 	virtual QMatrix4x4 getTransform();
 	virtual bool isHit(QVector3D rayPos, QVector3D rayDir);
+
+	virtual bool isDragging() = 0;
+	virtual void startDragging(QVector3D rayPos, QVector3D rayDir) = 0;
+	virtual void endDragging() = 0;
+	virtual void drag(QVector3D rayPos, QVector3D rayDir) = 0;
+
+	virtual void render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix) = 0;
 };
 
 #endif // GIZMOHANDLE_H
