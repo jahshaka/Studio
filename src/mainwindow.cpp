@@ -241,6 +241,11 @@ iris::ScenePtr MainWindow::getScene()
 
 iris::ScenePtr MainWindow::createDefaultScene()
 {
+	// if we reached this far, the project dir has already been created
+	// we can copy some default assets to each project here
+	QFile::copy(IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"),
+				QDir(Globals::project->getProjectFolder()).filePath("Textures/Tile.png"));
+
     auto scene = iris::Scene::create();
 
     scene->setSkyColor(QColor(72, 72, 72));
@@ -249,14 +254,14 @@ iris::ScenePtr MainWindow::createDefaultScene()
     // second node
     auto node = iris::MeshNode::create();
     node->setMesh(":/models/ground.obj");
-    node->setLocalPos(QVector3D(0, 1e-4, 0)); // prevent z-fighting with the default plane (iKlsR)
+    node->setLocalPos(QVector3D(0, 1e-4, 0)); // prevent z-fighting with the default plane reset (iKlsR)
     node->setName("Ground");
     node->setPickable(false);
     node->setShadowEnabled(false);
 
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-    m->setValue("diffuseTexture", IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"));
+    m->setValue("diffuseTexture", QDir(Globals::project->getProjectFolder()).filePath("Textures/Tile.png")); // use relative asset location
     m->setValue("textureScale", 4.f);
     node->setMaterial(m);
 
