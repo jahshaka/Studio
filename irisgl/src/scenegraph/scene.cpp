@@ -33,7 +33,7 @@ Scene::Scene()
     // rootNode->setScene(this->sharedFromThis());
 
     // todo: move this to ui code
-    skyMesh = Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/sky.obj"));
+    skyMesh = Mesh::loadMesh(":assets/models/sky.obj");
 
 //    QString x1 = IrisUtils::getAbsoluteAssetPath("app/content/textures/left.jpg");
 //    QString x2 = IrisUtils::getAbsoluteAssetPath("app/content/textures/right.jpg");

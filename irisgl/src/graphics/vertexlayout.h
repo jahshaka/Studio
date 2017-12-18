@@ -40,6 +40,7 @@ class VertexLayout
 public:
     VertexLayout();
 
+	QList<VertexAttribute> getAttribs();
     void addAttrib(VertexAttribUsage usage, int type, int count, int sizeInBytes);
 
     int getStride();

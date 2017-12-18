@@ -183,11 +183,6 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
     gl->glViewport(0, 0, rt->getWidth(), rt->getHeight());
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    //enable all attrib arrays
-    for (int i = 0; i < (int)iris::VertexAttribUsage::Count; i++) {
-        gl->glEnableVertexAttribArray(i);
-    }
-
     // reset states
     graphics->setBlendState(BlendState::Opaque);
     graphics->setDepthState(DepthState::Default);
@@ -280,11 +275,6 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     graphics->setViewport(QRect(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale));
     graphics->clear(QColor(0, 0, 0));
 
-    //enable all attrib arrays
-    for (int i = 0; i < (int)iris::VertexAttribUsage::Count; i++) {
-        gl->glEnableVertexAttribArray(i);
-    }
-
     // reset states
     graphics->setBlendState(BlendState::Opaque);
     graphics->setDepthState(DepthState::Default);
@@ -348,12 +338,7 @@ void ForwardRenderer::renderShadows(ScenePtr node)
 
 void ForwardRenderer::renderDirectionalShadow(LightNodePtr light, ScenePtr node)
 {
-    //light->shadowMap = new ShadowMap();
     graphics->setRenderTarget(QList<Texture2DPtr>(),light->shadowMap->shadowTexture);
-    //gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, shadowFBO);
-    //gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, light->shadowMap->shadowTexture->getTextureId(), 0);
-    //gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, light->shadowMap->shadowTexId, 0);
-    //gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthMap, 0);
 
     int shadowSize = light->shadowMap->resolution;
     graphics->setViewport(QRect(0, 0, shadowSize, shadowSize));
@@ -876,10 +861,10 @@ void ForwardRenderer::createShadowShader()
 void ForwardRenderer::createParticleShader()
 {
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-    vshader->compileSourceFile(":/shaders/particle.vert");
+    vshader->compileSourceFile(":/assets/shaders/particle.vert");
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-    fshader->compileSourceFile(":/shaders/particle.frag");
+    fshader->compileSourceFile(":/assets/shaders/particle.frag");
 
     particleShader = new QOpenGLShaderProgram;
     particleShader->addShader(vshader);
@@ -892,8 +877,8 @@ void ForwardRenderer::createParticleShader()
 
 void ForwardRenderer::createEmitterShader()
 {
-    emitterShader = GraphicsHelper::loadShader(":/shaders/emitter.vert",
-                                               ":/shaders/emitter.frag");
+    emitterShader = GraphicsHelper::loadShader(":/assets/shaders/emitter.vert",
+                                               ":/assets/shaders/emitter.frag");
 }
 
 ForwardRenderer::~ForwardRenderer()
