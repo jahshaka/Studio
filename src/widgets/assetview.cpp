@@ -103,7 +103,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	navLayout->setSpacing(6);
     _navPane->setLayout(navLayout);
 
-	QTreeWidget *treeWidget = new QTreeWidget;
+	treeWidget = new QTreeWidget;
 	//treeWidget->setStyleSheet("border: 1px solid red");
 	treeWidget->setObjectName(QStringLiteral("treeWidget"));
 	treeWidget->setColumnCount(2);
@@ -140,6 +140,25 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	treeWidget->addTopLevelItem(rootItem);
 	treeWidget->expandItem(rootItem);
 
+    connect(this, &AssetView::refreshCollections, [this]() {
+        treeWidget->clear();
+
+        rootItem = new QTreeWidgetItem;
+        rootItem->setText(0, "My Collections");
+        rootItem->setText(1, QString());
+
+        treeWidget->addTopLevelItem(rootItem);
+
+        for (auto coll : db->fetchCollections()) {
+            QTreeWidgetItem *treeItem = new QTreeWidgetItem;
+            treeItem->setText(0, coll.name);
+            treeItem->setData(0, Qt::UserRole, coll.id);
+            rootItem->addChild(treeItem);
+        }
+
+        treeWidget->expandItem(rootItem);
+    });
+
     navLayout->addWidget(localAssetsButton);
 	navLayout->addWidget(onlineAssetsButton);
 	navLayout->addSpacing(12);
@@ -165,6 +184,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
             
             if (!collectionName.isEmpty()) {
                 db->insertCollectionGlobal(collectionName);
+                emit refreshCollections();
                 QString infoText = QString("Collection Created.");
                 QMessageBox::information(this, "Collection Creation Successful", infoText, QMessageBox::Ok);
                 d.close();
@@ -202,6 +222,12 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	emptyL->addWidget(emptyLabel);
 	emptyGrid->setLayout(emptyL);
 
+    auto meshObject = new QPushButton();
+    meshObject->setAccessibleName("filterObj");
+    meshObject->setIcon(QPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-cube-filled-50.png")));
+    meshObject->setIconSize(QSize(16, 16));
+    meshObject->setStyleSheet("border-top-left-radius: 2px; border-bottom-left-radius: 2px;");
+
 	auto typeObject = new QPushButton();
 	typeObject->setAccessibleName("filterObj");
 	typeObject->setIcon(QPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-purchase-order-50.png")));
@@ -218,12 +244,6 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	imageObject->setIcon(QPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-picture-50.png")));
 	imageObject->setIconSize(QSize(16, 16));
 	imageObject->setStyleSheet("border-top-right-radius: 2px; border-bottom-right-radius: 2px;");
-
-	auto meshObject = new QPushButton();
-	meshObject->setAccessibleName("filterObj");
-	meshObject->setIcon(QPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-cube-filled-50.png")));
-	meshObject->setIconSize(QSize(16, 16));
-	meshObject->setStyleSheet("border-top-left-radius: 2px; border-bottom-left-radius: 2px;");
 
 	QWidget *filterGroup = new QWidget;
 	auto fgL = new QHBoxLayout;
@@ -468,17 +488,29 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	metadataVisibility->setSizePolicy(policy2);
 	metadataCollection = new QLabel("Collection: ");
 	metadataCollection->setSizePolicy(policy2);
+    metadataVisibility->setVisible(false);
 
 	metadataName->setVisible(false);
 	metadataType->setVisible(false);
-	metadataVisibility->setVisible(false);
-	metadataCollection->setVisible(false);
+
+    changeMetaCollection = new QPushButton(tr("change"));
+    changeMetaCollection->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Minimum);
+    changeMetaCollection->setStyleSheet("font-size: 8px; color: green; padding: 0; background: transparent; border: 0");
+    metadataLayout = new QHBoxLayout;
+    metadataLayout->setMargin(0);
+    metadataLayout->setSpacing(12);
+    metadataLayout->addWidget(metadataCollection);
+    metadataLayout->addWidget(changeMetaCollection);
+    metadataLayout->addStretch();
+    metadataWidget = new QWidget;
+    metadataWidget->setLayout(metadataLayout);
+	metadataWidget->setVisible(false);
 
 	l->addWidget(metadataMissing);
 	l->addWidget(metadataName);
 	l->addWidget(metadataType);
 	l->addWidget(metadataVisibility);
-	l->addWidget(metadataCollection);
+	l->addWidget(metadataWidget);
 	metadata->setLayout(l);
 	metadata->setStyleSheet("QLabel { font-size: 12px; font-weight: bold; }");
 	auto header = new QLabel("Asset Metadata");
@@ -502,6 +534,47 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
     _splitter->setStretchFactor(0, 0);
     _splitter->setStretchFactor(1, 3);
     _splitter->setStretchFactor(2, 1);
+
+    connect(changeMetaCollection, &QPushButton::pressed, [this]() {
+        QDialog d;
+        d.setStyleSheet("QLineEdit { font-size: 14px; background: #2f2f2f; padding: 6px; border: 0; }"
+            "QComboBox { background: #4D4D4D; color: #BBB; padding: 6px; border: 0; }"
+            "QComboBox::drop-down { border : 0; }"
+            "QComboBox::down-arrow { image: url(:/icons/down_arrow_check.png); width: 18px; height: 14px; }"
+            "QComboBox::down-arrow:!enabled { image: url(:/icons/down_arrow_check_disabled.png); width: 18px; height: 14px; }"
+            "QPushButton { background: #4898ff; color: white; border: 0; padding: 8px 12px; border-radius: 1px; }"
+            "QPushButton:hover { background: #51a1d6; }"
+            "QDialog { background: #1a1a1a; }");
+
+        QHBoxLayout *l = new QHBoxLayout;
+        d.setFixedWidth(350);
+        d.setLayout(l);
+        QComboBox *input = new QComboBox;
+        QPushButton *accept = new QPushButton(tr("Change Collection"));
+
+        for (auto item : db->fetchCollections()) {
+            input->addItem(item.name, QVariant(item.id));
+        }
+        
+        auto guid = selectedGridItem->metadata["guid"].toString();
+
+        connect(accept, &QPushButton::pressed, [&]() {
+            if (db->switchAssetCollection(input->currentData().toInt(), guid)) {
+                db->insertCollectionGlobal(collectionName);
+                QString infoText = QString("Collection Changed.");
+                QMessageBox::information(this, "Collection Change Successful", infoText, QMessageBox::Ok);
+                d.close();
+            }
+            else {
+                QString warningText = QString("Failed to change collection. Try again.");
+                QMessageBox::warning(this, "Collection Change Failed", warningText, QMessageBox::Ok);
+            }
+        });
+
+        l->addWidget(input);
+        l->addWidget(accept);
+        d.exec();
+    });
 
     QGridLayout *layout = new QGridLayout;
 	layout->setMargin(0);
@@ -534,7 +607,7 @@ void AssetView::fetchMetadata(AssetGridItem *widget)
 		metadataName->setVisible(true);
 		metadataType->setVisible(true);
 		metadataVisibility->setVisible(true);
-		metadataCollection->setVisible(true);
+        metadataWidget->setVisible(true);
 
 		metadataName->setText("Name: " + widget->metadata["name"].toString());
 		metadataType->setText("Type: " + QString::number(widget->metadata["type"].toInt()));
@@ -550,7 +623,7 @@ void AssetView::fetchMetadata(AssetGridItem *widget)
 		metadataName->setVisible(false);
 		metadataType->setVisible(false);
 		metadataVisibility->setVisible(false);
-		metadataCollection->setVisible(false);
+        metadataWidget->setVisible(false);
 	}
 }
 

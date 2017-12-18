@@ -27,11 +27,14 @@ Database::~Database()
     db.removeDatabase(connection);
 }
 
-void Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
+bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
 {
     if (!query.exec()) {
         irisLog(name + " + Query failed to execute: " + query.lastError().text());
+        return false;
     }
+
+    return true;
 }
 
 void Database::initializeDatabase(QString name)
@@ -95,6 +98,8 @@ void Database::createGlobalDbCollections()
     QSqlQuery query;
     query.prepare(schema);
     executeAndCheckQuery(query, "createGlobalDbCollections");
+
+    insertCollectionGlobal("Uncategorized");    // should be 0
 }
 
 void Database::createGlobalDbAssets() {
@@ -146,13 +151,23 @@ void Database::insertCollectionGlobal(const QString &collectionName)
     executeAndCheckQuery(query, "insertSceneCollection");
 }
 
+bool Database::switchAssetCollection(const int id, const QString &guid)
+{
+    QSqlQuery query;
+    query.prepare("UPDATE " + Constants::DB_ASSETS_TABLE + " SET collection = ?, last_updated = datetime() WHERE guid = ?");
+    query.addBindValue(id);
+    query.addBindValue(guid);
+
+    return executeAndCheckQuery(query, "switchAssetCollection");
+}
+
 QString Database::insertAssetGlobal(const QString &assetName, int type, const QByteArray &thumbnail)
 {
 	QSqlQuery query;
 	auto guid = GUIDManager::generateGUID();
 	query.prepare("INSERT INTO " + Constants::DB_ASSETS_TABLE +
-		" (name, thumbnail, type, version, date_created, last_updated, guid)" +
-		" VALUES (:name, :thumbnail, :type, :version, datetime(), datetime(), :guid)");
+		" (name, thumbnail, type, collection, version, date_created, last_updated, guid)" +
+		" VALUES (:name, :thumbnail, :type, 0, :version, datetime(), datetime(), :guid)");
 	query.bindValue(":name", assetName);
 	query.bindValue(":thumbnail", thumbnail);
 	query.bindValue(":type", type);
@@ -248,7 +263,7 @@ QVector<CollectionData> Database::fetchCollections()
         QSqlRecord record = query.record();
         for (int i = 0; i < record.count(); i++) {
             data.name = record.value(0).toString();
-            data.id = record.value(2).toInt();
+            data.id = record.value(1).toInt();
         }
 
         tileData.push_back(data);

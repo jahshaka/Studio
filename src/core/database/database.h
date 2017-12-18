@@ -15,7 +15,7 @@ public:
     Database();
     ~Database();
 
-    void executeAndCheckQuery(QSqlQuery&, const QString&);
+    bool executeAndCheckQuery(QSqlQuery&, const QString&);
     void initializeDatabase(QString name);
     void closeDb();
 
@@ -28,6 +28,7 @@ public:
 	QString insertAssetGlobal(const QString&, int type, const QByteArray &thumbnail);
     void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob);
     void insertCollectionGlobal(const QString &collectionName);
+    bool switchAssetCollection(const int, const QString&);
     void insertThumbnailGlobal(const QString &world_guid,
                                const QString &name,
                                const QByteArray &thumbnail);

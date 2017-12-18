@@ -12,6 +12,7 @@ class QLineEdit;
 class QComboBox;
 class QTreeWidgetItem;
 class QFocusEvent;
+#include <QTreeWidget>
 #include <QPushButton>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -54,6 +55,9 @@ public:
 	void focusInEvent(QFocusEvent *event);
 	bool eventFilter(QObject *watched, QEvent *event);
 
+signals:
+    void refreshCollections();
+
 private:
 	Database *db;
 	QSplitter *_splitter;
@@ -76,6 +80,7 @@ private:
 	QLineEdit *renameModelField;
 	QWidget *renameWidget;
 
+    QTreeWidget *treeWidget;
 	QTreeWidgetItem *rootItem;
 	QVector<int> collections;
 
@@ -87,6 +92,9 @@ private:
 	QLabel *metadataName;
 	QLabel *metadataType;
 	QLabel *metadataVisibility;
+    QWidget *metadataWidget;
+    QHBoxLayout *metadataLayout;
+    QPushButton *changeMetaCollection;
 	QLabel *metadataCollection;
 
 	QJsonArray fetchedOnlineAssets;
