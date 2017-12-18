@@ -91,6 +91,7 @@ private:
 
 	QJsonArray fetchedOnlineAssets;
 
+    QString collectionName;
     SettingsManager* settings;
 	AssetViewer *viewer;
     AssetGridItem *selectedGridItem;

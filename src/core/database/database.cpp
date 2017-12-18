@@ -84,6 +84,19 @@ void Database::createGlobalDbThumbs() {
     executeAndCheckQuery(query, "createGlobalDbThumbs");
 }
 
+void Database::createGlobalDbCollections()
+{
+    QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_COLLECT_TABLE + " ("
+        "    name              VARCHAR(128),"
+        "    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
+        "    collection_id     INTEGER PRIMARY KEY"
+        ")";
+
+    QSqlQuery query;
+    query.prepare(schema);
+    executeAndCheckQuery(query, "createGlobalDbCollections");
+}
+
 void Database::createGlobalDbAssets() {
 	QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_ASSETS_TABLE + " ("
 		"    name              VARCHAR(128),"
@@ -119,6 +132,18 @@ void Database::renameProject(const QString &newName)
     query.addBindValue(newName);
     query.addBindValue(Globals::project->getProjectGuid());
     executeAndCheckQuery(query, "renameProject");
+}
+
+void Database::insertCollectionGlobal(const QString &collectionName)
+{
+    QSqlQuery query;
+    auto guid = GUIDManager::generateGUID();
+    query.prepare("INSERT INTO " + Constants::DB_COLLECT_TABLE +
+        " (name, date_created)" +
+        " VALUES (:name, datetime())");
+    query.bindValue(":name", collectionName);
+
+    executeAndCheckQuery(query, "insertSceneCollection");
 }
 
 QString Database::insertAssetGlobal(const QString &assetName, int type, const QByteArray &thumbnail)
@@ -211,6 +236,27 @@ QVector<AssetData> Database::fetchThumbnails()
 	return tileData;
 }
 
+QVector<CollectionData> Database::fetchCollections()
+{
+    QSqlQuery query;
+    query.prepare("SELECT name, collection_id FROM " + Constants::DB_COLLECT_TABLE + " ORDER BY name, date_created DESC");
+    executeAndCheckQuery(query, "fetchCollections");
+
+    QVector<CollectionData> tileData;
+    while (query.next()) {
+        CollectionData data;
+        QSqlRecord record = query.record();
+        for (int i = 0; i < record.count(); i++) {
+            data.name = record.value(0).toString();
+            data.id = record.value(2).toInt();
+        }
+
+        tileData.push_back(data);
+    }
+
+    return tileData;
+}
+
 QVector<ProjectTileData> Database::fetchProjects()
 {
     QSqlQuery query;
@@ -236,7 +282,8 @@ QVector<ProjectTileData> Database::fetchProjects()
 QVector<AssetTileData> Database::fetchAssets()
 {
 	QSqlQuery query;
-	query.prepare("SELECT name, thumbnail, guid FROM " + Constants::DB_ASSETS_TABLE + " ORDER BY name DESC");
+	query.prepare("SELECT assets.name, assets.thumbnail, assets.guid, collections.name as collection_name FROM " + Constants::DB_ASSETS_TABLE +
+                  " INNER JOIN " + Constants::DB_COLLECT_TABLE + " ON assets.collection = collections.collection_id ORDER BY assets.name DESC");
 	executeAndCheckQuery(query, "fetchAssets");
 
 	QVector<AssetTileData> tileData;
@@ -247,6 +294,7 @@ QVector<AssetTileData> Database::fetchAssets()
 			data.name = record.value(0).toString();
 			data.thumbnail = record.value(1).toByteArray();
 			data.guid = record.value(2).toString();
+            data.collection_name = record.value(3).toString();
 		}
 
 		tileData.push_back(data);

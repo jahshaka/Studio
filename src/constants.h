@@ -28,6 +28,7 @@ namespace Constants
     const QString DB_ROOT_TABLE     = "JAH_PROJECT";
 
     const QString DB_PROJECTS_TABLE = "projects";
+    const QString DB_COLLECT_TABLE  = "collections";
     const QString DB_THUMBS_TABLE   = "thumbnails";
 	const QString DB_ASSETS_TABLE	= "assets";
 

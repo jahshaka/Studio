@@ -506,6 +506,7 @@ void MainWindow::setupProjectDB()
     db->initializeDatabase(path);
     db->createGlobalDb();
 	db->createGlobalDbAssets();
+    db->createGlobalDbCollections();
     db->createGlobalDbThumbs();
 }
 

@@ -44,6 +44,7 @@ struct AssetTileData {
 	QString     name;
 	QByteArray  thumbnail;
 	QString     guid;
+    QString     collection_name;
 };
 
 struct AssetData {
@@ -51,6 +52,11 @@ struct AssetData {
 	short type;
 	QString guid;
 	QString name;
+};
+
+struct CollectionData {
+    QString     name;
+    int         id;
 };
 
 enum class ModelTypes {

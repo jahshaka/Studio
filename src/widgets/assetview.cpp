@@ -117,6 +117,16 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	rootItem->setText(0, "My Collections");
 	rootItem->setText(1, QString());
 
+    // list collections
+    for (auto coll : db->fetchCollections()) {
+        QTreeWidgetItem *treeItem = new QTreeWidgetItem;
+        treeItem->setText(0, coll.name);
+        treeItem->setData(0, Qt::UserRole, coll.id);
+        // treeItem->setText(1, "2 items");
+        //treeItem->setIcon(1, QIcon(IrisUtils::getAbsoluteAssetPath("app/icons/world.svg")));
+        rootItem->addChild(treeItem);
+    }
+
 	//QTreeWidgetItem *treeItem = new QTreeWidgetItem;
 	//treeItem->setText(0, "Node");
 	//treeItem->setIcon(1, QIcon(IrisUtils::getAbsoluteAssetPath("app/icons/world.svg")));
@@ -128,7 +138,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	//rootItem->addChild(treeItem);
 	//rootItem->addChild(treeItem2);
 	treeWidget->addTopLevelItem(rootItem);
-	//treeWidget->expandItem(rootItem);
+	treeWidget->expandItem(rootItem);
 
     navLayout->addWidget(localAssetsButton);
 	navLayout->addWidget(onlineAssetsButton);
@@ -137,6 +147,37 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	auto collectionButton = new QPushButton("Create Collection");
 	collectionButton->setStyleSheet("font-size: 12px; font-weight: bold; padding: 8px;");
 	navLayout->addWidget(collectionButton);
+
+    connect(collectionButton, &QPushButton::pressed, [this]() {
+        QDialog d;
+        d.setStyleSheet("QLineEdit { font-size: 14px; background: #2f2f2f; padding: 6px; border: 0; }"
+                        "QPushButton { background: #4898ff; color: white; border: 0; padding: 8px 12px; border-radius: 1px; }"
+                        "QPushButton:hover { background: #51a1d6; }"
+                        "QDialog { background: #1a1a1a; }");
+        QHBoxLayout *l = new QHBoxLayout;
+        d.setFixedWidth(350);
+        d.setLayout(l);
+        QLineEdit *input = new QLineEdit;
+        QPushButton *accept = new QPushButton(tr("Create Collection"));
+
+        connect(accept, &QPushButton::pressed, [&]() {
+            collectionName = input->text();
+            
+            if (!collectionName.isEmpty()) {
+                db->insertCollectionGlobal(collectionName);
+                QString infoText = QString("Collection Created.");
+                QMessageBox::information(this, "Collection Creation Successful", infoText, QMessageBox::Ok);
+                d.close();
+            } else {
+                QString warningText = QString("Failed to create collection. Try again.");
+                QMessageBox::warning(this, "Collection Creation Failed", warningText, QMessageBox::Ok);
+            }
+        });
+
+        l->addWidget(input);
+        l->addWidget(accept);
+        d.exec();
+    });
 
     //QWidget *_previewPane;  
 	auto split = new QSplitter;
@@ -250,6 +291,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		object["icon_url"] = "";
         object["guid"] = record.guid;
 		object["name"] = QFileInfo(record.name).fileName();
+        object["collection_name"] = record.collection_name;
 
 		QImage image;
 		image.loadFromData(record.thumbnail, "PNG");
@@ -498,7 +540,7 @@ void AssetView::fetchMetadata(AssetGridItem *widget)
 		metadataType->setText("Type: " + QString::number(widget->metadata["type"].toInt()));
 		QString pub = widget->metadata["is_public"].toBool() ? "true" : "false";
 		metadataVisibility->setText("Public: " + pub);
-		metadataCollection->setText("Collection: " + QString::number(widget->metadata["collection_id"].toInt()));
+		metadataCollection->setText("Collection: " + widget->metadata["collection_name"].toString());
 	}
 	else {
 		metadataMissing->setVisible(true);
