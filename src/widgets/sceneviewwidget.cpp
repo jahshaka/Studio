@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QDebug>
 #include <QMimeData>
 #include <QElapsedTimer>
+#include <QOpenGLDebugLogger>
 
 #include "../irisgl/src/irisgl.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
@@ -65,31 +66,34 @@ For more information see the LICENSE file
 
 void SceneViewWidget::setShowFps(bool value)
 {
-    showFps = value;
+	showFps = value;
 }
 
 void SceneViewWidget::cleanup()
 {
-    scene.reset();
-    selectedNode.reset();
-    translationGizmo->setLastSelectedNode(iris::SceneNodePtr());
-    rotationGizmo->setLastSelectedNode(iris::SceneNodePtr());
-    scaleGizmo->setLastSelectedNode(iris::SceneNodePtr());
+	scene.reset();
+	selectedNode.reset();
+	translationGizmo->setLastSelectedNode(iris::SceneNodePtr());
+	rotationGizmo->setLastSelectedNode(iris::SceneNodePtr());
+	scaleGizmo->setLastSelectedNode(iris::SceneNodePtr());
 
-    renderer->setScene(iris::ScenePtr());
-    renderer->setSelectedSceneNode(iris::SceneNodePtr());
+	renderer->setScene(iris::ScenePtr());
+	renderer->setSelectedSceneNode(iris::SceneNodePtr());
 }
 
 SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 {
-    QSurfaceFormat format;
-    format.setDepthBufferSize(32);
-    format.setMajorVersion(3);
-    format.setMinorVersion(2);
-    format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
-    format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setSamples(1);
-    setFormat(format);
+	QSurfaceFormat format;
+	format.setDepthBufferSize(32);
+	format.setMajorVersion(3);
+	format.setMinorVersion(2);
+	format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
+	format.setProfile(QSurfaceFormat::CoreProfile);
+	format.setSamples(1);
+	format.setOption(QSurfaceFormat::DebugContext);
+	setFormat(format);
+
+	
 
     // needed in order to get mouse events
     setMouseTracking(true);
@@ -323,6 +327,22 @@ void SceneViewWidget::initializeGL()
     timer->start(Constants::FPS_60);
 
     this->elapsedTimer->start();
+
+	//initializeOpenGLDebugger();
+}
+
+void SceneViewWidget::initializeOpenGLDebugger()
+{
+	glDebugger = new QOpenGLDebugLogger();
+	connect(glDebugger, &QOpenGLDebugLogger::messageLogged, this, [](QOpenGLDebugMessage msg)
+	{
+		qDebug() << msg;
+	});
+
+	if (glDebugger->initialize()) {
+		glDebugger->startLogging(QOpenGLDebugLogger::SynchronousLogging);
+		glDebugger->enableMessages();
+	}
 }
 
 void SceneViewWidget::paintGL()

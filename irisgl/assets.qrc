@@ -14,6 +14,7 @@
         <file>assets/shaders/billboard.vert</file>
         <file>assets/models/head.png</file>
         <file>assets/models/head.obj</file>
+        <file>assets/models/sky.obj</file>
         <file>assets/shaders/viewer.frag</file>
         <file>assets/shaders/viewer.vert</file>
         <file>assets/textures/default_particle.jpg</file>
@@ -38,5 +39,9 @@
         <file>assets/shaders/postprocesses/aa.fs</file>
         <file>assets/shaders/sprite.vert</file>
         <file>assets/shaders/sprite.frag</file>
+        <file>assets/shaders/emitter.vert</file>
+        <file>assets/shaders/emitter.frag</file>
+        <file>assets/shaders/particle.vert</file>
+        <file>assets/shaders/particle.frag</file>
     </qresource>
 </RCC>

@@ -126,7 +126,6 @@ Mesh::Mesh(aiMesh* mesh)
         this->addVertexArray(VertexAttribUsage::BoneWeights, (void*)boneWeights.data(), sizeof(float) * boneWeights.size(), GL_FLOAT, MAX_BONE_INDICES);
     }
 
-    gl->glBindVertexArray(vao);
     // Assimp doesnt give the indices in an array
     // So some calculation still has to be done
     QVector<unsigned int> indices;
@@ -160,7 +159,7 @@ Mesh::Mesh(aiMesh* mesh)
     usesIndexBuffer = true;
 
     // the true size
-    int numVerts = indices.size();
+    numVerts = indices.size();
 
     this->setPrimitiveMode(PrimitiveMode::Triangles);
 
@@ -263,7 +262,6 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program)
     gl->glBindVertexArray(vao);
     if(usesIndexBuffer)
     {
-        //qDebug()<<indexBuffer;
         gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer);
         gl->glDrawElements(glPrimitive,numVerts,GL_UNSIGNED_INT,0);
         gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);

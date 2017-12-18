@@ -44,6 +44,7 @@ class OrbitalCameraController;
 class ViewerCameraController;
 class QElapsedTimer;
 class QTimer;
+class QOpenGLDebugLogger;
 
 class GizmoInstance;
 class ViewportGizmo;
@@ -104,6 +105,7 @@ public:
     iris::CameraNodePtr editorCam;
 
     ThumbnailGenerator* thumbGen;
+	QOpenGLDebugLogger* glDebugger;
 
     explicit SceneViewWidget(QWidget *parent = Q_NULLPTR);
 
@@ -165,6 +167,7 @@ public:
 
 protected:
     void initializeGL();
+	void initializeOpenGLDebugger();
     bool eventFilter(QObject *obj, QEvent *event);
     void mouseReleaseEvent(QMouseEvent* event);
     void wheelEvent(QWheelEvent *event);

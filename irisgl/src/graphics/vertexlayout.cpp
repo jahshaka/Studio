@@ -22,6 +22,11 @@ VertexLayout::VertexLayout()
     stride = 0;
 }
 
+QList<VertexAttribute> VertexLayout::getAttribs()
+{
+	return attribs;
+}
+
 void VertexLayout::addAttrib(VertexAttribUsage usage,int type,int count,int sizeOfAttribInBytes)
 {
     VertexAttribute attrib = {usage, type, count, sizeOfAttribInBytes};
