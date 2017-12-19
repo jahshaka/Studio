@@ -108,10 +108,10 @@ QVector3D TranslationHandle::getHitPos(QVector3D rayPos, QVector3D rayDir)
 	}
 
 	if (hit) {
-		qDebug() << "hit pos: " << finalHitPos;
+		//qDebug() << "hit pos: " << finalHitPos;
 	}
 	else {
-		qDebug() << "no hit";
+		//qDebug() << "no hit";
 		// no hit so move to max distance in view direction
 		float dominantExtent = iris::MathHelper::sign( QVector3D::dotProduct(rayDir.normalized(), handleExtent));// results in -1 or 1
 		finalHitPos = dominantExtent * handleExtent * 10000;
@@ -184,9 +184,13 @@ void TranslationGizmo::drag(QVector3D rayPos, QVector3D rayDir)
 	// move node along line
 	// do snapping here as well
 	auto diff = slidingPos - hitPos;
-
-	selectedNode->setLocalPos(nodeStartPos + diff);
-	//selectedNode->setLocalScale(diff * 0.1f)
+	
+	// apply diff in global space
+	auto targetPos = nodeStartPos + diff;
+	// bring to local space
+	auto localTarget = selectedNode->parent->getGlobalTransform().inverted() * targetPos;
+	selectedNode->setLocalPos(localTarget);
+	//selectedNode->setLocalPos(nodeStartPos + diff);
 }
 
 bool TranslationGizmo::isHit(QVector3D rayPos, QVector3D rayDir)
@@ -224,7 +228,7 @@ TranslationHandle* TranslationGizmo::getHitHandle(QVector3D rayPos, QVector3D ra
 	return closestHandle;
 }
 
-void TranslationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
+void TranslationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
 {
 	gl->glClear(GL_DEPTH_BUFFER_BIT);
 	//gl->glDisable(GL_DEPTH_TEST);
@@ -234,13 +238,36 @@ void TranslationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMat
 	shader->setUniformValue("u_projMatrix", projMatrix);
 	shader->setUniformValue("showHalf", false);
 
-	for (int i = 0; i<3; i++) {
-		auto transform = this->getTransform();
-		transform.scale(getGizmoScale() * handles[i]->handleRadius);
-		shader->setUniformValue("color", handles[i]->getHandleColor());
-		shader->setUniformValue("u_worldMatrix", transform);
-		//handles[i]->draw(gl, shader);
-		handleMeshes[i]->draw(gl, shader);
+	if (dragging) {
+		for (int i = 0; i < 3; i++) {
+			if (handles[i] == draggedHandle) {
+				auto transform = this->getTransform();
+				transform.scale(getGizmoScale() * handles[i]->handleRadius);
+				shader->setUniformValue("color", QColor(255, 255, 0));
+				shader->setUniformValue("u_worldMatrix", transform);
+				//handles[i]->draw(gl, shader);
+				handleMeshes[i]->draw(gl, shader);
+			}
+		}
+	}
+	else {
+		QVector3D hitPos;
+		auto hitHandle = getHitHandle(rayPos, rayDir, hitPos);
+
+		for (int i = 0; i < 3; i++) {
+			for (int i = 0; i < 3; i++) {
+				auto transform = this->getTransform();
+				transform.scale(getGizmoScale() * handles[i]->handleRadius);
+				shader->setUniformValue("color", handles[i]->getHandleColor());
+				shader->setUniformValue("u_worldMatrix", transform);
+
+				if (handles[i] == hitHandle)
+					shader->setUniformValue("color", QColor(255, 255, 0));
+				else
+					shader->setUniformValue("color", handles[i]->getHandleColor());
+				handleMeshes[i]->draw(gl, shader);
+			}
+		}
 	}
 
 	shader->release();

@@ -50,6 +50,12 @@ QMatrix4x4 Gizmo::getTransform()
 	//trans.setToIdentity();
 	//return trans;
 
+	if (!selectedNode) {
+		QMatrix4x4 mat;
+		mat.setToIdentity();
+		return mat;
+	}
+
 	if (transformSpace == GizmoTransformSpace::Global) {
 		QMatrix4x4 trans;
 		trans.setToIdentity();

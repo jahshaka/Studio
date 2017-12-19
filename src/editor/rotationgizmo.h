@@ -28,7 +28,7 @@ public:
 	float handleScale = 0.08f;
 	//float handleRadius = 3.0f;
 	float handleRadius = 1.0f;
-	float handleRadiusSize = 0.8f;
+	float handleRadiusSize = 0.4f;
 
 	RotationHandle(Gizmo* gizmo, GizmoAxis axis);
 
@@ -69,7 +69,7 @@ public:
 
 	// hitPos is the hit position of the hit handle
 	RotationHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, float& hitAngle);
-	virtual void render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
+	virtual void render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
 
 	QMatrix4x4 getTransform() override;
 	void setTransformSpace(GizmoTransformSpace transformSpace) override;

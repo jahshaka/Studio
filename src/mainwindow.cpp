@@ -1780,12 +1780,12 @@ void MainWindow::useArcballCam()
 
 void MainWindow::useLocalTransform()
 {
-    sceneView->setTransformOrientationLocal();
+    sceneView->setGizmoTransformToLocal();
 }
 
 void MainWindow::useGlobalTransform()
 {
-    sceneView->setTransformOrientationGlobal();
+    sceneView->setGizmoTransformToGlobal();
 }
 
 void MainWindow::translateGizmo()

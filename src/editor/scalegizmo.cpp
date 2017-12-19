@@ -240,7 +240,7 @@ ScaleHandle* ScaleGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, QVecto
 	return closestHandle;
 }
 
-void ScaleGizmo::render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
+void ScaleGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
 {
 	gl->glClear(GL_DEPTH_BUFFER_BIT);
 	//gl->glDisable(GL_DEPTH_TEST);
@@ -250,13 +250,33 @@ void ScaleGizmo::render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix, Q
 	shader->setUniformValue("u_projMatrix", projMatrix);
 	shader->setUniformValue("showHalf", false);
 
-	for (int i = 0; i<3; i++) {
-		auto transform = this->getTransform();
-		transform.scale(getGizmoScale() * handles[i]->handleRadius);
-		shader->setUniformValue("color", handles[i]->getHandleColor());
-		shader->setUniformValue("u_worldMatrix", transform);
-		//handles[i]->draw(gl, shader);
-		handleMeshes[i]->draw(gl, shader);
+	if (dragging) {
+		for (int i = 0; i < 3; i++) {
+			if (handles[i] == draggedHandle) {
+				auto transform = this->getTransform();
+				transform.scale(getGizmoScale() * handles[i]->handleRadius);
+				shader->setUniformValue("color", QColor(255, 255, 0));
+				shader->setUniformValue("u_worldMatrix", transform);
+				//handles[i]->draw(gl, shader);
+				handleMeshes[i]->draw(gl, shader);
+			}
+		}
+	}
+	else {
+		QVector3D hitPos;
+		auto hitHandle = getHitHandle(rayPos, rayDir, hitPos);
+
+		for (int i = 0; i < 3; i++) {
+			auto transform = this->getTransform();
+			transform.scale(getGizmoScale() * handles[i]->handleRadius);
+			shader->setUniformValue("u_worldMatrix", transform);
+
+			if (handles[i] == hitHandle)
+				shader->setUniformValue("color", QColor(255, 255, 0));
+			else
+				shader->setUniformValue("color", handles[i]->getHandleColor());
+			handleMeshes[i]->draw(gl, shader);
+		}
 	}
 
 	shader->release();

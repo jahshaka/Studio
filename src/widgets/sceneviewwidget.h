@@ -127,8 +127,8 @@ public:
     void setViewportMode(ViewportMode viewportMode);
     ViewportMode getViewportMode();
 
-    void setTransformOrientationLocal();
-    void setTransformOrientationGlobal();
+    void setGizmoTransformToLocal();
+    void setGizmoTransformToGlobal();
     void hideGizmo();
 
     void setGizmoLoc();

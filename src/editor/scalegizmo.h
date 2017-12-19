@@ -64,7 +64,7 @@ public:
 
 	// hitPos is the hit position of the hit handle
 	ScaleHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, QVector3D& hitPos);
-	void render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
+	void render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
 };
 
 

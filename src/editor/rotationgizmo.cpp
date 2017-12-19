@@ -39,20 +39,36 @@ RotationHandle::RotationHandle(Gizmo* gizmo, GizmoAxis axis)
 bool RotationHandle::isHit(QVector3D rayPos, QVector3D rayDir)
 {
 	auto gizmoTransform = gizmo->getTransform();
+	gizmoTransform.scale(handleScale * gizmo->getGizmoScale());
 	auto worldToGizmo = gizmoTransform.inverted();
 
 	rayPos = worldToGizmo * rayPos;
-	rayDir = QQuaternion::fromRotationMatrix(worldToGizmo.normalMatrix()).normalized() * rayDir;
+	//rayDir = QQuaternion::fromRotationMatrix(worldToGizmo.normalMatrix()).normalized() * rayDir;
+	rayDir = (worldToGizmo * QVector4D(rayDir, 0)).toVector3D();
 
 	QVector3D hitPoint;
 	float hitDist;
-	if (iris::IntersectionHelper::intersectSegmentPlane(rayPos, rayPos + rayDir * 1000000, iris::Plane(plane, 0), hitDist, hitPoint)) {
-		float innerRadius = (handleRadius - (handleRadiusSize / 2.0f)) *handleScale * gizmo->getGizmoScale();
-		float outerRadius = (handleRadius + (handleRadiusSize / 2.0f)) *handleScale * gizmo->getGizmoScale();
+	QVector3D hitPlane;
+	if (QVector3D::dotProduct(plane, rayDir) < 0)
+		hitPlane = -plane;
+	else
+		hitPlane = plane;
+
+	if (iris::IntersectionHelper::intersectSegmentPlane(rayPos, rayPos + rayDir * 1000000, iris::Plane(hitPlane, 0), hitDist, hitPoint)) {
+		//float innerRadius = (handleRadius - (handleRadiusSize / 2.0f)) *handleScale * gizmo->getGizmoScale();
+		//float outerRadius = (handleRadius + (handleRadiusSize / 2.0f)) *handleScale * gizmo->getGizmoScale();
+		float innerRadius = (handleRadius - (handleRadiusSize / 2.0f));
+		float outerRadius = (handleRadius + (handleRadiusSize / 2.0f));
 		float distToCenter = hitPoint.length();
 		//qDebug() << distToCenter;
 
+		// hit should be from the part facing the point, not the back side
+		if (QVector3D::dotProduct(hitPoint.normalized(), rayPos.normalized()) < 0)
+			return false;
+
 		if (distToCenter > innerRadius && distToCenter < outerRadius) {
+			//qDebug() << "hit: " << distToCenter;
+			//qDebug() << "hit: " << hitPoint;
 			//qDebug() << "hit!";
 			return true;
 		}
@@ -161,6 +177,7 @@ void RotationGizmo::endDragging()
 {
 	dragging = false;
 	draggedHandle = nullptr;
+	trans = Gizmo::getTransform();
 }
 
 void RotationGizmo::drag(QVector3D rayPos, QVector3D rayDir)
@@ -236,7 +253,7 @@ RotationHandle* RotationGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, 
 	return closestHandle;
 }
 
-void RotationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
+void RotationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
 {
 	gl->glClear(GL_DEPTH_BUFFER_BIT);
 	//gl->glDisable(GL_DEPTH_TEST);
@@ -252,7 +269,8 @@ void RotationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix
 				//auto transform = this->getTransform();
 				auto transform = Gizmo::getTransform();
 				transform.scale(getGizmoScale() * handles[i]->handleScale);
-				shader->setUniformValue("color", handles[i]->getHandleColor());
+				//shader->setUniformValue("color", handles[i]->getHandleColor());
+				shader->setUniformValue("color", QColor(255, 255, 0));
 				shader->setUniformValue("u_worldMatrix", transform);
 				//handles[i]->draw(gl, shader);
 				handleMeshes[i]->draw(gl, shader);
@@ -261,12 +279,18 @@ void RotationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QMatrix4x4& viewMatrix
 	}
 	else
 	{
+		float hitAngle;
+		auto hitHandle = getHitHandle(rayPos, rayDir, hitAngle);
 		for (int i = 0; i < 3; i++) {
 			auto transform = Gizmo::getTransform();
 			transform.scale(getGizmoScale() * handles[i]->handleScale);
-			shader->setUniformValue("color", handles[i]->getHandleColor());
 			shader->setUniformValue("u_worldMatrix", transform);
 			//handles[i]->draw(gl, shader);
+
+			if (handles[i] == hitHandle)
+				shader->setUniformValue("color", QColor(255, 255, 0));
+			else
+				shader->setUniformValue("color", handles[i]->getHandleColor());
 			handleMeshes[i]->draw(gl, shader);
 		}
 	}

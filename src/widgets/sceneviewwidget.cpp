@@ -287,7 +287,10 @@ void SceneViewWidget::renderGizmos(bool once)
     auto gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
 	if (!!selectedNode) {
 		gizmo->updateSize(editorCam);
-		gizmo->render(gl, editorCam->viewMatrix, editorCam->projMatrix);
+
+		QVector3D rayPos, rayDir;
+		this->getMousePosAndRay(this->prevMousePos, rayPos, rayDir);
+		gizmo->render(gl, rayPos, rayDir, editorCam->viewMatrix, editorCam->projMatrix);
 	}
     /*
     // update and draw the 3d manipulation gizmo
@@ -998,14 +1001,19 @@ ViewportMode SceneViewWidget::getViewportMode()
     return viewportMode;
 }
 
-void SceneViewWidget::setTransformOrientationLocal()
+void SceneViewWidget::setGizmoTransformToLocal()
 {
-    //viewportGizmo->setTransformOrientation("Local");
+	translationGizmo->setTransformSpace(GizmoTransformSpace::Local);
+	rotationGizmo->setTransformSpace(GizmoTransformSpace::Local);
+	scaleGizmo->setTransformSpace(GizmoTransformSpace::Local);
 }
 
-void SceneViewWidget::setTransformOrientationGlobal()
+void SceneViewWidget::setGizmoTransformToGlobal()
 {
-    //viewportGizmo->setTransformOrientation("Global");
+	translationGizmo->setTransformSpace(GizmoTransformSpace::Global);
+	rotationGizmo->setTransformSpace(GizmoTransformSpace::Global);
+	// scaling is only done locally
+	scaleGizmo->setTransformSpace(GizmoTransformSpace::Local);
 }
 
 void SceneViewWidget::hideGizmo()
