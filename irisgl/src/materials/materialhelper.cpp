@@ -80,23 +80,21 @@ DefaultMaterialPtr MaterialHelper::createMaterial(aiMaterial* aiMat,QString asse
 
 void MaterialHelper::extractMaterialData(aiMaterial *aiMat, QString assetPath, MeshMaterialData& mat)
 {
-    mat.diffuseColor = getAiMaterialColor(aiMat, AI_MATKEY_COLOR_DIFFUSE);
-    mat.specularColor = getAiMaterialColor(aiMat, AI_MATKEY_COLOR_SPECULAR);
-    mat.ambientColor = getAiMaterialColor(aiMat, AI_MATKEY_COLOR_AMBIENT);
-    mat.emissionColor = getAiMaterialColor(aiMat,AI_MATKEY_COLOR_EMISSIVE);
+    mat.diffuseColor    = getAiMaterialColor(aiMat, AI_MATKEY_COLOR_DIFFUSE);
+    mat.specularColor   = getAiMaterialColor(aiMat, AI_MATKEY_COLOR_SPECULAR);
+    mat.ambientColor    = getAiMaterialColor(aiMat, AI_MATKEY_COLOR_AMBIENT);
+    mat.emissionColor   = getAiMaterialColor(aiMat, AI_MATKEY_COLOR_EMISSIVE);
+    mat.shininess       = getAiMaterialFloat(aiMat, AI_MATKEY_SHININESS);
 
-    mat.shininess = getAiMaterialFloat(aiMat, AI_MATKEY_SHININESS);
+    if (!assetPath.isEmpty()) {
+        QString diffuseTex = getAiMaterialTexture(aiMat, aiTextureType_DIFFUSE);
+        mat.diffuseTexture = QFileInfo(diffuseTex).isRelative() ? QDir::cleanPath(QDir(assetPath).filePath(diffuseTex)) : diffuseTex;
 
-    if(!assetPath.isEmpty())
-    {
-        auto diffuseTex = getAiMaterialTexture(aiMat, aiTextureType_DIFFUSE);
-        mat.diffuseTexture = QDir::cleanPath(assetPath + QDir::separator() + diffuseTex);
+        QString specularTex = getAiMaterialTexture(aiMat, aiTextureType_SPECULAR);
+        mat.specularTexture = QFileInfo(specularTex).isRelative() ? QDir::cleanPath(QDir(assetPath).filePath(specularTex)) : specularTex;
 
-        auto specularTex = getAiMaterialTexture(aiMat, aiTextureType_SPECULAR);
-        mat.specularTexture = QDir::cleanPath(assetPath + QDir::separator() + specularTex);
-
-        auto normalsTex = getAiMaterialTexture(aiMat, aiTextureType_NORMALS);
-        mat.normalTexture = QDir::cleanPath(assetPath + QDir::separator() + normalsTex);
+        QString normalsTex = getAiMaterialTexture(aiMat, aiTextureType_NORMALS);
+        mat.normalTexture = QFileInfo(normalsTex).isRelative() ? QDir::cleanPath(QDir(assetPath).filePath(normalsTex)) : normalsTex;
     }
 }
 
