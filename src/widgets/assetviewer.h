@@ -40,6 +40,8 @@ class AssetViewer : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core, i
 public:
     AssetViewer(QWidget *parent = Q_NULLPTR);
 
+    iris::SceneSource *ssource;
+
     void update();
     void paintGL();
     void updateScene();

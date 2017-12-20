@@ -936,6 +936,8 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 
     if (filename.isEmpty()) return;
 
+    iris::SceneSource *ssource = new iris::SceneSource();
+
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::loadAsSceneFragment(filename, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
@@ -963,7 +965,7 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
             mat->setValue("normalTexture", data.normalTexture);
 
         return mat;
-    });
+    }, ssource);
 
     // model file may be invalid so null gets returned
     if (!node) return;

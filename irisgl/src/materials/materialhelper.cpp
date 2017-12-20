@@ -88,13 +88,19 @@ void MaterialHelper::extractMaterialData(aiMaterial *aiMat, QString assetPath, M
 
     if (!assetPath.isEmpty()) {
         QString diffuseTex = getAiMaterialTexture(aiMat, aiTextureType_DIFFUSE);
-        mat.diffuseTexture = QFileInfo(diffuseTex).isRelative() ? QDir::cleanPath(QDir(assetPath).filePath(diffuseTex)) : diffuseTex;
+        mat.diffuseTexture = QFileInfo(diffuseTex).isRelative()
+								? QDir::cleanPath(QDir(assetPath).filePath(diffuseTex))
+								: QDir::cleanPath(diffuseTex);
 
         QString specularTex = getAiMaterialTexture(aiMat, aiTextureType_SPECULAR);
-        mat.specularTexture = QFileInfo(specularTex).isRelative() ? QDir::cleanPath(QDir(assetPath).filePath(specularTex)) : specularTex;
+        mat.specularTexture = QFileInfo(specularTex).isRelative()
+								? QDir::cleanPath(QDir(assetPath).filePath(specularTex))
+								: QDir::cleanPath(specularTex);
 
         QString normalsTex = getAiMaterialTexture(aiMat, aiTextureType_NORMALS);
-        mat.normalTexture = QFileInfo(normalsTex).isRelative() ? QDir::cleanPath(QDir(assetPath).filePath(normalsTex)) : normalsTex;
+        mat.normalTexture = QFileInfo(normalsTex).isRelative()
+								? QDir::cleanPath(QDir(assetPath).filePath(normalsTex))
+								: QDir::cleanPath(normalsTex);
     }
 }
 

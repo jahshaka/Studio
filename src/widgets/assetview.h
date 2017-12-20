@@ -3,6 +3,7 @@
 
 #include <QWidget>
 
+#include "irisgl/src/graphics/mesh.h"
 #include "irisgl/src/core/irisutils.h"
 
 class QSplitter;
@@ -54,6 +55,7 @@ public:
 	~AssetView();
 	void focusInEvent(QFocusEvent *event);
 	bool eventFilter(QObject *watched, QEvent *event);
+    void copyTextures(const QString &folderGuid);
 
 signals:
     void refreshCollections();
@@ -88,6 +90,7 @@ private:
 	QWidget *emptyGrid;
 	QWidget *filterPane;
 
+    QPushButton *normalize;
 	QLabel *metadataMissing;
 	QLabel *metadataName;
 	QLabel *metadataType;

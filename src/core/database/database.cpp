@@ -99,7 +99,7 @@ void Database::createGlobalDbCollections()
     query.prepare(schema);
     executeAndCheckQuery(query, "createGlobalDbCollections");
 
-    insertCollectionGlobal("Uncategorized");    // should be 0
+    //insertCollectionGlobal("Uncategorized");    // should be 0
 }
 
 void Database::createGlobalDbAssets() {

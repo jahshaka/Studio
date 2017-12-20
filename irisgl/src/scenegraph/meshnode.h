@@ -17,10 +17,11 @@ For more information see the LICENSE file
 #include "../scenegraph/scenenode.h"
 #include "../core/irisutils.h"
 #include "../graphics/texture2d.h"
+#include "../graphics/mesh.h"
 #include "../graphics/renderitem.h"
 
+#include "assimp/Importer.hpp"
 #include "assimp/ProgressHandler.hpp"
-#include <QProgressBar>
 
 class aiScene;
 
@@ -56,6 +57,14 @@ public:
         if (handler) handler->onProgress(percentage);
         return 1;
     }
+};
+
+class SceneSource
+{
+public:
+    SceneSource() = default;
+    Assimp::Importer importer;
+    MeshMaterialData meshMatData;
 };
 
 class MeshNode : public SceneNode
@@ -97,6 +106,7 @@ public:
     static SceneNodePtr loadAsSceneFragment(
         QString path,
         std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc,
+        SceneSource *scene_ = Q_NULLPTR,
         IModelReadProgress* progressReader = Q_NULLPTR
     );
 

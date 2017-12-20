@@ -311,13 +311,12 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,aiNode* node,Sc
 QSharedPointer<iris::SceneNode>
 MeshNode::loadAsSceneFragment(QString filePath,
                               std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc,
-                              IModelReadProgress* progressReader)
+                              SceneSource *scene_, IModelReadProgress* progressReader)
 {
-    Assimp::Importer importer;
     ModelProgressHandler *handle = new ModelProgressHandler();
     handle->setHandler(progressReader);
-    importer.SetProgressHandler(handle);
-    const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(), aiProcessPreset_TargetRealtime_Quality);
+    scene_->importer.SetProgressHandler(handle);
+    const aiScene *scene = scene_->importer.ReadFile(filePath.toStdString().c_str(), aiProcessPreset_TargetRealtime_Quality);
 
     if (scene->mNumMeshes == 0) return QSharedPointer<iris::MeshNode>(nullptr);
     if (scene->mNumMeshes == 1) {
@@ -347,6 +346,7 @@ MeshNode::loadAsSceneFragment(QString filePath,
 
         MeshMaterialData meshMat;
         MaterialHelper::extractMaterialData(m, dir, meshMat);
+        scene_->meshMatData = meshMat;
         auto mat = createMaterialFunc(meshObj, meshMat);
         if (!!mat) node->setMaterial(mat);
 

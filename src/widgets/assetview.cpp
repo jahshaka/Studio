@@ -50,6 +50,37 @@ bool AssetView::eventFilter(QObject * watched, QEvent * event)
 	return QObject::eventFilter(watched, event);
 }
 
+void AssetView::copyTextures(const QString &folderGuid)
+{
+    const QString relativePath = "Textures";
+    const aiScene *scene = viewer->ssource->importer.GetScene();
+
+    QStringList texturesToCopy;
+
+    for (int i = 0; i < scene->mNumMeshes; i++) {
+        auto mesh = scene->mMeshes[i];
+        auto material = scene->mMaterials[mesh->mMaterialIndex];
+
+        // todo - repeat for all 3 channels we currently import
+        if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
+            aiString textureName;
+            material->GetTexture(aiTextureType_DIFFUSE, 0, &textureName);
+            texturesToCopy.append(textureName.C_Str());
+        }
+    }
+
+    if (!texturesToCopy.isEmpty()) {
+        QString assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER + "/" + folderGuid;
+        for (auto texture : texturesToCopy) {
+			QString diffuseTexture = QFileInfo(texture).isRelative()
+										? QDir::cleanPath(QDir(QFileInfo(filename).absoluteDir()).filePath(texture))
+										: QDir::cleanPath(texture);
+
+            QFile::copy(diffuseTexture, QDir(assetPath).filePath(QFileInfo(texture).fileName()));
+        }
+    }
+}
+
 AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(parent)
 {
 	_assetView = new QListWidget;
@@ -348,6 +379,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	addToLibrary->setStyleSheet("background: #2ecc71");
 	addToLibrary->setVisible(false);
 
+    normalize = new QPushButton("Normalize");
+
 	addToProject = new QPushButton("Add to Project");
 	addToProject->setStyleSheet("background: #3498db");
 	addToProject->setVisible(false);
@@ -364,10 +397,25 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	renameWidget->setLayout(renameLayout);
 	renameWidget->setVisible(false);
 
-    connect(fastGrid, &AssetViewGrid::selectedTile, [this](AssetGridItem *gridItem) {
+    connect(normalize, &QPushButton::pressed, [this]() {
+        //copyTextures(iris::MeshMaterialData());
+    });
+
+    connect(fastGrid, &AssetViewGrid::selectedTile, [=](AssetGridItem *gridItem) {
 		fastGrid->deselectAll();
 
 		if (!gridItem->metadata.isEmpty()) {
+
+            auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
+            viewer->loadModel(QDir(assetPath).filePath(gridItem->metadata["guid"].toString() + ".obj"));
+           
+            split->setHandleWidth(1);
+            int size = this->height() / 3;
+            const QList<int> sizes = { size, size * 2 };
+            split->setSizes(sizes);
+            split->setStretchFactor(0, 1);
+            split->setStretchFactor(1, 1);
+
 			selectedGridItem = gridItem;
 			addToProject->setVisible(true);
 			selectedGridItem->highlight(true);
@@ -395,7 +443,13 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		object["guid"] = guid;
 
         auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
-        bool copyFile = QFile::copy(filename, QDir(assetPath).filePath(guid + "." + fInfo.suffix()));
+
+		if (!QDir(QDir(assetPath).filePath(guid)).exists()) {
+			QDir().mkdir(QDir(assetPath).filePath(guid));
+			bool copyFile = QFile::copy(filename, QDir(QDir(assetPath).filePath(guid)).filePath(guid + "." + fInfo.suffix()));
+		}
+
+        copyTextures(guid);
 
 		fastGrid->addTo(object, thumbnail, 0);
 		QApplication::processEvents();
@@ -418,9 +472,6 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		QString object = guid + "." + fInfo.suffix();
         auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
         
-		qDebug() << QDir(assetPath).filePath(object);
-		qDebug() << QDir(pDir).filePath(object);
-
 		if (!QFile::copy(QDir(assetPath).filePath(object), QDir(pDir).filePath(object))) {
 			QString warningText = QString("Failed to add asset %1. Possible reasons are:\n"
 				"1. It doesn't exist\n"
@@ -466,6 +517,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	metaLayout->addStretch();
 	auto projectSpecific = new QWidget;
 	auto ll = new QVBoxLayout;
+    ll->addWidget(normalize);
 	ll->addWidget(addToProject);
 	projectSpecific->setLayout(ll);
 	metaLayout->addWidget(projectSpecific);
