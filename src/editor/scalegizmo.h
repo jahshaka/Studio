@@ -49,7 +49,12 @@ class ScaleGizmo : public Gizmo
 	int draggedHandleIndex;
 	QVector3D startScale;
 
+	// just so the handle looks scaled when dragged
+	QVector3D handleVisualScale;
+
 	bool dragging;
+private:
+	void createAxisLine(GizmoAxis axis);
 public:
 	ScaleGizmo();
 

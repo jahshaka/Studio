@@ -113,6 +113,9 @@ public:
     void setSelectedNode(iris::SceneNodePtr sceneNode);
     void clearSelectedNode();
 
+	void enterEditorMode();
+	void enterPlayerMode();
+
     void setEditorCamera(iris::CameraNodePtr camera);
     void resetEditorCam();
 
@@ -130,6 +133,7 @@ public:
     void setGizmoTransformToLocal();
     void setGizmoTransformToGlobal();
     void hideGizmo();
+	void showGizmos();
 
     void setGizmoLoc();
     void setGizmoRot();

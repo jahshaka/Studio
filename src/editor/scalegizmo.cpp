@@ -6,6 +6,7 @@
 #include "irisgl/src/math/mathhelper.h"
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/scenegraph/scene.h"
+#include "irisgl/src/graphics/vertexlayout.h"
 #include "irisgl/src/scenegraph/cameranode.h"
 #include "irisgl/src/graphics/graphicshelper.h"
 #include "uimanager.h"
@@ -109,10 +110,9 @@ QVector3D ScaleHandle::getHitPos(QVector3D rayPos, QVector3D rayDir)
 	}
 
 	if (hit) {
-		qDebug() << "hit pos: " << finalHitPos;
+		//qDebug() << "hit pos: " << finalHitPos;
 	}
 	else {
-		qDebug() << "no hit";
 		// no hit so move to max distance in view direction
 		float dominantExtent = iris::MathHelper::sign(QVector3D::dotProduct(rayDir.normalized(), handleExtent));// results in -1 or 1
 		finalHitPos = dominantExtent * handleExtent * 10000;
@@ -136,6 +136,7 @@ ScaleGizmo::ScaleGizmo() :
 
 	dragging = false;
 	draggedHandle = nullptr;
+	handleVisualScale = QVector3D(1, 1, 1);
 }
 
 void ScaleGizmo::loadAssets()
@@ -163,6 +164,7 @@ void ScaleGizmo::startDragging(QVector3D rayPos, QVector3D rayDir)
 		return;
 	}
 
+	handleVisualScale = QVector3D(1, 1, 1);
 	nodeStartPos = selectedNode->getGlobalPosition();
 	dragging = true;
 	startScale = selectedNode->getLocalScale();
@@ -171,6 +173,8 @@ void ScaleGizmo::startDragging(QVector3D rayPos, QVector3D rayDir)
 void ScaleGizmo::endDragging()
 {
 	dragging = false;
+	draggedHandle = nullptr;
+	handleVisualScale = QVector3D(1, 1, 1);
 }
 
 void ScaleGizmo::drag(QVector3D rayPos, QVector3D rayDir)
@@ -191,18 +195,21 @@ void ScaleGizmo::drag(QVector3D rayPos, QVector3D rayDir)
 	{
 	case GizmoAxis::X:
 		diff = QVector3D(diff.x(), 0, 0);
+		handleVisualScale = QVector3D(qAbs(qBound(-2.0f, 1.0f + diff.x()*0.1f, 2.0f)), 1, 1);
 		break;
 	case GizmoAxis::Y:
 		diff = QVector3D(0, diff.y(), 0);
+		handleVisualScale = QVector3D(1, qAbs(qBound(-2.0f, 1.0f + diff.y()*0.1f, 2.0f)), 1);
 		break;
 	case GizmoAxis::Z:
 		diff = QVector3D(0, 0, diff.z());
+		handleVisualScale = QVector3D(1, 1, qAbs(qBound(-2.0f, 1.0f + diff.z()*0.1f, 2.0f)));
 		break;
 	}
 
 	//selectedNode->setLocalPos(nodeStartPos + diff);
 	//qDebug() << startScale + diff;
-	selectedNode->setLocalScale(startScale + diff * 1.0f);
+	selectedNode->setLocalScale(startScale + diff);
 }
 
 bool ScaleGizmo::isHit(QVector3D rayPos, QVector3D rayDir)
@@ -254,7 +261,7 @@ void ScaleGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector
 		for (int i = 0; i < 3; i++) {
 			if (handles[i] == draggedHandle) {
 				auto transform = this->getTransform();
-				transform.scale(getGizmoScale() * handles[i]->handleRadius);
+				transform.scale(getGizmoScale() * handles[i]->handleRadius * handleVisualScale);
 				shader->setUniformValue("color", QColor(255, 255, 0));
 				shader->setUniformValue("u_worldMatrix", transform);
 				//handles[i]->draw(gl, shader);
@@ -268,7 +275,7 @@ void ScaleGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector
 
 		for (int i = 0; i < 3; i++) {
 			auto transform = this->getTransform();
-			transform.scale(getGizmoScale() * handles[i]->handleRadius);
+			transform.scale(getGizmoScale() * handles[i]->handleRadius * handleVisualScale);
 			shader->setUniformValue("u_worldMatrix", transform);
 
 			if (handles[i] == hitHandle)

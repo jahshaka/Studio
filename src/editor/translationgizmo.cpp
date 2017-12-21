@@ -169,6 +169,7 @@ void TranslationGizmo::startDragging(QVector3D rayPos, QVector3D rayDir)
 void TranslationGizmo::endDragging()
 {
 	dragging = false;
+	draggedHandle = nullptr;
 }
 
 void TranslationGizmo::drag(QVector3D rayPos, QVector3D rayDir)
