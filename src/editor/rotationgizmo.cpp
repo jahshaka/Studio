@@ -1,6 +1,6 @@
 #include "rotationgizmo.h"
 #include <QOpenGLFunctions_3_2_Core>
-#include <qopenglshaderprogram.h>
+#include <QOpenGLShaderProgram>
 
 #include "irisgl/src/math/intersectionhelper.h"
 #include "irisgl/src/math/mathhelper.h"

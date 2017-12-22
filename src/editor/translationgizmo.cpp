@@ -1,6 +1,6 @@
 #include "translationgizmo.h"
 #include <QOpenGLFunctions_3_2_Core>
-#include <qopenglshaderprogram.h>
+#include <QOpenGLShaderProgram>
 
 #include "irisgl/src/math/intersectionhelper.h"
 #include "irisgl/src/math/mathhelper.h"
@@ -59,9 +59,6 @@ bool TranslationHandle::isHit(QVector3D rayPos, QVector3D rayDir)
     return false;
 }
 
-//todo: transform rayPos and rayDir to gizmo space first then back to world space
-// The rayPos and rayDir are in world space, convert them to gizmo space to do calculations then calculate them back
-// to world space when we're done
 QVector3D TranslationHandle::getHitPos(QVector3D rayPos, QVector3D rayDir)
 {
 	bool hit = false;
@@ -74,7 +71,7 @@ QVector3D TranslationHandle::getHitPos(QVector3D rayPos, QVector3D rayDir)
 	rayPos = worldToGizmo * rayPos;
 	rayDir = QQuaternion::fromRotationMatrix(worldToGizmo.normalMatrix()).rotatedVector(rayDir);
 
-	// loop thru planes
+	// loop through planes
 	for (auto normal : planes) {
 		float t;
 		QVector3D hitPos;
@@ -107,15 +104,8 @@ QVector3D TranslationHandle::getHitPos(QVector3D rayPos, QVector3D rayDir)
 		}
 	}
 
-	if (hit) {
-		//qDebug() << "hit pos: " << finalHitPos;
-	}
-	else {
-		//qDebug() << "no hit";
-		// no hit so move to max distance in view direction
-		float dominantExtent = iris::MathHelper::sign( QVector3D::dotProduct(rayDir.normalized(), handleExtent));// results in -1 or 1
-		finalHitPos = dominantExtent * handleExtent * 10000;
-	}
+	float dominantExtent = iris::MathHelper::sign( QVector3D::dotProduct(rayDir.normalized(), handleExtent));// results in -1 or 1
+	finalHitPos = dominantExtent * handleExtent * 10000;
 
 	// now convert it back to world space
 	finalHitPos = gizmoTransform * finalHitPos;
@@ -131,7 +121,6 @@ TranslationGizmo::TranslationGizmo() :
 	handles[2] = new TranslationHandle(this, GizmoAxis::Z);
 
 	loadAssets();
-	//handle->setHandleColor(QColor(255, 255, 255));
 
 	dragging = false;
 	draggedHandle = nullptr;
@@ -155,7 +144,6 @@ bool TranslationGizmo::isDragging()
 
 void TranslationGizmo::startDragging(QVector3D rayPos, QVector3D rayDir)
 {
-	//qDebug() << "drag starting";
 	draggedHandle = getHitHandle(rayPos, rayDir, hitPos);
 	if (draggedHandle == nullptr) {
 		dragging = false; // end dragging if no handle was actually hit
@@ -174,12 +162,10 @@ void TranslationGizmo::endDragging()
 
 void TranslationGizmo::drag(QVector3D rayPos, QVector3D rayDir)
 {
-	//qDebug() << "dragging";
 	if (draggedHandle == nullptr) {
-		//dragging = false;
 		return;
 	}
-	//qDebug()<<"sliding";
+
 	auto slidingPos = draggedHandle->getHitPos(rayPos, rayDir);
 
 	// move node along line
@@ -191,7 +177,6 @@ void TranslationGizmo::drag(QVector3D rayPos, QVector3D rayDir)
 	// bring to local space
 	auto localTarget = selectedNode->parent->getGlobalTransform().inverted() * targetPos;
 	selectedNode->setLocalPos(localTarget);
-	//selectedNode->setLocalPos(nodeStartPos + diff);
 }
 
 bool TranslationGizmo::isHit(QVector3D rayPos, QVector3D rayDir)
@@ -199,7 +184,6 @@ bool TranslationGizmo::isHit(QVector3D rayPos, QVector3D rayDir)
 	for (auto i = 0; i< 3; i++) {
 		if (handles[i]->isHit(rayPos, rayDir))
 		{
-			//handle->setHandleColor(QColor(255, 255, 255));
 			return true;
 		}
 	}
@@ -232,7 +216,7 @@ TranslationHandle* TranslationGizmo::getHitHandle(QVector3D rayPos, QVector3D ra
 void TranslationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
 {
 	gl->glClear(GL_DEPTH_BUFFER_BIT);
-	//gl->glDisable(GL_DEPTH_TEST);
+
 	shader->bind();
 
 	shader->setUniformValue("u_viewMatrix", viewMatrix);
@@ -246,7 +230,7 @@ void TranslationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, Q
 				transform.scale(getGizmoScale() * handles[i]->handleRadius);
 				shader->setUniformValue("color", QColor(255, 255, 0));
 				shader->setUniformValue("u_worldMatrix", transform);
-				//handles[i]->draw(gl, shader);
+
 				handleMeshes[i]->draw(gl, shader);
 			}
 		}

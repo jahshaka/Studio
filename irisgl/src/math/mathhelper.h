@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include <QMatrix4x4>
 #include <QVector3D>
 #include <QQuaternion>
-#include <qmath.h>
+#include <QtMath>
 
 namespace iris
 {
