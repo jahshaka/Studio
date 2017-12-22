@@ -112,18 +112,6 @@ void RenderThread::initScene()
     node->setPickable(false);
     node->setShadowEnabled(false);
 
-    auto m = iris::CustomMaterial::create();
-    m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-    m->setValue("diffuseTexture", IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"));
-    //m->setValue("diffuseTexture", ":/content/skies/alternative/cove/back.jpg");
-    m->setValue("textureScale", 4.f);
-    //m->setValue("emission",QColor(255, 255, 255));
-    m->setValue("diffuseColor", QColor(255, 255, 255, 255));
-    m->setValue("useAlpha", false);
-    node->setMaterial(m);
-
-    //scene->rootNode->addChild(node);
-
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
@@ -162,8 +150,9 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 {
     if(request.type == ThumbnailRequestType::Mesh)
     {
+		iris::SceneSource *ssource = new iris::SceneSource();
         // load mesh as scene
-        sceneNode = iris::MeshNode::loadAsSceneFragment(request.path,[](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+        sceneNode = iris::MeshNode::loadAsSceneFragment(request.path, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
         {
             auto mat = iris::CustomMaterial::create();
             if (mesh->hasSkeleton())
@@ -188,7 +177,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
                 mat->setValue("normalTexture", data.normalTexture);
 
             return mat;
-        });
+        }, ssource);
 
         if (!sceneNode)
             return;

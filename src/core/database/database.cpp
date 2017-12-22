@@ -105,6 +105,7 @@ void Database::createGlobalDbCollections()
 void Database::createGlobalDbAssets() {
 	QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_ASSETS_TABLE + " ("
 		"    name              VARCHAR(128),"
+		"    extension		   VARCHAR(8),"
 		"	 type			   INTEGER,"
 		"	 collection		   INTEGER,"
 		"	 times_used		   INTEGER,"	
@@ -120,6 +121,45 @@ void Database::createGlobalDbAssets() {
 	QSqlQuery query;
 	query.prepare(schema);
 	executeAndCheckQuery(query, "createGlobalDbAssets");
+}
+
+void Database::createGlobalDbMaterials()
+{
+	QString schema = "CREATE TABLE IF NOT EXISTS materials ("
+		"    name              VARCHAR(128),"
+		"	 type			   INTEGER,"
+		"	 collection		   INTEGER,"
+		"	 times_used		   INTEGER,"
+		"	 model_guid		   VARCHAR(32),"
+		"    world_guid        VARCHAR(32),"
+		"    thumbnail         BLOB,"
+		"    material		   BLOB,"
+		"    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
+		"    last_updated      DATETIME,"
+		"    version           REAL,"
+		"    asset_guid        VARCHAR(32),"
+		"    guid              VARCHAR(32) PRIMARY KEY"
+		")";
+
+	QSqlQuery query;
+	query.prepare(schema);
+	executeAndCheckQuery(query, "createGlobalDbMaterials");
+}
+
+QString Database::insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material)
+{
+	QSqlQuery query;
+	auto guid = GUIDManager::generateGUID();
+	query.prepare("INSERT INTO materials (name, date_created, material, asset_guid, guid) "
+			      "VALUES (:name, datetime(), :material, :asset_guid, :guid)");
+	query.bindValue(":name", materialName);
+	query.bindValue(":material", material);
+	query.bindValue(":asset_guid", asset_guid);
+	query.bindValue(":guid", guid);
+
+	executeAndCheckQuery(query, "insertMaterialGlobal");
+
+	return guid;
 }
 
 void Database::deleteProject()
@@ -166,9 +206,13 @@ QString Database::insertAssetGlobal(const QString &assetName, int type, const QB
 	QSqlQuery query;
 	auto guid = GUIDManager::generateGUID();
 	query.prepare("INSERT INTO " + Constants::DB_ASSETS_TABLE +
-		" (name, thumbnail, type, collection, version, date_created, last_updated, guid)" +
-		" VALUES (:name, :thumbnail, :type, 0, :version, datetime(), datetime(), :guid)");
-	query.bindValue(":name", assetName);
+		" (name, extension, thumbnail, type, collection, version, date_created, last_updated, guid)" +
+		" VALUES (:name, :extension, :thumbnail, :type, 0, :version, datetime(), datetime(), :guid)");
+
+	QFileInfo assetInfo(assetName);
+
+	query.bindValue(":name", assetInfo.baseName());
+	query.bindValue(":extension", assetInfo.suffix());
 	query.bindValue(":thumbnail", thumbnail);
 	query.bindValue(":type", type);
 	query.bindValue(":version", Constants::CONTENT_VERSION);
@@ -209,6 +253,24 @@ void Database::insertThumbnailGlobal(const QString &world_guid,
     query.bindValue(":guid",        GUIDManager::generateGUID());
 
     executeAndCheckQuery(query, "insertThumbnailGlobal");
+}
+
+QByteArray Database::getMaterialGlobal(const QString &guid) const
+{
+	QSqlQuery query;
+	query.prepare("SELECT material FROM materials WHERE asset_guid = ?");
+	query.addBindValue(guid);
+
+	if (query.exec()) {
+		if (query.first()) {
+			return query.value(0).toByteArray();
+		}
+	}
+	else {
+		irisLog("There was an error getting the material blob! " + query.lastError().text());
+	}
+
+	return QByteArray();
 }
 
 bool Database::hasCachedThumbnail(const QString &name)
@@ -297,7 +359,9 @@ QVector<ProjectTileData> Database::fetchProjects()
 QVector<AssetTileData> Database::fetchAssets()
 {
 	QSqlQuery query;
-	query.prepare("SELECT assets.name, assets.thumbnail, assets.guid, collections.name as collection_name FROM " + Constants::DB_ASSETS_TABLE +
+	query.prepare("SELECT assets.name, (assets.guid || '.' || assets.extension) as full_filename,"
+				  " assets.thumbnail, assets.guid, collections.name as collection_name"
+				  " FROM assets"
                   " INNER JOIN " + Constants::DB_COLLECT_TABLE + " ON assets.collection = collections.collection_id ORDER BY assets.name DESC");
 	executeAndCheckQuery(query, "fetchAssets");
 
@@ -307,9 +371,10 @@ QVector<AssetTileData> Database::fetchAssets()
 		QSqlRecord record = query.record();
 		for (int i = 0; i < record.count(); i++) {
 			data.name = record.value(0).toString();
-			data.thumbnail = record.value(1).toByteArray();
-			data.guid = record.value(2).toString();
-            data.collection_name = record.value(3).toString();
+			data.full_filename = record.value(1).toString();
+			data.thumbnail = record.value(2).toByteArray();
+			data.guid = record.value(3).toString();
+            data.collection_name = record.value(4).toString();
 		}
 
 		tileData.push_back(data);

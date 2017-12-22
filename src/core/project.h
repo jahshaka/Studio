@@ -42,6 +42,7 @@ struct ProjectTileData {
 
 struct AssetTileData {
 	QString     name;
+	QString     full_filename;
 	QByteArray  thumbnail;
 	QString     guid;
     QString     collection_name;

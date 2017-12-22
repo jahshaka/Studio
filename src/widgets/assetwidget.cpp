@@ -151,20 +151,21 @@ void AssetWidget::addItem(const QString &asset)
 		}
 		else if (Constants::MODEL_EXTS.contains(file.suffix())) {
             // we need our own search predicate since we have a vector that houses structs
-            QVector<AssetData>::iterator thumb = std::find_if(assetList.begin(),
+            /*QVector<AssetData>::iterator thumb = std::find_if(assetList.begin(),
                                                               assetList.end(),
-                                                              find_asset_thumbnail(QFileInfo(file.fileName()).baseName()));
+                                                              find_asset_thumbnail(QFileInfo(file.fileName()).baseName()));*/
 
-            if (!thumb->guid.isNull() && !thumb->guid.isEmpty()) {
-                pixmap = QPixmap::fromImage(QImage::fromData(thumb->thumbnail));
-                item->setIcon(QIcon(pixmap));
-                item->setData(Qt::DisplayRole, QFileInfo(thumb->name).baseName());
-                item->setData(MODEL_EXT_ROLE, QFileInfo(thumb->name).suffix());
-                item->setData(MODEL_GUID_ROLE, thumb->guid);
-                item->setData(MODEL_TYPE_ROLE, thumb->type);
-            }
-			// todo do this once into the list instead of per item maybe...
-			else if (db->hasCachedThumbnail(file.fileName())) {
+   //         if (!thumb->guid.isNull() && !thumb->guid.isEmpty()) {
+   //             pixmap = QPixmap::fromImage(QImage::fromData(thumb->thumbnail));
+   //             item->setIcon(QIcon(pixmap));
+   //             item->setData(Qt::DisplayRole, QFileInfo(thumb->name).baseName());
+   //             item->setData(MODEL_EXT_ROLE, QFileInfo(thumb->name).suffix());
+   //             item->setData(MODEL_GUID_ROLE, thumb->guid);
+   //             item->setData(MODEL_TYPE_ROLE, thumb->type);
+   //         }
+			//// todo do this once into the list instead of per item maybe...
+			//else
+				if (db->hasCachedThumbnail(file.fileName())) {
 				QPixmap cachedPixmap;
 				const QByteArray blob = db->fetchCachedThumbnail(file.fileName());
 				if (cachedPixmap.loadFromData(blob, "PNG")) {
@@ -200,7 +201,7 @@ void AssetWidget::updateAssetView(const QString &path)
 {
 	assetList = db->fetchThumbnails();
 
-	for (auto asset : assetList) qDebug() << asset.name;
+	// for (auto asset : assetList) qDebug() << asset.name;
 
     // clear the old view
     ui->assetView->clear();

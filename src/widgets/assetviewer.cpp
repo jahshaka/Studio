@@ -102,6 +102,7 @@ void AssetViewer::initializeGL()
 
     auto plight = iris::LightNode::create();
     plight->setLightType(iris::LightType::Point);
+	plight->setName("Rim Light");
     plight->setLocalPos(QVector3D(0, 0, -3));
     plight->color = QColor(198, 198, 255);
     plight->intensity = 1;
@@ -111,6 +112,7 @@ void AssetViewer::initializeGL()
 
     auto blight = iris::LightNode::create();
     blight->setLightType(iris::LightType::Point);
+	blight->setName("Fill Light");
     blight->setLocalPos(QVector3D(2, 2, 2));
     blight->color = QColor(255, 255, 198);
     blight->intensity = 0.67;
@@ -128,7 +130,7 @@ void AssetViewer::initializeGL()
     scene->setCamera(camera);
 
     scene->setSkyColor(QColor(25, 25, 25));
-    scene->setAmbientColor(QColor(255, 255, 255));
+    scene->setAmbientColor(QColor(155, 155, 155));
 
     scene->fogEnabled = false;
     scene->shadowEnabled = false;
@@ -204,12 +206,12 @@ void AssetViewer::resetViewerCamera()
     camera->update(0);
 }
 
-void AssetViewer::loadModel(QString str) {
+void AssetViewer::loadModel(QString str, bool firstAdd) {
     pdialog->setLabelText(tr("Importing model..."));
     pdialog->show();
     QApplication::processEvents();
 	makeCurrent();
-    addMesh(str);
+    addMesh(str, firstAdd);
     resetViewerCamera();
 	renderObject();
 	doneCurrent();
@@ -229,7 +231,7 @@ void AssetViewer::resizeGL(int width, int height)
     viewport->height = height;
 }
 
-void AssetViewer::addMesh(const QString &path, bool ignore, QVector3D position)
+void AssetViewer::addMesh(const QString &path, bool firstAdd, QVector3D position)
 {
 	QString filename;
 	if (path.isEmpty()) {
@@ -243,28 +245,82 @@ void AssetViewer::addMesh(const QString &path, bool ignore, QVector3D position)
 
     ssource = new iris::SceneSource();
 
-	auto node = iris::MeshNode::loadAsSceneFragment(filename, [](iris::MeshPtr mesh, iris::MeshMaterialData& data) {
+	if (firstAdd) {
+		assetMaterial = QJsonObject();
+	}
+
+	int iteration = 0;
+	auto node = iris::MeshNode::loadAsSceneFragment(filename, [&, this](iris::MeshPtr mesh, iris::MeshMaterialData& data) {
 		auto mat = iris::CustomMaterial::create();
+
 		if (mesh->hasSkeleton())
 			mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
 		else
 			mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
-		mat->setValue("diffuseColor", QColor(155, 155, 155));
-		mat->setValue("specularColor", data.specularColor);
-		mat->setValue("ambientColor", QColor(100, 100, 100));
-		mat->setValue("emissionColor", data.emissionColor);
+		if (firstAdd) {
+			mat->setValue("diffuseColor", data.diffuseColor);
+			mat->setValue("specularColor", data.specularColor);
+			mat->setValue("ambientColor", data.ambientColor);
+			mat->setValue("emissionColor", data.emissionColor);
 
-		mat->setValue("shininess", data.shininess);
+			mat->setValue("shininess", data.shininess);
 
-		if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
-			mat->setValue("diffuseTexture", data.diffuseTexture);
+			if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
+				mat->setValue("diffuseTexture", data.diffuseTexture);
 
-		if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
-			mat->setValue("specularTexture", data.specularTexture);
+			if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
+				mat->setValue("specularTexture", data.specularTexture);
 
-		if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
-			mat->setValue("normalTexture", data.normalTexture);
+			if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
+				mat->setValue("normalTexture", data.normalTexture);
+
+			QJsonObject matObj;
+			createMaterial(matObj, mat);
+			assetMaterial.insert(QString::number(iteration), matObj);
+		}
+		else {
+			iris::MeshMaterialData cdata;
+
+			auto matinfo = assetMaterial[QString::number(iteration)].toObject();
+
+			QColor col;
+			col.setNamedColor(matinfo["ambientColor"].toString());
+			cdata.ambientColor = col;
+			col.setNamedColor(matinfo["diffuseColor"].toString());
+			cdata.diffuseColor = col;
+			cdata.diffuseTexture = matinfo["diffuseTexture"].toString();
+			cdata.normalTexture = matinfo["normalTexture"].toString();
+			cdata.shininess = 1;
+			col.setNamedColor(matinfo["specularColor"].toString());
+			cdata.specularColor = col;
+			cdata.specularTexture = matinfo["specularTexture"].toString();
+
+			mat->setValue("diffuseColor", cdata.diffuseColor);
+			mat->setValue("specularColor", cdata.specularColor);
+			mat->setValue("ambientColor", cdata.ambientColor);
+			mat->setValue("emissionColor", cdata.emissionColor);
+
+			mat->setValue("shininess", cdata.shininess);
+
+			auto libraryTextureIsValid = [](const QString &path, const QString texturePath) {
+				return (
+					QFile(QDir(QFileInfo(path).absoluteDir()).filePath(texturePath)).exists() &&
+					QFileInfo(QDir(QFileInfo(path).absoluteDir()).filePath(texturePath)).isFile()
+				);
+			};
+
+			if (libraryTextureIsValid(filename, cdata.diffuseTexture))
+				mat->setValue("diffuseTexture", QDir(QFileInfo(filename).absoluteDir()).filePath(cdata.diffuseTexture));
+
+			if (libraryTextureIsValid(filename, cdata.specularTexture))
+				mat->setValue("specularTexture", QDir(QFileInfo(filename).absoluteDir()).filePath(cdata.specularTexture));
+
+			if (libraryTextureIsValid(filename, cdata.normalTexture))
+				mat->setValue("normalTexture", QDir(QFileInfo(filename).absoluteDir()).filePath(cdata.normalTexture));
+		}
+
+		iteration++;
 
 		return mat;
 	}, ssource, this);
@@ -281,8 +337,7 @@ void AssetViewer::addMesh(const QString &path, bool ignore, QVector3D position)
 
 	node->setLocalPos(position);
 
-	// todo: load material data
-	addNodeToScene(node, ignore);
+	addNodeToScene(node);
 }
 
 /**
@@ -290,7 +345,7 @@ void AssetViewer::addMesh(const QString &path, bool ignore, QVector3D position)
 * applied default material to mesh if one isnt present
 * ignore set to false means we only add it visually, usually to discard it afterw
 */
-void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore)
+void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
 {
 	if (!scene) {
 		// @TODO: set alert that a scene needs to be set before this can be done
@@ -299,7 +354,7 @@ void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool
 
     sceneNode->setLocalPos(QVector3D(0, 0, 0));
 
-	// apply default material to mesh nodes
+	// apply default material to mesh nodes if they have none
 	if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
 		auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 		if (!meshNode->getMaterial()) {
@@ -311,8 +366,9 @@ void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool
 
     if (scene->rootNode->hasChildren()) {
         for (auto child : scene->rootNode->children) {
-            if (child->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-                child->removeFromParent();
+			// clear the scene of anything that is not a light for the next asset
+            if (child->sceneNodeType != iris::SceneNodeType::Light) {
+				child->removeFromParent();
             }
         }
     }
@@ -341,11 +397,9 @@ void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool
         }
     }
 
-    float dist = (bound.radius * 1.2) / qTan(qDegreesToRadians(camera->angle / 2.0f));
+    float dist = (bound.radius * 1.2) / qTan(qDegreesToRadians(camera->angle / 2.f));
     lookAt = bound.pos;
     localPos = QVector3D(0, bound.pos.y(), dist);
-    //camera->lookAt(bound.pos);
-    //camera->update(0);
 }
 
 float AssetViewer::getBoundingRadius(iris::SceneNodePtr node)
@@ -389,4 +443,27 @@ QImage AssetViewer::takeScreenshot(int width, int height)
 	doneCurrent();
 
 	return img;
+}
+
+void AssetViewer::createMaterial(QJsonObject &matObj, iris::CustomMaterialPtr mat)
+{
+	matObj["name"] = mat->getName();
+
+	for (auto prop : mat->properties) {
+		if (prop->type == iris::PropertyType::Bool) {
+			matObj[prop->name] = prop->getValue().toBool();
+		}
+
+		if (prop->type == iris::PropertyType::Float) {
+			matObj[prop->name] = prop->getValue().toFloat();
+		}
+
+		if (prop->type == iris::PropertyType::Color) {
+			matObj[prop->name] = prop->getValue().value<QColor>().name();
+		}
+
+		if (prop->type == iris::PropertyType::Texture) {
+			matObj[prop->name] = QFileInfo(prop->getValue().toString()).fileName();
+		}
+	}
 }

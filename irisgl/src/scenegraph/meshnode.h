@@ -64,7 +64,6 @@ class SceneSource
 public:
     SceneSource() = default;
     Assimp::Importer importer;
-    MeshMaterialData meshMatData;
 };
 
 class MeshNode : public SceneNode
@@ -118,9 +117,6 @@ public:
     MeshPtr getMesh();
 
     void setMaterial(MaterialPtr material);
-    void setCustomMaterial(MaterialPtr material);
-
-    void setActiveMaterial(int type);
 
     MaterialPtr getMaterial() {
         return material;
@@ -140,8 +136,6 @@ public:
     virtual void submitRenderItems() override;
     float getMeshRadius();
     BoundingSphere getTransformedBoundingSphere();
-
-    //void updateAnimation(float time) override;
 
     FaceCullingMode getFaceCullingMode() const;
     void setFaceCullingMode(const FaceCullingMode &value);

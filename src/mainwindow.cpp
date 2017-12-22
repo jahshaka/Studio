@@ -508,6 +508,7 @@ void MainWindow::setupProjectDB()
 	db->createGlobalDbAssets();
     db->createGlobalDbCollections();
     db->createGlobalDbThumbs();
+	db->createGlobalDbMaterials();
 }
 
 void MainWindow::setupUndoRedo()

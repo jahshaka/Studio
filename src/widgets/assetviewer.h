@@ -7,11 +7,13 @@
 #include <QOpenGLShaderProgram>
 #include <QMatrix4x4>
 #include <QVector3D>
-
+#include <QJsonObject>
 #include <QWheelEvent>
 #include <QKeyEvent>
 #include <QKeyEvent>
 #include <QFocusEvent>
+#include <QJsonObject>
+#include <QJsonDocument>
 
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/graphics/mesh.h"
@@ -42,6 +44,7 @@ public:
 
     iris::SceneSource *ssource;
 
+
     void update();
     void paintGL();
     void updateScene();
@@ -50,15 +53,15 @@ public:
 
     void renderObject();
     void resetViewerCamera();
-    void loadModel(QString str);
+    void loadModel(QString str, bool firstAdd = true);
 
     void wheelEvent(QWheelEvent *event);
     void mousePressEvent(QMouseEvent *e);
     void mouseReleaseEvent(QMouseEvent *e);
     void mouseMoveEvent(QMouseEvent *e);
 
-	void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
-	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore);
+	void addMesh(const QString &path = QString(), bool firstAdd = true, QVector3D position = QVector3D());
+	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode);
 	QImage takeScreenshot(int width, int height);
 
     float onProgress(float percentage) {
@@ -66,10 +69,21 @@ public:
         return percentage;
     }
 
+	void createMaterial(QJsonObject &matObj, iris::CustomMaterialPtr mat);
+	void setMaterial(QJsonObject &matObj) {
+		assetMaterial = matObj;
+	}
+
+	QJsonObject getMaterial() {
+		return assetMaterial;
+	}
+
 signals:
     void progressChanged(int);
 
 private:
+
+	QJsonObject assetMaterial;
     ProgressDialog * pdialog;
     QOpenGLFunctions_3_2_Core *gl;
     iris::ForwardRendererPtr renderer;

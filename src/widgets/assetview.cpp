@@ -341,7 +341,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		QJsonObject object;
 		object["icon_url"] = "";
         object["guid"] = record.guid;
-		object["name"] = QFileInfo(record.name).fileName();
+		object["name"] = record.name;
+		object["full_filename"] = record.full_filename;
         object["collection_name"] = record.collection_name;
 
 		QImage image;
@@ -398,16 +399,22 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	renameWidget->setVisible(false);
 
     connect(normalize, &QPushButton::pressed, [this]() {
-        //copyTextures(iris::MeshMaterialData());
+
     });
 
     connect(fastGrid, &AssetViewGrid::selectedTile, [=](AssetGridItem *gridItem) {
 		fastGrid->deselectAll();
 
 		if (!gridItem->metadata.isEmpty()) {
+			auto material = db->getMaterialGlobal(gridItem->metadata["guid"].toString());
+			auto materialObj = QJsonDocument::fromBinaryData(material);
 
-            auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
-            viewer->loadModel(QDir(assetPath).filePath(gridItem->metadata["guid"].toString() + ".obj"));
+            auto assetPath = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+											 Constants::ASSET_FOLDER,
+											 gridItem->metadata["guid"].toString());
+
+			viewer->setMaterial(materialObj.object());
+            viewer->loadModel(QDir(assetPath).filePath(gridItem->metadata["full_filename"].toString()), false);
            
             split->setHandleWidth(1);
             int size = this->height() / 3;
@@ -428,7 +435,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		QFileInfo fInfo(filename);
 		QJsonObject object;
 		object["icon_url"] = "";
-		object["name"] = renameModelField->text() + "." + fInfo.suffix();
+		object["name"] = renameModelField->text();
 
 		auto thumbnail = viewer->takeScreenshot(512, 512);
 
@@ -439,17 +446,22 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		thumbnail.save(&buffer, "PNG");
 
 		// maybe actually check if Object?
-		QString guid = db->insertAssetGlobal(renameModelField->text() + "." + fInfo.suffix(), (int) ModelTypes::Object, bytes);
+		QString guid = db->insertAssetGlobal(IrisUtils::buildFileName(renameModelField->text(), fInfo.suffix()),
+											 static_cast<int>(ModelTypes::Object), bytes);
 		object["guid"] = guid;
+		object["full_filename"] = IrisUtils::buildFileName(guid, fInfo.suffix());
 
         auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
 
 		if (!QDir(QDir(assetPath).filePath(guid)).exists()) {
 			QDir().mkdir(QDir(assetPath).filePath(guid));
-			bool copyFile = QFile::copy(filename, QDir(QDir(assetPath).filePath(guid)).filePath(guid + "." + fInfo.suffix()));
+			bool copyFile = QFile::copy(filename,
+										QDir(QDir(assetPath).filePath(guid)).filePath(IrisUtils::buildFileName(guid, fInfo.suffix())));
 		}
 
         copyTextures(guid);
+
+		db->insertMaterialGlobal(QString(), guid, QJsonDocument(viewer->getMaterial()).toBinaryData());
 
 		fastGrid->addTo(object, thumbnail, 0);
 		QApplication::processEvents();
@@ -469,10 +481,12 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
         auto guid = selectedGridItem->metadata["guid"].toString();
 		QFileInfo fInfo(selectedGridItem->metadata["name"].toString());
-		QString object = guid + "." + fInfo.suffix();
+		QString object = IrisUtils::buildFileName(guid, fInfo.suffix());
         auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
-        
-		if (!QFile::copy(QDir(assetPath).filePath(object), QDir(pDir).filePath(object))) {
+
+		// copy to correct folder TODO
+		//if (!QFile::copy(QDir(assetPath).filePath(object), QDir(pDir).filePath(object))) {
+		if (!QFile::copy(QDir(assetPath).filePath(object), QDir(pDir).filePath(guid))) {
 			QString warningText = QString("Failed to add asset %1. Possible reasons are:\n"
 				"1. It doesn't exist\n"
 				"2. The file isn't valid")

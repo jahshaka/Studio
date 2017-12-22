@@ -31,12 +31,16 @@ public:
         return path;
     }
 
+	static QString buildFileName(const QString &fileName, const QString &suffix) {
+		return fileName + "." + suffix;
+	}
+
     template<typename... Args>
     static QString join(Args const&... args) {
         QString result;
         int unpack[]{ 0, (result += [=](QString const& s) { return s + "/"; }(args), 0) ... };
         static_cast<void>(unpack);
-        return result;
+        return QDir::cleanPath(result);
     }
 };
 
