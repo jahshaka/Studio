@@ -227,14 +227,10 @@ private:
     void initialize();
 
 	Gizmo* gizmo;
-    //TranslationGizmo* gizmo;
-	//ScaleGizmo* gizmo;
-	//RotationGizmo* gizmo;
     TranslationGizmo* translationGizmo;
     RotationGizmo* rotationGizmo;
     ScaleGizmo* scaleGizmo;
 
-    //GizmoInstance* viewportGizmo;
     QString transformMode;
 
     iris::Viewport* viewport;

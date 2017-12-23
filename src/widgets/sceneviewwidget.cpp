@@ -158,13 +158,9 @@ void SceneViewWidget::initialize()
 
     scaleGizmo = new ScaleGizmo();
 	scaleGizmo->loadAssets();
-	
-    //viewportGizmo = translationGizmo;
     
     transformMode = "Global";
     gizmo = translationGizmo;
-	//gizmo = new ScaleGizmo();
-	//gizmo = new RotationGizmo();
 
     // has to be initialized here since it loads assets
     vrCam = new EditorVrController();
@@ -310,17 +306,6 @@ void SceneViewWidget::renderGizmos(bool once)
 		this->getMousePosAndRay(this->prevMousePos, rayPos, rayDir);
 		gizmo->render(gl, rayPos, rayDir, editorCam->viewMatrix, editorCam->projMatrix);
 	}
-    /*
-    // update and draw the 3d manipulation gizmo
-    if (!!viewportGizmo->getLastSelectedNode()) {
-        if (!viewportGizmo->getLastSelectedNode()->isRootNode()) {
-            viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
-            if (viewportMode != ViewportMode::VR && UiManager::sceneMode == SceneMode::EditMode) {
-                viewportGizmo->render(editorCam->viewMatrix, editorCam->projMatrix);
-            }
-        }
-    }
-    */
 }
 
 void SceneViewWidget::initializeGL()
@@ -595,16 +580,10 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     QPointF localPos = e->localPos();
     QPointF dir = localPos - prevMousePos;
 
-    /*
-    if (e->buttons() == Qt::LeftButton && !!viewportGizmo->currentNode) {
-         viewportGizmo->update(editorCam->getLocalPos(), calculateMouseRay(localPos));
-    }
-    */
 
     if (e->buttons() == Qt::LeftButton && !!selectedNode) {
 		
 		if (gizmo->isDragging()) {
-			//qDebug()<<"gizmo dragging";
 			QVector3D rayPos, rayDir;
 			this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
 			gizmo->drag(rayPos, rayDir);
@@ -636,9 +615,6 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
             this->doGizmoPicking(e->localPos());
 
             if (!!selectedNode) {
-                //viewportGizmo->isGizmoHit(editorCam, e->localPos(), this->calculateMouseRay(e->localPos()));
-                //viewportGizmo->isHandleHit();
-                //if (gizmo->isHit(rayPos, ))
                 QVector3D rayPos, rayDir;
                 this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
                 gizmo->startDragging(rayPos, rayDir);
@@ -664,7 +640,6 @@ void SceneViewWidget::mouseReleaseEvent(QMouseEvent *e)
 
     if (e->button() == Qt::LeftButton) {
         // maybe explicitly hard reset stuff related to picking here
-        //viewportGizmo->onMouseRelease();
         if (gizmo->isDragging())
             gizmo->endDragging();
     }
@@ -754,7 +729,6 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr l
             pickedNode = pickedRoot;        // if not then pick the root node
     }
 
-    //viewportGizmo->setLastSelectedNode(pickedNode);
     gizmo->setSelectedNode(pickedNode);
     emit sceneNodeSelected(pickedNode);
 }
@@ -780,7 +754,7 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
 
     auto segStart = this->editorCam->getLocalPos();
     auto rayDir = this->calculateMouseRay(point).normalized();// * 1024;
-    //auto segEnd = segStart + rayDir;
+
     if (!!selectedNode) {
         gizmo->setSelectedNode(selectedNode);
         if (gizmo != nullptr && gizmo->isHit(segStart, rayDir)) {
@@ -790,28 +764,6 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
             return;
         }
     }
-
-    //emit sceneNodeSelected(iris::SceneNodePtr());
-    /*
-    QList<PickingResult> hitList;
-    doMeshPicking(viewportGizmo->getRootNode(), segStart, segEnd, hitList);
-
-    if (hitList.size() == 0) {
-        viewportGizmo->setLastSelectedNode(iris::SceneNodePtr());
-        viewportGizmo->currentNode = iris::SceneNodePtr();
-        emit sceneNodeSelected(iris::SceneNodePtr());
-        return;
-    }
-
-    qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
-        return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
-    });
-
-    viewportGizmo->finalHitPoint = hitList.last().hitPoint;
-    viewportGizmo->setPlaneOrientation(hitList.last().hitNode->getName());
-    viewportGizmo->currentNode = hitList.last().hitNode;
-    viewportGizmo->onMousePress(editorCam->getLocalPos(), this->calculateMouseRay(point) * 1024);
-    */
 }
 
 void SceneViewWidget::setCameraController(CameraControllerBase *controller)
@@ -1036,18 +988,11 @@ void SceneViewWidget::setGizmoTransformToGlobal()
 
 void SceneViewWidget::hideGizmo()
 {
-    //viewportGizmo->setLastSelectedNode(iris::SceneNodePtr());
 }
 
 void SceneViewWidget::setGizmoLoc()
 {
     editorCam->updateCameraMatrices();
-    /*
-    transformMode = viewportGizmo->getTransformOrientation();
-    viewportGizmo = translationGizmo;
-    viewportGizmo->setTransformOrientation(transformMode);
-    viewportGizmo->setLastSelectedNode(selectedNode);
-    */
 	translationGizmo->setSelectedNode(selectedNode);
 	gizmo = translationGizmo;
 }
@@ -1055,12 +1000,6 @@ void SceneViewWidget::setGizmoLoc()
 void SceneViewWidget::setGizmoRot()
 {
     editorCam->updateCameraMatrices();
-    /*
-    transformMode = viewportGizmo->getTransformOrientation();
-    viewportGizmo = rotationGizmo;
-    viewportGizmo->setTransformOrientation(transformMode);
-    viewportGizmo->setLastSelectedNode(selectedNode);
-    */
 	rotationGizmo->setSelectedNode(selectedNode);
 	gizmo = rotationGizmo;
 }
@@ -1068,12 +1007,6 @@ void SceneViewWidget::setGizmoRot()
 void SceneViewWidget::setGizmoScale()
 {
     editorCam->updateCameraMatrices();
-    /*
-    transformMode = viewportGizmo->getTransformOrientation();
-    viewportGizmo = scaleGizmo;
-    viewportGizmo->setTransformOrientation(transformMode);
-    viewportGizmo->setLastSelectedNode(selectedNode);
-    */
 	scaleGizmo->setSelectedNode(selectedNode);
 	gizmo = scaleGizmo;
 }
@@ -1110,7 +1043,6 @@ void SceneViewWidget::startPlayingScene()
 
 
     playScene = true;
-    //animTime = 0.0f;
 }
 
 void SceneViewWidget::pausePlayingScene()
