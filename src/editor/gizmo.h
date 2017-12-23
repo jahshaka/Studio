@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QVector3D>
 #include <QColor>
 #include <QQuaternion>
+#include <QMatrix4x4>
 #include "irisgl/src/irisglfwd.h"
 
 class QOpenGLFunctions_3_2_Core;
@@ -113,6 +114,9 @@ protected:
 	GizmoTransformSpace transformSpace;
 	float gizmoScale;
 
+	QVector3D oldPos, oldScale;
+	QQuaternion oldRot;
+
 public:
 	Gizmo();
 	virtual void updateSize(iris::CameraNodePtr camera);
@@ -121,6 +125,10 @@ public:
 	virtual void setTransformSpace(GizmoTransformSpace transformSpace);
 	virtual void setSelectedNode(iris::SceneNodePtr node);
 	void clearSelectedNode();
+
+	// undo-redo
+	void setInitialTransform();
+	void createUndoAction();
 
 	// returns transform of the gizmo, not the scene node
 	// the transform is calculated based on the transform's space (local or global)

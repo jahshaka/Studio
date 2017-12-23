@@ -5,6 +5,8 @@
 #include "irisgl/src/scenegraph/cameranode.h"
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/scenegraph/meshnode.h"
+#include "uimanager.h"
+#include "../commands/transfrormscenenodecommand.h"
 
 
 Gizmo::Gizmo()
@@ -42,14 +44,28 @@ void Gizmo::clearSelectedNode()
 	selectedNode.clear();
 }
 
+void Gizmo::setInitialTransform()
+{
+	oldPos = selectedNode->getLocalPos();
+	oldRot = selectedNode->getLocalRot();
+	oldScale = selectedNode->getLocalScale();
+}
+void Gizmo::createUndoAction()
+{
+	auto newPos = selectedNode->getLocalPos();
+	auto newRot = selectedNode->getLocalRot();
+	auto newScale = selectedNode->getLocalScale();
+
+	selectedNode->setLocalPos(oldPos);
+	selectedNode->setLocalRot(oldRot);
+	selectedNode->setLocalScale(oldScale);
+	UiManager::pushUndoStack(new TransformSceneNodeCommand(selectedNode, newPos, newRot, newScale));
+}
+
 // returns transform of the gizmo, not the scene node
 // the transform is calculated based on the transform's space (local or global)
 QMatrix4x4 Gizmo::getTransform()
 {
-	//QMatrix4x4 trans;
-	//trans.setToIdentity();
-	//return trans;
-
 	if (!selectedNode) {
 		QMatrix4x4 mat;
 		mat.setToIdentity();
@@ -67,9 +83,7 @@ QMatrix4x4 Gizmo::getTransform()
 		QMatrix4x4 trans;
 		trans.setToIdentity();
 		trans.translate(selectedNode->getGlobalPosition());
-		//auto rotMat = selectedNode->getGlobalTransform().normalMatrix();
 		trans.rotate(selectedNode->getGlobalRotation());
-		//trans.scale(1);
 		return trans;
 	}
 }

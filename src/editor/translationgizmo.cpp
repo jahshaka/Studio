@@ -8,8 +8,6 @@
 #include "irisgl/src/scenegraph/scene.h"
 #include "irisgl/src/scenegraph/cameranode.h"
 #include "irisgl/src/graphics/graphicshelper.h"
-#include "uimanager.h"
-#include "../commands/transfrormscenenodecommand.h"
 #include "irisgl/src/math/mathhelper.h"
 
 TranslationHandle::TranslationHandle(Gizmo* gizmo, GizmoAxis axis)
@@ -104,8 +102,10 @@ QVector3D TranslationHandle::getHitPos(QVector3D rayPos, QVector3D rayDir)
 		}
 	}
 
-	float dominantExtent = iris::MathHelper::sign( QVector3D::dotProduct(rayDir.normalized(), handleExtent));// results in -1 or 1
-	finalHitPos = dominantExtent * handleExtent * 10000;
+	if (!hit) {
+		float dominantExtent = iris::MathHelper::sign(QVector3D::dotProduct(rayDir.normalized(), handleExtent));// results in -1 or 1
+		finalHitPos = dominantExtent * handleExtent * 10000;
+	}
 
 	// now convert it back to world space
 	finalHitPos = gizmoTransform * finalHitPos;
@@ -152,12 +152,16 @@ void TranslationGizmo::startDragging(QVector3D rayPos, QVector3D rayDir)
 
 	nodeStartPos = selectedNode->getGlobalPosition();
 	dragging = true;
+	setInitialTransform();
 }
 
 void TranslationGizmo::endDragging()
 {
 	dragging = false;
 	draggedHandle = nullptr;
+
+	// undo-redo
+	createUndoAction();
 }
 
 void TranslationGizmo::drag(QVector3D rayPos, QVector3D rayDir)

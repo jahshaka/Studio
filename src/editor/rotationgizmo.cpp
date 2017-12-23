@@ -171,6 +171,7 @@ void RotationGizmo::startDragging(QVector3D rayPos, QVector3D rayDir)
 
 	nodeStartRot = selectedNode->getLocalRot().normalized();
 	dragging = true;
+	setInitialTransform();
 }
 
 void RotationGizmo::endDragging()
@@ -178,6 +179,9 @@ void RotationGizmo::endDragging()
 	dragging = false;
 	draggedHandle = nullptr;
 	trans = Gizmo::getTransform();
+
+	// undo-redo
+	createUndoAction();
 }
 
 void RotationGizmo::drag(QVector3D rayPos, QVector3D rayDir)

@@ -54,6 +54,7 @@ class TranslationGizmo : public Gizmo
     int draggedHandleIndex;
 
     bool dragging;
+
 public:
 	TranslationGizmo();
 

@@ -106,9 +106,11 @@ QVector3D ScaleHandle::getHitPos(QVector3D rayPos, QVector3D rayDir)
 		}
 	}
 
-	// no hit so move to max distance in view direction
-	float dominantExtent = iris::MathHelper::sign(QVector3D::dotProduct(rayDir.normalized(), handleExtent));// results in -1 or 1
-	finalHitPos = dominantExtent * handleExtent * 10000;
+	if (!hit) {
+		// no hit so move to max distance in view direction
+		float dominantExtent = iris::MathHelper::sign(QVector3D::dotProduct(rayDir.normalized(), handleExtent));// results in -1 or 1
+		finalHitPos = dominantExtent * handleExtent * 10000;
+	}
 
 	// now convert it back to world space
 	finalHitPos = gizmoTransform * finalHitPos;
@@ -158,6 +160,7 @@ void ScaleGizmo::startDragging(QVector3D rayPos, QVector3D rayDir)
 	nodeStartPos = selectedNode->getGlobalPosition();
 	dragging = true;
 	startScale = selectedNode->getLocalScale();
+	setInitialTransform();
 }
 
 void ScaleGizmo::endDragging()
@@ -165,6 +168,9 @@ void ScaleGizmo::endDragging()
 	dragging = false;
 	draggedHandle = nullptr;
 	handleVisualScale = QVector3D(1, 1, 1);
+
+	// undo-redo
+	createUndoAction();
 }
 
 void ScaleGizmo::drag(QVector3D rayPos, QVector3D rayDir)
