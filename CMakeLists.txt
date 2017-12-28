@@ -15,6 +15,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/breakpad)
 
 set(SRCS
     src/main.cpp
@@ -306,14 +307,20 @@ endif()
 # Also note MSVC build path is different from GNU in that it containts the build type
 set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_target_properties(breakpad PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_executable(${CMAKE_PROJECT_NAME} src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS})
-target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC src irisgl/src irisgl/src/assimp/include/ irisgl/src/libovr/include/)
-target_link_libraries(${CMAKE_PROJECT_NAME} Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets IrisGL ${OPENGL_LIBRARIES})
+target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
+															src
+															irisgl/src
+															irisgl/src/assimp/include/
+															irisgl/src/libovr/include/
+															thirdparty/breakpad/breakpad/src)
+target_link_libraries(${CMAKE_PROJECT_NAME} Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets IrisGL breakpad ${OPENGL_LIBRARIES})
 
 include(CopyResources)
 include(CopyDependencies)
