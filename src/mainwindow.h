@@ -200,6 +200,7 @@ public slots:
     void addEmpty();
     void addViewer();
     void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
+	void addMaterialMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
     void addDragPlaceholder();
 
     //context menu functions

@@ -342,6 +342,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		object["icon_url"] = "";
         object["guid"] = record.guid;
 		object["name"] = record.name;
+		object["type"] = record.type;
 		object["full_filename"] = record.full_filename;
         object["collection_name"] = record.collection_name;
 
@@ -449,6 +450,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		QString guid = db->insertAssetGlobal(IrisUtils::buildFileName(renameModelField->text(), fInfo.suffix()),
 											 static_cast<int>(ModelTypes::Object), bytes);
 		object["guid"] = guid;
+		object["type"] = 5; // model?
 		object["full_filename"] = IrisUtils::buildFileName(guid, fInfo.suffix());
 
         auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
@@ -480,16 +482,38 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
         auto pDir = IrisUtils::join(defaultProjectDirectory, Globals::project->getProjectName());
 
         auto guid = selectedGridItem->metadata["guid"].toString();
+		int assetType = selectedGridItem->metadata["type"].toInt();
 		QFileInfo fInfo(selectedGridItem->metadata["name"].toString());
 		QString object = IrisUtils::buildFileName(guid, fInfo.suffix());
         auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
 
+		QString assetFolder;
+
+		if (assetType == 5) {
+			assetFolder = "Models";
+		}
+		else {
+			assetFolder = QString();
+		}
+
+		// todo -- undo progress?
+		auto copyFolder = [](const QString &src, const QString &dest) {
+			if (!QDir(dest).exists()) {
+				if (!QDir().mkdir(dest)) return false;
+
+				for (auto file : QDir(src).entryInfoList(QStringList(), QDir::Files)) {
+					if (!QFile::copy(file.absoluteFilePath(), QDir(dest).filePath(file.fileName()))) return false;
+				}
+
+				return true;
+			}
+		};
+
 		// copy to correct folder TODO
-		//if (!QFile::copy(QDir(assetPath).filePath(object), QDir(pDir).filePath(object))) {
-		if (!QFile::copy(QDir(assetPath).filePath(object), QDir(pDir).filePath(guid))) {
-			QString warningText = QString("Failed to add asset %1. Possible reasons are:\n"
+		if (!copyFolder(QDir(assetPath).filePath(guid), QDir(QDir(pDir).filePath(assetFolder)).filePath(guid))) {
+			QString warningText = QString("Failed to import asset %1. Possible reasons are:\n"
 				"1. It doesn't exist\n"
-				"2. The file isn't valid")
+				"2. The asset isn't valid")
 				.arg(selectedGridItem->metadata["name"].toString());
 			QMessageBox::warning(this, "Asset Import Failed", warningText, QMessageBox::Ok);
 		}

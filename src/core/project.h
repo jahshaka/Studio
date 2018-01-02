@@ -46,6 +46,7 @@ struct AssetTileData {
 	QByteArray  thumbnail;
 	QString     guid;
     QString     collection_name;
+	int			type;
 };
 
 struct AssetData {
@@ -53,6 +54,7 @@ struct AssetData {
 	short type;
 	QString guid;
 	QString name;
+	QString extension;
 };
 
 struct CollectionData {

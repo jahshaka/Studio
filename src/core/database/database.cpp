@@ -293,7 +293,7 @@ bool Database::hasCachedThumbnail(const QString &name)
 QVector<AssetData> Database::fetchThumbnails()
 {
 	QSqlQuery query;
-	query.prepare("SELECT name, thumbnail, guid, type FROM " + Constants::DB_ASSETS_TABLE);
+	query.prepare("SELECT name, thumbnail, guid, type, extension FROM " + Constants::DB_ASSETS_TABLE);
 	executeAndCheckQuery(query, "fetchAssetData");
 
 	QVector<AssetData> tileData;
@@ -305,6 +305,7 @@ QVector<AssetData> Database::fetchThumbnails()
 			data.thumbnail	= record.value(1).toByteArray();
 			data.guid		= record.value(2).toString();
 			data.type		= record.value(3).toInt();
+			data.extension  = record.value(4).toString();
 		}
 
 		tileData.push_back(data);
@@ -360,7 +361,7 @@ QVector<AssetTileData> Database::fetchAssets()
 {
 	QSqlQuery query;
 	query.prepare("SELECT assets.name, (assets.guid || '.' || assets.extension) as full_filename,"
-				  " assets.thumbnail, assets.guid, collections.name as collection_name"
+				  " assets.thumbnail, assets.guid, collections.name as collection_name, assets.type"
 				  " FROM assets"
                   " INNER JOIN " + Constants::DB_COLLECT_TABLE + " ON assets.collection = collections.collection_id ORDER BY assets.name DESC");
 	executeAndCheckQuery(query, "fetchAssets");
@@ -375,7 +376,10 @@ QVector<AssetTileData> Database::fetchAssets()
 			data.thumbnail = record.value(2).toByteArray();
 			data.guid = record.value(3).toString();
             data.collection_name = record.value(4).toString();
+			data.type = record.value(5).toInt();
 		}
+
+		Globals::assetNames.insert(data.guid, data.name);
 
 		tileData.push_back(data);
 	}

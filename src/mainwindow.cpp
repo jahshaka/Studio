@@ -984,6 +984,96 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
     addNodeToScene(node, ignore);
 }
 
+void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position)
+{
+	QString filename;
+	if (path.isEmpty()) {
+		filename = QFileDialog::getOpenFileName(this, "Load Mesh", "Mesh Files (*.obj *.fbx *.3ds *.dae *.c4d *.blend)");
+	}
+	else {
+		filename = path;
+	}
+
+	if (filename.isEmpty()) return;
+
+	iris::SceneSource *ssource = new iris::SceneSource();
+
+	auto material = db->getMaterialGlobal(QFileInfo(filename).baseName());
+	auto materialObj = QJsonDocument::fromBinaryData(material);
+
+	QJsonObject assetMaterial = materialObj.object();
+
+	this->sceneView->makeCurrent();
+	int iteration = 0;
+	auto node = iris::MeshNode::loadAsSceneFragment(filename, [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+	{
+		auto mat = iris::CustomMaterial::create();
+
+		if (mesh->hasSkeleton())
+			mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
+		else
+			mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+
+		iris::MeshMaterialData cdata;
+
+		auto matinfo = assetMaterial[QString::number(iteration)].toObject();
+
+		QColor col;
+		col.setNamedColor(matinfo["ambientColor"].toString());
+		cdata.ambientColor = col;
+		col.setNamedColor(matinfo["diffuseColor"].toString());
+		cdata.diffuseColor = col;
+		cdata.diffuseTexture = matinfo["diffuseTexture"].toString();
+		cdata.normalTexture = matinfo["normalTexture"].toString();
+		cdata.shininess = 1;
+		col.setNamedColor(matinfo["specularColor"].toString());
+		cdata.specularColor = col;
+		cdata.specularTexture = matinfo["specularTexture"].toString();
+
+		mat->setValue("diffuseColor", cdata.diffuseColor);
+		mat->setValue("specularColor", cdata.specularColor);
+		mat->setValue("ambientColor", cdata.ambientColor);
+		mat->setValue("emissionColor", cdata.emissionColor);
+
+		mat->setValue("shininess", cdata.shininess);
+
+		auto libraryTextureIsValid = [](const QString &path, const QString texturePath) {
+			return (
+				QFile(QDir(QFileInfo(path).absoluteDir()).filePath(texturePath)).exists() &&
+				QFileInfo(QDir(QFileInfo(path).absoluteDir()).filePath(texturePath)).isFile()
+			);
+		};
+
+		if (libraryTextureIsValid(filename, cdata.diffuseTexture))
+			mat->setValue("diffuseTexture", QDir(QFileInfo(filename).absoluteDir()).filePath(cdata.diffuseTexture));
+
+		if (libraryTextureIsValid(filename, cdata.specularTexture))
+			mat->setValue("specularTexture", QDir(QFileInfo(filename).absoluteDir()).filePath(cdata.specularTexture));
+
+		if (libraryTextureIsValid(filename, cdata.normalTexture))
+			mat->setValue("normalTexture", QDir(QFileInfo(filename).absoluteDir()).filePath(cdata.normalTexture));
+
+		iteration++;
+
+		return mat;
+	}, ssource);
+
+	// model file may be invalid so null gets returned
+	if (!node) return;
+
+	// rename animation sources to relative paths
+	auto relPath = QDir(Globals::project->folderPath).relativeFilePath(filename);
+	for (auto anim : node->getAnimations()) {
+		if (!!anim->skeletalAnimation)
+			anim->skeletalAnimation->source = relPath;
+	}
+
+	node->setLocalPos(position);
+
+	// todo: load material data
+	addNodeToScene(node, ignore);
+}
+
 void MainWindow::addDragPlaceholder()
 {
     /*
@@ -1445,7 +1535,7 @@ void MainWindow::setupViewPort()
     sceneContainer->setLayout(layout);
 
     connect(sceneView, &SceneViewWidget::addDroppedMesh, [this](QString path, bool v, QVector3D pos) {
-        addMesh(path, v, pos);
+        addMaterialMesh(path, v, pos);
     });
 
     connect(sceneView,  SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),

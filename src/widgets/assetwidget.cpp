@@ -111,7 +111,12 @@ void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
     foreach (const QFileInfo &folder, folders) {
         auto item = new QTreeWidgetItem();
         item->setIcon(0, QIcon(":/icons/ic_folder.svg"));
-        item->setData(0, Qt::DisplayRole, folder.fileName());
+		if (!Globals::assetNames.value(folder.fileName()).isEmpty()) {
+			item->setData(0, Qt::DisplayRole, Globals::assetNames.value(folder.fileName()));
+		}
+		else {
+			item->setData(0, Qt::DisplayRole, folder.fileName());
+		}
         item->setData(0, Qt::UserRole, folder.absoluteFilePath());
         parent->addChild(item);
         updateTree(item, folder.absoluteFilePath());
@@ -139,6 +144,14 @@ void AssetWidget::addItem(const QString &asset)
 
     if (file.isDir()) {
         item = new QListWidgetItem(QIcon(":/icons/ic_folder.svg"), file.fileName());
+
+		if (!Globals::assetNames.value(file.fileName()).isEmpty()) {
+			item->setData(Qt::DisplayRole, Globals::assetNames.value(file.fileName()));
+		}
+		else {
+			item->setData(Qt::DisplayRole, file.fileName());
+		}
+
         item->setData(Qt::UserRole, file.absolutePath());
     } else {
         QPixmap pixmap;
@@ -151,20 +164,20 @@ void AssetWidget::addItem(const QString &asset)
 		}
 		else if (Constants::MODEL_EXTS.contains(file.suffix())) {
             // we need our own search predicate since we have a vector that houses structs
-            /*QVector<AssetData>::iterator thumb = std::find_if(assetList.begin(),
+            QVector<AssetData>::iterator thumb = std::find_if(assetList.begin(),
                                                               assetList.end(),
-                                                              find_asset_thumbnail(QFileInfo(file.fileName()).baseName()));*/
+                                                              find_asset_thumbnail(QFileInfo(file.fileName()).baseName()));
 
-   //         if (!thumb->guid.isNull() && !thumb->guid.isEmpty()) {
-   //             pixmap = QPixmap::fromImage(QImage::fromData(thumb->thumbnail));
-   //             item->setIcon(QIcon(pixmap));
-   //             item->setData(Qt::DisplayRole, QFileInfo(thumb->name).baseName());
-   //             item->setData(MODEL_EXT_ROLE, QFileInfo(thumb->name).suffix());
-   //             item->setData(MODEL_GUID_ROLE, thumb->guid);
-   //             item->setData(MODEL_TYPE_ROLE, thumb->type);
-   //         }
+            if (!thumb->guid.isNull() && !thumb->guid.isEmpty()) {
+                pixmap = QPixmap::fromImage(QImage::fromData(thumb->thumbnail));
+                item->setIcon(QIcon(pixmap));
+                item->setData(Qt::DisplayRole, QFileInfo(thumb->name).baseName());
+                item->setData(MODEL_EXT_ROLE, thumb->extension);
+                item->setData(MODEL_GUID_ROLE, thumb->guid);
+                item->setData(MODEL_TYPE_ROLE, thumb->type);
+            }
 			//// todo do this once into the list instead of per item maybe...
-			//else
+			else
 				if (db->hasCachedThumbnail(file.fileName())) {
 				QPixmap cachedPixmap;
 				const QByteArray blob = db->fetchCachedThumbnail(file.fileName());
