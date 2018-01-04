@@ -53,6 +53,24 @@ void Database::closeDb()
     db.removeDatabase(connection);
 }
 
+bool Database::checkIfTableExists(const QString &tableName)
+{
+    QSqlQuery query;
+    query.prepare("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?;");
+    query.addBindValue(tableName);
+
+    if (query.exec()) {
+        if (query.first()) {
+            return query.value(0).toBool();
+        }
+    }
+    else {
+        irisLog("There was an error getting the material blob! " + query.lastError().text());
+    }
+
+    return false;
+}
+
 void Database::createGlobalDb() {
     QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_PROJECTS_TABLE + " ("
                      "    name              VARCHAR(64),"
@@ -89,17 +107,19 @@ void Database::createGlobalDbThumbs() {
 
 void Database::createGlobalDbCollections()
 {
-    QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_COLLECT_TABLE + " ("
-        "    name              VARCHAR(128),"
-        "    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
-        "    collection_id     INTEGER PRIMARY KEY"
-        ")";
+    if (!checkIfTableExists(Constants::DB_COLLECT_TABLE)) {
+        QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_COLLECT_TABLE + " ("
+            "    name              VARCHAR(128),"
+            "    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
+            "    collection_id     INTEGER PRIMARY KEY"
+            ")";
 
-    QSqlQuery query;
-    query.prepare(schema);
-    executeAndCheckQuery(query, "createGlobalDbCollections");
+        QSqlQuery query;
+        query.prepare(schema);
+        executeAndCheckQuery(query, "createGlobalDbCollections");
 
-    //insertCollectionGlobal("Uncategorized");    // should be 0
+        insertCollectionGlobal("Uncategorized"); // will default to 0
+    }
 }
 
 void Database::createGlobalDbAssets() {

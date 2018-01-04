@@ -19,6 +19,8 @@ public:
     void initializeDatabase(QString name);
     void closeDb();
 
+    bool checkIfTableExists(const QString &tableName);
+
     void createGlobalDb();
     void createGlobalDbThumbs();
     void createGlobalDbCollections();
