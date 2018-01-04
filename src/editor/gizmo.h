@@ -13,11 +13,20 @@ For more information see the LICENSE file
 #define GIZMOHANDLE_H
 
 #include <QtMath>
+#include <QVector3D>
+#include <QColor>
+#include <QQuaternion>
+#include <QMatrix4x4>
+#include "irisgl/src/irisglfwd.h"
 
-#include "../irisgl/src/irisgl.h"
-#include "../irisgl/src/scenegraph/scenenode.h"
-#include "../irisgl/src/core/irisutils.h"
-#include "../irisgl/src/scenegraph/meshnode.h"
+class QOpenGLFunctions_3_2_Core;
+
+enum class GizmoAxis
+{
+	X,
+	Y,
+	Z
+};
 
 enum class AxisHandle
 {
@@ -68,10 +77,9 @@ private:
 
 public:
 
-    GizmoHandle(const QString& objPath, const QString& name) {
-        gizmoHandle = iris::MeshNode::create();
-        gizmoHandle->setMesh(IrisUtils::getAbsoluteAssetPath(objPath));
-        gizmoHandle->setName(name);
+    GizmoHandle()
+    {
+
     }
 
     void setHandleColor(const QColor& color) {
@@ -82,30 +90,12 @@ public:
         return this->handleColor;
     }
 
-    void setHandlePosition(const QVector3D& position) {
-        this->handlePosition = position;
-        gizmoHandle->setLocalPos(position);
-    }
-
-    QVector3D getHandlePosition() const {
-       return this->handlePosition;
-    }
-
     void setHandleScale(const QVector3D& scale) {
         this->handleScale = scale;
     }
 
     QVector3D getHandleScale() const {
         return this->handleScale;
-    }
-
-    void setHandleRotation(const QVector3D& rotation) {
-        this->handleRotation = QQuaternion::fromEulerAngles(rotation);
-        gizmoHandle->setLocalRot(this->handleRotation);
-    }
-
-    QQuaternion getHandleRotation() const {
-        return this->handleRotation;
     }
 
     void setHandleName(const QString& name) {
@@ -115,11 +105,42 @@ public:
     QString getHandleName() const {
         return this->handleName;
     }
+};
 
-    QSharedPointer<iris::MeshNode> gizmoHandle;
+class Gizmo
+{
+protected:
+	iris::SceneNodePtr selectedNode;
+	GizmoTransformSpace transformSpace;
+	float gizmoScale;
 
-//    QMatrix4x4 localTransform;
-//    QMatrix4x4 globalTransform;
+	QVector3D oldPos, oldScale;
+	QQuaternion oldRot;
+
+public:
+	Gizmo();
+	virtual void updateSize(iris::CameraNodePtr camera);
+	float getGizmoScale();
+
+	virtual void setTransformSpace(GizmoTransformSpace transformSpace);
+	virtual void setSelectedNode(iris::SceneNodePtr node);
+	void clearSelectedNode();
+
+	// undo-redo
+	void setInitialTransform();
+	void createUndoAction();
+
+	// returns transform of the gizmo, not the scene node
+	// the transform is calculated based on the transform's space (local or global)
+	virtual QMatrix4x4 getTransform();
+	virtual bool isHit(QVector3D rayPos, QVector3D rayDir);
+
+	virtual bool isDragging() = 0;
+	virtual void startDragging(QVector3D rayPos, QVector3D rayDir) = 0;
+	virtual void endDragging() = 0;
+	virtual void drag(QVector3D rayPos, QVector3D rayDir) = 0;
+
+	virtual void render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix) = 0;
 };
 
 #endif // GIZMOHANDLE_H

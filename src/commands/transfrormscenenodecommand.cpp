@@ -1,19 +1,35 @@
 #include "transfrormscenenodecommand.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
+#include "../irisgl/src/math/mathhelper.h"
 
 TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node, QMatrix4x4 localTransform)
 {
     sceneNode = node;
-    oldTransform = node->getLocalTransform();
-    newTransform = localTransform;
+    auto oldTransform = node->getLocalTransform();
+    auto newTransform = localTransform;
+	iris::MathHelper::decomposeMatrix(oldTransform, oldPos, oldRot, oldScale);
+	iris::MathHelper::decomposeMatrix(newTransform, newPos, newRot, newScale);
+}
+
+TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node, QVector3D pos, QQuaternion rot, QVector3D scale)
+{
+	sceneNode = node;
+	newPos = pos; newRot = rot; newScale = scale;
+	oldPos = node->getLocalPos();
+	oldRot = node->getLocalRot();
+	oldScale = node->getLocalScale();
 }
 
 void TransformSceneNodeCommand::undo()
 {
-    sceneNode->setLocalTransform(oldTransform);
+	sceneNode->setLocalPos(oldPos);
+	sceneNode->setLocalRot(oldRot);
+	sceneNode->setLocalScale(oldScale);
 }
 
 void TransformSceneNodeCommand::redo()
 {
-    sceneNode->setLocalTransform(newTransform);
+	sceneNode->setLocalPos(newPos);
+	sceneNode->setLocalRot(newRot);
+	sceneNode->setLocalScale(newScale);
 }

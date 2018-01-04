@@ -77,6 +77,15 @@ long SceneNode::getNodeId()
     return nodeId;
 }
 
+void SceneNode::rotate(QQuaternion rot, bool global)
+{
+	if (global)
+		this->rot = this->rot * rot;
+	else
+		this->rot = rot * this->rot;
+	setTransformDirty();
+}
+
 void SceneNode::setLocalPos(QVector3D pos)
 {
     this->pos = pos;
@@ -457,6 +466,13 @@ void SceneNode::removeFromScene()
 long SceneNode::generateNodeId()
 {
     return nextId++;
+}
+
+QQuaternion SceneNode::getGlobalRotation()
+{
+	if (!!parent)
+		return parent->getGlobalRotation() * rot;
+	return rot;
 }
 
 QVector3D SceneNode::getGlobalPosition()

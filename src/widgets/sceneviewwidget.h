@@ -46,7 +46,7 @@ class QElapsedTimer;
 class QTimer;
 class QOpenGLDebugLogger;
 
-class GizmoInstance;
+class Gizmo;
 class ViewportGizmo;
 class TranslationGizmo;
 class RotationGizmo;
@@ -113,6 +113,9 @@ public:
     void setSelectedNode(iris::SceneNodePtr sceneNode);
     void clearSelectedNode();
 
+	void enterEditorMode();
+	void enterPlayerMode();
+
     void setEditorCamera(iris::CameraNodePtr camera);
     void resetEditorCam();
 
@@ -127,9 +130,10 @@ public:
     void setViewportMode(ViewportMode viewportMode);
     ViewportMode getViewportMode();
 
-    void setTransformOrientationLocal();
-    void setTransformOrientationGlobal();
+    void setGizmoTransformToLocal();
+    void setGizmoTransformToGlobal();
     void hideGizmo();
+	void showGizmos();
 
     void setGizmoLoc();
     void setGizmoRot();
@@ -180,9 +184,11 @@ protected:
     void setCameraController(CameraControllerBase* controller);
     void restorePreviousCameraController();
 
+    void getMousePosAndRay(const QPointF& point, QVector3D& rayPos, QVector3D& rayDir);
+
 private slots:
     void paintGL();
-    void updateScene(bool once = false);
+    void renderGizmos(bool once = false);
     void resizeGL(int width, int height);
 
 
@@ -220,11 +226,11 @@ private:
 
     void initialize();
 
-    GizmoInstance* translationGizmo;
+	Gizmo* gizmo;
+    TranslationGizmo* translationGizmo;
     RotationGizmo* rotationGizmo;
     ScaleGizmo* scaleGizmo;
 
-    GizmoInstance* viewportGizmo;
     QString transformMode;
 
     iris::Viewport* viewport;

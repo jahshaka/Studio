@@ -47,6 +47,10 @@ set(SRCS
     src/widgets/transformeditor.cpp 
     src/widgets/scenehierarchywidget.cpp 
     src/editor/cameracontrollerbase.cpp 
+		src/editor/gizmo.cpp 
+		src/editor/translationgizmo.cpp 
+		src/editor/scalegizmo.cpp 
+		src/editor/rotationgizmo.cpp 
     src/widgets/skypresets.cpp 
     src/editor/orbitalcameracontroller.cpp 
     src/widgets/scenenodepropertieswidget.cpp 
@@ -159,7 +163,7 @@ set(HEADERS
     src/io/materialpresetreader.h 
     src/widgets/keyframelabeltreewidget.h 
     src/io/materialpresetreader.h 
-    src/editor/gizmohandle.h 
+    src/editor/gizmo.h 
     src/editor/translationgizmo.h 
     src/editor/rotationgizmo.h 
     src/editor/scalegizmo.h 
