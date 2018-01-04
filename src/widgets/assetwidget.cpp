@@ -79,6 +79,12 @@ void AssetWidget::trigger()
     populateAssetTree(true);
 }
 
+void AssetWidget::updateLabels()
+{
+    updateAssetView(assetItem.selectedPath);
+    populateAssetTree(false);
+}
+
 AssetWidget::~AssetWidget()
 {
     delete ui;
@@ -413,8 +419,16 @@ void AssetWidget::syncTreeAndView(const QString &path)
 void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
 {
     // TODO - depending on file type, we can open mini dialogs for texture preview
+    // TODO - store guid in a custom role
     // Or we can directly add model files to the scene
-    QFileInfo fInfo(QDir(item->data(Qt::UserRole).toString()).filePath(item->text()));
+    QFileInfo fInfo;
+    if (!Globals::assetNames.key(item->text()).isEmpty()) {
+        fInfo.setFile(QDir(item->data(Qt::UserRole).toString()).filePath(Globals::assetNames.key(item->text())));
+    }
+    else {
+        fInfo.setFile(QDir(item->data(Qt::UserRole).toString()).filePath(item->text()));
+    }
+
     if (fInfo.isDir()) {
         assetItem.wItem = item;
         assetItem.selectedPath = fInfo.absoluteFilePath();

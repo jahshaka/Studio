@@ -53,6 +53,7 @@ public:
     void addItem(const QString &asset);
     void updateAssetView(const QString &path);
     void trigger();
+    void updateLabels();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);

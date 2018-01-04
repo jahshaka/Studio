@@ -95,7 +95,7 @@ void AssetViewer::initializeGL()
     dlight->setLightType(iris::LightType::Directional);
     dlight->setName("Key Light");
     dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 45, 0));
-    dlight->intensity = 1;
+    dlight->intensity = 0.71;
     dlight->setShadowEnabled(true);
     dlight->shadowMap->shadowType = iris::ShadowMapType::None;
     scene->rootNode->addChild(dlight);
@@ -105,7 +105,7 @@ void AssetViewer::initializeGL()
 	plight->setName("Rim Light");
     plight->setLocalPos(QVector3D(0, 0, -3));
     plight->color = QColor(198, 198, 255);
-    plight->intensity = 1;
+    plight->intensity = 0.67;
     plight->setShadowEnabled(true);
     plight->shadowMap->shadowType = iris::ShadowMapType::None;
     scene->rootNode->addChild(plight);
@@ -115,7 +115,7 @@ void AssetViewer::initializeGL()
 	blight->setName("Fill Light");
     blight->setLocalPos(QVector3D(2, 2, 2));
     blight->color = QColor(255, 255, 198);
-    blight->intensity = 0.67;
+    blight->intensity = 0.43;
     blight->setShadowEnabled(true);
     blight->shadowMap->shadowType = iris::ShadowMapType::None;
     scene->rootNode->addChild(blight);

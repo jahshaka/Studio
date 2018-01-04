@@ -453,6 +453,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		object["type"] = 5; // model?
 		object["full_filename"] = IrisUtils::buildFileName(guid, fInfo.suffix());
 
+        Globals::assetNames.insert(guid, object["name"].toString());
+
         auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
 
 		if (!QDir(QDir(assetPath).filePath(guid)).exists()) {
@@ -555,7 +557,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	metaLayout->addStretch();
 	auto projectSpecific = new QWidget;
 	auto ll = new QVBoxLayout;
-    ll->addWidget(normalize);
+    // ll->addWidget(normalize);
 	ll->addWidget(addToProject);
 	projectSpecific->setLayout(ll);
 	metaLayout->addWidget(projectSpecific);
