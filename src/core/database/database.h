@@ -27,6 +27,7 @@ public:
 	void createGlobalDbAssets();
 	void createGlobalDbMaterials();
     void deleteProject();
+    bool deleteAsset(const QString &guid);
     void renameProject(const QString&);
 	QString insertAssetGlobal(const QString&, int type, const QByteArray &thumbnail);
 	QString insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material);

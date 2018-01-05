@@ -78,6 +78,11 @@ public:
 		return assetMaterial;
 	}
 
+    void clearScene() {
+        scene->cleanup();
+        scene.clear();
+    }
+
 signals:
     void progressChanged(int);
 

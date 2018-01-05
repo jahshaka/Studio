@@ -60,6 +60,66 @@ void AssetViewGrid::mousePressEvent(QMouseEvent *event)
 	}
 }
 
+void AssetViewGrid::deleteTile(AssetGridItem *widget)
+{
+    int index = _layout->indexOf(widget);
+    if (index != -1) {
+        int row, col, col_span, row_span;
+        _layout->getItemPosition(index, &row, &col, &col_span, &row_span);
+
+        auto w = _layout->itemAtPosition(row, col)->widget();
+        auto idx = _layout->layout()->indexOf(w);
+        auto item = _layout->takeAt(idx);
+        deleteChildWidgets(item);
+        item->widget()->deleteLater();
+
+        originalItems.removeOne(widget);
+        updateGridColumns(lastWidth);
+
+        emit gridCount(_layout->count());
+    }
+}
+
+void AssetViewGrid::deleteChildWidgets(QLayoutItem *item) {
+    if (item->layout()) {
+        // Process all child items recursively.
+        for (int i = 0; i < item->layout()->count(); i++) {
+            deleteChildWidgets(item->layout()->itemAt(i));
+        }
+    }
+
+    // delete item->widget();
+    item->widget()->deleteLater();
+}
+
+void AssetViewGrid::searchTiles(QString searchString)
+{
+	int columnCount = lastWidth / (180 + 10);
+
+	int count = 0;
+	if (!searchString.isEmpty()) {
+		foreach (AssetGridItem *gridItem, originalItems) {
+			if (gridItem->textLabel->text().toLower().contains(searchString)) {
+				gridItem->setVisible(true);
+				_layout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
+				count++;
+			}
+			else {
+				gridItem->setVisible(false);
+			}
+		}
+	}
+	else {
+		foreach(AssetGridItem *gridItem, originalItems) {
+			gridItem->setVisible(true);
+			_layout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
+			count++;
+		}
+	}
+
+	gridWidget->adjustSize();
+}
+
 void AssetViewGrid::updateGridColumns(int width)
 {
 	int columnCount = width / (180 + 10);

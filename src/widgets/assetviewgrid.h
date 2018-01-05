@@ -21,11 +21,18 @@ public:
 
 	void updateImage();
 
+    bool containsTiles() {
+        if (_layout->count()) return true;
+        return false;
+    }
 	void addTo(QJsonObject details, QImage image, int count);
 	void resizeEvent(QResizeEvent *event);
 	void mousePressEvent(QMouseEvent*);
 	void updateGridColumns(int width);
 	void deselectAll();
+	void searchTiles(QString);
+    void deleteTile(AssetGridItem *widget);
+    void deleteChildWidgets(QLayoutItem *item);
 
 private:
 	int gridCounter;

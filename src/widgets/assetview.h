@@ -56,6 +56,9 @@ public:
 	void focusInEvent(QFocusEvent *event);
 	bool eventFilter(QObject *watched, QEvent *event);
     void copyTextures(const QString &folderGuid);
+    void checkForEmptyState();
+    void toggleFilterPane(bool);
+    void closeViewer();
 
 signals:
     void refreshCollections();
@@ -70,6 +73,8 @@ private:
 	QWidget *_viewPane;
 	QWidget *_metadataPane;
 
+    QSplitter *split;
+
 	QListWidget *_assetView;
 
 	QByteArray downloadedImage;
@@ -78,6 +83,7 @@ private:
 
 	QPushButton *addToLibrary;
 	QPushButton *addToProject;
+    QPushButton *deleteFromLibrary;
 	QLabel *renameModel;
 	QLineEdit *renameModelField;
 	QWidget *renameWidget;
@@ -106,6 +112,9 @@ private:
     SettingsManager* settings;
 	AssetViewer *viewer;
     AssetGridItem *selectedGridItem;
+	QTimer *searchTimer;
+	QString searchTerm;
+	QLineEdit *le;
 };
 
 #endif // ASSETVIEW_H

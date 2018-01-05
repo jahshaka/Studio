@@ -97,6 +97,34 @@ void AssetView::copyTextures(const QString &folderGuid)
     }
 }
 
+void AssetView::checkForEmptyState()
+{
+    //if (fastGrid->containsTiles()) {
+    //    ui->stackedWidget->setCurrentIndex(0);
+    //    return false;
+    //}
+
+    //ui->stackedWidget->setCurrentIndex(1);
+    //return true;
+}
+
+void AssetView::toggleFilterPane(bool toggle) {
+    filterPane->setVisible(toggle);
+}
+
+void AssetView::closeViewer()
+{
+    // viewer->clearScene();
+
+    int size = this->height() / 3;
+    const QList<int> sizes = { 1, size * 2 };   // 1px keeps the viewer visible so it's never fully hidden so initializegl gets called
+    split->setSizes(sizes);
+    split->setStretchFactor(0, 1);
+    split->setStretchFactor(1, 1);
+
+    toggleFilterPane(fastGrid->containsTiles());
+}
+
 AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(parent)
 {
 	_assetView = new QListWidget;
@@ -247,7 +275,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
     });
 
     //QWidget *_previewPane;  
-	auto split = new QSplitter;
+	split = new QSplitter;
 	split->setHandleWidth(1);
 	split->setOrientation(Qt::Vertical);
 
@@ -295,12 +323,19 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	QWidget *filterGroup = new QWidget;
 	auto fgL = new QHBoxLayout;
 	fgL->addWidget(meshObject);
-	fgL->addWidget(typeObject);
-	fgL->addWidget(imageObject);
+	//fgL->addWidget(typeObject);
+	//fgL->addWidget(imageObject);
 	//fgL->addWidget(scriptObject);
 	filterGroup->setLayout(fgL);
 	fgL->setMargin(0);
 	fgL->setSpacing(0);
+
+	searchTimer = new QTimer(this);
+	searchTimer->setSingleShot(true);   // timer can only fire once after started
+
+	connect(searchTimer, &QTimer::timeout, this, [this]() {
+		fastGrid->searchTiles(searchTerm.toLower());
+	});
 
 	filterPane = new QWidget;
 	auto filterLayout = new QHBoxLayout;
@@ -308,13 +343,19 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	filterLayout->addWidget(filterGroup);
 	filterLayout->addStretch();
 	filterLayout->addWidget(new QLabel("Search: "));
-	auto le = new QLineEdit();
+	le = new QLineEdit();
 	le->setFixedWidth(256);
 	le->setStyleSheet(
 		"border: 1px solid #1E1E1E; border - radius: 2px; "
 		"font-size: 12px; font-weight: bold; background: #3B3B3B; padding: 6px 4px;"
 	);
 	filterLayout->addWidget(le);
+
+	connect(le, &QLineEdit::textChanged, this, [this](const QString &searchTerm) {
+		this->searchTerm = searchTerm;
+		searchTimer->start(100);
+	});
+
 	filterPane->setObjectName("filterPane");
 	filterPane->setLayout(filterLayout);
 	filterPane->setFixedHeight(48);
@@ -348,6 +389,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 			filterPane->setVisible(false);
 			emptyGrid->setVisible(true);
 			fastGrid->setVisible(false);
+
+            closeViewer();
 		}
 	});
 
@@ -403,6 +446,10 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	addToProject->setStyleSheet("background: #3498db");
 	addToProject->setVisible(false);
 
+    deleteFromLibrary = new QPushButton("Remove From Library");
+    deleteFromLibrary->setStyleSheet("background: #E74C3C");
+    deleteFromLibrary->setVisible(false);
+
 	renameModel = new QLabel("Rename:");
 	renameModelField = new QLineEdit();
 
@@ -442,10 +489,30 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 			selectedGridItem = gridItem;
 			addToProject->setVisible(true);
+            deleteFromLibrary->setVisible(true);
 			selectedGridItem->highlight(true);
 		}
 
 		fetchMetadata(gridItem);
+    });
+
+    connect(deleteFromLibrary, &QPushButton::pressed, [this]() {
+        auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
+
+        auto option = QMessageBox::question(this,
+            "Deleting Asset", "Are you sure you want to delete this asset?",
+            QMessageBox::Yes | QMessageBox::Cancel);
+
+        if (option == QMessageBox::Yes) {
+            if (IrisUtils::removeDir(QDir(assetPath).filePath(selectedGridItem->metadata["guid"].toString()))) {
+                fastGrid->deleteTile(selectedGridItem);
+                db->deleteAsset(selectedGridItem->metadata["guid"].toString());
+                closeViewer();
+            }
+            else {
+                QMessageBox::warning(this, "Delete Failed!", "Failed to remove asset, please try again!", QMessageBox::Ok);
+            }
+        }
     });
 
 	connect(addToLibrary, &QPushButton::pressed, [this]() {
@@ -577,6 +644,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	auto ll = new QVBoxLayout;
     // ll->addWidget(normalize);
 	ll->addWidget(addToProject);
+    ll->addWidget(deleteFromLibrary);
 	projectSpecific->setLayout(ll);
 	metaLayout->addWidget(projectSpecific);
 	auto metadata = new QWidget;
@@ -632,6 +700,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 	split->addWidget(viewer);
 	split->addWidget(_viewPane);
+
+    closeViewer();
 
 	split->setHandleWidth(0);
 	split->setStretchFactor(0, 0);
@@ -729,6 +799,7 @@ void AssetView::fetchMetadata(AssetGridItem *widget)
 		metadataMissing->setVisible(true);
 
 		addToProject->setVisible(false);
+        deleteFromLibrary->setVisible(false);
 
 		metadataName->setVisible(false);
 		metadataType->setVisible(false);

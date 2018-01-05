@@ -170,11 +170,11 @@ void AssetWidget::addItem(const QString &asset)
 		}
 		else if (Constants::MODEL_EXTS.contains(file.suffix())) {
             // we need our own search predicate since we have a vector that houses structs
-            QVector<AssetData>::iterator thumb = std::find_if(assetList.begin(),
-                                                              assetList.end(),
-                                                              find_asset_thumbnail(QFileInfo(file.fileName()).baseName()));
+            if (!Globals::assetNames.value(QFileInfo(file.fileName()).baseName()).isEmpty()) {
+                QVector<AssetData>::iterator thumb = std::find_if(assetList.begin(),
+                                                                  assetList.end(),
+                                                                  find_asset_thumbnail(QFileInfo(file.fileName()).baseName()));
 
-            if (!thumb->guid.isNull() && !thumb->guid.isEmpty()) {
                 pixmap = QPixmap::fromImage(QImage::fromData(thumb->thumbnail));
                 item->setIcon(QIcon(pixmap));
                 item->setData(Qt::DisplayRole, QFileInfo(thumb->name).baseName());
@@ -182,7 +182,7 @@ void AssetWidget::addItem(const QString &asset)
                 item->setData(MODEL_GUID_ROLE, thumb->guid);
                 item->setData(MODEL_TYPE_ROLE, thumb->type);
             }
-			//// todo do this once into the list instead of per item maybe...
+			//////// todo do this once into the list instead of per item maybe...
 			else
 				if (db->hasCachedThumbnail(file.fileName())) {
 				QPixmap cachedPixmap;

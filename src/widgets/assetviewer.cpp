@@ -276,7 +276,6 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, QVector3D position
 
 			QJsonObject matObj;
 			createMaterial(matObj, mat);
-			qDebug() << matObj;
 			assetMaterial.insert(QString::number(iteration), matObj);
 		}
 		else {

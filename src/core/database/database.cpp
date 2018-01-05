@@ -118,7 +118,13 @@ void Database::createGlobalDbCollections()
         query.prepare(schema);
         executeAndCheckQuery(query, "createGlobalDbCollections");
 
-        insertCollectionGlobal("Uncategorized"); // will default to 0
+        QSqlQuery query2;
+        query.prepare("INSERT INTO " + Constants::DB_COLLECT_TABLE +
+            " (name, date_created, collection_id)" +
+            " VALUES (:name, datetime(), 0)");
+        query.bindValue(":name", "Uncategorized");
+
+        executeAndCheckQuery(query, "insertSceneCollection");
     }
 }
 
@@ -188,6 +194,22 @@ void Database::deleteProject()
     query.prepare("DELETE FROM " + Constants::DB_PROJECTS_TABLE + " WHERE guid = ?");
     query.addBindValue(Globals::project->getProjectGuid());
     executeAndCheckQuery(query, "deleteProject");
+}
+
+bool Database::deleteAsset(const QString &guid)
+{
+    QSqlQuery query;
+    query.prepare("DELETE FROM " + Constants::DB_ASSETS_TABLE + " WHERE guid = ?");
+    query.addBindValue(guid);
+
+    QSqlQuery query2;
+    query2.prepare("DELETE FROM materials WHERE asset_guid = ?");
+    query2.addBindValue(guid);
+    
+    bool da = executeAndCheckQuery(query, "deleteAsset");
+    bool dm = executeAndCheckQuery(query, "deleteMaterial");
+
+    return da && dm;
 }
 
 void Database::renameProject(const QString &newName)
