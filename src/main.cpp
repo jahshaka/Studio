@@ -51,7 +51,10 @@ int main(int argc, char *argv[])
     QApplication::setAttribute(Qt::AA_UseDesktopOpenGL);
     QApplication::setDesktopSettingsAware(false);
     QApplication app(argc, argv);
+
+#ifdef USE_BREAKPAD
 	initializeBreakpad();
+#endif
 
     app.setWindowIcon(QIcon(":/images/logo.png"));
     app.setApplicationName("Jahshaka");

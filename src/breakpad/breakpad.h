@@ -1,3 +1,7 @@
+#ifndef BREAKPAD_H
+#define BREAKPAD_H
+
+#ifdef USE_BREAKPAD
 #include "client\windows\handler\exception_handler.h"
 #include "client\windows\sender\crash_report_sender.h"
 #include "../constants.h"
@@ -32,7 +36,10 @@ bool JahshakaBreakpadCallback(const wchar_t* dump_dir,
 void initializeBreakpad()
 {
 	std::wstring path = qApp->applicationDirPath().toStdWString();
-	auto handler = new google_breakpad::ExceptionHandler(path, /*FilterCallback*/ 0,
-		JahshakaBreakpadCallback, /*context*/ 0,
+	auto handler = new google_breakpad::ExceptionHandler(path, 0,
+		JahshakaBreakpadCallback, 0,
 		google_breakpad::ExceptionHandler::HANDLER_ALL);
 }
+#endif
+
+#endif // BREAKPAD_H

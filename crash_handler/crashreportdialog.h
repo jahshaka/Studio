@@ -26,4 +26,4 @@ private slots:
 	void onCancel();
 	void onSend();
 };
-#endif // !CRASHREPORTDIALOG_H
+#endif // CRASHREPORTDIALOG_H

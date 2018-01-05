@@ -305,6 +305,11 @@ else()
     set(DestDir ${CMAKE_BINARY_DIR}/bin)
 endif()
 
+# only enable breakpad on windows platforms using msvc for now
+if(WIN32)
+	add_definitions("-DUSE_BREAKPAD")
+endif()
+
 # For convenience, put the shared files built from IrisGL along with the final binary
 # Also note MSVC build path is different from GNU in that it containts the build type
 set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
