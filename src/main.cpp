@@ -21,7 +21,9 @@ For more information see the LICENSE file
 #include "core/settingsmanager.h"
 #include "globals.h"
 #include "constants.h"
+#ifdef USE_BREAKPAD
 #include "breakpad\breakpad.h"
+#endif
 
 // Hints that a dedicated GPU should be used whenever possible
 // https://stackoverflow.com/a/39047129/991834

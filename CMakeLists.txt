@@ -15,8 +15,6 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/breakpad)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/crash_handler)
 
 set(SRCS
     src/main.cpp
@@ -274,6 +272,10 @@ set(FORMS
     src/dialogs/donate.ui
 )
 
+set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets IrisGL ${OPENGL_LIBRARIES})
+
+include(IncludeBreakpad)
+
 qt5_wrap_cpp(HEADERS_moc ${HEADERS})
 qt5_wrap_ui(UI_moc ${FORMS})
 
@@ -305,17 +307,10 @@ else()
     set(DestDir ${CMAKE_BINARY_DIR}/bin)
 endif()
 
-# only enable breakpad on windows platforms using msvc for now
-if(WIN32)
-	add_definitions("-DUSE_BREAKPAD")
-endif()
-
 # For convenience, put the shared files built from IrisGL along with the final binary
 # Also note MSVC build path is different from GNU in that it containts the build type
 set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set_target_properties(breakpad PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set_target_properties(crash_handler PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -326,9 +321,10 @@ target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 															src
 															irisgl/src
 															irisgl/src/assimp/include/
-															irisgl/src/libovr/include/
+                                                                                                                        irisgl/src/libovr/Include/
 															thirdparty/breakpad/breakpad/src)
-target_link_libraries(${CMAKE_PROJECT_NAME} Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets IrisGL breakpad ${OPENGL_LIBRARIES})
+target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBS})
 
 include(CopyResources)
 include(CopyDependencies)
+
