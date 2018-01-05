@@ -56,7 +56,7 @@ void CrashReportDialog::onSend()
 
 	// Finally, send a report
 	std::map<std::wstring, std::wstring> files;
-	if (ui->crashCheck->checked())
+	if (ui->crashCheck->isChecked())
 		files[std::wstring(L"upload_file_minidump")] = logPath.toStdWString();
 
 	QProgressDialog progress("Uploading Crash Report", "Cancel", 0, 3, this);
