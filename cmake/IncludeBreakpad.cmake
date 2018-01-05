@@ -1,0 +1,2 @@
+set(USE_BREAKPAD FALSE)
+
