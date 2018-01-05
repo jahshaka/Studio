@@ -256,9 +256,6 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 						//auto item = static_cast<QListWidgetItem*>(index.internalPointer());
 						ui->assetView->clearSelection();
                         if (item) {
-
-                            qDebug() << "Started a Drag";
-  
 							QByteArray mdata;
 							QDataStream stream(&mdata, QIODevice::WriteOnly);
 							QMap<int, QVariant> roleDataMap;

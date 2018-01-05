@@ -259,12 +259,11 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, QVector3D position
 			mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
 		if (firstAdd) {
-			mat->setValue("diffuseColor", data.diffuseColor);
-			mat->setValue("specularColor", data.specularColor);
-			mat->setValue("ambientColor", data.ambientColor);
-			mat->setValue("emissionColor", data.emissionColor);
-
-			mat->setValue("shininess", data.shininess);
+			mat->setValue("diffuseColor",	data.diffuseColor);
+			mat->setValue("specularColor",	data.specularColor);
+			mat->setValue("ambientColor",	data.ambientColor);
+			mat->setValue("emissionColor",	data.emissionColor);
+			mat->setValue("shininess",		1);
 
 			if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
 				mat->setValue("diffuseTexture", data.diffuseTexture);
@@ -277,6 +276,7 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, QVector3D position
 
 			QJsonObject matObj;
 			createMaterial(matObj, mat);
+			qDebug() << matObj;
 			assetMaterial.insert(QString::number(iteration), matObj);
 		}
 		else {
@@ -296,12 +296,11 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, QVector3D position
 			cdata.specularColor = col;
 			cdata.specularTexture = matinfo["specularTexture"].toString();
 
-			mat->setValue("diffuseColor", cdata.diffuseColor);
-			mat->setValue("specularColor", cdata.specularColor);
-			mat->setValue("ambientColor", cdata.ambientColor);
-			mat->setValue("emissionColor", cdata.emissionColor);
-
-			mat->setValue("shininess", cdata.shininess);
+			mat->setValue("diffuseColor",	cdata.diffuseColor);
+			mat->setValue("specularColor",	cdata.specularColor);
+			mat->setValue("ambientColor",	cdata.ambientColor);
+			mat->setValue("emissionColor",	cdata.emissionColor);
+			mat->setValue("shininess",		cdata.shininess);
 
 			auto libraryTextureIsValid = [](const QString &path, const QString texturePath) {
 				return (

@@ -100,16 +100,12 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
         if (doActiveObjectPicking(event->posF())) {
             //activeSceneNode->pos = sceneView->hit;
             dragScenePos = hit;
-            qDebug() << "Hit existing";
-
             // if we drag on the "floor"
         }
         else if (updateRPI(editorCam->getLocalPos(), calculateMouseRay(event->posF())))
         {
             //activeSceneNode->pos = sceneView->Offset;
             dragScenePos = Offset;
-            qDebug() << "On the floor";
-
             // otherwise just spawn a distance in front of the camera
         }
         else {
@@ -119,35 +115,28 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
             offset += editorCam->getLocalPos();
             //activeSceneNode->pos = offset;
             dragScenePos = offset;
-            qDebug() << "Floating";
         }
     }
 
-    qDebug() << "TESTING " << dragScenePos;
-
-    if (roleDataMap.value(0).toInt() != static_cast<int>(ModelTypes::Object))
-    {
+    if (roleDataMap.value(0).toInt() != static_cast<int>(ModelTypes::Object)) {
         doObjectPicking(event->posF(), iris::SceneNodePtr(), false, true);
     }
 }
 
 void SceneViewWidget::dropEvent(QDropEvent *event)
 {
-    qDebug() << "Dropped";
- 
     QByteArray encoded = event->mimeData()->data("application/x-qabstractitemmodeldatalist");
     QDataStream stream(&encoded, QIODevice::ReadOnly);
     QMap<int, QVariant> roleDataMap;
     while (!stream.atEnd()) {
         stream >> roleDataMap;
     }
-    qDebug() << roleDataMap;
+
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object))
     {
         //auto ppos = activeSceneNode->pos;
         auto ppos = dragScenePos;
         //deleteNode();
-        qDebug() << "PPOS" << ppos;
         emit addDroppedMesh(roleDataMap.value(3).toString(), true, ppos);
         // addMesh(roleDataMap.value(3).toString(), true, ppos);
     }
@@ -155,7 +144,6 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 
 void SceneViewWidget::dragEnterEvent(QDragEnterEvent *event)
 {
-    qDebug() << "Drag Enter";
     hideGizmo();
     if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist"))
         event->acceptProposedAction();

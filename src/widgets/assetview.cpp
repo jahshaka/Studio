@@ -61,22 +61,38 @@ void AssetView::copyTextures(const QString &folderGuid)
         auto mesh = scene->mMeshes[i];
         auto material = scene->mMaterials[mesh->mMaterialIndex];
 
-        // todo - repeat for all 3 channels we currently import
+        aiString textureName;
+
         if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
-            aiString textureName;
             material->GetTexture(aiTextureType_DIFFUSE, 0, &textureName);
             texturesToCopy.append(textureName.C_Str());
         }
+
+		if (material->GetTextureCount(aiTextureType_SPECULAR) > 0) {
+			material->GetTexture(aiTextureType_SPECULAR, 0, &textureName);
+			texturesToCopy.append(textureName.C_Str());
+		}
+
+		if (material->GetTextureCount(aiTextureType_NORMALS) > 0) {
+			material->GetTexture(aiTextureType_NORMALS, 0, &textureName);
+			texturesToCopy.append(textureName.C_Str());
+		}
+
+		if (material->GetTextureCount(aiTextureType_HEIGHT) > 0) {
+			material->GetTexture(aiTextureType_HEIGHT, 0, &textureName);
+			texturesToCopy.append(textureName.C_Str());
+		}
     }
 
     if (!texturesToCopy.isEmpty()) {
-        QString assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER + "/" + folderGuid;
-        for (auto texture : texturesToCopy) {
-			QString diffuseTexture = QFileInfo(texture).isRelative()
-										? QDir::cleanPath(QDir(QFileInfo(filename).absoluteDir()).filePath(texture))
-										: QDir::cleanPath(texture);
+        QString assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) +
+							Constants::ASSET_FOLDER + "/" + folderGuid;
 
-            QFile::copy(diffuseTexture, QDir(assetPath).filePath(QFileInfo(texture).fileName()));
+        for (auto texture : texturesToCopy) {
+			QString tex = QFileInfo(texture).isRelative()
+									? QDir::cleanPath(QDir(QFileInfo(filename).absoluteDir()).filePath(texture))
+									: QDir::cleanPath(texture);
+            QFile::copy(tex, QDir(assetPath).filePath(QFileInfo(texture).fileName()));
         }
     }
 }
@@ -447,7 +463,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		thumbnail.save(&buffer, "PNG");
 
 		// maybe actually check if Object?
-		QString guid = db->insertAssetGlobal(IrisUtils::buildFileName(renameModelField->text(), fInfo.suffix()),
+		QString guid = db->insertAssetGlobal(IrisUtils::buildFileName(renameModelField->text(), fInfo.suffix().toLower()),
 											 static_cast<int>(ModelTypes::Object), bytes);
 		object["guid"] = guid;
 		object["type"] = 5; // model?
@@ -460,7 +476,9 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		if (!QDir(QDir(assetPath).filePath(guid)).exists()) {
 			QDir().mkdir(QDir(assetPath).filePath(guid));
 			bool copyFile = QFile::copy(filename,
-										QDir(QDir(assetPath).filePath(guid)).filePath(IrisUtils::buildFileName(guid, fInfo.suffix())));
+										QDir(QDir(assetPath).filePath(guid)).filePath(
+											IrisUtils::buildFileName(guid, fInfo.suffix().toLower()))
+										);
 		}
 
         copyTextures(guid);

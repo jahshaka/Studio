@@ -101,6 +101,14 @@ void MaterialHelper::extractMaterialData(aiMaterial *aiMat, QString assetPath, M
         mat.normalTexture = QFileInfo(normalsTex).isRelative()
 								? QDir::cleanPath(QDir(assetPath).filePath(normalsTex))
 								: QDir::cleanPath(normalsTex);
+
+		// reading normals for some obj's won't always work with aiTextureType_NORMALS, use this as fallback alt.
+		if (normalsTex.isEmpty()) {
+			QString normalsTex = getAiMaterialTexture(aiMat, aiTextureType_HEIGHT);
+			mat.normalTexture = QFileInfo(normalsTex).isRelative()
+				? QDir::cleanPath(QDir(assetPath).filePath(normalsTex))
+				: QDir::cleanPath(normalsTex);
+		}
     }
 }
 
