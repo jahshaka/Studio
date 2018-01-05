@@ -16,6 +16,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/breakpad)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/crash_handler)
 
 set(SRCS
     src/main.cpp
@@ -225,6 +226,7 @@ set(HEADERS
     src/widgets/assetviewer.h
     src/widgets/assetviewgrid.h
     src/widgets/assetgriditem.h
+	src/breakpad/breakpad.h
 )
 
 # Todo - trim these down to nothing eventually
@@ -308,6 +310,7 @@ endif()
 set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(breakpad PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_target_properties(crash_handler PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
