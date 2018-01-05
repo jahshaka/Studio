@@ -8,7 +8,6 @@ find_package(Qt5 REQUIRED COMPONENTS Concurrent Widgets Sql Svg)
 
 include(UseModernCpp)
 include(BuildType)
-include(GnuInstallDirs)
 
 # set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)

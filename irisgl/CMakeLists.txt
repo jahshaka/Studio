@@ -196,7 +196,7 @@ target_include_directories(IrisGL PUBLIC
     "${PROJECT_SOURCE_DIR}/src/"
     "${PROJECT_BINARY_DIR}/src/assimp/include/"
     "${PROJECT_SOURCE_DIR}/src/assimp/include/"
-    "${PROJECT_SOURCE_DIR}/src/libovr/include"
+    "${PROJECT_SOURCE_DIR}/src/libovr/Include"
 )
 
 target_link_libraries (IrisGL assimp Qt5::Core Qt5::OpenGL)
