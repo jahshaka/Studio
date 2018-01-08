@@ -1,3 +1,5 @@
+#include <QMenu>
+
 #include "assetgriditem.h"
 
 // local
@@ -32,9 +34,37 @@ AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QWidget *parent)
 	setStyleSheet("background: #272727");
 	setLayout(layout);
 	setCursor(Qt::PointingHandCursor);
+	setContextMenuPolicy(Qt::CustomContextMenu);
 
 	connect(this, SIGNAL(hovered()), SLOT(dimHighlight()));
 	connect(this, SIGNAL(left()), SLOT(noHighlight()));
+
+	connect(this, SIGNAL(customContextMenuRequested(const QPoint&)), SLOT(projectContextMenu(QPoint)));
+}
+
+void AssetGridItem::projectContextMenu(const QPoint &pos)
+{
+	QMenu menu("Context Menu", this);
+
+	QAction add("Add to Project", this);
+	connect(&add, &QAction::triggered, this, [this]() {
+		emit addAssetToProject(this);
+	});
+	menu.addAction(&add);
+
+	QAction change("Change Collections", this);
+	connect(&change, &QAction::triggered, this, [this]() {
+		emit changeAssetCollection(this);
+	});
+	menu.addAction(&change);
+
+	QAction remove("Delete", this);
+	connect(&remove, &QAction::triggered, this, [this]() {
+		emit removeAssetFromProject(this);
+	});
+	menu.addAction(&remove);
+
+	menu.exec(mapToGlobal(pos));
 }
 
 void AssetGridItem::setTile(QPixmap pix) {
@@ -54,8 +84,12 @@ void AssetGridItem::leaveEvent(QEvent *event) {
 }
 
 void AssetGridItem::mousePressEvent(QMouseEvent *event) {
-	if (event->button() == Qt::LeftButton || event->button() == Qt::RightButton) {
+	if (event->button() == Qt::LeftButton) {
 		emit singleClicked(this);
+	}
+
+	if (event->button() == Qt::RightButton) {
+		emit contextClicked(this);
 	}
 }
 

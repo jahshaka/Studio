@@ -21,6 +21,23 @@ void AssetViewGrid::updateImage() {
 }
 
 // local
+void AssetViewGrid::addTo(AssetGridItem *item, int count)
+{
+	int columnCount = viewport()->width() / (180 + 10);
+	if (columnCount == 0) columnCount = 1;
+
+	originalItems.push_back(item);
+
+	connect(item, &AssetGridItem::singleClicked, [this](AssetGridItem *item) {
+		emit selectedTile(item);
+	});
+
+	_layout->addWidget(item, count / columnCount + 1, count % columnCount + 1);
+	gridWidget->adjustSize();
+
+	emit gridCount(_layout->count());
+}
+
 void AssetViewGrid::addTo(QJsonObject details, QImage image, int count) {
 	auto sampleWidget = new AssetGridItem(details, image);
 
@@ -57,6 +74,10 @@ void AssetViewGrid::mousePressEvent(QMouseEvent *event)
 {
 	if (event->button() == Qt::LeftButton) {
 		emit selectedTile(new AssetGridItem(QJsonObject(), QImage()));
+	}
+
+	if (event->button() == Qt::RightButton) {
+		emit contextSelected(new AssetGridItem(QJsonObject(), QImage()));
 	}
 }
 
@@ -100,6 +121,34 @@ void AssetViewGrid::searchTiles(QString searchString)
 	if (!searchString.isEmpty()) {
 		foreach (AssetGridItem *gridItem, originalItems) {
 			if (gridItem->textLabel->text().toLower().contains(searchString)) {
+				gridItem->setVisible(true);
+				_layout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
+				count++;
+			}
+			else {
+				gridItem->setVisible(false);
+			}
+		}
+	}
+	else {
+		foreach(AssetGridItem *gridItem, originalItems) {
+			gridItem->setVisible(true);
+			_layout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
+			count++;
+		}
+	}
+
+	gridWidget->adjustSize();
+}
+
+void AssetViewGrid::filterAssets(int id)
+{
+	int columnCount = lastWidth / (180 + 10);
+
+	int count = 0;
+	if (id != -1) {
+		foreach(AssetGridItem *gridItem, originalItems) {
+			if (gridItem->metadata["collection"].toInt() == id) {
 				gridItem->setVisible(true);
 				_layout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
 				count++;

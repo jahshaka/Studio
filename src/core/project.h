@@ -47,6 +47,7 @@ struct AssetTileData {
 	QString     guid;
     QString     collection_name;
 	int			type;
+	int			collection;
 };
 
 struct AssetData {

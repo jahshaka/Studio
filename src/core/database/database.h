@@ -43,6 +43,7 @@ public:
     QVector<CollectionData> fetchCollections();
     QVector<ProjectTileData> fetchProjects();
 	QVector<AssetTileData> fetchAssets();
+	QVector<AssetTileData> fetchAssetsByCollection(int collection_id);
     QByteArray getSceneBlobGlobal() const;
     QByteArray fetchCachedThumbnail(const QString& name) const;
     void updateSceneGlobal(const QByteArray &sceneBlob, const QByteArray &thumbnail);

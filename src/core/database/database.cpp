@@ -403,7 +403,7 @@ QVector<AssetTileData> Database::fetchAssets()
 {
 	QSqlQuery query;
 	query.prepare("SELECT assets.name, (assets.guid || '.' || assets.extension) as full_filename,"
-				  " assets.thumbnail, assets.guid, collections.name as collection_name, assets.type"
+				  " assets.thumbnail, assets.guid, collections.name as collection_name, assets.type, assets.collection"
 				  " FROM assets"
                   " INNER JOIN " + Constants::DB_COLLECT_TABLE + " ON assets.collection = collections.collection_id ORDER BY assets.name DESC");
 	executeAndCheckQuery(query, "fetchAssets");
@@ -418,6 +418,38 @@ QVector<AssetTileData> Database::fetchAssets()
 			data.thumbnail = record.value(2).toByteArray();
 			data.guid = record.value(3).toString();
             data.collection_name = record.value(4).toString();
+			data.type = record.value(5).toInt();
+			data.collection = record.value(6).toInt();
+		}
+
+		Globals::assetNames.insert(data.guid, data.name);
+
+		tileData.push_back(data);
+	}
+
+	return tileData;
+}
+
+QVector<AssetTileData> Database::fetchAssetsByCollection(int collection_id)
+{
+	QSqlQuery query;
+	query.prepare("SELECT assets.name, (assets.guid || '.' || assets.extension) as full_filename,"
+		" assets.thumbnail, assets.guid, collections.name as collection_name, assets.type"
+		" FROM assets"
+		" INNER JOIN " + Constants::DB_COLLECT_TABLE + " ON assets.collection = collections.collection_id ORDER BY assets.name DESC WHERE assets.collection_id = ?");
+	query.addBindValue(collection_id);
+	executeAndCheckQuery(query, "fetchAssetsByCollection");
+
+	QVector<AssetTileData> tileData;
+	while (query.next()) {
+		AssetTileData data;
+		QSqlRecord record = query.record();
+		for (int i = 0; i < record.count(); i++) {
+			data.name = record.value(0).toString();
+			data.full_filename = record.value(1).toString();
+			data.thumbnail = record.value(2).toByteArray();
+			data.guid = record.value(3).toString();
+			data.collection_name = record.value(4).toString();
 			data.type = record.value(5).toInt();
 		}
 

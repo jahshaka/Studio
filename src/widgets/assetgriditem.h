@@ -38,6 +38,7 @@ public:
 	void mousePressEvent(QMouseEvent *event);
 
 public slots:
+	void projectContextMenu(const QPoint &pos);
 	void dimHighlight();
 	void noHighlight();
 
@@ -45,6 +46,11 @@ signals:
 	void hovered();
 	void left();
 	void singleClicked(AssetGridItem*);
+	void contextClicked(AssetGridItem*);	// use this exclusively for right clicks
+
+	void addAssetToProject(AssetGridItem*);
+	void changeAssetCollection(AssetGridItem*);
+	void removeAssetFromProject(AssetGridItem*);
 };
 
 #endif // ASSETGRIDITEM_HPP

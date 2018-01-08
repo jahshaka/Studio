@@ -25,6 +25,7 @@ public:
         if (_layout->count()) return true;
         return false;
     }
+	void addTo(AssetGridItem *widget, int count);
 	void addTo(QJsonObject details, QImage image, int count);
 	void resizeEvent(QResizeEvent *event);
 	void mousePressEvent(QMouseEvent*);
@@ -33,6 +34,7 @@ public:
 	void searchTiles(QString);
     void deleteTile(AssetGridItem *widget);
     void deleteChildWidgets(QLayoutItem *item);
+	void filterAssets(int id);
 
 private:
 	int gridCounter;
@@ -42,6 +44,7 @@ private:
 signals:
 	void gridCount(int);
     void selectedTile(AssetGridItem*);
+	void contextSelected(AssetGridItem*);
 };
 
 #endif // ASSETVIEWGRID_HPP

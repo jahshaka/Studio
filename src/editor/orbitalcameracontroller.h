@@ -34,6 +34,8 @@ public:
     float yaw;
     float pitch;
 
+	bool previewMode;
+
     float rotationSpeed;
 
     QVector3D pivot;

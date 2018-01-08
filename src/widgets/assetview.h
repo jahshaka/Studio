@@ -32,6 +32,18 @@ enum AssetSource
 	ONLINE
 };
 
+enum AssetMetaType
+{
+	Shader,
+	Material,
+	Texture,
+	Video,
+	Cubemap,
+	Object,
+	SoundEffect,
+	Music
+};
+
 class AssetViewGrid;
 class AssetGridItem;
 class AssetViewer;
@@ -44,6 +56,10 @@ class AssetView : public QWidget
 
 public slots:
 	void fetchMetadata(AssetGridItem*);
+
+	void addAssetToProject(AssetGridItem*);
+	void changeAssetCollection(AssetGridItem*);
+	void removeAssetFromProject(AssetGridItem*);
 
 public:
 	int gridCount;
@@ -59,6 +75,7 @@ public:
     void checkForEmptyState();
     void toggleFilterPane(bool);
     void closeViewer();
+	QString getAssetType(int);
 
 signals:
     void refreshCollections();

@@ -125,6 +125,21 @@ void AssetView::closeViewer()
     toggleFilterPane(fastGrid->containsTiles());
 }
 
+QString AssetView::getAssetType(int id)
+{
+	switch (id) {
+		case static_cast<int>(AssetMetaType::Shader):		return "Shader";		break;
+		case static_cast<int>(AssetMetaType::Material):		return "Material";		break;
+		case static_cast<int>(AssetMetaType::Texture):		return "Texture";		break;
+		case static_cast<int>(AssetMetaType::Video):		return "Video";			break;
+		case static_cast<int>(AssetMetaType::Cubemap):		return "Cubemap";		break;
+		case static_cast<int>(AssetMetaType::Object):		return "Object";		break;
+		case static_cast<int>(AssetMetaType::SoundEffect):	return "SoundEffect";	break;
+		case static_cast<int>(AssetMetaType::Music):		return "Music";			break;
+		default: return "Undefined"; break;
+	}
+}
+
 AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(parent)
 {
 	_assetView = new QListWidget;
@@ -191,6 +206,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	rootItem = new QTreeWidgetItem;
 	rootItem->setText(0, "My Collections");
 	rootItem->setText(1, QString());
+	rootItem->setData(0, Qt::UserRole, -1);
 
     // list collections
     for (auto coll : db->fetchCollections()) {
@@ -201,6 +217,10 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
         //treeItem->setIcon(1, QIcon(IrisUtils::getAbsoluteAssetPath("app/icons/world.svg")));
         rootItem->addChild(treeItem);
     }
+
+	connect(treeWidget, &QTreeWidget::itemClicked, [this](QTreeWidgetItem *item, int column) {
+		fastGrid->filterAssets(item->data(0, Qt::UserRole).toInt());
+	});
 
 	//QTreeWidgetItem *treeItem = new QTreeWidgetItem;
 	//treeItem->setText(0, "Node");
@@ -403,12 +423,27 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		object["name"] = record.name;
 		object["type"] = record.type;
 		object["full_filename"] = record.full_filename;
+		object["collection"] = record.collection;
         object["collection_name"] = record.collection_name;
 
 		QImage image;
 		image.loadFromData(record.thumbnail, "PNG");
 
-		fastGrid->addTo(object, image, i);
+		auto gridItem = new AssetGridItem(object, image);
+
+		connect(gridItem, &AssetGridItem::addAssetToProject, [this](AssetGridItem *item) {
+			addAssetToProject(item);
+		});
+
+		connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
+			changeAssetCollection(item);
+		});
+
+		connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
+			removeAssetFromProject(item);
+		});
+
+		fastGrid->addTo(gridItem, i);
 		i++;
 	}
 
@@ -478,7 +513,13 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 											 gridItem->metadata["guid"].toString());
 
 			viewer->setMaterial(materialObj.object());
-            viewer->loadModel(QDir(assetPath).filePath(gridItem->metadata["full_filename"].toString()), false);
+
+			if (viewer->cachedAssets.value(gridItem->metadata["guid"].toString())) {
+				viewer->addNodeToScene(viewer->cachedAssets.value(gridItem->metadata["guid"].toString()));
+			}
+			else {
+				viewer->loadModel(QDir(assetPath).filePath(gridItem->metadata["full_filename"].toString()), false, true);
+			}
            
             split->setHandleWidth(1);
             int size = this->height() / 3;
@@ -494,25 +535,6 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		}
 
 		fetchMetadata(gridItem);
-    });
-
-    connect(deleteFromLibrary, &QPushButton::pressed, [this]() {
-        auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
-
-        auto option = QMessageBox::question(this,
-            "Deleting Asset", "Are you sure you want to delete this asset?",
-            QMessageBox::Yes | QMessageBox::Cancel);
-
-        if (option == QMessageBox::Yes) {
-            if (IrisUtils::removeDir(QDir(assetPath).filePath(selectedGridItem->metadata["guid"].toString()))) {
-                fastGrid->deleteTile(selectedGridItem);
-                db->deleteAsset(selectedGridItem->metadata["guid"].toString());
-                closeViewer();
-            }
-            else {
-                QMessageBox::warning(this, "Delete Failed!", "Failed to remove asset, please try again!", QMessageBox::Ok);
-            }
-        }
     });
 
 	connect(addToLibrary, &QPushButton::pressed, [this]() {
@@ -561,54 +583,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	});
 
 	connect(addToProject, &QPushButton::pressed, [this]() {
-		//addToProject->setVisible(false);
-        // get the current project working directory
-        auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
-            Constants::PROJECT_FOLDER);
-        auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
-        auto pDir = IrisUtils::join(defaultProjectDirectory, Globals::project->getProjectName());
-
-        auto guid = selectedGridItem->metadata["guid"].toString();
-		int assetType = selectedGridItem->metadata["type"].toInt();
-		QFileInfo fInfo(selectedGridItem->metadata["name"].toString());
-		QString object = IrisUtils::buildFileName(guid, fInfo.suffix());
-        auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
-
-		QString assetFolder;
-
-		if (assetType == 5) {
-			assetFolder = "Models";
-		}
-		else {
-			assetFolder = QString();
-		}
-
-		// todo -- undo progress?
-		auto copyFolder = [](const QString &src, const QString &dest) {
-			if (!QDir(dest).exists()) {
-				if (!QDir().mkdir(dest)) return false;
-
-				for (auto file : QDir(src).entryInfoList(QStringList(), QDir::Files)) {
-					if (!QFile::copy(file.absoluteFilePath(), QDir(dest).filePath(file.fileName()))) return false;
-				}
-
-				return true;
-			}
-		};
-
-		// copy to correct folder TODO
-		if (!copyFolder(QDir(assetPath).filePath(guid), QDir(QDir(pDir).filePath(assetFolder)).filePath(guid))) {
-			QString warningText = QString("Failed to import asset %1. Possible reasons are:\n"
-				"1. It doesn't exist\n"
-				"2. The asset isn't valid")
-				.arg(selectedGridItem->metadata["name"].toString());
-			QMessageBox::warning(this, "Asset Import Failed", warningText, QMessageBox::Ok);
-		}
-		else {
-			QString warningText = QString("Added asset %1 to your project!")
-				.arg(selectedGridItem->metadata["name"].toString());
-			QMessageBox::information(this, "Asset Import Successful", warningText, QMessageBox::Ok);
-		}
+		
 	});
 
 	connect(browseButton, &QPushButton::pressed, [=]() {
@@ -715,47 +690,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
     _splitter->setStretchFactor(1, 3);
     _splitter->setStretchFactor(2, 1);
 
-    connect(changeMetaCollection, &QPushButton::pressed, [this]() {
-        QDialog d;
-        d.setStyleSheet("QLineEdit { font-size: 14px; background: #2f2f2f; padding: 6px; border: 0; }"
-            "QComboBox { background: #4D4D4D; color: #BBB; padding: 6px; border: 0; }"
-            "QComboBox::drop-down { border : 0; }"
-            "QComboBox::down-arrow { image: url(:/icons/down_arrow_check.png); width: 18px; height: 14px; }"
-            "QComboBox::down-arrow:!enabled { image: url(:/icons/down_arrow_check_disabled.png); width: 18px; height: 14px; }"
-            "QPushButton { background: #4898ff; color: white; border: 0; padding: 8px 12px; border-radius: 1px; }"
-            "QPushButton:hover { background: #51a1d6; }"
-            "QDialog { background: #1a1a1a; }");
-
-        QHBoxLayout *l = new QHBoxLayout;
-        d.setFixedWidth(350);
-        d.setLayout(l);
-        QComboBox *input = new QComboBox;
-        QPushButton *accept = new QPushButton(tr("Change Collection"));
-
-        for (auto item : db->fetchCollections()) {
-            input->addItem(item.name, QVariant(item.id));
-        }
-        
-        auto guid = selectedGridItem->metadata["guid"].toString();
-
-        connect(accept, &QPushButton::pressed, [&]() {
-            if (db->switchAssetCollection(input->currentData().toInt(), guid)) {
-                db->insertCollectionGlobal(collectionName);
-                QString infoText = QString("Collection Changed.");
-                QMessageBox::information(this, "Collection Change Successful", infoText, QMessageBox::Ok);
-                d.close();
-            }
-            else {
-                QString warningText = QString("Failed to change collection. Try again.");
-                QMessageBox::warning(this, "Collection Change Failed", warningText, QMessageBox::Ok);
-            }
-        });
-
-        l->addWidget(input);
-        l->addWidget(accept);
-        d.exec();
-    });
-
+    
     QGridLayout *layout = new QGridLayout;
 	layout->setMargin(0);
     layout->addWidget(_splitter);
@@ -790,7 +725,7 @@ void AssetView::fetchMetadata(AssetGridItem *widget)
         metadataWidget->setVisible(true);
 
 		metadataName->setText("Name: " + widget->metadata["name"].toString());
-		metadataType->setText("Type: " + QString::number(widget->metadata["type"].toInt()));
+		metadataType->setText("Type: " + getAssetType(widget->metadata["type"].toInt()));
 		QString pub = widget->metadata["is_public"].toBool() ? "true" : "false";
 		metadataVisibility->setText("Public: " + pub);
 		metadataCollection->setText("Collection: " + widget->metadata["collection_name"].toString());
@@ -805,6 +740,129 @@ void AssetView::fetchMetadata(AssetGridItem *widget)
 		metadataType->setVisible(false);
 		metadataVisibility->setVisible(false);
         metadataWidget->setVisible(false);
+	}
+}
+
+void AssetView::addAssetToProject(AssetGridItem *item)
+{
+	//addToProject->setVisible(false);
+	// get the current project working directory
+	auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
+		Constants::PROJECT_FOLDER);
+	auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
+	auto pDir = IrisUtils::join(defaultProjectDirectory, Globals::project->getProjectName());
+
+	auto guid = item->metadata["guid"].toString();
+	int assetType = item->metadata["type"].toInt();
+	QFileInfo fInfo(item->metadata["name"].toString());
+	QString object = IrisUtils::buildFileName(guid, fInfo.suffix());
+	auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
+
+	QString assetFolder;
+
+	if (assetType == (int) AssetMetaType::Object) {
+		assetFolder = "Models";
+	}
+	else {
+		assetFolder = QString();
+	}
+
+	// todo -- undo progress?
+	auto copyFolder = [](const QString &src, const QString &dest) {
+		if (!QDir(dest).exists()) {
+			if (!QDir().mkdir(dest)) return false;
+
+			for (auto file : QDir(src).entryInfoList(QStringList(), QDir::Files)) {
+				if (!QFile::copy(file.absoluteFilePath(), QDir(dest).filePath(file.fileName()))) return false;
+			}
+
+			return true;
+		}
+	};
+
+	// copy to correct folder TODO
+	if (!copyFolder(QDir(assetPath).filePath(guid), QDir(QDir(pDir).filePath(assetFolder)).filePath(guid))) {
+		QString warningText = QString("Failed to import asset %1. Possible reasons are:\n"
+			"1. It doesn't exist\n"
+			"2. The asset isn't valid")
+			.arg(item->metadata["name"].toString());
+		QMessageBox::warning(this, "Asset Import Failed", warningText, QMessageBox::Ok);
+	}
+	else {
+		QString warningText = QString("Added asset %1 to your project!")
+			.arg(item->metadata["name"].toString());
+		QMessageBox::information(this, "Asset Import Successful", warningText, QMessageBox::Ok);
+	}
+}
+
+void AssetView::changeAssetCollection(AssetGridItem *item)
+{
+	QDialog d;
+	d.setStyleSheet("QLineEdit { font-size: 14px; background: #2f2f2f; padding: 6px; border: 0; }"
+		"QComboBox { background: #4D4D4D; color: #BBB; padding: 6px; border: 0; }"
+		"QComboBox::drop-down { border : 0; }"
+		"QComboBox::down-arrow { image: url(:/icons/down_arrow_check.png); width: 18px; height: 14px; }"
+		"QComboBox::down-arrow:!enabled { image: url(:/icons/down_arrow_check_disabled.png); width: 18px; height: 14px; }"
+		"QPushButton { background: #4898ff; color: white; border: 0; padding: 8px 12px; border-radius: 1px; }"
+		"QPushButton:hover { background: #51a1d6; }"
+		"QDialog { background: #1a1a1a; }");
+
+	QHBoxLayout *l = new QHBoxLayout;
+	d.setFixedWidth(350);
+	d.setLayout(l);
+	QComboBox *input = new QComboBox;
+	QPushButton *accept = new QPushButton(tr("Change Collection"));
+	l->addWidget(input);
+	l->addWidget(accept);
+
+	for (auto item : db->fetchCollections()) {
+		input->addItem(item.name, QVariant(item.id));
+	}
+
+	auto guid = item->metadata["guid"].toString();
+
+	connect(accept, &QPushButton::pressed, [&]() {
+		if (db->switchAssetCollection(input->currentData().toInt(), guid)) {
+			QString infoText = QString("Collection Changed.");
+			QMessageBox::information(this, "Collection Change Successful", infoText, QMessageBox::Ok);
+			item->metadata["collection"] = input->currentData().toInt();
+			item->metadata["collection_name"] = input->currentText();
+
+			if (!treeWidget->selectedItems().isEmpty()) {
+				fastGrid->filterAssets(treeWidget->currentItem()->data(0, Qt::UserRole).toInt());
+			}
+			else {
+				fastGrid->filterAssets(-1);
+			}
+		}
+		else {
+			QString warningText = QString("Failed to change collection. Try again.");
+			QMessageBox::warning(this, "Collection Change Failed", warningText, QMessageBox::Ok);
+		}
+
+		d.close();
+	});
+
+	d.exec();
+}
+
+void AssetView::removeAssetFromProject(AssetGridItem *item)
+{
+	auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
+
+	auto option = QMessageBox::question(this,
+	    "Deleting Asset", "Are you sure you want to delete this asset?",
+	    QMessageBox::Yes | QMessageBox::Cancel);
+
+	if (option == QMessageBox::Yes) {
+	    if (IrisUtils::removeDir(QDir(assetPath).filePath(item->metadata["guid"].toString()))) {
+	        fastGrid->deleteTile(item);
+	        db->deleteAsset(item->metadata["guid"].toString());
+	        closeViewer();
+	    }
+	    else {
+	        QMessageBox::warning(this, "Delete Failed!", "Failed to remove asset, please try again!", QMessageBox::Ok);
+	    }
 	}
 }
 

@@ -122,6 +122,7 @@ void AssetViewer::initializeGL()
 
     defaultCam = new EditorCameraController();
     orbitalCam = new OrbitalCameraController();
+	orbitalCam->previewMode = true;
 
     camera = iris::CameraNode::create();
     camera->setLocalPos(QVector3D(1, 1, 3));
@@ -206,12 +207,12 @@ void AssetViewer::resetViewerCamera()
     camera->update(0);
 }
 
-void AssetViewer::loadModel(QString str, bool firstAdd) {
+void AssetViewer::loadModel(QString str, bool firstAdd, bool cache) {
     pdialog->setLabelText(tr("Importing model..."));
     pdialog->show();
     QApplication::processEvents();
 	makeCurrent();
-    addMesh(str, firstAdd);
+    addMesh(str, firstAdd, cache);
     resetViewerCamera();
 	renderObject();
 	doneCurrent();
@@ -231,7 +232,7 @@ void AssetViewer::resizeGL(int width, int height)
     viewport->height = height;
 }
 
-void AssetViewer::addMesh(const QString &path, bool firstAdd, QVector3D position)
+void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVector3D position)
 {
 	QString filename;
 	if (path.isEmpty()) {
@@ -335,7 +336,7 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, QVector3D position
 
 	node->setLocalPos(position);
 
-	addNodeToScene(node);
+	addNodeToScene(node, QFileInfo(filename).baseName(), true);
 }
 
 /**
@@ -343,7 +344,7 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, QVector3D position
 * applied default material to mesh if one isnt present
 * ignore set to false means we only add it visually, usually to discard it afterw
 */
-void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
+void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid, bool cache)
 {
 	if (!scene) {
 		// @TODO: set alert that a scene needs to be set before this can be done
@@ -372,6 +373,8 @@ void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode)
     }
 
     scene->rootNode->addChild(sceneNode);
+
+	if (cache) cachedAssets.insert(guid, sceneNode);
 
     // fit object in view
     QList<iris::BoundingSphere> spheres;

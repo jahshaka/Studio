@@ -44,7 +44,6 @@ public:
 
     iris::SceneSource *ssource;
 
-
     void update();
     void paintGL();
     void updateScene();
@@ -53,15 +52,15 @@ public:
 
     void renderObject();
     void resetViewerCamera();
-    void loadModel(QString str, bool firstAdd = true);
+    void loadModel(QString str, bool firstAdd = true, bool cache = false);
 
     void wheelEvent(QWheelEvent *event);
     void mousePressEvent(QMouseEvent *e);
     void mouseReleaseEvent(QMouseEvent *e);
     void mouseMoveEvent(QMouseEvent *e);
 
-	void addMesh(const QString &path = QString(), bool firstAdd = true, QVector3D position = QVector3D());
-	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode);
+	void addMesh(const QString &path = QString(), bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
+	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid = "", bool cache = false);
 	QImage takeScreenshot(int width, int height);
 
     float onProgress(float percentage) {
@@ -82,6 +81,8 @@ public:
         scene->cleanup();
         scene.clear();
     }
+
+	QMap<QString, iris::SceneNodePtr> cachedAssets;
 
 signals:
     void progressChanged(int);

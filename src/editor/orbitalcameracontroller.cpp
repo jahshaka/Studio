@@ -24,6 +24,8 @@ OrbitalCameraController::OrbitalCameraController()
 {
     distFromPivot = 15;
     rotationSpeed = 1.f / 10.f;
+
+	previewMode = false;
 }
 
 QSharedPointer<iris::CameraNode>  OrbitalCameraController::getCamera()
@@ -55,11 +57,14 @@ void OrbitalCameraController::setRotationSpeed(float rotationSpeed)
 
 void OrbitalCameraController::onMouseMove(int x,int y)
 {
-    if (rightMouseDown) {
-        //rotate camera
-        this->yaw += x * rotationSpeed;
-        this->pitch += y * rotationSpeed;
-    }
+	if (previewMode && leftMouseDown) {
+		this->yaw	+= x * rotationSpeed;
+		this->pitch += y * rotationSpeed;
+	}
+	else if (!previewMode && rightMouseDown) {
+		this->yaw	+= x * rotationSpeed;
+		this->pitch += y * rotationSpeed;
+	}
 
     if (middleMouseDown) {
         //translate camera
