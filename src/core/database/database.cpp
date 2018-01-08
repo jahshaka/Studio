@@ -141,6 +141,7 @@ void Database::createGlobalDbAssets() {
 		"    last_updated      DATETIME,"
 		"    hash              VARCHAR(16),"
 		"    version           REAL,"
+		"    properties        BLOB,"
 		"    guid              VARCHAR(32) PRIMARY KEY"
 		")";
 
@@ -243,13 +244,13 @@ bool Database::switchAssetCollection(const int id, const QString &guid)
     return executeAndCheckQuery(query, "switchAssetCollection");
 }
 
-QString Database::insertAssetGlobal(const QString &assetName, int type, const QByteArray &thumbnail)
+QString Database::insertAssetGlobal(const QString &assetName, int type, const QByteArray &thumbnail, const QByteArray &properties)
 {
 	QSqlQuery query;
 	auto guid = GUIDManager::generateGUID();
 	query.prepare("INSERT INTO " + Constants::DB_ASSETS_TABLE +
-		" (name, extension, thumbnail, type, collection, version, date_created, last_updated, guid)" +
-		" VALUES (:name, :extension, :thumbnail, :type, 0, :version, datetime(), datetime(), :guid)");
+		" (name, extension, thumbnail, type, collection, version, date_created, last_updated, guid, properties)" +
+		" VALUES (:name, :extension, :thumbnail, :type, 0, :version, datetime(), datetime(), :guid, :properties)");
 
 	QFileInfo assetInfo(assetName);
 
@@ -259,6 +260,7 @@ QString Database::insertAssetGlobal(const QString &assetName, int type, const QB
 	query.bindValue(":type", type);
 	query.bindValue(":version", Constants::CONTENT_VERSION);
 	query.bindValue(":guid", guid);
+	query.bindValue(":properties", properties);
 
 	executeAndCheckQuery(query, "insertSceneAsset");
 
@@ -403,7 +405,8 @@ QVector<AssetTileData> Database::fetchAssets()
 {
 	QSqlQuery query;
 	query.prepare("SELECT assets.name, (assets.guid || '.' || assets.extension) as full_filename,"
-				  " assets.thumbnail, assets.guid, collections.name as collection_name, assets.type, assets.collection"
+				  " assets.thumbnail, assets.guid, collections.name as collection_name,"
+				  " assets.type, assets.collection, assets.properties"
 				  " FROM assets"
                   " INNER JOIN " + Constants::DB_COLLECT_TABLE + " ON assets.collection = collections.collection_id ORDER BY assets.name DESC");
 	executeAndCheckQuery(query, "fetchAssets");
@@ -420,6 +423,7 @@ QVector<AssetTileData> Database::fetchAssets()
             data.collection_name = record.value(4).toString();
 			data.type = record.value(5).toInt();
 			data.collection = record.value(6).toInt();
+			data.properties = record.value(7).toByteArray();
 		}
 
 		Globals::assetNames.insert(data.guid, data.name);

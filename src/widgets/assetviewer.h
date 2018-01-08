@@ -52,7 +52,8 @@ public:
 
     void renderObject();
     void resetViewerCamera();
-    void loadModel(QString str, bool firstAdd = true, bool cache = false);
+	void resetViewerCameraAfter();
+    void loadModel(QString str, bool firstAdd = true, bool cache = false, bool firstLoad = true);
 
     void wheelEvent(QWheelEvent *event);
     void mousePressEvent(QMouseEvent *e);
@@ -60,7 +61,7 @@ public:
     void mouseMoveEvent(QMouseEvent *e);
 
 	void addMesh(const QString &path = QString(), bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
-	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid = "", bool cache = false);
+	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid = "", bool viewed = false, bool cache = false);
 	QImage takeScreenshot(int width, int height);
 
     float onProgress(float percentage) {
@@ -69,7 +70,7 @@ public:
     }
 
 	void createMaterial(QJsonObject &matObj, iris::CustomMaterialPtr mat);
-	void setMaterial(QJsonObject &matObj) {
+	void setMaterial(const QJsonObject &matObj) {
 		assetMaterial = matObj;
 	}
 
@@ -81,6 +82,18 @@ public:
         scene->cleanup();
         scene.clear();
     }
+
+	void orientCamera(QVector3D pos, QVector3D localRot, int distanceFromPivot) {
+		this->localPos = pos;
+		this->distanceFromPivot = distanceFromPivot;
+		this->localRot = localRot;
+
+		resetViewerCameraAfter();
+	}
+
+	void cacheCurrentModel(QString guid);
+
+	QJsonObject getSceneProperties();
 
 	QMap<QString, iris::SceneNodePtr> cachedAssets;
 
@@ -115,5 +128,6 @@ private:
     float getBoundingRadius(iris::SceneNodePtr node);
     void getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere>& spheres);
 
-    QVector3D localPos, lookAt;
+    QVector3D localPos, localRot, lookAt;
+	int distanceFromPivot;
 };

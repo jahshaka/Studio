@@ -25,8 +25,8 @@ public:
         if (_layout->count()) return true;
         return false;
     }
-	void addTo(AssetGridItem *widget, int count);
-	void addTo(QJsonObject details, QImage image, int count);
+	void addTo(AssetGridItem *widget, int count, bool select = false);
+	void addTo(QJsonObject details, QImage image, int count, QJsonObject properties, bool select = false);
 	void resizeEvent(QResizeEvent *event);
 	void mousePressEvent(QMouseEvent*);
 	void updateGridColumns(int width);

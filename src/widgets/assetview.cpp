@@ -359,8 +359,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 	filterPane = new QWidget;
 	auto filterLayout = new QHBoxLayout;
-	filterLayout->addWidget(new QLabel("Filter: "));
-	filterLayout->addWidget(filterGroup);
+	//filterLayout->addWidget(new QLabel("Filter: "));
+	//filterLayout->addWidget(filterGroup);
 	filterLayout->addStretch();
 	filterLayout->addWidget(new QLabel("Search: "));
 	le = new QLineEdit();
@@ -429,7 +429,9 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		QImage image;
 		image.loadFromData(record.thumbnail, "PNG");
 
-		auto gridItem = new AssetGridItem(object, image);
+		auto sceneProperties = QJsonDocument::fromBinaryData(record.properties);
+
+		auto gridItem = new AssetGridItem(object, image, sceneProperties.object());
 
 		connect(gridItem, &AssetGridItem::addAssetToProject, [this](AssetGridItem *item) {
 			addAssetToProject(item);
@@ -514,11 +516,36 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 			viewer->setMaterial(materialObj.object());
 
+			QVector3D pos;
+			QVector3D rot;
+			int distObj;
+
+			bool cached = false;
+
+			if (!gridItem->sceneProperties["camera"].toObject().isEmpty()) {
+				auto props = gridItem->sceneProperties["camera"].toObject();
+				auto posObj = props["pos"].toObject();
+				distObj = props["distFromPivot"].toDouble(5.0);
+				auto rotObj = props["rot"].toObject();
+
+				pos.setX(posObj["x"].toDouble(0));
+				pos.setY(posObj["y"].toDouble(0));
+				pos.setZ(posObj["z"].toDouble(0));
+
+				rot.setX(rotObj["x"].toDouble(0));
+				rot.setY(rotObj["y"].toDouble(0));
+				rot.setZ(rotObj["z"].toDouble(0));
+
+				cached = true;
+			}
+
 			if (viewer->cachedAssets.value(gridItem->metadata["guid"].toString())) {
-				viewer->addNodeToScene(viewer->cachedAssets.value(gridItem->metadata["guid"].toString()));
+				viewer->addNodeToScene(viewer->cachedAssets.value(gridItem->metadata["guid"].toString()), QString(), true, false);
+				viewer->orientCamera(pos, rot, distObj);
 			}
 			else {
-				viewer->loadModel(QDir(assetPath).filePath(gridItem->metadata["full_filename"].toString()), false, true);
+				viewer->loadModel(QDir(assetPath).filePath(gridItem->metadata["full_filename"].toString()), false, true, !cached);
+				viewer->orientCamera(pos, rot, distObj);
 			}
            
             split->setHandleWidth(1);
@@ -551,11 +578,15 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		buffer.open(QIODevice::WriteOnly);
 		thumbnail.save(&buffer, "PNG");
 
+		QJsonDocument doc(viewer->getSceneProperties());
+		QByteArray sceneProperties = doc.toJson();
+
 		// maybe actually check if Object?
-		QString guid = db->insertAssetGlobal(IrisUtils::buildFileName(renameModelField->text(), fInfo.suffix().toLower()),
-											 static_cast<int>(ModelTypes::Object), bytes);
+		QString guid = db->insertAssetGlobal(IrisUtils::buildFileName(renameModelField->text(),
+											 fInfo.suffix().toLower()),
+											 static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData());
 		object["guid"] = guid;
-		object["type"] = 5; // model?
+		object["type"] = (int) AssetMetaType::Object; // model?
 		object["full_filename"] = IrisUtils::buildFileName(guid, fInfo.suffix());
 
         Globals::assetNames.insert(guid, object["name"].toString());
@@ -574,12 +605,29 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 		db->insertMaterialGlobal(QString(), guid, QJsonDocument(viewer->getMaterial()).toBinaryData());
 
-		fastGrid->addTo(object, thumbnail, 0);
+		auto gridItem = new AssetGridItem(object, thumbnail, viewer->getSceneProperties());
+
+		connect(gridItem, &AssetGridItem::addAssetToProject, [this](AssetGridItem *item) {
+			addAssetToProject(item);
+		});
+
+		connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
+			changeAssetCollection(item);
+		});
+
+		connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
+			removeAssetFromProject(item);
+		});
+
+		viewer->cacheCurrentModel(guid);
+
+		fastGrid->addTo(gridItem, 0, true);
 		QApplication::processEvents();
 		fastGrid->updateGridColumns(fastGrid->lastWidth);
 
+
 		renameWidget->setVisible(false);
-		addToLibrary->setVisible(false);	
+		addToLibrary->setVisible(false);
 	});
 
 	connect(addToProject, &QPushButton::pressed, [this]() {
@@ -780,7 +828,6 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 		}
 	};
 
-	// copy to correct folder TODO
 	if (!copyFolder(QDir(assetPath).filePath(guid), QDir(QDir(pDir).filePath(assetFolder)).filePath(guid))) {
 		QString warningText = QString("Failed to import asset %1. Possible reasons are:\n"
 			"1. It doesn't exist\n"

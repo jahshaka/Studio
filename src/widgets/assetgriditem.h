@@ -27,9 +27,10 @@ public:
 	QLabel *textLabel;
 	bool selected;
 	QJsonObject metadata;
+	QJsonObject sceneProperties;
 
 	AssetGridItem() = default;
-	AssetGridItem(QJsonObject details, QImage image, QWidget *parent = Q_NULLPTR);
+	AssetGridItem(QJsonObject details, QImage image, QJsonObject properties, QWidget *parent = Q_NULLPTR);
 	void setTile(QPixmap pix);
 	void highlight(bool);
 	

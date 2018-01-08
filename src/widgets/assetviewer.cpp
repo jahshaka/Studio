@@ -198,22 +198,41 @@ void AssetViewer::mouseReleaseEvent(QMouseEvent *e)
 void AssetViewer::resetViewerCamera()
 {
     camera->setLocalPos(localPos);
+	camera->setLocalRot(QQuaternion::fromEulerAngles(localRot));
     camera->lookAt(lookAt);
+	camera->update(0);
+
     camController->setCamera(camera);
     orbitalCam->pivot = QVector3D(lookAt);
-    orbitalCam->distFromPivot = 5;
+    orbitalCam->distFromPivot = distanceFromPivot;
     orbitalCam->setRotationSpeed(.5f);
     orbitalCam->updateCameraRot();
     camera->update(0);
 }
 
-void AssetViewer::loadModel(QString str, bool firstAdd, bool cache) {
+void AssetViewer::resetViewerCameraAfter()
+{
+	camera->setLocalPos(localPos);
+	camera->setLocalRot(QQuaternion::fromEulerAngles(localRot));
+	camera->update(0);
+
+	orbitalCam->distFromPivot = distanceFromPivot;
+	orbitalCam->setCamera(camera);
+	orbitalCam->setRotationSpeed(.5f);
+}
+
+void AssetViewer::loadModel(QString str, bool firstAdd, bool cache, bool firstLoad) {
     pdialog->setLabelText(tr("Importing model..."));
     pdialog->show();
     QApplication::processEvents();
 	makeCurrent();
     addMesh(str, firstAdd, cache);
-    resetViewerCamera();
+	if (firstLoad) {
+		resetViewerCamera();
+	}
+	else {
+		resetViewerCameraAfter();
+	}
 	renderObject();
 	doneCurrent();
     pdialog->close();
@@ -336,7 +355,7 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 
 	node->setLocalPos(position);
 
-	addNodeToScene(node, QFileInfo(filename).baseName(), true);
+	addNodeToScene(node, QFileInfo(filename).baseName(), false, true);
 }
 
 /**
@@ -344,7 +363,7 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 * applied default material to mesh if one isnt present
 * ignore set to false means we only add it visually, usually to discard it afterw
 */
-void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid, bool cache)
+void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid, bool viewed, bool cache)
 {
 	if (!scene) {
 		// @TODO: set alert that a scene needs to be set before this can be done
@@ -399,8 +418,13 @@ void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QStr
     }
 
     float dist = (bound.radius * 1.2) / qTan(qDegreesToRadians(camera->angle / 2.f));
-    lookAt = bound.pos;
-    localPos = QVector3D(0, bound.pos.y(), dist);
+
+	if (!viewed) {
+		lookAt = bound.pos;
+		localPos = QVector3D(0, bound.pos.y(), dist);
+	}
+
+	this->distanceFromPivot = dist;
 }
 
 float AssetViewer::getBoundingRadius(iris::SceneNodePtr node)
@@ -467,4 +491,37 @@ void AssetViewer::createMaterial(QJsonObject &matObj, iris::CustomMaterialPtr ma
 			matObj[prop->name] = QFileInfo(prop->getValue().toString()).fileName();
 		}
 	}
+}
+
+void AssetViewer::cacheCurrentModel(QString guid)
+{
+	if (scene->rootNode->hasChildren()) {
+		for (auto child : scene->rootNode->children) {
+			// clear the scene of anything that is not a light for the next asset
+			if (child->sceneNodeType != iris::SceneNodeType::Light) {
+				cachedAssets.insert(guid, child);
+			}
+		}
+	}
+}
+
+QJsonObject AssetViewer::getSceneProperties()
+{
+	auto jsonToVec3 = [](const QVector3D &vec) {
+		QJsonObject obj;
+		obj["x"] = vec.x();
+		obj["y"] = vec.y();
+		obj["z"] = vec.z();
+		return obj;
+	};
+
+	QJsonObject properties;
+	QJsonObject cameraObj;
+	cameraObj["pos"] = jsonToVec3(camera->getLocalPos());
+	cameraObj["distFromPivot"] = orbitalCam->distFromPivot;
+	cameraObj["rot"] = jsonToVec3(camera->getLocalRot().toEulerAngles());
+
+	properties["camera"] = cameraObj;
+
+	return properties;
 }

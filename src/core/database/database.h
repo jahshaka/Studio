@@ -29,7 +29,7 @@ public:
     void deleteProject();
     bool deleteAsset(const QString &guid);
     void renameProject(const QString&);
-	QString insertAssetGlobal(const QString&, int type, const QByteArray &thumbnail);
+	QString insertAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties);
 	QString insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material);
     void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob);
     void insertCollectionGlobal(const QString &collectionName);

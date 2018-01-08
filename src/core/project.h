@@ -48,6 +48,7 @@ struct AssetTileData {
     QString     collection_name;
 	int			type;
 	int			collection;
+	QByteArray  properties;
 };
 
 struct AssetData {
