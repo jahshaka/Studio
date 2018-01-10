@@ -222,6 +222,7 @@ public slots:
 
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
 
+	void saveScene(const QString &filename, const QString &projectPath);
     void saveScene();
 
     void showPreferences();

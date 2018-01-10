@@ -644,19 +644,37 @@ void MainWindow::switchSpace(WindowSpaces space)
     }
 }
 
+void MainWindow::saveScene(const QString &filename, const QString &projectPath)
+{
+	SceneWriter writer;
+	auto sceneObject = writer.getSceneObject(projectPath,
+											 this->scene,
+											 sceneView->getRenderer()->getPostProcessManager(),
+											 sceneView->getEditorData());
+
+	auto img = sceneView->takeScreenshot(Constants::TILE_SIZE * 2);
+	QByteArray thumb;
+	QBuffer buffer(&thumb);
+	buffer.open(QIODevice::WriteOnly);
+	img.save(&buffer, "PNG");
+
+	db->insertSceneGlobal(filename, sceneObject, thumb);
+}
+
 void MainWindow::saveScene()
 {
-    auto writer = new SceneWriter();
-    auto blob = writer->getSceneObject(Globals::project->getProjectFolder(),
-                                       scene,
-                                       sceneView->getRenderer()->getPostProcessManager(),
-                                       sceneView->getEditorData());
+	SceneWriter writer;
+    auto blob = writer.getSceneObject(Globals::project->getProjectFolder(),
+                                      scene,
+                                      sceneView->getRenderer()->getPostProcessManager(),
+                                      sceneView->getEditorData());
 
-    auto img = sceneView->takeScreenshot(Constants::TILE_SIZE.width(), Constants::TILE_SIZE.height());
+    auto img = sceneView->takeScreenshot(Constants::TILE_SIZE * 2);
     QByteArray thumb;
     QBuffer buffer(&thumb);
     buffer.open(QIODevice::WriteOnly);
     img.save(&buffer, "PNG");
+
     db->updateSceneGlobal(blob, thumb);
 }
 
@@ -1766,15 +1784,6 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 {
     newScene();
 
-    auto pPath = QDir(projectPath).filePath(filename + Constants::PROJ_EXT);
-
-    auto writer = new SceneWriter();
-    auto sceneObject = writer->getSceneObject(pPath,
-                                              this->scene,
-                                              sceneView->getRenderer()->getPostProcessManager(),
-                                              sceneView->getEditorData());
-    db->insertSceneGlobal(filename, sceneObject);
-
     UiManager::updateWindowTitle();
 
     assetWidget->trigger();
@@ -1783,7 +1792,8 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
     ui->actionClose->setDisabled(false);
     switchSpace(WindowSpaces::EDITOR);
 
-    delete writer;
+	// todo - do this once instead of having two writers as above
+	saveScene(filename, projectPath);
 }
 
 void MainWindow::showAboutDialog()

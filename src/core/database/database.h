@@ -31,7 +31,7 @@ public:
     void renameProject(const QString&);
 	QString insertAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties);
 	QString insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material);
-    void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob);
+    void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob, const QByteArray &thumb);
     void insertCollectionGlobal(const QString &collectionName);
     bool switchAssetCollection(const int, const QString&);
     void insertThumbnailGlobal(const QString &world_guid,

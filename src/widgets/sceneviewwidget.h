@@ -167,6 +167,7 @@ public:
     bool doActiveObjectPicking(const QPointF& point);
     void doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject = true, bool skipLights = false, bool skipViewers = false);
 
+	QImage takeScreenshot(QSize dimension);
     QImage takeScreenshot(int width=1920, int height=1080);
     bool getShowLightWires() const;
     void setShowLightWires(bool value);

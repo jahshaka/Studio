@@ -267,15 +267,16 @@ QString Database::insertAssetGlobal(const QString &assetName, int type, const QB
     return guid;
 }
 
-void Database::insertSceneGlobal(const QString &projectName, const QByteArray &sceneBlob)
+void Database::insertSceneGlobal(const QString &projectName, const QByteArray &sceneBlob, const QByteArray &thumb)
 {
     QSqlQuery query;
     auto guid = GUIDManager::generateGUID();
     query.prepare("INSERT INTO " + Constants::DB_PROJECTS_TABLE                 +
-                  " (name, scene, version, last_accessed, last_written, guid)"   +
-                  " VALUES (:name, :scene, :version, datetime(), datetime(), :guid)");
+                  " (name, scene, thumbnail, version, last_accessed, last_written, guid)"   +
+                  " VALUES (:name, :scene, :thumb, :version, datetime(), datetime(), :guid)");
     query.bindValue(":name",    projectName);
     query.bindValue(":scene",   sceneBlob);
+	query.bindValue(":thumb",	thumb);
     query.bindValue(":version", Constants::CONTENT_VERSION);
     query.bindValue(":guid",    guid);
 
