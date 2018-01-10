@@ -619,6 +619,9 @@ QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
        </item>
        <item>
         <widget class="QPushButton" name="assets_menu">
+         <property name="cursor">
+          <cursorShape>PointingHandCursor</cursorShape>
+         </property>
          <property name="text">
           <string>Assets</string>
          </property>

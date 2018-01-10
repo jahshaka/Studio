@@ -24,11 +24,15 @@
 #include <QTreeWidget>
 #include <QHeaderView>
 #include <QTreeWidgetItem>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
 
 #include "../globals.h"
 #include "../constants.h"
 #include "../core/settingsmanager.h"
 #include "../core/database/database.h"
+#include "../uimanager.h"
 #include "assetviewgrid.h"
 #include "assetgriditem.h"
 #include "assetviewer.h"
@@ -39,12 +43,35 @@ void AssetView::focusInEvent(QFocusEvent *event)
 	//emit fetch();
 }
 
-bool AssetView::eventFilter(QObject * watched, QEvent * event)
+bool AssetView::eventFilter(QObject *watched, QEvent *event)
 {
-	if (watched == fastGrid) {
-		/*switch (event->type()) {
-		
-		}*/
+	if (watched == assetDropPad) {
+		switch (event->type()) {
+			case QEvent::Drop: {
+				auto evt = static_cast<QDropEvent*>(event);
+				QList<QUrl> droppedUrls = evt->mimeData()->urls();
+				QStringList list;
+				for (auto url : droppedUrls) {
+					auto fileInfo = QFileInfo(url.toLocalFile());
+					list << fileInfo.absoluteFilePath();
+				}
+
+				importModel(list.front());
+
+				break;
+			}
+
+			case QEvent::DragEnter: {
+				auto evt = static_cast<QDragEnterEvent*>(event);
+				if (evt->mimeData()->hasUrls()) {
+					evt->acceptProposedAction();
+				}
+
+				break;
+			}
+
+			default: break;
+		}
 	}
 
 	return QObject::eventFilter(watched, event);
@@ -456,7 +483,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	_metadataPane->setObjectName(QStringLiteral("MetadataPane"));
     QVBoxLayout *metaLayout = new QVBoxLayout;
 	metaLayout->setMargin(0);
-	auto assetDropPad = new QWidget;
+	assetDropPad = new QWidget;
 	assetDropPad->setAcceptDrops(true);
 	assetDropPad->installEventFilter(this);
 	QSizePolicy policy;
@@ -464,7 +491,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	assetDropPad->setSizePolicy(policy);
 	assetDropPad->setObjectName(QStringLiteral("assetDropPad"));
 	auto assetDropPadLayout = new QVBoxLayout;
-	QLabel *assetDropPadLabel = new QLabel("Drop model to import...");
+	QLabel *assetDropPadLabel = new QLabel("Drop a model to import...");
 	assetDropPadLayout->setSpacing(4);
 	assetDropPadLabel->setObjectName(QStringLiteral("assetDropPadLabel"));
 	assetDropPadLabel->setAlignment(Qt::AlignHCenter);
@@ -556,8 +583,10 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
             split->setStretchFactor(1, 1);
 
 			selectedGridItem = gridItem;
-			addToProject->setVisible(true);
-            deleteFromLibrary->setVisible(true);
+			if (UiManager::isSceneOpen) {
+				addToProject->setVisible(true);
+				deleteFromLibrary->setVisible(true);
+			}
 			selectedGridItem->highlight(true);
 		}
 
@@ -631,7 +660,11 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	});
 
 	connect(addToProject, &QPushButton::pressed, [this]() {
-		
+		addAssetToProject(selectedGridItem);
+	});
+
+	connect(deleteFromLibrary, &QPushButton::pressed, [this]() {
+		removeAssetFromProject(selectedGridItem);
 	});
 
 	connect(browseButton, &QPushButton::pressed, [=]() {
@@ -641,19 +674,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 												"Mesh Files (*.obj *.fbx *.3ds *.dae *.c4d *.blend)");
 
 		// this should switch over to local from online
-		if (!filename.isEmpty()) {
-			renameModelField->setText(QFileInfo(filename).baseName());
-			renameWidget->setVisible(true);
-			addToLibrary->setVisible(true);
-			viewer->loadModel(filename);
-
-			split->setHandleWidth(1);
-			int size = this->height() / 3;
-			const QList<int> sizes = { size, size * 2 };
-			split->setSizes(sizes);
-			split->setStretchFactor(0, 1);
-			split->setStretchFactor(1, 1);
-		}
+		importModel(filename);
 	});
 
 	assetDropPadLayout->addWidget(renameWidget);
@@ -760,6 +781,24 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		"							  font-size: 12px; font-weight: bold; background: #3B3B3B; padding: 6px 4px; }"
 		"#assetDropPad QLabel		{ font-size: 12px; font-weight: bold; }"
 	);
+}
+
+void AssetView::importModel(const QString &filename)
+{
+	if (!filename.isEmpty()) {
+		renameModelField->setText(QFileInfo(filename).baseName());
+
+		renameWidget->setVisible(true);
+		addToLibrary->setVisible(true);
+		viewer->loadModel(filename);
+
+		split->setHandleWidth(1);
+		int size = this->height() / 3;
+		const QList<int> sizes = { size, size * 2 };
+		split->setSizes(sizes);
+		split->setStretchFactor(0, 1);
+		split->setStretchFactor(1, 1);
+	}
 }
 
 void AssetView::fetchMetadata(AssetGridItem *widget)

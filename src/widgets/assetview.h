@@ -77,6 +77,8 @@ public:
     void closeViewer();
 	QString getAssetType(int);
 
+	void importModel(const QString &filename);
+
 signals:
     void refreshCollections();
 
@@ -89,6 +91,8 @@ private:
 	QWidget *_previewPane;
 	QWidget *_viewPane;
 	QWidget *_metadataPane;
+
+	QWidget *assetDropPad;
 
     QSplitter *split;
 

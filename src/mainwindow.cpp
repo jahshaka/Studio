@@ -548,6 +548,8 @@ void MainWindow::switchSpace(WindowSpaces space)
    const QString selectedMenu   = "border-color: white";
    const QString unselectedMenu = "border-color: #111";
 
+	ui->assets_menu->setStyleSheet(unselectedMenu);
+
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
             if (UiManager::isSceneOpen) pmContainer->populateDesktop(true);
@@ -562,8 +564,8 @@ void MainWindow::switchSpace(WindowSpaces space)
                 ui->editor_menu->setDisabled(false);
                 ui->player_menu->setStyleSheet(unselectedMenu);
                 ui->player_menu->setDisabled(false);
-                ui->assets_menu->setStyleSheet(unselectedMenu);
-                ui->assets_menu->setDisabled(false);
+                //ui->assets_menu->setStyleSheet(unselectedMenu);
+                //ui->assets_menu->setDisabled(false);
             } else {
                 ui->editor_menu->setStyleSheet(disabledMenu);
                 ui->editor_menu->setDisabled(true);
@@ -571,9 +573,9 @@ void MainWindow::switchSpace(WindowSpaces space)
                 ui->player_menu->setStyleSheet(disabledMenu);
                 ui->player_menu->setDisabled(true);
                 ui->player_menu->setCursor(Qt::ArrowCursor);
-                ui->assets_menu->setStyleSheet(disabledMenu);
-                ui->assets_menu->setDisabled(true);
-                ui->assets_menu->setCursor(Qt::ArrowCursor);
+                //ui->assets_menu->setStyleSheet(disabledMenu);
+                //ui->assets_menu->setDisabled(true);
+                //ui->assets_menu->setCursor(Qt::ArrowCursor);
             }
             break;
         }
@@ -589,9 +591,9 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->player_menu->setStyleSheet(unselectedMenu);
             ui->player_menu->setDisabled(false);
             ui->player_menu->setCursor(Qt::PointingHandCursor);
-            ui->assets_menu->setStyleSheet(unselectedMenu);
-            ui->assets_menu->setDisabled(false);
-            ui->assets_menu->setCursor(Qt::PointingHandCursor);
+            //ui->assets_menu->setStyleSheet(unselectedMenu);
+            //ui->assets_menu->setDisabled(false);
+            //ui->assets_menu->setCursor(Qt::PointingHandCursor);
 
             playSceneBtn->show();
             this->enterEditMode();
@@ -613,9 +615,9 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->player_menu->setStyleSheet(selectedMenu);
             ui->player_menu->setDisabled(false);
             ui->player_menu->setCursor(Qt::PointingHandCursor);
-            ui->assets_menu->setStyleSheet(unselectedMenu);
-            ui->assets_menu->setDisabled(false);
-            ui->assets_menu->setCursor(Qt::PointingHandCursor);
+            //ui->assets_menu->setStyleSheet(unselectedMenu);
+            //ui->assets_menu->setDisabled(false);
+            //ui->assets_menu->setCursor(Qt::PointingHandCursor);
 
             UiManager::sceneMode = SceneMode::PlayMode;
             playSceneBtn->hide();
@@ -628,16 +630,19 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->stackedWidget->currentWidget()->setFocus();
     		toggleWidgets(false);
     		toolBar->setVisible(false);
-    		ui->worlds_menu->setStyleSheet(unselectedMenu);
-    		ui->editor_menu->setStyleSheet(unselectedMenu);
-    		ui->player_menu->setStyleSheet(unselectedMenu);
-    		ui->assets_menu->setStyleSheet(selectedMenu);
-    		ui->assets_menu->setDisabled(false);
-    		ui->assets_menu->setCursor(Qt::PointingHandCursor);
-    		//UiManager::sceneMode = SceneMode::PlayMode;
-    		playSceneBtn->hide();
-    		//this->enterEditMode();
-    		break;
+			if (UiManager::isSceneOpen) {
+				ui->worlds_menu->setStyleSheet(unselectedMenu);
+				ui->editor_menu->setStyleSheet(unselectedMenu);
+				ui->player_menu->setStyleSheet(unselectedMenu);
+				//ui->assets_menu->setDisabled(false);
+				//ui->assets_menu->setCursor(Qt::PointingHandCursor);
+				playSceneBtn->hide();
+			}
+
+			ui->worlds_menu->setStyleSheet(unselectedMenu);
+			ui->assets_menu->setStyleSheet(selectedMenu);
+    		
+			break;
     	}
 
         default: break;
