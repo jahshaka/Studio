@@ -22,7 +22,7 @@ For more information see the LICENSE file
 #include "globals.h"
 #include "constants.h"
 #ifdef USE_BREAKPAD
-#include "breakpad\breakpad.h"
+#include "breakpad/breakpad.h"
 #endif
 
 // Hints that a dedicated GPU should be used whenever possible

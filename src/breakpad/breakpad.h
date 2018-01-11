@@ -2,15 +2,20 @@
 #define BREAKPAD_H
 
 #ifdef USE_BREAKPAD
+
+#if defined(Q_OS_WIN32)
 #include "client\windows\handler\exception_handler.h"
-#include "client\windows\sender\crash_report_sender.h"
+#elif defined(Q_OS_LINUX)
+#include "client/linux/handler/exception_handler.h"
+#endif
+
 #include "../constants.h"
 #include <string>
-#include <qdebug>
+#include <QDebug>
 #include <QProcess>
 #include <QStringList>
 
-
+#if defined(Q_OS_WIN32)
 bool JahshakaBreakpadCallback(const wchar_t* dump_dir,
 	const wchar_t* minidump_id,
 	void* context,
@@ -18,7 +23,6 @@ bool JahshakaBreakpadCallback(const wchar_t* dump_dir,
 	MDRawAssertionInfo* assertion,
 	bool succeeded)
 {
-	qDebug() << "crash captured";
 	std::wstring filename = dump_dir;
 	filename += L"\\";
 	filename += minidump_id;
@@ -29,16 +33,41 @@ bool JahshakaBreakpadCallback(const wchar_t* dump_dir,
 	args << QString::fromWCharArray(filename.c_str());
 	args << Constants::CONTENT_VERSION;
 	proc->start("crash_handler.exe", args);
+    delete proc;
 
 	return true;
 }
+#elif defined(Q_OS_LINUX)
+bool DumpCallback(const google_breakpad::MinidumpDescriptor& descriptor,
+                                    void* context,
+                                    bool succeeded)
+{
+    auto proc = new QProcess();
+    QStringList args;
+    args << QString(descriptor.path());
+    args << Constants::CONTENT_VERSION;
+    QString exePath = QDir::currentPath() + "/crash_handler";
+    proc->startDetached(exePath, args);
+    delete proc;
+}
+#endif
 
 void initializeBreakpad()
 {
 	std::wstring path = qApp->applicationDirPath().toStdWString();
+
+#if defined(Q_OS_WIN32)
 	auto handler = new google_breakpad::ExceptionHandler(path, 0,
 		JahshakaBreakpadCallback, 0,
 		google_breakpad::ExceptionHandler::HANDLER_ALL);
+#elif defined(Q_OS_LINUX)
+    auto handler = new google_breakpad::ExceptionHandler(google_breakpad::MinidumpDescriptor(qApp->applicationDirPath().toStdString()),
+        0,
+        DumpCallback,
+        0,
+        true,
+        -1);
+#endif
 }
 #endif
 

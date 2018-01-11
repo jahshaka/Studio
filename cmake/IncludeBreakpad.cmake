@@ -1,7 +1,7 @@
 set(USE_BREAKPAD FALSE)
 
 # only enable breakpad on windows platforms using msvc for now
-if(WIN32 OR LINUX)
+if(WIN32 OR UNIX)
 	set(USE_BREAKPAD TRUE)
 endif()
 

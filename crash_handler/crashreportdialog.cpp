@@ -1,7 +1,10 @@
 #include "crashreportdialog.h"
 #include "ui_crashreportdialog.h"
+#if defined(Q_OS_WIN32)
 #include "client\windows\handler\exception_handler.h"
-#include "client\windows\sender\crash_report_sender.h"
+#elif defined(Q_OS_LINUX)
+#include "common/linux/google_crashdump_uploader.h"
+#endif
 
 #include <QProgressDialog>
 #include <QTextEdit>
@@ -11,6 +14,14 @@
 
 #include <map>
 #include <string>
+
+#include <QtNetwork/QNetworkAccessManager>
+#include <QtNetwork/QNetworkRequest>
+#include <QtNetwork/QNetworkReply>
+#include <QFile>
+#include <QHttpMultiPart>
+#include <QHttpPart>
+#include <QUrlQuery>
 
 CrashReportDialog::CrashReportDialog(QWidget* parent):
 	QDialog(parent),
@@ -46,8 +57,10 @@ void CrashReportDialog::onCancel()
 
 void CrashReportDialog::onSend()
 {
+#if defined(Q_OS_WIN32)
+
 	//qDebug() << "sending report";
-	google_breakpad::CrashReportSender sender(L"crash.checkpoint");
+    google_breakpad::CrashReportSender sender(L"crash.checkpoint");
 
 	std::map<std::wstring, std::wstring> params;
 	params[L"text"] = ui->textEdit->toPlainText().toStdWString();
@@ -72,6 +85,45 @@ void CrashReportDialog::onSend()
 	else
 		msg.setText("Failed to send report!");
 	msg.exec();
+    this->close();
+#elif defined(Q_OS_LINUX)
 
-	this->close();
+    QNetworkAccessManager* manager = new QNetworkAccessManager();
+    QUrl url("http://breakpad.jahshaka.com/crashreports");
+    QUrlQuery query;
+
+    query.addQueryItem("text", ui->textEdit->toPlainText());
+    query.addQueryItem("prod", "Jahshaka");
+    query.addQueryItem("ver", version);
+
+    url.setQuery(query.query());
+    QNetworkRequest request(url);
+
+    QHttpPart fileDataPart;
+    fileDataPart.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant("form-data; name=\"upload_file_minidump\"; filename=\"data.dump\""));
+    fileDataPart.setHeader(QNetworkRequest::ContentTypeHeader, QVariant("application/octet-stream"));
+
+    QHttpMultiPart *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+
+    QFile *file = new QFile(logPath);
+    if (file->exists()) {
+        file->open(QIODevice::ReadOnly);
+        qDebug() << "test file size:" << file->size();
+        fileDataPart.setBodyDevice(file);
+        multiPart->append(fileDataPart);
+    }
+
+    connect(manager, &QNetworkAccessManager::finished, this, [this](QNetworkReply* reply) {
+        if (reply->error()) {
+            qDebug()<<"error";
+        } else {
+            qDebug()<<"success";
+        }
+
+        this->close();
+    } );
+
+    manager->post(request,multiPart);
+#endif
+
 }
