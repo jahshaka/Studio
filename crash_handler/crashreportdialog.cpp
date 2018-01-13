@@ -119,7 +119,10 @@ void CrashReportDialog::onSend()
         } else {
             qDebug()<<"success";
         }
+        if(file->exists() && file->isOpen())
+            file->close();
 
+        file->deleteLater();
         this->close();
     } );
 

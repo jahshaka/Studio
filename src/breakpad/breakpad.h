@@ -54,14 +54,14 @@ bool DumpCallback(const google_breakpad::MinidumpDescriptor& descriptor,
 
 void initializeBreakpad()
 {
-	std::wstring path = qApp->applicationDirPath().toStdWString();
+    QString path = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
 
 #if defined(Q_OS_WIN32)
-	auto handler = new google_breakpad::ExceptionHandler(path, 0,
+    auto handler = new google_breakpad::ExceptionHandler(path.toStdWString(), 0,
 		JahshakaBreakpadCallback, 0,
 		google_breakpad::ExceptionHandler::HANDLER_ALL);
 #elif defined(Q_OS_LINUX)
-    auto handler = new google_breakpad::ExceptionHandler(google_breakpad::MinidumpDescriptor(qApp->applicationDirPath().toStdString()),
+    auto handler = new google_breakpad::ExceptionHandler(google_breakpad::MinidumpDescriptor(path.toStdString()),
         0,
         DumpCallback,
         0,
