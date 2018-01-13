@@ -22,6 +22,7 @@
 #include <QHttpMultiPart>
 #include <QHttpPart>
 #include <QUrlQuery>
+#include <QFile>
 
 CrashReportDialog::CrashReportDialog(QWidget* parent):
 	QDialog(parent),
@@ -92,6 +93,7 @@ void CrashReportDialog::onSend()
     QUrl url("http://breakpad.jahshaka.com/crashreports");
     QUrlQuery query;
 
+
     query.addQueryItem("text", ui->textEdit->toPlainText());
     query.addQueryItem("prod", "Jahshaka");
     query.addQueryItem("ver", version);
@@ -108,21 +110,42 @@ void CrashReportDialog::onSend()
     QFile *file = new QFile(logPath);
     if (file->exists()) {
         file->open(QIODevice::ReadOnly);
-        qDebug() << "test file size:" << file->size();
         fileDataPart.setBodyDevice(file);
         multiPart->append(fileDataPart);
     }
 
-    connect(manager, &QNetworkAccessManager::finished, this, [this](QNetworkReply* reply) {
-        if (reply->error()) {
-            qDebug()<<"error";
-        } else {
-            qDebug()<<"success";
-        }
-        if(file->exists() && file->isOpen())
-            file->close();
+    // params
+    QHttpPart textPart;
+    textPart.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant("form-data; name=\"text\""));
+    textPart.setBody(ui->textEdit->toPlainText().toUtf8());
+    multiPart->append(textPart);
 
-        file->deleteLater();
+    QHttpPart prodPart;
+    prodPart.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant("form-data; name=\"prod\""));
+    prodPart.setBody("Jahshaka");
+    multiPart->append(prodPart);
+
+    QHttpPart verPart;
+    verPart.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant("form-data; name=\"ver\""));
+    verPart.setBody(version.toUtf8());
+    multiPart->append(verPart);
+
+    connect(manager, &QNetworkAccessManager::finished, this, [this, file](QNetworkReply* reply) {
+        QMessageBox msg;
+        if (reply->error()) {
+            msg.setText("Failed to send report!");
+        } else {
+            msg.setText("Report sent successfully!");
+        }
+        if(file->exists()) {
+            if(file->isOpen())
+                file->close();
+            file->remove();
+        }
+
+        delete file;
+
+        msg.exec();
         this->close();
     } );
 

@@ -4,6 +4,8 @@
 int main(int argc, char** argv)
 {
 	QApplication app(argc, argv);
+    app.setApplicationDisplayName("Jahshaka Crash Handler");
+    app.setApplicationName("Jahshaka Crash Handler");
 
 	CrashReportDialog crashReporter(nullptr);
 
