@@ -1,7 +1,7 @@
 #include "crashreportdialog.h"
 #include "ui_crashreportdialog.h"
 #if defined(Q_OS_WIN32)
-#include "client\windows\handler\exception_handler.h"
+#include "client\windows\sender\crash_report_sender.h"
 #elif defined(Q_OS_LINUX)
 #include "common/linux/google_crashdump_uploader.h"
 #endif

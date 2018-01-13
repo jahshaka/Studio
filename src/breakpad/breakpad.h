@@ -32,7 +32,7 @@ bool JahshakaBreakpadCallback(const wchar_t* dump_dir,
 	QStringList args;
 	args << QString::fromWCharArray(filename.c_str());
 	args << Constants::CONTENT_VERSION;
-	proc->start("crash_handler.exe", args);
+	proc->startDetached("crash_handler.exe", args);
     delete proc;
 
 	return true;
