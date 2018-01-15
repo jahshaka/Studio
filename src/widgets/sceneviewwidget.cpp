@@ -202,8 +202,6 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     fontSize = 20;
     showFps = SettingsManager::getDefaultManager()->getValue("show_fps", false).toBool();
-    iris::SceneNodePtr node;
-    node->setLocalPos(QVector3D(0, 0, 0));
 }
 
 void SceneViewWidget::resetEditorCam()

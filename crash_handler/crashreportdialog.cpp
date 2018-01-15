@@ -23,6 +23,7 @@
 #include <QHttpPart>
 #include <QUrlQuery>
 #include <QFile>
+#include <QStandardPaths>
 
 CrashReportDialog::CrashReportDialog(QWidget* parent):
 	QDialog(parent),
@@ -59,9 +60,8 @@ void CrashReportDialog::onCancel()
 void CrashReportDialog::onSend()
 {
 #if defined(Q_OS_WIN32)
-
-	//qDebug() << "sending report";
-    google_breakpad::CrashReportSender sender(L"crash.checkpoint");
+	QString path = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QStringLiteral("crash.checkpoint");
+    google_breakpad::CrashReportSender sender(path.toStdWString());
 
 	std::map<std::wstring, std::wstring> params;
 	params[L"text"] = ui->textEdit->toPlainText().toStdWString();
