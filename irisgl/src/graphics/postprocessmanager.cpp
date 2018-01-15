@@ -68,6 +68,7 @@ void PostProcessManager::blit(iris::Texture2DPtr source, iris::Texture2DPtr dest
     renderTarget->bind();
 
     gl->glViewport(0, 0, dest->texture->width(), dest->texture->height());
+    gl->glClearColor(0, 0, 0, 0);
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if (!!source)

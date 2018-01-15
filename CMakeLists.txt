@@ -106,6 +106,11 @@ set(SRCS
     src/widgets/mainwindowviewport.cpp 
     src/editor/viewercontroller.cpp 
     src/dialogs/donatedialog.cpp
+    src/widgets/assetview.cpp
+    src/widgets/assetview.cpp
+    src/widgets/assetviewer.cpp
+    src/widgets/assetviewgrid.cpp
+    src/widgets/assetgriditem.cpp
 )
 
 set(HEADERS
@@ -215,6 +220,10 @@ set(HEADERS
     src/widgets/mainwindowviewport.h 
     src/editor/viewercontroller.h 
     src/dialogs/donatedialog.h
+    src/widgets/assetview.h
+    src/widgets/assetviewer.h
+    src/widgets/assetviewgrid.h
+    src/widgets/assetgriditem.h
 )
 
 # Todo - trim these down to nothing eventually

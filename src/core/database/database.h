@@ -7,7 +7,7 @@
 #include <QSqlQuery>
 #include <QCryptographicHash>
 
-#include "../../core/project.h"
+#include "../project.h"
 
 class Database
 {
@@ -15,20 +15,35 @@ public:
     Database();
     ~Database();
 
-    void executeAndCheckQuery(QSqlQuery&, const QString&);
+    bool executeAndCheckQuery(QSqlQuery&, const QString&);
     void initializeDatabase(QString name);
     void closeDb();
 
+    bool checkIfTableExists(const QString &tableName);
+
     void createGlobalDb();
     void createGlobalDbThumbs();
+    void createGlobalDbCollections();
+	void createGlobalDbAssets();
+	void createGlobalDbMaterials();
     void deleteProject();
+    bool deleteAsset(const QString &guid);
     void renameProject(const QString&);
-    void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob);
+	QString insertAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties);
+	QString insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material);
+    void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob, const QByteArray &thumb);
+    void insertCollectionGlobal(const QString &collectionName);
+    bool switchAssetCollection(const int, const QString&);
     void insertThumbnailGlobal(const QString &world_guid,
                                const QString &name,
                                const QByteArray &thumbnail);
+	QByteArray getMaterialGlobal(const QString &guid) const;
     bool hasCachedThumbnail(const QString& name);
+	QVector<AssetData> fetchThumbnails();
+    QVector<CollectionData> fetchCollections();
     QVector<ProjectTileData> fetchProjects();
+	QVector<AssetTileData> fetchAssets();
+	QVector<AssetTileData> fetchAssetsByCollection(int collection_id);
     QByteArray getSceneBlobGlobal() const;
     QByteArray fetchCachedThumbnail(const QString& name) const;
     void updateSceneGlobal(const QByteArray &sceneBlob, const QByteArray &thumbnail);

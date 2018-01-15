@@ -18,6 +18,7 @@ namespace Constants
     const QString SAMPLES_FOLDER    = "/scenes";
     const QString PROJECT_FOLDER    = "/JahProjects";
     const QString JAH_FOLDER        = "/Jahshaka";
+    const QString ASSET_FOLDER      = "/AssetStore";
     const QString JAH_DATABASE      = "JahLibrary.db";
     const QString DEF_EXPORT_FILE   = "export.zip";
     const QSize   TILE_SIZE         = QSize(460, 215);
@@ -27,7 +28,9 @@ namespace Constants
     const QString DB_ROOT_TABLE     = "JAH_PROJECT";
 
     const QString DB_PROJECTS_TABLE = "projects";
+    const QString DB_COLLECT_TABLE  = "collections";
     const QString DB_THUMBS_TABLE   = "thumbnails";
+	const QString DB_ASSETS_TABLE	= "assets";
 
     const QList<QString> IMAGE_EXTS = { "png", "PNG", "jpg" };
     const QList<QString> MODEL_EXTS = { "obj", "fbx", "dae", "blend"};

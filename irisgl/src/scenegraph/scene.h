@@ -54,6 +54,8 @@ public:
     QList<ParticleSystemNodePtr> particleSystems;
     QList<ViewerNodePtr> viewers;
 
+    QColor clearColor;
+    bool renderSky;
     MeshPtr skyMesh;
     Texture2DPtr skyTexture;
     QColor skyColor;

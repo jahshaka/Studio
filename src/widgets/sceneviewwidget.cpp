@@ -84,6 +84,71 @@ void SceneViewWidget::cleanup()
 	renderer->setSelectedSceneNode(iris::SceneNodePtr());
 }
 
+void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
+{
+    QByteArray encoded = event->mimeData()->data("application/x-qabstractitemmodeldatalist");
+    QDataStream stream(&encoded, QIODevice::ReadOnly);
+
+    QMap<int, QVariant> roleDataMap;
+    while (!stream.atEnd()) {
+        stream >> roleDataMap;
+    }
+
+    // backwards compat for now
+    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
+        // if we drag unto another object
+        if (doActiveObjectPicking(event->posF())) {
+            //activeSceneNode->pos = sceneView->hit;
+            dragScenePos = hit;
+            // if we drag on the "floor"
+        }
+        else if (updateRPI(editorCam->getLocalPos(), calculateMouseRay(event->posF())))
+        {
+            //activeSceneNode->pos = sceneView->Offset;
+            dragScenePos = Offset;
+            // otherwise just spawn a distance in front of the camera
+        }
+        else {
+            ////////////////////////////////////////
+            const float spawnDist = 10.0f;
+            auto offset = editorCam->getLocalRot().rotatedVector(QVector3D(0, -1.0f, -spawnDist));
+            offset += editorCam->getLocalPos();
+            //activeSceneNode->pos = offset;
+            dragScenePos = offset;
+        }
+    }
+
+    if (roleDataMap.value(0).toInt() != static_cast<int>(ModelTypes::Object)) {
+        doObjectPicking(event->posF(), iris::SceneNodePtr(), false, true);
+    }
+}
+
+void SceneViewWidget::dropEvent(QDropEvent *event)
+{
+    QByteArray encoded = event->mimeData()->data("application/x-qabstractitemmodeldatalist");
+    QDataStream stream(&encoded, QIODevice::ReadOnly);
+    QMap<int, QVariant> roleDataMap;
+    while (!stream.atEnd()) {
+        stream >> roleDataMap;
+    }
+
+    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object))
+    {
+        //auto ppos = activeSceneNode->pos;
+        auto ppos = dragScenePos;
+        //deleteNode();
+        emit addDroppedMesh(roleDataMap.value(3).toString(), true, ppos);
+        // addMesh(roleDataMap.value(3).toString(), true, ppos);
+    }
+}
+
+void SceneViewWidget::dragEnterEvent(QDragEnterEvent *event)
+{
+    hideGizmo();
+    if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist"))
+        event->acceptProposedAction();
+}
+
 SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 {
 	QSurfaceFormat format;
@@ -732,6 +797,22 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr l
     gizmo->setSelectedNode(pickedNode);
     emit sceneNodeSelected(pickedNode);
 }
+
+QImage SceneViewWidget::takeScreenshot(QSize dimension)
+{
+	this->makeCurrent();
+	screenshotRT->resize(dimension.width(), dimension.height(), true);
+	scene->update(0);
+	renderer->renderLightBillboards = false;
+	renderer->renderSceneToRenderTarget(screenshotRT, editorCam, false);
+	renderer->renderLightBillboards = true;
+
+	auto img = screenshotRT->toImage();
+	this->doneCurrent();
+
+	return img;
+}
+
 
 QImage SceneViewWidget::takeScreenshot(int width, int height)
 {

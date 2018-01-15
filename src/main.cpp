@@ -57,6 +57,10 @@ int main(int argc, char *argv[])
     QDir dataDir(dataPath);
     if (!dataDir.exists()) dataDir.mkpath(dataPath);
 
+    auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
+    QDir assetDir(assetPath);
+    if (!assetDir.exists()) assetDir.mkpath(assetPath);
+
 // use nicer font on platforms with poor defaults, Mac has really nice font rendering (iKlsR)
 #if defined(Q_OS_WIN) || defined(Q_OS_UNIX)
     int id = QFontDatabase::addApplicationFont(":/fonts/DroidSans.ttf");

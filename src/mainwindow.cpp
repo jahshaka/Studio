@@ -12,11 +12,10 @@ For more information see the LICENSE file
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
-#include <qwindow.h>
-#include <qsurface.h>
+#include <QWindow>
+#include <QSurface>
 #include <QScrollArea>
 
-//#include "irisgl/src/irisgl.h"
 #include "irisgl/src/scenegraph/meshnode.h"
 #include "irisgl/src/scenegraph/cameranode.h"
 #include "irisgl/src/scenegraph/scene.h"
@@ -28,7 +27,6 @@ For more information see the LICENSE file
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/materials/custommaterial.h"
 #include "irisgl/src/graphics/forwardrenderer.h"
-// #include "irisgl/src/graphics/mesh.h"
 #include "irisgl/src/graphics/shader.h"
 #include "irisgl/src/graphics/texture2d.h"
 #include "irisgl/src/graphics/viewport.h"
@@ -113,6 +111,8 @@ For more information see the LICENSE file
 #include "../src/widgets/materialsets.h"
 #include "../src/widgets/modelpresets.h"
 #include "../src/widgets/skypresets.h"
+
+#include "../src/widgets/assetview.h"
 
 #include "irisgl/src/zip/zip.h"
 
@@ -339,97 +339,6 @@ bool MainWindow::handleMouseWheel(QWheelEvent *event)
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
     switch (event->type()) {
-        case QEvent::DragMove: {
-            auto evt = static_cast<QDragMoveEvent*>(event);
-            if (obj == sceneContainer) {
-                auto info = QFileInfo(evt->mimeData()->text());
-
-                if (!!activeSceneNode) {
-                    sceneView->hideGizmo();
-
-                    if (Constants::MODEL_EXTS.contains(info.suffix())) {
-                        if (sceneView->doActiveObjectPicking(evt->posF())) {
-                            //activeSceneNode->pos = sceneView->hit;
-                            dragScenePos = sceneView->hit;
-                        } else if (sceneView->updateRPI(sceneView->editorCam->getLocalPos(),
-                                                        sceneView->calculateMouseRay(evt->posF())))
-                        {
-                            //activeSceneNode->pos = sceneView->Offset;
-                            dragScenePos = sceneView->Offset;
-                        } else {
-                            ////////////////////////////////////////
-                            const float spawnDist = 10.0f;
-                            auto offset = sceneView->editorCam->getLocalRot().rotatedVector(QVector3D(0, -1.0f, -spawnDist));
-                            offset += sceneView->editorCam->getLocalPos();
-                            //activeSceneNode->pos = offset;
-                            dragScenePos = offset;
-                        }
-                    }
-                }
-
-                if (!Constants::MODEL_EXTS.contains(info.suffix())) {
-                    sceneView->doObjectPicking(evt->posF(), iris::SceneNodePtr(), false, true);
-                }
-            }
-        }
-
-        case QEvent::DragEnter: {
-            auto evt = static_cast<QDragEnterEvent*>(event);
-
-            sceneView->hideGizmo();
-
-            if (obj == sceneContainer) {
-                if (evt->mimeData()->hasText()) {
-                    evt->acceptProposedAction();
-                } else {
-                    evt->ignore();
-                }
-
-                auto info = QFileInfo(evt->mimeData()->text());
-                if (Constants::MODEL_EXTS.contains(info.suffix())) {
-
-                    if (dragging) {
-                        // TODO swap this with the actual model later on
-                        addDragPlaceholder();
-                        dragging = !dragging;
-                    }
-                }
-            }
-
-            break;
-        }
-
-        case QEvent::Drop: {
-            if (obj == sceneContainer) {
-                auto evt = static_cast<QDropEvent*>(event);
-
-                auto info = QFileInfo(evt->mimeData()->text());
-                if (evt->mimeData()->hasText()) {
-                    evt->acceptProposedAction();
-                } else {
-                    evt->ignore();
-                }
-
-                if (Constants::MODEL_EXTS.contains(info.suffix())) {
-                    //auto ppos = activeSceneNode->pos;
-                    auto ppos = dragScenePos;
-                    //deleteNode();
-                    addMesh(evt->mimeData()->text(), true, ppos);
-                }
-
-                if (!!activeSceneNode && !Constants::MODEL_EXTS.contains(info.suffix())) {
-                    auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
-                    auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
-
-                    if (!mat->firstTextureSlot().isEmpty()) {
-                        mat->setValue(mat->firstTextureSlot(), evt->mimeData()->text());
-                    }
-                }
-            }
-
-            break;
-        }
-
         case QEvent::MouseButtonPress: {
             dragging = true;
 
@@ -596,7 +505,10 @@ void MainWindow::setupProjectDB()
     db = new Database();
     db->initializeDatabase(path);
     db->createGlobalDb();
+	db->createGlobalDbAssets();
+    db->createGlobalDbCollections();
     db->createGlobalDbThumbs();
+	db->createGlobalDbMaterials();
 }
 
 void MainWindow::setupUndoRedo()
@@ -636,6 +548,8 @@ void MainWindow::switchSpace(WindowSpaces space)
    const QString selectedMenu   = "border-color: white";
    const QString unselectedMenu = "border-color: #111";
 
+	ui->assets_menu->setStyleSheet(unselectedMenu);
+
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
             if (UiManager::isSceneOpen) pmContainer->populateDesktop(true);
@@ -650,6 +564,8 @@ void MainWindow::switchSpace(WindowSpaces space)
                 ui->editor_menu->setDisabled(false);
                 ui->player_menu->setStyleSheet(unselectedMenu);
                 ui->player_menu->setDisabled(false);
+                //ui->assets_menu->setStyleSheet(unselectedMenu);
+                //ui->assets_menu->setDisabled(false);
             } else {
                 ui->editor_menu->setStyleSheet(disabledMenu);
                 ui->editor_menu->setDisabled(true);
@@ -657,6 +573,9 @@ void MainWindow::switchSpace(WindowSpaces space)
                 ui->player_menu->setStyleSheet(disabledMenu);
                 ui->player_menu->setDisabled(true);
                 ui->player_menu->setCursor(Qt::ArrowCursor);
+                //ui->assets_menu->setStyleSheet(disabledMenu);
+                //ui->assets_menu->setDisabled(true);
+                //ui->assets_menu->setCursor(Qt::ArrowCursor);
             }
             break;
         }
@@ -672,10 +591,16 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->player_menu->setStyleSheet(unselectedMenu);
             ui->player_menu->setDisabled(false);
             ui->player_menu->setCursor(Qt::PointingHandCursor);
+            //ui->assets_menu->setStyleSheet(unselectedMenu);
+            //ui->assets_menu->setDisabled(false);
+            //ui->assets_menu->setCursor(Qt::PointingHandCursor);
 
             playSceneBtn->show();
             this->enterEditMode();
             UiManager::sceneMode = SceneMode::EditMode;
+
+            assetWidget->updateLabels();
+
             break;
         }
 
@@ -690,29 +615,71 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->player_menu->setStyleSheet(selectedMenu);
             ui->player_menu->setDisabled(false);
             ui->player_menu->setCursor(Qt::PointingHandCursor);
+            //ui->assets_menu->setStyleSheet(unselectedMenu);
+            //ui->assets_menu->setDisabled(false);
+            //ui->assets_menu->setCursor(Qt::PointingHandCursor);
 
             UiManager::sceneMode = SceneMode::PlayMode;
             playSceneBtn->hide();
             this->enterEditMode();
             break;
         }
+
+        case WindowSpaces::ASSETS: {
+            ui->stackedWidget->setCurrentIndex(2);
+            ui->stackedWidget->currentWidget()->setFocus();
+    		toggleWidgets(false);
+    		toolBar->setVisible(false);
+			if (UiManager::isSceneOpen) {
+				ui->worlds_menu->setStyleSheet(unselectedMenu);
+				ui->editor_menu->setStyleSheet(unselectedMenu);
+				ui->player_menu->setStyleSheet(unselectedMenu);
+				//ui->assets_menu->setDisabled(false);
+				//ui->assets_menu->setCursor(Qt::PointingHandCursor);
+				playSceneBtn->hide();
+			}
+
+			ui->worlds_menu->setStyleSheet(unselectedMenu);
+			ui->assets_menu->setStyleSheet(selectedMenu);
+    		
+			break;
+    	}
+
         default: break;
     }
 }
 
+void MainWindow::saveScene(const QString &filename, const QString &projectPath)
+{
+	SceneWriter writer;
+	auto sceneObject = writer.getSceneObject(projectPath,
+											 this->scene,
+											 sceneView->getRenderer()->getPostProcessManager(),
+											 sceneView->getEditorData());
+
+	auto img = sceneView->takeScreenshot(Constants::TILE_SIZE * 2);
+	QByteArray thumb;
+	QBuffer buffer(&thumb);
+	buffer.open(QIODevice::WriteOnly);
+	img.save(&buffer, "PNG");
+
+	db->insertSceneGlobal(filename, sceneObject, thumb);
+}
+
 void MainWindow::saveScene()
 {
-    auto writer = new SceneWriter();
-    auto blob = writer->getSceneObject(Globals::project->getProjectFolder(),
-                                       scene,
-                                       sceneView->getRenderer()->getPostProcessManager(),
-                                       sceneView->getEditorData());
+	SceneWriter writer;
+    auto blob = writer.getSceneObject(Globals::project->getProjectFolder(),
+                                      scene,
+                                      sceneView->getRenderer()->getPostProcessManager(),
+                                      sceneView->getEditorData());
 
-    auto img = sceneView->takeScreenshot(Constants::TILE_SIZE.width(), Constants::TILE_SIZE.height());
+    auto img = sceneView->takeScreenshot(Constants::TILE_SIZE * 2);
     QByteArray thumb;
     QBuffer buffer(&thumb);
     buffer.open(QIODevice::WriteOnly);
     img.save(&buffer, "PNG");
+
     db->updateSceneGlobal(blob, thumb);
 }
 
@@ -996,6 +963,8 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 
     if (filename.isEmpty()) return;
 
+    iris::SceneSource *ssource = new iris::SceneSource();
+
     this->sceneView->makeCurrent();
     auto node = iris::MeshNode::loadAsSceneFragment(filename, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
@@ -1023,7 +992,7 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
             mat->setValue("normalTexture", data.normalTexture);
 
         return mat;
-    });
+    }, ssource);
 
     // model file may be invalid so null gets returned
     if (!node) return;
@@ -1039,6 +1008,96 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 
     // todo: load material data
     addNodeToScene(node, ignore);
+}
+
+void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position)
+{
+	QString filename;
+	if (path.isEmpty()) {
+		filename = QFileDialog::getOpenFileName(this, "Load Mesh", "Mesh Files (*.obj *.fbx *.3ds *.dae *.c4d *.blend)");
+	}
+	else {
+		filename = path;
+	}
+
+	if (filename.isEmpty()) return;
+
+	iris::SceneSource *ssource = new iris::SceneSource();
+
+	auto material = db->getMaterialGlobal(QFileInfo(filename).baseName());
+	auto materialObj = QJsonDocument::fromBinaryData(material);
+
+	QJsonObject assetMaterial = materialObj.object();
+
+	this->sceneView->makeCurrent();
+	int iteration = 0;
+	auto node = iris::MeshNode::loadAsSceneFragment(filename, [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+	{
+		auto mat = iris::CustomMaterial::create();
+
+		if (mesh->hasSkeleton())
+			mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
+		else
+			mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+
+		iris::MeshMaterialData cdata;
+
+		auto matinfo = assetMaterial[QString::number(iteration)].toObject();
+
+		QColor col;
+		col.setNamedColor(matinfo["ambientColor"].toString());
+		cdata.ambientColor = col;
+		col.setNamedColor(matinfo["diffuseColor"].toString());
+		cdata.diffuseColor = col;
+		cdata.diffuseTexture = matinfo["diffuseTexture"].toString();
+		cdata.normalTexture = matinfo["normalTexture"].toString();
+		cdata.shininess = 1;
+		col.setNamedColor(matinfo["specularColor"].toString());
+		cdata.specularColor = col;
+		cdata.specularTexture = matinfo["specularTexture"].toString();
+
+		mat->setValue("diffuseColor", cdata.diffuseColor);
+		mat->setValue("specularColor", cdata.specularColor);
+		mat->setValue("ambientColor", cdata.ambientColor);
+		mat->setValue("emissionColor", cdata.emissionColor);
+
+		mat->setValue("shininess", cdata.shininess);
+
+		auto libraryTextureIsValid = [](const QString &path, const QString texturePath) {
+			return (
+				QFile(QDir(QFileInfo(path).absoluteDir()).filePath(texturePath)).exists() &&
+				QFileInfo(QDir(QFileInfo(path).absoluteDir()).filePath(texturePath)).isFile()
+			);
+		};
+
+		if (libraryTextureIsValid(filename, cdata.diffuseTexture))
+			mat->setValue("diffuseTexture", QDir(QFileInfo(filename).absoluteDir()).filePath(cdata.diffuseTexture));
+
+		if (libraryTextureIsValid(filename, cdata.specularTexture))
+			mat->setValue("specularTexture", QDir(QFileInfo(filename).absoluteDir()).filePath(cdata.specularTexture));
+
+		if (libraryTextureIsValid(filename, cdata.normalTexture))
+			mat->setValue("normalTexture", QDir(QFileInfo(filename).absoluteDir()).filePath(cdata.normalTexture));
+
+		iteration++;
+
+		return mat;
+	}, ssource);
+
+	// model file may be invalid so null gets returned
+	if (!node) return;
+
+	// rename animation sources to relative paths
+	auto relPath = QDir(Globals::project->folderPath).relativeFilePath(filename);
+	for (auto anim : node->getAnimations()) {
+		if (!!anim->skeletalAnimation)
+			anim->skeletalAnimation->source = relPath;
+	}
+
+	node->setLocalPos(position);
+
+	// todo: load material data
+	addNodeToScene(node, ignore);
 }
 
 void MainWindow::addDragPlaceholder()
@@ -1368,6 +1427,7 @@ void MainWindow::setupViewPort()
     connect(ui->worlds_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::DESKTOP); });
     connect(ui->player_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::PLAYER); });
     connect(ui->editor_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::EDITOR); });
+    connect(ui->assets_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::ASSETS); });
 
     sceneContainer = new QWidget;
     QSizePolicy sceneContainerPolicy;
@@ -1500,6 +1560,10 @@ void MainWindow::setupViewPort()
     layout->setMargin(0);
     sceneContainer->setLayout(layout);
 
+    connect(sceneView, &SceneViewWidget::addDroppedMesh, [this](QString path, bool v, QVector3D pos) {
+        addMaterialMesh(path, v, pos);
+    });
+
     connect(sceneView,  SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),
             this,       SLOT(initializeGraphics(SceneViewWidget*,   QOpenGLFunctions_3_2_Core*)));
 
@@ -1512,9 +1576,12 @@ void MainWindow::setupViewPort()
 void MainWindow::setupDesktop()
 {
     pmContainer = new ProjectManager(db, this);
+    _assetView = new AssetView(db, this);
+    _assetView->installEventFilter(this);
 
     ui->stackedWidget->addWidget(pmContainer);
     ui->stackedWidget->addWidget(viewPort);
+    ui->stackedWidget->addWidget(_assetView);
 
     connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));
     connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
@@ -1722,15 +1789,6 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 {
     newScene();
 
-    auto pPath = QDir(projectPath).filePath(filename + Constants::PROJ_EXT);
-
-    auto writer = new SceneWriter();
-    auto sceneObject = writer->getSceneObject(pPath,
-                                              this->scene,
-                                              sceneView->getRenderer()->getPostProcessManager(),
-                                              sceneView->getEditorData());
-    db->insertSceneGlobal(filename, sceneObject);
-
     UiManager::updateWindowTitle();
 
     assetWidget->trigger();
@@ -1739,7 +1797,8 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
     ui->actionClose->setDisabled(false);
     switchSpace(WindowSpaces::EDITOR);
 
-    delete writer;
+	// todo - do this once instead of having two writers as above
+	saveScene(filename, projectPath);
 }
 
 void MainWindow::showAboutDialog()

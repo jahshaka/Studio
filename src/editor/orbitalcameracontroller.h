@@ -34,6 +34,10 @@ public:
     float yaw;
     float pitch;
 
+	bool previewMode;
+
+    float rotationSpeed;
+
     QVector3D pivot;
     float distFromPivot;
 
@@ -42,6 +46,7 @@ public:
     OrbitalCameraController();
 
     QSharedPointer<iris::CameraNode>  getCamera();
+    void setRotationSpeed(float rotationSpeed);
     void setCamera(QSharedPointer<iris::CameraNode>  cam) override;
 
     void onMouseMove(int x,int y) override;

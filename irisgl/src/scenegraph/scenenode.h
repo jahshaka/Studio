@@ -93,22 +93,23 @@ public:
         return duplicable;
     }
 
-    QVector3D getLocalPos()
-    {
+    QVector3D getLocalPos() {
         return pos;
     }
 
-    QQuaternion getLocalRot()
-    {
+    QQuaternion getLocalRot() {
         return rot;
     }
 
-    QVector3D getLocalScale()
-    {
+    QVector3D getLocalScale() {
         return scale;
     }
 
 	void rotate(QQuaternion rot, bool global = false);
+    
+    bool hasChildren() {
+        return !children.empty();
+    }
 
     void setLocalPos(QVector3D pos);
     void setLocalRot(QQuaternion rot);

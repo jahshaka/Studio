@@ -195,20 +195,14 @@ QList<Property*> SceneNode::getProperties()
     prop->value = scale;
     props.append(prop);
 
-
     return props;
 }
 
 QVariant SceneNode::getPropertyValue(QString valueName)
 {
-    if(valueName == "position")
-        return pos;
-
-    if(valueName == "rotation")
-        return rot.toEulerAngles();
-
-    if(valueName == "scale")
-        return scale;
+    if (valueName == "position") return pos;
+    if (valueName == "rotation") return rot.toEulerAngles();
+    if (valueName == "scale")	 return scale;
 
     return QVariant();
 }
@@ -267,24 +261,19 @@ void SceneNode::removeFromParent()
 {
     auto self = sharedFromThis();
 
-    if(!parent.isNull())
-        this->parent->removeChild(self);
+    if (!parent.isNull()) this->parent->removeChild(self);
 }
 
 void SceneNode::removeChild(SceneNodePtr node)
 {
     children.removeOne(node);
-    node->parent = QSharedPointer<SceneNode>(nullptr);
-    //node->setScene(QSharedPointer<Scene>(nullptr));
-    //scene->removeNode(node);
+    node->parent = QSharedPointer<SceneNode>(Q_NULLPTR);
     node->removeFromScene();
 }
 
 bool SceneNode::isRootNode()
 {
-    if(this->scene->getRootNode().data()==this)
-        return true;
-
+    if (this->scene->getRootNode().data() == this) return true;
     return false;
 }
 

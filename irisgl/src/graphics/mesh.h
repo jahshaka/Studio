@@ -59,6 +59,8 @@ struct MeshMaterialData
     QString diffuseTexture;
     QString specularTexture;
     QString normalTexture;
+
+	QString nodeName;
 };
 
 class VertexArrayData

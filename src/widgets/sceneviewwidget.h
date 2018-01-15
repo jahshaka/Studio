@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include <QHash>
 
+#include "../core/project.h"
 #include "../irisgl/src/irisglfwd.h"
 #include "../irisgl/src/math/intersectionhelper.h"
 
@@ -107,6 +108,10 @@ public:
     ThumbnailGenerator* thumbGen;
 	QOpenGLDebugLogger* glDebugger;
 
+    void dragMoveEvent(QDragMoveEvent*);
+    void dropEvent(QDropEvent*);
+    void dragEnterEvent(QDragEnterEvent*);
+
     explicit SceneViewWidget(QWidget *parent = Q_NULLPTR);
 
     void setScene(iris::ScenePtr scene);
@@ -156,11 +161,13 @@ public:
     QVector3D finalHitPoint;
     QVector3D Offset;
     QVector3D hit;
+    QVector3D dragScenePos;
     iris::SceneNodePtr activeDragNode;
     bool updateRPI(QVector3D pos, QVector3D r);
     bool doActiveObjectPicking(const QPointF& point);
     void doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject = true, bool skipLights = false, bool skipViewers = false);
 
+	QImage takeScreenshot(QSize dimension);
     QImage takeScreenshot(int width=1920, int height=1080);
     bool getShowLightWires() const;
     void setShowLightWires(bool value);
@@ -252,6 +259,7 @@ private:
     void addLightShapesToScene();
 
 signals:
+    void addDroppedMesh(QString, bool, QVector3D);
     void initializeGraphics(SceneViewWidget* widget,
                             QOpenGLFunctions_3_2_Core* gl);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);

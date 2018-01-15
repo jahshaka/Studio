@@ -29,6 +29,7 @@ namespace Ui {
 }
 
 class SurfaceView;
+class AssetView;
 
 class QPushButton;
 class QStandardItem;
@@ -85,7 +86,8 @@ enum class SceneNodeType;
 enum WindowSpaces {
     DESKTOP,
     PLAYER,
-    EDITOR
+    EDITOR,
+    ASSETS
 };
 
 class Database;
@@ -198,6 +200,7 @@ public slots:
     void addEmpty();
     void addViewer();
     void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
+	void addMaterialMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
     void addDragPlaceholder();
 
     //context menu functions
@@ -219,6 +222,7 @@ public slots:
 
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
 
+	void saveScene(const QString &filename, const QString &projectPath);
     void saveScene();
 
     void showPreferences();
@@ -344,8 +348,10 @@ private:
     QPushButton *stopBtn;
 
     QToolBar *toolBar;
+    AssetView *_assetView;
 
     WindowSpaces currentSpace;
+
 };
 
 #endif // MAINWINDOW_H

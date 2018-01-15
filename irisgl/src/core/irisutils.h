@@ -15,6 +15,10 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QCoreApplication>
 
+#ifdef Q_OS_WIN32
+    #include <Windows.h>
+#endif
+
 class IrisUtils
 {
 public:
@@ -31,12 +35,21 @@ public:
         return path;
     }
 
+	static QString buildFileName(const QString &fileName, const QString &suffix) {
+		return fileName + "." + suffix;
+	}
+
     template<typename... Args>
     static QString join(Args const&... args) {
         QString result;
         int unpack[]{ 0, (result += [=](QString const& s) { return s + "/"; }(args), 0) ... };
         static_cast<void>(unpack);
-        return result;
+        return QDir::cleanPath(result);
+    }
+
+    static bool removeDir(const QString &path) {
+        QDir dirToRemove(path);
+        return dirToRemove.removeRecursively();
     }
 };
 

@@ -17,7 +17,11 @@ For more information see the LICENSE file
 #include "../scenegraph/scenenode.h"
 #include "../core/irisutils.h"
 #include "../graphics/texture2d.h"
+#include "../graphics/mesh.h"
 #include "../graphics/renderitem.h"
+
+#include "assimp/Importer.hpp"
+#include "assimp/ProgressHandler.hpp"
 
 class aiScene;
 
@@ -26,6 +30,41 @@ namespace iris
 
 class RenderItem;
 struct MeshMaterialData;
+
+class IModelReadProgress
+{
+public:
+    virtual float onProgress(float percentage) = 0;
+};
+
+class ModelProgressHandler : public Assimp::ProgressHandler
+{
+public:
+    IModelReadProgress *handler;
+    ModelProgressHandler() : ProgressHandler() {
+        handler = Q_NULLPTR;
+    }
+
+    void setHandler(IModelReadProgress* handler) {
+        this->handler = handler;
+    }
+
+    ~ModelProgressHandler() {
+
+    }
+
+    bool Update(float percentage) {
+        if (handler) handler->onProgress(percentage);
+        return 1;
+    }
+};
+
+class SceneSource
+{
+public:
+    SceneSource() = default;
+    Assimp::Importer importer;
+};
 
 class MeshNode : public SceneNode
 {
@@ -63,7 +102,12 @@ public:
      * @param path
      * @return
      */
-    static SceneNodePtr loadAsSceneFragment(QString path, std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc);
+    static SceneNodePtr loadAsSceneFragment(
+        QString path,
+        std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc,
+        SceneSource *scene_ = Q_NULLPTR,
+        IModelReadProgress* progressReader = Q_NULLPTR
+    );
 
     static SceneNodePtr loadAsAnimatedModel(QString path);
 
@@ -73,9 +117,6 @@ public:
     MeshPtr getMesh();
 
     void setMaterial(MaterialPtr material);
-    void setCustomMaterial(MaterialPtr material);
-
-    void setActiveMaterial(int type);
 
     MaterialPtr getMaterial() {
         return material;
@@ -95,8 +136,6 @@ public:
     virtual void submitRenderItems() override;
     float getMeshRadius();
     BoundingSphere getTransformedBoundingSphere();
-
-    //void updateAnimation(float time) override;
 
     FaceCullingMode getFaceCullingMode() const;
     void setFaceCullingMode(const FaceCullingMode &value);
