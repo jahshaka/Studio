@@ -23,12 +23,5 @@ set(SRCS
     breakpad/src/common/linux/safe_readlink.cc 
     breakpad/src/common/linux/linux_libc_support.cc
     breakpad/src/common/linux/elf_core_dump.cc
-    #breakpad/src/common/linux/elf_core_dump.cc
-
-	#crash sender
-        #breakpad/src/common/linux/google_crashdump_uploader.cc
 )
-
-set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS 1)
-
 

@@ -25,6 +25,8 @@
 #include <QFile>
 #include <QStandardPaths>
 
+#define SERVER_URL L"http://breakpad.jahshaka.com/crashreports"
+
 CrashReportDialog::CrashReportDialog(QWidget* parent):
 	QDialog(parent),
 	ui(new Ui::CrashReportDialog)
@@ -77,7 +79,7 @@ void CrashReportDialog::onSend()
 	progress.setWindowModality(Qt::WindowModal);
 	progress.setValue(2);
 
-	google_breakpad::ReportResult r = sender.SendCrashReport(L"http://breakpad.jahshaka.com/crashreports", params, files, 0);
+	google_breakpad::ReportResult r = sender.SendCrashReport(SERVER_URL, params, files, 0);
 
 	progress.setValue(3);
 	QMessageBox msg;
@@ -90,7 +92,7 @@ void CrashReportDialog::onSend()
 #elif defined(Q_OS_LINUX)
 
     QNetworkAccessManager* manager = new QNetworkAccessManager();
-    QUrl url("http://breakpad.jahshaka.com/crashreports");
+    QUrl url(SERVER_URL);
     QUrlQuery query;
 
 
