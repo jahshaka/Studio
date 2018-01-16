@@ -224,6 +224,7 @@ set(HEADERS
     src/widgets/assetviewer.h
     src/widgets/assetviewgrid.h
     src/widgets/assetgriditem.h
+	src/breakpad/breakpad.h
 )
 
 # Todo - trim these down to nothing eventually
@@ -271,6 +272,10 @@ set(FORMS
     src/dialogs/donate.ui
 )
 
+set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets IrisGL ${OPENGL_LIBRARIES})
+
+include(IncludeBreakpad)
+
 qt5_wrap_cpp(HEADERS_moc ${HEADERS})
 qt5_wrap_ui(UI_moc ${FORMS})
 
@@ -312,8 +317,14 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_executable(${CMAKE_PROJECT_NAME} src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS})
-target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC src irisgl/src irisgl/src/assimp/include/ irisgl/src/libovr/include/)
-target_link_libraries(${CMAKE_PROJECT_NAME} Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets IrisGL ${OPENGL_LIBRARIES})
+target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
+															src
+															irisgl/src
+															irisgl/src/assimp/include/
+                                                                                                                        irisgl/src/libovr/Include/
+															thirdparty/breakpad/breakpad/src)
+target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBS})
 
 include(CopyResources)
 include(CopyDependencies)
+

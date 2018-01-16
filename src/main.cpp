@@ -21,6 +21,9 @@ For more information see the LICENSE file
 #include "core/settingsmanager.h"
 #include "globals.h"
 #include "constants.h"
+#ifdef USE_BREAKPAD
+#include "breakpad/breakpad.h"
+#endif
 
 // Hints that a dedicated GPU should be used whenever possible
 // https://stackoverflow.com/a/39047129/991834
@@ -50,6 +53,11 @@ int main(int argc, char *argv[])
     QApplication::setAttribute(Qt::AA_UseDesktopOpenGL);
     QApplication::setDesktopSettingsAware(false);
     QApplication app(argc, argv);
+
+#ifdef USE_BREAKPAD
+	initializeBreakpad();
+#endif
+
     app.setWindowIcon(QIcon(":/images/logo.png"));
     app.setApplicationName("Jahshaka");
 
