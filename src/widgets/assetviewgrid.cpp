@@ -40,8 +40,8 @@ void AssetViewGrid::addTo(AssetGridItem *item, int count, bool select)
 	emit gridCount(_layout->count());
 }
 
-void AssetViewGrid::addTo(QJsonObject details, QImage image, int count, QJsonObject properties, bool select) {
-	auto sampleWidget = new AssetGridItem(details, image, properties);
+void AssetViewGrid::addTo(QJsonObject details, QImage image, int count, QJsonObject properties, QJsonObject tags, bool select) {
+	auto sampleWidget = new AssetGridItem(details, image, properties, tags);
 
 	int columnCount = viewport()->width() / (180 + 10);
 	if (columnCount == 0) columnCount = 1;
@@ -77,11 +77,11 @@ void AssetViewGrid::resizeEvent(QResizeEvent *event)
 void AssetViewGrid::mousePressEvent(QMouseEvent *event)
 {
 	if (event->button() == Qt::LeftButton) {
-		emit selectedTile(new AssetGridItem(QJsonObject(), QImage(), QJsonObject()));
+		emit selectedTile(new AssetGridItem(QJsonObject(), QImage(), QJsonObject(), QJsonObject()));
 	}
 
 	if (event->button() == Qt::RightButton) {
-		emit contextSelected(new AssetGridItem(QJsonObject(), QImage(), QJsonObject()));
+		emit contextSelected(new AssetGridItem(QJsonObject(), QImage(), QJsonObject(), QJsonObject()));
 	}
 }
 

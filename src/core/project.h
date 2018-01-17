@@ -49,6 +49,9 @@ struct AssetTileData {
 	int			type;
 	int			collection;
 	QByteArray  properties;
+	QString		license;
+	QString		author;
+	QByteArray  tags;
 };
 
 struct AssetData {

@@ -128,6 +128,12 @@ void Database::createGlobalDbCollections()
     }
 }
 
+/*
+ *	properties is a json object that currently holds
+ *  1. the camera orientation
+ *  2. number of textures
+ *	3. polygon count
+ */
 void Database::createGlobalDbAssets() {
 	QString schema = "CREATE TABLE IF NOT EXISTS " + Constants::DB_ASSETS_TABLE + " ("
 		"    name              VARCHAR(128),"
@@ -139,8 +145,11 @@ void Database::createGlobalDbAssets() {
 		"    thumbnail         BLOB,"
 		"    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
 		"    last_updated      DATETIME,"
+		"	 author			   VARCHAR(128),"
+		"    license		   VARCHAR(64),"
 		"    hash              VARCHAR(16),"
 		"    version           REAL,"
+		"    tags			   BLOB,"
 		"    properties        BLOB,"
 		"    guid              VARCHAR(32) PRIMARY KEY"
 		")";
@@ -171,6 +180,70 @@ void Database::createGlobalDbMaterials()
 	QSqlQuery query;
 	query.prepare(schema);
 	executeAndCheckQuery(query, "createGlobalDbMaterials");
+}
+
+void Database::createGlobalDbAuthor()
+{
+	QString schema = "CREATE TABLE IF NOT EXISTS author ("
+		"    name              VARCHAR(128),"
+		"    default_license   VARCHAR(24),"
+		"    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
+		"    last_updated      DATETIME,"
+		"    version           REAL"
+		")";
+
+	QSqlQuery query;
+	query.prepare(schema);
+	executeAndCheckQuery(query, "createGlobalDbAuthor");
+}
+
+void Database::updateAuthorInfo(const QString &author_name)
+{
+	QSqlQuery query1;
+	query1.prepare("DELETE FROM author");
+	executeAndCheckQuery(query1, "wipeTable");
+
+	QSqlQuery query2;
+	query2.prepare("INSERT INTO author (name, date_created, default_license) VALUES (:name, datetime(), :default_license)");
+	query2.bindValue(":name", author_name);
+	query2.bindValue(":default_license", "CCBY");
+	executeAndCheckQuery(query2, "insertAuthorName");
+}
+
+bool Database::isAuthorInfoPresent()
+{
+	QSqlQuery query;
+	query.prepare("SELECT COUNT(*) FROM author");
+	executeAndCheckQuery(query, "authorCount");
+
+	if (query.exec()) {
+		if (query.first()) {
+			return query.value(0).toBool();
+		}
+	}
+	else {
+		irisLog("There was an error getting the author count! " + query.lastError().text());
+	}
+
+	return false;
+}
+
+QString Database::getAuthorName()
+{
+	QSqlQuery query;
+	query.prepare("SELECT name FROM author LIMIT 1");
+	executeAndCheckQuery(query, "getAuthorName");
+
+	if (query.exec()) {
+		if (query.first()) {
+			return query.value(0).toString();
+		}
+	}
+	else {
+		irisLog("There was an error getting the author count! " + query.lastError().text());
+	}
+
+	return QString();
 }
 
 QString Database::insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material)
@@ -244,13 +317,19 @@ bool Database::switchAssetCollection(const int id, const QString &guid)
     return executeAndCheckQuery(query, "switchAssetCollection");
 }
 
-QString Database::insertAssetGlobal(const QString &assetName, int type, const QByteArray &thumbnail, const QByteArray &properties)
+QString Database::insertAssetGlobal(const QString &assetName,
+									int type,
+									const QByteArray &thumbnail,
+									const QByteArray &properties,
+									const QByteArray &tags)
 {
 	QSqlQuery query;
 	auto guid = GUIDManager::generateGUID();
 	query.prepare("INSERT INTO " + Constants::DB_ASSETS_TABLE +
-		" (name, extension, thumbnail, type, collection, version, date_created, last_updated, guid, properties)" +
-		" VALUES (:name, :extension, :thumbnail, :type, 0, :version, datetime(), datetime(), :guid, :properties)");
+		" (name, extension, thumbnail, type, collection, version, date_created,"
+		" last_updated, guid, properties, author, license, tags)" +
+		" VALUES (:name, :extension, :thumbnail, :type, 0, :version, datetime(),"
+		" datetime(), :guid, :properties, :author, :license, :tags)");
 
 	QFileInfo assetInfo(assetName);
 
@@ -261,6 +340,10 @@ QString Database::insertAssetGlobal(const QString &assetName, int type, const QB
 	query.bindValue(":version", Constants::CONTENT_VERSION);
 	query.bindValue(":guid", guid);
 	query.bindValue(":properties", properties);
+
+	query.bindValue(":author", getAuthorName());
+	query.bindValue(":license", "CCBY");
+	query.bindValue(":tags", tags);
 
 	executeAndCheckQuery(query, "insertSceneAsset");
 
@@ -407,7 +490,7 @@ QVector<AssetTileData> Database::fetchAssets()
 	QSqlQuery query;
 	query.prepare("SELECT assets.name, (assets.guid || '.' || assets.extension) as full_filename,"
 				  " assets.thumbnail, assets.guid, collections.name as collection_name,"
-				  " assets.type, assets.collection, assets.properties"
+				  " assets.type, assets.collection, assets.properties, assets.author, assets.license, assets.tags"
 				  " FROM assets"
                   " INNER JOIN " + Constants::DB_COLLECT_TABLE + " ON assets.collection = collections.collection_id ORDER BY assets.name DESC");
 	executeAndCheckQuery(query, "fetchAssets");
@@ -425,6 +508,9 @@ QVector<AssetTileData> Database::fetchAssets()
 			data.type = record.value(5).toInt();
 			data.collection = record.value(6).toInt();
 			data.properties = record.value(7).toByteArray();
+			data.author = record.value(8).toString();
+			data.license = record.value(9).toString();
+			data.tags = record.value(10).toByteArray();
 		}
 
 		Globals::assetNames.insert(data.guid, data.name);
@@ -439,7 +525,8 @@ QVector<AssetTileData> Database::fetchAssetsByCollection(int collection_id)
 {
 	QSqlQuery query;
 	query.prepare("SELECT assets.name, (assets.guid || '.' || assets.extension) as full_filename,"
-		" assets.thumbnail, assets.guid, collections.name as collection_name, assets.type"
+		" assets.thumbnail, assets.guid, collections.name as collection_name, assets.type,"
+		" assets.author, assets.license, assets.tags"
 		" FROM assets"
 		" INNER JOIN " + Constants::DB_COLLECT_TABLE + " ON assets.collection = collections.collection_id ORDER BY assets.name DESC WHERE assets.collection_id = ?");
 	query.addBindValue(collection_id);

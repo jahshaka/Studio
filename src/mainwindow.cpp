@@ -142,10 +142,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/jahshaka.log");
 #endif
 
-    createPostProcessDockWidget();
+	setupProjectDB();
+    
+	createPostProcessDockWidget();
 
     settings = SettingsManager::getDefaultManager();
-    prefsDialog = new PreferencesDialog(settings);
+    prefsDialog = new PreferencesDialog(db, settings);
     aboutDialog = new AboutDialog();
     licenseDialog = new LicenseDialog();
 
@@ -156,7 +158,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupHelpMenu();
 
     setupViewPort();
-    setupProjectDB();
     setupDesktop();
     setupToolBar();
     setupDockWidgets();
@@ -505,6 +506,7 @@ void MainWindow::setupProjectDB()
     db = new Database();
     db->initializeDatabase(path);
     db->createGlobalDb();
+	db->createGlobalDbAuthor();
 	db->createGlobalDbAssets();
     db->createGlobalDbCollections();
     db->createGlobalDbThumbs();
