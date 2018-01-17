@@ -1,4 +1,4 @@
-set(SRCS ${SRCS}
+set(BREAKPAD_SRCS ${BREAKPAD_SRCS}
     breakpad/src/common/string_conversion.cc
     breakpad/src/common/convert_UTF.c
     breakpad/src/common/md5.cc
@@ -22,4 +22,3 @@ set(SRCS ${SRCS}
     breakpad/src/client/linux/handler/minidump_descriptor.cc 
     breakpad/src/client/linux/handler/exception_handler.cc 
 )
-

@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.3 FATAL_ERROR)
+foreach(p CMP0071) # 3.10: Let AUTOMOC and AUTOUIC process GENERATED files
+    if(POLICY ${p})
+        cmake_policy(SET ${p} NEW)
+    endif()
+endforeach()
 project(Jahshaka)
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
@@ -318,11 +323,16 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_executable(${CMAKE_PROJECT_NAME} src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS})
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
-															src
-															irisgl/src
-															irisgl/src/assimp/include/
-                                                                                                                        irisgl/src/libovr/Include/
-															thirdparty/breakpad/breakpad/src)
+							src
+							irisgl/src
+							irisgl/src/assimp/include
+                            irisgl/src/libovr/Include
+                            thirdparty/breakpad/breakpad/src)
+   
+if(USE_BREAKPAD)
+    set(LIBS ${LIBS} breakpad)
+endif(USE_BREAKPAD)
+
 target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBS})
 
 include(CopyResources)
