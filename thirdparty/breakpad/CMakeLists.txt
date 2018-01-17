@@ -10,7 +10,7 @@ set(SRCS)
 set(LIBS)
 
 if (WIN32)
-        include (WindowsBreakpad)
+    include (WindowsBreakpad)
 endif (WIN32)
 
 if ((UNIX) AND (NOT APPLE))
@@ -19,9 +19,7 @@ endif()
 
 add_library(breakpad STATIC ${SRCS})
 
-target_include_directories(breakpad PUBLIC
-    "${PROJECT_SOURCE_DIR}/breakpad/src/"
-)
+target_include_directories(breakpad PUBLIC "${PROJECT_SOURCE_DIR}/breakpad/src/")
 
 target_link_libraries(breakpad ${LIBS})
 add_definitions("-DUNICODE")
