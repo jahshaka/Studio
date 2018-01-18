@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.3 FATAL_ERROR)
+add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
 foreach(p CMP0071) # 3.10: Let AUTOMOC and AUTOUIC process GENERATED files
     if(POLICY ${p})
         cmake_policy(SET ${p} NEW)
