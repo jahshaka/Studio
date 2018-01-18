@@ -79,8 +79,14 @@ public:
 	}
 
     void clearScene() {
-        scene->cleanup();
-        scene.clear();
+		if (scene->rootNode->hasChildren()) {
+			for (auto child : scene->rootNode->children) {
+				// clear the scene of anything that is not a light for the next asset
+				if (child->sceneNodeType != iris::SceneNodeType::Light) {
+					child->removeFromParent();
+				}
+			}
+		}
     }
 
 	void orientCamera(QVector3D pos, QVector3D localRot, int distanceFromPivot) {

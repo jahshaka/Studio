@@ -155,6 +155,11 @@ void AssetView::closeViewer()
     toggleFilterPane(fastGrid->containsTiles());
 }
 
+void AssetView::clearViewer()
+{
+	viewer->clearScene();
+}
+
 QString AssetView::getAssetType(int id)
 {
 	switch (id) {
@@ -1046,7 +1051,7 @@ void AssetView::removeAssetFromProject(AssetGridItem *item)
 	    if (IrisUtils::removeDir(QDir(assetPath).filePath(item->metadata["guid"].toString()))) {
 	        fastGrid->deleteTile(item);
 	        db->deleteAsset(item->metadata["guid"].toString());
-	        // closeViewer();
+	        clearViewer();
 	    }
 	    else {
 	        QMessageBox::warning(this, "Delete Failed!", "Failed to remove asset, please try again!", QMessageBox::Ok);

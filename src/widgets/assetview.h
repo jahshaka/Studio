@@ -76,6 +76,7 @@ public:
     void checkForEmptyState();
     void toggleFilterPane(bool);
     void closeViewer();
+	void clearViewer();
 	QString getAssetType(int);
 
 	void importModel(const QString &filename);

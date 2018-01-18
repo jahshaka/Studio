@@ -149,16 +149,29 @@ void AssetWidget::addItem(const QString &asset)
     QListWidgetItem *item;
 
     if (file.isDir()) {
-        item = new QListWidgetItem(QIcon(":/icons/ic_folder.svg"), file.fileName());
+		QPixmap pixmap;
 
-		if (!Globals::assetNames.value(file.fileName()).isEmpty()) {
-			item->setData(Qt::DisplayRole, Globals::assetNames.value(file.fileName()));
+		// we need our own search predicate since we have a vector that houses structs
+		if (!Globals::assetNames.value(QFileInfo(file.fileName()).baseName()).isEmpty()) {
+			QVector<AssetData>::iterator thumb = std::find_if(assetList.begin(),
+				assetList.end(),
+				find_asset_thumbnail(QFileInfo(file.fileName()).baseName()));
+
+			item = new QListWidgetItem(QFileInfo(thumb->name).baseName());
+			pixmap = QPixmap::fromImage(QImage::fromData(thumb->thumbnail));
+			item->setIcon(QIcon(pixmap));
+			item->setData(Qt::DisplayRole, QFileInfo(thumb->name).baseName());
+			item->setData(Qt::UserRole, file.absoluteFilePath());
+			item->setData(MODEL_EXT_ROLE, thumb->extension);
+			item->setData(MODEL_GUID_ROLE, thumb->guid);
+			item->setData(MODEL_TYPE_ROLE, thumb->type);
 		}
 		else {
+			item = new QListWidgetItem(file.fileName());
+			item->setIcon(QIcon(":/icons/ic_folder.svg"));
 			item->setData(Qt::DisplayRole, file.fileName());
+			item->setData(Qt::UserRole, file.absolutePath());
 		}
-
-        item->setData(Qt::UserRole, file.absolutePath());
     } else {
         QPixmap pixmap;
         item = new QListWidgetItem(file.fileName());
@@ -169,22 +182,7 @@ void AssetWidget::addItem(const QString &asset)
 			item->setIcon(QIcon(pixmap));
 		}
 		else if (Constants::MODEL_EXTS.contains(file.suffix())) {
-            // we need our own search predicate since we have a vector that houses structs
-            if (!Globals::assetNames.value(QFileInfo(file.fileName()).baseName()).isEmpty()) {
-                QVector<AssetData>::iterator thumb = std::find_if(assetList.begin(),
-                                                                  assetList.end(),
-                                                                  find_asset_thumbnail(QFileInfo(file.fileName()).baseName()));
-
-                pixmap = QPixmap::fromImage(QImage::fromData(thumb->thumbnail));
-                item->setIcon(QIcon(pixmap));
-                item->setData(Qt::DisplayRole, QFileInfo(thumb->name).baseName());
-                item->setData(MODEL_EXT_ROLE, thumb->extension);
-                item->setData(MODEL_GUID_ROLE, thumb->guid);
-                item->setData(MODEL_TYPE_ROLE, thumb->type);
-            }
-			//////// todo do this once into the list instead of per item maybe...
-			else
-				if (db->hasCachedThumbnail(file.fileName())) {
+			if (db->hasCachedThumbnail(file.fileName())) {
 				QPixmap cachedPixmap;
 				const QByteArray blob = db->fetchCachedThumbnail(file.fileName());
 				if (cachedPixmap.loadFromData(blob, "PNG")) {
@@ -198,6 +196,12 @@ void AssetWidget::addItem(const QString &asset)
 					if (!asset->thumbnail.isNull()) item->setIcon(QIcon(asset->thumbnail));
 				}
 			}
+
+			item->setData(Qt::DisplayRole, file.baseName());
+			item->setData(Qt::UserRole, file.absolutePath());
+			item->setData(MODEL_EXT_ROLE, "");
+			item->setData(MODEL_GUID_ROLE, file.absoluteFilePath());	// TODO: actually generate guids and use these
+			item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Object));
 		}
 		else if (file.suffix() == "shader") {
 			item->setIcon(QIcon(":/icons/ic_file.svg"));
