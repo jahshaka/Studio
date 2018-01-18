@@ -13,3 +13,7 @@ set(LIBS
     ${LIBS}
     wininet.lib
     )
+
+if(WIN32 AND MSVC)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS 1)
+endif()
