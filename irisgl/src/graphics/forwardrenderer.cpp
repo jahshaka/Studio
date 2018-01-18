@@ -308,7 +308,8 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     graphics->clear(GL_DEPTH_BUFFER_BIT);
     // STEP 5: RENDER SELECTED OBJECT
-    if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
+    if (!!selectedSceneNode && selectedSceneNode->isVisible())
+		renderSelectedNode(renderData,selectedSceneNode);
 
     //clear lists
     scene->geometryRenderList->clear();
@@ -824,7 +825,8 @@ void ForwardRenderer::renderOutlineNode(RenderData *renderData, SceneNodePtr nod
     }
 
     for(auto childNode : node->children) {
-        renderOutlineNode(renderData, childNode);
+		if (childNode->isVisible())
+			renderOutlineNode(renderData, childNode);
     }
 }
 
