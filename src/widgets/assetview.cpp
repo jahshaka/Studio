@@ -668,6 +668,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 			object["guid"] = guid;
 			object["type"] = (int)AssetMetaType::Object; // model?
 			object["full_filename"] = IrisUtils::buildFileName(guid, fInfo.suffix());
+			object["author"] = db->getAuthorName();
+			object["license"] = "CCBY";
 
 			Globals::assetNames.insert(guid, object["name"].toString());
 
@@ -721,7 +723,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 				prefsDialog->exec();
 			}
 			else {
-				QMessageBox::warning(this, "Faile to add asset!", "Nothing was done.", QMessageBox::Ok);
+				QMessageBox::warning(this, "Failed to add asset!", "Nothing was done.", QMessageBox::Ok);
 			}
 		}
 	});
@@ -1044,7 +1046,7 @@ void AssetView::removeAssetFromProject(AssetGridItem *item)
 	    if (IrisUtils::removeDir(QDir(assetPath).filePath(item->metadata["guid"].toString()))) {
 	        fastGrid->deleteTile(item);
 	        db->deleteAsset(item->metadata["guid"].toString());
-	        closeViewer();
+	        // closeViewer();
 	    }
 	    else {
 	        QMessageBox::warning(this, "Delete Failed!", "Failed to remove asset, please try again!", QMessageBox::Ok);
