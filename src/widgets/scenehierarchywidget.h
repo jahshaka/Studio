@@ -77,6 +77,7 @@ protected slots:
     void duplicateNode();
 
 private:
+	void showHideNode(QTreeWidgetItem* item, bool show);
     void repopulateTree();
     void populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode);
 

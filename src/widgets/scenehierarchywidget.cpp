@@ -199,13 +199,18 @@ void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem* item)
 void SceneHierarchyWidget::treeItemChanged(QTreeWidgetItem* item, int column)
 {
     long nodeId = item->data(1,Qt::UserRole).toLongLong();
-    auto node = nodeList[nodeId];
 
     if (item->checkState(column) == Qt::Checked) {
-        node->show();
+		showHideNode(item, true);
     } else {
-        node->hide();
+		showHideNode(item, false);
     }
+
+	for (int i = 0; i < item->childCount(); i++)
+	{
+		auto childTreeItem = item->child(i);
+		childTreeItem->setCheckState(column, item->checkState(column));
+	}
 }
 
 void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
@@ -261,6 +266,18 @@ void SceneHierarchyWidget::deleteNode()
 void SceneHierarchyWidget::duplicateNode()
 {
     mainWindow->duplicateNode();
+}
+
+void SceneHierarchyWidget::showHideNode(QTreeWidgetItem* item, bool show)
+{
+	long nodeId = item->data(1,Qt::UserRole).toLongLong();
+    auto node = nodeList[nodeId];
+
+    if (show) {
+        node->show();
+    } else {
+        node->hide();
+    }
 }
 
 void SceneHierarchyWidget::repopulateTree()

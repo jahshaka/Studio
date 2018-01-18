@@ -150,12 +150,20 @@ public:
         return visible;
     }
 
-    void show() {
+    void show(bool hideChildren = false) {
         visible = true;
+		if (hideChildren) {
+			for (auto child : children)
+				child->show(hideChildren);
+		}
     }
 
-    void hide() {
+    void hide(bool hideChildren = false) {
         visible = false;
+		if (hideChildren) {
+			for (auto child : children)
+				child->hide(hideChildren);
+		}
     }
 
     bool isRemovable() {
