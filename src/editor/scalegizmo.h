@@ -24,7 +24,6 @@ public:
 	QVector3D handleExtent;// local extent of the gizmo
 	QVector<QVector3D> planes;// for hit detection
 	float handleScale = 0.05f;
-	float handleScale = 0.05f;
 	float handleLength = 1.5;
 
 	ScaleHandle(Gizmo* gizmo, GizmoAxis axis);

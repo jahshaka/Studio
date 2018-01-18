@@ -93,6 +93,31 @@ public:
 
     void updateAnimation(float time) override;
 
+	ShadowMap* getShadowMap()
+	{
+		return shadowMap;
+	}
+
+	void setShadowMapType(ShadowMapType shadowType)
+	{
+		shadowMap->shadowType = shadowType;
+	}
+
+	ShadowMapType getShadowMapType()
+	{
+		return shadowMap->shadowType;
+	}
+
+	void setShadowMapResolution(int size)
+	{
+		shadowMap->setResolution(size);
+	}
+
+	int getShadowMapResolution()
+	{
+		return shadowMap->resolution;
+	}
+
 private:
     LightNode();
 
