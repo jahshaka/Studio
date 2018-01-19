@@ -27,6 +27,7 @@ public:
 	void createGlobalDbAssets();
 	void createGlobalDbMaterials();
 	void createGlobalDbAuthor();
+	void createGlobalDbProjectAssets();
 	void updateAuthorInfo(const QString &author_name);
 	bool isAuthorInfoPresent();
 	QString getAuthorName();

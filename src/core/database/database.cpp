@@ -197,6 +197,32 @@ void Database::createGlobalDbAuthor()
 	executeAndCheckQuery(query, "createGlobalDbAuthor");
 }
 
+void Database::createGlobalDbProjectAssets()
+{
+	QString schema = "CREATE TABLE IF NOT EXISTS project_assets ("
+		"    name              VARCHAR(128),"
+		"    extension		   VARCHAR(8),"
+		"	 type			   INTEGER,"
+		"	 collection		   INTEGER,"
+		"	 times_used		   INTEGER,"
+		"    world_guid        VARCHAR(32),"
+		"    thumbnail         BLOB,"
+		"    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
+		"    last_updated      DATETIME,"
+		"	 author			   VARCHAR(128),"
+		"    license		   VARCHAR(64),"
+		"    hash              VARCHAR(16),"
+		"    version           REAL,"
+		"    tags			   BLOB,"
+		"    properties        BLOB,"
+		"    guid              VARCHAR(32) PRIMARY KEY"
+		")";
+
+	QSqlQuery query;
+	query.prepare(schema);
+	executeAndCheckQuery(query, "createGlobalDbProjectAssets");
+}
+
 void Database::updateAuthorInfo(const QString &author_name)
 {
 	QSqlQuery query1;

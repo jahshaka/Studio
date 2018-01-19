@@ -508,6 +508,7 @@ void MainWindow::setupProjectDB()
     db->createGlobalDb();
 	db->createGlobalDbAuthor();
 	db->createGlobalDbAssets();
+	db->createGlobalDbProjectAssets();
     db->createGlobalDbCollections();
     db->createGlobalDbThumbs();
 	db->createGlobalDbMaterials();
