@@ -118,13 +118,13 @@ void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
         auto item = new QTreeWidgetItem();
         item->setIcon(0, QIcon(":/icons/ic_folder.svg"));
 		if (!Globals::assetNames.value(folder.fileName()).isEmpty()) {
-			item->setData(0, Qt::DisplayRole, Globals::assetNames.value(folder.fileName()));
+			// item->setData(0, Qt::DisplayRole, Globals::assetNames.value(folder.fileName()));
 		}
 		else {
 			item->setData(0, Qt::DisplayRole, folder.fileName());
+			parent->addChild(item);
 		}
         item->setData(0, Qt::UserRole, folder.absoluteFilePath());
-        parent->addChild(item);
         updateTree(item, folder.absoluteFilePath());
     }
 }
@@ -480,7 +480,7 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
 
     if (child) {    // should always be set but just in case
         auto branch = new QTreeWidgetItem();
-        branch->setIcon(0, QIcon(":/icons/folder-symbol.svg"));
+        branch->setIcon(0, QIcon(":/icons/ic_folder.svg"));
         branch->setText(0, folderName);
         branch->setData(0, Qt::UserRole, assetItem.selectedPath + '/' + folderName);
         child->addChild(branch);
@@ -515,7 +515,7 @@ void AssetWidget::openAtFolder()
 
 void AssetWidget::createFolder()
 {
-    QIcon icon = QIcon(":/icons/folder-symbol.svg");
+    QIcon icon = QIcon(":/icons/ic_folder.svg");
     QListWidgetItem *item = new QListWidgetItem(icon, "New Folder");
     item->setData(Qt::UserRole, "");    // null until we confirm
     item->setFlags(item->flags() | Qt::ItemIsEditable);
