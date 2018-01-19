@@ -150,6 +150,10 @@ public:
         return visible;
     }
 
+	void setVisible(bool flag = true) {
+		visible = flag;
+	}
+
     void show(bool hideChildren = false) {
         visible = true;
 		if (hideChildren) {

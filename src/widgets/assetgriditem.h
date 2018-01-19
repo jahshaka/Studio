@@ -28,9 +28,10 @@ public:
 	bool selected;
 	QJsonObject metadata;
 	QJsonObject sceneProperties;
+	QJsonObject tags;
 
 	AssetGridItem() = default;
-	AssetGridItem(QJsonObject details, QImage image, QJsonObject properties, QWidget *parent = Q_NULLPTR);
+	AssetGridItem(QJsonObject details, QImage image, QJsonObject properties, QJsonObject tags, QWidget *parent = Q_NULLPTR);
 	void setTile(QPixmap pix);
 	void highlight(bool);
 	

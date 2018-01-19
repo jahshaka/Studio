@@ -16,11 +16,26 @@ For more information see the LICENSE file
 #include <QMenu>
 #include <QDebug>
 
-
-
 #include "../irisgl/src/scenegraph/scene.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
+#include "../irisgl/src/core/irisutils.h"
 #include "../mainwindow.h"
+
+//#include <QProxyStyle>
+//
+//class MyProxyStyle : public QProxyStyle
+//{
+//public:
+//	virtual void drawPrimitive(PrimitiveElement element, const QStyleOption * option,
+//		QPainter * painter, const QWidget * widget = 0) const
+//	{
+//		if (PE_FrameFocusRect == element) {
+//			// do not draw focus rectangle
+//		} else {
+//			QProxyStyle::drawPrimitive(element, option, painter, widget);
+//		}
+//	}
+//};
 
 SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
     QWidget(parent),
@@ -30,29 +45,33 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 
     mainWindow = nullptr;
 
+	ui->sceneTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+	ui->sceneTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     ui->sceneTree->viewport()->installEventFilter(this);
 
-    connect(ui->sceneTree, SIGNAL(itemClicked(QTreeWidgetItem*, int)),
-            this,
-            SLOT(treeItemSelected(QTreeWidgetItem*)));
+	connect(ui->sceneTree,	SIGNAL(itemClicked(QTreeWidgetItem*, int)),
+			this,			SLOT(treeItemSelected(QTreeWidgetItem*, int)));
 
-    connect(ui->sceneTree,
-            SIGNAL(itemChanged(QTreeWidgetItem*, int)),
-            this,
-            SLOT(treeItemChanged(QTreeWidgetItem*, int)));
-
-    //make items draggable and droppable
+    // Make items draggable and droppable
     ui->sceneTree->setSelectionMode(QAbstractItemView::SingleSelection);
     ui->sceneTree->setDragEnabled(true);
     ui->sceneTree->viewport()->setAcceptDrops(true);
     ui->sceneTree->setDropIndicatorShown(true);
     ui->sceneTree->setDragDropMode(QAbstractItemView::InternalMove);
 
-    //custom context menu
-    //http://stackoverflow.com/questions/22198427/adding-a-right-click-menu-for-specific-items-in-qtreeview
     ui->sceneTree->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(ui->sceneTree, SIGNAL(customContextMenuRequested(const QPoint &)), this, SLOT(sceneTreeCustomContextMenu(const QPoint &)));
 
+    connect(ui->sceneTree,	SIGNAL(customContextMenuRequested(const QPoint&)),
+			this,			SLOT(sceneTreeCustomContextMenu(const QPoint&)));
+
+	// We do QIcon::Selected manually to remove an annoying default highlight for selected icons
+	visibleIcon = new QIcon;
+	visibleIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/eye_open.png"), QIcon::Normal);
+	visibleIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/eye_open.png"), QIcon::Selected);
+
+	hiddenIcon = new QIcon;
+	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/eye_closed.png"), QIcon::Normal);
+	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/eye_closed.png"), QIcon::Selected);
 }
 
 void SceneHierarchyWidget::setScene(QSharedPointer<iris::Scene> scene)
@@ -62,40 +81,40 @@ void SceneHierarchyWidget::setScene(QSharedPointer<iris::Scene> scene)
     this->repopulateTree();
 }
 
-void SceneHierarchyWidget::setMainWindow(MainWindow* mainWin)
+void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
 {
     mainWindow = mainWin;
 
-    //ADD BUTTON
-    //todo: bind callbacks
     QMenu* addMenu = new QMenu();
 
+	// Primitives
     auto primtiveMenu = addMenu->addMenu("Primitive");
+
     QAction *action = new QAction("Torus", this);
     primtiveMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addTorus()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addTorus()));
 
     action = new QAction("Cube", this);
     primtiveMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addCube()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addCube()));
 
     action = new QAction("Sphere", this);
     primtiveMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addSphere()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addSphere()));
 
     action = new QAction("Cylinder", this);
     primtiveMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addCylinder()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addCylinder()));
 
     action = new QAction("Plane", this);
     primtiveMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addPlane()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addPlane()));
 
     action = new QAction("Ground", this);
     primtiveMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addGround()));
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addGround()));
 
-    //LIGHTS
+    // Lamps
     auto lightMenu = addMenu->addMenu("Light");
     action = new QAction("Point", this);
     lightMenu->addAction(action);
@@ -117,22 +136,10 @@ void SceneHierarchyWidget::setMainWindow(MainWindow* mainWin)
     addMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addViewer()));
 
-    //SYSTEMS
+    // Systems
     action = new QAction("Particle System", this);
     addMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addParticleSystem()));
-
-    //MESHES
-//    action = new QAction("Load Model", this);
-//    addMenu->addAction(action);
-//    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addMesh()));
-
-    //VIEWPOINT
-    /*
-    action = new QAction("ViewPoint", this);
-    addMenu->addAction(action);
-    connect(action,SIGNAL(triggered()),mainWindow,SLOT(addViewPoint()));
-    */
 
     ui->addBtn->setMenu(addMenu);
     ui->addBtn->setPopupMode(QToolButton::InstantPopup);
@@ -144,15 +151,8 @@ void SceneHierarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> scene
 {
     selectedNode = sceneNode;
 
-    //set tree item
-    //todo: check if item exists in nodeList
-    //auto selected = ui->sceneTree->selectedItems();
-    //for(auto item:selected)
-    //    item->setSelected(false);
-
-    if(!!sceneNode) {
+    if (!!sceneNode) {
         auto item = treeItemList[sceneNode->getNodeId()];
-        //item->setSelected(true);
         ui->sceneTree->setCurrentItem(item);
     }
 }
@@ -164,10 +164,9 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
         auto dropEventPtr = static_cast<QDropEvent*>(event);
         this->dropEvent(dropEventPtr);
 
-        QTreeWidgetItem *droppedIndex = ui->sceneTree->itemAt(dropEventPtr->pos().x(),
-                                                              dropEventPtr->pos().y());
+        QTreeWidgetItem *droppedIndex = ui->sceneTree->itemAt(dropEventPtr->pos().x(), dropEventPtr->pos().y());
         if (droppedIndex) {
-            long itemId = droppedIndex->data(1, Qt::UserRole).toLongLong();
+            long itemId = droppedIndex->data(0, Qt::UserRole).toLongLong();
             auto source = nodeList[itemId];
             source->addChild(this->lastDraggedHiearchyItemSrc);
         }
@@ -178,8 +177,7 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
 
         auto selected = ui->sceneTree->selectedItems();
         if (selected.size() > 0) {
-            long itemId = selected[0]->data(1, Qt::UserRole).toLongLong();
-
+            long itemId = selected[0]->data(0, Qt::UserRole).toLongLong();
             auto source = nodeList[itemId];
             lastDraggedHiearchyItemSrc = source;
         }
@@ -188,62 +186,56 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
     return QObject::eventFilter(watched, event);
 }
 
-void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem* item)
+void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem *item, int column)
 {
-    long nodeId = item->data(1, Qt::UserRole).toLongLong();
-    selectedNode = nodeList[nodeId];
+    long nodeId = item->data(0, Qt::UserRole).toLongLong();
 
-    emit sceneNodeSelected(selectedNode);
-}
-
-void SceneHierarchyWidget::treeItemChanged(QTreeWidgetItem* item, int column)
-{
-    long nodeId = item->data(1,Qt::UserRole).toLongLong();
-
-    if (item->checkState(column) == Qt::Checked) {
-		showHideNode(item, true);
-    } else {
-		showHideNode(item, false);
-    }
-
-	for (int i = 0; i < item->childCount(); i++)
-	{
-		auto childTreeItem = item->child(i);
-		childTreeItem->setCheckState(column, item->checkState(column));
+	// Our icons are in the second column
+	if (column == 1) {
+		auto node = nodeList[nodeId];
+		if (item->data(1, Qt::UserRole).toBool()) {
+			item->setIcon(1, *hiddenIcon);
+			node->hide();
+			item->setData(1, Qt::UserRole, QVariant::fromValue(false));
+		}
+		else {
+			item->setIcon(1, *visibleIcon);
+			node->show();
+			item->setData(1, Qt::UserRole, QVariant::fromValue(true));
+		}
+	}
+	else {
+		selectedNode = nodeList[nodeId];
+		emit sceneNodeSelected(selectedNode);
 	}
 }
 
 void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 {
     QModelIndex index = ui->sceneTree->indexAt(pos);
-    if (!index.isValid()) {
-        return;
-    }
+    if (!index.isValid()) return;
 
     auto item = ui->sceneTree->itemAt(pos);
-    auto nodeId = (long)item->data(1,Qt::UserRole).toLongLong();
+    auto nodeId = (long) item->data(0, Qt::UserRole).toLongLong();
     auto node = nodeList[nodeId];
 
     QMenu menu;
     QAction* action;
 
-    //rename
-    action = new QAction(QIcon(),"Rename",this);
-    connect(action,SIGNAL(triggered()),this,SLOT(renameNode()));
+    action = new QAction(QIcon(), "Rename", this);
+    connect(action, SIGNAL(triggered()), this, SLOT(renameNode()));
     menu.addAction(action);
 
-    //world node isnt removable
-    if(node->isRemovable())
-    {
-        action = new QAction(QIcon(),"Delete",this);
-        connect(action,SIGNAL(triggered()),this,SLOT(deleteNode()));
+    // The world node isn't removable
+    if (node->isRemovable()) {
+        action = new QAction(QIcon(), "Delete", this);
+        connect(action, SIGNAL(triggered()), this, SLOT(deleteNode()));
         menu.addAction(action);
     }
 
-    if(node->isDuplicable())
-    {
-        action = new QAction(QIcon(),"Duplicate",this);
-        connect(action,SIGNAL(triggered()),this,SLOT(duplicateNode()));
+    if (node->isDuplicable()) {
+        action = new QAction(QIcon(), "Duplicate", this);
+        connect(action, SIGNAL(triggered()), this, SLOT(duplicateNode()));
         menu.addAction(action);
     }
 
@@ -253,7 +245,6 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 
 void SceneHierarchyWidget::renameNode()
 {
-    //mainWindow->deleteNode();
     mainWindow->renameNode();
 }
 
@@ -286,8 +277,8 @@ void SceneHierarchyWidget::repopulateTree()
     auto rootTreeItem = new QTreeWidgetItem();
 
     rootTreeItem->setText(0, rootNode->getName());
+    rootTreeItem->setData(0, Qt::UserRole, QVariant::fromValue(rootNode->getNodeId()));
     //root->setIcon(0,this->getIconFromSceneNodeType(SceneNodeType::World));
-    rootTreeItem->setData(1, Qt::UserRole,QVariant::fromValue(rootNode->getNodeId()));
 
     // populate tree
     nodeList.clear();
@@ -296,7 +287,7 @@ void SceneHierarchyWidget::repopulateTree()
     nodeList.insert(rootNode->getNodeId(), rootNode);
     treeItemList.insert(rootNode->getNodeId(), rootTreeItem);
 
-    populateTree(rootTreeItem,rootNode);
+    populateTree(rootTreeItem, rootNode);
 
     ui->sceneTree->clear();
     ui->sceneTree->addTopLevelItem(rootTreeItem);
@@ -309,13 +300,9 @@ void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
 {
     for (auto childNode : sceneNode->children) {
         auto childTreeItem = createTreeItems(childNode);
-
         parentTreeItem->addChild(childTreeItem);
-
-        // sceneTreeItems.insert(node->getEntity()->id(),childNode);
         nodeList.insert(childNode->getNodeId(), childNode);
         treeItemList.insert(childNode->getNodeId(), childTreeItem);
-
         populateTree(childTreeItem, childNode);
     }
 }
@@ -324,10 +311,11 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 {
     auto childTreeItem = new QTreeWidgetItem();
     childTreeItem->setText(0, node->getName());
-    childTreeItem->setData(1, Qt::UserRole,QVariant::fromValue(node->getNodeId()));
+    childTreeItem->setData(0, Qt::UserRole, QVariant::fromValue(node->getNodeId()));
     // childNode->setIcon(0,this->getIconFromSceneNodeType(node->sceneNodeType));
-    childTreeItem->setFlags(childTreeItem->flags() | Qt::ItemIsUserCheckable);
-    childTreeItem->setCheckState(0, Qt::Checked);
+	childTreeItem->setData(1, Qt::UserRole, QVariant::fromValue(node->isVisible()));
+	
+	node->isVisible() ? childTreeItem->setIcon(1, *visibleIcon) : childTreeItem->setIcon(1, *hiddenIcon);
 
     return childTreeItem;
 }
@@ -343,9 +331,7 @@ void SceneHierarchyWidget::insertChild(iris::SceneNodePtr childNode)
     treeItemList.insert(childNode->getNodeId(), childItem);
 
     // recursively add children
-    for(auto child: childNode->children) {
-        insertChild(child);
-    }
+    for (auto child: childNode->children) insertChild(child);
 }
 
 void SceneHierarchyWidget::removeChild(iris::SceneNodePtr childNode)

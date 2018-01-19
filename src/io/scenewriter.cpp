@@ -179,7 +179,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sc
     auto rot = sceneNode->getLocalRot().toEulerAngles();
     sceneNodeObj["rot"] = jsonVector3(rot);
     sceneNodeObj["scale"] = jsonVector3(sceneNode->getLocalScale());
-
+	sceneNodeObj["visible"] = sceneNode->isVisible();
 
     //todo: write data specific to node type
     switch (sceneNode->sceneNodeType) {
@@ -327,6 +327,7 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
 void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode)
 {
     sceneNodeObject["viewScale"] = viewerNode->getViewScale();
+	sceneNodeObject["visible"] = viewerNode->isVisible();
 }
 
 void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node)
@@ -341,6 +342,7 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["lifeLength"]           = node->lifeLength;
     sceneNodeObject["speed"]                = node->speed;
     sceneNodeObject["texture"]              = getRelativePath(node->texture->getSource());
+	sceneNodeObject["visible"]				= node->isVisible();
 }
 
 void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat)
@@ -414,6 +416,7 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     sceneNodeObject["shadowType"] = evalShadowTypeName(shadowMap->shadowType);
     sceneNodeObject["shadowSize"] = shadowMap->resolution;
     sceneNodeObject["shadowBias"] = shadowMap->bias;
+	sceneNodeObject["visible"] = lightNode->isVisible();
 }
 
 QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)

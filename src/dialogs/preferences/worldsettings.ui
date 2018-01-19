@@ -7,14 +7,18 @@
     <x>0</x>
     <y>0</y>
     <width>634</width>
-    <height>99</height>
+    <height>194</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">
+   <string notr="true">/* Double Spin Box */
+QLineEdit {
+	border: none;
+}
+
 /* Double Spin Box */
 QDoubleSpinBox {
    /*	padding-right: 15px; /* make room for the arrows */
@@ -68,21 +72,6 @@ QDoubleSpinBox::down-button:pressed {
 }</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <property name="leftMargin">
-    <number>0</number>
-   </property>
-   <property name="topMargin">
-    <number>0</number>
-   </property>
-   <property name="rightMargin">
-    <number>0</number>
-   </property>
-   <property name="bottomMargin">
-    <number>0</number>
-   </property>
-   <property name="spacing">
-    <number>8</number>
-   </property>
    <item row="0" column="0">
     <layout class="QHBoxLayout" name="horizontalLayout_3">
      <item>
@@ -214,6 +203,40 @@ QDoubleSpinBox::down-button:pressed {
         </size>
        </property>
       </spacer>
+     </item>
+    </layout>
+   </item>
+   <item row="3" column="0">
+    <layout class="QHBoxLayout" name="horizontalLayout_4">
+     <item>
+      <widget class="QLabel" name="label_5">
+       <property name="text">
+        <string>Author</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="author"/>
+     </item>
+    </layout>
+   </item>
+   <item row="4" column="0">
+    <layout class="QHBoxLayout" name="horizontalLayout_5">
+     <item>
+      <widget class="QLabel" name="label_6">
+       <property name="text">
+        <string>Default License</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="cc">
+       <item>
+        <property name="text">
+         <string>CC0 - Freeing content globally without restrictions</string>
+        </property>
+       </item>
+      </widget>
      </item>
     </layout>
    </item>

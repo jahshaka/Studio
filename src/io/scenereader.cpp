@@ -348,26 +348,19 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
 void SceneReader::readSceneNodeTransform(QJsonObject& nodeObj,iris::SceneNodePtr sceneNode)
 {
     auto pos = nodeObj["pos"].toObject();
-    if(!pos.isEmpty())
-    {
-        sceneNode->setLocalPos(readVector3(pos));
-    }
+    if (!pos.isEmpty()) sceneNode->setLocalPos(readVector3(pos));
 
     auto rot = nodeObj["rot"].toObject();
-    if(!rot.isEmpty())
-    {
+    if (!rot.isEmpty()) {
         //the rotation is stored as euler angles
         sceneNode->setLocalRot(QQuaternion::fromEulerAngles(readVector3(rot)));
     }
 
     auto scale = nodeObj["scale"].toObject();
-    if(!scale.isEmpty())
-    {
+    if (!scale.isEmpty()) {
         sceneNode->setLocalScale(readVector3(scale));
-    }
-    else
-    {
-        sceneNode->setLocalScale(QVector3D(1,1,1));
+    } else {
+        sceneNode->setLocalScale(QVector3D(1, 1, 1));
     }
 }
 
@@ -392,6 +385,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
             meshNode->setMesh(mesh);
         }
         meshNode->setPickable(pickable);
+		meshNode->setVisible(nodeObj["visible"].toBool(true));
         meshNode->meshPath = source;
         meshNode->meshIndex = meshIndex;
     }
@@ -442,6 +436,7 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->distance = (float)nodeObj["distance"].toDouble(1.0f);
     lightNode->spotCutOff = (float)nodeObj["spotCutOff"].toDouble(30.0f);
     lightNode->color = readColor(nodeObj["color"].toObject());
+	lightNode->setVisible(nodeObj["visible"].toBool(true));
 
     //shadow data
     auto shadowMap = lightNode->shadowMap;
@@ -467,6 +462,7 @@ iris::ViewerNodePtr SceneReader::createViewer(QJsonObject& nodeObj)
 {
     auto viewerNode = iris::ViewerNode::create();
     viewerNode->setViewScale((float)nodeObj["viewScale"].toDouble(1.0f));
+	viewerNode->setVisible(nodeObj["visible"].toBool(true));
 
     return viewerNode;
 }
@@ -486,6 +482,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     particleNode->setName(nodeObj["name"].toString());
     particleNode->setSpeed((float) nodeObj["speed"].toDouble(1.0f));
     particleNode->setTexture(iris::Texture2D::load(getAbsolutePath(nodeObj["texture"].toString())));
+	particleNode->setVisible(nodeObj["visible"].toBool(true));
 
     return particleNode;
 }

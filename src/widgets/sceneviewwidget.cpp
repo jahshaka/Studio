@@ -471,6 +471,8 @@ void SceneViewWidget::renderScene()
         if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
             viewerVisible = selectedNode->isVisible();
             selectedNode->hide();
+        } else {
+            viewerVisible = false;    
         }
 
         scene->update(dt);

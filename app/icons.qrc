@@ -18,7 +18,6 @@
         <file>icons/expand-button.svg</file>
         <file>icons/fastforward.svg</file>
         <file>icons/fastreverse.svg</file>
-        <file>icons/folder-symbol.svg</file>
         <file>icons/google-drive-file.svg</file>
         <file>icons/icon.ico</file>
         <file>icons/import.svg</file>
@@ -77,5 +76,7 @@
         <file>icons/ic_file.svg</file>
         <file>icons/g_pause.svg</file>
         <file>icons/error_alpha.svg</file>
+        <file>icons/eye_closed.png</file>
+        <file>icons/eye_open.png</file>
     </qresource>
 </RCC>

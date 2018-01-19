@@ -3,9 +3,10 @@
 #include "assetgriditem.h"
 
 // local
-AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject properties, QWidget *parent) : QWidget(parent) {
+AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject properties, QJsonObject tags, QWidget *parent) : QWidget(parent) {
 	this->metadata = details;
 	this->sceneProperties = properties;
+	this->tags = tags;
 	url = details["icon_url"].toString();
 	selected = false;
 	auto layout = new QGridLayout;

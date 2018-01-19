@@ -26,10 +26,15 @@ public:
     void createGlobalDbCollections();
 	void createGlobalDbAssets();
 	void createGlobalDbMaterials();
+	void createGlobalDbAuthor();
+	void createGlobalDbProjectAssets();
+	void updateAuthorInfo(const QString &author_name);
+	bool isAuthorInfoPresent();
+	QString getAuthorName();
     void deleteProject();
     bool deleteAsset(const QString &guid);
     void renameProject(const QString&);
-	QString insertAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties);
+	QString insertAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties, const QByteArray &tags);
 	QString insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material);
     void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob, const QByteArray &thumb);
     void insertCollectionGlobal(const QString &collectionName);

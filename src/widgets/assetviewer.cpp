@@ -223,7 +223,7 @@ void AssetViewer::resetViewerCameraAfter()
 }
 
 void AssetViewer::loadModel(QString str, bool firstAdd, bool cache, bool firstLoad) {
-    pdialog->setLabelText(tr("Importing model..."));
+    pdialog->setLabelText(tr("Loading asset preview..."));
     pdialog->show();
     QApplication::processEvents();
 	makeCurrent();

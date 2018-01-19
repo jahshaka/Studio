@@ -13,17 +13,22 @@ For more information see the LICENSE file
 #include "../../core/settingsmanager.h"
 #include "../../constants.h"
 #include "../../uimanager.h"
+#include "../../globals.h"
 #include "../../widgets/sceneviewwidget.h"
+#include "../../core/database/database.h"
 #include <QFileDialog>
 #include <QStandardPaths>
 
-WorldSettings::WorldSettings(SettingsManager* settings) :
+WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
     QWidget(nullptr),
     ui(new Ui::WorldSettings)
 {
     ui->setupUi(this);
+	db = handle;
 
     this->settings = settings;
+
+	ui->author->setText(db->getAuthorName());
 
     connect(ui->browseProject, SIGNAL(pressed()), SLOT(changeDefaultDirectory()));
 
@@ -85,6 +90,13 @@ void WorldSettings::projectDirectoryChanged(QString path)
 {
     settings->setValue("default_directory", path);
     defaultProjectDirectory = path;
+}
+
+void WorldSettings::saveSettings()
+{
+	if (!ui->author->text().isEmpty()) {
+		db->updateAuthorInfo(ui->author->text());
+	}
 }
 
 WorldSettings::~WorldSettings()

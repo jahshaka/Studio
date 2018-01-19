@@ -49,6 +49,7 @@ class AssetGridItem;
 class AssetViewer;
 class Database;
 class SettingsManager;
+class PreferencesDialog;
 
 class AssetView : public QWidget
 {
@@ -75,6 +76,7 @@ public:
     void checkForEmptyState();
     void toggleFilterPane(bool);
     void closeViewer();
+	void clearViewer();
 	QString getAssetType(int);
 
 	void importModel(const QString &filename);
@@ -102,12 +104,17 @@ private:
 	QVector<QByteArray> iconList;
 	QString filename;
 
+	PreferencesDialog* prefsDialog;
+
 	QPushButton *addToLibrary;
 	QPushButton *addToProject;
     QPushButton *deleteFromLibrary;
 	QLabel *renameModel;
 	QLineEdit *renameModelField;
+	QLabel *tagModel;
+	QLineEdit *tagModelField;
 	QWidget *renameWidget;
+	QWidget *tagWidget;
 
     QTreeWidget *treeWidget;
 	QTreeWidgetItem *rootItem;
@@ -122,6 +129,9 @@ private:
 	QLabel *metadataName;
 	QLabel *metadataType;
 	QLabel *metadataVisibility;
+	QLabel *metadataLicense;
+	QLabel *metadataAuthor;
+	QLabel *metadataTags;
     QWidget *metadataWidget;
     QHBoxLayout *metadataLayout;
     QPushButton *changeMetaCollection;

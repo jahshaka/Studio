@@ -13,19 +13,21 @@ For more information see the LICENSE file
 #include <QListWidgetItem>
 #include "preferences/worldsettings.h"
 #include "../core/settingsmanager.h"
+#include "../core/database/database.h"
 
-PreferencesDialog::PreferencesDialog(SettingsManager* settings) :
+PreferencesDialog::PreferencesDialog(Database *handle, SettingsManager* settings) :
     QDialog(nullptr),
     ui(new Ui::PreferencesDialog)
 {
     ui->setupUi(this);
 
+	db = handle;
     this->settings = settings;
 
     setWindowTitle("Preferences");
     ui->cancelButton->hide();
 
-    connect(ui->okButton, SIGNAL(clicked(bool)), this, SLOT(close()));
+    connect(ui->okButton, SIGNAL(clicked(bool)), this, SLOT(saveSettings()));
 
     setupPages();
 }
@@ -33,13 +35,14 @@ PreferencesDialog::PreferencesDialog(SettingsManager* settings) :
 void PreferencesDialog::setupPages()
 {
     // can we elimate this to be more permanent? why (was/is) this dynamic really?
-    worldSettings = new WorldSettings(settings);
+    worldSettings = new WorldSettings(db, settings);
     ui->worldLayout->addWidget(worldSettings);
 }
 
-void PreferencesDialog::closeDialog()
+void PreferencesDialog::saveSettings()
 {
-    this->close();
+	worldSettings->saveSettings();
+	close();
 }
 
 PreferencesDialog::~PreferencesDialog()
