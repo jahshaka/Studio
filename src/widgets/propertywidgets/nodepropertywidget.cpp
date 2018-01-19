@@ -47,7 +47,7 @@ void NodePropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     if (!!sceneNode) {
         this->sceneNode = sceneNode.staticCast<iris::SceneNode>();
-        shadowCaster->setValue(this->sceneNode->getShadowEnabled());
+        shadowCaster->setValue(this->sceneNode->getShadowCastingEnabled());
     } else {
         this->sceneNode.clear();
     }
@@ -56,7 +56,7 @@ void NodePropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 void NodePropertyWidget::onShadowEnabledChanged(bool val)
 {
     if (!!this->sceneNode) {
-        this->sceneNode->setShadowEnabled(val);
+        this->sceneNode->setShadowCastingEnabled(val);
     }
 }
 

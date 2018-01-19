@@ -165,14 +165,7 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
     renderData->fogEnabled = scene->fogEnabled;
 
     if (scene->shadowEnabled) {
-        gl->glViewport(0, 0, 4096, 4096);
-        gl->glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
-        gl->glClear(GL_DEPTH_BUFFER_BIT);
-        gl->glCullFace(GL_FRONT);
         renderShadows(scene);
-        gl->glCullFace(GL_BACK);
-        gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
     }
 
     gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -264,14 +257,7 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     renderData->fogEnabled = scene->fogEnabled;
 
     if (scene->shadowEnabled) {
-        gl->glViewport(0, 0, 4096, 4096);
-        gl->glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
-        gl->glClear(GL_DEPTH_BUFFER_BIT);
-        gl->glCullFace(GL_FRONT);
         renderShadows(scene);
-        gl->glCullFace(GL_BACK);
-        gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
     }
 
     gl->glViewport(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale);
@@ -322,7 +308,8 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     graphics->clear(GL_DEPTH_BUFFER_BIT);
     // STEP 5: RENDER SELECTED OBJECT
-    if (!!selectedSceneNode) renderSelectedNode(renderData,selectedSceneNode);
+    if (!!selectedSceneNode && selectedSceneNode->isVisible())
+		renderSelectedNode(renderData,selectedSceneNode);
 
     //clear lists
     scene->geometryRenderList->clear();
@@ -338,17 +325,21 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 void ForwardRenderer::renderShadows(ScenePtr node)
 {
     for (auto light : scene->lights) {
-        if (light->lightType == iris::LightType::Directional) {
-            renderDirectionalShadow(light, scene);
-        } else if (light->lightType == iris::LightType::Spot) {
-            renderSpotlightShadow(light, scene);
-        }
+		if (light->getShadowMapType() != iris::ShadowMapType::None) {
+			if (light->lightType == iris::LightType::Directional) {
+				renderDirectionalShadow(light, scene);
+			}
+			else if (light->lightType == iris::LightType::Spot) {
+				renderSpotlightShadow(light, scene);
+			}
+		}
     }
 }
 
 void ForwardRenderer::renderDirectionalShadow(LightNodePtr light, ScenePtr node)
 {
     graphics->setRenderTarget(QList<Texture2DPtr>(),light->shadowMap->shadowTexture);
+	graphics->setRasterizerState(RasterizerState::CullClockwise);
 
     int shadowSize = light->shadowMap->resolution;
     graphics->setViewport(QRect(0, 0, shadowSize, shadowSize));
@@ -389,13 +380,14 @@ void ForwardRenderer::renderDirectionalShadow(LightNodePtr light, ScenePtr node)
             item->mesh->draw(gl, shader);
         }
     }
-    //gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
     graphics->clearRenderTarget();
 }
 
 void ForwardRenderer::renderSpotlightShadow(LightNodePtr light, ScenePtr node)
 {
     graphics->setRenderTarget(QList<Texture2DPtr>(),light->shadowMap->shadowTexture);
+	graphics->setRasterizerState(RasterizerState::CullClockwise);
     //gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, shadowFBO);
     //gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, light->shadowMap->shadowTexture->getTextureId(), 0);
     //gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, light->shadowMap->shadowTexId, 0);
@@ -438,6 +430,8 @@ void ForwardRenderer::renderSpotlightShadow(LightNodePtr light, ScenePtr node)
             item->mesh->draw(gl, shader);
         }
     }
+
+	graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
     graphics->clearRenderTarget();
 }
 
@@ -462,14 +456,7 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
     graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
 
     if (scene->shadowEnabled) {
-        gl->glViewport(0, 0, 4096, 4096);
-        gl->glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
-        gl->glClear(GL_DEPTH_BUFFER_BIT);
-        gl->glCullFace(GL_FRONT);
         renderShadows(scene);
-        gl->glCullFace(GL_BACK);
-        gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
     }
 
     vrDevice->beginFrame();
@@ -658,17 +645,22 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 //                                         item->renderStates.receiveShadows &&
 //                                         scene->shadowEnabled &&
 //                                         light->lightType != iris::LightType::Point);
-                    mat->setUniformValue(lightPrefix+"shadowMap", shadowIndex);
-                    //mat->setUniformValue(QString("shadowMaps[%0].").arg(i), 8);
-                    mat->setUniformValue(lightPrefix+"shadowMatrix", light->shadowMap->shadowMatrix);
-                    if (light->lightType == iris::LightType::Point)
-                        mat->setUniformValue(lightPrefix+"shadowType", (int)iris::ShadowMapType::None);
-                    else
-                        mat->setUniformValue(lightPrefix+"shadowType", (int)light->shadowMap->shadowType);
+					if (!scene->shadowEnabled) {
+						mat->setUniformValue(lightPrefix + "shadowType", (int)iris::ShadowMapType::None);
+					}
+					else {
+						mat->setUniformValue(lightPrefix + "shadowMap", shadowIndex);
+						//mat->setUniformValue(QString("shadowMaps[%0].").arg(i), 8);
+						mat->setUniformValue(lightPrefix + "shadowMatrix", light->shadowMap->shadowMatrix);
+						if (light->lightType == iris::LightType::Point)
+							mat->setUniformValue(lightPrefix + "shadowType", (int)iris::ShadowMapType::None);
+						else
+							mat->setUniformValue(lightPrefix + "shadowType", (int)light->shadowMap->shadowType);
 
 
-                    graphics->setTexture(shadowIndex, light->shadowMap->shadowTexture);
-                    shadowIndex++;
+						graphics->setTexture(shadowIndex, light->shadowMap->shadowTexture);
+						shadowIndex++;
+					}
                     //shadowDepthMap
                     //gl->glActiveTexture(GL_TEXTURE8);
                     //gl->glBindTexture(GL_TEXTURE_2D, light->shadowMap->shadowTexId);
@@ -833,7 +825,8 @@ void ForwardRenderer::renderOutlineNode(RenderData *renderData, SceneNodePtr nod
     }
 
     for(auto childNode : node->children) {
-        renderOutlineNode(renderData, childNode);
+		if (childNode->isVisible())
+			renderOutlineNode(renderData, childNode);
     }
 }
 

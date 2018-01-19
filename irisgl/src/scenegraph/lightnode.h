@@ -93,6 +93,64 @@ public:
 
     void updateAnimation(float time) override;
 
+	ShadowMap* getShadowMap()
+	{
+		return shadowMap;
+	}
+
+	void setShadowMapType(ShadowMapType shadowType)
+	{
+		shadowMap->shadowType = shadowType;
+	}
+
+	ShadowMapType getShadowMapType()
+	{
+		return shadowMap->shadowType;
+	}
+
+	void setShadowMapResolution(int size)
+	{
+		shadowMap->setResolution(size);
+	}
+
+	int getShadowMapResolution()
+	{
+		return shadowMap->resolution;
+	}
+
+	SceneNodePtr createDuplicate() override
+	{
+		auto light = iris::LightNode::create();
+
+		// node properties
+		light->pos = this->pos;
+		light->rot = this->rot;
+		light->scale = this->scale;
+		light->castShadow = this->castShadow;
+		light->duplicable = this->duplicable;
+		light->visible = this->visible;
+		light->removable = this->removable;
+		light->pickable = this->pickable;
+		light->castShadow  = this->castShadow;
+		light->attached = this->attached;
+
+		// light properties
+		light->lightDir = this->lightDir;
+		light->lightType = this->lightType;
+		light->color = this->color;
+		light->intensity = this->intensity;
+		light->distance = this->distance;
+		light->spotCutOff = this->spotCutOff;
+		light->spotCutOffSoftness = this->spotCutOffSoftness;
+		light->shadowMap->bias = this->shadowMap->bias;
+		light->shadowMap->shadowType = this->shadowMap->shadowType;
+		light->shadowMap->setResolution(this->shadowMap->resolution);
+		light->icon = this->icon;
+		light->iconSize = this->iconSize;
+
+		return light;
+	}
+
 private:
     LightNode();
 

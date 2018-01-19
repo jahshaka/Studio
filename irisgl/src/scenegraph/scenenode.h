@@ -66,7 +66,7 @@ public:
     bool removable;
 
     bool pickable;
-    bool shadowEnabled;
+    bool castShadow;
 
     friend class Renderer;
     friend class Scene;
@@ -140,7 +140,7 @@ public:
     * 1) The duplicate shouldnt have a parent node or be added to a scene
     */
    virtual SceneNodePtr createDuplicate(){
-       qt_assert((QString("This node isnt duplicable: ") + name).toStdString().c_str(),__FILE__,__LINE__);
+       //qt_assert((QString("This node isnt duplicable: ") + name).toStdString().c_str(),__FILE__,__LINE__);
 	   return SceneNodePtr();
    }
 
@@ -150,12 +150,20 @@ public:
         return visible;
     }
 
-    void show() {
+    void show(bool hideChildren = false) {
         visible = true;
+		if (hideChildren) {
+			for (auto child : children)
+				child->show(hideChildren);
+		}
     }
 
-    void hide() {
+    void hide(bool hideChildren = false) {
         visible = false;
+		if (hideChildren) {
+			for (auto child : children)
+				child->hide(hideChildren);
+		}
     }
 
     bool isRemovable() {
@@ -170,12 +178,12 @@ public:
         return pickable;
     }
 
-    void setShadowEnabled(bool val) {
-        shadowEnabled = val;
+    void setShadowCastingEnabled(bool val) {
+        castShadow = val;
     }
 
-    bool getShadowEnabled() {
-        return shadowEnabled;
+    bool getShadowCastingEnabled() {
+        return castShadow;
     }
 
     SceneNodeType getSceneNodeType();

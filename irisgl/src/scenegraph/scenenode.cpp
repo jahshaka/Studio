@@ -43,7 +43,7 @@ SceneNode::SceneNode():
     removable = true;
 
     pickable = true;
-    shadowEnabled = true;
+    castShadow = true;
 
     localTransform.setToIdentity();
     globalTransform.setToIdentity();

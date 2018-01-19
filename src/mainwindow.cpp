@@ -257,7 +257,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     node->setLocalPos(QVector3D(0, 1e-4, 0)); // prevent z-fighting with the default plane reset (iKlsR)
     node->setName("Ground");
     node->setPickable(false);
-    node->setShadowEnabled(false);
+    node->setShadowCastingEnabled(false);
 
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
@@ -283,7 +283,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     plight->setLocalPos(QVector3D(-4, 4, 0));
     plight->intensity = 1;
     plight->icon = iris::Texture2D::load(":/icons/bulb.png");
-    plight->setShadowEnabled(false);
+	plight->setShadowMapType(iris::ShadowMapType::None);
 
     // fog params
     scene->fogColor = QColor(72, 72, 72);

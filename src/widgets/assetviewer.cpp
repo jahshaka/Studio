@@ -97,7 +97,7 @@ void AssetViewer::initializeGL()
 	dlight->color = QColor(255, 355, 240);
     dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 45, 0));
     dlight->intensity = 0.56;
-    dlight->setShadowEnabled(true);
+    dlight->setShadowMapType(iris::ShadowMapType::Soft);
     dlight->shadowMap->shadowType = iris::ShadowMapType::None;
     scene->rootNode->addChild(dlight);
 
@@ -107,7 +107,7 @@ void AssetViewer::initializeGL()
     plight->setLocalPos(QVector3D(0, 0, -3));
     plight->color = QColor(230, 230, 255);
     plight->intensity = 0.47;
-    plight->setShadowEnabled(true);
+    plight->setShadowMapType(iris::ShadowMapType::None);
     plight->shadowMap->shadowType = iris::ShadowMapType::None;
     scene->rootNode->addChild(plight);
 
@@ -117,7 +117,7 @@ void AssetViewer::initializeGL()
     blight->setLocalPos(QVector3D(2, 2, 2));
     blight->color = QColor(255, 255, 238);
     blight->intensity = 0.43;
-    blight->setShadowEnabled(true);
+    blight->setShadowMapType(iris::ShadowMapType::None);
     blight->shadowMap->shadowType = iris::ShadowMapType::None;
     scene->rootNode->addChild(blight);
 

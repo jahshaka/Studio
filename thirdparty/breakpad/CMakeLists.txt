@@ -17,12 +17,7 @@ if ((UNIX) AND (NOT APPLE))
     include (LinuxBreakpad)
 endif()
 
-# This will allow a .lib to be built alongside the dll, ((needed)) for MSVC
-if(WIN32 AND MSVC)
-    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS 1)
-endif()
-
-add_library(breakpad SHARED ${SRCS})
+add_library(breakpad STATIC ${SRCS})
 
 target_include_directories(breakpad PUBLIC
     "${PROJECT_SOURCE_DIR}/breakpad/src/"

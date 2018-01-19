@@ -120,7 +120,7 @@ void MeshNode::submitRenderItems()
 
         this->scene->geometryRenderList->add(renderItem);
 
-        if (this->getShadowEnabled()) {
+        if (this->getShadowCastingEnabled()) {
             this->scene->shadowRenderList->add(renderItem);
         }
     }

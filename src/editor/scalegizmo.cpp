@@ -251,7 +251,7 @@ void ScaleGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector
 		for (int i = 0; i < 3; i++) {
 			if (handles[i] == draggedHandle) {
 				auto transform = this->getTransform();
-				transform.scale(getGizmoScale() * handles[i]->handleRadius * handleVisualScale);
+				transform.scale(getGizmoScale() * handles[i]->handleScale * handleVisualScale);
 				shader->setUniformValue("color", QColor(255, 255, 0));
 				shader->setUniformValue("u_worldMatrix", transform);
 
@@ -265,7 +265,7 @@ void ScaleGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector
 
 		for (int i = 0; i < 3; i++) {
 			auto transform = this->getTransform();
-			transform.scale(getGizmoScale() * handles[i]->handleRadius * handleVisualScale);
+			transform.scale(getGizmoScale() * handles[i]->handleScale * handleVisualScale);
 			shader->setUniformValue("u_worldMatrix", transform);
 
 			if (handles[i] == hitHandle)

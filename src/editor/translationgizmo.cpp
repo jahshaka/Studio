@@ -231,7 +231,8 @@ void TranslationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, Q
 		for (int i = 0; i < 3; i++) {
 			if (handles[i] == draggedHandle) {
 				auto transform = this->getTransform();
-				transform.scale(getGizmoScale() * handles[i]->handleRadius);
+				//transform.scale(getGizmoScale() * handles[i]->handleRadius);
+				transform.scale(getGizmoScale() * handles[i]->handleScale);
 				shader->setUniformValue("color", QColor(255, 255, 0));
 				shader->setUniformValue("u_worldMatrix", transform);
 
@@ -246,7 +247,8 @@ void TranslationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, Q
 		for (int i = 0; i < 3; i++) {
 			for (int i = 0; i < 3; i++) {
 				auto transform = this->getTransform();
-				transform.scale(getGizmoScale() * handles[i]->handleRadius);
+				//transform.scale(getGizmoScale() * handles[i]->handleRadius);
+				transform.scale(getGizmoScale() * handles[i]->handleScale);
 				shader->setUniformValue("color", handles[i]->getHandleColor());
 				shader->setUniformValue("u_worldMatrix", transform);
 
