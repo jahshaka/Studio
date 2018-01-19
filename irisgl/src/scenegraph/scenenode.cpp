@@ -43,7 +43,7 @@ SceneNode::SceneNode():
     removable = true;
 
     pickable = true;
-    cashShadow = true;
+    castShadow = true;
 
     localTransform.setToIdentity();
     globalTransform.setToIdentity();
