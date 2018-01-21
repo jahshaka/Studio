@@ -1,6 +1,7 @@
 #include "translationgizmo.h"
 #include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLShaderProgram>
+#include <QApplication>
 
 #include "irisgl/src/math/intersectionhelper.h"
 #include "irisgl/src/math/mathhelper.h"
@@ -10,9 +11,12 @@
 #include "irisgl/src/graphics/graphicshelper.h"
 #include "irisgl/src/math/mathhelper.h"
 
+#define DEFAULT_SNAP_LENGTH 1.0f
+
 TranslationHandle::TranslationHandle(Gizmo* gizmo, GizmoAxis axis)
 {
 	this->gizmo = gizmo;
+	this->axis = axis;
 
 	switch (axis) {
 	case GizmoAxis::X:
@@ -175,11 +179,21 @@ void TranslationGizmo::drag(QVector3D rayPos, QVector3D rayDir)
 	// move node along line
 	// do snapping here as well
 	auto diff = slidingPos - hitPos;
-	
+
+	// apply snapping (relative snapping)
+	auto mods = QApplication::keyboardModifiers();
+	if (mods.testFlag(Qt::ControlModifier)) {
+		float length = diff.length();
+		float snapLength = Gizmo::snap(length, DEFAULT_SNAP_LENGTH);
+		diff = diff.normalized() * snapLength;
+	}
+
 	// apply diff in global space
 	auto targetPos = nodeStartPos + diff;
+
 	// bring to local space
 	auto localTarget = selectedNode->parent->getGlobalTransform().inverted() * targetPos;
+	
 	selectedNode->setLocalPos(localTarget);
 }
 

@@ -130,6 +130,9 @@ public:
 	void setInitialTransform();
 	void createUndoAction();
 
+	static QVector3D snap(QVector3D pos, float gridSize);
+	static float snap(float value, float gridSize);
+
 	// returns transform of the gizmo, not the scene node
 	// the transform is calculated based on the transform's space (local or global)
 	virtual QMatrix4x4 getTransform();
