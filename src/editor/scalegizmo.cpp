@@ -1,6 +1,7 @@
 #include "scalegizmo.h"
 #include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLShaderProgram>
+#include <QApplication>
 
 #include "irisgl/src/math/intersectionhelper.h"
 #include "irisgl/src/math/mathhelper.h"
@@ -12,6 +13,8 @@
 #include "uimanager.h"
 #include "../commands/transfrormscenenodecommand.h"
 #include "irisgl/src/math/mathhelper.h"
+
+#define DEFAULT_SNAP_LENGTH 1.0f
 
 ScaleHandle::ScaleHandle(Gizmo* gizmo, GizmoAxis axis)
 {
@@ -184,6 +187,12 @@ void ScaleGizmo::drag(QVector3D rayPos, QVector3D rayDir)
 	// move node along line
 	// do snapping here as well
 	QVector3D diff = slidingPos - hitPos;
+	auto mods = QApplication::keyboardModifiers();
+	if (mods.testFlag(Qt::ControlModifier)) {
+		float length = diff.length();
+		float snapLength = Gizmo::snap(length, DEFAULT_SNAP_LENGTH);
+		diff = diff.normalized() * snapLength;
+	}
 
 	switch (draggedHandle->axis)
 	{
