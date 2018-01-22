@@ -20,9 +20,17 @@ endmacro()
 # Copy Jahshaka data folders after a successful build
 set(DataDirs app assets scenes)
 foreach(dir ${DataDirs})
+if (APPLE)
+	add_custom_command(
+		TARGET Jahshaka POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+				${PROJECT_SOURCE_DIR}/${dir}
+				${DestDir}/${PROJECT_NAME}.app/Contents/MacOS/${dir})
+else()
 	add_custom_command(
 		TARGET Jahshaka POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy_directory
 				${PROJECT_SOURCE_DIR}/${dir}
 				${DestDir}/${dir})
+endif()
 endforeach()
