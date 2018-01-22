@@ -374,7 +374,7 @@ QListWidget::item:selected {
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="pushButton">
+       <widget class="QPushButton" name="downloadWorlds">
         <property name="text">
          <string>Download Worlds</string>
         </property>

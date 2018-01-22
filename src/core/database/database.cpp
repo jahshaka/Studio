@@ -615,6 +615,17 @@ QByteArray Database::fetchCachedThumbnail(const QString &name) const
     return QByteArray();
 }
 
+void Database::updateAssetMetadata(const QString &guid, const QString &name, const QByteArray &tags)
+{
+	QSqlQuery query;
+	query.prepare("UPDATE assets SET name = ?, tags = ?, last_updated = datetime() WHERE guid = ?");
+	query.addBindValue(name);
+	query.addBindValue(tags);
+	query.addBindValue(guid);
+
+	executeAndCheckQuery(query, "updateAssetMetadata");
+}
+
 void Database::updateSceneGlobal(const QByteArray &sceneBlob, const QByteArray &thumbnail)
 {
     QSqlQuery query;

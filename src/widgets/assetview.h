@@ -75,6 +75,8 @@ public:
     void copyTextures(const QString &folderGuid);
     void checkForEmptyState();
     void toggleFilterPane(bool);
+	void addToLibrary();
+	void spaceSplits();
     void closeViewer();
 	void clearViewer();
 	QString getAssetType(int);
@@ -106,7 +108,7 @@ private:
 
 	PreferencesDialog* prefsDialog;
 
-	QPushButton *addToLibrary;
+	QPushButton *updateAsset;
 	QPushButton *addToProject;
     QPushButton *deleteFromLibrary;
 	QLabel *renameModel;
@@ -115,6 +117,9 @@ private:
 	QLineEdit *tagModelField;
 	QWidget *renameWidget;
 	QWidget *tagWidget;
+
+	QLabel *backdropLabel;
+	QComboBox *backdropColor;
 
     QTreeWidget *treeWidget;
 	QTreeWidgetItem *rootItem;

@@ -631,6 +631,7 @@ void MainWindow::switchSpace(WindowSpaces space)
         case WindowSpaces::ASSETS: {
             ui->stackedWidget->setCurrentIndex(2);
             ui->stackedWidget->currentWidget()->setFocus();
+			static_cast<AssetView*>(ui->stackedWidget->currentWidget())->spaceSplits();
     		toggleWidgets(false);
     		toolBar->setVisible(false);
 			if (UiManager::isSceneOpen) {
