@@ -167,10 +167,10 @@ void ParticleSystemNode::update(float delta) {
     SceneNode::update(delta);
 
     generateParticles(delta);
-    std::list<Particle*>::iterator it = particles.begin();
+    //std::list<Particle*>::iterator it = particles.begin();
 
-    while (it != particles.end()) {
-        auto p = (*it);
+	for (int i = 0; i < particles.size(); i++) {
+		auto p = particles[i];
 
         p->velocity += QVector3D(0, p->GRAVITY * p->gravityEffect * delta, 0);
         //p.velocity.setY(p.velocity.y() + GRAVITY * gravityEffect * delta);
@@ -190,10 +190,9 @@ void ParticleSystemNode::update(float delta) {
         }
 
         if (p->elapsedTime > p->lifeLength) {
-            it = particles.erase(it++);
+			particles.erase(particles.begin() + i);
+			i--;
         }
-
-        ++it;
     }
 }
 
@@ -201,6 +200,41 @@ void ParticleSystemNode::renderParticles(RenderData* renderData, QOpenGLShaderPr
 {
     renderer->icon = texture;
     renderer->render(shader, renderData, this->particles);
+}
+
+SceneNodePtr ParticleSystemNode::createDuplicate()
+{
+	auto ps = ParticleSystemNode::create();
+
+	ps->particlesPerSecond  = this->particlesPerSecond;
+	ps->speed				= this->speed;
+	ps->texture				= this->texture;
+
+	ps->dissipate			= this->dissipate;
+	ps->dissipateInv		= this->dissipateInv;
+	ps->randomRotation		= this->randomRotation;
+
+	ps->lifeFactor			= this->lifeFactor;
+	ps->scaleFactor			= this->scaleFactor;
+	ps->speedFactor			= this->speedFactor;
+	ps->useAdditive			= this->useAdditive;
+
+	ps->gravityComplement	= this->gravityComplement;
+	ps->lifeLength			= this->lifeLength;
+	ps->particleScale		= this->particleScale;
+
+	ps->maxParticles		= this->maxParticles;
+	ps->billboardScale		= this->billboardScale;
+
+	ps->speedError			= this->speedError;
+	ps->lifeError			= this->lifeError;
+	ps->scaleError			= this->scaleError;
+	ps->direction			= this->direction;
+
+	ps->posDir				= this->posDir;
+	ps->boundDimension		= this->boundDimension;
+
+	return ps;
 }
 
 }

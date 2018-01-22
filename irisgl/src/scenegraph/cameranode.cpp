@@ -40,4 +40,16 @@ QVector3D CameraNode::calculatePickingDirection(int viewPortWidth, int viewPortH
     return ray.toVector3D().normalized();
 }
 
+SceneNodePtr CameraNode::createDuplicate()
+{
+	auto camera = iris::CameraNode::create();
+
+	camera->angle = this->angle;
+	camera->nearClip = this->nearClip;
+	camera->farClip = this->farClip;
+	camera->aspectRatio = this->aspectRatio;
+
+	return camera;
+}
+
 }

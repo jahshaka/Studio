@@ -1189,11 +1189,13 @@ void MainWindow::duplicateNode()
     if (!scene) return;
     if (!activeSceneNode || !activeSceneNode->isDuplicable()) return;
 
+	sceneView->makeCurrent();
     auto node = activeSceneNode->duplicate();
     activeSceneNode->parent->addChild(node, false);
 
     this->sceneHierarchyWidget->repopulateTree();
     sceneNodeSelected(node);
+	sceneView->doneCurrent();
 }
 
 void MainWindow::deleteNode()

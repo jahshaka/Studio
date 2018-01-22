@@ -99,6 +99,8 @@ public:
      */
     QVector3D calculatePickingDirection(int viewPortWidth, int viewPortHeight, QPointF pos);
 
+	SceneNodePtr createDuplicate() override;
+
 private:
     CameraNode()
     {

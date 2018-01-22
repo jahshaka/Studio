@@ -93,7 +93,7 @@ public:
 
     void render(QOpenGLShaderProgram *shader,
                 iris::RenderData* renderData,
-                std::list<Particle*>& particles)
+                std::vector<Particle*>& particles)
     {
         shader->bind();
 
