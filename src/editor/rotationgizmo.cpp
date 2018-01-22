@@ -1,6 +1,7 @@
 #include "rotationgizmo.h"
 #include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLShaderProgram>
+#include <QApplication>
 
 #include "irisgl/src/math/intersectionhelper.h"
 #include "irisgl/src/math/mathhelper.h"
@@ -11,6 +12,8 @@
 #include "uimanager.h"
 #include "../commands/transfrormscenenodecommand.h"
 #include "irisgl/src/math/mathhelper.h"
+
+#define DEFAULT_SNAP_LENGTH 10
 
 RotationHandle::RotationHandle(Gizmo* gizmo, GizmoAxis axis)
 {
@@ -198,6 +201,11 @@ void RotationGizmo::drag(QVector3D rayPos, QVector3D rayDir)
 	// move node along line
 	// do snapping here as well
 	auto diff = startAngle - hitAngle;
+	auto mods = QApplication::keyboardModifiers();
+	if (mods.testFlag(Qt::ControlModifier)) {
+		diff = Gizmo::snap(diff, DEFAULT_SNAP_LENGTH);
+	}
+
 	QQuaternion rot;
 
 	switch (draggedHandle->axis) {
