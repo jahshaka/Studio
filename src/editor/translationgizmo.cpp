@@ -10,6 +10,8 @@
 #include "irisgl/src/scenegraph/cameranode.h"
 #include "irisgl/src/graphics/graphicshelper.h"
 #include "irisgl/src/math/mathhelper.h"
+#include "../uimanager.h"
+#include "../widgets/scenenodepropertieswidget.h"
 
 #define DEFAULT_SNAP_LENGTH 1.0f
 
@@ -195,6 +197,7 @@ void TranslationGizmo::drag(QVector3D rayPos, QVector3D rayDir)
 	auto localTarget = selectedNode->parent->getGlobalTransform().inverted() * targetPos;
 	
 	selectedNode->setLocalPos(localTarget);
+	UiManager::propertyWidget->refreshTransform();
 }
 
 bool TranslationGizmo::isHit(QVector3D rayPos, QVector3D rayDir)

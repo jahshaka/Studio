@@ -1,6 +1,8 @@
 #include "transfrormscenenodecommand.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/math/mathhelper.h"
+#include "../uimanager.h"
+#include "../widgets/scenenodepropertieswidget.h"
 
 TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node, QMatrix4x4 localTransform)
 {
@@ -25,6 +27,7 @@ void TransformSceneNodeCommand::undo()
 	sceneNode->setLocalPos(oldPos);
 	sceneNode->setLocalRot(oldRot);
 	sceneNode->setLocalScale(oldScale);
+	UiManager::propertyWidget->refreshTransform();
 }
 
 void TransformSceneNodeCommand::redo()
@@ -32,4 +35,5 @@ void TransformSceneNodeCommand::redo()
 	sceneNode->setLocalPos(newPos);
 	sceneNode->setLocalRot(newRot);
 	sceneNode->setLocalScale(newScale);
+	UiManager::propertyWidget->refreshTransform();
 }

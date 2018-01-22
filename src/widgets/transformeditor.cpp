@@ -76,21 +76,26 @@ void TransformEditor::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
     this->sceneNode = defaultStateNode = sceneNode;
 
     if (!!sceneNode) {
-        auto pos = sceneNode->getLocalPos();
-        ui->xpos->setValue(pos.x());
-        ui->ypos->setValue(pos.y());
-        ui->zpos->setValue(pos.z());
-
-        auto rot = sceneNode->getLocalRot().toEulerAngles();
-        ui->xrot->setValue(rot.x());
-        ui->yrot->setValue(rot.y());
-        ui->zrot->setValue(rot.z());
-
-        auto scale = sceneNode->getLocalScale();
-        ui->xscale->setValue(scale.x());
-        ui->yscale->setValue(scale.y());
-        ui->zscale->setValue(scale.z());
+		refreshUi();
     }
+}
+
+void TransformEditor::refreshUi()
+{
+	auto pos = sceneNode->getLocalPos();
+	ui->xpos->setValue(pos.x());
+	ui->ypos->setValue(pos.y());
+	ui->zpos->setValue(pos.z());
+
+	auto rot = sceneNode->getLocalRot().toEulerAngles();
+	ui->xrot->setValue(rot.x());
+	ui->yrot->setValue(rot.y());
+	ui->zrot->setValue(rot.z());
+
+	auto scale = sceneNode->getLocalScale();
+	ui->xscale->setValue(scale.x());
+	ui->yscale->setValue(scale.y());
+	ui->zscale->setValue(scale.z());
 }
 
 void TransformEditor::xPosChanged(double value)

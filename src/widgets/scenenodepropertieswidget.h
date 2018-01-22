@@ -50,6 +50,8 @@ public:
      */
     void refreshMaterial(const QString &matName);
 
+	void refreshTransform();
+
 private:
     void clearLayout(QLayout*);
 

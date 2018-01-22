@@ -12,6 +12,8 @@
 #include "uimanager.h"
 #include "../commands/transfrormscenenodecommand.h"
 #include "irisgl/src/math/mathhelper.h"
+#include "uimanager.h"
+#include "../widgets/scenenodepropertieswidget.h"
 
 #define DEFAULT_SNAP_LENGTH 10
 
@@ -226,6 +228,8 @@ void RotationGizmo::drag(QVector3D rayPos, QVector3D rayDir)
 		selectedNode->setLocalRot(rot * nodeStartRot);
 	else
 		selectedNode->setLocalRot(nodeStartRot * rot);
+
+	UiManager::propertyWidget->refreshTransform();
 }
 
 bool RotationGizmo::isHit(QVector3D rayPos, QVector3D rayDir)

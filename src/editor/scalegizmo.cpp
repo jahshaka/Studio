@@ -13,6 +13,8 @@
 #include "uimanager.h"
 #include "../commands/transfrormscenenodecommand.h"
 #include "irisgl/src/math/mathhelper.h"
+#include "../widgets/scenenodepropertieswidget.h"
+#include "../widgets/propertywidgets/transformpropertywidget.h"
 
 #define DEFAULT_SNAP_LENGTH 1.0f
 
@@ -211,6 +213,7 @@ void ScaleGizmo::drag(QVector3D rayPos, QVector3D rayDir)
 	}
 
 	selectedNode->setLocalScale(startScale + diff);
+	UiManager::propertyWidget->refreshTransform();
 }
 
 bool ScaleGizmo::isHit(QVector3D rayPos, QVector3D rayDir)

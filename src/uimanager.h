@@ -7,6 +7,7 @@ class QUndoCommand;
 class MainWindow;
 class SceneViewWidget;
 class SceneHierarchyWidget;
+class SceneNodePropertiesWidget;
 
 enum class SceneMode
 {
@@ -21,6 +22,7 @@ public:
     static AnimationWidget* animationWidget;
     static SceneViewWidget* sceneViewWidget;
     static SceneHierarchyWidget* sceneHierarchyWidget;
+	static SceneNodePropertiesWidget* propertyWidget;
 
     static AnimationWidget *getAnimationWidget();
     static void setAnimationWidget(AnimationWidget *value);
