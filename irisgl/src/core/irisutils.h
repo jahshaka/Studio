@@ -36,7 +36,8 @@ public:
     }
 
 	static QString buildFileName(const QString &fileName, const QString &suffix) {
-		return fileName + "." + suffix;
+		if (!suffix.isEmpty()) return fileName + "." + suffix;
+		return fileName;
 	}
 
     template<typename... Args>
