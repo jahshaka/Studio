@@ -202,7 +202,9 @@ void main()
     if(u_useNormalTex)
     {
         vec3 texNorm = (texture(u_normalTexture,v_texCoord).xyz-0.5)*2;
+		texNorm.xy *= u_normalIntensity;
         normal = normalize(v_tanToWorld*texNorm);
+		//normal = normalize(normal);
         //normal = mix(normal,vec3(0,0,0),u_normalIntensity);
     }
 
