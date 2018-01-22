@@ -367,7 +367,7 @@ QString Database::insertAssetGlobal(const QString &assetName,
 	query.bindValue(":guid", guid);
 	query.bindValue(":properties", properties);
 
-	query.bindValue(":author", getAuthorName());
+	query.bindValue(":author", "");// getAuthorName());
 	query.bindValue(":license", "CCBY");
 	query.bindValue(":tags", tags);
 

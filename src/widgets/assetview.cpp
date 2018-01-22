@@ -620,7 +620,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
     });
 
 	connect(addToLibrary, &QPushButton::pressed, [this]() {
-		bool canAdd = db->isAuthorInfoPresent();
+		bool canAdd = true; // db->isAuthorInfoPresent();
 
 		QJsonObject tags;
 		QJsonArray actualTags;
@@ -673,7 +673,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 			object["guid"] = guid;
 			object["type"] = (int)AssetMetaType::Object; // model?
 			object["full_filename"] = IrisUtils::buildFileName(guid, fInfo.suffix());
-			object["author"] = db->getAuthorName();
+			object["author"] = ""; // db->getAuthorName();
 			object["license"] = "CCBY";
 
 			Globals::assetNames.insert(guid, object["name"].toString());
