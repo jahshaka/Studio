@@ -575,6 +575,8 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             program->setUniformValue("u_viewMatrix",    renderData->viewMatrix);
             program->setUniformValue("u_projMatrix",    renderData->projMatrix);
 
+			program->setUniformValue("u_time", scene->getRunningTime());
+
             if  (item->mesh->hasSkeleton()) {
                 auto boneTransforms = item->mesh->getSkeleton()->boneTransforms;
                 program->setUniformValueArray("u_bones", boneTransforms.data(), boneTransforms.size());

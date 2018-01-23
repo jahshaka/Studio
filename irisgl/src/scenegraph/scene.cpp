@@ -67,6 +67,8 @@ Scene::Scene()
     geometryRenderList = new RenderList();
     shadowRenderList = new RenderList();
     gizmoRenderList = new RenderList();
+
+	time = 0;
 }
 
 void Scene::setSkyTexture(Texture2DPtr tex)
@@ -104,6 +106,7 @@ void Scene::updateSceneAnimation(float time)
 
 void Scene::update(float dt)
 {
+	time += dt;
     rootNode->update(dt);
 
     // cameras aren't always a part of the scene hierarchy, so their matrices are updated here
