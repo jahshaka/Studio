@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>400</height>
+    <width>1625</width>
+    <height>838</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -367,6 +367,33 @@ QListWidget::item:selected {
        <number>4</number>
       </property>
       <item>
+       <widget class="QPushButton" name="importWorld">
+        <property name="text">
+         <string>Import World</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="downloadWorlds">
+        <property name="text">
+         <string>Download Worlds</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="horizontalSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
        <widget class="QLabel" name="tilePreviewLabel">
         <property name="text">
          <string>Tile Size</string>
@@ -470,7 +497,7 @@ QListWidget::item:selected {
        </layout>
       </item>
       <item>
-       <spacer name="horizontalSpacer">
+       <spacer name="horizontalSpacer_2">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
@@ -488,7 +515,7 @@ QListWidget::item:selected {
          <string notr="true"/>
         </property>
         <property name="text">
-         <string>+ Create Sample World</string>
+         <string>+ Sample World</string>
         </property>
         <property name="flat">
          <bool>false</bool>
@@ -496,16 +523,9 @@ QListWidget::item:selected {
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="importWorld">
-        <property name="text">
-         <string>Import World</string>
-        </property>
-       </widget>
-      </item>
-      <item>
        <widget class="QPushButton" name="newProject">
         <property name="text">
-         <string>+ Create New World</string>
+         <string>+ New World</string>
         </property>
        </widget>
       </item>

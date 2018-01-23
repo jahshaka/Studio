@@ -30,6 +30,7 @@
 #include "dynamicgrid.h"
 
 #include <QDebug>
+#include <QDesktopServices>
 #include <QGraphicsDropShadowEffect>
 #include <QLineEdit>
 #include <QFontDatabase>
@@ -81,6 +82,10 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     connect(ui->tilePreview, &QComboBox::currentTextChanged, [this](const QString &changedText) {
         settings->setValue("tileSize", changedText);
     });
+
+	connect(ui->downloadWorlds, &QPushButton::pressed, []() {
+		QDesktopServices::openUrl(QUrl("http://www.jahfx.com/worlds/"));
+	});
 
     populateDesktop();
 

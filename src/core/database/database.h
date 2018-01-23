@@ -51,6 +51,7 @@ public:
 	QVector<AssetTileData> fetchAssetsByCollection(int collection_id);
     QByteArray getSceneBlobGlobal() const;
     QByteArray fetchCachedThumbnail(const QString& name) const;
+	void updateAssetMetadata(const QString &guid, const QString &name, const QByteArray &tags);
     void updateSceneGlobal(const QByteArray &sceneBlob, const QByteArray &thumbnail);
     void createExportScene(const QString& outTempFilePath);
     bool importProject(const QString& inFilePath);

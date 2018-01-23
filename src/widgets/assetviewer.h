@@ -69,6 +69,8 @@ public:
         return percentage;
     }
 
+	void changeBackdrop(unsigned int id);
+
 	void createMaterial(QJsonObject &matObj, iris::CustomMaterialPtr mat);
 	void setMaterial(const QJsonObject &matObj) {
 		assetMaterial = matObj;

@@ -34,6 +34,7 @@ public:
 	AssetGridItem(QJsonObject details, QImage image, QJsonObject properties, QJsonObject tags, QWidget *parent = Q_NULLPTR);
 	void setTile(QPixmap pix);
 	void highlight(bool);
+	void updateMetadata(QJsonObject details, QJsonObject tags);
 	
 	void enterEvent(QEvent *event);
 	void leaveEvent(QEvent *event);

@@ -14,6 +14,8 @@ AssetViewGrid::AssetViewGrid(QWidget *parent) : QScrollArea(parent) {
 	//setWidgetResizable(true);
 	setWidget(gridWidget);
 	setStyleSheet("background: transparent");
+
+	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 }
 
 void AssetViewGrid::updateImage() {
@@ -23,7 +25,7 @@ void AssetViewGrid::updateImage() {
 // local
 void AssetViewGrid::addTo(AssetGridItem *item, int count, bool select)
 {
-	int columnCount = viewport()->width() / (180 + 10);
+	int columnCount = viewport()->width() / (128 + 10);
 	if (columnCount == 0) columnCount = 1;
 
 	originalItems.push_back(item);
@@ -43,7 +45,7 @@ void AssetViewGrid::addTo(AssetGridItem *item, int count, bool select)
 void AssetViewGrid::addTo(QJsonObject details, QImage image, int count, QJsonObject properties, QJsonObject tags, bool select) {
 	auto sampleWidget = new AssetGridItem(details, image, properties, tags);
 
-	int columnCount = viewport()->width() / (180 + 10);
+	int columnCount = viewport()->width() / (128 + 10);
 	if (columnCount == 0) columnCount = 1;
 
 	originalItems.push_back(sampleWidget);
@@ -64,7 +66,7 @@ void AssetViewGrid::addTo(QJsonObject details, QImage image, int count, QJsonObj
 void AssetViewGrid::resizeEvent(QResizeEvent *event)
 {
 	lastWidth = event->size().width();
-	int check = event->size().width() / (180 + 10);
+	int check = event->size().width() / (128 + 10);
 	//gridWidget->setMinimumWidth(viewport()->width());
 
 	if (check != 0) {
@@ -119,7 +121,7 @@ void AssetViewGrid::deleteChildWidgets(QLayoutItem *item) {
 
 void AssetViewGrid::searchTiles(QString searchString)
 {
-	int columnCount = lastWidth / (180 + 10);
+	int columnCount = lastWidth / (128 + 10);
 
 	int count = 0;
 	if (!searchString.isEmpty()) {
@@ -147,7 +149,7 @@ void AssetViewGrid::searchTiles(QString searchString)
 
 void AssetViewGrid::filterAssets(int id)
 {
-	int columnCount = lastWidth / (180 + 10);
+	int columnCount = lastWidth / (128 + 10);
 
 	int count = 0;
 	if (id != -1) {
@@ -175,7 +177,7 @@ void AssetViewGrid::filterAssets(int id)
 
 void AssetViewGrid::updateGridColumns(int width)
 {
-	int columnCount = width / (180 + 10);
+	int columnCount = width / (128 + 10);
 	if (columnCount == 0) columnCount = 1;
 
 	int count = 0;

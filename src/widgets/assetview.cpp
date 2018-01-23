@@ -30,6 +30,7 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QDesktopServices>
 
 #include "../globals.h"
 #include "../constants.h"
@@ -67,7 +68,7 @@ bool AssetView::eventFilter(QObject *watched, QEvent *event)
 			case QEvent::DragEnter: {
 				auto evt = static_cast<QDragEnterEvent*>(event);
 				if (evt->mimeData()->hasUrls()) {
-					evt->acceptProposedAction();
+					// evt->acceptProposedAction();
 				}
 
 				break;
@@ -140,6 +141,16 @@ void AssetView::checkForEmptyState()
 
 void AssetView::toggleFilterPane(bool toggle) {
     filterPane->setVisible(toggle);
+}
+
+void AssetView::spaceSplits()
+{
+	split->setHandleWidth(1);
+	int size = this->height() / 2;
+	const QList<int> sizes = { size, size };
+	split->setSizes(sizes);
+	split->setStretchFactor(0, 1);
+	split->setStretchFactor(1, 1);
 }
 
 void AssetView::closeViewer()
@@ -395,6 +406,30 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 	filterPane = new QWidget;
 	auto filterLayout = new QHBoxLayout;
+
+	backdropLabel = new QLabel("Backdrop: ");
+	backdropColor = new QComboBox();
+	backdropColor->setView(new QListView());
+
+	backdropColor->addItem("Dark", 1);
+	backdropColor->addItem("Light", 2);
+	//backdropColor->addItem("Custom Color", 3);
+
+	filterLayout->addWidget(backdropLabel);
+	filterLayout->addWidget(backdropColor);
+
+	connect(backdropColor, &QComboBox::currentTextChanged, [this](const QString &text) {
+		if (text == "Dark") {
+			viewer->changeBackdrop(1);
+		}
+		else if ("Light") {
+			viewer->changeBackdrop(2);
+		}
+		//else if ("Custom Color") {
+		//	viewer->changeBackdrop(3);
+		//}
+	});
+
 	//filterLayout->addWidget(new QLabel("Filter: "));
 	//filterLayout->addWidget(filterGroup);
 	filterLayout->addStretch();
@@ -402,7 +437,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	le = new QLineEdit();
 	le->setFixedWidth(256);
 	le->setStyleSheet(
-		"border: 1px solid #1E1E1E; border - radius: 2px; "
+		"border: 1px solid #1E1E1E; border-radius: 2px; "
 		"font-size: 12px; font-weight: bold; background: #3B3B3B; padding: 6px 4px;"
 	);
 	filterLayout->addWidget(le);
@@ -419,6 +454,11 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		"#filterPane { border-bottom: 1px solid #111; }"
 		"QLabel { font-size: 12px; font-weight: bold; margin-right: 8px; }"
 		"QPushButton[accessibleName=\"filterObj\"] { border-radius: 0; padding: 10px 8px; }"
+		"QComboBox { background: #3B3B3B; border-radius: 1px; color: #BBB; padding: 0 12px; min-height: 30px; min-width: 72px; border: 1px solid #1e1e1e;}"
+		"QComboBox::drop-down { border: 0; margin: 0; padding: 0; min-height: 20px; }"
+		"QComboBox::down-arrow { image: url(:/icons/down_arrow_check.png); width: 18px; height: 14px; }"
+		"QComboBox::down-arrow:!enabled { image: url(:/icons/down_arrow_check_disabled.png); width: 18px; height: 14px; }"
+		"QComboBox QAbstractItemView::item { min-height: 24px; selection-background-color: #404040; color: #cecece; }"
 	);
 
 	auto views = new QWidget;
@@ -446,7 +486,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 			emptyGrid->setVisible(true);
 			fastGrid->setVisible(false);
 
-            closeViewer();
+            // closeViewer();
 		}
 	});
 
@@ -506,17 +546,26 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	assetDropPad->setObjectName(QStringLiteral("assetDropPad"));
 	auto assetDropPadLayout = new QVBoxLayout;
 	QLabel *assetDropPadLabel = new QLabel("Drop a model to import...");
-	assetDropPadLayout->setSpacing(4);
+	assetDropPadLayout->setSpacing(6);
 	assetDropPadLabel->setObjectName(QStringLiteral("assetDropPadLabel"));
 	assetDropPadLabel->setAlignment(Qt::AlignHCenter);
 
 	assetDropPadLayout->addWidget(assetDropPadLabel);
-	QPushButton *browseButton = new QPushButton("Browse for file...");
+	QPushButton *browseButton = new QPushButton("Browse for asset...");
 	assetDropPadLayout->addWidget(browseButton);
+	//auto downloadWorld = new QPushButton("Download Worlds...");
 
-	addToLibrary = new QPushButton("Add to Library");
-	addToLibrary->setStyleSheet("background: #2ecc71");
-	addToLibrary->setVisible(false);
+	QPushButton *downloadWorld = new QPushButton();
+	downloadWorld->setText("Download Worlds");
+
+	connect(downloadWorld, &QPushButton::pressed, []() {
+		QDesktopServices::openUrl(QUrl("http://www.jahfx.com/worlds/"));
+	});
+	assetDropPadLayout->addWidget(downloadWorld);
+
+	updateAsset = new QPushButton("Update");
+	updateAsset->setStyleSheet("background: #2ecc71");
+	updateAsset->setVisible(false);
 
     normalize = new QPushButton("Normalize");
 
@@ -528,7 +577,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
     deleteFromLibrary->setStyleSheet("background: #E74C3C");
     deleteFromLibrary->setVisible(false);
 
-	renameModel = new QLabel("Rename:");
+	renameModel = new QLabel("Name:");
 	renameModelField = new QLineEdit();
 
 	tagModel = new QLabel("Tags (comma separated):");
@@ -552,14 +601,31 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	tagWidget->setLayout(tagLayout);
 	tagWidget->setVisible(false);
 
-    connect(normalize, &QPushButton::pressed, [this]() {
-
-    });
-
     connect(fastGrid, &AssetViewGrid::selectedTile, [=](AssetGridItem *gridItem) {
 		fastGrid->deselectAll();
 
+		renameWidget->setVisible(false);
+		tagWidget->setVisible(false);
+		updateAsset->setVisible(false);
+
 		if (!gridItem->metadata.isEmpty()) {
+			renameWidget->setVisible(true);
+			tagWidget->setVisible(true);
+			updateAsset->setVisible(true);
+
+			renameModelField->setText(gridItem->metadata["name"].toString());
+
+			QString tags;
+			QJsonArray children = gridItem->tags["tags"].toArray();
+			for (auto childObj : children) {
+				auto tag = childObj.toString();
+				tags.append(tag + ", ");
+			}
+
+			tags.chop(2);
+
+			tagModelField->setText(tags);
+
 			auto material = db->getMaterialGlobal(gridItem->metadata["guid"].toString());
 			auto materialObj = QJsonDocument::fromBinaryData(material);
 
@@ -601,13 +667,6 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 				viewer->orientCamera(pos, rot, distObj);
 			}
            
-            split->setHandleWidth(1);
-            int size = this->height() / 3;
-            const QList<int> sizes = { size, size * 2 };
-            split->setSizes(sizes);
-            split->setStretchFactor(0, 1);
-            split->setStretchFactor(1, 1);
-
 			selectedGridItem = gridItem;
 			if (UiManager::isSceneOpen) {
 				addToProject->setVisible(true);
@@ -619,9 +678,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		fetchMetadata(gridItem);
     });
 
-	connect(addToLibrary, &QPushButton::pressed, [this]() {
-		bool canAdd = db->isAuthorInfoPresent();
-
+	connect(updateAsset, &QPushButton::pressed, [this]() {
 		QJsonObject tags;
 		QJsonArray actualTags;
 
@@ -647,90 +704,20 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 			tags["tags"] = actualTags;
 		}
 
-		if (canAdd) {
-			QFileInfo fInfo(filename);
-			QJsonObject object;
-			object["icon_url"] = "";
-			object["name"] = renameModelField->text();
+		QJsonDocument tagsDoc(tags);
 
-			auto thumbnail = viewer->takeScreenshot(512, 512);
+		db->updateAssetMetadata(
+			selectedGridItem->metadata["guid"].toString(),
+			renameModelField->text(),
+			tagsDoc.toBinaryData()
+		);
 
-			QJsonDocument tagsDoc(tags);
+		auto metadata = selectedGridItem->metadata;
+		metadata["name"] = renameModelField->text();
+		metadata["full_filename"] = IrisUtils::buildFileName(renameModelField->text(), QFileInfo(selectedGridItem->metadata["full_filename"].toString()).suffix());
 
-			// add to db
-			QByteArray bytes;
-			QBuffer buffer(&bytes);
-			buffer.open(QIODevice::WriteOnly);
-			thumbnail.save(&buffer, "PNG");
-
-			QJsonDocument doc(viewer->getSceneProperties());
-			QByteArray sceneProperties = doc.toJson();
-
-			// maybe actually check if Object?
-			QString guid = db->insertAssetGlobal(IrisUtils::buildFileName(renameModelField->text(),
-				fInfo.suffix().toLower()),
-				static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData());
-			object["guid"] = guid;
-			object["type"] = (int)AssetMetaType::Object; // model?
-			object["full_filename"] = IrisUtils::buildFileName(guid, fInfo.suffix());
-			object["author"] = db->getAuthorName();
-			object["license"] = "CCBY";
-
-			Globals::assetNames.insert(guid, object["name"].toString());
-
-			auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
-
-			if (!QDir(QDir(assetPath).filePath(guid)).exists()) {
-				QDir().mkdir(QDir(assetPath).filePath(guid));
-				bool copyFile = QFile::copy(filename,
-					QDir(QDir(assetPath).filePath(guid)).filePath(
-						IrisUtils::buildFileName(guid, fInfo.suffix().toLower()))
-				);
-			}
-
-			copyTextures(guid);
-
-			db->insertMaterialGlobal(QString(), guid, QJsonDocument(viewer->getMaterial()).toBinaryData());
-
-			auto gridItem = new AssetGridItem(object, thumbnail, viewer->getSceneProperties(), tags);
-
-			connect(gridItem, &AssetGridItem::addAssetToProject, [this](AssetGridItem *item) {
-				addAssetToProject(item);
-			});
-
-			connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
-				changeAssetCollection(item);
-			});
-
-			connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
-				removeAssetFromProject(item);
-			});
-
-			viewer->cacheCurrentModel(guid);
-
-			fastGrid->addTo(gridItem, 0, true);
-			QApplication::processEvents();
-			fastGrid->updateGridColumns(fastGrid->lastWidth);
-
-
-			renameWidget->setVisible(false);
-			tagWidget->setVisible(false);
-			addToLibrary->setVisible(false);
-		}
-		else {
-			auto option = QMessageBox::question(this,
-				"No Author!", "There is no author set, would you like to set a name now?\n"
-				"Without it you will not be able to import assets.\n\n"
-				"Enter a valid name in the Author field and save.",
-				QMessageBox::Yes | QMessageBox::No);
-
-			if (option == QMessageBox::Yes) {
-				prefsDialog->exec();
-			}
-			else {
-				QMessageBox::warning(this, "Failed to add asset!", "Nothing was done.", QMessageBox::Ok);
-			}
-		}
+		selectedGridItem->updateMetadata(metadata, tags);
+		fetchMetadata(selectedGridItem);
 	});
 
 	connect(addToProject, &QPushButton::pressed, [this]() {
@@ -747,13 +734,12 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 												QString(),
 												"Mesh Files (*.obj *.fbx *.3ds *.dae *.c4d *.blend)");
 
-		// this should switch over to local from online
 		importModel(filename);
 	});
 
 	assetDropPadLayout->addWidget(renameWidget);
 	assetDropPadLayout->addWidget(tagWidget);
-	assetDropPadLayout->addWidget(addToLibrary);
+	assetDropPadLayout->addWidget(updateAsset);
 	assetDropPad->setLayout(assetDropPadLayout);
 
     metaLayout->addWidget(assetDropPad);
@@ -806,7 +792,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
     metadataLayout->setMargin(0);
     metadataLayout->setSpacing(12);
     metadataLayout->addWidget(metadataCollection);
-    metadataLayout->addWidget(changeMetaCollection);
+    // metadataLayout->addWidget(changeMetaCollection);
     metadataLayout->addStretch();
     metadataWidget = new QWidget;
     metadataWidget->setLayout(metadataLayout);
@@ -832,12 +818,6 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	split->addWidget(viewer);
 	split->addWidget(_viewPane);
 
-    closeViewer();
-
-	split->setHandleWidth(0);
-	split->setStretchFactor(0, 0);
-	split->setStretchFactor(1, 1);
-
     _splitter->addWidget(_navPane);
     _splitter->addWidget(split);
     _splitter->addWidget(_metadataPane);
@@ -845,7 +825,6 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
     _splitter->setStretchFactor(0, 0);
     _splitter->setStretchFactor(1, 3);
     _splitter->setStretchFactor(2, 1);
-
     
     QGridLayout *layout = new QGridLayout;
 	layout->setMargin(0);
@@ -854,7 +833,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 	setStyleSheet(
 		"*							{ color: #EEE; }"
-		"QPushButton				{ border-radius: 2px; }"
+		"QPushButton				{ border-radius: 2px; padding: 8px 12px; }"
 		"QSplitter					{ background: #2E2E2E; } QSplitter:handle { background: black; }"
 		"#localAssetsButton			{ font-size: 12px; font-weight: bold; text-align: left; padding: 12px; }"
 		"#onlineAssetsButton		{ font-size: 12px; font-weight: bold; text-align: left; padding: 12px; }"
@@ -863,7 +842,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		"#assetDropPad				{}"
 		"#assetDropPadLabel			{ font-size: 14px; font-weight: bold; border: 4px dashed #1E1E1E; border-radius: 4px; "
 		"							  padding: 48px 36px; }"
-		"#assetDropPad, #MetadataPane QPushButton	{ font-size: 12px; font-weight: bold; padding: 8px; }"
+		"#assetDropPad, #MetadataPane QPushButton	{ font-size: 12px; font-weight: bold; padding: 8px 12px; }"
 		"#assetDropPad QLineEdit	{ border: 1px solid #1E1E1E; border-radius: 2px;"
 		"							  font-size: 12px; font-weight: bold; background: #3B3B3B; padding: 6px 4px; }"
 		"#assetDropPad QLabel		{ font-size: 12px; font-weight: bold; }"
@@ -874,19 +853,123 @@ void AssetView::importModel(const QString &filename)
 {
 	if (!filename.isEmpty()) {
 		renameModelField->setText(QFileInfo(filename).baseName());
-
-		renameWidget->setVisible(true);
-		tagWidget->setVisible(true);
-		addToLibrary->setVisible(true);
 		viewer->loadModel(filename);
-
-		split->setHandleWidth(1);
-		int size = this->height() / 3;
-		const QList<int> sizes = { size, size * 2 };
-		split->setSizes(sizes);
-		split->setStretchFactor(0, 1);
-		split->setStretchFactor(1, 1);
+		addToLibrary();
 	}
+}
+
+void AssetView::addToLibrary()
+{
+	//bool canAdd = db->isAuthorInfoPresent();
+	QJsonObject tags;
+	QJsonArray actualTags;
+
+	// parse tags
+	//QString stringIn = tagModelField->text();
+	//if (!stringIn.isEmpty()) {
+	//	std::vector<QString> commaSeparated(1);
+	//	int commaCounter = 0;
+	//	for (int i = 0; i<stringIn.size(); i++) {
+	//		if (stringIn[i] == ",") {
+	//			commaSeparated.push_back("");
+	//			commaCounter++;
+	//		}
+	//		else {
+	//			commaSeparated.at(commaCounter) += stringIn[i];
+	//		}
+	//	}
+
+	//	for (const QString &tag : commaSeparated) {
+	//		if (!tag.isEmpty()) actualTags.append(tag);
+	//	}
+
+	//	tags["tags"] = actualTags;
+	//}
+
+	//if (canAdd) {
+		QFileInfo fInfo(filename);
+		QJsonObject object;
+		object["icon_url"] = "";
+		object["name"] = fInfo.baseName(); // renameModelField->text();
+
+		auto thumbnail = viewer->takeScreenshot(512, 512);
+
+		QJsonDocument tagsDoc(tags);
+
+		// add to db
+		QByteArray bytes;
+		QBuffer buffer(&bytes);
+		buffer.open(QIODevice::WriteOnly);
+		thumbnail.save(&buffer, "PNG");
+
+		QJsonDocument doc(viewer->getSceneProperties());
+		QByteArray sceneProperties = doc.toJson();
+
+		// maybe actually check if Object?
+		QString guid = db->insertAssetGlobal(IrisUtils::buildFileName(renameModelField->text(),
+			fInfo.suffix().toLower()),
+			static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData());
+		object["guid"] = guid;
+		object["type"] = (int)AssetMetaType::Object; // model?
+		object["full_filename"] = IrisUtils::buildFileName(guid, fInfo.suffix());
+		object["author"] = "";// db->getAuthorName();
+		object["license"] = "CCBY";
+
+		Globals::assetNames.insert(guid, object["name"].toString());
+
+		auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
+
+		if (!QDir(QDir(assetPath).filePath(guid)).exists()) {
+			QDir().mkdir(QDir(assetPath).filePath(guid));
+			bool copyFile = QFile::copy(filename,
+				QDir(QDir(assetPath).filePath(guid)).filePath(
+					IrisUtils::buildFileName(guid, fInfo.suffix().toLower()))
+			);
+		}
+
+		copyTextures(guid);
+
+		db->insertMaterialGlobal(QString(), guid, QJsonDocument(viewer->getMaterial()).toBinaryData());
+
+		auto gridItem = new AssetGridItem(object, thumbnail, viewer->getSceneProperties(), tags);
+
+		connect(gridItem, &AssetGridItem::addAssetToProject, [this](AssetGridItem *item) {
+			addAssetToProject(item);
+		});
+
+		connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
+			changeAssetCollection(item);
+		});
+
+		connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
+			removeAssetFromProject(item);
+		});
+
+		viewer->cacheCurrentModel(guid);
+
+		fastGrid->addTo(gridItem, 0, true);
+		QApplication::processEvents();
+		fastGrid->updateGridColumns(fastGrid->lastWidth);
+
+
+		renameWidget->setVisible(false);
+		tagWidget->setVisible(false);
+		//addToLibrary->setVisible(false);
+	//}
+	//else {
+	//	auto option = QMessageBox::question(this,
+	//		"No Author!", "There is no author set, would you like to set a name now?\n"
+	//		"Without it you will not be able to import assets.\n\n"
+	//		"Enter a valid name in the Author field and save.",
+	//		QMessageBox::Yes | QMessageBox::No);
+
+	//	if (option == QMessageBox::Yes) {
+	//		prefsDialog->exec();
+	//	}
+	//	else {
+	//		QMessageBox::warning(this, "Failed to add asset!", "Nothing was done.", QMessageBox::Ok);
+	//	}
+	//}
 }
 
 void AssetView::fetchMetadata(AssetGridItem *widget)
@@ -977,7 +1060,9 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 	if (!copyFolder(QDir(assetPath).filePath(guid), QDir(QDir(pDir).filePath(assetFolder)).filePath(guid))) {
 		QString warningText = QString("Failed to import asset %1. Possible reasons are:\n"
 			"1. It doesn't exist\n"
-			"2. The asset isn't valid")
+			"2. The asset isn't valid\n"
+			"3. There is no scene open\n"
+			"4. The asset is already in your project")
 			.arg(item->metadata["name"].toString());
 		QMessageBox::warning(this, "Asset Import Failed", warningText, QMessageBox::Ok);
 	}
@@ -997,8 +1082,8 @@ void AssetView::changeAssetCollection(AssetGridItem *item)
 		"QComboBox::down-arrow { image: url(:/icons/down_arrow_check.png); width: 18px; height: 14px; }"
 		"QComboBox::down-arrow:!enabled { image: url(:/icons/down_arrow_check_disabled.png); width: 18px; height: 14px; }"
 		"QPushButton { background: #4898ff; color: white; border: 0; padding: 8px 12px; border-radius: 1px; }"
-		"QPushButton:hover { background: #51a1d6; }"
-		"QDialog { background: #1a1a1a; }");
+		"QPushButton:hover { background: #555; }"
+		"QDialog { background: #1A1A1A; }");
 
 	QHBoxLayout *l = new QHBoxLayout;
 	d.setFixedWidth(350);

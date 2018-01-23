@@ -267,8 +267,12 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 							QString name = item->data(Qt::DisplayRole).toString();
 							roleDataMap[0] = QVariant(assetType);
 							roleDataMap[1] = QVariant(name);
-							roleDataMap[3] = QDir(item->data(Qt::UserRole).toString()).filePath(item->data(MODEL_GUID_ROLE).toString() + "." + item->data(MODEL_EXT_ROLE).toString());
+							roleDataMap[3] = IrisUtils::buildFileName(
+								QDir(item->data(Qt::UserRole).toString()).filePath(item->data(MODEL_GUID_ROLE).toString()),
+								item->data(MODEL_EXT_ROLE).toString()
+							);
 							stream << roleDataMap;
+
 							mimeData->setData(QString("application/x-qabstractitemmodeldatalist"), mdata);
                             drag->setMimeData(mimeData);
 

@@ -46,10 +46,11 @@ void AssetViewer::paintGL()
 {
     makeCurrent();
 
-    if (render) {
+    //if (render) {
         // glViewport(0, 0, this->width() * devicePixelRatio(), this->height() * devicePixelRatio());
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		//auto color = scene->skyColor;
+        //glClearColor(0.1f, 0.1f, 0.1f, 0.0f);
+        //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         float dt = elapsedTimer.nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
         elapsedTimer.restart();
@@ -59,10 +60,12 @@ void AssetViewer::paintGL()
             scene->update(dt);
             renderer->renderScene(dt, viewport);
         }
-	}
-	else {
-		glClearColor(0.18, 0.18, 0.18, 1);
-	}
+	//}
+	//else {
+		// glClearColor(0.18, 0.18, 0.18, 1);
+		// show default dark until rendering kicks in
+		//glClearColor(0.1f, 0.1f, 0.1f, 0.0f);
+	//}
 
     doneCurrent();
 }
@@ -284,7 +287,7 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 			mat->setValue("specularColor",	data.specularColor);
 			mat->setValue("ambientColor",	data.ambientColor);
 			mat->setValue("emissionColor",	data.emissionColor);
-			mat->setValue("shininess",		1);
+			mat->setValue("shininess",		data.shininess);
 
 			if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
 				mat->setValue("diffuseTexture", data.diffuseTexture);
@@ -311,7 +314,7 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 			cdata.diffuseColor = col;
 			cdata.diffuseTexture = matinfo["diffuseTexture"].toString();
 			cdata.normalTexture = matinfo["normalTexture"].toString();
-			cdata.shininess = 1;
+			cdata.shininess = matinfo["shininess"].toDouble(1.f);
 			col.setNamedColor(matinfo["specularColor"].toString());
 			cdata.specularColor = col;
 			cdata.specularTexture = matinfo["specularTexture"].toString();
@@ -464,11 +467,22 @@ QImage AssetViewer::takeScreenshot(int width, int height)
 	renderer->renderLightBillboards = false;
 	renderer->renderSceneToRenderTarget(previewRT, camera, false, false);
 	renderer->renderLightBillboards = true;
-
 	auto img = previewRT->toImage();
 	doneCurrent();
 
 	return img;
+}
+
+void AssetViewer::changeBackdrop(unsigned int id)
+{
+	switch (id) {
+	case 1:
+		scene->setSkyColor(QColor(25, 25, 25, 0));
+	break;
+	case 2:
+		scene->setSkyColor(QColor(82, 82, 82, 0));
+	break;
+	}
 }
 
 void AssetViewer::createMaterial(QJsonObject &matObj, iris::CustomMaterialPtr mat)

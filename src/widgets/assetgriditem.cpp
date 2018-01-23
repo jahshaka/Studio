@@ -14,7 +14,7 @@ AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject prop
 	layout->setSpacing(0);
 	pixmap = QPixmap::fromImage(image);
 	gridImageLabel = new QLabel;
-	gridImageLabel->setPixmap(pixmap.scaledToHeight(164, Qt::SmoothTransformation));
+	gridImageLabel->setPixmap(pixmap.scaledToHeight(116, Qt::SmoothTransformation));
 	gridImageLabel->setAlignment(Qt::AlignCenter);
 
 	layout->addWidget(gridImageLabel, 0, 0);
@@ -24,10 +24,10 @@ AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject prop
 	textLabel->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
 	layout->addWidget(textLabel, 1, 0);
 
-	setMinimumWidth(180);
-	setMaximumWidth(180);
-	setMinimumHeight(196);
-	setMaximumHeight(196);
+	setMinimumWidth(128);
+	setMaximumWidth(128);
+	setMinimumHeight(142);
+	setMaximumHeight(142);
 
 	textLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 12px; background: #1e1e1e;"
 		"border-left: 3px solid rgba(0, 0, 0, 3%); border-bottom: 3px solid rgba(0, 0, 0, 3%); border-right: 3px solid rgba(0, 0, 0, 3%)");
@@ -71,7 +71,7 @@ void AssetGridItem::projectContextMenu(const QPoint &pos)
 
 void AssetGridItem::setTile(QPixmap pix) {
 	pixmap = pix;
-	gridImageLabel->setPixmap(pixmap.scaledToHeight(164, Qt::SmoothTransformation));
+	gridImageLabel->setPixmap(pixmap.scaledToHeight(116, Qt::SmoothTransformation));
 	gridImageLabel->setAlignment(Qt::AlignCenter);
 }
 
@@ -121,4 +121,11 @@ void AssetGridItem::highlight(bool highlight) {
 	else {
 		dimHighlight();
 	}
+}
+
+void AssetGridItem::updateMetadata(QJsonObject details, QJsonObject tags)
+{
+	this->metadata = details;
+	this->tags = tags;
+	textLabel->setText(details["name"].toString());
 }
