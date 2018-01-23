@@ -144,6 +144,14 @@ void SceneNodePropertiesWidget::refreshMaterial(const QString &matName)
     }
 }
 
+void SceneNodePropertiesWidget::refreshTransform()
+{
+	if (transformWidget)
+	{
+		transformWidget->refreshUi();
+	}
+}
+
 /**
  * clears layout and child layouts and deletes child widget
  * @param layout

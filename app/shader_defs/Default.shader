@@ -80,7 +80,7 @@
             "displayName"   : "Reflection Influence",
             "name"          : "reflectionInfluence",
             "type"          : "float",
-            "value"         : 0,
+            "value"         : 1,
             "min"           : 0,
             "max"           : 1,
             "uniform"       : "u_reflectionInfluence"

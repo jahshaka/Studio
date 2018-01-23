@@ -38,6 +38,8 @@ public:
      */
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
 
+	void refreshUi();
+
 protected slots:
     /**
      * should be triggered when active scene node's properties gets

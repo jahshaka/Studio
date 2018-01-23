@@ -96,6 +96,15 @@ void ViewerNode::submitRenderItems()
     */
 }
 
+SceneNodePtr ViewerNode::createDuplicate()
+{
+	auto viewer = iris::ViewerNode::create();
+
+	viewer->setViewScale(this->viewScale);
+
+	return viewer;
+}
+
 ViewerNodePtr ViewerNode::create()
 {
     return ViewerNodePtr(new ViewerNode());

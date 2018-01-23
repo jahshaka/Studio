@@ -98,6 +98,24 @@ LightNode::LightNode()
     shadowMap = new ShadowMap();
 }
 
+SceneNodePtr LightNode::createDuplicate()
+{
+	auto light = iris::LightNode::create();
 
+	light->lightDir = this->lightDir;
+	light->lightType = this->lightType;
+	light->color = this->color;
+	light->intensity = this->intensity;
+	light->distance = this->distance;
+	light->spotCutOff = this->spotCutOff;
+	light->spotCutOffSoftness = this->spotCutOffSoftness;
+	light->shadowMap->bias = this->shadowMap->bias;
+	light->shadowMap->shadowType = this->shadowMap->shadowType;
+	light->shadowMap->setResolution(this->shadowMap->resolution);
+	light->icon = this->icon;
+	light->iconSize = this->iconSize;
+
+	return light;
+}
 
 }

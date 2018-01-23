@@ -508,9 +508,16 @@ SceneNodePtr SceneNode::duplicate()
     auto node = this->createDuplicate();
 
     node->setName(this->getName());
-    node->pos = this->pos;
-    node->scale = this->scale;
-    node->rot = this->rot;
+    node->setLocalPos(this->pos);
+    node->setLocalScale(this->scale);
+    node->setLocalRot(this->rot);
+	node->castShadow = this->castShadow;
+	node->duplicable = this->duplicable;
+	node->visible = this->visible;
+	node->removable = this->removable;
+	node->pickable = this->pickable;
+	node->castShadow = this->castShadow;
+	node->attached = this->attached;
 
     for (auto& child : this->children) {
         if (child->isDuplicable()) {

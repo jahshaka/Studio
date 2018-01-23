@@ -166,10 +166,12 @@ public:
 
     ParticleRenderer* renderer;
 
+	SceneNodePtr createDuplicate() override;
+
 private:
     ParticleSystemNode();
 
-    std::list<Particle*> particles;
+    std::vector<Particle*> particles;
 
     MaterialPtr material;
     RenderItem* renderItem;

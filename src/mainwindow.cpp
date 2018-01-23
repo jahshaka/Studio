@@ -1189,11 +1189,13 @@ void MainWindow::duplicateNode()
     if (!scene) return;
     if (!activeSceneNode || !activeSceneNode->isDuplicable()) return;
 
+	sceneView->makeCurrent();
     auto node = activeSceneNode->duplicate();
     activeSceneNode->parent->addChild(node, false);
 
     this->sceneHierarchyWidget->repopulateTree();
     sceneNodeSelected(node);
+	sceneView->doneCurrent();
 }
 
 void MainWindow::deleteNode()
@@ -1349,6 +1351,7 @@ void MainWindow::setupDockWidgets()
     sceneNodePropertiesWidget = new SceneNodePropertiesWidget;
     sceneNodePropertiesWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     sceneNodePropertiesWidget->setObjectName(QStringLiteral("sceneNodePropertiesWidget"));
+	UiManager::propertyWidget = sceneNodePropertiesWidget;
 
     QWidget *sceneNodeDockWidgetContents = new QWidget(viewPort);
     QScrollArea *sceneNodeScrollArea = new QScrollArea(sceneNodeDockWidgetContents);

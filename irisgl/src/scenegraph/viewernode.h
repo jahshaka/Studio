@@ -38,6 +38,8 @@ public:
 
     void submitRenderItems() override;
 
+	SceneNodePtr createDuplicate() override;
+
     RenderItem* renderItem;
     RenderItem* leftHandenderItem;
     RenderItem* rightHandRenderItem;

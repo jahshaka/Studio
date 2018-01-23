@@ -62,6 +62,18 @@ void Gizmo::createUndoAction()
 	UiManager::pushUndoStack(new TransformSceneNodeCommand(selectedNode, newPos, newRot, newScale));
 }
 
+QVector3D Gizmo::snap(QVector3D pos, float gridSize)
+{
+	return QVector3D(Gizmo::snap(pos.x(), gridSize),
+					 Gizmo::snap(pos.y(), gridSize),
+					 Gizmo::snap(pos.z(), gridSize));
+}
+
+float Gizmo::snap(float value, float gridSize)
+{
+	return qFloor(value / gridSize)*gridSize;
+}
+
 // returns transform of the gizmo, not the scene node
 // the transform is calculated based on the transform's space (local or global)
 QMatrix4x4 Gizmo::getTransform()
