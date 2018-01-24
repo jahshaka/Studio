@@ -31,6 +31,8 @@ in vec4 FragPosLightSpace;
 uniform sampler2D u_shadowMap;
 uniform bool u_shadowEnabled;
 
+uniform float u_time;
+
 float SampleShadowMap(sampler2D shadowMap, vec2 coords, float compare) {
     return step(compare, texture(shadowMap, coords.xy).r);
 }

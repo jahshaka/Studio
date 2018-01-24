@@ -86,6 +86,9 @@ public:
     int outlineWidth;
     QColor outlineColor;
 
+	// time counter to pass to shaders that do time-based animation
+	float time;
+
     Scene();
 public:
     static ScenePtr create();
@@ -103,6 +106,11 @@ public:
     void setSkyTextureSource(QString src) {
         skyTexture->source = src;
     }
+
+	float getRunningTime()
+	{
+		return time;
+	}
 
     QString getSkyTextureSource();
     void clearSkyTexture();
