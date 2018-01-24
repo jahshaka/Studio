@@ -97,32 +97,33 @@ void AssetViewer::initializeGL()
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
     dlight->setName("Key Light");
-	dlight->color = QColor(255, 355, 240);
+	dlight->color = QColor(255, 255, 240);
+	//dlight->setLocalPos(QVector3D(2, 2, 2));
     dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 45, 0));
-    dlight->intensity = 0.56;
-    dlight->setShadowMapType(iris::ShadowMapType::Soft);
-    dlight->shadowMap->shadowType = iris::ShadowMapType::None;
+    dlight->intensity = 0.76;
+    dlight->setShadowMapType(iris::ShadowMapType::None);
+    //dlight->shadowMap->shadowType = iris::ShadowMapType::None;
     scene->rootNode->addChild(dlight);
 
     auto plight = iris::LightNode::create();
     plight->setLightType(iris::LightType::Point);
 	plight->setName("Rim Light");
     plight->setLocalPos(QVector3D(0, 0, -3));
-    plight->color = QColor(230, 230, 255);
+    plight->color = QColor(210, 210, 255);
     plight->intensity = 0.47;
     plight->setShadowMapType(iris::ShadowMapType::None);
     plight->shadowMap->shadowType = iris::ShadowMapType::None;
     scene->rootNode->addChild(plight);
 
-    auto blight = iris::LightNode::create();
-    blight->setLightType(iris::LightType::Point);
-	blight->setName("Fill Light");
-    blight->setLocalPos(QVector3D(2, 2, 2));
-    blight->color = QColor(255, 255, 238);
-    blight->intensity = 0.43;
-    blight->setShadowMapType(iris::ShadowMapType::None);
-    blight->shadowMap->shadowType = iris::ShadowMapType::None;
-    scene->rootNode->addChild(blight);
+ //   auto blight = iris::LightNode::create();
+ //   blight->setLightType(iris::LightType::Point);
+	//blight->setName("Fill Light");
+ //   blight->setLocalPos(QVector3D(2, 2, 2));
+ //   blight->color = QColor(255, 255, 238);
+ //   blight->intensity = 0.43;
+ //   blight->setShadowMapType(iris::ShadowMapType::None);
+ //   blight->shadowMap->shadowType = iris::ShadowMapType::None;
+ //   scene->rootNode->addChild(blight);
 
     defaultCam = new EditorCameraController();
     orbitalCam = new OrbitalCameraController();
@@ -135,7 +136,7 @@ void AssetViewer::initializeGL()
     scene->setCamera(camera);
 
     scene->setSkyColor(QColor(25, 25, 25));
-    scene->setAmbientColor(QColor(155, 155, 155));
+    scene->setAmbientColor(QColor(190, 190, 190));
 
     scene->fogEnabled = false;
     scene->shadowEnabled = false;
@@ -285,7 +286,7 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 		if (firstAdd) {
 			mat->setValue("diffuseColor",	data.diffuseColor);
 			mat->setValue("specularColor",	data.specularColor);
-			mat->setValue("ambientColor",	data.ambientColor);
+			mat->setValue("ambientColor",	QColor(130, 130, 130));
 			mat->setValue("emissionColor",	data.emissionColor);
 			mat->setValue("shininess",		data.shininess);
 

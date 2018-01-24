@@ -951,9 +951,9 @@ void AssetView::addToLibrary()
 		QApplication::processEvents();
 		fastGrid->updateGridColumns(fastGrid->lastWidth);
 
-
 		renameWidget->setVisible(false);
 		tagWidget->setVisible(false);
+		updateAsset->setVisible(false);
 		//addToLibrary->setVisible(false);
 	//}
 	//else {
