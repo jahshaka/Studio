@@ -172,6 +172,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     // this ties to hidden geometry so should come at the end
     setupViewMenu();
+
+	undoStackCount = 0;
 }
 
 void MainWindow::grabOpenGLContextHack()
@@ -378,7 +380,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     bool closing = false;
 
-    if (UiManager::isUndoStackDirty()) {
+    if (UiManager::isUndoStackDirty() && (undoStackCount != UiManager::getUndoStackCount())) {
         QMessageBox::StandardButton reply;
         reply = QMessageBox::question(this,
                                       "Unsaved Changes",
@@ -668,6 +670,8 @@ void MainWindow::saveScene(const QString &filename, const QString &projectPath)
 	img.save(&buffer, "PNG");
 
 	db->insertSceneGlobal(filename, sceneObject, thumb);
+
+	undoStackCount = UiManager::getUndoStackCount();
 }
 
 void MainWindow::saveScene()
@@ -685,6 +689,8 @@ void MainWindow::saveScene()
     img.save(&buffer, "PNG");
 
     db->updateSceneGlobal(blob, thumb);
+
+	undoStackCount = UiManager::getUndoStackCount();
 }
 
 void MainWindow::openProject(bool playMode)
@@ -734,6 +740,8 @@ void MainWindow::openProject(bool playMode)
     }
 
     UiManager::playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+
+	undoStackCount = 0;
 }
 
 void MainWindow::closeProject()
@@ -749,6 +757,8 @@ void MainWindow::closeProject()
 
     scene->cleanup();
     scene.clear();
+
+	undoStackCount = 0;
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
@@ -1806,6 +1816,8 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
 	// todo - do this once instead of having two writers as above
 	saveScene(filename, projectPath);
+
+	undoStackCount = 0;
 }
 
 void MainWindow::showAboutDialog()

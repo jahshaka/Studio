@@ -303,6 +303,7 @@ private:
     bool dragging;
     QVector3D dragScenePos;
 
+	int undoStackCount;
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;
     LicenseDialog* licenseDialog;
