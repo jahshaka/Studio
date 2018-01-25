@@ -35,6 +35,7 @@ struct VrFrameData
 VrTouchController::VrTouchController(int index)
 {
     this->index = index;
+	this->isBeingTracked = false;
 }
 
 bool VrTouchController::isButtonDown(VrTouchInput btn)
