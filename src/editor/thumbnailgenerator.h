@@ -2,6 +2,7 @@
 #define THUMBNAILGENERATOR_H
 
 #include "../irisgl/src/irisglfwd.h"
+#include "../irisgl/src/scenegraph/meshnode.h"
 #include <QThread>
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
@@ -9,6 +10,7 @@
 #include <QMutex>
 #include <QSemaphore>
 #include <QImage>
+#include <QJsonObject>
 
 enum class ThumbnailRequestType
 {
@@ -30,6 +32,8 @@ struct ThumbnailResult
     QString path;
     QString id;
     QImage thumbnail;
+	QJsonObject material;
+	QStringList textureList;
 };
 
 class RenderThread : public QThread
@@ -53,7 +57,11 @@ public:
     QList<ThumbnailRequest> requests;
     QSemaphore requestsAvailable;
 
+	iris::SceneSource *ssource;
+
     bool shutdown;
+
+	QStringList getTextureList();
 
     void requestThumbnail(const ThumbnailRequest& request);
 
@@ -63,6 +71,8 @@ public:
     void prepareScene(const ThumbnailRequest& request);
     void cleanupScene();
 
+	void createMaterial(QJsonObject &matObj, iris::CustomMaterialPtr mat);
+
 signals:
     void thumbnailComplete(ThumbnailResult* result);
 
@@ -70,7 +80,7 @@ private:
     //ThumbnailRequest& getRequest();
     float getBoundingRadius(iris::SceneNodePtr node);
     void getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere>& spheres);
-
+	QJsonObject assetMaterial;
 };
 
 // http://doc.qt.io/qt-5/qtquick-scenegraph-textureinthread-threadrenderer-cpp.html

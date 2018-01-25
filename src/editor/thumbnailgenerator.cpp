@@ -1,6 +1,5 @@
 #include "thumbnailgenerator.h"
 #include <QOpenGLFunctions_3_2_Core>
-
 #include "../constants.h"
 
 #include "../irisgl/src/graphics/rendertarget.h"
@@ -71,10 +70,11 @@ void RenderThread::run()
             result->type = request.type;
             result->path = request.path;
             result->thumbnail = img;
+			result->material = assetMaterial;
+			result->textureList = getTextureList();
 
             emit thumbnailComplete(result);
         }
-
     }
 
     // move to main thread to be cleaned up
@@ -101,7 +101,7 @@ void RenderThread::initScene()
     //cam->setLocalRot(QQuaternion::fromEulerAngles(-45, 45, 0));
     cam->lookAt(QVector3D(0,0.5f,0));
 
-    scene->setSkyColor(QColor(100, 100, 100));
+    scene->setSkyColor(QColor(100, 100, 100, 0));
     scene->setAmbientColor(QColor(255, 255, 255));
 
     // second node
@@ -153,9 +153,10 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 {
     if(request.type == ThumbnailRequestType::Mesh)
     {
-		iris::SceneSource *ssource = new iris::SceneSource();
+		ssource = new iris::SceneSource();
         // load mesh as scene
-        sceneNode = iris::MeshNode::loadAsSceneFragment(request.path, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+		int iteration = 0;
+        sceneNode = iris::MeshNode::loadAsSceneFragment(request.path, [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
         {
             auto mat = iris::CustomMaterial::create();
             if (mesh->hasSkeleton())
@@ -167,7 +168,6 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
             mat->setValue("specularColor", data.specularColor);
             mat->setValue("ambientColor", data.ambientColor);
             mat->setValue("emissionColor", data.emissionColor);
-
             mat->setValue("shininess", data.shininess);
 
             if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
@@ -179,11 +179,16 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
             if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
                 mat->setValue("normalTexture", data.normalTexture);
 
+			QJsonObject matObj;
+			createMaterial(matObj, mat);
+			assetMaterial.insert(QString::number(iteration), matObj);
+
+			iteration++;
+
             return mat;
         }, ssource);
 
-        if (!sceneNode)
-            return;
+        if (!sceneNode) return;
 
         scene->rootNode->addChild(sceneNode);
 
@@ -207,8 +212,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
             }
         }
 
-
-        float dist = (bound.radius*1.2) / qTan(qDegreesToRadians(cam->angle/2.0f));
+        float dist = (bound.radius * 1.2) / qTan(qDegreesToRadians(cam->angle / 2.0f));
         cam->setLocalPos(QVector3D(0, bound.pos.y(), dist));
         cam->lookAt(bound.pos);
         cam->update(0);
@@ -221,6 +225,42 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 
         // apply
     }
+}
+
+QStringList RenderThread::getTextureList()
+{
+	const aiScene *scene = ssource->importer.GetScene();
+
+	QStringList texturesToCopy;
+
+	for (int i = 0; i < scene->mNumMeshes; i++) {
+		auto mesh = scene->mMeshes[i];
+		auto material = scene->mMaterials[mesh->mMaterialIndex];
+
+		aiString textureName;
+
+		if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
+			material->GetTexture(aiTextureType_DIFFUSE, 0, &textureName);
+			texturesToCopy.append(textureName.C_Str());
+		}
+
+		if (material->GetTextureCount(aiTextureType_SPECULAR) > 0) {
+			material->GetTexture(aiTextureType_SPECULAR, 0, &textureName);
+			texturesToCopy.append(textureName.C_Str());
+		}
+
+		if (material->GetTextureCount(aiTextureType_NORMALS) > 0) {
+			material->GetTexture(aiTextureType_NORMALS, 0, &textureName);
+			texturesToCopy.append(textureName.C_Str());
+		}
+
+		if (material->GetTextureCount(aiTextureType_HEIGHT) > 0) {
+			material->GetTexture(aiTextureType_HEIGHT, 0, &textureName);
+			texturesToCopy.append(textureName.C_Str());
+		}
+	}
+
+	return texturesToCopy;
 }
 
 void RenderThread::cleanupScene()
@@ -253,6 +293,29 @@ void RenderThread::getBoundingSpheres(iris::SceneNodePtr node, QList<iris::Bound
     for(auto child : node->children) {
         getBoundingSpheres(child, spheres);
     }
+}
+
+void RenderThread::createMaterial(QJsonObject &matObj, iris::CustomMaterialPtr mat)
+{
+	matObj["name"] = mat->getName();
+
+	for (auto prop : mat->properties) {
+		if (prop->type == iris::PropertyType::Bool) {
+			matObj[prop->name] = prop->getValue().toBool();
+		}
+
+		if (prop->type == iris::PropertyType::Float) {
+			matObj[prop->name] = prop->getValue().toFloat();
+		}
+
+		if (prop->type == iris::PropertyType::Color) {
+			matObj[prop->name] = prop->getValue().value<QColor>().name();
+		}
+
+		if (prop->type == iris::PropertyType::Texture) {
+			matObj[prop->name] = QFileInfo(prop->getValue().toString()).fileName();
+		}
+	}
 }
 
 ThumbnailGenerator::ThumbnailGenerator()
@@ -289,9 +352,7 @@ ThumbnailGenerator::ThumbnailGenerator()
 
 ThumbnailGenerator *ThumbnailGenerator::getSingleton()
 {
-    if(instance==nullptr)
-        instance = new ThumbnailGenerator();
-
+    if (instance == Q_NULLPTR) instance = new ThumbnailGenerator();
     return instance;
 }
 
@@ -310,8 +371,3 @@ void ThumbnailGenerator::shutdown()
     renderThread->requestsAvailable.release();// release 1 so the thread's main loop continues;
     renderThread->wait();
 }
-
-//void ThumbnialGenerator::run()
-//{
-//    //renderThread->start();
-//}

@@ -10,6 +10,7 @@
 #include "../widgets/sceneviewwidget.h"
 #include "../editor/thumbnailgenerator.h"
 #include "../core/database/database.h"
+#include "../core/guidmanager.h"
 
 #include <QBuffer>
 #include <QDebug>
@@ -19,6 +20,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QJsonDocument>
 
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
@@ -74,7 +76,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 void AssetWidget::trigger()
 {
-    // generateAssetThumbnails();
+    generateAssetThumbnails();
     // It's important that this get's called after a project has been loaded (iKlsR)
     populateAssetTree(true);
 }
@@ -559,31 +561,59 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const Q
             AssetType type;
             QPixmap pixmap;
 
+			QString fileName;
+			QString fileAbsolutePath;
+
             if (Constants::IMAGE_EXTS.contains(file.suffix())) {
                 auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
                 pixmap = QPixmap::fromImage(*thumb->thumb);
                 type = AssetType::Texture;
+				fileName = file.fileName();
+				fileAbsolutePath = file.absoluteFilePath();
             } else if (Constants::MODEL_EXTS.contains(file.suffix())) {
                 auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
                 pixmap = QPixmap::fromImage(*thumb->thumb);
                 type = AssetType::Object;
+
+				QString guid = GUIDManager::generateGUID();
+				auto generatedPath = QDir(path).filePath(guid);
+				QDir dir;
+				dir.mkdir(generatedPath);
+
+				QByteArray bytes;
+				QBuffer buffer(&bytes);
+				buffer.open(QIODevice::WriteOnly);
+				pixmap.save(&buffer, "PNG");
+
+				// original filename
+				db->insertProjectAssetGlobal(file.fileName(), (int) ModelTypes::Object, bytes, QByteArray(), QByteArray(), guid);
+				Globals::assetNames.insert(guid, QFileInfo(file.fileName()).baseName());
+
+				// guid filename
+				fileName = QDir(generatedPath).filePath(guid + "." + file.suffix());
+				fileAbsolutePath = file.absoluteFilePath();
+
             }  else if (file.suffix() == "shader") {
                 auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
                 type = AssetType::Shader;
                 pixmap = QPixmap::fromImage(*thumb->thumb);
+				fileName = file.fileName();
+				fileAbsolutePath = file.absoluteFilePath();
             } else {
                 auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
                 type = AssetType::File;
                 pixmap = QPixmap::fromImage(*thumb->thumb);
+				fileName = file.fileName();
+				fileAbsolutePath = file.absoluteFilePath();
             }
 
             auto asset = new AssetVariant;
             asset->type         = type;
-            asset->fileName     = file.fileName();
-            asset->path         = file.absoluteFilePath();
+            asset->fileName     = fileName;
+            asset->path         = fileAbsolutePath;
             asset->thumbnail    = pixmap;
 
-            bool copyFile = QFile::copy(file.absoluteFilePath(), QDir(path).filePath(file.fileName()));
+            bool copyFile = QFile::copy(fileAbsolutePath, QDir(path).filePath(fileName));
 
             if (copyFile) {
                 if (asset->type == AssetType::Object) {
@@ -666,7 +696,23 @@ void AssetWidget::onThumbnailResult(ThumbnailResult* result)
             QBuffer buffer(&bytes);
             buffer.open(QIODevice::WriteOnly);
             asset->thumbnail.save(&buffer, "PNG");
-            db->insertThumbnailGlobal("null", asset->fileName, bytes);
+
+			QString asset_guid = QFileInfo(asset->fileName).baseName();
+
+			if (!result->textureList.isEmpty()) {
+				for (auto texture : result->textureList) {
+					QString tex = QFileInfo(texture).isRelative()
+						? QDir::cleanPath(QDir(QFileInfo(asset->path).absoluteDir()).filePath(texture))
+						: QDir::cleanPath(texture);
+					//QFile::copy(tex, QDir(assetItem.selectedPath).filePath(QFileInfo(texture).fileName()));
+					QFile::copy(tex, QDir(QFileInfo(asset->fileName).absoluteDir()).filePath(QFileInfo(texture).fileName()));
+				}
+			}
+
+			// todo? maybe update the asset thumbnail in this function as well?
+            db->insertThumbnailGlobal(Globals::project->getProjectGuid(), asset->fileName, bytes, asset_guid);
+			db->insertMaterialGlobal(QString(), asset_guid, QJsonDocument(result->material).toBinaryData());
+			db->updateAssetThumbnail(asset_guid, bytes);
 
             // find item and update its icon
             auto items = ui->assetView->findItems(asset->fileName, Qt::MatchExactly);
@@ -675,6 +721,8 @@ void AssetWidget::onThumbnailResult(ThumbnailResult* result)
             }
         }
     }
+
+	updateAssetView(assetItem.selectedPath);
 
     delete result;
 }

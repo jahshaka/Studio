@@ -1440,6 +1440,8 @@ void MainWindow::setupDockWidgets()
 
 void MainWindow::setupViewPort()
 {
+	// ui->MenuBar->setVisible(false);
+
 	worlds_menu = new QPushButton("Worlds");
 	worlds_menu->setObjectName("worlds_menu");
 	worlds_menu->setCursor(Qt::PointingHandCursor);
@@ -1489,7 +1491,7 @@ void MainWindow::setupViewPort()
 	);
 
 	connect(help, &QPushButton::pressed, []() {
-		QDesktopServices::openUrl(QUrl("http://www.jahfx.com/"));
+		QDesktopServices::openUrl(QUrl("http://www.jahshaka.com/tutorials/"));
 	});
 
 	ui->ohlayout->addWidget(jlogo, 0, 0, Qt::AlignLeft);
