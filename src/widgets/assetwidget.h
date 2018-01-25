@@ -79,7 +79,7 @@ protected slots:
     void OnLstItemsCommitData(QWidget*);
 
     void deleteTreeFolder();
-    void deleteViewFolder();
+    void deleteItem();
     void openAtFolder();
     void createFolder();
     void importAssetB();

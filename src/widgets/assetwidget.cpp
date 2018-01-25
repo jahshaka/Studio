@@ -380,7 +380,7 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
         // menu.addAction(action);
 
         action = new QAction(QIcon(), "Delete", this);
-        connect(action, SIGNAL(triggered()), this, SLOT(deleteViewFolder()));
+        connect(action, SIGNAL(triggered()), this, SLOT(deleteItem()));
         menu.addAction(action);
     }
     else {
@@ -503,13 +503,23 @@ void AssetWidget::deleteTreeFolder()
     }
 }
 
-void AssetWidget::deleteViewFolder()
+void AssetWidget::deleteItem()
 {
     auto item = assetItem.wItem;
-    QDir dir(assetItem.selectedPath + '/' + item->text());
-    if (dir.removeRecursively()) {
-        delete ui->assetView->takeItem(ui->assetView->row(item));
-    }
+	QFileInfo itemInfo(QDir(assetItem.selectedPath).filePath(item->text()));
+    QDir dir(itemInfo.absoluteFilePath());
+
+	if (itemInfo.isDir()) {
+		if (dir.removeRecursively()) {
+			delete ui->assetView->takeItem(ui->assetView->row(item));
+		}
+	}
+	else if (itemInfo.isFile()) {
+        QFile file(itemInfo.absoluteFilePath());
+		if (file.remove()) {
+			delete ui->assetView->takeItem(ui->assetView->row(item));
+		}
+	}
 }
 
 void AssetWidget::openAtFolder()
