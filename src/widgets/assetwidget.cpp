@@ -180,6 +180,10 @@ void AssetWidget::addItem(const QString &asset)
 			auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
 			pixmap = QPixmap::fromImage(*thumb->thumb);
 			item->setIcon(QIcon(pixmap));
+
+            item->setData(MODEL_EXT_ROLE, "");
+			item->setData(MODEL_GUID_ROLE, file.absoluteFilePath());
+			item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Texture));
 		}
 		else if (Constants::MODEL_EXTS.contains(file.suffix())) {
 			if (db->hasCachedThumbnail(file.fileName())) {
@@ -188,6 +192,10 @@ void AssetWidget::addItem(const QString &asset)
 				if (cachedPixmap.loadFromData(blob, "PNG")) {
 					item->setIcon(QIcon(cachedPixmap));
 				}
+
+                item->setData(MODEL_EXT_ROLE, "");
+			    item->setData(MODEL_GUID_ROLE, file.absoluteFilePath());
+			    item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Object));
 			}
 			else {
 				item->setIcon(QIcon(":/icons/ic_file.svg"));
@@ -199,9 +207,9 @@ void AssetWidget::addItem(const QString &asset)
 
 			item->setData(Qt::DisplayRole, file.baseName());
 			item->setData(Qt::UserRole, file.absolutePath());
-			item->setData(MODEL_EXT_ROLE, "");
-			item->setData(MODEL_GUID_ROLE, file.absoluteFilePath());	// TODO: actually generate guids and use these
-			item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Object));
+			// item->setData(MODEL_EXT_ROLE, "");
+			// item->setData(MODEL_GUID_ROLE, file.absoluteFilePath());
+			// item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Undefined));
 		}
 		else if (file.suffix() == "shader") {
 			item->setIcon(QIcon(":/icons/ic_file.svg"));

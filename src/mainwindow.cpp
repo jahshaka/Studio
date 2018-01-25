@@ -1065,7 +1065,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 		cdata.diffuseColor = col;
 		cdata.diffuseTexture = matinfo["diffuseTexture"].toString();
 		cdata.normalTexture = matinfo["normalTexture"].toString();
-		cdata.shininess = 1;
+		cdata.shininess = matinfo["shininess"].toDouble(1.f);
 		col.setNamedColor(matinfo["specularColor"].toString());
 		cdata.specularColor = col;
 		cdata.specularTexture = matinfo["specularTexture"].toString();
@@ -1216,7 +1216,6 @@ void MainWindow::deleteNode()
         UiManager::pushUndoStack(cmd);
     }
 }
-
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {

@@ -132,14 +132,16 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
         stream >> roleDataMap;
     }
 
-    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object))
-    {
-        //auto ppos = activeSceneNode->pos;
+    // qDebug() << roleDataMap.value(0).toInt();
+
+    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
         auto ppos = dragScenePos;
-        //deleteNode();
         emit addDroppedMesh(roleDataMap.value(3).toString(), true, ppos);
-        // addMesh(roleDataMap.value(3).toString(), true, ppos);
     }
+
+    //if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
+    //    // handleTexture
+    //}
 }
 
 void SceneViewWidget::dragEnterEvent(QDragEnterEvent *event)
@@ -647,9 +649,7 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     QPointF localPos = e->localPos();
     QPointF dir = localPos - prevMousePos;
 
-
     if (e->buttons() == Qt::LeftButton && !!selectedNode) {
-		
 		if (gizmo->isDragging()) {
 			QVector3D rayPos, rayDir;
 			this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
@@ -788,8 +788,6 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr l
         auto pickedRoot = hitList.last().hitNode;
         while (pickedRoot->isAttached())
             pickedRoot = pickedRoot->parent;
-
-
 
         if (!lastSelectedNode ||            // if the user clicked away then the root should be reselected
             pickedRoot != lastSelectedRoot) // if both are under, or is, the same root then pick the actual object
