@@ -399,8 +399,8 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         meshNode->setFaceCullingMode(iris::FaceCullingMode::Back);
     } else if (faceCullingMode == "front") {
         meshNode->setFaceCullingMode(iris::FaceCullingMode::Front);
-    } else if (faceCullingMode == "frontandback") {
-        meshNode->setFaceCullingMode(iris::FaceCullingMode::FrontAndBack);
+    } else if (faceCullingMode == "material") {
+        meshNode->setFaceCullingMode(iris::FaceCullingMode::DefinedInMaterial);
     } else {
         meshNode->setFaceCullingMode(iris::FaceCullingMode::None);
     }

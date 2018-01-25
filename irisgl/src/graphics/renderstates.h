@@ -7,14 +7,6 @@
 
 namespace iris{
 
-enum class FaceCullingMode
-{
-    None,
-    Front,
-    Back,
-    FrontAndBack
-};
-
 struct RenderStates
 {
     int renderLayer;

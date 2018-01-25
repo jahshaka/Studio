@@ -52,7 +52,7 @@ MeshNode::MeshNode() {
     renderItem = new RenderItem();
     renderItem->type = RenderItemType::Mesh;
 
-    faceCullingMode = FaceCullingMode::Back;
+    faceCullingMode = FaceCullingMode::DefinedInMaterial;
 }
 
 // @todo: cleanup previous mesh item
