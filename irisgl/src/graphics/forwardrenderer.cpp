@@ -234,9 +234,9 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     auto cam = scene->camera;
 
     // reset states
-    graphics->setBlendState(BlendState::Opaque);
-    graphics->setDepthState(DepthState::Default);
-    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+    graphics->setBlendState(BlendState::Opaque, true);
+    graphics->setDepthState(DepthState::Default, true);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise, true);
 
     // STEP 1: RENDER SCENE
     //perfTimer->start("render_scene");
@@ -272,9 +272,9 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     graphics->clear(QColor(0, 0, 0, 0));
 
     // reset states
-    graphics->setBlendState(BlendState::Opaque);
-    graphics->setDepthState(DepthState::Default);
-    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+    graphics->setBlendState(BlendState::Opaque, true);
+    graphics->setDepthState(DepthState::Default, true);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise, true);
 
     renderNode(renderData, scene);
 
@@ -285,6 +285,11 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     //perfTimer->start("render_post");
     renderTarget->unbind();
+
+	// reset these states for post processing
+	graphics->setBlendState(BlendState::Opaque, true);
+	graphics->setDepthState(DepthState::Default, true);
+	graphics->setRasterizerState(RasterizerState::CullCounterClockwise, true);
 
     postContext->sceneTexture = sceneRenderTexture;
     postContext->depthTexture = depthRenderTexture;
@@ -297,9 +302,9 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     graphics->setViewport(QRect(0, 0, vp->width * vp->pixelRatioScale, vp->height * vp->pixelRatioScale));
     graphics->clear(QColor(0,0,0));
 
-    graphics->setBlendState(BlendState::Opaque);
-    graphics->setDepthState(DepthState::Default);
-    graphics->setRasterizerState(RasterizerState::CullNone);
+    graphics->setBlendState(BlendState::Opaque, true);
+    graphics->setDepthState(DepthState::Default, true);
+    graphics->setRasterizerState(RasterizerState::CullNone, true);
 
     gl->glActiveTexture(GL_TEXTURE0);
     postContext->finalTexture->bind();
