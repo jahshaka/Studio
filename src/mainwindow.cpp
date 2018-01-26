@@ -172,6 +172,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     // this ties to hidden geometry so should come at the end
     setupViewMenu();
+
+	undoStackCount = 0;
 }
 
 void MainWindow::grabOpenGLContextHack()
@@ -378,7 +380,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     bool closing = false;
 
-    if (UiManager::isUndoStackDirty()) {
+    if (UiManager::isUndoStackDirty() && (undoStackCount != UiManager::getUndoStackCount())) {
         QMessageBox::StandardButton reply;
         reply = QMessageBox::question(this,
                                       "Unsaved Changes",
@@ -551,7 +553,7 @@ void MainWindow::switchSpace(WindowSpaces space)
    const QString selectedMenu   = "border-color: white";
    const QString unselectedMenu = "border-color: #111";
 
-	ui->assets_menu->setStyleSheet(unselectedMenu);
+	assets_menu->setStyleSheet(unselectedMenu);
 
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
@@ -559,23 +561,23 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->stackedWidget->setCurrentIndex(0);
             toggleWidgets(false);
 
-            ui->worlds_menu->setStyleSheet(selectedMenu);
+            worlds_menu->setStyleSheet(selectedMenu);
             ui->actionClose->setDisabled(true);
 
             if (UiManager::isSceneOpen) {
-                ui->editor_menu->setStyleSheet(unselectedMenu);
-                ui->editor_menu->setDisabled(false);
-                ui->player_menu->setStyleSheet(unselectedMenu);
-                ui->player_menu->setDisabled(false);
+                editor_menu->setStyleSheet(unselectedMenu);
+                editor_menu->setDisabled(false);
+                player_menu->setStyleSheet(unselectedMenu);
+                player_menu->setDisabled(false);
                 //ui->assets_menu->setStyleSheet(unselectedMenu);
                 //ui->assets_menu->setDisabled(false);
             } else {
-                ui->editor_menu->setStyleSheet(disabledMenu);
-                ui->editor_menu->setDisabled(true);
-                ui->editor_menu->setCursor(Qt::ArrowCursor);
-                ui->player_menu->setStyleSheet(disabledMenu);
-                ui->player_menu->setDisabled(true);
-                ui->player_menu->setCursor(Qt::ArrowCursor);
+                editor_menu->setStyleSheet(disabledMenu);
+                editor_menu->setDisabled(true);
+                editor_menu->setCursor(Qt::ArrowCursor);
+                player_menu->setStyleSheet(disabledMenu);
+                player_menu->setDisabled(true);
+                player_menu->setCursor(Qt::ArrowCursor);
                 //ui->assets_menu->setStyleSheet(disabledMenu);
                 //ui->assets_menu->setDisabled(true);
                 //ui->assets_menu->setCursor(Qt::ArrowCursor);
@@ -587,13 +589,13 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->stackedWidget->setCurrentIndex(1);
             toggleWidgets(true);
             toolBar->setVisible(true);
-            ui->worlds_menu->setStyleSheet(unselectedMenu);
-            ui->editor_menu->setStyleSheet(selectedMenu);
-            ui->editor_menu->setDisabled(false);
-            ui->editor_menu->setCursor(Qt::PointingHandCursor);
-            ui->player_menu->setStyleSheet(unselectedMenu);
-            ui->player_menu->setDisabled(false);
-            ui->player_menu->setCursor(Qt::PointingHandCursor);
+            worlds_menu->setStyleSheet(unselectedMenu);
+            editor_menu->setStyleSheet(selectedMenu);
+            editor_menu->setDisabled(false);
+            editor_menu->setCursor(Qt::PointingHandCursor);
+            player_menu->setStyleSheet(unselectedMenu);
+            player_menu->setDisabled(false);
+            player_menu->setCursor(Qt::PointingHandCursor);
             //ui->assets_menu->setStyleSheet(unselectedMenu);
             //ui->assets_menu->setDisabled(false);
             //ui->assets_menu->setCursor(Qt::PointingHandCursor);
@@ -611,13 +613,13 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->stackedWidget->setCurrentIndex(1);
             toggleWidgets(false);
             toolBar->setVisible(false);
-            ui->worlds_menu->setStyleSheet(unselectedMenu);
-            ui->editor_menu->setStyleSheet(unselectedMenu);
-            ui->editor_menu->setDisabled(false);
-            ui->editor_menu->setCursor(Qt::PointingHandCursor);
-            ui->player_menu->setStyleSheet(selectedMenu);
-            ui->player_menu->setDisabled(false);
-            ui->player_menu->setCursor(Qt::PointingHandCursor);
+            worlds_menu->setStyleSheet(unselectedMenu);
+            editor_menu->setStyleSheet(unselectedMenu);
+            editor_menu->setDisabled(false);
+            editor_menu->setCursor(Qt::PointingHandCursor);
+            player_menu->setStyleSheet(selectedMenu);
+            player_menu->setDisabled(false);
+            player_menu->setCursor(Qt::PointingHandCursor);
             //ui->assets_menu->setStyleSheet(unselectedMenu);
             //ui->assets_menu->setDisabled(false);
             //ui->assets_menu->setCursor(Qt::PointingHandCursor);
@@ -635,16 +637,16 @@ void MainWindow::switchSpace(WindowSpaces space)
     		toggleWidgets(false);
     		toolBar->setVisible(false);
 			if (UiManager::isSceneOpen) {
-				ui->worlds_menu->setStyleSheet(unselectedMenu);
-				ui->editor_menu->setStyleSheet(unselectedMenu);
-				ui->player_menu->setStyleSheet(unselectedMenu);
+				worlds_menu->setStyleSheet(unselectedMenu);
+				editor_menu->setStyleSheet(unselectedMenu);
+				player_menu->setStyleSheet(unselectedMenu);
 				//ui->assets_menu->setDisabled(false);
 				//ui->assets_menu->setCursor(Qt::PointingHandCursor);
 				playSceneBtn->hide();
 			}
 
-			ui->worlds_menu->setStyleSheet(unselectedMenu);
-			ui->assets_menu->setStyleSheet(selectedMenu);
+			worlds_menu->setStyleSheet(unselectedMenu);
+			assets_menu->setStyleSheet(selectedMenu);
     		
 			break;
     	}
@@ -668,6 +670,8 @@ void MainWindow::saveScene(const QString &filename, const QString &projectPath)
 	img.save(&buffer, "PNG");
 
 	db->insertSceneGlobal(filename, sceneObject, thumb);
+
+	undoStackCount = UiManager::getUndoStackCount();
 }
 
 void MainWindow::saveScene()
@@ -685,6 +689,8 @@ void MainWindow::saveScene()
     img.save(&buffer, "PNG");
 
     db->updateSceneGlobal(blob, thumb);
+
+	undoStackCount = UiManager::getUndoStackCount();
 }
 
 void MainWindow::openProject(bool playMode)
@@ -734,6 +740,8 @@ void MainWindow::openProject(bool playMode)
     }
 
     UiManager::playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+
+	undoStackCount = 0;
 }
 
 void MainWindow::closeProject()
@@ -749,6 +757,8 @@ void MainWindow::closeProject()
 
     scene->cleanup();
     scene.clear();
+
+	undoStackCount = 0;
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
@@ -1055,7 +1065,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 		cdata.diffuseColor = col;
 		cdata.diffuseTexture = matinfo["diffuseTexture"].toString();
 		cdata.normalTexture = matinfo["normalTexture"].toString();
-		cdata.shininess = 1;
+		cdata.shininess = matinfo["shininess"].toDouble(1.f);
 		col.setNamedColor(matinfo["specularColor"].toString());
 		cdata.specularColor = col;
 		cdata.specularTexture = matinfo["specularTexture"].toString();
@@ -1206,7 +1216,6 @@ void MainWindow::deleteNode()
         UiManager::pushUndoStack(cmd);
     }
 }
-
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {
@@ -1431,10 +1440,68 @@ void MainWindow::setupDockWidgets()
 
 void MainWindow::setupViewPort()
 {
-    connect(ui->worlds_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::DESKTOP); });
-    connect(ui->player_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::PLAYER); });
-    connect(ui->editor_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::EDITOR); });
-    connect(ui->assets_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::ASSETS); });
+	// ui->MenuBar->setVisible(false);
+
+	worlds_menu = new QPushButton("Worlds");
+	worlds_menu->setObjectName("worlds_menu");
+	worlds_menu->setCursor(Qt::PointingHandCursor);
+	player_menu = new QPushButton("Player");
+	player_menu->setObjectName("player_menu");
+	player_menu->setCursor(Qt::PointingHandCursor);
+	editor_menu = new QPushButton("Editor");
+	editor_menu->setObjectName("editor_menu");
+	editor_menu->setCursor(Qt::PointingHandCursor);
+	assets_menu = new QPushButton("Assets");
+	assets_menu->setObjectName("assets_menu");
+	assets_menu->setCursor(Qt::PointingHandCursor);
+
+	assets_panel = new QWidget;
+
+	auto hl = new QHBoxLayout;
+	hl->setMargin(0);
+	hl->setSpacing(12);
+	hl->addWidget(worlds_menu);
+	hl->addWidget(player_menu);
+	hl->addWidget(editor_menu);
+	hl->addWidget(assets_menu);
+
+	assets_panel->setLayout(hl);
+
+	jlogo = new QLabel;
+	jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/header.png"));
+	help = new QPushButton;
+	help->setObjectName("helpButton");
+	//help->setStyleSheet("background: transparent");
+	//help->setIconSize(QSize(48, 48));
+	QIcon ico;
+	ico.addPixmap(IrisUtils::getAbsoluteAssetPath("app/images/question.png"), QIcon::Normal);
+	//help->setIcon(ico);
+	help->setIconSize(ico.availableSizes().first());
+	help->setFixedSize(ico.actualSize(ico.availableSizes().first()));//never larger than ic.availableSizes().first()
+	help->setCursor(Qt::PointingHandCursor);
+
+	help->setStyleSheet(
+		"#helpButton { qproperty-icon: url(\"\");"
+		"qproperty-iconSize: 48px 48px;"
+		"background: transparent;"
+		"background-image: url(\":/images/question.png\");"
+		"background-repeat: no-repeat; }"
+		"#helpButton::hover { background-image: url(\":/images/question_hover.png\");"
+		"background-repeat: no-repeat; }"
+	);
+
+	connect(help, &QPushButton::pressed, []() {
+		QDesktopServices::openUrl(QUrl("http://www.jahshaka.com/tutorials/"));
+	});
+
+	ui->ohlayout->addWidget(jlogo, 0, 0, Qt::AlignLeft);
+	ui->ohlayout->addWidget(assets_panel, 0, 1, Qt::AlignCenter);
+	ui->ohlayout->addWidget(help, 0, 2, Qt::AlignRight);
+
+    connect(worlds_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::DESKTOP); });
+    connect(player_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::PLAYER); });
+    connect(editor_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::EDITOR); });
+    connect(assets_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::ASSETS); });
 
     sceneContainer = new QWidget;
     QSizePolicy sceneContainerPolicy;
@@ -1582,18 +1649,18 @@ void MainWindow::setupViewPort()
 
 void MainWindow::setupDesktop()
 {
-    pmContainer = new ProjectManager(db, this);
-    _assetView = new AssetView(db, this);
-    _assetView->installEventFilter(this);
+	pmContainer = new ProjectManager(db, this);
+	_assetView = new AssetView(db, this);
+	_assetView->installEventFilter(this);
 
-    ui->stackedWidget->addWidget(pmContainer);
-    ui->stackedWidget->addWidget(viewPort);
-    ui->stackedWidget->addWidget(_assetView);
+	ui->stackedWidget->addWidget(pmContainer);
+	ui->stackedWidget->addWidget(viewPort);
+	ui->stackedWidget->addWidget(_assetView);
 
-    connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));
-    connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
-    connect(pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
-    connect(pmContainer, SIGNAL(exportProject()), SLOT(exportSceneAsZip()));
+	connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));
+	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
+	connect(pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
+	connect(pmContainer, SIGNAL(exportProject()), SLOT(exportSceneAsZip()));
 }
 
 void MainWindow::setupToolBar()
@@ -1806,6 +1873,8 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
 	// todo - do this once instead of having two writers as above
 	saveScene(filename, projectPath);
+
+	undoStackCount = 0;
 }
 
 void MainWindow::showAboutDialog()

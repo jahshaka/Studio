@@ -10,6 +10,7 @@
 #include "../widgets/sceneviewwidget.h"
 #include "../editor/thumbnailgenerator.h"
 #include "../core/database/database.h"
+#include "../core/guidmanager.h"
 
 #include <QBuffer>
 #include <QDebug>
@@ -19,6 +20,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QJsonDocument>
 
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
@@ -180,6 +182,10 @@ void AssetWidget::addItem(const QString &asset)
 			auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
 			pixmap = QPixmap::fromImage(*thumb->thumb);
 			item->setIcon(QIcon(pixmap));
+
+            item->setData(MODEL_EXT_ROLE, "");
+			item->setData(MODEL_GUID_ROLE, file.absoluteFilePath());
+			item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Texture));
 		}
 		else if (Constants::MODEL_EXTS.contains(file.suffix())) {
 			if (db->hasCachedThumbnail(file.fileName())) {
@@ -188,6 +194,10 @@ void AssetWidget::addItem(const QString &asset)
 				if (cachedPixmap.loadFromData(blob, "PNG")) {
 					item->setIcon(QIcon(cachedPixmap));
 				}
+
+                item->setData(MODEL_EXT_ROLE, "");
+			    item->setData(MODEL_GUID_ROLE, file.absoluteFilePath());
+			    item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Object));
 			}
 			else {
 				item->setIcon(QIcon(":/icons/ic_file.svg"));
@@ -199,9 +209,9 @@ void AssetWidget::addItem(const QString &asset)
 
 			item->setData(Qt::DisplayRole, file.baseName());
 			item->setData(Qt::UserRole, file.absolutePath());
-			item->setData(MODEL_EXT_ROLE, "");
-			item->setData(MODEL_GUID_ROLE, file.absoluteFilePath());	// TODO: actually generate guids and use these
-			item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Object));
+			// item->setData(MODEL_EXT_ROLE, "");
+			// item->setData(MODEL_GUID_ROLE, file.absoluteFilePath());
+			// item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Undefined));
 		}
 		else if (file.suffix() == "shader") {
 			item->setIcon(QIcon(":/icons/ic_file.svg"));
@@ -380,7 +390,7 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
         // menu.addAction(action);
 
         action = new QAction(QIcon(), "Delete", this);
-        connect(action, SIGNAL(triggered()), this, SLOT(deleteViewFolder()));
+        connect(action, SIGNAL(triggered()), this, SLOT(deleteItem()));
         menu.addAction(action);
     }
     else {
@@ -503,13 +513,36 @@ void AssetWidget::deleteTreeFolder()
     }
 }
 
-void AssetWidget::deleteViewFolder()
+void AssetWidget::deleteItem()
 {
     auto item = assetItem.wItem;
-    QDir dir(assetItem.selectedPath + '/' + item->text());
-    if (dir.removeRecursively()) {
-        delete ui->assetView->takeItem(ui->assetView->row(item));
-    }
+	QFileInfo itemInfo;
+	itemInfo.setFile(QDir(assetItem.selectedPath).filePath(item->text()));
+
+    QDir dir(itemInfo.absoluteFilePath());
+
+	if (item->data(Qt::UserRole).toString() != itemInfo.absoluteFilePath()) {
+		QDir dir2(item->data(Qt::UserRole).toString());
+		if (dir2.removeRecursively()) {
+			// remove from db
+			delete ui->assetView->takeItem(ui->assetView->row(item));
+		}
+		return;
+	}
+
+	if (itemInfo.isDir()) {
+		qDebug() << "dir" << itemInfo.absoluteFilePath();
+		if (dir.removeRecursively()) {
+			delete ui->assetView->takeItem(ui->assetView->row(item));
+		}
+	}
+	else if (itemInfo.isFile()) {
+		qDebug() << "file" << itemInfo.absoluteFilePath();
+        QFile file(itemInfo.absoluteFilePath());
+		if (file.remove()) {
+			delete ui->assetView->takeItem(ui->assetView->row(item));
+		}
+	}
 }
 
 void AssetWidget::openAtFolder()
@@ -541,31 +574,59 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const Q
             AssetType type;
             QPixmap pixmap;
 
+			QString fileName;
+			QString fileAbsolutePath;
+
             if (Constants::IMAGE_EXTS.contains(file.suffix())) {
                 auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
                 pixmap = QPixmap::fromImage(*thumb->thumb);
                 type = AssetType::Texture;
+				fileName = file.fileName();
+				fileAbsolutePath = file.absoluteFilePath();
             } else if (Constants::MODEL_EXTS.contains(file.suffix())) {
                 auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
                 pixmap = QPixmap::fromImage(*thumb->thumb);
                 type = AssetType::Object;
+
+				QString guid = GUIDManager::generateGUID();
+				auto generatedPath = QDir(path).filePath(guid);
+				QDir dir;
+				dir.mkdir(generatedPath);
+
+				QByteArray bytes;
+				QBuffer buffer(&bytes);
+				buffer.open(QIODevice::WriteOnly);
+				pixmap.save(&buffer, "PNG");
+
+				// original filename
+				db->insertProjectAssetGlobal(file.fileName(), (int) ModelTypes::Object, bytes, QByteArray(), QByteArray(), guid);
+				Globals::assetNames.insert(guid, QFileInfo(file.fileName()).baseName());
+
+				// guid filename
+				fileName = QDir(generatedPath).filePath(guid + "." + file.suffix());
+				fileAbsolutePath = file.absoluteFilePath();
+
             }  else if (file.suffix() == "shader") {
                 auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
                 type = AssetType::Shader;
                 pixmap = QPixmap::fromImage(*thumb->thumb);
+				fileName = file.fileName();
+				fileAbsolutePath = file.absoluteFilePath();
             } else {
                 auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
                 type = AssetType::File;
                 pixmap = QPixmap::fromImage(*thumb->thumb);
+				fileName = file.fileName();
+				fileAbsolutePath = file.absoluteFilePath();
             }
 
             auto asset = new AssetVariant;
             asset->type         = type;
-            asset->fileName     = file.fileName();
-            asset->path         = file.absoluteFilePath();
+            asset->fileName     = fileName;
+            asset->path         = fileAbsolutePath;
             asset->thumbnail    = pixmap;
 
-            bool copyFile = QFile::copy(file.absoluteFilePath(), QDir(path).filePath(file.fileName()));
+            bool copyFile = QFile::copy(fileAbsolutePath, QDir(path).filePath(fileName));
 
             if (copyFile) {
                 if (asset->type == AssetType::Object) {
@@ -648,7 +709,23 @@ void AssetWidget::onThumbnailResult(ThumbnailResult* result)
             QBuffer buffer(&bytes);
             buffer.open(QIODevice::WriteOnly);
             asset->thumbnail.save(&buffer, "PNG");
-            db->insertThumbnailGlobal("null", asset->fileName, bytes);
+
+			QString asset_guid = QFileInfo(asset->fileName).baseName();
+
+			if (!result->textureList.isEmpty()) {
+				for (auto texture : result->textureList) {
+					QString tex = QFileInfo(texture).isRelative()
+						? QDir::cleanPath(QDir(QFileInfo(asset->path).absoluteDir()).filePath(texture))
+						: QDir::cleanPath(texture);
+					//QFile::copy(tex, QDir(assetItem.selectedPath).filePath(QFileInfo(texture).fileName()));
+					QFile::copy(tex, QDir(QFileInfo(asset->fileName).absoluteDir()).filePath(QFileInfo(texture).fileName()));
+				}
+			}
+
+			// todo? maybe update the asset thumbnail in this function as well?
+            db->insertThumbnailGlobal(Globals::project->getProjectGuid(), asset->fileName, bytes, asset_guid);
+			db->insertMaterialGlobal(QString(), asset_guid, QJsonDocument(result->material).toBinaryData());
+			db->updateAssetThumbnail(asset_guid, bytes);
 
             // find item and update its icon
             auto items = ui->assetView->findItems(asset->fileName, Qt::MatchExactly);
@@ -657,6 +734,8 @@ void AssetWidget::onThumbnailResult(ThumbnailResult* result)
             }
         }
     }
+
+	updateAssetView(assetItem.selectedPath);
 
     delete result;
 }

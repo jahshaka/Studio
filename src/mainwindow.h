@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include <QToolBar>
 #include <QSharedPointer>
 #include <QVector3D>
+#include <QLabel>
 #include <QCheckBox>
 #include "irisglfwd.h"
 
@@ -303,6 +304,7 @@ private:
     bool dragging;
     QVector3D dragScenePos;
 
+	int undoStackCount;
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;
     LicenseDialog* licenseDialog;
@@ -316,6 +318,14 @@ private:
     ProjectManager *pmContainer;
 
     QUndoStack* undoStack;
+
+	QPushButton *worlds_menu;
+	QPushButton *player_menu;
+	QPushButton *editor_menu;
+	QPushButton *assets_menu;
+	QWidget *assets_panel;
+	QLabel *jlogo;
+	QPushButton *help;
 
     bool vrMode;
     QPushButton* vrButton;
@@ -351,7 +361,6 @@ private:
     AssetView *_assetView;
 
     WindowSpaces currentSpace;
-
 };
 
 #endif // MAINWINDOW_H

@@ -81,6 +81,7 @@ public:
 	void clearViewer();
 	QString getAssetType(int);
 
+	void importJahModel(const QString &filename);
 	void importModel(const QString &filename);
 
 signals:

@@ -75,7 +75,8 @@ enum class ModelTypes {
 	Cubemap,
 	Object,
 	SoundEffect,
-	Music
+	Music,
+	Undefined
 };
 
 #define	MODEL_GUID_ROLE	0x0113

@@ -93,7 +93,14 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     layout->addWidget(dynamicGrid);
     layout->setMargin(0);
 
-    ui->pmContainer->setStyleSheet("border: none");
+    ui->pmContainer->setStyleSheet(
+		"border: none;"
+		"background-image: url(:/images/empty_canvas.png);"
+		"background-attachment: fixed;"
+		"background-position: center;"
+		"background-origin: content;"
+		"background-repeat: no-repeat;"
+	);
     ui->pmContainer->setLayout(layout);
 }
 

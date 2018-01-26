@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "ui_texturepickerwidget.h"
 #include "qfiledialog.h"
 #include <Qt>
+#include "../core/project.h"
 #include "../core/thumbnailmanager.h"
 #include "../widgets/assetpickerwidget.h"
 
@@ -46,8 +47,8 @@ QString TexturePickerWidget::getTexturePath()
 void TexturePickerWidget::dragEnterEvent(QDragEnterEvent *event)
 {
 //    const QString mimeType = "application/x-qabstractitemmodeldatalist";
-    if (event->mimeData()->hasText()) {
-        event->acceptProposedAction();
+	if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist")) {
+		event->acceptProposedAction();
     } else {
         event->ignore();
     }
@@ -65,7 +66,18 @@ void TexturePickerWidget::dropEvent(QDropEvent *event)
 //        stream >> row >> col >> roleDataMap;
 //    }
 
-    changeMap(event->mimeData()->text());
+	QByteArray encoded = event->mimeData()->data("application/x-qabstractitemmodeldatalist");
+	QDataStream stream(&encoded, QIODevice::ReadOnly);
+	QMap<int, QVariant> roleDataMap;
+	while (!stream.atEnd()) {
+		stream >> roleDataMap;
+	}
+
+	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
+		changeMap(roleDataMap.value(3).toString());
+
+		qDebug() << roleDataMap.value(3).toString();
+	}
 
     event->acceptProposedAction();
 }

@@ -321,6 +321,15 @@ void Database::renameProject(const QString &newName)
     executeAndCheckQuery(query, "renameProject");
 }
 
+void Database::updateAssetThumbnail(const QString guid, const QByteArray &thumbnail)
+{
+	QSqlQuery query;
+	query.prepare("UPDATE assets SET thumbnail = ? WHERE guid = ?");
+	query.addBindValue(thumbnail);
+	query.addBindValue(guid);
+	executeAndCheckQuery(query, "updateAssetThumbnail");
+}
+
 void Database::insertCollectionGlobal(const QString &collectionName)
 {
     QSqlQuery query;
@@ -376,6 +385,37 @@ QString Database::insertAssetGlobal(const QString &assetName,
     return guid;
 }
 
+void Database::insertProjectAssetGlobal(const QString &assetName,
+										   int type,
+										   const QByteArray &thumbnail,
+										   const QByteArray &properties,
+										   const QByteArray &tags,
+								           const QString &guid)
+{
+	QSqlQuery query;
+	query.prepare("INSERT INTO assets"
+		" (name, extension, thumbnail, type, collection, version, date_created,"
+		" last_updated, guid, properties, author, license, tags)"
+		" VALUES (:name, :extension, :thumbnail, :type, 0, :version, datetime(),"
+		" datetime(), :guid, :properties, :author, :license, :tags)");
+
+	QFileInfo assetInfo(assetName);
+
+	query.bindValue(":name", assetInfo.baseName());
+	query.bindValue(":extension", assetInfo.suffix());
+	query.bindValue(":thumbnail", thumbnail);
+	query.bindValue(":type", type);
+	query.bindValue(":version", Constants::CONTENT_VERSION);
+	query.bindValue(":guid", guid);
+	query.bindValue(":properties", properties);
+
+	query.bindValue(":author", "");// getAuthorName());
+	query.bindValue(":license", "CCBY");
+	query.bindValue(":tags", tags);
+
+	executeAndCheckQuery(query, "insertProjectSceneAsset");
+}
+
 void Database::insertSceneGlobal(const QString &projectName, const QByteArray &sceneBlob, const QByteArray &thumb)
 {
     QSqlQuery query;
@@ -396,7 +436,8 @@ void Database::insertSceneGlobal(const QString &projectName, const QByteArray &s
 
 void Database::insertThumbnailGlobal(const QString &world_guid,
                                      const QString &name,
-                                     const QByteArray &thumbnail)
+                                     const QByteArray &thumbnail,
+								     const QString &thumbnail_guid)
 {
     QSqlQuery query;
     query.prepare("INSERT INTO " + Constants::DB_THUMBS_TABLE + " (world_guid, name, thumbnail, guid)"
@@ -404,7 +445,7 @@ void Database::insertThumbnailGlobal(const QString &world_guid,
     query.bindValue(":world_guid",  world_guid);
     query.bindValue(":thumbnail",   thumbnail);
     query.bindValue(":name",        name);
-    query.bindValue(":guid",        GUIDManager::generateGUID());
+    query.bindValue(":guid",        thumbnail_guid);
 
     executeAndCheckQuery(query, "insertThumbnailGlobal");
 }

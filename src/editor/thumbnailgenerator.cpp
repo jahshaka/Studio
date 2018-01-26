@@ -1,6 +1,5 @@
 #include "thumbnailgenerator.h"
 #include <QOpenGLFunctions_3_2_Core>
-
 #include "../constants.h"
 
 #include "../irisgl/src/graphics/rendertarget.h"
@@ -71,10 +70,11 @@ void RenderThread::run()
             result->type = request.type;
             result->path = request.path;
             result->thumbnail = img;
+			result->material = assetMaterial;
+			result->textureList = getTextureList();
 
             emit thumbnailComplete(result);
         }
-
     }
 
     // move to main thread to be cleaned up
@@ -101,49 +101,72 @@ void RenderThread::initScene()
     //cam->setLocalRot(QQuaternion::fromEulerAngles(-45, 45, 0));
     cam->lookAt(QVector3D(0,0.5f,0));
 
-    scene->setSkyColor(QColor(100, 100, 100));
-    scene->setAmbientColor(QColor(255, 255, 255));
+    //scene->setSkyColor(QColor(100, 100, 100, 0));
+    //scene->setAmbientColor(QColor(255, 255, 255));
 
-    // second node
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/models/ground.obj");
-    node->setLocalPos(QVector3D(0, 0, 0));
-    node->setName("Ground");
-    node->setPickable(false);
-    node->setShadowCastingEnabled(false);
+	scene->setSkyColor(QColor(25, 25, 25, 0));
+	scene->setAmbientColor(QColor(190, 190, 190));
 
-    auto dlight = iris::LightNode::create();
-    dlight->setLightType(iris::LightType::Directional);
-    scene->rootNode->addChild(dlight);
-    dlight->setName("Key Light");
-    dlight->setLocalRot(QQuaternion::fromEulerAngles(45, -45, 0));
-    dlight->intensity = 1;
-	dlight->setShadowMapType(iris::ShadowMapType::Soft);
-    //dlight->icon = iris::Texture2D::load(":/icons/light.png");
+ //   // second node
+ //   auto node = iris::MeshNode::create();
+ //   node->setMesh(":/models/ground.obj");
+ //   node->setLocalPos(QVector3D(0, 0, 0));
+ //   node->setName("Ground");
+ //   node->setPickable(false);
+ //   node->setShadowCastingEnabled(false);
 
-    auto plight = iris::LightNode::create();
-    plight->setLightType(iris::LightType::Directional);
-    scene->rootNode->addChild(plight);
-    plight->setName("Fill Light");
-    dlight->setLocalRot(QQuaternion::fromEulerAngles(90, 180, 90));
-    plight->intensity = 1;
-    plight->color = QColor(255, 200, 200);
-    //plight->icon = iris::Texture2D::load(":/icons/bulb.png");
+ //   auto dlight = iris::LightNode::create();
+ //   dlight->setLightType(iris::LightType::Directional);
+ //   scene->rootNode->addChild(dlight);
+ //   dlight->setName("Key Light");
+ //   dlight->setLocalRot(QQuaternion::fromEulerAngles(45, -45, 0));
+ //   dlight->intensity = 1;
+	//dlight->setShadowMapType(iris::ShadowMapType::Soft);
+ //   //dlight->icon = iris::Texture2D::load(":/icons/light.png");
+
+ //   auto plight = iris::LightNode::create();
+ //   plight->setLightType(iris::LightType::Directional);
+ //   scene->rootNode->addChild(plight);
+ //   plight->setName("Fill Light");
+ //   dlight->setLocalRot(QQuaternion::fromEulerAngles(90, 180, 90));
+ //   plight->intensity = 1;
+ //   plight->color = QColor(255, 200, 200);
+ //   //plight->icon = iris::Texture2D::load(":/icons/bulb.png");
+	//plight->setShadowMapType(iris::ShadowMapType::None);
+
+ //   plight = iris::LightNode::create();
+ //   plight->setLightType(iris::LightType::Directional);
+ //   scene->rootNode->addChild(plight);
+ //   plight->setName("Rim Light");
+ //   dlight->setLocalRot(QQuaternion::fromEulerAngles(60, 0, 0));
+ //   plight->intensity = 1;
+ //   plight->color = QColor(200, 222, 200);
+	//plight->setShadowMapType(iris::ShadowMapType::None);
+
+	auto dlight = iris::LightNode::create();
+	dlight->setLightType(iris::LightType::Directional);
+	dlight->setName("Key Light");
+	dlight->color = QColor(255, 255, 240);
+	//dlight->setLocalPos(QVector3D(2, 2, 2));
+	dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 45, 0));
+	dlight->intensity = 0.76;
+	dlight->setShadowMapType(iris::ShadowMapType::None);
+	//dlight->shadowMap->shadowType = iris::ShadowMapType::None;
+	scene->rootNode->addChild(dlight);
+
+	auto plight = iris::LightNode::create();
+	plight->setLightType(iris::LightType::Point);
+	plight->setName("Rim Light");
+	plight->setLocalPos(QVector3D(0, 0, -3));
+	plight->color = QColor(210, 210, 255);
+	plight->intensity = 0.47;
 	plight->setShadowMapType(iris::ShadowMapType::None);
-
-    plight = iris::LightNode::create();
-    plight->setLightType(iris::LightType::Directional);
-    scene->rootNode->addChild(plight);
-    plight->setName("Rim Light");
-    dlight->setLocalRot(QQuaternion::fromEulerAngles(60, 0, 0));
-    plight->intensity = 1;
-    plight->color = QColor(200, 222, 200);
-	plight->setShadowMapType(iris::ShadowMapType::None);
+	plight->shadowMap->shadowType = iris::ShadowMapType::None;
+	scene->rootNode->addChild(plight);
 
     // fog params
-    scene->fogColor = QColor(72, 72, 72);
     scene->fogEnabled = false;
-    scene->shadowEnabled = true;
+    scene->shadowEnabled = false;
 
     cam->update(0);// necessary!
     scene->update(0);
@@ -153,9 +176,10 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 {
     if(request.type == ThumbnailRequestType::Mesh)
     {
-		iris::SceneSource *ssource = new iris::SceneSource();
+		ssource = new iris::SceneSource();
         // load mesh as scene
-        sceneNode = iris::MeshNode::loadAsSceneFragment(request.path, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+		int iteration = 0;
+        sceneNode = iris::MeshNode::loadAsSceneFragment(request.path, [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
         {
             auto mat = iris::CustomMaterial::create();
             if (mesh->hasSkeleton())
@@ -165,9 +189,8 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 
             mat->setValue("diffuseColor", data.diffuseColor);
             mat->setValue("specularColor", data.specularColor);
-            mat->setValue("ambientColor", data.ambientColor);
+            mat->setValue("ambientColor", QColor(110, 110, 110));
             mat->setValue("emissionColor", data.emissionColor);
-
             mat->setValue("shininess", data.shininess);
 
             if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
@@ -179,11 +202,16 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
             if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
                 mat->setValue("normalTexture", data.normalTexture);
 
+			QJsonObject matObj;
+			createMaterial(matObj, mat);
+			assetMaterial.insert(QString::number(iteration), matObj);
+
+			iteration++;
+
             return mat;
         }, ssource);
 
-        if (!sceneNode)
-            return;
+        if (!sceneNode) return;
 
         scene->rootNode->addChild(sceneNode);
 
@@ -207,8 +235,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
             }
         }
 
-
-        float dist = (bound.radius*1.2) / qTan(qDegreesToRadians(cam->angle/2.0f));
+        float dist = (bound.radius * 1.2) / qTan(qDegreesToRadians(cam->angle / 2.0f));
         cam->setLocalPos(QVector3D(0, bound.pos.y(), dist));
         cam->lookAt(bound.pos);
         cam->update(0);
@@ -221,6 +248,42 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 
         // apply
     }
+}
+
+QStringList RenderThread::getTextureList()
+{
+	const aiScene *scene = ssource->importer.GetScene();
+
+	QStringList texturesToCopy;
+
+	for (int i = 0; i < scene->mNumMeshes; i++) {
+		auto mesh = scene->mMeshes[i];
+		auto material = scene->mMaterials[mesh->mMaterialIndex];
+
+		aiString textureName;
+
+		if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
+			material->GetTexture(aiTextureType_DIFFUSE, 0, &textureName);
+			texturesToCopy.append(textureName.C_Str());
+		}
+
+		if (material->GetTextureCount(aiTextureType_SPECULAR) > 0) {
+			material->GetTexture(aiTextureType_SPECULAR, 0, &textureName);
+			texturesToCopy.append(textureName.C_Str());
+		}
+
+		if (material->GetTextureCount(aiTextureType_NORMALS) > 0) {
+			material->GetTexture(aiTextureType_NORMALS, 0, &textureName);
+			texturesToCopy.append(textureName.C_Str());
+		}
+
+		if (material->GetTextureCount(aiTextureType_HEIGHT) > 0) {
+			material->GetTexture(aiTextureType_HEIGHT, 0, &textureName);
+			texturesToCopy.append(textureName.C_Str());
+		}
+	}
+
+	return texturesToCopy;
 }
 
 void RenderThread::cleanupScene()
@@ -253,6 +316,29 @@ void RenderThread::getBoundingSpheres(iris::SceneNodePtr node, QList<iris::Bound
     for(auto child : node->children) {
         getBoundingSpheres(child, spheres);
     }
+}
+
+void RenderThread::createMaterial(QJsonObject &matObj, iris::CustomMaterialPtr mat)
+{
+	matObj["name"] = mat->getName();
+
+	for (auto prop : mat->properties) {
+		if (prop->type == iris::PropertyType::Bool) {
+			matObj[prop->name] = prop->getValue().toBool();
+		}
+
+		if (prop->type == iris::PropertyType::Float) {
+			matObj[prop->name] = prop->getValue().toFloat();
+		}
+
+		if (prop->type == iris::PropertyType::Color) {
+			matObj[prop->name] = prop->getValue().value<QColor>().name();
+		}
+
+		if (prop->type == iris::PropertyType::Texture) {
+			matObj[prop->name] = QFileInfo(prop->getValue().toString()).fileName();
+		}
+	}
 }
 
 ThumbnailGenerator::ThumbnailGenerator()
@@ -289,9 +375,7 @@ ThumbnailGenerator::ThumbnailGenerator()
 
 ThumbnailGenerator *ThumbnailGenerator::getSingleton()
 {
-    if(instance==nullptr)
-        instance = new ThumbnailGenerator();
-
+    if (instance == Q_NULLPTR) instance = new ThumbnailGenerator();
     return instance;
 }
 
@@ -310,8 +394,3 @@ void ThumbnailGenerator::shutdown()
     renderThread->requestsAvailable.release();// release 1 so the thread's main loop continues;
     renderThread->wait();
 }
-
-//void ThumbnialGenerator::run()
-//{
-//    //renderThread->start();
-//}
