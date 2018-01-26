@@ -310,7 +310,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	navLayout->addSpacing(12);
 	navLayout->addWidget(treeWidget);
 	auto collectionButton = new QPushButton("Create Collection");
-	collectionButton->setStyleSheet("font-size: 12px; font-weight: bold; padding: 8px;");
+	collectionButton->setStyleSheet("font-size: 12px; padding: 8px;");
 	navLayout->addWidget(collectionButton);
 
     connect(collectionButton, &QPushButton::pressed, [this]() {
@@ -442,7 +442,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	le->setFixedWidth(256);
 	le->setStyleSheet(
 		"border: 1px solid #1E1E1E; border-radius: 2px; "
-		"font-size: 12px; font-weight: bold; background: #3B3B3B; padding: 6px 4px;"
+		"font-size: 12px; background: #3B3B3B; padding: 6px 4px;"
 	);
 	filterLayout->addWidget(le);
 
@@ -456,7 +456,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	filterPane->setFixedHeight(48);
 	filterPane->setStyleSheet(
 		"#filterPane { border-bottom: 1px solid #111; }"
-		"QLabel { font-size: 12px; font-weight: bold; margin-right: 8px; }"
+		"QLabel { font-size: 12px; margin-right: 8px; }"
 		"QPushButton[accessibleName=\"filterObj\"] { border-radius: 0; padding: 10px 8px; }"
 		"QComboBox { background: #3B3B3B; border-radius: 1px; color: #BBB; padding: 0 12px; min-height: 30px; min-width: 72px; border: 1px solid #1e1e1e;}"
 		"QComboBox::drop-down { border: 0; margin: 0; padding: 0; min-height: 20px; }"
@@ -549,7 +549,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	assetDropPad->setSizePolicy(policy);
 	assetDropPad->setObjectName(QStringLiteral("assetDropPad"));
 	auto assetDropPadLayout = new QVBoxLayout;
-	QLabel *assetDropPadLabel = new QLabel("Drop a model to import...");
+	QLabel *assetDropPadLabel = new QLabel("Drop an asset to import...");
 	assetDropPadLayout->setSpacing(6);
 	assetDropPadLabel->setObjectName(QStringLiteral("assetDropPadLabel"));
 	assetDropPadLabel->setAlignment(Qt::AlignHCenter);
@@ -560,10 +560,10 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	//auto downloadWorld = new QPushButton("Download Worlds...");
 
 	QPushButton *downloadWorld = new QPushButton();
-	downloadWorld->setText("Download Worlds");
+	downloadWorld->setText("Download Assets");
 
 	connect(downloadWorld, &QPushButton::pressed, []() {
-		QDesktopServices::openUrl(QUrl("http://www.jahfx.com/worlds/"));
+		QDesktopServices::openUrl(QUrl("http://www.jahfx.com/models/"));
 	});
 	assetDropPadLayout->addWidget(downloadWorld);
 
@@ -816,10 +816,10 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	l->addWidget(metadataTags);
 	l->addWidget(metadataWidget);
 	metadata->setLayout(l);
-	metadata->setStyleSheet("QLabel { font-size: 12px; font-weight: bold; }");
+	metadata->setStyleSheet("QLabel { font-size: 12px; }");
 	auto header = new QLabel("Asset Metadata");
 	header->setAlignment(Qt::AlignCenter);
-	header->setStyleSheet("font-size: 14px; font-weight: bold; border-top: 1px solid black; border-bottom: 1px solid black; text-align: center; padding: 12px; background: #1e1e1e");
+	header->setStyleSheet("font-size: 14px; border-top: 1px solid black; border-bottom: 1px solid black; text-align: center; padding: 12px; background: #1e1e1e");
 	metaLayout->addWidget(header);
 	metaLayout->addWidget(metadata);
     _metadataPane->setLayout(metaLayout);
@@ -844,17 +844,17 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		"*							{ color: #EEE; }"
 		"QPushButton				{ border-radius: 2px; padding: 8px 12px; }"
 		"QSplitter					{ background: #2E2E2E; } QSplitter:handle { background: black; }"
-		"#localAssetsButton			{ font-size: 12px; font-weight: bold; text-align: left; padding: 12px; }"
-		"#onlineAssetsButton		{ font-size: 12px; font-weight: bold; text-align: left; padding: 12px; }"
+		"#localAssetsButton			{ font-size: 12px; text-align: left; padding: 12px; }"
+		"#onlineAssetsButton		{ font-size: 12px; text-align: left; padding: 12px; }"
         "QPushButton[accessibleName=\"assetsButton\"]:disabled { color: #444; }"
-		"#treeWidget				{ font-size: 12px; font-weight: bold; background: transparent; }"
+		"#treeWidget				{ font-size: 12px; background: transparent; }"
 		"#assetDropPad				{}"
-		"#assetDropPadLabel			{ font-size: 14px; font-weight: bold; border: 4px dashed #1E1E1E; border-radius: 4px; "
+		"#assetDropPadLabel			{ font-size: 14px; border: 4px dashed #1E1E1E; border-radius: 4px; "
 		"							  padding: 48px 36px; }"
-		"#assetDropPad, #MetadataPane QPushButton	{ font-size: 12px; font-weight: bold; padding: 8px 12px; }"
+		"#assetDropPad, #MetadataPane QPushButton	{ font-size: 12px; padding: 8px 12px; }"
 		"#assetDropPad QLineEdit	{ border: 1px solid #1E1E1E; border-radius: 2px;"
-		"							  font-size: 12px; font-weight: bold; background: #3B3B3B; padding: 6px 4px; }"
-		"#assetDropPad QLabel		{ font-size: 12px; font-weight: bold; }"
+		"							  font-size: 12px; background: #3B3B3B; padding: 6px 4px; }"
+		"#assetDropPad QLabel		{ font-size: 12px; }"
 	);
 }
 
