@@ -189,7 +189,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 
             mat->setValue("diffuseColor", data.diffuseColor);
             mat->setValue("specularColor", data.specularColor);
-            mat->setValue("ambientColor", QColor(130, 130, 130));
+            mat->setValue("ambientColor", QColor(110, 110, 110));
             mat->setValue("emissionColor", data.emissionColor);
             mat->setValue("shininess", data.shininess);
 

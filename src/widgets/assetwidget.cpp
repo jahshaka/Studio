@@ -516,15 +516,28 @@ void AssetWidget::deleteTreeFolder()
 void AssetWidget::deleteItem()
 {
     auto item = assetItem.wItem;
-	QFileInfo itemInfo(QDir(assetItem.selectedPath).filePath(item->text()));
+	QFileInfo itemInfo;
+	itemInfo.setFile(QDir(assetItem.selectedPath).filePath(item->text()));
+
     QDir dir(itemInfo.absoluteFilePath());
 
+	if (item->data(Qt::UserRole).toString() != itemInfo.absoluteFilePath()) {
+		QDir dir2(item->data(Qt::UserRole).toString());
+		if (dir2.removeRecursively()) {
+			// remove from db
+			delete ui->assetView->takeItem(ui->assetView->row(item));
+		}
+		return;
+	}
+
 	if (itemInfo.isDir()) {
+		qDebug() << "dir" << itemInfo.absoluteFilePath();
 		if (dir.removeRecursively()) {
 			delete ui->assetView->takeItem(ui->assetView->row(item));
 		}
 	}
 	else if (itemInfo.isFile()) {
+		qDebug() << "file" << itemInfo.absoluteFilePath();
         QFile file(itemInfo.absoluteFilePath());
 		if (file.remove()) {
 			delete ui->assetView->takeItem(ui->assetView->row(item));

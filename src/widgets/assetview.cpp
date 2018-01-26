@@ -5,6 +5,7 @@
 
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/graphics/mesh.h"
+#include "irisgl/src/zip/zip.h"
 
 #include <QListWidget>
 #include <QListWidgetItem>
@@ -31,6 +32,7 @@
 #include <QDropEvent>
 #include <QMimeData>
 #include <QDesktopServices>
+#include <QTemporaryDir>
 
 #include "../globals.h"
 #include "../constants.h"
@@ -40,6 +42,8 @@
 #include "assetviewgrid.h"
 #include "assetgriditem.h"
 #include "assetviewer.h"
+
+#include "../core/guidmanager.h"
 
 void AssetView::focusInEvent(QFocusEvent *event)
 {
@@ -732,9 +736,14 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		filename = QFileDialog::getOpenFileName(this,
 												"Load Mesh",
 												QString(),
-												"Mesh Files (*.obj *.fbx *.3ds *.dae *.c4d *.blend)");
+												"Mesh Files (*.obj *.fbx *.3ds *.job)");
 
-		importModel(filename);
+		if (QFileInfo(filename).suffix() == "job") {
+			importJahModel(filename);
+		}
+		else {
+			importModel(filename);
+		}
 	});
 
 	assetDropPadLayout->addWidget(renameWidget);
@@ -847,6 +856,18 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		"							  font-size: 12px; font-weight: bold; background: #3B3B3B; padding: 6px 4px; }"
 		"#assetDropPad QLabel		{ font-size: 12px; font-weight: bold; }"
 	);
+}
+
+QString importProjectNameAV;
+int on_extract_entry_av(const char *filename, void *arg) {
+	QFileInfo fInfo(filename);
+	if (fInfo.suffix() == "db") importProjectNameAV = fInfo.baseName();
+	return 0;
+}
+
+void AssetView::importJahModel(const QString &fileName)
+{
+
 }
 
 void AssetView::importModel(const QString &filename)
