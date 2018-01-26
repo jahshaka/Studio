@@ -76,7 +76,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 void AssetWidget::trigger()
 {
-    generateAssetThumbnails();
+    // generateAssetThumbnails();
     // It's important that this get's called after a project has been loaded (iKlsR)
     populateAssetTree(true);
 }

@@ -101,49 +101,72 @@ void RenderThread::initScene()
     //cam->setLocalRot(QQuaternion::fromEulerAngles(-45, 45, 0));
     cam->lookAt(QVector3D(0,0.5f,0));
 
-    scene->setSkyColor(QColor(100, 100, 100, 0));
-    scene->setAmbientColor(QColor(255, 255, 255));
+    //scene->setSkyColor(QColor(100, 100, 100, 0));
+    //scene->setAmbientColor(QColor(255, 255, 255));
 
-    // second node
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/models/ground.obj");
-    node->setLocalPos(QVector3D(0, 0, 0));
-    node->setName("Ground");
-    node->setPickable(false);
-    node->setShadowCastingEnabled(false);
+	scene->setSkyColor(QColor(25, 25, 25, 0));
+	scene->setAmbientColor(QColor(190, 190, 190));
 
-    auto dlight = iris::LightNode::create();
-    dlight->setLightType(iris::LightType::Directional);
-    scene->rootNode->addChild(dlight);
-    dlight->setName("Key Light");
-    dlight->setLocalRot(QQuaternion::fromEulerAngles(45, -45, 0));
-    dlight->intensity = 1;
-	dlight->setShadowMapType(iris::ShadowMapType::Soft);
-    //dlight->icon = iris::Texture2D::load(":/icons/light.png");
+ //   // second node
+ //   auto node = iris::MeshNode::create();
+ //   node->setMesh(":/models/ground.obj");
+ //   node->setLocalPos(QVector3D(0, 0, 0));
+ //   node->setName("Ground");
+ //   node->setPickable(false);
+ //   node->setShadowCastingEnabled(false);
 
-    auto plight = iris::LightNode::create();
-    plight->setLightType(iris::LightType::Directional);
-    scene->rootNode->addChild(plight);
-    plight->setName("Fill Light");
-    dlight->setLocalRot(QQuaternion::fromEulerAngles(90, 180, 90));
-    plight->intensity = 1;
-    plight->color = QColor(255, 200, 200);
-    //plight->icon = iris::Texture2D::load(":/icons/bulb.png");
+ //   auto dlight = iris::LightNode::create();
+ //   dlight->setLightType(iris::LightType::Directional);
+ //   scene->rootNode->addChild(dlight);
+ //   dlight->setName("Key Light");
+ //   dlight->setLocalRot(QQuaternion::fromEulerAngles(45, -45, 0));
+ //   dlight->intensity = 1;
+	//dlight->setShadowMapType(iris::ShadowMapType::Soft);
+ //   //dlight->icon = iris::Texture2D::load(":/icons/light.png");
+
+ //   auto plight = iris::LightNode::create();
+ //   plight->setLightType(iris::LightType::Directional);
+ //   scene->rootNode->addChild(plight);
+ //   plight->setName("Fill Light");
+ //   dlight->setLocalRot(QQuaternion::fromEulerAngles(90, 180, 90));
+ //   plight->intensity = 1;
+ //   plight->color = QColor(255, 200, 200);
+ //   //plight->icon = iris::Texture2D::load(":/icons/bulb.png");
+	//plight->setShadowMapType(iris::ShadowMapType::None);
+
+ //   plight = iris::LightNode::create();
+ //   plight->setLightType(iris::LightType::Directional);
+ //   scene->rootNode->addChild(plight);
+ //   plight->setName("Rim Light");
+ //   dlight->setLocalRot(QQuaternion::fromEulerAngles(60, 0, 0));
+ //   plight->intensity = 1;
+ //   plight->color = QColor(200, 222, 200);
+	//plight->setShadowMapType(iris::ShadowMapType::None);
+
+	auto dlight = iris::LightNode::create();
+	dlight->setLightType(iris::LightType::Directional);
+	dlight->setName("Key Light");
+	dlight->color = QColor(255, 255, 240);
+	//dlight->setLocalPos(QVector3D(2, 2, 2));
+	dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 45, 0));
+	dlight->intensity = 0.76;
+	dlight->setShadowMapType(iris::ShadowMapType::None);
+	//dlight->shadowMap->shadowType = iris::ShadowMapType::None;
+	scene->rootNode->addChild(dlight);
+
+	auto plight = iris::LightNode::create();
+	plight->setLightType(iris::LightType::Point);
+	plight->setName("Rim Light");
+	plight->setLocalPos(QVector3D(0, 0, -3));
+	plight->color = QColor(210, 210, 255);
+	plight->intensity = 0.47;
 	plight->setShadowMapType(iris::ShadowMapType::None);
-
-    plight = iris::LightNode::create();
-    plight->setLightType(iris::LightType::Directional);
-    scene->rootNode->addChild(plight);
-    plight->setName("Rim Light");
-    dlight->setLocalRot(QQuaternion::fromEulerAngles(60, 0, 0));
-    plight->intensity = 1;
-    plight->color = QColor(200, 222, 200);
-	plight->setShadowMapType(iris::ShadowMapType::None);
+	plight->shadowMap->shadowType = iris::ShadowMapType::None;
+	scene->rootNode->addChild(plight);
 
     // fog params
-    scene->fogColor = QColor(72, 72, 72);
     scene->fogEnabled = false;
-    scene->shadowEnabled = true;
+    scene->shadowEnabled = false;
 
     cam->update(0);// necessary!
     scene->update(0);
@@ -166,7 +189,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 
             mat->setValue("diffuseColor", data.diffuseColor);
             mat->setValue("specularColor", data.specularColor);
-            mat->setValue("ambientColor", data.ambientColor);
+            mat->setValue("ambientColor", QColor(130, 130, 130));
             mat->setValue("emissionColor", data.emissionColor);
             mat->setValue("shininess", data.shininess);
 
