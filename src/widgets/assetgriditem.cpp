@@ -29,7 +29,7 @@ AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject prop
 	setMinimumHeight(142);
 	setMaximumHeight(142);
 
-	textLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 12px; background: #1e1e1e;"
+	textLabel->setStyleSheet("color: #ddd; font-size: 12px; background: #1e1e1e;"
 		"border-left: 3px solid rgba(0, 0, 0, 3%); border-bottom: 3px solid rgba(0, 0, 0, 3%); border-right: 3px solid rgba(0, 0, 0, 3%)");
 	gridImageLabel->setStyleSheet("border-left: 3px solid rgba(0, 0, 0, 3%); border-top: 3px solid rgba(0, 0, 0, 3%); border-right: 3px solid rgba(0, 0, 0, 3%)");
 
@@ -97,7 +97,7 @@ void AssetGridItem::mousePressEvent(QMouseEvent *event) {
 
 void AssetGridItem::dimHighlight() {
     if (!selected) {
-        textLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 12px; background: #1e1e1e;"
+        textLabel->setStyleSheet("color: #ddd; font-size: 12px; background: #1e1e1e;"
             "border-left: 3px solid rgba(0, 0, 0, 10%); border-bottom: 3px solid rgba(0, 0, 0, 10%); border-right: 3px solid rgba(0, 0, 0, 10%)");
         gridImageLabel->setStyleSheet("border-left: 3px solid rgba(0, 0, 0, 10%); border-top: 3px solid rgba(0, 0, 0, 10%); border-right: 3px solid rgba(0, 0, 0, 10%)");
     }
@@ -105,7 +105,7 @@ void AssetGridItem::dimHighlight() {
 
 void AssetGridItem::noHighlight() {
     if (!selected) {
-        textLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 12px; background: #1e1e1e;"
+        textLabel->setStyleSheet("color: #ddd; font-size: 12px; background: #1e1e1e;"
             "border-left: 3px solid rgba(0, 0, 0, 3%); border-bottom: 3px solid rgba(0, 0, 0, 3%); border-right: 3px solid rgba(0, 0, 0, 3%)");
         gridImageLabel->setStyleSheet("border-left: 3px solid rgba(0, 0, 0, 3%); border-top: 3px solid rgba(0, 0, 0, 3%); border-right: 3px solid rgba(0, 0, 0, 3%)");
     }
@@ -114,7 +114,7 @@ void AssetGridItem::noHighlight() {
 void AssetGridItem::highlight(bool highlight) {
 	selected = highlight;
 	if (selected) {
-		textLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 12px; background: #1e1e1e;"
+		textLabel->setStyleSheet("color: #ddd; font-size: 12px; background: #1e1e1e;"
 			"border-left: 3px solid #3498db; border-bottom: 3px solid #3498db; border-right: 3px solid #3498db");
 		gridImageLabel->setStyleSheet("border-left: 3px solid #3498db; border-top: 3px solid #3498db; border-right: 3px solid #3498db");
 	}
