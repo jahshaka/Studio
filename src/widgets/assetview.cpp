@@ -619,7 +619,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 			tagWidget->setVisible(true);
 			updateAsset->setVisible(true);
 
-			renameModelField->setText(gridItem->metadata["name"].toString());
+			renameModelField->setText(QFileInfo(gridItem->metadata["name"].toString()).baseName());
 
 			QString tags;
 			QJsonArray children = gridItem->tags["tags"].toArray();
@@ -714,9 +714,10 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 		QJsonDocument tagsDoc(tags);
 
+		auto ext = QFileInfo(selectedGridItem->metadata["name"].toString()).suffix();
 		db->updateAssetMetadata(
 			selectedGridItem->metadata["guid"].toString(),
-			renameModelField->text(),
+			renameModelField->text() + "." + ext,
 			tagsDoc.toBinaryData()
 		);
 
