@@ -231,6 +231,7 @@ set(HEADERS
     src/widgets/assetviewgrid.h
     src/widgets/assetgriditem.h
 	src/breakpad/breakpad.h
+	src/materials/jahdefaultmaterial.h
 )
 
 # Todo - trim these down to nothing eventually

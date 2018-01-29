@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include "../constants.h"
 
 #include "../editor/editordata.h"
+#include "../materials/JahDefaultMaterial.h"
 
 #include "../irisgl/src/scenegraph/scene.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
@@ -536,7 +537,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 
 
     if (shaderFile.exists()) {
-        m->generate(shaderFile.absoluteFilePath());
+		m->generate(shaderFile.absoluteFilePath());
     } else {
         for (auto asset : AssetManager::getAssets()) {
             if (asset->type == AssetType::Shader) {
