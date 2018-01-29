@@ -510,10 +510,11 @@ void MainWindow::setupProjectDB()
     db->createGlobalDb();
 	db->createGlobalDbAuthor();
 	db->createGlobalDbAssets();
-	db->createGlobalDbProjectAssets();
+	db->createGlobalDependencies();
+	//db->createGlobalDbProjectAssets();
     db->createGlobalDbCollections();
     db->createGlobalDbThumbs();
-	db->createGlobalDbMaterials();
+	//db->createGlobalDbMaterials();
 }
 
 void MainWindow::setupUndoRedo()
@@ -1038,7 +1039,8 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
 	iris::SceneSource *ssource = new iris::SceneSource();
 
-	auto material = db->getMaterialGlobal(QFileInfo(filename).baseName());
+	auto material_guid = db->getDependencyByType((int) AssetMetaType::Material, QFileInfo(filename).baseName());
+	auto material = db->getMaterialGlobal(material_guid);
 	auto materialObj = QJsonDocument::fromBinaryData(material);
 
 	QJsonObject assetMaterial = materialObj.object();
