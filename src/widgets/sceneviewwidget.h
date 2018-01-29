@@ -259,7 +259,7 @@ private:
     void addLightShapesToScene();
 
 signals:
-    void addDroppedMesh(QString, bool, QVector3D);
+    void addDroppedMesh(QString, bool, QVector3D, QString);
     void initializeGraphics(SceneViewWidget* widget,
                             QOpenGLFunctions_3_2_Core* gl);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);

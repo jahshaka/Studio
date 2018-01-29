@@ -136,7 +136,7 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
         auto ppos = dragScenePos;
-        emit addDroppedMesh(roleDataMap.value(3).toString(), true, ppos);
+        emit addDroppedMesh(roleDataMap.value(3).toString(), true, ppos, roleDataMap.value(1).toString());
     }
 
     //if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {

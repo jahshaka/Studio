@@ -1025,7 +1025,7 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
     addNodeToScene(node, ignore);
 }
 
-void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position)
+void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position, const QString &name)
 {
 	QString filename;
 	if (path.isEmpty()) {
@@ -1110,6 +1110,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 			anim->skeletalAnimation->source = relPath;
 	}
 
+	node->setName(name);
 	node->setLocalPos(position);
 
 	// todo: load material data
@@ -1636,8 +1637,8 @@ void MainWindow::setupViewPort()
     layout->setMargin(0);
     sceneContainer->setLayout(layout);
 
-    connect(sceneView, &SceneViewWidget::addDroppedMesh, [this](QString path, bool v, QVector3D pos) {
-        addMaterialMesh(path, v, pos);
+    connect(sceneView, &SceneViewWidget::addDroppedMesh, [this](QString path, bool v, QVector3D pos, QString name) {
+        addMaterialMesh(path, v, pos, name);
     });
 
     connect(sceneView,  SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),
