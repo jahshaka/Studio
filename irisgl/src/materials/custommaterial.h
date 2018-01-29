@@ -44,8 +44,14 @@ public:
     int getCalculatedPropHeight() const;
 
     static CustomMaterialPtr create();
+	// called when the material's value is changed
+	// returning true means the change is accepted and false means the change is rejected
+	virtual bool onValueChange(const QString &name, const QVariant &value)
+	{
+		return true;
+	}
 
-private:
+protected:
     CustomMaterial() = default;
     QString materialName;
 

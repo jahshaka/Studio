@@ -309,8 +309,8 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
     case iris::FaceCullingMode::Front:
         sceneNodeObject["faceCullingMode"] = "front";
         break;
-    case iris::FaceCullingMode::FrontAndBack:
-        sceneNodeObject["faceCullingMode"] = "frontandback";
+    case iris::FaceCullingMode::DefinedInMaterial:
+        sceneNodeObject["faceCullingMode"] = "material";
         break;
     case iris::FaceCullingMode::None:
         sceneNodeObject["faceCullingMode"] = "none";

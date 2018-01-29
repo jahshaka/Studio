@@ -32,21 +32,23 @@ void CustomMaterial::setTextureWithUniform(const QString &uniform, const QString
 
 void CustomMaterial::setValue(const QString &name, const QVariant &value)
 {
-    for (auto prop : this->properties) {
-        if (prop->name == name) {
+	if (onValueChange(name, value)) {
+		for (auto prop : this->properties) {
+			if (prop->name == name) {
 
-            if (prop->type == iris::PropertyType::Texture) {
-                auto _prop = static_cast<TextureProperty*>(prop);
-                _prop->toggle = !value.toString().isEmpty();
-                prop->setValue(value.toString());
-                setTextureWithUniform(prop->uniform, value.toString());
-            }
+				if (prop->type == iris::PropertyType::Texture) {
+					auto _prop = static_cast<TextureProperty*>(prop);
+					_prop->toggle = !value.toString().isEmpty();
+					prop->setValue(value.toString());
+					setTextureWithUniform(prop->uniform, value.toString());
+				}
 
-            else {
-                prop->setValue(value);
-            }
-        }
-    }
+				else {
+					prop->setValue(value);
+				}
+			}
+		}
+	}
 }
 
 void CustomMaterial::setUniformValues(Property *prop)

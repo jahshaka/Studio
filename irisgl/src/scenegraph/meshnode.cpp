@@ -52,7 +52,7 @@ MeshNode::MeshNode() {
     renderItem = new RenderItem();
     renderItem->type = RenderItemType::Mesh;
 
-    faceCullingMode = FaceCullingMode::Back;
+    faceCullingMode = FaceCullingMode::DefinedInMaterial;
 }
 
 // @todo: cleanup previous mesh item
@@ -117,6 +117,23 @@ void MeshNode::submitRenderItems()
         if (!!material) {
             renderItem->renderLayer = material->renderLayer;
 			renderItem->renderStates = material->renderStates;
+			if (this->faceCullingMode != iris::FaceCullingMode::DefinedInMaterial)
+			{
+				switch (faceCullingMode) {
+				case iris::FaceCullingMode::Front:
+					renderItem->renderStates.rasterState = iris::RasterizerState::CullClockwise;
+					break;
+				case iris::FaceCullingMode::Back:
+					renderItem->renderStates.rasterState = iris::RasterizerState::CullCounterClockwise;
+					break;
+				case iris::FaceCullingMode::None:
+					renderItem->renderStates.rasterState = iris::RasterizerState::CullNone;
+					break;
+				default:
+					renderItem->renderStates.rasterState = iris::RasterizerState::CullNone;
+				}
+				
+			}
         }
 
         this->scene->geometryRenderList->add(renderItem);

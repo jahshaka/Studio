@@ -66,6 +66,14 @@ public:
     Assimp::Importer importer;
 };
 
+enum class FaceCullingMode
+{
+	None,
+	Front,
+	Back,
+	DefinedInMaterial
+};
+
 class MeshNode : public SceneNode
 {
 public:
