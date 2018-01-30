@@ -497,41 +497,43 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	// show assets
 	int i = 0;
 	foreach(const AssetTileData &record, db->fetchAssets()) {
-		QJsonObject object;
-		object["icon_url"] = "";
-        object["guid"] = record.guid;
-		object["name"] = record.name;
-		object["type"] = record.type;
-		object["full_filename"] = record.full_filename;
-		object["collection"] = record.collection;
-        object["collection_name"] = record.collection_name;
-		object["author"] = record.author;
-		object["license"] = record.license;
-		// object["tags"] = record.tags;
+		if (record.used == false) {
+			QJsonObject object;
+			object["icon_url"] = "";
+			object["guid"] = record.guid;
+			object["name"] = record.name;
+			object["type"] = record.type;
+			object["full_filename"] = record.full_filename;
+			object["collection"] = record.collection;
+			object["collection_name"] = record.collection_name;
+			object["author"] = record.author;
+			object["license"] = record.license;
+			// object["tags"] = record.tags;
 
-		auto tags = QJsonDocument::fromBinaryData(record.tags);
+			auto tags = QJsonDocument::fromBinaryData(record.tags);
 
-		QImage image;
-		image.loadFromData(record.thumbnail, "PNG");
+			QImage image;
+			image.loadFromData(record.thumbnail, "PNG");
 
-		auto sceneProperties = QJsonDocument::fromBinaryData(record.properties);
+			auto sceneProperties = QJsonDocument::fromBinaryData(record.properties);
 
-		auto gridItem = new AssetGridItem(object, image, sceneProperties.object(), tags.object());
+			auto gridItem = new AssetGridItem(object, image, sceneProperties.object(), tags.object());
 
-		connect(gridItem, &AssetGridItem::addAssetToProject, [this](AssetGridItem *item) {
-			addAssetToProject(item);
-		});
+			connect(gridItem, &AssetGridItem::addAssetToProject, [this](AssetGridItem *item) {
+				addAssetToProject(item);
+			});
 
-		connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
-			changeAssetCollection(item);
-		});
+			connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
+				changeAssetCollection(item);
+			});
 
-		connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
-			removeAssetFromProject(item);
-		});
+			connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
+				removeAssetFromProject(item);
+			});
 
-		fastGrid->addTo(gridItem, i);
-		i++;
+			fastGrid->addTo(gridItem, i);
+			i++;
+		}
 	}
 
 	//QApplication::processEvents();
@@ -617,7 +619,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 			tagWidget->setVisible(true);
 			updateAsset->setVisible(true);
 
-			renameModelField->setText(gridItem->metadata["name"].toString());
+			renameModelField->setText(QFileInfo(gridItem->metadata["name"].toString()).baseName());
 
 			QString tags;
 			QJsonArray children = gridItem->tags["tags"].toArray();
@@ -630,7 +632,9 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 			tagModelField->setText(tags);
 
-			auto material = db->getMaterialGlobal(gridItem->metadata["guid"].toString());
+			// get material 
+			auto material_guid = db->getDependencyByType((int)AssetMetaType::Material, gridItem->metadata["guid"].toString());
+			auto material = db->getMaterialGlobal(material_guid);
 			auto materialObj = QJsonDocument::fromBinaryData(material);
 
             auto assetPath = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DataLocation),
@@ -710,9 +714,10 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 		QJsonDocument tagsDoc(tags);
 
+		auto ext = QFileInfo(selectedGridItem->metadata["name"].toString()).suffix();
 		db->updateAssetMetadata(
 			selectedGridItem->metadata["guid"].toString(),
-			renameModelField->text(),
+			renameModelField->text() + "." + ext,
 			tagsDoc.toBinaryData()
 		);
 
@@ -911,7 +916,7 @@ void AssetView::addToLibrary()
 		QFileInfo fInfo(filename);
 		QJsonObject object;
 		object["icon_url"] = "";
-		object["name"] = fInfo.baseName(); // renameModelField->text();
+		object["name"] = QFileInfo(filename).baseName(); // renameModelField->text();
 
 		auto thumbnail = viewer->takeScreenshot(512, 512);
 
@@ -930,6 +935,7 @@ void AssetView::addToLibrary()
 		QString guid = db->insertAssetGlobal(IrisUtils::buildFileName(renameModelField->text(),
 			fInfo.suffix().toLower()),
 			static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData());
+		db->insertGlobalDependency(static_cast<int>(ModelTypes::Object), QString(), QString());
 		object["guid"] = guid;
 		object["type"] = (int)AssetMetaType::Object; // model?
 		object["full_filename"] = IrisUtils::buildFileName(guid, fInfo.suffix());
@@ -950,7 +956,8 @@ void AssetView::addToLibrary()
 
 		copyTextures(guid);
 
-		db->insertMaterialGlobal(QString(), guid, QJsonDocument(viewer->getMaterial()).toBinaryData());
+		auto material_guid = db->insertMaterialGlobal(QString(), guid, QJsonDocument(viewer->getMaterial()).toBinaryData());
+		db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), guid, material_guid);
 
 		auto gridItem = new AssetGridItem(object, thumbnail, viewer->getSceneProperties(), tags);
 
@@ -1006,7 +1013,7 @@ void AssetView::fetchMetadata(AssetGridItem *widget)
 		metadataTags->setVisible(true);
         metadataWidget->setVisible(true);
 
-		metadataName->setText("Name: " + widget->metadata["name"].toString());
+		metadataName->setText("Name: " + QFileInfo(widget->metadata["name"].toString()).baseName());
 		metadataType->setText("Type: " + getAssetType(widget->metadata["type"].toInt()));
 		QString pub = widget->metadata["is_public"].toBool() ? "true" : "false";
 		metadataVisibility->setText("Public: " + pub);

@@ -11,6 +11,7 @@
 #include "../editor/thumbnailgenerator.h"
 #include "../core/database/database.h"
 #include "../core/guidmanager.h"
+#include "assetview.h"
 
 #include <QBuffer>
 #include <QDebug>
@@ -390,7 +391,7 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
         // menu.addAction(action);
 
         action = new QAction(QIcon(), "Delete", this);
-        connect(action, SIGNAL(triggered()), this, SLOT(deleteItem()));
+        // connect(action, SIGNAL(triggered()), this, SLOT(deleteItem()));
         menu.addAction(action);
     }
     else {
@@ -598,7 +599,7 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const Q
 				buffer.open(QIODevice::WriteOnly);
 				pixmap.save(&buffer, "PNG");
 
-				// original filename
+				// the material is generated in the thumbnail handler and passed back in the result
 				db->insertProjectAssetGlobal(file.fileName(), (int) ModelTypes::Object, bytes, QByteArray(), QByteArray(), guid);
 				Globals::assetNames.insert(guid, QFileInfo(file.fileName()).baseName());
 
@@ -724,7 +725,8 @@ void AssetWidget::onThumbnailResult(ThumbnailResult* result)
 
 			// todo? maybe update the asset thumbnail in this function as well?
             db->insertThumbnailGlobal(Globals::project->getProjectGuid(), asset->fileName, bytes, asset_guid);
-			db->insertMaterialGlobal(QString(), asset_guid, QJsonDocument(result->material).toBinaryData());
+			auto material_id = db->insertMaterialGlobal(QString(), asset_guid, QJsonDocument(result->material).toBinaryData(), true);
+			db->insertGlobalDependency((int) AssetMetaType::Material, asset_guid, material_id);
 			db->updateAssetThumbnail(asset_guid, bytes);
 
             // find item and update its icon

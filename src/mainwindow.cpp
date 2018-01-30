@@ -510,10 +510,11 @@ void MainWindow::setupProjectDB()
     db->createGlobalDb();
 	db->createGlobalDbAuthor();
 	db->createGlobalDbAssets();
-	db->createGlobalDbProjectAssets();
+	db->createGlobalDependencies();
+	//db->createGlobalDbProjectAssets();
     db->createGlobalDbCollections();
     db->createGlobalDbThumbs();
-	db->createGlobalDbMaterials();
+	//db->createGlobalDbMaterials();
 }
 
 void MainWindow::setupUndoRedo()
@@ -1024,7 +1025,7 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
     addNodeToScene(node, ignore);
 }
 
-void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position)
+void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position, const QString &name)
 {
 	QString filename;
 	if (path.isEmpty()) {
@@ -1038,7 +1039,8 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
 	iris::SceneSource *ssource = new iris::SceneSource();
 
-	auto material = db->getMaterialGlobal(QFileInfo(filename).baseName());
+	auto material_guid = db->getDependencyByType((int) AssetMetaType::Material, QFileInfo(filename).baseName());
+	auto material = db->getMaterialGlobal(material_guid);
 	auto materialObj = QJsonDocument::fromBinaryData(material);
 
 	QJsonObject assetMaterial = materialObj.object();
@@ -1108,6 +1110,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 			anim->skeletalAnimation->source = relPath;
 	}
 
+	node->setName(name);
 	node->setLocalPos(position);
 
 	// todo: load material data
@@ -1634,8 +1637,8 @@ void MainWindow::setupViewPort()
     layout->setMargin(0);
     sceneContainer->setLayout(layout);
 
-    connect(sceneView, &SceneViewWidget::addDroppedMesh, [this](QString path, bool v, QVector3D pos) {
-        addMaterialMesh(path, v, pos);
+    connect(sceneView, &SceneViewWidget::addDroppedMesh, [this](QString path, bool v, QVector3D pos, QString name) {
+        addMaterialMesh(path, v, pos, name);
     });
 
     connect(sceneView,  SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),

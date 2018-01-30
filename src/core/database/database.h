@@ -21,6 +21,11 @@ public:
 
     bool checkIfTableExists(const QString &tableName);
 
+	void createGlobalDependencies();
+	void insertGlobalDependency(const int &type, const QString &depender, const QString &dependee, const QString &project_id = QString());
+
+	QString getDependencyByType(const int &type, const QString &depender);
+
     void createGlobalDb();
     void createGlobalDbThumbs();
     void createGlobalDbCollections();
@@ -37,7 +42,7 @@ public:
 	void updateAssetThumbnail(const QString guid, const QByteArray &thumbnail);
 	QString insertAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties, const QByteArray &tags);
 	void insertProjectAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties, const QByteArray &tags, const QString &guid);
-	QString insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material);
+	QString insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material, bool used = false);
     void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob, const QByteArray &thumb);
     void insertCollectionGlobal(const QString &collectionName);
     bool switchAssetCollection(const int, const QString&);
