@@ -13,10 +13,6 @@
   <property name="windowTitle">
    <string>Jahshaka</string>
   </property>
-  <property name="windowIcon">
-   <iconset resource="../app/icons.qrc">
-    <normaloff>:/icons/logo03.svg</normaloff>:/icons/logo03.svg</iconset>
-  </property>
   <property name="windowOpacity">
    <double>1.000000000000000</double>
   </property>

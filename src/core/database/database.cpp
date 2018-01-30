@@ -202,6 +202,7 @@ void Database::createGlobalDbAssets() {
 		"    properties        BLOB,"
 		"    asset             BLOB,"
 		"    used              INTEGER,"
+		"    deleted		   INTEGER,"		
 		"    guid              VARCHAR(32) PRIMARY KEY"
 		")";
 
@@ -220,9 +221,9 @@ QString Database::insertAssetGlobal(const QString &assetName,
 	auto guid = GUIDManager::generateGUID();
 	query.prepare("INSERT INTO assets"
 		" (name, thumbnail, type, collection, version, date_created,"
-		" last_updated, used, guid, properties, author, license, tags)"
+		" last_updated, used, deleted, guid, properties, author, license, tags)"
 		" VALUES (:name, :thumbnail, :type, 0, :version, datetime(),"
-		" datetime(), 0, :guid, :properties, :author, :license, :tags)");
+		" datetime(), 0, 0, :guid, :properties, :author, :license, :tags)");
 
 	QFileInfo assetInfo(assetName);
 
@@ -247,8 +248,8 @@ QVector<AssetTileData> Database::fetchAssets()
 {
 	QSqlQuery query;
 	query.prepare("SELECT assets.name, assets.thumbnail, assets.guid, collections.name as collection_name,"
-		" assets.type, assets.collection, assets.properties, assets.author, assets.license, assets.tags, assets.used"
-		" FROM assets INNER JOIN collections ON assets.collection = collections.collection_id ORDER BY assets.name DESC");
+		" assets.type, assets.collection, assets.properties, assets.author, assets.license, assets.tags, assets.deleted"
+		" FROM assets INNER JOIN collections ON assets.collection = collections.collection_id WHERE assets.type = 5 ORDER BY assets.name DESC");
 	executeAndCheckQuery(query, "fetchAssets");
 
 	QVector<AssetTileData> tileData;
@@ -266,7 +267,7 @@ QVector<AssetTileData> Database::fetchAssets()
 			data.author = record.value(7).toString();
 			data.license = record.value(8).toString();
 			data.tags = record.value(9).toByteArray();
-			data.used = record.value(10).toBool();
+			data.deleted = record.value(10).toBool();
 
 			data.full_filename = data.guid + "." + QFileInfo(data.name).suffix();
 		}
@@ -286,7 +287,7 @@ QVector<AssetTileData> Database::fetchAssetsByCollection(int collection_id)
 		" assets.thumbnail, assets.guid, collections.name as collection_name, assets.type,"
 		" assets.author, assets.license, assets.tags"
 		" FROM assets"
-		" INNER JOIN " + Constants::DB_COLLECT_TABLE + " ON assets.collection = collections.collection_id ORDER BY assets.name DESC WHERE assets.collection_id = ?");
+		" INNER JOIN collections ON assets.collection = collections.collection_id  WHERE assets.type = 5 AND assets.deleted = 0 ORDER BY assets.name DESC WHERE assets.collection_id = ?");
 	query.addBindValue(collection_id);
 	executeAndCheckQuery(query, "fetchAssetsByCollection");
 
@@ -429,8 +430,11 @@ QString Database::insertMaterialGlobal(const QString &materialName, const QStrin
 {
 	QSqlQuery query;
 	auto guid = GUIDManager::generateGUID();
-	query.prepare("INSERT INTO assets (name, date_created, asset, guid, used) VALUES (:name, datetime(), :asset, :guid, :used)");
+	query.prepare("INSERT INTO assets (name, date_created, type, collection, version, asset, guid, used)"
+				  " VALUES (:name, datetime(), :type, 0, :version, :asset, :guid, :used)");
 	query.bindValue(":name", materialName);
+	query.bindValue(":type", 1); // switch this to the enum later
+	query.bindValue(":version", "0.5a"); // switch this to the enum later
 	query.bindValue(":asset", material);
 	query.bindValue(":guid", guid);
 	query.bindValue(":used", used);
@@ -448,20 +452,56 @@ void Database::deleteProject()
     executeAndCheckQuery(query, "deleteProject");
 }
 
+bool Database::canDeleteAsset(const QString &guid)
+{
+	QSqlQuery query;
+	query.prepare("SELECT used FROM assets WHERE guid = ? LIMIT 1");
+	query.addBindValue(guid);
+
+	if (query.exec()) {
+		if (query.first()) {
+			return query.record().value(0).toBool();
+		}
+	}
+	else {
+		irisLog("canDeleteAsset query failed! " + query.lastError().text());
+	}
+
+	return false;
+}
+
+bool Database::softDeleteAsset(const QString &guid)
+{
+	// delete asset, material and dependency
+	QSqlQuery query;
+	query.prepare("UPDATE assets SET deleted = 1 WHERE guid = ? AND used = 1");
+	query.addBindValue(guid);
+
+	//QSqlQuery query2;
+	//query2.prepare("DELETE FROM materials WHERE asset_guid = ?");
+	//query2.addBindValue(guid);
+
+	bool da = executeAndCheckQuery(query, "softDeleteAsset");
+	//bool dm = executeAndCheckQuery(query, "deleteMaterial");
+
+	return da; // && dm;
+}
+
 bool Database::deleteAsset(const QString &guid)
 {
+	// delete asset, material and dependency
     QSqlQuery query;
-    query.prepare("DELETE FROM " + Constants::DB_ASSETS_TABLE + " WHERE guid = ?");
+    query.prepare("DELETE FROM assets WHERE guid = ? AND used = 0");
     query.addBindValue(guid);
 
-    QSqlQuery query2;
-    query2.prepare("DELETE FROM materials WHERE asset_guid = ?");
-    query2.addBindValue(guid);
+    //QSqlQuery query2;
+    //query2.prepare("DELETE FROM materials WHERE asset_guid = ?");
+    //query2.addBindValue(guid);
     
     bool da = executeAndCheckQuery(query, "deleteAsset");
-    bool dm = executeAndCheckQuery(query, "deleteMaterial");
+    //bool dm = executeAndCheckQuery(query, "deleteMaterial");
 
-    return da && dm;
+	return da; // && dm;
 }
 
 void Database::renameProject(const QString &newName)
@@ -492,6 +532,15 @@ void Database::insertCollectionGlobal(const QString &collectionName)
     query.bindValue(":name", collectionName);
 
     executeAndCheckQuery(query, "insertSceneCollection");
+}
+
+void Database::updateAssetUsed(const QString &guid, bool used)
+{
+	QSqlQuery query;
+	query.prepare("UPDATE assets SET used = ? WHERE guid = ?");
+	query.addBindValue(used);
+	query.addBindValue(guid);
+	executeAndCheckQuery(query, "updateAssetUsed");
 }
 
 bool Database::switchAssetCollection(const int id, const QString &guid)
@@ -606,7 +655,7 @@ QVector<AssetData> Database::fetchThumbnails()
 {
 	QSqlQuery query;
 	query.prepare("SELECT name, thumbnail, guid, type FROM assets WHERE type = 5");
-	executeAndCheckQuery(query, "fetchAssetData");
+	executeAndCheckQuery(query, "fetchThumbnails");
 
 	QVector<AssetData> tileData;
 	while (query.next()) {

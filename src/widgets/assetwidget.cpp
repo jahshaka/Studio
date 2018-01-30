@@ -391,7 +391,7 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
         // menu.addAction(action);
 
         action = new QAction(QIcon(), "Delete", this);
-        // connect(action, SIGNAL(triggered()), this, SLOT(deleteItem()));
+        connect(action, SIGNAL(triggered()), this, SLOT(deleteItem()));
         menu.addAction(action);
     }
     else {
@@ -522,23 +522,22 @@ void AssetWidget::deleteItem()
 
     QDir dir(itemInfo.absoluteFilePath());
 
-	if (item->data(Qt::UserRole).toString() != itemInfo.absoluteFilePath()) {
-		QDir dir2(item->data(Qt::UserRole).toString());
-		if (dir2.removeRecursively()) {
-			// remove from db
-			delete ui->assetView->takeItem(ui->assetView->row(item));
-		}
-		return;
-	}
-
 	if (itemInfo.isDir()) {
-		qDebug() << "dir" << itemInfo.absoluteFilePath();
 		if (dir.removeRecursively()) {
 			delete ui->assetView->takeItem(ui->assetView->row(item));
 		}
 	}
-	else if (itemInfo.isFile()) {
-		qDebug() << "file" << itemInfo.absoluteFilePath();
+	else if (Globals::assetNames.contains(QFileInfo(assetItem.selectedPath).baseName())) {
+		const QString guid = QFileInfo(assetItem.selectedPath).baseName();
+		QDir guid_path(assetItem.selectedPath);
+		// delete asset from project TODO (make it red in the tree)
+		if (guid_path.removeRecursively()) {
+			if (!db->canDeleteAsset(guid)) db->deleteAsset(guid);
+			delete ui->assetView->takeItem(ui->assetView->row(item));
+		}
+	}
+	
+	if (itemInfo.isFile()) {
         QFile file(itemInfo.absoluteFilePath());
 		if (file.remove()) {
 			delete ui->assetView->takeItem(ui->assetView->row(item));

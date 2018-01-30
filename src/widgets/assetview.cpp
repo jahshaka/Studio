@@ -59,12 +59,18 @@ bool AssetView::eventFilter(QObject *watched, QEvent *event)
 				auto evt = static_cast<QDropEvent*>(event);
 				QList<QUrl> droppedUrls = evt->mimeData()->urls();
 				QStringList list;
+
 				for (auto url : droppedUrls) {
 					auto fileInfo = QFileInfo(url.toLocalFile());
 					list << fileInfo.absoluteFilePath();
 				}
 
-				importModel(list.front());
+				if (QFileInfo(list.front()).suffix() == "job") {
+					importJahModel(list.front());
+				}
+				else {
+					importModel(list.front());
+				}
 
 				break;
 			}
@@ -72,7 +78,7 @@ bool AssetView::eventFilter(QObject *watched, QEvent *event)
 			case QEvent::DragEnter: {
 				auto evt = static_cast<QDragEnterEvent*>(event);
 				if (evt->mimeData()->hasUrls()) {
-					// evt->acceptProposedAction();
+					evt->acceptProposedAction();
 				}
 
 				break;
@@ -497,7 +503,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	// show assets
 	int i = 0;
 	foreach(const AssetTileData &record, db->fetchAssets()) {
-		if (record.used == false) {
+		if (record.deleted == false) {
 			QJsonObject object;
 			object["icon_url"] = "";
 			object["guid"] = record.guid;
@@ -714,7 +720,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 		QJsonDocument tagsDoc(tags);
 
-		auto ext = QFileInfo(selectedGridItem->metadata["name"].toString()).suffix();
+		auto ext = QFileInfo(selectedGridItem->metadata["full_filename"].toString()).suffix();
+
 		db->updateAssetMetadata(
 			selectedGridItem->metadata["guid"].toString(),
 			renameModelField->text() + "." + ext,
@@ -872,7 +879,20 @@ int on_extract_entry_av(const char *filename, void *arg) {
 
 void AssetView::importJahModel(const QString &fileName)
 {
-
+	// create a temporary directory and extract our project into it
+	// we need a sure way to get the project name, so we have to extract it first and check the blob
+	QTemporaryDir temporaryDir;
+	if (temporaryDir.isValid()) {
+		zip_extract(fileName.toStdString().c_str(), temporaryDir.path().toStdString().c_str(), Q_NULLPTR, Q_NULLPTR);
+		QDir dir(temporaryDir.path());
+		foreach(auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files)) {
+			if (Constants::MODEL_EXTS.contains(file.suffix())) {
+				filename = file.absoluteFilePath();
+				importModel(file.absoluteFilePath());
+				break;
+			}
+		}
+	}
 }
 
 void AssetView::importModel(const QString &filename)
@@ -956,7 +976,7 @@ void AssetView::addToLibrary()
 
 		copyTextures(guid);
 
-		auto material_guid = db->insertMaterialGlobal(QString(), guid, QJsonDocument(viewer->getMaterial()).toBinaryData());
+		auto material_guid = db->insertMaterialGlobal(QFileInfo(filename).baseName() + "_material", guid, QJsonDocument(viewer->getMaterial()).toBinaryData());
 		db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), guid, material_guid);
 
 		auto gridItem = new AssetGridItem(object, thumbnail, viewer->getSceneProperties(), tags);
@@ -1095,6 +1115,7 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 		QMessageBox::warning(this, "Asset Import Failed", warningText, QMessageBox::Ok);
 	}
 	else {
+		db->updateAssetUsed(guid, true);
 		QString warningText = QString("Added asset %1 to your project!")
 			.arg(item->metadata["name"].toString());
 		QMessageBox::information(this, "Asset Import Successful", warningText, QMessageBox::Ok);
@@ -1163,7 +1184,13 @@ void AssetView::removeAssetFromProject(AssetGridItem *item)
 	if (option == QMessageBox::Yes) {
 	    if (IrisUtils::removeDir(QDir(assetPath).filePath(item->metadata["guid"].toString()))) {
 	        fastGrid->deleteTile(item);
-	        db->deleteAsset(item->metadata["guid"].toString());
+			// if the item is being used soft delete it
+			if (!db->canDeleteAsset(item->metadata["guid"].toString())) {
+				db->deleteAsset(item->metadata["guid"].toString());
+			}
+			else {
+				db->softDeleteAsset(item->metadata["guid"].toString());
+			}
 	        clearViewer();
 	    }
 	    else {

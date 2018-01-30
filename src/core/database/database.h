@@ -37,6 +37,8 @@ public:
 	bool isAuthorInfoPresent();
 	QString getAuthorName();
     void deleteProject();
+	bool canDeleteAsset(const QString &guid);
+	bool softDeleteAsset(const QString &guid);
     bool deleteAsset(const QString &guid);
     void renameProject(const QString&);
 	void updateAssetThumbnail(const QString guid, const QByteArray &thumbnail);
@@ -45,6 +47,7 @@ public:
 	QString insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material, bool used = false);
     void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob, const QByteArray &thumb);
     void insertCollectionGlobal(const QString &collectionName);
+	void updateAssetUsed(const QString &guid, bool used);
     bool switchAssetCollection(const int, const QString&);
     void insertThumbnailGlobal(const QString &world_guid,
                                const QString &name,
