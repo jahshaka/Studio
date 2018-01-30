@@ -65,7 +65,7 @@ bool AssetView::eventFilter(QObject *watched, QEvent *event)
 					list << fileInfo.absoluteFilePath();
 				}
 
-				if (QFileInfo(list.front()).suffix() == "job") {
+				if (QFileInfo(list.front()).suffix() == "jaf") {
 					importJahModel(list.front());
 				}
 				else {

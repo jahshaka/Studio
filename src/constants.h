@@ -16,7 +16,7 @@ namespace Constants
     const QString SHADER_DEFS       = "/app/shader_defs/";
     const QString DEFAULT_SHADER    = "/app/shader_defs/Default.shader";
     const QString SAMPLES_FOLDER    = "/scenes";
-    const QString PROJECT_FOLDER    = "/JahProjects";
+    const QString PROJECT_FOLDER    = "/Jahshaka";
     const QString JAH_FOLDER        = "/Jahshaka";
     const QString ASSET_FOLDER      = "/AssetStore";
     const QString JAH_DATABASE      = "JahLibrary.db";
