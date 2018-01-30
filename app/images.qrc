@@ -2,6 +2,7 @@
     <qresource prefix="/">
         <file>images/frame.png</file>
         <file>images/logo.png</file>
+        <file>images/icon.ico</file>
         <file>images/preview.png</file>
         <file>images/splashv3.png</file>
         <file>images/empty_canvas.png</file>

@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
 	initializeBreakpad();
 #endif
 
-    app.setWindowIcon(QIcon(":/images/logo.png"));
+    app.setWindowIcon(QIcon(":/images/icon.ico"));
     app.setApplicationName("Jahshaka");
 
     auto dataPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation);

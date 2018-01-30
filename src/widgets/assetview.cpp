@@ -59,12 +59,18 @@ bool AssetView::eventFilter(QObject *watched, QEvent *event)
 				auto evt = static_cast<QDropEvent*>(event);
 				QList<QUrl> droppedUrls = evt->mimeData()->urls();
 				QStringList list;
+
 				for (auto url : droppedUrls) {
 					auto fileInfo = QFileInfo(url.toLocalFile());
 					list << fileInfo.absoluteFilePath();
 				}
 
-				importModel(list.front());
+				if (QFileInfo(list.front()).suffix() == "job") {
+					importJahModel(list.front());
+				}
+				else {
+					importModel(list.front());
+				}
 
 				break;
 			}
@@ -72,7 +78,7 @@ bool AssetView::eventFilter(QObject *watched, QEvent *event)
 			case QEvent::DragEnter: {
 				auto evt = static_cast<QDragEnterEvent*>(event);
 				if (evt->mimeData()->hasUrls()) {
-					// evt->acceptProposedAction();
+					evt->acceptProposedAction();
 				}
 
 				break;
