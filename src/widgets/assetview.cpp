@@ -748,9 +748,9 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		filename = QFileDialog::getOpenFileName(this,
 												"Load Mesh",
 												QString(),
-												"Mesh Files (*.obj *.fbx *.3ds *.jab)");
+												"Mesh Files (*.obj *.fbx *.3ds *.jaf)");
 
-		if (QFileInfo(filename).suffix() == "jab") {
+		if (QFileInfo(filename).suffix() == "jaf") {
 			importJahModel(filename);
 		}
 		else {
