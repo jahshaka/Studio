@@ -571,7 +571,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	downloadWorld->setText("Download Assets");
 
 	connect(downloadWorld, &QPushButton::pressed, []() {
-		QDesktopServices::openUrl(QUrl("http://www.jahfx.com/models/"));
+		QDesktopServices::openUrl(QUrl("http://www.jahfx.com/downloads/models/"));
 	});
 	assetDropPadLayout->addWidget(downloadWorld);
 
