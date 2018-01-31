@@ -21,6 +21,7 @@ ViewerMaterial::ViewerMaterial()
                                   ":assets/shaders/viewer.frag");
 
     this->setRenderLayer((int)RenderLayer::Opaque);
+	renderStates.rasterState = iris::RasterizerState::CullNone;
 }
 
 void ViewerMaterial::setTexture(Texture2DPtr tex)
