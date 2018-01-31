@@ -26,6 +26,12 @@ class QFocusEvent;
 #include <QOpenGLWidget>
 #include <QButtonGroup>
 
+#ifdef Q_OS_WIN
+	#include <Windows.h>
+	#define WIN32_MEAN_AND_LEAN
+#endif // Q_OS_WIN
+
+
 enum AssetSource
 {
 	LOCAL,

@@ -52,7 +52,7 @@ struct AssetTileData {
 	QString		license;
 	QString		author;
 	QByteArray  tags;
-	bool		deleted;
+	bool		used;
 };
 
 struct AssetData {

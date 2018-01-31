@@ -532,7 +532,7 @@ void AssetWidget::deleteItem()
 		QDir guid_path(assetItem.selectedPath);
 		// delete asset from project TODO (make it red in the tree)
 		if (guid_path.removeRecursively()) {
-			if (!db->canDeleteAsset(guid)) db->deleteAsset(guid);
+			db->deleteAsset(guid);
 			delete ui->assetView->takeItem(ui->assetView->row(item));
 		}
 	}
@@ -724,7 +724,7 @@ void AssetWidget::onThumbnailResult(ThumbnailResult* result)
 
 			// todo? maybe update the asset thumbnail in this function as well?
             db->insertThumbnailGlobal(Globals::project->getProjectGuid(), asset->fileName, bytes, asset_guid);
-			auto material_id = db->insertMaterialGlobal(QString(), asset_guid, QJsonDocument(result->material).toBinaryData(), true);
+			auto material_id = db->insertProjectMaterialGlobal(QString(), asset_guid, QJsonDocument(result->material).toBinaryData());
 			db->insertGlobalDependency((int) AssetMetaType::Material, asset_guid, material_id);
 			db->updateAssetThumbnail(asset_guid, bytes);
 

@@ -503,7 +503,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	// show assets
 	int i = 0;
 	foreach(const AssetTileData &record, db->fetchAssets()) {
-		if (record.deleted == false) {
+		if (!record.used) {
 			QJsonObject object;
 			object["icon_url"] = "";
 			object["guid"] = record.guid;
@@ -952,12 +952,10 @@ void AssetView::addToLibrary()
 		QByteArray sceneProperties = doc.toJson();
 
 		// maybe actually check if Object?
-		QString guid = db->insertAssetGlobal(IrisUtils::buildFileName(renameModelField->text(),
-			fInfo.suffix().toLower()),
+		QString guid = db->insertAssetGlobal(QFileInfo(filename).fileName(),
 			static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData());
-		db->insertGlobalDependency(static_cast<int>(ModelTypes::Object), QString(), QString());
 		object["guid"] = guid;
-		object["type"] = (int)AssetMetaType::Object; // model?
+		object["type"] = (int) AssetMetaType::Object; // model?
 		object["full_filename"] = IrisUtils::buildFileName(guid, fInfo.suffix());
 		object["author"] = "";// db->getAuthorName();
 		object["license"] = "CCBY";
@@ -1105,7 +1103,9 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 		}
 	};
 
-	if (!copyFolder(QDir(assetPath).filePath(guid), QDir(QDir(pDir).filePath(assetFolder)).filePath(guid))) {
+	QString new_guid = GUIDManager::generateGUID();
+
+	if (!copyFolder(QDir(assetPath).filePath(guid), QDir(QDir(pDir).filePath(assetFolder)).filePath(new_guid))) {
 		QString warningText = QString("Failed to import asset %1. Possible reasons are:\n"
 			"1. It doesn't exist\n"
 			"2. The asset isn't valid\n"
@@ -1115,7 +1115,41 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 		QMessageBox::warning(this, "Asset Import Failed", warningText, QMessageBox::Ok);
 	}
 	else {
-		db->updateAssetUsed(guid, true);
+		// if copy successful, update the db and refs
+		QByteArray bytes;
+		QBuffer buffer(&bytes);
+		buffer.open(QIODevice::WriteOnly);
+		item->pixmap.save(&buffer, "PNG");
+
+		db->insertProjectAssetGlobal(
+			item->metadata["name"].toString() + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix(),
+			(int)ModelTypes::Object, bytes, QByteArray(), QByteArray(), new_guid
+		);
+		Globals::assetNames.insert(new_guid, QFileInfo(item->metadata["name"].toString()).baseName());
+
+		// get material 
+		auto material_guid = db->getDependencyByType((int)AssetMetaType::Material, item->metadata["guid"].toString());
+		auto material = db->getMaterialGlobal(material_guid);
+
+		auto material_id = db->insertProjectMaterialGlobal(QFileInfo(item->metadata["name"].toString()).baseName() + "_material", new_guid, material);
+		db->insertGlobalDependency((int)AssetMetaType::Material, new_guid, material_id);
+
+		QString basePath = QDir(QDir(pDir).filePath(assetFolder)).filePath(new_guid);
+		bool renameModel = QFile::rename(
+			QDir(basePath).filePath(item->metadata["full_filename"].toString()),
+			QDir(basePath).filePath(new_guid + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix())
+		);
+
+#ifdef Q_OS_WIN
+		if (!renameModel) {
+			qDebug() << "hit";
+			MoveFile(
+				QDir(basePath).filePath(item->metadata["full_filename"].toString()).toStdString().c_str(),
+				QDir(basePath).filePath(new_guid + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix()).toStdString().c_str()
+			);
+		}
+#endif // Q_OS_WIN
+
 		QString warningText = QString("Added asset %1 to your project!")
 			.arg(item->metadata["name"].toString());
 		QMessageBox::information(this, "Asset Import Successful", warningText, QMessageBox::Ok);
@@ -1185,12 +1219,7 @@ void AssetView::removeAssetFromProject(AssetGridItem *item)
 	    if (IrisUtils::removeDir(QDir(assetPath).filePath(item->metadata["guid"].toString()))) {
 	        fastGrid->deleteTile(item);
 			// if the item is being used soft delete it
-			if (!db->canDeleteAsset(item->metadata["guid"].toString())) {
-				db->deleteAsset(item->metadata["guid"].toString());
-			}
-			else {
-				db->softDeleteAsset(item->metadata["guid"].toString());
-			}
+			db->deleteAsset(item->metadata["guid"].toString());
 	        clearViewer();
 	    }
 	    else {
