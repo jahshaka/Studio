@@ -30,24 +30,20 @@ public:
     void createGlobalDbThumbs();
     void createGlobalDbCollections();
 	void createGlobalDbAssets();
-	void createGlobalDbMaterials();
 	void createGlobalDbAuthor();
-	void createGlobalDbProjectAssets();
 	void updateAuthorInfo(const QString &author_name);
 	bool isAuthorInfoPresent();
 	QString getAuthorName();
     void deleteProject();
-	bool canDeleteAsset(const QString &guid);
-	bool softDeleteAsset(const QString &guid);
     bool deleteAsset(const QString &guid);
     void renameProject(const QString&);
 	void updateAssetThumbnail(const QString guid, const QByteArray &thumbnail);
 	QString insertAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties, const QByteArray &tags);
 	void insertProjectAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties, const QByteArray &tags, const QString &guid);
-	QString insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material, bool used = false);
+	QString insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material);
+	QString insertProjectMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material);
     void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob, const QByteArray &thumb);
     void insertCollectionGlobal(const QString &collectionName);
-	void updateAssetUsed(const QString &guid, bool used);
     bool switchAssetCollection(const int, const QString&);
     void insertThumbnailGlobal(const QString &world_guid,
                                const QString &name,

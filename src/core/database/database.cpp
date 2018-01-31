@@ -201,8 +201,6 @@ void Database::createGlobalDbAssets() {
 		"    tags			   BLOB,"
 		"    properties        BLOB,"
 		"    asset             BLOB,"
-		"    used              INTEGER,"
-		"    deleted		   INTEGER,"		
 		"    guid              VARCHAR(32) PRIMARY KEY"
 		")";
 
@@ -221,9 +219,9 @@ QString Database::insertAssetGlobal(const QString &assetName,
 	auto guid = GUIDManager::generateGUID();
 	query.prepare("INSERT INTO assets"
 		" (name, thumbnail, type, collection, version, date_created,"
-		" last_updated, used, deleted, guid, properties, author, license, tags)"
+		" last_updated, guid, properties, author, license, tags)"
 		" VALUES (:name, :thumbnail, :type, 0, :version, datetime(),"
-		" datetime(), 0, 0, :guid, :properties, :author, :license, :tags)");
+		" datetime(), :guid, :properties, :author, :license, :tags)");
 
 	QFileInfo assetInfo(assetName);
 
@@ -247,9 +245,13 @@ QString Database::insertAssetGlobal(const QString &assetName,
 QVector<AssetTileData> Database::fetchAssets()
 {
 	QSqlQuery query;
-	query.prepare("SELECT assets.name, assets.thumbnail, assets.guid, collections.name as collection_name,"
-		" assets.type, assets.collection, assets.properties, assets.author, assets.license, assets.tags, assets.deleted"
-		" FROM assets INNER JOIN collections ON assets.collection = collections.collection_id WHERE assets.type = 5 ORDER BY assets.name DESC");
+	query.prepare(
+		"SELECT assets.name, assets.thumbnail, assets.guid, collections.name as collection_name, "
+		"assets.type, assets.collection, assets.properties, assets.author, assets.license, assets.tags, assets.world_guid "
+		"FROM assets "
+		"INNER JOIN collections ON assets.collection = collections.collection_id WHERE assets.type = 5 "
+		"ORDER BY assets.name DESC"
+	);
 	executeAndCheckQuery(query, "fetchAssets");
 
 	QVector<AssetTileData> tileData;
@@ -267,8 +269,8 @@ QVector<AssetTileData> Database::fetchAssets()
 			data.author = record.value(7).toString();
 			data.license = record.value(8).toString();
 			data.tags = record.value(9).toByteArray();
-			data.deleted = record.value(10).toBool();
 
+			data.used = record.value(10).toBool();
 			data.full_filename = data.guid + "." + QFileInfo(data.name).suffix();
 		}
 
@@ -283,11 +285,13 @@ QVector<AssetTileData> Database::fetchAssets()
 QVector<AssetTileData> Database::fetchAssetsByCollection(int collection_id)
 {
 	QSqlQuery query;
-	query.prepare("SELECT assets.name,"
+	query.prepare(
+		"SELECT assets.name,"
 		" assets.thumbnail, assets.guid, collections.name as collection_name, assets.type,"
 		" assets.author, assets.license, assets.tags"
 		" FROM assets"
-		" INNER JOIN collections ON assets.collection = collections.collection_id  WHERE assets.type = 5 AND assets.deleted = 0 ORDER BY assets.name DESC WHERE assets.collection_id = ?");
+		" INNER JOIN collections ON assets.collection = collections.collection_id  WHERE assets.type = 5"
+		" ORDER BY assets.name DESC WHERE assets.collection_id = ?");
 	query.addBindValue(collection_id);
 	executeAndCheckQuery(query, "fetchAssetsByCollection");
 
@@ -313,29 +317,6 @@ QVector<AssetTileData> Database::fetchAssetsByCollection(int collection_id)
 	return tileData;
 }
 
-void Database::createGlobalDbMaterials()
-{
-	QString schema = "CREATE TABLE IF NOT EXISTS materials ("
-		"    name              VARCHAR(128),"
-		"	 type			   INTEGER,"
-		"	 collection		   INTEGER,"
-		"	 times_used		   INTEGER,"
-		"	 model_guid		   VARCHAR(32),"
-		"    world_guid        VARCHAR(32),"
-		"    thumbnail         BLOB,"
-		"    material		   BLOB,"
-		"    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
-		"    last_updated      DATETIME,"
-		"    version           REAL,"
-		"    asset_guid        VARCHAR(32),"
-		"    guid              VARCHAR(32) PRIMARY KEY"
-		")";
-
-	QSqlQuery query;
-	query.prepare(schema);
-	executeAndCheckQuery(query, "createGlobalDbMaterials");
-}
-
 void Database::createGlobalDbAuthor()
 {
 	QString schema = "CREATE TABLE IF NOT EXISTS author ("
@@ -349,32 +330,6 @@ void Database::createGlobalDbAuthor()
 	QSqlQuery query;
 	query.prepare(schema);
 	executeAndCheckQuery(query, "createGlobalDbAuthor");
-}
-
-void Database::createGlobalDbProjectAssets()
-{
-	QString schema = "CREATE TABLE IF NOT EXISTS project_assets ("
-		"    name              VARCHAR(128),"
-		"    extension		   VARCHAR(8),"
-		"	 type			   INTEGER,"
-		"	 collection		   INTEGER,"
-		"	 times_used		   INTEGER,"
-		"    world_guid        VARCHAR(32),"
-		"    thumbnail         BLOB,"
-		"    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
-		"    last_updated      DATETIME,"
-		"	 author			   VARCHAR(128),"
-		"    license		   VARCHAR(64),"
-		"    hash              VARCHAR(16),"
-		"    version           REAL,"
-		"    tags			   BLOB,"
-		"    properties        BLOB,"
-		"    guid              VARCHAR(32) PRIMARY KEY"
-		")";
-
-	QSqlQuery query;
-	query.prepare(schema);
-	executeAndCheckQuery(query, "createGlobalDbProjectAssets");
 }
 
 void Database::updateAuthorInfo(const QString &author_name)
@@ -426,18 +381,36 @@ QString Database::getAuthorName()
 	return QString();
 }
 
-QString Database::insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material, bool used)
+QString Database::insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material)
 {
 	QSqlQuery query;
 	auto guid = GUIDManager::generateGUID();
-	query.prepare("INSERT INTO assets (name, date_created, type, collection, version, asset, guid, used)"
-				  " VALUES (:name, datetime(), :type, 0, :version, :asset, :guid, :used)");
+	query.prepare("INSERT INTO assets (name, date_created, type, collection, version, asset, guid)"
+				  " VALUES (:name, datetime(), :type, 0, :version, :asset, :guid)");
 	query.bindValue(":name", materialName);
 	query.bindValue(":type", 1); // switch this to the enum later
 	query.bindValue(":version", "0.5a"); // switch this to the enum later
 	query.bindValue(":asset", material);
 	query.bindValue(":guid", guid);
-	query.bindValue(":used", used);
+
+	executeAndCheckQuery(query, "insertMaterialGlobal");
+
+	return guid;
+}
+
+QString Database::insertProjectMaterialGlobal(const QString & materialName, const QString & asset_guid, const QByteArray & material)
+{
+	QSqlQuery query;
+	auto guid = GUIDManager::generateGUID();
+	query.prepare(
+		"INSERT INTO assets (name, date_created, type, collection, version, asset, guid, world_guid) "
+		"VALUES (:name, datetime(), :type, 0, :version, :asset, :guid, :world_guid)");
+	query.bindValue(":name", materialName);
+	query.bindValue(":type", 1); // switch this to the enum later
+	query.bindValue(":version", "0.5a"); // switch this to the enum later
+	query.bindValue(":asset", material);
+	query.bindValue(":guid", guid);
+	query.bindValue(":world_guid", Globals::project->getProjectGuid());
 
 	executeAndCheckQuery(query, "insertMaterialGlobal");
 
@@ -452,56 +425,29 @@ void Database::deleteProject()
     executeAndCheckQuery(query, "deleteProject");
 }
 
-bool Database::canDeleteAsset(const QString &guid)
-{
-	QSqlQuery query;
-	query.prepare("SELECT used FROM assets WHERE guid = ? LIMIT 1");
-	query.addBindValue(guid);
-
-	if (query.exec()) {
-		if (query.first()) {
-			return query.record().value(0).toBool();
-		}
-	}
-	else {
-		irisLog("canDeleteAsset query failed! " + query.lastError().text());
-	}
-
-	return false;
-}
-
-bool Database::softDeleteAsset(const QString &guid)
-{
-	// delete asset, material and dependency
-	QSqlQuery query;
-	query.prepare("UPDATE assets SET deleted = 1 WHERE guid = ? AND used = 1");
-	query.addBindValue(guid);
-
-	//QSqlQuery query2;
-	//query2.prepare("DELETE FROM materials WHERE asset_guid = ?");
-	//query2.addBindValue(guid);
-
-	bool da = executeAndCheckQuery(query, "softDeleteAsset");
-	//bool dm = executeAndCheckQuery(query, "deleteMaterial");
-
-	return da; // && dm;
-}
-
 bool Database::deleteAsset(const QString &guid)
 {
 	// delete asset, material and dependency
     QSqlQuery query;
-    query.prepare("DELETE FROM assets WHERE guid = ? AND used = 0");
+    query.prepare("DELETE FROM assets WHERE guid = ?");
     query.addBindValue(guid);
 
-    //QSqlQuery query2;
-    //query2.prepare("DELETE FROM materials WHERE asset_guid = ?");
-    //query2.addBindValue(guid);
+	QString material_id = getDependencyByType(1, guid);
+
+    QSqlQuery query2;
+    query2.prepare("DELETE FROM assets WHERE guid = ?");
+    query2.addBindValue(material_id);
+
+	QSqlQuery query3;
+	query3.prepare("DELETE FROM dependencies WHERE depender = ? AND dependee = ?");
+	query3.addBindValue(guid);
+	query3.addBindValue(material_id);
     
     bool da = executeAndCheckQuery(query, "deleteAsset");
-    //bool dm = executeAndCheckQuery(query, "deleteMaterial");
+    bool dm = executeAndCheckQuery(query2, "deleteMaterial");
+	bool dd = executeAndCheckQuery(query3, "deleteDependency");
 
-	return da; // && dm;
+	return da && dm && dd;
 }
 
 void Database::renameProject(const QString &newName)
@@ -534,15 +480,6 @@ void Database::insertCollectionGlobal(const QString &collectionName)
     executeAndCheckQuery(query, "insertSceneCollection");
 }
 
-void Database::updateAssetUsed(const QString &guid, bool used)
-{
-	QSqlQuery query;
-	query.prepare("UPDATE assets SET used = ? WHERE guid = ?");
-	query.addBindValue(used);
-	query.addBindValue(guid);
-	executeAndCheckQuery(query, "updateAssetUsed");
-}
-
 bool Database::switchAssetCollection(const int id, const QString &guid)
 {
     QSqlQuery query;
@@ -561,10 +498,11 @@ void Database::insertProjectAssetGlobal(const QString &assetName,
 								        const QString &guid)
 {
 	QSqlQuery query;
-	query.prepare("INSERT INTO assets (name, thumbnail, type, collection, version, date_created,"
-		" last_updated, guid, properties, author, license, tags, used)"
-		" VALUES (:name, :thumbnail, :type, 0, :version, datetime(),"
-		" datetime(), :guid, :properties, :author, :license, :tags, 1)");
+	query.prepare(
+		"INSERT INTO assets (name, thumbnail, type, collection, version, date_created, "
+		"last_updated, world_guid, guid, properties, author, license, tags) "
+		"VALUES (:name, :thumbnail, :type, 0, :version, datetime(), "
+		"datetime(), :world_guid, :guid, :properties, :author, :license, :tags)");
 
 	QFileInfo assetInfo(assetName);
 
@@ -572,6 +510,7 @@ void Database::insertProjectAssetGlobal(const QString &assetName,
 	query.bindValue(":thumbnail", thumbnail);
 	query.bindValue(":type", type);
 	query.bindValue(":version", Constants::CONTENT_VERSION);
+	query.bindValue(":world_guid", Globals::project->getProjectGuid());
 	query.bindValue(":guid", guid);
 	query.bindValue(":properties", properties);
 
