@@ -21,7 +21,7 @@ void ViewerCameraController::start()
 
 void ViewerCameraController::end()
 {
-    clearViewer();
+    //clearViewer();
 
     // restore cam transform
     camera->setLocalPos(camPos);
