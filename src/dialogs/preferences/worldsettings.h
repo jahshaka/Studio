@@ -33,6 +33,7 @@ public:
     QColor outlineColor;
     QString defaultProjectDirectory;
     bool showFps;
+	bool autoSave;
 
 	Database *db;
 
@@ -43,6 +44,7 @@ private slots:
     void outlineWidthChanged(double width);
     void outlineColorChanged(QColor color);
     void showFpsChanged(bool show);
+	void enableAutoSave(bool state);
     void changeDefaultDirectory();
     void projectDirectoryChanged(QString path);
 

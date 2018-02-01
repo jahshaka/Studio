@@ -24,7 +24,7 @@
 #include <QStandardPaths>
 #include <QtAlgorithms>
 #include <QFile>
-#include <QBuffer>>
+#include <QBuffer>
 #include <QTreeWidget>
 #include <QHeaderView>
 #include <QTreeWidgetItem>
@@ -563,37 +563,42 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	assetDropPadLabel->setAlignment(Qt::AlignHCenter);
 
 	assetDropPadLayout->addWidget(assetDropPadLabel);
-	QPushButton *browseButton = new QPushButton("Browse for asset...");
-	assetDropPadLayout->addWidget(browseButton);
-	//auto downloadWorld = new QPushButton("Download Worlds...");
-
-	QPushButton *downloadWorld = new QPushButton();
-	downloadWorld->setText("Download Assets");
+	QPushButton *browseButton = new QPushButton("Import Asset");
+	QPushButton *downloadWorld = new QPushButton("Download Assets");
 
 	connect(downloadWorld, &QPushButton::pressed, []() {
 		QDesktopServices::openUrl(QUrl("http://www.jahfx.com/downloads/models/"));
 	});
-	assetDropPadLayout->addWidget(downloadWorld);
+
+	QWidget *importButtons = new QWidget;
+	auto ipbl = new QHBoxLayout;
+	ipbl->setMargin(0);
+	ipbl->addWidget(browseButton);
+	ipbl->addWidget(downloadWorld);
+	importButtons->setLayout(ipbl);
+
+	assetDropPadLayout->addWidget(importButtons);
 
 	updateAsset = new QPushButton("Update");
-	updateAsset->setStyleSheet("background: #2ecc71");
+	updateAsset->setStyleSheet("background: #3498db");
 	updateAsset->setVisible(false);
 
     normalize = new QPushButton("Normalize");
 
 	addToProject = new QPushButton("Add to Project");
-	addToProject->setStyleSheet("background: #3498db");
-	addToProject->setVisible(false);
+	addToProject->setStyleSheet("QPushButton { background: #3498db } QPushButton:disabled { color: #656565; background-color: #3e3e3e; }");
+	addToProject->setEnabled(false);
 
-    deleteFromLibrary = new QPushButton("Remove From Library");
-    deleteFromLibrary->setStyleSheet("background: #E74C3C");
-    deleteFromLibrary->setVisible(false);
+    deleteFromLibrary = new QPushButton("Delete From Library");
+	deleteFromLibrary->setStyleSheet("QPushButton { background: #E74C3C } QPushButton:disabled { color: #656565; background-color: #3e3e3e; }");
+    deleteFromLibrary->setEnabled(false);
 
 	renameModel = new QLabel("Name:");
 	renameModelField = new QLineEdit();
 
-	tagModel = new QLabel("Tags (comma separated):");
+	tagModel = new QLabel("Tags:");
 	tagModelField = new QLineEdit();
+	tagModelField->setPlaceholderText("(comma separated)");
 
 	renameWidget = new QWidget;
 	auto renameLayout = new QHBoxLayout;
@@ -620,7 +625,13 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		tagWidget->setVisible(false);
 		updateAsset->setVisible(false);
 
+		fetchMetadata(gridItem);
+
 		if (!gridItem->metadata.isEmpty()) {
+
+			if (UiManager::isSceneOpen) addToProject->setEnabled(true);
+			deleteFromLibrary->setEnabled(true);
+
 			renameWidget->setVisible(true);
 			tagWidget->setVisible(true);
 			updateAsset->setVisible(true);
@@ -682,14 +693,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 			}
            
 			selectedGridItem = gridItem;
-			if (UiManager::isSceneOpen) {
-				addToProject->setVisible(true);
-				deleteFromLibrary->setVisible(true);
-			}
 			selectedGridItem->highlight(true);
 		}
-
-		fetchMetadata(gridItem);
     });
 
 	connect(updateAsset, &QPushButton::pressed, [this]() {
@@ -758,21 +763,10 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		}
 	});
 
-	assetDropPadLayout->addWidget(renameWidget);
-	assetDropPadLayout->addWidget(tagWidget);
-	assetDropPadLayout->addWidget(updateAsset);
 	assetDropPad->setLayout(assetDropPadLayout);
 
     metaLayout->addWidget(assetDropPad);
 
-	metaLayout->addStretch();
-	auto projectSpecific = new QWidget;
-	auto ll = new QVBoxLayout;
-    // ll->addWidget(normalize);
-	ll->addWidget(addToProject);
-    ll->addWidget(deleteFromLibrary);
-	projectSpecific->setLayout(ll);
-	metaLayout->addWidget(projectSpecific);
 	auto metadata = new QWidget;
 	//metadata->setFixedHeight(256);
 	auto l = new QVBoxLayout;
@@ -782,7 +776,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	policy2.setVerticalPolicy(QSizePolicy::Preferred);
 	policy2.setHorizontalPolicy(QSizePolicy::Preferred);
 	metadataMissing = new QLabel("Nothing selected...");
-	metadataMissing->setStyleSheet("padding: 12px");
+	metadataMissing->setAlignment(Qt::AlignCenter);
+	metadataMissing->setStyleSheet("padding: 12px; text-align: center");
 	metadataMissing->setSizePolicy(policy2);
 	metadataName = new QLabel("Name: ");
 	metadataName->setSizePolicy(policy2);
@@ -820,20 +815,37 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	metadataWidget->setVisible(false);
 
 	l->addWidget(metadataMissing);
-	l->addWidget(metadataName);
+
+	l->addWidget(renameWidget);
+	l->addWidget(tagWidget);
+
+	//l->addWidget(metadataName);
 	l->addWidget(metadataType);
 	l->addWidget(metadataVisibility);
 	l->addWidget(metadataAuthor);
 	l->addWidget(metadataLicense);
-	l->addWidget(metadataTags);
+	//l->addWidget(metadataTags);
 	l->addWidget(metadataWidget);
+	l->addWidget(updateAsset);
+
 	metadata->setLayout(l);
-	metadata->setStyleSheet("QLabel { font-size: 12px; }");
+	//metadata->setStyleSheet("QLabel { font-size: 12px; }");
 	auto header = new QLabel("Asset Metadata");
 	header->setAlignment(Qt::AlignCenter);
-	header->setStyleSheet("font-size: 14px; border-top: 1px solid black; border-bottom: 1px solid black; text-align: center; padding: 12px; background: #1e1e1e");
+	header->setStyleSheet("border-top: 1px solid black; border-bottom: 1px solid black; text-align: center; padding: 12px; background: #1e1e1e");
 	metaLayout->addWidget(header);
 	metaLayout->addWidget(metadata);
+
+	metaLayout->addStretch();
+
+	auto projectSpecific = new QWidget;
+	auto ll = new QVBoxLayout;
+	// ll->addWidget(normalize);
+	ll->addWidget(addToProject);
+	ll->addWidget(deleteFromLibrary);
+	projectSpecific->setLayout(ll);
+	metaLayout->addWidget(projectSpecific);
+
     _metadataPane->setLayout(metaLayout);
 
 	split->addWidget(viewer);
@@ -856,17 +868,16 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		"*							{ color: #EEE; }"
 		"QPushButton				{ border-radius: 2px; padding: 8px 12px; }"
 		"QSplitter					{ background: #2E2E2E; } QSplitter:handle { background: black; }"
-		"#localAssetsButton			{ font-size: 12px; text-align: left; padding: 12px; }"
-		"#onlineAssetsButton		{ font-size: 12px; text-align: left; padding: 12px; }"
+		"#localAssetsButton			{ text-align: left; padding: 12px; }"
+		"#onlineAssetsButton		{ text-align: left; padding: 12px; }"
         "QPushButton[accessibleName=\"assetsButton\"]:disabled { color: #444; }"
-		"#treeWidget				{ font-size: 12px; background: transparent; }"
+		"#treeWidget				{ background: transparent; }"
 		"#assetDropPad				{}"
-		"#assetDropPadLabel			{ font-size: 14px; border: 4px dashed #1E1E1E; border-radius: 4px; "
-		"							  padding: 48px 36px; }"
-		"#assetDropPad, #MetadataPane QPushButton	{ font-size: 12px; padding: 8px 12px; }"
-		"#assetDropPad QLineEdit	{ border: 1px solid #1E1E1E; border-radius: 2px;"
-		"							  font-size: 12px; background: #3B3B3B; padding: 6px 4px; }"
-		"#assetDropPad QLabel		{ font-size: 12px; }"
+		"#assetDropPadLabel			{ border: 4px dashed #1E1E1E; border-radius: 4px; "
+		"							  padding: 48px 36px; margin: 0; }"
+		"#assetDropPad, #MetadataPane QPushButton	{ padding: 8px 12px; }"
+		"QLineEdit					{ border: 1px solid #1E1E1E; border-radius: 2px; background: #3B3B3B; }"
+		"#assetDropPad QLabel		{}"
 	);
 }
 
@@ -888,23 +899,23 @@ void AssetView::importJahModel(const QString &fileName)
 		foreach(auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files)) {
 			if (Constants::MODEL_EXTS.contains(file.suffix())) {
 				filename = file.absoluteFilePath();
-				importModel(file.absoluteFilePath());
+				importModel(file.absoluteFilePath(), true);
 				break;
 			}
 		}
 	}
 }
 
-void AssetView::importModel(const QString &filename)
+void AssetView::importModel(const QString &filename, bool jfx)
 {
 	if (!filename.isEmpty()) {
 		renameModelField->setText(QFileInfo(filename).baseName());
 		viewer->loadModel(filename);
-		addToLibrary();
+		addToLibrary(jfx);
 	}
 }
 
-void AssetView::addToLibrary()
+void AssetView::addToLibrary(bool jfx)
 {
 	//bool canAdd = db->isAuthorInfoPresent();
 	QJsonObject tags;
@@ -952,12 +963,24 @@ void AssetView::addToLibrary()
 		QByteArray sceneProperties = doc.toJson();
 
 		// maybe actually check if Object?
-		QString guid = db->insertAssetGlobal(QFileInfo(filename).fileName(),
-			static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData());
+		QString guid;
+		if (jfx) {
+			guid = db->insertAssetGlobal(QFileInfo(filename).fileName(),
+				static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData(), "JahFX");
+		}
+		else {
+			guid = db->insertAssetGlobal(QFileInfo(filename).fileName(),
+				static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData());
+		}
 		object["guid"] = guid;
 		object["type"] = (int) AssetMetaType::Object; // model?
 		object["full_filename"] = IrisUtils::buildFileName(guid, fInfo.suffix());
-		object["author"] = "";// db->getAuthorName();
+		if (jfx) {
+			object["author"] = "JahFX";// db->getAuthorName();
+		}
+		else {
+			object["author"] = "";// db->getAuthorName();
+		}
 		object["license"] = "CCBY";
 
 		Globals::assetNames.insert(guid, object["name"].toString());
@@ -997,9 +1020,9 @@ void AssetView::addToLibrary()
 		QApplication::processEvents();
 		fastGrid->updateGridColumns(fastGrid->lastWidth);
 
-		renameWidget->setVisible(false);
-		tagWidget->setVisible(false);
-		updateAsset->setVisible(false);
+		renameWidget->setVisible(true);
+		tagWidget->setVisible(true);
+		updateAsset->setVisible(true);
 		//addToLibrary->setVisible(false);
 	//}
 	//else {
@@ -1023,45 +1046,45 @@ void AssetView::fetchMetadata(AssetGridItem *widget)
 	if (!widget->metadata.isEmpty()) {
 		metadataMissing->setVisible(false);
 
-		metadataName->setVisible(true);
+		//metadataName->setVisible(true);
 		metadataType->setVisible(true);
 		metadataVisibility->setVisible(true);
 		metadataAuthor->setVisible(true);
 		metadataLicense->setVisible(true);
-		metadataTags->setVisible(true);
+		//metadataTags->setVisible(true);
         metadataWidget->setVisible(true);
 
-		metadataName->setText("Name: " + QFileInfo(widget->metadata["name"].toString()).baseName());
+		//metadataName->setText("Name: " + QFileInfo(widget->metadata["name"].toString()).baseName());
 		metadataType->setText("Type: " + getAssetType(widget->metadata["type"].toInt()));
 		QString pub = widget->metadata["is_public"].toBool() ? "true" : "false";
 		metadataVisibility->setText("Public: " + pub);
 		metadataAuthor->setText("Author: " + widget->metadata["author"].toString());
 		metadataLicense->setText("License: " + widget->metadata["license"].toString());
 		
-		QString tags;
+		//QString tags;
 
-		QJsonArray children = widget->tags["tags"].toArray();
+		//QJsonArray children = widget->tags["tags"].toArray();
 
-		for (auto childObj : children) {
-			auto tag = childObj.toString();
-			tags.append(tag + " ");
-		}
+		//for (auto childObj : children) {
+		//	auto tag = childObj.toString();
+		//	tags.append(tag + " ");
+		//}
 
-		metadataTags->setText("Tags: " + tags);
+		//metadataTags->setText("Tags: " + tags);
 		metadataCollection->setText("Collection: " + widget->metadata["collection_name"].toString());
 	}
 	else {
 		metadataMissing->setVisible(true);
 
-		addToProject->setVisible(false);
-        deleteFromLibrary->setVisible(false);
+		addToProject->setEnabled(false);
+		deleteFromLibrary->setEnabled(false);
 
-		metadataName->setVisible(false);
+		//metadataName->setVisible(false);
 		metadataType->setVisible(false);
 		metadataVisibility->setVisible(false);
 		metadataAuthor->setVisible(false);
 		metadataLicense->setVisible(false);
-		metadataTags->setVisible(false);
+		//metadataTags->setVisible(false);
         metadataWidget->setVisible(false);
 	}
 }

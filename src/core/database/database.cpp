@@ -213,7 +213,8 @@ QString Database::insertAssetGlobal(const QString &assetName,
 	int type,
 	const QByteArray &thumbnail,
 	const QByteArray &properties,
-	const QByteArray &tags)
+	const QByteArray &tags,
+	const QString &author)
 {
 	QSqlQuery query;
 	auto guid = GUIDManager::generateGUID();
@@ -231,7 +232,7 @@ QString Database::insertAssetGlobal(const QString &assetName,
 	query.bindValue(":version", Constants::CONTENT_VERSION);
 	query.bindValue(":guid", guid);
 	query.bindValue(":properties", properties);
-	query.bindValue(":author", "");// getAuthorName());
+	query.bindValue(":author", author);// getAuthorName());
 	query.bindValue(":license", "CCBY");
 	query.bindValue(":tags", tags);
 
@@ -638,7 +639,7 @@ QVector<CollectionData> Database::fetchCollections()
 QVector<ProjectTileData> Database::fetchProjects()
 {
     QSqlQuery query;
-    query.prepare("SELECT name, thumbnail, guid FROM " + Constants::DB_PROJECTS_TABLE + " ORDER BY last_written DESC");
+    query.prepare("SELECT name, thumbnail, guid FROM projects ORDER BY last_written DESC");
     executeAndCheckQuery(query, "fetchProjects");
 
     QVector<ProjectTileData> tileData;
@@ -707,7 +708,7 @@ void Database::updateAssetMetadata(const QString &guid, const QString &name, con
 void Database::updateSceneGlobal(const QByteArray &sceneBlob, const QByteArray &thumbnail)
 {
     QSqlQuery query;
-    query.prepare("UPDATE " + Constants::DB_PROJECTS_TABLE + " SET scene = ?, last_written = datetime(), thumbnail = ? WHERE guid = ?");
+    query.prepare("UPDATE projects SET scene = ?, last_written = datetime(), thumbnail = ? WHERE guid = ?");
     query.addBindValue(sceneBlob);
     query.addBindValue(thumbnail);
     query.addBindValue(Globals::project->getProjectGuid());

@@ -38,7 +38,7 @@ public:
     bool deleteAsset(const QString &guid);
     void renameProject(const QString&);
 	void updateAssetThumbnail(const QString guid, const QByteArray &thumbnail);
-	QString insertAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties, const QByteArray &tags);
+	QString insertAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties, const QByteArray &tags, const QString &author = QString());
 	void insertProjectAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties, const QByteArray &tags, const QString &guid);
 	QString insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material);
 	QString insertProjectMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material);

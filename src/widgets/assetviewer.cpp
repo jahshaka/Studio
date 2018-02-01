@@ -3,6 +3,8 @@
 #include "../core/project.h"
 #include "sceneviewwidget.h"
 
+#include "irisgl/src/graphics/rasterizerstate.h"
+
 #include "../constants.h"
 #include "../globals.h"
 #include "../core/keyboardstate.h"
@@ -345,7 +347,7 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 
 		iteration++;
 
-		mat->renderStates.rasterState = iris::RasterizerState::CullNone;
+		mat->renderStates.rasterState = iris::RasterizerState(iris::CullMode::None, GL_FILL);
 		return mat;
 	}, ssource, this);
 
