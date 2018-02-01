@@ -345,6 +345,7 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 
 		iteration++;
 
+		mat->renderStates.rasterState = iris::RasterizerState::CullNone;
 		return mat;
 	}, ssource, this);
 
