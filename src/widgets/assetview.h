@@ -81,14 +81,14 @@ public:
     void copyTextures(const QString &folderGuid);
     void checkForEmptyState();
     void toggleFilterPane(bool);
-	void addToLibrary();
+	void addToLibrary(bool jfx = false);
 	void spaceSplits();
     void closeViewer();
 	void clearViewer();
 	QString getAssetType(int);
 
 	void importJahModel(const QString &filename);
-	void importModel(const QString &filename);
+	void importModel(const QString &filename, bool jfx = false);
 
 signals:
     void refreshCollections();

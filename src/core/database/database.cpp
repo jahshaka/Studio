@@ -213,7 +213,8 @@ QString Database::insertAssetGlobal(const QString &assetName,
 	int type,
 	const QByteArray &thumbnail,
 	const QByteArray &properties,
-	const QByteArray &tags)
+	const QByteArray &tags,
+	const QString &author)
 {
 	QSqlQuery query;
 	auto guid = GUIDManager::generateGUID();
@@ -231,7 +232,7 @@ QString Database::insertAssetGlobal(const QString &assetName,
 	query.bindValue(":version", Constants::CONTENT_VERSION);
 	query.bindValue(":guid", guid);
 	query.bindValue(":properties", properties);
-	query.bindValue(":author", "");// getAuthorName());
+	query.bindValue(":author", author);// getAuthorName());
 	query.bindValue(":license", "CCBY");
 	query.bindValue(":tags", tags);
 

@@ -379,28 +379,39 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 void MainWindow::closeEvent(QCloseEvent *event)
 {
     bool closing = false;
+	bool autoSave = settings->getValue("auto_save", false).toBool();
 
-    if (UiManager::isUndoStackDirty() && (undoStackCount != UiManager::getUndoStackCount())) {
-        QMessageBox::StandardButton reply;
-        reply = QMessageBox::question(this,
-                                      "Unsaved Changes",
-                                      "There are unsaved changes, save before closing?",
-                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
-        if (reply == QMessageBox::Yes) {
-            saveScene();
-            event->accept();
-            closing = true;
-        } else if (reply == QMessageBox::No) {
-            event->accept();
-            closing = true;
-        } else {
-            event->ignore();
-            return;
-        }
-    } else {
-        event->accept();
-        closing = true;
-    }
+	if (autoSave && UiManager::isSceneOpen) {
+		saveScene();
+		closing = true;
+		event->accept();
+	}
+	else {
+		if (UiManager::isUndoStackDirty() && (undoStackCount != UiManager::getUndoStackCount())) {
+			QMessageBox::StandardButton reply;
+			reply = QMessageBox::question(this,
+				"Unsaved Changes",
+				"There are unsaved changes, save before closing?",
+				QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+			if (reply == QMessageBox::Yes) {
+				saveScene();
+				event->accept();
+				closing = true;
+			}
+			else if (reply == QMessageBox::No) {
+				event->accept();
+				closing = true;
+			}
+			else {
+				event->ignore();
+				return;
+			}
+		}
+		else {
+			event->accept();
+			closing = true;
+		}
+	}
 
 //#ifndef QT_DEBUG
     if (closing) {
@@ -550,15 +561,17 @@ void MainWindow::setupUndoRedo()
 
 void MainWindow::switchSpace(WindowSpaces space)
 {
-   const QString disabledMenu   = "color: #444; border-color: #111";
-   const QString selectedMenu   = "border-color: white";
-   const QString unselectedMenu = "border-color: #111";
+	const QString disabledMenu   = "color: #444; border-color: #111";
+	const QString selectedMenu   = "border-color: white";
+	const QString unselectedMenu = "border-color: #111";
 
 	assets_menu->setStyleSheet(unselectedMenu);
 
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
-            if (UiManager::isSceneOpen) pmContainer->populateDesktop(true);
+			if (UiManager::isSceneOpen) {
+				pmContainer->populateDesktop(true);
+			}
             ui->stackedWidget->setCurrentIndex(0);
             toggleWidgets(false);
 
@@ -747,6 +760,10 @@ void MainWindow::openProject(bool playMode)
 
 void MainWindow::closeProject()
 {
+	if (UiManager::isSceneOpen) {
+		if (settings->getValue("auto_save", false).toBool()) saveScene();
+	}
+
     UiManager::isSceneOpen = false;
     UiManager::isScenePlaying = false;
     ui->actionClose->setDisabled(false);
@@ -1346,7 +1363,6 @@ void MainWindow::setupDockWidgets()
     sceneHierarchyDock = new QDockWidget("Hierarchy", viewPort);
     sceneHierarchyDock->setObjectName(QStringLiteral("sceneHierarchyDock"));
     sceneHierarchyWidget = new SceneHierarchyWidget;
-    sceneHierarchyWidget->setMinimumWidth(396);
     sceneHierarchyDock->setObjectName(QStringLiteral("sceneHierarchyWidget"));
     sceneHierarchyDock->setWidget(sceneHierarchyWidget);
     sceneHierarchyWidget->setMainWindow(this);
