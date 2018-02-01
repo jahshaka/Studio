@@ -6,6 +6,7 @@
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QApplication>
 
 #include "../dialogs/renameprojectdialog.h"
 
@@ -214,6 +215,29 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
 //    setStyleSheet("border: 1px solid red");
 
     connect(this, SIGNAL(customContextMenuRequested(const QPoint&)), SLOT(projectContextMenu(QPoint)));
+}
+
+void ItemGridWidget::updateTile(const QByteArray &arr)
+{
+	QPixmap pixmap;
+	QPixmap cachedPixmap;
+	if (cachedPixmap.loadFromData(tileData.thumbnail, "PNG")) {
+		pixmap = cachedPixmap;
+	}
+	else {
+		pixmap = QPixmap(":/images/preview.png");
+	}
+
+	oimage = pixmap;
+	image = pixmap.scaled(tileSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+
+	gridImageLabel->setPixmap(image);
+	gridImageLabel->update();
+	update();
+	QApplication::processEvents();
+	gridImageLabel->setAlignment(Qt::AlignCenter);
+
+	tileData.thumbnail = arr;
 }
 
 void ItemGridWidget::setTileSize(QSize size, QSize iSize)

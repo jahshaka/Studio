@@ -570,6 +570,7 @@ void MainWindow::switchSpace(WindowSpaces space)
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
 			if (UiManager::isSceneOpen) {
+				if (settings->getValue("auto_save", false).toBool()) saveScene();
 				pmContainer->populateDesktop(true);
 			}
             ui->stackedWidget->setCurrentIndex(0);
@@ -703,6 +704,7 @@ void MainWindow::saveScene()
     img.save(&buffer, "PNG");
 
     db->updateSceneGlobal(blob, thumb);
+	pmContainer->updateTile(Globals::project->getProjectGuid(), thumb);
 
 	undoStackCount = UiManager::getUndoStackCount();
 }

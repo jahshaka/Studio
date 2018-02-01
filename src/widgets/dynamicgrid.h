@@ -29,6 +29,8 @@ public:
     bool containsTiles();
     void deleteTile(ItemGridWidget*);
 
+	void updateTile(const QString &id, const QByteArray &arr);
+
     void resetView();
 
 protected:

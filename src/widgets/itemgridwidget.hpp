@@ -34,6 +34,8 @@ public:
     QWidget *controls;
     ProjectTileData tileData;
 
+	void updateTile(const QByteArray &arr);
+
     void setTileSize(QSize size, QSize iSize);
     void updateImage();
     void updateLabel(QString);
