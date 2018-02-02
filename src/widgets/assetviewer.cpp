@@ -298,8 +298,10 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 			if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
 				mat->setValue("specularTexture", data.specularTexture);
 
-			if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
+			if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile()) {
 				mat->setValue("normalTexture", data.normalTexture);
+				mat->setValue("normalIntensity", 1.f);
+			}
 
 			QJsonObject matObj;
 			createMaterial(matObj, mat);
@@ -341,8 +343,10 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 			if (libraryTextureIsValid(filename, cdata.specularTexture))
 				mat->setValue("specularTexture", QDir(QFileInfo(filename).absoluteDir()).filePath(cdata.specularTexture));
 
-			if (libraryTextureIsValid(filename, cdata.normalTexture))
+			if (libraryTextureIsValid(filename, cdata.normalTexture)) {
 				mat->setValue("normalTexture", QDir(QFileInfo(filename).absoluteDir()).filePath(cdata.normalTexture));
+				mat->setValue("normalIntensity", 1.f);
+			}
 		}
 
 		iteration++;
