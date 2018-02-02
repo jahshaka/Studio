@@ -85,19 +85,19 @@ void EditorVrController::update(float dt)
 
     auto camPos = camera->getLocalPos();
     // left
-    if(KeyboardState::isKeyDown(Qt::Key_Left) ||KeyboardState::isKeyDown(Qt::Key_A) )
+    if(KeyboardState::isKeyDown(Qt::Key_Left))
         camPos -= x * linearSpeed;
 
     // right
-    if(KeyboardState::isKeyDown(Qt::Key_Right) ||KeyboardState::isKeyDown(Qt::Key_D) )
+    if(KeyboardState::isKeyDown(Qt::Key_Right))
         camPos += x * linearSpeed;
 
     // up
-    if(KeyboardState::isKeyDown(Qt::Key_Up) ||KeyboardState::isKeyDown(Qt::Key_W) )
+    if(KeyboardState::isKeyDown(Qt::Key_Up))
         camPos += z * linearSpeed;
 
     // down
-    if(KeyboardState::isKeyDown(Qt::Key_Down) ||KeyboardState::isKeyDown(Qt::Key_S) )
+    if(KeyboardState::isKeyDown(Qt::Key_Down))
         camPos -= z * linearSpeed;
 
     camera->setLocalPos(camPos);
