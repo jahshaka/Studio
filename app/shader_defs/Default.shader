@@ -65,7 +65,7 @@
             "displayName"   : "Normal Intensity",
             "name"          : "normalIntensity",
             "type"          : "float",
-            "value"         : 0,
+            "value"         : 1,
             "min"           : -1,
             "max"           : 1,
             "uniform"       : "u_normalIntensity"
