@@ -1687,6 +1687,21 @@ void MainWindow::setupDesktop()
 void MainWindow::setupToolBar()
 {
     toolBar = new QToolBar;
+	QAction *actionUndo = new QAction;
+	actionUndo->setObjectName(QStringLiteral("actionUndo"));
+	actionUndo->setIcon(QIcon(":/icons/undo.png"));
+	toolBar->addAction(actionUndo);
+
+	QAction *actionRedo = new QAction;
+	actionRedo->setObjectName(QStringLiteral("actionRedo"));
+	actionRedo->setIcon(QIcon(":/icons/redo.svg"));
+	toolBar->addAction(actionRedo);
+
+	toolBar->addSeparator();
+
+	connect(actionUndo, SIGNAL(triggered(bool)), SLOT(undo()));
+	connect(actionRedo, SIGNAL(triggered(bool)), SLOT(redo()));
+
     QAction *actionTranslate = new QAction;
     actionTranslate->setObjectName(QStringLiteral("actionTranslate"));
     actionTranslate->setCheckable(true);

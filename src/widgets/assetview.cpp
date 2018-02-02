@@ -559,6 +559,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	auto assetDropPadLayout = new QVBoxLayout;
 	QLabel *assetDropPadLabel = new QLabel("Drop an asset to import...");
 	assetDropPadLayout->setSpacing(6);
+	assetDropPadLayout->setContentsMargins(6, 6, 6, 2);
 	assetDropPadLabel->setObjectName(QStringLiteral("assetDropPadLabel"));
 	assetDropPadLabel->setAlignment(Qt::AlignHCenter);
 
@@ -1243,6 +1244,13 @@ void AssetView::removeAssetFromProject(AssetGridItem *item)
 	        fastGrid->deleteTile(item);
 			// if the item is being used soft delete it
 			db->deleteAsset(item->metadata["guid"].toString());
+
+			item->metadata = QJsonObject();
+			renameWidget->setVisible(false);
+			tagWidget->setVisible(false);
+			updateAsset->setVisible(false);
+
+			fetchMetadata(item);
 	        clearViewer();
 	    }
 	    else {
