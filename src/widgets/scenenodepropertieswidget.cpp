@@ -29,7 +29,17 @@ For more information see the LICENSE file
 
 SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(parent)
 {
+	transformPropView = nullptr;
+	transformWidget = nullptr;
 
+	materialPropView = nullptr;
+	emitterPropView = nullptr;
+
+	lightPropView = nullptr;
+	worldPropView = nullptr;
+	fogPropView = nullptr;
+	meshPropView = nullptr;
+	demoPane = nullptr;
 }
 
 /**
@@ -159,6 +169,20 @@ void SceneNodePropertiesWidget::refreshTransform()
 void SceneNodePropertiesWidget::clearLayout(QLayout *layout)
 {
     if (layout == nullptr) return;
+
+#define NULLIFY(obj) if (obj){obj = nullptr;}
+	NULLIFY(transformPropView);
+	NULLIFY(transformWidget);
+
+	NULLIFY(materialPropView);
+	NULLIFY(emitterPropView);
+
+	NULLIFY(lightPropView);
+	NULLIFY(worldPropView);
+	NULLIFY(fogPropView);
+	NULLIFY(meshPropView);
+	NULLIFY(demoPane);
+#undef NULLIFY
 
     while (auto item = layout->takeAt(0)) {
         if (auto widget = item->widget()) delete widget;
