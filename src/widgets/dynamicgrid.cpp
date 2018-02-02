@@ -166,6 +166,16 @@ void DynamicGrid::deleteTile(ItemGridWidget *widget)
     }
 }
 
+void DynamicGrid::updateTile(const QString &id, const QByteArray &arr)
+{
+	foreach(ItemGridWidget *gridItem, originalItems) {
+		if (gridItem->tileData.guid == id) {
+			gridItem->updateTile(arr);
+			break;
+		}
+	}
+}
+
 void DynamicGrid::resetView()
 {
     QLayoutItem *gridItem;

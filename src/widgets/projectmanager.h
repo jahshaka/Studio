@@ -45,6 +45,7 @@ public:
     ProjectManager(Database *handle, QWidget *parent = nullptr);
     ~ProjectManager();
 
+	void updateTile(const QString &id, const QByteArray &arr);
     void populateDesktop(bool reset = false);
     bool checkForEmptyState();
     void cleanupOnClose();

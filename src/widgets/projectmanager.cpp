@@ -499,3 +499,8 @@ ProjectManager::~ProjectManager()
 {
     delete ui;
 }
+
+void ProjectManager::updateTile(const QString &id, const QByteArray & arr)
+{
+	dynamicGrid->updateTile(id, arr);
+}

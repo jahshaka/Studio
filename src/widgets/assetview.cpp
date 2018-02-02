@@ -24,7 +24,7 @@
 #include <QStandardPaths>
 #include <QtAlgorithms>
 #include <QFile>
-#include <QBuffer>>
+#include <QBuffer>
 #include <QTreeWidget>
 #include <QHeaderView>
 #include <QTreeWidgetItem>
@@ -855,7 +855,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
     _splitter->addWidget(split);
     _splitter->addWidget(_metadataPane);
 
-    _splitter->setStretchFactor(0, 1);
+    _splitter->setStretchFactor(0, 0);
     _splitter->setStretchFactor(1, 3);
     _splitter->setStretchFactor(2, 1);
     
