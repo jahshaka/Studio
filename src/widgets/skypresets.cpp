@@ -40,12 +40,14 @@ SkyPresets::SkyPresets(QWidget *parent) :
     QString lake = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/yokohama/front.jpg");
     QString field = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/field/front.jpg");
     QString creek = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/creek/front.jpg");
+	QString space = IrisUtils::getAbsoluteAssetPath("app/content/skies/alternative/space/front.png");
 
     addCubeSky(cove, "Cove");
     addCubeSky(dessert, "Hamarikyu");
     addCubeSky(lake, "Bay");
     addCubeSky(field, "Field");
     addCubeSky(creek, "Creek");
+	addCubeSky(space, "Space");
 
     connect(ui->skyList,    SIGNAL(itemClicked(QListWidgetItem*)),
             this,           SLOT(applyCubeSky(QListWidgetItem*)));
