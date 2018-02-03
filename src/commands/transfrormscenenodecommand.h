@@ -20,6 +20,9 @@ public:
 
     TransformSceneNodeCommand(iris::SceneNodePtr node, QMatrix4x4 localTransform);
 	TransformSceneNodeCommand(iris::SceneNodePtr node, QVector3D pos, QQuaternion rot, QVector3D scale);
+	TransformSceneNodeCommand(iris::SceneNodePtr node,
+							  QVector3D oldPos, QQuaternion oldRot, QVector3D oldScale,
+							  QVector3D newPos, QQuaternion newRot, QVector3D newScale);
     void undo() override;
     void redo() override;
 };

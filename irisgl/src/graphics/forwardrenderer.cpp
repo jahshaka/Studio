@@ -501,7 +501,7 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
    //rendering to the window
    gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
 
-   gl->glViewport(0, 0, vp->width,vp->height);
+   gl->glViewport(0, 0, vp->width * vp->pixelRatioScale,vp->height * vp->pixelRatioScale);
    gl->glActiveTexture(GL_TEXTURE0);
 
    graphics->setBlendState(BlendState::Opaque);
@@ -509,6 +509,7 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
    graphics->setRasterizerState(RasterizerState::CullNone);
 
    vrDevice->bindMirrorTextureId();
+   //vrDevice->bindEyeTexture(0);
    fsQuad->draw(gl);
    gl->glBindTexture(GL_TEXTURE_2D,0);
 

@@ -22,6 +22,19 @@ TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node, QV
 	oldScale = node->getLocalScale();
 }
 
+TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node,
+	QVector3D oldPos, QQuaternion oldRot, QVector3D oldScale,
+	QVector3D newPos, QQuaternion newRot, QVector3D newScale)
+{
+	sceneNode = node;
+	this->newPos = newPos;
+	this->newRot = newRot;
+	this->newScale = newScale;
+	this->oldPos = oldPos;
+	this->oldRot = oldRot;
+	this->oldScale = oldScale;
+}
+
 void TransformSceneNodeCommand::undo()
 {
 	sceneNode->setLocalPos(oldPos);
