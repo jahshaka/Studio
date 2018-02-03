@@ -103,6 +103,8 @@ public:
     void beginEye(int eye);
     void endEye(int eye);
 
+	void bindEyeTexture(int eye);
+
     /*
      * Returns whether or not the headset is being tracked
      * If orientation is being track the the headset is on the persons head

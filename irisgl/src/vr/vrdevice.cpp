@@ -349,6 +349,16 @@ QVector3D VrDevice::getHeadPos()
     return QVector3D(pos.x, pos.y, pos.z);
 }
 
+void VrDevice::bindEyeTexture(int eye)
+{
+	GLuint curTexId;
+	int curIndex;
+
+	ovr_GetTextureSwapChainCurrentIndex(session, vr_textureChain[eye], &curIndex);
+	ovr_GetTextureSwapChainBufferGL(session, vr_textureChain[eye], curIndex, &curTexId);
+	gl->glBindTexture(GL_TEXTURE_2D, curTexId);
+}
+
 void VrDevice::beginEye(int eye)
 {
     GLuint curTexId;
