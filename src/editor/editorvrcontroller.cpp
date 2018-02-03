@@ -23,6 +23,8 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../core/keyboardstate.h"
 #include "../irisgl/src/graphics/renderlist.h"
+#include "../commands/transfrormscenenodecommand.h"
+#include "../uimanager.h"
 #include <QtMath>
 
 
@@ -150,7 +152,10 @@ void EditorVrController::update(float dt)
             // Pick a node if the trigger is down
             if (leftTouch->getIndexTrigger() > 0.1f && !leftPickedNode)
             {
-                leftPickedNode = pick.hitNode;
+				leftPickedNode = pick.hitNode;
+				leftPos = leftPickedNode->getLocalPos();
+				leftRot = leftPickedNode->getLocalRot();
+				leftScale = leftPickedNode->getLocalScale();
 
                 //calculate offset
                 //leftNodeOffset = leftPickedNode->getGlobalTransform() * leftHandRenderItem->worldMatrix.inverted();
@@ -165,6 +170,13 @@ void EditorVrController::update(float dt)
 
         if(leftTouch->getIndexTrigger() < 0.1f && !!leftPickedNode)
         {
+			// add to undo
+			auto newPos = leftPickedNode->getLocalPos();
+			auto cmd = new TransformSceneNodeCommand(leftPickedNode,
+												     leftPos, leftRot, leftScale,
+													 leftPickedNode->getLocalPos(), leftPickedNode->getLocalRot(), leftPickedNode->getLocalScale());
+			UiManager::pushUndoStack(cmd);
+
             // release node
             leftPickedNode.clear();
             leftNodeOffset.setToIdentity(); // why bother?
