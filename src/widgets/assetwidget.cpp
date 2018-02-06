@@ -98,7 +98,7 @@ void AssetWidget::populateAssetTree(bool initialRun)
     // TODO - revamp this, the actual project directory is up one level. ok
     auto rootTreeItem = new QTreeWidgetItem();
     rootTreeItem->setText(0, "Assets");
-    rootTreeItem->setIcon(0, QIcon(":/icons/ic_folder.svg"));
+    rootTreeItem->setIcon(0, QIcon(":/icons/ic_folder_large.svg"));
     rootTreeItem->setData(0, Qt::UserRole, Globals::project->getProjectFolder());
     updateTree(rootTreeItem, Globals::project->getProjectFolder());
 
@@ -119,7 +119,7 @@ void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
     QFileInfoList folders = QDir(path).entryInfoList(QDir::NoDotAndDotDot | QDir::Dirs);
     foreach (const QFileInfo &folder, folders) {
         auto item = new QTreeWidgetItem();
-        item->setIcon(0, QIcon(":/icons/ic_folder.svg"));
+        item->setIcon(0, QIcon(":/icons/ic_folder_large.svg"));
 		if (!Globals::assetNames.value(folder.fileName()).isEmpty()) {
 			// item->setData(0, Qt::DisplayRole, Globals::assetNames.value(folder.fileName()));
 		}
