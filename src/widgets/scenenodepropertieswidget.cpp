@@ -54,6 +54,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             // demoPane = new DemoPane();
             // demoPane->setPanelTitle("Demo Pane");
             // demoPane->expand();
+			clearLayout(this->layout());
 
             fogPropView = new FogPropertyWidget();
             fogPropView->setPanelTitle("Fog");
@@ -73,9 +74,11 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             layout->addStretch();
             layout->setMargin(0);
 
-            clearLayout(this->layout());
+            
             this->setLayout(layout);
         } else {
+			clearLayout(this->layout());
+
             this->sceneNode = sceneNode;
 
             transformPropView = new AccordianBladeWidget();
@@ -138,7 +141,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             layout->addStretch();
             layout->setMargin(0);
 
-            clearLayout(this->layout());
+            
             this->setLayout(layout);
         }
     } else {
