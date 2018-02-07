@@ -279,6 +279,7 @@ void RotationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVec
 	shader->setUniformValue("u_projMatrix", projMatrix);
 	shader->setUniformValue("showHalf", true);
 	gl->glEnable(GL_BLEND);
+	gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	if (dragging) {
 		for (int i = 0; i < 3; i++) {
