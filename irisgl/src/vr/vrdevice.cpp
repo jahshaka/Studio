@@ -381,7 +381,7 @@ void VrDevice::beginEye(int eye)
 
     gl->glViewport(0, 0, eyeWidth, eyeHeight);
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    gl->glEnable(GL_FRAMEBUFFER_SRGB);
+    //gl->glEnable(GL_FRAMEBUFFER_SRGB);
 }
 
 void VrDevice::endEye(int eye)
