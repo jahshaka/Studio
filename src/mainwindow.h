@@ -65,7 +65,6 @@ class SceneHierarchyWidget;
 class EditorCameraController;
 class SettingsManager;
 class PreferencesDialog;
-class LicenseDialog;
 class AboutDialog;
 
 class JahRenderer;
@@ -149,8 +148,6 @@ private:
 
     // menus
     void setupFileMenu();
-    void setupViewMenu();
-    void setupHelpMenu();
 
     //ui setup
     void createPostProcessDockWidget();
@@ -226,14 +223,10 @@ public slots:
 	void saveScene(const QString &filename, const QString &projectPath);
     void saveScene();
 
+	void toggleDockWidgets();
     void showPreferences();
     void exitApp();
     void newScene();
-
-    void showAboutDialog();
-    void showLicenseDialog();
-    void openFacebookUrl();
-    void openWebsiteUrl();
 
     void newProject(const QString&, const QString&);
     void openProject(bool playMode = false);
@@ -307,7 +300,6 @@ private:
 	int undoStackCount;
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;
-    LicenseDialog* licenseDialog;
     AboutDialog* aboutDialog;
 
     QActionGroup* transformGroup;
@@ -359,6 +351,7 @@ private:
 
     QToolBar *toolBar;
     AssetView *_assetView;
+	QAction *actionSaveScene;
 
     WindowSpaces currentSpace;
 };
