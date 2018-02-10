@@ -63,6 +63,13 @@ QLineEdit {
        <number>0</number>
       </property>
       <item>
+       <widget class="QPushButton" name="aboutButton">
+        <property name="text">
+         <string>About</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <spacer name="horizontalSpacer">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
@@ -125,15 +132,12 @@ QLineEdit {
          <string/>
         </property>
         <property name="pixmap">
-         <pixmap resource="../../app/images.qrc">:/images/sidepanelimage.jpg</pixmap>
+         <pixmap>:/images/sidepanelimage.jpg</pixmap>
         </property>
        </widget>
       </item>
      </layout>
     </widget>
-   </item>
-   <item row="0" column="1">
-    <layout class="QHBoxLayout" name="worldLayout"/>
    </item>
    <item row="1" column="1">
     <spacer name="verticalSpacer">
@@ -147,6 +151,9 @@ QLineEdit {
       </size>
      </property>
     </spacer>
+   </item>
+   <item row="0" column="1">
+    <layout class="QHBoxLayout" name="worldLayout"/>
    </item>
   </layout>
  </widget>

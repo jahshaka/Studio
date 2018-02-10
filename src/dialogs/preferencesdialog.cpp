@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "preferences/worldsettings.h"
 #include "../core/settingsmanager.h"
 #include "../core/database/database.h"
+#include "aboutdialog.h"
 
 PreferencesDialog::PreferencesDialog(Database *handle, SettingsManager* settings) :
     QDialog(nullptr),
@@ -28,6 +29,11 @@ PreferencesDialog::PreferencesDialog(Database *handle, SettingsManager* settings
     ui->cancelButton->hide();
 
     connect(ui->okButton, SIGNAL(clicked(bool)), this, SLOT(saveSettings()));
+
+	connect(ui->aboutButton, &QPushButton::pressed, this, []() {
+		AboutDialog ad;
+		ad.exec();
+	});
 
     setupPages();
 }

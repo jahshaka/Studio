@@ -29,7 +29,6 @@ set(SRCS
     src/widgets/colorpickerwidget.cpp 
     src/dialogs/preferencesdialog.cpp 
     src/dialogs/aboutdialog.cpp 
-    src/dialogs/licensedialog.cpp 
     src/dialogs/preferences/worldsettings.cpp 
     src/dialogs/loadmeshdialog.cpp 
     src/widgets/animationwidget.cpp 
@@ -127,7 +126,6 @@ set(HEADERS
     src/helpers/settingshelper.h 
     src/dialogs/preferencesdialog.h 
     src/dialogs/aboutdialog.h 
-    src/dialogs/licensedialog.h 
     src/dialogs/preferences/worldsettings.h 
     src/helpers/collisionhelper.h 
     src/dialogs/infodialog.h 
@@ -241,7 +239,6 @@ set(FORMS
     src/widgets/colorpickerwidget.ui 
     src/dialogs/preferencesdialog.ui 
     src/dialogs/aboutdialog.ui 
-    src/dialogs/licensedialog.ui 
     src/dialogs/preferences/worldsettings.ui 
     src/dialogs/infodialog.ui 
     src/dialogs/loadmeshdialog.ui 

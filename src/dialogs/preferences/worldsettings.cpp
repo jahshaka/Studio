@@ -48,7 +48,7 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 	showFps = settings->getValue("show_fps", false).toBool();
 	ui->showFPS->setChecked(showFps);
 
-	autoSave = settings->getValue("auto_save", false).toBool();
+	autoSave = settings->getValue("auto_save", true).toBool();
 	ui->autoSave->setChecked(autoSave);
 }
 

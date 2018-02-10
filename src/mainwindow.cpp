@@ -77,7 +77,6 @@ For more information see the LICENSE file
 #include "core/settingsmanager.h"
 #include "dialogs/preferencesdialog.h"
 #include "dialogs/preferences/worldsettings.h"
-#include "dialogs/licensedialog.h"
 #include "dialogs/aboutdialog.h"
 
 #include "helpers/collisionhelper.h"
@@ -149,13 +148,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     settings = SettingsManager::getDefaultManager();
     prefsDialog = new PreferencesDialog(db, settings);
     aboutDialog = new AboutDialog();
-    licenseDialog = new LicenseDialog();
 
     camControl = nullptr;
     vrMode = false;
 
     setupFileMenu();
-    setupHelpMenu();
 
     setupViewPort();
     setupDesktop();
@@ -169,9 +166,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 //    }
 
     setupUndoRedo();
-
-    // this ties to hidden geometry so should come at the end
-    setupViewMenu();
 
 	undoStackCount = 0;
 }
@@ -379,7 +373,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 void MainWindow::closeEvent(QCloseEvent *event)
 {
     bool closing = false;
-	bool autoSave = settings->getValue("auto_save", false).toBool();
+	bool autoSave = settings->getValue("auto_save", true).toBool();
 
 	if (autoSave && UiManager::isSceneOpen) {
 		saveScene();
@@ -432,51 +426,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 void MainWindow::setupFileMenu()
 {
-    connect(ui->actionSave,         SIGNAL(triggered(bool)), this, SLOT(saveScene()));
-    connect(ui->actionExit,         SIGNAL(triggered(bool)), this, SLOT(exitApp()));
-    connect(ui->actionPreferences,  SIGNAL(triggered(bool)), this, SLOT(showPreferences()));
     connect(prefsDialog,            SIGNAL(PreferencesDialogClosed()), SLOT(updateSceneSettings()));
-    connect(ui->actionExport,       SIGNAL(triggered(bool)), this, SLOT(exportSceneAsZip()));
-    connect(ui->actionClose,        &QAction::triggered, [this](bool) { closeProject(); });
-}
-
-void MainWindow::setupViewMenu()
-{
-    connect(ui->actionOutliner, &QAction::toggled, [this](bool set) {
-        sceneHierarchyDock->setVisible(set);
-    });
-
-    connect(ui->actionProperties, &QAction::toggled, [this](bool set) {
-        sceneNodePropertiesDock->setVisible(set);
-    });
-
-    connect(ui->actionPresets, &QAction::toggled, [this](bool set) {
-        presetsDock->setVisible(set);
-    });
-
-    connect(ui->actionAnimation, &QAction::toggled, [this](bool set) {
-        animationDock->setVisible(set);
-    });
-
-    connect(ui->actionAssets, &QAction::toggled, [this](bool set) {
-        assetDock->setVisible(set);
-    });
-
-    connect(ui->actionClose_All, &QAction::triggered, [this]() {
-        toggleWidgets(false);
-    });
-
-    connect(ui->actionRestore_All, &QAction::triggered, [this]() {
-        toggleWidgets(true);
-    });
-}
-
-void MainWindow::setupHelpMenu()
-{
-    connect(ui->actionLicense,      SIGNAL(triggered(bool)), this, SLOT(showLicenseDialog()));
-    connect(ui->actionAbout,        SIGNAL(triggered(bool)), this, SLOT(showAboutDialog()));
-    connect(ui->actionFacebook,     SIGNAL(triggered(bool)), this, SLOT(openFacebookUrl()));
-    connect(ui->actionOpenWebsite,  SIGNAL(triggered(bool)), this, SLOT(openWebsiteUrl()));
 }
 
 void MainWindow::createPostProcessDockWidget()
@@ -570,7 +520,7 @@ void MainWindow::switchSpace(WindowSpaces space)
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
 			if (UiManager::isSceneOpen) {
-				if (settings->getValue("auto_save", false).toBool()) saveScene();
+				if (settings->getValue("auto_save", true).toBool()) saveScene();
 				pmContainer->populateDesktop(true);
 			}
             ui->stackedWidget->setCurrentIndex(0);
@@ -763,7 +713,7 @@ void MainWindow::openProject(bool playMode)
 void MainWindow::closeProject()
 {
 	if (UiManager::isSceneOpen) {
-		if (settings->getValue("auto_save", false).toBool()) saveScene();
+		if (settings->getValue("auto_save", true).toBool()) saveScene();
 	}
 
     UiManager::isSceneOpen = false;
@@ -1688,11 +1638,13 @@ void MainWindow::setupToolBar()
 {
     toolBar = new QToolBar;
 	QAction *actionUndo = new QAction;
+	actionUndo->setToolTip("Undo last action");
 	actionUndo->setObjectName(QStringLiteral("actionUndo"));
 	actionUndo->setIcon(QIcon(":/icons/undo.png"));
 	toolBar->addAction(actionUndo);
 
 	QAction *actionRedo = new QAction;
+	actionRedo->setToolTip("Redo last action");
 	actionRedo->setObjectName(QStringLiteral("actionRedo"));
 	actionRedo->setIcon(QIcon(":/icons/redo.svg"));
 	toolBar->addAction(actionRedo);
@@ -1705,18 +1657,21 @@ void MainWindow::setupToolBar()
     QAction *actionTranslate = new QAction;
     actionTranslate->setObjectName(QStringLiteral("actionTranslate"));
     actionTranslate->setCheckable(true);
+	actionTranslate->setToolTip("Manipulator for translating objects");
     actionTranslate->setIcon(QIcon(":/icons/tranlate arrow.svg"));
     toolBar->addAction(actionTranslate);
 
     QAction *actionRotate = new QAction;
     actionRotate->setObjectName(QStringLiteral("actionRotate"));
     actionRotate->setCheckable(true);
+	actionRotate->setToolTip("Manipulator for rotating objects");
     actionRotate->setIcon(QIcon(":/icons/rotate-to-right.svg"));
     toolBar->addAction(actionRotate);
 
     QAction *actionScale = new QAction;
     actionScale->setObjectName(QStringLiteral("actionScale"));
     actionScale->setCheckable(true);
+	actionScale->setToolTip("Manipulator for scaling objects");
     actionScale->setIcon(QIcon(":/icons/expand-arrows.svg"));
     toolBar->addAction(actionScale);
 
@@ -1725,12 +1680,14 @@ void MainWindow::setupToolBar()
     QAction *actionGlobalSpace = new QAction;
     actionGlobalSpace->setObjectName(QStringLiteral("actionGlobalSpace"));
     actionGlobalSpace->setCheckable(true);
+	actionGlobalSpace->setToolTip("Move objects relative to the global world");
     actionGlobalSpace->setIcon(QIcon(":/icons/world.svg"));
     toolBar->addAction(actionGlobalSpace);
 
     QAction *actionLocalSpace = new QAction;
     actionLocalSpace->setObjectName(QStringLiteral("actionLocalSpace"));
     actionLocalSpace->setCheckable(true);
+	actionLocalSpace->setToolTip("Move objects relative to their transform");
     actionLocalSpace->setIcon(QIcon(":/icons/sceneobject.svg"));
     toolBar->addAction(actionLocalSpace);
 
@@ -1739,12 +1696,14 @@ void MainWindow::setupToolBar()
     QAction *actionFreeCamera = new QAction;
     actionFreeCamera->setObjectName(QStringLiteral("actionFreeCamera"));
     actionFreeCamera->setCheckable(true);
+	actionFreeCamera->setToolTip("Freely move and orient the camera");
     actionFreeCamera->setIcon(QIcon(":/icons/people.svg"));
     toolBar->addAction(actionFreeCamera);
 
     QAction *actionArcballCam = new QAction;
     actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
     actionArcballCam->setCheckable(true);
+	actionArcballCam->setToolTip("Move and orient the camera around a fixed point");
     actionArcballCam->setIcon(QIcon(":/icons/local.svg"));
     toolBar->addAction(actionArcballCam);
 
@@ -1777,6 +1736,43 @@ void MainWindow::setupToolBar()
     QWidget* empty = new QWidget();
     empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     toolBar->addWidget(empty);
+
+	QAction *actionExport = new QAction;
+	actionExport->setObjectName(QStringLiteral("actionExport"));
+	actionExport->setCheckable(false);
+	actionExport->setToolTip("Export the current scene");
+	actionExport->setIcon(QIcon(":/icons/export.png"));
+	toolBar->addAction(actionExport);
+
+	actionSaveScene = new QAction;
+	actionSaveScene->setObjectName(QStringLiteral("actionSaveScene"));
+	actionSaveScene->setVisible(!settings->getValue("auto_save", true).toBool());
+	actionSaveScene->setCheckable(false);
+	actionSaveScene->setToolTip("Save the current scene");
+	actionSaveScene->setIcon(QIcon(":/icons/save.png"));
+	toolBar->addAction(actionSaveScene);
+
+	QAction *viewDocks = new QAction;
+	viewDocks->setObjectName(QStringLiteral("viewDocks"));
+	viewDocks->setCheckable(false);
+	viewDocks->setToolTip("Toggle Widgets");
+	viewDocks->setIcon(QIcon(":/icons/tab.png"));
+	toolBar->addAction(viewDocks);
+
+	QAction *actionPreferences = new QAction;
+	actionPreferences->setObjectName(QStringLiteral("actionPreferences"));
+	actionPreferences->setCheckable(false);
+	actionPreferences->setToolTip("User Preferences");
+	actionPreferences->setIcon(QIcon(":/icons/settings.png"));
+	toolBar->addAction(actionPreferences);
+
+	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
+	connect(viewDocks,			SIGNAL(triggered(bool)), SLOT(toggleDockWidgets()));
+	connect(actionSaveScene,	SIGNAL(triggered(bool)), SLOT(saveScene()));
+	connect(actionPreferences,	SIGNAL(triggered(bool)), SLOT(showPreferences()));
+
+	// connect(ui->actionClose, &QAction::triggered, [this](bool) { closeProject(); });
+
     /*
     vrButton = new QPushButton();
     QIcon icovr(":/icons/virtual-reality.svg");
@@ -1784,6 +1780,7 @@ void MainWindow::setupToolBar()
     vrButton->setObjectName("vrButton");
     toolBar->addWidget(vrButton);
     */
+
     viewPort->addToolBar(toolBar);
 }
 
@@ -1809,6 +1806,90 @@ QIcon MainWindow::getIconFromSceneNodeType(SceneNodeType type)
     return QIcon();
 }
 
+void MainWindow::toggleDockWidgets()
+{
+	QDialog *d = new QDialog(this);
+	d->setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::Popup);
+
+	d->setStyleSheet(
+		"QDialog { border: 1px solid black; }"
+		"QPushButton { padding: 8px 36px; border-radius: 1px; }"
+		"QPushButton[accessibleName=\"toggleAbles\"]:checked { background: #1E1E1E; }"
+		"QPushButton[accessibleName=\"toggleAbles\"] { background: #3E3E3E; }"
+	);
+
+	QVBoxLayout *dl = new QVBoxLayout;
+	dl->setContentsMargins(20, 16, 20, 16);
+	d->setLayout(dl);
+
+	QPushButton *hierarchy = new QPushButton("Hierarchy");
+	hierarchy->setAccessibleName(QStringLiteral("toggleAbles"));
+	hierarchy->setCheckable(true);
+	hierarchy->setChecked(true);
+
+	QPushButton *properties = new QPushButton("Properties");
+	properties->setAccessibleName(QStringLiteral("toggleAbles"));
+	properties->setCheckable(true);
+	properties->setChecked(true);
+
+	QPushButton *presets = new QPushButton("Presets");
+	presets->setAccessibleName(QStringLiteral("toggleAbles"));
+	presets->setCheckable(true);
+	presets->setChecked(true);
+
+	QPushButton *timeline = new QPushButton("Timeline");
+	timeline->setAccessibleName(QStringLiteral("toggleAbles"));
+	timeline->setCheckable(true);
+	timeline->setChecked(true);
+
+	QPushButton *assets = new QPushButton("Assets");
+	assets->setAccessibleName(QStringLiteral("toggleAbles"));
+	assets->setCheckable(true);
+	assets->setChecked(true);
+
+	QPushButton *closeAll = new QPushButton("Close All");
+	closeAll->setCheckable(true);
+	closeAll->setChecked(true);
+
+	QPushButton *restoreAll = new QPushButton("Restore All");
+	restoreAll->setCheckable(true);
+	restoreAll->setChecked(true);
+
+	dl->addWidget(hierarchy);
+	dl->addWidget(properties);
+	dl->addWidget(presets);
+	dl->addWidget(timeline);
+	dl->addWidget(assets);
+
+	dl->addWidget(closeAll);
+	dl->addWidget(restoreAll);
+
+	connect(hierarchy, &QPushButton::toggled, [&](bool set) {
+		sceneHierarchyDock->setVisible(set);
+	});
+
+	connect(properties, &QPushButton::toggled, [this](bool set) {
+		sceneNodePropertiesDock->setVisible(set);
+	});
+
+	connect(presets, &QPushButton::toggled, [this](bool set) {
+		presetsDock->setVisible(set);
+	});
+
+	connect(timeline, &QPushButton::toggled, [this](bool set) {
+		animationDock->setVisible(set);
+	});
+
+	connect(assets, &QPushButton::toggled, [this](bool set) {
+		assetDock->setVisible(set);
+	});
+
+	connect(closeAll,	&QPushButton::pressed,	[this]() { toggleWidgets(false); });
+	connect(restoreAll, &QPushButton::pressed,	[this]() { toggleWidgets(true); });
+
+	d->exec();
+}
+
 void MainWindow::showPreferences()
 {
     prefsDialog->exec();
@@ -1823,6 +1904,8 @@ void MainWindow::updateSceneSettings()
 {
     scene->setOutlineWidth(prefsDialog->worldSettings->outlineWidth);
     scene->setOutlineColor(prefsDialog->worldSettings->outlineColor);
+
+	actionSaveScene->setVisible(!prefsDialog->worldSettings->autoSave);
 }
 
 void MainWindow::undo()
@@ -1911,26 +1994,6 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 	saveScene(filename, projectPath);
 
 	undoStackCount = 0;
-}
-
-void MainWindow::showAboutDialog()
-{
-    aboutDialog->exec();
-}
-
-void MainWindow::showLicenseDialog()
-{
-    licenseDialog->exec();
-}
-
-void MainWindow::openFacebookUrl()
-{
-    QDesktopServices::openUrl(QUrl("https://www.facebook.com/jahshakafx/"));
-}
-
-void MainWindow::openWebsiteUrl()
-{
-    QDesktopServices::openUrl(QUrl("http://www.jahshaka.com/"));
 }
 
 MainWindow::~MainWindow()
