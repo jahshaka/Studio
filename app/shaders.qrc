@@ -24,5 +24,7 @@
         <file>shaders/defaultsky.frag</file>
         <file>shaders/fullscreen.frag</file>
         <file>shaders/fullscreen.vert</file>
+        <file>shaders/outlinepp.frag</file>
+        <file>shaders/outlinepp.vert</file>
     </qresource>
 </RCC>

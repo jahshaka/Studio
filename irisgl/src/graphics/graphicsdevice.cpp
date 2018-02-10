@@ -76,6 +76,11 @@ void GraphicsDevice::setRenderTarget(RenderTargetPtr renderTarget)
     activeRT->bind();
 }
 
+void GraphicsDevice::setRenderTarget(Texture2DPtr colorTarget)
+{
+	setRenderTarget({ colorTarget }, iris::Texture2DPtr());
+}
+
 // the size of all the textures should be the same
 void GraphicsDevice::setRenderTarget(QList<Texture2DPtr> colorTargets, Texture2DPtr depthTarget)
 {
@@ -117,7 +122,7 @@ void GraphicsDevice::clearRenderTarget()
 
         activeRT.reset();
     }
-    gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, context->defaultFramebufferObject());
 }
 
 void GraphicsDevice::clear(QColor color)

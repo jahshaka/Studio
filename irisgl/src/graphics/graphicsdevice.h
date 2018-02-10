@@ -98,6 +98,7 @@ public:
     QRect getViewport();
 
     void setRenderTarget(RenderTargetPtr renderTarget);
+	void setRenderTarget(Texture2DPtr renderTarget);
     void setRenderTarget(QList<Texture2DPtr> colorTargets, Texture2DPtr depthTarget);
     void clearRenderTarget();
 

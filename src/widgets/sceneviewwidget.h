@@ -55,6 +55,7 @@ class ScaleGizmo;
 
 class EditorData;
 class ThumbnailGenerator;
+class OutlinerRenderer;
 
 enum class ViewportMode
 {
@@ -173,6 +174,7 @@ public:
     void setShowLightWires(bool value);
 
     void setShowFps(bool value);
+	void renderSelectedNode(iris::SceneNodePtr selectedNode);
 
     void cleanup();
 
@@ -242,6 +244,7 @@ private:
 
     iris::Viewport* viewport;
     iris::FullScreenQuad* fsQuad;
+	OutlinerRenderer* outliner;
 
     bool playScene;
     iris::Plane sceneFloor;
