@@ -378,7 +378,7 @@ void SceneViewWidget::renderGizmos(bool once)
 
 void SceneViewWidget::renderSelectedNode(iris::SceneNodePtr selectedNode)
 {
-	outliner->renderOutline(renderer->getGraphicsDevice(), selectedNode, editorCam, scene->outlineWidth, scene->outlineColor);
+	outliner->renderOutline(renderer->getGraphicsDevice(), selectedNode, editorCam, qBound(1.f,(float)scene->outlineWidth,2.f), scene->outlineColor);
 }
 
 void SceneViewWidget::initializeGL()

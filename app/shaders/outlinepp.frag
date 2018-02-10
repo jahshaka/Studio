@@ -37,5 +37,5 @@ void main()
 
 	vec4 h = n[2] + (2.0*n[5]) + n[8] - (n[0] + (2.0*n[3]) + n[6]);
   	vec4 v = n[0] + (2.0*n[1]) + n[2] - (n[6] + (2.0*n[7]) + n[8]);
-	fragColor = sqrt((h * h) + (v * v)) * vec4(u_color, 1.0);
+	fragColor = min(sqrt((h * h) + (v * v)), 1.0) * vec4(u_color, 1.0);
 }
