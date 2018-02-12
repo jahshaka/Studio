@@ -33,6 +33,8 @@ public:
 	iris::Texture2DPtr outlineTexture;
 
 	iris::FullScreenQuad* fsQuad;
+	iris::RenderData* renderData;
+
 	OutlinerRenderer();
 
 	void renderOutline(iris::GraphicsDevicePtr device,

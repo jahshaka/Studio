@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "irisgl\src\graphics\utils\fullscreenquad.h"
 #include "irisgl\src\graphics\graphicshelper.h"
 #include "irisgl\src\graphics\skeleton.h"
+#include "irisgl\src\graphics\renderdata.h"
 #include "irisgl\src\graphics\utils\fullscreenquad.h"
 
 #include "irisgl\src\scenegraph\scenenode.h"
@@ -30,6 +31,9 @@ OutlinerRenderer::OutlinerRenderer()
 
 void OutlinerRenderer::loadAssets()
 {
+	particleShader = iris::GraphicsHelper::loadShader(":/assets/shaders/particle.vert",
+		":/assets/shaders/particle.frag");
+
 	meshShader = iris::GraphicsHelper::loadShader(":assets/shaders/color.vert",
 		":assets/shaders/color.frag");
 
@@ -51,6 +55,8 @@ void OutlinerRenderer::loadAssets()
 	outlineTexture = iris::Texture2D::create(100, 100);
 
 	fsQuad = new iris::FullScreenQuad();
+
+	renderData = new iris::RenderData;
 }
 
 void OutlinerRenderer::renderOutline(iris::GraphicsDevicePtr device,
@@ -123,6 +129,13 @@ void OutlinerRenderer::renderNode(iris::GraphicsDevicePtr device,
 			meshNode->mesh->draw(device->getGL(), shader);
 		}
 	}
+	else if (node->getSceneNodeType() == iris::SceneNodeType::ParticleSystem) {
+
+		renderData->viewMatrix = cam->viewMatrix;
+		renderData->projMatrix = cam->projMatrix;
+		auto ps = node.staticCast<iris::ParticleSystemNode>();
+		ps->renderParticles(renderData, particleShader);
+	}
 
 	for (auto childNode : node->children) {
 		if (childNode->isVisible())
@@ -133,4 +146,5 @@ void OutlinerRenderer::renderNode(iris::GraphicsDevicePtr device,
 OutlinerRenderer::~OutlinerRenderer()
 {
 	delete fsQuad;
+	delete renderData;
 }
