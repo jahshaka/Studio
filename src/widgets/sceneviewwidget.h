@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include <QHash>
 
+#include "../core/project.h"
 #include "../irisgl/src/irisglfwd.h"
 #include "../irisgl/src/math/intersectionhelper.h"
 
@@ -44,8 +45,9 @@ class OrbitalCameraController;
 class ViewerCameraController;
 class QElapsedTimer;
 class QTimer;
+class QOpenGLDebugLogger;
 
-class GizmoInstance;
+class Gizmo;
 class ViewportGizmo;
 class TranslationGizmo;
 class RotationGizmo;
@@ -53,6 +55,7 @@ class ScaleGizmo;
 
 class EditorData;
 class ThumbnailGenerator;
+class OutlinerRenderer;
 
 enum class ViewportMode
 {
@@ -104,12 +107,20 @@ public:
     iris::CameraNodePtr editorCam;
 
     ThumbnailGenerator* thumbGen;
+	QOpenGLDebugLogger* glDebugger;
+
+    void dragMoveEvent(QDragMoveEvent*);
+    void dropEvent(QDropEvent*);
+    void dragEnterEvent(QDragEnterEvent*);
 
     explicit SceneViewWidget(QWidget *parent = Q_NULLPTR);
 
     void setScene(iris::ScenePtr scene);
     void setSelectedNode(iris::SceneNodePtr sceneNode);
     void clearSelectedNode();
+
+	void enterEditorMode();
+	void enterPlayerMode();
 
     void setEditorCamera(iris::CameraNodePtr camera);
     void resetEditorCam();
@@ -125,9 +136,10 @@ public:
     void setViewportMode(ViewportMode viewportMode);
     ViewportMode getViewportMode();
 
-    void setTransformOrientationLocal();
-    void setTransformOrientationGlobal();
+    void setGizmoTransformToLocal();
+    void setGizmoTransformToGlobal();
     void hideGizmo();
+	void showGizmos();
 
     void setGizmoLoc();
     void setGizmoRot();
@@ -150,21 +162,25 @@ public:
     QVector3D finalHitPoint;
     QVector3D Offset;
     QVector3D hit;
+    QVector3D dragScenePos;
     iris::SceneNodePtr activeDragNode;
     bool updateRPI(QVector3D pos, QVector3D r);
     bool doActiveObjectPicking(const QPointF& point);
     void doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject = true, bool skipLights = false, bool skipViewers = false);
 
+	QImage takeScreenshot(QSize dimension);
     QImage takeScreenshot(int width=1920, int height=1080);
     bool getShowLightWires() const;
     void setShowLightWires(bool value);
 
     void setShowFps(bool value);
+	void renderSelectedNode(iris::SceneNodePtr selectedNode);
 
     void cleanup();
 
 protected:
     void initializeGL();
+	void initializeOpenGLDebugger();
     bool eventFilter(QObject *obj, QEvent *event);
     void mouseReleaseEvent(QMouseEvent* event);
     void wheelEvent(QWheelEvent *event);
@@ -177,9 +193,11 @@ protected:
     void setCameraController(CameraControllerBase* controller);
     void restorePreviousCameraController();
 
+    void getMousePosAndRay(const QPointF& point, QVector3D& rayPos, QVector3D& rayDir);
+
 private slots:
     void paintGL();
-    void updateScene(bool once = false);
+    void renderGizmos(bool once = false);
     void resizeGL(int width, int height);
 
 
@@ -217,15 +235,16 @@ private:
 
     void initialize();
 
-    GizmoInstance* translationGizmo;
+	Gizmo* gizmo;
+    TranslationGizmo* translationGizmo;
     RotationGizmo* rotationGizmo;
     ScaleGizmo* scaleGizmo;
 
-    GizmoInstance* viewportGizmo;
     QString transformMode;
 
     iris::Viewport* viewport;
     iris::FullScreenQuad* fsQuad;
+	OutlinerRenderer* outliner;
 
     bool playScene;
     iris::Plane sceneFloor;
@@ -243,6 +262,7 @@ private:
     void addLightShapesToScene();
 
 signals:
+    void addDroppedMesh(QString, bool, QVector3D, QString);
     void initializeGraphics(SceneViewWidget* widget,
                             QOpenGLFunctions_3_2_Core* gl);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);

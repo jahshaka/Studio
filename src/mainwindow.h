@@ -21,14 +21,16 @@ For more information see the LICENSE file
 #include <QToolBar>
 #include <QSharedPointer>
 #include <QVector3D>
+#include <QLabel>
 #include <QCheckBox>
-#include "irisgl/src/irisglfwd.h"
+#include "irisglfwd.h"
 
 namespace Ui {
     class MainWindow;
 }
 
 class SurfaceView;
+class AssetView;
 
 class QPushButton;
 class QStandardItem;
@@ -63,7 +65,6 @@ class SceneHierarchyWidget;
 class EditorCameraController;
 class SettingsManager;
 class PreferencesDialog;
-class LicenseDialog;
 class AboutDialog;
 
 class JahRenderer;
@@ -74,7 +75,9 @@ class GizmoHitData;
 class AdvancedGizmoHandle;
 class MaterialPreset;
 class AssetWidget;
-class SceneNodePropertiesWidget;
+// class SceneNodePropertiesWidget;
+
+#include "widgets/scenenodepropertieswidget.h"
 
 class QOpenGLFunctions_3_2_Core;
 
@@ -83,7 +86,17 @@ enum class SceneNodeType;
 enum WindowSpaces {
     DESKTOP,
     PLAYER,
-    EDITOR
+    EDITOR,
+    ASSETS
+};
+
+enum class Widget
+{
+	HIERARCHY,
+	PROPERTIES,
+	ASSETS,
+	TIMELINE,
+	PRESETS
 };
 
 class Database;
@@ -144,8 +157,6 @@ private:
 
     // menus
     void setupFileMenu();
-    void setupViewMenu();
-    void setupHelpMenu();
 
     //ui setup
     void createPostProcessDockWidget();
@@ -196,6 +207,7 @@ public slots:
     void addEmpty();
     void addViewer();
     void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
+	void addMaterialMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D(), const QString &name = QString());
     void addDragPlaceholder();
 
     //context menu functions
@@ -217,16 +229,13 @@ public slots:
 
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
 
+	void saveScene(const QString &filename, const QString &projectPath);
     void saveScene();
 
+	void toggleDockWidgets();
     void showPreferences();
     void exitApp();
     void newScene();
-
-    void showAboutDialog();
-    void showLicenseDialog();
-    void openFacebookUrl();
-    void openWebsiteUrl();
 
     void newProject(const QString&, const QString&);
     void openProject(bool playMode = false);
@@ -297,9 +306,9 @@ private:
     bool dragging;
     QVector3D dragScenePos;
 
+	int undoStackCount;
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;
-    LicenseDialog* licenseDialog;
     AboutDialog* aboutDialog;
 
     QActionGroup* transformGroup;
@@ -310,6 +319,14 @@ private:
     ProjectManager *pmContainer;
 
     QUndoStack* undoStack;
+
+	QPushButton *worlds_menu;
+	QPushButton *player_menu;
+	QPushButton *editor_menu;
+	QPushButton *assets_menu;
+	QWidget *assets_panel;
+	QLabel *jlogo;
+	QPushButton *help;
 
     bool vrMode;
     QPushButton* vrButton;
@@ -342,6 +359,10 @@ private:
     QPushButton *stopBtn;
 
     QToolBar *toolBar;
+    AssetView *_assetView;
+	QAction *actionSaveScene;
+
+	QVector<bool> widgetStates;	// use the order in the enum
 
     WindowSpaces currentSpace;
 };

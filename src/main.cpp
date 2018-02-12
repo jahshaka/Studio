@@ -21,6 +21,9 @@ For more information see the LICENSE file
 #include "core/settingsmanager.h"
 #include "globals.h"
 #include "constants.h"
+#ifdef USE_BREAKPAD
+#include "breakpad/breakpad.h"
+#endif
 
 // Hints that a dedicated GPU should be used whenever possible
 // https://stackoverflow.com/a/39047129/991834
@@ -50,12 +53,21 @@ int main(int argc, char *argv[])
     QApplication::setAttribute(Qt::AA_UseDesktopOpenGL);
     QApplication::setDesktopSettingsAware(false);
     QApplication app(argc, argv);
-    app.setWindowIcon(QIcon(":/images/logo.png"));
+
+#ifdef USE_BREAKPAD
+	initializeBreakpad();
+#endif
+
+    app.setWindowIcon(QIcon(":/images/icon.ico"));
     app.setApplicationName("Jahshaka");
 
     auto dataPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
     QDir dataDir(dataPath);
     if (!dataDir.exists()) dataDir.mkpath(dataPath);
+
+    auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
+    QDir assetDir(assetPath);
+    if (!assetDir.exists()) assetDir.mkpath(assetPath);
 
 // use nicer font on platforms with poor defaults, Mac has really nice font rendering (iKlsR)
 #if defined(Q_OS_WIN) || defined(Q_OS_UNIX)

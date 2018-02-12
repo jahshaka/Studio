@@ -23,6 +23,7 @@ namespace Ui {
 class QListWidgetItem;
 class SettingsManager;
 class WorldSettings;
+class Database;
 
 class PreferencesDialog : public QDialog
 {
@@ -39,16 +40,17 @@ protected:
     }
 
 public:
-    explicit PreferencesDialog(SettingsManager* settings);
+    explicit PreferencesDialog(Database *db, SettingsManager* settings);
     ~PreferencesDialog();
 
     WorldSettings* worldSettings;
+	Database *db;
 
 private:
     void setupPages();
 
 private slots:
-    void closeDialog();
+    void saveSettings();
 
 private:
     Ui::PreferencesDialog *ui;

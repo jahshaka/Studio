@@ -57,21 +57,71 @@ QSlider::handle:horizontal {
     margin: -2px 0; /* handle is placed by default on the contents rect of the groove. Expand outside the groove */
 }
 
+QListWidget {
+	outline: 0;
+	padding: 0;
+	margin: 0;
+}
+
 /* Works for both QListView and QListWidget */
-QListView::item {
+QListWidget::item {
     /* Won't work without borders set */
     border: 0;
-    padding: 10px;
-}
-
-QListWidget::item {
+	outline: 0;
+	padding: 0;
+	margin: 0;
 	color: #CECECE;
 }
 
-QListView::item:selected {
-    border: 1px solid #3498db;
-	background: #3498db;
+QListWidget::item:selected {
+	outline: 0;
+    border: 1px solid #353535;
+	background: green;
 	color: #CECECE;
+	padding: 0;
+}
+
+/* important when the widget loses focus */
+QListWidget::item:selected:!active {
+	background: #404040;
+	padding: 0;
+	margin: 0;
+	color: #CECECE;
+}
+
+QListWidget::item:selected:active {
+	background: #404040;
+	padding: 0;
+margin: 0;
+}
+
+QTreeWidget {
+	outline: none;
+	selection-background-color: #404040;
+	color: #CECECE;
+ }
+
+QTreeWidget::item:selected {
+	selection-background-color: #404040;
+	background: #404040;
+	outline: none;
+	padding: 0;
+ }
+
+/* important when the widget loses focus */
+QTreeWidget::item:selected:!active {
+	background: #404040;
+	padding: 0;
+	color: #CECECE;
+}
+
+QTreeWidget::item:selected:active {
+	background: #404040;
+	padding: 0;
+}
+
+QTreeWidget::item:hover {
+
 }
 
 /* ========================== */
@@ -210,6 +260,7 @@ QListView::item:selected {
       <property name="styleSheet">
        <string notr="true">QScrollBar:vertical {
 	background: #1e1e1e;
+	outline: 0;
 }</string>
       </property>
       <property name="editTriggers">

@@ -31,6 +31,8 @@ public:
 
     iris::VrDevice* vrDevice;
 
+	QVector3D leftPos, leftScale;
+	QQuaternion leftRot;
     iris::SceneNodePtr leftPickedNode;
     iris::SceneNodePtr rightPickedNode;
 

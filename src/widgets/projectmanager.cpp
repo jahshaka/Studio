@@ -24,11 +24,13 @@
 #include "../core/guidmanager.h"
 #include "../io/assetmanager.h"
 
-#include "src/irisgl/src/zip/zip.h"
+#include "irisgl/src/zip/zip.h"
+#include "irisgl/src/assimp/include/assimp/Importer.hpp"
 
 #include "dynamicgrid.h"
 
 #include <QDebug>
+#include <QDesktopServices>
 #include <QGraphicsDropShadowEffect>
 #include <QLineEdit>
 #include <QFontDatabase>
@@ -81,13 +83,24 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
         settings->setValue("tileSize", changedText);
     });
 
+	connect(ui->downloadWorlds, &QPushButton::pressed, []() {
+		QDesktopServices::openUrl(QUrl("http://www.jahfx.com/downloads/worlds/"));
+	});
+
     populateDesktop();
 
     QGridLayout *layout = new QGridLayout();
     layout->addWidget(dynamicGrid);
     layout->setMargin(0);
 
-    ui->pmContainer->setStyleSheet("border: none");
+    ui->pmContainer->setStyleSheet(
+		"border: none;"
+		"background-image: url(:/images/empty_canvas.png);"
+		"background-attachment: fixed;"
+		"background-position: center;"
+		"background-origin: content;"
+		"background-repeat: no-repeat;"
+	);
     ui->pmContainer->setLayout(layout);
 }
 
@@ -481,26 +494,13 @@ void ProjectManager::walkProjectFolder(const QString &projectPath)
     }
 }
 
-QVector<ModelData> ProjectManager::loadModel(const QString &filePath)
-{
-    QVector<ModelData> sceneVec;
-    QFile file(filePath);
-    file.open(QFile::ReadOnly);
-    auto data = file.readAll();
-
-    auto importer = new Assimp::Importer;
-    //    const aiScene *scene = importer->ReadFile(filePath.toStdString().c_str(),
-    //                                             aiProcessPreset_TargetRealtime_Fast);
-
-    const aiScene *scene = importer->ReadFileFromMemory((void*) data.data(),
-                                                        data.length(),
-                                                        aiProcessPreset_TargetRealtime_Fast);
-    ModelData d = { filePath, scene };
-    sceneVec.append(d);
-    return sceneVec;
-}
 
 ProjectManager::~ProjectManager()
 {
     delete ui;
+}
+
+void ProjectManager::updateTile(const QString &id, const QByteArray & arr)
+{
+	dynamicGrid->updateTile(id, arr);
 }

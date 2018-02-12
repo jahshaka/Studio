@@ -2,7 +2,7 @@
 #define DELETESCENENODECOMMAND_H
 
 #include <QUndoCommand>
-#include "../irisglfwd.h"
+#include "irisglfwd.h"
 
 class MainWindow;
 class SceneHierarchyWidget;

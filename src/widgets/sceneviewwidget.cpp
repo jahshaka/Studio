@@ -20,8 +20,10 @@ For more information see the LICENSE file
 #include <QDebug>
 #include <QMimeData>
 #include <QElapsedTimer>
+#include <QOpenGLDebugLogger>
 
 #include "../irisgl/src/irisgl.h"
+#include "../irisgl/src/scenegraph/scene.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
@@ -35,6 +37,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/graphics/viewport.h"
 #include "../irisgl/src/graphics/renderlist.h"
 #include "../irisgl/src/graphics/rendertarget.h"
+#include "../irisgl/src/graphics/shadowmap.h"
 #include "../irisgl/src/graphics/font.h"
 #include "../irisgl/src/graphics/spritebatch.h"
 #include "../irisgl/src/graphics/utils/fullscreenquad.h"
@@ -49,9 +52,11 @@ For more information see the LICENSE file
 
 #include "../editor/editordata.h"
 
+#include "../editor/gizmo.h"
 #include "../editor/translationgizmo.h"
 #include "../editor/rotationgizmo.h"
 #include "../editor/scalegizmo.h"
+#include "../editor/outlinerenderer.h"
 
 #include "../core/keyboardstate.h"
 
@@ -61,34 +66,105 @@ For more information see the LICENSE file
 
 #include "../editor/thumbnailgenerator.h"
 #include "../core/settingsmanager.h"
+#include "../uimanager.h"
 
 void SceneViewWidget::setShowFps(bool value)
 {
-    showFps = value;
+	showFps = value;
 }
 
 void SceneViewWidget::cleanup()
 {
-    scene.reset();
-    selectedNode.reset();
-    translationGizmo->setLastSelectedNode(iris::SceneNodePtr());
-    rotationGizmo->setLastSelectedNode(iris::SceneNodePtr());
-    scaleGizmo->setLastSelectedNode(iris::SceneNodePtr());
+	scene.reset();
+	selectedNode.reset();
+	translationGizmo->clearSelectedNode();
+	rotationGizmo->clearSelectedNode();
+	scaleGizmo->clearSelectedNode();
 
-    renderer->setScene(iris::ScenePtr());
-    renderer->setSelectedSceneNode(iris::SceneNodePtr());
+	renderer->setScene(iris::ScenePtr());
+	renderer->setSelectedSceneNode(iris::SceneNodePtr());
+}
+
+void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
+{
+    QByteArray encoded = event->mimeData()->data("application/x-qabstractitemmodeldatalist");
+    QDataStream stream(&encoded, QIODevice::ReadOnly);
+
+    QMap<int, QVariant> roleDataMap;
+    while (!stream.atEnd()) {
+        stream >> roleDataMap;
+    }
+
+    // backwards compat for now
+    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
+        // if we drag unto another object
+        if (doActiveObjectPicking(event->posF())) {
+            //activeSceneNode->pos = sceneView->hit;
+            dragScenePos = hit;
+            // if we drag on the "floor"
+        }
+        else if (updateRPI(editorCam->getLocalPos(), calculateMouseRay(event->posF())))
+        {
+            //activeSceneNode->pos = sceneView->Offset;
+            dragScenePos = Offset;
+            // otherwise just spawn a distance in front of the camera
+        }
+        else {
+            ////////////////////////////////////////
+            const float spawnDist = 10.0f;
+            auto offset = editorCam->getLocalRot().rotatedVector(QVector3D(0, -1.0f, -spawnDist));
+            offset += editorCam->getLocalPos();
+            //activeSceneNode->pos = offset;
+            dragScenePos = offset;
+        }
+    }
+
+    if (roleDataMap.value(0).toInt() != static_cast<int>(ModelTypes::Object)) {
+        doObjectPicking(event->posF(), iris::SceneNodePtr(), false, true);
+    }
+}
+
+void SceneViewWidget::dropEvent(QDropEvent *event)
+{
+    QByteArray encoded = event->mimeData()->data("application/x-qabstractitemmodeldatalist");
+    QDataStream stream(&encoded, QIODevice::ReadOnly);
+    QMap<int, QVariant> roleDataMap;
+    while (!stream.atEnd()) {
+        stream >> roleDataMap;
+    }
+
+    // qDebug() << roleDataMap.value(0).toInt();
+
+    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
+        auto ppos = dragScenePos;
+        emit addDroppedMesh(roleDataMap.value(3).toString(), true, ppos, roleDataMap.value(1).toString());
+    }
+
+    //if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
+    //    // handleTexture
+    //}
+}
+
+void SceneViewWidget::dragEnterEvent(QDragEnterEvent *event)
+{
+    hideGizmo();
+    if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist"))
+        event->acceptProposedAction();
 }
 
 SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 {
-    QSurfaceFormat format;
-    format.setDepthBufferSize(32);
-    format.setMajorVersion(3);
-    format.setMinorVersion(2);
-    format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
-    format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setSamples(1);
-    setFormat(format);
+	QSurfaceFormat format;
+	format.setDepthBufferSize(32);
+	format.setMajorVersion(3);
+	format.setMinorVersion(2);
+	format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
+	format.setProfile(QSurfaceFormat::CoreProfile);
+	format.setSamples(1);
+	format.setOption(QSurfaceFormat::DebugContext);
+	setFormat(format);
+
+	
 
     // needed in order to get mouse events
     setMouseTracking(true);
@@ -141,18 +217,18 @@ void SceneViewWidget::resetEditorCam()
 void SceneViewWidget::initialize()
 {
     initialH = true;
+    
+    translationGizmo = new TranslationGizmo();
+    translationGizmo->loadAssets();
 
-    translationGizmo = new TranslationGizmo(editorCam);
-    translationGizmo->createHandleShader();
+    rotationGizmo = new RotationGizmo();
+    rotationGizmo->loadAssets();
 
-    rotationGizmo = new RotationGizmo(editorCam);
-    rotationGizmo->createHandleShader();
-
-    scaleGizmo = new ScaleGizmo(editorCam);
-    scaleGizmo->createHandleShader();
-
-    viewportGizmo = translationGizmo;
+    scaleGizmo = new ScaleGizmo();
+	scaleGizmo->loadAssets();
+    
     transformMode = "Global";
+    gizmo = translationGizmo;
 
     // has to be initialized here since it loads assets
     vrCam = new EditorVrController();
@@ -251,34 +327,58 @@ void SceneViewWidget::setScene(iris::ScenePtr scene)
 
 void SceneViewWidget::setSelectedNode(iris::SceneNodePtr sceneNode)
 {
-    selectedNode = sceneNode;
-    if (sceneNode == scene->getRootNode())
-        renderer->setSelectedSceneNode(iris::SceneNodePtr());
-    else
-        renderer->setSelectedSceneNode(sceneNode);
+    if (!scene)
+        return;
 
-    if (viewportGizmo != nullptr) {
-        viewportGizmo->setLastSelectedNode(sceneNode);
-    }
+    selectedNode = sceneNode;
+
+	if (sceneNode == scene->getRootNode() || !sceneNode) {
+		renderer->setSelectedSceneNode(iris::SceneNodePtr());
+		gizmo->clearSelectedNode();
+	}
+	else {
+		renderer->setSelectedSceneNode(sceneNode);
+		gizmo->setSelectedNode(sceneNode);
+	}
 }
 
 void SceneViewWidget::clearSelectedNode()
 {
     selectedNode.clear();
     renderer->setSelectedSceneNode(selectedNode);
+	gizmo->clearSelectedNode();
 }
 
-void SceneViewWidget::updateScene(bool once)
+void SceneViewWidget::enterEditorMode()
 {
-    // update and draw the 3d manipulation gizmo
-    if (!!viewportGizmo->getLastSelectedNode()) {
-        if (!viewportGizmo->getLastSelectedNode()->isRootNode()) {
-            viewportGizmo->updateTransforms(editorCam->getGlobalPosition());
-            if (viewportMode != ViewportMode::VR && UiManager::sceneMode == SceneMode::EditMode) {
-                viewportGizmo->render(editorCam->viewMatrix, editorCam->projMatrix);
-            }
-        }
-    }
+
+}
+
+void SceneViewWidget::enterPlayerMode()
+{
+	if (gizmo->isDragging()) {
+		gizmo->endDragging();
+	}
+}
+
+void SceneViewWidget::renderGizmos(bool once)
+{
+	if (viewportMode != ViewportMode::Editor || UiManager::sceneMode != SceneMode::EditMode)
+		return;
+	
+    auto gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+	if (!!selectedNode) {
+		gizmo->updateSize(editorCam);
+
+		QVector3D rayPos, rayDir;
+		this->getMousePosAndRay(this->prevMousePos, rayPos, rayDir);
+		gizmo->render(gl, rayPos, rayDir, editorCam->viewMatrix, editorCam->projMatrix);
+	}
+}
+
+void SceneViewWidget::renderSelectedNode(iris::SceneNodePtr selectedNode)
+{
+	outliner->renderOutline(renderer->getGraphicsDevice(), selectedNode, editorCam, qBound(1.f,(float)scene->outlineWidth,2.f), scene->outlineColor);
 }
 
 void SceneViewWidget::initializeGL()
@@ -309,6 +409,9 @@ void SceneViewWidget::initializeGL()
     screenshotTex = iris::Texture2D::create(500, 500);
     screenshotRT->addTexture(screenshotTex);
 
+	outliner = new OutlinerRenderer();
+	outliner->loadAssets();
+
     emit initializeGraphics(this, this);
 
     //thumbGen = new ThumbnialGenerator();
@@ -319,6 +422,22 @@ void SceneViewWidget::initializeGL()
     timer->start(Constants::FPS_60);
 
     this->elapsedTimer->start();
+
+	//initializeOpenGLDebugger();
+}
+
+void SceneViewWidget::initializeOpenGLDebugger()
+{
+	glDebugger = new QOpenGLDebugLogger();
+	connect(glDebugger, &QOpenGLDebugLogger::messageLogged, this, [](QOpenGLDebugMessage msg)
+	{
+		qDebug() << msg;
+	});
+
+	if (glDebugger->initialize()) {
+		glDebugger->startLogging(QOpenGLDebugLogger::SynchronousLogging);
+		glDebugger->enableMessages();
+	}
 }
 
 void SceneViewWidget::paintGL()
@@ -363,6 +482,8 @@ void SceneViewWidget::renderScene()
         if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
             viewerVisible = selectedNode->isVisible();
             selectedNode->hide();
+        } else {
+            viewerVisible = false;    
         }
 
         scene->update(dt);
@@ -426,8 +547,9 @@ void SceneViewWidget::renderScene()
                 viewerQuad->draw();
             }
         }
-
-        this->updateScene();
+		this->renderGizmos();
+		this->renderSelectedNode(selectedNode);
+        
     }
 
     // render fps
@@ -442,6 +564,13 @@ void SceneViewWidget::renderScene()
                                 QVector2D(8, 8),
                                 QColor(255, 255, 255));
     }
+
+//    if (!!scene) {
+//        for(auto light : scene->lights) {
+//            if (light->lightType == iris::LightType::Spot)
+//                spriteBatch->draw(light->shadowMap->shadowTexture,QRect(0,0,200,200),QColor(255,255,255,255));
+//        }
+//    }
     spriteBatch->end();
 
 }
@@ -530,8 +659,12 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     QPointF localPos = e->localPos();
     QPointF dir = localPos - prevMousePos;
 
-    if (e->buttons() == Qt::LeftButton && !!viewportGizmo->currentNode) {
-         viewportGizmo->update(editorCam->getLocalPos(), calculateMouseRay(localPos));
+    if (e->buttons() == Qt::LeftButton && !!selectedNode) {
+		if (gizmo->isDragging()) {
+			QVector3D rayPos, rayDir;
+			this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
+			gizmo->drag(rayPos, rayDir);
+		}
     }
 
     if (camController != nullptr) {
@@ -539,6 +672,8 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     }
 
     prevMousePos = localPos;
+
+	gizmo->updateSize(editorCam);
 }
 
 void SceneViewWidget::mousePressEvent(QMouseEvent *e)
@@ -553,12 +688,13 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
     if (e->button() == Qt::LeftButton) {
         editorCam->updateCameraMatrices();
 
-        if (viewportMode == ViewportMode::Editor) {
+        if (viewportMode == ViewportMode::Editor && UiManager::sceneMode == SceneMode::EditMode) {
             this->doGizmoPicking(e->localPos());
 
             if (!!selectedNode) {
-                viewportGizmo->isGizmoHit(editorCam, e->localPos(), this->calculateMouseRay(e->localPos()));
-                viewportGizmo->isHandleHit();
+                QVector3D rayPos, rayDir;
+                this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
+                gizmo->startDragging(rayPos, rayDir);
             }
 
             // if we don't have a selected node prioritize object picking
@@ -581,7 +717,8 @@ void SceneViewWidget::mouseReleaseEvent(QMouseEvent *e)
 
     if (e->button() == Qt::LeftButton) {
         // maybe explicitly hard reset stuff related to picking here
-        viewportGizmo->onMouseRelease();
+        if (gizmo->isDragging())
+            gizmo->endDragging();
     }
 
     if (camController != nullptr) {
@@ -594,6 +731,8 @@ void SceneViewWidget::wheelEvent(QWheelEvent *event)
     if (camController != nullptr) {
         camController->onMouseWheel(event->delta());
     }
+
+	gizmo->updateSize(editorCam);
 }
 
 void SceneViewWidget::keyPressEvent(QKeyEvent *event)
@@ -660,16 +799,30 @@ void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr l
         while (pickedRoot->isAttached())
             pickedRoot = pickedRoot->parent;
 
-
-
         if (!lastSelectedNode ||            // if the user clicked away then the root should be reselected
             pickedRoot != lastSelectedRoot) // if both are under, or is, the same root then pick the actual object
             pickedNode = pickedRoot;        // if not then pick the root node
     }
 
-    viewportGizmo->setLastSelectedNode(pickedNode);
+    gizmo->setSelectedNode(pickedNode);
     emit sceneNodeSelected(pickedNode);
 }
+
+QImage SceneViewWidget::takeScreenshot(QSize dimension)
+{
+	this->makeCurrent();
+	screenshotRT->resize(dimension.width(), dimension.height(), true);
+	scene->update(0);
+	renderer->renderLightBillboards = false;
+	renderer->renderSceneToRenderTarget(screenshotRT, editorCam, false);
+	renderer->renderLightBillboards = true;
+
+	auto img = screenshotRT->toImage();
+	this->doneCurrent();
+
+	return img;
+}
+
 
 QImage SceneViewWidget::takeScreenshot(int width, int height)
 {
@@ -691,27 +844,17 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
     editorCam->updateCameraMatrices();
 
     auto segStart = this->editorCam->getLocalPos();
-    auto rayDir = this->calculateMouseRay(point) * 1024;
-    auto segEnd = segStart + rayDir;
+    auto rayDir = this->calculateMouseRay(point).normalized();// * 1024;
 
-    QList<PickingResult> hitList;
-    doMeshPicking(viewportGizmo->getRootNode(), segStart, segEnd, hitList);
+    if (!!selectedNode) {
+        gizmo->setSelectedNode(selectedNode);
+        if (gizmo != nullptr && gizmo->isHit(segStart, rayDir)) {
 
-    if (hitList.size() == 0) {
-        viewportGizmo->setLastSelectedNode(iris::SceneNodePtr());
-        viewportGizmo->currentNode = iris::SceneNodePtr();
-        emit sceneNodeSelected(iris::SceneNodePtr());
-        return;
+        } else {
+            emit sceneNodeSelected(iris::SceneNodePtr());
+            return;
+        }
     }
-
-    qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
-        return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
-    });
-
-    viewportGizmo->finalHitPoint = hitList.last().hitPoint;
-    viewportGizmo->setPlaneOrientation(hitList.last().hitNode->getName());
-    viewportGizmo->currentNode = hitList.last().hitNode;
-    viewportGizmo->onMousePress(editorCam->getLocalPos(), this->calculateMouseRay(point) * 1024);
 }
 
 void SceneViewWidget::setCameraController(CameraControllerBase *controller)
@@ -738,6 +881,14 @@ void SceneViewWidget::restorePreviousCameraController()
     camController->resetMouseStates();
     camController->setCamera(editorCam);
     camController->start();
+}
+
+void SceneViewWidget::getMousePosAndRay(const QPointF& point, QVector3D &rayPos, QVector3D &rayDir)
+{
+    editorCam->updateCameraMatrices();
+
+    rayPos = this->editorCam->getLocalPos();
+    rayDir = this->calculateMouseRay(point).normalized();// * 1024;
 }
 
 void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,
@@ -911,46 +1062,44 @@ ViewportMode SceneViewWidget::getViewportMode()
     return viewportMode;
 }
 
-void SceneViewWidget::setTransformOrientationLocal()
+void SceneViewWidget::setGizmoTransformToLocal()
 {
-    viewportGizmo->setTransformOrientation("Local");
+	translationGizmo->setTransformSpace(GizmoTransformSpace::Local);
+	rotationGizmo->setTransformSpace(GizmoTransformSpace::Local);
+	scaleGizmo->setTransformSpace(GizmoTransformSpace::Local);
 }
 
-void SceneViewWidget::setTransformOrientationGlobal()
+void SceneViewWidget::setGizmoTransformToGlobal()
 {
-    viewportGizmo->setTransformOrientation("Global");
+	translationGizmo->setTransformSpace(GizmoTransformSpace::Global);
+	rotationGizmo->setTransformSpace(GizmoTransformSpace::Global);
+	// scaling is only done locally
+	scaleGizmo->setTransformSpace(GizmoTransformSpace::Local);
 }
 
 void SceneViewWidget::hideGizmo()
 {
-    viewportGizmo->setLastSelectedNode(iris::SceneNodePtr());
 }
 
 void SceneViewWidget::setGizmoLoc()
 {
     editorCam->updateCameraMatrices();
-    transformMode = viewportGizmo->getTransformOrientation();
-    viewportGizmo = translationGizmo;
-    viewportGizmo->setTransformOrientation(transformMode);
-    viewportGizmo->setLastSelectedNode(selectedNode);
+	translationGizmo->setSelectedNode(selectedNode);
+	gizmo = translationGizmo;
 }
 
 void SceneViewWidget::setGizmoRot()
 {
     editorCam->updateCameraMatrices();
-    transformMode = viewportGizmo->getTransformOrientation();
-    viewportGizmo = rotationGizmo;
-    viewportGizmo->setTransformOrientation(transformMode);
-    viewportGizmo->setLastSelectedNode(selectedNode);
+	rotationGizmo->setSelectedNode(selectedNode);
+	gizmo = rotationGizmo;
 }
 
 void SceneViewWidget::setGizmoScale()
 {
     editorCam->updateCameraMatrices();
-    transformMode = viewportGizmo->getTransformOrientation();
-    viewportGizmo = scaleGizmo;
-    viewportGizmo->setTransformOrientation(transformMode);
-    viewportGizmo->setLastSelectedNode(selectedNode);
+	scaleGizmo->setSelectedNode(selectedNode);
+	gizmo = scaleGizmo;
 }
 
 void SceneViewWidget::setEditorData(EditorData* data)
@@ -985,7 +1134,6 @@ void SceneViewWidget::startPlayingScene()
 
 
     playScene = true;
-    //animTime = 0.0f;
 }
 
 void SceneViewWidget::pausePlayingScene()

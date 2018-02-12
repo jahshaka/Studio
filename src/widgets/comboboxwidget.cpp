@@ -43,7 +43,9 @@ QString ComboBoxWidget::getCurrentItem()
 
 void ComboBoxWidget::setCurrentItem(const QString &item)
 {
+	ui->comboBox->blockSignals(true);
     ui->comboBox->setCurrentIndex(ui->comboBox->findData(item, Qt::DisplayRole));
+	ui->comboBox->blockSignals(false);
 }
 
 void ComboBoxWidget::onDropDownTextChanged(const QString &text)

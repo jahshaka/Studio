@@ -44,16 +44,13 @@ QString AssetIOBase::getRelativePath(QString filename)
 QString AssetIOBase::getAbsolutePath(QString filename)
 {
     //if it's a resource then return it
-    if(filename.trimmed().startsWith(":") || filename.trimmed().startsWith("qrc:"))
-        return filename;
+    if (filename.trimmed().startsWith(":") || filename.trimmed().startsWith("qrc:")) return filename;
 
     auto absPath = dir.absoluteFilePath(filename);
 
     //file should exist, else return null string
-    if(!QFile(absPath).exists())
-        return QString::null;
+    if (!QFile(absPath).exists()) return QString::null;
 
-    //everything went ok :)
     return absPath;
 }
 

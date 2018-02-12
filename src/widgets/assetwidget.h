@@ -14,6 +14,7 @@ class Database;
 
 #include "../io/assetmanager.h"
 #include "../editor/thumbnailgenerator.h"
+#include "../core/project.h"
 
 // TODO - https://stackoverflow.com/questions/19465812/how-can-i-insert-qdockwidget-as-tab
 
@@ -22,6 +23,15 @@ struct AssetItem {
     QTreeWidgetItem *item;
     QListWidgetItem *wItem;
     // add one for assetView...
+};
+
+struct find_asset_thumbnail
+{
+	QString guid;
+	find_asset_thumbnail(QString guid) : guid(guid) {}
+	bool operator () (const AssetData& assetData) const {
+		return assetData.guid == guid;
+	}
 };
 
 #define     ID_ROLE     0x0111
@@ -34,6 +44,8 @@ public:
     explicit AssetWidget(Database *handle, QWidget *parent = Q_NULLPTR);
     ~AssetWidget();
 
+	QVector<AssetData> assetList;
+
     void populateAssetTree(bool initialRun);
     void updateTree(QTreeWidgetItem* parentTreeItem, QString path);
     void generateAssetThumbnails();
@@ -41,6 +53,7 @@ public:
     void addItem(const QString &asset);
     void updateAssetView(const QString &path);
     void trigger();
+    void updateLabels();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
@@ -66,7 +79,7 @@ protected slots:
     void OnLstItemsCommitData(QWidget*);
 
     void deleteTreeFolder();
-    void deleteViewFolder();
+    void deleteItem();
     void openAtFolder();
     void createFolder();
     void importAssetB();

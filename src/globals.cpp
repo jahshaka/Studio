@@ -17,3 +17,4 @@ float Globals::animFrameTime = 0;
 QString Globals::appWorkingDir = QString();
 Project* Globals::project = Project::createNew();
 SceneViewWidget* Globals::sceneViewWidget = nullptr;
+QMap<QString, QString> Globals::assetNames = QMap<QString, QString>();

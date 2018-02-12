@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include "../constants.h"
 
 #include "../editor/editordata.h"
+#include "../materials/jahdefaultmaterial.h"
 
 #include "../irisgl/src/scenegraph/scene.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
@@ -348,26 +349,19 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
 void SceneReader::readSceneNodeTransform(QJsonObject& nodeObj,iris::SceneNodePtr sceneNode)
 {
     auto pos = nodeObj["pos"].toObject();
-    if(!pos.isEmpty())
-    {
-        sceneNode->setLocalPos(readVector3(pos));
-    }
+    if (!pos.isEmpty()) sceneNode->setLocalPos(readVector3(pos));
 
     auto rot = nodeObj["rot"].toObject();
-    if(!rot.isEmpty())
-    {
+    if (!rot.isEmpty()) {
         //the rotation is stored as euler angles
         sceneNode->setLocalRot(QQuaternion::fromEulerAngles(readVector3(rot)));
     }
 
     auto scale = nodeObj["scale"].toObject();
-    if(!scale.isEmpty())
-    {
+    if (!scale.isEmpty()) {
         sceneNode->setLocalScale(readVector3(scale));
-    }
-    else
-    {
-        sceneNode->setLocalScale(QVector3D(1,1,1));
+    } else {
+        sceneNode->setLocalScale(QVector3D(1, 1, 1));
     }
 }
 
@@ -392,6 +386,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
             meshNode->setMesh(mesh);
         }
         meshNode->setPickable(pickable);
+		meshNode->setVisible(nodeObj["visible"].toBool(true));
         meshNode->meshPath = source;
         meshNode->meshIndex = meshIndex;
     }
@@ -405,8 +400,8 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         meshNode->setFaceCullingMode(iris::FaceCullingMode::Back);
     } else if (faceCullingMode == "front") {
         meshNode->setFaceCullingMode(iris::FaceCullingMode::Front);
-    } else if (faceCullingMode == "frontandback") {
-        meshNode->setFaceCullingMode(iris::FaceCullingMode::FrontAndBack);
+    } else if (faceCullingMode == "material") {
+        meshNode->setFaceCullingMode(iris::FaceCullingMode::DefinedInMaterial);
     } else {
         meshNode->setFaceCullingMode(iris::FaceCullingMode::None);
     }
@@ -414,6 +409,18 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     meshNode->applyDefaultPose();
 
     return meshNode;
+}
+
+iris::ShadowMapType evalShadowMapType(QString shadowType)
+{
+    if (shadowType=="hard")
+        return iris::ShadowMapType::Hard;
+    if (shadowType=="soft")
+        return iris::ShadowMapType::Soft;
+    if (shadowType=="softer")
+        return iris::ShadowMapType::Softer;
+
+    return iris::ShadowMapType::None;
 }
 
 /**
@@ -430,6 +437,15 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->distance = (float)nodeObj["distance"].toDouble(1.0f);
     lightNode->spotCutOff = (float)nodeObj["spotCutOff"].toDouble(30.0f);
     lightNode->color = readColor(nodeObj["color"].toObject());
+	lightNode->setVisible(nodeObj["visible"].toBool(true));
+
+    //shadow data
+    auto shadowMap = lightNode->shadowMap;
+    shadowMap->bias = (float)nodeObj["shadowBias"].toDouble(0.0015f);
+    // ensure shadow map size isnt too big ro too small
+    auto res = qBound(512, nodeObj["shadowSize"].toInt(1024), 4096);
+    shadowMap->setResolution(res);
+    shadowMap->shadowType = evalShadowMapType(nodeObj["shadowType"].toString());
 
     //TODO: move this to the sceneview widget or somewhere more appropriate
     if (lightNode->lightType == iris::LightType::Directional) {
@@ -447,6 +463,7 @@ iris::ViewerNodePtr SceneReader::createViewer(QJsonObject& nodeObj)
 {
     auto viewerNode = iris::ViewerNode::create();
     viewerNode->setViewScale((float)nodeObj["viewScale"].toDouble(1.0f));
+	viewerNode->setVisible(nodeObj["visible"].toBool(true));
 
     return viewerNode;
 }
@@ -466,6 +483,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     particleNode->setName(nodeObj["name"].toString());
     particleNode->setSpeed((float) nodeObj["speed"].toDouble(1.0f));
     particleNode->setTexture(iris::Texture2D::load(getAbsolutePath(nodeObj["texture"].toString())));
+	particleNode->setVisible(nodeObj["visible"].toBool(true));
 
     return particleNode;
 }
@@ -519,7 +537,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 
 
     if (shaderFile.exists()) {
-        m->generate(shaderFile.absoluteFilePath());
+		m->generate(shaderFile.absoluteFilePath());
     } else {
         for (auto asset : AssetManager::getAssets()) {
             if (asset->type == AssetType::Shader) {

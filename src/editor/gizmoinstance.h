@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #ifndef GIZMOINSTANCE_H
 #define GIZMOINSTANCE_H
 
-#include "gizmohandle.h"
+#include "gizmo.h"
 
 class QOpenGLFunctions_3_2_Core;
 

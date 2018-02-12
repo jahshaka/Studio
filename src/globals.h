@@ -15,6 +15,7 @@ For more information see the LICENSE file
 class Project;
 class SceneViewWidget;
 
+#include <QMap>
 #include <QString>
 
 class Globals
@@ -24,6 +25,7 @@ public:
     static QString appWorkingDir;
     static Project* project;
     static SceneViewWidget* sceneViewWidget;
+    static QMap<QString, QString> assetNames;
 };
 
 #endif // GLOBALS_H

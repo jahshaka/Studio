@@ -7,6 +7,7 @@ class QUndoCommand;
 class MainWindow;
 class SceneViewWidget;
 class SceneHierarchyWidget;
+class SceneNodePropertiesWidget;
 
 enum class SceneMode
 {
@@ -21,6 +22,7 @@ public:
     static AnimationWidget* animationWidget;
     static SceneViewWidget* sceneViewWidget;
     static SceneHierarchyWidget* sceneHierarchyWidget;
+	static SceneNodePropertiesWidget* propertyWidget;
 
     static AnimationWidget *getAnimationWidget();
     static void setAnimationWidget(AnimationWidget *value);
@@ -43,7 +45,8 @@ public:
     static void updateWindowTitle();
 
     static bool isUndoStackDirty();
-    static bool clearUndoStack();
+	static bool getUndoStackCount();
+    static void clearUndoStack();
     static void setUndoStack(QUndoStack*);
     static void pushUndoStack(QUndoCommand*);
     static void popUndoStack();

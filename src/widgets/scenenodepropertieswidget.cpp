@@ -29,7 +29,17 @@ For more information see the LICENSE file
 
 SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(parent)
 {
+	transformPropView = nullptr;
+	transformWidget = nullptr;
 
+	materialPropView = nullptr;
+	emitterPropView = nullptr;
+
+	lightPropView = nullptr;
+	worldPropView = nullptr;
+	fogPropView = nullptr;
+	meshPropView = nullptr;
+	demoPane = nullptr;
 }
 
 /**
@@ -44,6 +54,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             // demoPane = new DemoPane();
             // demoPane->setPanelTitle("Demo Pane");
             // demoPane->expand();
+			clearLayout(this->layout());
 
             fogPropView = new FogPropertyWidget();
             fogPropView->setPanelTitle("Fog");
@@ -63,9 +74,11 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             layout->addStretch();
             layout->setMargin(0);
 
-            clearLayout(this->layout());
+            
             this->setLayout(layout);
         } else {
+			clearLayout(this->layout());
+
             this->sceneNode = sceneNode;
 
             transformPropView = new AccordianBladeWidget();
@@ -128,7 +141,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             layout->addStretch();
             layout->setMargin(0);
 
-            clearLayout(this->layout());
+            
             this->setLayout(layout);
         }
     } else {
@@ -144,6 +157,14 @@ void SceneNodePropertiesWidget::refreshMaterial(const QString &matName)
     }
 }
 
+void SceneNodePropertiesWidget::refreshTransform()
+{
+	if (transformWidget)
+	{
+		transformWidget->refreshUi();
+	}
+}
+
 /**
  * clears layout and child layouts and deletes child widget
  * @param layout
@@ -151,6 +172,20 @@ void SceneNodePropertiesWidget::refreshMaterial(const QString &matName)
 void SceneNodePropertiesWidget::clearLayout(QLayout *layout)
 {
     if (layout == nullptr) return;
+
+#define NULLIFY(obj) if (obj){obj = nullptr;}
+	NULLIFY(transformPropView);
+	NULLIFY(transformWidget);
+
+	NULLIFY(materialPropView);
+	NULLIFY(emitterPropView);
+
+	NULLIFY(lightPropView);
+	NULLIFY(worldPropView);
+	NULLIFY(fogPropView);
+	NULLIFY(meshPropView);
+	NULLIFY(demoPane);
+#undef NULLIFY
 
     while (auto item = layout->takeAt(0)) {
         if (auto widget = item->widget()) delete widget;

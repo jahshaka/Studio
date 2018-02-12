@@ -18,7 +18,6 @@
         <file>icons/expand-button.svg</file>
         <file>icons/fastforward.svg</file>
         <file>icons/fastreverse.svg</file>
-        <file>icons/folder-symbol.svg</file>
         <file>icons/google-drive-file.svg</file>
         <file>icons/icon.ico</file>
         <file>icons/import.svg</file>
@@ -70,6 +69,7 @@
         <file>icons/thandleh.png</file>
         <file>icons/thandlev.png</file>
         <file>icons/ic_folder.svg</file>
+        <file>icons/ic_folder_large.svg</file>
         <file>icons/tedit.svg</file>
         <file>icons/tplay.svg</file>
         <file>icons/tedit_alpha.svg</file>
@@ -77,5 +77,11 @@
         <file>icons/ic_file.svg</file>
         <file>icons/g_pause.svg</file>
         <file>icons/error_alpha.svg</file>
+        <file>icons/eye_closed.png</file>
+        <file>icons/eye_open.png</file>
+        <file>icons/settings.png</file>
+        <file>icons/save.png</file>
+        <file>icons/export.png</file>
+        <file>icons/tab.png</file>
     </qresource>
 </RCC>

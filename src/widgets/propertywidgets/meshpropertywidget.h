@@ -30,10 +30,12 @@ public:
 
 protected slots:
     void onMeshPathChanged(const QString&);
+	void onCullModeChanged(const QString&);
 
 private:
     QSharedPointer<iris::MeshNode> meshNode;
     FilePickerWidget* meshPicker;
+	ComboBoxWidget* faceCullMode;
 };
 
 #endif // MESHPROPERTYWIDGET_H

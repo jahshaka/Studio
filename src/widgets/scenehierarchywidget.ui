@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>256</width>
-    <height>256</height>
+    <width>360</width>
+    <height>368</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -29,7 +29,36 @@
 
 #deleteBtn {
 	border-left: 1px solid #333;
-}</string>
+}
+
+ QTreeWidget {
+	outline: none;
+	selection-background-color: #404040;
+	color: #CECECE;
+  }
+
+QTreeWidget::item:selected {
+	selection-background-color: #404040;
+	background: #404040;
+	outline: none;
+  }
+
+
+/* important when the widget loses focus */
+QTreeWidget::item:selected:!active {
+	background: #404040;
+	padding: 0;
+	color: #CECECE;
+}
+
+QTreeWidget::item:selected:active {
+	background: #404040;
+	padding: 0;
+}
+
+ QTreeWidget::item:hover {
+
+  }</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <property name="spacing">
@@ -151,17 +180,40 @@
    <item>
     <widget class="QTreeWidget" name="sceneTree">
      <property name="styleSheet">
-      <string notr="true"/>
+      <string notr="true">outline: none</string>
      </property>
-     <property name="animated">
+     <property name="rootIsDecorated">
       <bool>true</bool>
      </property>
+     <property name="uniformRowHeights">
+      <bool>true</bool>
+     </property>
+     <property name="animated">
+      <bool>false</bool>
+     </property>
+     <property name="headerHidden">
+      <bool>true</bool>
+     </property>
+     <property name="columnCount">
+      <number>2</number>
+     </property>
      <attribute name="headerVisible">
+      <bool>false</bool>
+     </attribute>
+     <attribute name="headerMinimumSectionSize">
+      <number>0</number>
+     </attribute>
+     <attribute name="headerStretchLastSection">
       <bool>false</bool>
      </attribute>
      <column>
       <property name="text">
        <string notr="true">1</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string notr="true">2</string>
       </property>
      </column>
     </widget>

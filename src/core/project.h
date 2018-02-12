@@ -40,4 +40,48 @@ struct ProjectTileData {
     QString     guid;
 };
 
+struct AssetTileData {
+	QString     name;
+	QString     full_filename;
+	QByteArray  thumbnail;
+	QString     guid;
+    QString     collection_name;
+	int			type;
+	int			collection;
+	QByteArray  properties;
+	QString		license;
+	QString		author;
+	QByteArray  tags;
+	bool		used;
+};
+
+struct AssetData {
+	QByteArray thumbnail;
+	short type;
+	QString guid;
+	QString name;
+	QString extension;
+};
+
+struct CollectionData {
+    QString     name;
+    int         id;
+};
+
+enum class ModelTypes {
+	Shader,
+	Material,
+	Texture,
+	Video,
+	Cubemap,
+	Object,
+	SoundEffect,
+	Music,
+	Undefined
+};
+
+#define	MODEL_GUID_ROLE	0x0113
+#define	MODEL_EXT_ROLE	0x0133
+#define	MODEL_TYPE_ROLE	0x0123
+
 #endif // PROJECT_H

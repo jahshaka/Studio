@@ -18,6 +18,7 @@ namespace Ui {
 }
 
 class SettingsManager;
+class Database;
 
 class WorldSettings : public QWidget
 {
@@ -25,13 +26,16 @@ class WorldSettings : public QWidget
     SettingsManager *settings;
 
 public:
-    explicit WorldSettings(SettingsManager* settings);
+    explicit WorldSettings(Database *db, SettingsManager* settings);
     ~WorldSettings();
 
     int outlineWidth;
     QColor outlineColor;
     QString defaultProjectDirectory;
     bool showFps;
+	bool autoSave;
+
+	Database *db;
 
     void setupDirectoryDefaults();
     void setupOutline();
@@ -40,8 +44,12 @@ private slots:
     void outlineWidthChanged(double width);
     void outlineColorChanged(QColor color);
     void showFpsChanged(bool show);
+	void enableAutoSave(bool state);
     void changeDefaultDirectory();
     void projectDirectoryChanged(QString path);
+
+public slots:
+	void saveSettings();
 
 public:
     Ui::WorldSettings *ui;

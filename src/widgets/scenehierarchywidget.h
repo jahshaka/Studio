@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QMap>
+#include <QIcon>
 #include <QEvent>
 #include "../irisgl/src/irisglfwd.h"
 
@@ -68,8 +69,7 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event);
 
 protected slots:
-    void treeItemSelected(QTreeWidgetItem* item);
-    void treeItemChanged(QTreeWidgetItem* item,int index);
+    void treeItemSelected(QTreeWidgetItem *item, int column);
     void sceneTreeCustomContextMenu(const QPoint &);
 
     void renameNode();
@@ -77,6 +77,7 @@ protected slots:
     void duplicateNode();
 
 private:
+	void showHideNode(QTreeWidgetItem* item, bool show);
     void repopulateTree();
     void populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode);
 
@@ -93,6 +94,9 @@ private:
     QSharedPointer<iris::Scene> scene;
     QSharedPointer<iris::SceneNode> selectedNode;
     MainWindow* mainWindow;
+
+	QIcon *visibleIcon;
+	QIcon *hiddenIcon;
 
 signals:
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);

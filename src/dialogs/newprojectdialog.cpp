@@ -2,7 +2,7 @@
 #include <QFileDialog>
 #include <QFontDatabase>
 
-#include "src/irisgl/src/core/irisutils.h"
+#include "irisgl/src/core/irisutils.h"
 #include "../core/settingsmanager.h"
 #include "../constants.h"
 

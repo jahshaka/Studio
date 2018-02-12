@@ -6,6 +6,9 @@
 #include <QProgressDialog>
 
 #include "../dialogs/progressdialog.h"
+#include "assimp/Importer.hpp"
+#include "assimp/scene.h"
+#include "assimp/postprocess.h"
 
 namespace Ui {
     class ProjectManager;
@@ -42,10 +45,30 @@ public:
     ProjectManager(Database *handle, QWidget *parent = nullptr);
     ~ProjectManager();
 
+	void updateTile(const QString &id, const QByteArray &arr);
     void populateDesktop(bool reset = false);
     bool checkForEmptyState();
     void cleanupOnClose();
-    QVector<ModelData> loadModel(const QString&);
+//    static QVector<ModelData> loadModel(const QString&);
+    QVector<ModelData> loadModel(const QString &filePath)
+    {
+        QVector<ModelData> sceneVec;
+        QFile file(filePath);
+        file.open(QFile::ReadOnly);
+        auto data = file.readAll();
+
+        auto importer = new Assimp::Importer;
+        //    const aiScene *scene = importer->ReadFile(filePath.toStdString().c_str(),
+        //                                             aiProcessPreset_TargetRealtime_Fast);
+
+        const aiScene *scene = importer->ReadFileFromMemory((void*) data.data(),
+                                                            data.length(),
+                                                            aiProcessPreset_TargetRealtime_Fast);
+        ModelData d = { filePath, scene };
+        sceneVec.append(d);
+        return sceneVec;
+    }
+
 
 protected slots:
     void openSampleProject(QListWidgetItem*);

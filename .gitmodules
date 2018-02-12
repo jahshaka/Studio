@@ -1,0 +1,6 @@
+[submodule "irisgl/src/assimp"]
+	path = irisgl/src/assimp
+	url = https://github.com/assimp/assimp.git
+[submodule "thirdparty/breakpad/breakpad"]
+	path = thirdparty/breakpad/breakpad
+	url = https://github.com/jahshaka/breakpad.git

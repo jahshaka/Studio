@@ -1,0 +1,47 @@
+<RCC>
+    <qresource prefix="/">
+        <file>assets/shaders/shadow_map.vert</file>
+        <file>assets/shaders/shadow_map.frag</file>
+        <file>assets/shaders/fullscreen.vert</file>
+        <file>assets/shaders/fullscreen.frag</file>
+        <file>assets/shaders/default_material.vert</file>
+        <file>assets/shaders/default_material.frag</file>
+        <file>assets/shaders/defaultsky.vert</file>
+        <file>assets/shaders/defaultsky.frag</file>
+        <file>assets/shaders/color.vert</file>
+        <file>assets/shaders/color.frag</file>
+        <file>assets/shaders/billboard.frag</file>
+        <file>assets/shaders/billboard.vert</file>
+        <file>assets/models/head.png</file>
+        <file>assets/models/head.obj</file>
+        <file>assets/models/sky.obj</file>
+        <file>assets/shaders/viewer.frag</file>
+        <file>assets/shaders/viewer.vert</file>
+        <file>assets/textures/default_particle.jpg</file>
+        <file>assets/models/cube.obj</file>
+        <file>assets/shaders/surface.vert</file>
+        <file>assets/shaders/surface.frag</file>
+        <file>assets/shaders/postprocesses/coloroverlay.fs</file>
+        <file>assets/shaders/postprocesses/radial_blur.fs</file>
+        <file>assets/shaders/postprocesses/default.vs</file>
+        <file>assets/shaders/postprocesses/bloom_threshold.fs</file>
+        <file>assets/shaders/postprocesses/bloom_combine.fs</file>
+        <file>assets/shaders/postprocesses/bloom_blur.fs</file>
+        <file>assets/shaders/postprocesses/greyscale.fs</file>
+        <file>assets/textures/random_normal.png</file>
+        <file>assets/shaders/postprocesses/ssao.fs</file>
+        <file>assets/models/head2.obj</file>
+        <file>assets/shaders/skinned_material.vert</file>
+        <file>assets/shaders/skinned_shadow_map.vert</file>
+        <file>assets/shaders/skinned_color.vert</file>
+        <file>assets/shaders/postprocesses/fxaa3_11.h</file>
+        <file>assets/shaders/postprocesses/tonemapping.fs</file>
+        <file>assets/shaders/postprocesses/aa.fs</file>
+        <file>assets/shaders/sprite.vert</file>
+        <file>assets/shaders/sprite.frag</file>
+        <file>assets/shaders/emitter.vert</file>
+        <file>assets/shaders/emitter.frag</file>
+        <file>assets/shaders/particle.vert</file>
+        <file>assets/shaders/particle.frag</file>
+    </qresource>
+</RCC>

@@ -11,6 +11,7 @@ MainWindow *UiManager::mainWindow = Q_NULLPTR;
 AnimationWidget *UiManager::animationWidget = Q_NULLPTR;
 SceneViewWidget *UiManager::sceneViewWidget = Q_NULLPTR;
 SceneHierarchyWidget *UiManager::sceneHierarchyWidget = Q_NULLPTR;
+SceneNodePropertiesWidget *UiManager::propertyWidget = Q_NULLPTR;
 
 QUndoStack *UiManager::undoStack = Q_NULLPTR;
 SceneMode UiManager::sceneMode = SceneMode::EditMode;
@@ -95,7 +96,12 @@ bool UiManager::isUndoStackDirty()
     return !UiManager::undoStack->isClean();
 }
 
-bool UiManager::clearUndoStack()
+bool UiManager::getUndoStackCount()
+{
+	return UiManager::undoStack->count();
+}
+
+void UiManager::clearUndoStack()
 {
     UiManager::undoStack->clear();
 }
