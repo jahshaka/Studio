@@ -27,7 +27,7 @@
 QSlider::sub-page {
 	border: 0px solid transparent;
 	height: 2px;
-	background: rgb(164, 192, 2);
+	background: #3498db;
 	margin: 2px 0;
 }
 
