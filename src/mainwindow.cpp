@@ -552,7 +552,14 @@ void MainWindow::switchSpace(WindowSpaces space)
 
         case WindowSpaces::EDITOR: {
             ui->stackedWidget->setCurrentIndex(1);
-            toggleWidgets(true);
+            
+			sceneHierarchyDock->setVisible(widgetStates[(int) Widget::HIERARCHY]);
+			sceneNodePropertiesDock->setVisible(widgetStates[(int)Widget::PROPERTIES]);
+			presetsDock->setVisible(widgetStates[(int)Widget::PRESETS]);
+			assetDock->setVisible(widgetStates[(int)Widget::ASSETS]);
+			animationDock->setVisible(widgetStates[(int)Widget::TIMELINE]);
+			playerControls->setVisible(false);
+
             toolBar->setVisible(true);
             worlds_menu->setStyleSheet(unselectedMenu);
             editor_menu->setStyleSheet(selectedMenu);
@@ -1616,6 +1623,18 @@ void MainWindow::setupViewPort()
             this,       SLOT(sceneNodeSelected(iris::SceneNodePtr)));
 
     connect(playSceneBtn, SIGNAL(clicked(bool)), SLOT(onPlaySceneButton()));
+
+	widgetStates = QVector<bool>(5);
+
+	//auto values = settings->getValue("widgets", { /* empty */ }).value<QVector<bool>>();
+
+	//if (!values.isEmpty()) {
+		widgetStates[static_cast<int>(Widget::HIERARCHY)]	= true;
+		widgetStates[static_cast<int>(Widget::PROPERTIES)]	= true;
+		widgetStates[static_cast<int>(Widget::ASSETS)]		= true;
+		widgetStates[static_cast<int>(Widget::TIMELINE)]	= true;
+		widgetStates[static_cast<int>(Widget::PRESETS)]		= true;
+	//}
 }
 
 void MainWindow::setupDesktop()
@@ -1813,47 +1832,52 @@ void MainWindow::toggleDockWidgets()
 
 	d->setStyleSheet(
 		"QDialog { border: 1px solid black; }"
-		"QPushButton { padding: 8px 36px; border-radius: 1px; }"
+		"QPushButton { padding: 8px 24px; border-radius: 1px; }"
 		"QPushButton[accessibleName=\"toggleAbles\"]:checked { background: #1E1E1E; }"
 		"QPushButton[accessibleName=\"toggleAbles\"] { background: #3E3E3E; }"
 	);
 
 	QVBoxLayout *dl = new QVBoxLayout;
-	dl->setContentsMargins(20, 16, 20, 16);
+	dl->setContentsMargins(20, 10, 20, 16);
 	d->setLayout(dl);
 
 	QPushButton *hierarchy = new QPushButton("Hierarchy");
 	hierarchy->setAccessibleName(QStringLiteral("toggleAbles"));
 	hierarchy->setCheckable(true);
-	hierarchy->setChecked(true);
+	hierarchy->setChecked(widgetStates[(int) Widget::HIERARCHY]);
 
 	QPushButton *properties = new QPushButton("Properties");
 	properties->setAccessibleName(QStringLiteral("toggleAbles"));
 	properties->setCheckable(true);
-	properties->setChecked(true);
+	properties->setChecked(widgetStates[(int) Widget::PROPERTIES]);
 
 	QPushButton *presets = new QPushButton("Presets");
 	presets->setAccessibleName(QStringLiteral("toggleAbles"));
 	presets->setCheckable(true);
-	presets->setChecked(true);
+	presets->setChecked(widgetStates[(int) Widget::PRESETS]);
 
 	QPushButton *timeline = new QPushButton("Timeline");
 	timeline->setAccessibleName(QStringLiteral("toggleAbles"));
 	timeline->setCheckable(true);
-	timeline->setChecked(true);
+	timeline->setChecked(widgetStates[(int) Widget::TIMELINE]);
 
-	QPushButton *assets = new QPushButton("Assets");
+	QPushButton *assets = new QPushButton("Assets Browser");
 	assets->setAccessibleName(QStringLiteral("toggleAbles"));
 	assets->setCheckable(true);
-	assets->setChecked(true);
+	assets->setChecked(widgetStates[(int) Widget::ASSETS]);
 
 	QPushButton *closeAll = new QPushButton("Close All");
 	closeAll->setCheckable(true);
-	closeAll->setChecked(true);
+	//closeAll->setChecked(true);
 
 	QPushButton *restoreAll = new QPushButton("Restore All");
 	restoreAll->setCheckable(true);
-	restoreAll->setChecked(true);
+	//restoreAll->setChecked(true);
+
+	QLabel *label = new QLabel("Toggle Widgets");
+	label->setAlignment(Qt::AlignCenter);
+	label->setContentsMargins(0, 0, 0, 6);
+	dl->addWidget(label);
 
 	dl->addWidget(hierarchy);
 	dl->addWidget(properties);
@@ -1861,31 +1885,80 @@ void MainWindow::toggleDockWidgets()
 	dl->addWidget(timeline);
 	dl->addWidget(assets);
 
-	dl->addWidget(closeAll);
-	dl->addWidget(restoreAll);
+	QPushButton *saveLayout = new QPushButton("Save");
+	
+	connect(saveLayout, &QPushButton::pressed, [=]() {
+		//widgetStates[(int) Widget::HIERARCHY]	= hierarchy->isChecked() || !sceneHierarchyDock->isVisible();
+		//widgetStates[(int) Widget::PROPERTIES]	= properties->isChecked() || !sceneNodePropertiesDock->isVisible();
+		//widgetStates[(int) Widget::ASSETS]		= assets->isChecked() || !assetDock->isVisible();
+		//widgetStates[(int) Widget::TIMELINE]	= timeline->isChecked() || !animationDock->isVisible();
+		//widgetStates[(int) Widget::PRESETS]		= presets->isChecked() || !presetsDock->isVisible();
+
+		//// saveState and saveGeometry don't seem to work if visibility is altered so do this instead
+		//settings->setValue("widgets", QVariant::fromValue(widgetStates));
+	});
+
+	QWidget *cw = new QWidget;
+	QHBoxLayout *cl = new QHBoxLayout;
+	cl->setMargin(0);
+	cw->setLayout(cl);
+	cl->addWidget(closeAll);
+	cl->addWidget(restoreAll);
+	//cl->addWidget(saveLayout);
+	dl->addWidget(cw);
 
 	connect(hierarchy, &QPushButton::toggled, [&](bool set) {
 		sceneHierarchyDock->setVisible(set);
+		widgetStates[(int)Widget::HIERARCHY] = set;
 	});
 
 	connect(properties, &QPushButton::toggled, [this](bool set) {
 		sceneNodePropertiesDock->setVisible(set);
+		widgetStates[(int)Widget::PROPERTIES] = set;
 	});
 
 	connect(presets, &QPushButton::toggled, [this](bool set) {
 		presetsDock->setVisible(set);
+		widgetStates[(int)Widget::PRESETS] = set;
 	});
 
 	connect(timeline, &QPushButton::toggled, [this](bool set) {
 		animationDock->setVisible(set);
+		widgetStates[(int)Widget::TIMELINE] = set;
 	});
 
 	connect(assets, &QPushButton::toggled, [this](bool set) {
 		assetDock->setVisible(set);
+		widgetStates[(int)Widget::ASSETS] = set;
 	});
 
-	connect(closeAll,	&QPushButton::pressed,	[this]() { toggleWidgets(false); });
-	connect(restoreAll, &QPushButton::pressed,	[this]() { toggleWidgets(true); });
+	connect(closeAll,	&QPushButton::pressed,	[&]() {
+		sceneHierarchyDock->close();
+		sceneNodePropertiesDock->close();
+		presetsDock->close();
+		assetDock->close();
+		animationDock->close();
+
+		hierarchy->setChecked(false);
+		properties->setChecked(false);
+		assets->setChecked(false);
+		timeline->setChecked(false);
+		presets->setChecked(false);
+	});
+
+	connect(restoreAll, &QPushButton::pressed,	[&]() {
+		sceneHierarchyDock->show();
+		sceneNodePropertiesDock->show();
+		presetsDock->show();
+		assetDock->show();
+		animationDock->show();
+
+		hierarchy->setChecked(true);
+		properties->setChecked(true);
+		assets->setChecked(true);
+		timeline->setChecked(true);
+		presets->setChecked(true);
+	});
 
 	d->exec();
 }
