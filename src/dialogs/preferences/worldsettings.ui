@@ -98,8 +98,14 @@ QDoubleSpinBox::down-button:pressed {
        <property name="decimals">
         <number>0</number>
        </property>
+       <property name="minimum">
+        <double>1.000000000000000</double>
+       </property>
        <property name="maximum">
-        <double>10.000000000000000</double>
+        <double>2.000000000000000</double>
+       </property>
+       <property name="singleStep">
+        <double>1.000000000000000</double>
        </property>
       </widget>
      </item>
