@@ -37,6 +37,10 @@ struct BlendState
         alphaDestBlend = destBlend;
     }
 
+	static BlendState createAlphaBlend();
+	static BlendState createOpaque();
+	static BlendState createAdditive();
+
     static BlendState AlphaBlend;
     static BlendState Opaque;
     static BlendState Additive;

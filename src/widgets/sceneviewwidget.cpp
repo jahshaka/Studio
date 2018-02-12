@@ -56,6 +56,7 @@ For more information see the LICENSE file
 #include "../editor/translationgizmo.h"
 #include "../editor/rotationgizmo.h"
 #include "../editor/scalegizmo.h"
+#include "../editor/outlinerenderer.h"
 
 #include "../core/keyboardstate.h"
 
@@ -375,6 +376,11 @@ void SceneViewWidget::renderGizmos(bool once)
 	}
 }
 
+void SceneViewWidget::renderSelectedNode(iris::SceneNodePtr selectedNode)
+{
+	outliner->renderOutline(renderer->getGraphicsDevice(), selectedNode, editorCam, qBound(1.f,(float)scene->outlineWidth,2.f), scene->outlineColor);
+}
+
 void SceneViewWidget::initializeGL()
 {
     QOpenGLWidget::initializeGL();
@@ -407,6 +413,9 @@ void SceneViewWidget::initializeGL()
 
     //thumbGen = new ThumbnialGenerator();
     thumbGen = ThumbnailGenerator::getSingleton();
+
+	outliner = new OutlinerRenderer();
+	outliner->loadAssets();
 
     timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(update()));
@@ -538,8 +547,9 @@ void SceneViewWidget::renderScene()
                 viewerQuad->draw();
             }
         }
-
-        this->renderGizmos();
+		this->renderGizmos();
+		this->renderSelectedNode(selectedNode);
+        
     }
 
     // render fps
