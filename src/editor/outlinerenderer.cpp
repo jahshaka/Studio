@@ -10,17 +10,17 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "outlinerenderer.h"
-#include "irisgl\src\graphics\graphicsdevice.h"
-#include "irisgl\src\graphics\utils\fullscreenquad.h"
-#include "irisgl\src\graphics\graphicshelper.h"
-#include "irisgl\src\graphics\skeleton.h"
-#include "irisgl\src\graphics\renderdata.h"
-#include "irisgl\src\graphics\utils\fullscreenquad.h"
+#include "irisgl/src/graphics/graphicsdevice.h"
+#include "irisgl/src/graphics/utils/fullscreenquad.h"
+#include "irisgl/src/graphics/graphicshelper.h"
+#include "irisgl/src/graphics/skeleton.h"
+#include "irisgl/src/graphics/renderdata.h"
+#include "irisgl/src/graphics/utils/fullscreenquad.h"
 
-#include "irisgl\src\scenegraph\scenenode.h"
-#include "irisgl\src\scenegraph\meshnode.h"
-#include "irisgl\src\scenegraph\cameranode.h"
-#include "irisgl\src\scenegraph\particlesystemnode.h"
+#include "irisgl/src/scenegraph/scenenode.h"
+#include "irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/src/scenegraph/cameranode.h"
+#include "irisgl/src/scenegraph/particlesystemnode.h"
 
 #include <QOpenGLShaderProgram>
 
