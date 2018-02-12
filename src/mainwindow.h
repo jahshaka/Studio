@@ -90,6 +90,15 @@ enum WindowSpaces {
     ASSETS
 };
 
+enum class Widget
+{
+	HIERARCHY,
+	PROPERTIES,
+	ASSETS,
+	TIMELINE,
+	PRESETS
+};
+
 class Database;
 class MainWindow : public QMainWindow
 {
@@ -352,6 +361,8 @@ private:
     QToolBar *toolBar;
     AssetView *_assetView;
 	QAction *actionSaveScene;
+
+	QVector<bool> widgetStates;	// use the order in the enum
 
     WindowSpaces currentSpace;
 };
