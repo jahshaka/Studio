@@ -60,12 +60,12 @@ If you will be cloning the repo you can do both steps in one command by using `g
 
 Again, if you want to build the latest code, you might want to do a `git checkout dev` at this point.
 
-If using Qt Creator (on any platform)
+**If using Qt Creator (on any platform)**
 - Make sure Cmake has been installed and properly added to your path.
 - Open the `CMakeLists.txt` file (it will run and configure the default build target).
 - Build the application.
 
-If using MSVC (recommended for x64 builds)
+**If using MSVC (recommended for x64 builds)**
 - There are several ways to go about this, the easiest is to use the `cmake-gui` tool.
 - Point to the folder where you have the source and a folder where you want to build by using the Browse Source and Browse Build buttons respectively.
 - Add Qt to cmake's prefix path by pressing Add Entry, for name enter `CMAKE_PREFIX_PATH`, type should be set to `PATH` and the value should point to where you installed Qt and the msvc tools for example `C:\Qt\5.9.2\msvc2017_64`.
