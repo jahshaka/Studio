@@ -92,7 +92,7 @@ void CrashReportDialog::onSend()
 #elif defined(Q_OS_LINUX)
 
     QNetworkAccessManager* manager = new QNetworkAccessManager();
-    QUrl url(SERVER_URL);
+    QUrl url(QString::fromStdWString(SERVER_URL));
     QUrlQuery query;
 
 

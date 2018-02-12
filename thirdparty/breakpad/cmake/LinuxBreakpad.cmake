@@ -22,3 +22,6 @@ set(BREAKPAD_SRCS ${BREAKPAD_SRCS}
     breakpad/src/client/linux/handler/minidump_descriptor.cc 
     breakpad/src/client/linux/handler/exception_handler.cc 
 )
+
+find_package (Threads REQUIRED)
+set(BREAKPAD_LIBS ${BREAKPAD_LIBS} ${CMAKE_THREAD_LIBS_INIT})

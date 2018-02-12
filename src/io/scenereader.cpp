@@ -26,7 +26,7 @@ For more information see the LICENSE file
 #include "../constants.h"
 
 #include "../editor/editordata.h"
-#include "../materials/JahDefaultMaterial.h"
+#include "../materials/jahdefaultmaterial.h"
 
 #include "../irisgl/src/scenegraph/scene.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
