@@ -409,13 +409,13 @@ void SceneViewWidget::initializeGL()
     screenshotTex = iris::Texture2D::create(500, 500);
     screenshotRT->addTexture(screenshotTex);
 
+	outliner = new OutlinerRenderer();
+	outliner->loadAssets();
+
     emit initializeGraphics(this, this);
 
     //thumbGen = new ThumbnialGenerator();
     thumbGen = ThumbnailGenerator::getSingleton();
-
-	outliner = new OutlinerRenderer();
-	outliner->loadAssets();
 
     timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(update()));
