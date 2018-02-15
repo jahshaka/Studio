@@ -547,8 +547,9 @@ void SceneViewWidget::renderScene()
                 viewerQuad->draw();
             }
         }
-		this->renderGizmos();
+		
 		this->renderSelectedNode(selectedNode);
+		this->renderGizmos();
         
     }
 
