@@ -16,7 +16,7 @@
 
 Jahshaka brings you the future of immersive digital content creation with the leading free and open source digital content creation suite.
 
-![](https://i.imgur.com/r6S7lHP.png)
+![](https://i.imgur.com/C6Cu8AY.jpg)
 
 ## Features:
  - View scenes in virtual reality via the Oculus Rift
