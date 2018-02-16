@@ -141,7 +141,7 @@ public:
     */
    virtual SceneNodePtr createDuplicate(){
        //qt_assert((QString("This node isnt duplicable: ") + name).toStdString().c_str(),__FILE__,__LINE__);
-	   return SceneNodePtr();
+	   return SceneNodePtr(new SceneNode());
    }
 
    SceneNodePtr duplicate();
