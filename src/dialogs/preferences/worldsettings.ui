@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>634</width>
-    <height>221</height>
+    <width>705</width>
+    <height>252</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -244,6 +244,37 @@ QDoubleSpinBox::down-button:pressed {
     </layout>
    </item>
    <item row="4" column="0">
+    <layout class="QHBoxLayout" name="horizontalLayout_7">
+     <item>
+      <widget class="QLabel" name="label_8">
+       <property name="text">
+        <string>Open Imported Worlds in Player</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="openInPlayer">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer_4">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item row="5" column="0">
     <layout class="QHBoxLayout" name="horizontalLayout_4">
      <item>
       <widget class="QLabel" name="label_5">
@@ -257,7 +288,7 @@ QDoubleSpinBox::down-button:pressed {
      </item>
     </layout>
    </item>
-   <item row="5" column="0">
+   <item row="6" column="0">
     <layout class="QHBoxLayout" name="horizontalLayout_5">
      <item>
       <widget class="QLabel" name="label_6">

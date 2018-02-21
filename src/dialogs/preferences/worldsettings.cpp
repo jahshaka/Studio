@@ -31,16 +31,12 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 	ui->author->setText(db->getAuthorName());
 
     connect(ui->browseProject, SIGNAL(pressed()), SLOT(changeDefaultDirectory()));
-
     connect(ui->outlineWidth, SIGNAL(valueChanged(double)), SLOT(outlineWidthChanged(double)));
-
     connect(ui->outlineColor, SIGNAL(onColorChanged(QColor)), SLOT(outlineColorChanged(QColor)));
-
     connect(ui->projectDefault, SIGNAL(textChanged(QString)), SLOT(projectDirectoryChanged(QString)));
-
     connect(ui->showFPS, SIGNAL(toggled(bool)), SLOT(showFpsChanged(bool)));
-
 	connect(ui->autoSave, SIGNAL(toggled(bool)), SLOT(enableAutoSave(bool)));
+	connect(ui->openInPlayer, SIGNAL(toggled(bool)), SLOT(enableOpenInPlayer(bool)));
 
     setupDirectoryDefaults();
     setupOutline();
@@ -50,6 +46,8 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 
 	autoSave = settings->getValue("auto_save", true).toBool();
 	ui->autoSave->setChecked(autoSave);
+
+	openInPlayer = settings->getValue("open_in_player", false).toBool();
 }
 
 void WorldSettings::setupOutline()
@@ -84,13 +82,17 @@ void WorldSettings::outlineColorChanged(QColor color)
 void WorldSettings::showFpsChanged(bool show)
 {
     showFps = show;
-    if (UiManager::sceneViewWidget)
-        UiManager::sceneViewWidget->setShowFps(show);
+    if (UiManager::sceneViewWidget) UiManager::sceneViewWidget->setShowFps(show);
 }
 
 void WorldSettings::enableAutoSave(bool state)
 {
 	settings->setValue("auto_save", autoSave = state);
+}
+
+void WorldSettings::enableOpenInPlayer(bool state)
+{
+	settings->setValue("open_in_player", openInPlayer = state);
 }
 
 void WorldSettings::projectDirectoryChanged(QString path)
