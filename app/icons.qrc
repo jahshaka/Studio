@@ -80,6 +80,7 @@
         <file>icons/eye_closed.png</file>
         <file>icons/eye_open.png</file>
         <file>icons/settings.png</file>
+        <file>icons/settings_hover.png</file>
         <file>icons/save.png</file>
         <file>icons/export.png</file>
         <file>icons/tab.png</file>
