@@ -337,7 +337,7 @@ void ProjectManager::finalizeProjectAssetLoad()
 
 void ProjectManager::finishedFutureWatcher()
 {
-    emit fileToOpen(openInPlayMode);
+    emit fileToOpen(false);
     progressDialog->close();
 }
 
