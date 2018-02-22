@@ -291,6 +291,7 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 			mat->setValue("ambientColor",	QColor(130, 130, 130));
 			mat->setValue("emissionColor",	data.emissionColor);
 			mat->setValue("shininess",		data.shininess);
+			mat->setValue("useAlpha",		true);
 
 			if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
 				mat->setValue("diffuseTexture", data.diffuseTexture);
@@ -329,6 +330,7 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 			mat->setValue("ambientColor",	cdata.ambientColor);
 			mat->setValue("emissionColor",	cdata.emissionColor);
 			mat->setValue("shininess",		cdata.shininess);
+			mat->setValue("useAlpha",		true);
 
 			auto libraryTextureIsValid = [](const QString &path, const QString texturePath) {
 				return (
