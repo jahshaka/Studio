@@ -1023,15 +1023,32 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
 	iris::SceneSource *ssource = new iris::SceneSource();
 
-	auto material_guid = db->getDependencyByType((int) AssetMetaType::Material, QFileInfo(filename).baseName());
-	auto material = db->getMaterialGlobal(material_guid);
+	//auto material_guid = db->getDependencyByType((int) AssetMetaType::Material, QFileInfo(filename).baseName());
+	//auto material = db->getMaterialGlobal(material_guid);
+	auto material = db->getAssetMaterialGlobal(QFileInfo(filename).baseName());
 	auto materialObj = QJsonDocument::fromBinaryData(material);
 
 	QJsonObject assetMaterial = materialObj.object();
 
+	int iter = 0;
+	std::function<void (QJsonObject, QJsonArray&)> extractMeshMaterial = [&](QJsonObject node, QJsonArray &materialList) -> void {
+		if (!node["material"].toObject().isEmpty()) materialList.append(node["material"].toObject());	
+
+		QJsonArray children = node["children"].toArray();
+		if (!children.isEmpty()) {
+			for (auto &child : children) {
+				extractMeshMaterial(child.toObject(), materialList);
+				iter++;
+			}
+		}
+	};
+
+	QJsonArray materialList;
+	extractMeshMaterial(assetMaterial, materialList);
+
 	this->sceneView->makeCurrent();
 	int iteration = 0;
-	auto node = iris::MeshNode::loadAsSceneFragment(filename, [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+	auto node = iris::MeshNode::loadAsSceneFragment(filename, [&](iris::MeshPtr mesh, iris::MeshMaterialData &data)
 	{
 		auto mat = iris::CustomMaterial::create();
 
@@ -1042,7 +1059,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
 		iris::MeshMaterialData cdata;
 
-		auto matinfo = assetMaterial[QString::number(iteration)].toObject();
+		auto matinfo = materialList[iteration].toObject();
 
 		QColor col;
 		col.setNamedColor(matinfo["ambientColor"].toString());

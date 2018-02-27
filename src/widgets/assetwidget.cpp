@@ -599,7 +599,7 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const Q
 				pixmap.save(&buffer, "PNG");
 
 				// the material is generated in the thumbnail handler and passed back in the result
-				db->insertProjectAssetGlobal(file.fileName(), (int) ModelTypes::Object, bytes, QByteArray(), QByteArray(), guid);
+				db->insertProjectAssetGlobal(file.fileName(), (int) ModelTypes::Object, bytes, QByteArray(), QByteArray(), QByteArray(), guid);
 				Globals::assetNames.insert(guid, QFileInfo(file.fileName()).baseName());
 
 				// guid filename
@@ -724,9 +724,10 @@ void AssetWidget::onThumbnailResult(ThumbnailResult* result)
 
 			// todo? maybe update the asset thumbnail in this function as well?
             db->insertThumbnailGlobal(Globals::project->getProjectGuid(), asset->fileName, bytes, asset_guid);
-			auto material_id = db->insertProjectMaterialGlobal(QString(), asset_guid, QJsonDocument(result->material).toBinaryData());
-			db->insertGlobalDependency((int) AssetMetaType::Material, asset_guid, material_id);
+			//auto material_id = db->insertProjectMaterialGlobal(QString(), asset_guid, QJsonDocument(result->material).toBinaryData());
+			//db->insertGlobalDependency((int) AssetMetaType::Material, asset_guid, material_id);
 			db->updateAssetThumbnail(asset_guid, bytes);
+			db->updateAssetAsset(asset_guid, QJsonDocument(result->material).toBinaryData());
 
             // find item and update its icon
             auto items = ui->assetView->findItems(asset->fileName, Qt::MatchExactly);

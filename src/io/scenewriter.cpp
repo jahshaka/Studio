@@ -169,7 +169,7 @@ void SceneWriter::writeEditorData(QJsonObject& projectObj,EditorData* editorData
     projectObj["editor"] = editorObj;
 }
 
-void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sceneNode)
+void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr sceneNode, bool relative)
 {
     sceneNodeObj["name"] = sceneNode->getName();
     sceneNodeObj["attached"] = sceneNode->isAttached();
@@ -184,7 +184,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sc
     //todo: write data specific to node type
     switch (sceneNode->sceneNodeType) {
         case iris::SceneNodeType::Mesh:
-            writeMeshData(sceneNodeObj, sceneNode.staticCast<iris::MeshNode>());
+            writeMeshData(sceneNodeObj, sceneNode.staticCast<iris::MeshNode>(), relative);
         break;
         case iris::SceneNodeType::Light:
             writeLightData(sceneNodeObj, sceneNode.staticCast<iris::LightNode>());
@@ -203,7 +203,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sc
     QJsonArray childrenArray;
     for (auto childNode : sceneNode->children) {
         QJsonObject childNodeObj;
-        writeSceneNode(childNodeObj, childNode);
+        writeSceneNode(childNodeObj, childNode, relative);
         childrenArray.append(childNodeObj);
     }
 
@@ -262,10 +262,10 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
                     keyObj["leftSlope"] = key->leftSlope;
                     keyObj["rightSlope"] = key->rightSlope;
 
-                    keyObj["leftTangentType"] = this->getKeyTangentTypeName(key->leftTangent);
-                    keyObj["rightTangentType"] = this->getKeyTangentTypeName(key->rightTangent);
+                    keyObj["leftTangentType"] = getKeyTangentTypeName(key->leftTangent);
+                    keyObj["rightTangentType"] = getKeyTangentTypeName(key->rightTangent);
 
-                    keyObj["handleMode"] = this->getKeyHandleModeName(key->handleMode);
+                    keyObj["handleMode"] = getKeyHandleModeName(key->handleMode);
 
                     keysListObj.append(keyObj);
                 }
@@ -293,11 +293,11 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
     sceneNodeObj["animations"] = animListObj;
 }
 
-void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode)
+void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode, bool relative)
 {
     // TODO: handle generated meshes properly
     // ???? sure...
-    sceneNodeObject["mesh"] = getRelativePath(meshNode->meshPath);
+    sceneNodeObject["mesh"] = relative ? getRelativePath(meshNode->meshPath) : QFileInfo(meshNode->meshPath).fileName();
     sceneNodeObject["meshIndex"] = meshNode->meshIndex;
     sceneNodeObject["pickable"] = meshNode->pickable;
 
@@ -320,7 +320,7 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
     // todo: check if material actually exists
     auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
     QJsonObject matObj;
-    writeSceneNodeMaterial(matObj, mat);
+    writeSceneNodeMaterial(matObj, mat, relative);
     sceneNodeObject["material"] = matObj;
 }
 
@@ -345,7 +345,7 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
 	sceneNodeObject["visible"]				= node->isVisible();
 }
 
-void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat)
+void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat, bool relative)
 {
     matObj["name"] = mat->getName();
 
@@ -363,7 +363,7 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMateri
         }
 
         if (prop->type == iris::PropertyType::Texture) {
-            matObj[prop->name] = getRelativePath(prop->getValue().toString());
+			matObj[prop->name] = relative ? getRelativePath(prop->getValue().toString()) : QFileInfo(prop->getValue().toString()).fileName();
         }
     }
 }

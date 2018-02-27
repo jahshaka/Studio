@@ -12,6 +12,8 @@
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/materials/custommaterial.h"
 
+#include "io/scenewriter.h"
+
 #include <QMutex>
 #include <QMutexLocker>
 
@@ -178,7 +180,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
     {
 		ssource = new iris::SceneSource();
         // load mesh as scene
-		int iteration = 0;
+		//int iteration = 0;
         sceneNode = iris::MeshNode::loadAsSceneFragment(request.path, [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
         {
             auto mat = iris::CustomMaterial::create();
@@ -187,11 +189,11 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
             else
                 mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
-            mat->setValue("diffuseColor", data.diffuseColor);
-            mat->setValue("specularColor", data.specularColor);
-            mat->setValue("ambientColor", QColor(110, 110, 110));
-            mat->setValue("emissionColor", data.emissionColor);
-            mat->setValue("shininess", data.shininess);
+            mat->setValue("diffuseColor",	data.diffuseColor);
+            mat->setValue("specularColor",	data.specularColor);
+            mat->setValue("ambientColor",	QColor(110, 110, 110));	// assume this color, some formats set this to pitch black
+            mat->setValue("emissionColor",	data.emissionColor);
+            mat->setValue("shininess",		data.shininess);
 
             if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
                 mat->setValue("diffuseTexture", data.diffuseTexture);
@@ -202,11 +204,11 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
             if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
                 mat->setValue("normalTexture", data.normalTexture);
 
-			QJsonObject matObj;
-			createMaterial(matObj, mat);
-			assetMaterial.insert(QString::number(iteration), matObj);
+			//QJsonObject matObj;
+			//createMaterial(matObj, mat);
+			//assetMaterial.insert(QString::number(iteration), matObj);
 
-			iteration++;
+			//iteration++;
 
             return mat;
         }, ssource);
@@ -219,6 +221,11 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
         QList<iris::BoundingSphere> spheres;
         getBoundingSpheres(sceneNode, spheres);
         iris::BoundingSphere bound;
+
+		//QJsonObject node;
+		SceneWriter::writeSceneNode(assetMaterial, sceneNode, false);
+		//assetMaterial = node;
+		//qDebug() << assetMaterial;
 
         //merge bounding spheres
         if (spheres.count() == 0) {

@@ -8,6 +8,7 @@
 #include "../constants.h"
 #include "../globals.h"
 #include "../core/keyboardstate.h"
+#include "../io/scenewriter.h"
 
 #include <QApplication>
 #include <QFileDialog>
@@ -276,6 +277,23 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 		assetMaterial = QJsonObject();
 	}
 
+	QJsonArray materialList;
+
+	int iter = 0;
+	std::function<void(QJsonObject, QJsonArray&)> extractMeshMaterial = [&](QJsonObject node, QJsonArray &materialList) -> void {
+		if (!node["material"].toObject().isEmpty()) materialList.append(node["material"].toObject());
+
+		QJsonArray children = node["children"].toArray();
+		if (!children.isEmpty()) {
+			for (auto &child : children) {
+				extractMeshMaterial(child.toObject(), materialList);
+				iter++;
+			}
+		}
+	};
+
+	extractMeshMaterial(assetMaterial, materialList);
+
 	int iteration = 0;
 	auto node = iris::MeshNode::loadAsSceneFragment(filename, [&, this](iris::MeshPtr mesh, iris::MeshMaterialData& data) {
 		auto mat = iris::CustomMaterial::create();
@@ -304,14 +322,13 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 				mat->setValue("normalIntensity", 1.f);
 			}
 
-			QJsonObject matObj;
-			createMaterial(matObj, mat);
-			assetMaterial.insert(QString::number(iteration), matObj);
+			//QJsonObject matObj;
+			//createMaterial(matObj, mat);
+			//assetMaterial.insert(QString::number(iteration), matObj);
 		}
 		else {
 			iris::MeshMaterialData cdata;
-
-			auto matinfo = assetMaterial[QString::number(iteration)].toObject();
+			auto matinfo = materialList[iteration].toObject();
 
 			QColor col;
 			col.setNamedColor(matinfo["ambientColor"].toString());
@@ -356,6 +373,10 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 		mat->renderStates.rasterState = iris::RasterizerState(iris::CullMode::None, GL_FILL);
 		return mat;
 	}, ssource, this);
+
+	if (firstAdd) {
+		SceneWriter::writeSceneNode(assetMaterial, node, false);
+	}
 
 	// model file may be invalid so null gets returned
 	if (!node) return;

@@ -214,15 +214,16 @@ QString Database::insertAssetGlobal(const QString &assetName,
 	const QByteArray &thumbnail,
 	const QByteArray &properties,
 	const QByteArray &tags,
+	const QByteArray &asset,
 	const QString &author)
 {
 	QSqlQuery query;
 	auto guid = GUIDManager::generateGUID();
 	query.prepare("INSERT INTO assets"
 		" (name, thumbnail, type, collection, version, date_created,"
-		" last_updated, guid, properties, author, license, tags)"
+		" last_updated, guid, properties, author, asset, license, tags)"
 		" VALUES (:name, :thumbnail, :type, 0, :version, datetime(),"
-		" datetime(), :guid, :properties, :author, :license, :tags)");
+		" datetime(), :guid, :properties, :author, :asset, :license, :tags)");
 
 	QFileInfo assetInfo(assetName);
 
@@ -233,6 +234,7 @@ QString Database::insertAssetGlobal(const QString &assetName,
 	query.bindValue(":guid", guid);
 	query.bindValue(":properties", properties);
 	query.bindValue(":author", author);// getAuthorName());
+	query.bindValue(":asset", asset);
 	query.bindValue(":license", "CCBY");
 	query.bindValue(":tags", tags);
 
@@ -469,6 +471,15 @@ void Database::updateAssetThumbnail(const QString guid, const QByteArray &thumbn
 	executeAndCheckQuery(query, "updateAssetThumbnail");
 }
 
+void Database::updateAssetAsset(const QString guid, const QByteArray &asset)
+{
+	QSqlQuery query;
+	query.prepare("UPDATE assets SET asset = ? WHERE guid = ?");
+	query.addBindValue(asset);
+	query.addBindValue(guid);
+	executeAndCheckQuery(query, "updateAssetAsset");
+}
+
 void Database::insertCollectionGlobal(const QString &collectionName)
 {
     QSqlQuery query;
@@ -496,14 +507,15 @@ void Database::insertProjectAssetGlobal(const QString &assetName,
 										const QByteArray &thumbnail,
 										const QByteArray &properties,
 										const QByteArray &tags,
+										const QByteArray &asset,
 								        const QString &guid)
 {
 	QSqlQuery query;
 	query.prepare(
 		"INSERT INTO assets (name, thumbnail, type, collection, version, date_created, "
-		"last_updated, world_guid, guid, properties, author, license, tags) "
+		"last_updated, world_guid, guid, properties, author, asset, license, tags) "
 		"VALUES (:name, :thumbnail, :type, 0, :version, datetime(), "
-		"datetime(), :world_guid, :guid, :properties, :author, :license, :tags)");
+		"datetime(), :world_guid, :guid, :properties, :author, :asset, :license, :tags)");
 
 	QFileInfo assetInfo(assetName);
 
@@ -516,6 +528,7 @@ void Database::insertProjectAssetGlobal(const QString &assetName,
 	query.bindValue(":properties", properties);
 
 	query.bindValue(":author", "");// getAuthorName());
+	query.bindValue(":asset", asset);// getAuthorName());
 	query.bindValue(":license", "CCBY");
 	query.bindValue(":tags", tags);
 
@@ -557,6 +570,24 @@ void Database::insertThumbnailGlobal(const QString &world_guid,
 }
 
 QByteArray Database::getMaterialGlobal(const QString &guid) const
+{
+	QSqlQuery query;
+	query.prepare("SELECT asset FROM assets WHERE guid = ?");
+	query.addBindValue(guid);
+
+	if (query.exec()) {
+		if (query.first()) {
+			return query.value(0).toByteArray();
+		}
+	}
+	else {
+		irisLog("There was an error getting the material blob! " + query.lastError().text());
+	}
+
+	return QByteArray();
+}
+
+QByteArray Database::getAssetMaterialGlobal(const QString &guid) const
 {
 	QSqlQuery query;
 	query.prepare("SELECT asset FROM assets WHERE guid = ?");

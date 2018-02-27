@@ -38,8 +38,9 @@ public:
     bool deleteAsset(const QString &guid);
     void renameProject(const QString&);
 	void updateAssetThumbnail(const QString guid, const QByteArray &thumbnail);
-	QString insertAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties, const QByteArray &tags, const QString &author = QString());
-	void insertProjectAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties, const QByteArray &tags, const QString &guid);
+	void updateAssetAsset(const QString guid, const QByteArray &asset);
+	QString insertAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties, const QByteArray &tags, const QByteArray &asset, const QString &author = QString());
+	void insertProjectAssetGlobal(const QString&, int type, const QByteArray &thumbnail, const QByteArray &properties, const QByteArray &tags, const QByteArray &asset, const QString &guid);
 	QString insertMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material);
 	QString insertProjectMaterialGlobal(const QString &materialName, const QString &asset_guid, const QByteArray &material);
     void insertSceneGlobal(const QString &world_guid, const QByteArray &sceneBlob, const QByteArray &thumb);
@@ -50,6 +51,7 @@ public:
                                const QByteArray &thumbnail,
 							   const QString &thumbnail_guid);
 	QByteArray getMaterialGlobal(const QString &guid) const;
+	QByteArray getAssetMaterialGlobal(const QString &guid) const;
     bool hasCachedThumbnail(const QString& name);
 	QVector<AssetData> fetchThumbnails();
     QVector<CollectionData> fetchCollections();

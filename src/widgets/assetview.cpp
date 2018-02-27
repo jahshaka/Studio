@@ -661,8 +661,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 			tagModelField->setText(tags);
 
 			// get material 
-			auto material_guid = db->getDependencyByType((int)AssetMetaType::Material, gridItem->metadata["guid"].toString());
-			auto material = db->getMaterialGlobal(material_guid);
+			//auto material_guid = db->getDependencyByType((int)AssetMetaType::Material, gridItem->metadata["guid"].toString());
+			auto material = db->getAssetMaterialGlobal(gridItem->metadata["guid"].toString());
 			auto materialObj = QJsonDocument::fromBinaryData(material);
 
             auto assetPath = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DataLocation),
@@ -977,11 +977,11 @@ void AssetView::addToLibrary(bool jfx)
 		QString guid;
 		if (jfx) {
 			guid = db->insertAssetGlobal(QFileInfo(filename).fileName(),
-				static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData(), "JahFX");
+				static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData(), QJsonDocument(viewer->getMaterial()).toBinaryData(), "JahFX");
 		}
 		else {
 			guid = db->insertAssetGlobal(QFileInfo(filename).fileName(),
-				static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData());
+				static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData(), QJsonDocument(viewer->getMaterial()).toBinaryData());
 		}
 		object["guid"] = guid;
 		object["type"] = (int) AssetMetaType::Object; // model?
@@ -1008,8 +1008,8 @@ void AssetView::addToLibrary(bool jfx)
 
 		copyTextures(guid);
 
-		auto material_guid = db->insertMaterialGlobal(QFileInfo(filename).baseName() + "_material", guid, QJsonDocument(viewer->getMaterial()).toBinaryData());
-		db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), guid, material_guid);
+		//auto material_guid = db->insertMaterialGlobal(QFileInfo(filename).baseName() + "_material", guid, QJsonDocument(viewer->getMaterial()).toBinaryData());
+		//db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), guid, material_guid);
 
 		auto gridItem = new AssetGridItem(object, thumbnail, viewer->getSceneProperties(), tags);
 
@@ -1155,18 +1155,23 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 		buffer.open(QIODevice::WriteOnly);
 		item->pixmap.save(&buffer, "PNG");
 
+		auto material = db->getAssetMaterialGlobal(item->metadata["guid"].toString());
+
+		//db->insertProjectAssetGlobal(
+		//	item->metadata["name"].toString() + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix(),
+		//	(int)ModelTypes::Object, bytes, QByteArray(), QByteArray(), material, new_guid
+		//);
 		db->insertProjectAssetGlobal(
-			item->metadata["name"].toString() + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix(),
-			(int)ModelTypes::Object, bytes, QByteArray(), QByteArray(), new_guid
+			item->metadata["name"].toString(),
+			(int)ModelTypes::Object, bytes, QByteArray(), QByteArray(), material, new_guid
 		);
 		Globals::assetNames.insert(new_guid, QFileInfo(item->metadata["name"].toString()).baseName());
 
 		// get material 
-		auto material_guid = db->getDependencyByType((int)AssetMetaType::Material, item->metadata["guid"].toString());
-		auto material = db->getMaterialGlobal(material_guid);
+		//auto material_guid = db->getDependencyByType((int)AssetMetaType::Material, item->metadata["guid"].toString());
 
-		auto material_id = db->insertProjectMaterialGlobal(QFileInfo(item->metadata["name"].toString()).baseName() + "_material", new_guid, material);
-		db->insertGlobalDependency((int)AssetMetaType::Material, new_guid, material_id);
+		//auto material_id = db->insertProjectMaterialGlobal(QFileInfo(item->metadata["name"].toString()).baseName() + "_material", new_guid, material);
+		//db->insertGlobalDependency((int)AssetMetaType::Material, new_guid, material_id);
 
 		QString basePath = QDir(QDir(pDir).filePath(assetFolder)).filePath(new_guid);
 		bool renameModel = QFile::rename(
