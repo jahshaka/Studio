@@ -95,7 +95,7 @@ QMatrix4x4 Gizmo::getTransform()
 		QMatrix4x4 trans;
 		trans.setToIdentity();
 		trans.translate(selectedNode->getGlobalPosition());
-		trans.rotate(selectedNode->getGlobalRotation());
+		trans.rotate(selectedNode->getGlobalRotation().normalized());
 		return trans;
 	}
 }
