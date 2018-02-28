@@ -2,7 +2,7 @@
     "name": "Glass",
     "preview": false,
 
-    "blendMode"     : "normal",
+    "blendMode"     : "alphablend",
     "renderLayer"   : "transparent",
 
     "uniforms": [
