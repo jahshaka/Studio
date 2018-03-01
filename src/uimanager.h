@@ -9,6 +9,11 @@ class SceneViewWidget;
 class SceneHierarchyWidget;
 class SceneNodePropertiesWidget;
 
+/*
+Tied directly to the WindowSpaces enum
+The sceneview widget is shared between the Editor and Player tabs
+This enum distinguishes between which of each tab is active
+*/
 enum class SceneMode
 {
     EditMode,

@@ -23,6 +23,8 @@ For more information see the LICENSE file
 #include "../core/project.h"
 #include "../irisgl/src/irisglfwd.h"
 #include "../irisgl/src/math/intersectionhelper.h"
+#include "uimanager.h"
+#include "../mainwindow.h"
 
 namespace iris
 {
@@ -148,6 +150,8 @@ public:
     void setEditorData(EditorData* data);
     EditorData* getEditorData();
 
+	void setWindowSpace(WindowSpaces windowSpace);
+
     void startPlayingScene();
     void pausePlayingScene();
     void stopPlayingScene();
@@ -175,6 +179,8 @@ public:
 
     void setShowFps(bool value);
 	void renderSelectedNode(iris::SceneNodePtr selectedNode);
+
+	void setSceneMode(SceneMode sceneMode);
 
     void cleanup();
 
@@ -260,6 +266,11 @@ private:
     void initLightAssets();
     iris::MeshPtr createDirLightMesh(float radius = 1.0);
     void addLightShapesToScene();
+
+	WindowSpaces windowSpace;
+	bool displayGizmos;
+	bool displayLightIcons;
+	bool displaySelectionOutline;
 
 signals:
     void addDroppedMesh(QString, bool, QVector3D, QString);

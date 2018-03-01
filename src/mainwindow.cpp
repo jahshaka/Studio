@@ -510,6 +510,11 @@ void MainWindow::setupUndoRedo()
     ui->actionEditRedo->setShortcuts(QKeySequence::Redo);
 }
 
+WindowSpaces MainWindow::getWindowSpace()
+{
+	return currentSpace;
+}
+
 void MainWindow::switchSpace(WindowSpaces space)
 {
 	const QString disabledMenu   = "color: #444; border-color: #111";
@@ -573,6 +578,7 @@ void MainWindow::switchSpace(WindowSpaces space)
             //ui->assets_menu->setDisabled(false);
             //ui->assets_menu->setCursor(Qt::PointingHandCursor);
 
+			this->sceneView->setWindowSpace(space);
             playSceneBtn->show();
             this->enterEditMode();
             UiManager::sceneMode = SceneMode::EditMode;
@@ -597,6 +603,7 @@ void MainWindow::switchSpace(WindowSpaces space)
             //ui->assets_menu->setDisabled(false);
             //ui->assets_menu->setCursor(Qt::PointingHandCursor);
 
+			this->sceneView->setWindowSpace(space);
             UiManager::sceneMode = SceneMode::PlayMode;
             playSceneBtn->hide();
             this->enterPlayMode();

@@ -67,6 +67,7 @@ For more information see the LICENSE file
 #include "../editor/thumbnailgenerator.h"
 #include "../core/settingsmanager.h"
 #include "../uimanager.h"
+#include "../mainwindow.h"
 
 void SceneViewWidget::setShowFps(bool value)
 {
@@ -378,7 +379,22 @@ void SceneViewWidget::renderGizmos(bool once)
 
 void SceneViewWidget::renderSelectedNode(iris::SceneNodePtr selectedNode)
 {
+	if (viewportMode != ViewportMode::Editor || UiManager::sceneMode != SceneMode::EditMode)
+		return;
 	outliner->renderOutline(renderer->getGraphicsDevice(), selectedNode, editorCam, qBound(1.f,(float)scene->outlineWidth,2.f), scene->outlineColor);
+}
+
+void SceneViewWidget::setSceneMode(SceneMode sceneMode)
+{
+	// stop animation
+	if (sceneMode == SceneMode::EditMode)
+	{
+
+	}
+	else
+	{
+
+	}
 }
 
 void SceneViewWidget::initializeGL()
@@ -698,7 +714,7 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
                 gizmo->startDragging(rayPos, rayDir);
             }
 
-            // if we don't have a selected node prioritize object picking
+            // if we don't have a selected node, prioritize object picking
             if (selectedNode.isNull()) {
                 this->doObjectPicking(e->localPos(), lastSelected);
             }
@@ -1120,6 +1136,25 @@ EditorData* SceneViewWidget::getEditorData()
     data->showLightWires = showLightWires;
 
     return data;
+}
+
+void SceneViewWidget::setWindowSpace(WindowSpaces windowSpace)
+{
+	this->windowSpace = windowSpace;
+
+	switch (windowSpace)
+	{
+	case WindowSpaces::EDITOR:
+		displayGizmos = true;
+		displayLightIcons = true;
+		displaySelectionOutline = true;
+		break;
+	case WindowSpaces::PLAYER:
+		displayGizmos = false;
+		displayLightIcons = false;
+		displaySelectionOutline = false;
+		break;
+	}
 }
 
 void SceneViewWidget::startPlayingScene()

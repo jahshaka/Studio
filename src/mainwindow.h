@@ -116,6 +116,7 @@ public:
     void setupProjectDB();
     void setupUndoRedo();
 
+	WindowSpaces getWindowSpace();
     void switchSpace(WindowSpaces space);
 
     bool handleMousePress(QMouseEvent *event);
