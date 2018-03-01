@@ -162,7 +162,9 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 	format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
 	format.setProfile(QSurfaceFormat::CoreProfile);
 	format.setSamples(1);
+#ifdef QT_DEBUG
 	format.setOption(QSurfaceFormat::DebugContext);
+#endif
 	setFormat(format);
 
 	
