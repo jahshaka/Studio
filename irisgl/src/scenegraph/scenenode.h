@@ -62,11 +62,14 @@ public:
 
     // editor specific
     bool duplicable;
+	bool exportable;
     bool visible;
     bool removable;
 
     bool pickable;
     bool castShadow;
+
+	mutable QString guid;
 
     friend class Renderer;
     friend class Scene;
@@ -89,9 +92,21 @@ public:
 
     long getNodeId();
 
+	void setGUID(const QString &id) const {
+		guid = id;
+	}
+
+	const QString getGUID() const {
+		return guid;
+	}
+
     bool isDuplicable() {
         return duplicable;
     }
+
+	bool isExportable() {
+		return exportable;
+	}
 
     QVector3D getLocalPos() {
         return pos;

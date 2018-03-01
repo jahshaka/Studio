@@ -194,6 +194,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
             mat->setValue("ambientColor",	QColor(110, 110, 110));	// assume this color, some formats set this to pitch black
             mat->setValue("emissionColor",	data.emissionColor);
             mat->setValue("shininess",		data.shininess);
+			mat->setValue("useAlpha",		true);
 
             if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
                 mat->setValue("diffuseTexture", data.diffuseTexture);

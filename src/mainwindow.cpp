@@ -1077,7 +1077,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 		mat->setValue("specularColor", cdata.specularColor);
 		mat->setValue("ambientColor", cdata.ambientColor);
 		mat->setValue("emissionColor", cdata.emissionColor);
-
+		mat->setValue("useAlpha",	true);
 		mat->setValue("shininess", cdata.shininess);
 
 		auto libraryTextureIsValid = [](const QString &path, const QString texturePath) {
@@ -1112,6 +1112,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 	}
 
 	node->setName(name);
+	node->setGUID(QFileInfo(filename).baseName());
 	node->setLocalPos(position);
 
 	// todo: load material data
@@ -1211,6 +1212,21 @@ void MainWindow::duplicateNode()
     this->sceneHierarchyWidget->repopulateTree();
     sceneNodeSelected(node);
 	sceneView->doneCurrent();
+}
+
+void MainWindow::exportNode(const QString &guid)
+{
+	//if (!scene) return;
+	//if (!activeSceneNode || !activeSceneNode->isDuplicable()) return;
+
+	//sceneView->makeCurrent();
+	//auto node = activeSceneNode->duplicate();
+	//activeSceneNode->parent->addChild(node, false);
+
+	//this->sceneHierarchyWidget->repopulateTree();
+	//sceneNodeSelected(node);
+	//sceneView->doneCurrent();
+	qDebug() << guid;
 }
 
 void MainWindow::deleteNode()

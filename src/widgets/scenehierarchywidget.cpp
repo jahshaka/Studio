@@ -221,6 +221,8 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
     auto nodeId = (long) item->data(0, Qt::UserRole).toLongLong();
     auto node = nodeList[nodeId];
 
+	selectedNode = node;
+
     QMenu menu;
     QAction* action;
 
@@ -246,6 +248,21 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	menu.addAction(action);
 
     selectedNode = node;
+	if (node->isExportable()) {
+		// action = new QAction(QIcon(), "Export", this);
+		// connect(action, SIGNAL(triggered()), this, SLOT(exportNode()));
+		//menu.addAction(action);
+
+		QMenu *subMenu = menu.addMenu("Export");
+		QAction *exportAsset = subMenu->addAction("Export Asset");
+		//if (node->hasMaterial()) {
+			//QAction *exportAssetMaterial = subMenu->addAction("Export Material");
+		//}
+		connect(exportAsset, &QAction::triggered, this, [this, node]() {
+			exportNode(node->getGUID());
+		});
+	}
+
     menu.exec(ui->sceneTree->mapToGlobal(pos));
 }
 
@@ -265,9 +282,15 @@ void SceneHierarchyWidget::duplicateNode()
     mainWindow->duplicateNode();
 }
 
+<<<<<<< HEAD
 void SceneHierarchyWidget::focusOnNode()
 {
 	UiManager::sceneViewWidget->focusOnNode(selectedNode);
+=======
+void SceneHierarchyWidget::exportNode(const QString &guid)
+{
+	mainWindow->exportNode(guid);
+>>>>>>> Prepare for exporting scenenodes
 }
 
 void SceneHierarchyWidget::showHideNode(QTreeWidgetItem* item, bool show)

@@ -95,6 +95,8 @@ LightNode::LightNode()
 
     iconSize = 0.5f;
 
+	exportable = false;
+
     shadowMap = new ShadowMap();
 }
 
