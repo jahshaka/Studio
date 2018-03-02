@@ -47,7 +47,6 @@ set(SRCS
     src/animation/keyframeset.cpp
     src/materials/materialhelper.cpp
     src/scenegraph/viewernode.cpp
-    src/materials/viewermaterial.cpp
     src/scenegraph/particlesystemnode.cpp
     src/vr/vrmanager.cpp
     src/math/mathhelper.cpp
@@ -124,7 +123,6 @@ set (HEADERS
     src/materials/materialhelper.h
     src/core/irisutils.h
     src/scenegraph/viewernode.h
-    src/materials/viewermaterial.h
     src/graphics/particle.h
     src/graphics/particlerender.h
     src/graphics/renderitem.h

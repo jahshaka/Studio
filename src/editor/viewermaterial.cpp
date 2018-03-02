@@ -1,6 +1,6 @@
 /**************************************************************************
-This file is part of IrisGL
-http://www.irisgl.org
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
 Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
 
 This is free software: you may copy, redistribute
@@ -10,21 +10,19 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "viewermaterial.h"
-#include "../core/irisutils.h"
-
-namespace iris
-{
+#include "irisgl/src/graphics/texture2d.h"
+#include "irisgl/src/graphics/material.h"
 
 ViewerMaterial::ViewerMaterial()
 {
     createProgramFromShaderSource(":assets/shaders/viewer.vert",
                                   ":assets/shaders/viewer.frag");
 
-    this->setRenderLayer((int)RenderLayer::Opaque);
-	renderStates.rasterState = iris::RasterizerState::CullNone;
+    this->setRenderLayer((int)iris::RenderLayer::Opaque);
+	renderStates.rasterState = iris::RasterizerState::createCullNone();
 }
 
-void ViewerMaterial::setTexture(Texture2DPtr tex)
+void ViewerMaterial::setTexture(iris::Texture2DPtr tex)
 {
     texture = tex;
     if(!!tex)
@@ -33,17 +31,17 @@ void ViewerMaterial::setTexture(Texture2DPtr tex)
         this->removeTexture("tex");
 }
 
-Texture2DPtr ViewerMaterial::getTexture()
+iris::Texture2DPtr ViewerMaterial::getTexture()
 {
     return texture;
 }
 
-void ViewerMaterial::begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+void ViewerMaterial::begin(QOpenGLFunctions_3_2_Core* gl,iris::ScenePtr scene)
 {
     Material::begin(gl,scene);
 }
 
-void ViewerMaterial::end(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+void ViewerMaterial::end(QOpenGLFunctions_3_2_Core* gl,iris::ScenePtr scene)
 {
     Material::end(gl,scene);
 }
@@ -51,6 +49,4 @@ void ViewerMaterial::end(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
 ViewerMaterialPtr ViewerMaterial::create()
 {
     return ViewerMaterialPtr(new ViewerMaterial());
-}
-
 }

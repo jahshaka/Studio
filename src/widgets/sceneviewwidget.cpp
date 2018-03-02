@@ -49,6 +49,7 @@ For more information see the LICENSE file
 #include "../editor/orbitalcameracontroller.h"
 #include "../editor/viewercontroller.h"
 #include "../editor/editorvrcontroller.h"
+#include "../editor/viewermaterial.h"
 
 #include "../editor/editordata.h"
 
@@ -317,6 +318,14 @@ void SceneViewWidget::addLightShapesToScene()
     }
 }
 
+void SceneViewWidget::addViewerHeadsToScene()
+{
+	for (auto viewer : scene->viewers) {
+		//if (selectedNode != viewer)
+		scene->geometryRenderList->submitMesh(viewerMesh, viewerMat, viewer->getGlobalTransform());
+	}
+}
+
 void SceneViewWidget::setScene(iris::ScenePtr scene)
 {
     this->scene = scene;
@@ -423,6 +432,11 @@ void SceneViewWidget::initializeGL()
     viewerRT->addTexture(viewerTex);
     viewerQuad = new iris::FullScreenQuad();
 
+	auto mat = ViewerMaterial::create();
+	mat->setTexture(iris::Texture2D::load(":/assets/models/head.png"));
+	viewerMat = mat.staticCast<iris::Material>();
+	viewerMesh = iris::Mesh::loadMesh(":/assets/models/head2.obj");
+
     screenshotRT = iris::RenderTarget::create(500, 500);
     screenshotTex = iris::Texture2D::create(500, 500);
     screenshotRT->addTexture(screenshotTex);
@@ -496,21 +510,19 @@ void SceneViewWidget::renderScene()
 
         // hide viewer so it doesnt show up in rt
         bool viewerVisible = true;
-
+/*
         if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
             viewerVisible = selectedNode->isVisible();
             selectedNode->hide();
         } else {
             viewerVisible = false;    
         }
-
+		*/
         scene->update(dt);
 
         // insert vr head
         if ((UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)) {
             renderer->renderLightBillboards = true;
-            for (auto view : scene->viewers)
-                view->submitRenderItems();
         } else {
             renderer->renderLightBillboards = false;
         }
@@ -528,23 +540,11 @@ void SceneViewWidget::renderScene()
                 viewerRT->resize(this->width(), this->height(), true);
 
                 renderer->renderSceneToRenderTarget(viewerRT, viewerCamera);
-
-                // restore viewer visibility state
-                if (viewerVisible) {
-                    selectedNode->show();
-
-                    // let it show back in regular scene rendering mode
-                    // i know this looks like a hack, but it'll
-                    // have to do until we find a better way to do this
-                    if (UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)
-                        selectedNode->submitRenderItems();
-                }
-            }
-            else {
-                if (viewerVisible)
-                    selectedNode->show();
             }
         }
+
+		if (UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)
+			addViewerHeadsToScene();
 
         if (viewportMode == ViewportMode::Editor) {
             renderer->renderScene(dt, viewport);

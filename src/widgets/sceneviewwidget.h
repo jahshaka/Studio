@@ -105,6 +105,10 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
     iris::FontPtr font;
     float fontSize;
     bool showFps;
+
+	// vr viewer representation
+	iris::MaterialPtr viewerMat;
+	iris::MeshPtr viewerMesh;
 public:
     iris::CameraNodePtr editorCam;
 
@@ -266,6 +270,8 @@ private:
     void initLightAssets();
     iris::MeshPtr createDirLightMesh(float radius = 1.0);
     void addLightShapesToScene();
+
+	void addViewerHeadsToScene();
 
 	WindowSpaces windowSpace;
 	bool displayGizmos;
