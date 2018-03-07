@@ -52,7 +52,7 @@ void SceneWriter::writeScene(QString filePath,
     file.open(QIODevice::WriteOnly | QIODevice::Truncate);
 
     QJsonObject projectObj;
-    projectObj["version"] = "0.1";
+    projectObj["version"] = Constants::CONTENT_VERSION;
     writeScene(projectObj, scene);
     if(editorData != nullptr)
         writeEditorData(projectObj, editorData);

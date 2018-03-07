@@ -91,7 +91,6 @@ void RenderThread::initScene()
     auto gl = context->versionFunctions<QOpenGLFunctions_3_2_Core>();
     gl->glEnable(GL_DEPTH_TEST);
     gl->glEnable(GL_CULL_FACE);
-    //gl->glDisable(GL_BLEND);
 
     renderer = iris::ForwardRenderer::create(false);
     scene = iris::Scene::create();
@@ -100,87 +99,43 @@ void RenderThread::initScene()
     // create scene and renderer
     cam = iris::CameraNode::create();
     cam->setLocalPos(QVector3D(1, 1, 5));
-    //cam->setLocalRot(QQuaternion::fromEulerAngles(-45, 45, 0));
     cam->lookAt(QVector3D(0,0.5f,0));
-
-    //scene->setSkyColor(QColor(100, 100, 100, 0));
-    //scene->setAmbientColor(QColor(255, 255, 255));
 
 	scene->setSkyColor(QColor(25, 25, 25, 0));
 	scene->setAmbientColor(QColor(190, 190, 190));
 
- //   // second node
- //   auto node = iris::MeshNode::create();
- //   node->setMesh(":/models/ground.obj");
- //   node->setLocalPos(QVector3D(0, 0, 0));
- //   node->setName("Ground");
- //   node->setPickable(false);
- //   node->setShadowCastingEnabled(false);
-
- //   auto dlight = iris::LightNode::create();
- //   dlight->setLightType(iris::LightType::Directional);
- //   scene->rootNode->addChild(dlight);
- //   dlight->setName("Key Light");
- //   dlight->setLocalRot(QQuaternion::fromEulerAngles(45, -45, 0));
- //   dlight->intensity = 1;
-	//dlight->setShadowMapType(iris::ShadowMapType::Soft);
- //   //dlight->icon = iris::Texture2D::load(":/icons/light.png");
-
- //   auto plight = iris::LightNode::create();
- //   plight->setLightType(iris::LightType::Directional);
- //   scene->rootNode->addChild(plight);
- //   plight->setName("Fill Light");
- //   dlight->setLocalRot(QQuaternion::fromEulerAngles(90, 180, 90));
- //   plight->intensity = 1;
- //   plight->color = QColor(255, 200, 200);
- //   //plight->icon = iris::Texture2D::load(":/icons/bulb.png");
-	//plight->setShadowMapType(iris::ShadowMapType::None);
-
- //   plight = iris::LightNode::create();
- //   plight->setLightType(iris::LightType::Directional);
- //   scene->rootNode->addChild(plight);
- //   plight->setName("Rim Light");
- //   dlight->setLocalRot(QQuaternion::fromEulerAngles(60, 0, 0));
- //   plight->intensity = 1;
- //   plight->color = QColor(200, 222, 200);
-	//plight->setShadowMapType(iris::ShadowMapType::None);
-
 	auto dlight = iris::LightNode::create();
+	dlight->color = QColor(255, 255, 240);
+	dlight->intensity = 0.76;
 	dlight->setLightType(iris::LightType::Directional);
 	dlight->setName("Key Light");
-	dlight->color = QColor(255, 255, 240);
-	//dlight->setLocalPos(QVector3D(2, 2, 2));
 	dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 45, 0));
-	dlight->intensity = 0.76;
 	dlight->setShadowMapType(iris::ShadowMapType::None);
-	//dlight->shadowMap->shadowType = iris::ShadowMapType::None;
 	scene->rootNode->addChild(dlight);
 
 	auto plight = iris::LightNode::create();
+	plight->color = QColor(210, 210, 255);
+	plight->intensity = 0.47;
 	plight->setLightType(iris::LightType::Point);
 	plight->setName("Rim Light");
 	plight->setLocalPos(QVector3D(0, 0, -3));
-	plight->color = QColor(210, 210, 255);
-	plight->intensity = 0.47;
 	plight->setShadowMapType(iris::ShadowMapType::None);
-	plight->shadowMap->shadowType = iris::ShadowMapType::None;
 	scene->rootNode->addChild(plight);
 
     // fog params
     scene->fogEnabled = false;
     scene->shadowEnabled = false;
 
-    cam->update(0);// necessary!
+    cam->update(0); // necessary!
     scene->update(0);
 }
 
 void RenderThread::prepareScene(const ThumbnailRequest &request)
 {
-    if(request.type == ThumbnailRequestType::Mesh)
+    if (request.type == ThumbnailRequestType::Mesh)
     {
 		ssource = new iris::SceneSource();
         // load mesh as scene
-		//int iteration = 0;
         sceneNode = iris::MeshNode::loadAsSceneFragment(request.path, [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
         {
             auto mat = iris::CustomMaterial::create();
@@ -205,12 +160,6 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
             if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
                 mat->setValue("normalTexture", data.normalTexture);
 
-			//QJsonObject matObj;
-			//createMaterial(matObj, mat);
-			//assetMaterial.insert(QString::number(iteration), matObj);
-
-			//iteration++;
-
             return mat;
         }, ssource);
 
@@ -223,10 +172,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
         getBoundingSpheres(sceneNode, spheres);
         iris::BoundingSphere bound;
 
-		//QJsonObject node;
 		SceneWriter::writeSceneNode(assetMaterial, sceneNode, false);
-		//assetMaterial = node;
-		//qDebug() << assetMaterial;
 
         //merge bounding spheres
         if (spheres.count() == 0) {
@@ -296,18 +242,16 @@ QStringList RenderThread::getTextureList()
 
 void RenderThread::cleanupScene()
 {
-    //scene->rootNode->removeChild(sceneNode);
-    if (!!sceneNode)
-        sceneNode->removeFromParent();
+    if (!!sceneNode) sceneNode->removeFromParent();
 }
 
 float RenderThread::getBoundingRadius(iris::SceneNodePtr node)
 {
     auto radius = 0.0f;
-    if(node->sceneNodeType== iris::SceneNodeType::Mesh)
+    if (node->sceneNodeType == iris::SceneNodeType::Mesh)
         radius = node.staticCast<iris::MeshNode>()->getMesh()->boundingSphere.radius;
 
-    for(auto child : node->children) {
+    for (auto child : node->children) {
         radius = qMax(radius, getBoundingRadius(child));
     }
 
@@ -354,20 +298,17 @@ ThumbnailGenerator::ThumbnailGenerator()
     renderThread = new RenderThread();
 
     auto curCtx = QOpenGLContext::currentContext();
-    if (curCtx != nullptr)
-        curCtx->doneCurrent();
+    if (curCtx != Q_NULLPTR) curCtx->doneCurrent();
 
     QSurfaceFormat format;
     format.setDepthBufferSize(32);
     format.setMajorVersion(3);
     format.setMinorVersion(2);
     format.setProfile(QSurfaceFormat::CoreProfile);
-    //format.setOption();
     format.setSamples(1);
 
     auto context = new QOpenGLContext();
     context->setFormat(format);
-    //context->setShareContext(curCtx);
     context->create();
     context->moveToThread(renderThread);
     renderThread->context = context;

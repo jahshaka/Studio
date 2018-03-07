@@ -225,18 +225,18 @@ QString Database::insertAssetGlobal(const QString &assetName,
 		" VALUES (:name, :thumbnail, :type, 0, :version, datetime(),"
 		" datetime(), :guid, :properties, :author, :asset, :license, :tags)");
 
-	QFileInfo assetInfo(assetName);
+	// QFileInfo assetInfo(assetName);
 
-	query.bindValue(":name", assetInfo.fileName());
-	query.bindValue(":thumbnail", thumbnail);
-	query.bindValue(":type", type);
-	query.bindValue(":version", Constants::CONTENT_VERSION);
-	query.bindValue(":guid", guid);
-	query.bindValue(":properties", properties);
-	query.bindValue(":author", author);// getAuthorName());
-	query.bindValue(":asset", asset);
-	query.bindValue(":license", "CCBY");
-	query.bindValue(":tags", tags);
+	query.bindValue(":name",		assetName);
+	query.bindValue(":thumbnail",	thumbnail);
+	query.bindValue(":type",		type);
+	query.bindValue(":version",		Constants::CONTENT_VERSION);
+	query.bindValue(":guid",		guid);
+	query.bindValue(":properties",	properties);
+	query.bindValue(":author",		author);// getAuthorName());
+	query.bindValue(":asset",		asset);
+	query.bindValue(":license",		"CCBY");
+	query.bindValue(":tags",		tags);
 
 	executeAndCheckQuery(query, "insertSceneAsset");
 

@@ -151,89 +151,102 @@ void AssetWidget::addItem(const QString &asset)
     QFileInfo file(asset);
     QListWidgetItem *item;
 
-    if (file.isDir()) {
-		QPixmap pixmap;
+	item = new QListWidgetItem();
 
-		// we need our own search predicate since we have a vector that houses structs
-		if (!Globals::assetNames.value(QFileInfo(file.fileName()).baseName()).isEmpty()) {
-			QVector<AssetData>::iterator thumb = std::find_if(assetList.begin(),
-				assetList.end(),
-				find_asset_thumbnail(QFileInfo(file.fileName()).baseName()));
+	item->setData(Qt::DisplayRole, file.baseName());
 
-			item = new QListWidgetItem(QFileInfo(thumb->name).baseName());
-			pixmap = QPixmap::fromImage(QImage::fromData(thumb->thumbnail));
-			item->setIcon(QIcon(pixmap));
-			item->setData(Qt::DisplayRole, QFileInfo(thumb->name).baseName());
-			item->setData(Qt::UserRole, file.absoluteFilePath());
-			item->setData(MODEL_EXT_ROLE, thumb->extension);
-			item->setData(MODEL_GUID_ROLE, thumb->guid);
-			item->setData(MODEL_TYPE_ROLE, thumb->type);
-		}
-		else {
-			item = new QListWidgetItem(file.fileName());
-			item->setIcon(QIcon(":/icons/ic_folder.svg"));
-			item->setData(Qt::DisplayRole, file.fileName());
-			item->setData(Qt::UserRole, file.absolutePath());
-		}
-    } else {
-        QPixmap pixmap;
-        item = new QListWidgetItem(file.fileName());
-		
-		if (Constants::IMAGE_EXTS.contains(file.suffix())) {
-			auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
-			pixmap = QPixmap::fromImage(*thumb->thumb);
-			item->setIcon(QIcon(pixmap));
+	if (file.isDir()) {
+		item->setIcon(QIcon(":/icons/ic_folder.svg"));
+	}
+	else {
+		item->setIcon(QIcon(":/icons/ic_file.svg"));
+	}
 
-            item->setData(MODEL_EXT_ROLE, "");
-			item->setData(MODEL_GUID_ROLE, file.absoluteFilePath());
-			item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Texture));
-		}
-		else if (Constants::MODEL_EXTS.contains(file.suffix())) {
-			if (db->hasCachedThumbnail(file.fileName())) {
-				QPixmap cachedPixmap;
-				const QByteArray blob = db->fetchCachedThumbnail(file.fileName());
-				if (cachedPixmap.loadFromData(blob, "PNG")) {
-					item->setIcon(QIcon(cachedPixmap));
-				}
+	item->setData(Qt::UserRole, file.absolutePath());
 
-                item->setData(MODEL_EXT_ROLE, "");
-			    item->setData(MODEL_GUID_ROLE, file.absoluteFilePath());
-			    item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Object));
-			}
-			else {
-				item->setIcon(QIcon(":/icons/ic_file.svg"));
-				auto asset = AssetManager::getAssetByPath(file.absoluteFilePath());
-				if (asset != nullptr) {
-					if (!asset->thumbnail.isNull()) item->setIcon(QIcon(asset->thumbnail));
-				}
-			}
+  //  if (file.isDir()) {
+		//QPixmap pixmap;
 
-			item->setData(Qt::DisplayRole, file.baseName());
-			item->setData(Qt::UserRole, file.absolutePath());
-			// item->setData(MODEL_EXT_ROLE, "");
-			// item->setData(MODEL_GUID_ROLE, file.absoluteFilePath());
-			// item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Undefined));
-		}
-		else if (file.suffix() == "shader") {
-			item->setIcon(QIcon(":/icons/ic_file.svg"));
-		}
-		else {
-			item->setIcon(QIcon(":/icons/ic_file.svg"));
-		}
+		//// we need our own search predicate since we have a vector that houses structs
+		//if (!Globals::assetNames.value(QFileInfo(file.fileName()).baseName()).isEmpty()) {
+		//	QVector<AssetData>::iterator thumb = std::find_if(assetList.begin(),
+		//		assetList.end(),
+		//		find_asset_thumbnail(QFileInfo(file.fileName()).baseName()));
 
-		item->setData(Qt::UserRole, file.absolutePath());
-    }
+		//	item = new QListWidgetItem(QFileInfo(thumb->name).baseName());
+		//	pixmap = QPixmap::fromImage(QImage::fromData(thumb->thumbnail));
+		//	item->setIcon(QIcon(pixmap));
+		//	item->setData(Qt::DisplayRole, QFileInfo(thumb->name).baseName());
+		//	item->setData(Qt::UserRole, file.absoluteFilePath());
+		//	item->setData(MODEL_EXT_ROLE, thumb->extension);
+		//	item->setData(MODEL_GUID_ROLE, thumb->guid);
+		//	item->setData(MODEL_TYPE_ROLE, thumb->type);
+		//}
+		//else {
+		//	item = new QListWidgetItem(file.fileName());
+		//	item->setIcon(QIcon(":/icons/ic_folder.svg"));
+		//	item->setData(Qt::DisplayRole, file.fileName());
+		//	item->setData(Qt::UserRole, file.absolutePath());
+		//}
+  //  } else {
+  //      QPixmap pixmap;
+  //      item = new QListWidgetItem(file.fileName());
+		//
+		//if (Constants::IMAGE_EXTS.contains(file.suffix())) {
+		//	auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
+		//	pixmap = QPixmap::fromImage(*thumb->thumb);
+		//	item->setIcon(QIcon(pixmap));
 
-    item->setSizeHint(QSize(128, 128));
-    item->setTextAlignment(Qt::AlignCenter);
-    item->setFlags(item->flags() | Qt::ItemIsEditable);
+  //          item->setData(MODEL_EXT_ROLE, "");
+		//	item->setData(MODEL_GUID_ROLE, file.absoluteFilePath());
+		//	item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Texture));
+		//}
+		//else if (Constants::MODEL_EXTS.contains(file.suffix())) {
+		//	if (db->hasCachedThumbnail(file.fileName())) {
+		//		QPixmap cachedPixmap;
+		//		const QByteArray blob = db->fetchCachedThumbnail(file.fileName());
+		//		if (cachedPixmap.loadFromData(blob, "PNG")) {
+		//			item->setIcon(QIcon(cachedPixmap));
+		//		}
+
+  //              item->setData(MODEL_EXT_ROLE, "");
+		//	    item->setData(MODEL_GUID_ROLE, file.absoluteFilePath());
+		//	    item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Object));
+		//	}
+		//	else {
+		//		item->setIcon(QIcon(":/icons/ic_file.svg"));
+		//		auto asset = AssetManager::getAssetByPath(file.absoluteFilePath());
+		//		if (asset != nullptr) {
+		//			if (!asset->thumbnail.isNull()) item->setIcon(QIcon(asset->thumbnail));
+		//		}
+		//	}
+
+		//	item->setData(Qt::DisplayRole, file.baseName());
+		//	item->setData(Qt::UserRole, file.absolutePath());
+		//	// item->setData(MODEL_EXT_ROLE, "");
+		//	// item->setData(MODEL_GUID_ROLE, file.absoluteFilePath());
+		//	// item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Undefined));
+		//}
+		//else if (file.suffix() == "shader") {
+		//	item->setIcon(QIcon(":/icons/ic_file.svg"));
+		//}
+		//else {
+		//	item->setIcon(QIcon(":/icons/ic_file.svg"));
+		//}
+
+		//item->setData(Qt::UserRole, file.absolutePath());
+  //  }
+
+  //  item->setSizeHint(QSize(128, 128));
+  //  item->setTextAlignment(Qt::AlignCenter);
+  //  item->setFlags(item->flags() | Qt::ItemIsEditable);
 
     ui->assetView->addItem(item);
 }
 
 void AssetWidget::updateAssetView(const QString &path)
 {
-	assetList = db->fetchThumbnails();
+	//assetList = db->fetchThumbnails();
 
 	// for (auto asset : assetList) qDebug() << asset.name;
 
@@ -569,116 +582,223 @@ void AssetWidget::importAssetB()
 
 void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const QString &path)
 {
-    foreach (const QFileInfo &file, fileNames) {
-        if (file.isFile()) {
-            AssetType type;
-            QPixmap pixmap;
+	foreach (const QFileInfo &file, fileNames) {
+		const QString metaFileName = IrisUtils::buildFileName(IrisUtils::join(path, file.fileName()), "meta");
 
+		QJsonObject assetProperty;
+		assetProperty.insert("name",	file.fileName());
+		assetProperty.insert("license", QString());
+		assetProperty.insert("author",	QString());
+
+		if (file.isDir()) {
+			// if we encounter a folder, create it and import files
+			QDir importDir(QDir(path).filePath(file.fileName()));
+			if (!importDir.exists()) {
+			    importDir.mkpath(".");
+
+			    QStringList list;
+			    foreach (const QString &item, QDir(file.absoluteFilePath()).entryList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
+			        list << QDir(file.absoluteFilePath()).filePath(item);
+			    }
+
+				assetProperty.insert("type",	static_cast<int>(AssetType::Folder));
+				assetProperty.insert("guid",	GUIDManager::generateGUID());
+
+			    createDirectoryStructure(list, QDir(path).filePath(file.fileName()));
+			}
+			// couldn't create the folder, it already exists? handle here
+			else {
+			    //QString warningText = QString("Failed to create folder %1. Aborting import for this folder")
+			    //                    .arg(file.fileName());
+
+			    //QMessageBox::warning(this,
+			    //                    "Could not create folder",
+			    //                    warningText,
+			    //                    QMessageBox::Ok);
+			    //continue;
+			}
+		}
+		else {
 			QString fileName;
 			QString fileAbsolutePath;
 
-            if (Constants::IMAGE_EXTS.contains(file.suffix())) {
-                auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-                type = AssetType::Texture;
-				fileName = file.fileName();
-				fileAbsolutePath = file.absoluteFilePath();
-            } else if (Constants::MODEL_EXTS.contains(file.suffix())) {
-                auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-                type = AssetType::Object;
+			AssetType type;
+			QPixmap thumbnail;
 
-				QString guid = GUIDManager::generateGUID();
-				auto generatedPath = QDir(path).filePath(guid);
-				QDir dir;
-				dir.mkdir(generatedPath);
+			auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
+			thumbnail = QPixmap::fromImage(*thumb->thumb);
 
-				QByteArray bytes;
-				QBuffer buffer(&bytes);
-				buffer.open(QIODevice::WriteOnly);
-				pixmap.save(&buffer, "PNG");
+			// handle all model extensions here
+			if (Constants::IMAGE_EXTS.contains(file.suffix())) {
+				auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
+				thumbnail = QPixmap::fromImage(*thumb->thumb);
+				type = AssetType::Texture;
+			}
+			else if (Constants::MODEL_EXTS.contains(file.suffix())) {
+				type = AssetType::Object;
+			}
+			else if (file.suffix() == Constants::SHADER_EXT) {
+				type = AssetType::Shader;
+			}
+			else if (file.suffix() == Constants::MATERIAL_EXT) {
+				type = AssetType::Material;
+			}
+			// Generally if we don't explicitly specify an extension, don't import or add it to the database (iKlsR)
+			else {
+				type = AssetType::Invalid;
+			}
 
-				// the material is generated in the thumbnail handler and passed back in the result
-				db->insertProjectAssetGlobal(file.fileName(), (int) ModelTypes::Object, bytes, QByteArray(), QByteArray(), QByteArray(), guid);
-				Globals::assetNames.insert(guid, QFileInfo(file.fileName()).baseName());
+			fileName = file.fileName();
+			fileAbsolutePath = file.absoluteFilePath();
+			
+			auto asset = new AssetVariant;
+			asset->type         = type;
+			asset->fileName     = fileName;
+			asset->path         = fileAbsolutePath;
+			asset->thumbnail    = thumbnail;
 
-				// guid filename
-				fileName = QDir(generatedPath).filePath(guid + "." + file.suffix());
-				fileAbsolutePath = file.absoluteFilePath();
+			if (asset->type != AssetType::Invalid) {
+				const QString pathToCopyTo = QDir(path).filePath(asset->fileName);
 
-            }  else if (file.suffix() == "shader") {
-                auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
-                type = AssetType::Shader;
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-				fileName = file.fileName();
-				fileAbsolutePath = file.absoluteFilePath();
-            } else {
-                auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
-                type = AssetType::File;
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-				fileName = file.fileName();
-				fileAbsolutePath = file.absoluteFilePath();
-            }
+				QFileInfo check_file(pathToCopyTo);
+				if (!check_file.exists()) {
+					const QString guid = db->insertAssetGlobal(asset->fileName, static_cast<int>(asset->type),
+															   QByteArray(), QByteArray(), QByteArray(), QByteArray());
 
-            auto asset = new AssetVariant;
-            asset->type         = type;
-            asset->fileName     = fileName;
-            asset->path         = fileAbsolutePath;
-            asset->thumbnail    = pixmap;
+					assetProperty.insert("type", static_cast<int>(asset->type));
+					assetProperty.insert("guid", guid);
 
-            bool copyFile = QFile::copy(fileAbsolutePath, QDir(path).filePath(fileName));
+					if (asset->type == AssetType::Object) {
+						ThumbnailGenerator::getSingleton()->requestThumbnail(
+							ThumbnailRequestType::Mesh, file.absoluteFilePath(), guid
+						);
+					}
+				}
 
-            if (copyFile) {
-                if (asset->type == AssetType::Object) {
-                    ThumbnailGenerator::getSingleton()->requestThumbnail(
-                        ThumbnailRequestType::Mesh, asset->path, asset->path
-                    );
-                }
+				bool copyFile = QFile::copy(fileAbsolutePath, pathToCopyTo);
+			}
+		}
 
-                AssetManager::addAsset(asset);
-            } else {
-                QString warningText = QString("Failed to import file %1. Possible reasons are:\n"
-                                              "1. It already exists\n"
-                                              "2. The file isn't valid")
-                                      .arg(file.fileName());
+		QFileInfo checkMetaFile(metaFileName);
+		if (!checkMetaFile.exists()) {
+			QJsonDocument saveDoc(assetProperty);
+			QFile metaFile(metaFileName);
+			metaFile.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			metaFile.write(saveDoc.toJson());
+			metaFile.close();
+		}
+	}
 
-                QMessageBox::warning(this, "Import failed", warningText, QMessageBox::Ok);
-            }
-        }
-        else {
-            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/ic_folder.svg", 128, 128);
-            auto asset = new AssetFolder;
-            asset->fileName     = file.fileName();
-            asset->path         = file.absoluteFilePath();
-            asset->thumbnail    = QPixmap::fromImage(*thumb->thumb);
+    //foreach (const QFileInfo &file, fileNames) {
+        //if (file.isFile()) {
+   //         AssetType type;
+   //         QPixmap pixmap;
 
-            // if we encounter a folder, create it and import files
-            QDir importDir(QDir(path).filePath(file.fileName()));
-            if (!importDir.exists()) {
-                importDir.mkpath(".");
-                AssetManager::addAsset(asset);
-                QStringList list;
-                foreach (auto item, QDir(file.absoluteFilePath())
-                                    .entryList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs))
-                {
-                    list << QDir(file.absoluteFilePath()).filePath(item);
-                }
+			//QString fileName;
+			//QString fileAbsolutePath;
 
-                QString targetDir = QDir(path).filePath(file.fileName());
-                createDirectoryStructure(list, targetDir);
-            }
-            else {
-                QString warningText = QString("Failed to create folder %1. Aborting import for this folder")
-                                      .arg(file.fileName());
+   //         if (Constants::IMAGE_EXTS.contains(file.suffix())) {
+   //             auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
+   //             pixmap = QPixmap::fromImage(*thumb->thumb);
+   //             type = AssetType::Texture;
+			//	fileName = file.fileName();
+			//	fileAbsolutePath = file.absoluteFilePath();
+   //         } else if (Constants::MODEL_EXTS.contains(file.suffix())) {
+   //             auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
+   //             pixmap = QPixmap::fromImage(*thumb->thumb);
+   //             type = AssetType::Object;
 
-                QMessageBox::warning(this,
-                                     "Could not create folder",
-                                     warningText,
-                                     QMessageBox::Ok);
-                continue;
-            }
-        }
-    }
+			//	QString guid = GUIDManager::generateGUID();
+			//	auto generatedPath = QDir(path).filePath(guid);
+			//	QDir dir;
+			//	dir.mkdir(generatedPath);
+
+			//	QByteArray bytes;
+			//	QBuffer buffer(&bytes);
+			//	buffer.open(QIODevice::WriteOnly);
+			//	pixmap.save(&buffer, "PNG");
+
+			//	// the material is generated in the thumbnail handler and passed back in the result
+			//	db->insertProjectAssetGlobal(file.fileName(), (int) ModelTypes::Object, bytes, QByteArray(), QByteArray(), QByteArray(), guid);
+			//	Globals::assetNames.insert(guid, QFileInfo(file.fileName()).baseName());
+
+			//	// guid filename
+			//	fileName = QDir(generatedPath).filePath(guid + "." + file.suffix());
+			//	fileAbsolutePath = file.absoluteFilePath();
+
+   //         }  else if (file.suffix() == "shader") {
+   //             auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
+   //             type = AssetType::Shader;
+   //             pixmap = QPixmap::fromImage(*thumb->thumb);
+			//	fileName = file.fileName();
+			//	fileAbsolutePath = file.absoluteFilePath();
+   //         } else {
+   //             auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
+   //             type = AssetType::File;
+   //             pixmap = QPixmap::fromImage(*thumb->thumb);
+			//	fileName = file.fileName();
+			//	fileAbsolutePath = file.absoluteFilePath();
+   //         }
+
+   //         auto asset = new AssetVariant;
+   //         asset->type         = type;
+   //         asset->fileName     = fileName;
+   //         asset->path         = fileAbsolutePath;
+   //         asset->thumbnail    = pixmap;
+
+   //         bool copyFile = QFile::copy(fileAbsolutePath, QDir(path).filePath(fileName));
+
+   //         if (copyFile) {
+   //             if (asset->type == AssetType::Object) {
+   //                 ThumbnailGenerator::getSingleton()->requestThumbnail(
+   //                     ThumbnailRequestType::Mesh, asset->path, asset->path
+   //                 );
+   //             }
+
+   //             AssetManager::addAsset(asset);
+   //         } else {
+   //             QString warningText = QString("Failed to import file %1. Possible reasons are:\n"
+   //                                           "1. It already exists\n"
+   //                                           "2. The file isn't valid")
+   //                                   .arg(file.fileName());
+
+   //             QMessageBox::warning(this, "Import failed", warningText, QMessageBox::Ok);
+   //         }
+   //     }
+   //     else {
+   //         auto thumb = ThumbnailManager::createThumbnail(":/app/icons/ic_folder.svg", 128, 128);
+   //         auto asset = new AssetFolder;
+   //         asset->fileName     = file.fileName();
+   //         asset->path         = file.absoluteFilePath();
+   //         asset->thumbnail    = QPixmap::fromImage(*thumb->thumb);
+
+   //         // if we encounter a folder, create it and import files
+   //         QDir importDir(QDir(path).filePath(file.fileName()));
+   //         if (!importDir.exists()) {
+   //             importDir.mkpath(".");
+   //             AssetManager::addAsset(asset);
+   //             QStringList list;
+   //             foreach (auto item, QDir(file.absoluteFilePath())
+   //                                 .entryList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs))
+   //             {
+   //                 list << QDir(file.absoluteFilePath()).filePath(item);
+   //             }
+
+   //             QString targetDir = QDir(path).filePath(file.fileName());
+   //             createDirectoryStructure(list, targetDir);
+   //         }
+   //         else {
+   //             QString warningText = QString("Failed to create folder %1. Aborting import for this folder")
+   //                                   .arg(file.fileName());
+
+   //             QMessageBox::warning(this,
+   //                                  "Could not create folder",
+   //                                  warningText,
+   //                                  QMessageBox::Ok);
+   //             continue;
+   //         }
+   //     }
+    //}
 }
 
 void AssetWidget::importAsset(const QStringList &path)
@@ -701,43 +821,48 @@ void AssetWidget::importAsset(const QStringList &path)
 
 void AssetWidget::onThumbnailResult(ThumbnailResult* result)
 {
-    for (auto& asset : AssetManager::getAssets()) {
-        if (asset->path == result->id) {
-            asset->thumbnail = QPixmap::fromImage(result->thumbnail);
+   // for (auto& asset : AssetManager::getAssets()) {
+   //     if (asset->path == result->id) {
+            auto thumbnail = QPixmap::fromImage(result->thumbnail);
 
             QByteArray bytes;
             QBuffer buffer(&bytes);
             buffer.open(QIODevice::WriteOnly);
-            asset->thumbnail.save(&buffer, "PNG");
+            thumbnail.save(&buffer, "PNG");
 
-			QString asset_guid = QFileInfo(asset->fileName).baseName();
+			db->updateAssetThumbnail(result->id, bytes);
 
-			if (!result->textureList.isEmpty()) {
-				for (auto texture : result->textureList) {
-					QString tex = QFileInfo(texture).isRelative()
-						? QDir::cleanPath(QDir(QFileInfo(asset->path).absoluteDir()).filePath(texture))
-						: QDir::cleanPath(texture);
-					//QFile::copy(tex, QDir(assetItem.selectedPath).filePath(QFileInfo(texture).fileName()));
-					QFile::copy(tex, QDir(QFileInfo(asset->fileName).absoluteDir()).filePath(QFileInfo(texture).fileName()));
-				}
-			}
+			updateAssetView(assetItem.selectedPath);
+			// 
 
-			// todo? maybe update the asset thumbnail in this function as well?
-            db->insertThumbnailGlobal(Globals::project->getProjectGuid(), asset->fileName, bytes, asset_guid);
-			//auto material_id = db->insertProjectMaterialGlobal(QString(), asset_guid, QJsonDocument(result->material).toBinaryData());
-			//db->insertGlobalDependency((int) AssetMetaType::Material, asset_guid, material_id);
-			db->updateAssetThumbnail(asset_guid, bytes);
-			db->updateAssetAsset(asset_guid, QJsonDocument(result->material).toBinaryData());
+			//QString asset_guid = QFileInfo(asset->fileName).baseName();
 
-            // find item and update its icon
-            auto items = ui->assetView->findItems(asset->fileName, Qt::MatchExactly);
-            if (items.count() > 0) {
-                items[0]->setIcon(asset->thumbnail);
-            }
-        }
-    }
+			//if (!result->textureList.isEmpty()) {
+			//	for (auto texture : result->textureList) {
+			//		QString tex = QFileInfo(texture).isRelative()
+			//			? QDir::cleanPath(QDir(QFileInfo(asset->path).absoluteDir()).filePath(texture))
+			//			: QDir::cleanPath(texture);
+			//		//QFile::copy(tex, QDir(assetItem.selectedPath).filePath(QFileInfo(texture).fileName()));
+			//		QFile::copy(tex, QDir(QFileInfo(asset->fileName).absoluteDir()).filePath(QFileInfo(texture).fileName()));
+			//	}
+			//}
 
-	updateAssetView(assetItem.selectedPath);
+			//// todo? maybe update the asset thumbnail in this function as well?
+   //         db->insertThumbnailGlobal(Globals::project->getProjectGuid(), asset->fileName, bytes, asset_guid);
+			////auto material_id = db->insertProjectMaterialGlobal(QString(), asset_guid, QJsonDocument(result->material).toBinaryData());
+			////db->insertGlobalDependency((int) AssetMetaType::Material, asset_guid, material_id);
+			//db->updateAssetThumbnail(asset_guid, bytes);
+			//db->updateAssetAsset(asset_guid, QJsonDocument(result->material).toBinaryData());
+
+   //         // find item and update its icon
+   //         auto items = ui->assetView->findItems(asset->fileName, Qt::MatchExactly);
+   //         if (items.count() > 0) {
+   //             items[0]->setIcon(asset->thumbnail);
+   //         }
+   //     }
+   // }
+
+	//updateAssetView(assetItem.selectedPath);
 
     delete result;
 }

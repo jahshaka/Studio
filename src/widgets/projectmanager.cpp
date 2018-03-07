@@ -294,11 +294,27 @@ void ProjectManager::newProject()
         QDir projectDir(fullProjectPath);
         if (!projectDir.exists()) projectDir.mkpath(".");
 
+		QJsonObject assetProperty;
+
         for (auto folder : Constants::PROJECT_DIRS) {
             QDir dir(QDir(fullProjectPath).filePath(folder));
             dir.mkpath(".");
-        }
+			const QString guid = db->insertAssetGlobal(folder, static_cast<int>(AssetType::Folder),
+													   QByteArray(), QByteArray(), QByteArray(), QByteArray(), QByteArray());
 
+			assetProperty.insert("name",	folder);
+			assetProperty.insert("license", QString());
+			assetProperty.insert("author",	QString());
+			assetProperty.insert("type",	static_cast<int>(AssetType::Folder));
+			assetProperty.insert("guid",	guid);
+
+			QJsonDocument saveDoc(assetProperty);
+			QFile metaFile(IrisUtils::buildFileName(IrisUtils::join(fullProjectPath, folder), "meta"));
+			metaFile.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			metaFile.write(saveDoc.toJson());
+			metaFile.close();
+        }
+		
         emit fileToCreate(projectName, fullProjectPath);
 
         this->hide();
