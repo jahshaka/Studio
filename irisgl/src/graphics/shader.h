@@ -64,19 +64,24 @@ public:
 class Shader
 {
     friend class Material;
-    friend class VertexLayout;
+	friend class VertexLayout;
+	friend class GraphicsDevice;
 
 public:
-    static ShaderPtr load(QOpenGLFunctions_3_2_Core* gl, QString vertexShaderFile, QString fragmentShaderFile);
-    static ShaderPtr create(QOpenGLFunctions_3_2_Core* gl, QString vertexShader, QString fragmentShader);
-
-    QOpenGLShaderProgram* program;
-    long shaderId;
+    static ShaderPtr load(GraphicsDevicePtr device, QString vertexShaderFile, QString fragmentShaderFile);
+    static ShaderPtr create(GraphicsDevicePtr device, QString vertexShader, QString fragmentShader);
+	static ShaderPtr create(GraphicsDevicePtr device);
 
     ~Shader();
 
-    void bind();
-    void unbind();
+	void setVertexShader(QString vertexShader);
+	void setFragmentShader(QString fragmentShader);
+
+	void _setDirty();
+
+private:
+	QOpenGLShaderProgram * program;
+	long shaderId;
 
     ShaderValue* getUniform(QString name);
 
@@ -100,9 +105,12 @@ public:
         }
     }
 
-private:
-    Shader(QOpenGLFunctions_3_2_Core* gl, QString vertexShader, QString fragmentShader);
-    QOpenGLFunctions_3_2_Core* gl;
+	Shader(GraphicsDevicePtr device);
+
+	GraphicsDevicePtr device;
+	bool isDirty;
+
+	void compileShader();
 
     static long generateNodeId();
     static long nextId;
@@ -113,6 +121,8 @@ protected:
     QMap<QString,ShaderSampler*> samplers;
 
     QList<ShaderValue*> updatedUniforms;
+
+	QString vertexShader, fragmentShader;
 };
 
 }

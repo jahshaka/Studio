@@ -7,6 +7,7 @@
 #include "shader.h"
 
 #include <QOpenGLShaderProgram>
+#include <QOpenGLFunctions_3_2_Core>
 
 namespace iris
 {
@@ -145,8 +146,118 @@ void GraphicsDevice::clear(GLuint bits, QColor color, float depth, int stencil)
 
 void GraphicsDevice::setShader(ShaderPtr shader)
 {
+	if (!!activeShader) {
+		int index = 0;
+		auto& samplers = activeShader->samplers;
+
+		// reset textures to 0
+		// this step might not be needed if all textures units are set to null
+		// when setting a shader
+		for (auto& sampler : samplers)
+		{
+			clearTexture(index++);
+		}
+	}
+
     activeShader = shader;
-    shader->program->bind();
+	if (activeShader->isDirty)
+		compileShader(activeShader);
+	shader->program->bind();
+
+	// nullify all textures
+	{
+		int index = 0;
+		auto& samplers = activeShader->samplers;
+		for (auto& sampler : samplers)
+		{
+			clearTexture(index++);
+		}
+	}
+}
+
+void GraphicsDevice::compileShader(iris::ShaderPtr shader)
+{
+	QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
+	vshader->compileSourceCode(shader->vertexShader);
+
+	QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
+	fshader->compileSourceCode(shader->fragmentShader);
+
+	if (!shader->program)
+		shader->program = new QOpenGLShaderProgram;
+
+	auto& program = shader->program;
+	program->removeAllShaders();
+
+	program->addShader(vshader);
+	program->addShader(fshader);
+
+	program->bindAttributeLocation("a_pos", (int)VertexAttribUsage::Position);
+	program->bindAttributeLocation("a_color", (int)VertexAttribUsage::Color);
+	program->bindAttributeLocation("a_texCoord", (int)VertexAttribUsage::TexCoord0);
+	program->bindAttributeLocation("a_texCoord1", (int)VertexAttribUsage::TexCoord1);
+	program->bindAttributeLocation("a_texCoord2", (int)VertexAttribUsage::TexCoord2);
+	program->bindAttributeLocation("a_texCoord3", (int)VertexAttribUsage::TexCoord3);
+	program->bindAttributeLocation("a_normal", (int)VertexAttribUsage::Normal);
+	program->bindAttributeLocation("a_tangent", (int)VertexAttribUsage::Tangent);
+
+	program->link();
+
+	//todo: check for errors
+
+	//get attribs, uniforms and samplers
+	//http://stackoverflow.com/questions/440144/in-opengl-is-there-a-way-to-get-a-list-of-all-uniforms-attribs-used-by-a-shade
+	auto programId = shader->program->programId();
+	GLint count;
+	GLint size;
+	GLenum type;
+
+	const GLsizei bufSize = 64;
+	GLchar name[bufSize];
+	GLsizei length;
+
+	//attributes
+	gl->glGetProgramiv(programId, GL_ACTIVE_ATTRIBUTES, &count);
+	shader->attribs.clear();
+	shader->uniforms.clear();
+	shader->samplers.clear();
+
+	for (int i = 0; i<count; i++)
+	{
+		gl->glGetActiveAttrib(programId, i, bufSize, &length, &size, &type, name);
+		auto attrib = new ShaderValue();
+		attrib->location = gl->glGetAttribLocation(programId, name);
+		attrib->name = std::string(name);
+		attrib->type = type;
+		shader->attribs.insert(QString(name), attrib);
+	}
+
+	//uniforms and samplers
+	gl->glGetProgramiv(programId, GL_ACTIVE_UNIFORMS, &count);
+
+	for (int i = 0; i<count; i++)
+	{
+		gl->glGetActiveUniform(programId, i, bufSize, &length, &size, &type, name);
+
+		if (type == GL_SAMPLER_1D || type == GL_SAMPLER_2D || type == GL_SAMPLER_3D || type == GL_SAMPLER_CUBE)
+		{
+			auto sampler = new ShaderSampler();
+			sampler->location = gl->glGetUniformLocation(programId, name);
+			sampler->name = std::string(name);
+			shader->samplers.insert(QString(name), sampler);
+		}
+		else
+		{
+			auto uniform = new ShaderValue();
+			uniform->location = gl->glGetUniformLocation(programId, name);
+			uniform->name = std::string(name);
+			uniform->type = type;
+			shader->uniforms.insert(QString(name), uniform);
+		}
+
+	}
+
+	shader->isDirty = false;
 }
 
 void GraphicsDevice::setTexture(int target, Texture2DPtr texture)

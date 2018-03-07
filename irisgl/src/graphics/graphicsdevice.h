@@ -109,6 +109,7 @@ public:
     void setShader(ShaderPtr shader);
     void setTexture(int target, Texture2DPtr texture);
     void clearTexture(int target);
+	void compileShader(iris::ShaderPtr shader);
 
     void setVertexBuffer(VertexBufferPtr vertexBuffer);
     void setVertexBuffers(QList<VertexBufferPtr> vertexBuffers);
@@ -122,6 +123,9 @@ public:
     QOpenGLFunctions_3_2_Core *getGL() const;
 
     static GraphicsDevicePtr create();
+
+private:
+	void compileShader();
 };
 
 }
