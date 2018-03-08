@@ -471,7 +471,7 @@ void MainWindow::setupProjectDB()
 	//db->createGlobalDbProjectAssets();
     db->createGlobalDbCollections();
     db->createGlobalDbThumbs();
-	db->createGlobalDbFolders();
+	//db->createGlobalDbFolders();
 	//db->createGlobalDbMaterials();
 }
 

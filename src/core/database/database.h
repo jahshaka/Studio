@@ -64,6 +64,7 @@ public:
     QVector<ProjectTileData> fetchProjects();
 	QVector<AssetTileData> fetchAssets();
 	QVector<AssetTileData> fetchAssetsByCollection(int collection_id);
+	QVector<AssetData> fetchAssetThumbnails(const QStringList& guids);
     QByteArray getSceneBlobGlobal() const;
     QByteArray fetchCachedThumbnail(const QString& name) const;
 	void updateAssetMetadata(const QString &guid, const QString &name, const QByteArray &tags);

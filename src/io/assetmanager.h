@@ -35,6 +35,7 @@ struct Asset {
     AssetType           type;
     QString             path;
     QString             fileName;
+	QString				assetGuid;
     QPixmap             thumbnail;
     bool                deletable;
 

@@ -28,9 +28,9 @@ struct AssetItem {
 struct find_asset_thumbnail
 {
 	QString guid;
-	find_asset_thumbnail(QString guid) : guid(guid) {}
-	bool operator () (const AssetData& assetData) const {
-		return assetData.guid == guid;
+	find_asset_thumbnail(const QString guid) : guid(guid) {}
+	bool operator () (const Asset* data) const {
+		return data->assetGuid == guid;
 	}
 };
 

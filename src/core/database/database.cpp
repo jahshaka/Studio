@@ -323,6 +323,33 @@ QVector<AssetTileData> Database::fetchAssetsByCollection(int collection_id)
 	return tileData;
 }
 
+QVector<AssetData> Database::fetchAssetThumbnails(const QStringList &guids)
+{
+	// Construct the guid list to use and chop of the extraneous comma to make it valid
+	QString guidInString;
+	for (const QString &guid : guids) guidInString += "'" + guid + "',";
+	guidInString.chop(1);
+
+	QSqlQuery query;
+	query.prepare("SELECT guid, thumbnail, name FROM assets WHERE guid IN (" + guidInString + ")");
+	executeAndCheckQuery(query, "fetchAssetThumbnails");
+
+	QVector<AssetData> assetData;
+	while (query.next()) {
+		AssetData data;
+		QSqlRecord record = query.record();
+		for (int i = 0; i < record.count(); i++) {
+			data.guid		= record.value(0).toString();
+			data.thumbnail	= record.value(1).toByteArray();
+			data.name		= record.value(2).toString();
+		}
+
+		assetData.push_back(data);
+	}
+
+	return assetData;
+}
+
 void Database::createGlobalDbAuthor()
 {
 	QString schema = "CREATE TABLE IF NOT EXISTS author ("

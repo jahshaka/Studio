@@ -12,6 +12,7 @@ namespace Constants
 {
     const QString CONTENT_VERSION   = "0.5.1a";
     const QString PROJ_EXT          = ".jah";
+	const QString META_EXT			= "meta";
     const QStringList PROJECT_DIRS  = { "Textures", "Shaders", "Materials", "Models" };
     const QString SHADER_DEFS       = "/app/shader_defs/";
     const QString DEFAULT_SHADER    = "/app/shader_defs/Default.shader";

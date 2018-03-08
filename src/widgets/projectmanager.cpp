@@ -472,55 +472,85 @@ void ProjectManager::loadProjectAssets()
 
 void ProjectManager::walkProjectFolder(const QString &projectPath)
 {
-    QDir dir(projectPath);
-    foreach (auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
-        if (file.isFile()) {
-            AssetType type;
-            QPixmap pixmap;
+	QStringList guidList;
 
-            if (Constants::IMAGE_EXTS.contains(file.suffix())) {
-                auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-                type = AssetType::Texture;
-            }
-            else if (Constants::MODEL_EXTS.contains(file.suffix())) {
-                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
-                type = AssetType::Object;
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-            }
-            else if (file.suffix() == "shader") {
-                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-                type = AssetType::Shader;
-            }
-            else {
-                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
-                type = AssetType::File;
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-            }
+	QDir projectDirectory(projectPath);
+	foreach (auto &file, projectDirectory.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
+		if (file.isDir()) {
+		    walkProjectFolder(file.absoluteFilePath());
+		}
+		else {
+			if (file.isFile() && (file.suffix() == Constants::META_EXT)) {
+				QString jsonMeta;
+				QFile file(file.absoluteFilePath());
+				file.open(QFile::ReadOnly | QFile::Text);
+				jsonMeta = file.readAll();
+				file.close();
+				QJsonDocument jsonDoc = QJsonDocument::fromJson(jsonMeta.toUtf8());
+				QJsonObject json = jsonDoc.object();
+				guidList.append(json["guid"].toString());
+			}
+		}
+	}
 
-            auto asset = new AssetVariant;
-            asset->type         = type;
-            asset->fileName     = file.fileName();
-            asset->path         = file.absoluteFilePath();
-            asset->thumbnail    = pixmap;
+	for (const AssetData &data : db->fetchAssetThumbnails(guidList)) {
+		QPixmap pixmap;
+		auto asset = new AssetVariant;
+		asset->assetGuid = data.guid;
+		asset->fileName = data.name;
+		asset->thumbnail.loadFromData(data.thumbnail, "PNG");
+		AssetManager::assets.append(asset);
+	}
 
-            AssetManager::assets.append(asset);
-        }
-        else {
-            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
-            auto asset = new AssetFolder;
-            asset->fileName     = file.fileName();
-            asset->path         = file.absoluteFilePath();
-            asset->thumbnail    = QPixmap::fromImage(*thumb->thumb);
+    //QDir dir(projectPath);
+    //foreach (auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
+    //    if (file.isFile()) {
+    //        AssetType type;
+    //        QPixmap pixmap;
 
-            AssetManager::assets.append(asset);
-        }
+    //        if (Constants::IMAGE_EXTS.contains(file.suffix())) {
+    //            auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
+    //            pixmap = QPixmap::fromImage(*thumb->thumb);
+    //            type = AssetType::Texture;
+    //        }
+    //        else if (Constants::MODEL_EXTS.contains(file.suffix())) {
+    //            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+    //            type = AssetType::Object;
+    //            pixmap = QPixmap::fromImage(*thumb->thumb);
+    //        }
+    //        else if (file.suffix() == "shader") {
+    //            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+    //            pixmap = QPixmap::fromImage(*thumb->thumb);
+    //            type = AssetType::Shader;
+    //        }
+    //        else {
+    //            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+    //            type = AssetType::File;
+    //            pixmap = QPixmap::fromImage(*thumb->thumb);
+    //        }
 
-        if (file.isDir()) {
-            walkProjectFolder(file.absoluteFilePath());
-        }
-    }
+    //        auto asset = new AssetVariant;
+    //        asset->type         = type;
+    //        asset->fileName     = file.fileName();
+    //        asset->path         = file.absoluteFilePath();
+    //        asset->thumbnail    = pixmap;
+
+    //        AssetManager::assets.append(asset);
+    //    }
+    //    else {
+    //        auto thumb = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
+    //        auto asset = new AssetFolder;
+    //        asset->fileName     = file.fileName();
+    //        asset->path         = file.absoluteFilePath();
+    //        asset->thumbnail    = QPixmap::fromImage(*thumb->thumb);
+
+    //        AssetManager::assets.append(asset);
+    //    }
+
+    //    if (file.isDir()) {
+    //        walkProjectFolder(file.absoluteFilePath());
+    //    }
+    //}
 }
 
 

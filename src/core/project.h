@@ -59,11 +59,11 @@ struct AssetTileData {
 };
 
 struct AssetData {
-	QByteArray thumbnail;
-	short type;
-	QString guid;
-	QString name;
-	QString extension;
+	QByteArray	thumbnail;
+	short		type;
+	QString		guid;
+	QString		name;
+	QString		extension;
 };
 
 struct CollectionData {

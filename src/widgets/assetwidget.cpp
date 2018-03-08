@@ -84,8 +84,8 @@ void AssetWidget::trigger()
 
 void AssetWidget::updateLabels()
 {
-    updateAssetView(assetItem.selectedPath);
-    populateAssetTree(false);
+    //updateAssetView(assetItem.selectedPath);
+    //populateAssetTree(false);
 }
 
 AssetWidget::~AssetWidget()
@@ -148,21 +148,55 @@ void AssetWidget::generateAssetThumbnails()
 
 void AssetWidget::addItem(const QString &asset)
 {
+	QPixmap pixmap;
     QFileInfo file(asset);
-    QListWidgetItem *item;
 
-	item = new QListWidgetItem();
-
-	item->setData(Qt::DisplayRole, file.baseName());
+    QListWidgetItem *item = new QListWidgetItem();
 
 	if (file.isDir()) {
 		item->setIcon(QIcon(":/icons/ic_folder.svg"));
 	}
 	else {
-		item->setIcon(QIcon(":/icons/ic_file.svg"));
+		if (Constants::IMAGE_EXTS.contains(file.suffix())) {
+			// Use the database thumb, smaller.
+			auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
+			pixmap = QPixmap::fromImage(*thumb->thumb);
+			item->setIcon(QIcon(pixmap));
+		}
+		else if (Constants::MODEL_EXTS.contains(file.suffix())) {
+			// find the meta file as well
+			QString jsonMeta;
+			QFile file(IrisUtils::buildFileName(file.absoluteFilePath(), Constants::META_EXT));
+			file.open(QFile::ReadOnly | QFile::Text);
+			jsonMeta = file.readAll();
+			file.close();
+			QJsonDocument jsonDoc = QJsonDocument::fromJson(jsonMeta.toUtf8());
+			QJsonObject json = jsonDoc.object();
+			const QString assetGuid = json["guid"].toString();
+
+			QList<Asset*>::iterator thumb = std::find_if(AssetManager::getAssets().begin(),
+													     AssetManager::getAssets().end(),
+														 find_asset_thumbnail(assetGuid));
+
+			if (thumb != AssetManager::getAssets().end()) pixmap = (*thumb)->thumbnail;
+
+			item->setIcon(pixmap);
+		}
+		else {
+			item->setIcon(QIcon(":/icons/ic_file.svg"));
+		}
 	}
 
+	item->setData(Qt::DisplayRole, file.baseName());
 	item->setData(Qt::UserRole, file.absolutePath());
+
+	item->setSizeHint(QSize(128, 128));
+	item->setTextAlignment(Qt::AlignCenter);
+	item->setFlags(item->flags() | Qt::ItemIsEditable);
+
+	if (file.suffix() != "meta") {
+		ui->assetView->addItem(item);
+	}
 
   //  if (file.isDir()) {
 		//QPixmap pixmap;
@@ -241,18 +275,15 @@ void AssetWidget::addItem(const QString &asset)
   //  item->setTextAlignment(Qt::AlignCenter);
   //  item->setFlags(item->flags() | Qt::ItemIsEditable);
 
-    ui->assetView->addItem(item);
+    /*ui->assetView->addItem(item);*/
 }
 
 void AssetWidget::updateAssetView(const QString &path)
 {
-	//assetList = db->fetchThumbnails();
-
-	// for (auto asset : assetList) qDebug() << asset.name;
-
-    // clear the old view
+    // Clear the old view
     ui->assetView->clear();
-    // set to new view path by itering path dir
+
+    // Set to new or same view path by itering path dir, underlying lookups are done in addItem
     for (auto file : QDir(path).entryList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
         addItem(QDir(path).filePath(file));
     }
@@ -598,7 +629,7 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const d
 
 				directory_pair dp;
 				dp.path = QDir(dir_pair.path).filePath(file.fileName());
-				dp.guid = db->insertFolder(file.fileName(), dir_pair.guid);
+				dp.guid = QString();
 
 			    createDirectoryStructure(list, dp);
 			}
@@ -621,8 +652,8 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const d
 			AssetType type;
 			QPixmap thumbnail;
 
-			auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 128, 128);
-			thumbnail = QPixmap::fromImage(*thumb->thumb);
+			// auto thumb = ThumbnailManager::createThumbnail(":/icons/ic_file.svg", 256, 256);
+			thumbnail = QPixmap(":/icons/ic_file.svg");
 
 			// handle all model extensions here
 			if (Constants::IMAGE_EXTS.contains(file.suffix())) {
@@ -682,6 +713,10 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const d
 						metaFile.write(metaDoc.toJson());
 						metaFile.close();
 					}
+
+					asset->assetGuid = guid;
+
+					AssetManager::assets.append(asset);
 				}
 
 				bool copyFile = QFile::copy(fileAbsolutePath, pathToCopyTo);
@@ -804,7 +839,7 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const d
 void AssetWidget::importAsset(const QStringList &path)
 {
     QStringList fileNames;
-    if (path.isEmpty()) {   // this is hit when we call this function via import menu
+    if (path.isEmpty()) {   // This is hit when we call this function via import menu
         fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
     } else {
         fileNames = path;
@@ -824,18 +859,26 @@ void AssetWidget::importAsset(const QStringList &path)
 
 void AssetWidget::onThumbnailResult(ThumbnailResult* result)
 {
-   // for (auto& asset : AssetManager::getAssets()) {
-   //     if (asset->path == result->id) {
-            auto thumbnail = QPixmap::fromImage(result->thumbnail);
+	// Update the database with the new result
+	QByteArray bytes;
+	QBuffer buffer(&bytes);
+	buffer.open(QIODevice::WriteOnly);
+	auto thumbnail = QPixmap::fromImage(result->thumbnail);
+	thumbnail.save(&buffer, "PNG");
+	db->updateAssetThumbnail(result->id, bytes);
 
-            QByteArray bytes;
-            QBuffer buffer(&bytes);
-            buffer.open(QIODevice::WriteOnly);
-            thumbnail.save(&buffer, "PNG");
+	// Update the global asset manager with the new image
+	QList<Asset*>::iterator thumb = std::find_if(AssetManager::getAssets().begin(),
+											     AssetManager::getAssets().end(),
+												 find_asset_thumbnail(result->id));
+	
+	if (thumb != AssetManager::getAssets().end()) {
+		int index = AssetManager::getAssets().indexOf(*thumb);
+		AssetManager::getAssets()[index]->thumbnail = thumbnail;
+	}
 
-			db->updateAssetThumbnail(result->id, bytes);
-
-			updateAssetView(assetItem.selectedPath);
+	// Refresh the view
+	updateAssetView(assetItem.selectedPath);
 			// 
 
 			//QString asset_guid = QFileInfo(asset->fileName).baseName();
