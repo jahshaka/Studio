@@ -580,19 +580,14 @@ void AssetWidget::importAssetB()
     importAsset(fileNames);
 }
 
-void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const QString &path)
+void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const directory_pair &dir_pair)
 {
 	foreach (const QFileInfo &file, fileNames) {
-		const QString metaFileName = IrisUtils::buildFileName(IrisUtils::join(path, file.fileName()), "meta");
-
-		QJsonObject assetProperty;
-		assetProperty.insert("name",	file.fileName());
-		assetProperty.insert("license", QString());
-		assetProperty.insert("author",	QString());
+		const QString metaFileName = IrisUtils::buildFileName(IrisUtils::join(dir_pair.path, file.fileName()), "meta");
 
 		if (file.isDir()) {
 			// if we encounter a folder, create it and import files
-			QDir importDir(QDir(path).filePath(file.fileName()));
+			QDir importDir(QDir(dir_pair.path).filePath(file.fileName()));
 			if (!importDir.exists()) {
 			    importDir.mkpath(".");
 
@@ -601,10 +596,11 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const Q
 			        list << QDir(file.absoluteFilePath()).filePath(item);
 			    }
 
-				assetProperty.insert("type",	static_cast<int>(AssetType::Folder));
-				assetProperty.insert("guid",	GUIDManager::generateGUID());
+				directory_pair dp;
+				dp.path = QDir(dir_pair.path).filePath(file.fileName());
+				dp.guid = db->insertFolder(file.fileName(), dir_pair.guid);
 
-			    createDirectoryStructure(list, QDir(path).filePath(file.fileName()));
+			    createDirectoryStructure(list, dp);
 			}
 			// couldn't create the folder, it already exists? handle here
 			else {
@@ -658,34 +654,38 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const Q
 			asset->thumbnail    = thumbnail;
 
 			if (asset->type != AssetType::Invalid) {
-				const QString pathToCopyTo = QDir(path).filePath(asset->fileName);
+				const QString pathToCopyTo = QDir(dir_pair.path).filePath(asset->fileName);
 
 				QFileInfo check_file(pathToCopyTo);
 				if (!check_file.exists()) {
-					const QString guid = db->insertAssetGlobal(asset->fileName, static_cast<int>(asset->type),
-															   QByteArray(), QByteArray(), QByteArray(), QByteArray());
+					const QString guid = db->insertAssetGlobal(asset->fileName,
+															   static_cast<int>(asset->type),
+															   dir_pair.guid);
 
-					assetProperty.insert("type", static_cast<int>(asset->type));
-					assetProperty.insert("guid", guid);
+					QJsonObject assetProperty;
+					assetProperty.insert("name",	file.fileName());
+					assetProperty.insert("license", QString());
+					assetProperty.insert("author",	QString());
+					assetProperty.insert("type",	static_cast<int>(asset->type));
+					assetProperty.insert("guid",	guid);
 
 					if (asset->type == AssetType::Object) {
 						ThumbnailGenerator::getSingleton()->requestThumbnail(
 							ThumbnailRequestType::Mesh, file.absoluteFilePath(), guid
 						);
 					}
+
+					if (!QFileInfo(metaFileName).exists()) {
+						QJsonDocument metaDoc(assetProperty);
+						QFile metaFile(metaFileName);
+						metaFile.open(QIODevice::WriteOnly | QIODevice::Truncate);
+						metaFile.write(metaDoc.toJson());
+						metaFile.close();
+					}
 				}
 
 				bool copyFile = QFile::copy(fileAbsolutePath, pathToCopyTo);
 			}
-		}
-
-		QFileInfo checkMetaFile(metaFileName);
-		if (!checkMetaFile.exists()) {
-			QJsonDocument saveDoc(assetProperty);
-			QFile metaFile(metaFileName);
-			metaFile.open(QIODevice::WriteOnly | QIODevice::Truncate);
-			metaFile.write(saveDoc.toJson());
-			metaFile.close();
 		}
 	}
 
@@ -811,7 +811,10 @@ void AssetWidget::importAsset(const QStringList &path)
     }
 
     if (!assetItem.selectedPath.isEmpty()) {
-        createDirectoryStructure(fileNames, assetItem.selectedPath);
+		directory_pair dir_pair;
+		dir_pair.path = assetItem.selectedPath;
+		dir_pair.guid = Globals::project->getProjectFolderGuid();
+        createDirectoryStructure(fileNames, dir_pair);
         populateAssetTree(false);
         updateAssetView(assetItem.selectedPath);
         // TODO - select the last imported directory!

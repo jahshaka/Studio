@@ -185,13 +185,14 @@ void Database::createGlobalDbCollections()
  */
 void Database::createGlobalDbAssets() {
 	QString schema = "CREATE TABLE IF NOT EXISTS assets ("
-		"    name              VARCHAR(128),"
+		"    guid              VARCHAR(32) PRIMARY KEY,"
 		"	 type			   INTEGER,"
+		"    parent			   VARCHAR(32),"
+		"    name              VARCHAR(128),"
 		"	 collection		   INTEGER,"
 		"	 times_used		   INTEGER,"
 		"    project_guid      VARCHAR(32),"
 		"    world_guid        VARCHAR(32),"
-		"    thumbnail         BLOB,"
 		"    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
 		"    last_updated      DATETIME,"
 		"	 author			   VARCHAR(128),"
@@ -201,7 +202,7 @@ void Database::createGlobalDbAssets() {
 		"    tags			   BLOB,"
 		"    properties        BLOB,"
 		"    asset             BLOB,"
-		"    guid              VARCHAR(32) PRIMARY KEY"
+		"    thumbnail         BLOB"
 		")";
 
 	QSqlQuery query;
@@ -211,6 +212,7 @@ void Database::createGlobalDbAssets() {
 
 QString Database::insertAssetGlobal(const QString &assetName,
 	int type,
+	const QString &parentFolder,
 	const QByteArray &thumbnail,
 	const QByteArray &properties,
 	const QByteArray &tags,
@@ -220,15 +222,16 @@ QString Database::insertAssetGlobal(const QString &assetName,
 	QSqlQuery query;
 	auto guid = GUIDManager::generateGUID();
 	query.prepare("INSERT INTO assets"
-		" (name, thumbnail, type, collection, version, date_created,"
+		" (name, thumbnail, parent, type, collection, version, date_created,"
 		" last_updated, guid, properties, author, asset, license, tags)"
-		" VALUES (:name, :thumbnail, :type, 0, :version, datetime(),"
+		" VALUES (:name, :thumbnail, :parent, :type, 0, :version, datetime(),"
 		" datetime(), :guid, :properties, :author, :asset, :license, :tags)");
 
 	// QFileInfo assetInfo(assetName);
 
 	query.bindValue(":name",		assetName);
 	query.bindValue(":thumbnail",	thumbnail);
+	query.bindValue(":parent",		parentFolder);
 	query.bindValue(":type",		type);
 	query.bindValue(":version",		Constants::CONTENT_VERSION);
 	query.bindValue(":guid",		guid);
@@ -333,6 +336,25 @@ void Database::createGlobalDbAuthor()
 	QSqlQuery query;
 	query.prepare(schema);
 	executeAndCheckQuery(query, "createGlobalDbAuthor");
+}
+
+void Database::createGlobalDbFolders()
+{
+	QString schema = "CREATE TABLE IF NOT EXISTS folders ("
+		"    guid              VARCHAR(32) PRIMARY KEY,"
+		"    parent            VARCHAR(32),"
+		"    name              VARCHAR(128),"
+		"    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
+		"    last_updated      DATETIME,"
+		"    hash              VARCHAR(16),"
+		"    version           REAL,"
+		"    count			   INTEGER,"
+		"    visible           INTEGER"
+		")";
+
+	QSqlQuery query;
+	query.prepare(schema);
+	executeAndCheckQuery(query, "createGlobalDbFolder");
 }
 
 void Database::updateAuthorInfo(const QString &author_name)
@@ -478,6 +500,24 @@ void Database::updateAssetAsset(const QString guid, const QByteArray &asset)
 	query.addBindValue(asset);
 	query.addBindValue(guid);
 	executeAndCheckQuery(query, "updateAssetAsset");
+}
+
+QString Database::insertFolder(const QString &folderName, const QString &parentFolder)
+{
+	auto guid = GUIDManager::generateGUID();
+
+	QSqlQuery query;
+	query.prepare("INSERT INTO folders (name, parent, version, date_created, last_updated, guid)"
+		" VALUES (:name, :parent, :version, datetime(), datetime(), :guid)");
+
+	query.bindValue(":name",	folderName);
+	query.bindValue(":parent",  parentFolder);
+	query.bindValue(":version", Constants::CONTENT_VERSION);
+	query.bindValue(":guid",	guid);
+
+	executeAndCheckQuery(query, "insertFolder");
+
+	return guid;
 }
 
 void Database::insertCollectionGlobal(const QString &collectionName)

@@ -238,27 +238,6 @@ iris::ScenePtr MainWindow::getScene()
 
 iris::ScenePtr MainWindow::createDefaultScene()
 {
-	// if we reached this far, the project dir has already been created
-	// we can copy some default assets to each project here
-	QFile::copy(IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"),
-				QDir(Globals::project->getProjectFolder()).filePath("Textures/Tile.png"));
-
-	const QString guid = db->insertAssetGlobal("Tile.png", static_cast<int>(AssetType::Folder),
-												QByteArray(), QByteArray(), QByteArray(), QByteArray(), QByteArray());
-
-	QJsonObject assetProperty;
-	assetProperty.insert("name",	"Tile.png");
-	assetProperty.insert("license", QString());
-	assetProperty.insert("author",	QString());
-	assetProperty.insert("type",	static_cast<int>(AssetType::Texture));
-	assetProperty.insert("guid",	guid);
-
-	QJsonDocument saveDoc(assetProperty);
-	QFile metaFile(IrisUtils::buildFileName(QDir(Globals::project->getProjectFolder()).filePath("Textures/Tile.png"), "meta"));
-	metaFile.open(QIODevice::WriteOnly | QIODevice::Truncate);
-	metaFile.write(saveDoc.toJson());
-	metaFile.close();
-
     auto scene = iris::Scene::create();
 
     scene->setSkyColor(QColor(72, 72, 72));
@@ -492,6 +471,7 @@ void MainWindow::setupProjectDB()
 	//db->createGlobalDbProjectAssets();
     db->createGlobalDbCollections();
     db->createGlobalDbThumbs();
+	db->createGlobalDbFolders();
 	//db->createGlobalDbMaterials();
 }
 

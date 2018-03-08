@@ -18,6 +18,7 @@ class Project
 public:
     QString folderPath;
     QString projectName;
+	QString projectFolderGuid;
     QString guid;
 
     bool _saved;
@@ -25,11 +26,13 @@ public:
     Project();
     void setProjectPath(const QString&);
     void setProjectGuid(const QString&);
+	void setProjectFolderGuid(const QString &guid);
     bool isSaved();
 
     QString getProjectName();
     QString getProjectFolder();
     QString getProjectGuid();
+	QString getProjectFolderGuid();
 
     static Project* createNew();
 };
