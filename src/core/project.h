@@ -44,6 +44,7 @@ struct ProjectTileData {
 };
 
 struct AssetTileData {
+	QString		parent;
 	QString     name;
 	QString     full_filename;
 	QByteArray  thumbnail;
@@ -56,6 +57,14 @@ struct AssetTileData {
 	QString		author;
 	QByteArray  tags;
 	bool		used;
+};
+
+struct FolderData
+{
+	QString	guid;
+	QString	name;
+	QString	parent;
+	short	count;
 };
 
 struct AssetData {
@@ -86,5 +95,6 @@ enum class ModelTypes {
 #define	MODEL_GUID_ROLE	0x0113
 #define	MODEL_EXT_ROLE	0x0133
 #define	MODEL_TYPE_ROLE	0x0123
+#define	MODEL_MESH_ROLE	0x0173
 
 #endif // PROJECT_H

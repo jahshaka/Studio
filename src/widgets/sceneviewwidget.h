@@ -285,7 +285,7 @@ private:
 	AnimationPath* animPath;
 
 signals:
-    void addDroppedMesh(QString, bool, QVector3D, QString);
+    void addDroppedMesh(QString, bool, QVector3D, QString, QString);
     void initializeGraphics(SceneViewWidget* widget,
                             QOpenGLFunctions_3_2_Core* gl);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);

@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "assetwidget.h"
 #include "sceneviewwidget.h"
 #include "../constants.h"
 #include <QTimer>
@@ -138,11 +139,17 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
         stream >> roleDataMap;
     }
 
-    // qDebug() << roleDataMap.value(0).toInt();
+    qDebug() << roleDataMap.value(0).toInt();
+	qDebug() << roleDataMap.value(1).toString();
+	qDebug() << roleDataMap.value(2).toString();
+	qDebug() << roleDataMap.value(3).toString();
 
-    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
+	//qDebug() << QDir(QDir(Globals::project->getProjectFolder()).filePath("Models")).filePath(roleDataMap.value(2).toString());
+
+    if (roleDataMap.value(0).toInt() == static_cast<int>(AssetType::Object)) {
         auto ppos = dragScenePos;
-        emit addDroppedMesh(roleDataMap.value(3).toString(), true, ppos, roleDataMap.value(1).toString());
+        emit addDroppedMesh(QDir(QDir(Globals::project->getProjectFolder()).filePath("Models")).filePath(roleDataMap.value(2).toString()), true, ppos,
+			roleDataMap.value(3).toString(), roleDataMap.value(1).toString());
     }
 
     //if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {

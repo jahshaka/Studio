@@ -22,6 +22,7 @@ struct AssetItem {
     QString selectedPath;
     QTreeWidgetItem *item;
     QListWidgetItem *wItem;
+	QString selectedGuid;
     // add one for assetView...
 };
 
@@ -34,7 +35,9 @@ struct find_asset_thumbnail
 	}
 };
 
-#define     ID_ROLE     0x0111
+#define     ID_ROLE				0x0111
+#define		DATA_GUID_ROLE		0x0400
+#define		DATA_PARENT_ROLE	0x0401
 
 typedef struct directory_pair
 {
@@ -57,9 +60,14 @@ public:
     void generateAssetThumbnails();
     void syncTreeAndView(const QString&);
     void addItem(const QString &asset);
+	void addItem(const FolderData &folderData);
+	void addItem(const AssetTileData &assetData);
     void updateAssetView(const QString &path);
+	void populateAssetView();
     void trigger();
     void updateLabels();
+
+	void extractTexturesAndMaterialFromMesh(const QString &filePath, QStringList &textureList, QJsonObject &material);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);

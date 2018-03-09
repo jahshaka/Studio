@@ -187,7 +187,6 @@ void Database::createGlobalDbAssets() {
 	QString schema = "CREATE TABLE IF NOT EXISTS assets ("
 		"    guid              VARCHAR(32) PRIMARY KEY,"
 		"	 type			   INTEGER,"
-		"    parent			   VARCHAR(32),"
 		"    name              VARCHAR(128),"
 		"	 collection		   INTEGER,"
 		"	 times_used		   INTEGER,"
@@ -199,6 +198,7 @@ void Database::createGlobalDbAssets() {
 		"    license		   VARCHAR(64),"
 		"    hash              VARCHAR(16),"
 		"    version           REAL,"
+		"    parent            VARCHAR(32),"
 		"    tags			   BLOB,"
 		"    properties        BLOB,"
 		"    asset             BLOB,"
@@ -281,6 +281,86 @@ QVector<AssetTileData> Database::fetchAssets()
 		}
 
 		Globals::assetNames.insert(data.guid, data.name);
+
+		tileData.push_back(data);
+	}
+
+	return tileData;
+}
+
+AssetTileData Database::fetchAsset(const QString &guid)
+{
+	QSqlQuery query;
+	query.prepare(
+		"SELECT name, thumbnail, guid, parent, type FROM assets WHERE guid = ? "
+	);
+	query.addBindValue(guid);
+	executeAndCheckQuery(query, "fetchAsset");
+
+	if (query.exec()) {
+		if (query.first()) {
+			AssetTileData data;
+			data.name = query.value(0).toString();
+			data.thumbnail = query.value(1).toByteArray();
+			data.guid = query.value(2).toString();
+			data.parent = query.value(3).toString();
+			data.type = query.value(4).toInt();
+			return data;
+		}
+	}
+	else {
+		irisLog("There was an error getting the asset! " + query.lastError().text());
+	}
+
+	return AssetTileData();
+}
+
+QVector<FolderData> Database::fetchChildFolders(const QString &parent)
+{
+	QSqlQuery query;
+	query.prepare("SELECT guid, parent, name, count FROM folders WHERE parent = ?");
+	query.addBindValue(parent);
+	executeAndCheckQuery(query, "fetchChildFolders");
+
+	QVector<FolderData> folderData;
+	while (query.next()) {
+		FolderData data;
+		QSqlRecord record = query.record();
+		for (int i = 0; i < record.count(); i++) {
+			data.guid = record.value(0).toString();
+			data.parent = record.value(1).toString();
+			data.name = record.value(2).toString();
+			data.count = record.value(3).toInt();
+		}
+
+		folderData.push_back(data);
+	}
+
+	return folderData;
+}
+
+QVector<AssetTileData> Database::fetchChildAssets(const QString &parent)
+{
+	QSqlQuery query;
+	query.prepare(
+		"SELECT name, thumbnail, guid, parent, type "
+		"FROM assets WHERE parent = ? "
+		"ORDER BY name DESC"
+	);
+	query.addBindValue(parent);
+	executeAndCheckQuery(query, "fetchChildAssets");
+
+	QVector<AssetTileData> tileData;
+	while (query.next()) {
+		AssetTileData data;
+		QSqlRecord record = query.record();
+		for (int i = 0; i < record.count(); i++) {
+			data.name = record.value(0).toString();
+			data.thumbnail = record.value(1).toByteArray();
+			data.guid = record.value(2).toString();
+			data.parent = record.value(3).toString();
+			data.type = record.value(4).toInt();
+		}
 
 		tileData.push_back(data);
 	}
@@ -546,6 +626,19 @@ QString Database::insertFolder(const QString &folderName, const QString &parentF
 
 	return guid;
 }
+
+bool Database::deleteFolder(const QString &guid)
+{
+	// This should fetch all children and remove them as well
+	QSqlQuery query;
+	query.prepare("DELETE FROM folders WHERE guid = ?");
+	query.addBindValue(guid);
+	return executeAndCheckQuery(query, "deleteFolder");
+
+	return false;
+}
+
+
 
 void Database::insertCollectionGlobal(const QString &collectionName)
 {

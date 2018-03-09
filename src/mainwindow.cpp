@@ -471,7 +471,7 @@ void MainWindow::setupProjectDB()
 	//db->createGlobalDbProjectAssets();
     db->createGlobalDbCollections();
     db->createGlobalDbThumbs();
-	//db->createGlobalDbFolders();
+	db->createGlobalDbFolders();
 	//db->createGlobalDbMaterials();
 }
 
@@ -645,7 +645,7 @@ void MainWindow::saveScene(const QString &filename, const QString &projectPath)
 	buffer.open(QIODevice::WriteOnly);
 	img.save(&buffer, "PNG");
 
-	db->insertSceneGlobal(filename, sceneObject, thumb);
+	db->updateSceneGlobal(sceneObject, thumb);
 
 	undoStackCount = UiManager::getUndoStackCount();
 }
@@ -1005,7 +1005,7 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
     addNodeToScene(node, ignore);
 }
 
-void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position, const QString &name)
+void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position, const QString &guid, const QString &assetName)
 {
 	QString filename;
 	if (path.isEmpty()) {
@@ -1021,10 +1021,13 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
 	//auto material_guid = db->getDependencyByType((int) AssetMetaType::Material, QFileInfo(filename).baseName());
 	//auto material = db->getMaterialGlobal(material_guid);
-	auto material = db->getAssetMaterialGlobal(QFileInfo(filename).baseName());
+	auto material = db->getAssetMaterialGlobal(guid);
 	auto materialObj = QJsonDocument::fromBinaryData(material);
 
 	QJsonObject assetMaterial = materialObj.object();
+
+	qDebug() << filename;
+	qDebug() << assetMaterial;
 
 	int iter = 0;
 	std::function<void (QJsonObject, QJsonArray&)> extractMeshMaterial = [&](QJsonObject node, QJsonArray &materialList) -> void {
@@ -1107,8 +1110,8 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 			anim->skeletalAnimation->source = relPath;
 	}
 
-	node->setName(name);
-	node->setGUID(QFileInfo(filename).baseName());
+	node->setName(QFileInfo(filename).baseName());
+	node->setGUID(guid);
 	node->setLocalPos(position);
 
 	// todo: load material data

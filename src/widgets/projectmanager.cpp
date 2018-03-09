@@ -296,37 +296,31 @@ void ProjectManager::newProject()
 
 		QJsonObject assetProperty;
 
-		const QString parentFolder = db->insertFolder(projectName, QString());
-		Globals::project->setProjectFolderGuid(parentFolder);
+		// Insert an empty scene to get access to the project guid... 
+		db->insertSceneGlobal(projectName, QByteArray(), QByteArray());
 
-        for (auto folder : Constants::PROJECT_DIRS) {
-            QDir dir(QDir(fullProjectPath).filePath(folder));
-            dir.mkpath(".");
-			const QString folderGuid = db->insertFolder(folder, parentFolder);
+		for (auto folder : Constants::PROJECT_DIRS) {
+			QDir dir(QDir(fullProjectPath).filePath(folder));
+			dir.mkpath(".");
+		}
 
-			// gonn kotch this yassuh for now
-			if (folder == "Textures") {
-				// if we reached this far, the project dir has already been created
-				// we can copy some default assets to each project here
-				QFile::copy(IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"),
+		//const QString folderGuid = db->insertFolder("Assets", Globals::project->getProjectGuid());
+        
+		// if we reached this far, the project dir has already been created
+		// we can copy some default assets to each project here
+		QFile::copy(IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"),
 					QDir(Globals::project->getProjectFolder()).filePath("Textures/Tile.png"));
 
-				const QString assetGuid = db->insertAssetGlobal("Tile.png", static_cast<int>(AssetType::Texture), folderGuid);
+		auto thumb = ThumbnailManager::createThumbnail(
+						IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"), 256, 256);
 
-				QJsonObject assetProperty;
-				assetProperty.insert("name", "Tile.png");
-				assetProperty.insert("license", QString());
-				assetProperty.insert("author", QString());
-				assetProperty.insert("type", static_cast<int>(AssetType::Texture));
-				assetProperty.insert("guid", assetGuid);
+		QByteArray bytes;
+		QBuffer buffer(&bytes);
+		buffer.open(QIODevice::WriteOnly);
+		QPixmap::fromImage(*thumb->thumb).save(&buffer, "PNG");
 
-				QJsonDocument saveDoc(assetProperty);
-				QFile metaFile(IrisUtils::buildFileName(QDir(Globals::project->getProjectFolder()).filePath("Textures/Tile.png"), "meta"));
-				metaFile.open(QIODevice::WriteOnly | QIODevice::Truncate);
-				metaFile.write(saveDoc.toJson());
-				metaFile.close();
-			}
-        }
+		db->insertAssetGlobal("Tile.png", static_cast<int>(AssetType::Texture),
+							  Globals::project->getProjectGuid(), bytes);
 		
         emit fileToCreate(projectName, fullProjectPath);
 

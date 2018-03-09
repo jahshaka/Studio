@@ -41,6 +41,7 @@ public:
 	void updateAssetThumbnail(const QString guid, const QByteArray &thumbnail);
 	void updateAssetAsset(const QString guid, const QByteArray &asset);
 	QString insertFolder(const QString&, const QString&);
+	bool deleteFolder(const QString &);
 	QString insertAssetGlobal(const QString&, int type, const QString&, const QByteArray &thumbnail = QByteArray(),
 							  const QByteArray &properties = QByteArray(), const QByteArray &tags = QByteArray(),
 							  const QByteArray &asset = QByteArray(), const QString &author = QString());
@@ -63,6 +64,9 @@ public:
     QVector<CollectionData> fetchCollections();
     QVector<ProjectTileData> fetchProjects();
 	QVector<AssetTileData> fetchAssets();
+	AssetTileData fetchAsset(const QString &guid);
+	QVector<FolderData> fetchChildFolders(const QString &parent);
+	QVector<AssetTileData> fetchChildAssets(const QString &parent);
 	QVector<AssetTileData> fetchAssetsByCollection(int collection_id);
 	QVector<AssetData> fetchAssetThumbnails(const QStringList& guids);
     QByteArray getSceneBlobGlobal() const;
