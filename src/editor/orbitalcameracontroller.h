@@ -62,6 +62,8 @@ public:
 
 	void update(float dt) override;
 
+	void focusOnNode(iris::SceneNodePtr sceneNode);
+
     void updateCameraRot();
 };
 

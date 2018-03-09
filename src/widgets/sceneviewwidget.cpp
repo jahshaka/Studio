@@ -1055,6 +1055,12 @@ void SceneViewWidget::setArcBallCameraMode()
     setCameraController(orbitalCam);
 }
 
+void SceneViewWidget::focusOnNode(iris::SceneNodePtr sceneNode)
+{
+	setCameraController(orbitalCam);
+	orbitalCam->focusOnNode(sceneNode);
+}
+
 bool SceneViewWidget::isVrSupported()
 {
     return renderer->isVrSupported();

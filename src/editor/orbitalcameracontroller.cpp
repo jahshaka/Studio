@@ -148,6 +148,14 @@ void OrbitalCameraController::onKeyReleased(Qt::Key key)
 	}
 }
 
+void OrbitalCameraController::focusOnNode(iris::SceneNodePtr sceneNode)
+{
+	auto nodePos = sceneNode->getGlobalPosition();
+	camera->lookAt(nodePos);
+	distFromPivot = camera->getGlobalPosition().distanceToPoint(nodePos);
+	this->setCamera(camera);
+}
+
 void OrbitalCameraController::updateCameraRot()
 {
     auto rot = QQuaternion::fromEulerAngles(pitch,yaw,0);

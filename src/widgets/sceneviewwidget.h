@@ -138,6 +138,8 @@ public:
     void setArcBallCameraMode();
     void setCameraController();
 
+	void focusOnNode(iris::SceneNodePtr sceneNode);
+
     bool isVrSupported();
     void setViewportMode(ViewportMode viewportMode);
     ViewportMode getViewportMode();

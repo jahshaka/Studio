@@ -74,7 +74,8 @@ protected slots:
 
     void renameNode();
     void deleteNode();
-    void duplicateNode();
+	void duplicateNode();
+	void focusOnNode();
 
 private:
 	void showHideNode(QTreeWidgetItem* item, bool show);
