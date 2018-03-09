@@ -23,6 +23,8 @@ For more information see the LICENSE file
 #include "../core/project.h"
 #include "../irisgl/src/irisglfwd.h"
 #include "../irisgl/src/math/intersectionhelper.h"
+#include "uimanager.h"
+#include "../mainwindow.h"
 
 namespace iris
 {
@@ -103,6 +105,10 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
     iris::FontPtr font;
     float fontSize;
     bool showFps;
+
+	// vr viewer representation
+	iris::MaterialPtr viewerMat;
+	iris::MeshPtr viewerMesh;
 public:
     iris::CameraNodePtr editorCam;
 
@@ -132,6 +138,8 @@ public:
     void setArcBallCameraMode();
     void setCameraController();
 
+	void focusOnNode(iris::SceneNodePtr sceneNode);
+
     bool isVrSupported();
     void setViewportMode(ViewportMode viewportMode);
     ViewportMode getViewportMode();
@@ -147,6 +155,8 @@ public:
 
     void setEditorData(EditorData* data);
     EditorData* getEditorData();
+
+	void setWindowSpace(WindowSpaces windowSpace);
 
     void startPlayingScene();
     void pausePlayingScene();
@@ -175,6 +185,8 @@ public:
 
     void setShowFps(bool value);
 	void renderSelectedNode(iris::SceneNodePtr selectedNode);
+
+	void setSceneMode(SceneMode sceneMode);
 
     void cleanup();
 
@@ -260,6 +272,13 @@ private:
     void initLightAssets();
     iris::MeshPtr createDirLightMesh(float radius = 1.0);
     void addLightShapesToScene();
+
+	void addViewerHeadsToScene();
+
+	WindowSpaces windowSpace;
+	bool displayGizmos;
+	bool displayLightIcons;
+	bool displaySelectionOutline;
 
 signals:
     void addDroppedMesh(QString, bool, QVector3D, QString);

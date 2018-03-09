@@ -117,6 +117,7 @@ set(SRCS
     src/widgets/assetviewgrid.cpp
     src/widgets/assetgriditem.cpp
 	src/editor/outlinerenderer.cpp
+	src/editor/viewermaterial.cpp
 )
 
 set(HEADERS
@@ -232,6 +233,7 @@ set(HEADERS
 	src/breakpad/breakpad.h
 	src/materials/jahdefaultmaterial.h
 	src/editor/outlinerenderer.h 
+	src/editor/viewermaterial.h
 )
 
 # Todo - trim these down to nothing eventually

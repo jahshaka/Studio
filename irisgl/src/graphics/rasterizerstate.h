@@ -33,6 +33,10 @@ struct RasterizerState
     static RasterizerState CullCounterClockwise;
     static RasterizerState CullClockwise;
     static RasterizerState CullNone;
+
+	static RasterizerState createCullCounterClockwise();
+	static RasterizerState createCullClockwise();
+	static RasterizerState createCullNone();
 };
 
 }

@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/core/irisutils.h"
 #include "../mainwindow.h"
+#include "../uimanager.h"
+#include "../widgets/sceneviewwidget.h"
 
 //#include <QProxyStyle>
 //
@@ -239,6 +241,10 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
         menu.addAction(action);
     }
 
+	action = new QAction(QIcon(), "Focus Camera", this);
+	connect(action, SIGNAL(triggered()), this, SLOT(focusOnNode()));
+	menu.addAction(action);
+
     selectedNode = node;
     menu.exec(ui->sceneTree->mapToGlobal(pos));
 }
@@ -257,6 +263,11 @@ void SceneHierarchyWidget::deleteNode()
 void SceneHierarchyWidget::duplicateNode()
 {
     mainWindow->duplicateNode();
+}
+
+void SceneHierarchyWidget::focusOnNode()
+{
+	UiManager::sceneViewWidget->focusOnNode(selectedNode);
 }
 
 void SceneHierarchyWidget::showHideNode(QTreeWidgetItem* item, bool show)

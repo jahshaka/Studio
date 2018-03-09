@@ -34,6 +34,8 @@ public:
     virtual void onMouseUp(Qt::MouseButton button);
     virtual void onMouseMove(int x,int y);
     virtual void onMouseWheel(int val);
+	virtual void onKeyPressed(Qt::Key key);
+	virtual void onKeyReleased(Qt::Key key);
 
     virtual void start();
     virtual void update(float dt);

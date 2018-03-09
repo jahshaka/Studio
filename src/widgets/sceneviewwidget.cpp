@@ -49,6 +49,7 @@ For more information see the LICENSE file
 #include "../editor/orbitalcameracontroller.h"
 #include "../editor/viewercontroller.h"
 #include "../editor/editorvrcontroller.h"
+#include "../editor/viewermaterial.h"
 
 #include "../editor/editordata.h"
 
@@ -67,6 +68,7 @@ For more information see the LICENSE file
 #include "../editor/thumbnailgenerator.h"
 #include "../core/settingsmanager.h"
 #include "../uimanager.h"
+#include "../mainwindow.h"
 
 void SceneViewWidget::setShowFps(bool value)
 {
@@ -161,7 +163,9 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 	format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
 	format.setProfile(QSurfaceFormat::CoreProfile);
 	format.setSamples(1);
+#ifdef QT_DEBUG
 	format.setOption(QSurfaceFormat::DebugContext);
+#endif
 	setFormat(format);
 
 	
@@ -314,6 +318,14 @@ void SceneViewWidget::addLightShapesToScene()
     }
 }
 
+void SceneViewWidget::addViewerHeadsToScene()
+{
+	for (auto viewer : scene->viewers) {
+		//if (selectedNode != viewer)
+		scene->geometryRenderList->submitMesh(viewerMesh, viewerMat, viewer->getGlobalTransform());
+	}
+}
+
 void SceneViewWidget::setScene(iris::ScenePtr scene)
 {
     this->scene = scene;
@@ -378,7 +390,22 @@ void SceneViewWidget::renderGizmos(bool once)
 
 void SceneViewWidget::renderSelectedNode(iris::SceneNodePtr selectedNode)
 {
+	if (viewportMode != ViewportMode::Editor || UiManager::sceneMode != SceneMode::EditMode)
+		return;
 	outliner->renderOutline(renderer->getGraphicsDevice(), selectedNode, editorCam, qBound(1.f,(float)scene->outlineWidth,2.f), scene->outlineColor);
+}
+
+void SceneViewWidget::setSceneMode(SceneMode sceneMode)
+{
+	// stop animation
+	if (sceneMode == SceneMode::EditMode)
+	{
+
+	}
+	else
+	{
+
+	}
 }
 
 void SceneViewWidget::initializeGL()
@@ -404,6 +431,11 @@ void SceneViewWidget::initializeGL()
     viewerTex = iris::Texture2D::create(500, 500);
     viewerRT->addTexture(viewerTex);
     viewerQuad = new iris::FullScreenQuad();
+
+	auto mat = ViewerMaterial::create();
+	mat->setTexture(iris::Texture2D::load(":/assets/models/head.png"));
+	viewerMat = mat.staticCast<iris::Material>();
+	viewerMesh = iris::Mesh::loadMesh(":/assets/models/head2.obj");
 
     screenshotRT = iris::RenderTarget::create(500, 500);
     screenshotTex = iris::Texture2D::create(500, 500);
@@ -478,21 +510,19 @@ void SceneViewWidget::renderScene()
 
         // hide viewer so it doesnt show up in rt
         bool viewerVisible = true;
-
+/*
         if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
             viewerVisible = selectedNode->isVisible();
             selectedNode->hide();
         } else {
             viewerVisible = false;    
         }
-
+		*/
         scene->update(dt);
 
         // insert vr head
         if ((UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)) {
             renderer->renderLightBillboards = true;
-            for (auto view : scene->viewers)
-                view->submitRenderItems();
         } else {
             renderer->renderLightBillboards = false;
         }
@@ -510,23 +540,11 @@ void SceneViewWidget::renderScene()
                 viewerRT->resize(this->width(), this->height(), true);
 
                 renderer->renderSceneToRenderTarget(viewerRT, viewerCamera);
-
-                // restore viewer visibility state
-                if (viewerVisible) {
-                    selectedNode->show();
-
-                    // let it show back in regular scene rendering mode
-                    // i know this looks like a hack, but it'll
-                    // have to do until we find a better way to do this
-                    if (UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)
-                        selectedNode->submitRenderItems();
-                }
-            }
-            else {
-                if (viewerVisible)
-                    selectedNode->show();
             }
         }
+
+		if (UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)
+			addViewerHeadsToScene();
 
         if (viewportMode == ViewportMode::Editor) {
             renderer->renderScene(dt, viewport);
@@ -698,7 +716,7 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
                 gizmo->startDragging(rayPos, rayDir);
             }
 
-            // if we don't have a selected node prioritize object picking
+            // if we don't have a selected node, prioritize object picking
             if (selectedNode.isNull()) {
                 this->doObjectPicking(e->localPos(), lastSelected);
             }
@@ -739,11 +757,13 @@ void SceneViewWidget::wheelEvent(QWheelEvent *event)
 void SceneViewWidget::keyPressEvent(QKeyEvent *event)
 {
     KeyboardState::keyStates[event->key()] = true;
+	camController->onKeyPressed((Qt::Key)event->key());
 }
 
 void SceneViewWidget::keyReleaseEvent(QKeyEvent *event)
 {
     KeyboardState::keyStates[event->key()] = false;
+	camController->onKeyReleased((Qt::Key)event->key());
 }
 
 void SceneViewWidget::focusOutEvent(QFocusEvent* event)
@@ -1035,6 +1055,12 @@ void SceneViewWidget::setArcBallCameraMode()
     setCameraController(orbitalCam);
 }
 
+void SceneViewWidget::focusOnNode(iris::SceneNodePtr sceneNode)
+{
+	setCameraController(orbitalCam);
+	orbitalCam->focusOnNode(sceneNode);
+}
+
 bool SceneViewWidget::isVrSupported()
 {
     return renderer->isVrSupported();
@@ -1120,6 +1146,25 @@ EditorData* SceneViewWidget::getEditorData()
     data->showLightWires = showLightWires;
 
     return data;
+}
+
+void SceneViewWidget::setWindowSpace(WindowSpaces windowSpace)
+{
+	this->windowSpace = windowSpace;
+
+	switch (windowSpace)
+	{
+	case WindowSpaces::EDITOR:
+		displayGizmos = true;
+		displayLightIcons = true;
+		displaySelectionOutline = true;
+		break;
+	case WindowSpaces::PLAYER:
+		displayGizmos = false;
+		displayLightIcons = false;
+		displaySelectionOutline = false;
+		break;
+	}
 }
 
 void SceneViewWidget::startPlayingScene()

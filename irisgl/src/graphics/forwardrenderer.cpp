@@ -17,7 +17,6 @@ For more information see the LICENSE file
 #include "../scenegraph/lightnode.h"
 #include "../scenegraph/viewernode.h"
 #include "../scenegraph/particlesystemnode.h"
-#include "../materials/viewermaterial.h"
 #include "mesh.h"
 #include "skeleton.h"
 #include "graphicshelper.h"

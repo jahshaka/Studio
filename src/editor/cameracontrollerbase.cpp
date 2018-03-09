@@ -74,6 +74,16 @@ void CameraControllerBase::onMouseWheel(int val)
 
 }
 
+void CameraControllerBase::onKeyPressed(Qt::Key key)
+{
+
+}
+
+void CameraControllerBase::onKeyReleased(Qt::Key key)
+{
+
+}
+
 void CameraControllerBase::start()
 {
     resetMouseStates();

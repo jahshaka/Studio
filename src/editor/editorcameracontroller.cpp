@@ -154,6 +154,18 @@ void EditorCameraController::onMouseWheel(int delta)
     camera->setLocalPos(movement);
 }
 
+void EditorCameraController::onKeyPressed(Qt::Key key)
+{
+
+}
+
+void EditorCameraController::onKeyReleased(Qt::Key key)
+{
+	if (key == Qt::Key_X) {
+		//
+	}
+}
+
 /**
  * @brief EditorCameraController::updateCameraRot
  */

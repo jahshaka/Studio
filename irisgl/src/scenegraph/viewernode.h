@@ -28,8 +28,8 @@ class ViewerNode : public SceneNode
     ViewerNode();
 
 public:
-    MeshPtr headModel;
-    ViewerMaterialPtr material;
+    //MeshPtr headModel;
+    //ViewerMaterialPtr material;
 
     void setViewScale(float scale);
     float getViewScale();
