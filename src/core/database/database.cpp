@@ -210,7 +210,47 @@ void Database::createGlobalDbAssets() {
 	executeAndCheckQuery(query, "createGlobalDbAssets");
 }
 
-QString Database::insertAssetGlobal(const QString &assetName,
+QString Database::insertAssetGlobal(
+	const QString &assetName,
+	int type,
+	const QString &parentFolder,
+	const QByteArray &thumbnail,
+	const QByteArray &properties,
+	const QByteArray &tags,
+	const QByteArray &asset,
+	const QString &author)
+{
+	auto guid = GUIDManager::generateGUID();
+
+	QSqlQuery query;
+	query.prepare(
+		"INSERT INTO assets"
+		" (name, thumbnail, parent, type, collection, version, date_created,"
+		" last_updated, guid, properties, author, asset, license, tags)"
+		" VALUES (:name, :thumbnail, :parent, :type, 0, :version, datetime(),"
+		" datetime(), :guid, :properties, :author, :asset, :license, :tags)"
+	);
+
+	query.bindValue(":name", assetName);
+	query.bindValue(":thumbnail", thumbnail);
+	query.bindValue(":parent", parentFolder);
+	query.bindValue(":type", type);
+	query.bindValue(":version", Constants::CONTENT_VERSION);
+	query.bindValue(":guid", guid);
+	query.bindValue(":properties", properties);
+	query.bindValue(":author", author);// getAuthorName());
+	query.bindValue(":asset", asset);
+	query.bindValue(":license", "CCBY");
+	query.bindValue(":tags", tags);
+
+	executeAndCheckQuery(query, "insertSceneAsset");
+
+	return guid;
+}
+
+QString Database::createAssetEntry(
+	const QString &guid,
+	const QString &assetName,
 	int type,
 	const QString &parentFolder,
 	const QByteArray &thumbnail,
@@ -220,14 +260,13 @@ QString Database::insertAssetGlobal(const QString &assetName,
 	const QString &author)
 {
 	QSqlQuery query;
-	auto guid = GUIDManager::generateGUID();
-	query.prepare("INSERT INTO assets"
+	query.prepare(
+		"INSERT INTO assets"
 		" (name, thumbnail, parent, type, collection, version, date_created,"
 		" last_updated, guid, properties, author, asset, license, tags)"
 		" VALUES (:name, :thumbnail, :parent, :type, 0, :version, datetime(),"
-		" datetime(), :guid, :properties, :author, :asset, :license, :tags)");
-
-	// QFileInfo assetInfo(assetName);
+		" datetime(), :guid, :properties, :author, :asset, :license, :tags)"
+	);
 
 	query.bindValue(":name",		assetName);
 	query.bindValue(":thumbnail",	thumbnail);
@@ -241,7 +280,7 @@ QString Database::insertAssetGlobal(const QString &assetName,
 	query.bindValue(":license",		"CCBY");
 	query.bindValue(":tags",		tags);
 
-	executeAndCheckQuery(query, "insertSceneAsset");
+	executeAndCheckQuery(query, "createAssetEntry");
 
 	return guid;
 }
@@ -609,13 +648,13 @@ void Database::updateAssetAsset(const QString guid, const QByteArray &asset)
 	executeAndCheckQuery(query, "updateAssetAsset");
 }
 
-QString Database::insertFolder(const QString &folderName, const QString &parentFolder)
+QString Database::insertFolder(const QString &folderName, const QString &parentFolder, const QString &guid)
 {
-	auto guid = GUIDManager::generateGUID();
-
 	QSqlQuery query;
-	query.prepare("INSERT INTO folders (name, parent, version, date_created, last_updated, guid)"
-		" VALUES (:name, :parent, :version, datetime(), datetime(), :guid)");
+	query.prepare(
+		"INSERT INTO folders (name, parent, version, date_created, last_updated, guid) "
+		"VALUES (:name, :parent, :version, datetime(), datetime(), :guid)"
+	);
 
 	query.bindValue(":name",	folderName);
 	query.bindValue(":parent",  parentFolder);

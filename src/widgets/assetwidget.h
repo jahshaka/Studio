@@ -39,10 +39,11 @@ struct find_asset_thumbnail
 #define		DATA_GUID_ROLE		0x0400
 #define		DATA_PARENT_ROLE	0x0401
 
-typedef struct directory_pair
+typedef struct directory_tuple
 {
 	QString path;
 	QString guid;
+	QString parent_guid;
 };
 
 class AssetWidget : public QWidget
@@ -97,7 +98,7 @@ protected slots:
     void openAtFolder();
     void createFolder();
     void importAssetB();
-    void createDirectoryStructure(const QStringList&, const directory_pair&);
+    void createDirectoryStructure(const QList<directory_tuple>&);
     void importAsset(const QStringList &path);
 
     void onThumbnailResult(ThumbnailResult* result);

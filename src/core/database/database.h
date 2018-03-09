@@ -40,11 +40,14 @@ public:
     void renameProject(const QString&);
 	void updateAssetThumbnail(const QString guid, const QByteArray &thumbnail);
 	void updateAssetAsset(const QString guid, const QByteArray &asset);
-	QString insertFolder(const QString&, const QString&);
+	QString insertFolder(const QString&, const QString&, const QString&);
 	bool deleteFolder(const QString &);
 	QString insertAssetGlobal(const QString&, int type, const QString&, const QByteArray &thumbnail = QByteArray(),
-							  const QByteArray &properties = QByteArray(), const QByteArray &tags = QByteArray(),
-							  const QByteArray &asset = QByteArray(), const QString &author = QString());
+		const QByteArray &properties = QByteArray(), const QByteArray &tags = QByteArray(),
+		const QByteArray &asset = QByteArray(), const QString &author = QString());
+	QString createAssetEntry(const QString&, const QString&, int type, const QString&, const QByteArray &thumbnail = QByteArray(),
+		const QByteArray &properties = QByteArray(), const QByteArray &tags = QByteArray(),
+		const QByteArray &asset = QByteArray(), const QString &author = QString());
 	void insertProjectAssetGlobal(const QString&, int type, const QByteArray &thumbnail,
 							      const QByteArray &properties, const QByteArray &tags,
 								  const QByteArray &asset, const QString &guid);

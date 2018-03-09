@@ -663,7 +663,7 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
 {
     QString folderName = reinterpret_cast<QLineEdit*>(listItem)->text();
 	if (!folderName.isEmpty()) {
-		db->insertFolder(folderName, assetItem.selectedGuid);
+		//db->insertFolder(folderName, assetItem.selectedGuid);
 		//reinterpret_cast<QListWidgetItem*>(listItem)->setData(Qt::DisplayRole, folderName);
 		//reinterpret_cast<QListWidgetItem*>(listItem)->setData(DATA_GUID_ROLE, assetItem.selectedGuid);
 	}
@@ -749,20 +749,15 @@ void AssetWidget::importAssetB()
     importAsset(fileNames);
 }
 
-void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const directory_pair &dir_pair)
+void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNames)
 {
-	foreach (const QFileInfo &file, fileNames) {
-		if (file.isDir()) {
-			QStringList list;
-			foreach (const QString &item, QDir(file.absoluteFilePath()).entryList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
-			    list << QDir(file.absoluteFilePath()).filePath(item);
-			}
+	QList<directory_tuple> imagesInUse;
 
-			directory_pair dp;
-			dp.path = QDir(dir_pair.path).filePath(file.fileName());
-			dp.guid = db->insertFolder(file.baseName(), dir_pair.guid);
+	foreach (const auto &entry, fileNames) {
+		QFileInfo entryInfo(entry.path);
 
-			createDirectoryStructure(list, dp);
+		if (entryInfo.isDir()) {
+			db->insertFolder(entryInfo.baseName(), entry.parent_guid, entry.guid);
 		}
 		else {
 			QString fileName;
@@ -776,21 +771,21 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const d
 			QString destDir;
 
 			// handle all model extensions here
-			if (Constants::IMAGE_EXTS.contains(file.suffix())) {
-				auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
+			if (Constants::IMAGE_EXTS.contains(entryInfo.suffix().toLower())) {
+				auto thumb = ThumbnailManager::createThumbnail(entryInfo.absoluteFilePath(), 256, 256);
 				thumbnail = QPixmap::fromImage(*thumb->thumb);
 				type = AssetType::Texture;
 				destDir = "Textures";
 			}
-			else if (Constants::MODEL_EXTS.contains(file.suffix())) {
+			else if (Constants::MODEL_EXTS.contains(entryInfo.suffix().toLower())) {
 				type = AssetType::Mesh;
 				destDir = "Models";
 			}
-			else if (file.suffix() == Constants::SHADER_EXT) {
+			else if (entryInfo.suffix() == Constants::SHADER_EXT) {
 				type = AssetType::Shader;
 				destDir = "Shaders";
 			}
-			else if (file.suffix() == Constants::MATERIAL_EXT) {
+			else if (entryInfo.suffix() == Constants::MATERIAL_EXT) {
 				type = AssetType::Material;
 				destDir = "Materials";
 			}
@@ -799,8 +794,8 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const d
 				type = AssetType::Invalid;
 			}
 
-			fileName = file.fileName();
-			fileAbsolutePath = file.absoluteFilePath();
+			fileName = entryInfo.fileName();
+			fileAbsolutePath = entry.path;
 			
 			auto asset = new AssetVariant;
 			asset->type         = type;
@@ -815,29 +810,54 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const d
 				QFileInfo check_file(pathToCopyTo);
 
 				if (!check_file.exists()) {
-					QByteArray bytes;
-					QBuffer buffer(&bytes);
+					QByteArray thumbnailBytes;
+					QBuffer buffer(&thumbnailBytes);
 					buffer.open(QIODevice::WriteOnly);
 					thumbnail.save(&buffer, "PNG");
 
-					const QString assetGuid = db->insertAssetGlobal(asset->fileName, static_cast<int>(asset->type), dir_pair.guid, bytes);
+					const QString assetGuid = db->createAssetEntry(entry.guid,
+																   asset->fileName,
+																   static_cast<int>(asset->type),
+																   entry.parent_guid,
+																   thumbnailBytes);
+
+					if (asset->type == AssetType::Texture) {
+						directory_tuple dt;
+						dt.parent_guid = entry.parent_guid;
+						dt.guid = entry.guid;
+						dt.path = pathToCopyTo;
+						imagesInUse.append(dt);
+					}
 
 					if (asset->type == AssetType::Mesh) {
 						// Copy textures over to project and create embedded material
-						QJsonObject material;
+						QJsonObject jsonMaterial;
 						QStringList texturesToCopy;
-						extractTexturesAndMaterialFromMesh(file.absoluteFilePath(), texturesToCopy, material);
-						// Create an actual object from a mesh, objects hold materials
-						const QString objectGuid = db->insertAssetGlobal(file.baseName(),
-																		 static_cast<int>(AssetType::Object),
-																		 dir_pair.guid,
-																		 QByteArray(),
-																		 QByteArray(),
-																		 QByteArray(),
-																		 QJsonDocument(material).toBinaryData());
+						extractTexturesAndMaterialFromMesh(asset->path, texturesToCopy, jsonMaterial);
 
-						qDebug() << material;
-						qDebug() << texturesToCopy;
+						// From the list of textures used in the file, make the material reference their guids
+						// Qt doesn't have the mechanisms to update objects so do string replaces
+						QString jsonMaterialString = QJsonDocument(jsonMaterial).toJson();
+						// Update the model reference to point to a guid
+						jsonMaterialString.replace(asset->fileName, assetGuid);
+
+						for (const auto &image : imagesInUse) {
+							if (texturesToCopy.contains(QFileInfo(image.path).fileName())) {
+								qDebug() << "Texture to be used already imported! " << QFileInfo(image.path).fileName();
+							}
+						}
+
+						// Create an actual object from a mesh, objects hold materials
+
+						const QString objectGuid = db->createAssetEntry(GUIDManager::generateGUID(),
+																		entryInfo.baseName(),
+																		static_cast<int>(AssetType::Object),
+																		entry.parent_guid,
+																		QByteArray(),
+																		QByteArray(),
+																		QByteArray(),
+																		QJsonDocument(jsonMaterial).toBinaryData());
+
 						asset->assetGuid = objectGuid;
 						//AssetManager::assets.append(asset);
 
@@ -845,13 +865,16 @@ void AssetWidget::createDirectoryStructure(const QStringList &fileNames, const d
 						db->insertGlobalDependency(static_cast<int>(AssetType::Object), objectGuid, assetGuid);
 
 						ThumbnailGenerator::getSingleton()->requestThumbnail(
-							ThumbnailRequestType::Mesh, file.absoluteFilePath(), objectGuid
+							ThumbnailRequestType::Mesh, asset->path, objectGuid
 						);
 					}
 
 					//asset->assetGuid = guid;
 
 					//AssetManager::assets.append(asset);
+				}
+				else {
+					qDebug() << check_file.fileName() << "already exists!";
 				}
 
                 // If it's being used in a material already this is redundant
@@ -981,16 +1004,75 @@ void AssetWidget::importAsset(const QStringList &path)
         fileNames = path;
     }
 
-    //if (!assetItem.selectedPath.isEmpty()) {
-		directory_pair dir_pair;
-		dir_pair.path = assetItem.selectedPath;
-		dir_pair.guid = assetItem.selectedGuid;
-        createDirectoryStructure(fileNames, dir_pair);
-        //populateAssetTree(false);
-        updateAssetView(assetItem.selectedGuid);
-        // TODO - select the last imported directory!
-        //syncTreeAndView(assetItem.selectedPath);
-    //}
+	// Get the entire directory listing if there are nested folders
+	std::function<void(QStringList, QString guid, QList<directory_tuple>&)> getImportManifest =
+		[&](QStringList files, QString guid, QList<directory_tuple> &items) -> void
+	{
+		foreach (const QFileInfo &file, files) {
+			directory_tuple item;
+			item.path = file.absoluteFilePath();
+			item.parent_guid = guid;
+
+			if (file.isDir()) {
+				QStringList list;
+				foreach(const QString &entry,
+						QDir(file.absoluteFilePath()).entryList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs))
+				{
+					list << QDir(file.absoluteFilePath()).filePath(entry);
+				}
+
+				item.guid = GUIDManager::generateGUID();
+
+				getImportManifest(list, item.guid, items);
+				items.append(item);
+			}
+			else {
+				item.guid = GUIDManager::generateGUID();
+				items.append(item);
+			}
+		}
+	};
+
+	QList<directory_tuple> fileNameList;
+	getImportManifest(fileNames, assetItem.selectedGuid, fileNameList);
+
+	// Sort filenames by type, we want to import and create db entries in dependent order
+	// 0. Folders
+	// 1. Textures
+	// 2. Materials
+	// 3. Shaders
+	// 4. Meshes
+
+	// Path, GUID, Parent
+	QList<directory_tuple> finalImportList;
+
+	//// First create directories
+	for (const auto &folder : fileNameList) {
+		if (QFileInfo(folder.path).isDir()) {
+			finalImportList.append(folder);
+		}
+	}
+
+	////// Import images
+	for (const auto &image : fileNameList) {
+		if (Constants::IMAGE_EXTS.contains(QFileInfo(image.path).suffix().toLower())) {
+			finalImportList.append(image);
+		}
+	}
+
+	////// Import meshes
+	for (const auto &mesh : fileNameList) {
+		if (Constants::MODEL_EXTS.contains(QFileInfo(mesh.path).suffix().toLower())) {
+			finalImportList.append(mesh);
+		}
+	}
+
+	createDirectoryStructure(finalImportList);
+  //      //populateAssetTree(false);
+	updateAssetView(assetItem.selectedGuid);
+  //      // TODO - select the last imported directory!
+  //      //syncTreeAndView(assetItem.selectedPath);
+  //  //}
 }
 
 void AssetWidget::onThumbnailResult(ThumbnailResult* result)
