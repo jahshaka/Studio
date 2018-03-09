@@ -757,11 +757,13 @@ void SceneViewWidget::wheelEvent(QWheelEvent *event)
 void SceneViewWidget::keyPressEvent(QKeyEvent *event)
 {
     KeyboardState::keyStates[event->key()] = true;
+	camController->onKeyPressed((Qt::Key)event->key());
 }
 
 void SceneViewWidget::keyReleaseEvent(QKeyEvent *event)
 {
     KeyboardState::keyStates[event->key()] = false;
+	camController->onKeyReleased((Qt::Key)event->key());
 }
 
 void SceneViewWidget::focusOutEvent(QFocusEvent* event)

@@ -19,6 +19,10 @@ For more information see the LICENSE file
 #include "cameracontrollerbase.h"
 #include "orbitalcameracontroller.h"
 
+float lerp(float a, float b, float t)
+{
+	return a * (1 - t) + b * t;
+}
 
 OrbitalCameraController::OrbitalCameraController()
 {
@@ -26,9 +30,12 @@ OrbitalCameraController::OrbitalCameraController()
     rotationSpeed = 1.f / 10.f;
 
 	previewMode = false;
+
+	pitch = yaw = 0;
+	targetPitch = targetYaw = 0;
 }
 
-QSharedPointer<iris::CameraNode>  OrbitalCameraController::getCamera()
+iris::CameraNodePtr OrbitalCameraController::getCamera()
 {
     return camera;
 }
@@ -36,7 +43,7 @@ QSharedPointer<iris::CameraNode>  OrbitalCameraController::getCamera()
 /**
  * Calculates the pivot location and its yaw and pitch
  */
-void OrbitalCameraController::setCamera(QSharedPointer<iris::CameraNode>  cam)
+void OrbitalCameraController::setCamera(iris::CameraNodePtr  cam)
 {
     this->camera = cam;
 
@@ -46,6 +53,8 @@ void OrbitalCameraController::setCamera(QSharedPointer<iris::CameraNode>  cam)
 
     float roll;
     cam->getLocalRot().getEulerAngles(&pitch,&yaw,&roll);
+	targetYaw = yaw;
+	targetPitch = pitch;
 
     this->updateCameraRot();
 }
@@ -58,12 +67,28 @@ void OrbitalCameraController::setRotationSpeed(float rotationSpeed)
 void OrbitalCameraController::onMouseMove(int x,int y)
 {
 	if (previewMode && leftMouseDown) {
+		// in case lerping is still in progress, match the values with their targets
+		yaw = targetYaw;
+		pitch = targetPitch;
+
 		this->yaw	+= x * rotationSpeed;
 		this->pitch += y * rotationSpeed;
+
+		// keep pitch and yaw in sync
+		targetYaw = yaw;
+		targetPitch = pitch;
 	}
 	else if (!previewMode && rightMouseDown) {
+		// in case lerping is still in progress, match the values with their targets
+		yaw = targetYaw;
+		pitch = targetPitch;
+
 		this->yaw	+= x * rotationSpeed;
 		this->pitch += y * rotationSpeed;
+
+		// keep pitch and yaw in sync
+		targetYaw = yaw;
+		targetPitch = pitch;
 	}
 
     if (middleMouseDown) {
@@ -72,7 +97,6 @@ void OrbitalCameraController::onMouseMove(int x,int y)
         auto dir = camera->getLocalRot().rotatedVector(QVector3D(x*dragSpeed,-y*dragSpeed,0));
         pivot += dir;
     }
-
     updateCameraRot();
 }
 
@@ -91,6 +115,37 @@ void OrbitalCameraController::onMouseWheel(int delta)
         distFromPivot = 0;
 
     updateCameraRot();
+}
+
+void OrbitalCameraController::update(float dt)
+{
+	yaw = lerp(yaw, targetYaw, 0.8);
+	pitch = lerp(pitch, targetPitch, 0.8);
+
+	updateCameraRot();
+}
+
+void OrbitalCameraController::onKeyPressed(Qt::Key key)
+{
+
+}
+
+void OrbitalCameraController::onKeyReleased(Qt::Key key)
+{
+	if (key == Qt::Key_Y) {
+		targetYaw = 0;
+		targetPitch = -90;
+	}
+
+	if (key == Qt::Key_X) {
+		targetYaw = 90;
+		targetPitch = 0;
+	}
+
+	if (key == Qt::Key_Z) {
+		targetYaw = 0;
+		targetPitch = 0;
+	}
 }
 
 void OrbitalCameraController::updateCameraRot()
