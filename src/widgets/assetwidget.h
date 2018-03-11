@@ -13,8 +13,10 @@ class Database;
 #include <QFileDialog>
 
 #include "../io/assetmanager.h"
+#include "../dialogs/progressdialog.h"
 #include "../editor/thumbnailgenerator.h"
 #include "../core/project.h"
+#include "../widgets/sceneviewwidget.h"
 
 // TODO - https://stackoverflow.com/questions/19465812/how-can-i-insert-qdockwidget-as-tab
 
@@ -35,10 +37,6 @@ struct find_asset_thumbnail
 	}
 };
 
-#define     ID_ROLE				0x0111
-#define		DATA_GUID_ROLE		0x0400
-#define		DATA_PARENT_ROLE	0x0401
-
 typedef struct directory_tuple
 {
 	QString path;
@@ -54,21 +52,29 @@ public:
     explicit AssetWidget(Database *handle, QWidget *parent = Q_NULLPTR);
     ~AssetWidget();
 
-	QVector<AssetData> assetList;
-
     void populateAssetTree(bool initialRun);
     void updateTree(QTreeWidgetItem* parentTreeItem, QString path);
     void generateAssetThumbnails();
     void syncTreeAndView(const QString&);
-    void addItem(const QString &asset);
 	void addItem(const FolderData &folderData);
 	void addItem(const AssetTileData &assetData);
     void updateAssetView(const QString &path);
-	void populateAssetView();
     void trigger();
     void updateLabels();
 
-	void extractTexturesAndMaterialFromMesh(const QString &filePath, QStringList &textureList, QJsonObject &material);
+	void extractTexturesAndMaterialFromMaterial(
+		const QString &filePath,
+		QStringList &textureList,
+		QJsonObject &material
+	);
+
+	iris::SceneNodePtr extractTexturesAndMaterialFromMesh(
+		const QString &filePath,
+		QStringList &textureList,
+		QJsonObject &material
+	) const;
+
+	SceneViewWidget *sceneView;
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
@@ -109,6 +115,7 @@ private:
     QPoint startPos;
 
     Database *db;
+	ProgressDialog *progressDialog;
 
     QString currentPath;
 };

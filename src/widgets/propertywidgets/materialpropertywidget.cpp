@@ -32,7 +32,7 @@ For more information see the LICENSE file
 #include "../../uimanager.h"
 #include "../../commands/changematerialpropertycommand.h"
 
-void MaterialPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
+void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 {
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         meshNode = sceneNode.staticCast<iris::MeshNode>();

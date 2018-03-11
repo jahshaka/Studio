@@ -339,21 +339,21 @@ void ProjectManager::finalizeProjectAssetLoad()
     progressDialog->setLabelText(QString("Populating scene..."));
 
     // update the static list of assets with the now loaded assimp data in memory
-    for (auto item : futureWatcher->result()) {
-        for (int i = 0; i < AssetManager::assets.count(); i++) {
-            if (AssetManager::assets[i]->path == item.path) {
-                AssimpObject *ao = new AssimpObject(item.data, item.path);
-                AssetObject *model = new AssetObject(ao,
-                                                     item.path,
-                                                     AssetManager::assets[i]->fileName);
+    //for (auto item : futureWatcher->result()) {
+    //    for (int i = 0; i < AssetManager::assets.count(); i++) {
+    //        if (AssetManager::assets[i]->path == item.path) {
+    //            AssimpObject *ao = new AssimpObject(item.data, item.path);
+    //            AssetObject *model = new AssetObject(ao,
+    //                                                 item.path,
+    //                                                 AssetManager::assets[i]->fileName);
 
-                QVariant v;
-                v.setValue(ao);
+    //            QVariant v;
+    //            v.setValue(ao);
 
-                AssetManager::assets[i] = model;
-            }
-        }
-    }
+    //            AssetManager::assets[i] = model;
+    //        }
+    //    }
+    //}
 
     progressDialog->setLabelText(QString("Initializing panels..."));
 }

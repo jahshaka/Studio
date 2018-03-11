@@ -92,9 +92,10 @@ enum class ModelTypes {
 	Undefined
 };
 
-#define	MODEL_GUID_ROLE	0x0113
-#define	MODEL_EXT_ROLE	0x0133
-#define	MODEL_TYPE_ROLE	0x0123
-#define	MODEL_MESH_ROLE	0x0173
+#define	MODEL_GUID_ROLE		0x0113
+#define MODEL_PARENT_ROLE	0x0128
+#define	MODEL_EXT_ROLE		0x0133
+#define	MODEL_TYPE_ROLE		0x0123
+#define	MODEL_MESH_ROLE		0x0173
 
 #endif // PROJECT_H

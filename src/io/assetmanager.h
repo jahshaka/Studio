@@ -31,6 +31,8 @@ enum class AssetType {
     Variant
 };
 
+class iris::SceneNode;
+
 struct Asset {
     AssetType           type;
     QString             path;
@@ -41,6 +43,7 @@ struct Asset {
 
     virtual QVariant    getValue() = 0;
     virtual void        setValue(QVariant val) = 0;
+	QVariant			value;
 };
 
 struct AssetVariant : public Asset
@@ -93,28 +96,44 @@ struct AssetFolder : public Asset
 
 // note that this class is not able to be used for queued signal-slot connections
 // not needed at the moment nor should it be in the foreseeable future
+//struct AssetObject : public Asset
+//{
+//    // this is a metatype so we can use aiScene's in variants
+//    AssimpObject *ao;
+//
+//    AssetObject(AssimpObject *a, QString p, QString f) : ao(a) {
+//        type = AssetType::Object;
+//        path = p;
+//        fileName = f;
+//        deletable = true;
+//    }
+//
+//    virtual QVariant getValue() override {
+//        QVariant v;
+//        v.setValue(ao);
+//        return v;
+//    }
+//
+//    virtual void setValue(QVariant value) {
+//        // look into getting rid of the ptr
+//        // ao = value.value<AssimpObject*>();
+//    }
+//};
+
 struct AssetObject : public Asset
 {
-    // this is a metatype so we can use aiScene's in variants
-    AssimpObject *ao;
+	AssetObject() {
+		type = AssetType::Object;
+		deletable = true;
+	}
 
-    AssetObject(AssimpObject *a, QString p, QString f) : ao(a) {
-        type = AssetType::Object;
-        path = p;
-        fileName = f;
-        deletable = true;
-    }
+	virtual QVariant getValue() {
+		return value;
+	}
 
-    virtual QVariant getValue() override {
-        QVariant v;
-        v.setValue(ao);
-        return v;
-    }
-
-    virtual void setValue(QVariant value) {
-        // look into getting rid of the ptr
-        // ao = value.value<AssimpObject*>();
-    }
+	virtual void setValue(QVariant val) {
+		value = val;
+	}
 };
 
 class AssetManager
@@ -124,11 +143,9 @@ public:
     static QList<Asset*>& getAssets();
     static void addAsset(Asset* asset);
 
-    // returns asset by path
-    // return null if no asset exists
-    static Asset* getAssetByPath(QString absolutePath);
-
-
+	static QHash<QString, Asset*> nodes;
+	static QHash<QString, Asset*> getNodes();
+	static void addAsset(const QString &guid, Asset* asset);
 };
 
 #endif // ASSETMANAGER_H

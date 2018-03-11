@@ -2,12 +2,13 @@
 #include "ui_progressdialog.h"
 
 #include <QApplication>
-#include <QDebug>
 
 ProgressDialog::ProgressDialog(QDialog *parent) : QDialog(parent), ui(new Ui::ProgressDialog)
 {
     ui->setupUi(this);
     this->setWindowFlags(Qt::WindowTitleHint);
+	//setModal(true);
+	setWindowModality(Qt::WindowModal);
 }
 
 ProgressDialog::~ProgressDialog()
@@ -34,4 +35,5 @@ void ProgressDialog::setRange(int min, int max)
 void ProgressDialog::setValue(int val)
 {
     ui->progressBar->setValue(val);
+	QApplication::processEvents();
 }

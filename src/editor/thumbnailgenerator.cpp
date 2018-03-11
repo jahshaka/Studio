@@ -10,14 +10,11 @@
 #include "../irisgl/src/scenegraph/lightnode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
-#include "../irisgl/src/materials/custommaterial.h"
-
-#include "io/scenewriter.h"
 
 #include <QMutex>
 #include <QMutexLocker>
-
 #include <QtMath>
+#include <QJsonDocument>
 
 ThumbnailGenerator* ThumbnailGenerator::instance = nullptr;
 
@@ -43,37 +40,30 @@ void RenderThread::run()
 
     while(!shutdown) {
         requestsAvailable.acquire();
-
         // the size still has to be checked because there is a case where the size
         // of the requests isnt equal to the available locks in the semaphore i.e.
         // when the thread needs to die but the semaphore is waiting for a lock in order
         // to continue execution
-        if (requests.size()>0){
-
-            //qDebug()<<"rendering";
+        if (requests.size() > 0) {
             QMutexLocker locker(&requestMutex);
             auto request = requests.takeFirst();
             locker.unlock();
 
             prepareScene(request);
-            //scene->rootNode->addChild(sceneNode);
 
             scene->update(0);
             renderer->renderSceneToRenderTarget(renderTarget, cam, true, false);
 
             cleanupScene();
-            //meshNode->
 
             // save contents to file
             auto img = renderTarget->toImage();
 
             auto result = new ThumbnailResult;
-            result->id = request.id;
-            result->type = request.type;
-            result->path = request.path;
-            result->thumbnail = img;
-			result->material = assetMaterial;
-			result->textureList = getTextureList();
+            result->id			= request.id;
+            result->type		= request.type;
+            result->path		= request.path;
+            result->thumbnail	= img;
 
             emit thumbnailComplete(result);
         }
@@ -122,6 +112,20 @@ void RenderThread::initScene()
 	plight->setShadowMapType(iris::ShadowMapType::None);
 	scene->rootNode->addChild(plight);
 
+	materialNode = iris::MeshNode::create();
+	materialNode->setMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/sphere.obj"));
+	scene->getRootNode()->addChild(materialNode);
+	materialNode->hide();
+
+	auto m = iris::CustomMaterial::create();
+	m->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+	m->setValue("diffuseColor",		QColor(255, 255, 255));
+	m->setValue("specularColor",	QColor(255, 255, 255));
+	m->setValue("ambientColor",		QColor(110, 110, 110));
+	m->setValue("emissionColor",	QColor(0, 0, 0));
+	m->setValue("shininess",		0);
+	materialNode->setMaterial(m);
+
     // fog params
     scene->fogEnabled = false;
     scene->shadowEnabled = false;
@@ -165,14 +169,13 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 
         if (!sceneNode) return;
 
+		materialNode->hide();
         scene->rootNode->addChild(sceneNode);
 
         // fit object in view
         QList<iris::BoundingSphere> spheres;
         getBoundingSpheres(sceneNode, spheres);
         iris::BoundingSphere bound;
-
-		SceneWriter::writeSceneNode(assetMaterial, sceneNode, false);
 
         //merge bounding spheres
         if (spheres.count() == 0) {
@@ -183,10 +186,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
         } else {
             bound.pos = QVector3D(0,0,0);
             bound.radius = 1;
-
-            for(auto& sphere : spheres) {
-                bound = iris::BoundingSphere::merge(bound, sphere);
-            }
+            for (auto &sphere : spheres) bound = iris::BoundingSphere::merge(bound, sphere);
         }
 
         float dist = (bound.radius * 1.2) / qTan(qDegreesToRadians(cam->angle / 2.0f));
@@ -194,52 +194,42 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
         cam->lookAt(bound.pos);
         cam->update(0);
     }
-    else
-    {
-        // load sphere model
+	else if (request.type == ThumbnailRequestType::Material) {
+		QFile *file = new QFile(request.path);
+		file->open(QIODevice::ReadOnly | QIODevice::Text);
+		QJsonDocument doc = QJsonDocument::fromJson(file->readAll());
+		
+		const QJsonObject materialDefinition = doc.object();
+		auto shaderName = Constants::SHADER_DEFS + materialDefinition["name"].toString() + ".shader";
+		
+		auto material = iris::CustomMaterial::create();
+		material->generate(IrisUtils::getAbsoluteAssetPath(shaderName));
+		material->setName(materialDefinition["name"].toString());
 
-        // load material
+		for (const auto &prop : material->properties) {
+			if (materialDefinition.contains(prop->name)) {
+				if (prop->type == iris::PropertyType::Texture) {
+					auto textureStr = !materialDefinition[prop->name].toString().isEmpty()
+										? QDir(QFileInfo(request.path).absolutePath())
+											.filePath(materialDefinition[prop->name].toString())
+										: QString();
+					material->setValue(prop->name, textureStr);
+				}
+				else {
+					material->setValue(prop->name, materialDefinition[prop->name].toVariant());
+				}
+			}
+		}
 
-        // apply
+		materialNode->setMaterial(material);
+		materialNode->show();
+
+		float dist = 1.2f / qTan(qDegreesToRadians(cam->angle / 2.f));
+		cam->setLocalPos(QVector3D(0, 0, dist));
+		cam->lookAt(QVector3D(0, 0, 0));
+		cam->update(0);
     }
 }
-
-QStringList RenderThread::getTextureList()
-{
-	const aiScene *scene = ssource->importer.GetScene();
-
-	QStringList texturesToCopy;
-
-	for (int i = 0; i < scene->mNumMeshes; i++) {
-		auto mesh = scene->mMeshes[i];
-		auto material = scene->mMaterials[mesh->mMaterialIndex];
-
-		aiString textureName;
-
-		if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
-			material->GetTexture(aiTextureType_DIFFUSE, 0, &textureName);
-			texturesToCopy.append(textureName.C_Str());
-		}
-
-		if (material->GetTextureCount(aiTextureType_SPECULAR) > 0) {
-			material->GetTexture(aiTextureType_SPECULAR, 0, &textureName);
-			texturesToCopy.append(textureName.C_Str());
-		}
-
-		if (material->GetTextureCount(aiTextureType_NORMALS) > 0) {
-			material->GetTexture(aiTextureType_NORMALS, 0, &textureName);
-			texturesToCopy.append(textureName.C_Str());
-		}
-
-		if (material->GetTextureCount(aiTextureType_HEIGHT) > 0) {
-			material->GetTexture(aiTextureType_HEIGHT, 0, &textureName);
-			texturesToCopy.append(textureName.C_Str());
-		}
-	}
-
-	return texturesToCopy;
-}
-
 void RenderThread::cleanupScene()
 {
     if (!!sceneNode) sceneNode->removeFromParent();
@@ -260,12 +250,12 @@ float RenderThread::getBoundingRadius(iris::SceneNodePtr node)
 
 void RenderThread::getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere> &spheres)
 {
-    if(node->sceneNodeType== iris::SceneNodeType::Mesh) {
+    if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto sphere = node.staticCast<iris::MeshNode>()->getTransformedBoundingSphere();
         spheres.append(sphere);
     }
 
-    for(auto child : node->children) {
+    for (auto child : node->children) {
         getBoundingSpheres(child, spheres);
     }
 }
@@ -331,9 +321,9 @@ ThumbnailGenerator *ThumbnailGenerator::getSingleton()
 void ThumbnailGenerator::requestThumbnail(ThumbnailRequestType type, QString path, QString id)
 {
     ThumbnailRequest req;
-    req.type = type;
-    req.path = path;
-    req.id = id;
+    req.type	= type;
+    req.path	= path;
+    req.id		= id;
     renderThread->requestThumbnail(req);
 }
 

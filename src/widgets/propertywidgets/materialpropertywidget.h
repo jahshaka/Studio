@@ -39,7 +39,7 @@ public:
     MaterialPropertyWidget() = default;
     QSharedPointer<iris::CustomMaterial> material;
 
-    void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
+    void setSceneNode(iris::SceneNodePtr sceneNode);
     void forceShaderRefresh(const QString&);
     void setWidgetProperties();
 

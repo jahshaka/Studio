@@ -1,6 +1,7 @@
 #include "assetmanager.h"
 
 QList<Asset*> AssetManager::assets;
+QHash<QString, Asset*> AssetManager::nodes;
 
 QList<Asset*> &AssetManager::getAssets()
 {
@@ -10,14 +11,14 @@ QList<Asset*> &AssetManager::getAssets()
 void AssetManager::addAsset(Asset *asset)
 {
     assets.append(asset);
-    //assetsByPath.insert(asset->path, asset);
 }
 
-Asset *AssetManager::getAssetByPath(QString absolutePath)
+QHash<QString, Asset*> AssetManager::getNodes()
 {
-    for (auto asset : assets)
-        if (asset->path == absolutePath)
-            return asset;
+	return nodes;
+}
 
-    return nullptr;
+void AssetManager::addAsset(const QString &guid, Asset* asset)
+{
+	nodes.insert(guid, asset);
 }
