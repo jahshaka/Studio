@@ -339,7 +339,7 @@ SceneNodePtr MeshNode::createDuplicate()
     node->setMesh(this->getMesh());
     node->meshPath = this->meshPath;
     node->meshIndex = this->meshIndex;
-    node->setMaterial(this->material);
+    node->setMaterial(this->material->duplicate());
 
     return node;
 }

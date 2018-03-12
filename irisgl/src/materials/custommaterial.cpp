@@ -111,6 +111,7 @@ void CustomMaterial::end(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
 
 void CustomMaterial::generate(const QString &fileName, bool project)
 {
+	materialPath = fileName;
     auto fileInfo = QFileInfo(fileName);
     auto shaderName = fileName;
     if (fileInfo.suffix().isEmpty()) shaderName += ".shader";
@@ -263,6 +264,18 @@ void CustomMaterial::setBaseMaterialProperties(const QJsonObject &jahShader)
 
     renderStates.depthState.depthWriteEnabled = zwrite;
     renderStates.depthState.depthBufferEnabled = depthTest;
+}
+
+MaterialPtr CustomMaterial::duplicate()
+{
+	auto mat = CustomMaterial::create();
+	mat->generate(materialPath, true);
+
+	for (auto prop : this->properties) {
+		mat->setValue(prop->name, prop->getValue());
+	}
+
+	return mat;
 }
 
 QString CustomMaterial::getName() const

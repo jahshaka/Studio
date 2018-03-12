@@ -112,6 +112,11 @@ public:
         program->setUniformValue(name.toStdString().c_str(), value);
     }
 
+	virtual MaterialPtr duplicate()
+	{
+		return MaterialPtr(new Material());
+	}
+
 protected:
     /**
      * Sets the amount of textures your shader uses
