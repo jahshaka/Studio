@@ -40,7 +40,9 @@ For more information see the LICENSE file
 #include "scenewriter.h"
 #include "assetiobase.h"
 #include "../constants.h"
+#include "../core/database/database.h"
 
+Database *SceneWriter::handle = 0;
 
 void SceneWriter::writeScene(QString filePath,
                              iris::ScenePtr scene,
@@ -362,7 +364,8 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMateri
         }
 
         if (prop->type == iris::PropertyType::Texture) {
-			matObj[prop->name] = relative ? getRelativePath(prop->getValue().toString()) : QFileInfo(prop->getValue().toString()).fileName();
+			//matObj[prop->name] = relative ? getRelativePath(prop->getValue().toString()) : QFileInfo(prop->getValue().toString()).fileName();
+			matObj[prop->name] = handle->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName());
         }
     }
 }

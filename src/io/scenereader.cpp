@@ -23,7 +23,9 @@ For more information see the LICENSE file
 #include "scenereader.h"
 #include "assetmanager.h"
 
+#include "../globals.h"
 #include "../constants.h"
+#include "../core/database/database.h"
 
 #include "../editor/editordata.h"
 #include "../materials/jahdefaultmaterial.h"
@@ -56,8 +58,6 @@ For more information see the LICENSE file
 #include "../irisgl/src/postprocesses/radialblurpostprocess.h"
 #include "../irisgl/src/postprocesses/ssaopostprocess.h"
 #include "../irisgl/src/postprocesses/fxaapostprocess.h"
-
-#include "../constants.h"
 
 iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
@@ -372,14 +372,19 @@ void SceneReader::readSceneNodeTransform(QJsonObject& nodeObj,iris::SceneNodePtr
  */
 iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 {
+	qDebug() << nodeObj;
     auto meshNode = iris::MeshNode::create();
 
     auto source = nodeObj["mesh"].toString("");
+	if (!source.startsWith(":")) {
+		source = QDir(QDir(Globals::project->getProjectFolder()).filePath("Models")).filePath(handle->fetchAsset(nodeObj["mesh"].toString("")).name);
+	}
+
     auto meshIndex = nodeObj["meshIndex"].toInt(0);
     auto pickable = nodeObj["pickable"].toBool(true);
 
     if (!source.isEmpty()) {
-        auto mesh = getMesh(getAbsolutePath(source), meshIndex);
+        auto mesh = getMesh(source, meshIndex);
         if (source.startsWith(":")) {
             meshNode->setMesh(source);
         } else {
@@ -552,9 +557,12 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
     for (auto prop : m->properties) {
         if (mat.contains(prop->name)) {
             if (prop->type == iris::PropertyType::Texture) {
-                auto textureStr = !mat[prop->name].toString().isEmpty()
-                                  ? getAbsolutePath(mat[prop->name].toString())
-                                  : QString();
+                //auto textureStr = !mat[prop->name].toString().isEmpty()
+                //                  ? getAbsolutePath(mat[prop->name].toString())
+                //                  : QString();
+				auto textureStr = !mat[prop->name].toString().isEmpty()
+					? QDir(Globals::project->getProjectFolder() + "/Textures").filePath(handle->fetchAsset(mat[prop->name].toString()).name)
+					: QString();
 
                 m->setValue(prop->name, textureStr);
             } else {

@@ -25,10 +25,15 @@ For more information see the LICENSE file
 #include "../irisgl/src/irisglfwd.h"
 
 class EditorData;
+class Database;	// this is a temp way to get this working, remove later
 
 class SceneWriter : public AssetIOBase
 {
+	static Database *handle;
 public:
+	void setDatabaseHandle(Database *db) {
+		this->handle = db;
+	}
     void writeScene(QString filePath,iris::ScenePtr scene, iris::PostProcessManagerPtr postMan, EditorData* ediorData = nullptr);
     QByteArray getSceneObject(QString projectPath,
                               iris::ScenePtr scene,

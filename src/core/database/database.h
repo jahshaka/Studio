@@ -79,6 +79,8 @@ public:
     void createExportScene(const QString& outTempFilePath);
     bool importProject(const QString& inFilePath);
 
+	QString fetchAssetGUIDByName(const QString &name);
+
     QSqlDatabase getDb() { return db; }
 
 private:

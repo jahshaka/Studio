@@ -338,22 +338,22 @@ void ProjectManager::finalizeProjectAssetLoad()
     progressDialog->setRange(0, 0);
     progressDialog->setLabelText(QString("Populating scene..."));
 
-    // update the static list of assets with the now loaded assimp data in memory
-    //for (auto item : futureWatcher->result()) {
-    //    for (int i = 0; i < AssetManager::assets.count(); i++) {
-    //        if (AssetManager::assets[i]->path == item.path) {
-    //            AssimpObject *ao = new AssimpObject(item.data, item.path);
-    //            AssetObject *model = new AssetObject(ao,
-    //                                                 item.path,
-    //                                                 AssetManager::assets[i]->fileName);
+     //update the static list of assets with the now loaded assimp data in memory
+    for (auto item : futureWatcher->result()) {
+        for (int i = 0; i < AssetManager::assets.count(); i++) {
+            if (AssetManager::assets[i]->path == item.path) {
+                AssimpObject *ao = new AssimpObject(item.data, item.path);
+                AssetObject *model = new AssetObject(ao,
+                                                     item.path,
+                                                     AssetManager::assets[i]->fileName);
 
-    //            QVariant v;
-    //            v.setValue(ao);
+                QVariant v;
+                v.setValue(ao);
 
-    //            AssetManager::assets[i] = model;
-    //        }
-    //    }
-    //}
+                AssetManager::assets[i] = model;
+            }
+        }
+    }
 
     progressDialog->setLabelText(QString("Initializing panels..."));
 }
@@ -496,55 +496,55 @@ void ProjectManager::walkProjectFolder(const QString &projectPath)
 	//	AssetManager::assets.append(asset);
 	//}
 
-    //QDir dir(projectPath);
-    //foreach (auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
-    //    if (file.isFile()) {
-    //        AssetType type;
-    //        QPixmap pixmap;
+    QDir dir(projectPath);
+    foreach (auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
+        if (file.isFile()) {
+            AssetType type;
+            QPixmap pixmap;
 
-    //        if (Constants::IMAGE_EXTS.contains(file.suffix())) {
-    //            auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
-    //            pixmap = QPixmap::fromImage(*thumb->thumb);
-    //            type = AssetType::Texture;
-    //        }
-    //        else if (Constants::MODEL_EXTS.contains(file.suffix())) {
-    //            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
-    //            type = AssetType::Object;
-    //            pixmap = QPixmap::fromImage(*thumb->thumb);
-    //        }
-    //        else if (file.suffix() == "shader") {
-    //            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
-    //            pixmap = QPixmap::fromImage(*thumb->thumb);
-    //            type = AssetType::Shader;
-    //        }
-    //        else {
-    //            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
-    //            type = AssetType::File;
-    //            pixmap = QPixmap::fromImage(*thumb->thumb);
-    //        }
+            if (Constants::IMAGE_EXTS.contains(file.suffix())) {
+                auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
+                pixmap = QPixmap::fromImage(*thumb->thumb);
+                type = AssetType::Texture;
+            }
+            else if (Constants::MODEL_EXTS.contains(file.suffix())) {
+                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                type = AssetType::Object;
+                pixmap = QPixmap::fromImage(*thumb->thumb);
+            }
+            else if (file.suffix() == "shader") {
+                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                pixmap = QPixmap::fromImage(*thumb->thumb);
+                type = AssetType::Shader;
+            }
+            else {
+                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
+                type = AssetType::File;
+                pixmap = QPixmap::fromImage(*thumb->thumb);
+            }
 
-    //        auto asset = new AssetVariant;
-    //        asset->type         = type;
-    //        asset->fileName     = file.fileName();
-    //        asset->path         = file.absoluteFilePath();
-    //        asset->thumbnail    = pixmap;
+            auto asset = new AssetVariant;
+            asset->type         = type;
+            asset->fileName     = file.fileName();
+            asset->path         = file.absoluteFilePath();
+            asset->thumbnail    = pixmap;
 
-    //        AssetManager::assets.append(asset);
-    //    }
-    //    else {
-    //        auto thumb = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
-    //        auto asset = new AssetFolder;
-    //        asset->fileName     = file.fileName();
-    //        asset->path         = file.absoluteFilePath();
-    //        asset->thumbnail    = QPixmap::fromImage(*thumb->thumb);
+            AssetManager::assets.append(asset);
+        }
+        else {
+            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
+            auto asset = new AssetFolder;
+            asset->fileName     = file.fileName();
+            asset->path         = file.absoluteFilePath();
+            asset->thumbnail    = QPixmap::fromImage(*thumb->thumb);
 
-    //        AssetManager::assets.append(asset);
-    //    }
+            AssetManager::assets.append(asset);
+        }
 
-    //    if (file.isDir()) {
-    //        walkProjectFolder(file.absoluteFilePath());
-    //    }
-    //}
+        if (file.isDir()) {
+            walkProjectFolder(file.absoluteFilePath());
+        }
+    }
 }
 
 

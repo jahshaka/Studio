@@ -31,12 +31,19 @@ For more information see the LICENSE file
 class EditorData;
 class aiScene;
 
+class Database;	// this is a temp way to get this working, remove later
+
 class SceneReader : public AssetIOBase
 {
     QHash<QString,QList<iris::MeshPtr>> meshes;
     QSet<QString> assimpScenes;
     QHash<QString,QMap<QString, iris::SkeletalAnimationPtr>> animations;
 
+	Database *handle;
+public:
+	void setDatabaseHandle(Database *db) {
+		this->handle = db;
+	}
 
 public:
     iris::ScenePtr readScene(const QString &projectPath,

@@ -707,7 +707,6 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 				
 				// If we encounter the same file, make a duplicate...
 				// Maybe ask the user to replace sometime later on (iKlsR)
-				// Make this into a lambda please
 				while (checkFile.exists()) {
 					QString newName = entryInfo.baseName() + " " + QString::number(increment++);
 					checkFile = QFileInfo(IrisUtils::buildFileName(IrisUtils::join(pathToCopyTo, newName), entryInfo.suffix()));
@@ -728,6 +727,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 															   thumbnailBytes);
 
 				// Accumulate a list of all the images imported so we can use this to update references
+				// If they are used in assets that depend on them such as Materials and Objects
 				if (asset->type == AssetType::Texture) {
 					directory_tuple dt;
 					dt.parent_guid	= entry.parent_guid;
@@ -772,40 +772,6 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					this->sceneView->makeCurrent();
 					auto scene = extractTexturesAndMaterialFromMesh(asset->path, texturesToCopy, jsonSceneNode);
 					this->sceneView->doneCurrent();
-
-					// From the list of textures used in the file, make the material reference their guids
-					// Qt doesn't have the mechanisms to update objects so do string replaces
-					//QString jsonNodeString = QJsonDocument(jsonSceneNode).toJson();
-
-					// Update the model reference to point to a guid
-					//jsonNodeString.replace(entryInfo.fileName(), assetGuid);
-						
-					// Do roughly the same thing as incrementing the filename...
-					//for (auto &image : texturesToCopy) {
-					//	QFileInfo imageInfo(image);
-					//	QString imagePathToCopyTo = IrisUtils::join(Globals::project->getProjectFolder(), "Textures");
-					//	QString imageFileToCopyTo = IrisUtils::join(imagePathToCopyTo, image);
-
-					//	int increment = 1;
-					//	int numberToAdd = 0;
-					//	QFileInfo checkImage(imageFileToCopyTo);
-
-					//	while (checkImage.exists()) {
-					//		QString newName = imageInfo.baseName() + " " + QString::number(increment++);
-					//		checkImage = QFileInfo(IrisUtils::buildFileName(
-					//						IrisUtils::join(imagePathToCopyTo, newName), imageInfo.suffix()));
-					//		QString actualName = imageInfo.baseName() + " " + QString::number(numberToAdd++);
-					//		image = QFileInfo(IrisUtils::buildFileName(
-					//			IrisUtils::join(imagePathToCopyTo, actualName), imageInfo.suffix())).fileName();
-					//	}
-					//}
-
-					// Update the embedded material to point to image asset guids
-					//for (const auto &image : imagesInUse) {
-					//	if (texturesToCopy.contains(image.path)) {
-					//		jsonNodeString.replace(image.path, image.guid);
-					//	}
-					//}
 
 					// You can't manipulate Qt's json when nested
 					std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
@@ -852,7 +818,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					// Add to persistent store
 					{
 						QVariant variant = QVariant::fromValue(scene);
-						AssetObject *nodeAsset = new AssetObject;
+						auto nodeAsset = new AssetNodeObject;
 						nodeAsset->setValue(variant);
 						AssetManager::addAsset(objectGuid, nodeAsset);
 					}

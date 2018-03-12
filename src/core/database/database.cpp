@@ -1084,3 +1084,23 @@ bool Database::importProject(const QString &inFilePath)
 
     return false;
 }
+
+QString Database::fetchAssetGUIDByName(const QString & name)
+{
+	QSqlQuery query;
+	query.prepare("SELECT guid FROM assets WHERE name = ?");
+	query.addBindValue(name);
+
+	if (query.exec()) {
+		if (query.first()) {
+			return query.value(0).toString();
+		}
+	}
+	else {
+		irisLog(
+			"There was an error fetching a guid for an asset (" + name + ")" + query.lastError().text()
+		);
+	}
+
+	return QByteArray();
+}
