@@ -51,9 +51,12 @@ public:
 		return true;
 	}
 
+	MaterialPtr duplicate() override;
+
 protected:
     CustomMaterial() = default;
     QString materialName;
+	QString materialPath;
 
     QJsonObject loadShaderFromDisk(const QString &);
 };
