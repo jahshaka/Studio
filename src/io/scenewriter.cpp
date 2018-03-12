@@ -85,7 +85,7 @@ QByteArray SceneWriter::getSceneObject(QString projectPath,
         writePostProcessData(projectObj, postMan);
     }
 
-    // qDebug() << projectObj;
+    qDebug() << projectObj;
 
     return QJsonDocument(projectObj).toBinaryData();
 }
@@ -295,8 +295,7 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
 
 void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode, bool relative)
 {
-    // TODO: handle generated meshes properly
-    // ???? sure...
+    // It's a safe assumption that the filename is safe to use here in queries if need be
     sceneNodeObject["mesh"] = relative ? getRelativePath(meshNode->meshPath) : QFileInfo(meshNode->meshPath).fileName();
     sceneNodeObject["meshIndex"] = meshNode->meshIndex;
     sceneNodeObject["pickable"] = meshNode->pickable;

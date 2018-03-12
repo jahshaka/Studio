@@ -150,12 +150,12 @@ iris::SceneNodePtr AssetWidget::extractTexturesAndMaterialFromMesh(
 		else
 			mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
-		mat->setValue("diffuseColor", data.diffuseColor);
-		mat->setValue("specularColor", data.specularColor);
-		mat->setValue("ambientColor", QColor(110, 110, 110));	// assume this color, some formats set this to pitch black
-		mat->setValue("emissionColor", data.emissionColor);
-		mat->setValue("shininess", data.shininess);
-		mat->setValue("useAlpha", true);
+		mat->setValue("diffuseColor",	data.diffuseColor);
+		mat->setValue("specularColor",	data.specularColor);
+		mat->setValue("ambientColor",	QColor(110, 110, 110));	// assume this color, some formats set this to pitch black
+		mat->setValue("emissionColor",	data.emissionColor);
+		mat->setValue("shininess",		data.shininess);
+		mat->setValue("useAlpha",		true);
 
 		if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
 			mat->setValue("diffuseTexture", data.diffuseTexture);
@@ -200,8 +200,8 @@ iris::SceneNodePtr AssetWidget::extractTexturesAndMaterialFromMesh(
 		}
 	}
 
-    SceneWriter::writeSceneNode(material, node, false);
 	textureList = texturesToCopy;
+	SceneWriter::writeSceneNode(material, node, false);
 
 	return node;
 }
@@ -565,9 +565,10 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
         ui->assetTree->clearSelection();
         branch->setSelected(true);
 	}
-	else {
-		qDebug() << "no child";
-	}
+	
+	//populateAssetTree(false);
+	//updateAssetView(assetItem.selectedGuid);
+	//syncTreeAndView(assetItem.selectedGuid);
 }
 
 void AssetWidget::deleteTreeFolder()
@@ -640,6 +641,7 @@ void AssetWidget::importAssetB()
 void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNames)
 {
 	int counter = 0;
+	// If we're loading a single asset, it's likely a single large file, make the progress indeterminate
 	int maxRange = fileNames.size() == 1 ? 0 : fileNames.size();
 	
 	progressDialog->setRange(0, maxRange);
@@ -704,11 +706,11 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 				QFileInfo checkFile(fileToCopyTo);
 				
 				// If we encounter the same file, make a duplicate...
-				// Maybe ask the user to replace sometime later (iKlsR)
+				// Maybe ask the user to replace sometime later on (iKlsR)
+				// Make this into a lambda please
 				while (checkFile.exists()) {
 					QString newName = entryInfo.baseName() + " " + QString::number(increment++);
-					checkFile = QFileInfo(IrisUtils::buildFileName(IrisUtils::join(pathToCopyTo, newName),
-																				   entryInfo.suffix()));
+					checkFile = QFileInfo(IrisUtils::buildFileName(IrisUtils::join(pathToCopyTo, newName), entryInfo.suffix()));
 					asset->fileName = checkFile.fileName();
 				}
 
@@ -730,7 +732,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					directory_tuple dt;
 					dt.parent_guid	= entry.parent_guid;
 					dt.guid			= entry.guid;
-					dt.path			= pathToCopyTo;
+					dt.path			= entryInfo.fileName();
 					imagesInUse.append(dt);
 				}
 
@@ -764,28 +766,78 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 				}
 
 				if (asset->type == AssetType::Mesh) {
-					// Copy textures over to project and create embedded material
-					QJsonObject jsonMaterial;
+					// Copy textures over to project and create embedded node hierarchy
+					QJsonObject jsonSceneNode;
 					QStringList texturesToCopy;
 					this->sceneView->makeCurrent();
-					auto scene = extractTexturesAndMaterialFromMesh(asset->path, texturesToCopy, jsonMaterial);
+					auto scene = extractTexturesAndMaterialFromMesh(asset->path, texturesToCopy, jsonSceneNode);
 					this->sceneView->doneCurrent();
 
 					// From the list of textures used in the file, make the material reference their guids
 					// Qt doesn't have the mechanisms to update objects so do string replaces
-					QString jsonNodeString = QJsonDocument(jsonMaterial).toJson();
-						
-					// Update the model reference to point to a guid
-					jsonNodeString.replace(asset->fileName, assetGuid);
-						
-					// Update the embedded material to point to image asset guids
-					for (const auto &image : imagesInUse) {
-						if (texturesToCopy.contains(QFileInfo(image.path).fileName())) {
-							jsonNodeString.replace(QFileInfo(image.path).fileName(), image.guid);
-						}
-					}
+					//QString jsonNodeString = QJsonDocument(jsonSceneNode).toJson();
 
-					QJsonDocument jsonMaterialGuids = QJsonDocument::fromJson(jsonNodeString.toUtf8());
+					// Update the model reference to point to a guid
+					//jsonNodeString.replace(entryInfo.fileName(), assetGuid);
+						
+					// Do roughly the same thing as incrementing the filename...
+					//for (auto &image : texturesToCopy) {
+					//	QFileInfo imageInfo(image);
+					//	QString imagePathToCopyTo = IrisUtils::join(Globals::project->getProjectFolder(), "Textures");
+					//	QString imageFileToCopyTo = IrisUtils::join(imagePathToCopyTo, image);
+
+					//	int increment = 1;
+					//	int numberToAdd = 0;
+					//	QFileInfo checkImage(imageFileToCopyTo);
+
+					//	while (checkImage.exists()) {
+					//		QString newName = imageInfo.baseName() + " " + QString::number(increment++);
+					//		checkImage = QFileInfo(IrisUtils::buildFileName(
+					//						IrisUtils::join(imagePathToCopyTo, newName), imageInfo.suffix()));
+					//		QString actualName = imageInfo.baseName() + " " + QString::number(numberToAdd++);
+					//		image = QFileInfo(IrisUtils::buildFileName(
+					//			IrisUtils::join(imagePathToCopyTo, actualName), imageInfo.suffix())).fileName();
+					//	}
+					//}
+
+					// Update the embedded material to point to image asset guids
+					//for (const auto &image : imagesInUse) {
+					//	if (texturesToCopy.contains(image.path)) {
+					//		jsonNodeString.replace(image.path, image.guid);
+					//	}
+					//}
+
+					// You can't manipulate Qt's json when nested
+					std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
+						if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+							auto n = node.staticCast<iris::MeshNode>();
+							if (QFileInfo(n->meshPath).fileName() == entryInfo.fileName()) {
+								n->meshPath = assetGuid;
+							}
+							auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+							for (auto prop : mat->properties) {
+								if (prop->type == iris::PropertyType::Texture) {
+									for (const auto &image : imagesInUse) {
+										if (texturesToCopy.contains(QFileInfo(prop->getValue().toString()).fileName()) &&
+											(image.path == QFileInfo(prop->getValue().toString()).fileName()))
+										{
+											mat->setValue(prop->name, image.guid);
+										}
+									}
+								}
+							}
+						}
+
+						if (node->hasChildren()) {
+							for (auto &child : node->children) {
+								updateNodeValues(child);
+							}
+						}
+					};
+
+					updateNodeValues(scene);
+					QJsonObject newJson;
+					SceneWriter::writeSceneNode(newJson, scene, false);
 
 					// Create an actual object from a mesh, objects hold materials
 					const QString objectGuid = db->createAssetEntry(GUIDManager::generateGUID(),
@@ -795,23 +847,12 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 																	QByteArray(),
 																	QByteArray(),
 																	QByteArray(),
-																	jsonMaterialGuids.toBinaryData());
+																	QJsonDocument(newJson).toBinaryData());
 
 					// Add to persistent store
-/*					{
-						AssimpObject *ao = new AssimpObject(scene, objectGuid);
-						QVariant variant = QVariant::fromValue(ao);
-						AssetObject *nodeAsset = new AssetObject;
-						qDebug() << variant.canConvert<AssimpObject*>();
-						qDebug() << variant.value<AssimpObject*>()->getGUID();
-						nodeAsset->setValue(variant);
-						AssetManager::addAsset(ao->getGUID(), nodeAsset);
-					}*/
 					{
 						QVariant variant = QVariant::fromValue(scene);
 						AssetObject *nodeAsset = new AssetObject;
-						qDebug() << variant.canConvert<iris::SceneNodePtr>();
-						qDebug() << variant.value<iris::SceneNodePtr>()->getName();
 						nodeAsset->setValue(variant);
 						AssetManager::addAsset(objectGuid, nodeAsset);
 					}
@@ -825,15 +866,16 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 
 					// Insert a dependency for the mesh to the object
 					db->insertGlobalDependency(static_cast<int>(AssetType::Object), objectGuid, assetGuid);
+					// Remove the thumbnail from the object asset
+					db->updateAssetAsset(assetGuid, QByteArray());
 
 					ThumbnailGenerator::getSingleton()->requestThumbnail(
 						ThumbnailRequestType::Mesh, asset->path, objectGuid
 					);
 				}
 
-				//asset->assetGuid = guid;
-				//AssetManager::assets.append(asset);
 				bool copyFile = QFile::copy(entry.path, pathToCopyTo);
+
 				progressDialog->setLabelText("Copying " + asset->fileName);
 				progressDialog->setValue(counter++);
 			}

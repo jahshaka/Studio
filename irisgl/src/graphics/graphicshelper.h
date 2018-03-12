@@ -16,23 +16,23 @@ For more information see the LICENSE file
 #include <QList>
 #include "../irisglfwd.h"
 #include "../graphics/mesh.h"
-// #include "assimp/scene.h"
+
 class aiScene;
 
 class QOpenGLShaderProgram;
 
 class AssimpObject {
 public:
-    AssimpObject() {}
-    AssimpObject(const aiScene *ai, QString p) : scene(ai), path(p) {}
-    AssimpObject(const AssimpObject &ao) {}
+	AssimpObject() = default;
+    AssimpObject(const aiScene *ai, QString g) : scene(ai), GUID(g) {}
+	AssimpObject(const AssimpObject &ao) = default;
     const aiScene *getSceneData() const { return scene; }
-    QString getPath() { return path; }
+    QString getGUID() { return GUID; }
     ~AssimpObject() {}
 
 private:
     const aiScene *scene;
-    QString path;
+    QString GUID;
 };
 
 Q_DECLARE_METATYPE(AssimpObject)

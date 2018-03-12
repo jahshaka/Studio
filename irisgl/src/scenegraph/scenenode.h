@@ -249,6 +249,8 @@ private:
     static long nextId;
 };
 
+Q_DECLARE_METATYPE(SceneNode)
+Q_DECLARE_METATYPE(SceneNodePtr)
 
 }
 

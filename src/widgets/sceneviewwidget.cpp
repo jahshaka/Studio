@@ -139,10 +139,10 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
         stream >> roleDataMap;
     }
 
-    qDebug() << roleDataMap.value(0).toInt();
-	qDebug() << roleDataMap.value(1).toString();
-	qDebug() << roleDataMap.value(2).toString();
-	qDebug() << roleDataMap.value(3).toString();
+ //   qDebug() << roleDataMap.value(0).toInt();
+	//qDebug() << roleDataMap.value(1).toString();
+	//qDebug() << roleDataMap.value(2).toString();
+	//qDebug() << roleDataMap.value(3).toString();
 
 	//qDebug() << QDir(QDir(Globals::project->getProjectFolder()).filePath("Models")).filePath(roleDataMap.value(2).toString());
 

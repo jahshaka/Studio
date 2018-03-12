@@ -466,35 +466,35 @@ void ProjectManager::loadProjectAssets()
 
 void ProjectManager::walkProjectFolder(const QString &projectPath)
 {
-	QStringList guidList;
+	//QStringList guidList;
 
-	QDir projectDirectory(projectPath);
-	foreach (auto &file, projectDirectory.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
-		if (file.isDir()) {
-		    walkProjectFolder(file.absoluteFilePath());
-		}
-		else {
-			if (file.isFile() && (file.suffix() == Constants::META_EXT)) {
-				QString jsonMeta;
-				QFile file(file.absoluteFilePath());
-				file.open(QFile::ReadOnly | QFile::Text);
-				jsonMeta = file.readAll();
-				file.close();
-				QJsonDocument jsonDoc = QJsonDocument::fromJson(jsonMeta.toUtf8());
-				QJsonObject json = jsonDoc.object();
-				guidList.append(json["guid"].toString());
-			}
-		}
-	}
+	//QDir projectDirectory(projectPath);
+	//foreach (auto &file, projectDirectory.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
+	//	if (file.isDir()) {
+	//	    walkProjectFolder(file.absoluteFilePath());
+	//	}
+	//	else {
+	//		if (file.isFile() && (file.suffix() == Constants::META_EXT)) {
+	//			QString jsonMeta;
+	//			QFile file(file.absoluteFilePath());
+	//			file.open(QFile::ReadOnly | QFile::Text);
+	//			jsonMeta = file.readAll();
+	//			file.close();
+	//			QJsonDocument jsonDoc = QJsonDocument::fromJson(jsonMeta.toUtf8());
+	//			QJsonObject json = jsonDoc.object();
+	//			guidList.append(json["guid"].toString());
+	//		}
+	//	}
+	//}
 
-	for (const AssetData &data : db->fetchAssetThumbnails(guidList)) {
-		QPixmap pixmap;
-		auto asset = new AssetVariant;
-		asset->assetGuid = data.guid;
-		asset->fileName = data.name;
-		asset->thumbnail.loadFromData(data.thumbnail, "PNG");
-		AssetManager::assets.append(asset);
-	}
+	//for (const AssetData &data : db->fetchAssetThumbnails(guidList)) {
+	//	QPixmap pixmap;
+	//	auto asset = new AssetVariant;
+	//	asset->assetGuid = data.guid;
+	//	asset->fileName = data.name;
+	//	asset->thumbnail.loadFromData(data.thumbnail, "PNG");
+	//	AssetManager::assets.append(asset);
+	//}
 
     //QDir dir(projectPath);
     //foreach (auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {

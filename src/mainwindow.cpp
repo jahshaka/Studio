@@ -1019,7 +1019,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
 	if (filename.isEmpty()) return;
 
-	iris::SceneSource *ssource = new iris::SceneSource();
+	//iris::SceneSource *ssource = new iris::SceneSource();
 
 	//auto material_guid = db->getDependencyByType((int) AssetMetaType::Material, QFileInfo(filename).baseName());
 	//auto material = db->getMaterialGlobal(material_guid);
@@ -1028,35 +1028,58 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
 	QJsonObject assetMaterial = materialObj.object();
 
-	qDebug() << filename;
-	qDebug() << assetMaterial;
+	//int iter = 0;
+	//std::function<void (QJsonObject, QJsonArray&)> extractMeshMaterial = [&](QJsonObject node, QJsonArray &materialList) -> void {
+	//	if (!node["material"].toObject().isEmpty()) materialList.append(node["material"].toObject());	
 
-	int iter = 0;
-	std::function<void (QJsonObject, QJsonArray&)> extractMeshMaterial = [&](QJsonObject node, QJsonArray &materialList) -> void {
-		if (!node["material"].toObject().isEmpty()) materialList.append(node["material"].toObject());	
+	//	QJsonArray children = node["children"].toArray();
+	//	if (!children.isEmpty()) {
+	//		for (auto &child : children) {
+	//			extractMeshMaterial(child.toObject(), materialList);
+	//			iter++;
+	//		}
+	//	}
+	//};
 
-		QJsonArray children = node["children"].toArray();
-		if (!children.isEmpty()) {
-			for (auto &child : children) {
-				extractMeshMaterial(child.toObject(), materialList);
-				iter++;
-			}
-		}
-	};
-
-	QJsonArray materialList;
-	extractMeshMaterial(assetMaterial, materialList);
+	//QJsonArray materialList;
+	//extractMeshMaterial(assetMaterial, materialList);
 
 	this->sceneView->makeCurrent();
-	int iteration = 0;
 
 	iris::SceneNodePtr node;
 
 	QHash<QString, Asset*>::const_iterator iterator = AssetManager::getNodes().constBegin();
 	while (iterator != AssetManager::getNodes().constEnd()) {
-		if (iterator.key() == guid) node = iterator.value()->getValue().value<iris::SceneNodePtr>();
+		if (iterator.key() == guid) node = iterator.value()->getValue().value<iris::SceneNodePtr>()->duplicate();
 		++iterator;
 	}
+
+	std::function<void(iris::SceneNodePtr&)> updateNodeValues_ = [&](iris::SceneNodePtr &node) -> void {
+		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+			auto n = node.staticCast<iris::MeshNode>();
+			//if (QFileInfo(n->meshPath).fileName() == entryInfo.fileName()) {
+			//	n->meshPath = assetGuid;
+			//}
+			auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+			for (auto prop : mat->properties) {
+				if (prop->type == iris::PropertyType::Texture) {
+					if (!prop->getValue().toString().isEmpty()) {
+						mat->setValue(prop->name,
+							IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
+								db->fetchAsset(prop->getValue().toString()).name));
+					}
+				}
+			}
+		}
+
+		if (node->hasChildren()) {
+			for (auto &child : node->children) {
+				updateNodeValues_(child);
+			}
+		}
+	};
+
+	updateNodeValues_(node);
 
 	// Now use guid materials
 	// TODO
@@ -1073,6 +1096,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
 	//const aiScene *scene_ = ao->getSceneData();
 
+	int iteration = 0;
 	//auto node = iris::MeshNode::loadAsSceneFragment(
 	//	filename, scene_,
 	//	[&](iris::MeshPtr mesh, iris::MeshMaterialData &data)
@@ -1213,7 +1237,6 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 	//node->setGUID(guid);
 	node->setLocalPos(position);
 
-	// todo: load material data
 	addNodeToScene(node, ignore);
 }
 
