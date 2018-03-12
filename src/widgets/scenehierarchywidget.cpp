@@ -282,15 +282,14 @@ void SceneHierarchyWidget::duplicateNode()
     mainWindow->duplicateNode();
 }
 
-<<<<<<< HEAD
 void SceneHierarchyWidget::focusOnNode()
 {
 	UiManager::sceneViewWidget->focusOnNode(selectedNode);
-=======
+}
+
 void SceneHierarchyWidget::exportNode(const QString &guid)
 {
 	mainWindow->exportNode(guid);
->>>>>>> Prepare for exporting scenenodes
 }
 
 void SceneHierarchyWidget::showHideNode(QTreeWidgetItem* item, bool show)

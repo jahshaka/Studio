@@ -197,6 +197,16 @@ QTreeWidget::item:hover {
        </spacer>
       </item>
       <item>
+       <widget class="QCheckBox" name="hideDeps">
+        <property name="text">
+         <string>Hide dependencies</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QPushButton" name="importBtn">
         <property name="text">
          <string>Import Asset</string>

@@ -1079,10 +1079,8 @@ QStringList Database::fetchFolderAndChildFolders(const QString &guid)
 		QStringList subFolders;
 		while (query.next()) {
 			QSqlRecord record = query.record();
-			for (int i = 0; i < record.count(); i++) {
-				folders.append(record.value(0).toString());
-				subFolders.append(record.value(0).toString());
-			}
+			subFolders.append(record.value(0).toString());
+			folders.append(record.value(0).toString());
 		}
 
 		for (const QString &folder : subFolders) {
@@ -1106,13 +1104,30 @@ QStringList Database::fetchChildFolderAssets(const QString &guid)
 
 	QStringList assets;
 	while (query.next()) {
+		QString data;
 		QSqlRecord record = query.record();
-		for (int i = 0; i < record.count(); i++) {
-			assets.append(record.value(0).toString());
+		if (Constants::IMAGE_EXTS.contains(QFileInfo(record.value(0).toString()).suffix().toLower())) {
+			data = QDir("Textures").filePath(record.value(0).toString());
 		}
+		else if (Constants::MODEL_EXTS.contains(QFileInfo(record.value(0).toString()).suffix().toLower())) {
+			data = QDir("Models").filePath(record.value(0).toString());
+		}
+		else {
+			data = record.value(0).toString();
+		}
+
+		assets.append(data);
 	}
 
 	return assets;
+}
+
+bool Database::deleteDependency(const QString & dependee)
+{
+	QSqlQuery query;
+	query.prepare("DELETE FROM dependencies WHERE dependee = ?");
+	query.addBindValue(dependee);
+	return executeAndCheckQuery(query, "deleteDependency");
 }
 
 QStringList Database::fetchAssetAndDependencies(const QString &guid)
@@ -1122,40 +1137,109 @@ QStringList Database::fetchAssetAndDependencies(const QString &guid)
 	query.addBindValue(guid);
 	executeAndCheckQuery(query, "fetchAssetAndDependencies");
 
-	QStringList dependencies;
-	while (query.next()) {
-		QString data;
-		QSqlRecord record = query.record();
-		for (int i = 0; i < record.count(); ++i) {
-			if (Constants::IMAGE_EXTS.contains(QFileInfo(record.value(0).toString()).suffix().toLower())) {
-				data = QDir("Textures").filePath(record.value(0).toString());
-			}
-			else if (Constants::MODEL_EXTS.contains(QFileInfo(record.value(0).toString()).suffix().toLower())) {
-				data = QDir("Models").filePath(record.value(0).toString());
-			}
-			else {
-				data = record.value(0).toString();
-			}
+	auto prependPath = [](const QString &value) {
+		if (Constants::IMAGE_EXTS.contains(QFileInfo(value).suffix().toLower())) {
+			return QDir("Textures").filePath(value);
 		}
+		else if (Constants::MODEL_EXTS.contains(QFileInfo(value).suffix().toLower())) {
+			return QDir("Models").filePath(value);
+		}
+		else {
+			return value;
+		}
+	};
 
-		dependencies.append(data);
+	QStringList dependencies;
+	dependencies.append(prependPath(fetchAsset(guid).name));
+	while (query.next()) {
+		QSqlRecord record = query.record();
+		dependencies.append(prependPath(record.value(0).toString()));
+	}
+
+	for (int i = 0; i < dependencies.size(); ++i) {
+		if (QFileInfo(dependencies[i]).suffix().isEmpty()) {
+			dependencies.removeAt(i);
+		}
 	}
 
 	return dependencies;
 }
 
-QStringList Database::gatherDependencies(const QString &guid)
+QStringList Database::fetchAssetGUIDAndDependencies(const QString &guid)
+{
+	QSqlQuery query;
+	query.prepare("select assets.guid from dependencies inner join assets on dependencies.dependee = assets.guid where depender = ?");
+	query.addBindValue(guid);
+	executeAndCheckQuery(query, "fetchAssetGUIDAndDependencies");
+
+	QStringList dependencies;
+	dependencies.append(guid);
+	while (query.next()) {
+		QSqlRecord record = query.record();
+		dependencies.append(record.value(0).toString());
+	}
+
+	//for (int i = 0; i < dependencies.size(); ++i) {
+	//	if (QFileInfo(dependencies[i]).suffix().isEmpty()) {
+	//		dependencies.removeAt(i);
+	//	}
+	//}
+
+	return dependencies;
+}
+
+QStringList Database::deleteFolderAndDependencies(const QString &guid)
 {
 	QStringList files;
-	auto folders = fetchFolderAndChildFolders(guid);
-	for (const auto &folder : folders) {
-		auto assets = fetchChildFolderAssets(folder);
-		for (const auto &asset : assets) {
-			qDebug() << folder << " " << fetchAssetAndDependencies(asset);
+
+	// Get all child folders
+	for (const auto &folder : fetchFolderAndChildFolders(guid)) {
+		// For every folder, fetch assets inside
+		for (const auto &asset : fetchChildFolderAssets(folder)) {
+			// For every asset, find their dependencies
+			for (const auto &dep : fetchAssetAndDependencies(asset)) {
+				files.append(dep);
+			}
+
+			deleteAsset(asset);
+			deleteDependency(asset);
+		}
+
+		deleteFolder(folder);
+	}
+
+	for (int i = 0; i < files.size(); ++i) {
+		if (QFileInfo(files[i]).suffix().isEmpty()) {
+			files.removeAt(i);
 		}
 	}
 
-	return QStringList();
+	files.removeDuplicates();
+	return files;
+}
+
+QStringList Database::deleteAssetAndDependencies(const QString & guid)
+{
+	QStringList files;
+
+	// For every asset, find their dependencies
+	for (const auto &asset : fetchAssetGUIDAndDependencies(guid)) {
+		for (const auto &dep : fetchAssetAndDependencies(asset)) {
+			files.append(dep);
+		}
+
+		deleteAsset(asset);
+		deleteDependency(asset);
+	}
+
+	for (int i = 0; i < files.size(); ++i) {
+		if (QFileInfo(files[i]).suffix().isEmpty()) {
+			files.removeAt(i);
+		}
+	}
+
+	files.removeDuplicates();
+	return files;
 }
 
 QString Database::fetchAssetGUIDByName(const QString & name)

@@ -82,8 +82,12 @@ public:
 	QStringList fetchFolderAndChildFolders(const QString &guid);
 	QStringList fetchChildFolderAssets(const QString &guid);
 
+	bool deleteDependency(const QString &dependee);
+
+	QStringList fetchAssetGUIDAndDependencies(const QString &guid);
 	QStringList fetchAssetAndDependencies(const QString &guid);
-	QStringList gatherDependencies(const QString &guid);
+	QStringList deleteFolderAndDependencies(const QString &guid);
+	QStringList deleteAssetAndDependencies(const QString &guid);
 	QString fetchAssetGUIDByName(const QString &name);
 
     QSqlDatabase getDb() { return db; }

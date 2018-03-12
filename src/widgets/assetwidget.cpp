@@ -590,39 +590,22 @@ void AssetWidget::deleteItem()
 
 	// Delete folder and contents
 	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_FOLDER) {
-		db->gatherDependencies(item->data(MODEL_GUID_ROLE).toString());
+		for (const auto &files : db->deleteFolderAndDependencies(item->data(MODEL_GUID_ROLE).toString())) {
+			auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
+			if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
+		}
+		
+		delete ui->assetView->takeItem(ui->assetView->row(item));
 	}
 	// Delete asset and dependencies
 	else if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_ASSET) {
-		qDebug() << "A " << db->fetchAssetAndDependencies(item->data(MODEL_GUID_ROLE).toString());
+		for (const auto &files : db->deleteAssetAndDependencies(item->data(MODEL_GUID_ROLE).toString())) {
+			auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
+			if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
+		}
+
+		delete ui->assetView->takeItem(ui->assetView->row(item));
 	}
-
-	//QFileInfo itemInfo;
-	//itemInfo.setFile(QDir(assetItem.selectedPath).filePath(item->text()));
-
- //   QDir dir(itemInfo.absoluteFilePath());
-
-	//if (itemInfo.isDir()) {
-	//	if (dir.removeRecursively()) {
-	//		delete ui->assetView->takeItem(ui->assetView->row(item));
-	//	}
-	//}
-	//else if (Globals::assetNames.contains(QFileInfo(assetItem.selectedPath).baseName())) {
-	//	const QString guid = QFileInfo(assetItem.selectedPath).baseName();
-	//	QDir guid_path(assetItem.selectedPath);
-	//	// delete asset from project TODO (make it red in the tree)
-	//	if (guid_path.removeRecursively()) {
-	//		db->deleteAsset(guid);
-	//		delete ui->assetView->takeItem(ui->assetView->row(item));
-	//	}
-	//}
-	//
-	//if (itemInfo.isFile()) {
- //       QFile file(itemInfo.absoluteFilePath());
-	//	if (file.remove()) {
-	//		delete ui->assetView->takeItem(ui->assetView->row(item));
-	//	}
-	//}
 }
 
 void AssetWidget::openAtFolder()

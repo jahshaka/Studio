@@ -372,7 +372,6 @@ void SceneReader::readSceneNodeTransform(QJsonObject& nodeObj,iris::SceneNodePtr
  */
 iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 {
-	qDebug() << nodeObj;
     auto meshNode = iris::MeshNode::create();
 
     auto source = nodeObj["mesh"].toString("");
@@ -547,7 +546,6 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
         for (auto asset : AssetManager::getAssets()) {
             if (asset->type == AssetType::Shader) {
                 if (asset->fileName == mat["name"].toString() + ".shader") {
-                    //qDebug() << asset->path;
                     m->generate(asset->path, true);
                 }
             }
