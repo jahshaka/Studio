@@ -598,28 +598,22 @@ void Database::deleteProject()
 
 bool Database::deleteAsset(const QString &guid)
 {
-	// delete asset, material and dependency
     QSqlQuery query;
     query.prepare("DELETE FROM assets WHERE guid = ?");
     query.addBindValue(guid);
 
-	QString material_id = getDependencyByType(1, guid);
-
-    QSqlQuery query2;
-    query2.prepare("DELETE FROM assets WHERE guid = ?");
-    query2.addBindValue(material_id);
-
-	QSqlQuery query3;
-	query3.prepare("DELETE FROM dependencies WHERE depender = ? AND dependee = ?");
-	query3.addBindValue(guid);
-	query3.addBindValue(material_id);
-    
-    bool da = executeAndCheckQuery(query, "deleteAsset");
-    bool dm = executeAndCheckQuery(query2, "deleteMaterial");
-	bool dd = executeAndCheckQuery(query3, "deleteDependency");
-
-	return da && dm && dd;
+	return executeAndCheckQuery(query, "deleteAsset");
 }
+
+bool Database::deleteFolder(const QString &guid)
+{
+	QSqlQuery query;
+	query.prepare("DELETE FROM folders WHERE guid = ?");
+	query.addBindValue(guid);
+
+	return executeAndCheckQuery(query, "deleteFolder");
+}
+
 
 void Database::renameProject(const QString &newName)
 {
@@ -665,19 +659,6 @@ QString Database::insertFolder(const QString &folderName, const QString &parentF
 
 	return guid;
 }
-
-bool Database::deleteFolder(const QString &guid)
-{
-	// This should fetch all children and remove them as well
-	QSqlQuery query;
-	query.prepare("DELETE FROM folders WHERE guid = ?");
-	query.addBindValue(guid);
-	return executeAndCheckQuery(query, "deleteFolder");
-
-	return false;
-}
-
-
 
 void Database::insertCollectionGlobal(const QString &collectionName)
 {
@@ -1085,6 +1066,98 @@ bool Database::importProject(const QString &inFilePath)
     return false;
 }
 
+QStringList Database::fetchFolderAndChildFolders(const QString &guid)
+{
+	std::function<void(QStringList&, const QString&)> fetchFolders
+		= [&](QStringList &folders, const QString &guid) -> void
+	{
+		QSqlQuery query;
+		query.prepare("SELECT guid FROM folders WHERE parent = ?");
+		query.addBindValue(guid);
+		executeAndCheckQuery(query, "fetchFolderAndDependencies");
+
+		QStringList subFolders;
+		while (query.next()) {
+			QSqlRecord record = query.record();
+			for (int i = 0; i < record.count(); i++) {
+				folders.append(record.value(0).toString());
+				subFolders.append(record.value(0).toString());
+			}
+		}
+
+		for (const QString &folder : subFolders) {
+			fetchFolders(folders, folder);
+		}
+	};
+
+	QStringList folders;
+	fetchFolders(folders, guid);
+	folders.append(guid);
+
+	return folders;
+}
+
+QStringList Database::fetchChildFolderAssets(const QString &guid)
+{
+	QSqlQuery query;
+	query.prepare("SELECT guid FROM assets WHERE parent = ?");
+	query.addBindValue(guid);
+	executeAndCheckQuery(query, "fetchChildFolderAssets");
+
+	QStringList assets;
+	while (query.next()) {
+		QSqlRecord record = query.record();
+		for (int i = 0; i < record.count(); i++) {
+			assets.append(record.value(0).toString());
+		}
+	}
+
+	return assets;
+}
+
+QStringList Database::fetchAssetAndDependencies(const QString &guid)
+{
+	QSqlQuery query;
+	query.prepare("select assets.name from dependencies inner join assets on dependencies.dependee = assets.guid where depender = ?");
+	query.addBindValue(guid);
+	executeAndCheckQuery(query, "fetchAssetAndDependencies");
+
+	QStringList dependencies;
+	while (query.next()) {
+		QString data;
+		QSqlRecord record = query.record();
+		for (int i = 0; i < record.count(); ++i) {
+			if (Constants::IMAGE_EXTS.contains(QFileInfo(record.value(0).toString()).suffix().toLower())) {
+				data = QDir("Textures").filePath(record.value(0).toString());
+			}
+			else if (Constants::MODEL_EXTS.contains(QFileInfo(record.value(0).toString()).suffix().toLower())) {
+				data = QDir("Models").filePath(record.value(0).toString());
+			}
+			else {
+				data = record.value(0).toString();
+			}
+		}
+
+		dependencies.append(data);
+	}
+
+	return dependencies;
+}
+
+QStringList Database::gatherDependencies(const QString &guid)
+{
+	QStringList files;
+	auto folders = fetchFolderAndChildFolders(guid);
+	for (const auto &folder : folders) {
+		auto assets = fetchChildFolderAssets(folder);
+		for (const auto &asset : assets) {
+			qDebug() << folder << " " << fetchAssetAndDependencies(asset);
+		}
+	}
+
+	return QStringList();
+}
+
 QString Database::fetchAssetGUIDByName(const QString & name)
 {
 	QSqlQuery query;
@@ -1102,5 +1175,5 @@ QString Database::fetchAssetGUIDByName(const QString & name)
 		);
 	}
 
-	return QByteArray();
+	return QString();
 }

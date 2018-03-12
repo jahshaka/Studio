@@ -77,9 +77,9 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
     connect(ui->importBtn,  SIGNAL(pressed()), SLOT(importAssetB()));
 
     // The signal will be emitted from another thread (Nick)
-    connect(ThumbnailGenerator::getSingleton()->renderThread, SIGNAL(thumbnailComplete(ThumbnailResult*)),
-            this,    
-                                         SLOT(onThumbnailResult(ThumbnailResult*)));
+    connect(ThumbnailGenerator::getSingleton()->renderThread,	SIGNAL(thumbnailComplete(ThumbnailResult*)),
+            this,												SLOT(onThumbnailResult(ThumbnailResult*)));
+
 	progressDialog = new ProgressDialog;
 	progressDialog->setLabelText("Importing assets...");
 }
@@ -263,8 +263,9 @@ void AssetWidget::generateAssetThumbnails()
 void AssetWidget::addItem(const FolderData &folderData)
 {
 	QListWidgetItem *item = new QListWidgetItem;
-	item->setData(Qt::DisplayRole,	folderData.name);
-	item->setData(MODEL_GUID_ROLE,	folderData.guid);
+	item->setData(Qt::DisplayRole, folderData.name);
+	item->setData(MODEL_ITEM_TYPE, MODEL_FOLDER);
+	item->setData(MODEL_GUID_ROLE, folderData.guid);
 	item->setData(MODEL_PARENT_ROLE, folderData.parent);
 
 	item->setSizeHint(QSize(128, 128));
@@ -279,7 +280,8 @@ void AssetWidget::addItem(const AssetTileData &assetData)
 {
 	QListWidgetItem *item = new QListWidgetItem;
 	item->setData(Qt::DisplayRole, QFileInfo(assetData.name).baseName());
-	item->setData(MODEL_GUID_ROLE,	 assetData.guid);
+	item->setData(MODEL_ITEM_TYPE, MODEL_ASSET);
+	item->setData(MODEL_GUID_ROLE, assetData.guid);
 	item->setData(MODEL_PARENT_ROLE, assetData.parent);
 
 	if (assetData.type == static_cast<int>(AssetType::Texture)) {
@@ -583,32 +585,44 @@ void AssetWidget::deleteTreeFolder()
 void AssetWidget::deleteItem()
 {
     auto item = assetItem.wItem;
-	QFileInfo itemInfo;
-	itemInfo.setFile(QDir(assetItem.selectedPath).filePath(item->text()));
-
-    QDir dir(itemInfo.absoluteFilePath());
-
-	if (itemInfo.isDir()) {
-		if (dir.removeRecursively()) {
-			delete ui->assetView->takeItem(ui->assetView->row(item));
-		}
-	}
-	else if (Globals::assetNames.contains(QFileInfo(assetItem.selectedPath).baseName())) {
-		const QString guid = QFileInfo(assetItem.selectedPath).baseName();
-		QDir guid_path(assetItem.selectedPath);
-		// delete asset from project TODO (make it red in the tree)
-		if (guid_path.removeRecursively()) {
-			db->deleteAsset(guid);
-			delete ui->assetView->takeItem(ui->assetView->row(item));
-		}
-	}
 	
-	if (itemInfo.isFile()) {
-        QFile file(itemInfo.absoluteFilePath());
-		if (file.remove()) {
-			delete ui->assetView->takeItem(ui->assetView->row(item));
-		}
+	QStringList filesToRemove;
+
+	// Delete folder and contents
+	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_FOLDER) {
+		db->gatherDependencies(item->data(MODEL_GUID_ROLE).toString());
 	}
+	// Delete asset and dependencies
+	else if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_ASSET) {
+		qDebug() << "A " << db->fetchAssetAndDependencies(item->data(MODEL_GUID_ROLE).toString());
+	}
+
+	//QFileInfo itemInfo;
+	//itemInfo.setFile(QDir(assetItem.selectedPath).filePath(item->text()));
+
+ //   QDir dir(itemInfo.absoluteFilePath());
+
+	//if (itemInfo.isDir()) {
+	//	if (dir.removeRecursively()) {
+	//		delete ui->assetView->takeItem(ui->assetView->row(item));
+	//	}
+	//}
+	//else if (Globals::assetNames.contains(QFileInfo(assetItem.selectedPath).baseName())) {
+	//	const QString guid = QFileInfo(assetItem.selectedPath).baseName();
+	//	QDir guid_path(assetItem.selectedPath);
+	//	// delete asset from project TODO (make it red in the tree)
+	//	if (guid_path.removeRecursively()) {
+	//		db->deleteAsset(guid);
+	//		delete ui->assetView->takeItem(ui->assetView->row(item));
+	//	}
+	//}
+	//
+	//if (itemInfo.isFile()) {
+ //       QFile file(itemInfo.absoluteFilePath());
+	//	if (file.remove()) {
+	//		delete ui->assetView->takeItem(ui->assetView->row(item));
+	//	}
+	//}
 }
 
 void AssetWidget::openAtFolder()
@@ -930,14 +944,6 @@ void AssetWidget::importAsset(const QStringList &path)
 	populateAssetTree(false);
 	updateAssetView(assetItem.selectedGuid);
     //syncTreeAndView(assetItem.selectedGuid);
-
-	for (const auto &asset : AssetManager::getAssets()) {
-		if (asset->type == AssetType::Object) {
-			qDebug() << "hit" << asset->getValue().value<iris::SceneNodePtr>()->getName();
-		}
-
-		qDebug() << asset->fileName;
-	}
 }
 
 void AssetWidget::onThumbnailResult(ThumbnailResult *result)

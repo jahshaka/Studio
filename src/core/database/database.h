@@ -37,11 +37,11 @@ public:
 	QString getAuthorName();
     void deleteProject();
     bool deleteAsset(const QString &guid);
+	bool deleteFolder(const QString &guid);
     void renameProject(const QString&);
 	void updateAssetThumbnail(const QString guid, const QByteArray &thumbnail);
 	void updateAssetAsset(const QString guid, const QByteArray &asset);
 	QString insertFolder(const QString&, const QString&, const QString&);
-	bool deleteFolder(const QString &);
 	QString insertAssetGlobal(const QString&, int type, const QString&, const QByteArray &thumbnail = QByteArray(),
 		const QByteArray &properties = QByteArray(), const QByteArray &tags = QByteArray(),
 		const QByteArray &asset = QByteArray(), const QString &author = QString());
@@ -79,6 +79,11 @@ public:
     void createExportScene(const QString& outTempFilePath);
     bool importProject(const QString& inFilePath);
 
+	QStringList fetchFolderAndChildFolders(const QString &guid);
+	QStringList fetchChildFolderAssets(const QString &guid);
+
+	QStringList fetchAssetAndDependencies(const QString &guid);
+	QStringList gatherDependencies(const QString &guid);
 	QString fetchAssetGUIDByName(const QString &name);
 
     QSqlDatabase getDb() { return db; }

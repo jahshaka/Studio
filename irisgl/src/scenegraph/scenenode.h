@@ -83,6 +83,7 @@ public:
 
 public:
     SceneNode();
+	SceneNode(const SceneNode&);
     virtual ~SceneNode() {}
 
     static SceneNodePtr create();
@@ -154,7 +155,7 @@ public:
     * with a few exceptions:
     * 1) The duplicate shouldnt have a parent node or be added to a scene
     */
-   virtual SceneNodePtr createDuplicate(){
+   virtual SceneNodePtr createDuplicate() {
        //qt_assert((QString("This node isnt duplicable: ") + name).toStdString().c_str(),__FILE__,__LINE__);
 	   return SceneNodePtr(new SceneNode());
    }

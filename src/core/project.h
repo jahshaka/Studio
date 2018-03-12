@@ -98,4 +98,8 @@ enum class ModelTypes {
 #define	MODEL_TYPE_ROLE		0x0123
 #define	MODEL_MESH_ROLE		0x0173
 
+#define MODEL_ITEM_TYPE		0x0981
+#define MODEL_FOLDER		0x0871
+#define MODEL_ASSET			0x0421
+
 #endif // PROJECT_H
