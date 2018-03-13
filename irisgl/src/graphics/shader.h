@@ -66,6 +66,7 @@ class Shader
     friend class Material;
 	friend class VertexLayout;
 	friend class GraphicsDevice;
+	friend class SpriteBatch;
 
 public:
     static ShaderPtr load(GraphicsDevicePtr device, QString vertexShaderFile, QString fragmentShaderFile);

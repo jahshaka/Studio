@@ -56,6 +56,7 @@ QMatrix4x4 aiMatrixToQMatrix(aiMatrix4x4 aiMat) {
 // http://ogldev.atspace.co.uk/www/tutorial38/tutorial38.html
 Mesh::Mesh(aiMesh* mesh)
 {
+	_isDirty = 0;
     lastShaderId = -1;
     gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
 

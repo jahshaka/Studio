@@ -92,6 +92,10 @@ class Mesh
     SkeletonPtr skeleton;
     QMap<QString, SkeletalAnimationPtr> skeletalAnimations;
 
+	QList<VertexBufferPtr> vertexBuffers;
+	IndexBufferPtr idxBuffer;
+	GraphicsDevicePtr device;
+
     GLenum glPrimitive;
 public:
     PrimitiveMode primitiveMode;
@@ -99,6 +103,7 @@ public:
     GLuint vao;
     GLuint indexBuffer;
     bool usesIndexBuffer;
+	bool _isDirty;
 
     BoundingSphere boundingSphere;
 
@@ -197,6 +202,9 @@ public:
 
     PrimitiveMode getPrimitiveMode() const;
     void setPrimitiveMode(const PrimitiveMode &value);
+
+	void addVertexBuffer(VertexBufferPtr vertexBuffer);
+	void setIndexBuffer(IndexBufferPtr indexBuffer);
 
 private:
     void addVertexArray(VertexAttribUsage usage,void* data,int size,GLenum type,int numComponents);
