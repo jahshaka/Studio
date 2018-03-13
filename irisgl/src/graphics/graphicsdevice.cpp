@@ -16,16 +16,40 @@ VertexBuffer::VertexBuffer(GraphicsDevicePtr device, VertexLayout vertexLayout)
 {
     this->device = device;
     this->vertexLayout = vertexLayout;
-    device->getGL()->glGenBuffers(1, &bufferId);
+    bufferId = -1;
+    data = nullptr;
+    dataSize = 0;
+    _isDirty = true;
 }
 
-void VertexBuffer::setData(void *data, unsigned int sizeInBytes)
+void VertexBuffer::setData(void *bufferData, unsigned int sizeInBytes)
 {
-    //memcpy(this->data, data, sizeInBytes);
+    if(data)
+        delete data;
 
+    data = new char[sizeInBytes];
+    memcpy(this->data, bufferData, sizeInBytes);
+    dataSize = sizeInBytes;
+
+    _isDirty = true;
+}
+
+void VertexBuffer::destroy()
+{
+    if (data)
+        delete data;
+    // todo: delete gl buffer
+}
+
+void VertexBuffer::upload()
+{
     auto gl = device->getGL();
+    if (bufferId == -1)
+        gl->glGenBuffers(1, &bufferId);
+
     gl->glBindBuffer(GL_ARRAY_BUFFER, bufferId);
-    gl->glBufferData(GL_ARRAY_BUFFER, sizeInBytes, data, GL_STATIC_DRAW);
+    // todo : add buffer usage option (nick)
+    gl->glBufferData(GL_ARRAY_BUFFER, dataSize, data, GL_STATIC_DRAW);
     gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
@@ -280,7 +304,33 @@ void GraphicsDevice::clearTexture(int target)
 void GraphicsDevice::setVertexBuffer(VertexBufferPtr vertexBuffer)
 {
     vertexBuffers.clear();
+    if (vertexBuffer->isDirty())
+        vertexBuffer->upload();
     vertexBuffers.append(vertexBuffer);
+}
+
+void GraphicsDevice::setVertexBuffers(QList<VertexBufferPtr> vertexBuffers)
+{
+    vertexBuffers.clear();
+    for(auto& vertexBuffer : vertexBuffers)
+    {
+        if (vertexBuffer->isDirty())
+            vertexBuffer->upload();
+        vertexBuffers.append(vertexBuffer);
+    }
+}
+
+void GraphicsDevice::setIndexBuffer(IndexBufferPtr indexBuffer)
+{
+    if (!!indexBuffer)
+        this->indexBuffer = indexBuffer;
+    else
+        this->indexBuffer.clear();
+}
+
+void GraphicsDevice::clearIndexBuffer()
+{
+    this->indexBuffer.clear();
 }
 
 void GraphicsDevice::setBlendState(const BlendState &blendState, bool force)

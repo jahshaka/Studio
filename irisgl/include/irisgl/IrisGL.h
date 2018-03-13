@@ -9,3 +9,6 @@
 #include "../../src/graphics/blendstate.h"
 #include "../../src/graphics/depthstate.h"
 #include "../../src/graphics/rasterizerstate.h"
+#include "../../src/graphics/vertexlayout.h"
+
+#include "../../src/widgets/renderwidget.h"

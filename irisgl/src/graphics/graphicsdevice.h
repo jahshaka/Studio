@@ -33,6 +33,8 @@ public:
     VertexLayout vertexLayout;
     GraphicsDevicePtr device;
 
+    bool _isDirty;
+
     static VertexBufferPtr create(GraphicsDevicePtr device, VertexLayout vertexLayout)
     {
         return VertexBufferPtr(new VertexBuffer(device, vertexLayout));
@@ -46,8 +48,15 @@ public:
 
     void setData(void* data, unsigned int sizeinBytes);
 
+    bool isDirty()
+    {
+        return _isDirty;
+    }
+
 private:
     VertexBuffer(GraphicsDevicePtr device, VertexLayout vertexLayout);
+    void upload();
+    void destroy();
 };
 
 class IndexBuffer
@@ -78,7 +87,7 @@ class GraphicsDevice
 
     QVector<TexturePtr> textureUnits;
     QVector<VertexBufferPtr> vertexBuffers;
-    IndexBufferPtr indexBuffers;
+    IndexBufferPtr indexBuffer;
 
     // apparently gl needs at least one to be set
     // before you can render anything
@@ -114,6 +123,7 @@ public:
     void setVertexBuffer(VertexBufferPtr vertexBuffer);
     void setVertexBuffers(QList<VertexBufferPtr> vertexBuffers);
     void setIndexBuffer(IndexBufferPtr indexBuffer);
+    void clearIndexBuffer();
 
     void setBlendState(const BlendState& blendState, bool force = false);
     void setDepthState(const DepthState& depthStencil, bool force = false);
