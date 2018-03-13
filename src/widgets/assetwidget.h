@@ -11,6 +11,7 @@ class Database;
 #include <QTreeWidgetItem>
 #include <QWidget>
 #include <QFileDialog>
+#include <QHBoxLayout>
 
 #include "../io/assetmanager.h"
 #include "../dialogs/progressdialog.h"
@@ -18,16 +19,17 @@ class Database;
 #include "../core/project.h"
 #include "../widgets/sceneviewwidget.h"
 
-// TODO - https://stackoverflow.com/questions/19465812/how-can-i-insert-qdockwidget-as-tab
+// Look into this (iKlsR) - https://stackoverflow.com/questions/19465812/how-can-i-insert-qdockwidget-as-tab
 
 struct AssetItem {
     QString selectedPath;
     QTreeWidgetItem *item;
     QListWidgetItem *wItem;
 	QString selectedGuid;
-    // add one for assetView...
+    // add one for assetView maybe...
 };
 
+// This is a simple custom search predicate to be used with a stl search
 struct find_asset_thumbnail
 {
 	QString guid;
@@ -58,6 +60,7 @@ public:
     void syncTreeAndView(const QString&);
 	void addItem(const FolderData &folderData);
 	void addItem(const AssetTileData &assetData);
+	void addCrumbs(const QVector<FolderData> &folderData);
     void updateAssetView(const QString &path);
     void trigger();
     void updateLabels();
@@ -118,6 +121,8 @@ private:
 	ProgressDialog *progressDialog;
 
     QString currentPath;
+
+	QHBoxLayout *breadCrumbLayout;
 };
 
 #endif // ASSETWIDGET_H

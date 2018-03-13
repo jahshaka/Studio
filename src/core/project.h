@@ -26,15 +26,13 @@ public:
     Project();
     void setProjectPath(const QString&);
     void setProjectGuid(const QString&);
-	void setProjectFolderGuid(const QString &guid);
     bool isSaved();
 
     QString getProjectName();
     QString getProjectFolder();
     QString getProjectGuid();
-	QString getProjectFolderGuid();
 
-    static Project* createNew();
+    static Project *createNew();
 };
 
 struct ProjectTileData {

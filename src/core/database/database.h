@@ -69,6 +69,7 @@ public:
 	QVector<AssetTileData> fetchAssets();
 	AssetTileData fetchAsset(const QString &guid);
 	QVector<FolderData> fetchChildFolders(const QString &parent);
+	QVector<FolderData> fetchCrumbTrail(const QString &parent);
 	QVector<AssetTileData> fetchChildAssets(const QString &parent);
 	QVector<AssetTileData> fetchAssetsByCollection(int collection_id);
 	QVector<AssetData> fetchAssetThumbnails(const QStringList& guids);

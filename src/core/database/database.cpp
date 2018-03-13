@@ -354,6 +354,46 @@ AssetTileData Database::fetchAsset(const QString &guid)
 	return AssetTileData();
 }
 
+QVector<FolderData> Database::fetchCrumbTrail(const QString &guid)
+{
+	std::function<void(QVector<FolderData>&, const QString&)> fetchFolders
+		= [&](QVector<FolderData> &folders, const QString &guid) -> void
+	{
+		QSqlQuery query;
+		query.prepare("SELECT guid, parent, name FROM folders WHERE guid = ?");
+		query.addBindValue(guid);
+		executeAndCheckQuery(query, "fetchCrumbTrail");
+
+		QStringList parentFolder;
+		while (query.next()) {
+			FolderData data;
+			QSqlRecord record = query.record();
+			data.guid = record.value(0).toString();
+			data.parent = record.value(1).toString();
+			data.name = record.value(2).toString();
+
+			parentFolder.push_back(data.parent);
+			folders.push_back(data);
+		}
+
+		for (const QString &folder : parentFolder) {
+			fetchFolders(folders, folder);
+		}
+	};
+
+	QVector<FolderData> folders;
+	fetchFolders(folders, guid);
+
+	FolderData home;
+	home.guid = Globals::project->getProjectGuid();
+	home.name = "Assets";
+	folders.push_back(home);
+
+	std::reverse(folders.begin(), folders.end());
+
+	return folders;
+}
+
 QVector<FolderData> Database::fetchChildFolders(const QString &parent)
 {
 	QSqlQuery query;

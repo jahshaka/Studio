@@ -49,16 +49,6 @@ QString Project::getProjectGuid()
     return guid;
 }
 
-QString Project::getProjectFolderGuid()
-{
-	return projectFolderGuid;
-}
-
-void Project::setProjectFolderGuid(const QString &guid)
-{
-	this->projectFolderGuid = guid;
-}
-
 // TODO - repurpose this and all paths
 Project* Project::createNew()
 {

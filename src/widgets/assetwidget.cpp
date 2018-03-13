@@ -80,6 +80,18 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
     connect(ThumbnailGenerator::getSingleton()->renderThread,	SIGNAL(thumbnailComplete(ThumbnailResult*)),
             this,												SLOT(onThumbnailResult(ThumbnailResult*)));
 
+	breadCrumbLayout = new QHBoxLayout;
+	breadCrumbLayout->setContentsMargins(4, 0, 4, 0);
+	breadCrumbLayout->setSpacing(0);
+	ui->breadCrumb->setObjectName(QStringLiteral("BreadCrumb"));
+	ui->breadCrumb->setFixedHeight(32);
+	ui->breadCrumb->setLayout(breadCrumbLayout);
+	ui->breadCrumb->setStyleSheet(
+		"QWidget#BreadCrumb { background: #222; border: 1px solid black; }"
+		"QPushButton { background-color: #222; padding: 4px 16px; border-right: 1px solid black; color: #999; }"
+		"QPushButton:checked { color: white; border-right: 1px solid black; }"
+	);
+
 	progressDialog = new ProgressDialog;
 	progressDialog->setLabelText("Importing assets...");
 }
@@ -315,11 +327,39 @@ void AssetWidget::addItem(const AssetTileData &assetData)
 	}
 }
 
+void AssetWidget::addCrumbs(const QVector<FolderData> &folderData)
+{
+	breadCrumbLayout->setAlignment(Qt::AlignLeft);
+
+	while (QLayoutItem* item = breadCrumbLayout->takeAt(0)) {
+		Q_ASSERT(!item->layout()); // otherwise the layout will leak
+		delete item->widget();
+		delete item;
+	}
+
+	for (const auto &folder : folderData) {
+		QPushButton *crumb = new QPushButton(folder.name);
+		crumb->setCheckable(true);
+		crumb->setCursor(Qt::PointingHandCursor);
+		if (&folder == &folderData.back()) {
+			crumb->setChecked(true);
+		}
+		connect(crumb, &QPushButton::pressed, [folder, crumb, this]() {
+			assetItem.selectedGuid = folder.guid;
+			updateAssetView(folder.guid);
+			syncTreeAndView(folder.guid);
+		});
+		breadCrumbLayout->addWidget(crumb);
+	}
+}
+
 void AssetWidget::updateAssetView(const QString &path)
 {
     ui->assetView->clear();
+
 	for (const auto &folder : db->fetchChildFolders(path)) addItem(folder);
 	for (const auto &asset : db->fetchChildAssets(path)) addItem(asset);
+	addCrumbs(db->fetchCrumbTrail(path));
 }
 
 bool AssetWidget::eventFilter(QObject *watched, QEvent *event)

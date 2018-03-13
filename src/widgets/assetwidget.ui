@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>720</width>
-    <height>256</height>
+    <width>1003</width>
+    <height>198</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -149,7 +149,7 @@ QTreeWidget::item:hover {
    <property name="bottomMargin">
     <number>0</number>
    </property>
-   <property name="verticalSpacing">
+   <property name="spacing">
     <number>0</number>
    </property>
    <item row="0" column="0">
@@ -217,6 +217,9 @@ QTreeWidget::item:hover {
     </widget>
    </item>
    <item row="1" column="0">
+    <widget class="QWidget" name="breadCrumb" native="true"/>
+   </item>
+   <item row="2" column="0">
     <widget class="QSplitter" name="splitter">
      <property name="styleSheet">
       <string notr="true">background: #303030</string>
