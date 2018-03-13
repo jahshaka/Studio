@@ -84,5 +84,7 @@
         <file>icons/save.png</file>
         <file>icons/export.png</file>
         <file>icons/tab.png</file>
+        <file>icons/icons8-folder.svg</file>
+        <file>icons/icons8-file.svg</file>
     </qresource>
 </RCC>

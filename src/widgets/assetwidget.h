@@ -123,6 +123,14 @@ private:
     QString currentPath;
 
 	QHBoxLayout *breadCrumbLayout;
+
+	QButtonGroup *assetViewToggleButtonGroup;
+	QPushButton *toggleIconView;
+	QPushButton *toggleListView;
+
+	QSize iconSize;
+	QSize listSize;
+	QSize currentSize;
 };
 
 #endif // ASSETWIDGET_H

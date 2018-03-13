@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1003</width>
-    <height>198</height>
+    <width>799</width>
+    <height>267</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -92,7 +92,7 @@ QListWidget::item:selected:!active {
 QListWidget::item:selected:active {
 	background: #404040;
 	padding: 0;
-margin: 0;
+	margin: 0;
 }
 
 QTreeWidget {
@@ -217,7 +217,14 @@ QTreeWidget::item:hover {
     </widget>
    </item>
    <item row="1" column="0">
-    <widget class="QWidget" name="breadCrumb" native="true"/>
+    <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <item>
+      <widget class="QWidget" name="breadCrumb" native="true"/>
+     </item>
+     <item>
+      <widget class="QWidget" name="switcher" native="true"/>
+     </item>
+    </layout>
    </item>
    <item row="2" column="0">
     <widget class="QSplitter" name="splitter">

@@ -49,8 +49,6 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
             this,           SLOT(sceneTreeCustomContextMenu(const QPoint&)));
 
     ui->assetView->setContextMenuPolicy(Qt::CustomContextMenu);
-    ui->assetView->setViewMode(QListWidget::IconMode);
-    ui->assetView->setIconSize(QSize(88, 88));
     ui->assetView->setResizeMode(QListWidget::Adjust);
     ui->assetView->setMovement(QListView::Static);
     ui->assetView->setSelectionBehavior(QAbstractItemView::SelectItems);
@@ -87,9 +85,67 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->breadCrumb->setFixedHeight(32);
 	ui->breadCrumb->setLayout(breadCrumbLayout);
 	ui->breadCrumb->setStyleSheet(
-		"QWidget#BreadCrumb { background: #222; border: 1px solid black; }"
+		"QWidget#BreadCrumb { background: #222; border-top: 1px solid black; border-bottom: 1px solid black; }"
 		"QPushButton { background-color: #222; padding: 4px 16px; border-right: 1px solid black; color: #999; }"
 		"QPushButton:checked { color: white; border-right: 1px solid black; }"
+	);
+
+	assetViewToggleButtonGroup = new QButtonGroup;
+	toggleIconView = new QPushButton(tr("Icon"));
+	toggleIconView->setCheckable(true);
+	//localAssetsButton->setIcon(QIcon(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-server-50.png")));
+	//localAssetsButton->setIconSize(QSize(16, 16));
+	toggleIconView->setCursor(Qt::PointingHandCursor);
+	// Todo - use preferences
+	toggleIconView->setChecked(true);
+
+	toggleListView = new QPushButton(tr("List"));
+	toggleListView->setCheckable(true);
+	//onlineAssetsButton->setIcon(QIcon(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cloud-50.png")));
+	//onlineAssetsButton->setIconSize(QSize(16, 16));
+	toggleListView->setCursor(Qt::PointingHandCursor);
+
+	assetViewToggleButtonGroup->addButton(toggleIconView);
+	assetViewToggleButtonGroup->addButton(toggleListView);
+
+	QHBoxLayout *toggleLayout = new QHBoxLayout;
+	toggleLayout->setSpacing(0);
+	toggleLayout->setSizeConstraint(QLayout::SetFixedSize);
+	toggleLayout->addWidget(new QLabel(tr("Display:")));
+	toggleLayout->addSpacing(8);
+	toggleLayout->addWidget(toggleIconView);
+	toggleLayout->addWidget(toggleListView);
+
+	iconSize = QSize(72, 96);
+	listSize = QSize(12, 12);
+	currentSize = iconSize;
+
+	ui->assetView->setViewMode(QListWidget::IconMode);
+	ui->assetView->setSpacing(8);
+	ui->assetView->setIconSize(currentSize);
+
+	connect(toggleIconView, &QPushButton::pressed, [this]() {
+		ui->assetView->setViewMode(QListWidget::IconMode);
+		ui->assetView->setSpacing(8);
+		currentSize = iconSize;
+		ui->assetView->setIconSize(currentSize);
+		updateAssetView(assetItem.selectedGuid);
+	});
+
+	connect(toggleListView, &QPushButton::pressed, [this]() {
+		ui->assetView->setViewMode(QListWidget::ListMode);
+		ui->assetView->setSpacing(4);
+		currentSize = listSize;
+		ui->assetView->setIconSize(currentSize);
+		updateAssetView(assetItem.selectedGuid);
+	});
+
+	ui->switcher->setLayout(toggleLayout);
+	ui->switcher->setObjectName("Switcher");
+	ui->switcher->setStyleSheet(
+		"QWidget#Switcher { background: #222; border-top: 1px solid black; border-bottom: 1px solid black; }"
+		"QPushButton { background-color: #333; padding: 4px 16px; }"
+		"QPushButton:checked { background: #2980b9; }"
 	);
 
 	progressDialog = new ProgressDialog;
@@ -227,7 +283,7 @@ void AssetWidget::populateAssetTree(bool initialRun)
 {
     auto rootTreeItem = new QTreeWidgetItem();
     rootTreeItem->setText(0, "Assets");
-    rootTreeItem->setIcon(0, QIcon(":/icons/ic_folder_large.svg"));
+    rootTreeItem->setIcon(0, QIcon(":/icons/icons8-folder.svg"));
     rootTreeItem->setData(0, MODEL_GUID_ROLE, Globals::project->getProjectGuid());
     updateTree(rootTreeItem, Globals::project->getProjectGuid());
 
@@ -247,7 +303,7 @@ void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
 {
 	for (const auto &folder : db->fetchChildFolders(path)) {
 		auto item = new QTreeWidgetItem();
-		item->setIcon(0, QIcon(":/icons/ic_folder_large.svg"));
+		item->setIcon(0, QIcon(":/icons/icons8-folder.svg"));
 		item->setData(0, Qt::DisplayRole,	folder.name);
 		item->setData(0, MODEL_GUID_ROLE,	folder.guid);
 		item->setData(0, MODEL_PARENT_ROLE,	folder.parent);
@@ -280,10 +336,10 @@ void AssetWidget::addItem(const FolderData &folderData)
 	item->setData(MODEL_GUID_ROLE, folderData.guid);
 	item->setData(MODEL_PARENT_ROLE, folderData.parent);
 
-	item->setSizeHint(QSize(128, 128));
+	item->setSizeHint(currentSize);
 	item->setTextAlignment(Qt::AlignCenter);
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
-	item->setIcon(QIcon(":/icons/ic_folder.svg"));
+	item->setIcon(QIcon(":/icons/icons8-folder.svg"));
 
 	ui->assetView->addItem(item);
 }
@@ -314,10 +370,10 @@ void AssetWidget::addItem(const AssetTileData &assetData)
 		item->setIcon(QIcon(thumbnail));
 	}
 	else {
-		item->setIcon(QIcon(":/icons/ic_file.svg"));
+		item->setIcon(QIcon(":/icons/icons8-file.svg"));
 	}
 
-	item->setSizeHint(QSize(128, 128));
+	item->setSizeHint(currentSize);
 	item->setTextAlignment(Qt::AlignCenter);
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
 
@@ -657,7 +713,7 @@ void AssetWidget::createFolder()
 {
     QListWidgetItem *item = new QListWidgetItem("New Folder");
     item->setFlags(item->flags() | Qt::ItemIsEditable);
-	item->setSizeHint(QSize(128, 128));
+	item->setSizeHint(currentSize);
 	item->setTextAlignment(Qt::AlignCenter);
 	item->setIcon(QIcon(":/icons/ic_folder.svg"));
 
@@ -701,13 +757,13 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 			AssetType type;
 			QPixmap thumbnail;
 
-			thumbnail = QPixmap(":/icons/ic_file_large.svg");
+			thumbnail = QPixmap(":/icons/icons8-file.svg");
 
 			QString destDir;
 
 			// handle all model extensions here
 			if (Constants::IMAGE_EXTS.contains(entryInfo.suffix().toLower())) {
-				auto thumb = ThumbnailManager::createThumbnail(entryInfo.absoluteFilePath(), 256, 256);
+				auto thumb = ThumbnailManager::createThumbnail(entryInfo.absoluteFilePath(), 512, 512);
 				thumbnail = QPixmap::fromImage(*thumb->thumb);
 				type = AssetType::Texture;
 				destDir = "Textures";
