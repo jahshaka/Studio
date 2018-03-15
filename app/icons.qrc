@@ -86,5 +86,7 @@
         <file>icons/tab.png</file>
         <file>icons/icons8-folder.svg</file>
         <file>icons/icons8-file.svg</file>
+        <file>icons/icons8-folder-72.png</file>
+        <file>icons/empty_object.png</file>
     </qresource>
 </RCC>

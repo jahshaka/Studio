@@ -16,6 +16,7 @@
 #include "assetview.h"
 #include "../io/assetmanager.h"
 
+#include <QPainter>
 #include <QProgressDialog>
 #include <QBuffer>
 #include <QDebug>
@@ -31,52 +32,52 @@
 
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
-    ui->setupUi(this);
+	ui->setupUi(this);
 
-    this->db = handle;
+	this->db = handle;
 
-    ui->assetView->viewport()->installEventFilter(this);
-    ui->assetTree->viewport()->installEventFilter(this);
-    ui->assetTree->setContextMenuPolicy(Qt::CustomContextMenu);
+	ui->assetView->viewport()->installEventFilter(this);
+	ui->assetTree->viewport()->installEventFilter(this);
+	ui->assetTree->setContextMenuPolicy(Qt::CustomContextMenu);
 
-    connect(ui->assetTree,  SIGNAL(itemClicked(QTreeWidgetItem*, int)),
-            this,           SLOT(treeItemSelected(QTreeWidgetItem*)));
+	connect(ui->assetTree, SIGNAL(itemClicked(QTreeWidgetItem*, int)),
+		this, SLOT(treeItemSelected(QTreeWidgetItem*)));
 
-    connect(ui->assetTree,  SIGNAL(itemChanged(QTreeWidgetItem*, int)),
-            this,           SLOT(treeItemChanged(QTreeWidgetItem*, int)));
+	connect(ui->assetTree, SIGNAL(itemChanged(QTreeWidgetItem*, int)),
+		this, SLOT(treeItemChanged(QTreeWidgetItem*, int)));
 
-    connect(ui->assetTree,  SIGNAL(customContextMenuRequested(const QPoint&)),
-            this,           SLOT(sceneTreeCustomContextMenu(const QPoint&)));
+	connect(ui->assetTree, SIGNAL(customContextMenuRequested(const QPoint&)),
+		this, SLOT(sceneTreeCustomContextMenu(const QPoint&)));
 
-    ui->assetView->setContextMenuPolicy(Qt::CustomContextMenu);
-    ui->assetView->setResizeMode(QListWidget::Adjust);
-    ui->assetView->setMovement(QListView::Static);
-    ui->assetView->setSelectionBehavior(QAbstractItemView::SelectItems);
-    ui->assetView->setSelectionMode(QAbstractItemView::SingleSelection);
+	ui->assetView->setContextMenuPolicy(Qt::CustomContextMenu);
+	ui->assetView->setResizeMode(QListWidget::Adjust);
+	ui->assetView->setMovement(QListView::Static);
+	ui->assetView->setSelectionBehavior(QAbstractItemView::SelectItems);
+	ui->assetView->setSelectionMode(QAbstractItemView::SingleSelection);
 
-    ui->assetView->setDragEnabled(true);
-    ui->assetView->setDragDropMode(QAbstractItemView::DragDrop);
+	ui->assetView->setDragEnabled(true);
+	ui->assetView->setDragDropMode(QAbstractItemView::DragDrop);
 
-    connect(ui->assetView,  SIGNAL(itemClicked(QListWidgetItem*)),
-            this,           SLOT(assetViewClicked(QListWidgetItem*)));
+	connect(ui->assetView, SIGNAL(itemClicked(QListWidgetItem*)),
+		this, SLOT(assetViewClicked(QListWidgetItem*)));
 
-    connect(ui->assetView,  SIGNAL(customContextMenuRequested(const QPoint&)),
-            this,           SLOT(sceneViewCustomContextMenu(const QPoint&)));
+	connect(ui->assetView, SIGNAL(customContextMenuRequested(const QPoint&)),
+		this, SLOT(sceneViewCustomContextMenu(const QPoint&)));
 
-    connect(ui->assetView,  SIGNAL(itemDoubleClicked(QListWidgetItem*)),
-            this,           SLOT(assetViewDblClicked(QListWidgetItem*)));
+	connect(ui->assetView, SIGNAL(itemDoubleClicked(QListWidgetItem*)),
+		this, SLOT(assetViewDblClicked(QListWidgetItem*)));
 
-    connect(ui->assetView->itemDelegate(),  &QAbstractItemDelegate::commitData,
-            this,                           &AssetWidget::OnLstItemsCommitData);
+	connect(ui->assetView->itemDelegate(), &QAbstractItemDelegate::commitData,
+		this, &AssetWidget::OnLstItemsCommitData);
 
-    connect(ui->searchBar,  SIGNAL(textChanged(QString)),
-            this,           SLOT(searchAssets(QString)));
+	connect(ui->searchBar, SIGNAL(textChanged(QString)),
+		this, SLOT(searchAssets(QString)));
 
-    connect(ui->importBtn,  SIGNAL(pressed()), SLOT(importAssetB()));
+	connect(ui->importBtn, SIGNAL(pressed()), SLOT(importAssetB()));
 
-    // The signal will be emitted from another thread (Nick)
-    connect(ThumbnailGenerator::getSingleton()->renderThread,	SIGNAL(thumbnailComplete(ThumbnailResult*)),
-            this,												SLOT(onThumbnailResult(ThumbnailResult*)));
+	// The signal will be emitted from another thread (Nick)
+	connect(ThumbnailGenerator::getSingleton()->renderThread, SIGNAL(thumbnailComplete(ThumbnailResult*)),
+		this, SLOT(onThumbnailResult(ThumbnailResult*)));
 
 	breadCrumbLayout = new QHBoxLayout;
 	breadCrumbLayout->setContentsMargins(4, 0, 4, 0);
@@ -116,27 +117,36 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	toggleLayout->addWidget(toggleIconView);
 	toggleLayout->addWidget(toggleListView);
 
-	iconSize = QSize(72, 96);
-	listSize = QSize(12, 12);
+	iconSize = QSize(72, 72);
+	listSize = QSize(16, 16);
 	currentSize = iconSize;
 
+	setMouseTracking(true);
+	ui->assetView->setMouseTracking(true);
+
 	ui->assetView->setViewMode(QListWidget::IconMode);
-	ui->assetView->setSpacing(8);
+	ui->assetView->setSpacing(4);
 	ui->assetView->setIconSize(currentSize);
+
+	ui->assetView->setItemDelegate(new ListViewDelegate());
 
 	connect(toggleIconView, &QPushButton::pressed, [this]() {
 		ui->assetView->setViewMode(QListWidget::IconMode);
-		ui->assetView->setSpacing(8);
+		ui->assetView->setAlternatingRowColors(false);
+		ui->assetView->setSpacing(4);
 		currentSize = iconSize;
 		ui->assetView->setIconSize(currentSize);
+		ui->assetView->setItemDelegate(new ListViewDelegate());
 		updateAssetView(assetItem.selectedGuid);
 	});
 
 	connect(toggleListView, &QPushButton::pressed, [this]() {
 		ui->assetView->setViewMode(QListWidget::ListMode);
-		ui->assetView->setSpacing(4);
+		ui->assetView->setAlternatingRowColors(true);
+		ui->assetView->setSpacing(0);
 		currentSize = listSize;
 		ui->assetView->setIconSize(currentSize);
+		ui->assetView->setItemDelegate(new QStyledItemDelegate());
 		updateAssetView(assetItem.selectedGuid);
 	});
 
@@ -154,14 +164,14 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 void AssetWidget::trigger()
 {
-    // It's important that this gets called after a project has been loaded (iKlsR)
-    populateAssetTree(true);
+	// It's important that this gets called after a project has been loaded (iKlsR)
+	populateAssetTree(true);
 }
 
 void AssetWidget::updateLabels()
 {
-    //updateAssetView(assetItem.selectedPath);
-    //populateAssetTree(false);
+	//updateAssetView(assetItem.selectedPath);
+	//populateAssetTree(false);
 }
 
 void AssetWidget::extractTexturesAndMaterialFromMaterial(
@@ -218,12 +228,12 @@ iris::SceneNodePtr AssetWidget::extractTexturesAndMaterialFromMesh(
 		else
 			mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
-		mat->setValue("diffuseColor",	data.diffuseColor);
-		mat->setValue("specularColor",	data.specularColor);
-		mat->setValue("ambientColor",	QColor(110, 110, 110));	// assume this color, some formats set this to pitch black
-		mat->setValue("emissionColor",	data.emissionColor);
-		mat->setValue("shininess",		data.shininess);
-		mat->setValue("useAlpha",		true);
+		mat->setValue("diffuseColor", data.diffuseColor);
+		mat->setValue("specularColor", data.specularColor);
+		mat->setValue("ambientColor", QColor(110, 110, 110));	// assume this color, some formats set this to pitch black
+		mat->setValue("emissionColor", data.emissionColor);
+		mat->setValue("shininess", data.shininess);
+		mat->setValue("useAlpha", true);
 
 		if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
 			mat->setValue("diffuseTexture", data.diffuseTexture);
@@ -276,37 +286,37 @@ iris::SceneNodePtr AssetWidget::extractTexturesAndMaterialFromMesh(
 
 AssetWidget::~AssetWidget()
 {
-    delete ui;
+	delete ui;
 }
 
 void AssetWidget::populateAssetTree(bool initialRun)
 {
-    auto rootTreeItem = new QTreeWidgetItem();
-    rootTreeItem->setText(0, "Assets");
-    rootTreeItem->setIcon(0, QIcon(":/icons/icons8-folder.svg"));
-    rootTreeItem->setData(0, MODEL_GUID_ROLE, Globals::project->getProjectGuid());
-    updateTree(rootTreeItem, Globals::project->getProjectGuid());
+	auto rootTreeItem = new QTreeWidgetItem();
+	rootTreeItem->setText(0, "Assets");
+	rootTreeItem->setIcon(0, QIcon(":/icons/icons8-folder-72.png"));
+	rootTreeItem->setData(0, MODEL_GUID_ROLE, Globals::project->getProjectGuid());
+	updateTree(rootTreeItem, Globals::project->getProjectGuid());
 
-    ui->assetTree->clear();
-    ui->assetTree->addTopLevelItem(rootTreeItem);
-    ui->assetTree->expandItem(rootTreeItem);
+	ui->assetTree->clear();
+	ui->assetTree->addTopLevelItem(rootTreeItem);
+	ui->assetTree->expandItem(rootTreeItem);
 
-    if (initialRun) {
-        updateAssetView(Globals::project->getProjectGuid());
-        rootTreeItem->setSelected(true);
-        assetItem.item = rootTreeItem;
-        assetItem.selectedGuid = Globals::project->getProjectGuid();
-    }
+	if (initialRun) {
+		updateAssetView(Globals::project->getProjectGuid());
+		rootTreeItem->setSelected(true);
+		assetItem.item = rootTreeItem;
+		assetItem.selectedGuid = Globals::project->getProjectGuid();
+	}
 }
 
 void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
 {
 	for (const auto &folder : db->fetchChildFolders(path)) {
 		auto item = new QTreeWidgetItem();
-		item->setIcon(0, QIcon(":/icons/icons8-folder.svg"));
-		item->setData(0, Qt::DisplayRole,	folder.name);
-		item->setData(0, MODEL_GUID_ROLE,	folder.guid);
-		item->setData(0, MODEL_PARENT_ROLE,	folder.parent);
+		item->setIcon(0, QIcon(":/icons/icons8-folder-72.png"));
+		item->setData(0, Qt::DisplayRole, folder.name);
+		item->setData(0, MODEL_GUID_ROLE, folder.guid);
+		item->setData(0, MODEL_PARENT_ROLE, folder.parent);
 		parent->addChild(item);
 		// Add children if any
 		updateTree(item, folder.guid);
@@ -316,16 +326,16 @@ void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
 // Use this a force thumbnail generator in the future
 void AssetWidget::generateAssetThumbnails()
 {
-    //foreach (auto asset, AssetManager::assets) {
-    //    if (asset->type == AssetType::Object) {
-    //        // TODO - fetch a list and check that instead of hitting the db, low cost but better way
-    //        if (!db->hasCachedThumbnail(asset->fileName)) {
-    //            ThumbnailGenerator::getSingleton()->requestThumbnail(
-    //                ThumbnailRequestType::Mesh, asset->path, asset->path
-    //            );
-    //        }
-    //    }
-    //}
+	//foreach (auto asset, AssetManager::assets) {
+	//    if (asset->type == AssetType::Object) {
+	//        // TODO - fetch a list and check that instead of hitting the db, low cost but better way
+	//        if (!db->hasCachedThumbnail(asset->fileName)) {
+	//            ThumbnailGenerator::getSingleton()->requestThumbnail(
+	//                ThumbnailRequestType::Mesh, asset->path, asset->path
+	//            );
+	//        }
+	//    }
+	//}
 }
 
 void AssetWidget::addItem(const FolderData &folderData)
@@ -339,7 +349,7 @@ void AssetWidget::addItem(const FolderData &folderData)
 	item->setSizeHint(currentSize);
 	item->setTextAlignment(Qt::AlignCenter);
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
-	item->setIcon(QIcon(":/icons/icons8-folder.svg"));
+	item->setIcon(QIcon(":/icons/icons8-folder-72.png"));
 
 	ui->assetView->addItem(item);
 }
@@ -359,10 +369,10 @@ void AssetWidget::addItem(const AssetTileData &assetData)
 		//item->setData(Qt::UserRole,		file.absoluteFilePath());
 		const QString meshAssetGuid = db->getDependencyByType(static_cast<int>(AssetType::Object), assetData.guid);
 		const AssetTileData meshAssetName = db->fetchAsset(meshAssetGuid);
-		item->setData(MODEL_GUID_ROLE,		assetData.guid);
-		item->setData(MODEL_PARENT_ROLE,	assetData.parent);
-		item->setData(MODEL_TYPE_ROLE,		assetData.type);
-		item->setData(MODEL_MESH_ROLE,		meshAssetName.name);
+		item->setData(MODEL_GUID_ROLE, assetData.guid);
+		item->setData(MODEL_PARENT_ROLE, assetData.parent);
+		item->setData(MODEL_TYPE_ROLE, assetData.type);
+		item->setData(MODEL_MESH_ROLE, meshAssetName.name);
 	}
 
 	QPixmap thumbnail;
@@ -370,7 +380,7 @@ void AssetWidget::addItem(const AssetTileData &assetData)
 		item->setIcon(QIcon(thumbnail));
 	}
 	else {
-		item->setIcon(QIcon(":/icons/icons8-file.svg"));
+		item->setIcon(QIcon(":/icons/empty_object.png"));
 	}
 
 	item->setSizeHint(currentSize);
@@ -411,7 +421,7 @@ void AssetWidget::addCrumbs(const QVector<FolderData> &folderData)
 
 void AssetWidget::updateAssetView(const QString &path)
 {
-    ui->assetView->clear();
+	ui->assetView->clear();
 
 	for (const auto &folder : db->fetchChildFolders(path)) addItem(folder);
 	for (const auto &asset : db->fetchChildAssets(path)) addItem(asset);
@@ -420,88 +430,94 @@ void AssetWidget::updateAssetView(const QString &path)
 
 bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 {
-    if (watched == ui->assetView->viewport()) {
-        switch (event->type()) {
-            case QEvent::MouseButtonPress: {
-                auto evt = static_cast<QMouseEvent*>(event);
-                if (evt->button() == Qt::LeftButton) {
-                    startPos = evt->pos();
-                }
+	if (watched == ui->assetView->viewport()) {
+		switch (event->type()) {
+		case QEvent::MouseButtonPress: {
+			auto evt = static_cast<QMouseEvent*>(event);
+			if (evt->button() == Qt::LeftButton) {
+				startPos = evt->pos();
+			}
 
-				ui->assetView->clearSelection();
+			ui->assetView->clearSelection();
 
-                AssetWidget::mousePressEvent(evt);
-                break;
-            }
+			AssetWidget::mousePressEvent(evt);
+			break;
+		}
 
-            case QEvent::MouseMove: {
-                auto evt = static_cast<QMouseEvent*>(event);
-                if (evt->buttons() & Qt::LeftButton) {
-                    int distance = (evt->pos() - startPos).manhattanLength();
-                    if (distance >= QApplication::startDragDistance()) {
-                        auto item = ui->assetView->currentItem();
-						QDrag *drag = new QDrag(this);
-						QMimeData *mimeData = new QMimeData;
-						//QModelIndex index = ui->assetView->indexAt(evt->pos());
-						//auto item = static_cast<QListWidgetItem*>(index.internalPointer());
-						ui->assetView->clearSelection();
-                        if (item) {
-							QByteArray mdata;
-							QDataStream stream(&mdata, QIODevice::WriteOnly);
-							QMap<int, QVariant> roleDataMap;
+		case QEvent::MouseButtonRelease: {
+			auto evt = static_cast<QMouseEvent*>(event);
+			AssetWidget::mouseReleaseEvent(evt);
+			break;
+		}
 
-							roleDataMap[0] = QVariant(item->data(MODEL_TYPE_ROLE).toInt());
-							roleDataMap[1] = QVariant(item->data(Qt::DisplayRole).toString());
-							roleDataMap[2] = QVariant(item->data(MODEL_MESH_ROLE).toString());
-							roleDataMap[3] = QVariant(item->data(MODEL_GUID_ROLE).toString());
+		case QEvent::MouseMove: {
+			auto evt = static_cast<QMouseEvent*>(event);
+			if (evt->buttons() & Qt::LeftButton) {
+				int distance = (evt->pos() - startPos).manhattanLength();
+				if (distance >= QApplication::startDragDistance()) {
+					auto item = ui->assetView->currentItem();
+					QDrag *drag = new QDrag(this);
+					QMimeData *mimeData = new QMimeData;
+					//QModelIndex index = ui->assetView->indexAt(evt->pos());
+					//auto item = static_cast<QListWidgetItem*>(index.internalPointer());
+					ui->assetView->clearSelection();
+					if (item) {
+						QByteArray mdata;
+						QDataStream stream(&mdata, QIODevice::WriteOnly);
+						QMap<int, QVariant> roleDataMap;
 
-							stream << roleDataMap;
+						roleDataMap[0] = QVariant(item->data(MODEL_TYPE_ROLE).toInt());
+						roleDataMap[1] = QVariant(item->data(Qt::DisplayRole).toString());
+						roleDataMap[2] = QVariant(item->data(MODEL_MESH_ROLE).toString());
+						roleDataMap[3] = QVariant(item->data(MODEL_GUID_ROLE).toString());
 
-							mimeData->setData(QString("application/x-qabstractitemmodeldatalist"), mdata);
-                            drag->setMimeData(mimeData);
+						stream << roleDataMap;
 
-                            // only hide for object models
-                            //drag->setPixmap(QPixmap());
-                            drag->exec();
-                        }
-                    }
-                }
+						mimeData->setData(QString("application/x-qabstractitemmodeldatalist"), mdata);
+						drag->setMimeData(mimeData);
 
-                AssetWidget::mouseMoveEvent(evt);
-                break;
-            }
+						// only hide for object models
+						//drag->setPixmap(QPixmap());
+						drag->exec();
+					}
+				}
+			}
 
-            default: break;
-        }
-    }
+			AssetWidget::mouseMoveEvent(evt);
+			break;
+		}
 
-    return QObject::eventFilter(watched, event);
+		default: break;
+		}
+	}
+
+	return QObject::eventFilter(watched, event);
 }
 
 void AssetWidget::dragEnterEvent(QDragEnterEvent *evt)
 {
-    if (evt->mimeData()->hasUrls()) {
-        evt->acceptProposedAction();
-    }
+	if (evt->mimeData()->hasUrls()) {
+		evt->acceptProposedAction();
+	}
 }
 
 void AssetWidget::dropEvent(QDropEvent *evt)
 {
-    QList<QUrl> droppedUrls = evt->mimeData()->urls();
-    QStringList list;
-    for (auto url : droppedUrls) {
-        auto fileInfo = QFileInfo(url.toLocalFile());
-        list << fileInfo.absoluteFilePath();
-    }
+	QList<QUrl> droppedUrls = evt->mimeData()->urls();
+	QStringList list;
+	for (auto url : droppedUrls) {
+		auto fileInfo = QFileInfo(url.toLocalFile());
+		list << fileInfo.absoluteFilePath();
+	}
 
-    importAsset(list);
+	importAsset(list);
 
-    evt->acceptProposedAction();
+	evt->acceptProposedAction();
 }
 
 void AssetWidget::treeItemSelected(QTreeWidgetItem *item)
 {
-    assetItem.item = item;
+	assetItem.item = item;
 	assetItem.selectedGuid = item->data(0, MODEL_GUID_ROLE).toString();
 	updateAssetView(item->data(0, MODEL_GUID_ROLE).toString());
 }
@@ -513,97 +529,97 @@ void AssetWidget::treeItemChanged(QTreeWidgetItem *item, int column)
 
 void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 {
-    QModelIndex index = ui->assetTree->indexAt(pos);
+	QModelIndex index = ui->assetTree->indexAt(pos);
 
-    if (!index.isValid()) return;
+	if (!index.isValid()) return;
 
-    assetItem.item = ui->assetTree->itemAt(pos);
-    assetItem.selectedPath = assetItem.item->data(0, Qt::UserRole).toString();
+	assetItem.item = ui->assetTree->itemAt(pos);
+	assetItem.selectedPath = assetItem.item->data(0, Qt::UserRole).toString();
 
-    QMenu menu;
-    QAction *action;
+	QMenu menu;
+	QAction *action;
 
-    QMenu *createMenu = menu.addMenu("Create");
-    action = new QAction(QIcon(), "New Folder", this);
-    connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
-    createMenu->addAction(action);
+	QMenu *createMenu = menu.addMenu("Create");
+	action = new QAction(QIcon(), "New Folder", this);
+	connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
+	createMenu->addAction(action);
 
-//    action = new QAction(QIcon(), "Open in Explorer", this);
-//    connect(action, SIGNAL(triggered()), this, SLOT(openAtFolder()));
-//    menu.addAction(action);
+	//    action = new QAction(QIcon(), "Open in Explorer", this);
+	//    connect(action, SIGNAL(triggered()), this, SLOT(openAtFolder()));
+	//    menu.addAction(action);
 
-    action = new QAction(QIcon(), "Import Asset", this);
-    connect(action, SIGNAL(triggered()), this, SLOT(importAsset()));
-    menu.addAction(action);
+	action = new QAction(QIcon(), "Import Asset", this);
+	connect(action, SIGNAL(triggered()), this, SLOT(importAsset()));
+	menu.addAction(action);
 
-//    action = new QAction(QIcon(), "Rename", this);
-//    connect(action, SIGNAL(triggered()), this, SLOT(renameTreeItem()));
-//    menu.addAction(action);
+	//    action = new QAction(QIcon(), "Rename", this);
+	//    connect(action, SIGNAL(triggered()), this, SLOT(renameTreeItem()));
+	//    menu.addAction(action);
 
-    action = new QAction(QIcon(), "Delete", this);
-    connect(action, SIGNAL(triggered()), this, SLOT(deleteTreeFolder()));
-    menu.addAction(action);
+	action = new QAction(QIcon(), "Delete", this);
+	connect(action, SIGNAL(triggered()), this, SLOT(deleteTreeFolder()));
+	menu.addAction(action);
 
-    menu.exec(ui->assetTree->mapToGlobal(pos));
+	menu.exec(ui->assetTree->mapToGlobal(pos));
 }
 
 void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 {
-    QModelIndex index = ui->assetView->indexAt(pos);
+	QModelIndex index = ui->assetView->indexAt(pos);
 
-    QMenu menu;
-    QAction *action;
+	QMenu menu;
+	QAction *action;
 
-    if (index.isValid()) {
-        auto item = ui->assetView->itemAt(pos);
-        assetItem.wItem = item;
-        //assetItem.selectedPath = item->data(Qt::UserRole).toString();
+	if (index.isValid()) {
+		auto item = ui->assetView->itemAt(pos);
+		assetItem.wItem = item;
+		//assetItem.selectedPath = item->data(Qt::UserRole).toString();
 
-        // action = new QAction(QIcon(), "Rename", this);
-        // connect(action, SIGNAL(triggered()), this, SLOT(renameViewItem()));
-        // menu.addAction(action);
+		// action = new QAction(QIcon(), "Rename", this);
+		// connect(action, SIGNAL(triggered()), this, SLOT(renameViewItem()));
+		// menu.addAction(action);
 
-        action = new QAction(QIcon(), "Delete", this);
-        connect(action, SIGNAL(triggered()), this, SLOT(deleteItem()));
-        menu.addAction(action);
-    }
-    else {
-        QMenu *createMenu = menu.addMenu("Create");
-        action = new QAction(QIcon(), "New Folder", this);
-        connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
-        createMenu->addAction(action);
+		action = new QAction(QIcon(), "Delete", this);
+		connect(action, SIGNAL(triggered()), this, SLOT(deleteItem()));
+		menu.addAction(action);
+	}
+	else {
+		QMenu *createMenu = menu.addMenu("Create");
+		action = new QAction(QIcon(), "New Folder", this);
+		connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
+		createMenu->addAction(action);
 
-        action = new QAction(QIcon(), "Import Asset", this);
-        connect(action, SIGNAL(triggered()), this, SLOT(importAssetB()));
-        menu.addAction(action);
+		action = new QAction(QIcon(), "Import Asset", this);
+		connect(action, SIGNAL(triggered()), this, SLOT(importAssetB()));
+		menu.addAction(action);
 
-        // action = new QAction(QIcon(), "Open in Explorer", this);
-        // connect(action, SIGNAL(triggered()), this, SLOT(openAtFolder()));
-        // menu.addAction(action);
-    }
+		// action = new QAction(QIcon(), "Open in Explorer", this);
+		// connect(action, SIGNAL(triggered()), this, SLOT(openAtFolder()));
+		// menu.addAction(action);
+	}
 
-    menu.exec(ui->assetView->mapToGlobal(pos));
+	menu.exec(ui->assetView->mapToGlobal(pos));
 }
 
 void AssetWidget::assetViewClicked(QListWidgetItem *item)
 {
-    assetItem.wItem = item;
+	assetItem.wItem = item;
 }
 
 void AssetWidget::syncTreeAndView(const QString &path)
 {
-    QTreeWidgetItemIterator it(ui->assetTree);
-    while (*it) {
-        if ((*it)->data(0, MODEL_GUID_ROLE).toString() == path) {
-            ui->assetTree->clearSelection();
-            (*it)->setSelected(true);
-            ui->assetTree->expandItem((*it));
+	QTreeWidgetItemIterator it(ui->assetTree);
+	while (*it) {
+		if ((*it)->data(0, MODEL_GUID_ROLE).toString() == path) {
+			ui->assetTree->clearSelection();
+			(*it)->setSelected(true);
+			ui->assetTree->expandItem((*it));
 			ui->assetTree->scrollToItem((*it));
-            break;
-        }
+			break;
+		}
 
-        ++it;
-    }
+		++it;
+	}
 }
 
 void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
@@ -626,23 +642,24 @@ void AssetWidget::renameTreeItem()
 
 void AssetWidget::renameViewItem()
 {
-    ui->assetView->editItem(assetItem.wItem);
+	ui->assetView->editItem(assetItem.wItem);
 }
 
 void AssetWidget::searchAssets(QString searchString)
 {
-    ui->assetView->clear();
+	ui->assetView->clear();
 
-    if (!searchString.isEmpty()) {
+	if (!searchString.isEmpty()) {
 		// keep a list of last db fetch in memory OR search entire db...
-    } else {
-        updateAssetView(assetItem.selectedGuid);
-    }
+	}
+	else {
+		updateAssetView(assetItem.selectedGuid);
+	}
 }
 
 void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
 {
-    QString folderName = qobject_cast<QLineEdit*>(listItem)->text();
+	QString folderName = qobject_cast<QLineEdit*>(listItem)->text();
 	const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
 	const QString parent = assetItem.wItem->data(MODEL_PARENT_ROLE).toString();
 
@@ -652,18 +669,18 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
 	}
 
 	// Update the tree browser
-    QTreeWidgetItem *child = ui->assetTree->currentItem();
-    if (child) {    // should always be set but just in case
-        auto branch = new QTreeWidgetItem();
-        branch->setIcon(0, QIcon(":/icons/ic_folder_large.svg"));
-        branch->setText(0, folderName);
-        branch->setData(0, MODEL_GUID_ROLE, guid);
+	QTreeWidgetItem *child = ui->assetTree->currentItem();
+	if (child) {    // should always be set but just in case
+		auto branch = new QTreeWidgetItem();
+		branch->setIcon(0, QIcon(":/icons/icons8-folder-72.png"));
+		branch->setText(0, folderName);
+		branch->setData(0, MODEL_GUID_ROLE, guid);
 		branch->setData(0, MODEL_PARENT_ROLE, parent);
-        child->addChild(branch);
-        ui->assetTree->clearSelection();
-        branch->setSelected(true);
+		child->addChild(branch);
+		ui->assetTree->clearSelection();
+		branch->setSelected(true);
 	}
-	
+
 	//populateAssetTree(false);
 	//updateAssetView(assetItem.selectedGuid);
 	//syncTreeAndView(assetItem.selectedGuid);
@@ -671,17 +688,17 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
 
 void AssetWidget::deleteTreeFolder()
 {
-    QDir dir(assetItem.selectedPath);
-    if (dir.removeRecursively()) {
-        auto item = assetItem.item;
-        delete item->parent()->takeChild(item->parent()->indexOfChild(item));
-    }
+	QDir dir(assetItem.selectedPath);
+	if (dir.removeRecursively()) {
+		auto item = assetItem.item;
+		delete item->parent()->takeChild(item->parent()->indexOfChild(item));
+	}
 }
 
 void AssetWidget::deleteItem()
 {
-    auto item = assetItem.wItem;
-	
+	auto item = assetItem.wItem;
+
 	QStringList filesToRemove;
 
 	// Delete folder and contents
@@ -690,7 +707,7 @@ void AssetWidget::deleteItem()
 			auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
 			if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
 		}
-		
+
 		delete ui->assetView->takeItem(ui->assetView->row(item));
 	}
 	// Delete asset and dependencies
@@ -711,24 +728,24 @@ void AssetWidget::openAtFolder()
 
 void AssetWidget::createFolder()
 {
-    QListWidgetItem *item = new QListWidgetItem("New Folder");
-    item->setFlags(item->flags() | Qt::ItemIsEditable);
+	QListWidgetItem *item = new QListWidgetItem("New Folder");
+	item->setFlags(item->flags() | Qt::ItemIsEditable);
 	item->setSizeHint(currentSize);
 	item->setTextAlignment(Qt::AlignCenter);
-	item->setIcon(QIcon(":/icons/ic_folder.svg"));
+	item->setIcon(QIcon(":/icons/icons8-folder-72.png"));
 
 	item->setData(MODEL_GUID_ROLE, GUIDManager::generateGUID());
 	item->setData(MODEL_PARENT_ROLE, assetItem.selectedGuid);
 
 	assetItem.wItem = item;
-    ui->assetView->addItem(item);
-    ui->assetView->editItem(item);
+	ui->assetView->addItem(item);
+	ui->assetView->editItem(item);
 }
 
 void AssetWidget::importAssetB()
 {
-    auto fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
-    importAsset(fileNames);
+	auto fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
+	importAsset(fileNames);
 }
 
 void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNames)
@@ -736,7 +753,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 	int counter = 0;
 	// If we're loading a single asset, it's likely a single large file, make the progress indeterminate
 	int maxRange = fileNames.size() == 1 ? 0 : fileNames.size();
-	
+
 	progressDialog->setRange(0, maxRange);
 	progressDialog->setValue(0);
 	progressDialog->show();
@@ -744,7 +761,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 
 	QList<directory_tuple> imagesInUse;
 
-	foreach (const auto &entry, fileNames) {
+	foreach(const auto &entry, fileNames) {
 		QFileInfo entryInfo(entry.path);
 
 		if (entryInfo.isDir()) {
@@ -757,13 +774,13 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 			AssetType type;
 			QPixmap thumbnail;
 
-			thumbnail = QPixmap(":/icons/icons8-file.svg");
+			thumbnail = QPixmap(":/icons/empty_object.png");
 
 			QString destDir;
 
 			// handle all model extensions here
 			if (Constants::IMAGE_EXTS.contains(entryInfo.suffix().toLower())) {
-				auto thumb = ThumbnailManager::createThumbnail(entryInfo.absoluteFilePath(), 512, 512);
+				auto thumb = ThumbnailManager::createThumbnail(entryInfo.absoluteFilePath(), 72, 72);
 				thumbnail = QPixmap::fromImage(*thumb->thumb);
 				type = AssetType::Texture;
 				destDir = "Textures";
@@ -786,10 +803,10 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 			}
 
 			auto asset = new AssetVariant;
-			asset->type         = type;
-			asset->fileName     = entryInfo.fileName();
-			asset->path         = entry.path;
-			asset->thumbnail    = thumbnail;
+			asset->type = type;
+			asset->fileName = entryInfo.fileName();
+			asset->path = entry.path;
+			asset->thumbnail = thumbnail;
 
 			if (asset->type != AssetType::Invalid) {
 				QString pathToCopyTo = IrisUtils::join(Globals::project->getProjectFolder(), destDir);
@@ -797,7 +814,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 
 				int increment = 1;
 				QFileInfo checkFile(fileToCopyTo);
-				
+
 				// If we encounter the same file, make a duplicate...
 				// Maybe ask the user to replace sometime later on (iKlsR)
 				while (checkFile.exists()) {
@@ -814,18 +831,18 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 				thumbnail.save(&buffer, "PNG");
 
 				const QString assetGuid = db->createAssetEntry(entry.guid,
-															   asset->fileName,
-															   static_cast<int>(asset->type),
-															   entry.parent_guid,
-															   thumbnailBytes);
+					asset->fileName,
+					static_cast<int>(asset->type),
+					entry.parent_guid,
+					thumbnailBytes);
 
 				// Accumulate a list of all the images imported so we can use this to update references
 				// If they are used in assets that depend on them such as Materials and Objects
 				if (asset->type == AssetType::Texture) {
 					directory_tuple dt;
-					dt.parent_guid	= entry.parent_guid;
-					dt.guid			= entry.guid;
-					dt.path			= entryInfo.fileName();
+					dt.parent_guid = entry.parent_guid;
+					dt.guid = entry.guid;
+					dt.path = entryInfo.fileName();
 					imagesInUse.append(dt);
 				}
 
@@ -900,13 +917,13 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 
 					// Create an actual object from a mesh, objects hold materials
 					const QString objectGuid = db->createAssetEntry(GUIDManager::generateGUID(),
-																	QFileInfo(asset->fileName).baseName(),
-																	static_cast<int>(AssetType::Object),
-																	entry.parent_guid,
-																	QByteArray(),
-																	QByteArray(),
-																	QByteArray(),
-																	QJsonDocument(newJson).toBinaryData());
+						QFileInfo(asset->fileName).baseName(),
+						static_cast<int>(AssetType::Object),
+						entry.parent_guid,
+						QByteArray(),
+						QByteArray(),
+						QByteArray(),
+						QJsonDocument(newJson).toBinaryData());
 
 					// Add to persistent store
 					{
@@ -946,18 +963,19 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 
 void AssetWidget::importAsset(const QStringList &path)
 {
-    QStringList fileNames;
-    if (path.isEmpty()) {   // This is hit when we call this function via import menu
-        fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
-    } else {
-        fileNames = path;
-    }
+	QStringList fileNames;
+	if (path.isEmpty()) {   // This is hit when we call this function via import menu
+		fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
+	}
+	else {
+		fileNames = path;
+	}
 
 	// Get the entire directory listing if there are nested folders
 	std::function<void(QStringList, QString guid, QList<directory_tuple>&)> getImportManifest =
 		[&](QStringList files, QString guid, QList<directory_tuple> &items) -> void
 	{
-		foreach (const QFileInfo &file, files) {
+		foreach(const QFileInfo &file, files) {
 			directory_tuple item;
 			item.path = file.absoluteFilePath();
 			item.parent_guid = guid;
@@ -965,7 +983,7 @@ void AssetWidget::importAsset(const QStringList &path)
 			if (file.isDir()) {
 				QStringList list;
 				foreach(const QString &entry,
-						QDir(file.absoluteFilePath()).entryList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs))
+					QDir(file.absoluteFilePath()).entryList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs))
 				{
 					list << QDir(file.absoluteFilePath()).filePath(entry);
 				}
@@ -1022,7 +1040,7 @@ void AssetWidget::importAsset(const QStringList &path)
 	createDirectoryStructure(finalImportList);
 	populateAssetTree(false);
 	updateAssetView(assetItem.selectedGuid);
-    //syncTreeAndView(assetItem.selectedGuid);
+	//syncTreeAndView(assetItem.selectedGuid);
 }
 
 void AssetWidget::onThumbnailResult(ThumbnailResult *result)
@@ -1030,7 +1048,7 @@ void AssetWidget::onThumbnailResult(ThumbnailResult *result)
 	QByteArray bytes;
 	QBuffer buffer(&bytes);
 	buffer.open(QIODevice::WriteOnly);
-	auto thumbnail = QPixmap::fromImage(result->thumbnail);
+	auto thumbnail = QPixmap::fromImage(result->thumbnail).scaledToHeight(iconSize.height(), Qt::SmoothTransformation);
 	thumbnail.save(&buffer, "PNG");
 
 	db->updateAssetThumbnail(result->id, bytes);
@@ -1043,5 +1061,5 @@ void AssetWidget::onThumbnailResult(ThumbnailResult *result)
 		}
 	}
 
-    delete result;
+	delete result;
 }

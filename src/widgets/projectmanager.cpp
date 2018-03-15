@@ -312,7 +312,7 @@ void ProjectManager::newProject()
 					QDir(Globals::project->getProjectFolder()).filePath("Textures/Tile.png"));
 
 		auto thumb = ThumbnailManager::createThumbnail(
-						IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"), 256, 256);
+						IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"), 72, 72);
 
 		QByteArray bytes;
 		QBuffer buffer(&bytes);
