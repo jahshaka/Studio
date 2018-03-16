@@ -69,10 +69,7 @@ public:
      {
          for (F ao : store) {
              if (ao->path == filePath) {
-                QVariant aoVariant;
-                aoVariant.setValue(ao->getValue());
-
-                const aiScene* scene = aoVariant.value<AssimpObject*>()->getSceneData();
+                const aiScene* scene = QVariant::fromValue(ao->getValue()).value<AssimpObject*>()->getSceneData();
 
                 if (scene != nullptr) {
                     meshes = loadAllMeshesFromAssimpScene(scene);

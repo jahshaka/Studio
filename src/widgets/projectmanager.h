@@ -22,8 +22,9 @@ class Database;
 
 struct ModelData {
     ModelData() = default;
-    ModelData(QString p, const aiScene *ai) : path(p), data(ai) {}
+    ModelData(QString p, QString g, const aiScene *ai) : path(p), guid(g), data(ai) {}
     QString path;
+	QString guid;
     const aiScene *data;
 };
 
@@ -50,21 +51,21 @@ public:
     bool checkForEmptyState();
     void cleanupOnClose();
 //    static QVector<ModelData> loadModel(const QString&);
-    QVector<ModelData> loadModel(const QString &filePath)
+    QVector<ModelData> loadModel(const QPair<QString, QString> asset)
     {
         QVector<ModelData> sceneVec;
-        QFile file(filePath);
-        file.open(QFile::ReadOnly);
-        auto data = file.readAll();
+        //QFile file(asset.first);
+        //file.open(QFile::ReadOnly);
+        //auto data = file.readAll();
 
         auto importer = new Assimp::Importer;
-        //    const aiScene *scene = importer->ReadFile(filePath.toStdString().c_str(),
-        //                                             aiProcessPreset_TargetRealtime_Fast);
+            const aiScene *scene = importer->ReadFile(asset.first.toStdString().c_str(),
+                                                     aiProcessPreset_TargetRealtime_Fast);
 
-        const aiScene *scene = importer->ReadFileFromMemory((void*) data.data(),
-                                                            data.length(),
-                                                            aiProcessPreset_TargetRealtime_Fast);
-        ModelData d = { filePath, scene };
+        //const aiScene *scene = importer->ReadFileFromMemory((void*) data.data(),
+        //                                                    data.length(),
+        //                                                    aiProcessPreset_TargetRealtime_Fast);
+        ModelData d = { asset.first, asset.second, scene };
         sceneVec.append(d);
         return sceneVec;
     }
@@ -103,7 +104,6 @@ signals:
 
 private:
     void loadProjectAssets();
-    void walkProjectFolder(const QString&);
 
     Ui::ProjectManager *ui;
     SettingsManager* settings;
@@ -126,8 +126,8 @@ struct AssetWidgetConcurrentWrapper {
     ProjectManager *instance;
     typedef QVector<ModelData> result_type;
     AssetWidgetConcurrentWrapper(ProjectManager *inst) : instance(inst) {}
-        result_type operator()(const QString &data) {
-        return instance->loadModel(data);
+        result_type operator()(const QPair<QString, QString> &value) {
+        return instance->loadModel(value);
     }
 };
 

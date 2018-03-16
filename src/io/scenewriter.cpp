@@ -87,7 +87,7 @@ QByteArray SceneWriter::getSceneObject(QString projectPath,
         writePostProcessData(projectObj, postMan);
     }
 
-    qDebug() << projectObj;
+    //qDebug() << projectObj;
 
     return QJsonDocument(projectObj).toBinaryData();
 }
@@ -298,7 +298,12 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
 void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode, bool relative)
 {
     // It's a safe assumption that the filename is safe to use here in queries if need be
-    sceneNodeObject["mesh"] = relative ? getRelativePath(meshNode->meshPath) : QFileInfo(meshNode->meshPath).fileName();
+	if (meshNode->meshPath.startsWith(":")) {
+		sceneNodeObject["mesh"] = relative ? getRelativePath(meshNode->meshPath) : QFileInfo(meshNode->meshPath).fileName();
+	}
+	else {
+		sceneNodeObject["mesh"] = relative ? getRelativePath(meshNode->meshPath) : QFileInfo(meshNode->meshPath).fileName();
+	}
     sceneNodeObject["meshIndex"] = meshNode->meshIndex;
     sceneNodeObject["pickable"] = meshNode->pickable;
 
@@ -323,6 +328,8 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
     QJsonObject matObj;
     writeSceneNodeMaterial(matObj, mat, relative);
     sceneNodeObject["material"] = matObj;
+
+	qDebug() << "WRITE\n====================\n" << sceneNodeObject;
 }
 
 void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode)
@@ -365,7 +372,9 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMateri
 
         if (prop->type == iris::PropertyType::Texture) {
 			//matObj[prop->name] = relative ? getRelativePath(prop->getValue().toString()) : QFileInfo(prop->getValue().toString()).fileName();
-			matObj[prop->name] = handle->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName());
+			matObj[prop->name] = relative
+									? handle->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName())
+									: getRelativePath(prop->getValue().toString());
         }
     }
 }

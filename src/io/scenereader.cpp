@@ -374,31 +374,38 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 {
     auto meshNode = iris::MeshNode::create();
 
-    auto source = nodeObj["mesh"].toString("");
+    QString source = nodeObj["mesh"].toString("");
+	// Keep a special reference to embedded asset primitives for now
 	if (!source.startsWith(":")) {
-		source = QDir(QDir(Globals::project->getProjectFolder()).filePath("Models")).filePath(handle->fetchAsset(nodeObj["mesh"].toString("")).name);
+		source = IrisUtils::join(Globals::project->getProjectFolder(),
+								 "Models", handle->fetchAsset(nodeObj["mesh"].toString("")).name);
 	}
 
-    auto meshIndex = nodeObj["meshIndex"].toInt(0);
-    auto pickable = nodeObj["pickable"].toBool(true);
+    int meshIndex = nodeObj["meshIndex"].toInt(0);
+    bool pickable = nodeObj["pickable"].toBool(true);
+
+	qDebug() << "READ SRC " << source;
 
     if (!source.isEmpty()) {
         auto mesh = getMesh(source, meshIndex);
+
         if (source.startsWith(":")) {
             meshNode->setMesh(source);
+			meshNode->meshPath = source;
         } else {
             meshNode->setMesh(mesh);
+			meshNode->meshPath = nodeObj["mesh"].toString();
         }
+
         meshNode->setPickable(pickable);
 		meshNode->setVisible(nodeObj["visible"].toBool(true));
-        meshNode->meshPath = source;
         meshNode->meshIndex = meshIndex;
     }
 
     auto material = readMaterial(nodeObj);
     meshNode->setMaterial(material);
 
-    auto faceCullingMode = nodeObj["faceCullingMode"].toString("back");
+    QString faceCullingMode = nodeObj["faceCullingMode"].toString("back");
 
     if (faceCullingMode == "back") {
         meshNode->setFaceCullingMode(iris::FaceCullingMode::Back);
@@ -411,6 +418,8 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     }
 
     meshNode->applyDefaultPose();
+
+	qDebug() << "READ " << nodeObj;
 
     return meshNode;
 }
@@ -581,6 +590,8 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
                                                                           filePath,
                                                                           meshList,
                                                                           animationss);
+
+		//iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(filePath, meshList, animationss);
 
         meshes.insert(filePath,meshList);
         assimpScenes.insert(filePath);

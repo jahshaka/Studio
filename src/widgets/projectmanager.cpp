@@ -340,20 +340,11 @@ void ProjectManager::finalizeProjectAssetLoad()
 
      //update the static list of assets with the now loaded assimp data in memory
     for (auto item : futureWatcher->result()) {
-        for (int i = 0; i < AssetManager::assets.count(); i++) {
-            if (AssetManager::assets[i]->path == item.path) {
-                AssimpObject *ao = new AssimpObject(item.data, item.path);
-                AssetObject *model = new AssetObject(ao,
-                                                     item.path,
-                                                     AssetManager::assets[i]->fileName);
-
-                QVariant v;
-                v.setValue(ao);
-
-                AssetManager::assets[i] = model;
-            }
-        }
-    }
+        AssimpObject *ao = new AssimpObject(item.data, item.path);
+        AssetObject *model = new AssetObject(ao, item.path, QFileInfo(item.path).fileName());
+		model->assetGuid = item.guid;
+		AssetManager::addAsset(model);
+	}
 
     progressDialog->setLabelText(QString("Initializing panels..."));
 }
@@ -424,19 +415,28 @@ void ProjectManager::openSampleBrowser()
 void ProjectManager::loadProjectAssets()
 {
     // iterate through the project directory and pick out files we want
-    walkProjectFolder(Globals::project->getProjectFolder());
+    // walkProjectFolder(Globals::project->getProjectFolder());
 
     // the whole point of the function is to concurrently load models when opening a project
     // as the project scope expands and projects get larger, it will be expanded for more assets
-    QStringList assetsToLoad;
+    QVector<QPair<QString, QString>> assetsToLoad;
+
+	for (const auto &asset : db->fetchFilteredAssets(Globals::project->getProjectGuid(), (int)AssetType::Mesh)) {
+		//QString meshGuid = db->fetchObjectMesh(asset.guid, (int)AssetType::Object);
+		//qDebug() << asset.guid << meshGuid;
+		assetsToLoad.append(QPair<QString, QString>(QDir(Globals::project->getProjectFolder() + "/Models").filePath(asset.name),
+							db->fetchMeshObject(asset.guid, (int) AssetType::Object)));
+	}
+
+	//for (auto i : assetsToLoad) qDebug() << i.first << i.second;
 
     // TODO - only load files that are in the scene instead of everything! (iKlsR)
     // of the files we detect, get a separate list of objects so we can load into memory
-    for (auto asset : AssetManager::assets) {
-        if (asset->type == AssetType::Object) {
-            assetsToLoad.append(asset->path);
-        }
-    }
+    //for (auto asset : AssetManager::assets) {
+    //    if (asset->type == AssetType::Object) {
+    //        assetsToLoad.append(asset->path);
+    //    }
+    //}
 
     progressDialog = QSharedPointer<ProgressDialog>(new ProgressDialog);
     progressDialog->setLabelText("Loading assets...");
@@ -463,90 +463,6 @@ void ProjectManager::loadProjectAssets()
 
     futureWatcher->waitForFinished();
 }
-
-void ProjectManager::walkProjectFolder(const QString &projectPath)
-{
-	//QStringList guidList;
-
-	//QDir projectDirectory(projectPath);
-	//foreach (auto &file, projectDirectory.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
-	//	if (file.isDir()) {
-	//	    walkProjectFolder(file.absoluteFilePath());
-	//	}
-	//	else {
-	//		if (file.isFile() && (file.suffix() == Constants::META_EXT)) {
-	//			QString jsonMeta;
-	//			QFile file(file.absoluteFilePath());
-	//			file.open(QFile::ReadOnly | QFile::Text);
-	//			jsonMeta = file.readAll();
-	//			file.close();
-	//			QJsonDocument jsonDoc = QJsonDocument::fromJson(jsonMeta.toUtf8());
-	//			QJsonObject json = jsonDoc.object();
-	//			guidList.append(json["guid"].toString());
-	//		}
-	//	}
-	//}
-
-	//for (const AssetData &data : db->fetchAssetThumbnails(guidList)) {
-	//	QPixmap pixmap;
-	//	auto asset = new AssetVariant;
-	//	asset->assetGuid = data.guid;
-	//	asset->fileName = data.name;
-	//	asset->thumbnail.loadFromData(data.thumbnail, "PNG");
-	//	AssetManager::assets.append(asset);
-	//}
-
-    QDir dir(projectPath);
-    foreach (auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
-        if (file.isFile()) {
-            AssetType type;
-            QPixmap pixmap;
-
-            if (Constants::IMAGE_EXTS.contains(file.suffix())) {
-                auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-                type = AssetType::Texture;
-            }
-            else if (Constants::MODEL_EXTS.contains(file.suffix())) {
-                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
-                type = AssetType::Object;
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-            }
-            else if (file.suffix() == "shader") {
-                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-                type = AssetType::Shader;
-            }
-            else {
-                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
-                type = AssetType::File;
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-            }
-
-            auto asset = new AssetVariant;
-            asset->type         = type;
-            asset->fileName     = file.fileName();
-            asset->path         = file.absoluteFilePath();
-            asset->thumbnail    = pixmap;
-
-            AssetManager::assets.append(asset);
-        }
-        else {
-            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
-            auto asset = new AssetFolder;
-            asset->fileName     = file.fileName();
-            asset->path         = file.absoluteFilePath();
-            asset->thumbnail    = QPixmap::fromImage(*thumb->thumb);
-
-            AssetManager::assets.append(asset);
-        }
-
-        if (file.isDir()) {
-            walkProjectFolder(file.absoluteFilePath());
-        }
-    }
-}
-
 
 ProjectManager::~ProjectManager()
 {

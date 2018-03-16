@@ -166,6 +166,119 @@ void AssetWidget::trigger()
 {
 	// It's important that this gets called after a project has been loaded (iKlsR)
 	populateAssetTree(true);
+
+	sceneView->makeCurrent();
+	for (auto &asset : AssetManager::getAssets()) {
+		if (asset->type == AssetType::Object) {
+
+			auto material = db->getAssetMaterialGlobal(asset->assetGuid);
+			auto materialObj = QJsonDocument::fromBinaryData(material);
+
+			//qDebug() << "MATERIAL " << materialObj.object();
+
+
+			std::function<void(QJsonObject&)> printNodes = [&](QJsonObject &node) -> void {
+				//if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+				//	auto n = node.staticCast<iris::MeshNode>();
+				//	//n->meshPath = meshGuid;
+				//	auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+				//	for (auto prop : mat->properties) {
+				//		if (prop->type == iris::PropertyType::Texture) {
+				//			if (!prop->getValue().toString().isEmpty()) {
+				//				mat->setValue(prop->name,
+				//					IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
+				//						db->fetchAsset(prop->getValue().toString()).name));
+				//			}
+				//		}
+				//	}
+				//}
+
+				qDebug() << node.value("type").toString() << node.value("name").toString();
+
+				QJsonArray children = node["children"].toArray();
+
+				for (auto childObj : children) {
+					auto sceneNodeObj = childObj.toObject();
+					printNodes(sceneNodeObj);
+				}
+			};
+
+			qDebug() << "==================";
+			printNodes(materialObj.object());
+			qDebug() << "==================";
+
+			auto node = iris::MeshNode::loadAsSceneFragment(QString(), asset->getValue().value<AssimpObject*>()->getSceneData(),
+				[&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+			{
+				auto mat = iris::CustomMaterial::create();
+
+				if (mesh->hasSkeleton())
+					mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
+				else
+					mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+
+				mat->setValue("diffuseColor", data.diffuseColor);
+				mat->setValue("specularColor", data.specularColor);
+				mat->setValue("ambientColor", QColor(110, 110, 110));	// assume this color, some formats set this to pitch black
+				mat->setValue("emissionColor", data.emissionColor);
+				mat->setValue("shininess", data.shininess);
+				mat->setValue("useAlpha", true);
+
+				qDebug() << "FUCK " << data.diffuseTexture;
+
+	///*			
+
+	//			if (!data.diffuseTexture.isEmpty())
+	//				mat->setValue("diffuseTexture", QDir(Globals::project->getProjectFolder() + "/Textures").filePath(db->fetchAsset(data.diffuseTexture).name));
+
+	//			if (!data.specularTexture.isEmpty())
+	//				mat->setValue("specularTexture", QDir(Globals::project->getProjectFolder() + "/Textures").filePath(db->fetchAsset(data.specularTexture).name));
+
+	//			if (!data.normalTexture.isEmpty())
+	//				mat->setValue("normalTexture", QDir(Globals::project->getProjectFolder() + "/Textures").filePath(db->fetchAsset(data.normalTexture).name));*/
+
+				return mat;
+			});
+
+			//std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
+			//	if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+			//		auto n = node.staticCast<iris::MeshNode>();
+			//		//n->meshPath = meshGuid;
+			//		auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+			//		for (auto prop : mat->properties) {
+			//			if (prop->type == iris::PropertyType::Texture) {
+			//				if (!prop->getValue().toString().isEmpty()) {
+			//					mat->setValue(prop->name,
+			//						IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
+			//							db->fetchAsset(prop->getValue().toString()).name));
+			//				}
+			//			}
+			//		}
+			//	}
+
+			//	if (node->hasChildren()) {
+			//		for (auto &child : node->children) {
+			//			updateNodeValues(child);
+			//		}
+			//	}
+			//};
+
+			//updateNodeValues(node);
+
+
+			QVariant variant = QVariant::fromValue(node);
+			auto nodeAsset = new AssetNodeObject;
+			nodeAsset->fileName = asset->fileName;
+			nodeAsset->assetGuid = asset->assetGuid;
+			nodeAsset->setValue(variant);
+
+			qDebug() << "---- " << asset->assetGuid;
+
+			// Replace the raw aiScene with a SceneNode
+			asset = nodeAsset;
+		}
+	}
+	sceneView->doneCurrent();
 }
 
 void AssetWidget::updateLabels()
@@ -831,10 +944,11 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 				thumbnail.save(&buffer, "PNG");
 
 				const QString assetGuid = db->createAssetEntry(entry.guid,
-					asset->fileName,
-					static_cast<int>(asset->type),
-					entry.parent_guid,
-					thumbnailBytes);
+																asset->fileName,
+																static_cast<int>(asset->type),
+																Globals::project->getProjectGuid(),
+																entry.parent_guid,
+																thumbnailBytes);
 
 				// Accumulate a list of all the images imported so we can use this to update references
 				// If they are used in assets that depend on them such as Materials and Objects
@@ -915,22 +1029,26 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					QJsonObject newJson;
 					SceneWriter::writeSceneNode(newJson, scene, false);
 
+					qDebug() << "\nNEW JSON " << newJson;
+
 					// Create an actual object from a mesh, objects hold materials
 					const QString objectGuid = db->createAssetEntry(GUIDManager::generateGUID(),
-						QFileInfo(asset->fileName).baseName(),
-						static_cast<int>(AssetType::Object),
-						entry.parent_guid,
-						QByteArray(),
-						QByteArray(),
-						QByteArray(),
-						QJsonDocument(newJson).toBinaryData());
+																	QFileInfo(asset->fileName).baseName(),
+																	static_cast<int>(AssetType::Object),
+																	Globals::project->getProjectGuid(),
+																	entry.parent_guid,
+																	QByteArray(),
+																	QByteArray(),
+																	QByteArray(),
+																	QJsonDocument(newJson).toBinaryData());
 
 					// Add to persistent store
 					{
 						QVariant variant = QVariant::fromValue(scene);
 						auto nodeAsset = new AssetNodeObject;
+						nodeAsset->assetGuid = objectGuid;
 						nodeAsset->setValue(variant);
-						AssetManager::addAsset(objectGuid, nodeAsset);
+						AssetManager::addAsset(nodeAsset);
 					}
 
 					// Create dependencies to the object for the textures used

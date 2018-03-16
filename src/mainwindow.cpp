@@ -260,7 +260,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     m->setValue("textureScale", 4.f);
     node->setMaterial(m);
 
-    scene->rootNode->addChild(node);
+    //scene->rootNode->addChild(node);
 
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
@@ -1024,15 +1024,18 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
 	iris::SceneNodePtr node;
 
-	QHash<QString, Asset*>::const_iterator iterator = AssetManager::getNodes().constBegin();
-	while (iterator != AssetManager::getNodes().constEnd()) {
-		if (iterator.key() == guid) node = iterator.value()->getValue().value<iris::SceneNodePtr>()->duplicate();
+	QString meshGuid = db->fetchObjectMesh(guid, (int)AssetType::Object);
+
+	QList<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
+	while (iterator != AssetManager::getAssets().constEnd()) {
+		if ((*iterator)->assetGuid == guid) node = (*iterator)->getValue().value<iris::SceneNodePtr>()->duplicate();
 		++iterator;
 	}
 
 	std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
 		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
 			auto n = node.staticCast<iris::MeshNode>();
+			n->meshPath = meshGuid;
 			auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
 			for (auto prop : mat->properties) {
 				if (prop->type == iris::PropertyType::Texture) {

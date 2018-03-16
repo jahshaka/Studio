@@ -252,6 +252,7 @@ QString Database::createAssetEntry(
 	const QString &guid,
 	const QString &assetName,
 	int type,
+	const QString &project_guid,
 	const QString &parentFolder,
 	const QByteArray &thumbnail,
 	const QByteArray &properties,
@@ -262,9 +263,9 @@ QString Database::createAssetEntry(
 	QSqlQuery query;
 	query.prepare(
 		"INSERT INTO assets"
-		" (name, thumbnail, parent, type, collection, version, date_created,"
+		" (name, thumbnail, parent, type, project_guid, collection, version, date_created,"
 		" last_updated, guid, properties, author, asset, license, tags)"
-		" VALUES (:name, :thumbnail, :parent, :type, 0, :version, datetime(),"
+		" VALUES (:name, :thumbnail, :parent, :type, :project_guid, 0, :version, datetime(),"
 		" datetime(), :guid, :properties, :author, :asset, :license, :tags)"
 	);
 
@@ -272,6 +273,7 @@ QString Database::createAssetEntry(
 	query.bindValue(":thumbnail",	thumbnail);
 	query.bindValue(":parent",		parentFolder);
 	query.bindValue(":type",		type);
+	query.bindValue(":project_guid",project_guid);
 	query.bindValue(":version",		Constants::CONTENT_VERSION);
 	query.bindValue(":guid",		guid);
 	query.bindValue(":properties",	properties);
@@ -866,6 +868,29 @@ QVector<AssetData> Database::fetchThumbnails()
 	return tileData;
 }
 
+QVector<AssetData> Database::fetchFilteredAssets(const QString &guid, int type)
+{
+	QSqlQuery query;
+	query.prepare("SELECT name, guid FROM assets WHERE project_guid = ? AND type = ?");
+	query.addBindValue(guid);
+	query.addBindValue(type);
+	executeAndCheckQuery(query, "fetchFilteredAssets");
+
+	QVector<AssetData> tileData;
+	while (query.next()) {
+		AssetData data;
+		QSqlRecord record = query.record();
+		for (int i = 0; i < record.count(); i++) {
+			data.name = record.value(0).toString();
+			data.guid = record.value(1).toString();
+		}
+
+		tileData.push_back(data);
+	}
+
+	return tileData;
+}
+
 QVector<CollectionData> Database::fetchCollections()
 {
     QSqlQuery query;
@@ -1285,8 +1310,9 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid)
 QString Database::fetchAssetGUIDByName(const QString & name)
 {
 	QSqlQuery query;
-	query.prepare("SELECT guid FROM assets WHERE name = ?");
+	query.prepare("SELECT guid FROM assets WHERE name = ? AND project_guid = ?");
 	query.addBindValue(name);
+	query.addBindValue(Globals::project->getProjectGuid());
 
 	if (query.exec()) {
 		if (query.first()) {
@@ -1296,6 +1322,48 @@ QString Database::fetchAssetGUIDByName(const QString & name)
 	else {
 		irisLog(
 			"There was an error fetching a guid for an asset (" + name + ")" + query.lastError().text()
+		);
+	}
+
+	return QString();
+}
+
+QString Database::fetchObjectMesh(const QString &guid, const int type)
+{
+	QSqlQuery query;
+	query.prepare("SELECT dependee FROM dependencies WHERE depender = ? AND type = ?");
+	query.addBindValue(guid);
+	query.addBindValue(type);
+
+	if (query.exec()) {
+		if (query.first()) {
+			return query.value(0).toString();
+		}
+	}
+	else {
+		irisLog(
+			"There was an error fetching a guid" + query.lastError().text()
+		);
+	}
+
+	return QString();
+}
+
+QString Database::fetchMeshObject(const QString &guid, const int type)
+{
+	QSqlQuery query;
+	query.prepare("SELECT depender FROM dependencies WHERE dependee = ? AND type = ?");
+	query.addBindValue(guid);
+	query.addBindValue(type);
+
+	if (query.exec()) {
+		if (query.first()) {
+			return query.value(0).toString();
+		}
+	}
+	else {
+		irisLog(
+			"There was an error fetching a guid" + query.lastError().text()
 		);
 	}
 

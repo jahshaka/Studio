@@ -45,7 +45,7 @@ public:
 	QString insertAssetGlobal(const QString&, int type, const QString&, const QByteArray &thumbnail = QByteArray(),
 		const QByteArray &properties = QByteArray(), const QByteArray &tags = QByteArray(),
 		const QByteArray &asset = QByteArray(), const QString &author = QString());
-	QString createAssetEntry(const QString&, const QString&, int type, const QString&, const QByteArray &thumbnail = QByteArray(),
+	QString createAssetEntry(const QString&, const QString&, int type, const QString &, const QString&, const QByteArray &thumbnail = QByteArray(),
 		const QByteArray &properties = QByteArray(), const QByteArray &tags = QByteArray(),
 		const QByteArray &asset = QByteArray(), const QString &author = QString());
 	void insertProjectAssetGlobal(const QString&, int type, const QByteArray &thumbnail,
@@ -64,6 +64,7 @@ public:
 	QByteArray getAssetMaterialGlobal(const QString &guid) const;
     bool hasCachedThumbnail(const QString& name);
 	QVector<AssetData> fetchThumbnails();
+	QVector<AssetData> fetchFilteredAssets(const QString &guid, int type);
     QVector<CollectionData> fetchCollections();
     QVector<ProjectTileData> fetchProjects();
 	QVector<AssetTileData> fetchAssets();
@@ -90,6 +91,9 @@ public:
 	QStringList deleteFolderAndDependencies(const QString &guid);
 	QStringList deleteAssetAndDependencies(const QString &guid);
 	QString fetchAssetGUIDByName(const QString &name);
+
+	QString fetchObjectMesh(const QString &guid, const int type);
+	QString fetchMeshObject(const QString &guid, const int type);
 
     QSqlDatabase getDb() { return db; }
 

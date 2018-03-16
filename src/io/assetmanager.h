@@ -142,10 +142,6 @@ public:
     static QList<Asset*> assets;
     static QList<Asset*>& getAssets();
     static void addAsset(Asset* asset);
-
-	static QHash<QString, Asset*> nodes;
-	static QHash<QString, Asset*> getNodes();
-	static void addAsset(const QString &guid, Asset* asset);
 };
 
 #endif // ASSETMANAGER_H
