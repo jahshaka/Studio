@@ -49,6 +49,7 @@ signals:
 	void hovered();
 	void left();
 	void singleClicked(AssetGridItem*);
+	void specialClicked(AssetGridItem*);	// bypass loading asset and add to scene
 	void contextClicked(AssetGridItem*);	// use this exclusively for right clicks
 
 	void addAssetToProject(AssetGridItem*);

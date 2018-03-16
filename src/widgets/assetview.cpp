@@ -619,6 +619,16 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	tagWidget->setLayout(tagLayout);
 	tagWidget->setVisible(false);
 
+	connect(fastGrid, &AssetViewGrid::selectedTileToAdd, [=](AssetGridItem *gridItem) {
+		if (!gridItem->metadata.isEmpty()) {
+			if (UiManager::isSceneOpen) {
+				selectedGridItem = gridItem;
+				addAssetToProject(gridItem);
+				selectedGridItem = Q_NULLPTR;
+			}
+		}
+	});
+
     connect(fastGrid, &AssetViewGrid::selectedTile, [=](AssetGridItem *gridItem) {
 		fastGrid->deselectAll();
 

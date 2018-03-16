@@ -328,6 +328,7 @@ private:
 	QWidget *assets_panel;
 	QLabel *jlogo;
 	QPushButton *help;
+	QPushButton *prefs;
 
     bool vrMode;
     QPushButton* vrButton;

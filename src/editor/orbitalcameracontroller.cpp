@@ -66,11 +66,10 @@ void OrbitalCameraController::setRotationSpeed(float rotationSpeed)
 
 void OrbitalCameraController::onMouseMove(int x,int y)
 {
-	if (previewMode && leftMouseDown) {
+	if (previewMode && (leftMouseDown || rightMouseDown)) {
 		// in case lerping is still in progress, match the values with their targets
 		yaw = targetYaw;
 		pitch = targetPitch;
-
 		this->yaw	+= x * rotationSpeed;
 		this->pitch += y * rotationSpeed;
 

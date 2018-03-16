@@ -45,6 +45,7 @@ signals:
 	void gridCount(int);
     void selectedTile(AssetGridItem*);
 	void contextSelected(AssetGridItem*);
+	void selectedTileToAdd(AssetGridItem*);
 };
 
 #endif // ASSETVIEWGRID_HPP

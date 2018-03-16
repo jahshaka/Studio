@@ -34,6 +34,10 @@ void AssetViewGrid::addTo(AssetGridItem *item, int count, bool select)
 		emit selectedTile(item);
 	});
 
+	connect(item, &AssetGridItem::specialClicked, [this](AssetGridItem *item) {
+		emit selectedTileToAdd(item);
+	});
+
 	if (select) emit selectedTile(item);
 
 	_layout->addWidget(item, count / columnCount + 1, count % columnCount + 1);
@@ -53,6 +57,10 @@ void AssetViewGrid::addTo(QJsonObject details, QImage image, int count, QJsonObj
 	connect(sampleWidget, &AssetGridItem::singleClicked, [this](AssetGridItem *item) {
 		//qobject_cast<AssetView*>(parent)->fetchMetadata(item);
         emit selectedTile(item);
+	});
+
+	connect(sampleWidget, &AssetGridItem::specialClicked, [this](AssetGridItem *item) {
+		emit selectedTileToAdd(item);
 	});
 
 	if (select) emit selectedTile(sampleWidget);

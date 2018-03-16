@@ -34,6 +34,7 @@ public:
     QString defaultProjectDirectory;
     bool showFps;
 	bool autoSave;
+	bool openInPlayer;
 
 	Database *db;
 
@@ -45,6 +46,7 @@ private slots:
     void outlineColorChanged(QColor color);
     void showFpsChanged(bool show);
 	void enableAutoSave(bool state);
+	void enableOpenInPlayer(bool state);
     void changeDefaultDirectory();
     void projectDirectoryChanged(QString path);
 

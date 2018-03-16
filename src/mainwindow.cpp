@@ -1455,13 +1455,11 @@ void MainWindow::setupViewPort()
 
 	jlogo = new QLabel;
 	jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/header.png"));
+
 	help = new QPushButton;
 	help->setObjectName("helpButton");
-	//help->setStyleSheet("background: transparent");
-	//help->setIconSize(QSize(48, 48));
 	QIcon ico;
 	ico.addPixmap(IrisUtils::getAbsoluteAssetPath("app/images/question.png"), QIcon::Normal);
-	//help->setIcon(ico);
 	help->setIconSize(ico.availableSizes().first());
 	help->setFixedSize(ico.actualSize(ico.availableSizes().first()));//never larger than ic.availableSizes().first()
 	help->setCursor(Qt::PointingHandCursor);
@@ -1480,9 +1478,36 @@ void MainWindow::setupViewPort()
 		QDesktopServices::openUrl(QUrl("http://www.jahshaka.com/tutorials/"));
 	});
 
+	prefs = new QPushButton;
+	prefs->setObjectName("prefsButton");
+	QIcon icop;
+	icop.addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/settings.png"), QIcon::Normal);
+	prefs->setIconSize(ico.availableSizes().first());
+	prefs->setFixedSize(ico.actualSize(icop.availableSizes().first()));//never larger than ic.availableSizes().first()
+	prefs->setCursor(Qt::PointingHandCursor);
+
+	prefs->setStyleSheet(
+		"#prefsButton { qproperty-icon: url(\"\");"
+		"qproperty-iconSize: 48px 48px;"
+		"background: transparent;"
+		"background-image: url(\":/icons/settings.png\");"
+		"background-repeat: no-repeat; }"
+		"#prefsButton::hover { background-image: url(\":/icons/settings_hover.png\");"
+		"background-repeat: no-repeat; }"
+	);
+
+	connect(prefs, &QPushButton::pressed, [this]() { showPreferences(); });
+
+	QWidget *buttons = new QWidget;
+	QHBoxLayout *bl = new QHBoxLayout;
+	buttons->setLayout(bl);
+
+	bl->addWidget(help);
+	bl->addWidget(prefs);
+
 	ui->ohlayout->addWidget(jlogo, 0, 0, Qt::AlignLeft);
 	ui->ohlayout->addWidget(assets_panel, 0, 1, Qt::AlignCenter);
-	ui->ohlayout->addWidget(help, 0, 2, Qt::AlignRight);
+	ui->ohlayout->addWidget(buttons, 0, 2, Qt::AlignRight);
 
     connect(worlds_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::DESKTOP); });
     connect(player_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::PLAYER); });
@@ -1786,17 +1811,9 @@ void MainWindow::setupToolBar()
 	viewDocks->setIcon(QIcon(":/icons/tab.png"));
 	toolBar->addAction(viewDocks);
 
-	QAction *actionPreferences = new QAction;
-	actionPreferences->setObjectName(QStringLiteral("actionPreferences"));
-	actionPreferences->setCheckable(false);
-	actionPreferences->setToolTip("User Preferences");
-	actionPreferences->setIcon(QIcon(":/icons/settings.png"));
-	toolBar->addAction(actionPreferences);
-
 	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
 	connect(viewDocks,			SIGNAL(triggered(bool)), SLOT(toggleDockWidgets()));
 	connect(actionSaveScene,	SIGNAL(triggered(bool)), SLOT(saveScene()));
-	connect(actionPreferences,	SIGNAL(triggered(bool)), SLOT(showPreferences()));
 
 	// connect(ui->actionClose, &QAction::triggered, [this](bool) { closeProject(); });
 
@@ -1983,8 +2000,10 @@ void MainWindow::exitApp()
 
 void MainWindow::updateSceneSettings()
 {
-    scene->setOutlineWidth(prefsDialog->worldSettings->outlineWidth);
-    scene->setOutlineColor(prefsDialog->worldSettings->outlineColor);
+	if (UiManager::isSceneOpen) {
+		scene->setOutlineWidth(prefsDialog->worldSettings->outlineWidth);
+		scene->setOutlineColor(prefsDialog->worldSettings->outlineColor);
+	}
 
 	actionSaveScene->setVisible(!prefsDialog->worldSettings->autoSave);
 }

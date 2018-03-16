@@ -337,7 +337,7 @@ void ProjectManager::finalizeProjectAssetLoad()
 
 void ProjectManager::finishedFutureWatcher()
 {
-    emit fileToOpen(openInPlayMode);
+    emit fileToOpen(settings->getValue("open_in_player", QVariant::fromValue(false)).toBool());
     progressDialog->close();
 }
 

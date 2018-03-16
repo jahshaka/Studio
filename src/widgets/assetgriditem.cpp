@@ -86,8 +86,12 @@ void AssetGridItem::leaveEvent(QEvent *event) {
 }
 
 void AssetGridItem::mousePressEvent(QMouseEvent *event) {
-	if (event->button() == Qt::LeftButton) {
+	if (event->button() == Qt::LeftButton && !event->modifiers().testFlag(Qt::ShiftModifier)) {
 		emit singleClicked(this);
+	}
+
+	if (event->button() == Qt::LeftButton && event->modifiers().testFlag(Qt::ShiftModifier)) {
+		emit specialClicked(this);
 	}
 
 	if (event->button() == Qt::RightButton) {
