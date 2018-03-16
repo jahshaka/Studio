@@ -134,7 +134,7 @@ void OutlinerRenderer::renderNode(iris::GraphicsDevicePtr device,
 		renderData->viewMatrix = cam->viewMatrix;
 		renderData->projMatrix = cam->projMatrix;
 		auto ps = node.staticCast<iris::ParticleSystemNode>();
-		ps->renderParticles(renderData, particleShader);
+		ps->renderParticles(device, renderData, particleShader);
 	}
 
 	for (auto childNode : node->children) {

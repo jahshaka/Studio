@@ -196,10 +196,10 @@ void ParticleSystemNode::update(float delta) {
     }
 }
 
-void ParticleSystemNode::renderParticles(RenderData* renderData, QOpenGLShaderProgram* shader)
+void ParticleSystemNode::renderParticles(GraphicsDevicePtr device, RenderData* renderData, QOpenGLShaderProgram* shader)
 {
     renderer->icon = texture;
-    renderer->render(shader, renderData, this->particles);
+    renderer->render(device, shader, renderData, this->particles);
 }
 
 SceneNodePtr ParticleSystemNode::createDuplicate()

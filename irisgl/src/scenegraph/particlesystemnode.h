@@ -156,7 +156,7 @@ public:
 
     void update(float delta) override;
 
-    void renderParticles(RenderData* renderData, QOpenGLShaderProgram* shader);
+    void renderParticles(GraphicsDevicePtr device, RenderData* renderData, QOpenGLShaderProgram* shader);
 
     void addParticle(Particle *particle) {
         particles.push_back(particle);

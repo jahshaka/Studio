@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include "renderdata.h"
 #include "texture2d.h"
 #include "../core/irisutils.h"
+#include "graphicsdevice.h"
+#include "blendstate.h"
 
 namespace iris {
 
@@ -28,6 +30,7 @@ class ParticleRenderer {
 private:
     GLuint quadVAO, quadVBO;
     QOpenGLFunctions_3_2_Core* gl;
+	DepthState depthState;
 
 public:
     bool useAdditive;
@@ -57,6 +60,7 @@ public:
         gl->glBindVertexArray(0);
 
         useAdditive = true;
+		depthState = DepthState(true, false);
     }
 
     void updateModelViewMatrix(QOpenGLShaderProgram *shader,
@@ -91,7 +95,8 @@ public:
         this->icon = icon;
     }
 
-    void render(QOpenGLShaderProgram *shader,
+    void render(GraphicsDevicePtr device,
+				QOpenGLShaderProgram *shader,
                 iris::RenderData* renderData,
                 std::vector<Particle*>& particles)
     {
@@ -101,15 +106,19 @@ public:
         QMatrix4x4 viewMatrix = renderData->viewMatrix;
 
         gl->glBindVertexArray(quadVAO);
-        gl->glEnable(GL_BLEND);
+        //gl->glEnable(GL_BLEND);
+		
 
         if (useAdditive) {
-            gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+            //gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+			device->setBlendState(BlendState::createAdditive());
         } else {
-            gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            //gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			device->setBlendState(BlendState::createAlphaBlend());
         }
 
-        gl->glDepthMask(GL_FALSE);
+        //gl->glDepthMask(GL_FALSE);
+		device->setDepthState(depthState);
 
         for (auto particle : particles) {
             updateModelViewMatrix(
@@ -127,8 +136,8 @@ public:
             gl->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         }
 
-        gl->glDepthMask(GL_TRUE);
-        gl->glDisable(GL_BLEND);
+        //gl->glDepthMask(GL_TRUE);
+        //gl->glDisable(GL_BLEND);
         gl->glBindVertexArray(0);
 
         shader->release();

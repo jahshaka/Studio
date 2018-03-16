@@ -689,7 +689,7 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
         else if(item->type == iris::RenderItemType::ParticleSystem) {
 
             auto ps = item->sceneNode.staticCast<ParticleSystemNode>();
-            ps->renderParticles(renderData, particleShader);
+            ps->renderParticles(graphics, renderData, particleShader);
         }
     }
 
