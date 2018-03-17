@@ -15,6 +15,9 @@ find_package(Qt5 REQUIRED COMPONENTS Concurrent Widgets Sql Svg)
 include(UseModernCpp)
 include(BuildType)
 
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
+
 # set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
@@ -326,6 +329,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# https://stackoverflow.com/a/37211780/996468
+source_group(moc FILES ${HEADERS_moc} ${QRCS})
 add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp.rc)
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 							src
