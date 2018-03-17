@@ -174,39 +174,6 @@ void AssetWidget::trigger()
 			auto material = db->getAssetMaterialGlobal(asset->assetGuid);
 			auto materialObj = QJsonDocument::fromBinaryData(material);
 
-			//qDebug() << "MATERIAL " << materialObj.object();
-
-
-			std::function<void(QJsonObject&)> printNodes = [&](QJsonObject &node) -> void {
-				//if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-				//	auto n = node.staticCast<iris::MeshNode>();
-				//	//n->meshPath = meshGuid;
-				//	auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-				//	for (auto prop : mat->properties) {
-				//		if (prop->type == iris::PropertyType::Texture) {
-				//			if (!prop->getValue().toString().isEmpty()) {
-				//				mat->setValue(prop->name,
-				//					IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
-				//						db->fetchAsset(prop->getValue().toString()).name));
-				//			}
-				//		}
-				//	}
-				//}
-
-				qDebug() << node.value("type").toString() << node.value("name").toString();
-
-				QJsonArray children = node["children"].toArray();
-
-				for (auto childObj : children) {
-					auto sceneNodeObj = childObj.toObject();
-					printNodes(sceneNodeObj);
-				}
-			};
-
-			qDebug() << "==================";
-			printNodes(materialObj.object());
-			qDebug() << "==================";
-
 			auto node = iris::MeshNode::loadAsSceneFragment(QString(), asset->getValue().value<AssimpObject*>()->getSceneData(),
 				[&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
 			{
@@ -224,46 +191,36 @@ void AssetWidget::trigger()
 				mat->setValue("shininess", data.shininess);
 				mat->setValue("useAlpha", true);
 
-				qDebug() << "FUCK " << data.diffuseTexture;
-
-	///*			
-
-	//			if (!data.diffuseTexture.isEmpty())
-	//				mat->setValue("diffuseTexture", QDir(Globals::project->getProjectFolder() + "/Textures").filePath(db->fetchAsset(data.diffuseTexture).name));
-
-	//			if (!data.specularTexture.isEmpty())
-	//				mat->setValue("specularTexture", QDir(Globals::project->getProjectFolder() + "/Textures").filePath(db->fetchAsset(data.specularTexture).name));
-
-	//			if (!data.normalTexture.isEmpty())
-	//				mat->setValue("normalTexture", QDir(Globals::project->getProjectFolder() + "/Textures").filePath(db->fetchAsset(data.normalTexture).name));*/
-
 				return mat;
 			});
 
-			//std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
-			//	if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-			//		auto n = node.staticCast<iris::MeshNode>();
-			//		//n->meshPath = meshGuid;
-			//		auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-			//		for (auto prop : mat->properties) {
-			//			if (prop->type == iris::PropertyType::Texture) {
-			//				if (!prop->getValue().toString().isEmpty()) {
-			//					mat->setValue(prop->name,
-			//						IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
-			//							db->fetchAsset(prop->getValue().toString()).name));
-			//				}
-			//			}
-			//		}
-			//	}
+			std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeValues =
+				[&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
+			{
+				if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+					auto n = node.staticCast<iris::MeshNode>();
+					//n->meshPath = meshGuid;
+					auto mat_defs = definition.value("material").toObject();
+					auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+					for (auto prop : mat->properties) {
+						if (prop->type == iris::PropertyType::Texture) {
+							if (!mat_defs.value(prop->name).toString().isEmpty()) {
+								mat->setValue(prop->name, mat_defs.value(prop->name).toString());
+							}
+						}
+					}
+				}
 
-			//	if (node->hasChildren()) {
-			//		for (auto &child : node->children) {
-			//			updateNodeValues(child);
-			//		}
-			//	}
-			//};
+				QJsonArray children = definition["children"].toArray();
+				// These will always be in sync since the definition is derived from the mesh
+				if (node->hasChildren()) {
+					for (int i = 0; i < node->children.count(); i++) {
+						updateNodeValues(node->children[i], children[i].toObject());
+					}
+				}
+			};
 
-			//updateNodeValues(node);
+			updateNodeValues(node, materialObj.object());
 
 
 			QVariant variant = QVariant::fromValue(node);
@@ -271,8 +228,6 @@ void AssetWidget::trigger()
 			nodeAsset->fileName = asset->fileName;
 			nodeAsset->assetGuid = asset->assetGuid;
 			nodeAsset->setValue(variant);
-
-			qDebug() << "---- " << asset->assetGuid;
 
 			// Replace the raw aiScene with a SceneNode
 			asset = nodeAsset;
@@ -1028,8 +983,6 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					updateNodeValues(scene);
 					QJsonObject newJson;
 					SceneWriter::writeSceneNode(newJson, scene, false);
-
-					qDebug() << "\nNEW JSON " << newJson;
 
 					// Create an actual object from a mesh, objects hold materials
 					const QString objectGuid = db->createAssetEntry(GUIDManager::generateGUID(),

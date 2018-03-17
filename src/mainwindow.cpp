@@ -36,6 +36,8 @@ For more information see the LICENSE file
 #include "irisgl/src/animation/animation.h"
 #include "irisgl/src/graphics/postprocessmanager.h"
 #include "irisgl/src/core/logger.h"
+#include "core/guidmanager.h"
+#include "core/thumbnailmanager.h"
 #include "src/dialogs/donatedialog.h"
 
 #include <QFontDatabase>
@@ -254,13 +256,34 @@ iris::ScenePtr MainWindow::createDefaultScene()
 	node->setFaceCullingMode(iris::FaceCullingMode::None);
     node->setShadowCastingEnabled(false);
 
+	// if we reached this far, the project dir has already been created
+	// we can copy some default assets to each project here
+	QFile::copy(IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"),
+		QDir(Globals::project->getProjectFolder()).filePath("Textures/Tile.png"));
+
+	auto thumb = ThumbnailManager::createThumbnail(
+		IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"), 72, 72);
+
+	QByteArray thumbnailBytes;
+	QBuffer buffer(&thumbnailBytes);
+	buffer.open(QIODevice::WriteOnly);
+	QPixmap::fromImage(*thumb->thumb).save(&buffer, "PNG");
+
+	const QString tileGuid = GUIDManager::generateGUID();
+	const QString assetGuid = db->createAssetEntry(tileGuid,
+													"Tile.png",
+													static_cast<int>(AssetType::Texture),
+													Globals::project->getProjectGuid(),
+													QString(),
+													thumbnailBytes);
+
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
     m->setValue("diffuseTexture", QDir(Globals::project->getProjectFolder()).filePath("Textures/Tile.png")); // use relative asset location
     m->setValue("textureScale", 4.f);
     node->setMaterial(m);
 
-    //scene->rootNode->addChild(node);
+    scene->rootNode->addChild(node);
 
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);

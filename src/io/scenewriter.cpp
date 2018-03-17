@@ -328,8 +328,6 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
     QJsonObject matObj;
     writeSceneNodeMaterial(matObj, mat, relative);
     sceneNodeObject["material"] = matObj;
-
-	qDebug() << "WRITE\n====================\n" << sceneNodeObject;
 }
 
 void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode)

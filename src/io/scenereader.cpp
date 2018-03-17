@@ -384,8 +384,6 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     int meshIndex = nodeObj["meshIndex"].toInt(0);
     bool pickable = nodeObj["pickable"].toBool(true);
 
-	qDebug() << "READ SRC " << source;
-
     if (!source.isEmpty()) {
         auto mesh = getMesh(source, meshIndex);
 
@@ -418,8 +416,6 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     }
 
     meshNode->applyDefaultPose();
-
-	qDebug() << "READ " << nodeObj;
 
     return meshNode;
 }

@@ -303,24 +303,6 @@ void ProjectManager::newProject()
 			QDir dir(QDir(fullProjectPath).filePath(folder));
 			dir.mkpath(".");
 		}
-
-		//const QString folderGuid = db->insertFolder("Assets", Globals::project->getProjectGuid());
-        
-		// if we reached this far, the project dir has already been created
-		// we can copy some default assets to each project here
-		QFile::copy(IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"),
-					QDir(Globals::project->getProjectFolder()).filePath("Textures/Tile.png"));
-
-		auto thumb = ThumbnailManager::createThumbnail(
-						IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"), 72, 72);
-
-		QByteArray bytes;
-		QBuffer buffer(&bytes);
-		buffer.open(QIODevice::WriteOnly);
-		QPixmap::fromImage(*thumb->thumb).save(&buffer, "PNG");
-
-		db->insertAssetGlobal("Tile.png", static_cast<int>(AssetType::Texture),
-							  Globals::project->getProjectGuid(), bytes);
 		
         emit fileToCreate(projectName, fullProjectPath);
 
