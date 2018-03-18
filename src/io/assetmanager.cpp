@@ -1,8 +1,8 @@
 #include "assetmanager.h"
 
-QList<Asset*> AssetManager::assets;
+QVector<Asset*> AssetManager::assets;
 
-QList<Asset*> &AssetManager::getAssets()
+QVector<Asset*> &AssetManager::getAssets()
 {
     return assets;
 }
@@ -10,4 +10,10 @@ QList<Asset*> &AssetManager::getAssets()
 void AssetManager::addAsset(Asset *asset)
 {
     assets.append(asset);
+}
+
+void AssetManager::clearAssetList()
+{
+	qDeleteAll(assets.begin(), assets.end());
+	assets.clear();
 }

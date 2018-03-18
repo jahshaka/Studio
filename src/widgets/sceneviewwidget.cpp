@@ -102,7 +102,7 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
     }
 
     // backwards compat for now
-    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
+    if (roleDataMap.value(0).toInt() == static_cast<int>(AssetType::Object)) {
         // if we drag unto another object
         if (doActiveObjectPicking(event->posF())) {
             //activeSceneNode->pos = sceneView->hit;

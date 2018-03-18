@@ -25,8 +25,7 @@ class AssimpObject {
 public:
 	AssimpObject() = default;
     AssimpObject(const aiScene *ai, QString g) : scene(ai), GUID(g) {}
-	AssimpObject(const AssimpObject &ao) = default;
-    const aiScene *getSceneData() const { return scene; }
+    const aiScene *getSceneData() { return scene; }
     QString getGUID() { return GUID; }
     ~AssimpObject() {}
 
@@ -62,7 +61,7 @@ public:
                                                    QMap<QString, SkeletalAnimationPtr> &animations);
 
     template <typename F>
-    static void loadAllMeshesAndAnimationsFromStore(const QList<F> &store,
+    static void loadAllMeshesAndAnimationsFromStore(const QVector<F> &store,
                                                     QString filePath,
                                                     QList<MeshPtr> &meshes,
                                                     QMap<QString, SkeletalAnimationPtr> &animations)

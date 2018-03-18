@@ -16,6 +16,8 @@ For more information see the LICENSE file
 #include <QSurface>
 #include <QScrollArea>
 
+#include <memory>
+
 #include "irisgl/src/scenegraph/meshnode.h"
 #include "irisgl/src/scenegraph/cameranode.h"
 #include "irisgl/src/scenegraph/scene.h"
@@ -697,15 +699,13 @@ void MainWindow::saveScene()
 
 void MainWindow::openProject(bool playMode)
 {
-    this->sceneView->makeCurrent();
+    sceneView->makeCurrent();
+    removeScene();
 
-    // TODO - actually remove scenes - empty asset list, db cache and invalidate scene object
-    this->removeScene();
-
-    auto reader = new SceneReader();
+    std::unique_ptr<SceneReader> reader(new SceneReader);
 	reader->setDatabaseHandle(db);
 
-    EditorData* editorData = nullptr;
+    EditorData* editorData = Q_NULLPTR;
     UiManager::updateWindowTitle();
 
     auto postMan = sceneView->getRenderer()->getPostProcessManager();
@@ -726,14 +726,12 @@ void MainWindow::openProject(bool playMode)
     postProcessWidget->setPostProcessMgr(postMan);
     this->sceneView->doneCurrent();
 
-    if (editorData != nullptr) {
+    if (editorData != Q_NULLPTR) {
         sceneView->setEditorData(editorData);
         wireCheckBtn->setChecked(editorData->showLightWires);
     }
 
     assetWidget->trigger();
-
-    delete reader;
 
     // autoplay scenes immediately
     if (playMode) {
@@ -760,7 +758,7 @@ void MainWindow::closeProject()
     switchSpace(WindowSpaces::DESKTOP);
 
     UiManager::clearUndoStack();
-    AssetManager::assets.clear();
+    AssetManager::clearAssetList();
 
     scene->cleanup();
     scene.clear();
@@ -1049,7 +1047,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
 	QString meshGuid = db->fetchObjectMesh(guid, (int)AssetType::Object);
 
-	QList<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
+	QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
 	while (iterator != AssetManager::getAssets().constEnd()) {
 		if ((*iterator)->assetGuid == guid) node = (*iterator)->getValue().value<iris::SceneNodePtr>()->duplicate();
 		++iterator;
@@ -1685,6 +1683,7 @@ void MainWindow::setupViewPort()
 void MainWindow::setupDesktop()
 {
 	pmContainer = new ProjectManager(db, this);
+	pmContainer->mainWindow = this;
 	_assetView = new AssetView(db, this);
 	_assetView->installEventFilter(this);
 

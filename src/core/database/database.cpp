@@ -191,7 +191,6 @@ void Database::createGlobalDbAssets() {
 		"	 collection		   INTEGER,"
 		"	 times_used		   INTEGER,"
 		"    project_guid      VARCHAR(32),"
-		"    world_guid        VARCHAR(32),"
 		"    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
 		"    last_updated      DATETIME,"
 		"	 author			   VARCHAR(128),"

@@ -1,42 +1,40 @@
 #ifndef PROJECTMANAGER_H
 #define PROJECTMANAGER_H
 
-#include <QListWidgetItem>
+#include <QDialog>
 #include <QFutureWatcher>
-#include <QProgressDialog>
+#include <QListWidgetItem>
+#include <QPointer>
+#include <QWidget>
 
-#include "../dialogs/progressdialog.h"
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
 #include "assimp/postprocess.h"
 
+class aiScene;
+
+class Database;
+class DynamicGrid;
+class GridWidget;
+class ItemGridWidget;
+class ProgressDialog;
+
 namespace Ui {
-    class ProjectManager;
+	class ProjectManager;
 }
 
-class aiScene;
-class GridWidget;
-class DynamicGrid;
-class ItemGridWidget;
-class Database;
-
 struct ModelData {
-    ModelData() = default;
-    ModelData(QString p, QString g, const aiScene *ai) : path(p), guid(g), data(ai) {}
-    QString path;
-	QString guid;
-    const aiScene *data;
+	ModelData() = default;
+    ModelData(QString p, QString g, const aiScene *s) : path(p), guid(g), data(s) {}
+	QString			path;
+	QString			guid;
+    const aiScene  *data;
 };
 
 class SettingsManager;
-
-#include <QListWidget>
-#include <QTreeWidgetItem>
-#include <QWidget>
-#include <QFileDialog>
-#include <QMessageBox>
-
 class MainWindow;
+
+using AssetList = QPair<QString, QString>;
 
 class ProjectManager : public QWidget
 {
@@ -50,26 +48,9 @@ public:
     void populateDesktop(bool reset = false);
     bool checkForEmptyState();
     void cleanupOnClose();
-//    static QVector<ModelData> loadModel(const QString&);
-    QVector<ModelData> loadModel(const QPair<QString, QString> asset)
-    {
-        QVector<ModelData> sceneVec;
-        //QFile file(asset.first);
-        //file.open(QFile::ReadOnly);
-        //auto data = file.readAll();
 
-        auto importer = new Assimp::Importer;
-            const aiScene *scene = importer->ReadFile(asset.first.toStdString().c_str(),
-                                                     aiProcessPreset_TargetRealtime_Fast);
-
-        //const aiScene *scene = importer->ReadFileFromMemory((void*) data.data(),
-        //                                                    data.length(),
-        //                                                    aiProcessPreset_TargetRealtime_Fast);
-        ModelData d = { asset.first, asset.second, scene };
-        sceneVec.append(d);
-        return sceneVec;
-    }
-
+	ModelData loadAiSceneFromModel(const QPair<QString, QString> asset);
+	MainWindow *mainWindow;
 
 protected slots:
     void openSampleProject(QListWidgetItem*);
@@ -112,9 +93,10 @@ private:
     QString searchTerm;
 
     Database *db;
-    QFutureWatcher<QVector<ModelData>> *futureWatcher;
 
-    QSharedPointer<ProgressDialog> progressDialog;
+    QPointer<QFutureWatcher<QVector<ModelData>>> futureWatcher;
+	QPointer<ProgressDialog> progressDialog;
+
     bool isNewProject;
     bool isMainWindowActive;
 
@@ -124,10 +106,10 @@ private:
 
 struct AssetWidgetConcurrentWrapper {
     ProjectManager *instance;
-    typedef QVector<ModelData> result_type;
+    typedef ModelData result_type;
     AssetWidgetConcurrentWrapper(ProjectManager *inst) : instance(inst) {}
         result_type operator()(const QPair<QString, QString> &value) {
-        return instance->loadModel(value);
+        return instance->loadAiSceneFromModel(value);
     }
 };
 

@@ -1,47 +1,42 @@
 #include "projectmanager.h"
 #include "ui_projectmanager.h"
 
-#include <QStandardPaths>
-#include "../constants.h"
-#include "../irisgl/src/core/irisutils.h"
-#include "../core/settingsmanager.h"
-
-#include <QFutureWatcher>
-#include <QProgressDialog>
-#include <QThread>
-#include <QtConcurrent/QtConcurrent>
 #include <chrono>
+#include <memory>
 
-#include "../mainwindow.h"
-#include "../core/project.h"
-#include "../core/database/database.h"
-#include "../dialogs/newprojectdialog.h"
-#include "../globals.h"
-#include "../constants.h"
-
-#include "../core/thumbnailmanager.h"
-
-#include "../core/guidmanager.h"
-#include "../io/assetmanager.h"
-
-#include "irisgl/src/zip/zip.h"
-#include "irisgl/src/assimp/include/assimp/Importer.hpp"
-
-#include "dynamicgrid.h"
-
+#include <QtConcurrent/QtConcurrent>
 #include <QDebug>
 #include <QDesktopServices>
+#include <QFileDialog>
+#include <QFontDatabase>
 #include <QGraphicsDropShadowEffect>
 #include <QLineEdit>
-#include <QFontDatabase>
 #include <QMenu>
+#include <QMessageBox>
+#include <QProgressDialog>
+#include <QStandardPaths>
+#include <QThread>
+#include <QTreeWidgetItem>
 
+#include "irisgl/src/assimp/include/assimp/Importer.hpp"
+#include "irisgl/src/core/irisutils.h"
+#include "irisgl/src/zip/zip.h"
+
+#include "constants.h"
+#include "dynamicgrid.h"
+#include "globals.h"
 #include "itemgridwidget.hpp"
+#include "mainwindow.h"
+#include "uimanager.h"
 
-void reducer(QVector<ModelData> &accum, const QVector<ModelData> &interm)
-{
-    accum.append(interm);
-}
+#include "core/database/database.h"
+#include "core/guidmanager.h"
+#include "core/thumbnailmanager.h"
+#include "core/project.h"
+#include "core/settingsmanager.h"
+#include "dialogs/newprojectdialog.h"
+#include "dialogs/progressdialog.h"
+#include "io/assetmanager.h"
 
 ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::ProjectManager)
 {
@@ -53,7 +48,31 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     setAttribute(Qt::WA_NativeWindow, true);
 #endif
 
-    setWindowTitle("Jahshaka Desktop");
+	futureWatcher = QPointer<QFutureWatcher<QVector<ModelData>>>(new QFutureWatcher<QVector<ModelData>>());
+	progressDialog = QPointer<ProgressDialog>(new ProgressDialog());
+
+	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::finished, [&]() {
+		progressDialog->setRange(0, 0);
+		progressDialog->setLabelText(tr("Caching assets scene..."));
+
+		for (const auto &item : futureWatcher->result()) {
+			AssetObject *model = new AssetObject(new AssimpObject(item.data, item.path),
+				item.path,
+				QFileInfo(item.path).fileName());
+			model->assetGuid = item.guid;
+			AssetManager::addAsset(model);
+		}
+
+		progressDialog->setLabelText(tr("Opening scene..."));
+		emit fileToOpen(openInPlayMode);
+		progressDialog->close();
+	});
+
+
+	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressRangeChanged,
+		progressDialog.data(), &ProgressDialog::setRange);
+	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressValueChanged,
+		progressDialog.data(), &ProgressDialog::setValue);
 
     dynamicGrid = new DynamicGrid(this);
 
@@ -65,6 +84,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     connect(ui->newProject,     SIGNAL(pressed()), SLOT(newProject()));
     connect(ui->importWorld,    SIGNAL(pressed()), SLOT(importProjectFromFile()));
     connect(ui->browseProjects, SIGNAL(pressed()), SLOT(openSampleBrowser()));
+
     ui->browseProjects->setCursor(Qt::PointingHandCursor);
 
     searchTimer = new QTimer(this);
@@ -104,17 +124,27 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     ui->pmContainer->setLayout(layout);
 }
 
+ProjectManager::~ProjectManager()
+{
+	delete ui;
+}
+
 void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
 {
-    auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-    auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
+	if (!UiManager::isSceneOpen) {
+		auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+		auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
 
-    Globals::project->setProjectPath(QDir(projectFolder).filePath(widget->tileData.name));
-    Globals::project->setProjectGuid(widget->tileData.guid);
+		Globals::project->setProjectPath(QDir(projectFolder).filePath(widget->tileData.name));
+		Globals::project->setProjectGuid(widget->tileData.guid);
 
-    this->openInPlayMode = playMode;
+		this->openInPlayMode = playMode;
 
-    loadProjectAssets();
+		loadProjectAssets();
+	}
+	else {
+		mainWindow->switchSpace(WindowSpaces::EDITOR);
+	}
 }
 
 QString importProjectName;
@@ -267,7 +297,7 @@ bool ProjectManager::checkForEmptyState()
 
 void ProjectManager::cleanupOnClose()
 {
-    AssetManager::assets.clear();
+    AssetManager::getAssets().clear();
 }
 
 void ProjectManager::openSampleProject(QListWidgetItem *item)
@@ -315,20 +345,24 @@ void ProjectManager::changePreviewSize(QString scale)
     dynamicGrid->scaleTile(scale);
 }
 
+ModelData ProjectManager::loadAiSceneFromModel(const QPair<QString, QString> asset)
+{
+	//QFile file(asset.first);
+	//file.open(QFile::ReadOnly);
+	//auto data = file.readAll();
+
+	Assimp::Importer *importer = new Assimp::Importer;
+	 //const aiScene *scene = importer->ReadFile(asset.first.toStdString().c_str(), aiProcessPreset_TargetRealtime_Fast);
+	//const aiScene *scene = sceneSource->importer.ReadFileFromMemory((void*)data.data(),
+	//																data.length(),
+	//																aiProcessPreset_TargetRealtime_Fast);
+	ModelData d = { asset.first, asset.second, importer->ReadFile(asset.first.toStdString().c_str(), aiProcessPreset_TargetRealtime_Fast) };
+	return d;
+}
+
 void ProjectManager::finalizeProjectAssetLoad()
 {
-    progressDialog->setRange(0, 0);
-    progressDialog->setLabelText(QString("Populating scene..."));
-
-     //update the static list of assets with the now loaded assimp data in memory
-    for (auto item : futureWatcher->result()) {
-        AssimpObject *ao = new AssimpObject(item.data, item.path);
-        AssetObject *model = new AssetObject(ao, item.path, QFileInfo(item.path).fileName());
-		model->assetGuid = item.guid;
-		AssetManager::addAsset(model);
-	}
-
-    progressDialog->setLabelText(QString("Initializing panels..."));
+	
 }
 
 void ProjectManager::finishedFutureWatcher()
@@ -396,59 +430,38 @@ void ProjectManager::openSampleBrowser()
 
 void ProjectManager::loadProjectAssets()
 {
-    // iterate through the project directory and pick out files we want
-    // walkProjectFolder(Globals::project->getProjectFolder());
+	// This shouldn't be needed but just in case a scene doesn't get cleaned up due 
+	// to some future change this will prevent any subtle bugs regarding invalid data
+	AssetManager::clearAssetList();
 
-    // the whole point of the function is to concurrently load models when opening a project
-    // as the project scope expands and projects get larger, it will be expanded for more assets
-    QVector<QPair<QString, QString>> assetsToLoad;
+    // The whole point of the function is to concurrently load models when opening a project
+    // As the project scope expands and projects get larger, it will be expanded for more (large) assets
+    QVector<AssetList> assetsToLoad;
 
+	progressDialog->setLabelText(tr("Collecting assets..."));
+
+	// TODO - if we are only loading a couple assets, just do it sequentially
 	for (const auto &asset : db->fetchFilteredAssets(Globals::project->getProjectGuid(), (int)AssetType::Mesh)) {
-		//QString meshGuid = db->fetchObjectMesh(asset.guid, (int)AssetType::Object);
-		//qDebug() << asset.guid << meshGuid;
-		assetsToLoad.append(QPair<QString, QString>(QDir(Globals::project->getProjectFolder() + "/Models").filePath(asset.name),
-							db->fetchMeshObject(asset.guid, (int) AssetType::Object)));
+		assetsToLoad.append(
+			AssetList(QDir(Globals::project->getProjectFolder() + "/Models").filePath(asset.name),
+			db->fetchMeshObject(asset.guid, (int) AssetType::Object))
+		);
 	}
 
-	//for (auto i : assetsToLoad) qDebug() << i.first << i.second;
+    progressDialog->setLabelText(tr("Loading assets..."));
 
-    // TODO - only load files that are in the scene instead of everything! (iKlsR)
-    // of the files we detect, get a separate list of objects so we can load into memory
-    //for (auto asset : AssetManager::assets) {
-    //    if (asset->type == AssetType::Object) {
-    //        assetsToLoad.append(asset->path);
-    //    }
-    //}
-
-    progressDialog = QSharedPointer<ProgressDialog>(new ProgressDialog);
-    progressDialog->setLabelText("Loading assets...");
-
-    futureWatcher = new QFutureWatcher<QVector<ModelData>>();
-
-    QObject::connect(futureWatcher, SIGNAL(finished()), SLOT(finalizeProjectAssetLoad()));
-    QObject::connect(futureWatcher, SIGNAL(finished()), SLOT(finishedFutureWatcher()));
-    QObject::connect(futureWatcher, SIGNAL(finished()), futureWatcher, SLOT(deleteLater()));
-    QObject::connect(futureWatcher, SIGNAL(progressRangeChanged(int, int)),
-                     progressDialog.data(), SLOT(setRange(int, int)));
-    QObject::connect(futureWatcher, SIGNAL(progressValueChanged(int)),
-                     progressDialog.data(), SLOT(setValue(int)));
-
-    AssetWidgetConcurrentWrapper loadWrapper(this);
-    // pass our list of objects to load concurrently
-    auto future = QtConcurrent::mappedReduced(assetsToLoad,
-                                              loadWrapper,
-                                              reducer,
-                                              QtConcurrent::SequentialReduce);
+    AssetWidgetConcurrentWrapper aiSceneFromModelMapper(this);
+	auto aiSceneFromModelReducer = [](QVector<ModelData> &accum, const ModelData &interm) -> decltype(auto) {
+		accum.append(interm);
+	};
+    auto future = QtConcurrent::mappedReduced<QVector<ModelData>>(assetsToLoad.constBegin(),
+																  assetsToLoad.constEnd(),
+																  aiSceneFromModelMapper,
+																  aiSceneFromModelReducer,
+																  QtConcurrent::OrderedReduce);
     futureWatcher->setFuture(future);
-
     progressDialog->exec();
-
     futureWatcher->waitForFinished();
-}
-
-ProjectManager::~ProjectManager()
-{
-    delete ui;
 }
 
 void ProjectManager::updateTile(const QString &id, const QByteArray & arr)

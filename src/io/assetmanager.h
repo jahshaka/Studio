@@ -139,9 +139,10 @@ struct AssetNodeObject : public Asset
 class AssetManager
 {
 public:
-    static QList<Asset*> assets;
-    static QList<Asset*>& getAssets();
+    static QVector<Asset*> assets;
+    static QVector<Asset*>& getAssets();
     static void addAsset(Asset* asset);
+	static void clearAssetList();
 };
 
 #endif // ASSETMANAGER_H
