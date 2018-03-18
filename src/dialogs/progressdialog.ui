@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>396</width>
-    <height>64</height>
+    <height>77</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -16,6 +16,7 @@
   <property name="styleSheet">
    <string notr="true">#ProgressDialog {
 	background: #1e1e1e;
+	border: 1px solid black;
 }
 
 #progressBar {

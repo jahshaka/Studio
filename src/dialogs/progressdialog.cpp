@@ -6,8 +6,7 @@
 ProgressDialog::ProgressDialog(QDialog *parent) : QDialog(parent), ui(new Ui::ProgressDialog)
 {
     ui->setupUi(this);
-    this->setWindowFlags(Qt::WindowTitleHint);
-	//setModal(true);
+    this->setWindowFlags(Qt::FramelessWindowHint);
 	setWindowModality(Qt::WindowModal);
 }
 
