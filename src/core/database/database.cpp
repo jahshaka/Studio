@@ -293,7 +293,7 @@ QVector<AssetTileData> Database::fetchAssets()
 	QSqlQuery query;
 	query.prepare(
 		"SELECT assets.name, assets.thumbnail, assets.guid, collections.name as collection_name, "
-		"assets.type, assets.collection, assets.properties, assets.author, assets.license, assets.tags, assets.world_guid "
+		"assets.type, assets.collection, assets.properties, assets.author, assets.license, assets.tags, assets.project_guid "
 		"FROM assets "
 		"INNER JOIN collections ON assets.collection = collections.collection_id WHERE assets.type = 5 "
 		"ORDER BY assets.name DESC"
@@ -615,14 +615,14 @@ QString Database::insertProjectMaterialGlobal(const QString & materialName, cons
 	QSqlQuery query;
 	auto guid = GUIDManager::generateGUID();
 	query.prepare(
-		"INSERT INTO assets (name, date_created, type, collection, version, asset, guid, world_guid) "
-		"VALUES (:name, datetime(), :type, 0, :version, :asset, :guid, :world_guid)");
+		"INSERT INTO assets (name, date_created, type, collection, version, asset, guid, project_guid) "
+		"VALUES (:name, datetime(), :type, 0, :version, :asset, :guid, :project_guid)");
 	query.bindValue(":name", materialName);
 	query.bindValue(":type", 1); // switch this to the enum later
 	query.bindValue(":version", "0.5a"); // switch this to the enum later
 	query.bindValue(":asset", material);
 	query.bindValue(":guid", guid);
-	query.bindValue(":world_guid", Globals::project->getProjectGuid());
+	query.bindValue(":project_guid", Globals::project->getProjectGuid());
 
 	executeAndCheckQuery(query, "insertMaterialGlobal");
 
@@ -734,9 +734,9 @@ void Database::insertProjectAssetGlobal(const QString &assetName,
 	QSqlQuery query;
 	query.prepare(
 		"INSERT INTO assets (name, thumbnail, type, collection, version, date_created, "
-		"last_updated, world_guid, guid, properties, author, asset, license, tags) "
+		"last_updated, project_guid, guid, properties, author, asset, license, tags) "
 		"VALUES (:name, :thumbnail, :type, 0, :version, datetime(), "
-		"datetime(), :world_guid, :guid, :properties, :author, :asset, :license, :tags)");
+		"datetime(), :project_guid, :guid, :properties, :author, :asset, :license, :tags)");
 
 	QFileInfo assetInfo(assetName);
 
@@ -744,7 +744,7 @@ void Database::insertProjectAssetGlobal(const QString &assetName,
 	query.bindValue(":thumbnail", thumbnail);
 	query.bindValue(":type", type);
 	query.bindValue(":version", Constants::CONTENT_VERSION);
-	query.bindValue(":world_guid", Globals::project->getProjectGuid());
+	query.bindValue(":project_guid", Globals::project->getProjectGuid());
 	query.bindValue(":guid", guid);
 	query.bindValue(":properties", properties);
 
@@ -1197,16 +1197,27 @@ bool Database::deleteDependency(const QString & dependee)
 QStringList Database::fetchAssetAndDependencies(const QString &guid)
 {
 	QSqlQuery query;
-	query.prepare("select assets.name from dependencies inner join assets on dependencies.dependee = assets.guid where depender = ?");
+	query.prepare(
+		"SELECT assets.name FROM dependencies "
+		"INNER JOIN assets ON dependencies.dependee = assets.guid "
+		"WHERE depender = ?"
+	);
 	query.addBindValue(guid);
 	executeAndCheckQuery(query, "fetchAssetAndDependencies");
 
 	auto prependPath = [](const QString &value) {
-		if (Constants::IMAGE_EXTS.contains(QFileInfo(value).suffix().toLower())) {
+		QString fileSuffix = QFileInfo(value).suffix().toLower();
+		if (Constants::IMAGE_EXTS.contains(fileSuffix)) {
 			return QDir("Textures").filePath(value);
 		}
-		else if (Constants::MODEL_EXTS.contains(QFileInfo(value).suffix().toLower())) {
+		else if (Constants::MODEL_EXTS.contains(fileSuffix)) {
 			return QDir("Models").filePath(value);
+		}
+		else if (fileSuffix == Constants::SHADER_EXT) {
+			return QDir("Shaders").filePath(value);
+		}
+		else if (fileSuffix == Constants::MATERIAL_EXT) {
+			return QDir("Materials").filePath(value);
 		}
 		else {
 			return value;

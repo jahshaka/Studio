@@ -1,34 +1,34 @@
 #include "assetwidget.h"
 #include "ui_assetwidget.h"
 
-#include "irisgl/src/core/irisutils.h"
-#include "irisgl/src/materials/custommaterial.h"
-#include "../core/thumbnailmanager.h"
-#include "../core/project.h"
-#include "../globals.h"
-#include "../constants.h"
-#include "../uimanager.h"
-#include "../widgets/sceneviewwidget.h"
-#include "../editor/thumbnailgenerator.h"
-#include "../core/database/database.h"
-#include "../core/guidmanager.h"
-#include "../io/scenewriter.h"
-#include "assetview.h"
-#include "../io/assetmanager.h"
-
-#include <QPainter>
-#include <QProgressDialog>
 #include <QBuffer>
 #include <QDebug>
 #include <QDir>
 #include <QDrag>
+#include <QJsonDocument>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
-#include <QJsonDocument>
+#include <QPainter>
+#include <QProgressDialog>
 
-#include "../irisgl/src/materials/custommaterial.h"
+#include "irisgl/src/core/irisutils.h"
+#include "irisgl/src/materials/custommaterial.h"
+
+#include "assetview.h"
+#include "constants.h"
+#include "globals.h"
+#include "uimanager.h"
+
+#include "core/database/database.h"
+#include "core/guidmanager.h"
+#include "core/project.h"
+#include "core/thumbnailmanager.h"
+#include "editor/thumbnailgenerator.h"
+#include "io/assetmanager.h"
+#include "io/scenewriter.h"
+#include "widgets/sceneviewwidget.h"
 
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
@@ -871,9 +871,9 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 			}
 
 			auto asset = new AssetVariant;
-			asset->type = type;
-			asset->fileName = entryInfo.fileName();
-			asset->path = entry.path;
+			asset->type		 = type;
+			asset->fileName  = entryInfo.fileName();
+			asset->path		 = entry.path;
 			asset->thumbnail = thumbnail;
 
 			if (asset->type != AssetType::Invalid) {
@@ -887,7 +887,8 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 				// Maybe ask the user to replace sometime later on (iKlsR)
 				while (checkFile.exists()) {
 					QString newName = entryInfo.baseName() + " " + QString::number(increment++);
-					checkFile = QFileInfo(IrisUtils::buildFileName(IrisUtils::join(pathToCopyTo, newName), entryInfo.suffix()));
+					checkFile = QFileInfo(IrisUtils::buildFileName(
+											IrisUtils::join(pathToCopyTo, newName), entryInfo.suffix()));
 					asset->fileName = checkFile.fileName();
 				}
 
@@ -899,11 +900,11 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 				thumbnail.save(&buffer, "PNG");
 
 				const QString assetGuid = db->createAssetEntry(entry.guid,
-																asset->fileName,
-																static_cast<int>(asset->type),
-																Globals::project->getProjectGuid(),
-																entry.parent_guid,
-																thumbnailBytes);
+															   asset->fileName,
+															   static_cast<int>(asset->type),
+															   Globals::project->getProjectGuid(),
+															   entry.parent_guid,
+															   thumbnailBytes);
 
 				// Accumulate a list of all the images imported so we can use this to update references
 				// If they are used in assets that depend on them such as Materials and Objects
