@@ -257,8 +257,10 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,Material* mat)
 
 void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program)
 {
-    auto programId = program->programId();
-    gl->glUseProgram(programId);
+    if (program) {
+        auto programId = program->programId();
+        gl->glUseProgram(programId);
+    }
 
     gl->glBindVertexArray(vao);
     if(usesIndexBuffer)
