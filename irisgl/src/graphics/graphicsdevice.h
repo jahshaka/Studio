@@ -3,6 +3,7 @@
 
 #include "../irisglfwd.h"
 #include <QOpenGLFunctions_3_2_Core>
+#include <QOpenGLShaderProgram>
 #include <QRect>
 #include <QStack>
 #include "vertexlayout.h"
@@ -94,6 +95,8 @@ class GraphicsDevice
     GLuint defautVAO;
 
     ShaderPtr activeShader;
+    // comes from active shader for ease-of-access
+    QOpenGLShaderProgram* activeProgram;
 
     bool lastBlendEnabled;
     BlendState lastBlendState;
@@ -116,6 +119,17 @@ public:
     void clear(GLuint bits, QColor color, float depth=1.0f, int stencil=0);
 
     void setShader(ShaderPtr shader);
+    template<typename T>
+    void setShaderUniform(QString name,T value) {
+        if (activeProgram)
+            activeProgram->setUniformValue(name.toStdString().c_str(), value);
+    }
+    template<typename T>
+    void setShaderUniform(const char* name,T value) {
+        if (activeProgram)
+            activeProgram->setUniformValue(name, value);
+    }
+
     void setTexture(int target, Texture2DPtr texture);
     void clearTexture(int target);
 	void compileShader(iris::ShaderPtr shader);

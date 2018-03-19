@@ -80,6 +80,7 @@ GraphicsDevice::GraphicsDevice()
     this->setBlendState(BlendState::Opaque, true);
     this->setDepthState(DepthState::Default, true);
     this->setRasterizerState(RasterizerState::CullCounterClockwise, true);
+    activeProgram = nullptr;
 }
 
 void GraphicsDevice::setViewport(const QRect& vp)
@@ -187,6 +188,7 @@ void GraphicsDevice::setShader(ShaderPtr shader)
 	if (activeShader->isDirty)
 		compileShader(activeShader);
 	shader->program->bind();
+    activeProgram = shader->program;
 
 	// nullify all textures
 	{
