@@ -26,7 +26,7 @@ SpriteBatch::SpriteBatch(GraphicsDevicePtr graphicsDevice)
     layout.addAttrib(VertexAttribUsage::Position, GL_FLOAT, 3, sizeof(float)*3);
     layout.addAttrib(VertexAttribUsage::Color, GL_FLOAT, 4, sizeof(float)*4);
     layout.addAttrib(VertexAttribUsage::TexCoord0, GL_FLOAT, 2, sizeof(float)*2);
-    vertexBuffer = VertexBuffer::create(graphicsDevice, layout);
+    vertexBuffer = VertexBuffer::create(layout);
 
     data.reserve(_pool.size() * layout.getStride());
 }

@@ -36,9 +36,9 @@ public:
 
     bool _isDirty;
 
-    static VertexBufferPtr create(GraphicsDevicePtr device, VertexLayout vertexLayout)
+    static VertexBufferPtr create(VertexLayout vertexLayout)
     {
-        return VertexBufferPtr(new VertexBuffer(device, vertexLayout));
+        return VertexBufferPtr(new VertexBuffer(vertexLayout));
     }
 
     template<typename T>
@@ -55,22 +55,42 @@ public:
     }
 
 private:
-    VertexBuffer(GraphicsDevicePtr device, VertexLayout vertexLayout);
-    void upload();
+    VertexBuffer(VertexLayout vertexLayout);
+    void upload(QOpenGLFunctions_3_2_Core* gl);
     void destroy();
 };
 
 class IndexBuffer
 {
+    friend class GraphicsDevice;
 public:
+    GraphicsDevicePtr device;
     void* data;
     GLuint bufferId;
+    int dataSize;
+    bool _isDirty;
 
     template<typename T>
     void setData(T* data, unsigned int sizeInBytes)
     {
-        memcpy(this->data, data, sizeInBytes);
+        setData((void*) data, sizeInBytes);
     }
+
+    void setData(void* data, unsigned int sizeinBytes);
+
+    bool isDirty()
+    {
+        return _isDirty;
+    }
+
+    static IndexBufferPtr create()
+    {
+        return IndexBufferPtr(new IndexBuffer());
+    }
+private:
+    IndexBuffer();
+    void upload(QOpenGLFunctions_3_2_Core* gl);
+    void destroy();
 };
 
 /*
@@ -144,6 +164,7 @@ public:
     void setRasterizerState(const RasterizerState& rasterState, bool force = false);
 
     void drawPrimitives(GLenum primitiveType,int start, int count);
+    void drawIndexedPrimitives(GLenum primitiveType,int start, int count);
     QOpenGLFunctions_3_2_Core *getGL() const;
 
     static GraphicsDevicePtr create();

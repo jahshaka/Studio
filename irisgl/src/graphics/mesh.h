@@ -131,8 +131,9 @@ public:
     QMap<QString, SkeletalAnimationPtr> getSkeletalAnimations();
     bool hasSkeletalAnimations();
 
-    void draw(QOpenGLFunctions_3_2_Core* gl, Material* mat);
-    void draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* mat);
+    //void draw(QOpenGLFunctions_3_2_Core* gl, Material* mat);
+    //void draw(QOpenGLFunctions_3_2_Core* gl, QOpenGLShaderProgram* mat);
+    void draw(GraphicsDevicePtr device);
 
     static MeshPtr loadMesh(QString filePath);
     static MeshPtr loadAnimatedMesh(QString filePath);

@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define FULLSCREENQUAD_H
 
 #include <QMatrix4x4>
+#include "../../irisglfwd.h"
 
 class QOpenGLFunctions_3_2_Core;
 class QOpenGLShaderProgram;
@@ -29,8 +30,8 @@ public:
     FullScreenQuad();
     ~FullScreenQuad();
 
-    void draw(bool flipY = false);
-    void draw(QOpenGLShaderProgram* shader);
+    void draw(GraphicsDevicePtr device, bool flipY = false);
+    void draw(GraphicsDevicePtr device, QOpenGLShaderProgram* shader);
 
     QOpenGLShaderProgram* shader;
     Mesh* mesh;

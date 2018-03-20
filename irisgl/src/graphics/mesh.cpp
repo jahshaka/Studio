@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include <QOpenGLTexture>
 #include <QtMath>
 
+#include "graphicsdevice.h"
 #include "vertexlayout.h"
 #include "../geometry/trimesh.h"
 #include "skeleton.h"
@@ -152,12 +153,15 @@ Mesh::Mesh(aiMesh* mesh)
                              QVector3D(b.x, b.y, b.z),
                              QVector3D(c.x, c.y, c.z));
     }
-
+    /*
     gl->glGenBuffers(1, &indexBuffer);
     gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
     gl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * indices.size(), indices.data(), GL_STATIC_DRAW);
     gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    */
     usesIndexBuffer = true;
+    idxBuffer = IndexBuffer::create();
+    idxBuffer->setData(indices.data(), sizeof(unsigned int) * indices.size());
 
     // the true size
     numVerts = indices.size();
@@ -171,12 +175,11 @@ Mesh::Mesh(aiMesh* mesh)
 Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
 {
     lastShaderId = -1;
-
-    gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
-
     triMesh = nullptr;
-    this->vertexLayout = vertexLayout;
     numVerts = numElements;
+/*
+    gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+    this->vertexLayout = vertexLayout;
 
     gl->glGenVertexArrays(1,&vao);
     gl->glBindVertexArray(vao);
@@ -190,6 +193,10 @@ Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
 
     gl->glBindBuffer(GL_ARRAY_BUFFER,0);
     gl->glBindVertexArray(0);
+*/
+    auto vb = VertexBuffer::create(*vertexLayout);
+    vb->setData(data, dataSize);
+    vertexBuffers.append(vb);
 
     usesIndexBuffer = false;
     this->setPrimitiveMode(PrimitiveMode::Triangles);
@@ -249,7 +256,7 @@ bool Mesh::hasSkeletalAnimations()
 {
     return skeletalAnimations.count() != 0;
 }
-
+/*
 void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,Material* mat)
 {
     draw(gl,mat->program);
@@ -274,6 +281,17 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program)
         gl->glDrawArrays(glPrimitive,0,numVerts);
     }
     gl->glBindVertexArray(0);
+}
+*/
+void Mesh::draw(GraphicsDevicePtr device)
+{
+    device->setVertexBuffers(vertexBuffers);
+    if (!!idxBuffer) {
+        device->setIndexBuffer(idxBuffer);
+        device->drawIndexedPrimitives(glPrimitive, 0, numVerts);
+    } else {
+        device->drawPrimitives(glPrimitive, 0, numVerts);
+    }
 }
 
 MeshPtr Mesh::loadMesh(QString filePath)
@@ -388,12 +406,14 @@ Mesh* Mesh::create(void* data,int dataSize,int numVerts,VertexLayout* vertexLayo
 
 Mesh::~Mesh()
 {
-    delete vertexLayout;
-    delete triMesh;
+    //delete vertexLayout;
+	if (triMesh)
+		delete triMesh;
 }
 
 void Mesh::addVertexArray(VertexAttribUsage usage,void* dataPtr,int size,GLenum type,int numComponents)
 {
+    /*
     gl->glBindVertexArray(vao);
 
     GLuint bufferId;
@@ -414,6 +434,18 @@ void Mesh::addVertexArray(VertexAttribUsage usage,void* dataPtr,int size,GLenum 
 
     gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
     gl->glBindVertexArray(0);
+    */
+    VertexLayout layout;
+    int sizeInBytes = 0;
+    switch(type) {
+    case GL_FLOAT:
+    case GL_INT:
+        sizeInBytes = 4 * numComponents;
+    }
+    layout.addAttrib(usage, type, numComponents, sizeInBytes);
+    auto vb = VertexBuffer::create(layout);
+    vb->setData(dataPtr, size);
+    vertexBuffers.append(vb);
 }
 
 void Mesh::addIndexArray(void* data,int size,GLenum type)

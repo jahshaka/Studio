@@ -79,7 +79,7 @@ ShaderPtr Shader::create(GraphicsDevicePtr device, QString vertexShader, QString
 
 ShaderPtr Shader::create(GraphicsDevicePtr device)
 {
-	auto shader = new Shader(device);
+    auto shader = new Shader(device);
 	return ShaderPtr(shader);
 }
 

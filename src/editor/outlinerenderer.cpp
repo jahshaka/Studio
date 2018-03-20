@@ -87,14 +87,14 @@ void OutlinerRenderer::renderOutline(iris::GraphicsDevicePtr device,
 	outlineShader->setUniformValue("u_sceneTex", 0);
 	outlineShader->setUniformValue("u_lineWidth", lineWidth);
 	outlineShader->setUniformValue("u_color", QVector3D(color.redF(), color.greenF(), color.blueF()));
-	fsQuad->draw(outlineShader);
+	fsQuad->draw(device, outlineShader);
 	//fsQuad->draw();
 	device->clearRenderTarget();
 
 	device->setBlendState(iris::BlendState::createAlphaBlend());
 	device->setTexture(0, outlineTexture);
 	//device->setTexture(0, objectTexture);
-	fsQuad->draw();
+	fsQuad->draw(device);
 
 }
 
@@ -126,7 +126,7 @@ void OutlinerRenderer::renderNode(iris::GraphicsDevicePtr device,
 				shader->setUniformValueArray("u_bones", boneTransforms.data(), boneTransforms.size());
 			}
 
-			meshNode->mesh->draw(device->getGL(), shader);
+			meshNode->mesh->draw(device);
 		}
 	}
 	else if (node->getSceneNodeType() == iris::SceneNodeType::ParticleSystem) {

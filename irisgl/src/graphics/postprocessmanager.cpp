@@ -18,8 +18,9 @@
 namespace iris
 {
 
-PostProcessManager::PostProcessManager()
+PostProcessManager::PostProcessManager(GraphicsDevicePtr device)
 {
+    this->device = device;
     gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
     rtInitialized = false;
     fsQuad = new FullScreenQuad();
@@ -33,9 +34,9 @@ PostProcessManager::PostProcessManager()
     postProcesses.append(FxaaPostProcess::create());
 }
 
-PostProcessManagerPtr PostProcessManager::create()
+PostProcessManagerPtr PostProcessManager::create(GraphicsDevicePtr device)
 {
-    return PostProcessManagerPtr(new PostProcessManager());
+    return PostProcessManagerPtr(new PostProcessManager(device));
 }
 
 void PostProcessManager::addPostProcess(PostProcessPtr process)
@@ -75,9 +76,9 @@ void PostProcessManager::blit(iris::Texture2DPtr source, iris::Texture2DPtr dest
         source->bind(0);
 
     if (shader)
-        fsQuad->draw(shader);
+        fsQuad->draw(device, shader);
     else
-        fsQuad->draw();
+        fsQuad->draw(device);
 
     renderTarget->unbind();
     renderTarget->clearTextures();

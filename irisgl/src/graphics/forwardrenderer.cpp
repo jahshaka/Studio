@@ -70,7 +70,7 @@ ForwardRenderer::ForwardRenderer(bool supportsVr)
 
     renderData = new RenderData();
 
-    billboard = new Billboard(gl);
+    billboard = new Billboard();
     fsQuad = new FullScreenQuad();
     createLineShader();
     createShadowShader();
@@ -93,7 +93,7 @@ ForwardRenderer::ForwardRenderer(bool supportsVr)
     renderTarget->addTexture(sceneRenderTexture);
     renderTarget->setDepthTexture(depthRenderTexture);
 
-    postMan = PostProcessManager::create();
+    postMan = PostProcessManager::create(graphics);
     postContext = new PostProcessContext();
 
     perfTimer = new PerformanceTimer();
@@ -214,7 +214,7 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
     else
         sceneRenderTexture->bind();
         
-    fsQuad->draw();
+    fsQuad->draw(graphics);
     gl->glBindTexture(GL_TEXTURE_2D, 0);
     rt->unbind();
 
@@ -307,7 +307,7 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     gl->glActiveTexture(GL_TEXTURE0);
     postContext->finalTexture->bind();
-    fsQuad->draw();
+    fsQuad->draw(graphics);
     gl->glBindTexture(GL_TEXTURE_2D, 0);
 
     graphics->clear(GL_DEPTH_BUFFER_BIT);
@@ -381,7 +381,8 @@ void ForwardRenderer::renderDirectionalShadow(LightNodePtr light, ScenePtr node)
 
 
 
-            item->mesh->draw(gl, shader);
+            //item->mesh->draw(gl, shader);
+            item->mesh->draw(graphics);
         }
     }
 	graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
@@ -431,7 +432,8 @@ void ForwardRenderer::renderSpotlightShadow(LightNodePtr light, ScenePtr node)
                 shader = shadowShader;
             }
 
-            item->mesh->draw(gl, shader);
+            //item->mesh->draw(gl, shader);
+            item->mesh->draw(graphics);
         }
     }
 
@@ -509,7 +511,7 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
 
    vrDevice->bindMirrorTextureId();
    //vrDevice->bindEyeTexture(0);
-   fsQuad->draw(gl);
+   fsQuad->draw(graphics);
    gl->glBindTexture(GL_TEXTURE_2D,0);
 
    scene->geometryRenderList->clear();
@@ -680,7 +682,8 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             graphics->setDepthState(item->renderStates.depthState);
             graphics->setBlendState(item->renderStates.blendState);
 
-            item->mesh->draw(gl, program);
+            //item->mesh->draw(gl, program);
+			item->mesh->draw(graphics);
 
             if (!!mat) {
                 mat->end(gl,scene);
@@ -710,7 +713,8 @@ void ForwardRenderer::renderSky(RenderData* renderData)
     worldMatrix.setToIdentity();
     program->setUniformValue("u_worldMatrix",worldMatrix);
 
-    scene->skyMesh->draw(gl,program);
+    //scene->skyMesh->draw(gl,program);
+    scene->skyMesh->draw(graphics);
     scene->skyMaterial->end(gl,scene);
 
     gl->glDepthMask(true);
@@ -739,7 +743,7 @@ void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
         if(!!icon)
         {
             icon->texture->bind();
-            billboard->draw(gl);
+            billboard->draw(graphics);
         }
         else
         {
@@ -827,7 +831,8 @@ void ForwardRenderer::renderOutlineNode(RenderData *renderData, SceneNodePtr nod
                 shader->setUniformValueArray("u_bones",          boneTransforms.data(), boneTransforms.size());
             }
 
-            meshNode->mesh->draw(gl, shader);
+            //meshNode->mesh->draw(gl, shader);
+            meshNode->mesh->draw(graphics);
         }
     }
 

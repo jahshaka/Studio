@@ -8,13 +8,13 @@
 
 #include <QOpenGLShaderProgram>
 #include <QOpenGLFunctions_3_2_Core>
+#include <QOpenGLFunctions>
 
 namespace iris
 {
 
-VertexBuffer::VertexBuffer(GraphicsDevicePtr device, VertexLayout vertexLayout)
+VertexBuffer::VertexBuffer(VertexLayout vertexLayout)
 {
-    this->device = device;
     this->vertexLayout = vertexLayout;
     bufferId = -1;
     data = nullptr;
@@ -41,9 +41,10 @@ void VertexBuffer::destroy()
     // todo: delete gl buffer
 }
 
-void VertexBuffer::upload()
+void VertexBuffer::upload(QOpenGLFunctions_3_2_Core* gl)
 {
-    auto gl = device->getGL();
+    //auto gl = device->getGL();
+    //auto gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
     if (bufferId == -1)
         gl->glGenBuffers(1, &bufferId);
 
@@ -51,6 +52,46 @@ void VertexBuffer::upload()
     // todo : add buffer usage option (nick)
     gl->glBufferData(GL_ARRAY_BUFFER, dataSize, data, GL_STATIC_DRAW);
     gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+IndexBuffer::IndexBuffer()
+{
+    this->device = device;
+    bufferId = -1;
+    data = nullptr;
+    dataSize = 0;
+    _isDirty = true;
+}
+
+void IndexBuffer::setData(void *bufferData, unsigned int sizeInBytes)
+{
+    if(data)
+        delete data;
+
+    data = new char[sizeInBytes];
+    memcpy(this->data, bufferData, sizeInBytes);
+    dataSize = sizeInBytes;
+
+    _isDirty = true;
+}
+
+void IndexBuffer::upload(QOpenGLFunctions_3_2_Core* gl)
+{
+    //auto gl = device->getGL();
+    //auto gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+    if (bufferId == -1)
+        gl->glGenBuffers(1, &bufferId);
+
+    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bufferId);
+    gl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, dataSize, data, GL_STATIC_DRAW);
+    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+}
+
+void IndexBuffer::destroy()
+{
+    if (data)
+        delete data;
+    // todo: delete gl buffer
 }
 
 QOpenGLFunctions_3_2_Core *GraphicsDevice::getGL() const
@@ -307,25 +348,28 @@ void GraphicsDevice::setVertexBuffer(VertexBufferPtr vertexBuffer)
 {
     vertexBuffers.clear();
     if (vertexBuffer->isDirty())
-        vertexBuffer->upload();
+        vertexBuffer->upload(gl);
     vertexBuffers.append(vertexBuffer);
 }
 
 void GraphicsDevice::setVertexBuffers(QList<VertexBufferPtr> vertexBuffers)
 {
-    vertexBuffers.clear();
+    this->vertexBuffers.clear();
     for(auto& vertexBuffer : vertexBuffers)
     {
         if (vertexBuffer->isDirty())
-            vertexBuffer->upload();
-        vertexBuffers.append(vertexBuffer);
+            vertexBuffer->upload(gl);
+        this->vertexBuffers.append(vertexBuffer);
     }
 }
 
 void GraphicsDevice::setIndexBuffer(IndexBufferPtr indexBuffer)
 {
-    if (!!indexBuffer)
+    if (!!indexBuffer) {
         this->indexBuffer = indexBuffer;
+        if (indexBuffer->isDirty())
+            indexBuffer->upload(gl);
+    }
     else
         this->indexBuffer.clear();
 }
@@ -442,6 +486,30 @@ void GraphicsDevice::drawPrimitives(GLenum primitiveType, int start, int count)
     }
 
     gl->glDrawArrays(primitiveType, start, count);
+
+    for(auto buffer : vertexBuffers) {
+        buffer->vertexLayout.unbind();
+    }
+    gl->glBindVertexArray(0);
+}
+
+// https://stackoverflow.com/a/30106751
+#define BUFFER_OFFSET(i) ((char*)nullptr+(i))
+void GraphicsDevice::drawIndexedPrimitives(GLenum primitiveType, int start, int count)
+{
+    gl->glBindVertexArray(defautVAO);
+    for(auto buffer : vertexBuffers) {
+        gl->glBindBuffer(GL_ARRAY_BUFFER, buffer->bufferId);
+        buffer->vertexLayout.bind();
+    }
+
+    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer->bufferId);
+    gl->glDrawElements(primitiveType,count,GL_UNSIGNED_INT,BUFFER_OFFSET(start));
+    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
+
+    for(auto buffer : vertexBuffers) {
+        buffer->vertexLayout.unbind();
+    }
     gl->glBindVertexArray(0);
 }
 
