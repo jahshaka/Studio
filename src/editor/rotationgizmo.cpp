@@ -9,6 +9,7 @@
 #include "irisgl/src/scenegraph/scene.h"
 #include "irisgl/src/scenegraph/cameranode.h"
 #include "irisgl/src/graphics/graphicshelper.h"
+#include "irisgl/src/graphics/graphicsdevice.h"
 #include "uimanager.h"
 #include "../commands/transfrormscenenodecommand.h"
 #include "irisgl/src/math/mathhelper.h"
@@ -269,8 +270,9 @@ RotationHandle* RotationGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, 
 	return closestHandle;
 }
 
-void RotationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
+void RotationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
 {
+	auto gl = device->getGL();
 	gl->glClear(GL_DEPTH_BUFFER_BIT);
 	//gl->glDisable(GL_DEPTH_TEST);
 	shader->bind();
@@ -291,7 +293,7 @@ void RotationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVec
 				shader->setUniformValue("color", QColor(255, 255, 0));
 				shader->setUniformValue("u_worldMatrix", transform);
 				//handles[i]->draw(gl, shader);
-				handleMeshes[i]->draw(gl, shader);
+				handleMeshes[i]->draw(device);
 			}
 		}
 	}
@@ -309,7 +311,7 @@ void RotationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVec
 				shader->setUniformValue("color", QColor(255, 255, 0));
 			else
 				shader->setUniformValue("color", handles[i]->getHandleColor());
-			handleMeshes[i]->draw(gl, shader);
+			handleMeshes[i]->draw(device);
 		}
 	}
 

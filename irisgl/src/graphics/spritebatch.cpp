@@ -14,7 +14,7 @@ namespace iris
 SpriteBatch::SpriteBatch(GraphicsDevicePtr graphicsDevice)
 {
     graphics = graphicsDevice;
-    spriteShader = Shader::load(graphics->getGL(),
+    spriteShader = Shader::load(graphics,
                           ":/assets/shaders/sprite.vert",
                           ":/assets/shaders/sprite.frag");
 
@@ -26,7 +26,7 @@ SpriteBatch::SpriteBatch(GraphicsDevicePtr graphicsDevice)
     layout.addAttrib(VertexAttribUsage::Position, GL_FLOAT, 3, sizeof(float)*3);
     layout.addAttrib(VertexAttribUsage::Color, GL_FLOAT, 4, sizeof(float)*4);
     layout.addAttrib(VertexAttribUsage::TexCoord0, GL_FLOAT, 2, sizeof(float)*2);
-    vertexBuffer = VertexBuffer::create(graphicsDevice, layout);
+    vertexBuffer = VertexBuffer::create(layout);
 
     data.reserve(_pool.size() * layout.getStride());
 }
@@ -48,9 +48,11 @@ void SpriteBatch::begin()
     proj.ortho(0, rect.width(),rect.height(), 0, -10, 10);
     //proj.ortho(0, 500, 0, 300, -10, 10);
 
-    spriteShader->program->setUniformValue("u_viewMatrix", view);
-    spriteShader->program->setUniformValue("u_projMatrix", proj);
+    //spriteShader->program->setUniformValue("u_viewMatrix", view);
+    //spriteShader->program->setUniformValue("u_projMatrix", proj);
 
+    graphics->setShaderUniform("u_viewMatrix", view);
+    graphics->setShaderUniform("u_projMatrix", proj);
 }
 
 void SpriteBatch::draw(Texture2DPtr texture, QRect rect, QColor color)

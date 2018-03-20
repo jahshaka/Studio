@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include <QVector>
 #include "../mesh.h"
 #include "../graphicshelper.h"
+#include "../graphicsdevice.h"
 #include "../vertexlayout.h"
 #include "../../core/irisutils.h"
 #include <QOpenGLFunctions_3_2_Core>
@@ -64,18 +65,18 @@ FullScreenQuad::~FullScreenQuad()
     delete mesh;
 }
 
-void FullScreenQuad::draw(bool flipY)
+void FullScreenQuad::draw(GraphicsDevicePtr device, bool flipY)
 {
     gl->glUseProgram(shader->programId());
     gl->glUniform1i(gl->glGetUniformLocation(shader->programId(), "flipY"), flipY);
     shader->setUniformValue("matrix", matrix);
-    mesh->draw(gl,shader);
+    mesh->draw(device);
 }
 
-void FullScreenQuad::draw(QOpenGLShaderProgram* shader)
+void FullScreenQuad::draw(GraphicsDevicePtr device, QOpenGLShaderProgram* shader)
 {
     shader->bind();
-    mesh->draw(gl,shader);
+    mesh->draw(device);
 }
 
 }

@@ -384,7 +384,7 @@ void SceneViewWidget::renderGizmos(bool once)
 
 		QVector3D rayPos, rayDir;
 		this->getMousePosAndRay(this->prevMousePos, rayPos, rayDir);
-		gizmo->render(gl, rayPos, rayDir, editorCam->viewMatrix, editorCam->projMatrix);
+		gizmo->render(renderer->getGraphicsDevice(), rayPos, rayDir, editorCam->viewMatrix, editorCam->projMatrix);
 	}
 }
 
@@ -562,7 +562,7 @@ void SceneViewWidget::renderScene()
                 mat.scale(0.2, 0.2, 0);
                 viewerTex->bind(0);
                 viewerQuad->matrix = mat;
-                viewerQuad->draw();
+                viewerQuad->draw(renderer->getGraphicsDevice());
             }
         }
 		

@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define BILLBOARD_H
 
 #include <qopengl.h>
+#include "../../irisglfwd.h"
 
 class QOpenGLFunctions_3_2_Core;
 class QOpenGLBuffer;
@@ -31,8 +32,8 @@ class Billboard
     QOpenGLShaderProgram* program;
 
 public:
-    Billboard(QOpenGLFunctions_3_2_Core* gl, float size=0.5f);
-    void draw(QOpenGLFunctions_3_2_Core* gl);
+    Billboard(float size=0.5f);
+    void draw(GraphicsDevicePtr device);
 };
 
 }
