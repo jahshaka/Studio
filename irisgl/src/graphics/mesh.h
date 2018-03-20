@@ -204,6 +204,7 @@ public:
     PrimitiveMode getPrimitiveMode() const;
     void setPrimitiveMode(const PrimitiveMode &value);
 
+    void clearVertexBuffers();
 	void addVertexBuffer(VertexBufferPtr vertexBuffer);
 	void setIndexBuffer(IndexBufferPtr indexBuffer);
 

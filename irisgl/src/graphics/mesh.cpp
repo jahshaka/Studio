@@ -232,6 +232,21 @@ void Mesh::setPrimitiveMode(const PrimitiveMode &value)
     }
 }
 
+void Mesh::clearVertexBuffers()
+{
+    this->vertexBuffers.clear();
+}
+
+void Mesh::addVertexBuffer(VertexBufferPtr vertexBuffer)
+{
+    this->vertexBuffers.append(vertexBuffer);
+}
+
+void Mesh::setIndexBuffer(IndexBufferPtr indexBuffer)
+{
+    this->idxBuffer = indexBuffer;
+}
+
 bool Mesh::hasSkeleton()
 {
     return !!skeleton;
