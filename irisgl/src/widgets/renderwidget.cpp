@@ -30,6 +30,7 @@ RenderWidget::RenderWidget(QWidget *parent)
     format.setMinorVersion(2);
     format.setProfile(QSurfaceFormat::CoreProfile);
     format.setSamples(1);
+    format.setSwapInterval(0);
 
     setFormat(format);
     // needed in order to get mouse events

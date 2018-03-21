@@ -118,6 +118,7 @@ set(SRCS
     src/widgets/assetgriditem.cpp
 	src/editor/outlinerenderer.cpp
 	src/editor/viewermaterial.cpp
+	src/editor/animationpath.cpp
 )
 
 set(HEADERS
@@ -234,6 +235,7 @@ set(HEADERS
 	src/materials/jahdefaultmaterial.h
 	src/editor/outlinerenderer.h 
 	src/editor/viewermaterial.h
+	src/editor/animationpath.h
 )
 
 # Todo - trim these down to nothing eventually
@@ -327,6 +329,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp.rc)
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 							src
+							irisgl/include
 							irisgl/src
 							irisgl/src/assimp/include
                             irisgl/src/libovr/Include

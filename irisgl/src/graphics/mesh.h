@@ -185,6 +185,7 @@ public:
 
     //assumed ownership of vertexLayout
     static Mesh* create(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
+	static MeshPtr create(VertexLayout vertexLayout);
 
     Mesh(aiMesh* mesh);
 

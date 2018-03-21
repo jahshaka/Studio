@@ -53,6 +53,8 @@ public:
 
 	MaterialPtr duplicate() override;
 
+	CustomMaterialPtr createFromShader(iris::ShaderPtr shader);
+
 protected:
     CustomMaterial() = default;
     QString materialName;

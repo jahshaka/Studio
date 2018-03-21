@@ -278,6 +278,13 @@ MaterialPtr CustomMaterial::duplicate()
 	return mat;
 }
 
+CustomMaterialPtr CustomMaterial::createFromShader(iris::ShaderPtr shader)
+{
+	auto mat = CustomMaterial::create();
+	// todo: set shader
+	return mat;
+}
+
 QString CustomMaterial::getName() const
 {
     return materialName;

@@ -50,6 +50,7 @@ For more information see the LICENSE file
 #include "../editor/viewercontroller.h"
 #include "../editor/editorvrcontroller.h"
 #include "../editor/viewermaterial.h"
+#include "../editor/animationpath.h"
 
 #include "../editor/editordata.h"
 
@@ -163,6 +164,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 	format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
 	format.setProfile(QSurfaceFormat::CoreProfile);
 	format.setSamples(1);
+	format.setSwapInterval(0);
 #ifdef QT_DEBUG
 	format.setOption(QSurfaceFormat::DebugContext);
 #endif
@@ -344,6 +346,13 @@ void SceneViewWidget::setSelectedNode(iris::SceneNodePtr sceneNode)
 
     selectedNode = sceneNode;
 
+	if (!!selectedNode && selectedNode->hasActiveAnimation()) {
+		animPath->generate(selectedNode, selectedNode->getAnimation());
+	}
+	else {
+		animPath->clearPath();
+	}
+
 	if (sceneNode == scene->getRootNode() || !sceneNode) {
 		renderer->setSelectedSceneNode(iris::SceneNodePtr());
 		gizmo->clearSelectedNode();
@@ -448,6 +457,8 @@ void SceneViewWidget::initializeGL()
 
     //thumbGen = new ThumbnialGenerator();
     thumbGen = ThumbnailGenerator::getSingleton();
+
+	animPath = new AnimationPath();
 
     timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(update()));
