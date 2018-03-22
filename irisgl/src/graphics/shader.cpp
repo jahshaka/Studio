@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include <QOpenGLTexture>
 #include "mesh.h"
 #include "texture.h"
+#include "graphicshelper.h"
 
 namespace iris
 {
@@ -57,14 +58,15 @@ void Shader::setFragmentShader(QString fragmentShader)
 
 ShaderPtr Shader::load(QString vertexShaderFile,QString fragmentShaderFile)
 {
+    //QFile vsFile(vertexShaderFile);
+    //vsFile.open(QFile::ReadOnly | QFile::Text);
+    //QString vertexShader(vsFile.readAll());
+	QString vertexShader = GraphicsHelper::loadAndProcessShader(vertexShaderFile);
 
-    QFile vsFile(vertexShaderFile);
-    vsFile.open(QFile::ReadOnly | QFile::Text);
-    QString vertexShader(vsFile.readAll());
-
-    QFile fsFile(fragmentShaderFile);
-    fsFile.open(QFile::ReadOnly | QFile::Text);
-    QString fragmentShader(fsFile.readAll());
+    //QFile fsFile(fragmentShaderFile);
+    //fsFile.open(QFile::ReadOnly | QFile::Text);
+    //QString fragmentShader(fsFile.readAll());
+	QString fragmentShader = GraphicsHelper::loadAndProcessShader(fragmentShaderFile);
 
     return create(vertexShader,fragmentShader);
 }

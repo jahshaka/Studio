@@ -13,8 +13,12 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QJsonDocument>
 
+#include <QOpenGLShaderProgram>
+
 #include "custommaterial.h"
 #include "../graphics/texture2d.h"
+#include "../graphics/shader.h"
+#include "../graphics/graphicsdevice.h"
 #include "../core/irisutils.h"
 
 namespace iris
@@ -51,19 +55,20 @@ void CustomMaterial::setValue(const QString &name, const QVariant &value)
 	}
 }
 
-void CustomMaterial::setUniformValues(Property *prop)
+void CustomMaterial::setUniformValues(GraphicsDevicePtr device, Property *prop)
 {
+	auto program = getProgram();
     if (prop->type == PropertyType::Bool) {
-        program->setUniformValue(prop->uniform.toStdString().c_str(), prop->getValue().toBool());
+		device->setShaderUniform(prop->uniform.toStdString().c_str(), prop->getValue().toBool());
     }
 
     if (prop->type == PropertyType::Float) {
-        program->setUniformValue(prop->uniform.toStdString().c_str(), prop->getValue().toFloat());
+		device->setShaderUniform(prop->uniform.toStdString().c_str(), prop->getValue().toFloat());
     }
 
     // TODO, figure out a way for the default material to mix values... the ambient for one
     if (prop->type == PropertyType::Color) {
-        program->setUniformValue(prop->uniform.toStdString().c_str(),
+		device->setShaderUniform(prop->uniform.toStdString().c_str(),
                                  QVector3D(prop->getValue().value<QColor>().redF(),
                                            prop->getValue().value<QColor>().greenF(),
                                            prop->getValue().value<QColor>().blueF()));
@@ -71,7 +76,8 @@ void CustomMaterial::setUniformValues(Property *prop)
 
     if (prop->type == iris::PropertyType::Texture) {
         auto tprop = static_cast<TextureProperty*>(prop);
-        program->setUniformValue(tprop->toggleValue.toStdString().c_str(), tprop->toggle);
+		device->setShaderUniform(tprop->toggleValue.toStdString().c_str(), tprop->toggle);
+		//device->setShaderUniform(tprop->toggleValue.toStdString().c_str(), true);
     }
 }
 
@@ -95,18 +101,18 @@ QJsonObject CustomMaterial::loadShaderFromDisk(const QString &filePath)
     return QJsonDocument::fromJson(data).object();
 }
 
-void CustomMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
+void CustomMaterial::begin(GraphicsDevicePtr device, ScenePtr scene)
 {
-    Material::begin(gl, scene);
+    Material::begin(device, scene);
 
     for (auto prop : this->properties) {
-        setUniformValues(prop);
+        setUniformValues(device, prop);
     }
 }
 
-void CustomMaterial::end(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
+void CustomMaterial::end(GraphicsDevicePtr device, ScenePtr scene)
 {
-    Material::end(gl, scene);
+    Material::end(device, scene);
 }
 
 void CustomMaterial::generate(const QString &fileName, bool project)
@@ -278,6 +284,7 @@ MaterialPtr CustomMaterial::duplicate()
 	return mat;
 }
 
+// incomplete!!
 CustomMaterialPtr CustomMaterial::createFromShader(iris::ShaderPtr shader)
 {
 	auto mat = CustomMaterial::create();

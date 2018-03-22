@@ -569,41 +569,42 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 
             if (!!item->material) {
                 mat = item->material;
-                program = mat->program;
+                program = mat->getProgram();
 
-                mat->begin(gl, scene);
+                mat->begin(graphics, scene);
+				graphics->setShader(mat->shader);
             } else {
                 program = item->shaderProgram;
                 program->bind();
             }
 
             // send transform and light data
-            program->setUniformValue("u_worldMatrix",   item->worldMatrix);
-            program->setUniformValue("u_viewMatrix",    renderData->viewMatrix);
-            program->setUniformValue("u_projMatrix",    renderData->projMatrix);
+			graphics->setShaderUniform("u_worldMatrix",   item->worldMatrix);
+			graphics->setShaderUniform("u_viewMatrix",    renderData->viewMatrix);
+			graphics->setShaderUniform("u_projMatrix",    renderData->projMatrix);
 
-			program->setUniformValue("u_time", scene->getRunningTime());
+			graphics->setShaderUniform("u_time", scene->getRunningTime());
 
             if  (item->mesh->hasSkeleton()) {
                 auto boneTransforms = item->mesh->getSkeleton()->boneTransforms;
                 program->setUniformValueArray("u_bones", boneTransforms.data(), boneTransforms.size());
             }
 
-            program->setUniformValue("u_normalMatrix",  item->worldMatrix.normalMatrix());
+			graphics->setShaderUniform("u_normalMatrix",  item->worldMatrix.normalMatrix());
 
-            program->setUniformValue("u_eyePos",        renderData->eyePos);
-            program->setUniformValue("u_sceneAmbient",  QVector3D(scene->ambientColor.redF(),
+			graphics->setShaderUniform("u_eyePos",        renderData->eyePos);
+			graphics->setShaderUniform("u_sceneAmbient",  QVector3D(scene->ambientColor.redF(),
                                                                   scene->ambientColor.greenF(),
                                                                   scene->ambientColor.blueF()));
 
             if (item->renderStates.fogEnabled && scene->fogEnabled ) {
-                program->setUniformValue("u_fogData.color", renderData->fogColor);
-                program->setUniformValue("u_fogData.start", renderData->fogStart);
-                program->setUniformValue("u_fogData.end",   renderData->fogEnd);
+				graphics->setShaderUniform("u_fogData.color", renderData->fogColor);
+				graphics->setShaderUniform("u_fogData.start", renderData->fogStart);
+				graphics->setShaderUniform("u_fogData.end",   renderData->fogEnd);
 
-                program->setUniformValue("u_fogData.enabled", true);
+				graphics->setShaderUniform("u_fogData.enabled", true);
             } else {
-                program->setUniformValue("u_fogData.enabled", false);
+				graphics->setShaderUniform("u_fogData.enabled", false);
             }
             /*
             if (item->renderStates.receiveShadows && scene->shadowEnabled) {
@@ -619,7 +620,7 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 
             program->setUniformValue("u_lightSpaceMatrix",  lightSpaceMatrix);
             */
-            program->setUniformValue("u_lightCount",        lightCount);
+			graphics->setShaderUniform("u_lightCount",        lightCount);
             int shadowIndex = 8;
             // only materials get lights passed to it
             if ( item->renderStates.receiveLighting ) {
@@ -631,23 +632,23 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                     if(!light->isVisible())
                     {
                         //quick hack for now
-                        mat->setUniformValue(lightPrefix+"color", QColor(0,0,0));
+						graphics->setShaderUniform(lightPrefix+"color", QColor(0,0,0));
                         continue;
                     }
 
-                    mat->setUniformValue(lightPrefix+"type", (int)light->lightType);
-                    mat->setUniformValue(lightPrefix+"position", light->globalTransform.column(3).toVector3D());
+					graphics->setShaderUniform(lightPrefix+"type", (int)light->lightType);
+					graphics->setShaderUniform(lightPrefix+"position", light->globalTransform.column(3).toVector3D());
                     //mat->setUniformValue(lightPrefix+"direction", light->getDirection());
-                    mat->setUniformValue(lightPrefix+"distance", light->distance);
-                    mat->setUniformValue(lightPrefix+"direction", light->getLightDir());
-                    mat->setUniformValue(lightPrefix+"cutOffAngle", light->spotCutOff);
-                    mat->setUniformValue(lightPrefix+"cutOffSoftness", light->spotCutOffSoftness);
-                    mat->setUniformValue(lightPrefix+"intensity", light->intensity);
-                    mat->setUniformValue(lightPrefix+"color", light->color);
+					graphics->setShaderUniform(lightPrefix+"distance", light->distance);
+					graphics->setShaderUniform(lightPrefix+"direction", light->getLightDir());
+					graphics->setShaderUniform(lightPrefix+"cutOffAngle", light->spotCutOff);
+					graphics->setShaderUniform(lightPrefix+"cutOffSoftness", light->spotCutOffSoftness);
+					graphics->setShaderUniform(lightPrefix+"intensity", light->intensity);
+					graphics->setShaderUniform(lightPrefix+"color", light->color);
 
-                    mat->setUniformValue(lightPrefix+"constantAtten", 1.0f);
-                    mat->setUniformValue(lightPrefix+"linearAtten", 0.0f);
-                    mat->setUniformValue(lightPrefix+"quadtraticAtten", 1.0f);
+					graphics->setShaderUniform(lightPrefix+"constantAtten", 1.0f);
+					graphics->setShaderUniform(lightPrefix+"linearAtten", 0.0f);
+					graphics->setShaderUniform(lightPrefix+"quadtraticAtten", 1.0f);
 
                     // shadow data
 //                    mat->setUniformValue(lightPrefix+"shadowEnabled",
@@ -655,16 +656,16 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 //                                         scene->shadowEnabled &&
 //                                         light->lightType != iris::LightType::Point);
 					if (!scene->shadowEnabled) {
-						mat->setUniformValue(lightPrefix + "shadowType", (int)iris::ShadowMapType::None);
+						graphics->setShaderUniform(lightPrefix + "shadowType", (int)iris::ShadowMapType::None);
 					}
 					else {
-						mat->setUniformValue(lightPrefix + "shadowMap", shadowIndex);
+						graphics->setShaderUniform(lightPrefix + "shadowMap", shadowIndex);
 						//mat->setUniformValue(QString("shadowMaps[%0].").arg(i), 8);
-						mat->setUniformValue(lightPrefix + "shadowMatrix", light->shadowMap->shadowMatrix);
+						graphics->setShaderUniform(lightPrefix + "shadowMatrix", light->shadowMap->shadowMatrix);
 						if (light->lightType == iris::LightType::Point)
-							mat->setUniformValue(lightPrefix + "shadowType", (int)iris::ShadowMapType::None);
+							graphics->setShaderUniform(lightPrefix + "shadowType", (int)iris::ShadowMapType::None);
 						else
-							mat->setUniformValue(lightPrefix + "shadowType", (int)light->shadowMap->shadowType);
+							graphics->setShaderUniform(lightPrefix + "shadowType", (int)light->shadowMap->shadowType);
 
 
 						graphics->setTexture(shadowIndex, light->shadowMap->shadowTexture);
@@ -686,11 +687,10 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 			item->mesh->draw(graphics);
 
             if (!!mat) {
-                mat->end(gl,scene);
+                mat->end(graphics, scene);
             }
         }
         else if(item->type == iris::RenderItemType::ParticleSystem) {
-
             auto ps = item->sceneNode.staticCast<ParticleSystemNode>();
             ps->renderParticles(graphics, renderData, particleShader);
         }
@@ -704,18 +704,27 @@ void ForwardRenderer::renderSky(RenderData* renderData)
 
     gl->glDepthMask(false);
 
-    scene->skyMaterial->begin(gl,scene);
+    scene->skyMaterial->begin(graphics, scene);
 
+	/*
     auto program = scene->skyMaterial->program;
     program->setUniformValue("u_viewMatrix",renderData->viewMatrix);
     program->setUniformValue("u_projMatrix",renderData->projMatrix);
     QMatrix4x4 worldMatrix;
     worldMatrix.setToIdentity();
     program->setUniformValue("u_worldMatrix",worldMatrix);
+	*/
+
+	graphics->setShader(scene->skyMaterial->shader);
+	graphics->setShaderUniform("u_viewMatrix", renderData->viewMatrix);
+	graphics->setShaderUniform("u_projMatrix", renderData->projMatrix);
+	QMatrix4x4 worldMatrix;
+	worldMatrix.setToIdentity();
+	graphics->setShaderUniform("u_worldMatrix", worldMatrix);
 
     //scene->skyMesh->draw(gl,program);
     scene->skyMesh->draw(graphics);
-    scene->skyMaterial->end(gl,scene);
+    scene->skyMaterial->end(graphics, scene);
 
     gl->glDepthMask(true);
 }

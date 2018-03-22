@@ -1,5 +1,8 @@
 #include "colormaterial.h"
 #include "../graphics/material.h"
+#include "../graphics/shader.h"
+#include "../graphics/graphicsdevice.h"
+#include <QOpenGLShaderProgram>
 
 namespace iris {
 
@@ -13,15 +16,16 @@ void ColorMaterial::setColor(const QColor &value)
     color = value;
 }
 
-void ColorMaterial::begin(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
+void ColorMaterial::begin(GraphicsDevicePtr device, ScenePtr scene)
 {
-    Material::begin(gl, scene);
-    program->setUniformValue("color", color);
+    Material::begin(device, scene);
+    //getProgram()->setUniformValue("color", color);
+	device->setShaderUniform("color", color);
 }
 
-void ColorMaterial::end(QOpenGLFunctions_3_2_Core *gl, ScenePtr scene)
+void ColorMaterial::end(GraphicsDevicePtr device, ScenePtr scene)
 {
-    Material::end(gl, scene);
+    Material::end(device, scene);
 }
 
 ColorMaterial::ColorMaterial()

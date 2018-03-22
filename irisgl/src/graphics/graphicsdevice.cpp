@@ -210,9 +210,9 @@ void GraphicsDevice::clear(GLuint bits, QColor color, float depth, int stencil)
     gl->glClear(bits);
 }
 
-void GraphicsDevice::setShader(ShaderPtr shader)
+void GraphicsDevice::setShader(ShaderPtr shader, bool force)
 {
-	if (!!activeShader) {
+	if ((!!activeShader && activeShader != shader) || force) {
 		int index = 0;
 		auto& samplers = activeShader->samplers;
 
@@ -232,6 +232,7 @@ void GraphicsDevice::setShader(ShaderPtr shader)
     activeProgram = shader->program;
 
 	// nullify all textures
+	/*
 	{
 		int index = 0;
 		auto& samplers = activeShader->samplers;
@@ -240,6 +241,7 @@ void GraphicsDevice::setShader(ShaderPtr shader)
 			clearTexture(index++);
 		}
 	}
+	*/
 }
 
 void GraphicsDevice::compileShader(iris::ShaderPtr shader)

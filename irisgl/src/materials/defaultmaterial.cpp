@@ -35,12 +35,12 @@ DefaultMaterial::DefaultMaterial()
     this->createProgramFromShaderSource(":assets/shaders/default_material.vert",
                                         ":assets/shaders/default_material.frag");
 
-    program->bind();
-    program->setUniformValue("u_useDiffuseTex",false);
-    program->setUniformValue("u_useNormalTex",false);
-    program->setUniformValue("u_useReflectionTex",false);
-    program->setUniformValue("u_useSpecularTex",false);
-    program->setUniformValue("u_material.diffuse",QVector3D(1,0,0));
+    //program->bind();
+    //program->setUniformValue("u_useDiffuseTex",false);
+    //program->setUniformValue("u_useNormalTex",false);
+    //program->setUniformValue("u_useReflectionTex",false);
+    //program->setUniformValue("u_useSpecularTex",false);
+    //program->setUniformValue("u_material.diffuse",QVector3D(1,0,0));
 
     textureScale = 1.0f;
     ambientColor = QColor(0,0,0);
@@ -61,11 +61,12 @@ DefaultMaterial::DefaultMaterial()
     this->setRenderLayer((int)RenderLayer::Opaque);
 }
 
-void DefaultMaterial::begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+void DefaultMaterial::begin(GraphicsDevicePtr device,ScenePtr scene)
 {
+	auto program = getProgram();
     program->bind();
 
-    bindTextures(gl);
+    bindTextures(device);
 
     //set params
     program->setUniformValue("u_material.diffuse",QVector3D(diffuseColor.redF(),diffuseColor.greenF(),diffuseColor.blueF()));
@@ -90,10 +91,10 @@ void DefaultMaterial::begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
 
 }
 
-void DefaultMaterial::end(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene)
+void DefaultMaterial::end(GraphicsDevicePtr device, ScenePtr scene)
 {
     //unset textures
-    Material::end(gl, scene);
+    Material::end(device, scene);
 }
 
 void DefaultMaterial::setDiffuseTexture(QSharedPointer<Texture2D> tex)

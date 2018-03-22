@@ -138,7 +138,9 @@ public:
     void clear(GLuint bits);
     void clear(GLuint bits, QColor color, float depth=1.0f, int stencil=0);
 
-    void setShader(ShaderPtr shader);
+	// if force is set to true, texture units will be reset regardless if the shader
+	// being bound is already bound
+    void setShader(ShaderPtr shader, bool force = false);
     template<typename T>
     void setShaderUniform(QString name,T value) {
         if (activeProgram)

@@ -86,8 +86,8 @@ public:
     float getReflectionInfluence();
 
 
-    void begin(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
-    void end(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
+    void begin(GraphicsDevicePtr device, ScenePtr scene) override;
+    void end(GraphicsDevicePtr device, ScenePtr scene) override;
 
     static DefaultMaterialPtr create()
     {
