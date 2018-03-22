@@ -70,6 +70,8 @@ public:
     explicit AnimationWidget(QWidget *parent = 0);
     ~AnimationWidget();
 
+	KeyFrameCurveWidget* getCurveWidget();
+
     void setScene(iris::ScenePtr scene);
     void setSceneNode(iris::SceneNodePtr node);
     void buildPropertiesMenu();
@@ -97,6 +99,9 @@ public:
 
     void removeProperty(QString propertyName);
     void clearPropertyKeys(QString propertyName);
+
+signals:
+	void animationChanged(iris::SceneNodePtr ptr, iris::AnimationPtr anim);
 
 private:
     iris::PropertyAnim* createPropertyAnim(iris::Property* prop);

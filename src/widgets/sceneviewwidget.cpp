@@ -70,6 +70,8 @@ For more information see the LICENSE file
 #include "../core/settingsmanager.h"
 #include "../uimanager.h"
 #include "../mainwindow.h"
+#include "keyframecurvewidget.h"
+#include "animationwidget.h"
 
 void SceneViewWidget::setShowFps(bool value)
 {
@@ -466,6 +468,9 @@ void SceneViewWidget::initializeGL()
 
     this->elapsedTimer->start();
 
+	auto curveWidget = UiManager::animationWidget->getCurveWidget();
+	connect(curveWidget, SIGNAL(keyChanged(iris::FloatKey*)), this, SLOT(onAnimationKeyChanged(iris::FloatKey*)));
+
 	//initializeOpenGLDebugger();
 }
 
@@ -530,6 +535,7 @@ void SceneViewWidget::renderScene()
         }
 		*/
         scene->update(dt);
+		//animPath->submit(scene->geometryRenderList);
 
         // insert vr head
         if ((UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)) {
@@ -612,6 +618,11 @@ void SceneViewWidget::resizeGL(int width, int height)
     viewport->pixelRatioScale = devicePixelRatio();
     viewport->width = width;
     viewport->height = height;
+}
+
+void SceneViewWidget::onAnimationKeyChanged(iris::FloatKey* key)
+{
+	animPath->generate(selectedNode, selectedNode->getAnimation());
 }
 
 bool SceneViewWidget::eventFilter(QObject *obj, QEvent *event)

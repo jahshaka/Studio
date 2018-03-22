@@ -586,9 +586,10 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 			graphics->setShaderUniform("u_time", scene->getRunningTime());
 
             if  (item->mesh->hasSkeleton()) {
-                auto boneTransforms = item->mesh->getSkeleton()->boneTransforms;
-                program->setUniformValueArray("u_bones", boneTransforms.data(), boneTransforms.size());
-            }
+                auto& boneTransforms = item->mesh->getSkeleton()->boneTransforms;
+                graphics->setShaderUniformArray("u_bones", boneTransforms.data(), boneTransforms.size());
+				
+			}
 
 			graphics->setShaderUniform("u_normalMatrix",  item->worldMatrix.normalMatrix());
 

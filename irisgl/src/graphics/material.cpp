@@ -80,7 +80,7 @@ void Material::bindTextures(GraphicsDevicePtr device)
 
         if (!!tex) {
             tex->texture->bind();
-			qDebug() << " texture: " << it.key() << " - " << count << " - " << tex->getTextureId();
+			//qDebug() << " texture: " << it.key() << " - " << count << " - " << tex->getTextureId();
             shader->program->setUniformValue(it.key().toStdString().c_str(), count);
 
 			//device->setTexture(count, tex);

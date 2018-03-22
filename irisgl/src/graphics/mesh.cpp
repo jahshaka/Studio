@@ -226,6 +226,9 @@ void Mesh::setPrimitiveMode(const PrimitiveMode &value)
     case PrimitiveMode::LineLoop:
         glPrimitive = GL_LINE_LOOP;
         break;
+	case PrimitiveMode::LineStrip:
+		glPrimitive = GL_LINE_STRIP;
+		break;
     default:
         glPrimitive = GL_TRIANGLES;
         break;

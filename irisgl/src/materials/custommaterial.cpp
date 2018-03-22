@@ -289,6 +289,7 @@ CustomMaterialPtr CustomMaterial::createFromShader(iris::ShaderPtr shader)
 {
 	auto mat = CustomMaterial::create();
 	// todo: set shader
+	mat->shader = shader;
 	return mat;
 }
 

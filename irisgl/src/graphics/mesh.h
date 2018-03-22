@@ -83,7 +83,8 @@ enum class PrimitiveMode
 {
     Triangles,
     Lines,
-    LineLoop
+    LineLoop,
+	LineStrip
 };
 
 //todo: switch to using mesh pointer

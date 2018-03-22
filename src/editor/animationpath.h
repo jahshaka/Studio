@@ -9,6 +9,8 @@ public:
 	iris::MeshPtr pathMesh;
 	iris::MeshPtr intervalMesh;
 	iris::ShaderPtr shader;
+	iris::MaterialPtr pathMaterial;
+	//bool hasPath;
 
 	AnimationPath();
 

@@ -212,6 +212,7 @@ private slots:
     void paintGL();
     void renderGizmos(bool once = false);
     void resizeGL(int width, int height);
+	void onAnimationKeyChanged(iris::FloatKey* key);
 
 
 private:
