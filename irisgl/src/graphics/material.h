@@ -45,6 +45,7 @@ class Material
 public:
     int renderLayer;
     QOpenGLShaderProgram* program;
+	ShaderPtr shader;
     QMap<QString, Texture2DPtr> textures;
 
     bool acceptsLighting;
