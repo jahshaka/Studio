@@ -80,28 +80,6 @@ int main(int argc, char *argv[])
     }
 #endif
 
-    // TODO - try to get rid of this in the future https://gist.github.com/skyrpex/5547015 (iKlsR)
-    app.setStyle(QStyleFactory::create("fusion"));
-    QPalette palette;
-    palette.setColor(QPalette::Window, QColor(48, 48, 48));
-    palette.setColor(QPalette::WindowText, Qt::white);
-    palette.setColor(QPalette::Base, QColor(64, 64, 64));
-    palette.setColor(QPalette::AlternateBase, QColor(53,53,53));
-    palette.setColor(QPalette::ToolTipBase, Qt::white);
-    palette.setColor(QPalette::ToolTipText, Qt::white);
-    palette.setColor(QPalette::Text, Qt::white);
-    palette.setColor(QPalette::Button, QColor(53,53,53));
-    palette.setColor(QPalette::ButtonText, Qt::white);
-    palette.setColor(QPalette::BrightText, Qt::red);
-    palette.setColor(QPalette::Highlight, QColor(30,144,255));
-    palette.setColor(QPalette::HighlightedText, Qt::black);
-
-    palette.setColor(QPalette::Inactive, QPalette::Link, QColor(135, 135, 135));
-    palette.setColor(QPalette::Inactive, QPalette::Text, QColor(135, 135, 135));
-    palette.setColor(QPalette::Disabled, QPalette::Text, QColor(135, 135, 135));
-    palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(135, 135, 135));
-    app.setPalette(palette);
-
     QSplashScreen splash;
     auto pixmap = QPixmap(":/images/splashv3.png");
     splash.setPixmap(pixmap.scaled(815, 480, Qt::KeepAspectRatio, Qt::SmoothTransformation));
