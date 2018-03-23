@@ -876,6 +876,15 @@ void MainWindow::addCone()
     addNodeToScene(node);
 }
 
+void MainWindow::addCapsule()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::MeshNode::create();
+    node->setMesh(":/content/primitives/capsule.obj");
+    node->setName("Capsule");
+    addNodeToScene(node);
+}
+
 void MainWindow::addCube()
 {
     this->sceneView->makeCurrent();
