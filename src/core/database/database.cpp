@@ -1140,6 +1140,99 @@ bool Database::importProject(const QString &inFilePath)
     return false;
 }
 
+void Database::createExportNode(const QString &object_guid, const QString &outTempFilePath)
+{
+	QSqlQuery selectAssetQuery;
+	selectAssetQuery.prepare("SELECT * FROM assets WHERE guid = ?");
+	selectAssetQuery.addBindValue(object_guid);
+
+	if (selectAssetQuery.exec()) {
+		selectAssetQuery.next();
+	}
+	else {
+		irisLog(
+			"There was an error fetching a row to be exported " + selectAssetQuery.lastError().text()
+		);
+	}
+
+	auto guid = selectAssetQuery.value(0).toString();
+	auto type = selectAssetQuery.value(1).toInt();
+	auto name = selectAssetQuery.value(2).toString();
+	auto collection = selectAssetQuery.value(3).toInt();
+	auto times_used = selectAssetQuery.value(4).toInt();
+	auto project_guid = selectAssetQuery.value(5).toString();
+	auto date_created = selectAssetQuery.value(6).toDateTime();
+	auto last_updated = selectAssetQuery.value(7).toDateTime();
+	auto author = selectAssetQuery.value(8).toString();
+	auto license = selectAssetQuery.value(9).toString();
+	auto hash = selectAssetQuery.value(10).toString();
+	auto version = selectAssetQuery.value(11).toDouble();
+	auto parent = selectAssetQuery.value(12).toString();
+	auto tags = selectAssetQuery.value(13).toByteArray();
+	auto properties = selectAssetQuery.value(14).toByteArray();
+	auto asset = selectAssetQuery.value(15).toByteArray();
+	auto thumbnail = selectAssetQuery.value(16).toByteArray();
+
+	QSqlDatabase datbaseConnection = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "nodeExportSQLITEConnection");
+	datbaseConnection.setDatabaseName(outTempFilePath);
+	datbaseConnection.open();
+
+	QString createAssetsTableSchema = 
+		"CREATE TABLE IF NOT EXISTS assets ("
+		"    guid              VARCHAR(32),"
+		"	 type			   INTEGER,"
+		"    name              VARCHAR(128),"
+		"	 collection		   INTEGER,"
+		"	 times_used		   INTEGER,"
+		"    project_guid      VARCHAR(32),"
+		"    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
+		"    last_updated      DATETIME,"
+		"	 author			   VARCHAR(128),"
+		"    license		   VARCHAR(64),"
+		"    hash              VARCHAR(16),"
+		"    version           REAL,"
+		"    parent            VARCHAR(32),"
+		"    tags			   BLOB,"
+		"    properties        BLOB,"
+		"    asset             BLOB,"
+		"    thumbnail         BLOB"
+		")";
+
+	QSqlQuery createAssetsTableQuery(datbaseConnection);
+	createAssetsTableQuery.prepare(createAssetsTableSchema);
+	executeAndCheckQuery(createAssetsTableQuery, "createExportGlobalDb");
+
+	QSqlQuery insertAssetQuery(datbaseConnection);
+	insertAssetQuery.prepare(
+		"INSERT INTO assets"
+		" (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
+		" license, hash, version, parent, tags, properties, asset, thumbnail)"
+		" VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
+		" :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail)"
+	);
+
+	insertAssetQuery.bindValue(":guid", guid);
+	insertAssetQuery.bindValue(":type", type);
+	insertAssetQuery.bindValue(":name", name);
+	insertAssetQuery.bindValue(":collection", collection);
+	insertAssetQuery.bindValue(":times_used", times_used);
+	insertAssetQuery.bindValue(":project_guid", project_guid);
+	insertAssetQuery.bindValue(":date_created", date_created);
+	insertAssetQuery.bindValue(":last_updated", last_updated);
+	insertAssetQuery.bindValue(":author", author);
+	insertAssetQuery.bindValue(":license", license);
+	insertAssetQuery.bindValue(":hash", hash);
+	insertAssetQuery.bindValue(":version", version);
+	insertAssetQuery.bindValue(":parent", parent);
+	insertAssetQuery.bindValue(":tags", tags);
+	insertAssetQuery.bindValue(":properties", properties);
+	insertAssetQuery.bindValue(":asset", asset);
+	insertAssetQuery.bindValue(":thumbnail", thumbnail);
+
+	executeAndCheckQuery(insertAssetQuery, "insertAssetQuery");
+
+	datbaseConnection.close();
+}
 QStringList Database::fetchFolderAndChildFolders(const QString &guid)
 {
 	std::function<void(QStringList&, const QString&)> fetchFolders

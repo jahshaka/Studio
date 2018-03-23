@@ -86,24 +86,18 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		this, SLOT(onThumbnailResult(ThumbnailResult*)));
 
 	breadCrumbLayout = new QHBoxLayout;
-	breadCrumbLayout->setContentsMargins(4, 0, 4, 0);
 	breadCrumbLayout->setSpacing(0);
 	ui->breadCrumb->setObjectName(QStringLiteral("BreadCrumb"));
-	ui->breadCrumb->setFixedHeight(32);
 	ui->breadCrumb->setLayout(breadCrumbLayout);
 	assetViewToggleButtonGroup = new QButtonGroup;
 	toggleIconView = new QPushButton(tr("Icon"));
 	toggleIconView->setCheckable(true);
-	//localAssetsButton->setIcon(QIcon(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-server-50.png")));
-	//localAssetsButton->setIconSize(QSize(16, 16));
 	toggleIconView->setCursor(Qt::PointingHandCursor);
 	// Todo - use preferences
 	toggleIconView->setChecked(true);
 
 	toggleListView = new QPushButton(tr("List"));
 	toggleListView->setCheckable(true);
-	//onlineAssetsButton->setIcon(QIcon(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cloud-50.png")));
-	//onlineAssetsButton->setIconSize(QSize(16, 16));
 	toggleListView->setCursor(Qt::PointingHandCursor);
 
 	assetViewToggleButtonGroup->addButton(toggleIconView);
@@ -160,17 +154,17 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 	setStyleSheet(
 		"QWidget#headerTEMP { background: #1A1A1A;}"
-		"QWidget#Switcher { background: #222; border-top: 1px solid #151515; border-bottom: 1px solid #151515; }"
+		"QWidget#Switcher { background: #1A1A1A; border-top: 1px solid #151515; border-bottom: 1px solid #151515; }"
 		"QWidget#Switcher QPushButton { background-color: #333; padding: 4px 16px; }"
 		"QWidget#Switcher QPushButton:checked { background: #2980b9; }"
-		"QWidget#BreadCrumb { background: #222; border-top: 1px solid #151515; border-bottom: 1px solid #151515; }"
+		"QWidget#BreadCrumb { background: #1A1A1A; border-top: 1px solid #151515; border-bottom: 1px solid #151515; }"
 		"QWidget#BreadCrumb QPushButton { background: transparent; padding: 4px 16px;"
 		"									border-right: 1px solid black; color: #999; }"
 		"QWidget#BreadCrumb QPushButton:checked { color: white; border-right: 1px solid black; }"
 		"QWidget#assetTree { background: #202020; border: 0; }"
 		"QWidget#assetView { background: #202020; border: 0; outline: 0; padding: 0; margin: 0; }"
 		"QSplitter::handle { width: 1px; background: #151515; }"
-		"QLineEdit { border: 0; background: #292929; color: #EEE; padding: 4px 8px; }"
+		"QLineEdit { border: 0; background: #292929; color: #EEE; padding: 4px 8px; selection-background-color: #404040; color: #EEE; }"
 		"QTreeView, QTreeWidget { show-decoration-selected: 1; }"
 		"QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; }"
 		"QTreeWidget::branch { background-color: #202020; }"
@@ -224,33 +218,33 @@ void AssetWidget::trigger()
 				return mat;
 			});
 
-			std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
-				[&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
-			{
-				if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-					auto n = node.staticCast<iris::MeshNode>();
-					//n->meshPath = meshGuid;
-					auto mat_defs = definition.value("material").toObject();
-					auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-					for (auto prop : mat->properties) {
-						if (prop->type == iris::PropertyType::Texture) {
-							if (!mat_defs.value(prop->name).toString().isEmpty()) {
-								mat->setValue(prop->name, mat_defs.value(prop->name).toString());
-							}
-						}
-					}
-				}
+			//std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
+			//	[&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
+			//{
+			//	if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+			//		auto n = node.staticCast<iris::MeshNode>();
+			//		//n->meshPath = meshGuid;
+			//		auto mat_defs = definition.value("material").toObject();
+			//		auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+			//		for (auto prop : mat->properties) {
+			//			if (prop->type == iris::PropertyType::Texture) {
+			//				if (!mat_defs.value(prop->name).toString().isEmpty()) {
+			//					mat->setValue(prop->name, mat_defs.value(prop->name).toString());
+			//				}
+			//			}
+			//		}
+			//	}
 
-				QJsonArray children = definition["children"].toArray();
-				// These will always be in sync since the definition is derived from the mesh
-				if (node->hasChildren()) {
-					for (int i = 0; i < node->children.count(); i++) {
-						updateNodeMaterialValues(node->children[i], children[i].toObject());
-					}
-				}
-			};
+			//	QJsonArray children = definition["children"].toArray();
+			//	// These will always be in sync since the definition is derived from the mesh
+			//	if (node->hasChildren()) {
+			//		for (int i = 0; i < node->children.count(); i++) {
+			//			updateNodeMaterialValues(node->children[i], children[i].toObject());
+			//		}
+			//	}
+			//};
 
-			updateNodeMaterialValues(node, materialObj.object());
+			//updateNodeMaterialValues(node, materialObj.object());
 
 			QString meshGuid = db->fetchObjectMesh(asset->assetGuid, (int)ModelTypes::Object);
 

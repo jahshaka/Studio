@@ -8,18 +8,22 @@ and/or modify it under the terms of the GPLv3 License
 
 For more information see the LICENSE file
 *************************************************************************/
+
 #include "worldsettings.h"
 #include "ui_worldsettings.h"
-#include "../../core/settingsmanager.h"
-#include "../../constants.h"
-#include "../../uimanager.h"
-#include "../../globals.h"
-#include "../../widgets/sceneviewwidget.h"
-#include "../../core/database/database.h"
+
 #include <QFileDialog>
-#include <QStandardPaths>
 #include <QListView>
+#include <QStandardPaths>
 #include <QStyledItemDelegate>
+
+#include "core/database/database.h"
+#include "core/settingsmanager.h"
+#include "widgets/sceneviewwidget.h"
+
+#include "constants.h"
+#include "globals.h"
+#include "uimanager.h"
 
 WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
     QWidget(nullptr),
@@ -48,8 +52,11 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 	QButtonGroup *buttonGroup = new QButtonGroup;
 
 	buttonGroup->addButton(ui->viewport_2);
+	buttonGroup->addButton(ui->editor_2);
 	buttonGroup->addButton(ui->content_2);
 	buttonGroup->addButton(ui->mining_2);
+	buttonGroup->addButton(ui->help);
+	buttonGroup->addButton(ui->about);
 
 	connect(buttonGroup,
 		static_cast<void(QButtonGroup::*)(QAbstractButton *, bool)>(&QButtonGroup::buttonToggled),
@@ -60,8 +67,11 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 	});
 
 	connect(ui->viewport_2, &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(0); });
-	connect(ui->content_2, &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(1); });
-	connect(ui->mining_2, &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(2); });
+	connect(ui->editor_2, &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(1); });
+	connect(ui->content_2, &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(2); });
+	connect(ui->mining_2, &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(3); });
+	connect(ui->help, &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(4); });
+	connect(ui->about, &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(5); });
 
     setupDirectoryDefaults();
     setupOutline();

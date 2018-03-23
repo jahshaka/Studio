@@ -31,13 +31,7 @@ PreferencesDialog::PreferencesDialog(Database *handle, SettingsManager* settings
     setWindowTitle("Preferences");
 
     connect(ui->okButton, SIGNAL(clicked(bool)), this, SLOT(saveSettings()));
-
 	connect(ui->cancelButton, &QPushButton::pressed, [this]() { this->close(); });
-
-	connect(ui->aboutButton, &QPushButton::pressed, this, []() {
-		AboutDialog ad;
-		ad.exec();
-	});
 
     setupPages();
 }

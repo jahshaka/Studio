@@ -374,11 +374,12 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 {
     auto meshNode = iris::MeshNode::create();
 
+	auto asset = handle->fetchAsset(nodeObj["mesh"].toString(""));
+
     QString source = nodeObj["mesh"].toString("");
 	// Keep a special reference to embedded asset primitives for now
 	if (!source.startsWith(":")) {
-		source = IrisUtils::join(Globals::project->getProjectFolder(),
-								 "Models", handle->fetchAsset(nodeObj["mesh"].toString("")).name);
+		source = IrisUtils::join(Globals::project->getProjectFolder(), "Models", asset.name);
 	}
 
     int meshIndex = nodeObj["meshIndex"].toInt(0);
@@ -416,6 +417,9 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     }
 
     meshNode->applyDefaultPose();
+	meshNode->setGUID(handle->fetchMeshObject(asset.guid, static_cast<int>(ModelTypes::Object)));
+
+    qDebug() << asset.name << "now pointing to " << handle->fetchMeshObject(asset.guid, static_cast<int>(ModelTypes::Object));
 
     return meshNode;
 }

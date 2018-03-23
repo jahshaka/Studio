@@ -1054,7 +1054,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
 	iris::SceneNodePtr node;
 
-	QString meshGuid = db->fetchObjectMesh(guid, (int)ModelTypes::Object);
+	QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object));
 
 	QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
 	while (iterator != AssetManager::getAssets().constEnd()) {
@@ -1062,30 +1062,30 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 		++iterator;
 	}
 
-	//std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
-	//	if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-	//		auto n = node.staticCast<iris::MeshNode>();
-	//		n->meshPath = meshGuid;
-	//		auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-	//		for (auto prop : mat->properties) {
-	//			if (prop->type == iris::PropertyType::Texture) {
-	//				if (!prop->getValue().toString().isEmpty()) {
-	//					mat->setValue(prop->name,
-	//						IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
-	//							db->fetchAsset(prop->getValue().toString()).name));
-	//				}
-	//			}
-	//		}
-	//	}
+	std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
+		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+			auto n = node.staticCast<iris::MeshNode>();
+			n->meshPath = meshGuid;
+			auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+			for (auto prop : mat->properties) {
+				if (prop->type == iris::PropertyType::Texture) {
+					if (!prop->getValue().toString().isEmpty()) {
+						mat->setValue(prop->name,
+							IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
+								db->fetchAsset(prop->getValue().toString()).name));
+					}
+				}
+			}
+		}
 
-	//	if (node->hasChildren()) {
-	//		for (auto &child : node->children) {
-	//			updateNodeValues(child);
-	//		}
-	//	}
-	//};
+		if (node->hasChildren()) {
+			for (auto &child : node->children) {
+				updateNodeValues(child);
+			}
+		}
+	};
 
-	//updateNodeValues(node);
+	updateNodeValues(node);
 
 	// model file may be invalid so null gets returned
 	if (!node) return;
@@ -1097,7 +1097,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 	}
 
 	node->setName(QFileInfo(filename).baseName());
-	//node->setGUID(guid);
+	node->setGUID(guid);
 	node->setLocalPos(position);
 
 	addNodeToScene(node, ignore);
@@ -1200,17 +1200,26 @@ void MainWindow::duplicateNode()
 
 void MainWindow::exportNode(const QString &guid)
 {
-	//if (!scene) return;
-	//if (!activeSceneNode || !activeSceneNode->isDuplicable()) return;
-
-	//sceneView->makeCurrent();
-	//auto node = activeSceneNode->duplicate();
-	//activeSceneNode->parent->addChild(node, false);
-
-	//this->sceneHierarchyWidget->repopulateTree();
-	//sceneNodeSelected(node);
-	//sceneView->doneCurrent();
 	qDebug() << guid;
+	//QTemporaryDir temporaryDir;
+	//temporaryDir.setAutoRemove(false);
+	//if (!temporaryDir.isValid()) return;
+
+	//qDebug() << "PATH " << temporaryDir.path();
+
+	//db->createExportNode(guid, QDir(temporaryDir.path()).filePath("asset.db"));
+
+	//QDir tempDir(temporaryDir.path());
+	//tempDir.mkpath("assets");
+
+	//for (const auto &asset : db->fetchAssetAndDependencies(guid)) {
+	//	QFile::copy(
+	//		IrisUtils::join(Globals::project->getProjectFolder(), asset),
+	//		IrisUtils::join(temporaryDir.path(), "assets", QFileInfo(asset).fileName())
+	//	);
+	//}
+
+	// temporaryDir.remove();
 }
 
 void MainWindow::deleteNode()

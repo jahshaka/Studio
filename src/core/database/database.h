@@ -81,6 +81,8 @@ public:
     void createExportScene(const QString& outTempFilePath);
     bool importProject(const QString& inFilePath);
 
+	void createExportNode(const QString& object_guid, const QString& outTempFilePath);
+
 	QStringList fetchFolderAndChildFolders(const QString &guid);
 	QStringList fetchChildFolderAssets(const QString &guid);
 

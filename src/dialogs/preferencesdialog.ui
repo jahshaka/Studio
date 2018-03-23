@@ -24,6 +24,7 @@ QPushButton, QToolButton {
   border: 0;
   padding: 5px 15px;
   background: #444;
+	color: #EEE;
 }
 
 QPushButton::hover {
@@ -76,13 +77,6 @@ QLineEdit {
       <property name="bottomMargin">
        <number>13</number>
       </property>
-      <item>
-       <widget class="QPushButton" name="aboutButton">
-        <property name="text">
-         <string>About</string>
-        </property>
-       </widget>
-      </item>
       <item>
        <spacer name="horizontalSpacer">
         <property name="orientation">
