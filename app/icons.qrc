@@ -88,5 +88,12 @@
         <file>icons/icons8-file.svg</file>
         <file>icons/icons8-folder-72.png</file>
         <file>icons/empty_object.png</file>
+        <file>icons/icons8-globe-64.png</file>
+        <file>icons/icons8-mesh-32.png</file>
+        <file>icons/icons8-sun-48.png</file>
+        <file>icons/icons8-snow-storm-26.png</file>
+        <file>icons/icons8-average-math-filled-50.png</file>
+        <file>icons/icons8-virtual-reality-filled-50.png</file>
+        <file>icons/icons8-camera-48.png</file>
     </qresource>
 </RCC>
