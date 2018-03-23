@@ -41,6 +41,7 @@ SceneNode::SceneNode():
     visible = true;
     duplicable = true;
     removable = true;
+	exportable = false;
 
     pickable = true;
     castShadow = true;

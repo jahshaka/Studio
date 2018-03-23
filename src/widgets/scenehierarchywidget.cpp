@@ -247,20 +247,29 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	connect(action, SIGNAL(triggered()), this, SLOT(focusOnNode()));
 	menu.addAction(action);
 
-    selectedNode = node;
 	if (node->isExportable()) {
-		// action = new QAction(QIcon(), "Export", this);
-		// connect(action, SIGNAL(triggered()), this, SLOT(exportNode()));
-		//menu.addAction(action);
-
 		QMenu *subMenu = menu.addMenu("Export");
-		QAction *exportAsset = subMenu->addAction("Export Asset");
-		//if (node->hasMaterial()) {
-			//QAction *exportAssetMaterial = subMenu->addAction("Export Material");
-		//}
-		connect(exportAsset, &QAction::triggered, this, [this, node]() {
-			exportNode(node->getGUID());
-		});
+
+		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+			
+			QAction *exportAsset = subMenu->addAction("Export Entire Node");
+			QAction *exportMat = subMenu->addAction("Export Material");
+
+			connect(exportAsset, &QAction::triggered, this, [this, node]() {
+				exportNode(node->getGUID());
+			});
+
+			connect(exportMat, &QAction::triggered, this, [this, node]() {
+				exportMaterial(node->getGUID());
+			});
+		}
+		else if (node->getSceneNodeType() == iris::SceneNodeType::ParticleSystem) {
+			QAction *exportPSystem = subMenu->addAction("Export Particle System");
+
+			connect(exportPSystem, &QAction::triggered, this, [this, node]() {
+				exportParticleSystem(node->getGUID());
+			});
+		}
 	}
 
     menu.exec(ui->sceneTree->mapToGlobal(pos));
@@ -288,6 +297,15 @@ void SceneHierarchyWidget::focusOnNode()
 }
 
 void SceneHierarchyWidget::exportNode(const QString &guid)
+{
+	mainWindow->exportNode(guid);
+}
+void SceneHierarchyWidget::exportMaterial(const QString &guid)
+{
+	mainWindow->exportNode(guid);
+}
+
+void SceneHierarchyWidget::exportParticleSystem(const QString &guid)
 {
 	mainWindow->exportNode(guid);
 }
