@@ -63,6 +63,9 @@ protected:
     QJsonObject loadShaderFromDisk(const QString &);
 };
 
+Q_DECLARE_METATYPE(CustomMaterial)
+Q_DECLARE_METATYPE(CustomMaterialPtr)
+
 }
 
 #endif // CUSTOMMATERIAL_H

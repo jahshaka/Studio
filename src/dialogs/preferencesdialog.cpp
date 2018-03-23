@@ -22,13 +22,17 @@ PreferencesDialog::PreferencesDialog(Database *handle, SettingsManager* settings
 {
     ui->setupUi(this);
 
+	this->setWindowFlags(Qt::FramelessWindowHint);
+	setWindowModality(Qt::WindowModal);
+
 	db = handle;
     this->settings = settings;
 
     setWindowTitle("Preferences");
-    ui->cancelButton->hide();
 
     connect(ui->okButton, SIGNAL(clicked(bool)), this, SLOT(saveSettings()));
+
+	connect(ui->cancelButton, &QPushButton::pressed, [this]() { this->close(); });
 
 	connect(ui->aboutButton, &QPushButton::pressed, this, []() {
 		AboutDialog ad;

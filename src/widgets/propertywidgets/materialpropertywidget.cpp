@@ -49,7 +49,7 @@ void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
             material->generate(shaderFile.absoluteFilePath());
         } else {
             for (auto asset : AssetManager::getAssets()) {
-                if (asset->type == AssetType::Shader) {
+                if (asset->type == ModelTypes::Shader) {
                     if (asset->fileName == material->getName() + ".shader") {
                         material->generate(asset->path, true);
                     }
@@ -96,7 +96,7 @@ void MaterialPropertyWidget::setupShaderSelector()
     }
 
     for (auto asset : AssetManager::getAssets()) {
-        if (asset->type == AssetType::Shader) {
+        if (asset->type == ModelTypes::Shader) {
             materialSelector->addItem(QFileInfo(asset->fileName).baseName());
         }
     }

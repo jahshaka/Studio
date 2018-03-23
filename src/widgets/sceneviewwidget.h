@@ -12,53 +12,54 @@ For more information see the LICENSE file
 #ifndef SCENEVIEWWIDGET_H
 #define SCENEVIEWWIDGET_H
 
-#include <QOpenGLWidget>
+#include <QOpenGLBuffer>
+#include <QHash>
+#include <QMatrix4x4>
 #include <QOpenGLFunctions>
 #include <QOpenGLFunctions_3_2_Core>
-#include <QOpenGLBuffer>
-#include <QMatrix4x4>
+#include <QOpenGLWidget>
 #include <QSharedPointer>
-#include <QHash>
 
-#include "../core/project.h"
-#include "../irisgl/src/irisglfwd.h"
-#include "../irisgl/src/math/intersectionhelper.h"
+#include "irisgl/src/irisglfwd.h"
+#include "irisgl/src/math/intersectionhelper.h"
+
+#include "mainwindow.h"
 #include "uimanager.h"
-#include "../mainwindow.h"
+
+#include "core/project.h"
 
 namespace iris
 {
-    class Scene;
-    class ForwardRenderer;
-    class Mesh;
-    class SceneNode;
-    class MeshNode;
-    class DefaultMaterial;
-    class Viewport;
     class CameraNode;
+    class DefaultMaterial;
+    class ForwardRenderer;
     class FullScreenQuad;
+    class Mesh;
+    class MeshNode;
+    class Scene;
+    class SceneNode;
+    class Viewport;
 }
 
-class EditorCameraController;
-class QOpenGLShaderProgram;
 class CameraControllerBase;
+class EditorCameraController;
+class EditorData;
 class EditorVrController;
-class OrbitalCameraController;
-class ViewerCameraController;
-class QElapsedTimer;
-class QTimer;
-class QOpenGLDebugLogger;
-
 class Gizmo;
-class ViewportGizmo;
-class TranslationGizmo;
+class OrbitalCameraController;
+class OutlinerRenderer;
+class QElapsedTimer;
+class QOpenGLDebugLogger;
+class QOpenGLShaderProgram;
+class QTimer;
 class RotationGizmo;
 class ScaleGizmo;
-
-class EditorData;
 class ThumbnailGenerator;
 class OutlinerRenderer;
 class AnimationPath;
+class TranslationGizmo;
+class ViewerCameraController;
+class ViewportGizmo;
 
 enum class ViewportMode
 {
@@ -147,8 +148,6 @@ public:
 
     void setGizmoTransformToLocal();
     void setGizmoTransformToGlobal();
-    void hideGizmo();
-	void showGizmos();
 
     void setGizmoLoc();
     void setGizmoRot();
@@ -169,6 +168,9 @@ public:
     void mousePressEvent(QMouseEvent* evt);
     void mouseMoveEvent(QMouseEvent* evt);
 
+	iris::SceneNodePtr currentDragNode;
+	iris::SceneNodePtr selectedDragNode;
+
     float translatePlaneD;
     QVector3D finalHitPoint;
     QVector3D Offset;
@@ -176,8 +178,14 @@ public:
     QVector3D dragScenePos;
     iris::SceneNodePtr activeDragNode;
     bool updateRPI(QVector3D pos, QVector3D r);
-    bool doActiveObjectPicking(const QPointF& point);
-    void doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject = true, bool skipLights = false, bool skipViewers = false);
+    iris::SceneNodePtr doActiveObjectPicking(const QPointF& point);
+    void doObjectPicking(
+		const QPointF& point,
+		iris::SceneNodePtr lastSelectedNode,
+		bool selectRootObject = true,
+		bool skipLights = false,
+		bool skipViewers = false
+	);
 
 	QImage takeScreenshot(QSize dimension);
     QImage takeScreenshot(int width=1920, int height=1080);

@@ -3,7 +3,7 @@
 #include "../core/thumbnailmanager.h"
 #include "../constants.h"
 
-AssetPickerWidget::AssetPickerWidget(AssetType type, QDialog *parent) :
+AssetPickerWidget::AssetPickerWidget(ModelTypes type, QDialog *parent) :
     QDialog(parent),
     ui(new Ui::AssetPickerWidget)
 {

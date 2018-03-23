@@ -24,60 +24,12 @@ QMessageBox QPushButton:hover {
     background-color: #555;
 }
 
-QMenu {
-    background-color: #212121;
-}
-
-QMenu::item {
-    /* sets background of menu item. set this to something non-transparent
-        if you want menu color and menu item color to be different */
-    background-color: #212121;
-}
-
-QMenu::item:selected { /* when user selects item using mouse or keyboard */
-    background-color: #3498db;
-	color: white;
-}
-
 #searchIcon {
 	background: #303030;
 	padding: 4px;
 }
 
-/* ================== */
-
-QScrollBar:vertical {
-    background: #17181a;
-	width: 16px;
-}
-
-QScrollBar::handle:vertical {
-    background: #5a5f66;
-	border: 1px solid black;
-	min-height: 32px;
-	margin: 2px;
-	border-radius: 6px;
-	/*border-radius: 5px;	/* this appears to be tied to the (width of the scrollbar / 2) */
-}
-
-QScrollBar::handle:vertical:hover {
-    background-color: #6b6f77;
-}
-
-QScrollBar::add-page:vertical,  QScrollBar::sub-page:vertical {
-    background: #17181a;
-}
-
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-      border: none;
-      background: none;
-}
-
 /* ========================== */
-
-#ProjectManager {
-	background: #1a1a1a;
-}
 
 #lineEdit {
 	font-size: 14px;
@@ -86,35 +38,6 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
 	border: 0;
 }
 
-QComboBox {
-    background: #4D4D4D;
-    color: #BBB;
-    border:  0;
-	border-radius: 1px;
-}
-
-QComboBox:item {
-
-}
-
-QComboBox QAbstractItemView {
-	background-color: #212121;
-    selection-background-color: red;
-    border: 0;
-    outline: none;
-}
-
-QComboBox::drop-down {
-    border:  0;
-    /*background: #4D4D4D; */
-}
-
-QComboBox::down-arrow {
-	image: url(:/icons/down_arrow_check.png);
-	width: 18px;
-	height: 14px;
- }
-
 #newProject {
 	background: #4898ff;
 	color: white;
@@ -122,22 +45,6 @@ QComboBox::down-arrow {
 
 #newProject:hover {
 	background-color: #51a1d6;
-}
-
-
-QSlider::groove:horizontal {
-   /* height: 8px; /* the groove expands to the size of the slider by default. by giving it a height, it has a fixed size */
-    background: #404040;
-}
-
-QSlider::handle:horizontal {
-    background: #AFAFAF;
-    width: 10px;
-    margin: -2px 0; /* handle is placed by default on the contents rect of the groove. Expand outside the groove */
-}
-
-#newProject {
-
 }
 
 #samples, #projects {
@@ -169,38 +76,74 @@ QToolButton::hover {
 	background: #555;
 }
 
-/*
-QListWidget {
-	background: #404040;
-	color: #CECECE;
-	padding-left: 16px;
-	padding-top: 24px;
-}*/
-
-QListWidget::item {
-	border: 4px solid transparent;
-	padding: 6px;
-	margin-bottom: 6px;
-	margin-right: 6px;
-	outline: none;
+QComboBox {
+    /*border-radius: 3px;
+    padding: 1px 18px 1px 3px;
+    min-width: 6em;*/
 }
 
-QListWidget::item:hover {
-	padding: 6px;
-	margin-bottom: 6px;
-	margin-right: 6px;
-	border: 4px solid #4898ff;
-	/*background: rgba(71, 151, 255, 0.3);*/
+QComboBox:editable {
+	    background: #1A1A1A;
 }
 
-QListWidget::item:selected {
-	border: 4px solid transparent;
-	padding: 6px;
-	margin-bottom: 6px;
-	margin-right: 6px;
-	background: #4998ff;
-	color: #CECECE;
-}</string>
+QComboBox QAbstractItemView::item {
+    show-decoration-selected: 1;
+}
+
+QComboBox QAbstractItemView::item {
+    padding: 6px;
+}
+
+QListView::item:selected {
+    background: #404040;
+}
+
+QComboBox:!editable, QComboBox::drop-down:editable {
+    background: #1A1A1A;
+}
+
+/* QComboBox gets the on state when the popup is open */
+QComboBox:!editable:on, QComboBox::drop-down:editable:on {
+    background: #1A1A1A;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1A1A1A;
+    selection-background-color: #404040;
+    border: 0;
+    outline: none;
+}
+
+QComboBox QAbstractItemView::item {
+    border: none;
+    padding-left: 5px;
+}
+
+QComboBox QAbstractItemView::item:selected {
+    background: #404040;
+    padding-left: 5px;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 18px;
+    border-left-width: 1px;
+}
+
+QComboBox::down-arrow {
+    image: url(:/icons/down_arrow_check.png);
+	width: 18px;
+	height: 14px;
+}
+
+QComboBox::down-arrow:!enabled {
+    image: url(:/icons/down_arrow_check_disabled.png);
+    width: 18px;
+    height: 14px;
+}
+
+</string>
   </property>
   <layout class="QGridLayout" name="gridLayout_3">
    <property name="leftMargin">
@@ -340,15 +283,7 @@ QListWidget::item:selected {
       </size>
      </property>
      <property name="styleSheet">
-      <string notr="true">#aaaaaabrowseProjects {
-	background: transparent;
-	font-size: 9px;
-	font-weight: bold;
-}
-
-#aaaaabrowseProjects::hover {
-	color: #3498db;
-}</string>
+      <string notr="true"/>
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout_2">
       <property name="spacing">

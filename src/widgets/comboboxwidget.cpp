@@ -12,11 +12,17 @@ For more information see the LICENSE file
 #include "comboboxwidget.h"
 #include "ui_comboboxwidget.h"
 
-#include <QDebug>
+#include <QListView>
+#include <QStyledItemDelegate>
 
 ComboBoxWidget::ComboBoxWidget(QWidget* parent) : QWidget(parent), ui(new Ui::ComboBoxWidget)
 {
     ui->setupUi(this);
+
+    ui->comboBox->setItemDelegate(new QStyledItemDelegate(ui->comboBox));   
+
+    auto lv = new QListView();
+    ui->comboBox->setView(lv); 
 
     connect(ui->comboBox, SIGNAL(currentTextChanged(QString)), SLOT(onDropDownTextChanged(QString)));
 }

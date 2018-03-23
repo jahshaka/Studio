@@ -11,6 +11,7 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPointer>
 #include <QProgressDialog>
 
 #include "irisgl/src/core/irisutils.h"
@@ -58,6 +59,11 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->assetView->setDragEnabled(true);
 	ui->assetView->setDragDropMode(QAbstractItemView::DragDrop);
 
+	connect(ui->hideDeps, &QCheckBox::toggled, [this](bool state) {
+		hideDependencies = !state;
+		updateAssetView(assetItem.selectedGuid, !state);
+	});
+
 	connect(ui->assetView, SIGNAL(itemClicked(QListWidgetItem*)),
 		this, SLOT(assetViewClicked(QListWidgetItem*)));
 
@@ -85,12 +91,6 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->breadCrumb->setObjectName(QStringLiteral("BreadCrumb"));
 	ui->breadCrumb->setFixedHeight(32);
 	ui->breadCrumb->setLayout(breadCrumbLayout);
-	ui->breadCrumb->setStyleSheet(
-		"QWidget#BreadCrumb { background: #222; border-top: 1px solid black; border-bottom: 1px solid black; }"
-		"QPushButton { background-color: #222; padding: 4px 16px; border-right: 1px solid black; color: #999; }"
-		"QPushButton:checked { color: white; border-right: 1px solid black; }"
-	);
-
 	assetViewToggleButtonGroup = new QButtonGroup;
 	toggleIconView = new QPushButton(tr("Icon"));
 	toggleIconView->setCheckable(true);
@@ -152,14 +152,41 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 	ui->switcher->setLayout(toggleLayout);
 	ui->switcher->setObjectName("Switcher");
-	ui->switcher->setStyleSheet(
-		"QWidget#Switcher { background: #222; border-top: 1px solid black; border-bottom: 1px solid black; }"
-		"QPushButton { background-color: #333; padding: 4px 16px; }"
-		"QPushButton:checked { background: #2980b9; }"
-	);
+
+	ui->searchBar->setPlaceholderText(tr("Type to search for assets..."));
 
 	progressDialog = new ProgressDialog;
 	progressDialog->setLabelText("Importing assets...");
+
+	setStyleSheet(
+		"QWidget#headerTEMP { background: #1A1A1A;}"
+		"QWidget#Switcher { background: #222; border-top: 1px solid #151515; border-bottom: 1px solid #151515; }"
+		"QWidget#Switcher QPushButton { background-color: #333; padding: 4px 16px; }"
+		"QWidget#Switcher QPushButton:checked { background: #2980b9; }"
+		"QWidget#BreadCrumb { background: #222; border-top: 1px solid #151515; border-bottom: 1px solid #151515; }"
+		"QWidget#BreadCrumb QPushButton { background: transparent; padding: 4px 16px;"
+		"									border-right: 1px solid black; color: #999; }"
+		"QWidget#BreadCrumb QPushButton:checked { color: white; border-right: 1px solid black; }"
+		"QWidget#assetTree { background: #202020; border: 0; }"
+		"QWidget#assetView { background: #202020; border: 0; outline: 0; padding: 0; margin: 0; }"
+		"QSplitter::handle { width: 1px; background: #151515; }"
+		"QLineEdit { border: 0; background: #292929; color: #EEE; padding: 4px 8px; }"
+		"QTreeView, QTreeWidget { show-decoration-selected: 1; }"
+		"QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; }"
+		"QTreeWidget::branch { background-color: #202020; }"
+		"QTreeWidget::branch:hover { background-color: #303030; }"
+		"QTreeWidget::branch:selected { background-color: #404040; }"
+		"QTreeWidget::item:selected { selection-background-color: #404040;"
+		"								background: #404040; outline: none; padding: 5px 0; }"
+		/* Important, this is set for when the widget loses focus to fill the left gap */
+		"QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }"
+		"QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }"
+		"QTreeWidget::item { padding: 5px 0; }"
+		"QTreeWidget::item:hover { background: #303030; padding: 5px 0; }"
+		"QPushButton{ background-color: #333; color: #DEDEDE; border : 0; padding: 4px 16px; }"
+		"QPushButton:hover{ background-color: #555; }"
+		"QPushButton:pressed{ background-color: #444; }"
+	);
 }
 
 void AssetWidget::trigger()
@@ -169,8 +196,11 @@ void AssetWidget::trigger()
 
 	sceneView->makeCurrent();
 	for (auto &asset : AssetManager::getAssets()) {
-		if (asset->type == AssetType::Object) {
+		if (asset->type == ModelTypes::Material) {
 
+		}
+
+		if (asset->type == ModelTypes::Object) {
 			auto material = db->getAssetMaterialGlobal(asset->assetGuid);
 			auto materialObj = QJsonDocument::fromBinaryData(material);
 
@@ -194,7 +224,7 @@ void AssetWidget::trigger()
 				return mat;
 			});
 
-			std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeValues =
+			std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
 				[&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
 			{
 				if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
@@ -215,13 +245,39 @@ void AssetWidget::trigger()
 				// These will always be in sync since the definition is derived from the mesh
 				if (node->hasChildren()) {
 					for (int i = 0; i < node->children.count(); i++) {
-						updateNodeValues(node->children[i], children[i].toObject());
+						updateNodeMaterialValues(node->children[i], children[i].toObject());
 					}
 				}
 			};
 
-			updateNodeValues(node, materialObj.object());
+			updateNodeMaterialValues(node, materialObj.object());
 
+			QString meshGuid = db->fetchObjectMesh(asset->assetGuid, (int)ModelTypes::Object);
+
+			std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
+				if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+					auto n = node.staticCast<iris::MeshNode>();
+					n->meshPath = meshGuid;
+					auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+					for (auto prop : mat->properties) {
+						if (prop->type == iris::PropertyType::Texture) {
+							if (!prop->getValue().toString().isEmpty()) {
+								mat->setValue(prop->name,
+									IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
+										db->fetchAsset(prop->getValue().toString()).name));
+							}
+						}
+					}
+				}
+
+				if (node->hasChildren()) {
+					for (auto &child : node->children) {
+						updateNodeValues(child);
+					}
+				}
+			};
+
+			updateNodeValues(node);
 
 			QVariant variant = QVariant::fromValue(node);
 			auto nodeAsset = new AssetNodeObject;
@@ -262,8 +318,7 @@ void AssetWidget::extractTexturesAndMaterialFromMaterial(
 		if (materialDefinition.contains(prop->name)) {
 			if (prop->type == iris::PropertyType::Texture) {
 				auto textureStr = !materialDefinition[prop->name].toString().isEmpty()
-					? QDir(QFileInfo(filePath).absolutePath())
-					.filePath(materialDefinition[prop->name].toString())
+					? materialDefinition[prop->name].toString()
 					: QString();
 				material->setValue(prop->name, textureStr);
 				if (!textureStr.isEmpty()) {
@@ -430,12 +485,19 @@ void AssetWidget::addItem(const AssetTileData &assetData)
 	item->setData(MODEL_GUID_ROLE, assetData.guid);
 	item->setData(MODEL_PARENT_ROLE, assetData.parent);
 
-	if (assetData.type == static_cast<int>(AssetType::Texture)) {
+	if (assetData.type == static_cast<int>(ModelTypes::Texture)) {
 
 	}
-	else if (assetData.type == static_cast<int>(AssetType::Object)) {
-		//item->setData(Qt::UserRole,		file.absoluteFilePath());
-		const QString meshAssetGuid = db->getDependencyByType(static_cast<int>(AssetType::Object), assetData.guid);
+	else if (assetData.type == static_cast<int>(ModelTypes::Material)) {
+		const QString materialAssetGuid = db->getDependencyByType(static_cast<int>(ModelTypes::Material), assetData.guid);
+		const AssetTileData materialAssetName = db->fetchAsset(materialAssetGuid);
+		item->setData(MODEL_GUID_ROLE, assetData.guid);
+		item->setData(MODEL_PARENT_ROLE, assetData.parent);
+		item->setData(MODEL_TYPE_ROLE, assetData.type);
+		item->setData(MODEL_MESH_ROLE, materialAssetName.name); // TODO
+	}
+	else if (assetData.type == static_cast<int>(ModelTypes::Object)) {
+		const QString meshAssetGuid = db->getDependencyByType(static_cast<int>(ModelTypes::Object), assetData.guid);
 		const AssetTileData meshAssetName = db->fetchAsset(meshAssetGuid);
 		item->setData(MODEL_GUID_ROLE, assetData.guid);
 		item->setData(MODEL_PARENT_ROLE, assetData.parent);
@@ -456,7 +518,7 @@ void AssetWidget::addItem(const AssetTileData &assetData)
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
 
 	// Hide meshes for now, we work with objects which are parents for meshes, materials etc
-	if (assetData.type != static_cast<int>(AssetType::Mesh)) {
+	if (assetData.type != static_cast<int>(ModelTypes::Mesh)) {
 		ui->assetView->addItem(item);
 	}
 }
@@ -487,12 +549,12 @@ void AssetWidget::addCrumbs(const QVector<FolderData> &folderData)
 	}
 }
 
-void AssetWidget::updateAssetView(const QString &path)
+void AssetWidget::updateAssetView(const QString &path, bool showDependencies)
 {
 	ui->assetView->clear();
 
 	for (const auto &folder : db->fetchChildFolders(path)) addItem(folder);
-	for (const auto &asset : db->fetchChildAssets(path)) addItem(asset);
+	for (const auto &asset : db->fetchChildAssets(path, showDependencies)) addItem(asset);
 	addCrumbs(db->fetchCrumbTrail(path));
 }
 
@@ -524,11 +586,11 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 				int distance = (evt->pos() - startPos).manhattanLength();
 				if (distance >= QApplication::startDragDistance()) {
 					auto item = ui->assetView->currentItem();
-					QDrag *drag = new QDrag(this);
-					QMimeData *mimeData = new QMimeData;
-					//QModelIndex index = ui->assetView->indexAt(evt->pos());
-					//auto item = static_cast<QListWidgetItem*>(index.internalPointer());
+					auto drag = QPointer<QDrag>(new QDrag(this));
+					auto mimeData = QPointer<QMimeData>(new QMimeData);
+
 					ui->assetView->clearSelection();
+
 					if (item) {
 						QByteArray mdata;
 						QDataStream stream(&mdata, QIODevice::WriteOnly);
@@ -605,6 +667,13 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	assetItem.selectedPath = assetItem.item->data(0, Qt::UserRole).toString();
 
 	QMenu menu;
+	menu.setStyleSheet(
+		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
+		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
+		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
+		"QMenu::item : disabled { color: #555; }"
+	);
+
 	QAction *action;
 
 	QMenu *createMenu = menu.addMenu("Create");
@@ -636,6 +705,12 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 	QModelIndex index = ui->assetView->indexAt(pos);
 
 	QMenu menu;
+	menu.setStyleSheet(
+		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
+		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
+		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
+		"QMenu::item : disabled { color: #555; }"
+	);
 	QAction *action;
 
 	if (index.isValid()) {
@@ -643,9 +718,9 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 		assetItem.wItem = item;
 		//assetItem.selectedPath = item->data(Qt::UserRole).toString();
 
-		// action = new QAction(QIcon(), "Rename", this);
-		// connect(action, SIGNAL(triggered()), this, SLOT(renameViewItem()));
-		// menu.addAction(action);
+		action = new QAction(QIcon(), "Rename", this);
+		connect(action, SIGNAL(triggered()), this, SLOT(renameViewItem()));
+		menu.addAction(action);
 
 		action = new QAction(QIcon(), "Delete", this);
 		connect(action, SIGNAL(triggered()), this, SLOT(deleteItem()));
@@ -728,26 +803,28 @@ void AssetWidget::searchAssets(QString searchString)
 void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
 {
 	QString folderName = qobject_cast<QLineEdit*>(listItem)->text();
-	const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
-	const QString parent = assetItem.wItem->data(MODEL_PARENT_ROLE).toString();
+	//const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
+	//const QString parent = assetItem.wItem->data(MODEL_PARENT_ROLE).toString();
 
-	// Create a new database entry for the new folder
-	if (!folderName.isEmpty()) {
-		db->insertFolder(folderName, parent, guid);
-	}
+	qDebug() << folderName;
 
-	// Update the tree browser
-	QTreeWidgetItem *child = ui->assetTree->currentItem();
-	if (child) {    // should always be set but just in case
-		auto branch = new QTreeWidgetItem();
-		branch->setIcon(0, QIcon(":/icons/icons8-folder-72.png"));
-		branch->setText(0, folderName);
-		branch->setData(0, MODEL_GUID_ROLE, guid);
-		branch->setData(0, MODEL_PARENT_ROLE, parent);
-		child->addChild(branch);
-		ui->assetTree->clearSelection();
-		branch->setSelected(true);
-	}
+	//// Create a new database entry for the new folder
+	//if (!folderName.isEmpty()) {
+	//	db->insertFolder(folderName, parent, guid);
+	//}
+
+	//// Update the tree browser
+	//QTreeWidgetItem *child = ui->assetTree->currentItem();
+	//if (child) {    // should always be set but just in case
+	//	auto branch = new QTreeWidgetItem();
+	//	branch->setIcon(0, QIcon(":/icons/icons8-folder-72.png"));
+	//	branch->setText(0, folderName);
+	//	branch->setData(0, MODEL_GUID_ROLE, guid);
+	//	branch->setData(0, MODEL_PARENT_ROLE, parent);
+	//	child->addChild(branch);
+	//	ui->assetTree->clearSelection();
+	//	branch->setSelected(true);
+	//}
 
 	//populateAssetTree(false);
 	//updateAssetView(assetItem.selectedGuid);
@@ -839,7 +916,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 			QString fileName;
 			QString fileAbsolutePath;
 
-			AssetType type;
+			ModelTypes type;
 			QPixmap thumbnail;
 
 			thumbnail = QPixmap(":/icons/empty_object.png");
@@ -850,24 +927,24 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 			if (Constants::IMAGE_EXTS.contains(entryInfo.suffix().toLower())) {
 				auto thumb = ThumbnailManager::createThumbnail(entryInfo.absoluteFilePath(), 72, 72);
 				thumbnail = QPixmap::fromImage(*thumb->thumb);
-				type = AssetType::Texture;
+				type = ModelTypes::Texture;
 				destDir = "Textures";
 			}
 			else if (Constants::MODEL_EXTS.contains(entryInfo.suffix().toLower())) {
-				type = AssetType::Mesh;
+				type = ModelTypes::Mesh;
 				destDir = "Models";
 			}
 			else if (entryInfo.suffix() == Constants::SHADER_EXT) {
-				type = AssetType::Shader;
+				type = ModelTypes::Shader;
 				destDir = "Shaders";
 			}
 			else if (entryInfo.suffix() == Constants::MATERIAL_EXT) {
-				type = AssetType::Material;
+				type = ModelTypes::Material;
 				destDir = "Materials";
 			}
 			// Generally if we don't explicitly specify an extension, don't import or add it to the database (iKlsR)
 			else {
-				type = AssetType::Invalid;
+				type = ModelTypes::Undefined;
 			}
 
 			auto asset = new AssetVariant;
@@ -876,7 +953,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 			asset->path		 = entry.path;
 			asset->thumbnail = thumbnail;
 
-			if (asset->type != AssetType::Invalid) {
+			if (asset->type != ModelTypes::Undefined) {
 				QString pathToCopyTo = IrisUtils::join(Globals::project->getProjectFolder(), destDir);
 				QString fileToCopyTo = IrisUtils::join(pathToCopyTo, asset->fileName);
 
@@ -908,7 +985,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 
 				// Accumulate a list of all the images imported so we can use this to update references
 				// If they are used in assets that depend on them such as Materials and Objects
-				if (asset->type == AssetType::Texture) {
+				if (asset->type == ModelTypes::Texture) {
 					directory_tuple dt;
 					dt.parent_guid = entry.parent_guid;
 					dt.guid = entry.guid;
@@ -916,7 +993,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					imagesInUse.append(dt);
 				}
 
-				if (asset->type == AssetType::Material) {
+				if (asset->type == ModelTypes::Material) {
 					ThumbnailGenerator::getSingleton()->requestThumbnail(
 						ThumbnailRequestType::Material, asset->path, assetGuid
 					);
@@ -940,12 +1017,12 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					// Create dependencies to the object for the textures used
 					for (const auto &image : imagesInUse) {
 						if (texturesToCopy.contains(QFileInfo(image.path).fileName())) {
-							db->insertGlobalDependency(static_cast<int>(AssetType::Material), assetGuid, image.guid);
+							db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), assetGuid, image.guid);
 						}
 					}
 				}
 
-				if (asset->type == AssetType::Mesh) {
+				if (asset->type == ModelTypes::Mesh) {
 					// Copy textures over to project and create embedded node hierarchy
 					QJsonObject jsonSceneNode;
 					QStringList texturesToCopy;
@@ -988,7 +1065,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					// Create an actual object from a mesh, objects hold materials
 					const QString objectGuid = db->createAssetEntry(GUIDManager::generateGUID(),
 																	QFileInfo(asset->fileName).baseName(),
-																	static_cast<int>(AssetType::Object),
+																	static_cast<int>(ModelTypes::Object),
 																	Globals::project->getProjectGuid(),
 																	entry.parent_guid,
 																	QByteArray(),
@@ -1008,12 +1085,12 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					// Create dependencies to the object for the textures used
 					for (const auto &image : imagesInUse) {
 						if (texturesToCopy.contains(QFileInfo(image.path).fileName())) {
-							db->insertGlobalDependency(static_cast<int>(AssetType::Material), objectGuid, image.guid);
+							db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), objectGuid, image.guid);
 						}
 					}
 
 					// Insert a dependency for the mesh to the object
-					db->insertGlobalDependency(static_cast<int>(AssetType::Object), objectGuid, assetGuid);
+					db->insertGlobalDependency(static_cast<int>(ModelTypes::Object), objectGuid, assetGuid);
 					// Remove the thumbnail from the object asset
 					db->updateAssetAsset(assetGuid, QByteArray());
 

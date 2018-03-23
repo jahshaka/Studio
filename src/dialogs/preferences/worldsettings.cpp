@@ -18,6 +18,8 @@ For more information see the LICENSE file
 #include "../../core/database/database.h"
 #include <QFileDialog>
 #include <QStandardPaths>
+#include <QListView>
+#include <QStyledItemDelegate>
 
 WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
     QWidget(nullptr),
@@ -30,6 +32,11 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 
 	ui->author->setText(db->getAuthorName());
 
+	ui->cc->setItemDelegate(new QStyledItemDelegate(ui->cc));
+
+	auto lv = new QListView();
+	ui->cc->setView(lv);
+
     connect(ui->browseProject, SIGNAL(pressed()), SLOT(changeDefaultDirectory()));
     connect(ui->outlineWidth, SIGNAL(valueChanged(double)), SLOT(outlineWidthChanged(double)));
     connect(ui->outlineColor, SIGNAL(onColorChanged(QColor)), SLOT(outlineColorChanged(QColor)));
@@ -37,6 +44,24 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
     connect(ui->showFPS, SIGNAL(toggled(bool)), SLOT(showFpsChanged(bool)));
 	connect(ui->autoSave, SIGNAL(toggled(bool)), SLOT(enableAutoSave(bool)));
 	connect(ui->openInPlayer, SIGNAL(toggled(bool)), SLOT(enableOpenInPlayer(bool)));
+
+	QButtonGroup *buttonGroup = new QButtonGroup;
+
+	buttonGroup->addButton(ui->viewport_2);
+	buttonGroup->addButton(ui->content_2);
+	buttonGroup->addButton(ui->mining_2);
+
+	connect(buttonGroup,
+		static_cast<void(QButtonGroup::*)(QAbstractButton *, bool)>(&QButtonGroup::buttonToggled),
+		[](QAbstractButton *button, bool checked)
+	{
+		QString style = checked ? "background: #3498db" : "background: #1E1E1E";
+		button->setStyleSheet(style);
+	});
+
+	connect(ui->viewport_2, &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(0); });
+	connect(ui->content_2, &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(1); });
+	connect(ui->mining_2, &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(2); });
 
     setupDirectoryDefaults();
     setupOutline();

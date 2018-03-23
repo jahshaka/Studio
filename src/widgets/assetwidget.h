@@ -149,6 +149,8 @@ public:
     explicit AssetWidget(Database *handle, QWidget *parent = Q_NULLPTR);
     ~AssetWidget();
 
+	bool hideDependencies;
+
     void populateAssetTree(bool initialRun);
     void updateTree(QTreeWidgetItem* parentTreeItem, QString path);
     void generateAssetThumbnails();
@@ -156,7 +158,7 @@ public:
 	void addItem(const FolderData &folderData);
 	void addItem(const AssetTileData &assetData);
 	void addCrumbs(const QVector<FolderData> &folderData);
-    void updateAssetView(const QString &path);
+    void updateAssetView(const QString &path, bool showDependencies = false);
     void trigger();
     void updateLabels();
 

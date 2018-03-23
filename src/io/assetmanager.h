@@ -1,40 +1,19 @@
 #ifndef ASSETMANAGER_H
 #define ASSETMANAGER_H
 
-#include <QImage>
 #include <QList>
+#include <QImage>
 #include <QPixmap>
-
-// #include "../irisgl/src/assimp/include/assimp/Importer.hpp"
-// #include "../irisgl/src/assimp/include/assimp/scene.h"
-// #include "../irisgl/src/assimp/include/assimp/postprocess.h"
-
-class aiScene;
 
 #include "irisgl/src/graphics/graphicshelper.h"
 
-enum class AssetType {
-    Shader,
-    Material,
-    Mesh,
-    Texture,
-    Video,
-    SoundClip,
-    Music,
-    ParticleSystem,
-    File,
-    Folder,
-    Scene,
-    Animation,
-    Object,
-    Invalid,
-    Variant
-};
+#include "core/project.h"
 
+class aiScene;
 class iris::SceneNode;
 
 struct Asset {
-    AssetType           type;
+    ModelTypes          type;
     QString             path;
     QString             fileName;
 	QString				assetGuid;
@@ -49,39 +28,7 @@ struct Asset {
 struct AssetVariant : public Asset
 {
     AssetVariant() {
-        type = AssetType::Variant;
-        deletable = true;
-    }
-
-    virtual QVariant getValue() {
-        return QVariant();
-    }
-
-    virtual void setValue(QVariant val) {
-        Q_UNUSED(val);
-    }
-};
-
-struct AssetFile : public Asset
-{
-    AssetFile() {
-        type = AssetType::File;
-        deletable = true;
-    }
-
-    virtual QVariant getValue() {
-        return QVariant();
-    }
-
-    virtual void setValue(QVariant val) {
-        Q_UNUSED(val)
-    }
-};
-
-struct AssetFolder : public Asset
-{
-    AssetFolder() {
-        type = AssetType::Folder;
+        type = ModelTypes::Variant;
         deletable = true;
     }
 
@@ -102,7 +49,7 @@ struct AssetObject : public Asset
     AssimpObject *ao;
 
     AssetObject(AssimpObject *a, QString p, QString f) : ao(a) {
-        type = AssetType::Object;
+        type = ModelTypes::Object;
         path = p;
         fileName = f;
         deletable = true;
@@ -123,7 +70,23 @@ struct AssetObject : public Asset
 struct AssetNodeObject : public Asset
 {
 	AssetNodeObject() {
-		type = AssetType::Object;
+		type = ModelTypes::Object;
+		deletable = true;
+	}
+
+	virtual QVariant getValue() {
+		return value;
+	}
+
+	virtual void setValue(QVariant val) {
+		value = val;
+	}
+};
+
+struct AssetMaterial : public Asset
+{
+	AssetMaterial() {
+		type = ModelTypes::Material;
 		deletable = true;
 	}
 

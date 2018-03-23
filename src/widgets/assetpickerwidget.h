@@ -14,7 +14,7 @@ class AssetPickerWidget : public QDialog
     Q_OBJECT
 
 public:
-    AssetPickerWidget(AssetType type, QDialog *parent = nullptr);
+    AssetPickerWidget(ModelTypes type, QDialog *parent = nullptr);
     ~AssetPickerWidget();
 
     void populateWidget(QString filter = nullptr);
@@ -33,7 +33,7 @@ protected:
 
 private:
     Ui::AssetPickerWidget *ui;
-    AssetType type;
+	ModelTypes type;
 };
 
 #endif // ASSETPICKERWIDGET_H

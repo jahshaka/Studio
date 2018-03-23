@@ -15,12 +15,12 @@
   </property>
   <property name="styleSheet">
    <string notr="true">#ProgressDialog {
-	background: #1e1e1e;
+	background: #222;
 	border: 1px solid black;
 }
 
 #progressBar {
-	color: #DEDEDE;
+	/*color: #DEDEDE;*/
 }</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">

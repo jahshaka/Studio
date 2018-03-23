@@ -419,14 +419,24 @@ QVector<FolderData> Database::fetchChildFolders(const QString &parent)
 	return folderData;
 }
 
-QVector<AssetTileData> Database::fetchChildAssets(const QString &parent)
+QVector<AssetTileData> Database::fetchChildAssets(const QString &parent, bool showDependencies)
 {
 	QSqlQuery query;
-	query.prepare(
-		"SELECT name, thumbnail, guid, parent, type "
-		"FROM assets WHERE parent = ? "
-		"ORDER BY name DESC"
-	);
+	if (showDependencies) {
+		query.prepare(
+			"SELECT name, thumbnail, guid, parent, type "
+			"FROM assets A WHERE parent = ? "
+			"ORDER BY A.name DESC"
+		);
+	}
+	else {
+		query.prepare(
+			"SELECT name, thumbnail, guid, parent, type "
+			"FROM assets A WHERE parent = ? "
+			"AND A.guid NOT IN (SELECT dependee FROM dependencies) "
+			"ORDER BY A.name DESC"
+		);
+	}
 	query.addBindValue(parent);
 	executeAndCheckQuery(query, "fetchChildAssets");
 
@@ -1378,4 +1388,24 @@ QString Database::fetchMeshObject(const QString &guid, const int type)
 	}
 
 	return QString();
+}
+
+bool Database::renameFolder(const QString &guid, const QString &newName)
+{
+	QSqlQuery query;
+	query.prepare("UPDATE folders SET name = ? WHERE guid = ?");
+	query.addBindValue(newName);
+	query.addBindValue(guid);
+
+	return executeAndCheckQuery(query, "renameFolder");
+}
+
+bool Database::renameAsset(const QString &guid, const QString &newName)
+{
+	QSqlQuery query;
+	query.prepare("UPDATE assets SET name = ? WHERE guid = ?");
+	query.addBindValue(newName);
+	query.addBindValue(guid);
+
+	return executeAndCheckQuery(query, "renameAsset");
 }

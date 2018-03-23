@@ -55,6 +55,7 @@ struct AssetTileData {
 	QString		author;
 	QByteArray  tags;
 	bool		used;
+	QByteArray  asset;
 };
 
 struct FolderData
@@ -85,9 +86,11 @@ enum class ModelTypes {
 	Video,
 	Cubemap,
 	Object,
+	Mesh,
 	SoundEffect,
 	Music,
-	Undefined
+	Undefined,
+	Variant
 };
 
 #define	MODEL_GUID_ROLE		0x0113

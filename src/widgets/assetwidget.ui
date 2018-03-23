@@ -14,127 +14,7 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">#assetTree {
-	border: 0;
-}
-
-#assetView {
-	border: 0;
-}
-
-QSplitter::handle:horizontal {
-    width: 1px;
-	background: black;
-}
-
-QPushButton {
-    background-color: #4D4D4D;
-    color: #DEDEDE;
-    border: 0;
-	padding: 2px 8px;
-}
-
-QPushButton:hover {
-    background-color: #555;
-}
-
-QPushButton:pressed {
-    background-color: #444;
-}
-
-QSplitter::handle {
-	background: #1e1e1e;
-}
-
-QSlider::groove:horizontal {
-   /* height: 8px; /* the groove expands to the size of the slider by default. by giving it a height, it has a fixed size */
-    background: #404040;
-}
-
-QSlider::handle:horizontal {
-    background: #AFAFAF;
-    width: 10px;
-    margin: -2px 0; /* handle is placed by default on the contents rect of the groove. Expand outside the groove */
-}
-
-QListWidget {
-	outline: 0;
-	padding: 0;
-	margin: 0;
-}
-
-/* Works for both QListView and QListWidget */
-QListWidget::item {
-    /* Won't work without borders set */
-    border: 0;
-	outline: 0;
-	padding: 0;
-	margin: 0;
-	color: #CECECE;
-}
-
-QListWidget::item:selected {
-	outline: 0;
-    border: 1px solid #353535;
-	background: green;
-	color: #CECECE;
-	padding: 0;
-}
-
-/* important when the widget loses focus */
-QListWidget::item:selected:!active {
-	background: #404040;
-	padding: 0;
-	margin: 0;
-	color: #CECECE;
-}
-
-QListWidget::item:selected:active {
-	background: #404040;
-	padding: 0;
-	margin: 0;
-}
-
-QTreeWidget {
-	outline: none;
-	selection-background-color: #404040;
-	color: #CECECE;
- }
-
-QTreeWidget::item:selected {
-	selection-background-color: #404040;
-	background: #404040;
-	outline: none;
-	padding: 0;
- }
-
-/* important when the widget loses focus */
-QTreeWidget::item:selected:!active {
-	background: #404040;
-	padding: 0;
-	color: #CECECE;
-}
-
-QTreeWidget::item:selected:active {
-	background: #404040;
-	padding: 0;
-}
-
-QTreeWidget::item:hover {
-
-}
-
-/* ========================== */
-
-/* For icon only */
-/*QListView::icon {
-    left: 10px;
-}*/
-
-/* For text only */
-/*QListView::text {
-    left: 10px;
-}*/</string>
+   <string notr="true"/>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="leftMargin">
@@ -161,6 +41,9 @@ QTreeWidget::item:hover {
       </sizepolicy>
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout">
+      <property name="spacing">
+       <number>12</number>
+      </property>
       <property name="leftMargin">
        <number>7</number>
       </property>
@@ -173,13 +56,6 @@ QTreeWidget::item:hover {
       <property name="bottomMargin">
        <number>7</number>
       </property>
-      <item>
-       <widget class="QLabel" name="srchLabel">
-        <property name="text">
-         <string>Search</string>
-        </property>
-       </widget>
-      </item>
       <item>
        <widget class="QLineEdit" name="searchBar"/>
       </item>
@@ -229,7 +105,7 @@ QTreeWidget::item:hover {
    <item row="2" column="0">
     <widget class="QSplitter" name="splitter">
      <property name="styleSheet">
-      <string notr="true">background: #303030</string>
+      <string notr="true"/>
      </property>
      <property name="lineWidth">
       <number>0</number>
@@ -257,9 +133,7 @@ QTreeWidget::item:hover {
        </size>
       </property>
       <property name="styleSheet">
-       <string notr="true">QScrollBar:vertical {
-	background: #1e1e1e;
-}</string>
+       <string notr="true"/>
       </property>
       <property name="headerHidden">
        <bool>true</bool>
@@ -278,10 +152,7 @@ QTreeWidget::item:hover {
        </sizepolicy>
       </property>
       <property name="styleSheet">
-       <string notr="true">QScrollBar:vertical {
-	background: #1e1e1e;
-	outline: 0;
-}</string>
+       <string notr="true"/>
       </property>
       <property name="editTriggers">
        <set>QAbstractItemView::NoEditTriggers</set>

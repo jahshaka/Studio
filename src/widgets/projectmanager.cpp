@@ -17,9 +17,11 @@
 #include <QStandardPaths>
 #include <QThread>
 #include <QTreeWidgetItem>
+#include <QStyledItemDelegate>
 
 #include "irisgl/src/assimp/include/assimp/Importer.hpp"
 #include "irisgl/src/core/irisutils.h"
+#include "irisgl/src/materials/custommaterial.h"
 #include "irisgl/src/zip/zip.h"
 
 #include "constants.h"
@@ -53,8 +55,9 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
 	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::finished, [&]() {
 		progressDialog->setRange(0, 0);
-		progressDialog->setLabelText(tr("Caching assets scene..."));
+		progressDialog->setLabelText(tr("Caching assets..."));
 
+		// Meshes
 		for (const auto &item : futureWatcher->result()) {
 			AssetObject *model = new AssetObject(new AssimpObject(item.data, item.path),
 				item.path,
@@ -62,6 +65,43 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 			model->assetGuid = item.guid;
 			AssetManager::addAsset(model);
 		}
+
+		// Materials
+		for (const auto &asset :
+			db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Material)))
+		{
+			QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->getMaterialGlobal(asset.guid));
+			QJsonObject matObject = matDoc.object();
+			iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
+			material->generate(IrisUtils::join(
+					IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS),
+					IrisUtils::buildFileName(matObject.value("name").toString(), "shader"))
+				);
+
+			for (const auto &prop : material->properties) {
+				if (prop->type == iris::PropertyType::Color) {
+					QColor col;
+					col.setNamedColor(matObject.value(prop->name).toString());
+					material->setValue(prop->name, col);
+				}
+				else if (prop->type == iris::PropertyType::Texture) {
+					QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
+					QString textureStr = IrisUtils::join(
+						Globals::project->getProjectFolder(), "Textures", materialName
+					);
+					material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
+				}
+				else {
+					material->setValue(prop->name, QVariant::fromValue(matObject.value(prop->name)));
+				}
+			}
+
+			auto assetMat = new AssetMaterial;
+			assetMat->assetGuid = asset.guid;
+			assetMat->setValue(QVariant::fromValue(material));
+			AssetManager::addAsset(assetMat);
+		}
+
 
 		progressDialog->setLabelText(tr("Opening scene..."));
 		emit fileToOpen(openInPlayMode);
@@ -78,6 +118,8 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
     settings = SettingsManager::getDefaultManager();
 
+    ui->tilePreview->setView(new QListView());
+    ui->tilePreview->setItemDelegate(new QStyledItemDelegate(ui->tilePreview));
     ui->tilePreview->setCurrentText(settings->getValue("tileSize", "Normal").toString());
 
     connect(ui->tilePreview,    SIGNAL(currentTextChanged(QString)), SLOT(changePreviewSize(QString)));
@@ -441,10 +483,10 @@ void ProjectManager::loadProjectAssets()
 	progressDialog->setLabelText(tr("Collecting assets..."));
 
 	// TODO - if we are only loading a couple assets, just do it sequentially
-	for (const auto &asset : db->fetchFilteredAssets(Globals::project->getProjectGuid(), (int)AssetType::Mesh)) {
+	for (const auto &asset : db->fetchFilteredAssets(Globals::project->getProjectGuid(), (int)ModelTypes::Mesh)) {
 		assetsToLoad.append(
 			AssetList(QDir(Globals::project->getProjectFolder() + "/Models").filePath(asset.name),
-			db->fetchMeshObject(asset.guid, (int) AssetType::Object))
+			db->fetchMeshObject(asset.guid, (int)ModelTypes::Object))
 		);
 	}
 

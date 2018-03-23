@@ -12,16 +12,15 @@ For more information see the LICENSE file
 #include "scenehierarchywidget.h"
 #include "ui_scenehierarchywidget.h"
 
-#include <QTreeWidgetItem>
 #include <QMenu>
-#include <QDebug>
+#include <QTreeWidgetItem>
 
-#include "../irisgl/src/scenegraph/scene.h"
-#include "../irisgl/src/scenegraph/scenenode.h"
-#include "../irisgl/src/core/irisutils.h"
-#include "../mainwindow.h"
-#include "../uimanager.h"
-#include "../widgets/sceneviewwidget.h"
+#include "irisgl/src/scenegraph/scene.h"
+#include "irisgl/src/scenegraph/scenenode.h"
+#include "irisgl/src/core/irisutils.h"
+#include "mainwindow.h"
+#include "uimanager.h"
+#include "widgets/sceneviewwidget.h"
 
 //#include <QProxyStyle>
 //
@@ -58,7 +57,8 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
     ui->sceneTree->setSelectionMode(QAbstractItemView::SingleSelection);
     ui->sceneTree->setDragEnabled(true);
     ui->sceneTree->viewport()->setAcceptDrops(true);
-    ui->sceneTree->setDropIndicatorShown(true);
+    ui->sceneTree->setDropIndicatorShown(false);
+	ui->sceneTree->setSelectionBehavior(QAbstractItemView::SelectRows);
     ui->sceneTree->setDragDropMode(QAbstractItemView::InternalMove);
 
     ui->sceneTree->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -74,6 +74,21 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 	hiddenIcon = new QIcon;
 	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/eye_closed.png"), QIcon::Normal);
 	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/eye_closed.png"), QIcon::Selected);
+
+	ui->sceneTree->setStyleSheet(
+		"QTreeView, QTreeWidget { show-decoration-selected: 1; }"
+		"QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; }"
+		"QTreeWidget::branch { background-color: #202020; }"
+		"QTreeWidget::branch:hover { background-color: #303030; }"
+		"QTreeWidget::branch:selected { background-color: #404040; }"
+		"QTreeWidget::item:selected { selection-background-color: #404040;"
+		"								background: #404040; outline: none; padding: 5px 0; }"
+		/* Important, this is set for when the widget loses focus to fill the left gap */
+		"QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }"
+		"QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }"
+		"QTreeWidget::item { padding: 5px 0; }"
+		"QTreeWidget::item:hover { background: #303030; padding: 5px 0; }"
+	);
 }
 
 void SceneHierarchyWidget::setScene(QSharedPointer<iris::Scene> scene)
@@ -88,6 +103,12 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
     mainWindow = mainWin;
 
     QMenu* addMenu = new QMenu();
+	addMenu->setStyleSheet(
+		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
+		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
+		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
+		"QMenu::item : disabled { color: #555; }"
+	);
 
 	// Primitives
     auto primtiveMenu = addMenu->addMenu("Primitive");
@@ -174,8 +195,14 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
+	if (event->type() == QEvent::DragMove) {
+		auto evt = static_cast<QDragMoveEvent*>(event);
+		QTreeWidgetItem* item = ui->sceneTree->itemAt(evt->pos());
+		//if (ui->sceneTree->currentColumn() != 1) qDebug() << "yes";
+	}
+
     if (event->type() == QEvent::DragEnter) {
-        auto eventPtr = static_cast<QDragEnterEvent*>(event);
+        auto evt = static_cast<QDragEnterEvent*>(event);
 
         auto selected = ui->sceneTree->selectedItems();
         if (selected.size() > 0) {
@@ -224,6 +251,13 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	selectedNode = node;
 
     QMenu menu;
+	menu.setStyleSheet(
+		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
+		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
+		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
+		"QMenu::item : disabled { color: #555; }"
+	);
+
     QAction* action;
 
     action = new QAction(QIcon(), "Rename", this);
@@ -327,9 +361,13 @@ void SceneHierarchyWidget::repopulateTree()
     auto rootNode = scene->getRootNode();
     auto rootTreeItem = new QTreeWidgetItem();
 
+	QIcon *hiddenIcon = new QIcon;
+	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-globe-64.png"), QIcon::Normal);
+	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-globe-64.png"), QIcon::Selected);
+
     rootTreeItem->setText(0, rootNode->getName());
     rootTreeItem->setData(0, Qt::UserRole, QVariant::fromValue(rootNode->getNodeId()));
-    //root->setIcon(0,this->getIconFromSceneNodeType(SceneNodeType::World));
+	rootTreeItem->setIcon(0, *hiddenIcon);
 
     // populate tree
     nodeList.clear();
@@ -363,8 +401,36 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
     auto childTreeItem = new QTreeWidgetItem();
     childTreeItem->setText(0, node->getName());
     childTreeItem->setData(0, Qt::UserRole, QVariant::fromValue(node->getNodeId()));
-    // childNode->setIcon(0,this->getIconFromSceneNodeType(node->sceneNodeType));
 	childTreeItem->setData(1, Qt::UserRole, QVariant::fromValue(node->isVisible()));
+
+	QIcon *nodeIcon = new QIcon;
+	
+	if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-mesh-32.png"), QIcon::Normal);
+		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-mesh-32.png"), QIcon::Selected);
+	}
+	else if (node->getSceneNodeType() == iris::SceneNodeType::Light) {
+		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-sun-48.png"), QIcon::Normal);
+		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-sun-48.png"), QIcon::Selected);
+	}
+	else if (node->getSceneNodeType() == iris::SceneNodeType::ParticleSystem) {
+		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-snow-storm-26.png"), QIcon::Normal);
+		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-snow-storm-26.png"), QIcon::Selected);
+	}
+	else if (node->getSceneNodeType() == iris::SceneNodeType::Empty) {
+		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-average-math-filled-50.png"), QIcon::Normal);
+		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-average-math-filled-50.png"), QIcon::Selected);
+	}
+	else if (node->getSceneNodeType() == iris::SceneNodeType::Viewer) {
+		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-virtual-reality-filled-50.png"), QIcon::Normal);
+		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-virtual-reality-filled-50.png"), QIcon::Selected);
+	}
+	else if (node->getSceneNodeType() == iris::SceneNodeType::Camera) {
+		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-camera-48.png"), QIcon::Normal);
+		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-camera-48.png"), QIcon::Selected);
+	}
+
+	childTreeItem->setIcon(0, *nodeIcon);
 	
 	node->isVisible() ? childTreeItem->setIcon(1, *visibleIcon) : childTreeItem->setIcon(1, *hiddenIcon);
 

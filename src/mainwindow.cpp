@@ -274,7 +274,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 	const QString tileGuid = GUIDManager::generateGUID();
 	const QString assetGuid = db->createAssetEntry(tileGuid,
 													"Tile.png",
-													static_cast<int>(AssetType::Texture),
+													static_cast<int>(ModelTypes::Texture),
 													Globals::project->getProjectGuid(),
 													QString(),
 													thumbnailBytes);
@@ -497,7 +497,7 @@ void MainWindow::setupProjectDB()
 	db->createGlobalDependencies();
 	//db->createGlobalDbProjectAssets();
     db->createGlobalDbCollections();
-    db->createGlobalDbThumbs();
+    //db->createGlobalDbThumbs();
 	db->createGlobalDbFolders();
 	//db->createGlobalDbMaterials();
 }
@@ -1054,7 +1054,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
 	iris::SceneNodePtr node;
 
-	QString meshGuid = db->fetchObjectMesh(guid, (int)AssetType::Object);
+	QString meshGuid = db->fetchObjectMesh(guid, (int)ModelTypes::Object);
 
 	QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
 	while (iterator != AssetManager::getAssets().constEnd()) {
@@ -1062,30 +1062,30 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 		++iterator;
 	}
 
-	std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
-		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-			auto n = node.staticCast<iris::MeshNode>();
-			n->meshPath = meshGuid;
-			auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-			for (auto prop : mat->properties) {
-				if (prop->type == iris::PropertyType::Texture) {
-					if (!prop->getValue().toString().isEmpty()) {
-						mat->setValue(prop->name,
-							IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
-								db->fetchAsset(prop->getValue().toString()).name));
-					}
-				}
-			}
-		}
+	//std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
+	//	if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+	//		auto n = node.staticCast<iris::MeshNode>();
+	//		n->meshPath = meshGuid;
+	//		auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+	//		for (auto prop : mat->properties) {
+	//			if (prop->type == iris::PropertyType::Texture) {
+	//				if (!prop->getValue().toString().isEmpty()) {
+	//					mat->setValue(prop->name,
+	//						IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
+	//							db->fetchAsset(prop->getValue().toString()).name));
+	//				}
+	//			}
+	//		}
+	//	}
 
-		if (node->hasChildren()) {
-			for (auto &child : node->children) {
-				updateNodeValues(child);
-			}
-		}
-	};
+	//	if (node->hasChildren()) {
+	//		for (auto &child : node->children) {
+	//			updateNodeValues(child);
+	//		}
+	//	}
+	//};
 
-	updateNodeValues(node);
+	//updateNodeValues(node);
 
 	// model file may be invalid so null gets returned
 	if (!node) return;
@@ -1363,12 +1363,13 @@ void MainWindow::setupDockWidgets()
     sceneNodePropertiesDock->setObjectName(QStringLiteral("sceneNodePropertiesDock"));
     sceneNodePropertiesWidget = new SceneNodePropertiesWidget;
     sceneNodePropertiesWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-    sceneNodePropertiesWidget->setObjectName(QStringLiteral("sceneNodePropertiesWidget"));
+    sceneNodePropertiesWidget->setObjectName(QStringLiteral("SceneNodePropertiesWidget"));
+    sceneNodePropertiesDock->setStyleSheet("QWidget { background-color: #202020; }");
 	UiManager::propertyWidget = sceneNodePropertiesWidget;
 
     QWidget *sceneNodeDockWidgetContents = new QWidget(viewPort);
     QScrollArea *sceneNodeScrollArea = new QScrollArea(sceneNodeDockWidgetContents);
-    sceneNodeScrollArea->setMinimumWidth(396);
+    sceneNodeScrollArea->setMinimumWidth(312);
     sceneNodeScrollArea->setStyleSheet("border: 0");
     sceneNodeScrollArea->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
     sceneNodeScrollArea->setWidget(sceneNodePropertiesWidget);
@@ -1385,6 +1386,7 @@ void MainWindow::setupDockWidgets()
     presetsDock->setObjectName(QStringLiteral("presetsDock"));
 
     QWidget *presetDockContents = new QWidget;
+    presetDockContents->setStyleSheet( "QWidget { background-color: #151515; }");
     MaterialSets *materialPresets = new MaterialSets;
     materialPresets->setMainWindow(this);
     SkyPresets *skyPresets = new SkyPresets;
@@ -1393,6 +1395,7 @@ void MainWindow::setupDockWidgets()
     modelPresets->setMainWindow(this);
 
     presetsTabWidget = new QTabWidget;
+    presetsTabWidget->setObjectName("PresetsTabWidget");
     presetsTabWidget->setMinimumWidth(396);
     presetsTabWidget->addTab(modelPresets, "Primitives");
     presetsTabWidget->addTab(materialPresets, "Materials");
@@ -1473,8 +1476,11 @@ void MainWindow::setupViewPort()
 	assets_panel->setLayout(hl);
 
 	jlogo = new QLabel;
-	jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/header.png"));
-
+#ifdef QT_DEBUG
+    jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/header_dev.png"));
+#else
+    jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/header.png"));
+#endif
 	help = new QPushButton;
 	help->setObjectName("helpButton");
 	QIcon ico;
@@ -1574,7 +1580,7 @@ void MainWindow::setupViewPort()
     controlBarLayout->addWidget(playSceneBtn);
 
     controlBar->setLayout(controlBarLayout);
-    controlBar->setStyleSheet("#controlBar {  background: #1A1A1A; border-bottom: 1px solid black; }");
+    controlBar->setStyleSheet("#controlBar {  background: #1E1E1E; border-bottom: 1px solid black; }");
 
     playerControls = new QWidget;
     playerControls->setStyleSheet("background: #1A1A1A");

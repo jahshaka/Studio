@@ -1,15 +1,15 @@
 #include "thumbnailgenerator.h"
 #include <QOpenGLFunctions_3_2_Core>
-#include "../constants.h"
+#include "constants.h"
 
-#include "../irisgl/src/graphics/rendertarget.h"
-#include "../irisgl/src/graphics/texture2d.h"
-#include "../irisgl/src/graphics/mesh.h"
-#include "../irisgl/src/graphics/forwardrenderer.h"
-#include "../irisgl/src/scenegraph/scene.h"
-#include "../irisgl/src/scenegraph/lightnode.h"
-#include "../irisgl/src/scenegraph/cameranode.h"
-#include "../irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/src/graphics/forwardrenderer.h"
+#include "irisgl/src/graphics/mesh.h"
+#include "irisgl/src/graphics/rendertarget.h"
+#include "irisgl/src/graphics/texture2d.h"
+#include "irisgl/src/scenegraph/cameranode.h"
+#include "irisgl/src/scenegraph/lightnode.h"
+#include "irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/src/scenegraph/scene.h"
 
 #include <QMutex>
 #include <QMutexLocker>

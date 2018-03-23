@@ -549,7 +549,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 		m->generate(shaderFile.absoluteFilePath());
     } else {
         for (auto asset : AssetManager::getAssets()) {
-            if (asset->type == AssetType::Shader) {
+            if (asset->type == ModelTypes::Shader) {
                 if (asset->fileName == mat["name"].toString() + ".shader") {
                     m->generate(asset->path, true);
                 }

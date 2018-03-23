@@ -30,7 +30,6 @@ TexturePickerWidget::TexturePickerWidget(QWidget* parent) :
     this->ui->texture->installEventFilter(this);
     type = WidgetType::TextureWidget;
 
-    connect(ui->load, SIGNAL(pressed()), SLOT(pickTextureMap()));
     setAcceptDrops(true);
 }
 
@@ -91,7 +90,7 @@ void TexturePickerWidget::changeTextureMap()
 
 void TexturePickerWidget::pickTextureMap()
 {
-    auto widget = new AssetPickerWidget(AssetType::Texture);
+    auto widget = new AssetPickerWidget(ModelTypes::Texture);
     connect(widget, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(changeMap(QListWidgetItem*)));
 }
 
@@ -110,19 +109,13 @@ void TexturePickerWidget::setLabelImage(QLabel* label, QString file, bool emitSi
         auto thumb = ThumbnailManager::createThumbnail(file,
                                                        ui->texture->width(),
                                                        ui->texture->height());
-        QPixmap pixmap = QPixmap::fromImage(*thumb->thumb);
+        QPixmap pixmap = QPixmap::fromImage(*thumb->thumb).scaled(QSize(72, 72));
         ui->texture->setPixmap(pixmap);
 
         filePath = file;
-        QFileInfo fileInfo(file);
-        filename = fileInfo.fileName();
-        ui->imagename->setText(filename);
-        ui->imagename->setMaximumWidth(200);
-        ui->imagename->setWordWrap(true);
 
-        QString dimension_H = QString::number(thumb->originalSize.width());
+		QString dimension_H = QString::number(thumb->originalSize.width());
         QString dimension_W = QString::number(thumb->originalSize.height());
-        ui->dimensions->setText(dimension_H + " * " + dimension_W);
     }
 
     if (emitSignal) emit valueChanged(file);
@@ -139,13 +132,8 @@ bool TexturePickerWidget::eventFilter(QObject *object, QEvent *ev)
 
 void TexturePickerWidget::on_pushButton_clicked()
 {
-    ui->imagename->clear();
-    ui->dimensions->clear();
     ui->texture->clear();
-
-    // new
     filePath.clear();
-
     emit valueChanged(QString::null);
 }
 
@@ -162,9 +150,7 @@ void TexturePickerWidget::changeMap(const QString &texturePath)
 void TexturePickerWidget::setTexture(QString path)
 {
     if (path.isNull() || path.isEmpty()) {
-        ui->texture->clear();
-        ui->imagename->clear();
-        ui->dimensions->clear();
+        //ui->dimensions->clear();
     } else {
         setLabelImage(ui->texture, path, false);
     }

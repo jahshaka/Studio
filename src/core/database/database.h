@@ -71,7 +71,7 @@ public:
 	AssetTileData fetchAsset(const QString &guid);
 	QVector<FolderData> fetchChildFolders(const QString &parent);
 	QVector<FolderData> fetchCrumbTrail(const QString &parent);
-	QVector<AssetTileData> fetchChildAssets(const QString &parent);
+	QVector<AssetTileData> fetchChildAssets(const QString &parent, bool showDependencies = true);
 	QVector<AssetTileData> fetchAssetsByCollection(int collection_id);
 	QVector<AssetData> fetchAssetThumbnails(const QStringList& guids);
     QByteArray getSceneBlobGlobal() const;
@@ -94,6 +94,9 @@ public:
 
 	QString fetchObjectMesh(const QString &guid, const int type);
 	QString fetchMeshObject(const QString &guid, const int type);
+
+	bool renameFolder(const QString &guid, const QString &newName);
+	bool renameAsset(const QString &guid, const QString &newName);
 
     QSqlDatabase getDb() { return db; }
 
