@@ -35,7 +35,7 @@ FontPtr ContentManager::loadFont(QString fontName, int size)
 
 ShaderPtr ContentManager::loadShader(QString vertexShaderPath, QString fragmentShaderPath)
 {
-    return Shader::load(graphics, vertexShaderPath, fragmentShaderPath);
+    return Shader::load(vertexShaderPath, fragmentShaderPath);
 }
 
 ContentManagerPtr ContentManager::create(GraphicsDevicePtr graphics)

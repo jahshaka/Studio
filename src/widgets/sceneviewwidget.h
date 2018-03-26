@@ -58,6 +58,7 @@ class ScaleGizmo;
 class EditorData;
 class ThumbnailGenerator;
 class OutlinerRenderer;
+class AnimationPath;
 
 enum class ViewportMode
 {
@@ -211,6 +212,7 @@ private slots:
     void paintGL();
     void renderGizmos(bool once = false);
     void resizeGL(int width, int height);
+	void onAnimationKeyChanged(iris::FloatKey* key);
 
 
 private:
@@ -279,6 +281,8 @@ private:
 	bool displayGizmos;
 	bool displayLightIcons;
 	bool displaySelectionOutline;
+
+	AnimationPath* animPath;
 
 signals:
     void addDroppedMesh(QString, bool, QVector3D, QString);

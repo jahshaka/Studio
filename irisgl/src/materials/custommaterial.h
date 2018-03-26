@@ -26,8 +26,8 @@ class CustomMaterial : public Material
 public:
     QList<Property*> properties;
 
-    void begin(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
-    void end(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
+    void begin(GraphicsDevicePtr device, ScenePtr scene) override;
+    void end(GraphicsDevicePtr device, ScenePtr scene) override;
 
     void generate(const QString&, bool project = false);
     void setTextureWithUniform(const QString&, const QString&);
@@ -36,7 +36,7 @@ public:
     void setName(const QString&);
     void setProperties(QList<Property*> props);
     QList<Property*> getProperties();
-    void setUniformValues(Property*);
+    void setUniformValues(GraphicsDevicePtr device, Property*);
     void purge();
 
     QString getName() const;
@@ -52,6 +52,8 @@ public:
 	}
 
 	MaterialPtr duplicate() override;
+
+	CustomMaterialPtr createFromShader(iris::ShaderPtr shader);
 
 protected:
     CustomMaterial() = default;

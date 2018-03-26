@@ -69,9 +69,9 @@ class Shader
 	friend class SpriteBatch;
 
 public:
-    static ShaderPtr load(GraphicsDevicePtr device, QString vertexShaderFile, QString fragmentShaderFile);
-    static ShaderPtr create(GraphicsDevicePtr device, QString vertexShader, QString fragmentShader);
-	static ShaderPtr create(GraphicsDevicePtr device);
+    static ShaderPtr load(QString vertexShaderFile, QString fragmentShaderFile);
+    static ShaderPtr create(QString vertexShader, QString fragmentShader);
+	static ShaderPtr create();
 
     ~Shader();
 
@@ -106,9 +106,8 @@ private:
         }
     }
 
-	Shader(GraphicsDevicePtr device);
+	Shader();
 
-	GraphicsDevicePtr device;
 	bool isDirty;
 
 	void compileShader();

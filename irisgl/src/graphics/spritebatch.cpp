@@ -14,7 +14,7 @@ namespace iris
 SpriteBatch::SpriteBatch(GraphicsDevicePtr graphicsDevice)
 {
     graphics = graphicsDevice;
-    spriteShader = Shader::load(graphics,
+    spriteShader = Shader::load(
                           ":/assets/shaders/sprite.vert",
                           ":/assets/shaders/sprite.frag");
 

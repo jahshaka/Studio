@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "viewermaterial.h"
 #include "irisgl/src/graphics/texture2d.h"
 #include "irisgl/src/graphics/material.h"
+#include "irisgl/src/graphics/graphicsdevice.h"
 
 ViewerMaterial::ViewerMaterial()
 {
@@ -36,14 +37,14 @@ iris::Texture2DPtr ViewerMaterial::getTexture()
     return texture;
 }
 
-void ViewerMaterial::begin(QOpenGLFunctions_3_2_Core* gl,iris::ScenePtr scene)
+void ViewerMaterial::begin(iris::GraphicsDevicePtr device, iris::ScenePtr scene)
 {
-    Material::begin(gl,scene);
+    Material::begin(device, scene);
 }
 
-void ViewerMaterial::end(QOpenGLFunctions_3_2_Core* gl,iris::ScenePtr scene)
+void ViewerMaterial::end(iris::GraphicsDevicePtr device, iris::ScenePtr scene)
 {
-    Material::end(gl,scene);
+    Material::end(device, scene);
 }
 
 ViewerMaterialPtr ViewerMaterial::create()

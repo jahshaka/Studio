@@ -10,5 +10,7 @@
 #include "../../src/graphics/depthstate.h"
 #include "../../src/graphics/rasterizerstate.h"
 #include "../../src/graphics/vertexlayout.h"
+#include "../../src/graphics/renderlist.h"
+#include "../../src/graphics/font.h"
 
 #include "../../src/widgets/renderwidget.h"

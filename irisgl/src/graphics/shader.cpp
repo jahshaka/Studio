@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include <QOpenGLTexture>
 #include "mesh.h"
 #include "texture.h"
+#include "graphicshelper.h"
 
 namespace iris
 {
@@ -55,40 +56,40 @@ void Shader::setFragmentShader(QString fragmentShader)
 	_setDirty();
 }
 
-ShaderPtr Shader::load(GraphicsDevicePtr device,QString vertexShaderFile,QString fragmentShaderFile)
+ShaderPtr Shader::load(QString vertexShaderFile,QString fragmentShaderFile)
 {
+    //QFile vsFile(vertexShaderFile);
+    //vsFile.open(QFile::ReadOnly | QFile::Text);
+    //QString vertexShader(vsFile.readAll());
+	QString vertexShader = GraphicsHelper::loadAndProcessShader(vertexShaderFile);
 
-    QFile vsFile(vertexShaderFile);
-    vsFile.open(QFile::ReadOnly | QFile::Text);
-    QString vertexShader(vsFile.readAll());
+    //QFile fsFile(fragmentShaderFile);
+    //fsFile.open(QFile::ReadOnly | QFile::Text);
+    //QString fragmentShader(fsFile.readAll());
+	QString fragmentShader = GraphicsHelper::loadAndProcessShader(fragmentShaderFile);
 
-    QFile fsFile(fragmentShaderFile);
-    fsFile.open(QFile::ReadOnly | QFile::Text);
-    QString fragmentShader(fsFile.readAll());
-
-    return create(device ,vertexShader,fragmentShader);
+    return create(vertexShader,fragmentShader);
 }
 
-ShaderPtr Shader::create(GraphicsDevicePtr device, QString vertexShader, QString fragmentShader)
+ShaderPtr Shader::create(QString vertexShader, QString fragmentShader)
 {
-	auto shader = new Shader(device);
+	auto shader = new Shader();
 	shader->setVertexShader(vertexShader);
 	shader->setFragmentShader(fragmentShader);
     return ShaderPtr(shader);
 }
 
-ShaderPtr Shader::create(GraphicsDevicePtr device)
+ShaderPtr Shader::create()
 {
-    auto shader = new Shader(device);
+    auto shader = new Shader();
 	return ShaderPtr(shader);
 }
 
-Shader::Shader(GraphicsDevicePtr devicer)
+Shader::Shader()
 {
 	isDirty = true;
 	program = nullptr;
 
-    this->device = device;
     shaderId = generateNodeId();
 }
 

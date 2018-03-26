@@ -55,7 +55,7 @@ QColor DefaultSkyMaterial::getSkyColor()
     return color;
 }
 
-void DefaultSkyMaterial::begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+void DefaultSkyMaterial::begin(GraphicsDevicePtr device,ScenePtr scene)
 {
 //    Material::begin(gl,scene);
 //    this->setUniformValue("skybox", texture);
@@ -63,26 +63,26 @@ void DefaultSkyMaterial::begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
 //        this->setUniformValue("useTexture", true);
 //    else
 //        this->setUniformValue("useTexture",false);
-    beginCube(gl, scene);
+    beginCube(device, scene);
 }
 
-void DefaultSkyMaterial::beginCube(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+void DefaultSkyMaterial::beginCube(GraphicsDevicePtr device,ScenePtr scene)
 {
-    Material::beginCube(gl,scene);
+    Material::beginCube(device,scene);
     this->setUniformValue("color", color);
     if (!!texture)  this->setUniformValue("useTexture", true);
     else            this->setUniformValue("useTexture", false);
 }
 
-void DefaultSkyMaterial::end(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+void DefaultSkyMaterial::end(GraphicsDevicePtr device,ScenePtr scene)
 {
-    Material::end(gl, scene);
+    Material::end(device, scene);
 }
 
 // not needed
-void DefaultSkyMaterial::endCube(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+void DefaultSkyMaterial::endCube(GraphicsDevicePtr device,ScenePtr scene)
 {
-    Material::endCube(gl, scene);
+    Material::endCube(device, scene);
 }
 
 DefaultSkyMaterialPtr DefaultSkyMaterial::create()

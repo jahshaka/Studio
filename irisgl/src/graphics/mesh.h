@@ -83,7 +83,8 @@ enum class PrimitiveMode
 {
     Triangles,
     Lines,
-    LineLoop
+    LineLoop,
+	LineStrip
 };
 
 //todo: switch to using mesh pointer
@@ -185,6 +186,7 @@ public:
 
     //assumed ownership of vertexLayout
     static Mesh* create(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
+	static MeshPtr create(VertexLayout vertexLayout);
 
     Mesh(aiMesh* mesh);
 

@@ -138,17 +138,30 @@ public:
     void clear(GLuint bits);
     void clear(GLuint bits, QColor color, float depth=1.0f, int stencil=0);
 
-    void setShader(ShaderPtr shader);
+	// if force is set to true, texture units will be reset regardless if the shader
+	// being bound is already bound
+    void setShader(ShaderPtr shader, bool force = false);
     template<typename T>
-    void setShaderUniform(QString name,T value) {
+    void setShaderUniform(const QString& name,const T& value) {
         if (activeProgram)
             activeProgram->setUniformValue(name.toStdString().c_str(), value);
     }
     template<typename T>
-    void setShaderUniform(const char* name,T value) {
+    void setShaderUniform(const char* name,const T& value) {
         if (activeProgram)
             activeProgram->setUniformValue(name, value);
     }
+
+	template<typename T>
+	void setShaderUniformArray(const QString& name, const T* value, const unsigned int count) {
+		if (activeProgram)
+			activeProgram->setUniformValueArray(name.toStdString().c_str(), value);
+	}
+	template<typename T>
+	void setShaderUniformArray(const char* name, const T* value, const unsigned int count) {
+		if (activeProgram)
+			activeProgram->setUniformValueArray(name, value, count);
+	}
 
     void setTexture(int target, Texture2DPtr texture);
     void clearTexture(int target);

@@ -29,8 +29,8 @@ public:
     void setTexture(iris::Texture2DPtr tex);
 	iris::Texture2DPtr getTexture();
 
-    void begin(QOpenGLFunctions_3_2_Core* gl, iris::ScenePtr scene) override;
-    void end(QOpenGLFunctions_3_2_Core* gl, iris::ScenePtr scene) override;
+    void begin(iris::GraphicsDevicePtr device, iris::ScenePtr scene) override;
+    void end(iris::GraphicsDevicePtr device, iris::ScenePtr scene) override;
 
     static ViewerMaterialPtr create();
 private:

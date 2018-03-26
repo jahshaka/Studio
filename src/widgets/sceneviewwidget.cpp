@@ -50,6 +50,7 @@ For more information see the LICENSE file
 #include "../editor/viewercontroller.h"
 #include "../editor/editorvrcontroller.h"
 #include "../editor/viewermaterial.h"
+#include "../editor/animationpath.h"
 
 #include "../editor/editordata.h"
 
@@ -69,6 +70,8 @@ For more information see the LICENSE file
 #include "../core/settingsmanager.h"
 #include "../uimanager.h"
 #include "../mainwindow.h"
+#include "keyframecurvewidget.h"
+#include "animationwidget.h"
 
 void SceneViewWidget::setShowFps(bool value)
 {
@@ -163,6 +166,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 	format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
 	format.setProfile(QSurfaceFormat::CoreProfile);
 	format.setSamples(1);
+	format.setSwapInterval(0);
 #ifdef QT_DEBUG
 	format.setOption(QSurfaceFormat::DebugContext);
 #endif
@@ -344,6 +348,13 @@ void SceneViewWidget::setSelectedNode(iris::SceneNodePtr sceneNode)
 
     selectedNode = sceneNode;
 
+	if (!!selectedNode && selectedNode->hasActiveAnimation()) {
+		animPath->generate(selectedNode, selectedNode->getAnimation());
+	}
+	else {
+		animPath->clearPath();
+	}
+
 	if (sceneNode == scene->getRootNode() || !sceneNode) {
 		renderer->setSelectedSceneNode(iris::SceneNodePtr());
 		gizmo->clearSelectedNode();
@@ -449,11 +460,16 @@ void SceneViewWidget::initializeGL()
     //thumbGen = new ThumbnialGenerator();
     thumbGen = ThumbnailGenerator::getSingleton();
 
+	animPath = new AnimationPath();
+
     timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(update()));
     timer->start(Constants::FPS_60);
 
     this->elapsedTimer->start();
+
+	auto curveWidget = UiManager::animationWidget->getCurveWidget();
+	connect(curveWidget, SIGNAL(keyChanged(iris::FloatKey*)), this, SLOT(onAnimationKeyChanged(iris::FloatKey*)));
 
 	//initializeOpenGLDebugger();
 }
@@ -519,6 +535,7 @@ void SceneViewWidget::renderScene()
         }
 		*/
         scene->update(dt);
+		//animPath->submit(scene->geometryRenderList);
 
         // insert vr head
         if ((UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)) {
@@ -601,6 +618,11 @@ void SceneViewWidget::resizeGL(int width, int height)
     viewport->pixelRatioScale = devicePixelRatio();
     viewport->width = width;
     viewport->height = height;
+}
+
+void SceneViewWidget::onAnimationKeyChanged(iris::FloatKey* key)
+{
+	animPath->generate(selectedNode, selectedNode->getAnimation());
 }
 
 bool SceneViewWidget::eventFilter(QObject *obj, QEvent *event)

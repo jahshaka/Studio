@@ -13,6 +13,8 @@ For more information see the LICENSE file
 #include <QOpenGLFunctions_3_2_Core>
 #include "texture2d.h"
 #include "graphicshelper.h"
+#include "shader.h"
+#include "graphicsdevice.h"
 
 namespace iris
 {
@@ -25,26 +27,28 @@ int RenderLayer::Overlay = 5000;
 int RenderLayer::Gizmo = 6000;//the scene depth is cleared before this pass
 */
 
-void Material::begin(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+void Material::begin(GraphicsDevicePtr device,ScenePtr scene)
 {
-    this->program->bind();
-    this->bindTextures(gl);
+    //shader->program->bind();
+	device->setShader(shader);
+    this->bindTextures(device);
 }
 
-void Material::beginCube(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+void Material::beginCube(GraphicsDevicePtr device,ScenePtr scene)
 {
-    this->program->bind();
-    this->bindCubeTextures(gl);
+    //shader->program->bind();
+	device->setShader(shader);
+    this->bindCubeTextures(device);
 }
 
-void Material::end(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+void Material::end(GraphicsDevicePtr device,ScenePtr scene)
 {
-    this->unbindTextures(gl);
+    this->unbindTextures(device);
 }
 
-void Material::endCube(QOpenGLFunctions_3_2_Core* gl,ScenePtr scene)
+void Material::endCube(GraphicsDevicePtr device,ScenePtr scene)
 {
-    this->unbindTextures(gl);
+    this->unbindTextures(device);
 }
 
 void Material::addTexture(QString name,Texture2DPtr texture)
@@ -66,31 +70,39 @@ void Material::removeTexture(QString name)
     }
 }
 
-void Material::bindTextures(QOpenGLFunctions_3_2_Core* gl)
+void Material::bindTextures(GraphicsDevicePtr device)
 {
+	auto gl = device->getGL();
     int count = 0;
     for (auto it = textures.begin(); it != textures.end(); it++, count++) {
         auto tex = it.value();
         gl->glActiveTexture(GL_TEXTURE0+count);
 
-        if (tex->texture != nullptr) {
+        if (!!tex) {
             tex->texture->bind();
-            program->setUniformValue(it.key().toStdString().c_str(), count);
+			//qDebug() << " texture: " << it.key() << " - " << count << " - " << tex->getTextureId();
+            shader->program->setUniformValue(it.key().toStdString().c_str(), count);
+
+			//device->setTexture(count, tex);
+			//device->setShaderUniform(it.key().toStdString().c_str(), count);
         } else {
-            gl->glBindTexture(GL_TEXTURE_2D,0);
+            //gl->glBindTexture(GL_TEXTURE_2D,0);
+			device->clearTexture(count);
         }
     }
 
     // bind the rest of the textures to 0
     for (; count < numTextures; count++) {
-        gl->glActiveTexture(GL_TEXTURE0 + count);
-        gl->glBindTexture(GL_TEXTURE_2D, 0);
+        //gl->glActiveTexture(GL_TEXTURE0 + count);
+        //gl->glBindTexture(GL_TEXTURE_2D, 0);
+		device->clearTexture(count);
     }
 }
 
 // @TODO -- remove or clean
-void Material::bindCubeTextures(QOpenGLFunctions_3_2_Core* gl)
+void Material::bindCubeTextures(GraphicsDevicePtr device)
 {
+	auto gl = device->getGL();
     int count=0;
     for(auto it = textures.begin();it != textures.end();it++,count++)
     {
@@ -100,7 +112,7 @@ void Material::bindCubeTextures(QOpenGLFunctions_3_2_Core* gl)
         if(tex->texture!=nullptr)
         {
             tex->texture->bind();
-            program->setUniformValue(it.key().toStdString().c_str(), count);
+            shader->program->setUniformValue(it.key().toStdString().c_str(), count);
         }
         else
         {
@@ -117,22 +129,29 @@ void Material::bindCubeTextures(QOpenGLFunctions_3_2_Core* gl)
 
 }
 
-void Material::unbindTextures(QOpenGLFunctions_3_2_Core* gl)
+void Material::unbindTextures(GraphicsDevicePtr device)
 {
     for (auto i = 0; i < numTextures; i++) {
-        gl->glActiveTexture(GL_TEXTURE0 + i);
-        gl->glBindTexture(GL_TEXTURE_2D, 0);
+        //gl->glActiveTexture(GL_TEXTURE0 + i);
+        //gl->glBindTexture(GL_TEXTURE_2D, 0);
+		device->clearTexture(i);
     }
 }
 
 void Material::createProgramFromShaderSource(QString vsFile,QString fsFile)
 {
-    program = GraphicsHelper::loadShader(vsFile, fsFile);
+    //program = GraphicsHelper::loadShader(vsFile, fsFile);
+	shader = Shader::load(vsFile, fsFile);
 }
 
 void Material::setTextureCount(int count)
 {
     numTextures = count;
+}
+
+QOpenGLShaderProgram* Material::getProgram()
+{
+	return shader->program;
 }
 
 }
