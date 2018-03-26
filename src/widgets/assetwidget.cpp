@@ -246,7 +246,7 @@ void AssetWidget::trigger()
 
 			//updateNodeMaterialValues(node, materialObj.object());
 
-			QString meshGuid = db->fetchObjectMesh(asset->assetGuid, (int)ModelTypes::Object);
+			QString meshGuid = db->fetchObjectMesh(asset->assetGuid, static_cast<int>(ModelTypes::Object));
 
 			std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
 				if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
@@ -935,6 +935,10 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 			else if (entryInfo.suffix() == Constants::MATERIAL_EXT) {
 				type = ModelTypes::Material;
 				destDir = "Materials";
+			} 
+			else if (entryInfo.suffix() == Constants::ASSET_EXT) {
+				// Can be a plain zipped file containing an asset or an exported one
+				// Check for a manifest file and treat it accordingly
 			}
 			// Generally if we don't explicitly specify an extension, don't import or add it to the database (iKlsR)
 			else {

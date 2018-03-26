@@ -214,6 +214,7 @@ public slots:
 
     //context menu functions
     void duplicateNode();
+	void exportMaterial(const QString &guid);
 	void exportNode(const QString &guid);
     void deleteNode();
     void renameNode();

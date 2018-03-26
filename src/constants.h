@@ -37,6 +37,7 @@ namespace Constants
     const QList<QString> MODEL_EXTS = { "obj", "fbx", "dae", "blend"};
 	const QString SHADER_EXT		= "shader";
 	const QString MATERIAL_EXT		= "material";
+	const QString ASSET_EXT			= "jaf";
 
     const int FPS_90                = 11; // milliseconds
     const int FPS_60                = 17; // milliseconds

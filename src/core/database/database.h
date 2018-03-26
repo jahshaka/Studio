@@ -9,6 +9,14 @@
 
 #include "../project.h"
 
+typedef struct {
+	int type;
+	QString project_guid;
+	QString depender;
+	QString dependee;
+	QString id;
+} DepRecord;
+
 class Database
 {
 public:
@@ -82,6 +90,9 @@ public:
     bool importProject(const QString& inFilePath);
 
 	void createExportNode(const QString& object_guid, const QString& outTempFilePath);
+	QStringList createExportMaterial(const QString& object_guid, const QString& outTempFilePath);
+
+	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table);
 
 	QStringList fetchFolderAndChildFolders(const QString &guid);
 	QStringList fetchChildFolderAssets(const QString &guid);

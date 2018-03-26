@@ -1198,28 +1198,150 @@ void MainWindow::duplicateNode()
 	sceneView->doneCurrent();
 }
 
+void MainWindow::exportMaterial(const QString & guid)
+{
+	// get the export file path from a save dialog
+	auto filePath = QFileDialog::getSaveFileName(
+		this,
+		"Choose export path",
+		Constants::DEF_EXPORT_FILE,
+		"Supported Export Formats (*.jaf)"
+	);
+
+	if (filePath.isEmpty() || filePath.isNull()) return;
+
+	QTemporaryDir temporaryDir;
+	if (!temporaryDir.isValid()) return;
+
+	const QString writePath = temporaryDir.path();
+
+	auto fileList = db->createExportMaterial(guid, QDir(writePath).filePath("asset.db"));
+
+	QDir tempDir(writePath);
+	tempDir.mkpath("assets");
+
+	for (const auto &fileName : fileList) {
+		QFile::copy(
+			IrisUtils::join(Globals::project->getProjectFolder(), "Textures", fileName),
+			IrisUtils::join(writePath, "assets", fileName)
+		);
+	}
+
+	// get all the files and directories in the project working directory
+	QDir workingProjectDirectory(writePath);
+	QDirIterator projectDirIterator(writePath,
+		QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
+		QDirIterator::Subdirectories);
+
+	QVector<QString> fileNames;
+	while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
+
+	//ZipWrapper exportNode("path", "read / write", "folder / file list");
+	//exportNode.setOutputPath();
+	//exportNode.setMode();
+	//exportNode.setCompressionLevel();
+	//exportNode.setFolder();
+	//exportNode.setFileList();
+	//exportNode.createArchive();
+
+	// open a basic zip file for writing, maybe change compression level later (iKlsR)
+	struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
+
+	for (int i = 0; i < fileNames.count(); i++) {
+		QFileInfo fInfo(fileNames[i]);
+
+		// we need to pay special attention to directories since we want to write empty ones as well
+		if (fInfo.isDir()) {
+			zip_entry_open(
+				zip,
+				/* will only create directory if / is appended */
+				QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
+			);
+			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+		}
+		else {
+			zip_entry_open(
+				zip,
+				workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
+			);
+			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+		}
+
+		// we close each entry after a successful write
+		zip_entry_close(zip);
+	}
+
+	// close our now exported file
+	zip_close(zip);
+}
+
 void MainWindow::exportNode(const QString &guid)
 {
-	qDebug() << guid;
-	//QTemporaryDir temporaryDir;
-	//temporaryDir.setAutoRemove(false);
-	//if (!temporaryDir.isValid()) return;
+	// get the export file path from a save dialog
+	auto filePath = QFileDialog::getSaveFileName(
+		this,
+		"Choose export path",
+		Constants::DEF_EXPORT_FILE,
+		"Supported Export Formats (*.jaf)"
+	);
 
-	//qDebug() << "PATH " << temporaryDir.path();
+	if (filePath.isEmpty() || filePath.isNull()) return;
 
-	//db->createExportNode(guid, QDir(temporaryDir.path()).filePath("asset.db"));
+	QTemporaryDir temporaryDir;
+	if (!temporaryDir.isValid()) return;
 
-	//QDir tempDir(temporaryDir.path());
-	//tempDir.mkpath("assets");
+    const QString writePath = temporaryDir.path();
 
-	//for (const auto &asset : db->fetchAssetAndDependencies(guid)) {
-	//	QFile::copy(
-	//		IrisUtils::join(Globals::project->getProjectFolder(), asset),
-	//		IrisUtils::join(temporaryDir.path(), "assets", QFileInfo(asset).fileName())
-	//	);
-	//}
+	db->createExportNode(guid, QDir(writePath).filePath("asset.db"));
 
-	// temporaryDir.remove();
+	QDir tempDir(writePath);
+	tempDir.mkpath("assets");
+
+	for (const auto &asset : db->fetchAssetAndDependencies(guid)) {
+		QFile::copy(
+			IrisUtils::join(Globals::project->getProjectFolder(), asset),
+			IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
+		);
+	}
+
+    // get all the files and directories in the project working directory
+    QDir workingProjectDirectory(writePath);
+    QDirIterator projectDirIterator(writePath,
+                                    QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
+                                    QDirIterator::Subdirectories);
+
+    QVector<QString> fileNames;
+    while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
+
+    // open a basic zip file for writing, maybe change compression level later (iKlsR)
+    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
+
+    for (int i = 0; i < fileNames.count(); i++) {
+		QFileInfo fInfo(fileNames[i]);
+
+		// we need to pay special attention to directories since we want to write empty ones as well
+		if (fInfo.isDir()) {
+			zip_entry_open(
+				zip,
+				/* will only create directory if / is appended */
+				QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
+			);
+			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+		}
+		else {
+			zip_entry_open(
+				zip,
+				workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
+			);
+			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+		}
+
+		// we close each entry after a successful write
+		zip_entry_close(zip);
+	}
+
+    // close our now exported file
+    zip_close(zip);
 }
 
 void MainWindow::deleteNode()
