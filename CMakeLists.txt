@@ -10,7 +10,7 @@ project(Jahshaka)
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 find_package(OpenGL REQUIRED) # is this needed?
-find_package(Qt5 REQUIRED COMPONENTS Concurrent Widgets Sql Svg)
+find_package(Qt5 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg)
 
 include(UseModernCpp)
 include(BuildType)
@@ -124,6 +124,7 @@ set(SRCS
 	src/editor/viewermaterial.cpp
 	src/editor/animationpath.cpp
     src/constants.cpp
+	src/misc/updatechecker.cpp
 )
 
 set(HEADERS
@@ -242,6 +243,7 @@ set(HEADERS
 	src/editor/outlinerenderer.h 
 	src/editor/viewermaterial.h
 	src/editor/animationpath.h
+	src/misc/updatechecker.h
 )
 
 # Todo - trim these down to nothing eventually
@@ -288,7 +290,7 @@ set(FORMS
     src/dialogs/donate.ui
 )
 
-set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets IrisGL ${OPENGL_LIBRARIES})
+set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
 

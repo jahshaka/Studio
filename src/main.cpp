@@ -15,12 +15,14 @@ For more information see the LICENSE file
 #include <QSplashScreen>
 #include <QSurfaceFormat>
 #include <QFontDatabase>
+#include <QtConcurrent>
 
 #include "mainwindow.h"
 #include "dialogs/infodialog.h"
 #include "core/settingsmanager.h"
 #include "globals.h"
 #include "constants.h"
+#include "misc\updatechecker.h"
 #ifdef USE_BREAKPAD
 #include "breakpad/breakpad.h"
 #endif
@@ -57,6 +59,18 @@ int main(int argc, char *argv[])
 #ifdef USE_BREAKPAD
 	initializeBreakpad();
 #endif
+
+	UpdateChecker updateChecker;
+	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded, [&updateChecker]()
+	{
+		// show update dialog
+	});
+	updateChecker.checkForUpdate();
+	/*
+	QtConcurrent::run([&updateChecker]() {
+		updateChecker.checkForUpdate();
+	});
+	*/
 
     app.setWindowIcon(QIcon(":/images/icon.ico"));
     app.setApplicationName("Jahshaka");
