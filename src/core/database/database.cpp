@@ -128,7 +128,7 @@ void Database::createGlobalDb() {
                      "    last_written      DATETIME,"
                      "    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
                      "    scene             BLOB,"
-                     "    version           REAL,"
+					 "    version           VARCHAR(8),"
                      "    description       TEXT,"
                      "    url               TEXT,"
                      "    guid              VARCHAR(32) PRIMARY KEY"
@@ -196,7 +196,7 @@ void Database::createGlobalDbAssets() {
 		"	 author			   VARCHAR(128),"
 		"    license		   VARCHAR(64),"
 		"    hash              VARCHAR(16),"
-		"    version           REAL,"
+		"    version           VARCHAR(8),"
 		"    parent            VARCHAR(32),"
 		"    tags			   BLOB,"
 		"    properties        BLOB,"
@@ -527,7 +527,7 @@ void Database::createGlobalDbAuthor()
 		"    default_license   VARCHAR(24),"
 		"    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
 		"    last_updated      DATETIME,"
-		"    version           REAL"
+		"    version           VARCHAR(8)"
 		")";
 
 	QSqlQuery query;
@@ -544,7 +544,7 @@ void Database::createGlobalDbFolders()
 		"    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
 		"    last_updated      DATETIME,"
 		"    hash              VARCHAR(16),"
-		"    version           REAL,"
+		"    version           VARCHAR(8),"
 		"    count			   INTEGER,"
 		"    visible           INTEGER"
 		")";
@@ -611,7 +611,7 @@ QString Database::insertMaterialGlobal(const QString &materialName, const QStrin
 				  " VALUES (:name, datetime(), :type, 0, :version, :asset, :guid)");
 	query.bindValue(":name", materialName);
 	query.bindValue(":type", 1); // switch this to the enum later
-	query.bindValue(":version", "0.5a"); // switch this to the enum later
+	query.bindValue(":version", Constants::CONTENT_VERSION); // switch this to the enum later
 	query.bindValue(":asset", material);
 	query.bindValue(":guid", guid);
 
@@ -629,7 +629,7 @@ QString Database::insertProjectMaterialGlobal(const QString & materialName, cons
 		"VALUES (:name, datetime(), :type, 0, :version, :asset, :guid, :project_guid)");
 	query.bindValue(":name", materialName);
 	query.bindValue(":type", 1); // switch this to the enum later
-	query.bindValue(":version", "0.5a"); // switch this to the enum later
+	query.bindValue(":version", Constants::CONTENT_VERSION); // switch this to the enum later
 	query.bindValue(":asset", material);
 	query.bindValue(":guid", guid);
 	query.bindValue(":project_guid", Globals::project->getProjectGuid());
@@ -1034,7 +1034,7 @@ void Database::createExportScene(const QString &outTempFilePath)
                      "    last_written      DATETIME,"
                      "    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
                      "    scene             BLOB,"
-                     "    version           REAL,"
+                     "    version           VARCHAR(8),"
                      "    description       TEXT,"
                      "    url               TEXT,"
                      "    guid              VARCHAR(32) PRIMARY KEY"
@@ -1142,36 +1142,6 @@ bool Database::importProject(const QString &inFilePath)
 
 void Database::createExportNode(const QString &object_guid, const QString &outTempFilePath)
 {
-	QSqlQuery selectAssetQuery;
-	selectAssetQuery.prepare("SELECT * FROM assets WHERE guid = ?");
-	selectAssetQuery.addBindValue(object_guid);
-
-	if (selectAssetQuery.exec()) {
-		selectAssetQuery.next();
-	}
-	else {
-		irisLog(
-			"There was an error fetching a row to be exported " + selectAssetQuery.lastError().text()
-		);
-	}
-
-	auto guid = selectAssetQuery.value(0).toString();
-	auto type = selectAssetQuery.value(1).toInt();
-	auto name = selectAssetQuery.value(2).toString();
-	auto collection = selectAssetQuery.value(3).toInt();
-	auto times_used = selectAssetQuery.value(4).toInt();
-	auto project_guid = selectAssetQuery.value(5).toString();
-	auto date_created = selectAssetQuery.value(6).toDateTime();
-	auto last_updated = selectAssetQuery.value(7).toDateTime();
-	auto author = selectAssetQuery.value(8).toString();
-	auto license = selectAssetQuery.value(9).toString();
-	auto hash = selectAssetQuery.value(10).toString();
-	auto version = selectAssetQuery.value(11).toDouble();
-	auto parent = selectAssetQuery.value(12).toString();
-	auto tags = selectAssetQuery.value(13).toByteArray();
-	auto properties = selectAssetQuery.value(14).toByteArray();
-	auto asset = selectAssetQuery.value(15).toByteArray();
-
 	QSqlDatabase datbaseConnection = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "nodeExportSQLITEConnection");
 	datbaseConnection.setDatabaseName(outTempFilePath);
 	datbaseConnection.open();
@@ -1189,7 +1159,7 @@ void Database::createExportNode(const QString &object_guid, const QString &outTe
 		"	 author			   VARCHAR(128),"
 		"    license		   VARCHAR(64),"
 		"    hash              VARCHAR(16),"
-		"    version           REAL,"
+		"    version           VARCHAR(8),"
 		"    parent            VARCHAR(32),"
 		"    tags			   BLOB,"
 		"    properties        BLOB,"
@@ -1200,34 +1170,6 @@ void Database::createExportNode(const QString &object_guid, const QString &outTe
 	QSqlQuery createAssetsTableQuery(datbaseConnection);
 	createAssetsTableQuery.prepare(createAssetsTableSchema);
 	executeAndCheckQuery(createAssetsTableQuery, "createExportGlobalDb");
-
-	QSqlQuery insertAssetQuery(datbaseConnection);
-	insertAssetQuery.prepare(
-		"INSERT INTO assets"
-		" (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-		" license, hash, version, parent, tags, properties, asset)"
-		" VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-		" :license, :hash, :version, :parent, :tags, :properties, :asset)"
-	);
-
-	insertAssetQuery.bindValue(":guid", guid);
-	insertAssetQuery.bindValue(":type", type);
-	insertAssetQuery.bindValue(":name", name);
-	insertAssetQuery.bindValue(":collection", collection);
-	insertAssetQuery.bindValue(":times_used", times_used);
-	insertAssetQuery.bindValue(":project_guid", project_guid);
-	insertAssetQuery.bindValue(":date_created", date_created);
-	insertAssetQuery.bindValue(":last_updated", last_updated);
-	insertAssetQuery.bindValue(":author", author);
-	insertAssetQuery.bindValue(":license", license);
-	insertAssetQuery.bindValue(":hash", hash);
-	insertAssetQuery.bindValue(":version", version);
-	insertAssetQuery.bindValue(":parent", parent);
-	insertAssetQuery.bindValue(":tags", tags);
-	insertAssetQuery.bindValue(":properties", properties);
-	insertAssetQuery.bindValue(":asset", asset);
-
-	executeAndCheckQuery(insertAssetQuery, "insertAssetQuery");
 
 	QString dependenciesSchema =
 		"CREATE TABLE IF NOT EXISTS dependencies ("
@@ -1242,42 +1184,43 @@ void Database::createExportNode(const QString &object_guid, const QString &outTe
 	dependenciesCreateSchema.prepare(dependenciesSchema);
 	executeAndCheckQuery(dependenciesCreateSchema, "createExportDependencies");
 
-	QStringList assetsToExport;
-
+	QVector<AssetTileDataFull> assetList;
 	for (const auto &asset : fetchAssetGUIDAndDependencies(object_guid)) {
-		if (asset != object_guid) assetsToExport.append(asset);
-	}
-
-	for (const auto &asset : assetsToExport) {
 		QSqlQuery selectAssetQuery;
-		selectAssetQuery.prepare("SELECT * FROM assets WHERE guid = ?");
+		selectAssetQuery.prepare(
+			"SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, author, license, hash, version, parent, tags, properties, asset, thumbnail FROM assets WHERE guid = ?"
+		);
 		selectAssetQuery.addBindValue(asset);
 
 		if (selectAssetQuery.exec()) {
-			selectAssetQuery.next();
+			if (selectAssetQuery.first()) {
+				AssetTileDataFull data;
+				data.guid = selectAssetQuery.value(0).toString();
+				data.type = selectAssetQuery.value(1).toInt();
+				data.name = selectAssetQuery.value(2).toString();
+				data.collection = selectAssetQuery.value(3).toInt();
+				data.times_used = selectAssetQuery.value(4).toInt();
+				data.project_guid = selectAssetQuery.value(5).toString();
+				data.date_created = selectAssetQuery.value(6).toDateTime();
+				data.last_updated = selectAssetQuery.value(7).toDateTime();
+				data.author = selectAssetQuery.value(8).toString();
+				data.license = selectAssetQuery.value(9).toString();
+				data.hash = selectAssetQuery.value(10).toString();
+				data.version = selectAssetQuery.value(11).toString();
+				data.parent = selectAssetQuery.value(12).toString();
+				data.tags = selectAssetQuery.value(13).toByteArray();
+				data.properties = selectAssetQuery.value(14).toByteArray();
+				data.asset = selectAssetQuery.value(15).toByteArray();
+				data.thumbnail = selectAssetQuery.value(16).toByteArray();
+				assetList.push_back(data);
+			}
 		}
 		else {
 			irisLog("There was an error fetching an asset " + selectAssetQuery.lastError().text());
 		}
+	}
 
-		auto guid = selectAssetQuery.value(0).toString();
-		auto type = selectAssetQuery.value(1).toInt();
-		auto name = selectAssetQuery.value(2).toString();
-		auto collection = selectAssetQuery.value(3).toInt();
-		auto times_used = selectAssetQuery.value(4).toInt();
-		auto project_guid = selectAssetQuery.value(5).toString();
-		auto date_created = selectAssetQuery.value(6).toDateTime();
-		auto last_updated = selectAssetQuery.value(7).toDateTime();
-		auto author = selectAssetQuery.value(8).toString();
-		auto license = selectAssetQuery.value(9).toString();
-		auto hash = selectAssetQuery.value(10).toString();
-		auto version = selectAssetQuery.value(11).toDouble();
-		auto parent = selectAssetQuery.value(12).toString();
-		auto tags = selectAssetQuery.value(13).toByteArray();
-		auto properties = selectAssetQuery.value(14).toByteArray();
-		auto asset = selectAssetQuery.value(15).toByteArray();
-		auto thumbnail = selectAssetQuery.value(16).toByteArray();
-
+	for (const auto &asset : assetList) {
 		QSqlQuery insertExportAssetQuery(datbaseConnection);
 		insertExportAssetQuery.prepare(
 			"INSERT INTO assets"
@@ -1287,55 +1230,56 @@ void Database::createExportNode(const QString &object_guid, const QString &outTe
 			" :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail)"
 		);
 
-		insertExportAssetQuery.bindValue(":guid", guid);
-		insertExportAssetQuery.bindValue(":type", type);
-		insertExportAssetQuery.bindValue(":name", name);
-		insertExportAssetQuery.bindValue(":collection", collection);
-		insertExportAssetQuery.bindValue(":times_used", times_used);
-		insertExportAssetQuery.bindValue(":project_guid", project_guid);
-		insertExportAssetQuery.bindValue(":date_created", date_created);
-		insertExportAssetQuery.bindValue(":last_updated", last_updated);
-		insertExportAssetQuery.bindValue(":author", author);
-		insertExportAssetQuery.bindValue(":license", license);
-		insertExportAssetQuery.bindValue(":hash", hash);
-		insertExportAssetQuery.bindValue(":version", version);
-		insertExportAssetQuery.bindValue(":parent", parent);
-		insertExportAssetQuery.bindValue(":tags", tags);
-		insertExportAssetQuery.bindValue(":properties", properties);
-		insertExportAssetQuery.bindValue(":asset", asset);
-		insertExportAssetQuery.bindValue(":thumbnail", thumbnail);
+		insertExportAssetQuery.bindValue(":guid", asset.guid);
+		insertExportAssetQuery.bindValue(":type", asset.type);
+		insertExportAssetQuery.bindValue(":name", asset.name);
+		insertExportAssetQuery.bindValue(":collection", asset.collection);
+		insertExportAssetQuery.bindValue(":times_used", asset.times_used);
+		insertExportAssetQuery.bindValue(":project_guid", asset.project_guid);
+		insertExportAssetQuery.bindValue(":date_created", asset.date_created);
+		insertExportAssetQuery.bindValue(":last_updated", asset.last_updated);
+		insertExportAssetQuery.bindValue(":author", asset.author);
+		insertExportAssetQuery.bindValue(":license", asset.license);
+		insertExportAssetQuery.bindValue(":hash", asset.hash);
+		insertExportAssetQuery.bindValue(":version", asset.version);
+		insertExportAssetQuery.bindValue(":parent", asset.parent);
+		insertExportAssetQuery.bindValue(":tags", asset.tags);
+		insertExportAssetQuery.bindValue(":properties", asset.properties);
+		insertExportAssetQuery.bindValue(":asset", asset.asset);
+		insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
 
 		executeAndCheckQuery(insertExportAssetQuery, "insertExportAssetQuery");
 	}
 
 	QVector<DepRecord> dependenciesToExport;
 
-	for (const auto &asset : assetsToExport) {
+	for (const auto &asset : assetList) {
 		QSqlQuery selectDep;
 		selectDep.prepare("SELECT type, project_guid, depender, dependee, id FROM dependencies WHERE dependee = ?");
-		selectDep.addBindValue(asset);
+		selectDep.addBindValue(asset.guid);
 
 		if (selectDep.exec()) {
-			selectDep.next();
+			if (selectDep.first()) {
+				auto type = selectDep.value(0).toInt();
+				auto project_guid = selectDep.value(1).toString();
+				auto depender = selectDep.value(2).toString();
+				auto dependee = selectDep.value(3).toString();
+				auto id = selectDep.value(4).toString();
+
+				DepRecord record;
+				record.type = type;
+				record.project_guid = project_guid;
+				record.depender = depender;
+				record.dependee = dependee;
+				record.id = id;
+
+				dependenciesToExport.append(record);
+			}
 		}
 		else {
 			irisLog("There was an error fetching a dependency" + selectDep.lastError().text());
 		}
 
-		auto type = selectDep.value(0).toInt();
-		auto project_guid = selectDep.value(1).toString();
-		auto depender = selectDep.value(2).toString();
-		auto dependee = selectDep.value(3).toString();
-		auto id = selectDep.value(4).toString();
-
-		DepRecord record;
-		record.type = type;
-		record.project_guid = project_guid;
-		record.depender = depender;
-		record.dependee = dependee;
-		record.id = id;
-
-		dependenciesToExport.append(record);
 	}
 
 	for (const auto &dep : dependenciesToExport) {
@@ -1383,7 +1327,7 @@ QStringList Database::createExportMaterial(const QString & object_guid, const QS
 	auto author = selectAssetQuery.value(8).toString();
 	auto license = selectAssetQuery.value(9).toString();
 	auto hash = selectAssetQuery.value(10).toString();
-	auto version = selectAssetQuery.value(11).toDouble();
+	auto version = selectAssetQuery.value(11).toString();
 	auto parent = selectAssetQuery.value(12).toString();
 	auto tags = selectAssetQuery.value(13).toByteArray();
 	auto properties = selectAssetQuery.value(14).toByteArray();
@@ -1406,7 +1350,7 @@ QStringList Database::createExportMaterial(const QString & object_guid, const QS
 		"	 author			   VARCHAR(128),"
 		"    license		   VARCHAR(64),"
 		"    hash              VARCHAR(16),"
-		"    version           REAL,"
+		"    version           VARCHAR(8),"
 		"    parent            VARCHAR(32),"
 		"    tags			   BLOB,"
 		"    properties        BLOB,"
@@ -1472,7 +1416,7 @@ QStringList Database::createExportMaterial(const QString & object_guid, const QS
 
 	for (auto value : matObject) {
 		if (value.isString()) {
-			if (checkIfRecordExists("guid", value.toString(), "assets")) {
+			if (checkIfRecordExists("guid", value.toString(), "assets", db)) {
 				assetsToExport.append(fetchAsset(value.toString()));
 			}
 		}
@@ -1501,7 +1445,7 @@ QStringList Database::createExportMaterial(const QString & object_guid, const QS
 		auto author = selectAssetQuery.value(8).toString();
 		auto license = selectAssetQuery.value(9).toString();
 		auto hash = selectAssetQuery.value(10).toString();
-		auto version = selectAssetQuery.value(11).toDouble();
+		auto version = selectAssetQuery.value(11).toString();
 		auto parent = selectAssetQuery.value(12).toString();
 		auto tags = selectAssetQuery.value(13).toByteArray();
 		auto properties = selectAssetQuery.value(14).toByteArray();
@@ -1592,7 +1536,7 @@ QStringList Database::createExportMaterial(const QString & object_guid, const QS
 	return fileList;
 }
 
-bool Database::checkIfRecordExists(const QString & record, const QVariant &value, const QString & table)
+bool Database::checkIfRecordExists(const QString & record, const QVariant &value, const QString & table, const QSqlDatabase &connection)
 {
 	QSqlQuery query;
 	query.prepare("SELECT EXISTS (SELECT 1 FROM assets WHERE guid = ? LIMIT 1)");
@@ -1789,14 +1733,14 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid)
 		deleteDependency(asset);
 	}
 
-	for (int i = 0; i < files.size(); ++i) {
-		if (QFileInfo(files[i]).suffix().isEmpty()) {
-			files.removeAt(i);
-		}
+for (int i = 0; i < files.size(); ++i) {
+	if (QFileInfo(files[i]).suffix().isEmpty()) {
+		files.removeAt(i);
 	}
+}
 
-	files.removeDuplicates();
-	return files;
+files.removeDuplicates();
+return files;
 }
 
 QString Database::fetchAssetGUIDByName(const QString & name)
@@ -1860,6 +1804,320 @@ QString Database::fetchMeshObject(const QString &guid, const int type)
 	}
 
 	return QString();
+}
+
+QString Database::importAssetMaterial(
+	const ModelTypes &jafType,
+	const QString & pathToDb,
+	const QMap<QString, QString>& newNames,
+	const QString &parent)
+{
+	QSqlDatabase dbe = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "newSqlImportConnectionMat");
+	dbe.setDatabaseName(pathToDb);
+	dbe.open();
+
+	QSqlQuery selectAssetQuery(dbe);
+	selectAssetQuery.prepare("SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, author, license, hash, version, parent, tags, properties, asset, thumbnail FROM assets");
+	executeAndCheckQuery(selectAssetQuery, "fetchImportAssets");
+
+	QMap<QString, QString> assetGuids; /* old x new guid */
+
+	const QString guidToReturn = GUIDManager::generateGUID();
+
+	QVector<AssetTileDataFull> assetsToImport;
+
+	while (selectAssetQuery.next()) {
+		AssetTileDataFull data;
+		QSqlRecord record = selectAssetQuery.record();
+
+		qDebug() << "hidee";
+
+		for (int i = 0; i < record.count(); i++) {
+			if (selectAssetQuery.value(1).toInt() == static_cast<int>(ModelTypes::Material)) {
+				data.guid = guidToReturn;
+				assetGuids.insert(record.value(0).toString(), guidToReturn);
+			}
+			else {
+				QString guid = GUIDManager::generateGUID();
+				assetGuids.insert(record.value(0).toString(), guid);
+				data.guid = guid;
+			}
+
+			data.type = record.value(1).toInt();
+
+			// If we find a file with the same name, rename it (may or may not change)
+			for (const auto &name : newNames) {
+				if (!newNames.value(record.value(2).toString()).isEmpty()) {
+					data.name = newNames.value(record.value(2).toString());
+				}
+				else data.name = record.value(2).toString();
+			}
+
+			data.collection = record.value(3).toInt();
+			data.times_used = record.value(4).toInt();
+			data.project_guid = record.value(5).toString();
+			data.date_created = record.value(6).toDateTime();
+			data.last_updated = record.value(7).toDateTime();
+			data.author = record.value(8).toString();
+			data.license = record.value(9).toString();
+			data.hash = record.value(10).toString();
+			data.version = record.value(11).toString();
+			data.parent = parent;
+			data.tags = record.value(13).toByteArray();
+			data.properties = record.value(14).toByteArray();
+			data.asset = record.value(15).toByteArray();
+			data.thumbnail = record.value(16).toByteArray();
+		}
+
+		qDebug() << data.name;
+
+		assetsToImport.push_back(data);
+	}
+
+	if (jafType == ModelTypes::Material) {
+		for (auto &asset : assetsToImport) {
+			if (asset.type == static_cast<int>(ModelTypes::Material)) {
+				auto doc = QJsonDocument::fromBinaryData(asset.asset);
+				QString docToString = doc.toJson(QJsonDocument::Compact);
+
+				QMapIterator<QString, QString> i(assetGuids);
+				while (i.hasNext()) {
+					i.next();
+					docToString.replace(i.key(), i.value());
+				}
+
+				QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
+				asset.asset = updatedDoc.toBinaryData();
+			}
+		}
+	}
+
+	QSqlQuery selectDepQuery(dbe);
+	selectDepQuery.prepare("SELECT type, project_guid, depender, dependee, id FROM dependencies");
+	executeAndCheckQuery(selectDepQuery, "fetchImportDeps");
+
+	QVector<DepRecord> depsToImport;
+	while (selectDepQuery.next()) {
+		DepRecord data;
+		QSqlRecord record = selectDepQuery.record();
+		for (int i = 0; i < record.count(); i++) {
+			data.type = record.value(0).toInt();
+			data.project_guid = record.value(1).toString();
+			data.depender = assetGuids.value(record.value(2).toString());
+			data.dependee = assetGuids.value(record.value(3).toString());
+			data.id = GUIDManager::generateGUID();
+		}
+
+		depsToImport.push_back(data);
+	}
+
+	for (const auto &asset : assetsToImport) {
+		QSqlQuery insertAssetQuery;
+		insertAssetQuery.prepare(
+			"INSERT INTO assets"
+			" (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
+			" license, hash, version, parent, tags, properties, asset, thumbnail)"
+			" VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
+			" :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail)"
+		);
+
+		insertAssetQuery.bindValue(":guid", asset.guid);
+		insertAssetQuery.bindValue(":type", asset.type);
+		insertAssetQuery.bindValue(":name", asset.name);
+		insertAssetQuery.bindValue(":collection", asset.collection);
+		insertAssetQuery.bindValue(":times_used", asset.times_used);
+		insertAssetQuery.bindValue(":project_guid", asset.project_guid);
+		insertAssetQuery.bindValue(":date_created", asset.date_created);
+		insertAssetQuery.bindValue(":last_updated", asset.last_updated);
+		insertAssetQuery.bindValue(":author", asset.author);
+		insertAssetQuery.bindValue(":license", asset.license);
+		insertAssetQuery.bindValue(":hash", asset.hash);
+		insertAssetQuery.bindValue(":version", asset.version);
+		insertAssetQuery.bindValue(":parent", asset.parent);
+		insertAssetQuery.bindValue(":tags", asset.tags);
+		insertAssetQuery.bindValue(":properties", asset.properties);
+		insertAssetQuery.bindValue(":asset", asset.asset);
+		insertAssetQuery.bindValue(":thumbnail", asset.thumbnail);
+
+		executeAndCheckQuery(insertAssetQuery, "insertAssetQuery");
+	}
+
+	QSqlQuery exportDep;
+	exportDep.prepare(
+		"INSERT INTO dependencies (type, project_guid, depender, dependee, id) "
+		"VALUES (:type, :project_guid, :depender, :dependee, :id)"
+	);
+
+	for (const auto &dep : depsToImport) {
+		exportDep.bindValue(":type", dep.type);
+		exportDep.bindValue(":project_guid", dep.project_guid);
+		exportDep.bindValue(":depender", dep.depender);
+		exportDep.bindValue(":dependee", dep.dependee);
+		exportDep.bindValue(":id", dep.id);
+
+		executeAndCheckQuery(exportDep, "exportDep");
+	}
+
+	dbe.close();
+
+	return guidToReturn;
+
+
+	dbe.close();
+}
+
+QString Database::importAssetModel(
+	const ModelTypes &jafType,
+	const QString & pathToDb,
+	const QMap<QString, QString>& newNames,
+	const QString &parent)
+{
+	QSqlDatabase dbe = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "newSqlImportConnection");
+	dbe.setDatabaseName(pathToDb);
+	dbe.open();
+
+	QSqlQuery selectAssetQuery(dbe);
+	selectAssetQuery.prepare("SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, author, license, hash, version, parent, tags, properties, asset, thumbnail FROM assets");
+	executeAndCheckQuery(selectAssetQuery, "fetchImportAssets");
+
+	QMap<QString, QString> assetGuids; /* old x new guid */
+
+	const QString guidToReturn = GUIDManager::generateGUID();
+
+	QVector<AssetTileDataFull> assetsToImport;
+
+	while (selectAssetQuery.next()) {
+		AssetTileDataFull data;
+		QSqlRecord record = selectAssetQuery.record();
+
+		for (int i = 0; i < record.count(); i++) {
+			if (selectAssetQuery.value(1).toInt() == static_cast<int>(ModelTypes::Object) ||
+				selectAssetQuery.value(1).toInt() == static_cast<int>(ModelTypes::Material)) {
+				data.guid = guidToReturn;
+				assetGuids.insert(record.value(0).toString(), guidToReturn);
+			}
+			else {
+				QString guid = GUIDManager::generateGUID();
+				assetGuids.insert(record.value(0).toString(), guid);
+				data.guid = guid;
+			}
+
+			data.type = record.value(1).toInt();
+
+			// If we find a file with the same name, rename it (may or may not change)
+			for (const auto &name : newNames) {
+				if (!newNames.value(record.value(2).toString()).isEmpty()) {
+					data.name = newNames.value(record.value(2).toString());
+				}
+				else data.name = record.value(2).toString();
+			}
+
+			data.collection = record.value(3).toInt();
+			data.times_used = record.value(4).toInt();
+			data.project_guid = record.value(5).toString();
+			data.date_created = record.value(6).toDateTime();
+			data.last_updated = record.value(7).toDateTime();
+			data.author = record.value(8).toString();
+			data.license = record.value(9).toString();
+			data.hash = record.value(10).toString();
+			data.version = record.value(11).toString();
+			data.parent = parent;
+			data.tags = record.value(13).toByteArray();
+			data.properties = record.value(14).toByteArray();
+			data.asset = record.value(15).toByteArray();
+			data.thumbnail = record.value(16).toByteArray();
+		}
+
+		assetsToImport.push_back(data);
+	}
+
+	if (jafType == ModelTypes::Object) {
+		for (auto &asset : assetsToImport) {
+			if (asset.type == static_cast<int>(ModelTypes::Object)) {
+				auto doc = QJsonDocument::fromBinaryData(asset.asset);
+				QString docToString = doc.toJson(QJsonDocument::Compact);
+
+				QMapIterator<QString, QString> i(assetGuids);
+				while (i.hasNext()) {
+					i.next();
+					docToString.replace(i.key(), i.value());
+				}
+
+				QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
+				asset.asset = updatedDoc.toBinaryData();
+			}
+		}
+	}
+
+	QSqlQuery selectDepQuery(dbe);
+	selectDepQuery.prepare("SELECT type, project_guid, depender, dependee, id FROM dependencies");
+	executeAndCheckQuery(selectDepQuery, "fetchImportDeps");
+
+	QVector<DepRecord> depsToImport;
+	while (selectDepQuery.next()) {
+		DepRecord data;
+		QSqlRecord record = selectDepQuery.record();
+		for (int i = 0; i < record.count(); i++) {
+			data.type = record.value(0).toInt();
+			data.project_guid = record.value(1).toString();
+			data.depender = assetGuids.value(record.value(2).toString());
+			data.dependee = assetGuids.value(record.value(3).toString());
+			data.id = GUIDManager::generateGUID();
+		}
+
+		depsToImport.push_back(data);
+	}
+
+	for (const auto &asset : assetsToImport) {
+		QSqlQuery insertAssetQuery;
+		insertAssetQuery.prepare(
+			"INSERT INTO assets"
+			" (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
+			" license, hash, version, parent, tags, properties, asset, thumbnail)"
+			" VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
+			" :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail)"
+		);
+
+		insertAssetQuery.bindValue(":guid", asset.guid);
+		insertAssetQuery.bindValue(":type", asset.type);
+		insertAssetQuery.bindValue(":name", asset.name);
+		insertAssetQuery.bindValue(":collection", asset.collection);
+		insertAssetQuery.bindValue(":times_used", asset.times_used);
+		insertAssetQuery.bindValue(":project_guid", asset.project_guid);
+		insertAssetQuery.bindValue(":date_created", asset.date_created);
+		insertAssetQuery.bindValue(":last_updated", asset.last_updated);
+		insertAssetQuery.bindValue(":author", asset.author);
+		insertAssetQuery.bindValue(":license", asset.license);
+		insertAssetQuery.bindValue(":hash", asset.hash);
+		insertAssetQuery.bindValue(":version", asset.version);
+		insertAssetQuery.bindValue(":parent", asset.parent);
+		insertAssetQuery.bindValue(":tags", asset.tags);
+		insertAssetQuery.bindValue(":properties", asset.properties);
+		insertAssetQuery.bindValue(":asset", asset.asset);
+		insertAssetQuery.bindValue(":thumbnail", asset.thumbnail);
+
+		executeAndCheckQuery(insertAssetQuery, "insertAssetQuery");
+	}
+
+	QSqlQuery exportDep;
+	exportDep.prepare(
+		"INSERT INTO dependencies (type, project_guid, depender, dependee, id) "
+		"VALUES (:type, :project_guid, :depender, :dependee, :id)"
+	);
+
+	for (const auto &dep : depsToImport) {
+		exportDep.bindValue(":type", dep.type);
+		exportDep.bindValue(":project_guid", dep.project_guid);
+		exportDep.bindValue(":depender", dep.depender);
+		exportDep.bindValue(":dependee", dep.dependee);
+		exportDep.bindValue(":id", dep.id);
+
+		executeAndCheckQuery(exportDep, "exportDep");
+	}
+
+	dbe.close();
+
+	return guidToReturn;
 }
 
 bool Database::renameFolder(const QString &guid, const QString &newName)

@@ -1220,6 +1220,13 @@ void MainWindow::exportMaterial(const QString & guid)
 	QDir tempDir(writePath);
 	tempDir.mkpath("assets");
 
+	QFile manifest(QDir(writePath).filePath(".manifest"));
+	if (manifest.open(QIODevice::ReadWrite)) {
+		QTextStream stream(&manifest);
+		stream << "material";
+	}
+	manifest.close();
+
 	for (const auto &fileName : fileList) {
 		QFile::copy(
 			IrisUtils::join(Globals::project->getProjectFolder(), "Textures", fileName),
@@ -1296,6 +1303,13 @@ void MainWindow::exportNode(const QString &guid)
 
 	QDir tempDir(writePath);
 	tempDir.mkpath("assets");
+
+	QFile manifest(QDir(writePath).filePath(".manifest"));
+	if (manifest.open(QIODevice::ReadWrite)) {
+		QTextStream stream(&manifest);
+		stream << "object";
+	}
+	manifest.close();
 
 	for (const auto &asset : db->fetchAssetAndDependencies(guid)) {
 		QFile::copy(

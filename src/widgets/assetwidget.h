@@ -168,6 +168,12 @@ public:
 		QJsonObject &material
 	);
 
+	void extractTexturesAndMaterialFromMaterial(
+		const QByteArray &blob,
+		QStringList &textureList,
+		QJsonObject &material
+	);
+
 	iris::SceneNodePtr extractTexturesAndMaterialFromMesh(
 		const QString &filePath,
 		QStringList &textureList,

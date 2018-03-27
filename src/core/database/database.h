@@ -5,6 +5,7 @@
 #include <QSqlDriver>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QJsonArray>
 #include <QCryptographicHash>
 
 #include "../project.h"
@@ -92,7 +93,7 @@ public:
 	void createExportNode(const QString& object_guid, const QString& outTempFilePath);
 	QStringList createExportMaterial(const QString& object_guid, const QString& outTempFilePath);
 
-	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table);
+	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table, const QSqlDatabase &connection);
 
 	QStringList fetchFolderAndChildFolders(const QString &guid);
 	QStringList fetchChildFolderAssets(const QString &guid);
@@ -107,6 +108,9 @@ public:
 
 	QString fetchObjectMesh(const QString &guid, const int type);
 	QString fetchMeshObject(const QString &guid, const int type);
+
+	QString importAssetMaterial(const ModelTypes &jafType, const QString &pathToDb, const QMap<QString, QString> &newNames, const QString &parent);
+	QString importAssetModel(const ModelTypes &jafType, const QString &pathToDb, const QMap<QString, QString> &newNames, const QString &parent);
 
 	bool renameFolder(const QString &guid, const QString &newName);
 	bool renameAsset(const QString &guid, const QString &newName);

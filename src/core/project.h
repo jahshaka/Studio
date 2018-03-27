@@ -11,7 +11,9 @@ For more information see the LICENSE file
 
 #ifndef PROJECT_H
 #define PROJECT_H
+
 #include <QString>
+#include <QDateTime>
 
 class Project
 {
@@ -39,6 +41,26 @@ struct ProjectTileData {
     QString     name;
     QByteArray  thumbnail;
     QString     guid;
+};
+
+struct AssetTileDataFull {
+	QString guid;
+	int type;
+	QString name;
+	int collection;
+	int times_used;
+	QString project_guid;
+	QDateTime date_created;
+	QDateTime last_updated;
+	QString author;
+	QString license;
+	QString hash;
+	QString version;
+	QString parent;
+	QByteArray tags;
+	QByteArray properties;
+	QByteArray asset;
+	QByteArray thumbnail;
 };
 
 struct AssetTileData {
