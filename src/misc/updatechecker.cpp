@@ -32,6 +32,7 @@ void UpdateChecker::checkForUpdate()
 			auto nextVersion = obj.value("nextVersion").toString();
 			auto versionNotes = obj.value("versionNotes").toString();
 			auto downloadLink = obj.value("downloadLink").toString();
+			qDebug() << downloadLink;
 
 			qDebug() << obj;
 

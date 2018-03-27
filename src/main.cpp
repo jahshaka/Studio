@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include "globals.h"
 #include "constants.h"
 #include "misc\updatechecker.h"
+#include "dialogs/softwareupdatedialog.h"
 #ifdef USE_BREAKPAD
 #include "breakpad/breakpad.h"
 #endif
@@ -61,11 +62,13 @@ int main(int argc, char *argv[])
 #endif
 
 	UpdateChecker updateChecker;
-	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded, [&updateChecker]()
+	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded, [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)
 	{
 		// show update dialog
+		auto dialog = new SoftwareUpdateDialog();
+		dialog->show();
 	});
-	updateChecker.checkForUpdate();
+	
 	/*
 	QtConcurrent::run([&updateChecker]() {
 		updateChecker.checkForUpdate();
@@ -118,6 +121,8 @@ int main(int argc, char *argv[])
     window.goToDesktop();
 
     splash.finish(&window);
+
+	updateChecker.checkForUpdate();
 
     return app.exec();
 }
