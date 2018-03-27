@@ -144,6 +144,8 @@ void ScaleGizmo::loadAssets()
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/scale_y.obj")));
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/scale_z.obj")));
 
+	centerMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_cube.obj"));
+
 	shader = iris::GraphicsHelper::loadShader(
 		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"),
 		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.frag"));
@@ -288,6 +290,9 @@ void ScaleGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVecto
 				shader->setUniformValue("color", handles[i]->getHandleColor());
 			handleMeshes[i]->draw(device);
 		}
+
+		shader->setUniformValue("color", QColor(255, 255, 255));
+		centerMesh->draw(device);
 	}
 
 	shader->release();
