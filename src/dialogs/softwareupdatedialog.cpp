@@ -14,7 +14,7 @@ SoftwareUpdateDialog::SoftwareUpdateDialog(QDialog *parent) : QDialog(parent), u
 
 	connect(ui->pushButton, &QPushButton::clicked, [this]() {
 		qDebug() << downloadUrl;
-		QDesktopServices::openUrl(QUrl(downloadUrl));
+		QDesktopServices::openUrl(downloadUrl);
 	});
 
 	connect(ui->pushButton_2, &QPushButton::clicked, [this]() {

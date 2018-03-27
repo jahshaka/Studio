@@ -60,14 +60,6 @@ int main(int argc, char *argv[])
 #ifdef USE_BREAKPAD
 	initializeBreakpad();
 #endif
-
-	UpdateChecker updateChecker;
-	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded, [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)
-	{
-		// show update dialog
-		auto dialog = new SoftwareUpdateDialog();
-		dialog->show();
-	});
 	
 	/*
 	QtConcurrent::run([&updateChecker]() {
@@ -122,7 +114,18 @@ int main(int argc, char *argv[])
 
     splash.finish(&window);
 
-	updateChecker.checkForUpdate();
+	UpdateChecker updateChecker;
+	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded, [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)
+	{
+		// show update dialog
+		auto dialog = new SoftwareUpdateDialog();
+		dialog->setVersionNotes(versionNotes);
+		dialog->setDownloadUrl(downloadLink);
+		dialog->show();
+	});
+
+	if(SettingsManager::getDefaultManager()->getValue("automatic_updates", true).toBool())
+		updateChecker.checkForUpdate();
 
     return app.exec();
 }
