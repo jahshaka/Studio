@@ -48,6 +48,8 @@ namespace Constants
 	extern QString MATERIAL_EXT;
 	extern QString ASSET_EXT;
 
+	extern QString UPDATE_CHECK_URL;
+
     extern int FPS_90;
     extern int FPS_60;
 

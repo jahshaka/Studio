@@ -1,4 +1,6 @@
 #include "updatechecker.h"
+#include "../constants.h"
+
 #include <QUrl>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -19,7 +21,7 @@ void UpdateChecker::checkForUpdate()
 
 	//manager = new QNetworkAccessManager();
 
-	auto reply = manager.get(QNetworkRequest(QUrl("http://localhost/jahapi/shouldupdate.php?currentVersion=0.5a")));
+	auto reply = manager.get(QNetworkRequest(QUrl(Constants::UPDATE_CHECK_URL)));
 	if (reply) {
 		connect(reply, &QNetworkReply::finished, [this, reply]() {
 			QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());

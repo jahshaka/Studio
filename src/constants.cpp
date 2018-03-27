@@ -36,6 +36,8 @@ namespace Contants
 	QString MATERIAL_EXT		= "material";
 	QString ASSET_EXT			= "jaf";
 
+	QString UPDATE_CHECK_URL	= "http://localhost/jahapi/shouldupdate.php?currentVersion=0.5a";
+
     int FPS_90                  = 11; // milliseconds
     int FPS_60                  = 17; // milliseconds
 
