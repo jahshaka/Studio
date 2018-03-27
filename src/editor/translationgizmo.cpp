@@ -139,6 +139,8 @@ void TranslationGizmo::loadAssets()
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_y.obj")));
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_z.obj")));
 
+	centerMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_sphere.obj"));
+
 	shader = iris::GraphicsHelper::loadShader(
 		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"),
 		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.frag"));
@@ -278,6 +280,9 @@ void TranslationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, 
 				handleMeshes[i]->draw(device);
 			}
 		}
+
+		shader->setUniformValue("color", QColor(255, 255, 255));
+		centerMesh->draw(device);
 	}
 
 	shader->release();
