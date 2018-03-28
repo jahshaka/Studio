@@ -28,7 +28,7 @@ class TexturePickerWidget : public BaseWidget
 private slots:
     void changeTextureMap();
     void pickTextureMap();
-    void on_pushButton_clicked();
+    void clear();
 
     void changeMap(QListWidgetItem*);
     void changeMap(const QString&);

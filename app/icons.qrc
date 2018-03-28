@@ -95,5 +95,6 @@
         <file>icons/icons8-average-math-filled-50.png</file>
         <file>icons/icons8-virtual-reality-filled-50.png</file>
         <file>icons/icons8-camera-48.png</file>
+        <file>icons/icons8-synchronize-26.png</file>
     </qresource>
 </RCC>

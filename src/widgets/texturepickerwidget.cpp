@@ -30,6 +30,11 @@ TexturePickerWidget::TexturePickerWidget(QWidget* parent) :
     this->ui->texture->installEventFilter(this);
     type = WidgetType::TextureWidget;
 
+    connect(ui->clear, &QPushButton::pressed, this, &TexturePickerWidget::clear);
+    connect(ui->load, &QPushButton::pressed, this, &TexturePickerWidget::changeTextureMap);
+
+    ui->clear->setIcon(QIcon(":/icons/icons8-synchronize-26.png"));
+
     setAcceptDrops(true);
 }
 
@@ -109,7 +114,7 @@ void TexturePickerWidget::setLabelImage(QLabel* label, QString file, bool emitSi
         auto thumb = ThumbnailManager::createThumbnail(file,
                                                        ui->texture->width(),
                                                        ui->texture->height());
-        QPixmap pixmap = QPixmap::fromImage(*thumb->thumb).scaled(QSize(72, 72));
+        QPixmap pixmap = QPixmap::fromImage(*thumb->thumb).scaled(QSize(28, 28));
         ui->texture->setPixmap(pixmap);
 
         filePath = file;
@@ -130,7 +135,7 @@ bool TexturePickerWidget::eventFilter(QObject *object, QEvent *ev)
     return false;
 }
 
-void TexturePickerWidget::on_pushButton_clicked()
+void TexturePickerWidget::clear()
 {
     ui->texture->clear();
     filePath.clear();

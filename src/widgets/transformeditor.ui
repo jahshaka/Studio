@@ -74,8 +74,8 @@ QPushButton:pressed#resetBtn { background-color: #444; }</string>
       <widget class="QLabel" name="label">
        <property name="font">
         <font>
-         <weight>75</weight>
-         <bold>true</bold>
+         <weight>50</weight>
+         <bold>false</bold>
         </font>
        </property>
        <property name="text">
@@ -93,8 +93,8 @@ QPushButton:pressed#resetBtn { background-color: #444; }</string>
       <widget class="QLabel" name="label_2">
        <property name="font">
         <font>
-         <weight>75</weight>
-         <bold>true</bold>
+         <weight>50</weight>
+         <bold>false</bold>
         </font>
        </property>
        <property name="text">
@@ -109,8 +109,8 @@ QPushButton:pressed#resetBtn { background-color: #444; }</string>
       <widget class="QLabel" name="label_3">
        <property name="font">
         <font>
-         <weight>75</weight>
-         <bold>true</bold>
+         <weight>50</weight>
+         <bold>false</bold>
         </font>
        </property>
        <property name="text">
