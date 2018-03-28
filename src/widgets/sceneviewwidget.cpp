@@ -92,17 +92,56 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
     while (!stream.atEnd()) stream >> roleDataMap;
 
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Material)) {
-		if (auto node = doActiveObjectPicking(event->posF())) {
-			if (!!node) selectedDragNode = node;
+		auto node = doActiveObjectPicking(event->posF());
+
+		if (!!node && !wasHit) {
+			wasHit = true;
+			selectedDragNode = savedActiveNode = node;
+			originalMaterial = node.staticCast<iris::MeshNode>()->getMaterial()->duplicate().staticCast<iris::CustomMaterial>();
+
+			// TODO - get this at drag start
+			iris::CustomMaterialPtr material;
+			QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
+			while (iterator != AssetManager::getAssets().constEnd()) {
+				if ((*iterator)->assetGuid == roleDataMap.value(3).toString()) {
+					material = (*iterator)->getValue().value<iris::CustomMaterialPtr>();
+				}
+				++iterator;
+			}
+
+			node.staticCast<iris::MeshNode>()->setMaterial(material->duplicate());
+		}
+		else if (!!node && wasHit) {
+			qDebug() << "no node but hit";
 		}
 		else {
-			if (!!selectedDragNode) selectedDragNode.reset();
+			wasHit = false;
+			qDebug() << "no node";
+			if (!!savedActiveNode) {
+				savedActiveNode.staticCast<iris::MeshNode>()->setMaterial(originalMaterial);
+				savedActiveNode.reset();
+			}
 		}
-		// Store current valid asset material
 
-		// Update current asset material as a preview
+		//if (!!selectedDragNode && !wasHit) {
+		//	iris::CustomMaterialPtr material;
+		//	QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
+		//	while (iterator != AssetManager::getAssets().constEnd()) {
+		//		if ((*iterator)->assetGuid == roleDataMap.value(3).toString()) {
+		//			material = (*iterator)->getValue().value<iris::CustomMaterialPtr>();
+		//		}
+		//		++iterator;
+		//	}
 
-		// When we leave, restore the original material
+		//	wasHit = true;
+		//	selectedDragNode.staticCast<iris::MeshNode>()->setMaterial(material->duplicate());
+		//}
+		//
+		//if (!!node) {
+		//}
+		//else {
+		//	savedActiveNode.staticCast<iris::MeshNode>()->setMaterial(originalMaterial);
+		//}
 	}
 
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
@@ -160,7 +199,7 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 				++iterator;
 			}
 
-			selectedDragNode.staticCast<iris::MeshNode>()->setMaterial(material);
+			selectedDragNode.staticCast<iris::MeshNode>()->setMaterial(material->duplicate());
 		}
 		else {
 			qDebug() << "Empty";

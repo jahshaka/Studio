@@ -168,8 +168,10 @@ public:
     void mousePressEvent(QMouseEvent* evt);
     void mouseMoveEvent(QMouseEvent* evt);
 
-	iris::SceneNodePtr currentDragNode;
+	iris::SceneNodePtr savedActiveNode;
+	iris::CustomMaterialPtr originalMaterial;
 	iris::SceneNodePtr selectedDragNode;
+	bool wasHit = false;
 
     float translatePlaneD;
     QVector3D finalHitPoint;
