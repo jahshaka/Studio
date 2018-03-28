@@ -54,12 +54,21 @@ QMatrix4x4 aiMatrixToQMatrix(aiMatrix4x4 aiMat) {
     return mat;
 }
 
+Mesh::Mesh()
+{
+	triMesh = nullptr;
+	_isDirty = 0;
+	lastShaderId = -1;
+	numVerts = 0;
+	usesIndexBuffer = false;
+}
+
 // http://ogldev.atspace.co.uk/www/tutorial38/tutorial38.html
 Mesh::Mesh(aiMesh* mesh)
 {
 	_isDirty = 0;
     lastShaderId = -1;
-    gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+    //gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
 
     triMesh = new TriMesh();
 
@@ -67,7 +76,7 @@ Mesh::Mesh(aiMesh* mesh)
     numVerts = mesh->mNumFaces*3;
     numFaces = mesh->mNumFaces;
 
-    gl->glGenVertexArrays(1,&vao);
+    //gl->glGenVertexArrays(1,&vao);
 
     if(!mesh->HasPositions())
         return;
@@ -303,6 +312,10 @@ void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program)
 */
 void Mesh::draw(GraphicsDevicePtr device)
 {
+	// cant render a mesh that doesnt have any vertices
+	if (numVerts == 0)
+		return;
+
     device->setVertexBuffers(vertexBuffers);
     if (!!idxBuffer) {
         device->setIndexBuffer(idxBuffer);
@@ -422,11 +435,22 @@ Mesh* Mesh::create(void* data,int dataSize,int numVerts,VertexLayout* vertexLayo
     return new Mesh(data,dataSize,numVerts,vertexLayout);
 }
 
+MeshPtr Mesh::create()
+{
+	auto mesh = new Mesh();
+	return MeshPtr(mesh);
+}
+
 Mesh::~Mesh()
 {
     //delete vertexLayout;
 	if (triMesh)
 		delete triMesh;
+}
+
+void Mesh::setVertexCount(const unsigned int count)
+{
+	numVerts = count;
 }
 
 void Mesh::addVertexArray(VertexAttribUsage usage,void* dataPtr,int size,GLenum type,int numComponents)
