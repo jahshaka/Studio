@@ -46,7 +46,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     db = handle;
 
 #ifdef Q_OS_WIN32
-//    setAttribute(Qt::WA_PaintOnScreen, true);
+	// setAttribute(Qt::WA_PaintOnScreen, true);
     setAttribute(Qt::WA_NativeWindow, true);
 #endif
 
@@ -58,10 +58,11 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 		progressDialog->setLabelText(tr("Caching assets..."));
 
 		// Meshes
+		// Note - this would be the perfect place to attach materials as well but we can't access the opengl context
 		for (const auto &item : futureWatcher->result()) {
-			AssetObject *model = new AssetObject(new AssimpObject(item.data, item.path),
-				item.path,
-				QFileInfo(item.path).fileName());
+			AssetObject *model = new AssetObject(
+				new AssimpObject(item.data, item.path), item.path, QFileInfo(item.path).fileName()
+			);
 			model->assetGuid = item.guid;
 			AssetManager::addAsset(model);
 		}
@@ -74,9 +75,9 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 			QJsonObject matObject = matDoc.object();
 			iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 			material->generate(IrisUtils::join(
-					IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS),
-					IrisUtils::buildFileName(matObject.value("name").toString(), "shader"))
-				);
+				IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS),
+				IrisUtils::buildFileName(matObject.value("name").toString(), "shader"))
+			);
 
 			for (const auto &prop : material->properties) {
 				if (prop->type == iris::PropertyType::Color) {

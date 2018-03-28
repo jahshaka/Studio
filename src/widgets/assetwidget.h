@@ -149,6 +149,8 @@ public:
     explicit AssetWidget(Database *handle, QWidget *parent = Q_NULLPTR);
     ~AssetWidget();
 
+	AssetItem assetItem;
+
 	bool hideDependencies;
 
     void populateAssetTree(bool initialRun);
@@ -202,6 +204,8 @@ protected slots:
     void renameTreeItem();
     void renameViewItem();
 
+	void exportMaterial();
+
     void searchAssets(QString);
     void OnLstItemsCommitData(QWidget*);
 
@@ -217,7 +221,6 @@ protected slots:
 
 private:
     Ui::AssetWidget *ui;
-    AssetItem assetItem;
     QPoint startPos;
 
     Database *db;

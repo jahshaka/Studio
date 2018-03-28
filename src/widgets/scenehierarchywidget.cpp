@@ -287,14 +287,14 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
 			
 			QAction *exportAsset = subMenu->addAction("Export Object");
-			QAction *exportMat = subMenu->addAction("Export Material");
+			QAction *exportMat = subMenu->addAction("Create Material");
 
 			connect(exportAsset, &QAction::triggered, this, [this, node]() {
 				exportNode(node->getGUID());
 			});
 
 			connect(exportMat, &QAction::triggered, this, [this, node]() {
-				exportMaterial(node->getGUID());
+				createMaterial(node->getGUID());
 			});
 		}
 		else if (node->getSceneNodeType() == iris::SceneNodeType::ParticleSystem) {
@@ -334,9 +334,9 @@ void SceneHierarchyWidget::exportNode(const QString &guid)
 {
 	mainWindow->exportNode(guid);
 }
-void SceneHierarchyWidget::exportMaterial(const QString &guid)
+void SceneHierarchyWidget::createMaterial(const QString &guid)
 {
-	mainWindow->exportMaterial(guid);
+	mainWindow->createMaterial(guid);
 }
 
 void SceneHierarchyWidget::exportParticleSystem(const QString &guid)

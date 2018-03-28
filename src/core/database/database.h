@@ -91,7 +91,6 @@ public:
     bool importProject(const QString& inFilePath);
 
 	void createExportNode(const QString& object_guid, const QString& outTempFilePath);
-	QStringList createExportMaterial(const QString& object_guid, const QString& outTempFilePath);
 
 	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table, const QSqlDatabase &connection);
 

@@ -14,7 +14,11 @@
    <string>Jahshaka</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">#ProgressDialog {
+   <string notr="true">* {
+	color: #EEE;
+}
+
+#ProgressDialog {
 	background: #222;
 	border: 1px solid black;
 }

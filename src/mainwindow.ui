@@ -127,6 +127,7 @@ QCheckBox::indicator::checked {
 QScrollBar:vertical {
 	width: 12px;
 	border-left: 1px solid black;
+    background: transparent;
 }
 
 QScrollBar::handle:vertical {

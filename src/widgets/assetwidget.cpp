@@ -115,7 +115,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	toggleLayout->addWidget(toggleListView);
 
 	iconSize = QSize(72, 72);
-	listSize = QSize(16, 16);
+	listSize = QSize(32, 32);
 	currentSize = iconSize;
 
 	setMouseTracking(true);
@@ -169,6 +169,9 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		"QSplitter::handle { width: 1px; background: #151515; }"
 		"QLineEdit { border: 0; background: #292929; color: #EEE; padding: 4px 8px; selection-background-color: #404040; color: #EEE; }"
 		"QTreeView, QTreeWidget { show-decoration-selected: 1; }"
+		"QWidget#assetView { alternate-background-color: #222; selection-background-color: transparent; }"
+		"QListView::item:selected { background-color: #303030; }"
+		"QListView::item:hover { background-color: #292929; }"
 		"QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; }"
 		"QTreeWidget::branch { background-color: #202020; }"
 		"QTreeWidget::branch:hover { background-color: #303030; }"
@@ -193,10 +196,6 @@ void AssetWidget::trigger()
 
 	sceneView->makeCurrent();
 	for (auto &asset : AssetManager::getAssets()) {
-		if (asset->type == ModelTypes::Material) {
-
-		}
-
 		if (asset->type == ModelTypes::Object) {
 			auto material = db->getAssetMaterialGlobal(asset->assetGuid);
 			auto materialObj = QJsonDocument::fromBinaryData(material);
@@ -221,33 +220,42 @@ void AssetWidget::trigger()
 				return mat;
 			});
 
-			//std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
-			//	[&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
-			//{
-			//	if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-			//		auto n = node.staticCast<iris::MeshNode>();
-			//		//n->meshPath = meshGuid;
-			//		auto mat_defs = definition.value("material").toObject();
-			//		auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-			//		for (auto prop : mat->properties) {
-			//			if (prop->type == iris::PropertyType::Texture) {
-			//				if (!mat_defs.value(prop->name).toString().isEmpty()) {
-			//					mat->setValue(prop->name, mat_defs.value(prop->name).toString());
-			//				}
-			//			}
-			//		}
-			//	}
+			std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
+				[&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
+			{
+				if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+					auto n = node.staticCast<iris::MeshNode>();
+					//n->meshPath = meshGuid;
+					auto mat_defs = definition.value("material").toObject();
+					auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+					for (auto prop : mat->properties) {
+						if (prop->type == iris::PropertyType::Texture) {
+							if (!mat_defs.value(prop->name).toString().isEmpty()) {
+								mat->setValue(prop->name, mat_defs.value(prop->name).toString());
+							}
+						}
+						else if (prop->type == iris::PropertyType::Color) {
+							mat->setValue(
+								prop->name,
+								QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
+							);
+						}
+						else {
+							mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
+						}
+					}
+				}
 
-			//	QJsonArray children = definition["children"].toArray();
-			//	// These will always be in sync since the definition is derived from the mesh
-			//	if (node->hasChildren()) {
-			//		for (int i = 0; i < node->children.count(); i++) {
-			//			updateNodeMaterialValues(node->children[i], children[i].toObject());
-			//		}
-			//	}
-			//};
+				QJsonArray children = definition["children"].toArray();
+				// These will always be in sync since the definition is derived from the mesh
+				if (node->hasChildren()) {
+					for (int i = 0; i < node->children.count(); i++) {
+						updateNodeMaterialValues(node->children[i], children[i].toObject());
+					}
+				}
+			};
 
-			//updateNodeMaterialValues(node, materialObj.object());
+			updateNodeMaterialValues(node, materialObj.object());
 
 			QString meshGuid = db->fetchObjectMesh(asset->assetGuid, static_cast<int>(ModelTypes::Object));
 
@@ -746,11 +754,16 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 	if (index.isValid()) {
 		auto item = ui->assetView->itemAt(pos);
 		assetItem.wItem = item;
-		//assetItem.selectedPath = item->data(Qt::UserRole).toString();
 
 		action = new QAction(QIcon(), "Rename", this);
 		connect(action, SIGNAL(triggered()), this, SLOT(renameViewItem()));
 		menu.addAction(action);
+
+		if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Material)) {
+			action = new QAction(QIcon(), "Export Material", this);
+			connect(action, SIGNAL(triggered()), this, SLOT(exportMaterial()));
+			menu.addAction(action);
+		}
 
 		action = new QAction(QIcon(), "Delete", this);
 		connect(action, SIGNAL(triggered()), this, SLOT(deleteItem()));
@@ -816,6 +829,92 @@ void AssetWidget::renameTreeItem()
 void AssetWidget::renameViewItem()
 {
 	ui->assetView->editItem(assetItem.wItem);
+}
+
+void AssetWidget::exportMaterial()
+{
+	// get the export file path from a save dialog
+	auto filePath = QFileDialog::getSaveFileName(
+		this,
+		"Choose export path",
+		"export",
+		"Supported Export Formats (*.jaf)"
+	);
+
+	if (filePath.isEmpty() || filePath.isNull()) return;
+
+	QTemporaryDir temporaryDir;
+	if (!temporaryDir.isValid()) return;
+
+	const QString writePath = temporaryDir.path();
+
+	const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
+
+	db->createExportNode(guid, QDir(writePath).filePath("asset.db"));
+
+	QDir tempDir(writePath);
+	tempDir.mkpath("assets");
+
+	QFile manifest(QDir(writePath).filePath(".manifest"));
+	if (manifest.open(QIODevice::ReadWrite)) {
+		QTextStream stream(&manifest);
+		stream << "material";
+	}
+	manifest.close();
+
+	for (const auto &asset : db->fetchAssetAndDependencies(guid)) {
+		QFile::copy(
+			IrisUtils::join(Globals::project->getProjectFolder(), asset),
+			IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
+		);
+	}
+
+	// get all the files and directories in the project working directory
+	QDir workingProjectDirectory(writePath);
+	QDirIterator projectDirIterator(writePath,
+		QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
+		QDirIterator::Subdirectories);
+
+	QVector<QString> fileNames;
+	while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
+
+	//ZipWrapper exportNode("path", "read / write", "folder / file list");
+	//exportNode.setOutputPath();
+	//exportNode.setMode();
+	//exportNode.setCompressionLevel();
+	//exportNode.setFolder();
+	//exportNode.setFileList();
+	//exportNode.createArchive();
+
+	// open a basic zip file for writing, maybe change compression level later (iKlsR)
+	struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
+
+	for (int i = 0; i < fileNames.count(); i++) {
+		QFileInfo fInfo(fileNames[i]);
+
+		// we need to pay special attention to directories since we want to write empty ones as well
+		if (fInfo.isDir()) {
+			zip_entry_open(
+				zip,
+				/* will only create directory if / is appended */
+				QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
+			);
+			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+		}
+		else {
+			zip_entry_open(
+				zip,
+				workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
+			);
+			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+		}
+
+		// we close each entry after a successful write
+		zip_entry_close(zip);
+	}
+
+	// close our now exported file
+	zip_close(zip);
 }
 
 void AssetWidget::searchAssets(QString searchString)
@@ -1294,6 +1393,43 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					auto scene = extractTexturesAndMaterialFromMesh(asset->path, texturesToCopy, jsonSceneNode);
 					this->sceneView->doneCurrent();
 
+					std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
+						[&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
+					{
+						if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+							auto n = node.staticCast<iris::MeshNode>();
+							//n->meshPath = meshGuid;
+							auto mat_defs = definition.value("material").toObject();
+							auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+							for (auto prop : mat->properties) {
+								if (prop->type == iris::PropertyType::Texture) {
+									if (!mat_defs.value(prop->name).toString().isEmpty()) {
+										mat->setValue(prop->name, mat_defs.value(prop->name).toString());
+									}
+								}
+								else if (prop->type == iris::PropertyType::Color) {
+									mat->setValue(
+										prop->name,
+										QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
+									);
+								}
+								else {
+									mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
+								}
+							}
+						}
+
+						QJsonArray children = definition["children"].toArray();
+						// These will always be in sync since the definition is derived from the mesh
+						if (node->hasChildren()) {
+							for (int i = 0; i < node->children.count(); i++) {
+								updateNodeMaterialValues(node->children[i], children[i].toObject());
+							}
+						}
+					};
+
+					updateNodeMaterialValues(scene, jsonSceneNode);
+
 					// You can't manipulate Qt's json when nested
 					std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
 						if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
@@ -1363,6 +1499,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					);
 				}
 
+				// Copy only objects, textures and shader files
 				bool copyFile = QFile::copy(entry.path, pathToCopyTo);
 
 				progressDialog->setLabelText("Copying " + asset->fileName);
@@ -1422,7 +1559,7 @@ void AssetWidget::importAsset(const QStringList &path)
 	// 2. Materials
 	// 3. Shaders
 	// 4. Meshes
-	// 5. Asset Files
+	// 5. Asset Files (these contain their own assets)
 
 	// Path, GUID, Parent
 	QList<directory_tuple> finalImportList;

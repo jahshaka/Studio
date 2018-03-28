@@ -77,7 +77,7 @@ protected slots:
 	void duplicateNode();
 	void focusOnNode();
 	void exportNode(const QString &guid);
-	void exportMaterial(const QString &guid);
+	void createMaterial(const QString &guid);
 	void exportParticleSystem(const QString &guid);
 
 private:

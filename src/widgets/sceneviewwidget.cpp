@@ -136,16 +136,12 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
     QByteArray encoded = event->mimeData()->data("application/x-qabstractitemmodeldatalist");
     QDataStream stream(&encoded, QIODevice::ReadOnly);
     QMap<int, QVariant> roleDataMap;
-    while (!stream.atEnd()) {
-        stream >> roleDataMap;
-    }
+    while (!stream.atEnd()) stream >> roleDataMap;
 
     qDebug() << roleDataMap.value(0).toInt();
 	qDebug() << roleDataMap.value(1).toString();
 	qDebug() << roleDataMap.value(2).toString();
 	qDebug() << roleDataMap.value(3).toString();
-
-	//qDebug() << QDir(QDir(Globals::project->getProjectFolder()).filePath("Models")).filePath(roleDataMap.value(2).toString());
 
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
         auto ppos = dragScenePos;
@@ -155,7 +151,6 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Material)) {
 		if (!!selectedDragNode) {
-			qDebug() << "We have one";
 			iris::CustomMaterialPtr material;
 			QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
 			while (iterator != AssetManager::getAssets().constEnd()) {

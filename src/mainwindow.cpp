@@ -1062,30 +1062,30 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 		++iterator;
 	}
 
-	std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
-		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-			auto n = node.staticCast<iris::MeshNode>();
-			n->meshPath = meshGuid;
-			auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-			for (auto prop : mat->properties) {
-				if (prop->type == iris::PropertyType::Texture) {
-					if (!prop->getValue().toString().isEmpty()) {
-						mat->setValue(prop->name,
-							IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
-								db->fetchAsset(prop->getValue().toString()).name));
-					}
-				}
-			}
-		}
+	//std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
+	//	if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+	//		auto n = node.staticCast<iris::MeshNode>();
+	//		n->meshPath = meshGuid;
+	//		auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+	//		for (auto prop : mat->properties) {
+	//			if (prop->type == iris::PropertyType::Texture) {
+	//				if (!prop->getValue().toString().isEmpty()) {
+	//					mat->setValue(prop->name,
+	//						IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
+	//							db->fetchAsset(prop->getValue().toString()).name));
+	//				}
+	//			}
+	//		}
+	//	}
 
-		if (node->hasChildren()) {
-			for (auto &child : node->children) {
-				updateNodeValues(child);
-			}
-		}
-	};
+	//	if (node->hasChildren()) {
+	//		for (auto &child : node->children) {
+	//			updateNodeValues(child);
+	//		}
+	//	}
+	//};
 
-	updateNodeValues(node);
+	//updateNodeValues(node);
 
 	// model file may be invalid so null gets returned
 	if (!node) return;
@@ -1198,88 +1198,90 @@ void MainWindow::duplicateNode()
 	sceneView->doneCurrent();
 }
 
-void MainWindow::exportMaterial(const QString & guid)
+void MainWindow::createMaterial(const QString &guid)
 {
-	// get the export file path from a save dialog
-	auto filePath = QFileDialog::getSaveFileName(
-		this,
-		"Choose export path",
-		Constants::DEF_EXPORT_FILE,
-		"Supported Export Formats (*.jaf)"
-	);
-
-	if (filePath.isEmpty() || filePath.isNull()) return;
-
-	QTemporaryDir temporaryDir;
-	if (!temporaryDir.isValid()) return;
-
-	const QString writePath = temporaryDir.path();
-
-	auto fileList = db->createExportMaterial(guid, QDir(writePath).filePath("asset.db"));
-
-	QDir tempDir(writePath);
-	tempDir.mkpath("assets");
-
-	QFile manifest(QDir(writePath).filePath(".manifest"));
-	if (manifest.open(QIODevice::ReadWrite)) {
-		QTextStream stream(&manifest);
-		stream << "material";
-	}
-	manifest.close();
-
-	for (const auto &fileName : fileList) {
-		QFile::copy(
-			IrisUtils::join(Globals::project->getProjectFolder(), "Textures", fileName),
-			IrisUtils::join(writePath, "assets", fileName)
+	if (!!activeSceneNode) {
+		QJsonObject materialDef;
+		SceneWriter::writeSceneNodeMaterial(
+			materialDef,
+			activeSceneNode.staticCast<iris::MeshNode>()->getMaterial().staticCast<iris::CustomMaterial>()
 		);
-	}
 
-	// get all the files and directories in the project working directory
-	QDir workingProjectDirectory(writePath);
-	QDirIterator projectDirIterator(writePath,
-		QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
-		QDirIterator::Subdirectories);
+		QByteArray binaryMat = QJsonDocument(materialDef).toBinaryData();
 
-	QVector<QString> fileNames;
-	while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
-
-	//ZipWrapper exportNode("path", "read / write", "folder / file list");
-	//exportNode.setOutputPath();
-	//exportNode.setMode();
-	//exportNode.setCompressionLevel();
-	//exportNode.setFolder();
-	//exportNode.setFileList();
-	//exportNode.createArchive();
-
-	// open a basic zip file for writing, maybe change compression level later (iKlsR)
-	struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
-
-	for (int i = 0; i < fileNames.count(); i++) {
-		QFileInfo fInfo(fileNames[i]);
-
-		// we need to pay special attention to directories since we want to write empty ones as well
-		if (fInfo.isDir()) {
-			zip_entry_open(
-				zip,
-				/* will only create directory if / is appended */
-				QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
-			);
-			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-		}
-		else {
-			zip_entry_open(
-				zip,
-				workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
-			);
-			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+		for (auto &value : materialDef) {
+			if (value.isString() && !db->fetchAsset(value.toString()).name.isEmpty()) {
+				value = "../Textures/" + db->fetchAsset(value.toString()).name;
+			}
 		}
 
-		// we close each entry after a successful write
-		zip_entry_close(zip);
-	}
+		QString fileName = Globals::project->getProjectFolder() + "/Materials/" + activeSceneNode.staticCast<iris::MeshNode>()->getName() + ".material";
 
-	// close our now exported file
-	zip_close(zip);
+		QJsonDocument saveDoc(materialDef);
+
+		QFile file(fileName);
+		file.open(QFile::WriteOnly);
+		file.write(saveDoc.toJson());
+		file.close();
+
+		const QString assetGuid = GUIDManager::generateGUID();
+
+		db->createAssetEntry(assetGuid,
+			QFileInfo(fileName).fileName(),
+			static_cast<int>(ModelTypes::Material),
+			Globals::project->getProjectGuid(),
+			assetWidget->assetItem.selectedGuid,
+			QByteArray(),
+			QByteArray(),
+			QByteArray(),
+			binaryMat);
+
+		ThumbnailGenerator::getSingleton()->requestThumbnail(
+			ThumbnailRequestType::Material, fileName, assetGuid
+		);
+
+		assetWidget->updateAssetView(assetWidget->assetItem.selectedGuid);
+
+		QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->getMaterialGlobal(assetGuid));
+		QJsonObject matObject = matDoc.object();
+		iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
+		material->generate(IrisUtils::join(
+			IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS),
+			IrisUtils::buildFileName(matObject.value("name").toString(), "shader"))
+		);
+
+		for (const auto &prop : material->properties) {
+			if (prop->type == iris::PropertyType::Color) {
+				QColor col;
+				col.setNamedColor(matObject.value(prop->name).toString());
+				material->setValue(prop->name, col);
+			}
+			else if (prop->type == iris::PropertyType::Texture) {
+				if (!matObject.value(prop->name).toString().isEmpty()) {
+					db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), assetGuid, matObject.value(prop->name).toString());
+				}
+				QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
+				QString textureStr = IrisUtils::join(
+					Globals::project->getProjectFolder(), "Textures", materialName
+				);
+				material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
+			}
+			else {
+				material->setValue(prop->name, QVariant::fromValue(matObject.value(prop->name)));
+			}
+		}
+
+		{	
+			auto assetMat = new AssetMaterial;
+			assetMat->assetGuid = assetGuid;
+			assetMat->setValue(QVariant::fromValue(material));
+			AssetManager::addAsset(assetMat);
+		}
+	}
+	else {
+		qDebug() << "Need an active scenenode!";
+		return;
+	}
 }
 
 void MainWindow::exportNode(const QString &guid)
@@ -1514,7 +1516,7 @@ void MainWindow::setupDockWidgets()
 
     QWidget *sceneNodeDockWidgetContents = new QWidget(viewPort);
     QScrollArea *sceneNodeScrollArea = new QScrollArea(sceneNodeDockWidgetContents);
-    sceneNodeScrollArea->setMinimumWidth(312);
+    sceneNodeScrollArea->setMinimumWidth(326);
     sceneNodeScrollArea->setStyleSheet("border: 0");
     sceneNodeScrollArea->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
     sceneNodeScrollArea->setWidget(sceneNodePropertiesWidget);
