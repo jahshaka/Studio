@@ -180,7 +180,7 @@ void RotationGizmo::loadAssets()
 
 	circleMesh = iris::Mesh::create();
 	circleMesh->addVertexBuffer(vb);
-	circleMesh->setPrimitiveMode(iris::PrimitiveMode::LineLoop);
+	circleMesh->setPrimitiveMode(iris::PrimitiveMode::Lines);
 	circleMesh->setVertexCount(360 * 2);
 	//circleMesh = iris::Mesh::create((void*)points.constData(), points.size() * sizeof(float), points.size(), layout);
 }
