@@ -170,7 +170,6 @@ public:
 
 	iris::SceneNodePtr savedActiveNode;
 	iris::CustomMaterialPtr originalMaterial;
-	iris::SceneNodePtr selectedDragNode;
 	bool wasHit = false;
 
     float translatePlaneD;

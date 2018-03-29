@@ -77,13 +77,12 @@ QToolButton::hover {
 }
 
 QComboBox {
-    /*border-radius: 3px;
-    padding: 1px 18px 1px 3px;
-    min-width: 6em;*/
+    background: #1A1A1A;
+    border: 0;
 }
 
 QComboBox:editable {
-	    background: #1A1A1A;
+
 }
 
 QComboBox QAbstractItemView::item {
@@ -99,7 +98,7 @@ QListView::item:selected {
 }
 
 QComboBox:!editable, QComboBox::drop-down:editable {
-    background: #1A1A1A;
+     background: #1A1A1A;
 }
 
 /* QComboBox gets the on state when the popup is open */
@@ -142,7 +141,6 @@ QComboBox::down-arrow:!enabled {
     width: 18px;
     height: 14px;
 }
-
 </string>
   </property>
   <layout class="QGridLayout" name="gridLayout_3">

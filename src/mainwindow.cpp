@@ -276,7 +276,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 													"Tile.png",
 													static_cast<int>(ModelTypes::Texture),
 													Globals::project->getProjectGuid(),
-													QString(),
+													Globals::project->getProjectGuid(),
 													thumbnailBytes);
 
     auto m = iris::CustomMaterial::create();
@@ -1062,30 +1062,30 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 		++iterator;
 	}
 
-	//std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
-	//	if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-	//		auto n = node.staticCast<iris::MeshNode>();
-	//		n->meshPath = meshGuid;
-	//		auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-	//		for (auto prop : mat->properties) {
-	//			if (prop->type == iris::PropertyType::Texture) {
-	//				if (!prop->getValue().toString().isEmpty()) {
-	//					mat->setValue(prop->name,
-	//						IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
-	//							db->fetchAsset(prop->getValue().toString()).name));
-	//				}
-	//			}
-	//		}
-	//	}
+	std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
+		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+			auto n = node.staticCast<iris::MeshNode>();
+			n->meshPath = meshGuid;
+			auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+			for (auto prop : mat->properties) {
+				if (prop->type == iris::PropertyType::Texture) {
+					if (!prop->getValue().toString().isEmpty()) {
+						mat->setValue(prop->name,
+							IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
+								db->fetchAsset(prop->getValue().toString()).name));
+					}
+				}
+			}
+		}
 
-	//	if (node->hasChildren()) {
-	//		for (auto &child : node->children) {
-	//			updateNodeValues(child);
-	//		}
-	//	}
-	//};
+		if (node->hasChildren()) {
+			for (auto &child : node->children) {
+				updateNodeValues(child);
+			}
+		}
+	};
 
-	//updateNodeValues(node);
+	updateNodeValues(node);
 
 	// model file may be invalid so null gets returned
 	if (!node) return;
@@ -1862,6 +1862,7 @@ void MainWindow::setupDesktop()
 void MainWindow::setupToolBar()
 {
     toolBar = new QToolBar;
+	toolBar->setIconSize(QSize(14, 14));
 	QAction *actionUndo = new QAction;
 	actionUndo->setToolTip("Undo last action");
 	actionUndo->setObjectName(QStringLiteral("actionUndo"));
@@ -2029,7 +2030,7 @@ void MainWindow::toggleDockWidgets()
 	d->setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::Popup);
 
 	d->setStyleSheet(
-		"QDialog { border: 1px solid black; }"
+		"QDialog { border: 1px solid black; background: #1E1E1E; }"
 		"QPushButton { padding: 8px 24px; border-radius: 1px; }"
 		"QPushButton[accessibleName=\"toggleAbles\"]:checked { background: #1E1E1E; }"
 		"QPushButton[accessibleName=\"toggleAbles\"] { background: #3E3E3E; }"

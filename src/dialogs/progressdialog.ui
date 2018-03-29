@@ -14,7 +14,11 @@
    <string>Jahshaka</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">* {
+   <string notr="true">QLabel {
+	color: #EEEEEE;
+}
+
+QProgressBar {
 	color: #EEE;
 }
 

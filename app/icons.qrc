@@ -77,8 +77,6 @@
         <file>icons/ic_file.svg</file>
         <file>icons/g_pause.svg</file>
         <file>icons/error_alpha.svg</file>
-        <file>icons/eye_closed.png</file>
-        <file>icons/eye_open.png</file>
         <file>icons/settings.png</file>
         <file>icons/settings_hover.png</file>
         <file>icons/save.png</file>
@@ -96,5 +94,7 @@
         <file>icons/icons8-virtual-reality-filled-50.png</file>
         <file>icons/icons8-camera-48.png</file>
         <file>icons/icons8-synchronize-26.png</file>
+        <file>icons/icons8-eye-48.png</file>
+        <file>icons/icons8-eye-48-dim.png</file>
     </qresource>
 </RCC>

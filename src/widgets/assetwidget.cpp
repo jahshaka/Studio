@@ -282,7 +282,7 @@ void AssetWidget::trigger()
 				}
 			};
 
-			updateNodeValues(node);
+			//updateNodeValues(node);
 
 			QVariant variant = QVariant::fromValue(node);
 			auto nodeAsset = new AssetNodeObject;
@@ -973,26 +973,23 @@ void AssetWidget::deleteItem()
 {
 	auto item = assetItem.wItem;
 
-	QStringList filesToRemove;
-
 	// Delete folder and contents
 	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_FOLDER) {
 		for (const auto &files : db->deleteFolderAndDependencies(item->data(MODEL_GUID_ROLE).toString())) {
 			auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
 			if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
 		}
-
-		delete ui->assetView->takeItem(ui->assetView->row(item));
 	}
+
 	// Delete asset and dependencies
-	else if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_ASSET) {
+	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_ASSET) {
 		for (const auto &files : db->deleteAssetAndDependencies(item->data(MODEL_GUID_ROLE).toString())) {
 			auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
 			if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
 		}
-
-		delete ui->assetView->takeItem(ui->assetView->row(item));
 	}
+	
+	delete ui->assetView->takeItem(ui->assetView->row(item));
 }
 
 void AssetWidget::openAtFolder()
@@ -1383,6 +1380,39 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 							db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), assetGuid, image.guid);
 						}
 					}
+
+					{
+						QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->getMaterialGlobal(assetGuid));
+						QJsonObject matObject = matDoc.object();
+						iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
+						material->generate(IrisUtils::join(
+							IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS),
+							IrisUtils::buildFileName(matObject.value("name").toString(), "shader"))
+						);
+
+						for (const auto &prop : material->properties) {
+							if (prop->type == iris::PropertyType::Color) {
+								QColor col;
+								col.setNamedColor(matObject.value(prop->name).toString());
+								material->setValue(prop->name, col);
+							}
+							else if (prop->type == iris::PropertyType::Texture) {
+								QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
+								QString textureStr = IrisUtils::join(
+									Globals::project->getProjectFolder(), "Textures", materialName
+								);
+								material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
+							}
+							else {
+								material->setValue(prop->name, QVariant::fromValue(matObject.value(prop->name)));
+							}
+						}
+
+						auto assetMat = new AssetMaterial;
+						assetMat->assetGuid = assetGuid;
+						assetMat->setValue(QVariant::fromValue(material));
+						AssetManager::addAsset(assetMat);
+					}
 				}
 
 				if (asset->type == ModelTypes::Mesh) {
@@ -1428,7 +1458,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 						}
 					};
 
-					updateNodeMaterialValues(scene, jsonSceneNode);
+					//updateNodeMaterialValues(scene, jsonSceneNode);
 
 					// You can't manipulate Qt's json when nested
 					std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {

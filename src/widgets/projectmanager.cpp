@@ -299,6 +299,19 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
             dynamicGrid->deleteTile(widget);
             Globals::project->setProjectGuid(widget->tileData.guid);
             db->deleteProject();
+
+			// Delete folder and contents
+			for (const auto &files : db->deleteFolderAndDependencies(Globals::project->getProjectGuid())) {
+				auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
+				if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
+			}
+
+			// Delete asset and dependencies
+			for (const auto &files : db->deleteAssetAndDependencies(Globals::project->getProjectGuid())) {
+				auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
+				if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
+			}
+
             checkForEmptyState();
         } else {
             QMessageBox::warning(this,

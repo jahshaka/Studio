@@ -213,7 +213,9 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 										? QDir(QFileInfo(request.path).absolutePath())
 											.filePath(materialDefinition[prop->name].toString())
 										: QString();
-					material->setValue(prop->name, textureStr);
+					if (!textureStr.isEmpty()) {
+						material->setValue(prop->name, textureStr);
+					}
 				}
 				else {
 					material->setValue(prop->name, materialDefinition[prop->name].toVariant());

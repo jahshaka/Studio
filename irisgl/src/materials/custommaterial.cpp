@@ -43,8 +43,10 @@ void CustomMaterial::setValue(const QString &name, const QVariant &value)
 				if (prop->type == iris::PropertyType::Texture) {
 					auto _prop = static_cast<TextureProperty*>(prop);
 					_prop->toggle = !value.toString().isEmpty();
-					prop->setValue(value.toString());
-					setTextureWithUniform(prop->uniform, value.toString());
+					if (!value.toString().isEmpty()) {
+						prop->setValue(value.toString());
+						setTextureWithUniform(prop->uniform, value.toString());
+					}
 				}
 
 				else {

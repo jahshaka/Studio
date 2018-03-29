@@ -68,12 +68,12 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 
 	// We do QIcon::Selected manually to remove an annoying default highlight for selected icons
 	visibleIcon = new QIcon;
-	visibleIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/eye_open.png"), QIcon::Normal);
-	visibleIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/eye_open.png"), QIcon::Selected);
+	visibleIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48.png"), QIcon::Normal);
+	visibleIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48.png"), QIcon::Selected);
 
 	hiddenIcon = new QIcon;
-	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/eye_closed.png"), QIcon::Normal);
-	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/eye_closed.png"), QIcon::Selected);
+	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48-dim.png"), QIcon::Normal);
+	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48-dim.png"), QIcon::Selected);
 
 	ui->sceneTree->setStyleSheet(
 		"QTreeView, QTreeWidget { show-decoration-selected: 1; }"

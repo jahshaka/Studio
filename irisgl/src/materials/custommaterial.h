@@ -55,7 +55,6 @@ public:
 
 	CustomMaterialPtr createFromShader(iris::ShaderPtr shader);
 
-protected:
     CustomMaterial() = default;
     QString materialName;
 	QString materialPath;

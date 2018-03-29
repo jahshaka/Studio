@@ -46,12 +46,15 @@ For more information see the LICENSE file
 #include "irisgl/src/vr/vrdevice.h"
 #include "irisgl/src/vr/vrmanager.h"
 
+#include "animationwidget.h"
 #include "constants.h"
+#include "keyframecurvewidget.h"
 #include "mainwindow.h"
 #include "uimanager.h"
 
 #include "core/keyboardstate.h"
 #include "core/settingsmanager.h"
+#include "editor/animationpath.h"
 #include "editor/cameracontrollerbase.h"
 #include "editor/editordata.h"
 #include "editor/editorcameracontroller.h"
@@ -96,7 +99,7 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
 
 		if (!!node && !wasHit) {
 			wasHit = true;
-			selectedDragNode = savedActiveNode = node;
+			savedActiveNode = node;
 			originalMaterial = node.staticCast<iris::MeshNode>()->getMaterial()->duplicate().staticCast<iris::CustomMaterial>();
 
 			// TODO - get this at drag start
@@ -109,17 +112,17 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
 				++iterator;
 			}
 
-			node.staticCast<iris::MeshNode>()->setMaterial(material->duplicate());
+			if (!!material) node.staticCast<iris::MeshNode>()->setMaterial(material);
 		}
 		else if (!!node && wasHit) {
 			qDebug() << "no node but hit";
 		}
 		else {
-			wasHit = false;
-			qDebug() << "no node";
 			if (!!savedActiveNode) {
 				savedActiveNode.staticCast<iris::MeshNode>()->setMaterial(originalMaterial);
 				savedActiveNode.reset();
+				originalMaterial.reset();
+				wasHit = false;
 			}
 		}
 
@@ -189,7 +192,7 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
     }
 
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Material)) {
-		if (!!selectedDragNode) {
+		if (!!savedActiveNode) {
 			iris::CustomMaterialPtr material;
 			QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
 			while (iterator != AssetManager::getAssets().constEnd()) {
@@ -199,12 +202,15 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 				++iterator;
 			}
 
-			selectedDragNode.staticCast<iris::MeshNode>()->setMaterial(material->duplicate());
+			savedActiveNode.staticCast<iris::MeshNode>()->setMaterial(material->duplicate());
 		}
 		else {
 			qDebug() << "Empty";
 		}
 	}
+
+	savedActiveNode.reset();
+	wasHit = false;
 }
 
 void SceneViewWidget::dragEnterEvent(QDragEnterEvent *event)

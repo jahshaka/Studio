@@ -272,8 +272,8 @@ QToolBar > QToolButton, QWidget#vrButton, #pmButton {
     border: 1px solid #1e1e1e;
     border-radius: 2px;
     padding: 8px;
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     margin: 8px;
 }
 
@@ -316,7 +316,13 @@ QWidget#addBtn:hover, QWidget#deleteBtn:hover {
 
 QWidget#addBtn:pressed, QWidget#deleteBtn:pressed {
     background-color: #444;
-} </string>
+}
+
+QMessageBox {
+    background: #222;
+}
+
+</string>
   </property>
   <property name="iconSize">
    <size>
