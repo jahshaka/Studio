@@ -42,9 +42,11 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 	ui->cc->setView(lv);
 
     connect(ui->browseProject, SIGNAL(pressed()), SLOT(changeDefaultDirectory()));
+    connect(ui->projectDefault, SIGNAL(textChanged(QString)), SLOT(projectDirectoryChanged(QString)));
+    connect(ui->browseEditor, SIGNAL(pressed()), SLOT(changeEditorPath()));
+    connect(ui->editorPath, SIGNAL(textChanged(QString)), SLOT(editorPathChanged(QString)));
     connect(ui->outlineWidth, SIGNAL(valueChanged(double)), SLOT(outlineWidthChanged(double)));
     connect(ui->outlineColor, SIGNAL(onColorChanged(QColor)), SLOT(outlineColorChanged(QColor)));
-    connect(ui->projectDefault, SIGNAL(textChanged(QString)), SLOT(projectDirectoryChanged(QString)));
     connect(ui->showFPS, SIGNAL(toggled(bool)), SLOT(showFpsChanged(bool)));
 	connect(ui->autoSave, SIGNAL(toggled(bool)), SLOT(enableAutoSave(bool)));
 	connect(ui->openInPlayer, SIGNAL(toggled(bool)), SLOT(enableOpenInPlayer(bool)));
@@ -134,6 +136,20 @@ void WorldSettings::projectDirectoryChanged(QString path)
 {
     settings->setValue("default_directory", path);
     defaultProjectDirectory = path;
+}
+
+void WorldSettings::changeEditorPath()
+{
+    QFileDialog editorBrowser;
+    defaultEditorPath = editorBrowser.getExistingDirectory(Q_NULLPTR, "Select Editor", defaultProjectDirectory);
+    if (!defaultEditorPath.isNull())
+        ui->editorPath->setText(defaultEditorPath);
+}
+
+void WorldSettings::editorPathChanged(QString path)
+{
+    settings->setValue("editor_path", path);
+    defaultEditorPath = path;
 }
 
 void WorldSettings::saveSettings()

@@ -3,6 +3,7 @@
 
 #include <QBuffer>
 #include <QDebug>
+#include <QDesktopServices>
 #include <QDir>
 #include <QDirIterator>
 #include <QDrag>
@@ -14,6 +15,7 @@
 #include <QPainter>
 #include <QPointer>
 #include <QProgressDialog>
+#include <QProcess>
 #include <QTemporaryDir>
 
 #include "irisgl/src/core/irisutils.h"
@@ -28,6 +30,7 @@
 #include "core/database/database.h"
 #include "core/guidmanager.h"
 #include "core/project.h"
+#include "core/settingsmanager.h"
 #include "core/thumbnailmanager.h"
 #include "editor/thumbnailgenerator.h"
 #include "io/assetmanager.h"
@@ -810,10 +813,32 @@ void AssetWidget::syncTreeAndView(const QString &path)
 
 void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
 {
-	const QString guid = item->data(MODEL_GUID_ROLE).toString();
-	assetItem.selectedGuid = guid;
-	updateAssetView(guid);
-	syncTreeAndView(guid);
+    if (item->data(MODEL_ITEM_TYPE) == MODEL_ASSET) {
+        if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Shader)) {
+            editFileExternally();
+        }
+
+        //if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::File)) {
+        //    editFileExternally();
+        //}
+
+        //// Maybe  have an internal viewer?
+        //if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Texture)) {
+        //    QDesktopServices::openUrl(QUrl(
+        //        IrisUtils::join(
+        //            Globals::project->getProjectFolder(), "Textures",
+        //            db->fetchAsset(item->data(MODEL_GUID_ROLE).toString()).name
+        //        )
+        //    ));
+        //}
+    }
+    
+    if (item->data(MODEL_ITEM_TYPE) == MODEL_FOLDER) {
+        const QString guid = item->data(MODEL_GUID_ROLE).toString();
+        assetItem.selectedGuid = guid;
+        updateAssetView(guid);
+        syncTreeAndView(guid);
+    }
 }
 
 void AssetWidget::updateAssetItem()
@@ -829,6 +854,26 @@ void AssetWidget::renameTreeItem()
 void AssetWidget::renameViewItem()
 {
 	ui->assetView->editItem(assetItem.wItem);
+}
+
+void AssetWidget::editFileExternally()
+{
+	for (auto asset : AssetManager::getAssets()) {
+		if (asset->type == ModelTypes::Shader) {
+			if (asset->fileName == assetItem.wItem->text()) {
+                auto editor = SettingsManager::getDefaultManager()->getValue("editor_path", "");
+                if (!editor.toString().isEmpty()) {
+                    QProcess *process = new QProcess(this);
+                    QStringList argument;
+                    argument << asset->path;
+                    process->start(editor.toString(), argument);
+                }
+                else {
+                    QDesktopServices::openUrl(QUrl(asset->path));
+                }
+			}
+		}
+	}
 }
 
 void AssetWidget::exportMaterial()
