@@ -96,5 +96,7 @@
         <file>icons/icons8-synchronize-26.png</file>
         <file>icons/icons8-eye-48.png</file>
         <file>icons/icons8-eye-48-dim.png</file>
+        <file>icons/icons8-file-72.png</file>
+        <file>icons/icons8-file-72-file.png</file>
     </qresource>
 </RCC>
