@@ -493,6 +493,30 @@ QVector<AssetTileData> Database::fetchAssetsByCollection(int collection_id)
 	return tileData;
 }
 
+QVector<AssetTileData> Database::fetchAssetsByType(const int type)
+{
+    QSqlQuery query;
+    query.prepare("SELECT guid, type, name, asset FROM assets WHERE type = ?");
+    query.addBindValue(type);
+    executeAndCheckQuery(query, "fetchAssetsByType");
+
+    QVector<AssetTileData> tileData;
+    while (query.next()) {
+        AssetTileData data;
+        QSqlRecord record = query.record();
+        for (int i = 0; i < record.count(); i++) {
+            data.guid = record.value(0).toString();
+            data.type = record.value(1).toInt();
+            data.name = record.value(2).toString();
+            data.asset = record.value(3).toByteArray();
+        }
+
+        tileData.push_back(data);
+    }
+
+    return tileData;
+}
+
 QVector<AssetData> Database::fetchAssetThumbnails(const QStringList &guids)
 {
 	// Construct the guid list to use and chop of the extraneous comma to make it valid
@@ -1324,6 +1348,22 @@ bool Database::checkIfRecordExists(const QString & record, const QVariant &value
 	return false;
 }
 
+QStringList Database::fetchFolderNameByParent(const QString &guid)
+{
+	QSqlQuery query;
+	query.prepare("SELECT name FROM folders WHERE parent = ?");
+	query.addBindValue(guid);
+	executeAndCheckQuery(query, "fetchFolderNameByParent");
+
+	QStringList folders;
+	while (query.next()) {
+		QSqlRecord record = query.record();
+		folders.append(record.value(0).toString());
+	}
+
+	return folders;
+}
+
 QStringList Database::fetchFolderAndChildFolders(const QString &guid)
 {
 	std::function<void(QStringList&, const QString&)> fetchFolders
@@ -1413,6 +1453,9 @@ QStringList Database::fetchAssetAndDependencies(const QString &guid)
 		else if (fileSuffix == Constants::MATERIAL_EXT) {
 			return QDir("Materials").filePath(value);
 		}
+        else if (Constants::WHITELIST.contains(fileSuffix)) {
+            return QDir("Files").filePath(value);
+        }
 		else {
 			return value;
 		}
@@ -1501,14 +1544,14 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid)
 		deleteDependency(asset);
 	}
 
-for (int i = 0; i < files.size(); ++i) {
-	if (QFileInfo(files[i]).suffix().isEmpty()) {
-		files.removeAt(i);
-	}
-}
+    for (int i = 0; i < files.size(); ++i) {
+	    if (QFileInfo(files[i]).suffix().isEmpty()) {
+		    files.removeAt(i);
+	    }
+    }
 
-files.removeDuplicates();
-return files;
+    files.removeDuplicates();
+    return files;
 }
 
 QString Database::fetchAssetGUIDByName(const QString & name)

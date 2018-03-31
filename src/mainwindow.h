@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QModelIndex>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QListWidgetItem>
 #include <QDrag>
 #include <QToolBar>
 #include <QSharedPointer>
@@ -227,10 +228,11 @@ public slots:
 
     void updateAnim();
 
-    void sceneNodeSelected(QTreeWidgetItem* item);
     void sceneTreeCustomContextMenu(const QPoint&);
     void sceneTreeItemChanged(QTreeWidgetItem* item,int column);
 
+    void sceneNodeSelected(QTreeWidgetItem *item);
+    void assetItemSelected(QListWidgetItem *item);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
 
 	void saveScene(const QString &filename, const QString &projectPath);

@@ -84,7 +84,8 @@ set(SRCS
     src/widgets/texturepickerwidget.cpp 
     src/io/materialreader.cpp 
     src/widgets/filepickerwidget.cpp 
-    src/widgets/propertywidgets/meshpropertywidget.cpp 
+    src/widgets/propertywidgets/meshpropertywidget.cpp
+    src/widgets/propertywidgets/shaderpropertywidget.cpp 
     src/widgets/propertywidget.cpp 
     src/widgets/propertywidgets/postprocesspropertywidget.cpp 
     src/widgets/postprocesseswidget.cpp 
@@ -197,6 +198,7 @@ set(HEADERS
     src/io/materialreader.hpp 
     src/widgets/filepickerwidget.h 
     src/widgets/propertywidgets/meshpropertywidget.h 
+    src/widgets/propertywidgets/shaderpropertywidget.h 
     src/widgets/propertywidget.h 
     src/widgets/basewidget.h 
     src/widgets/propertywidgets/postprocesspropertywidget.h 

@@ -82,6 +82,7 @@ public:
 	QVector<FolderData> fetchCrumbTrail(const QString &parent);
 	QVector<AssetTileData> fetchChildAssets(const QString &parent, bool showDependencies = true);
 	QVector<AssetTileData> fetchAssetsByCollection(int collection_id);
+	QVector<AssetTileData> fetchAssetsByType(const int type);
 	QVector<AssetData> fetchAssetThumbnails(const QStringList& guids);
     QByteArray getSceneBlobGlobal() const;
     QByteArray fetchCachedThumbnail(const QString& name) const;
@@ -94,6 +95,7 @@ public:
 
 	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table, const QSqlDatabase &connection);
 
+	QStringList fetchFolderNameByParent(const QString &guid);
 	QStringList fetchFolderAndChildFolders(const QString &guid);
 	QStringList fetchChildFolderAssets(const QString &guid);
 

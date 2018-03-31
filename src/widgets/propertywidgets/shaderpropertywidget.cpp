@@ -1,0 +1,187 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
+#include "shaderpropertywidget.h"
+
+#include <QDirIterator>
+#include <QJsonDocument>
+#include <QJsonObject>
+
+#include "irisgl/src/graphics/shader.h"
+#include "irisgl/src/scenegraph/meshnode.h"
+
+#include "constants.h"
+#include "globals.h"
+
+#include "../checkboxwidget.h"
+#include "../comboboxwidget.h"
+#include "../sceneviewwidget.h"
+#include "core/database/database.h"
+#include "io/assetmanager.h"
+
+ShaderPropertyWidget::ShaderPropertyWidget()
+{
+    allowBuiltinShaders = addCheckBox("Allow Builtin Shaders");
+    autoReloadOnChange  = addCheckBox("Automatically Reload");
+	vertexShaderCombo   = addComboBox("Vertex Shader");
+	fragmentShaderCombo = addComboBox("Fragment Shader");
+
+	shader = iris::ShaderPtr();
+
+    QDirIterator it(":/assets/shaders", QDirIterator::Subdirectories);
+    while (it.hasNext()) builtinShaders.append(it.next());
+
+    onAllowBuiltinShaders(false);
+
+    //vertexShaderCombo->setCurrentItem("color");
+    //fragmentShaderCombo->setCurrentItem("color");
+
+    //shader->load(
+    //    IrisUtils::getAbsoluteAssetPath("app/shaders/color.vert"),
+    //    IrisUtils::getAbsoluteAssetPath("app/shaders/flat_color.frag")
+    //);
+
+    connect(vertexShaderCombo,	    &ComboBoxWidget::currentIndexChanged,
+            this,                   &ShaderPropertyWidget::onVertexShaderFileChanged);
+
+    connect(fragmentShaderCombo,    &ComboBoxWidget::currentIndexChanged,
+			this,                   &ShaderPropertyWidget::onFragmentShaderFileChanged);
+
+    connect(allowBuiltinShaders,    &CheckBoxWidget::valueChanged,
+            this,                   &ShaderPropertyWidget::onAllowBuiltinShaders);
+}
+
+ShaderPropertyWidget::~ShaderPropertyWidget()
+{
+
+}
+
+void ShaderPropertyWidget::onVertexShaderFileChanged(const QString& file)
+{
+    auto vertexShader = vertexShaderCombo->getCurrentItemData();
+    auto fragmentShader = fragmentShaderCombo->getCurrentItemData();
+    //shader->load(vertexShaderCombo->getCurrentItemData(), fragmentShaderCombo->getCurrentItemData());
+    //for (auto asset : AssetManager::getAssets()) {
+    //    if (asset->type == ModelTypes::File) {
+    //        if (vertexShaderCombo->getCurrentItemData() == asset->assetGuid) {
+    //            vertexShader = asset->path;
+    //        }
+
+    //        if (fragmentShaderCombo->getCurrentItemData() == asset->assetGuid) {
+    //            fragmentShader = asset->path;
+    //        }
+    //    }
+    //}
+    
+    for (auto asset : AssetManager::getAssets()) {
+        if (asset->type == ModelTypes::Shader) {
+            auto shaderObject = asset->getValue().toJsonObject();
+            shaderObject["vertex_shader"] = vertexShader;
+            shaderObject["fragment_shader"] = fragmentShader;
+            asset->setValue(QVariant::fromValue(shaderObject));
+
+            QFile jsonFile(asset->path);
+            jsonFile.open(QFile::WriteOnly);
+            jsonFile.write(QJsonDocument(shaderObject).toJson());
+        }
+    }
+}
+
+void ShaderPropertyWidget::onFragmentShaderFileChanged(const QString& file)
+{
+    auto vertexShader = vertexShaderCombo->getCurrentItemData();
+    auto fragmentShader = fragmentShaderCombo->getCurrentItemData();
+    //shader->load(vertexShaderCombo->getCurrentItemData(), fragmentShaderCombo->getCurrentItemData());
+    //for (auto asset : AssetManager::getAssets()) {
+    //    if (asset->type == ModelTypes::File) {
+    //        if (vertexShaderCombo->getCurrentItemData() == asset->assetGuid) {
+    //            vertexShader = asset->path;
+    //        }
+
+    //        if (fragmentShaderCombo->getCurrentItemData() == asset->assetGuid) {
+    //            fragmentShader = asset->path;
+    //        }
+    //    }
+    //}
+
+    for (auto asset : AssetManager::getAssets()) {
+        if (asset->type == ModelTypes::Shader) {
+            auto shaderObject = asset->getValue().toJsonObject();
+            shaderObject["vertex_shader"] = vertexShader;
+            shaderObject["fragment_shader"] = fragmentShader;
+            asset->setValue(QVariant::fromValue(shaderObject));
+
+            QFile jsonFile(asset->path);
+            jsonFile.open(QFile::WriteOnly);
+            jsonFile.write(QJsonDocument(shaderObject).toJson());
+        }
+    }
+}
+
+void ShaderPropertyWidget::onAllowBuiltinShaders(const bool toggle)
+{
+    if (toggle) {
+        for (const auto &shader : builtinShaders) {
+            auto shaderInfo = QFileInfo(shader);
+            if (shaderInfo.suffix() == "vert") vertexShaderCombo->addItem(shaderInfo.baseName(), shader);
+            if (shaderInfo.suffix() == "frag") fragmentShaderCombo->addItem(shaderInfo.baseName(), shader);
+        }
+    }
+
+    for (auto asset : AssetManager::getAssets()) {
+        if (asset->type == ModelTypes::File) {
+            auto shaderInfo = QFileInfo(asset->fileName);
+            if (shaderInfo.suffix() == "vert") vertexShaderCombo->addItem(shaderInfo.baseName(), asset->assetGuid);
+            if (shaderInfo.suffix() == "frag") fragmentShaderCombo->addItem(shaderInfo.baseName(), asset->assetGuid);
+        }
+    }
+}
+
+void ShaderPropertyWidget::setShaderGuid(const QString &guid)
+{
+    for (auto asset : AssetManager::getAssets()) {
+        if (asset->assetGuid == guid) {
+            auto shaderObject = asset->getValue().toJsonObject();
+            auto vShader = shaderObject["vertex_shader"].toString();
+            auto fShader = shaderObject["fragment_shader"].toString();
+
+            bool usesBuiltinAsset = false;
+            for (const auto &asset : builtinShaders) {
+                if (vShader == asset || fShader == asset) {
+                    usesBuiltinAsset = true;
+                    break;
+                }
+            }
+
+            if (usesBuiltinAsset) {
+                allowBuiltinShaders->setValue(true);
+                for (const auto &shader : builtinShaders) {
+                    auto shaderInfo = QFileInfo(shader);
+                    if (shaderInfo.suffix() == "vert") vertexShaderCombo->addItem(shaderInfo.baseName(), shader);
+                    if (shaderInfo.suffix() == "frag") fragmentShaderCombo->addItem(shaderInfo.baseName(), shader);
+                }
+            }
+
+            if (int index = vertexShaderCombo->findData(vShader)) {
+                vertexShaderCombo->setCurrentIndex(index);
+            }
+
+            if (int index = fragmentShaderCombo->findData(fShader)) {
+                fragmentShaderCombo->setCurrentIndex(index);
+            }
+        }
+    }
+}
+
+void ShaderPropertyWidget::leaveEvent(QEvent *event)
+{
+    QWidget::leaveEvent(event);
+}

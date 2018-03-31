@@ -30,6 +30,7 @@ public:
     void end(GraphicsDevicePtr device, ScenePtr scene) override;
 
     void generate(const QString&, bool project = false);
+    void generate(const QJsonObject&);
     void setTextureWithUniform(const QString&, const QString&);
     void setValue(const QString&, const QVariant&);
     void setBaseMaterialProperties(const QJsonObject&);
@@ -60,6 +61,7 @@ public:
 	QString materialPath;
 
     QJsonObject loadShaderFromDisk(const QString &);
+    void createWidgets(const QJsonArray&);
 };
 
 Q_DECLARE_METATYPE(CustomMaterial)

@@ -25,6 +25,8 @@ struct Asset {
 	QVariant			value;
 };
 
+// Notice this class doesn't do anything, this is intentional
+// Explicitly define a type for whatever you want to hold
 struct AssetVariant : public Asset
 {
     AssetVariant() {
@@ -71,7 +73,6 @@ struct AssetNodeObject : public Asset
 {
 	AssetNodeObject() {
 		type = ModelTypes::Object;
-		deletable = true;
 	}
 
 	virtual QVariant getValue() {
@@ -87,7 +88,36 @@ struct AssetMaterial : public Asset
 {
 	AssetMaterial() {
 		type = ModelTypes::Material;
-		deletable = true;
+	}
+
+	virtual QVariant getValue() {
+		return value;
+	}
+
+	virtual void setValue(QVariant val) {
+		value = val;
+	}
+};
+
+struct AssetFile : public Asset
+{
+    AssetFile() {
+        type = ModelTypes::File;
+    }
+
+    virtual QVariant getValue() {
+        return value;
+    }
+
+    virtual void setValue(QVariant val) {
+        value = val;
+    }
+};
+
+struct AssetShader : public Asset
+{
+	AssetShader() {
+		type = ModelTypes::Shader;
 	}
 
 	virtual QVariant getValue() {

@@ -184,6 +184,9 @@ public:
 
 	SceneViewWidget *sceneView;
 
+signals:
+	void assetItemSelected(QListWidgetItem*);
+
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
     void dragEnterEvent(QDragEnterEvent*) override;
@@ -204,6 +207,7 @@ protected slots:
     void renameTreeItem();
     void renameViewItem();
 
+	void editFileExternally();
 	void exportMaterial();
 
     void searchAssets(QString);
@@ -212,6 +216,7 @@ protected slots:
     void deleteTreeFolder();
     void deleteItem();
     void openAtFolder();
+	void createShader();
     void createFolder();
     void importAssetB();
     void createDirectoryStructure(const QList<directory_tuple>&);

@@ -141,12 +141,29 @@ void CustomMaterial::generate(const QString &fileName, bool project)
     }
 
     createProgramFromShaderSource(vertPath, fragPath);
+    createWidgets(jahShader["uniforms"].toArray());
+}
 
-    auto widgetProps = jahShader["uniforms"].toArray();
+void CustomMaterial::generate(const QJsonObject &object)
+{
+    setName(object["name"].toString());
 
+    auto vertPath = object["vertex_shader"].toString();
+    auto fragPath = object["fragment_shader"].toString();
+
+    setBaseMaterialProperties(object);
+
+    //if (!vertPath.startsWith(":")) vertPath = vertPath;
+    //if (!fragPath.startsWith(":")) fragPath = fragPath;
+
+    createProgramFromShaderSource(vertPath, fragPath);
+    createWidgets(object["uniforms"].toArray());
+}
+
+void CustomMaterial::createWidgets(const QJsonArray &widgetProps)
+{
     for (int i = 0; i < widgetProps.size(); i++) {
-        auto prop = widgetProps[i].toObject();
-
+        auto prop           = widgetProps[i].toObject();
         auto displayName    = prop["displayName"].toString();
         auto name           = prop["name"].toString();
         auto uniform        = prop["uniform"].toString();
@@ -161,22 +178,18 @@ void CustomMaterial::generate(const QString &fileName, bool project)
             fltProp->uniform        = uniform;
             fltProp->value          = prop["value"].toDouble();
 
-            if (properties.size() < widgetProps.size()) {
-                this->properties.append(fltProp);
-            }
+            if (properties.size() < widgetProps.size()) this->properties.append(fltProp);
         }
 
         if (prop["type"] == "bool") {
-            auto blProp = new iris::BoolProperty;
-            blProp->id              = i;
-            blProp->displayName     = displayName;
-            blProp->name            = name;
-            blProp->uniform         = uniform;
-            blProp->value           = prop["value"].toBool();
+            auto blProp             = new iris::BoolProperty;
+            blProp->id          = i;
+            blProp->displayName = displayName;
+            blProp->name        = name;
+            blProp->uniform     = uniform;
+            blProp->value       = prop["value"].toBool();
 
-            if (properties.size() < widgetProps.size()) {
-                this->properties.append(blProp);
-            }
+            if (properties.size() < widgetProps.size()) this->properties.append(blProp);
         }
 
         if (prop["type"] == "texture") {
@@ -188,9 +201,7 @@ void CustomMaterial::generate(const QString &fileName, bool project)
             texProp->toggleValue    = prop["toggle"].toString();
             texProp->value          = prop["value"].toString();
 
-            if (properties.size() < widgetProps.size()) {
-                this->properties.append(texProp);
-            }
+            if (properties.size() < widgetProps.size()) this->properties.append(texProp);
         }
 
         if (prop["type"] == "color") {
@@ -202,11 +213,9 @@ void CustomMaterial::generate(const QString &fileName, bool project)
 
             QColor col;
             col.setNamedColor(prop["value"].toString());
-            clrProp->value          = col;
+            clrProp->value = col;
 
-            if (properties.size() < widgetProps.size()) {
-                this->properties.append(clrProp);
-            }
+            if (properties.size() < widgetProps.size()) this->properties.append(clrProp);
         }
     }
 }

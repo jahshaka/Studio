@@ -67,6 +67,33 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 			AssetManager::addAsset(model);
 		}
 
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader))) {
+            QFile *templateShaderFile = new QFile(IrisUtils::join(Globals::project->getProjectFolder(), "Shaders", asset.name));
+            templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);
+            QJsonObject shaderDefinition = QJsonDocument::fromJson(templateShaderFile->readAll()).object();
+            templateShaderFile->close();
+
+            auto assetShader = new AssetShader;
+            assetShader->assetGuid = asset.guid;
+            assetShader->fileName = QFileInfo(asset.name).baseName();
+            assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), "Shaders", asset.name);
+            assetShader->setValue(QVariant::fromValue(shaderDefinition));
+            AssetManager::addAsset(assetShader);
+        }
+
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File))) {
+            QFile *file = new QFile(IrisUtils::join(Globals::project->getProjectFolder(), "Files", asset.name));
+            file->open(QIODevice::ReadOnly | QIODevice::Text);
+            file->close();
+
+            auto assetFile = new AssetFile;
+            assetFile->fileName = asset.name;
+            assetFile->assetGuid = asset.guid;
+            assetFile->path = IrisUtils::join(Globals::project->getProjectFolder(), "Files", asset.name);
+            assetFile->setValue(QVariant::fromValue(QVariant::fromValue(file)));
+            AssetManager::addAsset(assetFile);
+        }
+
 		// Materials
 		for (const auto &asset :
 			db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Material)))

@@ -26,18 +26,15 @@ namespace iris
 
 Shader::~Shader()
 {
-    for(auto iter = this->attribs.begin();iter!=this->attribs.end();iter++)
-    {
+    for (auto iter = this->attribs.begin(); iter != this->attribs.end(); iter++) {
         delete iter.value();
     }
 
-    for(auto iter = this->uniforms.begin();iter!=this->uniforms.end();iter++)
-    {
+    for (auto iter = this->uniforms.begin(); iter != this->uniforms.end(); iter++) {
         delete iter.value();
     }
 
-    for(auto iter = this->samplers.begin();iter!=this->samplers.end();iter++)
-    {
+    for (auto iter = this->samplers.begin(); iter != this->samplers.end(); iter++) {
         delete iter.value();
     }
 
@@ -58,16 +55,8 @@ void Shader::setFragmentShader(QString fragmentShader)
 
 ShaderPtr Shader::load(QString vertexShaderFile,QString fragmentShaderFile)
 {
-    //QFile vsFile(vertexShaderFile);
-    //vsFile.open(QFile::ReadOnly | QFile::Text);
-    //QString vertexShader(vsFile.readAll());
 	QString vertexShader = GraphicsHelper::loadAndProcessShader(vertexShaderFile);
-
-    //QFile fsFile(fragmentShaderFile);
-    //fsFile.open(QFile::ReadOnly | QFile::Text);
-    //QString fragmentShader(fsFile.readAll());
 	QString fragmentShader = GraphicsHelper::loadAndProcessShader(fragmentShaderFile);
-
     return create(vertexShader,fragmentShader);
 }
 

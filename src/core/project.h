@@ -102,7 +102,7 @@ struct CollectionData {
 };
 
 enum class ModelTypes {
-	Shader,
+    Undefined,
 	Material,
 	Texture,
 	Video,
@@ -111,8 +111,9 @@ enum class ModelTypes {
 	Mesh,
 	SoundEffect,
 	Music,
-	Undefined,
-	Variant
+	Shader,
+	Variant,
+	File
 };
 
 #define	MODEL_GUID_ROLE		0x0113

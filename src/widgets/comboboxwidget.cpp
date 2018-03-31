@@ -37,9 +37,14 @@ void ComboBoxWidget::setLabel(const QString &label)
     ui->label->setText(label);
 }
 
-void ComboBoxWidget::addItem(const QString &item)
+void ComboBoxWidget::addItem(const QString &text, const QVariant &data)
 {
-    ui->comboBox->addItem(item);
+    ui->comboBox->addItem(text, data);
+}
+
+int ComboBoxWidget::findData(const QVariant & data)
+{
+    return ui->comboBox->findData(data);
 }
 
 QString ComboBoxWidget::getCurrentItem()
@@ -47,11 +52,21 @@ QString ComboBoxWidget::getCurrentItem()
     return ui->comboBox->currentText();
 }
 
+QString ComboBoxWidget::getCurrentItemData()
+{
+    return ui->comboBox->itemData(ui->comboBox->currentIndex()).toString();
+}
+
 void ComboBoxWidget::setCurrentItem(const QString &item)
 {
 	ui->comboBox->blockSignals(true);
     ui->comboBox->setCurrentIndex(ui->comboBox->findData(item, Qt::DisplayRole));
 	ui->comboBox->blockSignals(false);
+}
+
+void ComboBoxWidget::setCurrentIndex(const int &index)
+{
+    ui->comboBox->setCurrentIndex(index);
 }
 
 void ComboBoxWidget::onDropDownTextChanged(const QString &text)

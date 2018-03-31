@@ -819,6 +819,12 @@ void MainWindow::setupPropertyUi()
     animWidget = new AnimationWidget();
 }
 
+void MainWindow::assetItemSelected(QListWidgetItem *item)
+{
+	emit sceneNodeSelected(iris::SceneNodePtr());
+	this->sceneNodePropertiesWidget->setAssetItem(item);
+}
+
 void MainWindow::sceneNodeSelected(QTreeWidgetItem* item)
 {
 
@@ -1560,6 +1566,8 @@ void MainWindow::setupDockWidgets()
     assetWidget = new AssetWidget(db, viewPort);
     assetWidget->setAcceptDrops(true);
     assetWidget->installEventFilter(this);
+
+	connect(assetWidget, SIGNAL(assetItemSelected(QListWidgetItem*)), this, SLOT(assetItemSelected(QListWidgetItem*)));
 
 	assetWidget->sceneView = sceneView;
 

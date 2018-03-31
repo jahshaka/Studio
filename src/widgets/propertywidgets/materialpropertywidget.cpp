@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "materialpropertywidget.h"
 
+#include <QJsonObject>
+
 #include "../accordianbladewidget.h"
 #include "../hfloatsliderwidget.h"
 #include "../comboboxwidget.h"
@@ -42,7 +44,7 @@ void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
     setupShaderSelector();
 
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-        // TODO - properly update only when requested
+        // TODO - properly update only when requested, and cache these?
         auto shaderName = Constants::SHADER_DEFS + material->getName() + ".shader";
         auto shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(shaderName));
         if (shaderFile.exists()) {
@@ -50,8 +52,19 @@ void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
         } else {
             for (auto asset : AssetManager::getAssets()) {
                 if (asset->type == ModelTypes::Shader) {
-                    if (asset->fileName == material->getName() + ".shader") {
-                        material->generate(asset->path, true);
+                    if (asset->fileName == material->getName()) {
+                        auto def = asset->getValue().toJsonObject();
+                        auto vertexShader = def["vertex_shader"].toString();
+                        auto fragmentShader = def["fragment_shader"].toString();
+                        for (auto asset : AssetManager::getAssets()) {
+                            if (asset->type == ModelTypes::File) {
+                                if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+                                if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+                            }
+                        }
+                        def["vertex_shader"] = vertexShader;
+                        def["fragment_shader"] = fragmentShader;
+                        material->generate(def);
                     }
                 }
             }
@@ -97,7 +110,7 @@ void MaterialPropertyWidget::setupShaderSelector()
 
     for (auto asset : AssetManager::getAssets()) {
         if (asset->type == ModelTypes::Shader) {
-            materialSelector->addItem(QFileInfo(asset->fileName).baseName());
+            materialSelector->addItem(asset->fileName);
         }
     }
 

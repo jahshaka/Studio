@@ -13,8 +13,9 @@ namespace Constants
     const QString CONTENT_VERSION   = "0.5.1a";
     const QString PROJ_EXT          = ".jah";
 	const QString META_EXT			= "meta";
-    const QStringList PROJECT_DIRS  = { "Textures", "Shaders", "Materials", "Models" };
+    const QStringList PROJECT_DIRS  = { "Textures", "Shaders", "Materials", "Models", "Files" };
     const QString SHADER_DEFS       = "/app/shader_defs/";
+	const QString SHADER_FILE_DEFS	= "/app/shaders/";
     const QString DEFAULT_SHADER    = "/app/shader_defs/Default.shader";
     const QString SAMPLES_FOLDER    = "/scenes";
     const QString PROJECT_FOLDER    = "/Jahshaka";
@@ -35,6 +36,7 @@ namespace Constants
 
     const QList<QString> IMAGE_EXTS = { "png", "jpg" };
     const QList<QString> MODEL_EXTS = { "obj", "fbx", "dae", "blend"};
+    const QList<QString> WHITELIST  = { "txt", "frag", "vert", "vs", "fs" };
 	const QString SHADER_EXT		= "shader";
 	const QString MATERIAL_EXT		= "material";
 	const QString ASSET_EXT			= "jaf";

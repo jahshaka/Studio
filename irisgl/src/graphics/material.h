@@ -107,15 +107,14 @@ public:
      */
     void unbindTextures(GraphicsDevicePtr device);
 
-    void createProgramFromShaderSource(QString vsFile,QString fsFile);
+    void createProgramFromShaderSource(QString vsFile, QString fsFile);
 
     template<typename T>
     void setUniformValue(QString name,T value) {
         getProgram()->setUniformValue(name.toStdString().c_str(), value);
     }
 
-	virtual MaterialPtr duplicate()
-	{
+	virtual MaterialPtr duplicate() {
 		return MaterialPtr(new Material());
 	}
 
