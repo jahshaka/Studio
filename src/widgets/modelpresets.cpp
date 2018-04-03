@@ -32,7 +32,7 @@ ModelPresets::ModelPresets(QWidget *parent) :
     connect(ui->modelsSets, SIGNAL(doubleClicked(QModelIndex)), SLOT(onPrimitiveSelected(QModelIndex)));
 
     // addItem("IcoSphere","app/modelpresets/icosphere.png");
-    addItem("Cone",     "app/modelpresets/cone.png");
+    // addItem("Cone",     "app/modelpresets/cone.png");
     addItem("Plane",    "app/modelpresets/plane.png");
     addItem("Cube",     "app/modelpresets/cube.png");
     addItem("Cylinder", "app/modelpresets/cylinder.png");
