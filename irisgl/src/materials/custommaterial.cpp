@@ -121,24 +121,25 @@ void CustomMaterial::generate(const QString &fileName, bool project)
 {
 	materialPath = fileName;
     auto fileInfo = QFileInfo(fileName);
-    auto shaderName = fileName;
-    if (fileInfo.suffix().isEmpty()) shaderName += ".shader";
-    auto jahShader = loadShaderFromDisk(shaderName);
+    //auto shaderName = fileName;
+    //if (fileInfo.suffix().isEmpty()) shaderName += ".shader";
+    auto jahShader = loadShaderFromDisk(fileInfo.absoluteFilePath());
 
     setName(jahShader["name"].toString());
+    setGuid(jahShader["guid"].toString());
 
     auto vertPath = jahShader["vertex_shader"].toString();
     auto fragPath = jahShader["fragment_shader"].toString();
 
     setBaseMaterialProperties(jahShader);
 
-    if (!project) {
+    //if (!project) {
         if (!vertPath.startsWith(":")) vertPath = IrisUtils::getAbsoluteAssetPath(vertPath);
         if (!fragPath.startsWith(":")) fragPath = IrisUtils::getAbsoluteAssetPath(fragPath);
-    } else {
-        if (!vertPath.startsWith(":")) vertPath = QDir(fileInfo.absolutePath()).filePath(vertPath);
-        if (!fragPath.startsWith(":")) fragPath = QDir(fileInfo.absolutePath()).filePath(fragPath);
-    }
+    //} else {
+        //if (!vertPath.startsWith(":")) vertPath = QDir(fileInfo.absolutePath()).filePath(vertPath);
+       // if (!fragPath.startsWith(":")) fragPath = QDir(fileInfo.absolutePath()).filePath(fragPath);
+   // }
 
     createProgramFromShaderSource(vertPath, fragPath);
     createWidgets(jahShader["uniforms"].toArray());
@@ -147,6 +148,7 @@ void CustomMaterial::generate(const QString &fileName, bool project)
 void CustomMaterial::generate(const QJsonObject &object)
 {
     setName(object["name"].toString());
+    setGuid(object["guid"].toString());
 
     auto vertPath = object["vertex_shader"].toString();
     auto fragPath = object["fragment_shader"].toString();
@@ -230,6 +232,11 @@ void CustomMaterial::setName(const QString &name)
     materialName = name;
 }
 
+void CustomMaterial::setGuid(const QString &guid)
+{
+    materialGuid = guid;
+}
+
 void CustomMaterial::setBaseMaterialProperties(const QJsonObject &jahShader)
 {
     auto renderLayer    = jahShader["renderLayer"].toString("opaque");
@@ -307,6 +314,11 @@ CustomMaterialPtr CustomMaterial::createFromShader(iris::ShaderPtr shader)
 QString CustomMaterial::getName() const
 {
     return materialName;
+}
+
+QString CustomMaterial::getGuid() const
+{
+    return materialGuid;
 }
 
 CustomMaterialPtr CustomMaterial::create()

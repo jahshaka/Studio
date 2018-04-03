@@ -45,6 +45,7 @@ public:
 
 
 protected slots:
+    void materialChanged(int);
     void materialChanged(const QString&);
 
 private:

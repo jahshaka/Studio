@@ -1004,10 +1004,8 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
     {
         auto mat = iris::CustomMaterial::create();
         //MaterialReader *materialReader = new MaterialReader();
-        if (mesh->hasSkeleton())
-            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
-        else
-            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+        if (mesh->hasSkeleton()) mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
+        else mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
         mat->setValue("diffuseColor", data.diffuseColor);
         mat->setValue("specularColor", data.specularColor);
@@ -1216,7 +1214,10 @@ void MainWindow::createMaterial(const QString &guid)
 		QByteArray binaryMat = QJsonDocument(materialDef).toBinaryData();
 
 		for (auto &value : materialDef) {
-			if (value.isString() && !db->fetchAsset(value.toString()).name.isEmpty()) {
+			if (value.isString() &&
+                !db->fetchAsset(value.toString()).name.isEmpty() &&
+                value.toString() != materialDef["guid"].toString())
+            {
 				value = "../Textures/" + db->fetchAsset(value.toString()).name;
 			}
 		}
@@ -1250,11 +1251,50 @@ void MainWindow::createMaterial(const QString &guid)
 
 		QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->getMaterialGlobal(assetGuid));
 		QJsonObject matObject = matDoc.object();
-		iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
-		material->generate(IrisUtils::join(
-			IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS),
-			IrisUtils::buildFileName(matObject.value("name").toString(), "shader"))
-		);
+
+        auto material = iris::CustomMaterial::create();
+        const QJsonObject materialDefinition = matDoc.object();
+        auto shaderGuid = materialDefinition["guid"].toString();
+        material->setName(materialDefinition["name"].toString());
+        material->setGuid(shaderGuid);
+
+        QFileInfo shaderFile;
+
+        QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+        while (it.hasNext()) {
+            it.next();
+            if (it.key() == shaderGuid) {
+                shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
+                break;
+            }
+        }
+
+        if (shaderFile.exists()) {
+            material->generate(shaderFile.absoluteFilePath());
+        }
+        else {
+            // Reading is thread safe...
+            for (auto asset : AssetManager::getAssets()) {
+                if (asset->type == ModelTypes::Shader) {
+                    if (asset->assetGuid == material->getGuid()) {
+                        auto def = asset->getValue().toJsonObject();
+                        auto vertexShader = def["vertex_shader"].toString();
+                        auto fragmentShader = def["fragment_shader"].toString();
+                        for (auto asset : AssetManager::getAssets()) {
+                            if (asset->type == ModelTypes::File) {
+                                if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+                                if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+                            }
+                        }
+                        def["vertex_shader"] = vertexShader;
+                        def["fragment_shader"] = fragmentShader;
+                        qDebug() << vertexShader;
+                        qDebug() << fragmentShader;
+                        //material->generate(def);
+                    }
+                }
+            }
+        }
 
 		for (const auto &prop : material->properties) {
 			if (prop->type == iris::PropertyType::Color) {

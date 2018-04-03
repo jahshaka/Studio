@@ -49,14 +49,14 @@ ShaderPropertyWidget::ShaderPropertyWidget()
     //    IrisUtils::getAbsoluteAssetPath("app/shaders/flat_color.frag")
     //);
 
-    connect(vertexShaderCombo,	    &ComboBoxWidget::currentIndexChanged,
-            this,                   &ShaderPropertyWidget::onVertexShaderFileChanged);
+    connect(vertexShaderCombo,	    SIGNAL(currentIndexChanged(int)),
+            this,                   SLOT(onVertexShaderFileChanged(int)));
 
-    connect(fragmentShaderCombo,    &ComboBoxWidget::currentIndexChanged,
-			this,                   &ShaderPropertyWidget::onFragmentShaderFileChanged);
+    connect(fragmentShaderCombo,    SIGNAL(currentIndexChanged(int)),
+			this,                   SLOT(onFragmentShaderFileChanged(int)));
 
-    connect(allowBuiltinShaders,    &CheckBoxWidget::valueChanged,
-            this,                   &ShaderPropertyWidget::onAllowBuiltinShaders);
+    connect(allowBuiltinShaders,    SIGNAL(valueChanged(bool)),
+            this,                   SLOT(onAllowBuiltinShaders(bool)));
 }
 
 ShaderPropertyWidget::~ShaderPropertyWidget()
@@ -64,7 +64,7 @@ ShaderPropertyWidget::~ShaderPropertyWidget()
 
 }
 
-void ShaderPropertyWidget::onVertexShaderFileChanged(const QString& file)
+void ShaderPropertyWidget::onVertexShaderFileChanged(int index)
 {
     auto vertexShader = vertexShaderCombo->getCurrentItemData();
     auto fragmentShader = fragmentShaderCombo->getCurrentItemData();
@@ -95,7 +95,7 @@ void ShaderPropertyWidget::onVertexShaderFileChanged(const QString& file)
     }
 }
 
-void ShaderPropertyWidget::onFragmentShaderFileChanged(const QString& file)
+void ShaderPropertyWidget::onFragmentShaderFileChanged(int index)
 {
     auto vertexShader = vertexShaderCombo->getCurrentItemData();
     auto fragmentShader = fragmentShaderCombo->getCurrentItemData();

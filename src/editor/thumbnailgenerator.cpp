@@ -1,6 +1,10 @@
 #include "thumbnailgenerator.h"
+
+#include <QJsonDocument>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QOpenGLFunctions_3_2_Core>
-#include "constants.h"
+#include <QtMath>
 
 #include "irisgl/src/graphics/forwardrenderer.h"
 #include "irisgl/src/graphics/mesh.h"
@@ -11,10 +15,8 @@
 #include "irisgl/src/scenegraph/meshnode.h"
 #include "irisgl/src/scenegraph/scene.h"
 
-#include <QMutex>
-#include <QMutexLocker>
-#include <QtMath>
-#include <QJsonDocument>
+#include "constants.h"
+#include "io/assetmanager.h"
 
 ThumbnailGenerator* ThumbnailGenerator::instance = nullptr;
 
@@ -199,12 +201,47 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 		file->open(QIODevice::ReadOnly | QIODevice::Text);
 		QJsonDocument doc = QJsonDocument::fromJson(file->readAll());
 		
+        auto material = iris::CustomMaterial::create();
 		const QJsonObject materialDefinition = doc.object();
-		auto shaderName = Constants::SHADER_DEFS + materialDefinition["name"].toString() + ".shader";
-		
-		auto material = iris::CustomMaterial::create();
-		material->generate(IrisUtils::getAbsoluteAssetPath(shaderName));
-		material->setName(materialDefinition["name"].toString());
+        auto shaderGuid = materialDefinition["guid"].toString();
+        material->setName(materialDefinition["name"].toString());
+        material->setGuid(shaderGuid);
+
+        QFileInfo shaderFile;
+
+        QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+        while (it.hasNext()) {
+            it.next();
+            if (it.key() == shaderGuid) {
+                shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
+                break;
+            }
+        }
+
+        if (shaderFile.exists()) {
+            material->generate(shaderFile.absoluteFilePath());
+        }
+        else {
+            // Reading is thread safe...
+            for (auto asset : AssetManager::getAssets()) {
+                if (asset->type == ModelTypes::Shader) {
+                    if (asset->assetGuid == material->getGuid()) {
+                        auto def = asset->getValue().toJsonObject();
+                        auto vertexShader = def["vertex_shader"].toString();
+                        auto fragmentShader = def["fragment_shader"].toString();
+                        for (auto asset : AssetManager::getAssets()) {
+                            if (asset->type == ModelTypes::File) {
+                                if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+                                if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+                            }
+                        }
+                        def["vertex_shader"] = vertexShader;
+                        def["fragment_shader"] = fragmentShader;
+                        material->generate(def);
+                    }
+                }
+            }
+        }
 
 		for (const auto &prop : material->properties) {
 			if (materialDefinition.contains(prop->name)) {

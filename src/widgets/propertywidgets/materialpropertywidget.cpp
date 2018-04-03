@@ -45,14 +45,23 @@ void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         // TODO - properly update only when requested, and cache these?
-        auto shaderName = Constants::SHADER_DEFS + material->getName() + ".shader";
-        auto shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(shaderName));
+        QFileInfo shaderFile;
+
+        QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+        while (it.hasNext()) {
+            it.next();
+            if (it.key() == material->getGuid()) {
+                shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
+                break;
+            }
+        }
+
         if (shaderFile.exists()) {
             material->generate(shaderFile.absoluteFilePath());
         } else {
             for (auto asset : AssetManager::getAssets()) {
                 if (asset->type == ModelTypes::Shader) {
-                    if (asset->fileName == material->getName()) {
+                    if (asset->assetGuid == material->getGuid()) {
                         auto def = asset->getValue().toJsonObject();
                         auto vertexShader = def["vertex_shader"].toString();
                         auto fragmentShader = def["fragment_shader"].toString();
@@ -69,6 +78,7 @@ void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
                 }
             }
         }
+
         setWidgetProperties();
     }
 
@@ -93,9 +103,16 @@ void MaterialPropertyWidget::setWidgetProperties()
 
 void MaterialPropertyWidget::materialChanged(const QString &text)
 {
+    Q_UNUSED(text)
+}
+
+void MaterialPropertyWidget::materialChanged(int index)
+{
+    Q_UNUSED(index);
     material->purge();
     clearPanel(this->layout());
-    material->setName(text);
+    material->setName(materialSelector->getCurrentItem());
+    material->setGuid(materialSelector->getCurrentItemData());
     setSceneNode(meshNode);
 }
 
@@ -103,21 +120,21 @@ void MaterialPropertyWidget::setupShaderSelector()
 {
     materialSelector = this->addComboBox("Shader");
 
-    QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS));
-    for (auto shaderName : dir.entryList(QDir::Files)) {
-        materialSelector->addItem(QFileInfo(shaderName).baseName());
+    QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+    while (it.hasNext()) {
+        it.next();
+        materialSelector->addItem(QFileInfo(it.value()).baseName(), it.key());
     }
 
     for (auto asset : AssetManager::getAssets()) {
         if (asset->type == ModelTypes::Shader) {
-            materialSelector->addItem(asset->fileName);
+            materialSelector->addItem(asset->fileName, asset->assetGuid);
         }
     }
 
-    materialSelector->setCurrentItem(material->getName());
+    materialSelector->setCurrentItemData(material->getGuid());
 
-    connect(materialSelector,   SIGNAL(currentIndexChanged(QString)),
-            this,               SLOT(materialChanged(QString)));
+    connect(materialSelector, SIGNAL(currentIndexChanged(int)), this, SLOT(materialChanged(int)));
 }
 
 void MaterialPropertyWidget::onPropertyChanged(iris::Property *prop)

@@ -35,12 +35,14 @@ public:
     void setValue(const QString&, const QVariant&);
     void setBaseMaterialProperties(const QJsonObject&);
     void setName(const QString&);
+    void setGuid(const QString&);
     void setProperties(QList<Property*> props);
     QList<Property*> getProperties();
     void setUniformValues(GraphicsDevicePtr device, Property*);
     void purge();
 
     QString getName() const;
+    QString getGuid() const;
     QString firstTextureSlot() const;
     int getCalculatedPropHeight() const;
 
@@ -58,6 +60,7 @@ public:
 
     CustomMaterial() = default;
     QString materialName;
+    QString materialGuid;
 	QString materialPath;
 
     QJsonObject loadShaderFromDisk(const QString &);

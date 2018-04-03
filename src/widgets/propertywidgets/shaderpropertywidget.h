@@ -31,8 +31,8 @@ public:
     void leaveEvent(QEvent*) override;
 
 protected slots:
-    void onVertexShaderFileChanged(const QString&);
-    void onFragmentShaderFileChanged(const QString&);
+    void onVertexShaderFileChanged(int);
+    void onFragmentShaderFileChanged(int);
     void onAllowBuiltinShaders(const bool);
 
 private:
