@@ -162,6 +162,7 @@ void SceneNodePropertiesWidget::setAssetItem(QListWidgetItem *item)
         shaderPropView = new ShaderPropertyWidget();
         shaderPropView->setPanelTitle("Shader Definitions");
         shaderPropView->setShaderGuid(item->data(MODEL_GUID_ROLE).toString());
+        shaderPropView->setDatabase(db);
         shaderPropView->expand();
 
         auto layout = new QVBoxLayout();
@@ -190,6 +191,11 @@ void SceneNodePropertiesWidget::refreshTransform()
 	if (transformWidget) {
 		transformWidget->refreshUi();
 	}
+}
+
+void SceneNodePropertiesWidget::setDatabase(Database *db)
+{
+    this->db = db;
 }
 
 /**

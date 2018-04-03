@@ -34,8 +34,8 @@ void RenderThread::run()
     context->makeCurrent(surface);
     initScene();
 
-    renderTarget = iris::RenderTarget::create(500, 500);
-    tex = iris::Texture2D::create(500, 500);
+    renderTarget = iris::RenderTarget::create(512, 512);
+    tex = iris::Texture2D::create(512, 512);
     renderTarget->addTexture(tex);
 
     shutdown = false;

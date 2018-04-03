@@ -1222,14 +1222,17 @@ void MainWindow::createMaterial(const QString &guid)
 			}
 		}
 
-		QString fileName = Globals::project->getProjectFolder() + "/Materials/" + activeSceneNode.staticCast<iris::MeshNode>()->getName() + ".material";
+        QJsonDocument saveDoc(materialDef);
 
-		QJsonDocument saveDoc(materialDef);
+        QString fileName = IrisUtils::join(
+            Globals::project->getProjectFolder(), "Materials",
+            IrisUtils::buildFileName(activeSceneNode.staticCast<iris::MeshNode>()->getName(), "material"
+            ));
 
-		QFile file(fileName);
-		file.open(QFile::WriteOnly);
-		file.write(saveDoc.toJson());
-		file.close();
+        QFile file(fileName);
+        file.open(QFile::WriteOnly);
+        file.write(saveDoc.toJson());
+        file.close();
 
 		const QString assetGuid = GUIDManager::generateGUID();
 
@@ -1249,11 +1252,10 @@ void MainWindow::createMaterial(const QString &guid)
 
 		assetWidget->updateAssetView(assetWidget->assetItem.selectedGuid);
 
-		QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->getMaterialGlobal(assetGuid));
-		QJsonObject matObject = matDoc.object();
+		QJsonObject matObject = QJsonDocument::fromBinaryData(binaryMat).object();
 
         auto material = iris::CustomMaterial::create();
-        const QJsonObject materialDefinition = matDoc.object();
+        const QJsonObject materialDefinition = matObject;
         auto shaderGuid = materialDefinition["guid"].toString();
         material->setName(materialDefinition["name"].toString());
         material->setGuid(shaderGuid);
@@ -1288,9 +1290,7 @@ void MainWindow::createMaterial(const QString &guid)
                         }
                         def["vertex_shader"] = vertexShader;
                         def["fragment_shader"] = fragmentShader;
-                        qDebug() << vertexShader;
-                        qDebug() << fragmentShader;
-                        //material->generate(def);
+                        material->generate(def);
                     }
                 }
             }
@@ -1555,6 +1555,7 @@ void MainWindow::setupDockWidgets()
     sceneNodePropertiesDock = new QDockWidget("Properties", viewPort);
     sceneNodePropertiesDock->setObjectName(QStringLiteral("sceneNodePropertiesDock"));
     sceneNodePropertiesWidget = new SceneNodePropertiesWidget;
+    sceneNodePropertiesWidget->setDatabase(db);
     sceneNodePropertiesWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     sceneNodePropertiesWidget->setObjectName(QStringLiteral("SceneNodePropertiesWidget"));
     sceneNodePropertiesDock->setStyleSheet("QWidget { background-color: #202020; }");

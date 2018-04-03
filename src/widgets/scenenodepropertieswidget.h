@@ -59,6 +59,8 @@ public:
 
 	void refreshTransform();
 
+    void setDatabase(Database*);
+
 private:
     void clearLayout(QLayout*);
 

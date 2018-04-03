@@ -103,10 +103,41 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 			QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->getMaterialGlobal(asset.guid));
 			QJsonObject matObject = matDoc.object();
 			iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
-			material->generate(IrisUtils::join(
-				IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS),
-				IrisUtils::buildFileName(matObject.value("name").toString(), "shader"))
-			);
+
+            QFileInfo shaderFile;
+
+            QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+            while (it.hasNext()) {
+                it.next();
+                if (it.key() == matObject["guid"].toString()) {
+                    shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
+                    break;
+                }
+            }
+
+            if (shaderFile.exists()) {
+                material->generate(shaderFile.absoluteFilePath());
+            }
+            else {
+                for (auto asset : AssetManager::getAssets()) {
+                    if (asset->type == ModelTypes::Shader) {
+                        if (asset->assetGuid == matObject["guid"].toString()) {
+                            auto def = asset->getValue().toJsonObject();
+                            auto vertexShader = def["vertex_shader"].toString();
+                            auto fragmentShader = def["fragment_shader"].toString();
+                            for (auto asset : AssetManager::getAssets()) {
+                                if (asset->type == ModelTypes::File) {
+                                    if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+                                    if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+                                }
+                            }
+                            def["vertex_shader"] = vertexShader;
+                            def["fragment_shader"] = fragmentShader;
+                            material->generate(def);
+                        }
+                    }
+                }
+            }
 
 			for (const auto &prop : material->properties) {
 				if (prop->type == iris::PropertyType::Color) {

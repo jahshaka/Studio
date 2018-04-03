@@ -101,6 +101,32 @@ void Database::insertGlobalDependency(const int &type, const QString &depender, 
 	executeAndCheckQuery(query, "insertGlobalDependency");
 }
 
+void Database::updateGlobalDependencyDepender(const int & type, const QString & depender, const QString & dependee)
+{
+    QSqlQuery query;
+    auto guid = GUIDManager::generateGUID();
+    query.prepare("UPDATE dependencies SET depender = ? WHERE type = ? AND dependee = ?");
+
+    query.bindValue(":depender", depender);
+    query.bindValue(":type", type);
+    query.bindValue(":dependee", dependee);
+
+    executeAndCheckQuery(query, "updateGlobalDependencyDepender");
+}
+
+void Database::updateGlobalDependencyDependee(const int & type, const QString & depender, const QString & dependee)
+{
+    QSqlQuery query;
+    auto guid = GUIDManager::generateGUID();
+    query.prepare("UPDATE dependencies SET dependee = ? WHERE type = ? AND depender = ?");
+
+    query.bindValue(":depender", depender);
+    query.bindValue(":type", type);
+    query.bindValue(":dependee", dependee);
+
+    executeAndCheckQuery(query, "updateGlobalDependencyDependee");
+}
+
 QString Database::getDependencyByType(const int &type, const QString &depender)
 {
 	QSqlQuery query;
@@ -1328,21 +1354,17 @@ void Database::createExportNode(const QString &object_guid, const QString &outTe
 	QSqlDatabase::removeDatabase("nodeExportSQLITEConnection");
 }
 
-bool Database::checkIfRecordExists(const QString & record, const QVariant &value, const QString & table, const QSqlDatabase &connection)
+bool Database::checkIfRecordExists(const QString & record, const QVariant &value, const QString & table)
 {
 	QSqlQuery query;
 	query.prepare("SELECT EXISTS (SELECT 1 FROM assets WHERE guid = ? LIMIT 1)");
 	query.addBindValue(value);
 
 	if (query.exec()) {
-		if (query.first()) {
-			return query.value(0).toBool();
-		}
+		if (query.first()) return query.value(0).toBool();
 	}
 	else {
-		irisLog(
-			"There was an error fetching a record" + query.lastError().text()
-		);
+		irisLog("There was an error fetching a record" + query.lastError().text());
 	}
 
 	return false;

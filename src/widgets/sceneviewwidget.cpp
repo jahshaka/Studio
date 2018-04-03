@@ -178,8 +178,10 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
         auto ppos = dragScenePos;
-        emit addDroppedMesh(QDir(QDir(Globals::project->getProjectFolder()).filePath("Models")).filePath(roleDataMap.value(2).toString()), true, ppos,
-			roleDataMap.value(3).toString(), roleDataMap.value(1).toString());
+        emit addDroppedMesh(
+                QDir(QDir(Globals::project->getProjectFolder()).filePath("Models")).filePath(roleDataMap.value(2).toString()),
+                true, ppos, roleDataMap.value(3).toString(), roleDataMap.value(1).toString()
+        );
     }
 
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Material)) {
@@ -188,20 +190,21 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 			QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
 			while (iterator != AssetManager::getAssets().constEnd()) {
 				if ((*iterator)->assetGuid == roleDataMap.value(3).toString()) {
-					material = (*iterator)->getValue().value<iris::CustomMaterialPtr>();
+					material = (*iterator)->getValue().value<iris::CustomMaterialPtr>()->duplicate().staticCast<iris::CustomMaterial>();
 				}
 				++iterator;
 			}
 
-			savedActiveNode.staticCast<iris::MeshNode>()->setMaterial(material->duplicate());
+            //if (!!material) savedActiveNode.staticCast<iris::MeshNode>()->setMaterial(material); ???
 		}
 		else {
 			qDebug() << "Empty";
 		}
-	}
 
-	savedActiveNode.reset();
-	wasHit = false;
+        savedActiveNode.reset();
+        originalMaterial.reset();
+        wasHit = false;
+	}
 }
 
 void SceneViewWidget::dragEnterEvent(QDragEnterEvent *event)

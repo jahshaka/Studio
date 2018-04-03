@@ -521,7 +521,8 @@ void AssetWidget::addItem(const FolderData &folderData)
 void AssetWidget::addItem(const AssetTileData &assetData)
 {
 	QListWidgetItem *item = new QListWidgetItem;
-	item->setData(Qt::DisplayRole, assetData.name);
+	item->setData(Qt::DisplayRole, QFileInfo(assetData.name).baseName());
+    item->setData(Qt::UserRole, assetData.name);
     item->setData(MODEL_TYPE_ROLE, assetData.type);
 	item->setData(MODEL_ITEM_TYPE, MODEL_ASSET);
 	item->setData(MODEL_GUID_ROLE, assetData.guid);
@@ -647,7 +648,7 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 						QMap<int, QVariant> roleDataMap;
 
 						roleDataMap[0] = QVariant(item->data(MODEL_TYPE_ROLE).toInt());
-						roleDataMap[1] = QVariant(item->data(Qt::DisplayRole).toString());
+						roleDataMap[1] = QVariant(item->data(Qt::UserRole).toString());
 						roleDataMap[2] = QVariant(item->data(MODEL_MESH_ROLE).toString());
 						roleDataMap[3] = QVariant(item->data(MODEL_GUID_ROLE).toString());
 
@@ -785,6 +786,10 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 			action = new QAction(QIcon(), "Edit", this);
 			connect(action, SIGNAL(triggered()), this, SLOT(editFileExternally()));
 			menu.addAction(action);
+
+            action = new QAction(QIcon(), "Export Shader", this);
+            connect(action, SIGNAL(triggered()), this, SLOT(exportShader()));
+            menu.addAction(action);
 		}
 
 		action = new QAction(QIcon(), "Delete", this);
@@ -815,7 +820,10 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 void AssetWidget::assetViewClicked(QListWidgetItem *item)
 {
 	assetItem.wItem = item;
-	emit assetItemSelected(item);
+
+    if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Shader)) {
+        emit assetItemSelected(item);
+    }
 }
 
 void AssetWidget::syncTreeAndView(const QString &path)
@@ -983,6 +991,90 @@ void AssetWidget::exportMaterial()
 
 	// close our now exported file
 	zip_close(zip);
+}
+
+void AssetWidget::exportShader()
+{
+    // get the export file path from a save dialog
+    auto filePath = QFileDialog::getSaveFileName(
+        this,
+        "Choose export path",
+        "export",
+        "Supported Export Formats (*.jaf)"
+    );
+
+    if (filePath.isEmpty() || filePath.isNull()) return;
+
+    QTemporaryDir temporaryDir;
+    if (!temporaryDir.isValid()) return;
+
+    const QString writePath = temporaryDir.path();
+
+    const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
+
+    db->createExportNode(guid, QDir(writePath).filePath("asset.db"));
+
+    QDir tempDir(writePath);
+    tempDir.mkpath("assets");
+
+    QFile manifest(QDir(writePath).filePath(".manifest"));
+    if (manifest.open(QIODevice::ReadWrite)) {
+        QTextStream stream(&manifest);
+        stream << "shader";
+    }
+    manifest.close();
+
+    for (const auto &asset : db->fetchAssetAndDependencies(guid)) {
+        QFile::copy(
+            IrisUtils::join(Globals::project->getProjectFolder(), asset),
+            IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
+        );
+    }
+
+    // get all the files and directories in the project working directory
+    QDir workingProjectDirectory(writePath);
+    QDirIterator projectDirIterator(writePath, QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs, QDirIterator::Subdirectories);
+
+    QVector<QString> fileNames;
+    while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
+
+    //ZipWrapper exportNode("path", "read / write", "folder / file list");
+    //exportNode.setOutputPath();
+    //exportNode.setMode();
+    //exportNode.setCompressionLevel();
+    //exportNode.setFolder();
+    //exportNode.setFileList();
+    //exportNode.createArchive();
+
+    // open a basic zip file for writing, maybe change compression level later (iKlsR)
+    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
+
+    for (int i = 0; i < fileNames.count(); i++) {
+        QFileInfo fInfo(fileNames[i]);
+
+        // we need to pay special attention to directories since we want to write empty ones as well
+        if (fInfo.isDir()) {
+            zip_entry_open(
+                zip,
+                /* will only create directory if / is appended */
+                QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
+            );
+            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+        }
+        else {
+            zip_entry_open(
+                zip,
+                workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
+            );
+            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+        }
+
+        // we close each entry after a successful write
+        zip_entry_close(zip);
+    }
+
+    // close our now exported file
+    zip_close(zip);
 }
 
 void AssetWidget::searchAssets(QString searchString)
@@ -1231,7 +1323,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
                 type = ModelTypes::File;
                 destDir = "Files";
             }
-			else if (entryInfo.suffix() == Constants::ASSET_EXT) {
+			else if (entryInfo.suffix() == "break"/* entryInfo.suffix() == Constants::ASSET_EXT */) {
 				// Can be a plain zipped file containing an asset or an exported one
 				// Check for a manifest file and treat it accordingly
 
@@ -1283,6 +1375,14 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 							destDir = "Models";
 							jafType = ModelTypes::Object;
 						}
+                        else if (Constants::WHITELIST.contains(fileInfo.suffix())) {
+                            destDir = "Files";
+                            jafType = ModelTypes::Object;
+                        }
+                        else if (Constants::SHADER_EXT == fileInfo.suffix()) {
+                            destDir = "Shaders";
+                            jafType = ModelTypes::Shader;
+                        }
 
 						if (jafString == "material") {
 							jafType == ModelTypes::Material;

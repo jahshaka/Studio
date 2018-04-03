@@ -32,6 +32,8 @@ public:
 
 	void createGlobalDependencies();
 	void insertGlobalDependency(const int &type, const QString &depender, const QString &dependee, const QString &project_id = QString());
+	void updateGlobalDependencyDepender(const int &type, const QString &depender, const QString &dependee);
+	void updateGlobalDependencyDependee(const int &type, const QString &depender, const QString &dependee);
 
 	QString getDependencyByType(const int &type, const QString &depender);
 
@@ -93,7 +95,7 @@ public:
 
 	void createExportNode(const QString& object_guid, const QString& outTempFilePath);
 
-	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table, const QSqlDatabase &connection);
+	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table);
 
 	QStringList fetchFolderNameByParent(const QString &guid);
 	QStringList fetchFolderAndChildFolders(const QString &guid);

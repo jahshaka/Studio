@@ -209,6 +209,7 @@ protected slots:
 
 	void editFileExternally();
 	void exportMaterial();
+	void exportShader();
 
     void searchAssets(QString);
     void OnLstItemsCommitData(QWidget*);

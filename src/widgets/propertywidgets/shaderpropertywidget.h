@@ -18,6 +18,8 @@ For more information see the LICENSE file
 #include "irisgl/src/irisglfwd.h"
 #include "../accordianbladewidget.h"
 
+class Database;
+
 class ShaderPropertyWidget : public AccordianBladeWidget
 {
     Q_OBJECT
@@ -27,6 +29,7 @@ public:
     ~ShaderPropertyWidget();
 
     void setShaderGuid(const QString&);
+    void setDatabase(Database*);
 
     void leaveEvent(QEvent*) override;
 
@@ -46,6 +49,7 @@ private:
     ComboBoxWidget *fragmentShaderCombo;
 
     QStringList builtinShaders;
+    Database *db;
 };
 
 #endif // NODEPROPERTY_H
