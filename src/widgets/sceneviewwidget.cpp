@@ -97,10 +97,21 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Material)) {
 		auto node = doActiveObjectPicking(event->posF());
 
+        // This is to handle overlapping meshes or those close to each other, if we pass
+        // over another node while still dragging, switch materials
+        if (!!savedActiveNode) {
+            if (savedActiveNode != node) {
+                savedActiveNode.staticCast<iris::MeshNode>()->setMaterial(originalMaterial);
+                savedActiveNode.reset();
+                originalMaterial.reset();
+                wasHit = false;
+            }
+        }
+
 		if (!!node && !wasHit) {
 			wasHit = true;
 			savedActiveNode = node;
-			originalMaterial = node.staticCast<iris::MeshNode>()->getMaterial()->duplicate().staticCast<iris::CustomMaterial>();
+			originalMaterial = node.staticCast<iris::MeshNode>()->getMaterial().staticCast<iris::CustomMaterial>();
 
 			// TODO - get this at drag start
 			iris::CustomMaterialPtr material;
@@ -125,26 +136,6 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
 				wasHit = false;
 			}
 		}
-
-		//if (!!selectedDragNode && !wasHit) {
-		//	iris::CustomMaterialPtr material;
-		//	QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
-		//	while (iterator != AssetManager::getAssets().constEnd()) {
-		//		if ((*iterator)->assetGuid == roleDataMap.value(3).toString()) {
-		//			material = (*iterator)->getValue().value<iris::CustomMaterialPtr>();
-		//		}
-		//		++iterator;
-		//	}
-
-		//	wasHit = true;
-		//	selectedDragNode.staticCast<iris::MeshNode>()->setMaterial(material->duplicate());
-		//}
-		//
-		//if (!!node) {
-		//}
-		//else {
-		//	savedActiveNode.staticCast<iris::MeshNode>()->setMaterial(originalMaterial);
-		//}
 	}
 
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {

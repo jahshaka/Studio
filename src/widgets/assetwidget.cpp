@@ -521,7 +521,8 @@ void AssetWidget::addItem(const FolderData &folderData)
 void AssetWidget::addItem(const AssetTileData &assetData)
 {
 	QListWidgetItem *item = new QListWidgetItem;
-	item->setData(Qt::DisplayRole, QFileInfo(assetData.name).baseName());
+	item->setData(Qt::DisplayRole, assetData.name);
+    item->setData(MODEL_TYPE_ROLE, assetData.type);
 	item->setData(MODEL_ITEM_TYPE, MODEL_ASSET);
 	item->setData(MODEL_GUID_ROLE, assetData.guid);
 	item->setData(MODEL_PARENT_ROLE, assetData.parent);
@@ -1522,6 +1523,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 
                     {
                         auto assetFile = new AssetFile;
+                        assetFile->assetGuid = assetGuid;
                         assetFile->fileName = asset->fileName;
                         assetFile->path = pathToCopyTo;
                         assetFile->setValue(QVariant::fromValue(QVariant::fromValue(file)));
@@ -1539,6 +1541,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 
                     {
                         auto assetShader = new AssetShader;
+                        assetShader->assetGuid = assetGuid;
                         assetShader->fileName = QFileInfo(asset->fileName).baseName();
                         assetShader->path = pathToCopyTo;
                         assetShader->setValue(QVariant::fromValue(shaderDefinition));

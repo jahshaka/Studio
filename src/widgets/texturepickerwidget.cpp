@@ -16,7 +16,8 @@ For more information see the LICENSE file
 #include "../core/project.h"
 #include "../core/thumbnailmanager.h"
 #include "../widgets/assetpickerwidget.h"
-
+#include "irisgl/src/core/irisutils.h"
+#include "globals.h"
 #include <QMimeData>
 #include <QDrag>
 #include <QStandardItemModel>
@@ -61,26 +62,13 @@ void TexturePickerWidget::dragEnterEvent(QDragEnterEvent *event)
 void TexturePickerWidget::dropEvent(QDropEvent *event)
 {
     // http://stackoverflow.com/a/2747369/996468
-    const QString mimeType = "application/x-qabstractitemmodeldatalist";
-//    QByteArray encoded = event->mimeData()->data(mimeType);
-//    QDataStream stream(&encoded, QIODevice::ReadOnly);
-//    QMap<int, QVariant> roleDataMap;
-//    while (!stream.atEnd()) {
-//        int row, col;
-//        stream >> row >> col >> roleDataMap;
-//    }
-
 	QByteArray encoded = event->mimeData()->data("application/x-qabstractitemmodeldatalist");
 	QDataStream stream(&encoded, QIODevice::ReadOnly);
 	QMap<int, QVariant> roleDataMap;
-	while (!stream.atEnd()) {
-		stream >> roleDataMap;
-	}
+	while (!stream.atEnd()) stream >> roleDataMap;
 
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
-		changeMap(roleDataMap.value(3).toString());
-
-		qDebug() << roleDataMap.value(3).toString();
+		changeMap(IrisUtils::join(Globals::project->getProjectFolder(), "Textures", roleDataMap.value(1).toString()));
 	}
 
     event->acceptProposedAction();
