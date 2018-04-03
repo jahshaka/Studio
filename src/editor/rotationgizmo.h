@@ -40,9 +40,11 @@ public:
 class RotationGizmo : public Gizmo
 {
 	iris::MeshPtr handleMesh;
+	iris::MeshPtr circleMesh;
 	QVector<iris::MeshPtr> handleMeshes;
 
 	QOpenGLShaderProgram* shader;
+	iris::ShaderPtr lineShader;
 
 	RotationHandle* handles[3];
 

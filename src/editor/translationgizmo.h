@@ -41,9 +41,12 @@ class TranslationHandle : public GizmoHandle
 class TranslationGizmo : public Gizmo
 {
     iris::MeshPtr handleMesh;
+	iris::MeshPtr centerMesh;
+	iris::MeshPtr circleMesh;
     QVector<iris::MeshPtr> handleMeshes;
 
     QOpenGLShaderProgram* shader;
+	iris::ShaderPtr lineShader;
 
     TranslationHandle* handles[3];
 

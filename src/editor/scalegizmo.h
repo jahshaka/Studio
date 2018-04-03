@@ -35,6 +35,7 @@ public:
 class ScaleGizmo : public Gizmo
 {
 	iris::MeshPtr handleMesh;
+	iris::MeshPtr centerMesh;
 	QVector<iris::MeshPtr> handleMeshes;
 
 	QOpenGLShaderProgram* shader;

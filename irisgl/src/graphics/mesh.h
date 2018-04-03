@@ -187,6 +187,9 @@ public:
     //assumed ownership of vertexLayout
     static Mesh* create(void* data,int dataSize,int numElements,VertexLayout* vertexLayout);
 	static MeshPtr create(VertexLayout vertexLayout);
+	static MeshPtr create();
+
+	Mesh();
 
     Mesh(aiMesh* mesh);
 
@@ -201,6 +204,7 @@ public:
 
     ~Mesh();
 
+	void setVertexCount(const unsigned int count);
     void setSkeleton(const SkeletonPtr &value);
 
     PrimitiveMode getPrimitiveMode() const;
