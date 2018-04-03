@@ -1,6 +1,7 @@
 {
     "name"          : "DefaultAnimated",
     "preview"       : false,
+    "guid"          : "00000000-0000-0000-0000-000000000002",
 
     "zWrite"        : true,
     "depthTest"     : true,

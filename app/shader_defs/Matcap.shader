@@ -1,5 +1,6 @@
 {
-    "name"                  : "Matcap",
+    "name"  : "Matcap",
+    "guid"  : "00000000-0000-0000-0000-000000000006",
     "uniforms": [
         {
             "displayName"   : "Matcap Texture",
