@@ -27,7 +27,7 @@ QImage RenderTarget::toImage()
     gl->glReadPixels( 0,0,  this->width, this->height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     unbind();
 
-    auto image = QImage(pixels, this->width, this->height, QImage::Format_ARGB32);
+    auto image = QImage(pixels, this->width, this->height, QImage::Format_ARGB32_Premultiplied);
     image = image.rgbSwapped();
     return image.mirrored(false, true);
 }
