@@ -1,6 +1,9 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
+#include <QDir>
+#include <QMap>
+#include <QPair>
 #include <QString>
 #include <QSize>
 
@@ -8,41 +11,62 @@
 // this is not the same as "globals.h" as this file should ONLY hold basic data types
 // that are used in several places across the application,
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 namespace Constants
 {
-    const QString CONTENT_VERSION   = "0.5.1a";
-    const QString PROJ_EXT          = ".jah";
-	const QString META_EXT			= "meta";
-    const QStringList PROJECT_DIRS  = { "Textures", "Shaders", "Materials", "Models", "Files" };
-    const QString SHADER_DEFS       = "/app/shader_defs/";
-	const QString SHADER_FILE_DEFS	= "/app/shaders/";
-    const QString DEFAULT_SHADER    = "/app/shader_defs/Default.shader";
-    const QString SAMPLES_FOLDER    = "/scenes";
-    const QString PROJECT_FOLDER    = "/Jahshaka";
-    const QString JAH_FOLDER        = "/Jahshaka";
-    const QString ASSET_FOLDER      = "/AssetStore";
-    const QString JAH_DATABASE      = "JahLibrary.db";
-    const QString DEF_EXPORT_FILE   = "export.zip";
-    const QSize   TILE_SIZE         = QSize(460, 215);
-    const int     UI_FONT_SIZE      = 10;
+    extern QString CONTENT_VERSION   ;
+    extern QString PROJ_EXT          ;
+	extern QString META_EXT			;
+    extern QStringList PROJECT_DIRS  ;
+    extern QString SHADER_DEFS       ;
+	extern QString SHADER_FILE_DEFS	;
+    extern QString DEFAULT_SHADER    ;
+    extern QString SAMPLES_FOLDER    ;
+    extern QString PROJECT_FOLDER    ;
+    extern QString JAH_FOLDER        ;
+    extern QString ASSET_FOLDER      ;
+    extern QString JAH_DATABASE      ;
+    extern QString DEF_EXPORT_FILE   ;
+    extern QSize   TILE_SIZE         ;
+    extern int     UI_FONT_SIZE      ;
 
-    const QString DB_DRIVER         = "QSQLITE";
-    const QString DB_ROOT_TABLE     = "JAH_PROJECT";
+    extern QString DB_DRIVER         ;
+    extern QString DB_ROOT_TABLE     ;
 
-    const QString DB_PROJECTS_TABLE = "projects";
-    const QString DB_COLLECT_TABLE  = "collections";
-    const QString DB_THUMBS_TABLE   = "thumbnails";
-	const QString DB_ASSETS_TABLE	= "assets";
+    extern QString DB_PROJECTS_TABLE ;
+    extern QString DB_COLLECT_TABLE  ;
+    extern QString DB_THUMBS_TABLE   ;
+	extern QString DB_ASSETS_TABLE	;
 
-    const QList<QString> IMAGE_EXTS = { "png", "jpg" };
-    const QList<QString> MODEL_EXTS = { "obj", "fbx", "dae", "blend"};
-    const QList<QString> WHITELIST  = { "txt", "frag", "vert", "vs", "fs" };
-	const QString SHADER_EXT		= "shader";
-	const QString MATERIAL_EXT		= "material";
-	const QString ASSET_EXT			= "jaf";
+    extern QList<QString> IMAGE_EXTS   ;
+    extern QList<QString> MODEL_EXTS   ;
+    extern QList<QString> WHITELIST    ;
+	extern QString SHADER_EXT		    ;
+	extern QString MATERIAL_EXT		;
+	extern QString ASSET_EXT			;
 
-    const int FPS_90                = 11; // milliseconds
-    const int FPS_60                = 17; // milliseconds
+    extern int FPS_90                  ;
+    extern int FPS_60                  ;
+
+    namespace Reserved
+    {
+        // TODO - maybe move this to an external resources json file
+        extern QMap<QString, QString> BuiltinShaders;
+
+        extern QString SHADER_DEFAULT;
+        extern QString SHADER_DEFAULT_ANIMATED;
+        extern QString SHADER_EDGE_MATERIAL;
+        extern QString SHADER_FLAT;
+        extern QString SHADER_GLASS;
+        extern QString SHADER_MATCAP;
+    }
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // CONSTANTS_H

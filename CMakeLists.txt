@@ -123,6 +123,7 @@ set(SRCS
 	src/editor/outlinerenderer.cpp
 	src/editor/viewermaterial.cpp
 	src/editor/animationpath.cpp
+    src/constants.cpp
 )
 
 set(HEADERS
