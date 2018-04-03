@@ -542,22 +542,58 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 
     auto mat = nodeObj["material"].toObject();
     auto m = iris::CustomMaterial::create();
-    auto shaderName = Constants::SHADER_DEFS + mat["name"].toString() + ".shader";
-    auto shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(shaderName));
-    m->setName(mat["name"].toString());
+    auto shaderGuid = mat["guid"].toString();
 
+    m->setName(mat["name"].toString());
+    m->setGuid(shaderGuid);
+
+    QFileInfo shaderFile;
+
+    // Note that this runs after asset accumulation, hence why we can get custom shaders used
+    QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+    while (it.hasNext()) {
+        it.next();
+        if (it.key() == shaderGuid) {
+            shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
+            break;
+        }
+    }
 
     if (shaderFile.exists()) {
-		m->generate(shaderFile.absoluteFilePath());
-    } else {
+        m->generate(shaderFile.absoluteFilePath());
+    }
+    else {
         for (auto asset : AssetManager::getAssets()) {
             if (asset->type == ModelTypes::Shader) {
-                if (asset->fileName == mat["name"].toString() + ".shader") {
-                    m->generate(asset->path, true);
+                if (asset->assetGuid == m->getGuid()) {
+                    auto def = asset->getValue().toJsonObject();
+                    auto vertexShader = def["vertex_shader"].toString();
+                    auto fragmentShader = def["fragment_shader"].toString();
+                    for (auto asset : AssetManager::getAssets()) {
+                        if (asset->type == ModelTypes::File) {
+                            if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+                            if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+                        }
+                    }
+                    def["vertex_shader"] = vertexShader;
+                    def["fragment_shader"] = fragmentShader;
+                    m->generate(def);
                 }
             }
         }
     }
+
+  //  if (shaderFile.exists()) {
+		//m->generate(shaderFile.absoluteFilePath());
+  //  } else {
+  //      for (auto asset : AssetManager::getAssets()) {
+  //          if (asset->type == ModelTypes::Shader) {
+  //              if (asset->fileName == mat["name"].toString() + ".shader") {
+  //                  m->generate(asset->path, true);
+  //              }
+  //          }
+  //      }
+  //  }
 
     for (auto prop : m->properties) {
         if (mat.contains(prop->name)) {

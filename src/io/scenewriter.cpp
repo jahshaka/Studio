@@ -354,6 +354,7 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
 void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat, bool relative)
 {
     matObj["name"] = mat->getName();
+    matObj["guid"] = mat->getGuid();
 
     for (auto prop : mat->properties) {
         if (prop->type == iris::PropertyType::Bool) {
