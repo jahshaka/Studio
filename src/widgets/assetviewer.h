@@ -29,6 +29,7 @@
 #include "irisgl/src/animation/animation.h"
 #include "irisglfwd.h"
 
+#include "core/database/database.h"
 #include "../editor/editorcameracontroller.h"
 #include "../editor/cameracontrollerbase.h"
 #include "../editor/orbitalcameracontroller.h"
@@ -44,6 +45,7 @@ public:
 
     iris::SceneSource *ssource;
 
+    void setDatabase(Database *db) { this->db = db;  }
     void update();
     void paintGL();
     void updateScene();
@@ -53,6 +55,7 @@ public:
     void renderObject();
     void resetViewerCamera();
 	void resetViewerCameraAfter();
+    void loadJafModel(QString str, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
     void loadModel(QString str, bool firstAdd = true, bool cache = false, bool firstLoad = true);
 
     void wheelEvent(QWheelEvent *event);
@@ -60,6 +63,7 @@ public:
     void mouseReleaseEvent(QMouseEvent *e);
     void mouseMoveEvent(QMouseEvent *e);
 
+	void addJafMesh(const QString &path, const QString &guid, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addMesh(const QString &path = QString(), bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid = "", bool viewed = false, bool cache = false);
 	QImage takeScreenshot(int width, int height);
@@ -132,6 +136,8 @@ private:
 
 	iris::RenderTargetPtr previewRT;
 	iris::Texture2DPtr screenshotTex;
+
+    Database *db;
 
     float getBoundingRadius(iris::SceneNodePtr node);
     void getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere>& spheres);

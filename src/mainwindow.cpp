@@ -1355,7 +1355,7 @@ void MainWindow::exportNode(const QString &guid)
 	QFile manifest(QDir(writePath).filePath(".manifest"));
 	if (manifest.open(QIODevice::ReadWrite)) {
 		QTextStream stream(&manifest);
-		stream << "object";
+		stream << "object" << endl << guid;
 	}
 	manifest.close();
 

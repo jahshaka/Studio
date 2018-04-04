@@ -52,6 +52,7 @@ public:
     void renameProject(const QString&);
 	void updateAssetThumbnail(const QString guid, const QByteArray &thumbnail);
 	void updateAssetAsset(const QString guid, const QByteArray &asset);
+	void updateAssetProperties(const QString guid, const QByteArray &asset);
 	QString insertFolder(const QString&, const QString&, const QString&);
 	QString insertAssetGlobal(const QString&, int type, const QString&, const QByteArray &thumbnail = QByteArray(),
 		const QByteArray &properties = QByteArray(), const QByteArray &tags = QByteArray(),
@@ -115,6 +116,7 @@ public:
 
 	QString importAssetMaterial(const ModelTypes &jafType, const QString &pathToDb, const QMap<QString, QString> &newNames, const QString &parent);
 	QString importAssetModel(const ModelTypes &jafType, const QString &pathToDb, const QMap<QString, QString> &newNames, const QString &parent);
+	QString importJafAssetModel(const ModelTypes &jafType, const QString &pathToDb);
 
 	bool renameFolder(const QString &guid, const QString &newName);
 	bool renameAsset(const QString &guid, const QString &newName);

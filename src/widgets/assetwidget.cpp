@@ -934,6 +934,7 @@ void AssetWidget::exportMaterial()
 	if (manifest.open(QIODevice::ReadWrite)) {
 		QTextStream stream(&manifest);
 		stream << "material";
+		stream << guid;
 	}
 	manifest.close();
 
@@ -1020,6 +1021,7 @@ void AssetWidget::exportShader()
     if (manifest.open(QIODevice::ReadWrite)) {
         QTextStream stream(&manifest);
         stream << "shader";
+        stream << guid;
     }
     manifest.close();
 
