@@ -1,6 +1,7 @@
 #include "assetwidget.h"
 #include "ui_assetwidget.h"
 
+#include <QAbstractItemModel>
 #include <QBuffer>
 #include <QDebug>
 #include <QDesktopServices>
@@ -70,26 +71,26 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		updateAssetView(assetItem.selectedGuid, !state);
 	});
 
-	connect(ui->assetView, SIGNAL(itemClicked(QListWidgetItem*)),
-		this, SLOT(assetViewClicked(QListWidgetItem*)));
+    ui->assetView->setItemDelegate(new ListViewDelegate());
 
-	connect(ui->assetView, SIGNAL(customContextMenuRequested(const QPoint&)),
-		this, SLOT(sceneViewCustomContextMenu(const QPoint&)));
+	connect(ui->assetView,  SIGNAL(itemClicked(QListWidgetItem*)),
+		    this,           SLOT(assetViewClicked(QListWidgetItem*)));
 
-	connect(ui->assetView, SIGNAL(itemDoubleClicked(QListWidgetItem*)),
-		this, SLOT(assetViewDblClicked(QListWidgetItem*)));
+	connect(ui->assetView,  SIGNAL(customContextMenuRequested(const QPoint&)),
+		    this,           SLOT(sceneViewCustomContextMenu(const QPoint&)));
 
-	connect(ui->assetView->itemDelegate(), &QAbstractItemDelegate::commitData,
-		this, &AssetWidget::OnLstItemsCommitData);
+	connect(ui->assetView,  SIGNAL(itemDoubleClicked(QListWidgetItem*)),
+		    this,           SLOT(assetViewDblClicked(QListWidgetItem*)));
 
-	connect(ui->searchBar, SIGNAL(textChanged(QString)),
-		this, SLOT(searchAssets(QString)));
+	connect(ui->assetView->itemDelegate(), &QAbstractItemDelegate::commitData, this, &AssetWidget::OnLstItemsCommitData);
+
+	connect(ui->searchBar, SIGNAL(textChanged(QString)), this, SLOT(searchAssets(QString)));
 
 	connect(ui->importBtn, SIGNAL(pressed()), SLOT(importAssetB()));
 
 	// The signal will be emitted from another thread (Nick)
-	connect(ThumbnailGenerator::getSingleton()->renderThread, SIGNAL(thumbnailComplete(ThumbnailResult*)),
-		this, SLOT(onThumbnailResult(ThumbnailResult*)));
+	connect(ThumbnailGenerator::getSingleton()->renderThread,   SIGNAL(thumbnailComplete(ThumbnailResult*)),
+		    this,                                               SLOT(onThumbnailResult(ThumbnailResult*)));
 
 	breadCrumbLayout = new QHBoxLayout;
 	breadCrumbLayout->setSpacing(0);
@@ -127,8 +128,6 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->assetView->setViewMode(QListWidget::IconMode);
 	ui->assetView->setSpacing(4);
 	ui->assetView->setIconSize(currentSize);
-
-	ui->assetView->setItemDelegate(new ListViewDelegate());
 
 	connect(toggleIconView, &QPushButton::pressed, [this]() {
 		ui->assetView->setViewMode(QListWidget::IconMode);
@@ -1091,33 +1090,9 @@ void AssetWidget::searchAssets(QString searchString)
 
 void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
 {
-	QString folderName = qobject_cast<QLineEdit*>(listItem)->text();
-	//const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
-	//const QString parent = assetItem.wItem->data(MODEL_PARENT_ROLE).toString();
-
-	qDebug() << folderName;
-
-	//// Create a new database entry for the new folder
-	//if (!folderName.isEmpty()) {
-	//	db->insertFolder(folderName, parent, guid);
-	//}
-
-	//// Update the tree browser
-	//QTreeWidgetItem *child = ui->assetTree->currentItem();
-	//if (child) {    // should always be set but just in case
-	//	auto branch = new QTreeWidgetItem();
-	//	branch->setIcon(0, QIcon(":/icons/icons8-folder-72.png"));
-	//	branch->setText(0, folderName);
-	//	branch->setData(0, MODEL_GUID_ROLE, guid);
-	//	branch->setData(0, MODEL_PARENT_ROLE, parent);
-	//	child->addChild(branch);
-	//	ui->assetTree->clearSelection();
-	//	branch->setSelected(true);
-	//}
-
-	//populateAssetTree(false);
-	//updateAssetView(assetItem.selectedGuid);
-	//syncTreeAndView(assetItem.selectedGuid);
+	QString newName = qobject_cast<QLineEdit*>(listItem)->text();
+	const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
+    if (!newName.isEmpty()) db->renameAsset(guid, newName);
 }
 
 void AssetWidget::deleteTreeFolder()

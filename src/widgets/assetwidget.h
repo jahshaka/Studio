@@ -11,6 +11,7 @@ class Database;
 #include <QTreeWidgetItem>
 #include <QWidget>
 #include <QFileDialog>
+#include <QLineEdit>
 #include <QHBoxLayout>
 
 #include "../io/assetmanager.h"
@@ -122,6 +123,52 @@ protected:
 		result.setWidth(100);
 		return result;
 	}
+
+    QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &option,
+        const QModelIndex &index) const override
+    {
+        if (index.data().canConvert<QString>()) {
+            QLineEdit *editor = new QLineEdit(parent);
+            connect(editor, &QLineEdit::editingFinished, this, &ListViewDelegate::commitAndCloseEditor);
+            return editor;
+        }
+        else {
+            return QStyledItemDelegate::createEditor(parent, option, index);
+        }
+    }
+
+    void setEditorData(QWidget *editor,
+        const QModelIndex &index) const
+    {
+        if (index.data().canConvert<QString>()) {
+            const QString text = index.data().toString();
+            QLineEdit *lineEdit = qobject_cast<QLineEdit*>(editor);
+            lineEdit->setText(text);
+            qDebug() << text;
+        }
+        else {
+            QStyledItemDelegate::setEditorData(editor, index);
+        }
+    }
+
+    void setModelData(QWidget *editor, QAbstractItemModel *model,
+        const QModelIndex &index) const
+    {
+        if (index.data().canConvert<QString>()) {
+            QLineEdit *textEditor = qobject_cast<QLineEdit *>(editor);
+            model->setData(index, QVariant::fromValue(qobject_cast<QLineEdit*>(textEditor)->text()));
+        }
+        else {
+            QStyledItemDelegate::setModelData(editor, model, index);
+        }
+    }
+
+    void commitAndCloseEditor()
+    {
+        QLineEdit *editor = qobject_cast<QLineEdit*>(sender());
+        emit commitData(editor);
+        emit closeEditor(editor);
+    }
 };
 
 // This is a simple custom search predicate to be used with a stl search
