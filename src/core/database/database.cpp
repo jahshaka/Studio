@@ -1190,7 +1190,7 @@ bool Database::importProject(const QString &inFilePath)
     return false;
 }
 
-void Database::createExportNode(const QString &object_guid, const QString &outTempFilePath)
+void Database::createExportNode(const ModelTypes &type, const QString &object_guid, const QString &outTempFilePath)
 {
 	QSqlDatabase datbaseConnection = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "nodeExportSQLITEConnection");
 	datbaseConnection.setDatabaseName(outTempFilePath);
@@ -1305,8 +1305,9 @@ void Database::createExportNode(const QString &object_guid, const QString &outTe
 
 	for (const auto &asset : assetList) {
 		QSqlQuery selectDep;
-		selectDep.prepare("SELECT type, project_guid, depender, dependee, id FROM dependencies WHERE dependee = ?");
+		selectDep.prepare("SELECT type, project_guid, depender, dependee, id FROM dependencies WHERE dependee = ? AND type = ?");
 		selectDep.addBindValue(asset.guid);
+		selectDep.addBindValue(static_cast<int>(type));
 
 		if (selectDep.exec()) {
 			if (selectDep.first()) {
@@ -1329,7 +1330,6 @@ void Database::createExportNode(const QString &object_guid, const QString &outTe
 		else {
 			irisLog("There was an error fetching a dependency" + selectDep.lastError().text());
 		}
-
 	}
 
 	QStringList assetDependencies;
@@ -1450,6 +1450,25 @@ bool Database::deleteDependency(const QString & dependee)
 	return executeAndCheckQuery(query, "deleteDependency");
 }
 
+QStringList Database::fetchAssetDependenciesByType(const QString & guid, const ModelTypes &type)
+{
+    QSqlQuery query;
+    query.prepare(
+        "SELECT assets.guid FROM dependencies "
+        "INNER JOIN assets ON dependencies.dependee = assets.guid "
+        "WHERE depender = ? AND type = ?");
+    query.addBindValue(guid);
+    query.addBindValue(static_cast<int>(type));
+    executeAndCheckQuery(query, "fetchAssetDependenciesByType");
+
+    QStringList dependencies;
+    while (query.next()) {
+        QSqlRecord record = query.record();
+        dependencies.append(record.value(0).toString());
+    }
+    return dependencies;
+}
+
 QStringList Database::fetchAssetAndDependencies(const QString &guid)
 {
 	QSqlQuery query;
@@ -1499,7 +1518,7 @@ QStringList Database::fetchAssetAndDependencies(const QString &guid)
 	return dependencies;
 }
 
-QStringList Database::fetchAssetGUIDAndDependencies(const QString &guid)
+QStringList Database::fetchAssetGUIDAndDependencies(const QString &guid, bool appendSelf)
 {
 	QSqlQuery query;
 	query.prepare("select assets.guid from dependencies inner join assets on dependencies.dependee = assets.guid where depender = ?");
@@ -1507,7 +1526,7 @@ QStringList Database::fetchAssetGUIDAndDependencies(const QString &guid)
 	executeAndCheckQuery(query, "fetchAssetGUIDAndDependencies");
 
 	QStringList dependencies;
-	dependencies.append(guid);
+    if (appendSelf) dependencies.append(guid);
 	while (query.next()) {
 		QSqlRecord record = query.record();
 		dependencies.append(record.value(0).toString());
@@ -1881,6 +1900,24 @@ QString Database::importAssetModel(
 			}
 		}
 	}
+
+    if (jafType == ModelTypes::Material) {
+        for (auto &asset : assetsToImport) {
+            if (asset.type == static_cast<int>(ModelTypes::Material)) {
+                auto doc = QJsonDocument::fromBinaryData(asset.asset);
+                QString docToString = doc.toJson(QJsonDocument::Compact);
+
+                QMapIterator<QString, QString> i(assetGuids);
+                while (i.hasNext()) {
+                    i.next();
+                    docToString.replace(i.key(), i.value());
+                }
+
+                QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
+                asset.asset = updatedDoc.toBinaryData();
+            }
+        }
+    }
 
 	QSqlQuery selectDepQuery(dbe);
 	selectDepQuery.prepare("SELECT type, project_guid, depender, dependee, id FROM dependencies");

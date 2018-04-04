@@ -1226,8 +1226,8 @@ void MainWindow::createMaterial(const QString &guid)
 
         QString fileName = IrisUtils::join(
             Globals::project->getProjectFolder(), "Materials",
-            IrisUtils::buildFileName(activeSceneNode.staticCast<iris::MeshNode>()->getName(), "material"
-            ));
+            IrisUtils::buildFileName(activeSceneNode.staticCast<iris::MeshNode>()->getName(), "material")
+        );
 
         QFile file(fileName);
         file.open(QFile::WriteOnly);
@@ -1304,7 +1304,7 @@ void MainWindow::createMaterial(const QString &guid)
 			}
 			else if (prop->type == iris::PropertyType::Texture) {
 				if (!matObject.value(prop->name).toString().isEmpty()) {
-					db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), assetGuid, matObject.value(prop->name).toString());
+					db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), assetGuid, matObject.value(prop->name).toString(), Globals::project->getProjectGuid());
 				}
 				QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
 				QString textureStr = IrisUtils::join(
@@ -1336,7 +1336,7 @@ void MainWindow::exportNode(const QString &guid)
 	auto filePath = QFileDialog::getSaveFileName(
 		this,
 		"Choose export path",
-		Constants::DEF_EXPORT_FILE,
+		"export",
 		"Supported Export Formats (*.jaf)"
 	);
 
@@ -1347,7 +1347,7 @@ void MainWindow::exportNode(const QString &guid)
 
     const QString writePath = temporaryDir.path();
 
-	db->createExportNode(guid, QDir(writePath).filePath("asset.db"));
+	db->createExportNode(ModelTypes::Object, guid, QDir(writePath).filePath("asset.db"));
 
 	QDir tempDir(writePath);
 	tempDir.mkpath("assets");

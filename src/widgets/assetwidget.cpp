@@ -691,7 +691,7 @@ void AssetWidget::dropEvent(QDropEvent *evt)
 		list << fileInfo.absoluteFilePath();
 	}
 
-	importAsset(list);
+	if (!list.isEmpty()) importAsset(list);
 
 	evt->acceptProposedAction();
 }
@@ -926,7 +926,7 @@ void AssetWidget::exportMaterial()
 
 	const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
 
-	db->createExportNode(guid, QDir(writePath).filePath("asset.db"));
+	db->createExportNode(ModelTypes::Material, guid, QDir(writePath).filePath("asset.db"));
 
 	QDir tempDir(writePath);
 	tempDir.mkpath("assets");
@@ -1012,7 +1012,7 @@ void AssetWidget::exportShader()
 
     const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
 
-    db->createExportNode(guid, QDir(writePath).filePath("asset.db"));
+    db->createExportNode(ModelTypes::Shader, guid, QDir(writePath).filePath("asset.db"));
 
     QDir tempDir(writePath);
     tempDir.mkpath("assets");
@@ -1267,7 +1267,319 @@ void AssetWidget::createFolder()
 void AssetWidget::importAssetB()
 {
 	auto fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
-	importAsset(fileNames);
+	if (!fileNames.isEmpty()) importAsset(fileNames);
+}
+
+void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
+{
+    // Can be a plain zipped file containing an asset or an exported one
+    // Check for a manifest file and treat it accordingly
+    int counter = 0;
+    // If we're loading a single asset, it's likely a single large file, make the progress indeterminate
+    int maxRange = fileNames.size() == 1 ? 0 : fileNames.size();
+
+    progressDialog->reset();
+    progressDialog->setRange(0, maxRange);
+    progressDialog->setValue(0);
+
+    foreach(const auto &entry, fileNames) {
+        QFileInfo entryInfo(entry.path);
+        // create a temporary directory and extract our project into it
+        // we need a sure way to get the project name, so we have to extract it first and check the blob
+        QTemporaryDir temporaryDir;
+        if (temporaryDir.isValid()) {
+            zip_extract(entryInfo.absoluteFilePath().toStdString().c_str(),
+                temporaryDir.path().toStdString().c_str(),
+                Q_NULLPTR, Q_NULLPTR
+            );
+
+            QFile f(QDir(temporaryDir.path()).filePath(".manifest"));
+            if (!f.open(QFile::ReadOnly | QFile::Text)) break;
+            QTextStream in(&f);
+            const QString jafString = in.readLine();
+
+            // Copy assets over to project folder
+            // If the file already exists, increment the filename and do the same when inserting the db entry
+            // get all the files and directories in the project working directory
+            QString assetsDir = QDir(temporaryDir.path()).filePath("assets");
+            QDirIterator projectDirIterator(assetsDir, QDir::NoDotAndDotDot | QDir::Files);
+
+            QStringList fileNames;
+            while (projectDirIterator.hasNext()) fileNames << projectDirIterator.next();
+
+            // Create a pair that holds the original name and the new name (if any)
+            QVector<QPair<QString, QString>> files;	/* original x new */
+
+            ModelTypes jafType = ModelTypes::Undefined;
+
+            QString placeHolderGuid = GUIDManager::generateGUID();
+
+            for (const auto &file : fileNames) {
+                QFileInfo fileInfo(file);
+                QString destDir;
+                if (Constants::IMAGE_EXTS.contains(fileInfo.suffix())) {
+                    destDir = "Textures";
+                    jafType = ModelTypes::Texture;
+                }
+                else if (Constants::MODEL_EXTS.contains(fileInfo.suffix())) {
+                    destDir = "Models";
+                    jafType = ModelTypes::Object;
+                }
+                else if (Constants::WHITELIST.contains(fileInfo.suffix())) {
+                    destDir = "Files";
+                    jafType = ModelTypes::File;
+                }
+                else if (Constants::SHADER_EXT == fileInfo.suffix()) {
+                    destDir = "Shaders";
+                    jafType = ModelTypes::Shader;
+                }
+
+                QString pathToCopyTo = IrisUtils::join(Globals::project->getProjectFolder(), destDir);
+                QString fileToCopyTo = IrisUtils::join(pathToCopyTo, fileInfo.fileName());
+
+                int increment = 1;
+                QFileInfo checkFile(fileToCopyTo);
+
+                // If we encounter the same file, make a duplicate...
+                QString newFileName = fileInfo.fileName();
+
+                while (checkFile.exists()) {
+                    QString newName = fileInfo.baseName() + " " + QString::number(increment++);
+                    checkFile = QFileInfo(IrisUtils::buildFileName(
+                        IrisUtils::join(pathToCopyTo, newName), fileInfo.suffix())
+                    );
+                    newFileName = checkFile.fileName();
+                }
+
+                files.push_back(QPair<QString, QString>(file, QDir(pathToCopyTo).filePath(newFileName)));
+                bool copyFile = QFile::copy(file, QDir(pathToCopyTo).filePath(newFileName));
+                progressDialog->setLabelText("Importing " + fileInfo.fileName());
+
+                if (jafType == ModelTypes::File) {
+                    //QFile *file = new QFile(IrisUtils::join(Globals::project->getProjectFolder(), "Files", asset.name));
+                    //file->open(QIODevice::ReadOnly | QIODevice::Text);
+                    //file->close();
+                    auto assetFile = new AssetFile;
+                    assetFile->fileName = checkFile.fileName();
+                    assetFile->assetGuid = placeHolderGuid;
+                    assetFile->path = checkFile.absoluteFilePath();
+                    //assetFile->setValue(QVariant::fromValue(QVariant::fromValue(file)));
+                    AssetManager::addAsset(assetFile);
+                }
+
+                if (jafType == ModelTypes::Shader) {
+                    QFile *templateShaderFile = new QFile(checkFile.absoluteFilePath());
+                    templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);
+                    QJsonObject shaderDefinition = QJsonDocument::fromJson(templateShaderFile->readAll()).object();
+                    templateShaderFile->close();
+                    shaderDefinition["name"] = checkFile.baseName();
+                    shaderDefinition.insert("guid", placeHolderGuid);
+
+                    auto assetShader = new AssetShader;
+                    assetShader->assetGuid = placeHolderGuid;
+                    assetShader->fileName = checkFile.baseName();
+                    assetShader->path = checkFile.absoluteFilePath();
+                    assetShader->setValue(QVariant::fromValue(shaderDefinition));
+                    AssetManager::addAsset(assetShader);
+                }
+
+                if (jafType == ModelTypes::Object) {
+                    this->sceneView->makeCurrent();
+                    auto ssource = new iris::SceneSource();
+                    // load mesh as scene
+                    auto node = iris::MeshNode::loadAsSceneFragment(
+                        QDir(pathToCopyTo).filePath(newFileName),
+                        [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+                    {
+                        auto mat = iris::CustomMaterial::create();
+
+                        if (mesh->hasSkeleton())
+                            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
+                        else
+                            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+
+                        mat->setValue("diffuseColor", data.diffuseColor);
+                        mat->setValue("specularColor", data.specularColor);
+                        mat->setValue("ambientColor", QColor(110, 110, 110));	// assume this color, some formats set this to pitch black
+                        mat->setValue("emissionColor", data.emissionColor);
+                        mat->setValue("shininess", data.shininess);
+                        mat->setValue("useAlpha", true);
+
+                        if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
+                            mat->setValue("diffuseTexture", data.diffuseTexture);
+
+                        if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
+                            mat->setValue("specularTexture", data.specularTexture);
+
+                        if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
+                            mat->setValue("normalTexture", data.normalTexture);
+
+                        return mat;
+                    }, ssource);
+
+                    this->sceneView->doneCurrent();
+
+                    // Add to persistent store
+                    {
+                        QVariant variant = QVariant::fromValue(node);
+                        auto nodeAsset = new AssetNodeObject;
+                        nodeAsset->assetGuid = placeHolderGuid;	/* temp guid */
+                        nodeAsset->setValue(variant);
+                        AssetManager::addAsset(nodeAsset);
+                    }
+                }
+
+                progressDialog->setValue(counter++);
+            }
+
+            QMap<QString, QString> newNames;	/* original x new */
+            for (const auto &file : files) {
+                newNames.insert(
+                    QFileInfo(file.first).fileName(),
+                    QFileInfo(file.second).fileName()
+                );
+            }
+
+            progressDialog->setLabelText("Populating database...");
+            // Create db entries from asset blob
+
+            // We can discern most types from their extension, we don't store material files so we use the manifest
+            if (jafString == "material") {
+                jafType = ModelTypes::Material;
+            }
+            else if (jafString == "object") {
+                jafType = ModelTypes::Object;
+            }
+            else if (jafString == "shader") {
+                jafType = ModelTypes::Shader;
+            }
+            else {
+                // Default to files since we know what archives can contain
+                jafType = ModelTypes::File;
+            }
+
+            QString guidReturned = db->importAssetModel(jafType, QDir(temporaryDir.path()).filePath("asset.db"), newNames, assetItem.selectedGuid);
+
+            if (jafType == ModelTypes::Shader || jafType == ModelTypes::File) {
+                for (auto &asset : AssetManager::getAssets()) {
+                    if (asset->assetGuid == placeHolderGuid) {
+                        asset->assetGuid = guidReturned;
+                    }
+                }
+            }
+
+            if (jafType == ModelTypes::Object) {
+                std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
+                    [&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
+                {
+                    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+                        auto n = node.staticCast<iris::MeshNode>();
+                        //n->meshPath = meshGuid;
+                        auto mat_defs = definition.value("material").toObject();
+                        auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+                        for (auto prop : mat->properties) {
+                            if (prop->type == iris::PropertyType::Texture) {
+                                if (!mat_defs.value(prop->name).toString().isEmpty()) {
+                                    mat->setValue(prop->name, mat_defs.value(prop->name).toString());
+                                }
+                            }
+                            else if (prop->type == iris::PropertyType::Color) {
+                                mat->setValue(
+                                    prop->name,
+                                    QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
+                                );
+                            }
+                            else {
+                                mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
+                            }
+                        }
+                    }
+
+                    QJsonArray children = definition["children"].toArray();
+                    // These will always be in sync since the definition is derived from the mesh
+                    if (node->hasChildren()) {
+                        for (int i = 0; i < node->children.count(); i++) {
+                            updateNodeMaterialValues(node->children[i], children[i].toObject());
+                        }
+                    }
+                };
+
+                for (auto &asset : AssetManager::getAssets()) {
+                    if (asset->assetGuid == placeHolderGuid) {
+                        asset->assetGuid = guidReturned;
+                        auto node = asset->value.value<iris::SceneNodePtr>();
+                        auto material = db->getAssetMaterialGlobal(guidReturned);
+                        auto materialObj = QJsonDocument::fromBinaryData(material);
+                        updateNodeMaterialValues(node, materialObj.object());
+                    }
+                }
+            }
+
+            if (jafType == ModelTypes::Material) {
+                QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->getMaterialGlobal(guidReturned));
+                QJsonObject matObject = matDoc.object();
+                iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
+
+                QFileInfo shaderFile;
+
+                QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+                while (it.hasNext()) {
+                    it.next();
+                    if (it.key() == matObject["guid"].toString()) {
+                        shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
+                        break;
+                    }
+                }
+
+                if (shaderFile.exists()) {
+                    material->generate(shaderFile.absoluteFilePath());
+                }
+                else {
+                    for (auto asset : AssetManager::getAssets()) {
+                        if (asset->type == ModelTypes::Shader) {
+                            if (asset->assetGuid == matObject["guid"].toString()) {
+                                auto def = asset->getValue().toJsonObject();
+                                auto vertexShader = def["vertex_shader"].toString();
+                                auto fragmentShader = def["fragment_shader"].toString();
+                                for (auto asset : AssetManager::getAssets()) {
+                                    if (asset->type == ModelTypes::File) {
+                                        if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+                                        if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+                                    }
+                                }
+                                def["vertex_shader"] = vertexShader;
+                                def["fragment_shader"] = fragmentShader;
+                                material->generate(def);
+                            }
+                        }
+                    }
+                }
+
+                for (const auto &prop : material->properties) {
+                    if (prop->type == iris::PropertyType::Color) {
+                        QColor col;
+                        col.setNamedColor(matObject.value(prop->name).toString());
+                        material->setValue(prop->name, col);
+                    }
+                    else if (prop->type == iris::PropertyType::Texture) {
+                        QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
+                        QString textureStr = IrisUtils::join(
+                            Globals::project->getProjectFolder(), "Textures", materialName
+                        );
+                        material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
+                    }
+                    else {
+                        material->setValue(prop->name, QVariant::fromValue(matObject.value(prop->name)));
+                    }
+                }
+
+                auto assetMat = new AssetMaterial;
+                assetMat->assetGuid = guidReturned;
+                assetMat->setValue(QVariant::fromValue(material));
+                AssetManager::addAsset(assetMat);
+            }
+        }
+    }
 }
 
 void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNames)
@@ -1323,248 +1635,6 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
                 type = ModelTypes::File;
                 destDir = "Files";
             }
-			else if (entryInfo.suffix() == "break"/* entryInfo.suffix() == Constants::ASSET_EXT */) {
-				// Can be a plain zipped file containing an asset or an exported one
-				// Check for a manifest file and treat it accordingly
-
-				int counter = 0;
-				// If we're loading a single asset, it's likely a single large file, make the progress indeterminate
-				int maxRange = fileNames.size() == 1 ? 0 : fileNames.size();
-
-				progressDialog->reset();
-				progressDialog->setRange(0, maxRange);
-				progressDialog->setValue(0);
-
-				// create a temporary directory and extract our project into it
-				// we need a sure way to get the project name, so we have to extract it first and check the blob
-				QTemporaryDir temporaryDir;
-				if (temporaryDir.isValid()) {
-					zip_extract(entryInfo.absoluteFilePath().toStdString().c_str(),
-						temporaryDir.path().toStdString().c_str(),
-						Q_NULLPTR, Q_NULLPTR
-					);
-
-					QFile f(QDir(temporaryDir.path()).filePath(".manifest"));
-					if (!f.open(QFile::ReadOnly | QFile::Text)) break;
-					QTextStream in(&f);
-					const QString jafString = in.readLine();
-
-					// Copy assets over to project folder
-					// If the file already exists, increment the filename and do the same when inserting the db entry
-					// get all the files and directories in the project working directory
-					QString assetsDir = QDir(temporaryDir.path()).filePath("assets");
-					QDirIterator projectDirIterator(assetsDir, QDir::NoDotAndDotDot | QDir::Files);
-
-					QStringList fileNames;
-					while (projectDirIterator.hasNext()) fileNames << projectDirIterator.next();
-					
-					// Create a pair that holds the original name and the new name (if any)
-					QVector<QPair<QString, QString>> files;	/* original x new */
-
-					ModelTypes jafType = ModelTypes::Undefined;
-
-					QString placeHolderGuid = GUIDManager::generateGUID();
-					
-					for (const auto &file : fileNames) {
-						QFileInfo fileInfo(file);
-						QString destDir;
-						if (Constants::IMAGE_EXTS.contains(fileInfo.suffix())) {
-							destDir = "Textures";
-						}
-						else if (Constants::MODEL_EXTS.contains(fileInfo.suffix())) {
-							destDir = "Models";
-							jafType = ModelTypes::Object;
-						}
-                        else if (Constants::WHITELIST.contains(fileInfo.suffix())) {
-                            destDir = "Files";
-                            jafType = ModelTypes::Object;
-                        }
-                        else if (Constants::SHADER_EXT == fileInfo.suffix()) {
-                            destDir = "Shaders";
-                            jafType = ModelTypes::Shader;
-                        }
-
-						if (jafString == "material") {
-							jafType == ModelTypes::Material;
-						}
-
-						QString pathToCopyTo = IrisUtils::join(Globals::project->getProjectFolder(), destDir);
-						QString fileToCopyTo = IrisUtils::join(pathToCopyTo, fileInfo.fileName());
-
-						int increment = 1;
-						QFileInfo checkFile(fileToCopyTo);
-
-						// If we encounter the same file, make a duplicate...
-						QString newFileName = fileInfo.fileName();
-
-						while (checkFile.exists()) {
-							QString newName = fileInfo.baseName() + " " + QString::number(increment++);
-							checkFile = QFileInfo(IrisUtils::buildFileName(
-								IrisUtils::join(pathToCopyTo, newName), fileInfo.suffix())
-							);
-							newFileName = checkFile.fileName();
-						}
-						
-						files.push_back(QPair<QString, QString>(file, QDir(pathToCopyTo).filePath(newFileName)));
-						bool copyFile = QFile::copy(file, QDir(pathToCopyTo).filePath(newFileName));
-						progressDialog->setLabelText("Importing " + fileInfo.fileName());
-
-						if (jafType == ModelTypes::Object) {
-							this->sceneView->makeCurrent();
-							auto ssource = new iris::SceneSource();
-							// load mesh as scene
-							auto node = iris::MeshNode::loadAsSceneFragment(QDir(pathToCopyTo).filePath(newFileName), [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
-							{
-								auto mat = iris::CustomMaterial::create();
-
-								if (mesh->hasSkeleton())
-									mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
-								else
-									mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
-
-								mat->setValue("diffuseColor", data.diffuseColor);
-								mat->setValue("specularColor", data.specularColor);
-								mat->setValue("ambientColor", QColor(110, 110, 110));	// assume this color, some formats set this to pitch black
-								mat->setValue("emissionColor", data.emissionColor);
-								mat->setValue("shininess", data.shininess);
-								mat->setValue("useAlpha", true);
-
-								if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
-									mat->setValue("diffuseTexture", data.diffuseTexture);
-
-								if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
-									mat->setValue("specularTexture", data.specularTexture);
-
-								if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
-									mat->setValue("normalTexture", data.normalTexture);
-
-								return mat;
-							}, ssource);
-
-							this->sceneView->doneCurrent();
-
-							// Add to persistent store
-							{
-								QVariant variant = QVariant::fromValue(node);
-								auto nodeAsset = new AssetNodeObject;
-								nodeAsset->assetGuid = placeHolderGuid;	/* temp guid */
-								nodeAsset->setValue(variant);
-								AssetManager::addAsset(nodeAsset);
-							}
-						}
-
-						if (jafType == ModelTypes::Material) {
-							//ThumbnailGenerator::getSingleton()->requestThumbnail(
-							//	ThumbnailRequestType::Material, asset->path, assetGuid
-							//);
-
-							//QJsonObject jsonMaterial;
-							//QStringList texturesToCopy;
-							//extractTexturesAndMaterialFromMaterial(asset->path, texturesToCopy, jsonMaterial);
-
-							//QString jsonMaterialString = QJsonDocument(jsonMaterial).toJson();
-
-							//// Update the embedded material to point to image asset guids
-							//for (const auto &image : imagesInUse) {
-							//	if (texturesToCopy.contains(QFileInfo(image.path).fileName())) {
-							//		jsonMaterialString.replace(QFileInfo(image.path).fileName(), image.guid);
-							//	}
-							//}
-
-							//QJsonDocument jsonMaterialGuids = QJsonDocument::fromJson(jsonMaterialString.toUtf8());
-							//db->updateAssetAsset(assetGuid, jsonMaterialGuids.toBinaryData());
-
-							//// Create dependencies to the object for the textures used
-							//for (const auto &image : imagesInUse) {
-							//	if (texturesToCopy.contains(QFileInfo(image.path).fileName())) {
-							//		db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), assetGuid, image.guid);
-							//	}
-							//}
-						}
-							
-						progressDialog->setValue(counter++);
-					}
-
-					QMap<QString, QString> newNames;	/* original x new */
-					for (const auto &file : files) {
-						newNames.insert(
-							QFileInfo(file.first).fileName(),
-							QFileInfo(file.second).fileName()
-						);
-					}
-
-					progressDialog->setLabelText("Populating database...");
-					// Create db entries from asset blob
-
-					QString guidReturned = db->importAssetModel(jafType, QDir(temporaryDir.path()).filePath("asset.db"), newNames, assetItem.selectedGuid);
-
-					if (jafType == ModelTypes::Material) {
-	
-					}
-
-					if (jafType == ModelTypes::Object) {
-						std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
-							[&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
-						{
-							if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-								auto n = node.staticCast<iris::MeshNode>();
-								//n->meshPath = meshGuid;
-								auto mat_defs = definition.value("material").toObject();
-								auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-								for (auto prop : mat->properties) {
-									if (prop->type == iris::PropertyType::Texture) {
-										if (!mat_defs.value(prop->name).toString().isEmpty()) {
-											mat->setValue(prop->name, mat_defs.value(prop->name).toString());
-										}
-									}
-									else if (prop->type == iris::PropertyType::Color) {
-										mat->setValue(
-											prop->name,
-											QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
-										);
-									}
-									else {
-										mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
-									}
-								}
-							}
-
-							QJsonArray children = definition["children"].toArray();
-							// These will always be in sync since the definition is derived from the mesh
-							if (node->hasChildren()) {
-								for (int i = 0; i < node->children.count(); i++) {
-									updateNodeMaterialValues(node->children[i], children[i].toObject());
-								}
-							}
-						};
-
-						for (auto &asset : AssetManager::getAssets()) {
-							if (asset->assetGuid == placeHolderGuid) {
-								asset->assetGuid = guidReturned;
-								auto node = asset->value.value<iris::SceneNodePtr>();
-								auto material = db->getAssetMaterialGlobal(guidReturned);
-								auto materialObj = QJsonDocument::fromBinaryData(material);
-								updateNodeMaterialValues(node, materialObj.object());
-							}
-						}
-					}
-
-	/*				if (jafType == ModelTypes::Material) {
-						QString guidReturned = db->importAssetMaterial(jafType, QDir(temporaryDir.path()).filePath("asset.db"), newNames, assetItem.selectedGuid);
-
-						for (auto &asset : AssetManager::getAssets()) {
-							if (asset->assetGuid == placeHolderGuid) {
-								asset->assetGuid = guidReturned;
-								auto node = asset->value.value<iris::SceneNodePtr>();
-								auto material = db->getAssetMaterialGlobal(guidReturned);
-								auto materialObj = QJsonDocument::fromBinaryData(material);
-							}
-						}
-					}*/
-
-					type = ModelTypes::Undefined;
-				}
-			}
 			// Generally if we don't explicitly specify an extension, don't import or add it to the database (iKlsR)
 			else {
 				type = ModelTypes::Undefined;
@@ -1811,7 +1881,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					// Create dependencies to the object for the textures used
 					for (const auto &image : imagesInUse) {
 						if (texturesToCopy.contains(QFileInfo(image.path).fileName())) {
-							db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), objectGuid, image.guid);
+							db->insertGlobalDependency(static_cast<int>(ModelTypes::Object), objectGuid, image.guid);
 						}
 					}
 
@@ -1837,16 +1907,8 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 	progressDialog->hide();
 }
 
-void AssetWidget::importAsset(const QStringList &path)
+void AssetWidget::importAsset(const QStringList &fileNames)
 {
-	QStringList fileNames;
-	if (path.isEmpty()) {   // This is hit when we call this function via import menu
-		fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
-	}
-	else {
-		fileNames = path;
-	}
-
 	// Get the entire directory listing if there are nested folders
 	std::function<void(QStringList, QString guid, QList<directory_tuple>&)> getImportManifest =
 		[&](QStringList files, QString guid, QList<directory_tuple> &items) -> void
@@ -1890,6 +1952,7 @@ void AssetWidget::importAsset(const QStringList &path)
 
 	// Path, GUID, Parent
 	QList<directory_tuple> finalImportList;
+    QList<directory_tuple> finalJafAssetImportList;
 
 	for (const auto &folder : fileNameList) {
 		if (QFileInfo(folder.path).isDir()) {
@@ -1929,11 +1992,12 @@ void AssetWidget::importAsset(const QStringList &path)
 
 	for (const auto &archive : fileNameList) {
 		if (QFileInfo(archive.path).suffix() == Constants::ASSET_EXT) {
-			finalImportList.append(archive);
+            finalJafAssetImportList.append(archive);
 		}
 	}
 
 	createDirectoryStructure(finalImportList);
+    importJafAssets(finalJafAssetImportList);
 	populateAssetTree(false);
 	updateAssetView(assetItem.selectedGuid);
 	//syncTreeAndView(assetItem.selectedGuid);

@@ -222,6 +222,7 @@ protected slots:
     void importAssetB();
     void createDirectoryStructure(const QList<directory_tuple>&);
     void importAsset(const QStringList &path);
+    void importJafAssets(const QList<directory_tuple>&);
 
     void onThumbnailResult(ThumbnailResult* result);
 

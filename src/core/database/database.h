@@ -93,7 +93,7 @@ public:
     void createExportScene(const QString& outTempFilePath);
     bool importProject(const QString& inFilePath);
 
-	void createExportNode(const QString& object_guid, const QString& outTempFilePath);
+	void createExportNode(const ModelTypes&, const QString& object_guid, const QString& outTempFilePath);
 
 	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table);
 
@@ -103,7 +103,8 @@ public:
 
 	bool deleteDependency(const QString &dependee);
 
-	QStringList fetchAssetGUIDAndDependencies(const QString &guid);
+	QStringList fetchAssetGUIDAndDependencies(const QString &guid, bool appendSelf = true);
+	QStringList fetchAssetDependenciesByType(const QString &guid, const ModelTypes&);
 	QStringList fetchAssetAndDependencies(const QString &guid);
 	QStringList deleteFolderAndDependencies(const QString &guid);
 	QStringList deleteAssetAndDependencies(const QString &guid);
