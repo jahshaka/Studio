@@ -9,7 +9,7 @@
 SoftwareUpdateDialog::SoftwareUpdateDialog(QDialog *parent) : QDialog(parent), ui(new Ui::SoftwareUpdateDialog)
 {
 	ui->setupUi(this);
-	setWindowTitle("Rename Project");
+	setWindowTitle("Software Update");
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
 	connect(ui->pushButton, &QPushButton::clicked, [this]() {

@@ -27,13 +27,13 @@ void UpdateChecker::checkForUpdate()
 			QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
 			auto obj = doc.object();
 
-			auto shouldUpdate = obj.value("shouldUpdate").toBool(false);
+			auto shouldUpdate = obj.value("should_update").toBool(false);
 			if (!shouldUpdate)
 				return;
 
-			auto nextVersion = obj.value("nextVersion").toString();
-			auto versionNotes = obj.value("versionNotes").toString();
-			auto downloadLink = obj.value("downloadLink").toString();
+			auto nextVersion = obj.value("id").toString();
+			auto versionNotes = obj.value("notes").toString();
+			auto downloadLink = obj.value("download_url").toString();
 			//qDebug() << downloadLink;
 			//qDebug() << obj;
 
