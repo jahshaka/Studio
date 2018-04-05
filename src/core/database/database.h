@@ -11,7 +11,8 @@
 #include "../project.h"
 
 typedef struct {
-	int type;
+	int ertype;
+	int eetype;
 	QString project_guid;
 	QString depender;
 	QString dependee;
@@ -31,7 +32,7 @@ public:
     bool checkIfTableExists(const QString &tableName);
 
 	void createGlobalDependencies();
-	void insertGlobalDependency(const int &type, const QString &depender, const QString &dependee, const QString &project_id = QString());
+	void insertGlobalDependency(const int ertype, const int eetype, const QString &depender, const QString &dependee, const QString &project_id = QString());
 	void updateGlobalDependencyDepender(const int &type, const QString &depender, const QString &dependee);
 	void updateGlobalDependencyDependee(const int &type, const QString &depender, const QString &dependee);
 
@@ -111,11 +112,10 @@ public:
 	QStringList deleteAssetAndDependencies(const QString &guid);
 	QString fetchAssetGUIDByName(const QString &name);
 
-	QString fetchObjectMesh(const QString &guid, const int type);
-	QString fetchMeshObject(const QString &guid, const int type);
+	QString fetchObjectMesh(const QString &guid, const int ertype, const int eetype);
+	QString fetchMeshObject(const QString &guid, const int ertype, const int eetype);
 
-	QString importAssetMaterial(const ModelTypes &jafType, const QString &pathToDb, const QMap<QString, QString> &newNames, const QString &parent);
-	QString importAssetModel(const ModelTypes &jafType, const QString &pathToDb, const QMap<QString, QString> &newNames, const QString &parent);
+	QString importAsset(const ModelTypes &jafType, const QString &pathToDb, const QMap<QString, QString> &newNames, const QString &parent);
 	QString importJafAssetModel(const ModelTypes &jafType, const QString &pathToDb);
 
 	bool renameFolder(const QString &guid, const QString &newName);

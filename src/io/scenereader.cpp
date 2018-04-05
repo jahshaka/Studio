@@ -417,7 +417,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     }
 
     meshNode->applyDefaultPose();
-	meshNode->setGUID(handle->fetchMeshObject(asset.guid, static_cast<int>(ModelTypes::Object)));
+	meshNode->setGUID(handle->fetchMeshObject(asset.guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh)));
 
     return meshNode;
 }

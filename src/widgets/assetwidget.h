@@ -143,8 +143,8 @@ protected:
         if (index.data().canConvert<QString>()) {
             const QString text = index.data().toString();
             QLineEdit *lineEdit = qobject_cast<QLineEdit*>(editor);
+            lineEdit->setMaxLength(15);
             lineEdit->setText(text);
-            qDebug() << text;
         }
         else {
             QStyledItemDelegate::setEditorData(editor, index);

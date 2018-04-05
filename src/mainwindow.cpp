@@ -1058,7 +1058,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
 	iris::SceneNodePtr node;
 
-	QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object));
+	QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
 
 	QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
 	while (iterator != AssetManager::getAssets().constEnd()) {
@@ -1304,7 +1304,7 @@ void MainWindow::createMaterial(const QString &guid)
 			}
 			else if (prop->type == iris::PropertyType::Texture) {
 				if (!matObject.value(prop->name).toString().isEmpty()) {
-					db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), assetGuid, matObject.value(prop->name).toString(), Globals::project->getProjectGuid());
+					db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), static_cast<int>(ModelTypes::Texture), assetGuid, matObject.value(prop->name).toString(), Globals::project->getProjectGuid());
 				}
 				QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
 				QString textureStr = IrisUtils::join(
@@ -1323,6 +1323,8 @@ void MainWindow::createMaterial(const QString &guid)
 			assetMat->setValue(QVariant::fromValue(material));
 			AssetManager::addAsset(assetMat);
 		}
+
+        QFile::remove(fileName);
 	}
 	else {
 		qDebug() << "Need an active scenenode!";
@@ -1355,7 +1357,7 @@ void MainWindow::exportNode(const QString &guid)
 	QFile manifest(QDir(writePath).filePath(".manifest"));
 	if (manifest.open(QIODevice::ReadWrite)) {
 		QTextStream stream(&manifest);
-		stream << "object" << endl << guid;
+		stream << "object";
 	}
 	manifest.close();
 

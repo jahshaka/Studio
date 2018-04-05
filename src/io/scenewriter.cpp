@@ -298,35 +298,30 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
 void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode, bool relative)
 {
     // It's a safe assumption that the filename is safe to use here in queries if need be
-	if (meshNode->meshPath.startsWith(":")) {
-		sceneNodeObject["mesh"] = relative ? getRelativePath(meshNode->meshPath) : QFileInfo(meshNode->meshPath).fileName();
-	}
-	else {
-		sceneNodeObject["mesh"] = relative ? getRelativePath(meshNode->meshPath) : QFileInfo(meshNode->meshPath).fileName();
-	}
-    sceneNodeObject["meshIndex"] = meshNode->meshIndex;
-    sceneNodeObject["pickable"] = meshNode->pickable;
+	sceneNodeObject["mesh"]         = meshNode->meshPath;
+    sceneNodeObject["meshIndex"]    = meshNode->meshIndex;
+    sceneNodeObject["pickable"]     = meshNode->pickable;
 
     auto cullMode = meshNode->getFaceCullingMode();
     switch (cullMode) {
-    case iris::FaceCullingMode::Back:
-        sceneNodeObject["faceCullingMode"] = "back";
-        break;
-    case iris::FaceCullingMode::Front:
-        sceneNodeObject["faceCullingMode"] = "front";
-        break;
-    case iris::FaceCullingMode::DefinedInMaterial:
-        sceneNodeObject["faceCullingMode"] = "material";
-        break;
-    case iris::FaceCullingMode::None:
-        sceneNodeObject["faceCullingMode"] = "none";
-        break;
+        case iris::FaceCullingMode::Back:
+            sceneNodeObject["faceCullingMode"] = "back";
+            break;
+        case iris::FaceCullingMode::Front:
+            sceneNodeObject["faceCullingMode"] = "front";
+            break;
+        case iris::FaceCullingMode::DefinedInMaterial:
+            sceneNodeObject["faceCullingMode"] = "material";
+            break;
+        case iris::FaceCullingMode::None:
+            sceneNodeObject["faceCullingMode"] = "none";
+            break;
+        default: break;
     }
 
     // todo: check if material actually exists
-    auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
     QJsonObject matObj;
-    writeSceneNodeMaterial(matObj, mat, relative);
+    writeSceneNodeMaterial(matObj, meshNode->getMaterial().staticCast<iris::CustomMaterial>(), relative);
     sceneNodeObject["material"] = matObj;
 }
 

@@ -557,10 +557,10 @@ void ProjectManager::loadProjectAssets()
 	progressDialog->setLabelText(tr("Collecting assets..."));
 
 	// TODO - if we are only loading a couple assets, just do it sequentially
-	for (const auto &asset : db->fetchFilteredAssets(Globals::project->getProjectGuid(), (int)ModelTypes::Mesh)) {
+	for (const auto &asset : db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Mesh))) {
 		assetsToLoad.append(
 			AssetList(QDir(Globals::project->getProjectFolder() + "/Models").filePath(asset.name),
-			db->fetchMeshObject(asset.guid, (int)ModelTypes::Object))
+			db->fetchMeshObject(asset.guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh)))
 		);
 	}
 

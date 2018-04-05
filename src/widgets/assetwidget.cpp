@@ -72,6 +72,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	});
 
     ui->assetView->setItemDelegate(new ListViewDelegate());
+    ui->assetView->setTextElideMode(Qt::ElideRight);
 
 	connect(ui->assetView,  SIGNAL(itemClicked(QListWidgetItem*)),
 		    this,           SLOT(assetViewClicked(QListWidgetItem*)));
@@ -259,7 +260,7 @@ void AssetWidget::trigger()
 
 			updateNodeMaterialValues(node, materialObj.object());
 
-			QString meshGuid = db->fetchObjectMesh(asset->assetGuid, static_cast<int>(ModelTypes::Object));
+			QString meshGuid = db->fetchObjectMesh(asset->assetGuid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
 
 			std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
 				if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
@@ -557,10 +558,9 @@ void AssetWidget::addItem(const AssetTileData &assetData)
 	
     if (assetData.type == static_cast<int>(ModelTypes::Object)) {
 		const QString meshAssetGuid =
-            db->getDependencyByType(static_cast<int>(ModelTypes::Object), assetData.guid);
-		const AssetTileData meshAssetName = db->fetchAsset(meshAssetGuid);
+            db->getDependencyByType(static_cast<int>(ModelTypes::Mesh), assetData.guid);
 		item->setData(MODEL_TYPE_ROLE, assetData.type);
-		item->setData(MODEL_MESH_ROLE, meshAssetName.name);
+		item->setData(MODEL_MESH_ROLE, db->fetchAsset(meshAssetGuid).name);
 	}
 
 	item->setSizeHint(currentSize);
@@ -934,7 +934,6 @@ void AssetWidget::exportMaterial()
 	if (manifest.open(QIODevice::ReadWrite)) {
 		QTextStream stream(&manifest);
 		stream << "material";
-		stream << guid;
 	}
 	manifest.close();
 
@@ -999,7 +998,7 @@ void AssetWidget::exportShader()
     auto filePath = QFileDialog::getSaveFileName(
         this,
         "Choose export path",
-        "export",
+        assetItem.wItem->data(Qt::DisplayRole).toString(),
         "Supported Export Formats (*.jaf)"
     );
 
@@ -1021,7 +1020,6 @@ void AssetWidget::exportShader()
     if (manifest.open(QIODevice::ReadWrite)) {
         QTextStream stream(&manifest);
         stream << "shader";
-        stream << guid;
     }
     manifest.close();
 
@@ -1418,7 +1416,6 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             }
 
             progressDialog->setLabelText("Populating database...");
-            // Create db entries from asset blob
 
             // We can discern most types from their extension, we don't store material files so we use the manifest
             if (jafString == "material") {
@@ -1435,7 +1432,7 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                 jafType = ModelTypes::File;
             }
 
-            QString guidReturned = db->importAssetModel(jafType, QDir(temporaryDir.path()).filePath("asset.db"), newNames, assetItem.selectedGuid);
+            QString guidReturned = db->importAsset(jafType, QDir(temporaryDir.path()).filePath("asset.db"), newNames, assetItem.selectedGuid);
 
             if (jafType == ModelTypes::Shader || jafType == ModelTypes::File) {
                 for (auto &asset : AssetManager::getAssets()) {
@@ -1720,7 +1717,7 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					// Create dependencies to the object for the textures used
 					for (const auto &image : imagesInUse) {
 						if (texturesToCopy.contains(QFileInfo(image.path).fileName())) {
-							db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), assetGuid, image.guid);
+							db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), static_cast<int>(ModelTypes::Texture), assetGuid, image.guid, Globals::project->getProjectGuid());
 						}
 					}
 
@@ -1858,12 +1855,12 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					// Create dependencies to the object for the textures used
 					for (const auto &image : imagesInUse) {
 						if (texturesToCopy.contains(QFileInfo(image.path).fileName())) {
-							db->insertGlobalDependency(static_cast<int>(ModelTypes::Object), objectGuid, image.guid);
+							db->insertGlobalDependency(static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Texture), objectGuid, image.guid, Globals::project->getProjectGuid());
 						}
 					}
 
 					// Insert a dependency for the mesh to the object
-					db->insertGlobalDependency(static_cast<int>(ModelTypes::Object), objectGuid, assetGuid);
+					db->insertGlobalDependency(static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh), objectGuid, assetGuid, Globals::project->getProjectGuid());
 					// Remove the thumbnail from the object asset
 					db->updateAssetAsset(assetGuid, QByteArray());
 
