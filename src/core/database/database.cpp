@@ -325,7 +325,7 @@ QVector<AssetTileData> Database::fetchAssets()
         "assets.tags, assets.project_guid "
         "FROM assets "
 		"INNER JOIN collections ON assets.collection = collections.collection_id "
-        "WHERE assets.type = :m OR assets.type = :o "
+        "WHERE assets.project_guid IS NULL AND assets.type = :m OR assets.type = :o "
 		"ORDER BY assets.name DESC"
 	);
     query.bindValue(":m", static_cast<int>(ModelTypes::Object));
@@ -351,7 +351,7 @@ QVector<AssetTileData> Database::fetchAssets()
 
 		Globals::assetNames.insert(data.guid, data.name);
 
-		tileData.push_back(data);
+        tileData.push_back(data);
 	}
 
 	return tileData;
@@ -1890,7 +1890,7 @@ QString Database::importJafAssetModel(const ModelTypes &jafType, const QString &
             data.name = record.value(2).toString();
             data.collection = record.value(3).toInt();
             data.times_used = record.value(4).toInt();
-            data.project_guid = record.value(5).toString();
+            //data.project_guid = record.value(5).toString();
             data.date_created = record.value(6).toDateTime();
             data.last_updated = record.value(7).toDateTime();
             data.author = record.value(8).toString();
@@ -1938,6 +1938,7 @@ QString Database::importJafAssetModel(const ModelTypes &jafType, const QString &
                 }
 
                 QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
+                qDebug() << updatedDoc;
                 asset.asset = updatedDoc.toBinaryData();
             }
         }

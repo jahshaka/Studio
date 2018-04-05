@@ -55,6 +55,7 @@ public:
     void renderObject();
     void resetViewerCamera();
 	void resetViewerCameraAfter();
+    void loadJafMaterial(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
     void loadJafModel(QString str, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
     void loadModel(QString str, bool firstAdd = true, bool cache = false, bool firstLoad = true);
 
@@ -63,6 +64,7 @@ public:
     void mouseReleaseEvent(QMouseEvent *e);
     void mouseMoveEvent(QMouseEvent *e);
 
+	void addJafMaterial(const QString &guid, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addJafMesh(const QString &path, const QString &guid, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addMesh(const QString &path = QString(), bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid = "", bool viewed = false, bool cache = false);
@@ -87,8 +89,7 @@ public:
     void clearScene() {
 		if (scene->rootNode->hasChildren()) {
 			for (auto child : scene->rootNode->children) {
-				// clear the scene of anything that is not a light for the next asset
-				if (child->sceneNodeType != iris::SceneNodeType::Light) {
+				if (child->getName() == lastNode) {
 					child->removeFromParent();
 				}
 			}
@@ -144,4 +145,6 @@ private:
 
     QVector3D localPos, localRot, lookAt;
 	int distanceFromPivot;
+
+    QString lastNode;
 };
