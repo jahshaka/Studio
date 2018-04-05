@@ -1263,15 +1263,17 @@ void SceneViewWidget::pausePlayingScene()
 
 void SceneViewWidget::stopPlayingScene()
 {
-    playScene = false;
-    animTime = 0.0f;
+	if (playScene) {
+		playScene = false;
+		animTime = 0.0f;
 
-    if (!scene)
-        return;
+		if (!scene)
+			return;
 
-    scene->updateSceneAnimation(0.0f);
+		scene->updateSceneAnimation(0.0f);
 
-    restorePreviousCameraController();
+		restorePreviousCameraController();
+	}
 }
 
 iris::ForwardRendererPtr SceneViewWidget::getRenderer() const
