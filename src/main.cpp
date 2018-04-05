@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
 
     QSplashScreen splash;
     auto pixmap = QPixmap(":/images/splashv3.png");
-    splash.setPixmap(pixmap.scaled(815, 480, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    splash.setPixmap(pixmap.scaled(900, 506, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     splash.show();
 
     Globals::appWorkingDir = QApplication::applicationDirPath();
