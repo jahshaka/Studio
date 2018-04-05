@@ -14,7 +14,15 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QPushButton {
+   <string notr="true">QWidget#AssetPickerWidget, #assetView {
+	background: #202020;
+}
+
+QLabel {
+	color: #EEE;
+}
+
+QPushButton {
     background-color: #4D4D4D;
     color: #DEDEDE;
     border: 0;

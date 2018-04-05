@@ -96,6 +96,14 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
             AssetManager::addAsset(assetFile);
         }
 
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture))) {
+            auto assetTexture = new AssetTexture;
+            assetTexture->fileName = asset.name;
+            assetTexture->assetGuid = asset.guid;
+            assetTexture->path = IrisUtils::join(Globals::project->getProjectFolder(), "Textures", asset.name);
+            AssetManager::addAsset(assetTexture);
+        }
+
 		// Materials
 		for (const auto &asset :
 			db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Material)))
@@ -496,13 +504,14 @@ void ProjectManager::openSampleBrowser()
     QGridLayout *layout = new QGridLayout();
     QListWidget *sampleList = new QListWidget();
     sampleList->setObjectName("sampleList");
-    sampleList->setStyleSheet("#sampleList { background-color: #1e1e1e; padding: 0 8px; border: none } " \
+    sampleList->setStyleSheet("#sampleList { background-color: #1e1e1e; padding: 0 8px; border: none; color: #EEE; } " \
                               "QListWidgetItem { padding: 12px; } "\
                               "QListView::item:selected { "\
                               "    border: 1px solid #3498db; "\
                                " background: #3498db; "\
                                "  color: #CECECE; "\
                               "} "\
+                              "*, QLabel { color: white; } "\
                               "QToolTip { padding: 2px; border: 0; background: black; opacity: 200; }");
     sampleList->setViewMode(QListWidget::IconMode);
     sampleList->setSizeAdjustPolicy(QListWidget::AdjustToContents);
@@ -533,7 +542,7 @@ void ProjectManager::openSampleBrowser()
 
     auto instructions = new QLabel("Double click on a sample world to import it in the editor");
     instructions->setObjectName("instructions");
-    instructions->setStyleSheet("#instructions { border: none; background: #1e1e1e; " \
+    instructions->setStyleSheet("#instructions { border: none; background: #1e1e1e; color: white; " \
                                 "padding: 10px; font-size: 12px }");
     layout->addWidget(instructions);
     layout->addWidget(sampleList);

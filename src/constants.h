@@ -17,39 +17,39 @@ extern "C"
 #endif
 namespace Constants
 {
-    extern QString CONTENT_VERSION   ;
-    extern QString PROJ_EXT          ;
-	extern QString META_EXT			;
-    extern QStringList PROJECT_DIRS  ;
-    extern QString SHADER_DEFS       ;
-	extern QString SHADER_FILE_DEFS	;
-    extern QString DEFAULT_SHADER    ;
-    extern QString SAMPLES_FOLDER    ;
-    extern QString PROJECT_FOLDER    ;
-    extern QString JAH_FOLDER        ;
-    extern QString ASSET_FOLDER      ;
-    extern QString JAH_DATABASE      ;
-    extern QString DEF_EXPORT_FILE   ;
-    extern QSize   TILE_SIZE         ;
-    extern int     UI_FONT_SIZE      ;
+    extern QString CONTENT_VERSION;
+    extern QString PROJ_EXT;
+	extern QString META_EXT;
+    extern QStringList PROJECT_DIRS;
+    extern QString SHADER_DEFS;
+	extern QString SHADER_FILE_DEFS;
+    extern QString DEFAULT_SHADER;
+    extern QString SAMPLES_FOLDER;
+    extern QString PROJECT_FOLDER;
+    extern QString JAH_FOLDER;
+    extern QString ASSET_FOLDER;
+    extern QString JAH_DATABASE;
+    extern QString DEF_EXPORT_FILE;
+    extern QSize   TILE_SIZE;
+    extern int     UI_FONT_SIZE;
 
-    extern QString DB_DRIVER         ;
-    extern QString DB_ROOT_TABLE     ;
+    extern QString DB_DRIVER;
+    extern QString DB_ROOT_TABLE;
 
-    extern QString DB_PROJECTS_TABLE ;
-    extern QString DB_COLLECT_TABLE  ;
-    extern QString DB_THUMBS_TABLE   ;
-	extern QString DB_ASSETS_TABLE	;
+    extern QString DB_PROJECTS_TABLE;
+    extern QString DB_COLLECT_TABLE;
+    extern QString DB_THUMBS_TABLE;
+	extern QString DB_ASSETS_TABLE;
 
-    extern QList<QString> IMAGE_EXTS   ;
-    extern QList<QString> MODEL_EXTS   ;
-    extern QList<QString> WHITELIST    ;
-	extern QString SHADER_EXT		    ;
-	extern QString MATERIAL_EXT		;
-	extern QString ASSET_EXT			;
+    extern QList<QString> IMAGE_EXTS;
+    extern QList<QString> MODEL_EXTS;
+    extern QList<QString> WHITELIST;
+	extern QString SHADER_EXT;
+	extern QString MATERIAL_EXT;
+	extern QString ASSET_EXT;
 
-    extern int FPS_90                  ;
-    extern int FPS_60                  ;
+    extern int FPS_90;
+    extern int FPS_60;
 
     namespace Reserved
     {

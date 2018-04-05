@@ -63,10 +63,10 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 	buttonGroup->addButton(ui->donate);
 	buttonGroup->addButton(ui->about);
 
-    QPixmap p = IrisUtils::getAbsoluteAssetPath("app/images/mascot.png");
+    //QPixmap p = IrisUtils::getAbsoluteAssetPath("app/images/mascot.png");
 
-    ui->logo->setPixmap(p.scaled(128, 128, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    ui->logo->setAlignment(Qt::AlignCenter | Qt::AlignBottom);
+    //ui->logo->setPixmap(p.scaled(128, 128, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    //ui->logo->setAlignment(Qt::AlignCenter | Qt::AlignBottom);
 
 	connect(buttonGroup,
 		static_cast<void(QButtonGroup::*)(QAbstractButton *, bool)>(&QButtonGroup::buttonToggled),

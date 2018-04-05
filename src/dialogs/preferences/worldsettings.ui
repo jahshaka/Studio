@@ -216,6 +216,9 @@ QComboBox::down-arrow:!enabled {
      </item>
      <item>
       <widget class="QPushButton" name="help">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
        <property name="text">
         <string>Help</string>
        </property>
@@ -236,6 +239,9 @@ QComboBox::down-arrow:!enabled {
      </item>
      <item>
       <widget class="QPushButton" name="donate">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
        <property name="text">
         <string>Donate</string>
        </property>
@@ -728,9 +734,40 @@ QComboBox::down-arrow:!enabled {
      <widget class="QWidget" name="mining"/>
      <widget class="QWidget" name="help_page"/>
      <widget class="QWidget" name="about_page">
+      <property name="styleSheet">
+       <string notr="true">QScrollBar:vertical {
+	width: 12px;
+	border-left: 1px solid black;
+    background: transparent;
+}
+
+QScrollBar::handle:vertical {
+    background: #5A5F66;
+	border: 1px solid black;
+	min-height: 32px;
+	margin: 2px 1px 2px 1px;
+	border-radius: 4px; /* this appears to be tied to the (width of the scrollbar / 2) */
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #6b6f77;
+}
+
+QScrollBar::add-page:vertical,  QScrollBar::sub-page:vertical {
+    background: #17181a;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+      border: none;
+      background: none;
+}</string>
+      </property>
       <layout class="QGridLayout" name="gridLayout_2">
        <item row="0" column="0">
         <widget class="QTextBrowser" name="textBrowser">
+         <property name="styleSheet">
+          <string notr="true">border: 0</string>
+         </property>
          <property name="html">
           <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
 &lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;

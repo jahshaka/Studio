@@ -114,6 +114,21 @@ struct AssetFile : public Asset
     }
 };
 
+struct AssetTexture : public Asset
+{
+    AssetTexture() {
+        type = ModelTypes::Texture;
+    }
+
+    virtual QVariant getValue() {
+        return value;
+    }
+
+    virtual void setValue(QVariant val) {
+        value = val;
+    }
+};
+
 struct AssetShader : public Asset
 {
 	AssetShader() {

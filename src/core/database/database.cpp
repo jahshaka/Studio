@@ -325,7 +325,7 @@ QVector<AssetTileData> Database::fetchAssets()
         "assets.tags, assets.project_guid "
         "FROM assets "
 		"INNER JOIN collections ON assets.collection = collections.collection_id "
-        "WHERE assets.project_guid IS NULL AND assets.type = :m OR assets.type = :o "
+        "WHERE assets.project_guid IS NULL AND (assets.type = :m OR assets.type = :o) "
 		"ORDER BY assets.name DESC"
 	);
     query.bindValue(":m", static_cast<int>(ModelTypes::Object));

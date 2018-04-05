@@ -1675,6 +1675,14 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
                     }
                 }
 
+                if (asset->type == ModelTypes::Texture) {
+                    auto assetTexture = new AssetTexture;
+                    assetTexture->assetGuid = assetGuid;
+                    assetTexture->fileName = asset->fileName;
+                    assetTexture->path = pathToCopyTo;
+                    AssetManager::addAsset(assetTexture);
+                }
+
                 if (asset->type == ModelTypes::Shader) {
                     QFile *templateShaderFile = new QFile(asset->path);
                     templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);

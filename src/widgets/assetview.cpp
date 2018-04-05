@@ -1352,27 +1352,32 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 {
 	//addToProject->setVisible(false);
 	// get the current project working directory
-	auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
-		Constants::PROJECT_FOLDER);
+	auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), Constants::PROJECT_FOLDER);
 	auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
 	auto pDir = IrisUtils::join(defaultProjectDirectory, Globals::project->getProjectName());
 
 	auto guid = item->metadata["guid"].toString();
 	int assetType = item->metadata["type"].toInt();
-	QFileInfo fInfo(item->metadata["name"].toString());
-	QString object = IrisUtils::buildFileName(guid, fInfo.suffix());
-	auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
+	QFileInfo fInfo(item->metadata["full_name"].toString());
+	// QString object = IrisUtils::buildFileName(guid, fInfo.suffix());
+	auto assetPath = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::ASSET_FOLDER, guid);
+
+ /*   for (auto &asset : db->fetchAssetGUIDAndDependencies(guid)) {
+        qDebug() << db->fetchAsset(asset).name;
+    }*/
+
+ //   qDebug() << assetPath;
+ //   qDebug() << pDir;
 
 	QString assetFolder;
 
-	if (assetType == (int) AssetMetaType::Object) {
-		assetFolder = "Models";
-	}
-	else {
-		assetFolder = QString();
-	}
+	//if (assetType == (int) AssetMetaType::Object) {
+	//	assetFolder = "Models";
+	//}
+	//else {
+	//	assetFolder = QString();
+	//}
 
-	// todo -- undo progress?
 	auto copyFolder = [](const QString &src, const QString &dest) {
 		if (!QDir(dest).exists()) {
 			if (!QDir().mkdir(dest)) return false;
@@ -1396,51 +1401,45 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 			.arg(item->metadata["name"].toString());
 		QMessageBox::warning(this, "Asset Import Failed", warningText, QMessageBox::Ok);
 	}
-	else {
-		// if copy successful, update the db and refs
-		QByteArray bytes;
-		QBuffer buffer(&bytes);
-		buffer.open(QIODevice::WriteOnly);
-		item->pixmap.save(&buffer, "PNG");
+	//else {
+		//// if copy successful, update the db and refs
+		//QByteArray bytes;
+		//QBuffer buffer(&bytes);
+		//buffer.open(QIODevice::WriteOnly);
+		//item->pixmap.save(&buffer, "PNG");
 
-		auto material = db->getAssetMaterialGlobal(item->metadata["guid"].toString());
+		//auto material = db->getAssetMaterialGlobal(item->metadata["guid"].toString());
 
+		////db->insertProjectAssetGlobal(
+		////	item->metadata["name"].toString() + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix(),
+		////	(int)ModelTypes::Object, bytes, QByteArray(), QByteArray(), material, new_guid
+		////);
 		//db->insertProjectAssetGlobal(
-		//	item->metadata["name"].toString() + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix(),
+		//	item->metadata["name"].toString(),
 		//	(int)ModelTypes::Object, bytes, QByteArray(), QByteArray(), material, new_guid
 		//);
-		db->insertProjectAssetGlobal(
-			item->metadata["name"].toString(),
-			(int)ModelTypes::Object, bytes, QByteArray(), QByteArray(), material, new_guid
-		);
-		Globals::assetNames.insert(new_guid, QFileInfo(item->metadata["name"].toString()).baseName());
+		//Globals::assetNames.insert(new_guid, QFileInfo(item->metadata["name"].toString()).baseName());
 
-		// get material 
-		//auto material_guid = db->getDependencyByType((int)AssetMetaType::Material, item->metadata["guid"].toString());
+		//QString basePath = QDir(QDir(pDir).filePath(assetFolder)).filePath(new_guid);
+		//bool renameModel = QFile::rename(
+		//	QDir(basePath).filePath(item->metadata["full_filename"].toString()),
+		//	QDir(basePath).filePath(new_guid + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix())
+		//);
 
-		//auto material_id = db->insertProjectMaterialGlobal(QFileInfo(item->metadata["name"].toString()).baseName() + "_material", new_guid, material);
-		//db->insertGlobalDependency((int)AssetMetaType::Material, new_guid, material_id);
-
-		QString basePath = QDir(QDir(pDir).filePath(assetFolder)).filePath(new_guid);
-		bool renameModel = QFile::rename(
-			QDir(basePath).filePath(item->metadata["full_filename"].toString()),
-			QDir(basePath).filePath(new_guid + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix())
-		);
-
-#ifdef Q_OS_WIN
-		if (!renameModel) {
-			qDebug() << "hit";
-			MoveFile(
-				QDir(basePath).filePath(item->metadata["full_filename"].toString()).toStdString().c_str(),
-				QDir(basePath).filePath(new_guid + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix()).toStdString().c_str()
-			);
-		}
-#endif // Q_OS_WIN
-
-		QString warningText = QString("Added asset %1 to your project!")
-			.arg(item->metadata["name"].toString());
-		QMessageBox::information(this, "Asset Import Successful", warningText, QMessageBox::Ok);
-	}
+//#ifdef Q_OS_WIN
+//		if (!renameModel) {
+//			qDebug() << "hit";
+//			MoveFile(
+//				QDir(basePath).filePath(item->metadata["full_filename"].toString()).toStdString().c_str(),
+//				QDir(basePath).filePath(new_guid + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix()).toStdString().c_str()
+//			);
+//		}
+//#endif // Q_OS_WIN
+//
+//		QString warningText = QString("Added asset %1 to your project!")
+//			.arg(item->metadata["name"].toString());
+//		QMessageBox::information(this, "Asset Import Successful", warningText, QMessageBox::Ok);
+	//}
 }
 
 void AssetView::changeAssetCollection(AssetGridItem *item)
