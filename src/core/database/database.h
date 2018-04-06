@@ -116,7 +116,8 @@ public:
 	QString fetchMeshObject(const QString &guid, const int ertype, const int eetype);
 
 	QString importAsset(const ModelTypes &jafType, const QString &pathToDb, const QMap<QString, QString> &newNames, const QString &parent);
-	QString importJafAssetModel(const ModelTypes &jafType, const QString &pathToDb);
+	QString copyAsset(const ModelTypes &jafType, const QString &guid, const QMap<QString, QString> &newNames, const QString &parent);
+	QString importJafAssetModel(const ModelTypes &jafType, const QString &pathToDb, bool store = false);
 
 	bool renameFolder(const QString &guid, const QString &newName);
 	bool renameAsset(const QString &guid, const QString &newName);

@@ -27,6 +27,7 @@ namespace iris {
 }
 
 class PropertyWidget;
+class Database;
 
 /**
  *  Displays properties for materials
@@ -42,6 +43,10 @@ public:
     void setSceneNode(iris::SceneNodePtr sceneNode);
     void forceShaderRefresh(const QString&);
     void setWidgetProperties();
+
+    void setDatabase(Database *db) {
+        this->db = db;
+    }
 
 
 protected slots:
@@ -60,6 +65,7 @@ private:
 
     // for undo/redo
     QVariant startValue;
+    Database *db;
 };
 
 #endif // MATERIALPROPERTYWIDGET_H

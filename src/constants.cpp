@@ -51,6 +51,16 @@ namespace Contants
             { "00000000-0000-0000-0000-000000000006", QDir(Constants::SHADER_DEFS).filePath("Matcap.shader") },
         };
 
+        QMap<QString, QString> BuiltinPrimitives = {
+            { "00000000-0000-0000-0000-000000001000", ":/content/primitives/cube.obj" },
+            { "00000000-0000-0000-0000-000000002000", ":/content/primitives/cylinder.obj" },
+            { "00000000-0000-0000-0000-000000003000", ":/content/primitives/plane.obj" },
+            { "00000000-0000-0000-0000-000000004000", ":/content/primitives/sphere.obj" },
+            { "00000000-0000-0000-0000-000000005000", ":/content/primitives/torus.obj" },
+            { "00000000-0000-0000-0000-000000006000", ":/content/primitives/arrow.obj" },
+            { "00000000-0000-0000-0000-000000007000", ":/content/primitives/capsule.obj" },
+        };
+
         QString SHADER_DEFAULT = "00000000-0000-0000-0000-000000000001";
         QString SHADER_DEFAULT_ANIMATED = "00000000-0000-0000-0000-000000000002";
         QString SHADER_EDGE_MATERIAL = "00000000-0000-0000-0000-000000000003";

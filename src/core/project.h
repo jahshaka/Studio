@@ -85,7 +85,11 @@ struct FolderData
 	QString	guid;
 	QString	name;
 	QString	parent;
-	short	count;
+    QString version;
+    QString project_guid;
+    QDateTime date_created;
+    QDateTime last_updated;
+	int	count;
 };
 
 struct AssetData {

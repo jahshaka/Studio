@@ -122,6 +122,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                     materialPropView = new MaterialPropertyWidget();
                     materialPropView->setPanelTitle("Material");
                     materialPropView->setSceneNode(sceneNode);
+                    materialPropView->setDatabase(db);
 
                     layout->addWidget(meshPropView);
                     // layout->addWidget(nodePropView);

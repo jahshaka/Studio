@@ -67,6 +67,14 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 			AssetManager::addAsset(model);
 		}
 
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File))) {
+            auto assetFile = new AssetFile;
+            assetFile->fileName = asset.name;
+            assetFile->assetGuid = asset.guid;
+            assetFile->path = IrisUtils::join(Globals::project->getProjectFolder(), "Files", asset.name);
+            AssetManager::addAsset(assetFile);
+        }
+
         for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader))) {
             QFile *templateShaderFile = new QFile(IrisUtils::join(Globals::project->getProjectFolder(), "Shaders", asset.name));
             templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);
@@ -81,19 +89,6 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
             assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), "Shaders", asset.name);
             assetShader->setValue(QVariant::fromValue(shaderDefinition));
             AssetManager::addAsset(assetShader);
-        }
-
-        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File))) {
-            //QFile *file = new QFile(IrisUtils::join(Globals::project->getProjectFolder(), "Files", asset.name));
-            //file->open(QIODevice::ReadOnly | QIODevice::Text);
-            //file->close();
-
-            auto assetFile = new AssetFile;
-            assetFile->fileName = asset.name;
-            assetFile->assetGuid = asset.guid;
-            assetFile->path = IrisUtils::join(Globals::project->getProjectFolder(), "Files", asset.name);
-            //assetFile->setValue(QVariant::fromValue(QVariant::fromValue(file)));
-            AssetManager::addAsset(assetFile);
         }
 
         for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture))) {

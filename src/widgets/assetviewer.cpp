@@ -361,7 +361,7 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
         else if (prop->type == iris::PropertyType::Texture) {
             QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
             QString textureStr = IrisUtils::join(
-                QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::ASSET_FOLDER, guid, "Textures", materialName
+                QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::ASSET_FOLDER, guid, materialName
             );
             material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
         }
@@ -466,15 +466,11 @@ void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firs
         if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             auto n = node.staticCast<iris::MeshNode>();
             auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-            QDir folder = QDir(path);
-            folder.cdUp();
-            folder.cdUp();
             for (auto prop : mat->properties) {
                 if (prop->type == iris::PropertyType::Texture) {
                     if (!prop->getValue().toString().isEmpty()) {
                         mat->setValue(prop->name,
-                            IrisUtils::join(folder.absolutePath(), "Textures",
-                                db->fetchAsset(prop->getValue().toString()).name));
+                            IrisUtils::join(QFileInfo(path).absolutePath(), db->fetchAsset(prop->getValue().toString()).name));
                     }
                 }
             }

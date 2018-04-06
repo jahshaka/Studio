@@ -34,6 +34,9 @@ For more information see the LICENSE file
 #include "../../uimanager.h"
 #include "../../commands/changematerialpropertycommand.h"
 
+#include "globals.h"
+#include "core/database/database.h"
+
 void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 {
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
@@ -114,6 +117,15 @@ void MaterialPropertyWidget::materialChanged(int index)
     material->setName(materialSelector->getCurrentItem());
     material->setGuid(materialSelector->getCurrentItemData());
     setSceneNode(meshNode);
+
+    //if (db->checkIfRecordExists("guid", material->getGuid(), "assets")) {
+    //    if (db->checkIfRecordExists("dependee", material->getGuid(), "dependencies")) {
+    //        db->insertGlobalDependency(static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Shader), meshNode->getGUID(), material->getGuid(), Globals::project->getProjectGuid());
+    //    }
+    //    else {
+    //        db->updateGlobalDependencyDependee(static_cast<int>(ModelTypes::File), meshNode->getGUID(), material->getGuid());
+    //    }
+    //}
 }
 
 void MaterialPropertyWidget::setupShaderSelector()

@@ -1044,16 +1044,6 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 
 void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position, const QString &guid, const QString &assetName)
 {
-	QString filename;
-	if (path.isEmpty()) {
-		filename = QFileDialog::getOpenFileName(this, "Load Mesh", "Mesh Files (*.obj *.fbx *.3ds *.dae *.c4d *.blend)");
-	}
-	else {
-		filename = path;
-	}
-
-	if (filename.isEmpty()) return;
-
 	this->sceneView->makeCurrent();
 
 	iris::SceneNodePtr node;
@@ -1095,13 +1085,13 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 	if (!node) return;
 
 	// rename animation sources to relative paths
-	auto relPath = QDir(Globals::project->folderPath).relativeFilePath(filename);
+	auto relPath = QDir(Globals::project->folderPath).relativeFilePath(path);
 	for (auto anim : node->getAnimations()) {
 		if (!!anim->skeletalAnimation) anim->skeletalAnimation->source = relPath;
 	}
 
-	node->setName(QFileInfo(filename).baseName());
 	node->setGUID(guid);
+    node->setName(assetName);
 	node->setLocalPos(position);
 
 	addNodeToScene(node, ignore);
@@ -1465,9 +1455,7 @@ void MainWindow::exportSceneAsZip()
 
     if (filePath.isEmpty() || filePath.isNull()) return;
 
-    if (!!scene) {
-        saveScene();
-    }
+    if (!!scene) saveScene();
 
     // Maybe in the future one could add a way to using an in memory database
     // and saving saving that as a blob which can be put into the zip as bytes (iKlsR)
@@ -1868,8 +1856,8 @@ void MainWindow::setupViewPort()
     layout->setMargin(0);
     sceneContainer->setLayout(layout);
 
-    connect(sceneView, &SceneViewWidget::addDroppedMesh, [this](QString path, bool v, QVector3D pos, QString name) {
-        addMaterialMesh(path, v, pos, name);
+    connect(sceneView, &SceneViewWidget::addDroppedMesh, [this](QString path, bool v, QVector3D pos, QString guid, QString name) {
+        addMaterialMesh(path, v, pos, guid, name);
     });
 
     connect(sceneView,  SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),

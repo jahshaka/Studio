@@ -604,7 +604,7 @@ void AssetWidget::updateAssetView(const QString &path, bool showDependencies)
 	ui->assetView->clear();
 
 	for (const auto &folder : db->fetchChildFolders(path)) addItem(folder);
-	for (const auto &asset : db->fetchChildAssets(path, showDependencies)) addItem(asset);
+	for (const auto &asset : db->fetchChildAssets(path, true)) addItem(asset);  /* TODO : irk this out */
 	addCrumbs(db->fetchCrumbTrail(path));
 }
 
@@ -912,7 +912,7 @@ void AssetWidget::exportMaterial()
 	auto filePath = QFileDialog::getSaveFileName(
 		this,
 		"Choose export path",
-		"export",
+        assetItem.wItem->data(Qt::DisplayRole).toString() + "_material",
 		"Supported Export Formats (*.jaf)"
 	);
 
@@ -937,7 +937,20 @@ void AssetWidget::exportMaterial()
 	}
 	manifest.close();
 
-	for (const auto &asset : db->fetchAssetAndDependencies(guid)) {
+    QStringList fullFileList = db->fetchAssetAndDependencies(guid);
+    auto shaderGuid = QJsonDocument::fromBinaryData(db->getMaterialGlobal(guid)).object()["guid"].toString();
+    bool exportCustomShader = false;
+    QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+    while (it.hasNext()) {
+        it.next();
+        if (it.key() != shaderGuid) {
+            exportCustomShader = true;
+            break;
+        }
+    }
+    if (exportCustomShader) fullFileList.append(db->fetchAssetAndDependencies(shaderGuid));
+
+	for (const auto &asset : fullFileList) {
 		QFile::copy(
 			IrisUtils::join(Globals::project->getProjectFolder(), asset),
 			IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
@@ -1289,7 +1302,39 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
 
             QString placeHolderGuid = GUIDManager::generateGUID();
 
+            QStringList fullFileList;
+
+            for (const auto &image : fileNames) {
+                if (Constants::IMAGE_EXTS.contains(QFileInfo(image).suffix().toLower())) {
+                    fullFileList.append(image);
+                }
+            }
+
+            for (const auto &material : fileNames) {
+                if (QFileInfo(material).suffix() == Constants::MATERIAL_EXT) {
+                    fullFileList.append(material);
+                }
+            }
+
             for (const auto &file : fileNames) {
+                if (Constants::WHITELIST.contains(QFileInfo(file).suffix().toLower())) {
+                    fullFileList.append(file);
+                }
+            }
+
+            for (const auto &shader : fileNames) {
+                if (QFileInfo(shader).suffix() == Constants::SHADER_EXT) {
+                    fullFileList.append(shader);
+                }
+            }
+
+            for (const auto &mesh : fileNames) {
+                if (Constants::MODEL_EXTS.contains(QFileInfo(mesh).suffix().toLower())) {
+                    fullFileList.append(mesh);
+                }
+            }
+
+            for (const auto &file : fullFileList) {
                 QFileInfo fileInfo(file);
                 QString destDir;
                 if (Constants::IMAGE_EXTS.contains(fileInfo.suffix())) {
@@ -1331,14 +1376,10 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                 progressDialog->setLabelText("Importing " + fileInfo.fileName());
 
                 if (jafType == ModelTypes::File) {
-                    //QFile *file = new QFile(IrisUtils::join(Globals::project->getProjectFolder(), "Files", asset.name));
-                    //file->open(QIODevice::ReadOnly | QIODevice::Text);
-                    //file->close();
                     auto assetFile = new AssetFile;
                     assetFile->fileName = checkFile.fileName();
                     assetFile->assetGuid = placeHolderGuid;
                     assetFile->path = checkFile.absoluteFilePath();
-                    //assetFile->setValue(QVariant::fromValue(QVariant::fromValue(file)));
                     AssetManager::addAsset(assetFile);
                 }
 

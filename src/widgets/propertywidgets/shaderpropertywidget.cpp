@@ -41,9 +41,6 @@ ShaderPropertyWidget::ShaderPropertyWidget()
 
     onAllowBuiltinShaders(false);
 
-    //vertexShaderCombo->setCurrentItem("color");
-    //fragmentShaderCombo->setCurrentItem("color");
-
     //shader->load(
     //    IrisUtils::getAbsoluteAssetPath("app/shaders/color.vert"),
     //    IrisUtils::getAbsoluteAssetPath("app/shaders/flat_color.frag")
