@@ -80,21 +80,14 @@ void Material::bindTextures(GraphicsDevicePtr device)
 
         if (!!tex) {
             tex->texture->bind();
-			//qDebug() << " texture: " << it.key() << " - " << count << " - " << tex->getTextureId();
             shader->program->setUniformValue(it.key().toStdString().c_str(), count);
-
-			//device->setTexture(count, tex);
-			//device->setShaderUniform(it.key().toStdString().c_str(), count);
         } else {
-            //gl->glBindTexture(GL_TEXTURE_2D,0);
 			device->clearTexture(count);
         }
     }
 
     // bind the rest of the textures to 0
     for (; count < numTextures; count++) {
-        //gl->glActiveTexture(GL_TEXTURE0 + count);
-        //gl->glBindTexture(GL_TEXTURE_2D, 0);
 		device->clearTexture(count);
     }
 }
@@ -103,28 +96,24 @@ void Material::bindTextures(GraphicsDevicePtr device)
 void Material::bindCubeTextures(GraphicsDevicePtr device)
 {
 	auto gl = device->getGL();
-    int count=0;
-    for(auto it = textures.begin();it != textures.end();it++,count++)
-    {
+    int count = 0;
+    for (auto it = textures.begin(); it != textures.end(); it++, count++) {
         auto tex = it.value();
-        gl->glActiveTexture(GL_TEXTURE0+count);
+        gl->glActiveTexture(GL_TEXTURE0 + count);
 
-        if(tex->texture!=nullptr)
-        {
+        if (tex->texture != nullptr) {
             tex->texture->bind();
             shader->program->setUniformValue(it.key().toStdString().c_str(), count);
         }
-        else
-        {
-            gl->glBindTexture(GL_TEXTURE_2D,0);
+        else {
+            gl->glBindTexture(GL_TEXTURE_2D, 0);
         }
     }
 
-    //bind the rest of the textures to 0
-    for(;count<numTextures;count++)
-    {
-        gl->glActiveTexture(GL_TEXTURE0+count);
-        gl->glBindTexture(GL_TEXTURE_2D,0);
+    // bind the rest of the textures to 0
+    for (; count < numTextures; count++) {
+        gl->glActiveTexture(GL_TEXTURE0 + count);
+        gl->glBindTexture(GL_TEXTURE_2D, 0);
     }
 
 }
@@ -132,15 +121,12 @@ void Material::bindCubeTextures(GraphicsDevicePtr device)
 void Material::unbindTextures(GraphicsDevicePtr device)
 {
     for (auto i = 0; i < numTextures; i++) {
-        //gl->glActiveTexture(GL_TEXTURE0 + i);
-        //gl->glBindTexture(GL_TEXTURE_2D, 0);
 		device->clearTexture(i);
     }
 }
 
-void Material::createProgramFromShaderSource(QString vsFile,QString fsFile)
+void Material::createProgramFromShaderSource(QString vsFile, QString fsFile)
 {
-    //program = GraphicsHelper::loadShader(vsFile, fsFile);
 	shader = Shader::load(vsFile, fsFile);
 }
 

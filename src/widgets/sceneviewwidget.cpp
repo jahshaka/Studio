@@ -9,69 +9,65 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "assetwidget.h"
 #include "sceneviewwidget.h"
-#include "../constants.h"
-#include <QTimer>
 
+#include <QDebug>
+#include <QElapsedTimer>
+#include <QMouseEvent>
+#include <QMimeData>
+#include <QOpenGLDebugLogger>
 #include <QOpenGLShaderProgram>
 #include <QOpenGLTexture>
-#include <QMouseEvent>
 #include <QtMath>
-#include <QDebug>
-#include <QMimeData>
-#include <QElapsedTimer>
-#include <QOpenGLDebugLogger>
+#include <QTimer>
 
-#include "../irisgl/src/irisgl.h"
-#include "../irisgl/src/scenegraph/scene.h"
-#include "../irisgl/src/scenegraph/scenenode.h"
-#include "../irisgl/src/scenegraph/meshnode.h"
-#include "../irisgl/src/scenegraph/cameranode.h"
-#include "../irisgl/src/scenegraph/lightnode.h"
-#include "../irisgl/src/scenegraph/viewernode.h"
-#include "../irisgl/src/materials/defaultmaterial.h"
-#include "../irisgl/src/graphics/forwardrenderer.h"
-#include "../irisgl/src/graphics/mesh.h"
-#include "../irisgl/src/geometry/trimesh.h"
-#include "../irisgl/src/graphics/texture2d.h"
-#include "../irisgl/src/graphics/viewport.h"
-#include "../irisgl/src/graphics/renderlist.h"
-#include "../irisgl/src/graphics/rendertarget.h"
-#include "../irisgl/src/graphics/shadowmap.h"
-#include "../irisgl/src/graphics/font.h"
-#include "../irisgl/src/graphics/spritebatch.h"
-#include "../irisgl/src/graphics/utils/fullscreenquad.h"
-#include "../irisgl/src/vr/vrmanager.h"
-#include "../irisgl/src/vr/vrdevice.h"
+#include "irisgl/src/graphics/font.h"
+#include "irisgl/src/graphics/forwardrenderer.h"
+#include "irisgl/src/graphics/mesh.h"
+#include "irisgl/src/graphics/texture2d.h"
+#include "irisgl/src/geometry/trimesh.h"
+#include "irisgl/src/graphics/renderlist.h"
+#include "irisgl/src/graphics/rendertarget.h"
+#include "irisgl/src/graphics/shadowmap.h"
+#include "irisgl/src/graphics/spritebatch.h"
+#include "irisgl/src/graphics/utils/fullscreenquad.h"
+#include "irisgl/src/graphics/utils/shapehelper.h"
+#include "irisgl/src/graphics/utils/linemeshbuilder.h"
+#include "irisgl/src/graphics/viewport.h"
+#include "irisgl/src/materials/colormaterial.h"
+#include "irisgl/src/scenegraph/scene.h"
+#include "irisgl/src/scenegraph/scenenode.h"
+#include "irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/src/scenegraph/cameranode.h"
+#include "irisgl/src/scenegraph/lightnode.h"
+#include "irisgl/src/scenegraph/viewernode.h"
+#include "irisgl/src/materials/defaultmaterial.h"
+#include "irisgl/src/vr/vrdevice.h"
+#include "irisgl/src/vr/vrmanager.h"
 
-#include "../editor/cameracontrollerbase.h"
-#include "../editor/editorcameracontroller.h"
-#include "../editor/orbitalcameracontroller.h"
-#include "../editor/viewercontroller.h"
-#include "../editor/editorvrcontroller.h"
-#include "../editor/viewermaterial.h"
-#include "../editor/animationpath.h"
-
-#include "../editor/editordata.h"
-
-#include "../editor/gizmo.h"
-#include "../editor/translationgizmo.h"
-#include "../editor/rotationgizmo.h"
-#include "../editor/scalegizmo.h"
-#include "../editor/outlinerenderer.h"
-
-#include "../core/keyboardstate.h"
-
-#include "../irisgl/src/graphics/utils/shapehelper.h"
-#include "../irisgl/src/graphics/utils/linemeshbuilder.h"
-#include "../irisgl/src/materials/colormaterial.h"
-
-#include "../editor/thumbnailgenerator.h"
-#include "../core/settingsmanager.h"
-#include "../uimanager.h"
-#include "../mainwindow.h"
-#include "keyframecurvewidget.h"
 #include "animationwidget.h"
+#include "constants.h"
+#include "keyframecurvewidget.h"
+#include "mainwindow.h"
+#include "uimanager.h"
+
+#include "core/keyboardstate.h"
+#include "core/settingsmanager.h"
+#include "editor/animationpath.h"
+#include "editor/cameracontrollerbase.h"
+#include "editor/editordata.h"
+#include "editor/editorcameracontroller.h"
+#include "editor/editorvrcontroller.h"
+#include "editor/gizmo.h"
+#include "editor/orbitalcameracontroller.h"
+#include "editor/outlinerenderer.h"
+#include "editor/rotationgizmo.h"
+#include "editor/scalegizmo.h"
+#include "editor/thumbnailgenerator.h"
+#include "editor/translationgizmo.h"
+#include "editor/viewercontroller.h"
+#include "editor/viewermaterial.h"
 
 void SceneViewWidget::setShowFps(bool value)
 {
@@ -96,26 +92,65 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
     QDataStream stream(&encoded, QIODevice::ReadOnly);
 
     QMap<int, QVariant> roleDataMap;
-    while (!stream.atEnd()) {
-        stream >> roleDataMap;
-    }
+    while (!stream.atEnd()) stream >> roleDataMap;
 
-    // backwards compat for now
+	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Material)) {
+		auto node = doActiveObjectPicking(event->posF());
+
+        // This is to handle overlapping meshes or those close to each other, if we pass
+        // over another node while still dragging, switch materials
+        if (!!savedActiveNode) {
+            if (savedActiveNode != node) {
+                savedActiveNode.staticCast<iris::MeshNode>()->setMaterial(originalMaterial);
+                savedActiveNode.reset();
+                originalMaterial.reset();
+                wasHit = false;
+            }
+        }
+
+		if (!!node && !wasHit) {
+			wasHit = true;
+			savedActiveNode = node;
+			originalMaterial = node.staticCast<iris::MeshNode>()->getMaterial().staticCast<iris::CustomMaterial>();
+
+			// TODO - get this at drag start
+			iris::CustomMaterialPtr material;
+			QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
+			while (iterator != AssetManager::getAssets().constEnd()) {
+				if ((*iterator)->assetGuid == roleDataMap.value(3).toString()) {
+					material = (*iterator)->getValue().value<iris::CustomMaterialPtr>();
+				}
+				++iterator;
+			}
+
+			if (!!material) node.staticCast<iris::MeshNode>()->setMaterial(material);
+		}
+		else if (!!node && wasHit) {
+			qDebug() << "no node but hit";
+		}
+		else {
+			if (!!savedActiveNode) {
+				savedActiveNode.staticCast<iris::MeshNode>()->setMaterial(originalMaterial);
+				savedActiveNode.reset();
+				originalMaterial.reset();
+				wasHit = false;
+			}
+		}
+	}
+
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
-        // if we drag unto another object
+        // If we drag unto another object
         if (doActiveObjectPicking(event->posF())) {
             //activeSceneNode->pos = sceneView->hit;
             dragScenePos = hit;
-            // if we drag on the "floor"
         }
-        else if (updateRPI(editorCam->getLocalPos(), calculateMouseRay(event->posF())))
-        {
+        // If we drag on the "floor"
+        else if (updateRPI(editorCam->getLocalPos(), calculateMouseRay(event->posF()))) {
             //activeSceneNode->pos = sceneView->Offset;
             dragScenePos = Offset;
-            // otherwise just spawn a distance in front of the camera
         }
+        // Spawn a distance in front of the camera
         else {
-            ////////////////////////////////////////
             const float spawnDist = 10.0f;
             auto offset = editorCam->getLocalRot().rotatedVector(QVector3D(0, -1.0f, -spawnDist));
             offset += editorCam->getLocalPos();
@@ -124,9 +159,9 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
         }
     }
 
-    if (roleDataMap.value(0).toInt() != static_cast<int>(ModelTypes::Object)) {
-        doObjectPicking(event->posF(), iris::SceneNodePtr(), false, true);
-    }
+    //if (roleDataMap.value(0).toInt() != static_cast<int>(ModelTypes::Object)) {
+    //    doObjectPicking(event->posF(), iris::SceneNodePtr(), false, true);
+    //}
 }
 
 void SceneViewWidget::dropEvent(QDropEvent *event)
@@ -134,27 +169,49 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
     QByteArray encoded = event->mimeData()->data("application/x-qabstractitemmodeldatalist");
     QDataStream stream(&encoded, QIODevice::ReadOnly);
     QMap<int, QVariant> roleDataMap;
-    while (!stream.atEnd()) {
-        stream >> roleDataMap;
-    }
+    while (!stream.atEnd()) stream >> roleDataMap;
 
-    // qDebug() << roleDataMap.value(0).toInt();
+    qDebug() << roleDataMap.value(0).toInt();
+	qDebug() << roleDataMap.value(1).toString();
+	qDebug() << roleDataMap.value(2).toString();
+	qDebug() << roleDataMap.value(3).toString();
 
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
         auto ppos = dragScenePos;
-        emit addDroppedMesh(roleDataMap.value(3).toString(), true, ppos, roleDataMap.value(1).toString());
+        emit addDroppedMesh(
+                QDir(QDir(Globals::project->getProjectFolder()).filePath("Models")).filePath(roleDataMap.value(2).toString()),
+                true, ppos, roleDataMap.value(3).toString(), roleDataMap.value(1).toString()
+        );
     }
 
-    //if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
-    //    // handleTexture
-    //}
+	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Material)) {
+		if (!!savedActiveNode) {
+			iris::CustomMaterialPtr material;
+			QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
+			while (iterator != AssetManager::getAssets().constEnd()) {
+				if ((*iterator)->assetGuid == roleDataMap.value(3).toString()) {
+					material = (*iterator)->getValue().value<iris::CustomMaterialPtr>()->duplicate().staticCast<iris::CustomMaterial>();
+				}
+				++iterator;
+			}
+
+            //if (!!material) savedActiveNode.staticCast<iris::MeshNode>()->setMaterial(material); ???
+		}
+		else {
+			qDebug() << "Empty";
+		}
+
+        savedActiveNode.reset();
+        originalMaterial.reset();
+        wasHit = false;
+	}
 }
 
 void SceneViewWidget::dragEnterEvent(QDragEnterEvent *event)
 {
-    hideGizmo();
-    if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist"))
+	if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist")) {
         event->acceptProposedAction();
+	}
 }
 
 SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
@@ -171,8 +228,6 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 	format.setOption(QSurfaceFormat::DebugContext);
 #endif
 	setFormat(format);
-
-	
 
     // needed in order to get mouse events
     setMouseTracking(true);
@@ -668,7 +723,7 @@ bool SceneViewWidget::updateRPI(QVector3D pos, QVector3D r) {
     return false;
 }
 
-bool SceneViewWidget::doActiveObjectPicking(const QPointF &point)
+iris::SceneNodePtr SceneViewWidget::doActiveObjectPicking(const QPointF &point)
 {
     editorCam->updateCameraMatrices();
 
@@ -680,18 +735,13 @@ bool SceneViewWidget::doActiveObjectPicking(const QPointF &point)
     doScenePicking(scene->getRootNode(), segStart, segEnd, hitList);
 
     if (hitList.size() == 0) return false;
-
-    if (hitList.size() == 1) {
-        hit = hitList.last().hitPoint;
-        return true;
-    }
+    if (hitList.size() == 1) return hitList.last().hitNode;
 
     qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
         return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
     });
 
-    hit = hitList.last().hitPoint;
-    return true;
+    return hitList.last().hitNode;
 }
 
 void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
@@ -799,7 +849,12 @@ void SceneViewWidget::focusOutEvent(QFocusEvent* event)
  * @selectRootObject is usually true for picking using the mouse
  * It's false for when dragging a texture to an object
  */
-void SceneViewWidget::doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject, bool skipLights, bool skipViewers)
+void SceneViewWidget::doObjectPicking(
+	const QPointF& point,
+	iris::SceneNodePtr lastSelectedNode,
+	bool selectRootObject,
+	bool skipLights,
+	bool skipViewers)
 {
     editorCam->updateCameraMatrices();
 
@@ -1124,10 +1179,6 @@ void SceneViewWidget::setGizmoTransformToGlobal()
 	rotationGizmo->setTransformSpace(GizmoTransformSpace::Global);
 	// scaling is only done locally
 	scaleGizmo->setTransformSpace(GizmoTransformSpace::Local);
-}
-
-void SceneViewWidget::hideGizmo()
-{
 }
 
 void SceneViewWidget::setGizmoLoc()

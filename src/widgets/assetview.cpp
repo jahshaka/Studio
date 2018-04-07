@@ -7,6 +7,7 @@
 #include "irisgl/src/graphics/mesh.h"
 #include "irisgl/src/zip/zip.h"
 
+#include <QDirIterator>
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QVBoxLayout>
@@ -42,6 +43,7 @@
 #include "assetviewgrid.h"
 #include "assetgriditem.h"
 #include "assetviewer.h"
+#include "io/assetmanager.h"
 
 #include "../core/guidmanager.h"
 
@@ -68,9 +70,9 @@ bool AssetView::eventFilter(QObject *watched, QEvent *event)
 				if (QFileInfo(list.front()).suffix() == "jaf") {
 					importJahModel(list.front());
 				}
-				else {
-					importModel(list.front());
-				}
+				//else {
+				//	importModel(list.front());
+				//}
 
 				break;
 			}
@@ -184,14 +186,10 @@ void AssetView::clearViewer()
 QString AssetView::getAssetType(int id)
 {
 	switch (id) {
-		case static_cast<int>(AssetMetaType::Shader):		return "Shader";		break;
-		case static_cast<int>(AssetMetaType::Material):		return "Material";		break;
-		case static_cast<int>(AssetMetaType::Texture):		return "Texture";		break;
-		case static_cast<int>(AssetMetaType::Video):		return "Video";			break;
-		case static_cast<int>(AssetMetaType::Cubemap):		return "Cubemap";		break;
-		case static_cast<int>(AssetMetaType::Object):		return "Object";		break;
-		case static_cast<int>(AssetMetaType::SoundEffect):	return "SoundEffect";	break;
-		case static_cast<int>(AssetMetaType::Music):		return "Music";			break;
+		case static_cast<int>(ModelTypes::Shader):		return "Shader";		break;
+		case static_cast<int>(ModelTypes::Material):	return "Material";		break;
+		case static_cast<int>(ModelTypes::Texture):		return "Texture";		break;
+		case static_cast<int>(ModelTypes::Object):		return "Object";		break;
 		default: return "Undefined"; break;
 	}
 }
@@ -200,6 +198,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 {
 	_assetView = new QListWidget;
 	viewer = new AssetViewer(this);
+    viewer->setDatabase(db);
 
     settings = SettingsManager::getDefaultManager();
 	prefsDialog = new PreferencesDialog(db, settings);
@@ -249,10 +248,12 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
     QVBoxLayout *navLayout = new QVBoxLayout;
 	navLayout->setSpacing(6);
     _navPane->setLayout(navLayout);
+    _navPane->setStyleSheet("background: #202020;");
 
 	treeWidget = new QTreeWidget;
 	//treeWidget->setStyleSheet("border: 1px solid red");
-	treeWidget->setObjectName(QStringLiteral("treeWidget"));
+	treeWidget->setObjectName(QStringLiteral("TreeWidget"));
+    treeWidget->setAlternatingRowColors(true);
 	treeWidget->setColumnCount(2);
 	treeWidget->setHeaderHidden(true);
 	treeWidget->header()->setMinimumSectionSize(0);
@@ -261,7 +262,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	treeWidget->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
 
 	rootItem = new QTreeWidgetItem;
-	rootItem->setText(0, "My Collections");
+	rootItem->setText(0, "Asset Collections");
 	rootItem->setText(1, QString());
 	rootItem->setData(0, Qt::UserRole, -1);
 
@@ -363,6 +364,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	emptyGrid->setFixedHeight(96);
 	auto emptyL = new QVBoxLayout;
 	testL->setMargin(0);
+    testL->setSpacing(0);
 	emptyL->setSpacing(0);
 	auto emptyLabel = new QLabel("You have no assets in your library.");
 	auto emptyIcon = new QLabel;
@@ -421,20 +423,26 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	backdropColor = new QComboBox();
 	backdropColor->setView(new QListView());
 
-	backdropColor->addItem("Dark", 1);
-	backdropColor->addItem("Light", 2);
-	//backdropColor->addItem("Custom Color", 3);
+	backdropColor->addItem("Plain Dark", 1);
+	backdropColor->addItem("Plain Light", 2);
+	backdropColor->addItem("Checkered Floor", 3);
+	//backdropColor->addItem("Custom Color", 4);
 
 	filterLayout->addWidget(backdropLabel);
 	filterLayout->addWidget(backdropColor);
 
+    backdropColor->setCurrentText("Checkered Floor");
+
 	connect(backdropColor, &QComboBox::currentTextChanged, [this](const QString &text) {
-		if (text == "Dark") {
+		if (text == "Plain Dark") {
 			viewer->changeBackdrop(1);
 		}
-		else if ("Light") {
+		else if (text == "Plain Light") {
 			viewer->changeBackdrop(2);
 		}
+        else if (text == "Checkered Floor") {
+            viewer->changeBackdrop(3);
+        }
 		//else if ("Custom Color") {
 		//	viewer->changeBackdrop(3);
 		//}
@@ -447,7 +455,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	le = new QLineEdit();
 	le->setFixedWidth(256);
 	le->setStyleSheet(
-		"border: 1px solid #1E1E1E; border-radius: 2px; "
+		"border: 1px solid #1E1E1E; border-radius: 1px; "
 		"font-size: 12px; background: #3B3B3B; padding: 6px 4px;"
 	);
 	filterLayout->addWidget(le);
@@ -461,14 +469,16 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	filterPane->setLayout(filterLayout);
 	filterPane->setFixedHeight(48);
 	filterPane->setStyleSheet(
-		"#filterPane { border-bottom: 1px solid #111; }"
+        "#filterPane { background: #1E1E1E; border-bottom: 1px solid #111; }"
 		"QLabel { font-size: 12px; margin-right: 8px; }"
 		"QPushButton[accessibleName=\"filterObj\"] { border-radius: 0; padding: 10px 8px; }"
-		"QComboBox { background: #3B3B3B; border-radius: 1px; color: #BBB; padding: 0 12px; min-height: 30px; min-width: 72px; border: 1px solid #1e1e1e;}"
+		"QComboBox { background: #222; border-radius: 1px; color: #BBB; padding: 0 12px; min-height: 30px; min-width: 72px; border: 1px solid #111;}"
 		"QComboBox::drop-down { border: 0; margin: 0; padding: 0; min-height: 20px; }"
 		"QComboBox::down-arrow { image: url(:/icons/down_arrow_check.png); width: 18px; height: 14px; }"
 		"QComboBox::down-arrow:!enabled { image: url(:/icons/down_arrow_check_disabled.png); width: 18px; height: 14px; }"
 		"QComboBox QAbstractItemView::item { min-height: 24px; selection-background-color: #404040; color: #cecece; }"
+        "QComboBox QAbstractItemView { background-color: #1A1A1A; selection-background-color: #404040; border: 0; outline: none; }"
+        "QComboBox QAbstractItemView::item:selected { background: #404040; }"
 	);
 
 	auto views = new QWidget;
@@ -476,6 +486,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	viewsL->addWidget(emptyGrid);
 	viewsL->addWidget(fastGrid);
 	views->setLayout(viewsL);
+    views->setStyleSheet("background: #202020");
 
 	testL->addWidget(filterPane, 0, 0);
 	testL->addWidget(views, 1, 0);
@@ -503,43 +514,41 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	// show assets
 	int i = 0;
 	foreach(const AssetTileData &record, db->fetchAssets()) {
-		if (!record.used) {
-			QJsonObject object;
-			object["icon_url"] = "";
-			object["guid"] = record.guid;
-			object["name"] = record.name;
-			object["type"] = record.type;
-			object["full_filename"] = record.full_filename;
-			object["collection"] = record.collection;
-			object["collection_name"] = record.collection_name;
-			object["author"] = record.author;
-			object["license"] = record.license;
-			// object["tags"] = record.tags;
+		QJsonObject object;
+		object["icon_url"] = "";
+		object["guid"] = record.guid;
+		object["name"] = record.name;
+		object["type"] = record.type;
+		object["full_filename"] = record.full_filename;
+		object["collection"] = record.collection;
+		object["collection_name"] = record.collection_name;
+		object["author"] = record.author;
+		object["license"] = record.license;
+		// object["tags"] = record.tags;
 
-			auto tags = QJsonDocument::fromBinaryData(record.tags);
+		auto tags = QJsonDocument::fromBinaryData(record.tags);
 
-			QImage image;
-			image.loadFromData(record.thumbnail, "PNG");
+		QImage image;
+		image.loadFromData(record.thumbnail, "PNG");
 
-			auto sceneProperties = QJsonDocument::fromBinaryData(record.properties);
+		auto sceneProperties = QJsonDocument::fromBinaryData(record.properties);
 
-			auto gridItem = new AssetGridItem(object, image, sceneProperties.object(), tags.object());
+		auto gridItem = new AssetGridItem(object, image, sceneProperties.object(), tags.object());
 
-			connect(gridItem, &AssetGridItem::addAssetToProject, [this](AssetGridItem *item) {
-				addAssetToProject(item);
-			});
+		connect(gridItem, &AssetGridItem::addAssetToProject, [this](AssetGridItem *item) {
+			addAssetToProject(item);
+		});
 
-			connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
-				changeAssetCollection(item);
-			});
+		connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
+			changeAssetCollection(item);
+		});
 
-			connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
-				removeAssetFromProject(item);
-			});
+		connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
+			removeAssetFromProject(item);
+		});
 
-			fastGrid->addTo(gridItem, i);
-			i++;
-		}
+		fastGrid->addTo(gridItem, i);
+		i++;
 	}
 
 	//QApplication::processEvents();
@@ -547,6 +556,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
     _metadataPane = new QWidget; 
 	_metadataPane->setObjectName(QStringLiteral("MetadataPane"));
+    _metadataPane->setStyleSheet("background: #202020");
     QVBoxLayout *metaLayout = new QVBoxLayout;
 	metaLayout->setMargin(0);
 	assetDropPad = new QWidget;
@@ -577,6 +587,10 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	ipbl->addWidget(browseButton);
 	ipbl->addWidget(downloadWorld);
 	importButtons->setLayout(ipbl);
+
+    importButtons->setStyleSheet(
+        "QPushButton { background: #111; border: 1px solid black; border-radius: 1px; padding: 8px 12px; }"
+    );
 
 	assetDropPadLayout->addWidget(importButtons);
 
@@ -661,15 +675,15 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 			tagModelField->setText(tags);
 
 			// get material 
-			auto material_guid = db->getDependencyByType((int)AssetMetaType::Material, gridItem->metadata["guid"].toString());
-			auto material = db->getMaterialGlobal(material_guid);
-			auto materialObj = QJsonDocument::fromBinaryData(material);
+			//auto material_guid = db->getDependencyByType((int)AssetMetaType::Material, gridItem->metadata["guid"].toString());
+			//auto material = db->getAssetMaterialGlobal(gridItem->metadata["guid"].toString());
+			//auto materialObj = QJsonDocument::fromBinaryData(material);
 
             auto assetPath = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DataLocation),
-											 Constants::ASSET_FOLDER,
-											 gridItem->metadata["guid"].toString());
+                Constants::ASSET_FOLDER,
+                gridItem->metadata["guid"].toString());
 
-			viewer->setMaterial(materialObj.object());
+			// viewer->setMaterial(materialObj.object());
 
 			QVector3D pos;
 			QVector3D rot;
@@ -694,15 +708,40 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 				cached = true;
 			}
 
-			if (viewer->cachedAssets.value(gridItem->metadata["guid"].toString())) {
-				viewer->addNodeToScene(viewer->cachedAssets.value(gridItem->metadata["guid"].toString()), QString(), true, false);
-				viewer->orientCamera(pos, rot, distObj);
-			}
-			else {
-				viewer->loadModel(QDir(assetPath).filePath(gridItem->metadata["full_filename"].toString()), false, true, !cached);
-				viewer->orientCamera(pos, rot, distObj);
-			}
-           
+            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Object)) {
+                QString path;
+                // if model
+                QDir dir(assetPath);
+                foreach(auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files)) {
+                    if (Constants::MODEL_EXTS.contains(file.suffix())) {
+                        path = file.absoluteFilePath();
+                        break;
+                    }
+                }
+
+                if (viewer->cachedAssets.value(gridItem->metadata["guid"].toString())) {
+                    viewer->addNodeToScene(viewer->cachedAssets.value(gridItem->metadata["guid"].toString()), gridItem->metadata["guid"].toString(), true, false);
+                    viewer->orientCamera(pos, rot, distObj);
+                }
+                else {
+                    viewer->loadJafModel(path, gridItem->metadata["guid"].toString(), false, true, !cached);
+                    viewer->orientCamera(pos, rot, distObj);
+                }
+            }
+
+            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Material)) {
+                if (viewer->cachedAssets.value(gridItem->metadata["guid"].toString())) {
+                    //viewer->addNodeToScene(viewer->cachedAssets.value(gridItem->metadata["guid"].toString()), gridItem->metadata["guid"].toString(), true, false);
+                    viewer->loadJafMaterial(gridItem->metadata["guid"].toString());
+                    viewer->orientCamera(pos, rot, distObj);
+                }
+                else {
+                    viewer->loadJafMaterial(gridItem->metadata["guid"].toString());
+                    //viewer->loadJafModel(path, gridItem->metadata["guid"].toString(), false, true, !cached);
+                    viewer->orientCamera(pos, rot, distObj);
+                }
+            }
+
 			selectedGridItem = gridItem;
 			selectedGridItem->highlight(true);
 		}
@@ -740,7 +779,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 		db->updateAssetMetadata(
 			selectedGridItem->metadata["guid"].toString(),
-			renameModelField->text() + "." + ext,
+			renameModelField->text(),
 			tagsDoc.toBinaryData()
 		);
 
@@ -769,9 +808,9 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		if (QFileInfo(filename).suffix() == "jaf") {
 			importJahModel(filename);
 		}
-		else {
-			importModel(filename);
-		}
+		//else {
+		//	importModel(filename);
+		//}
 	});
 
 	assetDropPad->setLayout(assetDropPadLayout);
@@ -843,7 +882,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	//metadata->setStyleSheet("QLabel { font-size: 12px; }");
 	auto header = new QLabel("Asset Metadata");
 	header->setAlignment(Qt::AlignCenter);
-	header->setStyleSheet("border-top: 1px solid black; border-bottom: 1px solid black; text-align: center; padding: 12px; background: #1e1e1e");
+	header->setStyleSheet("border-top: 1px solid black; border-bottom: 1px solid black; text-align: center; padding: 12px; background: #1A1A1A");
 	metaLayout->addWidget(header);
 	metaLayout->addWidget(metadata);
 
@@ -877,18 +916,29 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 	setStyleSheet(
 		"*							{ color: #EEE; }"
-		"QPushButton				{ border-radius: 2px; padding: 8px 12px; }"
+        "QPushButton				{ background: #404040; border-radius: 2px; padding: 8px 12px; }"
 		"QSplitter					{ background: #2E2E2E; } QSplitter:handle { background: black; }"
 		"#localAssetsButton			{ text-align: left; padding: 12px; }"
 		"#onlineAssetsButton		{ text-align: left; padding: 12px; }"
         "QPushButton[accessibleName=\"assetsButton\"]:disabled { color: #444; }"
-		"#treeWidget				{ background: transparent; }"
 		"#assetDropPad				{}"
-		"#assetDropPadLabel			{ border: 4px dashed #1E1E1E; border-radius: 4px; "
+		"#assetDropPadLabel			{ border: 4px dashed #111; border-radius: 4px; "
 		"							  padding: 48px 36px; margin: 0; }"
-		"#assetDropPad, #MetadataPane QPushButton	{ padding: 8px 12px; }"
+        "#assetDropPad, #MetadataPane QPushButton	{ padding: 8px 12px; }"
 		"QLineEdit					{ border: 1px solid #1E1E1E; border-radius: 2px; background: #3B3B3B; }"
 		"#assetDropPad QLabel		{}"
+        "QTreeView, QTreeWidget { show-decoration-selected: 1; border: 0; outline: none; selection-background-color: #404040; color: #EEE; background: #202020; alternate-background-color: #252525; }"
+		//"QTreeWidget::branch { background-color: #202020; }"
+		"QTreeWidget::branch:hover { background-color: #303030; }"
+		"QTreeWidget::branch:selected { background-color: #404040; }"
+		"QTreeWidget::item:selected { selection-background-color: #404040;"
+		"							  background: #404040; outline: none; padding: 5px 0; }"
+		/* Important, this is set for when the widget loses focus to fill the left gap */
+		"QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }"
+		"QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }"
+		"QTreeWidget::item { padding: 5px 0; }"
+		"QTreeWidget::item:hover { background: #303030; padding: 5px 0; }"
+        "QComboBox { background: #1A1A1A; border : 0; }"
 	);
 }
 
@@ -901,20 +951,82 @@ int on_extract_entry_av(const char *filename, void *arg) {
 
 void AssetView::importJahModel(const QString &fileName)
 {
-	// create a temporary directory and extract our project into it
-	// we need a sure way to get the project name, so we have to extract it first and check the blob
-	QTemporaryDir temporaryDir;
-	if (temporaryDir.isValid()) {
-		zip_extract(fileName.toStdString().c_str(), temporaryDir.path().toStdString().c_str(), Q_NULLPTR, Q_NULLPTR);
-		QDir dir(temporaryDir.path());
-		foreach(auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files)) {
-			if (Constants::MODEL_EXTS.contains(file.suffix())) {
-				filename = file.absoluteFilePath();
-				importModel(file.absoluteFilePath(), true);
-				break;
-			}
-		}
-	}
+    QFileInfo entryInfo(fileName);
+
+    auto assetPath = IrisUtils::join(
+        QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+        "AssetStore"
+    );
+
+    // create a temporary directory and extract our project into it
+    // we need a sure way to get the project name, so we have to extract it first and check the blob
+    QTemporaryDir temporaryDir;
+    if (temporaryDir.isValid()) {
+        zip_extract(entryInfo.absoluteFilePath().toStdString().c_str(),
+            temporaryDir.path().toStdString().c_str(),
+            Q_NULLPTR, Q_NULLPTR
+        );
+
+        QFile f(QDir(temporaryDir.path()).filePath(".manifest"));
+        if (!f.open(QFile::ReadOnly | QFile::Text)) return;
+        QTextStream in(&f);
+
+        const QString jafString = in.readLine();
+
+        ModelTypes jafType = ModelTypes::Undefined;
+
+        if (jafString == "object") {
+            jafType = ModelTypes::Object;
+        }
+        else if (jafString == "material") {
+            jafType = ModelTypes::Material;
+        }
+
+        QString guid = db->importJafAssetModel(jafType, QDir(temporaryDir.path()).filePath("asset.db"), true);
+
+        const QString assetFolder = QDir(assetPath).filePath(guid);
+        QDir().mkpath(assetFolder);
+
+        QString assetsDir = QDir(temporaryDir.path()).filePath("assets");
+        QDirIterator projectDirIterator(assetsDir, QDir::NoDotAndDotDot | QDir::Files);
+
+        QStringList fileNames;
+        while (projectDirIterator.hasNext()) fileNames << projectDirIterator.next();
+
+        jafType = ModelTypes::Undefined;
+
+        QString placeHolderGuid = GUIDManager::generateGUID();
+
+        for (const auto &file : fileNames) {
+            QFileInfo fileInfo(file);
+            QString fileToCopyTo = IrisUtils::join(assetFolder, fileInfo.fileName());
+
+            bool copyFile = QFile::copy(fileInfo.absoluteFilePath(), fileToCopyTo);
+        }
+
+        if (jafString == "material") {
+            renameModelField->setText(QFileInfo(filename).baseName());
+            viewer->loadJafMaterial(guid);
+            addToJahLibrary(filename, guid, true);
+        }
+
+        if (jafString == "object") {
+            // Open the asset
+            QString path;
+            // if model
+            QDir dir(assetFolder);
+            foreach(auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files)) {
+                if (Constants::MODEL_EXTS.contains(file.suffix())) {
+                    path = file.absoluteFilePath();
+                    break;
+                }
+            }
+
+            renameModelField->setText(QFileInfo(filename).baseName());
+            viewer->loadJafModel(path, guid);
+            addToJahLibrary(filename, guid, true);
+        }
+    }
 }
 
 void AssetView::importModel(const QString &filename, bool jfx)
@@ -924,6 +1036,49 @@ void AssetView::importModel(const QString &filename, bool jfx)
 		viewer->loadModel(filename);
 		addToLibrary(jfx);
 	}
+}
+
+void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool jfx)
+{
+    QJsonObject tags;
+    QJsonArray actualTags;
+
+    QFileInfo fInfo(filename);
+    QJsonObject object;
+    object["icon_url"] = "";
+    object["name"] = QFileInfo(fileName).baseName(); // renameModelField->text();
+
+    auto thumbnail = viewer->takeScreenshot(512, 512);
+
+    db->updateAssetProperties(guid, QJsonDocument(viewer->getSceneProperties()).toBinaryData());
+    //db->updateAssetThumbnail(guid, bytes);
+
+    object["type"] = db->fetchAsset(guid).type;
+    object["guid"] = guid;
+
+    auto gridItem = new AssetGridItem(object, thumbnail, viewer->getSceneProperties(), tags);
+
+    connect(gridItem, &AssetGridItem::addAssetToProject, [this](AssetGridItem *item) {
+        addAssetToProject(item);
+    });
+
+    connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
+        changeAssetCollection(item);
+    });
+
+    connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
+        removeAssetFromProject(item);
+    });
+
+    viewer->cacheCurrentModel(guid);
+
+    fastGrid->addTo(gridItem, 0, true);
+    QApplication::processEvents();
+    fastGrid->updateGridColumns(fastGrid->lastWidth);
+
+    renameWidget->setVisible(true);
+    tagWidget->setVisible(true);
+    updateAsset->setVisible(true);
 }
 
 void AssetView::addToLibrary(bool jfx)
@@ -977,14 +1132,14 @@ void AssetView::addToLibrary(bool jfx)
 		QString guid;
 		if (jfx) {
 			guid = db->insertAssetGlobal(QFileInfo(filename).fileName(),
-				static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData(), "JahFX");
+				static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData(), QJsonDocument(viewer->getMaterial()).toBinaryData(), "JahFX");
 		}
 		else {
 			guid = db->insertAssetGlobal(QFileInfo(filename).fileName(),
-				static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData());
+				static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData(), QJsonDocument(viewer->getMaterial()).toBinaryData());
 		}
 		object["guid"] = guid;
-		object["type"] = (int) AssetMetaType::Object; // model?
+		object["type"] = db->fetchAsset(guid).type; // model?
 		object["full_filename"] = IrisUtils::buildFileName(guid, fInfo.suffix());
 		if (jfx) {
 			object["author"] = "JahFX";// db->getAuthorName();
@@ -1008,8 +1163,8 @@ void AssetView::addToLibrary(bool jfx)
 
 		copyTextures(guid);
 
-		auto material_guid = db->insertMaterialGlobal(QFileInfo(filename).baseName() + "_material", guid, QJsonDocument(viewer->getMaterial()).toBinaryData());
-		db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), guid, material_guid);
+		//auto material_guid = db->insertMaterialGlobal(QFileInfo(filename).baseName() + "_material", guid, QJsonDocument(viewer->getMaterial()).toBinaryData());
+		//db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), guid, material_guid);
 
 		auto gridItem = new AssetGridItem(object, thumbnail, viewer->getSceneProperties(), tags);
 
@@ -1104,90 +1259,346 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 {
 	//addToProject->setVisible(false);
 	// get the current project working directory
-	auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
-		Constants::PROJECT_FOLDER);
+	auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), Constants::PROJECT_FOLDER);
 	auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
 	auto pDir = IrisUtils::join(defaultProjectDirectory, Globals::project->getProjectName());
 
-	auto guid = item->metadata["guid"].toString();
+	QString guid = item->metadata["guid"].toString();
 	int assetType = item->metadata["type"].toInt();
-	QFileInfo fInfo(item->metadata["name"].toString());
-	QString object = IrisUtils::buildFileName(guid, fInfo.suffix());
-	auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
+	QFileInfo fInfo(item->metadata["full_name"].toString());
+	auto assetsDir = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::ASSET_FOLDER, guid);
 
-	QString assetFolder;
+    const int aType = db->fetchAsset(guid).type;
 
-	if (assetType == (int) AssetMetaType::Object) {
-		assetFolder = "Models";
-	}
-	else {
-		assetFolder = QString();
-	}
+    QDirIterator projectDirIterator(assetsDir, QDir::NoDotAndDotDot | QDir::Files);
 
-	// todo -- undo progress?
-	auto copyFolder = [](const QString &src, const QString &dest) {
-		if (!QDir(dest).exists()) {
-			if (!QDir().mkdir(dest)) return false;
+    QStringList fileNames;
+    while (projectDirIterator.hasNext()) fileNames << projectDirIterator.next();
 
-			for (auto file : QDir(src).entryInfoList(QStringList(), QDir::Files)) {
-				if (!QFile::copy(file.absoluteFilePath(), QDir(dest).filePath(file.fileName()))) return false;
-			}
+    // Create a pair that holds the original name and the new name (if any)
+    QVector<QPair<QString, QString>> files;	/* original x new */
 
-			return true;
-		}
-	};
+    ModelTypes jafType = ModelTypes::Undefined;
 
-	QString new_guid = GUIDManager::generateGUID();
+    QString placeHolderGuid = GUIDManager::generateGUID();
 
-	if (!copyFolder(QDir(assetPath).filePath(guid), QDir(QDir(pDir).filePath(assetFolder)).filePath(new_guid))) {
-		QString warningText = QString("Failed to import asset %1. Possible reasons are:\n"
-			"1. It doesn't exist\n"
-			"2. The asset isn't valid\n"
-			"3. There is no scene open\n"
-			"4. The asset is already in your project")
-			.arg(item->metadata["name"].toString());
-		QMessageBox::warning(this, "Asset Import Failed", warningText, QMessageBox::Ok);
-	}
-	else {
-		// if copy successful, update the db and refs
-		QByteArray bytes;
-		QBuffer buffer(&bytes);
-		buffer.open(QIODevice::WriteOnly);
-		item->pixmap.save(&buffer, "PNG");
+    for (const auto &file : fileNames) {
+        QFileInfo fileInfo(file);
+        QString destDir;
+        if (Constants::IMAGE_EXTS.contains(fileInfo.suffix())) {
+            destDir = "Textures";
+            jafType = ModelTypes::Texture;
+        }
+        else if (Constants::MODEL_EXTS.contains(fileInfo.suffix())) {
+            destDir = "Models";
+            jafType = ModelTypes::Object;
+        }
+        else if (Constants::WHITELIST.contains(fileInfo.suffix())) {
+            destDir = "Files";
+            jafType = ModelTypes::File;
+        }
+        else if (Constants::SHADER_EXT == fileInfo.suffix()) {
+            destDir = "Shaders";
+            jafType = ModelTypes::Shader;
+        }
 
-		db->insertProjectAssetGlobal(
-			item->metadata["name"].toString() + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix(),
-			(int)ModelTypes::Object, bytes, QByteArray(), QByteArray(), new_guid
-		);
-		Globals::assetNames.insert(new_guid, QFileInfo(item->metadata["name"].toString()).baseName());
+        QString pathToCopyTo = IrisUtils::join(Globals::project->getProjectFolder(), destDir);
+        QString fileToCopyTo = IrisUtils::join(pathToCopyTo, fileInfo.fileName());
 
-		// get material 
-		auto material_guid = db->getDependencyByType((int)AssetMetaType::Material, item->metadata["guid"].toString());
-		auto material = db->getMaterialGlobal(material_guid);
+        int increment = 1;
+        QFileInfo checkFile(fileToCopyTo);
 
-		auto material_id = db->insertProjectMaterialGlobal(QFileInfo(item->metadata["name"].toString()).baseName() + "_material", new_guid, material);
-		db->insertGlobalDependency((int)AssetMetaType::Material, new_guid, material_id);
+        // If we encounter the same file, make a duplicate...
+        QString newFileName = fileInfo.fileName();
 
-		QString basePath = QDir(QDir(pDir).filePath(assetFolder)).filePath(new_guid);
-		bool renameModel = QFile::rename(
-			QDir(basePath).filePath(item->metadata["full_filename"].toString()),
-			QDir(basePath).filePath(new_guid + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix())
-		);
+        while (checkFile.exists()) {
+            QString newName = fileInfo.baseName() + " " + QString::number(increment++);
+            checkFile = QFileInfo(IrisUtils::buildFileName(
+                IrisUtils::join(pathToCopyTo, newName), fileInfo.suffix())
+            );
+            newFileName = checkFile.fileName();
+        }
 
-#ifdef Q_OS_WIN
-		if (!renameModel) {
-			qDebug() << "hit";
-			MoveFile(
-				QDir(basePath).filePath(item->metadata["full_filename"].toString()).toStdString().c_str(),
-				QDir(basePath).filePath(new_guid + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix()).toStdString().c_str()
-			);
-		}
-#endif // Q_OS_WIN
+        files.push_back(QPair<QString, QString>(file, QDir(pathToCopyTo).filePath(newFileName)));
+        bool copyFile = QFile::copy(file, QDir(pathToCopyTo).filePath(newFileName));
 
-		QString warningText = QString("Added asset %1 to your project!")
-			.arg(item->metadata["name"].toString());
-		QMessageBox::information(this, "Asset Import Successful", warningText, QMessageBox::Ok);
-	}
+        if (jafType == ModelTypes::File) {
+            auto assetFile = new AssetFile;
+            assetFile->fileName = fileInfo.fileName();
+            assetFile->assetGuid = placeHolderGuid;
+            assetFile->path = fileInfo.absoluteFilePath();
+            AssetManager::addAsset(assetFile);
+        }
+
+        if (jafType == ModelTypes::Shader) {
+            QFile *templateShaderFile = new QFile(fileInfo.absoluteFilePath());
+            templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);
+            QJsonObject shaderDefinition = QJsonDocument::fromJson(templateShaderFile->readAll()).object();
+            templateShaderFile->close();
+            shaderDefinition["name"] = fileInfo.baseName();
+            shaderDefinition.insert("guid", placeHolderGuid);
+
+            auto assetShader = new AssetShader;
+            assetShader->assetGuid = placeHolderGuid;
+            assetShader->fileName = fileInfo.baseName();
+            assetShader->path = fileInfo.absoluteFilePath();
+            assetShader->setValue(QVariant::fromValue(shaderDefinition));
+            AssetManager::addAsset(assetShader);
+        }
+
+        if (jafType == ModelTypes::Object) {
+            this->viewer->makeCurrent();
+            auto ssource = new iris::SceneSource();
+            // load mesh as scene
+            auto node = iris::MeshNode::loadAsSceneFragment(
+                QDir(pathToCopyTo).filePath(newFileName),
+                [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+            {
+                auto mat = iris::CustomMaterial::create();
+
+                if (mesh->hasSkeleton())
+                    mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
+                else
+                    mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+
+                return mat;
+            }, ssource);
+
+            this->viewer->doneCurrent();
+
+            // Add to persistent store
+            {
+                QVariant variant = QVariant::fromValue(node);
+                auto nodeAsset = new AssetNodeObject;
+                nodeAsset->assetGuid = placeHolderGuid;	/* temp guid */
+                nodeAsset->setValue(variant);
+                AssetManager::addAsset(nodeAsset);
+            }
+        }
+    }
+
+    QMap<QString, QString> newNames;	/* original x new */
+    for (const auto &file : files) {
+        newNames.insert(
+            QFileInfo(file.first).fileName(),
+            QFileInfo(file.second).fileName()
+        );
+    }
+
+    // We can discern most types from their extension, we don't store material files so we use the manifest
+    if (aType == static_cast<int>(ModelTypes::Material)) {
+        jafType = ModelTypes::Material;
+    }
+    else if (aType == static_cast<int>(ModelTypes::Object)) {
+        jafType = ModelTypes::Object;
+    }
+    else if (aType == static_cast<int>(ModelTypes::Shader)) {
+        jafType = ModelTypes::Shader;
+    }
+    else {
+        // Default to files since we know what archives can contain
+        jafType = ModelTypes::File;
+    }
+
+    QString guidReturned = db->copyAsset(jafType, guid, newNames, Globals::project->getProjectGuid());
+
+    if (jafType == ModelTypes::Shader || jafType == ModelTypes::File) {
+        for (auto &asset : AssetManager::getAssets()) {
+            if (asset->assetGuid == placeHolderGuid) {
+                asset->assetGuid = guidReturned;
+            }
+        }
+    }
+
+    if (jafType == ModelTypes::Object) {
+        std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
+            [&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
+        {
+            if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+                auto n = node.staticCast<iris::MeshNode>();
+                //n->meshPath = meshGuid;
+                auto mat_defs = definition.value("material").toObject();
+                auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+                for (auto prop : mat->properties) {
+                    if (prop->type == iris::PropertyType::Texture) {
+                        if (!mat_defs.value(prop->name).toString().isEmpty()) {
+                            mat->setValue(prop->name, mat_defs.value(prop->name).toString());
+                        }
+                    }
+                    else if (prop->type == iris::PropertyType::Color) {
+                        mat->setValue(
+                            prop->name,
+                            QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
+                        );
+                    }
+                    else {
+                        mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
+                    }
+                }
+            }
+
+            QJsonArray children = definition["children"].toArray();
+            // These will always be in sync since the definition is derived from the mesh
+            if (node->hasChildren()) {
+                for (int i = 0; i < node->children.count(); i++) {
+                    updateNodeMaterialValues(node->children[i], children[i].toObject());
+                }
+            }
+        };
+
+        for (auto &asset : AssetManager::getAssets()) {
+            if (asset->assetGuid == placeHolderGuid) {
+                asset->assetGuid = guidReturned;
+                auto node = asset->value.value<iris::SceneNodePtr>();
+                auto material = db->getAssetMaterialGlobal(guidReturned);
+                auto materialObj = QJsonDocument::fromBinaryData(material);
+                updateNodeMaterialValues(node, materialObj.object());
+            }
+        }
+    }
+
+    if (jafType == ModelTypes::Material) {
+        QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->getMaterialGlobal(guidReturned));
+        QJsonObject matObject = matDoc.object();
+        iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
+
+        QFileInfo shaderFile;
+
+        QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+        while (it.hasNext()) {
+            it.next();
+            if (it.key() == matObject["guid"].toString()) {
+                shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
+                break;
+            }
+        }
+
+        if (shaderFile.exists()) {
+            material->generate(shaderFile.absoluteFilePath());
+        }
+        else {
+            for (auto asset : AssetManager::getAssets()) {
+                if (asset->type == ModelTypes::Shader) {
+                    if (asset->assetGuid == matObject["guid"].toString()) {
+                        auto def = asset->getValue().toJsonObject();
+                        auto vertexShader = def["vertex_shader"].toString();
+                        auto fragmentShader = def["fragment_shader"].toString();
+                        for (auto asset : AssetManager::getAssets()) {
+                            if (asset->type == ModelTypes::File) {
+                                if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+                                if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+                            }
+                        }
+                        def["vertex_shader"] = vertexShader;
+                        def["fragment_shader"] = fragmentShader;
+                        material->generate(def);
+                    }
+                }
+            }
+        }
+
+        for (const auto &prop : material->properties) {
+            if (prop->type == iris::PropertyType::Color) {
+                QColor col;
+                col.setNamedColor(matObject.value(prop->name).toString());
+                material->setValue(prop->name, col);
+            }
+            else if (prop->type == iris::PropertyType::Texture) {
+                QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
+                QString textureStr = IrisUtils::join(
+                    Globals::project->getProjectFolder(), "Textures", materialName
+                );
+                material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
+            }
+            else {
+                material->setValue(prop->name, QVariant::fromValue(matObject.value(prop->name)));
+            }
+        }
+
+        auto assetMat = new AssetMaterial;
+        assetMat->assetGuid = guidReturned;
+        assetMat->setValue(QVariant::fromValue(material));
+        AssetManager::addAsset(assetMat);
+    }
+
+ /*   for (auto &asset : db->fetchAssetGUIDAndDependencies(guid)) {
+        qDebug() << db->fetchAsset(asset).name;
+    }*/
+
+ //   qDebug() << assetPath;
+ //   qDebug() << pDir;
+
+	//QString assetFolder;
+
+	//if (assetType == (int) AssetMetaType::Object) {
+	//	assetFolder = "Models";
+	//}
+	//else {
+	//	assetFolder = QString();
+	//}
+
+	//auto copyFolder = [](const QString &src, const QString &dest) {
+	//	if (!QDir(dest).exists()) {
+	//		if (!QDir().mkdir(dest)) return false;
+
+	//		for (auto file : QDir(src).entryInfoList(QStringList(), QDir::Files)) {
+	//			if (!QFile::copy(file.absoluteFilePath(), QDir(dest).filePath(file.fileName()))) return false;
+	//		}
+
+	//		return true;
+	//	}
+	//};
+
+	//QString new_guid = GUIDManager::generateGUID();
+
+	//if (!copyFolder(QDir(assetPath).filePath(guid), QDir(QDir(pDir).filePath(assetFolder)).filePath(new_guid))) {
+	//	QString warningText = QString("Failed to import asset %1. Possible reasons are:\n"
+	//		"1. It doesn't exist\n"
+	//		"2. The asset isn't valid\n"
+	//		"3. There is no scene open\n"
+	//		"4. The asset is already in your project")
+	//		.arg(item->metadata["name"].toString());
+	//	QMessageBox::warning(this, "Asset Import Failed", warningText, QMessageBox::Ok);
+	//}
+	//else {
+		//// if copy successful, update the db and refs
+		//QByteArray bytes;
+		//QBuffer buffer(&bytes);
+		//buffer.open(QIODevice::WriteOnly);
+		//item->pixmap.save(&buffer, "PNG");
+
+		//auto material = db->getAssetMaterialGlobal(item->metadata["guid"].toString());
+
+		////db->insertProjectAssetGlobal(
+		////	item->metadata["name"].toString() + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix(),
+		////	(int)ModelTypes::Object, bytes, QByteArray(), QByteArray(), material, new_guid
+		////);
+		//db->insertProjectAssetGlobal(
+		//	item->metadata["name"].toString(),
+		//	(int)ModelTypes::Object, bytes, QByteArray(), QByteArray(), material, new_guid
+		//);
+		//Globals::assetNames.insert(new_guid, QFileInfo(item->metadata["name"].toString()).baseName());
+
+		//QString basePath = QDir(QDir(pDir).filePath(assetFolder)).filePath(new_guid);
+		//bool renameModel = QFile::rename(
+		//	QDir(basePath).filePath(item->metadata["full_filename"].toString()),
+		//	QDir(basePath).filePath(new_guid + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix())
+		//);
+
+//#ifdef Q_OS_WIN
+//		if (!renameModel) {
+//			qDebug() << "hit";
+//			MoveFile(
+//				QDir(basePath).filePath(item->metadata["full_filename"].toString()).toStdString().c_str(),
+//				QDir(basePath).filePath(new_guid + "." + QFileInfo(item->metadata["full_filename"].toString()).suffix()).toStdString().c_str()
+//			);
+//		}
+//#endif // Q_OS_WIN
+//
+//		QString warningText = QString("Added asset %1 to your project!")
+//			.arg(item->metadata["name"].toString());
+//		QMessageBox::information(this, "Asset Import Successful", warningText, QMessageBox::Ok);
+	//}
 }
 
 void AssetView::changeAssetCollection(AssetGridItem *item)
@@ -1253,7 +1664,8 @@ void AssetView::removeAssetFromProject(AssetGridItem *item)
 	    if (IrisUtils::removeDir(QDir(assetPath).filePath(item->metadata["guid"].toString()))) {
 	        fastGrid->deleteTile(item);
 			// if the item is being used soft delete it
-			db->deleteAsset(item->metadata["guid"].toString());
+			//db->deleteAsset(item->metadata["guid"].toString());
+            db->deleteAssetAndDependencies(item->metadata["guid"].toString());
 
 			item->metadata = QJsonObject();
 			renameWidget->setVisible(false);

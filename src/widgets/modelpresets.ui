@@ -16,7 +16,6 @@
   <property name="styleSheet">
    <string notr="true">#ModelPresets {
 	padding: 4px;
-	background: #303030;
 	border: 0;
 }</string>
   </property>
@@ -42,7 +41,8 @@
       </sizepolicy>
      </property>
      <property name="styleSheet">
-      <string notr="true">border: 0</string>
+      <string notr="true">border: 0;
+background: #202020;</string>
      </property>
     </widget>
    </item>

@@ -1,47 +1,44 @@
 #include "projectmanager.h"
 #include "ui_projectmanager.h"
 
-#include <QStandardPaths>
-#include "../constants.h"
-#include "../irisgl/src/core/irisutils.h"
-#include "../core/settingsmanager.h"
-
-#include <QFutureWatcher>
-#include <QProgressDialog>
-#include <QThread>
-#include <QtConcurrent/QtConcurrent>
 #include <chrono>
+#include <memory>
 
-#include "../mainwindow.h"
-#include "../core/project.h"
-#include "../core/database/database.h"
-#include "../dialogs/newprojectdialog.h"
-#include "../globals.h"
-#include "../constants.h"
-
-#include "../core/thumbnailmanager.h"
-
-#include "../core/guidmanager.h"
-#include "../io/assetmanager.h"
-
-#include "irisgl/src/zip/zip.h"
-#include "irisgl/src/assimp/include/assimp/Importer.hpp"
-
-#include "dynamicgrid.h"
-
+#include <QtConcurrent/QtConcurrent>
 #include <QDebug>
 #include <QDesktopServices>
+#include <QFileDialog>
+#include <QFontDatabase>
 #include <QGraphicsDropShadowEffect>
 #include <QLineEdit>
-#include <QFontDatabase>
 #include <QMenu>
+#include <QMessageBox>
+#include <QProgressDialog>
+#include <QStandardPaths>
+#include <QThread>
+#include <QTreeWidgetItem>
+#include <QStyledItemDelegate>
 
+#include "irisgl/src/assimp/include/assimp/Importer.hpp"
+#include "irisgl/src/core/irisutils.h"
+#include "irisgl/src/materials/custommaterial.h"
+#include "irisgl/src/zip/zip.h"
+
+#include "constants.h"
+#include "dynamicgrid.h"
+#include "globals.h"
 #include "itemgridwidget.hpp"
+#include "mainwindow.h"
+#include "uimanager.h"
 
-void reducer(QVector<ModelData> &accum, const QVector<ModelData> &interm)
-{
-    accum.append(interm);
-}
+#include "core/database/database.h"
+#include "core/guidmanager.h"
+#include "core/thumbnailmanager.h"
+#include "core/project.h"
+#include "core/settingsmanager.h"
+#include "dialogs/newprojectdialog.h"
+#include "dialogs/progressdialog.h"
+#include "io/assetmanager.h"
 
 ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::ProjectManager)
 {
@@ -49,22 +46,151 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     db = handle;
 
 #ifdef Q_OS_WIN32
-//    setAttribute(Qt::WA_PaintOnScreen, true);
+	// setAttribute(Qt::WA_PaintOnScreen, true);
     setAttribute(Qt::WA_NativeWindow, true);
 #endif
 
-    setWindowTitle("Jahshaka Desktop");
+	futureWatcher = QPointer<QFutureWatcher<QVector<ModelData>>>(new QFutureWatcher<QVector<ModelData>>());
+	progressDialog = QPointer<ProgressDialog>(new ProgressDialog());
+
+	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::finished, [&]() {
+		progressDialog->setRange(0, 0);
+		progressDialog->setLabelText(tr("Caching assets..."));
+
+		// Meshes
+		// Note - this would be the perfect place to attach materials as well but we can't access the opengl context
+		for (const auto &item : futureWatcher->result()) {
+			AssetObject *model = new AssetObject(
+				new AssimpObject(item.data, item.path), item.path, QFileInfo(item.path).fileName()
+			);
+			model->assetGuid = item.guid;
+			AssetManager::addAsset(model);
+		}
+
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File))) {
+            auto assetFile = new AssetFile;
+            assetFile->fileName = asset.name;
+            assetFile->assetGuid = asset.guid;
+            assetFile->path = IrisUtils::join(Globals::project->getProjectFolder(), "Files", asset.name);
+            AssetManager::addAsset(assetFile);
+        }
+
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader))) {
+            QFile *templateShaderFile = new QFile(IrisUtils::join(Globals::project->getProjectFolder(), "Shaders", asset.name));
+            templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);
+            QJsonObject shaderDefinition = QJsonDocument::fromJson(templateShaderFile->readAll()).object();
+            templateShaderFile->close();
+            shaderDefinition["name"] = QFileInfo(asset.name).baseName();
+            shaderDefinition.insert("guid", asset.guid);
+
+            auto assetShader = new AssetShader;
+            assetShader->assetGuid = asset.guid;
+            assetShader->fileName = QFileInfo(asset.name).baseName();
+            assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), "Shaders", asset.name);
+            assetShader->setValue(QVariant::fromValue(shaderDefinition));
+            AssetManager::addAsset(assetShader);
+        }
+
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture))) {
+            auto assetTexture = new AssetTexture;
+            assetTexture->fileName = asset.name;
+            assetTexture->assetGuid = asset.guid;
+            assetTexture->path = IrisUtils::join(Globals::project->getProjectFolder(), "Textures", asset.name);
+            AssetManager::addAsset(assetTexture);
+        }
+
+		// Materials
+		for (const auto &asset :
+			db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Material)))
+		{
+			QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->getMaterialGlobal(asset.guid));
+			QJsonObject matObject = matDoc.object();
+			iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
+
+            QFileInfo shaderFile;
+
+            QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+            while (it.hasNext()) {
+                it.next();
+                if (it.key() == matObject["guid"].toString()) {
+                    shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
+                    break;
+                }
+            }
+
+            if (shaderFile.exists()) {
+                material->generate(shaderFile.absoluteFilePath());
+            }
+            else {
+                for (auto asset : AssetManager::getAssets()) {
+                    if (asset->type == ModelTypes::Shader) {
+                        if (asset->assetGuid == matObject["guid"].toString()) {
+                            auto def = asset->getValue().toJsonObject();
+                            auto vertexShader = def["vertex_shader"].toString();
+                            auto fragmentShader = def["fragment_shader"].toString();
+                            for (auto asset : AssetManager::getAssets()) {
+                                if (asset->type == ModelTypes::File) {
+                                    if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+                                    if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+                                }
+                            }
+                            def["vertex_shader"] = vertexShader;
+                            def["fragment_shader"] = fragmentShader;
+                            material->generate(def);
+                        }
+                    }
+                }
+            }
+
+			for (const auto &prop : material->properties) {
+				if (prop->type == iris::PropertyType::Color) {
+					QColor col;
+					col.setNamedColor(matObject.value(prop->name).toString());
+					material->setValue(prop->name, col);
+				}
+				else if (prop->type == iris::PropertyType::Texture) {
+					QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
+					QString textureStr = IrisUtils::join(
+						Globals::project->getProjectFolder(), "Textures", materialName
+					);
+					material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
+				}
+				else {
+					material->setValue(prop->name, QVariant::fromValue(matObject.value(prop->name)));
+				}
+			}
+
+			auto assetMat = new AssetMaterial;
+			assetMat->assetGuid = asset.guid;
+			assetMat->setValue(QVariant::fromValue(material));
+			AssetManager::addAsset(assetMat);
+		}
+
+
+		progressDialog->setLabelText(tr("Opening scene..."));
+		emit fileToOpen(openInPlayMode);
+		progressDialog->close();
+	});
+
+
+	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressRangeChanged,
+		progressDialog.data(), &ProgressDialog::setRange);
+	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressValueChanged,
+		progressDialog.data(), &ProgressDialog::setValue);
 
     dynamicGrid = new DynamicGrid(this);
 
     settings = SettingsManager::getDefaultManager();
 
+    ui->tilePreview->setView(new QListView());
+    ui->tilePreview->setItemDelegate(new QStyledItemDelegate(ui->tilePreview));
     ui->tilePreview->setCurrentText(settings->getValue("tileSize", "Normal").toString());
 
     connect(ui->tilePreview,    SIGNAL(currentTextChanged(QString)), SLOT(changePreviewSize(QString)));
     connect(ui->newProject,     SIGNAL(pressed()), SLOT(newProject()));
     connect(ui->importWorld,    SIGNAL(pressed()), SLOT(importProjectFromFile()));
     connect(ui->browseProjects, SIGNAL(pressed()), SLOT(openSampleBrowser()));
+
     ui->browseProjects->setCursor(Qt::PointingHandCursor);
 
     searchTimer = new QTimer(this);
@@ -104,17 +230,27 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     ui->pmContainer->setLayout(layout);
 }
 
+ProjectManager::~ProjectManager()
+{
+	delete ui;
+}
+
 void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
 {
-    auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-    auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
+	if (!UiManager::isSceneOpen) {
+		auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+		auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
 
-    Globals::project->setProjectPath(QDir(projectFolder).filePath(widget->tileData.name));
-    Globals::project->setProjectGuid(widget->tileData.guid);
+		Globals::project->setProjectPath(QDir(projectFolder).filePath(widget->tileData.name));
+		Globals::project->setProjectGuid(widget->tileData.guid);
 
-    this->openInPlayMode = playMode;
+		this->openInPlayMode = playMode;
 
-    loadProjectAssets();
+		loadProjectAssets();
+	}
+	else {
+		mainWindow->switchSpace(WindowSpaces::EDITOR);
+	}
 }
 
 QString importProjectName;
@@ -226,6 +362,19 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
             dynamicGrid->deleteTile(widget);
             Globals::project->setProjectGuid(widget->tileData.guid);
             db->deleteProject();
+
+			// Delete folder and contents
+			for (const auto &files : db->deleteFolderAndDependencies(Globals::project->getProjectGuid())) {
+				auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
+				if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
+			}
+
+			// Delete asset and dependencies
+			for (const auto &files : db->deleteAssetAndDependencies(Globals::project->getProjectGuid())) {
+				auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
+				if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
+			}
+
             checkForEmptyState();
         } else {
             QMessageBox::warning(this,
@@ -267,7 +416,7 @@ bool ProjectManager::checkForEmptyState()
 
 void ProjectManager::cleanupOnClose()
 {
-    AssetManager::assets.clear();
+    AssetManager::getAssets().clear();
 }
 
 void ProjectManager::openSampleProject(QListWidgetItem *item)
@@ -294,11 +443,16 @@ void ProjectManager::newProject()
         QDir projectDir(fullProjectPath);
         if (!projectDir.exists()) projectDir.mkpath(".");
 
-        for (auto folder : Constants::PROJECT_DIRS) {
-            QDir dir(QDir(fullProjectPath).filePath(folder));
-            dir.mkpath(".");
-        }
+		QJsonObject assetProperty;
 
+		// Insert an empty scene to get access to the project guid... 
+		db->insertSceneGlobal(projectName, QByteArray(), QByteArray());
+
+		for (auto folder : Constants::PROJECT_DIRS) {
+			QDir dir(QDir(fullProjectPath).filePath(folder));
+			dir.mkpath(".");
+		}
+		
         emit fileToCreate(projectName, fullProjectPath);
 
         this->hide();
@@ -310,29 +464,24 @@ void ProjectManager::changePreviewSize(QString scale)
     dynamicGrid->scaleTile(scale);
 }
 
+ModelData ProjectManager::loadAiSceneFromModel(const QPair<QString, QString> asset)
+{
+	//QFile file(asset.first);
+	//file.open(QFile::ReadOnly);
+	//auto data = file.readAll();
+
+	Assimp::Importer *importer = new Assimp::Importer;
+	 //const aiScene *scene = importer->ReadFile(asset.first.toStdString().c_str(), aiProcessPreset_TargetRealtime_Fast);
+	//const aiScene *scene = sceneSource->importer.ReadFileFromMemory((void*)data.data(),
+	//																data.length(),
+	//																aiProcessPreset_TargetRealtime_Fast);
+	ModelData d = { asset.first, asset.second, importer->ReadFile(asset.first.toStdString().c_str(), aiProcessPreset_TargetRealtime_Fast) };
+	return d;
+}
+
 void ProjectManager::finalizeProjectAssetLoad()
 {
-    progressDialog->setRange(0, 0);
-    progressDialog->setLabelText(QString("Populating scene..."));
-
-    // update the static list of assets with the now loaded assimp data in memory
-    for (auto item : futureWatcher->result()) {
-        for (int i = 0; i < AssetManager::assets.count(); i++) {
-            if (AssetManager::assets[i]->path == item.path) {
-                AssimpObject *ao = new AssimpObject(item.data, item.path);
-                AssetObject *model = new AssetObject(ao,
-                                                     item.path,
-                                                     AssetManager::assets[i]->fileName);
-
-                QVariant v;
-                v.setValue(ao);
-
-                AssetManager::assets[i] = model;
-            }
-        }
-    }
-
-    progressDialog->setLabelText(QString("Initializing panels..."));
+	
 }
 
 void ProjectManager::finishedFutureWatcher()
@@ -350,13 +499,14 @@ void ProjectManager::openSampleBrowser()
     QGridLayout *layout = new QGridLayout();
     QListWidget *sampleList = new QListWidget();
     sampleList->setObjectName("sampleList");
-    sampleList->setStyleSheet("#sampleList { background-color: #1e1e1e; padding: 0 8px; border: none } " \
+    sampleList->setStyleSheet("#sampleList { background-color: #1e1e1e; padding: 0 8px; border: none; color: #EEE; } " \
                               "QListWidgetItem { padding: 12px; } "\
                               "QListView::item:selected { "\
                               "    border: 1px solid #3498db; "\
                                " background: #3498db; "\
                                "  color: #CECECE; "\
                               "} "\
+                              "*, QLabel { color: white; } "\
                               "QToolTip { padding: 2px; border: 0; background: black; opacity: 200; }");
     sampleList->setViewMode(QListWidget::IconMode);
     sampleList->setSizeAdjustPolicy(QListWidget::AdjustToContents);
@@ -387,7 +537,7 @@ void ProjectManager::openSampleBrowser()
 
     auto instructions = new QLabel("Double click on a sample world to import it in the editor");
     instructions->setObjectName("instructions");
-    instructions->setStyleSheet("#instructions { border: none; background: #1e1e1e; " \
+    instructions->setStyleSheet("#instructions { border: none; background: #1e1e1e; color: white; " \
                                 "padding: 10px; font-size: 12px }");
     layout->addWidget(instructions);
     layout->addWidget(sampleList);
@@ -400,104 +550,38 @@ void ProjectManager::openSampleBrowser()
 
 void ProjectManager::loadProjectAssets()
 {
-    // iterate through the project directory and pick out files we want
-    walkProjectFolder(Globals::project->getProjectFolder());
+	// This shouldn't be needed but just in case a scene doesn't get cleaned up due 
+	// to some future change this will prevent any subtle bugs regarding invalid data
+	AssetManager::clearAssetList();
 
-    // the whole point of the function is to concurrently load models when opening a project
-    // as the project scope expands and projects get larger, it will be expanded for more assets
-    QStringList assetsToLoad;
+    // The whole point of the function is to concurrently load models when opening a project
+    // As the project scope expands and projects get larger, it will be expanded for more (large) assets
+    QVector<AssetList> assetsToLoad;
 
-    // TODO - only load files that are in the scene instead of everything! (iKlsR)
-    // of the files we detect, get a separate list of objects so we can load into memory
-    for (auto asset : AssetManager::assets) {
-        if (asset->type == AssetType::Object) {
-            assetsToLoad.append(asset->path);
-        }
-    }
+	progressDialog->setLabelText(tr("Collecting assets..."));
 
-    progressDialog = QSharedPointer<ProgressDialog>(new ProgressDialog);
-    progressDialog->setLabelText("Loading assets...");
+	// TODO - if we are only loading a couple assets, just do it sequentially
+	for (const auto &asset : db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Mesh))) {
+		assetsToLoad.append(
+			AssetList(QDir(Globals::project->getProjectFolder() + "/Models").filePath(asset.name),
+			db->fetchMeshObject(asset.guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh)))
+		);
+	}
 
-    futureWatcher = new QFutureWatcher<QVector<ModelData>>();
+    progressDialog->setLabelText(tr("Loading assets..."));
 
-    QObject::connect(futureWatcher, SIGNAL(finished()), SLOT(finalizeProjectAssetLoad()));
-    QObject::connect(futureWatcher, SIGNAL(finished()), SLOT(finishedFutureWatcher()));
-    QObject::connect(futureWatcher, SIGNAL(finished()), futureWatcher, SLOT(deleteLater()));
-    QObject::connect(futureWatcher, SIGNAL(progressRangeChanged(int, int)),
-                     progressDialog.data(), SLOT(setRange(int, int)));
-    QObject::connect(futureWatcher, SIGNAL(progressValueChanged(int)),
-                     progressDialog.data(), SLOT(setValue(int)));
-
-    AssetWidgetConcurrentWrapper loadWrapper(this);
-    // pass our list of objects to load concurrently
-    auto future = QtConcurrent::mappedReduced(assetsToLoad,
-                                              loadWrapper,
-                                              reducer,
-                                              QtConcurrent::SequentialReduce);
+    AssetWidgetConcurrentWrapper aiSceneFromModelMapper(this);
+	auto aiSceneFromModelReducer = [](QVector<ModelData> &accum, const ModelData &interm) -> decltype(auto) {
+		accum.append(interm);
+	};
+    auto future = QtConcurrent::mappedReduced<QVector<ModelData>>(assetsToLoad.constBegin(),
+																  assetsToLoad.constEnd(),
+																  aiSceneFromModelMapper,
+																  aiSceneFromModelReducer,
+																  QtConcurrent::OrderedReduce);
     futureWatcher->setFuture(future);
-
     progressDialog->exec();
-
     futureWatcher->waitForFinished();
-}
-
-void ProjectManager::walkProjectFolder(const QString &projectPath)
-{
-    QDir dir(projectPath);
-    foreach (auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs)) {
-        if (file.isFile()) {
-            AssetType type;
-            QPixmap pixmap;
-
-            if (Constants::IMAGE_EXTS.contains(file.suffix())) {
-                auto thumb = ThumbnailManager::createThumbnail(file.absoluteFilePath(), 256, 256);
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-                type = AssetType::Texture;
-            }
-            else if (Constants::MODEL_EXTS.contains(file.suffix())) {
-                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
-                type = AssetType::Object;
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-            }
-            else if (file.suffix() == "shader") {
-                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-                type = AssetType::Shader;
-            }
-            else {
-                auto thumb = ThumbnailManager::createThumbnail(":/app/icons/google-drive-file.svg", 128, 128);
-                type = AssetType::File;
-                pixmap = QPixmap::fromImage(*thumb->thumb);
-            }
-
-            auto asset = new AssetVariant;
-            asset->type         = type;
-            asset->fileName     = file.fileName();
-            asset->path         = file.absoluteFilePath();
-            asset->thumbnail    = pixmap;
-
-            AssetManager::assets.append(asset);
-        }
-        else {
-            auto thumb = ThumbnailManager::createThumbnail(":/app/icons/folder-symbol.svg", 128, 128);
-            auto asset = new AssetFolder;
-            asset->fileName     = file.fileName();
-            asset->path         = file.absoluteFilePath();
-            asset->thumbnail    = QPixmap::fromImage(*thumb->thumb);
-
-            AssetManager::assets.append(asset);
-        }
-
-        if (file.isDir()) {
-            walkProjectFolder(file.absoluteFilePath());
-        }
-    }
-}
-
-
-ProjectManager::~ProjectManager()
-{
-    delete ui;
 }
 
 void ProjectManager::updateTile(const QString &id, const QByteArray & arr)

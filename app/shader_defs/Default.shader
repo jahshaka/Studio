@@ -1,5 +1,6 @@
 {
     "name"          : "Default",
+    "guid"          : "00000000-0000-0000-0000-000000000001",
     "preview"       : false,
 
     "zWrite"        : true,

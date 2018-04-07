@@ -13,7 +13,7 @@ AssetViewGrid::AssetViewGrid(QWidget *parent) : QScrollArea(parent) {
 	setAlignment(Qt::AlignHCenter);
 	//setWidgetResizable(true);
 	setWidget(gridWidget);
-	setStyleSheet("background: transparent");
+    setStyleSheet("background: #202020; border: 0");
 
 	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 }

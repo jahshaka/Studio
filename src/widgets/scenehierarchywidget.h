@@ -76,6 +76,9 @@ protected slots:
     void deleteNode();
 	void duplicateNode();
 	void focusOnNode();
+	void exportNode(const QString &guid);
+	void createMaterial(const QString &guid);
+	void exportParticleSystem(const QString &guid);
 
 private:
 	void showHideNode(QTreeWidgetItem* item, bool show);

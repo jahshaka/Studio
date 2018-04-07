@@ -1,83 +1,36 @@
 #ifndef ASSETMANAGER_H
 #define ASSETMANAGER_H
 
-#include <QImage>
 #include <QList>
+#include <QImage>
 #include <QPixmap>
-
-// #include "../irisgl/src/assimp/include/assimp/Importer.hpp"
-// #include "../irisgl/src/assimp/include/assimp/scene.h"
-// #include "../irisgl/src/assimp/include/assimp/postprocess.h"
-
-class aiScene;
 
 #include "irisgl/src/graphics/graphicshelper.h"
 
-enum class AssetType {
-    Shader,
-    Material,
-    Mesh,
-    Texture,
-    Video,
-    SoundClip,
-    Music,
-    ParticleSystem,
-    File,
-    Folder,
-    Scene,
-    Animation,
-    Object,
-    Invalid,
-    Variant
-};
+#include "core/project.h"
+
+class aiScene;
+class iris::SceneNode;
 
 struct Asset {
-    AssetType           type;
+    ModelTypes          type;
     QString             path;
     QString             fileName;
+	QString				assetGuid;
     QPixmap             thumbnail;
     bool                deletable;
 
     virtual QVariant    getValue() = 0;
     virtual void        setValue(QVariant val) = 0;
+	QVariant			value;
 };
 
+// Notice this class doesn't do anything, this is intentional
+// Explicitly define a type for whatever you want to hold
 struct AssetVariant : public Asset
 {
     AssetVariant() {
-        type = AssetType::Variant;
-        deletable = true;
-    }
-
-    virtual QVariant getValue() {
-        return QVariant();
-    }
-
-    virtual void setValue(QVariant val) {
-        Q_UNUSED(val);
-    }
-};
-
-struct AssetFile : public Asset
-{
-    AssetFile() {
-        type = AssetType::File;
-        deletable = true;
-    }
-
-    virtual QVariant getValue() {
-        return QVariant();
-    }
-
-    virtual void setValue(QVariant val) {
-        Q_UNUSED(val)
-    }
-};
-
-struct AssetFolder : public Asset
-{
-    AssetFolder() {
-        type = AssetType::Folder;
+        type = ModelTypes::Variant;
         deletable = true;
     }
 
@@ -98,7 +51,7 @@ struct AssetObject : public Asset
     AssimpObject *ao;
 
     AssetObject(AssimpObject *a, QString p, QString f) : ao(a) {
-        type = AssetType::Object;
+        type = ModelTypes::Object;
         path = p;
         fileName = f;
         deletable = true;
@@ -116,18 +69,88 @@ struct AssetObject : public Asset
     }
 };
 
+struct AssetNodeObject : public Asset
+{
+	AssetNodeObject() {
+		type = ModelTypes::Object;
+	}
+
+	virtual QVariant getValue() {
+		return value;
+	}
+
+	virtual void setValue(QVariant val) {
+		value = val;
+	}
+};
+
+struct AssetMaterial : public Asset
+{
+	AssetMaterial() {
+		type = ModelTypes::Material;
+	}
+
+	virtual QVariant getValue() {
+		return value;
+	}
+
+	virtual void setValue(QVariant val) {
+		value = val;
+	}
+};
+
+struct AssetFile : public Asset
+{
+    AssetFile() {
+        type = ModelTypes::File;
+    }
+
+    virtual QVariant getValue() {
+        return value;
+    }
+
+    virtual void setValue(QVariant val) {
+        value = val;
+    }
+};
+
+struct AssetTexture : public Asset
+{
+    AssetTexture() {
+        type = ModelTypes::Texture;
+    }
+
+    virtual QVariant getValue() {
+        return value;
+    }
+
+    virtual void setValue(QVariant val) {
+        value = val;
+    }
+};
+
+struct AssetShader : public Asset
+{
+	AssetShader() {
+		type = ModelTypes::Shader;
+	}
+
+	virtual QVariant getValue() {
+		return value;
+	}
+
+	virtual void setValue(QVariant val) {
+		value = val;
+	}
+};
+
 class AssetManager
 {
 public:
-    static QList<Asset*> assets;
-    static QList<Asset*>& getAssets();
+    static QVector<Asset*> assets;
+    static QVector<Asset*>& getAssets();
     static void addAsset(Asset* asset);
-
-    // returns asset by path
-    // return null if no asset exists
-    static Asset* getAssetByPath(QString absolutePath);
-
-
+	static void clearAssetList();
 };
 
 #endif // ASSETMANAGER_H

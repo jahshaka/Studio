@@ -62,11 +62,14 @@ public:
 
     // editor specific
     bool duplicable;
+	bool exportable;
     bool visible;
     bool removable;
 
     bool pickable;
     bool castShadow;
+
+	mutable QString guid;
 
     friend class Renderer;
     friend class Scene;
@@ -80,6 +83,7 @@ public:
 
 public:
     SceneNode();
+	SceneNode(const SceneNode&);
     virtual ~SceneNode() {}
 
     static SceneNodePtr create();
@@ -89,9 +93,21 @@ public:
 
     long getNodeId();
 
+	void setGUID(const QString &id) const {
+		guid = id;
+	}
+
+	const QString getGUID() const {
+		return guid;
+	}
+
     bool isDuplicable() {
         return duplicable;
     }
+
+	bool isExportable() {
+		return exportable;
+	}
 
     QVector3D getLocalPos() {
         return pos;
@@ -139,7 +155,7 @@ public:
     * with a few exceptions:
     * 1) The duplicate shouldnt have a parent node or be added to a scene
     */
-   virtual SceneNodePtr createDuplicate(){
+   virtual SceneNodePtr createDuplicate() {
        //qt_assert((QString("This node isnt duplicable: ") + name).toStdString().c_str(),__FILE__,__LINE__);
 	   return SceneNodePtr(new SceneNode());
    }
@@ -234,6 +250,8 @@ private:
     static long nextId;
 };
 
+Q_DECLARE_METATYPE(SceneNode)
+Q_DECLARE_METATYPE(SceneNodePtr)
 
 }
 

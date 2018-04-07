@@ -11,30 +11,182 @@ class Database;
 #include <QTreeWidgetItem>
 #include <QWidget>
 #include <QFileDialog>
+#include <QLineEdit>
+#include <QHBoxLayout>
 
 #include "../io/assetmanager.h"
+#include "../dialogs/progressdialog.h"
 #include "../editor/thumbnailgenerator.h"
 #include "../core/project.h"
+#include "../widgets/sceneviewwidget.h"
 
-// TODO - https://stackoverflow.com/questions/19465812/how-can-i-insert-qdockwidget-as-tab
+// Look into this (iKlsR) - https://stackoverflow.com/questions/19465812/how-can-i-insert-qdockwidget-as-tab
 
 struct AssetItem {
     QString selectedPath;
     QTreeWidgetItem *item;
     QListWidgetItem *wItem;
-    // add one for assetView...
+	QString selectedGuid;
+    // add one for assetView maybe...
 };
 
+#include <QApplication>
+#include <QStyledItemDelegate>
+#include <QPainter>
+
+class ListViewDelegate : public QStyledItemDelegate
+{
+protected:
+	void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const
+	{
+
+
+		//        painter->save();
+		QPalette::ColorRole textRole = QPalette::NoRole;
+
+		if (option.state & QStyle::State_Selected) {
+			textRole = QPalette::HighlightedText;
+			painter->fillRect(option.rect, QColor(70, 70, 70, 255));
+		}
+
+		if (option.state & QStyle::State_MouseOver) {
+			painter->fillRect(option.rect, QColor(64, 64, 64));
+		}
+
+		// handle selection
+		//if (option.state & QStyle::State_Selected) {
+		//	//          painter->save();
+		//	textRole = QPalette::Mid;
+		//	//          QBrush selectionBrush(QColor(128, 128, 128, 128));
+		//	//          painter->setBrush(selectionBrush);
+		//	//          painter->drawRect(r.adjusted(1, 1,-1,-1));
+		//	//          painter->restore();
+		//}
+
+		painter->setRenderHint(QPainter::Antialiasing);
+
+
+		auto opt = option;
+		initStyleOption(&opt, index);
+		QRect r = opt.rect;
+		QString title = index.data(Qt::DisplayRole).toString();
+		//        QString description = index.data(Qt::UserRole + 1).toString();
+
+		QPalette::ColorGroup cg = opt.state & QStyle::State_Enabled ? QPalette::Normal : QPalette::Disabled;
+		if (cg == QPalette::Normal && !(opt.state & QStyle::State_Active))
+			cg = QPalette::Inactive;
+
+		// set pen color
+		if (opt.state & QStyle::State_Selected)
+			painter->setPen(opt.palette.color(cg, QPalette::HighlightedText));
+		else
+			painter->setPen(opt.palette.color(cg, QPalette::Text));
+
+
+		QStyle *style = opt.widget ? opt.widget->style() : QApplication::style();
+		//        style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
+
+		QIcon ic = QIcon(qvariant_cast<QIcon>(index.data(Qt::DecorationRole)));
+		r = option.rect.adjusted(0, 0, 0, 0);
+		style->drawItemPixmap(painter, r, Qt::AlignCenter, ic.pixmap(QSize(128, 128)));
+
+		//r = option.rect.adjusted(50, 0, 0, -50);
+		//        painter->drawText(r.left(), r.top(), r.width(), r.height(),
+		//                          Qt::AlignBottom|Qt::AlignCenter|Qt::TextWordWrap, title, &r);
+		style->drawItemText(painter, opt.rect, Qt::AlignBottom | Qt::AlignCenter | Qt::TextWordWrap,
+			opt.palette, true, title, textRole);
+
+
+		//        painter->restore();
+		//r = option.rect.adjusted(50, 50, 0, 0);
+		//        painter->drawText(r.left(), r.top(), r.width(), r.height(), Qt::AlignLeft|Qt::TextWordWrap, description, &r);
+		//        auto opt = option;
+		//        initStyleOption(&opt, index);
+
+		//        QString line0 = index.model()->data(index.model()->index(index.row(), 0)).toString();
+		//        QString line1 = index.model()->data(index.model()->index(index.row(), 2)).toString();
+
+		//        // draw correct background
+		//        opt.text = "";
+
+
+		//        style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
+
+
+		//        painter->drawText(QRect(rect.left(), rect.height(), rect.width(), rect.height()), opt.displayAlignment, line0);
+	}
+
+	QSize sizeHint(const QStyleOptionViewItem & option, const QModelIndex & index) const
+	{
+		QSize result = QStyledItemDelegate::sizeHint(option, index);
+		result.setHeight(100);
+		result.setWidth(100);
+		return result;
+	}
+
+    QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &option,
+        const QModelIndex &index) const override
+    {
+        if (index.data().canConvert<QString>()) {
+            QLineEdit *editor = new QLineEdit(parent);
+            connect(editor, &QLineEdit::editingFinished, this, &ListViewDelegate::commitAndCloseEditor);
+            return editor;
+        }
+        else {
+            return QStyledItemDelegate::createEditor(parent, option, index);
+        }
+    }
+
+    void setEditorData(QWidget *editor,
+        const QModelIndex &index) const
+    {
+        if (index.data().canConvert<QString>()) {
+            const QString text = index.data().toString();
+            QLineEdit *lineEdit = qobject_cast<QLineEdit*>(editor);
+            lineEdit->setMaxLength(15);
+            lineEdit->setText(text);
+        }
+        else {
+            QStyledItemDelegate::setEditorData(editor, index);
+        }
+    }
+
+    void setModelData(QWidget *editor, QAbstractItemModel *model,
+        const QModelIndex &index) const
+    {
+        if (index.data().canConvert<QString>()) {
+            QLineEdit *textEditor = qobject_cast<QLineEdit *>(editor);
+            model->setData(index, QVariant::fromValue(qobject_cast<QLineEdit*>(textEditor)->text()));
+        }
+        else {
+            QStyledItemDelegate::setModelData(editor, model, index);
+        }
+    }
+
+    void commitAndCloseEditor()
+    {
+        QLineEdit *editor = qobject_cast<QLineEdit*>(sender());
+        emit commitData(editor);
+        emit closeEditor(editor);
+    }
+};
+
+// This is a simple custom search predicate to be used with a stl search
 struct find_asset_thumbnail
 {
 	QString guid;
-	find_asset_thumbnail(QString guid) : guid(guid) {}
-	bool operator () (const AssetData& assetData) const {
-		return assetData.guid == guid;
+	find_asset_thumbnail(const QString guid) : guid(guid) {}
+	bool operator () (const Asset* data) const {
+		return data->assetGuid == guid;
 	}
 };
 
-#define     ID_ROLE     0x0111
+typedef struct directory_tuple
+{
+	QString path;
+	QString guid;
+	QString parent_guid;
+};
 
 class AssetWidget : public QWidget
 {
@@ -44,16 +196,43 @@ public:
     explicit AssetWidget(Database *handle, QWidget *parent = Q_NULLPTR);
     ~AssetWidget();
 
-	QVector<AssetData> assetList;
+	AssetItem assetItem;
+
+	bool hideDependencies;
 
     void populateAssetTree(bool initialRun);
     void updateTree(QTreeWidgetItem* parentTreeItem, QString path);
     void generateAssetThumbnails();
     void syncTreeAndView(const QString&);
-    void addItem(const QString &asset);
-    void updateAssetView(const QString &path);
+	void addItem(const FolderData &folderData);
+	void addItem(const AssetTileData &assetData);
+	void addCrumbs(const QVector<FolderData> &folderData);
+    void updateAssetView(const QString &path, bool showDependencies = false);
     void trigger();
     void updateLabels();
+
+	void extractTexturesAndMaterialFromMaterial(
+		const QString &filePath,
+		QStringList &textureList,
+		QJsonObject &material
+	);
+
+	void extractTexturesAndMaterialFromMaterial(
+		const QByteArray &blob,
+		QStringList &textureList,
+		QJsonObject &material
+	);
+
+	iris::SceneNodePtr extractTexturesAndMaterialFromMesh(
+		const QString &filePath,
+		QStringList &textureList,
+		QJsonObject &material
+	) const;
+
+	SceneViewWidget *sceneView;
+
+signals:
+	void assetItemSelected(QListWidgetItem*);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
@@ -75,27 +254,43 @@ protected slots:
     void renameTreeItem();
     void renameViewItem();
 
+	void editFileExternally();
+	void exportMaterial();
+	void exportShader();
+
     void searchAssets(QString);
     void OnLstItemsCommitData(QWidget*);
 
     void deleteTreeFolder();
     void deleteItem();
     void openAtFolder();
+	void createShader();
     void createFolder();
     void importAssetB();
-    void createDirectoryStructure(const QStringList&, const QString&);
+    void createDirectoryStructure(const QList<directory_tuple>&);
     void importAsset(const QStringList &path);
+    void importJafAssets(const QList<directory_tuple>&);
 
     void onThumbnailResult(ThumbnailResult* result);
 
 private:
     Ui::AssetWidget *ui;
-    AssetItem assetItem;
     QPoint startPos;
 
     Database *db;
+	ProgressDialog *progressDialog;
 
     QString currentPath;
+
+	QHBoxLayout *breadCrumbLayout;
+
+	QButtonGroup *assetViewToggleButtonGroup;
+	QPushButton *toggleIconView;
+	QPushButton *toggleListView;
+
+	QSize iconSize;
+	QSize listSize;
+	QSize currentSize;
 };
 
 #endif // ASSETWIDGET_H

@@ -1,8 +1,8 @@
 #include "assetmanager.h"
 
-QList<Asset*> AssetManager::assets;
+QVector<Asset*> AssetManager::assets;
 
-QList<Asset*> &AssetManager::getAssets()
+QVector<Asset*> &AssetManager::getAssets()
 {
     return assets;
 }
@@ -10,14 +10,10 @@ QList<Asset*> &AssetManager::getAssets()
 void AssetManager::addAsset(Asset *asset)
 {
     assets.append(asset);
-    //assetsByPath.insert(asset->path, asset);
 }
 
-Asset *AssetManager::getAssetByPath(QString absolutePath)
+void AssetManager::clearAssetList()
 {
-    for (auto asset : assets)
-        if (asset->path == absolutePath)
-            return asset;
-
-    return nullptr;
+	qDeleteAll(assets.begin(), assets.end());
+	assets.clear();
 }

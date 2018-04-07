@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define SCENENODEPROPERTYWIDGET_H
 
 #include <QWidget>
+#include <QListWidgetItem>
 #include <QSharedPointer>
 
 namespace iris {
@@ -30,6 +31,11 @@ class NodePropertyWidget;
 class MeshPropertyWidget;
 class DemoPane;
 
+class Database;
+
+// These are special and a kind of hack since this widget was never really designed to work with non scenenode types
+class ShaderPropertyWidget;
+
 /**
  * This class shows the properties of selected nodes in the scene
  */
@@ -44,6 +50,7 @@ public:
      * @param sceneNode
      */
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
+    void setAssetItem(QListWidgetItem *item);
 
     /**
      * Updates material properties if active scene node is a mesh
@@ -51,6 +58,8 @@ public:
     void refreshMaterial(const QString &matName);
 
 	void refreshTransform();
+
+    void setDatabase(Database*);
 
 private:
     void clearLayout(QLayout*);
@@ -68,7 +77,10 @@ private:
     WorldPropertyWidget* worldPropView;
     FogPropertyWidget*  fogPropView;
     MeshPropertyWidget* meshPropView;
-     DemoPane* demoPane;
+    DemoPane* demoPane;
+
+    Database *db;
+	ShaderPropertyWidget *shaderPropView;
 };
 
 #endif // PROPERTYWIDGET_H

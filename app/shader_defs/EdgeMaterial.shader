@@ -1,5 +1,6 @@
 {
-    "name": "EdgeMaterial",
+    "name"  : "EdgeMaterial",
+    "guid"  : "00000000-0000-0000-0000-000000000003",
     "preview": false,
     "uniforms": [
         {

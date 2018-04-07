@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef COMBOBOXWIDGET_H
 #define COMBOBOXWIDGET_H
 
+#include <QVariant>
 #include <QWidget>
 
 namespace Ui {
@@ -28,16 +29,22 @@ public:
 
     int index;
     void setLabel(const QString&);
-    void addItem(const QString&);
+    void addItem(const QString&, const QVariant &data = QVariant());
+    int findData(const QVariant &data);
     QString getCurrentItem();
+    QString getCurrentItemData();
     void setCurrentItem(const QString&);
-
+    void setCurrentItemData(const QString&);
+    void setCurrentIndex(const int&);
+    
 signals:
     void currentIndexChanged(const QString&);
     void currentTextChanged(const QString&);
+    void currentIndexChanged(int);
 
 private slots:
     void onDropDownTextChanged(const QString&);
+    void onDropDownIndexChanged(int);
 
 private:
     Ui::ComboBoxWidget* ui;

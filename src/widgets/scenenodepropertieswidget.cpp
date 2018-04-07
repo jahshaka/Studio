@@ -12,20 +12,22 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QLayout>
 
-#include "../irisgl/src/scenegraph/scenenode.h"
+#include "irisgl/src/scenegraph/scenenode.h"
 
-#include "scenenodepropertieswidget.h"
 #include "accordianbladewidget.h"
+#include "scenenodepropertieswidget.h"
 #include "transformeditor.h"
 
+#include "core/database/database.h"
+#include "propertywidgets/demopane.h"
+#include "propertywidgets/emitterpropertywidget.h"
+#include "propertywidgets/fogpropertywidget.h"
 #include "propertywidgets/lightpropertywidget.h"
 #include "propertywidgets/materialpropertywidget.h"
-#include "propertywidgets/worldpropertywidget.h"
-#include "propertywidgets/fogpropertywidget.h"
-#include "propertywidgets/emitterpropertywidget.h"
-#include "propertywidgets/nodepropertywidget.h"
 #include "propertywidgets/meshpropertywidget.h"
-#include "propertywidgets/demopane.h"
+#include "propertywidgets/nodepropertywidget.h"
+#include "propertywidgets/shaderpropertywidget.h"
+#include "propertywidgets/worldpropertywidget.h"
 
 SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(parent)
 {
@@ -40,6 +42,7 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	fogPropView = nullptr;
 	meshPropView = nullptr;
 	demoPane = nullptr;
+    shaderPropView = nullptr;
 }
 
 /**
@@ -119,6 +122,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                     materialPropView = new MaterialPropertyWidget();
                     materialPropView->setPanelTitle("Material");
                     materialPropView->setSceneNode(sceneNode);
+                    materialPropView->setDatabase(db);
 
                     layout->addWidget(meshPropView);
                     // layout->addWidget(nodePropView);
@@ -144,7 +148,33 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             
             this->setLayout(layout);
         }
-    } else {
+    }
+    else {
+        clearLayout(this->layout());
+        this->setLayout(new QVBoxLayout());
+    }
+}
+
+void SceneNodePropertiesWidget::setAssetItem(QListWidgetItem *item)
+{
+    if (item) {
+		clearLayout(this->layout());
+
+        shaderPropView = new ShaderPropertyWidget();
+        shaderPropView->setPanelTitle("Shader Definitions");
+        shaderPropView->setShaderGuid(item->data(MODEL_GUID_ROLE).toString());
+        shaderPropView->setDatabase(db);
+        shaderPropView->expand();
+
+        auto layout = new QVBoxLayout();
+        layout->addWidget(shaderPropView);
+
+        layout->addStretch();
+        layout->setMargin(0);
+
+        this->setLayout(layout);
+    }
+    else {
         clearLayout(this->layout());
         this->setLayout(new QVBoxLayout());
     }
@@ -159,10 +189,14 @@ void SceneNodePropertiesWidget::refreshMaterial(const QString &matName)
 
 void SceneNodePropertiesWidget::refreshTransform()
 {
-	if (transformWidget)
-	{
+	if (transformWidget) {
 		transformWidget->refreshUi();
 	}
+}
+
+void SceneNodePropertiesWidget::setDatabase(Database *db)
+{
+    this->db = db;
 }
 
 /**
@@ -173,7 +207,7 @@ void SceneNodePropertiesWidget::clearLayout(QLayout *layout)
 {
     if (layout == nullptr) return;
 
-#define NULLIFY(obj) if (obj){obj = nullptr;}
+#define NULLIFY(obj) if (obj) { obj = nullptr; }
 	NULLIFY(transformPropView);
 	NULLIFY(transformWidget);
 
@@ -185,15 +219,12 @@ void SceneNodePropertiesWidget::clearLayout(QLayout *layout)
 	NULLIFY(fogPropView);
 	NULLIFY(meshPropView);
 	NULLIFY(demoPane);
+    NULLIFY(shaderPropView);
 #undef NULLIFY
 
     while (auto item = layout->takeAt(0)) {
         if (auto widget = item->widget()) delete widget;
-
-        if (auto childLayout = item->layout()) {
-            this->clearLayout(childLayout);
-        }
-
+        if (auto childLayout = item->layout()) this->clearLayout(childLayout);
         delete item;
     }
 

@@ -146,7 +146,9 @@ void TranslationGizmo::loadAssets()
 		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"),
 		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.frag"));
 
-	lineShader = iris::Shader::load("app/shaders/gizmo_line.vert", "app/shaders/color.frag");
+	lineShader = iris::Shader::load(
+		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo_line.vert"),
+		IrisUtils::getAbsoluteAssetPath("app/shaders/color.frag"));
 
 	// create circle
 	QVector<float> points;

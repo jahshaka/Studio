@@ -15,6 +15,9 @@ find_package(Qt5 REQUIRED COMPONENTS Concurrent Widgets Sql Svg)
 include(UseModernCpp)
 include(BuildType)
 
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
+
 # set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
@@ -81,7 +84,8 @@ set(SRCS
     src/widgets/texturepickerwidget.cpp 
     src/io/materialreader.cpp 
     src/widgets/filepickerwidget.cpp 
-    src/widgets/propertywidgets/meshpropertywidget.cpp 
+    src/widgets/propertywidgets/meshpropertywidget.cpp
+    src/widgets/propertywidgets/shaderpropertywidget.cpp 
     src/widgets/propertywidget.cpp 
     src/widgets/propertywidgets/postprocesspropertywidget.cpp 
     src/widgets/postprocesseswidget.cpp 
@@ -119,6 +123,7 @@ set(SRCS
 	src/editor/outlinerenderer.cpp
 	src/editor/viewermaterial.cpp
 	src/editor/animationpath.cpp
+    src/constants.cpp
 )
 
 set(HEADERS
@@ -194,6 +199,7 @@ set(HEADERS
     src/io/materialreader.hpp 
     src/widgets/filepickerwidget.h 
     src/widgets/propertywidgets/meshpropertywidget.h 
+    src/widgets/propertywidgets/shaderpropertywidget.h 
     src/widgets/propertywidget.h 
     src/widgets/basewidget.h 
     src/widgets/propertywidgets/postprocesspropertywidget.h 
@@ -326,6 +332,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# https://stackoverflow.com/a/37211780/996468
+source_group(moc FILES ${HEADERS_moc} ${QRCS})
 add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp.rc)
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 							src

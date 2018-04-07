@@ -81,6 +81,7 @@ public:
     void copyTextures(const QString &folderGuid);
     void checkForEmptyState();
     void toggleFilterPane(bool);
+	void addToJahLibrary(const QString fileName, const QString guid, bool jfx = false);
 	void addToLibrary(bool jfx = false);
 	void spaceSplits();
     void closeViewer();

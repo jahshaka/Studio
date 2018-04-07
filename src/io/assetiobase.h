@@ -21,7 +21,7 @@ protected:
     //holds the directory for the file being saved or loaded
     //used for creating relative file paths for assets upon saving scene
     //used for creating absolute file paths for assets upon loading scene
-    QDir dir;
+    static QDir dir;
 
     void setAssetPath(QString assetPath);
 
@@ -32,7 +32,7 @@ protected:
     //assumes dir has already been assigned a value from saveScene or loadScene
     //should be called inside a SceneNode's writeData function
     //if path is resource, return original path
-    QString getRelativePath(QString filename);
+    static QString getRelativePath(QString filename);
 
     //gets absolute path for filename
     //assumes dir has already been assigned a value from saveScene or loadScene

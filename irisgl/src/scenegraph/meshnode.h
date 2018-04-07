@@ -117,6 +117,12 @@ public:
         IModelReadProgress* progressReader = Q_NULLPTR
     );
 
+	static SceneNodePtr loadAsSceneFragment(
+		const QString &filePath,
+		const aiScene* scene_,
+		std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc
+	);
+
     static SceneNodePtr loadAsAnimatedModel(QString path);
 
     void setMesh(QString source);

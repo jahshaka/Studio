@@ -25,35 +25,41 @@ For more information see the LICENSE file
 #include "../irisgl/src/irisglfwd.h"
 
 class EditorData;
+class Database;	// this is a temp way to get this working, remove later
 
 class SceneWriter : public AssetIOBase
 {
+	static Database *handle;
 public:
+	void setDatabaseHandle(Database *db) {
+		this->handle = db;
+	}
     void writeScene(QString filePath,iris::ScenePtr scene, iris::PostProcessManagerPtr postMan, EditorData* ediorData = nullptr);
     QByteArray getSceneObject(QString projectPath,
                               iris::ScenePtr scene,
                               iris::PostProcessManagerPtr postMan,
                               EditorData *editorData);
 
-private:
+public:
     void writeScene(QJsonObject& projectObj, iris::ScenePtr scene);
     void writePostProcessData(QJsonObject& projectObj, iris::PostProcessManagerPtr postMan);
     void writeEditorData(QJsonObject& projectObj, EditorData* ediorData = nullptr);
-    void writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr node);
-    void writeAnimationData(QJsonObject& sceneNodeObj, iris::SceneNodePtr node);
-    void writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr node);
-    void writeViewerData(QJsonObject& sceneNodeObject, iris::ViewerNodePtr node);
-    void writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node);
-    void writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat);
-    void writeLightData(QJsonObject& sceneNodeObject, iris::LightNodePtr node);
 
-    QJsonObject jsonColor(QColor color);
-    QJsonObject jsonVector3(QVector3D vec);
+    static void writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr node, bool relative = true);
+	static void writeAnimationData(QJsonObject& sceneNodeObj, iris::SceneNodePtr node);
+    static void writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr node, bool relative = true);
+	static void writeViewerData(QJsonObject& sceneNodeObject, iris::ViewerNodePtr node);
+	static void writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node);
+	static void writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat, bool relative = true);
+    static void writeLightData(QJsonObject& sceneNodeObject, iris::LightNodePtr node);
 
-    QString getSceneNodeTypeName(iris::SceneNodeType nodeType);
-    QString getLightNodeTypeName(iris::LightType lightType);
-    QString getKeyTangentTypeName(iris::TangentType tangentType);
-    QString getKeyHandleModeName(iris::HandleMode handleMode);
+	static QJsonObject jsonColor(QColor color);
+    static QJsonObject jsonVector3(QVector3D vec);
+
+    static QString getSceneNodeTypeName(iris::SceneNodeType nodeType);
+	static QString getLightNodeTypeName(iris::LightType lightType);
+	static QString getKeyTangentTypeName(iris::TangentType tangentType);
+	static QString getKeyHandleModeName(iris::HandleMode handleMode);
 };
 
 #endif // SCENEWRITER_H

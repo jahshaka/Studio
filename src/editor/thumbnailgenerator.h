@@ -3,6 +3,9 @@
 
 #include "../irisgl/src/irisglfwd.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
+#include "../irisgl/src/materials/custommaterial.h"
+#include "../irisgl/src/materials/defaultmaterial.h"
+
 #include <QThread>
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
@@ -20,7 +23,6 @@ enum class ThumbnailRequestType
 
 struct ThumbnailRequest
 {
-public:
     ThumbnailRequestType type;
     QString path;
     QString id;
@@ -32,13 +34,12 @@ struct ThumbnailResult
     QString path;
     QString id;
     QImage thumbnail;
-	QJsonObject material;
-	QStringList textureList;
 };
 
 class RenderThread : public QThread
 {
     Q_OBJECT
+
 public:
     QOffscreenSurface *surface;
     QOpenGLContext *context;
@@ -50,6 +51,8 @@ public:
     iris::ScenePtr scene;
     iris::SceneNodePtr sceneNode;
 
+	iris::MeshNodePtr materialNode;
+
     iris::CameraNodePtr cam;
     iris::CustomMaterialPtr material;
 
@@ -58,18 +61,13 @@ public:
     QSemaphore requestsAvailable;
 
 	iris::SceneSource *ssource;
-
     bool shutdown;
 
-	QStringList getTextureList();
-
-    void requestThumbnail(const ThumbnailRequest& request);
-
     void run() override;
-
     void initScene();
-    void prepareScene(const ThumbnailRequest& request);
     void cleanupScene();
+    void requestThumbnail(const ThumbnailRequest& request);
+    void prepareScene(const ThumbnailRequest& request);
 
 	void createMaterial(QJsonObject &matObj, iris::CustomMaterialPtr mat);
 
@@ -77,26 +75,24 @@ signals:
     void thumbnailComplete(ThumbnailResult* result);
 
 private:
-    //ThumbnailRequest& getRequest();
     float getBoundingRadius(iris::SceneNodePtr node);
     void getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere>& spheres);
-	QJsonObject assetMaterial;
 };
 
 // http://doc.qt.io/qt-5/qtquick-scenegraph-textureinthread-threadrenderer-cpp.html
 class ThumbnailGenerator
 {
-    static ThumbnailGenerator* instance;
-    ThumbnailGenerator();
 public:
     RenderThread* renderThread;
-
     static ThumbnailGenerator* getSingleton();
-
     void requestThumbnail(ThumbnailRequestType type, QString path, QString id = "");
 
     // must be called to properly shutdown ui components
     void shutdown();
+
+private:
+	static ThumbnailGenerator* instance;
+	ThumbnailGenerator();
 };
 
 #endif // THUMBNAILGENERATOR_H

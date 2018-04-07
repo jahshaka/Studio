@@ -14,24 +14,30 @@
    <string>Dialog</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">#createProject {
+   <string notr="true">
+QWidget#NewProjectDialog {
+  background: #222;
+  color: #EEE;
+}
+
+#createProject {
 	background: #4898ff;
-	color: white;
 }
 
 #createProject:hover {
 	background-color: #51a1d6;
 }
 
-
 QLabel {
 	margin-right: 12px;
+  color: #EEE;
 }
 
 QPushButton, QToolButton {
 	border: 0;
 	padding: 5px;
 	background: #444;
+  color: #EEE;
 }
 
 QPushButton::hover {
@@ -45,6 +51,8 @@ QToolButton::hover {
 QLineEdit {
 	background: #404040;
 	padding: 5px;
+  border: 0;
+  color: #EEE;
 }</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">

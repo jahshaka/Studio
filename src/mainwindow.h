@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QModelIndex>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QListWidgetItem>
 #include <QDrag>
 #include <QToolBar>
 #include <QSharedPointer>
@@ -200,6 +201,7 @@ public slots:
     //scenegraph
     void addPlane();
     void addGround();
+    void addCapsule();
     void addCone();
     void addCube();
     void addTorus();
@@ -208,11 +210,13 @@ public slots:
     void addEmpty();
     void addViewer();
     void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
-	void addMaterialMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D(), const QString &name = QString());
+	void addMaterialMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D(), const QString &guid = QString(), const QString &name = QString());
     void addDragPlaceholder();
 
     //context menu functions
     void duplicateNode();
+	void createMaterial(const QString &guid);
+	void exportNode(const QString &guid);
     void deleteNode();
     void renameNode();
 
@@ -224,10 +228,11 @@ public slots:
 
     void updateAnim();
 
-    void sceneNodeSelected(QTreeWidgetItem* item);
     void sceneTreeCustomContextMenu(const QPoint&);
     void sceneTreeItemChanged(QTreeWidgetItem* item,int column);
 
+    void sceneNodeSelected(QTreeWidgetItem *item);
+    void assetItemSelected(QListWidgetItem *item);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
 
 	void saveScene(const QString &filename, const QString &projectPath);

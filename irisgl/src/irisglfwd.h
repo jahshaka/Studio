@@ -108,8 +108,6 @@ typedef QSharedPointer<ContentManager> ContentManagerPtr;
 typedef QSharedPointer<SpriteBatch> SpriteBatchPtr;
 typedef QSharedPointer<Font> FontPtr;
 
-
-
 }
 
 #endif // IRISGLFWD_H

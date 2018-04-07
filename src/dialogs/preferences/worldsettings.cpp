@@ -8,16 +8,24 @@ and/or modify it under the terms of the GPLv3 License
 
 For more information see the LICENSE file
 *************************************************************************/
+
 #include "worldsettings.h"
 #include "ui_worldsettings.h"
-#include "../../core/settingsmanager.h"
-#include "../../constants.h"
-#include "../../uimanager.h"
-#include "../../globals.h"
-#include "../../widgets/sceneviewwidget.h"
-#include "../../core/database/database.h"
+
+#include "irisgl/src/core/irisutils.h"
+
 #include <QFileDialog>
+#include <QListView>
 #include <QStandardPaths>
+#include <QStyledItemDelegate>
+
+#include "core/database/database.h"
+#include "core/settingsmanager.h"
+#include "widgets/sceneviewwidget.h"
+
+#include "constants.h"
+#include "globals.h"
+#include "uimanager.h"
 
 WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
     QWidget(nullptr),
@@ -30,13 +38,50 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 
 	ui->author->setText(db->getAuthorName());
 
-    connect(ui->browseProject, SIGNAL(pressed()), SLOT(changeDefaultDirectory()));
-    connect(ui->outlineWidth, SIGNAL(valueChanged(double)), SLOT(outlineWidthChanged(double)));
-    connect(ui->outlineColor, SIGNAL(onColorChanged(QColor)), SLOT(outlineColorChanged(QColor)));
-    connect(ui->projectDefault, SIGNAL(textChanged(QString)), SLOT(projectDirectoryChanged(QString)));
-    connect(ui->showFPS, SIGNAL(toggled(bool)), SLOT(showFpsChanged(bool)));
-	connect(ui->autoSave, SIGNAL(toggled(bool)), SLOT(enableAutoSave(bool)));
-	connect(ui->openInPlayer, SIGNAL(toggled(bool)), SLOT(enableOpenInPlayer(bool)));
+	ui->cc->setItemDelegate(new QStyledItemDelegate(ui->cc));
+
+	auto lv = new QListView();
+	ui->cc->setView(lv);
+
+    connect(ui->browseProject,  SIGNAL(pressed()),              SLOT(changeDefaultDirectory()));
+    connect(ui->projectDefault, SIGNAL(textChanged(QString)),   SLOT(projectDirectoryChanged(QString)));
+    connect(ui->browseEditor,   SIGNAL(pressed()),              SLOT(changeEditorPath()));
+    connect(ui->editorPath,     SIGNAL(textChanged(QString)),   SLOT(editorPathChanged(QString)));
+    connect(ui->outlineWidth,   SIGNAL(valueChanged(double)),   SLOT(outlineWidthChanged(double)));
+    connect(ui->outlineColor,   SIGNAL(onColorChanged(QColor)), SLOT(outlineColorChanged(QColor)));
+    connect(ui->showFPS,        SIGNAL(toggled(bool)),          SLOT(showFpsChanged(bool)));
+	connect(ui->autoSave,       SIGNAL(toggled(bool)),          SLOT(enableAutoSave(bool)));
+	connect(ui->openInPlayer,   SIGNAL(toggled(bool)),          SLOT(enableOpenInPlayer(bool)));
+
+	QButtonGroup *buttonGroup = new QButtonGroup;
+
+	buttonGroup->addButton(ui->viewport_2);
+	buttonGroup->addButton(ui->editor_2);
+	buttonGroup->addButton(ui->content_2);
+	buttonGroup->addButton(ui->mining_2);
+	buttonGroup->addButton(ui->help);
+	buttonGroup->addButton(ui->donate);
+	buttonGroup->addButton(ui->about);
+
+    //QPixmap p = IrisUtils::getAbsoluteAssetPath("app/images/mascot.png");
+
+    //ui->logo->setPixmap(p.scaled(128, 128, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    //ui->logo->setAlignment(Qt::AlignCenter | Qt::AlignBottom);
+
+	connect(buttonGroup,
+		static_cast<void(QButtonGroup::*)(QAbstractButton *, bool)>(&QButtonGroup::buttonToggled),
+		[](QAbstractButton *button, bool checked)
+	{
+		QString style = checked ? "background: #3498db" : "background: #1E1E1E";
+		button->setStyleSheet(style);
+	});
+
+	connect(ui->viewport_2, &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(0); });
+	connect(ui->editor_2,   &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(1); });
+	connect(ui->content_2,  &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(2); });
+	connect(ui->mining_2,   &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(3); });
+	connect(ui->help,       &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(4); });
+	connect(ui->about,      &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(5); });
 
     setupDirectoryDefaults();
     setupOutline();
@@ -99,6 +144,20 @@ void WorldSettings::projectDirectoryChanged(QString path)
 {
     settings->setValue("default_directory", path);
     defaultProjectDirectory = path;
+}
+
+void WorldSettings::changeEditorPath()
+{
+    QFileDialog editorBrowser;
+    defaultEditorPath = editorBrowser.getExistingDirectory(Q_NULLPTR, "Select Editor", defaultProjectDirectory);
+    if (!defaultEditorPath.isNull())
+        ui->editorPath->setText(defaultEditorPath);
+}
+
+void WorldSettings::editorPathChanged(QString path)
+{
+    settings->setValue("editor_path", path);
+    defaultEditorPath = path;
 }
 
 void WorldSettings::saveSettings()

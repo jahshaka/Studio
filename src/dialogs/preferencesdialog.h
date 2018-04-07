@@ -46,6 +46,19 @@ public:
     WorldSettings* worldSettings;
 	Database *db;
 
+protected:
+    void mousePressEvent(QMouseEvent *evt) {
+        oldPos = evt->globalPos();
+    }
+
+    void mouseMoveEvent(QMouseEvent *evt) {
+        const QPoint delta = evt->globalPos() - oldPos;
+        move(x() + delta.x(), y() + delta.y());
+        oldPos = evt->globalPos();
+    }
+
+    QPoint oldPos;
+
 private:
     void setupPages();
 

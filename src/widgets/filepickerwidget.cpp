@@ -35,7 +35,7 @@ FilePickerWidget::~FilePickerWidget()
 
 void FilePickerWidget::filePicker()
 {
-    auto picker = new AssetPickerWidget(AssetType::Object);
+    auto picker = new AssetPickerWidget(ModelTypes::Object);
     connect(picker, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(pickFile(QListWidgetItem*)));
 //    auto file = openFile();
 

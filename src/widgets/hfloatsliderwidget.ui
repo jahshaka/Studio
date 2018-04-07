@@ -55,6 +55,12 @@ QSlider::handle:horizontal:pressed {
     border-radius: 7px;
 }
 
+QDoubleSpinBox {
+	border-radius: 1px;
+	padding: 7px;
+	background: #292929;
+}
+
 QSlider::handle:horizontal:disabled {
     background-color: #bbbbbb;
     width: 12px;
@@ -64,6 +70,9 @@ QSlider::handle:horizontal:disabled {
 }</string>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
+   <property name="spacing">
+    <number>0</number>
+   </property>
    <property name="leftMargin">
     <number>0</number>
    </property>
@@ -80,7 +89,7 @@ QSlider::handle:horizontal:disabled {
     <widget class="QLabel" name="label">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-       <horstretch>2</horstretch>
+       <horstretch>1</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
@@ -99,7 +108,7 @@ QSlider::handle:horizontal:disabled {
     <widget class="QWidget" name="floater" native="true">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-       <horstretch>3</horstretch>
+       <horstretch>1</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
