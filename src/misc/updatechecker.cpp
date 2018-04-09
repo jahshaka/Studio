@@ -21,7 +21,8 @@ void UpdateChecker::checkForUpdate()
 
 	//manager = new QNetworkAccessManager();
 
-	auto reply = manager.get(QNetworkRequest(QUrl(Constants::UPDATE_CHECK_URL)));
+	qDebug() << Constants::UPDATE_CHECK_URL + Constants::CONTENT_VERSION;
+	auto reply = manager.get(QNetworkRequest(QUrl(Constants::UPDATE_CHECK_URL + Constants::CONTENT_VERSION)));
 	if (reply) {
 		connect(reply, &QNetworkReply::finished, [this, reply]() {
 			QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
