@@ -52,6 +52,8 @@ public:
     void initializeGL();
     void resizeGL(int width, int height);
 
+    void updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject definition);
+
     void renderObject();
     void resetViewerCamera();
 	void resetViewerCameraAfter();

@@ -38,6 +38,40 @@
 #include "io/scenewriter.h"
 #include "widgets/sceneviewwidget.h"
 
+void AssetWidget::updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject definition)
+{
+    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+        auto n = node.staticCast<iris::MeshNode>();
+        //n->meshPath = meshGuid;
+        auto mat_defs = definition.value("material").toObject();
+        auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+        for (auto prop : mat->properties) {
+            if (prop->type == iris::PropertyType::Texture) {
+                if (!mat_defs.value(prop->name).toString().isEmpty()) {
+                    mat->setValue(prop->name, mat_defs.value(prop->name).toString());
+                }
+            }
+            else if (prop->type == iris::PropertyType::Color) {
+                mat->setValue(
+                    prop->name,
+                    QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
+                );
+            }
+            else {
+                mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
+            }
+        }
+    }
+
+    QJsonArray children = definition["children"].toArray();
+    // These will always be in sync since the definition is derived from the mesh
+    if (node->hasChildren()) {
+        for (int i = 0; i < node->children.count(); i++) {
+            updateNodeMaterialValues(node->children[i], children[i].toObject());
+        }
+    }
+}
+
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
 	ui->setupUi(this);
@@ -222,41 +256,6 @@ void AssetWidget::trigger()
 
 				return mat;
 			});
-
-			std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
-				[&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
-			{
-				if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-					auto n = node.staticCast<iris::MeshNode>();
-					//n->meshPath = meshGuid;
-					auto mat_defs = definition.value("material").toObject();
-					auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-					for (auto prop : mat->properties) {
-						if (prop->type == iris::PropertyType::Texture) {
-							if (!mat_defs.value(prop->name).toString().isEmpty()) {
-								mat->setValue(prop->name, mat_defs.value(prop->name).toString());
-							}
-						}
-						else if (prop->type == iris::PropertyType::Color) {
-							mat->setValue(
-								prop->name,
-								QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
-							);
-						}
-						else {
-							mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
-						}
-					}
-				}
-
-				QJsonArray children = definition["children"].toArray();
-				// These will always be in sync since the definition is derived from the mesh
-				if (node->hasChildren()) {
-					for (int i = 0; i < node->children.count(); i++) {
-						updateNodeMaterialValues(node->children[i], children[i].toObject());
-					}
-				}
-			};
 
 			updateNodeMaterialValues(node, materialObj.object());
 
@@ -1484,40 +1483,40 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             }
 
             if (jafType == ModelTypes::Object) {
-                std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
-                    [&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
-                {
-                    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-                        auto n = node.staticCast<iris::MeshNode>();
-                        //n->meshPath = meshGuid;
-                        auto mat_defs = definition.value("material").toObject();
-                        auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-                        for (auto prop : mat->properties) {
-                            if (prop->type == iris::PropertyType::Texture) {
-                                if (!mat_defs.value(prop->name).toString().isEmpty()) {
-                                    mat->setValue(prop->name, mat_defs.value(prop->name).toString());
-                                }
-                            }
-                            else if (prop->type == iris::PropertyType::Color) {
-                                mat->setValue(
-                                    prop->name,
-                                    QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
-                                );
-                            }
-                            else {
-                                mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
-                            }
-                        }
-                    }
+//                std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
+//                    [&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
+//                {
+//                    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+//                        auto n = node.staticCast<iris::MeshNode>();
+//                        //n->meshPath = meshGuid;
+//                        auto mat_defs = definition.value("material").toObject();
+//                        auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+//                        for (auto prop : mat->properties) {
+//                            if (prop->type == iris::PropertyType::Texture) {
+//                                if (!mat_defs.value(prop->name).toString().isEmpty()) {
+//                                    mat->setValue(prop->name, mat_defs.value(prop->name).toString());
+//                                }
+//                            }
+//                            else if (prop->type == iris::PropertyType::Color) {
+//                                mat->setValue(
+//                                    prop->name,
+//                                    QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
+//                                );
+//                            }
+//                            else {
+//                                mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
+//                            }
+//                        }
+//                    }
 
-                    QJsonArray children = definition["children"].toArray();
-                    // These will always be in sync since the definition is derived from the mesh
-                    if (node->hasChildren()) {
-                        for (int i = 0; i < node->children.count(); i++) {
-                            updateNodeMaterialValues(node->children[i], children[i].toObject());
-                        }
-                    }
-                };
+//                    QJsonArray children = definition["children"].toArray();
+//                    // These will always be in sync since the definition is derived from the mesh
+//                    if (node->hasChildren()) {
+//                        for (int i = 0; i < node->children.count(); i++) {
+//                            updateNodeMaterialValues(node->children[i], children[i].toObject());
+//                        }
+//                    }
+//                };
 
                 for (auto &asset : AssetManager::getAssets()) {
                     if (asset->assetGuid == placeHolderGuid) {
@@ -1812,40 +1811,40 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					auto scene = extractTexturesAndMaterialFromMesh(asset->path, texturesToCopy, jsonSceneNode);
 					this->sceneView->doneCurrent();
 
-					std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
-						[&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
-					{
-						if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-							auto n = node.staticCast<iris::MeshNode>();
-							//n->meshPath = meshGuid;
-							auto mat_defs = definition.value("material").toObject();
-							auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-							for (auto prop : mat->properties) {
-								if (prop->type == iris::PropertyType::Texture) {
-									if (!mat_defs.value(prop->name).toString().isEmpty()) {
-										mat->setValue(prop->name, mat_defs.value(prop->name).toString());
-									}
-								}
-								else if (prop->type == iris::PropertyType::Color) {
-									mat->setValue(
-										prop->name,
-										QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
-									);
-								}
-								else {
-									mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
-								}
-							}
-						}
+//					std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
+//						[&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
+//					{
+//						if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+//							auto n = node.staticCast<iris::MeshNode>();
+//							//n->meshPath = meshGuid;
+//							auto mat_defs = definition.value("material").toObject();
+//							auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+//							for (auto prop : mat->properties) {
+//								if (prop->type == iris::PropertyType::Texture) {
+//									if (!mat_defs.value(prop->name).toString().isEmpty()) {
+//										mat->setValue(prop->name, mat_defs.value(prop->name).toString());
+//									}
+//								}
+//								else if (prop->type == iris::PropertyType::Color) {
+//									mat->setValue(
+//										prop->name,
+//										QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
+//									);
+//								}
+//								else {
+//									mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
+//								}
+//							}
+//						}
 
-						QJsonArray children = definition["children"].toArray();
-						// These will always be in sync since the definition is derived from the mesh
-						if (node->hasChildren()) {
-							for (int i = 0; i < node->children.count(); i++) {
-								updateNodeMaterialValues(node->children[i], children[i].toObject());
-							}
-						}
-					};
+//						QJsonArray children = definition["children"].toArray();
+//						// These will always be in sync since the definition is derived from the mesh
+//						if (node->hasChildren()) {
+//							for (int i = 0; i < node->children.count(); i++) {
+//								updateNodeMaterialValues(node->children[i], children[i].toObject());
+//							}
+//						}
+//					};
 
 					//updateNodeMaterialValues(scene, jsonSceneNode);
 

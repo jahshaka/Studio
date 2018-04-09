@@ -16,6 +16,40 @@
 #include <QFileDialog>
 #include <QStandardPaths>
 
+void AssetViewer::updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject definition)
+{
+    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+        auto n = node.staticCast<iris::MeshNode>();
+        //n->meshPath = meshGuid;
+        auto mat_defs = definition.value("material").toObject();
+        auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+        for (auto prop : mat->properties) {
+            if (prop->type == iris::PropertyType::Texture) {
+                if (!mat_defs.value(prop->name).toString().isEmpty()) {
+                    mat->setValue(prop->name, mat_defs.value(prop->name).toString());
+                }
+            }
+            else if (prop->type == iris::PropertyType::Color) {
+                mat->setValue(
+                    prop->name,
+                    QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
+                );
+            }
+            else {
+                mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
+            }
+        }
+    }
+
+    QJsonArray children = definition["children"].toArray();
+    // These will always be in sync since the definition is derived from the mesh
+    if (node->hasChildren()) {
+        for (int i = 0; i < node->children.count(); i++) {
+            updateNodeMaterialValues(node->children[i], children[i].toObject());
+        }
+    }
+}
+
 AssetViewer::AssetViewer(QWidget *parent) : QOpenGLWidget(parent)
 {
     QSurfaceFormat format = QSurfaceFormat::defaultFormat();
@@ -423,41 +457,6 @@ void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firs
     // model file may be invalid so null gets returned
     if (!node) return;
 
-    std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
-        [&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
-    {
-        if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            auto n = node.staticCast<iris::MeshNode>();
-            //n->meshPath = meshGuid;
-            auto mat_defs = definition.value("material").toObject();
-            auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-            for (auto prop : mat->properties) {
-                if (prop->type == iris::PropertyType::Texture) {
-                    if (!mat_defs.value(prop->name).toString().isEmpty()) {
-                        mat->setValue(prop->name, mat_defs.value(prop->name).toString());
-                    }
-                }
-                else if (prop->type == iris::PropertyType::Color) {
-                    mat->setValue(
-                        prop->name,
-                        QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
-                    );
-                }
-                else {
-                    mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
-                }
-            }
-        }
-
-        QJsonArray children = definition["children"].toArray();
-        // These will always be in sync since the definition is derived from the mesh
-        if (node->hasChildren()) {
-            for (int i = 0; i < node->children.count(); i++) {
-                updateNodeMaterialValues(node->children[i], children[i].toObject());
-            }
-        }
-    };
-
     auto material = db->getAssetMaterialGlobal(guid);
     auto materialObj = QJsonDocument::fromBinaryData(material);
     updateNodeMaterialValues(node, materialObj.object());
@@ -519,12 +518,12 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 	QJsonArray materialList;
 
 	int iter = 0;
-	std::function<void(QJsonObject, QJsonArray&)> extractMeshMaterial = [&](QJsonObject node, QJsonArray &materialList) -> void {
+    std::function<void(QJsonObject, QJsonArray&)> extractMeshMaterial = [&](QJsonObject node, QJsonArray &materialList) -> void {
 		if (!node["material"].toObject().isEmpty()) materialList.append(node["material"].toObject());
 
 		QJsonArray children = node["children"].toArray();
 		if (!children.isEmpty()) {
-			for (auto &child : children) {
+            for (auto child : children) {
 				extractMeshMaterial(child.toObject(), materialList);
 				iter++;
 			}

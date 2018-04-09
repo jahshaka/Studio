@@ -67,9 +67,10 @@ public:
     void createWidgets(const QJsonArray&);
 };
 
-Q_DECLARE_METATYPE(CustomMaterial)
-Q_DECLARE_METATYPE(CustomMaterialPtr)
+
 
 }
+Q_DECLARE_METATYPE(iris::CustomMaterial)
+Q_DECLARE_METATYPE(iris::CustomMaterialPtr)
 
 #endif // CUSTOMMATERIAL_H
