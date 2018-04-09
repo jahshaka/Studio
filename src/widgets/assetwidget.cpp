@@ -34,43 +34,10 @@
 #include "core/settingsmanager.h"
 #include "core/thumbnailmanager.h"
 #include "editor/thumbnailgenerator.h"
+#include "io/assethelper.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 #include "widgets/sceneviewwidget.h"
-
-void AssetWidget::updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject definition)
-{
-    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-        auto n = node.staticCast<iris::MeshNode>();
-        //n->meshPath = meshGuid;
-        auto mat_defs = definition.value("material").toObject();
-        auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-        for (auto prop : mat->properties) {
-            if (prop->type == iris::PropertyType::Texture) {
-                if (!mat_defs.value(prop->name).toString().isEmpty()) {
-                    mat->setValue(prop->name, mat_defs.value(prop->name).toString());
-                }
-            }
-            else if (prop->type == iris::PropertyType::Color) {
-                mat->setValue(
-                    prop->name,
-                    QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
-                );
-            }
-            else {
-                mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
-            }
-        }
-    }
-
-    QJsonArray children = definition["children"].toArray();
-    // These will always be in sync since the definition is derived from the mesh
-    if (node->hasChildren()) {
-        for (int i = 0; i < node->children.count(); i++) {
-            updateNodeMaterialValues(node->children[i], children[i].toObject());
-        }
-    }
-}
 
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
@@ -247,42 +214,35 @@ void AssetWidget::trigger()
 				else
 					mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
-				mat->setValue("diffuseColor", data.diffuseColor);
-				mat->setValue("specularColor", data.specularColor);
-				mat->setValue("ambientColor", QColor(110, 110, 110));	// assume this color, some formats set this to pitch black
-				mat->setValue("emissionColor", data.emissionColor);
-				mat->setValue("shininess", data.shininess);
-				mat->setValue("useAlpha", true);
-
 				return mat;
 			});
 
-			updateNodeMaterialValues(node, materialObj.object());
+			AssetHelper::updateNodeMaterial(node, materialObj.object());
 
-			QString meshGuid = db->fetchObjectMesh(asset->assetGuid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
+			//QString meshGuid = db->fetchObjectMesh(asset->assetGuid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
 
-			std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
-				if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-					auto n = node.staticCast<iris::MeshNode>();
-					n->meshPath = meshGuid;
-					auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-					for (auto prop : mat->properties) {
-						if (prop->type == iris::PropertyType::Texture) {
-							if (!prop->getValue().toString().isEmpty()) {
-								mat->setValue(prop->name,
-									IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
-										db->fetchAsset(prop->getValue().toString()).name));
-							}
-						}
-					}
-				}
+			//std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
+			//	if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+			//		auto n = node.staticCast<iris::MeshNode>();
+			//		n->meshPath = meshGuid;
+			//		auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+			//		for (auto prop : mat->properties) {
+			//			if (prop->type == iris::PropertyType::Texture) {
+			//				if (!prop->getValue().toString().isEmpty()) {
+			//					mat->setValue(prop->name,
+			//						IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
+			//							db->fetchAsset(prop->getValue().toString()).name));
+			//				}
+			//			}
+			//		}
+			//	}
 
-				if (node->hasChildren()) {
-					for (auto &child : node->children) {
-						updateNodeValues(child);
-					}
-				}
-			};
+			//	if (node->hasChildren()) {
+			//		for (auto &child : node->children) {
+			//			updateNodeValues(child);
+			//		}
+			//	}
+			//};
 
 			//updateNodeValues(node);
 
@@ -1413,22 +1373,6 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                         else
                             mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
-                        mat->setValue("diffuseColor", data.diffuseColor);
-                        mat->setValue("specularColor", data.specularColor);
-                        mat->setValue("ambientColor", QColor(110, 110, 110));	// assume this color, some formats set this to pitch black
-                        mat->setValue("emissionColor", data.emissionColor);
-                        mat->setValue("shininess", data.shininess);
-                        mat->setValue("useAlpha", true);
-
-                        if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
-                            mat->setValue("diffuseTexture", data.diffuseTexture);
-
-                        if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
-                            mat->setValue("specularTexture", data.specularTexture);
-
-                        if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
-                            mat->setValue("normalTexture", data.normalTexture);
-
                         return mat;
                     }, ssource);
 
@@ -1483,48 +1427,13 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             }
 
             if (jafType == ModelTypes::Object) {
-//                std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
-//                    [&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
-//                {
-//                    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-//                        auto n = node.staticCast<iris::MeshNode>();
-//                        //n->meshPath = meshGuid;
-//                        auto mat_defs = definition.value("material").toObject();
-//                        auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-//                        for (auto prop : mat->properties) {
-//                            if (prop->type == iris::PropertyType::Texture) {
-//                                if (!mat_defs.value(prop->name).toString().isEmpty()) {
-//                                    mat->setValue(prop->name, mat_defs.value(prop->name).toString());
-//                                }
-//                            }
-//                            else if (prop->type == iris::PropertyType::Color) {
-//                                mat->setValue(
-//                                    prop->name,
-//                                    QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
-//                                );
-//                            }
-//                            else {
-//                                mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
-//                            }
-//                        }
-//                    }
-
-//                    QJsonArray children = definition["children"].toArray();
-//                    // These will always be in sync since the definition is derived from the mesh
-//                    if (node->hasChildren()) {
-//                        for (int i = 0; i < node->children.count(); i++) {
-//                            updateNodeMaterialValues(node->children[i], children[i].toObject());
-//                        }
-//                    }
-//                };
-
                 for (auto &asset : AssetManager::getAssets()) {
                     if (asset->assetGuid == placeHolderGuid) {
                         asset->assetGuid = guidReturned;
                         auto node = asset->value.value<iris::SceneNodePtr>();
                         auto material = db->getAssetMaterialGlobal(guidReturned);
                         auto materialObj = QJsonDocument::fromBinaryData(material);
-                        updateNodeMaterialValues(node, materialObj.object());
+                        AssetHelper::updateNodeMaterial(node, materialObj.object());
                     }
                 }
             }

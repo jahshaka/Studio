@@ -54,10 +54,10 @@ set(SRCS
     src/widgets/transformeditor.cpp 
     src/widgets/scenehierarchywidget.cpp 
     src/editor/cameracontrollerbase.cpp 
-		src/editor/gizmo.cpp 
-		src/editor/translationgizmo.cpp 
-		src/editor/scalegizmo.cpp 
-		src/editor/rotationgizmo.cpp 
+    src/editor/gizmo.cpp 
+    src/editor/translationgizmo.cpp 
+    src/editor/scalegizmo.cpp 
+    src/editor/rotationgizmo.cpp 
     src/widgets/skypresets.cpp 
     src/editor/orbitalcameracontroller.cpp 
     src/widgets/scenenodepropertieswidget.cpp 
@@ -126,6 +126,7 @@ set(SRCS
     src/constants.cpp
 	src/misc/updatechecker.cpp
 	src/dialogs/softwareupdatedialog.cpp
+    src/io/assethelper.cpp
 )
 
 set(HEADERS
@@ -246,6 +247,8 @@ set(HEADERS
 	src/editor/animationpath.h
 	src/misc/updatechecker.h
 	src/dialogs/softwareupdatedialog.h
+    src/editor/animationpath.h
+    src/io/assethelper.h
 )
 
 # Todo - trim these down to nothing eventually
