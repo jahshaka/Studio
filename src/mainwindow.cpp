@@ -486,20 +486,43 @@ void MainWindow::stopAnimWidget()
 
 void MainWindow::setupProjectDB()
 {
-    auto path = QDir(QStandardPaths::writableLocation(QStandardPaths::DataLocation))
-                .filePath(Constants::JAH_DATABASE);
+    auto path = QDir(QStandardPaths::writableLocation(QStandardPaths::DataLocation)).filePath(Constants::JAH_DATABASE);
+    auto versionTest = new Database();
+    versionTest->initializeDatabase(path);
 
+    // temp, TODO
+    if (auto version = (versionTest->getVersion() != Constants::CONTENT_VERSION) && !versionTest->getVersion().isEmpty()) {
+        QMessageBox::StandardButton option;
+        option = QMessageBox::question(Q_NULLPTR,
+            "Outdated App Version!",
+            "The version of the application you are using " + QString(version) + " has been deprecated!\n\n"
+            "Jahshaka is currently in an alpha stage and as such, some versions might constitute breaking changes.\n\n"
+            "To proceed, confirm resetting your current database and creating a new one.\n\n"
+            "If you choose not to at the moment, you can continue using the current version but will be unable to import future dated assets and worlds.",
+            QMessageBox::Yes | QMessageBox::No);
+        versionTest->closeDb();
+        if (option == QMessageBox::Yes) {
+#ifdef Q_OS_WIN
+            if (!QFile::remove(path)) {
+                DeleteFile(path.toStdString().c_str());
+            }
+#endif // Q_OS_WIN
+            QMessageBox::StandardButton option;
+            option = QMessageBox::information(Q_NULLPTR,
+                "Database Wiped",
+                "Your database has been recreated successfully! Enjoy a new and updated version of Jahshaka!\n\n",
+                QMessageBox::Ok);
+        }
+    }
+  
     db = new Database();
     db->initializeDatabase(path);
     db->createGlobalDb();
-	db->createGlobalDbAuthor();
-	db->createGlobalDbAssets();
-	db->createGlobalDependencies();
-	//db->createGlobalDbProjectAssets();
+    db->createGlobalDbAuthor();
+    db->createGlobalDbAssets();
+    db->createGlobalDependencies();
     db->createGlobalDbCollections();
-    //db->createGlobalDbThumbs();
-	db->createGlobalDbFolders();
-	//db->createGlobalDbMaterials();
+    db->createGlobalDbFolders();
 }
 
 void MainWindow::setupUndoRedo()

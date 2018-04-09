@@ -31,6 +31,8 @@ public:
 
     bool checkIfTableExists(const QString &tableName);
 
+    QString getVersion();
+
 	void createGlobalDependencies();
 	void insertGlobalDependency(const int ertype, const int eetype, const QString &depender, const QString &dependee, const QString &project_id = QString());
 	void updateGlobalDependencyDepender(const int &type, const QString &depender, const QString &dependee);

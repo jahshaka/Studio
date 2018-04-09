@@ -15,16 +15,12 @@
 Database::Database()
 {
     if (!QSqlDatabase::isDriverAvailable(Constants::DB_DRIVER)) irisLog("DB driver not present!");
-
     db = QSqlDatabase::addDatabase(Constants::DB_DRIVER);
 }
 
 Database::~Database()
 {
-    auto connection = db.connectionName();
-    db.close();
-    db = QSqlDatabase();
-    db.removeDatabase(connection);
+    closeDb();
 }
 
 bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
@@ -47,10 +43,8 @@ void Database::initializeDatabase(QString name)
 
 void Database::closeDb()
 {
-    auto connection = db.connectionName();
     db.close();
-    db = QSqlDatabase();
-    db.removeDatabase(connection);
+    QSqlDatabase::removeDatabase(db.connectionName());
 }
 
 bool Database::checkIfTableExists(const QString &tableName)
@@ -69,6 +63,21 @@ bool Database::checkIfTableExists(const QString &tableName)
     }
 
     return false;
+}
+
+QString Database::getVersion()
+{
+    QSqlQuery query;
+    query.prepare("SELECT version FROM assets LIMIT 1");
+
+    if (query.exec()) {
+        if (query.first()) {
+            return query.value(0).toString();
+        }
+    }
+    else {
+        irisLog("There was an error getting the material blob! " + query.lastError().text());
+    }
 }
 
 void Database::createGlobalDependencies()
