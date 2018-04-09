@@ -63,6 +63,10 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 	buttonGroup->addButton(ui->donate);
 	buttonGroup->addButton(ui->about);
 
+	// hide these for now
+	ui->mining_2->hide();
+	ui->donate->hide();
+
     //QPixmap p = IrisUtils::getAbsoluteAssetPath("app/images/mascot.png");
 
     //ui->logo->setPixmap(p.scaled(128, 128, Qt::KeepAspectRatio, Qt::SmoothTransformation));
@@ -93,6 +97,9 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 	ui->autoSave->setChecked(autoSave);
 
 	openInPlayer = settings->getValue("open_in_player", false).toBool();
+
+	autoUpdate = settings->getValue("automatic_updates", true).toBool();
+	ui->checkUpdates->setChecked(autoUpdate);
 }
 
 void WorldSettings::setupOutline()
@@ -138,6 +145,11 @@ void WorldSettings::enableAutoSave(bool state)
 void WorldSettings::enableOpenInPlayer(bool state)
 {
 	settings->setValue("open_in_player", openInPlayer = state);
+}
+
+void WorldSettings::enableAutoUpdate(bool state)
+{
+	settings->setValue("open_in_player", autoUpdate = state);
 }
 
 void WorldSettings::projectDirectoryChanged(QString path)

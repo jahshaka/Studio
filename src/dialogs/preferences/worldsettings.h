@@ -36,6 +36,7 @@ public:
     bool showFps;
 	bool autoSave;
 	bool openInPlayer;
+	bool autoUpdate;
 
 	Database *db;
 
@@ -52,6 +53,7 @@ private slots:
     void projectDirectoryChanged(QString path);
     void changeEditorPath();
     void editorPathChanged(QString path);
+	void enableAutoUpdate(bool state);
 
 public slots:
 	void saveSettings();

@@ -152,7 +152,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	createPostProcessDockWidget();
 
     settings = SettingsManager::getDefaultManager();
-    prefsDialog = new PreferencesDialog(db, settings);
+    prefsDialog = new PreferencesDialog(nullptr, db, settings);
     aboutDialog = new AboutDialog();
 
     camControl = nullptr;

@@ -16,14 +16,14 @@ For more information see the LICENSE file
 #include "../core/database/database.h"
 #include "aboutdialog.h"
 
-PreferencesDialog::PreferencesDialog(Database *handle, SettingsManager* settings) :
-    QDialog(nullptr),
+PreferencesDialog::PreferencesDialog(QWidget* parent, Database *handle, SettingsManager* settings) :
+    QDialog(parent),
     ui(new Ui::PreferencesDialog)
 {
     ui->setupUi(this);
 
 	this->setWindowFlags(Qt::FramelessWindowHint);
-	setWindowModality(Qt::WindowModal);
+	setWindowModality(Qt::ApplicationModal);
 
 	db = handle;
     this->settings = settings;
