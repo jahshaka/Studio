@@ -40,7 +40,7 @@ protected:
     }
 
 public:
-    explicit PreferencesDialog(Database *db, SettingsManager* settings);
+    explicit PreferencesDialog(QWidget* parent, Database *db, SettingsManager* settings);
     ~PreferencesDialog();
 
     WorldSettings* worldSettings;

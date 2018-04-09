@@ -36,6 +36,8 @@ namespace Contants
 	QString MATERIAL_EXT		= "material";
 	QString ASSET_EXT			= "jaf";
 
+	QString UPDATE_CHECK_URL	= "http://api.dev.jahfx.com/applications/5d7c5a71-f8ec-4c73-a2dc-de7b99ed824f/update/";
+
     int FPS_90                  = 11; // milliseconds
     int FPS_60                  = 17; // milliseconds
 

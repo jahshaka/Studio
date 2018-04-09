@@ -15,12 +15,15 @@ For more information see the LICENSE file
 #include <QSplashScreen>
 #include <QSurfaceFormat>
 #include <QFontDatabase>
+#include <QtConcurrent>
 
 #include "mainwindow.h"
 #include "dialogs/infodialog.h"
 #include "core/settingsmanager.h"
 #include "globals.h"
 #include "constants.h"
+#include "misc\updatechecker.h"
+#include "dialogs/softwareupdatedialog.h"
 #ifdef USE_BREAKPAD
 #include "breakpad/breakpad.h"
 #endif
@@ -57,6 +60,12 @@ int main(int argc, char *argv[])
 #ifdef USE_BREAKPAD
 	initializeBreakpad();
 #endif
+	
+	/*
+	QtConcurrent::run([&updateChecker]() {
+		updateChecker.checkForUpdate();
+	});
+	*/
 
     app.setWindowIcon(QIcon(":/images/icon.ico"));
     app.setApplicationName("Jahshaka");
@@ -104,6 +113,19 @@ int main(int argc, char *argv[])
     window.goToDesktop();
 
     splash.finish(&window);
+
+	UpdateChecker updateChecker;
+	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded, [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)
+	{
+		// show update dialog
+		auto dialog = new SoftwareUpdateDialog();
+		dialog->setVersionNotes(versionNotes);
+		dialog->setDownloadUrl(downloadLink);
+		dialog->show();
+	});
+
+	if(SettingsManager::getDefaultManager()->getValue("automatic_updates", true).toBool())
+		updateChecker.checkForUpdate();
 
     return app.exec();
 }

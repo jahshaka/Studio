@@ -201,7 +201,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
     viewer->setDatabase(db);
 
     settings = SettingsManager::getDefaultManager();
-	prefsDialog = new PreferencesDialog(db, settings);
+	//prefsDialog = new PreferencesDialog(this, db, settings);
 
 	sourceGroup = new QButtonGroup;
 	localAssetsButton = new QPushButton(tr(" Local Assets"));
