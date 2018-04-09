@@ -200,6 +200,8 @@ public:
 
 	bool hideDependencies;
 
+    void updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject definition);
+
     void populateAssetTree(bool initialRun);
     void updateTree(QTreeWidgetItem* parentTreeItem, QString path);
     void generateAssetThumbnails();

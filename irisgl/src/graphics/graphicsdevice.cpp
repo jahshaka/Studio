@@ -484,13 +484,13 @@ void GraphicsDevice::drawPrimitives(GLenum primitiveType, int start, int count)
     gl->glBindVertexArray(defautVAO);
     for(auto buffer : vertexBuffers) {
         gl->glBindBuffer(GL_ARRAY_BUFFER, buffer->bufferId);
-        buffer->vertexLayout.bind();
+        buffer->vertexLayout.bind(gl);
     }
 
     gl->glDrawArrays(primitiveType, start, count);
 
     for(auto buffer : vertexBuffers) {
-        buffer->vertexLayout.unbind();
+        buffer->vertexLayout.unbind(gl);
     }
     gl->glBindVertexArray(0);
 }
@@ -502,7 +502,7 @@ void GraphicsDevice::drawIndexedPrimitives(GLenum primitiveType, int start, int 
     gl->glBindVertexArray(defautVAO);
     for(auto buffer : vertexBuffers) {
         gl->glBindBuffer(GL_ARRAY_BUFFER, buffer->bufferId);
-        buffer->vertexLayout.bind();
+        buffer->vertexLayout.bind(gl);
     }
 
     gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer->bufferId);
@@ -510,7 +510,7 @@ void GraphicsDevice::drawIndexedPrimitives(GLenum primitiveType, int start, int 
     gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
 
     for(auto buffer : vertexBuffers) {
-        buffer->vertexLayout.unbind();
+        buffer->vertexLayout.unbind(gl);
     }
     gl->glBindVertexArray(0);
 }

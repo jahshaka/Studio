@@ -1195,7 +1195,7 @@ void MainWindow::duplicateNode()
 void MainWindow::createMaterial(const QString &guid)
 {
 	if (!!activeSceneNode) {
-		QJsonObject materialDef;
+        QJsonObject materialDef;
 		SceneWriter::writeSceneNodeMaterial(
 			materialDef,
 			activeSceneNode.staticCast<iris::MeshNode>()->getMaterial().staticCast<iris::CustomMaterial>()
@@ -1203,16 +1203,19 @@ void MainWindow::createMaterial(const QString &guid)
 
 		QByteArray binaryMat = QJsonDocument(materialDef).toBinaryData();
 
-		for (auto &value : materialDef) {
+        QString jsonMaterialString = QJsonDocument(materialDef).toJson();
+
+        for (const auto &value : materialDef) {
 			if (value.isString() &&
                 !db->fetchAsset(value.toString()).name.isEmpty() &&
                 value.toString() != materialDef["guid"].toString())
             {
-				value = "../Textures/" + db->fetchAsset(value.toString()).name;
+                //value = "../Textures/" + db->fetchAsset(value.toString()).name;
+                jsonMaterialString.replace(value.toString(), QString("../Textures/" + db->fetchAsset(value.toString()).name));
 			}
 		}
 
-        QJsonDocument saveDoc(materialDef);
+        QJsonDocument saveDoc = QJsonDocument::fromJson(jsonMaterialString.toUtf8());
 
         QString fileName = IrisUtils::join(
             Globals::project->getProjectFolder(), "Materials",

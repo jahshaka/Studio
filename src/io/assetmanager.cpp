@@ -14,6 +14,6 @@ void AssetManager::addAsset(Asset *asset)
 
 void AssetManager::clearAssetList()
 {
-	qDeleteAll(assets.begin(), assets.end());
-	assets.clear();
+    assets.clear();
+    assets.squeeze();
 }

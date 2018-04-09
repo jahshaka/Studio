@@ -6,11 +6,11 @@
 #include <QPixmap>
 
 #include "irisgl/src/graphics/graphicshelper.h"
+#include "irisgl/src/irisglfwd.h"
 
 #include "core/project.h"
 
 class aiScene;
-class iris::SceneNode;
 
 struct Asset {
     ModelTypes          type;

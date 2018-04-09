@@ -571,7 +571,7 @@ void ProjectManager::loadProjectAssets()
     progressDialog->setLabelText(tr("Loading assets..."));
 
     AssetWidgetConcurrentWrapper aiSceneFromModelMapper(this);
-	auto aiSceneFromModelReducer = [](QVector<ModelData> &accum, const ModelData &interm) -> decltype(auto) {
+    auto aiSceneFromModelReducer = [](QVector<ModelData> &accum, const ModelData &interm) {
 		accum.append(interm);
 	};
     auto future = QtConcurrent::mappedReduced<QVector<ModelData>>(assetsToLoad.constBegin(),

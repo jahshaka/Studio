@@ -250,9 +250,8 @@ private:
     static long nextId;
 };
 
-Q_DECLARE_METATYPE(SceneNode)
-Q_DECLARE_METATYPE(SceneNodePtr)
-
 }
 
+Q_DECLARE_METATYPE(iris::SceneNode)
+Q_DECLARE_METATYPE(iris::SceneNodePtr)
 #endif // SCENENODE_H

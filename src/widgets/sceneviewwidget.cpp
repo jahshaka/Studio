@@ -523,8 +523,8 @@ void SceneViewWidget::initializeGL()
 
     this->elapsedTimer->start();
 
-	auto curveWidget = UiManager::animationWidget->getCurveWidget();
-	connect(curveWidget, SIGNAL(keyChanged(iris::FloatKey*)), this, SLOT(onAnimationKeyChanged(iris::FloatKey*)));
+    //auto curveWidget = UiManager::animationWidget->getCurveWidget();
+    //connect(curveWidget, SIGNAL(keyChanged(iris::FloatKey*)), this, SLOT(onAnimationKeyChanged(iris::FloatKey*)));
 
 	//initializeOpenGLDebugger();
 }
@@ -734,7 +734,7 @@ iris::SceneNodePtr SceneViewWidget::doActiveObjectPicking(const QPointF &point)
     QList<PickingResult> hitList;
     doScenePicking(scene->getRootNode(), segStart, segEnd, hitList);
 
-    if (hitList.size() == 0) return false;
+    if (hitList.size() == 0) return iris::SceneNodePtr();
     if (hitList.size() == 1) return hitList.last().hitNode;
 
     qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
