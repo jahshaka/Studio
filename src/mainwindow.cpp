@@ -491,7 +491,8 @@ void MainWindow::setupProjectDB()
     versionTest->initializeDatabase(path);
 
     // temp, TODO
-    if (auto version = (versionTest->getVersion() != Constants::CONTENT_VERSION)) {
+    auto version = versionTest->getVersion();
+    if (version != Constants::CONTENT_VERSION && !version.isEmpty()) {
         QMessageBox::StandardButton option;
         option = QMessageBox::question(Q_NULLPTR,
             "Outdated App Version!",
