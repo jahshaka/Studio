@@ -80,6 +80,8 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 		"QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; }"
 		"QTreeWidget::branch { background-color: #202020; }"
 		"QTreeWidget::branch:hover { background-color: #303030; }"
+        "QTreeView::branch:open { image: url(:/icons/icons8-expand-arrow-24.png); }"
+        "QTreeView::branch:closed:has-children { image: url(:/icons/icons8-expand-arrow-closed-24.png); }"
 		"QTreeWidget::branch:selected { background-color: #404040; }"
 		"QTreeWidget::item:selected { selection-background-color: #404040;"
 		"								background: #404040; outline: none; padding: 5px 0; }"

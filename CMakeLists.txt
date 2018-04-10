@@ -157,7 +157,6 @@ set(HEADERS
     src/editor/editorcameracontroller.h 
     src/globals.h 
     src/widgets/sceneviewwidget.h 
-    src/globals.h 
     src/widgets/materialsets.h 
     src/widgets/modelpresets.h 
     src/widgets/accordianbladewidget.h 

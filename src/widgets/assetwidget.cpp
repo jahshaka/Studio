@@ -1614,14 +1614,12 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
                     file->open(QIODevice::ReadOnly | QIODevice::Text);
                     file->close();
 
-                    {
-                        auto assetFile = new AssetFile;
-                        assetFile->assetGuid = assetGuid;
-                        assetFile->fileName = asset->fileName;
-                        assetFile->path = pathToCopyTo;
-                        assetFile->setValue(QVariant::fromValue(QVariant::fromValue(file)));
-                        AssetManager::addAsset(assetFile);
-                    }
+                    auto assetFile = new AssetFile;
+                    assetFile->assetGuid = assetGuid;
+                    assetFile->fileName = asset->fileName;
+                    assetFile->path = pathToCopyTo;
+                    assetFile->setValue(QVariant::fromValue(QVariant::fromValue(file)));
+                    AssetManager::addAsset(assetFile);
                 }
 
                 if (asset->type == ModelTypes::Texture) {
@@ -1640,14 +1638,12 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
                     shaderDefinition["name"] = QFileInfo(asset->fileName).baseName();
                     shaderDefinition.insert("guid", asset->assetGuid);
 
-                    {
-                        auto assetShader = new AssetShader;
-                        assetShader->assetGuid = assetGuid;
-                        assetShader->fileName = QFileInfo(asset->fileName).baseName();
-                        assetShader->path = pathToCopyTo;
-                        assetShader->setValue(QVariant::fromValue(shaderDefinition));
-                        AssetManager::addAsset(assetShader);
-                    }
+                    auto assetShader = new AssetShader;
+                    assetShader->assetGuid = assetGuid;
+                    assetShader->fileName = QFileInfo(asset->fileName).baseName();
+                    assetShader->path = pathToCopyTo;
+                    assetShader->setValue(QVariant::fromValue(shaderDefinition));
+                    AssetManager::addAsset(assetShader);
                 }
 
 				if (asset->type == ModelTypes::Material) {
@@ -1674,42 +1670,43 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					// Create dependencies to the object for the textures used
 					for (const auto &image : imagesInUse) {
 						if (texturesToCopy.contains(QFileInfo(image.path).fileName())) {
-							db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), static_cast<int>(ModelTypes::Texture), assetGuid, image.guid, Globals::project->getProjectGuid());
+							db->insertGlobalDependency(
+                                static_cast<int>(ModelTypes::Material), static_cast<int>(ModelTypes::Texture),
+                                assetGuid, image.guid, Globals::project->getProjectGuid()
+                            );
 						}
 					}
 
-					{
-						QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->getMaterialGlobal(assetGuid));
-						QJsonObject matObject = matDoc.object();
-						iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
-						material->generate(IrisUtils::join(
-							IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS),
-							IrisUtils::buildFileName(matObject.value("name").toString(), "shader"))
-						);
+					QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->getMaterialGlobal(assetGuid));
+					QJsonObject matObject = matDoc.object();
+					iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
+					material->generate(IrisUtils::join(
+						IrisUtils::getAbsoluteAssetPath(Constants::SHADER_DEFS),
+						IrisUtils::buildFileName(matObject.value("name").toString(), "shader"))
+					);
 
-						for (const auto &prop : material->properties) {
-							if (prop->type == iris::PropertyType::Color) {
-								QColor col;
-								col.setNamedColor(matObject.value(prop->name).toString());
-								material->setValue(prop->name, col);
-							}
-							else if (prop->type == iris::PropertyType::Texture) {
-								QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
-								QString textureStr = IrisUtils::join(
-									Globals::project->getProjectFolder(), "Textures", materialName
-								);
-								material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
-							}
-							else {
-								material->setValue(prop->name, QVariant::fromValue(matObject.value(prop->name)));
-							}
+					for (const auto &prop : material->properties) {
+						if (prop->type == iris::PropertyType::Color) {
+							QColor col;
+							col.setNamedColor(matObject.value(prop->name).toString());
+							material->setValue(prop->name, col);
 						}
-
-						auto assetMat = new AssetMaterial;
-						assetMat->assetGuid = assetGuid;
-						assetMat->setValue(QVariant::fromValue(material));
-						AssetManager::addAsset(assetMat);
+						else if (prop->type == iris::PropertyType::Texture) {
+							QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
+							QString textureStr = IrisUtils::join(
+								Globals::project->getProjectFolder(), "Textures", materialName
+							);
+							material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
+						}
+						else {
+							material->setValue(prop->name, QVariant::fromValue(matObject.value(prop->name)));
+						}
 					}
+
+					auto assetMat = new AssetMaterial;
+					assetMat->assetGuid = assetGuid;
+					assetMat->setValue(QVariant::fromValue(material));
+					AssetManager::addAsset(assetMat);
 				}
 
 				if (asset->type == ModelTypes::Mesh) {
@@ -1719,43 +1716,6 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					this->sceneView->makeCurrent();
 					auto scene = extractTexturesAndMaterialFromMesh(asset->path, texturesToCopy, jsonSceneNode);
 					this->sceneView->doneCurrent();
-
-//					std::function<void(iris::SceneNodePtr&, QJsonObject&)> updateNodeMaterialValues =
-//						[&](iris::SceneNodePtr &node, QJsonObject &definition) -> void
-//					{
-//						if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-//							auto n = node.staticCast<iris::MeshNode>();
-//							//n->meshPath = meshGuid;
-//							auto mat_defs = definition.value("material").toObject();
-//							auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-//							for (auto prop : mat->properties) {
-//								if (prop->type == iris::PropertyType::Texture) {
-//									if (!mat_defs.value(prop->name).toString().isEmpty()) {
-//										mat->setValue(prop->name, mat_defs.value(prop->name).toString());
-//									}
-//								}
-//								else if (prop->type == iris::PropertyType::Color) {
-//									mat->setValue(
-//										prop->name,
-//										QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
-//									);
-//								}
-//								else {
-//									mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
-//								}
-//							}
-//						}
-
-//						QJsonArray children = definition["children"].toArray();
-//						// These will always be in sync since the definition is derived from the mesh
-//						if (node->hasChildren()) {
-//							for (int i = 0; i < node->children.count(); i++) {
-//								updateNodeMaterialValues(node->children[i], children[i].toObject());
-//							}
-//						}
-//					};
-
-					//updateNodeMaterialValues(scene, jsonSceneNode);
 
 					// You can't manipulate Qt's json when nested
 					std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
@@ -1800,7 +1760,6 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 																	QByteArray(),
 																	QJsonDocument(newJson).toBinaryData());
 
-					// Add to persistent store
 					{
 						QVariant variant = QVariant::fromValue(scene);
 						auto nodeAsset = new AssetNodeObject;
@@ -1812,12 +1771,18 @@ void AssetWidget::createDirectoryStructure(const QList<directory_tuple> &fileNam
 					// Create dependencies to the object for the textures used
 					for (const auto &image : imagesInUse) {
 						if (texturesToCopy.contains(QFileInfo(image.path).fileName())) {
-							db->insertGlobalDependency(static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Texture), objectGuid, image.guid, Globals::project->getProjectGuid());
+							db->insertGlobalDependency(
+                                static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Texture),
+                                objectGuid, image.guid, Globals::project->getProjectGuid()
+                            );
 						}
 					}
 
 					// Insert a dependency for the mesh to the object
-					db->insertGlobalDependency(static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh), objectGuid, assetGuid, Globals::project->getProjectGuid());
+					db->insertGlobalDependency(
+                        static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh),
+                        objectGuid, assetGuid, Globals::project->getProjectGuid()
+                    );
 					// Remove the thumbnail from the object asset
 					db->updateAssetAsset(assetGuid, QByteArray());
 

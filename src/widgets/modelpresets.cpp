@@ -39,7 +39,7 @@ ModelPresets::ModelPresets(QWidget *parent) :
     addItem("Sphere",   "app/modelpresets/sphere.png");
     addItem("Torus",    "app/modelpresets/torus.png");
     addItem("Capsule",  "app/modelpresets/capsule.png");
-
+    addItem("Gear",     "app/modelpresets/gear.png");
 }
 
 void ModelPresets::setMainWindow(MainWindow* mainWindow)
@@ -56,7 +56,7 @@ void ModelPresets::onPrimitiveSelected(QModelIndex itemIndex)
 
     // if (text == "IcoSphere") mainWindow->addIcoSphere();
     if (text == "Plane")    mainWindow->addPlane();
-    if (text == "Cone") mainWindow->addCone();
+    if (text == "Cone")     mainWindow->addCone();
     if (text == "Cube")     mainWindow->addCube();
     if (text == "Cylinder") mainWindow->addCylinder();
     if (text == "Sphere")   mainWindow->addSphere();

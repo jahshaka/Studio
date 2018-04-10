@@ -929,6 +929,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		"#assetDropPad QLabel		{}"
         "QTreeView, QTreeWidget { show-decoration-selected: 1; border: 0; outline: none; selection-background-color: #404040; color: #EEE; background: #202020; alternate-background-color: #252525; }"
 		//"QTreeWidget::branch { background-color: #202020; }"
+        "QTreeView::branch:open { image: url(:/icons/icons8-expand-arrow-24.png); }"
+        "QTreeView::branch:closed:has-children { image: url(:/icons/icons8-expand-arrow-closed-24.png); }"
 		"QTreeWidget::branch:hover { background-color: #303030; }"
 		"QTreeWidget::branch:selected { background-color: #404040; }"
 		"QTreeWidget::item:selected { selection-background-color: #404040;"
