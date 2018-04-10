@@ -67,17 +67,35 @@ bool Database::checkIfTableExists(const QString &tableName)
 
 QString Database::getVersion()
 {
-    QSqlQuery query;
-    query.prepare("SELECT version FROM assets LIMIT 1");
+    QSqlQuery pquery;
+    pquery.prepare("SELECT COUNT(*) FROM projects");
+    executeAndCheckQuery(pquery, "projectsCount");
 
-    if (query.exec()) {
-        if (query.first()) {
-            return query.value(0).toString();
+    bool getVersion = false;
+    if (pquery.exec()) {
+        if (pquery.first()) {
+            getVersion = pquery.value(0).toBool();
         }
     }
     else {
-        irisLog("There was an error getting the material blob! " + query.lastError().text());
+        irisLog("There was an error getting the projects count! " + pquery.lastError().text());
     }
+
+    if (getVersion) {
+        QSqlQuery query1;
+        query1.prepare("SELECT version FROM projects LIMIT 1");
+
+        if (query1.exec()) {
+            if (query1.first()) {
+                return query1.value(0).toString();
+            }
+        }
+        else {
+            irisLog("There was an error getting the db version! " + query1.lastError().text());
+        }
+    }
+
+    return QString();
 }
 
 void Database::createGlobalDependencies()
