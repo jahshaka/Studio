@@ -491,11 +491,11 @@ void MainWindow::setupProjectDB()
     versionTest->initializeDatabase(path);
 
     // temp, TODO
-    if (auto version = (versionTest->getVersion() != Constants::CONTENT_VERSION) && !versionTest->getVersion().isEmpty()) {
+    if (auto version = (versionTest->getVersion() != Constants::CONTENT_VERSION)) {
         QMessageBox::StandardButton option;
         option = QMessageBox::question(Q_NULLPTR,
             "Outdated App Version!",
-            "The version of the application you are using " + QString(version) + " has been deprecated!\n\n"
+            "The version of the application you are using has been deprecated!\n\n"
             "Jahshaka is currently in an alpha stage and as such, some versions might constitute breaking changes.\n\n"
             "To proceed, confirm resetting your current database and creating a new one.\n\n"
             "If you choose not to at the moment, you can continue using the current version but will be unable to import future dated assets and worlds.",
@@ -509,8 +509,8 @@ void MainWindow::setupProjectDB()
 #endif // Q_OS_WIN
             QMessageBox::StandardButton option;
             option = QMessageBox::information(Q_NULLPTR,
-                "Database Wiped",
-                "Your database has been recreated successfully! Enjoy a new and updated version of Jahshaka!\n\n",
+                "Database Reset",
+                "Your database has been recreated successfully!\n\n Enjoy an updated version of Jahshaka!\n\n",
                 QMessageBox::Ok);
         }
     }
