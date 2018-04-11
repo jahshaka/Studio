@@ -22,7 +22,7 @@ For more information see the LICENSE file
 #include "core/settingsmanager.h"
 #include "globals.h"
 #include "constants.h"
-#include "misc\updatechecker.h"
+#include "misc/updatechecker.h"
 #include "dialogs/softwareupdatedialog.h"
 #ifdef USE_BREAKPAD
 #include "breakpad/breakpad.h"
