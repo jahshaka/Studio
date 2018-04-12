@@ -52,6 +52,8 @@ void VertexBuffer::upload(QOpenGLFunctions_3_2_Core* gl)
     // todo : add buffer usage option (nick)
     gl->glBufferData(GL_ARRAY_BUFFER, dataSize, data, GL_STATIC_DRAW);
     gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    _isDirty = false;
 }
 
 IndexBuffer::IndexBuffer()
