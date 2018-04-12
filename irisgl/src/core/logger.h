@@ -10,7 +10,7 @@ class QFile;
 class QTextStream;
 
 
-void irisLog(QString text);
+void irisLog(const QString &text);
 
 namespace iris
 {

@@ -30,6 +30,10 @@
 	border: 1px solid black;
 }
 
+* {
+	color: #EEE;
+}
+
 QCheckBox {
     spacing: 5px;
 	font-size: 12px;

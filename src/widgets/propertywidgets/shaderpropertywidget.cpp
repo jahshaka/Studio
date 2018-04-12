@@ -79,7 +79,7 @@ void ShaderPropertyWidget::onVertexShaderFileChanged(int index)
 
             if (db->checkIfRecordExists("guid", vertexShader, "assets")) {
                 if (db->checkIfRecordExists("depender", asset->assetGuid, "dependencies")) {
-                    db->insertGlobalDependency(static_cast<int>(ModelTypes::Shader), static_cast<int>(ModelTypes::File), asset->assetGuid, vertexShader, Globals::project->getProjectGuid());
+                    db->createDependency(static_cast<int>(ModelTypes::Shader), static_cast<int>(ModelTypes::File), asset->assetGuid, vertexShader, Globals::project->getProjectGuid());
                 }
                 else {
                     db->updateGlobalDependencyDependee(static_cast<int>(ModelTypes::File), asset->assetGuid, vertexShader);
@@ -107,7 +107,7 @@ void ShaderPropertyWidget::onFragmentShaderFileChanged(int index)
 
             if (db->checkIfRecordExists("guid", fragmentShader, "assets")) {
                 if (db->checkIfRecordExists("depender", asset->assetGuid, "dependencies")) {
-                    db->insertGlobalDependency(static_cast<int>(ModelTypes::Shader), static_cast<int>(ModelTypes::File), asset->assetGuid, fragmentShader, Globals::project->getProjectGuid());
+                    db->createDependency(static_cast<int>(ModelTypes::Shader), static_cast<int>(ModelTypes::File), asset->assetGuid, fragmentShader, Globals::project->getProjectGuid());
                 }
                 else {
                     db->updateGlobalDependencyDependee(static_cast<int>(ModelTypes::File), asset->assetGuid, fragmentShader);

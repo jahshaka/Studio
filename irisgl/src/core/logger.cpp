@@ -60,7 +60,7 @@ Logger *Logger::getSingleton()
 
 }
 
-void irisLog(QString text)
+void irisLog(const QString &text)
 {
     iris::Logger::getSingleton()->info(text);
 }

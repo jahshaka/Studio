@@ -48,6 +48,8 @@ ViewerNode::ViewerNode()
     rightHandRenderItem->type = RenderItemType::Mesh;
     rightHandRenderItem->material = DefaultMaterial::create();
     rightHandRenderItem->mesh = cube;
+
+    exportable = false;
 }
 
 ViewerNode::~ViewerNode()

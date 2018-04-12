@@ -43,81 +43,69 @@ struct ProjectTileData {
     QString     guid;
 };
 
-struct AssetTileDataFull {
-	QString guid;
-	int type;
-	QString name;
-	int collection;
-	int times_used;
-	QString project_guid;
-	QDateTime date_created;
-	QDateTime last_updated;
-	QString author;
-	QString license;
-	QString hash;
-	QString version;
-	QString parent;
-	QByteArray tags;
-	QByteArray properties;
-	QByteArray asset;
-	QByteArray thumbnail;
-};
-
-struct AssetTileData {
-	QString		parent;
-	QString     name;
-	QString     full_filename;
-	QByteArray  thumbnail;
-	QString     guid;
-    QString     collection_name;
-	int			type;
-	int			collection;
-	QByteArray  properties;
-	QString		license;
-	QString		author;
-	QByteArray  tags;
-	bool		used;
-	QByteArray  asset;
-};
-
-struct FolderData
+struct AssetRecord
 {
-	QString	guid;
-	QString	name;
-	QString	parent;
-    QString version;
-    QString project_guid;
-    QDateTime date_created;
-    QDateTime last_updated;
-	int	count;
+    QString     guid;
+	int			type;
+	QString     name;
+	int			collection;
+	int			timesUsed;
+    QString     projectGuid;
+    QDateTime   dateCreated;
+    QDateTime   lastUpdated;
+	QString		author;
+	QString		license;
+	QString		hash;
+	QString		version;
+	QString		parent;
+	QByteArray  thumbnail;
+	QByteArray  asset;
+	QByteArray  tags;
+	QByteArray  properties;
 };
 
-struct AssetData {
-	QByteArray	thumbnail;
-	short		type;
-	QString		guid;
-	QString		name;
-	QString		extension;
+struct DependencyRecord
+{
+    int         dependerType;
+    int         dependeeType;
+    QString     projectGuid;
+    QString     depender;
+    QString     dependee;
+    QString     id;
 };
 
-struct CollectionData {
+struct FolderRecord
+{
+	QString	    guid;
+	QString	    name;
+	QString	    parent;
+    QString     version;
+    QString     projectGuid;
+    QDateTime   dateCreated;
+    QDateTime   lastUpdated;
+	int	        count;
+};
+
+struct CollectionRecord
+{
     QString     name;
+    QDateTime   dateCreated;
     int         id;
 };
 
 enum class ModelTypes {
-    Undefined,
-	Material,
-	Texture,
+    Undefined,      // Used
+	Material,       // Supported
+	Texture,        // Supported
 	Video,
 	Cubemap,
-	Object,
-	Mesh,
+	Object,         // Supported
+	Mesh,           // Supported
 	SoundEffect,
 	Music,
-	Shader,
+	Shader,         // Supported
 	Variant,
-	File
+	File            // Supported
 };
 
 #define	MODEL_GUID_ROLE		0x0113

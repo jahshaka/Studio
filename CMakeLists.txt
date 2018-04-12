@@ -54,10 +54,10 @@ set(SRCS
     src/widgets/transformeditor.cpp 
     src/widgets/scenehierarchywidget.cpp 
     src/editor/cameracontrollerbase.cpp 
-		src/editor/gizmo.cpp 
-		src/editor/translationgizmo.cpp 
-		src/editor/scalegizmo.cpp 
-		src/editor/rotationgizmo.cpp 
+    src/editor/gizmo.cpp 
+    src/editor/translationgizmo.cpp 
+    src/editor/scalegizmo.cpp 
+    src/editor/rotationgizmo.cpp 
     src/widgets/skypresets.cpp 
     src/editor/orbitalcameracontroller.cpp 
     src/widgets/scenenodepropertieswidget.cpp 
@@ -126,6 +126,7 @@ set(SRCS
     src/constants.cpp
 	src/misc/updatechecker.cpp
 	src/dialogs/softwareupdatedialog.cpp
+    src/io/assethelper.cpp
 )
 
 set(HEADERS
@@ -156,7 +157,6 @@ set(HEADERS
     src/editor/editorcameracontroller.h 
     src/globals.h 
     src/widgets/sceneviewwidget.h 
-    src/globals.h 
     src/widgets/materialsets.h 
     src/widgets/modelpresets.h 
     src/widgets/accordianbladewidget.h 
@@ -241,11 +241,13 @@ set(HEADERS
     src/widgets/assetgriditem.h
 	src/breakpad/breakpad.h
 	src/materials/jahdefaultmaterial.h
-	src/editor/outlinerenderer.h 
-	src/editor/viewermaterial.h
-	src/editor/animationpath.h
-	src/misc/updatechecker.h
-	src/dialogs/softwareupdatedialog.h
+    src/editor/outlinerenderer.h 
+    src/editor/viewermaterial.h
+    src/editor/animationpath.h
+    src/misc/updatechecker.h
+    src/dialogs/softwareupdatedialog.h
+    src/editor/animationpath.h
+    src/io/assethelper.h
 )
 
 # Todo - trim these down to nothing eventually

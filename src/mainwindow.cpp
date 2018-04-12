@@ -132,6 +132,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 {
     ui->setupUi(this);
     setWindowTitle("Jahshaka " + Constants::CONTENT_VERSION);
+	settings = SettingsManager::getDefaultManager();
 
     UiManager::mainWindow = this;
 
@@ -151,7 +152,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     
 	createPostProcessDockWidget();
 
-    settings = SettingsManager::getDefaultManager();
     prefsDialog = new PreferencesDialog(nullptr, db, settings);
     aboutDialog = new AboutDialog();
 
@@ -261,7 +261,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 	// if we reached this far, the project dir has already been created
 	// we can copy some default assets to each project here
 	QFile::copy(IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"),
-		QDir(Globals::project->getProjectFolder()).filePath("Textures/Tile.png"));
+		QDir(Globals::project->getProjectFolder()).filePath("Tile.png"));
 
 	auto thumb = ThumbnailManager::createThumbnail(
 		IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"), 72, 72);
@@ -273,15 +273,16 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
 	const QString tileGuid = GUIDManager::generateGUID();
 	const QString assetGuid = db->createAssetEntry(tileGuid,
-													"Tile.png",
-													static_cast<int>(ModelTypes::Texture),
-													Globals::project->getProjectGuid(),
-													Globals::project->getProjectGuid(),
-													thumbnailBytes);
+												   "Tile.png",
+												   static_cast<int>(ModelTypes::Texture),
+												   Globals::project->getProjectGuid(),
+                                                   QString(),
+                                                   QString(), 
+												   thumbnailBytes);
 
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-    m->setValue("diffuseTexture", QDir(Globals::project->getProjectFolder()).filePath("Textures/Tile.png")); // use relative asset location
+    m->setValue("diffuseTexture", QDir(Globals::project->getProjectFolder()).filePath("Tile.png"));
     m->setValue("textureScale", 4.f);
     node->setMaterial(m);
 
@@ -486,44 +487,59 @@ void MainWindow::stopAnimWidget()
 
 void MainWindow::setupProjectDB()
 {
-    auto path = QDir(QStandardPaths::writableLocation(QStandardPaths::DataLocation)).filePath(Constants::JAH_DATABASE);
-    auto versionTest = new Database();
-    versionTest->initializeDatabase(path);
+    const QString path = IrisUtils::join(
+        QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::JAH_DATABASE
+    );
 
-    // temp, TODO
-    auto version = versionTest->getVersion();
-    if (version != Constants::CONTENT_VERSION && !version.isEmpty()) {
-        QMessageBox::StandardButton option;
-        option = QMessageBox::question(Q_NULLPTR,
-            "Outdated App Version!",
-            "The version of the application you are using has been deprecated!\n\n"
-            "Jahshaka is currently in an alpha stage and as such, some versions might constitute breaking changes.\n\n"
-            "To proceed, confirm resetting your current database and creating a new one.\n\n"
-            "If you choose not to at the moment, you can continue using the current version but will be unable to import future dated assets and worlds.",
-            QMessageBox::Yes | QMessageBox::No);
-        versionTest->closeDb();
-        if (option == QMessageBox::Yes) {
-#ifdef Q_OS_WIN
-            if (!QFile::remove(path)) {
-                DeleteFile(path.toStdString().c_str());
-            }
-#endif // Q_OS_WIN
-            QMessageBox::StandardButton option;
-            option = QMessageBox::information(Q_NULLPTR,
-                "Database Reset",
-                "Your database has been recreated successfully!\n\n Enjoy an updated version of Jahshaka!\n\n",
-                QMessageBox::Ok);
-        }
-    }
-  
     db = new Database();
-    db->initializeDatabase(path);
-    db->createGlobalDb();
-    db->createGlobalDbAuthor();
-    db->createGlobalDbAssets();
-    db->createGlobalDependencies();
-    db->createGlobalDbCollections();
-    db->createGlobalDbFolders();
+	if (db->initializeDatabase(path)) {
+		if (!db->checkIfTableExists("metadata") && db->getTableCount() != 0) {
+			QMessageBox::StandardButton option;
+			option = QMessageBox::question(
+				Q_NULLPTR,
+			    "Outdated App Version!",
+			    "The version of the application you are using has been deprecated!\n\n"
+			    "Jahshaka is currently in an alpha stage and as such, some versions might constitute breaking changes.\n\n"
+			    "To proceed, confirm wiping your database and asset library. This will delete all projects, "\
+				"assets and scenes that you have on your desktop or in the asset manager..\n\n"
+			    "If you choose not to at the moment, you can continue using the current version but will be "\
+				"unable to import future dated assets and worlds.",
+
+			    QMessageBox::Yes | QMessageBox::No
+			);
+
+			if (option == QMessageBox::Yes) {
+				db->wipeDatabase();
+
+				QDir storeDir(IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DataLocation), "AssetStore"));
+				if (!storeDir.removeRecursively()) {
+			#ifdef Q_OS_WIN
+					RemoveDirectory(storeDir.absolutePath().toStdString().c_str());
+			#endif Q_OS_WIN
+				}
+
+				// get the current project working directory
+				auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
+					Constants::PROJECT_FOLDER);
+				auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
+
+				QDir projectDir(defaultProjectDirectory);
+				if (!projectDir.removeRecursively()) {
+			#ifdef Q_OS_WIN
+					RemoveDirectory(projectDir.absolutePath().toStdString().c_str());
+			#endif Q_OS_WIN
+				}
+
+				QMessageBox::StandardButton option;
+				option = QMessageBox::information(Q_NULLPTR,
+					"Database Reset",
+					"Your database has been recreated successfully!\n\n Enjoy an updated version of Jahshaka!\n\n",
+					QMessageBox::Ok);
+			}
+		}
+
+		db->createAllTables();
+	}
 }
 
 void MainWindow::setupUndoRedo()
@@ -696,7 +712,7 @@ void MainWindow::saveScene(const QString &filename, const QString &projectPath)
 	buffer.open(QIODevice::WriteOnly);
 	img.save(&buffer, "PNG");
 
-	db->updateSceneGlobal(sceneObject, thumb);
+	db->updateProject(sceneObject, thumb);
 
 	undoStackCount = UiManager::getUndoStackCount();
 }
@@ -715,7 +731,7 @@ void MainWindow::saveScene()
     buffer.open(QIODevice::WriteOnly);
     img.save(&buffer, "PNG");
 
-    db->updateSceneGlobal(blob, thumb);
+    db->updateProject(blob, thumb);
 	pmContainer->updateTile(Globals::project->getProjectGuid(), thumb);
 
 	undoStackCount = UiManager::getUndoStackCount();
@@ -948,7 +964,15 @@ void MainWindow::addCylinder()
     auto node = iris::MeshNode::create();
     node->setMesh(":/content/primitives/cylinder.obj");
     node->setName("Cylinder");
+    addNodeToScene(node);
+}
 
+void MainWindow::addGear()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::MeshNode::create();
+    node->setMesh(":/content/primitives/gear.obj");
+    node->setName("Gear");
     addNodeToScene(node);
 }
 
@@ -1080,6 +1104,8 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 		++iterator;
 	}
 
+    if (!node) return;
+
 	std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
 		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
 			auto n = node.staticCast<iris::MeshNode>();
@@ -1089,8 +1115,11 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 				if (prop->type == iris::PropertyType::Texture) {
 					if (!prop->getValue().toString().isEmpty()) {
 						mat->setValue(prop->name,
-							IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
-								db->fetchAsset(prop->getValue().toString()).name));
+							IrisUtils::join(
+                                Globals::project->getProjectFolder(),
+								db->fetchAsset(prop->getValue().toString()).name
+                            )
+                        );
 					}
 				}
 			}
@@ -1104,9 +1133,6 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 	};
 
 	updateNodeValues(node);
-
-	// model file may be invalid so null gets returned
-	if (!node) return;
 
 	// rename animation sources to relative paths
 	auto relPath = QDir(Globals::project->folderPath).relativeFilePath(path);
@@ -1234,15 +1260,14 @@ void MainWindow::createMaterial(const QString &guid)
                 !db->fetchAsset(value.toString()).name.isEmpty() &&
                 value.toString() != materialDef["guid"].toString())
             {
-                //value = "../Textures/" + db->fetchAsset(value.toString()).name;
-                jsonMaterialString.replace(value.toString(), QString("../Textures/" + db->fetchAsset(value.toString()).name));
+                jsonMaterialString.replace(value.toString(), QString(db->fetchAsset(value.toString()).name));
 			}
 		}
 
         QJsonDocument saveDoc = QJsonDocument::fromJson(jsonMaterialString.toUtf8());
 
         QString fileName = IrisUtils::join(
-            Globals::project->getProjectFolder(), "Materials",
+            Globals::project->getProjectFolder(),
             IrisUtils::buildFileName(activeSceneNode.staticCast<iris::MeshNode>()->getName(), "material")
         );
 
@@ -1253,15 +1278,18 @@ void MainWindow::createMaterial(const QString &guid)
 
 		const QString assetGuid = GUIDManager::generateGUID();
 
-		db->createAssetEntry(assetGuid,
+		db->createAssetEntry(
+            assetGuid,
 			QFileInfo(fileName).fileName(),
 			static_cast<int>(ModelTypes::Material),
-			Globals::project->getProjectGuid(),
 			assetWidget->assetItem.selectedGuid,
+            QString(),
+            QString(),
 			QByteArray(),
 			QByteArray(),
 			QByteArray(),
-			binaryMat);
+			binaryMat
+        );
 
 		ThumbnailGenerator::getSingleton()->requestThumbnail(
 			ThumbnailRequestType::Material, fileName, assetGuid
@@ -1321,12 +1349,16 @@ void MainWindow::createMaterial(const QString &guid)
 			}
 			else if (prop->type == iris::PropertyType::Texture) {
 				if (!matObject.value(prop->name).toString().isEmpty()) {
-					db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), static_cast<int>(ModelTypes::Texture), assetGuid, matObject.value(prop->name).toString(), Globals::project->getProjectGuid());
+					db->createDependency(
+                        static_cast<int>(ModelTypes::Material),
+                        static_cast<int>(ModelTypes::Texture),
+                        assetGuid, matObject.value(prop->name).toString(),
+                        Globals::project->getProjectGuid()
+                    );
 				}
+
 				QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
-				QString textureStr = IrisUtils::join(
-					Globals::project->getProjectFolder(), "Textures", materialName
-				);
+				QString textureStr = IrisUtils::join(Globals::project->getProjectFolder(), materialName);
 				material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
 			}
 			else {
@@ -1334,12 +1366,10 @@ void MainWindow::createMaterial(const QString &guid)
 			}
 		}
 
-		{	
-			auto assetMat = new AssetMaterial;
-			assetMat->assetGuid = assetGuid;
-			assetMat->setValue(QVariant::fromValue(material));
-			AssetManager::addAsset(assetMat);
-		}
+		auto assetMat = new AssetMaterial;
+		assetMat->assetGuid = assetGuid;
+		assetMat->setValue(QVariant::fromValue(material));
+		AssetManager::addAsset(assetMat);
 
         QFile::remove(fileName);
 	}
@@ -1423,6 +1453,84 @@ void MainWindow::exportNode(const QString &guid)
 
     // close our now exported file
     zip_close(zip);
+}
+
+void MainWindow::exportNodes(const QStringList &assetGuids)
+{
+	// get the export file path from a save dialog
+	auto filePath = QFileDialog::getSaveFileName(
+		this,
+		"Choose export path",
+		"export",
+		"Supported Export Formats (*.jaf)"
+	);
+
+	if (filePath.isEmpty() || filePath.isNull()) return;
+
+	QTemporaryDir temporaryDir;
+	if (!temporaryDir.isValid()) return;
+
+	const QString writePath = temporaryDir.path();
+
+	db->createExportNodes(ModelTypes::Object, assetGuids, QDir(writePath).filePath("asset.db"));
+
+	QDir tempDir(writePath);
+	tempDir.mkpath("assets");
+
+	QFile manifest(QDir(writePath).filePath(".manifest"));
+	if (manifest.open(QIODevice::ReadWrite)) {
+		QTextStream stream(&manifest);
+		stream << "object";
+	}
+	manifest.close();
+
+	for (const auto &guid : assetGuids) {
+		for (const auto &asset : db->fetchAssetAndDependencies(guid)) {
+			QFile::copy(
+				IrisUtils::join(Globals::project->getProjectFolder(), asset),
+				IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
+			);
+		}
+	}
+
+	// get all the files and directories in the project working directory
+	QDir workingProjectDirectory(writePath);
+	QDirIterator projectDirIterator(writePath,
+		QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
+		QDirIterator::Subdirectories);
+
+	QVector<QString> fileNames;
+	while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
+
+	// open a basic zip file for writing, maybe change compression level later (iKlsR)
+	struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
+
+	for (int i = 0; i < fileNames.count(); i++) {
+		QFileInfo fInfo(fileNames[i]);
+
+		// we need to pay special attention to directories since we want to write empty ones as well
+		if (fInfo.isDir()) {
+			zip_entry_open(
+				zip,
+				/* will only create directory if / is appended */
+				QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
+			);
+			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+		}
+		else {
+			zip_entry_open(
+				zip,
+				workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
+			);
+			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+		}
+
+		// we close each entry after a successful write
+		zip_entry_close(zip);
+	}
+
+	// close our now exported file
+	zip_close(zip);
 }
 
 void MainWindow::deleteNode()
@@ -2338,7 +2446,7 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
 MainWindow::~MainWindow()
 {
-    this->db->closeDb();
+    this->db->closeDatabase();
     delete ui;
 }
 
