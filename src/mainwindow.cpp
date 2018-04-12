@@ -2240,7 +2240,7 @@ void MainWindow::exitApp()
 
 void MainWindow::updateSceneSettings()
 {
-	if (UiManager::isSceneOpen) {
+	if (UiManager::isSceneOpen || !!scene) {
 		scene->setOutlineWidth(prefsDialog->worldSettings->outlineWidth);
 		scene->setOutlineColor(prefsDialog->worldSettings->outlineColor);
 	}

@@ -458,7 +458,7 @@ void SceneViewWidget::renderSelectedNode(iris::SceneNodePtr selectedNode)
 {
 	if (viewportMode != ViewportMode::Editor || UiManager::sceneMode != SceneMode::EditMode)
 		return;
-	outliner->renderOutline(renderer->getGraphicsDevice(), selectedNode, editorCam, qBound(1.f,(float)scene->outlineWidth,2.f), scene->outlineColor);
+	outliner->renderOutline(renderer->getGraphicsDevice(), selectedNode, editorCam, qBound(1.f,(float)scene->outlineWidth,2.f),scene->outlineColor);
 }
 
 void SceneViewWidget::setSceneMode(SceneMode sceneMode)
