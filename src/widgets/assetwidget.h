@@ -93,7 +93,7 @@ protected:
 		//r = option.rect.adjusted(50, 0, 0, -50);
 		//        painter->drawText(r.left(), r.top(), r.width(), r.height(),
 		//                          Qt::AlignBottom|Qt::AlignCenter|Qt::TextWordWrap, title, &r);
-		style->drawItemText(painter, opt.rect, Qt::AlignBottom | Qt::AlignCenter | Qt::TextWordWrap,
+		style->drawItemText(painter, opt.rect, Qt::AlignBottom | Qt::AlignCenter | Qt::TextSingleLine,
 			opt.palette, true, title, textRole);
 
 

@@ -51,6 +51,9 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 	ui->sceneTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     ui->sceneTree->viewport()->installEventFilter(this);
 
+    ui->sceneTree->setAttribute(Qt::WA_MacShowFocusRect, false);
+    ui->sceneTree->viewport()->setAttribute(Qt::WA_MacShowFocusRect, false);
+
 	connect(ui->sceneTree,	SIGNAL(itemClicked(QTreeWidgetItem*, int)),
 			this,			SLOT(treeItemSelected(QTreeWidgetItem*, int)));
 
@@ -81,8 +84,8 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 		"QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; }"
 		"QTreeWidget::branch { background-color: #202020; }"
 		"QTreeWidget::branch:hover { background-color: #303030; }"
-        "QTreeView::branch:open { image: url(:/icons/icons8-expand-arrow-24.png); }"
-        "QTreeView::branch:closed:has-children { image: url(:/icons/icons8-expand-arrow-closed-24.png); }"
+        "QTreeView::branch:open { image: url(:/icons/expand_arrow_open.png); }"
+        "QTreeView::branch:closed:has-children { image: url(:/icons/expand_arrow_closed.png); }"
 		"QTreeWidget::branch:selected { background-color: #404040; }"
 		"QTreeWidget::item:selected { selection-background-color: #404040; background: #404040; outline: none; padding: 5px 0; }"
 		/* Important, this is set for when the widget loses focus to fill the left gap */

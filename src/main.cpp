@@ -90,6 +90,7 @@ int main(int argc, char *argv[])
 #endif
 
     QSplashScreen splash;
+    splash.setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnBottomHint);
     auto pixmap = QPixmap(":/images/splashv3.png");
     splash.setPixmap(pixmap.scaled(900, 506, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     splash.show();

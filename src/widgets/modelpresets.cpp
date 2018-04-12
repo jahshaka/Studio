@@ -22,6 +22,7 @@ ModelPresets::ModelPresets(QWidget *parent) :
     ui->setupUi(this);
     mainWindow = nullptr;
 
+    ui->modelsSets->setAttribute(Qt::WA_MacShowFocusRect, false);
     ui->modelsSets->setViewMode(QListWidget::IconMode);
     ui->modelsSets->setIconSize(QSize(88,88));
     ui->modelsSets->setResizeMode(QListWidget::Adjust);

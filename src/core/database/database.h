@@ -40,6 +40,7 @@ public:
 
     // INSERT ===============================================================================
     bool createProject(const QString &guid,
+                       const QString &name,
                        const QByteArray &sceneBlob = QByteArray(),
                        const QByteArray &thumbnail = QByteArray());
     bool createFolder(const QString &folderName, const QString &parentFolder, const QString &guid);
