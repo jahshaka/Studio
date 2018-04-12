@@ -312,7 +312,7 @@ void AssetViewer::resizeGL(int width, int height)
 
 void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache, QVector3D position)
 {
-    QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->getMaterialGlobal(guid));
+    QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
     QJsonObject matObject = matDoc.object();
     iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 
@@ -394,35 +394,17 @@ void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firs
         [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
         auto mat = iris::CustomMaterial::create();
-
         if (mesh->hasSkeleton())
             mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
         else
             mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
-
-        mat->setValue("diffuseColor", data.diffuseColor);
-        mat->setValue("specularColor", data.specularColor);
-        mat->setValue("ambientColor", QColor(110, 110, 110));	// assume this color, some formats set this to pitch black
-        mat->setValue("emissionColor", data.emissionColor);
-        mat->setValue("shininess", data.shininess);
-        mat->setValue("useAlpha", true);
-
-        if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
-            mat->setValue("diffuseTexture", data.diffuseTexture);
-
-        if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
-            mat->setValue("specularTexture", data.specularTexture);
-
-        if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
-            mat->setValue("normalTexture", data.normalTexture);
-
         return mat;
     }, ssource);
 
     // model file may be invalid so null gets returned
     if (!node) return;
 
-    auto materialObj = QJsonDocument::fromBinaryData(db->getAssetMaterialGlobal(guid));
+    auto materialObj = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
     AssetHelper::updateNodeMaterial(node, materialObj.object());
 
     std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {

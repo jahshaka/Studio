@@ -206,9 +206,9 @@ public:
     void updateTree(QTreeWidgetItem* parentTreeItem, QString path);
     void generateAssetThumbnails();
     void syncTreeAndView(const QString&);
-	void addItem(const FolderData &folderData);
-	void addItem(const AssetTileData &assetData);
-	void addCrumbs(const QVector<FolderData> &folderData);
+	void addItem(const FolderRecord &folderData);
+	void addItem(const AssetRecord &assetData);
+	void addCrumbs(const QVector<FolderRecord> &folderData);
     void updateAssetView(const QString &path, bool showDependencies = false);
     void trigger();
     void updateLabels();
@@ -224,12 +224,6 @@ public:
 		QStringList &textureList,
 		QJsonObject &material
 	);
-
-	iris::SceneNodePtr extractTexturesAndMaterialFromMesh(
-		const QString &filePath,
-		QStringList &textureList,
-		QJsonObject &material
-	) const;
 
 	SceneViewWidget *sceneView;
 
@@ -269,8 +263,8 @@ protected slots:
 	void createShader();
     void createFolder();
     void importAssetB();
-    void createDirectoryStructure(const QList<directory_tuple>&);
     void importAsset(const QStringList &path);
+    void importRegularAssets(const QList<directory_tuple>&);
     void importJafAssets(const QList<directory_tuple>&);
 
     void onThumbnailResult(ThumbnailResult* result);

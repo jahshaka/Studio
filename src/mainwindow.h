@@ -207,6 +207,7 @@ public slots:
     void addTorus();
     void addSphere();
     void addCylinder();
+    void addGear();
     void addEmpty();
     void addViewer();
     void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());

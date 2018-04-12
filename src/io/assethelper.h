@@ -16,11 +16,17 @@ For more information see the LICENSE file
 #include <QJsonArray>
 
 #include "irisglfwd.h"
+#include "constants.h"
+#include "core/project.h"
 
 class AssetHelper
 {
 public:
     static void updateNodeMaterial(iris::SceneNodePtr &node, const QJsonObject definition);
+    static QByteArray makeBlobFromPixmap(const QPixmap &pixmap);
+    static ModelTypes getAssetTypeFromExtension(const QString &fileSuffix);
+    static iris::SceneNodePtr extractTexturesAndMaterialFromMesh(const QString &filePath,
+                                                                 QStringList &textureList);
 };
 
 #endif

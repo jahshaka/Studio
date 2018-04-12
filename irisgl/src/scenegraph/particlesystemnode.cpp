@@ -60,8 +60,6 @@ ParticleSystemNode::ParticleSystemNode() {
     particleScale = 1.0f;
     lifeLength = 1.0f;
 
-	exportable = true;
-
     speedError = lifeError = scaleError = 0;
 
     renderer = new ParticleRenderer();

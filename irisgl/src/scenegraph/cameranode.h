@@ -109,6 +109,8 @@ private:
         farClip = 1000.0f;
         aspectRatio = 1.0f;//assumes a square viewport by default
 
+        exportable = false;
+
         updateCameraMatrices();
     }
 

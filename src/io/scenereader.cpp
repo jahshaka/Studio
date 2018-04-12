@@ -379,7 +379,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     QString source = nodeObj["mesh"].toString("");
 	// Keep a special reference to embedded asset primitives for now
 	if (!source.startsWith(":")) {
-		source = IrisUtils::join(Globals::project->getProjectFolder(), "Models", asset.name);
+		source = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
 	}
 
     int meshIndex = nodeObj["meshIndex"].toInt(0);
@@ -602,7 +602,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
                 //                  ? getAbsolutePath(mat[prop->name].toString())
                 //                  : QString();
 				auto textureStr = !mat[prop->name].toString().isEmpty()
-					? QDir(Globals::project->getProjectFolder() + "/Textures").filePath(handle->fetchAsset(mat[prop->name].toString()).name)
+					? QDir(Globals::project->getProjectFolder()).filePath(handle->fetchAsset(mat[prop->name].toString()).name)
 					: QString();
 
                 m->setValue(prop->name, textureStr);

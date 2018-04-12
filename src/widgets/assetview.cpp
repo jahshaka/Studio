@@ -43,6 +43,7 @@
 #include "assetviewgrid.h"
 #include "assetgriditem.h"
 #include "assetviewer.h"
+#include "io/assethelper.h"
 #include "io/assetmanager.h"
 
 #include "../core/guidmanager.h"
@@ -513,18 +514,16 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 	// show assets
 	int i = 0;
-	foreach(const AssetTileData &record, db->fetchAssets()) {
+	foreach(const AssetRecord &record, db->fetchAssets()) {
 		QJsonObject object;
 		object["icon_url"] = "";
 		object["guid"] = record.guid;
 		object["name"] = record.name;
 		object["type"] = record.type;
-		object["full_filename"] = record.full_filename;
 		object["collection"] = record.collection;
-		object["collection_name"] = record.collection_name;
+		object["collection_name"] = record.collection;
 		object["author"] = record.author;
 		object["license"] = record.license;
-		// object["tags"] = record.tags;
 
 		auto tags = QJsonDocument::fromBinaryData(record.tags);
 
@@ -984,7 +983,9 @@ void AssetView::importJahModel(const QString &fileName)
             jafType = ModelTypes::Material;
         }
 
-        QString guid = db->importJafAssetModel(jafType, QDir(temporaryDir.path()).filePath("asset.db"), true);
+        QString guid = db->importAsset(jafType,
+                                       QDir(temporaryDir.path()).filePath("asset.db"),
+                                       QMap<QString, QString>());
 
         const QString assetFolder = QDir(assetPath).filePath(guid);
         QDir().mkpath(assetFolder);
@@ -1002,7 +1003,6 @@ void AssetView::importJahModel(const QString &fileName)
         for (const auto &file : fileNames) {
             QFileInfo fileInfo(file);
             QString fileToCopyTo = IrisUtils::join(assetFolder, fileInfo.fileName());
-
             bool copyFile = QFile::copy(fileInfo.absoluteFilePath(), fileToCopyTo);
         }
 
@@ -1117,29 +1117,41 @@ void AssetView::addToLibrary(bool jfx)
 		object["icon_url"] = "";
 		object["name"] = QFileInfo(filename).baseName(); // renameModelField->text();
 
-		auto thumbnail = viewer->takeScreenshot(512, 512);
+		auto assetSnapshot = viewer->takeScreenshot(512, 512);
 
 		QJsonDocument tagsDoc(tags);
-
-		// add to db
-		QByteArray bytes;
-		QBuffer buffer(&bytes);
-		buffer.open(QIODevice::WriteOnly);
-		thumbnail.save(&buffer, "PNG");
-
-		QJsonDocument doc(viewer->getSceneProperties());
-		QByteArray sceneProperties = doc.toJson();
 
 		// maybe actually check if Object?
 		QString guid;
 		if (jfx) {
-			guid = db->insertAssetGlobal(QFileInfo(filename).fileName(),
-				static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData(), QJsonDocument(viewer->getMaterial()).toBinaryData(), "JahFX");
+			guid = db->createAssetEntry(
+                       GUIDManager::generateGUID(),
+                       QFileInfo(filename).fileName(),
+				       static_cast<int>(ModelTypes::Object),
+                       QString(),
+                       QString(),
+                       "JahFX",
+                       AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(assetSnapshot)),
+                       QJsonDocument(viewer->getSceneProperties()).toBinaryData(),
+                       tagsDoc.toBinaryData(),
+                       QJsonDocument(viewer->getMaterial()).toBinaryData()
+                   );
 		}
 		else {
-			guid = db->insertAssetGlobal(QFileInfo(filename).fileName(),
-				static_cast<int>(ModelTypes::Object), bytes, doc.toBinaryData(), tagsDoc.toBinaryData(), QJsonDocument(viewer->getMaterial()).toBinaryData());
+            guid = db->createAssetEntry(
+                GUIDManager::generateGUID(),
+                QFileInfo(filename).fileName(),
+                static_cast<int>(ModelTypes::Object),
+                QString(),
+                QString(),
+                QString(),
+                AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(assetSnapshot)),
+                QJsonDocument(viewer->getSceneProperties()).toBinaryData(),
+                tagsDoc.toBinaryData(),
+                QJsonDocument(viewer->getMaterial()).toBinaryData()
+            );
 		}
+
 		object["guid"] = guid;
 		object["type"] = db->fetchAsset(guid).type; // model?
 		object["full_filename"] = IrisUtils::buildFileName(guid, fInfo.suffix());
@@ -1168,7 +1180,7 @@ void AssetView::addToLibrary(bool jfx)
 		//auto material_guid = db->insertMaterialGlobal(QFileInfo(filename).baseName() + "_material", guid, QJsonDocument(viewer->getMaterial()).toBinaryData());
 		//db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), guid, material_guid);
 
-		auto gridItem = new AssetGridItem(object, thumbnail, viewer->getSceneProperties(), tags);
+		auto gridItem = new AssetGridItem(object, assetSnapshot, viewer->getSceneProperties(), tags);
 
 		connect(gridItem, &AssetGridItem::addAssetToProject, [this](AssetGridItem *item) {
 			addAssetToProject(item);
@@ -1451,7 +1463,7 @@ void AssetView::addAssetToProject(AssetGridItem *item)
             if (asset->assetGuid == placeHolderGuid) {
                 asset->assetGuid = guidReturned;
                 auto node = asset->value.value<iris::SceneNodePtr>();
-                auto material = db->getAssetMaterialGlobal(guidReturned);
+                auto material = db->fetchAssetData(guidReturned);
                 auto materialObj = QJsonDocument::fromBinaryData(material);
                 updateNodeMaterialValues(node, materialObj.object());
             }
@@ -1459,7 +1471,7 @@ void AssetView::addAssetToProject(AssetGridItem *item)
     }
 
     if (jafType == ModelTypes::Material) {
-        QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->getMaterialGlobal(guidReturned));
+        QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
         QJsonObject matObject = matDoc.object();
         iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 

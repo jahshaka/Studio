@@ -48,7 +48,6 @@ namespace iris
 
 MeshNode::MeshNode() {
     sceneNodeType = SceneNodeType::Mesh;
-	exportable = true;
 
     renderItem = new RenderItem();
     renderItem->type = RenderItemType::Mesh;

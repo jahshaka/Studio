@@ -14,6 +14,7 @@
         <file>content/primitives/torus.obj</file>
         <file>content/primitives/arrow.obj</file>
         <file>content/primitives/capsule.obj</file>
+        <file>content/primitives/gear.obj</file>
         <file>models/ground.obj</file>
     </qresource>
 </RCC>

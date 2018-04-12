@@ -11,10 +11,15 @@ For more information see the LICENSE file
 
 #include "assethelper.h"
 
+#include <QPixmap>
+#include <QBuffer>
+
 #include "irisgl/src/core/property.h"
 #include "irisgl/src/materials/custommaterial.h"
 #include "irisgl/src/scenegraph/scenenode.h"
 #include "irisgl/src/scenegraph/meshnode.h"
+
+#include "io/scenewriter.h"
 
 // Thanks to Qt not allowing updating its json values and instead returning temp objects
 // This class updates a meshnode with the values in a material definition
@@ -51,4 +56,106 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, const QJsonObject
             updateNodeMaterial(node->children[i], children[i].toObject());
         }
     }
+}
+
+QByteArray AssetHelper::makeBlobFromPixmap(const QPixmap &thumbnail)
+{
+    QByteArray thumbnailBytes;
+    QBuffer buffer(&thumbnailBytes);
+    buffer.open(QIODevice::WriteOnly);
+    thumbnail.save(&buffer, "PNG");
+    return thumbnailBytes;
+}
+
+ModelTypes AssetHelper::getAssetTypeFromExtension(const QString &fileSuffix)
+{
+    if (Constants::IMAGE_EXTS.contains(fileSuffix)) {
+        return ModelTypes::Texture;
+    }
+    else if (Constants::MODEL_EXTS.contains(fileSuffix)) {
+        return ModelTypes::Mesh;
+    }
+    else if (fileSuffix == Constants::SHADER_EXT) {
+        return ModelTypes::Shader;
+    }
+    else if (fileSuffix == Constants::MATERIAL_EXT) {
+        return ModelTypes::Material;
+    }
+    else if (Constants::WHITELIST.contains(fileSuffix)) {
+        return ModelTypes::File;
+    }
+
+    // Generally if we don't explicitly specify an extension, don't import or add it to the database (iKlsR)
+    return ModelTypes::Undefined;
+}
+
+iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
+    const QString &filePath,
+    QStringList &textureList)
+{
+    auto ssource = new iris::SceneSource();
+    // load mesh as scene
+    auto node = iris::MeshNode::loadAsSceneFragment(filePath, [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+    {
+        auto mat = iris::CustomMaterial::create();
+
+        if (mesh->hasSkeleton())
+            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
+        else
+            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+
+        mat->setValue("diffuseColor", data.diffuseColor);
+        mat->setValue("specularColor", data.specularColor);
+        mat->setValue("ambientColor", data.ambientColor);
+        mat->setValue("emissionColor", data.emissionColor);
+        mat->setValue("shininess", data.shininess);
+        mat->setValue("useAlpha", true);
+
+        if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
+            mat->setValue("diffuseTexture", data.diffuseTexture);
+
+        if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
+            mat->setValue("specularTexture", data.specularTexture);
+
+        if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
+            mat->setValue("normalTexture", data.normalTexture);
+
+        return mat;
+    }, ssource);
+
+    const aiScene *scene = ssource->importer.GetScene();
+
+    QStringList texturesToCopy;
+
+    for (int i = 0; i < scene->mNumMeshes; i++) {
+        auto mesh = scene->mMeshes[i];
+        auto material = scene->mMaterials[mesh->mMaterialIndex];
+
+        aiString textureName;
+
+        if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
+            material->GetTexture(aiTextureType_DIFFUSE, 0, &textureName);
+            texturesToCopy.append(textureName.C_Str());
+        }
+
+        if (material->GetTextureCount(aiTextureType_SPECULAR) > 0) {
+            material->GetTexture(aiTextureType_SPECULAR, 0, &textureName);
+            texturesToCopy.append(textureName.C_Str());
+        }
+
+        if (material->GetTextureCount(aiTextureType_NORMALS) > 0) {
+            material->GetTexture(aiTextureType_NORMALS, 0, &textureName);
+            texturesToCopy.append(textureName.C_Str());
+        }
+
+        if (material->GetTextureCount(aiTextureType_HEIGHT) > 0) {
+            material->GetTexture(aiTextureType_HEIGHT, 0, &textureName);
+            texturesToCopy.append(textureName.C_Str());
+        }
+    }
+
+    textureList = texturesToCopy;
+    // SceneWriter::writeSceneNode(QJsonObject(), node, false);
+
+    return node;
 }

@@ -241,11 +241,11 @@ set(HEADERS
     src/widgets/assetgriditem.h
 	src/breakpad/breakpad.h
 	src/materials/jahdefaultmaterial.h
-	src/editor/outlinerenderer.h 
-	src/editor/viewermaterial.h
-	src/editor/animationpath.h
-	src/misc/updatechecker.h
-	src/dialogs/softwareupdatedialog.h
+    src/editor/outlinerenderer.h 
+    src/editor/viewermaterial.h
+    src/editor/animationpath.h
+    src/misc/updatechecker.h
+    src/dialogs/softwareupdatedialog.h
     src/editor/animationpath.h
     src/io/assethelper.h
 )

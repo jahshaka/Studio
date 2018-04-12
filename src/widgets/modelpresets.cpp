@@ -62,6 +62,7 @@ void ModelPresets::onPrimitiveSelected(QModelIndex itemIndex)
     if (text == "Sphere")   mainWindow->addSphere();
     if (text == "Torus")    mainWindow->addTorus();
     if (text == "Capsule")  mainWindow->addCapsule();
+    if (text == "Gear")     mainWindow->addGear();
 }
 
 void ModelPresets::addItem(QString name, QString path)
