@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "mainwindow.h"
 #include "uimanager.h"
 #include "widgets/sceneviewwidget.h"
+#include "io/scenewriter.h"
 
 //#include <QProxyStyle>
 //
@@ -83,8 +84,7 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
         "QTreeView::branch:open { image: url(:/icons/icons8-expand-arrow-24.png); }"
         "QTreeView::branch:closed:has-children { image: url(:/icons/icons8-expand-arrow-closed-24.png); }"
 		"QTreeWidget::branch:selected { background-color: #404040; }"
-		"QTreeWidget::item:selected { selection-background-color: #404040;"
-		"								background: #404040; outline: none; padding: 5px 0; }"
+		"QTreeWidget::item:selected { selection-background-color: #404040; background: #404040; outline: none; padding: 5px 0; }"
 		/* Important, this is set for when the widget loses focus to fill the left gap */
 		"QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }"
 		"QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }"
@@ -286,8 +286,26 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	if (node->isExportable()) {
 		QMenu *subMenu = menu.addMenu("Export");
 
+		std::function<void(const iris::SceneNodePtr&, QStringList&)> getChildGuids =
+			[&](const iris::SceneNodePtr &node, QStringList &items) -> void
+		{
+			if (!node->getGUID().isEmpty() && !items.contains(node->getGUID())) items.append(node->getGUID());
+			if (node->hasChildren()) {
+				for (const auto &child : node->children) {
+					getChildGuids(child, items);
+				}
+			}
+		};
+
+		if (node->getSceneNodeType() == iris::SceneNodeType::Empty) {
+			QAction *exportAsset = subMenu->addAction("Export Object");
+
+			QStringList assetGuids;
+			getChildGuids(node, assetGuids);
+			connect(exportAsset, &QAction::triggered, this, [assetGuids, this]() { mainWindow->exportNodes(assetGuids); });
+		}
+
 		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-			
 			QAction *exportAsset = subMenu->addAction("Export Object");
 			QAction *exportMat = subMenu->addAction("Create Material");
 
@@ -336,6 +354,7 @@ void SceneHierarchyWidget::exportNode(const QString &guid)
 {
 	mainWindow->exportNode(guid);
 }
+
 void SceneHierarchyWidget::createMaterial(const QString &guid)
 {
 	mainWindow->createMaterial(guid);

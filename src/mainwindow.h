@@ -218,6 +218,7 @@ public slots:
     void duplicateNode();
 	void createMaterial(const QString &guid);
 	void exportNode(const QString &guid);
+	void exportNodes(const QStringList &assetGuids);
     void deleteNode();
     void renameNode();
 

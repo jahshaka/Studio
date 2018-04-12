@@ -120,6 +120,7 @@ public:
     // EXPORT ===============================================================================
     void createExportScene(const QString& outTempFilePath);
     void createExportNode(const ModelTypes &type, const QString& objectGuid, const QString& outTempFilePath);
+    void createExportNodes(const ModelTypes &type, const QStringList& objectGuids, const QString& outTempFilePath);
 
     bool checkIfTableExists(const QString &tableName);
 
