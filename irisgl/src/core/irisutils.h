@@ -24,13 +24,6 @@ class IrisUtils
 public:
     static QString getAbsoluteAssetPath(QString relToApp) {
         QDir basePath = QDir(QCoreApplication::applicationDirPath());
-    // #if defined(WIN32) && defined(QT_DEBUG)
-    //     basePath.cdUp();
-//		#if defined(Q_OS_MAC)
-//			basePath.cdUp();
-//			basePath.cdUp();
-//			basePath.cdUp();
-//		#endif
         auto path = QDir::cleanPath(basePath.absolutePath() + QDir::separator() + relToApp);
         return path;
     }

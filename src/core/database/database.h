@@ -35,6 +35,7 @@ public:
     bool createDependenciesTable();
     bool createAuthorTable();
     bool createFoldersTable();
+    bool createMetadataTable();
     void createAllTables();
 
     // INSERT ===============================================================================
@@ -60,6 +61,8 @@ public:
 
     // DELETE ===============================================================================
     bool deleteProject();
+	bool destroyTable(const QString &table);
+	void wipeDatabase();
     bool deleteAsset(const QString &guid);
     bool deleteCollection(const int &collectionId);
     bool deleteFolder(const QString &guid);
@@ -122,6 +125,7 @@ public:
     void createExportNode(const ModelTypes &type, const QString& objectGuid, const QString& outTempFilePath);
     void createExportNodes(const ModelTypes &type, const QStringList& objectGuids, const QString& outTempFilePath);
 
+    int getTableCount();
     bool checkIfTableExists(const QString &tableName);
 
     QString getVersion();
@@ -157,6 +161,7 @@ private:
     QString dependenciesTableSchema;
     QString authorTableSchema;
     QString foldersTableSchema;
+    QString metadataTableSchema;
 
     QSqlDatabase db;
 };

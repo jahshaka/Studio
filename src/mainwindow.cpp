@@ -132,6 +132,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 {
     ui->setupUi(this);
     setWindowTitle("Jahshaka " + Constants::CONTENT_VERSION);
+	settings = SettingsManager::getDefaultManager();
 
     UiManager::mainWindow = this;
 
@@ -151,7 +152,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     
 	createPostProcessDockWidget();
 
-    settings = SettingsManager::getDefaultManager();
     prefsDialog = new PreferencesDialog(nullptr, db, settings);
     aboutDialog = new AboutDialog();
 
@@ -492,36 +492,54 @@ void MainWindow::setupProjectDB()
     );
 
     db = new Database();
-    if (db->initializeDatabase(path)) db->createAllTables();
+	if (db->initializeDatabase(path)) {
+		if (!db->checkIfTableExists("metadata") && db->getTableCount() != 0) {
+			QMessageBox::StandardButton option;
+			option = QMessageBox::question(
+				Q_NULLPTR,
+			    "Outdated App Version!",
+			    "The version of the application you are using has been deprecated!\n\n"
+			    "Jahshaka is currently in an alpha stage and as such, some versions might constitute breaking changes.\n\n"
+			    "To proceed, confirm wiping your database and asset library. This will delete all projects, "\
+				"assets and scenes that you have on your desktop or in the asset manager..\n\n"
+			    "If you choose not to at the moment, you can continue using the current version but will be "\
+				"unable to import future dated assets and worlds.",
 
-    //auto versionTest = new Database();
-    //versionTest->initializeDatabase(path);
+			    QMessageBox::Yes | QMessageBox::No
+			);
 
-    // temp, TODO
-//    auto version = versionTest->getVersion();
-//    if (version.isEmpty()) {
-//        QMessageBox::StandardButton option;
-//        option = QMessageBox::question(Q_NULLPTR,
-//            "Outdated App Version!",
-//            "The version of the application you are using has been deprecated!\n\n"
-//            "Jahshaka is currently in an alpha stage and as such, some versions might constitute breaking changes.\n\n"
-//            "To proceed, confirm resetting your current database and creating a new one.\n\n"
-//            "If you choose not to at the moment, you can continue using the current version but will be unable to import future dated assets and worlds.",
-//            QMessageBox::Yes | QMessageBox::No);
-//        versionTest->closeDatabase();
-//        if (option == QMessageBox::Yes) {
-//#ifdef Q_OS_WIN
-//            if (!QFile::remove(path)) {
-//                DeleteFile(path.toStdString().c_str());
-//            }
-//#endif // Q_OS_WIN
-//            QMessageBox::StandardButton option;
-//            option = QMessageBox::information(Q_NULLPTR,
-//                "Database Reset",
-//                "Your database has been recreated successfully!\n\n Enjoy an updated version of Jahshaka!\n\n",
-//                QMessageBox::Ok);
-//        }
-//    }
+			if (option == QMessageBox::Yes) {
+				db->wipeDatabase();
+
+				QDir storeDir(IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DataLocation), "AssetStore"));
+				if (!storeDir.removeRecursively()) {
+			#ifdef Q_OS_WIN
+					RemoveDirectory(storeDir.absolutePath().toStdString().c_str());
+			#endif Q_OS_WIN
+				}
+
+				// get the current project working directory
+				auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
+					Constants::PROJECT_FOLDER);
+				auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
+
+				QDir projectDir(defaultProjectDirectory);
+				if (!projectDir.removeRecursively()) {
+			#ifdef Q_OS_WIN
+					RemoveDirectory(projectDir.absolutePath().toStdString().c_str());
+			#endif Q_OS_WIN
+				}
+
+				QMessageBox::StandardButton option;
+				option = QMessageBox::information(Q_NULLPTR,
+					"Database Reset",
+					"Your database has been recreated successfully!\n\n Enjoy an updated version of Jahshaka!\n\n",
+					QMessageBox::Ok);
+			}
+		}
+
+		db->createAllTables();
+	}
 }
 
 void MainWindow::setupUndoRedo()
@@ -2330,7 +2348,7 @@ void MainWindow::exitApp()
 
 void MainWindow::updateSceneSettings()
 {
-	if (UiManager::isSceneOpen) {
+	if (UiManager::isSceneOpen || !!scene) {
 		scene->setOutlineWidth(prefsDialog->worldSettings->outlineWidth);
 		scene->setOutlineColor(prefsDialog->worldSettings->outlineColor);
 	}

@@ -98,6 +98,14 @@ Database::Database()
         "    count			   INTEGER,"
         "    visible           INTEGER"
         ")";
+
+	metadataTableSchema =
+		"CREATE TABLE IF NOT EXISTS metadata ("
+		"    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
+		"    hash              VARCHAR(16),"
+		"    version           VARCHAR(8),"
+		"    data			   BLOB"
+		")";
 }
 
 Database::~Database()
@@ -142,6 +150,20 @@ void Database::closeDatabase()
     if (db.isOpen()) db.close();
     db = QSqlDatabase(); // important that we make an invalid object
     QSqlDatabase::removeDatabase(db.connectionName());
+}
+
+int Database::getTableCount()
+{
+	QSqlQuery query;
+	query.prepare("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'");
+	if (query.exec()) {
+		if (query.first()) return query.value(0).toInt();
+	}
+	else {
+		irisLog(QString("There was an error getting the table count! ").arg(query.lastError().text()));
+	}
+
+	return 0;
 }
 
 bool Database::checkIfTableExists(const QString &tableName)
@@ -305,6 +327,22 @@ bool Database::createFoldersTable()
     return executeAndCheckQuery(query, "CreateFoldersTable");
 }
 
+bool Database::createMetadataTable()
+{
+	if (!checkIfTableExists("metadata")) {
+		QSqlQuery query;
+		query.prepare(metadataTableSchema);
+		if (executeAndCheckQuery(query, "CreateMetadataTable")) {
+			QSqlQuery defaultCollQuery;
+			defaultCollQuery.prepare("INSERT INTO metadata (version) VALUES (?)");
+			defaultCollQuery.addBindValue(Constants::CONTENT_VERSION);
+			return executeAndCheckQuery(defaultCollQuery, "InsertDefaultMetadata");
+		}
+
+		return false;
+	}
+}
+
 void Database::createAllTables()
 {
     // TODO - transactions here
@@ -315,6 +353,7 @@ void Database::createAllTables()
     if (!checkIfTableExists("dependencies"))    createDependenciesTable();
     if (!checkIfTableExists("author"))          createAuthorTable();
     if (!checkIfTableExists("folders"))         createFoldersTable();
+    if (!checkIfTableExists("metadata"))        createMetadataTable();
 }
 
 bool Database::createProject(
@@ -567,6 +606,25 @@ bool Database::deleteProject()
     query.prepare("DELETE FROM projects WHERE guid = ?");
     query.addBindValue(Globals::project->getProjectGuid());
     return executeAndCheckQuery(query, "DeleteProject");
+}
+
+bool Database::destroyTable(const QString &table)
+{
+	QSqlQuery query;
+	query.prepare(QString("DROP TABLE IF EXISTS %1").arg(table));
+	return executeAndCheckQuery(query, QString("DropAssetTable[%1]").arg(table));
+}
+
+void Database::wipeDatabase()
+{
+	destroyTable("projects");
+	destroyTable("thumbnails");
+	destroyTable("collections");
+	destroyTable("assets");
+	destroyTable("dependencies");
+	destroyTable("author");
+	destroyTable("folders");
+	destroyTable("metadata");
 }
 
 bool Database::deleteAsset(const QString &guid)
