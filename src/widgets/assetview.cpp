@@ -1332,25 +1332,10 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 
     for (const auto &file : fileNames) {
         QFileInfo fileInfo(file);
-        QString destDir;
-        if (Constants::IMAGE_EXTS.contains(fileInfo.suffix())) {
-            destDir = "Textures";
-            jafType = ModelTypes::Texture;
-        }
-        else if (Constants::MODEL_EXTS.contains(fileInfo.suffix())) {
-            destDir = "Models";
-            jafType = ModelTypes::Object;
-        }
-        else if (Constants::WHITELIST.contains(fileInfo.suffix())) {
-            destDir = "Files";
-            jafType = ModelTypes::File;
-        }
-        else if (Constants::SHADER_EXT == fileInfo.suffix()) {
-            destDir = "Shaders";
-            jafType = ModelTypes::Shader;
-        }
+        
+		ModelTypes jafType = AssetHelper::getAssetTypeFromExtension(fileInfo.suffix().toLower());
 
-        QString pathToCopyTo = IrisUtils::join(Globals::project->getProjectFolder(), destDir);
+        QString pathToCopyTo = Globals::project->getProjectFolder();
         QString fileToCopyTo = IrisUtils::join(pathToCopyTo, fileInfo.fileName());
 
         int increment = 1;

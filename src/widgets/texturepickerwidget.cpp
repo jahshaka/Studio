@@ -68,7 +68,7 @@ void TexturePickerWidget::dropEvent(QDropEvent *event)
 	while (!stream.atEnd()) stream >> roleDataMap;
 
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
-		changeMap(IrisUtils::join(Globals::project->getProjectFolder(), "Textures", roleDataMap.value(1).toString()));
+		changeMap(IrisUtils::join(Globals::project->getProjectFolder(), roleDataMap.value(1).toString()));
 	}
 
     event->acceptProposedAction();
