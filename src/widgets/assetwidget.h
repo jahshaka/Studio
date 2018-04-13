@@ -69,7 +69,12 @@ protected:
 		auto opt = option;
 		initStyleOption(&opt, index);
 		QRect r = opt.rect;
-		QString title = index.data(Qt::DisplayRole).toString();
+
+        QFontMetrics metrix(painter->font());
+        int width = r.width() - 8;
+        QString clippedText = metrix.elidedText(index.data(Qt::DisplayRole).toString(), Qt::ElideRight, width);
+
+		QString title = clippedText;
 		//        QString description = index.data(Qt::UserRole + 1).toString();
 
 		QPalette::ColorGroup cg = opt.state & QStyle::State_Enabled ? QPalette::Normal : QPalette::Disabled;
@@ -143,7 +148,7 @@ protected:
         if (index.data().canConvert<QString>()) {
             const QString text = index.data().toString();
             QLineEdit *lineEdit = qobject_cast<QLineEdit*>(editor);
-            lineEdit->setMaxLength(15);
+            //lineEdit->setMaxLength(15);
             lineEdit->setText(text);
         }
         else {
