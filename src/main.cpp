@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include "globals.h"
 #include "constants.h"
 #include "misc/updatechecker.h"
+#include "misc/upgrader.h"
 #include "dialogs/softwareupdatedialog.h"
 #ifdef USE_BREAKPAD
 #include "breakpad/breakpad.h"
@@ -74,6 +75,9 @@ int main(int argc, char *argv[])
 		updateChecker.checkForUpdate();
 	});
 	*/
+
+	Upgrader upgrader;
+	upgrader.checkIfDeprecatedVersion();
 
     app.setWindowIcon(QIcon(":/images/icon.ico"));
     app.setApplicationName("Jahshaka");

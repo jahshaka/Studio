@@ -184,6 +184,8 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		"QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; }"
 		"QTreeWidget::branch { background-color: #202020; }"
 		"QTreeWidget::branch:hover { background-color: #303030; }"
+        "QTreeView::branch:open { image: url(:/icons/expand_arrow_open.png); }"
+        "QTreeView::branch:closed:has-children { image: url(:/icons/expand_arrow_closed.png); }"
 		"QTreeWidget::branch:selected { background-color: #404040; }"
 		"QTreeWidget::item:selected { selection-background-color: #404040;"
 		"								background: #404040; outline: none; padding: 5px 0; }"
@@ -996,7 +998,15 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
 {
 	QString newName = qobject_cast<QLineEdit*>(listItem)->text();
 	const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
-    if (!newName.isEmpty()) db->renameAsset(guid, newName);
+    if (!newName.isEmpty()) {
+        if (assetItem.wItem->data(MODEL_ITEM_TYPE) == MODEL_ASSET) {
+            db->renameAsset(guid, newName);
+        }
+        else {
+            db->renameFolder(guid, newName);
+            populateAssetTree(false);
+        }
+    }
 }
 
 void AssetWidget::deleteTreeFolder()
@@ -1029,6 +1039,8 @@ void AssetWidget::deleteItem()
 	}
 	
 	delete ui->assetView->takeItem(ui->assetView->row(item));
+    updateAssetView(assetItem.selectedGuid);
+    populateAssetTree(false);
 }
 
 void AssetWidget::openAtFolder()
