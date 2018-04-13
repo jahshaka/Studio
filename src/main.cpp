@@ -38,8 +38,16 @@ extern "C"
 }
 #endif
 
+inline void GetGitCommitHash()
+{
+#ifndef GIT_COMMIT_HASH && GIT_COMMIT_DATE
+#define GIT_COMMIT_HASH "0000" // means uninitialized
+#endif
+}
+
 int main(int argc, char *argv[])
 {
+    GetGitCommitHash();
     // Fixes issue on osx where the SceneView widget shows up blank
     // Causes freezing on linux for some reason (Nick)
 #ifdef Q_OS_MAC
@@ -93,6 +101,12 @@ int main(int argc, char *argv[])
     splash.setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnBottomHint);
     auto pixmap = QPixmap(":/images/splashv3.png");
     splash.setPixmap(pixmap.scaled(900, 506, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+#ifdef QT_DEBUG
+#ifdef GIT_COMMIT_HASH != "0000"
+    splash.showMessage(QString("Revision - %1 %2").arg(GIT_COMMIT_HASH).arg(GIT_COMMIT_DATE),
+                       Qt::AlignBottom | Qt::AlignLeft, QColor(255, 255, 255));
+#endif // GIT_COMMIT_HASH
+#endif // QT_DEBUG
     splash.show();
 
     Globals::appWorkingDir = QApplication::applicationDirPath();
@@ -116,7 +130,8 @@ int main(int argc, char *argv[])
     splash.finish(&window);
 
 	UpdateChecker updateChecker;
-	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded, [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)
+	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded,
+        [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)
 	{
 		// show update dialog
 		auto dialog = new SoftwareUpdateDialog();
@@ -125,8 +140,9 @@ int main(int argc, char *argv[])
 		dialog->show();
 	});
 
-	if(SettingsManager::getDefaultManager()->getValue("automatic_updates", true).toBool())
+    if (SettingsManager::getDefaultManager()->getValue("automatic_updates", true).toBool()) {
 		updateChecker.checkForUpdate();
+    }
 
     return app.exec();
 }
