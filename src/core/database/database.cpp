@@ -603,7 +603,14 @@ bool Database::deleteProject()
     QSqlQuery query;
     query.prepare("DELETE FROM projects WHERE guid = ?");
     query.addBindValue(Globals::project->getProjectGuid());
-    return executeAndCheckQuery(query, "DeleteProject");
+    bool q = executeAndCheckQuery(query, "DeleteProject");
+
+    QSqlQuery dquery;
+    dquery.prepare("DELETE FROM projects WHERE guid = ?");
+    dquery.addBindValue(Globals::project->getProjectGuid());
+    bool d = executeAndCheckQuery(dquery, "DeleteDependencies");
+
+    return d && q;
 }
 
 bool Database::destroyTable(const QString &table)
@@ -649,10 +656,19 @@ bool Database::deleteFolder(const QString &guid)
     return executeAndCheckQuery(query, "DeleteFolder");
 }
 
-bool Database::deleteDependency(const QString & dependee)
+bool Database::deleteDependency(const QString &dependee)
 {
     QSqlQuery query;
-    query.prepare("DELETE FROM dependencies WHERE dependee = ?");
+    query.prepare("DELETE FROM dependencies dependee = ?");
+    query.addBindValue(dependee);
+    return executeAndCheckQuery(query, "deleteDependency");
+}
+
+bool Database::deleteDependency(const QString &depender, const QString &dependee)
+{
+    QSqlQuery query;
+    query.prepare("DELETE FROM dependencies WHERE depender = ? AND dependee = ?");
+    query.addBindValue(depender);
     query.addBindValue(dependee);
     return executeAndCheckQuery(query, "deleteDependency");
 }
@@ -1836,6 +1852,7 @@ QStringList Database::fetchAssetAndDependencies(const QString &guid)
 	return dependencies;
 }
 
+
 QStringList Database::fetchAssetGUIDAndDependencies(const QString &guid, bool appendSelf)
 {
 	QSqlQuery query;
@@ -1876,7 +1893,10 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid)
 			}
 
 			deleteAsset(asset);
-			deleteDependency(asset);
+			
+            for (const auto &dep : fetchAssetGUIDAndDependencies(asset, false)) {
+                deleteDependency(asset, dep);
+            }
 		}
 
 		deleteFolder(folder);
@@ -1903,7 +1923,10 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid)
 		}
 
 		deleteAsset(asset);
-		deleteDependency(asset);
+		
+        for (const auto &dep : fetchAssetGUIDAndDependencies(asset, false)) {
+            deleteDependency(asset, dep);
+        }
 	}
 
     for (int i = 0; i < files.size(); ++i) {
@@ -1979,6 +2002,40 @@ QString Database::fetchMeshObject(const QString &guid, const int ertype, const i
 	}
 
 	return QString();
+}
+
+QStringList Database::hasMultipleDependers(const QString &guid)
+{
+    QSqlQuery query;
+    query.prepare("SELECT depender FROM dependencies WHERE dependee = ?");
+    query.addBindValue(guid);
+    executeAndCheckQuery(query, "HasMultipleDependers");
+
+    QStringList dependers;
+    while (query.next()) {
+        QSqlRecord record = query.record();
+        dependers.append(record.value(0).toString());
+    }
+    return dependers;
+}
+
+bool Database::hasDependencies(const QString &guid)
+{
+    QSqlQuery query;
+    query.prepare("SELECT COUNT(*) FROM dependencies WHERE depender = ?");
+    query.addBindValue(guid);
+    executeAndCheckQuery(query, "HasDependencies");
+
+    if (query.exec()) {
+        if (query.first()) {
+            return query.value(0).toBool();
+        }
+    }
+    else {
+        irisLog("There was an error getting the dependency count! " + query.lastError().text());
+    }
+
+    return false;
 }
 
 bool Database::importProject(const QString &inFilePath)

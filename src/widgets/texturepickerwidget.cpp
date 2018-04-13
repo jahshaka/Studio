@@ -99,16 +99,10 @@ void TexturePickerWidget::setLabelImage(QLabel* label, QString file, bool emitSi
     if (file.isNull() || file.isEmpty()) {
         ui->texture->clear();
     } else {
-        auto thumb = ThumbnailManager::createThumbnail(file,
-                                                       ui->texture->width(),
-                                                       ui->texture->height());
+        auto thumb = ThumbnailManager::createThumbnail(file, ui->texture->width(), ui->texture->height());
         QPixmap pixmap = QPixmap::fromImage(*thumb->thumb).scaled(QSize(28, 28));
         ui->texture->setPixmap(pixmap);
-
         filePath = file;
-
-		QString dimension_H = QString::number(thumb->originalSize.width());
-        QString dimension_W = QString::number(thumb->originalSize.height());
     }
 
     if (emitSignal) emit valueChanged(file);
@@ -116,10 +110,7 @@ void TexturePickerWidget::setLabelImage(QLabel* label, QString file, bool emitSi
 
 bool TexturePickerWidget::eventFilter(QObject *object, QEvent *ev)
 {
-    if (object == ui->texture && ev->type() == QEvent::MouseButtonRelease) {
-        pickTextureMap();
-    }
-
+    if (object == ui->texture && ev->type() == QEvent::MouseButtonRelease) pickTextureMap();
     return false;
 }
 
@@ -142,9 +133,7 @@ void TexturePickerWidget::changeMap(const QString &texturePath)
 
 void TexturePickerWidget::setTexture(QString path)
 {
-    if (path.isNull() || path.isEmpty()) {
-        //ui->dimensions->clear();
-    } else {
+    if (!path.isEmpty()) {
         setLabelImage(ui->texture, path, false);
     }
 }

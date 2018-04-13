@@ -383,6 +383,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 	}
 
     int meshIndex = nodeObj["meshIndex"].toInt(0);
+    QString meshGUID = nodeObj["guid"].toString();
     bool pickable = nodeObj["pickable"].toBool(true);
 
     if (!source.isEmpty()) {
@@ -396,6 +397,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 			meshNode->meshPath = nodeObj["mesh"].toString();
         }
 
+        meshNode->setGUID(meshGUID);
         meshNode->setPickable(pickable);
 		meshNode->setVisible(nodeObj["visible"].toBool(true));
         meshNode->meshIndex = meshIndex;
@@ -417,7 +419,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     }
 
     meshNode->applyDefaultPose();
-	meshNode->setGUID(handle->fetchMeshObject(asset.guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh)));
+	//meshNode->setGUID(handle->fetchMeshObject(asset.guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh)));
 
     return meshNode;
 }

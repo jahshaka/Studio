@@ -68,6 +68,7 @@ public:
     bool deleteCollection(const int &collectionId);
     bool deleteFolder(const QString &guid);
     bool deleteDependency(const QString &dependee);
+    bool deleteDependency(const QString &depender, const QString &dependee);
     QStringList deleteFolderAndDependencies(const QString &guid);
     QStringList deleteAssetAndDependencies(const QString &guid);
     bool deleteRecord(const QString &table, const QString &row, const QVariant &value);
@@ -108,6 +109,9 @@ public:
     QString fetchAssetGUIDByName(const QString &name);
     QString fetchObjectMesh(const QString &guid, const int ertype, const int eetype);
     QString fetchMeshObject(const QString &guid, const int ertype, const int eetype);
+
+    QStringList hasMultipleDependers(const QString &guid);
+    bool hasDependencies(const QString &guid);
 
     // IMPORT ===============================================================================
     bool importProject(const QString& inFilePath);

@@ -94,6 +94,10 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
     QMap<int, QVariant> roleDataMap;
     while (!stream.atEnd()) stream >> roleDataMap;
 
+ /*   if (roleDataMap.value(0).toInt() != static_cast<int>(ModelTypes::Texture)) {
+        savedActiveNode = doActiveObjectPicking(event->posF());
+    }*/
+
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Material)) {
 		auto node = doActiveObjectPicking(event->posF());
 
@@ -158,10 +162,6 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
             dragScenePos = offset;
         }
     }
-
-    //if (roleDataMap.value(0).toInt() != static_cast<int>(ModelTypes::Object)) {
-    //    doObjectPicking(event->posF(), iris::SceneNodePtr(), false, true);
-    //}
 }
 
 void SceneViewWidget::dropEvent(QDropEvent *event)
@@ -179,7 +179,7 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
         auto ppos = dragScenePos;
         emit addDroppedMesh(
-                QDir(QDir(Globals::project->getProjectFolder()).filePath("Models")).filePath(roleDataMap.value(2).toString()),
+                QDir(Globals::project->getProjectFolder()).filePath(roleDataMap.value(2).toString()),
                 true, ppos, roleDataMap.value(3).toString(), roleDataMap.value(1).toString()
         );
     }
@@ -205,6 +205,19 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
         originalMaterial.reset();
         wasHit = false;
 	}
+
+    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
+        auto node = doActiveObjectPicking(event->posF());
+        if (!!node) {
+            qDebug() << QDir(Globals::project->getProjectFolder()).filePath(roleDataMap.value(1).toString());
+            auto meshNode = node.staticCast<iris::MeshNode>();
+            auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
+
+            if (!mat->firstTextureSlot().isEmpty()) {
+                mat->setValue(mat->firstTextureSlot(), QDir(Globals::project->getProjectFolder()).filePath(roleDataMap.value(1).toString()));
+            }
+        }
+    }
 }
 
 void SceneViewWidget::dragEnterEvent(QDragEnterEvent *event)

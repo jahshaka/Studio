@@ -260,6 +260,14 @@ iris::ScenePtr MainWindow::createDefaultScene()
     node->setPickable(false);
 	node->setFaceCullingMode(iris::FaceCullingMode::None);
     node->setShadowCastingEnabled(false);
+    node->isBuiltIn = true;
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid()
+    );
 
 	// if we reached this far, the project dir has already been created
 	// we can copy some default assets to each project here
@@ -282,6 +290,13 @@ iris::ScenePtr MainWindow::createDefaultScene()
                                                    QString(),
                                                    QString(), 
 												   thumbnailBytes);
+
+    db->createDependency(
+        static_cast<int>(ModelTypes::Object),
+        static_cast<int>(ModelTypes::Texture),
+        nodeGuid, assetGuid,
+        Globals::project->getProjectGuid()
+    );
 
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
@@ -858,6 +873,14 @@ void MainWindow::addPlane()
     node->setMesh(":/content/primitives/plane.obj");
     node->setFaceCullingMode(iris::FaceCullingMode::None);
     node->setName("Plane");
+    node->isBuiltIn = true;
+    auto guid = GUIDManager::generateGUID();
+    node->setGUID(guid);
+    db->createAssetEntry(
+        guid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid()
+    );
     addNodeToScene(node);
 }
 
@@ -868,6 +891,14 @@ void MainWindow::addGround()
     node->setMesh(":/models/ground.obj");
     node->setFaceCullingMode(iris::FaceCullingMode::None);
     node->setName("Ground");
+    node->isBuiltIn = true;
+    auto guid = GUIDManager::generateGUID();
+    node->setGUID(guid);
+    db->createAssetEntry(
+        guid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid()
+    );
     addNodeToScene(node);
 }
 
@@ -877,6 +908,14 @@ void MainWindow::addCone()
     auto node = iris::MeshNode::create();
     node->setMesh(":/content/primitives/cone.obj");
     node->setName("Cone");
+    node->isBuiltIn = true;
+    auto guid = GUIDManager::generateGUID();
+    node->setGUID(guid);
+    db->createAssetEntry(
+        guid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid()
+    );
     addNodeToScene(node);
 }
 
@@ -886,6 +925,14 @@ void MainWindow::addCapsule()
     auto node = iris::MeshNode::create();
     node->setMesh(":/content/primitives/capsule.obj");
     node->setName("Capsule");
+    node->isBuiltIn = true;
+    auto guid = GUIDManager::generateGUID();
+    node->setGUID(guid);
+    db->createAssetEntry(
+        guid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid()
+    );
     addNodeToScene(node);
 }
 
@@ -895,6 +942,14 @@ void MainWindow::addCube()
     auto node = iris::MeshNode::create();
     node->setMesh(":/content/primitives/cube.obj");
     node->setName("Cube");
+    node->isBuiltIn = true;
+    auto guid = GUIDManager::generateGUID();
+    node->setGUID(guid);
+    db->createAssetEntry(
+        guid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid()
+    );
     addNodeToScene(node);
 }
 
@@ -904,6 +959,14 @@ void MainWindow::addTorus()
     auto node = iris::MeshNode::create();
     node->setMesh(":/content/primitives/torus.obj");
     node->setName("Torus");
+    node->isBuiltIn = true;
+    auto guid = GUIDManager::generateGUID();
+    node->setGUID(guid);
+    db->createAssetEntry(
+        guid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid()
+    );
     addNodeToScene(node);
 }
 
@@ -913,6 +976,14 @@ void MainWindow::addSphere()
     auto node = iris::MeshNode::create();
     node->setMesh(":/content/primitives/sphere.obj");
     node->setName("Sphere");
+    node->isBuiltIn = true;
+    auto guid = GUIDManager::generateGUID();
+    node->setGUID(guid);
+    db->createAssetEntry(
+        guid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid()
+    );
     addNodeToScene(node);
 }
 
@@ -922,6 +993,14 @@ void MainWindow::addCylinder()
     auto node = iris::MeshNode::create();
     node->setMesh(":/content/primitives/cylinder.obj");
     node->setName("Cylinder");
+    node->isBuiltIn = true;
+    auto guid = GUIDManager::generateGUID();
+    node->setGUID(guid);
+    db->createAssetEntry(
+        guid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid()
+    );
     addNodeToScene(node);
 }
 
@@ -931,6 +1010,14 @@ void MainWindow::addGear()
     auto node = iris::MeshNode::create();
     node->setMesh(":/content/primitives/gear.obj");
     node->setName("Gear");
+    node->isBuiltIn = true;
+    auto guid = GUIDManager::generateGUID();
+    node->setGUID(guid);
+    db->createAssetEntry(
+        guid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid()
+    );
     addNodeToScene(node);
 }
 
@@ -1494,6 +1581,8 @@ void MainWindow::exportNodes(const QStringList &assetGuids)
 void MainWindow::deleteNode()
 {
     if (!!activeSceneNode) {
+        // TODO - do a deps check here as well
+        if (activeSceneNode->isBuiltIn) db->deleteAsset(activeSceneNode->getGUID());
         auto cmd = new DeleteSceneNodeCommand(activeSceneNode->parent, activeSceneNode);
         UiManager::pushUndoStack(cmd);
     }
