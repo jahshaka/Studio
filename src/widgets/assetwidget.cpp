@@ -45,6 +45,11 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 	this->db = handle;
 
+	ui->assetView->setAttribute(Qt::WA_MacShowFocusRect, false);
+	ui->assetTree->setAttribute(Qt::WA_MacShowFocusRect, false);
+	ui->assetView->viewport()->setAttribute(Qt::WA_MacShowFocusRect, false);
+	ui->assetTree->viewport()->setAttribute(Qt::WA_MacShowFocusRect, false);
+
 	ui->assetView->viewport()->installEventFilter(this);
 	ui->assetTree->viewport()->installEventFilter(this);
 	ui->assetTree->setContextMenuPolicy(Qt::CustomContextMenu);

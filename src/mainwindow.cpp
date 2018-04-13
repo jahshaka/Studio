@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QWindow>
 #include <QSurface>
 #include <QScrollArea>
+#include <QTextDocument>
 
 #include <memory>
 
@@ -50,6 +51,8 @@ For more information see the LICENSE file
 #include <QOpenGLDebugLogger>
 #include <QUndoStack>
 
+#include <QApplication>
+#include <QDesktopWidget>
 #include <QHash>
 #include <QHashIterator>
 #include <QBuffer>
@@ -494,28 +497,79 @@ void MainWindow::setupProjectDB()
     db = new Database();
 	if (db->initializeDatabase(path)) {
 		if (!db->checkIfTableExists("metadata") && db->getTableCount() != 0) {
-			QMessageBox::StandardButton option;
-			option = QMessageBox::question(
-				Q_NULLPTR,
-			    "Outdated App Version!",
-			    "The version of the application you are using has been deprecated!\n\n"
-			    "Jahshaka is currently in an alpha stage and as such, some versions might constitute breaking changes.\n\n"
-			    "To proceed, confirm wiping your database and asset library. This will delete all projects, "\
-				"assets and scenes that you have on your desktop or in the asset manager..\n\n"
-			    "If you choose not to at the moment, you can continue using the current version but will be "\
-				"unable to import future dated assets and worlds.",
+			QDialog dialog;
+			dialog.setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+			dialog.setWindowTitle("Outdated App Version!");
 
-			    QMessageBox::Yes | QMessageBox::No
+			QLabel *textLabel = new QLabel("The version of the application you are using has been deprecated!");
+			QLabel *descDoc = new QLabel(
+				"Jahshaka is currently in an alpha stage and as such, some versions might constitute breaking changes.\n"
+				"To proceed, confirm wiping your database and asset library. This will delete all projects, "\
+				"assets and worlds that you have on your desktop or in the asset manager.\n\n"
+				"If you choose not to at the moment, you can continue using the current version but will be "\
+				"unable to import future dated assets and worlds."
 			);
 
-			if (option == QMessageBox::Yes) {
+			auto layout = new QVBoxLayout;
+
+			layout->addWidget(textLabel);
+			layout->addSpacing(8);
+			layout->addWidget(descDoc);
+
+			auto blayout = new QHBoxLayout;
+			auto bwidget = new QWidget;
+			bwidget->setLayout(blayout);
+			QPushButton *yes = new QPushButton("Confirm wipe");
+			QPushButton *no = new QPushButton("Not now");
+			QPushButton *cont = new QPushButton("Continue");
+			cont->setVisible(false);
+			blayout->addStretch(1);
+			blayout->addWidget(yes);
+			blayout->addWidget(no);
+			blayout->addWidget(cont);
+
+			layout->addSpacing(8);
+			layout->addWidget(bwidget);
+
+			dialog.setStyleSheet(
+				"* { color: #EEE; }"
+				"QDialog { background: #222222; padding: 4px; }"
+				"QPushButton { background: #444; color: #EEE; border: 0; padding: 6px 10px; }"
+				"QPushButton:hover { background: #555; color: #EEE; }"
+				"QPushButton:pressed { background: #333; color: #EEE; }"
+			);
+
+			bool proceed = false;
+
+			connect(yes, &QPushButton::pressed, this, [&]() {
+				proceed = true;
+				dialog.setWindowTitle("Database Wiped!");
+				textLabel->setVisible(false);
+				no->setVisible(false);
+				yes->setVisible(false);
+				cont->setVisible(true);
+				descDoc->setText("Your database has been recreated successfully! Enjoy the updated version of Jahshaka! \n");
+				dialog.adjustSize();
+
+				QRect position = dialog.frameGeometry();
+				position.moveCenter(QDesktopWidget().availableGeometry().center());
+				dialog.move(position.topLeft());
+			});
+
+			connect(no,   &QPushButton::pressed, this, [&proceed, &dialog]() { proceed = false; dialog.close(); });
+            connect(cont, &QPushButton::pressed, this, [&proceed, &dialog]() { dialog.close(); });
+
+			dialog.setLayout(layout);
+			dialog.exec();
+
+			if (proceed) {
 				db->wipeDatabase();
 
 				QDir storeDir(IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DataLocation), "AssetStore"));
 				if (!storeDir.removeRecursively()) {
 			#ifdef Q_OS_WIN
 					RemoveDirectory(storeDir.absolutePath().toStdString().c_str());
-			#endif Q_OS_WIN
+			#endif // Q_OS_WIN
 				}
 
 				// get the current project working directory
@@ -527,15 +581,14 @@ void MainWindow::setupProjectDB()
 				if (!projectDir.removeRecursively()) {
 			#ifdef Q_OS_WIN
 					RemoveDirectory(projectDir.absolutePath().toStdString().c_str());
-			#endif Q_OS_WIN
+			#endif // Q_OS_WIN
 				}
 
-				QMessageBox::StandardButton option;
-				option = QMessageBox::information(Q_NULLPTR,
-					"Database Reset",
-					"Your database has been recreated successfully!\n\n Enjoy an updated version of Jahshaka!\n\n",
-					QMessageBox::Ok);
-			}
+				dialog.close();
+            }
+            else {
+                return;
+            }
 		}
 
 		db->createAllTables();

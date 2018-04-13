@@ -78,7 +78,7 @@ private:
 
 signals:
     void fileToOpen(bool playMode);
-    void fileToCreate(const QString& str, const QString& str2);
+    void fileToCreate(const QString &name, const QString &path);
     void importProject();
     void exportProject();
     void closeProject();

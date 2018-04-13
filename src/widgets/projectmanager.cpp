@@ -182,6 +182,8 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
     settings = SettingsManager::getDefaultManager();
 
+    ui->lineEdit->setAttribute(Qt::WA_MacShowFocusRect, false);
+
     ui->tilePreview->setView(new QListView());
     ui->tilePreview->setItemDelegate(new QStyledItemDelegate(ui->tilePreview));
     ui->tilePreview->setCurrentText(settings->getValue("tileSize", "Normal").toString());
@@ -428,11 +430,11 @@ void ProjectManager::openSampleProject(QListWidgetItem *item)
 void ProjectManager::newProject()
 {
     NewProjectDialog dialog;
-
     dialog.exec();
 
     auto projectName = dialog.getProjectInfo().projectName;
     auto projectPath = dialog.getProjectInfo().projectPath;
+    auto projectGuid = GUIDManager::generateGUID();
 
     if (!projectName.isEmpty() || !projectName.isNull()) {
         auto fullProjectPath = QDir(projectPath).filePath(projectName);
@@ -446,13 +448,10 @@ void ProjectManager::newProject()
 		QJsonObject assetProperty;
 
 		// Insert an empty scene to get access to the project guid... 
-		db->createProject(projectName);
+        if (!db->createProject(projectGuid, projectName)) return;
 
-		//for (auto folder : Constants::PROJECT_DIRS) {
-		//	QDir dir(QDir(fullProjectPath).filePath(folder));
-		//	dir.mkpath(".");
-		//}
-		
+        Globals::project->setProjectGuid(projectGuid);
+
         emit fileToCreate(projectName, fullProjectPath);
 
         this->hide();

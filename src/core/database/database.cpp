@@ -186,33 +186,33 @@ bool Database::checkIfTableExists(const QString &tableName)
 
 QString Database::getVersion()
 {
-    QSqlQuery pquery;
-    pquery.prepare("SELECT COUNT(*) FROM projects");
-    executeAndCheckQuery(pquery, "projectsCount");
+    //QSqlQuery pquery;
+    //pquery.prepare("SELECT COUNT(*) FROM projects");
+    //executeAndCheckQuery(pquery, "projectsCount");
 
-    bool getVersion = false;
-    if (pquery.exec()) {
-        if (pquery.first()) {
-            getVersion = pquery.value(0).toBool();
-        }
-    }
-    else {
-        irisLog("There was an error getting the projects count! " + pquery.lastError().text());
-    }
+    //bool getVersion = false;
+    //if (pquery.exec()) {
+    //    if (pquery.first()) {
+    //        getVersion = pquery.value(0).toBool();
+    //    }
+    //}
+    //else {
+    //    irisLog("There was an error getting the projects count! " + pquery.lastError().text());
+    //}
 
-    if (getVersion) {
-        QSqlQuery query1;
-        query1.prepare("SELECT version FROM projects LIMIT 1");
+    //if (getVersion) {
+    //    QSqlQuery query1;
+    //    query1.prepare("SELECT version FROM projects LIMIT 1");
 
-        if (query1.exec()) {
-            if (query1.first()) {
-                return query1.value(0).toString();
-            }
-        }
-        else {
-            irisLog("There was an error getting the db version! " + query1.lastError().text());
-        }
-    }
+    //    if (query1.exec()) {
+    //        if (query1.first()) {
+    //            return query1.value(0).toString();
+    //        }
+    //    }
+    //    else {
+    //        irisLog("There was an error getting the db version! " + query1.lastError().text());
+    //    }
+    //}
 
     return QString();
 }
@@ -357,13 +357,13 @@ void Database::createAllTables()
 }
 
 bool Database::createProject(
+    const QString &guid,
     const QString &projectName,
     const QByteArray &sceneBlob,
     const QByteArray &thumbnail
 )
 {
     QSqlQuery query;
-    auto guid = GUIDManager::generateGUID();
     query.prepare(
         "INSERT INTO projects (name, scene, thumbnail, version, date_created, last_accessed, last_written, guid) "
         "VALUES (:name, :scene, :thumbnail, :version, datetime(), datetime(), datetime(), :guid)"
@@ -374,8 +374,6 @@ bool Database::createProject(
     query.bindValue(":version", Constants::CONTENT_VERSION);
     query.bindValue(":guid", guid);
 
-    Globals::project->setProjectGuid(guid);
- 
     return executeAndCheckQuery(query, "CreateProject");
 }
 

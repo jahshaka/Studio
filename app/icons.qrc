@@ -98,7 +98,7 @@
         <file>icons/icons8-eye-48-dim.png</file>
         <file>icons/icons8-file-72.png</file>
         <file>icons/icons8-file-72-file.png</file>
-        <file>icons/icons8-expand-arrow-24.png</file>
-        <file>icons/icons8-expand-arrow-closed-24.png</file>
+        <file>icons/expand_arrow_open.png</file>
+        <file>icons/expand_arrow_closed.png</file>
     </qresource>
 </RCC>
