@@ -9,9 +9,9 @@ AssetPickerWidget::AssetPickerWidget(ModelTypes type, QDialog *parent) :
 {
     ui->setupUi(this);
 
-    setWindowTitle("Select Asset");
+    setWindowTitle(tr("Select Asset"));
     ui->viewButton->setCheckable(true);
-    ui->viewButton->setToolTip("Toggle icon view");
+    ui->viewButton->setToolTip(tr("Toggle icon view"));
 
     connect(ui->assetView,  SIGNAL(itemDoubleClicked(QListWidgetItem*)),
             this,           SLOT(assetViewDblClicked(QListWidgetItem*)));

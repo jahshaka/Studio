@@ -311,7 +311,7 @@ void KeyFrameWidget::mouseReleaseEvent(QMouseEvent* evt)
             //show context menu
             QMenu menu;
 
-            auto deleteAction = menu.addAction("Delete");
+            auto deleteAction = menu.addAction(tr("Delete"));
             connect(deleteAction, SIGNAL(triggered(bool)), this, SLOT(deleteContextKey()));
 
             menu.exec(this->mapToGlobal(mousePos));

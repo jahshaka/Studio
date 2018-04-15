@@ -411,8 +411,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
 		if (UiManager::isUndoStackDirty() && (undoStackCount != UiManager::getUndoStackCount())) {
 			QMessageBox::StandardButton reply;
 			reply = QMessageBox::question(this,
-				"Unsaved Changes",
-				"There are unsaved changes, save before closing?",
+				tr("Unsaved Changes"),
+				tr("There are unsaved changes, save before closing?"),
 				QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
 			if (reply == QMessageBox::Yes) {
 				saveScene();
@@ -462,7 +462,7 @@ void MainWindow::createPostProcessDockWidget()
     postProcessWidget = new PostProcessesWidget();
     // postProcessWidget->setWindowTitle("Post Processes");
     postProcessDockWidget->setWidget(postProcessWidget);
-    postProcessDockWidget->setWindowTitle("PostProcesses");
+    postProcessDockWidget->setWindowTitle(tr("PostProcesses"));
     // postProcessDockWidget->setFloating(true);
     postProcessDockWidget->setHidden(true);
     this->addDockWidget(Qt::RightDockWidgetArea, postProcessDockWidget);
@@ -733,7 +733,7 @@ void MainWindow::openProject(bool playMode)
 
     // autoplay scenes immediately
     if (playMode) {
-        playBtn->setToolTip("Pause the scene");
+        playBtn->setToolTip(tr("Pause the scene"));
         playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
         onPlaySceneButton();
     }
@@ -1729,16 +1729,16 @@ void MainWindow::setupViewPort()
 {
 	// ui->MenuBar->setVisible(false);
 
-	worlds_menu = new QPushButton("Worlds");
+	worlds_menu = new QPushButton(tr("Worlds"));
 	worlds_menu->setObjectName("worlds_menu");
 	worlds_menu->setCursor(Qt::PointingHandCursor);
-	player_menu = new QPushButton("Player");
+	player_menu = new QPushButton(tr("Player"));
 	player_menu->setObjectName("player_menu");
 	player_menu->setCursor(Qt::PointingHandCursor);
-	editor_menu = new QPushButton("Editor");
+	editor_menu = new QPushButton(tr("Editor"));
 	editor_menu->setObjectName("editor_menu");
 	editor_menu->setCursor(Qt::PointingHandCursor);
-	assets_menu = new QPushButton("Assets");
+	assets_menu = new QPushButton(tr("Assets"));
 	assets_menu->setObjectName("assets_menu");
 	assets_menu->setCursor(Qt::PointingHandCursor);
 
@@ -1834,7 +1834,7 @@ void MainWindow::setupViewPort()
     auto containerLayout = new QVBoxLayout;
 
     auto screenShotBtn = new QPushButton;
-    screenShotBtn->setToolTip("Take a screenshot of the scene");
+    screenShotBtn->setToolTip(tr("Take a screenshot of the scene"));
     screenShotBtn->setToolTipDuration(-1);
     screenShotBtn->setStyleSheet("background: transparent");
     screenShotBtn->setIcon(QIcon(":/icons/camera.svg"));
@@ -1847,7 +1847,7 @@ void MainWindow::setupViewPort()
 
     auto controlBarLayout = new QHBoxLayout;
     playSceneBtn = new QPushButton;
-    playSceneBtn->setToolTip("Play scene");
+    playSceneBtn->setToolTip(tr("Play scene"));
     playSceneBtn->setToolTipDuration(-1);
     playSceneBtn->setStyleSheet("background: transparent");
     playSceneBtn->setIcon(QIcon(":/icons/g_play.svg"));
@@ -1868,7 +1868,7 @@ void MainWindow::setupViewPort()
 
     restartBtn = new QPushButton;
     restartBtn->setCursor(Qt::PointingHandCursor);
-    restartBtn->setToolTip("Restart playback");
+    restartBtn->setToolTip(tr("Restart playback"));
     restartBtn->setToolTipDuration(-1);
     restartBtn->setStyleSheet("background: transparent");
     restartBtn->setIcon(QIcon(":/icons/rotate-to-right.svg"));
@@ -1876,7 +1876,7 @@ void MainWindow::setupViewPort()
 
     playBtn = new QPushButton;
     playBtn->setCursor(Qt::PointingHandCursor);
-    playBtn->setToolTip("Play the scene");
+    playBtn->setToolTip(tr("Play the scene"));
     playBtn->setToolTipDuration(-1);
     playBtn->setStyleSheet("background: transparent");
     playBtn->setIcon(QIcon(":/icons/g_play.svg"));
@@ -1884,7 +1884,7 @@ void MainWindow::setupViewPort()
 
     stopBtn = new QPushButton;
     stopBtn->setCursor(Qt::PointingHandCursor);
-    stopBtn->setToolTip("Stop playback");
+    stopBtn->setToolTip(tr("Stop playback"));
     stopBtn->setToolTipDuration(-1);
     stopBtn->setStyleSheet("background: transparent");
     stopBtn->setIcon(QIcon(":/icons/g_stop.svg"));
@@ -1899,24 +1899,24 @@ void MainWindow::setupViewPort()
     playerControlsLayout->addStretch();
 
     connect(restartBtn, &QPushButton::pressed, [this]() {
-        playBtn->setToolTip("Pause the scene");
+        playBtn->setToolTip(tr("Pause the scene"));
         playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
         UiManager::restartScene();
     });
 
     connect(playBtn, &QPushButton::pressed, [this]() {
         if (UiManager::isScenePlaying) {
-            playBtn->setToolTip("Play the scene");
+            playBtn->setToolTip(tr("Play the scene"));
             playBtn->setIcon(QIcon(":/icons/g_play.svg"));
             UiManager::pauseScene();
         } else {
-            playBtn->setToolTip("Pause the scene");
+            playBtn->setToolTip(tr("Pause the scene"));
             playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
             UiManager::playScene();
         }
     });
     connect(stopBtn, &QPushButton::pressed, [this]() {
-        playBtn->setToolTip("Play the scene");
+        playBtn->setToolTip(tr("Play the scene"));
         playBtn->setIcon(QIcon(":/icons/g_play.svg"));
         UiManager::stopScene();
     });
@@ -1993,16 +1993,18 @@ void MainWindow::setupDesktop()
 
 void MainWindow::setupToolBar()
 {
+
+
     toolBar = new QToolBar;
 	toolBar->setIconSize(QSize(14, 14));
 	QAction *actionUndo = new QAction;
-	actionUndo->setToolTip("Undo last action");
+	actionUndo->setToolTip(tr("Undo last action"));
 	actionUndo->setObjectName(QStringLiteral("actionUndo"));
 	actionUndo->setIcon(QIcon(":/icons/undo.png"));
 	toolBar->addAction(actionUndo);
 
 	QAction *actionRedo = new QAction;
-	actionRedo->setToolTip("Redo last action");
+	actionRedo->setToolTip(tr("Redo last action"));
 	actionRedo->setObjectName(QStringLiteral("actionRedo"));
 	actionRedo->setIcon(QIcon(":/icons/redo.svg"));
 	toolBar->addAction(actionRedo);
@@ -2015,21 +2017,21 @@ void MainWindow::setupToolBar()
     QAction *actionTranslate = new QAction;
     actionTranslate->setObjectName(QStringLiteral("actionTranslate"));
     actionTranslate->setCheckable(true);
-	actionTranslate->setToolTip("Manipulator for translating objects");
+	actionTranslate->setToolTip(tr("Manipulator for translating objects"));
     actionTranslate->setIcon(QIcon(":/icons/tranlate arrow.svg"));
     toolBar->addAction(actionTranslate);
 
     QAction *actionRotate = new QAction;
     actionRotate->setObjectName(QStringLiteral("actionRotate"));
     actionRotate->setCheckable(true);
-	actionRotate->setToolTip("Manipulator for rotating objects");
+	actionRotate->setToolTip(tr("Manipulator for rotating objects"));
     actionRotate->setIcon(QIcon(":/icons/rotate-to-right.svg"));
     toolBar->addAction(actionRotate);
 
     QAction *actionScale = new QAction;
     actionScale->setObjectName(QStringLiteral("actionScale"));
     actionScale->setCheckable(true);
-	actionScale->setToolTip("Manipulator for scaling objects");
+	actionScale->setToolTip(tr("Manipulator for scaling objects"));
     actionScale->setIcon(QIcon(":/icons/expand-arrows.svg"));
     toolBar->addAction(actionScale);
 
@@ -2038,14 +2040,14 @@ void MainWindow::setupToolBar()
     QAction *actionGlobalSpace = new QAction;
     actionGlobalSpace->setObjectName(QStringLiteral("actionGlobalSpace"));
     actionGlobalSpace->setCheckable(true);
-	actionGlobalSpace->setToolTip("Move objects relative to the global world");
+	actionGlobalSpace->setToolTip(tr("Move objects relative to the global world"));
     actionGlobalSpace->setIcon(QIcon(":/icons/world.svg"));
     toolBar->addAction(actionGlobalSpace);
 
     QAction *actionLocalSpace = new QAction;
     actionLocalSpace->setObjectName(QStringLiteral("actionLocalSpace"));
     actionLocalSpace->setCheckable(true);
-	actionLocalSpace->setToolTip("Move objects relative to their transform");
+	actionLocalSpace->setToolTip(tr("Move objects relative to their transform"));
     actionLocalSpace->setIcon(QIcon(":/icons/sceneobject.svg"));
     toolBar->addAction(actionLocalSpace);
 
@@ -2054,14 +2056,14 @@ void MainWindow::setupToolBar()
     QAction *actionFreeCamera = new QAction;
     actionFreeCamera->setObjectName(QStringLiteral("actionFreeCamera"));
     actionFreeCamera->setCheckable(true);
-	actionFreeCamera->setToolTip("Freely move and orient the camera");
+	actionFreeCamera->setToolTip(tr("Freely move and orient the camera"));
     actionFreeCamera->setIcon(QIcon(":/icons/people.svg"));
     toolBar->addAction(actionFreeCamera);
 
     QAction *actionArcballCam = new QAction;
     actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
     actionArcballCam->setCheckable(true);
-	actionArcballCam->setToolTip("Move and orient the camera around a fixed point");
+	actionArcballCam->setToolTip(tr("Move and orient the camera around a fixed point"));
     actionArcballCam->setIcon(QIcon(":/icons/local.svg"));
     toolBar->addAction(actionArcballCam);
 
@@ -2098,7 +2100,7 @@ void MainWindow::setupToolBar()
 	QAction *actionExport = new QAction;
 	actionExport->setObjectName(QStringLiteral("actionExport"));
 	actionExport->setCheckable(false);
-	actionExport->setToolTip("Export the current scene");
+	actionExport->setToolTip(tr("Export the current scene"));
 	actionExport->setIcon(QIcon(":/icons/export.png"));
 	toolBar->addAction(actionExport);
 
@@ -2106,16 +2108,17 @@ void MainWindow::setupToolBar()
 	actionSaveScene->setObjectName(QStringLiteral("actionSaveScene"));
 	actionSaveScene->setVisible(!settings->getValue("auto_save", true).toBool());
 	actionSaveScene->setCheckable(false);
-	actionSaveScene->setToolTip("Save the current scene");
+	actionSaveScene->setToolTip(tr("Save the current scene"));
 	actionSaveScene->setIcon(QIcon(":/icons/save.png"));
 	toolBar->addAction(actionSaveScene);
 
 	QAction *viewDocks = new QAction;
 	viewDocks->setObjectName(QStringLiteral("viewDocks"));
 	viewDocks->setCheckable(false);
-	viewDocks->setToolTip("Toggle Widgets");
+	viewDocks->setToolTip(tr("Toggle Widgets"));
 	viewDocks->setIcon(QIcon(":/icons/tab.png"));
 	toolBar->addAction(viewDocks);
+
 
 	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
 	connect(viewDocks,			SIGNAL(triggered(bool)), SLOT(toggleDockWidgets()));
@@ -2172,40 +2175,40 @@ void MainWindow::toggleDockWidgets()
 	dl->setContentsMargins(20, 10, 20, 16);
 	d->setLayout(dl);
 
-	QPushButton *hierarchy = new QPushButton("Hierarchy");
+	QPushButton *hierarchy = new QPushButton(tr("Hierarchy"));
 	hierarchy->setAccessibleName(QStringLiteral("toggleAbles"));
 	hierarchy->setCheckable(true);
 	hierarchy->setChecked(widgetStates[(int) Widget::HIERARCHY]);
 
-	QPushButton *properties = new QPushButton("Properties");
+	QPushButton *properties = new QPushButton(tr("Properties"));
 	properties->setAccessibleName(QStringLiteral("toggleAbles"));
 	properties->setCheckable(true);
 	properties->setChecked(widgetStates[(int) Widget::PROPERTIES]);
 
-	QPushButton *presets = new QPushButton("Presets");
+	QPushButton *presets = new QPushButton(tr("Presets"));
 	presets->setAccessibleName(QStringLiteral("toggleAbles"));
 	presets->setCheckable(true);
 	presets->setChecked(widgetStates[(int) Widget::PRESETS]);
 
-	QPushButton *timeline = new QPushButton("Timeline");
+	QPushButton *timeline = new QPushButton(tr("Timeline"));
 	timeline->setAccessibleName(QStringLiteral("toggleAbles"));
 	timeline->setCheckable(true);
 	timeline->setChecked(widgetStates[(int) Widget::TIMELINE]);
 
-	QPushButton *assets = new QPushButton("Assets Browser");
+	QPushButton *assets = new QPushButton(tr("Assets Browser"));
 	assets->setAccessibleName(QStringLiteral("toggleAbles"));
 	assets->setCheckable(true);
 	assets->setChecked(widgetStates[(int) Widget::ASSETS]);
 
-	QPushButton *closeAll = new QPushButton("Close All");
+	QPushButton *closeAll = new QPushButton(tr("Close All"));
 	closeAll->setCheckable(true);
 	//closeAll->setChecked(true);
 
-	QPushButton *restoreAll = new QPushButton("Restore All");
+	QPushButton *restoreAll = new QPushButton(tr("Restore All"));
 	restoreAll->setCheckable(true);
 	//restoreAll->setChecked(true);
 
-	QLabel *label = new QLabel("Toggle Widgets");
+	QLabel *label = new QLabel(tr("Toggle Widgets"));
 	label->setAlignment(Qt::AlignCenter);
 	label->setContentsMargins(0, 0, 0, 6);
 	dl->addWidget(label);
@@ -2216,7 +2219,7 @@ void MainWindow::toggleDockWidgets()
 	dl->addWidget(timeline);
 	dl->addWidget(assets);
 
-	QPushButton *saveLayout = new QPushButton("Save");
+	QPushButton *saveLayout = new QPushButton(tr("Save"));
 	
 	connect(saveLayout, &QPushButton::pressed, [=]() {
 		//widgetStates[(int) Widget::HIERARCHY]	= hierarchy->isChecked() || !sceneHierarchyDock->isVisible();
@@ -2355,8 +2358,8 @@ void MainWindow::showProjectManagerInternal()
     if (UiManager::isUndoStackDirty()) {
         QMessageBox::StandardButton option;
         option = QMessageBox::question(this,
-                                       "Unsaved Changes",
-                                       "There are unsaved changes, save before closing?",
+                                       tr("Unsaved Changes"),
+                                       tr("There are unsaved changes, save before closing?"),
                                        QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
 
         if (option == QMessageBox::Yes) {
@@ -2457,7 +2460,7 @@ void MainWindow::enterEditMode()
 {
     UiManager::isScenePlaying = false;
     UiManager::enterEditMode();
-    playSceneBtn->setToolTip("Play scene");
+    playSceneBtn->setToolTip(tr("Play scene"));
     playSceneBtn->setIcon(QIcon(":/icons/g_play.svg"));
 }
 
@@ -2465,6 +2468,6 @@ void MainWindow::enterPlayMode()
 {
     UiManager::isScenePlaying = true;
     UiManager::enterPlayMode();
-    playSceneBtn->setToolTip("Stop playing");
+    playSceneBtn->setToolTip(tr("Stop playing"));
     playSceneBtn->setIcon(QIcon(":/icons/g_stop.svg"));
 }

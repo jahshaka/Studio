@@ -16,7 +16,7 @@ AboutDialog::AboutDialog(QWidget *parent) :
     ui(new Ui::AboutDialog)
 {
     ui->setupUi(this);
-    this->setWindowTitle("About");
+    this->setWindowTitle(tr("About"));
 
     connect(ui->okButton,SIGNAL(clicked(bool)),this,SLOT(close()));
 }

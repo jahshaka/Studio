@@ -16,7 +16,7 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui
 {
     ui->setupUi(this);
 
-    this->setWindowTitle("New World");
+    this->setWindowTitle(tr("New World"));
 
     ui->createProject->setAutoDefault(true);
     ui->createProject->setDefault(true);

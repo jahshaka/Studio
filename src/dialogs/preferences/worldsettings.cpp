@@ -14,6 +14,15 @@ For more information see the LICENSE file
 
 #include "irisgl/src/core/irisutils.h"
 
+#include "mainwindow.h"
+#include "../../core/settingsmanager.h"
+#include "../../constants.h"
+#include "../../uimanager.h"
+#include "../../globals.h"
+#include "../../widgets/sceneviewwidget.h"
+#include "../../core/database/database.h"
+
+
 #include <QFileDialog>
 #include <QListView>
 #include <QStandardPaths>
@@ -87,6 +96,13 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 	connect(ui->help,       &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(4); });
 	connect(ui->about,      &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(5); });
 
+	//connect(ui->language, SIGNAL(currentIndexChanged(QString)), this, SLOT(changeLanguage()));
+
+	
+
+	if (translator_por.load(":/languages/jahshaka_por"))
+		qDebug() << "portuguese language qm loaded successfully \n\n";
+
     setupDirectoryDefaults();
     setupOutline();
 
@@ -100,6 +116,61 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 
 	autoUpdate = settings->getValue("automatic_updates", true).toBool();
 	ui->checkUpdates->setChecked(autoUpdate);
+}
+
+void WorldSettings::changeLanguage() {
+
+	/*qDebug() << "change language function called";
+
+	if (ui->language->currentText() == "English") {
+		changeLanguageToEnglish();
+
+	}
+	if (ui->language->currentText() == "Portuguese") {
+		changeLanguageToPortugese();
+	}
+*/
+}
+
+void WorldSettings::changeLanguageToEnglish()
+{
+	qApp->removeTranslator(&translator_por);
+	qDebug() << "language changed to english called";
+
+}
+
+void WorldSettings::changeLanguageToPortugese()
+{
+
+	
+
+	if(qApp->installTranslator(&translator_por))
+	qDebug() << "language changed to portuguese called";
+
+	for (int i = 0; i < qApp->topLevelWidgets().length(); i++)
+	{
+		ui->retranslateUi(qApp->topLevelWidgets().at(i));
+	
+		
+		
+
+	}
+	
+	qDebug() << "  translaated";
+
+
+}
+
+void WorldSettings::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+
+		
+
+	}
+
+	QWidget::changeEvent(event);
 }
 
 void WorldSettings::setupOutline()
@@ -174,9 +245,11 @@ void WorldSettings::editorPathChanged(QString path)
 
 void WorldSettings::saveSettings()
 {
+
 	if (!ui->author->text().isEmpty()) {
 		db->updateAuthorInfo(ui->author->text());
 	}
+
 }
 
 WorldSettings::~WorldSettings()

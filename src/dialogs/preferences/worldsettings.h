@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #define WORLDSETTINGS_H
 
 #include <QWidget>
+#include <QTranslator>
+
 
 namespace Ui {
     class WorldSettings;
@@ -27,6 +29,7 @@ class WorldSettings : public QWidget
 
 public:
     explicit WorldSettings(Database *db, SettingsManager* settings);
+	
     ~WorldSettings();
 
     int outlineWidth;
@@ -51,15 +54,26 @@ private slots:
 	void enableOpenInPlayer(bool state);
     void changeDefaultDirectory();
     void projectDirectoryChanged(QString path);
+
     void changeEditorPath();
     void editorPathChanged(QString path);
 	void enableAutoUpdate(bool state);
 
+    void changeLanguage();
+
 public slots:
 	void saveSettings();
 
+private:
+	void changeLanguageToEnglish();
+	void changeLanguageToPortugese();
+	QTranslator translator_por;
+
 public:
     Ui::WorldSettings *ui;
+
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 #endif // WORLDSETTINGS_H

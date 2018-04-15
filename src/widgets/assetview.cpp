@@ -367,7 +367,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	testL->setMargin(0);
     testL->setSpacing(0);
 	emptyL->setSpacing(0);
-	auto emptyLabel = new QLabel("You have no assets in your library.");
+	auto emptyLabel = new QLabel(tr("You have no assets in your library."));
 	auto emptyIcon = new QLabel;
 	emptyIcon->setAlignment(Qt::AlignVCenter | Qt::AlignHCenter);
 	emptyIcon->setPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-empty-box-50.png"));
@@ -452,7 +452,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	//filterLayout->addWidget(new QLabel("Filter: "));
 	//filterLayout->addWidget(filterGroup);
 	filterLayout->addStretch();
-	filterLayout->addWidget(new QLabel("Search: "));
+	filterLayout->addWidget(new QLabel(tr("Search: ")));
 	le = new QLineEdit();
 	le->setFixedWidth(256);
 	le->setStyleSheet(
@@ -573,8 +573,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	assetDropPadLabel->setAlignment(Qt::AlignHCenter);
 
 	assetDropPadLayout->addWidget(assetDropPadLabel);
-	QPushButton *browseButton = new QPushButton("Import Asset");
-	QPushButton *downloadWorld = new QPushButton("Download Assets");
+	QPushButton *browseButton = new QPushButton(tr("Import Asset"));
+	QPushButton *downloadWorld = new QPushButton(tr("Download Assets"));
 
 	connect(downloadWorld, &QPushButton::pressed, []() {
 		QDesktopServices::openUrl(QUrl("http://www.jahfx.com/downloads/models/"));
@@ -593,26 +593,26 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 	assetDropPadLayout->addWidget(importButtons);
 
-	updateAsset = new QPushButton("Update");
+	updateAsset = new QPushButton(tr("Update"));
 	updateAsset->setStyleSheet("background: #3498db");
 	updateAsset->setVisible(false);
 
-    normalize = new QPushButton("Normalize");
+    normalize = new QPushButton(tr("Normalize"));
 
-	addToProject = new QPushButton("Add to Project");
+	addToProject = new QPushButton(tr("Add to Project"));
 	addToProject->setStyleSheet("QPushButton { background: #3498db } QPushButton:disabled { color: #656565; background-color: #3e3e3e; }");
 	addToProject->setEnabled(false);
 
-    deleteFromLibrary = new QPushButton("Delete From Library");
+    deleteFromLibrary = new QPushButton(tr("Delete From Library"));
 	deleteFromLibrary->setStyleSheet("QPushButton { background: #E74C3C } QPushButton:disabled { color: #656565; background-color: #3e3e3e; }");
     deleteFromLibrary->setEnabled(false);
 
-	renameModel = new QLabel("Name:");
+	renameModel = new QLabel(tr("Name:"));
 	renameModelField = new QLineEdit();
 
-	tagModel = new QLabel("Tags:");
+	tagModel = new QLabel(tr("Tags:"));
 	tagModelField = new QLineEdit();
-	tagModelField->setPlaceholderText("(comma separated)");
+	tagModelField->setPlaceholderText(tr("(comma separated)"));
 
 	renameWidget = new QWidget;
 	auto renameLayout = new QHBoxLayout;
@@ -824,23 +824,23 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	QSizePolicy policy2;
 	policy2.setVerticalPolicy(QSizePolicy::Preferred);
 	policy2.setHorizontalPolicy(QSizePolicy::Preferred);
-	metadataMissing = new QLabel("Nothing selected...");
+	metadataMissing = new QLabel(tr("Nothing selected..."));
 	metadataMissing->setAlignment(Qt::AlignCenter);
 	metadataMissing->setStyleSheet("padding: 12px; text-align: center");
 	metadataMissing->setSizePolicy(policy2);
-	metadataName = new QLabel("Name: ");
+	metadataName = new QLabel(tr("Name: "));
 	metadataName->setSizePolicy(policy2);
-	metadataType = new QLabel("Type: ");
+	metadataType = new QLabel(tr("Type: "));
 	metadataType->setSizePolicy(policy2);
-	metadataAuthor = new QLabel("Author: ");
+	metadataAuthor = new QLabel(tr("Author: "));
 	metadataAuthor->setSizePolicy(policy2);
-	metadataLicense = new QLabel("License: ");
+	metadataLicense = new QLabel(tr("License: "));
 	metadataLicense->setSizePolicy(policy2);
-	metadataTags = new QLabel("Tags: ");
+	metadataTags = new QLabel(tr("Tags: "));
 	metadataTags->setSizePolicy(policy2);
-	metadataVisibility = new QLabel("Public: ");
+	metadataVisibility = new QLabel(tr("Public: "));
 	metadataVisibility->setSizePolicy(policy2);
-	metadataCollection = new QLabel("Collection: ");
+	metadataCollection = new QLabel(tr("Collection: "));
 	metadataCollection->setSizePolicy(policy2);
     metadataVisibility->setVisible(false);
 
@@ -879,7 +879,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 	metadata->setLayout(l);
 	//metadata->setStyleSheet("QLabel { font-size: 12px; }");
-	auto header = new QLabel("Asset Metadata");
+	auto header = new QLabel(tr("Asset Metadata"));
 	header->setAlignment(Qt::AlignCenter);
 	header->setStyleSheet("border-top: 1px solid black; border-bottom: 1px solid black; text-align: center; padding: 12px; background: #1A1A1A");
 	metaLayout->addWidget(header);
@@ -1328,6 +1328,7 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 
     ModelTypes jafType = ModelTypes::Undefined;
 
+
     QString placeHolderGuid = GUIDManager::generateGUID();
 
     for (const auto &file : fileNames) {
@@ -1597,6 +1598,7 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 //			.arg(item->metadata["name"].toString());
 //		QMessageBox::information(this, "Asset Import Successful", warningText, QMessageBox::Ok);
 	//}
+
 }
 
 void AssetView::changeAssetCollection(AssetGridItem *item)
@@ -1627,8 +1629,8 @@ void AssetView::changeAssetCollection(AssetGridItem *item)
 
 	connect(accept, &QPushButton::pressed, [&]() {
 		if (db->switchAssetCollection(input->currentData().toInt(), guid)) {
-			QString infoText = QString("Collection Changed.");
-			QMessageBox::information(this, "Collection Change Successful", infoText, QMessageBox::Ok);
+			QString infoText = QString(tr("Collection Changed."));
+			QMessageBox::information(this, tr("Collection Change Successful"), infoText, QMessageBox::Ok);
 			item->metadata["collection"] = input->currentData().toInt();
 			item->metadata["collection_name"] = input->currentText();
 
@@ -1640,8 +1642,8 @@ void AssetView::changeAssetCollection(AssetGridItem *item)
 			}
 		}
 		else {
-			QString warningText = QString("Failed to change collection. Try again.");
-			QMessageBox::warning(this, "Collection Change Failed", warningText, QMessageBox::Ok);
+			QString warningText = QString(tr("Failed to change collection. Try again."));
+			QMessageBox::warning(this, tr("Collection Change Failed"), warningText, QMessageBox::Ok);
 		}
 
 		d.close();
@@ -1655,7 +1657,7 @@ void AssetView::removeAssetFromProject(AssetGridItem *item)
 	auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
 
 	auto option = QMessageBox::question(this,
-	    "Deleting Asset", "Are you sure you want to delete this asset?",
+	    tr("Deleting Asset"), tr("Are you sure you want to delete this asset?"),
 	    QMessageBox::Yes | QMessageBox::Cancel);
 
 	if (option == QMessageBox::Yes) {
@@ -1674,7 +1676,7 @@ void AssetView::removeAssetFromProject(AssetGridItem *item)
 	        clearViewer();
 	    }
 	    else {
-	        QMessageBox::warning(this, "Delete Failed!", "Failed to remove asset, please try again!", QMessageBox::Ok);
+	        QMessageBox::warning(this, tr("Delete Failed!"), tr("Failed to remove asset, please try again!"), QMessageBox::Ok);
 	    }
 	}
 }
