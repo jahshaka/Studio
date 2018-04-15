@@ -630,25 +630,28 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	connect(action, SIGNAL(triggered()), this, SLOT(createShader()));
 	createMenu->addAction(action);
 
-	action = new QAction(QIcon(), "New Folder", this);
+	action = new QAction(QIcon(), tr("New Folder"), this);
 	connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
 	createMenu->addAction(action);
+
 
 	//    action = new QAction(QIcon(), "Open in Explorer", this);
 	//    connect(action, SIGNAL(triggered()), this, SLOT(openAtFolder()));
 	//    menu.addAction(action);
 
-	action = new QAction(QIcon(), "Import Asset", this);
-	connect(action, SIGNAL(triggered()), this, SLOT(importAsset()));
-	menu.addAction(action);
+
+    action = new QAction(QIcon(), tr("Import Asset"), this);
+    connect(action, SIGNAL(triggered()), this, SLOT(importAsset()));
+    menu.addAction(action);
 
 	//    action = new QAction(QIcon(), "Rename", this);
 	//    connect(action, SIGNAL(triggered()), this, SLOT(renameTreeItem()));
 	//    menu.addAction(action);
 
-	action = new QAction(QIcon(), "Delete", this);
-	connect(action, SIGNAL(triggered()), this, SLOT(deleteTreeFolder()));
-	menu.addAction(action);
+
+    action = new QAction(QIcon(), tr("Delete"), this);
+    connect(action, SIGNAL(triggered()), this, SLOT(deleteTreeFolder()));
+    menu.addAction(action);
 
 	menu.exec(ui->assetTree->mapToGlobal(pos));
 }
@@ -696,20 +699,20 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
             menu.addAction(action);
 		}
 
-		action = new QAction(QIcon(), "Delete", this);
+		action = new QAction(QIcon(), tr("Delete"), this);
 		connect(action, SIGNAL(triggered()), this, SLOT(deleteItem()));
 		menu.addAction(action);
 	}
 	else {
-		QMenu *createMenu = menu.addMenu("Create");
-		action = new QAction(QIcon(), "Standard Shader", this);
+		QMenu *createMenu = menu.addMenu(tr("Create"));
+		action = new QAction(QIcon(), tr("Standard Shader"), this);
 		connect(action, SIGNAL(triggered()), this, SLOT(createShader()));
 		createMenu->addAction(action);
-		action = new QAction(QIcon(), "New Folder", this);
+		action = new QAction(QIcon(), tr("New Folder"), this);
 		connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
 		createMenu->addAction(action);
 
-		action = new QAction(QIcon(), "Import Asset", this);
+		action = new QAction(QIcon(), tr("Import Asset"), this);
 		connect(action, SIGNAL(triggered()), this, SLOT(importAssetB()));
 		menu.addAction(action);
 
@@ -1394,7 +1397,7 @@ void AssetWidget::createShader()
 
 void AssetWidget::createFolder()
 {
-	const QString newFolder = "New Folder";
+	const QString newFolder = tr("New Folder");
 	QListWidgetItem *item = new QListWidgetItem;
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
 	item->setSizeHint(currentSize);
@@ -1406,6 +1409,7 @@ void AssetWidget::createFolder()
 	item->setData(MODEL_ITEM_TYPE, MODEL_FOLDER);
 
 	assetItem.wItem = item;
+
 
 	QString folderName = newFolder;
 
@@ -1718,6 +1722,7 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                 assetMat->assetGuid = guidReturned;
                 assetMat->setValue(QVariant::fromValue(material));
                 AssetManager::addAsset(assetMat);
+
             }
         }
     }

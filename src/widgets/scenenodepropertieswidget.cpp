@@ -60,12 +60,12 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 			clearLayout(this->layout());
 
             fogPropView = new FogPropertyWidget();
-            fogPropView->setPanelTitle("Fog");
+            fogPropView->setPanelTitle(tr("Fog"));
             fogPropView->setScene(sceneNode->scene);
             fogPropView->expand();
 
             worldPropView = new WorldPropertyWidget();
-            worldPropView->setPanelTitle("World");
+            worldPropView->setPanelTitle(tr("World"));
             worldPropView->setScene(sceneNode->scene);
             worldPropView->expand();
 
@@ -85,12 +85,12 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             this->sceneNode = sceneNode;
 
             transformPropView = new AccordianBladeWidget();
-            transformPropView->setPanelTitle("Transformation");
+            transformPropView->setPanelTitle(tr("Transformation"));
             transformWidget = transformPropView->addTransformControls();
             transformWidget->setSceneNode(sceneNode);
 
             meshPropView = new MeshPropertyWidget();
-            meshPropView->setPanelTitle("Mesh Properties");
+            meshPropView->setPanelTitle(tr("Mesh Properties"));
             meshPropView->setSceneNode(sceneNode);
 
             // nodePropView = new NodePropertyWidget();
@@ -98,13 +98,13 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             // nodePropView->setSceneNode(sceneNode);
 
             lightPropView = new LightPropertyWidget();
-            lightPropView->setPanelTitle("Light");
+            lightPropView->setPanelTitle(tr("Light"));
             lightPropView->setSceneNode(sceneNode);
 
             // try to move back mat prop here
 
             emitterPropView = new EmitterPropertyWidget();
-            emitterPropView->setPanelTitle("Emitter");
+            emitterPropView->setPanelTitle(tr("Emitter"));
             emitterPropView->setSceneNode(sceneNode);
 
             auto layout = new QVBoxLayout();
@@ -120,7 +120,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 
                 case iris::SceneNodeType::Mesh: {
                     materialPropView = new MaterialPropertyWidget();
-                    materialPropView->setPanelTitle("Material");
+                    materialPropView->setPanelTitle(tr("Material"));
                     materialPropView->setSceneNode(sceneNode);
                     materialPropView->setDatabase(db);
 

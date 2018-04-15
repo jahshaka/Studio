@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/">
+        <file>languages/jahshaka_por.qm</file>
+    </qresource>
+</RCC>

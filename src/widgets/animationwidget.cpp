@@ -357,9 +357,9 @@ void AnimationWidget::addAnimation()
         return;
 
     GetNameDialog dialog;
-    auto defaultName = QString("Animation%1").arg(node->getAnimations().count()+1);
+    auto defaultName = QString(tr("Animation%1")).arg(node->getAnimations().count()+1);
     dialog.setName(defaultName);
-    dialog.setWindowTitle("New Animation Name");
+    dialog.setWindowTitle(tr("New Animation Name"));
     if (dialog.exec() == QDialog::Rejected)
         return;
 
@@ -510,7 +510,8 @@ void AnimationWidget::updateCreationWidgetMessage(iris::SceneNodePtr node)
         createAnimWidget->hideButton();
     } else {
         createAnimWidget->showButton();
-        createAnimWidget->setButtonText("Create Animation for "+node->getName());
+        createAnimWidget->setButtonText(tr("Create Animation for ")+node->getName());
+        //watch for error- myles
     }
 }
 

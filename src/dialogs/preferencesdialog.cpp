@@ -28,7 +28,8 @@ PreferencesDialog::PreferencesDialog(QWidget* parent, Database *handle, Settings
 	db = handle;
     this->settings = settings;
 
-    setWindowTitle("Preferences");
+    setWindowTitle(tr("Preferences"));
+
 
     connect(ui->okButton, SIGNAL(clicked(bool)), this, SLOT(saveSettings()));
 	connect(ui->cancelButton, &QPushButton::pressed, [this]() { this->close(); });

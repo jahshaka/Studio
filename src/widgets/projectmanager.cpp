@@ -347,8 +347,8 @@ void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
     }
     else {
         QMessageBox::warning(this,
-                             "Rename failed",
-                             "Failed to rename project, please try again or rename manually",
+                             tr("Rename failed"),
+                             tr("Failed to rename project, please try again or rename manually"),
                              QMessageBox::Ok);
     }
 }
@@ -365,8 +365,8 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
     auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
 
     auto option = QMessageBox::question(this,
-                                        "Deleting Project",
-                                        "Are you sure you want to delete this project?",
+                                        tr("Deleting Project"),
+                                        tr("Are you sure you want to delete this project?"),
                                         QMessageBox::Yes | QMessageBox::Cancel);
 
     if (option == QMessageBox::Yes) {
@@ -391,8 +391,8 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
             checkForEmptyState();
         } else {
             QMessageBox::warning(this,
-                                 "Delete Failed!",
-                                 "Failed to remove entire project folder, please try again!",
+                                 tr("Delete Failed!"),
+                                 tr("Failed to remove entire project folder, please try again!"),
                                  QMessageBox::Ok);
         }
     }
