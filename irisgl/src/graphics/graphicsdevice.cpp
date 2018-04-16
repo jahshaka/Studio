@@ -214,24 +214,32 @@ void GraphicsDevice::clear(GLuint bits, QColor color, float depth, int stencil)
 
 void GraphicsDevice::setShader(ShaderPtr shader, bool force)
 {
-	if ((!!activeShader && activeShader != shader) || force) {
-		int index = 0;
-		auto& samplers = activeShader->samplers;
+	if (!!activeShader) {
+		if ((activeShader != shader) || force) {
+			int index = 0;
+			auto& samplers = activeShader->samplers;
 
-		// reset textures to 0
-		// this step might not be needed if all textures units are set to null
-		// when setting a shader
-		for (auto& sampler : samplers)
-		{
-			clearTexture(index++);
+			// reset textures to 0
+			// this step might not be needed if all textures units are set to null
+			// when setting a shader
+			for (auto& sampler : samplers)
+			{
+				clearTexture(index++);
+			}
 		}
 	}
 
     activeShader = shader;
-	if (activeShader->isDirty)
-		compileShader(activeShader);
-	shader->program->bind();
-    activeProgram = shader->program;
+	if (!!activeShader) {
+		if (activeShader->isDirty)
+			compileShader(activeShader);
+		shader->program->bind();
+		activeProgram = shader->program;
+	}
+	else {
+		activeProgram = nullptr;
+		gl->glUseProgram(0);
+	}
 
 	// nullify all textures
 	/*
