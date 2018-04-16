@@ -13,6 +13,8 @@ class CreateAnimationWidget : public QWidget
 {
     Q_OBJECT
 
+
+
 public:
     explicit CreateAnimationWidget(QWidget *parent = 0);
     ~CreateAnimationWidget();

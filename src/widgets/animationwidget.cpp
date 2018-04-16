@@ -36,6 +36,15 @@ For more information see the LICENSE file
 #include "../dialogs/getnamedialog.h"
 
 
+void AnimationWidget::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}
+
 AnimationWidget::AnimationWidget(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::AnimationWidget)

@@ -2111,3 +2111,12 @@ void AssetWidget::onThumbnailResult(ThumbnailResult *result)
 
 	delete result;
 }
+
+void AssetWidget::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}

@@ -27,6 +27,15 @@ For more information see the LICENSE file
 #include "ui_keyframelabelwidget.h"
 
 
+void KeyFrameLabelWidget::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}
+
 KeyFrameLabelWidget::KeyFrameLabelWidget(QWidget* parent):
     QWidget(parent),
     ui(new Ui::KeyFrameLabelWidget)

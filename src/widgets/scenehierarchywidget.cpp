@@ -461,6 +461,15 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
     return childTreeItem;
 }
 
+void SceneHierarchyWidget::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}
+
 void SceneHierarchyWidget::insertChild(iris::SceneNodePtr childNode)
 {
     auto parentTreeItem = treeItemList[childNode->parent->nodeId];

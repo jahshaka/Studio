@@ -144,3 +144,12 @@ void InfoDialog::openProject(QListWidgetItem* item)
 
     this->close();
 }
+
+void InfoDialog::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}

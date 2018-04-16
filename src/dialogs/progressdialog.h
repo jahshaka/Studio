@@ -23,6 +23,8 @@ public slots:
 
 private:
     Ui::ProgressDialog *ui;
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 #endif // PROGRESSDIALOG_H

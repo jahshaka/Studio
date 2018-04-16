@@ -20,6 +20,9 @@ public:
 
 private:
     Ui::GetNameDialog *ui;
+
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 #endif // GETNAMEDIALOG_H

@@ -35,6 +35,9 @@ private:
             projectPath;
     SettingsManager *settingsManager;
     QString lastValue;
+
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 #endif // NEWPROJECTDIALOG_H

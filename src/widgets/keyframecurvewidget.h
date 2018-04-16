@@ -55,6 +55,9 @@ class KeyFrameCurveWidget : public QWidget
     bool middleButtonDown;
     bool rightButtonDown;
 
+protected:
+	void changeEvent(QEvent* event) override;
+
 public:
     explicit KeyFrameCurveWidget(QWidget *parent = 0);
     ~KeyFrameCurveWidget();

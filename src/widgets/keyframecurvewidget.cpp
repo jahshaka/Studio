@@ -34,6 +34,15 @@ void KeyFrameCurveWidget::setAnimWidgetData(AnimationWidgetData *value)
     animWidgetData = value;
 }
 
+void KeyFrameCurveWidget::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}
+
 KeyFrameCurveWidget::KeyFrameCurveWidget(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::KeyFrameCurveWidget)

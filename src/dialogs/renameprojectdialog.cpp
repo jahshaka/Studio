@@ -15,6 +15,15 @@ RenameProjectDialog::~RenameProjectDialog()
     delete ui;
 }
 
+void RenameProjectDialog::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}
+
 void RenameProjectDialog::newText()
 {
     emit newTextEmit(ui->lineEdit->text());
