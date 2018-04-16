@@ -433,7 +433,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Close</source>
-        <translation>fechar</translation>
+        <translation>fechar!</translation>
     </message>
 </context>
 <context>
@@ -790,15 +790,15 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Worlds</source>
-        <translation type="unfinished"></translation>
+        <translation>Mundo</translation>
     </message>
     <message>
         <source>Player</source>
-        <translation type="unfinished"></translation>
+        <translation>jogador</translation>
     </message>
     <message>
         <source>Editor</source>
-        <translation type="unfinished"></translation>
+        <translation>editor</translation>
     </message>
     <message>
         <source>Take a screenshot of the scene</source>
@@ -1015,7 +1015,7 @@ p, li { white-space: pre-wrap; }
     <name>NewProjectDialog</name>
     <message>
         <source>Dialog</source>
-        <translation type="unfinished">Diálogo</translation>
+        <translation>Diálogo</translation>
     </message>
     <message>
         <source>World Name</source>
@@ -1035,7 +1035,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>New World</source>
-        <translation type="unfinished"></translation>
+        <translation> novo Mundo</translation>
     </message>
 </context>
 <context>
@@ -1046,7 +1046,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Add</source>
-        <translation type="unfinished"></translation>
+        <translation>adicionar</translation>
     </message>
 </context>
 <context>
@@ -1076,11 +1076,11 @@ p, li { white-space: pre-wrap; }
     <name>ProgressDialog</name>
     <message>
         <source>Jahshaka</source>
-        <translation type="unfinished">Jahshaka</translation>
+        <translation>Jahshaka</translation>
     </message>
     <message>
         <source>Placeholder Text</source>
-        <translation type="unfinished">Texto de espaço reservado</translation>
+        <translation>Texto de espaço reservado</translation>
     </message>
 </context>
 <context>
@@ -1195,7 +1195,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Add</source>
-        <translation type="unfinished"></translation>
+        <translation>adicionar</translation>
     </message>
     <message>
         <source>Delete</source>
@@ -1206,31 +1206,31 @@ p, li { white-space: pre-wrap; }
     <name>SceneNodePropertiesWidget</name>
     <message>
         <source>Fog</source>
-        <translation type="unfinished"></translation>
+        <translation>névoa</translation>
     </message>
     <message>
         <source>World</source>
-        <translation type="unfinished"></translation>
+        <translation>Mundo</translation>
     </message>
     <message>
         <source>Transformation</source>
-        <translation type="unfinished"></translation>
+        <translation>transformação</translation>
     </message>
     <message>
         <source>Mesh Properties</source>
-        <translation type="unfinished"></translation>
+        <translation>propriedades de malha</translation>
     </message>
     <message>
         <source>Light</source>
-        <translation type="unfinished"></translation>
+        <translation>luz</translation>
     </message>
     <message>
         <source>Emitter</source>
-        <translation type="unfinished"></translation>
+        <translation>emissor</translation>
     </message>
     <message>
         <source>Material</source>
-        <translation type="unfinished"></translation>
+        <translation>a matéria</translation>
     </message>
 </context>
 <context>
@@ -1241,11 +1241,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Close</source>
-        <translation type="unfinished">fechar</translation>
+        <translation>fechar</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Salve</translation>
+        <translation>Salve</translation>
     </message>
 </context>
 <context>
@@ -1263,7 +1263,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Placeholder Text</source>
-        <translation type="unfinished">Texto de espaço reservado</translation>
+        <translation>Texto de espaço reservado</translation>
     </message>
 </context>
 <context>
@@ -1274,7 +1274,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Plaeceholder Text</source>
-        <translation type="unfinished"></translation>
+        <translation>Texto de espaço reservado</translation>
     </message>
     <message>
         <source>Load</source>
@@ -1293,62 +1293,62 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Reset</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">restabelecer</translation>
     </message>
     <message>
         <source>Position</source>
-        <translation type="unfinished">posição</translation>
+        <translation>posição</translation>
     </message>
     <message>
         <source>X</source>
-        <translation type="unfinished"></translation>
+        <translation>X</translation>
     </message>
     <message>
         <source>Y</source>
-        <translation type="unfinished"></translation>
+        <translation>Y</translation>
     </message>
     <message>
         <source>Z</source>
-        <translation type="unfinished"></translation>
+        <translation>Z</translation>
     </message>
     <message>
         <source>Rotation</source>
-        <translation type="unfinished"></translation>
+        <translation>rotação</translation>
     </message>
     <message>
         <source>Scale</source>
-        <translation type="unfinished"></translation>
+        <translation>escala</translation>
     </message>
 </context>
 <context>
     <name>WorldSettings</name>
     <message>
         <source>Form</source>
-        <translation>Sobre</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Selection Outline Width:</source>
-        <translation type="unfinished"></translation>
+        <translation>selecione a largura do contorno:</translation>
     </message>
     <message>
         <source>Selection Outline Color:</source>
-        <translation type="unfinished"></translation>
+        <translation>selecionar cor de contorno:</translation>
     </message>
     <message>
         <source>Default Project Directory</source>
-        <translation type="unfinished"></translation>
+        <translation>Diretório padrão do projeto:</translation>
     </message>
     <message>
         <source>...</source>
-        <translation type="unfinished">...</translation>
+        <translation>...</translation>
     </message>
     <message>
         <source>Show FPS: </source>
-        <translation type="unfinished"></translation>
+        <translation>exposição FPS</translation>
     </message>
     <message>
         <source>Enable autosave</source>
-        <translation type="unfinished"></translation>
+        <translation>ativar o salvamento automático</translation>
     </message>
     <message>
         <source>Author</source>
@@ -1356,11 +1356,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Default License</source>
-        <translation type="unfinished"></translation>
+        <translation>Liscência padrão</translation>
     </message>
     <message>
         <source>CC0 - Freeing content globally without restrictions</source>
-        <translation type="unfinished"></translation>
+        <translation>liberando conteúdo globaly sem restrições</translation>
     </message>
     <message>
         <source>Select Language</source>

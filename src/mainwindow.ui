@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Jahshaka</string>
+   <string notr="true">Jahshaka</string>
   </property>
   <property name="windowOpacity">
    <double>1.000000000000000</double>

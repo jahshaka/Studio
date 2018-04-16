@@ -135,38 +135,32 @@ void WorldSettings::changeLanguage() {
 void WorldSettings::changeLanguageToEnglish()
 {
 	qApp->removeTranslator(&translator_por);
-	qDebug() << "language changed to english called";
-
 }
 
 void WorldSettings::changeLanguageToPortugese()
 {
-
-	
-
 	if(qApp->installTranslator(&translator_por))
 	qDebug() << "language changed to portuguese called";
-
-	for (int i = 0; i < qApp->topLevelWidgets().length(); i++)
-	{
-		ui->retranslateUi(qApp->topLevelWidgets().at(i));
-	
-		
-		
-
-	}
-	
-	qDebug() << "  translaated";
-
-
 }
 
 void WorldSettings::changeEvent(QEvent * event)
 {
 	if (event->type() == QEvent::LanguageChange)
 	{
+		/*for (int i = 0; i < qApp->topLevelWidgets().length(); i++)
+		{
+			ui->retranslateUi(qApp->topLevelWidgets().at(i));
+			
+		}	*/	
 
-		
+		for (int i = 0; i < qApp->allWidgets().size(); i++) {
+
+			if (qApp->allWidgets().at(i)->objectName() == "MainWindow") {
+				ui->retranslateUi(qApp->allWidgets().at(i));
+				qDebug() << qApp->allWidgets().at(i)->objectName();
+
+			}
+		}
 
 	}
 

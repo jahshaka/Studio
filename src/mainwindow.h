@@ -105,6 +105,9 @@ class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
+protected: 
+	void changeEvent(QEvent * event) override;
+
 public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
@@ -157,6 +160,8 @@ private:
 
     // sets up the button for vr
     void setupVrUi();
+
+	
 
     // menus
     void setupFileMenu();
