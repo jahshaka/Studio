@@ -213,6 +213,17 @@ void MainWindow::setupVrUi()
     */
 }
 
+void MainWindow::changeEvent(QEvent * event) {
+	if (event->type() == QEvent::LanguageChange)
+	{
+		qDebug() << "event in mainwindow ";
+		ui->retranslateUi(this);
+
+
+	}
+	QWidget::changeEvent(event);
+}
+
 /**
  * uses style property trick
  * http://wiki.qt.io/Dynamic_Properties_and_Stylesheets
