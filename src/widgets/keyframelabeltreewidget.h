@@ -66,6 +66,7 @@ class KeyFrameLabelTreeWidget : public QWidget
 {
     Q_OBJECT
 
+
 public:
     explicit KeyFrameLabelTreeWidget(QWidget *parent = 0);
     ~KeyFrameLabelTreeWidget();

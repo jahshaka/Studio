@@ -24,6 +24,8 @@ class CheckBoxWidget : public BaseWidget
 {
     Q_OBJECT
 
+
+
 public:
     int index;
     explicit CheckBoxWidget(QWidget *parent = 0);

@@ -759,7 +759,7 @@ QComboBox::down-arrow:!enabled {
           </widget>
          </item>
          <item>
-          <widget class="QComboBox" name="comboBox">
+          <widget class="QComboBox" name="language">
            <item>
             <property name="text">
              <string notr="true">English</string>
@@ -859,31 +859,6 @@ p, li { white-space: pre-wrap; }
       </layout>
      </widget>
     </widget>
-   </item>
-   <item row="6" column="0">
-    <layout class="QHBoxLayout" name="horizontalLayout_7">
-     <item>
-      <widget class="QLabel" name="label_8">
-       <property name="text">
-        <string>Select Language</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QComboBox" name="language">
-       <item>
-        <property name="text">
-         <string notr="true">English</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string notr="true">Portuguese</string>
-        </property>
-       </item>
-      </widget>
-     </item>
-    </layout>
    </item>
   </layout>
  </widget>

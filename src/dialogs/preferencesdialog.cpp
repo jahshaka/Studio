@@ -44,6 +44,15 @@ void PreferencesDialog::setupPages()
     ui->worldLayout->addWidget(worldSettings);
 }
 
+void PreferencesDialog::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}
+
 void PreferencesDialog::saveSettings()
 {
 	worldSettings->saveSettings();

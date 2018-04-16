@@ -12,6 +12,15 @@ iris::FloatKeyFrame *KeyFrameLabel::getKeyFrame() const
     return keyFrame;
 }
 
+void KeyFrameLabel::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}
+
 KeyFrameLabel::KeyFrameLabel(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::KeyFrameLabel)

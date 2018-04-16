@@ -96,7 +96,7 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 	connect(ui->help,       &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(4); });
 	connect(ui->about,      &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(5); });
 
-	//connect(ui->language, SIGNAL(currentIndexChanged(QString)), this, SLOT(changeLanguage()));
+	connect(ui->language, SIGNAL(currentIndexChanged(QString)), this, SLOT(changeLanguage()));
 
 	
 
@@ -120,7 +120,7 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 
 void WorldSettings::changeLanguage() {
 
-	/*qDebug() << "change language function called";
+	qDebug() << "change language function called";
 
 	if (ui->language->currentText() == "English") {
 		changeLanguageToEnglish();
@@ -129,7 +129,7 @@ void WorldSettings::changeLanguage() {
 	if (ui->language->currentText() == "Portuguese") {
 		changeLanguageToPortugese();
 	}
-*/
+
 }
 
 void WorldSettings::changeLanguageToEnglish()
@@ -146,24 +146,9 @@ void WorldSettings::changeLanguageToPortugese()
 void WorldSettings::changeEvent(QEvent * event)
 {
 	if (event->type() == QEvent::LanguageChange)
-	{
-		/*for (int i = 0; i < qApp->topLevelWidgets().length(); i++)
-		{
-			ui->retranslateUi(qApp->topLevelWidgets().at(i));
-			
-		}	*/	
-
-		for (int i = 0; i < qApp->allWidgets().size(); i++) {
-
-			if (qApp->allWidgets().at(i)->objectName() == "MainWindow") {
-				ui->retranslateUi(qApp->allWidgets().at(i));
-				qDebug() << qApp->allWidgets().at(i)->objectName();
-
-			}
-		}
-
+	{	
+		ui->retranslateUi(this);
 	}
-
 	QWidget::changeEvent(event);
 }
 

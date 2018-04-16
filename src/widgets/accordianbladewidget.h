@@ -36,6 +36,8 @@ class AccordianBladeWidget : public QWidget
 {
     Q_OBJECT
 
+protected:
+
 public:
     explicit AccordianBladeWidget(QWidget* parent = 0);
     ~AccordianBladeWidget();

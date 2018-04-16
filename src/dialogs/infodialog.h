@@ -53,6 +53,9 @@ private slots:
 
 private:
     Ui::InfoDialog *ui;
+
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 #endif // INFODIALOG_H

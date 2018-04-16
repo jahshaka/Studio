@@ -23,6 +23,9 @@ signals:
 
 private:
     Ui::RenameProjectDialog *ui;
+
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 #endif // RENAMEPROJECTDIALOG_H

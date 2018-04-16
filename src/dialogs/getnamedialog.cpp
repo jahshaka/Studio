@@ -23,3 +23,12 @@ QString GetNameDialog::getName()
 {
     return ui->lineEdit->text();
 }
+
+void GetNameDialog::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}

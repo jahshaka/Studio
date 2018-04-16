@@ -22,6 +22,8 @@ class LabelWidget : public QWidget
 {
     Q_OBJECT
 
+
+
 public:
     LabelWidget(QWidget* parent = 0);
     ~LabelWidget();

@@ -12,6 +12,15 @@ For more information see the LICENSE file
 #include "hfloatsliderwidget.h"
 #include "ui_hfloatsliderwidget.h"
 
+void HFloatSliderWidget::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}
+
 HFloatSliderWidget::HFloatSliderWidget(QWidget* parent) :
     BaseWidget(parent),
     ui(new Ui::HFloatSliderWidget)

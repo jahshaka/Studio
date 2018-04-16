@@ -13,6 +13,7 @@ class ItemGridWidget : public QWidget
 {
     Q_OBJECT
 
+
 public:
     explicit ItemGridWidget(ProjectTileData tileData,
                             QSize size,

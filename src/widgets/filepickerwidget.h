@@ -26,6 +26,8 @@ class FilePickerWidget : public BaseWidget
 {
     Q_OBJECT
 
+
+
 private slots:
     void filePicker();
     void pickFile(QListWidgetItem*);

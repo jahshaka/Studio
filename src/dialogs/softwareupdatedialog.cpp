@@ -43,3 +43,12 @@ SoftwareUpdateDialog::~SoftwareUpdateDialog()
 {
 	delete ui;
 }
+
+void SoftwareUpdateDialog::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}

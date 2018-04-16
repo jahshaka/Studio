@@ -104,6 +104,8 @@ private:
 
 signals:
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 #endif // SCENEHEIRARCHYWIDGET_H

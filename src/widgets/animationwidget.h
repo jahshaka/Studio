@@ -41,6 +41,8 @@ class AnimationWidget : public QWidget
 {
     Q_OBJECT
 
+
+
     iris::ScenePtr scene;
     iris::SceneNodePtr node;
     QTimer* timer;
@@ -66,6 +68,9 @@ class AnimationWidget : public QWidget
     iris::AnimationPtr animation;
 
     AnimationWidgetData* animWidgetData;
+
+protected:
+	void changeEvent(QEvent* event) override;
 public:
     explicit AnimationWidget(QWidget *parent = 0);
     ~AnimationWidget();

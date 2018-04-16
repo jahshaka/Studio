@@ -28,6 +28,10 @@ class ColorValueWidget : public BaseWidget
 
     QString _title;
 
+protected:
+	void changeEvent(QEvent* event) override;
+
+
 public:
     int index;
     explicit ColorValueWidget(QWidget *parent = 0);

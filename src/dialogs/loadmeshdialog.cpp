@@ -50,3 +50,12 @@ void LoadMeshDialog::loadTexture()
     texFile = QFileDialog::getOpenFileName();
     this->ui->texEdit->setText(texFile);
 }
+
+void LoadMeshDialog::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}

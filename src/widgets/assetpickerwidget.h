@@ -13,6 +13,7 @@ class AssetPickerWidget : public QDialog
 {
     Q_OBJECT
 
+
 public:
     AssetPickerWidget(ModelTypes type, QDialog *parent = nullptr);
     ~AssetPickerWidget();

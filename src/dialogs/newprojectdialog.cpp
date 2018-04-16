@@ -82,3 +82,12 @@ void NewProjectDialog::confirmProjectCreation()
         emit accepted();
     }
 }
+
+void NewProjectDialog::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}

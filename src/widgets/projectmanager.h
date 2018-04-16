@@ -40,6 +40,7 @@ class ProjectManager : public QWidget
 {
     Q_OBJECT
 
+
 public:
     ProjectManager(Database *handle, QWidget *parent = nullptr);
     ~ProjectManager();
