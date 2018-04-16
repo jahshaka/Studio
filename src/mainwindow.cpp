@@ -220,8 +220,6 @@ void MainWindow::changeEvent(QEvent * event) {
 	{
 		qDebug() << "event in mainwindow ";
 		ui->retranslateUi(this);
-
-
 	}
 	QWidget::changeEvent(event);
 }
