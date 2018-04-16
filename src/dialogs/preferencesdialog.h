@@ -69,8 +69,7 @@ private slots:
 
 private:
     Ui::PreferencesDialog *ui;
-protected:
-	void changeEvent(QEvent* event) override;
+
 };
 
 #endif // PREFERENCESDIALOG_H
