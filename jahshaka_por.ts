@@ -249,7 +249,7 @@ p, li { white-space: pre-wrap; }
 2. The asset isn&apos;t valid
 3. There is no scene open
 4. The asset is already in your project</source>
-        <translation>Falha ao importar o recurso 1%. Possíveis razões são:
+        <translation type="vanished">Falha ao importar o recurso 1%. Possíveis razões são:
 1. Não existe
 2. O recurso não é válido
 3. Não há cena aberta
@@ -257,7 +257,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Added asset %1 to your project!</source>
-        <translation>adicione asset 1% ao seu projeto</translation>
+        <translation type="vanished">adicione asset 1% ao seu projeto</translation>
     </message>
     <message>
         <source>Change Collection</source>
@@ -316,7 +316,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Search</source>
-        <translation>pesquisa</translation>
+        <translation type="vanished">pesquisa</translation>
     </message>
     <message>
         <source>Import Asset</source>
@@ -336,11 +336,35 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Failed to create folder %1. Aborting import for this folder</source>
-        <translation>Falha ao criar a pasta %1. Anulando a importação para esta pasta</translation>
+        <translation type="vanished">Falha ao criar a pasta %1. Anulando a importação para esta pasta</translation>
     </message>
     <message>
         <source>Could not create folder</source>
-        <translation>Não foi possível criar a pasta</translation>
+        <translation type="vanished">Não foi possível criar a pasta</translation>
+    </message>
+    <message>
+        <source>Hide dependencies</source>
+        <translation>esconder dependências</translation>
+    </message>
+    <message>
+        <source>Icon</source>
+        <translation>Ícone</translation>
+    </message>
+    <message>
+        <source>List</source>
+        <translation>Lista</translation>
+    </message>
+    <message>
+        <source>Display:</source>
+        <translation>Exibição:</translation>
+    </message>
+    <message>
+        <source>Type to search for assets...</source>
+        <translation>Digite para procurar por ativos</translation>
+    </message>
+    <message>
+        <source>Standard Shader</source>
+        <translation>Shader Padrão</translation>
     </message>
 </context>
 <context>
@@ -618,7 +642,7 @@ p, li { white-space: pre-wrap; }
     <name>KeyFrameWidget</name>
     <message>
         <source>Delete</source>
-        <translation type="unfinished">excluir</translation>
+        <translation>excluir</translation>
     </message>
 </context>
 <context>
@@ -629,7 +653,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Placeholder Text</source>
-        <translation type="unfinished">Texto de espaço reservado</translation>
+        <translation>Texto de espaço reservado</translation>
     </message>
 </context>
 <context>
@@ -670,7 +694,7 @@ p, li { white-space: pre-wrap; }
     <name>MainWindow</name>
     <message>
         <source>Jahshaka</source>
-        <translation>Jahshaka</translation>
+        <translation type="vanished">Jahshaka</translation>
     </message>
     <message>
         <source>Save</source>
@@ -822,11 +846,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Undo last action</source>
-        <translation type="unfinished"></translation>
+        <translation>Desfazer a última ação</translation>
     </message>
     <message>
         <source>Redo last action</source>
-        <translation type="unfinished"></translation>
+        <translation>Refazer a última ação</translation>
     </message>
     <message>
         <source>Manipulator for translating objects</source>
@@ -866,10 +890,6 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Toggle Widgets</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>User Preferences</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1019,11 +1039,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>World Name</source>
-        <translation type="unfinished"></translation>
+        <translation>Nome mundial</translation>
     </message>
     <message>
         <source>Location</source>
-        <translation type="unfinished"></translation>
+        <translation>Localização</translation>
     </message>
     <message>
         <source>Cancel</source>
@@ -1031,7 +1051,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Create World</source>
-        <translation type="unfinished"></translation>
+        <translation>Criar mundo</translation>
     </message>
     <message>
         <source>New World</source>
@@ -1053,11 +1073,11 @@ p, li { white-space: pre-wrap; }
     <name>PreferencesDialog</name>
     <message>
         <source>Dialog</source>
-        <translation type="unfinished">Diálogo</translation>
+        <translation>Diálogo</translation>
     </message>
     <message>
         <source>About</source>
-        <translation type="unfinished">sobre</translation>
+        <translation type="obsolete">sobre</translation>
     </message>
     <message>
         <source>Apply Changes</source>
@@ -1069,7 +1089,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Preferences</source>
-        <translation type="unfinished">preferências</translation>
+        <translation>Preferências</translation>
     </message>
 </context>
 <context>
@@ -1107,23 +1127,23 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Small</source>
-        <translation type="unfinished"></translation>
+        <translation>Pequeno</translation>
     </message>
     <message>
         <source>Large</source>
-        <translation type="unfinished"></translation>
+        <translation>ampla</translation>
     </message>
     <message>
         <source>Huge</source>
-        <translation type="unfinished"></translation>
+        <translation>Enorme</translation>
     </message>
     <message>
         <source>Search recent worlds...</source>
-        <translation type="unfinished"></translation>
+        <translation>Pesquise mundos recentes</translation>
     </message>
     <message>
         <source>+ Sample World</source>
-        <translation type="unfinished"></translation>
+        <translation>+Amostra mundo</translation>
     </message>
     <message>
         <source>+ New World</source>
@@ -1151,6 +1171,22 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Failed to remove entire project folder, please try again!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Caching assets...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Opening scene...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Collecting assets...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Loading assets...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1256,6 +1292,29 @@ p, li { white-space: pre-wrap; }
     </message>
 </context>
 <context>
+    <name>SoftwareUpdateDialog</name>
+    <message>
+        <source>Dialog</source>
+        <translation type="unfinished">Diálogo</translation>
+    </message>
+    <message>
+        <source>There is a new version of Jahshaka available.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Automatically check for updates on startup</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>TextInputWidget</name>
     <message>
         <source>Form</source>
@@ -1274,15 +1333,15 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Plaeceholder Text</source>
-        <translation>Texto de espaço reservado</translation>
+        <translation type="vanished">Texto de espaço reservado</translation>
     </message>
     <message>
         <source>Load</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Clear</source>
-        <translation type="unfinished"></translation>
+        <source>Placeholder Text</source>
+        <translation type="unfinished">Texto de espaço reservado</translation>
     </message>
 </context>
 <context>
@@ -1297,7 +1356,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Position</source>
-        <translation>posição</translation>
+        <translation type="vanished">posição</translation>
     </message>
     <message>
         <source>X</source>
@@ -1313,10 +1372,22 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Rotation</source>
-        <translation>rotação</translation>
+        <translation type="vanished">rotação</translation>
     </message>
     <message>
         <source>Scale</source>
+        <translation type="vanished">escala</translation>
+    </message>
+    <message>
+        <source>position</source>
+        <translation>posição</translation>
+    </message>
+    <message>
+        <source>rotation</source>
+        <translation>rotação</translation>
+    </message>
+    <message>
+        <source>scale</source>
         <translation>escala</translation>
     </message>
 </context>
@@ -1324,7 +1395,7 @@ p, li { white-space: pre-wrap; }
     <name>WorldSettings</name>
     <message>
         <source>Form</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Sobre</translation>
     </message>
     <message>
         <source>Selection Outline Width:</source>
@@ -1360,11 +1431,84 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>CC0 - Freeing content globally without restrictions</source>
-        <translation>liberando conteúdo globaly sem restrições</translation>
+        <translation type="vanished">liberando conteúdo globaly sem restrições</translation>
     </message>
     <message>
         <source>Select Language</source>
         <translation>selecione o idioma</translation>
+    </message>
+    <message>
+        <source>Viewport</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Editor</source>
+        <translation type="unfinished">editor</translation>
+    </message>
+    <message>
+        <source>Content</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mining</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Help</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>About</source>
+        <translation type="unfinished">sobre</translation>
+    </message>
+    <message>
+        <source>Donate</source>
+        <translation type="unfinished">Doar</translation>
+    </message>
+    <message>
+        <source>Open Imported Worlds in Player:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Automatically Check for Updates</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Preferred Text Editor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CC0 - No restrictions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:&apos;MS Shell Dlg 2&apos;; font-size:8.25pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Jahshaka is bringing you the future of immersive digital content creation. It delivers a media management and playback platform the is accentuated by compositing, editing and effects modules. Jahshaka is free software, developed as an open source project under the GPL licence, and is designed to be compiled for Windows, OsX and many distributions of Linux.&lt;/p&gt;
+&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:12pt; font-weight:600;&quot;&gt;Core Jahshaka Features&lt;/span&gt;&lt;/p&gt;
+&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;2D and 3D animation &amp;amp; compositing&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Media and asset management&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;2D and 3D playback&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Colour Correction&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Editing &amp;amp; Effects&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Support Jahshaka&lt;/p&gt;
+&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;There are many ways you can support Jahshaka, the main thing is to just get involved. You can follow us on twitter for news and updates and join our community at facebook.&lt;/p&gt;
+&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-size:12pt; font-weight:600;&quot;&gt;Jahshaka is, and will always remain – free!&lt;/span&gt;&lt;/p&gt;
+&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Jahshaka is the industrys leading free, open source digital content creation platform is back! Stay tuned for news, updates, a new jahshaka site and a powerful new release!&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>
