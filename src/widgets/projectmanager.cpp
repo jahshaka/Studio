@@ -596,6 +596,16 @@ void ProjectManager::loadProjectAssets()
     futureWatcher->waitForFinished();
 }
 
+void ProjectManager::changeEvent(QEvent * event)
+{
+
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}
+
 void ProjectManager::updateTile(const QString &id, const QByteArray & arr)
 {
 	dynamicGrid->updateTile(id, arr);

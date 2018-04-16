@@ -103,6 +103,9 @@ private:
 
     DynamicGrid *dynamicGrid;
     QDialog sampleDialog;
+
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 struct AssetWidgetConcurrentWrapper {
