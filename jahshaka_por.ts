@@ -294,11 +294,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Deleting Asset</source>
-        <translation type="unfinished">deletando ativo</translation>
+        <translation>deletando ativo</translation>
     </message>
     <message>
         <source>Are you sure you want to delete this asset?</source>
-        <translation type="unfinished"></translation>
+        <translation>Tem certeza de que deseja excluir este recurso?</translation>
     </message>
 </context>
 <context>
@@ -415,15 +415,15 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Maybe you could help us fix what was broken. What were you doing before the crash?</source>
-        <translation type="unfinished"></translation>
+        <translation>Talvez você possa nos ajudar a consertar o que foi quebrado. O que você estava fazendo antes do acidente?</translation>
     </message>
     <message>
         <source>Send crash dump</source>
-        <translation type="unfinished"></translation>
+        <translation>Enviar despejo de memória</translation>
     </message>
     <message>
         <source>All data from crash reports are anonymous</source>
-        <translation type="unfinished"></translation>
+        <translation>Todos os dados dos relatórios de falhas são anônimos</translation>
     </message>
     <message>
         <source>Cancel</source>
@@ -431,7 +431,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Send Report</source>
-        <translation type="unfinished"></translation>
+        <translation>Enviar relatório</translation>
     </message>
 </context>
 <context>
@@ -574,39 +574,39 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Handles</source>
-        <translation type="unfinished"></translation>
+        <translation>Alças</translation>
     </message>
     <message>
         <source>Auto</source>
-        <translation type="unfinished"></translation>
+        <translation>Auto</translation>
     </message>
     <message>
         <source>Broken</source>
-        <translation type="unfinished"></translation>
+        <translation>Partido</translation>
     </message>
     <message>
         <source>Flat</source>
-        <translation type="unfinished"></translation>
+        <translation>Plano</translation>
     </message>
     <message>
         <source>Left Tangent</source>
-        <translation type="unfinished"></translation>
+        <translation>Tangente Esquerda</translation>
     </message>
     <message>
         <source>Free</source>
-        <translation type="unfinished"></translation>
+        <translation>Livre</translation>
     </message>
     <message>
         <source>Linear</source>
-        <translation type="unfinished"></translation>
+        <translation>Linear</translation>
     </message>
     <message>
         <source>Constant</source>
-        <translation type="unfinished"></translation>
+        <translation>Constante</translation>
     </message>
     <message>
         <source>Right Tangent</source>
-        <translation type="unfinished"></translation>
+        <translation>Tangente Direita</translation>
     </message>
 </context>
 <context>
@@ -617,11 +617,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>D</source>
-        <translation type="unfinished"></translation>
+        <translation>D</translation>
     </message>
     <message>
         <source>LabelName</source>
-        <translation type="unfinished"></translation>
+        <translation>Nome do rótulo</translation>
     </message>
 </context>
 <context>
@@ -660,23 +660,23 @@ p, li { white-space: pre-wrap; }
     <name>LoadMeshDialog</name>
     <message>
         <source>Dialog</source>
-        <translation type="unfinished">Diálogo</translation>
+        <translation>Diálogo</translation>
     </message>
     <message>
         <source>Load Mesh</source>
-        <translation type="unfinished"></translation>
+        <translation>Carregar Malha</translation>
     </message>
     <message>
         <source>Load Texture</source>
-        <translation type="unfinished"></translation>
+        <translation>Carregar Textura</translation>
     </message>
     <message>
         <source>Mesh</source>
-        <translation type="unfinished"></translation>
+        <translation>Malha</translation>
     </message>
     <message>
         <source>Texture (Optional)</source>
-        <translation type="unfinished"></translation>
+        <translation>Textura (Opcional)</translation>
     </message>
 </context>
 <context>
@@ -726,35 +726,35 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Redo</source>
-        <translation type="unfinished"></translation>
+        <translation>Refazer</translation>
     </message>
     <message>
         <source>Translate Tool</source>
-        <translation type="unfinished"></translation>
+        <translation>Ferramenta Traduzir</translation>
     </message>
     <message>
         <source>Rotate Tool</source>
-        <translation type="unfinished"></translation>
+        <translation>Rodar Ferramenta</translation>
     </message>
     <message>
         <source>Scale Tool</source>
-        <translation type="unfinished"></translation>
+        <translation>Ferramenta de escala</translation>
     </message>
     <message>
         <source>Global Space</source>
-        <translation type="unfinished"></translation>
+        <translation>Espaço global</translation>
     </message>
     <message>
         <source>Local Space</source>
-        <translation type="unfinished"></translation>
+        <translation>Espaço local</translation>
     </message>
     <message>
         <source>Free Camera</source>
-        <translation type="unfinished"></translation>
+        <translation>Câmera livre</translation>
     </message>
     <message>
         <source>Arcball Camera</source>
-        <translation type="unfinished"></translation>
+        <translation>Câmera Arcada</translation>
     </message>
     <message>
         <source>Close</source>
@@ -762,15 +762,15 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Facebook</source>
-        <translation type="unfinished"></translation>
+        <translation>Facebook</translation>
     </message>
     <message>
         <source>Outliner</source>
-        <translation type="unfinished"></translation>
+        <translation>Delineador</translation>
     </message>
     <message>
         <source>Properties</source>
-        <translation type="unfinished"></translation>
+        <translation>Propriedades</translation>
     </message>
     <message>
         <source>Animation</source>
@@ -782,35 +782,35 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Presets</source>
-        <translation type="unfinished"></translation>
+        <translation>Predefinições</translation>
     </message>
     <message>
         <source>Close All</source>
-        <translation type="unfinished"></translation>
+        <translation>Feche tudo</translation>
     </message>
     <message>
         <source>Restore All</source>
-        <translation type="unfinished"></translation>
+        <translation>Restaurar tudo</translation>
     </message>
     <message>
         <source>Export</source>
-        <translation type="unfinished"></translation>
+        <translation>Exportar</translation>
     </message>
     <message>
         <source>Unsaved Changes</source>
-        <translation type="unfinished"></translation>
+        <translation>Alterações não salvas</translation>
     </message>
     <message>
         <source>There are unsaved changes, save before closing?</source>
-        <translation type="unfinished"></translation>
+        <translation>Existem alterações não salvas, salve antes de fechar?</translation>
     </message>
     <message>
         <source>PostProcesses</source>
-        <translation type="unfinished"></translation>
+        <translation>PostProcesses</translation>
     </message>
     <message>
         <source>Pause the scene</source>
-        <translation type="unfinished"></translation>
+        <translation>Pausar a cena</translation>
     </message>
     <message>
         <source>Worlds</source>
@@ -826,23 +826,23 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Take a screenshot of the scene</source>
-        <translation type="unfinished"></translation>
+        <translation>Tire uma captura de tela da cena</translation>
     </message>
     <message>
         <source>Play scene</source>
-        <translation type="unfinished"></translation>
+        <translation>Cena do jogo</translation>
     </message>
     <message>
         <source>Restart playback</source>
-        <translation type="unfinished"></translation>
+        <translation>Reinicie a reprodução</translation>
     </message>
     <message>
         <source>Play the scene</source>
-        <translation type="unfinished"></translation>
+        <translation>Tocar a cena</translation>
     </message>
     <message>
         <source>Stop playback</source>
-        <translation type="unfinished"></translation>
+        <translation>Pare a reprodução</translation>
     </message>
     <message>
         <source>Undo last action</source>
@@ -854,167 +854,167 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Manipulator for translating objects</source>
-        <translation>test</translation>
+        <translation>Manipulador para traduzir objetos</translation>
     </message>
     <message>
         <source>Manipulator for rotating objects</source>
-        <translation type="unfinished"></translation>
+        <translation>Manipulador para objetos rotativos</translation>
     </message>
     <message>
         <source>Manipulator for scaling objects</source>
-        <translation type="unfinished"></translation>
+        <translation>Manipulador para escalar objetos</translation>
     </message>
     <message>
         <source>Move objects relative to the global world</source>
-        <translation type="unfinished"></translation>
+        <translation>Mova objetos em relação ao mundo global</translation>
     </message>
     <message>
         <source>Move objects relative to their transform</source>
-        <translation type="unfinished"></translation>
+        <translation>Mover objetos em relação a sua transformação</translation>
     </message>
     <message>
         <source>Freely move and orient the camera</source>
-        <translation type="unfinished"></translation>
+        <translation>Livremente mova e oriente a câmera</translation>
     </message>
     <message>
         <source>Move and orient the camera around a fixed point</source>
-        <translation type="unfinished"></translation>
+        <translation>Mova e oriente a câmera em torno de um ponto fixo</translation>
     </message>
     <message>
         <source>Export the current scene</source>
-        <translation type="unfinished"></translation>
+        <translation>Exportar a cena atual</translation>
     </message>
     <message>
         <source>Save the current scene</source>
-        <translation type="unfinished"></translation>
+        <translation>Salvar a cena atual</translation>
     </message>
     <message>
         <source>Toggle Widgets</source>
-        <translation type="unfinished"></translation>
+        <translation>Alternar widgets</translation>
     </message>
     <message>
         <source>Hierarchy</source>
-        <translation type="unfinished"></translation>
+        <translation>Hierarquia</translation>
     </message>
     <message>
         <source>Timeline</source>
-        <translation type="unfinished"></translation>
+        <translation>Timeline</translation>
     </message>
     <message>
         <source>Assets Browser</source>
-        <translation type="unfinished"></translation>
+        <translation>Navegador de Ativos</translation>
     </message>
     <message>
         <source>Stop playing</source>
-        <translation type="unfinished"></translation>
+        <translation>Pare de jogar</translation>
     </message>
     <message>
         <source>MainWindow</source>
-        <translation type="unfinished"></translation>
+        <translation>MainWindow</translation>
     </message>
     <message>
         <source>File</source>
-        <translation type="unfinished"></translation>
+        <translation>Arquivo</translation>
     </message>
     <message>
         <source>Open file</source>
-        <translation type="unfinished"></translation>
+        <translation>Abrir arquivo</translation>
     </message>
     <message>
         <source>File name</source>
-        <translation type="unfinished"></translation>
+        <translation>Nome do arquivo</translation>
     </message>
     <message>
         <source>Load time, s</source>
-        <translation type="unfinished"></translation>
+        <translation>Tempo de carregamento, s</translation>
     </message>
     <message>
         <source>Export time, s</source>
-        <translation type="unfinished"></translation>
+        <translation>Tempo de exportação, s</translation>
     </message>
     <message>
         <source>Info</source>
-        <translation type="unfinished"></translation>
+        <translation>Info</translation>
     </message>
     <message>
         <source>Render time, ms</source>
-        <translation type="unfinished"></translation>
+        <translation>Tempo de renderização, ms</translation>
     </message>
     <message>
         <source>Meshes</source>
-        <translation type="unfinished"></translation>
+        <translation>Malhas</translation>
     </message>
     <message>
         <source>Faces</source>
-        <translation type="unfinished"></translation>
+        <translation>Rostos</translation>
     </message>
     <message>
         <source>Vertices</source>
-        <translation type="unfinished"></translation>
+        <translation>Vértices</translation>
     </message>
     <message>
         <source>Lights</source>
-        <translation type="unfinished"></translation>
+        <translation>Luzes</translation>
     </message>
     <message>
         <source>Cameras</source>
-        <translation type="unfinished"></translation>
+        <translation>Câmeras</translation>
     </message>
     <message>
         <source>Shaders</source>
-        <translation type="unfinished"></translation>
+        <translation>Shaders</translation>
     </message>
     <message>
         <source>Distance</source>
-        <translation type="unfinished"></translation>
+        <translation>Distância</translation>
     </message>
     <message>
         <source>Dynamics</source>
-        <translation type="unfinished"></translation>
+        <translation>Dinâmica</translation>
     </message>
     <message>
         <source>Animation start</source>
-        <translation type="unfinished"></translation>
+        <translation>Início da animação</translation>
     </message>
     <message>
         <source>Animation stop</source>
-        <translation type="unfinished"></translation>
+        <translation>Parada de animação</translation>
     </message>
     <message>
         <source>Log</source>
-        <translation type="unfinished"></translation>
+        <translation>Registro</translation>
     </message>
     <message>
         <source>Lights and cameras</source>
-        <translation type="unfinished"></translation>
+        <translation>Luzes e câmeras</translation>
     </message>
     <message>
         <source>Light sources of the scene</source>
-        <translation type="unfinished"></translation>
+        <translation>Fontes de luz da cena</translation>
     </message>
     <message>
         <source>Cameras of the scene</source>
-        <translation type="unfinished"></translation>
+        <translation>Câmeras da cena</translation>
     </message>
     <message>
         <source>Control</source>
-        <translation type="unfinished"></translation>
+        <translation>Ao controle</translation>
     </message>
     <message>
         <source>Enable/Disable OpenGL lighting</source>
-        <translation type="unfinished"></translation>
+        <translation>Ativar / desativar a iluminação do OpenGL</translation>
     </message>
     <message>
         <source>Lighting</source>
-        <translation type="unfinished"></translation>
+        <translation>Iluminação</translation>
     </message>
     <message>
         <source>Scene BBox</source>
-        <translation type="unfinished"></translation>
+        <translation>Cena BBox</translation>
     </message>
     <message>
         <source>Textures</source>
-        <translation type="unfinished"></translation>
+        <translation>Texturas</translation>
     </message>
 </context>
 <context>
@@ -1081,7 +1081,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Apply Changes</source>
-        <translation type="unfinished"></translation>
+        <translation>Aplicar mudanças</translation>
     </message>
     <message>
         <source>Cancel</source>
@@ -1111,19 +1111,19 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Import World</source>
-        <translation type="unfinished"></translation>
+        <translation>Importar Mundo</translation>
     </message>
     <message>
         <source>Download Worlds</source>
-        <translation type="unfinished"></translation>
+        <translation>Baixar Mundos</translation>
     </message>
     <message>
         <source>Tile Size</source>
-        <translation type="unfinished"></translation>
+        <translation>Tamanho da telha</translation>
     </message>
     <message>
         <source>Normal</source>
-        <translation type="unfinished"></translation>
+        <translation>Normal</translation>
     </message>
     <message>
         <source>Small</source>
@@ -1151,43 +1151,43 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Rename failed</source>
-        <translation type="unfinished"></translation>
+        <translation>Renomear falhou</translation>
     </message>
     <message>
         <source>Failed to rename project, please try again or rename manually</source>
-        <translation type="unfinished"></translation>
+        <translation>Não foi possível renomear o projeto, tente novamente ou renomeie manualmente</translation>
     </message>
     <message>
         <source>Deleting Project</source>
-        <translation type="unfinished"></translation>
+        <translation>Excluindo o projeto</translation>
     </message>
     <message>
         <source>Are you sure you want to delete this project?</source>
-        <translation type="unfinished"></translation>
+        <translation>Tem certeza de que deseja excluir este projeto?</translation>
     </message>
     <message>
         <source>Delete Failed!</source>
-        <translation>exclusão falhou</translation>
+        <translation>exclusão falhou!</translation>
     </message>
     <message>
         <source>Failed to remove entire project folder, please try again!</source>
-        <translation type="unfinished"></translation>
+        <translation>Falha ao remover a pasta inteira do projeto. Tente novamente!</translation>
     </message>
     <message>
         <source>Caching assets...</source>
-        <translation type="unfinished"></translation>
+        <translation>Armazenando recursos em cache ...</translation>
     </message>
     <message>
         <source>Opening scene...</source>
-        <translation type="unfinished"></translation>
+        <translation>Cena de abertura...</translation>
     </message>
     <message>
         <source>Collecting assets...</source>
-        <translation type="unfinished"></translation>
+        <translation>Coletando ativos ...</translation>
     </message>
     <message>
         <source>Loading assets...</source>
-        <translation type="unfinished"></translation>
+        <translation>Carregando recursos ...</translation>
     </message>
 </context>
 <context>
@@ -1201,7 +1201,7 @@ p, li { white-space: pre-wrap; }
     <name>RenameLayerDialog</name>
     <message>
         <source>Dialog</source>
-        <translation type="unfinished">Diálogo</translation>
+        <translation>Diálogo</translation>
     </message>
 </context>
 <context>
@@ -1212,7 +1212,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>New Project Name:</source>
-        <translation type="unfinished"></translation>
+        <translation>Novo nome do projeto:</translation>
     </message>
     <message>
         <source>Cancel</source>
@@ -1295,23 +1295,23 @@ p, li { white-space: pre-wrap; }
     <name>SoftwareUpdateDialog</name>
     <message>
         <source>Dialog</source>
-        <translation type="unfinished">Diálogo</translation>
+        <translation>Diálogo</translation>
     </message>
     <message>
         <source>There is a new version of Jahshaka available.</source>
-        <translation type="unfinished"></translation>
+        <translation>Existe uma nova versão do Jahshaka disponível.</translation>
     </message>
     <message>
         <source>Automatically check for updates on startup</source>
-        <translation type="unfinished"></translation>
+        <translation>Verificar automaticamente se há atualizações na inicialização</translation>
     </message>
     <message>
         <source>Close</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>Download</source>
-        <translation type="unfinished"></translation>
+        <translation>Baixar</translation>
     </message>
 </context>
 <context>
@@ -1337,11 +1337,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Load</source>
-        <translation type="unfinished"></translation>
+        <translation>Carga</translation>
     </message>
     <message>
         <source>Placeholder Text</source>
-        <translation type="unfinished">Texto de espaço reservado</translation>
+        <translation>Texto de espaço reservado</translation>
     </message>
 </context>
 <context>
@@ -1352,7 +1352,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Reset</source>
-        <translation type="unfinished">restabelecer</translation>
+        <translation>restabelecer</translation>
     </message>
     <message>
         <source>Position</source>
@@ -1439,47 +1439,47 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Viewport</source>
-        <translation type="unfinished"></translation>
+        <translation>Janela de exibição</translation>
     </message>
     <message>
         <source>Editor</source>
-        <translation type="unfinished">editor</translation>
+        <translation>editor</translation>
     </message>
     <message>
         <source>Content</source>
-        <translation type="unfinished"></translation>
+        <translation>Conteúdo</translation>
     </message>
     <message>
         <source>Mining</source>
-        <translation type="unfinished"></translation>
+        <translation>Mineração</translation>
     </message>
     <message>
         <source>Help</source>
-        <translation type="unfinished"></translation>
+        <translation>Socorro</translation>
     </message>
     <message>
         <source>About</source>
-        <translation type="unfinished">sobre</translation>
+        <translation>sobre</translation>
     </message>
     <message>
         <source>Donate</source>
-        <translation type="unfinished">Doar</translation>
+        <translation>Doar</translation>
     </message>
     <message>
         <source>Open Imported Worlds in Player:</source>
-        <translation type="unfinished"></translation>
+        <translation>Abrir mundos importados no jogador:</translation>
     </message>
     <message>
         <source>Automatically Check for Updates</source>
-        <translation type="unfinished"></translation>
+        <translation>Verificar automaticamente se há atualizações</translation>
     </message>
     <message>
         <source>Preferred Text Editor</source>
-        <translation type="unfinished"></translation>
+        <translation>Editor de texto preferido</translation>
     </message>
     <message>
         <source>CC0 - No restrictions</source>
-        <translation type="unfinished"></translation>
+        <translation>CC0 - sem restrições</translation>
     </message>
     <message>
         <source>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
