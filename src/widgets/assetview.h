@@ -25,6 +25,7 @@ class QFocusEvent;
 #include <QLabel>
 #include <QOpenGLWidget>
 #include <QButtonGroup>
+#include <QStackedLayout>
 
 #ifdef Q_OS_WIN
 	#include <Windows.h>
@@ -161,6 +162,12 @@ private:
 	QTimer *searchTimer;
 	QString searchTerm;
 	QLineEdit *le;
+
+    QWidget *assetImageViewer;
+    QLabel *assetImageCanvas;
+
+    QWidget *viewersWidget;
+    QStackedLayout *viewers;
 };
 
 #endif // ASSETVIEW_H

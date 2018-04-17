@@ -33,14 +33,18 @@ ModelPresets::ModelPresets(QWidget *parent) :
     connect(ui->modelsSets, SIGNAL(doubleClicked(QModelIndex)), SLOT(onPrimitiveSelected(QModelIndex)));
 
     // addItem("IcoSphere","app/modelpresets/icosphere.png");
-    // addItem("Cone",     "app/modelpresets/cone.png");
     addItem("Plane",    "app/modelpresets/plane.png");
     addItem("Cube",     "app/modelpresets/cube.png");
     addItem("Cylinder", "app/modelpresets/cylinder.png");
     addItem("Sphere",   "app/modelpresets/sphere.png");
     addItem("Torus",    "app/modelpresets/torus.png");
+    addItem("Pyramid",  "app/modelpresets/pyramid.png");
     addItem("Capsule",  "app/modelpresets/capsule.png");
+    addItem("Cone",     "app/modelpresets/cone.png");
     addItem("Gear",     "app/modelpresets/gear.png");
+    addItem("Steps",    "app/modelpresets/steps.png");
+    addItem("Teapot",   "app/modelpresets/teapot.png");
+    addItem("Sponge",   "app/modelpresets/sponge.png");
 }
 
 void ModelPresets::setMainWindow(MainWindow* mainWindow)
@@ -64,6 +68,10 @@ void ModelPresets::onPrimitiveSelected(QModelIndex itemIndex)
     if (text == "Torus")    mainWindow->addTorus();
     if (text == "Capsule")  mainWindow->addCapsule();
     if (text == "Gear")     mainWindow->addGear();
+    if (text == "Pyramid")  mainWindow->addPyramid();
+    if (text == "Teapot")   mainWindow->addTeapot();
+    if (text == "Sponge")   mainWindow->addSponge();
+    if (text == "Steps")    mainWindow->addSteps();
 }
 
 void ModelPresets::addItem(QString name, QString path)

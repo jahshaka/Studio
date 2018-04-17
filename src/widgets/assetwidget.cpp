@@ -413,6 +413,12 @@ void AssetWidget::addItem(const FolderRecord &folderData)
 
 void AssetWidget::addItem(const AssetRecord &assetData)
 {
+    auto prop = QJsonDocument::fromBinaryData(assetData.properties).object();
+    if (!prop["type"].toString().isEmpty()) {
+        // No need to check further, this is a builtin asset
+        return;
+    }
+
 	QListWidgetItem *item = new QListWidgetItem;
 	item->setData(Qt::DisplayRole, QFileInfo(assetData.name).baseName());
     item->setData(Qt::UserRole, assetData.name);
@@ -668,6 +674,12 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 		connect(action, SIGNAL(triggered()), this, SLOT(renameViewItem()));
 		menu.addAction(action);
 
+        if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Texture)) {
+            action = new QAction(QIcon(), "Export Texture", this);
+            connect(action, SIGNAL(triggered()), this, SLOT(exportTexture()));
+            menu.addAction(action);
+        }
+
 		if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Material)) {
 			action = new QAction(QIcon(), "Export Material", this);
 			connect(action, SIGNAL(triggered()), this, SLOT(exportMaterial()));
@@ -797,6 +809,105 @@ void AssetWidget::editFileExternally()
 			}
 		}
 	}
+}
+
+void AssetWidget::exportTexture()
+{
+    // get the export file path from a save dialog
+    auto filePath = QFileDialog::getSaveFileName(
+        this,
+        "Choose export path",
+        assetItem.wItem->data(Qt::DisplayRole).toString() + "_texture",
+        "Supported Export Formats (*.jaf)"
+    );
+
+    if (filePath.isEmpty() || filePath.isNull()) return;
+
+    QTemporaryDir temporaryDir;
+    if (!temporaryDir.isValid()) return;
+
+    const QString writePath = temporaryDir.path();
+
+    const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
+
+    db->createExportNode(ModelTypes::Material, guid, QDir(writePath).filePath("asset.db"));
+
+    QDir tempDir(writePath);
+    tempDir.mkpath("assets");
+
+    QFile manifest(QDir(writePath).filePath(".manifest"));
+    if (manifest.open(QIODevice::ReadWrite)) {
+        QTextStream stream(&manifest);
+        stream << "texture";
+    }
+    manifest.close();
+
+    QStringList fullFileList = db->fetchAssetAndDependencies(guid);
+    auto shaderGuid = QJsonDocument::fromBinaryData(db->fetchAssetData(guid)).object()["guid"].toString();
+    bool exportCustomShader = false;
+    QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+    while (it.hasNext()) {
+        it.next();
+        if (it.key() != shaderGuid) {
+            exportCustomShader = true;
+            break;
+        }
+    }
+    if (exportCustomShader) fullFileList.append(db->fetchAssetAndDependencies(shaderGuid));
+
+    for (const auto &asset : fullFileList) {
+        QFile::copy(
+            IrisUtils::join(Globals::project->getProjectFolder(), asset),
+            IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
+        );
+    }
+
+    // get all the files and directories in the project working directory
+    QDir workingProjectDirectory(writePath);
+    QDirIterator projectDirIterator(writePath,
+        QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
+        QDirIterator::Subdirectories);
+
+    QVector<QString> fileNames;
+    while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
+
+    //ZipWrapper exportNode("path", "read / write", "folder / file list");
+    //exportNode.setOutputPath();
+    //exportNode.setMode();
+    //exportNode.setCompressionLevel();
+    //exportNode.setFolder();
+    //exportNode.setFileList();
+    //exportNode.createArchive();
+
+    // open a basic zip file for writing, maybe change compression level later (iKlsR)
+    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
+
+    for (int i = 0; i < fileNames.count(); i++) {
+        QFileInfo fInfo(fileNames[i]);
+
+        // we need to pay special attention to directories since we want to write empty ones as well
+        if (fInfo.isDir()) {
+            zip_entry_open(
+                zip,
+                /* will only create directory if / is appended */
+                QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
+            );
+            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+        }
+        else {
+            zip_entry_open(
+                zip,
+                workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
+            );
+            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+        }
+
+        // we close each entry after a successful write
+        zip_entry_close(zip);
+    }
+
+    // close our now exported file
+    zip_close(zip);
 }
 
 void AssetWidget::exportMaterial()
@@ -1430,6 +1541,14 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                     AssetManager::addAsset(assetFile);
                 }
 
+                if (jafType == ModelTypes::Texture) {
+                    auto assetTexture = new AssetTexture;
+                    assetTexture->fileName = checkFile.fileName();
+                    assetTexture->assetGuid = placeHolderGuid;
+                    assetTexture->path = checkFile.absoluteFilePath();
+                    AssetManager::addAsset(assetTexture);
+                }
+
                 if (jafType == ModelTypes::Shader) {
                     QFile *templateShaderFile = new QFile(checkFile.absoluteFilePath());
                     templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);
@@ -1493,6 +1612,9 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             if (jafString == "material") {
                 jafType = ModelTypes::Material;
             }
+            else if (jafString == "texture") {
+                jafType = ModelTypes::Texture;
+            }
             else if (jafString == "object") {
                 jafType = ModelTypes::Object;
             }
@@ -1506,7 +1628,7 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
 
             QString guidReturned = db->importAsset(jafType, QDir(temporaryDir.path()).filePath("asset.db"), newNames, assetItem.selectedGuid);
 
-            if (jafType == ModelTypes::Shader || jafType == ModelTypes::File) {
+            if (jafType == ModelTypes::Shader || jafType == ModelTypes::File || jafType == ModelTypes::Texture) {
                 for (auto &asset : AssetManager::getAssets()) {
                     if (asset->assetGuid == placeHolderGuid) {
                         asset->assetGuid = guidReturned;
@@ -1668,7 +1790,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tuple> &fileNames)
                     auto assetFile = new AssetFile;
                     assetFile->assetGuid = assetGuid;
                     assetFile->fileName = asset->fileName;
-                    assetFile->path = pathToCopyTo;
+                    assetFile->path = fileToCopyTo;
                     AssetManager::addAsset(assetFile);
                 }
 
@@ -1676,7 +1798,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tuple> &fileNames)
                     auto assetTexture = new AssetTexture;
                     assetTexture->assetGuid = assetGuid;
                     assetTexture->fileName = asset->fileName;
-                    assetTexture->path = pathToCopyTo;
+                    assetTexture->path = fileToCopyTo;
                     AssetManager::addAsset(assetTexture);
                 }
 
@@ -1691,7 +1813,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tuple> &fileNames)
                     auto assetShader = new AssetShader;
                     assetShader->assetGuid = assetGuid;
                     assetShader->fileName = QFileInfo(asset->fileName).baseName();
-                    assetShader->path = pathToCopyTo;
+                    assetShader->path = fileToCopyTo;
                     assetShader->setValue(QVariant::fromValue(shaderDefinition));
                     AssetManager::addAsset(assetShader);
                 }

@@ -4,6 +4,7 @@
 #include "../../irisgl/src/core/irisutils.h"
 #include "../../globals.h"
 #include "../guidmanager.h"
+#include "io/assetmanager.h"
 
 #include <QDebug>
 #include <QJsonDocument>
@@ -462,8 +463,9 @@ QVector<FolderRecord> Database::fetchCrumbTrail(const QString &guid)
 		= [&](QVector<FolderRecord> &folders, const QString &guid) -> void
 	{
 		QSqlQuery query;
-		query.prepare("SELECT guid, parent, name FROM folders WHERE guid = ?");
+		query.prepare("SELECT guid, parent, name FROM folders WHERE guid = ? AND project_guid = ?");
 		query.addBindValue(guid);
+		query.addBindValue(Globals::project->getProjectGuid());
 		executeAndCheckQuery(query, "fetchCrumbTrail");
 
 		QStringList parentFolder;
@@ -499,9 +501,10 @@ QVector<FolderRecord> Database::fetchCrumbTrail(const QString &guid)
 QVector<FolderRecord> Database::fetchChildFolders(const QString &parent)
 {
 	QSqlQuery query;
-	query.prepare("SELECT guid, parent, name, count FROM folders WHERE parent = ?");
+	query.prepare("SELECT guid, parent, name, count FROM folders WHERE parent = ? AND project_guid = ?");
 	query.addBindValue(parent);
-	executeAndCheckQuery(query, "fetchChildFolders");
+	query.addBindValue(Globals::project->getProjectGuid());
+	executeAndCheckQuery(query, "FetchChildFolders");
 
 	QVector<FolderRecord> folderData;
 	while (query.next()) {
@@ -606,7 +609,7 @@ bool Database::deleteProject()
     bool q = executeAndCheckQuery(query, "DeleteProject");
 
     QSqlQuery dquery;
-    dquery.prepare("DELETE FROM projects WHERE guid = ?");
+    dquery.prepare("DELETE FROM dependencies WHERE project_guid = ?");
     dquery.addBindValue(Globals::project->getProjectGuid());
     bool d = executeAndCheckQuery(dquery, "DeleteDependencies");
 
@@ -637,6 +640,11 @@ bool Database::deleteAsset(const QString &guid)
     QSqlQuery query;
     query.prepare("DELETE FROM assets WHERE guid = ?");
     query.addBindValue(guid);
+
+    for (int i = 0; i < AssetManager::getAssets().count(); i++) {
+        if (AssetManager::getAssets()[i]->assetGuid == guid) AssetManager::getAssets().remove(i);
+    }
+
 	return executeAndCheckQuery(query, "DeleteAsset");
 }
 
@@ -797,11 +805,14 @@ QVector<AssetRecord> Database::fetchAssets()
         "A.author, A.license, A.tags, A.project_guid "
         "FROM assets A "
         "INNER JOIN collections C ON A.collection = C.collection_id "
-        "WHERE A.project_guid IS NULL AND (A.type = :m OR A.type = :o) "
+        "WHERE A.project_guid IS NULL "
+        "AND (A.type = 5 OR A.type = 1 OR A.type = 2) "
+        "AND A.guid NOT IN (select dependee FROM dependencies) "
         "ORDER BY A.name DESC"
     );
     query.bindValue(":m", static_cast<int>(ModelTypes::Object));
     query.bindValue(":o", static_cast<int>(ModelTypes::Material));
+    query.bindValue(":t", static_cast<int>(ModelTypes::Texture));
     executeAndCheckQuery(query, "FetchAssets");
 
     QVector<AssetRecord> tileData;
@@ -834,20 +845,21 @@ QVector<AssetRecord> Database::fetchChildAssets(const QString &parent, bool show
     QSqlQuery query;
     if (showDependencies) {
         query.prepare(
-            "SELECT name, thumbnail, guid, parent, type "
-            "FROM assets A WHERE parent = ? "
+            "SELECT name, thumbnail, guid, parent, type, properties "
+            "FROM assets A WHERE parent = ? AND project_guid = ? "
             "ORDER BY A.name DESC"
         );
     }
     else {
         query.prepare(
-            "SELECT name, thumbnail, guid, parent, type "
-            "FROM assets A WHERE parent = ? "
+            "SELECT name, thumbnail, guid, parent, type, properties "
+            "FROM assets A WHERE parent = ? AND project_guid = ? "
             "AND A.guid NOT IN (SELECT dependee FROM dependencies) "
             "ORDER BY A.name DESC"
         );
     }
     query.addBindValue(parent);
+    query.addBindValue(Globals::project->getProjectGuid());
     executeAndCheckQuery(query, "fetchChildAssets");
 
     QVector<AssetRecord> tileData;
@@ -860,6 +872,7 @@ QVector<AssetRecord> Database::fetchChildAssets(const QString &parent, bool show
             data.guid = record.value(2).toString();
             data.parent = record.value(3).toString();
             data.type = record.value(4).toInt();
+            data.properties = record.value(5).toByteArray();
         }
 
         tileData.push_back(data);
@@ -905,8 +918,9 @@ QVector<AssetRecord> Database::fetchAssetsByCollection(const int &collection_id)
 QVector<AssetRecord> Database::fetchAssetsByType(const int &type)
 {
     QSqlQuery query;
-    query.prepare("SELECT guid, type, name, asset FROM assets WHERE type = ?");
+    query.prepare("SELECT guid, type, name, asset FROM assets WHERE type = ? AND project_guid = ?");
     query.addBindValue(type);
+    query.addBindValue(Globals::project->getProjectGuid());
     executeAndCheckQuery(query, "fetchAssetsByType");
 
     QVector<AssetRecord> tileData;
@@ -1413,7 +1427,7 @@ QVector<ProjectTileData> Database::fetchProjects()
 {
     QSqlQuery query;
     query.prepare("SELECT name, thumbnail, guid FROM projects ORDER BY last_written DESC");
-    executeAndCheckQuery(query, "fetchProjects");
+    executeAndCheckQuery(query, "FetchProjects");
 
     QVector<ProjectTileData> tileData;
     while (query.next())  {
@@ -1434,7 +1448,7 @@ QVector<ProjectTileData> Database::fetchProjects()
 QByteArray Database::getSceneBlobGlobal() const
 {
     QSqlQuery query;
-    query.prepare("SELECT scene FROM " + Constants::DB_PROJECTS_TABLE + " WHERE guid = ?");
+    query.prepare("SELECT scene FROM projects WHERE guid = ?");
     query.addBindValue(Globals::project->getProjectGuid());
 
     if (query.exec()) {
@@ -1490,7 +1504,7 @@ void Database::createExportScene(const QString &outTempFilePath)
     auto sceneGuid  = query.value(6).toString();
 
     QSqlDatabase dbe = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "myUniqueSQLITEConnection");
-    dbe.setDatabaseName(QDir(outTempFilePath).filePath(Globals::project->getProjectName() + ".db"));
+    dbe.setDatabaseName(QDir(outTempFilePath).filePath(Globals::project->getProjectGuid() + ".db"));
     dbe.open();
 
     QString schema = "CREATE TABLE IF NOT EXISTS projects ("
@@ -1649,24 +1663,22 @@ void Database::createExportScene(const QString &outTempFilePath)
 
     QVector<DependencyRecord> dependenciesToExport;
 
-    for (const auto &asset : assetList) {
-        QSqlQuery selectDep;
-        selectDep.prepare(
-			"SELECT depender_type, dependee_type, project_guid, depender, dependee, id FROM dependencies WHERE project_guid = ?"
-		);
-        selectDep.addBindValue(Globals::project->getProjectGuid());
-        executeAndCheckQuery(selectDep, "selectDep");
+    QSqlQuery selectDep;
+    selectDep.prepare(
+		"SELECT depender_type, dependee_type, project_guid, depender, dependee, id FROM dependencies WHERE project_guid = ?"
+	);
+    selectDep.addBindValue(Globals::project->getProjectGuid());
+    executeAndCheckQuery(selectDep, "selectDep");
 
-        while (selectDep.next()) {
-            DependencyRecord record;
-            record.dependerType = selectDep.value(0).toInt();
-            record.dependeeType = selectDep.value(1).toInt();
-            record.projectGuid = selectDep.value(2).toString();
-            record.depender = selectDep.value(3).toString();
-            record.dependee = selectDep.value(4).toString();
-            record.id = selectDep.value(5).toString();
-            dependenciesToExport.append(record);
-        }
+    while (selectDep.next()) {
+        DependencyRecord record;
+        record.dependerType = selectDep.value(0).toInt();
+        record.dependeeType = selectDep.value(1).toInt();
+        record.projectGuid = selectDep.value(2).toString();
+        record.depender = selectDep.value(3).toString();
+        record.dependee = selectDep.value(4).toString();
+        record.id = selectDep.value(5).toString();
+        dependenciesToExport.append(record);
     }
 
     for (const auto &dep : dependenciesToExport) {
@@ -2038,14 +2050,14 @@ bool Database::hasDependencies(const QString &guid)
     return false;
 }
 
-bool Database::importProject(const QString &inFilePath)
+bool Database::importProject(const QString &inFilePath, const QString &newSceneGuid, QString &worldName)
 {
     QSqlDatabase dbe = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "myUniqueSQLITEImportConnection");
     dbe.setDatabaseName(inFilePath + ".db");
     dbe.open();
 
     QSqlQuery query(dbe);
-    query.prepare("SELECT name, scene, thumbnail, last_written, last_accessed, guid FROM projects");
+    query.prepare("SELECT name, scene, thumbnail, version, last_written, last_accessed, guid FROM projects");
 
     if (query.exec()) {
         query.next();
@@ -2056,14 +2068,13 @@ bool Database::importProject(const QString &inFilePath)
         );
     }
 
-    auto sceneName = query.value(0).toString();
+    auto sceneName = worldName = query.value(0).toString();
     auto sceneBlob = query.value(1).toByteArray();
     auto sceneThumb = query.value(2).toByteArray();
-    auto sceneVersion = query.value(3).toByteArray();
+    auto sceneVersion = query.value(3).toString();
     auto sceneLastW = query.value(4).toDateTime();
     auto sceneLastA = query.value(5).toDateTime();
     auto oldSceneGuid = query.value(6).toString();
-    auto newSceneGuid = GUIDManager::generateGUID();
 
     QVector<AssetRecord> assetList;
 
@@ -2252,10 +2263,11 @@ bool Database::importProject(const QString &inFilePath)
             "VALUES (:guid, :name, :parent, :count, :project_guid, :date_created, :last_updated)"
         );
 
-        importFolder.bindValue(":guid", GUIDManager::generateGUID());
+        auto newFolderGuid = GUIDManager::generateGUID();
+        importFolder.bindValue(":guid", newFolderGuid);
         importFolder.bindValue(":name", folder.name);
         if (folder.parent == oldSceneGuid) {
-            importFolder.bindValue(":parent", folder.parent);
+            importFolder.bindValue(":parent", newFolderGuid);
         }
         else {
             importFolder.bindValue(":parent", folder.parent);
@@ -2269,8 +2281,6 @@ bool Database::importProject(const QString &inFilePath)
     }
 
     dbe.close();
-
-    Globals::project->setProjectGuid(newSceneGuid);
 
     return true;
 }
@@ -2303,7 +2313,7 @@ QString Database::importAsset(
 
 	QMap<QString, QString> assetGuids; /* old x new guid */
 
-	const QString guidToReturn = GUIDManager::generateGUID();
+	QString guidToReturn = GUIDManager::generateGUID();
 
 	QVector<AssetRecord> assetsToImport;
 
@@ -2423,6 +2433,10 @@ QString Database::importAsset(
 			" VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
 			" :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail)"
 		);
+
+        if (jafType == ModelTypes::Texture) {
+            guidToReturn = asset.guid;
+        }
 
 		insertAssetQuery.bindValue(":guid", asset.guid);
 		insertAssetQuery.bindValue(":type", asset.type);

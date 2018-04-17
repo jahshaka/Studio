@@ -152,8 +152,6 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 					QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
 					QString textureStr = IrisUtils::join(Globals::project->getProjectFolder(), materialName);
 					material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
-
-                    qDebug() << "tex " << textureStr;
 				}
 				else {
 					material->setValue(prop->name, QVariant::fromValue(matObject.value(prop->name)));
@@ -243,7 +241,10 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 		auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
 		auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
 
-		Globals::project->setProjectPath(QDir(projectFolder).filePath(widget->tileData.name));
+		Globals::project->setProjectPath(
+            QDir(QDir(projectFolder).filePath("Projects")).filePath(widget->tileData.guid),
+            widget->tileData.name
+        );
 		Globals::project->setProjectGuid(widget->tileData.guid);
 
 		this->openInPlayMode = playMode;
@@ -255,10 +256,10 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 	}
 }
 
-QString importProjectName;
+QString projectBlobGuid;
 int on_extract_entry(const char *filename, void *arg) {
     QFileInfo fInfo(filename);
-    if (fInfo.suffix() == "db") importProjectName = fInfo.baseName();
+    if (fInfo.suffix() == "db") projectBlobGuid = fInfo.baseName();
     return 0;
 }
 
@@ -282,6 +283,7 @@ void ProjectManager::importProjectFromFile(const QString& file)
     // create a temporary directory and extract our project into it
     // we need a sure way to get the project name, so we have to extract it first and check the blob
     QTemporaryDir temporaryDir;
+    temporaryDir.setAutoRemove(false);
     if (temporaryDir.isValid()) {
         zip_extract(fileName.toStdString().c_str(),
                     temporaryDir.path().toStdString().c_str(),
@@ -290,21 +292,27 @@ void ProjectManager::importProjectFromFile(const QString& file)
     }
 
     // now extract the project to the default projects directory with the name
-    if (!importProjectName.isEmpty() || !importProjectName.isNull()) {
-        auto pDir = QDir(defaultProjectDirectory).filePath(importProjectName);
+    auto importGuid = GUIDManager::generateGUID();
+    auto pDir = QDir(QDir(defaultProjectDirectory).filePath("Projects")).filePath(importGuid);
+    zip_extract(fileName.toStdString().c_str(), pDir.toStdString().c_str(), Q_NULLPTR, Q_NULLPTR);
 
-        zip_extract(fileName.toStdString().c_str(), pDir.toStdString().c_str(), Q_NULLPTR, Q_NULLPTR);
-        QDir dir;
-        if (!dir.remove(QDir(pDir).filePath(importProjectName + ".db"))) {
-            // let's try again shall we...
-            remove(QDir(pDir).filePath(importProjectName + ".db").toStdString().c_str());
-        }
+    QDir dir;
+    if (!dir.remove(QDir(pDir).filePath(projectBlobGuid + ".db"))) {
+        // let's try again shall we...
+        remove(QDir(pDir).filePath(projectBlobGuid + ".db").toStdString().c_str());
+    }
 
-        auto open = db->importProject(QDir(temporaryDir.path()).filePath(importProjectName));
-        if (open) {
-            Globals::project->setProjectPath(pDir);
-            loadProjectAssets();
-        }
+    QString worldName;
+    auto open = db->importProject(
+        QDir(temporaryDir.path()).filePath(projectBlobGuid),
+        importGuid,
+        worldName
+    );
+
+    if (open) {
+        Globals::project->setProjectPath(pDir, worldName);
+        Globals::project->setProjectGuid(importGuid);
+        loadProjectAssets();
     }
 
     temporaryDir.remove();
@@ -315,7 +323,10 @@ void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
     auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
     auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
 
-    Globals::project->setProjectPath(QDir(projectFolder).filePath(widget->tileData.name));
+    Globals::project->setProjectPath(
+        QDir(QDir(projectFolder).filePath("Projects")).filePath(widget->tileData.guid),
+        widget->tileData.name
+    );
     Globals::project->setProjectGuid(widget->tileData.guid);
 
     emit exportProject();
@@ -359,7 +370,7 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
                                         QMessageBox::Yes | QMessageBox::Cancel);
 
     if (option == QMessageBox::Yes) {
-        QDir dirToRemove(QDir(projectFolder).filePath(widget->tileData.name));
+        QDir dirToRemove(QDir(projectFolder + "/Projects").filePath(widget->tileData.guid));
         if (dirToRemove.removeRecursively()) {
             dynamicGrid->deleteTile(widget);
             Globals::project->setProjectGuid(widget->tileData.guid);
@@ -437,9 +448,9 @@ void ProjectManager::newProject()
     auto projectGuid = GUIDManager::generateGUID();
 
     if (!projectName.isEmpty() || !projectName.isNull()) {
-        auto fullProjectPath = QDir(projectPath).filePath(projectName);
+        auto fullProjectPath = QDir(QDir(projectPath).filePath("Projects")).filePath(projectGuid);
 
-        Globals::project->setProjectPath(fullProjectPath);
+        Globals::project->setProjectPath(fullProjectPath, projectName);
 
         // make a dir and the default subfolders
         QDir projectDir(fullProjectPath);
@@ -494,9 +505,11 @@ void ProjectManager::openSampleBrowser()
     sampleDialog.setFixedSize(Constants::TILE_SIZE * 1.66);
     sampleDialog.setWindowFlags(sampleDialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
     sampleDialog.setWindowTitle("Sample Worlds");
+    sampleDialog.setAttribute(Qt::WA_MacShowFocusRect, false);
 
     QGridLayout *layout = new QGridLayout();
     QListWidget *sampleList = new QListWidget();
+    sampleList->setAttribute(Qt::WA_MacShowFocusRect, false);
     sampleList->setObjectName("sampleList");
     sampleList->setStyleSheet("#sampleList { background-color: #1e1e1e; padding: 0 8px; border: none; color: #EEE; } " \
                               "QListWidgetItem { padding: 12px; } "\

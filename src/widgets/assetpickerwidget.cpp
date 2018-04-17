@@ -22,7 +22,6 @@ AssetPickerWidget::AssetPickerWidget(ModelTypes type, QDialog *parent) :
     connect(ui->searchBar,  SIGNAL(textChanged(QString)),
             this,           SLOT(searchAssets(QString)));
 
-    this->type = ModelTypes::Texture;
     populateWidget();
 
     ui->assetView->setViewMode(QListWidget::ListMode);
@@ -42,7 +41,7 @@ void AssetPickerWidget::populateWidget(QString filter)
     for (auto asset : AssetManager::getAssets()) {
         QPixmap pixmap;
 
-        if (asset->type == type) {
+        if (asset->type == ModelTypes::Texture) {
             QFileInfo file(asset->fileName);
             auto item = new QListWidgetItem(asset->fileName);
 

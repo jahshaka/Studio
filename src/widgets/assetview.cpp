@@ -7,6 +7,7 @@
 #include "irisgl/src/graphics/mesh.h"
 #include "irisgl/src/zip/zip.h"
 
+#include <QStackedLayout>
 #include <QDirIterator>
 #include <QListWidget>
 #include <QListWidgetItem>
@@ -200,6 +201,16 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	_assetView = new QListWidget;
 	viewer = new AssetViewer(this);
     viewer->setDatabase(db);
+
+    viewersWidget = new QWidget;
+    viewers = new QStackedLayout;
+
+    assetImageViewer = new QWidget;
+    auto imgl = new QGridLayout;
+    assetImageCanvas = new QLabel;
+    imgl->addWidget(assetImageCanvas);
+    imgl->setAlignment(Qt::AlignCenter);
+    assetImageViewer->setLayout(imgl);
 
     settings = SettingsManager::getDefaultManager();
 	//prefsDialog = new PreferencesDialog(this, db, settings);
@@ -642,7 +653,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		}
 	});
 
-    connect(fastGrid, &AssetViewGrid::selectedTile, [=](AssetGridItem *gridItem) {
+    connect(fastGrid, &AssetViewGrid::selectedTile, [&](AssetGridItem *gridItem) {
 		fastGrid->deselectAll();
 
 		renameWidget->setVisible(false);
@@ -708,6 +719,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 			}
 
             if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Object)) {
+                viewers->setCurrentIndex(0);
+
                 QString path;
                 // if model
                 QDir dir(assetPath);
@@ -729,6 +742,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
             }
 
             if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Material)) {
+                viewers->setCurrentIndex(0);
                 if (viewer->cachedAssets.value(gridItem->metadata["guid"].toString())) {
                     //viewer->addNodeToScene(viewer->cachedAssets.value(gridItem->metadata["guid"].toString()), gridItem->metadata["guid"].toString(), true, false);
                     viewer->loadJafMaterial(gridItem->metadata["guid"].toString());
@@ -739,6 +753,20 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
                     //viewer->loadJafModel(path, gridItem->metadata["guid"].toString(), false, true, !cached);
                     viewer->orientCamera(pos, rot, distObj);
                 }
+            }
+
+            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Texture)) {
+                // viewer->loadJafMaterial(gridItem->metadata["guid"].toString());
+                viewers->setCurrentIndex(1);
+                auto assetPath = IrisUtils::join(
+                    QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+                    "AssetStore",
+                    gridItem->metadata["guid"].toString(),
+                    db->fetchAsset(gridItem->metadata["guid"].toString()).name
+                );
+
+                QPixmap image(assetPath);
+                assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
             }
 
 			selectedGridItem = gridItem;
@@ -897,7 +925,12 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
     _metadataPane->setLayout(metaLayout);
 
-	split->addWidget(viewer);
+    viewers->addWidget(viewer);
+    viewers->addWidget(assetImageViewer);
+    viewersWidget->setLayout(viewers);
+
+	//split->addWidget(viewer);
+	split->addWidget(viewersWidget);
 	split->addWidget(_viewPane);
 
     _splitter->addWidget(_navPane);
@@ -979,6 +1012,9 @@ void AssetView::importJahModel(const QString &fileName)
         if (jafString == "object") {
             jafType = ModelTypes::Object;
         }
+        else if (jafString == "texture") {
+            jafType = ModelTypes::Texture;
+        }
         else if (jafString == "material") {
             jafType = ModelTypes::Material;
         }
@@ -1007,12 +1043,33 @@ void AssetView::importJahModel(const QString &fileName)
         }
 
         if (jafString == "material") {
+            viewers->setCurrentIndex(0);
             renameModelField->setText(QFileInfo(filename).baseName());
             viewer->loadJafMaterial(guid);
             addToJahLibrary(filename, guid, true);
         }
 
+        if (jafString == "texture") {
+            renameModelField->setText(QFileInfo(filename).baseName());
+
+            {
+                viewers->setCurrentIndex(1);
+                auto assetPath = IrisUtils::join(
+                    QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+                    "AssetStore",
+                    guid,
+                    db->fetchAsset(guid).name
+                );
+
+                QPixmap image(assetPath);
+                assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
+            }
+
+            addToJahLibrary(filename, guid, true);
+        }
+
         if (jafString == "object") {
+            viewers->setCurrentIndex(0);
             // Open the asset
             QString path;
             // if model
@@ -1050,7 +1107,13 @@ void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool
     object["icon_url"] = "";
     object["name"] = QFileInfo(fileName).baseName(); // renameModelField->text();
 
-    auto thumbnail = viewer->takeScreenshot(512, 512);
+    //auto thumbnail = viewer->takeScreenshot(512, 512);
+
+    auto bytes = db->fetchAsset(guid).thumbnail;
+    QImage thumbnail;
+    if (thumbnail.loadFromData(bytes, "PNG")) {
+        //thumbnail = viewer->takeScreenshot(512, 512);
+    }
 
     db->updateAssetProperties(guid, QJsonDocument(viewer->getSceneProperties()).toBinaryData());
     //db->updateAssetThumbnail(guid, bytes);
