@@ -256,6 +256,7 @@ protected slots:
     void renameViewItem();
 
 	void editFileExternally();
+	void exportTexture();
 	void exportMaterial();
 	void exportShader();
 

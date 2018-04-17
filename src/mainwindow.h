@@ -207,6 +207,10 @@ public slots:
     void addTorus();
     void addSphere();
     void addCylinder();
+    void addPyramid();
+    void addTeapot();
+    void addSponge();
+    void addSteps();
     void addGear();
     void addEmpty();
     void addViewer();

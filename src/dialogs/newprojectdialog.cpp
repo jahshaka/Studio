@@ -21,6 +21,8 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui
     ui->createProject->setAutoDefault(true);
     ui->createProject->setDefault(true);
 
+    ui->projectName->setAttribute(Qt::WA_MacShowFocusRect, false);
+
     settingsManager = SettingsManager::getDefaultManager();
 
     ui->projectPath->setDisabled(true);
@@ -67,18 +69,18 @@ void NewProjectDialog::createNewProject()
 
 void NewProjectDialog::confirmProjectCreation()
 {
-    if (QDir(projectPath + '/' + ui->projectName->text()).exists()) {
-        QMessageBox::StandardButton reply;
-        reply = QMessageBox::question(this, "Project Path not Empty", "Project already Exists! Overwrite?",
-                                        QMessageBox::Yes|QMessageBox::No);
-        if (reply == QMessageBox::Yes) {
-            createNewProject();
-            this->close();
-            emit accepted();
-        }
-    } else {
+    //if (QDir(projectPath + '/' + ui->projectName->text()).exists()) {
+    //    QMessageBox::StandardButton reply;
+    //    reply = QMessageBox::question(this, "Project Path not Empty", "Project already Exists! Overwrite?",
+    //                                    QMessageBox::Yes|QMessageBox::No);
+    //    if (reply == QMessageBox::Yes) {
+    //        createNewProject();
+    //        this->close();
+    //        emit accepted();
+    //    }
+    //} else {
         createNewProject();
         this->close();
         emit accepted();
-    }
+    //}
 }

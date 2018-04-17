@@ -42,6 +42,13 @@ void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         meshNode = sceneNode.staticCast<iris::MeshNode>();
         material = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
+        meshNodeGuid = meshNode->getGUID();
+
+        for (auto prop : material->properties) {
+            if (prop->type == iris::PropertyType::Texture) {
+                existingTextures.insert(prop->name, prop->getValue().toString());
+            }
+        }
     }
 
     setupShaderSelector();
@@ -158,8 +165,25 @@ void MaterialPropertyWidget::onPropertyChanged(iris::Property *prop)
     // special case for textures since we have to generate these
     if (prop->type == iris::PropertyType::Texture) {
         material->setTextureWithUniform(prop->uniform, prop->getValue().toString());
-    }
+        
+        // HANDLE CASE where the widget isn't deselected
 
+        QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName());
+        if (assetGuid.isEmpty()) {
+            db->deleteDependency(
+                meshNodeGuid,
+                db->fetchAssetGUIDByName(QFileInfo(existingTextures.value(prop->name)).fileName())
+            );
+        }
+        else {
+            db->createDependency(
+                static_cast<int>(ModelTypes::Object),
+                static_cast<int>(ModelTypes::Texture),
+                meshNodeGuid, assetGuid,
+                Globals::project->getProjectGuid()
+            );
+        }
+    }
 }
 
 void MaterialPropertyWidget::onPropertyChangeStart(iris::Property* prop)

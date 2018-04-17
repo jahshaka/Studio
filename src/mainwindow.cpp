@@ -260,6 +260,22 @@ iris::ScenePtr MainWindow::createDefaultScene()
     node->setPickable(false);
 	node->setFaceCullingMode(iris::FaceCullingMode::None);
     node->setShadowCastingEnabled(false);
+    node->isBuiltIn = true;
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    props.insert("type", "builtin");
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
 
 	// if we reached this far, the project dir has already been created
 	// we can copy some default assets to each project here
@@ -282,6 +298,19 @@ iris::ScenePtr MainWindow::createDefaultScene()
                                                    QString(),
                                                    QString(), 
 												   thumbnailBytes);
+
+    db->createDependency(
+        static_cast<int>(ModelTypes::Object),
+        static_cast<int>(ModelTypes::Texture),
+        nodeGuid, assetGuid,
+        Globals::project->getProjectGuid()
+    );
+
+    auto assetTexture = new AssetTexture;
+    assetTexture->fileName = "Tile.png";
+    assetTexture->assetGuid = assetGuid;
+    assetTexture->path = QDir(Globals::project->getProjectFolder()).filePath("Tile.png");
+    AssetManager::addAsset(assetTexture);
 
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
@@ -858,6 +887,22 @@ void MainWindow::addPlane()
     node->setMesh(":/content/primitives/plane.obj");
     node->setFaceCullingMode(iris::FaceCullingMode::None);
     node->setName("Plane");
+    node->isBuiltIn = true;
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    props["type"] = "builtin";
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
     addNodeToScene(node);
 }
 
@@ -868,6 +913,22 @@ void MainWindow::addGround()
     node->setMesh(":/models/ground.obj");
     node->setFaceCullingMode(iris::FaceCullingMode::None);
     node->setName("Ground");
+    node->isBuiltIn = true;
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    props["type"] = "builtin";
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
     addNodeToScene(node);
 }
 
@@ -877,6 +938,22 @@ void MainWindow::addCone()
     auto node = iris::MeshNode::create();
     node->setMesh(":/content/primitives/cone.obj");
     node->setName("Cone");
+    node->isBuiltIn = true;
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    props["type"] = "builtin";
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
     addNodeToScene(node);
 }
 
@@ -886,6 +963,22 @@ void MainWindow::addCapsule()
     auto node = iris::MeshNode::create();
     node->setMesh(":/content/primitives/capsule.obj");
     node->setName("Capsule");
+    node->isBuiltIn = true;
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    props["type"] = "builtin";
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
     addNodeToScene(node);
 }
 
@@ -895,6 +988,22 @@ void MainWindow::addCube()
     auto node = iris::MeshNode::create();
     node->setMesh(":/content/primitives/cube.obj");
     node->setName("Cube");
+    node->isBuiltIn = true;
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    props["type"] = "builtin";
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
     addNodeToScene(node);
 }
 
@@ -904,6 +1013,22 @@ void MainWindow::addTorus()
     auto node = iris::MeshNode::create();
     node->setMesh(":/content/primitives/torus.obj");
     node->setName("Torus");
+    node->isBuiltIn = true;
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    props["type"] = "builtin";
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
     addNodeToScene(node);
 }
 
@@ -913,6 +1038,22 @@ void MainWindow::addSphere()
     auto node = iris::MeshNode::create();
     node->setMesh(":/content/primitives/sphere.obj");
     node->setName("Sphere");
+    node->isBuiltIn = true;
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    props["type"] = "builtin";
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
     addNodeToScene(node);
 }
 
@@ -922,6 +1063,122 @@ void MainWindow::addCylinder()
     auto node = iris::MeshNode::create();
     node->setMesh(":/content/primitives/cylinder.obj");
     node->setName("Cylinder");
+    node->isBuiltIn = true;
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    props["type"] = "builtin";
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
+    addNodeToScene(node);
+}
+
+void MainWindow::addPyramid()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::MeshNode::create();
+    node->setMesh(":/content/primitives/pyramid.obj");
+    node->setName("Pyramid");
+    node->isBuiltIn = true;
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    props["type"] = "builtin";
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
+    addNodeToScene(node);
+}
+
+void MainWindow::addSponge()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::MeshNode::create();
+    node->setMesh(":/content/primitives/sponge.obj");
+    node->setName("Sponge");
+    node->isBuiltIn = true;
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    props["type"] = "builtin";
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
+    addNodeToScene(node);
+}
+
+void MainWindow::addTeapot()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::MeshNode::create();
+    node->setMesh(":/content/primitives/teapot.obj");
+    node->setName("Teapot");
+    node->isBuiltIn = true;
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    props["type"] = "builtin";
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
+    addNodeToScene(node);
+}
+
+void MainWindow::addSteps()
+{
+    this->sceneView->makeCurrent();
+    auto node = iris::MeshNode::create();
+    node->setMesh(":/content/primitives/steps.obj");
+    node->setName("Steps");
+    node->isBuiltIn = true;
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    props["type"] = "builtin";
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
     addNodeToScene(node);
 }
 
@@ -931,6 +1188,22 @@ void MainWindow::addGear()
     auto node = iris::MeshNode::create();
     node->setMesh(":/content/primitives/gear.obj");
     node->setName("Gear");
+    node->isBuiltIn = true;
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    props["type"] = "builtin";
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::Object),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
     addNodeToScene(node);
 }
 
@@ -1494,6 +1767,8 @@ void MainWindow::exportNodes(const QStringList &assetGuids)
 void MainWindow::deleteNode()
 {
     if (!!activeSceneNode) {
+        // TODO - do a deps check here as well
+        if (activeSceneNode->isBuiltIn) db->deleteAsset(activeSceneNode->getGUID());
         auto cmd = new DeleteSceneNodeCommand(activeSceneNode->parent, activeSceneNode);
         UiManager::pushUndoStack(cmd);
     }
@@ -1542,16 +1817,15 @@ void MainWindow::exportSceneAsZip()
     auto filePath = QFileDialog::getSaveFileName(
                         this,
                         "Choose export path",
-                        Globals::project->getProjectName() + "_" + Constants::DEF_EXPORT_FILE,
+                        QString("%1_export").arg(Globals::project->getProjectName()),
                         "Supported Export Formats (*.zip)"
                     );
 
     if (filePath.isEmpty() || filePath.isNull()) return;
-
     if (!!scene) saveScene();
 
     // Maybe in the future one could add a way to using an in memory database
-    // and saving saving that as a blob which can be put into the zip as bytes (iKlsR)
+    // and saving that as a blob which can be put into the zip as bytes (iKlsR)
     // prepare our export database with the current scene, use the os temp location and remove after
     db->createExportScene(QStandardPaths::writableLocation(QStandardPaths::TempLocation));
 
@@ -1559,7 +1833,7 @@ void MainWindow::exportSceneAsZip()
     auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
                                  Constants::PROJECT_FOLDER);
     auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
-    auto pDir = IrisUtils::join(defaultProjectDirectory, Globals::project->getProjectName());
+    auto pDir = IrisUtils::join(defaultProjectDirectory, "Projects", Globals::project->getProjectGuid());
 
     // get all the files and directories in the project working directory
     QDir workingProjectDirectory(pDir);
@@ -1598,11 +1872,11 @@ void MainWindow::exportSceneAsZip()
     }
 
     // finally add our exported scene
-    zip_entry_open(zip, QString(Globals::project->getProjectName() + ".db").toStdString().c_str());
+    zip_entry_open(zip, QString(Globals::project->getProjectGuid() + ".db").toStdString().c_str());
     zip_entry_fwrite(
         zip,
         QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
-            .filePath(Globals::project->getProjectName() + ".db").toStdString().c_str()
+            .filePath(Globals::project->getProjectGuid() + ".db").toStdString().c_str()
     );
     zip_entry_close(zip);
 
@@ -1613,7 +1887,7 @@ void MainWindow::exportSceneAsZip()
     QDir tempFile;
     tempFile.remove(
         QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
-            .filePath(Globals::project->getProjectName() + ".db")
+            .filePath(Globals::project->getProjectGuid() + ".db")
                 );
 }
 
