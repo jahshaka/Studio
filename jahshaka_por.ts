@@ -509,6 +509,61 @@ p, li { white-space: pre-wrap; }
     </message>
 </context>
 <context>
+    <name>HelpingLabels</name>
+    <message>
+        <source>Form</source>
+        <translation>Sobre</translation>
+    </message>
+    <message>
+        <source>Manipulator for translating objects</source>
+        <translation>Manipulador para traduzir objetos</translation>
+    </message>
+    <message>
+        <source>Manipulator for rotating objects</source>
+        <translation>Manipulador para objetos rotativos</translation>
+    </message>
+    <message>
+        <source>Manipulator for scaling objects</source>
+        <translation>Manipulador para escalar objetos</translation>
+    </message>
+    <message>
+        <source>Move objects relative to the global world</source>
+        <translation>Mova objetos em relação ao mundo global</translation>
+    </message>
+    <message>
+        <source>Move objects relative to their transform</source>
+        <translation>Mover objetos em relação a sua transformação</translation>
+    </message>
+    <message>
+        <source>Freely move and orient the camera</source>
+        <translation>Livremente mova e oriente a câmera</translation>
+    </message>
+    <message>
+        <source>Move and orient the camera around a fixed point</source>
+        <translation>Mova e oriente a câmera em torno de um ponto fixo</translation>
+    </message>
+    <message>
+        <source>Undo last action</source>
+        <translation>Desfazer a última ação</translation>
+    </message>
+    <message>
+        <source>Export the current scene</source>
+        <translation>Exportar a cena atual</translation>
+    </message>
+    <message>
+        <source>Save the current scene</source>
+        <translation>Salvar a cena atual</translation>
+    </message>
+    <message>
+        <source>Toggle Widgets</source>
+        <translation>Alternar widgets</translation>
+    </message>
+    <message>
+        <source>Redo last action</source>
+        <translation>Refazer a última ação</translation>
+    </message>
+</context>
+<context>
     <name>InfoDialog</name>
     <message>
         <source>Dialog</source>
@@ -687,7 +742,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>h:mm </source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
 </context>
 <context>
