@@ -157,7 +157,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Create Collection</source>
-        <translation>Criar coleção</translation>
+        <translation type="vanished">Criar coleção</translation>
     </message>
     <message>
         <source>You have no assets in your library.</source>
@@ -668,11 +668,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Online Assets</source>
-        <translation></translation>
+        <translation>Ativos Online</translation>
     </message>
     <message>
         <source>Local Assets</source>
-        <translation></translation>
+        <translation>Ativos locais</translation>
     </message>
     <message>
         <source>Update</source>
@@ -704,7 +704,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Collection Creation Failed</source>
-        <translation></translation>
+        <translation>Criação de coleção falhada</translation>
     </message>
     <message>
         <source>Backdrop: </source>
@@ -725,6 +725,22 @@ p, li { white-space: pre-wrap; }
     <message>
         <source>Collection: </source>
         <translation>Coleção:</translation>
+    </message>
+    <message>
+        <source>Import Asset</source>
+        <translation>Importar recurso</translation>
+    </message>
+    <message>
+        <source>Drop an asset to import...</source>
+        <translation>Solte um recurso para importar ...</translation>
+    </message>
+    <message>
+        <source>Download Assets</source>
+        <translation>Recurso de download</translation>
+    </message>
+    <message>
+        <source>Asset Collections</source>
+        <translation>Coleções de ativos</translation>
     </message>
 </context>
 <context>

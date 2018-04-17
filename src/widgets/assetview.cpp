@@ -204,7 +204,9 @@ void AssetView::changeEvent(QEvent *event) {
 
 	if (event->type() == QEvent::LanguageChange)
 	{
+		
 		changeAllLabels();
+		qDebug() << "change called";
 	}
 	QWidget::changeEvent(event);
 
@@ -279,7 +281,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	treeWidget->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
 
 	rootItem = new QTreeWidgetItem;
-	rootItem->setText(0, "Asset Collections");
+	rootItem->setText(0, helpingLabels->ui->assetCollections->text());
 	rootItem->setText(1, QString());
 	rootItem->setData(0, Qt::UserRole, -1);
 
@@ -347,7 +349,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
         d.setFixedWidth(350);
         d.setLayout(l);
         QLineEdit *input = new QLineEdit;
-        accept = new QPushButton(tr("Create Collection"));
+        accept = new QPushButton(helpingLabels->ui->changeMetaCollection->text());
 
         connect(accept, &QPushButton::pressed, [&]() {
             collectionName = input->text();
@@ -582,15 +584,15 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	assetDropPad->setSizePolicy(policy);
 	assetDropPad->setObjectName(QStringLiteral("assetDropPad"));
 	auto assetDropPadLayout = new QVBoxLayout;
-	QLabel *assetDropPadLabel = new QLabel("Drop an asset to import...");
+	assetDropPadLabel = new QLabel("Drop an asset to import...");
 	assetDropPadLayout->setSpacing(6);
 	assetDropPadLayout->setContentsMargins(6, 6, 6, 2);
 	assetDropPadLabel->setObjectName(QStringLiteral("assetDropPadLabel"));
 	assetDropPadLabel->setAlignment(Qt::AlignHCenter);
 
 	assetDropPadLayout->addWidget(assetDropPadLabel);
-	QPushButton *browseButton = new QPushButton(tr("Import Asset"));
-	QPushButton *downloadWorld = new QPushButton(tr("Download Assets"));
+	browseButton = new QPushButton(tr("Import Asset"));
+	downloadWorld = new QPushButton(tr("Download Assets"));
 
 	connect(downloadWorld, &QPushButton::pressed, []() {
 		QDesktopServices::openUrl(QUrl("http://www.jahfx.com/downloads/models/"));
@@ -1633,7 +1635,7 @@ void AssetView::changeAssetCollection(AssetGridItem *item)
 	d.setFixedWidth(350);
 	d.setLayout(l);
 	QComboBox *input = new QComboBox;
-	QPushButton *accept = new QPushButton(tr("Change Collection"));
+	accept = new QPushButton(tr("Change Collection"));
 	l->addWidget(input);
 	l->addWidget(accept);
 
@@ -1704,7 +1706,33 @@ AssetView::~AssetView()
 
 void AssetView::changeAllLabels()
 {
+	helpingLabels->ui->retranslateUi(helpingLabels);
 
-
-
+	header->setText(helpingLabels->ui->header->text());
+	emptyLabel->setText(helpingLabels->ui->noAssetsString->text());
+	collectionButton->setText(helpingLabels->ui->collectionButton->text());
+	//accept->setText(helpingLabels->ui->changeMetaCollection->text());
+	
+	normalize->setText(helpingLabels->ui->normalize->text());
+	metadataAuthor->setText(helpingLabels->ui->metadataAuthor->text());
+	metadataCollection->setText(helpingLabels->ui->metadataCollection->text());
+	metadataLicense->setText(helpingLabels->ui->metadataLicense->text());
+	metadataMissing->setText(helpingLabels->ui->metadataMissing->text());
+	metadataTags->setText(helpingLabels->ui->metadataTags->text());
+	metadataType->setText(helpingLabels->ui->metadataType->text());
+	metadataVisibility->setText(helpingLabels->ui->metadataPublic->text());
+	metadataName->setText(helpingLabels->ui->metadataName->text());
+	changeMetaCollection->setText(helpingLabels->ui->changeMetaCollection->text());
+	tagModel->setText(helpingLabels->ui->metadataTags->text());
+	renameModel->setText(helpingLabels->ui->metadataName->text());
+	deleteFromLibrary->setText(helpingLabels->ui->deleteFromLibrary->text());
+	addToProject->setText(helpingLabels->ui->addToProject->text());
+	updateAsset->setText(helpingLabels->ui->updatAsset->text());
+	onlineAssetsButton->setText(helpingLabels->ui->onlineAssetsBtn->text());
+	localAssetsButton->setText(helpingLabels->ui->localAssetsBtn->text());
+	backdropLabel->setText(helpingLabels->ui->backdropLabel->text());
+	assetDropPadLabel->setText(helpingLabels->ui->dropArea->text());
+	browseButton->setText(helpingLabels->ui->importAsset->text());
+	downloadWorld->setText(helpingLabels->ui->downloadAssets->text());
+	rootItem->setText(0,helpingLabels->ui->assetCollections->text());
 }

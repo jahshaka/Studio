@@ -172,6 +172,9 @@ private:
 	QPushButton *collectionButton;
 	QPushButton *accept;
 	QLabel *emptyLabel;
+	QLabel *assetDropPadLabel;
+	QPushButton *browseButton ;
+	QPushButton *downloadWorld ;
 };
 
 #endif // ASSETVIEW_H

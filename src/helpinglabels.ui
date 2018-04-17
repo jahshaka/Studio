@@ -241,7 +241,7 @@
      <x>450</x>
      <y>0</y>
      <width>180</width>
-     <height>433</height>
+     <height>509</height>
     </rect>
    </property>
    <layout class="QVBoxLayout" name="assetview">
@@ -319,6 +319,34 @@
      <widget class="QLabel" name="updatAsset">
       <property name="text">
        <string>Update</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="importAsset">
+      <property name="text">
+       <string>Import Asset</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="dropArea">
+      <property name="text">
+       <string>Drop an asset to import...</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="downloadAssets">
+      <property name="text">
+       <string>Download Assets</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="assetCollections">
+      <property name="text">
+       <string>Asset Collections</string>
       </property>
      </widget>
     </item>
