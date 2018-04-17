@@ -386,6 +386,7 @@ private:
     AssetView *_assetView;
 	QAction *actionSaveScene;
 
+	/////////////////////////////////////////////
 
 	QAction *actionUndo;
 	QAction *actionRedo;
@@ -398,6 +399,13 @@ private:
 	QAction *actionExport;
 	QAction *viewDocks;
 	QAction *actionRotate;
+
+	QPushButton *screenShotBtn;
+	
+
+
+
+	///////////////////////////////////////////
 
 
 	QVector<bool> widgetStates;	// use the order in the enum

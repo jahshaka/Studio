@@ -199,6 +199,7 @@ void MainWindow::goToDesktop()
 void MainWindow::changeAllLabels()
 {
 
+	// tool bar translations
 	helpingLabels->ui->retranslateUi(helpingLabels);
 	actionTranslate->setToolTip(helpingLabels->ui->actionTranslate->text());
 	actionScale->setToolTip(helpingLabels->ui->actionScale->text());
@@ -211,6 +212,36 @@ void MainWindow::changeAllLabels()
 	actionArcballCam->setToolTip(helpingLabels->ui->actionArcballcam->text());
 	actionExport->setToolTip(helpingLabels->ui->actionExport->text());
 	viewDocks->setToolTip(helpingLabels->ui->viewDocks->text());
+
+	//view port translation
+	screenShotBtn->setToolTip(helpingLabels->ui->screenShotBtn->text());
+	wireCheckBtn->setText(helpingLabels->ui->wireCheckBtn->text());
+
+	restartBtn->setText(helpingLabels->ui->restartBtn->text());
+	playBtn->setText(helpingLabels->ui->playBtn->text());
+	stopBtn->setText(helpingLabels->ui->stopBtn->text());
+
+	//dock widget titles translation
+	sceneHierarchyDock->setWindowTitle(helpingLabels->ui->hierarchy->text());
+	sceneNodePropertiesDock->setWindowTitle(helpingLabels->ui->properties->text());
+	presetsDock->setWindowTitle(helpingLabels->ui->presets->text());
+	assetDock->setWindowTitle(helpingLabels->ui->assetDock->text());
+	animationDock->setWindowTitle(helpingLabels->ui->animationDock->text());
+
+	//main buttons translation
+
+	worlds_menu->setText(helpingLabels->ui->worlds_menu->text());
+	editor_menu->setText(helpingLabels->ui->editor_menu->text());
+	player_menu->setText(helpingLabels->ui->player_menu->text());
+	assets_menu->setText(helpingLabels->ui->assets_menu->text());
+
+
+
+	
+
+
+	
+	
 
 
 }
@@ -241,13 +272,8 @@ void MainWindow::setupVrUi()
 void MainWindow::changeEvent(QEvent * event) {
 	if (event->type() == QEvent::LanguageChange)
 	{
-		qDebug() << "event in mainwindow ";
 		ui->retranslateUi(this);
-
 		changeAllLabels();
-
-
-
 	}
 	QWidget::changeEvent(event);
 }
@@ -2154,7 +2180,7 @@ void MainWindow::setupViewPort()
     auto container = new QWidget;
     auto containerLayout = new QVBoxLayout;
 
-    auto screenShotBtn = new QPushButton;
+    screenShotBtn = new QPushButton;
     screenShotBtn->setToolTip(tr("Take a screenshot of the scene"));
     screenShotBtn->setToolTipDuration(-1);
     screenShotBtn->setStyleSheet("background: transparent");
@@ -2220,24 +2246,25 @@ void MainWindow::setupViewPort()
     playerControlsLayout->addStretch();
 
     connect(restartBtn, &QPushButton::pressed, [this]() {
-        playBtn->setToolTip(tr("Pause the scene"));
+        playBtn->setToolTip(helpingLabels->ui->playBtn->text());
         playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
         UiManager::restartScene();
     });
 
     connect(playBtn, &QPushButton::pressed, [this]() {
         if (UiManager::isScenePlaying) {
-            playBtn->setToolTip(tr("Play the scene"));
+            playBtn->setToolTip(helpingLabels->ui->playBtn->text());
             playBtn->setIcon(QIcon(":/icons/g_play.svg"));
             UiManager::pauseScene();
         } else {
-            playBtn->setToolTip(tr("Pause the scene"));
+			
+            playBtn->setToolTip(helpingLabels->ui->pauseScene->text());
             playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
             UiManager::playScene();
         }
     });
     connect(stopBtn, &QPushButton::pressed, [this]() {
-        playBtn->setToolTip(tr("Play the scene"));
+        playBtn->setToolTip(helpingLabels->ui->playBtn->text());
         playBtn->setIcon(QIcon(":/icons/g_play.svg"));
         UiManager::stopScene();
     });
@@ -2497,40 +2524,40 @@ void MainWindow::toggleDockWidgets()
 	dl->setContentsMargins(20, 10, 20, 16);
 	d->setLayout(dl);
 
-	QPushButton *hierarchy = new QPushButton(tr("Hierarchy"));
+	QPushButton *hierarchy = new QPushButton(helpingLabels->ui->hierarchy->text());
 	hierarchy->setAccessibleName(QStringLiteral("toggleAbles"));
 	hierarchy->setCheckable(true);
 	hierarchy->setChecked(widgetStates[(int) Widget::HIERARCHY]);
 
-	QPushButton *properties = new QPushButton(tr("Properties"));
+	QPushButton *properties = new QPushButton(helpingLabels->ui->properties->text());
 	properties->setAccessibleName(QStringLiteral("toggleAbles"));
 	properties->setCheckable(true);
 	properties->setChecked(widgetStates[(int) Widget::PROPERTIES]);
 
-	QPushButton *presets = new QPushButton(tr("Presets"));
+	QPushButton *presets = new QPushButton(helpingLabels->ui->presets->text());
 	presets->setAccessibleName(QStringLiteral("toggleAbles"));
 	presets->setCheckable(true);
 	presets->setChecked(widgetStates[(int) Widget::PRESETS]);
 
-	QPushButton *timeline = new QPushButton(tr("Timeline"));
+	QPushButton *timeline = new QPushButton(helpingLabels->ui->animationDock->text());
 	timeline->setAccessibleName(QStringLiteral("toggleAbles"));
 	timeline->setCheckable(true);
 	timeline->setChecked(widgetStates[(int) Widget::TIMELINE]);
 
-	QPushButton *assets = new QPushButton(tr("Assets Browser"));
+	QPushButton *assets = new QPushButton(helpingLabels->ui->assetDock->text());
 	assets->setAccessibleName(QStringLiteral("toggleAbles"));
 	assets->setCheckable(true);
 	assets->setChecked(widgetStates[(int) Widget::ASSETS]);
 
-	QPushButton *closeAll = new QPushButton(tr("Close All"));
+	QPushButton *closeAll = new QPushButton(helpingLabels->ui->closeAll->text());
 	closeAll->setCheckable(true);
 	//closeAll->setChecked(true);
 
-	QPushButton *restoreAll = new QPushButton(tr("Restore All"));
+	QPushButton *restoreAll = new QPushButton(helpingLabels->ui->restoreAll->text());
 	restoreAll->setCheckable(true);
 	//restoreAll->setChecked(true);
 
-	QLabel *label = new QLabel(tr("Toggle Widgets"));
+	QLabel *label = new QLabel(helpingLabels->ui->viewDocks->text());
 	label->setAlignment(Qt::AlignCenter);
 	label->setContentsMargins(0, 0, 0, 6);
 	dl->addWidget(label);
@@ -2782,7 +2809,7 @@ void MainWindow::enterEditMode()
 {
     UiManager::isScenePlaying = false;
     UiManager::enterEditMode();
-    playSceneBtn->setToolTip(tr("Play scene"));
+    playSceneBtn->setToolTip(helpingLabels->ui->playBtn->text());
     playSceneBtn->setIcon(QIcon(":/icons/g_play.svg"));
 }
 
@@ -2790,6 +2817,6 @@ void MainWindow::enterPlayMode()
 {
     UiManager::isScenePlaying = true;
     UiManager::enterPlayMode();
-    playSceneBtn->setToolTip(tr("Stop playing"));
+    playSceneBtn->setToolTip(helpingLabels->ui->stopBtn->text());
     playSceneBtn->setIcon(QIcon(":/icons/g_stop.svg"));
 }

@@ -101,7 +101,6 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 	
 
 	if (translator_por.load(":/languages/jahshaka_por"))
-		qDebug() << "portuguese language qm loaded successfully \n\n";
 
     setupDirectoryDefaults();
     setupOutline();
@@ -120,7 +119,6 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 
 void WorldSettings::changeLanguage() {
 
-	qDebug() << "change language function called";
 
 	if (ui->language->currentText() == "English") {
 		changeLanguageToEnglish();
@@ -139,8 +137,7 @@ void WorldSettings::changeLanguageToEnglish()
 
 void WorldSettings::changeLanguageToPortugese()
 {
-	if(qApp->installTranslator(&translator_por))
-	qDebug() << "language changed to portuguese called";
+	qApp->installTranslator(&translator_por);
 }
 
 void WorldSettings::changeEvent(QEvent * event)

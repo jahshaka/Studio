@@ -614,7 +614,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
     normalize = new QPushButton(tr("Normalize"));
 
-<<<<<<< HEAD
+
 	addToProject = new QPushButton("Add to Project");
 	addToProject->setStyleSheet(
 		"QPushButton { background: #3498db; }"
@@ -622,10 +622,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		"QPushButton:pressed { background-color: #1f80c1; }"
 		"QPushButton:disabled { color: #656565; background-color: #3e3e3e; }"
 	);
-=======
-	addToProject = new QPushButton(tr("Add to Project"));
-	addToProject->setStyleSheet("QPushButton { background: #3498db } QPushButton:disabled { color: #656565; background-color: #3e3e3e; }");
->>>>>>> partially added translated language support
+
 	addToProject->setEnabled(false);
 
     deleteFromLibrary = new QPushButton(tr("Delete From Library"));
