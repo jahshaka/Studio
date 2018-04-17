@@ -1109,9 +1109,23 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
 {
 	QString newName = qobject_cast<QLineEdit*>(listItem)->text();
 	const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
+	const QString oldName = db->fetchAsset(guid).name;
     if (!newName.isEmpty()) {
         if (assetItem.wItem->data(MODEL_ITEM_TYPE) == MODEL_ASSET) {
-            db->renameAsset(guid, newName);
+			QString newFileName = IrisUtils::buildFileName(newName, QFileInfo(oldName).suffix());
+            db->renameAsset(guid, newFileName);
+			QFile assetToRename(QDir(Globals::project->getProjectFolder()).filePath(oldName));
+			if (!assetToRename.exists()) return;
+			if (!assetToRename.rename(QDir(Globals::project->getProjectFolder()).filePath(newFileName))) {
+				if (rename(
+					QDir(Globals::project->getProjectFolder()).filePath(oldName).toStdString().c_str(),
+					QDir(Globals::project->getProjectFolder()).filePath(newFileName).toStdString().c_str()
+				)) {
+					for (auto &asset : AssetManager::getAssets()) {
+						if (asset->assetGuid == guid) asset->fileName = newFileName;
+					}
+				}
+			}
         }
         else {
             db->renameFolder(guid, newName);
@@ -1580,18 +1594,15 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                             mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
                         return mat;
                     }, ssource);
-
-                    this->sceneView->doneCurrent();
+					this->sceneView->doneCurrent();
 
                     // Add to persistent store
-                    {
-                        QVariant variant = QVariant::fromValue(node);
-                        auto nodeAsset = new AssetNodeObject;
-                        nodeAsset->assetGuid = placeHolderGuid;	/* temp guid */
-                        nodeAsset->path = checkFile.absoluteFilePath();
-                        nodeAsset->setValue(variant);
-                        AssetManager::addAsset(nodeAsset);
-                    }
+                    QVariant variant = QVariant::fromValue(node);
+                    auto nodeAsset = new AssetNodeObject;
+                    nodeAsset->assetGuid = placeHolderGuid;	/* temp guid */
+                    nodeAsset->path = checkFile.absoluteFilePath();
+                    nodeAsset->setValue(variant);
+                    AssetManager::addAsset(nodeAsset);
                 }
 
                 progressDialog->setValue(counter++);
@@ -1638,12 +1649,11 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
 
             if (jafType == ModelTypes::Object) {
                 for (auto &asset : AssetManager::getAssets()) {
-                    if (asset->assetGuid == placeHolderGuid) {
+                    if (asset->assetGuid == placeHolderGuid && asset->type == ModelTypes::Object) {
                         asset->assetGuid = guidReturned;
-                        auto node = asset->value.value<iris::SceneNodePtr>();
-                        auto material = db->fetchAssetData(guidReturned);
-                        auto materialObj = QJsonDocument::fromBinaryData(material);
-                        AssetHelper::updateNodeMaterial(node, materialObj.object());
+                        auto node = asset->getValue().value<iris::SceneNodePtr>();
+						auto materialObj = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
+						AssetHelper::updateNodeMaterial(node, materialObj.object());
                     }
                 }
             }
@@ -1885,6 +1895,8 @@ void AssetWidget::importRegularAssets(const QList<directory_tuple> &fileNames)
 					auto scene = AssetHelper::extractTexturesAndMaterialFromMesh(asset->path, texturesToCopy);
 					this->sceneView->doneCurrent();
 
+					QString preObjectGuid = GUIDManager::generateGUID();
+
 					// Replace all path references with GUIDs before storing in the database
 					std::function<void(iris::SceneNodePtr&)> replacePathsWithGUIDs =
                         [&](iris::SceneNodePtr &node) -> void {
@@ -1893,6 +1905,9 @@ void AssetWidget::importRegularAssets(const QList<directory_tuple> &fileNames)
 							if (QFileInfo(meshNode->meshPath).fileName() == entryInfo.fileName()) {
                                 meshNode->meshPath = assetGuid;
 							}
+
+							meshNode->setGUID(preObjectGuid);
+
 							auto material = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
 							for (auto prop : material->properties) {
 								if (prop->type == iris::PropertyType::Texture) {
@@ -1920,7 +1935,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tuple> &fileNames)
 					SceneWriter::writeSceneNode(nodeWithGUIDs, scene, false);
 
 					// Create an actual object from a mesh, materials are embedded into objects by default
-					const QString objectGuid = db->createAssetEntry(GUIDManager::generateGUID(),
+					const QString objectGuid = db->createAssetEntry(preObjectGuid,
 																	QFileInfo(asset->fileName).baseName(),
 																	static_cast<int>(ModelTypes::Object),
 																	entry.parent_guid,

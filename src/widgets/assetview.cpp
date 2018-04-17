@@ -49,6 +49,8 @@
 
 #include "../core/guidmanager.h"
 
+#include "dialogs/toast.h"
+
 void AssetView::focusInEvent(QFocusEvent *event)
 {
 	Q_UNUSED(event);
@@ -198,6 +200,8 @@ QString AssetView::getAssetType(int id)
 
 AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(parent)
 {
+	setParent(parent);
+	this->parent = parent;
 	_assetView = new QListWidget;
 	viewer = new AssetViewer(this);
     viewer->setDatabase(db);
@@ -1368,6 +1372,15 @@ void AssetView::updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject d
 
 void AssetView::addAssetToProject(AssetGridItem *item)
 {
+	//auto rx = _navPane->rect().x() + viewer->rect().x();
+	//auto ry = _navPane->rect().y() + viewer->rect().y();
+	//auto rw = _navPane->rect().width() + viewer->rect().width();
+	//auto rh = viewer->rect().height() + 32;
+
+	//auto endRect = QRect(parent->pos().x(), parent->pos().y(), rw, rh);
+	//Toast *t = new Toast(this);
+	//t->showToast("This is a  test", "some test message goes here ", 0, parent->pos(), endRect);
+	//return;
 	//addToProject->setVisible(false);
 	// get the current project working directory
 	auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), Constants::PROJECT_FOLDER);
