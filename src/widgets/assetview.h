@@ -168,7 +168,7 @@ private:
 	QString searchTerm;
 	QLineEdit *le;
 
-<<<<<<< HEAD
+
     QWidget *assetImageViewer;
     QLabel *assetImageCanvas;
 
@@ -176,13 +176,17 @@ private:
     QStackedLayout *viewers;
 
 	QWidget *parent;
-=======
+
 	HelpingLabels *helpingLabels;
 	QLabel *header;
 	QPushButton *collectionButton;
 	QPushButton *accept;
 	QLabel *emptyLabel;
->>>>>>> added partial translation for assets view
+
+	QLabel *assetDropPadLabel;
+	QPushButton *browseButton ;
+	QPushButton *downloadWorld ;
+
 };
 
 #endif // ASSETVIEW_H
