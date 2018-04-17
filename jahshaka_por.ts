@@ -64,7 +64,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Delete</source>
-        <translation>excluir</translation>
+        <translation>Excluir</translation>
     </message>
     <message>
         <source>New</source>
@@ -72,19 +72,19 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Object Name</source>
-        <translation>nome do objeto</translation>
+        <translation>Nome do objeto</translation>
     </message>
     <message>
         <source>Insert Keyframe  </source>
-        <translation>inserir quadro-chave  </translation>
+        <translation>Inserir quadro-chave  </translation>
     </message>
     <message>
         <source>Loop</source>
-        <translation>laço</translation>
+        <translation>Laço</translation>
     </message>
     <message>
         <source>Curves</source>
-        <translation>curvas</translation>
+        <translation>Curvas</translation>
     </message>
     <message>
         <source>DopeSheet</source>
@@ -96,30 +96,30 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>New Animation Name</source>
-        <translation>novo nome da animação</translation>
+        <translation>Novo nome da animação</translation>
     </message>
     <message>
         <source>Create Animation for </source>
-        <translation>criar animação para </translation>
+        <translation>Criar animação para </translation>
     </message>
 </context>
 <context>
     <name>AssetGridItem</name>
     <message>
         <source>Context Menu</source>
-        <translation>menu contextual</translation>
+        <translation>Menu contextual</translation>
     </message>
     <message>
         <source>Add to Project</source>
-        <translation>adicionar ao projeto</translation>
+        <translation>Adicionar ao projeto</translation>
     </message>
     <message>
         <source>Change Collections</source>
-        <translation>alterar coleções</translation>
+        <translation>Alterar coleções</translation>
     </message>
     <message>
         <source>Delete</source>
-        <translation>excluir</translation>
+        <translation>Excluir</translation>
     </message>
 </context>
 <context>
@@ -130,15 +130,15 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Search</source>
-        <translation>pesquisa</translation>
+        <translation>Pesquisa</translation>
     </message>
     <message>
         <source>Refresh</source>
-        <translation>refrescar</translation>
+        <translation>Refrescar</translation>
     </message>
     <message>
         <source>Select Asset</source>
-        <translation>selecione o recurso</translation>
+        <translation>Selecione o recurso</translation>
     </message>
     <message>
         <source>Toggle icon view</source>
@@ -149,15 +149,15 @@ p, li { white-space: pre-wrap; }
     <name>AssetView</name>
     <message>
         <source> Local Assets</source>
-        <translation>ativos locais</translation>
+        <translation>Ativos locais</translation>
     </message>
     <message>
         <source> Online Assets</source>
-        <translation>ativos online</translation>
+        <translation>Ativos online</translation>
     </message>
     <message>
         <source>Create Collection</source>
-        <translation>criar coleção</translation>
+        <translation>Criar coleção</translation>
     </message>
     <message>
         <source>You have no assets in your library.</source>
@@ -165,35 +165,35 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Search: </source>
-        <translation>pesquisa:</translation>
+        <translation>Pesquisa:</translation>
     </message>
     <message>
         <source>Import Asset</source>
-        <translation>importar recurso</translation>
+        <translation>Importar recurso</translation>
     </message>
     <message>
         <source>Download Assets</source>
-        <translation>recurso de download</translation>
+        <translation>Recurso de download</translation>
     </message>
     <message>
         <source>Update</source>
-        <translation>atualizar</translation>
+        <translation>Atualizar</translation>
     </message>
     <message>
         <source>Normalize</source>
-        <translation>normalizado</translation>
+        <translation>Normalizado</translation>
     </message>
     <message>
         <source>Add to Project</source>
-        <translation>adicionar ao projeto</translation>
+        <translation>Adicionar ao projeto</translation>
     </message>
     <message>
         <source>Delete From Library</source>
-        <translation>excluir da biblioteca</translation>
+        <translation>Excluir da biblioteca</translation>
     </message>
     <message>
         <source>Name:</source>
-        <translation>nome:</translation>
+        <translation>Nome:</translation>
     </message>
     <message>
         <source>Tags:</source>
@@ -209,15 +209,15 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Name: </source>
-        <translation>nome:</translation>
+        <translation>Nome:</translation>
     </message>
     <message>
         <source>Type: </source>
-        <translation>tipo</translation>
+        <translation>Tipo</translation>
     </message>
     <message>
         <source>Author: </source>
-        <translation>autor:</translation>
+        <translation>Autor:</translation>
     </message>
     <message>
         <source>License: </source>
@@ -229,15 +229,15 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Public: </source>
-        <translation>público:</translation>
+        <translation>Público:</translation>
     </message>
     <message>
         <source>Collection: </source>
-        <translation>coleção:</translation>
+        <translation>Coleção:</translation>
     </message>
     <message>
         <source>change</source>
-        <translation>mudança</translation>
+        <translation>Mudança</translation>
     </message>
     <message>
         <source>Asset Metadata</source>
@@ -257,36 +257,36 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Added asset %1 to your project!</source>
-        <translation type="vanished">adicione asset 1% ao seu projeto</translation>
+        <translation type="vanished">Adicione asset 1% ao seu projeto</translation>
     </message>
     <message>
         <source>Change Collection</source>
-        <translation>alterar coleções</translation>
+        <translation>Alterar coleções</translation>
     </message>
     <message>
         <source>Collection Changed.</source>
-        <translation>coleção alterada</translation>
+        <translation>Coleção alterada</translation>
     </message>
     <message>
         <source>Collection Change Successful</source>
-        <translation>mudança de coleção bem sucedida</translation>
+        <translation>Mudança de coleção bem sucedida</translation>
     </message>
     <message>
         <source>Failed to change collection. Try again.</source>
-        <translation>não foi possível alterar a coleção, tente novamente.</translation>
+        <translation>Não foi possível alterar a coleção, tente novamente.</translation>
     </message>
     <message>
         <source>Collection Change Failed</source>
-        <translation>mudança de coleção falhou</translation>
+        <translation>Mudança de coleção falhou</translation>
     </message>
     <message>
         <source>Deleting Asset</source>
         <comment>Are you sure you want to delete this asset?</comment>
-        <translation type="vanished">deletando ativo</translation>
+        <translation type="vanished">Deletando ativo</translation>
     </message>
     <message>
         <source>Delete Failed!</source>
-        <translation>exclusão falhou</translation>
+        <translation>Exclusão falhou</translation>
     </message>
     <message>
         <source>Failed to remove asset, please try again!</source>
@@ -294,7 +294,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Deleting Asset</source>
-        <translation>deletando ativo</translation>
+        <translation>Deletando ativo</translation>
     </message>
     <message>
         <source>Are you sure you want to delete this asset?</source>
@@ -316,23 +316,23 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Search</source>
-        <translation type="vanished">pesquisa</translation>
+        <translation type="vanished">Pesquisa</translation>
     </message>
     <message>
         <source>Import Asset</source>
-        <translation>importar recurso</translation>
+        <translation>Importar recurso</translation>
     </message>
     <message>
         <source>Create</source>
-        <translation>crio</translation>
+        <translation>Crio</translation>
     </message>
     <message>
         <source>New Folder</source>
-        <translation>nova pasta</translation>
+        <translation>Nova pasta</translation>
     </message>
     <message>
         <source>Delete</source>
-        <translation>excluir</translation>
+        <translation>Excluir</translation>
     </message>
     <message>
         <source>Failed to create folder %1. Aborting import for this folder</source>
@@ -344,7 +344,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Hide dependencies</source>
-        <translation>esconder dependências</translation>
+        <translation>Esconder dependências</translation>
     </message>
     <message>
         <source>Icon</source>
@@ -442,7 +442,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Create New Animation</source>
-        <translation>criar nova animação</translation>
+        <translation>Criar nova animação</translation>
     </message>
 </context>
 <context>
@@ -457,7 +457,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Close</source>
-        <translation>fechar!</translation>
+        <translation>Fechar!</translation>
     </message>
 </context>
 <context>
@@ -562,6 +562,170 @@ p, li { white-space: pre-wrap; }
         <source>Redo last action</source>
         <translation>Refazer a última ação</translation>
     </message>
+    <message>
+        <source>Asset Browser</source>
+        <translation>Navegador de Ativos</translation>
+    </message>
+    <message>
+        <source>Timeline</source>
+        <translation>Timeline</translation>
+    </message>
+    <message>
+        <source>Take a screenshot of the scene</source>
+        <translation>Tire uma captura de tela da cena</translation>
+    </message>
+    <message>
+        <source>Viewport Wireframes</source>
+        <translation>Wrieframes de viewport</translation>
+    </message>
+    <message>
+        <source>Play scene</source>
+        <translation>Cena do jogo</translation>
+    </message>
+    <message>
+        <source>Restart playback</source>
+        <translation>Reinicie a reprodução</translation>
+    </message>
+    <message>
+        <source>Play the scene</source>
+        <translation>Tocar a cena</translation>
+    </message>
+    <message>
+        <source>Stop playback</source>
+        <translation>Pare a reprodução</translation>
+    </message>
+    <message>
+        <source>Hierarchy</source>
+        <translation>Hierarquia</translation>
+    </message>
+    <message>
+        <source>Properties</source>
+        <translation>Propriedades</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>Predefinições</translation>
+    </message>
+    <message>
+        <source>Close All</source>
+        <translation>Feche tudo</translation>
+    </message>
+    <message>
+        <source>Restore All</source>
+        <translation>Restaurar tudo</translation>
+    </message>
+    <message>
+        <source>Editor</source>
+        <translation>Editor</translation>
+    </message>
+    <message>
+        <source>Assets</source>
+        <translation>Ativos</translation>
+    </message>
+    <message>
+        <source>Player</source>
+        <translation>Jogador</translation>
+    </message>
+    <message>
+        <source>pause the scene</source>
+        <translation>Pausar a cena</translation>
+    </message>
+    <message>
+        <source>Worlds</source>
+        <translation>Mundo</translation>
+    </message>
+    <message>
+        <source>Tags: </source>
+        <translation>Tags:</translation>
+    </message>
+    <message>
+        <source>Public: </source>
+        <translation>Público:</translation>
+    </message>
+    <message>
+        <source>Type: </source>
+        <translation>Tipo:</translation>
+    </message>
+    <message>
+        <source>Author: </source>
+        <translation>Autor:</translation>
+    </message>
+    <message>
+        <source>change</source>
+        <translation>mudança</translation>
+    </message>
+    <message>
+        <source>Asset Metadata</source>
+        <translation>Metadados de recursos</translation>
+    </message>
+    <message>
+        <source>Add to Project</source>
+        <translation>Adicionar ao projeto</translation>
+    </message>
+    <message>
+        <source>Create Collection</source>
+        <translation>Criar coleção</translation>
+    </message>
+    <message>
+        <source>Online Assets</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Local Assets</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Atualizar</translation>
+    </message>
+    <message>
+        <source>Normalize</source>
+        <translation>Normalizado</translation>
+    </message>
+    <message>
+        <source>Delete From Library</source>
+        <translation>Excluir da biblioteca</translation>
+    </message>
+    <message>
+        <source>Collection Created</source>
+        <translation>Coleção criada</translation>
+    </message>
+    <message>
+        <source>Failed to create collection. Try again.</source>
+        <translation>Falha ao criar coleção. Tente novamente.</translation>
+    </message>
+    <message>
+        <source>You have no assets in your library</source>
+        <translation>Você não tem recursos em sua biblioteca.</translation>
+    </message>
+    <message>
+        <source>Colection Creation Successful</source>
+        <translation>Criação de colecção bem sucedida</translation>
+    </message>
+    <message>
+        <source>Collection Creation Failed</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Backdrop: </source>
+        <translation>Pano de fundo:</translation>
+    </message>
+    <message>
+        <source>Nothing selected...</source>
+        <translation>Nada selecionado...</translation>
+    </message>
+    <message>
+        <source>License: </source>
+        <translation>Licença:</translation>
+    </message>
+    <message>
+        <source>Name:</source>
+        <translation>Nome:</translation>
+    </message>
+    <message>
+        <source>Collection: </source>
+        <translation>Coleção:</translation>
+    </message>
 </context>
 <context>
     <name>InfoDialog</name>
@@ -571,11 +735,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Visit Website</source>
-        <translation>visite o site</translation>
+        <translation>Visite o site</translation>
     </message>
     <message>
         <source>View Tutorials</source>
-        <translation>ver tutorial</translation>
+        <translation>Ver tutorial</translation>
     </message>
     <message>
         <source>Recent Projects</source>
@@ -594,7 +758,7 @@ p, li { white-space: pre-wrap; }
     <name>ItemGridWidget</name>
     <message>
         <source>Play world fullscreen</source>
-        <translation>jogar mundo em tela cheia</translation>
+        <translation>Jogar mundo em tela cheia</translation>
     </message>
     <message>
         <source>Open world in editor</source>
@@ -602,7 +766,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Close open world</source>
-        <translation>fechar mundo aberto</translation>
+        <translation>Fechar mundo aberto</translation>
     </message>
     <message>
         <source>PLAY</source>
@@ -610,11 +774,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>EDIT</source>
-        <translation>editar</translation>
+        <translation>Editar</translation>
     </message>
     <message>
         <source>CLOSE</source>
-        <translation>fechar</translation>
+        <translation>Fechar</translation>
     </message>
 </context>
 <context>
@@ -625,7 +789,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Delete</source>
-        <translation>excluir</translation>
+        <translation>Excluir</translation>
     </message>
     <message>
         <source>Handles</source>
@@ -697,7 +861,7 @@ p, li { white-space: pre-wrap; }
     <name>KeyFrameWidget</name>
     <message>
         <source>Delete</source>
-        <translation>excluir</translation>
+        <translation>Excluir</translation>
     </message>
 </context>
 <context>
@@ -765,7 +929,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>About</source>
-        <translation>sobre</translation>
+        <translation>Sobre</translation>
     </message>
     <message>
         <source>License</source>
@@ -773,7 +937,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Website</source>
-        <translation>local na rede Internet</translation>
+        <translation>Local na rede Internet</translation>
     </message>
     <message>
         <source>Undo</source>
@@ -813,7 +977,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Close</source>
-        <translation>fechar</translation>
+        <translation>Fechar</translation>
     </message>
     <message>
         <source>Facebook</source>
@@ -873,11 +1037,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Player</source>
-        <translation>jogador</translation>
+        <translation>Jogador</translation>
     </message>
     <message>
         <source>Editor</source>
-        <translation>editor</translation>
+        <translation>Editor</translation>
     </message>
     <message>
         <source>Take a screenshot of the scene</source>
@@ -949,19 +1113,19 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Hierarchy</source>
-        <translation>Hierarquia</translation>
+        <translation type="vanished">Hierarquia</translation>
     </message>
     <message>
         <source>Timeline</source>
-        <translation>Timeline</translation>
+        <translation type="vanished">Timeline</translation>
     </message>
     <message>
         <source>Assets Browser</source>
-        <translation>Navegador de Ativos</translation>
+        <translation type="vanished">Navegador de Ativos</translation>
     </message>
     <message>
         <source>Stop playing</source>
-        <translation>Pare de jogar</translation>
+        <translation type="vanished">Pare de jogar</translation>
     </message>
     <message>
         <source>MainWindow</source>
@@ -1110,7 +1274,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>New World</source>
-        <translation> novo Mundo</translation>
+        <translation> Novo Mundo</translation>
     </message>
 </context>
 <context>
@@ -1121,7 +1285,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Add</source>
-        <translation>adicionar</translation>
+        <translation>Adicionar</translation>
     </message>
 </context>
 <context>
@@ -1186,7 +1350,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Large</source>
-        <translation>ampla</translation>
+        <translation>Ampla</translation>
     </message>
     <message>
         <source>Huge</source>
@@ -1222,7 +1386,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Delete Failed!</source>
-        <translation>exclusão falhou!</translation>
+        <translation>Exclusão falhou!</translation>
     </message>
     <message>
         <source>Failed to remove entire project folder, please try again!</source>
@@ -1286,18 +1450,18 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Add</source>
-        <translation>adicionar</translation>
+        <translation>Adicionar</translation>
     </message>
     <message>
         <source>Delete</source>
-        <translation>excluir</translation>
+        <translation>Excluir</translation>
     </message>
 </context>
 <context>
     <name>SceneNodePropertiesWidget</name>
     <message>
         <source>Fog</source>
-        <translation>névoa</translation>
+        <translation>Névoa</translation>
     </message>
     <message>
         <source>World</source>
@@ -1305,11 +1469,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Transformation</source>
-        <translation>transformação</translation>
+        <translation>Transformação</translation>
     </message>
     <message>
         <source>Mesh Properties</source>
-        <translation>propriedades de malha</translation>
+        <translation>Propriedades de malha</translation>
     </message>
     <message>
         <source>Light</source>
@@ -1317,11 +1481,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Emitter</source>
-        <translation>emissor</translation>
+        <translation>Emissor</translation>
     </message>
     <message>
         <source>Material</source>
-        <translation>a matéria</translation>
+        <translation>A Matéria</translation>
     </message>
 </context>
 <context>
@@ -1332,7 +1496,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Close</source>
-        <translation>fechar</translation>
+        <translation>Fechar</translation>
     </message>
     <message>
         <source>Save</source>
@@ -1407,11 +1571,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Reset</source>
-        <translation>restabelecer</translation>
+        <translation>Restabelecer</translation>
     </message>
     <message>
         <source>Position</source>
-        <translation type="vanished">posição</translation>
+        <translation type="vanished">Posição</translation>
     </message>
     <message>
         <source>X</source>
@@ -1427,23 +1591,23 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Rotation</source>
-        <translation type="vanished">rotação</translation>
+        <translation type="vanished">Rotação</translation>
     </message>
     <message>
         <source>Scale</source>
-        <translation type="vanished">escala</translation>
+        <translation type="vanished">Escala</translation>
     </message>
     <message>
         <source>position</source>
-        <translation>posição</translation>
+        <translation>Posição</translation>
     </message>
     <message>
         <source>rotation</source>
-        <translation>rotação</translation>
+        <translation>Rotação</translation>
     </message>
     <message>
         <source>scale</source>
-        <translation>escala</translation>
+        <translation>Escala</translation>
     </message>
 </context>
 <context>
@@ -1454,11 +1618,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Selection Outline Width:</source>
-        <translation>selecione a largura do contorno:</translation>
+        <translation>Selecione a largura do contorno:</translation>
     </message>
     <message>
         <source>Selection Outline Color:</source>
-        <translation>selecionar cor de contorno:</translation>
+        <translation>Selecionar cor de contorno:</translation>
     </message>
     <message>
         <source>Default Project Directory</source>
@@ -1470,15 +1634,15 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Show FPS: </source>
-        <translation>exposição FPS</translation>
+        <translation>Exposição FPS</translation>
     </message>
     <message>
         <source>Enable autosave</source>
-        <translation>ativar o salvamento automático</translation>
+        <translation>Ativar o salvamento automático</translation>
     </message>
     <message>
         <source>Author</source>
-        <translation>autor</translation>
+        <translation>Autor</translation>
     </message>
     <message>
         <source>Default License</source>
@@ -1486,11 +1650,11 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>CC0 - Freeing content globally without restrictions</source>
-        <translation type="vanished">liberando conteúdo globaly sem restrições</translation>
+        <translation type="vanished">Liberando conteúdo globaly sem restrições</translation>
     </message>
     <message>
         <source>Select Language</source>
-        <translation>selecione o idioma</translation>
+        <translation>Selecione o idioma</translation>
     </message>
     <message>
         <source>Viewport</source>
@@ -1498,7 +1662,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Editor</source>
-        <translation>editor</translation>
+        <translation>Editor</translation>
     </message>
     <message>
         <source>Content</source>

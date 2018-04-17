@@ -5,6 +5,7 @@
 
 #include "irisgl/src/graphics/mesh.h"
 #include "irisgl/src/core/irisutils.h"
+#include "../helpinglabels.h"
 
 class QSplitter;
 class QListWidget;
@@ -56,11 +57,14 @@ class AssetViewer;
 class Database;
 class SettingsManager;
 class PreferencesDialog;
+class HelpingLabels;
 
 class AssetView : public QWidget
 {
 	Q_OBJECT
 
+protected:
+	void changeEvent(QEvent *event) override;
 public slots:
 	void fetchMetadata(AssetGridItem*);
 
@@ -76,6 +80,7 @@ public:
 	AssetSource assetSource;
 	AssetView(Database *handle, QWidget *parent = Q_NULLPTR);
 	~AssetView();
+	void changeAllLabels();
 	void focusInEvent(QFocusEvent *event);
 	bool eventFilter(QObject *watched, QEvent *event);
     void copyTextures(const QString &folderGuid);
@@ -161,6 +166,12 @@ private:
 	QTimer *searchTimer;
 	QString searchTerm;
 	QLineEdit *le;
+
+	HelpingLabels *helpingLabels;
+	QLabel *header;
+	QPushButton *collectionButton;
+	QPushButton *accept;
+	QLabel *emptyLabel;
 };
 
 #endif // ASSETVIEW_H

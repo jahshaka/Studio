@@ -7,6 +7,9 @@
 #include "irisgl/src/graphics/mesh.h"
 #include "irisgl/src/zip/zip.h"
 
+#include "../ui_helpinglabels.h"
+#include "../helpinglabels.h"
+
 #include <QDirIterator>
 #include <QListWidget>
 #include <QListWidgetItem>
@@ -195,8 +198,21 @@ QString AssetView::getAssetType(int id)
 	}
 }
 
+
+
+void AssetView::changeEvent(QEvent *event) {
+
+	if (event->type() == QEvent::LanguageChange)
+	{
+		changeAllLabels();
+	}
+	QWidget::changeEvent(event);
+
+}
+
 AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(parent)
 {
+	helpingLabels = new HelpingLabels();
 	_assetView = new QListWidget;
 	viewer = new AssetViewer(this);
     viewer->setDatabase(db);
@@ -317,7 +333,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	navLayout->addWidget(onlineAssetsButton);
 	navLayout->addSpacing(12);
 	navLayout->addWidget(treeWidget);
-	auto collectionButton = new QPushButton("Create Collection");
+	collectionButton = new QPushButton("Create Collection");
 	collectionButton->setStyleSheet("font-size: 12px; padding: 8px;");
 	navLayout->addWidget(collectionButton);
 
@@ -331,7 +347,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
         d.setFixedWidth(350);
         d.setLayout(l);
         QLineEdit *input = new QLineEdit;
-        QPushButton *accept = new QPushButton(tr("Create Collection"));
+        accept = new QPushButton(tr("Create Collection"));
 
         connect(accept, &QPushButton::pressed, [&]() {
             collectionName = input->text();
@@ -367,7 +383,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	testL->setMargin(0);
     testL->setSpacing(0);
 	emptyL->setSpacing(0);
-	auto emptyLabel = new QLabel(tr("You have no assets in your library."));
+	emptyLabel = new QLabel(tr("You have no assets in your library."));
 	auto emptyIcon = new QLabel;
 	emptyIcon->setAlignment(Qt::AlignVCenter | Qt::AlignHCenter);
 	emptyIcon->setPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-empty-box-50.png"));
@@ -879,7 +895,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 	metadata->setLayout(l);
 	//metadata->setStyleSheet("QLabel { font-size: 12px; }");
-	auto header = new QLabel(tr("Asset Metadata"));
+	header = new QLabel(tr("Asset Metadata"));
 	header->setAlignment(Qt::AlignCenter);
 	header->setStyleSheet("border-top: 1px solid black; border-bottom: 1px solid black; text-align: center; padding: 12px; background: #1A1A1A");
 	metaLayout->addWidget(header);
@@ -1684,4 +1700,11 @@ void AssetView::removeAssetFromProject(AssetGridItem *item)
 AssetView::~AssetView()
 {
     
+}
+
+void AssetView::changeAllLabels()
+{
+
+
+
 }
