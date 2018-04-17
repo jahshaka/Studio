@@ -30,6 +30,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
 set(SRCS
     src/main.cpp
     src/mainwindow.cpp 
+	src/helpinglabels.cpp
     src/widgets/colorvaluewidget.cpp 
     src/widgets/colorpickerwidget.cpp 
     src/dialogs/preferencesdialog.cpp 
@@ -135,6 +136,7 @@ set(SRCS
 
 set(HEADERS
     src/mainwindow.h 
+	src/helpinglabels.h
     src/dialogs/renamelayerdialog.h 
     src/widgets/colorvaluewidget.h 
     src/widgets/colorpickerwidget.h 
@@ -258,6 +260,7 @@ set(HEADERS
 
 # Todo - trim these down to nothing eventually
 set(FORMS
+	src/helpinglabels.ui
     src/dialogs/renamelayerdialog.ui 
     src/widgets/colorvaluewidget.ui 
     src/widgets/colorpickerwidget.ui 

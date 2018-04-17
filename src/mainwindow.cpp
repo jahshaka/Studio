@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include "helpinglabels.h"
+#include "ui_helpinglabels.h"
 
 #include <QWindow>
 #include <QSurface>
@@ -179,6 +181,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupUndoRedo();
 
 	undoStackCount = 0;
+
+	helpingLabels = new HelpingLabels();
 }
 
 void MainWindow::grabOpenGLContextHack()
@@ -190,6 +194,25 @@ void MainWindow::goToDesktop()
 {
     showMaximized();
     switchSpace(WindowSpaces::DESKTOP);
+}
+
+void MainWindow::changeAllLabels()
+{
+
+	helpingLabels->ui->retranslateUi(helpingLabels);
+	actionTranslate->setToolTip(helpingLabels->ui->actionTranslate->text());
+	actionScale->setToolTip(helpingLabels->ui->actionScale->text());
+	actionRotate->setToolTip(helpingLabels->ui->actionRotate->text());
+	actionUndo->setToolTip(helpingLabels->ui->actionUndo->text());
+	actionRedo->setToolTip(helpingLabels->ui->actionRedo->text());
+	actionGlobalSpace->setToolTip(helpingLabels->ui->actionGlobalSpace->text());
+	actionLocalSpace->setToolTip(helpingLabels->ui->actionLocalSpace->text());
+	actionFreeCamera->setToolTip(helpingLabels->ui->actionFreeCamera->text());
+	actionArcballCam->setToolTip(helpingLabels->ui->actionArcballcam->text());
+	actionExport->setToolTip(helpingLabels->ui->actionExport->text());
+	viewDocks->setToolTip(helpingLabels->ui->viewDocks->text());
+
+
 }
 
 void MainWindow::setupVrUi()
@@ -220,6 +243,11 @@ void MainWindow::changeEvent(QEvent * event) {
 	{
 		qDebug() << "event in mainwindow ";
 		ui->retranslateUi(this);
+
+		changeAllLabels();
+
+
+
 	}
 	QWidget::changeEvent(event);
 }
@@ -2290,13 +2318,14 @@ void MainWindow::setupToolBar()
 
     toolBar = new QToolBar;
 	toolBar->setIconSize(QSize(14, 14));
-	QAction *actionUndo = new QAction;
+
+	actionUndo = new QAction;
 	actionUndo->setToolTip(tr("Undo last action"));
 	actionUndo->setObjectName(QStringLiteral("actionUndo"));
 	actionUndo->setIcon(QIcon(":/icons/undo.png"));
 	toolBar->addAction(actionUndo);
 
-	QAction *actionRedo = new QAction;
+	actionRedo = new QAction;
 	actionRedo->setToolTip(tr("Redo last action"));
 	actionRedo->setObjectName(QStringLiteral("actionRedo"));
 	actionRedo->setIcon(QIcon(":/icons/redo.svg"));
@@ -2307,21 +2336,21 @@ void MainWindow::setupToolBar()
 	connect(actionUndo, SIGNAL(triggered(bool)), SLOT(undo()));
 	connect(actionRedo, SIGNAL(triggered(bool)), SLOT(redo()));
 
-    QAction *actionTranslate = new QAction;
+    actionTranslate = new QAction;
     actionTranslate->setObjectName(QStringLiteral("actionTranslate"));
     actionTranslate->setCheckable(true);
 	actionTranslate->setToolTip(tr("Manipulator for translating objects"));
     actionTranslate->setIcon(QIcon(":/icons/tranlate arrow.svg"));
     toolBar->addAction(actionTranslate);
 
-    QAction *actionRotate = new QAction;
+    actionRotate = new QAction;
     actionRotate->setObjectName(QStringLiteral("actionRotate"));
     actionRotate->setCheckable(true);
 	actionRotate->setToolTip(tr("Manipulator for rotating objects"));
     actionRotate->setIcon(QIcon(":/icons/rotate-to-right.svg"));
     toolBar->addAction(actionRotate);
 
-    QAction *actionScale = new QAction;
+    actionScale = new QAction;
     actionScale->setObjectName(QStringLiteral("actionScale"));
     actionScale->setCheckable(true);
 	actionScale->setToolTip(tr("Manipulator for scaling objects"));
@@ -2330,14 +2359,14 @@ void MainWindow::setupToolBar()
 
     toolBar->addSeparator();
 
-    QAction *actionGlobalSpace = new QAction;
+    actionGlobalSpace = new QAction;
     actionGlobalSpace->setObjectName(QStringLiteral("actionGlobalSpace"));
     actionGlobalSpace->setCheckable(true);
 	actionGlobalSpace->setToolTip(tr("Move objects relative to the global world"));
     actionGlobalSpace->setIcon(QIcon(":/icons/world.svg"));
     toolBar->addAction(actionGlobalSpace);
 
-    QAction *actionLocalSpace = new QAction;
+    actionLocalSpace = new QAction;
     actionLocalSpace->setObjectName(QStringLiteral("actionLocalSpace"));
     actionLocalSpace->setCheckable(true);
 	actionLocalSpace->setToolTip(tr("Move objects relative to their transform"));
@@ -2346,14 +2375,14 @@ void MainWindow::setupToolBar()
 
     toolBar->addSeparator();
 
-    QAction *actionFreeCamera = new QAction;
+    actionFreeCamera = new QAction;
     actionFreeCamera->setObjectName(QStringLiteral("actionFreeCamera"));
     actionFreeCamera->setCheckable(true);
 	actionFreeCamera->setToolTip(tr("Freely move and orient the camera"));
     actionFreeCamera->setIcon(QIcon(":/icons/people.svg"));
     toolBar->addAction(actionFreeCamera);
 
-    QAction *actionArcballCam = new QAction;
+    actionArcballCam = new QAction;
     actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
     actionArcballCam->setCheckable(true);
 	actionArcballCam->setToolTip(tr("Move and orient the camera around a fixed point"));
@@ -2390,7 +2419,7 @@ void MainWindow::setupToolBar()
     empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     toolBar->addWidget(empty);
 
-	QAction *actionExport = new QAction;
+	actionExport = new QAction;
 	actionExport->setObjectName(QStringLiteral("actionExport"));
 	actionExport->setCheckable(false);
 	actionExport->setToolTip(tr("Export the current scene"));
@@ -2405,7 +2434,7 @@ void MainWindow::setupToolBar()
 	actionSaveScene->setIcon(QIcon(":/icons/save.png"));
 	toolBar->addAction(actionSaveScene);
 
-	QAction *viewDocks = new QAction;
+	viewDocks = new QAction;
 	viewDocks->setObjectName(QStringLiteral("viewDocks"));
 	viewDocks->setCheckable(false);
 	viewDocks->setToolTip(tr("Toggle Widgets"));
