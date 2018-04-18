@@ -168,6 +168,8 @@ private:
 
     QWidget *viewersWidget;
     QStackedLayout *viewers;
+
+	QWidget *parent;
 };
 
 #endif // ASSETVIEW_H

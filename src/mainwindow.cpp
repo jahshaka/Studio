@@ -121,6 +121,7 @@ For more information see the LICENSE file
 #include "../src/widgets/skypresets.h"
 
 #include "../src/widgets/assetview.h"
+#include "dialogs/toast.h"
 
 #include "irisgl/src/zip/zip.h"
 
@@ -1341,6 +1342,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
 			auto n = node.staticCast<iris::MeshNode>();
 			n->meshPath = meshGuid;
+			n->setGUID(guid);
 			auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
 			for (auto prop : mat->properties) {
 				if (prop->type == iris::PropertyType::Texture) {
@@ -2052,7 +2054,7 @@ void MainWindow::setupViewPort()
 		"background-repeat: no-repeat; }"
 	);
 
-	connect(help, &QPushButton::pressed, []() {
+	connect(help, &QPushButton::pressed, [this]() {
 		QDesktopServices::openUrl(QUrl("http://www.jahshaka.com/tutorials/"));
 	});
 
