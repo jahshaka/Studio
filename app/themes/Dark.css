@@ -1,0 +1,43 @@
+QPushButton#worlds_menu, QPushButton#player_menu, QPushButton#editor_menu, QPushButton#assets_menu {
+    border-width: 0px;
+    border-color: rgba(130,130,130,1);
+    background-color: rgba(0,0,0,1);
+    padding: 10px 25px 10px 25px;
+    border-radius: 2px;
+}
+
+QToolBar{
+    background-color : #222;
+    spacing : 5px;
+    border : none;
+    height : 10px;
+}
+
+    QToolBar::separator {
+        background-color: rgba(140,140,140,.5);
+        background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgba(0,0,0,0), stop: 0.4 rgba(0,0,0,.51), stop: 0.5 rgba(0,0,0,.51), stop: 1.0 rgba(0,0,0,0));
+        width: 2px;
+        height : 30px;
+    }
+
+QToolButton { /* all types of tool button */
+    border-width : 1px;
+    border-radius: 1px;
+    background-color: #111;
+    padding : 5px;
+
+}
+
+QToolTip{
+    background-color : #333;
+    border : 1px solid #333;
+    border-radius: 5px;
+}
+
+QToolBar::seperator{
+   
+}
+
+
+
+

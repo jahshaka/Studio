@@ -100,7 +100,7 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 
 	
 
-	if (translator_por.load(":/languages/jahshaka_por"))
+	translator_por.load(":/languages/jahshaka_por");
 
     setupDirectoryDefaults();
     setupOutline();
