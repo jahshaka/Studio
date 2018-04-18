@@ -15,7 +15,7 @@
   </property>
   <property name="styleSheet">
    <string notr="true">QDialog#PreferencesDialog {
-	border: px solid #1E1E1E;
+	border: 1px solid #1E1E1E;
 	background: #222;
 	color: #EEE;
 }

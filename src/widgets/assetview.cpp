@@ -615,7 +615,12 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
     normalize = new QPushButton("Normalize");
 
 	addToProject = new QPushButton("Add to Project");
-	addToProject->setStyleSheet("QPushButton { background: #3498db } QPushButton:disabled { color: #656565; background-color: #3e3e3e; }");
+	addToProject->setStyleSheet(
+		"QPushButton { background: #3498db; }"
+		"QPushButton:hover { background-color: #4aa3de; }"
+		"QPushButton:pressed { background-color: #1f80c1; }"
+		"QPushButton:disabled { color: #656565; background-color: #3e3e3e; }"
+	);
 	addToProject->setEnabled(false);
 
     deleteFromLibrary = new QPushButton("Delete From Library");
@@ -1378,9 +1383,13 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 	//auto rh = viewer->rect().height() + 32;
 
 	//auto endRect = QRect(parent->pos().x(), parent->pos().y(), rw, rh);
-	//Toast *t = new Toast(this);
-	//t->showToast("This is a  test", "some test message goes here ", 0, parent->pos(), endRect);
-	//return;
+	Toast *t = new Toast(this);
+	t->showToast(
+		"Asset Added To Project",
+		QString("%1 has been added successfully to the open project.").arg(item->metadata["name"].toString()),
+		0, parent->pos(), QRect()
+	);
+
 	//addToProject->setVisible(false);
 	// get the current project working directory
 	auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), Constants::PROJECT_FOLDER);
@@ -1389,7 +1398,7 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 
 	QString guid = item->metadata["guid"].toString();
 	int assetType = item->metadata["type"].toInt();
-	QFileInfo fInfo(item->metadata["full_name"].toString());
+
 	auto assetsDir = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::ASSET_FOLDER, guid);
 
     const int aType = db->fetchAsset(guid).type;

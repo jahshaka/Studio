@@ -634,7 +634,7 @@ void MainWindow::switchSpace(WindowSpaces space)
             this->enterEditMode();
             UiManager::sceneMode = SceneMode::EditMode;
 
-            assetWidget->updateLabels();
+            assetWidget->refresh();
 
             break;
         }
