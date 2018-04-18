@@ -216,7 +216,7 @@ public:
 	void addCrumbs(const QVector<FolderRecord> &folderData);
     void updateAssetView(const QString &path, bool showDependencies = false);
     void trigger();
-    void updateLabels();
+    void refresh();
 
 	void extractTexturesAndMaterialFromMaterial(
 		const QString &filePath,

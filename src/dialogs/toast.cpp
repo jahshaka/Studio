@@ -2,11 +2,12 @@
 
 #include <QApplication>
 #include <QDesktopWidget>
+#include <QGraphicsDropShadowEffect>
 #include <QStyle>
-
+#include <QTimer>
 #include <QDebug>
 
-Toast::Toast(QWidget *parent) : QWidget(parent)
+Toast::Toast(QWidget *parent) : QFrame(parent)
 {
 	setParent(parent);
 	setObjectName("Toast");
@@ -17,6 +18,7 @@ Toast::Toast(QWidget *parent) : QWidget(parent)
 	info = new QLabel;
 	info->setObjectName("Info");
 	toastLayout->addWidget(caption);
+	toastLayout->addSpacing(6);
 	toastLayout->addWidget(info);
 
 	setWindowFlags(
@@ -27,12 +29,12 @@ Toast::Toast(QWidget *parent) : QWidget(parent)
 	);
 
 	setStyleSheet(
-		"QWidget#Toast { background: #1E1E1E; border: 1px solid black; }"
+		"QWidget#Toast { background: #1E1E1E; border: 1px solid #3498db; }"
 		"QLabel { color: #EEE; }"
-		"QLabel#Caption { font-style: bold; }"
+		"QLabel#Caption { font-style: bold; font-size: 16px; }"
 	);
 
-	//setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+	setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 	//setGeometry(QStyle::alignedRect(Qt::RightToLeft, Qt::AlignTop, size(), QDesktopWidget().availableGeometry()));
 
 	//QRect position = frameGeometry();
@@ -48,6 +50,12 @@ Toast::Toast(QWidget *parent) : QWidget(parent)
 	//	parent->rect())
 	//);
 		//qApp->desktop()->availableGeometry()));
+
+	setLineWidth(1);
+	//QGraphicsDropShadowEffect* effect = new QGraphicsDropShadowEffect();
+	//effect->setColor(QColor(32, 32, 32));
+	//effect->setBlurRadius(12); 
+	//this->setGraphicsEffect(effect);
 }
 
 void Toast::showToast(const QString &title, const QString &text, const float &delay)
@@ -62,12 +70,13 @@ void Toast::showToast(const QString &title, const QString &text, const float &de
 	caption->setText(title);
 	info->setText(text);
 
+	QTimer::singleShot(1650, this, &Toast::hide);
 
 	//QRect position = frameGeometry();
 	//position.moveBottomRight(QPoint(rect.width() - position.width(), rect.height() - position.height()));
 	//move(position.bottomRight());
 
-	setGeometry(QStyle::alignedRect(Qt::RightToLeft, Qt::AlignBottom, QSize(frameGeometry().width(), frameGeometry().height()), rect));
+	//setGeometry(QStyle::alignedRect(Qt::RightToLeft, Qt::AlignBottom, QSize(frameGeometry().width(), frameGeometry().height()), rect));
 
 	show();
 }

@@ -266,10 +266,10 @@ void AssetWidget::trigger()
 	sceneView->doneCurrent();
 }
 
-void AssetWidget::updateLabels()
+void AssetWidget::refresh()
 {
-	//updateAssetView(assetItem.selectedPath);
-	//populateAssetTree(false);
+	updateAssetView(assetItem.selectedGuid);
+	populateAssetTree(false);
 }
 
 void AssetWidget::extractTexturesAndMaterialFromMaterial(
@@ -1771,6 +1771,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tuple> &fileNames)
                         IrisUtils::buildFileName(IrisUtils::join(pathToCopyTo, newName), entryInfo.suffix())
                     );
 					asset->fileName = checkFile.fileName();
+					fileToCopyTo = checkFile.absoluteFilePath();
 				}
 
                 // Accumulate a list of all the images imported so we can use this to update references

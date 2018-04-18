@@ -5,7 +5,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-class Toast : QWidget
+class Toast : QFrame
 {
     Q_OBJECT
 
