@@ -24,7 +24,7 @@ ModelPresets::ModelPresets(QWidget *parent) :
 
     ui->modelsSets->setAttribute(Qt::WA_MacShowFocusRect, false);
     ui->modelsSets->setViewMode(QListWidget::IconMode);
-    ui->modelsSets->setIconSize(QSize(88,88));
+    ui->modelsSets->setIconSize(QSize(84, 84));
     ui->modelsSets->setResizeMode(QListWidget::Adjust);
     ui->modelsSets->setMovement(QListView::Static);
     ui->modelsSets->setSelectionBehavior(QAbstractItemView::SelectItems);

@@ -569,7 +569,7 @@ WindowSpaces MainWindow::getWindowSpace()
 void MainWindow::switchSpace(WindowSpaces space)
 {
 	const QString disabledMenu   = "color: #444; border-color: #111";
-	const QString selectedMenu   = "border-color: white";
+	const QString selectedMenu   = "border-color: #3498db";
 	const QString unselectedMenu = "border-color: #111";
 
 	assets_menu->setStyleSheet(unselectedMenu);
@@ -577,10 +577,13 @@ void MainWindow::switchSpace(WindowSpaces space)
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
 			if (UiManager::isSceneOpen) {
-				if (settings->getValue("auto_save", true).toBool()) saveScene();
+				//if (settings->getValue("auto_save", true).toBool()) saveScene();
+				saveScene();
 				pmContainer->populateDesktop(true);
 			}
-            ui->stackedWidget->setCurrentIndex(0);
+			
+			ui->stackedWidget->setCurrentIndex(0);
+
             toggleWidgets(false);
 
             worlds_menu->setStyleSheet(selectedMenu);
@@ -2089,7 +2092,9 @@ void MainWindow::setupViewPort()
 	ui->ohlayout->addWidget(assets_panel, 0, 1, Qt::AlignCenter);
 	ui->ohlayout->addWidget(buttons, 0, 2, Qt::AlignRight);
 
-    connect(worlds_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::DESKTOP); });
+    connect(worlds_menu, &QPushButton::pressed, [this]() {
+		if (!currentSpace == WindowSpaces::DESKTOP) switchSpace(WindowSpaces::DESKTOP);
+	});
     connect(player_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::PLAYER); });
     connect(editor_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::EDITOR); });
     connect(assets_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::ASSETS); });
