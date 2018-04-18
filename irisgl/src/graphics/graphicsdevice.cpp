@@ -279,6 +279,8 @@ void GraphicsDevice::compileShader(iris::ShaderPtr shader)
 	program->bindAttributeLocation("a_texCoord3", (int)VertexAttribUsage::TexCoord3);
 	program->bindAttributeLocation("a_normal", (int)VertexAttribUsage::Normal);
 	program->bindAttributeLocation("a_tangent", (int)VertexAttribUsage::Tangent);
+	program->bindAttributeLocation("a_boneIndices", (int)VertexAttribUsage::BoneIndices);
+	program->bindAttributeLocation("a_boneWeights", (int)VertexAttribUsage::BoneWeights);
 
 	program->link();
 
