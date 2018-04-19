@@ -135,7 +135,7 @@ enum class VRButtonMode : int
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    setWindowTitle("Jahshaka " + Constants::CONTENT_VERSION);
+    setWindowTitle(QString("Jahshaka %1").arg(Constants::CONTENT_VERSION));
 	settings = SettingsManager::getDefaultManager();
 
     UiManager::mainWindow = this;
@@ -147,7 +147,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 #ifdef QT_DEBUG
     iris::Logger::getSingleton()->init(IrisUtils::getAbsoluteAssetPath("jahshaka.log"));
-    setWindowTitle(windowTitle() + " - Developer Build");
+    setWindowTitle(QString("Jahshaka %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
+    originalTitle = windowTitle();
 #else
     iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/jahshaka.log");
 #endif
@@ -779,22 +780,26 @@ void MainWindow::openProject(bool playMode)
 void MainWindow::closeProject()
 {
 	if (UiManager::isSceneOpen) {
-		if (settings->getValue("auto_save", true).toBool()) saveScene();
+		//if (settings->getValue("auto_save", true).toBool()) saveScene();
+        saveScene();
 	}
 
     UiManager::isSceneOpen = false;
     UiManager::isScenePlaying = false;
     ui->actionClose->setDisabled(false);
 
-    switchSpace(WindowSpaces::DESKTOP);
-
     UiManager::clearUndoStack();
     AssetManager::clearAssetList();
+
+    UiManager::mainWindow->setWindowTitle(originalTitle);
 
     scene->cleanup();
     scene.clear();
 
 	undoStackCount = 0;
+
+    if (currentSpace == WindowSpaces::DESKTOP) return;
+    switchSpace(WindowSpaces::DESKTOP);
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
