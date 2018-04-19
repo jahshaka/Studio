@@ -1371,10 +1371,8 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 	updateNodeValues(node);
 
 	// rename animation sources to relative paths
-	auto relPath = QDir(Globals::project->folderPath).relativeFilePath(path);
-	for (auto anim : node->getAnimations()) {
-		if (!!anim->skeletalAnimation) anim->skeletalAnimation->source = relPath;
-	}
+	auto relPath = QDir(Globals::project->folderPath).relativeFilePath(db->fetchAsset(meshGuid).name);
+	for (auto anim : node->getAnimations()) if (!!anim->skeletalAnimation) anim->skeletalAnimation->source = relPath;
 
 	node->setGUID(guid);
     node->setName(assetName);
