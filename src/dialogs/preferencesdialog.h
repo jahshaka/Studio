@@ -59,6 +59,8 @@ protected:
 
     QPoint oldPos;
 
+protected:
+	void changeEvent(QEvent* event) override;
 private:
     void setupPages();
 
@@ -67,6 +69,7 @@ private slots:
 
 private:
     Ui::PreferencesDialog *ui;
+
 };
 
 #endif // PREFERENCESDIALOG_H

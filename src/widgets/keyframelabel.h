@@ -16,6 +16,8 @@ class KeyFrameLabel : public QWidget
     bool collapsed;
     iris::FloatKeyFrame *keyFrame;
 
+protected:
+	void changeEvent(QEvent* event) override;
 public:
     explicit KeyFrameLabel(QWidget *parent = 0);
     ~KeyFrameLabel();

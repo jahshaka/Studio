@@ -15,10 +15,12 @@ find_package(Qt5 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg)
 include(UseModernCpp)
 include(BuildType)
 
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
 
-# set(CMAKE_AUTOMOC ON)
+
+set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -28,6 +30,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
 set(SRCS
     src/main.cpp
     src/mainwindow.cpp 
+	src/helpinglabels.cpp
     src/widgets/colorvaluewidget.cpp 
     src/widgets/colorpickerwidget.cpp 
     src/dialogs/preferencesdialog.cpp 
@@ -133,6 +136,7 @@ set(SRCS
 
 set(HEADERS
     src/mainwindow.h 
+	src/helpinglabels.h
     src/dialogs/renamelayerdialog.h 
     src/widgets/colorvaluewidget.h 
     src/widgets/colorpickerwidget.h 
@@ -256,6 +260,7 @@ set(HEADERS
 
 # Todo - trim these down to nothing eventually
 set(FORMS
+	src/helpinglabels.ui
     src/dialogs/renamelayerdialog.ui 
     src/widgets/colorvaluewidget.ui 
     src/widgets/colorpickerwidget.ui 
@@ -303,8 +308,8 @@ set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OP
 
 include(IncludeBreakpad)
 
-qt5_wrap_cpp(HEADERS_moc ${HEADERS})
-qt5_wrap_ui(UI_moc ${FORMS})
+#qt5_wrap_cpp(HEADERS_moc ${HEADERS})
+#qt5_wrap_ui(UI_moc ${FORMS})
 
 # Todo - trim these down to nothing eventually
 qt5_add_resources(QRCS
@@ -313,6 +318,8 @@ qt5_add_resources(QRCS
     ${CMAKE_SOURCE_DIR}/app/images.qrc
     ${CMAKE_SOURCE_DIR}/app/models.qrc
     ${CMAKE_SOURCE_DIR}/app/shaders.qrc 
+    ${CMAKE_SOURCE_DIR}/app/languages.qrc 
+
 )
 
 # Disable compiler specific warnings if we are building with MSVC
@@ -380,3 +387,4 @@ target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBS})
 include(CopyResources)
 include(CopyDependencies)
 
+ 

@@ -12,6 +12,8 @@ class PostProcessesWidget : public QWidget
 {
     Q_OBJECT
 
+
+
 public:
     explicit PostProcessesWidget(QWidget *parent = 0);
     ~PostProcessesWidget();

@@ -28,7 +28,8 @@ PreferencesDialog::PreferencesDialog(QWidget* parent, Database *handle, Settings
 	db = handle;
     this->settings = settings;
 
-    setWindowTitle("Preferences");
+    setWindowTitle(tr("Preferences"));
+
 
     connect(ui->okButton, SIGNAL(clicked(bool)), this, SLOT(saveSettings()));
 	connect(ui->cancelButton, &QPushButton::pressed, [this]() { this->close(); });
@@ -41,6 +42,15 @@ void PreferencesDialog::setupPages()
     // can we elimate this to be more permanent? why (was/is) this dynamic really?
     worldSettings = new WorldSettings(db, settings);
     ui->worldLayout->addWidget(worldSettings);
+}
+
+void PreferencesDialog::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
 }
 
 void PreferencesDialog::saveSettings()

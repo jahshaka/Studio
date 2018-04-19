@@ -26,6 +26,15 @@ void ProgressDialog::reset()
     ui->progressBar->reset();
 }
 
+void ProgressDialog::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}
+
 void ProgressDialog::setRange(int min, int max)
 {
     ui->progressBar->setRange(min, max);

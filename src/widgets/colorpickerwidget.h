@@ -27,6 +27,9 @@ class ColorPickerWidget : public QWidget
     QColor color;
     QColorDialog* dialog;
 
+protected:
+	void changeEvent(QEvent* event) override;
+
 public:
     int index;
     explicit ColorPickerWidget(QWidget *parent = 0);

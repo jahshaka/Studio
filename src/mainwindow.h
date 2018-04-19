@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include <QLabel>
 #include <QCheckBox>
 #include "irisglfwd.h"
+#include "helpinglabels.h"
 
 namespace Ui {
     class MainWindow;
@@ -76,6 +77,7 @@ class GizmoHitData;
 class AdvancedGizmoHandle;
 class MaterialPreset;
 class AssetWidget;
+class HelpingLabels;
 // class SceneNodePropertiesWidget;
 
 #include "widgets/scenenodepropertieswidget.h"
@@ -104,6 +106,9 @@ class Database;
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
+
+protected: 
+	void changeEvent(QEvent * event) override;
 
 public:
     explicit MainWindow(QWidget *parent = 0);
@@ -155,8 +160,13 @@ public:
 
 private:
 
+	//change local labels
+	void changeAllLabels();
+
     // sets up the button for vr
     void setupVrUi();
+
+	
 
     // menus
     void setupFileMenu();
@@ -376,9 +386,33 @@ private:
     AssetView *_assetView;
 	QAction *actionSaveScene;
 
+	/////////////////////////////////////////////
+
+	QAction *actionUndo;
+	QAction *actionRedo;
+	QAction *actionTranslate;
+	QAction *actionScale;
+	QAction *actionGlobalSpace;
+	QAction *actionLocalSpace;
+	QAction *actionFreeCamera;
+	QAction *actionArcballCam;
+	QAction *actionExport;
+	QAction *viewDocks;
+	QAction *actionRotate;
+
+	QPushButton *screenShotBtn;
+	
+
+
+
+	///////////////////////////////////////////
+
+
 	QVector<bool> widgetStates;	// use the order in the enum
 
     WindowSpaces currentSpace;
+
+	HelpingLabels *helpingLabels;
 };
 
 #endif // MAINWINDOW_H

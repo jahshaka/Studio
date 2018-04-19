@@ -35,6 +35,7 @@ class MainTimelineWidget : public QWidget
 {
     Q_OBJECT
 
+
 public:
     explicit MainTimelineWidget(QWidget *parent = 0);
     ~MainTimelineWidget();

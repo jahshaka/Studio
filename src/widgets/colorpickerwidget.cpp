@@ -15,6 +15,15 @@ For more information see the LICENSE file
 #include <QPainter>
 #include <QDebug>
 
+void ColorPickerWidget::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}
+
 ColorPickerWidget::ColorPickerWidget(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::ColorPickerWidget)
@@ -31,6 +40,8 @@ ColorPickerWidget::~ColorPickerWidget()
 {
     delete ui;
 }
+
+
 
 void ColorPickerWidget::paintEvent(QPaintEvent* evt)
 {

@@ -34,6 +34,15 @@ void KeyFrameCurveWidget::setAnimWidgetData(AnimationWidgetData *value)
     animWidgetData = value;
 }
 
+void KeyFrameCurveWidget::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}
+
 KeyFrameCurveWidget::KeyFrameCurveWidget(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::KeyFrameCurveWidget)
@@ -167,26 +176,26 @@ void KeyFrameCurveWidget::mouseReleaseEvent(QMouseEvent *evt)
 
         if (key != nullptr) {
             QMenu menu;
-            menu.addAction("Delete");
+            menu.addAction(tr("Delete"));
             menu.addSeparator();
 
-            auto handleMenu = new QMenu("Handles");
+            auto handleMenu = new QMenu(tr("Handles"));
             //handleMenu.setTitle("Handles");
-            handleMenu->addAction("Auto");
-            handleMenu->addAction("Broken");
-            handleMenu->addAction("Flat");
+            handleMenu->addAction(tr("Auto"));
+            handleMenu->addAction(tr("Broken"));
+            handleMenu->addAction(tr("Flat"));
             menu.addMenu(handleMenu);
 
-            auto leftTangent = new QMenu("Left Tangent");
-            leftTangent->addAction("Free");
-            leftTangent->addAction("Linear");
-            leftTangent->addAction("Constant");
+            auto leftTangent = new QMenu(tr("Left Tangent"));
+            leftTangent->addAction(tr("Free"));
+            leftTangent->addAction(tr("Linear"));
+            leftTangent->addAction(tr("Constant"));
             menu.addMenu(leftTangent);
 
-            auto rightTangent = new QMenu("Right Tangent");
-            rightTangent->addAction("Free");
-            rightTangent->addAction("Linear");
-            rightTangent->addAction("Constant");
+            auto rightTangent = new QMenu(tr("Right Tangent"));
+            rightTangent->addAction(tr("Free"));
+            rightTangent->addAction(tr("Linear"));
+            rightTangent->addAction(tr("Constant"));
             menu.addMenu(rightTangent);
 
             menu.exec(this->mapToGlobal(mousePos));

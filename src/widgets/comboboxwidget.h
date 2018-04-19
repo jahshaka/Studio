@@ -23,6 +23,8 @@ class ComboBoxWidget : public QWidget
 {
     Q_OBJECT
 
+
+
 public:
     explicit ComboBoxWidget(QWidget *parent = 0);
     ~ComboBoxWidget();

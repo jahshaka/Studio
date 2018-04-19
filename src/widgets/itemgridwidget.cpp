@@ -94,7 +94,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     playButton = new QPushButton();
     playButton->setObjectName("playButton");
     playButton->setToolTipDuration(0);
-    playButton->setToolTip("Play world fullscreen");
+    playButton->setToolTip(tr("Play world fullscreen"));
     playButton->setCursor(Qt::PointingHandCursor);
     playButton->setIconSize(iconSize);
     playButton->setIcon(QIcon(":/icons/tplay_alpha.svg"));
@@ -109,7 +109,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     editButton = new QPushButton();
     editButton->setObjectName("editButton");
     editButton->setToolTipDuration(0);
-    editButton->setToolTip("Open world in editor");
+    editButton->setToolTip(tr("Open world in editor"));
     editButton->setCursor(Qt::PointingHandCursor);
     editButton->setIconSize(iconSize);
     editButton->setIcon(QIcon(":/icons/tedit_alpha.svg"));
@@ -119,7 +119,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     closeButton = new QPushButton();
     closeButton->setObjectName("closeButton");
     closeButton->setToolTipDuration(0);
-    closeButton->setToolTip("Close open world");
+    closeButton->setToolTip(tr("Close open world"));
     closeButton->setCursor(Qt::PointingHandCursor);
     closeButton->setIconSize(iconSize);
     closeButton->setIcon(QIcon(":/icons/error_alpha.svg"));
@@ -130,7 +130,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     auto l = new QVBoxLayout;
     l->setSpacing(0);
     l->setMargin(0);
-    playText = new QLabel("PLAY");
+    playText = new QLabel(tr("PLAY"));
     playText->setAlignment(Qt::AlignHCenter);
     l->addWidget(playButton);
     l->addWidget(playText);
@@ -141,7 +141,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     l = new QVBoxLayout;
     l->setSpacing(0);
     l->setMargin(0);
-    editText = new QLabel("EDIT");
+    editText = new QLabel(tr("EDIT"));
     editText->setAlignment(Qt::AlignHCenter);
     l->addWidget(editButton);
     l->addWidget(editText);
@@ -152,7 +152,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     l = new QVBoxLayout;
     l->setSpacing(0);
     l->setMargin(0);
-    closeText = new QLabel("CLOSE");
+    closeText = new QLabel(tr("CLOSE"));
     closeText->setAlignment(Qt::AlignHCenter);
     l->addWidget(closeButton);
     l->addWidget(closeText);

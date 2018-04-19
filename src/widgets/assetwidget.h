@@ -293,6 +293,9 @@ private:
 	QSize iconSize;
 	QSize listSize;
 	QSize currentSize;
+
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 #endif // ASSETWIDGET_H

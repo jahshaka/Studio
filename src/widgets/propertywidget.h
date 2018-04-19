@@ -20,6 +20,7 @@ class PropertyWidget : public QWidget, iris::PropertyListener
 {
     Q_OBJECT
 
+
 public:
     explicit PropertyWidget(QWidget *parent = 0);
     ~PropertyWidget();

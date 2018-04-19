@@ -33,6 +33,9 @@ class KeyFrameLabelWidget:public QWidget
 
     QPen cursorPen;
     iris::SceneNodePtr obj;
+
+protected:
+	void changeEvent(QEvent* event) override;
 public:
     KeyFrameLabelWidget(QWidget* parent);
 

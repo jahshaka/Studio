@@ -40,6 +40,7 @@ class ProjectManager : public QWidget
 {
     Q_OBJECT
 
+
 public:
     ProjectManager(Database *handle, QWidget *parent = nullptr);
     ~ProjectManager();
@@ -102,6 +103,9 @@ private:
 
     DynamicGrid *dynamicGrid;
     QDialog sampleDialog;
+
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 struct AssetWidgetConcurrentWrapper {

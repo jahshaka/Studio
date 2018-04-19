@@ -12,6 +12,15 @@ For more information see the LICENSE file
 #include "colorvaluewidget.h"
 #include "ui_colorvaluewidget.h"
 
+void ColorValueWidget::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}
+
 ColorValueWidget::ColorValueWidget(QWidget *parent) :
     BaseWidget(parent),
     ui(new Ui::ColorValueWidget)

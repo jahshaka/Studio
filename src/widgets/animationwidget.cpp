@@ -36,6 +36,15 @@ For more information see the LICENSE file
 #include "../dialogs/getnamedialog.h"
 
 
+void AnimationWidget::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
+}
+
 AnimationWidget::AnimationWidget(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::AnimationWidget)
@@ -357,9 +366,9 @@ void AnimationWidget::addAnimation()
         return;
 
     GetNameDialog dialog;
-    auto defaultName = QString("Animation%1").arg(node->getAnimations().count()+1);
+    auto defaultName = QString(tr("Animation%1")).arg(node->getAnimations().count()+1);
     dialog.setName(defaultName);
-    dialog.setWindowTitle("New Animation Name");
+    dialog.setWindowTitle(tr("New Animation Name"));
     if (dialog.exec() == QDialog::Rejected)
         return;
 
@@ -510,7 +519,8 @@ void AnimationWidget::updateCreationWidgetMessage(iris::SceneNodePtr node)
         createAnimWidget->hideButton();
     } else {
         createAnimWidget->showButton();
-        createAnimWidget->setButtonText("Create Animation for "+node->getName());
+        createAnimWidget->setButtonText(tr("Create Animation for ")+node->getName());
+        //watch for error- myles
     }
 }
 

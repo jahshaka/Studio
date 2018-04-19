@@ -16,7 +16,7 @@ AboutDialog::AboutDialog(QWidget *parent) :
     ui(new Ui::AboutDialog)
 {
     ui->setupUi(this);
-    this->setWindowTitle("About");
+    this->setWindowTitle(tr("About"));
 
     connect(ui->okButton,SIGNAL(clicked(bool)),this,SLOT(close()));
 }
@@ -24,4 +24,13 @@ AboutDialog::AboutDialog(QWidget *parent) :
 AboutDialog::~AboutDialog()
 {
     delete ui;
+}
+
+void AboutDialog::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
 }

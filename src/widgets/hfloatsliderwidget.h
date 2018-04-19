@@ -43,9 +43,13 @@ class HFloatSliderWidget : public BaseWidget
 {
     Q_OBJECT
 
+
     int precision;
     float value;
     float minVal, maxVal;
+
+protected:
+	void changeEvent(QEvent* event) override;
 
 public:
     int index;

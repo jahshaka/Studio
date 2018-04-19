@@ -14,6 +14,15 @@ For more information see the LICENSE file
 
 #include "irisgl/src/core/irisutils.h"
 
+#include "mainwindow.h"
+#include "../../core/settingsmanager.h"
+#include "../../constants.h"
+#include "../../uimanager.h"
+#include "../../globals.h"
+#include "../../widgets/sceneviewwidget.h"
+#include "../../core/database/database.h"
+
+
 #include <QFileDialog>
 #include <QListView>
 #include <QStandardPaths>
@@ -87,6 +96,12 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 	connect(ui->help,       &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(4); });
 	connect(ui->about,      &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(5); });
 
+	connect(ui->language, SIGNAL(currentIndexChanged(QString)), this, SLOT(changeLanguage()));
+
+	
+
+	translator_por.load(":/languages/jahshaka_por");
+
     setupDirectoryDefaults();
     setupOutline();
 
@@ -100,6 +115,38 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 
 	autoUpdate = settings->getValue("automatic_updates", true).toBool();
 	ui->checkUpdates->setChecked(autoUpdate);
+}
+
+void WorldSettings::changeLanguage() {
+
+
+	if (ui->language->currentText() == "English") {
+		changeLanguageToEnglish();
+
+	}
+	if (ui->language->currentText() == "Portuguese") {
+		changeLanguageToPortugese();
+	}
+
+}
+
+void WorldSettings::changeLanguageToEnglish()
+{
+	qApp->removeTranslator(&translator_por);
+}
+
+void WorldSettings::changeLanguageToPortugese()
+{
+	qApp->installTranslator(&translator_por);
+}
+
+void WorldSettings::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)
+	{	
+		ui->retranslateUi(this);
+	}
+	QWidget::changeEvent(event);
 }
 
 void WorldSettings::setupOutline()
@@ -174,9 +221,11 @@ void WorldSettings::editorPathChanged(QString path)
 
 void WorldSettings::saveSettings()
 {
+
 	if (!ui->author->text().isEmpty()) {
 		db->updateAuthorInfo(ui->author->text());
 	}
+
 }
 
 WorldSettings::~WorldSettings()

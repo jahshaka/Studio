@@ -46,21 +46,21 @@ AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject prop
 
 void AssetGridItem::projectContextMenu(const QPoint &pos)
 {
-	QMenu menu("Context Menu", this);
+	QMenu menu(tr("Context Menu"), this);
 
-	QAction add("Add to Project", this);
+	QAction add(tr("Add to Project"), this);
 	connect(&add, &QAction::triggered, this, [this]() {
 		emit addAssetToProject(this);
 	});
 	menu.addAction(&add);
 
-	QAction change("Change Collections", this);
+	QAction change(tr("Change Collections"), this);
 	connect(&change, &QAction::triggered, this, [this]() {
 		emit changeAssetCollection(this);
 	});
 	menu.addAction(&change);
 
-	QAction remove("Delete", this);
+	QAction remove(tr("Delete"), this);
 	connect(&remove, &QAction::triggered, this, [this]() {
 		emit removeAssetFromProject(this);
 	});
