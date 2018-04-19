@@ -380,6 +380,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 							irisgl/src
 							irisgl/src/assimp/include
                             irisgl/src/libovr/Include
+                            irisgl/src/bullet3/src/
                             thirdparty/breakpad/breakpad/src)
    
 if(USE_BREAKPAD)

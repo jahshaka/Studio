@@ -27,6 +27,7 @@ option(ASSIMP_BUILD_COLLADA_IMPORTER            "" ON)
 option(ASSIMP_BUILD_ZLIB                        "" ON)
 
 add_subdirectory(src/assimp)
+add_subdirectory(src/bullet3)
 
 set(SRCS
     src/graphics/mesh.cpp
