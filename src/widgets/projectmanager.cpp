@@ -237,7 +237,7 @@ ProjectManager::~ProjectManager()
 
 void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
 {
-	if (!UiManager::isSceneOpen) {
+	if (Globals::project->getProjectGuid() != widget->tileData.guid) {
 		auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
 		auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
 

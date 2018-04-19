@@ -147,6 +147,7 @@ public:
      * @return
      */
     QString getAbsoluteAssetPath(QString pathRelativeToApp);
+    QString originalTitle;
 
     void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
     void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
