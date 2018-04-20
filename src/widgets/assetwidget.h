@@ -33,6 +33,7 @@ struct AssetItem {
 #include <QApplication>
 #include <QStyledItemDelegate>
 #include <QPainter>
+#include "helpinglabels.h"
 
 class ListViewDelegate : public QStyledItemDelegate
 {
@@ -216,7 +217,7 @@ public:
 	void addCrumbs(const QVector<FolderRecord> &folderData);
     void updateAssetView(const QString &path, bool showDependencies = false);
     void trigger();
-    void updateLabels();
+    void refresh();
 
 	void extractTexturesAndMaterialFromMaterial(
 		const QString &filePath,
@@ -256,6 +257,7 @@ protected slots:
     void renameViewItem();
 
 	void editFileExternally();
+	void exportTexture();
 	void exportMaterial();
 	void exportShader();
 
@@ -292,6 +294,10 @@ private:
 	QSize iconSize;
 	QSize listSize;
 	QSize currentSize;
+	QLabel *displayLabel;
+	HelpingLabels *helpingLabels;
+
+	void changeLabels();
 
 protected:
 	void changeEvent(QEvent* event) override;

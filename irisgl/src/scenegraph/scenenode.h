@@ -65,6 +65,7 @@ public:
 	bool exportable;
     bool visible;
     bool removable;
+    bool isBuiltIn;
 
     bool pickable;
     bool castShadow;

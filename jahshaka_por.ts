@@ -42,7 +42,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>About</source>
-        <translation>sobre</translation>
+        <translation>Sobre</translation>
     </message>
 </context>
 <context>
@@ -185,7 +185,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Add to Project</source>
-        <translation>Adicionar ao projeto</translation>
+        <translation type="vanished">Adicionar ao projeto</translation>
     </message>
     <message>
         <source>Delete From Library</source>
@@ -741,6 +741,26 @@ p, li { white-space: pre-wrap; }
     <message>
         <source>Asset Collections</source>
         <translation>Coleções de ativos</translation>
+    </message>
+    <message>
+        <source>Icon</source>
+        <translation>Ícone</translation>
+    </message>
+    <message>
+        <source>List</source>
+        <translation>Lista</translation>
+    </message>
+    <message>
+        <source>Importing assets...</source>
+        <translation>Importando ativos...</translation>
+    </message>
+    <message>
+        <source>Type to search for assets...</source>
+        <translation>Digite para procurar por ativos</translation>
+    </message>
+    <message>
+        <source>Display: </source>
+        <translation>Exibição:</translation>
     </message>
 </context>
 <context>

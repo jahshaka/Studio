@@ -299,6 +299,7 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
 {
     // It's a safe assumption that the filename is safe to use here in queries if need be
 	sceneNodeObject["mesh"]         = meshNode->meshPath;
+	sceneNodeObject["guid"]         = meshNode->getGUID();
     sceneNodeObject["meshIndex"]    = meshNode->meshIndex;
     sceneNodeObject["pickable"]     = meshNode->pickable;
 

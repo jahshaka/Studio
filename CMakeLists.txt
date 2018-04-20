@@ -131,6 +131,7 @@ set(SRCS
 	src/dialogs/softwareupdatedialog.cpp
     src/io/assethelper.cpp
     src/misc/upgrader.cpp
+    src/dialogs/toast.cpp
 )
 
 set(HEADERS
@@ -254,6 +255,7 @@ set(HEADERS
     src/editor/animationpath.h
     src/io/assethelper.h
     src/misc/upgrader.h
+    src/dialogs/toast.h
 )
 
 # Todo - trim these down to nothing eventually

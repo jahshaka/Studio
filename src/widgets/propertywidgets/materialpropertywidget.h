@@ -66,6 +66,8 @@ private:
     // for undo/redo
     QVariant startValue;
     Database *db;
+    QString meshNodeGuid;
+    QMap<QString, QString> existingTextures;
 };
 
 #endif // MATERIALPROPERTYWIDGET_H

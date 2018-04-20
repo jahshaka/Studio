@@ -6,10 +6,9 @@
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/graphics/mesh.h"
 #include "irisgl/src/zip/zip.h"
-
 #include "../ui_helpinglabels.h"
-#include "../helpinglabels.h"
-
+#include "helpinglabels.h"
+#include <QStackedLayout>
 #include <QDirIterator>
 #include <QListWidget>
 #include <QListWidgetItem>
@@ -50,6 +49,8 @@
 #include "io/assetmanager.h"
 
 #include "../core/guidmanager.h"
+
+#include "dialogs/toast.h"
 
 void AssetView::focusInEvent(QFocusEvent *event)
 {
@@ -200,24 +201,34 @@ QString AssetView::getAssetType(int id)
 
 
 
-void AssetView::changeEvent(QEvent *event) {
 
-	if (event->type() == QEvent::LanguageChange)
-	{
-		
-		changeAllLabels();
-		qDebug() << "change called";
-	}
+void AssetView::changeEvent(QEvent *event)
+{
+	if (event->type() == QEvent::LanguageChange)	changeAllLabels();	
 	QWidget::changeEvent(event);
-
 }
+
 
 AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(parent)
 {
 	helpingLabels = new HelpingLabels();
+
+
+setParent(parent);
+this->parent = parent;
 	_assetView = new QListWidget;
 	viewer = new AssetViewer(this);
     viewer->setDatabase(db);
+
+    viewersWidget = new QWidget;
+    viewers = new QStackedLayout;
+
+    assetImageViewer = new QWidget;
+    auto imgl = new QGridLayout;
+    assetImageCanvas = new QLabel;
+    imgl->addWidget(assetImageCanvas);
+    imgl->setAlignment(Qt::AlignCenter);
+    assetImageViewer->setLayout(imgl);
 
     settings = SettingsManager::getDefaultManager();
 	//prefsDialog = new PreferencesDialog(this, db, settings);
@@ -349,8 +360,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
         d.setFixedWidth(350);
         d.setLayout(l);
         QLineEdit *input = new QLineEdit;
-        accept = new QPushButton(helpingLabels->ui->changeMetaCollection->text());
 
+        accept = new QPushButton(helpingLabels->ui->changeMetaCollection->text());
         connect(accept, &QPushButton::pressed, [&]() {
             collectionName = input->text();
             
@@ -386,6 +397,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
     testL->setSpacing(0);
 	emptyL->setSpacing(0);
 	emptyLabel = new QLabel(tr("You have no assets in your library."));
+
 	auto emptyIcon = new QLabel;
 	emptyIcon->setAlignment(Qt::AlignVCenter | Qt::AlignHCenter);
 	emptyIcon->setPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-empty-box-50.png"));
@@ -617,8 +629,17 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
     normalize = new QPushButton(tr("Normalize"));
 
-	addToProject = new QPushButton(tr("Add to Project"));
-	addToProject->setStyleSheet("QPushButton { background: #3498db } QPushButton:disabled { color: #656565; background-color: #3e3e3e; }");
+
+
+	addToProject = new QPushButton("Add to Project");
+	addToProject->setStyleSheet(
+		"QPushButton { background: #3498db; }"
+		"QPushButton:hover { background-color: #4aa3de; }"
+		"QPushButton:pressed { background-color: #1f80c1; }"
+		"QPushButton:disabled { color: #656565; background-color: #3e3e3e; }"
+	);
+
+
 	addToProject->setEnabled(false);
 
     deleteFromLibrary = new QPushButton(tr("Delete From Library"));
@@ -660,7 +681,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		}
 	});
 
-    connect(fastGrid, &AssetViewGrid::selectedTile, [=](AssetGridItem *gridItem) {
+    connect(fastGrid, &AssetViewGrid::selectedTile, [&](AssetGridItem *gridItem) {
 		fastGrid->deselectAll();
 
 		renameWidget->setVisible(false);
@@ -726,6 +747,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 			}
 
             if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Object)) {
+                viewers->setCurrentIndex(0);
+
                 QString path;
                 // if model
                 QDir dir(assetPath);
@@ -747,6 +770,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
             }
 
             if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Material)) {
+                viewers->setCurrentIndex(0);
                 if (viewer->cachedAssets.value(gridItem->metadata["guid"].toString())) {
                     //viewer->addNodeToScene(viewer->cachedAssets.value(gridItem->metadata["guid"].toString()), gridItem->metadata["guid"].toString(), true, false);
                     viewer->loadJafMaterial(gridItem->metadata["guid"].toString());
@@ -757,6 +781,20 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
                     //viewer->loadJafModel(path, gridItem->metadata["guid"].toString(), false, true, !cached);
                     viewer->orientCamera(pos, rot, distObj);
                 }
+            }
+
+            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Texture)) {
+                // viewer->loadJafMaterial(gridItem->metadata["guid"].toString());
+                viewers->setCurrentIndex(1);
+                auto assetPath = IrisUtils::join(
+                    QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+                    "AssetStore",
+                    gridItem->metadata["guid"].toString(),
+                    db->fetchAsset(gridItem->metadata["guid"].toString()).name
+                );
+
+                QPixmap image(assetPath);
+                assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
             }
 
 			selectedGridItem = gridItem;
@@ -915,7 +953,12 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
     _metadataPane->setLayout(metaLayout);
 
-	split->addWidget(viewer);
+    viewers->addWidget(viewer);
+    viewers->addWidget(assetImageViewer);
+    viewersWidget->setLayout(viewers);
+
+	//split->addWidget(viewer);
+	split->addWidget(viewersWidget);
 	split->addWidget(_viewPane);
 
     _splitter->addWidget(_navPane);
@@ -997,6 +1040,9 @@ void AssetView::importJahModel(const QString &fileName)
         if (jafString == "object") {
             jafType = ModelTypes::Object;
         }
+        else if (jafString == "texture") {
+            jafType = ModelTypes::Texture;
+        }
         else if (jafString == "material") {
             jafType = ModelTypes::Material;
         }
@@ -1025,12 +1071,33 @@ void AssetView::importJahModel(const QString &fileName)
         }
 
         if (jafString == "material") {
+            viewers->setCurrentIndex(0);
             renameModelField->setText(QFileInfo(filename).baseName());
             viewer->loadJafMaterial(guid);
             addToJahLibrary(filename, guid, true);
         }
 
+        if (jafString == "texture") {
+            renameModelField->setText(QFileInfo(filename).baseName());
+
+            {
+                viewers->setCurrentIndex(1);
+                auto assetPath = IrisUtils::join(
+                    QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+                    "AssetStore",
+                    guid,
+                    db->fetchAsset(guid).name
+                );
+
+                QPixmap image(assetPath);
+                assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
+            }
+
+            addToJahLibrary(filename, guid, true);
+        }
+
         if (jafString == "object") {
+            viewers->setCurrentIndex(0);
             // Open the asset
             QString path;
             // if model
@@ -1068,7 +1135,13 @@ void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool
     object["icon_url"] = "";
     object["name"] = QFileInfo(fileName).baseName(); // renameModelField->text();
 
-    auto thumbnail = viewer->takeScreenshot(512, 512);
+    //auto thumbnail = viewer->takeScreenshot(512, 512);
+
+    auto bytes = db->fetchAsset(guid).thumbnail;
+    QImage thumbnail;
+    if (thumbnail.loadFromData(bytes, "PNG")) {
+        //thumbnail = viewer->takeScreenshot(512, 512);
+    }
 
     db->updateAssetProperties(guid, QJsonDocument(viewer->getSceneProperties()).toBinaryData());
     //db->updateAssetThumbnail(guid, bytes);
@@ -1323,6 +1396,19 @@ void AssetView::updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject d
 
 void AssetView::addAssetToProject(AssetGridItem *item)
 {
+	//auto rx = _navPane->rect().x() + viewer->rect().x();
+	//auto ry = _navPane->rect().y() + viewer->rect().y();
+	//auto rw = _navPane->rect().width() + viewer->rect().width();
+	//auto rh = viewer->rect().height() + 32;
+
+	//auto endRect = QRect(parent->pos().x(), parent->pos().y(), rw, rh);
+	Toast *t = new Toast(this);
+	t->showToast(
+		"Asset Added To Project",
+		QString("%1 has been added successfully to the open project.").arg(item->metadata["name"].toString()),
+		0, parent->pos(), QRect()
+	);
+
 	//addToProject->setVisible(false);
 	// get the current project working directory
 	auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), Constants::PROJECT_FOLDER);
@@ -1331,7 +1417,7 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 
 	QString guid = item->metadata["guid"].toString();
 	int assetType = item->metadata["type"].toInt();
-	QFileInfo fInfo(item->metadata["full_name"].toString());
+
 	auto assetsDir = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::ASSET_FOLDER, guid);
 
     const int aType = db->fetchAsset(guid).type;
@@ -1736,3 +1822,4 @@ void AssetView::changeAllLabels()
 	downloadWorld->setText(helpingLabels->ui->downloadAssets->text());
 	rootItem->setText(0,helpingLabels->ui->assetCollections->text());
 }
+

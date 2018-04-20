@@ -436,6 +436,53 @@
     </item>
    </layout>
   </widget>
+  <widget class="QWidget" name="verticalLayoutWidget_3">
+   <property name="geometry">
+    <rect>
+     <x>290</x>
+     <y>0</y>
+     <width>160</width>
+     <height>91</height>
+    </rect>
+   </property>
+   <layout class="QVBoxLayout" name="assetWidget">
+    <item>
+     <widget class="QLabel" name="Icon">
+      <property name="text">
+       <string>Icon</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="List">
+      <property name="text">
+       <string>List</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="importingAssets">
+      <property name="text">
+       <string>Importing assets...</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="typeToSearch">
+      <property name="text">
+       <string>Type to search for assets...</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="displayLabel">
+      <property name="text">
+       <string>Display: </string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
  </widget>
  <resources/>
  <connections/>

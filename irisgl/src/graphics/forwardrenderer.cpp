@@ -569,7 +569,7 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 
             if (!!item->material) {
                 mat = item->material;
-                program = mat->getProgram();
+                //program = mat->getProgram();
 
                 mat->begin(graphics, scene);
 				graphics->setShader(mat->shader);

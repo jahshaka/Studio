@@ -400,6 +400,12 @@ SceneNodePtr MeshNode::createDuplicate()
     node->meshIndex = this->meshIndex;
     node->setMaterial(this->material->duplicate());
 
+	// todo: clone instead of copying (Nick)
+	for (auto anim : animations) {
+		node->addAnimation(anim);
+	}
+	node->setAnimation(animation);
+
     return node;
 }
 

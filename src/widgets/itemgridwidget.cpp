@@ -57,9 +57,9 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
 
     // make things bigger at lower resolutions
     if (devicePixelRatio() > 1) {
-        gridTextLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 12px;");
+        gridTextLabel->setStyleSheet("color: #ddd; font-size: 12px;");
     } else {
-        gridTextLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 15px;");
+        gridTextLabel->setStyleSheet("color: #ddd; font-size: 15px;");
     }
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);

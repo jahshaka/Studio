@@ -41,11 +41,6 @@ ShaderPropertyWidget::ShaderPropertyWidget()
 
     onAllowBuiltinShaders(false);
 
-    //shader->load(
-    //    IrisUtils::getAbsoluteAssetPath("app/shaders/color.vert"),
-    //    IrisUtils::getAbsoluteAssetPath("app/shaders/flat_color.frag")
-    //);
-
     connect(vertexShaderCombo,	    SIGNAL(currentIndexChanged(int)),
             this,                   SLOT(onVertexShaderFileChanged(int)));
 
