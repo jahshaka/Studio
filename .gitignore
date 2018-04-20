@@ -23,6 +23,8 @@
 *.moc
 moc_*.cpp
 qrc_*.cpp
+.idea/*
+.idea
 ui_*.h
 Makefile*
 *build-*
