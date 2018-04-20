@@ -40,7 +40,9 @@ For more information see the LICENSE file
 #include "scenewriter.h"
 #include "assetiobase.h"
 #include "../constants.h"
+#include "../core/database/database.h"
 
+Database *SceneWriter::handle = 0;
 
 void SceneWriter::writeScene(QString filePath,
                              iris::ScenePtr scene,
@@ -52,7 +54,7 @@ void SceneWriter::writeScene(QString filePath,
     file.open(QIODevice::WriteOnly | QIODevice::Truncate);
 
     QJsonObject projectObj;
-    projectObj["version"] = "0.1";
+    projectObj["version"] = Constants::CONTENT_VERSION;
     writeScene(projectObj, scene);
     if(editorData != nullptr)
         writeEditorData(projectObj, editorData);
@@ -85,7 +87,7 @@ QByteArray SceneWriter::getSceneObject(QString projectPath,
         writePostProcessData(projectObj, postMan);
     }
 
-    // qDebug() << projectObj;
+    //qDebug() << projectObj;
 
     return QJsonDocument(projectObj).toBinaryData();
 }
@@ -169,7 +171,7 @@ void SceneWriter::writeEditorData(QJsonObject& projectObj,EditorData* editorData
     projectObj["editor"] = editorObj;
 }
 
-void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sceneNode)
+void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr sceneNode, bool relative)
 {
     sceneNodeObj["name"] = sceneNode->getName();
     sceneNodeObj["attached"] = sceneNode->isAttached();
@@ -184,7 +186,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sc
     //todo: write data specific to node type
     switch (sceneNode->sceneNodeType) {
         case iris::SceneNodeType::Mesh:
-            writeMeshData(sceneNodeObj, sceneNode.staticCast<iris::MeshNode>());
+            writeMeshData(sceneNodeObj, sceneNode.staticCast<iris::MeshNode>(), relative);
         break;
         case iris::SceneNodeType::Light:
             writeLightData(sceneNodeObj, sceneNode.staticCast<iris::LightNode>());
@@ -203,7 +205,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj,iris::SceneNodePtr sc
     QJsonArray childrenArray;
     for (auto childNode : sceneNode->children) {
         QJsonObject childNodeObj;
-        writeSceneNode(childNodeObj, childNode);
+        writeSceneNode(childNodeObj, childNode, relative);
         childrenArray.append(childNodeObj);
     }
 
@@ -262,10 +264,10 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
                     keyObj["leftSlope"] = key->leftSlope;
                     keyObj["rightSlope"] = key->rightSlope;
 
-                    keyObj["leftTangentType"] = this->getKeyTangentTypeName(key->leftTangent);
-                    keyObj["rightTangentType"] = this->getKeyTangentTypeName(key->rightTangent);
+                    keyObj["leftTangentType"] = getKeyTangentTypeName(key->leftTangent);
+                    keyObj["rightTangentType"] = getKeyTangentTypeName(key->rightTangent);
 
-                    keyObj["handleMode"] = this->getKeyHandleModeName(key->handleMode);
+                    keyObj["handleMode"] = getKeyHandleModeName(key->handleMode);
 
                     keysListObj.append(keyObj);
                 }
@@ -293,34 +295,34 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
     sceneNodeObj["animations"] = animListObj;
 }
 
-void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode)
+void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode, bool relative)
 {
-    // TODO: handle generated meshes properly
-    // ???? sure...
-    sceneNodeObject["mesh"] = getRelativePath(meshNode->meshPath);
-    sceneNodeObject["meshIndex"] = meshNode->meshIndex;
-    sceneNodeObject["pickable"] = meshNode->pickable;
+    // It's a safe assumption that the filename is safe to use here in queries if need be
+	sceneNodeObject["mesh"]         = meshNode->meshPath;
+	sceneNodeObject["guid"]         = meshNode->getGUID();
+    sceneNodeObject["meshIndex"]    = meshNode->meshIndex;
+    sceneNodeObject["pickable"]     = meshNode->pickable;
 
     auto cullMode = meshNode->getFaceCullingMode();
     switch (cullMode) {
-    case iris::FaceCullingMode::Back:
-        sceneNodeObject["faceCullingMode"] = "back";
-        break;
-    case iris::FaceCullingMode::Front:
-        sceneNodeObject["faceCullingMode"] = "front";
-        break;
-    case iris::FaceCullingMode::DefinedInMaterial:
-        sceneNodeObject["faceCullingMode"] = "material";
-        break;
-    case iris::FaceCullingMode::None:
-        sceneNodeObject["faceCullingMode"] = "none";
-        break;
+        case iris::FaceCullingMode::Back:
+            sceneNodeObject["faceCullingMode"] = "back";
+            break;
+        case iris::FaceCullingMode::Front:
+            sceneNodeObject["faceCullingMode"] = "front";
+            break;
+        case iris::FaceCullingMode::DefinedInMaterial:
+            sceneNodeObject["faceCullingMode"] = "material";
+            break;
+        case iris::FaceCullingMode::None:
+            sceneNodeObject["faceCullingMode"] = "none";
+            break;
+        default: break;
     }
 
     // todo: check if material actually exists
-    auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
     QJsonObject matObj;
-    writeSceneNodeMaterial(matObj, mat);
+    writeSceneNodeMaterial(matObj, meshNode->getMaterial().staticCast<iris::CustomMaterial>(), relative);
     sceneNodeObject["material"] = matObj;
 }
 
@@ -345,9 +347,10 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
 	sceneNodeObject["visible"]				= node->isVisible();
 }
 
-void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat)
+void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat, bool relative)
 {
     matObj["name"] = mat->getName();
+    matObj["guid"] = mat->getGuid();
 
     for (auto prop : mat->properties) {
         if (prop->type == iris::PropertyType::Bool) {
@@ -363,7 +366,10 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMateri
         }
 
         if (prop->type == iris::PropertyType::Texture) {
-            matObj[prop->name] = getRelativePath(prop->getValue().toString());
+			//matObj[prop->name] = relative ? getRelativePath(prop->getValue().toString()) : QFileInfo(prop->getValue().toString()).fileName();
+			matObj[prop->name] = relative
+									? handle->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName())
+									: getRelativePath(prop->getValue().toString());
         }
     }
 }

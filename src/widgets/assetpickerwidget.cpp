@@ -3,7 +3,7 @@
 #include "../core/thumbnailmanager.h"
 #include "../constants.h"
 
-AssetPickerWidget::AssetPickerWidget(AssetType type, QDialog *parent) :
+AssetPickerWidget::AssetPickerWidget(ModelTypes type, QDialog *parent) :
     QDialog(parent),
     ui(new Ui::AssetPickerWidget)
 {
@@ -22,7 +22,6 @@ AssetPickerWidget::AssetPickerWidget(AssetType type, QDialog *parent) :
     connect(ui->searchBar,  SIGNAL(textChanged(QString)),
             this,           SLOT(searchAssets(QString)));
 
-    this->type = type;
     populateWidget();
 
     ui->assetView->setViewMode(QListWidget::ListMode);
@@ -42,7 +41,7 @@ void AssetPickerWidget::populateWidget(QString filter)
     for (auto asset : AssetManager::getAssets()) {
         QPixmap pixmap;
 
-        if (asset->type == type) {
+        if (asset->type == ModelTypes::Texture) {
             QFileInfo file(asset->fileName);
             auto item = new QListWidgetItem(asset->fileName);
 
@@ -50,10 +49,6 @@ void AssetPickerWidget::populateWidget(QString filter)
                 auto thumb = ThumbnailManager::createThumbnail(asset->path, 128, 128);
                 pixmap = QPixmap::fromImage(*thumb->thumb);
                 item->setIcon(QIcon(pixmap));
-            } else if (Constants::MODEL_EXTS.contains(file.suffix())) {
-                item->setIcon(QIcon(":/icons/user-account-box.svg"));
-            } else {
-                item->setIcon(QIcon(":/icons/google-drive-file.svg"));
             }
 
             item->setData(Qt::UserRole, asset->path);

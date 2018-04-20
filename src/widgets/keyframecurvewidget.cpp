@@ -221,6 +221,8 @@ void KeyFrameCurveWidget::mouseMoveEvent(QMouseEvent *evt)
             for(auto frame : keyFrames)
                 frame->sortKeys();
 
+			emit keyChanged(selectedKey);
+
         } else if (dragHandleType == DragHandleType::LeftTangent) {
             // move handle and recalc tangent
             // this is all performed in the space of the canvas
@@ -246,6 +248,8 @@ void KeyFrameCurveWidget::mouseMoveEvent(QMouseEvent *evt)
                 selectedKey->rightSlope = -selectedKey->leftSlope;
             }
 
+			emit keyChanged(selectedKey);
+
         } else if(dragHandleType == DragHandleType::RightTangent) {
             // move handle and recalc tangent
             // this is all performed in the space of the canvas
@@ -267,6 +271,8 @@ void KeyFrameCurveWidget::mouseMoveEvent(QMouseEvent *evt)
             if (selectedKey->handleMode == iris::HandleMode::Joined) {
                 selectedKey->leftSlope = -selectedKey->rightSlope;
             }
+
+			emit keyChanged(selectedKey);
         }
 
         this->repaint();

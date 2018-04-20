@@ -25,11 +25,13 @@ class PostProcessManager
     QOpenGLFunctions_3_2_Core* gl;
     FullScreenQuad* fsQuad;
 
+    GraphicsDevicePtr device;
+
 public:
-    PostProcessManager();
+    PostProcessManager(GraphicsDevicePtr device);
 
 
-    static PostProcessManagerPtr create();
+    static PostProcessManagerPtr create(GraphicsDevicePtr device);
 
 
     void addPostProcess(PostProcessPtr process);

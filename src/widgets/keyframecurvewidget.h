@@ -74,6 +74,9 @@ public:
 
     void showEvent(QShowEvent* event);
 
+signals:
+	void keyChanged(iris::FloatKey* key);
+
 private:
     void drawGrid(QPainter& paint);
     void drawKeyFrames(QPainter& paint);

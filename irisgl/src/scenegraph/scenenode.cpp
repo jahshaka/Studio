@@ -41,6 +41,8 @@ SceneNode::SceneNode():
     visible = true;
     duplicable = true;
     removable = true;
+	exportable = true;
+    isBuiltIn = false;
 
     pickable = true;
     castShadow = true;
@@ -388,7 +390,7 @@ void SceneNode::applyAnimationPose(SceneNodePtr node, QMap<QString, QMatrix4x4> 
         }
     }
 
-    for(auto child : node->children) {
+    for (auto child : node->children) {
         applyAnimationPose(child, skeletonSpaceMatrices);
     }
 }
@@ -414,9 +416,6 @@ void SceneNode::update(float dt)
             child->update(dt);
         }
     }
-
-    //if (this->visible)
-    //    submitRenderItems();
 }
 
 void SceneNode::setParent(SceneNodePtr node)
@@ -433,7 +432,7 @@ void SceneNode::setScene(ScenePtr scene)
     this->scene->addNode(this->sharedFromThis());
 
     // add children
-    for (auto& child : children) {
+    for (auto &child : children) {
         child->setScene(scene);
     }
 }
@@ -447,7 +446,7 @@ void SceneNode::removeFromScene()
     this->scene.clear();
 
     // add children
-    for (auto& child : children) {
+    for (auto &child : children) {
         child->removeFromScene();
     }
 }
@@ -459,8 +458,7 @@ long SceneNode::generateNodeId()
 
 QQuaternion SceneNode::getGlobalRotation()
 {
-	if (!!parent)
-		return parent->getGlobalRotation() * rot;
+	if (!!parent) return parent->getGlobalRotation() * rot;
 	return rot;
 }
 
@@ -501,9 +499,7 @@ QMatrix4x4 SceneNode::getLocalTransform()
 
 SceneNodePtr SceneNode::duplicate()
 {
-    if (!duplicable) {
-        return SceneNodePtr();
-    }
+    if (!duplicable) return SceneNodePtr();
 
     auto node = this->createDuplicate();
 
@@ -511,15 +507,15 @@ SceneNodePtr SceneNode::duplicate()
     node->setLocalPos(this->pos);
     node->setLocalScale(this->scale);
     node->setLocalRot(this->rot);
-	node->castShadow = this->castShadow;
-	node->duplicable = this->duplicable;
-	node->visible = this->visible;
-	node->removable = this->removable;
-	node->pickable = this->pickable;
-	node->castShadow = this->castShadow;
-	node->attached = this->attached;
+	node->castShadow	= this->castShadow;
+	node->duplicable	= this->duplicable;
+	node->visible		= this->visible;
+	node->removable		= this->removable;
+	node->pickable		= this->pickable;
+	node->castShadow	= this->castShadow;
+	node->attached		= this->attached;
 
-    for (auto& child : this->children) {
+    for (auto &child : this->children) {
         if (child->isDuplicable()) {
             node->addChild(child->duplicate(), false);
         }

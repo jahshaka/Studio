@@ -1,8 +1,9 @@
 {
-    "name": "Glass",
-    "preview": false,
+    "name"      : "Glass",
+    "guid"      : "00000000-0000-0000-0000-000000000005",
+    "preview"   : false,
 
-    "blendMode"     : "normal",
+    "blendMode"     : "alphablend",
     "renderLayer"   : "transparent",
 
     "uniforms": [

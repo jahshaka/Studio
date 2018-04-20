@@ -18,7 +18,7 @@ namespace iris
 
 VertexLayout::VertexLayout()
 {
-    gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+    //gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
     stride = 0;
 }
 
@@ -43,7 +43,7 @@ int VertexLayout::getStride()
 // https://stackoverflow.com/a/30106751
 #define BUFFER_OFFSET(i) ((char*)nullptr+(i))
 
-void VertexLayout::bind()
+void VertexLayout::bind(QOpenGLFunctions_3_2_Core* gl)
 {
     int offset = 0;
     for(auto attrib: attribs)
@@ -55,7 +55,7 @@ void VertexLayout::bind()
     }
 }
 
-void VertexLayout::unbind()
+void VertexLayout::unbind(QOpenGLFunctions_3_2_Core* gl)
 {
     for(auto attrib: attribs)
     {

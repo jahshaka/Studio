@@ -49,7 +49,6 @@ class ForwardRenderer;
 class KeyFrameSet;
 class Animation;
 class FloatKeyFrame;
-class ViewerMaterial;
 class CustomMaterial;
 class RenderItem;
 class PickingResult;
@@ -93,7 +92,6 @@ typedef QSharedPointer<Texture> TexturePtr;
 typedef QSharedPointer<ForwardRenderer> ForwardRendererPtr;
 typedef QSharedPointer<KeyFrameSet> KeyFrameSetPtr;
 typedef QSharedPointer<FloatKeyFrame> FloatKeyFramePtr;
-typedef QSharedPointer<ViewerMaterial> ViewerMaterialPtr;
 typedef QSharedPointer<CustomMaterial> CustomMaterialPtr;
 typedef QSharedPointer<ViewerNode> ViewerNodePtr;
 typedef QSharedPointer<ParticleSystemNode> ParticleSystemNodePtr;
@@ -109,8 +107,6 @@ typedef QSharedPointer<GraphicsDevice> GraphicsDevicePtr;
 typedef QSharedPointer<ContentManager> ContentManagerPtr;
 typedef QSharedPointer<SpriteBatch> SpriteBatchPtr;
 typedef QSharedPointer<Font> FontPtr;
-
-
 
 }
 

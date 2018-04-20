@@ -4,13 +4,13 @@
 
 #include "irisgl/src/core/irisutils.h"
 #include "../core/settingsmanager.h"
-#include "../constants.h"
-
 #include "newprojectdialog.h"
 #include "ui_newprojectdialog.h"
 
 #include <QStandardPaths>
 #include <QMessageBox>
+
+#include "constants.h"
 
 NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::NewProjectDialog)
 {
@@ -21,16 +21,12 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui
     ui->createProject->setAutoDefault(true);
     ui->createProject->setDefault(true);
 
-//    QFile fontFile(IrisUtils::getAbsoluteAssetPath("app/fonts/OpenSans-Bold.ttf"));
-//    if (fontFile.exists()) {
-//        fontFile.open(QIODevice::ReadOnly);
-//        QFontDatabase::addApplicationFontFromData(fontFile.readAll());
-//        QApplication::setFont(QFont("Open Sans", 9));
-//    }
+    ui->projectName->setAttribute(Qt::WA_MacShowFocusRect, false);
 
     settingsManager = SettingsManager::getDefaultManager();
 
     ui->projectPath->setDisabled(true);
+    ui->projectPath->setStyleSheet("background: #303030; color: #888;");
 
 //    connect(ui->browseProject, SIGNAL(pressed()), SLOT(setProjectPath()));
     connect(ui->createProject, SIGNAL(pressed()), SLOT(confirmProjectCreation()));
@@ -73,18 +69,18 @@ void NewProjectDialog::createNewProject()
 
 void NewProjectDialog::confirmProjectCreation()
 {
-    if (QDir(projectPath + '/' + ui->projectName->text()).exists()) {
-        QMessageBox::StandardButton reply;
-        reply = QMessageBox::question(this, "Project Path not Empty", "Project already Exists! Overwrite?",
-                                        QMessageBox::Yes|QMessageBox::No);
-        if (reply == QMessageBox::Yes) {
-            createNewProject();
-            this->close();
-            emit accepted();
-        }
-    } else {
+    //if (QDir(projectPath + '/' + ui->projectName->text()).exists()) {
+    //    QMessageBox::StandardButton reply;
+    //    reply = QMessageBox::question(this, "Project Path not Empty", "Project already Exists! Overwrite?",
+    //                                    QMessageBox::Yes|QMessageBox::No);
+    //    if (reply == QMessageBox::Yes) {
+    //        createNewProject();
+    //        this->close();
+    //        emit accepted();
+    //    }
+    //} else {
         createNewProject();
         this->close();
         emit accepted();
-    }
+    //}
 }

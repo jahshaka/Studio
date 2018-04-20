@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef ORBITALCAMERACONTROLLER_H
 #define ORBITALCAMERACONTROLLER_H
 
+#include "../../irisgl/src/irisglfwd.h"
 #include <QPoint>
 #include <QVector3D>
 #include <QSharedPointer>
@@ -34,6 +35,10 @@ public:
     float yaw;
     float pitch;
 
+	float targetYaw;
+	float targetPitch;
+	float lerpSpeed;
+
 	bool previewMode;
 
     float rotationSpeed;
@@ -41,16 +46,23 @@ public:
     QVector3D pivot;
     float distFromPivot;
 
-    QSharedPointer<iris::CameraNode> camera;
+	iris::CameraNodePtr camera;
 
     OrbitalCameraController();
 
-    QSharedPointer<iris::CameraNode>  getCamera();
+    iris::CameraNodePtr  getCamera();
     void setRotationSpeed(float rotationSpeed);
-    void setCamera(QSharedPointer<iris::CameraNode>  cam) override;
+    void setCamera(iris::CameraNodePtr  cam) override;
 
     void onMouseMove(int x,int y) override;
     void onMouseWheel(int delta) override;
+
+	void onKeyPressed(Qt::Key key);
+	void onKeyReleased(Qt::Key key);
+
+	void update(float dt) override;
+
+	void focusOnNode(iris::SceneNodePtr sceneNode);
 
     void updateCameraRot();
 };

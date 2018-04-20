@@ -3,6 +3,7 @@
 
 #include "../irisglfwd.h"
 #include <QOpenGLFunctions_3_2_Core>
+#include <QOpenGLShaderProgram>
 #include <QRect>
 #include <QStack>
 #include "vertexlayout.h"
@@ -33,9 +34,11 @@ public:
     VertexLayout vertexLayout;
     GraphicsDevicePtr device;
 
-    static VertexBufferPtr create(GraphicsDevicePtr device, VertexLayout vertexLayout)
+    bool _isDirty;
+
+    static VertexBufferPtr create(VertexLayout vertexLayout)
     {
-        return VertexBufferPtr(new VertexBuffer(device, vertexLayout));
+        return VertexBufferPtr(new VertexBuffer(vertexLayout));
     }
 
     template<typename T>
@@ -46,21 +49,48 @@ public:
 
     void setData(void* data, unsigned int sizeinBytes);
 
+    bool isDirty()
+    {
+        return _isDirty;
+    }
+
 private:
-    VertexBuffer(GraphicsDevicePtr device, VertexLayout vertexLayout);
+    VertexBuffer(VertexLayout vertexLayout);
+    void upload(QOpenGLFunctions_3_2_Core* gl);
+    void destroy();
 };
 
 class IndexBuffer
 {
+    friend class GraphicsDevice;
 public:
+    GraphicsDevicePtr device;
     void* data;
     GLuint bufferId;
+    int dataSize;
+    bool _isDirty;
 
     template<typename T>
     void setData(T* data, unsigned int sizeInBytes)
     {
-        memcpy(this->data, data, sizeInBytes);
+        setData((void*) data, sizeInBytes);
     }
+
+    void setData(void* data, unsigned int sizeinBytes);
+
+    bool isDirty()
+    {
+        return _isDirty;
+    }
+
+    static IndexBufferPtr create()
+    {
+        return IndexBufferPtr(new IndexBuffer());
+    }
+private:
+    IndexBuffer();
+    void upload(QOpenGLFunctions_3_2_Core* gl);
+    void destroy();
 };
 
 /*
@@ -78,13 +108,15 @@ class GraphicsDevice
 
     QVector<TexturePtr> textureUnits;
     QVector<VertexBufferPtr> vertexBuffers;
-    IndexBufferPtr indexBuffers;
+    IndexBufferPtr indexBuffer;
 
     // apparently gl needs at least one to be set
     // before you can render anything
     GLuint defautVAO;
 
     ShaderPtr activeShader;
+    // comes from active shader for ease-of-access
+    QOpenGLShaderProgram* activeProgram;
 
     bool lastBlendEnabled;
     BlendState lastBlendState;
@@ -106,22 +138,52 @@ public:
     void clear(GLuint bits);
     void clear(GLuint bits, QColor color, float depth=1.0f, int stencil=0);
 
-    void setShader(ShaderPtr shader);
+	// if force is set to true, texture units will be reset regardless if the shader
+	// being bound is already bound
+    void setShader(ShaderPtr shader, bool force = false);
+    template<typename T>
+    void setShaderUniform(const QString& name,const T& value) {
+        if (activeProgram)
+            activeProgram->setUniformValue(name.toStdString().c_str(), value);
+    }
+    template<typename T>
+    void setShaderUniform(const char* name,const T& value) {
+        if (activeProgram)
+            activeProgram->setUniformValue(name, value);
+    }
+
+	template<typename T>
+	void setShaderUniformArray(const QString& name, const T* value, const unsigned int count) {
+		if (activeProgram)
+			activeProgram->setUniformValueArray(name.toStdString().c_str(), value);
+	}
+	template<typename T>
+	void setShaderUniformArray(const char* name, const T* value, const unsigned int count) {
+		if (activeProgram)
+			activeProgram->setUniformValueArray(name, value, count);
+	}
+
     void setTexture(int target, Texture2DPtr texture);
     void clearTexture(int target);
+	void compileShader(iris::ShaderPtr shader);
 
     void setVertexBuffer(VertexBufferPtr vertexBuffer);
     void setVertexBuffers(QList<VertexBufferPtr> vertexBuffers);
     void setIndexBuffer(IndexBufferPtr indexBuffer);
+    void clearIndexBuffer();
 
     void setBlendState(const BlendState& blendState, bool force = false);
     void setDepthState(const DepthState& depthStencil, bool force = false);
     void setRasterizerState(const RasterizerState& rasterState, bool force = false);
 
     void drawPrimitives(GLenum primitiveType,int start, int count);
+    void drawIndexedPrimitives(GLenum primitiveType,int start, int count);
     QOpenGLFunctions_3_2_Core *getGL() const;
 
     static GraphicsDevicePtr create();
+
+private:
+	void compileShader();
 };
 
 }

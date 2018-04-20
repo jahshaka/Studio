@@ -25,6 +25,7 @@ class QFocusEvent;
 #include <QLabel>
 #include <QOpenGLWidget>
 #include <QButtonGroup>
+#include <QStackedLayout>
 
 #ifdef Q_OS_WIN
 	#include <Windows.h>
@@ -81,6 +82,7 @@ public:
     void copyTextures(const QString &folderGuid);
     void checkForEmptyState();
     void toggleFilterPane(bool);
+	void addToJahLibrary(const QString fileName, const QString guid, bool jfx = false);
 	void addToLibrary(bool jfx = false);
 	void spaceSplits();
     void closeViewer();
@@ -89,6 +91,8 @@ public:
 
 	void importJahModel(const QString &filename);
 	void importModel(const QString &filename, bool jfx = false);
+
+    void updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject definition);
 
 signals:
     void refreshCollections();
@@ -158,6 +162,14 @@ private:
 	QTimer *searchTimer;
 	QString searchTerm;
 	QLineEdit *le;
+
+    QWidget *assetImageViewer;
+    QLabel *assetImageCanvas;
+
+    QWidget *viewersWidget;
+    QStackedLayout *viewers;
+
+	QWidget *parent;
 };
 
 #endif // ASSETVIEW_H

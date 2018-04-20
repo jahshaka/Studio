@@ -46,8 +46,8 @@ public:
     int getStride();
 
     //todo: make this more efficient
-    void bind();
-    void unbind();
+    void bind(QOpenGLFunctions_3_2_Core* gl);
+    void unbind(QOpenGLFunctions_3_2_Core* gl);
 
     //default vertex layout for meshes
     static VertexLayout* createMeshDefault();

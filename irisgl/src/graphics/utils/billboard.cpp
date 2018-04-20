@@ -17,12 +17,14 @@ For more information see the LICENSE file
 #include "../../core/irisutils.h"
 #include "../graphicshelper.h"
 #include "../mesh.h"
+#include "../shader.h"
 #include "../vertexlayout.h"
+#include "../graphicsdevice.h"
 
 namespace iris
 {
 
-Billboard::Billboard(QOpenGLFunctions_3_2_Core* gl,float size)
+Billboard::Billboard(float size)
 {
     program = GraphicsHelper::loadShader(":assets/shaders/billboard.vert",
                                          ":assets/shaders/billboard.frag");
@@ -58,9 +60,10 @@ Billboard::Billboard(QOpenGLFunctions_3_2_Core* gl,float size)
 
 }
 
-void Billboard::draw(QOpenGLFunctions_3_2_Core* gl)
+void Billboard::draw(GraphicsDevicePtr device)
 {
-    mesh->draw(gl,program);
+    program->bind();
+    mesh->draw(device);
 }
 
 }

@@ -57,9 +57,9 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
 
     // make things bigger at lower resolutions
     if (devicePixelRatio() > 1) {
-        gridTextLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 12px;");
+        gridTextLabel->setStyleSheet("color: #ddd; font-size: 12px;");
     } else {
-        gridTextLabel->setStyleSheet("font-weight: bold; color: #ddd; font-size: 15px;");
+        gridTextLabel->setStyleSheet("color: #ddd; font-size: 15px;");
     }
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
@@ -399,6 +399,12 @@ void ItemGridWidget::mouseDoubleClickEvent(QMouseEvent *event)
 void ItemGridWidget::projectContextMenu(const QPoint &pos)
 {
     QMenu menu("Context Menu", this);
+    menu.setStyleSheet(
+		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
+		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
+		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
+		"QMenu::item : disabled { color: #555; }"
+	);
 
     QAction open("Open", this);
     connect(&open, SIGNAL(triggered()), this, SLOT(openProject()));

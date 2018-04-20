@@ -15,7 +15,7 @@
   </property>
   <property name="styleSheet">
    <string notr="true">QWidget#sceneTree {
-	background-color: #303030;
+	background-color: #202020;
 	border-top: 1px solid #111;
 }
 
@@ -31,11 +31,15 @@
 	border-left: 1px solid #333;
 }
 
- QTreeWidget {
-	outline: none;
-	selection-background-color: #404040;
-	color: #CECECE;
-  }
+QTreeWidget {
+  outline: none;
+  selection-background-color: #404040;
+  color: #CECECE;
+}
+
+QTreeWidget::item {
+	padding: 6px;
+}
 
 QTreeWidget::item:selected {
 	selection-background-color: #404040;
@@ -56,9 +60,10 @@ QTreeWidget::item:selected:active {
 	padding: 0;
 }
 
- QTreeWidget::item:hover {
+QTreeWidget::item:hover {
 
-  }</string>
+}
+  </string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <property name="spacing">

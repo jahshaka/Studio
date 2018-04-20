@@ -183,7 +183,7 @@ out vec4 fragColor;
 vec2 envMapEquirect(vec3 wcNormal, float flipEnvMap) {
     float y = clamp( -1.0 * wcNormal.y * 0.5 + 0.5,0,1 );
     float x = atan(  wcNormal.z, wcNormal.x ) * RECIPROCAL_PI2 + 0.5;
-    return vec2(x, y);
+    return vec2(x, y * flipEnvMap);
 }
 
 vec2 envMapEquirect(vec3 wcNormal) {

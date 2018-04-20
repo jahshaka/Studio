@@ -12,50 +12,54 @@ For more information see the LICENSE file
 #ifndef SCENEVIEWWIDGET_H
 #define SCENEVIEWWIDGET_H
 
-#include <QOpenGLWidget>
+#include <QOpenGLBuffer>
+#include <QHash>
+#include <QMatrix4x4>
 #include <QOpenGLFunctions>
 #include <QOpenGLFunctions_3_2_Core>
-#include <QOpenGLBuffer>
-#include <QMatrix4x4>
+#include <QOpenGLWidget>
 #include <QSharedPointer>
-#include <QHash>
 
-#include "../core/project.h"
-#include "../irisgl/src/irisglfwd.h"
-#include "../irisgl/src/math/intersectionhelper.h"
+#include "irisgl/src/irisglfwd.h"
+#include "irisgl/src/math/intersectionhelper.h"
+
+#include "mainwindow.h"
+#include "uimanager.h"
+
+#include "core/project.h"
 
 namespace iris
 {
-    class Scene;
-    class ForwardRenderer;
-    class Mesh;
-    class SceneNode;
-    class MeshNode;
-    class DefaultMaterial;
-    class Viewport;
     class CameraNode;
+    class DefaultMaterial;
+    class ForwardRenderer;
     class FullScreenQuad;
+    class Mesh;
+    class MeshNode;
+    class Scene;
+    class SceneNode;
+    class Viewport;
 }
 
-class EditorCameraController;
-class QOpenGLShaderProgram;
 class CameraControllerBase;
+class EditorCameraController;
+class EditorData;
 class EditorVrController;
-class OrbitalCameraController;
-class ViewerCameraController;
-class QElapsedTimer;
-class QTimer;
-class QOpenGLDebugLogger;
-
 class Gizmo;
-class ViewportGizmo;
-class TranslationGizmo;
+class OrbitalCameraController;
+class OutlinerRenderer;
+class QElapsedTimer;
+class QOpenGLDebugLogger;
+class QOpenGLShaderProgram;
+class QTimer;
 class RotationGizmo;
 class ScaleGizmo;
-
-class EditorData;
 class ThumbnailGenerator;
 class OutlinerRenderer;
+class AnimationPath;
+class TranslationGizmo;
+class ViewerCameraController;
+class ViewportGizmo;
 
 enum class ViewportMode
 {
@@ -103,6 +107,10 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
     iris::FontPtr font;
     float fontSize;
     bool showFps;
+
+	// vr viewer representation
+	iris::MaterialPtr viewerMat;
+	iris::MeshPtr viewerMesh;
 public:
     iris::CameraNodePtr editorCam;
 
@@ -132,14 +140,14 @@ public:
     void setArcBallCameraMode();
     void setCameraController();
 
+	void focusOnNode(iris::SceneNodePtr sceneNode);
+
     bool isVrSupported();
     void setViewportMode(ViewportMode viewportMode);
     ViewportMode getViewportMode();
 
     void setGizmoTransformToLocal();
     void setGizmoTransformToGlobal();
-    void hideGizmo();
-	void showGizmos();
 
     void setGizmoLoc();
     void setGizmoRot();
@@ -147,6 +155,8 @@ public:
 
     void setEditorData(EditorData* data);
     EditorData* getEditorData();
+
+	void setWindowSpace(WindowSpaces windowSpace);
 
     void startPlayingScene();
     void pausePlayingScene();
@@ -158,6 +168,10 @@ public:
     void mousePressEvent(QMouseEvent* evt);
     void mouseMoveEvent(QMouseEvent* evt);
 
+	iris::SceneNodePtr savedActiveNode;
+	iris::CustomMaterialPtr originalMaterial;
+	bool wasHit = false;
+
     float translatePlaneD;
     QVector3D finalHitPoint;
     QVector3D Offset;
@@ -165,8 +179,14 @@ public:
     QVector3D dragScenePos;
     iris::SceneNodePtr activeDragNode;
     bool updateRPI(QVector3D pos, QVector3D r);
-    bool doActiveObjectPicking(const QPointF& point);
-    void doObjectPicking(const QPointF& point, iris::SceneNodePtr lastSelectedNode, bool selectRootObject = true, bool skipLights = false, bool skipViewers = false);
+    iris::SceneNodePtr doActiveObjectPicking(const QPointF& point);
+    void doObjectPicking(
+		const QPointF& point,
+		iris::SceneNodePtr lastSelectedNode,
+		bool selectRootObject = true,
+		bool skipLights = false,
+		bool skipViewers = false
+	);
 
 	QImage takeScreenshot(QSize dimension);
     QImage takeScreenshot(int width=1920, int height=1080);
@@ -175,6 +195,8 @@ public:
 
     void setShowFps(bool value);
 	void renderSelectedNode(iris::SceneNodePtr selectedNode);
+
+	void setSceneMode(SceneMode sceneMode);
 
     void cleanup();
 
@@ -199,6 +221,7 @@ private slots:
     void paintGL();
     void renderGizmos(bool once = false);
     void resizeGL(int width, int height);
+	void onAnimationKeyChanged(iris::FloatKey* key);
 
 
 private:
@@ -261,8 +284,17 @@ private:
     iris::MeshPtr createDirLightMesh(float radius = 1.0);
     void addLightShapesToScene();
 
+	void addViewerHeadsToScene();
+
+	WindowSpaces windowSpace;
+	bool displayGizmos;
+	bool displayLightIcons;
+	bool displaySelectionOutline;
+
+	AnimationPath* animPath;
+
 signals:
-    void addDroppedMesh(QString, bool, QVector3D, QString);
+    void addDroppedMesh(QString, bool, QVector3D, QString, QString);
     void initializeGraphics(SceneViewWidget* widget,
                             QOpenGLFunctions_3_2_Core* gl);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);

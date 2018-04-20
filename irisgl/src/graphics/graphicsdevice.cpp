@@ -7,25 +7,93 @@
 #include "shader.h"
 
 #include <QOpenGLShaderProgram>
+#include <QOpenGLFunctions_3_2_Core>
+#include <QOpenGLFunctions>
 
 namespace iris
 {
 
-VertexBuffer::VertexBuffer(GraphicsDevicePtr device, VertexLayout vertexLayout)
+VertexBuffer::VertexBuffer(VertexLayout vertexLayout)
 {
-    this->device = device;
     this->vertexLayout = vertexLayout;
-    device->getGL()->glGenBuffers(1, &bufferId);
+    bufferId = -1;
+    data = nullptr;
+    dataSize = 0;
+    _isDirty = true;
 }
 
-void VertexBuffer::setData(void *data, unsigned int sizeInBytes)
+void VertexBuffer::setData(void *bufferData, unsigned int sizeInBytes)
 {
-    //memcpy(this->data, data, sizeInBytes);
+    if(data)
+        delete data;
 
-    auto gl = device->getGL();
+    data = new char[sizeInBytes];
+    memcpy(this->data, bufferData, sizeInBytes);
+    dataSize = sizeInBytes;
+
+    _isDirty = true;
+}
+
+void VertexBuffer::destroy()
+{
+    if (data)
+        delete data;
+    // todo: delete gl buffer
+}
+
+void VertexBuffer::upload(QOpenGLFunctions_3_2_Core* gl)
+{
+    //auto gl = device->getGL();
+    //auto gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+    if (bufferId == -1)
+        gl->glGenBuffers(1, &bufferId);
+
     gl->glBindBuffer(GL_ARRAY_BUFFER, bufferId);
-    gl->glBufferData(GL_ARRAY_BUFFER, sizeInBytes, data, GL_STATIC_DRAW);
+    // todo : add buffer usage option (nick)
+    gl->glBufferData(GL_ARRAY_BUFFER, dataSize, data, GL_STATIC_DRAW);
     gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    _isDirty = false;
+}
+
+IndexBuffer::IndexBuffer()
+{
+    this->device = device;
+    bufferId = -1;
+    data = nullptr;
+    dataSize = 0;
+    _isDirty = true;
+}
+
+void IndexBuffer::setData(void *bufferData, unsigned int sizeInBytes)
+{
+    if(data)
+        delete data;
+
+    data = new char[sizeInBytes];
+    memcpy(this->data, bufferData, sizeInBytes);
+    dataSize = sizeInBytes;
+
+    _isDirty = true;
+}
+
+void IndexBuffer::upload(QOpenGLFunctions_3_2_Core* gl)
+{
+    //auto gl = device->getGL();
+    //auto gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+    if (bufferId == -1)
+        gl->glGenBuffers(1, &bufferId);
+
+    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bufferId);
+    gl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, dataSize, data, GL_STATIC_DRAW);
+    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+}
+
+void IndexBuffer::destroy()
+{
+    if (data)
+        delete data;
+    // todo: delete gl buffer
 }
 
 QOpenGLFunctions_3_2_Core *GraphicsDevice::getGL() const
@@ -55,6 +123,7 @@ GraphicsDevice::GraphicsDevice()
     this->setBlendState(BlendState::Opaque, true);
     this->setDepthState(DepthState::Default, true);
     this->setRasterizerState(RasterizerState::CullCounterClockwise, true);
+    activeProgram = nullptr;
 }
 
 void GraphicsDevice::setViewport(const QRect& vp)
@@ -143,10 +212,133 @@ void GraphicsDevice::clear(GLuint bits, QColor color, float depth, int stencil)
     gl->glClear(bits);
 }
 
-void GraphicsDevice::setShader(ShaderPtr shader)
+void GraphicsDevice::setShader(ShaderPtr shader, bool force)
 {
+	if (!!activeShader) {
+		if ((activeShader != shader) || force) {
+			int index = 0;
+			auto& samplers = activeShader->samplers;
+
+			// reset textures to 0
+			// this step might not be needed if all textures units are set to null
+			// when setting a shader
+			for (auto& sampler : samplers)
+			{
+				clearTexture(index++);
+			}
+		}
+	}
+
     activeShader = shader;
-    shader->program->bind();
+	if (!!activeShader) {
+		if (activeShader->isDirty)
+			compileShader(activeShader);
+		shader->program->bind();
+		activeProgram = shader->program;
+	}
+	else {
+		activeProgram = nullptr;
+		gl->glUseProgram(0);
+	}
+
+	// nullify all textures
+	/*
+	{
+		int index = 0;
+		auto& samplers = activeShader->samplers;
+		for (auto& sampler : samplers)
+		{
+			clearTexture(index++);
+		}
+	}
+	*/
+}
+
+void GraphicsDevice::compileShader(iris::ShaderPtr shader)
+{
+	QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
+	vshader->compileSourceCode(shader->vertexShader);
+
+	QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
+	fshader->compileSourceCode(shader->fragmentShader);
+
+	if (!shader->program)
+		shader->program = new QOpenGLShaderProgram;
+
+	auto& program = shader->program;
+	program->removeAllShaders();
+
+	program->addShader(vshader);
+	program->addShader(fshader);
+
+	program->bindAttributeLocation("a_pos", (int)VertexAttribUsage::Position);
+	program->bindAttributeLocation("a_color", (int)VertexAttribUsage::Color);
+	program->bindAttributeLocation("a_texCoord", (int)VertexAttribUsage::TexCoord0);
+	program->bindAttributeLocation("a_texCoord1", (int)VertexAttribUsage::TexCoord1);
+	program->bindAttributeLocation("a_texCoord2", (int)VertexAttribUsage::TexCoord2);
+	program->bindAttributeLocation("a_texCoord3", (int)VertexAttribUsage::TexCoord3);
+	program->bindAttributeLocation("a_normal", (int)VertexAttribUsage::Normal);
+	program->bindAttributeLocation("a_tangent", (int)VertexAttribUsage::Tangent);
+	program->bindAttributeLocation("a_boneIndices", (int)VertexAttribUsage::BoneIndices);
+	program->bindAttributeLocation("a_boneWeights", (int)VertexAttribUsage::BoneWeights);
+
+	program->link();
+
+	//todo: check for errors
+
+	//get attribs, uniforms and samplers
+	//http://stackoverflow.com/questions/440144/in-opengl-is-there-a-way-to-get-a-list-of-all-uniforms-attribs-used-by-a-shade
+	auto programId = shader->program->programId();
+	GLint count;
+	GLint size;
+	GLenum type;
+
+	const GLsizei bufSize = 64;
+	GLchar name[bufSize];
+	GLsizei length;
+
+	//attributes
+	gl->glGetProgramiv(programId, GL_ACTIVE_ATTRIBUTES, &count);
+	shader->attribs.clear();
+	shader->uniforms.clear();
+	shader->samplers.clear();
+
+	for (int i = 0; i<count; i++)
+	{
+		gl->glGetActiveAttrib(programId, i, bufSize, &length, &size, &type, name);
+		auto attrib = new ShaderValue();
+		attrib->location = gl->glGetAttribLocation(programId, name);
+		attrib->name = std::string(name);
+		attrib->type = type;
+		shader->attribs.insert(QString(name), attrib);
+	}
+
+	//uniforms and samplers
+	gl->glGetProgramiv(programId, GL_ACTIVE_UNIFORMS, &count);
+
+	for (int i = 0; i<count; i++)
+	{
+		gl->glGetActiveUniform(programId, i, bufSize, &length, &size, &type, name);
+
+		if (type == GL_SAMPLER_1D || type == GL_SAMPLER_2D || type == GL_SAMPLER_3D || type == GL_SAMPLER_CUBE)
+		{
+			auto sampler = new ShaderSampler();
+			sampler->location = gl->glGetUniformLocation(programId, name);
+			sampler->name = std::string(name);
+			shader->samplers.insert(QString(name), sampler);
+		}
+		else
+		{
+			auto uniform = new ShaderValue();
+			uniform->location = gl->glGetUniformLocation(programId, name);
+			uniform->name = std::string(name);
+			uniform->type = type;
+			shader->uniforms.insert(QString(name), uniform);
+		}
+
+	}
+
+	shader->isDirty = false;
 }
 
 void GraphicsDevice::setTexture(int target, Texture2DPtr texture)
@@ -169,7 +361,36 @@ void GraphicsDevice::clearTexture(int target)
 void GraphicsDevice::setVertexBuffer(VertexBufferPtr vertexBuffer)
 {
     vertexBuffers.clear();
+    if (vertexBuffer->isDirty())
+        vertexBuffer->upload(gl);
     vertexBuffers.append(vertexBuffer);
+}
+
+void GraphicsDevice::setVertexBuffers(QList<VertexBufferPtr> vertexBuffers)
+{
+    this->vertexBuffers.clear();
+    for(auto& vertexBuffer : vertexBuffers)
+    {
+        if (vertexBuffer->isDirty())
+            vertexBuffer->upload(gl);
+        this->vertexBuffers.append(vertexBuffer);
+    }
+}
+
+void GraphicsDevice::setIndexBuffer(IndexBufferPtr indexBuffer)
+{
+    if (!!indexBuffer) {
+        this->indexBuffer = indexBuffer;
+        if (indexBuffer->isDirty())
+            indexBuffer->upload(gl);
+    }
+    else
+        this->indexBuffer.clear();
+}
+
+void GraphicsDevice::clearIndexBuffer()
+{
+    this->indexBuffer.clear();
 }
 
 void GraphicsDevice::setBlendState(const BlendState &blendState, bool force)
@@ -275,10 +496,34 @@ void GraphicsDevice::drawPrimitives(GLenum primitiveType, int start, int count)
     gl->glBindVertexArray(defautVAO);
     for(auto buffer : vertexBuffers) {
         gl->glBindBuffer(GL_ARRAY_BUFFER, buffer->bufferId);
-        buffer->vertexLayout.bind();
+        buffer->vertexLayout.bind(gl);
     }
 
     gl->glDrawArrays(primitiveType, start, count);
+
+    for(auto buffer : vertexBuffers) {
+        buffer->vertexLayout.unbind(gl);
+    }
+    gl->glBindVertexArray(0);
+}
+
+// https://stackoverflow.com/a/30106751
+#define BUFFER_OFFSET(i) ((char*)nullptr+(i))
+void GraphicsDevice::drawIndexedPrimitives(GLenum primitiveType, int start, int count)
+{
+    gl->glBindVertexArray(defautVAO);
+    for(auto buffer : vertexBuffers) {
+        gl->glBindBuffer(GL_ARRAY_BUFFER, buffer->bufferId);
+        buffer->vertexLayout.bind(gl);
+    }
+
+    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer->bufferId);
+    gl->glDrawElements(primitiveType,count,GL_UNSIGNED_INT,BUFFER_OFFSET(start));
+    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
+
+    for(auto buffer : vertexBuffers) {
+        buffer->vertexLayout.unbind(gl);
+    }
     gl->glBindVertexArray(0);
 }
 

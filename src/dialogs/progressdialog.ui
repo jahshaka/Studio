@@ -7,19 +7,28 @@
     <x>0</x>
     <y>0</y>
     <width>396</width>
-    <height>64</height>
+    <height>77</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Jahshaka</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">#ProgressDialog {
-	background: #1e1e1e;
+   <string notr="true">QLabel {
+	color: #EEEEEE;
+}
+
+QProgressBar {
+	color: #EEE;
+}
+
+#ProgressDialog {
+	background: #222;
+	border: 1px solid black;
 }
 
 #progressBar {
-	color: #DEDEDE;
+	/*color: #DEDEDE;*/
 }</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">

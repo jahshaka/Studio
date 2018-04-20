@@ -15,12 +15,16 @@ For more information see the LICENSE file
 #include <QSplashScreen>
 #include <QSurfaceFormat>
 #include <QFontDatabase>
+#include <QtConcurrent>
 
 #include "mainwindow.h"
 #include "dialogs/infodialog.h"
 #include "core/settingsmanager.h"
 #include "globals.h"
 #include "constants.h"
+#include "misc/updatechecker.h"
+#include "misc/upgrader.h"
+#include "dialogs/softwareupdatedialog.h"
 #ifdef USE_BREAKPAD
 #include "breakpad/breakpad.h"
 #endif
@@ -35,8 +39,16 @@ extern "C"
 }
 #endif
 
+inline void GetGitCommitHash()
+{
+#ifndef GIT_COMMIT_HASH && GIT_COMMIT_DATE
+#define GIT_COMMIT_HASH "0000" // means uninitialized
+#endif
+}
+
 int main(int argc, char *argv[])
 {
+    GetGitCommitHash();
     // Fixes issue on osx where the SceneView widget shows up blank
     // Causes freezing on linux for some reason (Nick)
 #ifdef Q_OS_MAC
@@ -57,6 +69,15 @@ int main(int argc, char *argv[])
 #ifdef USE_BREAKPAD
 	initializeBreakpad();
 #endif
+	
+	/*
+	QtConcurrent::run([&updateChecker]() {
+		updateChecker.checkForUpdate();
+	});
+	*/
+
+	Upgrader upgrader;
+	upgrader.checkIfDeprecatedVersion();
 
     app.setWindowIcon(QIcon(":/images/icon.ico"));
     app.setApplicationName("Jahshaka");
@@ -70,7 +91,7 @@ int main(int argc, char *argv[])
     if (!assetDir.exists()) assetDir.mkpath(assetPath);
 
 // use nicer font on platforms with poor defaults, Mac has really nice font rendering (iKlsR)
-#if defined(Q_OS_WIN) || defined(Q_OS_UNIX)
+#if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
     int id = QFontDatabase::addApplicationFont(":/fonts/DroidSans.ttf");
     if (id != -1) {
         QString family = QFontDatabase::applicationFontFamilies(id).at(0);
@@ -80,31 +101,16 @@ int main(int argc, char *argv[])
     }
 #endif
 
-    // TODO - try to get rid of this in the future https://gist.github.com/skyrpex/5547015 (iKlsR)
-    app.setStyle(QStyleFactory::create("fusion"));
-    QPalette palette;
-    palette.setColor(QPalette::Window, QColor(48, 48, 48));
-    palette.setColor(QPalette::WindowText, Qt::white);
-    palette.setColor(QPalette::Base, QColor(64, 64, 64));
-    palette.setColor(QPalette::AlternateBase, QColor(53,53,53));
-    palette.setColor(QPalette::ToolTipBase, Qt::white);
-    palette.setColor(QPalette::ToolTipText, Qt::white);
-    palette.setColor(QPalette::Text, Qt::white);
-    palette.setColor(QPalette::Button, QColor(53,53,53));
-    palette.setColor(QPalette::ButtonText, Qt::white);
-    palette.setColor(QPalette::BrightText, Qt::red);
-    palette.setColor(QPalette::Highlight, QColor(30,144,255));
-    palette.setColor(QPalette::HighlightedText, Qt::black);
-
-    palette.setColor(QPalette::Inactive, QPalette::Link, QColor(135, 135, 135));
-    palette.setColor(QPalette::Inactive, QPalette::Text, QColor(135, 135, 135));
-    palette.setColor(QPalette::Disabled, QPalette::Text, QColor(135, 135, 135));
-    palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(135, 135, 135));
-    app.setPalette(palette);
-
     QSplashScreen splash;
+    splash.setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnBottomHint);
     auto pixmap = QPixmap(":/images/splashv3.png");
-    splash.setPixmap(pixmap.scaled(815, 480, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    splash.setPixmap(pixmap.scaled(900, 506, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+#ifdef QT_DEBUG
+#ifdef GIT_COMMIT_HASH != "0000"
+    splash.showMessage(QString("Revision - %1 %2").arg(GIT_COMMIT_HASH).arg(GIT_COMMIT_DATE),
+                       Qt::AlignBottom | Qt::AlignLeft, QColor(255, 255, 255));
+#endif // GIT_COMMIT_HASH
+#endif // QT_DEBUG
     splash.show();
 
     Globals::appWorkingDir = QApplication::applicationDirPath();
@@ -126,6 +132,21 @@ int main(int argc, char *argv[])
     window.goToDesktop();
 
     splash.finish(&window);
+
+	UpdateChecker updateChecker;
+	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded,
+        [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)
+	{
+		// show update dialog
+		auto dialog = new SoftwareUpdateDialog();
+		dialog->setVersionNotes(versionNotes);
+		dialog->setDownloadUrl(downloadLink);
+		dialog->show();
+	});
+
+    if (SettingsManager::getDefaultManager()->getValue("automatic_updates", true).toBool()) {
+		updateChecker.checkForUpdate();
+    }
 
     return app.exec();
 }

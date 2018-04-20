@@ -23,7 +23,9 @@ For more information see the LICENSE file
 #include "scenereader.h"
 #include "assetmanager.h"
 
+#include "../globals.h"
 #include "../constants.h"
+#include "../core/database/database.h"
 
 #include "../editor/editordata.h"
 #include "../materials/jahdefaultmaterial.h"
@@ -56,8 +58,6 @@ For more information see the LICENSE file
 #include "../irisgl/src/postprocesses/radialblurpostprocess.h"
 #include "../irisgl/src/postprocesses/ssaopostprocess.h"
 #include "../irisgl/src/postprocesses/fxaapostprocess.h"
-
-#include "../constants.h"
 
 iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
@@ -374,27 +374,39 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 {
     auto meshNode = iris::MeshNode::create();
 
-    auto source = nodeObj["mesh"].toString("");
-    auto meshIndex = nodeObj["meshIndex"].toInt(0);
-    auto pickable = nodeObj["pickable"].toBool(true);
+	auto asset = handle->fetchAsset(nodeObj["mesh"].toString(""));
+
+    QString source = nodeObj["mesh"].toString("");
+	// Keep a special reference to embedded asset primitives for now
+	if (!source.startsWith(":")) {
+		source = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
+	}
+
+    int meshIndex = nodeObj["meshIndex"].toInt(0);
+    QString meshGUID = nodeObj["guid"].toString();
+    bool pickable = nodeObj["pickable"].toBool(true);
 
     if (!source.isEmpty()) {
-        auto mesh = getMesh(getAbsolutePath(source), meshIndex);
+        auto mesh = getMesh(source, meshIndex);
+
         if (source.startsWith(":")) {
             meshNode->setMesh(source);
+			meshNode->meshPath = source;
         } else {
             meshNode->setMesh(mesh);
+			meshNode->meshPath = nodeObj["mesh"].toString();
         }
+
+        meshNode->setGUID(meshGUID);
         meshNode->setPickable(pickable);
 		meshNode->setVisible(nodeObj["visible"].toBool(true));
-        meshNode->meshPath = source;
         meshNode->meshIndex = meshIndex;
     }
 
     auto material = readMaterial(nodeObj);
     meshNode->setMaterial(material);
 
-    auto faceCullingMode = nodeObj["faceCullingMode"].toString("back");
+    QString faceCullingMode = nodeObj["faceCullingMode"].toString("back");
 
     if (faceCullingMode == "back") {
         meshNode->setFaceCullingMode(iris::FaceCullingMode::Back);
@@ -407,6 +419,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     }
 
     meshNode->applyDefaultPose();
+	//meshNode->setGUID(handle->fetchMeshObject(asset.guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh)));
 
     return meshNode;
 }
@@ -531,30 +544,68 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 
     auto mat = nodeObj["material"].toObject();
     auto m = iris::CustomMaterial::create();
-    auto shaderName = Constants::SHADER_DEFS + mat["name"].toString() + ".shader";
-    auto shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(shaderName));
-    m->setName(mat["name"].toString());
+    auto shaderGuid = mat["guid"].toString();
 
+    m->setName(mat["name"].toString());
+    m->setGuid(shaderGuid);
+
+    QFileInfo shaderFile;
+
+    // Note that this runs after asset accumulation, hence why we can get custom shaders used
+    QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+    while (it.hasNext()) {
+        it.next();
+        if (it.key() == shaderGuid) {
+            shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
+            break;
+        }
+    }
 
     if (shaderFile.exists()) {
-		m->generate(shaderFile.absoluteFilePath());
-    } else {
+        m->generate(shaderFile.absoluteFilePath());
+    }
+    else {
         for (auto asset : AssetManager::getAssets()) {
-            if (asset->type == AssetType::Shader) {
-                if (asset->fileName == mat["name"].toString() + ".shader") {
-                    //qDebug() << asset->path;
-                    m->generate(asset->path, true);
+            if (asset->type == ModelTypes::Shader) {
+                if (asset->assetGuid == m->getGuid()) {
+                    auto def = asset->getValue().toJsonObject();
+                    auto vertexShader = def["vertex_shader"].toString();
+                    auto fragmentShader = def["fragment_shader"].toString();
+                    for (auto asset : AssetManager::getAssets()) {
+                        if (asset->type == ModelTypes::File) {
+                            if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+                            if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+                        }
+                    }
+                    def["vertex_shader"] = vertexShader;
+                    def["fragment_shader"] = fragmentShader;
+                    m->generate(def);
                 }
             }
         }
     }
 
+  //  if (shaderFile.exists()) {
+		//m->generate(shaderFile.absoluteFilePath());
+  //  } else {
+  //      for (auto asset : AssetManager::getAssets()) {
+  //          if (asset->type == ModelTypes::Shader) {
+  //              if (asset->fileName == mat["name"].toString() + ".shader") {
+  //                  m->generate(asset->path, true);
+  //              }
+  //          }
+  //      }
+  //  }
+
     for (auto prop : m->properties) {
         if (mat.contains(prop->name)) {
             if (prop->type == iris::PropertyType::Texture) {
-                auto textureStr = !mat[prop->name].toString().isEmpty()
-                                  ? getAbsolutePath(mat[prop->name].toString())
-                                  : QString();
+                //auto textureStr = !mat[prop->name].toString().isEmpty()
+                //                  ? getAbsolutePath(mat[prop->name].toString())
+                //                  : QString();
+				auto textureStr = !mat[prop->name].toString().isEmpty()
+					? QDir(Globals::project->getProjectFolder()).filePath(handle->fetchAsset(mat[prop->name].toString()).name)
+					: QString();
 
                 m->setValue(prop->name, textureStr);
             } else {
@@ -575,6 +626,8 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
                                                                           filePath,
                                                                           meshList,
                                                                           animationss);
+
+		//iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(filePath, meshList, animationss);
 
         meshes.insert(filePath,meshList);
         assimpScenes.insert(filePath);

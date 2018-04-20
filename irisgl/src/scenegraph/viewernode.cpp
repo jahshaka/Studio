@@ -13,7 +13,6 @@ For more information see the LICENSE file
 #include "../scenegraph/scene.h"
 #include "../scenegraph/scenenode.h"
 #include "../graphics/mesh.h"
-#include "../materials/viewermaterial.h"
 #include "../materials/defaultmaterial.h"
 #include "../graphics/texture2d.h"
 #include "../graphics/renderitem.h"
@@ -27,16 +26,16 @@ namespace iris
 ViewerNode::ViewerNode()
 {
     this->sceneNodeType = SceneNodeType::Viewer;
-    this->headModel = Mesh::loadMesh(":/assets/models/head2.obj");
-    this->material = ViewerMaterial::create();
-    this->material->setTexture(Texture2D::load(":/assets/models/head.png"));
+    //this->headModel = Mesh::loadMesh(":/assets/models/head2.obj");
+    //this->material = ViewerMaterial::create();
+    //this->material->setTexture(Texture2D::load(":/assets/models/head.png"));
 
     this->setViewScale(1.0f);
 
     renderItem = new RenderItem();
     renderItem->type = RenderItemType::Mesh;
-    renderItem->material = this->material;
-    renderItem->mesh = headModel;
+    //renderItem->material = this->material;
+    //renderItem->mesh = headModel;
 
     auto cube = Mesh::loadMesh(":/assets/models/cube.obj");
 
@@ -49,6 +48,8 @@ ViewerNode::ViewerNode()
     rightHandRenderItem->type = RenderItemType::Mesh;
     rightHandRenderItem->material = DefaultMaterial::create();
     rightHandRenderItem->mesh = cube;
+
+    exportable = false;
 }
 
 ViewerNode::~ViewerNode()
@@ -72,8 +73,8 @@ void ViewerNode::submitRenderItems()
     if( !visible)
         return;
 
-    renderItem->worldMatrix = this->globalTransform;
-    scene->geometryRenderList->add(renderItem);
+    //renderItem->worldMatrix = this->globalTransform;
+    //scene->geometryRenderList->add(renderItem);
 
     /*
     auto device = VrManager::getDefaultDevice();

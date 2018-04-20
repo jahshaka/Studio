@@ -17,7 +17,6 @@ For more information see the LICENSE file
 #include "../scenegraph/lightnode.h"
 #include "../scenegraph/viewernode.h"
 #include "../scenegraph/particlesystemnode.h"
-#include "../materials/viewermaterial.h"
 #include "mesh.h"
 #include "skeleton.h"
 #include "graphicshelper.h"
@@ -71,7 +70,7 @@ ForwardRenderer::ForwardRenderer(bool supportsVr)
 
     renderData = new RenderData();
 
-    billboard = new Billboard(gl);
+    billboard = new Billboard();
     fsQuad = new FullScreenQuad();
     createLineShader();
     createShadowShader();
@@ -94,7 +93,7 @@ ForwardRenderer::ForwardRenderer(bool supportsVr)
     renderTarget->addTexture(sceneRenderTexture);
     renderTarget->setDepthTexture(depthRenderTexture);
 
-    postMan = PostProcessManager::create();
+    postMan = PostProcessManager::create(graphics);
     postContext = new PostProcessContext();
 
     perfTimer = new PerformanceTimer();
@@ -143,9 +142,9 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
     auto ctx = QOpenGLContext::currentContext();
 
     // reset states
-    graphics->setBlendState(BlendState::Opaque);
-    graphics->setDepthState(DepthState::Default);
-    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+    graphics->setBlendState(BlendState::Opaque, true);
+    graphics->setDepthState(DepthState::Default, true);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise, true);
 
     // STEP 1: RENDER SCENE
     renderData->scene = scene;
@@ -175,14 +174,13 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
     finalRenderTexture->resize(rt->getWidth(), rt->getHeight());
 
     renderTarget->bind();
-    gl->glViewport(0, 0, rt->getWidth(), rt->getHeight());
-    gl->glClearColor(scene->clearColor.redF(), scene->clearColor.greenF(), scene->clearColor.blueF(), scene->clearColor.alphaF());
-    gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	graphics->setViewport(QRect(0, 0, rt->getWidth(), rt->getHeight()));
+	graphics->clear(QColor(0, 0, 0, 0));
 
     // reset states
-    graphics->setBlendState(BlendState::Opaque);
-    graphics->setDepthState(DepthState::Default);
-    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+    graphics->setBlendState(BlendState::Opaque, true);
+    graphics->setDepthState(DepthState::Default, true);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise, true);
 
     renderNode(renderData, scene);
 
@@ -190,6 +188,11 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
         renderBillboardIcons(renderData);
 
     renderTarget->unbind();
+
+	// reset states for post processing
+	graphics->setBlendState(BlendState::Opaque, true);
+	graphics->setDepthState(DepthState::Default, true);
+	graphics->setRasterizerState(RasterizerState::CullCounterClockwise, true);
 
     if (applyPostProcesses) {
         postContext->sceneTexture = sceneRenderTexture;
@@ -206,16 +209,17 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     gl->glActiveTexture(GL_TEXTURE0);
 
-    graphics->setBlendState(BlendState::Opaque);
-    graphics->setDepthState(DepthState::Default);
-    graphics->setRasterizerState(RasterizerState::CullNone);
+    graphics->setBlendState(BlendState::Opaque, true);
+    graphics->setDepthState(DepthState::Default, true);
+    graphics->setRasterizerState(RasterizerState::CullNone, true);
 
+	//applyPostProcesses = false;
     if (applyPostProcesses)
         postContext->finalTexture->bind();
     else
         sceneRenderTexture->bind();
         
-    fsQuad->draw();
+    fsQuad->draw(graphics);
     gl->glBindTexture(GL_TEXTURE_2D, 0);
     rt->unbind();
 
@@ -308,7 +312,7 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
 
     gl->glActiveTexture(GL_TEXTURE0);
     postContext->finalTexture->bind();
-    fsQuad->draw();
+    fsQuad->draw(graphics);
     gl->glBindTexture(GL_TEXTURE_2D, 0);
 
     graphics->clear(GL_DEPTH_BUFFER_BIT);
@@ -382,7 +386,8 @@ void ForwardRenderer::renderDirectionalShadow(LightNodePtr light, ScenePtr node)
 
 
 
-            item->mesh->draw(gl, shader);
+            //item->mesh->draw(gl, shader);
+            item->mesh->draw(graphics);
         }
     }
 	graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
@@ -432,7 +437,8 @@ void ForwardRenderer::renderSpotlightShadow(LightNodePtr light, ScenePtr node)
                 shader = shadowShader;
             }
 
-            item->mesh->draw(gl, shader);
+            //item->mesh->draw(gl, shader);
+            item->mesh->draw(graphics);
         }
     }
 
@@ -510,7 +516,7 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
 
    vrDevice->bindMirrorTextureId();
    //vrDevice->bindEyeTexture(0);
-   fsQuad->draw(gl);
+   fsQuad->draw(graphics);
    gl->glBindTexture(GL_TEXTURE_2D,0);
 
    scene->geometryRenderList->clear();
@@ -568,41 +574,43 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 
             if (!!item->material) {
                 mat = item->material;
-                program = mat->program;
+                //program = mat->getProgram();
 
-                mat->begin(gl, scene);
+                mat->begin(graphics, scene);
+				graphics->setShader(mat->shader);
             } else {
                 program = item->shaderProgram;
                 program->bind();
             }
 
             // send transform and light data
-            program->setUniformValue("u_worldMatrix",   item->worldMatrix);
-            program->setUniformValue("u_viewMatrix",    renderData->viewMatrix);
-            program->setUniformValue("u_projMatrix",    renderData->projMatrix);
+			graphics->setShaderUniform("u_worldMatrix",   item->worldMatrix);
+			graphics->setShaderUniform("u_viewMatrix",    renderData->viewMatrix);
+			graphics->setShaderUniform("u_projMatrix",    renderData->projMatrix);
 
-			program->setUniformValue("u_time", scene->getRunningTime());
+			graphics->setShaderUniform("u_time", scene->getRunningTime());
 
             if  (item->mesh->hasSkeleton()) {
-                auto boneTransforms = item->mesh->getSkeleton()->boneTransforms;
-                program->setUniformValueArray("u_bones", boneTransforms.data(), boneTransforms.size());
-            }
+                auto& boneTransforms = item->mesh->getSkeleton()->boneTransforms;
+                graphics->setShaderUniformArray("u_bones", boneTransforms.data(), boneTransforms.size());
+				
+			}
 
-            program->setUniformValue("u_normalMatrix",  item->worldMatrix.normalMatrix());
+			graphics->setShaderUniform("u_normalMatrix",  item->worldMatrix.normalMatrix());
 
-            program->setUniformValue("u_eyePos",        renderData->eyePos);
-            program->setUniformValue("u_sceneAmbient",  QVector3D(scene->ambientColor.redF(),
+			graphics->setShaderUniform("u_eyePos",        renderData->eyePos);
+			graphics->setShaderUniform("u_sceneAmbient",  QVector3D(scene->ambientColor.redF(),
                                                                   scene->ambientColor.greenF(),
                                                                   scene->ambientColor.blueF()));
 
             if (item->renderStates.fogEnabled && scene->fogEnabled ) {
-                program->setUniformValue("u_fogData.color", renderData->fogColor);
-                program->setUniformValue("u_fogData.start", renderData->fogStart);
-                program->setUniformValue("u_fogData.end",   renderData->fogEnd);
+				graphics->setShaderUniform("u_fogData.color", renderData->fogColor);
+				graphics->setShaderUniform("u_fogData.start", renderData->fogStart);
+				graphics->setShaderUniform("u_fogData.end",   renderData->fogEnd);
 
-                program->setUniformValue("u_fogData.enabled", true);
+				graphics->setShaderUniform("u_fogData.enabled", true);
             } else {
-                program->setUniformValue("u_fogData.enabled", false);
+				graphics->setShaderUniform("u_fogData.enabled", false);
             }
             /*
             if (item->renderStates.receiveShadows && scene->shadowEnabled) {
@@ -618,7 +626,7 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 
             program->setUniformValue("u_lightSpaceMatrix",  lightSpaceMatrix);
             */
-            program->setUniformValue("u_lightCount",        lightCount);
+			graphics->setShaderUniform("u_lightCount",        lightCount);
             int shadowIndex = 8;
             // only materials get lights passed to it
             if ( item->renderStates.receiveLighting ) {
@@ -630,23 +638,23 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
                     if(!light->isVisible())
                     {
                         //quick hack for now
-                        mat->setUniformValue(lightPrefix+"color", QColor(0,0,0));
+						graphics->setShaderUniform(lightPrefix+"color", QColor(0,0,0));
                         continue;
                     }
 
-                    mat->setUniformValue(lightPrefix+"type", (int)light->lightType);
-                    mat->setUniformValue(lightPrefix+"position", light->globalTransform.column(3).toVector3D());
+					graphics->setShaderUniform(lightPrefix+"type", (int)light->lightType);
+					graphics->setShaderUniform(lightPrefix+"position", light->globalTransform.column(3).toVector3D());
                     //mat->setUniformValue(lightPrefix+"direction", light->getDirection());
-                    mat->setUniformValue(lightPrefix+"distance", light->distance);
-                    mat->setUniformValue(lightPrefix+"direction", light->getLightDir());
-                    mat->setUniformValue(lightPrefix+"cutOffAngle", light->spotCutOff);
-                    mat->setUniformValue(lightPrefix+"cutOffSoftness", light->spotCutOffSoftness);
-                    mat->setUniformValue(lightPrefix+"intensity", light->intensity);
-                    mat->setUniformValue(lightPrefix+"color", light->color);
+					graphics->setShaderUniform(lightPrefix+"distance", light->distance);
+					graphics->setShaderUniform(lightPrefix+"direction", light->getLightDir());
+					graphics->setShaderUniform(lightPrefix+"cutOffAngle", light->spotCutOff);
+					graphics->setShaderUniform(lightPrefix+"cutOffSoftness", light->spotCutOffSoftness);
+					graphics->setShaderUniform(lightPrefix+"intensity", light->intensity);
+					graphics->setShaderUniform(lightPrefix+"color", light->color);
 
-                    mat->setUniformValue(lightPrefix+"constantAtten", 1.0f);
-                    mat->setUniformValue(lightPrefix+"linearAtten", 0.0f);
-                    mat->setUniformValue(lightPrefix+"quadtraticAtten", 1.0f);
+					graphics->setShaderUniform(lightPrefix+"constantAtten", 1.0f);
+					graphics->setShaderUniform(lightPrefix+"linearAtten", 0.0f);
+					graphics->setShaderUniform(lightPrefix+"quadtraticAtten", 1.0f);
 
                     // shadow data
 //                    mat->setUniformValue(lightPrefix+"shadowEnabled",
@@ -654,16 +662,16 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 //                                         scene->shadowEnabled &&
 //                                         light->lightType != iris::LightType::Point);
 					if (!scene->shadowEnabled) {
-						mat->setUniformValue(lightPrefix + "shadowType", (int)iris::ShadowMapType::None);
+						graphics->setShaderUniform(lightPrefix + "shadowType", (int)iris::ShadowMapType::None);
 					}
 					else {
-						mat->setUniformValue(lightPrefix + "shadowMap", shadowIndex);
+						graphics->setShaderUniform(lightPrefix + "shadowMap", shadowIndex);
 						//mat->setUniformValue(QString("shadowMaps[%0].").arg(i), 8);
-						mat->setUniformValue(lightPrefix + "shadowMatrix", light->shadowMap->shadowMatrix);
+						graphics->setShaderUniform(lightPrefix + "shadowMatrix", light->shadowMap->shadowMatrix);
 						if (light->lightType == iris::LightType::Point)
-							mat->setUniformValue(lightPrefix + "shadowType", (int)iris::ShadowMapType::None);
+							graphics->setShaderUniform(lightPrefix + "shadowType", (int)iris::ShadowMapType::None);
 						else
-							mat->setUniformValue(lightPrefix + "shadowType", (int)light->shadowMap->shadowType);
+							graphics->setShaderUniform(lightPrefix + "shadowType", (int)light->shadowMap->shadowType);
 
 
 						graphics->setTexture(shadowIndex, light->shadowMap->shadowTexture);
@@ -681,16 +689,16 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             graphics->setDepthState(item->renderStates.depthState);
             graphics->setBlendState(item->renderStates.blendState);
 
-            item->mesh->draw(gl, program);
+            //item->mesh->draw(gl, program);
+			item->mesh->draw(graphics);
 
             if (!!mat) {
-                mat->end(gl,scene);
+                mat->end(graphics, scene);
             }
         }
         else if(item->type == iris::RenderItemType::ParticleSystem) {
-
             auto ps = item->sceneNode.staticCast<ParticleSystemNode>();
-            ps->renderParticles(renderData, particleShader);
+            ps->renderParticles(graphics, renderData, particleShader);
         }
     }
 
@@ -702,17 +710,27 @@ void ForwardRenderer::renderSky(RenderData* renderData)
 
     gl->glDepthMask(false);
 
-    scene->skyMaterial->begin(gl,scene);
+    scene->skyMaterial->begin(graphics, scene);
 
+	/*
     auto program = scene->skyMaterial->program;
     program->setUniformValue("u_viewMatrix",renderData->viewMatrix);
     program->setUniformValue("u_projMatrix",renderData->projMatrix);
     QMatrix4x4 worldMatrix;
     worldMatrix.setToIdentity();
     program->setUniformValue("u_worldMatrix",worldMatrix);
+	*/
 
-    scene->skyMesh->draw(gl,program);
-    scene->skyMaterial->end(gl,scene);
+	graphics->setShader(scene->skyMaterial->shader);
+	graphics->setShaderUniform("u_viewMatrix", renderData->viewMatrix);
+	graphics->setShaderUniform("u_projMatrix", renderData->projMatrix);
+	QMatrix4x4 worldMatrix;
+	worldMatrix.setToIdentity();
+	graphics->setShaderUniform("u_worldMatrix", worldMatrix);
+
+    //scene->skyMesh->draw(gl,program);
+    scene->skyMesh->draw(graphics);
+    scene->skyMaterial->end(graphics, scene);
 
     gl->glDepthMask(true);
 }
@@ -740,7 +758,7 @@ void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
         if(!!icon)
         {
             icon->texture->bind();
-            billboard->draw(gl);
+            billboard->draw(graphics);
         }
         else
         {
@@ -828,7 +846,8 @@ void ForwardRenderer::renderOutlineNode(RenderData *renderData, SceneNodePtr nod
                 shader->setUniformValueArray("u_bones",          boneTransforms.data(), boneTransforms.size());
             }
 
-            meshNode->mesh->draw(gl, shader);
+            //meshNode->mesh->draw(gl, shader);
+            meshNode->mesh->draw(graphics);
         }
     }
 

@@ -8,11 +8,18 @@
         <file>models/trans_arrow.obj</file>
         <file>models/cube.obj</file>
         <file>content/primitives/cube.obj</file>
+        <file>content/primitives/cone.obj</file>
         <file>content/primitives/cylinder.obj</file>
         <file>content/primitives/plane.obj</file>
         <file>content/primitives/sphere.obj</file>
         <file>content/primitives/torus.obj</file>
         <file>content/primitives/arrow.obj</file>
+        <file>content/primitives/capsule.obj</file>
+        <file>content/primitives/gear.obj</file>
+        <file>content/primitives/steps.obj</file>
+        <file>content/primitives/pyramid.obj</file>
+        <file>content/primitives/teapot.obj</file>
+        <file>content/primitives/sponge.obj</file>
         <file>models/ground.obj</file>
     </qresource>
 </RCC>

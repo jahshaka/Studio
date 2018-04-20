@@ -10,10 +10,13 @@ project(Jahshaka)
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 find_package(OpenGL REQUIRED) # is this needed?
-find_package(Qt5 REQUIRED COMPONENTS Concurrent Widgets Sql Svg)
+find_package(Qt5 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg)
 
 include(UseModernCpp)
 include(BuildType)
+
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
 
 # set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
@@ -51,10 +54,10 @@ set(SRCS
     src/widgets/transformeditor.cpp 
     src/widgets/scenehierarchywidget.cpp 
     src/editor/cameracontrollerbase.cpp 
-		src/editor/gizmo.cpp 
-		src/editor/translationgizmo.cpp 
-		src/editor/scalegizmo.cpp 
-		src/editor/rotationgizmo.cpp 
+    src/editor/gizmo.cpp 
+    src/editor/translationgizmo.cpp 
+    src/editor/scalegizmo.cpp 
+    src/editor/rotationgizmo.cpp 
     src/widgets/skypresets.cpp 
     src/editor/orbitalcameracontroller.cpp 
     src/widgets/scenenodepropertieswidget.cpp 
@@ -81,7 +84,8 @@ set(SRCS
     src/widgets/texturepickerwidget.cpp 
     src/io/materialreader.cpp 
     src/widgets/filepickerwidget.cpp 
-    src/widgets/propertywidgets/meshpropertywidget.cpp 
+    src/widgets/propertywidgets/meshpropertywidget.cpp
+    src/widgets/propertywidgets/shaderpropertywidget.cpp 
     src/widgets/propertywidget.cpp 
     src/widgets/propertywidgets/postprocesspropertywidget.cpp 
     src/widgets/postprocesseswidget.cpp 
@@ -117,6 +121,14 @@ set(SRCS
     src/widgets/assetviewgrid.cpp
     src/widgets/assetgriditem.cpp
 	src/editor/outlinerenderer.cpp
+	src/editor/viewermaterial.cpp
+	src/editor/animationpath.cpp
+    src/constants.cpp
+	src/misc/updatechecker.cpp
+	src/dialogs/softwareupdatedialog.cpp
+    src/io/assethelper.cpp
+    src/misc/upgrader.cpp
+    src/dialogs/toast.cpp
 )
 
 set(HEADERS
@@ -147,7 +159,6 @@ set(HEADERS
     src/editor/editorcameracontroller.h 
     src/globals.h 
     src/widgets/sceneviewwidget.h 
-    src/globals.h 
     src/widgets/materialsets.h 
     src/widgets/modelpresets.h 
     src/widgets/accordianbladewidget.h 
@@ -192,6 +203,7 @@ set(HEADERS
     src/io/materialreader.hpp 
     src/widgets/filepickerwidget.h 
     src/widgets/propertywidgets/meshpropertywidget.h 
+    src/widgets/propertywidgets/shaderpropertywidget.h 
     src/widgets/propertywidget.h 
     src/widgets/basewidget.h 
     src/widgets/propertywidgets/postprocesspropertywidget.h 
@@ -231,7 +243,15 @@ set(HEADERS
     src/widgets/assetgriditem.h
 	src/breakpad/breakpad.h
 	src/materials/jahdefaultmaterial.h
-	src/editor/outlinerenderer.h 
+    src/editor/outlinerenderer.h 
+    src/editor/viewermaterial.h
+    src/editor/animationpath.h
+    src/misc/updatechecker.h
+    src/dialogs/softwareupdatedialog.h
+    src/editor/animationpath.h
+    src/io/assethelper.h
+    src/misc/upgrader.h
+    src/dialogs/toast.h
 )
 
 # Todo - trim these down to nothing eventually
@@ -276,9 +296,10 @@ set(FORMS
     src/widgets/projectmanager.ui 
     src/dialogs/renameprojectdialog.ui 
     src/dialogs/donate.ui
+    src/dialogs/softwareupdatedialog.ui
 )
 
-set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets IrisGL ${OPENGL_LIBRARIES})
+set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
 
@@ -313,6 +334,23 @@ else()
     set(DestDir ${CMAKE_BINARY_DIR}/bin)
 endif()
 
+# git commit hash macro
+execute_process(
+    COMMAND git log -1 --pretty=format:%h
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+add_definitions("-DGIT_COMMIT_HASH=\"${GIT_COMMIT_HASH}\"")
+
+execute_process(
+    COMMAND git log -1 --pretty=format:%cd
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT_DATE
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+add_definitions("-DGIT_COMMIT_DATE=\"${GIT_COMMIT_DATE}\"")
+
 # For convenience, put the shared files built from IrisGL along with the final binary
 # Also note MSVC build path is different from GNU in that it containts the build type
 set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -322,9 +360,12 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# https://stackoverflow.com/a/37211780/996468
+source_group(moc FILES ${HEADERS_moc} ${QRCS})
 add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp.rc)
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 							src
+							irisgl/include
 							irisgl/src
 							irisgl/src/assimp/include
                             irisgl/src/libovr/Include

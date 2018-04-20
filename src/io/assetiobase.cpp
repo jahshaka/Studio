@@ -21,6 +21,8 @@ For more information see the LICENSE file
 
 #include "assetiobase.h"
 
+QDir AssetIOBase::dir;
+
 QDir AssetIOBase::getDirFromFileName(QString filename)
 {
     QFileInfo info(filename);

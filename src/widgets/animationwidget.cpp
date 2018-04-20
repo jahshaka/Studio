@@ -118,6 +118,11 @@ AnimationWidget::~AnimationWidget()
     delete ui;
 }
 
+KeyFrameCurveWidget* AnimationWidget::getCurveWidget()
+{
+	return curveWidget;
+}
+
 void AnimationWidget::setScene(iris::ScenePtr scene)
 {
     this->scene = scene;

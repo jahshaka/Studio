@@ -331,6 +331,65 @@ MeshNode::loadAsSceneFragment(QString filePath,
     return node;
 }
 
+QSharedPointer<iris::SceneNode>
+MeshNode::loadAsSceneFragment(
+	const QString &filePath,
+	const aiScene* scene_,
+	std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc)
+{
+	const aiScene *scene = scene_;
+
+	if (scene->mNumMeshes == 0) return QSharedPointer<iris::MeshNode>(nullptr);
+	if (scene->mNumMeshes == 1) {
+		auto mesh = scene->mMeshes[0];
+		auto node = iris::MeshNode::create();
+
+		auto meshObj = MeshPtr(new Mesh(mesh));
+
+		//todo: use relative path from scene root
+		auto anims = Mesh::extractAnimations(scene, filePath);
+		for (auto animName : anims.keys()) {
+			// meshObj->addSkeletalAnimation(animName, anims[animName]);
+			auto anim = Animation::createFromSkeletalAnimation(anims[animName]);
+			node->addAnimation(anim);
+			node->setAnimation(anim);
+		}
+
+		auto skel = Mesh::extractSkeleton(mesh, scene);
+		meshObj->setSkeleton(skel);
+
+		node->setMesh(meshObj);
+		node->meshPath = filePath;
+		node->meshIndex = 0;
+
+		auto m = scene->mMaterials[mesh->mMaterialIndex];
+		auto dir = QFileInfo(filePath).absoluteDir().absolutePath();
+
+		MeshMaterialData meshMat;
+		MaterialHelper::extractMaterialData(m, dir, meshMat);
+		auto mat = createMaterialFunc(meshObj, meshMat);
+		if (!!mat) node->setMaterial(mat);
+
+		return node;
+	}
+
+	auto node = _buildScene(scene, scene->mRootNode, SceneNodePtr(), filePath, createMaterialFunc);
+	node->setAttached(false); // root of object shouldnt be attached
+
+							  // extract animations and add them one by one
+							  // todo: use relative path from scene root (Nic)
+	auto anims = Mesh::extractAnimations(scene, filePath);
+	for (auto animName : anims.keys()) {
+		auto anim = Animation::createFromSkeletalAnimation(anims[animName]);
+		node->addAnimation(anim);
+		node->setAnimation(anim);
+	}
+
+	node->applyDefaultPose();
+
+	return node;
+}
+
 SceneNodePtr MeshNode::createDuplicate()
 {
     auto node = MeshNode::create();
@@ -339,7 +398,13 @@ SceneNodePtr MeshNode::createDuplicate()
     node->setMesh(this->getMesh());
     node->meshPath = this->meshPath;
     node->meshIndex = this->meshIndex;
-    node->setMaterial(this->material);
+    node->setMaterial(this->material->duplicate());
+
+	// todo: clone instead of copying (Nick)
+	for (auto anim : animations) {
+		node->addAnimation(anim);
+	}
+	node->setAnimation(animation);
 
     return node;
 }

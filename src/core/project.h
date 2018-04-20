@@ -11,19 +11,22 @@ For more information see the LICENSE file
 
 #ifndef PROJECT_H
 #define PROJECT_H
+
 #include <QString>
+#include <QDateTime>
 
 class Project
 {
 public:
     QString folderPath;
     QString projectName;
+	QString projectFolderGuid;
     QString guid;
 
     bool _saved;
 public:
     Project();
-    void setProjectPath(const QString&);
+    void setProjectPath(const QString&, const QString &);
     void setProjectGuid(const QString&);
     bool isSaved();
 
@@ -31,7 +34,7 @@ public:
     QString getProjectFolder();
     QString getProjectGuid();
 
-    static Project* createNew();
+    static Project *createNew();
 };
 
 struct ProjectTileData {
@@ -40,48 +43,79 @@ struct ProjectTileData {
     QString     guid;
 };
 
-struct AssetTileData {
-	QString     name;
-	QString     full_filename;
-	QByteArray  thumbnail;
-	QString     guid;
-    QString     collection_name;
+struct AssetRecord
+{
+    QString     guid;
 	int			type;
+	QString     name;
 	int			collection;
-	QByteArray  properties;
-	QString		license;
+	int			timesUsed;
+    QString     projectGuid;
+    QDateTime   dateCreated;
+    QDateTime   lastUpdated;
 	QString		author;
+	QString		license;
+	QString		hash;
+	QString		version;
+	QString		parent;
+	QByteArray  thumbnail;
+	QByteArray  asset;
 	QByteArray  tags;
-	bool		used;
+	QByteArray  properties;
 };
 
-struct AssetData {
-	QByteArray thumbnail;
-	short type;
-	QString guid;
-	QString name;
-	QString extension;
+struct DependencyRecord
+{
+    int         dependerType;
+    int         dependeeType;
+    QString     projectGuid;
+    QString     depender;
+    QString     dependee;
+    QString     id;
 };
 
-struct CollectionData {
+struct FolderRecord
+{
+	QString	    guid;
+	QString	    name;
+	QString	    parent;
+    QString     version;
+    QString     projectGuid;
+    QDateTime   dateCreated;
+    QDateTime   lastUpdated;
+	int	        count;
+};
+
+struct CollectionRecord
+{
     QString     name;
+    QDateTime   dateCreated;
     int         id;
 };
 
 enum class ModelTypes {
-	Shader,
-	Material,
-	Texture,
+    Undefined,      // Used
+	Material,       // Supported
+	Texture,        // Supported
 	Video,
 	Cubemap,
-	Object,
+	Object,         // Supported
+	Mesh,           // Supported
 	SoundEffect,
 	Music,
-	Undefined
+	Shader,         // Supported
+	Variant,
+	File            // Supported
 };
 
-#define	MODEL_GUID_ROLE	0x0113
-#define	MODEL_EXT_ROLE	0x0133
-#define	MODEL_TYPE_ROLE	0x0123
+#define	MODEL_GUID_ROLE		0x0113
+#define MODEL_PARENT_ROLE	0x0128
+#define	MODEL_EXT_ROLE		0x0133
+#define	MODEL_TYPE_ROLE		0x0123
+#define	MODEL_MESH_ROLE		0x0173
+
+#define MODEL_ITEM_TYPE		0x0981
+#define MODEL_FOLDER		0x0871
+#define MODEL_ASSET			0x0421
 
 #endif // PROJECT_H

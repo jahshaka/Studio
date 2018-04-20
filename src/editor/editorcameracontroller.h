@@ -54,6 +54,8 @@ public:
 
     void onMouseMove(int x,int y) override;
     void onMouseWheel(int delta) override;
+	void onKeyPressed(Qt::Key key);
+	void onKeyReleased(Qt::Key key);
 
     void updateCameraRot();
 

@@ -14,7 +14,11 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QPushButton:!enabled, QToolButton:!enabled, QComboBox:!enabled {
+   <string notr="true">QWidget#AnimationWidget {
+	background: #202020;
+}
+
+QPushButton:!enabled, QToolButton:!enabled, QComboBox:!enabled {
 	background: #222;
 	color: #555;
 }
@@ -28,16 +32,6 @@ QPushButton {
     color: #DEDEDE;
     border: 0;
 	padding: 4px 16px;
-}
-
-QComboBox {
-	padding: 4px 10px;
-}
-
-QToolButton {
-	border: 0;
-	background-color: #4D4D4D;
-	padding: 4px 21px;
 }
 
 QPushButton:hover {
@@ -85,17 +79,90 @@ QPushButton:pressed {
 	background: transparent;
 }
 
-QWidget#controls &gt; QToolButton {
-	background-color: #4D4D4D!important;
-	border-style: inset;
-	text-decoration: none;
-	color: rgb(0, 0, 0);
-}
-
 QWidget#controls &gt; QToolButton:hover {
 	background-color: rgb(235, 235, 235);
 	border-style: inset;
 }
+
+QComboBox {
+    background: #1A1A1A;
+    border: 0;
+}
+
+QComboBox:editable {
+
+}
+
+QComboBox QAbstractItemView::item {
+    show-decoration-selected: 1;
+}
+
+QComboBox QAbstractItemView::item {
+    padding: 6px;
+}
+
+QListView::item:selected {
+    background: #404040;
+}
+
+QComboBox:!editable, QComboBox::drop-down:editable {
+     background: #1A1A1A;
+}
+
+/* QComboBox gets the on state when the popup is open */
+QComboBox:!editable:on, QComboBox::drop-down:editable:on {
+    background: #1A1A1A;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1A1A1A;
+    selection-background-color: #404040;
+    border: 0;
+    outline: none;
+}
+
+QComboBox QAbstractItemView::item {
+    border: none;
+    padding-left: 5px;
+}
+
+QComboBox QAbstractItemView::item:selected {
+    background: #404040;
+    padding-left: 5px;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 18px;
+    border-left-width: 1px;
+}
+
+QComboBox::down-arrow {
+    image: url(:/icons/down_arrow_check.png);
+	width: 18px;
+	height: 14px;
+}
+
+QComboBox::down-arrow:!enabled {
+    image: url(:/icons/down_arrow_check_disabled.png);
+    width: 18px;
+    height: 14px;
+}
+
+QTreeView, QTreeWidget { show-decoration-selected: 1; }
+QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; background: #202020; border: 0; }
+QTreeWidget::branch { background-color: #202020; }
+QTreeWidget::branch:hover { background-color: #303030; }
+QTreeWidget::branch:selected { background-color: #404040; }
+QTreeWidget::item:selected { selection-background-color: #404040;
+								background: #404040; outline: none; padding: 5px 0; }
+/* Important, this is set for when the widget loses focus to fill the left gap */
+QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }
+QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }
+QTreeWidget::item { padding: 5px 0; }
+QTreeWidget::item:hover { background: #303030; padding: 5px 0; }
+
 </string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
@@ -238,6 +305,73 @@ QWidget#controls &gt; QToolButton:hover {
              </item>
              <item>
               <widget class="QToolButton" name="insertFrame">
+               <property name="styleSheet">
+                <string notr="true">QComboBox {
+    background: #1A1A1A;
+    border: 0;
+}
+
+QComboBox:editable {
+
+}
+
+QComboBox QAbstractItemView::item {
+    show-decoration-selected: 1;
+}
+
+QComboBox QAbstractItemView::item {
+    padding: 6px;
+}
+
+QListView::item:selected {
+    background: #404040;
+}
+
+QComboBox:!editable, QComboBox::drop-down:editable {
+     background: #1A1A1A;
+}
+
+/* QComboBox gets the on state when the popup is open */
+QComboBox:!editable:on, QComboBox::drop-down:editable:on {
+    background: #1A1A1A;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1A1A1A;
+    selection-background-color: #404040;
+    border: 0;
+    outline: none;
+}
+
+QComboBox QAbstractItemView::item {
+    border: none;
+    padding-left: 5px;
+}
+
+QComboBox QAbstractItemView::item:selected {
+    background: #404040;
+    padding-left: 5px;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 18px;
+    border-left-width: 1px;
+}
+
+QComboBox::down-arrow {
+    image: url(:/icons/down_arrow_check.png);
+	width: 18px;
+	height: 14px;
+}
+
+QComboBox::down-arrow:!enabled {
+    image: url(:/icons/down_arrow_check_disabled.png);
+    width: 18px;
+    height: 14px;
+}</string>
+               </property>
                <property name="text">
                 <string>Insert Keyframe  </string>
                </property>

@@ -28,6 +28,7 @@ SkyPresets::SkyPresets(QWidget *parent) :
 
     mainWindow = nullptr;
 
+    ui->skyList->setAttribute(Qt::WA_MacShowFocusRect, false);
     ui->skyList->setViewMode(QListWidget::IconMode);
     ui->skyList->setIconSize(QSize(64, 64));
     ui->skyList->setResizeMode(QListWidget::Adjust);

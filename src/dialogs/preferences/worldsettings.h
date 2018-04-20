@@ -32,8 +32,11 @@ public:
     int outlineWidth;
     QColor outlineColor;
     QString defaultProjectDirectory;
+    QString defaultEditorPath;
     bool showFps;
 	bool autoSave;
+	bool openInPlayer;
+	bool autoUpdate;
 
 	Database *db;
 
@@ -45,8 +48,12 @@ private slots:
     void outlineColorChanged(QColor color);
     void showFpsChanged(bool show);
 	void enableAutoSave(bool state);
+	void enableOpenInPlayer(bool state);
     void changeDefaultDirectory();
     void projectDirectoryChanged(QString path);
+    void changeEditorPath();
+    void editorPathChanged(QString path);
+	void enableAutoUpdate(bool state);
 
 public slots:
 	void saveSettings();

@@ -9,6 +9,7 @@
 #include "irisgl/src/scenegraph/scene.h"
 #include "irisgl/src/graphics/vertexlayout.h"
 #include "irisgl/src/scenegraph/cameranode.h"
+#include "irisgl/src/graphics/graphicsdevice.h"
 #include "irisgl/src/graphics/graphicshelper.h"
 #include "uimanager.h"
 #include "../commands/transfrormscenenodecommand.h"
@@ -143,6 +144,8 @@ void ScaleGizmo::loadAssets()
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/scale_y.obj")));
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/scale_z.obj")));
 
+	centerMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_cube.obj"));
+
 	shader = iris::GraphicsHelper::loadShader(
 		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"),
 		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.frag"));
@@ -250,8 +253,9 @@ ScaleHandle* ScaleGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, QVecto
 	return closestHandle;
 }
 
-void ScaleGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
+void ScaleGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
 {
+	auto gl = device->getGL();
 	gl->glClear(GL_DEPTH_BUFFER_BIT);
 	shader->bind();
 
@@ -267,7 +271,7 @@ void ScaleGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector
 				shader->setUniformValue("color", QColor(255, 255, 0));
 				shader->setUniformValue("u_worldMatrix", transform);
 
-				handleMeshes[i]->draw(gl, shader);
+				handleMeshes[i]->draw(device);
 			}
 		}
 	}
@@ -284,8 +288,11 @@ void ScaleGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector
 				shader->setUniformValue("color", QColor(255, 255, 0));
 			else
 				shader->setUniformValue("color", handles[i]->getHandleColor());
-			handleMeshes[i]->draw(gl, shader);
+			handleMeshes[i]->draw(device);
 		}
+
+		shader->setUniformValue("color", QColor(255, 255, 255));
+		centerMesh->draw(device);
 	}
 
 	shader->release();

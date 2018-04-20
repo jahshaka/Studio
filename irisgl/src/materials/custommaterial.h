@@ -26,20 +26,23 @@ class CustomMaterial : public Material
 public:
     QList<Property*> properties;
 
-    void begin(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
-    void end(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
+    void begin(GraphicsDevicePtr device, ScenePtr scene) override;
+    void end(GraphicsDevicePtr device, ScenePtr scene) override;
 
     void generate(const QString&, bool project = false);
+    void generate(const QJsonObject&);
     void setTextureWithUniform(const QString&, const QString&);
     void setValue(const QString&, const QVariant&);
     void setBaseMaterialProperties(const QJsonObject&);
     void setName(const QString&);
+    void setGuid(const QString&);
     void setProperties(QList<Property*> props);
     QList<Property*> getProperties();
-    void setUniformValues(Property*);
+    void setUniformValues(GraphicsDevicePtr device, Property*);
     void purge();
 
     QString getName() const;
+    QString getGuid() const;
     QString firstTextureSlot() const;
     int getCalculatedPropHeight() const;
 
@@ -51,13 +54,23 @@ public:
 		return true;
 	}
 
-protected:
+	MaterialPtr duplicate() override;
+
+	CustomMaterialPtr createFromShader(iris::ShaderPtr shader);
+
     CustomMaterial() = default;
     QString materialName;
+    QString materialGuid;
+	QString materialPath;
 
     QJsonObject loadShaderFromDisk(const QString &);
+    void createWidgets(const QJsonArray&);
 };
 
+
+
 }
+Q_DECLARE_METATYPE(iris::CustomMaterial)
+Q_DECLARE_METATYPE(iris::CustomMaterialPtr)
 
 #endif // CUSTOMMATERIAL_H

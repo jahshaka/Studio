@@ -1,6 +1,6 @@
 /**************************************************************************
-This file is part of IrisGL
-http://www.irisgl.org
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
 Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
 
 This is free software: you may copy, redistribute
@@ -12,34 +12,31 @@ For more information see the LICENSE file
 #ifndef VIEWERMATERIAL_H
 #define VIEWERMATERIAL_H
 
-
-#include "../graphics/material.h"
-#include "../irisglfwd.h"
+#include "../../irisgl/src/graphics/material.h"
+#include "../../irisgl/src/irisglfwd.h"
 #include <QOpenGLShaderProgram>
 #include <QColor>
+#include <QSharedPointer>
 
 class QOpenGLFunctions_3_2_Core;
+class ViewerMaterial;
+typedef QSharedPointer<ViewerMaterial> ViewerMaterialPtr;
 
-namespace iris
-{
-
-class ViewerMaterial : public Material
+class ViewerMaterial : public iris::Material
 {
 public:
 
-    void setTexture(Texture2DPtr tex);
-    Texture2DPtr getTexture();
+    void setTexture(iris::Texture2DPtr tex);
+	iris::Texture2DPtr getTexture();
 
-    void begin(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
-    void end(QOpenGLFunctions_3_2_Core* gl, ScenePtr scene) override;
+    void begin(iris::GraphicsDevicePtr device, iris::ScenePtr scene) override;
+    void end(iris::GraphicsDevicePtr device, iris::ScenePtr scene) override;
 
     static ViewerMaterialPtr create();
 private:
     ViewerMaterial();
 
-    Texture2DPtr texture;
+	iris::Texture2DPtr texture;
 };
-
-}
 
 #endif // VIEWERMATERIAL_H

@@ -10,6 +10,9 @@ project(IrisGL)
 find_package(OpenGL REQUIRED) # is this needed?
 find_package(Qt5 REQUIRED COMPONENTS Core OpenGL)
 
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
+
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
@@ -47,7 +50,6 @@ set(SRCS
     src/animation/keyframeset.cpp
     src/materials/materialhelper.cpp
     src/scenegraph/viewernode.cpp
-    src/materials/viewermaterial.cpp
     src/scenegraph/particlesystemnode.cpp
     src/vr/vrmanager.cpp
     src/math/mathhelper.cpp
@@ -124,7 +126,6 @@ set (HEADERS
     src/materials/materialhelper.h
     src/core/irisutils.h
     src/scenegraph/viewernode.h
-    src/materials/viewermaterial.h
     src/graphics/particle.h
     src/graphics/particlerender.h
     src/graphics/renderitem.h
@@ -194,6 +195,8 @@ if(WIN32 AND MSVC)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS 1)
 endif()
 
+# https://stackoverflow.com/a/37211780/996468
+source_group(moc FILES ${HEADERS_moc} ${QRCS})
 add_library(IrisGL SHARED ${SRCS} ${HEADERS_moc} ${QRCS})
 
 # useful to move away from include_directories() - https://stackoverflow.com/a/38158071/996468

@@ -28,7 +28,8 @@
   <property name="styleSheet">
    <string notr="true">QListWidget {
 	padding: 4px;
-	background: #303030;
+  border: 0;
+	background: #202020;
 }</string>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">

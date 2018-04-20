@@ -40,11 +40,24 @@ protected:
     }
 
 public:
-    explicit PreferencesDialog(Database *db, SettingsManager* settings);
+    explicit PreferencesDialog(QWidget* parent, Database *db, SettingsManager* settings);
     ~PreferencesDialog();
 
     WorldSettings* worldSettings;
 	Database *db;
+
+protected:
+    void mousePressEvent(QMouseEvent *evt) {
+        oldPos = evt->globalPos();
+    }
+
+    void mouseMoveEvent(QMouseEvent *evt) {
+        const QPoint delta = evt->globalPos() - oldPos;
+        move(x() + delta.x(), y() + delta.y());
+        oldPos = evt->globalPos();
+    }
+
+    QPoint oldPos;
 
 private:
     void setupPages();

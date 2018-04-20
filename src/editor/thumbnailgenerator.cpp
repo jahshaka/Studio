@@ -1,21 +1,22 @@
 #include "thumbnailgenerator.h"
-#include <QOpenGLFunctions_3_2_Core>
-#include "../constants.h"
 
-#include "../irisgl/src/graphics/rendertarget.h"
-#include "../irisgl/src/graphics/texture2d.h"
-#include "../irisgl/src/graphics/mesh.h"
-#include "../irisgl/src/graphics/forwardrenderer.h"
-#include "../irisgl/src/scenegraph/scene.h"
-#include "../irisgl/src/scenegraph/lightnode.h"
-#include "../irisgl/src/scenegraph/cameranode.h"
-#include "../irisgl/src/scenegraph/meshnode.h"
-#include "../irisgl/src/materials/custommaterial.h"
-
+#include <QJsonDocument>
 #include <QMutex>
 #include <QMutexLocker>
-
+#include <QOpenGLFunctions_3_2_Core>
 #include <QtMath>
+
+#include "irisgl/src/graphics/forwardrenderer.h"
+#include "irisgl/src/graphics/mesh.h"
+#include "irisgl/src/graphics/rendertarget.h"
+#include "irisgl/src/graphics/texture2d.h"
+#include "irisgl/src/scenegraph/cameranode.h"
+#include "irisgl/src/scenegraph/lightnode.h"
+#include "irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/src/scenegraph/scene.h"
+
+#include "constants.h"
+#include "io/assetmanager.h"
 
 ThumbnailGenerator* ThumbnailGenerator::instance = nullptr;
 
@@ -33,45 +34,38 @@ void RenderThread::run()
     context->makeCurrent(surface);
     initScene();
 
-    renderTarget = iris::RenderTarget::create(500, 500);
-    tex = iris::Texture2D::create(500, 500);
+    renderTarget = iris::RenderTarget::create(512, 512);
+    tex = iris::Texture2D::create(512, 512);
     renderTarget->addTexture(tex);
 
     shutdown = false;
 
     while(!shutdown) {
         requestsAvailable.acquire();
-
         // the size still has to be checked because there is a case where the size
         // of the requests isnt equal to the available locks in the semaphore i.e.
         // when the thread needs to die but the semaphore is waiting for a lock in order
         // to continue execution
-        if (requests.size()>0){
-
-            //qDebug()<<"rendering";
+        if (requests.size() > 0) {
             QMutexLocker locker(&requestMutex);
             auto request = requests.takeFirst();
             locker.unlock();
 
             prepareScene(request);
-            //scene->rootNode->addChild(sceneNode);
 
             scene->update(0);
             renderer->renderSceneToRenderTarget(renderTarget, cam, true, false);
 
             cleanupScene();
-            //meshNode->
 
             // save contents to file
             auto img = renderTarget->toImage();
 
             auto result = new ThumbnailResult;
-            result->id = request.id;
-            result->type = request.type;
-            result->path = request.path;
-            result->thumbnail = img;
-			result->material = assetMaterial;
-			result->textureList = getTextureList();
+            result->id			= request.id;
+            result->type		= request.type;
+            result->path		= request.path;
+            result->thumbnail	= img;
 
             emit thumbnailComplete(result);
         }
@@ -89,7 +83,6 @@ void RenderThread::initScene()
     auto gl = context->versionFunctions<QOpenGLFunctions_3_2_Core>();
     gl->glEnable(GL_DEPTH_TEST);
     gl->glEnable(GL_CULL_FACE);
-    //gl->glDisable(GL_BLEND);
 
     renderer = iris::ForwardRenderer::create(false);
     scene = iris::Scene::create();
@@ -98,87 +91,57 @@ void RenderThread::initScene()
     // create scene and renderer
     cam = iris::CameraNode::create();
     cam->setLocalPos(QVector3D(1, 1, 5));
-    //cam->setLocalRot(QQuaternion::fromEulerAngles(-45, 45, 0));
     cam->lookAt(QVector3D(0,0.5f,0));
-
-    //scene->setSkyColor(QColor(100, 100, 100, 0));
-    //scene->setAmbientColor(QColor(255, 255, 255));
 
 	scene->setSkyColor(QColor(25, 25, 25, 0));
 	scene->setAmbientColor(QColor(190, 190, 190));
 
- //   // second node
- //   auto node = iris::MeshNode::create();
- //   node->setMesh(":/models/ground.obj");
- //   node->setLocalPos(QVector3D(0, 0, 0));
- //   node->setName("Ground");
- //   node->setPickable(false);
- //   node->setShadowCastingEnabled(false);
-
- //   auto dlight = iris::LightNode::create();
- //   dlight->setLightType(iris::LightType::Directional);
- //   scene->rootNode->addChild(dlight);
- //   dlight->setName("Key Light");
- //   dlight->setLocalRot(QQuaternion::fromEulerAngles(45, -45, 0));
- //   dlight->intensity = 1;
-	//dlight->setShadowMapType(iris::ShadowMapType::Soft);
- //   //dlight->icon = iris::Texture2D::load(":/icons/light.png");
-
- //   auto plight = iris::LightNode::create();
- //   plight->setLightType(iris::LightType::Directional);
- //   scene->rootNode->addChild(plight);
- //   plight->setName("Fill Light");
- //   dlight->setLocalRot(QQuaternion::fromEulerAngles(90, 180, 90));
- //   plight->intensity = 1;
- //   plight->color = QColor(255, 200, 200);
- //   //plight->icon = iris::Texture2D::load(":/icons/bulb.png");
-	//plight->setShadowMapType(iris::ShadowMapType::None);
-
- //   plight = iris::LightNode::create();
- //   plight->setLightType(iris::LightType::Directional);
- //   scene->rootNode->addChild(plight);
- //   plight->setName("Rim Light");
- //   dlight->setLocalRot(QQuaternion::fromEulerAngles(60, 0, 0));
- //   plight->intensity = 1;
- //   plight->color = QColor(200, 222, 200);
-	//plight->setShadowMapType(iris::ShadowMapType::None);
-
 	auto dlight = iris::LightNode::create();
+	dlight->color = QColor(255, 255, 240);
+	dlight->intensity = 0.76;
 	dlight->setLightType(iris::LightType::Directional);
 	dlight->setName("Key Light");
-	dlight->color = QColor(255, 255, 240);
-	//dlight->setLocalPos(QVector3D(2, 2, 2));
 	dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 45, 0));
-	dlight->intensity = 0.76;
 	dlight->setShadowMapType(iris::ShadowMapType::None);
-	//dlight->shadowMap->shadowType = iris::ShadowMapType::None;
 	scene->rootNode->addChild(dlight);
 
 	auto plight = iris::LightNode::create();
+	plight->color = QColor(210, 210, 255);
+	plight->intensity = 0.47;
 	plight->setLightType(iris::LightType::Point);
 	plight->setName("Rim Light");
 	plight->setLocalPos(QVector3D(0, 0, -3));
-	plight->color = QColor(210, 210, 255);
-	plight->intensity = 0.47;
 	plight->setShadowMapType(iris::ShadowMapType::None);
-	plight->shadowMap->shadowType = iris::ShadowMapType::None;
 	scene->rootNode->addChild(plight);
+
+	materialNode = iris::MeshNode::create();
+	materialNode->setMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/sphere.obj"));
+	scene->getRootNode()->addChild(materialNode);
+	materialNode->hide();
+
+	auto m = iris::CustomMaterial::create();
+	m->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+	m->setValue("diffuseColor",		QColor(255, 255, 255));
+	m->setValue("specularColor",	QColor(255, 255, 255));
+	m->setValue("ambientColor",		QColor(110, 110, 110));
+	m->setValue("emissionColor",	QColor(0, 0, 0));
+	m->setValue("shininess",		0);
+	materialNode->setMaterial(m);
 
     // fog params
     scene->fogEnabled = false;
     scene->shadowEnabled = false;
 
-    cam->update(0);// necessary!
+    cam->update(0); // necessary!
     scene->update(0);
 }
 
 void RenderThread::prepareScene(const ThumbnailRequest &request)
 {
-    if(request.type == ThumbnailRequestType::Mesh)
+    if (request.type == ThumbnailRequestType::Mesh)
     {
 		ssource = new iris::SceneSource();
         // load mesh as scene
-		int iteration = 0;
         sceneNode = iris::MeshNode::loadAsSceneFragment(request.path, [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
         {
             auto mat = iris::CustomMaterial::create();
@@ -187,11 +150,12 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
             else
                 mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
-            mat->setValue("diffuseColor", data.diffuseColor);
-            mat->setValue("specularColor", data.specularColor);
-            mat->setValue("ambientColor", QColor(110, 110, 110));
-            mat->setValue("emissionColor", data.emissionColor);
-            mat->setValue("shininess", data.shininess);
+            mat->setValue("diffuseColor",	data.diffuseColor);
+            mat->setValue("specularColor",	data.specularColor);
+            mat->setValue("ambientColor",	QColor(110, 110, 110));	// assume this color, some formats set this to pitch black
+            mat->setValue("emissionColor",	data.emissionColor);
+            mat->setValue("shininess",		data.shininess);
+			mat->setValue("useAlpha",		true);
 
             if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
                 mat->setValue("diffuseTexture", data.diffuseTexture);
@@ -202,17 +166,12 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
             if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
                 mat->setValue("normalTexture", data.normalTexture);
 
-			QJsonObject matObj;
-			createMaterial(matObj, mat);
-			assetMaterial.insert(QString::number(iteration), matObj);
-
-			iteration++;
-
             return mat;
         }, ssource);
 
         if (!sceneNode) return;
 
+		materialNode->hide();
         scene->rootNode->addChild(sceneNode);
 
         // fit object in view
@@ -229,10 +188,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
         } else {
             bound.pos = QVector3D(0,0,0);
             bound.radius = 1;
-
-            for(auto& sphere : spheres) {
-                bound = iris::BoundingSphere::merge(bound, sphere);
-            }
+            for (auto &sphere : spheres) bound = iris::BoundingSphere::merge(bound, sphere);
         }
 
         float dist = (bound.radius * 1.2) / qTan(qDegreesToRadians(cam->angle / 2.0f));
@@ -240,66 +196,92 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
         cam->lookAt(bound.pos);
         cam->update(0);
     }
-    else
-    {
-        // load sphere model
+	else if (request.type == ThumbnailRequestType::Material) {
+		QFile *file = new QFile(request.path);
+		file->open(QIODevice::ReadOnly | QIODevice::Text);
+		QJsonDocument doc = QJsonDocument::fromJson(file->readAll());
+		
+        auto material = iris::CustomMaterial::create();
+		const QJsonObject materialDefinition = doc.object();
+        auto shaderGuid = materialDefinition["guid"].toString();
+        material->setName(materialDefinition["name"].toString());
+        material->setGuid(shaderGuid);
 
-        // load material
+        QFileInfo shaderFile;
 
-        // apply
+        QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+        while (it.hasNext()) {
+            it.next();
+            if (it.key() == shaderGuid) {
+                shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
+                break;
+            }
+        }
+
+        if (shaderFile.exists()) {
+            material->generate(shaderFile.absoluteFilePath());
+        }
+        else {
+            // Reading is thread safe...
+            for (auto asset : AssetManager::getAssets()) {
+                if (asset->type == ModelTypes::Shader) {
+                    if (asset->assetGuid == material->getGuid()) {
+                        auto def = asset->getValue().toJsonObject();
+                        auto vertexShader = def["vertex_shader"].toString();
+                        auto fragmentShader = def["fragment_shader"].toString();
+                        for (auto asset : AssetManager::getAssets()) {
+                            if (asset->type == ModelTypes::File) {
+                                if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+                                if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+                            }
+                        }
+                        def["vertex_shader"] = vertexShader;
+                        def["fragment_shader"] = fragmentShader;
+                        material->generate(def);
+                    }
+                }
+            }
+        }
+
+		for (const auto &prop : material->properties) {
+			if (materialDefinition.contains(prop->name)) {
+				if (prop->type == iris::PropertyType::Texture) {
+					auto textureStr = !materialDefinition[prop->name].toString().isEmpty()
+										? QDir(QFileInfo(request.path).absolutePath())
+											.filePath(materialDefinition[prop->name].toString())
+										: QString();
+
+					if (!textureStr.isEmpty()) {
+						material->setValue(prop->name, textureStr);
+					}
+				}
+				else {
+					material->setValue(prop->name, materialDefinition[prop->name].toVariant());
+				}
+			}
+		}
+
+		materialNode->setMaterial(material);
+		materialNode->show();
+
+		float dist = 1.2f / qTan(qDegreesToRadians(cam->angle / 2.f));
+		cam->setLocalPos(QVector3D(0, 0, dist));
+		cam->lookAt(QVector3D(0, 0, 0));
+		cam->update(0);
     }
 }
-
-QStringList RenderThread::getTextureList()
-{
-	const aiScene *scene = ssource->importer.GetScene();
-
-	QStringList texturesToCopy;
-
-	for (int i = 0; i < scene->mNumMeshes; i++) {
-		auto mesh = scene->mMeshes[i];
-		auto material = scene->mMaterials[mesh->mMaterialIndex];
-
-		aiString textureName;
-
-		if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
-			material->GetTexture(aiTextureType_DIFFUSE, 0, &textureName);
-			texturesToCopy.append(textureName.C_Str());
-		}
-
-		if (material->GetTextureCount(aiTextureType_SPECULAR) > 0) {
-			material->GetTexture(aiTextureType_SPECULAR, 0, &textureName);
-			texturesToCopy.append(textureName.C_Str());
-		}
-
-		if (material->GetTextureCount(aiTextureType_NORMALS) > 0) {
-			material->GetTexture(aiTextureType_NORMALS, 0, &textureName);
-			texturesToCopy.append(textureName.C_Str());
-		}
-
-		if (material->GetTextureCount(aiTextureType_HEIGHT) > 0) {
-			material->GetTexture(aiTextureType_HEIGHT, 0, &textureName);
-			texturesToCopy.append(textureName.C_Str());
-		}
-	}
-
-	return texturesToCopy;
-}
-
 void RenderThread::cleanupScene()
 {
-    //scene->rootNode->removeChild(sceneNode);
-    if (!!sceneNode)
-        sceneNode->removeFromParent();
+    if (!!sceneNode) sceneNode->removeFromParent();
 }
 
 float RenderThread::getBoundingRadius(iris::SceneNodePtr node)
 {
     auto radius = 0.0f;
-    if(node->sceneNodeType== iris::SceneNodeType::Mesh)
+    if (node->sceneNodeType == iris::SceneNodeType::Mesh)
         radius = node.staticCast<iris::MeshNode>()->getMesh()->boundingSphere.radius;
 
-    for(auto child : node->children) {
+    for (auto child : node->children) {
         radius = qMax(radius, getBoundingRadius(child));
     }
 
@@ -308,12 +290,12 @@ float RenderThread::getBoundingRadius(iris::SceneNodePtr node)
 
 void RenderThread::getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere> &spheres)
 {
-    if(node->sceneNodeType== iris::SceneNodeType::Mesh) {
+    if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto sphere = node.staticCast<iris::MeshNode>()->getTransformedBoundingSphere();
         spheres.append(sphere);
     }
 
-    for(auto child : node->children) {
+    for (auto child : node->children) {
         getBoundingSpheres(child, spheres);
     }
 }
@@ -346,20 +328,17 @@ ThumbnailGenerator::ThumbnailGenerator()
     renderThread = new RenderThread();
 
     auto curCtx = QOpenGLContext::currentContext();
-    if (curCtx != nullptr)
-        curCtx->doneCurrent();
+    if (curCtx != Q_NULLPTR) curCtx->doneCurrent();
 
     QSurfaceFormat format;
     format.setDepthBufferSize(32);
     format.setMajorVersion(3);
     format.setMinorVersion(2);
     format.setProfile(QSurfaceFormat::CoreProfile);
-    //format.setOption();
     format.setSamples(1);
 
     auto context = new QOpenGLContext();
     context->setFormat(format);
-    //context->setShareContext(curCtx);
     context->create();
     context->moveToThread(renderThread);
     renderThread->context = context;
@@ -382,9 +361,9 @@ ThumbnailGenerator *ThumbnailGenerator::getSingleton()
 void ThumbnailGenerator::requestThumbnail(ThumbnailRequestType type, QString path, QString id)
 {
     ThumbnailRequest req;
-    req.type = type;
-    req.path = path;
-    req.id = id;
+    req.type	= type;
+    req.path	= path;
+    req.id		= id;
     renderThread->requestThumbnail(req);
 }
 

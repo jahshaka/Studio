@@ -29,6 +29,7 @@
 #include "irisgl/src/animation/animation.h"
 #include "irisglfwd.h"
 
+#include "core/database/database.h"
 #include "../editor/editorcameracontroller.h"
 #include "../editor/cameracontrollerbase.h"
 #include "../editor/orbitalcameracontroller.h"
@@ -44,15 +45,20 @@ public:
 
     iris::SceneSource *ssource;
 
+    void setDatabase(Database *db) { this->db = db;  }
     void update();
     void paintGL();
     void updateScene();
     void initializeGL();
     void resizeGL(int width, int height);
 
+    void updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject definition);
+
     void renderObject();
     void resetViewerCamera();
 	void resetViewerCameraAfter();
+    void loadJafMaterial(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
+    void loadJafModel(QString str, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
     void loadModel(QString str, bool firstAdd = true, bool cache = false, bool firstLoad = true);
 
     void wheelEvent(QWheelEvent *event);
@@ -60,6 +66,8 @@ public:
     void mouseReleaseEvent(QMouseEvent *e);
     void mouseMoveEvent(QMouseEvent *e);
 
+	void addJafMaterial(const QString &guid, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
+	void addJafMesh(const QString &path, const QString &guid, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addMesh(const QString &path = QString(), bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid = "", bool viewed = false, bool cache = false);
 	QImage takeScreenshot(int width, int height);
@@ -83,8 +91,7 @@ public:
     void clearScene() {
 		if (scene->rootNode->hasChildren()) {
 			for (auto child : scene->rootNode->children) {
-				// clear the scene of anything that is not a light for the next asset
-				if (child->sceneNodeType != iris::SceneNodeType::Light) {
+				if (child->getName() == lastNode) {
 					child->removeFromParent();
 				}
 			}
@@ -133,9 +140,13 @@ private:
 	iris::RenderTargetPtr previewRT;
 	iris::Texture2DPtr screenshotTex;
 
+    Database *db;
+
     float getBoundingRadius(iris::SceneNodePtr node);
     void getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere>& spheres);
 
     QVector3D localPos, localRot, lookAt;
 	int distanceFromPivot;
+
+    QString lastNode;
 };

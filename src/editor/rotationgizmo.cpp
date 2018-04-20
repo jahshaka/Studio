@@ -9,6 +9,8 @@
 #include "irisgl/src/scenegraph/scene.h"
 #include "irisgl/src/scenegraph/cameranode.h"
 #include "irisgl/src/graphics/graphicshelper.h"
+#include "irisgl/src/graphics/graphicsdevice.h"
+#include "irisgl/src/graphics/shader.h"
 #include "uimanager.h"
 #include "../commands/transfrormscenenodecommand.h"
 #include "irisgl/src/math/mathhelper.h"
@@ -155,6 +157,34 @@ void RotationGizmo::loadAssets()
 	shader = iris::GraphicsHelper::loadShader(
 		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"),
 		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.frag"));
+
+	lineShader = iris::Shader::load(
+		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo_line.vert"),
+		IrisUtils::getAbsoluteAssetPath("app/shaders/color.frag"));
+
+	// create circle
+	QVector<float> points;
+	for (float i = 0; i < 360; i += 1) {
+		auto x = qCos(qDegreesToRadians(i));
+		auto y = qSin(qDegreesToRadians(i));
+		points.append(x); points.append(y); points.append(0);
+
+		x = qCos(qDegreesToRadians(i + 1));
+		y = qSin(qDegreesToRadians(i + 1));
+		points.append(x); points.append(y); points.append(0);
+	}
+
+	iris::VertexLayout layout;
+	layout.addAttrib(iris::VertexAttribUsage::Position, GL_FLOAT, 3, sizeof(float) * 3);
+
+	auto vb = iris::VertexBuffer::create(layout);
+	vb->setData((void*)points.constData(), points.size() * sizeof(float));
+
+	circleMesh = iris::Mesh::create();
+	circleMesh->addVertexBuffer(vb);
+	circleMesh->setPrimitiveMode(iris::PrimitiveMode::Lines);
+	circleMesh->setVertexCount(360 * 2);
+	//circleMesh = iris::Mesh::create((void*)points.constData(), points.size() * sizeof(float), points.size(), layout);
 }
 
 bool RotationGizmo::isDragging()
@@ -269,8 +299,9 @@ RotationHandle* RotationGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, 
 	return closestHandle;
 }
 
-void RotationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
+void RotationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
 {
+	auto gl = device->getGL();
 	gl->glClear(GL_DEPTH_BUFFER_BIT);
 	//gl->glDisable(GL_DEPTH_TEST);
 	shader->bind();
@@ -291,7 +322,7 @@ void RotationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVec
 				shader->setUniformValue("color", QColor(255, 255, 0));
 				shader->setUniformValue("u_worldMatrix", transform);
 				//handles[i]->draw(gl, shader);
-				handleMeshes[i]->draw(gl, shader);
+				handleMeshes[i]->draw(device);
 			}
 		}
 	}
@@ -309,8 +340,24 @@ void RotationGizmo::render(QOpenGLFunctions_3_2_Core* gl, QVector3D rayPos, QVec
 				shader->setUniformValue("color", QColor(255, 255, 0));
 			else
 				shader->setUniformValue("color", handles[i]->getHandleColor());
-			handleMeshes[i]->draw(gl, shader);
+			handleMeshes[i]->draw(device);
 		}
+
+		//shader->setUniformValue("showHalf", false);
+		device->setShader(lineShader);
+		device->setShaderUniform("u_viewMatrix", viewMatrix);
+		device->setShaderUniform("u_projMatrix", projMatrix);
+
+		auto transform = Gizmo::getTransform();
+		//transform.scale(getGizmoScale());
+		device->setShaderUniform("u_worldMatrix", transform);
+		device->setShaderUniform("color", QColor(255, 255, 255));
+		device->setShaderUniform("scale", getGizmoScale() * 0.1f);
+		circleMesh->draw(device);
+
+		device->setShaderUniform("color", QColor(40, 40, 40));
+		device->setShaderUniform("scale", getGizmoScale() * 0.085f);
+		circleMesh->draw(device);
 	}
 
 	shader->release();

@@ -7,31 +7,43 @@
     <x>0</x>
     <y>0</y>
     <width>640</width>
-    <height>112</height>
+    <height>134</height>
    </rect>
+  </property>
+ <property name="sizePolicy">
+  <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
   </property>
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">#createProject {
+   <string notr="true">
+QWidget#NewProjectDialog {
+  background: #222;
+  color: #EEE;
+}
+
+#createProject {
 	background: #4898ff;
-	color: white;
 }
 
 #createProject:hover {
 	background-color: #51a1d6;
 }
 
-
 QLabel {
 	margin-right: 12px;
+  color: #EEE;
 }
 
 QPushButton, QToolButton {
 	border: 0;
 	padding: 5px;
 	background: #444;
+  color: #EEE;
 }
 
 QPushButton::hover {
@@ -45,12 +57,17 @@ QToolButton::hover {
 QLineEdit {
 	background: #404040;
 	padding: 5px;
+  border: 0;
+  color: #EEE;
 }</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <item row="0" column="0">
     <widget class="QWidget" name="widget" native="true">
      <layout class="QFormLayout" name="formLayout">
+     <property name="fieldGrowthPolicy">
+  <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
+  </property>
       <item row="0" column="0">
        <widget class="QLabel" name="pName">
         <property name="text">

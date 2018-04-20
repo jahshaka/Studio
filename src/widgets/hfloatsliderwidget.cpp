@@ -24,6 +24,8 @@ HFloatSliderWidget::HFloatSliderWidget(QWidget* parent) :
 
     setStyle(new CustomStyle(this->style()));
 
+    ui->spinbox->setButtonSymbols(QAbstractSpinBox::NoButtons);
+
     precision = 1000.f;
     ui->slider->setRange(0, precision);
 
