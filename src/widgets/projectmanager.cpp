@@ -292,7 +292,7 @@ void ProjectManager::importProjectFromFile(const QString& file)
     }
 
     // iterate
-    QDirIterator projectDirIterator(temporaryDir.path(), QDir::NoDotAndDotDot | QDir::Files);
+    QDirIterator projectDirIterator(temporaryDir.path(), QDir::Files | QDir::Hidden);
     QStringList fileNames;
     while (projectDirIterator.hasNext()) fileNames << projectDirIterator.next();
 
