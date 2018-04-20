@@ -173,6 +173,10 @@ QMainWindow::separator {
     color: #EEE;
 }
 
+QMessageBox {
+    background: #1A1A1A;
+}
+
 QMessageBox QPushButton  {
     border: none;
     background-color: #212121;

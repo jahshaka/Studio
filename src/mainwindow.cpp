@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QSurface>
 #include <QScrollArea>
 #include <QTextDocument>
+#include <QTemporaryFile>
 
 #include <memory>
 
@@ -1885,6 +1886,16 @@ void MainWindow::exportSceneAsZip()
         zip,
         QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
             .filePath(Globals::project->getProjectGuid() + ".db").toStdString().c_str()
+    );
+    zip_entry_close(zip);
+
+    // empty manifest
+    QTemporaryFile tempManifestFile;
+    tempManifestFile.open();
+    zip_entry_open(zip, ".manifest");
+    zip_entry_fwrite(
+        zip,
+        QFileInfo(tempManifestFile.fileName()).absoluteFilePath().toStdString().c_str()
     );
     zip_entry_close(zip);
 

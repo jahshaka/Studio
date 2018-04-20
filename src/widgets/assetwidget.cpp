@@ -1472,9 +1472,23 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             );
 
             QFile f(QDir(temporaryDir.path()).filePath(".manifest"));
+            if (!f.exists()) {
+                QMessageBox::warning(
+                    this,
+                    "Incompatible Asset format",
+                    "This asset was made with a deprecated version of Jahshaka\n"
+                    "You can extract the contents manually and try importing as regular assets.",
+                    QMessageBox::Ok
+                );
+
+                continue;
+            }
+
             if (!f.open(QFile::ReadOnly | QFile::Text)) break;
             QTextStream in(&f);
             const QString jafString = in.readLine();
+            f.close();
+
 
             // Copy assets over to project folder
             // If the file already exists, increment the filename and do the same when inserting the db entry

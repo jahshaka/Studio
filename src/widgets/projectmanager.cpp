@@ -291,6 +291,32 @@ void ProjectManager::importProjectFromFile(const QString& file)
                     Q_NULLPTR);
     }
 
+    // iterate
+    QDirIterator projectDirIterator(temporaryDir.path(), QDir::NoDotAndDotDot | QDir::Files);
+    QStringList fileNames;
+    while (projectDirIterator.hasNext()) fileNames << projectDirIterator.next();
+
+    bool allowLoading = false;
+    for (const auto &name : fileNames) {
+        QFileInfo info(name);
+        if (info.fileName() == ".manifest") {
+            allowLoading = true;
+            break;
+        }
+    }
+
+    if (!allowLoading) {
+        QMessageBox::warning(
+            this,
+            "Incompatible World format",
+            "This world was made with a deprecated version of Jahshaka\n"
+            "You can extract the contents manually and recreate the world.",
+            QMessageBox::Ok
+        );
+
+        return;
+    }
+
     // now extract the project to the default projects directory with the name
     auto importGuid = GUIDManager::generateGUID();
     auto pDir = QDir(QDir(defaultProjectDirectory).filePath("Projects")).filePath(importGuid);

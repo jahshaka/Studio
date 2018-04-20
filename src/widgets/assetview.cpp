@@ -1011,10 +1011,23 @@ void AssetView::importJahModel(const QString &fileName)
         );
 
         QFile f(QDir(temporaryDir.path()).filePath(".manifest"));
+
+        if (!f.exists()) {
+            QMessageBox::warning(
+                this,
+                "Incompatible Asset format",
+                "This asset was made with a deprecated version of Jahshaka\n"
+                "You can extract the contents manually and try importing as regular assets.",
+                QMessageBox::Ok
+            );
+
+            return;
+        }
+
         if (!f.open(QFile::ReadOnly | QFile::Text)) return;
         QTextStream in(&f);
-
         const QString jafString = in.readLine();
+        f.close();
 
         ModelTypes jafType = ModelTypes::Undefined;
 
