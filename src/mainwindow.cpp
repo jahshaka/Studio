@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include "QtAwesome.h"
 
 #include <QWindow>
 #include <QSurface>
@@ -180,6 +181,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupUndoRedo();
 
 	undoStackCount = 0;
+
+	
 }
 
 void MainWindow::grabOpenGLContextHack()
@@ -417,10 +420,12 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             break;
         }
 
-        case QEvent::Wheel: {
-            if (obj == surface) return handleMouseWheel(static_cast<QWheelEvent*>(event));
-            break;
-        }
+		case QEvent::Wheel: {
+			if (obj == surface) return handleMouseWheel(static_cast<QWheelEvent*>(event));
+			break;
+		}
+	   
+        
 
         default:
             break;
@@ -2034,6 +2039,8 @@ void MainWindow::setupViewPort()
 	assets_menu = new QPushButton("Assets");
 	assets_menu->setObjectName("assets_menu");
 	assets_menu->setCursor(Qt::PointingHandCursor);
+	
+
 
 	assets_panel = new QWidget;
 
@@ -2288,18 +2295,29 @@ void MainWindow::setupDesktop()
 
 void MainWindow::setupToolBar()
 {
+	//added by myles
+	awesome = new QtAwesome(this);
+	awesome->initFontAwesome();
+
+
     toolBar = new QToolBar;
 	toolBar->setIconSize(QSize(14, 14));
 	QAction *actionUndo = new QAction;
 	actionUndo->setToolTip("Undo last action");
 	actionUndo->setObjectName(QStringLiteral("actionUndo"));
-	actionUndo->setIcon(QIcon(":/icons/undo.png"));
+	//actionUndo->setIcon(QIcon(":/icons/undo.png"));
+	//actionUndo->setIcon(awesome->icon(fa::reply));
+	actionUndo->setText(QChar(fa::reply));
+	actionUndo->setFont(awesome->font(16));
 	toolBar->addAction(actionUndo);
 
 	QAction *actionRedo = new QAction;
 	actionRedo->setToolTip("Redo last action");
 	actionRedo->setObjectName(QStringLiteral("actionRedo"));
-	actionRedo->setIcon(QIcon(":/icons/redo.svg"));
+	//actionRedo->setIcon(QIcon(":/icons/redo.svg"));
+	//actionRedo->setIcon(awesome->icon(fa::share));
+	actionRedo->setText(QChar(fa::share));
+	actionRedo->setFont(awesome->font(16));
 	toolBar->addAction(actionRedo);
 
 	toolBar->addSeparator();
@@ -2311,22 +2329,31 @@ void MainWindow::setupToolBar()
     actionTranslate->setObjectName(QStringLiteral("actionTranslate"));
     actionTranslate->setCheckable(true);
 	actionTranslate->setToolTip("Manipulator for translating objects");
-    actionTranslate->setIcon(QIcon(":/icons/tranlate arrow.svg"));
+   // actionTranslate->setIcon(QIcon(":/icons/tranlate arrow.svg"));
+	//actionTranslate->setIcon(awesome->icon(fa::arrows));
+	actionTranslate->setText(QChar(fa::arrows));
+	actionTranslate->setFont(awesome->font(16));
     toolBar->addAction(actionTranslate);
 
     QAction *actionRotate = new QAction;
     actionRotate->setObjectName(QStringLiteral("actionRotate"));
     actionRotate->setCheckable(true);
 	actionRotate->setToolTip("Manipulator for rotating objects");
-    actionRotate->setIcon(QIcon(":/icons/rotate-to-right.svg"));
+  //  actionRotate->setIcon(QIcon(":/icons/rotate-to-right.svg"));
+ //	actionRotate->setIcon(awesome->icon(fa::rotateright));
+	actionRotate->setText(QChar(fa::rotateright));
+	actionRotate->setFont(awesome->font(16));
+
     toolBar->addAction(actionRotate);
 
     QAction *actionScale = new QAction;
     actionScale->setObjectName(QStringLiteral("actionScale"));
     actionScale->setCheckable(true);
 	actionScale->setToolTip("Manipulator for scaling objects");
-    actionScale->setIcon(QIcon(":/icons/expand-arrows.svg"));
-    toolBar->addAction(actionScale);
+   // actionScale->setIcon(QIcon(":/icons/expand-arrows.svg"));
+	actionScale->setText(QChar(fa::expand));
+	actionScale->setFont(awesome->font(16));
+	toolBar->addAction(actionScale);
 
     toolBar->addSeparator();
 
@@ -2334,15 +2361,21 @@ void MainWindow::setupToolBar()
     actionGlobalSpace->setObjectName(QStringLiteral("actionGlobalSpace"));
     actionGlobalSpace->setCheckable(true);
 	actionGlobalSpace->setToolTip("Move objects relative to the global world");
-    actionGlobalSpace->setIcon(QIcon(":/icons/world.svg"));
+   // actionGlobalSpace->setIcon(QIcon(":/icons/world.svg"));
+	//actionGlobalSpace->setIcon(awesome->(fa::globe));
+	actionGlobalSpace->setText(QChar(fa::globe));
+	actionGlobalSpace->setFont(awesome->font(16));
     toolBar->addAction(actionGlobalSpace);
 
     QAction *actionLocalSpace = new QAction;
     actionLocalSpace->setObjectName(QStringLiteral("actionLocalSpace"));
     actionLocalSpace->setCheckable(true);
 	actionLocalSpace->setToolTip("Move objects relative to their transform");
-    actionLocalSpace->setIcon(QIcon(":/icons/sceneobject.svg"));
-    toolBar->addAction(actionLocalSpace);
+	//actionLocalSpace->setIcon(QIcon(":/icons/sceneobject.svg"));
+	//actionLocalSpace->setIcon(awesome->icon(fa::clone));
+	actionLocalSpace->setText(QChar(fa::clone));
+	actionLocalSpace->setFont(awesome->font(16));
+	toolBar->addAction(actionLocalSpace);
 
     toolBar->addSeparator();
 
@@ -2350,15 +2383,24 @@ void MainWindow::setupToolBar()
     actionFreeCamera->setObjectName(QStringLiteral("actionFreeCamera"));
     actionFreeCamera->setCheckable(true);
 	actionFreeCamera->setToolTip("Freely move and orient the camera");
-    actionFreeCamera->setIcon(QIcon(":/icons/people.svg"));
-    toolBar->addAction(actionFreeCamera);
+	//actionFreeCamera->setIcon(QIcon(":/icons/people.svg"));
+	//actionFreeCamera->setIcon(awesome->icon(fa::eye));
+	actionFreeCamera->setText(QChar(fa::eye));
+	actionFreeCamera->setFont(awesome->font(16));
+	toolBar->addAction(actionFreeCamera);
+
+
+	
 
     QAction *actionArcballCam = new QAction;
     actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
     actionArcballCam->setCheckable(true);
 	actionArcballCam->setToolTip("Move and orient the camera around a fixed point");
-    actionArcballCam->setIcon(QIcon(":/icons/local.svg"));
-    toolBar->addAction(actionArcballCam);
+	//actionArcballCam->setIcon(QIcon(":/icons/local.svg"));
+	//actionArcballCam->setIcon(awesome->icon(fa::dotcircleo));
+	actionArcballCam->setText(QChar(fa::dotcircleo));
+	actionArcballCam->setFont(awesome->font(16));
+	toolBar->addAction(actionArcballCam);
 
     connect(actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
     connect(actionRotate,       SIGNAL(triggered(bool)), SLOT(rotateGizmo()));
@@ -2394,7 +2436,9 @@ void MainWindow::setupToolBar()
 	actionExport->setObjectName(QStringLiteral("actionExport"));
 	actionExport->setCheckable(false);
 	actionExport->setToolTip("Export the current scene");
-	actionExport->setIcon(QIcon(":/icons/export.png"));
+	//actionExport->setIcon(QIcon(":/icons/export.png"));
+	actionExport->setText(QChar(fa::upload));
+	actionExport->setFont(awesome->font(16));
 	toolBar->addAction(actionExport);
 
 	actionSaveScene = new QAction;
@@ -2409,7 +2453,9 @@ void MainWindow::setupToolBar()
 	viewDocks->setObjectName(QStringLiteral("viewDocks"));
 	viewDocks->setCheckable(false);
 	viewDocks->setToolTip("Toggle Widgets");
-	viewDocks->setIcon(QIcon(":/icons/tab.png"));
+	//viewDocks->setIcon(QIcon(":/icons/tab.png"));
+	viewDocks->setText(QChar(fa::listalt));
+	viewDocks->setFont(awesome->font(16));
 	toolBar->addAction(viewDocks);
 
 	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
@@ -2666,6 +2712,29 @@ void MainWindow::showProjectManagerInternal()
     pmContainer->populateDesktop(true);
     pmContainer->showMaximized();
     pmContainer->cleanupOnClose();
+}
+
+void MainWindow::loadStylesheet()
+{
+
+	QFile file("StyleSheet.css");	
+
+	if (!file.open(QIODevice::ReadOnly)) {
+		qDebug() << "file could not be loaded";
+		return;
+	}
+	QString string = QLatin1String(file.readAll());
+	setStyleSheet(string);
+	file.close();
+	
+}
+
+void MainWindow::updateStyesheet()
+{
+	this->style()->unpolish(this); 
+	this->style()->polish(this);	
+	update();
+	loadStylesheet();
 }
 
 void MainWindow::newScene()

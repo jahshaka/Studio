@@ -132,6 +132,7 @@ int main(int argc, char *argv[])
     window.goToDesktop();
 
     splash.finish(&window);
+	
 
 	UpdateChecker updateChecker;
 	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded,

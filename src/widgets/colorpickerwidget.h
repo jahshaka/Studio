@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef COLORPICKERWIDGET_H
 #define COLORPICKERWIDGET_H
 
+
 #include <QWidget>
 //#include <QColorDialog>
 

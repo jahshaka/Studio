@@ -24,7 +24,9 @@ For more information see the LICENSE file
 #include <QVector3D>
 #include <QLabel>
 #include <QCheckBox>
+#include <qfilesystemwatcher.h>
 #include "irisglfwd.h"
+#include "QtAwesome.h"
 
 namespace Ui {
     class MainWindow;
@@ -274,6 +276,8 @@ public slots:
     void takeScreenshot();
     void toggleLightWires(bool state);
     void showProjectManagerInternal();
+	void loadStylesheet();
+	void updateStyesheet();
 
 private slots:
     void translateGizmo();
@@ -379,6 +383,8 @@ private:
 	QVector<bool> widgetStates;	// use the order in the enum
 
     WindowSpaces currentSpace;
+
+	QtAwesome *awesome;
 };
 
 #endif // MAINWINDOW_H

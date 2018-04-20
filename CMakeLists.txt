@@ -7,18 +7,21 @@ foreach(p CMP0071) # 3.10: Let AUTOMOC and AUTOUIC process GENERATED files
 endforeach()
 project(Jahshaka)
 
-set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake) 
+set(CMAKE_PREFIX_PATH "C:/Qt/5.9.4/msvc2017_64/lib/cmake/Qt5")
 
 find_package(OpenGL REQUIRED) # is this needed?
 find_package(Qt5 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg)
 
 include(UseModernCpp)
-include(BuildType)
+include(BuildType) 
+
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
 
-# set(CMAKE_AUTOMOC ON)
+
+set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -26,6 +29,8 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
 
 set(SRCS
+	src/QtAwesome.cpp
+	src/QtAwesomeAnim.cpp
     src/main.cpp
     src/mainwindow.cpp 
     src/widgets/colorvaluewidget.cpp 
@@ -132,6 +137,8 @@ set(SRCS
 )
 
 set(HEADERS
+	src/QtAwesome.h
+	src/QtAwesomeAnim.h
     src/mainwindow.h 
     src/dialogs/renamelayerdialog.h 
     src/widgets/colorvaluewidget.h 
@@ -303,8 +310,8 @@ set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OP
 
 include(IncludeBreakpad)
 
-qt5_wrap_cpp(HEADERS_moc ${HEADERS})
-qt5_wrap_ui(UI_moc ${FORMS})
+#qt5_wrap_cpp(HEADERS_moc ${HEADERS})
+#qt5_wrap_ui(uic ${FORMS})
 
 # Todo - trim these down to nothing eventually
 qt5_add_resources(QRCS
