@@ -111,7 +111,7 @@ public:
 
         if (useAdditive) {
             //gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-			device->setBlendState(BlendState::createAdditive());
+            device->setBlendState(BlendState(GL_SRC_ALPHA, GL_ONE));
         } else {
             //gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 			device->setBlendState(BlendState::createAlphaBlend());
