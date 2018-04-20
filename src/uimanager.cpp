@@ -87,7 +87,9 @@ void UiManager::updateWindowTitle()
 //    if (UiManager::isUndoStackDirty()) {
 //        UiManager::mainWindow->setWindowTitle("Jahshaka* - " + Globals::project->getFileName());
 //    } else {
-        UiManager::mainWindow->setWindowTitle("Jahshaka - " + Globals::project->getProjectName());
+    UiManager::mainWindow->setWindowTitle(
+        QString("%1 - %2").arg(mainWindow->originalTitle).arg(Globals::project->getProjectName())
+    );
 //    }
 }
 

@@ -26,7 +26,7 @@ public:
     bool _saved;
 public:
     Project();
-    void setProjectPath(const QString&);
+    void setProjectPath(const QString&, const QString &);
     void setProjectGuid(const QString&);
     bool isSaved();
 

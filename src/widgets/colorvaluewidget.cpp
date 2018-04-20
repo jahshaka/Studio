@@ -16,6 +16,8 @@ ColorValueWidget::ColorValueWidget(QWidget *parent) :
     BaseWidget(parent),
     ui(new Ui::ColorValueWidget)
 {
+	
+
     ui->setupUi(this);
 
     type = WidgetType::ColorWidget;

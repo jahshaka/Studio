@@ -142,9 +142,9 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
     auto ctx = QOpenGLContext::currentContext();
 
     // reset states
-    graphics->setBlendState(BlendState::Opaque);
-    graphics->setDepthState(DepthState::Default);
-    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+    graphics->setBlendState(BlendState::Opaque, true);
+    graphics->setDepthState(DepthState::Default, true);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise, true);
 
     // STEP 1: RENDER SCENE
     renderData->scene = scene;
@@ -174,14 +174,13 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
     finalRenderTexture->resize(rt->getWidth(), rt->getHeight());
 
     renderTarget->bind();
-    gl->glViewport(0, 0, rt->getWidth(), rt->getHeight());
-    gl->glClearColor(scene->clearColor.redF(), scene->clearColor.greenF(), scene->clearColor.blueF(), scene->clearColor.alphaF());
-    gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	graphics->setViewport(QRect(0, 0, rt->getWidth(), rt->getHeight()));
+	graphics->clear(QColor(0, 0, 0, 0));
 
     // reset states
-    graphics->setBlendState(BlendState::Opaque);
-    graphics->setDepthState(DepthState::Default);
-    graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+    graphics->setBlendState(BlendState::Opaque, true);
+    graphics->setDepthState(DepthState::Default, true);
+    graphics->setRasterizerState(RasterizerState::CullCounterClockwise, true);
 
     renderNode(renderData, scene);
 
@@ -189,6 +188,11 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
         renderBillboardIcons(renderData);
 
     renderTarget->unbind();
+
+	// reset states for post processing
+	graphics->setBlendState(BlendState::Opaque, true);
+	graphics->setDepthState(DepthState::Default, true);
+	graphics->setRasterizerState(RasterizerState::CullCounterClockwise, true);
 
     if (applyPostProcesses) {
         postContext->sceneTexture = sceneRenderTexture;
@@ -205,10 +209,11 @@ void ForwardRenderer::renderSceneToRenderTarget(RenderTargetPtr rt, CameraNodePt
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     gl->glActiveTexture(GL_TEXTURE0);
 
-    graphics->setBlendState(BlendState::Opaque);
-    graphics->setDepthState(DepthState::Default);
-    graphics->setRasterizerState(RasterizerState::CullNone);
+    graphics->setBlendState(BlendState::Opaque, true);
+    graphics->setDepthState(DepthState::Default, true);
+    graphics->setRasterizerState(RasterizerState::CullNone, true);
 
+	//applyPostProcesses = false;
     if (applyPostProcesses)
         postContext->finalTexture->bind();
     else
@@ -569,7 +574,7 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 
             if (!!item->material) {
                 mat = item->material;
-                program = mat->getProgram();
+                //program = mat->getProgram();
 
                 mat->begin(graphics, scene);
 				graphics->setShader(mat->shader);

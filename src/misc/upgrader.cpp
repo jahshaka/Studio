@@ -25,6 +25,8 @@ For more information see the LICENSE file
 #include "irisgl/src/core/irisutils.h"
 #include "constants.h"
 
+#include <QDebug>
+
 void Upgrader::checkIfDeprecatedVersion()
 {
 	const QString path = IrisUtils::join(
@@ -93,7 +95,7 @@ void Upgrader::checkIfDeprecatedVersion()
 				dialog.move(position.topLeft());
 			});
 
-			connect(no, &QPushButton::pressed, this, [&proceed, &dialog, &db]() { proceed = false; db.closeDatabase(); dialog.close(); });
+			connect(no, &QPushButton::pressed, this, [&proceed, &dialog, &db]() { proceed = false; dialog.close(); });
 			connect(cont, &QPushButton::pressed, this, [&proceed, &dialog]() { dialog.close(); });
 
 			dialog.setLayout(layout);
@@ -121,9 +123,10 @@ void Upgrader::checkIfDeprecatedVersion()
 #endif // Q_OS_WIN
 				}
 
-				db.closeDatabase();
 				dialog.close();
 			}
 		}
+
+		db.closeDatabase();
 	}
 }

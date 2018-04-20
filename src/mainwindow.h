@@ -24,7 +24,9 @@ For more information see the LICENSE file
 #include <QVector3D>
 #include <QLabel>
 #include <QCheckBox>
+#include <qfilesystemwatcher.h>
 #include "irisglfwd.h"
+#include "QtAwesome.h"
 
 namespace Ui {
     class MainWindow;
@@ -147,6 +149,7 @@ public:
      * @return
      */
     QString getAbsoluteAssetPath(QString pathRelativeToApp);
+    QString originalTitle;
 
     void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
     void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
@@ -207,6 +210,10 @@ public slots:
     void addTorus();
     void addSphere();
     void addCylinder();
+    void addPyramid();
+    void addTeapot();
+    void addSponge();
+    void addSteps();
     void addGear();
     void addEmpty();
     void addViewer();
@@ -269,6 +276,8 @@ public slots:
     void takeScreenshot();
     void toggleLightWires(bool state);
     void showProjectManagerInternal();
+	void loadStylesheet();
+	void updateStyesheet();
 
 private slots:
     void translateGizmo();
@@ -374,6 +383,8 @@ private:
 	QVector<bool> widgetStates;	// use the order in the enum
 
     WindowSpaces currentSpace;
+
+	QtAwesome *awesome;
 };
 
 #endif // MAINWINDOW_H

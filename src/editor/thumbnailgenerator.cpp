@@ -157,9 +157,14 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
             mat->setValue("shininess",		data.shininess);
 			mat->setValue("useAlpha",		true);
 
-            mat->setValue("diffuseTexture", data.diffuseTexture);
-            mat->setValue("specularTexture", data.specularTexture);
-            mat->setValue("normalTexture", data.normalTexture);
+            if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
+                mat->setValue("diffuseTexture", data.diffuseTexture);
+
+            if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
+                mat->setValue("specularTexture", data.specularTexture);
+
+            if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
+                mat->setValue("normalTexture", data.normalTexture);
 
             return mat;
         }, ssource);

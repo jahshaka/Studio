@@ -18,10 +18,10 @@ Project::Project()
     _saved = false;
 }
 
-void Project::setProjectPath(const QString &path)
+void Project::setProjectPath(const QString &path, const QString &name)
 {
     this->folderPath = path;
-    projectName = QFileInfo(path).baseName();
+    projectName = name;
 }
 
 void Project::setProjectGuid(const QString &guid)
