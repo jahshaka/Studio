@@ -23,6 +23,9 @@
 *.moc
 moc_*.cpp
 qrc_*.cpp
+.idea/*
+.idea
+.settings*
 ui_*.h
 Makefile*
 *build-*
