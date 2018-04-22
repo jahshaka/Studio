@@ -39,8 +39,6 @@ set(SRCS
     src/widgets/keyframewidget.cpp 
     src/widgets/maintimelinewidget.cpp 
     src/widgets/timelinewidget.cpp 
-    src/core/QtAwesome.cpp
-    src/core/QtAwesomeAnim.cpp
     src/core/nodekeyframeanimation.cpp 
     src/core/project.cpp 
     src/core/settingsmanager.cpp 
@@ -130,6 +128,8 @@ set(SRCS
 	src/dialogs/softwareupdatedialog.cpp
     src/io/assethelper.cpp
     src/misc/upgrader.cpp
+    src/misc/QtAwesome.cpp
+    src/misc/QtAwesomeAnim.cpp
     src/dialogs/toast.cpp
 )
 
@@ -151,8 +151,6 @@ set(HEADERS
     src/widgets/layertreewidget.h 
     src/widgets/maintimelinewidget.h 
     src/widgets/timelinewidget.h 
-    src/core/QtAwesome.h
-    src/core/QtAwesomeAnim.h
     src/core/keyframeanimation.h 
     src/core/keyframes.h 
     src/core/nodekeyframe.h 
@@ -255,6 +253,8 @@ set(HEADERS
     src/editor/animationpath.h
     src/io/assethelper.h
     src/misc/upgrader.h
+    src/misc/QtAwesome.h
+    src/misc/QtAwesomeAnim.h    
     src/dialogs/toast.h
 )
 

@@ -2057,20 +2057,25 @@ void MainWindow::setupViewPort()
 #endif
 	help = new QPushButton;
 	help->setObjectName("helpButton");
-	QIcon ico;
-	ico.addPixmap(IrisUtils::getAbsoluteAssetPath("app/images/question.png"), QIcon::Normal);
-	help->setIconSize(ico.availableSizes().first());
-	help->setFixedSize(ico.actualSize(ico.availableSizes().first()));//never larger than ic.availableSizes().first()
+	//QIcon ico;
+	//ico.addPixmap(IrisUtils::getAbsoluteAssetPath("app/images/question.png"), QIcon::Normal);
+	//help->setIconSize(ico.availableSizes().first());
+	//help->setFixedSize(ico.actualSize(ico.availableSizes().first()));//never larger than ic.availableSizes().first()
+	help->setText(QChar(fa::questioncircleo));
+	help->setFont(awesome->font(28));
 	help->setCursor(Qt::PointingHandCursor);
 
 	help->setStyleSheet(
 		"#helpButton { qproperty-icon: url(\"\");"
 		"qproperty-iconSize: 48px 48px;"
 		"background: transparent;"
-		"background-image: url(\":/images/question.png\");"
+		//"background-image: url(\":/images/question.png\");"
+		"color: rgba(255,255,255,.9);"
 		"background-repeat: no-repeat; }"
-		"#helpButton::hover { background-image: url(\":/images/question_hover.png\");"
-		"background-repeat: no-repeat; }"
+		//"#helpButton::hover { background-image: url(\":/images/question_hover.png\");"
+		//"background-repeat: no-repeat; }"
+		"#helpButton::hover {color: rgba(255, 255, 255, 1); }"
+		
 	);
 
 	connect(help, &QPushButton::pressed, [this]() {
@@ -2079,20 +2084,24 @@ void MainWindow::setupViewPort()
 
 	prefs = new QPushButton;
 	prefs->setObjectName("prefsButton");
-	QIcon icop;
-	icop.addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/settings.png"), QIcon::Normal);
-	prefs->setIconSize(ico.availableSizes().first());
-	prefs->setFixedSize(ico.actualSize(icop.availableSizes().first()));//never larger than ic.availableSizes().first()
+	//QIcon icop;
+	//icop.addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/settings.png"), QIcon::Normal);
+	//prefs->setIconSize(ico.availableSizes().first());
+	//prefs->setFixedSize(ico.actualSize(icop.availableSizes().first()));//never larger than ic.availableSizes().first()
+	prefs->setText(QChar(fa::cog));
+	prefs->setFont(awesome->font(28));
 	prefs->setCursor(Qt::PointingHandCursor);
 
 	prefs->setStyleSheet(
 		"#prefsButton { qproperty-icon: url(\"\");"
 		"qproperty-iconSize: 48px 48px;"
 		"background: transparent;"
-		"background-image: url(\":/icons/settings.png\");"
+		"color: rgba(255,255,255,.9);"
+		//"background-image: url(\":/icons/settings.png\");"
 		"background-repeat: no-repeat; }"
-		"#prefsButton::hover { background-image: url(\":/icons/settings_hover.png\");"
-		"background-repeat: no-repeat; }"
+		//"#prefsButton::hover { background-image: url(\":/icons/settings_hover.png\");"
+		//"background-repeat: no-repeat; }"
+		"#prefsButton::hover { color: rgba(255, 255, 255, 1); }"
 	);
 
 	connect(prefs, &QPushButton::pressed, [this]() { showPreferences(); });
@@ -2100,7 +2109,7 @@ void MainWindow::setupViewPort()
 	QWidget *buttons = new QWidget;
 	QHBoxLayout *bl = new QHBoxLayout;
 	buttons->setLayout(bl);
-
+	bl->setSpacing(20);
 	bl->addWidget(help);
 	bl->addWidget(prefs);
 
@@ -2724,6 +2733,7 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 MainWindow::~MainWindow()
 {
     this->db->closeDatabase();
+	delete awesome;
     delete ui;
 }
 

@@ -25,8 +25,8 @@ For more information see the LICENSE file
 #include <QLabel>
 #include <QCheckBox>
 #include "irisglfwd.h"
-#include "core/QtAwesome.h"
-#include "core/QtAwesomeAnim.h"
+#include "misc/QtAwesome.h"
+#include "misc/QtAwesomeAnim.h"
 
 namespace Ui {
     class MainWindow;
