@@ -39,6 +39,8 @@ set(SRCS
     src/widgets/keyframewidget.cpp 
     src/widgets/maintimelinewidget.cpp 
     src/widgets/timelinewidget.cpp 
+    src/core/QtAwesome.cpp
+    src/core/QtAwesomeAnim.cpp
     src/core/nodekeyframeanimation.cpp 
     src/core/project.cpp 
     src/core/settingsmanager.cpp 
@@ -149,6 +151,8 @@ set(HEADERS
     src/widgets/layertreewidget.h 
     src/widgets/maintimelinewidget.h 
     src/widgets/timelinewidget.h 
+    src/core/QtAwesome.h
+    src/core/QtAwesomeAnim.h
     src/core/keyframeanimation.h 
     src/core/keyframes.h 
     src/core/nodekeyframe.h 
