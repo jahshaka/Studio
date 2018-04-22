@@ -2061,7 +2061,7 @@ void MainWindow::setupViewPort()
 	//ico.addPixmap(IrisUtils::getAbsoluteAssetPath("app/images/question.png"), QIcon::Normal);
 	//help->setIconSize(ico.availableSizes().first());
 	//help->setFixedSize(ico.actualSize(ico.availableSizes().first()));//never larger than ic.availableSizes().first()
-	help->setText(QChar(fa::questioncircleo));
+	help->setText(QChar(fa::questioncircle));
 	help->setFont(awesome->font(28));
 	help->setCursor(Qt::PointingHandCursor);
 
@@ -2365,7 +2365,7 @@ void MainWindow::setupToolBar()
     actionLocalSpace->setCheckable(true);
 	actionLocalSpace->setToolTip("Move objects relative to their transform");
     //actionLocalSpace->setIcon(QIcon(":/icons/sceneobject.svg"));
-	actionLocalSpace->setText(QChar(fa::clone));
+	actionLocalSpace->setText(QChar(fa::cube));
 	actionLocalSpace->setFont(awesome->font(16)); 
 	toolBar->addAction(actionLocalSpace);
 
@@ -2433,7 +2433,9 @@ void MainWindow::setupToolBar()
 	actionSaveScene->setVisible(!settings->getValue("auto_save", true).toBool());
 	actionSaveScene->setCheckable(false);
 	actionSaveScene->setToolTip("Save the current scene");
-	actionSaveScene->setIcon(QIcon(":/icons/save.png"));
+	//actionSaveScene->setIcon(QIcon(":/icons/save.png"));
+	actionSaveScene->setText(QChar(fa::floppyo));
+	actionSaveScene->setFont(awesome->font(16));
 	toolBar->addAction(actionSaveScene);
 
 	QAction *viewDocks = new QAction;
