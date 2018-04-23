@@ -209,7 +209,6 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
         auto node = doActiveObjectPicking(event->posF());
         if (!!node) {
-            qDebug() << QDir(Globals::project->getProjectFolder()).filePath(roleDataMap.value(1).toString());
             auto meshNode = node.staticCast<iris::MeshNode>();
             auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
 

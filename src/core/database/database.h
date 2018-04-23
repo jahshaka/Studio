@@ -116,7 +116,7 @@ public:
     bool hasDependencies(const QString &guid);
 
     // IMPORT ===============================================================================
-    bool importProject(const QString &inFilePath, const QString &newGuid, QString &worldName);
+    bool importProject(const QString &inFilePath, const QString &newGuid, QString &worldName, QMap<QString, QString> &assetGuids);
     QString importAsset(const ModelTypes &jafType,
                         const QString &pathToDb,
                         const QMap<QString, QString> &newNames,

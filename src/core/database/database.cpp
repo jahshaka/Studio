@@ -2080,9 +2080,9 @@ bool Database::hasDependencies(const QString &guid)
     return false;
 }
 
-bool Database::importProject(const QString &inFilePath, const QString &newSceneGuid, QString &worldName)
+bool Database::importProject(const QString &inFilePath, const QString &newSceneGuid, QString &worldName, QMap<QString, QString> &outGuids)
 {
-    QSqlDatabase dbe = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "myUniqueSQLITEImportConnection");
+    QSqlDatabase dbe = QSqlDatabase::addDatabase(Constants::DB_DRIVER, GUIDManager::generateGUID());
     dbe.setDatabaseName(inFilePath + ".db");
     dbe.open();
 
@@ -2125,6 +2125,8 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
 
         auto newGuid = GUIDManager::generateGUID();
         assetGuids.insert(guid, newGuid);
+
+        outGuids.insert(guid, newGuid);
 
         data.guid = newGuid;
         data.type = selectAssetQuery.value(1).toInt();

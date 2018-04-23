@@ -545,6 +545,10 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		QImage image;
 		image.loadFromData(record.thumbnail, "PNG");
 
+        if (image.isNull() && record.type == static_cast<int>(ModelTypes::Shader)) {
+            image = QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-72.png"));
+        }
+
 		auto sceneProperties = QJsonDocument::fromBinaryData(record.properties);
 
 		auto gridItem = new AssetGridItem(object, image, sceneProperties.object(), tags.object());
@@ -1158,14 +1162,20 @@ void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool
 
     auto bytes = db->fetchAsset(guid).thumbnail;
     QImage thumbnail;
-    if (thumbnail.loadFromData(bytes, "PNG")) {
+    if (!thumbnail.loadFromData(bytes, "PNG")) {
         //thumbnail = viewer->takeScreenshot(512, 512);
+        //db->updateAssetThumbnail(guid, bytes);
     }
 
     db->updateAssetProperties(guid, QJsonDocument(viewer->getSceneProperties()).toBinaryData());
     //db->updateAssetThumbnail(guid, bytes);
 
     object["type"] = db->fetchAsset(guid).type;
+
+    if (object["type"].toInt() == static_cast<int>(ModelTypes::Shader)) {
+        thumbnail = QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-72.png"));
+    }
+
     object["guid"] = guid;
 
     auto gridItem = new AssetGridItem(object, thumbnail, viewer->getSceneProperties(), tags);

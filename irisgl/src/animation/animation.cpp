@@ -149,7 +149,6 @@ ColorPropertyAnim *Animation::getColorPropertyAnim(QString name)
 
 bool Animation::hasPropertyAnim(QString name)
 {
-	qDebug() << properties.keys();
     return properties.contains(name);
 }
 

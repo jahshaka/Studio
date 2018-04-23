@@ -70,7 +70,7 @@ void ShaderPropertyWidget::onVertexShaderFileChanged(int index)
             asset->setValue(QVariant::fromValue(shaderObject));
 
             QFile jsonFile(asset->path);
-            jsonFile.open(QFile::WriteOnly);
+            jsonFile.open(QIODevice::Truncate | QFile::WriteOnly);
             jsonFile.write(QJsonDocument(shaderObject).toJson());
 
             if (db->checkIfRecordExists("guid", vertexShader, "assets")) {
@@ -108,7 +108,7 @@ void ShaderPropertyWidget::onFragmentShaderFileChanged(int index)
             asset->setValue(QVariant::fromValue(shaderObject));
 
             QFile jsonFile(asset->path);
-            jsonFile.open(QFile::WriteOnly);
+            jsonFile.open(QIODevice::Truncate | QFile::WriteOnly);
             jsonFile.write(QJsonDocument(shaderObject).toJson());
 
             if (db->checkIfRecordExists("guid", fragmentShader, "assets")) {

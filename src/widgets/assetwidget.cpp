@@ -1725,8 +1725,6 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                             }
                         }
 
-                        qDebug() << asset->path;
-
                         QFile jsonFile(asset->path);
                         jsonFile.open(QIODevice::Truncate | QFile::WriteOnly);
                         jsonFile.write(QJsonDocument(shaderDefinition).toJson());

@@ -2137,8 +2137,8 @@ void MainWindow::setupViewPort()
 	help->setObjectName("helpButton");
 	QIcon ico;
 	ico.addPixmap(IrisUtils::getAbsoluteAssetPath("app/images/question.png"), QIcon::Normal);
-	help->setIconSize(ico.availableSizes().first());
-	help->setFixedSize(ico.actualSize(ico.availableSizes().first()));//never larger than ic.availableSizes().first()
+	//help->setIconSize(ico.availableSizes().first());
+	help->setFixedSize(QSize(32, 32));//never larger than ic.availableSizes().first()
 	help->setCursor(Qt::PointingHandCursor);
 
 	help->setStyleSheet(
@@ -2159,8 +2159,8 @@ void MainWindow::setupViewPort()
 	prefs->setObjectName("prefsButton");
 	QIcon icop;
 	icop.addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/settings.png"), QIcon::Normal);
-	prefs->setIconSize(ico.availableSizes().first());
-	prefs->setFixedSize(ico.actualSize(icop.availableSizes().first()));//never larger than ic.availableSizes().first()
+	//prefs->setIconSize(ico.availableSizes().first());
+	prefs->setFixedSize(QSize(32, 32));//never larger than ic.availableSizes().first()
 	prefs->setCursor(Qt::PointingHandCursor);
 
 	prefs->setStyleSheet(
