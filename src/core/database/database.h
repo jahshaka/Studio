@@ -43,7 +43,7 @@ public:
                        const QString &name,
                        const QByteArray &sceneBlob = QByteArray(),
                        const QByteArray &thumbnail = QByteArray());
-    bool createFolder(const QString &folderName, const QString &parentFolder, const QString &guid);
+    bool createFolder(const QString &folderName, const QString &parentFolder, const QString &guid, bool visible = true);
     QString createAssetEntry(const QString &guid,
                              const QString &assetname,
                              const int &type,
@@ -69,6 +69,7 @@ public:
     bool deleteFolder(const QString &guid);
     bool deleteDependency(const QString &dependee);
     bool deleteDependency(const QString &depender, const QString &dependee);
+    bool removeDependenciesByType(const QString &depender, const ModelTypes &type);
     QStringList deleteFolderAndDependencies(const QString &guid);
     QStringList deleteAssetAndDependencies(const QString &guid);
     bool deleteRecord(const QString &table, const QString &row, const QVariant &value);
@@ -101,6 +102,7 @@ public:
 
     QByteArray fetchCachedThumbnail(const QString& name) const;
     QStringList fetchFolderNameByParent(const QString &guid);
+    QStringList fetchAssetNameByParent(const QString &guid);
     QStringList fetchFolderAndChildFolders(const QString &guid);
     QStringList fetchChildFolderAssets(const QString &guid);
     QStringList fetchAssetGUIDAndDependencies(const QString &guid, bool appendSelf = true);
@@ -118,11 +120,15 @@ public:
     QString importAsset(const ModelTypes &jafType,
                         const QString &pathToDb,
                         const QMap<QString, QString> &newNames,
+                        QMap<QString, QString> &outGuids,
+                        QVector<AssetRecord> &assetRecords,
                         const QString &parent = QString());
 
     QString copyAsset(const ModelTypes &jafType,
                       const QString &guid,
                       const QMap<QString, QString> &newNames,
+                      QMap<QString, QString> &guidCompareMap,
+                      QVector<AssetRecord> &oldAssetRecords,
                       const QString &parent);
 
     // EXPORT ===============================================================================

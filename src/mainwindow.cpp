@@ -732,8 +732,8 @@ void MainWindow::saveScene()
 
 void MainWindow::openProject(bool playMode)
 {
-    sceneView->makeCurrent();
     removeScene();
+    sceneView->makeCurrent();
 
     std::unique_ptr<SceneReader> reader(new SceneReader);
 	reader->setDatabaseHandle(db);
@@ -799,6 +799,8 @@ void MainWindow::closeProject()
 
 	undoStackCount = 0;
 
+    Globals::project->setProjectPath(Q_NULLPTR, Q_NULLPTR);
+
     if (currentSpace == WindowSpaces::DESKTOP) return;
     switchSpace(WindowSpaces::DESKTOP);
 }
@@ -834,19 +836,41 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
     QJsonObject material;
     SceneWriter::writeSceneNodeMaterial(material, m);
 
-    // Remove any previous material dependencies?
+    // Remove previous material dependencies
+    //auto objectGuid = db->fetchMeshObject(
+    //    meshNode->getGUID(),
+    //    static_cast<int>(ModelTypes::Object),
+    //    static_cast<int>(ModelTypes::Mesh)
+    //);
+
+    //db->removeDependenciesByType(objectGuid, ModelTypes::Texture);
+
+    QFile jsonFile(QDir(Globals::project->getProjectFolder()).filePath("matgen.material"));
+    jsonFile.open(QFile::WriteOnly);
+    jsonFile.write(QJsonDocument(material).toJson());
+
+    auto fguid = GUIDManager::generateGUID();
+    if (!db->checkIfRecordExists("name", "Presets", "folders")) {
+        if (!db->createFolder("Presets", Globals::project->getProjectGuid(), fguid, false)) return;
+    }
 
     QString guid = db->createAssetEntry(
         GUIDManager::generateGUID(),
         preset->name,
         static_cast<int>(ModelTypes::Material),
-        Globals::project->getProjectGuid(),
+        fguid,
         QString(),
         QString(),
         QByteArray(),
         QByteArray(),
         QJsonDocument(material).toBinaryData()
     );
+
+    ThumbnailGenerator::getSingleton()->requestThumbnail(
+        ThumbnailRequestType::Material, QDir(Globals::project->getProjectFolder()).filePath("matgen.material"), guid
+    );
+
+    assetWidget->updateAssetView(assetWidget->assetItem.selectedGuid);
 
     for (const auto &prop : m->properties) {
         if (prop->type == iris::PropertyType::Texture) {
@@ -861,7 +885,7 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
                 GUIDManager::generateGUID(),
                 QFileInfo(file).fileName(),
                 static_cast<int>(ModelTypes::Texture),
-                Globals::project->getProjectGuid(),
+                fguid,
                 QString(),
                 QString(),
                 QByteArray(),

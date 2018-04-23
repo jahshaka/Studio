@@ -378,18 +378,19 @@ bool Database::createProject(
     return executeAndCheckQuery(query, "CreateProject");
 }
 
-bool Database::createFolder(const QString &folderName, const QString &parentFolder, const QString &guid)
+bool Database::createFolder(const QString &folderName, const QString &parentFolder, const QString &guid, bool visible)
 {
     QSqlQuery query;
     query.prepare(
-        "INSERT INTO folders (name, parent, version, date_created, last_updated, project_guid, guid) "
-        "VALUES (:name, :parent, :version, datetime(), datetime(), :project_guid, :guid)"
+        "INSERT INTO folders (name, parent, version, date_created, last_updated, project_guid, guid, visible) "
+        "VALUES (:name, :parent, :version, datetime(), datetime(), :project_guid, :guid, :visible)"
     );
     query.bindValue(":name", folderName);
     query.bindValue(":parent", parentFolder);
     query.bindValue(":version", Constants::CONTENT_VERSION);
     query.bindValue(":project_guid", Globals::project->getProjectGuid());
     query.bindValue(":guid", guid);
+    query.bindValue(":visible", visible);
     return executeAndCheckQuery(query, "CreateFolder");
 }
 
@@ -501,7 +502,7 @@ QVector<FolderRecord> Database::fetchCrumbTrail(const QString &guid)
 QVector<FolderRecord> Database::fetchChildFolders(const QString &parent)
 {
 	QSqlQuery query;
-	query.prepare("SELECT guid, parent, name, count FROM folders WHERE parent = ? AND project_guid = ?");
+	query.prepare("SELECT guid, parent, name, count, visible FROM folders WHERE parent = ? AND project_guid = ?");
 	query.addBindValue(parent);
 	query.addBindValue(Globals::project->getProjectGuid());
 	executeAndCheckQuery(query, "FetchChildFolders");
@@ -515,6 +516,7 @@ QVector<FolderRecord> Database::fetchChildFolders(const QString &parent)
 			data.parent = record.value(1).toString();
 			data.name = record.value(2).toString();
 			data.count = record.value(3).toInt();
+			data.visible = record.value(4).toBool();
 		}
 
 		folderData.push_back(data);
@@ -681,6 +683,15 @@ bool Database::deleteDependency(const QString &depender, const QString &dependee
     return executeAndCheckQuery(query, "deleteDependency");
 }
 
+bool Database::removeDependenciesByType(const QString &depender, const ModelTypes &type)
+{
+    QSqlQuery query;
+    query.prepare("DELETE FROM dependencies WHERE depender = ? AND dependee_type = ?");
+    query.addBindValue(depender);
+    query.addBindValue(static_cast<int>(type));
+    return executeAndCheckQuery(query, "RemoveDependenciesByType");
+}
+
 bool Database::deleteRecord(const QString &table, const QString &row, const QVariant &value)
 {
     QSqlQuery query;
@@ -806,13 +817,14 @@ QVector<AssetRecord> Database::fetchAssets()
         "FROM assets A "
         "INNER JOIN collections C ON A.collection = C.collection_id "
         "WHERE A.project_guid IS NULL "
-        "AND (A.type = 5 OR A.type = 1 OR A.type = 2) "
+        "AND (A.type = 5 OR A.type = 1 OR A.type = 2 OR A.type = 9) "
         "AND A.guid NOT IN (select dependee FROM dependencies) "
         "ORDER BY A.name DESC"
     );
     query.bindValue(":m", static_cast<int>(ModelTypes::Object));
     query.bindValue(":o", static_cast<int>(ModelTypes::Material));
     query.bindValue(":t", static_cast<int>(ModelTypes::Texture));
+    query.bindValue(":s", static_cast<int>(ModelTypes::Shader));
     executeAndCheckQuery(query, "FetchAssets");
 
     QVector<AssetRecord> tileData;
@@ -1702,7 +1714,7 @@ void Database::createExportScene(const QString &outTempFilePath)
 
     QSqlQuery selectFolder;
     selectFolder.prepare(
-		"SELECT guid, name, parent, count, project_guid, date_created, last_updated FROM folders WHERE project_guid = ?"
+		"SELECT guid, name, parent, count, project_guid, date_created, last_updated, visible FROM folders WHERE project_guid = ?"
 	);
     selectFolder.addBindValue(Globals::project->getProjectGuid());
     executeAndCheckQuery(selectFolder, "selectFolder");
@@ -1716,14 +1728,15 @@ void Database::createExportScene(const QString &outTempFilePath)
         record.projectGuid = selectFolder.value(4).toString();
         record.dateCreated = selectFolder.value(5).toDateTime();
         record.lastUpdated = selectFolder.value(6).toDateTime();
+        record.visible = selectFolder.value(7).toBool();
         foldersToExport.append(record);
     }
 
     for (const auto &folder : foldersToExport) {
         QSqlQuery exportFolder(dbe);
         exportFolder.prepare(
-            "INSERT INTO folders (guid, name, parent, count, project_guid, date_created, last_updated) "
-            "VALUES (:guid, :name, :parent, :count, :project_guid, :date_created, :last_updated)"
+            "INSERT INTO folders (guid, name, parent, count, project_guid, date_created, last_updated, visible) "
+            "VALUES (:guid, :name, :parent, :count, :project_guid, :date_created, :last_updated, :visible)"
         );
 
         exportFolder.bindValue(":guid", folder.guid);
@@ -1733,6 +1746,7 @@ void Database::createExportScene(const QString &outTempFilePath)
         exportFolder.bindValue(":project_guid", folder.projectGuid);
         exportFolder.bindValue(":date_created", folder.dateCreated);
         exportFolder.bindValue(":last_updated", folder.lastUpdated);
+        exportFolder.bindValue(":visible", folder.visible);
 
         executeAndCheckQuery(exportFolder, "exportFolder");
     }
@@ -1740,10 +1754,10 @@ void Database::createExportScene(const QString &outTempFilePath)
     dbe.close();
 }
 
-bool Database::checkIfRecordExists(const QString & record, const QVariant &value, const QString & table)
+bool Database::checkIfRecordExists(const QString & record, const QVariant &value, const QString &table)
 {
 	QSqlQuery query;
-	query.prepare("SELECT EXISTS (SELECT 1 FROM assets WHERE guid = ? LIMIT 1)");
+	query.prepare(QString("SELECT EXISTS (SELECT 1 FROM %1 WHERE %2 = ? LIMIT 1)").arg(table).arg(record));
 	query.addBindValue(value);
 
 	if (query.exec()) {
@@ -1770,6 +1784,22 @@ QStringList Database::fetchFolderNameByParent(const QString &guid)
 	}
 
 	return folders;
+}
+
+QStringList Database::fetchAssetNameByParent(const QString &guid)
+{
+    QSqlQuery query;
+    query.prepare("SELECT name FROM assets WHERE parent = ?");
+    query.addBindValue(guid);
+    executeAndCheckQuery(query, "FetchAssetNameByParent");
+
+    QStringList assets;
+    while (query.next()) {
+        QSqlRecord record = query.record();
+        assets.append(record.value(0).toString());
+    }
+
+    return assets;
 }
 
 QStringList Database::fetchFolderAndChildFolders(const QString &guid)
@@ -2241,7 +2271,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     QVector<FolderRecord> foldersToImport;
 
     QSqlQuery selectFolder(dbe);
-    selectFolder.prepare("SELECT guid, name, parent, count, project_guid, date_created, last_updated FROM folders");
+    selectFolder.prepare("SELECT guid, name, parent, count, project_guid, date_created, last_updated, visible FROM folders");
     executeAndCheckQuery(selectFolder, "selectFolder");
 
     while (selectFolder.next()) {
@@ -2253,14 +2283,15 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         record.projectGuid = selectFolder.value(4).toString();
         record.dateCreated = selectFolder.value(5).toDateTime();
         record.lastUpdated = selectFolder.value(5).toDateTime();
+        record.visible = selectFolder.value(6).toBool();
         foldersToImport.append(record);
     }
 
     for (const auto &folder : foldersToImport) {
         QSqlQuery importFolder;
         importFolder.prepare(
-            "INSERT INTO folders (guid, name, parent, count, project_guid, date_created, last_updated) "
-            "VALUES (:guid, :name, :parent, :count, :project_guid, :date_created, :last_updated)"
+            "INSERT INTO folders (guid, name, parent, count, project_guid, date_created, last_updated, visible) "
+            "VALUES (:guid, :name, :parent, :count, :project_guid, :date_created, :last_updated, :visible)"
         );
 
         auto newFolderGuid = GUIDManager::generateGUID();
@@ -2276,6 +2307,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         importFolder.bindValue(":project_guid", newSceneGuid);
         importFolder.bindValue(":date_created", folder.dateCreated);
         importFolder.bindValue(":last_updated", folder.lastUpdated);
+        importFolder.bindValue(":visible", folder.visible);
 
         executeAndCheckQuery(importFolder, "importFolder");
     }
@@ -2289,6 +2321,8 @@ QString Database::importAsset(
 	const ModelTypes &jafType,
 	const QString & pathToDb,
 	const QMap<QString, QString>& newNames,
+    QMap<QString, QString> &outGuids,
+    QVector<AssetRecord> &assetRecords,
 	const QString &parent)
 {
     QSqlDatabase importConnection = QSqlDatabase();
@@ -2323,6 +2357,7 @@ QString Database::importAsset(
 
 		for (int i = 0; i < record.count(); i++) {
 			if (selectAssetQuery.value(1).toInt() == static_cast<int>(ModelTypes::Object) ||
+			    selectAssetQuery.value(1).toInt() == static_cast<int>(ModelTypes::Shader) ||
 				selectAssetQuery.value(1).toInt() == static_cast<int>(ModelTypes::Material)) {
 				data.guid = guidToReturn;
 				assetGuids.insert(record.value(0).toString(), guidToReturn);
@@ -2332,6 +2367,8 @@ QString Database::importAsset(
 				assetGuids.insert(record.value(0).toString(), guid);
 				data.guid = guid;
 			}
+
+            outGuids.insert(record.value(0).toString(), data.guid);
 
 			data.type = record.value(1).toInt();
 
@@ -2366,6 +2403,9 @@ QString Database::importAsset(
 		}
 
 		assetsToImport.push_back(data);
+        auto d = data;
+        //d.guid = record.value(0).toString();
+        assetRecords.push_back(d);
 	}
 
 	if (jafType == ModelTypes::Object) {
@@ -2487,6 +2527,8 @@ QString Database::copyAsset(
 	const ModelTypes & jafType,
 	const QString & guid,
 	const QMap<QString, QString>& newNames,
+	QMap<QString, QString>& outGuids,
+	QVector<AssetRecord> &oldAssetRecords,
 	const QString & parent)
 {
     QMap<QString, QString> assetGuids; /* old x new guid */
@@ -2518,6 +2560,8 @@ QString Database::copyAsset(
                     data.guid = guid;
                 }
 
+                outGuids.insert(record.value(0).toString(), data.guid);
+
                 data.type = record.value(1).toInt();
 
                 // If we find a file with the same name, rename it (may or may not change)
@@ -2545,6 +2589,7 @@ QString Database::copyAsset(
             }
 
             assetsToImport.push_back(data);
+            oldAssetRecords.push_back(data);
         }
     }
 

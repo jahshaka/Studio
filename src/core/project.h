@@ -84,6 +84,7 @@ struct FolderRecord
     QDateTime   dateCreated;
     QDateTime   lastUpdated;
 	int	        count;
+    bool        visible;
 };
 
 struct CollectionRecord
