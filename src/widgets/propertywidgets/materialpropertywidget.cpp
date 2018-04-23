@@ -120,9 +120,9 @@ void MaterialPropertyWidget::materialChanged(int index)
 {
     Q_UNUSED(index);
     material->purge();
+    clearPanel(this->layout());
     material->setName(materialSelector->getCurrentItem());
     material->setGuid(materialSelector->getCurrentItemData());
-    clearPanel(this->layout());
     setSceneNode(meshNode);
 }
 
