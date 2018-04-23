@@ -48,6 +48,7 @@ private:
 	ComboBoxWidget *vertexShaderCombo;
     ComboBoxWidget *fragmentShaderCombo;
 
+    QString shaderGuid;
     QStringList builtinShaders;
     Database *db;
 };

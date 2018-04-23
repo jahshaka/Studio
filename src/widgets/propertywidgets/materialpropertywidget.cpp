@@ -120,19 +120,10 @@ void MaterialPropertyWidget::materialChanged(int index)
 {
     Q_UNUSED(index);
     material->purge();
-    clearPanel(this->layout());
     material->setName(materialSelector->getCurrentItem());
     material->setGuid(materialSelector->getCurrentItemData());
+    clearPanel(this->layout());
     setSceneNode(meshNode);
-
-    //if (db->checkIfRecordExists("guid", material->getGuid(), "assets")) {
-    //    if (db->checkIfRecordExists("dependee", material->getGuid(), "dependencies")) {
-    //        db->insertGlobalDependency(static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Shader), meshNode->getGUID(), material->getGuid(), Globals::project->getProjectGuid());
-    //    }
-    //    else {
-    //        db->updateGlobalDependencyDependee(static_cast<int>(ModelTypes::File), meshNode->getGUID(), material->getGuid());
-    //    }
-    //}
 }
 
 void MaterialPropertyWidget::setupShaderSelector()
@@ -147,7 +138,7 @@ void MaterialPropertyWidget::setupShaderSelector()
 
     for (auto asset : AssetManager::getAssets()) {
         if (asset->type == ModelTypes::Shader) {
-            materialSelector->addItem(asset->fileName, asset->assetGuid);
+            materialSelector->addItem(QFileInfo(asset->fileName).baseName(), asset->assetGuid);
         }
     }
 

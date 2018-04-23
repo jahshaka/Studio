@@ -58,6 +58,7 @@ public:
     void resetViewerCamera();
 	void resetViewerCameraAfter();
     void loadJafMaterial(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
+    void loadJafShader(QString guid, QMap<QString, QString> &outGuids, bool firstAdd = true, bool cache = false, bool firstLoad = true);
     void loadJafModel(QString str, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
     void loadModel(QString str, bool firstAdd = true, bool cache = false, bool firstLoad = true);
 
@@ -67,6 +68,7 @@ public:
     void mouseMoveEvent(QMouseEvent *e);
 
 	void addJafMaterial(const QString &guid, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
+	void addJafShader(const QString &guid, QMap<QString, QString> &outGuids, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addJafMesh(const QString &path, const QString &guid, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addMesh(const QString &path = QString(), bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid = "", bool viewed = false, bool cache = false);

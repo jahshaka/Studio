@@ -585,24 +585,9 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
         }
     }
 
-  //  if (shaderFile.exists()) {
-		//m->generate(shaderFile.absoluteFilePath());
-  //  } else {
-  //      for (auto asset : AssetManager::getAssets()) {
-  //          if (asset->type == ModelTypes::Shader) {
-  //              if (asset->fileName == mat["name"].toString() + ".shader") {
-  //                  m->generate(asset->path, true);
-  //              }
-  //          }
-  //      }
-  //  }
-
     for (auto prop : m->properties) {
         if (mat.contains(prop->name)) {
             if (prop->type == iris::PropertyType::Texture) {
-                //auto textureStr = !mat[prop->name].toString().isEmpty()
-                //                  ? getAbsolutePath(mat[prop->name].toString())
-                //                  : QString();
 				auto textureStr = !mat[prop->name].toString().isEmpty()
 					? QDir(Globals::project->getProjectFolder()).filePath(handle->fetchAsset(mat[prop->name].toString()).name)
 					: QString();

@@ -732,8 +732,8 @@ void MainWindow::saveScene()
 
 void MainWindow::openProject(bool playMode)
 {
-    sceneView->makeCurrent();
     removeScene();
+    sceneView->makeCurrent();
 
     std::unique_ptr<SceneReader> reader(new SceneReader);
 	reader->setDatabaseHandle(db);
@@ -799,6 +799,8 @@ void MainWindow::closeProject()
 
 	undoStackCount = 0;
 
+    Globals::project->setProjectPath(Q_NULLPTR, Q_NULLPTR);
+
     if (currentSpace == WindowSpaces::DESKTOP) return;
     switchSpace(WindowSpaces::DESKTOP);
 }
@@ -806,7 +808,7 @@ void MainWindow::closeProject()
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
 void MainWindow::applyMaterialPreset(MaterialPreset *preset)
 {
-    if (!activeSceneNode || activeSceneNode->sceneNodeType!=iris::SceneNodeType::Mesh) return;
+    if (!activeSceneNode || activeSceneNode->sceneNodeType != iris::SceneNodeType::Mesh) return;
 
     auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
 
@@ -830,6 +832,84 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
     m->setValue("textureScale", preset->textureScale);
 
     meshNode->setMaterial(m);
+
+    QJsonObject material;
+    SceneWriter::writeSceneNodeMaterial(material, m);
+
+    // Remove previous material dependencies
+    //auto objectGuid = db->fetchMeshObject(
+    //    meshNode->getGUID(),
+    //    static_cast<int>(ModelTypes::Object),
+    //    static_cast<int>(ModelTypes::Mesh)
+    //);
+
+    //db->removeDependenciesByType(objectGuid, ModelTypes::Texture);
+
+    QFile jsonFile(QDir(Globals::project->getProjectFolder()).filePath("matgen.material"));
+    jsonFile.open(QFile::WriteOnly);
+    jsonFile.write(QJsonDocument(material).toJson());
+
+    auto fguid = GUIDManager::generateGUID();
+    if (!db->checkIfRecordExists("name", "Presets", "folders")) {
+        if (!db->createFolder("Presets", Globals::project->getProjectGuid(), fguid, false)) return;
+    }
+
+    QString guid = db->createAssetEntry(
+        GUIDManager::generateGUID(),
+        preset->name,
+        static_cast<int>(ModelTypes::Material),
+        fguid,
+        QString(),
+        QString(),
+        QByteArray(),
+        QByteArray(),
+        QJsonDocument(material).toBinaryData()
+    );
+
+    ThumbnailGenerator::getSingleton()->requestThumbnail(
+        ThumbnailRequestType::Material, QDir(Globals::project->getProjectFolder()).filePath("matgen.material"), guid
+    );
+
+    assetWidget->updateAssetView(assetWidget->assetItem.selectedGuid);
+
+    for (const auto &prop : m->properties) {
+        if (prop->type == iris::PropertyType::Texture) {
+            auto file = prop->getValue().toString();
+            if (file.isEmpty()) continue;
+            QFile::copy(
+                file,
+                QDir(Globals::project->getProjectFolder()).filePath(QFileInfo(file).fileName())
+            );
+
+            QString fileGuid = db->createAssetEntry(
+                GUIDManager::generateGUID(),
+                QFileInfo(file).fileName(),
+                static_cast<int>(ModelTypes::Texture),
+                fguid,
+                QString(),
+                QString(),
+                QByteArray(),
+                QByteArray(),
+                QByteArray()
+            );
+
+            db->createDependency(
+                static_cast<int>(ModelTypes::Material),
+                static_cast<int>(ModelTypes::Texture),
+                guid,
+                fileGuid,
+                Globals::project->getProjectGuid()
+            );
+        }
+    }
+
+    db->createDependency(
+        static_cast<int>(ModelTypes::Object),
+        static_cast<int>(ModelTypes::Material),
+        meshNode->getGUID(),
+        guid,
+        Globals::project->getProjectGuid()
+    );
 
     // TODO: update node's material without updating the whole ui
     this->sceneNodePropertiesWidget->refreshMaterial(preset->type);

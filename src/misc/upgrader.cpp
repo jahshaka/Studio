@@ -33,6 +33,8 @@ void Upgrader::checkIfDeprecatedVersion()
 		QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::JAH_DATABASE
 	);
 
+    if (!QFile(path).exists()) return;
+
 	Database db;
 	if (db.initializeDatabase(path)) {
 		if (!db.checkIfTableExists("metadata") && db.getTableCount() != 0) {

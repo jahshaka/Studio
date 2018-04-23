@@ -16,12 +16,6 @@ UpdateChecker::UpdateChecker()
 
 void UpdateChecker::checkForUpdate()
 {
-	//QNetworkAccessManager *manager;
-	//QNetworkRequest request;
-
-	//manager = new QNetworkAccessManager();
-
-	qDebug() << Constants::UPDATE_CHECK_URL + Constants::CONTENT_VERSION;
 	auto reply = manager.get(QNetworkRequest(QUrl(Constants::UPDATE_CHECK_URL + Constants::CONTENT_VERSION)));
 	if (reply) {
 		connect(reply, &QNetworkReply::finished, [this, reply]() {
@@ -29,17 +23,13 @@ void UpdateChecker::checkForUpdate()
 			auto obj = doc.object();
 
 			auto shouldUpdate = obj.value("should_update").toBool(false);
-			if (!shouldUpdate)
-				return;
+			if (!shouldUpdate) return;
 
 			auto nextVersion = obj.value("id").toString();
 			auto versionNotes = obj.value("notes").toString();
 			auto downloadLink = obj.value("download_url").toString();
-			//qDebug() << downloadLink;
-			//qDebug() << obj;
 
 			emit updateNeeded(nextVersion, versionNotes, downloadLink);
-
 		});
 	}
 }

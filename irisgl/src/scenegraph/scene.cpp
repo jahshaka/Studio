@@ -116,16 +116,15 @@ void Scene::update(float dt)
     }
 
     // add items to renderlist
-    for(auto& mesh : meshes) {
+    for (const auto &mesh : meshes) {
         mesh->submitRenderItems();
     }
 
-    for(auto& particle : particleSystems) {
+    for (const auto &particle : particleSystems) {
         particle->submitRenderItems();
     }
 
-    if (renderSky)
-        this->geometryRenderList->add(skyRenderItem);
+    if (renderSky) this->geometryRenderList->add(skyRenderItem);
 }
 
 void Scene::render()

@@ -80,7 +80,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
             templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);
             QJsonObject shaderDefinition = QJsonDocument::fromJson(templateShaderFile->readAll()).object();
             templateShaderFile->close();
-            // shaderDefinition["name"] = QFileInfo(asset.name).baseName();
+            shaderDefinition["name"] = QFileInfo(asset.name).baseName();
             shaderDefinition.insert("guid", asset.guid);
 
             auto assetShader = new AssetShader;

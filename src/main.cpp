@@ -76,8 +76,8 @@ int main(int argc, char *argv[])
 	});
 	*/
 
-	Upgrader upgrader;
-	upgrader.checkIfDeprecatedVersion();
+	//Upgrader upgrader;
+	//upgrader.checkIfDeprecatedVersion();
 
     app.setWindowIcon(QIcon(":/images/icon.ico"));
     app.setApplicationName("Jahshaka");

@@ -397,6 +397,8 @@ void AssetWidget::generateAssetThumbnails()
 
 void AssetWidget::addItem(const FolderRecord &folderData)
 {
+    if (!folderData.visible) return;
+
 	QListWidgetItem *item = new QListWidgetItem;
 	item->setData(Qt::DisplayRole, folderData.name);
 	item->setData(MODEL_ITEM_TYPE, MODEL_FOLDER);
@@ -1122,10 +1124,21 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
 					QDir(Globals::project->getProjectFolder()).filePath(newFileName).toStdString().c_str()
 				)) {
 					for (auto &asset : AssetManager::getAssets()) {
-						if (asset->assetGuid == guid) asset->fileName = newFileName;
+                        if (asset->assetGuid == guid) {
+                            asset->fileName = newFileName;
+                            asset->path = QDir(Globals::project->getProjectFolder()).filePath(newFileName);
+                        }
 					}
 				}
-			}
+            }
+            else {
+                for (auto &asset : AssetManager::getAssets()) {
+                    if (asset->assetGuid == guid) {
+                        asset->fileName = newFileName;
+                        asset->path = QDir(Globals::project->getProjectFolder()).filePath(newFileName);
+                    }
+                }
+            }
         }
         else {
             db->renameFolder(guid, newName);
@@ -1350,21 +1363,22 @@ void AssetWidget::createShader()
 	item->setData(MODEL_GUID_ROLE, assetGuid);
 	item->setData(MODEL_PARENT_ROLE, assetItem.selectedGuid);
 	item->setData(MODEL_ITEM_TYPE, MODEL_ASSET);
+    item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Shader));
 
 	assetItem.wItem = item;
 
 	QString shaderName = newShader;
 
-	QStringList foldersInProject = db->fetchFolderNameByParent(assetItem.selectedGuid);
+	QStringList assetsInProject = db->fetchAssetNameByParent(assetItem.selectedGuid);
 
-	// If we encounter the same file, make a duplicate...
+	//// If we encounter the same file, make a duplicate...
 	int increment = 1;
-	while (foldersInProject.contains(shaderName)) {
+	while (assetsInProject.contains(IrisUtils::buildFileName(shaderName, "shader"))) {
 		shaderName = QString(newShader + " %1").arg(QString::number(increment++));
 	}
 
 	db->createAssetEntry(assetGuid,
-						 shaderName,
+						 IrisUtils::buildFileName(shaderName, "shader"),
 						 static_cast<int>(ModelTypes::Shader),
 					     assetItem.selectedGuid,
 						 QByteArray());
@@ -1376,20 +1390,21 @@ void AssetWidget::createShader()
 	templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);
 	QJsonObject shaderDefinition = QJsonDocument::fromJson(templateShaderFile->readAll()).object();
 	templateShaderFile->close();
+    shaderDefinition["name"] = shaderName;
 
-	shaderDefinition["name"] = shaderName;
-	shaderDefinition.insert("guid", assetGuid);
+    auto assetShader = new AssetShader;
+    assetShader->fileName = IrisUtils::buildFileName(shaderName, "shader");
+    assetShader->assetGuid = assetGuid;
+    assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), IrisUtils::buildFileName(shaderName, "shader"));
+    assetShader->setValue(QVariant::fromValue(shaderDefinition));
 
     // Write to project dir, and update the path to that location
+    QFile jsonFile(assetShader->path);
+    jsonFile.open(QFile::WriteOnly);
+    jsonFile.write(QJsonDocument(shaderDefinition).toJson());
 
-	{
-		auto assetShader = new AssetShader;
-		assetShader->fileName = shaderName;
-		assetShader->assetGuid = assetGuid;
-		assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), "Shaders", IrisUtils::buildFileName(shaderName, "shader"));
-		assetShader->setValue(QVariant::fromValue(shaderDefinition));
-		AssetManager::addAsset(assetShader);
-	}
+    shaderDefinition.insert("guid", assetGuid);
+    AssetManager::addAsset(assetShader);
 }
 
 void AssetWidget::createFolder()
@@ -1501,9 +1516,6 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
 
             // Create a pair that holds the original name and the new name (if any)
             QVector<QPair<QString, QString>> files;	/* original x new */
-
-            QString placeHolderGuid = GUIDManager::generateGUID();
-
             QStringList fullFileList;
 
             for (const auto &image : fileNames) {
@@ -1535,6 +1547,10 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                     fullFileList.append(mesh);
                 }
             }
+
+            QMap<QString, QString> guidCompareMap; /* old x new */
+
+            QString placeHolderGuid = GUIDManager::generateGUID();
 
             for (const auto &file : fullFileList) {
                 QFileInfo fileInfo(file);
@@ -1583,7 +1599,7 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                     QJsonObject shaderDefinition = QJsonDocument::fromJson(templateShaderFile->readAll()).object();
                     templateShaderFile->close();
                     // shaderDefinition["name"] = checkFile.baseName();
-                    shaderDefinition.insert("guid", placeHolderGuid);
+                    //shaderDefinition.insert("guid", placeHolderGuid);
 
                     auto assetShader = new AssetShader;
                     assetShader->assetGuid = placeHolderGuid;
@@ -1608,7 +1624,7 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                             mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
                         return mat;
                     }, ssource);
-					this->sceneView->doneCurrent();
+                    this->sceneView->doneCurrent();
 
                     // Add to persistent store
                     QVariant variant = QVariant::fromValue(node);
@@ -1651,12 +1667,72 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                 jafType = ModelTypes::File;
             }
 
-            QString guidReturned = db->importAsset(jafType, QDir(temporaryDir.path()).filePath("asset.db"), newNames, assetItem.selectedGuid);
+            QVector<AssetRecord> oldAssetRecords;
 
-            if (jafType == ModelTypes::Shader || jafType == ModelTypes::File || jafType == ModelTypes::Texture) {
+            QString guidReturned = db->importAsset(
+                jafType,
+                QDir(temporaryDir.path()).filePath("asset.db"),
+                newNames,
+                guidCompareMap,
+                oldAssetRecords,
+                assetItem.selectedGuid
+            );
+
+            // The multiple for loops are intentional, don't try to optimize this, each asset type must be updated
+            for (auto &asset : AssetManager::getAssets()) {
+                if (asset->type == ModelTypes::File) {
+                    for (const auto &record : oldAssetRecords) {
+                        if (record.name == asset->fileName) {
+                            asset->assetGuid = record.guid;
+                        }
+                    }
+                }
+            }
+
+            if (jafType == ModelTypes::Texture) {
                 for (auto &asset : AssetManager::getAssets()) {
-                    if (asset->assetGuid == placeHolderGuid) {
+                    if (asset->assetGuid == placeHolderGuid && asset->type == ModelTypes::Texture) {
                         asset->assetGuid = guidReturned;
+                    }
+                }
+            }
+
+            if (jafType == ModelTypes::Shader) {
+                for (auto &asset : AssetManager::getAssets()) {
+                    if (asset->assetGuid == placeHolderGuid && asset->type == ModelTypes::Shader) {
+                        asset->assetGuid = guidReturned;
+
+                        auto shaderDefinition = asset->getValue().toJsonObject();
+
+                        auto vertexShader = shaderDefinition["vertex_shader"].toString();
+                        auto fragmentShader = shaderDefinition["fragment_shader"].toString();
+
+                        QMapIterator<QString, QString> it(guidCompareMap);
+                        while (it.hasNext()) {
+                            it.next();
+                            if (it.key() == vertexShader) {
+                                shaderDefinition["vertex_shader"] = it.value();
+                                break;
+                            }
+                        }
+
+                        QMapIterator<QString, QString> it2(guidCompareMap);
+                        while (it2.hasNext()) {
+                            it2.next();
+                            if (it2.key() == fragmentShader) {
+                                shaderDefinition["fragment_shader"] = it2.value();
+                                break;
+                            }
+                        }
+
+                        qDebug() << asset->path;
+
+                        QFile jsonFile(asset->path);
+                        jsonFile.open(QIODevice::Truncate | QFile::WriteOnly);
+                        jsonFile.write(QJsonDocument(shaderDefinition).toJson());
+
+                        shaderDefinition.insert("guid", guidReturned);
+                        asset->setValue(QVariant::fromValue(shaderDefinition));
                     }
                 }
             }
