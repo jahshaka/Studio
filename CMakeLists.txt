@@ -128,8 +128,6 @@ set(SRCS
 	src/dialogs/softwareupdatedialog.cpp
     src/io/assethelper.cpp
     src/misc/upgrader.cpp
-    src/misc/QtAwesome.cpp
-    src/misc/QtAwesomeAnim.cpp
     src/dialogs/toast.cpp
 )
 
@@ -253,8 +251,6 @@ set(HEADERS
     src/editor/animationpath.h
     src/io/assethelper.h
     src/misc/upgrader.h
-    src/misc/QtAwesome.h
-    src/misc/QtAwesomeAnim.h    
     src/dialogs/toast.h
 )
 
