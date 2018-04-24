@@ -25,6 +25,8 @@ For more information see the LICENSE file
 #include <QLabel>
 #include <QCheckBox>
 #include "irisglfwd.h"
+#include "misc/QtAwesome.h"
+#include "misc/QtAwesomeAnim.h"
 
 namespace Ui {
     class MainWindow;
@@ -379,6 +381,7 @@ private:
 	QVector<bool> widgetStates;	// use the order in the enum
 
     WindowSpaces currentSpace;
+	QtAwesome *awesome;
 };
 
 #endif // MAINWINDOW_H
