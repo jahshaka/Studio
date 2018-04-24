@@ -9,7 +9,7 @@
 SoftwareUpdateDialog::SoftwareUpdateDialog(QDialog *parent) : QDialog(parent), ui(new Ui::SoftwareUpdateDialog)
 {
 	ui->setupUi(this);
-	setWindowTitle("Software Update");
+	setWindowTitle(tr("Software Update"));
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
 	connect(ui->pushButton, &QPushButton::clicked, [this]() {
@@ -42,4 +42,10 @@ void SoftwareUpdateDialog::setDownloadUrl(QString url)
 SoftwareUpdateDialog::~SoftwareUpdateDialog()
 {
 	delete ui;
+}
+
+void SoftwareUpdateDialog::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)	ui->retranslateUi(this);
+	QWidget::changeEvent(event);
 }

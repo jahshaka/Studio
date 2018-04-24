@@ -23,6 +23,9 @@ public slots:
 private:
     Ui::DonateDialog *ui;
     SettingsManager *settingsManager;
+
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 #endif // DONATEDIALOG_HPP

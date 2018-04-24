@@ -37,6 +37,9 @@ private:
 
     QString texFile;
     QString meshFile;
+
+protected:
+    void changeEvent(QEvent* event) override;
 };
 
 #endif // LOADMESHDIALOG_H

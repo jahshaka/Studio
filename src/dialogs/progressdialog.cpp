@@ -36,3 +36,9 @@ void ProgressDialog::setValue(int val)
     ui->progressBar->setValue(val);
 	QApplication::processEvents();
 }
+
+void ProgressDialog::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)	ui->retranslateUi(this);
+	QWidget::changeEvent(event);
+}

@@ -18,7 +18,7 @@ include(BuildType)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
 
-# set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -128,8 +128,12 @@ set(SRCS
 	src/dialogs/softwareupdatedialog.cpp
     src/io/assethelper.cpp
     src/misc/upgrader.cpp
+<<<<<<< HEAD
     src/misc/QtAwesome.cpp
     src/misc/QtAwesomeAnim.cpp
+=======
+    src/misc/helpinglabels.cpp
+>>>>>>> Added translation for main window in Portuguese
     src/dialogs/toast.cpp
 )
 
@@ -253,8 +257,12 @@ set(HEADERS
     src/editor/animationpath.h
     src/io/assethelper.h
     src/misc/upgrader.h
+<<<<<<< HEAD
     src/misc/QtAwesome.h
     src/misc/QtAwesomeAnim.h    
+=======
+    src/misc/helpinglabels.h
+>>>>>>> Added translation for main window in Portuguese
     src/dialogs/toast.h
 )
 
@@ -301,14 +309,15 @@ set(FORMS
     src/dialogs/renameprojectdialog.ui 
     src/dialogs/donate.ui
     src/dialogs/softwareupdatedialog.ui
+    src/misc/helpinglabels.ui
 )
 
 set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
 
-qt5_wrap_cpp(HEADERS_moc ${HEADERS})
-qt5_wrap_ui(UI_moc ${FORMS})
+#qt5_wrap_cpp(HEADERS_moc ${HEADERS})
+#qt5_wrap_ui(UI_moc ${FORMS})
 
 # Todo - trim these down to nothing eventually
 qt5_add_resources(QRCS
@@ -317,6 +326,7 @@ qt5_add_resources(QRCS
     ${CMAKE_SOURCE_DIR}/app/images.qrc
     ${CMAKE_SOURCE_DIR}/app/models.qrc
     ${CMAKE_SOURCE_DIR}/app/shaders.qrc 
+    ${CMAKE_SOURCE_DIR}/app/languages.qrc 
 )
 
 # Disable compiler specific warnings if we are building with MSVC

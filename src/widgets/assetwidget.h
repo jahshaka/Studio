@@ -19,6 +19,7 @@ class Database;
 #include "../editor/thumbnailgenerator.h"
 #include "../core/project.h"
 #include "../widgets/sceneviewwidget.h"
+#include "../misc/helpinglabels.h"
 
 // Look into this (iKlsR) - https://stackoverflow.com/questions/19465812/how-can-i-insert-qdockwidget-as-tab
 
@@ -293,6 +294,12 @@ private:
 	QSize iconSize;
 	QSize listSize;
 	QSize currentSize;
+	HelpingLabels *helpingLabels;
+	QLabel *displayLabel;
+	void changeLabels();
+
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 #endif // ASSETWIDGET_H

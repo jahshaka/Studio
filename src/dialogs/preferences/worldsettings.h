@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #define WORLDSETTINGS_H
 
 #include <QWidget>
+#include <QTranslator>
 
 namespace Ui {
     class WorldSettings;
@@ -54,12 +55,22 @@ private slots:
     void changeEditorPath();
     void editorPathChanged(QString path);
 	void enableAutoUpdate(bool state);
+	void changeLanguage();
+
 
 public slots:
 	void saveSettings();
 
 public:
     Ui::WorldSettings *ui;
+
+private:
+	void changeLanguageToEnglish();
+	void changeLanguageToPortugese();
+	QTranslator translator_por;
+
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 #endif // WORLDSETTINGS_H

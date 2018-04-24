@@ -28,6 +28,9 @@ public:
 
 private:
     Ui::AboutDialog *ui;
+
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 #endif // ABOUTDIALOG_H

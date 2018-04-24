@@ -1,0 +1,489 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>HelpingLabels</class>
+ <widget class="QWidget" name="HelpingLabels">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>750</width>
+    <height>539</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <widget class="QWidget" name="verticalLayoutWidget">
+   <property name="geometry">
+    <rect>
+     <x>580</x>
+     <y>0</y>
+     <width>237</width>
+     <height>566</height>
+    </rect>
+   </property>
+   <layout class="QVBoxLayout" name="mainwindow1">
+    <item>
+     <widget class="QLabel" name="actionFreeCamera">
+      <property name="text">
+       <string>Freely move and orient the camera</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="actionUndo">
+      <property name="text">
+       <string>Undo last action</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="hierarchy">
+      <property name="text">
+       <string>Hierarchy</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="playBtn">
+      <property name="text">
+       <string>Play the scene</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="animationDock">
+      <property name="text">
+       <string>Timeline</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="actionRedo">
+      <property name="text">
+       <string>Redo last action</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="viewDocks">
+      <property name="text">
+       <string>Toggle Widgets</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="actionSaveScene">
+      <property name="text">
+       <string>Save the current scene</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="worlds_menu">
+      <property name="text">
+       <string>Worlds</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="playSceneBtn">
+      <property name="text">
+       <string>Play scene</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="closeAll">
+      <property name="text">
+       <string>Close All</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="actionTranslate">
+      <property name="text">
+       <string>Manipulator for translating objects</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="actionLocalSpace">
+      <property name="text">
+       <string>Move objects relative to their transform</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="pauseScene">
+      <property name="text">
+       <string>pause the scene</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="stopBtn">
+      <property name="text">
+       <string>Stop playback</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="restartBtn">
+      <property name="text">
+       <string>Restart playback</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="actionArcballcam">
+      <property name="text">
+       <string>Move and orient the camera around a fixed point</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="restoreAll">
+      <property name="text">
+       <string>Restore All</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="properties">
+      <property name="text">
+       <string>Properties</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="actionGlobalSpace">
+      <property name="text">
+       <string>Move objects relative to the global world</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="screenShotBtn">
+      <property name="text">
+       <string>Take a screenshot of the scene</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="presets">
+      <property name="text">
+       <string>Presets</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="wireCheckBtn">
+      <property name="text">
+       <string>Viewport Wireframes</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="player_menu">
+      <property name="text">
+       <string>Player</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="editor_menu">
+      <property name="text">
+       <string>Editor</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="assets_menu">
+      <property name="text">
+       <string>Assets</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="actionScale">
+      <property name="text">
+       <string>Manipulator for scaling objects</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="actionRotate">
+      <property name="text">
+       <string>Manipulator for rotating objects</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="assetDock">
+      <property name="text">
+       <string>Asset Browser</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="actionExport">
+      <property name="text">
+       <string>Export the current scene</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QWidget" name="verticalLayoutWidget_2">
+   <property name="geometry">
+    <rect>
+     <x>450</x>
+     <y>0</y>
+     <width>180</width>
+     <height>509</height>
+    </rect>
+   </property>
+   <layout class="QVBoxLayout" name="assetview">
+    <item>
+     <widget class="QLabel" name="metadataTags">
+      <property name="text">
+       <string>Tags: </string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="metadataPublic">
+      <property name="text">
+       <string>Public: </string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="metadataType">
+      <property name="text">
+       <string>Type: </string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="metadataAuthor">
+      <property name="text">
+       <string>Author: </string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="changeMetaCollection">
+      <property name="text">
+       <string>change</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="header">
+      <property name="text">
+       <string>Asset Metadata</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="addToProject">
+      <property name="text">
+       <string>Add to Project</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="collectionButton">
+      <property name="text">
+       <string>Create Collection</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="onlineAssetsBtn">
+      <property name="text">
+       <string>Online Assets</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="localAssetsBtn">
+      <property name="text">
+       <string>Local Assets</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="updatAsset">
+      <property name="text">
+       <string>Update</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="importAsset">
+      <property name="text">
+       <string>Import Asset</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="dropArea">
+      <property name="text">
+       <string>Drop an asset to import...</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="downloadAssets">
+      <property name="text">
+       <string>Download Assets</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="assetCollections">
+      <property name="text">
+       <string>Asset Collections</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="normalize">
+      <property name="text">
+       <string>Normalize</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="deleteFromLibrary">
+      <property name="text">
+       <string>Delete From Library</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="collectionCreated">
+      <property name="text">
+       <string>Collection Created</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="failedToCreate">
+      <property name="text">
+       <string>Failed to create collection. Try again.</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="noAssetsString">
+      <property name="text">
+       <string>You have no assets in your library</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="collectionCreationSuccessful">
+      <property name="text">
+       <string>Colection Creation Successful</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="collectionCreationFailed">
+      <property name="text">
+       <string>Collection Creation Failed</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="backdropLabel">
+      <property name="text">
+       <string>Backdrop: </string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="metadataMissing">
+      <property name="text">
+       <string>Nothing selected...</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="metadataLicense">
+      <property name="text">
+       <string>License: </string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="metadataName">
+      <property name="text">
+       <string>Name:</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="metadataCollection">
+      <property name="text">
+       <string>Collection: </string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QWidget" name="verticalLayoutWidget_3">
+   <property name="geometry">
+    <rect>
+     <x>290</x>
+     <y>0</y>
+     <width>160</width>
+     <height>91</height>
+    </rect>
+   </property>
+   <layout class="QVBoxLayout" name="assetWidget">
+    <item>
+     <widget class="QLabel" name="Icon">
+      <property name="text">
+       <string>Icon</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="List">
+      <property name="text">
+       <string>List</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="importingAssets">
+      <property name="text">
+       <string>Importing assets...</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="typeToSearch">
+      <property name="text">
+       <string>Type to search for assets...</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="displayLabel">
+      <property name="text">
+       <string>Display: </string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

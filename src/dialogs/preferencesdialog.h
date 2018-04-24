@@ -38,6 +38,7 @@ protected:
         emit PreferencesDialogClosed();
         event->accept();
     }
+    void changeEvent(QEvent* event) override;
 
 public:
     explicit PreferencesDialog(QWidget* parent, Database *db, SettingsManager* settings);
@@ -67,6 +68,7 @@ private slots:
 
 private:
     Ui::PreferencesDialog *ui;
+    
 };
 
 #endif // PREFERENCESDIALOG_H

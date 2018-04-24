@@ -22,3 +22,9 @@ void DonateDialog::saveAndClose()
 {
     settingsManager->setValue("ddialog_seen", true);
 }
+
+void DonateDialog::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)	ui->retranslateUi(this);
+	QWidget::changeEvent(event);
+}

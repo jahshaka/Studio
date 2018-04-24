@@ -30,6 +30,9 @@ public:
 
 private:
     Ui::RenameLayerDialog *ui;
+
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 #endif // RENAMELAYERDIALOG_H

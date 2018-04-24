@@ -38,11 +38,13 @@
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 #include "widgets/sceneviewwidget.h"
+#include "../misc/helpinglabels.h"
+#include "../misc/ui_helpinglabels.h"
 
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
 	ui->setupUi(this);
-
+	helpingLabels = new HelpingLabels();
 	this->db = handle;
 
 	ui->assetView->setAttribute(Qt::WA_MacShowFocusRect, false);
@@ -120,8 +122,8 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	QHBoxLayout *toggleLayout = new QHBoxLayout;
 	toggleLayout->setSpacing(0);
 	toggleLayout->setSizeConstraint(QLayout::SetFixedSize);
-	toggleLayout->addWidget(new QLabel(tr("Display:")));
-	toggleLayout->addSpacing(8);
+	displayLabel = new QLabel(tr("Display:"));
+	toggleLayout->addWidget(displayLabel);	toggleLayout->addSpacing(8);
 	toggleLayout->addWidget(toggleIconView);
 	toggleLayout->addWidget(toggleListView);
 
@@ -2176,4 +2178,20 @@ void AssetWidget::onThumbnailResult(ThumbnailResult *result)
 	}
 
 	delete result;
+}
+
+void AssetWidget::changeLabels()
+{
+	ui->retranslateUi(this);
+	helpingLabels->ui->retranslateUi(helpingLabels);
+	displayLabel->setText(helpingLabels->ui->displayLabel->text());
+	toggleListView->setText(helpingLabels->ui->List->text());
+	toggleIconView->setText(helpingLabels->ui->Icon->text());
+	ui->searchBar->setPlaceholderText(helpingLabels->ui->typeToSearch->text());
+}
+
+void AssetWidget::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)	changeLabels();	
+	QWidget::changeEvent(event);
 }

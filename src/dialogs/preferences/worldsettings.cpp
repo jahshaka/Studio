@@ -86,6 +86,8 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 	connect(ui->mining_2,   &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(3); });
 	connect(ui->help,       &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(4); });
 	connect(ui->about,      &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(5); });
+	connect(ui->language, SIGNAL(currentIndexChanged(QString)), this, SLOT(changeLanguage()));
+	translator_por.load(":/languages/jahshaka_por");
 
     setupDirectoryDefaults();
     setupOutline();
@@ -191,4 +193,25 @@ void WorldSettings::setupDirectoryDefaults()
     defaultProjectDirectory = settings->getValue("default_directory", path).toString();
 
     ui->projectDefault->setText(defaultProjectDirectory);
+}
+
+void WorldSettings::changeLanguage() {
+	if (ui->language->currentText() == "English")	changeLanguageToEnglish();
+	if (ui->language->currentText() == "Portuguese")	changeLanguageToPortugese();
+}
+
+void WorldSettings::changeLanguageToEnglish()
+{
+	qApp->removeTranslator(&translator_por);
+}
+
+void WorldSettings::changeLanguageToPortugese()
+{
+	qApp->installTranslator(&translator_por);
+}
+
+void WorldSettings::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)	ui->retranslateUi(this);
+	QWidget::changeEvent(event);
 }

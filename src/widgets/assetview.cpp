@@ -50,6 +50,8 @@
 #include "../core/guidmanager.h"
 
 #include "dialogs/toast.h"
+#include "../misc/helpinglabels.h"
+#include "../misc/ui_helpinglabels.h"
 
 void AssetView::focusInEvent(QFocusEvent *event)
 {
@@ -200,6 +202,7 @@ QString AssetView::getAssetType(int id)
 
 AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(parent)
 {
+	helpingLabels = new HelpingLabels();
 	setParent(parent);
 	this->parent = parent;
 	_assetView = new QListWidget;
@@ -332,7 +335,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	navLayout->addWidget(onlineAssetsButton);
 	navLayout->addSpacing(12);
 	navLayout->addWidget(treeWidget);
-	auto collectionButton = new QPushButton("Create Collection");
+	collectionButton = new QPushButton("Create Collection");
 	collectionButton->setStyleSheet("font-size: 12px; padding: 8px;");
 	navLayout->addWidget(collectionButton);
 
@@ -346,7 +349,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
         d.setFixedWidth(350);
         d.setLayout(l);
         QLineEdit *input = new QLineEdit;
-        QPushButton *accept = new QPushButton(tr("Create Collection"));
+        accept = new QPushButton(tr("Create Collection"));
 
         connect(accept, &QPushButton::pressed, [&]() {
             collectionName = input->text();
@@ -382,7 +385,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	testL->setMargin(0);
     testL->setSpacing(0);
 	emptyL->setSpacing(0);
-	auto emptyLabel = new QLabel("You have no assets in your library.");
+	emptyLabel = new QLabel("You have no assets in your library.");
 	auto emptyIcon = new QLabel;
 	emptyIcon->setAlignment(Qt::AlignVCenter | Qt::AlignHCenter);
 	emptyIcon->setPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-empty-box-50.png"));
@@ -585,15 +588,15 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	assetDropPad->setSizePolicy(policy);
 	assetDropPad->setObjectName(QStringLiteral("assetDropPad"));
 	auto assetDropPadLayout = new QVBoxLayout;
-	QLabel *assetDropPadLabel = new QLabel("Drop an asset to import...");
+	assetDropPadLabel = new QLabel("Drop an asset to import...");
 	assetDropPadLayout->setSpacing(6);
 	assetDropPadLayout->setContentsMargins(6, 6, 6, 2);
 	assetDropPadLabel->setObjectName(QStringLiteral("assetDropPadLabel"));
 	assetDropPadLabel->setAlignment(Qt::AlignHCenter);
 
 	assetDropPadLayout->addWidget(assetDropPadLabel);
-	QPushButton *browseButton = new QPushButton("Import Asset");
-	QPushButton *downloadWorld = new QPushButton("Download Assets");
+	browseButton = new QPushButton("Import Asset");
+	downloadWorld = new QPushButton("Download Assets");
 
 	connect(downloadWorld, &QPushButton::pressed, []() {
 		QDesktopServices::openUrl(QUrl("http://www.jahfx.com/downloads/models/"));
@@ -931,7 +934,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 	metadata->setLayout(l);
 	//metadata->setStyleSheet("QLabel { font-size: 12px; }");
-	auto header = new QLabel("Asset Metadata");
+	header = new QLabel("Asset Metadata");
 	header->setAlignment(Qt::AlignCenter);
 	header->setStyleSheet("border-top: 1px solid black; border-bottom: 1px solid black; text-align: center; padding: 12px; background: #1A1A1A");
 	metaLayout->addWidget(header);
@@ -1762,5 +1765,44 @@ void AssetView::removeAssetFromProject(AssetGridItem *item)
 
 AssetView::~AssetView()
 {
-    
+}
+
+
+void AssetView::changeEvent(QEvent *event)
+{
+	if (event->type() == QEvent::LanguageChange)	changeAllLabels();	
+	QWidget::changeEvent(event);
+}
+
+void AssetView::changeAllLabels()
+{
+	helpingLabels->ui->retranslateUi(helpingLabels);
+
+	header->setText(helpingLabels->ui->header->text());
+	emptyLabel->setText(helpingLabels->ui->noAssetsString->text());
+	collectionButton->setText(helpingLabels->ui->collectionButton->text());
+	//accept->setText(helpingLabels->ui->changeMetaCollection->text());
+	
+	normalize->setText(helpingLabels->ui->normalize->text());
+	metadataAuthor->setText(helpingLabels->ui->metadataAuthor->text());
+	metadataCollection->setText(helpingLabels->ui->metadataCollection->text());
+	metadataLicense->setText(helpingLabels->ui->metadataLicense->text());
+	metadataMissing->setText(helpingLabels->ui->metadataMissing->text());
+	metadataTags->setText(helpingLabels->ui->metadataTags->text());
+	metadataType->setText(helpingLabels->ui->metadataType->text());
+	metadataVisibility->setText(helpingLabels->ui->metadataPublic->text());
+	metadataName->setText(helpingLabels->ui->metadataName->text());
+	changeMetaCollection->setText(helpingLabels->ui->changeMetaCollection->text());
+	tagModel->setText(helpingLabels->ui->metadataTags->text());
+	renameModel->setText(helpingLabels->ui->metadataName->text());
+	deleteFromLibrary->setText(helpingLabels->ui->deleteFromLibrary->text());
+	addToProject->setText(helpingLabels->ui->addToProject->text());
+	updateAsset->setText(helpingLabels->ui->updatAsset->text());
+	onlineAssetsButton->setText(helpingLabels->ui->onlineAssetsBtn->text());
+	localAssetsButton->setText(helpingLabels->ui->localAssetsBtn->text());
+	backdropLabel->setText(helpingLabels->ui->backdropLabel->text());
+	assetDropPadLabel->setText(helpingLabels->ui->dropArea->text());
+	browseButton->setText(helpingLabels->ui->importAsset->text());
+	downloadWorld->setText(helpingLabels->ui->downloadAssets->text());
+	rootItem->setText(0,helpingLabels->ui->assetCollections->text());
 }

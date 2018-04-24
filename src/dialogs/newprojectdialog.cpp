@@ -16,7 +16,7 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui
 {
     ui->setupUi(this);
 
-    this->setWindowTitle("New World");
+    this->setWindowTitle(tr("New World"));
 
     ui->createProject->setAutoDefault(true);
     ui->createProject->setDefault(true);
@@ -83,4 +83,10 @@ void NewProjectDialog::confirmProjectCreation()
         this->close();
         emit accepted();
     //}
+}
+
+void NewProjectDialog::changeEvent(QEvent * event)
+{
+    if (event->type() == QEvent::LanguageChange)    ui->retranslateUi(this);
+    QWidget::changeEvent(event);
 }

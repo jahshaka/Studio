@@ -21,6 +21,9 @@ public:
 private:
 	Ui::SoftwareUpdateDialog *ui;
 	QString downloadUrl;
+
+protected:
+	void changeEvent(QEvent* event) override;
 };
 
 #endif //SOFTWAREUPDATEDIALOG_H

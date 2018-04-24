@@ -4,7 +4,7 @@
 RenameProjectDialog::RenameProjectDialog(QDialog *parent) : QDialog(parent), ui(new Ui::RenameProjectDialog)
 {
     ui->setupUi(this);
-    setWindowTitle("Rename Project");
+    setWindowTitle(tr("Rename Project"));
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
     connect(ui->ok, SIGNAL(pressed()), SLOT(newText()));
@@ -19,4 +19,10 @@ void RenameProjectDialog::newText()
 {
     emit newTextEmit(ui->lineEdit->text());
     this->close();
+}
+
+void RenameProjectDialog::changeEvent(QEvent * event)
+{
+	if (event->type() == QEvent::LanguageChange)	ui->retranslateUi(this);
+	QWidget::changeEvent(event);
 }

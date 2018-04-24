@@ -6,6 +6,8 @@
 #include "irisgl/src/graphics/mesh.h"
 #include "irisgl/src/core/irisutils.h"
 
+#include "../misc/helpinglabels.h"
+
 class QSplitter;
 class QListWidget;
 
@@ -170,6 +172,21 @@ private:
     QStackedLayout *viewers;
 
 	QWidget *parent;
+
+	HelpingLabels *helpingLabels;
+	QLabel *header;
+	QPushButton *collectionButton;
+	QPushButton *accept;
+	QLabel *emptyLabel;
+	QLabel *assetDropPadLabel;
+	QPushButton *browseButton ;
+	QPushButton *downloadWorld ;
+
+	void changeAllLabels();
+
+
+private:
+	void changeEvent(QEvent *event) override;
 };
 
 #endif // ASSETVIEW_H
