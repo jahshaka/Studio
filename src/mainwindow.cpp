@@ -43,6 +43,7 @@ For more information see the LICENSE file
 #include "core/guidmanager.h"
 #include "core/thumbnailmanager.h"
 #include "src/dialogs/donatedialog.h"
+#include "src/io/assethelper.h"
 
 #include <QFontDatabase>
 #include <QOpenGLContext>
@@ -1609,7 +1610,7 @@ void MainWindow::createMaterial(const QString &guid)
 			QByteArray(),
 			QByteArray(),
 			binaryMat
-        );
+		);
 
 		ThumbnailGenerator::getSingleton()->requestThumbnail(
 			ThumbnailRequestType::Material, fileName, assetGuid
@@ -1619,47 +1620,55 @@ void MainWindow::createMaterial(const QString &guid)
 
 		QJsonObject matObject = QJsonDocument::fromBinaryData(binaryMat).object();
 
-        auto material = iris::CustomMaterial::create();
-        const QJsonObject materialDefinition = matObject;
-        auto shaderGuid = materialDefinition["guid"].toString();
-        material->setName(materialDefinition["name"].toString());
-        material->setGuid(shaderGuid);
+		auto material = iris::CustomMaterial::create();
+		const QJsonObject materialDefinition = matObject;
+		auto shaderGuid = materialDefinition["guid"].toString();
+		material->setName(materialDefinition["name"].toString());
+		material->setGuid(shaderGuid);
 
-        QFileInfo shaderFile;
+		QFileInfo shaderFile;
 
-        QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
-        while (it.hasNext()) {
-            it.next();
-            if (it.key() == shaderGuid) {
-                shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
-                break;
-            }
-        }
+		QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+		while (it.hasNext()) {
+			it.next();
+			if (it.key() == shaderGuid) {
+				shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
+				break;
+			}
+		}
 
-        if (shaderFile.exists()) {
-            material->generate(shaderFile.absoluteFilePath());
-        }
-        else {
-            // Reading is thread safe...
-            for (auto asset : AssetManager::getAssets()) {
-                if (asset->type == ModelTypes::Shader) {
-                    if (asset->assetGuid == material->getGuid()) {
-                        auto def = asset->getValue().toJsonObject();
-                        auto vertexShader = def["vertex_shader"].toString();
-                        auto fragmentShader = def["fragment_shader"].toString();
-                        for (auto asset : AssetManager::getAssets()) {
-                            if (asset->type == ModelTypes::File) {
-                                if (vertexShader == asset->assetGuid) vertexShader = asset->path;
-                                if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
-                            }
-                        }
-                        def["vertex_shader"] = vertexShader;
-                        def["fragment_shader"] = fragmentShader;
-                        material->generate(def);
-                    }
-                }
-            }
-        }
+		if (shaderFile.exists()) {
+			material->generate(shaderFile.absoluteFilePath());
+		}
+		else {
+			// Reading is thread safe...
+			for (auto asset : AssetManager::getAssets()) {
+				if (asset->type == ModelTypes::Shader) {
+					if (asset->assetGuid == material->getGuid()) {
+						auto def = asset->getValue().toJsonObject();
+						auto vertexShader = def["vertex_shader"].toString();
+						auto fragmentShader = def["fragment_shader"].toString();
+						for (auto asset : AssetManager::getAssets()) {
+							if (asset->type == ModelTypes::File) {
+								if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+								if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+							}
+						}
+						def["vertex_shader"] = vertexShader;
+						def["fragment_shader"] = fragmentShader;
+						material->setMaterialDefinition(def);
+						material->generate(def);
+
+						db->createDependency(
+							static_cast<int>(ModelTypes::Material),
+							static_cast<int>(ModelTypes::Shader),
+							assetGuid, material->getGuid(),
+							Globals::project->getProjectGuid()
+						);
+					}
+				}
+			}
+		}
 
 		for (const auto &prop : material->properties) {
 			if (prop->type == iris::PropertyType::Color) {
@@ -1670,11 +1679,11 @@ void MainWindow::createMaterial(const QString &guid)
 			else if (prop->type == iris::PropertyType::Texture) {
 				if (!matObject.value(prop->name).toString().isEmpty()) {
 					db->createDependency(
-                        static_cast<int>(ModelTypes::Material),
-                        static_cast<int>(ModelTypes::Texture),
-                        assetGuid, matObject.value(prop->name).toString(),
-                        Globals::project->getProjectGuid()
-                    );
+						static_cast<int>(ModelTypes::Material),
+						static_cast<int>(ModelTypes::Texture),
+						assetGuid, matObject.value(prop->name).toString(),
+						Globals::project->getProjectGuid()
+					);
 				}
 
 				QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
@@ -1691,12 +1700,12 @@ void MainWindow::createMaterial(const QString &guid)
 		assetMat->setValue(QVariant::fromValue(material));
 		AssetManager::addAsset(assetMat);
 
-        QFile::remove(fileName);
-	}
-	else {
-		qDebug() << "Need an active scenenode!";
-		return;
-	}
+		QFile::remove(fileName);
+    }
+    else {
+        qDebug() << "Need an active scenenode!";
+        return;
+    }
 }
 
 void MainWindow::exportNode(const QString &guid)
@@ -1728,11 +1737,15 @@ void MainWindow::exportNode(const QString &guid)
 	}
 	manifest.close();
 
-	for (const auto &asset : db->fetchAssetAndDependencies(guid)) {
-		QFile::copy(
-			IrisUtils::join(Globals::project->getProjectFolder(), asset),
-			IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
-		);
+	for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
+        auto asset = db->fetchAsset(assetGuid);
+        QFileInfo assetInfo(asset.name);
+        if (!assetInfo.suffix().isEmpty()) {
+            QFile::copy(
+                IrisUtils::join(Globals::project->getProjectFolder(), assetInfo.fileName()),
+                IrisUtils::join(writePath, "assets", assetInfo.fileName())
+            );
+        }
 	}
 
     // get all the files and directories in the project working directory

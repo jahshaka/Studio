@@ -34,6 +34,8 @@ For more information see the LICENSE file
 #include "../../uimanager.h"
 #include "../../commands/changematerialpropertycommand.h"
 
+#include "io/scenewriter.h"
+
 #include "globals.h"
 #include "core/database/database.h"
 
@@ -124,6 +126,17 @@ void MaterialPropertyWidget::materialChanged(int index)
     material->setName(materialSelector->getCurrentItem());
     material->setGuid(materialSelector->getCurrentItemData());
     setSceneNode(meshNode);
+
+    QJsonObject node;
+    SceneWriter::writeSceneNode(node, meshNode, false);
+    db->updateAssetAsset(meshNode->getGUID(), QJsonDocument(node).toBinaryData());
+    db->removeDependenciesByType(meshNode->getGUID(), ModelTypes::Shader);
+    db->createDependency(
+        static_cast<int>(ModelTypes::Object),
+        static_cast<int>(ModelTypes::Shader),
+        meshNodeGuid, materialSelector->getCurrentItemData(),
+        Globals::project->getProjectGuid()
+    );
 }
 
 void MaterialPropertyWidget::setupShaderSelector()

@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include "irisgl/src/scenegraph/meshnode.h"
 
 #include "io/scenewriter.h"
+#include "io/assetmanager.h"
 
 // Thanks to Qt not allowing updating its json values and instead returning temp objects
 // This class updates a meshnode with the values in a material definition
@@ -30,6 +31,42 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, const QJsonObject
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         auto materialDefinition = definition.value("material").toObject();
         auto nodeMaterial = node.staticCast<iris::MeshNode>()->getMaterial().staticCast<iris::CustomMaterial>();
+
+        QFileInfo shaderFile;
+        QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+        while (it.hasNext()) {
+            it.next();
+            if (it.key() == materialDefinition["guid"].toString()) {
+                shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
+                break;
+            }
+        }
+
+        if (shaderFile.exists()) {
+            nodeMaterial->generate(shaderFile.absoluteFilePath());
+        }
+        else {
+            for (auto asset : AssetManager::getAssets()) {
+                if (asset->type == ModelTypes::Shader) {
+                    if (asset->assetGuid == materialDefinition["guid"].toString()) {
+                        auto def = asset->getValue().toJsonObject();
+                        auto vertexShader = def["vertex_shader"].toString();
+                        auto fragmentShader = def["fragment_shader"].toString();
+                        for (auto asset : AssetManager::getAssets()) {
+                            if (asset->type == ModelTypes::File) {
+                                if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+                                if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+                            }
+                        }
+                        def["vertex_shader"] = vertexShader;
+                        def["fragment_shader"] = fragmentShader;
+
+						nodeMaterial->setMaterialDefinition(def);
+                        nodeMaterial->generate(def);
+                    }
+                }
+            }
+        }
 
         for (const iris::Property* property : nodeMaterial->properties) {
             if (property->type == iris::PropertyType::Texture) {
@@ -65,6 +102,28 @@ QByteArray AssetHelper::makeBlobFromPixmap(const QPixmap &thumbnail)
     buffer.open(QIODevice::WriteOnly);
     thumbnail.save(&buffer, "PNG");
     return thumbnailBytes;
+}
+
+QStringList AssetHelper::fetchAssetAndAllDependencies(const QString &guid, Database *db)
+{
+    QStringList topLevelAssets;
+    QStringList assetAndDependencies;
+
+    for (const auto &asset : db->fetchAssetGUIDAndDependencies(guid)) {
+        topLevelAssets.append(asset);
+        assetAndDependencies.append(asset);
+    }
+
+    // Dependency level is always max 2
+    for (const auto &asset : topLevelAssets) {
+        for (const auto &guid : db->fetchAssetGUIDAndDependencies(asset)) {
+            assetAndDependencies.append(guid);
+        }
+    }
+
+    assetAndDependencies.removeDuplicates();
+
+    return assetAndDependencies;
 }
 
 ModelTypes AssetHelper::getAssetTypeFromExtension(const QString &fileSuffix)

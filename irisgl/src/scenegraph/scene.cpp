@@ -106,7 +106,7 @@ void Scene::updateSceneAnimation(float time)
 
 void Scene::update(float dt)
 {
-	time += dt;
+	time += dt < 0 ? 0 : dt;
     rootNode->update(dt);
 
     // cameras aren't always a part of the scene hierarchy, so their matrices are updated here

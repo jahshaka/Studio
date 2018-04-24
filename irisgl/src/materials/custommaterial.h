@@ -16,6 +16,8 @@ For more information see the LICENSE file
 #include "../irisglfwd.h"
 #include "../core/property.h"
 
+#include <QJsonObject>
+
 class QOpenGLFunctions_3_2_Core;
 
 namespace iris
@@ -41,8 +43,16 @@ public:
     void setUniformValues(GraphicsDevicePtr device, Property*);
     void purge();
 
-    QString getName() const;
-    QString getGuid() const;
+	void setMaterialDefinition(const QJsonObject &def) {
+		materialDefinitions = def;
+	}
+
+	QJsonObject getMaterialDefinition() {
+		return materialDefinitions;
+	}
+
+    QString getName();
+    QString getGuid();
     QString firstTextureSlot() const;
     int getCalculatedPropHeight() const;
 
@@ -65,9 +75,9 @@ public:
 
     QJsonObject loadShaderFromDisk(const QString &);
     void createWidgets(const QJsonArray&);
+
+	QJsonObject materialDefinitions;
 };
-
-
 
 }
 Q_DECLARE_METATYPE(iris::CustomMaterial)

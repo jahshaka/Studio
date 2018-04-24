@@ -133,13 +133,8 @@ void CustomMaterial::generate(const QString &fileName, bool project)
 
     setBaseMaterialProperties(jahShader);
 
-    //if (!project) {
-        if (!vertPath.startsWith(":")) vertPath = IrisUtils::getAbsoluteAssetPath(vertPath);
-        if (!fragPath.startsWith(":")) fragPath = IrisUtils::getAbsoluteAssetPath(fragPath);
-    //} else {
-        //if (!vertPath.startsWith(":")) vertPath = QDir(fileInfo.absolutePath()).filePath(vertPath);
-       // if (!fragPath.startsWith(":")) fragPath = QDir(fileInfo.absolutePath()).filePath(fragPath);
-   // }
+    if (!vertPath.startsWith(":")) vertPath = IrisUtils::getAbsoluteAssetPath(vertPath);
+    if (!fragPath.startsWith(":")) fragPath = IrisUtils::getAbsoluteAssetPath(fragPath);
 
     createProgramFromShaderSource(vertPath, fragPath);
     createWidgets(jahShader["uniforms"].toArray());
@@ -154,9 +149,6 @@ void CustomMaterial::generate(const QJsonObject &object)
     auto fragPath = object["fragment_shader"].toString();
 
     setBaseMaterialProperties(object);
-
-    //if (!vertPath.startsWith(":")) vertPath = vertPath;
-    //if (!fragPath.startsWith(":")) fragPath = fragPath;
 
     createProgramFromShaderSource(vertPath, fragPath);
     createWidgets(object["uniforms"].toArray());
@@ -292,8 +284,14 @@ void CustomMaterial::setBaseMaterialProperties(const QJsonObject &jahShader)
 
 MaterialPtr CustomMaterial::duplicate()
 {
+	qDebug() << materialDefinitions;
 	auto mat = CustomMaterial::create();
-	mat->generate(materialPath, true);
+	if (materialDefinitions.isEmpty()) {
+		mat->generate(materialPath, true);
+	}
+	else {
+		mat->generate(materialDefinitions);
+	}
 
 	for (auto prop : this->properties) {
 		mat->setValue(prop->name, prop->getValue());
@@ -311,12 +309,12 @@ CustomMaterialPtr CustomMaterial::createFromShader(iris::ShaderPtr shader)
 	return mat;
 }
 
-QString CustomMaterial::getName() const
+QString CustomMaterial::getName()
 {
     return materialName;
 }
 
-QString CustomMaterial::getGuid() const
+QString CustomMaterial::getGuid()
 {
     return materialGuid;
 }

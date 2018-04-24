@@ -578,6 +578,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
                     }
                     def["vertex_shader"] = vertexShader;
                     def["fragment_shader"] = fragmentShader;
+
                     m->generate(def);
                 }
             }

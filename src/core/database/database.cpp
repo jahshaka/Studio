@@ -1,10 +1,11 @@
 #include "database.h"
-#include "../../constants.h"
-#include "../../irisgl/src/irisglfwd.h"
-#include "../../irisgl/src/core/irisutils.h"
-#include "../../globals.h"
+#include "constants.h"
+#include "irisgl/src/irisglfwd.h"
+#include "irisgl/src/core/irisutils.h"
+#include "globals.h"
 #include "../guidmanager.h"
 #include "io/assetmanager.h"
+#include "io/assethelper.h"
 
 #include <QDebug>
 #include <QJsonDocument>
@@ -225,7 +226,7 @@ void Database::updateGlobalDependencyDepender(const int &ertype, const QString &
     query.prepare("UPDATE dependencies SET depender = ? WHERE depender_type = ? AND dependee = ?");
 
     query.bindValue(":depender", depender);
-    query.bindValue(":type", ertype);
+    query.bindValue(":depender_type", ertype);
     query.bindValue(":dependee", dependee);
 
     executeAndCheckQuery(query, "updateGlobalDependencyDepender");
@@ -238,7 +239,7 @@ void Database::updateGlobalDependencyDependee(const int & ertype, const QString 
     query.prepare("UPDATE dependencies SET dependee = ? WHERE depender_type = ? AND depender = ?");
 
     query.bindValue(":depender", depender);
-    query.bindValue(":type", ertype);
+    query.bindValue(":depender_type", ertype);
     query.bindValue(":dependee", dependee);
 
     executeAndCheckQuery(query, "updateGlobalDependencyDependee");
@@ -978,22 +979,23 @@ void Database::createExportNode(const ModelTypes &type, const QString &objectGui
 
     QVector<AssetRecord> assetList;
 
-    QStringList fullAssetList = fetchAssetGUIDAndDependencies(objectGuid);
+    //QStringList fullAssetList = fetchAssetGUIDAndDependencies(objectGuid);
+    QStringList fullAssetList = AssetHelper::fetchAssetAndAllDependencies(objectGuid, this);
 
-    if (type == ModelTypes::Material) {
-        auto shaderGuid = QJsonDocument::fromBinaryData(fetchAssetData(objectGuid)).object()["guid"].toString();
-        bool exportCustomShader = false;
-        QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
-        while (it.hasNext()) {
-            it.next();
-            if (it.key() != shaderGuid) {
-                exportCustomShader = true;
-                break;
-            }
-        }
+    //if (type == ModelTypes::Material) {
+        //auto shaderGuid = QJsonDocument::fromBinaryData(fetchAssetData(objectGuid)).object()["guid"].toString();
+        //bool exportCustomShader = false;
+        //QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+        //while (it.hasNext()) {
+        //    it.next();
+        //    if (it.key() != shaderGuid) {
+        //        exportCustomShader = true;
+        //        break;
+        //    }
+        //}
 
-        if (exportCustomShader) fullAssetList.append(fetchAssetGUIDAndDependencies(shaderGuid));
-    }
+        //if (exportCustomShader) fullAssetList.append(fetchAssetGUIDAndDependencies(shaderGuid));
+    //}
 
     for (const auto &asset : fullAssetList) {
         QSqlQuery selectAssetQuery;
@@ -1068,11 +1070,11 @@ void Database::createExportNode(const ModelTypes &type, const QString &objectGui
         QSqlQuery selectDep;
         selectDep.prepare(
 			"SELECT depender_type, dependee_type, project_guid, depender, dependee, id FROM dependencies "
-			"WHERE dependee = ? AND dependee_type = ? AND depender_type = ?"
+			"WHERE dependee = ? AND dependee_type = ?"
 		);
         selectDep.addBindValue(asset.guid);
         selectDep.addBindValue(asset.type);
-        selectDep.addBindValue(static_cast<int>(type));
+        //selectDep.addBindValue(static_cast<int>(type));
 
         if (selectDep.exec()) {
             if (selectDep.first()) {
@@ -1871,7 +1873,7 @@ QStringList Database::fetchAssetAndDependencies(const QString &guid)
 {
 	QSqlQuery query;
 	query.prepare(
-		"SELECT assets.name FROM dependencies "
+		"SELECT assets.name, assets.guid FROM dependencies "
 		"INNER JOIN assets ON dependencies.dependee = assets.guid "
 		"WHERE depender = ?"
 	);
@@ -2209,6 +2211,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         insertImportAssetQuery.bindValue(":properties", asset.properties);
 
         if (asset.type == static_cast<int>(ModelTypes::Object) ||
+            asset.type == static_cast<int>(ModelTypes::Shader) ||
             asset.type == static_cast<int>(ModelTypes::Material))
         {
             auto doc = QJsonDocument::fromBinaryData(asset.asset);
@@ -2358,9 +2361,7 @@ QString Database::importAsset(
 		QSqlRecord record = selectAssetQuery.record();
 
 		for (int i = 0; i < record.count(); i++) {
-			if (selectAssetQuery.value(1).toInt() == static_cast<int>(ModelTypes::Object) ||
-			    selectAssetQuery.value(1).toInt() == static_cast<int>(ModelTypes::Shader) ||
-				selectAssetQuery.value(1).toInt() == static_cast<int>(ModelTypes::Material)) {
+			if (selectAssetQuery.value(1).toInt() == static_cast<int>(jafType)) {
 				data.guid = guidToReturn;
 				assetGuids.insert(record.value(0).toString(), guidToReturn);
 			}
@@ -2405,46 +2406,28 @@ QString Database::importAsset(
 		}
 
 		assetsToImport.push_back(data);
-        auto d = data;
-        //d.guid = record.value(0).toString();
-        assetRecords.push_back(d);
 	}
 
-	if (jafType == ModelTypes::Object) {
-		for (auto &asset : assetsToImport) {
-			if (asset.type == static_cast<int>(ModelTypes::Object)) {
-				auto doc = QJsonDocument::fromBinaryData(asset.asset);
-				QString docToString = doc.toJson(QJsonDocument::Compact);
+    for (auto &asset : assetsToImport) {
+        if (asset.type == static_cast<int>(ModelTypes::Shader)   ||
+            asset.type == static_cast<int>(ModelTypes::Material) ||
+            asset.type == static_cast<int>(ModelTypes::Object))
+        {
+            auto doc = QJsonDocument::fromBinaryData(asset.asset);
+            QString docToString = doc.toJson(QJsonDocument::Compact);
 
-				QMapIterator<QString, QString> i(assetGuids);
-				while (i.hasNext()) {
-					i.next();
-					docToString.replace(i.key(), i.value());
-				}
-
-				QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
-				asset.asset = updatedDoc.toBinaryData();
-			}
-		}
-	}
-
-    if (jafType == ModelTypes::Material) {
-        for (auto &asset : assetsToImport) {
-            if (asset.type == static_cast<int>(ModelTypes::Material)) {
-                auto doc = QJsonDocument::fromBinaryData(asset.asset);
-                QString docToString = doc.toJson(QJsonDocument::Compact);
-
-                QMapIterator<QString, QString> i(assetGuids);
-                while (i.hasNext()) {
-                    i.next();
-                    docToString.replace(i.key(), i.value());
-                }
-
-                QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
-                asset.asset = updatedDoc.toBinaryData();
+            QMapIterator<QString, QString> i(assetGuids);
+            while (i.hasNext()) {
+                i.next();
+                docToString.replace(i.key(), i.value());
             }
+
+            QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
+            asset.asset = updatedDoc.toBinaryData();
         }
     }
+
+    assetRecords = assetsToImport;
 
 	QSqlQuery selectDepQuery(importConnection);
 	selectDepQuery.prepare("SELECT depender_type, dependee_type, project_guid, depender, dependee, id FROM dependencies");
@@ -2508,12 +2491,12 @@ QString Database::importAsset(
 	);
 
 	for (const auto &dep : depsToImport) {
-		exportDep.bindValue(":depender_type", dep.dependerType);
-		exportDep.bindValue(":dependee_type", dep.dependeeType);
-		exportDep.bindValue(":project_guid", dep.projectGuid);
-		exportDep.bindValue(":depender", dep.depender);
-		exportDep.bindValue(":dependee", dep.dependee);
-		exportDep.bindValue(":id", dep.id);
+		exportDep.bindValue(":depender_type",   dep.dependerType);
+		exportDep.bindValue(":dependee_type",   dep.dependeeType);
+		exportDep.bindValue(":project_guid",    dep.projectGuid);
+		exportDep.bindValue(":depender",        dep.depender);
+		exportDep.bindValue(":dependee",        dep.dependee);
+		exportDep.bindValue(":id",              dep.id);
 
 		executeAndCheckQuery(exportDep, "exportDep");
 	}
@@ -2551,8 +2534,7 @@ QString Database::copyAsset(
             QSqlRecord record = selectAssetQuery.record();
 
             for (int i = 0; i < record.count(); i++) {
-                if (selectAssetQuery.value(1).toInt() == static_cast<int>(ModelTypes::Object) ||
-                    selectAssetQuery.value(1).toInt() == static_cast<int>(ModelTypes::Material)) {
+                if (selectAssetQuery.value(1).toInt() == static_cast<int>(jafType)) {
                     data.guid = guidToReturn;
                     assetGuids.insert(record.value(0).toString(), guidToReturn);
                 }
@@ -2591,45 +2573,28 @@ QString Database::copyAsset(
             }
 
             assetsToImport.push_back(data);
-            oldAssetRecords.push_back(data);
         }
     }
 
-    if (jafType == ModelTypes::Object) {
-        for (auto &asset : assetsToImport) {
-            if (asset.type == static_cast<int>(ModelTypes::Object)) {
-                auto doc = QJsonDocument::fromBinaryData(asset.asset);
-                QString docToString = doc.toJson(QJsonDocument::Compact);
+    for (auto &asset : assetsToImport) {
+        if (asset.type == static_cast<int>(ModelTypes::Object) ||
+			asset.type == static_cast<int>(ModelTypes::Material) ||
+			asset.type == static_cast<int>(ModelTypes::Shader)) {
+            auto doc = QJsonDocument::fromBinaryData(asset.asset);
+            QString docToString = doc.toJson(QJsonDocument::Compact);
 
-                QMapIterator<QString, QString> i(assetGuids);
-                while (i.hasNext()) {
-                    i.next();
-                    docToString.replace(i.key(), i.value());
-                }
-
-                QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
-                asset.asset = updatedDoc.toBinaryData();
+            QMapIterator<QString, QString> i(assetGuids);
+            while (i.hasNext()) {
+                i.next();
+                docToString.replace(i.key(), i.value());
             }
+
+            QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
+            asset.asset = updatedDoc.toBinaryData();
         }
     }
 
-    if (jafType == ModelTypes::Material) {
-        for (auto &asset : assetsToImport) {
-            if (asset.type == static_cast<int>(ModelTypes::Material)) {
-                auto doc = QJsonDocument::fromBinaryData(asset.asset);
-                QString docToString = doc.toJson(QJsonDocument::Compact);
-
-                QMapIterator<QString, QString> i(assetGuids);
-                while (i.hasNext()) {
-                    i.next();
-                    docToString.replace(i.key(), i.value());
-                }
-
-                QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
-                asset.asset = updatedDoc.toBinaryData();
-            }
-        }
-    }
+	oldAssetRecords = assetsToImport;
 
     QVector<DependencyRecord> depsToImport;
 
