@@ -84,46 +84,49 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
         }
 
         for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader))) {
-            QFile *templateShaderFile = new QFile(IrisUtils::join(Globals::project->getProjectFolder(), asset.name));
-            templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);
-            QJsonObject shaderDefinition = QJsonDocument::fromJson(templateShaderFile->readAll()).object();
-            templateShaderFile->close();
+            //QFile *templateShaderFile = new QFile(IrisUtils::join(Globals::project->getProjectFolder(), asset.name));
+            //templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);
+            //QJsonObject shaderDefinition = QJsonDocument::fromJson(templateShaderFile->readAll()).object();
+            //templateShaderFile->close();
             //shaderDefinition["name"] = QFileInfo(asset.name).baseName();
 
-            if (!assetGuids.empty()) {
-                auto vertexShader = shaderDefinition["vertex_shader"].toString();
-                auto fragmentShader = shaderDefinition["fragment_shader"].toString();
+            //if (!assetGuids.empty()) {
+            //    auto vertexShader = shaderDefinition["vertex_shader"].toString();
+            //    auto fragmentShader = shaderDefinition["fragment_shader"].toString();
 
-                QMapIterator<QString, QString> it(assetGuids);
-                while (it.hasNext()) {
-                    it.next();
-                    if (it.key() == vertexShader) {
-                        shaderDefinition["vertex_shader"] = it.value();
-                        break;
-                    }
-                }
+            //    QMapIterator<QString, QString> it(assetGuids);
+            //    while (it.hasNext()) {
+            //        it.next();
+            //        if (it.key() == vertexShader) {
+            //            shaderDefinition["vertex_shader"] = it.value();
+            //            break;
+            //        }
+            //    }
 
-                QMapIterator<QString, QString> it2(assetGuids);
-                while (it2.hasNext()) {
-                    it2.next();
-                    if (it2.key() == fragmentShader) {
-                        shaderDefinition["fragment_shader"] = it2.value();
-                        break;
-                    }
-                }
+            //    QMapIterator<QString, QString> it2(assetGuids);
+            //    while (it2.hasNext()) {
+            //        it2.next();
+            //        if (it2.key() == fragmentShader) {
+            //            shaderDefinition["fragment_shader"] = it2.value();
+            //            break;
+            //        }
+            //    }
 
-                QFile jsonFile(IrisUtils::join(Globals::project->getProjectFolder(), asset.name));
-                jsonFile.open(QIODevice::Truncate | QFile::WriteOnly);
-                jsonFile.write(QJsonDocument(shaderDefinition).toJson());
-            }
+            //    QFile jsonFile(IrisUtils::join(Globals::project->getProjectFolder(), asset.name));
+            //    jsonFile.open(QIODevice::Truncate | QFile::WriteOnly);
+            //    jsonFile.write(QJsonDocument(shaderDefinition).toJson());
+            //}
 
-            shaderDefinition.insert("guid", asset.guid);
+            //shaderDefinition.insert("guid", asset.guid);
+
+            QJsonDocument shaderDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(asset.guid));
+            QJsonObject shaderObject = shaderDefinition.object();
 
             auto assetShader = new AssetShader;
             assetShader->assetGuid = asset.guid;
             assetShader->fileName = QFileInfo(asset.name).baseName();
-            assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
-            assetShader->setValue(QVariant::fromValue(shaderDefinition));
+            //assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
+            assetShader->setValue(QVariant::fromValue(shaderObject));
             AssetManager::addAsset(assetShader);
         }
 

@@ -34,6 +34,7 @@ public:
     void leaveEvent(QEvent*) override;
 
 protected slots:
+    void onShaderFileChanged(int);
     void onVertexShaderFileChanged(int);
     void onFragmentShaderFileChanged(int);
     void onAllowBuiltinShaders(const bool);
