@@ -120,6 +120,7 @@ public:
     void setupUndoRedo();
 
 	WindowSpaces getWindowSpace();
+	void deselectViewports();
     void switchSpace(WindowSpaces space);
 
     bool handleMousePress(QMouseEvent *event);

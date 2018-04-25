@@ -571,6 +571,16 @@ WindowSpaces MainWindow::getWindowSpace()
 	return currentSpace;
 }
 
+void MainWindow::deselectViewports()
+{
+	editor_menu->setStyleSheet("color: #444; border-color: #111");
+	editor_menu->setDisabled(true);
+	editor_menu->setCursor(Qt::ArrowCursor);
+	player_menu->setStyleSheet("color: #444; border-color: #111");
+	player_menu->setDisabled(true);
+	player_menu->setCursor(Qt::ArrowCursor);
+}
+
 void MainWindow::switchSpace(WindowSpaces space)
 {
 	const QString disabledMenu   = "color: #444; border-color: #111";
@@ -802,9 +812,13 @@ void MainWindow::closeProject()
 
 	undoStackCount = 0;
 
-    Globals::project->setProjectPath(Q_NULLPTR, Q_NULLPTR);
+    Globals::project->setProjectGuid(Q_NULLPTR);
 
-    if (currentSpace == WindowSpaces::DESKTOP) return;
+	if (currentSpace == WindowSpaces::DESKTOP) {
+		deselectViewports();
+		return;
+	}
+
     switchSpace(WindowSpaces::DESKTOP);
 }
 
