@@ -173,6 +173,10 @@ QMainWindow::separator {
     color: #EEE;
 }
 
+QDialog {
+    background: #1A1A1A;
+}
+
 QMessageBox {
     background: #1A1A1A;
 }

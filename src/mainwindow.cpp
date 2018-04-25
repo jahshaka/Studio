@@ -1565,7 +1565,7 @@ void MainWindow::duplicateNode()
 	sceneView->doneCurrent();
 }
 
-void MainWindow::createMaterial(const QString &guid)
+void MainWindow::createMaterial()
 {
 	if (!!activeSceneNode) {
         QJsonObject materialDef;
@@ -1710,13 +1710,13 @@ void MainWindow::createMaterial(const QString &guid)
     }
 }
 
-void MainWindow::exportNode(const QString &guid)
+void MainWindow::exportNode(const iris::SceneNodePtr &node)
 {
 	// get the export file path from a save dialog
 	auto filePath = QFileDialog::getSaveFileName(
 		this,
 		"Choose export path",
-		"export",
+		QString("%1_export").arg(node->getName()),
 		"Supported Export Formats (*.jaf)"
 	);
 
@@ -1726,25 +1726,27 @@ void MainWindow::exportNode(const QString &guid)
 	if (!temporaryDir.isValid()) return;
 
     const QString writePath = temporaryDir.path();
+    const QString guid = node->getGUID();
 
-	db->createExportNode(ModelTypes::Object, guid, QDir(writePath).filePath("asset.db"));
+    db->createExportNode(ModelTypes::Object, guid, QDir(writePath).filePath("asset.db"));
 
-	QDir tempDir(writePath);
-	tempDir.mkpath("assets");
+    QDir tempDir(writePath);
+    tempDir.mkpath("assets");
 
-	QFile manifest(QDir(writePath).filePath(".manifest"));
-	if (manifest.open(QIODevice::ReadWrite)) {
-		QTextStream stream(&manifest);
-		stream << "object";
-	}
-	manifest.close();
+    QFile manifest(QDir(writePath).filePath(".manifest"));
+    if (manifest.open(QIODevice::ReadWrite)) {
+        QTextStream stream(&manifest);
+        stream << "object";
+    }
+    manifest.close();
 
 	for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
         auto asset = db->fetchAsset(assetGuid);
-        QFileInfo assetInfo(asset.name);
-        if (!assetInfo.suffix().isEmpty()) {
+        auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+        QFileInfo assetInfo(assetPath);
+        if (assetInfo.exists()) {
             QFile::copy(
-                IrisUtils::join(Globals::project->getProjectFolder(), assetInfo.fileName()),
+                IrisUtils::join(assetPath),
                 IrisUtils::join(writePath, "assets", assetInfo.fileName())
             );
         }

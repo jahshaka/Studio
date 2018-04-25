@@ -1442,7 +1442,7 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 	// get the current project working directory
 	auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), Constants::PROJECT_FOLDER);
 	auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
-	auto pDir = IrisUtils::join(defaultProjectDirectory, Globals::project->getProjectName());
+	auto pDir = IrisUtils::join(defaultProjectDirectory, Globals::project->getProjectGuid());
 
 	QString guid = item->metadata["guid"].toString();
 	int assetType = item->metadata["type"].toInt();
@@ -1495,22 +1495,6 @@ void AssetView::addAssetToProject(AssetGridItem *item)
             assetFile->path = checkFile.absoluteFilePath();
             AssetManager::addAsset(assetFile);
         }
-
-        //if (jafType == ModelTypes::Shader) {
-        //    QFile *templateShaderFile = new QFile(fileInfo.absoluteFilePath());
-        //    templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);
-        //    QJsonObject shaderDefinition = QJsonDocument::fromJson(templateShaderFile->readAll()).object();
-        //    templateShaderFile->close();
-        //    //shaderDefinition["name"] = fileInfo.baseName();
-        //    //shaderDefinition.insert("guid", placeHolderGuid);
-
-        //    auto assetShader = new AssetShader;
-        //    assetShader->assetGuid = placeHolderGuid;
-        //    assetShader->fileName = fileInfo.baseName();
-        //    assetShader->path = checkFile.absoluteFilePath();
-        //    assetShader->setValue(QVariant::fromValue(shaderDefinition));
-        //    AssetManager::addAsset(assetShader);
-        //}
 
         if (jafType == ModelTypes::Object) {
             this->viewer->makeCurrent();
@@ -1569,8 +1553,10 @@ void AssetView::addAssetToProject(AssetGridItem *item)
     QVector<AssetRecord> oldAssetRecords;
     QMap<QString, QString> guidCompareMap;
 
-    QString guidReturned = db->copyAsset(jafType, guid, newNames, guidCompareMap,
-        oldAssetRecords, Globals::project->getProjectGuid());
+    QString guidReturned = db->copyAsset(
+        jafType, guid, newNames, guidCompareMap,
+        oldAssetRecords, Globals::project->getProjectGuid()
+    );
 
     for (auto &asset : AssetManager::getAssets()) {
         if (asset->type == ModelTypes::File) {

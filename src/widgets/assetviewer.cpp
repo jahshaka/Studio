@@ -351,7 +351,7 @@ void AssetViewer::addJafShader(const QString &guid, QMap<QString, QString> &guid
     material->generate(shaderDefinition);
 
     auto matball = iris::MeshNode::create();
-    matball->setMesh(":/content/primitives/sphere.obj");
+    matball->setMesh(":/content/primitives/hp_sphere.obj");
     matball->setLocalPos(QVector3D(0, 0, 0)); // prevent z-fighting with the default plane reset (iKlsR)
     matball->setName("ae98cx7u_shader_ball");
     matball->setPickable(false);
@@ -427,7 +427,7 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
     }
 
     auto matball = iris::MeshNode::create();
-    matball->setMesh(":/content/primitives/sphere.obj");
+    matball->setMesh(":/content/primitives/hp_sphere.obj");
     matball->setLocalPos(QVector3D(0, 0, 0)); // prevent z-fighting with the default plane reset (iKlsR)
     matball->setName("ae98cx7u_mat_ball");
     matball->setPickable(false);

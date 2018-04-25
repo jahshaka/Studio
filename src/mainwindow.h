@@ -223,8 +223,8 @@ public slots:
 
     //context menu functions
     void duplicateNode();
-	void createMaterial(const QString &guid);
-	void exportNode(const QString &guid);
+	void createMaterial();
+	void exportNode(const iris::SceneNodePtr &node);
 	void exportNodes(const QStringList &assetGuids);
     void deleteNode();
     void renameNode();
