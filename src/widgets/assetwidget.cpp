@@ -704,7 +704,7 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 	}
 	else {
 		QMenu *createMenu = menu.addMenu("Create");
-		action = new QAction(QIcon(), "Standard Shader", this);
+		action = new QAction(QIcon(), "Shader", this);
 		connect(action, SIGNAL(triggered()), this, SLOT(createShader()));
 		createMenu->addAction(action);
 		action = new QAction(QIcon(), "New Folder", this);
@@ -928,7 +928,6 @@ void AssetWidget::exportMaterial()
 	if (!temporaryDir.isValid()) return;
 
 	const QString writePath = temporaryDir.path();
-
 	const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
 
 	db->createExportNode(ModelTypes::Material, guid, QDir(writePath).filePath("asset.db"));
@@ -1112,12 +1111,13 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
 	QString newName = qobject_cast<QLineEdit*>(listItem)->text();
 	const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
 	const QString oldName = db->fetchAsset(guid).name;
+
     if (!newName.isEmpty()) {
         if (assetItem.wItem->data(MODEL_ITEM_TYPE) == MODEL_ASSET) {
 			QString newFileName = IrisUtils::buildFileName(newName, QFileInfo(oldName).suffix());
             db->renameAsset(guid, newFileName);
 			QFile assetToRename(QDir(Globals::project->getProjectFolder()).filePath(oldName));
-			if (!assetToRename.exists()) return;
+			//if (!assetToRename.exists()) return;
 			if (!assetToRename.rename(QDir(Globals::project->getProjectFolder()).filePath(newFileName))) {
 				if (rename(
 					QDir(Globals::project->getProjectFolder()).filePath(oldName).toStdString().c_str(),
@@ -1126,7 +1126,9 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
 					for (auto &asset : AssetManager::getAssets()) {
                         if (asset->assetGuid == guid) {
                             asset->fileName = newFileName;
-                            asset->path = QDir(Globals::project->getProjectFolder()).filePath(newFileName);
+                            if (!asset->path.isEmpty()) {
+                                asset->path = QDir(Globals::project->getProjectFolder()).filePath(newFileName);
+                            }
                         }
 					}
 				}
@@ -1135,7 +1137,9 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
                 for (auto &asset : AssetManager::getAssets()) {
                     if (asset->assetGuid == guid) {
                         asset->fileName = newFileName;
-                        asset->path = QDir(Globals::project->getProjectFolder()).filePath(newFileName);
+                        if (!asset->path.isEmpty()) {
+                            asset->path = QDir(Globals::project->getProjectFolder()).filePath(newFileName);
+                        }
                     }
                 }
             }
