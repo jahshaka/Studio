@@ -84,48 +84,12 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
         }
 
         for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader))) {
-            //QFile *templateShaderFile = new QFile(IrisUtils::join(Globals::project->getProjectFolder(), asset.name));
-            //templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);
-            //QJsonObject shaderDefinition = QJsonDocument::fromJson(templateShaderFile->readAll()).object();
-            //templateShaderFile->close();
-            //shaderDefinition["name"] = QFileInfo(asset.name).baseName();
-
-            //if (!assetGuids.empty()) {
-            //    auto vertexShader = shaderDefinition["vertex_shader"].toString();
-            //    auto fragmentShader = shaderDefinition["fragment_shader"].toString();
-
-            //    QMapIterator<QString, QString> it(assetGuids);
-            //    while (it.hasNext()) {
-            //        it.next();
-            //        if (it.key() == vertexShader) {
-            //            shaderDefinition["vertex_shader"] = it.value();
-            //            break;
-            //        }
-            //    }
-
-            //    QMapIterator<QString, QString> it2(assetGuids);
-            //    while (it2.hasNext()) {
-            //        it2.next();
-            //        if (it2.key() == fragmentShader) {
-            //            shaderDefinition["fragment_shader"] = it2.value();
-            //            break;
-            //        }
-            //    }
-
-            //    QFile jsonFile(IrisUtils::join(Globals::project->getProjectFolder(), asset.name));
-            //    jsonFile.open(QIODevice::Truncate | QFile::WriteOnly);
-            //    jsonFile.write(QJsonDocument(shaderDefinition).toJson());
-            //}
-
-            //shaderDefinition.insert("guid", asset.guid);
-
             QJsonDocument shaderDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(asset.guid));
             QJsonObject shaderObject = shaderDefinition.object();
 
             auto assetShader = new AssetShader;
             assetShader->assetGuid = asset.guid;
             assetShader->fileName = QFileInfo(asset.name).baseName();
-            //assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
             assetShader->setValue(QVariant::fromValue(shaderObject));
             AssetManager::addAsset(assetShader);
         }
@@ -167,6 +131,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
                             }
                             def["vertex_shader"] = vertexShader;
                             def["fragment_shader"] = fragmentShader;
+							material->setMaterialDefinition(def);
                             material->generate(def);
                         }
                     }
@@ -395,21 +360,13 @@ void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
 
 void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
 {
-    auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-    auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
-
-    QDir dir;
-    auto dirRename = dir.rename(QDir(projectFolder).filePath(widget->tileData.name),
-                                QDir(projectFolder).filePath(widget->labelText));
-    if (dirRename) {
+    if (db->renameProject(widget->tileData.guid, widget->labelText)) {
         widget->updateLabel(widget->labelText);
-        Globals::project->setProjectGuid(widget->tileData.guid);
-        db->renameProject(widget->labelText);
     }
     else {
         QMessageBox::warning(this,
                              "Rename failed",
-                             "Failed to rename project, please try again or rename manually",
+                             "Failed to rename project, please try again!",
                              QMessageBox::Ok);
     }
 }

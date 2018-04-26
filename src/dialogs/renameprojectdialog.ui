@@ -7,14 +7,22 @@
     <x>0</x>
     <y>0</y>
     <width>400</width>
-    <height>86</height>
+    <height>95</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QPushButton  {
+   <string notr="true">* {
+	color: #EEE;
+}
+
+#RenameProjectDialog {
+	background: #1A1A1A;
+}
+
+QPushButton  {
     border: none;
     background-color: #212121;
     padding: 6px 16px;
@@ -67,7 +75,7 @@ QLineEdit {
    <item row="2" column="2">
     <widget class="QPushButton" name="ok">
      <property name="text">
-      <string>Ok</string>
+      <string>Rename</string>
      </property>
     </widget>
    </item>

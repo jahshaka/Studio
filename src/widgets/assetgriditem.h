@@ -53,6 +53,7 @@ signals:
 	void contextClicked(AssetGridItem*);	// use this exclusively for right clicks
 
 	void addAssetToProject(AssetGridItem*);
+	void addAssetItemToProject(AssetGridItem*);
 	void changeAssetCollection(AssetGridItem*);
 	void removeAssetFromProject(AssetGridItem*);
 };

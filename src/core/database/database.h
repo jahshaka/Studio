@@ -75,7 +75,7 @@ public:
     bool deleteRecord(const QString &table, const QString &row, const QVariant &value);
 
     // UPDATE ===============================================================================
-    bool renameProject(const QString &newName);
+    bool renameProject(const QString &guid, const QString &newName);
     bool renameFolder(const QString &guid, const QString &newName);
     bool renameCollection(const int &collectionId, const QString &newName);
     bool renameAsset(const QString &guid, const QString &newName);
@@ -128,7 +128,6 @@ public:
     QString copyAsset(const ModelTypes &jafType,
                       const QString &guid,
                       const QMap<QString, QString> &newNames,
-                      QMap<QString, QString> &guidCompareMap,
                       QVector<AssetRecord> &oldAssetRecords,
                       const QString &parent);
 

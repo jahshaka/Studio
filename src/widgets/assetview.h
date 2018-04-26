@@ -65,7 +65,7 @@ class AssetView : public QWidget
 public slots:
 	void fetchMetadata(AssetGridItem*);
 
-	void addAssetToProject(AssetGridItem*);
+	void addAssetItemToProject(AssetGridItem*);
 	void changeAssetCollection(AssetGridItem*);
 	void removeAssetFromProject(AssetGridItem*);
 
