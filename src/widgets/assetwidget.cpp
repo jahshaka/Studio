@@ -38,13 +38,11 @@
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 #include "widgets/sceneviewwidget.h"
-#include "../misc/helpinglabels.h"
-#include "../misc/ui_helpinglabels.h"
+
 
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
 	ui->setupUi(this);
-	helpingLabels = new HelpingLabels();
 	this->db = handle;
 
 	ui->assetView->setAttribute(Qt::WA_MacShowFocusRect, false);
@@ -164,7 +162,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->searchBar->setPlaceholderText(tr("Type to search for assets..."));
 
 	progressDialog = new ProgressDialog;
-	progressDialog->setLabelText("Importing assets...");
+	progressDialog->setLabelText(tr("Importing assets..."));
 
 	setStyleSheet(
 		"QWidget#headerTEMP { background: #1A1A1A;}"
@@ -351,7 +349,7 @@ AssetWidget::~AssetWidget()
 void AssetWidget::populateAssetTree(bool initialRun)
 {
 	auto rootTreeItem = new QTreeWidgetItem();
-	rootTreeItem->setText(0, "Assets");
+	rootTreeItem->setText(0, tr("Assets"));
 	rootTreeItem->setIcon(0, QIcon(":/icons/icons8-folder-72.png"));
 	rootTreeItem->setData(0, MODEL_GUID_ROLE, Globals::project->getProjectGuid());
 	updateTree(rootTreeItem, Globals::project->getProjectGuid());
@@ -634,7 +632,7 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	connect(action, SIGNAL(triggered()), this, SLOT(createShader()));
 	createMenu->addAction(action);
 
-	action = new QAction(QIcon(), "New Folder", this);
+	action = new QAction(QIcon(), tr("New Folder"), this);
 	connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
 	createMenu->addAction(action);
 
@@ -642,7 +640,7 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	//    connect(action, SIGNAL(triggered()), this, SLOT(openAtFolder()));
 	//    menu.addAction(action);
 
-	action = new QAction(QIcon(), "Import Asset", this);
+	action = new QAction(QIcon(), tr("Import Asset"), this);
 	connect(action, SIGNAL(triggered()), this, SLOT(importAsset()));
 	menu.addAction(action);
 
@@ -650,7 +648,7 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	//    connect(action, SIGNAL(triggered()), this, SLOT(renameTreeItem()));
 	//    menu.addAction(action);
 
-	action = new QAction(QIcon(), "Delete", this);
+	action = new QAction(QIcon(), tr("Delete"), this);
 	connect(action, SIGNAL(triggered()), this, SLOT(deleteTreeFolder()));
 	menu.addAction(action);
 
@@ -674,33 +672,33 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 		auto item = ui->assetView->itemAt(pos);
 		assetItem.wItem = item;
 
-		action = new QAction(QIcon(), "Rename", this);
+		action = new QAction(QIcon(), tr("Rename"), this);
 		connect(action, SIGNAL(triggered()), this, SLOT(renameViewItem()));
 		menu.addAction(action);
 
         if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Texture)) {
-            action = new QAction(QIcon(), "Export Texture", this);
+            action = new QAction(QIcon(), tr("Export Texture"), this);
             connect(action, SIGNAL(triggered()), this, SLOT(exportTexture()));
             menu.addAction(action);
         }
 
 		if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Material)) {
-			action = new QAction(QIcon(), "Export Material", this);
+			action = new QAction(QIcon(), tr("Export Material"), this);
 			connect(action, SIGNAL(triggered()), this, SLOT(exportMaterial()));
 			menu.addAction(action);
 		}
 
 		if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Shader)) {
-			action = new QAction(QIcon(), "Edit", this);
+			action = new QAction(QIcon(), tr("Edit"), this);
 			connect(action, SIGNAL(triggered()), this, SLOT(editFileExternally()));
 			menu.addAction(action);
 
-            action = new QAction(QIcon(), "Export Shader", this);
+            action = new QAction(QIcon(), tr("Export Shader"), this);
             connect(action, SIGNAL(triggered()), this, SLOT(exportShader()));
             menu.addAction(action);
 		}
 
-		action = new QAction(QIcon(), "Delete", this);
+		action = new QAction(QIcon(), tr("Delete"), this);
 		connect(action, SIGNAL(triggered()), this, SLOT(deleteItem()));
 		menu.addAction(action);
 	}
@@ -709,11 +707,11 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 		action = new QAction(QIcon(), "Shader", this);
 		connect(action, SIGNAL(triggered()), this, SLOT(createShader()));
 		createMenu->addAction(action);
-		action = new QAction(QIcon(), "New Folder", this);
+		action = new QAction(QIcon(), tr("New Folder"), this);
 		connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
 		createMenu->addAction(action);
 
-		action = new QAction(QIcon(), "Import Asset", this);
+		action = new QAction(QIcon(), tr("Import Asset"), this);
 		connect(action, SIGNAL(triggered()), this, SLOT(importAssetB()));
 		menu.addAction(action);
 
@@ -1017,9 +1015,9 @@ void AssetWidget::exportShader()
     // get the export file path from a save dialog
     auto filePath = QFileDialog::getSaveFileName(
         this,
-        "Choose export path",
+        tr("Choose export path"),
         assetItem.wItem->data(Qt::DisplayRole).toString(),
-        "Supported Export Formats (*.jaf)"
+        tr("Supported Export Formats (*.jaf)")
     );
 
     if (filePath.isEmpty() || filePath.isNull()) return;
@@ -1250,20 +1248,20 @@ void AssetWidget::deleteItem()
 
 		QDialog dialog;
 		dialog.setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
-		dialog.setWindowTitle("Dependent Assets");
+		dialog.setWindowTitle(tr("Dependent Assets"));
 
         QLabel *textLabel = new QLabel;
 
         if (assetHasDependencies) {
             textLabel->setText(
-                "The assets below will be deleted as dependencies.\n"
-                "Unticked items are being used with other assets, select them to remove them as well."
+                tr("The assets below will be deleted as dependencies.\n"
+                "Unticked items are being used with other assets, select them to remove them as well.")
             );
         }
         else {
             textLabel->setText(
-                "The assets below are dependent on this asset.\n"
-                "If you choose to continue removing this asset, those assets will be affected."
+                tr("The assets below are dependent on this asset.\n"
+                "If you choose to continue removing this asset, those assets will be affected.")
             );
         }
 
@@ -1277,8 +1275,8 @@ void AssetWidget::deleteItem()
 		auto blayout = new QHBoxLayout;
 		auto bwidget = new QWidget;
 		bwidget->setLayout(blayout);
-		QPushButton *deleteSelected = new QPushButton("Delete Selected");
-		QPushButton *cancel = new QPushButton("Cancel");
+		QPushButton *deleteSelected = new QPushButton(tr("Delete Selected"));
+		QPushButton *cancel = new QPushButton(tr("Cancel"));
 		blayout->addStretch(1);
 		blayout->addWidget(deleteSelected);
 		blayout->addWidget(cancel);
@@ -1357,7 +1355,7 @@ void AssetWidget::openAtFolder()
 
 void AssetWidget::createShader()
 {
-	const QString newShader = "Untitled Shader";
+	const QString newShader = tr("Untitled Shader");
 	QListWidgetItem *item = new QListWidgetItem;
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
 	item->setSizeHint(currentSize);
@@ -1417,7 +1415,7 @@ void AssetWidget::createShader()
 
 void AssetWidget::createFolder()
 {
-	const QString newFolder = "New Folder";
+	const QString newFolder = tr("New Folder");
 	QListWidgetItem *item = new QListWidgetItem;
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
 	item->setSizeHint(currentSize);
@@ -1498,9 +1496,9 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             if (!f.exists()) {
                 QMessageBox::warning(
                     this,
-                    "Incompatible Asset format",
-                    "This asset was made with a deprecated version of Jahshaka\n"
-                    "You can extract the contents manually and try importing as regular assets.",
+                    tr("Incompatible Asset format"),
+                    tr("This asset was made with a deprecated version of Jahshaka\n"
+                    "You can extract the contents manually and try importing as regular assets."),
                     QMessageBox::Ok
                 );
 
@@ -1637,7 +1635,7 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                 );
             }
 
-            progressDialog->setLabelText("Populating database...");
+            progressDialog->setLabelText(tr("Populating database..."));
 
             // We can discern most types from their extension, we don't store material files so we use the manifest
             ModelTypes jafType;
@@ -2183,11 +2181,11 @@ void AssetWidget::onThumbnailResult(ThumbnailResult *result)
 void AssetWidget::changeLabels()
 {
 	ui->retranslateUi(this);
-	helpingLabels->ui->retranslateUi(helpingLabels);
-	displayLabel->setText(helpingLabels->ui->displayLabel->text());
-	toggleListView->setText(helpingLabels->ui->List->text());
-	toggleIconView->setText(helpingLabels->ui->Icon->text());
-	ui->searchBar->setPlaceholderText(helpingLabels->ui->typeToSearch->text());
+	toggleIconView->setText(tr("Icon"));
+	toggleListView->setText(tr("List"));
+	displayLabel->setText(tr("Display:"));
+	progressDialog->setLabelText(tr("Importing assets..."));
+	ui->searchBar->setPlaceholderText(tr("Type to search for assets..."));
 }
 
 void AssetWidget::changeEvent(QEvent * event)

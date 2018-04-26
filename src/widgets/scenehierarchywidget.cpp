@@ -265,29 +265,29 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 
     QAction* action;
 
-    action = new QAction(QIcon(), "Rename", this);
+    action = new QAction(QIcon(), tr("Rename"), this);
     connect(action, SIGNAL(triggered()), this, SLOT(renameNode()));
     menu.addAction(action);
 
     // The world node isn't removable
     if (node->isRemovable()) {
-        action = new QAction(QIcon(), "Delete", this);
+        action = new QAction(QIcon(), tr("Delete"), this);
         connect(action, SIGNAL(triggered()), this, SLOT(deleteNode()));
         menu.addAction(action);
     }
 
     if (node->isDuplicable()) {
-        action = new QAction(QIcon(), "Duplicate", this);
+        action = new QAction(QIcon(), tr("Duplicate"), this);
         connect(action, SIGNAL(triggered()), this, SLOT(duplicateNode()));
         menu.addAction(action);
     }
 
-	action = new QAction(QIcon(), "Focus Camera", this);
+	action = new QAction(QIcon(), tr("Focus Camera"), this);
 	connect(action, SIGNAL(triggered()), this, SLOT(focusOnNode()));
 	menu.addAction(action);
 
 	if (node->isExportable()) {
-		QMenu *subMenu = menu.addMenu("Export");
+		QMenu *subMenu = menu.addMenu(tr("Export"));
 
 		std::function<void(const iris::SceneNodePtr&, QStringList&)> getChildGuids =
 			[&](const iris::SceneNodePtr &node, QStringList &items) -> void
@@ -301,7 +301,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 		};
 
 		if (node->getSceneNodeType() == iris::SceneNodeType::Empty) {
-			QAction *exportAsset = subMenu->addAction("Export Object");
+			QAction *exportAsset = subMenu->addAction(tr("Export Object"));
 
 			QStringList assetGuids;
 			getChildGuids(node, assetGuids);
@@ -310,19 +310,19 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 
 		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             if (!node->isBuiltIn) {
-                QAction *exportAsset = subMenu->addAction("Export Object");
+                QAction *exportAsset = subMenu->addAction(tr("Export Object"));
                 connect(exportAsset, &QAction::triggered, this, [this, node]() {
                     exportNode(node);
                 });
             }
 
-			QAction *exportMat = subMenu->addAction("Create Material");
+			QAction *exportMat = subMenu->addAction(tr("Create Material"));
 			connect(exportMat, &QAction::triggered, this, [this, node]() {
 				createMaterial();
 			});
 		}
 		else if (node->getSceneNodeType() == iris::SceneNodeType::ParticleSystem) {
-			QAction *exportPSystem = subMenu->addAction("Export Particle System");
+			QAction *exportPSystem = subMenu->addAction(tr("Export Particle System"));
 
 			connect(exportPSystem, &QAction::triggered, this, [this, node]() {
 				exportParticleSystem(node);
@@ -490,4 +490,9 @@ void SceneHierarchyWidget::removeChild(iris::SceneNodePtr childNode)
 SceneHierarchyWidget::~SceneHierarchyWidget()
 {
     delete ui;
+}
+
+void SceneHierarchyWidget::changeEvent(QEvent * event) {
+	if (event->type() == QEvent::LanguageChange) ui->retranslateUi(this);
+	QWidget::changeEvent(event);
 }

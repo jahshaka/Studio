@@ -127,8 +127,7 @@ For more information see the LICENSE file
 
 #include "irisgl/src/zip/zip.h"
 
-#include "misc/helpinglabels.h"
-#include "misc/ui_helpinglabels.h"
+
 
 enum class VRButtonMode : int
 {
@@ -140,12 +139,8 @@ enum class VRButtonMode : int
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-<<<<<<< HEAD
 	awesome = new QtAwesome();
 	awesome->initFontAwesome();
-=======
-	helpingLabels = new HelpingLabels();
->>>>>>> Added translation for main window in Portuguese
     setWindowTitle(QString("Jahshaka %1").arg(Constants::CONTENT_VERSION));
 	settings = SettingsManager::getDefaultManager();
 
@@ -2322,24 +2317,24 @@ void MainWindow::setupViewPort()
     playerControlsLayout->addStretch();
 
     connect(restartBtn, &QPushButton::pressed, [this]() {
-        playBtn->setToolTip(helpingLabels->ui->playBtn->text());
+        playBtn->setToolTip(tr("Pause the Scene"));
         playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
         UiManager::restartScene();
     });
 
     connect(playBtn, &QPushButton::pressed, [this]() {
         if (UiManager::isScenePlaying) {
-            playBtn->setToolTip(helpingLabels->ui->playBtn->text());
+            playBtn->setToolTip(tr("Play the scene"));
             playBtn->setIcon(QIcon(":/icons/g_play.svg"));
             UiManager::pauseScene();
         } else {
-            playBtn->setToolTip(helpingLabels->ui->pauseScene->text());
+            playBtn->setToolTip(tr("Pause the scene"));
             playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
             UiManager::playScene();
         }
     });
     connect(stopBtn, &QPushButton::pressed, [this]() {
-        playBtn->setToolTip(helpingLabels->ui->playBtn->text());
+        playBtn->setToolTip(tr("Play the scene"));
         playBtn->setIcon(QIcon(":/icons/g_play.svg"));
         UiManager::stopScene();
     });
@@ -2637,40 +2632,38 @@ void MainWindow::toggleDockWidgets()
 	dl->setContentsMargins(20, 10, 20, 16);
 	d->setLayout(dl);
 
-    QPushButton *hierarchy = new QPushButton(helpingLabels->ui->hierarchy->text());
+    QPushButton *hierarchy = new QPushButton(tr("Hierarchy"));
 	hierarchy->setAccessibleName(QStringLiteral("toggleAbles"));
 	hierarchy->setCheckable(true);
 	hierarchy->setChecked(widgetStates[(int) Widget::HIERARCHY]);
 
-    QPushButton *properties = new QPushButton(helpingLabels->ui->properties->text());
+    QPushButton *properties = new QPushButton(tr("Properties"));
 	properties->setAccessibleName(QStringLiteral("toggleAbles"));
 	properties->setCheckable(true);
 	properties->setChecked(widgetStates[(int) Widget::PROPERTIES]);
 
-    QPushButton *presets = new QPushButton(helpingLabels->ui->presets->text());
+    QPushButton *presets = new QPushButton(tr("Presets"));
 	presets->setAccessibleName(QStringLiteral("toggleAbles"));
 	presets->setCheckable(true);
 	presets->setChecked(widgetStates[(int) Widget::PRESETS]);
 
-    QPushButton *timeline = new QPushButton(helpingLabels->ui->animationDock->text());
+    QPushButton *timeline = new QPushButton(tr("Timeline"));
 	timeline->setAccessibleName(QStringLiteral("toggleAbles"));
 	timeline->setCheckable(true);
 	timeline->setChecked(widgetStates[(int) Widget::TIMELINE]);
 
-    QPushButton *assets = new QPushButton(helpingLabels->ui->assetDock->text());
+    QPushButton *assets = new QPushButton(tr("Assets Browser"));
 	assets->setAccessibleName(QStringLiteral("toggleAbles"));
 	assets->setCheckable(true);
 	assets->setChecked(widgetStates[(int) Widget::ASSETS]);
 
-    QPushButton *closeAll = new QPushButton(helpingLabels->ui->closeAll->text());
+    QPushButton *closeAll = new QPushButton(tr("Close All"));
 	closeAll->setCheckable(true);
-	//closeAll->setChecked(true);
 
-    QPushButton *restoreAll = new QPushButton(helpingLabels->ui->restoreAll->text());
+    QPushButton *restoreAll = new QPushButton(tr("Restore All"));
 	restoreAll->setCheckable(true);
-	//restoreAll->setChecked(true);
 
-    QLabel *label = new QLabel(helpingLabels->ui->viewDocks->text());
+    QLabel *label = new QLabel(tr("Toggle Widgets"));
 	label->setAlignment(Qt::AlignCenter);
 	label->setContentsMargins(0, 0, 0, 6);
 	dl->addWidget(label);
@@ -2923,7 +2916,7 @@ void MainWindow::enterEditMode()
 {
     UiManager::isScenePlaying = false;
     UiManager::enterEditMode();
-    playSceneBtn->setToolTip(helpingLabels->ui->playBtn->text());
+    playSceneBtn->setToolTip(tr("Play scene"));
     playSceneBtn->setIcon(QIcon(":/icons/g_play.svg"));
 }
 
@@ -2931,52 +2924,46 @@ void MainWindow::enterPlayMode()
 {
     UiManager::isScenePlaying = true;
     UiManager::enterPlayMode();
-    playSceneBtn->setToolTip(helpingLabels->ui->stopBtn->text());
+    playSceneBtn->setToolTip(tr("Stop playing"));
     playSceneBtn->setIcon(QIcon(":/icons/g_stop.svg"));
 }
 
 void MainWindow::changeEvent(QEvent * event)
 {
-	if (event->type() == QEvent::LanguageChange)	changeAllLabels();
+	if (event->type() == QEvent::LanguageChange)	changeAllTexts();
 	QWidget::changeEvent(event);
 }
 
-void MainWindow::changeAllLabels()
+void MainWindow::changeAllTexts()
 {
-    ui->retranslateUi(this);
-    // tool bar translations
-    helpingLabels->ui->retranslateUi(helpingLabels);
-    actionTranslate->setToolTip(helpingLabels->ui->actionTranslate->text());
-    actionScale->setToolTip(helpingLabels->ui->actionScale->text());
-    actionRotate->setToolTip(helpingLabels->ui->actionRotate->text());
-    actionUndo->setToolTip(helpingLabels->ui->actionUndo->text());
-    actionRedo->setToolTip(helpingLabels->ui->actionRedo->text());
-    actionGlobalSpace->setToolTip(helpingLabels->ui->actionGlobalSpace->text());
-    actionLocalSpace->setToolTip(helpingLabels->ui->actionLocalSpace->text());
-    actionFreeCamera->setToolTip(helpingLabels->ui->actionFreeCamera->text());
-    actionArcballCam->setToolTip(helpingLabels->ui->actionArcballcam->text());
-    actionExport->setToolTip(helpingLabels->ui->actionExport->text());
-    viewDocks->setToolTip(helpingLabels->ui->viewDocks->text());
+	actionUndo->setToolTip(tr("Undo last action"));
+	actionRedo->setToolTip(tr("Redo last action"));
+	actionTranslate->setToolTip(tr("Manipulator for translating objects"));
+	actionScale->setToolTip(tr("Manipulator for scaling objects"));
+	actionGlobalSpace->setToolTip(tr("Move objects relative to the global world"));
+	actionLocalSpace->setToolTip(tr("Move objects relative to their transform"));
+	actionFreeCamera->setToolTip(tr("Freely move and orient the camera"));
+	actionArcballCam->setToolTip(tr("Move and orient the camera around a fixed point"));
+	actionExport->setToolTip(tr("Export the current scene"));
+	viewDocks->setToolTip(tr("Toggle Widgets"));
+	actionRotate->setToolTip(tr("Manipulator for rotating objects"));
+	screenShotBtn->setToolTip(tr("Take a screenshot of the scene"));
+	actionSaveScene->setToolTip(tr("Save the current scene"));
+	wireCheckBtn->setText(tr("Viewport Wireframes"));
 
-    //view port translation
-    screenShotBtn->setToolTip(helpingLabels->ui->screenShotBtn->text());
-    wireCheckBtn->setText(helpingLabels->ui->wireCheckBtn->text());
+	restartBtn->setText(tr("Restart playback"));
+	playBtn->setText(tr("Play the scene"));
+	stopBtn->setText(tr("Stop playback"));
 
-    restartBtn->setText(helpingLabels->ui->restartBtn->text());
-    playBtn->setText(helpingLabels->ui->playBtn->text());
-    stopBtn->setText(helpingLabels->ui->stopBtn->text());
+	sceneHierarchyDock->setWindowTitle(tr("Hierarchy"));
+	sceneNodePropertiesDock->setWindowTitle(tr("Properties"));
+	presetsDock->setWindowTitle(tr("Presets"));
+	assetDock->setWindowTitle(tr("Assets Dock"));
+	animationDock->setWindowTitle(tr("Timeline"));
+    
+	worlds_menu->setText(tr("Worlds"));
+	editor_menu->setText(tr("Editor"));
+	player_menu->setText(tr("Player"));
+	assets_menu->setText(tr("Assets"));
 
-    //dock widget titles translation
-    sceneHierarchyDock->setWindowTitle(helpingLabels->ui->hierarchy->text());
-    sceneNodePropertiesDock->setWindowTitle(helpingLabels->ui->properties->text());
-    presetsDock->setWindowTitle(helpingLabels->ui->presets->text());
-    assetDock->setWindowTitle(helpingLabels->ui->assetDock->text());
-    animationDock->setWindowTitle(helpingLabels->ui->animationDock->text());
-
-    //main buttons translation
-
-    worlds_menu->setText(helpingLabels->ui->worlds_menu->text());
-    editor_menu->setText(helpingLabels->ui->editor_menu->text());
-    player_menu->setText(helpingLabels->ui->player_menu->text());
-    assets_menu->setText(helpingLabels->ui->assets_menu->text());
 }

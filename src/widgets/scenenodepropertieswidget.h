@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QListWidgetItem>
 #include <QSharedPointer>
+#include <QEvent>
 
 namespace iris {
     class SceneNode;
@@ -63,6 +64,8 @@ public:
 
 private:
     void clearLayout(QLayout*);
+
+	void changeEvent(QEvent * event) override;
 
 private:
     QSharedPointer<iris::SceneNode> sceneNode;

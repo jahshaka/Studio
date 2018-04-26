@@ -25,13 +25,10 @@ For more information see the LICENSE file
 #include <QLabel>
 #include <QCheckBox>
 #include "irisglfwd.h"
-<<<<<<< HEAD
 #include "misc/QtAwesome.h"
 #include "misc/QtAwesomeAnim.h"
-=======
 #include "misc/helpinglabels.h"
 #include "misc/ui_helpinglabels.h"
->>>>>>> Added translation for main window in Portuguese
 
 namespace Ui {
     class MainWindow;
@@ -165,8 +162,7 @@ public:
 
 private:
 
-	//change local labels
-	void changeAllLabels();
+	
     // sets up the button for vr
     void setupVrUi();
 
@@ -296,6 +292,8 @@ private slots:
     void enterEditMode();
     void enterPlayMode();
 
+	void changeAllTexts();
+
 private:
     Ui::MainWindow *ui;
     SurfaceView* surface;
@@ -405,7 +403,6 @@ private:
     QAction *viewDocks;
     QAction *actionRotate;
     QPushButton *screenShotBtn;
-    HelpingLabels *helpingLabels;
 };
 
 #endif // MAINWINDOW_H

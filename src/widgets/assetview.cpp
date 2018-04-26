@@ -50,8 +50,6 @@
 #include "../core/guidmanager.h"
 
 #include "dialogs/toast.h"
-#include "../misc/helpinglabels.h"
-#include "../misc/ui_helpinglabels.h"
 
 void AssetView::focusInEvent(QFocusEvent *event)
 {
@@ -202,7 +200,6 @@ QString AssetView::getAssetType(int id)
 
 AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(parent)
 {
-	helpingLabels = new HelpingLabels();
 	setParent(parent);
 	this->parent = parent;
 	_assetView = new QListWidget;
@@ -281,7 +278,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	treeWidget->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
 
 	rootItem = new QTreeWidgetItem;
-	rootItem->setText(0, "Asset Collections");
+	rootItem->setText(0, tr("Asset Collections"));
 	rootItem->setText(1, QString());
 	rootItem->setData(0, Qt::UserRole, -1);
 
@@ -316,7 +313,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
         treeWidget->clear();
 
         rootItem = new QTreeWidgetItem;
-        rootItem->setText(0, "My Collections");
+        rootItem->setText(0, tr("My Collections"));
         rootItem->setText(1, QString());
 
         treeWidget->addTopLevelItem(rootItem);
@@ -335,7 +332,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	navLayout->addWidget(onlineAssetsButton);
 	navLayout->addSpacing(12);
 	navLayout->addWidget(treeWidget);
-	collectionButton = new QPushButton("Create Collection");
+	collectionButton = new QPushButton(tr("Create Collection"));
 	collectionButton->setStyleSheet("font-size: 12px; padding: 8px;");
 	navLayout->addWidget(collectionButton);
 
@@ -358,11 +355,11 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
                 db->insertCollectionGlobal(collectionName);
                 emit refreshCollections();
                 QString infoText = QString("Collection Created.");
-                QMessageBox::information(this, "Collection Creation Successful", infoText, QMessageBox::Ok);
+                QMessageBox::information(this, tr("Collection Creation Successful"), infoText, QMessageBox::Ok);
                 d.close();
             } else {
-                QString warningText = QString("Failed to create collection. Try again.");
-                QMessageBox::warning(this, "Collection Creation Failed", warningText, QMessageBox::Ok);
+                QString warningText = QString(tr("Failed to create collection. Try again."));
+                QMessageBox::warning(this, tr("Collection Creation Failed"), warningText, QMessageBox::Ok);
             }
         });
 
@@ -385,7 +382,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	testL->setMargin(0);
     testL->setSpacing(0);
 	emptyL->setSpacing(0);
-	emptyLabel = new QLabel("You have no assets in your library.");
+	emptyLabel = new QLabel(tr("You have no assets in your library."));
 	auto emptyIcon = new QLabel;
 	emptyIcon->setAlignment(Qt::AlignVCenter | Qt::AlignHCenter);
 	emptyIcon->setPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-empty-box-50.png"));
@@ -438,7 +435,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	filterPane = new QWidget;
 	auto filterLayout = new QHBoxLayout;
 
-	backdropLabel = new QLabel("Backdrop: ");
+	backdropLabel = new QLabel(tr("Backdrop: "));
 	backdropColor = new QComboBox();
 	backdropColor->setView(new QListView());
 
@@ -470,7 +467,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	//filterLayout->addWidget(new QLabel("Filter: "));
 	//filterLayout->addWidget(filterGroup);
 	filterLayout->addStretch();
-	filterLayout->addWidget(new QLabel("Search: "));
+	searchLabel = new QLabel(tr("Search: "));
+	filterLayout->addWidget(searchLabel);
 	le = new QLineEdit();
 	le->setFixedWidth(256);
 	le->setStyleSheet(
@@ -588,15 +586,15 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	assetDropPad->setSizePolicy(policy);
 	assetDropPad->setObjectName(QStringLiteral("assetDropPad"));
 	auto assetDropPadLayout = new QVBoxLayout;
-	assetDropPadLabel = new QLabel("Drop an asset to import...");
+	assetDropPadLabel = new QLabel(tr("Drop an asset to import..."));
 	assetDropPadLayout->setSpacing(6);
 	assetDropPadLayout->setContentsMargins(6, 6, 6, 2);
 	assetDropPadLabel->setObjectName(QStringLiteral("assetDropPadLabel"));
 	assetDropPadLabel->setAlignment(Qt::AlignHCenter);
 
 	assetDropPadLayout->addWidget(assetDropPadLabel);
-	browseButton = new QPushButton("Import Asset");
-	downloadWorld = new QPushButton("Download Assets");
+	browseButton = new QPushButton(tr("Import Asset"));
+	downloadWorld = new QPushButton(tr("Download Assets"));
 
 	connect(downloadWorld, &QPushButton::pressed, []() {
 		QDesktopServices::openUrl(QUrl("http://www.jahfx.com/downloads/models/"));
@@ -615,13 +613,13 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 	assetDropPadLayout->addWidget(importButtons);
 
-	updateAsset = new QPushButton("Update");
+	updateAsset = new QPushButton(tr("Update"));
 	updateAsset->setStyleSheet("background: #3498db");
 	updateAsset->setVisible(false);
 
-    normalize = new QPushButton("Normalize");
+    normalize = new QPushButton(tr("Normalize"));
 
-	addToProject = new QPushButton("Add to Project");
+	addToProject = new QPushButton(tr("Add to Project"));
 	addToProject->setStyleSheet(
 		"QPushButton { background: #3498db; }"
 		"QPushButton:hover { background-color: #4aa3de; }"
@@ -630,16 +628,16 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	);
 	addToProject->setEnabled(false);
 
-    deleteFromLibrary = new QPushButton("Delete From Library");
+    deleteFromLibrary = new QPushButton(tr("Delete From Library"));
 	deleteFromLibrary->setStyleSheet("QPushButton { background: #E74C3C } QPushButton:disabled { color: #656565; background-color: #3e3e3e; }");
     deleteFromLibrary->setEnabled(false);
 
-	renameModel = new QLabel("Name:");
+	renameModel = new QLabel(tr("Name:"));
 	renameModelField = new QLineEdit();
 
-	tagModel = new QLabel("Tags:");
+	tagModel = new QLabel(tr("Tags:"));
 	tagModelField = new QLineEdit();
-	tagModelField->setPlaceholderText("(comma separated)");
+	tagModelField->setPlaceholderText(tr("(comma separated)"));
 
 	renameWidget = new QWidget;
 	auto renameLayout = new QHBoxLayout;
@@ -855,9 +853,9 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 	connect(browseButton, &QPushButton::pressed, [=]() {
 		filename = QFileDialog::getOpenFileName(this,
-												"Load Mesh",
+												tr("Load Mesh"),
 												QString(),
-												"Mesh Files (*.obj *.fbx *.3ds *.jaf)");
+												tr("Mesh Files (*.obj *.fbx *.3ds *.jaf)"));
 
 		if (QFileInfo(filename).suffix() == "jaf") {
 			importJahModel(filename);
@@ -879,23 +877,23 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	QSizePolicy policy2;
 	policy2.setVerticalPolicy(QSizePolicy::Preferred);
 	policy2.setHorizontalPolicy(QSizePolicy::Preferred);
-	metadataMissing = new QLabel("Nothing selected...");
+	metadataMissing = new QLabel(tr("Nothing selected..."));
 	metadataMissing->setAlignment(Qt::AlignCenter);
 	metadataMissing->setStyleSheet("padding: 12px; text-align: center");
 	metadataMissing->setSizePolicy(policy2);
-	metadataName = new QLabel("Name: ");
+	metadataName = new QLabel(tr("Name: "));
 	metadataName->setSizePolicy(policy2);
-	metadataType = new QLabel("Type: ");
+	metadataType = new QLabel(tr("Type: "));
 	metadataType->setSizePolicy(policy2);
-	metadataAuthor = new QLabel("Author: ");
+	metadataAuthor = new QLabel(tr("Author: "));
 	metadataAuthor->setSizePolicy(policy2);
-	metadataLicense = new QLabel("License: ");
+	metadataLicense = new QLabel(tr("License: "));
 	metadataLicense->setSizePolicy(policy2);
-	metadataTags = new QLabel("Tags: ");
+	metadataTags = new QLabel(tr("Tags: "));
 	metadataTags->setSizePolicy(policy2);
-	metadataVisibility = new QLabel("Public: ");
+	metadataVisibility = new QLabel(tr("Public: "));
 	metadataVisibility->setSizePolicy(policy2);
-	metadataCollection = new QLabel("Collection: ");
+	metadataCollection = new QLabel(tr("Collection: "));
 	metadataCollection->setSizePolicy(policy2);
     metadataVisibility->setVisible(false);
 
@@ -934,7 +932,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 	metadata->setLayout(l);
 	//metadata->setStyleSheet("QLabel { font-size: 12px; }");
-	header = new QLabel("Asset Metadata");
+	header = new QLabel(tr("Asset Metadata"));
 	header->setAlignment(Qt::AlignCenter);
 	header->setStyleSheet("border-top: 1px solid black; border-bottom: 1px solid black; text-align: center; padding: 12px; background: #1A1A1A");
 	metaLayout->addWidget(header);
@@ -1033,9 +1031,9 @@ void AssetView::importJahModel(const QString &fileName)
         if (!f.exists()) {
             QMessageBox::warning(
                 this,
-                "Incompatible Asset format",
-                "This asset was made with a deprecated version of Jahshaka\n"
-                "You can extract the contents manually and try importing as regular assets.",
+                tr("Incompatible Asset format"),
+                tr("This asset was made with a deprecated version of Jahshaka\n"
+                "You can extract the contents manually and try importing as regular assets."),
                 QMessageBox::Ok
             );
 
@@ -1724,8 +1722,8 @@ void AssetView::changeAssetCollection(AssetGridItem *item)
 			}
 		}
 		else {
-			QString warningText = QString("Failed to change collection. Try again.");
-			QMessageBox::warning(this, "Collection Change Failed", warningText, QMessageBox::Ok);
+			QString warningText = QString(tr("Failed to change collection. Try again."));
+			QMessageBox::warning(this, tr("Collection Change Failed"), warningText, QMessageBox::Ok);
 		}
 
 		d.close();
@@ -1739,7 +1737,7 @@ void AssetView::removeAssetFromProject(AssetGridItem *item)
 	auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
 
 	auto option = QMessageBox::question(this,
-	    "Deleting Asset", "Are you sure you want to delete this asset?",
+	    tr("Deleting Asset"), tr("Are you sure you want to delete this asset?"),
 	    QMessageBox::Yes | QMessageBox::Cancel);
 
 	if (option == QMessageBox::Yes) {
@@ -1758,7 +1756,7 @@ void AssetView::removeAssetFromProject(AssetGridItem *item)
 	        clearViewer();
 	    }
 	    else {
-	        QMessageBox::warning(this, "Delete Failed!", "Failed to remove asset, please try again!", QMessageBox::Ok);
+	        QMessageBox::warning(this, tr("Delete Failed!"), tr("Failed to remove asset, please try again!"), QMessageBox::Ok);
 	    }
 	}
 }
@@ -1776,33 +1774,31 @@ void AssetView::changeEvent(QEvent *event)
 
 void AssetView::changeAllLabels()
 {
-	helpingLabels->ui->retranslateUi(helpingLabels);
-
-	header->setText(helpingLabels->ui->header->text());
-	emptyLabel->setText(helpingLabels->ui->noAssetsString->text());
-	collectionButton->setText(helpingLabels->ui->collectionButton->text());
-	//accept->setText(helpingLabels->ui->changeMetaCollection->text());
-	
-	normalize->setText(helpingLabels->ui->normalize->text());
-	metadataAuthor->setText(helpingLabels->ui->metadataAuthor->text());
-	metadataCollection->setText(helpingLabels->ui->metadataCollection->text());
-	metadataLicense->setText(helpingLabels->ui->metadataLicense->text());
-	metadataMissing->setText(helpingLabels->ui->metadataMissing->text());
-	metadataTags->setText(helpingLabels->ui->metadataTags->text());
-	metadataType->setText(helpingLabels->ui->metadataType->text());
-	metadataVisibility->setText(helpingLabels->ui->metadataPublic->text());
-	metadataName->setText(helpingLabels->ui->metadataName->text());
-	changeMetaCollection->setText(helpingLabels->ui->changeMetaCollection->text());
-	tagModel->setText(helpingLabels->ui->metadataTags->text());
-	renameModel->setText(helpingLabels->ui->metadataName->text());
-	deleteFromLibrary->setText(helpingLabels->ui->deleteFromLibrary->text());
-	addToProject->setText(helpingLabels->ui->addToProject->text());
-	updateAsset->setText(helpingLabels->ui->updatAsset->text());
-	onlineAssetsButton->setText(helpingLabels->ui->onlineAssetsBtn->text());
-	localAssetsButton->setText(helpingLabels->ui->localAssetsBtn->text());
-	backdropLabel->setText(helpingLabels->ui->backdropLabel->text());
-	assetDropPadLabel->setText(helpingLabels->ui->dropArea->text());
-	browseButton->setText(helpingLabels->ui->importAsset->text());
-	downloadWorld->setText(helpingLabels->ui->downloadAssets->text());
-	rootItem->setText(0,helpingLabels->ui->assetCollections->text());
+	localAssetsButton->setText(tr(" Local Assets"));
+	onlineAssetsButton->setText(tr(" Online Assets"));
+	rootItem->setText(0, tr("Asset Collections"));
+	emptyLabel->setText(tr("You have no assets in your library."));
+	backdropLabel->setText(tr("Backdrop: "));
+	searchLabel->setText(tr("Search: "));
+	assetDropPadLabel->setText(tr("Drop an asset to import..."));
+	browseButton->setText(tr("Import Asset"));
+	downloadWorld->setText(tr("Download Assets"));
+	updateAsset->setText(tr("Update"));
+	normalize->setText(tr("Normalize"));
+	deleteFromLibrary->setText(tr("Delete From Library"));
+	addToProject->setText(tr("Add to Project"));
+	tagModelField->setPlaceholderText(tr("(comma separated)"));
+	tagModel->setText(tr("Tags:"));
+	renameModel->setText(tr("Name:"));
+	metadataMissing->setText(tr("Nothing selected..."));
+	metadataName->setText(tr("Name: "));
+	metadataType->setText(tr("Type: "));
+	metadataAuthor->setText(tr("Author: "));
+	metadataLicense->setText(tr("License: "));
+	metadataTags->setText(tr("Tags: "));
+	metadataVisibility->setText(tr("Public: "));
+	metadataCollection->setText(tr("Collection: "));
+	changeMetaCollection->setText(tr("change"));
+	header->setText(tr("Asset Metadata"));
+	collectionButton->setText(tr("Create Collection"));
 }

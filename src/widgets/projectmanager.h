@@ -45,6 +45,7 @@ public:
     ~ProjectManager();
 
 	void updateTile(const QString &id, const QByteArray &arr);
+	
     void populateDesktop(bool reset = false);
     bool checkForEmptyState();
     void cleanupOnClose();
@@ -104,6 +105,9 @@ private:
     QDialog sampleDialog;
 
     QMap<QString, QString> assetGuids;
+
+protected:
+	void changeEvent(QEvent * event) override;
 };
 
 struct AssetWidgetConcurrentWrapper {

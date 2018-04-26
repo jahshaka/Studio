@@ -43,6 +43,8 @@ private:
 
     void addPreset(MaterialPreset* preset);
 
+	void changeEvent(QEvent * event) override;
+
 private:
     Ui::MaterialSets *ui;
     QList<MaterialPreset*> presets;

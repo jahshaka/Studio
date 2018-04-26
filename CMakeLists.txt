@@ -128,12 +128,8 @@ set(SRCS
 	src/dialogs/softwareupdatedialog.cpp
     src/io/assethelper.cpp
     src/misc/upgrader.cpp
-<<<<<<< HEAD
     src/misc/QtAwesome.cpp
     src/misc/QtAwesomeAnim.cpp
-=======
-    src/misc/helpinglabels.cpp
->>>>>>> Added translation for main window in Portuguese
     src/dialogs/toast.cpp
 )
 
@@ -257,12 +253,8 @@ set(HEADERS
     src/editor/animationpath.h
     src/io/assethelper.h
     src/misc/upgrader.h
-<<<<<<< HEAD
     src/misc/QtAwesome.h
-    src/misc/QtAwesomeAnim.h    
-=======
-    src/misc/helpinglabels.h
->>>>>>> Added translation for main window in Portuguese
+    src/misc/QtAwesomeAnim.h   
     src/dialogs/toast.h
 )
 
@@ -309,7 +301,6 @@ set(FORMS
     src/dialogs/renameprojectdialog.ui 
     src/dialogs/donate.ui
     src/dialogs/softwareupdatedialog.ui
-    src/misc/helpinglabels.ui
 )
 
 set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OPENGL_LIBRARIES})

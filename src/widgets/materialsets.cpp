@@ -80,3 +80,8 @@ void MaterialSets::applyMaterialPreset(QListWidgetItem* item)
     auto preset = presets[item->data(Qt::UserRole).toInt()];
     mainWindow->applyMaterialPreset(preset);
 }
+
+void MaterialSets::changeEvent(QEvent *event) {
+	if (event->type() == QEvent::LanguageChange) ui->retranslateUi(this);
+	QWidget::changeEvent(event);
+}

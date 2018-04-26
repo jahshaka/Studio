@@ -6,7 +6,6 @@
 #include "irisgl/src/graphics/mesh.h"
 #include "irisgl/src/core/irisutils.h"
 
-#include "../misc/helpinglabels.h"
 
 class QSplitter;
 class QListWidget;
@@ -173,12 +172,12 @@ private:
 
 	QWidget *parent;
 
-	HelpingLabels *helpingLabels;
 	QLabel *header;
 	QPushButton *collectionButton;
 	QPushButton *accept;
 	QLabel *emptyLabel;
 	QLabel *assetDropPadLabel;
+	QLabel *searchLabel;
 	QPushButton *browseButton ;
 	QPushButton *downloadWorld ;
 

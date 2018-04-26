@@ -67,6 +67,7 @@ public:
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
+	void changeEvent(QEvent * event) override;
 
 protected slots:
     void treeItemSelected(QTreeWidgetItem *item, int column);

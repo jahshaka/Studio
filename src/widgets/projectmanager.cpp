@@ -340,9 +340,9 @@ void ProjectManager::importProjectFromFile(const QString& file)
     if (!allowLoading) {
         QMessageBox::warning(
             this,
-            "Incompatible World format",
-            "This world was made with a deprecated version of Jahshaka\n"
-            "You can extract the contents manually and recreate the world.",
+            tr("Incompatible World format"),
+            tr("This world was made with a deprecated version of Jahshaka\n"
+            "You can extract the contents manually and recreate the world."),
             QMessageBox::Ok
         );
 
@@ -408,8 +408,8 @@ void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
     }
     else {
         QMessageBox::warning(this,
-                             "Rename failed",
-                             "Failed to rename project, please try again or rename manually",
+                             tr("Rename failed"),
+                             tr("Failed to rename project, please try again or rename manually"),
                              QMessageBox::Ok);
     }
 }
@@ -426,8 +426,8 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
     auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
 
     auto option = QMessageBox::question(this,
-                                        "Deleting Project",
-                                        "Are you sure you want to delete this project?",
+                                        tr("Deleting Project"),
+                                        tr("Are you sure you want to delete this project?"),
                                         QMessageBox::Yes | QMessageBox::Cancel);
 
     if (option == QMessageBox::Yes) {
@@ -452,8 +452,8 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
             checkForEmptyState();
         } else {
             QMessageBox::warning(this,
-                                 "Delete Failed!",
-                                 "Failed to remove entire project folder, please try again!",
+                                 tr("Delete Failed!"),
+                                 tr("Failed to remove entire project folder, please try again!"),
                                  QMessageBox::Ok);
         }
     }
@@ -565,7 +565,7 @@ void ProjectManager::openSampleBrowser()
 {
     sampleDialog.setFixedSize(Constants::TILE_SIZE * 1.66);
     sampleDialog.setWindowFlags(sampleDialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
-    sampleDialog.setWindowTitle("Sample Worlds");
+    sampleDialog.setWindowTitle(tr("Sample Worlds"));
     sampleDialog.setAttribute(Qt::WA_MacShowFocusRect, false);
 
     QGridLayout *layout = new QGridLayout();
@@ -608,7 +608,7 @@ void ProjectManager::openSampleBrowser()
 
     connect(sampleList, SIGNAL(itemDoubleClicked(QListWidgetItem*)), SLOT(openSampleProject(QListWidgetItem*)));
 
-    auto instructions = new QLabel("Double click on a sample world to import it in the editor");
+    auto instructions = new QLabel(tr("Double click on a sample world to import it in the editor"));
     instructions->setObjectName("instructions");
     instructions->setStyleSheet("#instructions { border: none; background: #1e1e1e; color: white; " \
                                 "padding: 10px; font-size: 12px }");
@@ -660,4 +660,10 @@ void ProjectManager::loadProjectAssets()
 void ProjectManager::updateTile(const QString &id, const QByteArray & arr)
 {
 	dynamicGrid->updateTile(id, arr);
+}
+
+void ProjectManager::changeEvent(QEvent *event)
+{
+	if (event->type() == QEvent::LanguageChange)	ui->retranslateUi(this);
+	QWidget::changeEvent(event);
 }
