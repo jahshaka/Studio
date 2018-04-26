@@ -553,8 +553,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 		auto gridItem = new AssetGridItem(object, image, sceneProperties.object(), tags.object());
 
-		connect(gridItem, &AssetGridItem::addAssetToProject, [this](AssetGridItem *item) {
-			addAssetToProject(item);
+		connect(gridItem, &AssetGridItem::addAssetItemToProject, [this](AssetGridItem *item) {
+			addAssetItemToProject(item);
 		});
 
 		connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
@@ -660,7 +660,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 		if (!gridItem->metadata.isEmpty()) {
 			if (UiManager::isSceneOpen) {
 				selectedGridItem = gridItem;
-				addAssetToProject(gridItem);
+				addAssetItemToProject(gridItem);
 				selectedGridItem = Q_NULLPTR;
 			}
 		}
@@ -843,7 +843,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	});
 
 	connect(addToProject, &QPushButton::pressed, [this]() {
-		addAssetToProject(selectedGridItem);
+		addAssetItemToProject(selectedGridItem);
 	});
 
 	connect(deleteFromLibrary, &QPushButton::pressed, [this]() {
@@ -1066,8 +1066,7 @@ void AssetView::importJahModel(const QString &fileName)
                             QDir(temporaryDir.path()).filePath("asset.db"),
                             QMap<QString, QString>(),
                             guidCompareMap,
-                            records
-                    );
+                            records);
 
         const QString assetFolder = QDir(assetPath).filePath(guid);
         QDir().mkpath(assetFolder);
@@ -1182,8 +1181,8 @@ void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool
 
     auto gridItem = new AssetGridItem(object, thumbnail, viewer->getSceneProperties(), tags);
 
-    connect(gridItem, &AssetGridItem::addAssetToProject, [this](AssetGridItem *item) {
-        addAssetToProject(item);
+    connect(gridItem, &AssetGridItem::addAssetItemToProject, [this](AssetGridItem *item) {
+		addAssetItemToProject(item);
     });
 
     connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
@@ -1304,8 +1303,8 @@ void AssetView::addToLibrary(bool jfx)
 
 		auto gridItem = new AssetGridItem(object, assetSnapshot, viewer->getSceneProperties(), tags);
 
-		connect(gridItem, &AssetGridItem::addAssetToProject, [this](AssetGridItem *item) {
-			addAssetToProject(item);
+		connect(gridItem, &AssetGridItem::addAssetItemToProject, [this](AssetGridItem *item) {
+			addAssetItemToProject(item);
 		});
 
 		connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
@@ -1425,7 +1424,7 @@ void AssetView::updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject d
     }
 }
 
-void AssetView::addAssetToProject(AssetGridItem *item)
+void AssetView::addAssetItemToProject(AssetGridItem *item)
 {
 	//auto rx = _navPane->rect().x() + viewer->rect().x();
 	//auto ry = _navPane->rect().y() + viewer->rect().y();
@@ -1440,7 +1439,6 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 		0, parent->pos(), QRect()
 	);
 
-	//addToProject->setVisible(false);
 	// get the current project working directory
 	auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), Constants::PROJECT_FOLDER);
 	auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
@@ -1467,7 +1465,6 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 
     for (const auto &file : fileNames) {
         QFileInfo fileInfo(file);
-        
 		ModelTypes jafType = AssetHelper::getAssetTypeFromExtension(fileInfo.suffix().toLower());
 
         QString pathToCopyTo = Globals::project->getProjectFolder();
@@ -1475,7 +1472,6 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 
         int increment = 1;
         QFileInfo checkFile(fileToCopyTo);
-
         // If we encounter the same file, make a duplicate...
         QString newFileName = fileInfo.fileName();
 
@@ -1485,29 +1481,40 @@ void AssetView::addAssetToProject(AssetGridItem *item)
                 IrisUtils::join(pathToCopyTo, newName), fileInfo.suffix())
             );
             newFileName = checkFile.fileName();
+			fileToCopyTo = checkFile.absoluteFilePath();
         }
 
-        files.push_back(QPair<QString, QString>(file, QDir(pathToCopyTo).filePath(newFileName)));
-        bool copyFile = QFile::copy(file, QDir(pathToCopyTo).filePath(newFileName));
+        files.push_back(QPair<QString, QString>(file, fileToCopyTo));
+        
+		bool copyFile = QFile::copy(file, fileToCopyTo);
+
+		QFileInfo newFileInfo(fileToCopyTo);
 
         if (jafType == ModelTypes::File) {
             auto assetFile = new AssetFile;
-            assetFile->fileName = fileInfo.fileName();
+            assetFile->fileName = newFileInfo.fileName();
             assetFile->assetGuid = placeHolderGuid;
-            assetFile->path = checkFile.absoluteFilePath();
+            assetFile->path = fileToCopyTo;
             AssetManager::addAsset(assetFile);
         }
 
-        if (jafType == ModelTypes::Object) {
+		if (jafType == ModelTypes::Texture) {
+			auto assetTexture = new AssetTexture;
+			assetTexture->fileName = newFileInfo.fileName();
+			assetTexture->assetGuid = placeHolderGuid;
+			assetTexture->path = fileToCopyTo;
+			AssetManager::addAsset(assetTexture);
+		}
+
+        if (jafType == ModelTypes::Mesh) {
             this->viewer->makeCurrent();
             auto ssource = new iris::SceneSource();
             // load mesh as scene
             auto node = iris::MeshNode::loadAsSceneFragment(
-                QDir(pathToCopyTo).filePath(newFileName),
+				fileToCopyTo,
                 [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
             {
                 auto mat = iris::CustomMaterial::create();
-
                 if (mesh->hasSkeleton())
                     mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
                 else
@@ -1515,17 +1522,15 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 
                 return mat;
             }, ssource);
-
             this->viewer->doneCurrent();
 
-            // Add to persistent store
-            {
-                QVariant variant = QVariant::fromValue(node);
-                auto nodeAsset = new AssetNodeObject;
-                nodeAsset->assetGuid = placeHolderGuid;	/* temp guid */
-                nodeAsset->setValue(variant);
-                AssetManager::addAsset(nodeAsset);
-            }
+            QVariant variant = QVariant::fromValue(node);
+            auto nodeAsset = new AssetNodeObject;
+			nodeAsset->fileName = newFileInfo.fileName();
+			nodeAsset->path = fileToCopyTo;
+            nodeAsset->assetGuid = placeHolderGuid;	/* temp guid */
+            nodeAsset->setValue(variant);
+            AssetManager::addAsset(nodeAsset);
         }
     }
 
@@ -1544,6 +1549,9 @@ void AssetView::addAssetToProject(AssetGridItem *item)
     else if (aType == static_cast<int>(ModelTypes::Object)) {
         jafType = ModelTypes::Object;
     }
+	else if (aType == static_cast<int>(ModelTypes::Texture)) {
+		jafType = ModelTypes::Texture;
+	}
     else if (aType == static_cast<int>(ModelTypes::Shader)) {
         jafType = ModelTypes::Shader;
     }
@@ -1553,10 +1561,9 @@ void AssetView::addAssetToProject(AssetGridItem *item)
     }
 
     QVector<AssetRecord> oldAssetRecords;
-    QMap<QString, QString> guidCompareMap;
 
     QString guidReturned = db->copyAsset(
-        jafType, guid, newNames, guidCompareMap,
+        jafType, guid, newNames,
         oldAssetRecords, Globals::project->getProjectGuid()
     );
 
@@ -1605,9 +1612,9 @@ void AssetView::addAssetToProject(AssetGridItem *item)
 
     if (jafType == ModelTypes::Object) {
         for (auto &asset : AssetManager::getAssets()) {
-            if (asset->assetGuid == placeHolderGuid) {
+            if (asset->assetGuid == placeHolderGuid && asset->type == ModelTypes::Object) {
                 asset->assetGuid = guidReturned;
-                auto node = asset->value.value<iris::SceneNodePtr>();
+                auto node = asset->getValue().value<iris::SceneNodePtr>();
                 auto material = db->fetchAssetData(guidReturned);
                 auto materialObj = QJsonDocument::fromBinaryData(material);
                 updateNodeMaterialValues(node, materialObj.object());
@@ -1649,6 +1656,7 @@ void AssetView::addAssetToProject(AssetGridItem *item)
                         }
                         def["vertex_shader"] = vertexShader;
                         def["fragment_shader"] = fragmentShader;
+						material->setMaterialDefinition(def);
                         material->generate(def);
                     }
                 }

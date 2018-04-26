@@ -128,7 +128,6 @@ public:
     QString copyAsset(const ModelTypes &jafType,
                       const QString &guid,
                       const QMap<QString, QString> &newNames,
-                      QMap<QString, QString> &guidCompareMap,
                       QVector<AssetRecord> &oldAssetRecords,
                       const QString &parent);
 
