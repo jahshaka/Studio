@@ -505,7 +505,7 @@ void AssetWidget::updateAssetView(const QString &path, bool showDependencies)
 	ui->assetView->clear();
 
 	for (const auto &folder : db->fetchChildFolders(path)) addItem(folder);
-	for (const auto &asset : db->fetchChildAssets(path, true)) addItem(asset);  /* TODO : irk this out */
+	for (const auto &asset : db->fetchChildAssets(path, showDependencies)) addItem(asset);  /* TODO : irk this out */
 	addCrumbs(db->fetchCrumbTrail(path));
 }
 
