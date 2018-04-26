@@ -701,12 +701,12 @@ bool Database::deleteRecord(const QString &table, const QString &row, const QVar
     return executeAndCheckQuery(query, "DeleteRecord[" + table + ", " + row + "]");
 }
 
-bool Database::renameProject(const QString &newName)
+bool Database::renameProject(const QString &guid, const QString &newName)
 {
     QSqlQuery query;
     query.prepare("UPDATE projects SET name = ? WHERE guid = ?");
     query.addBindValue(newName);
-    query.addBindValue(Globals::project->getProjectGuid());
+    query.addBindValue(guid);
     return executeAndCheckQuery(query, "RenameProject");
 }
 

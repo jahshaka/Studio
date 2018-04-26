@@ -7,6 +7,9 @@ RenameProjectDialog::RenameProjectDialog(QDialog *parent) : QDialog(parent), ui(
     setWindowTitle("Rename Project");
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
+	ui->ok->setAutoDefault(true);
+	ui->ok->setDefault(true);
+
     connect(ui->ok, SIGNAL(pressed()), SLOT(newText()));
 }
 
