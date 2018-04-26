@@ -177,10 +177,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupShortcuts();
 	setupUndoRedo();
 
-//    if (!UiManager::playMode) {
-//        restoreGeometry(settings->getValue("geometry", "").toByteArray());
-//        restoreState(settings->getValue("windowState", "").toByteArray());
-//    }
+	restoreGeometry(settings->getValue("geometry", "").toByteArray());
+	//restoreState(settings->getValue("windowState", "").toByteArray());
 
 	undoStackCount = 0;
 }
@@ -192,7 +190,7 @@ void MainWindow::grabOpenGLContextHack()
 
 void MainWindow::goToDesktop()
 {
-    showMaximized();
+    show();
     switchSpace(WindowSpaces::DESKTOP);
 }
 
@@ -478,10 +476,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
 //#endif
 
-//    if (!UiManager::playMode) {
-//        settings->setValue("geometry", saveGeometry());
-//        settings->setValue("windowState", saveState());
-//    }
+	settings->setValue("geometry", saveGeometry());
 
     ThumbnailGenerator::getSingleton()->shutdown();
 }
