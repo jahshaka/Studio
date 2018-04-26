@@ -2950,20 +2950,16 @@ void MainWindow::changeAllTexts()
 	screenShotBtn->setToolTip(tr("Take a screenshot of the scene"));
 	actionSaveScene->setToolTip(tr("Save the current scene"));
 	wireCheckBtn->setText(tr("Viewport Wireframes"));
-
 	restartBtn->setText(tr("Restart playback"));
 	playBtn->setText(tr("Play the scene"));
 	stopBtn->setText(tr("Stop playback"));
-
 	sceneHierarchyDock->setWindowTitle(tr("Hierarchy"));
 	sceneNodePropertiesDock->setWindowTitle(tr("Properties"));
 	presetsDock->setWindowTitle(tr("Presets"));
 	assetDock->setWindowTitle(tr("Assets Dock"));
 	animationDock->setWindowTitle(tr("Timeline"));
-    
 	worlds_menu->setText(tr("Worlds"));
 	editor_menu->setText(tr("Editor"));
 	player_menu->setText(tr("Player"));
 	assets_menu->setText(tr("Assets"));
-
 }
