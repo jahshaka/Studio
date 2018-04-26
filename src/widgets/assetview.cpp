@@ -769,11 +769,13 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
             if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Shader)) {
                 viewers->setCurrentIndex(0);
                 if (viewer->cachedAssets.value(gridItem->metadata["guid"].toString())) {
-                    viewer->loadJafShader(gridItem->metadata["guid"].toString(), QMap<QString, QString>());
+					QMap<QString, QString> map;
+                    viewer->loadJafShader(gridItem->metadata["guid"].toString(), map);
                     viewer->orientCamera(pos, rot, distObj);
                 }
                 else {
-                    viewer->loadJafShader(gridItem->metadata["guid"].toString(), QMap<QString, QString>());
+					QMap<QString, QString> map;
+                    viewer->loadJafShader(gridItem->metadata["guid"].toString(), map);
                     viewer->orientCamera(pos, rot, distObj);
                 }
             }

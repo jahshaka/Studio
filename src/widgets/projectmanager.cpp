@@ -268,24 +268,24 @@ ProjectManager::~ProjectManager()
 
 void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
 {
-	if (Globals::project->getProjectGuid() != widget->tileData.guid) {
-		auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-		auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
-
-		Globals::project->setProjectPath(
-            QDir(QDir(projectFolder).filePath("Projects")).filePath(widget->tileData.guid),
-            widget->tileData.name
-        );
-		Globals::project->setProjectGuid(widget->tileData.guid);
-
-		this->openInPlayMode = playMode;
-
-        assetGuids.clear();
-		loadProjectAssets();
-	}
-	else {
+	if (Globals::project->getProjectGuid() == widget->tileData.guid) {
 		mainWindow->switchSpace(WindowSpaces::EDITOR);
+		return;
 	}
+
+	auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+	auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
+
+	Globals::project->setProjectPath(
+        QDir(QDir(projectFolder).filePath("Projects")).filePath(widget->tileData.guid),
+        widget->tileData.name
+    );
+	Globals::project->setProjectGuid(widget->tileData.guid);
+
+	this->openInPlayMode = playMode;
+
+    assetGuids.clear();
+	loadProjectAssets();
 }
 
 QString projectBlobGuid;
