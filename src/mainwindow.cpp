@@ -2381,7 +2381,10 @@ void MainWindow::setupViewPort()
     screenShotBtn->setToolTip("Take a screenshot of the scene");
     screenShotBtn->setToolTipDuration(-1);
     screenShotBtn->setStyleSheet("background: transparent");
-    screenShotBtn->setIcon(QIcon(":/icons/camera.svg"));
+    //reenShotBtn->setIcon(QIcon(":/icons/camera.svg"));
+	screenShotBtn->setText(QChar(fa::camera));
+	screenShotBtn->setFont(awesome->font(16));
+
 
     wireFramesButton = new QToolButton;
     wireFramesButton->setStyleSheet(
