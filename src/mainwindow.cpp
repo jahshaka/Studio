@@ -2429,10 +2429,54 @@ void MainWindow::setupViewPort()
     restartSimBtn->setToolTip("Restart physics simulation");
     restartSimBtn->setStyleSheet("background: transparent");
 
+	QWidget *middleContainer = new QWidget();
+	QHBoxLayout *middle = new QHBoxLayout;
+	middleContainer->setLayout(middle);
+	middle->setSpacing(0);
+	middle->setMargin(0);
+
+	topBtn = new QPushButton(QChar(fa::arrowup));
+	topBtn->setFont(awesome->font(16));
+	topBtn->setCursor(Qt::PointingHandCursor);
+	topBtn->setStyleSheet("QPushButton{background: #1E1E1E; border: 2px solid #111; border-right-width: .5px; border-top-left-radius: 8px;"
+		"border-bottom-left-radius: 8px; padding: 8px; padding-top:5px; padding-bottom:5px; margin:0px} QPushButton:hover{ color: #0530aa }");
+
+	bottomBtn = new QPushButton(QChar(fa::arrowdown));
+	bottomBtn->setFont(awesome->font(16));
+	bottomBtn->setCursor(Qt::PointingHandCursor);
+	bottomBtn->setStyleSheet("QPushButton{ background: #1E1E1E; border: 2px solid #111; border-left-width: .5px; border-right-width: .5px;"
+		"padding: 8px; padding-top:5px; padding-bottom:5px; margin:0px;} QPushButton:hover{ color: #0530aa }");
+
+	leftSideBtn = new QPushButton(QChar(fa::arrowleft));
+	leftSideBtn->setFont(awesome->font(16));
+	leftSideBtn->setCursor(Qt::PointingHandCursor);
+	leftSideBtn->setStyleSheet("QPushButton{background: #1E1E1E; border: 2px solid #111; border-left-width: .5px; border-right-width: .5px;"
+		" padding: 8px; padding-top:5px; padding-bottom:5px; margin:0px;} QPushButton:hover{ color: #0530aa }");
+
+	rightSideBtn = new QPushButton(QChar(fa::arrowright));
+	rightSideBtn->setFont(awesome->font(16));
+	rightSideBtn->setCursor(Qt::PointingHandCursor);
+	rightSideBtn->setStyleSheet("QPushButton{background: #1E1E1E; border: 2px solid #111; border-left-width: .5px; border-top-right-radius: 8px;"
+		" border-bottom-right-radius: 8px; padding: 8px; padding-top:5px; padding-bottom:5px; margin:0px;}"
+		"QPushButton:hover{color : #0530aa}");
+
+	middle->addWidget(topBtn);
+	middle->addWidget(bottomBtn);
+	middle->addWidget(leftSideBtn);
+	middle->addWidget(rightSideBtn);
+
+	connect(topBtn, &QPushButton::pressed, [this]() {});
+	connect(bottomBtn, &QPushButton::pressed, [this]() {});
+	connect(leftSideBtn, &QPushButton::pressed, [this]() {});
+	connect(rightSideBtn, &QPushButton::pressed, [this]() {});
+
+
     controlBarLayout->setSpacing(8);
     controlBarLayout->addWidget(screenShotBtn);
     controlBarLayout->addWidget(wireFramesButton);
     controlBarLayout->addStretch();
+	controlBarLayout->addWidget(middleContainer);
+	controlBarLayout->addStretch();
     controlBarLayout->addWidget(playSceneBtn);
     controlBarLayout->addSpacing(2);
 	controlBarLayout->addWidget(playSimBtn);

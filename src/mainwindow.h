@@ -465,7 +465,6 @@ private:
 	QVector<bool> widgetStates;	// use the order in the enum
 
     WindowSpaces currentSpace;
-	QtAwesome fontIcons;
 
 	MinerUI *miner;
 	QPushButton *playSimBtn;
@@ -478,6 +477,13 @@ private:
     AssetFavorites *assetFavorites;
     AssetModelPanel *assetModelPanel;
     AssetMaterialPanel *assetMaterialPanel;
+
+
+	QPushButton *topBtn;
+	QPushButton *bottomBtn;
+	QPushButton *leftSideBtn;
+	QPushButton *rightSideBtn;
+
 };
 
 #endif // MAINWINDOW_H
