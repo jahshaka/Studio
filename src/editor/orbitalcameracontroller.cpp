@@ -19,12 +19,16 @@ For more information see the LICENSE file
 #include "cameracontrollerbase.h"
 #include "orbitalcameracontroller.h"
 
+#include "../core/settingsmanager.h"
+#include "../widgets/sceneviewwidget.h"
+#include "../editor/gizmo.h"
+
 float lerp(float a, float b, float t)
 {
 	return a * (1 - t) + b * t;
 }
 
-OrbitalCameraController::OrbitalCameraController()
+OrbitalCameraController::OrbitalCameraController(SceneViewWidget* sceneWidget)
 {
     distFromPivot = 15;
     rotationSpeed = 1.f / 10.f;
@@ -33,6 +37,8 @@ OrbitalCameraController::OrbitalCameraController()
 
 	pitch = yaw = 0;
 	targetPitch = targetYaw = 0;
+
+	this->sceneWidget = sceneWidget;
 }
 
 iris::CameraNodePtr OrbitalCameraController::getCamera()
@@ -90,13 +96,30 @@ void OrbitalCameraController::onMouseMove(int x,int y)
 		targetPitch = pitch;
 	}
 
-    if (middleMouseDown) {
+    if (middleMouseDown ||
+		canLeftMouseDrag()) {
         //translate camera
         float dragSpeed = 0.01f;
         auto dir = camera->getLocalRot().rotatedVector(QVector3D(x*dragSpeed,-y*dragSpeed,0));
         pivot += dir;
     }
     updateCameraRot();
+}
+
+bool OrbitalCameraController::canLeftMouseDrag()
+{
+	bool gizmoDragging = false;
+	if (sceneWidget != nullptr) {
+		auto gizmo = sceneWidget->getActiveGizmo();
+		if (gizmo != nullptr) {
+			if (gizmo->isDragging())
+				gizmoDragging = true;
+		}
+	}
+
+	return (leftMouseDown && // left mouse must be down
+		settings->getValue("mouse_controls", "jahshaka").toString() == "jahshaka" && // left mouse to drag in jahshaka mouse mode
+		!gizmoDragging); // cant pan while dragging gizmo
 }
 
 /**
