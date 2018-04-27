@@ -152,6 +152,10 @@ public:
     void setGizmoLoc();
     void setGizmoRot();
     void setGizmoScale();
+	Gizmo* getActiveGizmo()
+	{
+		return gizmo;
+	}
 
     void setEditorData(EditorData* data);
     EditorData* getEditorData();
@@ -167,6 +171,7 @@ public:
     QVector3D calculateMouseRay(const QPointF& pos);
     void mousePressEvent(QMouseEvent* evt);
     void mouseMoveEvent(QMouseEvent* evt);
+	void mouseDoubleClickEvent(QMouseEvent* evt);
 
 	iris::SceneNodePtr savedActiveNode;
 	iris::CustomMaterialPtr originalMaterial;
@@ -292,6 +297,7 @@ private:
 	bool displaySelectionOutline;
 
 	AnimationPath* animPath;
+	SettingsManager* settings;
 
 signals:
     void addDroppedMesh(QString, bool, QVector3D, QString, QString);

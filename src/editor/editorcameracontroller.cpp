@@ -16,16 +16,22 @@ For more information see the LICENSE file
 #include <qmath.h>
 #include <math.h>
 #include "../core/keyboardstate.h"
+#include "../core/settingsmanager.h"
+#include "../widgets/sceneviewwidget.h"
+#include "../editor/gizmo.h"
 
 using namespace iris;
 
-EditorCameraController::EditorCameraController()
+EditorCameraController::EditorCameraController(SceneViewWidget* sceneWidget):
+	CameraControllerBase()
 {
     lookSpeed = 200;
     linearSpeed = 0.4f;
 
     yaw = 0;
     pitch = 0;
+
+	this->sceneWidget = sceneWidget;
 }
 
 CameraNodePtr EditorCameraController::getCamera()
@@ -121,7 +127,7 @@ void EditorCameraController::onMouseMove(int x,int y)
         this->pitch += y/10.0f;
     }
 
-    if(middleMouseDown)
+    if(middleMouseDown || canLeftMouseDrag())
     {
         //translate camera
         float dragSpeed = 0.01f;
@@ -144,6 +150,21 @@ void EditorCameraController::onMouseMove(int x,int y)
     */
 
     updateCameraRot();
+}
+
+bool EditorCameraController::canLeftMouseDrag()
+{
+	
+	bool gizmoDragging = false;
+	auto gizmo = sceneWidget->getActiveGizmo();
+	if (gizmo != nullptr) {
+		if (gizmo->isDragging())
+			gizmoDragging = true;
+	}
+
+	return (leftMouseDown && // left mouse must be down
+		settings->getValue("mouse_controls", "jahshaka").toString() == "jahshaka" && // left mouse to drag in jahshaka mouse mode
+		!gizmoDragging); // cant pan while dragging gizmo
 }
 
 void EditorCameraController::onMouseWheel(int delta)

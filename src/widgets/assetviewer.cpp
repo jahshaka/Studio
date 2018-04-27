@@ -144,8 +144,8 @@ void AssetViewer::initializeGL()
     m->setValue("textureScale", 4.f);
     node->setMaterial(m);
 
-    defaultCam = new EditorCameraController();
-    orbitalCam = new OrbitalCameraController();
+    defaultCam = new EditorCameraController(nullptr);
+    orbitalCam = new OrbitalCameraController(nullptr);
 	orbitalCam->previewMode = true;
 
     camera = iris::CameraNode::create();
