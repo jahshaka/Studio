@@ -484,6 +484,7 @@ private:
 	QPushButton *leftSideBtn;
 	QPushButton *rightSideBtn;
 
+	QLabel *view;
 };
 
 #endif // MAINWINDOW_H

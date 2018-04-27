@@ -2430,36 +2430,42 @@ void MainWindow::setupViewPort()
     restartSimBtn->setStyleSheet("background: transparent");
 
 	QWidget *middleContainer = new QWidget();
+	middleContainer->setStyleSheet("QWidget{ margin:0px; padding:0px;}");
 	QHBoxLayout *middle = new QHBoxLayout;
 	middleContainer->setLayout(middle);
 	middle->setSpacing(0);
 	middle->setMargin(0);
 
+	view = new QLabel(tr("Views   "));
+	view->setStyleSheet("QLabel{ font-style:Bold; font-weight: 500; font-size: 12px; }");
+
+
 	topBtn = new QPushButton(QChar(fa::arrowup));
-	topBtn->setFont(awesome->font(16));
+	topBtn->setFont(awesome->font(12));
 	topBtn->setCursor(Qt::PointingHandCursor);
-	topBtn->setStyleSheet("QPushButton{background: #1E1E1E; border: 2px solid #111; border-right-width: .5px; border-top-left-radius: 8px;"
-		"border-bottom-left-radius: 8px; padding: 8px; padding-top:5px; padding-bottom:5px; margin:0px} QPushButton:hover{ color: #0530aa }");
+	topBtn->setStyleSheet("QPushButton{background: rgba(48,48,48,1); border: 1px solid rgba(42,42,42,1); border-right-width: .5px; border-top-left-radius: 3px;"
+		"border-bottom-left-radius: 3px; padding: 8px; padding-top:2px; padding-bottom:2px; margin:0px; color:#eee;} QPushButton:hover{ color: #2980B9; }");
 
 	bottomBtn = new QPushButton(QChar(fa::arrowdown));
-	bottomBtn->setFont(awesome->font(16));
+	bottomBtn->setFont(awesome->font(12));
 	bottomBtn->setCursor(Qt::PointingHandCursor);
-	bottomBtn->setStyleSheet("QPushButton{ background: #1E1E1E; border: 2px solid #111; border-left-width: .5px; border-right-width: .5px;"
-		"padding: 8px; padding-top:5px; padding-bottom:5px; margin:0px;} QPushButton:hover{ color: #0530aa }");
+	bottomBtn->setStyleSheet("QPushButton{ background: rgba(48,48,48,1); border: 1px solid rgba(42,42,42,1); border-left-width: .5px; border-right-width: .5px;"
+		"padding: 8px; padding-top:2px; padding-bottom:2px; margin:0px; color:#eee;} QPushButton:hover{ color: #2980B9; }");
 
 	leftSideBtn = new QPushButton(QChar(fa::arrowleft));
-	leftSideBtn->setFont(awesome->font(16));
+	leftSideBtn->setFont(awesome->font(12));
 	leftSideBtn->setCursor(Qt::PointingHandCursor);
-	leftSideBtn->setStyleSheet("QPushButton{background: #1E1E1E; border: 2px solid #111; border-left-width: .5px; border-right-width: .5px;"
-		" padding: 8px; padding-top:5px; padding-bottom:5px; margin:0px;} QPushButton:hover{ color: #0530aa }");
+	leftSideBtn->setStyleSheet("QPushButton{background: rgba(48,48,48,1); border: 1px solid rgba(42,42,42,1); border-left-width: .5px; border-right-width: .5px;"
+		" padding: 8px; padding-top:2px; padding-bottom:2px; margin:0px; color:#eee;} QPushButton:hover{ color: #2980B9; }");
 
 	rightSideBtn = new QPushButton(QChar(fa::arrowright));
-	rightSideBtn->setFont(awesome->font(16));
+	rightSideBtn->setFont(awesome->font(12));
 	rightSideBtn->setCursor(Qt::PointingHandCursor);
-	rightSideBtn->setStyleSheet("QPushButton{background: #1E1E1E; border: 2px solid #111; border-left-width: .5px; border-top-right-radius: 8px;"
-		" border-bottom-right-radius: 8px; padding: 8px; padding-top:5px; padding-bottom:5px; margin:0px;}"
-		"QPushButton:hover{color : #0530aa}");
+	rightSideBtn->setStyleSheet("QPushButton{background: rgba(48,48,48,1); border: 1px solid rgba(42,42,42,1); border-left-width: .5px; border-top-right-radius: 3px;"
+		" border-bottom-right-radius: 3px; padding: 8px; padding-top:2px; padding-bottom:2px; margin:0px; color:#eee;}"
+		"QPushButton:hover{color: #2980B9;}");
 
+	middle->addWidget(view);
 	middle->addWidget(topBtn);
 	middle->addWidget(bottomBtn);
 	middle->addWidget(leftSideBtn);
