@@ -2786,14 +2786,16 @@ void MainWindow::newScene()
 
 void MainWindow::newProject(const QString &filename, const QString &projectPath)
 {
+	closeProject();
+
     newScene();
 
     UiManager::updateWindowTitle();
 
     assetWidget->trigger();
 
-    UiManager::isSceneOpen = true;
-    ui->actionClose->setDisabled(false);
+    //UiManager::isSceneOpen = true;
+    //ui->actionClose->setDisabled(false);
     switchSpace(WindowSpaces::EDITOR);
 
 	// todo - do this once instead of having two writers as above
