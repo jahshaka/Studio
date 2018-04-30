@@ -71,7 +71,7 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, const QJsonObject
         for (const iris::Property* property : nodeMaterial->properties) {
             if (property->type == iris::PropertyType::Texture) {
 				QString textureValue = materialDefinition.value(property->name).toString();
-                if (!textureValue.isEmpty() && !QFileInfo(textureValue).suffix().isEmpty()) {
+                if (!textureValue.isEmpty() || !QFileInfo(textureValue).suffix().isEmpty()) {
                     nodeMaterial->setValue(property->name, materialDefinition.value(property->name).toString());
                 }
             }
@@ -89,7 +89,7 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, const QJsonObject
 
     QJsonArray children = definition["children"].toArray();
     // These will always be in sync since the definition is derived from the mesh
-    if (node->hasChildren() && (node->getSceneNodeType() == iris::SceneNodeType::Mesh)) {
+    if (node->hasChildren()) {
         for (int i = 0; i < node->children.count(); i++) {
             updateNodeMaterial(node->children[i], children[i].toObject());
         }

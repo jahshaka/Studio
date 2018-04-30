@@ -818,7 +818,7 @@ QVector<AssetRecord> Database::fetchAssets()
         "FROM assets A "
         "INNER JOIN collections C ON A.collection = C.collection_id "
         "WHERE A.project_guid IS NULL "
-        "AND (A.type = 5 OR A.type = 1 OR A.type = 2 OR A.type = 9) "
+		"AND (A.type = :m OR A.type = :o OR A.type = :t OR A.type = :s) "
         "AND A.guid NOT IN (select dependee FROM dependencies) "
         "ORDER BY A.name DESC"
     );
