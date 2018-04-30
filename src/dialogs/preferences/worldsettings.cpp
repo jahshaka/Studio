@@ -120,7 +120,9 @@ void WorldSettings::setupMouseControls()
 	mouseControlModes.append("Jahshaka");
 	mouseControlModes.append("Default");
 
+	ui->mouseControls->blockSignals(true);
 	ui->mouseControls->addItems(mouseControlModes);
+	ui->mouseControls->blockSignals(false);
 
 	auto mode = settings->getValue("mouse_controls", "jahshaka").toString();
 	if (mode == "jahshaka")
@@ -172,7 +174,6 @@ void WorldSettings::enableAutoUpdate(bool state)
 
 void WorldSettings::mouseControlChanged(const QString& value)
 {
-	qDebug() << "mouse controls: " << value;
 	if (value == "Jahshaka")
 		settings->setValue("mouse_controls", "jahshaka");
 	else
