@@ -374,6 +374,7 @@ set_source_files_properties(${BUNDLE_ICON} PROPERTIES
 # https://stackoverflow.com/a/37211780/996468
 source_group(moc FILES ${HEADERS_moc} ${QRCS})
 add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp.rc ${BUNDLE_ICON})
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Jahshaka)
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 							src
 							irisgl/include

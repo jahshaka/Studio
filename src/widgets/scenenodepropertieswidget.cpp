@@ -14,6 +14,8 @@ For more information see the LICENSE file
 
 #include "irisgl/src/scenegraph/scenenode.h"
 
+#include "sceneviewwidget.h"
+
 #include "accordianbladewidget.h"
 #include "scenenodepropertieswidget.h"
 #include "transformeditor.h"
@@ -43,6 +45,11 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	meshPropView = nullptr;
 	demoPane = nullptr;
     shaderPropView = nullptr;
+}
+
+void SceneNodePropertiesWidget::setSceneView(SceneViewWidget *sceneView)
+{
+	this->sceneView = sceneView;
 }
 
 /**

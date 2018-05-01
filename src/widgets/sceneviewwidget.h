@@ -198,6 +198,9 @@ public:
     bool getShowLightWires() const;
     void setShowLightWires(bool value);
 
+	void startPhysicsSimulation();
+	void stopPhysicsSimulation();
+
     void setShowFps(bool value);
 	void renderSelectedNode(iris::SceneNodePtr selectedNode);
 

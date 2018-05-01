@@ -2034,6 +2034,7 @@ void MainWindow::setupDockWidgets()
     sceneNodePropertiesDock = new QDockWidget("Properties", viewPort);
     sceneNodePropertiesDock->setObjectName(QStringLiteral("sceneNodePropertiesDock"));
     sceneNodePropertiesWidget = new SceneNodePropertiesWidget;
+	sceneNodePropertiesWidget->setSceneView(sceneView);
     sceneNodePropertiesWidget->setDatabase(db);
     sceneNodePropertiesWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     sceneNodePropertiesWidget->setObjectName(QStringLiteral("SceneNodePropertiesWidget"));
@@ -2259,11 +2260,18 @@ void MainWindow::setupViewPort()
     playSceneBtn->setStyleSheet("background: transparent");
     playSceneBtn->setIcon(QIcon(":/icons/g_play.svg"));
 
+	playSimBtn = new QPushButton;
+	playSimBtn->setToolTip("Play scene");
+	playSimBtn->setToolTipDuration(-1);
+	playSimBtn->setStyleSheet("background: transparent");
+	playSimBtn->setIcon(QIcon(":/icons/p_play.svg"));
+
     controlBarLayout->setSpacing(8);
     controlBarLayout->addWidget(screenShotBtn);
     controlBarLayout->addWidget(wireCheckBtn);
     controlBarLayout->addStretch();
     controlBarLayout->addWidget(playSceneBtn);
+	controlBarLayout->addWidget(playSimBtn);
 
     controlBar->setLayout(controlBarLayout);
     controlBar->setStyleSheet("#controlBar {  background: #1E1E1E; border-bottom: 1px solid black; }");
@@ -2322,11 +2330,27 @@ void MainWindow::setupViewPort()
             UiManager::playScene();
         }
     });
+
     connect(stopBtn, &QPushButton::pressed, [this]() {
         playBtn->setToolTip("Play the scene");
         playBtn->setIcon(QIcon(":/icons/g_play.svg"));
         UiManager::stopScene();
     });
+
+	connect(playSimBtn, &QPushButton::pressed, [this]() {
+		UiManager::isSimulationRunning = !UiManager::isSimulationRunning;
+		
+		if (UiManager::isSimulationRunning) {
+			UiManager::startPhysicsSimulation();
+			playSimBtn->setToolTip("Stop simulating");
+			playSimBtn->setIcon(QIcon(":/icons/p_stop.svg"));
+		}
+		else {
+			UiManager::stopPhysicsSimulation();
+			playSimBtn->setToolTip("Start simulation");
+			playSimBtn->setIcon(QIcon(":/icons/p_play.svg"));
+		}
+	});
 
     playerControls->setLayout(playerControlsLayout);
 

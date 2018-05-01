@@ -46,6 +46,7 @@ For more information see the LICENSE file
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/vr/vrdevice.h"
 #include "irisgl/src/vr/vrmanager.h"
+#include "irisgl/src/physics/environment.h"
 
 #include "animationwidget.h"
 #include "constants.h"
@@ -324,6 +325,16 @@ void SceneViewWidget::setShowLightWires(bool value)
     showLightWires = value;
 }
 
+void SceneViewWidget::startPhysicsSimulation()
+{
+	renderer->getPhysicsEnvironment()->simulatePhysics();
+}
+
+void SceneViewWidget::stopPhysicsSimulation()
+{
+	renderer->getPhysicsEnvironment()->stopPhysics();
+}
+
 void SceneViewWidget::initLightAssets()
 {
     pointLightMesh = iris::ShapeHelper::createWireSphere(1.0f);
@@ -500,7 +511,7 @@ void SceneViewWidget::initializeGL()
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
 
-    renderer = iris::ForwardRenderer::create();
+    renderer = iris::ForwardRenderer::create(true, true);
     spriteBatch = iris::SpriteBatch::create(renderer->getGraphicsDevice());
     font = iris::Font::create(renderer->getGraphicsDevice(), fontSize);
 
