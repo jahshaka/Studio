@@ -2,6 +2,7 @@
 #define ENVIRONMENT_H
 
 #include <QVector>
+#include <QHash>
 
 #include "../bullet3/src/btBulletDynamicsCommon.h"
 
@@ -14,7 +15,9 @@ public:
     Environment();
     ~Environment();
 
-	void addBodyToWorld(btRigidBody *body);
+    QHash<QString, btRigidBody*> hashBodies;
+
+	void addBodyToWorld(btRigidBody *body, const QString &guid);
 	void removeBodyFromWorld(btRigidBody *body);
 	void simulatePhysics();
 	void stopPhysics();

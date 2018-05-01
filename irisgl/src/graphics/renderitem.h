@@ -35,6 +35,7 @@ struct RenderItem
 {
     RenderItemType type;
     MaterialPtr material;
+    QString guid;
     MeshPtr mesh;
 
     QMatrix4x4 worldMatrix;
@@ -46,6 +47,7 @@ struct RenderItem
     RenderStates renderStates;
 
     bool cullable = false;
+    bool physicsObject = false;
     BoundingSphere boundingSphere;
 
     //sort order for render layer
@@ -54,7 +56,6 @@ struct RenderItem
 
     RenderItem() {
         type = RenderItemType::None;
-        //renderLayer = (int)RenderLayer::Opaque;
         worldMatrix.setToIdentity();
     }
 

@@ -563,15 +563,17 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 
     for (auto& item : scene->geometryRenderList->getItems()) {
         if (item->type == iris::RenderItemType::Mesh && !!item->mesh) {
-
             if (item->cullable) {
                 auto sphere = item->boundingSphere;
-                //sphere->pos = item->worldMatrix.column(3).toVector3D();
+                if (!renderData->frustum.isSphereInside(&sphere)) continue;
+            }
 
-                if (!renderData->frustum.isSphereInside(&sphere)) {
-                    //qDebug() << "culled";
-                    continue;
-                }
+            if (item->physicsObject) {
+                btTransform trans;
+                float matrix[16];
+                environment->hashBodies.value(item->guid)->getMotionState()->getWorldTransform(trans);
+                trans.getOpenGLMatrix(matrix);
+                item->worldMatrix = QMatrix4x4(matrix).transposed();
             }
 
             QOpenGLShaderProgram* program = nullptr;

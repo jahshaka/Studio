@@ -61,6 +61,8 @@ class TranslationGizmo;
 class ViewerCameraController;
 class ViewportGizmo;
 
+class btRigidBody;
+
 enum class ViewportMode
 {
     Editor,
@@ -148,6 +150,9 @@ public:
 
     void setGizmoTransformToLocal();
     void setGizmoTransformToGlobal();
+
+    void addBodyToWorld(btRigidBody *body, const QString &guid);
+    void removeBodyFromWorld(btRigidBody *body);
 
     void setGizmoLoc();
     void setGizmoRot();

@@ -66,6 +66,7 @@ public:
     bool visible;
     bool removable;
     bool isBuiltIn;
+	bool isPhysicsBody;
 
     bool pickable;
     bool castShadow;

@@ -48,6 +48,8 @@ For more information see the LICENSE file
 #include "irisgl/src/vr/vrmanager.h"
 #include "irisgl/src/physics/environment.h"
 
+#include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
+
 #include "animationwidget.h"
 #include "constants.h"
 #include "keyframecurvewidget.h"
@@ -1225,6 +1227,16 @@ void SceneViewWidget::setGizmoTransformToGlobal()
 	rotationGizmo->setTransformSpace(GizmoTransformSpace::Global);
 	// scaling is only done locally
 	scaleGizmo->setTransformSpace(GizmoTransformSpace::Local);
+}
+
+void SceneViewWidget::addBodyToWorld(btRigidBody *body, const QString &guid)
+{
+    this->renderer->getPhysicsEnvironment()->addBodyToWorld(body, guid);
+}
+
+void SceneViewWidget::removeBodyFromWorld(btRigidBody *body)
+{
+    this->renderer->getPhysicsEnvironment()->removeBodyFromWorld(body);
 }
 
 void SceneViewWidget::setGizmoLoc()
