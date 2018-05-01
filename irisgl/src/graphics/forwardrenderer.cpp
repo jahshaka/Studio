@@ -58,12 +58,14 @@ For more information see the LICENSE file
 #include "../libovr/Include/OVR_CAPI_GL.h"
 #include "../libovr/Include/Extras/OVR_Math.h"
 
+#include "physics/environment.h"
+
 using namespace OVR;
 
 namespace iris
 {
 
-ForwardRenderer::ForwardRenderer(bool supportsVr)
+ForwardRenderer::ForwardRenderer(bool supportsVr, bool physicsEnabled)
 {
     this->gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
     graphics = GraphicsDevice::create();
@@ -99,6 +101,8 @@ ForwardRenderer::ForwardRenderer(bool supportsVr)
     perfTimer = new PerformanceTimer();
 
     renderLightBillboards = true;
+
+	environment = QSharedPointer<Environment>(new Environment());
 }
 
 void ForwardRenderer::generateShadowBuffer(GLuint size)
@@ -127,9 +131,9 @@ void ForwardRenderer::generateShadowBuffer(GLuint size)
     // check status at end
 }
 
-ForwardRendererPtr ForwardRenderer::create(bool useVr)
+ForwardRendererPtr ForwardRenderer::create(bool useVr, bool physicsEnabled)
 {
-    return ForwardRendererPtr(new ForwardRenderer(useVr));
+    return ForwardRendererPtr(new ForwardRenderer(useVr, physicsEnabled));
 }
 
 GraphicsDevicePtr ForwardRenderer::getGraphicsDevice()
@@ -279,6 +283,9 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     graphics->setBlendState(BlendState::Opaque, true);
     graphics->setDepthState(DepthState::Default, true);
     graphics->setRasterizerState(RasterizerState::CullCounterClockwise, true);
+
+	// advance simulation
+	environment->stepSimulation(delta);
 
     renderNode(renderData, scene);
 

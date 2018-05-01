@@ -41,6 +41,7 @@ class VrDevice;
 class PostProcessManager;
 class PostProcessContext;
 class PerformanceTimer;
+class Environment;
 
 /**
  * This is a basic forward renderer.
@@ -52,6 +53,7 @@ class ForwardRenderer
     GraphicsDevicePtr graphics;
 
     RenderData* renderData;
+	QSharedPointer<Environment> environment;
 
     /**
      * The scene to be rendered
@@ -88,6 +90,10 @@ public:
 
     GraphicsDevicePtr getGraphicsDevice();
 
+	QSharedPointer<Environment> getPhysicsEnvironment() {
+		return environment;
+	}
+
     /**
      * Sets selected scene node. If this node is a mesh, it is rendered in wireframe mode
      * as an overlay
@@ -110,14 +116,14 @@ public:
 
     PostProcessManagerPtr getPostProcessManager();
 
-    static ForwardRendererPtr create(bool useVr = true);
+    static ForwardRendererPtr create(bool useVr = true, bool physicsEnabled = false);
 
     bool isVrSupported();
 
     ~ForwardRenderer();
 
 private:
-    ForwardRenderer(bool supportsVr = true);
+    ForwardRenderer(bool supportsVr = true, bool physicsEnabled = false);
 
     void renderNode(RenderData* renderData, ScenePtr node);
     void renderSky(RenderData* renderData);
