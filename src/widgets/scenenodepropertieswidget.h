@@ -29,6 +29,7 @@ class FogPropertyWidget;
 class EmitterPropertyWidget;
 class NodePropertyWidget;
 class MeshPropertyWidget;
+class PhysicsPropertyWidget;
 class DemoPane;
 class SceneViewWidget;
 class Database;
@@ -79,6 +80,7 @@ private:
     WorldPropertyWidget* worldPropView;
     FogPropertyWidget*  fogPropView;
     MeshPropertyWidget* meshPropView;
+	PhysicsPropertyWidget *physicsPropView;
     DemoPane* demoPane;
 
     Database *db;

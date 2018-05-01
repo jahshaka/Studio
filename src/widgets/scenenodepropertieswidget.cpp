@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include "propertywidgets/nodepropertywidget.h"
 #include "propertywidgets/shaderpropertywidget.h"
 #include "propertywidgets/worldpropertywidget.h"
+#include "propertywidgets/physicspropertywidget.h"
 
 SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(parent)
 {
@@ -100,6 +101,11 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             meshPropView->setPanelTitle("Mesh Properties");
             meshPropView->setSceneNode(sceneNode);
 
+			physicsPropView = new PhysicsPropertyWidget();
+			physicsPropView->setPanelTitle("Physics");
+			physicsPropView->setSceneNode(sceneNode);
+			physicsPropView->setSceneView(this->sceneView);
+
             // nodePropView = new NodePropertyWidget();
             // nodePropView->setPanelTitle("Node Properties");
             // nodePropView->setSceneNode(sceneNode);
@@ -132,9 +138,11 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                     materialPropView->setDatabase(db);
 
                     layout->addWidget(meshPropView);
+					layout->addWidget(physicsPropView);
                     // layout->addWidget(nodePropView);
                     layout->addWidget(materialPropView);
                     meshPropView->expand();
+					physicsPropView->expand();
                     materialPropView->expand();
                     // nodePropView->expand();
                     break;
