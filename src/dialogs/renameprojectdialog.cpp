@@ -10,9 +10,12 @@ RenameProjectDialog::RenameProjectDialog(QDialog *parent) : QDialog(parent), ui(
 	ui->ok->setAutoDefault(true);
 	ui->ok->setDefault(true);
 
-    connect(ui->ok, SIGNAL(pressed()), SLOT(newText()));
-}
+    ui->lineEdit->setAttribute(Qt::WA_MacShowFocusRect, false);
 
+    connect(ui->ok, SIGNAL(pressed()), SLOT(newText()));
+    connect(ui->cancel, &QPushButton::pressed, [this]() { close(); });
+}
+ 
 RenameProjectDialog::~RenameProjectDialog()
 {
     delete ui;

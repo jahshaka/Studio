@@ -32,10 +32,14 @@ QPushButton:hover {
     background-color: #555;
 }
 
+QLabel {
+	color: #EEE;
+}
+
 QLineEdit {
 	border: 0;
 	padding: 4px;
-	color: #CECECE;
+	color: #EEE;
 	font-size: 11px;
 	background: #404040;
 	margin-bottom: 3px;
