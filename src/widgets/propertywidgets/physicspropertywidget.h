@@ -21,7 +21,7 @@ public:
     void setSceneView(SceneViewWidget *sceneView);
 
 protected slots:
-    void onPhysicsTypeChanged(const QString&);
+    void onPhysicsTypeChanged(int);
     void onPhysicsEnabled(bool);
     void onStaticTypeChecked(bool);
 

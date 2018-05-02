@@ -424,6 +424,11 @@ void SceneViewWidget::setScene(iris::ScenePtr scene)
     selectedNode.reset();
 }
 
+iris::ScenePtr SceneViewWidget::getScene()
+{
+    return scene;
+}
+
 void SceneViewWidget::setSelectedNode(iris::SceneNodePtr sceneNode)
 {
     if (!scene)

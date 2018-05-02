@@ -126,10 +126,11 @@ void Scene::update(float dt)
     for (const auto &mesh : meshes) {
         // Override the mesh's transform if it's a physics body
         // Not the end place since we need to transform empties as well
+        // Iterate through the entire scene and change physics object transforms as per NN
         if (mesh->isPhysicsBody) {
             btTransform trans;
             float matrix[16];
-            environment->hashBodies.value(mesh->guid)->getMotionState()->getWorldTransform(trans);
+            environment->hashBodies.value(mesh->getGUID())->getMotionState()->getWorldTransform(trans);
             trans.getOpenGLMatrix(matrix);
             mesh->globalTransform = QMatrix4x4(matrix).transposed();
         }

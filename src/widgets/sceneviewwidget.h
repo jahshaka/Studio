@@ -126,6 +126,7 @@ public:
     explicit SceneViewWidget(QWidget *parent = Q_NULLPTR);
 
     void setScene(iris::ScenePtr scene);
+    iris::ScenePtr getScene();
     void setSelectedNode(iris::SceneNodePtr sceneNode);
     void clearSelectedNode();
 
