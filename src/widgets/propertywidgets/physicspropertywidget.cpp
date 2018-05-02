@@ -9,6 +9,8 @@
 #include "../comboboxwidget.h"
 
 #include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
+#include "bullet3/src/BulletCollision/CollisionShapes/btConvexHullShape.h"
+#include "physics/physicshelper.h"
 
 enum class Shapes : int
 {
@@ -16,7 +18,8 @@ enum class Shapes : int
     PLANE,
     SPHERE,
     CUBE,
-    HULL
+    CONVEX_HULL,
+    TRIANGLE_MESH
 };
 
 PhysicsPropertyWidget::PhysicsPropertyWidget()
@@ -29,7 +32,8 @@ PhysicsPropertyWidget::PhysicsPropertyWidget()
     shapeSelector->addItem("Plane", static_cast<int>(Shapes::PLANE));
     shapeSelector->addItem("Sphere", static_cast<int>(Shapes::SPHERE));
     shapeSelector->addItem("Cube", static_cast<int>(Shapes::CUBE));
-    shapeSelector->addItem("Object Hull", static_cast<int>(Shapes::HULL));
+    shapeSelector->addItem("Convex Hull (fast, imprecise)", static_cast<int>(Shapes::CONVEX_HULL));
+    shapeSelector->addItem("Triangle Mesh (slow, precise)", static_cast<int>(Shapes::TRIANGLE_MESH));
 
     connect(isPhysicsObject, SIGNAL(valueChanged(bool)), SLOT(onPhysicsEnabled(bool)));
     connect(isStaticObject, SIGNAL(valueChanged(bool)), SLOT(onStaticTypeChecked(bool)));
@@ -63,18 +67,19 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
     btVector3 pos(meshNode->getLocalPos().x(), meshNode->getLocalPos().y(), meshNode->getLocalPos().z());
     btRigidBody *body = Q_NULLPTR;
 
+    btTransform transform;
+    transform.setIdentity();
+
     switch (itemData) {
         case static_cast<int>(Shapes::NONE): {
-            btTransform t;
-            t.setIdentity();
-            t.setFromOpenGLMatrix(meshNode->getLocalTransform().constData());
-            t.setOrigin(pos);
+            transform.setFromOpenGLMatrix(meshNode->getLocalTransform().constData());
+            transform.setOrigin(pos);
 
             float mass = 0.0;
             float rad = 1.0;
 
             btCollisionShape *shape = new btEmptyShape();
-            btMotionState *motion = new btDefaultMotionState(t);
+            btMotionState *motion = new btDefaultMotionState(transform);
             
             btVector3 inertia(0, 0, 0);
 
@@ -87,15 +92,14 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
         }
 
         case static_cast<int>(Shapes::SPHERE) : {
-            btTransform t;
-            t.setIdentity();
-            t.setOrigin(pos);
+
+            transform.setOrigin(pos);
             
             float mass = 2.0;
             float rad = 1.0;
             
             btCollisionShape * sphere = new btSphereShape(rad);
-            btMotionState * motion = new btDefaultMotionState(t);
+            btMotionState * motion = new btDefaultMotionState(transform);
 
             btVector3 inertia;
             
@@ -109,14 +113,13 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
         }
 
         case static_cast<int>(Shapes::PLANE) : {
-            btTransform t;
-            t.setIdentity();
-            t.setOrigin(pos);
+
+            transform.setOrigin(pos);
 
             float mass = 0.0;
 
             btCollisionShape * plane = new btStaticPlaneShape(btVector3(0, 1, 0), 0.f);
-            btMotionState * motion = new btDefaultMotionState(t);
+            btMotionState * motion = new btDefaultMotionState(transform);
 
             btRigidBody::btRigidBodyConstructionInfo info(mass, motion, plane);
 
@@ -127,15 +130,14 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
         }
 
         case static_cast<int>(Shapes::CUBE) : {
-            btTransform t;
-            t.setIdentity();
-            t.setOrigin(pos);
+
+            transform.setOrigin(pos);
 
             float mass = 0.0;
             float rad = 1.0;
 
             btCollisionShape *cube = new btBoxShape(btVector3(1, 1, 1));
-            btMotionState *motion = new btDefaultMotionState(t);
+            btMotionState *motion = new btDefaultMotionState(transform);
 
             btVector3 inertia;
 
@@ -149,7 +151,46 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
             break;
         }
 
-        case static_cast<int>(Shapes::HULL) : {
+        case static_cast<int>(Shapes::CONVEX_HULL) : {
+            break;
+        }
+
+        case static_cast<int>(Shapes::TRIANGLE_MESH) : {
+
+            transform.setOrigin(pos);
+
+
+            auto rot = meshNode->getGlobalRotation().toVector4D();
+
+            btQuaternion quat;
+            quat.setX(rot.x());
+            quat.setY(rot.y());
+            quat.setZ(rot.z());
+            quat.setW(rot.w());
+            //quat.setEulerZYX(rot.z(), rot.y(), rot.x()); //or quat.setEulerZYX depending on the ordering you want
+            transform.setRotation(quat);
+
+
+            float mass = 2.0;
+
+            // convert triangle mesh into convex shape
+
+            auto triMesh = iris::PhysicsHelper::btTriangleMeshShapeFromMesh(meshNode->getMesh());
+
+            auto shape = new btConvexTriangleMeshShape(triMesh, true);
+            btMotionState *motion = new btDefaultMotionState(transform);
+
+            btVector3 inertia(0, 0, 0);
+
+            if (mass != 0.0) shape->calculateLocalInertia(mass, inertia);
+
+            btRigidBody::btRigidBodyConstructionInfo info(mass, motion, shape, inertia);
+
+            body = new btRigidBody(info);
+            //body->setRestitution(.2f);
+
+            body->setCenterOfMassTransform(transform);
+
             break;
         }
 

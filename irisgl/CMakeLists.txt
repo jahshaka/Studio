@@ -107,6 +107,7 @@ set(SRCS
     src/libovr/Src/OVR_CAPIShim.c
     src/zip/zip.c
     src/physics/environment.cpp
+    src/physics/physicshelper.cpp
 )
 
 set (HEADERS
@@ -205,6 +206,7 @@ set (HEADERS
     src/zip/miniz.h
     src/zip/zip.h
     src/physics/environment.h
+    src/physics/physicshelper.h
 )
 
 qt5_wrap_cpp(HEADERS_moc ${HEADERS})
