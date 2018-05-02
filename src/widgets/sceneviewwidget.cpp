@@ -329,12 +329,12 @@ void SceneViewWidget::setShowLightWires(bool value)
 
 void SceneViewWidget::startPhysicsSimulation()
 {
-	renderer->getPhysicsEnvironment()->simulatePhysics();
+	scene->getPhysicsEnvironment()->simulatePhysics();
 }
 
 void SceneViewWidget::stopPhysicsSimulation()
 {
-	renderer->getPhysicsEnvironment()->stopPhysics();
+    scene->getPhysicsEnvironment()->stopPhysics();
 }
 
 void SceneViewWidget::initLightAssets()
@@ -1231,12 +1231,12 @@ void SceneViewWidget::setGizmoTransformToGlobal()
 
 void SceneViewWidget::addBodyToWorld(btRigidBody *body, const QString &guid)
 {
-    this->renderer->getPhysicsEnvironment()->addBodyToWorld(body, guid);
+    scene->getPhysicsEnvironment()->addBodyToWorld(body, guid);
 }
 
 void SceneViewWidget::removeBodyFromWorld(btRigidBody *body)
 {
-    this->renderer->getPhysicsEnvironment()->removeBodyFromWorld(body);
+    scene->getPhysicsEnvironment()->removeBodyFromWorld(body);
 }
 
 void SceneViewWidget::setGizmoLoc()

@@ -41,7 +41,6 @@ class VrDevice;
 class PostProcessManager;
 class PostProcessContext;
 class PerformanceTimer;
-class Environment;
 
 /**
  * This is a basic forward renderer.
@@ -53,7 +52,6 @@ class ForwardRenderer
     GraphicsDevicePtr graphics;
 
     RenderData* renderData;
-	QSharedPointer<Environment> environment;
 
     /**
      * The scene to be rendered
@@ -89,10 +87,6 @@ public:
     bool renderLightBillboards;
 
     GraphicsDevicePtr getGraphicsDevice();
-
-	QSharedPointer<Environment> getPhysicsEnvironment() {
-		return environment;
-	}
 
     /**
      * Sets selected scene node. If this node is a mesh, it is rendered in wireframe mode

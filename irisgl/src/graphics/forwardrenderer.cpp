@@ -58,7 +58,6 @@ For more information see the LICENSE file
 #include "../libovr/Include/OVR_CAPI_GL.h"
 #include "../libovr/Include/Extras/OVR_Math.h"
 
-#include "physics/environment.h"
 
 using namespace OVR;
 
@@ -101,8 +100,6 @@ ForwardRenderer::ForwardRenderer(bool supportsVr, bool physicsEnabled)
     perfTimer = new PerformanceTimer();
 
     renderLightBillboards = true;
-
-	environment = QSharedPointer<Environment>(new Environment());
 }
 
 void ForwardRenderer::generateShadowBuffer(GLuint size)
@@ -283,9 +280,6 @@ void ForwardRenderer::renderScene(float delta, Viewport* vp)
     graphics->setBlendState(BlendState::Opaque, true);
     graphics->setDepthState(DepthState::Default, true);
     graphics->setRasterizerState(RasterizerState::CullCounterClockwise, true);
-
-	// advance simulation
-	environment->stepSimulation(delta);
 
     renderNode(renderData, scene);
 
@@ -566,14 +560,6 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             if (item->cullable) {
                 auto sphere = item->boundingSphere;
                 if (!renderData->frustum.isSphereInside(&sphere)) continue;
-            }
-
-            if (item->physicsObject) {
-                btTransform trans;
-                float matrix[16];
-                environment->hashBodies.value(item->guid)->getMotionState()->getWorldTransform(trans);
-                trans.getOpenGLMatrix(matrix);
-                item->worldMatrix = QMatrix4x4(matrix).transposed();
             }
 
             QOpenGLShaderProgram* program = nullptr;
