@@ -33,6 +33,7 @@ public:
     int findData(const QVariant &data);
     QString getCurrentItem();
     QString getCurrentItemData();
+    QVariant getItemData(int index);
     void setCurrentItem(const QString&);
     void setCurrentItemData(const QString&);
     void setCurrentIndex(const int&);
