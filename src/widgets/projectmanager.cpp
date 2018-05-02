@@ -375,6 +375,7 @@ void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
 {
     Q_UNUSED(widget);
     emit closeProject();
+    Globals::project->setProjectGuid(QString::null);
 }
 
 void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
