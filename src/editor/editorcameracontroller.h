@@ -22,6 +22,7 @@ namespace iris
     class CameraNode;
 }
 
+class SceneViewWidget;
 class EditorCameraController : public CameraControllerBase
 {
     QSharedPointer<iris::CameraNode> camera;
@@ -32,8 +33,10 @@ class EditorCameraController : public CameraControllerBase
     float yaw;
     float pitch;
 
+	SceneViewWidget* sceneWidget;
+
 public:
-    EditorCameraController();
+    EditorCameraController(SceneViewWidget* sceneWidget);
 
     QSharedPointer<iris::CameraNode>  getCamera();
     void setCamera(QSharedPointer<iris::CameraNode>  cam) override;
@@ -60,6 +63,8 @@ public:
     void updateCameraRot();
 
     void update(float dt);
+
+	bool canLeftMouseDrag();
 };
 
 #endif // EDITORCAMERACONTROLLER_H

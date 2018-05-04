@@ -12,6 +12,7 @@
         <file>content/primitives/cylinder.obj</file>
         <file>content/primitives/plane.obj</file>
         <file>content/primitives/sphere.obj</file>
+        <file>content/primitives/hp_sphere.obj</file>
         <file>content/primitives/torus.obj</file>
         <file>content/primitives/arrow.obj</file>
         <file>content/primitives/capsule.obj</file>

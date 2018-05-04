@@ -34,6 +34,8 @@ For more information see the LICENSE file
 #include "../../uimanager.h"
 #include "../../commands/changematerialpropertycommand.h"
 
+#include "io/scenewriter.h"
+
 #include "globals.h"
 #include "core/database/database.h"
 
@@ -125,14 +127,16 @@ void MaterialPropertyWidget::materialChanged(int index)
     material->setGuid(materialSelector->getCurrentItemData());
     setSceneNode(meshNode);
 
-    //if (db->checkIfRecordExists("guid", material->getGuid(), "assets")) {
-    //    if (db->checkIfRecordExists("dependee", material->getGuid(), "dependencies")) {
-    //        db->insertGlobalDependency(static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Shader), meshNode->getGUID(), material->getGuid(), Globals::project->getProjectGuid());
-    //    }
-    //    else {
-    //        db->updateGlobalDependencyDependee(static_cast<int>(ModelTypes::File), meshNode->getGUID(), material->getGuid());
-    //    }
-    //}
+    QJsonObject node;
+    SceneWriter::writeSceneNode(node, meshNode, false);
+    db->updateAssetAsset(meshNode->getGUID(), QJsonDocument(node).toBinaryData());
+    db->removeDependenciesByType(meshNode->getGUID(), ModelTypes::Shader);
+    db->createDependency(
+        static_cast<int>(ModelTypes::Object),
+        static_cast<int>(ModelTypes::Shader),
+        meshNodeGuid, materialSelector->getCurrentItemData(),
+        Globals::project->getProjectGuid()
+    );
 }
 
 void MaterialPropertyWidget::setupShaderSelector()
@@ -147,7 +151,7 @@ void MaterialPropertyWidget::setupShaderSelector()
 
     for (auto asset : AssetManager::getAssets()) {
         if (asset->type == ModelTypes::Shader) {
-            materialSelector->addItem(asset->fileName, asset->assetGuid);
+            materialSelector->addItem(QFileInfo(asset->fileName).baseName(), asset->assetGuid);
         }
     }
 

@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "../graphics/material.h"
 #include "../graphics/texture.h"
 #include "../graphics/texture2d.h"
+#include "../graphics/graphicsdevice.h"
 #include "../materials/defaultmaterial.h"
 #include "../scenegraph/scene.h"
 #include "../core/irisutils.h"
@@ -63,31 +64,30 @@ DefaultMaterial::DefaultMaterial()
 
 void DefaultMaterial::begin(GraphicsDevicePtr device,ScenePtr scene)
 {
-	auto program = getProgram();
-    program->bind();
+	device->setShader(shader);
 
     bindTextures(device);
 
     //set params
-    program->setUniformValue("u_material.diffuse",QVector3D(diffuseColor.redF(),diffuseColor.greenF(),diffuseColor.blueF()));
+    device->setShaderUniform("u_material.diffuse",QVector3D(diffuseColor.redF(),diffuseColor.greenF(),diffuseColor.blueF()));
 
     const QColor& sceneAmbient = scene->ambientColor;
     auto finalAmbient = QVector3D(ambientColor.redF() + sceneAmbient.redF(),
                                   ambientColor.greenF() + sceneAmbient.greenF(),
                                   ambientColor.blueF() + sceneAmbient.blueF());
-    program->setUniformValue("u_material.ambient",finalAmbient);
-    program->setUniformValue("u_material.specular",QVector3D(specularColor.redF(),specularColor.greenF(),specularColor.blueF()));
-    program->setUniformValue("u_material.shininess",shininess);
+	device->setShaderUniform("u_material.ambient",finalAmbient);
+	device->setShaderUniform("u_material.specular",QVector3D(specularColor.redF(),specularColor.greenF(),specularColor.blueF()));
+	device->setShaderUniform("u_material.shininess",shininess);
 
-    program->setUniformValue("u_textureScale", this->textureScale);
+	device->setShaderUniform("u_textureScale", this->textureScale);
 
-    program->setUniformValue("u_normalIntensity",normalIntensity);
-    program->setUniformValue("u_reflectionInfluence",reflectionInfluence);
+	device->setShaderUniform("u_normalIntensity",normalIntensity);
+	device->setShaderUniform("u_reflectionInfluence",reflectionInfluence);
 
-    program->setUniformValue("u_useDiffuseTex",useDiffuseTex);
-    program->setUniformValue("u_useNormalTex",useNormalTex);
-    program->setUniformValue("u_useSpecularTex",useSpecularTex);
-    program->setUniformValue("u_useReflectionTex",useReflectionTex);
+	device->setShaderUniform("u_useDiffuseTex",useDiffuseTex);
+	device->setShaderUniform("u_useNormalTex",useNormalTex);
+	device->setShaderUniform("u_useSpecularTex",useSpecularTex);
+	device->setShaderUniform("u_useReflectionTex",useReflectionTex);
 
 }
 

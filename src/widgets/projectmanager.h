@@ -102,6 +102,8 @@ private:
 
     DynamicGrid *dynamicGrid;
     QDialog sampleDialog;
+
+    QMap<QString, QString> assetGuids;
 };
 
 struct AssetWidgetConcurrentWrapper {

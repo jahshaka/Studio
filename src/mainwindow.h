@@ -25,6 +25,8 @@ For more information see the LICENSE file
 #include <QLabel>
 #include <QCheckBox>
 #include "irisglfwd.h"
+#include "misc/QtAwesome.h"
+#include "misc/QtAwesomeAnim.h"
 
 namespace Ui {
     class MainWindow;
@@ -118,6 +120,7 @@ public:
     void setupUndoRedo();
 
 	WindowSpaces getWindowSpace();
+	void deselectViewports();
     void switchSpace(WindowSpaces space);
 
     bool handleMousePress(QMouseEvent *event);
@@ -221,8 +224,8 @@ public slots:
 
     //context menu functions
     void duplicateNode();
-	void createMaterial(const QString &guid);
-	void exportNode(const QString &guid);
+	void createMaterial();
+	void exportNode(const iris::SceneNodePtr &node);
 	void exportNodes(const QStringList &assetGuids);
     void deleteNode();
     void renameNode();
@@ -379,6 +382,7 @@ private:
 	QVector<bool> widgetStates;	// use the order in the enum
 
     WindowSpaces currentSpace;
+	QtAwesome fontIcons;
 };
 
 #endif // MAINWINDOW_H

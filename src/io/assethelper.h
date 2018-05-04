@@ -18,12 +18,14 @@ For more information see the LICENSE file
 #include "irisglfwd.h"
 #include "constants.h"
 #include "core/project.h"
+#include "core/database/database.h"
 
 class AssetHelper
 {
 public:
     static void updateNodeMaterial(iris::SceneNodePtr &node, const QJsonObject definition);
     static QByteArray makeBlobFromPixmap(const QPixmap &pixmap);
+    static QStringList fetchAssetAndAllDependencies(const QString &guid, Database *db);
     static ModelTypes getAssetTypeFromExtension(const QString &fileSuffix);
     static iris::SceneNodePtr extractTexturesAndMaterialFromMesh(const QString &filePath,
                                                                  QStringList &textureList);

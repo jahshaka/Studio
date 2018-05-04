@@ -75,28 +75,23 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
             AssetManager::addAsset(assetFile);
         }
 
-        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader))) {
-            QFile *templateShaderFile = new QFile(IrisUtils::join(Globals::project->getProjectFolder(), asset.name));
-            templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);
-            QJsonObject shaderDefinition = QJsonDocument::fromJson(templateShaderFile->readAll()).object();
-            templateShaderFile->close();
-            // shaderDefinition["name"] = QFileInfo(asset.name).baseName();
-            shaderDefinition.insert("guid", asset.guid);
-
-            auto assetShader = new AssetShader;
-            assetShader->assetGuid = asset.guid;
-            assetShader->fileName = QFileInfo(asset.name).baseName();
-            assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
-            assetShader->setValue(QVariant::fromValue(shaderDefinition));
-            AssetManager::addAsset(assetShader);
-        }
-
         for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture))) {
             auto assetTexture = new AssetTexture;
             assetTexture->fileName = asset.name;
             assetTexture->assetGuid = asset.guid;
             assetTexture->path = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
             AssetManager::addAsset(assetTexture);
+        }
+
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader))) {
+            QJsonDocument shaderDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(asset.guid));
+            QJsonObject shaderObject = shaderDefinition.object();
+
+            auto assetShader = new AssetShader;
+            assetShader->assetGuid = asset.guid;
+            assetShader->fileName = QFileInfo(asset.name).baseName();
+            assetShader->setValue(QVariant::fromValue(shaderObject));
+            AssetManager::addAsset(assetShader);
         }
 
 		// Materials
@@ -136,6 +131,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
                             }
                             def["vertex_shader"] = vertexShader;
                             def["fragment_shader"] = fragmentShader;
+							material->setMaterialDefinition(def);
                             material->generate(def);
                         }
                     }
@@ -237,23 +233,24 @@ ProjectManager::~ProjectManager()
 
 void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
 {
-	if (Globals::project->getProjectGuid() != widget->tileData.guid) {
-		auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-		auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
-
-		Globals::project->setProjectPath(
-            QDir(QDir(projectFolder).filePath("Projects")).filePath(widget->tileData.guid),
-            widget->tileData.name
-        );
-		Globals::project->setProjectGuid(widget->tileData.guid);
-
-		this->openInPlayMode = playMode;
-
-		loadProjectAssets();
-	}
-	else {
+	if (Globals::project->getProjectGuid() == widget->tileData.guid) {
 		mainWindow->switchSpace(WindowSpaces::EDITOR);
+		return;
 	}
+
+	auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+	auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
+
+	Globals::project->setProjectPath(
+        QDir(QDir(projectFolder).filePath("Projects")).filePath(widget->tileData.guid),
+        widget->tileData.name
+    );
+	Globals::project->setProjectGuid(widget->tileData.guid);
+
+	this->openInPlayMode = playMode;
+
+    assetGuids.clear();
+	loadProjectAssets();
 }
 
 QString projectBlobGuid;
@@ -283,7 +280,7 @@ void ProjectManager::importProjectFromFile(const QString& file)
     // create a temporary directory and extract our project into it
     // we need a sure way to get the project name, so we have to extract it first and check the blob
     QTemporaryDir temporaryDir;
-    temporaryDir.setAutoRemove(false);
+    //temporaryDir.setAutoRemove(false);
     if (temporaryDir.isValid()) {
         zip_extract(fileName.toStdString().c_str(),
                     temporaryDir.path().toStdString().c_str(),
@@ -332,8 +329,11 @@ void ProjectManager::importProjectFromFile(const QString& file)
     auto open = db->importProject(
         QDir(temporaryDir.path()).filePath(projectBlobGuid),
         importGuid,
-        worldName
+        worldName,
+        assetGuids
     );
+
+    // Update files that reference guids
 
     if (open) {
         Globals::project->setProjectPath(pDir, worldName);
@@ -360,21 +360,13 @@ void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
 
 void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
 {
-    auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-    auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
-
-    QDir dir;
-    auto dirRename = dir.rename(QDir(projectFolder).filePath(widget->tileData.name),
-                                QDir(projectFolder).filePath(widget->labelText));
-    if (dirRename) {
+    if (db->renameProject(widget->tileData.guid, widget->labelText)) {
         widget->updateLabel(widget->labelText);
-        Globals::project->setProjectGuid(widget->tileData.guid);
-        db->renameProject(widget->labelText);
     }
     else {
         QMessageBox::warning(this,
                              "Rename failed",
-                             "Failed to rename project, please try again or rename manually",
+                             "Failed to rename project, please try again!",
                              QMessageBox::Ok);
     }
 }
@@ -383,6 +375,7 @@ void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
 {
     Q_UNUSED(widget);
     emit closeProject();
+    Globals::project->setProjectGuid(QString::null);
 }
 
 void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
@@ -477,17 +470,14 @@ void ProjectManager::newProject()
         auto fullProjectPath = QDir(QDir(projectPath).filePath("Projects")).filePath(projectGuid);
 
         Globals::project->setProjectPath(fullProjectPath, projectName);
+        Globals::project->setProjectGuid(projectGuid);
 
         // make a dir and the default subfolders
         QDir projectDir(fullProjectPath);
         if (!projectDir.exists()) projectDir.mkpath(".");
 
-		QJsonObject assetProperty;
-
 		// Insert an empty scene to get access to the project guid... 
         if (!db->createProject(projectGuid, projectName)) return;
-
-        Globals::project->setProjectGuid(projectGuid);
 
         emit fileToCreate(projectName, fullProjectPath);
 

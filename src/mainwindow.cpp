@@ -43,6 +43,7 @@ For more information see the LICENSE file
 #include "core/guidmanager.h"
 #include "core/thumbnailmanager.h"
 #include "src/dialogs/donatedialog.h"
+#include "src/io/assethelper.h"
 
 #include <QFontDatabase>
 #include <QOpenGLContext>
@@ -136,7 +137,7 @@ enum class VRButtonMode : int
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    setWindowTitle(QString("Jahshaka %1").arg(Constants::CONTENT_VERSION));
+
 	settings = SettingsManager::getDefaultManager();
 
     UiManager::mainWindow = this;
@@ -149,35 +150,35 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 #ifdef QT_DEBUG
     iris::Logger::getSingleton()->init(IrisUtils::getAbsoluteAssetPath("jahshaka.log"));
     setWindowTitle(QString("Jahshaka %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
-    originalTitle = windowTitle();
 #else
+	setWindowTitle(QString("Jahshaka %1").arg(Constants::CONTENT_VERSION));
     iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/jahshaka.log");
 #endif
 
+	originalTitle = windowTitle();
+
 	setupProjectDB();
-    
 	createPostProcessDockWidget();
 
     prefsDialog = new PreferencesDialog(nullptr, db, settings);
     aboutDialog = new AboutDialog();
 
-    camControl = nullptr;
+    camControl = Q_NULLPTR;
     vrMode = false;
 
     setupFileMenu();
+
+	fontIcons.initFontAwesome();
 
     setupViewPort();
     setupDesktop();
     setupToolBar();
     setupDockWidgets();
     setupShortcuts();
+	setupUndoRedo();
 
-//    if (!UiManager::playMode) {
-//        restoreGeometry(settings->getValue("geometry", "").toByteArray());
-//        restoreState(settings->getValue("windowState", "").toByteArray());
-//    }
-
-    setupUndoRedo();
+	restoreGeometry(settings->getValue("geometry", "").toByteArray());
+	//restoreState(settings->getValue("windowState", "").toByteArray());
 
 	undoStackCount = 0;
 }
@@ -189,7 +190,7 @@ void MainWindow::grabOpenGLContextHack()
 
 void MainWindow::goToDesktop()
 {
-    showMaximized();
+    show();
     switchSpace(WindowSpaces::DESKTOP);
 }
 
@@ -475,10 +476,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
 //#endif
 
-//    if (!UiManager::playMode) {
-//        settings->setValue("geometry", saveGeometry());
-//        settings->setValue("windowState", saveState());
-//    }
+	settings->setValue("geometry", saveGeometry());
 
     ThumbnailGenerator::getSingleton()->shutdown();
 }
@@ -566,6 +564,16 @@ void MainWindow::setupUndoRedo()
 WindowSpaces MainWindow::getWindowSpace()
 {
 	return currentSpace;
+}
+
+void MainWindow::deselectViewports()
+{
+	editor_menu->setStyleSheet("color: #444; border-color: #111");
+	editor_menu->setDisabled(true);
+	editor_menu->setCursor(Qt::ArrowCursor);
+	player_menu->setStyleSheet("color: #444; border-color: #111");
+	player_menu->setDisabled(true);
+	player_menu->setCursor(Qt::ArrowCursor);
 }
 
 void MainWindow::switchSpace(WindowSpaces space)
@@ -732,8 +740,8 @@ void MainWindow::saveScene()
 
 void MainWindow::openProject(bool playMode)
 {
-    sceneView->makeCurrent();
     removeScene();
+    sceneView->makeCurrent();
 
     std::unique_ptr<SceneReader> reader(new SceneReader);
 	reader->setDatabaseHandle(db);
@@ -799,14 +807,18 @@ void MainWindow::closeProject()
 
 	undoStackCount = 0;
 
-    if (currentSpace == WindowSpaces::DESKTOP) return;
+	if (currentSpace == WindowSpaces::DESKTOP) {
+		deselectViewports();
+		return;
+	}
+
     switchSpace(WindowSpaces::DESKTOP);
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
 void MainWindow::applyMaterialPreset(MaterialPreset *preset)
 {
-    if (!activeSceneNode || activeSceneNode->sceneNodeType!=iris::SceneNodeType::Mesh) return;
+    if (!activeSceneNode || activeSceneNode->sceneNodeType != iris::SceneNodeType::Mesh) return;
 
     auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
 
@@ -830,6 +842,84 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
     m->setValue("textureScale", preset->textureScale);
 
     meshNode->setMaterial(m);
+
+    QJsonObject material;
+    SceneWriter::writeSceneNodeMaterial(material, m);
+
+    // Remove previous material dependencies
+    //auto objectGuid = db->fetchMeshObject(
+    //    meshNode->getGUID(),
+    //    static_cast<int>(ModelTypes::Object),
+    //    static_cast<int>(ModelTypes::Mesh)
+    //);
+
+    //db->removeDependenciesByType(objectGuid, ModelTypes::Texture);
+
+    QFile jsonFile(QDir(Globals::project->getProjectFolder()).filePath("matgen.material"));
+    jsonFile.open(QFile::WriteOnly);
+    jsonFile.write(QJsonDocument(material).toJson());
+
+    auto fguid = GUIDManager::generateGUID();
+    if (!db->checkIfRecordExists("name", "Presets", "folders")) {
+        if (!db->createFolder("Presets", Globals::project->getProjectGuid(), fguid, false)) return;
+    }
+
+    QString guid = db->createAssetEntry(
+        GUIDManager::generateGUID(),
+        preset->name,
+        static_cast<int>(ModelTypes::Material),
+        fguid,
+        QString(),
+        QString(),
+        QByteArray(),
+        QByteArray(),
+        QJsonDocument(material).toBinaryData()
+    );
+
+    ThumbnailGenerator::getSingleton()->requestThumbnail(
+        ThumbnailRequestType::Material, QDir(Globals::project->getProjectFolder()).filePath("matgen.material"), guid
+    );
+
+    assetWidget->updateAssetView(assetWidget->assetItem.selectedGuid);
+
+    for (const auto &prop : m->properties) {
+        if (prop->type == iris::PropertyType::Texture) {
+            auto file = prop->getValue().toString();
+            if (file.isEmpty()) continue;
+            QFile::copy(
+                file,
+                QDir(Globals::project->getProjectFolder()).filePath(QFileInfo(file).fileName())
+            );
+
+            QString fileGuid = db->createAssetEntry(
+                GUIDManager::generateGUID(),
+                QFileInfo(file).fileName(),
+                static_cast<int>(ModelTypes::Texture),
+                fguid,
+                QString(),
+                QString(),
+                QByteArray(),
+                QByteArray(),
+                QByteArray()
+            );
+
+            db->createDependency(
+                static_cast<int>(ModelTypes::Material),
+                static_cast<int>(ModelTypes::Texture),
+                guid,
+                fileGuid,
+                Globals::project->getProjectGuid()
+            );
+        }
+    }
+
+    db->createDependency(
+        static_cast<int>(ModelTypes::Object),
+        static_cast<int>(ModelTypes::Material),
+        meshNode->getGUID(),
+        guid,
+        Globals::project->getProjectGuid()
+    );
 
     // TODO: update node's material without updating the whole ui
     this->sceneNodePropertiesWidget->refreshMaterial(preset->type);
@@ -1482,7 +1572,7 @@ void MainWindow::duplicateNode()
 	sceneView->doneCurrent();
 }
 
-void MainWindow::createMaterial(const QString &guid)
+void MainWindow::createMaterial()
 {
 	if (!!activeSceneNode) {
         QJsonObject materialDef;
@@ -1529,7 +1619,7 @@ void MainWindow::createMaterial(const QString &guid)
 			QByteArray(),
 			QByteArray(),
 			binaryMat
-        );
+		);
 
 		ThumbnailGenerator::getSingleton()->requestThumbnail(
 			ThumbnailRequestType::Material, fileName, assetGuid
@@ -1539,47 +1629,55 @@ void MainWindow::createMaterial(const QString &guid)
 
 		QJsonObject matObject = QJsonDocument::fromBinaryData(binaryMat).object();
 
-        auto material = iris::CustomMaterial::create();
-        const QJsonObject materialDefinition = matObject;
-        auto shaderGuid = materialDefinition["guid"].toString();
-        material->setName(materialDefinition["name"].toString());
-        material->setGuid(shaderGuid);
+		auto material = iris::CustomMaterial::create();
+		const QJsonObject materialDefinition = matObject;
+		auto shaderGuid = materialDefinition["guid"].toString();
+		material->setName(materialDefinition["name"].toString());
+		material->setGuid(shaderGuid);
 
-        QFileInfo shaderFile;
+		QFileInfo shaderFile;
 
-        QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
-        while (it.hasNext()) {
-            it.next();
-            if (it.key() == shaderGuid) {
-                shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
-                break;
-            }
-        }
+		QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+		while (it.hasNext()) {
+			it.next();
+			if (it.key() == shaderGuid) {
+				shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
+				break;
+			}
+		}
 
-        if (shaderFile.exists()) {
-            material->generate(shaderFile.absoluteFilePath());
-        }
-        else {
-            // Reading is thread safe...
-            for (auto asset : AssetManager::getAssets()) {
-                if (asset->type == ModelTypes::Shader) {
-                    if (asset->assetGuid == material->getGuid()) {
-                        auto def = asset->getValue().toJsonObject();
-                        auto vertexShader = def["vertex_shader"].toString();
-                        auto fragmentShader = def["fragment_shader"].toString();
-                        for (auto asset : AssetManager::getAssets()) {
-                            if (asset->type == ModelTypes::File) {
-                                if (vertexShader == asset->assetGuid) vertexShader = asset->path;
-                                if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
-                            }
-                        }
-                        def["vertex_shader"] = vertexShader;
-                        def["fragment_shader"] = fragmentShader;
-                        material->generate(def);
-                    }
-                }
-            }
-        }
+		if (shaderFile.exists()) {
+			material->generate(shaderFile.absoluteFilePath());
+		}
+		else {
+			// Reading is thread safe...
+			for (auto asset : AssetManager::getAssets()) {
+				if (asset->type == ModelTypes::Shader) {
+					if (asset->assetGuid == material->getGuid()) {
+						auto def = asset->getValue().toJsonObject();
+						auto vertexShader = def["vertex_shader"].toString();
+						auto fragmentShader = def["fragment_shader"].toString();
+						for (auto asset : AssetManager::getAssets()) {
+							if (asset->type == ModelTypes::File) {
+								if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+								if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+							}
+						}
+						def["vertex_shader"] = vertexShader;
+						def["fragment_shader"] = fragmentShader;
+						material->setMaterialDefinition(def);
+						material->generate(def);
+
+						db->createDependency(
+							static_cast<int>(ModelTypes::Material),
+							static_cast<int>(ModelTypes::Shader),
+							assetGuid, material->getGuid(),
+							Globals::project->getProjectGuid()
+						);
+					}
+				}
+			}
+		}
 
 		for (const auto &prop : material->properties) {
 			if (prop->type == iris::PropertyType::Color) {
@@ -1590,11 +1688,11 @@ void MainWindow::createMaterial(const QString &guid)
 			else if (prop->type == iris::PropertyType::Texture) {
 				if (!matObject.value(prop->name).toString().isEmpty()) {
 					db->createDependency(
-                        static_cast<int>(ModelTypes::Material),
-                        static_cast<int>(ModelTypes::Texture),
-                        assetGuid, matObject.value(prop->name).toString(),
-                        Globals::project->getProjectGuid()
-                    );
+						static_cast<int>(ModelTypes::Material),
+						static_cast<int>(ModelTypes::Texture),
+						assetGuid, matObject.value(prop->name).toString(),
+						Globals::project->getProjectGuid()
+					);
 				}
 
 				QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
@@ -1611,21 +1709,21 @@ void MainWindow::createMaterial(const QString &guid)
 		assetMat->setValue(QVariant::fromValue(material));
 		AssetManager::addAsset(assetMat);
 
-        QFile::remove(fileName);
-	}
-	else {
-		qDebug() << "Need an active scenenode!";
-		return;
-	}
+		QFile::remove(fileName);
+    }
+    else {
+        qDebug() << "Need an active scenenode!";
+        return;
+    }
 }
 
-void MainWindow::exportNode(const QString &guid)
+void MainWindow::exportNode(const iris::SceneNodePtr &node)
 {
 	// get the export file path from a save dialog
 	auto filePath = QFileDialog::getSaveFileName(
 		this,
 		"Choose export path",
-		"export",
+		QString("%1_export").arg(node->getName()),
 		"Supported Export Formats (*.jaf)"
 	);
 
@@ -1635,24 +1733,30 @@ void MainWindow::exportNode(const QString &guid)
 	if (!temporaryDir.isValid()) return;
 
     const QString writePath = temporaryDir.path();
+    const QString guid = node->getGUID();
 
-	db->createExportNode(ModelTypes::Object, guid, QDir(writePath).filePath("asset.db"));
+    db->createExportNode(ModelTypes::Object, guid, QDir(writePath).filePath("asset.db"));
 
-	QDir tempDir(writePath);
-	tempDir.mkpath("assets");
+    QDir tempDir(writePath);
+    tempDir.mkpath("assets");
 
-	QFile manifest(QDir(writePath).filePath(".manifest"));
-	if (manifest.open(QIODevice::ReadWrite)) {
-		QTextStream stream(&manifest);
-		stream << "object";
-	}
-	manifest.close();
+    QFile manifest(QDir(writePath).filePath(".manifest"));
+    if (manifest.open(QIODevice::ReadWrite)) {
+        QTextStream stream(&manifest);
+        stream << "object";
+    }
+    manifest.close();
 
-	for (const auto &asset : db->fetchAssetAndDependencies(guid)) {
-		QFile::copy(
-			IrisUtils::join(Globals::project->getProjectFolder(), asset),
-			IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
-		);
+	for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
+        auto asset = db->fetchAsset(assetGuid);
+        auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+        QFileInfo assetInfo(assetPath);
+        if (assetInfo.exists()) {
+            QFile::copy(
+                IrisUtils::join(assetPath),
+                IrisUtils::join(writePath, "assets", assetInfo.fileName())
+            );
+        }
 	}
 
     // get all the files and directories in the project working directory
@@ -2055,20 +2159,18 @@ void MainWindow::setupViewPort()
 #endif
 	help = new QPushButton;
 	help->setObjectName("helpButton");
-	QIcon ico;
-	ico.addPixmap(IrisUtils::getAbsoluteAssetPath("app/images/question.png"), QIcon::Normal);
-	help->setIconSize(ico.availableSizes().first());
-	help->setFixedSize(ico.actualSize(ico.availableSizes().first()));//never larger than ic.availableSizes().first()
+	help->setText(QChar(fa::questioncircle));
+	help->setFont(fontIcons.font(28));
 	help->setCursor(Qt::PointingHandCursor);
 
 	help->setStyleSheet(
 		"#helpButton { qproperty-icon: url(\"\");"
 		"qproperty-iconSize: 48px 48px;"
 		"background: transparent;"
-		"background-image: url(\":/images/question.png\");"
+		"color: rgba(255,255,255,.9);"
 		"background-repeat: no-repeat; }"
-		"#helpButton::hover { background-image: url(\":/images/question_hover.png\");"
-		"background-repeat: no-repeat; }"
+		"#helpButton::hover {color: rgba(255, 255, 255, 1); }"
+		
 	);
 
 	connect(help, &QPushButton::pressed, [this]() {
@@ -2077,20 +2179,18 @@ void MainWindow::setupViewPort()
 
 	prefs = new QPushButton;
 	prefs->setObjectName("prefsButton");
-	QIcon icop;
-	icop.addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/settings.png"), QIcon::Normal);
-	prefs->setIconSize(ico.availableSizes().first());
-	prefs->setFixedSize(ico.actualSize(icop.availableSizes().first()));//never larger than ic.availableSizes().first()
+
+	prefs->setText(QChar(fa::cog));
+	prefs->setFont(fontIcons.font(28));
 	prefs->setCursor(Qt::PointingHandCursor);
 
 	prefs->setStyleSheet(
 		"#prefsButton { qproperty-icon: url(\"\");"
 		"qproperty-iconSize: 48px 48px;"
 		"background: transparent;"
-		"background-image: url(\":/icons/settings.png\");"
+		"color: rgba(255,255,255,.9);"
 		"background-repeat: no-repeat; }"
-		"#prefsButton::hover { background-image: url(\":/icons/settings_hover.png\");"
-		"background-repeat: no-repeat; }"
+		"#prefsButton::hover { color: rgba(255, 255, 255, 1); }"
 	);
 
 	connect(prefs, &QPushButton::pressed, [this]() { showPreferences(); });
@@ -2098,7 +2198,7 @@ void MainWindow::setupViewPort()
 	QWidget *buttons = new QWidget;
 	QHBoxLayout *bl = new QHBoxLayout;
 	buttons->setLayout(bl);
-
+	bl->setSpacing(20);
 	bl->addWidget(help);
 	bl->addWidget(prefs);
 
@@ -2293,13 +2393,15 @@ void MainWindow::setupToolBar()
 	QAction *actionUndo = new QAction;
 	actionUndo->setToolTip("Undo last action");
 	actionUndo->setObjectName(QStringLiteral("actionUndo"));
-	actionUndo->setIcon(QIcon(":/icons/undo.png"));
+	actionUndo->setText(QChar(fa::reply));
+	actionUndo->setFont(fontIcons.font(16)); 
 	toolBar->addAction(actionUndo);
 
 	QAction *actionRedo = new QAction;
 	actionRedo->setToolTip("Redo last action");
 	actionRedo->setObjectName(QStringLiteral("actionRedo"));
-	actionRedo->setIcon(QIcon(":/icons/redo.svg"));
+	actionRedo->setText(QChar(fa::share));
+	actionRedo->setFont(fontIcons.font(16));
 	toolBar->addAction(actionRedo);
 
 	toolBar->addSeparator();
@@ -2311,22 +2413,25 @@ void MainWindow::setupToolBar()
     actionTranslate->setObjectName(QStringLiteral("actionTranslate"));
     actionTranslate->setCheckable(true);
 	actionTranslate->setToolTip("Manipulator for translating objects");
-    actionTranslate->setIcon(QIcon(":/icons/tranlate arrow.svg"));
-    toolBar->addAction(actionTranslate);
+	actionTranslate->setText(QChar(fa::arrows));
+	actionTranslate->setFont(fontIcons.font(16));
+	toolBar->addAction(actionTranslate);
 
     QAction *actionRotate = new QAction;
     actionRotate->setObjectName(QStringLiteral("actionRotate"));
     actionRotate->setCheckable(true);
 	actionRotate->setToolTip("Manipulator for rotating objects");
-    actionRotate->setIcon(QIcon(":/icons/rotate-to-right.svg"));
-    toolBar->addAction(actionRotate);
+	actionRotate->setText(QChar(fa::rotateright));
+	actionRotate->setFont(fontIcons.font(16));
+	toolBar->addAction(actionRotate);
 
     QAction *actionScale = new QAction;
     actionScale->setObjectName(QStringLiteral("actionScale"));
     actionScale->setCheckable(true);
 	actionScale->setToolTip("Manipulator for scaling objects");
-    actionScale->setIcon(QIcon(":/icons/expand-arrows.svg"));
-    toolBar->addAction(actionScale);
+	actionScale->setText(QChar(fa::expand));
+	actionScale->setFont(fontIcons.font(16));
+	toolBar->addAction(actionScale);
 
     toolBar->addSeparator();
 
@@ -2334,15 +2439,17 @@ void MainWindow::setupToolBar()
     actionGlobalSpace->setObjectName(QStringLiteral("actionGlobalSpace"));
     actionGlobalSpace->setCheckable(true);
 	actionGlobalSpace->setToolTip("Move objects relative to the global world");
-    actionGlobalSpace->setIcon(QIcon(":/icons/world.svg"));
-    toolBar->addAction(actionGlobalSpace);
+	actionGlobalSpace->setText(QChar(fa::globe));
+	actionGlobalSpace->setFont(fontIcons.font(16));
+	toolBar->addAction(actionGlobalSpace);
 
     QAction *actionLocalSpace = new QAction;
     actionLocalSpace->setObjectName(QStringLiteral("actionLocalSpace"));
     actionLocalSpace->setCheckable(true);
 	actionLocalSpace->setToolTip("Move objects relative to their transform");
-    actionLocalSpace->setIcon(QIcon(":/icons/sceneobject.svg"));
-    toolBar->addAction(actionLocalSpace);
+	actionLocalSpace->setText(QChar(fa::cube));
+	actionLocalSpace->setFont(fontIcons.font(16));
+	toolBar->addAction(actionLocalSpace);
 
     toolBar->addSeparator();
 
@@ -2350,15 +2457,17 @@ void MainWindow::setupToolBar()
     actionFreeCamera->setObjectName(QStringLiteral("actionFreeCamera"));
     actionFreeCamera->setCheckable(true);
 	actionFreeCamera->setToolTip("Freely move and orient the camera");
-    actionFreeCamera->setIcon(QIcon(":/icons/people.svg"));
-    toolBar->addAction(actionFreeCamera);
+	actionFreeCamera->setText(QChar(fa::eye));
+	actionFreeCamera->setFont(fontIcons.font(16));
+	toolBar->addAction(actionFreeCamera);
 
     QAction *actionArcballCam = new QAction;
     actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
     actionArcballCam->setCheckable(true);
 	actionArcballCam->setToolTip("Move and orient the camera around a fixed point");
-    actionArcballCam->setIcon(QIcon(":/icons/local.svg"));
-    toolBar->addAction(actionArcballCam);
+	actionArcballCam->setText(QChar(fa::dotcircleo));
+	actionArcballCam->setFont(fontIcons.font(16));
+	toolBar->addAction(actionArcballCam);
 
     connect(actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
     connect(actionRotate,       SIGNAL(triggered(bool)), SLOT(rotateGizmo()));
@@ -2394,7 +2503,8 @@ void MainWindow::setupToolBar()
 	actionExport->setObjectName(QStringLiteral("actionExport"));
 	actionExport->setCheckable(false);
 	actionExport->setToolTip("Export the current scene");
-	actionExport->setIcon(QIcon(":/icons/export.png"));
+	actionExport->setText(QChar(fa::upload));
+	actionExport->setFont(fontIcons.font(16)); 
 	toolBar->addAction(actionExport);
 
 	actionSaveScene = new QAction;
@@ -2402,21 +2512,21 @@ void MainWindow::setupToolBar()
 	actionSaveScene->setVisible(!settings->getValue("auto_save", true).toBool());
 	actionSaveScene->setCheckable(false);
 	actionSaveScene->setToolTip("Save the current scene");
-	actionSaveScene->setIcon(QIcon(":/icons/save.png"));
+	actionSaveScene->setText(QChar(fa::floppyo));
+	actionSaveScene->setFont(fontIcons.font(16));
 	toolBar->addAction(actionSaveScene);
 
 	QAction *viewDocks = new QAction;
 	viewDocks->setObjectName(QStringLiteral("viewDocks"));
 	viewDocks->setCheckable(false);
 	viewDocks->setToolTip("Toggle Widgets");
-	viewDocks->setIcon(QIcon(":/icons/tab.png"));
+	viewDocks->setText(QChar(fa::listalt));
+	viewDocks->setFont(fontIcons.font(16));
 	toolBar->addAction(viewDocks);
 
 	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
 	connect(viewDocks,			SIGNAL(triggered(bool)), SLOT(toggleDockWidgets()));
 	connect(actionSaveScene,	SIGNAL(triggered(bool)), SLOT(saveScene()));
-
-	// connect(ui->actionClose, &QAction::triggered, [this](bool) { closeProject(); });
 
     /*
     vrButton = new QPushButton();
@@ -2444,11 +2554,6 @@ void MainWindow::setupShortcuts()
     // Save
     shortcut = new QShortcut(QKeySequence("ctrl+s"),sceneView);
     connect(shortcut, SIGNAL(activated()), this, SLOT(saveScene()));
-}
-
-QIcon MainWindow::getIconFromSceneNodeType(SceneNodeType type)
-{
-    return QIcon();
 }
 
 void MainWindow::toggleDockWidgets()
@@ -2664,14 +2769,12 @@ void MainWindow::showProjectManagerInternal()
     if (UiManager::isScenePlaying) enterEditMode();
     hide();
     pmContainer->populateDesktop(true);
-    pmContainer->showMaximized();
+    //pmContainer->showMaximized();
     pmContainer->cleanupOnClose();
 }
 
 void MainWindow::newScene()
 {
-    this->showMaximized();
-
     this->sceneView->makeCurrent();
     auto scene = this->createDefaultScene();
     this->setScene(scene);
@@ -2681,20 +2784,20 @@ void MainWindow::newScene()
 
 void MainWindow::newProject(const QString &filename, const QString &projectPath)
 {
-    newScene();
+    if (UiManager::isSceneOpen) closeProject();
 
-    UiManager::updateWindowTitle();
+    newScene();
+    UiManager::isSceneOpen = true;
+    ui->actionClose->setDisabled(false);
+
+    saveScene(filename, projectPath);
 
     assetWidget->trigger();
 
-    UiManager::isSceneOpen = true;
-    ui->actionClose->setDisabled(false);
+    UiManager::clearUndoStack();
+    UiManager::updateWindowTitle();
+
     switchSpace(WindowSpaces::EDITOR);
-
-	// todo - do this once instead of having two writers as above
-	saveScene(filename, projectPath);
-
-	undoStackCount = 0;
 }
 
 MainWindow::~MainWindow()

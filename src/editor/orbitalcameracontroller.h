@@ -26,6 +26,7 @@ namespace iris
     class CameraNode;
 }
 
+class SceneViewWidget;
 class OrbitalCameraController:public CameraControllerBase
 {
 public:
@@ -43,12 +44,14 @@ public:
 
     float rotationSpeed;
 
+	SceneViewWidget* sceneWidget;
+
     QVector3D pivot;
     float distFromPivot;
 
 	iris::CameraNodePtr camera;
 
-    OrbitalCameraController();
+    OrbitalCameraController(SceneViewWidget* sceneWidget);
 
     iris::CameraNodePtr  getCamera();
     void setRotationSpeed(float rotationSpeed);
@@ -65,6 +68,8 @@ public:
 	void focusOnNode(iris::SceneNodePtr sceneNode);
 
     void updateCameraRot();
+
+	bool canLeftMouseDrag();
 };
 
 #endif // ORBITALCAMERACONTROLLER_H

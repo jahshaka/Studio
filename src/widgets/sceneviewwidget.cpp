@@ -209,7 +209,6 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
         auto node = doActiveObjectPicking(event->posF());
         if (!!node) {
-            qDebug() << QDir(Globals::project->getProjectFolder()).filePath(roleDataMap.value(1).toString());
             auto meshNode = node.staticCast<iris::MeshNode>();
             auto mat = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
 
@@ -251,8 +250,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     viewport = new iris::Viewport();
 
-    defaultCam = new EditorCameraController();
-    orbitalCam = new OrbitalCameraController();
+    defaultCam = new EditorCameraController(this);
+    orbitalCam = new OrbitalCameraController(this);
     viewerCam = new ViewerCameraController();
 
     camController = defaultCam;
@@ -281,6 +280,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     fontSize = 20;
     showFps = SettingsManager::getDefaultManager()->getValue("show_fps", false).toBool();
+
+	settings = SettingsManager::getDefaultManager();
 }
 
 void SceneViewWidget::resetEditorCam()
@@ -780,6 +781,24 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
 	gizmo->updateSize(editorCam);
 }
 
+void SceneViewWidget::mouseDoubleClickEvent(QMouseEvent * e)
+{
+	auto lastSelected = selectedNode;
+
+	if (e->button() == Qt::LeftButton) {
+		editorCam->updateCameraMatrices();
+
+		if (viewportMode == ViewportMode::Editor && UiManager::sceneMode == SceneMode::EditMode) {
+			if (selectedNode.isNull()) {
+				// double-click to select object
+				if (settings->getValue("mouse_controls", "jahshaka").toString() == "jahshaka") {
+					this->doObjectPicking(e->localPos(), lastSelected);
+				}
+			}
+		}
+	}
+}
+
 void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 {
     auto lastSelected = selectedNode;
@@ -803,7 +822,9 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 
             // if we don't have a selected node, prioritize object picking
             if (selectedNode.isNull()) {
-                this->doObjectPicking(e->localPos(), lastSelected);
+				if (settings->getValue("mouse_controls", "jahshaka").toString() == "default") {
+					this->doObjectPicking(e->localPos(), lastSelected);
+				}
             }
         }
     }

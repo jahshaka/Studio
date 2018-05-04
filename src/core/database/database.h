@@ -43,7 +43,7 @@ public:
                        const QString &name,
                        const QByteArray &sceneBlob = QByteArray(),
                        const QByteArray &thumbnail = QByteArray());
-    bool createFolder(const QString &folderName, const QString &parentFolder, const QString &guid);
+    bool createFolder(const QString &folderName, const QString &parentFolder, const QString &guid, bool visible = true);
     QString createAssetEntry(const QString &guid,
                              const QString &assetname,
                              const int &type,
@@ -69,12 +69,13 @@ public:
     bool deleteFolder(const QString &guid);
     bool deleteDependency(const QString &dependee);
     bool deleteDependency(const QString &depender, const QString &dependee);
+    bool removeDependenciesByType(const QString &depender, const ModelTypes &type);
     QStringList deleteFolderAndDependencies(const QString &guid);
     QStringList deleteAssetAndDependencies(const QString &guid);
     bool deleteRecord(const QString &table, const QString &row, const QVariant &value);
 
     // UPDATE ===============================================================================
-    bool renameProject(const QString &newName);
+    bool renameProject(const QString &guid, const QString &newName);
     bool renameFolder(const QString &guid, const QString &newName);
     bool renameCollection(const int &collectionId, const QString &newName);
     bool renameAsset(const QString &guid, const QString &newName);
@@ -101,9 +102,11 @@ public:
 
     QByteArray fetchCachedThumbnail(const QString& name) const;
     QStringList fetchFolderNameByParent(const QString &guid);
+    QStringList fetchAssetNameByParent(const QString &guid);
     QStringList fetchFolderAndChildFolders(const QString &guid);
     QStringList fetchChildFolderAssets(const QString &guid);
     QStringList fetchAssetGUIDAndDependencies(const QString &guid, bool appendSelf = true);
+    QVector<DependencyRecord> fetchAssetDependencies(const AssetRecord &record);
     QStringList fetchAssetDependenciesByType(const QString &guid, const ModelTypes&);
     QStringList fetchAssetAndDependencies(const QString &guid);
     QString fetchAssetGUIDByName(const QString &name);
@@ -114,15 +117,18 @@ public:
     bool hasDependencies(const QString &guid);
 
     // IMPORT ===============================================================================
-    bool importProject(const QString &inFilePath, const QString &newGuid, QString &worldName);
+    bool importProject(const QString &inFilePath, const QString &newGuid, QString &worldName, QMap<QString, QString> &assetGuids);
     QString importAsset(const ModelTypes &jafType,
                         const QString &pathToDb,
                         const QMap<QString, QString> &newNames,
+                        QMap<QString, QString> &outGuids,
+                        QVector<AssetRecord> &assetRecords,
                         const QString &parent = QString());
 
     QString copyAsset(const ModelTypes &jafType,
                       const QString &guid,
                       const QMap<QString, QString> &newNames,
+                      QVector<AssetRecord> &oldAssetRecords,
                       const QString &parent);
 
     // EXPORT ===============================================================================
@@ -154,7 +160,7 @@ public:
     bool hasCachedThumbnail(const QString& name);
 
 	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table);
-
+    bool checkIfDependencyExists(const QString &depender, const ModelTypes &type);
 
     QSqlDatabase getDb() { return db; }
 

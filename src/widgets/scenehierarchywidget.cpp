@@ -309,22 +309,23 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 		}
 
 		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-			QAction *exportAsset = subMenu->addAction("Export Object");
+            if (!node->isBuiltIn) {
+                QAction *exportAsset = subMenu->addAction("Export Object");
+                connect(exportAsset, &QAction::triggered, this, [this, node]() {
+                    exportNode(node);
+                });
+            }
+
 			QAction *exportMat = subMenu->addAction("Create Material");
-
-			connect(exportAsset, &QAction::triggered, this, [this, node]() {
-				exportNode(node->getGUID());
-			});
-
 			connect(exportMat, &QAction::triggered, this, [this, node]() {
-				createMaterial(node->getGUID());
+				createMaterial();
 			});
 		}
 		else if (node->getSceneNodeType() == iris::SceneNodeType::ParticleSystem) {
 			QAction *exportPSystem = subMenu->addAction("Export Particle System");
 
 			connect(exportPSystem, &QAction::triggered, this, [this, node]() {
-				exportParticleSystem(node->getGUID());
+				exportParticleSystem(node);
 			});
 		}
 	}
@@ -353,19 +354,19 @@ void SceneHierarchyWidget::focusOnNode()
 	UiManager::sceneViewWidget->focusOnNode(selectedNode);
 }
 
-void SceneHierarchyWidget::exportNode(const QString &guid)
+void SceneHierarchyWidget::exportNode(const iris::SceneNodePtr &node)
 {
-	mainWindow->exportNode(guid);
+	mainWindow->exportNode(node);
 }
 
-void SceneHierarchyWidget::createMaterial(const QString &guid)
+void SceneHierarchyWidget::createMaterial()
 {
-	mainWindow->createMaterial(guid);
+	mainWindow->createMaterial();
 }
 
-void SceneHierarchyWidget::exportParticleSystem(const QString &guid)
+void SceneHierarchyWidget::exportParticleSystem(const iris::SceneNodePtr &node)
 {
-	mainWindow->exportNode(guid);
+	mainWindow->exportNode(node);
 }
 
 void SceneHierarchyWidget::showHideNode(QTreeWidgetItem* item, bool show)

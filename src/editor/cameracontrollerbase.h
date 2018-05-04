@@ -20,13 +20,11 @@ namespace iris
     class CameraNode;
 }
 
+class SettingsManager;
 class CameraControllerBase
 {
 public:
-    CameraControllerBase()
-    {
-        resetMouseStates();
-    }
+	CameraControllerBase();
 
     virtual void setCamera(QSharedPointer<iris::CameraNode>  cam);
 
@@ -46,6 +44,8 @@ public:
 
 protected:
     QSharedPointer<iris::CameraNode> camera;
+
+	SettingsManager* settings;
 
     bool leftMouseDown;
     bool middleMouseDown;

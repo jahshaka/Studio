@@ -34,6 +34,7 @@ public:
     void leaveEvent(QEvent*) override;
 
 protected slots:
+    void onShaderFileChanged(int);
     void onVertexShaderFileChanged(int);
     void onFragmentShaderFileChanged(int);
     void onAllowBuiltinShaders(const bool);
@@ -48,6 +49,7 @@ private:
 	ComboBoxWidget *vertexShaderCombo;
     ComboBoxWidget *fragmentShaderCombo;
 
+    QString shaderGuid;
     QStringList builtinShaders;
     Database *db;
 };

@@ -144,8 +144,8 @@ void AssetViewer::initializeGL()
     m->setValue("textureScale", 4.f);
     node->setMaterial(m);
 
-    defaultCam = new EditorCameraController();
-    orbitalCam = new OrbitalCameraController();
+    defaultCam = new EditorCameraController(nullptr);
+    orbitalCam = new OrbitalCameraController(nullptr);
 	orbitalCam->previewMode = true;
 
     camera = iris::CameraNode::create();
@@ -263,6 +263,23 @@ void AssetViewer::loadJafMaterial(QString guid, bool firstAdd, bool cache, bool 
     pdialog->close();
 }
 
+void AssetViewer::loadJafShader(QString guid, QMap<QString, QString> &outGuids, bool firstAdd, bool cache, bool firstLoad) {
+    pdialog->setLabelText(tr("Loading asset preview..."));
+    pdialog->show();
+    QApplication::processEvents();
+    makeCurrent();
+    addJafShader(guid, outGuids, firstAdd, cache);
+    if (firstLoad) {
+        //resetViewerCamera();
+    }
+    else {
+        resetViewerCameraAfter();
+    }
+    renderObject();
+    doneCurrent();
+    pdialog->close();
+}
+
 void AssetViewer::loadJafModel(QString str, QString guid, bool firstAdd, bool cache, bool firstLoad) {
     pdialog->setLabelText(tr("Loading asset preview..."));
     pdialog->show();
@@ -310,18 +327,57 @@ void AssetViewer::resizeGL(int width, int height)
     viewport->height = height;
 }
 
+void AssetViewer::addJafShader(const QString &guid, QMap<QString, QString> &guidCompareMap, bool firstAdd, bool cache, QVector3D position)
+{
+    QString assetPath = IrisUtils::join(
+        QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+        Constants::ASSET_FOLDER, guid
+    );
+    
+    auto shaderDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(guid)).object();
+
+    auto vAsset = db->fetchAsset(shaderDefinition["vertex_shader"].toString());
+    auto fAsset = db->fetchAsset(shaderDefinition["fragment_shader"].toString());
+
+    if (!vAsset.name.isEmpty()) {
+        shaderDefinition["vertex_shader"] = QDir(assetPath).filePath(vAsset.name);
+    }
+
+    if (!fAsset.name.isEmpty()) {
+        shaderDefinition["fragment_shader"] = QDir(assetPath).filePath(fAsset.name);
+    }
+
+    iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
+    material->generate(shaderDefinition);
+
+    auto matball = iris::MeshNode::create();
+    matball->setMesh(":/content/primitives/hp_sphere.obj");
+    matball->setLocalPos(QVector3D(0, 0, 0)); // prevent z-fighting with the default plane reset (iKlsR)
+    matball->setName("ae98cx7u_shader_ball");
+    matball->setPickable(false);
+    //matball->setFaceCullingMode(iris::FaceCullingMode::None);
+    //matball->setShadowCastingEnabled(true);
+    matball->setMaterial(material);
+    matball->setLocalPos(position);
+
+    addNodeToScene(matball, guid, false, true);
+    lastNode = matball->getName();
+}
+
 void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache, QVector3D position)
 {
     QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
     QJsonObject matObject = matDoc.object();
     iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 
+	auto shaderGuid = matObject["guid"].toString();
+
     QFileInfo shaderFile;
 
     QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
     while (it.hasNext()) {
         it.next();
-        if (it.key() == matObject["guid"].toString()) {
+        if (it.key() == shaderGuid) {
             shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
             break;
         }
@@ -331,24 +387,25 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
         material->generate(shaderFile.absoluteFilePath());
     }
     else {
-        for (auto asset : AssetManager::getAssets()) {
-            if (asset->type == ModelTypes::Shader) {
-                if (asset->assetGuid == matObject["guid"].toString()) {
-                    auto def = asset->getValue().toJsonObject();
-                    auto vertexShader = def["vertex_shader"].toString();
-                    auto fragmentShader = def["fragment_shader"].toString();
-                    for (auto asset : AssetManager::getAssets()) {
-                        if (asset->type == ModelTypes::File) {
-                            if (vertexShader == asset->assetGuid) vertexShader = asset->path;
-                            if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
-                        }
-                    }
-                    def["vertex_shader"] = vertexShader;
-                    def["fragment_shader"] = fragmentShader;
-                    material->generate(def);
-                }
-            }
-        }
+		QString assetPath = IrisUtils::join(
+			QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::ASSET_FOLDER, guid
+		);
+
+		auto shaderDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(shaderGuid)).object();
+
+		auto vAsset = db->fetchAsset(shaderDefinition["vertex_shader"].toString());
+		auto fAsset = db->fetchAsset(shaderDefinition["fragment_shader"].toString());
+
+		if (!vAsset.name.isEmpty()) {
+			shaderDefinition["vertex_shader"] = QDir(assetPath).filePath(vAsset.name);
+		}
+
+		if (!fAsset.name.isEmpty()) {
+			shaderDefinition["fragment_shader"] = QDir(assetPath).filePath(fAsset.name);
+		}
+
+		material->setMaterialDefinition(shaderDefinition);
+		material->generate(shaderDefinition);
     }
 
     for (const auto &prop : material->properties) {
@@ -370,14 +427,13 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
     }
 
     auto matball = iris::MeshNode::create();
-    matball->setMesh(":/content/primitives/sphere.obj");
+    matball->setMesh(":/content/primitives/hp_sphere.obj");
     matball->setLocalPos(QVector3D(0, 0, 0)); // prevent z-fighting with the default plane reset (iKlsR)
     matball->setName("ae98cx7u_mat_ball");
     matball->setPickable(false);
     matball->setFaceCullingMode(iris::FaceCullingMode::None);
     matball->setShadowCastingEnabled(true);
     matball->setMaterial(material);
-
     matball->setLocalPos(position);
 
     addNodeToScene(matball, guid, false, true);
@@ -394,10 +450,51 @@ void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firs
         [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
         auto mat = iris::CustomMaterial::create();
+
         if (mesh->hasSkeleton())
             mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
-        else
-            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+        else {
+            auto materialObj = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
+            QJsonObject matObject = materialObj.object().value("material").toObject();
+
+            QFileInfo shaderFile;
+            QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+            while (it.hasNext()) {
+                it.next();
+                if (it.key() == matObject["guid"].toString()) {
+                    shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
+                    break;
+                }
+            }
+
+            if (shaderFile.exists()) {
+                mat->generate(shaderFile.absoluteFilePath());
+            }
+            else {
+                QString assetPath = IrisUtils::join(
+                    QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+                    Constants::ASSET_FOLDER, guid
+                );
+
+                auto oguid = QJsonDocument::fromBinaryData(db->fetchAssetData(guid)).object();
+                auto shader = db->fetchAssetData(oguid["material"].toObject()["guid"].toString());
+                QJsonObject shaderDefinition = QJsonDocument::fromBinaryData(shader).object();
+
+                auto vAsset = db->fetchAsset(shaderDefinition["vertex_shader"].toString());
+                auto fAsset = db->fetchAsset(shaderDefinition["fragment_shader"].toString());
+
+                if (!vAsset.name.isEmpty()) {
+                    shaderDefinition["vertex_shader"] = QDir(assetPath).filePath(vAsset.name);
+                }
+
+                if (!fAsset.name.isEmpty()) {
+                    shaderDefinition["fragment_shader"] = QDir(assetPath).filePath(fAsset.name);
+                }
+
+                mat->generate(shaderDefinition);
+            }
+        }
+
         return mat;
     }, ssource);
 
