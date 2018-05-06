@@ -76,6 +76,8 @@ public:
     float fogEnd;
     bool fogEnabled;
 
+    float gravity;
+
     bool shadowEnabled;
 
     RenderList* geometryRenderList;
