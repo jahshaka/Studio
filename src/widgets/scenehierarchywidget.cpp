@@ -189,15 +189,18 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
 {
     // @TODO, handle multiple items later on
     if (event->type() == QEvent::Drop) {
-        auto dropEventPtr = static_cast<QDropEvent*>(event);
-        this->dropEvent(dropEventPtr);
+		auto dropEventPtr = static_cast<QDropEvent*>(event);
 
         QTreeWidgetItem *droppedIndex = ui->sceneTree->itemAt(dropEventPtr->pos().x(), dropEventPtr->pos().y());
         if (droppedIndex) {
             long itemId = droppedIndex->data(0, Qt::UserRole).toLongLong();
             auto source = nodeList[itemId];
             source->addChild(this->lastDraggedHiearchyItemSrc);
-        }
+		}
+		else {
+			//dropEventPtr->ignore();
+			dropEventPtr->setDropAction(Qt::IgnoreAction);
+		}
     }
 
 	if (event->type() == QEvent::DragMove) {
@@ -379,6 +382,10 @@ void SceneHierarchyWidget::showHideNode(QTreeWidgetItem* item, bool show)
     } else {
         node->hide();
     }
+
+	for (int i = 0; i < item->childCount(); i++) {
+		showHideNode(item->child(i), show);
+	}
 }
 
 void SceneHierarchyWidget::repopulateTree()
