@@ -22,4 +22,9 @@ btTriangleMesh *PhysicsHelper::btTriangleMeshShapeFromMesh(iris::MeshPtr mesh)
     return triMesh;
 }
 
+btVector3 PhysicsHelper::btVector3FromQVector3D(QVector3D vector)
+{
+    return btVector3(vector.x(), vector.y(), vector.z());
+}
+
 }

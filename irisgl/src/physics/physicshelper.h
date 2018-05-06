@@ -15,6 +15,7 @@ class PhysicsHelper
 public:
     PhysicsHelper() = default;
     static btTriangleMesh *btTriangleMeshShapeFromMesh(iris::MeshPtr mesh);
+    static btVector3 btVector3FromQVector3D(QVector3D vector);
 };
 
 }
