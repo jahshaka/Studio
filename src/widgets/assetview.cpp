@@ -596,7 +596,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	QPushButton *downloadWorld = new QPushButton("Download Assets");
 
 	connect(downloadWorld, &QPushButton::pressed, []() {
-		QDesktopServices::openUrl(QUrl("http://www.jahfx.com/downloads/models/"));
+		QDesktopServices::openUrl(QUrl("https://www.jahfx.com/downloads/models/"));
 	});
 
 	QWidget *importButtons = new QWidget;
