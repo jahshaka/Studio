@@ -525,6 +525,20 @@ void SceneNode::setGlobalRot(QQuaternion rot)
 	this->setTransformDirty();
 }
 
+void SceneNode::setGlobalTransform(QMatrix4x4 transform)
+{
+	if (!parent) {
+		this->setLocalTransform(transform);
+		return;
+	}
+
+	auto globInv = this->parent->getGlobalTransform().inverted();
+	auto res = globInv * transform;
+	this->setLocalTransform(res);
+
+	this->setTransformDirty();
+}
+
 
 SceneNodePtr SceneNode::duplicate()
 {
