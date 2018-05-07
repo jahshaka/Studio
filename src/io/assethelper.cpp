@@ -70,7 +70,8 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, const QJsonObject
 
         for (const iris::Property* property : nodeMaterial->properties) {
             if (property->type == iris::PropertyType::Texture) {
-                if (!materialDefinition.value(property->name).toString().isEmpty()) {
+				QString textureValue = materialDefinition.value(property->name).toString();
+                if (!textureValue.isEmpty() || !QFileInfo(textureValue).suffix().isEmpty()) {
                     nodeMaterial->setValue(property->name, materialDefinition.value(property->name).toString());
                 }
             }

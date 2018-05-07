@@ -52,6 +52,7 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
     connect(ui->showFPS,        SIGNAL(toggled(bool)),          SLOT(showFpsChanged(bool)));
 	connect(ui->autoSave,       SIGNAL(toggled(bool)),          SLOT(enableAutoSave(bool)));
 	connect(ui->openInPlayer,   SIGNAL(toggled(bool)),          SLOT(enableOpenInPlayer(bool)));
+	connect(ui->mouseControls,	SIGNAL(currentTextChanged(const QString&)),	SLOT(mouseControlChanged(const QString&)));
 
 	QButtonGroup *buttonGroup = new QButtonGroup;
 
@@ -89,6 +90,7 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 
     setupDirectoryDefaults();
     setupOutline();
+	setupMouseControls();
 
 	showFps = settings->getValue("show_fps", false).toBool();
 	ui->showFPS->setChecked(showFps);
@@ -109,6 +111,24 @@ void WorldSettings::setupOutline()
 
     ui->outlineWidth->setValue(outlineWidth);
     ui->outlineColor->setColor(outlineColor);
+}
+
+void WorldSettings::setupMouseControls()
+{
+	// mouse control options
+	QList<QString> mouseControlModes;
+	mouseControlModes.append("Jahshaka");
+	mouseControlModes.append("Default");
+
+	ui->mouseControls->blockSignals(true);
+	ui->mouseControls->addItems(mouseControlModes);
+	ui->mouseControls->blockSignals(false);
+
+	auto mode = settings->getValue("mouse_controls", "jahshaka").toString();
+	if (mode == "jahshaka")
+		ui->mouseControls->setCurrentIndex(0);
+	else
+		ui->mouseControls->setCurrentIndex(1);
 }
 
 void WorldSettings::changeDefaultDirectory()
@@ -150,6 +170,14 @@ void WorldSettings::enableOpenInPlayer(bool state)
 void WorldSettings::enableAutoUpdate(bool state)
 {
 	settings->setValue("open_in_player", autoUpdate = state);
+}
+
+void WorldSettings::mouseControlChanged(const QString& value)
+{
+	if (value == "Jahshaka")
+		settings->setValue("mouse_controls", "jahshaka");
+	else
+		settings->setValue("mouse_controls", "default");
 }
 
 void WorldSettings::projectDirectoryChanged(QString path)

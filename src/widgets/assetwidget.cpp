@@ -505,7 +505,7 @@ void AssetWidget::updateAssetView(const QString &path, bool showDependencies)
 	ui->assetView->clear();
 
 	for (const auto &folder : db->fetchChildFolders(path)) addItem(folder);
-	for (const auto &asset : db->fetchChildAssets(path, true)) addItem(asset);  /* TODO : irk this out */
+	for (const auto &asset : db->fetchChildAssets(path, showDependencies)) addItem(asset);  /* TODO : irk this out */
 	addCrumbs(db->fetchCrumbTrail(path));
 }
 
@@ -1895,7 +1895,6 @@ void AssetWidget::importRegularAssets(const QList<directory_tuple> &fileNames)
                     auto assetShader = new AssetShader;
                     assetShader->assetGuid = assetGuid;
                     assetShader->fileName = QFileInfo(asset->fileName).baseName();
-                    //assetShader->path = fileToCopyTo;
                     assetShader->setValue(QVariant::fromValue(shaderDefinition));
                     AssetManager::addAsset(assetShader);
                 }
@@ -2049,7 +2048,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tuple> &fileNames)
 					db->updateAssetAsset(assetGuid, QByteArray());
 				}
 
-				// Copy only models, textures, whitelisted files and shaders for now
+				// Copy only models, textures and whitelisted files
 				bool copyFile = QFile::copy(entry.path, fileToCopyTo);
 
 				progressDialog->setLabelText("Copying " + asset->fileName);

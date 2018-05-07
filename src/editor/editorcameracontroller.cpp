@@ -16,16 +16,22 @@ For more information see the LICENSE file
 #include <qmath.h>
 #include <math.h>
 #include "../core/keyboardstate.h"
+#include "../core/settingsmanager.h"
+#include "../widgets/sceneviewwidget.h"
+#include "../editor/gizmo.h"
 
 using namespace iris;
 
-EditorCameraController::EditorCameraController()
+EditorCameraController::EditorCameraController(SceneViewWidget* sceneWidget):
+	CameraControllerBase()
 {
     lookSpeed = 200;
     linearSpeed = 0.4f;
 
     yaw = 0;
     pitch = 0;
+
+	this->sceneWidget = sceneWidget;
 }
 
 CameraNodePtr EditorCameraController::getCamera()
@@ -121,7 +127,7 @@ void EditorCameraController::onMouseMove(int x,int y)
         this->pitch += y/10.0f;
     }
 
-    if(middleMouseDown)
+    if(middleMouseDown || canLeftMouseDrag())
     {
         //translate camera
         float dragSpeed = 0.01f;
@@ -144,6 +150,21 @@ void EditorCameraController::onMouseMove(int x,int y)
     */
 
     updateCameraRot();
+}
+
+bool EditorCameraController::canLeftMouseDrag()
+{
+	
+	bool gizmoDragging = false;
+	auto gizmo = sceneWidget->getActiveGizmo();
+	if (gizmo != nullptr) {
+		if (gizmo->isDragging())
+			gizmoDragging = true;
+	}
+
+	return (leftMouseDown && // left mouse must be down
+		settings->getValue("mouse_controls", "jahshaka").toString() == "jahshaka" && // left mouse to drag in jahshaka mouse mode
+		!gizmoDragging); // cant pan while dragging gizmo
 }
 
 void EditorCameraController::onMouseWheel(int delta)
@@ -188,19 +209,19 @@ void EditorCameraController::update(float dt)
 
     auto camPos = camera->getLocalPos();
     // left
-    if(KeyboardState::isKeyDown(Qt::Key_Left) ||KeyboardState::isKeyDown(Qt::Key_A) )
+    if(KeyboardState::isKeyDown(Qt::Key_Left))
         camPos -= x * linearSpeed;
 
     // right
-    if(KeyboardState::isKeyDown(Qt::Key_Right) ||KeyboardState::isKeyDown(Qt::Key_D) )
+    if(KeyboardState::isKeyDown(Qt::Key_Right))
         camPos += x * linearSpeed;
 
     // up
-    if(KeyboardState::isKeyDown(Qt::Key_Up) ||KeyboardState::isKeyDown(Qt::Key_W) )
+    if(KeyboardState::isKeyDown(Qt::Key_Up))
         camPos += z * linearSpeed;
 
     // down
-    if(KeyboardState::isKeyDown(Qt::Key_Down) ||KeyboardState::isKeyDown(Qt::Key_S) )
+    if(KeyboardState::isKeyDown(Qt::Key_Down))
         camPos -= z * linearSpeed;
 
     camera->setLocalPos(camPos);

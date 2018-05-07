@@ -42,6 +42,7 @@ public:
 
     void setupDirectoryDefaults();
     void setupOutline();
+	void setupMouseControls();
 
 private slots:
     void outlineWidthChanged(double width);
@@ -54,6 +55,7 @@ private slots:
     void changeEditorPath();
     void editorPathChanged(QString path);
 	void enableAutoUpdate(bool state);
+	void mouseControlChanged(const QString& value);
 
 public slots:
 	void saveSettings();

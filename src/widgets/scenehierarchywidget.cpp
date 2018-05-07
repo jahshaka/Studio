@@ -189,15 +189,18 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
 {
     // @TODO, handle multiple items later on
     if (event->type() == QEvent::Drop) {
-        auto dropEventPtr = static_cast<QDropEvent*>(event);
-        this->dropEvent(dropEventPtr);
+		auto dropEventPtr = static_cast<QDropEvent*>(event);
 
         QTreeWidgetItem *droppedIndex = ui->sceneTree->itemAt(dropEventPtr->pos().x(), dropEventPtr->pos().y());
         if (droppedIndex) {
             long itemId = droppedIndex->data(0, Qt::UserRole).toLongLong();
             auto source = nodeList[itemId];
             source->addChild(this->lastDraggedHiearchyItemSrc);
-        }
+		}
+		else {
+			//dropEventPtr->ignore();
+			dropEventPtr->setDropAction(Qt::IgnoreAction);
+		}
     }
 
 	if (event->type() == QEvent::DragMove) {
@@ -222,23 +225,17 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
 
 void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem *item, int column)
 {
-    long nodeId = item->data(0, Qt::UserRole).toLongLong();
-
 	// Our icons are in the second column
 	if (column == 1) {
-		auto node = nodeList[nodeId];
 		if (item->data(1, Qt::UserRole).toBool()) {
-			item->setIcon(1, *hiddenIcon);
-			node->hide();
-			item->setData(1, Qt::UserRole, QVariant::fromValue(false));
+			hideItemAndChildren(item);
 		}
 		else {
-			item->setIcon(1, *visibleIcon);
-			node->show();
-			item->setData(1, Qt::UserRole, QVariant::fromValue(true));
+			showItemAndChildren(item);
 		}
 	}
 	else {
+		long nodeId = item->data(0, Qt::UserRole).toLongLong();
 		selectedNode = nodeList[nodeId];
 		emit sceneNodeSelected(selectedNode);
 	}
@@ -379,6 +376,10 @@ void SceneHierarchyWidget::showHideNode(QTreeWidgetItem* item, bool show)
     } else {
         node->hide();
     }
+
+	for (int i = 0; i < item->childCount(); i++) {
+		showHideNode(item->child(i), show);
+	}
 }
 
 void SceneHierarchyWidget::repopulateTree()
@@ -460,6 +461,30 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 	node->isVisible() ? childTreeItem->setIcon(1, *visibleIcon) : childTreeItem->setIcon(1, *hiddenIcon);
 
     return childTreeItem;
+}
+
+void SceneHierarchyWidget::hideItemAndChildren(QTreeWidgetItem * item)
+{
+	long nodeId = item->data(0, Qt::UserRole).toLongLong();
+	item->setIcon(1, *hiddenIcon);
+	nodeList[nodeId]->hide();
+	item->setData(1, Qt::UserRole, QVariant::fromValue(false));
+
+	for (int i = 0; i < item->childCount(); i++) {
+		hideItemAndChildren(item->child(i));
+	}
+}
+
+void SceneHierarchyWidget::showItemAndChildren(QTreeWidgetItem * item)
+{
+	long nodeId = item->data(0, Qt::UserRole).toLongLong();
+	item->setIcon(1, *visibleIcon);
+	nodeList[nodeId]->show();
+	item->setData(1, Qt::UserRole, QVariant::fromValue(true));
+
+	for (int i = 0; i < item->childCount(); i++) {
+		showItemAndChildren(item->child(i));
+	}
 }
 
 void SceneHierarchyWidget::insertChild(iris::SceneNodePtr childNode)

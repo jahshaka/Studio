@@ -382,7 +382,7 @@ private:
 	QVector<bool> widgetStates;	// use the order in the enum
 
     WindowSpaces currentSpace;
-	QtAwesome *awesome;
+	QtAwesome fontIcons;
 };
 
 #endif // MAINWINDOW_H

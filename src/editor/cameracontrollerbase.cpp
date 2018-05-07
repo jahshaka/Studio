@@ -10,6 +10,14 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "cameracontrollerbase.h"
+#include "core/settingsmanager.h"
+
+
+CameraControllerBase::CameraControllerBase()
+{
+	resetMouseStates();
+	settings = SettingsManager::getDefaultManager();
+}
 
 void CameraControllerBase::setCamera(QSharedPointer<iris::CameraNode>  cam)
 {
