@@ -56,7 +56,7 @@ void AssetGridItem::projectContextMenu(const QPoint &pos)
 
 	QAction add("Add to Project", this);
 	connect(&add, &QAction::triggered, this, [this]() {
-		emit addAssetToProject(this);
+		emit addAssetItemToProject(this);
 	});
 	menu.addAction(&add);
 
