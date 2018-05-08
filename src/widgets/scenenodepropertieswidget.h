@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QListWidgetItem>
+#include <QVBoxLayout>
 #include <QSharedPointer>
 
 namespace iris {
@@ -80,12 +81,15 @@ private:
     WorldPropertyWidget* worldPropView;
     FogPropertyWidget*  fogPropView;
     MeshPropertyWidget* meshPropView;
-	PhysicsPropertyWidget *physicsPropView;
+    PhysicsPropertyWidget *physicsPropView;
     DemoPane* demoPane;
 
     Database *db;
 	ShaderPropertyWidget *shaderPropView;
-	SceneViewWidget *sceneView;
+    SceneViewWidget *sceneView;
+
+    QWidget *widgetProperty;
+    QVBoxLayout *widgetPropertyLayout;
 };
 
 #endif // PROPERTYWIDGET_H
