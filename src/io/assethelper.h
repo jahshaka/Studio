@@ -23,7 +23,7 @@ For more information see the LICENSE file
 class AssetHelper
 {
 public:
-    static void updateNodeMaterial(iris::SceneNodePtr &node, const QJsonObject definition);
+    static void updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject definition);
     static QByteArray makeBlobFromPixmap(const QPixmap &pixmap);
     static QStringList fetchAssetAndAllDependencies(const QString &guid, Database *db);
     static ModelTypes getAssetTypeFromExtension(const QString &fileSuffix);
