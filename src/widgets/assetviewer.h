@@ -90,15 +90,14 @@ public:
 		return assetMaterial;
 	}
 
-    void clearScene() {
+	void clearScene() {
 		if (scene->rootNode->hasChildren()) {
-			for (auto child : scene->rootNode->children) {
-				if (child->getName() == lastNode) {
-					child->removeFromParent();
-				}
+			auto lastNode = scene->rootNode->children.last();
+			if (!lastNode->isBuiltIn) {
+				lastNode->removeFromParent();
 			}
 		}
-    }
+	}
 
 	void orientCamera(QVector3D pos, QVector3D localRot, int distanceFromPivot) {
 		this->localPos = pos;

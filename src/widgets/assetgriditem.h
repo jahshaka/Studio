@@ -52,7 +52,6 @@ signals:
 	void specialClicked(AssetGridItem*);	// bypass loading asset and add to scene
 	void contextClicked(AssetGridItem*);	// use this exclusively for right clicks
 
-	void addAssetToProject(AssetGridItem*);
 	void addAssetItemToProject(AssetGridItem*);
 	void changeAssetCollection(AssetGridItem*);
 	void removeAssetFromProject(AssetGridItem*);

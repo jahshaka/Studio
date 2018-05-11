@@ -496,6 +496,49 @@ QMatrix4x4 SceneNode::getLocalTransform()
     return localTransform;
 }
 
+void SceneNode::setGlobalPos(QVector3D pos)
+{
+	if (!parent) {
+		this->pos = pos;
+		return;
+	}
+
+	auto globInv = this->parent->getGlobalTransform().inverted();
+
+	auto res = globInv * pos;
+
+	this->pos = res;
+	this->setTransformDirty();
+}
+
+void SceneNode::setGlobalRot(QQuaternion rot)
+{
+	if (!parent) {
+		this->rot = rot;
+		return;
+	}
+
+	auto globInv = this->parent->getGlobalRotation().inverted();
+	auto res = globInv * rot;
+
+	this->rot = res;
+	this->setTransformDirty();
+}
+
+void SceneNode::setGlobalTransform(QMatrix4x4 transform)
+{
+	if (!parent) {
+		this->setLocalTransform(transform);
+		return;
+	}
+
+	auto globInv = this->parent->getGlobalTransform().inverted();
+	auto res = globInv * transform;
+	this->setLocalTransform(res);
+
+	this->setTransformDirty();
+}
+
 
 SceneNodePtr SceneNode::duplicate()
 {

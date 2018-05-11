@@ -227,7 +227,8 @@ void TranslationGizmo::drag(QVector3D rayPos, QVector3D rayDir)
 	// bring to local space
 	auto localTarget = selectedNode->parent->getGlobalTransform().inverted() * targetPos;
 	
-	selectedNode->setLocalPos(localTarget);
+	//selectedNode->setLocalPos(localTarget);
+	selectedNode->setGlobalPos(targetPos);
 	UiManager::propertyWidget->refreshTransform();
 }
 

@@ -93,6 +93,9 @@ private:
 
     QSharedPointer<iris::SceneNode> lastDraggedHiearchyItemSrc;
 
+	void hideItemAndChildren(QTreeWidgetItem* item);
+	void showItemAndChildren(QTreeWidgetItem* item);
+
 private:
     Ui::SceneHierarchyWidget *ui;
     QSharedPointer<iris::Scene> scene;

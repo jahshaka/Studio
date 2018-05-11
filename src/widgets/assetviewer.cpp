@@ -134,6 +134,7 @@ void AssetViewer::initializeGL()
     node->setLocalPos(QVector3D(0, -5, 0)); // prevent z-fighting with the default plane reset (iKlsR)
     node->setName("ae98cx7u_floor");
     node->setPickable(false);
+	node->isBuiltIn = true;
     node->setFaceCullingMode(iris::FaceCullingMode::None);
     node->setShadowCastingEnabled(true);
     scene->rootNode->addChild(node);
