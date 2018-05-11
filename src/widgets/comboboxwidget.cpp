@@ -82,6 +82,11 @@ void ComboBoxWidget::setCurrentIndex(const int &index)
     ui->comboBox->setCurrentIndex(index);
 }
 
+QComboBox *ComboBoxWidget::getWidget() const
+{
+    return ui->comboBox;
+}
+
 void ComboBoxWidget::onDropDownTextChanged(const QString &text)
 {
     emit currentIndexChanged(text);
