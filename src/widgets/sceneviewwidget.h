@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include <QOpenGLWidget>
 #include <QSharedPointer>
 
+#include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h" 
+
 #include "irisgl/src/irisglfwd.h"
 #include "irisgl/src/math/intersectionhelper.h"
 
@@ -115,6 +117,16 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
 	iris::MeshPtr viewerMesh;
 public:
     iris::CameraNodePtr editorCam;
+
+    btRigidBody *activeRigidBody;
+
+    //testing
+    //class btTypedConstraint* m_pickedConstraint;
+    class btGeneric6DofConstraint* m_pickedConstraint;
+    int	m_savedState;
+    btVector3 m_oldPickingPos;
+    btVector3 m_hitPos;
+    btScalar m_oldPickingDist;
 
     ThumbnailGenerator* thumbGen;
 	QOpenGLDebugLogger* glDebugger;

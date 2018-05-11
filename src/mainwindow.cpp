@@ -126,6 +126,10 @@ For more information see the LICENSE file
 
 #include "irisgl/src/zip/zip.h"
 
+#include "irisgl/src/scenegraph/scene.h"
+#include "irisgl/src/physics/environment.h"
+#include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
+
 enum class VRButtonMode : int
 {
     Default = 0,
@@ -287,6 +291,28 @@ iris::ScenePtr MainWindow::createDefaultScene()
         QByteArray(),
         QByteArray()
     );
+
+    {
+        node->isPhysicsBody = true;
+
+        btVector3 pos(node->getLocalPos().x(), node->getLocalPos().y(), node->getLocalPos().z());
+
+        btTransform transform;
+        transform.setIdentity();
+        transform.setOrigin(pos);
+
+        auto mass = 0.f;
+
+        btCollisionShape *plane = new btStaticPlaneShape(btVector3(0, 1, 0), 0.f);
+        btMotionState *motion = new btDefaultMotionState(transform);
+
+        btRigidBody::btRigidBodyConstructionInfo info(mass, motion, plane);
+
+        btRigidBody *body = new btRigidBody(info);
+        body->setRestitution(0.5f);
+
+        scene->getPhysicsEnvironment()->addBodyToWorld(body, node->getGUID());
+    }
 
 	// if we reached this far, the project dir has already been created
 	// we can copy some default assets to each project here
@@ -2034,7 +2060,7 @@ void MainWindow::setupDockWidgets()
     sceneNodePropertiesDock = new QDockWidget("Properties", viewPort);
     sceneNodePropertiesDock->setObjectName(QStringLiteral("sceneNodePropertiesDock"));
     sceneNodePropertiesWidget = new SceneNodePropertiesWidget;
-	sceneNodePropertiesWidget->setSceneView(sceneView);
+    sceneNodePropertiesWidget->setSceneView(sceneView);
     sceneNodePropertiesWidget->setDatabase(db);
     sceneNodePropertiesWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     sceneNodePropertiesWidget->setObjectName(QStringLiteral("SceneNodePropertiesWidget"));
