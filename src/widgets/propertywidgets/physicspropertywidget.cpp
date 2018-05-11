@@ -1,11 +1,14 @@
 #include "physicspropertywidget.h"
 
+#include <QStandardItemModel>
+
 #include "irisgl/src/scenegraph/meshnode.h"
 #include "irisgl/src/scenegraph/scene.h"
 #include "irisgl/src/physics/environment.h"
 #include "../sceneviewwidget.h"
 #include "globals.h"
 #include "../checkboxwidget.h"
+#include "../hfloatsliderwidget.h"
 #include "../comboboxwidget.h"
 
 #include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
@@ -26,6 +29,9 @@ PhysicsPropertyWidget::PhysicsPropertyWidget()
 {
     isPhysicsObject = this->addCheckBox("Physics Object", false);
     isStaticObject = this->addCheckBox("Static", false);
+    isVisible = this->addCheckBox("Visible", true);
+    massValue = this->addFloatValueSlider("Object Mass", 0.f, 100.f, 1.f);
+    bouncinessValue = this->addFloatValueSlider("Bounciness", 0.f, 1.f, .1f);
 
     shapeSelector = this->addComboBox("Collision Shape");
     shapeSelector->addItem("None", static_cast<int>(Shapes::NONE));
@@ -35,8 +41,11 @@ PhysicsPropertyWidget::PhysicsPropertyWidget()
     shapeSelector->addItem("Convex Hull (fast, imprecise)", static_cast<int>(Shapes::CONVEX_HULL));
     shapeSelector->addItem("Triangle Mesh (slow, precise)", static_cast<int>(Shapes::TRIANGLE_MESH));
 
-    connect(isPhysicsObject, SIGNAL(valueChanged(bool)), SLOT(onPhysicsEnabled(bool)));
-    connect(isStaticObject, SIGNAL(valueChanged(bool)), SLOT(onStaticTypeChecked(bool)));
+    connect(isPhysicsObject, &CheckBoxWidget::valueChanged, this, &PhysicsPropertyWidget::onPhysicsEnabled);
+    connect(isStaticObject, &CheckBoxWidget::valueChanged, this, &PhysicsPropertyWidget::onStaticTypeChecked);
+    connect(isVisible, &CheckBoxWidget::valueChanged, this, &PhysicsPropertyWidget::onVisibilityChanged);
+    connect(massValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onMassChanged);
+    connect(bouncinessValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onBouncinessChanged);
     connect(shapeSelector, SIGNAL(currentIndexChanged(int)), this, SLOT(onPhysicsTypeChanged(int)));
 }
 
@@ -47,10 +56,24 @@ PhysicsPropertyWidget::~PhysicsPropertyWidget()
 
 void PhysicsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 {
-    if (!!sceneNode && sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
-        this->meshNode = sceneNode.staticCast<iris::MeshNode>();
+    if (!!sceneNode) {
+        this->sceneNode = sceneNode;
+
+        auto disabledItems = QVector<int>();
+        QStandardItemModel *model = qobject_cast<QStandardItemModel*>(shapeSelector->getWidget()->model());
+
+        if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Empty) {
+            disabledItems.append(static_cast<int>(Shapes::CONVEX_HULL));
+            disabledItems.append(static_cast<int>(Shapes::TRIANGLE_MESH));
+        }
+
+        for (int index = 0; index < shapeSelector->getWidget()->count(); ++index) {
+            model->item(index)->setEnabled(!disabledItems.contains(index));
+        }
+
+        isPhysicsObject->setValue(sceneNode->isPhysicsBody);
     } else {
-        this->meshNode.clear();
+        this->sceneNode.clear();
     }
 }
 
@@ -61,22 +84,22 @@ void PhysicsPropertyWidget::setSceneView(SceneViewWidget *sceneView)
 
 void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
 {
-    btRigidBody *currentBody = sceneView->getScene()->getPhysicsEnvironment()->hashBodies.value(meshNode->getGUID());
+    btRigidBody *currentBody = sceneView->getScene()->getPhysicsEnvironment()->hashBodies.value(sceneNode->getGUID());
     int itemData = shapeSelector->getItemData(index).toInt();
 
-    btVector3 pos(meshNode->getLocalPos().x(), meshNode->getLocalPos().y(), meshNode->getLocalPos().z());
+    btVector3 pos(sceneNode->getLocalPos().x(), sceneNode->getLocalPos().y(), sceneNode->getLocalPos().z());
     btRigidBody *body = Q_NULLPTR;
 
     btTransform transform;
     transform.setIdentity();
 
+    auto mass = massValue->getValue();
+    auto bounciness = bouncinessValue->getValue();
+
     switch (itemData) {
         case static_cast<int>(Shapes::NONE): {
-            transform.setFromOpenGLMatrix(meshNode->getLocalTransform().constData());
+            transform.setFromOpenGLMatrix(sceneNode->getLocalTransform().constData());
             transform.setOrigin(pos);
-
-            float mass = 0.0;
-            float rad = 1.0;
 
             btCollisionShape *shape = new btEmptyShape();
             btMotionState *motion = new btDefaultMotionState(transform);
@@ -95,19 +118,18 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
 
             transform.setOrigin(pos);
             
-            float mass = 2.0;
             float rad = 1.0;
             
             btCollisionShape * sphere = new btSphereShape(rad);
             btMotionState * motion = new btDefaultMotionState(transform);
 
-            btVector3 inertia;
+            btVector3 inertia(0, 0, 0);
             
             if (mass != 0.0) sphere->calculateLocalInertia(mass, inertia);
             
             btRigidBody::btRigidBodyConstructionInfo info(mass, motion, sphere, inertia);
             body = new btRigidBody(info);
-            body->setRestitution(1.f);
+            body->setRestitution(bounciness);
 
             break;
         }
@@ -116,15 +138,13 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
 
             transform.setOrigin(pos);
 
-            float mass = 0.0;
-
             btCollisionShape * plane = new btStaticPlaneShape(btVector3(0, 1, 0), 0.f);
             btMotionState * motion = new btDefaultMotionState(transform);
 
             btRigidBody::btRigidBodyConstructionInfo info(mass, motion, plane);
 
             body = new btRigidBody(info);
-            body->setRestitution(1.f);
+            body->setRestitution(bounciness);
 
             break;
         }
@@ -146,11 +166,12 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
             btRigidBody::btRigidBodyConstructionInfo info(mass, motion, cube, inertia);
 
             body = new btRigidBody(info);
-            body->setRestitution(.2f);
+            body->setRestitution(bounciness);
 
             break;
         }
 
+        // only show for mesh types!                                       
         case static_cast<int>(Shapes::CONVEX_HULL) : {
             break;
         }
@@ -159,6 +180,7 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
 
             transform.setOrigin(pos);
 
+            auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
             auto rot = meshNode->getGlobalRotation().toVector4D();
 
@@ -167,11 +189,7 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
             quat.setY(rot.y());
             quat.setZ(rot.z());
             quat.setW(rot.w());
-            //quat.setEulerZYX(rot.z(), rot.y(), rot.x()); //or quat.setEulerZYX depending on the ordering you want
             transform.setRotation(quat);
-
-
-            float mass = 2.0;
 
             // convert triangle mesh into convex shape
 
@@ -187,7 +205,7 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
             btRigidBody::btRigidBodyConstructionInfo info(mass, motion, shape, inertia);
 
             body = new btRigidBody(info);
-            //body->setRestitution(.2f);
+            body->setRestitution(bounciness);
 
             body->setCenterOfMassTransform(transform);
 
@@ -198,14 +216,14 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
     }
 
     sceneView->removeBodyFromWorld(currentBody);
-    sceneView->addBodyToWorld(body, meshNode->getGUID());
+    sceneView->addBodyToWorld(body, sceneNode->getGUID());
 }
 
 void PhysicsPropertyWidget::onPhysicsEnabled(bool value)
 {
     btTransform t;
     t.setIdentity();
-    t.setFromOpenGLMatrix(meshNode->getLocalTransform().constData());
+    t.setFromOpenGLMatrix(sceneNode->getLocalTransform().constData());
 
     float mass = 0.0;
 
@@ -219,8 +237,20 @@ void PhysicsPropertyWidget::onPhysicsEnabled(bool value)
     btRigidBody::btRigidBodyConstructionInfo info(mass, motion, shape, inertia);
     btRigidBody *body = new btRigidBody(info);
     
-    this->meshNode->isPhysicsBody = value;
-    this->sceneView->addBodyToWorld(body, meshNode->getGUID());
+    isPhysicsObject->setValue(this->sceneNode->isPhysicsBody = value);
+    this->sceneView->addBodyToWorld(body, sceneNode->getGUID());
+}
+
+void PhysicsPropertyWidget::onVisibilityChanged(bool value)
+{
+}
+
+void PhysicsPropertyWidget::onMassChanged(float value)
+{
+}
+
+void PhysicsPropertyWidget::onBouncinessChanged(float value)
+{
 }
 
 void PhysicsPropertyWidget::onStaticTypeChecked(bool value)

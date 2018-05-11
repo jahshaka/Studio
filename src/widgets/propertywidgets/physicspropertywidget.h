@@ -23,14 +23,20 @@ public:
 protected slots:
     void onPhysicsTypeChanged(int);
     void onPhysicsEnabled(bool);
+    void onVisibilityChanged(bool);
+    void onMassChanged(float);
+    void onBouncinessChanged(float);
     void onStaticTypeChecked(bool);
 
 private:
-    QSharedPointer<iris::MeshNode> meshNode;
+    iris::SceneNodePtr sceneNode;
     SceneViewWidget *sceneView;
 
     CheckBoxWidget* isPhysicsObject;
     CheckBoxWidget* isStaticObject;
+    CheckBoxWidget* isVisible;
+    HFloatSliderWidget *massValue;
+    HFloatSliderWidget *bouncinessValue;
     ComboBoxWidget *shapeSelector;
 };
 
