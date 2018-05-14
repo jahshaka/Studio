@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://i.imgur.com/j9nZTpo.png" width="400"></img>
+  <img src="https://i.imgur.com/4KbH9oV.png" width="400"></img>
 </div>
 
 <br>
@@ -16,7 +16,7 @@
 
 Jahshaka brings you the future of immersive digital content creation with the leading free and open source digital content creation suite.
 
-![](https://i.imgur.com/pQSsYXG.jpg)
+![](https://i.imgur.com/BYt24c1.jpg)
 
 ## Features:
  - View scenes in virtual reality via the Oculus Rift

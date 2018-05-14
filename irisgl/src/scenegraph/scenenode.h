@@ -225,6 +225,10 @@ public:
     QMatrix4x4 getGlobalTransform();
     QMatrix4x4 getLocalTransform();
 
+	void setGlobalPos(QVector3D pos);
+	void setGlobalRot(QQuaternion rot);
+	void setGlobalTransform(QMatrix4x4 transform);
+
     /*
      * This function does multiple things:
      * - Calculates the transformation of the objects

@@ -26,7 +26,7 @@ For more information see the LICENSE file
 // This class updates a meshnode with the values in a material definition
 // We handle special cases such as textures that need to be matched with guids
 // and colors that need to be converted from hex, the rest can be implicitly set
-void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, const QJsonObject definition)
+void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject definition)
 {
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         auto materialDefinition = definition.value("material").toObject();
@@ -89,8 +89,8 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, const QJsonObject
 
     QJsonArray children = definition["children"].toArray();
     // These will always be in sync since the definition is derived from the mesh
-    if (node->hasChildren()) {
-        for (int i = 0; i < node->children.count(); i++) {
+    if (!children.isEmpty()) {
+        for (int i = 0; i < children.count(); ++i) {
             updateNodeMaterial(node->children[i], children[i].toObject());
         }
     }
