@@ -259,8 +259,8 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
     QMenu menu;
 	menu.setStyleSheet(
 		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
-		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
+		"QMenu::item { background-color: #1A1A1A; padding: 6px 16px 6px 8px; margin: 0; }"
+		"QMenu::item:selected { background-color: #3498db; color: #EEE; }"
 		"QMenu::item : disabled { color: #555; }"
 	);
 
@@ -286,6 +286,12 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	action = new QAction(QIcon(), "Focus Camera", this);
 	connect(action, SIGNAL(triggered()), this, SLOT(focusOnNode()));
 	menu.addAction(action);
+
+    if (node->isPhysicsBody) {
+        QMenu *subMenu = menu.addMenu("Physics");
+        QMenu *constraintsMenu = subMenu->addMenu("Add Constraint");
+        //QAction *exportAsset = subMenu->addAction("Export Object");
+    }
 
 	if (node->isExportable()) {
 		QMenu *subMenu = menu.addMenu("Export");

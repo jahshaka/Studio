@@ -29,6 +29,33 @@ enum class SceneNodeType {
     Viewer
 };
 
+enum class PhysicsCollisionShape : int
+{
+    None,
+    Plane,
+    Sphere,
+    Cube,
+    ConvexHull,
+    TriangleMesh
+};
+
+struct PhysicsProperty
+{
+    PhysicsProperty() {
+        objectMass = 1.f;
+        objectRestitution = .1f;
+        isVisible = true;
+        isStatic = false;
+        shape = PhysicsCollisionShape::None;
+    }
+
+    float objectMass;
+    float objectRestitution;
+    bool isVisible;
+    bool isStatic;
+    PhysicsCollisionShape shape;
+};
+
 class Property;
 class Animation;
 class PropertyAnim;
@@ -67,6 +94,8 @@ public:
     bool removable;
     bool isBuiltIn;
 	bool isPhysicsBody;
+
+    PhysicsProperty physicsProperty;
 
     bool pickable;
     bool castShadow;

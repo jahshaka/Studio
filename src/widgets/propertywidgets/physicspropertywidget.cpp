@@ -14,16 +14,9 @@
 #include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
 #include "bullet3/src/BulletCollision/CollisionShapes/btConvexHullShape.h"
 #include "physics/physicshelper.h"
+#include "irisgl/src/scenegraph/scenenode.h"
 
-enum class Shapes : int
-{
-    NONE,
-    PLANE,
-    SPHERE,
-    CUBE,
-    CONVEX_HULL,
-    TRIANGLE_MESH
-};
+using namespace iris;
 
 PhysicsPropertyWidget::PhysicsPropertyWidget()
 {
@@ -34,12 +27,12 @@ PhysicsPropertyWidget::PhysicsPropertyWidget()
     bouncinessValue = this->addFloatValueSlider("Bounciness", 0.f, 1.f, .1f);
 
     shapeSelector = this->addComboBox("Collision Shape");
-    shapeSelector->addItem("None", static_cast<int>(Shapes::NONE));
-    shapeSelector->addItem("Plane", static_cast<int>(Shapes::PLANE));
-    shapeSelector->addItem("Sphere", static_cast<int>(Shapes::SPHERE));
-    shapeSelector->addItem("Cube", static_cast<int>(Shapes::CUBE));
-    shapeSelector->addItem("Convex Hull (fast, imprecise)", static_cast<int>(Shapes::CONVEX_HULL));
-    shapeSelector->addItem("Triangle Mesh (slow, precise)", static_cast<int>(Shapes::TRIANGLE_MESH));
+    shapeSelector->addItem("None", static_cast<int>(PhysicsCollisionShape::None));
+    shapeSelector->addItem("Plane", static_cast<int>(PhysicsCollisionShape::Plane));
+    shapeSelector->addItem("Sphere", static_cast<int>(PhysicsCollisionShape::Sphere));
+    shapeSelector->addItem("Cube", static_cast<int>(PhysicsCollisionShape::Cube));
+    shapeSelector->addItem("Convex Hull (fast, imprecise)", static_cast<int>(PhysicsCollisionShape::ConvexHull));
+    shapeSelector->addItem("Triangle Mesh (slow, precise)", static_cast<int>(PhysicsCollisionShape::TriangleMesh));
 
     connect(isPhysicsObject, &CheckBoxWidget::valueChanged, this, &PhysicsPropertyWidget::onPhysicsEnabled);
     connect(isStaticObject, &CheckBoxWidget::valueChanged, this, &PhysicsPropertyWidget::onStaticTypeChecked);
@@ -63,8 +56,8 @@ void PhysicsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
         QStandardItemModel *model = qobject_cast<QStandardItemModel*>(shapeSelector->getWidget()->model());
 
         if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Empty) {
-            disabledItems.append(static_cast<int>(Shapes::CONVEX_HULL));
-            disabledItems.append(static_cast<int>(Shapes::TRIANGLE_MESH));
+            disabledItems.append(static_cast<int>(PhysicsCollisionShape::ConvexHull));
+            disabledItems.append(static_cast<int>(PhysicsCollisionShape::TriangleMesh));
         }
 
         for (int index = 0; index < shapeSelector->getWidget()->count(); ++index) {
@@ -72,6 +65,13 @@ void PhysicsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
         }
 
         isPhysicsObject->setValue(sceneNode->isPhysicsBody);
+        isStaticObject->setValue(sceneNode->physicsProperty.isStatic);
+        isVisible->setValue(sceneNode->physicsProperty.isVisible);
+        massValue->setValue(sceneNode->physicsProperty.objectMass);
+        bouncinessValue->setValue(sceneNode->physicsProperty.objectRestitution);
+        // Note that the index matches the shape's enum value
+        shapeSelector->setCurrentIndex(static_cast<int>(sceneNode->physicsProperty.shape));
+
     } else {
         this->sceneNode.clear();
     }
@@ -97,7 +97,7 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
     auto bounciness = bouncinessValue->getValue();
 
     switch (itemData) {
-        case static_cast<int>(Shapes::NONE): {
+        case static_cast<int>(PhysicsCollisionShape::None): {
             transform.setFromOpenGLMatrix(sceneNode->getLocalTransform().constData());
             transform.setOrigin(pos);
 
@@ -114,7 +114,7 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
             break;
         }
 
-        case static_cast<int>(Shapes::SPHERE) : {
+        case static_cast<int>(PhysicsCollisionShape::Sphere) : {
 
             transform.setOrigin(pos);
             
@@ -134,7 +134,7 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
             break;
         }
 
-        case static_cast<int>(Shapes::PLANE) : {
+        case static_cast<int>(PhysicsCollisionShape::Plane) : {
 
             transform.setOrigin(pos);
 
@@ -149,7 +149,7 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
             break;
         }
 
-        case static_cast<int>(Shapes::CUBE) : {
+        case static_cast<int>(PhysicsCollisionShape::Cube) : {
 
             transform.setOrigin(pos);
 
@@ -172,11 +172,11 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
         }
 
         // only show for mesh types!                                       
-        case static_cast<int>(Shapes::CONVEX_HULL) : {
+        case static_cast<int>(PhysicsCollisionShape::ConvexHull) : {
             break;
         }
 
-        case static_cast<int>(Shapes::TRIANGLE_MESH) : {
+        case static_cast<int>(PhysicsCollisionShape::TriangleMesh) : {
 
             transform.setOrigin(pos);
 
@@ -215,6 +215,9 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
         default: break; // can't happen
     }
 
+    if (sceneNode) sceneNode->physicsProperty.shape = static_cast<PhysicsCollisionShape>(itemData);
+    shapeSelector->setCurrentIndex(index);
+
     sceneView->removeBodyFromWorld(currentBody);
     sceneView->addBodyToWorld(body, sceneNode->getGUID());
 }
@@ -243,16 +246,20 @@ void PhysicsPropertyWidget::onPhysicsEnabled(bool value)
 
 void PhysicsPropertyWidget::onVisibilityChanged(bool value)
 {
+    if (sceneNode) isVisible->setValue(sceneNode->physicsProperty.isVisible = value);
 }
 
 void PhysicsPropertyWidget::onMassChanged(float value)
 {
+    if (sceneNode) massValue->setValue(sceneNode->physicsProperty.objectMass = value);
 }
 
 void PhysicsPropertyWidget::onBouncinessChanged(float value)
 {
+    if (sceneNode) bouncinessValue->setValue(sceneNode->physicsProperty.objectRestitution = value);
 }
 
 void PhysicsPropertyWidget::onStaticTypeChecked(bool value)
 {
+    if (sceneNode) isStaticObject->setValue(sceneNode->physicsProperty.isStatic = value);
 }
