@@ -51,6 +51,9 @@ void ColorCircle::setValueInColor(QColor color)
 void ColorCircle::setInitialColor(QColor ic)
 {
     initialColor = ic;
+	setValueInColor(ic);
+	drawSmallCircle(ic);
+	emit positionChanged(ic);
 }
 
 void ColorCircle::paintEvent(QPaintEvent *event)

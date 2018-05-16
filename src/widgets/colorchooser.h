@@ -57,11 +57,11 @@ public:
         //setAttribute(Qt::WA_TranslucentBackground);
         desktop = new QDesktopWidget;
         setGeometry(desktop->width()/2 ,desktop->height()/2 ,3,3);
-		hide();
+		//hide();
     }
 
     void drawPixmap(QPixmap pm){
-		show();
+		//show();
        setGeometry(0,0,desktop->width(),desktop->height());
        pixmap = &pm;
        image = pixmap->toImage();
@@ -89,6 +89,8 @@ private:
 protected:
     void paintEvent(QPaintEvent *event){
         if(isBig){
+			if (!this->isVisible())
+				show();
         QPainter painter(this);
         painter.setRenderHint(QPainter::HighQualityAntialiasing);
         painter.drawPixmap(0,0,desktop->width(),desktop->height(),*pixmap);
@@ -129,6 +131,7 @@ class ColorChooser : public QWidget
 
 public:
     explicit ColorChooser(QWidget *parent = Q_NULLPTR);
+	void showWithColor(QColor color);
     ~ColorChooser();
 
 private slots:
@@ -136,6 +139,7 @@ private slots:
     void changeBackgroundColorOfDisplayWidgetRgb();
     void configureDisplay();
     void pickerMode(bool ye);
+	
 
 signals:
 	void onColorChanged(QColor c);

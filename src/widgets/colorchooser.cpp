@@ -248,7 +248,7 @@ void ColorChooser::setConnections()
         stackHolder->setCurrentIndex(0);
     });
     connect(hsv, &QPushButton::pressed, [this](){
-        if(picker->isChecked())
+        if(picker->isChecked()) 
             exitPickerMode();
         stackHolder->setCurrentIndex(1);
     });
@@ -259,10 +259,12 @@ void ColorChooser::setConnections()
     });
     connect(cancel, &QPushButton::pressed, [this]() {
 		emit onColorChanged(circlebg->initialColor);
+		cbg->hide();
 		hide();
     });
     connect(select, &QPushButton::pressed, [this]() {
 		emit onColorChanged(circlebg->currentColor);
+		cbg->hide();
 		hide();
     });
 
@@ -360,10 +362,10 @@ void ColorChooser::setColorBackground()
 void ColorChooser::setStyleForApplication()
 {
     setStyle(new CustomStyle1(this->style()));
-    setStyleSheet( " QSlider::handle { height: 0px; width:1px; margin: -2px 0px; background: rgba(250,100,100,0.9);}"
+ /*   setStyleSheet( " QSlider::handle { height: 4px; width:4px; margin: -2px 0px; background: rgba(250,251,251,0.9);}"
                    " QSlider::groove { border: 1px solid black; margin: 2px 0px;}"
-                   " QSlider::add-page {background: rgba(90,90,90,1); border-radius: 3px;}"
-                   " QSlider::sub-page {background: rgba(0,0,0,1); border-radius: 3px;}"
+                   " QSlider::add-page {background: rgba(52,151,219,0); border-radius: 3px;}"
+                   " QSlider::sub-page {background: rgba(52,151,219,0.9); border-radius: 3px;}"
                    "QSlider::groove:vertical{background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,stop: 0 white, stop: 1 black); border-radius: 5px;}"
                    " QSlider::handle:vertical {height: 1px; width:1px; margin: -2px 0px; background: rgba(250,100,100,0.9); }"
                    " QSlider::add-page:vertical {background: rgba(0,0,0,0); border-radius: 3px;}"
@@ -372,7 +374,17 @@ void ColorChooser::setStyleForApplication()
                    "QLineEdit {border: 1px solid rgba(0,0,0,.4); color: rgba(255,255,255,.8); }"
                    "QPushButton{ background: rgba(60,60,60,1); color: rgba(255,255,255,.9); padding: 2px; border: 1px solid rgba(0,0,0,.4); border-radius:2px; }"
                    "QPushButton::checked {background: rgba(45,45,45,.9); }"
-                   "QAbstractSpinBox { color:rgba(255,255,255,.8); }");
+                   "QAbstractSpinBox { color:rgba(255,255,255,.8); } QAbstractSpinBox QPushButton{ background: rgba(0,0,0,0); border : 1px solid rgba(0,0,0,0); }");*/
+
+	setStyleSheet("QWidget#floater {background: #212121; }"
+		"QSlider::sub-page {	border: 0px solid transparent;	height: 2px;	background: #3498db;	margin: 2px 0;}"
+		"QSlider::groove:horizontal {    border: 0px solid transparent;    height: 4px;   background: #1e1e1e;   margin: 2px 0;}"
+		"QSlider::handle:horizontal {    background-color: #CCC;    width: 12px;    border: 1px solid #1e1e1e;    margin: -5px 0px;   border-radius:7px;}"
+		"QSlider::handle:horizontal:pressed {    background-color: #AAA;    width: 12px;   border: 1px solid #1e1e1e;    margin: -5px 0px;    border-radius: 7px;}"
+	//	"QDoubleSpinBox { border-radius: 1px;	padding: 7px;	background: #292929;}"
+		"QAbstractSpinBox { color:rgba(255,255,255,.8); } QAbstractSpinBox QPushButton{ background: rgba(0,0,0,0); border : 1px solid rgba(0,0,0,0); }"
+		"QWidget{ background: rgba(50,50,50,1);border: 1px solid rgba(0,0,0,0); padding:0px; spacing : 0px;}"
+		"QSlider::handle:horizontal:disabled {    background-color: #bbbbbb;    width: 12px;    border: 0px solid transparent;    margin: -1px -1px;    border-radius: 4px;}");
 
 }
 
@@ -404,6 +416,13 @@ void ColorChooser::pickerMode(bool ye)
     }else{
         exitPickerMode();
     }
+}
+
+void ColorChooser::showWithColor(QColor color)
+{
+	circlebg->setInitialColor(color);
+	cbg->show();
+	show();
 }
 
 void ColorChooser::mouseMoveEvent(QMouseEvent *event)
