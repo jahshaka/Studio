@@ -50,6 +50,9 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 	ui->sceneTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
 	ui->sceneTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     ui->sceneTree->viewport()->installEventFilter(this);
+    ui->sceneTree->setItemDelegate(new TreeItemDelegate(this));
+
+    connect(ui->sceneTree->itemDelegate(), &QAbstractItemDelegate::commitData, this, &SceneHierarchyWidget::OnLstItemsCommitData);
 
     ui->sceneTree->setAttribute(Qt::WA_MacShowFocusRect, false);
     ui->sceneTree->viewport()->setAttribute(Qt::WA_MacShowFocusRect, false);
@@ -92,6 +95,7 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 		"QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }"
 		"QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }"
 		"QTreeWidget::item { padding: 5px 0; }"
+        "QTreeWidget QLineEdit { background-color: #404040; selection-background-color: #777; border: 0; }"
 		"QTreeWidget::item:hover { background: #303030; padding: 5px 0; }"
 	);
 }
@@ -263,7 +267,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
     QAction* action;
 
     action = new QAction(QIcon(), "Rename", this);
-    connect(action, SIGNAL(triggered()), this, SLOT(renameNode()));
+    connect(action, &QAction::triggered, this, [&]() { ui->sceneTree->editItem(item); });
     menu.addAction(action);
 
     // The world node isn't removable
@@ -328,11 +332,6 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	}
 
     menu.exec(ui->sceneTree->mapToGlobal(pos));
-}
-
-void SceneHierarchyWidget::renameNode()
-{
-    mainWindow->renameNode();
 }
 
 void SceneHierarchyWidget::deleteNode()
@@ -425,6 +424,7 @@ void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
 QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 {
     auto childTreeItem = new QTreeWidgetItem();
+    childTreeItem->setFlags(childTreeItem->flags() | Qt::ItemIsEditable);
     childTreeItem->setText(0, node->getName());
     childTreeItem->setData(0, Qt::UserRole, QVariant::fromValue(node->getNodeId()));
 	childTreeItem->setData(1, Qt::UserRole, QVariant::fromValue(node->isVisible()));
@@ -510,6 +510,12 @@ void SceneHierarchyWidget::removeChild(iris::SceneNodePtr childNode)
     // remove from lists
     nodeList.remove(childNode->getNodeId());
     treeItemList.remove(childNode->getNodeId());
+}
+
+void SceneHierarchyWidget::OnLstItemsCommitData(QWidget *listItem)
+{
+    QString newName = qobject_cast<QLineEdit*>(listItem)->text();
+    if (!newName.isEmpty() && selectedNode) selectedNode->setName(newName);
 }
 
 SceneHierarchyWidget::~SceneHierarchyWidget()
