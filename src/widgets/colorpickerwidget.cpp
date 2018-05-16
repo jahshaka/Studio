@@ -15,14 +15,18 @@ For more information see the LICENSE file
 #include <QPainter>
 #include <QDebug>
 
+#include "colorchooser.h"
+
 ColorPickerWidget::ColorPickerWidget(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::ColorPickerWidget)
 {
     ui->setupUi(this);
-    dialog = new QColorDialog();
-    QObject::connect(dialog,SIGNAL(currentColorChanged(QColor)),this,SLOT(colorChanged(QColor)));
-    QObject::connect(dialog,SIGNAL(colorSelected(QColor)),this,SLOT(setColor(QColor)));
+    //dialog = new QColorDialog();
+    //QObject::connect(dialog,SIGNAL(currentColorChanged(QColor)),this,SLOT(colorChanged(QColor)));
+    //QObject::connect(dialog,SIGNAL(colorSelected(QColor)),this,SLOT(setColor(QColor)));
+
+	chooser = new ColorChooser();
 
     color = QColor::fromRgb(255,255,255);
 }
@@ -74,11 +78,14 @@ void ColorPickerWidget::colorChanged(QColor col)
 
 void ColorPickerWidget::mouseReleaseEvent(QMouseEvent* event)
 {
-    Q_UNUSED(event);
-    dialog->setCurrentColor(color);
-    dialog->exec();
-    //dialog->show();
+    //Q_UNUSED(event);
+    //dialog->setCurrentColor(color);
+    //dialog->exec();
+    ////dialog->show();
+    //this->repaint();
+	chooser->show();
     this->repaint();
+
 }
 
 void ColorPickerWidget::mousePressEvent(QMouseEvent* event)

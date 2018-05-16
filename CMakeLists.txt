@@ -30,6 +30,8 @@ set(SRCS
     src/mainwindow.cpp 
     src/widgets/colorvaluewidget.cpp 
     src/widgets/colorpickerwidget.cpp 
+	src/widgets/colorchooser.cpp
+	src/widgets/colorcircle.cpp
     src/dialogs/preferencesdialog.cpp 
     src/dialogs/aboutdialog.cpp 
     src/dialogs/preferences/worldsettings.cpp 
@@ -138,6 +140,8 @@ set(HEADERS
     src/dialogs/renamelayerdialog.h 
     src/widgets/colorvaluewidget.h 
     src/widgets/colorpickerwidget.h 
+	src/widgets/colorchooser.h
+	src/widgets/colorcircle.h
     src/helpers/settingshelper.h 
     src/dialogs/preferencesdialog.h 
     src/dialogs/aboutdialog.h 
