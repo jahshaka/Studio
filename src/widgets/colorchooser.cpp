@@ -26,6 +26,7 @@ ColorChooser::ColorChooser(QWidget *parent) :
     gWidth = geometry().width();
     gHeight = geometry().height();
     cbg = new CustomBackground(this);
+	
 
     configureDisplay();
     setColorBackground();
@@ -45,14 +46,10 @@ ColorChooser::~ColorChooser()
 
 void ColorChooser::changeBackgroundColorOfDisplayWidgetHsv()
 {
-
     color.setHsv(hSpin->value(),sSpin->value(), vSpin->value());
-
     circlebg->drawSmallCircle(color);
     setValueInColor();
     setRgbSliders(color);
-
-
 }
 void ColorChooser::changeBackgroundColorOfDisplayWidgetRgb()
 {
@@ -261,9 +258,11 @@ void ColorChooser::setConnections()
         stackHolder->setCurrentIndex(2);
     });
     connect(cancel, &QPushButton::pressed, [this]() {
+		emit onColorChanged(circlebg->initialColor);
 		hide();
     });
     connect(select, &QPushButton::pressed, [this]() {
+		emit onColorChanged(circlebg->currentColor);
 		hide();
     });
 
@@ -512,6 +511,7 @@ void ColorChooser::setValueInColor()
 
 
     circlebg->setValueInColor(color);
+	emit onColorChanged(color);
 }
 
 

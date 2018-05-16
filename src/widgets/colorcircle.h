@@ -8,6 +8,8 @@ class ColorCircle : public QWidget
 {
     Q_OBJECT
 public:
+	QColor color, initialColor, currentColor;
+
     explicit ColorCircle(QWidget *parent = nullptr, QColor ic = nullptr);
     void drawSmallCircle(QColor color);
     void updateColor(int h, int s);
@@ -27,7 +29,7 @@ private:
     int radius, v, alpha=255;
     qreal s;
     QPoint centerPoint;
-    QColor color, initialColor, currentColor;
+    
     QPushButton *resetButton, *currentColorButton;
 
     QPoint pos;

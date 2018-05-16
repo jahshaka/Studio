@@ -57,10 +57,11 @@ public:
         //setAttribute(Qt::WA_TranslucentBackground);
         desktop = new QDesktopWidget;
         setGeometry(desktop->width()/2 ,desktop->height()/2 ,3,3);
-        show();
+		hide();
     }
 
     void drawPixmap(QPixmap pm){
+		show();
        setGeometry(0,0,desktop->width(),desktop->height());
        pixmap = &pm;
        image = pixmap->toImage();
@@ -74,6 +75,7 @@ public:
         isBig=false;
 
         emit finished(isBig);
+		hide();
 
    }
 

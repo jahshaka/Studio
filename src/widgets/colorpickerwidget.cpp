@@ -26,7 +26,10 @@ ColorPickerWidget::ColorPickerWidget(QWidget *parent) :
     //QObject::connect(dialog,SIGNAL(currentColorChanged(QColor)),this,SLOT(colorChanged(QColor)));
     //QObject::connect(dialog,SIGNAL(colorSelected(QColor)),this,SLOT(setColor(QColor)));
 
+
+
 	chooser = new ColorChooser();
+	connect(chooser, SIGNAL(onColorChanged(QColor)), this, SLOT(colorChanged(QColor)));
 
     color = QColor::fromRgb(255,255,255);
 }
@@ -68,6 +71,8 @@ void ColorPickerWidget::setColor(QColor col)
 
 void ColorPickerWidget::colorChanged(QColor col)
 {
+	qDebug() << "color changed";
+
     if(color!=col)
     {
         color = col;
