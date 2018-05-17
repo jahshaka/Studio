@@ -1881,6 +1881,8 @@ void MainWindow::deleteNode()
 {
     if (!!activeSceneNode) {
         // TODO - do a deps check here as well
+        // TODO - gray/disable delete button if a node isn't removable
+        if (activeSceneNode->isRootNode() || !activeSceneNode->isRemovable()) return;
         if (activeSceneNode->isBuiltIn) db->deleteAsset(activeSceneNode->getGUID());
         auto cmd = new DeleteSceneNodeCommand(activeSceneNode->parent, activeSceneNode);
         UiManager::pushUndoStack(cmd);
