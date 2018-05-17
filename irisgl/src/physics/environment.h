@@ -12,7 +12,7 @@
 #include "../irisgl/src/graphics/utils/linemeshbuilder.h"
 #include "../irisgl/src/graphics/renderlist.h"
 #include "../irisgl/src/graphics/renderitem.h"
-#include "../irisgl/src/materials/colormaterial.h"
+#include "../irisgl/src/materials/linecolormaterial.h"
 
 class btTypedConstraint;
 
@@ -23,15 +23,10 @@ class GLDebugDrawer : public btIDebugDraw
 {
     int m_debugMode;
     iris::RenderList *renderList;
-    iris::MaterialPtr lineMat;
-
     iris::LineMeshBuilder *builder;
 
 public:
-    GLDebugDrawer() {
-        lineMat = iris::ColorMaterial::create();
-        lineMat.staticCast<iris::ColorMaterial>()->setColor(QColor(10, 255, 20));
-    }
+    GLDebugDrawer() {}
 
     virtual ~GLDebugDrawer() {}
 
@@ -40,16 +35,29 @@ public:
     }
 
     virtual void   drawLine(const btVector3& from, const btVector3& to, const btVector3& fromColor, const btVector3& toColor) {
-        builder->addLine(QVector3D(from.x(), from.y(), from.z()), QVector3D(to.x(), to.y(), to.z()));
+        builder->addLine(
+            QVector3D(from.x(), from.y(), from.z()),
+            QColor(fromColor.getX() * 255.f, fromColor.getY() * 255.f, fromColor.getZ() * 255.f),
+            QVector3D(to.x(), to.y(), to.z()),
+            QColor(toColor.getX() * 255.f, toColor.getY() * 255.f, toColor.getZ() * 255.f)
+        );
     }
 
     virtual void   drawLine(const btVector3& from, const btVector3& to, const btVector3& color)
     {
-        builder->addLine(QVector3D(from.x(), from.y(), from.z()), QVector3D(to.x(), to.y(), to.z()));
+        builder->addLine(
+            QVector3D(from.x(), from.y(), from.z()),
+            QColor(color.getX() * 255.f, color.getY() * 255.f, color.getZ() * 255.f),
+            QVector3D(to.x(), to.y(), to.z()),
+            QColor(color.getX() * 255.f, color.getY() * 255.f, color.getZ() * 255.f)
+        );
     }
 
     virtual void   drawSphere(const btVector3& p, btScalar radius, const btVector3& color) {}
-    virtual void   drawTriangle(const btVector3& a, const btVector3& b, const btVector3& c, const btVector3& color, btScalar alpha) {}
+    virtual void   drawTriangle(const btVector3& a, const btVector3& b, const btVector3& c, const btVector3& color, btScalar alpha)
+    {
+
+    }
     virtual void   drawContactPoint(const btVector3& PointOnB, const btVector3& normalOnB, btScalar distance, int lifeTime, const btVector3& color) {}
     virtual void   reportErrorWarning(const char* warningString) {}
     virtual void   draw3dText(const btVector3& location, const char* textString) {
@@ -72,6 +80,7 @@ public:
 
 	void addBodyToWorld(btRigidBody *body, const QString &guid);
 	void removeBodyFromWorld(btRigidBody *body);
+	void removeBodyFromWorld(const QString &guid);
 
     void addConstraintToWorld(btTypedConstraint *constraint, bool disableCollisions = true);
     void removeConstraintFromWorld(btTypedConstraint *constraint);

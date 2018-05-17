@@ -2,6 +2,7 @@
 #define PHYSICS_HELPER
 
 #include "bullet3/src/BulletCollision/CollisionShapes/btConvexTriangleMeshShape.h"
+#include "bullet3/src/BulletCollision/CollisionShapes/btConvexHullShape.h"
 #include "bullet3/src/BulletCollision/CollisionShapes/btTriangleMesh.h"
 
 #include "graphics/mesh.h"
@@ -15,6 +16,7 @@ class PhysicsHelper
 public:
     PhysicsHelper() = default;
     static btTriangleMesh *btTriangleMeshShapeFromMesh(iris::MeshPtr mesh);
+    static btConvexHullShape *btConvexHullShapeFromMesh(iris::MeshPtr mesh);
     static btVector3 btVector3FromQVector3D(QVector3D vector);
 };
 

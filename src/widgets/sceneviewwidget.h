@@ -166,6 +166,7 @@ public:
 
     void addBodyToWorld(btRigidBody *body, const QString &guid);
     void removeBodyFromWorld(btRigidBody *body);
+    void removeBodyFromWorld(const QString &guid);
 
     void setGizmoLoc();
     void setGizmoRot();

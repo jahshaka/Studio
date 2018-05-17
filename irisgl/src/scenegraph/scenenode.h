@@ -39,11 +39,21 @@ enum class PhysicsCollisionShape : int
     TriangleMesh
 };
 
+enum class PhysicsConstraintType : int
+{
+    None,
+    Ball,
+    Dof6
+};
+
 struct PhysicsProperty
 {
+    // Fairly sane defaults...
     PhysicsProperty() {
         objectMass = 1.f;
         objectRestitution = .1f;
+        objectDamping = .1f;
+        objectCollisionMargin = .1f;
         isVisible = true;
         isStatic = false;
         shape = PhysicsCollisionShape::None;
@@ -51,9 +61,13 @@ struct PhysicsProperty
 
     float objectMass;
     float objectRestitution;
+    float objectDamping;
+    float objectCollisionMargin;
     bool isVisible;
     bool isStatic;
     PhysicsCollisionShape shape;
+    QVector3D centerOfMass;
+    QVector3D pivotPoint;
 };
 
 class Property;

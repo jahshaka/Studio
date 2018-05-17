@@ -18,17 +18,20 @@ Environment::Environment(iris::RenderList *debugList)
     hashBodies.reserve(512); // also for now
 
     // TODO - use constants file and make this changeable
-    world->setGravity(btVector3(0, -10, 0)); 
+    world->setGravity(btVector3(0, -10.f, 0)); 
 
     debugRenderList = debugList;
-    lineMat = iris::ColorMaterial::create();
-    lineMat.staticCast<iris::ColorMaterial>()->setColor(QColor(10, 255, 20));
+    lineMat = iris::LineColorMaterial::create();
+    lineMat.staticCast<iris::LineColorMaterial>()->setDepthBias(10.f);
 
     debugDrawer = new GLDebugDrawer;
     debugDrawer->setDebugMode(
+        GLDebugDrawer::DBG_DrawAabb |
         GLDebugDrawer::DBG_DrawWireframe |
         GLDebugDrawer::DBG_DrawConstraints |
-        GLDebugDrawer::DBG_DrawContactPoints
+        GLDebugDrawer::DBG_DrawContactPoints |
+        GLDebugDrawer::DBG_DrawConstraintLimits |
+        GLDebugDrawer::DBG_DrawFrames
     );
     world->setDebugDrawer(debugDrawer);
 }
@@ -49,13 +52,29 @@ void Environment::addBodyToWorld(btRigidBody *body, const QString &guid)
     hashBodies.insert(guid, body);
 
     qDebug() << "BODY ADDED TO WORLD " << guid;
+    qDebug() << "There are " << hashBodies.size() << " bodies ";
 } 
 
 void Environment::removeBodyFromWorld(btRigidBody *body)
 {
-     world->removeRigidBody(body);
-     //bodies.removeOne(body);
-     hashBodies.remove(hashBodies.key(body)); // ???
+    if (!hashBodies.contains(hashBodies.key(body))) return;
+
+    world->removeRigidBody(body);
+    hashBodies.remove(hashBodies.key(body)); // ???
+
+    qDebug() << "BODY REMOVED TO WORLD " ;
+    qDebug() << "There are " << hashBodies.size() << " bodies ";
+}
+
+void Environment::removeBodyFromWorld(const QString &guid)
+{
+    if (!hashBodies.contains(guid)) return;
+
+    world->removeRigidBody(hashBodies.value(guid));
+    hashBodies.remove(guid);
+
+    qDebug() << "BODY REMOVED TO WORLD ";
+    qDebug() << "There are " << hashBodies.size() << " bodies ";
 }
 
 void Environment::addConstraintToWorld(btTypedConstraint *constraint, bool disableCollisions)

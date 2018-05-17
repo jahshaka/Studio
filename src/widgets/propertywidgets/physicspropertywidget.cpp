@@ -13,6 +13,7 @@
 
 #include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
 #include "bullet3/src/BulletCollision/CollisionShapes/btConvexHullShape.h"
+#include "bullet3/src/BulletCollision/CollisionShapes/btShapeHull.h"
 #include "physics/physicshelper.h"
 #include "irisgl/src/scenegraph/scenenode.h"
 
@@ -31,8 +32,8 @@ PhysicsPropertyWidget::PhysicsPropertyWidget()
     shapeSelector->addItem("Plane", static_cast<int>(PhysicsCollisionShape::Plane));
     shapeSelector->addItem("Sphere", static_cast<int>(PhysicsCollisionShape::Sphere));
     shapeSelector->addItem("Cube", static_cast<int>(PhysicsCollisionShape::Cube));
-    shapeSelector->addItem("Convex Hull (fast, imprecise)", static_cast<int>(PhysicsCollisionShape::ConvexHull));
-    shapeSelector->addItem("Triangle Mesh (slow, precise)", static_cast<int>(PhysicsCollisionShape::TriangleMesh));
+    shapeSelector->addItem("Convex Hull", static_cast<int>(PhysicsCollisionShape::ConvexHull));
+    shapeSelector->addItem("Triangle Mesh", static_cast<int>(PhysicsCollisionShape::TriangleMesh));
 
     connect(isPhysicsObject, &CheckBoxWidget::valueChanged, this, &PhysicsPropertyWidget::onPhysicsEnabled);
     connect(isStaticObject, &CheckBoxWidget::valueChanged, this, &PhysicsPropertyWidget::onStaticTypeChecked);
@@ -85,6 +86,7 @@ void PhysicsPropertyWidget::setSceneView(SceneViewWidget *sceneView)
 void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
 {
     btRigidBody *currentBody = sceneView->getScene()->getPhysicsEnvironment()->hashBodies.value(sceneNode->getGUID());
+
     int itemData = shapeSelector->getItemData(index).toInt();
 
     btVector3 pos(sceneNode->getLocalPos().x(), sceneNode->getLocalPos().y(), sceneNode->getLocalPos().z());
@@ -93,23 +95,35 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
     btTransform transform;
     transform.setIdentity();
 
+    auto meshNode = sceneNode.staticCast<iris::MeshNode>();
+    auto rot = meshNode->getGlobalRotation().toVector4D();
+
+    btQuaternion quat;
+    quat.setX(rot.x());
+    quat.setY(rot.y());
+    quat.setZ(rot.z());
+    quat.setW(rot.w());
+
     auto mass = massValue->getValue();
     auto bounciness = bouncinessValue->getValue();
+    btCollisionShape *shape = Q_NULLPTR;
+    btVector3 inertia(0, 0, 0);
+    btMotionState *motionState = Q_NULLPTR;
 
     switch (itemData) {
         case static_cast<int>(PhysicsCollisionShape::None): {
             transform.setFromOpenGLMatrix(sceneNode->getLocalTransform().constData());
             transform.setOrigin(pos);
+            transform.setRotation(quat);
 
-            btCollisionShape *shape = new btEmptyShape();
-            btMotionState *motion = new btDefaultMotionState(transform);
+            shape = new btEmptyShape();
+            motionState = new btDefaultMotionState(transform);
             
-            btVector3 inertia(0, 0, 0);
-
             if (mass != 0.0) shape->calculateLocalInertia(mass, inertia);
             
-            btRigidBody::btRigidBodyConstructionInfo info(mass, motion, shape);
+            btRigidBody::btRigidBodyConstructionInfo info(mass, motionState, shape);
             body = new btRigidBody(info);
+            body->setCenterOfMassTransform(transform);
 
             break;
         }
@@ -117,19 +131,21 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
         case static_cast<int>(PhysicsCollisionShape::Sphere) : {
 
             transform.setOrigin(pos);
-            
+            transform.setRotation(quat);
+
             float rad = 1.0;
             
-            btCollisionShape * sphere = new btSphereShape(rad);
-            btMotionState * motion = new btDefaultMotionState(transform);
+            shape = new btSphereShape(rad);
+            motionState = new btDefaultMotionState(transform);
 
             btVector3 inertia(0, 0, 0);
             
-            if (mass != 0.0) sphere->calculateLocalInertia(mass, inertia);
+            if (mass != 0.0) shape->calculateLocalInertia(mass, inertia);
             
-            btRigidBody::btRigidBodyConstructionInfo info(mass, motion, sphere, inertia);
+            btRigidBody::btRigidBodyConstructionInfo info(mass, motionState, shape, inertia);
             body = new btRigidBody(info);
             body->setRestitution(bounciness);
+            body->setCenterOfMassTransform(transform);
 
             break;
         }
@@ -137,14 +153,16 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
         case static_cast<int>(PhysicsCollisionShape::Plane) : {
 
             transform.setOrigin(pos);
+            transform.setRotation(quat);
 
-            btCollisionShape * plane = new btStaticPlaneShape(btVector3(0, 1, 0), 0.f);
-            btMotionState * motion = new btDefaultMotionState(transform);
+            shape = new btStaticPlaneShape(btVector3(0, 1, 0), 0.f);
+            motionState = new btDefaultMotionState(transform);
 
-            btRigidBody::btRigidBodyConstructionInfo info(mass, motion, plane);
+            btRigidBody::btRigidBodyConstructionInfo info(mass, motionState, shape);
 
             body = new btRigidBody(info);
             body->setRestitution(bounciness);
+            body->setCenterOfMassTransform(transform);
 
             break;
         }
@@ -152,86 +170,124 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
         case static_cast<int>(PhysicsCollisionShape::Cube) : {
 
             transform.setOrigin(pos);
+            transform.setRotation(quat);
 
-            float mass = 0.0;
-            float rad = 1.0;
+            shape = new btBoxShape(btVector3(1, 1, 1));
+            motionState = new btDefaultMotionState(transform);
 
-            btCollisionShape *cube = new btBoxShape(btVector3(1, 1, 1));
-            btMotionState *motion = new btDefaultMotionState(transform);
+            if (mass != 0.0) shape->calculateLocalInertia(mass, inertia);
 
-            btVector3 inertia;
-
-            if (mass != 0.0) cube->calculateLocalInertia(mass, inertia);
-
-            btRigidBody::btRigidBodyConstructionInfo info(mass, motion, cube, inertia);
+            btRigidBody::btRigidBodyConstructionInfo info(mass, motionState, shape, inertia);
 
             body = new btRigidBody(info);
             body->setRestitution(bounciness);
+            body->setCenterOfMassTransform(transform);
 
             break;
         }
 
         // only show for mesh types!                                       
         case static_cast<int>(PhysicsCollisionShape::ConvexHull) : {
+            transform.setOrigin(pos);
+            transform.setRotation(quat);
+
+            // https://www.gamedev.net/forums/topic/691208-build-a-convex-hull-from-a-given-mesh-in-bullet/
+            // https://pybullet.org/Bullet/phpBB3/viewtopic.php?t=11342
+            auto tmpShape = iris::PhysicsHelper::btConvexHullShapeFromMesh(meshNode->getMesh());
+            tmpShape->setMargin(0); // bullet bug still?
+
+            // https://www.gamedev.net/forums/topic/602994-glmmodel-to-bullet-shape-btconvextrianglemeshshape/
+            // alternatively instead of building a hull manually with points, use the triangle mesh
+            // auto triMesh = iris::PhysicsHelper::btTriangleMeshShapeFromMesh(meshNode->getMesh());
+            // btConvexShape *tmpshape = new btConvexTriangleMeshShape(triMesh);
+            // btShapeHull *hull = new btShapeHull(tmpshape);
+            // btScalar margin = tmpshape->getMargin();
+
+            btShapeHull *hull = new btShapeHull(static_cast<btConvexHullShape*>(tmpShape));
+            hull->buildHull(0);
+
+            btConvexHullShape* pConvexHullShape = new btConvexHullShape(
+                (const btScalar*) hull->getVertexPointer(), hull->numVertices(), sizeof(btVector3));
+            shape = pConvexHullShape;
+            delete hull;
+            delete tmpShape;
+
+            motionState = new btDefaultMotionState(transform);
+
+            if (mass != 0.0) shape->calculateLocalInertia(mass, inertia);
+
+            btRigidBody::btRigidBodyConstructionInfo info(mass, motionState, shape, inertia);
+
+            body = new btRigidBody(info);
+            body->setRestitution(bounciness);
+            body->setCenterOfMassTransform(transform);
+
             break;
         }
 
         case static_cast<int>(PhysicsCollisionShape::TriangleMesh) : {
 
             transform.setOrigin(pos);
-
-            auto meshNode = sceneNode.staticCast<iris::MeshNode>();
-
-            auto rot = meshNode->getGlobalRotation().toVector4D();
-
-            btQuaternion quat;
-            quat.setX(rot.x());
-            quat.setY(rot.y());
-            quat.setZ(rot.z());
-            quat.setW(rot.w());
             transform.setRotation(quat);
 
             // convert triangle mesh into convex shape
 
             auto triMesh = iris::PhysicsHelper::btTriangleMeshShapeFromMesh(meshNode->getMesh());
 
-            auto shape = new btConvexTriangleMeshShape(triMesh, true);
-            btMotionState *motion = new btDefaultMotionState(transform);
-
-            btVector3 inertia(0, 0, 0);
+            shape = new btConvexTriangleMeshShape(triMesh, true);
+            motionState = new btDefaultMotionState(transform);
 
             if (mass != 0.0) shape->calculateLocalInertia(mass, inertia);
 
-            btRigidBody::btRigidBodyConstructionInfo info(mass, motion, shape, inertia);
+            btRigidBody::btRigidBodyConstructionInfo info(mass, motionState, shape, inertia);
 
             body = new btRigidBody(info);
             body->setRestitution(bounciness);
-
             body->setCenterOfMassTransform(transform);
 
             break;
         }
 
-        default: break; // can't happen
+        default: break;
     }
 
     if (sceneNode) sceneNode->physicsProperty.shape = static_cast<PhysicsCollisionShape>(itemData);
     shapeSelector->setCurrentIndex(index);
 
-    sceneView->removeBodyFromWorld(currentBody);
+    // Can I change shape of a rigid body after it created in Bullet3D?
+    // https://gamedev.stackexchange.com/a/11956/16598
+    //if (currentBody) {
+    //    currentBody->setMotionState(motionState);
+    //    currentBody->setMassProps(mass, inertia);
+    //    shape->calculateLocalInertia(mass, inertia);
+    //    currentBody->setCollisionShape(shape);
+    //    currentBody->setRestitution(bounciness);
+    //    currentBody->setCenterOfMassTransform(transform);
+    //    currentBody->updateInertiaTensor();
+    //}
+    sceneView->removeBodyFromWorld(sceneNode->getGUID());
     sceneView->addBodyToWorld(body, sceneNode->getGUID());
 }
 
 void PhysicsPropertyWidget::onPhysicsEnabled(bool value)
 {
-    btTransform t;
-    t.setIdentity();
-    t.setFromOpenGLMatrix(sceneNode->getLocalTransform().constData());
+    isPhysicsObject->setValue(this->sceneNode->isPhysicsBody = value);
+
+    if (!value) {
+        this->sceneView->removeBodyFromWorld(sceneNode->getGUID());
+        return;
+    }
+
+    btTransform transform;
+    transform.setIdentity();
+    transform.setFromOpenGLMatrix(sceneNode->getLocalTransform().constData());
+    btVector3 pos(sceneNode->getLocalPos().x(), sceneNode->getLocalPos().y(), sceneNode->getLocalPos().z());
+    transform.setOrigin(pos);
 
     float mass = 0.0;
 
     btCollisionShape *shape = new btEmptyShape();
-    btMotionState *motion = new btDefaultMotionState(t);
+    btMotionState *motion = new btDefaultMotionState(transform);
 
     btVector3 inertia(0, 0, 0);
 
@@ -239,8 +295,8 @@ void PhysicsPropertyWidget::onPhysicsEnabled(bool value)
 
     btRigidBody::btRigidBodyConstructionInfo info(mass, motion, shape, inertia);
     btRigidBody *body = new btRigidBody(info);
+    body->setCenterOfMassTransform(transform);
     
-    isPhysicsObject->setValue(this->sceneNode->isPhysicsBody = value);
     this->sceneView->addBodyToWorld(body, sceneNode->getGUID());
 }
 

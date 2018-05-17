@@ -1373,6 +1373,11 @@ void SceneViewWidget::removeBodyFromWorld(btRigidBody *body)
     scene->getPhysicsEnvironment()->removeBodyFromWorld(body);
 }
 
+void SceneViewWidget::removeBodyFromWorld(const QString &guid)
+{
+    scene->getPhysicsEnvironment()->removeBodyFromWorld(guid);
+}
+
 void SceneViewWidget::setGizmoLoc()
 {
     editorCam->updateCameraMatrices();
