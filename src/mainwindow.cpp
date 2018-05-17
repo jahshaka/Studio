@@ -79,7 +79,6 @@ For more information see the LICENSE file
 
 #include "widgets/animationwidget.h"
 
-#include "dialogs/renamelayerdialog.h"
 #include "widgets/layertreewidget.h"
 #include "core/project.h"
 #include "widgets/accordianbladewidget.h"
@@ -501,16 +500,6 @@ void MainWindow::createPostProcessDockWidget()
 
 void MainWindow::sceneTreeCustomContextMenu(const QPoint& pos)
 {
-}
-
-void MainWindow::renameNode()
-{
-    RenameLayerDialog dialog(this);
-    dialog.setName(activeSceneNode->getName());
-    dialog.exec();
-
-    activeSceneNode->setName(dialog.getName());
-    this->sceneHierarchyWidget->repopulateTree();
 }
 
 void MainWindow::stopAnimWidget()

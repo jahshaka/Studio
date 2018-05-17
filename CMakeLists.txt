@@ -46,7 +46,6 @@ set(SRCS
     src/editor/editorcameracontroller.cpp 
     src/dialogs/infodialog.cpp 
     src/globals.cpp 
-    src/dialogs/renamelayerdialog.cpp 
     src/widgets/sceneviewwidget.cpp 
     src/widgets/materialsets.cpp 
     src/widgets/modelpresets.cpp 
@@ -135,7 +134,6 @@ set(SRCS
 
 set(HEADERS
     src/mainwindow.h 
-    src/dialogs/renamelayerdialog.h 
     src/widgets/colorvaluewidget.h 
     src/widgets/colorpickerwidget.h 
     src/helpers/settingshelper.h 
@@ -260,7 +258,6 @@ set(HEADERS
 
 # Todo - trim these down to nothing eventually
 set(FORMS
-    src/dialogs/renamelayerdialog.ui 
     src/widgets/colorvaluewidget.ui 
     src/widgets/colorpickerwidget.ui 
     src/dialogs/preferencesdialog.ui 

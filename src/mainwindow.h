@@ -228,7 +228,6 @@ public slots:
 	void exportNode(const iris::SceneNodePtr &node);
 	void exportNodes(const QStringList &assetGuids);
     void deleteNode();
-    void renameNode();
 
     void addPointLight();
     void addSpotLight();
