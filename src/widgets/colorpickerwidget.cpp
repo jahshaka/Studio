@@ -88,7 +88,8 @@ void ColorPickerWidget::mouseReleaseEvent(QMouseEvent* event)
     //dialog->exec();
     ////dialog->show();
     //this->repaint();
-	chooser->showWithColor(color);
+	
+	chooser->showWithColor(color, event);
     this->repaint();
 
 }

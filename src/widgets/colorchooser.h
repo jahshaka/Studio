@@ -51,31 +51,35 @@ class CustomBackground : public QWidget
 {
     Q_OBJECT
 public:
+	bool isBig = false;
+
     CustomBackground(QWidget *parent = Q_NULLPTR, Qt::WindowFlags f = Qt::WindowFlags()){
         QWidget::QWidget(parent);
-        setWindowFlags(Qt::FramelessWindowHint  | Qt::X11BypassWindowManagerHint);
+        setWindowFlags(Qt::FramelessWindowHint  | Qt::X11BypassWindowManagerHint | Qt::WindowStaysOnTopHint );
+		setWindowFlag(Qt::SubWindow);
         //setAttribute(Qt::WA_TranslucentBackground);
         desktop = new QDesktopWidget;
         setGeometry(desktop->width()/2 ,desktop->height()/2 ,3,3);
-		//hide();
+		
     }
 
     void drawPixmap(QPixmap pm){
-		//show();
+		
        setGeometry(0,0,desktop->width(),desktop->height());
        pixmap = &pm;
        image = pixmap->toImage();
        isBig = true;
-//       qDebug() << pixmap << "  "  ;
-       repaint();
+	   setMouseTracking(true);
+	   repaint();
    }
 
     void shrink(){
         setGeometry(desktop->width()/2 ,desktop->height()/2 ,3,3);
         isBig=false;
+		//setMouseTracking(false);
 
         emit finished(isBig);
-		hide();
+		
 
    }
 
@@ -83,20 +87,14 @@ private:
     QDesktopWidget *desktop;
     QPixmap *pixmap;
     QImage image;
-    bool isBig=false;
     QColor color;
 
 protected:
     void paintEvent(QPaintEvent *event){
         if(isBig){
-			if (!this->isVisible())
-				show();
         QPainter painter(this);
         painter.setRenderHint(QPainter::HighQualityAntialiasing);
         painter.drawPixmap(0,0,desktop->width(),desktop->height(),*pixmap);
-      //  qDebug() << *pixmap << "  "  ;;
-        setMouseTracking(true);
-
         }
     }
 
@@ -131,14 +129,15 @@ class ColorChooser : public QWidget
 
 public:
     explicit ColorChooser(QWidget *parent = Q_NULLPTR);
-	void showWithColor(QColor color);
-    ~ColorChooser();
+	void showWithColor(QColor color, QMouseEvent * event);
+	~ColorChooser();
 
 private slots:
     void changeBackgroundColorOfDisplayWidgetHsv();
     void changeBackgroundColorOfDisplayWidgetRgb();
     void configureDisplay();
     void pickerMode(bool ye);
+
 	
 
 signals:
@@ -146,21 +145,17 @@ signals:
 
 
 private:
- 
-
     void setConnections();
     void setColorBackground();
     void setStyleForApplication();
-    void ErrorAdjustSliderValues();
     void exitPickerMode();
     void enterPickerMode();
 
 
 protected:
-    void mouseMoveEvent(QMouseEvent *event);
     void mousePressEvent(QMouseEvent *event) override;
-    void enterEvent(QEvent *);
     void paintEvent(QPaintEvent *event);
+	
 
     private slots:
     void setSliders(QColor color);
@@ -178,7 +173,7 @@ private:
     QRgb rgb;
     QColor color;
     ColorCircle* circlebg;
-    int x, y, gWidth, gHeight;
+    int gWidth, gHeight;
 
     QGroupBox* groupBox;
     CustomSlider *alphaSlider, *redSlider, *greenSlider, *blueSlider, *hueSlider, *saturationSlider, *valueSlider, *adjustSlider;
@@ -257,8 +252,8 @@ protected:
             QColor color(250,250,250);
             QPen pen(color);
             painter.setPen(pen);
-            painter.drawText(QPoint(x,y),minLabel);
-            painter.drawText(QPoint(z,y),maxLabel);
+         //   painter.drawText(QPoint(x,y),minLabel);
+         //   painter.drawText(QPoint(z,y),maxLabel);
 
 
         }else{
@@ -273,7 +268,7 @@ protected:
             QPen pen(color);
             pen.setWidth(2);
             painter.setPen(pen);
-            painter.drawEllipse(x,y,5,5);
+         //   painter.drawEllipse(x,y,5,5);
 
         }
 

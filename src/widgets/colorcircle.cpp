@@ -79,15 +79,29 @@ void ColorCircle::paintEvent(QPaintEvent *event)
     painter.setPen(pen);
     painter.drawEllipse(QPoint(pos.x(), pos.y()), 2,2);
 
+	//draw initial color
     pen.setColor(initialColor);
     pen.setWidth(8);
     painter.setPen(pen);
     painter.drawEllipse(resetButton->geometry());
 
+	//draw circle around initial color 
+	pen.setColor(QColor(250, 250, 250));
+	pen.setWidth(2);
+	painter.setPen(pen);
+	painter.drawEllipse(resetButton->geometry().x()-4, resetButton->geometry().y()-4, resetButton->geometry().width()+8, resetButton->geometry().height()+8);
+
+	//draw current color
     pen.setColor(currentColor);
     pen.setWidth(8);
     painter.setPen(pen);
-    painter.drawEllipse(7,height()-12,8,8);
+    painter.drawEllipse(7,height()-15,8,8);
+	
+	//draw circle around current color
+	pen.setColor(QColor(250, 250, 250));
+	pen.setWidth(2);
+	painter.setPen(pen);
+	painter.drawEllipse(3, height() - 19, 16, 16);
 
 
     QWidget::paintEvent(event);
@@ -152,7 +166,7 @@ void ColorCircle::drawCircleColorBackground()
                    color.setHsv(theta,s,v,alpha);
                    image->setPixelColor(i,j,color);
                }else{
-                   color.setRgb(50,50,50);
+                   color.setRgb(26,26,26);
                    image->setPixelColor(i,j,color);
                }
         }
@@ -162,8 +176,9 @@ void ColorCircle::drawCircleColorBackground()
 void ColorCircle::configureResetButton()
 {
     resetButton = new QPushButton(this);
-    resetButton->setGeometry(6,6,7,7);
+    resetButton->setGeometry(5,5,8,8);
     resetButton->setStyleSheet("background: rgba(0,0,0,0); border: 1px solid transparent; ");
+	resetButton->setToolTip("Reset color picker");
     connect(resetButton, &QPushButton::clicked, [=](){
         drawSmallCircle(initialColor);
         emit positionChanged(initialColor);

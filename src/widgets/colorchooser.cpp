@@ -6,8 +6,9 @@
 #include <qrgb.h>
 #include <qlayout.h>
 #include <QVBoxLayout>
-#include <qdesktopwidget.h>
 #include <qapplication.h>
+#include <qevent.h>
+#include <qgraphicseffect.h>
 
 
 ColorChooser::ColorChooser(QWidget *parent) :
@@ -16,17 +17,14 @@ ColorChooser::ColorChooser(QWidget *parent) :
     
     setWindowFlags(Qt::FramelessWindowHint |Qt::WindowStaysOnTopHint | Qt::X11BypassWindowManagerHint);
     setAttribute(Qt::WA_TranslucentBackground);
-    desktop = new QDesktopWidget;
 
     setContentsMargins(0,0,0,0);
-    setGeometry(desktop->width()/2 - 150,desktop->height()/2 - 200,300,410);
+	setGeometry(0,0, 240, 410);
 
-    x = geometry().x();
-    y = geometry().y();
     gWidth = geometry().width();
     gHeight = geometry().height();
     cbg = new CustomBackground(this);
-	
+	cbg->hide();	
 
     configureDisplay();
     setColorBackground();
@@ -35,7 +33,7 @@ ColorChooser::ColorChooser(QWidget *parent) :
     color = color.fromRgb(255,255,255);
     setSliders(color);
     alphaSpin->setValue(1.0);
-
+	setWindowFlag(Qt::SubWindow);
 
 }
 
@@ -47,23 +45,31 @@ ColorChooser::~ColorChooser()
 void ColorChooser::changeBackgroundColorOfDisplayWidgetHsv()
 {
     color.setHsv(hSpin->value(),sSpin->value(), vSpin->value());
-    circlebg->drawSmallCircle(color);
     setValueInColor();
     setRgbSliders(color);
+	
 }
 void ColorChooser::changeBackgroundColorOfDisplayWidgetRgb()
 {
     color.setRgb(rSpin->value(),gSpin->value(), bSpin->value());
-    circlebg->drawSmallCircle(color);
     setValueInColor();
     setHsvSliders(color);
+	
+
 }
 
 void ColorChooser::configureDisplay()
 {
+
+	QGraphicsDropShadowEffect *effect = new QGraphicsDropShadowEffect;
+	effect->setBlurRadius(10);
+	effect->setXOffset(0);
+	effect->setYOffset(1);
+	effect->setColor(QColor(10,10,10));
+	setGraphicsEffect(effect);
+
     groupBox = new QGroupBox();
     auto mainLayout = new QGridLayout();
-    //mainLayout->setSizeConstraint(QLayout::SetFixedSize);
 
     mainLayout->addWidget(groupBox);
     setLayout(mainLayout);
@@ -101,7 +107,7 @@ void ColorChooser::configureDisplay()
 
     cancel = new QPushButton("cancel");
     select = new QPushButton("Select");
-    picker = new QPushButton("pick");
+    picker = new QPushButton("PICK");
     picker->setCheckable(true);
     picker->setChecked(false);
     rgbBtn = new QPushButton("RGB");
@@ -118,11 +124,11 @@ void ColorChooser::configureDisplay()
     buttonLayout->addWidget(hsv);
     buttonLayout->addWidget(hex);
     buttonLayout->addWidget(picker);
+	buttonLayout->setSpacing(0);
     finalButtonLayout->addWidget(cancel);
     finalButtonLayout->addWidget(select);
-
-
-    stackHolder = new QStackedWidget();
+	
+	stackHolder = new QStackedWidget();
 
     redSlider = new CustomSlider(Qt::Horizontal);
     greenSlider = new CustomSlider(Qt::Horizontal);
@@ -132,21 +138,11 @@ void ColorChooser::configureDisplay()
     valueSlider = new CustomSlider(Qt::Horizontal);
     alphaSlider = new CustomSlider(Qt::Horizontal);
     adjustSlider = new CustomSlider(Qt::Vertical);
+   
+	connect(adjustSlider, SIGNAL(valueChanged(int)), valueSlider, SLOT(setValue(int)));
+	connect(valueSlider, SIGNAL(valueChanged(int)), adjustSlider, SLOT(setValue(int)));
 
-    alphaSlider->setObjectName(QStringLiteral("alphaSlider"));
-    //adjustSlider->setInvertedAppearance(true);
-    connect(valueSlider,&CustomSlider::sliderMoved,[=](){
-        adjustSlider->setValue(valueSlider->sliderPosition());
-    });
-    connect(adjustSlider,&CustomSlider::sliderMoved,[=](){
-        valueSlider->setValue(adjustSlider->sliderPosition());
-    });
-    connect(valueSlider,&CustomSlider::sliderPressed,[=](){
-        adjustSlider->setValue(valueSlider->sliderPosition());
-    });
-    connect(adjustSlider,&CustomSlider::sliderPressed,[=](){
-        valueSlider->setValue(adjustSlider->sliderPosition());
-    });
+
     rSpin = new QSpinBox();
     rSpin->setRange(0,255);
     gSpin = new QSpinBox();
@@ -163,13 +159,6 @@ void ColorChooser::configureDisplay()
     alphaSpin->setRange(0.0,1.0);
     alphaSpin->setSingleStep(0.1);
 
-    redSlider->setMinLabel(QString("R:"));
-    greenSlider->setMinLabel(QString("G:"));
-    blueSlider->setMinLabel(QString("B:"));
-    hueSlider->setMinLabel(QString("H:"));
-    saturationSlider->setMinLabel(QString("S:"));
-    valueSlider->setMinLabel(QString("V:"));
-    alphaSlider->setMinLabel(QString("Alpha"));
     redSlider->setMaximum(255);
     greenSlider->setMaximum(255);
     blueSlider->setMaximum(255);
@@ -178,24 +167,46 @@ void ColorChooser::configureDisplay()
     adjustSlider->setRange(0,255);
     hueSlider->setMaximum(360);
     alphaSlider->setRange(0,255);
-
     adjustSlider->setSliderPosition(255);
 
-    colorLayout->addSpacing(20);
+    colorLayout->addSpacing(10);
     colorLayout->addWidget(colorDisplay);
     colorLayout->addWidget(adjustSlider);
-    colorLayout->addSpacing(40);
+    colorLayout->addSpacing(20);
 
+	QLabel *r = new QLabel("R"); 
+	QLabel *g = new QLabel("G");
+	QLabel *b = new QLabel("B");
+	QLabel *h = new QLabel("H");
+	QLabel *s = new QLabel("S");
+	QLabel *v = new QLabel("V");
+	QLabel *a = new QLabel("A");	
+
+	QFont f = r->font();
+	f.setStyleStrategy(QFont::PreferQuality);
+
+	r->setFont(f);
+	b->setFont(f);
+	h->setFont(f);
+	s->setFont(f);
+	v->setFont(f);
+	a->setFont(f);
+	rSliderSpin->addWidget(r);
     rSliderSpin->addWidget(redSlider);
     rSliderSpin->addWidget(rSpin);
+	gSliderSpin->addWidget(g);
     gSliderSpin->addWidget(greenSlider);
     gSliderSpin->addWidget(gSpin);
+	bSliderSpin->addWidget(b);
     bSliderSpin->addWidget(blueSlider);
     bSliderSpin->addWidget(bSpin);
+	hSliderSpin->addWidget(h);
     hSliderSpin->addWidget(hueSlider);
     hSliderSpin->addWidget(hSpin);
+	sSliderSpin->addWidget(s);
     sSliderSpin->addWidget(saturationSlider);
     sSliderSpin->addWidget(sSpin);
+	vSliderSpin->addWidget(v);
     vSliderSpin->addWidget(valueSlider);
     vSliderSpin->addWidget(vSpin);
 
@@ -206,26 +217,12 @@ void ColorChooser::configureDisplay()
     hsvLayout->addLayout(sSliderSpin);
     hsvLayout->addLayout(vSliderSpin);
 
-
-
-
-    //    rgbLayout->addWidget(redSlider);
-    //    rgbLayout->addWidget(greenSlider);
-    //    rgbLayout->addWidget(blueSlider);
-    //    hsvLayout->addWidget(hueSlider);
-    //    hsvLayout->addWidget(saturationSlider);
-    //    hsvLayout->addWidget(valueSlider);
-
-
     stackHolder->addWidget(rgbHolder);
     stackHolder->addWidget(hsvHolder);
     stackHolder->addWidget(hexHolder);
 
-
-    // vLayout->addWidget(mainHolder);
-    // vLayout->addWidget(buttonHolder);
-
     alphaSliderLayout->addSpacing(10);
+	alphaSliderLayout->addWidget(a);
     alphaSliderLayout->addWidget(alphaSlider);
     alphaSliderLayout->addWidget(alphaSpin);
     alphaSliderLayout->addSpacing(10);
@@ -258,13 +255,15 @@ void ColorChooser::setConnections()
         stackHolder->setCurrentIndex(2);
     });
     connect(cancel, &QPushButton::pressed, [this]() {
+		if (picker->isChecked())
+			exitPickerMode();
 		emit onColorChanged(circlebg->initialColor);
-		cbg->hide();
 		hide();
     });
     connect(select, &QPushButton::pressed, [this]() {
+		if (picker->isChecked())
+			exitPickerMode();
 		emit onColorChanged(circlebg->currentColor);
-		cbg->hide();
 		hide();
     });
 
@@ -329,23 +328,61 @@ void ColorChooser::setConnections()
         alphaSlider->setValue(r);
     });
 
-//connect(alphaSpin, QOverload<int>::of(&QDoubleSpinBox::valueChanged), this, [this](int newValue) { });
-
 
     connect(circlebg, SIGNAL(positionChanged(QColor)), this,SLOT(setSliders(QColor)));
 
-    connect(rSpin, SIGNAL(valueChanged(int)),this, SLOT(changeBackgroundColorOfDisplayWidgetRgb()));
+	connect(rSpin, static_cast<void (QSpinBox::*)(int) > (&QSpinBox::valueChanged), this, [this](int val) {
+
+		blockSignals(true);
+		redSlider->setValue(val);	
+		blockSignals(false);
+		changeBackgroundColorOfDisplayWidgetRgb();
+		
+	});
+	connect(gSpin, static_cast<void (QSpinBox::*)(int) > (&QSpinBox::valueChanged), this, [this](int val) {
+
+		blockSignals(true);
+		greenSlider->setValue(val);	
+		blockSignals(false);
+		changeBackgroundColorOfDisplayWidgetRgb();
+		
+	});
+	connect(bSpin, static_cast<void (QSpinBox::*)(int) > (&QSpinBox::valueChanged), this, [this](int val) {
+
+		blockSignals(true);
+		blueSlider->setValue(val);	
+		blockSignals(false);
+		changeBackgroundColorOfDisplayWidgetRgb();
+	});
+	connect(hSpin, static_cast<void (QSpinBox::*)(int) > (&QSpinBox::valueChanged), this, [this](int val) {
+
+		blockSignals(true);
+		hueSlider->setValue(val);
+		blockSignals(false);
+		changeBackgroundColorOfDisplayWidgetHsv();
+	});
+	connect(sSpin, static_cast<void (QSpinBox::*)(int) > (&QSpinBox::valueChanged), this, [this](int val) {
+
+		blockSignals(true);
+		saturationSlider->setValue(val);	
+		blockSignals(false);
+		changeBackgroundColorOfDisplayWidgetHsv();
+	});
+	connect(vSpin, static_cast<void (QSpinBox::*)(int) > (&QSpinBox::valueChanged), this, [this](int val) {
+
+		blockSignals(true);
+		valueSlider->setValue(val);
+		blockSignals(false);
+		changeBackgroundColorOfDisplayWidgetHsv();
+	});
+		
+   /* connect(rSpin, SIGNAL(valueChanged(int)),this, SLOT(changeBackgroundColorOfDisplayWidgetRgb()));
     connect(gSpin, SIGNAL(valueChanged(int)),this, SLOT(changeBackgroundColorOfDisplayWidgetRgb()));
     connect(bSpin, SIGNAL(valueChanged(int)),this, SLOT(changeBackgroundColorOfDisplayWidgetRgb()));
     connect(hSpin, SIGNAL(valueChanged(int)),this, SLOT(changeBackgroundColorOfDisplayWidgetHsv()));
     connect(sSpin, SIGNAL(valueChanged(int)),this, SLOT(changeBackgroundColorOfDisplayWidgetHsv()));
-    connect(vSpin, SIGNAL(valueChanged(int)),this, SLOT(changeBackgroundColorOfDisplayWidgetHsv()));
-    //        connect(redSlider, SIGNAL(valueChanged(int)),rSpin,SLOT(setValue(int)));
-    //        connect(greenSlider, SIGNAL(valueChanged(int)),gSpin,SLOT(setValue(int)));
-    //        connect(blueSlider, SIGNAL(valueChanged(int)),bSpin,SLOT(setValue(int)));
-    //        connect(hueSlider, SIGNAL(valueChanged(int)),hSpin,SLOT(setValue(int)));
-    //        connect(saturationSlider, SIGNAL(valueChanged(int)),sSpin,SLOT(setValue(int)));
-    //        connect(valueSlider, SIGNAL(valueChanged(int)),vSpin,SLOT(setValue(int)));
+    connect(vSpin, SIGNAL(valueChanged(int)),this, SLOT(changeBackgroundColorOfDisplayWidgetHsv()));*/
+
 
     connect(hexEdit,SIGNAL(returnPressed()),this,SLOT(setColorFromHex()));
 
@@ -362,51 +399,39 @@ void ColorChooser::setColorBackground()
 void ColorChooser::setStyleForApplication()
 {
     setStyle(new CustomStyle1(this->style()));
- /*   setStyleSheet( " QSlider::handle { height: 4px; width:4px; margin: -2px 0px; background: rgba(250,251,251,0.9);}"
-                   " QSlider::groove { border: 1px solid black; margin: 2px 0px;}"
-                   " QSlider::add-page {background: rgba(52,151,219,0); border-radius: 3px;}"
-                   " QSlider::sub-page {background: rgba(52,151,219,0.9); border-radius: 3px;}"
-                   "QSlider::groove:vertical{background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,stop: 0 white, stop: 1 black); border-radius: 5px;}"
-                   " QSlider::handle:vertical {height: 1px; width:1px; margin: -2px 0px; background: rgba(250,100,100,0.9); }"
-                   " QSlider::add-page:vertical {background: rgba(0,0,0,0); border-radius: 3px;}"
-                   " QSlider::sub-page:vertical {background: rgba(90,90,90,0); border-radius: 3px;}"
-                   "QWidget{ background: rgba(50,50,50,1);border: 1px solid rgba(0,0,0,0); padding:0px; spacing : 0px;}"
-                   "QLineEdit {border: 1px solid rgba(0,0,0,.4); color: rgba(255,255,255,.8); }"
-                   "QPushButton{ background: rgba(60,60,60,1); color: rgba(255,255,255,.9); padding: 2px; border: 1px solid rgba(0,0,0,.4); border-radius:2px; }"
-                   "QPushButton::checked {background: rgba(45,45,45,.9); }"
-                   "QAbstractSpinBox { color:rgba(255,255,255,.8); } QAbstractSpinBox QPushButton{ background: rgba(0,0,0,0); border : 1px solid rgba(0,0,0,0); }");*/
-
 	setStyleSheet("QWidget#floater {background: #212121; }"
 		"QSlider::sub-page {	border: 0px solid transparent;	height: 2px;	background: #3498db;	margin: 2px 0;}"
 		"QSlider::groove:horizontal {    border: 0px solid transparent;    height: 4px;   background: #1e1e1e;   margin: 2px 0;}"
 		"QSlider::handle:horizontal {    background-color: #CCC;    width: 12px;    border: 1px solid #1e1e1e;    margin: -5px 0px;   border-radius:7px;}"
 		"QSlider::handle:horizontal:pressed {    background-color: #AAA;    width: 12px;   border: 1px solid #1e1e1e;    margin: -5px 0px;    border-radius: 7px;}"
-	//	"QDoubleSpinBox { border-radius: 1px;	padding: 7px;	background: #292929;}"
-		"QAbstractSpinBox { color:rgba(255,255,255,.8); } QAbstractSpinBox QPushButton{ background: rgba(0,0,0,0); border : 1px solid rgba(0,0,0,0); }"
-		"QWidget{ background: rgba(50,50,50,1);border: 1px solid rgba(0,0,0,0); padding:0px; spacing : 0px;}"
-		"QSlider::handle:horizontal:disabled {    background-color: #bbbbbb;    width: 12px;    border: 0px solid transparent;    margin: -1px -1px;    border-radius: 4px;}");
+		"QAbstractSpinBox { padding-right: 0px;	background: #292929; margin-right: -6px; }"
+		"QAbstractSpinBox, QLabel { color:rgba(255,255,255,.8); } QAbstractSpinBox::down-button, QAbstractSpinBox::up-button { background: rgba(0,0,0,0); border : 1px solid rgba(0,0,0,0); }"
+		"QWidget{ background: rgba(26,26,26,1);border: 1px solid rgba(0,0,0,0); padding:0px; spacing : 0px;}"
+		"QSlider::handle:horizontal:disabled {    background-color: #bbbbbb;    width: 12px;    border: 0px solid transparent;    margin: -1px -1px;    border-radius: 4px;}"
+		"QSlider::groove:vertical {background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,stop: 0 white, stop: 1 black); border-radius: 2px; width: 13px; }"
+		" QSlider::handle:vertical {height: 3px; width:1px; margin: -2px 0px; background: rgba(50,148,213,0.9); }"
+		" QSlider::add-page:vertical, QSlider::sub-page:vertical {background: rgba(0,0,0,0); border-radius: 1px;}"
+		"QLineEdit {border: 1px solid rgba(0,0,0,.4); color: rgba(255,255,255,.8); }"
+		"QPushButton{ background-color: #333; color: #DEDEDE; border : 0; padding: 4px 16px; }"
+		"QPushButton:hover{ background-color: #555; }"
+		"QPushButton:pressed{ background-color: #444; }"
+		"QPushButton:checked{border: 0px solid rgba(0,0,0,.3); background: rgba(50,148,213,0.9); color: rgba(255,255,255,.9); }");
 
 }
 
-void ColorChooser::ErrorAdjustSliderValues()
-{
-
-}
 
 void ColorChooser::exitPickerMode()
 {
     picker->setChecked(false);
+	if(cbg->isBig)
+	cbg->shrink();
 }
-
-
 
 
 void ColorChooser::enterPickerMode()
 {
-
-
     pixmap = QPixmap::grabWindow(QApplication::desktop()->winId());
-      cbg->drawPixmap(pixmap);
+    cbg->drawPixmap(pixmap);
 }
 
 void ColorChooser::pickerMode(bool ye)
@@ -418,22 +443,24 @@ void ColorChooser::pickerMode(bool ye)
     }
 }
 
-void ColorChooser::showWithColor(QColor color)
+void ColorChooser::showWithColor(QColor color, QMouseEvent* event)
 {
 	circlebg->setInitialColor(color);
 	cbg->show();
-	show();
-}
+	int x;
+	int y;
 
-void ColorChooser::mouseMoveEvent(QMouseEvent *event)
-{
-//    if(picker->isChecked()){
-//        rgb = pixmap.toImage().pixel(this->mapFromGlobal(QCursor::pos()));
-//        color = color.fromRgb(rgb);
-//        setSliders(color);
-//        setValueInColor();
-//        circlebg->drawSmallCircle(color);
-//    }
+	if (event->screenPos().x() + width() >= QApplication::desktop()->screenGeometry().width())
+		x = event->screenPos().x() - width();
+	else
+		x = event->screenPos().x();
+
+	if (event->screenPos().y() + height() > QApplication::desktop()->screenGeometry().height())
+		y = event->screenPos().y() - height();
+	else
+		y = event->screenPos().y();
+	setGeometry(x,y, width(), height());
+	show();
 }
 
 void ColorChooser::mousePressEvent(QMouseEvent *event)
@@ -445,32 +472,24 @@ void ColorChooser::mousePressEvent(QMouseEvent *event)
     QWidget::mousePressEvent(event);
 }
 
-void ColorChooser::enterEvent(QEvent *)
-{
-
-}
-
 void ColorChooser::paintEvent(QPaintEvent *event)
 {
     if(picker->isChecked()){
         QPainter painter(this) ;
-        painter.drawPixmap(0,0,desktop->width(),desktop->height(),pixmap);
+        painter.drawPixmap(0,0,QApplication::desktop()->width(),QApplication::desktop()->height(),pixmap);
     }
 }
 
 void ColorChooser::setSliders(QColor color)
-{
-    blockSignals(true);
+{    
     setRgbSliders(color);
-    setHsvSliders(color);
-    blockSignals(false);
+    setHsvSliders(color);    
     setValueInColor();
     circlebg->drawSmallCircle(color);
 }
 
 void ColorChooser::setRgbSliders(QColor color)
 {
-
     redSlider->setSliderPosition(color.red());
     greenSlider->setSliderPosition(color.green());
     blueSlider->setSliderPosition(color.blue());
@@ -489,7 +508,6 @@ void ColorChooser::setRgbSliders(QColor color)
 
 void ColorChooser::setHsvSliders(QColor color)
 {
-
     hueSlider->setSliderPosition(color.hsvHue());
     saturationSlider->setSliderPosition(color.hsvSaturation());
     valueSlider->setSliderPosition(color.value());
@@ -504,7 +522,6 @@ void ColorChooser::setHsvSliders(QColor color)
     vSpin->blockSignals(false);
     this->color = color;
     setSliderLabels();
-
 }
 
 void ColorChooser::setColorFromHex()
@@ -513,7 +530,6 @@ void ColorChooser::setColorFromHex()
     setSliders(color);
     setValueInColor();
     circlebg->drawSmallCircle(color);
-
 }
 
 void ColorChooser::setSliderLabels()
@@ -521,14 +537,11 @@ void ColorChooser::setSliderLabels()
     circlebg->drawSmallCircle(color);
     hexEdit->setText(color.name());
 	emit onColorChanged(color);
-
 }
 
 
 void ColorChooser::setValueInColor()
 {
-
-
     circlebg->setValueInColor(color);
 	emit onColorChanged(color);
 }
