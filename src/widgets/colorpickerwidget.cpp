@@ -47,16 +47,6 @@ void ColorPickerWidget::paintEvent(QPaintEvent* evt)
     QPainter paint(this);
 
     paint.fillRect(0,0,widgetWidth,widgetHeight,color);
-
-
-    /*
-    QWidget::paintEvent(evt);
-
-    QStyleOption opt;
-    opt.init(this);
-    QPainter p(this);
-    style()->drawPrimitive(QStyle::PE_Widget, &opt, &p, this);
-    */
 }
 
 void ColorPickerWidget::setColor(QColor col)
@@ -71,8 +61,6 @@ void ColorPickerWidget::setColor(QColor col)
 
 void ColorPickerWidget::colorChanged(QColor col)
 {
-	qDebug() << "color changed";
-
     if(color!=col)
     {
         color = col;
@@ -82,16 +70,9 @@ void ColorPickerWidget::colorChanged(QColor col)
 }
 
 void ColorPickerWidget::mouseReleaseEvent(QMouseEvent* event)
-{
-    //Q_UNUSED(event);
-    //dialog->setCurrentColor(color);
-    //dialog->exec();
-    ////dialog->show();
-    //this->repaint();
-	
+{	
 	chooser->showWithColor(color, event);
     this->repaint();
-
 }
 
 void ColorPickerWidget::mousePressEvent(QMouseEvent* event)

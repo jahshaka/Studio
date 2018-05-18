@@ -12,7 +12,6 @@ public:
 
     explicit ColorCircle(QWidget *parent = nullptr, QColor ic = nullptr);
     void drawSmallCircle(QColor color);
-    void updateColor(int h, int s);
     void setValueInColor(QColor color);
     void setInitialColor(QColor ic);
 
