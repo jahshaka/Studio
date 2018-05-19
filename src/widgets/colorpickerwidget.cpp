@@ -11,18 +11,17 @@ For more information see the LICENSE file
 
 #include "colorpickerwidget.h"
 #include "ui_colorpickerwidget.h"
-#include <QColorDialog>
 #include <QPainter>
 #include <QDebug>
+#include "colorchooser.h"
 
 ColorPickerWidget::ColorPickerWidget(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::ColorPickerWidget)
 {
     ui->setupUi(this);
-    dialog = new QColorDialog();
-    QObject::connect(dialog,SIGNAL(currentColorChanged(QColor)),this,SLOT(colorChanged(QColor)));
-    QObject::connect(dialog,SIGNAL(colorSelected(QColor)),this,SLOT(setColor(QColor)));
+	chooser = new ColorChooser();
+	connect(chooser, SIGNAL(onColorChanged(QColor)), this, SLOT(colorChanged(QColor)));
 
     color = QColor::fromRgb(255,255,255);
 }
@@ -41,15 +40,6 @@ void ColorPickerWidget::paintEvent(QPaintEvent* evt)
 
     paint.fillRect(0,0,widgetWidth,widgetHeight,color);
 
-
-    /*
-    QWidget::paintEvent(evt);
-
-    QStyleOption opt;
-    opt.init(this);
-    QPainter p(this);
-    style()->drawPrimitive(QStyle::PE_Widget, &opt, &p, this);
-    */
 }
 
 void ColorPickerWidget::setColor(QColor col)
@@ -74,10 +64,7 @@ void ColorPickerWidget::colorChanged(QColor col)
 
 void ColorPickerWidget::mouseReleaseEvent(QMouseEvent* event)
 {
-    Q_UNUSED(event);
-    dialog->setCurrentColor(color);
-    dialog->exec();
-    //dialog->show();
+	chooser->showWithColor(color, event);
     this->repaint();
 }
 
