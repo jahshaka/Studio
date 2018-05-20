@@ -1,11 +1,10 @@
 #include "colorcircle.h"
 
 #include <QPainter>
-#include <qvector2d.h>
+#include <QVECTOR2D>
 #include <qmath.h>
-#include <QDebug>
-#include <QMouseEvent>
-#include <QStyleOption>
+#include <QMOUSEEVENT>
+#include <QSTYLEOPTION>
 
 ColorCircle::ColorCircle(QWidget *parent, QColor ic) : QWidget(parent)
 {
@@ -19,6 +18,8 @@ ColorCircle::ColorCircle(QWidget *parent, QColor ic) : QWidget(parent)
 
 	configureResetButton();
 	setInitialColor(ic);
+	this->setStyleSheet("background-image:url(:/images/bg.png); ");
+
 }
 
 void ColorCircle::drawSmallCircle(QColor color)

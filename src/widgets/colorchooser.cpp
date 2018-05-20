@@ -1,14 +1,12 @@
 #include "colorchooser.h"
-#include <qdebug.h>
-#include <qpainter.h>
-#include <qcursor.h>
 #include "colorcircle.h"
-#include <qrgb.h>
-#include <qlayout.h>
-#include <QVBoxLayout>
-#include <qapplication.h>
-#include <qevent.h>
-#include <qgraphicseffect.h>
+#include <QDEBUG>
+#include <QPAINTER>
+#include <QLAYOUT>
+#include <QAPPLICATION>
+#include <QEVENT>
+#include <QMOUSEEVENT>
+#include <QGRAPHICSEFFECT>
 
 
 ColorChooser::ColorChooser(QWidget *parent) :
