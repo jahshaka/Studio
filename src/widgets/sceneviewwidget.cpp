@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "irisgl/src/graphics/utils/linemeshbuilder.h"
 #include "irisgl/src/graphics/viewport.h"
 #include "irisgl/src/materials/colormaterial.h"
+#include "irisgl/src/materials/linecolormaterial.h"
 #include "irisgl/src/scenegraph/scene.h"
 #include "irisgl/src/scenegraph/scenenode.h"
 #include "irisgl/src/scenegraph/meshnode.h"
@@ -328,7 +329,7 @@ void SceneViewWidget::initLightAssets()
     pointLightMesh = iris::ShapeHelper::createWireSphere(1.0f);
     spotLightMesh = iris::ShapeHelper::createWireCone(1.0f);
     dirLightMesh = createDirLightMesh();
-    lineMat = iris::ColorMaterial::create();
+	lineMat = iris::LineColorMaterial::create();
 }
 
 iris::MeshPtr SceneViewWidget::createDirLightMesh(float baseRadius)

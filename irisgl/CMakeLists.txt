@@ -75,6 +75,7 @@ set(SRCS
     src/graphics/utils/linemeshbuilder.cpp
     src/graphics/utils/shapehelper.cpp
     src/materials/colormaterial.cpp
+    src/materials/linecolormaterial.cpp
     src/postprocesses/fxaapostprocess.cpp
     src/graphics/graphicsdevice.cpp
     src/widgets/renderwidget.cpp
@@ -163,6 +164,7 @@ set (HEADERS
     src/graphics/utils/linemeshbuilder.h
     src/graphics/utils/shapehelper.h
     src/materials/colormaterial.h
+    src/materials/linecolormaterial.h
     src/postprocesses/fxaapostprocess.h
     src/graphics/graphicsdevice.h
     src/widgets/renderwidget.h
