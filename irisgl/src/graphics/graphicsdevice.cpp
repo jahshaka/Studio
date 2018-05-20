@@ -489,6 +489,21 @@ void GraphicsDevice::setRasterizerState(const RasterizerState &rasterState, bool
         gl->glPolygonMode(GL_FRONT_AND_BACK, rasterState.fillMode);
         lastRasterState.fillMode = rasterState.fillMode;
     }
+
+	// polygon offset
+	if (force || (lastRasterState.depthBias != rasterState.depthBias || lastRasterState.depthScaleBias != rasterState.depthScaleBias)) {
+		if (rasterState.depthBias == 0 && rasterState.depthScaleBias == 0) {
+			gl->glDisable(GL_POLYGON_OFFSET_FILL);
+		}
+		else {
+			gl->glEnable(GL_POLYGON_OFFSET_FILL);
+			gl->glPolygonOffset(rasterState.depthScaleBias, rasterState.depthBias);
+		}
+
+		lastRasterState.depthBias = rasterState.depthBias;
+		lastRasterState.depthScaleBias = rasterState.depthScaleBias;
+	}
+
 }
 
 void GraphicsDevice::drawPrimitives(GLenum primitiveType, int start, int count)

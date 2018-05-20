@@ -10,6 +10,8 @@
         <file>assets/shaders/defaultsky.frag</file>
         <file>assets/shaders/color.vert</file>
         <file>assets/shaders/color.frag</file>
+        <file>assets/shaders/linecolor.vert</file>
+        <file>assets/shaders/linecolor.frag</file>
         <file>assets/shaders/billboard.frag</file>
         <file>assets/shaders/billboard.vert</file>
         <file>assets/models/head.png</file>
