@@ -16,6 +16,11 @@ void LineColorMaterial::setColor(const QColor &value)
     color = value;
 }
 
+void LineColorMaterial::setDepthBias(float offset)
+{
+	this->renderStates.rasterState.depthBias = offset;
+}
+
 void LineColorMaterial::begin(GraphicsDevicePtr device, ScenePtr scene)
 {
     Material::begin(device, scene);

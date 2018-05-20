@@ -19,6 +19,8 @@ public:
     QColor getColor() const;
     void setColor(const QColor &value);
 
+	void setDepthBias(float offset = 1.0);
+
     void begin(GraphicsDevicePtr device, ScenePtr scene) override;
     void end(GraphicsDevicePtr device, ScenePtr scene) override;
 
