@@ -258,6 +258,7 @@ protected slots:
 	void editFileExternally();
 	void exportTexture();
 	void exportMaterial();
+	void exportMaterialPreview();
 	void exportShader();
 
     void searchAssets(QString);

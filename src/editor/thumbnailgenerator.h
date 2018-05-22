@@ -26,11 +26,13 @@ struct ThumbnailRequest
     ThumbnailRequestType type;
     QString path;
     QString id;
+    bool preview;
 };
 
 struct ThumbnailResult
 {
     ThumbnailRequestType type;
+    bool preview;
     QString path;
     QString id;
     QImage thumbnail;
@@ -85,7 +87,7 @@ class ThumbnailGenerator
 public:
     RenderThread* renderThread;
     static ThumbnailGenerator* getSingleton();
-    void requestThumbnail(ThumbnailRequestType type, QString path, QString id = "");
+    void requestThumbnail(ThumbnailRequestType type, QString path, QString id = "", bool preview = false);
 
     // must be called to properly shutdown ui components
     void shutdown();

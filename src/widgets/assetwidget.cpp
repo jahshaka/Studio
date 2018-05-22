@@ -686,6 +686,12 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 			action = new QAction(QIcon(), "Export Material", this);
 			connect(action, SIGNAL(triggered()), this, SLOT(exportMaterial()));
 			menu.addAction(action);
+
+            if (QGuiApplication::queryKeyboardModifiers() == Qt::ShiftModifier) {
+                action = new QAction(QIcon(), "Save Material Preview", this);
+                connect(action, SIGNAL(triggered()), this, SLOT(exportMaterialPreview()));
+                menu.addAction(action);
+            }
 		}
 
 		if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Shader)) {
@@ -1008,6 +1014,41 @@ void AssetWidget::exportMaterial()
 
 	// close our now exported file
 	zip_close(zip);
+}
+
+void AssetWidget::exportMaterialPreview()
+{
+    auto assetGuid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
+    auto materialDef = QJsonDocument::fromBinaryData(db->fetchAssetData(assetGuid)).object();
+
+    QString jsonMaterialString = QJsonDocument(materialDef).toJson();
+
+    for (const auto &value : materialDef) {
+        if (value.isString() &&
+            !db->fetchAsset(value.toString()).name.isEmpty() &&
+            value.toString() != materialDef["guid"].toString())
+        {
+            jsonMaterialString.replace(value.toString(), QString(db->fetchAsset(value.toString()).name));
+        }
+    }
+
+    QJsonDocument saveDoc = QJsonDocument::fromJson(jsonMaterialString.toUtf8());
+
+    QString fileName = IrisUtils::join(
+        Globals::project->getProjectFolder(),
+        IrisUtils::buildFileName(db->fetchAsset(assetGuid).name, "material")
+    );
+
+    QFile file(fileName);
+    file.open(QFile::WriteOnly);
+    file.write(saveDoc.toJson());
+    file.close();
+
+    ThumbnailGenerator::getSingleton()->requestThumbnail(
+        ThumbnailRequestType::Material, fileName, assetGuid, true
+    );
+
+    //QFile::remove(fileName);
 }
 
 void AssetWidget::exportShader()
@@ -2161,18 +2202,35 @@ void AssetWidget::onThumbnailResult(ThumbnailResult *result)
 	QByteArray bytes;
 	QBuffer buffer(&bytes);
 	buffer.open(QIODevice::WriteOnly);
-	auto thumbnail = QPixmap::fromImage(result->thumbnail).scaledToHeight(iconSize.height(), Qt::SmoothTransformation);
-	thumbnail.save(&buffer, "PNG");
 
-	db->updateAssetThumbnail(result->id, bytes);
+    if (!result->preview) {
+        auto thumbnail = QPixmap::fromImage(result->thumbnail).scaledToHeight(iconSize.height(), Qt::SmoothTransformation);
+        thumbnail.save(&buffer, "PNG");
 
-	// Refresh the view if we're still there
-	for (int i = 0; i < ui->assetView->count(); i++) {
-		QListWidgetItem* item = ui->assetView->item(i);
-		if (item->data(MODEL_GUID_ROLE).toString() == result->id) {
-			updateAssetView(assetItem.selectedGuid);
-		}
-	}
+        db->updateAssetThumbnail(result->id, bytes);
+
+        // Refresh the view if we're still there
+        for (int i = 0; i < ui->assetView->count(); i++) {
+            QListWidgetItem* item = ui->assetView->item(i);
+            if (item->data(MODEL_GUID_ROLE).toString() == result->id) {
+                updateAssetView(assetItem.selectedGuid);
+            }
+        }
+    }
+    else {
+        auto thumbnail = QPixmap::fromImage(result->thumbnail).scaledToHeight(512, Qt::SmoothTransformation);
+        thumbnail.save(&buffer, "PNG");
+
+        auto filePath = QFileDialog::getSaveFileName(
+            this,
+            "Choose image path",
+            QString("%1_preview.png").arg(QFileInfo(result->path).baseName()),
+            "Supported Image Formats (*.jpg, *.png)"
+        );
+
+        if (filePath.isEmpty() || filePath.isNull()) return;
+        thumbnail.save(filePath);
+    }
 
 	delete result;
 }
