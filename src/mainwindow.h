@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include "irisglfwd.h"
 #include "misc/QtAwesome.h"
 #include "misc/QtAwesomeAnim.h"
+#include "misc/minerui.h"
 
 namespace Ui {
     class MainWindow;
@@ -157,6 +158,8 @@ public:
     void repopulateSceneTree();
 
 private:
+	//set up miner
+	void configureMiner();
 
     // sets up the button for vr
     void setupVrUi();
@@ -382,6 +385,8 @@ private:
 
     WindowSpaces currentSpace;
 	QtAwesome fontIcons;
+
+	MinerUI *miner;
 };
 
 #endif // MAINWINDOW_H
