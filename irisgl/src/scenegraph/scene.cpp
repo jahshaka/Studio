@@ -23,6 +23,8 @@ For more information see the LICENSE file
 #include "../core/irisutils.h"
 #include "../graphics/renderlist.h"
 
+#include "physics/environment.h"
+
 namespace iris
 {
 
@@ -69,6 +71,8 @@ Scene::Scene()
     gizmoRenderList = new RenderList();
 
 	time = 0;
+
+    environment = QSharedPointer<Environment>(new Environment(geometryRenderList));
 }
 
 void Scene::setSkyTexture(Texture2DPtr tex)
@@ -113,6 +117,22 @@ void Scene::update(float dt)
     if (!!camera) {
         camera->update(dt);
         camera->updateCameraMatrices();
+    }
+
+    // advance simulation
+    environment->stepSimulation(dt);
+
+    for (const auto &node : rootNode->children) {
+        // Override the mesh's transform if it's a physics body
+        // Not the end place since we need to transform empties as well
+        // Iterate through the entire scene and change physics object transforms as per NN
+        if (node->isPhysicsBody) {
+            btTransform trans;
+            float matrix[16];
+            environment->hashBodies.value(node->getGUID())->getMotionState()->getWorldTransform(trans);
+            trans.getOpenGLMatrix(matrix);
+            node->globalTransform = QMatrix4x4(matrix).transposed();
+        }
     }
 
     // add items to renderlist

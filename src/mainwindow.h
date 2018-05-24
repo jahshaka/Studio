@@ -387,6 +387,7 @@ private:
 	QtAwesome fontIcons;
 
 	MinerUI *miner;
+	QPushButton *playSimBtn;
 };
 
 #endif // MAINWINDOW_H

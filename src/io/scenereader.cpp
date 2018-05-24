@@ -208,6 +208,8 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->fogEnabled = sceneObj["fogEnabled"].toBool(true);
     scene->shadowEnabled = sceneObj["shadowEnabled"].toBool(true);
 
+    scene->gravity = sceneObj["gravity"].toDouble(9.8);
+
     auto rootNode = sceneObj["rootNode"].toObject();
     QJsonArray children = rootNode["children"].toArray();
 

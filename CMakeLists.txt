@@ -63,6 +63,7 @@ set(SRCS
     src/widgets/propertywidgets/lightpropertywidget.cpp 
     src/widgets/propertywidgets/materialpropertywidget.cpp 
     src/widgets/propertywidgets/worldpropertywidget.cpp 
+    src/widgets/propertywidgets/physicspropertywidget.cpp 
     src/io/scenewriter.cpp 
     src/core/thumbnailmanager.cpp 
     src/widgets/propertywidgets/fogpropertywidget.cpp 
@@ -173,6 +174,7 @@ set(HEADERS
     src/widgets/propertywidgets/materialpropertywidget.h 
     src/widgets/scenenodepropertieswidget.h 
     src/widgets/propertywidgets/worldpropertywidget.h 
+    src/widgets/propertywidgets/physicspropertywidget.h 
     src/io/scenewriter.h 
     src/io/scenereader.h 
     src/widgets/propertywidgets/scenepropertywidget.h 
@@ -374,12 +376,14 @@ set_source_files_properties(${BUNDLE_ICON} PROPERTIES
 # https://stackoverflow.com/a/37211780/996468
 source_group(moc FILES ${HEADERS_moc} ${QRCS})
 add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp.rc ${BUNDLE_ICON})
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Jahshaka)
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 							src
 							irisgl/include
 							irisgl/src
 							irisgl/src/assimp/include
                             irisgl/src/libovr/Include
+                            irisgl/src/bullet3/src/
                             thirdparty/breakpad/breakpad/src)
    
 if(USE_BREAKPAD)

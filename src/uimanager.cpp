@@ -20,6 +20,18 @@ bool UiManager::isSceneOpen = false;
 bool UiManager::isScenePlaying = false;
 bool UiManager::playMode = false;
 
+bool UiManager::isSimulationRunning = false;
+
+void UiManager::startPhysicsSimulation()
+{
+    sceneViewWidget->startPhysicsSimulation();
+}
+
+void UiManager::stopPhysicsSimulation()
+{
+    sceneViewWidget->stopPhysicsSimulation();
+}
+
 SceneViewWidget *UiManager::getSceneViewWidget()
 {
     return sceneViewWidget;

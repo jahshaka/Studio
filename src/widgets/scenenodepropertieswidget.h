@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QListWidgetItem>
+#include <QVBoxLayout>
 #include <QSharedPointer>
 
 namespace iris {
@@ -29,8 +30,9 @@ class FogPropertyWidget;
 class EmitterPropertyWidget;
 class NodePropertyWidget;
 class MeshPropertyWidget;
+class PhysicsPropertyWidget;
 class DemoPane;
-
+class SceneViewWidget;
 class Database;
 
 // These are special and a kind of hack since this widget was never really designed to work with non scenenode types
@@ -49,8 +51,10 @@ public:
      * sets active scene node to show properties for
      * @param sceneNode
      */
+
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
     void setAssetItem(QListWidgetItem *item);
+	void setSceneView(SceneViewWidget *sceneView);
 
     /**
      * Updates material properties if active scene node is a mesh
@@ -77,10 +81,15 @@ private:
     WorldPropertyWidget* worldPropView;
     FogPropertyWidget*  fogPropView;
     MeshPropertyWidget* meshPropView;
+    PhysicsPropertyWidget *physicsPropView;
     DemoPane* demoPane;
 
     Database *db;
 	ShaderPropertyWidget *shaderPropView;
+    SceneViewWidget *sceneView;
+
+    QWidget *widgetProperty;
+    QVBoxLayout *widgetPropertyLayout;
 };
 
 #endif // PROPERTYWIDGET_H
