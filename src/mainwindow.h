@@ -27,7 +27,7 @@ For more information see the LICENSE file
 #include "irisglfwd.h"
 #include "misc/QtAwesome.h"
 #include "misc/QtAwesomeAnim.h"
-#include "misc/minerui.h"
+#include "miner/minerui.h"
 
 namespace Ui {
     class MainWindow;

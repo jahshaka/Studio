@@ -162,30 +162,19 @@ void MinerUI::configureUI()
 void MinerUI::configureSettings()
 {
 	auto settingsWidget = new QWidget;
-	auto settingsLaout = new QGridLayout;
-	settingsLaout->setContentsMargins(20, 0, 20, 10);
+	auto settingsLaout = new QVBoxLayout;
+	//settingsLaout->setContentsMargins(10, 6, 10,4 );
+	settingsLaout->setSpacing(10);
 	settingsWidget->setLayout(settingsLaout);
 	settingsWidget->setObjectName(QStringLiteral("settingsWidget"));
-	settingsWidget->setFixedSize(400, 300);
 
-	auto toolbar = new QWidget;
+	auto toolbar = new QToolBar;
 	toolbar->setObjectName(QStringLiteral("toolBar"));
-	toolbar->setMaximumHeight(50);
-	toolbar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-	auto toolbarLayout = new QHBoxLayout;
-	toolbar->setLayout(toolbarLayout);
-
-	/*auto vHolder = new QWidget;
-	auto vLayout = new QVBoxLayout;
-	vHolder->setLayout(vLayout);
-	vHolder->setFixedSize(400, 200);
-	vLayout->addWidget(settingsWidget);
-	vLayout->setContentsMargins(10, 0, 10, 20);*/
 
 
-	back = new QPushButton("<-- back", toolbar);
+	back = new QAction;
 	back->setText(QChar(fa::arrowleft));
-	back->setFont(fontIcon.font(13));
+	back->setFont(fontIcon.font(15));
 	back->setObjectName(QStringLiteral("back"));
 	auto settingsLabel = new QLabel("SETTINGS");
 	settingsLabel->setAlignment(Qt::AlignHCenter);
@@ -193,11 +182,12 @@ void MinerUI::configureSettings()
 	font.setBold(true);
 	settingsLabel->setFont(font);
 
-	auto settingsClose = new QPushButton("close");
+	auto settingsClose = new QAction;
 	settingsClose->setText(QChar(fa::times));
-	settingsClose->setFont(fontIcon.font(13));
+	settingsClose->setFont(fontIcon.font(15));
 	settingsClose->setObjectName(QStringLiteral("back"));
-	connect(settingsClose, SIGNAL(clicked(bool)), close, SLOT(trigger()));
+
+	connect(settingsClose, SIGNAL(triggered()), close, SLOT(trigger()));
 
 	auto confirm = new QPushButton("Confirm");
 	auto CancelBtn = new QPushButton("Cancel");
@@ -205,26 +195,30 @@ void MinerUI::configureSettings()
 	CancelBtn->setObjectName(QStringLiteral("bottomBtn"));
 
 	connect(confirm, &QPushButton::clicked, [=]() {
-		back->animateClick();
+		back->trigger();
 	});
 	connect(CancelBtn, &QPushButton::clicked, [=]() {
-		back->animateClick();
+		back->trigger();
 	});
 
 
 
-	toolbarLayout->addWidget(back);
-	toolbarLayout->addStretch();
-	toolbarLayout->addWidget(settingsLabel);
-	toolbarLayout->addStretch();
-	toolbarLayout->addWidget(settingsClose);
+	toolbar->addAction(back);
+	auto empty = new QWidget();
+	empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+	toolbar->addWidget(empty);	
+	toolbar->addWidget(settingsLabel);
+	auto empty1 = new QWidget();
+	empty1->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+	toolbar->addWidget(empty1);
+	toolbar->addAction(settingsClose);
 
 
 
-	auto walletLabel = new QLabel("Wallet Id :");
-	auto password = new QLabel("Password :");
-	auto poolUrl = new QLabel("Pool URL :");
-	auto identifier = new QLabel("Identifier :");
+	auto walletLabel = new QLabel("Wallet Id ");
+	auto password = new QLabel("Password ");
+	auto poolUrl = new QLabel("Pool URL ");
+	auto identifier = new QLabel("Identifier ");
 	auto currencyLabel = new QLabel("currency");
 	walletLabel->setObjectName(QStringLiteral("label"));
 	password->setObjectName(QStringLiteral("label"));
@@ -249,24 +243,68 @@ void MinerUI::configureSettings()
 	currency->setCurrentText("Select Currency");
 	currency->addItems(stringList);
 
-	settingsLaout->addWidget(toolbar, 0, 0, 1,4);
-	// settingsLaout->add
-	settingsLaout->addWidget(walletLabel, 2, 0,1,2);
-	settingsLaout->addWidget(walletEdit, 2, 2,1,2);
-	settingsLaout->addWidget(password, 3, 0,1,2);
-	settingsLaout->addWidget(passwordEdit, 3, 2,1,2);
-	settingsLaout->addWidget(poolUrl, 4, 0,1,2);
-	settingsLaout->addWidget(poolEdit, 4, 2,1,2);
-	settingsLaout->addWidget(identifier, 5, 0,1,2);
-	settingsLaout->addWidget(identifierEdit, 5, 2,1,2);
-	settingsLaout->addWidget(currencyLabel, 6, 0,1,2);
-	settingsLaout->addWidget(currency, 6, 2,1,2);
+	auto walletLayout = new QVBoxLayout;
+	auto poolLayout = new QVBoxLayout;
+	auto passwordLayout = new QVBoxLayout;
+	auto identifierLayout = new QVBoxLayout;
+	auto currencyLayout = new QHBoxLayout;
+	auto buttonLayout = new QHBoxLayout;
 
-	settingsLaout->addWidget(confirm, 8, 0,1,2);
-	settingsLaout->addWidget(CancelBtn, 8, 2,1,2);
-//	settingsLaout->addWidget(new QSizeGrip(this), 9, 3);
+	walletEdit->setObjectName(QStringLiteral("edit"));
+	poolEdit->setObjectName(QStringLiteral("edit"));
+	passwordEdit->setObjectName(QStringLiteral("edit"));
+	identifierEdit->setObjectName(QStringLiteral("edit"));
 
-	// settingsLaout->setSizeConstraint(QLayout::SetFixedSize);
+	walletEdit->setPlaceholderText("Enter Wallet ID");
+	poolEdit->setPlaceholderText("Enter Pool URL");
+	passwordEdit->setPlaceholderText("Enter Password");
+	identifierEdit->setPlaceholderText("Enter Identifier");
+	 
+
+	walletLayout->addWidget(walletLabel);
+	walletLayout->addWidget(walletEdit);
+	poolLayout->addWidget(poolUrl);
+	poolLayout->addWidget(poolEdit);
+	passwordLayout->addWidget(password);
+	passwordLayout->addWidget(passwordEdit);
+	identifierLayout->addWidget(identifier);
+	identifierLayout->addWidget(identifierEdit);
+	buttonLayout->addWidget(confirm);
+	buttonLayout->addWidget(CancelBtn);
+	currencyLayout->addWidget(currencyLabel);
+	currencyLayout->addWidget(currency);
+
+
+	settingsLaout->addWidget(toolbar);
+	settingsLaout->addStretch();
+	settingsLaout->addLayout(walletLayout);
+	settingsLaout->addLayout(poolLayout);
+	settingsLaout->addLayout(passwordLayout);
+	settingsLaout->addLayout(identifierLayout);
+	settingsLaout->addLayout(currencyLayout);
+	settingsLaout->addStretch();
+	settingsLaout->addLayout(buttonLayout);
+
+//	settingsLaout->addWidget(toolbar, 0, 0, 1,4);
+//	// settingsLaout->add
+//	settingsLaout->addWidget(walletLabel, 2, 0,1,2);
+//	settingsLaout->addWidget(walletEdit, 2, 2,1,2);
+//	settingsLaout->addWidget(password, 3, 0,1,2);
+//	settingsLaout->addWidget(passwordEdit, 3, 2,1,2);
+//	settingsLaout->addWidget(poolUrl, 4, 0,1,2);
+//	settingsLaout->addWidget(poolEdit, 4, 2,1,2);
+//	settingsLaout->addWidget(identifier, 5, 0,1,2);
+//	settingsLaout->addWidget(identifierEdit, 5, 2,1,2);
+//	settingsLaout->addWidget(currencyLabel, 6, 0,1,2);
+//	settingsLaout->addWidget(currency, 6, 2,1,2);
+//
+//	settingsLaout->addWidget(confirm, 8, 0,1,2);
+//	settingsLaout->addWidget(CancelBtn, 8, 2,1,2);
+//
+//	settingsLaout->setSpacing(0);
+////	settingsLaout->addWidget(new QSizeGrip(this), 9, 3);
+//
+//	// settingsLaout->setSizeConstraint(QLayout::SetFixedSize);
 
 	stack->addWidget(settingsWidget);
 
@@ -281,10 +319,13 @@ void MinerUI::configureConnections()
 		
 	});
 
-	connect(back, &QPushButton::clicked, [this]() {
+	connect(back, &QAction::triggered, [this]() {
 		stack->setCurrentIndex(0);
-		
+
 	});
+
+	
+
 
 	connect(currency, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](int index) {
 
@@ -318,7 +359,7 @@ void MinerUI::configureStyleSheet()
 		"QScrollArea, #cardHolder{ border: 0px solid rgba(130,130,130,0); background: rgba(17,17,17,0); border-radius:1px; }"
 		"#cardHolder, #grip {background: rgba(17,17,17,0); padding: 0px; margin: 0px; }"
 		"QLabel{ color: rgba(255,255,255,.9); }"
-	//	"QLabel#label{ padding-left: 10px; background:rgba(10,10,10,0); }"
+		"QLabel#label{ padding-left: 10px; background:rgba(10,10,10,0); }"
 		"QToolButton, #back {border-radius: 1px; background: rgba(20,20,20, 0); color: rgba(250,250,250, 1); border : 0px solid rgba(20,20,20, 1); padding: 4px 6px 4px 6px ; margin-right:3px;}"
 		//     "QToolButton:hover{background: rgba(48,48,48, 1);}"
 		"QScrollBar::handle {background: rgba(40,128, 185,.9); border-radius: 4px; right: 1px; width: 8px;}"
@@ -331,10 +372,11 @@ void MinerUI::configureStyleSheet()
 		"#startBtn{ padding: 9px 19px 9px 19px; background:rgba(23,23,23,.7); border:1px solid rgba(0,0,0,0);}"
 		"#startBtn:hover, QToolButton:hover, #back:hover { background : rgba(40,128, 185,.9); }"
 		//   "QScrollArea{background: rgba(23,23,23,1); border: 0px solid black; }"
-		"#toolBar{ background: rgba(40,128, 185,0); border: 1px solid rgba(10,0,0,0); }"
-		"#back{ background: rgba(40,128, 185,0); border: 0px solid rgba(40,40,40,0.3); }"
+		"#toolBar{ background: rgba(40,128, 185,1); border: 1px solid rgba(10,0,0,0); }"
+		//"#back{ background: rgba(40,128, 185,0); border: 0px solid rgba(40,40,40,0.3); }"
 		"#bottomBtn{border: 1px solid rgba(40,40,40,0.3); padding: 10px; }"
 		"#bottomBtn:hover{background: rgba(40,128, 185,0.5);}"
+		"#edit { background: rgba(17,17,17,1); margin-left :10; margin-right : 10px; border : 0px; border-bottom : 1px solid black; }"
 		"");
 }
 

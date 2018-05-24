@@ -17,7 +17,7 @@
 #include <QStackedWidget>
 #include <QComboBox>
 #include "mswitch.h"
-#include "QtAwesome.h"
+#include "../misc/QtAwesome.h"
 
 
 class QtAwesome;
@@ -56,6 +56,7 @@ public:
 		configureCard();
 		configureConnections();
 		setColor(1);
+		contract();
 
 	}
 
@@ -310,7 +311,7 @@ private:
 	QAction *settings, *close;
 	QAction *advance;
 	MSwitch *autoStartSwitch;
-	QPushButton *back;
+	QAction *back;
 	QComboBox *currency;
 	QLineEdit *walletEdit, *passwordEdit, *poolEdit, *identifierEdit;
 	QtAwesome fontIcon;
