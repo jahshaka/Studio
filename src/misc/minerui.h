@@ -5,6 +5,7 @@
 #include <QLayout>
 #include <QWidget>
 #include <QLabel>
+#include <QLineEdit>
 #include <QSlider>
 #include <QPropertyAnimation>
 #include <QPainter>
@@ -154,13 +155,14 @@ private:
 		logo = new QPushButton();
 		logo->setObjectName(QStringLiteral("logo"));
 		logo->setLayout(logoLayout);
-		logo->setFixedSize(100, 98);
+		logo->setFixedSize(150, 98);
 		logo->setCheckable(true);
 		logo->setCursor(Qt::PointingHandCursor);
+		logo->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
 
 
 		pool = new QLabel("Pool  ");
-		pool->setAlignment(Qt::AlignHCenter);
+		pool->setAlignment(Qt::AlignLeft);
 		dot = new Dot(color);
 		poolDotLayout->addWidget(pool);
 		poolDotLayout->addWidget(dot);
@@ -168,7 +170,7 @@ private:
 		setDotColor(CONNECTED);
 
 		speed = new QLabel("Speed: ");
-		speed->setAlignment(Qt::AlignHCenter);
+		speed->setAlignment(Qt::AlignLeft);
 		cardName = new QLabel("AMD A9");
 		cardName->setAlignment(Qt::AlignHCenter);
 		cardName->setWordWrap(true);
@@ -193,7 +195,7 @@ private:
 		logoLayout->addWidget(cardName);
 		logoLayout->addLayout(poolDotLayout);
 		logoLayout->addWidget(speed);
-		// logoLayout->addLayout(sliderLayout);
+		logoLayout->addLayout(sliderLayout);
 		//logoLayout->addStretch();
 
 		info = new QWidget();
@@ -232,12 +234,13 @@ private:
 		mainLayout->addWidget(card);
 
 		qDebug() << card->geometry();
-		setStyleSheet(" QWidget#logo, QWidget#info,QWidget#additional  { background:rgba(17,17,17,0); border : 0px solid rgba(00,00,00,.2); border-radius: 1px; margin: 0px;  }"
+		setStyleSheet(" * {color: white; }"
+			"QWidget#logo, QWidget#info,QWidget#additional  { background:rgba(17,17,17,0); border : 0px solid rgba(00,00,00,.2); border-radius: 1px; margin: 0px;  }"
 			"QWidget#logo:hover, QWidget#info:hover,QWidget#additional:hover{border : 1px solid rgba(40,128,185,.01); }"
-			"QLabel{ color:rgba(255,255,255,.8); padding :3px; }"
+			//"QLabel{ color:rgba(255,255,255,.8); padding :3px; }"
 			"#logo:checked {background: qlineargradient(x1: 0, y1: 1, x2: 1, y2: 1, stop: 0 rgba(40,128,185,.5), stop: 0.5 rgba(17,17,17,0));}"
 			"QToolBar::separator{ background:rgba(0,0,0,.1);}"
-			"#card{background: rgba(40,128,185,.1); border: 3px solid rgba(0,0,0,.85);}"
+			"#card{background: rgba(40,128,185,.1); border: 1px solid rgba(0,0,0,.85);}"
 			"#gpuLabel{ color: rgba(150,150,170,.8);}");
 
 		QGraphicsDropShadowEffect *effect = new QGraphicsDropShadowEffect;
@@ -309,7 +312,11 @@ private:
 	MSwitch *autoStartSwitch;
 	QPushButton *back;
 	QComboBox *currency;
+	QLineEdit *walletEdit, *passwordEdit, *poolEdit, *identifierEdit;
 	QtAwesome fontIcon;
+
+protected:
+
 };
 
 #endif // MINERUI_H
