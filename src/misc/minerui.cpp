@@ -49,7 +49,7 @@ void MinerUI::configureUI()
 	stack->setGraphicsEffect(effect);
 
 
-	// fontIcon.initFontAwesome();
+	 fontIcon.initFontAwesome();
 
 	auto groupBoxLayout = new QVBoxLayout;
 	auto mainLayout = new QVBoxLayout;
@@ -72,14 +72,14 @@ void MinerUI::configureUI()
 	toolbar = new QToolBar();
 	toolbar->setObjectName(QStringLiteral("toolBar"));
 	settings = new QAction("settings");
-	//settings->setText(QChar(fa::cog));
-	//settings->setFont(fontIcon.font(15));
+	settings->setText(QChar(fa::cog));
+	settings->setFont(fontIcon.font(15));
 	advance = new QAction("advance");
-	//advance->setText(QChar(fa::sliders));
-	//advance->setFont(fontIcon.font(15));
+	advance->setText(QChar(fa::sliders));
+	advance->setFont(fontIcon.font(15));
 	close = new QAction("X");
-	//close->setText(QChar(fa::times));
-	//close->setFont(fontIcon.font(15));
+	close->setText(QChar(fa::times));
+	close->setFont(fontIcon.font(15));
 
 	toolbar->addAction(settings);
 	toolbar->addAction(advance);
@@ -296,16 +296,16 @@ void MinerUI::configureStyleSheet()
 		//     "QToolButton:hover{background: rgba(48,48,48, 1);}"
 		"QScrollBar::handle {background: rgba(40,128, 185,.9); border-radius: 4px; right: 1px; width: 8px;}"
 		"QScrollBar{border : 0px solid black; background-color: rgba(32,32,32,.1); width: 8px;padding: 1px;}"
-		" QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {background: rgba(200,200,200,0);}"
+		"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {background: rgba(200,200,200,0);}"
 		"QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical { background: rgba(0,0,0,0); border: 0px solid white;}"
 		"QScrollBar::sub-line, QScrollBar::add-line {background: rgba(10,0,0,.1);}"
-		"QPushButton{ background: rgba(20,20,20,1); border: 1px solid rgba(10,10,10,1); border-radius: 1px;  color: rgba(255,255,255,.9); padding : 3px 9px 3px 9px; }"
+	//	"QPushButton{ background: rgba(20,20,20,1); border: 1px solid rgba(10,10,10,1); border-radius: 1px;  color: rgba(255,255,255,.9); padding : 3px 9px 3px 9px; }"
 		""
 		"#startBtn{ padding: 9px 19px 9px 19px; background:rgba(23,23,23,.7); border:1px solid rgba(0,0,0,0);}"
 		"#startBtn:hover, QToolButton:hover, #back:hover { background : rgba(40,128, 185,.9); }"
 		//   "QScrollArea{background: rgba(23,23,23,1); border: 0px solid black; }"
-		"#toolBar{ background: rgba(40,128, 185,0); border: 1px solid rgba(10,0,0,0); }"
-		"#back{ background: rgba(40,128, 185,0); border: 0px solid rgba(40,40,40,0.3); }"
+		"#toolBar{ background: rgba(40,128, 185,1); border: 1px solid rgba(10,0,0,0); }"
+		//"#back{ background: rgba(40,128, 185,0); border: 0px solid rgba(40,40,40,0.3); }"
 		"#bottomBtn{border: 1px solid rgba(40,40,40,0.3); }"
 		"#bottomBtn:hover{background: rgba(40,128, 185,0.5);};"
 		"");

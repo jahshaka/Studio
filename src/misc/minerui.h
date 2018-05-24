@@ -16,7 +16,7 @@
 #include <QStackedWidget>
 #include <QComboBox>
 #include "mswitch.h"
-//#include "QtAwesome.h"
+#include "QtAwesome.h"
 
 
 class QtAwesome;
@@ -175,7 +175,7 @@ private:
 
 		QFont font = cardName->font();
 		font.setStyleStrategy(QFont::PreferAntialias);
-		font.setBold(true);
+		//font.setBold(true);
 		cardName->setFont(font);
 		font.setBold(false);
 		font.setPixelSize(12);
@@ -189,12 +189,12 @@ private:
 		sliderLayout->addWidget(switchBtn);
 		sliderLayout->addStretch();
 
-		logoLayout->addStretch();
+		//logoLayout->addStretch();
 		logoLayout->addWidget(cardName);
 		logoLayout->addLayout(poolDotLayout);
 		logoLayout->addWidget(speed);
 		// logoLayout->addLayout(sliderLayout);
-		logoLayout->addStretch();
+		//logoLayout->addStretch();
 
 		info = new QWidget();
 		info->setObjectName(QStringLiteral("info"));
@@ -309,7 +309,7 @@ private:
 	MSwitch *autoStartSwitch;
 	QPushButton *back;
 	QComboBox *currency;
-	//QtAwesome fontIcon;
+	QtAwesome fontIcon;
 };
 
 #endif // MINERUI_H
