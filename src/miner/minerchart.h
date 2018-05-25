@@ -10,14 +10,15 @@ public:
 
 	MinerChart()
 	{
-		
+		/*
 		for (int i = 0; i < 100; i++) {
 			data.append({
+				true,
 				i,
 				RandomFloat(40, 100)
 			});
 		}
-		
+		*/
 	}
 
 	void paintEvent(QPaintEvent* evt)
@@ -53,10 +54,10 @@ public:
 			auto x1 = (i - 1) * xIncr;
 			auto x2 = i * xIncr;
 
-			auto yr = (d1.hps - minHps) / hpsDiff;
+			auto yr = 1.0 - ((d1.hps - minHps) / hpsDiff);
 			auto y1 = yBottom + yr * yDiff;
 
-			yr = (d2.hps - minHps) / hpsDiff;
+			yr = 1.0 - ((d2.hps - minHps) / hpsDiff);
 			auto y2 = yBottom + yr * yDiff;
 			painter.drawLine(x1, y1, x2, y2);
 		}

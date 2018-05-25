@@ -86,7 +86,7 @@ QList<GPU> get_cuda_devices() {
 			clGetDeviceInfo(devices[j], CL_DEVICE_VENDOR, sizeof vendorname, &vendorname, nullptr);
 			clGetDeviceInfo(devices[j], CL_DEVICE_NAME, sizeof name, &name, nullptr);
 			if (parse_vendor(vendorname) == "NVIDIA")
-				ret.push_back({ i, parse_vendor(vendorname), name, GPUType::AMD });
+				ret.push_back({ i, parse_vendor(vendorname), name, GPUType::NVidia });
 		}
 	}
 
@@ -206,7 +206,7 @@ void MinerProcess::startMining()
 	});
 
 	process->setProcessChannelMode(QProcess::MergedChannels);
-	process->start("xmr-stak.exe", args);
+	process->start("xmr-stak/xmr-stak.exe", args);
 
 	// start listening over the network
 	timer = new QTimer();
@@ -221,13 +221,15 @@ void MinerProcess::startMining()
 
 			if (error.error == QJsonParseError::NoError) {
 				QJsonObject obj = doc.object();
-				qDebug() << obj;
+				//qDebug() << obj;
 				//auto hps = obj["hashrate"]["total"][0].toDouble(0);
 				//auto time = obj["connection"]["uptime"].toFloat(0);
 
 				// time
 				auto conObj = obj["connection"].toObject();
 				auto uptime = conObj["uptime"].toInt();
+				auto pool = conObj["pool"].toString();
+				bool poolConnected = pool == "not connected" ? false : true;
 				//auto t = hashArray[0].toDouble(0);
 
 				// hps
@@ -235,8 +237,9 @@ void MinerProcess::startMining()
 				auto hashArray = hashObj["total"].toArray();
 				auto hps = (float)hashArray[0].toDouble(0);
 
+				//qDebug() << "uptime: " < uptime;
 				//data.append({ uptime, hps });
-				if (uptime > 0) {
+				//if (uptime > 0) {
 					/*
 					minerChart->data.append({ uptime, hps });
 					if (minerChart->data.size() > 100) {
@@ -244,8 +247,8 @@ void MinerProcess::startMining()
 					}
 					*/
 
-					emit onMinerChartData({ uptime, hps });
-				}
+					emit onMinerChartData({ poolConnected,uptime, hps });
+				//}
 
 				//minerChart->repaint();
 			}
@@ -253,6 +256,8 @@ void MinerProcess::startMining()
 			//qDebug() << result;
 		});
 	});
+
+	_isMining = true;
 }
 
 void MinerProcess::stopMining()
@@ -265,17 +270,19 @@ void MinerProcess::stopMining()
 		//delete process;
 		//process = nullptr;
 	}
+
+	_isMining = false;
 }
 
 void MinerProcess::networkRequest(QString url, std::function<void(QString)> callback)
 {
-	qDebug() << networkUrl;
+	//qDebug() << networkUrl;
 	auto reply = netMan->get(QNetworkRequest(QUrl(networkUrl)));
 	
 	QObject::connect(reply, &QNetworkReply::readyRead, [reply, callback]()
 	{
 		auto data = QString(reply->readAll());
-		qDebug() << data;
+		//qDebug() << data;
 		callback(data);
 	});
 }

@@ -10,6 +10,7 @@
 
 struct MinerChartData
 {
+	bool connected;
 	long time;
 	float hps;// hashes per second
 };
@@ -45,7 +46,8 @@ class QTimer;
 class MinerManager
 {
 public:
-	QString poolUrl = "pool.supportxmr.com:3333";
+	//QString poolUrl = "pool.supportxmr.com:3333";
+	QString poolUrl = "165.227.72.177:3333";
 	QString identifier = "x";
 	QString password = "x";
 	QString walletId = "43QGgipcHvNLBX3nunZLwVQpF6VbobmGcQKzXzQ5xMfJgzfRBzfXcJHX1tUHcKPm9bcjubrzKqTm69JbQSL4B3f6E3mNCbU";
@@ -62,6 +64,7 @@ class MinerProcess : public QObject
 {
 	Q_OBJECT
 public:
+	bool _isMining = false;
 	float hashesPerSecond;
 	//QString gpuType;
 	GPU gpu;
@@ -91,6 +94,7 @@ public:
 
 	void startMining();
 	void stopMining();
+	bool isMining() { return _isMining; }
 	MinerStatus getMinerStatus()
 	{
 		return status;
