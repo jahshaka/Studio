@@ -58,7 +58,7 @@ public:
 };
 
 class MinerChart;
-class MinerProcess
+class MinerProcess : public QObject
 {
 	Q_OBJECT
 public:

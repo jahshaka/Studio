@@ -111,6 +111,26 @@ public:
 	void setMinerProcess(MinerProcess* process)
 	{
 		this->process = process;
+
+		if (process != nullptr) {
+			connect(process, &MinerProcess::onMinerChartData, [this](MinerChartData data)
+			{
+				// set last hash to ui
+				this->setSpeed(data.hps);
+			});
+		}
+	}
+
+	void startMining()
+	{
+		if (armed) {
+			process->startMining();
+		}
+	}
+
+	void stopMinig()
+	{
+		process->stopMining();
 	}
 
 
@@ -303,6 +323,7 @@ private:
 
 	}
 
+
 signals:
 	void switchIsOn(bool);
 
@@ -312,14 +333,14 @@ signals:
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
+class MinerManager;
 class MinerUI : public QWidget
 {
 	Q_OBJECT
 public:
 	MinerUI(QWidget *parent = 0);
 	~MinerUI();
-	void addGraphicsCard(QString string);
+	GraphicsCardUI* addGraphicsCard(QString string);
 	bool setToStartAutomatically() {
 		return startAutomatically;
 	}
@@ -351,7 +372,9 @@ private:
 	QComboBox *currency;
 	QLineEdit *walletEdit, *passwordEdit, *poolEdit, *identifierEdit;
 	QtAwesome fontIcon;
+
 	QPoint oldPos;
+	MinerManager* minerMan;
 
 protected:
 	void mousePressEvent(QMouseEvent *event) {

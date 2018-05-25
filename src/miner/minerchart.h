@@ -11,7 +11,7 @@ public:
 	MinerChart()
 	{
 		
-		for (int i = 0; i < 30; i++) {
+		for (int i = 0; i < 100; i++) {
 			data.append({
 				i,
 				RandomFloat(40, 100)
