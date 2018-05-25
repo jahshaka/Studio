@@ -19,6 +19,8 @@
 #include <QComboBox>
 #include "mswitch.h"
 #include "../misc/QtAwesome.h"
+#include "minerprocess.h"
+#include "minerchart.h"
 
 
 class QtAwesome;
@@ -106,6 +108,11 @@ public:
 		displayLabel->setText(val? "--Mining--": oldString);		
 	}
 
+	void setMinerProcess(MinerProcess* process)
+	{
+		this->process = process;
+	}
+
 
 private:
 	QWidget * info, *additional;
@@ -116,6 +123,7 @@ private:
 	QPushButton *logo;
 	QString oldString;
 	bool armed=false, mining=false;
+	MinerProcess* process;
 
 	enum Connection {
 		CONNECTED = 1,
@@ -205,7 +213,8 @@ private:
 		logoLayout->addLayout(sliderLayout);
 		//logoLayout->addStretch();
 
-		info = new QWidget();
+		//info = new QWidget();
+		info = new MinerChart();
 		info->setObjectName(QStringLiteral("info"));
 		info->setLayout(infoLayout);
 		info->setFixedHeight(98);

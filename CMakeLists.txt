@@ -308,6 +308,7 @@ set(FORMS
 set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
+include(IncludeMiner)
 
 qt5_wrap_cpp(HEADERS_moc ${HEADERS})
 qt5_wrap_ui(UI_moc ${FORMS})
