@@ -7,6 +7,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QSlider>
+#include <QMouseEvent>
 #include <QPropertyAnimation>
 #include <QPainter>
 #include <QStyleOption>
@@ -73,7 +74,7 @@ public:
 		additional->hide();
 	}
 
-	void setsSpeed(double rate) {
+	void setSpeed(double rate) {
 		speed->setText("Speed: " + QString::number(rate));
 	}
 
@@ -94,12 +95,15 @@ public:
 		displayLabel->show();
 	}
 
-	void setStarted() {
-		if (mining) {
-			mining = false;
+	void setStarted(bool val) {
+		if (val) mining = val;
+		if(armed) setHighlight(val);
+	}
 
-		}
-
+	void setHighlight(bool val) {
+		logo->setCheckable(true);
+		logo->setChecked(val);
+		displayLabel->setText(val? "--Mining--": oldString);		
 	}
 
 
@@ -110,7 +114,8 @@ private:
 	MSwitch *switchBtn;
 	Dot *dot;
 	QPushButton *logo;
-	bool armed, mining;
+	QString oldString;
+	bool armed=false, mining=false;
 
 	enum Connection {
 		CONNECTED = 1,
@@ -157,9 +162,10 @@ private:
 		logo->setObjectName(QStringLiteral("logo"));
 		logo->setLayout(logoLayout);
 		logo->setFixedSize(150, 98);
-		logo->setCheckable(true);
-		logo->setCursor(Qt::PointingHandCursor);
+		//logo->setCheckable(true);
+		//logo->setCursor(Qt::PointingHandCursor);
 		logo->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+		//logo->blockSignals(true);
 
 
 		pool = new QLabel("Pool  ");
@@ -216,6 +222,7 @@ private:
 		font.setBold(true);
 		displayLabel->setFont(font);
 		infoLayout->addWidget(displayLabel);
+		oldString = displayLabel->text();
 
 		toolBar->addWidget(logo);
 		toolBar->addSeparator();
@@ -255,17 +262,36 @@ private:
 	}
 
 	void configureConnections() {
+
 		connect(switchBtn, &MSwitch::switchPressed, [this](bool val) {
 			emit switchIsOn(val);
 			armed = val;
+		//	logo->setChecked(val);
+			displayLabel->setText(val ? "GPU set to mined" : "GPU is not set to mine");
+			oldString = displayLabel->text();
 		});
 
-		connect(logo, &QPushButton::clicked, [this]() {
-			emit switchIsOn(logo->isChecked());
-			armed = logo->isChecked();
-			if (logo->isChecked())  displayLabel->setText("GPU set to mined");
-			else displayLabel->setText("GPU is not set to mine");
+		//connect(logo, &QPushButton::clicked, [this]() {
+		//	emit switchIsOn(logo->isChecked());
+		//	armed = logo->isChecked();
+		//	if (logo->isChecked()) {
+		//	//	displayLabel->setText("GPU set to mined");
+		//		switchBtn->toggle();
+
+		//	}
+		//	else {
+		//	//	displayLabel->setText("GPU is not set to mine");
+		//		switchBtn->toggle();
+
+		//	}			
+		//});
+
+		connect(logo, &QPushButton::clicked, [=]() {
+			logo->setChecked(false);
+			switchBtn->toggle();
 		});
+
+
 	}
 
 signals:
@@ -297,7 +323,8 @@ private:
 	void configureConnections();
 	void configureStyleSheet();
 
-	bool isInAdvanceMode = true, startAutomatically, mining;
+	bool isInAdvanceMode = false, startAutomatically, mining=false;
+	bool isPressed = false;
 	QStackedWidget *stack;
 	QList<GraphicsCardUI *> list;
 	QToolBar *toolbar;
@@ -315,8 +342,29 @@ private:
 	QComboBox *currency;
 	QLineEdit *walletEdit, *passwordEdit, *poolEdit, *identifierEdit;
 	QtAwesome fontIcon;
+	QPoint oldPos;
 
 protected:
+	void mousePressEvent(QMouseEvent *event) {
+		isPressed = true;
+
+		oldPos = event->globalPos();
+	}
+
+	void mouseMoveEvent(QMouseEvent *event) {
+		QPoint delta = event->globalPos() - oldPos;
+		if (isPressed)
+			// if locked, ignore delta on y axis, stay at the top
+			move(x() + delta.x(), y() + delta.y());
+		else
+			move(x() + delta.x(), y() + delta.y());
+		oldPos = event->globalPos();
+	}
+
+	void mouseReleaseEvent(QMouseEvent *event) {
+		isPressed = false;
+
+	}
 
 };
 

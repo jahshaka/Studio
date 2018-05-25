@@ -5,6 +5,7 @@
 #include <QGraphicsDropShadowEffect>
 #include <QGroupBox>
 #include <QSizeGrip>
+#include <QStyledItemDelegate>
 
 MinerUI::MinerUI(QWidget *parent)
 	: QWidget(parent)
@@ -58,16 +59,8 @@ void MinerUI::configureUI()
 	auto bottomLayout = new QHBoxLayout;
 	cardHolderLayout = new QVBoxLayout;
 
-	auto gripWidget = new QWidget();
-	gripWidget->setObjectName(QStringLiteral("grip"));
-	auto gripLayout = new QHBoxLayout;
-	gripWidget->setLayout(gripLayout);
-	gripLayout->addWidget(new QSizeGrip(this), 0, Qt::AlignBottom | Qt::AlignRight);
-
-
 	setLayout(mainLayout);
 	mainLayout->addWidget(stack);
-	mainLayout->addWidget(gripWidget);
 
 	auto groupBox = new QGroupBox;
 	groupBox->setLayout(groupBoxLayout);
@@ -90,11 +83,17 @@ void MinerUI::configureUI()
 	close->setText(QChar(fa::times));
 	close->setFont(fontIcon.font(15));
 
+	auto minerLabel = new QLabel("Miner");
+	
 	toolbar->addAction(settings);
 	toolbar->addAction(advance);
 	auto empty = new QWidget();
 	empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	toolbar->addWidget(empty);
+	toolbar->addWidget(minerLabel);
+	auto empty1 = new QWidget();
+	empty1->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+	toolbar->addWidget(empty1);
 	toolbar->addAction(close);
 
 
@@ -128,6 +127,7 @@ void MinerUI::configureUI()
 	font.setStyleStrategy(QFont::PreferAntialias);
 	font.setBold(true);
 	coinType->setFont(font);
+	minerLabel->setFont(font);
 	//autostart->setFont(font);
 
 
@@ -139,15 +139,18 @@ void MinerUI::configureUI()
 	switchLayout->addWidget(autoStartSwitch);
 	//switchLayout->addStretch();
 
-
+	autoLayout->addStretch();
 	autoLayout->addLayout(switchLayout);
 	autoLayout->addWidget(autostart);
+	autoLayout->addStretch();
 
+	bottomLayout->addSpacing(10);
 	bottomLayout->addWidget(startBtn);
 	bottomLayout->addSpacing(23);
 	bottomLayout->addWidget(coinType);
 	bottomLayout->addStretch();
 	bottomLayout->addLayout(autoLayout);
+	bottomLayout->addSpacing(10);
 
 
 	groupBoxLayout->addWidget(toolbar);
@@ -157,6 +160,7 @@ void MinerUI::configureUI()
 	groupBoxLayout->addLayout(bottomLayout);
 	//  groupBoxLayout->setSizeConstraint(QLayout::SetFixedSize);
 	groupBoxLayout->setSpacing(0);
+	groupBoxLayout->addWidget(new QSizeGrip(this), 0, Qt::AlignBottom | Qt::AlignRight);
 }
 
 void MinerUI::configureSettings()
@@ -171,13 +175,12 @@ void MinerUI::configureSettings()
 	auto toolbar = new QToolBar;
 	toolbar->setObjectName(QStringLiteral("toolBar"));
 
-
 	back = new QAction;
 	back->setText(QChar(fa::arrowleft));
 	back->setFont(fontIcon.font(15));
 	back->setObjectName(QStringLiteral("back"));
 	auto settingsLabel = new QLabel("SETTINGS");
-	settingsLabel->setAlignment(Qt::AlignHCenter);
+//	settingsLabel->setAlignment(Qt::AlignHCenter);
 	QFont font = settingsLabel->font();
 	font.setBold(true);
 	settingsLabel->setFont(font);
@@ -202,7 +205,6 @@ void MinerUI::configureSettings()
 	});
 
 
-
 	toolbar->addAction(back);
 	auto empty = new QWidget();
 	empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
@@ -212,7 +214,6 @@ void MinerUI::configureSettings()
 	empty1->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	toolbar->addWidget(empty1);
 	toolbar->addAction(settingsClose);
-
 
 
 	auto walletLabel = new QLabel("Wallet Id ");
@@ -236,10 +237,11 @@ void MinerUI::configureSettings()
 	poolEdit = new QLineEdit();
 	identifierEdit = new QLineEdit();
 
-
-
+	QStyledItemDelegate *itemDelegate = new QStyledItemDelegate();
 	currency = new QComboBox;
-	auto stringList = QStringList() << "Aeon" << "BBSCoin" << "Croat" << "Edollar" << "Electroneum" << "Graft" << "Haven" << "Intense" << "Karbo" << "Sumokoin" << "Monero7";
+	currency->setItemDelegate(itemDelegate);
+	currency->setObjectName(QStringLiteral("currencyBox"));
+	auto stringList = QStringList() << "Monero7" << "Aeon" << "BBSCoin" << "Croat" << "Edollar" << "Electroneum" << "Graft" << "Haven" << "Intense" << "Karbo" << "Sumokoin" ;
 	currency->setCurrentText("Select Currency");
 	currency->addItems(stringList);
 
@@ -258,8 +260,7 @@ void MinerUI::configureSettings()
 	walletEdit->setPlaceholderText("Enter Wallet ID");
 	poolEdit->setPlaceholderText("Enter Pool URL");
 	passwordEdit->setPlaceholderText("Enter Password");
-	identifierEdit->setPlaceholderText("Enter Identifier");
-	 
+	identifierEdit->setPlaceholderText("Enter Identifier");	 
 
 	walletLayout->addWidget(walletLabel);
 	walletLayout->addWidget(walletEdit);
@@ -274,7 +275,6 @@ void MinerUI::configureSettings()
 	currencyLayout->addWidget(currencyLabel);
 	currencyLayout->addWidget(currency);
 
-
 	settingsLaout->addWidget(toolbar);
 	settingsLaout->addStretch();
 	settingsLaout->addLayout(walletLayout);
@@ -285,31 +285,9 @@ void MinerUI::configureSettings()
 	settingsLaout->addStretch();
 	settingsLaout->addLayout(buttonLayout);
 
-//	settingsLaout->addWidget(toolbar, 0, 0, 1,4);
-//	// settingsLaout->add
-//	settingsLaout->addWidget(walletLabel, 2, 0,1,2);
-//	settingsLaout->addWidget(walletEdit, 2, 2,1,2);
-//	settingsLaout->addWidget(password, 3, 0,1,2);
-//	settingsLaout->addWidget(passwordEdit, 3, 2,1,2);
-//	settingsLaout->addWidget(poolUrl, 4, 0,1,2);
-//	settingsLaout->addWidget(poolEdit, 4, 2,1,2);
-//	settingsLaout->addWidget(identifier, 5, 0,1,2);
-//	settingsLaout->addWidget(identifierEdit, 5, 2,1,2);
-//	settingsLaout->addWidget(currencyLabel, 6, 0,1,2);
-//	settingsLaout->addWidget(currency, 6, 2,1,2);
-//
-//	settingsLaout->addWidget(confirm, 8, 0,1,2);
-//	settingsLaout->addWidget(CancelBtn, 8, 2,1,2);
-//
-//	settingsLaout->setSpacing(0);
-////	settingsLaout->addWidget(new QSizeGrip(this), 9, 3);
-//
-//	// settingsLaout->setSizeConstraint(QLayout::SetFixedSize);
-
 	stack->addWidget(settingsWidget);
-
+	settingsLaout->addWidget(new QSizeGrip(this), 0, Qt::AlignBottom | Qt::AlignRight);
 	
-
 }
 
 void MinerUI::configureConnections()
@@ -337,8 +315,20 @@ void MinerUI::configureConnections()
 	});
 
 	connect(startBtn, &QPushButton::clicked, [this]() {
-		foreach(card, list) card->setStarted();
-		startBtn->setText("Stop");
+		
+
+		if (!mining) {
+			foreach(card, list) card->setStarted(!mining);
+
+			startBtn->setText("Stop");
+			mining = true;
+		}
+		else {
+			foreach(card, list) card->setStarted(!mining);
+
+			startBtn->setText("Start");
+			mining = false;
+		}
 
 	});
 	connect(autoStartSwitch, &MSwitch::switchPressed, [this](bool val) {
@@ -372,11 +362,15 @@ void MinerUI::configureStyleSheet()
 		"#startBtn{ padding: 9px 19px 9px 19px; background:rgba(23,23,23,.7); border:1px solid rgba(0,0,0,0);}"
 		"#startBtn:hover, QToolButton:hover, #back:hover { background : rgba(40,128, 185,.9); }"
 		//   "QScrollArea{background: rgba(23,23,23,1); border: 0px solid black; }"
-		"#toolBar{ background: rgba(40,128, 185,1); border: 1px solid rgba(10,0,0,0); }"
+		"#toolBar{ background: rgba(40,128, 185,0); border: 1px solid rgba(10,0,0,0); }"
 		//"#back{ background: rgba(40,128, 185,0); border: 0px solid rgba(40,40,40,0.3); }"
 		"#bottomBtn{border: 1px solid rgba(40,40,40,0.3); padding: 10px; }"
 		"#bottomBtn:hover{background: rgba(40,128, 185,0.5);}"
 		"#edit { background: rgba(17,17,17,1); margin-left :10; margin-right : 10px; border : 0px; border-bottom : 1px solid black; }"
+		"#currencyBox, #currencyBox:drop-down {background-color: rgba(33,33,33,1); border :0px; border-bottom: 1px solid black; padding-left: 10px; margin-left : 5px; }"
+		"#currencyBox QAbstractItemView {background-color: rgba(33,33,33,1); border :0px; border-bottom: 1px solid black; padding-left: 10px; margin-left : 5px; selection-background-color: rgba(40,128, 185,0); }"
+		"#currencyBox QAbstractItemView::item:hover {background-color: rgba(40,128,185,1); border :0px;  }"
+		""
 		"");
 }
 

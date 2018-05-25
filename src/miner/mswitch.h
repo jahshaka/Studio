@@ -51,11 +51,49 @@ public:
         return onColor.dark(120);
     }
 
+	void toggle() {
+		simulateClick();
+	}
+
 private:
     bool isOn = false;
     QRect boundingRect;
     QColor startColor, endColor, onColor;
     int wHeight, wWidth, factor=10, offset =3;
+
+	void simulateClick() {
+
+		QPropertyAnimation *animation = new QPropertyAnimation(this, "sliderPosition");
+		QPropertyAnimation *animation1 = new QPropertyAnimation(this, "onColor1");
+		if (value() == minimum()) {
+			animation->setDuration(300);
+			animation->setStartValue(minimum());
+			animation->setEndValue(maximum());
+			animation->setEasingCurve(QEasingCurve::OutBounce);
+			animation->start();
+			animation1->setDuration(150);
+			animation1->setStartValue(startColor);
+			animation1->setEndValue(endColor.darker(120));
+			animation1->setEasingCurve(QEasingCurve::OutCurve);
+			animation1->start();
+			isOn = isOn ? false : true;
+		}
+		else {
+			animation->setDuration(300);
+			animation->setStartValue(maximum());
+			animation->setEndValue(minimum());
+			animation->setEasingCurve(QEasingCurve::OutCurve);
+			animation->start();
+			animation1->setDuration(250);
+			animation1->setEndValue(startColor);
+			animation1->setStartValue(endColor.darker(120));
+			animation1->setEasingCurve(QEasingCurve::OutCurve);
+			animation1->start();
+			isOn = isOn ? false : true;
+		}
+		emit switchPressed(isOn);
+
+	}
 
 protected:
     void paintEvent(QPaintEvent *event){
@@ -77,35 +115,7 @@ protected:
 
         Q_UNUSED(event);
         //animate value and color
-        QPropertyAnimation *animation = new QPropertyAnimation(this,"sliderPosition");
-        QPropertyAnimation *animation1 = new QPropertyAnimation(this,"onColor1");
-        if(value()==minimum()){
-            animation->setDuration(300);
-            animation->setStartValue(minimum());
-            animation->setEndValue(maximum());
-            animation->setEasingCurve(QEasingCurve::OutBounce);
-            animation->start();
-            animation1->setDuration(150);
-            animation1->setStartValue(startColor);
-            animation1->setEndValue(endColor.darker(120));
-            animation1->setEasingCurve(QEasingCurve::OutCurve);
-            animation1->start();
-            isOn = isOn? false:true;
-        }
-        else{
-            animation->setDuration(300);
-            animation->setStartValue(maximum());
-            animation->setEndValue(minimum());
-            animation->setEasingCurve(QEasingCurve::OutCurve);
-            animation->start();
-            animation1->setDuration(250);
-            animation1->setEndValue(startColor);
-            animation1->setStartValue(endColor.darker(120));
-            animation1->setEasingCurve(QEasingCurve::OutCurve);
-            animation1->start();
-            isOn = isOn? false:true;
-        }
-        emit switchPressed(isOn);
+		simulateClick();
     }
 
     void mouseReleaseEvent(QMouseEvent *e){
