@@ -42,6 +42,8 @@ public:
 		auto minHps = getMinHps();
 		auto maxHps = getMaxHps();
 		auto hpsDiff = maxHps - minHps;
+		if (hpsDiff < 5)
+			hpsDiff = 5;
 
 		painter.setBrush(QBrush(QColor(200, 200, 255)));
 		QPen pen(QColor(200, 200, 255));

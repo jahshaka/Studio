@@ -117,11 +117,13 @@ void MinerUI::configureUI()
 	scrollArea->setContentsMargins(0, 3, 3, 3);
 	scrollArea->setAlignment(Qt::AlignTop);
 	scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	scrollArea->setWidgetResizable(true);
 
 
 	cardHolder = new QWidget();
 	cardHolder->setObjectName(QStringLiteral("cardHolder"));
 	cardHolder->setGeometry(0, 0, 450, 400);
+	cardHolder->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 
 	for (int i = 0; i< 2; i++) {
 		//addGraphicsCard("amd numbering at this pos " + QString::number(i));
@@ -134,7 +136,7 @@ void MinerUI::configureUI()
 	}
 
 	cardHolder->setLayout(cardHolderLayout);
-	cardHolderLayout->setSizeConstraint(QLayout::SetFixedSize);
+	cardHolderLayout->addStretch();
 	cardHolderLayout->setContentsMargins(0, 0, 0, 0);
 	cardHolderLayout->setSpacing(2);
 	scrollArea->setWidget(cardHolder);
@@ -174,12 +176,16 @@ void MinerUI::configureUI()
 	bottomLayout->addLayout(autoLayout);
 	bottomLayout->addSpacing(10);
 
+	auto bottomWidget = new QWidget;
+	bottomWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+	bottomWidget->setLayout(bottomLayout);
 
 	groupBoxLayout->addWidget(toolbar);
 	groupBoxLayout->addSpacing(3);
 	groupBoxLayout->addWidget(scrollArea);
 	groupBoxLayout->addSpacing(3);
-	groupBoxLayout->addLayout(bottomLayout);
+	//groupBoxLayout->addLayout(bottomLayout);
+	groupBoxLayout->addWidget(bottomWidget);
 	//  groupBoxLayout->setSizeConstraint(QLayout::SetFixedSize);
 	groupBoxLayout->setSpacing(0);
 	groupBoxLayout->addWidget(new QSizeGrip(this), 0, Qt::AlignBottom | Qt::AlignRight);
@@ -368,7 +374,7 @@ void MinerUI::configureStyleSheet()
 {
 	setStyleSheet("*{color:rgba(255,255,255)}"
 		"QGroupBox, #settingsWidget{ background: rgba(33,33,33,1); margin:0px; padding : 0px; border: 0px solid black; }"
-		"QScrollArea, #cardHolder{ border: 0px solid rgba(130,130,130,0); background: rgba(17,17,17,0); border-radius:1px; }"
+		"QScrollArea, #cardHolder{ border: 1px solid rgba(130,130,130,0); background: rgba(17,17,17,0); border-radius:1px; }"
 		"#cardHolder, #grip {background: rgba(17,17,17,0); padding: 0px; margin: 0px; }"
 		"QLabel{ color: rgba(255,255,255,.9); }"
 		"QLabel#label{ padding-left: 10px; background:rgba(10,10,10,0); }"

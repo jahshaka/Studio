@@ -58,7 +58,7 @@ public:
 
 		configureCard();
 		configureConnections();
-		setColor(1);
+		setColor((int)Connection::NOTCONNECTED);
 		contract();
 
 	}
@@ -77,7 +77,7 @@ public:
 	}
 
 	void setSpeed(double rate) {
-		speed->setText("Speed: " + QString::number(rate));
+		speed->setText("Speed: " + QString::number(rate) +" H/s");
 	}
 
 	void setArmed(bool armed) {
@@ -137,10 +137,12 @@ public:
 				else
 					this->setDotColor((int)Connection::CONNECTING);
 
-				if (this->info->data.size() > 100)
-					this->info->data.removeFirst();
-				this->info->data.append(data);
-				this->info->repaint();
+				if (data.hps != 0) {
+					if (this->info->data.size() > 100)
+						this->info->data.removeFirst();
+					this->info->data.append(data);
+					this->info->repaint();
+				}
 			});
 		}
 	}
@@ -207,9 +209,13 @@ private:
 		auto cardLayout = new QGridLayout;
 		card->setLayout(cardLayout);
 		card->setObjectName(QStringLiteral("card"));
+		card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-		auto toolBar = new QToolBar;
-		toolBar->setFixedWidth(450);
+		auto toolBar = new QWidget;
+		toolBar->setObjectName(QStringLiteral("cardBar"));
+		auto toolBarLayout = new QHBoxLayout;
+		toolBar->setLayout(toolBarLayout);
+		toolBar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
 		logo = new QPushButton();
 		logo->setObjectName(QStringLiteral("logo"));
@@ -278,9 +284,8 @@ private:
 		infoLayout->addWidget(displayLabel);
 		oldString = displayLabel->text();
 
-		toolBar->addWidget(logo);
-		toolBar->addSeparator();
-		toolBar->addWidget(info);
+		toolBarLayout->addWidget(logo);
+		toolBarLayout->addWidget(info);
 
 		cardLayout->addWidget(toolBar);
 		cardLayout->addWidget(additional);
@@ -290,7 +295,7 @@ private:
 		//        cardLayout->addLayout(mainLayout);
 		//        cardLayout->addWidget(additional);
 		//        cardLayout->setSpacing(6);
-		cardLayout->setSizeConstraint(QLayout::SetFixedSize);
+		//cardLayout->setSizeConstraint(QLayout::SetFixedSize);
 		cardLayout->setContentsMargins(2, 1, 3, 2);
 		setLayout(mainLayout);
 		mainLayout->addWidget(card);
@@ -298,8 +303,10 @@ private:
 		qDebug() << card->geometry();
 		setStyleSheet(" * {color: white; }"
 			"QWidget#logo, QWidget#info,QWidget#additional  { background:rgba(17,17,17,0); border : 0px solid rgba(00,00,00,.2); border-radius: 1px; margin: 0px;  }"
-			"QWidget#logo:hover, QWidget#info:hover,QWidget#additional:hover{border : 1px solid rgba(40,128,185,.01); }"
+			//"QWidget#logo:hover, QWidget#info:hover,QWidget#additional:hover{border : 1px solid rgba(40,128,185,.01); }"
 			//"QLabel{ color:rgba(255,255,255,.8); padding :3px; }"
+			"QWidget#info  { border-left : 5px solid rgba(00,00,00,.1);  }"
+			"#card:hover{background: rgba(40,128,185,.11); }"
 			"#logo:checked {background: qlineargradient(x1: 0, y1: 1, x2: 1, y2: 1, stop: 0 rgba(40,128,185,.5), stop: 0.5 rgba(17,17,17,0));}"
 			"QToolBar::separator{ background:rgba(0,0,0,.1);}"
 			"#card{background: rgba(40,128,185,.1); border: 1px solid rgba(0,0,0,.85);}"
