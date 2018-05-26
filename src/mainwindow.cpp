@@ -172,8 +172,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupFileMenu();
 
 	fontIcons.initFontAwesome();
-
+#ifdef USE_MINER
 	configureMiner();
+#endif
     setupViewPort();
     setupDesktop();
     setupToolBar();
@@ -198,12 +199,13 @@ void MainWindow::goToDesktop()
     switchSpace(WindowSpaces::DESKTOP);
 }
 
+#ifdef USE_MINER
 void MainWindow::configureMiner()
 {
 	miner = new MinerUI;
 	miner->hide();
-	
 }
+#endif
 
 void MainWindow::setupVrUi()
 {
@@ -2184,7 +2186,7 @@ void MainWindow::setupViewPort()
     jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/header.png"));
 #endif
 
-
+#ifdef USE_MINER
 	auto minerBtn = new QPushButton;
 	minerBtn->setObjectName("miner");
 	minerBtn->setText(QChar(fa::microchip));
@@ -2193,7 +2195,7 @@ void MainWindow::setupViewPort()
 	connect(minerBtn, &QPushButton::pressed, [this]() {
 		miner->show();
 	});
-
+#endif
 
 	help = new QPushButton;
 	help->setObjectName("helpButton");
@@ -2237,7 +2239,9 @@ void MainWindow::setupViewPort()
 	QHBoxLayout *bl = new QHBoxLayout;
 	buttons->setLayout(bl);
 	bl->setSpacing(20);
+#ifdef USE_MINER
 	bl->addWidget(minerBtn);
+#endif
 	bl->addWidget(help);
 	bl->addWidget(prefs);
 
