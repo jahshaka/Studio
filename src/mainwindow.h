@@ -159,7 +159,9 @@ public:
 
 private:
 	//set up miner
+#ifdef USE_MINER
 	void configureMiner();
+#endif
 
     // sets up the button for vr
     void setupVrUi();

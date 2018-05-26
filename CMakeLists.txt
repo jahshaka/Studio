@@ -130,7 +130,6 @@ set(SRCS
     src/misc/upgrader.cpp
     src/misc/QtAwesome.cpp
     src/misc/QtAwesomeAnim.cpp
-	src/miner/minerUI.cpp
     src/dialogs/toast.cpp
 )
 
@@ -255,9 +254,7 @@ set(HEADERS
     src/io/assethelper.h
     src/misc/upgrader.h
     src/misc/QtAwesome.h
-    src/misc/QtAwesomeAnim.h    
-	src/miner/minerUI.h
-	src/miner/MSwitch.h
+    src/misc/QtAwesomeAnim.h 
     src/dialogs/toast.h
 )
 

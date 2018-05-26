@@ -50,6 +50,7 @@ public:
 	QString poolUrl = "165.227.72.177:3333";
 	QString identifier = "x";
 	QString password = "x";
+	//QString walletId = "43QGgipcHvNLBX3nunZLwVQpF6VbobmGcQKzXzQ5xMfJgzfRBzfXcJHX1tUHcKPm9bcjubrzKqTm69JbQSL4B3f6E3mNCbU";
 	QString walletId = "43QGgipcHvNLBX3nunZLwVQpF6VbobmGcQKzXzQ5xMfJgzfRBzfXcJHX1tUHcKPm9bcjubrzKqTm69JbQSL4B3f6E3mNCbU";
 
 	QVector<MinerProcess*> processes;

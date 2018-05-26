@@ -1,6 +1,6 @@
-set (USE_MINER ON)
+set (USE_MINER OFF CACHE BOOL "Enable Mining (OpenCL required)")
 if(USE_MINER)
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/cuda_gpu_list)
+    #add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/cuda_gpu_list)
 
 	find_package(OpenCL REQUIRED)
 	#enable_language("CUDA")
@@ -10,10 +10,13 @@ if(USE_MINER)
 				src/miner/minerprocess.h
 				src/miner/cuda_gpu_list.h
 				src/miner/minerchart.h
+				src/miner/minerUI.h
+				src/miner/MSwitch.h
 				)
 
 	set(SRCS 	${SRCS}
 				src/miner/minerprocess.cpp
+				src/miner/minerUI.cpp
 				)
 
     # add cuda lib
