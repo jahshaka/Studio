@@ -19,6 +19,8 @@
 #include <QComboBox>
 #include "mswitch.h"
 #include "../misc/QtAwesome.h"
+#include "minerprocess.h"
+#include "minerchart.h"
 
 
 class QtAwesome;
@@ -96,8 +98,20 @@ public:
 	}
 
 	void setStarted(bool val) {
-		if (val) mining = val;
-		if(armed) setHighlight(val);
+		if (armed && val)
+		{
+			mining = val;
+			if (process != nullptr)
+				process->startMining();
+		}
+		else {
+			if (process != nullptr)
+				if (process->isMining())
+					process->stopMining();
+		}
+
+		setHighlight(val);
+
 	}
 
 	void setHighlight(bool val) {
@@ -106,9 +120,47 @@ public:
 		displayLabel->setText(val? "--Mining--": oldString);		
 	}
 
+	void setMinerProcess(MinerProcess* process)
+	{
+		this->process = process;
+
+		if (process != nullptr) {
+			connect(process, &MinerProcess::onMinerChartData, [this](MinerChartData data)
+			{
+				// set last hash to ui
+				this->setSpeed(data.hps);
+
+				// if hps is 0 then it must be connecting
+				// set pool color to orange
+				if (data.connected)
+					this->setDotColor((int)Connection::CONNECTED);
+				else
+					this->setDotColor((int)Connection::CONNECTING);
+
+				if (this->info->data.size() > 100)
+					this->info->data.removeFirst();
+				this->info->data.append(data);
+				this->info->repaint();
+			});
+		}
+	}
+
+	void startMining()
+	{
+		if (armed) {
+			process->startMining();
+		}
+	}
+
+	void stopMining()
+	{
+		process->stopMining();
+	}
+
 
 private:
-	QWidget * info, *additional;
+	MinerChart * info;
+	QWidget *additional;
 	QColor color;
 	QLabel *cardName, *pool, *speed, *displayLabel;
 	MSwitch *switchBtn;
@@ -116,8 +168,9 @@ private:
 	QPushButton *logo;
 	QString oldString;
 	bool armed=false, mining=false;
+	MinerProcess* process;
 
-	enum Connection {
+	enum class Connection {
 		CONNECTED = 1,
 		CONNECTING = 2,
 		NOTCONNECTED = 3,
@@ -174,7 +227,7 @@ private:
 		poolDotLayout->addWidget(pool);
 		poolDotLayout->addWidget(dot);
 		poolDotLayout->setSpacing(2);
-		setDotColor(CONNECTED);
+		setDotColor((int)Connection::CONNECTED);
 
 		speed = new QLabel("Speed: ");
 		speed->setAlignment(Qt::AlignLeft);
@@ -205,7 +258,8 @@ private:
 		logoLayout->addLayout(sliderLayout);
 		//logoLayout->addStretch();
 
-		info = new QWidget();
+		//info = new QWidget();
+		info = new MinerChart();
 		info->setObjectName(QStringLiteral("info"));
 		info->setLayout(infoLayout);
 		info->setFixedHeight(98);
@@ -294,6 +348,7 @@ private:
 
 	}
 
+
 signals:
 	void switchIsOn(bool);
 
@@ -303,14 +358,14 @@ signals:
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
+class MinerManager;
 class MinerUI : public QWidget
 {
 	Q_OBJECT
 public:
 	MinerUI(QWidget *parent = 0);
 	~MinerUI();
-	void addGraphicsCard(QString string);
+	GraphicsCardUI* addGraphicsCard(QString string);
 	bool setToStartAutomatically() {
 		return startAutomatically;
 	}
@@ -342,7 +397,9 @@ private:
 	QComboBox *currency;
 	QLineEdit *walletEdit, *passwordEdit, *poolEdit, *identifierEdit;
 	QtAwesome fontIcon;
+
 	QPoint oldPos;
+	MinerManager* minerMan;
 
 protected:
 	void mousePressEvent(QMouseEvent *event) {

@@ -6,10 +6,14 @@
 #include <QGroupBox>
 #include <QSizeGrip>
 #include <QStyledItemDelegate>
+#include "minerprocess.h"
 
 MinerUI::MinerUI(QWidget *parent)
 	: QWidget(parent)
 {
+	minerMan = new MinerManager();
+	minerMan->initialize();
+
 	configureUI();
 	configureSettings();
 	configureConnections();
@@ -19,6 +23,17 @@ MinerUI::MinerUI(QWidget *parent)
 	// setWindowFlag(Qt::SubWindow);
 	setAttribute(Qt::WA_QuitOnClose, false);
 	setWindowModality(Qt::ApplicationModal);
+
+	
+
+	// add cards
+	/*
+	for (auto process : minerMan->processes) {
+		auto card = this->addGraphicsCard(process->gpu.name);
+		card->setMinerProcess(process);
+		card->startMining();
+	}
+	*/
 }
 
 MinerUI::~MinerUI()
@@ -26,13 +41,14 @@ MinerUI::~MinerUI()
 
 }
 
-void MinerUI::addGraphicsCard(QString string)
+GraphicsCardUI* MinerUI::addGraphicsCard(QString string)
 {
 	GraphicsCardUI *card = new GraphicsCardUI();
 	card->setCardName(string);
 	card->setObjectName(QStringLiteral("card"));
 	list.append(card);
 	cardHolderLayout->addWidget(card);
+	return card;
 }
 
 void MinerUI::configureUI()
@@ -108,7 +124,13 @@ void MinerUI::configureUI()
 	cardHolder->setGeometry(0, 0, 450, 400);
 
 	for (int i = 0; i< 2; i++) {
-		addGraphicsCard("amd numbering at this pos " + QString::number(i));
+		//addGraphicsCard("amd numbering at this pos " + QString::number(i));
+	}
+	// todo: move back to top (nick)
+	for (auto process : minerMan->processes) {
+		auto card = this->addGraphicsCard(process->gpu.name);
+		card->setMinerProcess(process);
+		card->startMining();
 	}
 
 	cardHolder->setLayout(cardHolderLayout);
