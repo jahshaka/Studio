@@ -1,18 +1,18 @@
 #include "colorcircle.h"
 
 #include <QPainter>
-#include <QVECTOR2D>
-#include <qmath.h>
-#include <QMOUSEEVENT>
-#include <QSTYLEOPTION>
+#include <QVector2D>
+#include <QMath.h>
+#include <QMouseEvent>
+#include <QStyleOption>
 
 ColorCircle::ColorCircle(QWidget *parent, QColor ic) : QWidget(parent)
 {
-	setGeometry(4, 4, parent->width() - 4, parent->height() - 4);
-	radius = width() / 2 - 4;
-	centerPoint.setX(radius + 4);
-	centerPoint.setY(radius + 4);
-	v = 255;
+	setGeometry(offset, offset, parent->width() - offset, parent->height() - offset);
+	radius = width() / 2 - offset;
+	centerPoint.setX(radius + offset);
+	centerPoint.setY(radius + offset);
+	colorValue = 255;
 	drawCircleColorBackground();
 	repaint();
 
@@ -30,13 +30,13 @@ void ColorCircle::drawSmallCircle(QColor color)
 	qreal y = sat * qSin(theta) + centerPoint.y();
 	QPoint vector(x, y);
 	pos = QPoint(x, y);
-	this->v = color.value();
+	this->colorValue = color.value();
 	repaint();
 }
 
 void ColorCircle::setValueInColor(QColor color)
 {
-	this->v = color.value();
+	this->colorValue = color.value();
 	currentColor = color;
 	drawCircleColorBackground();
 	repaint();
@@ -64,11 +64,8 @@ void ColorCircle::paintEvent(QPaintEvent *event)
 	painter.setPen(pen);
 	painter.drawEllipse(4, 4, width() - 8, height() - 8);
 
-	if (v < 195)
-		color1 = color1.fromRgb(250, 250, 250);
-	else
-		color1 = color1.fromRgb(50, 50, 50);
-	// color1.setRgb(0,0,0,250);
+	if (colorValue < 195)	color1 = color1.fromRgb(250, 250, 250);
+	else	color1 = color1.fromRgb(50, 50, 50);
 	pen.setColor(color1);
 	painter.setPen(pen);
 	painter.drawEllipse(QPoint(pos.x(), pos.y()), 2, 2);
@@ -104,35 +101,28 @@ void ColorCircle::paintEvent(QPaintEvent *event)
 
 void ColorCircle::mouseMoveEvent(QMouseEvent *event)
 {
+	setCirclePosition(event);
+}
+
+void ColorCircle::mousePressEvent(QMouseEvent *event)
+{
+	setCirclePosition(event);
+}
+
+
+void ColorCircle::setCirclePosition(QMouseEvent * event)
+{
 	QPoint mousePoint = event->pos();
 	QVector2D mousePos(mousePoint.x(), mousePoint.y());
 	auto centerPos = QVector2D(centerPoint.x(), centerPoint.y());
 	auto diff = mousePos - centerPos;
-	if (diff.length() > radius) {
-		diff = diff.normalized() * radius;
-	}
+	if (diff.length() > radius) 	diff = diff.normalized() * radius;
 	auto position = centerPos + diff;
 	pos.setX(position.x());
 	pos.setY(position.y());
 	currentColor = getCurrentColorFromPosition();
 	emit positionChanged(currentColor);
 }
-
-void ColorCircle::mousePressEvent(QMouseEvent *event)
-{
-	QPoint mousePoint = event->pos();
-	QVector2D mousePos(mousePoint.x(), mousePoint.y());
-	auto centerPos = QVector2D(centerPoint.x(), centerPoint.y());
-	auto diff = mousePos - centerPos;
-	if (diff.length() > radius) {
-		diff = diff.normalized() * radius;
-	}
-	auto position = centerPos + diff;
-	pos.setX(position.x());
-	currentColor = getCurrentColorFromPosition();
-	emit positionChanged(currentColor);
-}
-
 
 void ColorCircle::drawCircleColorBackground()
 {
@@ -141,7 +131,7 @@ void ColorCircle::drawCircleColorBackground()
 	color.setRgb(50, 0, 0);
 	color.setAlpha(0);
 
-	//draw color image
+	//draw color circle image
 	for (int i = 0; i < width(); i++) {
 		for (int j = 0; j < width(); j++) {
 
@@ -149,11 +139,11 @@ void ColorCircle::drawCircleColorBackground()
 			int d = qPow(point.rx() - centerPoint.rx(), 2) + qPow(point.ry() - centerPoint.ry(), 2);
 			if (d <= qPow(radius, 2)) {
 
-				s = (qSqrt(d) / radius)*255.0f;
+				saturation = (qSqrt(d) / radius)*255.0f;
 				qreal theta = qAtan2(point.ry() - centerPoint.ry(), point.rx() - centerPoint.rx());
 
-				theta = (180 + 90 + (int)qRadiansToDegrees(theta)) % 360;
-				color.setHsv(theta, s, v, alpha);
+				theta = (180 + 90 + static_cast<int>(qRadiansToDegrees(theta))) % 360;
+				color.setHsv(theta, saturation, colorValue, alpha);
 				image->setPixelColor(i, j, color);
 			}
 			else {
@@ -180,20 +170,15 @@ void ColorCircle::configureResetButton()
 QColor ColorCircle::getCurrentColorFromPosition()
 {
 	int d = qPow(pos.rx() - centerPoint.rx(), 2) + qPow(pos.ry() - centerPoint.ry(), 2);
-
-	s = (qSqrt(d) / radius)*255.0f;
+	saturation = (qSqrt(d) / radius)*255.0f;
 	qreal theta = qAtan2(pos.ry() - centerPoint.ry(), pos.rx() - centerPoint.rx());
 	theta = (180 + 90 + (int)qRadiansToDegrees(theta)) % 360;
-	if (s >= 253)
-		s = 255;
-	if (s <= 2)
-		s = 0;
-	if (v >= 253)
-		v = 255;
-	if (v <= 2)
-		v = 0;
+	if (saturation >= 253)	saturation = 255;
+	if (saturation <= 2)	saturation = 0;
+	if (colorValue >= 253)	colorValue = 255;
+	if (colorValue <= 2)	colorValue = 0;
 
-	color.setHsv(theta, s, v, 255);
+	color.setHsv(theta, saturation, colorValue, 255);
 	return color;
 }
 

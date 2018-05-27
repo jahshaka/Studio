@@ -12,7 +12,6 @@ For more information see the LICENSE file
 #include "colorpickerwidget.h"
 #include "ui_colorpickerwidget.h"
 #include <QPainter>
-#include <QDebug>
 #include "colorchooser.h"
 
 ColorPickerWidget::ColorPickerWidget(QWidget *parent) :

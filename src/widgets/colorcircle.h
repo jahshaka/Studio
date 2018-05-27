@@ -25,13 +25,13 @@ protected:
 
 private:
     QImage *image;
-    int radius, v, alpha=255;
-    qreal s;
-    QPoint centerPoint;
-    
+    int radius, colorValue, alpha=255, offset = 4;
+    qreal saturation;
+    QPoint centerPoint;    
     QPushButton *resetButton, *currentColorButton;
-
     QPoint pos;
+
+	void setCirclePosition(QMouseEvent *event);
     void drawCircleColorBackground();
     void configureResetButton();
     QColor getCurrentColorFromPosition();

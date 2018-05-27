@@ -1,22 +1,21 @@
+#include <QApplication>
+#include <QEvent>
+#include <QGraphicsEffect>
+#include <QLayout>
+#include <QMouseEvent>
+#include <QPainter>
 #include "colorchooser.h"
 #include "colorcircle.h"
-#include <QDEBUG>
-#include <QPAINTER>
-#include <QLAYOUT>
-#include <QAPPLICATION>
-#include <QEVENT>
-#include <QMOUSEEVENT>
-#include <QGRAPHICSEFFECT>
 
+#include <QDebug>
 
 ColorChooser::ColorChooser(QWidget *parent) :
     QWidget(parent)
 {
-    
     setWindowFlags(Qt::FramelessWindowHint |Qt::WindowStaysOnTopHint | Qt::X11BypassWindowManagerHint);
     setAttribute(Qt::WA_TranslucentBackground);
 
-    setContentsMargins(0,0,0,0);
+    setContentsMargins(20,20,20,20);
 	setGeometry(0,0, 240, 410);
 
     gWidth = geometry().width();
@@ -32,33 +31,28 @@ ColorChooser::ColorChooser(QWidget *parent) :
     setSliders(color);
     alphaSpin->setValue(1.0);
 	setWindowFlag(Qt::SubWindow);
-
+	setAttribute(Qt::WA_QuitOnClose, false);
+	setWindowModality(Qt::ApplicationModal);
 }
 
 ColorChooser::~ColorChooser()
-{
-   
-}
+{}
 
 void ColorChooser::changeBackgroundColorOfDisplayWidgetHsv()
 {
     color.setHsv(hSpin->value(),sSpin->value(), vSpin->value());
     setValueInColor();
-    setRgbSliders(color);
-	
+    setRgbSliders(color);	
 }
 void ColorChooser::changeBackgroundColorOfDisplayWidgetRgb()
 {
     color.setRgb(rSpin->value(),gSpin->value(), bSpin->value());
     setValueInColor();
     setHsvSliders(color);
-	
-
 }
 
 void ColorChooser::configureDisplay()
 {
-
 	QGraphicsDropShadowEffect *effect = new QGraphicsDropShadowEffect;
 	effect->setBlurRadius(10);
 	effect->setXOffset(0);
@@ -238,29 +232,24 @@ void ColorChooser::configureDisplay()
 void ColorChooser::setConnections()
 {
     connect(rgbBtn, &QPushButton::pressed, [this](){
-        if(picker->isChecked())
-            exitPickerMode();
+        if(picker->isChecked())exitPickerMode();
         stackHolder->setCurrentIndex(0);
     });
     connect(hsv, &QPushButton::pressed, [this](){
-        if(picker->isChecked()) 
-            exitPickerMode();
+        if(picker->isChecked())exitPickerMode();
         stackHolder->setCurrentIndex(1);
     });
     connect(hex, &QPushButton::pressed, [this](){
-        if(picker->isChecked())
-            exitPickerMode();
+        if(picker->isChecked())exitPickerMode();
         stackHolder->setCurrentIndex(2);
     });
     connect(cancel, &QPushButton::pressed, [this]() {
-		if (picker->isChecked())
-			exitPickerMode();
+		if (picker->isChecked())exitPickerMode();
 		emit onColorChanged(circlebg->initialColor);
 		hide();
     });
-    connect(select, &QPushButton::pressed, [this]() {
-		if (picker->isChecked())
-			exitPickerMode();
+    connect(select, &QPushButton::clicked, [this]() {
+		if (picker->isChecked())exitPickerMode();
 		emit onColorChanged(circlebg->currentColor);
 		hide();
     });
@@ -318,7 +307,6 @@ void ColorChooser::setConnections()
         circlebg->setOpacity(alphaSlider->sliderPosition());
         setValueInColor();
         alphaSpin->setValue(alphaSlider->sliderPosition()/255.0f);
-       // alphaSlider->setMaxLabel(QString::number(alphaSlider->sliderPosition()));
     });
 
     connect(alphaSpin,static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),this, [this](double val){
@@ -360,7 +348,6 @@ void ColorChooser::setConnections()
 		changeBackgroundColorOfDisplayWidgetHsv();
 	});
 	connect(sSpin, static_cast<void (QSpinBox::*)(int) > (&QSpinBox::valueChanged), this, [this](int val) {
-
 		blockSignals(true);
 		saturationSlider->setValue(val);	
 		blockSignals(false);
@@ -374,16 +361,7 @@ void ColorChooser::setConnections()
 		changeBackgroundColorOfDisplayWidgetHsv();
 	});
 		
-   /* connect(rSpin, SIGNAL(valueChanged(int)),this, SLOT(changeBackgroundColorOfDisplayWidgetRgb()));
-    connect(gSpin, SIGNAL(valueChanged(int)),this, SLOT(changeBackgroundColorOfDisplayWidgetRgb()));
-    connect(bSpin, SIGNAL(valueChanged(int)),this, SLOT(changeBackgroundColorOfDisplayWidgetRgb()));
-    connect(hSpin, SIGNAL(valueChanged(int)),this, SLOT(changeBackgroundColorOfDisplayWidgetHsv()));
-    connect(sSpin, SIGNAL(valueChanged(int)),this, SLOT(changeBackgroundColorOfDisplayWidgetHsv()));
-    connect(vSpin, SIGNAL(valueChanged(int)),this, SLOT(changeBackgroundColorOfDisplayWidgetHsv()));*/
-
-
     connect(hexEdit,SIGNAL(returnPressed()),this,SLOT(setColorFromHex()));
-
 }
 
 void ColorChooser::setColorBackground()
@@ -391,12 +369,11 @@ void ColorChooser::setColorBackground()
     colorDisplay->setGeometry(0,0,152,152);
     colorDisplay->setFixedSize(152,152);
     circlebg = new ColorCircle(colorDisplay, QColor(255,0,0));
-
 }
 
 void ColorChooser::setStyleForApplication()
 {
-    setStyle(new CustomStyle1(this->style()));
+    setStyle(new SliderMoveToMouseClickPositionStyle(this->style()));
 	setStyleSheet("QWidget#floater {background: #212121; }"
 		"QSlider::sub-page {	border: 0px solid transparent;	height: 2px;	background: #3498db;	margin: 2px 0;}"
 		"QSlider::groove:horizontal {    border: 0px solid transparent;    height: 4px;   background: #1e1e1e;   margin: 2px 0;}"
@@ -414,14 +391,13 @@ void ColorChooser::setStyleForApplication()
 		"QPushButton:hover{ background-color: #555; }"
 		"QPushButton:pressed{ background-color: #444; }"
 		"QPushButton:checked{border: 0px solid rgba(0,0,0,.3); background: rgba(50,148,213,0.9); color: rgba(255,255,255,.9); }");
-
 }
 
 
 void ColorChooser::exitPickerMode()
 {
     picker->setChecked(false);
-	if(cbg->isBig)
+	if(cbg->isExpanded)
 	cbg->shrink();
 }
 
@@ -448,25 +424,18 @@ void ColorChooser::showWithColor(QColor color, QMouseEvent* event)
 	int x;
 	int y;
 
-	if (event->screenPos().x() + width() >= QApplication::desktop()->screenGeometry().width())
-		x = event->screenPos().x() - width();
-	else
-		x = event->screenPos().x();
+	if (event->screenPos().x() + width() >= QApplication::desktop()->screenGeometry().width())	x = event->screenPos().x() - width()+30;
+	else	x = event->screenPos().x()-30;
+	if (event->screenPos().y() + height() > QApplication::desktop()->screenGeometry().height())		y = event->screenPos().y() - height()+30;
+	else	y = event->screenPos().y()-30;
 
-	if (event->screenPos().y() + height() > QApplication::desktop()->screenGeometry().height())
-		y = event->screenPos().y() - height();
-	else
-		y = event->screenPos().y();
 	setGeometry(x,y, width(), height());
 	show();
 }
 
 void ColorChooser::mousePressEvent(QMouseEvent *event)
 {
-    if(picker->isChecked()){
-        exitPickerMode();
-    }
-
+    if(picker->isChecked())     exitPickerMode();
     QWidget::mousePressEvent(event);
 }
 
@@ -476,6 +445,11 @@ void ColorChooser::paintEvent(QPaintEvent *event)
         QPainter painter(this) ;
         painter.drawPixmap(0,0,QApplication::desktop()->width(),QApplication::desktop()->height(),pixmap);
     }
+}
+
+void ColorChooser::leaveEvent(QEvent * event)
+{
+	if (!picker->isChecked()) select->animateClick();
 }
 
 void ColorChooser::setSliders(QColor color)
@@ -537,11 +511,8 @@ void ColorChooser::setSliderLabels()
 	emit onColorChanged(color);
 }
 
-
 void ColorChooser::setValueInColor()
 {
     circlebg->setValueInColor(color);
 	emit onColorChanged(color);
 }
-
-
