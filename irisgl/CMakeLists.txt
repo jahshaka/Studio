@@ -28,6 +28,22 @@ option(ASSIMP_BUILD_ZLIB                        "" ON)
 
 add_subdirectory(src/assimp)
 
+option(BUILD_BULLET2_DEMOS                      "" OFF)
+option(BUILD_OPENGL3_DEMOS                      "" OFF)
+option(BUILD_CPU_DEMOS                          "" OFF)
+option(BUILD_EXTRAS                             "" OFF)
+option(BUILD_UNIT_TESTS                         "" OFF)
+
+if (WIN32)
+    set(BUILD_SHARED_LIBS 0)
+    option(USE_MSVC_RUNTIME_LIBRARY_DLL         "" ON)
+    # set(USE_MSVC_RUNTIME_LIBRARY_DLL 1)
+else()
+  set(BUILD_SHARED_LIBS 1)   # shared libs doesn't work with msvc (there aren't any dllexports defined)
+endif()
+
+add_subdirectory(src/bullet3)
+
 set(SRCS
     src/graphics/mesh.cpp
     src/materials/defaultmaterial.cpp
@@ -90,6 +106,8 @@ set(SRCS
     src/libovr/Src/OVR_StereoProjection.cpp
     src/libovr/Src/OVR_CAPIShim.c
     src/zip/zip.c
+    src/physics/environment.cpp
+    src/physics/physicshelper.cpp
 )
 
 set (HEADERS
@@ -187,6 +205,8 @@ set (HEADERS
     src/libovr/Src/OVR_CAPI_Prototypes.h
     src/zip/miniz.h
     src/zip/zip.h
+    src/physics/environment.h
+    src/physics/physicshelper.h
 )
 
 qt5_wrap_cpp(HEADERS_moc ${HEADERS})
@@ -195,6 +215,7 @@ qt5_add_resources(QRCS assets.qrc)
 # This will allow a .lib to be built alongside the dll, ((needed)) for MSVC
 if(WIN32 AND MSVC)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS 1)
+    set(USE_MSVC_RUNTIME_LIBRARY_DLL 1)
 endif()
 
 # https://stackoverflow.com/a/37211780/996468
@@ -208,6 +229,9 @@ target_include_directories(IrisGL PUBLIC
     "${PROJECT_BINARY_DIR}/src/assimp/include/"
     "${PROJECT_SOURCE_DIR}/src/assimp/include/"
     "${PROJECT_SOURCE_DIR}/src/libovr/Include"
+    "${PROJECT_SOURCE_DIR}/src/bullet3"
+    "${PROJECT_SOURCE_DIR}/src/bullet3/src"
 )
 
-target_link_libraries (IrisGL assimp Qt5::Core Qt5::OpenGL)
+target_link_libraries (IrisGL assimp BulletDynamics BulletCollision LinearMath Bullet3Common Qt5::Core Qt5::OpenGL)
+target_compile_options(IrisGL PUBLIC)

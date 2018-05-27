@@ -10,11 +10,12 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "worldpropertywidget.h"
-#include "../texturepickerwidget.h"
-#include "../../irisgl/src/scenegraph/scene.h"
-#include "../../irisgl/src/core/irisutils.h"
-#include "../../irisgl/src/materials/defaultskymaterial.h"
 
+#include "irisgl/src/scenegraph/scene.h"
+#include "irisgl/src/core/irisutils.h"
+#include "irisgl/src/materials/defaultskymaterial.h"
+
+#include "../texturepickerwidget.h"
 #include "../colorvaluewidget.h"
 #include "../colorpickerwidget.h"
 #include "../hfloatsliderwidget.h"
@@ -37,8 +38,9 @@ void WorldPropertyWidget::setupViewSelector()
 
 WorldPropertyWidget::WorldPropertyWidget()
 {
-    this->setPanelTitle("Sky and Lighting");
+    this->setPanelTitle("World Settings");
 
+    worldGravity = this->addFloatValueSlider("Gravity", 0.f, 32.f);
     skyColor = this->addColorPicker("Sky Color");
     ambientColor = this->addColorPicker("Ambient Color");
 
@@ -104,6 +106,11 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
     } else {
         this->scene.clear();
     }
+}
+
+void WorldPropertyWidget::onGravityChanged(float value)
+{
+    scene->gravity = value;
 }
 
 void WorldPropertyWidget::onSkyTextureChanged(QString texPath)

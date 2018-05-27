@@ -14,12 +14,15 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QMap>
+#include <QHash>
 #include <QIcon>
 #include <QEvent>
 #include <QLineEdit>
 #include <QStyledItemDelegate>
 
+#include <qcombobox.h>
 #include "../irisgl/src/irisglfwd.h"
+#include "irisgl/src/scenegraph/scenenode.h"
 
 namespace Ui {
 class SceneHierarchyWidget;
@@ -92,6 +95,7 @@ public:
     void removeChild(iris::SceneNodePtr childNode);
 
     void OnLstItemsCommitData(QWidget *listItem);
+    QComboBox *box;
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
@@ -99,6 +103,8 @@ protected:
 protected slots:
     void treeItemSelected(QTreeWidgetItem *item, int column);
     void sceneTreeCustomContextMenu(const QPoint &);
+
+    void constraintsPicked(int index, iris::PhysicsConstraintType type);
 
     void deleteNode();
 	void duplicateNode();

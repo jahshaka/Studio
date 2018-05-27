@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include <QOpenGLWidget>
 #include <QSharedPointer>
 
+#include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h" 
+
 #include "irisgl/src/irisglfwd.h"
 #include "irisgl/src/math/intersectionhelper.h"
 
@@ -60,6 +62,8 @@ class AnimationPath;
 class TranslationGizmo;
 class ViewerCameraController;
 class ViewportGizmo;
+
+class btRigidBody;
 
 enum class ViewportMode
 {
@@ -114,6 +118,16 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
 public:
     iris::CameraNodePtr editorCam;
 
+    btRigidBody *activeRigidBody;
+
+    //testing
+    //class btTypedConstraint* m_pickedConstraint;
+    class btGeneric6DofConstraint* m_pickedConstraint;
+    int	m_savedState;
+    btVector3 m_oldPickingPos;
+    btVector3 m_hitPos;
+    btScalar m_oldPickingDist;
+
     ThumbnailGenerator* thumbGen;
 	QOpenGLDebugLogger* glDebugger;
 
@@ -124,6 +138,7 @@ public:
     explicit SceneViewWidget(QWidget *parent = Q_NULLPTR);
 
     void setScene(iris::ScenePtr scene);
+    iris::ScenePtr getScene();
     void setSelectedNode(iris::SceneNodePtr sceneNode);
     void clearSelectedNode();
 
@@ -148,6 +163,10 @@ public:
 
     void setGizmoTransformToLocal();
     void setGizmoTransformToGlobal();
+
+    void addBodyToWorld(btRigidBody *body, const QString &guid);
+    void removeBodyFromWorld(btRigidBody *body);
+    void removeBodyFromWorld(const QString &guid);
 
     void setGizmoLoc();
     void setGizmoRot();
@@ -197,6 +216,9 @@ public:
     QImage takeScreenshot(int width=1920, int height=1080);
     bool getShowLightWires() const;
     void setShowLightWires(bool value);
+
+	void startPhysicsSimulation();
+	void stopPhysicsSimulation();
 
     void setShowFps(bool value);
 	void renderSelectedNode(iris::SceneNodePtr selectedNode);

@@ -105,12 +105,15 @@ void MeshNode::setMaterial(MaterialPtr material)
 void MeshNode::submitRenderItems()
 {
     if (visible) {
-        renderItem->cullable = false;
+        QMatrix4x4 transform = this->globalTransform;
 
-        renderItem->worldMatrix = this->globalTransform;
+		renderItem->cullable = false;
+        renderItem->physicsObject = isPhysicsBody;
+		renderItem->worldMatrix = transform;
+        renderItem->guid = guid;
  
         if (!!mesh && renderItem->cullable) {
-            renderItem->boundingSphere.pos = this->globalTransform * mesh->boundingSphere.pos;
+            renderItem->boundingSphere.pos = transform * mesh->boundingSphere.pos;
             renderItem->boundingSphere.radius = mesh->boundingSphere.radius * getMeshRadius();
         }
 

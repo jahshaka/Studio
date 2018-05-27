@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef COMBOBOXWIDGET_H
 #define COMBOBOXWIDGET_H
 
+#include <QComboBox>
 #include <QVariant>
 #include <QWidget>
 
@@ -33,10 +34,13 @@ public:
     int findData(const QVariant &data);
     QString getCurrentItem();
     QString getCurrentItemData();
+    QVariant getItemData(int index);
     void setCurrentItem(const QString&);
     void setCurrentItemData(const QString&);
     void setCurrentIndex(const int&);
-    
+
+    QComboBox *getWidget() const;
+
 signals:
     void currentIndexChanged(const QString&);
     void currentTextChanged(const QString&);

@@ -41,6 +41,10 @@ public:
     static bool isScenePlaying;
     static bool playMode;
 
+	static void startPhysicsSimulation();
+	static void stopPhysicsSimulation();
+	static bool isSimulationRunning;
+
     // playing functions
     static void playScene();
     static void pauseScene();
