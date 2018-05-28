@@ -14,6 +14,8 @@
 #include <QStackedWidget>
 #include <QWidget>
 
+#include <QDebug>
+
 class ColorCircle;
 class SliderMoveToMouseClickPositionStyle : public QProxyStyle
 {
@@ -36,7 +38,7 @@ class CustomBackground : public QWidget
 public:
 	bool isExpanded = false;
 
-	CustomBackground(QWidget *parent = Q_NULLPTR, Qt::WindowFlags f = Qt::WindowFlags()) {
+	CustomBackground( QWidget *parent = Q_NULLPTR, Qt::WindowFlags f = Qt::WindowFlags()) {
 		QWidget::QWidget(parent);
 		setWindowFlags(Qt::FramelessWindowHint | Qt::X11BypassWindowManagerHint | Qt::WindowStaysOnTopHint);
 		setWindowFlag(Qt::SubWindow);
@@ -45,6 +47,7 @@ public:
 	}
 
 	void drawPixmap(QPixmap pm) {
+		//this->parentWidget()->setWindowModality(Qt::NonModal);
 		setGeometry(0, 0, QApplication::desktop()->screenGeometry().width(), QApplication::desktop()->screenGeometry().height());
 		pixmap = &pm;
 		image = pixmap->toImage();
@@ -56,6 +59,7 @@ public:
 	void shrink() {
 		setGeometry(QApplication::desktop()->screenGeometry().width() / 2, QApplication::desktop()->screenGeometry().height() / 2, 1, 1);
 		isExpanded = false;
+		//this->parentWidget()->setWindowModality(Qt::ApplicationModal);
 		emit finished(isExpanded);
 	}
 
@@ -97,8 +101,8 @@ class ColorChooser : public QWidget
 	Q_OBJECT
 
 public:
-	ColorChooser(QWidget *parent = Q_NULLPTR);
-	void showWithColor(QColor color, QMouseEvent * event);
+	void showWithColor(QColor color, QMouseEvent * event, QString name);
+	ColorChooser( QWidget * parent = Q_NULLPTR);
 	~ColorChooser();
 
 	private slots:
@@ -106,6 +110,7 @@ public:
 	void changeBackgroundColorOfDisplayWidgetRgb();
 	void configureDisplay();
 	void pickerMode(bool ye);
+
 
 signals:
 	void onColorChanged(QColor c);
@@ -121,6 +126,7 @@ protected:
 	void mousePressEvent(QMouseEvent *event) override;
 	void paintEvent(QPaintEvent *event);
 	void leaveEvent(QEvent *event);
+	bool eventFilter(QObject *obj, QEvent *event) override;
 
 private slots:
 	void setSliders(QColor color);

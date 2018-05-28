@@ -19,7 +19,7 @@ ColorPickerWidget::ColorPickerWidget(QWidget *parent) :
     ui(new Ui::ColorPickerWidget)
 {
     ui->setupUi(this);
-	chooser = new ColorChooser();
+	chooser = new ColorChooser(this);
 	connect(chooser, SIGNAL(onColorChanged(QColor)), this, SLOT(colorChanged(QColor)));
 
     color = QColor::fromRgb(255,255,255);
@@ -63,7 +63,7 @@ void ColorPickerWidget::colorChanged(QColor col)
 
 void ColorPickerWidget::mouseReleaseEvent(QMouseEvent* event)
 {
-	chooser->showWithColor(color, event);
+	chooser->showWithColor(color, event, objectName());
     this->repaint();
 }
 

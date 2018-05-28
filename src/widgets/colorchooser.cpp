@@ -10,18 +10,20 @@
 #include <QDebug>
 
 ColorChooser::ColorChooser(QWidget *parent) :
-    QWidget(parent)
+    QWidget()
 {
     setWindowFlags(Qt::FramelessWindowHint |Qt::WindowStaysOnTopHint | Qt::X11BypassWindowManagerHint);
     setAttribute(Qt::WA_TranslucentBackground);
+	setWindowFlag(Qt::SubWindow);
+	setAttribute(Qt::WA_QuitOnClose, false);
 
     setContentsMargins(20,20,20,20);
 	setGeometry(0,0, 240, 410);
 
     gWidth = geometry().width();
     gHeight = geometry().height();
-    cbg = new CustomBackground(this);
-	cbg->hide();	
+	cbg = new CustomBackground();
+	cbg->hide();
 
     configureDisplay();
     setColorBackground();
@@ -30,9 +32,7 @@ ColorChooser::ColorChooser(QWidget *parent) :
     color = color.fromRgb(255,255,255);
     setSliders(color);
     alphaSpin->setValue(1.0);
-	setWindowFlag(Qt::SubWindow);
-	setAttribute(Qt::WA_QuitOnClose, false);
-	setWindowModality(Qt::ApplicationModal);
+	
 }
 
 ColorChooser::~ColorChooser()
@@ -246,11 +246,13 @@ void ColorChooser::setConnections()
     connect(cancel, &QPushButton::pressed, [this]() {
 		if (picker->isChecked())exitPickerMode();
 		emit onColorChanged(circlebg->initialColor);
+		cbg->hide();
 		hide();
     });
     connect(select, &QPushButton::clicked, [this]() {
 		if (picker->isChecked())exitPickerMode();
 		emit onColorChanged(circlebg->currentColor);
+		cbg->hide();
 		hide();
     });
 
@@ -403,7 +405,8 @@ void ColorChooser::exitPickerMode()
 
 
 void ColorChooser::enterPickerMode()
-{
+{	
+	//qDebug() << windowModality();
     pixmap = QPixmap::grabWindow(QApplication::desktop()->winId());
     cbg->drawPixmap(pixmap);
 }
@@ -417,17 +420,23 @@ void ColorChooser::pickerMode(bool ye)
     }
 }
 
-void ColorChooser::showWithColor(QColor color, QMouseEvent* event)
+void ColorChooser::showWithColor(QColor color, QMouseEvent* event, QString name)
 {
+	if (name == QString("outlineColor")) {
+		picker->hide();
+		setWindowModality(Qt::ApplicationModal);
+	}
+	qDebug() << name;
+	
 	circlebg->setInitialColor(color);
 	cbg->show();
 	int x;
 	int y;
-
-	if (event->screenPos().x() + width() >= QApplication::desktop()->screenGeometry().width())	x = event->screenPos().x() - width()+30;
-	else	x = event->screenPos().x()-30;
-	if (event->screenPos().y() + height() > QApplication::desktop()->screenGeometry().height())		y = event->screenPos().y() - height()+30;
-	else	y = event->screenPos().y()-30;
+	int offset = 45;
+	if (event->screenPos().x() + width() >= QApplication::desktop()->screenGeometry().width())	x = event->screenPos().x() - width()+ offset;
+	else	x = event->screenPos().x()- offset;
+	if (event->screenPos().y() + height() > QApplication::desktop()->screenGeometry().height())		y = event->screenPos().y() - height()+ offset;
+	else	y = event->screenPos().y()- offset;
 
 	setGeometry(x,y, width(), height());
 	show();
@@ -449,7 +458,33 @@ void ColorChooser::paintEvent(QPaintEvent *event)
 
 void ColorChooser::leaveEvent(QEvent * event)
 {
-	if (!picker->isChecked()) select->animateClick();
+	if (!picker->isChecked()) {
+		cbg->hide();
+		hide();
+	}
+}
+
+bool ColorChooser::eventFilter(QObject * obj, QEvent * event)
+{
+	switch (event->type())
+	{
+	case QEvent::KeyPress:
+	case QEvent::KeyRelease:
+	case QEvent::MouseButtonPress:
+	case QEvent::MouseButtonDblClick:
+	case QEvent::MouseMove:
+		qDebug() << "moused moved";
+	case QEvent::HoverEnter:
+	case QEvent::HoverLeave:
+	case QEvent::HoverMove:
+	case QEvent::DragEnter:
+	case QEvent::DragLeave:
+	case QEvent::DragMove:
+	case QEvent::Drop:
+		return true;
+	default:
+		return QObject::eventFilter(obj, event);
+	}
 }
 
 void ColorChooser::setSliders(QColor color)
