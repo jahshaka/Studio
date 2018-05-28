@@ -216,6 +216,7 @@ public:
     QImage takeScreenshot(int width=1920, int height=1080);
     bool getShowLightWires() const;
     void setShowLightWires(bool value);
+    void toggleDebugDrawFlags(bool value);
 
 	void startPhysicsSimulation();
 	void stopPhysicsSimulation();

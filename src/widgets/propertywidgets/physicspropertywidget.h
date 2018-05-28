@@ -21,23 +21,26 @@ public:
     void setSceneView(SceneViewWidget *sceneView);
 
 protected slots:
-    void onPhysicsTypeChanged(int);
-    void onPhysicsEnabled(bool);
+    void onPhysicsTypeChanged(const QString&);
+    void onPhysicsShapeChanged(int);
     void onVisibilityChanged(bool);
     void onMassChanged(float);
+    void onMarginChanged(float);
     void onBouncinessChanged(float);
-    void onStaticTypeChecked(bool);
 
 private:
     iris::SceneNodePtr sceneNode;
     SceneViewWidget *sceneView;
 
-    CheckBoxWidget* isPhysicsObject;
-    CheckBoxWidget* isStaticObject;
     CheckBoxWidget* isVisible;
     HFloatSliderWidget *massValue;
     HFloatSliderWidget *bouncinessValue;
-    ComboBoxWidget *shapeSelector;
+    HFloatSliderWidget *marginValue;
+    ComboBoxWidget *physicsTypeSelector;
+    ComboBoxWidget *physicsShapeSelector;
+
+    QMap<int, QString> physicsTypes;
+    QMap<int, QString> physicsShapes;
 };
 
 #endif // PHYSICSPROPERTYWIDGET_HPP

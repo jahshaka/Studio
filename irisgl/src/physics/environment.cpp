@@ -24,15 +24,9 @@ Environment::Environment(iris::RenderList *debugList)
     lineMat = iris::LineColorMaterial::create();
     lineMat.staticCast<iris::LineColorMaterial>()->setDepthBias(10.f);
 
+    // http://bulletphysics.org/mediawiki-1.5.8/index.php/Bullet_Debug_drawer
     debugDrawer = new GLDebugDrawer;
-    debugDrawer->setDebugMode(
-        GLDebugDrawer::DBG_DrawAabb |
-        GLDebugDrawer::DBG_DrawWireframe |
-        GLDebugDrawer::DBG_DrawConstraints |
-        GLDebugDrawer::DBG_DrawContactPoints |
-        GLDebugDrawer::DBG_DrawConstraintLimits |
-        GLDebugDrawer::DBG_DrawFrames
-    );
+    debugDrawer->setDebugMode(GLDebugDrawer::DBG_NoDebug);
     world->setDebugDrawer(debugDrawer);
 }
 
@@ -122,6 +116,23 @@ void Environment::stepSimulation(float delta)
     QMatrix4x4 transform;
     transform.setToIdentity();
     debugRenderList->submitMesh(builder.build(), lineMat, transform);
+}
+
+void Environment::toggleDebugDrawFlags(bool state)
+{
+    if (!state) {
+        debugDrawer->setDebugMode(GLDebugDrawer::DBG_NoDebug);
+    }
+    else {
+        debugDrawer->setDebugMode(
+            GLDebugDrawer::DBG_DrawAabb |
+            GLDebugDrawer::DBG_DrawWireframe |
+            GLDebugDrawer::DBG_DrawConstraints |
+            GLDebugDrawer::DBG_DrawContactPoints |
+            GLDebugDrawer::DBG_DrawConstraintLimits |
+            GLDebugDrawer::DBG_DrawFrames
+        );
+    }
 }
 
 }

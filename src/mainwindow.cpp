@@ -70,6 +70,7 @@ For more information see the LICENSE file
 #include <math.h>
 #include <QDesktopServices>
 #include <QShortcut>
+#include <QToolButton>
 
 #include "dialogs/loadmeshdialog.h"
 #include "core/surfaceview.h"
@@ -794,7 +795,7 @@ void MainWindow::openProject(bool playMode)
 
     if (editorData != Q_NULLPTR) {
         sceneView->setEditorData(editorData);
-        wireCheckBtn->setChecked(editorData->showLightWires);
+        wireCheckAction->setChecked(editorData->showLightWires);
     }
 
     assetWidget->trigger();
@@ -2277,11 +2278,27 @@ void MainWindow::setupViewPort()
     screenShotBtn->setStyleSheet("background: transparent");
     screenShotBtn->setIcon(QIcon(":/icons/camera.svg"));
 
-    wireCheckBtn = new QCheckBox("Viewport Wireframes");
-    wireCheckBtn->setCheckable(true);
+    wireFramesButton = new QToolButton;
+    wireFramesButton->setStyleSheet(
+        "padding: 0 8px 0 0; margin: 0"
+    );
+    wireFramesMenu = new QMenu;
+
+    wireCheckAction = new QAction(QIcon(), "Light Bounds");
+    wireCheckAction->setCheckable(true);
+    connect(wireCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleLightWires(bool)));
+    wireFramesMenu->addAction(wireCheckAction);
+
+    physicsCheckAction = new QAction(QIcon(), "Physics Debug Info");
+    physicsCheckAction->setCheckable(true);
+    connect(physicsCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleDebugDrawer(bool)));
+    wireFramesMenu->addAction(physicsCheckAction);
+
+    wireFramesButton->setMenu(wireFramesMenu);
+    wireFramesButton->setText("Wireframes ");
+    wireFramesButton->setPopupMode(QToolButton::InstantPopup);
 
     connect(screenShotBtn, SIGNAL(pressed()), this, SLOT(takeScreenshot()));
-    connect(wireCheckBtn, SIGNAL(toggled(bool)), this, SLOT(toggleLightWires(bool)));
 
     auto controlBarLayout = new QHBoxLayout;
     playSceneBtn = new QPushButton;
@@ -2298,7 +2315,7 @@ void MainWindow::setupViewPort()
 
     controlBarLayout->setSpacing(8);
     controlBarLayout->addWidget(screenShotBtn);
-    controlBarLayout->addWidget(wireCheckBtn);
+    controlBarLayout->addWidget(wireFramesButton);
     controlBarLayout->addStretch();
     controlBarLayout->addWidget(playSceneBtn);
 	controlBarLayout->addWidget(playSimBtn);
@@ -2403,7 +2420,7 @@ void MainWindow::setupViewPort()
     Globals::sceneViewWidget = sceneView;
     UiManager::setSceneViewWidget(sceneView);
 
-    wireCheckBtn->setChecked(sceneView->getShowLightWires());
+    wireCheckAction->setChecked(sceneView->getShowLightWires());
 
     QGridLayout* layout = new QGridLayout;
     layout->addWidget(sceneView);
@@ -2804,6 +2821,11 @@ void MainWindow::takeScreenshot()
 void MainWindow::toggleLightWires(bool state)
 {
     sceneView->setShowLightWires(state);
+}
+
+void MainWindow::toggleDebugDrawer(bool state)
+{
+    sceneView->toggleDebugDrawFlags(state);
 }
 
 void MainWindow::toggleWidgets(bool state)

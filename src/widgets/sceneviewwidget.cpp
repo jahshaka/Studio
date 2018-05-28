@@ -330,10 +330,16 @@ void SceneViewWidget::setShowLightWires(bool value)
     showLightWires = value;
 }
 
+void SceneViewWidget::toggleDebugDrawFlags(bool value)
+{
+    scene->getPhysicsEnvironment()->toggleDebugDrawFlags(value);
+}
+
 void SceneViewWidget::startPhysicsSimulation()
 {
-	scene->getPhysicsEnvironment()->simulatePhysics();
+    scene->getPhysicsEnvironment()->simulatePhysics();
 }
+
 
 void SceneViewWidget::stopPhysicsSimulation()
 {

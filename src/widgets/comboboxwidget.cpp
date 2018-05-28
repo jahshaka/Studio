@@ -82,6 +82,11 @@ void ComboBoxWidget::setCurrentIndex(const int &index)
     ui->comboBox->setCurrentIndex(index);
 }
 
+void ComboBoxWidget::setCurrentText(const QString &text)
+{
+    ui->comboBox->setCurrentText(text);
+}
+
 QComboBox *ComboBoxWidget::getWidget() const
 {
     return ui->comboBox;

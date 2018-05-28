@@ -36,6 +36,7 @@ public:
     QString getCurrentItemData();
     QVariant getItemData(int index);
     void setCurrentItem(const QString&);
+    void setCurrentText(const QString&);
     void setCurrentItemData(const QString&);
     void setCurrentIndex(const int&);
 

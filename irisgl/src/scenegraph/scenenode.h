@@ -29,6 +29,14 @@ enum class SceneNodeType {
     Viewer
 };
 
+enum class PhysicsType : int
+{
+    None,
+    Static,
+    RigidBody,
+    SoftBody
+};
+
 enum class PhysicsCollisionShape : int
 {
     None,
@@ -57,6 +65,7 @@ struct PhysicsProperty
         isVisible = true;
         isStatic = false;
         shape = PhysicsCollisionShape::None;
+        type = PhysicsType::None;
     }
 
     float objectMass;
@@ -66,6 +75,7 @@ struct PhysicsProperty
     bool isVisible;
     bool isStatic;
     PhysicsCollisionShape shape;
+    PhysicsType type;
     QVector3D centerOfMass;
     QVector3D pivotPoint;
 };

@@ -91,6 +91,7 @@ public:
 	void simulatePhysics();
 	void stopPhysics();
 	void stepSimulation(float delta);
+    void toggleDebugDrawFlags(bool state = false);
 
 private:
     btCollisionConfiguration    *collisionConfig;
