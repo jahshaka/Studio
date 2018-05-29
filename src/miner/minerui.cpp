@@ -17,13 +17,17 @@ For more information see the LICENSE file
 #include <QGroupBox>
 #include <QSizeGrip>
 #include <QStyledItemDelegate>
+#include <QStandardPaths>
 #include "minerprocess.h"
+#include "../core/settingsmanager.h"
 
 MinerUI::MinerUI(QWidget *parent)
 	: QWidget(parent)
 {
 	minerMan = new MinerManager();
 	minerMan->initialize();
+
+	settingsMan = new SettingsManager("jahminer.ini");
 
 	configureUI();
 	configureSettings();
@@ -34,8 +38,6 @@ MinerUI::MinerUI(QWidget *parent)
 	// setWindowFlag(Qt::SubWindow);
 	setAttribute(Qt::WA_QuitOnClose, false);
 	setWindowModality(Qt::ApplicationModal);
-
-	
 
 	// add cards
 	/*
@@ -200,6 +202,7 @@ void MinerUI::configureUI()
 	//  groupBoxLayout->setSizeConstraint(QLayout::SetFixedSize);
 	groupBoxLayout->setSpacing(0);
 	groupBoxLayout->addWidget(new QSizeGrip(this), 0, Qt::AlignBottom | Qt::AlignRight);
+
 }
 
 void MinerUI::configureSettings()
@@ -238,9 +241,11 @@ void MinerUI::configureSettings()
 
 	connect(confirm, &QPushButton::clicked, [=]() {
 		back->trigger();
+		this->saveAndApplySettings();
 	});
 	connect(CancelBtn, &QPushButton::clicked, [=]() {
 		back->trigger();
+		this->restoreSettings();
 	});
 
 
@@ -326,6 +331,16 @@ void MinerUI::configureSettings()
 
 	stack->addWidget(settingsWidget);
 	settingsLaout->addWidget(new QSizeGrip(this), 0, Qt::AlignBottom | Qt::AlignRight);
+
+	// pass application settings to ui
+	walletId = settingsMan->getValue("wallet_id", "").toString();
+	walletEdit->setText(walletId);
+	pool = settingsMan->getValue("pool", "").toString();
+	poolEdit->setText(pool);
+	password = settingsMan->getValue("password", "").toString();
+	passwordEdit->setText(password);
+	identifier = settingsMan->getValue("identifier", "").toString();
+	identifierEdit->setText(identifier);
 	
 }
 
@@ -411,6 +426,26 @@ void MinerUI::configureStyleSheet()
 		"#currencyBox QAbstractItemView::item:hover {background-color: rgba(40,128,185,1); border :0px;  }"
 		""
 		"");
+}
+
+void MinerUI::saveAndApplySettings()
+{
+	walletId = walletEdit->text();
+	settingsMan->setValue("wallet_id", walletId);
+	pool = poolEdit->text();
+	settingsMan->setValue("pool", pool);
+	password = passwordEdit->text();
+	settingsMan->setValue("password", password);
+	identifier = identifierEdit->text()
+	settingsMan->setValue("identifier", identifier);
+}
+
+void MinerUI::restoreSettings()
+{
+	settingsMan->setValue("wallet_id", walletId);
+	settingsMan->setValue("pool", pool);
+	settingsMan->setValue("password", password);
+	settingsMan->setValue("identifier", identifier);
 }
 
 void MinerUI::switchToAdvanceMode()

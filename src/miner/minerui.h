@@ -377,6 +377,7 @@ signals:
 
 
 class MinerManager;
+class SettingsManager;
 class MinerUI : public QWidget
 {
 	Q_OBJECT
@@ -418,6 +419,11 @@ private:
 
 	QPoint oldPos;
 	MinerManager* minerMan;
+	SettingsManager* settingsMan;
+	QString walletId;
+	QString pool;
+	QString password;
+	QString identifier;
 
 protected:
 	void mousePressEvent(QMouseEvent *event) {
@@ -440,6 +446,9 @@ protected:
 		isPressed = false;
 
 	}
+	
+	void saveAndApplySettings();
+	void restoreSettings();
 
 };
 
