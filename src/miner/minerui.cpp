@@ -18,11 +18,13 @@ For more information see the LICENSE file
 #include <QSizeGrip>
 #include <QStyledItemDelegate>
 #include <QStandardPaths>
+
 #include <QMessageBox>
 #include <QApplication>
 #include "minerprocess.h"
 #include "../core/settingsmanager.h"
 #include "../constants.h"
+
 
 MinerUI::MinerUI(QWidget *parent)
 	: QWidget(parent)
@@ -357,6 +359,7 @@ void MinerUI::configureSettings()
 	passwordEdit->setText(passwordText);
 	identifierText = settingsMan->getValue("identifier", "").toString();
 	identifierEdit->setText(identifierText);
+
 	
 }
 
@@ -456,6 +459,7 @@ void MinerUI::configureStyleSheet()
 
 void MinerUI::saveAndApplySettings()
 {
+
 	walletIdText = walletEdit->text();
 	settingsMan->setValue("wallet_id", walletIdText);
 	poolText = poolEdit->text();
@@ -472,10 +476,12 @@ void MinerUI::saveAndApplySettings()
 
 	//restart mining
 	restartMining();
+
 }
 
 void MinerUI::restoreSettings()
 {
+
 	settingsMan->setValue("wallet_id", walletIdText);
 	settingsMan->setValue("pool", poolText);
 	settingsMan->setValue("password", passwordText);
@@ -502,6 +508,7 @@ void MinerUI::stopMining()
 
 	startBtn->setText("Start");
 	mining = false;
+
 }
 
 void MinerUI::switchToAdvanceMode()

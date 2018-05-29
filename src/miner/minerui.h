@@ -467,10 +467,12 @@ private:
 	QPoint oldPos;
 	MinerManager* minerMan;
 	SettingsManager* settingsMan;
+
 	QString walletIdText;
 	QString poolText;
 	QString passwordText;
 	QString identifierText;
+
 
 protected:
 	void mousePressEvent(QMouseEvent *event) {
@@ -497,6 +499,7 @@ public:
 	void restartMining();
 	void startMining();
 	void stopMining();
+
 
 };
 
