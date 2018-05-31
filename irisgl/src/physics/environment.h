@@ -89,6 +89,7 @@ public:
 
     // These are special functions used for creating a constraint to drag bodies
 	void simulatePhysics();
+	bool isSimulating();
 	void stopPhysics();
 	void stepSimulation(float delta);
     void toggleDebugDrawFlags(bool state = false);

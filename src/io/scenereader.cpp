@@ -59,6 +59,9 @@ For more information see the LICENSE file
 #include "../irisgl/src/postprocesses/ssaopostprocess.h"
 #include "../irisgl/src/postprocesses/fxaapostprocess.h"
 
+#include "irisgl/src/physics/physicsproperties.h"
+#include "irisgl/src/physics/physicshelper.h"
+
 iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
                                       iris::PostProcessManagerPtr postMan,
@@ -421,6 +424,21 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     }
 
     meshNode->applyDefaultPose();
+
+    meshNode->isPhysicsBody = nodeObj["physicsObject"].toBool();
+
+    if (meshNode->isPhysicsBody) {
+        QJsonObject physicsDef = nodeObj["physicsProperties"].toObject();
+        meshNode->physicsProperty.centerOfMass          = readVector3(physicsDef["centerOfMass"].toObject());
+        meshNode->physicsProperty.isStatic              = physicsDef["static"].toBool();
+        meshNode->physicsProperty.objectCollisionMargin = physicsDef["collisionMargin"].toDouble();
+        meshNode->physicsProperty.objectDamping         = physicsDef["damping"].toDouble();
+        meshNode->physicsProperty.objectMass            = physicsDef["mass"].toDouble();
+        meshNode->physicsProperty.objectRestitution     = physicsDef["bounciness"].toDouble();
+        meshNode->physicsProperty.pivotPoint            = readVector3(physicsDef["pivot"].toObject());
+        meshNode->physicsProperty.shape                 = static_cast<iris::PhysicsCollisionShape>(physicsDef["shape"].toInt());
+        meshNode->physicsProperty.type                  = static_cast<iris::PhysicsType>(physicsDef["type"].toInt());
+    }
 
     return meshNode;
 }

@@ -8,6 +8,7 @@
 #include "../accordianbladewidget.h"
 
 class SceneViewWidget;
+class btRigidBody;
 
 class PhysicsPropertyWidget : public AccordianBladeWidget
 {
@@ -21,7 +22,7 @@ public:
     void setSceneView(SceneViewWidget *sceneView);
 
 protected slots:
-    void onPhysicsTypeChanged(const QString&);
+    void onPhysicsTypeChanged(int);
     void onPhysicsShapeChanged(int);
     void onVisibilityChanged(bool);
     void onMassChanged(float);
@@ -29,6 +30,7 @@ protected slots:
     void onBouncinessChanged(float);
 
 private:
+    btRigidBody *currentBody;
     iris::SceneNodePtr sceneNode;
     SceneViewWidget *sceneView;
 

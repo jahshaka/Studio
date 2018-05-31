@@ -56,7 +56,7 @@ void Environment::removeBodyFromWorld(btRigidBody *body)
     world->removeRigidBody(body);
     hashBodies.remove(hashBodies.key(body)); // ???
 
-    qDebug() << "BODY REMOVED TO WORLD " ;
+    qDebug() << "BODY REMOVED FROM WORLD " ;
     qDebug() << "There are " << hashBodies.size() << " bodies ";
 }
 
@@ -67,7 +67,7 @@ void Environment::removeBodyFromWorld(const QString &guid)
     world->removeRigidBody(hashBodies.value(guid));
     hashBodies.remove(guid);
 
-    qDebug() << "BODY REMOVED TO WORLD ";
+    qDebug() << "BODY REMOVED FROM WORLD ";
     qDebug() << "There are " << hashBodies.size() << " bodies ";
 }
 
@@ -96,6 +96,11 @@ btDynamicsWorld *Environment::getWorld()
 void Environment::simulatePhysics()
 {
     simulating = true;
+}
+
+bool Environment::isSimulating()
+{
+    return simulating;
 }
 
 void Environment::stopPhysics()

@@ -298,10 +298,25 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
 void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode, bool relative)
 {
     // It's a safe assumption that the filename is safe to use here in queries if need be
-	sceneNodeObject["mesh"]         = meshNode->meshPath;
-	sceneNodeObject["guid"]         = meshNode->getGUID();
-    sceneNodeObject["meshIndex"]    = meshNode->meshIndex;
-    sceneNodeObject["pickable"]     = meshNode->pickable;
+	sceneNodeObject["mesh"]          = meshNode->meshPath;
+	sceneNodeObject["guid"]          = meshNode->getGUID();
+    sceneNodeObject["meshIndex"]     = meshNode->meshIndex;
+    sceneNodeObject["pickable"]      = meshNode->pickable;
+    sceneNodeObject["physicsObject"] = meshNode->isPhysicsBody;
+
+    if (meshNode->isPhysicsBody) {
+        QJsonObject physicsProperties;
+        physicsProperties.insert("centerOfMass", jsonVector3(meshNode->physicsProperty.centerOfMass));
+        physicsProperties.insert("pivot", jsonVector3(meshNode->physicsProperty.pivotPoint));
+        physicsProperties.insert("static", meshNode->physicsProperty.isStatic);
+        physicsProperties.insert("collisionMargin", meshNode->physicsProperty.objectCollisionMargin);
+        physicsProperties.insert("damping", meshNode->physicsProperty.objectDamping);
+        physicsProperties.insert("mass", meshNode->physicsProperty.objectMass);
+        physicsProperties.insert("bounciness", meshNode->physicsProperty.objectRestitution);
+        physicsProperties.insert("shape", static_cast<int>(meshNode->physicsProperty.shape));
+        physicsProperties.insert("type", static_cast<int>(meshNode->physicsProperty.type));
+        sceneNodeObject["physicsProperties"] = physicsProperties;
+    }
 
     auto cullMode = meshNode->getFaceCullingMode();
     switch (cullMode) {

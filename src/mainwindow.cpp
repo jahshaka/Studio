@@ -788,6 +788,13 @@ void MainWindow::openProject(bool playMode)
     ui->actionClose->setDisabled(false);
     setScene(scene);
 
+    for (const auto &node : scene->getRootNode()->children) {
+        if (node->isPhysicsBody) {
+            auto body = iris::PhysicsHelper::createPhysicsBody(node, node->physicsProperty);
+            if (body) sceneView->addBodyToWorld(body, node->getGUID());
+        }
+    }
+
     // use new post process that has fxaa by default
     // TODO: remember to find a better replacement (Nick)
     postProcessWidget->setPostProcessMgr(postMan);
