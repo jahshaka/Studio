@@ -14,8 +14,6 @@
 #include <QStackedWidget>
 #include <QWidget>
 
-#include <QDebug>
-
 class ColorCircle;
 class SliderMoveToMouseClickPositionStyle : public QProxyStyle
 {
@@ -79,6 +77,7 @@ protected:
 
 	void mousePressEvent(QMouseEvent *event) {
 		shrink();
+		emit shouldHide(true);
 	}
 
 	void mouseMoveEvent(QMouseEvent *event)
@@ -92,6 +91,7 @@ protected:
 signals:
 	void finished(bool b);
 	void positionChanged(QColor color);
+	void shouldHide(bool b);
 };
 
 class CustomSlider;
@@ -126,7 +126,6 @@ protected:
 	void mousePressEvent(QMouseEvent *event) override;
 	void paintEvent(QPaintEvent *event);
 	void leaveEvent(QEvent *event);
-	bool eventFilter(QObject *obj, QEvent *event) override;
 
 private slots:
 	void setSliders(QColor color);
@@ -144,6 +143,7 @@ private:
 	QColor color;
 	ColorCircle* circlebg;
 	int gWidth, gHeight;
+	bool fromHexEdit = true;
 
 	QGroupBox* groupBox;
 	CustomSlider *alphaSlider, *redSlider, *greenSlider, *blueSlider, *hueSlider, *saturationSlider, *valueSlider, *adjustSlider;
