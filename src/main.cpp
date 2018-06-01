@@ -133,6 +133,7 @@ int main(int argc, char *argv[])
 
     splash.finish(&window);
 
+#ifdef QT_DEBUG
 	UpdateChecker updateChecker;
 	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded,
         [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)
@@ -147,6 +148,7 @@ int main(int argc, char *argv[])
     if (SettingsManager::getDefaultManager()->getValue("automatic_updates", true).toBool()) {
 		updateChecker.checkForUpdate();
     }
+#endif // QT_DEBUG
 
     return app.exec();
 }
