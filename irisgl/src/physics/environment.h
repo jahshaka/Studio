@@ -76,11 +76,12 @@ public:
     ~Environment();
 
     QHash<QString, btRigidBody*> hashBodies;
-    QVector<btTypedConstraint*> constraints;
 
 	void addBodyToWorld(btRigidBody *body, const QString &guid);
 	void removeBodyFromWorld(btRigidBody *body);
 	void removeBodyFromWorld(const QString &guid);
+
+    void storeCollisionShape(btCollisionShape *shape);
 
     void addConstraintToWorld(btTypedConstraint *constraint, bool disableCollisions = true);
     void removeConstraintFromWorld(btTypedConstraint *constraint);
@@ -94,6 +95,10 @@ public:
 	void stepSimulation(float delta);
     void toggleDebugDrawFlags(bool state = false);
 
+    void restartPhysics();
+    void createPhysicsWorld();
+    void destroyPhysicsWorld();
+
 private:
     btCollisionConfiguration    *collisionConfig;
     btDispatcher                *dispatcher;
@@ -102,6 +107,9 @@ private:
     btDynamicsWorld             *world;
 
     QVector<btRigidBody*> bodies;
+    QVector<btTypedConstraint*> constraints;
+    btAlignedObjectArray<btCollisionShape*>	collisionShapes;
+
     bool simulating;
     bool simulationStarted;
 

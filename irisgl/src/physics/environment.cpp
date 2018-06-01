@@ -6,37 +6,18 @@ namespace iris
 
 Environment::Environment(iris::RenderList *debugList)
 {
-    collisionConfig = new btDefaultCollisionConfiguration(); 
-    dispatcher      = new btCollisionDispatcher(collisionConfig); 
-    broadphase      = new btDbvtBroadphase(); 
-    solver          = new btSequentialImpulseConstraintSolver(); 
-    world           = new btDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfig); 
+    createPhysicsWorld();
  
     simulating = false;
-
-    bodies.reserve(512); // for now
-    hashBodies.reserve(512); // also for now
-
-    // TODO - use constants file and make this changeable
-    world->setGravity(btVector3(0, -10.f, 0)); 
 
     debugRenderList = debugList;
     lineMat = iris::LineColorMaterial::create();
     lineMat.staticCast<iris::LineColorMaterial>()->setDepthBias(10.f);
-
-    // http://bulletphysics.org/mediawiki-1.5.8/index.php/Bullet_Debug_drawer
-    debugDrawer = new GLDebugDrawer;
-    debugDrawer->setDebugMode(GLDebugDrawer::DBG_NoDebug);
-    world->setDebugDrawer(debugDrawer);
 }
 
 Environment::~Environment()
 {
-    delete world;
-    delete solver;
-    delete broadphase;
-    delete dispatcher;
-    delete collisionConfig;
+    destroyPhysicsWorld();
 }
 
 void Environment::addBodyToWorld(btRigidBody *body, const QString &guid) 
@@ -69,6 +50,11 @@ void Environment::removeBodyFromWorld(const QString &guid)
 
     qDebug() << "BODY REMOVED FROM WORLD ";
     qDebug() << "There are " << hashBodies.size() << " bodies ";
+}
+
+void Environment::storeCollisionShape(btCollisionShape *shape)
+{
+    collisionShapes.push_back(shape);
 }
 
 void Environment::addConstraintToWorld(btTypedConstraint *constraint, bool disableCollisions)
@@ -119,8 +105,9 @@ void Environment::stepSimulation(float delta)
 
     if (simulating) {
         world->stepSimulation(delta);
-        world->debugDrawWorld();
     }
+
+    world->debugDrawWorld();
 
     QMatrix4x4 transform;
     transform.setToIdentity();
@@ -142,6 +129,86 @@ void Environment::toggleDebugDrawFlags(bool state)
             GLDebugDrawer::DBG_DrawFrames
         );
     }
+}
+
+void Environment::restartPhysics()
+{
+    destroyPhysicsWorld();
+    createPhysicsWorld();
+}
+
+void Environment::createPhysicsWorld()
+{
+    collisionConfig = new btDefaultCollisionConfiguration();
+    dispatcher = new btCollisionDispatcher(collisionConfig);
+    broadphase = new btDbvtBroadphase();
+    solver = new btSequentialImpulseConstraintSolver();
+    world = new btDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfig);
+
+    bodies.reserve(512); // for now
+    hashBodies.reserve(512); // also for now
+
+    world->setGravity(btVector3(0, -10.f, 0));
+
+    // http://bulletphysics.org/mediawiki-1.5.8/index.php/Bullet_Debug_drawer
+    debugDrawer = new GLDebugDrawer;
+    debugDrawer->setDebugMode(GLDebugDrawer::DBG_NoDebug);
+    world->setDebugDrawer(debugDrawer);
+}
+
+void Environment::destroyPhysicsWorld()
+{
+    //removePickingConstraint();
+
+    // this is rougly verbose the same thing as the exitPhysics() function in the bullet demos
+    if (world) {
+        int i;
+        for (i = world->getNumConstraints() - 1; i >= 0; i--) {
+            world->removeConstraint(world->getConstraint(i));
+        }
+
+        for (i = world->getNumCollisionObjects() - 1; i >= 0; i--) {
+            btCollisionObject* obj = world->getCollisionObjectArray()[i];
+            btRigidBody* body = btRigidBody::upcast(obj);
+            if (body && body->getMotionState()) {
+                delete body->getMotionState();
+            }
+            world->removeCollisionObject(obj);
+            delete obj;
+        }
+
+        // https://pybullet.org/Bullet/phpBB3/viewtopic.php?t=8148#p28087
+        btOverlappingPairCache* pair_cache = world->getBroadphase()->getOverlappingPairCache();
+        btBroadphasePairArray& pair_array = pair_cache->getOverlappingPairArray();
+        for (int i = 0; i < pair_array.size(); i++)
+            pair_cache->cleanOverlappingPair(pair_array[i], world->getDispatcher());
+    }
+
+    // delete collision shapes
+    for (int j = 0; j < collisionShapes.size(); j++) {
+        btCollisionShape* shape = collisionShapes[j];
+        delete shape;
+    }
+
+    collisionShapes.clear();
+
+    delete world;
+    world = 0;
+
+    delete solver;
+    solver = 0;
+
+    delete broadphase;
+    broadphase = 0;
+
+    delete dispatcher;
+    dispatcher = 0;
+
+    delete collisionConfig;
+    collisionConfig = 0;
+
+    bodies.clear();
+    hashBodies.clear();
 }
 
 }

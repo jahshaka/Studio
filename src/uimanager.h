@@ -42,6 +42,7 @@ public:
     static bool playMode;
 
 	static void startPhysicsSimulation();
+	static void restartPhysicsSimulation();
 	static void stopPhysicsSimulation();
 	static bool isSimulationRunning;
 

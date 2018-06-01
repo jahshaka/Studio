@@ -394,6 +394,28 @@ void MainWindow::initializeGraphics(SceneViewWidget *widget, QOpenGLFunctions_3_
     setupVrUi();
 }
 
+void MainWindow::initializePhysicsWorld()
+{
+    // add bodies to world first
+    for (const auto &node : scene->getRootNode()->children) {
+        if (node->isPhysicsBody) {
+            auto body = iris::PhysicsHelper::createPhysicsBody(node, node->physicsProperty);
+            if (body) sceneView->addBodyToWorld(body, node->getGUID());
+        }
+    }
+
+    // now add constraints
+    // TODO - avoid looping like this, get constraint list -- list and then use that
+    // TODO - handle children of children?
+    for (const auto &node : scene->getRootNode()->children) {
+        if (node->isPhysicsBody) {
+            for (const auto &constraint : node->physicsProperty.constraints) {
+                sceneView->addConstraintToWorldFromProperty(constraint);
+            }
+        }
+    }
+}
+
 void MainWindow::setSettingsManager(SettingsManager* settings)
 {
     this->settings = settings;
@@ -788,24 +810,7 @@ void MainWindow::openProject(bool playMode)
     ui->actionClose->setDisabled(false);
     setScene(scene);
 
-    // create physics objects etc
-    // ================================================== 
-    // add bodies to world first
-    for (const auto &node : scene->getRootNode()->children) {
-        if (node->isPhysicsBody) {
-            auto body = iris::PhysicsHelper::createPhysicsBody(node, node->physicsProperty);
-            if (body) sceneView->addBodyToWorld(body, node->getGUID());
-        }
-    }
-
-    // now add constraints
-    for (const auto &node : scene->getRootNode()->children) {
-        if (node->isPhysicsBody) {
-            for (const auto &constraint : node->physicsProperty.constraints) {
-                sceneView->addConstraintToWorldFromProperty(constraint);
-            }
-        }
-    }
+    initializePhysicsWorld();
 
     // use new post process that has fxaa by default
     // TODO: remember to find a better replacement (Nick)
@@ -2319,25 +2324,32 @@ void MainWindow::setupViewPort()
 
     connect(screenShotBtn, SIGNAL(pressed()), this, SLOT(takeScreenshot()));
 
+    QVariantMap options;
+    
     auto controlBarLayout = new QHBoxLayout;
-    playSceneBtn = new QPushButton("Play scene");
+    playSceneBtn = new QPushButton(fontIcons.icon(fa::play), "Play scene");
     playSceneBtn->setToolTip("Play all animations in the scene");
-    playSceneBtn->setToolTipDuration(-1);
     playSceneBtn->setStyleSheet("background: transparent");
-    playSceneBtn->setIcon(QIcon(":/icons/g_play.svg"));
 
-	playSimBtn = new QPushButton("Simulate physics");
+    options.insert("color", QColor(52, 152, 219));
+    options.insert("color-active", QColor(52, 152, 219));
+	playSimBtn = new QPushButton(fontIcons.icon(fa::play, options), "Simulate physics");
 	playSimBtn->setToolTip("Simulate physics only");
-	playSimBtn->setToolTipDuration(-1);
 	playSimBtn->setStyleSheet("background: transparent");
-	playSimBtn->setIcon(QIcon(":/icons/p_play.svg"));
+
+    restartSimBtn = new QPushButton(fontIcons.icon(fa::undo, options), "Restart Physics");
+    restartSimBtn->setToolTip("Restart physics simulation");
+    restartSimBtn->setStyleSheet("background: transparent");
 
     controlBarLayout->setSpacing(8);
     controlBarLayout->addWidget(screenShotBtn);
     controlBarLayout->addWidget(wireFramesButton);
     controlBarLayout->addStretch();
     controlBarLayout->addWidget(playSceneBtn);
+    controlBarLayout->addSpacing(2);
 	controlBarLayout->addWidget(playSimBtn);
+    controlBarLayout->addSpacing(2);
+	controlBarLayout->addWidget(restartSimBtn);
 
     controlBar->setLayout(controlBarLayout);
     controlBar->setStyleSheet("#controlBar {  background: #1E1E1E; border-bottom: 1px solid black; }");
@@ -2406,19 +2418,32 @@ void MainWindow::setupViewPort()
 	connect(playSimBtn, &QPushButton::pressed, [this]() {
 		UiManager::isSimulationRunning = !UiManager::isSimulationRunning;
 		
+        QVariantMap options;
+
 		if (UiManager::isSimulationRunning) {
 			UiManager::startPhysicsSimulation();
-            playSimBtn->setText("Reset Simulation");
-			playSimBtn->setToolTip("Stop simulating physics");
-			playSimBtn->setIcon(QIcon(":/icons/p_stop.svg"));
+            playSimBtn->setText("Pause Simulation");
+			playSimBtn->setToolTip("Pause physics simulation");
+
+            options.insert("color", QColor(241, 196, 15));
+            options.insert("color-active", QColor(241, 196, 15));
+            playSimBtn->setIcon(fontIcons.icon(fa::pause, options));
 		}
 		else {
 			UiManager::stopPhysicsSimulation();
             playSimBtn->setText("Simulate Physics");
 			playSimBtn->setToolTip("Simulate physics only");
-			playSimBtn->setIcon(QIcon(":/icons/p_play.svg"));
+
+            options.insert("color", QColor(52, 152, 219));
+            options.insert("color-active", QColor(52, 152, 219));
+            playSimBtn->setIcon(fontIcons.icon(fa::play, options));
 		}
 	});
+
+    connect(restartSimBtn, &QPushButton::pressed, [this]() {
+        UiManager::restartPhysicsSimulation();
+        initializePhysicsWorld();
+    });
 
     playerControls->setLayout(playerControlsLayout);
 
@@ -2964,16 +2989,27 @@ void MainWindow::enterEditMode()
 {
     UiManager::isScenePlaying = false;
     UiManager::enterEditMode();
+    
     playSceneBtn->setText("Play Scene");
     playSceneBtn->setToolTip("Play scene");
-    playSceneBtn->setIcon(QIcon(":/icons/g_play.svg"));
+
+    QVariantMap options;
+    options.insert("color", QColor(46, 204, 113));
+    options.insert("color-active", QColor(46, 204, 113));
+    playSceneBtn->setIcon(fontIcons.icon(fa::play, options));
 }
 
 void MainWindow::enterPlayMode()
 {
     UiManager::isScenePlaying = true;
     UiManager::enterPlayMode();
+    
+    playSceneBtn->setEnabled(true);
     playSceneBtn->setText("Stop playing");
     playSceneBtn->setToolTip("Stop playing");
-    playSceneBtn->setIcon(QIcon(":/icons/g_stop.svg"));
+
+    QVariantMap options;
+    options.insert("color", QColor(231, 76, 60));
+    options.insert("color-active", QColor(231, 76, 60));
+    playSceneBtn->setIcon(fontIcons.icon(fa::stop, options));
 }

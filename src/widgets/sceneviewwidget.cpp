@@ -340,6 +340,10 @@ void SceneViewWidget::startPhysicsSimulation()
     scene->getPhysicsEnvironment()->simulatePhysics();
 }
 
+void SceneViewWidget::restartPhysicsSimulation()
+{
+    scene->getPhysicsEnvironment()->restartPhysics();
+}
 
 void SceneViewWidget::stopPhysicsSimulation()
 {
