@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include <QVector3D>
 #include <QLabel>
 #include <QCheckBox>
+#include <QMenu>
 #include "irisglfwd.h"
 #include "misc/QtAwesome.h"
 #include "misc/QtAwesomeAnim.h"
@@ -43,6 +44,7 @@ class QTreeWidgetItem;
 class QTreeWidget;
 class QIcon;
 class QUndoStack;
+class QToolButton;
 
 class TransformSlidersUi;
 class LightLayerWidget;
@@ -280,6 +282,7 @@ public slots:
 
     void takeScreenshot();
     void toggleLightWires(bool state);
+    void toggleDebugDrawer(bool state);
     void showProjectManagerInternal();
 
 private slots:
@@ -374,7 +377,9 @@ private:
     QWidget *controlBar;
     QWidget *playerControls;
     QPushButton *playSceneBtn;
+    QMenu *wireFramesMenu;
     QCheckBox *wireCheckBtn;
+    QToolButton *wireFramesButton;
     QPushButton *restartBtn;
     QPushButton *playBtn;
     QPushButton *stopBtn;
@@ -382,6 +387,9 @@ private:
     QToolBar *toolBar;
     AssetView *_assetView;
 	QAction *actionSaveScene;
+
+    QAction *wireCheckAction;
+    QAction *physicsCheckAction;
 
 	QVector<bool> widgetStates;	// use the order in the enum
 

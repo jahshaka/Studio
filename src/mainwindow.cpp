@@ -70,6 +70,7 @@ For more information see the LICENSE file
 #include <math.h>
 #include <QDesktopServices>
 #include <QShortcut>
+#include <QToolButton>
 
 #include "dialogs/loadmeshdialog.h"
 #include "core/surfaceview.h"
@@ -787,6 +788,25 @@ void MainWindow::openProject(bool playMode)
     ui->actionClose->setDisabled(false);
     setScene(scene);
 
+    // create physics objects etc
+    // ================================================== 
+    // add bodies to world first
+    for (const auto &node : scene->getRootNode()->children) {
+        if (node->isPhysicsBody) {
+            auto body = iris::PhysicsHelper::createPhysicsBody(node, node->physicsProperty);
+            if (body) sceneView->addBodyToWorld(body, node->getGUID());
+        }
+    }
+
+    // now add constraints
+    for (const auto &node : scene->getRootNode()->children) {
+        if (node->isPhysicsBody) {
+            for (const auto &constraint : node->physicsProperty.constraints) {
+                sceneView->addConstraintToWorldFromProperty(constraint);
+            }
+        }
+    }
+
     // use new post process that has fxaa by default
     // TODO: remember to find a better replacement (Nick)
     postProcessWidget->setPostProcessMgr(postMan);
@@ -794,7 +814,7 @@ void MainWindow::openProject(bool playMode)
 
     if (editorData != Q_NULLPTR) {
         sceneView->setEditorData(editorData);
-        wireCheckBtn->setChecked(editorData->showLightWires);
+        wireCheckAction->setChecked(editorData->showLightWires);
     }
 
     assetWidget->trigger();
@@ -2277,28 +2297,44 @@ void MainWindow::setupViewPort()
     screenShotBtn->setStyleSheet("background: transparent");
     screenShotBtn->setIcon(QIcon(":/icons/camera.svg"));
 
-    wireCheckBtn = new QCheckBox("Viewport Wireframes");
-    wireCheckBtn->setCheckable(true);
+    wireFramesButton = new QToolButton;
+    wireFramesButton->setStyleSheet(
+        "padding: 0 8px 0 0; margin: 0"
+    );
+    wireFramesMenu = new QMenu;
+
+    wireCheckAction = new QAction(QIcon(), "Light Bounds");
+    wireCheckAction->setCheckable(true);
+    connect(wireCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleLightWires(bool)));
+    wireFramesMenu->addAction(wireCheckAction);
+
+    physicsCheckAction = new QAction(QIcon(), "Physics Debug Info");
+    physicsCheckAction->setCheckable(true);
+    connect(physicsCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleDebugDrawer(bool)));
+    wireFramesMenu->addAction(physicsCheckAction);
+
+    wireFramesButton->setMenu(wireFramesMenu);
+    wireFramesButton->setText("Wireframes ");
+    wireFramesButton->setPopupMode(QToolButton::InstantPopup);
 
     connect(screenShotBtn, SIGNAL(pressed()), this, SLOT(takeScreenshot()));
-    connect(wireCheckBtn, SIGNAL(toggled(bool)), this, SLOT(toggleLightWires(bool)));
 
     auto controlBarLayout = new QHBoxLayout;
-    playSceneBtn = new QPushButton;
-    playSceneBtn->setToolTip("Play scene");
+    playSceneBtn = new QPushButton("Play scene");
+    playSceneBtn->setToolTip("Play all animations in the scene");
     playSceneBtn->setToolTipDuration(-1);
     playSceneBtn->setStyleSheet("background: transparent");
     playSceneBtn->setIcon(QIcon(":/icons/g_play.svg"));
 
-	playSimBtn = new QPushButton;
-	playSimBtn->setToolTip("Play scene");
+	playSimBtn = new QPushButton("Simulate physics");
+	playSimBtn->setToolTip("Simulate physics only");
 	playSimBtn->setToolTipDuration(-1);
 	playSimBtn->setStyleSheet("background: transparent");
 	playSimBtn->setIcon(QIcon(":/icons/p_play.svg"));
 
     controlBarLayout->setSpacing(8);
     controlBarLayout->addWidget(screenShotBtn);
-    controlBarLayout->addWidget(wireCheckBtn);
+    controlBarLayout->addWidget(wireFramesButton);
     controlBarLayout->addStretch();
     controlBarLayout->addWidget(playSceneBtn);
 	controlBarLayout->addWidget(playSimBtn);
@@ -2372,12 +2408,14 @@ void MainWindow::setupViewPort()
 		
 		if (UiManager::isSimulationRunning) {
 			UiManager::startPhysicsSimulation();
-			playSimBtn->setToolTip("Stop simulating");
+            playSimBtn->setText("Reset Simulation");
+			playSimBtn->setToolTip("Stop simulating physics");
 			playSimBtn->setIcon(QIcon(":/icons/p_stop.svg"));
 		}
 		else {
 			UiManager::stopPhysicsSimulation();
-			playSimBtn->setToolTip("Start simulation");
+            playSimBtn->setText("Simulate Physics");
+			playSimBtn->setToolTip("Simulate physics only");
 			playSimBtn->setIcon(QIcon(":/icons/p_play.svg"));
 		}
 	});
@@ -2403,7 +2441,7 @@ void MainWindow::setupViewPort()
     Globals::sceneViewWidget = sceneView;
     UiManager::setSceneViewWidget(sceneView);
 
-    wireCheckBtn->setChecked(sceneView->getShowLightWires());
+    wireCheckAction->setChecked(sceneView->getShowLightWires());
 
     QGridLayout* layout = new QGridLayout;
     layout->addWidget(sceneView);
@@ -2806,6 +2844,11 @@ void MainWindow::toggleLightWires(bool state)
     sceneView->setShowLightWires(state);
 }
 
+void MainWindow::toggleDebugDrawer(bool state)
+{
+    sceneView->toggleDebugDrawFlags(state);
+}
+
 void MainWindow::toggleWidgets(bool state)
 {
     sceneHierarchyDock->setVisible(state);
@@ -2921,6 +2964,7 @@ void MainWindow::enterEditMode()
 {
     UiManager::isScenePlaying = false;
     UiManager::enterEditMode();
+    playSceneBtn->setText("Play Scene");
     playSceneBtn->setToolTip("Play scene");
     playSceneBtn->setIcon(QIcon(":/icons/g_play.svg"));
 }
@@ -2929,6 +2973,7 @@ void MainWindow::enterPlayMode()
 {
     UiManager::isScenePlaying = true;
     UiManager::enterPlayMode();
+    playSceneBtn->setText("Stop playing");
     playSceneBtn->setToolTip("Stop playing");
     playSceneBtn->setIcon(QIcon(":/icons/g_stop.svg"));
 }

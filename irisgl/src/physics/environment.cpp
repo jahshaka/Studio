@@ -24,15 +24,9 @@ Environment::Environment(iris::RenderList *debugList)
     lineMat = iris::LineColorMaterial::create();
     lineMat.staticCast<iris::LineColorMaterial>()->setDepthBias(10.f);
 
+    // http://bulletphysics.org/mediawiki-1.5.8/index.php/Bullet_Debug_drawer
     debugDrawer = new GLDebugDrawer;
-    debugDrawer->setDebugMode(
-        GLDebugDrawer::DBG_DrawAabb |
-        GLDebugDrawer::DBG_DrawWireframe |
-        GLDebugDrawer::DBG_DrawConstraints |
-        GLDebugDrawer::DBG_DrawContactPoints |
-        GLDebugDrawer::DBG_DrawConstraintLimits |
-        GLDebugDrawer::DBG_DrawFrames
-    );
+    debugDrawer->setDebugMode(GLDebugDrawer::DBG_NoDebug);
     world->setDebugDrawer(debugDrawer);
 }
 
@@ -62,7 +56,7 @@ void Environment::removeBodyFromWorld(btRigidBody *body)
     world->removeRigidBody(body);
     hashBodies.remove(hashBodies.key(body)); // ???
 
-    qDebug() << "BODY REMOVED TO WORLD " ;
+    qDebug() << "BODY REMOVED FROM WORLD " ;
     qDebug() << "There are " << hashBodies.size() << " bodies ";
 }
 
@@ -73,7 +67,7 @@ void Environment::removeBodyFromWorld(const QString &guid)
     world->removeRigidBody(hashBodies.value(guid));
     hashBodies.remove(guid);
 
-    qDebug() << "BODY REMOVED TO WORLD ";
+    qDebug() << "BODY REMOVED FROM WORLD ";
     qDebug() << "There are " << hashBodies.size() << " bodies ";
 }
 
@@ -102,10 +96,19 @@ btDynamicsWorld *Environment::getWorld()
 void Environment::simulatePhysics()
 {
     simulating = true;
+    simulationStarted = true;
+}
+
+bool Environment::isSimulating()
+{
+    return simulationStarted;
 }
 
 void Environment::stopPhysics()
 {
+    // this is the original, we also want to be able to pause as well
+    // to "restart" a sim we have to cleanup and recreate it from scratch basically...
+	//simulating = false;
 	simulating = false;
 }
 
@@ -122,6 +125,23 @@ void Environment::stepSimulation(float delta)
     QMatrix4x4 transform;
     transform.setToIdentity();
     debugRenderList->submitMesh(builder.build(), lineMat, transform);
+}
+
+void Environment::toggleDebugDrawFlags(bool state)
+{
+    if (!state) {
+        debugDrawer->setDebugMode(GLDebugDrawer::DBG_NoDebug);
+    }
+    else {
+        debugDrawer->setDebugMode(
+            GLDebugDrawer::DBG_DrawAabb |
+            GLDebugDrawer::DBG_DrawWireframe |
+            GLDebugDrawer::DBG_DrawConstraints |
+            GLDebugDrawer::DBG_DrawContactPoints |
+            GLDebugDrawer::DBG_DrawConstraintLimits |
+            GLDebugDrawer::DBG_DrawFrames
+        );
+    }
 }
 
 }

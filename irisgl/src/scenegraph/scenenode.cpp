@@ -10,20 +10,21 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "scenenode.h"
-#include "scene.h"
-#include "../graphics/mesh.h"
-#include "../graphics/skeleton.h"
-#include "../scenegraph/meshnode.h"
-#include "../animation/keyframeset.h"
-#include "../animation/animation.h"
-#include "../animation/propertyanim.h"
-#include "../animation/animableproperty.h"
-#include "../animation/keyframeanimation.h"
-#include "../animation/skeletalanimation.h"
-#include "../core/property.h"
-#include "../math/mathhelper.h"
 
 #include <functional>
+
+#include "animation/animation.h"
+#include "animation/animableproperty.h"
+#include "animation/keyframeanimation.h"
+#include "animation/keyframeset.h"
+#include "animation/propertyanim.h"
+#include "animation/skeletalanimation.h"
+#include "core/property.h"
+#include "graphics/mesh.h"
+#include "graphics/skeleton.h"
+#include "math/mathhelper.h"
+#include "scene.h"
+#include "scenegraph/meshnode.h"
 
 namespace iris
 {

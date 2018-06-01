@@ -330,10 +330,16 @@ void SceneViewWidget::setShowLightWires(bool value)
     showLightWires = value;
 }
 
+void SceneViewWidget::toggleDebugDrawFlags(bool value)
+{
+    scene->getPhysicsEnvironment()->toggleDebugDrawFlags(value);
+}
+
 void SceneViewWidget::startPhysicsSimulation()
 {
-	scene->getPhysicsEnvironment()->simulatePhysics();
+    scene->getPhysicsEnvironment()->simulatePhysics();
 }
+
 
 void SceneViewWidget::stopPhysicsSimulation()
 {
@@ -1376,6 +1382,12 @@ void SceneViewWidget::removeBodyFromWorld(btRigidBody *body)
 void SceneViewWidget::removeBodyFromWorld(const QString &guid)
 {
     scene->getPhysicsEnvironment()->removeBodyFromWorld(guid);
+}
+
+void SceneViewWidget::addConstraintToWorldFromProperty(const iris::ConstraintProperty &prop)
+{
+    auto constraint = iris::PhysicsHelper::createConstraintFromProperty(scene->getPhysicsEnvironment(), prop);
+    scene->getPhysicsEnvironment()->addConstraintToWorld(constraint);
 }
 
 void SceneViewWidget::setGizmoLoc()

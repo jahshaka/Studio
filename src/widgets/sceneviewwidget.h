@@ -24,6 +24,7 @@ For more information see the LICENSE file
 
 #include "irisgl/src/irisglfwd.h"
 #include "irisgl/src/math/intersectionhelper.h"
+#include "irisgl/src/physics/physicsproperties.h"
 
 #include "mainwindow.h"
 #include "uimanager.h"
@@ -168,6 +169,8 @@ public:
     void removeBodyFromWorld(btRigidBody *body);
     void removeBodyFromWorld(const QString &guid);
 
+    void addConstraintToWorldFromProperty(const iris::ConstraintProperty &prop);
+
     void setGizmoLoc();
     void setGizmoRot();
     void setGizmoScale();
@@ -216,6 +219,7 @@ public:
     QImage takeScreenshot(int width=1920, int height=1080);
     bool getShowLightWires() const;
     void setShowLightWires(bool value);
+    void toggleDebugDrawFlags(bool value);
 
 	void startPhysicsSimulation();
 	void stopPhysicsSimulation();

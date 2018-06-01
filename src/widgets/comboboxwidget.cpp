@@ -79,7 +79,16 @@ void ComboBoxWidget::setCurrentItemData(const QString &item)
 
 void ComboBoxWidget::setCurrentIndex(const int &index)
 {
+    ui->comboBox->blockSignals(true);
     ui->comboBox->setCurrentIndex(index);
+    ui->comboBox->blockSignals(false);
+}
+
+void ComboBoxWidget::setCurrentText(const QString &text)
+{
+    ui->comboBox->blockSignals(true);
+    ui->comboBox->setCurrentText(text);
+    ui->comboBox->blockSignals(false);
 }
 
 QComboBox *ComboBoxWidget::getWidget() const

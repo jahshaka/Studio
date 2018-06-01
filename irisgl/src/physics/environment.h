@@ -89,8 +89,10 @@ public:
 
     // These are special functions used for creating a constraint to drag bodies
 	void simulatePhysics();
+	bool isSimulating();
 	void stopPhysics();
 	void stepSimulation(float delta);
+    void toggleDebugDrawFlags(bool state = false);
 
 private:
     btCollisionConfiguration    *collisionConfig;
@@ -101,6 +103,7 @@ private:
 
     QVector<btRigidBody*> bodies;
     bool simulating;
+    bool simulationStarted;
 
     iris::MaterialPtr lineMat;
     iris::RenderList *debugRenderList;
