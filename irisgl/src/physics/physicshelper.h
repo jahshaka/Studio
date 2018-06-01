@@ -17,7 +17,9 @@
 namespace iris
 {
 
-    class PhysicsHelper
+class Environment;
+
+class PhysicsHelper
 {
 public:
     PhysicsHelper() = default;
@@ -25,6 +27,7 @@ public:
     static btConvexHullShape *btConvexHullShapeFromMesh(iris::MeshPtr mesh);
     static btVector3 btVector3FromQVector3D(QVector3D vector);
     static btRigidBody *createPhysicsBody(const iris::SceneNodePtr sceneNode, const iris::PhysicsProperty &props);
+    static btTypedConstraint *createConstraintFromProperty(QSharedPointer<Environment> environment, const iris::ConstraintProperty &prop);
 };
 
 }

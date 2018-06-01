@@ -24,6 +24,7 @@ For more information see the LICENSE file
 
 #include "irisgl/src/irisglfwd.h"
 #include "irisgl/src/math/intersectionhelper.h"
+#include "irisgl/src/physics/physicsproperties.h"
 
 #include "mainwindow.h"
 #include "uimanager.h"
@@ -167,6 +168,8 @@ public:
     void addBodyToWorld(btRigidBody *body, const QString &guid);
     void removeBodyFromWorld(btRigidBody *body);
     void removeBodyFromWorld(const QString &guid);
+
+    void addConstraintToWorldFromProperty(const iris::ConstraintProperty &prop);
 
     void setGizmoLoc();
     void setGizmoRot();

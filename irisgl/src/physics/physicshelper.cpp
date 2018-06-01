@@ -1,6 +1,7 @@
 #include "physicshelper.h"
 
 #include "geometry/trimesh.h"
+#include "physics/environment.h"
 
 namespace iris
 {
@@ -216,6 +217,41 @@ btRigidBody *PhysicsHelper::createPhysicsBody(const iris::SceneNodePtr sceneNode
     }
 
     return body;
+}
+
+btTypedConstraint * PhysicsHelper::createConstraintFromProperty(QSharedPointer<Environment> environment, const iris::ConstraintProperty & prop)
+{
+    btTypedConstraint *constraint = Q_NULLPTR;
+
+    auto bodyA = environment->hashBodies.value(prop.constraintFrom);
+    auto bodyB = environment->hashBodies.value(prop.constraintTo);
+
+    // Constraints must be defined in LOCAL SPACE...
+    btVector3 pivotA = bodyA->getCenterOfMassTransform().getOrigin();
+    btVector3 pivotB = bodyB->getCenterOfMassTransform().getOrigin();
+
+    // Prefer a transform instead of a vector ... the majority of constraints use transforms
+    btTransform frameA;
+    frameA.setIdentity();
+    frameA.setOrigin(bodyA->getCenterOfMassTransform().inverse() * pivotA);
+
+    btTransform frameB;
+    frameB.setIdentity();
+    frameB.setOrigin(bodyB->getCenterOfMassTransform().inverse() * pivotA);
+
+    if (prop.constraintType == iris::PhysicsConstraintType::Ball) {
+        constraint = new btPoint2PointConstraint(
+            *bodyA, *bodyB, frameA.getOrigin(), frameB.getOrigin()
+        );
+    }
+
+    if (prop.constraintType == iris::PhysicsConstraintType::Dof6) {
+        constraint = new btGeneric6DofConstraint(
+            *bodyA, *bodyB, frameA, frameB, true
+        );
+    }
+
+    return constraint;
 }
 
 

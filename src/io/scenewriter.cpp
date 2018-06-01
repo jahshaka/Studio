@@ -306,6 +306,7 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
 
     if (meshNode->isPhysicsBody) {
         QJsonObject physicsProperties;
+
         physicsProperties.insert("centerOfMass", jsonVector3(meshNode->physicsProperty.centerOfMass));
         physicsProperties.insert("pivot", jsonVector3(meshNode->physicsProperty.pivotPoint));
         physicsProperties.insert("static", meshNode->physicsProperty.isStatic);
@@ -315,6 +316,20 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
         physicsProperties.insert("bounciness", meshNode->physicsProperty.objectRestitution);
         physicsProperties.insert("shape", static_cast<int>(meshNode->physicsProperty.shape));
         physicsProperties.insert("type", static_cast<int>(meshNode->physicsProperty.type));
+
+        QJsonArray constraintProperties;
+        
+        for (const auto &constraint : meshNode->physicsProperty.constraints) {
+            QJsonObject constraintProp;
+            constraintProp.insert("constraintFrom", constraint.constraintFrom);
+            constraintProp.insert("constraintTo", constraint.constraintTo);
+            constraintProp.insert("constraintType", static_cast<int>(constraint.constraintType));
+
+            constraintProperties.append(constraintProp);
+        }
+
+        physicsProperties["constraints"] = constraintProperties;
+
         sceneNodeObject["physicsProperties"] = physicsProperties;
     }
 

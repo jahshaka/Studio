@@ -103,6 +103,7 @@ private:
 
     QVector<btRigidBody*> bodies;
     bool simulating;
+    bool simulationStarted;
 
     iris::MaterialPtr lineMat;
     iris::RenderList *debugRenderList;

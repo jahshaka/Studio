@@ -438,6 +438,18 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         meshNode->physicsProperty.pivotPoint            = readVector3(physicsDef["pivot"].toObject());
         meshNode->physicsProperty.shape                 = static_cast<iris::PhysicsCollisionShape>(physicsDef["shape"].toInt());
         meshNode->physicsProperty.type                  = static_cast<iris::PhysicsType>(physicsDef["type"].toInt());
+
+        QJsonArray constraints = physicsDef["constraints"].toArray();
+        for (const auto &constraint : constraints) {
+            QJsonObject constraintObject = constraint.toObject();
+
+            iris::ConstraintProperty constraintProp;
+            constraintProp.constraintFrom = constraintObject.value("constraintFrom").toString();
+            constraintProp.constraintTo = constraintObject.value("constraintTo").toString();
+            constraintProp.constraintType = static_cast<iris::PhysicsConstraintType>(constraintObject.value("constraintType").toInt());
+            
+            meshNode->physicsProperty.constraints.append(constraintProp);
+        }
     }
 
     return meshNode;

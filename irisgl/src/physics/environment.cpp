@@ -96,15 +96,19 @@ btDynamicsWorld *Environment::getWorld()
 void Environment::simulatePhysics()
 {
     simulating = true;
+    simulationStarted = true;
 }
 
 bool Environment::isSimulating()
 {
-    return simulating;
+    return simulationStarted;
 }
 
 void Environment::stopPhysics()
 {
+    // this is the original, we also want to be able to pause as well
+    // to "restart" a sim we have to cleanup and recreate it from scratch basically...
+	//simulating = false;
 	simulating = false;
 }
 

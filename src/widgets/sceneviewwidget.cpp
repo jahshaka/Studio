@@ -1384,6 +1384,12 @@ void SceneViewWidget::removeBodyFromWorld(const QString &guid)
     scene->getPhysicsEnvironment()->removeBodyFromWorld(guid);
 }
 
+void SceneViewWidget::addConstraintToWorldFromProperty(const iris::ConstraintProperty &prop)
+{
+    auto constraint = iris::PhysicsHelper::createConstraintFromProperty(scene->getPhysicsEnvironment(), prop);
+    scene->getPhysicsEnvironment()->addConstraintToWorld(constraint);
+}
+
 void SceneViewWidget::setGizmoLoc()
 {
     editorCam->updateCameraMatrices();

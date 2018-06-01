@@ -28,6 +28,17 @@ enum class PhysicsConstraintType : int
     Dof6
 };
 
+struct ConstraintProperty
+{
+    ConstraintProperty() {
+        constraintType = PhysicsConstraintType::None;
+    }
+
+    QString constraintFrom;
+    QString constraintTo;
+    PhysicsConstraintType constraintType;
+};
+
 struct PhysicsProperty
 {
     // Fairly sane defaults...
@@ -52,6 +63,8 @@ struct PhysicsProperty
     PhysicsType type;
     QVector3D centerOfMass;
     QVector3D pivotPoint;
+
+    QVector<ConstraintProperty> constraints;
 };
 
 }
