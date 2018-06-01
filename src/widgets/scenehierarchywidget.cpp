@@ -22,6 +22,11 @@ For more information see the LICENSE file
 #include "uimanager.h"
 #include "widgets/sceneviewwidget.h"
 #include "io/scenewriter.h"
+#include <qdialog.h>
+#include <qcombobox.h>
+
+#include "irisgl/src/physics/environment.h"
+#include "bullet3/src/Bullet3Common/b3Logging.h"
 
 //#include <QProxyStyle>
 //
@@ -50,6 +55,9 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 	ui->sceneTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
 	ui->sceneTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     ui->sceneTree->viewport()->installEventFilter(this);
+    ui->sceneTree->setItemDelegate(new TreeItemDelegate(this));
+
+    connect(ui->sceneTree->itemDelegate(), &QAbstractItemDelegate::commitData, this, &SceneHierarchyWidget::OnLstItemsCommitData);
 
     ui->sceneTree->setAttribute(Qt::WA_MacShowFocusRect, false);
     ui->sceneTree->viewport()->setAttribute(Qt::WA_MacShowFocusRect, false);
@@ -92,6 +100,7 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 		"QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }"
 		"QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }"
 		"QTreeWidget::item { padding: 5px 0; }"
+        "QTreeWidget QLineEdit { background-color: #404040; selection-background-color: #777; border: 0; }"
 		"QTreeWidget::item:hover { background: #303030; padding: 5px 0; }"
 	);
 }
@@ -255,15 +264,15 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
     QMenu menu;
 	menu.setStyleSheet(
 		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
-		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
+		"QMenu::item { background-color: #1A1A1A; padding: 6px 16px 6px 8px; margin: 0; }"
+		"QMenu::item:selected { background-color: #3498db; color: #EEE; }"
 		"QMenu::item : disabled { color: #555; }"
 	);
 
     QAction* action;
 
     action = new QAction(QIcon(), "Rename", this);
-    connect(action, SIGNAL(triggered()), this, SLOT(renameNode()));
+    connect(action, &QAction::triggered, this, [&]() { ui->sceneTree->editItem(item); });
     menu.addAction(action);
 
     // The world node isn't removable
@@ -282,6 +291,57 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	action = new QAction(QIcon(), "Focus Camera", this);
 	connect(action, SIGNAL(triggered()), this, SLOT(focusOnNode()));
 	menu.addAction(action);
+
+    if (node->isPhysicsBody) {
+        QMenu *physicsMenu = menu.addMenu("Physics");
+        QMenu *addConstraintsMenu = physicsMenu->addMenu("Add Constraint");
+        QAction *p2pConstraint = addConstraintsMenu->addAction("Ball Constraint");
+        QAction *dof6Constraint = addConstraintsMenu->addAction("6Dof Constraint");
+
+        box = new QComboBox;
+
+        auto rootNode = scene->getRootNode();
+
+        connect(p2pConstraint, &QAction::triggered, this, [&]() {
+            box->addItem("null", "");
+
+            for (auto childNode : rootNode->children) {
+                if (childNode->isPhysicsBody && childNode->getGUID() != node->getGUID()) {
+                    box->addItem(childNode->getName(), childNode->getGUID());
+                }
+            }
+
+            connect<void(QComboBox::*)(int)>(box, &QComboBox::currentIndexChanged, this, [&](int index) {
+                constraintsPicked(index, iris::PhysicsConstraintType::Ball);
+            });
+
+            QDialog d;
+            auto dl = new QVBoxLayout();
+            dl->addWidget(box);
+            d.setLayout(dl);
+            d.exec();
+        });
+
+        connect(dof6Constraint, &QAction::triggered, this, [&]() {
+            box->addItem("null", "");
+
+            for (auto childNode : rootNode->children) {
+                if (childNode->isPhysicsBody && childNode->getGUID() != node->getGUID()) {
+                    box->addItem(childNode->getName(), childNode->getGUID());
+                }
+            }
+
+            connect<void(QComboBox::*)(int)>(box, &QComboBox::currentIndexChanged, this, [&](int index) {
+                constraintsPicked(index, iris::PhysicsConstraintType::Dof6);
+            });
+
+            QDialog d;
+            auto dl = new QVBoxLayout();
+            dl->addWidget(box);
+            d.setLayout(dl);
+            d.exec();
+        });
+    }
 
 	if (node->isExportable()) {
 		QMenu *subMenu = menu.addMenu("Export");
@@ -330,9 +390,55 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
     menu.exec(ui->sceneTree->mapToGlobal(pos));
 }
 
-void SceneHierarchyWidget::renameNode()
+void SceneHierarchyWidget::constraintsPicked(int ix, iris::PhysicsConstraintType type)
 {
-    mainWindow->renameNode();
+    // Adds this constraint to two rigid bodies, the first is the currently selected node/body
+    // The second is selected from a menu ... TODO - do an interactive pick for selecting the second node
+    auto bodyA = scene->getPhysicsEnvironment()->hashBodies.value(selectedNode->getGUID());
+    auto bodyB = scene->getPhysicsEnvironment()->hashBodies.value(box->itemData(ix).toString());
+
+    // Constraints must be defined in LOCAL SPACE...
+    btVector3 pivotA = bodyA->getCenterOfMassTransform().getOrigin();
+    btVector3 pivotB = bodyB->getCenterOfMassTransform().getOrigin();
+
+    // Prefer a transform instead of a vector ... the majority of constraints use transforms
+    btTransform frameA;
+    frameA.setIdentity();
+    frameA.setOrigin(bodyA->getCenterOfMassTransform().inverse() * pivotA);
+
+    btTransform frameB; 
+    frameB.setIdentity();
+    frameB.setOrigin(bodyB->getCenterOfMassTransform().inverse() * pivotA);
+
+    //btVector3 pA = bodyA->getCenterOfMassTransform().inverse() * pivotA;
+    //btVector3 pB = bodyB->getCenterOfMassTransform().inverse() * pivotA;
+    //qDebug() << pA.x() << pA.y() << pA.z();
+    //qDebug() << pB.x() << pB.y() << pB.z();
+
+    qDebug() << frameA.getOrigin().x() << frameA.getOrigin().y() << frameA.getOrigin().z();
+    qDebug() << frameB.getOrigin().x() << frameB.getOrigin().y() << frameB.getOrigin().z();
+
+    btTypedConstraint *constraint = Q_NULLPTR;
+
+    if (type == iris::PhysicsConstraintType::Ball) {
+        constraint = new btPoint2PointConstraint(
+            *bodyA, *bodyB, frameA.getOrigin(), frameB.getOrigin()
+        );
+    }
+
+    if (type == iris::PhysicsConstraintType::Dof6) {
+        constraint = new btGeneric6DofConstraint(
+            *bodyA, *bodyB, frameA, frameB, true
+        );
+    }
+
+    constraint->setDbgDrawSize(btScalar(6));
+
+    //constraint->m_setting.m_damping = 1.f;
+    //constraint->m_setting.m_impulseClamp = 1.f;
+
+    // Add the constraint to the physics world
+    scene->getPhysicsEnvironment()->addConstraintToWorld(constraint);
 }
 
 void SceneHierarchyWidget::deleteNode()
@@ -425,6 +531,7 @@ void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
 QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 {
     auto childTreeItem = new QTreeWidgetItem();
+    childTreeItem->setFlags(childTreeItem->flags() | Qt::ItemIsEditable);
     childTreeItem->setText(0, node->getName());
     childTreeItem->setData(0, Qt::UserRole, QVariant::fromValue(node->getNodeId()));
 	childTreeItem->setData(1, Qt::UserRole, QVariant::fromValue(node->isVisible()));
@@ -510,6 +617,12 @@ void SceneHierarchyWidget::removeChild(iris::SceneNodePtr childNode)
     // remove from lists
     nodeList.remove(childNode->getNodeId());
     treeItemList.remove(childNode->getNodeId());
+}
+
+void SceneHierarchyWidget::OnLstItemsCommitData(QWidget *listItem)
+{
+    QString newName = qobject_cast<QLineEdit*>(listItem)->text();
+    if (!newName.isEmpty() && selectedNode) selectedNode->setName(newName);
 }
 
 SceneHierarchyWidget::~SceneHierarchyWidget()

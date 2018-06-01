@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "irisgl/src/graphics/utils/linemeshbuilder.h"
 #include "irisgl/src/graphics/viewport.h"
 #include "irisgl/src/materials/colormaterial.h"
+#include "irisgl/src/materials/linecolormaterial.h"
 #include "irisgl/src/scenegraph/scene.h"
 #include "irisgl/src/scenegraph/scenenode.h"
 #include "irisgl/src/scenegraph/meshnode.h"
@@ -45,6 +46,10 @@ For more information see the LICENSE file
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/vr/vrdevice.h"
 #include "irisgl/src/vr/vrmanager.h"
+#include "irisgl/src/physics/environment.h"
+#include "irisgl/src/physics/physicshelper.h"
+
+#include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
 
 #include "animationwidget.h"
 #include "constants.h"
@@ -282,6 +287,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     showFps = SettingsManager::getDefaultManager()->getValue("show_fps", false).toBool();
 
 	settings = SettingsManager::getDefaultManager();
+
+    m_pickedConstraint = nullptr;
 }
 
 void SceneViewWidget::resetEditorCam()
@@ -323,12 +330,22 @@ void SceneViewWidget::setShowLightWires(bool value)
     showLightWires = value;
 }
 
+void SceneViewWidget::startPhysicsSimulation()
+{
+	scene->getPhysicsEnvironment()->simulatePhysics();
+}
+
+void SceneViewWidget::stopPhysicsSimulation()
+{
+    scene->getPhysicsEnvironment()->stopPhysics();
+}
+
 void SceneViewWidget::initLightAssets()
 {
     pointLightMesh = iris::ShapeHelper::createWireSphere(1.0f);
     spotLightMesh = iris::ShapeHelper::createWireCone(1.0f);
     dirLightMesh = createDirLightMesh();
-    lineMat = iris::ColorMaterial::create();
+	lineMat = iris::LineColorMaterial::create();
 }
 
 iris::MeshPtr SceneViewWidget::createDirLightMesh(float baseRadius)
@@ -410,6 +427,11 @@ void SceneViewWidget::setScene(iris::ScenePtr scene)
     selectedNode.reset();
 }
 
+iris::ScenePtr SceneViewWidget::getScene()
+{
+    return scene;
+}
+
 void SceneViewWidget::setSelectedNode(iris::SceneNodePtr sceneNode)
 {
     if (!scene)
@@ -459,7 +481,7 @@ void SceneViewWidget::renderGizmos(bool once)
 		return;
 	
     auto gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
-	if (!!selectedNode) {
+	if (!!selectedNode && !selectedNode->isPhysicsBody) {
 		gizmo->updateSize(editorCam);
 
 		QVector3D rayPos, rayDir;
@@ -499,7 +521,7 @@ void SceneViewWidget::initializeGL()
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
 
-    renderer = iris::ForwardRenderer::create();
+    renderer = iris::ForwardRenderer::create(true, true);
     spriteBatch = iris::SpriteBatch::create(renderer->getGraphicsDevice());
     font = iris::Font::create(renderer->getGraphicsDevice(), fontSize);
 
@@ -765,7 +787,43 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     QPointF dir = localPos - prevMousePos;
 
     if (e->buttons() == Qt::LeftButton && !!selectedNode) {
-		if (gizmo->isDragging()) {
+        if (selectedNode->isPhysicsBody) {
+            if (activeRigidBody && m_pickedConstraint)
+            {
+                //btPoint2PointConstraint* pickCon = static_cast<btPoint2PointConstraint*>(m_pickedConstraint);
+                //if (pickCon)
+                //{
+                //    //keep it at the same picking distance
+
+                //    btVector3 newPivotB;
+
+                //    btVector3 rayFromWorld = iris::PhysicsHelper::btVector3FromQVector3D(editorCam->getGlobalPosition());
+                //    btVector3 rayToWorld = iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(localPos) * 1024);
+
+                //    btVector3 dir = rayToWorld - rayFromWorld;
+                //    dir.normalize();
+                //    dir *= m_oldPickingDist;
+
+                //    newPivotB = rayFromWorld + dir;
+                //    pickCon->setPivotB(newPivotB);
+                //}
+
+                btGeneric6DofConstraint* pickCon = static_cast<btGeneric6DofConstraint*>(m_pickedConstraint);
+                if (pickCon)
+                {
+                    // use another picking ray to get the target direction
+                    btVector3 dir = iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(localPos) * 1024);
+                    -iris::PhysicsHelper::btVector3FromQVector3D(editorCam->getGlobalPosition());
+                    dir.normalize();
+                    // use the same distance as when we originally picked the object
+                    dir *= m_oldPickingDist;
+                    btVector3 newPivot = iris::PhysicsHelper::btVector3FromQVector3D(editorCam->getGlobalPosition()) + dir;
+                    // set the position of the constraint
+                    pickCon->getFrameOffsetA().setOrigin(newPivot);
+                }
+            }
+
+        } else if (gizmo->isDragging()) {
 			QVector3D rayPos, rayDir;
 			this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
 			gizmo->drag(rayPos, rayDir);
@@ -844,6 +902,15 @@ void SceneViewWidget::mouseReleaseEvent(QMouseEvent *e)
         // maybe explicitly hard reset stuff related to picking here
         if (gizmo->isDragging())
             gizmo->endDragging();
+
+        if (m_pickedConstraint) {
+            activeRigidBody->forceActivationState(m_savedState);
+            activeRigidBody->activate();
+            scene->getPhysicsEnvironment()->removeConstraintFromWorld(m_pickedConstraint);
+            delete m_pickedConstraint;
+            m_pickedConstraint = 0;
+            activeRigidBody = 0;
+        }
     }
 
     if (camController != nullptr) {
@@ -935,6 +1002,87 @@ void SceneViewWidget::doObjectPicking(
             pickedRoot != lastSelectedRoot) // if both are under, or is, the same root then pick the actual object
             pickedNode = pickedRoot;        // if not then pick the root node
     }
+
+    // Use a Point2Point Constraint, this makes the body follow the constraint origin loosely
+    // with directional forces effecting its transform
+    //if (pickedNode->isPhysicsBody) {
+    //    activeRigidBody = scene->getPhysicsEnvironment()->hashBodies.value(pickedNode->getGUID());
+
+    //    m_savedState = activeRigidBody->getActivationState();
+    //    activeRigidBody->setActivationState(DISABLE_DEACTIVATION);
+    //    //printf("pickPos=%f,%f,%f\n",pickPos.getX(),pickPos.getY(),pickPos.getZ());
+    //    btVector3 localPivot = activeRigidBody->getCenterOfMassTransform().inverse() * iris::PhysicsHelper::btVector3FromQVector3D(hitList.last().hitPoint);
+    //    btPoint2PointConstraint* p2p = new btPoint2PointConstraint(*activeRigidBody, localPivot);
+    //    scene->getPhysicsEnvironment()->getWorld()->addConstraint(p2p, true);
+    //    m_pickedConstraint = p2p;
+    //    btScalar mousePickClamping = 30.f;
+    //    p2p->m_setting.m_impulseClamp = mousePickClamping;
+    //    //very weak constraint for picking
+    //    p2p->m_setting.m_tau = 0.001f;
+    //}
+
+    //btVector3 rayFromWorld = iris::PhysicsHelper::btVector3FromQVector3D(editorCam->getGlobalPosition());
+    //btVector3 rayToWorld = iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(point) * 1024);
+
+    //m_oldPickingPos = rayToWorld;
+    //m_hitPos = iris::PhysicsHelper::btVector3FromQVector3D(hitList.last().hitPoint);
+    //m_oldPickingDist = (iris::PhysicsHelper::btVector3FromQVector3D(hitList.last().hitPoint) - rayFromWorld).length();
+
+    if (pickedNode->isPhysicsBody) {
+        // Fetch our rigid body from the list stored in the world by guid
+        activeRigidBody = scene->getPhysicsEnvironment()->hashBodies.value(pickedNode->getGUID());
+        // prevent the picked object from falling asleep
+        activeRigidBody->setActivationState(DISABLE_DEACTIVATION);
+        // get the hit position relative to the body we hit 
+        // constraints MUST be defined in local space coords
+        btVector3 localPivot = activeRigidBody->getCenterOfMassTransform().inverse()
+            * iris::PhysicsHelper::btVector3FromQVector3D(hitList.last().hitPoint);
+
+        // create a transform for the pivot point
+        btTransform pivot;
+        pivot.setIdentity();
+        pivot.setOrigin(localPivot);
+
+        // create our constraint object
+        auto dof6 = new btGeneric6DofConstraint(*activeRigidBody, pivot, true);
+        bool bLimitAngularMotion = true;
+        if (bLimitAngularMotion) {
+            dof6->setAngularLowerLimit(btVector3(0, 0, 0));
+            dof6->setAngularUpperLimit(btVector3(0, 0, 0));
+        }
+
+        // add the constraint to the world
+        scene->getPhysicsEnvironment()->addConstraintToWorld(dof6, false);
+
+        // store a pointer to our constraint
+        m_pickedConstraint = dof6;
+
+        // define the 'strength' of our constraint (each axis)
+        float cfm = 0.1f;
+        dof6->setParam(BT_CONSTRAINT_STOP_CFM, cfm, 0);
+        dof6->setParam(BT_CONSTRAINT_STOP_CFM, cfm, 1);
+        dof6->setParam(BT_CONSTRAINT_STOP_CFM, cfm, 2);
+        dof6->setParam(BT_CONSTRAINT_STOP_CFM, cfm, 3);
+        dof6->setParam(BT_CONSTRAINT_STOP_CFM, cfm, 4);
+        dof6->setParam(BT_CONSTRAINT_STOP_CFM, cfm, 5);
+
+        // define the 'error reduction' of our constraint (each axis)
+        float erp = 0.5f;
+        dof6->setParam(BT_CONSTRAINT_STOP_ERP, erp, 0);
+        dof6->setParam(BT_CONSTRAINT_STOP_ERP, erp, 1);
+        dof6->setParam(BT_CONSTRAINT_STOP_ERP, erp, 2);
+        dof6->setParam(BT_CONSTRAINT_STOP_ERP, erp, 3);
+        dof6->setParam(BT_CONSTRAINT_STOP_ERP, erp, 4);
+        dof6->setParam(BT_CONSTRAINT_STOP_ERP, erp, 5);
+    }
+
+    // save this data for future reference
+    btVector3 rayFromWorld = iris::PhysicsHelper::btVector3FromQVector3D(editorCam->getGlobalPosition());
+    btVector3 rayToWorld = iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(point) * 1024);
+
+    m_oldPickingPos = rayToWorld;
+    m_hitPos = iris::PhysicsHelper::btVector3FromQVector3D(hitList.last().hitPoint);
+    m_oldPickingDist = (iris::PhysicsHelper::btVector3FromQVector3D(hitList.last().hitPoint) - rayFromWorld).length();
 
     gizmo->setSelectedNode(pickedNode);
     emit sceneNodeSelected(pickedNode);
@@ -1213,6 +1361,21 @@ void SceneViewWidget::setGizmoTransformToGlobal()
 	rotationGizmo->setTransformSpace(GizmoTransformSpace::Global);
 	// scaling is only done locally
 	scaleGizmo->setTransformSpace(GizmoTransformSpace::Local);
+}
+
+void SceneViewWidget::addBodyToWorld(btRigidBody *body, const QString &guid)
+{
+    scene->getPhysicsEnvironment()->addBodyToWorld(body, guid);
+}
+
+void SceneViewWidget::removeBodyFromWorld(btRigidBody *body)
+{
+    scene->getPhysicsEnvironment()->removeBodyFromWorld(body);
+}
+
+void SceneViewWidget::removeBodyFromWorld(const QString &guid)
+{
+    scene->getPhysicsEnvironment()->removeBodyFromWorld(guid);
 }
 
 void SceneViewWidget::setGizmoLoc()

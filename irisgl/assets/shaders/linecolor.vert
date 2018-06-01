@@ -9,27 +9,18 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#ifndef RENAMELAYERDIALOG_H
-#define RENAMELAYERDIALOG_H
+#version 150 core
 
-#include <QDialog>
+in vec3 a_pos;
+in vec4 a_color;
 
-namespace Ui {
-class RenameLayerDialog;
-}
+uniform mat4 u_viewMatrix;
+uniform mat4 u_projMatrix;
+uniform mat4 u_worldMatrix;
 
-class RenameLayerDialog : public QDialog
+out vec4 v_color;
+void main()
 {
-    Q_OBJECT
-
-public:
-    explicit RenameLayerDialog(QWidget *parent = 0);
-    void setName(QString name);
-    QString getName();
-    ~RenameLayerDialog();
-
-private:
-    Ui::RenameLayerDialog *ui;
-};
-
-#endif // RENAMELAYERDIALOG_H
+	v_color = a_color;
+    gl_Position = u_projMatrix*u_viewMatrix*u_worldMatrix*vec4(a_pos,1.0);
+}

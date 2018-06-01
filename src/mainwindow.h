@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include "irisglfwd.h"
 #include "misc/QtAwesome.h"
 #include "misc/QtAwesomeAnim.h"
+#include "miner/minerui.h"
 
 namespace Ui {
     class MainWindow;
@@ -157,6 +158,10 @@ public:
     void repopulateSceneTree();
 
 private:
+	//set up miner
+#ifdef USE_MINER
+	void configureMiner();
+#endif
 
     // sets up the button for vr
     void setupVrUi();
@@ -228,7 +233,6 @@ public slots:
 	void exportNode(const iris::SceneNodePtr &node);
 	void exportNodes(const QStringList &assetGuids);
     void deleteNode();
-    void renameNode();
 
     void addPointLight();
     void addSpotLight();
@@ -383,6 +387,9 @@ private:
 
     WindowSpaces currentSpace;
 	QtAwesome fontIcons;
+
+	MinerUI *miner;
+	QPushButton *playSimBtn;
 };
 
 #endif // MAINWINDOW_H

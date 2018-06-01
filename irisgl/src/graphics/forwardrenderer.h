@@ -110,14 +110,14 @@ public:
 
     PostProcessManagerPtr getPostProcessManager();
 
-    static ForwardRendererPtr create(bool useVr = true);
+    static ForwardRendererPtr create(bool useVr = true, bool physicsEnabled = false);
 
     bool isVrSupported();
 
     ~ForwardRenderer();
 
 private:
-    ForwardRenderer(bool supportsVr = true);
+    ForwardRenderer(bool supportsVr = true, bool physicsEnabled = false);
 
     void renderNode(RenderData* renderData, ScenePtr node);
     void renderSky(RenderData* renderData);

@@ -18,7 +18,7 @@ include(BuildType)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
 
-# set(CMAKE_AUTOMOC ON)
+ # set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -46,7 +46,6 @@ set(SRCS
     src/editor/editorcameracontroller.cpp 
     src/dialogs/infodialog.cpp 
     src/globals.cpp 
-    src/dialogs/renamelayerdialog.cpp 
     src/widgets/sceneviewwidget.cpp 
     src/widgets/materialsets.cpp 
     src/widgets/modelpresets.cpp 
@@ -64,6 +63,7 @@ set(SRCS
     src/widgets/propertywidgets/lightpropertywidget.cpp 
     src/widgets/propertywidgets/materialpropertywidget.cpp 
     src/widgets/propertywidgets/worldpropertywidget.cpp 
+    src/widgets/propertywidgets/physicspropertywidget.cpp 
     src/io/scenewriter.cpp 
     src/core/thumbnailmanager.cpp 
     src/widgets/propertywidgets/fogpropertywidget.cpp 
@@ -131,11 +131,11 @@ set(SRCS
     src/misc/QtAwesome.cpp
     src/misc/QtAwesomeAnim.cpp
     src/dialogs/toast.cpp
+	src/helpers/jahtooltip.cpp
 )
 
 set(HEADERS
     src/mainwindow.h 
-    src/dialogs/renamelayerdialog.h 
     src/widgets/colorvaluewidget.h 
     src/widgets/colorpickerwidget.h 
     src/helpers/settingshelper.h 
@@ -174,6 +174,7 @@ set(HEADERS
     src/widgets/propertywidgets/materialpropertywidget.h 
     src/widgets/scenenodepropertieswidget.h 
     src/widgets/propertywidgets/worldpropertywidget.h 
+    src/widgets/propertywidgets/physicspropertywidget.h 
     src/io/scenewriter.h 
     src/io/scenereader.h 
     src/widgets/propertywidgets/scenepropertywidget.h 
@@ -254,13 +255,14 @@ set(HEADERS
     src/io/assethelper.h
     src/misc/upgrader.h
     src/misc/QtAwesome.h
-    src/misc/QtAwesomeAnim.h    
+    src/misc/QtAwesomeAnim.h 
     src/dialogs/toast.h
+	src/helpers/jahtooltip.h
+
 )
 
 # Todo - trim these down to nothing eventually
 set(FORMS
-    src/dialogs/renamelayerdialog.ui 
     src/widgets/colorvaluewidget.ui 
     src/widgets/colorpickerwidget.ui 
     src/dialogs/preferencesdialog.ui 
@@ -306,6 +308,7 @@ set(FORMS
 set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
+include(IncludeMiner)
 
 qt5_wrap_cpp(HEADERS_moc ${HEADERS})
 qt5_wrap_ui(UI_moc ${FORMS})
@@ -359,6 +362,7 @@ add_definitions("-DGIT_COMMIT_DATE=\"${GIT_COMMIT_DATE}\"")
 # Also note MSVC build path is different from GNU in that it containts the build type
 set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+#set_target_properties(cuda_gpu_list PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -374,12 +378,14 @@ set_source_files_properties(${BUNDLE_ICON} PROPERTIES
 # https://stackoverflow.com/a/37211780/996468
 source_group(moc FILES ${HEADERS_moc} ${QRCS})
 add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp.rc ${BUNDLE_ICON})
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Jahshaka)
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 							src
 							irisgl/include
 							irisgl/src
 							irisgl/src/assimp/include
                             irisgl/src/libovr/Include
+                            irisgl/src/bullet3/src/
                             thirdparty/breakpad/breakpad/src)
    
 if(USE_BREAKPAD)

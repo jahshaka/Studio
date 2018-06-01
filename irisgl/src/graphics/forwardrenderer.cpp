@@ -58,12 +58,13 @@ For more information see the LICENSE file
 #include "../libovr/Include/OVR_CAPI_GL.h"
 #include "../libovr/Include/Extras/OVR_Math.h"
 
+
 using namespace OVR;
 
 namespace iris
 {
 
-ForwardRenderer::ForwardRenderer(bool supportsVr)
+ForwardRenderer::ForwardRenderer(bool supportsVr, bool physicsEnabled)
 {
     this->gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
     graphics = GraphicsDevice::create();
@@ -127,9 +128,9 @@ void ForwardRenderer::generateShadowBuffer(GLuint size)
     // check status at end
 }
 
-ForwardRendererPtr ForwardRenderer::create(bool useVr)
+ForwardRendererPtr ForwardRenderer::create(bool useVr, bool physicsEnabled)
 {
-    return ForwardRendererPtr(new ForwardRenderer(useVr));
+    return ForwardRendererPtr(new ForwardRenderer(useVr, physicsEnabled));
 }
 
 GraphicsDevicePtr ForwardRenderer::getGraphicsDevice()
@@ -556,15 +557,9 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 
     for (auto& item : scene->geometryRenderList->getItems()) {
         if (item->type == iris::RenderItemType::Mesh && !!item->mesh) {
-
             if (item->cullable) {
                 auto sphere = item->boundingSphere;
-                //sphere->pos = item->worldMatrix.column(3).toVector3D();
-
-                if (!renderData->frustum.isSphereInside(&sphere)) {
-                    //qDebug() << "culled";
-                    continue;
-                }
+                if (!renderData->frustum.isSphereInside(&sphere)) continue;
             }
 
             QOpenGLShaderProgram* program = nullptr;

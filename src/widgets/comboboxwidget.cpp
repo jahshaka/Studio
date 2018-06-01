@@ -58,6 +58,11 @@ QString ComboBoxWidget::getCurrentItemData()
     return ui->comboBox->itemData(ui->comboBox->currentIndex()).toString();
 }
 
+QVariant ComboBoxWidget::getItemData(int index)
+{
+    return ui->comboBox->itemData(index);
+}
+
 void ComboBoxWidget::setCurrentItem(const QString &item)
 {
 	ui->comboBox->blockSignals(true);
@@ -77,12 +82,17 @@ void ComboBoxWidget::setCurrentIndex(const int &index)
     ui->comboBox->setCurrentIndex(index);
 }
 
+QComboBox *ComboBoxWidget::getWidget() const
+{
+    return ui->comboBox;
+}
+
 void ComboBoxWidget::onDropDownTextChanged(const QString &text)
 {
     emit currentIndexChanged(text);
 }
 
-void ComboBoxWidget::onDropDownIndexChanged(int)
+void ComboBoxWidget::onDropDownIndexChanged(int index)
 {
     emit currentIndexChanged(index);
 }

@@ -14,9 +14,15 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QMap>
+#include <QHash>
 #include <QIcon>
 #include <QEvent>
+#include <QLineEdit>
+#include <QStyledItemDelegate>
+
+#include <qcombobox.h>
 #include "../irisgl/src/irisglfwd.h"
+#include "irisgl/src/scenegraph/scenenode.h"
 
 namespace Ui {
 class SceneHierarchyWidget;
@@ -30,6 +36,29 @@ namespace iris
 
 class QTreeWidgetItem;
 class MainWindow;
+
+class TreeItemDelegate : public QStyledItemDelegate
+{
+public:
+    TreeItemDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
+    void setModelData(QWidget *editor, QAbstractItemModel *model,
+        const QModelIndex &index) const
+    {
+        QLineEdit *lineEdit = qobject_cast<QLineEdit *>(editor);
+        if (!lineEdit->isModified()) {
+            return;
+        }
+        QString text = lineEdit->text();
+        text = text.trimmed();
+        if (text.isEmpty()) {
+            // If text is empty, do nothing - preserve the old value.
+            return;
+        }
+        else {
+            QStyledItemDelegate::setModelData(editor, model, index);
+        }
+    }
+};
 
 class SceneHierarchyWidget : public QWidget
 {
@@ -65,6 +94,9 @@ public:
      */
     void removeChild(iris::SceneNodePtr childNode);
 
+    void OnLstItemsCommitData(QWidget *listItem);
+    QComboBox *box;
+
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
 
@@ -72,7 +104,8 @@ protected slots:
     void treeItemSelected(QTreeWidgetItem *item, int column);
     void sceneTreeCustomContextMenu(const QPoint &);
 
-    void renameNode();
+    void constraintsPicked(int index, iris::PhysicsConstraintType type);
+
     void deleteNode();
 	void duplicateNode();
 	void focusOnNode();

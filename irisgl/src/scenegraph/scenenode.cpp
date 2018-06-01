@@ -43,6 +43,7 @@ SceneNode::SceneNode():
     removable = true;
 	exportable = true;
     isBuiltIn = false;
+	isPhysicsBody = false;
 
     pickable = true;
     castShadow = true;
