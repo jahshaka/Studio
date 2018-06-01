@@ -140,7 +140,7 @@ enum class VRButtonMode : int
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-
+	
 	settings = SettingsManager::getDefaultManager();
 
     UiManager::mainWindow = this;
@@ -186,6 +186,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	//restoreState(settings->getValue("windowState", "").toByteArray());
 
 	undoStackCount = 0;
+
+	
 }
 
 void MainWindow::grabOpenGLContextHack()
@@ -2148,6 +2150,12 @@ void MainWindow::setupDockWidgets()
     viewPort->addDockWidget(Qt::BottomDockWidgetArea, animationDock);
     viewPort->addDockWidget(Qt::BottomDockWidgetArea, presetsDock);
     viewPort->tabifyDockWidget(animationDock, assetDock);
+
+	viewPort->setStyleSheet("QMenu{	background: rgba(26,26,26,.9); color: rgba(250,250, 250,.9);}"
+		"QMenu::item{padding: 2px 5px 2px 25px;	}"
+		"QMenu::item:hover{	background: rgba(40,128, 185,.9);	}"
+		"QMenu::indicator{ width : 10; height : 10; border-radius: 3px; background: rgba(53,53,53,.9);}"
+		"QMenu::indicator:checked{background: rgba(40,128, 185,.9);}");
 }
 
 void MainWindow::setupViewPort()
@@ -2530,7 +2538,7 @@ void MainWindow::setupToolBar()
     QAction *actionArcballCam = new QAction;
     actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
     actionArcballCam->setCheckable(true);
-	actionArcballCam->setToolTip("Move and orient the camera around a fixed point");
+	actionArcballCam->setToolTip("action arc ball camera | Move and orient the camera around a fixed point | with this button selected, you are now able to move around a fixed point.");
 	actionArcballCam->setText(QChar(fa::dotcircleo));
 	actionArcballCam->setFont(fontIcons.font(16));
 	toolBar->addAction(actionArcballCam);
@@ -2632,6 +2640,7 @@ void MainWindow::toggleDockWidgets()
 		"QPushButton { padding: 8px 24px; border-radius: 1px; }"
 		"QPushButton[accessibleName=\"toggleAbles\"]:checked { background: #1E1E1E; }"
 		"QPushButton[accessibleName=\"toggleAbles\"] { background: #3E3E3E; }"
+		
 	);
 
 	QVBoxLayout *dl = new QVBoxLayout;

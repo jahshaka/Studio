@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "misc/updatechecker.h"
 #include "misc/upgrader.h"
 #include "dialogs/softwareupdatedialog.h"
+#include "helpers/jahtooltip.h"
 #ifdef USE_BREAKPAD
 #include "breakpad/breakpad.h"
 #endif
@@ -147,6 +148,8 @@ int main(int argc, char *argv[])
     if (SettingsManager::getDefaultManager()->getValue("automatic_updates", true).toBool()) {
 		updateChecker.checkForUpdate();
     }
+
+	app.installEventFilter(new JahToolTipHelper());
 
     return app.exec();
 }
