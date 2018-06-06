@@ -160,6 +160,7 @@ void MinerUI::configureUI()
 	autoStartSwitch = new MSwitch();
 	autoStartSwitch->setColor(QColor(40, 128, 185));
 	autoStartSwitch->setSizeOfSwitch(20);
+	//autoStartSwitch->
 	auto switchLayout = new QHBoxLayout;
 	//switchLayout->addStretch();
 	switchLayout->addWidget(autoStartSwitch);
@@ -358,8 +359,6 @@ void MinerUI::configureConnections()
 	});
 
 	connect(startBtn, &QPushButton::clicked, [this]() {
-		
-
 		if (!mining) {
 			startMining();
 		}
@@ -368,8 +367,10 @@ void MinerUI::configureConnections()
 		}
 
 	});
+
 	connect(autoStartSwitch, &MSwitch::switchPressed, [this](bool val) {
 		startAutomatically = val;
+		this->settingsMan->setValue("miner_auto_start", val);
 	});
 
 	foreach(card, list) {
