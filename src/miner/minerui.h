@@ -101,17 +101,19 @@ public:
 		if (armed && val)
 		{
 			mining = val;
-			if (process != nullptr)
+			if (process != nullptr) {
 				process->startMining();
+				setHighlight(true);
+			}
 		}
 		else {
-			if (process != nullptr)
-				if (process->isMining())
+			if (process != nullptr) {
+				if (process->isMining()) {
 					process->stopMining();
+					setHighlight(false);
+				}
+			}
 		}
-
-		setHighlight(val);
-
 	}
 
 	void setHighlight(bool val) {
@@ -142,6 +144,25 @@ public:
 						this->info->data.removeFirst();
 					this->info->data.append(data);
 					this->info->repaint();
+				}
+			});
+
+			connect(process, &MinerProcess::minerStatusChanged, [this](MinerStatus status)
+			{
+				switch (status)
+				{
+				case MinerStatus::Idle:
+					this->setDotColor((int)Connection::INACTIVE);
+					break;
+				case MinerStatus::Starting:
+					this->setDotColor((int)Connection::CONNECTING);
+					break;
+				case MinerStatus::Mining:
+					this->setDotColor((int)Connection::CONNECTED);
+					break;
+				case MinerStatus::Stopping:
+					this->setDotColor((int)Connection::NOTCONNECTED);
+					break;
 				}
 			});
 		}
@@ -377,7 +398,7 @@ public:
 	bool setToStartAutomatically() {
 		return startAutomatically;
 	}
-	private slots:
+private slots:
 	void switchToAdvanceMode();
 
 private:
@@ -409,10 +430,10 @@ private:
 	QPoint oldPos;
 	MinerManager* minerMan;
 	SettingsManager* settingsMan;
-	QString walletId;
-	QString pool;
-	QString password;
-	QString identifier;
+	QString walletIdText;
+	QString poolText;
+	QString passwordText;
+	QString identifierText;
 
 protected:
 	void mousePressEvent(QMouseEvent *event) {
@@ -438,6 +459,10 @@ protected:
 	
 	void saveAndApplySettings();
 	void restoreSettings();
+
+	void restartMining();
+	void startMining();
+	void stopMining();
 
 };
 

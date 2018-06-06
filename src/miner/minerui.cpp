@@ -322,14 +322,14 @@ void MinerUI::configureSettings()
 	settingsLaout->addWidget(new QSizeGrip(this), 0, Qt::AlignBottom | Qt::AlignRight);
 
 	// pass application settings to ui
-	walletId = settingsMan->getValue("wallet_id", "").toString();
-	walletEdit->setText(walletId);
-	pool = settingsMan->getValue("pool", "").toString();
-	poolEdit->setText(pool);
-	password = settingsMan->getValue("password", "").toString();
-	passwordEdit->setText(password);
-	identifier = settingsMan->getValue("identifier", "").toString();
-	identifierEdit->setText(identifier);
+	walletIdText = settingsMan->getValue("wallet_id", "").toString();
+	walletEdit->setText(walletIdText);
+	poolText = settingsMan->getValue("pool", "").toString();
+	poolEdit->setText(poolText);
+	passwordText = settingsMan->getValue("password", "").toString();
+	passwordEdit->setText(passwordText);
+	identifierText = settingsMan->getValue("identifier", "").toString();
+	identifierEdit->setText(identifierText);
 	
 }
 
@@ -361,16 +361,10 @@ void MinerUI::configureConnections()
 		
 
 		if (!mining) {
-			foreach(card, list) card->setStarted(!mining);
-
-			startBtn->setText("Stop");
-			mining = true;
+			startMining();
 		}
 		else {
-			foreach(card, list) card->setStarted(!mining);
-
-			startBtn->setText("Start");
-			mining = false;
+			stopMining();
 		}
 
 	});
@@ -419,22 +413,52 @@ void MinerUI::configureStyleSheet()
 
 void MinerUI::saveAndApplySettings()
 {
-	walletId = walletEdit->text();
-	settingsMan->setValue("wallet_id", walletId);
-	pool = poolEdit->text();
-	settingsMan->setValue("pool", pool);
-	password = passwordEdit->text();
-	settingsMan->setValue("password", password);
-	identifier = identifierEdit->text()
-	settingsMan->setValue("identifier", identifier);
+	walletIdText = walletEdit->text();
+	settingsMan->setValue("wallet_id", walletIdText);
+	poolText = poolEdit->text();
+	settingsMan->setValue("pool", poolText);
+	passwordText = passwordEdit->text();
+	settingsMan->setValue("password", passwordText);
+	identifierText = identifierEdit->text();
+	settingsMan->setValue("identifier", identifierText);
+
+	minerMan->walletId = walletIdText;
+	minerMan->poolUrl = poolText;
+	minerMan->password = passwordText;
+	minerMan->identifier = identifierText;
+
+	//restart mining
+	restartMining();
 }
 
 void MinerUI::restoreSettings()
 {
-	settingsMan->setValue("wallet_id", walletId);
-	settingsMan->setValue("pool", pool);
-	settingsMan->setValue("password", password);
-	settingsMan->setValue("identifier", identifier);
+	settingsMan->setValue("wallet_id", walletIdText);
+	settingsMan->setValue("pool", poolText);
+	settingsMan->setValue("password", passwordText);
+	settingsMan->setValue("identifier", identifierText);
+}
+
+void MinerUI::restartMining()
+{
+	this->stopMining();
+	this->startMining();
+}
+
+void MinerUI::startMining()
+{
+	foreach(card, list) card->setStarted(!mining);
+
+	startBtn->setText("Stop");
+	mining = true;
+}
+
+void MinerUI::stopMining()
+{
+	foreach(card, list) card->setStarted(!mining);
+
+	startBtn->setText("Start");
+	mining = false;
 }
 
 void MinerUI::switchToAdvanceMode()
