@@ -360,7 +360,6 @@ void MinerUI::configureSettings()
 	identifierText = settingsMan->getValue("identifier", "").toString();
 	identifierEdit->setText(identifierText);
 
-	
 }
 
 void MinerUI::configureConnections()
@@ -405,6 +404,7 @@ void MinerUI::configureConnections()
 #endif	
 				return;
 			}
+
 			startMining();
 		}
 		else {
@@ -459,7 +459,6 @@ void MinerUI::configureStyleSheet()
 
 void MinerUI::saveAndApplySettings()
 {
-
 	walletIdText = walletEdit->text();
 	settingsMan->setValue("wallet_id", walletIdText);
 	poolText = poolEdit->text();
@@ -476,12 +475,10 @@ void MinerUI::saveAndApplySettings()
 
 	//restart mining
 	restartMining();
-
 }
 
 void MinerUI::restoreSettings()
 {
-
 	settingsMan->setValue("wallet_id", walletIdText);
 	settingsMan->setValue("pool", poolText);
 	settingsMan->setValue("password", passwordText);
@@ -508,7 +505,6 @@ void MinerUI::stopMining()
 
 	startBtn->setText("Start");
 	mining = false;
-
 }
 
 void MinerUI::switchToAdvanceMode()
@@ -521,7 +517,5 @@ void MinerUI::switchToAdvanceMode()
 		foreach(card, list)   card->contract();
 		isInAdvanceMode = false;
 	}
-
-
 }
 

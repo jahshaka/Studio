@@ -431,10 +431,12 @@ public:
 		return startAutomatically;
 	}
 
+
 	bool isMining()
 	{
 		return mining;
 	}
+
 private slots:
 	void switchToAdvanceMode();
 
@@ -495,11 +497,12 @@ protected:
 	void saveAndApplySettings();
 	void restoreSettings();
 
+
 public:
+
 	void restartMining();
 	void startMining();
 	void stopMining();
-
 
 };
 
