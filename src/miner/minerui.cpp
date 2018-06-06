@@ -187,7 +187,6 @@ void MinerUI::configureUI()
 	auto switchLayout = new QHBoxLayout;
 	//switchLayout->addStretch();
 	switchLayout->addWidget(autoStartSwitch);
-	//switchLayout->addStretch();
 
 	autoLayout->addStretch();
 	autoLayout->addLayout(switchLayout);
