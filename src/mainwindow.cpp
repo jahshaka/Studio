@@ -2538,7 +2538,7 @@ void MainWindow::setupToolBar()
 	connect(actionUndo, SIGNAL(triggered(bool)), SLOT(undo()));
 	connect(actionRedo, SIGNAL(triggered(bool)), SLOT(redo()));
 
-    QAction *actionTranslate = new QAction;
+    actionTranslate = new QAction;
     actionTranslate->setObjectName(QStringLiteral("actionTranslate"));
     actionTranslate->setCheckable(true);
 	actionTranslate->setToolTip("Manipulator for translating objects");
@@ -2546,7 +2546,7 @@ void MainWindow::setupToolBar()
 	actionTranslate->setFont(fontIcons.font(16));
 	toolBar->addAction(actionTranslate);
 
-    QAction *actionRotate = new QAction;
+    actionRotate = new QAction;
     actionRotate->setObjectName(QStringLiteral("actionRotate"));
     actionRotate->setCheckable(true);
 	actionRotate->setToolTip("Manipulator for rotating objects");
@@ -2554,7 +2554,7 @@ void MainWindow::setupToolBar()
 	actionRotate->setFont(fontIcons.font(16));
 	toolBar->addAction(actionRotate);
 
-    QAction *actionScale = new QAction;
+    actionScale = new QAction;
     actionScale->setObjectName(QStringLiteral("actionScale"));
     actionScale->setCheckable(true);
 	actionScale->setToolTip("Manipulator for scaling objects");
@@ -2606,6 +2606,7 @@ void MainWindow::setupToolBar()
     transformGroup->addAction(actionTranslate);
     transformGroup->addAction(actionRotate);
     transformGroup->addAction(actionScale);
+    actionTranslate->setChecked(true);
 
     connect(actionGlobalSpace,  SIGNAL(triggered(bool)), SLOT(useGlobalTransform()));
     connect(actionLocalSpace,   SIGNAL(triggered(bool)), SLOT(useLocalTransform()));
@@ -2613,7 +2614,7 @@ void MainWindow::setupToolBar()
     transformSpaceGroup = new QActionGroup(viewPort);
     transformSpaceGroup->addAction(actionGlobalSpace);
     transformSpaceGroup->addAction(actionLocalSpace);
-    ui->actionGlobalSpace->setChecked(true);
+    actionGlobalSpace->setChecked(true);
 
     connect(actionFreeCamera,   SIGNAL(triggered(bool)), SLOT(useFreeCamera()));
     connect(actionArcballCam,   SIGNAL(triggered(bool)), SLOT(useArcballCam()));
@@ -2963,16 +2964,19 @@ void MainWindow::useGlobalTransform()
 void MainWindow::translateGizmo()
 {
     sceneView->setGizmoLoc();
+    actionTranslate->setChecked(true);
 }
 
 void MainWindow::rotateGizmo()
 {
     sceneView->setGizmoRot();
+    actionRotate->setChecked(true);
 }
 
 void MainWindow::scaleGizmo()
 {
     sceneView->setGizmoScale();
+    actionScale->setChecked(true);
 }
 
 void MainWindow::onPlaySceneButton()

@@ -401,6 +401,10 @@ private:
 	MinerUI *miner;
 	QPushButton *playSimBtn;
 	QPushButton *restartSimBtn;
+
+    QAction *actionTranslate;
+    QAction *actionRotate;
+    QAction *actionScale;
 };
 
 #endif // MAINWINDOW_H
