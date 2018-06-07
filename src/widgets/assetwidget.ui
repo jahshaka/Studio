@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>799</width>
-    <height>267</height>
+    <width>1441</width>
+    <height>272</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -45,16 +45,16 @@
        <number>12</number>
       </property>
       <property name="leftMargin">
-       <number>7</number>
+       <number>6</number>
       </property>
       <property name="topMargin">
-       <number>7</number>
+       <number>6</number>
       </property>
       <property name="rightMargin">
-       <number>7</number>
+       <number>6</number>
       </property>
       <property name="bottomMargin">
-       <number>7</number>
+       <number>6</number>
       </property>
       <item>
        <widget class="QLineEdit" name="searchBar"/>
@@ -94,6 +94,9 @@
    </item>
    <item row="1" column="0">
     <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <item>
+      <widget class="QWidget" name="dirControls" native="true"/>
+     </item>
      <item>
       <widget class="QWidget" name="breadCrumb" native="true"/>
      </item>
@@ -146,22 +149,10 @@
      </widget>
      <widget class="QListWidget" name="assetView">
       <property name="sizePolicy">
-       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
         <horstretch>1</horstretch>
         <verstretch>0</verstretch>
        </sizepolicy>
-      </property>
-      <property name="styleSheet">
-       <string notr="true"/>
-      </property>
-      <property name="editTriggers">
-       <set>QAbstractItemView::NoEditTriggers</set>
-      </property>
-      <property name="iconSize">
-       <size>
-        <width>0</width>
-        <height>0</height>
-       </size>
       </property>
      </widget>
     </widget>

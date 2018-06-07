@@ -144,6 +144,22 @@ struct AssetShader : public Asset
 	}
 };
 
+struct AssetParticleSystem : public Asset
+{
+    AssetParticleSystem() {
+        type = ModelTypes::ParticleSystem;
+    }
+
+    virtual QVariant getValue() {
+        return value;
+    }
+
+    virtual void setValue(QVariant val) {
+        value = val;
+    }
+};
+
+
 class AssetManager
 {
 public:

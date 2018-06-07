@@ -51,6 +51,7 @@ set(SRCS
     src/widgets/sceneviewwidget.cpp 
     src/widgets/materialsets.cpp 
     src/widgets/modelpresets.cpp 
+    src/widgets/assetfavorites.cpp 
     src/widgets/accordianbladewidget.cpp 
     src/widgets/transformeditor.cpp 
     src/widgets/scenehierarchywidget.cpp 
@@ -166,6 +167,7 @@ set(HEADERS
     src/widgets/sceneviewwidget.h 
     src/widgets/materialsets.h 
     src/widgets/modelpresets.h 
+    src/widgets/assetfavorites.h 
     src/widgets/accordianbladewidget.h 
     src/widgets/transformeditor.h 
     src/widgets/scenehierarchywidget.h 

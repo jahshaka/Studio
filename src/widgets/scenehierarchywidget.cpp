@@ -357,20 +357,25 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 			}
 		};
 
-		if (node->getSceneNodeType() == iris::SceneNodeType::Empty) {
-			QAction *exportAsset = subMenu->addAction("Export Object");
+		//if (node->getSceneNodeType() == iris::SceneNodeType::Empty) {
+		//	QAction *exportAsset = subMenu->addAction("Export Object");
 
-			QStringList assetGuids;
-			getChildGuids(node, assetGuids);
-			connect(exportAsset, &QAction::triggered, this, [assetGuids, this]() { mainWindow->exportNodes(assetGuids); });
-		}
+		//	QStringList assetGuids;
+		//	getChildGuids(node, assetGuids);
+		//	connect(exportAsset, &QAction::triggered, this, [assetGuids, this]() { mainWindow->exportNodes(assetGuids); });
+		//}
 
-		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh ||
+            node->getSceneNodeType() == iris::SceneNodeType::Empty)
+        {
             if (!node->isBuiltIn) {
                 QAction *exportAsset = subMenu->addAction("Export Object");
-                connect(exportAsset, &QAction::triggered, this, [this, node]() {
-                    exportNode(node);
-                });
+                //connect(exportAsset, &QAction::triggered, this, [this, node]() {
+                //    exportNode(node);
+                //});
+                QStringList assetGuids;
+                getChildGuids(node, assetGuids);
+                connect(exportAsset, &QAction::triggered, this, [assetGuids, node, this]() { mainWindow->exportNodes(node, assetGuids); });
             }
 
 			QAction *exportMat = subMenu->addAction("Create Material");
@@ -382,7 +387,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 			QAction *exportPSystem = subMenu->addAction("Export Particle System");
 
 			connect(exportPSystem, &QAction::triggered, this, [this, node]() {
-				exportParticleSystem(node);
+                mainWindow->exportParticleSystem(node);
 			});
 		}
 	}

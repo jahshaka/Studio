@@ -90,7 +90,7 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
     QJsonArray children = definition["children"].toArray();
     // These will always be in sync since the definition is derived from the mesh
     if (!children.isEmpty()) {
-        for (int i = 0; i < children.count(); ++i) {
+        for (int i = 0; i < node->children.count(); ++i) {
             updateNodeMaterial(node->children[i], children[i].toObject());
         }
     }

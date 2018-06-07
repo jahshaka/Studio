@@ -94,6 +94,17 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
             AssetManager::addAsset(assetShader);
         }
 
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::ParticleSystem))) {
+            QJsonDocument particleDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(asset.guid));
+            QJsonObject particleObject = particleDefinition.object();
+
+            auto assetPS = new AssetParticleSystem;
+            assetPS->assetGuid = asset.guid;
+            assetPS->fileName = QFileInfo(asset.name).baseName();
+            assetPS->setValue(QVariant::fromValue(particleObject));
+            AssetManager::addAsset(assetPS);
+        }
+
 		// Materials
 		for (const auto &asset :
 			db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Material)))

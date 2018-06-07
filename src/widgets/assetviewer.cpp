@@ -1,6 +1,7 @@
 #include "assetviewer.h"
 
 #include "irisgl/src/graphics/rasterizerstate.h"
+#include "irisgl/src/scenegraph/particlesystemnode.h" 
 
 #include "constants.h"
 #include "globals.h"
@@ -264,6 +265,24 @@ void AssetViewer::loadJafMaterial(QString guid, bool firstAdd, bool cache, bool 
     pdialog->close();
 }
 
+void AssetViewer::loadJafParticleSystem(QString guid, bool firstAdd, bool cache, bool firstLoad)
+{
+    pdialog->setLabelText(tr("Loading asset preview..."));
+    pdialog->show();
+    QApplication::processEvents();
+    makeCurrent();
+    addJafParticleSystem(guid, firstAdd, cache);
+    if (firstLoad) {
+        //resetViewerCamera(); 
+    }
+    else {
+        resetViewerCameraAfter();
+    }
+    renderObject();
+    doneCurrent();
+    pdialog->close();
+}
+
 void AssetViewer::loadJafShader(QString guid, QMap<QString, QString> &outGuids, bool firstAdd, bool cache, bool firstLoad) {
     pdialog->setLabelText(tr("Loading asset preview..."));
     pdialog->show();
@@ -443,6 +462,24 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
 
 void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firstAdd, bool cache, QVector3D position)
 {
+    int meshIndexCounter = 0;
+
+    // gather material definitions
+    auto materialObj = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
+
+    std::function<void(QVector<QJsonObject> &, QJsonObject&)> extractMaterialDefinition = [&](QVector<QJsonObject> &output, QJsonObject &input) -> void {
+        if (input.value("type").toString() == "mesh") output.append(input);
+        QJsonArray children = input["children"].toArray();
+        if (!children.isEmpty()) {
+            for (int i = 0; i < children.count(); ++i) {
+                extractMaterialDefinition(output, children[i].toObject());
+            }
+        }
+    };
+
+    QVector<QJsonObject> materials;
+    extractMaterialDefinition(materials, materialObj.object());
+
     // if model
     auto ssource = new iris::SceneSource();
     // load mesh as scene
@@ -451,13 +488,11 @@ void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firs
         [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
         auto mat = iris::CustomMaterial::create();
+        auto matObject = materials[meshIndexCounter++].value("material").toObject();
 
         if (mesh->hasSkeleton())
             mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
         else {
-            auto materialObj = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
-            QJsonObject matObject = materialObj.object().value("material").toObject();
-
             QFileInfo shaderFile;
             QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
             while (it.hasNext()) {
@@ -477,22 +512,23 @@ void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firs
                     Constants::ASSET_FOLDER, guid
                 );
 
-                auto oguid = QJsonDocument::fromBinaryData(db->fetchAssetData(guid)).object();
-                auto shader = db->fetchAssetData(oguid["material"].toObject()["guid"].toString());
+                auto shader = db->fetchAssetData(matObject.value("guid").toString());
                 QJsonObject shaderDefinition = QJsonDocument::fromBinaryData(shader).object();
 
-                auto vAsset = db->fetchAsset(shaderDefinition["vertex_shader"].toString());
-                auto fAsset = db->fetchAsset(shaderDefinition["fragment_shader"].toString());
+                if (!shaderDefinition.isEmpty()) {
+                    auto vAsset = db->fetchAsset(shaderDefinition["vertex_shader"].toString());
+                    auto fAsset = db->fetchAsset(shaderDefinition["fragment_shader"].toString());
 
-                if (!vAsset.name.isEmpty()) {
-                    shaderDefinition["vertex_shader"] = QDir(assetPath).filePath(vAsset.name);
+                    if (!vAsset.name.isEmpty()) {
+                        shaderDefinition["vertex_shader"] = QDir(assetPath).filePath(vAsset.name);
+                    }
+
+                    if (!fAsset.name.isEmpty()) {
+                        shaderDefinition["fragment_shader"] = QDir(assetPath).filePath(fAsset.name);
+                    }
+
+                    mat->generate(shaderDefinition);
                 }
-
-                if (!fAsset.name.isEmpty()) {
-                    shaderDefinition["fragment_shader"] = QDir(assetPath).filePath(fAsset.name);
-                }
-
-                mat->generate(shaderDefinition);
             }
         }
 
@@ -502,8 +538,68 @@ void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firs
     // model file may be invalid so null gets returned
     if (!node) return;
 
-    auto materialObj = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
     AssetHelper::updateNodeMaterial(node, materialObj.object());
+
+    // create system 
+    std::function<void(QJsonObject&)> createSystems = [&](QJsonObject &definition) -> void {
+        if (definition.value("type").toString() == "light") {
+            auto lightNode = createLight(definition).staticCast<iris::SceneNode>();
+            lightNode->setLocalPos(IrisUtils::readVector3(definition["pos"].toObject()));
+            lightNode->setLocalRot(QQuaternion::fromEulerAngles(IrisUtils::readVector3(definition["rot"].toObject())));
+            lightNode->setLocalScale(IrisUtils::readVector3(definition["scale"].toObject()));
+            node->addChild(lightNode);
+        }
+
+        if (definition.value("type").toString() == "particle system") {
+            //QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guid)); 
+            QJsonObject pDefs = definition;
+
+            auto particleNode = iris::ParticleSystemNode::create();
+
+            particleNode->setGUID(pDefs["guid"].toString());
+            particleNode->setPPS((float) pDefs["particlesPerSecond"].toDouble(1.0f));
+            particleNode->setParticleScale((float) pDefs["particleScale"].toDouble(1.0f));
+            particleNode->setDissipation(pDefs["dissipate"].toBool());
+            particleNode->setDissipationInv(pDefs["dissipateInv"].toBool());
+            particleNode->setRandomRotation(pDefs["randomRotation"].toBool());
+            particleNode->setGravity((float) pDefs["gravityComplement"].toDouble(1.0f));
+            particleNode->setBlendMode(pDefs["blendMode"].toBool());
+            particleNode->setLife((float) pDefs["lifeLength"].toDouble(1.0f));
+            particleNode->setName(pDefs["name"].toString());
+            particleNode->setSpeed((float) pDefs["speed"].toDouble(1.0f));
+
+            {
+                auto textureGuid = pDefs["texture"].toString();
+
+                QString texPath = IrisUtils::join(
+                    QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+                    Constants::ASSET_FOLDER, guid, db->fetchAsset(textureGuid).name
+                );
+
+                particleNode->setTexture(iris::Texture2D::load(texPath));
+            }
+
+            particleNode->setVisible(pDefs["visible"].toBool(true));
+
+            particleNode->setPickable(false);
+            particleNode->setShadowCastingEnabled(true);
+            particleNode->setLocalPos(IrisUtils::readVector3(pDefs["pos"].toObject()));
+            particleNode->setLocalRot(QQuaternion::fromEulerAngles(IrisUtils::readVector3(pDefs["rot"].toObject())));
+            particleNode->setLocalScale(IrisUtils::readVector3(pDefs["scale"].toObject()));
+
+            node->addChild(particleNode);
+        }
+
+        QJsonArray children = definition["children"].toArray();
+        // These will always be in sync since the definition is derived from the mesh 
+        if (!children.isEmpty()) {
+            for (int i = 0; i < children.count(); ++i) {
+                createSystems(children[i].toObject());
+            }
+        }
+    };
+
+    createSystems(materialObj.object());
 
     std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
         if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
@@ -539,6 +635,46 @@ void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firs
 
     addNodeToScene(node, QFileInfo(path).baseName(), false, true);
     lastNode = node->getName();
+}
+
+void AssetViewer::addJafParticleSystem(const QString &guid, bool firstAdd, bool cache, QVector3D position)
+{
+    QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
+    QJsonObject pDefs = matDoc.object();
+
+    auto particleNode = iris::ParticleSystemNode::create();
+
+    particleNode->setGUID(pDefs["guid"].toString());
+    particleNode->setPPS((float) pDefs["particlesPerSecond"].toDouble(1.0f));
+    particleNode->setParticleScale((float) pDefs["particleScale"].toDouble(1.0f));
+    particleNode->setDissipation(pDefs["dissipate"].toBool());
+    particleNode->setDissipationInv(pDefs["dissipateInv"].toBool());
+    particleNode->setRandomRotation(pDefs["randomRotation"].toBool());
+    particleNode->setGravity((float) pDefs["gravityComplement"].toDouble(1.0f));
+    particleNode->setBlendMode(pDefs["blendMode"].toBool());
+    particleNode->setLife((float) pDefs["lifeLength"].toDouble(1.0f));
+    particleNode->setName(pDefs["name"].toString());
+    particleNode->setSpeed((float) pDefs["speed"].toDouble(1.0f));
+
+    {
+        auto textureGuid = pDefs["texture"].toString();
+
+        QString texPath = IrisUtils::join(
+            QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+            Constants::ASSET_FOLDER, guid, db->fetchAsset(textureGuid).name
+        );
+
+        particleNode->setTexture(iris::Texture2D::load(texPath));
+    }
+
+    particleNode->setVisible(pDefs["visible"].toBool(true));
+
+    particleNode->setPickable(false);
+    particleNode->setShadowCastingEnabled(true);
+    particleNode->setLocalPos(position);
+
+    addNodeToScene(particleNode, guid, false, true);
+    lastNode = particleNode->getName();
 }
 
 void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVector3D position)

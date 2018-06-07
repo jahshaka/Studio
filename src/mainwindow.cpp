@@ -122,6 +122,8 @@ For more information see the LICENSE file
 #include "../src/widgets/modelpresets.h"
 #include "../src/widgets/skypresets.h"
 
+#include "widgets/assetfavorites.h"
+
 #include "../src/widgets/assetview.h"
 #include "dialogs/toast.h"
 
@@ -975,6 +977,11 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
     this->sceneNodePropertiesWidget->refreshMaterial(preset->type);
 }
 
+void MainWindow::favoriteItem(const QListWidgetItem *item)
+{
+    assetFavorites->addFavorite(item);
+}
+
 void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 {
     this->scene = scene;
@@ -1412,6 +1419,67 @@ void MainWindow::addParticleSystem()
     this->sceneView->makeCurrent();
     auto node = iris::ParticleSystemNode::create();
     node->setName("Particle System");
+
+    auto fguid = GUIDManager::generateGUID();
+    if (!db->checkIfRecordExists("name", "Systems", "folders")) {
+        if (!db->createFolder("Systems", Globals::project->getProjectGuid(), fguid, false)) return;
+    }
+
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::ParticleSystem),
+        fguid,
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
+
+    // if we reached this far, the project dir has already been created
+    // we can copy some default assets to each project here
+    QFile::copy(IrisUtils::getAbsoluteAssetPath("app/images/default_particle.jpg"),
+        QDir(Globals::project->getProjectFolder()).filePath("Glowing Particle.jpg"));
+
+    auto thumb = ThumbnailManager::createThumbnail(
+        IrisUtils::getAbsoluteAssetPath("app/images/default_particle.jpg"), 72, 72);
+
+    QByteArray thumbnailBytes;
+    QBuffer buffer(&thumbnailBytes);
+    buffer.open(QIODevice::WriteOnly);
+    QPixmap::fromImage(*thumb->thumb).save(&buffer, "PNG");
+
+    const QString tileGuid = GUIDManager::generateGUID();
+    const QString assetGuid = db->createAssetEntry(tileGuid,
+        "Glowing Particle.jpg",
+        static_cast<int>(ModelTypes::Texture),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        thumbnailBytes);
+
+    db->createDependency(
+        static_cast<int>(ModelTypes::ParticleSystem),
+        static_cast<int>(ModelTypes::Texture),
+        nodeGuid, assetGuid,
+        Globals::project->getProjectGuid()
+    );
+
+    {
+        QString texPath = QDir(Globals::project->getProjectFolder()).filePath("Glowing Particle.jpg");
+        node->setTexture(iris::Texture2D::load(texPath));
+    }
+
+    auto assetTexture = new AssetTexture;
+    assetTexture->fileName = "Glowing Particle.jpg";
+    assetTexture->assetGuid = assetGuid;
+    assetTexture->path = QDir(Globals::project->getProjectFolder()).filePath("Glowing Particle.jpg");
+    AssetManager::addAsset(assetTexture);
+
     addNodeToScene(node);
 }
 
@@ -1487,6 +1555,69 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
     if (!node) return;
 
+    auto materialObj = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
+
+    // create system 
+    std::function<void(QJsonObject&)> createSystems = [&](QJsonObject &definition) -> void {
+        if (definition.value("type").toString() == "light") {
+            auto lightNode = createLight(definition).staticCast<iris::SceneNode>();
+            lightNode->setLocalPos(IrisUtils::readVector3(definition["pos"].toObject()));
+            lightNode->setLocalRot(QQuaternion::fromEulerAngles(IrisUtils::readVector3(definition["rot"].toObject())));
+            lightNode->setLocalScale(IrisUtils::readVector3(definition["scale"].toObject()));
+            node->addChild(lightNode);
+        }
+
+        if (definition.value("type").toString() == "particle system") {
+            //QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guid)); 
+            QJsonObject pDefs = definition;
+
+            auto particleNode = iris::ParticleSystemNode::create();
+
+            particleNode->setGUID(pDefs["guid"].toString());
+            particleNode->setPPS((float) pDefs["particlesPerSecond"].toDouble(1.0f));
+            particleNode->setParticleScale((float) pDefs["particleScale"].toDouble(1.0f));
+            particleNode->setDissipation(pDefs["dissipate"].toBool());
+            particleNode->setDissipationInv(pDefs["dissipateInv"].toBool());
+            particleNode->setRandomRotation(pDefs["randomRotation"].toBool());
+            particleNode->setGravity((float) pDefs["gravityComplement"].toDouble(1.0f));
+            particleNode->setBlendMode(pDefs["blendMode"].toBool());
+            particleNode->setLife((float) pDefs["lifeLength"].toDouble(1.0f));
+            particleNode->setName(pDefs["name"].toString());
+            particleNode->setSpeed((float) pDefs["speed"].toDouble(1.0f));
+
+            {
+                auto textureGuid = pDefs["texture"].toString();
+
+                QString texPath = IrisUtils::join(
+                    Globals::project->getProjectFolder(),
+                    db->fetchAsset(textureGuid).name
+                );
+
+                particleNode->setTexture(iris::Texture2D::load(texPath));
+            }
+
+            particleNode->setVisible(pDefs["visible"].toBool(true));
+
+            particleNode->setPickable(false);
+            particleNode->setShadowCastingEnabled(true);
+            particleNode->setLocalPos(IrisUtils::readVector3(pDefs["pos"].toObject()));
+            particleNode->setLocalRot(QQuaternion::fromEulerAngles(IrisUtils::readVector3(pDefs["rot"].toObject())));
+            particleNode->setLocalScale(IrisUtils::readVector3(pDefs["scale"].toObject()));
+
+            node->addChild(particleNode);
+        }
+
+        QJsonArray children = definition["children"].toArray();
+        // These will always be in sync since the definition is derived from the mesh 
+        if (!children.isEmpty()) {
+            for (int i = 0; i < children.count(); ++i) {
+                createSystems(children[i].toObject());
+            }
+        }
+    };
+
+    createSystems(materialObj.object());
+
 	std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
 		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
 			auto n = node.staticCast<iris::MeshNode>();
@@ -1525,6 +1656,52 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 	node->setLocalPos(position);
 
 	addNodeToScene(node, ignore);
+}
+
+void MainWindow::addAssetParticleSystem(bool ignore, QVector3D position, QString guid, QString assetName)
+{
+    this->sceneView->makeCurrent();
+
+    QJsonObject pDefs;
+    QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
+    while (iterator != AssetManager::getAssets().constEnd()) {
+        if ((*iterator)->assetGuid == guid) pDefs = (*iterator)->getValue().toJsonObject();
+        ++iterator;
+    }
+
+    //if (!node) return; 
+
+    auto particleNode = iris::ParticleSystemNode::create();
+
+    particleNode->setGUID(pDefs["guid"].toString());
+    particleNode->setPPS((float) pDefs["particlesPerSecond"].toDouble(1.0f));
+    particleNode->setParticleScale((float) pDefs["particleScale"].toDouble(1.0f));
+    particleNode->setDissipation(pDefs["dissipate"].toBool());
+    particleNode->setDissipationInv(pDefs["dissipateInv"].toBool());
+    particleNode->setRandomRotation(pDefs["randomRotation"].toBool());
+    particleNode->setGravity((float) pDefs["gravityComplement"].toDouble(1.0f));
+    particleNode->setBlendMode(pDefs["blendMode"].toBool());
+    particleNode->setLife((float) pDefs["lifeLength"].toDouble(1.0f));
+    particleNode->setName(pDefs["name"].toString());
+    particleNode->setSpeed((float) pDefs["speed"].toDouble(1.0f));
+    {
+        auto textureGuid = pDefs["texture"].toString();
+        auto texPath = IrisUtils::join(
+            Globals::project->getProjectFolder(),
+            db->fetchAsset(textureGuid).name
+        );
+        particleNode->setTexture(iris::Texture2D::load(texPath));
+    }
+    particleNode->setVisible(pDefs["visible"].toBool(true));
+
+    //return particleNode; 
+
+    particleNode->setPickable(true);
+    particleNode->setGUID(guid);
+    particleNode->setName(assetName);
+    particleNode->setLocalPos(position);
+
+    addNodeToScene(particleNode, ignore);
 }
 
 void MainWindow::addDragPlaceholder()
@@ -1767,6 +1944,109 @@ void MainWindow::createMaterial()
     }
 }
 
+void MainWindow::exportParticleSystem(const iris::SceneNodePtr &node)
+{
+    if (!!activeSceneNode) {
+        QJsonObject particleDef;
+        SceneWriter::writeParticleData(
+            particleDef,
+            activeSceneNode.staticCast<iris::ParticleSystemNode>()
+        );
+
+        auto textureGuid = db->fetchAssetGUIDByName(particleDef.value("texture").toString());
+        if (!textureGuid.isEmpty()) particleDef["texture"] = textureGuid;
+
+        QByteArray binaryDef = QJsonDocument(particleDef).toBinaryData();
+
+        db->updateAssetAsset(node->getGUID(), binaryDef);
+
+        const QString assetGuid = GUIDManager::generateGUID();
+
+        // get the export file path from a save dialog 
+        auto filePath = QFileDialog::getSaveFileName(
+            this,
+            "Choose export path",
+            QString("%1_export").arg(node->getName()),
+            "Supported Export Formats (*.jaf)"
+        );
+
+        if (filePath.isEmpty() || filePath.isNull()) return;
+
+        QTemporaryDir temporaryDir;
+        if (!temporaryDir.isValid()) return;
+
+        const QString writePath = temporaryDir.path();
+        const QString guid = node->getGUID();
+
+        db->createExportNode(ModelTypes::ParticleSystem, guid, QDir(writePath).filePath("asset.db"));
+
+        QDir tempDir(writePath);
+        tempDir.mkpath("assets");
+
+        QFile manifest(QDir(writePath).filePath(".manifest"));
+        if (manifest.open(QIODevice::ReadWrite)) {
+            QTextStream stream(&manifest);
+            stream << "particle_system";
+        }
+        manifest.close();
+
+        for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
+            auto asset = db->fetchAsset(assetGuid);
+            auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+            QFileInfo assetInfo(assetPath);
+            if (assetInfo.exists()) {
+                QFile::copy(
+                    IrisUtils::join(assetPath),
+                    IrisUtils::join(writePath, "assets", assetInfo.fileName())
+                );
+            }
+        }
+
+        // get all the files and directories in the project working directory 
+        QDir workingProjectDirectory(writePath);
+        QDirIterator projectDirIterator(writePath,
+            QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
+            QDirIterator::Subdirectories);
+
+        QVector<QString> fileNames;
+        while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
+
+        // open a basic zip file for writing, maybe change compression level later (iKlsR) 
+        struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
+
+        for (int i = 0; i < fileNames.count(); i++) {
+            QFileInfo fInfo(fileNames[i]);
+
+            // we need to pay special attention to directories since we want to write empty ones as well 
+            if (fInfo.isDir()) {
+                zip_entry_open(
+                    zip,
+                    /* will only create directory if / is appended */
+                    QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
+                );
+                zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+            }
+            else {
+                zip_entry_open(
+                    zip,
+                    workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
+                );
+                zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+            }
+
+            // we close each entry after a successful write 
+            zip_entry_close(zip);
+        }
+
+        // close our now exported file 
+        zip_close(zip);
+    }
+    else {
+        qDebug() << "Need an active scenenode!";
+        return;
+    }
+}
+
 void MainWindow::exportNode(const iris::SceneNodePtr &node)
 {
 	// get the export file path from a save dialog
@@ -1849,13 +2129,15 @@ void MainWindow::exportNode(const iris::SceneNodePtr &node)
     zip_close(zip);
 }
 
-void MainWindow::exportNodes(const QStringList &assetGuids)
+void MainWindow::exportNodes(iris::SceneNodePtr node, const QStringList &assetGuids)
 {
+    QDateTime currentDateTime = QDateTime::currentDateTimeUtc();
+
 	// get the export file path from a save dialog
 	auto filePath = QFileDialog::getSaveFileName(
 		this,
 		"Choose export path",
-		"export",
+		QString("%1_%2").arg(node->getName(), QString::number(currentDateTime.toTime_t())),
 		"Supported Export Formats (*.jaf)"
 	);
 
@@ -1866,7 +2148,7 @@ void MainWindow::exportNodes(const QStringList &assetGuids)
 
 	const QString writePath = temporaryDir.path();
 
-	db->createExportNodes(ModelTypes::Object, assetGuids, QDir(writePath).filePath("asset.db"));
+	db->createExportNodes(ModelTypes::Object, node, assetGuids, QDir(writePath).filePath("asset.db"));
 
 	QDir tempDir(writePath);
 	tempDir.mkpath("assets");
@@ -1879,18 +2161,23 @@ void MainWindow::exportNodes(const QStringList &assetGuids)
 	manifest.close();
 
 	for (const auto &guid : assetGuids) {
-		for (const auto &asset : db->fetchAssetAndDependencies(guid)) {
-			QFile::copy(
-				IrisUtils::join(Globals::project->getProjectFolder(), asset),
-				IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
-			);
-		}
+        for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
+            auto asset = db->fetchAsset(assetGuid);
+            auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+            QFileInfo assetInfo(assetPath);
+            if (assetInfo.exists()) {
+                QFile::copy(
+                    IrisUtils::join(assetPath),
+                    IrisUtils::join(writePath, "assets", assetInfo.fileName())
+                );
+            }
+        }
 	}
 
 	// get all the files and directories in the project working directory
 	QDir workingProjectDirectory(writePath);
 	QDirIterator projectDirIterator(writePath,
-		QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
+		QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs | QDir::Hidden,
 		QDirIterator::Subdirectories);
 
 	QVector<QString> fileNames;
@@ -2121,12 +2408,17 @@ void MainWindow::setupDockWidgets()
     ModelPresets *modelPresets = new ModelPresets;
     modelPresets->setMainWindow(this);
 
+    assetFavorites = new AssetFavorites;
+    assetFavorites->setMainWindow(this);
+    assetFavorites->setHandle(db);
+
     presetsTabWidget = new QTabWidget;
     presetsTabWidget->setObjectName("PresetsTabWidget");
     presetsTabWidget->setMinimumWidth(396);
     presetsTabWidget->addTab(modelPresets, "Primitives");
     presetsTabWidget->addTab(materialPresets, "Materials");
     presetsTabWidget->addTab(skyPresets, "Skyboxes");
+    presetsTabWidget->addTab(assetFavorites, "Favorites");
     presetDockContents->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
 
     QGridLayout *presetsLayout = new QGridLayout(presetDockContents);
@@ -2138,6 +2430,7 @@ void MainWindow::setupDockWidgets()
     assetDock = new QDockWidget("Asset Browser", viewPort);
     assetDock->setObjectName(QStringLiteral("assetDock"));
     assetWidget = new AssetWidget(db, viewPort);
+    assetWidget->setMainWindow(this);
     assetWidget->setAcceptDrops(true);
     assetWidget->installEventFilter(this);
 
@@ -2422,7 +2715,7 @@ void MainWindow::setupViewPort()
 
 		if (UiManager::isSimulationRunning) {
 			UiManager::startPhysicsSimulation();
-            playSimBtn->setText("Pause Simulation");
+            playSimBtn->setText("Stop Simulation");
 			playSimBtn->setToolTip("Pause physics simulation");
 
             options.insert("color", QColor(241, 196, 15));
@@ -2475,6 +2768,10 @@ void MainWindow::setupViewPort()
 
     connect(sceneView, &SceneViewWidget::addDroppedMesh, [this](QString path, bool v, QVector3D pos, QString guid, QString name) {
         addMaterialMesh(path, v, pos, guid, name);
+    });
+
+    connect(sceneView, &SceneViewWidget::addDroppedParticleSystem, [this](bool v, QVector3D pos, QString guid, QString name) {
+        addAssetParticleSystem(v, pos, guid, name);
     });
 
     connect(sceneView,  SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),

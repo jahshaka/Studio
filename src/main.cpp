@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
 
     splash.finish(&window);
 
-#ifdef QT_DEBUG
+#ifndef QT_DEBUG
 	UpdateChecker updateChecker;
 	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded,
         [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)
