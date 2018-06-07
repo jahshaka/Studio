@@ -160,7 +160,7 @@ void MinerUI::configureUI()
 	autoStartSwitch = new MSwitch();
 	autoStartSwitch->setColor(QColor(40, 128, 185));
 	autoStartSwitch->setSizeOfSwitch(20);
-	//autoStartSwitch->
+	autoStartSwitch->setChecked(settingsMan->getValue("miner_auto_start", false).toBool());
 	auto switchLayout = new QHBoxLayout;
 	//switchLayout->addStretch();
 	switchLayout->addWidget(autoStartSwitch);
