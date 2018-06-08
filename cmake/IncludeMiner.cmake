@@ -10,13 +10,15 @@ if(USE_MINER)
 				src/miner/minerprocess.h
 				src/miner/cuda_gpu_list.h
 				src/miner/minerchart.h
-				src/miner/minerUI.h
-				src/miner/MSwitch.h
+				src/miner/minerui.h
+				src/miner/mswitch.h
+				src/miner/autominer.h
 				)
 
 	set(SRCS 	${SRCS}
 				src/miner/minerprocess.cpp
-				src/miner/minerUI.cpp
+				src/miner/minerui.cpp
+				src/miner/autominer.cpp
 				)
 
     # add cuda lib
