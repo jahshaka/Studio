@@ -95,7 +95,7 @@ public:
 	}
 
 	void contract() {
-		additional->hide();
+		additional->hide(); 
 	}
 
 	void setSpeed(double rate) {

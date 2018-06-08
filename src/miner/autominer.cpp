@@ -1,13 +1,18 @@
 #include "autominer.h"
+<<<<<<< HEAD
 #include "minerui.h"
 #include <QElapsedTimer>
 #include <QTimer>
+=======
+
+>>>>>>> Added class for handling automatic mining
 #include <QEvent>
 
 AutoMining::AutoMining(MinerUI* minerUI)
 {
 	this->minerUI = minerUI;
 	inactiveTime = 0;
+<<<<<<< HEAD
 	isAutoMining = false;
 
 	elapsedTimer = new QElapsedTimer();
@@ -16,11 +21,14 @@ AutoMining::AutoMining(MinerUI* minerUI)
 	connect(timer, SIGNAL(QTimer::timeout()), this, SLOT(timerEvent()));
 	timer->start(1000 * 60);//timeout every minute
 
+=======
+>>>>>>> Added class for handling automatic mining
 }
 
 bool AutoMining::eventFilter(QObject* target, QEvent* evt)
 {
 	switch (evt->type()) {
+<<<<<<< HEAD
 
 	// mousemove should be enough for now
 	case QEvent::MouseMove:
@@ -30,10 +38,14 @@ bool AutoMining::eventFilter(QObject* target, QEvent* evt)
 			isAutoMining = false;
 		}
 		inactiveTime = 0;
+=======
+	case QEvent::MouseMove:
+>>>>>>> Added class for handling automatic mining
 		break;
 	}
 
 	return QObject::eventFilter(target, evt);
+<<<<<<< HEAD
 }
 
 void AutoMining::onTimer()
@@ -48,4 +60,6 @@ void AutoMining::onTimer()
 		minerUI->startMining();
 		isAutoMining = true;
 	}
+=======
+>>>>>>> Added class for handling automatic mining
 }
