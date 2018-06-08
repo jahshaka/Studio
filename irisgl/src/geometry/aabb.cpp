@@ -22,7 +22,7 @@ void AABB::setNegativeInfinity()
 		-std::numeric_limits<float>::max());
 }
 
-QVector3D AABB::getMin(QVector3D a, QVector3D b)
+QVector3D AABB::getMin(const QVector3D& a, const QVector3D& b) const
 {
 	QVector3D result;
 
@@ -33,7 +33,7 @@ QVector3D AABB::getMin(QVector3D a, QVector3D b)
 	return result;
 }
 
-QVector3D AABB::getMax(QVector3D a, QVector3D b)
+QVector3D AABB::getMax(const QVector3D& a, const QVector3D& b) const
 {
 	QVector3D result;
 
@@ -44,37 +44,49 @@ QVector3D AABB::getMax(QVector3D a, QVector3D b)
 	return result;
 }
 
-QVector3D AABB::getCenter()
+QVector3D AABB::getCenter() const
 {
 	return (minPos + maxPos) * 0.5f;
 }
 
-QVector3D AABB::getSize()
+QVector3D AABB::getSize() const
 {
 	return QVector3D(maxPos.x() - minPos.x(),
 		maxPos.y() - minPos.y(),
 		maxPos.z() - minPos.z());
 }
 
-QVector3D AABB::getHalfSize()
+QVector3D AABB::getHalfSize() const
 {
 	return getSize() * 0.5f;
 }
 
-void AABB::merge(QVector3D point)
+void AABB::offset(QVector3D offset)
 {
-	minPos = getMin(minPos, point);
-	maxPos = getMin(maxPos, point);
+	minPos += offset;
+	maxPos += offset;
 }
 
-void AABB::merge(QVector<QVector3D> points)
+void AABB::merge(const QVector3D& point)
+{
+	minPos = getMin(minPos, point);
+	maxPos = getMax(maxPos, point);
+}
+
+void AABB::merge(const QVector<QVector3D>& points)
 {
 	for (auto &p : points) {
 		merge(p);
 	}
 }
 
-BoundingSphere AABB::getMinimalEnclosingSphere()
+void AABB::merge(const AABB& aabb)
+{
+	minPos = getMin(minPos, aabb.minPos);
+	maxPos = getMax(maxPos, aabb.maxPos);
+}
+
+BoundingSphere AABB::getMinimalEnclosingSphere() const
 {
 	return { getCenter(), getSize().length() * 0.5f };
 }

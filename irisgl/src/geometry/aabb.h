@@ -16,20 +16,26 @@ public:
 
 	void setNegativeInfinity();
 
-	QVector3D getCenter();
-	QVector3D getSize();
-	QVector3D getHalfSize();
+	QVector3D getMin() { return minPos; }
+	QVector3D getMax() { return maxPos; }
 
-	void merge(QVector3D point);
-	void merge(QVector<QVector3D> points);
+	QVector3D getCenter() const;
+	QVector3D getSize() const;
+	QVector3D getHalfSize() const;
 
-	BoundingSphere getMinimalEnclosingSphere();
+	void offset(QVector3D offset);
 
-	static AABB fromPoints(QVector<QVector3D> points);
+	void merge(const QVector3D& point);
+	void merge(const QVector<QVector3D>& points);
+	void merge(const AABB& aabb);
+
+	BoundingSphere getMinimalEnclosingSphere() const;
+
+	static AABB fromPoints(const QVector<QVector3D>& points);
 
 private:
-	QVector3D getMin(QVector3D a, QVector3D b);
-	QVector3D getMax(QVector3D a, QVector3D b);
+	QVector3D getMin(const QVector3D& a, const QVector3D& b) const;
+	QVector3D getMax(const QVector3D& a, const QVector3D& b) const;
 };
 
 }

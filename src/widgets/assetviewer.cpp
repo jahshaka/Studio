@@ -687,7 +687,8 @@ void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QStr
 		return;
 	}
 
-    sceneNode->setLocalPos(QVector3D(0, 0, 0));
+	auto aabb = getNodeBoundingBox(sceneNode);
+	sceneNode->setLocalPos(QVector3D(0, -aabb.getMin().y() -5, 0));
 
 	// apply default material to mesh nodes if they have none
 	if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
@@ -727,6 +728,7 @@ void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QStr
         }
     }
 
+	bound = aabb.getMinimalEnclosingSphere();
     float dist = (bound.radius * 1.2) / qTan(qDegreesToRadians(camera->angle / 2.f));
 
 	if (!viewed) {
@@ -760,6 +762,24 @@ void AssetViewer::getBoundingSpheres(iris::SceneNodePtr node, QList<iris::Boundi
     for (auto child : node->children) {
         getBoundingSpheres(child, spheres);
     }
+}
+
+iris::AABB AssetViewer::getNodeBoundingBox(iris::SceneNodePtr node)
+{
+	iris::AABB aabb;
+	if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
+		//auto sphere = node.staticCast<iris::MeshNode>()->getTransformedBoundingSphere();
+		//aabb.merge(sphere.getAABB());
+		auto box = node.staticCast<iris::MeshNode>()->getMesh()->getAABB();
+		box.offset(node->getGlobalPosition());// todo: include other transforms
+		aabb.merge(box);
+	}
+
+	for (auto child : node->children) {
+		aabb.merge(getNodeBoundingBox(child));
+	}
+
+	return aabb;
 }
 
 QImage AssetViewer::takeScreenshot(int width, int height)
