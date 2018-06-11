@@ -222,6 +222,7 @@ public:
     void toggleDebugDrawFlags(bool value);
 
 	void startPhysicsSimulation();
+	void restartPhysicsSimulation();
 	void stopPhysicsSimulation();
 
     void setShowFps(bool value);

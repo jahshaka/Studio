@@ -27,6 +27,11 @@ void UiManager::startPhysicsSimulation()
     sceneViewWidget->startPhysicsSimulation();
 }
 
+void UiManager::restartPhysicsSimulation()
+{
+    sceneViewWidget->restartPhysicsSimulation();
+}
+
 void UiManager::stopPhysicsSimulation()
 {
     sceneViewWidget->stopPhysicsSimulation();
