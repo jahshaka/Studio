@@ -444,11 +444,7 @@ protected:
 
 	void mouseMoveEvent(QMouseEvent *event) {
 		QPoint delta = event->globalPos() - oldPos;
-		if (isPressed)
-			// if locked, ignore delta on y axis, stay at the top
-			move(x() + delta.x(), y() + delta.y());
-		else
-			move(x() + delta.x(), y() + delta.y());
+		if (isPressed) move(x() + delta.x(), y() + delta.y());
 		oldPos = event->globalPos();
 	}
 
