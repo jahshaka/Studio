@@ -145,6 +145,7 @@ private:
 
     float getBoundingRadius(iris::SceneNodePtr node);
     void getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere>& spheres);
+	iris::AABB getNodeBoundingBox(iris::SceneNodePtr node);
 
     QVector3D localPos, localRot, lookAt;
 	int distanceFromPivot;

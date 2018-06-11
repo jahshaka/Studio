@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "../irisglfwd.h"
 #include "../animation/skeletalanimation.h"
 #include "../geometry/boundingsphere.h"
+#include "../geometry/aabb.h"
 
 #include "assimp/scene.h"
 
@@ -107,6 +108,7 @@ public:
 	bool _isDirty;
 
     BoundingSphere boundingSphere;
+	AABB aabb;
 
     // will cause problems if a shader was freed and gl gives the
     // id to another shader
@@ -214,9 +216,14 @@ public:
 	void addVertexBuffer(VertexBufferPtr vertexBuffer);
 	void setIndexBuffer(IndexBufferPtr indexBuffer);
 
+	AABB getAABB(){return aabb;}
+	BoundingSphere getBoundingSphere() { return boundingSphere; }
+
 private:
     void addVertexArray(VertexAttribUsage usage,void* data,int size,GLenum type,int numComponents);
     void addIndexArray(void* data,int size,GLenum type);
+
+	void calculateBounds(const aiMesh* mesh);
 
     static BoundingSphere calculateBoundingSphere(const aiMesh* mesh);
 };
