@@ -58,7 +58,7 @@ public:
 
 		configureCard();
 		configureConnections();
-		setColor((int)Connection::NOTCONNECTED);
+		setColor((int)Connection::INACTIVE);
 		contract();
 
 	}
@@ -115,7 +115,7 @@ public:
 	}
 
 	void setHighlight(bool val) {
-		logo->setCheckable(true);
+		logo->setCheckable(val);
 		logo->setChecked(val);
 		displayLabel->setText(val? "--Mining--": oldString);		
 	}
@@ -221,11 +221,7 @@ private:
 		logo->setObjectName(QStringLiteral("logo"));
 		logo->setLayout(logoLayout);
 		logo->setFixedSize(150, 98);
-		//logo->setCheckable(true);
-		//logo->setCursor(Qt::PointingHandCursor);
 		logo->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
-		//logo->blockSignals(true);
-
 
 		pool = new QLabel("Pool  ");
 		pool->setAlignment(Qt::AlignLeft);
@@ -290,17 +286,12 @@ private:
 		cardLayout->addWidget(toolBar);
 		cardLayout->addWidget(additional);
 
-		// mainLayout->addWidget(logo);
-		// mainLayout->addWidget(info);
-		//        cardLayout->addLayout(mainLayout);
-		//        cardLayout->addWidget(additional);
-		//        cardLayout->setSpacing(6);
-		//cardLayout->setSizeConstraint(QLayout::SetFixedSize);
 		cardLayout->setContentsMargins(2, 1, 3, 2);
 		setLayout(mainLayout);
 		mainLayout->addWidget(card);
 
 		qDebug() << card->geometry();
+
 		setStyleSheet(" * {color: white; }"
 			"QWidget#logo, QWidget#info,QWidget#additional  { background:rgba(17,17,17,0); border : 0px solid rgba(00,00,00,.2); border-radius: 1px; margin: 0px;  }"
 			//"QWidget#logo:hover, QWidget#info:hover,QWidget#additional:hover{border : 1px solid rgba(40,128,185,.01); }"
@@ -312,14 +303,6 @@ private:
 			"#card{background: rgba(40,128,185,.1); border: 1px solid rgba(0,0,0,.85);}"
 			"#gpuLabel{ color: rgba(150,150,170,.8);}");
 
-		QGraphicsDropShadowEffect *effect = new QGraphicsDropShadowEffect;
-		effect->setBlurRadius(10);
-		effect->setXOffset(0);
-		effect->setYOffset(0);
-		effect->setColor(QColor(0, 0, 0));
-		//  card->setGraphicsEffect(effect);
-		//additional->setGraphicsEffect(effect);
-		//logo->setGraphicsEffect(effect);
 	}
 
 	void configureConnections() {
@@ -331,21 +314,6 @@ private:
 			displayLabel->setText(val ? "GPU set to mined" : "GPU is not set to mine");
 			oldString = displayLabel->text();
 		});
-
-		//connect(logo, &QPushButton::clicked, [this]() {
-		//	emit switchIsOn(logo->isChecked());
-		//	armed = logo->isChecked();
-		//	if (logo->isChecked()) {
-		//	//	displayLabel->setText("GPU set to mined");
-		//		switchBtn->toggle();
-
-		//	}
-		//	else {
-		//	//	displayLabel->setText("GPU is not set to mine");
-		//		switchBtn->toggle();
-
-		//	}			
-		//});
 
 		connect(logo, &QPushButton::clicked, [=]() {
 			logo->setChecked(false);
@@ -395,7 +363,7 @@ private:
 	QScrollArea *scrollArea;
 	QWidget *cardHolder;
 	GraphicsCardUI *card;
-	QPushButton *startBtn;
+	QPushButton *startBtn, *confirm, *cancelBtn;
 	QLabel *coinType, *autostart;
 	QAction *settings, *close;
 	QAction *advance;
@@ -417,17 +385,13 @@ protected:
 
 	void mouseMoveEvent(QMouseEvent *event) {
 		QPoint delta = event->globalPos() - oldPos;
-		if (isPressed)
-			// if locked, ignore delta on y axis, stay at the top
-			move(x() + delta.x(), y() + delta.y());
-		else
-			move(x() + delta.x(), y() + delta.y());
+		if (isPressed)	move(x() + delta.x(), y() + delta.y());
 		oldPos = event->globalPos();
+		//Q_UNUSED(event);
 	}
 
 	void mouseReleaseEvent(QMouseEvent *event) {
 		isPressed = false;
-
 	}
 
 };

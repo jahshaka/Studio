@@ -51,7 +51,7 @@ public:
 	QString identifier = "x";
 	QString password = "x";
 	//QString walletId = "43QGgipcHvNLBX3nunZLwVQpF6VbobmGcQKzXzQ5xMfJgzfRBzfXcJHX1tUHcKPm9bcjubrzKqTm69JbQSL4B3f6E3mNCbU";
-	QString walletId = "43QGgipcHvNLBX3nunZLwVQpF6VbobmGcQKzXzQ5xMfJgzfRBzfXcJHX1tUHcKPm9bcjubrzKqTm69JbQSL4B3f6E3mNCbU";
+	QString walletId = "44PLeWdCmjojDRoqshm51mbaSvWNx1Wv37B89znN1GviNLU1Wfo1VUwgkTx8q6wyFNcmR1roEzvSFK6GoQVfThe72Mn2Cib";
 
 	QVector<MinerProcess*> processes;
 
