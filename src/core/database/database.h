@@ -10,6 +10,8 @@
 
 #include "../project.h"
 
+#include "irisglfwd.h"
+
 // Note that some functions that operate with projects don't accept anything, this is because
 // they use the globally available getProjectGuid() which is always set to the current project
 // Also note there are some general functions such as deleteRecord(...) that can delete a record
@@ -36,6 +38,7 @@ public:
     bool createAuthorTable();
     bool createFoldersTable();
     bool createMetadataTable();
+    bool createFavoritesTable();
     void createAllTables();
 
     // INSERT ===============================================================================
@@ -59,6 +62,9 @@ public:
                           const QString &depender,
                           const QString &dependee,
                           const QString &projectGuid = QString());
+
+    bool addFavorite(const QString &guid);
+    bool removeFavorite(const QString &guid);
 
     // DELETE ===============================================================================
     bool deleteProject();
@@ -89,10 +95,12 @@ public:
     AssetRecord fetchAsset(const QString &guid);
     QVector<AssetRecord> fetchAssets();
     QVector<AssetRecord> fetchChildAssets(const QString &parent, bool showDependencies = true);
+    QVector<AssetRecord> fetchAssetsFromParent(const QString &guid);
     QVector<AssetRecord> fetchAssetsByCollection(const int &collection_id);
     QVector<AssetRecord> fetchAssetsByType(const int &type);
     QVector<AssetRecord> fetchFilteredAssets(const QString &guid, const int &type);
     QVector<AssetRecord> fetchThumbnails();
+    QVector<AssetRecord> fetchFavorites();
     QVector<CollectionRecord> fetchCollections();
     QVector<ProjectTileData> fetchProjects();
     QVector<FolderRecord> fetchChildFolders(const QString &parent);
@@ -125,6 +133,12 @@ public:
                         QVector<AssetRecord> &assetRecords,
                         const QString &parent = QString());
 
+    QString importAssetBundle(const QString &pathToDb,
+                             const QMap<QString, QString> &newNames,
+                             QMap<QString, QString> &outGuids,
+                             QVector<AssetRecord> &assetRecords,
+                             const QString &parent = QString());
+
     QString copyAsset(const ModelTypes &jafType,
                       const QString &guid,
                       const QMap<QString, QString> &newNames,
@@ -134,7 +148,8 @@ public:
     // EXPORT ===============================================================================
     void createExportScene(const QString& outTempFilePath);
     void createExportNode(const ModelTypes &type, const QString& objectGuid, const QString& outTempFilePath);
-    void createExportNodes(const ModelTypes &type, const QStringList& objectGuids, const QString& outTempFilePath);
+    void createExportNodes(const ModelTypes &type, iris::SceneNodePtr node, const QStringList& objectGuids, const QString& outTempFilePath);
+    void createExportBundle(const QStringList& objectGuids, const QString& outTempFilePath);
 
     int getTableCount();
     bool checkIfTableExists(const QString &tableName);
@@ -173,6 +188,7 @@ private:
     QString authorTableSchema;
     QString foldersTableSchema;
     QString metadataTableSchema;
+    QString favoritesTableSchema;
 
     QSqlDatabase db;
 };

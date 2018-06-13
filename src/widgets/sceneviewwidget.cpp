@@ -181,11 +181,18 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 	qDebug() << roleDataMap.value(2).toString();
 	qDebug() << roleDataMap.value(3).toString();
 
+    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::ParticleSystem)) {
+        auto ppos = dragScenePos;
+        emit addDroppedParticleSystem(
+            true, ppos, roleDataMap.value(3).toString(), roleDataMap.value(1).toString()
+        );
+    }
+
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
         auto ppos = dragScenePos;
         emit addDroppedMesh(
-                QDir(Globals::project->getProjectFolder()).filePath(roleDataMap.value(2).toString()),
-                true, ppos, roleDataMap.value(3).toString(), roleDataMap.value(1).toString()
+            QDir(Globals::project->getProjectFolder()).filePath(roleDataMap.value(2).toString()),
+            true, ppos, roleDataMap.value(3).toString(), roleDataMap.value(1).toString()
         );
     }
 

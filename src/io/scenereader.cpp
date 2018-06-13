@@ -516,6 +516,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
 {
     auto particleNode = iris::ParticleSystemNode::create();
 
+    particleNode->setGUID(nodeObj["guid"].toString());
     particleNode->setPPS((float) nodeObj["particlesPerSecond"].toDouble(1.0f));
     particleNode->setParticleScale((float) nodeObj["particleScale"].toDouble(1.0f));
     particleNode->setDissipation(nodeObj["dissipate"].toBool());
@@ -526,7 +527,10 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     particleNode->setLife((float) nodeObj["lifeLength"].toDouble(1.0f));
     particleNode->setName(nodeObj["name"].toString());
     particleNode->setSpeed((float) nodeObj["speed"].toDouble(1.0f));
-    particleNode->setTexture(iris::Texture2D::load(getAbsolutePath(nodeObj["texture"].toString())));
+
+    auto textureStr = QDir(Globals::project->getProjectFolder()).filePath(handle->fetchAsset(nodeObj["texture"].toString()).name);
+
+    particleNode->setTexture(iris::Texture2D::load(getAbsolutePath(textureStr)));
 	particleNode->setVisible(nodeObj["visible"].toBool(true));
 
     return particleNode;

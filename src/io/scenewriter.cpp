@@ -364,6 +364,7 @@ void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodeP
 
 void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node)
 {
+    sceneNodeObject["guid"]                 = node->getGUID();
     sceneNodeObject["particlesPerSecond"]   = node->particlesPerSecond;
     sceneNodeObject["particleScale"]        = node->particleScale;
     sceneNodeObject["dissipate"]            = node->dissipate;
@@ -373,8 +374,8 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["blendMode"]            = node->useAdditive;
     sceneNodeObject["lifeLength"]           = node->lifeLength;
     sceneNodeObject["speed"]                = node->speed;
-    sceneNodeObject["texture"]              = getRelativePath(node->texture->getSource());
 	sceneNodeObject["visible"]				= node->isVisible();
+    sceneNodeObject["texture"]              = handle->fetchAssetGUIDByName(QFileInfo(node->texture->getSource()).fileName());
 }
 
 void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat, bool relative)

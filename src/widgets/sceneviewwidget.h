@@ -327,7 +327,8 @@ private:
 	SettingsManager* settings;
 
 signals:
-    void addDroppedMesh(QString, bool, QVector3D, QString, QString);
+    void addDroppedMesh(QString path, bool ignore, QVector3D position, QString guid, QString assetName);
+    void addDroppedParticleSystem(bool ignore, QVector3D position, QString guid, QString assetName);
     void initializeGraphics(SceneViewWidget* widget,
                             QOpenGLFunctions_3_2_Core* gl);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
