@@ -143,7 +143,7 @@ enum class VRButtonMode : int
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-
+	
 	settings = SettingsManager::getDefaultManager();
 
     UiManager::mainWindow = this;
@@ -189,6 +189,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	//restoreState(settings->getValue("windowState", "").toByteArray());
 
 	undoStackCount = 0;
+
+	
 }
 
 void MainWindow::grabOpenGLContextHack()
@@ -2466,6 +2468,15 @@ void MainWindow::setupDockWidgets()
     viewPort->addDockWidget(Qt::BottomDockWidgetArea, animationDock);
     viewPort->addDockWidget(Qt::BottomDockWidgetArea, presetsDock);
     viewPort->tabifyDockWidget(animationDock, assetDock);
+
+	viewPort->setStyleSheet(
+		"QMenu{	background: rgba(26,26,26,.9); color: rgba(250,250, 250,.9);}"
+		"QMenu::item{padding: 2px 5px 2px 20px;	}"
+		"QMenu::item:hover{	background: rgba(40,128, 185,.9);}"
+		"QMenu::item:selected{	background: rgba(40,128, 185,.9);}"
+	//	"QMenu::indicator{ width : 13; height : 10; border-radius: 3px; background: rgba(53,53,53,.9);}"
+		//"QMenu::indicator:checked{background: rgba(40,128, 185,.9);}"
+	);
 }
 
 void MainWindow::setupViewPort()
@@ -2600,6 +2611,10 @@ void MainWindow::setupViewPort()
         "padding: 0 8px 0 0; margin: 0"
     );
     wireFramesMenu = new QMenu;
+	wireFramesMenu->setStyleSheet("QMenu{	background: rgba(26,26,26,.9); color: rgba(250,250, 250,.9);}"
+		"QMenu::item{padding: 2px 5px 2px 20px;	}"
+		"QMenu::item:hover{	background: rgba(40,128, 185,.9);}"
+		"QMenu::item:selected{	background: rgba(40,128, 185,.9);}");
 
     wireCheckAction = new QAction(QIcon(), "Light Bounds");
     wireCheckAction->setCheckable(true);
@@ -2817,14 +2832,14 @@ void MainWindow::setupToolBar()
     toolBar = new QToolBar;
 	toolBar->setIconSize(QSize(14, 14));
 	QAction *actionUndo = new QAction;
-	actionUndo->setToolTip("Undo last action");
+	actionUndo->setToolTip("Undo | Undo last action");
 	actionUndo->setObjectName(QStringLiteral("actionUndo"));
 	actionUndo->setText(QChar(fa::reply));
 	actionUndo->setFont(fontIcons.font(16)); 
 	toolBar->addAction(actionUndo);
 
 	QAction *actionRedo = new QAction;
-	actionRedo->setToolTip("Redo last action");
+	actionRedo->setToolTip("Redo | Redo last action");
 	actionRedo->setObjectName(QStringLiteral("actionRedo"));
 	actionRedo->setText(QChar(fa::share));
 	actionRedo->setFont(fontIcons.font(16));
@@ -2838,7 +2853,7 @@ void MainWindow::setupToolBar()
     actionTranslate = new QAction;
     actionTranslate->setObjectName(QStringLiteral("actionTranslate"));
     actionTranslate->setCheckable(true);
-	actionTranslate->setToolTip("Manipulator for translating objects");
+	actionTranslate->setToolTip("Translate | Manipulator for translating objects | Translates the object along a given axis");
 	actionTranslate->setText(QChar(fa::arrows));
 	actionTranslate->setFont(fontIcons.font(16));
 	toolBar->addAction(actionTranslate);
@@ -2846,7 +2861,7 @@ void MainWindow::setupToolBar()
     actionRotate = new QAction;
     actionRotate->setObjectName(QStringLiteral("actionRotate"));
     actionRotate->setCheckable(true);
-	actionRotate->setToolTip("Manipulator for rotating objects");
+	actionRotate->setToolTip("Rptate | Manipulator for rotating objects | Rotates the object along a given axis");
 	actionRotate->setText(QChar(fa::rotateright));
 	actionRotate->setFont(fontIcons.font(16));
 	toolBar->addAction(actionRotate);
@@ -2854,7 +2869,7 @@ void MainWindow::setupToolBar()
     actionScale = new QAction;
     actionScale->setObjectName(QStringLiteral("actionScale"));
     actionScale->setCheckable(true);
-	actionScale->setToolTip("Manipulator for scaling objects");
+	actionScale->setToolTip("Scale | Manipulator for scaling objects | Scales the object along a given axis");
 	actionScale->setText(QChar(fa::expand));
 	actionScale->setFont(fontIcons.font(16));
 	toolBar->addAction(actionScale);
@@ -2864,7 +2879,7 @@ void MainWindow::setupToolBar()
     QAction *actionGlobalSpace = new QAction;
     actionGlobalSpace->setObjectName(QStringLiteral("actionGlobalSpace"));
     actionGlobalSpace->setCheckable(true);
-	actionGlobalSpace->setToolTip("Move objects relative to the global world");
+	actionGlobalSpace->setToolTip("Global Space | Move objects relative to the global world");
 	actionGlobalSpace->setText(QChar(fa::globe));
 	actionGlobalSpace->setFont(fontIcons.font(16));
 	toolBar->addAction(actionGlobalSpace);
@@ -2872,7 +2887,7 @@ void MainWindow::setupToolBar()
     QAction *actionLocalSpace = new QAction;
     actionLocalSpace->setObjectName(QStringLiteral("actionLocalSpace"));
     actionLocalSpace->setCheckable(true);
-	actionLocalSpace->setToolTip("Move objects relative to their transform");
+	actionLocalSpace->setToolTip("Local Space | Move objects relative to their transform");
 	actionLocalSpace->setText(QChar(fa::cube));
 	actionLocalSpace->setFont(fontIcons.font(16));
 	toolBar->addAction(actionLocalSpace);
@@ -2882,7 +2897,7 @@ void MainWindow::setupToolBar()
     QAction *actionFreeCamera = new QAction;
     actionFreeCamera->setObjectName(QStringLiteral("actionFreeCamera"));
     actionFreeCamera->setCheckable(true);
-	actionFreeCamera->setToolTip("Freely move and orient the camera");
+	actionFreeCamera->setToolTip("Free Camera | Freely move and orient the camera");
 	actionFreeCamera->setText(QChar(fa::eye));
 	actionFreeCamera->setFont(fontIcons.font(16));
 	toolBar->addAction(actionFreeCamera);
@@ -2890,7 +2905,7 @@ void MainWindow::setupToolBar()
     QAction *actionArcballCam = new QAction;
     actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
     actionArcballCam->setCheckable(true);
-	actionArcballCam->setToolTip("Move and orient the camera around a fixed point");
+	actionArcballCam->setToolTip("Arc Ball Camera | Move and orient the camera around a fixed point | With this button selected, you are now able to move around a fixed point.");
 	actionArcballCam->setText(QChar(fa::dotcircleo));
 	actionArcballCam->setFont(fontIcons.font(16));
 	toolBar->addAction(actionArcballCam);
@@ -2929,7 +2944,7 @@ void MainWindow::setupToolBar()
 	QAction *actionExport = new QAction;
 	actionExport->setObjectName(QStringLiteral("actionExport"));
 	actionExport->setCheckable(false);
-	actionExport->setToolTip("Export the current scene");
+	actionExport->setToolTip("Export | Export the current scene");
 	actionExport->setText(QChar(fa::upload));
 	actionExport->setFont(fontIcons.font(16)); 
 	toolBar->addAction(actionExport);
@@ -2938,7 +2953,7 @@ void MainWindow::setupToolBar()
 	actionSaveScene->setObjectName(QStringLiteral("actionSaveScene"));
 	actionSaveScene->setVisible(!settings->getValue("auto_save", true).toBool());
 	actionSaveScene->setCheckable(false);
-	actionSaveScene->setToolTip("Save the current scene");
+	actionSaveScene->setToolTip("Save | Save the current scene");
 	actionSaveScene->setText(QChar(fa::floppyo));
 	actionSaveScene->setFont(fontIcons.font(16));
 	toolBar->addAction(actionSaveScene);
@@ -2946,7 +2961,7 @@ void MainWindow::setupToolBar()
 	QAction *viewDocks = new QAction;
 	viewDocks->setObjectName(QStringLiteral("viewDocks"));
 	viewDocks->setCheckable(false);
-	viewDocks->setToolTip("Toggle Widgets");
+	viewDocks->setToolTip("Toggle Widgets | Toggle the dock widgets");
 	viewDocks->setText(QChar(fa::listalt));
 	viewDocks->setFont(fontIcons.font(16));
 	toolBar->addAction(viewDocks);
@@ -2993,6 +3008,7 @@ void MainWindow::toggleDockWidgets()
 		"QPushButton { padding: 8px 24px; border-radius: 1px; }"
 		"QPushButton[accessibleName=\"toggleAbles\"]:checked { background: #1E1E1E; }"
 		"QPushButton[accessibleName=\"toggleAbles\"] { background: #3E3E3E; }"
+		
 	);
 
 	QVBoxLayout *dl = new QVBoxLayout;
