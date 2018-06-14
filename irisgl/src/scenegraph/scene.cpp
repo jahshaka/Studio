@@ -132,7 +132,7 @@ void Scene::update(float dt)
                 float matrix[16];
                 environment->hashBodies.value(node->getGUID())->getMotionState()->getWorldTransform(trans);
                 trans.getOpenGLMatrix(matrix);
-                node->globalTransform = QMatrix4x4(matrix).transposed();
+                node->setGlobalTransform(QMatrix4x4(matrix).transposed());
             }
         }
     }

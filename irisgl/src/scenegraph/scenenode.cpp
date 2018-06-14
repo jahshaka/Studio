@@ -26,6 +26,8 @@ For more information see the LICENSE file
 #include "scene.h"
 #include "scenegraph/meshnode.h"
 
+#include <QUuid>
+
 namespace iris
 {
 
@@ -559,6 +561,11 @@ SceneNodePtr SceneNode::duplicate()
 	node->pickable		= this->pickable;
 	node->castShadow	= this->castShadow;
 	node->attached		= this->attached;
+
+    auto id = QUuid::createUuid();
+    auto guid = id.toString().remove(0, 1);
+    guid.chop(1);
+    node->setGUID(guid);
 
     for (auto &child : this->children) {
         if (child->isDuplicable()) {

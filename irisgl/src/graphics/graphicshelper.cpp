@@ -100,11 +100,13 @@ QList<iris::MeshPtr> GraphicsHelper::loadAllMeshesFromFile(QString filePath)
 {
     Assimp::Importer importer;
     const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(), aiProcessPreset_TargetRealtime_Fast);
-
     return loadAllMeshesFromAssimpScene(scene);
 }
 
-void GraphicsHelper::loadAllMeshesAndAnimationsFromFile(QString filePath, QList<MeshPtr> &meshes, QMap<QString, SkeletalAnimationPtr> &animations)
+void GraphicsHelper::loadAllMeshesAndAnimationsFromFile(
+    QString filePath,
+    QList<MeshPtr> &meshes,
+    QMap<QString, SkeletalAnimationPtr> &animations)
 {
     Assimp::Importer importer;
     const aiScene *scene = importer.ReadFile(filePath.toStdString().c_str(), aiProcessPreset_TargetRealtime_Fast);

@@ -1541,119 +1541,19 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 
 void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position, const QString &guid, const QString &assetName)
 {
-	this->sceneView->makeCurrent();
+    auto document = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
 
-	iris::SceneNodePtr node;
-
-	QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
-
-	QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
-	while (iterator != AssetManager::getAssets().constEnd()) {
-		if ((*iterator)->assetGuid == guid) node = (*iterator)->getValue().value<iris::SceneNodePtr>()->duplicate();
-		++iterator;
-	}
-
-    if (!node) return;
-
-    auto materialObj = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
-
-    // create system 
-    std::function<void(QJsonObject&)> createSystems = [&](QJsonObject &definition) -> void {
-        if (definition.value("type").toString() == "light") {
-            auto lightNode = createLight(definition).staticCast<iris::SceneNode>();
-            lightNode->setLocalPos(IrisUtils::readVector3(definition["pos"].toObject()));
-            lightNode->setLocalRot(QQuaternion::fromEulerAngles(IrisUtils::readVector3(definition["rot"].toObject())));
-            lightNode->setLocalScale(IrisUtils::readVector3(definition["scale"].toObject()));
-            node->addChild(lightNode);
-        }
-
-        if (definition.value("type").toString() == "particle system") {
-            //QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guid)); 
-            QJsonObject pDefs = definition;
-
-            auto particleNode = iris::ParticleSystemNode::create();
-
-            particleNode->setGUID(pDefs["guid"].toString());
-            particleNode->setPPS((float) pDefs["particlesPerSecond"].toDouble(1.0f));
-            particleNode->setParticleScale((float) pDefs["particleScale"].toDouble(1.0f));
-            particleNode->setDissipation(pDefs["dissipate"].toBool());
-            particleNode->setDissipationInv(pDefs["dissipateInv"].toBool());
-            particleNode->setRandomRotation(pDefs["randomRotation"].toBool());
-            particleNode->setGravity((float) pDefs["gravityComplement"].toDouble(1.0f));
-            particleNode->setBlendMode(pDefs["blendMode"].toBool());
-            particleNode->setLife((float) pDefs["lifeLength"].toDouble(1.0f));
-            particleNode->setName(pDefs["name"].toString());
-            particleNode->setSpeed((float) pDefs["speed"].toDouble(1.0f));
-
-            {
-                auto textureGuid = pDefs["texture"].toString();
-
-                QString texPath = IrisUtils::join(
-                    Globals::project->getProjectFolder(),
-                    db->fetchAsset(textureGuid).name
-                );
-
-                particleNode->setTexture(iris::Texture2D::load(texPath));
-            }
-
-            particleNode->setVisible(pDefs["visible"].toBool(true));
-
-            particleNode->setPickable(false);
-            particleNode->setShadowCastingEnabled(true);
-            particleNode->setLocalPos(IrisUtils::readVector3(pDefs["pos"].toObject()));
-            particleNode->setLocalRot(QQuaternion::fromEulerAngles(IrisUtils::readVector3(pDefs["rot"].toObject())));
-            particleNode->setLocalScale(IrisUtils::readVector3(pDefs["scale"].toObject()));
-
-            node->addChild(particleNode);
-        }
-
-        QJsonArray children = definition["children"].toArray();
-        // These will always be in sync since the definition is derived from the mesh 
-        if (!children.isEmpty()) {
-            for (int i = 0; i < children.count(); ++i) {
-                createSystems(children[i].toObject());
-            }
-        }
-    };
-
-    createSystems(materialObj.object());
-
-	std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
-		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-			auto n = node.staticCast<iris::MeshNode>();
-			n->meshPath = meshGuid;
-			n->setGUID(guid);
-			auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-			for (auto prop : mat->properties) {
-				if (prop->type == iris::PropertyType::Texture) {
-					if (!prop->getValue().toString().isEmpty()) {
-						mat->setValue(prop->name,
-							IrisUtils::join(
-                                Globals::project->getProjectFolder(),
-								db->fetchAsset(prop->getValue().toString()).name
-                            )
-                        );
-					}
-				}
-			}
-		}
-
-		if (node->hasChildren()) {
-			for (auto &child : node->children) {
-				updateNodeValues(child);
-			}
-		}
-	};
-
-	updateNodeValues(node);
+    auto reader = new SceneReader;
+    reader->setBaseDirectory(Globals::project->getProjectFolder());
+    this->sceneView->makeCurrent();
+    iris::SceneNodePtr node = reader->readSceneNode(document.object());
+    this->sceneView->doneCurrent();
+    delete reader;
 
 	// rename animation sources to relative paths
+	QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
 	auto relPath = QDir(Globals::project->folderPath).relativeFilePath(db->fetchAsset(meshGuid).name);
 	for (auto anim : node->getAnimations()) if (!!anim->skeletalAnimation) anim->skeletalAnimation->source = relPath;
-
-	node->setGUID(guid);
-    node->setName(assetName);
-	node->setLocalPos(position);
 
 	addNodeToScene(node, ignore);
 }

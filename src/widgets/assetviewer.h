@@ -71,7 +71,6 @@ public:
     void mouseMoveEvent(QMouseEvent *e);
 
 	void addJafMaterial(const QString &guid, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
-    void addJafParticleSystem(const QString &guid, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addJafShader(const QString &guid, QMap<QString, QString> &outGuids, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addJafMesh(const QString &path, const QString &guid, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addMesh(const QString &path = QString(), bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());

@@ -1167,7 +1167,7 @@ void Database::createExportNodes(const ModelTypes &type, iris::SceneNodePtr node
 
 	QStringList fullAssetList;
 	for (const auto &guid : objectGuids) {
-		fullAssetList.append(fetchAssetGUIDAndDependencies(guid));
+		fullAssetList.append(fetchAssetAndAllDependencies(guid));
 	}
 
 	for (const auto &asset : fullAssetList) {
@@ -1199,6 +1199,8 @@ void Database::createExportNodes(const ModelTypes &type, iris::SceneNodePtr node
 				data.asset          = selectAssetQuery.value(15).toByteArray();
 				data.thumbnail      = selectAssetQuery.value(16).toByteArray();
 				assetList.push_back(data);
+
+                qDebug() << "trying to export " << data.name << data.guid;
 			}
 		}
 		else {
@@ -2119,6 +2121,28 @@ QStringList Database::fetchAssetGUIDAndDependencies(const QString &guid, bool ap
 	}
 
 	return dependencies;
+}
+
+QStringList Database::fetchAssetAndAllDependencies(const QString & guid)
+{
+    QStringList topLevelAssets;
+    QStringList assetAndDependencies;
+
+    for (const auto &asset : fetchAssetGUIDAndDependencies(guid)) {
+        topLevelAssets.append(asset);
+        assetAndDependencies.append(asset);
+    }
+
+    // Dependency level is always max 2
+    for (const auto &asset : topLevelAssets) {
+        for (const auto &guid : fetchAssetGUIDAndDependencies(asset)) {
+            assetAndDependencies.append(guid);
+        }
+    }
+
+    assetAndDependencies.removeDuplicates();
+
+    return assetAndDependencies;
 }
 
 QVector<DependencyRecord> Database::fetchAssetDependencies(const AssetRecord &record)

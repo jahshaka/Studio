@@ -114,6 +114,7 @@ public:
     QStringList fetchFolderAndChildFolders(const QString &guid);
     QStringList fetchChildFolderAssets(const QString &guid);
     QStringList fetchAssetGUIDAndDependencies(const QString &guid, bool appendSelf = true);
+    QStringList fetchAssetAndAllDependencies(const QString &guid);
     QVector<DependencyRecord> fetchAssetDependencies(const AssetRecord &record);
     QStringList fetchAssetDependenciesByType(const QString &guid, const ModelTypes&);
     QStringList fetchAssetAndDependencies(const QString &guid);
