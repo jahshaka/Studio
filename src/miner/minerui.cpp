@@ -108,6 +108,7 @@ void MinerUI::configureUI()
 	advance = new QAction("advance");
 	advance->setText(QChar(fa::sliders));
 	advance->setFont(fontIcon.font(15));
+	advance->hide();
 	close = new QAction("X");
 	close->setText(QChar(fa::times));
 	close->setFont(fontIcon.font(15));
