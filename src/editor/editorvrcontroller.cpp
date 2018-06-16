@@ -220,7 +220,7 @@ void EditorVrController::update(float dt)
         }
 
         scene->geometryRenderList->add(leftHandRenderItem);
-        scene->geometryRenderList->add(rightHandRenderItem);
+        scene->geometryRenderList->add(leftBeamRenderItem);
     }
 
 
