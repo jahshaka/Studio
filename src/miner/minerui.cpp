@@ -17,13 +17,17 @@ For more information see the LICENSE file
 #include <QGroupBox>
 #include <QSizeGrip>
 #include <QStyledItemDelegate>
+#include <QStandardPaths>
 #include "minerprocess.h"
+#include "../core/settingsmanager.h"
 
 MinerUI::MinerUI(QWidget *parent)
 	: QWidget(parent)
 {
 	minerMan = new MinerManager();
 	minerMan->initialize();
+
+	settingsMan = new SettingsManager("jahminer.ini");
 
 	configureUI();
 	configureSettings();
@@ -34,8 +38,6 @@ MinerUI::MinerUI(QWidget *parent)
 	// setWindowFlag(Qt::SubWindow);
 	setAttribute(Qt::WA_QuitOnClose, false);
 	setWindowModality(Qt::ApplicationModal);
-
-	
 
 	// add cards
 	/*
@@ -106,6 +108,7 @@ void MinerUI::configureUI()
 	advance = new QAction("advance");
 	advance->setText(QChar(fa::sliders));
 	advance->setFont(fontIcon.font(15));
+	advance->hide();
 	close = new QAction("X");
 	close->setText(QChar(fa::times));
 	close->setFont(fontIcon.font(15));
@@ -169,6 +172,7 @@ void MinerUI::configureUI()
 	autoStartSwitch = new MSwitch();
 	autoStartSwitch->setColor(QColor(40, 128, 185));
 	autoStartSwitch->setSizeOfSwitch(20);
+	autoStartSwitch->setChecked(settingsMan->getValue("miner_auto_start", false).toBool());
 	auto switchLayout = new QHBoxLayout;
 	//switchLayout->addStretch();
 	switchLayout->addWidget(autoStartSwitch);
@@ -200,6 +204,7 @@ void MinerUI::configureUI()
 	//  groupBoxLayout->setSizeConstraint(QLayout::SetFixedSize);
 	groupBoxLayout->setSpacing(0);
 	groupBoxLayout->addWidget(new QSizeGrip(this), 0, Qt::AlignBottom | Qt::AlignRight);
+
 }
 
 void MinerUI::configureSettings()
@@ -238,9 +243,11 @@ void MinerUI::configureSettings()
 
 	connect(confirm, &QPushButton::clicked, [=]() {
 		back->trigger();
+		this->saveAndApplySettings();
 	});
 	connect(CancelBtn, &QPushButton::clicked, [=]() {
 		back->trigger();
+		this->restoreSettings();
 	});
 
 
@@ -326,6 +333,16 @@ void MinerUI::configureSettings()
 
 	stack->addWidget(settingsWidget);
 	settingsLaout->addWidget(new QSizeGrip(this), 0, Qt::AlignBottom | Qt::AlignRight);
+
+	// pass application settings to ui
+	walletIdText = settingsMan->getValue("wallet_id", "").toString();
+	walletEdit->setText(walletIdText);
+	poolText = settingsMan->getValue("pool", "").toString();
+	poolEdit->setText(poolText);
+	passwordText = settingsMan->getValue("password", "").toString();
+	passwordEdit->setText(passwordText);
+	identifierText = settingsMan->getValue("identifier", "").toString();
+	identifierEdit->setText(identifierText);
 	
 }
 
@@ -354,24 +371,18 @@ void MinerUI::configureConnections()
 	});
 
 	connect(startBtn, &QPushButton::clicked, [this]() {
-		
-
 		if (!mining) {
-			foreach(card, list) card->setStarted(!mining);
-
-			startBtn->setText("Stop");
-			mining = true;
+			startMining();
 		}
 		else {
-			foreach(card, list) card->setStarted(!mining);
-
-			startBtn->setText("Start");
-			mining = false;
+			stopMining();
 		}
 
 	});
+
 	connect(autoStartSwitch, &MSwitch::switchPressed, [this](bool val) {
 		startAutomatically = val;
+		this->settingsMan->setValue("miner_auto_start", val);
 	});
 
 	foreach(card, list) {
@@ -411,6 +422,56 @@ void MinerUI::configureStyleSheet()
 		"#currencyBox QAbstractItemView::item:hover {background-color: rgba(40,128,185,1); border :0px;  }"
 		""
 		"");
+}
+
+void MinerUI::saveAndApplySettings()
+{
+	walletIdText = walletEdit->text();
+	settingsMan->setValue("wallet_id", walletIdText);
+	poolText = poolEdit->text();
+	settingsMan->setValue("pool", poolText);
+	passwordText = passwordEdit->text();
+	settingsMan->setValue("password", passwordText);
+	identifierText = identifierEdit->text();
+	settingsMan->setValue("identifier", identifierText);
+
+	minerMan->walletId = walletIdText;
+	minerMan->poolUrl = poolText;
+	minerMan->password = passwordText;
+	minerMan->identifier = identifierText;
+
+	//restart mining
+	restartMining();
+}
+
+void MinerUI::restoreSettings()
+{
+	settingsMan->setValue("wallet_id", walletIdText);
+	settingsMan->setValue("pool", poolText);
+	settingsMan->setValue("password", passwordText);
+	settingsMan->setValue("identifier", identifierText);
+}
+
+void MinerUI::restartMining()
+{
+	this->stopMining();
+	this->startMining();
+}
+
+void MinerUI::startMining()
+{
+	foreach(card, list) card->setStarted(!mining);
+
+	startBtn->setText("Stop");
+	mining = true;
+}
+
+void MinerUI::stopMining()
+{
+	foreach(card, list) card->setStarted(!mining);
+
+	startBtn->setText("Start");
+	mining = false;
 }
 
 void MinerUI::switchToAdvanceMode()

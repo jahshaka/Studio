@@ -64,6 +64,19 @@ public:
 
 	void toggle() {
 		simulateClick();
+                emit stateChanged(value());
+	}
+
+	void setChecked(bool val){
+            if(val){
+                if(value()==minimum()) toggle();
+            }else{
+                if(value()==maximum()) toggle();
+            }
+	}
+
+	bool isChecked(){
+                return value()==maximum() ? true : false;
 	}
 
 private:
@@ -141,6 +154,7 @@ protected:
 
 signals:
     void switchPressed(bool b);
+    void stateChanged(int value);
 };
 
 #endif // MSWITCH_H

@@ -57,7 +57,6 @@ class QTimer;
 class MinerManager
 {
 public:
-	//QString poolUrl = "pool.supportxmr.com:3333";
 	QString poolUrl = "165.227.72.177:3333";
 	QString identifier = "x";
 	QString password = "x";
@@ -90,6 +89,10 @@ public:
 	// for getting http reports
 	int networkPort;
 	QString networkUrl;
+	int sentRequests;
+
+	// number of retries after miner has crashed
+	int retries;
 
 	MinerStatus status;
 
@@ -118,6 +121,8 @@ public:
 	{
 		minerMan = manager;
 		netMan = new QNetworkAccessManager(nullptr);
+		sentRequests = 0;
+		retries = 0;
 	}
 
 	virtual ~MinerProcess()
@@ -126,13 +131,14 @@ public:
 	}
 
 signals:
-	//void minerStatusChanged(MinerStatus status);
+	void minerStatusChanged(MinerStatus status);
 
 	// called as soon as new miner data comes in
 	void onMinerChartData(MinerChartData data);
 
 private:
-	void networkRequest(QString url, std::function<void(QString)> callback);
+	void networkRequest(QString url, std::function<void(QString)> successCallback, std::function<void(QNetworkReply::NetworkError)> errorCallback);
+	void _setMinerStatus(MinerStatus status);
 };
 
 /*
