@@ -46,6 +46,7 @@ add_subdirectory(src/bullet3)
 
 set(SRCS
     src/graphics/mesh.cpp
+    src/graphics/model.cpp
     src/materials/defaultmaterial.cpp
     src/scenegraph/meshnode.cpp
     src/graphics/forwardrenderer.cpp
@@ -119,6 +120,7 @@ set (HEADERS
     src/graphics/texture.h
     src/graphics/shadowmap.h
     src/graphics/mesh.h
+    src/graphics/model.h
     src/graphics/material.h
     src/scenegraph/cameranode.h
     src/scenegraph/meshnode.h
