@@ -150,10 +150,8 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
     goUpOneControl->setEnabled(false);
 
     QHBoxLayout *dirControlLayout = new QHBoxLayout;
-    dirControlLayout->setContentsMargins(0, 0, 6, 0);
     dirControlLayout->setSpacing(0);
     dirControlLayout->setSizeConstraint(QLayout::SetFixedSize);
-    dirControlLayout->addSpacing(8);
     //dirControlLayout->addWidget(goBackOneControl);
     dirControlLayout->addWidget(goUpOneControl);
 
@@ -207,7 +205,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		"QWidget#headerTEMP { background: #1A1A1A;}"
 		"QWidget#Switcher { background: #1A1A1A; border-top: 1px solid #151515; border-bottom: 1px solid #151515; }"
 		"QWidget#Switcher QPushButton { background-color: #333; padding: 4px 16px; }"
-		"QWidget#DirControl { background: #1A1A1A; }"
+        "QWidget#DirControl { background: #1A1A1A; }"
 		"QWidget#Switcher QPushButton:checked { background: #2980b9; }"
 		"QWidget#BreadCrumb { background: #1A1A1A; border-top: 1px solid #151515; border-bottom: 1px solid #151515; }"
 		"QWidget#BreadCrumb QPushButton { background: transparent; padding: 4px 16px;"
@@ -846,6 +844,7 @@ void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
 
         // If item has dependencies
         const QString guid = item->data(MODEL_GUID_ROLE).toString();
+        if (!db->hasDependencies(guid)) return;
         assetItem.selectedGuid = guid;
         updateAssetContentsView(guid);
         goUpOneControl->setEnabled(true);
@@ -1236,7 +1235,7 @@ void AssetWidget::exportAssetPack()
         this,
         "Choose export path",
         QString("AssetBundle_%1").arg(QString::number(currentDateTime.toTime_t())),
-        "Supported Export Formats (*.jbf)"
+        "Supported Export Formats (*.jaf)"
     );
 
     if (filePath.isEmpty() || filePath.isNull()) return;

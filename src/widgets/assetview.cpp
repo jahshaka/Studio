@@ -742,7 +742,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 				cached = true;
 			}
 
-            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Object)) {
+            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Object) || 
+                gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::ParticleSystem)) {
                 viewers->setCurrentIndex(0);
 
                 QString path;
@@ -787,18 +788,6 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
                 else {
 					QMap<QString, QString> map;
                     viewer->loadJafShader(gridItem->metadata["guid"].toString(), map);
-                    viewer->orientCamera(pos, rot, distObj);
-                }
-            }
-
-            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::ParticleSystem)) {
-                viewers->setCurrentIndex(0);
-                if (viewer->cachedAssets.value(gridItem->metadata["guid"].toString())) {
-                    viewer->loadJafParticleSystem(gridItem->metadata["guid"].toString());
-                    viewer->orientCamera(pos, rot, distObj);
-                }
-                else {
-                    viewer->loadJafParticleSystem(gridItem->metadata["guid"].toString());
                     viewer->orientCamera(pos, rot, distObj);
                 }
             }
@@ -1148,13 +1137,6 @@ void AssetView::importJahModel(const QString &fileName)
                 assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
             }
 
-            addToJahLibrary(filename, guid, true);
-        }
-
-        if (jafString == "particle_system") {
-            viewers->setCurrentIndex(0);
-            renameModelField->setText(QFileInfo(filename).baseName());
-            viewer->loadJafParticleSystem(guid);
             addToJahLibrary(filename, guid, true);
         }
 

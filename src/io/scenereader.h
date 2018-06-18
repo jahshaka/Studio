@@ -23,6 +23,9 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QMap>
 
+#include "globals.h"
+#include "core/project.h"
+
 #include "../irisgl/src/irisglfwd.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
@@ -40,10 +43,19 @@ class SceneReader : public AssetIOBase
     QHash<QString,QMap<QString, iris::SkeletalAnimationPtr>> animations;
 
 	Database *handle;
+    // We can choose to load assets from a flat file or from those already cached
+    // TODO - also cache assets in the viewer
 public:
 	void setDatabaseHandle(Database *db) {
 		this->handle = db;
 	}
+
+    QString assetDirectory = Globals::project->getProjectFolder();
+    bool useAlternativeLocation = false;
+    void setBaseDirectory(const QString &location) {
+        assetDirectory = location;
+        useAlternativeLocation = true;
+    };
 
 public:
     iris::ScenePtr readScene(const QString &projectPath,
