@@ -5,12 +5,16 @@
 #include "../graphics/font.h"
 #include "../graphics/shader.h"
 
+#include "modelloader.h"
+
 namespace iris
 {
 
 ContentManager::ContentManager(GraphicsDevicePtr graphics)
 {
     this->graphics = graphics;
+
+	modelLoader = new ModelLoader(graphics);
 }
 
 MeshPtr ContentManager::loadMesh(QString meshPath)

@@ -280,37 +280,55 @@ void Mesh::draw(GraphicsDevicePtr device)
 
 MeshPtr Mesh::loadMesh(QString filePath)
 {
-    // legacy -- update TODO
-    Assimp::Importer importer;
-    const aiScene *scene;
+	// legacy -- update TODO
+	Assimp::Importer importer;
+	const aiScene *scene;
 
-    if (filePath.startsWith(":") || filePath.startsWith("qrc:")) {
-        // loads mesh from resource
-        QFile file(filePath);
-        file.open(QIODevice::ReadOnly);
-        auto data = file.readAll();
-        scene = importer.ReadFileFromMemory((void*)data.data(),
-                                            data.length(),
-                                            aiProcessPreset_TargetRealtime_Fast);
-    } else {
-        scene = importer.ReadFile(filePath.toStdString().c_str(),
-                                  aiProcessPreset_TargetRealtime_Fast);
-    }
+	QFile file(filePath);
+	if (!file.exists())
+	{
+		irisLog("model " + filePath + " does not exists");
+		return MeshPtr();
+	}
 
-    auto mesh = scene->mMeshes[0];
-    auto meshObj = new Mesh(scene->mMeshes[0]);
-    auto skel = extractSkeleton(mesh, scene);
+	if (filePath.startsWith(":") || filePath.startsWith("qrc:")) {
+		// loads mesh from resource
+		file.open(QIODevice::ReadOnly);
+		auto data = file.readAll();
+		scene = importer.ReadFileFromMemory((void*)data.data(),
+			data.length(),
+			aiProcessPreset_TargetRealtime_Fast);
+	}
+	else {
+		// load mesh from file
+		scene = importer.ReadFile(filePath.toStdString().c_str(),
+			aiProcessPreset_TargetRealtime_Fast);
+	}
 
-    if (!!skel)
-        meshObj->setSkeleton(skel);
+	if (!scene) {
+		irisLog("model " + filePath + ": error parsing file");
+		return MeshPtr();
+	}
 
-    auto anims = extractAnimations(scene);
-    for (auto animName : anims.keys())
-    {
-        meshObj->addSkeletalAnimation(animName, anims[animName]);
-    }
+	if (scene->mNumMeshes <= 0) {
+		irisLog("model " + filePath + ": scene has no meshes");
+		return MeshPtr();
+	}
 
-    return MeshPtr(meshObj);
+	auto mesh = scene->mMeshes[0];
+	auto meshObj = new Mesh(scene->mMeshes[0]);
+	auto skel = extractSkeleton(mesh, scene);
+
+	if (!!skel)
+		meshObj->setSkeleton(skel);
+
+	auto anims = extractAnimations(scene);
+	for (auto animName : anims.keys())
+	{
+		meshObj->addSkeletalAnimation(animName, anims[animName]);
+	}
+
+	return MeshPtr(meshObj);
 }
 
 MeshPtr Mesh::loadAnimatedMesh(QString filePath)

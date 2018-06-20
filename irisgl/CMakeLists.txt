@@ -104,6 +104,7 @@ set(SRCS
     src/graphics/depthstate.cpp
     src/graphics/rasterizerstate.cpp
     src/content/contentmanager.cpp
+    src/content/modelloader.cpp
     src/libovr/Src/OVR_CAPI_Util.cpp
     src/libovr/Src/OVR_StereoProjection.cpp
     src/libovr/Src/OVR_CAPIShim.c
@@ -196,6 +197,7 @@ set (HEADERS
     src/graphics/depthstate.h
     src/graphics/rasterizerstate.h
     src/content/contentmanager.h
+	src/content/modelloader.h
     src/libovr/Include/OVR_CAPI.h
     src/libovr/Include/OVR_CAPI_Audio.h
     src/libovr/Include/OVR_CAPI_D3D.h

@@ -7,10 +7,14 @@
 namespace iris
 {
 
+class ModelLoader;
+
 // this class is in charge of loading and caching all assets
 class ContentManager
 {
     GraphicsDevicePtr graphics;
+
+	ModelLoader* modelLoader;
 
     ContentManager(GraphicsDevicePtr graphics);
 public:

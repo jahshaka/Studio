@@ -16,7 +16,11 @@ public:
     QMatrix4x4 inversePoseMatrix;// skeleton space
     QMatrix4x4 poseMatrix;// skeleton space
     QMatrix4x4 transformMatrix;// skeleton space
+
     QMatrix4x4 localMatrix;// local space
+	// local
+	QVector3D pos, scale;
+	QQuaternion rot;
 
     QMatrix4x4 skinMatrix;// final transform sent to the shader
 

@@ -27,8 +27,12 @@ namespace iris
 
 class Model
 {
+	friend class ModelLoader;
+
     SkeletonPtr skeleton;
     QMap<QString, SkeletalAnimationPtr> skeletalAnimations;
+	SkeletalAnimationPtr activeAnimation;
+	float animTime;
 
 	QList<MeshPtr> meshes;
 	GraphicsDevicePtr device;
@@ -46,12 +50,13 @@ public:
 	AABB getAABB() { return aabb; }
 	BoundingSphere getBoundingSphere() { return boundingSphere; }
 
+	void updateAnimation(float dt);
     void draw(GraphicsDevicePtr device);
 	
     ~Model();
 private:
-	Model(QList<MeshPtr> meshes);
-	Model(QList<MeshPtr> meshes, SkeletonPtr skeleton);
+	explicit Model(QList<MeshPtr> meshes);
+	Model(QList<MeshPtr> meshes, QMap<QString, SkeletalAnimationPtr> skeletalAnimations);
 };
 
 }
