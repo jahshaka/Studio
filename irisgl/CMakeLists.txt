@@ -85,6 +85,7 @@ set(SRCS
     src/scenegraph/scenenode.cpp
     src/geometry/plane.cpp
     src/geometry/frustum.cpp
+    src/geometry/aabb.cpp
     src/core/logger.cpp
     src/graphics/renderlist.cpp
     src/graphics/renderitem.cpp
@@ -174,6 +175,7 @@ set (HEADERS
     src/geometry/boundingsphere.h
     src/geometry/plane.h
     src/geometry/frustum.h
+    src/geometry/aabb.h
     src/math/transform.h
     src/core/logger.h
     src/core/performancetimer.h
@@ -207,6 +209,7 @@ set (HEADERS
     src/zip/zip.h
     src/physics/environment.h
     src/physics/physicshelper.h
+    src/physics/physicsproperties.h
 )
 
 qt5_wrap_cpp(HEADERS_moc ${HEADERS})

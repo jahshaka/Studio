@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include <QVector3D>
 #include <QLabel>
 #include <QCheckBox>
+#include <QMenu>
 #include "irisglfwd.h"
 #include "misc/QtAwesome.h"
 #include "misc/QtAwesomeAnim.h"
@@ -43,6 +44,7 @@ class QTreeWidgetItem;
 class QTreeWidget;
 class QIcon;
 class QUndoStack;
+class QToolButton;
 
 class TransformSlidersUi;
 class LightLayerWidget;
@@ -81,6 +83,8 @@ class MaterialPreset;
 class AssetWidget;
 // class SceneNodePropertiesWidget;
 
+class AssetFavorites;
+
 #include "widgets/scenenodepropertieswidget.h"
 
 class QOpenGLFunctions_3_2_Core;
@@ -102,6 +106,12 @@ enum class Widget
 	TIMELINE,
 	PRESETS
 };
+
+#include <QJsonObject>
+#include "irisgl/src/scenegraph/lightnode.h"
+#include "irisgl/src/graphics/shadowmap.h"
+#include "irisgl/src/core/irisutils.h"
+#include "irisgl/src/graphics/texture2d.h"
 
 class Database;
 class MainWindow : public QMainWindow
@@ -145,6 +155,8 @@ public:
      */
     void applyMaterialPreset(MaterialPreset* preset);
 
+    void favoriteItem(const QListWidgetItem *item);
+
     /**
      * Returns absolute path of file copied as an asset
      * @param relToApp file path relative to application
@@ -156,6 +168,59 @@ public:
     void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
     void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
     void repopulateSceneTree();
+
+    iris::ShadowMapType evalShadowMapType(QString shadowType)
+    {
+        if (shadowType == "hard")
+            return iris::ShadowMapType::Hard;
+        if (shadowType == "soft")
+            return iris::ShadowMapType::Soft;
+        if (shadowType == "softer")
+            return iris::ShadowMapType::Softer;
+
+        return iris::ShadowMapType::None;
+    }
+
+    iris::LightType getLightTypeFromName(QString lightType)
+    {
+        if (lightType == "point")       return iris::LightType::Point;
+        if (lightType == "directional") return iris::LightType::Directional;
+        if (lightType == "spot")        return iris::LightType::Spot;
+
+        return iris::LightType::Point;
+    }
+
+    iris::LightNodePtr createLight(QJsonObject& nodeObj)
+    {
+        auto lightNode = iris::LightNode::create();
+
+        lightNode->setLightType(getLightTypeFromName(nodeObj["lightType"].toString()));
+        lightNode->intensity = (float) nodeObj["intensity"].toDouble(1.0f);
+        lightNode->distance = (float) nodeObj["distance"].toDouble(1.0f);
+        lightNode->spotCutOff = (float) nodeObj["spotCutOff"].toDouble(30.0f);
+        lightNode->color = IrisUtils::readColor(nodeObj["color"].toObject());
+        lightNode->setVisible(nodeObj["visible"].toBool(true));
+
+        //shadow data
+        auto shadowMap = lightNode->shadowMap;
+        shadowMap->bias = (float) nodeObj["shadowBias"].toDouble(0.0015f);
+        // ensure shadow map size isnt too big ro too small
+        auto res = qBound(512, nodeObj["shadowSize"].toInt(1024), 4096);
+        shadowMap->setResolution(res);
+        shadowMap->shadowType = evalShadowMapType(nodeObj["shadowType"].toString());
+
+        //TODO: move this to the sceneview widget or somewhere more appropriate
+        if (lightNode->lightType == iris::LightType::Directional) {
+            lightNode->icon = iris::Texture2D::load(":/icons/light.png");
+        }
+        else {
+            lightNode->icon = iris::Texture2D::load(":/icons/bulb.png");
+        }
+
+        lightNode->iconSize = 0.5f;
+
+        return lightNode;
+    }
 
 private:
 	//set up miner
@@ -225,13 +290,15 @@ public slots:
     void addViewer();
     void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
 	void addMaterialMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D(), const QString &guid = QString(), const QString &name = QString());
+    void addAssetParticleSystem(bool ignore, QVector3D position, QString guid, QString assetName);
     void addDragPlaceholder();
 
     //context menu functions
     void duplicateNode();
 	void createMaterial();
 	void exportNode(const iris::SceneNodePtr &node);
-	void exportNodes(const QStringList &assetGuids);
+	void exportNodes(iris::SceneNodePtr node, const QStringList &assetGuids);
+    void exportParticleSystem(const iris::SceneNodePtr &node);
     void deleteNode();
 
     void addPointLight();
@@ -266,6 +333,8 @@ public slots:
     iris::ScenePtr createDefaultScene();
     void initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*);
 
+    void initializePhysicsWorld();
+
     void useFreeCamera();
     void useArcballCam();
 
@@ -280,6 +349,7 @@ public slots:
 
     void takeScreenshot();
     void toggleLightWires(bool state);
+    void toggleDebugDrawer(bool state);
     void showProjectManagerInternal();
 
 private slots:
@@ -374,7 +444,9 @@ private:
     QWidget *controlBar;
     QWidget *playerControls;
     QPushButton *playSceneBtn;
+    QMenu *wireFramesMenu;
     QCheckBox *wireCheckBtn;
+    QToolButton *wireFramesButton;
     QPushButton *restartBtn;
     QPushButton *playBtn;
     QPushButton *stopBtn;
@@ -383,6 +455,9 @@ private:
     AssetView *_assetView;
 	QAction *actionSaveScene;
 
+    QAction *wireCheckAction;
+    QAction *physicsCheckAction;
+
 	QVector<bool> widgetStates;	// use the order in the enum
 
     WindowSpaces currentSpace;
@@ -390,6 +465,13 @@ private:
 
 	MinerUI *miner;
 	QPushButton *playSimBtn;
+	QPushButton *restartSimBtn;
+
+    QAction *actionTranslate;
+    QAction *actionRotate;
+    QAction *actionScale;
+
+    AssetFavorites *assetFavorites;
 };
 
 #endif // MAINWINDOW_H

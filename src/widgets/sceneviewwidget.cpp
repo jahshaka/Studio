@@ -181,11 +181,18 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 	qDebug() << roleDataMap.value(2).toString();
 	qDebug() << roleDataMap.value(3).toString();
 
+    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::ParticleSystem)) {
+        auto ppos = dragScenePos;
+        emit addDroppedParticleSystem(
+            true, ppos, roleDataMap.value(3).toString(), roleDataMap.value(1).toString()
+        );
+    }
+
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
         auto ppos = dragScenePos;
         emit addDroppedMesh(
-                QDir(Globals::project->getProjectFolder()).filePath(roleDataMap.value(2).toString()),
-                true, ppos, roleDataMap.value(3).toString(), roleDataMap.value(1).toString()
+            QDir(Globals::project->getProjectFolder()).filePath(roleDataMap.value(2).toString()),
+            true, ppos, roleDataMap.value(3).toString(), roleDataMap.value(1).toString()
         );
     }
 
@@ -330,9 +337,19 @@ void SceneViewWidget::setShowLightWires(bool value)
     showLightWires = value;
 }
 
+void SceneViewWidget::toggleDebugDrawFlags(bool value)
+{
+    scene->getPhysicsEnvironment()->toggleDebugDrawFlags(value);
+}
+
 void SceneViewWidget::startPhysicsSimulation()
 {
-	scene->getPhysicsEnvironment()->simulatePhysics();
+    scene->getPhysicsEnvironment()->simulatePhysics();
+}
+
+void SceneViewWidget::restartPhysicsSimulation()
+{
+    scene->getPhysicsEnvironment()->restartPhysics();
 }
 
 void SceneViewWidget::stopPhysicsSimulation()
@@ -1376,6 +1393,12 @@ void SceneViewWidget::removeBodyFromWorld(btRigidBody *body)
 void SceneViewWidget::removeBodyFromWorld(const QString &guid)
 {
     scene->getPhysicsEnvironment()->removeBodyFromWorld(guid);
+}
+
+void SceneViewWidget::addConstraintToWorldFromProperty(const iris::ConstraintProperty &prop)
+{
+    auto constraint = iris::PhysicsHelper::createConstraintFromProperty(scene->getPhysicsEnvironment(), prop);
+    scene->getPhysicsEnvironment()->addConstraintToWorld(constraint);
 }
 
 void SceneViewWidget::setGizmoLoc()

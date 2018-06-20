@@ -59,6 +59,9 @@ For more information see the LICENSE file
 #include "../irisgl/src/postprocesses/ssaopostprocess.h"
 #include "../irisgl/src/postprocesses/fxaapostprocess.h"
 
+#include "irisgl/src/physics/physicsproperties.h"
+#include "irisgl/src/physics/physicshelper.h"
+
 iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
                                       iris::PostProcessManagerPtr postMan,
@@ -381,7 +384,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     QString source = nodeObj["mesh"].toString("");
 	// Keep a special reference to embedded asset primitives for now
 	if (!source.startsWith(":")) {
-		source = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
+        source = IrisUtils::join(assetDirectory, asset.name);
 	}
 
     int meshIndex = nodeObj["meshIndex"].toInt(0);
@@ -421,6 +424,33 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     }
 
     meshNode->applyDefaultPose();
+
+    meshNode->isPhysicsBody = nodeObj["physicsObject"].toBool();
+
+    if (meshNode->isPhysicsBody) {
+        QJsonObject physicsDef = nodeObj["physicsProperties"].toObject();
+        meshNode->physicsProperty.centerOfMass          = readVector3(physicsDef["centerOfMass"].toObject());
+        meshNode->physicsProperty.isStatic              = physicsDef["static"].toBool();
+        meshNode->physicsProperty.objectCollisionMargin = physicsDef["collisionMargin"].toDouble();
+        meshNode->physicsProperty.objectDamping         = physicsDef["damping"].toDouble();
+        meshNode->physicsProperty.objectMass            = physicsDef["mass"].toDouble();
+        meshNode->physicsProperty.objectRestitution     = physicsDef["bounciness"].toDouble();
+        meshNode->physicsProperty.pivotPoint            = readVector3(physicsDef["pivot"].toObject());
+        meshNode->physicsProperty.shape                 = static_cast<iris::PhysicsCollisionShape>(physicsDef["shape"].toInt());
+        meshNode->physicsProperty.type                  = static_cast<iris::PhysicsType>(physicsDef["type"].toInt());
+
+        QJsonArray constraints = physicsDef["constraints"].toArray();
+        for (const auto &constraint : constraints) {
+            QJsonObject constraintObject = constraint.toObject();
+
+            iris::ConstraintProperty constraintProp;
+            constraintProp.constraintFrom = constraintObject.value("constraintFrom").toString();
+            constraintProp.constraintTo = constraintObject.value("constraintTo").toString();
+            constraintProp.constraintType = static_cast<iris::PhysicsConstraintType>(constraintObject.value("constraintType").toInt());
+            
+            meshNode->physicsProperty.constraints.append(constraintProp);
+        }
+    }
 
     return meshNode;
 }
@@ -486,6 +516,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
 {
     auto particleNode = iris::ParticleSystemNode::create();
 
+    particleNode->setGUID(nodeObj["guid"].toString());
     particleNode->setPPS((float) nodeObj["particlesPerSecond"].toDouble(1.0f));
     particleNode->setParticleScale((float) nodeObj["particleScale"].toDouble(1.0f));
     particleNode->setDissipation(nodeObj["dissipate"].toBool());
@@ -496,7 +527,10 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     particleNode->setLife((float) nodeObj["lifeLength"].toDouble(1.0f));
     particleNode->setName(nodeObj["name"].toString());
     particleNode->setSpeed((float) nodeObj["speed"].toDouble(1.0f));
-    particleNode->setTexture(iris::Texture2D::load(getAbsolutePath(nodeObj["texture"].toString())));
+
+    QString textureStr = QDir(assetDirectory).filePath(handle->fetchAsset(nodeObj["texture"].toString()).name);
+
+    particleNode->setTexture(iris::Texture2D::load(getAbsolutePath(textureStr)));
 	particleNode->setVisible(nodeObj["visible"].toBool(true));
 
     return particleNode;
@@ -566,22 +600,38 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
         m->generate(shaderFile.absoluteFilePath());
     }
     else {
-        for (auto asset : AssetManager::getAssets()) {
-            if (asset->type == ModelTypes::Shader) {
-                if (asset->assetGuid == m->getGuid()) {
-                    auto def = asset->getValue().toJsonObject();
-                    auto vertexShader = def["vertex_shader"].toString();
-                    auto fragmentShader = def["fragment_shader"].toString();
-                    for (auto asset : AssetManager::getAssets()) {
-                        if (asset->type == ModelTypes::File) {
-                            if (vertexShader == asset->assetGuid) vertexShader = asset->path;
-                            if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
-                        }
-                    }
-                    def["vertex_shader"] = vertexShader;
-                    def["fragment_shader"] = fragmentShader;
+        if (useAlternativeLocation) {
+            auto shader = handle->fetchAssetData(shaderGuid);
+            QJsonObject shaderDefinition = QJsonDocument::fromBinaryData(shader).object();
 
-                    m->generate(def);
+            if (!shaderDefinition.isEmpty()) {
+                auto vAsset = handle->fetchAsset(shaderDefinition["vertex_shader"].toString());
+                auto fAsset = handle->fetchAsset(shaderDefinition["fragment_shader"].toString());
+
+                if (!vAsset.name.isEmpty()) shaderDefinition["vertex_shader"] = QDir(assetDirectory).filePath(vAsset.name);
+                if (!fAsset.name.isEmpty()) shaderDefinition["fragment_shader"] = QDir(assetDirectory).filePath(fAsset.name);
+                
+                m->generate(shaderDefinition);
+            }
+        }
+        else {
+            for (auto asset : AssetManager::getAssets()) {
+                if (asset->type == ModelTypes::Shader) {
+                    if (asset->assetGuid == m->getGuid()) {
+                        auto def = asset->getValue().toJsonObject();
+                        auto vertexShader = def["vertex_shader"].toString();
+                        auto fragmentShader = def["fragment_shader"].toString();
+                        for (auto asset : AssetManager::getAssets()) {
+                            if (asset->type == ModelTypes::File) {
+                                if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+                                if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+                            }
+                        }
+                        def["vertex_shader"] = vertexShader;
+                        def["fragment_shader"] = fragmentShader;
+
+                        m->generate(def);
+                    }
                 }
             }
         }
@@ -590,9 +640,9 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
     for (auto prop : m->properties) {
         if (mat.contains(prop->name)) {
             if (prop->type == iris::PropertyType::Texture) {
-				auto textureStr = !mat[prop->name].toString().isEmpty()
-					? QDir(Globals::project->getProjectFolder()).filePath(handle->fetchAsset(mat[prop->name].toString()).name)
-					: QString();
+                QString textureStr = !mat[prop->name].toString().isEmpty()
+                        ? QDir(assetDirectory).filePath(handle->fetchAsset(mat[prop->name].toString()).name)
+                        : QString();
 
                 m->setValue(prop->name, textureStr);
             } else {
@@ -609,22 +659,20 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
     if (!assimpScenes.contains(filePath)) {
         QList<iris::MeshPtr> meshList;
         QMap<QString, iris::SkeletalAnimationPtr> animationss;
-        iris::GraphicsHelper::loadAllMeshesAndAnimationsFromStore<Asset*>(AssetManager::getAssets(),
-                                                                          filePath,
-                                                                          meshList,
-                                                                          animationss);
+        
+        if (useAlternativeLocation) {
+		    iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(filePath, meshList, animationss);
+        }
+        else {
+            iris::GraphicsHelper::loadAllMeshesAndAnimationsFromStore<Asset*>(AssetManager::getAssets(),
+                filePath,
+                meshList,
+                animationss);
+        }
 
-		//iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(filePath, meshList, animationss);
-
-        meshes.insert(filePath,meshList);
+        meshes.insert(filePath, meshList);
         assimpScenes.insert(filePath);
         animations.insert(filePath, animationss);
-
-//        auto relPath = QDir(Globals::project->folderPath).relativeFilePath(filename);
-//        for(auto anim : node->getAnimations()) {
-//            if (!!anim->skeletalAnimation)
-//                anim->skeletalAnimation->source = relPath;
-//        }
     }
 }
 

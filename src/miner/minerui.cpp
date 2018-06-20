@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 
 #include "minerui.h"
 #include <QComboBox>
@@ -97,6 +108,7 @@ void MinerUI::configureUI()
 	advance = new QAction("advance");
 	advance->setText(QChar(fa::sliders));
 	advance->setFont(fontIcon.font(15));
+	advance->hide();
 	close = new QAction("X");
 	close->setText(QChar(fa::times));
 	close->setFont(fontIcon.font(15));

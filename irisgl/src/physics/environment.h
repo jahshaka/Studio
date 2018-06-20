@@ -76,11 +76,12 @@ public:
     ~Environment();
 
     QHash<QString, btRigidBody*> hashBodies;
-    QVector<btTypedConstraint*> constraints;
 
 	void addBodyToWorld(btRigidBody *body, const QString &guid);
 	void removeBodyFromWorld(btRigidBody *body);
 	void removeBodyFromWorld(const QString &guid);
+
+    void storeCollisionShape(btCollisionShape *shape);
 
     void addConstraintToWorld(btTypedConstraint *constraint, bool disableCollisions = true);
     void removeConstraintFromWorld(btTypedConstraint *constraint);
@@ -89,8 +90,14 @@ public:
 
     // These are special functions used for creating a constraint to drag bodies
 	void simulatePhysics();
+	bool isSimulating();
 	void stopPhysics();
 	void stepSimulation(float delta);
+    void toggleDebugDrawFlags(bool state = false);
+
+    void restartPhysics();
+    void createPhysicsWorld();
+    void destroyPhysicsWorld();
 
 private:
     btCollisionConfiguration    *collisionConfig;
@@ -100,7 +107,11 @@ private:
     btDynamicsWorld             *world;
 
     QVector<btRigidBody*> bodies;
+    QVector<btTypedConstraint*> constraints;
+    btAlignedObjectArray<btCollisionShape*>	collisionShapes;
+
     bool simulating;
+    bool simulationStarted;
 
     iris::MaterialPtr lineMat;
     iris::RenderList *debugRenderList;

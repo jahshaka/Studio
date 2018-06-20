@@ -517,7 +517,7 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
 
    vrDevice->bindMirrorTextureId();
    //vrDevice->bindEyeTexture(0);
-   fsQuad->draw(graphics);
+   fsQuad->draw(graphics, true);
    gl->glBindTexture(GL_TEXTURE_2D,0);
 
    scene->geometryRenderList->clear();

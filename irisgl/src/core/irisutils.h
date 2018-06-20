@@ -12,8 +12,11 @@ For more information see the LICENSE file
 #ifndef IRISUTILS_H
 #define IRISUTILS_H
 
-#include <QDir>
+#include <QColor>
 #include <QCoreApplication>
+#include <QDir>
+#include <QJsonObject>
+#include <QVector3D>
 
 #ifdef Q_OS_WIN32
     #include <Windows.h>
@@ -39,6 +42,29 @@ public:
         int unpack[]{ 0, (result += [=](QString const& s) { return s + "/"; }(args), 0) ... };
         static_cast<void>(unpack);
         return QDir::cleanPath(result);
+    }
+
+    static QVector3D readVector3(const QJsonObject &vecObj) {
+        if (vecObj.isEmpty()) return QVector3D();
+
+        QVector3D vec;
+        vec.setX(vecObj["x"].toDouble(0));
+        vec.setY(vecObj["y"].toDouble(0));
+        vec.setZ(vecObj["z"].toDouble(0));
+
+        return vec;
+    }
+
+    static QColor readColor(const QJsonObject &colorObj) {
+        if (colorObj.isEmpty()) return QColor();
+
+        QColor col;
+        col.setRed(colorObj["r"].toInt(0));
+        col.setGreen(colorObj["g"].toInt(0));
+        col.setBlue(colorObj["b"].toInt(0));
+        col.setAlpha(colorObj["a"].toInt(255));
+
+        return col;
     }
 
     static bool removeDir(const QString &path) {

@@ -12,10 +12,13 @@ For more information see the LICENSE file
 #ifndef SCENENODE_H
 #define SCENENODE_H
 
-#include "../irisglfwd.h"
+
 #include <QQuaternion>
 #include <QMatrix4x4>
 #include <QVector3D>
+
+#include "irisglfwd.h"
+#include "physics/physicsproperties.h"
 
 namespace iris
 {
@@ -29,47 +32,7 @@ enum class SceneNodeType {
     Viewer
 };
 
-enum class PhysicsCollisionShape : int
-{
-    None,
-    Plane,
-    Sphere,
-    Cube,
-    ConvexHull,
-    TriangleMesh
-};
-
-enum class PhysicsConstraintType : int
-{
-    None,
-    Ball,
-    Dof6
-};
-
-struct PhysicsProperty
-{
-    // Fairly sane defaults...
-    PhysicsProperty() {
-        objectMass = 1.f;
-        objectRestitution = .1f;
-        objectDamping = .1f;
-        objectCollisionMargin = .1f;
-        isVisible = true;
-        isStatic = false;
-        shape = PhysicsCollisionShape::None;
-    }
-
-    float objectMass;
-    float objectRestitution;
-    float objectDamping;
-    float objectCollisionMargin;
-    bool isVisible;
-    bool isStatic;
-    PhysicsCollisionShape shape;
-    QVector3D centerOfMass;
-    QVector3D pivotPoint;
-};
-
+class PhysicsProperty;
 class Property;
 class Animation;
 class PropertyAnim;

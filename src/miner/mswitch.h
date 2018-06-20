@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef MSWITCH_H
 #define MSWITCH_H
 
@@ -12,9 +23,10 @@ class MSwitch : public QSlider
     Q_PROPERTY(QColor onColor1 READ onColor1 WRITE setOnColor1 )
 
 public:
+
     MSwitch(QWidget *parent = Q_NULLPTR);
     ~MSwitch();
-    void setSizeOfSwitch(int a);
+    void setSizeOfSwitch(int size);
     void setColor(QColor col);
     void setOnColor1(QColor col);
     QColor onColor1();
@@ -23,6 +35,7 @@ public:
     void setChecked(bool val);
     bool isChecked();
     void simulateClick();
+
 private:
     bool isOn = false;
     QRect boundingRect;
@@ -44,7 +57,7 @@ protected:
 
 signals:
     void switchPressed(bool b);
-    void stateChanged(int val);
+    void stateChanged(int value);
 };
 
 #endif // MSWITCH_H

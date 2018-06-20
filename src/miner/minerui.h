@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef MINERUI_H
 #define MINERUI_H
 
@@ -41,6 +52,7 @@ class GraphicsCardUI : public QWidget
 {
 	Q_OBJECT
 public:
+
         GraphicsCardUI(QWidget *parent = Q_NULLPTR);
 
         void setCardName(QString name);
@@ -56,6 +68,9 @@ public:
         void setMinerProcess(MinerProcess* process);
         void startMining();
         void stopMining();
+
+
+
 private:
 	MinerChart * info;
 	QWidget *additional;

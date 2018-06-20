@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef ASSETWIDGET_H
 #define ASSETWIDGET_H
 
@@ -33,6 +44,8 @@ struct AssetItem {
 #include <QApplication>
 #include <QStyledItemDelegate>
 #include <QPainter>
+
+class MainWindow;
 
 class ListViewDelegate : public QStyledItemDelegate
 {
@@ -215,6 +228,7 @@ public:
 	void addItem(const AssetRecord &assetData);
 	void addCrumbs(const QVector<FolderRecord> &folderData);
     void updateAssetView(const QString &path, bool showDependencies = false);
+    void updateAssetContentsView(const QString &guid);
     void trigger();
     void refresh();
 
@@ -229,6 +243,12 @@ public:
 		QStringList &textureList,
 		QJsonObject &material
 	);
+
+    void setMainWindow(MainWindow* mainWindow) {
+        this->mainWindow = mainWindow;
+    }
+
+    MainWindow *mainWindow;
 
 	SceneViewWidget *sceneView;
 
@@ -254,11 +274,14 @@ protected slots:
 
     void renameTreeItem();
     void renameViewItem();
+    void favoriteItem();
 
 	void editFileExternally();
 	void exportTexture();
 	void exportMaterial();
+	void exportMaterialPreview();
 	void exportShader();
+	void exportAssetPack();
 
     void searchAssets(QString);
     void OnLstItemsCommitData(QWidget*);
@@ -290,9 +313,14 @@ private:
 	QPushButton *toggleIconView;
 	QPushButton *toggleListView;
 
+	QPushButton *goBackOneControl;  // goes to previous dir
+	QPushButton *goUpOneControl;    // goes to parent dir
+
 	QSize iconSize;
 	QSize listSize;
 	QSize currentSize;
+
+    bool draggingItem;
 };
 
 #endif // ASSETWIDGET_H

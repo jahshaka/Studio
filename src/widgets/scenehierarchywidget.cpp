@@ -357,20 +357,25 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 			}
 		};
 
-		if (node->getSceneNodeType() == iris::SceneNodeType::Empty) {
-			QAction *exportAsset = subMenu->addAction("Export Object");
+		//if (node->getSceneNodeType() == iris::SceneNodeType::Empty) {
+		//	QAction *exportAsset = subMenu->addAction("Export Object");
 
-			QStringList assetGuids;
-			getChildGuids(node, assetGuids);
-			connect(exportAsset, &QAction::triggered, this, [assetGuids, this]() { mainWindow->exportNodes(assetGuids); });
-		}
+		//	QStringList assetGuids;
+		//	getChildGuids(node, assetGuids);
+		//	connect(exportAsset, &QAction::triggered, this, [assetGuids, this]() { mainWindow->exportNodes(assetGuids); });
+		//}
 
-		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh ||
+            node->getSceneNodeType() == iris::SceneNodeType::Empty)
+        {
             if (!node->isBuiltIn) {
                 QAction *exportAsset = subMenu->addAction("Export Object");
-                connect(exportAsset, &QAction::triggered, this, [this, node]() {
-                    exportNode(node);
-                });
+                //connect(exportAsset, &QAction::triggered, this, [this, node]() {
+                //    exportNode(node);
+                //});
+                QStringList assetGuids;
+                getChildGuids(node, assetGuids);
+                connect(exportAsset, &QAction::triggered, this, [assetGuids, node, this]() { mainWindow->exportNodes(node, assetGuids); });
             }
 
 			QAction *exportMat = subMenu->addAction("Create Material");
@@ -382,7 +387,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 			QAction *exportPSystem = subMenu->addAction("Export Particle System");
 
 			connect(exportPSystem, &QAction::triggered, this, [this, node]() {
-				exportParticleSystem(node);
+                mainWindow->exportParticleSystem(node);
 			});
 		}
 	}
@@ -392,10 +397,11 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 
 void SceneHierarchyWidget::constraintsPicked(int ix, iris::PhysicsConstraintType type)
 {
+    QString constraintGuidTo = box->itemData(ix).toString();
     // Adds this constraint to two rigid bodies, the first is the currently selected node/body
     // The second is selected from a menu ... TODO - do an interactive pick for selecting the second node
     auto bodyA = scene->getPhysicsEnvironment()->hashBodies.value(selectedNode->getGUID());
-    auto bodyB = scene->getPhysicsEnvironment()->hashBodies.value(box->itemData(ix).toString());
+    auto bodyB = scene->getPhysicsEnvironment()->hashBodies.value(constraintGuidTo);
 
     // Constraints must be defined in LOCAL SPACE...
     btVector3 pivotA = bodyA->getCenterOfMassTransform().getOrigin();
@@ -415,22 +421,32 @@ void SceneHierarchyWidget::constraintsPicked(int ix, iris::PhysicsConstraintType
     //qDebug() << pA.x() << pA.y() << pA.z();
     //qDebug() << pB.x() << pB.y() << pB.z();
 
-    qDebug() << frameA.getOrigin().x() << frameA.getOrigin().y() << frameA.getOrigin().z();
-    qDebug() << frameB.getOrigin().x() << frameB.getOrigin().y() << frameB.getOrigin().z();
+    //qDebug() << frameA.getOrigin().x() << frameA.getOrigin().y() << frameA.getOrigin().z();
+    //qDebug() << frameB.getOrigin().x() << frameB.getOrigin().y() << frameB.getOrigin().z();
 
     btTypedConstraint *constraint = Q_NULLPTR;
+
+    iris::ConstraintProperty constraintProperty;
+    constraintProperty.constraintFrom = selectedNode->getGUID();
+    constraintProperty.constraintTo = constraintGuidTo;
 
     if (type == iris::PhysicsConstraintType::Ball) {
         constraint = new btPoint2PointConstraint(
             *bodyA, *bodyB, frameA.getOrigin(), frameB.getOrigin()
         );
+
+        constraintProperty.constraintType = iris::PhysicsConstraintType::Ball;
     }
 
     if (type == iris::PhysicsConstraintType::Dof6) {
         constraint = new btGeneric6DofConstraint(
             *bodyA, *bodyB, frameA, frameB, true
         );
+
+        constraintProperty.constraintType = iris::PhysicsConstraintType::Dof6;
     }
+
+    selectedNode->physicsProperty.constraints.push_back(constraintProperty);
 
     constraint->setDbgDrawSize(btScalar(6));
 

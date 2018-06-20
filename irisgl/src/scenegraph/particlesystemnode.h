@@ -168,7 +168,6 @@ public:
 
 	SceneNodePtr createDuplicate() override;
 
-private:
     ParticleSystemNode();
 
     std::vector<Particle*> particles;
@@ -180,5 +179,8 @@ private:
 };
 
 }
+
+Q_DECLARE_METATYPE(iris::ParticleSystemNode)
+Q_DECLARE_METATYPE(iris::ParticleSystemNodePtr)
 
 #endif // PARTICLESYSTEMNODE_H

@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include "skeleton.h"
 #include "../animation/skeletalanimation.h"
 #include "../geometry/boundingsphere.h"
+#include "../geometry/aabb.h"
 
 #include <functional>
 
@@ -162,12 +163,7 @@ Mesh::Mesh(aiMesh* mesh)
                              QVector3D(b.x, b.y, b.z),
                              QVector3D(c.x, c.y, c.z));
     }
-    /*
-    gl->glGenBuffers(1, &indexBuffer);
-    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
-    gl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * indices.size(), indices.data(), GL_STATIC_DRAW);
-    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    */
+
     usesIndexBuffer = true;
     idxBuffer = IndexBuffer::create();
     idxBuffer->setData(indices.data(), sizeof(unsigned int) * indices.size());
@@ -176,8 +172,7 @@ Mesh::Mesh(aiMesh* mesh)
     numVerts = indices.size();
 
     this->setPrimitiveMode(PrimitiveMode::Triangles);
-
-    boundingSphere = calculateBoundingSphere(mesh);
+	calculateBounds(mesh);
 }
 
 //todo: extract trimesh from data
@@ -186,23 +181,7 @@ Mesh::Mesh(void* data,int dataSize,int numElements,VertexLayout* vertexLayout)
     lastShaderId = -1;
     triMesh = nullptr;
     numVerts = numElements;
-/*
-    gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
-    this->vertexLayout = vertexLayout;
 
-    gl->glGenVertexArrays(1,&vao);
-    gl->glBindVertexArray(vao);
-
-    GLuint vbo;
-    gl->glGenBuffers(1, &vbo);
-    gl->glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    gl->glBufferData(GL_ARRAY_BUFFER,dataSize,data,GL_STATIC_DRAW);
-
-    vertexLayout->bind();
-
-    gl->glBindBuffer(GL_ARRAY_BUFFER,0);
-    gl->glBindVertexArray(0);
-*/
     auto vb = VertexBuffer::create(*vertexLayout);
     vb->setData(data, dataSize);
     vertexBuffers.append(vb);
@@ -283,33 +262,7 @@ bool Mesh::hasSkeletalAnimations()
 {
     return skeletalAnimations.count() != 0;
 }
-/*
-void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,Material* mat)
-{
-    draw(gl,mat->program);
-}
 
-void Mesh::draw(QOpenGLFunctions_3_2_Core* gl,QOpenGLShaderProgram* program)
-{
-    if (program) {
-        auto programId = program->programId();
-        gl->glUseProgram(programId);
-    }
-
-    gl->glBindVertexArray(vao);
-    if(usesIndexBuffer)
-    {
-        gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,indexBuffer);
-        gl->glDrawElements(glPrimitive,numVerts,GL_UNSIGNED_INT,0);
-        gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
-    }
-    else
-    {
-        gl->glDrawArrays(glPrimitive,0,numVerts);
-    }
-    gl->glBindVertexArray(0);
-}
-*/
 void Mesh::draw(GraphicsDevicePtr device)
 {
 	// cant render a mesh that doesnt have any vertices
@@ -455,28 +408,6 @@ void Mesh::setVertexCount(const unsigned int count)
 
 void Mesh::addVertexArray(VertexAttribUsage usage,void* dataPtr,int size,GLenum type,int numComponents)
 {
-    /*
-    gl->glBindVertexArray(vao);
-
-    GLuint bufferId;
-    gl->glGenBuffers(1, &bufferId);
-    gl->glBindBuffer(GL_ARRAY_BUFFER, bufferId);
-    gl->glBufferData(GL_ARRAY_BUFFER, size, dataPtr, GL_STATIC_DRAW);
-
-    auto data = VertexArrayData();
-    data.usage = usage;
-    data.numComponents = numComponents;
-    data.type = type;
-    data.bufferId = bufferId;
-
-    vertexArrays[(int)usage] = data;
-
-    gl->glVertexAttribPointer((GLuint)usage,numComponents,type,GL_FALSE,0,0);
-    gl->glEnableVertexAttribArray((int)usage);
-
-    gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
-    gl->glBindVertexArray(0);
-    */
     VertexLayout layout;
     int sizeInBytes = 0;
     switch(type) {
@@ -493,6 +424,17 @@ void Mesh::addVertexArray(VertexAttribUsage usage,void* dataPtr,int size,GLenum 
 void Mesh::addIndexArray(void* data,int size,GLenum type)
 {
 
+}
+
+void Mesh::calculateBounds(const aiMesh* mesh)
+{
+	aabb = AABB();
+	for (unsigned int i = 0; i<mesh->mNumVertices; i++) {
+		auto& vert = mesh->mVertices[i];
+		aabb.merge(QVector3D(vert.x, vert.y, vert.z));
+	}
+
+	boundingSphere = aabb.getMinimalEnclosingSphere();
 }
 
 // https://github.com/playcanvas/engine/blob/master/src/shape/bounding-sphere.js#L30

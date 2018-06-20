@@ -6,43 +6,18 @@ namespace iris
 
 Environment::Environment(iris::RenderList *debugList)
 {
-    collisionConfig = new btDefaultCollisionConfiguration(); 
-    dispatcher      = new btCollisionDispatcher(collisionConfig); 
-    broadphase      = new btDbvtBroadphase(); 
-    solver          = new btSequentialImpulseConstraintSolver(); 
-    world           = new btDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfig); 
+    createPhysicsWorld();
  
     simulating = false;
-
-    bodies.reserve(512); // for now
-    hashBodies.reserve(512); // also for now
-
-    // TODO - use constants file and make this changeable
-    world->setGravity(btVector3(0, -10.f, 0)); 
 
     debugRenderList = debugList;
     lineMat = iris::LineColorMaterial::create();
     lineMat.staticCast<iris::LineColorMaterial>()->setDepthBias(10.f);
-
-    debugDrawer = new GLDebugDrawer;
-    debugDrawer->setDebugMode(
-        GLDebugDrawer::DBG_DrawAabb |
-        GLDebugDrawer::DBG_DrawWireframe |
-        GLDebugDrawer::DBG_DrawConstraints |
-        GLDebugDrawer::DBG_DrawContactPoints |
-        GLDebugDrawer::DBG_DrawConstraintLimits |
-        GLDebugDrawer::DBG_DrawFrames
-    );
-    world->setDebugDrawer(debugDrawer);
 }
 
 Environment::~Environment()
 {
-    delete world;
-    delete solver;
-    delete broadphase;
-    delete dispatcher;
-    delete collisionConfig;
+    destroyPhysicsWorld();
 }
 
 void Environment::addBodyToWorld(btRigidBody *body, const QString &guid) 
@@ -62,7 +37,7 @@ void Environment::removeBodyFromWorld(btRigidBody *body)
     world->removeRigidBody(body);
     hashBodies.remove(hashBodies.key(body)); // ???
 
-    qDebug() << "BODY REMOVED TO WORLD " ;
+    qDebug() << "BODY REMOVED FROM WORLD " ;
     qDebug() << "There are " << hashBodies.size() << " bodies ";
 }
 
@@ -73,8 +48,13 @@ void Environment::removeBodyFromWorld(const QString &guid)
     world->removeRigidBody(hashBodies.value(guid));
     hashBodies.remove(guid);
 
-    qDebug() << "BODY REMOVED TO WORLD ";
+    qDebug() << "BODY REMOVED FROM WORLD ";
     qDebug() << "There are " << hashBodies.size() << " bodies ";
+}
+
+void Environment::storeCollisionShape(btCollisionShape *shape)
+{
+    collisionShapes.push_back(shape);
 }
 
 void Environment::addConstraintToWorld(btTypedConstraint *constraint, bool disableCollisions)
@@ -102,10 +82,19 @@ btDynamicsWorld *Environment::getWorld()
 void Environment::simulatePhysics()
 {
     simulating = true;
+    simulationStarted = true;
+}
+
+bool Environment::isSimulating()
+{
+    return simulationStarted;
 }
 
 void Environment::stopPhysics()
 {
+    // this is the original, we also want to be able to pause as well
+    // to "restart" a sim we have to cleanup and recreate it from scratch basically...
+	//simulating = false;
 	simulating = false;
 }
 
@@ -116,12 +105,110 @@ void Environment::stepSimulation(float delta)
 
     if (simulating) {
         world->stepSimulation(delta);
-        world->debugDrawWorld();
     }
+
+    world->debugDrawWorld();
 
     QMatrix4x4 transform;
     transform.setToIdentity();
     debugRenderList->submitMesh(builder.build(), lineMat, transform);
+}
+
+void Environment::toggleDebugDrawFlags(bool state)
+{
+    if (!state) {
+        debugDrawer->setDebugMode(GLDebugDrawer::DBG_NoDebug);
+    }
+    else {
+        debugDrawer->setDebugMode(
+            GLDebugDrawer::DBG_DrawAabb |
+            GLDebugDrawer::DBG_DrawWireframe |
+            GLDebugDrawer::DBG_DrawConstraints |
+            GLDebugDrawer::DBG_DrawContactPoints |
+            GLDebugDrawer::DBG_DrawConstraintLimits |
+            GLDebugDrawer::DBG_DrawFrames
+        );
+    }
+}
+
+void Environment::restartPhysics()
+{
+    destroyPhysicsWorld();
+    createPhysicsWorld();
+}
+
+void Environment::createPhysicsWorld()
+{
+    collisionConfig = new btDefaultCollisionConfiguration();
+    dispatcher = new btCollisionDispatcher(collisionConfig);
+    broadphase = new btDbvtBroadphase();
+    solver = new btSequentialImpulseConstraintSolver();
+    world = new btDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfig);
+
+    bodies.reserve(512); // for now
+    hashBodies.reserve(512); // also for now
+
+    world->setGravity(btVector3(0, -10.f, 0));
+
+    // http://bulletphysics.org/mediawiki-1.5.8/index.php/Bullet_Debug_drawer
+    debugDrawer = new GLDebugDrawer;
+    debugDrawer->setDebugMode(GLDebugDrawer::DBG_NoDebug);
+    world->setDebugDrawer(debugDrawer);
+}
+
+void Environment::destroyPhysicsWorld()
+{
+    //removePickingConstraint();
+
+    // this is rougly verbose the same thing as the exitPhysics() function in the bullet demos
+    if (world) {
+        int i;
+        for (i = world->getNumConstraints() - 1; i >= 0; i--) {
+            world->removeConstraint(world->getConstraint(i));
+        }
+
+        for (i = world->getNumCollisionObjects() - 1; i >= 0; i--) {
+            btCollisionObject* obj = world->getCollisionObjectArray()[i];
+            btRigidBody* body = btRigidBody::upcast(obj);
+            if (body && body->getMotionState()) {
+                delete body->getMotionState();
+            }
+            world->removeCollisionObject(obj);
+            delete obj;
+        }
+
+        // https://pybullet.org/Bullet/phpBB3/viewtopic.php?t=8148#p28087
+        btOverlappingPairCache* pair_cache = world->getBroadphase()->getOverlappingPairCache();
+        btBroadphasePairArray& pair_array = pair_cache->getOverlappingPairArray();
+        for (int i = 0; i < pair_array.size(); i++)
+            pair_cache->cleanOverlappingPair(pair_array[i], world->getDispatcher());
+    }
+
+    // delete collision shapes
+    for (int j = 0; j < collisionShapes.size(); j++) {
+        btCollisionShape* shape = collisionShapes[j];
+        delete shape;
+    }
+
+    collisionShapes.clear();
+
+    delete world;
+    world = 0;
+
+    delete solver;
+    solver = 0;
+
+    delete broadphase;
+    broadphase = 0;
+
+    delete dispatcher;
+    dispatcher = 0;
+
+    delete collisionConfig;
+    collisionConfig = 0;
+
+    bodies.clear();
+    hashBodies.clear();
 }
 
 }

@@ -5,23 +5,23 @@
 MSwitch::MSwitch(QWidget *parent): QSlider(parent),wHeight(28)
    {
        wWidth = wHeight*2;
-       //setWindowFlags(Qt::FramelessWindowHint |Qt::WindowStaysOnTopHint | Qt::X11BypassWindowManagerHint);
-       setFixedSize(wWidth,wHeight);
-       setRange(height()/(offset*2)*factor,(width()-height()+wHeight/(offset*2+1))*factor);
+        //setWindowFlags(Qt::FramelessWindowHint |Qt::WindowStaysOnTopHint | Qt::X11BypassWindowManagerHint);
+        setFixedSize(wWidth,wHeight);
+        setRange(height()/(offset*2)*factor,(width()-height()+wHeight/(offset*2+1))*factor);
 
-       startColor = QColor(230,230,230);
-       endColor = QColor(150,150,200);
-       onColor = QColor(250,250,250);
+        startColor = QColor(230,230,230);
+        endColor = QColor(150,150,200);
+        onColor = QColor(250,250,250);
 
-       boundingRect = QRect(offset,offset,width()-offset*2, height()-offset*2);
-       setCursor(Qt::PointingHandCursor);
+        boundingRect = QRect(offset,offset,width()-offset*2, height()-offset*2);
+        setCursor(Qt::PointingHandCursor);
    }
    MSwitch::~MSwitch(){
 
    }
 
    void MSwitch::setSizeOfSwitch(int size){
-        if(size == wHeight) return;
+      if(size == wHeight) return;
        wHeight = size;
        wWidth = 2*size;
        setFixedSize(wWidth,wHeight);

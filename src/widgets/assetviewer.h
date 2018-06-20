@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #include <QOpenGLWidget>
 #include <QElapsedTimer>
 #include <QTimer>
@@ -36,6 +47,8 @@
 
 #include "dialogs/progressdialog.h"
 
+#include "irisgl/src/graphics/shadowmap.h"
+
 class AssetViewer : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core, iris::IModelReadProgress
 {
     Q_OBJECT
@@ -58,6 +71,7 @@ public:
     void resetViewerCamera();
 	void resetViewerCameraAfter();
     void loadJafMaterial(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
+    void loadJafParticleSystem(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
     void loadJafShader(QString guid, QMap<QString, QString> &outGuids, bool firstAdd = true, bool cache = false, bool firstLoad = true);
     void loadJafModel(QString str, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
     void loadModel(QString str, bool firstAdd = true, bool cache = false, bool firstLoad = true);
@@ -98,6 +112,59 @@ public:
 			}
 		}
 	}
+
+    iris::ShadowMapType evalShadowMapType(QString shadowType)
+    {
+        if (shadowType == "hard")
+            return iris::ShadowMapType::Hard;
+        if (shadowType == "soft")
+            return iris::ShadowMapType::Soft;
+        if (shadowType == "softer")
+            return iris::ShadowMapType::Softer;
+
+        return iris::ShadowMapType::None;
+    }
+
+    iris::LightType getLightTypeFromName(QString lightType)
+    {
+        if (lightType == "point")       return iris::LightType::Point;
+        if (lightType == "directional") return iris::LightType::Directional;
+        if (lightType == "spot")        return iris::LightType::Spot;
+
+        return iris::LightType::Point;
+    }
+
+    iris::LightNodePtr createLight(QJsonObject& nodeObj)
+    {
+        auto lightNode = iris::LightNode::create();
+
+        lightNode->setLightType(getLightTypeFromName(nodeObj["lightType"].toString()));
+        lightNode->intensity = (float) nodeObj["intensity"].toDouble(1.0f);
+        lightNode->distance = (float) nodeObj["distance"].toDouble(1.0f);
+        lightNode->spotCutOff = (float) nodeObj["spotCutOff"].toDouble(30.0f);
+        lightNode->color = IrisUtils::readColor(nodeObj["color"].toObject());
+        lightNode->setVisible(nodeObj["visible"].toBool(true));
+
+        //shadow data
+        auto shadowMap = lightNode->shadowMap;
+        shadowMap->bias = (float) nodeObj["shadowBias"].toDouble(0.0015f);
+        // ensure shadow map size isnt too big ro too small
+        auto res = qBound(512, nodeObj["shadowSize"].toInt(1024), 4096);
+        shadowMap->setResolution(res);
+        shadowMap->shadowType = evalShadowMapType(nodeObj["shadowType"].toString());
+
+        //TODO: move this to the sceneview widget or somewhere more appropriate
+        if (lightNode->lightType == iris::LightType::Directional) {
+            lightNode->icon = iris::Texture2D::load(":/icons/light.png");
+        }
+        else {
+            lightNode->icon = iris::Texture2D::load(":/icons/bulb.png");
+        }
+
+        lightNode->iconSize = 0.5f;
+
+        return lightNode;
+    }
 
 	void orientCamera(QVector3D pos, QVector3D localRot, int distanceFromPivot) {
 		this->localPos = pos;
@@ -145,6 +212,7 @@ private:
 
     float getBoundingRadius(iris::SceneNodePtr node);
     void getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere>& spheres);
+	iris::AABB getNodeBoundingBox(iris::SceneNodePtr node);
 
     QVector3D localPos, localRot, lookAt;
 	int distanceFromPivot;

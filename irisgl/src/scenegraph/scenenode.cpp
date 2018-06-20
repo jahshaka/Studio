@@ -10,20 +10,23 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "scenenode.h"
-#include "scene.h"
-#include "../graphics/mesh.h"
-#include "../graphics/skeleton.h"
-#include "../scenegraph/meshnode.h"
-#include "../animation/keyframeset.h"
-#include "../animation/animation.h"
-#include "../animation/propertyanim.h"
-#include "../animation/animableproperty.h"
-#include "../animation/keyframeanimation.h"
-#include "../animation/skeletalanimation.h"
-#include "../core/property.h"
-#include "../math/mathhelper.h"
 
 #include <functional>
+
+#include "animation/animation.h"
+#include "animation/animableproperty.h"
+#include "animation/keyframeanimation.h"
+#include "animation/keyframeset.h"
+#include "animation/propertyanim.h"
+#include "animation/skeletalanimation.h"
+#include "core/property.h"
+#include "graphics/mesh.h"
+#include "graphics/skeleton.h"
+#include "math/mathhelper.h"
+#include "scene.h"
+#include "scenegraph/meshnode.h"
+
+#include <QUuid>
 
 namespace iris
 {
@@ -558,6 +561,11 @@ SceneNodePtr SceneNode::duplicate()
 	node->pickable		= this->pickable;
 	node->castShadow	= this->castShadow;
 	node->attached		= this->attached;
+
+    auto id = QUuid::createUuid();
+    auto guid = id.toString().remove(0, 1);
+    guid.chop(1);
+    node->setGUID(guid);
 
     for (auto &child : this->children) {
         if (child->isDuplicable()) {

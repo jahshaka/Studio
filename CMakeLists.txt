@@ -18,7 +18,7 @@ include(BuildType)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
 
-# set(CMAKE_AUTOMOC ON)
+ # set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -34,6 +34,8 @@ set(SRCS
     src/dialogs/aboutdialog.cpp 
     src/dialogs/preferences/worldsettings.cpp 
     src/dialogs/loadmeshdialog.cpp 
+	src/widgets/colorchooser.cpp 
+	src/widgets/colorcircle.cpp 
     src/widgets/animationwidget.cpp 
     src/widgets/keyframelabelwidget.cpp 
     src/widgets/keyframewidget.cpp 
@@ -49,6 +51,7 @@ set(SRCS
     src/widgets/sceneviewwidget.cpp 
     src/widgets/materialsets.cpp 
     src/widgets/modelpresets.cpp 
+    src/widgets/assetfavorites.cpp 
     src/widgets/accordianbladewidget.cpp 
     src/widgets/transformeditor.cpp 
     src/widgets/scenehierarchywidget.cpp 
@@ -131,6 +134,7 @@ set(SRCS
     src/misc/QtAwesome.cpp
     src/misc/QtAwesomeAnim.cpp
     src/dialogs/toast.cpp
+	src/helpers/tooltip.cpp
 )
 
 set(HEADERS
@@ -144,6 +148,8 @@ set(HEADERS
     src/helpers/collisionhelper.h 
     src/dialogs/infodialog.h 
     src/dialogs/loadmeshdialog.h 
+	src/widgets/colorchooser.h 
+	src/widgets/colorcircle.h 
     src/widgets/animationwidget.h 
     src/widgets/keyframelabelwidget.h 
     src/widgets/keyframewidget.h 
@@ -162,6 +168,7 @@ set(HEADERS
     src/widgets/sceneviewwidget.h 
     src/widgets/materialsets.h 
     src/widgets/modelpresets.h 
+    src/widgets/assetfavorites.h 
     src/widgets/accordianbladewidget.h 
     src/widgets/transformeditor.h 
     src/widgets/scenehierarchywidget.h 
@@ -256,6 +263,8 @@ set(HEADERS
     src/misc/QtAwesome.h
     src/misc/QtAwesomeAnim.h 
     src/dialogs/toast.h
+	src/helpers/tooltip.h
+
 )
 
 # Todo - trim these down to nothing eventually

@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "misc/updatechecker.h"
 #include "misc/upgrader.h"
 #include "dialogs/softwareupdatedialog.h"
+#include "helpers/tooltip.h"
 #ifdef USE_BREAKPAD
 #include "breakpad/breakpad.h"
 #endif
@@ -133,6 +134,7 @@ int main(int argc, char *argv[])
 
     splash.finish(&window);
 
+#ifndef QT_DEBUG
 	UpdateChecker updateChecker;
 	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded,
         [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)
@@ -147,6 +149,8 @@ int main(int argc, char *argv[])
     if (SettingsManager::getDefaultManager()->getValue("automatic_updates", true).toBool()) {
 		updateChecker.checkForUpdate();
     }
+#endif // QT_DEBUG
 
+	app.installEventFilter(new ToolTipHelper());
     return app.exec();
 }
