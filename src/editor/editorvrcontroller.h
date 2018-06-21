@@ -16,9 +16,20 @@ For more information see the LICENSE file
 #include "cameracontrollerbase.h"
 #include <QMatrix4x4>
 
+class VrHand
+{
+public:
+	iris::ModelPtr handModel;
+	QVector3D pos, scale;
+	QQuaternion rot;
+};
+
 class EditorVrController : public CameraControllerBase
 {
 public:
+	iris::ModelPtr leftHandModel;
+	iris::ModelPtr rightHandModel;
+
     iris::MeshPtr leftHandMesh;
     iris::MeshPtr rightHandMesh;
 

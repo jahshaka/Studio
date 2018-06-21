@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/graphics/renderitem.h"
 #include "../irisgl/src/graphics/material.h"
 #include "../irisgl/src/graphics/mesh.h"
+#include "../irisgl/src/graphics/model.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/vr/vrdevice.h"
 #include "../irisgl/src/vr/vrmanager.h"
