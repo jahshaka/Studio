@@ -17,8 +17,12 @@ For more information see the LICENSE file
 
 namespace iris
 {
+	void CameraNode::setProjection(CameraProjection projMode)
+	{
+		this->projMode = projMode;
+	}
 
-void CameraNode::lookAt(QVector3D target)
+	void CameraNode::lookAt(QVector3D target)
 {
     //todo: use global matrices
     QMatrix4x4 matrix;
@@ -28,7 +32,13 @@ void CameraNode::lookAt(QVector3D target)
     MathHelper::decomposeMatrix(matrix, pos, rot, scale);
 }
 
-QVector3D CameraNode::calculatePickingDirection(int viewPortWidth, int viewPortHeight,QPointF pos)
+	void CameraNode::setOrthagonalZoom(float size)
+	{
+		orthoSize = size;
+		updateCameraMatrices();
+	}
+
+	QVector3D CameraNode::calculatePickingDirection(int viewPortWidth, int viewPortHeight,QPointF pos)
 {
     float x = ((2.0f * pos.x()) / viewPortWidth) - 1.0f;
     float y = 1.0f - ((2.0f * pos.y()) / viewPortHeight);

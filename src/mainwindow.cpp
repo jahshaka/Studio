@@ -2850,12 +2850,38 @@ void MainWindow::setupToolBar()
 	actionFreeCamera->setIcon(Globals::fontIcons->icon(fa::eye, options));
 	toolBar->addAction(actionFreeCamera);
 
-    QAction *actionArcballCam = new QAction;
-    actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
-    actionArcballCam->setCheckable(true);
+	QAction *actionArcballCam = new QAction;
+	actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
+	actionArcballCam->setCheckable(true);
 	actionArcballCam->setToolTip("Arc Ball Camera | Move and orient the camera around a fixed point | With this button selected, you are now able to move around a fixed point.");
 	actionArcballCam->setIcon(Globals::fontIcons->icon(fa::dotcircleo, options));
 	toolBar->addAction(actionArcballCam);
+
+	toolBar->addSeparator();
+
+	QAction *changeCamera = new QAction;
+	changeCamera->setObjectName(QStringLiteral("cameraMode"));
+	changeCamera->setCheckable(true);
+	changeCamera->setToolTip("Viewport Projection Mode | Switch between orthogonal and perspective view | Toggle to switch the camera between orthagonal view and perspective view.");
+	changeCamera->setText(QChar(fa::dotcircleo));
+	changeCamera->setFont(fontIcons.font(16));
+	toolBar->addAction(changeCamera);
+
+	//cubes 
+	//square
+
+	connect(changeCamera, &QAction::triggered, [=]() {
+		auto val = changeCamera->isChecked();
+		if (val) {
+			changeCamera->setText(QChar(fa::cubes));
+			sceneView->getScene()->camera->setProjection(iris::CameraProjection::Perspective);
+		}
+		else {
+			changeCamera->setText(QChar(fa::square));
+			sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthagonal);
+
+		}
+	});
 
     connect(actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
     connect(actionRotate,       SIGNAL(triggered(bool)), SLOT(rotateGizmo()));
@@ -2909,6 +2935,8 @@ void MainWindow::setupToolBar()
 	viewDocks->setToolTip("Toggle Widgets | Toggle the dock widgets");
 	viewDocks->setIcon(Globals::fontIcons->icon(fa::listalt, options));
 	toolBar->addAction(viewDocks);
+
+	
 
 	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
 	connect(viewDocks,			SIGNAL(triggered(bool)), SLOT(toggleDockWidgets()));
