@@ -174,7 +174,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     setupFileMenu();
 
-	fontIcons.initFontAwesome();
+	Globals::fontIcons->initFontAwesome();
 #ifdef USE_MINER
 	configureMiner();
 #endif
@@ -2429,7 +2429,7 @@ void MainWindow::setupViewPort()
 	help = new QPushButton;
 	help->setObjectName("helpButton");
 	help->setText(QChar(fa::questioncircle));
-	help->setFont(fontIcons.font(28));
+	help->setFont(Globals::fontIcons->font(28));
 	help->setCursor(Qt::PointingHandCursor);
 
 	help->setStyleSheet(
@@ -2450,7 +2450,7 @@ void MainWindow::setupViewPort()
 	prefs->setObjectName("prefsButton");
 
 	prefs->setText(QChar(fa::cog));
-	prefs->setFont(fontIcons.font(28));
+	prefs->setFont(Globals::fontIcons->font(28));
 	prefs->setCursor(Qt::PointingHandCursor);
 
 	prefs->setStyleSheet(
@@ -2535,17 +2535,17 @@ void MainWindow::setupViewPort()
     QVariantMap options;
     
     auto controlBarLayout = new QHBoxLayout;
-    playSceneBtn = new QPushButton(fontIcons.icon(fa::play), "Play scene");
+    playSceneBtn = new QPushButton(Globals::fontIcons->icon(fa::play), "Play scene");
     playSceneBtn->setToolTip("Play all animations in the scene");
     playSceneBtn->setStyleSheet("background: transparent");
 
     options.insert("color", QColor(52, 152, 219));
     options.insert("color-active", QColor(52, 152, 219));
-	playSimBtn = new QPushButton(fontIcons.icon(fa::play, options), "Simulate physics");
+	playSimBtn = new QPushButton(Globals::fontIcons->icon(fa::play, options), "Simulate physics");
 	playSimBtn->setToolTip("Simulate physics only");
 	playSimBtn->setStyleSheet("background: transparent");
 
-    restartSimBtn = new QPushButton(fontIcons.icon(fa::undo, options), "Restart Physics");
+    restartSimBtn = new QPushButton(Globals::fontIcons->icon(fa::undo, options), "Restart Physics");
     restartSimBtn->setToolTip("Restart physics simulation");
     restartSimBtn->setStyleSheet("background: transparent");
 
@@ -2735,14 +2735,14 @@ void MainWindow::setupToolBar()
 	actionUndo->setToolTip("Undo | Undo last action");
 	actionUndo->setObjectName(QStringLiteral("actionUndo"));
 	actionUndo->setText(QChar(fa::reply));
-	actionUndo->setFont(fontIcons.font(16)); 
+	actionUndo->setFont(Globals::fontIcons->font(16));
 	toolBar->addAction(actionUndo);
 
 	QAction *actionRedo = new QAction;
 	actionRedo->setToolTip("Redo | Redo last action");
 	actionRedo->setObjectName(QStringLiteral("actionRedo"));
 	actionRedo->setText(QChar(fa::share));
-	actionRedo->setFont(fontIcons.font(16));
+	actionRedo->setFont(Globals::fontIcons->font(16));
 	toolBar->addAction(actionRedo);
 
 	toolBar->addSeparator();
@@ -2755,7 +2755,7 @@ void MainWindow::setupToolBar()
     actionTranslate->setCheckable(true);
 	actionTranslate->setToolTip("Translate | Manipulator for translating objects | Translates the object along a given axis");
 	actionTranslate->setText(QChar(fa::arrows));
-	actionTranslate->setFont(fontIcons.font(16));
+	actionTranslate->setFont(Globals::fontIcons->font(16));
 	toolBar->addAction(actionTranslate);
 
     actionRotate = new QAction;
@@ -2763,7 +2763,7 @@ void MainWindow::setupToolBar()
     actionRotate->setCheckable(true);
 	actionRotate->setToolTip("Rptate | Manipulator for rotating objects | Rotates the object along a given axis");
 	actionRotate->setText(QChar(fa::rotateright));
-	actionRotate->setFont(fontIcons.font(16));
+	actionRotate->setFont(Globals::fontIcons->font(16));
 	toolBar->addAction(actionRotate);
 
     actionScale = new QAction;
@@ -2771,7 +2771,7 @@ void MainWindow::setupToolBar()
     actionScale->setCheckable(true);
 	actionScale->setToolTip("Scale | Manipulator for scaling objects | Scales the object along a given axis");
 	actionScale->setText(QChar(fa::expand));
-	actionScale->setFont(fontIcons.font(16));
+	actionScale->setFont(Globals::fontIcons->font(16));
 	toolBar->addAction(actionScale);
 
     toolBar->addSeparator();
@@ -2781,7 +2781,7 @@ void MainWindow::setupToolBar()
     actionGlobalSpace->setCheckable(true);
 	actionGlobalSpace->setToolTip("Global Space | Move objects relative to the global world");
 	actionGlobalSpace->setText(QChar(fa::globe));
-	actionGlobalSpace->setFont(fontIcons.font(16));
+	actionGlobalSpace->setFont(Globals::fontIcons->font(16));
 	toolBar->addAction(actionGlobalSpace);
 
     QAction *actionLocalSpace = new QAction;
@@ -2789,7 +2789,7 @@ void MainWindow::setupToolBar()
     actionLocalSpace->setCheckable(true);
 	actionLocalSpace->setToolTip("Local Space | Move objects relative to their transform");
 	actionLocalSpace->setText(QChar(fa::cube));
-	actionLocalSpace->setFont(fontIcons.font(16));
+	actionLocalSpace->setFont(Globals::fontIcons->font(16));
 	toolBar->addAction(actionLocalSpace);
 
     toolBar->addSeparator();
@@ -2799,7 +2799,7 @@ void MainWindow::setupToolBar()
     actionFreeCamera->setCheckable(true);
 	actionFreeCamera->setToolTip("Free Camera | Freely move and orient the camera");
 	actionFreeCamera->setText(QChar(fa::eye));
-	actionFreeCamera->setFont(fontIcons.font(16));
+	actionFreeCamera->setFont(Globals::fontIcons->font(16));
 	toolBar->addAction(actionFreeCamera);
 
     QAction *actionArcballCam = new QAction;
@@ -2807,7 +2807,7 @@ void MainWindow::setupToolBar()
     actionArcballCam->setCheckable(true);
 	actionArcballCam->setToolTip("Arc Ball Camera | Move and orient the camera around a fixed point | With this button selected, you are now able to move around a fixed point.");
 	actionArcballCam->setText(QChar(fa::dotcircleo));
-	actionArcballCam->setFont(fontIcons.font(16));
+	actionArcballCam->setFont(Globals::fontIcons->font(16));
 	toolBar->addAction(actionArcballCam);
 
     connect(actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
@@ -2846,7 +2846,7 @@ void MainWindow::setupToolBar()
 	actionExport->setCheckable(false);
 	actionExport->setToolTip("Export | Export the current scene");
 	actionExport->setText(QChar(fa::upload));
-	actionExport->setFont(fontIcons.font(16)); 
+	actionExport->setFont(Globals::fontIcons->font(16));
 	toolBar->addAction(actionExport);
 
 	actionSaveScene = new QAction;
@@ -2855,7 +2855,7 @@ void MainWindow::setupToolBar()
 	actionSaveScene->setCheckable(false);
 	actionSaveScene->setToolTip("Save | Save the current scene");
 	actionSaveScene->setText(QChar(fa::floppyo));
-	actionSaveScene->setFont(fontIcons.font(16));
+	actionSaveScene->setFont(Globals::fontIcons->font(16));
 	toolBar->addAction(actionSaveScene);
 
 	QAction *viewDocks = new QAction;
@@ -2863,7 +2863,7 @@ void MainWindow::setupToolBar()
 	viewDocks->setCheckable(false);
 	viewDocks->setToolTip("Toggle Widgets | Toggle the dock widgets");
 	viewDocks->setText(QChar(fa::listalt));
-	viewDocks->setFont(fontIcons.font(16));
+	viewDocks->setFont(Globals::fontIcons->font(16));
 	toolBar->addAction(viewDocks);
 
 	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
