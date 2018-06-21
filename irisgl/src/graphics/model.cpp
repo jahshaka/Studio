@@ -82,43 +82,12 @@ bool Model::hasSkeletalAnimations()
 
 void Model::updateAnimation(float dt)
 {
-	if (!!activeAnimation) {
+	if (!!activeAnimation && !!skeleton) {
 		animTime += dt;
 		float time = animTime;
-		QMap<QString, QMatrix4x4> skeletonSpaceMatrices;
-		// The skeleton begins at this node, the root
+		skeleton->applyAnimation(activeAnimation, time);
 
-		// recursively update the animation for each node
-		std::function<void(SkeletalAnimationPtr anim, SceneNodePtr node, QMatrix4x4 parentTransform)> animateHierarchy;
-		animateHierarchy = [&animateHierarchy, time, &skeletonSpaceMatrices](SkeletalAnimationPtr anim, SceneNodePtr node, QMatrix4x4 parentTransform)
-		{
-			// skeleton-space transform of current node
-			QMatrix4x4 skelTrans;
-			skelTrans.setToIdentity();
-
-			if (anim->boneAnimations.contains(node->name)) {
-				auto boneAnim = anim->boneAnimations[node->name];
-
-				node->pos = boneAnim->posKeys->getValueAt(time);
-				node->rot = boneAnim->rotKeys->getValueAt(time).normalized();
-				//node->scale = QVector3D(1,1,1);
-				node->scale = boneAnim->scaleKeys->getValueAt(time);
-			}
-
-			auto localTrans = node->getLocalTransform(); //calculates the local transform matrix
-			skelTrans = parentTransform * localTrans; //skeleton space transform
-			skeletonSpaceMatrices.insert(node->name, skelTrans);
-
-			for (auto child : node->children) {
-				animateHierarchy(anim, child, skelTrans);
-			}
-		};
-
-		QMatrix4x4 rootTransform;
-		rootTransform.setToIdentity();
-		animateHierarchy(activeAnimation, this->sharedFromThis(), rootTransform);
-
-		applyAnimationPose(this->sharedFromThis(), skeletonSpaceMatrices);
+		//todo: apply to children nodes
 	}
 }
 

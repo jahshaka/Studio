@@ -15,7 +15,7 @@ public:
 	ModelPtr load(QString path);
 
 private:
-	static SkeletonPtr extractSkeletonFromScene(aiScene* scene);
+	static SkeletonPtr extractSkeletonFromScene(const aiScene* scene);
 };
 
 }

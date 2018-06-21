@@ -10,6 +10,7 @@
 #include "assimp/mesh.h"
 
 #include <QFile>
+#include <functional>
 
 namespace iris
 {
@@ -70,7 +71,8 @@ ModelPtr ModelLoader::load(QString filePath)
 
 	auto skeleton = ModelLoader::extractSkeletonFromScene(scene);
 	auto anims = Mesh::extractAnimations(scene);
-	auto model = new Model(meshes, skeleton);
+	auto model = new Model(meshes);
+	model->setSkeleton(skeleton);
 	for (auto animName : anims.keys())
 	{
 		model->addSkeletalAnimation(animName, anims[animName]);
@@ -79,11 +81,11 @@ ModelPtr ModelLoader::load(QString filePath)
 	return ModelPtr(model);
 }
 
-SkeletonPtr ModelLoader::extractSkeletonFromScene(aiScene* scene)
+SkeletonPtr ModelLoader::extractSkeletonFromScene(const aiScene* scene)
 {
 	auto skel = Skeleton::create();
 
-	std::function<void(aiNode*)> evalChildren;
+	std::function<void(aiNode*, BonePtr parentBone)> evalChildren;
 	evalChildren = [skel, &evalChildren](aiNode* node, BonePtr parentBone) {
 		auto bone = Bone::create(QString(node->mName.C_Str()));
 
@@ -92,15 +94,17 @@ SkeletonPtr ModelLoader::extractSkeletonFromScene(aiScene* scene)
 			parentBone->addChild(bone);
 		
 
-		for (unsigned i = 0; i < parent->mNumChildren; i++)
+		for (unsigned i = 0; i < node->mNumChildren; i++)
 		{
-			auto childNode = parent->mChildren[i];
-			evalChildren(childNode, parentBone);
+			auto childNode = node->mChildren[i];
+			evalChildren(childNode, bone);
 		}
 	};
 
 	//auto bone = Bone::create(QString(meshBone->mName.C_Str()));
 	evalChildren(scene->mRootNode, BonePtr());
+
+	return skel;
 }
 
 }
