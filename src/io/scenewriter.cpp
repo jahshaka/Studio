@@ -176,7 +176,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     sceneNodeObj["name"] = sceneNode->getName();
     sceneNodeObj["attached"] = sceneNode->isAttached();
     sceneNodeObj["type"] = getSceneNodeTypeName(sceneNode->sceneNodeType);
-
+    sceneNodeObj["pickable"] = sceneNode->isPickable();
     sceneNodeObj["pos"] = jsonVector3(sceneNode->getLocalPos());
     auto rot = sceneNode->getLocalRot().toEulerAngles();
     sceneNodeObj["rot"] = jsonVector3(rot);
@@ -301,7 +301,6 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
 	sceneNodeObject["mesh"]          = meshNode->meshPath;
 	sceneNodeObject["guid"]          = meshNode->getGUID();
     sceneNodeObject["meshIndex"]     = meshNode->meshIndex;
-    sceneNodeObject["pickable"]      = meshNode->pickable;
     sceneNodeObject["physicsObject"] = meshNode->isPhysicsBody;
 
     if (meshNode->isPhysicsBody) {

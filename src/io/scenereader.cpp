@@ -256,10 +256,10 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     //read name
     sceneNode->name = nodeObj["name"].toString("");
     sceneNode->setAttached(nodeObj["attached"].toBool());
+    sceneNode->setPickable(nodeObj["pickable"].toBool(true));
 
     QJsonArray children = nodeObj["children"].toArray();
-    for(auto childObj:children)
-    {
+    for (auto childObj : children) {
         auto sceneNodeObj = childObj.toObject();
         auto childNode = readSceneNode(sceneNodeObj);
         sceneNode->addChild(childNode, false);
@@ -389,7 +389,6 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 
     int meshIndex = nodeObj["meshIndex"].toInt(0);
     QString meshGUID = nodeObj["guid"].toString();
-    bool pickable = nodeObj["pickable"].toBool(true);
 
     if (!source.isEmpty()) {
         auto mesh = getMesh(source, meshIndex);
@@ -403,7 +402,6 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         }
 
         meshNode->setGUID(meshGUID);
-        meshNode->setPickable(pickable);
 		meshNode->setVisible(nodeObj["visible"].toBool(true));
         meshNode->meshIndex = meshIndex;
     }
