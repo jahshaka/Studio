@@ -34,6 +34,7 @@ public:
     float farClip;
     float vrViewScale;
 	float orthoSize;
+	bool isPerspective;
 
 	CameraProjection projMode;
 

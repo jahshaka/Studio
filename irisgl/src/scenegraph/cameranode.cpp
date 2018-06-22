@@ -20,6 +20,7 @@ namespace iris
 	void CameraNode::setProjection(CameraProjection projMode)
 	{
 		this->projMode = projMode;
+		isPerspective = projMode == CameraProjection::Perspective ? true : false;
 	}
 
 	void CameraNode::lookAt(QVector3D target)

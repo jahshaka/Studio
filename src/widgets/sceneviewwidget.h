@@ -341,6 +341,7 @@ signals:
     void initializeGraphics(SceneViewWidget* widget,
                             QOpenGLFunctions_3_2_Core* gl);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
+	void updateToolbarButton();
 
 };
 

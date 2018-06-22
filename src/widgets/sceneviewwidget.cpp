@@ -1431,6 +1431,7 @@ void SceneViewWidget::setEditorData(EditorData* data)
     scene->setCamera(editorCam);
     camController->setCamera(editorCam);
     showLightWires = data->showLightWires;
+	emit updateToolbarButton();
 }
 
 EditorData* SceneViewWidget::getEditorData()

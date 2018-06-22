@@ -62,8 +62,6 @@ For more information see the LICENSE file
 #include "irisgl/src/physics/physicsproperties.h"
 #include "irisgl/src/physics/physicshelper.h"
 
-#include <QDebug>
-
 iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
                                       iris::PostProcessManagerPtr postMan,
@@ -102,10 +100,6 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
 	camera->setOrthagonalZoom((float)camObj["orthogonalSize"].toDouble());
 	iris::CameraProjection val = camObj["projectionMode"].toString().compare("perspective") == 0 ? iris::CameraProjection::Perspective : iris::CameraProjection::Orthagonal;
 	camera->setProjection(val);
-
-	//qDebug() << val;
-	qDebug() << camObj["projectionMode"].toString().compare("perspective");// == 1 ? iris::CameraProjection::Perspective : iris::CameraProjection::Orthagonal;
-	qDebug() << camObj["projectionMode"].toString();
 
     auto editorData = new EditorData();
     editorData->editorCamera = camera;

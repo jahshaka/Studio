@@ -2862,28 +2862,31 @@ void MainWindow::setupToolBar()
 	QAction *changeCamera = new QAction;
 	changeCamera->setObjectName(QStringLiteral("cameraMode"));
 	changeCamera->setCheckable(true);
-	changeCamera->setChecked(true);
+	changeCamera->setChecked(sceneView->editorCam->isPerspective);
 	changeCamera->setToolTip("Viewport Projection Mode | Switch between orthogonal and perspective view | Toggle to switch the camera between orthagonal view and perspective view.");
-	changeCamera->setText(QChar(fa::cubes));
-	changeCamera->setFont(fontIcons.font(16));
+	changeCamera->setText(sceneView->editorCam->isPerspective? "P":"O");
+	//changeCamera->setFont(fontIcons.font(16));
 	toolBar->addAction(changeCamera);
 
-	//cubes 
-	//square
+	connect(sceneView, &SceneViewWidget::updateToolbarButton, [=]() {
+		changeCamera->setChecked(sceneView->editorCam->isPerspective);
+		changeCamera->setText(sceneView->editorCam->isPerspective ? "P" : "O");
+	});
 
-	connect(changeCamera, &QAction::triggered, [=]() {
+	connect(changeCamera, &QAction::changed, [=]() {
 		auto val = changeCamera->isChecked();
 		if (val) {
-			changeCamera->setText(QChar(fa::cubes));
+			changeCamera->setText("P");
 			sceneView->getScene()->camera->setProjection(iris::CameraProjection::Perspective);
 		}
 		else {
-			changeCamera->setText(QChar(fa::square));
+			changeCamera->setText("O");
 			sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthagonal);
 
 		}
 	});
 
+	
     connect(actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
     connect(actionRotate,       SIGNAL(triggered(bool)), SLOT(rotateGizmo()));
     connect(actionScale,        SIGNAL(triggered(bool)), SLOT(scaleGizmo()));
