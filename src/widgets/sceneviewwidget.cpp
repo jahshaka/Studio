@@ -711,6 +711,11 @@ void SceneViewWidget::renderScene()
                                 QColor(255, 255, 255));
     }
 
+	if(editorCam->isPerspective)
+		spriteBatch->drawString(font, QString("perspective"),QVector2D(8,height() - 25), QColor(255, 255, 255, 150));
+	else
+		spriteBatch->drawString(font, QString("orthogonal"), QVector2D(8, height() - 25), QColor(255, 255, 255, 150));
+
 //    if (!!scene) {
 //        for(auto light : scene->lights) {
 //            if (light->lightType == iris::LightType::Spot)
@@ -718,6 +723,8 @@ void SceneViewWidget::renderScene()
 //        }
 //    }
     spriteBatch->end();
+
+
 
 }
 
