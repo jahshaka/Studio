@@ -122,6 +122,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["fogEnd"] = scene->fogEnd;
     sceneObj["fogEnabled"] = scene->fogEnabled;
     sceneObj["shadowEnabled"] = scene->shadowEnabled;
+	
 
 
     QJsonObject rootNodeObj;
@@ -166,6 +167,8 @@ void SceneWriter::writeEditorData(QJsonObject& projectObj,EditorData* editorData
     cameraObj["farClip"] = cam->farClip;
     cameraObj["pos"] = jsonVector3(editorData->editorCamera->getLocalPos());
     cameraObj["rot"] = jsonVector3(editorData->editorCamera->getLocalRot().toEulerAngles());
+	cameraObj["orthogonalSize"] = cam->orthoSize;
+	cameraObj["projectionMode"] = cam->projMode == iris::CameraProjection::Perspective ? "perspective" : "orthogonal";
 
     editorObj["camera"] = cameraObj;
     projectObj["editor"] = editorObj;

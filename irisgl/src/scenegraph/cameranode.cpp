@@ -58,6 +58,8 @@ SceneNodePtr CameraNode::createDuplicate()
 	camera->nearClip = this->nearClip;
 	camera->farClip = this->farClip;
 	camera->aspectRatio = this->aspectRatio;
+	camera->orthoSize = this->orthoSize;
+	
 
 	return camera;
 }
