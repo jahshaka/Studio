@@ -2862,8 +2862,9 @@ void MainWindow::setupToolBar()
 	QAction *changeCamera = new QAction;
 	changeCamera->setObjectName(QStringLiteral("cameraMode"));
 	changeCamera->setCheckable(true);
+	changeCamera->setChecked(true);
 	changeCamera->setToolTip("Viewport Projection Mode | Switch between orthogonal and perspective view | Toggle to switch the camera between orthagonal view and perspective view.");
-	changeCamera->setText(QChar(fa::dotcircleo));
+	changeCamera->setText(QChar(fa::cubes));
 	changeCamera->setFont(fontIcons.font(16));
 	toolBar->addAction(changeCamera);
 
