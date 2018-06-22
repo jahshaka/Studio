@@ -136,7 +136,15 @@ void OrbitalCameraController::onMouseWheel(int delta)
     if(distFromPivot<0)
         distFromPivot = 0;
 
-    updateCameraRot();
+
+
+	if (camera->projMode == iris::CameraProjection::Orthagonal) {
+		camera->setOrthagonalZoom(distFromPivot);
+	}else{
+		updateCameraRot();
+
+	}
+
 }
 
 void OrbitalCameraController::update(float dt)

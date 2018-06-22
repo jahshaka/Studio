@@ -178,11 +178,9 @@ void EditorCameraController::onMouseWheel(int delta)
     auto movement = camera->getLocalPos() + forward*zoomSpeed*delta;
 	if (camera->projMode == iris::CameraProjection::Perspective)
 		camera->setLocalPos(movement);
-	else {
-	
+	else {	
 		orthoZoom -= delta/120;
 		camera->setOrthagonalZoom(orthoZoom);
-		qDebug() << delta;
 	}
 }
 

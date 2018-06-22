@@ -97,7 +97,7 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     camera->farClip = (float)camObj["farClip"].toDouble(100.f);
     camera->setLocalPos(readVector3(camObj["pos"].toObject()));
     camera->setLocalRot(QQuaternion::fromEulerAngles(readVector3(camObj["rot"].toObject())));
-	camera->setOrthagonalZoom((float)camObj["orthogonalSize"].toDouble());
+	camera->setOrthagonalZoom((float)camObj["orthogonalSize"].toDouble(3.0f));
 	iris::CameraProjection val = camObj["projectionMode"].toString().compare("perspective") == 0 ? iris::CameraProjection::Perspective : iris::CameraProjection::Orthagonal;
 	camera->setProjection(val);
 
