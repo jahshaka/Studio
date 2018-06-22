@@ -1277,12 +1277,12 @@ void SceneViewWidget::doLightPicking(const QVector3D& segStart,
     QVector3D hitPoint;
     float t;
 
-    for (auto light: scene->lights) {
+    for (auto light : scene->lights) {
         if (iris::IntersectionHelper::raySphereIntersects(segStart,
                                                           rayDir,
                                                           light->getLocalPos(),
                                                           lightRadius,
-                                                          t, hitPoint))
+                                                          t, hitPoint) && light->isPickable())
         {
             PickingResult pick;
             pick.hitNode = light.staticCast<iris::SceneNode>();

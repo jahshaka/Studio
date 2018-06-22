@@ -54,6 +54,7 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 
 	ui->sceneTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
 	ui->sceneTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+	ui->sceneTree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     ui->sceneTree->viewport()->installEventFilter(this);
     ui->sceneTree->setItemDelegate(new TreeItemDelegate(this));
 
@@ -86,6 +87,14 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 	hiddenIcon = new QIcon;
 	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48-dim.png"), QIcon::Normal);
 	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48-dim.png"), QIcon::Selected);
+
+    pickableIcon = new QIcon;
+    pickableIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cursor-filled-50.png"), QIcon::Normal);
+    pickableIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cursor-filled-50.png"), QIcon::Selected);
+
+    disabledIcon = new QIcon;
+    disabledIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cursor-filled-50-dim.png"), QIcon::Normal);
+    disabledIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cursor-filled-50-dim.png"), QIcon::Selected);
 
 	ui->sceneTree->setStyleSheet(
 		"QTreeView, QTreeWidget { show-decoration-selected: 1; }"
@@ -242,13 +251,13 @@ void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem *item, int column)
 {
 	// Our icons are in the second column
 	if (column == 1) {
-		if (item->data(1, Qt::UserRole).toBool()) {
-			hideItemAndChildren(item);
-		}
-		else {
-			showItemAndChildren(item);
-		}
+		if (item->data(1, Qt::UserRole).toBool()) hideItemAndChildren(item);
+		else showItemAndChildren(item);
 	}
+    else if (column == 2) {
+        if (item->data(2, Qt::UserRole).toBool()) lockItemAndChildren(item);
+        else releaseItemAndChildren(item);
+    }
 	else {
 		long nodeId = item->data(0, Qt::UserRole).toLongLong();
 		selectedNode = nodeList[nodeId];
@@ -584,6 +593,7 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
     childTreeItem->setText(0, node->getName());
     childTreeItem->setData(0, Qt::UserRole, QVariant::fromValue(node->getNodeId()));
 	childTreeItem->setData(1, Qt::UserRole, QVariant::fromValue(node->isVisible()));
+	childTreeItem->setData(2, Qt::UserRole, QVariant::fromValue(node->isPickable()));
 
 	QIcon *nodeIcon = new QIcon;
 	
@@ -615,6 +625,7 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 	childTreeItem->setIcon(0, *nodeIcon);
 	
 	node->isVisible() ? childTreeItem->setIcon(1, *visibleIcon) : childTreeItem->setIcon(1, *hiddenIcon);
+	node->isPickable() ? childTreeItem->setIcon(2, *pickableIcon) : childTreeItem->setIcon(2, *disabledIcon);
 
     return childTreeItem;
 }
@@ -687,6 +698,30 @@ void SceneHierarchyWidget::refreshAttachmentColors(iris::SceneNodePtr node)
 		auto childNode = nodeList[nodeId];
 		refreshAttachmentColors(childNode);
 	}
+}
+
+void SceneHierarchyWidget::lockItemAndChildren(QTreeWidgetItem *item)
+{
+    long nodeId = item->data(0, Qt::UserRole).toLongLong();
+    item->setIcon(2, *disabledIcon);
+    nodeList[nodeId]->setPickable(false);
+    item->setData(2, Qt::UserRole, QVariant::fromValue(false));
+
+    for (int i = 0; i < item->childCount(); i++) {
+        lockItemAndChildren(item->child(i));
+    }
+}
+
+void SceneHierarchyWidget::releaseItemAndChildren(QTreeWidgetItem *item)
+{
+    long nodeId = item->data(0, Qt::UserRole).toLongLong();
+    item->setIcon(2, *pickableIcon);
+    nodeList[nodeId]->setPickable(true);
+    item->setData(2, Qt::UserRole, QVariant::fromValue(true));
+
+    for (int i = 0; i < item->childCount(); i++) {
+        releaseItemAndChildren(item->child(i));
+    }
 }
 
 void SceneHierarchyWidget::insertChild(iris::SceneNodePtr childNode)

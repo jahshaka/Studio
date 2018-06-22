@@ -105,5 +105,7 @@
         <file>icons/p_pause.svg</file>
         <file>icons/p_play.svg</file>
         <file>icons/p_stop.svg</file>
+        <file>icons/icons8-cursor-filled-50.png</file>
+        <file>icons/icons8-cursor-filled-50-dim.png</file>
     </qresource>
 </RCC>
