@@ -178,7 +178,11 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
     addMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addParticleSystem()));
 
-	
+	// Hands
+	auto handMenu = addMenu->addMenu("Hands");
+	action = new QAction("Grab", this);
+	handMenu->addAction(action);
+	connect(action, SIGNAL(triggered()), mainWindow, SLOT(addGrabHand()));
 
     ui->addBtn->setMenu(addMenu);
     ui->addBtn->setPopupMode(QToolButton::InstantPopup);

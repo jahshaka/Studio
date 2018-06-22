@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "irisgl/src/scenegraph/viewernode.h"
 #include "irisgl/src/scenegraph/particlesystemnode.h"
 #include "irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/src/scenegraph/grabnode.h"
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/materials/custommaterial.h"
 #include "irisgl/src/graphics/forwardrenderer.h"
@@ -1414,6 +1415,14 @@ void MainWindow::addViewer()
     auto node = iris::ViewerNode::create();
     node->setName("Viewer");
     addNodeToScene(node);
+}
+
+void MainWindow::addGrabHand()
+{
+	this->sceneView->makeCurrent();
+	auto node = iris::GrabNode::create();
+	node->setName("Hand");
+	addNodeToScene(node);
 }
 
 void MainWindow::addParticleSystem()
