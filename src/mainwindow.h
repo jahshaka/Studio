@@ -84,6 +84,7 @@ class AssetWidget;
 // class SceneNodePropertiesWidget;
 
 class AssetFavorites;
+class AssetModelPanel;
 
 #include "widgets/scenenodepropertieswidget.h"
 
@@ -473,6 +474,7 @@ private:
     QAction *actionScale;
 
     AssetFavorites *assetFavorites;
+    AssetModelPanel *assetModelPanel;
 };
 
 #endif // MAINWINDOW_H

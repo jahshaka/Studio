@@ -124,6 +124,7 @@ For more information see the LICENSE file
 #include "../src/widgets/skypresets.h"
 
 #include "widgets/assetfavorites.h"
+#include "widgets/assetmodelpanel.h"
 
 #include "../src/widgets/assetview.h"
 #include "dialogs/toast.h"
@@ -2323,9 +2324,14 @@ void MainWindow::setupDockWidgets()
     assetFavorites->setMainWindow(this);
     assetFavorites->setHandle(db);
 
+    assetModelPanel = new AssetModelPanel;
+    assetModelPanel->setMainWindow(this);
+    assetModelPanel->setHandle(db);
+
     presetsTabWidget = new QTabWidget;
     presetsTabWidget->setObjectName("PresetsTabWidget");
     presetsTabWidget->setMinimumWidth(396);
+    presetsTabWidget->addTab(assetModelPanel, "Models");
     presetsTabWidget->addTab(modelPresets, "Primitives");
     presetsTabWidget->addTab(materialPresets, "Materials");
     presetsTabWidget->addTab(skyPresets, "Skyboxes");
