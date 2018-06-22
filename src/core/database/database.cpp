@@ -913,26 +913,36 @@ QVector<AssetRecord> Database::fetchAssets()
     return tileData;
 }
 
-QVector<AssetRecord> Database::fetchChildAssets(const QString &parent, bool showDependencies)
+QVector<AssetRecord> Database::fetchChildAssets(const QString &parent, int filter, bool showDependencies)
 {
-    QSqlQuery query;
+    QString dependentQuery =
+        "SELECT name, thumbnail, guid, parent, type, properties "
+        "FROM assets A WHERE parent = ? AND project_guid = ? ";
+
+    QString nonDependentQuery =
+        "SELECT name, thumbnail, guid, parent, type, properties "
+        "FROM assets A WHERE parent = ? AND project_guid = ? "
+        "AND A.guid NOT IN (SELECT dependee FROM dependencies) ";
+
+    QString orderQuery = "ORDER BY A.name DESC";
+
+    QString assetsQuery;
     if (showDependencies) {
-        query.prepare(
-            "SELECT name, thumbnail, guid, parent, type, properties "
-            "FROM assets A WHERE parent = ? AND project_guid = ? "
-            "ORDER BY A.name DESC"
-        );
+        assetsQuery.append(dependentQuery);
+        if (filter > 0) assetsQuery.append("AND type = ? ");
     }
     else {
-        query.prepare(
-            "SELECT name, thumbnail, guid, parent, type, properties "
-            "FROM assets A WHERE parent = ? AND project_guid = ? "
-            "AND A.guid NOT IN (SELECT dependee FROM dependencies) "
-            "ORDER BY A.name DESC"
-        );
+        assetsQuery.append(nonDependentQuery);
+        if (filter > 0) assetsQuery.append("AND type = ? ");
     }
+
+    assetsQuery.append(orderQuery);
+
+    QSqlQuery query;
+    query.prepare(assetsQuery);
     query.addBindValue(parent);
     query.addBindValue(Globals::project->getProjectGuid());
+    if (filter > 0) query.addBindValue(filter);
     executeAndCheckQuery(query, "fetchChildAssets");
 
     QVector<AssetRecord> tileData;

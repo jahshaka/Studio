@@ -90,7 +90,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 	connect(ui->hideDeps, &QCheckBox::toggled, [this](bool state) {
 		hideDependencies = !state;
-		updateAssetView(assetItem.selectedGuid, !state);
+		updateAssetView(assetItem.selectedGuid, -1, !state);
 	});
 
     ui->assetView->setItemDelegate(new ListViewDelegate());
@@ -163,7 +163,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
     });
 
     connect(goUpOneControl, &QPushButton::pressed, [this]() {
-        updateAssetView(db->fetchAsset(assetItem.selectedGuid).parent, false);
+        updateAssetView(db->fetchAsset(assetItem.selectedGuid).parent, -1, false);
     });
 
 	setMouseTracking(true);
@@ -196,6 +196,73 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->switcher->setLayout(toggleLayout);
 	ui->switcher->setObjectName("Switcher");
 
+    assetFilterToggleButtonGroup = new QButtonGroup;
+    filterGroupLayout = new QHBoxLayout;
+    filterGroupLayout->setMargin(0);
+    filterGroupLayout->setSpacing(0);
+    ui->filterWidget->setObjectName(QStringLiteral("FilterWidget"));
+    ui->filterWidget->setLayout(filterGroupLayout);
+
+    assetsShowAll = new QPushButton(tr("A"));
+    assetsShowAll->setCheckable(true);
+    assetsShowAll->setChecked(true);
+    assetsShowAll->setProperty("data", QVariant::fromValue(static_cast<int>(-1)));
+    assetsShowAll->setToolTip("Show all assets");
+
+    assetsShowObjects = new QPushButton(tr("O"));
+    assetsShowObjects->setCheckable(true);
+    assetsShowObjects->setProperty("data", QVariant::fromValue(static_cast<int>(ModelTypes::Object)));
+    assetsShowObjects->setToolTip("Show only objects");
+
+    assetsShowMaterials = new QPushButton(tr("M"));
+    assetsShowMaterials->setCheckable(true);
+    assetsShowMaterials->setProperty("data", QVariant::fromValue(static_cast<int>(ModelTypes::Material)));
+    assetsShowMaterials->setToolTip("Show only materials");
+
+    assetsShowParticleSystems = new QPushButton(tr("P"));
+    assetsShowParticleSystems->setCheckable(true);
+    assetsShowParticleSystems->setProperty("data", QVariant::fromValue(static_cast<int>(ModelTypes::ParticleSystem)));
+    assetsShowParticleSystems->setToolTip("Show only particle systems");
+
+    assetsShowTextures = new QPushButton(tr("T"));
+    assetsShowTextures->setCheckable(true);
+    assetsShowTextures->setProperty("data", QVariant::fromValue(static_cast<int>(ModelTypes::Texture)));
+    assetsShowTextures->setToolTip("Show only textures");
+
+    assetsShowShaders = new QPushButton(tr("S"));
+    assetsShowShaders->setCheckable(true);
+    assetsShowShaders->setProperty("data", QVariant::fromValue(static_cast<int>(ModelTypes::Shader)));
+    assetsShowShaders->setToolTip("Show only shaders");
+
+    assetsShowFiles = new QPushButton(tr("F"));
+    assetsShowFiles->setCheckable(true);
+    assetsShowFiles->setProperty("data", QVariant::fromValue(static_cast<int>(ModelTypes::File)));
+    assetsShowFiles->setToolTip("Show only files");
+
+    assetFilterToggleButtonGroup->addButton(assetsShowAll);
+    assetFilterToggleButtonGroup->addButton(assetsShowObjects);
+    assetFilterToggleButtonGroup->addButton(assetsShowMaterials);
+    assetFilterToggleButtonGroup->addButton(assetsShowParticleSystems);
+    assetFilterToggleButtonGroup->addButton(assetsShowTextures);
+    assetFilterToggleButtonGroup->addButton(assetsShowShaders);
+    assetFilterToggleButtonGroup->addButton(assetsShowFiles);
+
+    filterGroupLayout->addWidget(assetsShowAll);
+    filterGroupLayout->addWidget(assetsShowObjects);
+    filterGroupLayout->addWidget(assetsShowMaterials);
+    filterGroupLayout->addWidget(assetsShowParticleSystems);
+    filterGroupLayout->addWidget(assetsShowTextures);
+    filterGroupLayout->addWidget(assetsShowShaders);
+    filterGroupLayout->addWidget(assetsShowFiles);
+
+    connect(assetFilterToggleButtonGroup,
+        static_cast<void(QButtonGroup::*)(QAbstractButton*)>(&QButtonGroup::buttonPressed),
+        [this](QAbstractButton *button)
+    {
+        qDebug() << button->property("data").toInt();
+        updateAssetView(assetItem.selectedGuid, button->property("data").toInt()); // todo - remember show deps
+    });
+
 	ui->searchBar->setPlaceholderText(tr("Type to search for assets..."));
 
 	progressDialog = new ProgressDialog;
@@ -211,6 +278,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		"QWidget#BreadCrumb QPushButton { background: transparent; padding: 4px 16px;"
 		"									border-right: 1px solid black; color: #999; }"
 		"QWidget#BreadCrumb QPushButton:checked { color: white; border-right: 1px solid black; }"
+        "QWidget#FilterWidget QPushButton:checked { color: white; background: #2980b9; }"
 		"QWidget#assetTree { background: #202020; border: 0; }"
 		"QWidget#assetView { background: #202020; border: 0; outline: 0; padding: 0; margin: 0; }"
 		"QSplitter::handle { width: 1px; background: #151515; }"
@@ -544,13 +612,18 @@ void AssetWidget::addCrumbs(const QVector<FolderRecord> &folderData)
 	}
 }
 
-void AssetWidget::updateAssetView(const QString &path, bool showDependencies)
+void AssetWidget::updateAssetView(const QString &path, int filter, bool showDependencies)
 {
 	ui->assetView->clear();
 
-	for (const auto &folder : db->fetchChildFolders(path)) addItem(folder);
-	for (const auto &asset : db->fetchChildAssets(path, showDependencies)) addItem(asset);  /* TODO : irk this out */
-	addCrumbs(db->fetchCrumbTrail(path));
+    if (filter > 0) {
+        for (const auto &asset : db->fetchChildAssets(path, filter, showDependencies)) addItem(asset);
+    }
+    else {
+        for (const auto &folder : db->fetchChildFolders(path)) addItem(folder);
+        for (const auto &asset : db->fetchChildAssets(path, filter, showDependencies)) addItem(asset);  /* TODO : irk this out */
+        addCrumbs(db->fetchCrumbTrail(path));
+    }
 
     goUpOneControl->setEnabled(false);
 }
