@@ -69,6 +69,7 @@ set(SRCS
     src/scenegraph/viewernode.cpp
     src/scenegraph/particlesystemnode.cpp
     src/vr/vrmanager.cpp
+    src/vr/handpose.cpp
     src/math/mathhelper.cpp
     src/materials/custommaterial.cpp
     src/graphics/rendertarget.cpp
@@ -111,6 +112,7 @@ set(SRCS
     src/zip/zip.c
     src/physics/environment.cpp
     src/physics/physicshelper.cpp
+	src/scenegraph/grabnode.cpp
 )
 
 set (HEADERS
@@ -138,6 +140,7 @@ set (HEADERS
     src/core/meshmanager.h
     src/graphics/utils/fullscreenquad.h
     src/vr/vrdevice.h
+    src/vr/handpose.h
     src/math/mathhelper.h
     src/irisglfwd.h
     src/graphics/shader.h
@@ -214,6 +217,7 @@ set (HEADERS
     src/physics/environment.h
     src/physics/physicshelper.h
     src/physics/physicsproperties.h
+	src/scenegraph/grabnode.h
 )
 
 qt5_wrap_cpp(HEADERS_moc ${HEADERS})

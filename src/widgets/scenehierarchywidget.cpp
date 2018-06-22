@@ -178,6 +178,8 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
     addMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addParticleSystem()));
 
+	
+
     ui->addBtn->setMenu(addMenu);
     ui->addBtn->setPopupMode(QToolButton::InstantPopup);
 
