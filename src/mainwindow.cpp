@@ -2729,20 +2729,23 @@ void MainWindow::setupDesktop()
 
 void MainWindow::setupToolBar()
 {
+	QVariantMap options;
+	options.insert("color", QColor(255, 255, 255));
+	options.insert("color-active", QColor(255, 255, 255));
+
     toolBar = new QToolBar;
-	toolBar->setIconSize(QSize(14, 14));
+	toolBar->setIconSize(QSize(16, 16));
+
 	QAction *actionUndo = new QAction;
 	actionUndo->setToolTip("Undo | Undo last action");
 	actionUndo->setObjectName(QStringLiteral("actionUndo"));
-	actionUndo->setText(QChar(fa::reply));
-	actionUndo->setFont(Globals::fontIcons->font(16));
+	actionUndo->setIcon(Globals::fontIcons->icon(fa::reply, options));
 	toolBar->addAction(actionUndo);
 
 	QAction *actionRedo = new QAction;
 	actionRedo->setToolTip("Redo | Redo last action");
 	actionRedo->setObjectName(QStringLiteral("actionRedo"));
-	actionRedo->setText(QChar(fa::share));
-	actionRedo->setFont(Globals::fontIcons->font(16));
+	actionRedo->setIcon(Globals::fontIcons->icon(fa::share, options));
 	toolBar->addAction(actionRedo);
 
 	toolBar->addSeparator();
@@ -2754,24 +2757,21 @@ void MainWindow::setupToolBar()
     actionTranslate->setObjectName(QStringLiteral("actionTranslate"));
     actionTranslate->setCheckable(true);
 	actionTranslate->setToolTip("Translate | Manipulator for translating objects | Translates the object along a given axis");
-	actionTranslate->setText(QChar(fa::arrows));
-	actionTranslate->setFont(Globals::fontIcons->font(16));
+	actionTranslate->setIcon(Globals::fontIcons->icon(fa::arrows, options));
 	toolBar->addAction(actionTranslate);
 
     actionRotate = new QAction;
     actionRotate->setObjectName(QStringLiteral("actionRotate"));
     actionRotate->setCheckable(true);
 	actionRotate->setToolTip("Rptate | Manipulator for rotating objects | Rotates the object along a given axis");
-	actionRotate->setText(QChar(fa::rotateright));
-	actionRotate->setFont(Globals::fontIcons->font(16));
+	actionRotate->setIcon(Globals::fontIcons->icon(fa::rotateright, options));
 	toolBar->addAction(actionRotate);
 
     actionScale = new QAction;
     actionScale->setObjectName(QStringLiteral("actionScale"));
     actionScale->setCheckable(true);
 	actionScale->setToolTip("Scale | Manipulator for scaling objects | Scales the object along a given axis");
-	actionScale->setText(QChar(fa::expand));
-	actionScale->setFont(Globals::fontIcons->font(16));
+	actionScale->setIcon(Globals::fontIcons->icon(fa::expand, options));
 	toolBar->addAction(actionScale);
 
     toolBar->addSeparator();
@@ -2780,16 +2780,14 @@ void MainWindow::setupToolBar()
     actionGlobalSpace->setObjectName(QStringLiteral("actionGlobalSpace"));
     actionGlobalSpace->setCheckable(true);
 	actionGlobalSpace->setToolTip("Global Space | Move objects relative to the global world");
-	actionGlobalSpace->setText(QChar(fa::globe));
-	actionGlobalSpace->setFont(Globals::fontIcons->font(16));
+	actionGlobalSpace->setIcon(Globals::fontIcons->icon(fa::globe, options));
 	toolBar->addAction(actionGlobalSpace);
 
     QAction *actionLocalSpace = new QAction;
     actionLocalSpace->setObjectName(QStringLiteral("actionLocalSpace"));
     actionLocalSpace->setCheckable(true);
 	actionLocalSpace->setToolTip("Local Space | Move objects relative to their transform");
-	actionLocalSpace->setText(QChar(fa::cube));
-	actionLocalSpace->setFont(Globals::fontIcons->font(16));
+	actionLocalSpace->setIcon(Globals::fontIcons->icon(fa::cube, options));
 	toolBar->addAction(actionLocalSpace);
 
     toolBar->addSeparator();
@@ -2798,16 +2796,14 @@ void MainWindow::setupToolBar()
     actionFreeCamera->setObjectName(QStringLiteral("actionFreeCamera"));
     actionFreeCamera->setCheckable(true);
 	actionFreeCamera->setToolTip("Free Camera | Freely move and orient the camera");
-	actionFreeCamera->setText(QChar(fa::eye));
-	actionFreeCamera->setFont(Globals::fontIcons->font(16));
+	actionFreeCamera->setIcon(Globals::fontIcons->icon(fa::eye, options));
 	toolBar->addAction(actionFreeCamera);
 
     QAction *actionArcballCam = new QAction;
     actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
     actionArcballCam->setCheckable(true);
 	actionArcballCam->setToolTip("Arc Ball Camera | Move and orient the camera around a fixed point | With this button selected, you are now able to move around a fixed point.");
-	actionArcballCam->setText(QChar(fa::dotcircleo));
-	actionArcballCam->setFont(Globals::fontIcons->font(16));
+	actionArcballCam->setIcon(Globals::fontIcons->icon(fa::dotcircleo, options));
 	toolBar->addAction(actionArcballCam);
 
     connect(actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
@@ -2845,8 +2841,7 @@ void MainWindow::setupToolBar()
 	actionExport->setObjectName(QStringLiteral("actionExport"));
 	actionExport->setCheckable(false);
 	actionExport->setToolTip("Export | Export the current scene");
-	actionExport->setText(QChar(fa::upload));
-	actionExport->setFont(Globals::fontIcons->font(16));
+	actionExport->setIcon(Globals::fontIcons->icon(fa::upload, options));
 	toolBar->addAction(actionExport);
 
 	actionSaveScene = new QAction;
@@ -2854,16 +2849,14 @@ void MainWindow::setupToolBar()
 	actionSaveScene->setVisible(!settings->getValue("auto_save", true).toBool());
 	actionSaveScene->setCheckable(false);
 	actionSaveScene->setToolTip("Save | Save the current scene");
-	actionSaveScene->setText(QChar(fa::floppyo));
-	actionSaveScene->setFont(Globals::fontIcons->font(16));
+	actionSaveScene->setIcon(Globals::fontIcons->icon(fa::floppyo, options));
 	toolBar->addAction(actionSaveScene);
 
 	QAction *viewDocks = new QAction;
 	viewDocks->setObjectName(QStringLiteral("viewDocks"));
 	viewDocks->setCheckable(false);
 	viewDocks->setToolTip("Toggle Widgets | Toggle the dock widgets");
-	viewDocks->setText(QChar(fa::listalt));
-	viewDocks->setFont(Globals::fontIcons->font(16));
+	viewDocks->setIcon(Globals::fontIcons->icon(fa::listalt, options));
 	toolBar->addAction(viewDocks);
 
 	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
