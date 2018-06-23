@@ -42,6 +42,11 @@ ShaderPtr ContentManager::loadShader(QString vertexShaderPath, QString fragmentS
     return Shader::load(vertexShaderPath, fragmentShaderPath);
 }
 
+ModelPtr ContentManager::loadModel(QString modelPath)
+{
+	return modelLoader->load(modelPath);
+}
+
 ContentManagerPtr ContentManager::create(GraphicsDevicePtr graphics)
 {
     return ContentManagerPtr(new ContentManager(graphics));

@@ -24,14 +24,17 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../core/keyboardstate.h"
 #include "../irisgl/src/graphics/renderlist.h"
+#include "../irisgl/src/content/contentmanager.h"
 #include "../commands/transfrormscenenodecommand.h"
 #include "../uimanager.h"
 #include "irisgl\extras\Materials.h"
 #include <QtMath>
 
 
-EditorVrController::EditorVrController()
+EditorVrController::EditorVrController(iris::ContentManagerPtr content)
 {
+	this->content = content;
+
     //auto cube = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/cube.obj"));
     auto leftHandModel = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_left.obj"));
 
@@ -67,6 +70,10 @@ EditorVrController::EditorVrController()
     rightBeamRenderItem->type = iris::RenderItemType::Mesh;
     rightBeamRenderItem->material = beamMat;
     rightBeamRenderItem->mesh = beamMesh;
+
+	// load models
+	leftHandModel = content->loadModel("app/content/models/left_hand.dae");
+	rightHandModel = content->loadModel("app/content/models/right_hand.dae");
 }
 
 void EditorVrController::setScene(iris::ScenePtr scene)

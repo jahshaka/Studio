@@ -322,7 +322,7 @@ void SceneViewWidget::initialize()
     gizmo = translationGizmo;
 
     // has to be initialized here since it loads assets
-    vrCam = new EditorVrController();
+    vrCam = new EditorVrController(content);
 
     initLightAssets();
 }

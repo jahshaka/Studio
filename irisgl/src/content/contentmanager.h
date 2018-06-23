@@ -23,6 +23,7 @@ public:
     FontPtr loadDefaultFont(int size = 15);
     FontPtr loadFont(QString fontPath, int size = 15);
     ShaderPtr loadShader(QString vertexShaderPath, QString fragmentShaderPath);
+	ModelPtr loadModel(QString modelPath);
 
     static ContentManagerPtr create(GraphicsDevicePtr graphics);
 };

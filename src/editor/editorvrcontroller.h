@@ -42,6 +42,8 @@ public:
 
     iris::VrDevice* vrDevice;
 
+	iris::ContentManagerPtr content;
+
 	QVector3D leftPos, leftScale, rightPos, rightScale;
 	QQuaternion leftRot, rightRot;
     iris::SceneNodePtr leftPickedNode;
@@ -55,7 +57,7 @@ public:
     //iris::SceneNodePtr tracker;
     iris::ScenePtr scene;
 
-    EditorVrController();
+	EditorVrController(iris::ContentManagerPtr content);
 
     void setScene(iris::ScenePtr scene);
 
