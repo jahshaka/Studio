@@ -44,6 +44,7 @@ For more information see the LICENSE file
 #include "irisgl/src/scenegraph/lightnode.h"
 #include "irisgl/src/scenegraph/viewernode.h"
 #include "irisgl/src/materials/defaultmaterial.h"
+#include "irisgl/src/content/contentmanager.h"
 #include "irisgl/src/vr/vrdevice.h"
 #include "irisgl/src/vr/vrmanager.h"
 #include "irisgl/src/physics/environment.h"
@@ -539,6 +540,7 @@ void SceneViewWidget::initializeGL()
     glEnable(GL_CULL_FACE);
 
     renderer = iris::ForwardRenderer::create(true, true);
+	content = iris::ContentManager::create(renderer->getGraphicsDevice());
     spriteBatch = iris::SpriteBatch::create(renderer->getGraphicsDevice());
     font = iris::Font::create(renderer->getGraphicsDevice(), fontSize);
 

@@ -185,7 +185,7 @@ void Scene::rayCast(const QSharedPointer<iris::SceneNode>& sceneNode,
 			auto sphere = mesh->getBoundingSphere();
 			float t;
 			QVector3D hitPoint;
-			if (!IntersectionHelper::raySphereIntersects(a, (b - a).normalized(), QVector3D(0, 0, 0), sphere.radius, t, hitPoint)) {
+			if (IntersectionHelper::raySphereIntersects(a, (b - a).normalized(), sphere.pos, sphere.radius, t, hitPoint)) {
 				auto triMesh = meshNode->getMesh()->getTriMesh();
 
 				QList<iris::TriangleIntersectionResult> results;

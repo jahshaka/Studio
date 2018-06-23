@@ -36,7 +36,7 @@ EditorVrController::EditorVrController(iris::ContentManagerPtr content)
 	this->content = content;
 
     //auto cube = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/cube.obj"));
-    auto leftHandModel = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_left.obj"));
+    auto leftHandMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_left.obj"));
 
 	auto mat = iris::DefaultMaterial::create();
 
@@ -47,13 +47,13 @@ EditorVrController::EditorVrController(iris::ContentManagerPtr content)
     leftHandRenderItem = new iris::RenderItem();
     leftHandRenderItem->type = iris::RenderItemType::Mesh;
     leftHandRenderItem->material = mat;
-    leftHandRenderItem->mesh = leftHandModel;
+    leftHandRenderItem->mesh = leftHandMesh;
 
-    auto rightHandModel = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_right.obj"));
+    auto rightHandMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_right.obj"));
     rightHandRenderItem = new iris::RenderItem();
     rightHandRenderItem->type = iris::RenderItemType::Mesh;
     rightHandRenderItem->material = mat;
-    rightHandRenderItem->mesh = rightHandModel;
+    rightHandRenderItem->mesh = rightHandMesh;
 
     beamMesh = iris::Mesh::loadMesh(
                 IrisUtils::getAbsoluteAssetPath("app/content/models/beam.obj"));
@@ -361,7 +361,7 @@ bool EditorVrController::rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResu
 
 iris::SceneNodePtr EditorVrController::getObjectRoot(iris::SceneNodePtr node)
 {
-	if (node->isAttached())
+	if (node->isAttached() && scene->getRootNode() != node->getParent())
 		return getObjectRoot(node->getParent());
 
 	return node;
