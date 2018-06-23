@@ -398,6 +398,21 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 		}
 	}
 
+	// attchment
+	if (node->scene->getRootNode() != node) {
+		QMenu *attachMenu = menu.addMenu("Attach..");
+
+		QAction* attachChildrenMenu = attachMenu->addAction("Attach All Children");
+		connect(attachChildrenMenu, &QAction::triggered, this, [this, node]() {
+			this->attachAllChildren(node);
+		});
+
+		QAction* detachChildrenMenu = attachMenu->addAction("Detach From Parent");
+		connect(detachChildrenMenu, &QAction::triggered, this, [this, node]() {
+			this->detachFromParent(node);
+		});
+	}
+
     menu.exec(ui->sceneTree->mapToGlobal(pos));
 }
 
@@ -494,6 +509,16 @@ void SceneHierarchyWidget::exportParticleSystem(const iris::SceneNodePtr &node)
 	mainWindow->exportNode(node);
 }
 
+void SceneHierarchyWidget::attachAllChildren()
+{
+	attachAllChildren(selectedNode);
+}
+
+void SceneHierarchyWidget::detachFromParent()
+{
+	detachFromParent(selectedNode);
+}
+
 void SceneHierarchyWidget::showHideNode(QTreeWidgetItem* item, bool show)
 {
 	long nodeId = item->data(1,Qt::UserRole).toLongLong();
@@ -548,6 +573,8 @@ void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
         treeItemList.insert(childNode->getNodeId(), childTreeItem);
         populateTree(childTreeItem, childNode);
     }
+
+	this->refreshAttachmentColors(sceneNode);
 }
 
 QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
@@ -613,6 +640,52 @@ void SceneHierarchyWidget::showItemAndChildren(QTreeWidgetItem * item)
 
 	for (int i = 0; i < item->childCount(); i++) {
 		showItemAndChildren(item->child(i));
+	}
+}
+
+//todo : attach physics objects
+void SceneHierarchyWidget::attachAllChildren(iris::SceneNodePtr node)
+{
+	_attachAllChildren(node);
+	refreshAttachmentColors(node);
+}
+
+void SceneHierarchyWidget::_attachAllChildren(iris::SceneNodePtr node)
+{
+	for (auto child : node->children) {
+		child->setAttached(true);
+		attachAllChildren(child);
+	}
+}
+
+
+void SceneHierarchyWidget::detachFromParent(iris::SceneNodePtr node)
+{
+	node->setAttached(false);
+	refreshAttachmentColors(node);
+}
+
+void SceneHierarchyWidget::refreshAttachmentColors(iris::SceneNodePtr node)
+{
+	auto rootNode = node->scene->getRootNode();
+	auto treeNode = treeItemList[node->getNodeId()];
+	treeNode->setTextColor(0, QColor(255, 255, 255, 255));
+	if (node->isAttached() &&
+		node->parent != rootNode) {
+		treeNode->setTextColor(0, QColor(255, 255, 255, 150));
+	}
+
+	for (int i = 0; i < treeNode->childCount(); i++) {
+		/*
+		if (node->parent == rootNode) {
+			treeNode->setTextColor(0, QColor(255, 255, 255, 255));
+		}
+		*/
+
+		auto childTreeNode = treeNode->child(i);
+		long nodeId = childTreeNode->data(0, Qt::UserRole).toLongLong();
+		auto childNode = nodeList[nodeId];
+		refreshAttachmentColors(childNode);
 	}
 }
 
