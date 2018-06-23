@@ -55,7 +55,7 @@ For more information see the LICENSE file
 #include "assetviewgrid.h"
 #include "assetgriditem.h"
 #include "assetviewer.h"
-#include "io/assethelper.h"
+#include "core/assethelper.h"
 #include "io/assetmanager.h"
 
 #include "../core/guidmanager.h"

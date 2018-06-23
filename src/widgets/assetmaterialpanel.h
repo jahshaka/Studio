@@ -9,8 +9,8 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#ifndef ASSETMODELPANEL_H
-#define ASSETMODELPANEL_H
+#ifndef ASSETMATERIALPANEL_H
+#define ASSETMATERIALPANEL_H
 
 #include <QWidget>
 #include <QListWidget>
@@ -21,14 +21,15 @@ For more information see the LICENSE file
 #include "core/database/database.h"
 
 class MainWindow;
+class MaterialPreset;
 
-class AssetModelPanel : public AssetPanel
+class AssetMaterialPanel : public AssetPanel
 {
     Q_OBJECT
 
 public:
-    explicit AssetModelPanel(QWidget *parent = 0);
-    ~AssetModelPanel();
+    explicit AssetMaterialPanel(QWidget *parent = 0);
+    ~AssetMaterialPanel();
 
     void setMainWindow(MainWindow* mainWindow) {
         this->mainWindow = mainWindow;
@@ -43,16 +44,17 @@ public:
     // Add the default starter primitives
     void addDefaultItems();
 
-    void addDefaultItem(const AssetRecord &asset);
     void addNewItem(QListWidgetItem *item);
 
     bool eventFilter(QObject *watched, QEvent *event);
 
 public slots:
     void showContextMenu(const QPoint &pos);
+    void applyMaterialPreset(QListWidgetItem *item);
 
 private:
-    QVector<DefaultModel> defaultModels;
+    //void addPreset(MaterialPreset* preset);
+    QVector<MaterialPreset> defaultMaterials;
     QVector<AssetRecord> objectAssets;
 };
 

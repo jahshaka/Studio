@@ -9,27 +9,25 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#ifndef MATERIALREADER_H
-#define MATERIALREADER_H
+#ifndef SCENENODEHELPER_H
+#define SCENENODEHELPER_H
 
-#include <QSharedPointer>
-#include "assetiobase.h"
+#include "irisglfwd.h"
 
-namespace iris {
-    class Material;
-}
+#include "irisgl/src/scenegraph/meshnode.h"
 
-class MaterialPreset;
+#include "constants.h"
+#include "core/project.h"
+#include "core/database/database.h"
 
-/**
- * This class parses material definitions from json files
- */
-class MaterialPresetReader : public AssetIOBase
+class SceneNodeHelper
 {
 public:
-    MaterialPresetReader() = default;
-    QJsonObject getMatPreset(const QString &filename);
-    MaterialPreset readMaterialPreset(QString filename);
+    static iris::MeshNodePtr createBasicMeshNode(
+        const QString &meshPath,
+        const QString &meshName,
+        const QString &guid
+    );
 };
 
-#endif // MATERIALREADER_H
+#endif

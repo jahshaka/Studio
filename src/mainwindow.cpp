@@ -41,10 +41,12 @@ For more information see the LICENSE file
 #include "irisgl/src/animation/animation.h"
 #include "irisgl/src/graphics/postprocessmanager.h"
 #include "irisgl/src/core/logger.h"
+
 #include "core/guidmanager.h"
 #include "core/thumbnailmanager.h"
-#include "src/dialogs/donatedialog.h"
-#include "src/io/assethelper.h"
+#include "dialogs/donatedialog.h"
+#include "core/assethelper.h"
+#include "core/scenenodehelper.h"
 
 #include <QFontDatabase>
 #include <QOpenGLContext>
@@ -119,12 +121,11 @@ For more information see the LICENSE file
 #include "../src/widgets/scenehierarchywidget.h"
 #include "../src/widgets/scenenodepropertieswidget.h"
 
-#include "../src/widgets/materialsets.h"
-#include "../src/widgets/modelpresets.h"
 #include "../src/widgets/skypresets.h"
 
 #include "widgets/assetfavorites.h"
 #include "widgets/assetmodelpanel.h"
+#include "widgets/assetmaterialpanel.h"
 
 #include "../src/widgets/assetview.h"
 #include "dialogs/toast.h"
@@ -191,8 +192,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	//restoreState(settings->getValue("windowState", "").toByteArray());
 
 	undoStackCount = 0;
-
-	
 }
 
 void MainWindow::grabOpenGLContextHack()
@@ -872,7 +871,7 @@ void MainWindow::closeProject()
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
-void MainWindow::applyMaterialPreset(MaterialPreset *preset)
+void MainWindow::applyMaterialPreset(MaterialPreset preset)
 {
     if (!activeSceneNode || activeSceneNode->sceneNodeType != iris::SceneNodeType::Mesh) return;
 
@@ -883,19 +882,19 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
 
-    m->setValue("diffuseTexture", preset->diffuseTexture);
-    m->setValue("specularTexture", preset->specularTexture);
-    m->setValue("normalTexture", preset->normalTexture);
-    m->setValue("reflectionTexture", preset->reflectionTexture);
+    m->setValue("diffuseTexture", preset.diffuseTexture);
+    m->setValue("specularTexture", preset.specularTexture);
+    m->setValue("normalTexture", preset.normalTexture);
+    m->setValue("reflectionTexture", preset.reflectionTexture);
 
-    m->setValue("ambientColor", preset->ambientColor);
-    m->setValue("diffuseColor", preset->diffuseColor);
-    m->setValue("specularColor", preset->specularColor);
+    m->setValue("ambientColor", preset.ambientColor);
+    m->setValue("diffuseColor", preset.diffuseColor);
+    m->setValue("specularColor", preset.specularColor);
 
-    m->setValue("shininess", preset->shininess);
-    m->setValue("normalIntensity", preset->normalIntensity);
-    m->setValue("reflectionInfluence", preset->reflectionInfluence);
-    m->setValue("textureScale", preset->textureScale);
+    m->setValue("shininess", preset.shininess);
+    m->setValue("normalIntensity", preset.normalIntensity);
+    m->setValue("reflectionInfluence", preset.reflectionInfluence);
+    m->setValue("textureScale", preset.textureScale);
 
     meshNode->setMaterial(m);
 
@@ -922,7 +921,7 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
 
     QString guid = db->createAssetEntry(
         GUIDManager::generateGUID(),
-        preset->name,
+        preset.name,
         static_cast<int>(ModelTypes::Material),
         fguid,
         QString(),
@@ -978,12 +977,19 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
     );
 
     // TODO: update node's material without updating the whole ui
-    this->sceneNodePropertiesWidget->refreshMaterial(preset->type);
+    this->sceneNodePropertiesWidget->refreshMaterial(preset.type);
 }
 
-void MainWindow::favoriteItem(const QListWidgetItem *item)
+void MainWindow::favoriteItem(QListWidgetItem *item)
 {
-    assetFavorites->addFavorite(item);
+    if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Material)) {
+        assetMaterialPanel->addNewItem(item);
+        presetsTabWidget->setCurrentIndex(1);
+    }
+    else if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Object)) {
+        assetModelPanel->addNewItem(item);
+        presetsTabWidget->setCurrentIndex(0);
+    }
 }
 
 void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
@@ -1044,13 +1050,12 @@ void MainWindow::setSceneAnimTime(float time)
 void MainWindow::addPlane()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/plane.obj");
-    node->setFaceCullingMode(iris::FaceCullingMode::None);
-    node->setName("Plane");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/plane.obj",
+        "Plane",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1070,13 +1075,12 @@ void MainWindow::addPlane()
 void MainWindow::addGround()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/models/ground.obj");
-    node->setFaceCullingMode(iris::FaceCullingMode::None);
-    node->setName("Ground");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/models/ground.obj",
+        "Ground",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1096,12 +1100,12 @@ void MainWindow::addGround()
 void MainWindow::addCone()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/cone.obj");
-    node->setName("Cone");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/cone.obj",
+        "Cone",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1121,12 +1125,12 @@ void MainWindow::addCone()
 void MainWindow::addCapsule()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/capsule.obj");
-    node->setName("Capsule");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/capsule.obj",
+        "Plane",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1146,12 +1150,12 @@ void MainWindow::addCapsule()
 void MainWindow::addCube()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/cube.obj");
-    node->setName("Cube");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/cube.obj",
+        "Cube",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1171,12 +1175,12 @@ void MainWindow::addCube()
 void MainWindow::addTorus()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/torus.obj");
-    node->setName("Torus");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/torus.obj",
+        "Torus",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1196,12 +1200,12 @@ void MainWindow::addTorus()
 void MainWindow::addSphere()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/sphere.obj");
-    node->setName("Sphere");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/sphere.obj",
+        "Sphere",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1221,12 +1225,12 @@ void MainWindow::addSphere()
 void MainWindow::addCylinder()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/cylinder.obj");
-    node->setName("Cylinder");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/cylinder.obj",
+        "Cylinder",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1246,12 +1250,12 @@ void MainWindow::addCylinder()
 void MainWindow::addPyramid()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/pyramid.obj");
-    node->setName("Pyramid");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/pyramid.obj",
+        "Pyramid",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1271,12 +1275,12 @@ void MainWindow::addPyramid()
 void MainWindow::addSponge()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/sponge.obj");
-    node->setName("Sponge");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/sponge.obj",
+        "Sponge",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1296,12 +1300,12 @@ void MainWindow::addSponge()
 void MainWindow::addTeapot()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/teapot.obj");
-    node->setName("Teapot");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/teapot.obj",
+        "Teapot",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1321,12 +1325,12 @@ void MainWindow::addTeapot()
 void MainWindow::addSteps()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/steps.obj");
-    node->setName("Steps");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/steps.obj",
+        "Steps",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1346,12 +1350,12 @@ void MainWindow::addSteps()
 void MainWindow::addGear()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/gear.obj");
-    node->setName("Gear");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/gear.obj",
+        "Gear",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -2313,12 +2317,8 @@ void MainWindow::setupDockWidgets()
 
     QWidget *presetDockContents = new QWidget;
     presetDockContents->setStyleSheet( "QWidget { background-color: #151515; }");
-    MaterialSets *materialPresets = new MaterialSets;
-    materialPresets->setMainWindow(this);
     SkyPresets *skyPresets = new SkyPresets;
     skyPresets->setMainWindow(this);
-    ModelPresets *modelPresets = new ModelPresets;
-    modelPresets->setMainWindow(this);
 
     assetFavorites = new AssetFavorites;
     assetFavorites->setMainWindow(this);
@@ -2326,14 +2326,17 @@ void MainWindow::setupDockWidgets()
 
     assetModelPanel = new AssetModelPanel;
     assetModelPanel->setMainWindow(this);
-    assetModelPanel->setHandle(db);
+    assetModelPanel->setDatabaseHandle(db);
+
+    assetMaterialPanel = new AssetMaterialPanel;
+    assetMaterialPanel->setMainWindow(this);
+    assetMaterialPanel->setDatabaseHandle(db);
 
     presetsTabWidget = new QTabWidget;
     presetsTabWidget->setObjectName("PresetsTabWidget");
     presetsTabWidget->setMinimumWidth(396);
     presetsTabWidget->addTab(assetModelPanel, "Models");
-    presetsTabWidget->addTab(modelPresets, "Primitives");
-    presetsTabWidget->addTab(materialPresets, "Materials");
+    presetsTabWidget->addTab(assetMaterialPanel, "Materials");
     presetsTabWidget->addTab(skyPresets, "Skyboxes");
     presetsTabWidget->addTab(assetFavorites, "Favorites");
     presetDockContents->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);

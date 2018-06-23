@@ -85,6 +85,7 @@ class AssetWidget;
 
 class AssetFavorites;
 class AssetModelPanel;
+class AssetMaterialPanel;
 
 #include "widgets/scenenodepropertieswidget.h"
 
@@ -154,9 +155,9 @@ public:
      * Applies material preset to active scene node and refreshes material property widget
      * @param preset
      */
-    void applyMaterialPreset(MaterialPreset* preset);
+    void applyMaterialPreset(MaterialPreset preset);
 
-    void favoriteItem(const QListWidgetItem *item);
+    void favoriteItem(QListWidgetItem *item);
 
     /**
      * Returns absolute path of file copied as an asset
@@ -475,6 +476,7 @@ private:
 
     AssetFavorites *assetFavorites;
     AssetModelPanel *assetModelPanel;
+    AssetMaterialPanel *assetMaterialPanel;
 };
 
 #endif // MAINWINDOW_H

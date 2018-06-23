@@ -16,7 +16,7 @@ For more information see the LICENSE file
 #include "globals.h"
 #include "../guidmanager.h"
 #include "io/assetmanager.h"
-#include "io/assethelper.h"
+#include "core/assethelper.h"
 #include "io/scenewriter.h"
 
 #include <QDebug>

@@ -49,7 +49,7 @@ For more information see the LICENSE file
 #include "core/settingsmanager.h"
 #include "core/thumbnailmanager.h"
 #include "editor/thumbnailgenerator.h"
-#include "io/assethelper.h"
+#include "core/assethelper.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 #include "widgets/sceneviewwidget.h"

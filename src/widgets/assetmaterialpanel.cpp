@@ -9,7 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "assetmodelpanel.h"
+#include "assetmaterialpanel.h"
 
 #include <QApplication>
 #include <QDir>
@@ -24,7 +24,7 @@ For more information see the LICENSE file
 #include "io/materialpresetreader.h"
 #include "mainwindow.h"
 
-AssetModelPanel::AssetModelPanel(QWidget *parent) : AssetPanel(parent)
+AssetMaterialPanel::AssetMaterialPanel(QWidget *parent) : AssetPanel(parent)
 {
     installEventFilter(this);
     listView->installEventFilter(this);
@@ -46,6 +46,9 @@ AssetModelPanel::AssetModelPanel(QWidget *parent) : AssetPanel(parent)
     connect(listView,   SIGNAL(customContextMenuRequested(const QPoint&)),
             this,       SLOT(showContextMenu(const QPoint&)));
 
+    connect(listView,   SIGNAL(itemClicked(QListWidgetItem*)),
+            this,       SLOT(applyMaterialPreset(QListWidgetItem*)));
+
     setStyleSheet(
         "QListWidget { padding: 4px; border: 0; background: #202020; }"
     );
@@ -53,81 +56,38 @@ AssetModelPanel::AssetModelPanel(QWidget *parent) : AssetPanel(parent)
     addDefaultItems();
 }
 
-AssetModelPanel::~AssetModelPanel()
+AssetMaterialPanel::~AssetMaterialPanel()
 {
 }
 
-void AssetModelPanel::addDefaultItems()
+void AssetMaterialPanel::addDefaultItems()
 {
-    defaultModels.append(DefaultModel {
-        "Plane", ":/content/primitives/plane.obj", "app/modelpresets/plane.png"
-    });
+    auto dir = QDir(IrisUtils::getAbsoluteAssetPath("app/content/materials"));
+    auto files = dir.entryInfoList(QStringList(), QDir::Files);
 
-    defaultModels.append(DefaultModel {
-        "Cube", ":/content/primitives/cube.obj", "app/modelpresets/cube.png"
-    });
-    
-    defaultModels.append(DefaultModel {
-        "Cylinder", ":/content/primitives/cylinder.obj", "app/modelpresets/cylinder.png"
-    });
+    auto reader = new MaterialPresetReader();
 
-    defaultModels.append(DefaultModel {
-        "Sphere", ":/content/primitives/sphere.obj", "app/modelpresets/sphere.png"
-    });
+    for (const auto &file : files) {
+        auto preset = reader->readMaterialPreset(file.absoluteFilePath());
+        defaultMaterials.append(preset);
+    }
 
-    defaultModels.append(DefaultModel {
-        "Torus", ":/content/primitives/torus.obj", "app/modelpresets/torus.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Pyramid", ":/content/primitives/pyramid.obj", "app/modelpresets/pyramid.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Capsule", ":/content/primitives/capsule.obj", "app/modelpresets/capsule.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Cone", ":/content/primitives/cone.obj", "app/modelpresets/cone.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Gear", ":/content/primitives/gear.obj", "app/modelpresets/gear.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Steps", ":/content/primitives/steps.obj", "app/modelpresets/steps.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Teapot", ":/content/primitives/teapot.obj", "app/modelpresets/teapot.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Sponge", ":/content/primitives/sponge.obj", "app/modelpresets/sponge.png"
-    });
-
-    for (const auto &object : defaultModels) {
+    for (int i = 0; i < defaultMaterials.count(); ++i) {
         auto item = new QListWidgetItem;
-        item->setData(Qt::DisplayRole, object.objectName);
-        item->setData(Qt::UserRole, object.objectName);
+        item->setData(Qt::DisplayRole, defaultMaterials[i].name);
+        item->setData(Qt::UserRole, defaultMaterials[i].name);
 
-        item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Object));
-        item->setData(MODEL_MESH_ROLE, object.meshPath);
+        item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Material));
         item->setData(MODEL_GUID_ROLE, GUIDManager::generateGUID());
 
-        item->setIcon(QIcon(IrisUtils::getAbsoluteAssetPath(object.objectIcon)));
+        item->setIcon(QIcon(defaultMaterials[i].icon));
+        item->setData(0x32, i); // used to get item index
 
         listView->addItem(item);
     }
 }
 
-void AssetModelPanel::addDefaultItem(const AssetRecord &asset)
-{
-
-}
-
-void AssetModelPanel::addNewItem(QListWidgetItem *itemInc)
+void AssetMaterialPanel::addNewItem(QListWidgetItem *itemInc)
 {
     auto asset = handle->fetchAsset(itemInc->data(MODEL_GUID_ROLE).toString());
 
@@ -136,7 +96,6 @@ void AssetModelPanel::addNewItem(QListWidgetItem *itemInc)
     item->setData(Qt::UserRole, asset.name);
 
     item->setData(MODEL_TYPE_ROLE, itemInc->data(MODEL_TYPE_ROLE).toInt());
-    item->setData(MODEL_MESH_ROLE, itemInc->data(MODEL_MESH_ROLE).toString());
     item->setData(MODEL_GUID_ROLE, itemInc->data(MODEL_GUID_ROLE).toString());
 
     QPixmap thumbnail;
@@ -147,18 +106,21 @@ void AssetModelPanel::addNewItem(QListWidgetItem *itemInc)
         item->setIcon(QIcon(":/icons/empty_object.png"));
     }
 
-    listView->addItem(item);
+    item->setData(0x32, defaultMaterials.count() - 1);
 
+    listView->addItem(item);
+    
+    
     // add this asset to the assets table and set the VIEW so we know where it belongs
     // handle->addFavorite(itemInc->data(MODEL_GUID_ROLE).toString());
 }
 
-bool AssetModelPanel::eventFilter(QObject *watched, QEvent *event)
+bool AssetMaterialPanel::eventFilter(QObject *watched, QEvent *event)
 {
     return QObject::eventFilter(watched, event);
 }
 
-void AssetModelPanel::showContextMenu(const QPoint &pos)
+void AssetMaterialPanel::showContextMenu(const QPoint &pos)
 {
     QMenu contextMenu;
     contextMenu.setStyleSheet(
@@ -179,4 +141,11 @@ void AssetModelPanel::showContextMenu(const QPoint &pos)
 
     contextMenu.addAction(&action);
     contextMenu.exec(mapToGlobal(pos));
+}
+
+void AssetMaterialPanel::applyMaterialPreset(QListWidgetItem *item)
+{
+    if (!mainWindow) return;
+    auto preset = defaultMaterials[item->data(0x32).toInt()];
+    mainWindow->applyMaterialPreset(preset);
 }
