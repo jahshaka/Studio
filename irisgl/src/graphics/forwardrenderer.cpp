@@ -100,6 +100,8 @@ ForwardRenderer::ForwardRenderer(bool supportsVr, bool physicsEnabled)
     perfTimer = new PerformanceTimer();
 
     renderLightBillboards = true;
+	generateLightUnformNames();
+
 }
 
 void ForwardRenderer::generateShadowBuffer(GLuint size)
@@ -904,6 +906,29 @@ void ForwardRenderer::createEmitterShader()
 {
     emitterShader = GraphicsHelper::loadShader(":/assets/shaders/emitter.vert",
                                                ":/assets/shaders/emitter.frag");
+}
+
+void ForwardRenderer::generateLightUnformNames()
+{
+	for (int i = 0; i < 16; i++) {
+		LightUniformNames names;
+		QString lightPrefix = QString("u_lights[%0].").arg(i);
+		names.color = (lightPrefix + "color").toStdString();
+		names.type = (lightPrefix + "type").toStdString();
+		names.position = (lightPrefix + "position").toStdString();
+		names.distance = (lightPrefix + "distance").toStdString();
+		names.direction = (lightPrefix + "direction").toStdString();
+		names.cutOffAngle = (lightPrefix + "cutOffAngle").toStdString();
+		names.cutOffSoftness = (lightPrefix + "cutOffSoftness").toStdString();
+		names.intensity = (lightPrefix + "intensity").toStdString();
+		names.constantAtten = (lightPrefix + "constantAtten").toStdString();
+		names.linearAtten = (lightPrefix + "linearAtten").toStdString();
+		names.quadAtten = (lightPrefix + "quadtraticAtten").toStdString();
+		names.shadowType = (lightPrefix + "shadowType").toStdString();
+		names.shadowMap = (lightPrefix + "shadowMap").toStdString();
+		names.shadowMatrix = (lightPrefix + "shadowMatrix").toStdString();
+		lightUniformNames.append(names);
+	}
 }
 
 ForwardRenderer::~ForwardRenderer()

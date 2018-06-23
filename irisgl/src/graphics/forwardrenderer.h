@@ -42,6 +42,25 @@ class PostProcessManager;
 class PostProcessContext;
 class PerformanceTimer;
 
+struct LightUniformNames
+{
+	std::string color;
+	std::string type;
+	std::string position;
+	std::string distance;
+	std::string direction;
+	std::string cutOffAngle;
+	std::string cutOffSoftness;
+	std::string intensity;
+	std::string constantAtten;
+	std::string linearAtten;
+	std::string quadAtten;
+	std::string shadowType;
+	std::string shadowMap;
+	std::string shadowMatrix;
+	std::string shadowType;
+};
+
 /**
  * This is a basic forward renderer.
  * It currently has features specific for the editor which will be taken out in a future version.
@@ -81,6 +100,7 @@ class ForwardRenderer
     Texture2DPtr finalRenderTexture;
 
     PerformanceTimer* perfTimer;
+	QVector<LightUniformNames> lightUniformNames;
 
 public:
 
@@ -139,6 +159,8 @@ private:
     void renderDirectionalShadow(LightNodePtr lightNode,ScenePtr node);
     void renderSpotlightShadow(LightNodePtr lightNode,ScenePtr node);
     void generateShadowBuffer(GLuint size = 1024);
+
+	void generateLightUnformNames();
 
     //editor-specific
     iris::Billboard* billboard;
