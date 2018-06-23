@@ -158,7 +158,7 @@ void EditorVrController::update(float dt)
             // Pick a node if the trigger is down
             if (leftTouch->getIndexTrigger() > 0.1f && !leftPickedNode)
             {
-				leftPickedNode = pick.hitNode;
+				leftPickedNode = getObjectRoot(pick.hitNode);
 				leftPos = leftPickedNode->getLocalPos();
 				leftRot = leftPickedNode->getLocalRot();
 				leftScale = leftPickedNode->getLocalScale();
@@ -258,7 +258,7 @@ void EditorVrController::update(float dt)
 																					 // Pick a node if the trigger is down
 			if (rightTouch->getIndexTrigger() > 0.1f && !rightPickedNode)
 			{
-				rightPickedNode = pick.hitNode;
+				rightPickedNode = getObjectRoot(pick.hitNode);
 				rightPos = rightPickedNode->getLocalPos();
 				rightRot = rightPickedNode->getLocalRot();
 				rightScale = rightPickedNode->getLocalScale();
@@ -352,4 +352,11 @@ bool EditorVrController::rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResu
     return true;
 }
 
+iris::SceneNodePtr EditorVrController::getObjectRoot(iris::SceneNodePtr node)
+{
+	if (node->isAttached())
+		return getObjectRoot(node->getParent());
+
+	return node;
+}
 

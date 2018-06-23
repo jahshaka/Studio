@@ -69,6 +69,8 @@ private:
      * Returns nearest object hit in the raycast
      */
     bool rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResult& result);
+
+	iris::SceneNodePtr getObjectRoot(iris::SceneNodePtr node);
 };
 
 #endif // EDITORVRCONTROLLER_H
