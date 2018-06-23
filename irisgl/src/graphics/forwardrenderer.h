@@ -58,7 +58,6 @@ struct LightUniformNames
 	std::string shadowType;
 	std::string shadowMap;
 	std::string shadowMatrix;
-	std::string shadowType;
 };
 
 /**

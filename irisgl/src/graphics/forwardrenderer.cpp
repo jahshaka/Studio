@@ -629,29 +629,30 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             if ( item->renderStates.receiveLighting ) {
                 for (int i=0;i<lightCount;i++)
                 {
-                    QString lightPrefix = QString("u_lights[%0].").arg(i);
+					auto& lightNames = this->lightUniformNames[i];
+                    //QString lightPrefix = QString("u_lights[%0].").arg(i);
 
                     auto light = renderData->scene->lights[i];
                     if(!light->isVisible())
                     {
                         //quick hack for now
-						graphics->setShaderUniform(lightPrefix+"color", QColor(0,0,0));
+						graphics->setShaderUniform(lightNames.color.c_str(), QColor(0,0,0));
                         continue;
                     }
 
-					graphics->setShaderUniform(lightPrefix+"type", (int)light->lightType);
-					graphics->setShaderUniform(lightPrefix+"position", light->globalTransform.column(3).toVector3D());
+					graphics->setShaderUniform(lightNames.type.c_str(), (int)light->lightType);
+					graphics->setShaderUniform(lightNames.position.c_str(), light->globalTransform.column(3).toVector3D());
                     //mat->setUniformValue(lightPrefix+"direction", light->getDirection());
-					graphics->setShaderUniform(lightPrefix+"distance", light->distance);
-					graphics->setShaderUniform(lightPrefix+"direction", light->getLightDir());
-					graphics->setShaderUniform(lightPrefix+"cutOffAngle", light->spotCutOff);
-					graphics->setShaderUniform(lightPrefix+"cutOffSoftness", light->spotCutOffSoftness);
-					graphics->setShaderUniform(lightPrefix+"intensity", light->intensity);
-					graphics->setShaderUniform(lightPrefix+"color", light->color);
+					graphics->setShaderUniform(lightNames.distance.c_str(), light->distance);
+					graphics->setShaderUniform(lightNames.direction.c_str(), light->getLightDir());
+					graphics->setShaderUniform(lightNames.cutOffAngle.c_str(), light->spotCutOff);
+					graphics->setShaderUniform(lightNames.cutOffSoftness.c_str(), light->spotCutOffSoftness);
+					graphics->setShaderUniform(lightNames.intensity.c_str(), light->intensity);
+					graphics->setShaderUniform(lightNames.color.c_str(), light->color);
 
-					graphics->setShaderUniform(lightPrefix+"constantAtten", 1.0f);
-					graphics->setShaderUniform(lightPrefix+"linearAtten", 0.0f);
-					graphics->setShaderUniform(lightPrefix+"quadtraticAtten", 1.0f);
+					graphics->setShaderUniform(lightNames.constantAtten.c_str(), 1.0f);
+					graphics->setShaderUniform(lightNames.linearAtten.c_str(), 0.0f);
+					graphics->setShaderUniform(lightNames.quadAtten.c_str(), 1.0f);
 
                     // shadow data
 //                    mat->setUniformValue(lightPrefix+"shadowEnabled",
@@ -659,16 +660,16 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 //                                         scene->shadowEnabled &&
 //                                         light->lightType != iris::LightType::Point);
 					if (!scene->shadowEnabled) {
-						graphics->setShaderUniform(lightPrefix + "shadowType", (int)iris::ShadowMapType::None);
+						graphics->setShaderUniform(lightNames.shadowType.c_str(), (int)iris::ShadowMapType::None);
 					}
 					else {
-						graphics->setShaderUniform(lightPrefix + "shadowMap", shadowIndex);
+						graphics->setShaderUniform(lightNames.shadowMap.c_str(), shadowIndex);
 						//mat->setUniformValue(QString("shadowMaps[%0].").arg(i), 8);
-						graphics->setShaderUniform(lightPrefix + "shadowMatrix", light->shadowMap->shadowMatrix);
+						graphics->setShaderUniform(lightNames.shadowMatrix.c_str(), light->shadowMap->shadowMatrix);
 						if (light->lightType == iris::LightType::Point)
-							graphics->setShaderUniform(lightPrefix + "shadowType", (int)iris::ShadowMapType::None);
+							graphics->setShaderUniform(lightNames.shadowType.c_str(), (int)iris::ShadowMapType::None);
 						else
-							graphics->setShaderUniform(lightPrefix + "shadowType", (int)light->shadowMap->shadowType);
+							graphics->setShaderUniform(lightNames.shadowType.c_str(), (int)light->shadowMap->shadowType);
 
 
 						graphics->setTexture(shadowIndex, light->shadowMap->shadowTexture);
