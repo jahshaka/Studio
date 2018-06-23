@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "../graphics/renderlist.h"
 
 #include "physics/environment.h"
+#include "math/intersectionhelper.h"
 
 namespace iris
 {
@@ -173,27 +174,35 @@ void Scene::rayCast(const QSharedPointer<iris::SceneNode>& sceneNode,
         auto mesh = meshNode->getMesh();
         if(mesh != nullptr)
         {
-            auto triMesh = meshNode->getMesh()->getTriMesh();
-
+            
             // transform segment to local space
             auto invTransform = meshNode->globalTransform.inverted();
             auto a = invTransform * segStart;
             auto b = invTransform * segEnd;
 
-            QList<iris::TriangleIntersectionResult> results;
-            if (int resultCount = triMesh->getSegmentIntersections(a, b, results)) {
-                for (auto triResult : results) {
-                    // convert hit to world space
-                    auto hitPoint = meshNode->globalTransform * triResult.hitPoint;
+			// ray-sphere intersection first
+			auto& mesh = meshNode->getMesh();
+			auto sphere = mesh->getBoundingSphere();
+			float t;
+			QVector3D hitPoint;
+			if (!IntersectionHelper::raySphereIntersects(a, (b - a).normalized(), QVector3D(0, 0, 0), sphere.radius, t, hitPoint)) {
+				auto triMesh = meshNode->getMesh()->getTriMesh();
 
-                    PickingResult pick;
-                    pick.hitNode = sceneNode;
-                    pick.hitPoint = hitPoint;
-                    pick.distanceFromStartSqrd = (hitPoint - segStart).lengthSquared();
+				QList<iris::TriangleIntersectionResult> results;
+				if (int resultCount = triMesh->getSegmentIntersections(a, b, results)) {
+					for (auto triResult : results) {
+						// convert hit to world space
+						auto hitPoint = meshNode->globalTransform * triResult.hitPoint;
 
-                    hitList.append(pick);
-                }
-            }
+						PickingResult pick;
+						pick.hitNode = sceneNode;
+						pick.hitPoint = hitPoint;
+						pick.distanceFromStartSqrd = (hitPoint - segStart).lengthSquared();
+
+						hitList.append(pick);
+					}
+				}
+			}
         }
     }
 

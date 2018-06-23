@@ -285,13 +285,13 @@ void EditorVrController::update(float dt)
 
 			// release node
 			rightPickedNode.clear();
-			leftNodeOffset.setToIdentity(); // why bother?
+			rightNodeOffset.setToIdentity(); // why bother?
 		}
 
 		// update picked node
 		if (!!rightPickedNode) {
 			// calculate the global position
-			auto nodeGlobal = rightHandRenderItem->worldMatrix * leftNodeOffset;
+			auto nodeGlobal = rightHandRenderItem->worldMatrix * rightNodeOffset;
 
 			// calculate position relative to parent
 			auto localTransform = rightPickedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
@@ -314,11 +314,12 @@ void EditorVrController::update(float dt)
 			// leftPickedNode->update(0);// bad!
 			// it wil be updated a frame later, no need to stress over this
 		}
-
+		/*
 		if (rayCastToScene(rightBeamRenderItem->worldMatrix, pick)) {
 			auto dist = qSqrt(pick.distanceFromStartSqrd);
-			rightBeamRenderItem->worldMatrix.scale(1, 1, (dist /*  * (1.0f / 0.55f )*/));// todo: remove magic 0.55
+			rightBeamRenderItem->worldMatrix.scale(1, 1, (dist);// todo: remove magic 0.55
 		}
+		*/
 
 		scene->geometryRenderList->add(rightBeamRenderItem);
 		scene->geometryRenderList->add(rightHandRenderItem);
