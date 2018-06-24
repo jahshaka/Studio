@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "skeleton.h"
 #include "graphicshelper.h"
 #include "renderdata.h"
+#include "shader.h"
 #include "material.h"
 #include "renderitem.h"
 #include "shadowmap.h"
@@ -477,6 +478,13 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
 
     for (int eye = 0; eye < 2; ++eye)
     {
+		// states need to be reset before the framebuffer it set and cleared
+		// glClear adheres to states that prevent writing to certain buffers
+		// like glDepthMask or glColorMask
+		graphics->setBlendState(BlendState::Opaque);
+		graphics->setDepthState(DepthState::Default);
+		graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+
         vrDevice->beginEye(eye);
 
         auto view = vrDevice->getEyeViewMatrix(eye, viewerPos, viewTransform);
@@ -888,6 +896,7 @@ void ForwardRenderer::createShadowShader()
 
 void ForwardRenderer::createParticleShader()
 {
+	/*
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
     vshader->compileSourceFile(":/assets/shaders/particle.vert");
 
@@ -901,6 +910,8 @@ void ForwardRenderer::createParticleShader()
     particleShader->link();
 
     particleShader->bind();
+	*/
+	particleShader = Shader::load(":/assets/shaders/particle.vert", ":/assets/shaders/particle.frag");
 }
 
 void ForwardRenderer::createEmitterShader()

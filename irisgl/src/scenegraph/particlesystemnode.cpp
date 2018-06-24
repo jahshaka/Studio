@@ -196,7 +196,7 @@ void ParticleSystemNode::update(float delta) {
     }
 }
 
-void ParticleSystemNode::renderParticles(GraphicsDevicePtr device, RenderData* renderData, QOpenGLShaderProgram* shader)
+void ParticleSystemNode::renderParticles(GraphicsDevicePtr device, RenderData* renderData, ShaderPtr shader)
 {
     renderer->icon = texture;
     renderer->render(device, shader, renderData, this->particles);

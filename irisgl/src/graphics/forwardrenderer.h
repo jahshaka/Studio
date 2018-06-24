@@ -85,7 +85,7 @@ class ForwardRenderer
     QOpenGLShaderProgram* skinnedLineShader;
     QOpenGLShaderProgram* shadowShader;
     QOpenGLShaderProgram* skinnedShadowShader;
-    QOpenGLShaderProgram* particleShader;
+    ShaderPtr particleShader;
     QOpenGLShaderProgram* emitterShader;
 
     PostProcessManagerPtr postMan;
