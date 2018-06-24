@@ -50,6 +50,7 @@ public:
 
 public slots:
     void showContextMenu(const QPoint &pos);
+    void addObjectToScene(QModelIndex itemIndex);
 
 private:
     QVector<DefaultModel> defaultModels;

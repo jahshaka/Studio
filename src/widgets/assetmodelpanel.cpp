@@ -19,6 +19,7 @@ For more information see the LICENSE file
 
 #include "irisgl/src/core/irisutils.h"
 
+#include "constants.h"
 #include "core/materialpreset.h"
 #include "core/guidmanager.h"
 #include "io/materialpresetreader.h"
@@ -45,6 +46,8 @@ AssetModelPanel::AssetModelPanel(QWidget *parent) : AssetPanel(parent)
     setContextMenuPolicy(Qt::CustomContextMenu);
     connect(listView,   SIGNAL(customContextMenuRequested(const QPoint&)),
             this,       SLOT(showContextMenu(const QPoint&)));
+
+    connect(listView, SIGNAL(doubleClicked(QModelIndex)), SLOT(addObjectToScene(QModelIndex)));
 
     setStyleSheet(
         "QListWidget { padding: 4px; border: 0; background: #202020; }"
@@ -114,7 +117,7 @@ void AssetModelPanel::addDefaultItems()
 
         item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Object));
         item->setData(MODEL_MESH_ROLE, object.meshPath);
-        item->setData(MODEL_GUID_ROLE, GUIDManager::generateGUID());
+        item->setData(MODEL_GUID_ROLE, Constants::Reserved::DefaultPrimitives.key(object.objectName));
 
         item->setIcon(QIcon(IrisUtils::getAbsoluteAssetPath(object.objectIcon)));
 
@@ -155,7 +158,94 @@ void AssetModelPanel::addNewItem(QListWidgetItem *itemInc)
 
 bool AssetModelPanel::eventFilter(QObject *watched, QEvent *event)
 {
+    QPoint startPos;
+
+    if (watched == listView->viewport()) {
+        switch (event->type()) {
+            case QEvent::ContextMenu: {
+                auto evt = static_cast<QContextMenuEvent*>(event);
+                AssetModelPanel::contextMenuEvent(evt);
+                break;
+            }
+
+            case QEvent::MouseButtonPress: {
+                auto evt = static_cast<QMouseEvent*>(event);
+                if (evt->button() == Qt::LeftButton) {
+                    startPos = evt->pos();
+                    QModelIndex index = listView->indexAt(evt->pos());
+                }
+
+                AssetModelPanel::mousePressEvent(evt);
+                break;
+            }
+
+            case QEvent::MouseButtonRelease: {
+                auto evt = static_cast<QMouseEvent*>(event);
+                AssetModelPanel::mouseReleaseEvent(evt);
+                break;
+            }
+
+            case QEvent::MouseMove: {
+                auto evt = static_cast<QMouseEvent*>(event);
+                if (evt->buttons() & Qt::LeftButton) {
+                    int distance = (evt->pos() - startPos).manhattanLength();
+                    if (distance >= QApplication::startDragDistance()) {
+                        auto item = listView->currentItem();
+
+                        if (item) {
+                            auto drag = QPointer<QDrag>(new QDrag(this));
+                            auto mimeData = QPointer<QMimeData>(new QMimeData);
+
+                            QByteArray mdata;
+                            QDataStream stream(&mdata, QIODevice::WriteOnly);
+                            QMap<int, QVariant> roleDataMap;
+
+                            roleDataMap[0] = QVariant(item->data(MODEL_TYPE_ROLE).toInt());
+                            roleDataMap[1] = QVariant(item->data(Qt::UserRole).toString());
+                            roleDataMap[2] = QVariant(item->data(MODEL_MESH_ROLE).toString());
+                            roleDataMap[3] = QVariant(item->data(MODEL_GUID_ROLE).toString());
+
+                            stream << roleDataMap;
+
+                            mimeData->setData(QString("application/x-qabstractitemmodeldatalist"), mdata);
+                            drag->setMimeData(mimeData);
+
+                            // only hide for object models
+                            drag->setPixmap(item->icon().pixmap(64, 64));
+                            drag->exec();
+                        }
+                    }
+                }
+
+                AssetModelPanel::mouseMoveEvent(evt);
+                break;
+            }
+
+            default: break;
+        }
+    }
+
     return QObject::eventFilter(watched, event);
+}
+
+void AssetModelPanel::addObjectToScene(QModelIndex itemIndex)
+{
+    if (mainWindow == Q_NULLPTR) return;
+    auto item = listView->item(itemIndex.row());
+    auto text = item->text();
+
+    if (text == "Plane")    mainWindow->addPlane();
+    if (text == "Cone")     mainWindow->addCone();
+    if (text == "Cube")     mainWindow->addCube();
+    if (text == "Cylinder") mainWindow->addCylinder();
+    if (text == "Sphere")   mainWindow->addSphere();
+    if (text == "Torus")    mainWindow->addTorus();
+    if (text == "Capsule")  mainWindow->addCapsule();
+    if (text == "Gear")     mainWindow->addGear();
+    if (text == "Pyramid")  mainWindow->addPyramid();
+    if (text == "Teapot")   mainWindow->addTeapot();
+    if (text == "Sponge")   mainWindow->addSponge();
+    if (text == "Steps")    mainWindow->addSteps();
 }
 
 void AssetModelPanel::showContextMenu(const QPoint &pos)

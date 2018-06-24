@@ -292,6 +292,7 @@ public slots:
     void addViewer();
 	void addGrabHand();
     void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
+    void addPrimitiveObject(const QString &guid);
 	void addMaterialMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D(), const QString &guid = QString(), const QString &name = QString());
     void addAssetParticleSystem(bool ignore, QVector3D position, QString guid, QString assetName);
     void addDragPlaceholder();

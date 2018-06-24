@@ -1555,6 +1555,22 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
     addNodeToScene(node, ignore);
 }
 
+void MainWindow::addPrimitiveObject(const QString &text)
+{
+    if (text == "Plane")    addPlane();
+    if (text == "Cone")     addCone();
+    if (text == "Cube")     addCube();
+    if (text == "Cylinder") addCylinder();
+    if (text == "Sphere")   addSphere();
+    if (text == "Torus")    addTorus();
+    if (text == "Capsule")  addCapsule();
+    if (text == "Gear")     addGear();
+    if (text == "Pyramid")  addPyramid();
+    if (text == "Teapot")   addTeapot();
+    if (text == "Sponge")   addSponge();
+    if (text == "Steps")    addSteps();
+}
+
 void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position, const QString &guid, const QString &assetName)
 {
     auto document = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
@@ -2701,6 +2717,10 @@ void MainWindow::setupViewPort()
 
     connect(sceneView, &SceneViewWidget::addDroppedMesh, [this](QString path, bool v, QVector3D pos, QString guid, QString name) {
         addMaterialMesh(path, v, pos, guid, name);
+    });
+
+    connect(sceneView, &SceneViewWidget::addPrimitive, [this](QString guid) {
+        addPrimitiveObject(guid);
     });
 
     connect(sceneView, &SceneViewWidget::addDroppedParticleSystem, [this](bool v, QVector3D pos, QString guid, QString name) {

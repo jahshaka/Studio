@@ -58,6 +58,8 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
     ui->sceneTree->viewport()->installEventFilter(this);
     ui->sceneTree->setItemDelegate(new TreeItemDelegate(this));
 
+    ui->sceneTree->setAlternatingRowColors(true);
+
     connect(ui->sceneTree->itemDelegate(), &QAbstractItemDelegate::commitData, this, &SceneHierarchyWidget::OnLstItemsCommitData);
 
     ui->sceneTree->setAttribute(Qt::WA_MacShowFocusRect, false);
@@ -97,14 +99,15 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
     disabledIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cursor-filled-50-dim.png"), QIcon::Selected);
 
 	ui->sceneTree->setStyleSheet(
-		"QTreeView, QTreeWidget { show-decoration-selected: 1; }"
+		"QTreeView, QTreeWidget { show-decoration-selected: 1; paint-alternating-row-colors-for-empty-area: 1; }"
 		"QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; }"
-		"QTreeWidget::branch { background-color: #202020; }"
+		//"QTreeWidget::branch { background-color: #202020; }"
 		"QTreeWidget::branch:hover { background-color: #303030; }"
         "QTreeView::branch:open { image: url(:/icons/expand_arrow_open.png); }"
         "QTreeView::branch:closed:has-children { image: url(:/icons/expand_arrow_closed.png); }"
 		"QTreeWidget::branch:selected { background-color: #404040; }"
 		"QTreeWidget::item:selected { selection-background-color: #404040; background: #404040; outline: none; padding: 5px 0; }"
+        "QTreeView, QTreeWidget { show-decoration-selected: 1; border: 0; outline: none; selection-background-color: #404040; color: #EEE; background: #202020; alternate-background-color: #222; }"
 		/* Important, this is set for when the widget loses focus to fill the left gap */
 		"QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }"
 		"QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }"

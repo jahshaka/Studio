@@ -54,6 +54,9 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "widgets/sceneviewwidget.h"
 
+#include "core/materialpreset.h"
+#include "io/materialpresetreader.h"
+
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
 	ui->setupUi(this);
@@ -309,6 +312,41 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 void AssetWidget::trigger()
 {
+    auto dir = QDir(IrisUtils::getAbsoluteAssetPath("app/content/materials"));
+    auto files = dir.entryInfoList(QStringList(), QDir::Files);
+
+    auto reader = new MaterialPresetReader();
+
+    // needs opengl context so we have to call this after the window is shown...
+    sceneView->makeCurrent();
+    for (const auto &file : files) {
+        auto preset = reader->readMaterialPreset(file.absoluteFilePath());
+
+        auto m = iris::CustomMaterial::create();
+        m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
+
+        m->setValue("diffuseTexture", preset.diffuseTexture);
+        m->setValue("specularTexture", preset.specularTexture);
+        m->setValue("normalTexture", preset.normalTexture);
+        m->setValue("reflectionTexture", preset.reflectionTexture);
+
+        m->setValue("ambientColor", preset.ambientColor);
+        m->setValue("diffuseColor", preset.diffuseColor);
+        m->setValue("specularColor", preset.specularColor);
+
+        m->setValue("shininess", preset.shininess);
+        m->setValue("normalIntensity", preset.normalIntensity);
+        m->setValue("reflectionInfluence", preset.reflectionInfluence);
+        m->setValue("textureScale", preset.textureScale);
+
+        auto assetMat = new AssetMaterial;
+        assetMat->fileName = preset.name;
+        assetMat->assetGuid = Constants::Reserved::DefaultMaterials.key(preset.name);
+        assetMat->setValue(QVariant::fromValue(m));
+        AssetManager::addAsset(assetMat);
+    }
+    sceneView->doneCurrent();
+
 	// It's important that this gets called after a project has been loaded (iKlsR)
 	populateAssetTree(true);
 
@@ -682,8 +720,7 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
                                 mimeData->setData(QString("application/x-qabstractitemmodeldatalist"), mdata);
                                 drag->setMimeData(mimeData);
 
-                                // only hide for object models
-                                //drag->setPixmap(QPixmap());
+                                drag->setPixmap(item->icon().pixmap(64, 64));
                                 drag->exec();
                             }
                         }
@@ -802,7 +839,7 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 		connect(action, SIGNAL(triggered()), this, SLOT(renameViewItem()));
 		menu.addAction(action);
 
-        action = new QAction(QIcon(), "Add to Favorites", this);
+        action = new QAction(QIcon(), "Favorite Asset", this);
         connect(action, SIGNAL(triggered()), this, SLOT(favoriteItem()));
         menu.addAction(action);
 

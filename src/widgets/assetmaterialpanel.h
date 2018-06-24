@@ -43,7 +43,6 @@ public:
 
     // Add the default starter primitives
     void addDefaultItems();
-
     void addNewItem(QListWidgetItem *item);
 
     bool eventFilter(QObject *watched, QEvent *event);
@@ -53,7 +52,6 @@ public slots:
     void applyMaterialPreset(QListWidgetItem *item);
 
 private:
-    //void addPreset(MaterialPreset* preset);
     QVector<MaterialPreset> defaultMaterials;
     QVector<AssetRecord> objectAssets;
 };
