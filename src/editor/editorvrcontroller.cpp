@@ -31,7 +31,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/content/contentmanager.h"
 #include "../commands/transfrormscenenodecommand.h"
 #include "../uimanager.h"
-#include "irisgl\extras\Materials.h"
+#include "irisgl/extras/Materials.h"
 #include <QtMath>
 
 

@@ -131,14 +131,14 @@ void ColorChooser::configureDisplay()
 	
 	stackHolder = new QStackedWidget();
 
-    redSlider = new CustomSlider(Qt::Horizontal);
-    greenSlider = new CustomSlider(Qt::Horizontal);
-    blueSlider = new CustomSlider(Qt::Horizontal);
-    hueSlider = new CustomSlider(Qt::Horizontal);
-    saturationSlider = new CustomSlider(Qt::Horizontal);
-    valueSlider = new CustomSlider(Qt::Horizontal);
-    alphaSlider = new CustomSlider(Qt::Horizontal);
-    adjustSlider = new CustomSlider(Qt::Vertical);
+    redSlider = new QSlider(Qt::Horizontal);
+    greenSlider = new QSlider(Qt::Horizontal);
+    blueSlider = new QSlider(Qt::Horizontal);
+    hueSlider = new QSlider(Qt::Horizontal);
+    saturationSlider = new QSlider(Qt::Horizontal);
+    valueSlider = new QSlider(Qt::Horizontal);
+    alphaSlider = new QSlider(Qt::Horizontal);
+    adjustSlider = new QSlider(Qt::Vertical);
    
 	connect(adjustSlider, SIGNAL(valueChanged(int)), valueSlider, SLOT(setValue(int)));
 	connect(valueSlider, SIGNAL(valueChanged(int)), adjustSlider, SLOT(setValue(int)));
@@ -275,52 +275,52 @@ void ColorChooser::setConnections()
 	connect(cbg, SIGNAL(finished(bool)), this, SLOT(pickerMode(bool)));
 	connect(cbg, SIGNAL(positionChanged(QColor)), this, SLOT(setSliders(QColor)));
 
-	connect(hueSlider, &CustomSlider::sliderPressed, [=]() {
+    connect(hueSlider, &QSlider::sliderPressed, [=]() {
 		hSpin->setValue(hueSlider->sliderPosition());
 	});
-	connect(saturationSlider, &CustomSlider::sliderPressed, [=]() {
+    connect(saturationSlider, &QSlider::sliderPressed, [=]() {
 		sSpin->setValue(saturationSlider->sliderPosition());
 	});
-	connect(valueSlider, &CustomSlider::sliderPressed, [=]() {
+    connect(valueSlider, &QSlider::sliderPressed, [=]() {
 		vSpin->setValue(valueSlider->sliderPosition());
 	});
-	connect(adjustSlider, &CustomSlider::sliderPressed, [=]() {
+    connect(adjustSlider, &QSlider::sliderPressed, [=]() {
 		vSpin->setValue(valueSlider->sliderPosition());
 	});
-	connect(redSlider, &CustomSlider::sliderPressed, [=]() {
+    connect(redSlider, &QSlider::sliderPressed, [=]() {
 		rSpin->setValue(redSlider->sliderPosition());
 	});
-	connect(greenSlider, &CustomSlider::sliderPressed, [=]() {
+    connect(greenSlider, &QSlider::sliderPressed, [=]() {
 		gSpin->setValue(greenSlider->sliderPosition());
 	});
-	connect(blueSlider, &CustomSlider::sliderPressed, [=]() {
+    connect(blueSlider, &QSlider::sliderPressed, [=]() {
 		bSpin->setValue(blueSlider->sliderPosition());
 	});
 
 
-	connect(hueSlider, &CustomSlider::sliderMoved, [=]() {
+    connect(hueSlider, &QSlider::sliderMoved, [=]() {
 		hSpin->setValue(hueSlider->sliderPosition());
 	});
-	connect(saturationSlider, &CustomSlider::sliderMoved, [=]() {
+    connect(saturationSlider, &QSlider::sliderMoved, [=]() {
 		sSpin->setValue(saturationSlider->sliderPosition());
 	});
-	connect(valueSlider, &CustomSlider::sliderMoved, [=]() {
+    connect(valueSlider, &QSlider::sliderMoved, [=]() {
 		vSpin->setValue(valueSlider->sliderPosition());
 	});
-	connect(adjustSlider, &CustomSlider::sliderMoved, [=]() {
+    connect(adjustSlider, &QSlider::sliderMoved, [=]() {
 		vSpin->setValue(valueSlider->sliderPosition());
 	});
-	connect(redSlider, &CustomSlider::sliderMoved, [=]() {
+    connect(redSlider, &QSlider::sliderMoved, [=]() {
 		rSpin->setValue(redSlider->sliderPosition());
 	});
-	connect(greenSlider, &CustomSlider::sliderMoved, [=]() {
+    connect(greenSlider, &QSlider::sliderMoved, [=]() {
 		gSpin->setValue(greenSlider->sliderPosition());
 	});
-	connect(blueSlider, &CustomSlider::sliderMoved, [=]() {
+    connect(blueSlider, &QSlider::sliderMoved, [=]() {
 		bSpin->setValue(blueSlider->sliderPosition());
 	});
 
-	connect(alphaSlider, &CustomSlider::valueChanged, [=]() {
+    connect(alphaSlider, &QSlider::valueChanged, [=]() {
 		circlebg->setOpacity(alphaSlider->sliderPosition());
 		setValueInColor();
 		alphaSpin->setValue(alphaSlider->sliderPosition() / 255.0f);
