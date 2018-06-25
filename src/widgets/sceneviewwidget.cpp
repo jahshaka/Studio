@@ -710,12 +710,8 @@ void SceneViewWidget::renderScene()
                                 QVector2D(8, 8),
                                 QColor(255, 255, 255));
     }
-
-	if(editorCam->isPerspective)
-		spriteBatch->drawString(font, QString("perspective"),QVector2D(8,height() - 25), QColor(255, 255, 255, 150));
-	else
-		spriteBatch->drawString(font, QString("orthogonal"), QVector2D(8, height() - 25), QColor(255, 255, 255, 150));
-
+	renderCameraUi(spriteBatch);
+	
 //    if (!!scene) {
 //        for(auto light : scene->lights) {
 //            if (light->lightType == iris::LightType::Spot)
@@ -726,6 +722,36 @@ void SceneViewWidget::renderScene()
 
 
 
+}
+
+void SceneViewWidget::renderCameraUi(iris::SpriteBatchPtr batch)
+{
+
+	auto dist = [](float a, float b, float closest = 2){
+		if (fabs(b - a) < closest)
+			return true;
+		return false;
+	};
+
+	float yaw, pitch, roll;
+	editorCam->getLocalRot().getEulerAngles(&pitch, &yaw, &roll);
+
+	QString text = "";
+
+	if (editorCam->getProjection() == iris::CameraProjection::Perspective)
+		text = "perspective";
+	else 
+		text = "orthogonal";
+
+	if (dist(yaw,0) && dist(pitch, -90))
+		text += " (top)";
+	if (dist(yaw, 90) && dist(pitch, 0))
+		text += " (side)";
+	if (dist(yaw, 0) && dist(pitch, 0))
+		text += " (front)";
+	
+	auto fnt = iris::Font::create(renderer->getGraphicsDevice(), 12);	
+	spriteBatch->drawString(fnt, text, QVector2D(8, height() - 25), QColor(255, 255, 255, 150));
 }
 
 void SceneViewWidget::resizeGL(int width, int height)

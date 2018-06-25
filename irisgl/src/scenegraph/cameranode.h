@@ -20,8 +20,8 @@ namespace iris
 {
 
 enum class CameraProjection {
-	Perspective = 1,
-	Orthagonal = 2
+	Orthogonal,
+	Perspective
 };
 
 class CameraNode:public SceneNode
@@ -42,6 +42,10 @@ public:
     QMatrix4x4 projMatrix;
 
 	void setProjection(CameraProjection view);
+	CameraProjection getProjection()
+	{
+		return projMode;
+	}
 
     float getVrViewScale()
     {
@@ -90,7 +94,7 @@ public:
 		if ((projMode == CameraProjection::Perspective))
 			projMatrix.perspective(angle, aspectRatio, nearClip, farClip);
 		else
-			projMatrix.ortho(-orthoSize *aspectRatio, orthoSize*aspectRatio,-orthoSize, orthoSize, .1, 1000);
+			projMatrix.ortho(-orthoSize *aspectRatio, orthoSize*aspectRatio,-orthoSize, orthoSize, nearClip, farClip);
 
         vrViewScale = 5.0f;
     }

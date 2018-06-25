@@ -103,6 +103,21 @@ void OrbitalCameraController::onMouseMove(int x,int y)
         auto dir = camera->getLocalRot().rotatedVector(QVector3D(x*dragSpeed,-y*dragSpeed,0));
         pivot += dir;
     }
+
+	if (targetYaw != 0 && !camera->isPerspective || targetYaw != 90 && !camera->isPerspective)
+		camera->setProjection(iris::CameraProjection::Orthogonal);
+	else 		camera->setProjection(iris::CameraProjection::Perspective);
+
+	/*
+	if (targetYaw == 0 && targetPitch == -90)
+		camera->setProjection(iris::CameraProjection::Orthogonal_top);
+	if (targetYaw == 90 && targetPitch == 0)
+		camera->setProjection(iris::CameraProjection::Orthogonal_right);
+	if (targetYaw == 0 && targetPitch == 0)
+		camera->setProjection(iris::CameraProjection::Orthogonal_front);
+		*/
+	
+
     updateCameraRot();
 }
 
@@ -138,7 +153,7 @@ void OrbitalCameraController::onMouseWheel(int delta)
 
 
 
-	if (camera->projMode == iris::CameraProjection::Orthagonal) {
+	if (camera->projMode == iris::CameraProjection::Orthogonal) {
 		camera->setOrthagonalZoom(distFromPivot);
 	}else{
 		updateCameraRot();
@@ -161,17 +176,17 @@ void OrbitalCameraController::onKeyPressed(Qt::Key key)
 }
 
 void OrbitalCameraController::onKeyReleased(Qt::Key key)
-{
+{	//top
 	if (key == Qt::Key_Y) {
 		targetYaw = 0;
 		targetPitch = -90;
 	}
-
+	//side
 	if (key == Qt::Key_X) {
 		targetYaw = 90;
 		targetPitch = 0;
 	}
-
+	//front
 	if (key == Qt::Key_Z) {
 		targetYaw = 0;
 		targetPitch = 0;

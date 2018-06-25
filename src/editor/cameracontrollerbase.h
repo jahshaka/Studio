@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <Qt>
 #include <QSharedPointer>
+#include "irisglfwd.h"
 
 namespace iris
 {
@@ -38,6 +39,8 @@ public:
     virtual void start();
     virtual void update(float dt);
     virtual void end();
+
+	virtual void renderUi(iris::GraphicsDevicePtr device, iris::SpriteBatchPtr batch) {}
 
     void resetMouseStates();
 

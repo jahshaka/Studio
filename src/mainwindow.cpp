@@ -2881,7 +2881,7 @@ void MainWindow::setupToolBar()
 		}
 		else {
 			changeCamera->setText("O");
-			sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthagonal);
+			sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthogonal);
 
 		}
 	});

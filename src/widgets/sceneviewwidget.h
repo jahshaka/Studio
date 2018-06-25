@@ -286,6 +286,7 @@ private:
 
     void makeObject();
     void renderScene();
+	void renderCameraUi(iris::SpriteBatchPtr batch);
 
 
     iris::ScenePtr scene;
