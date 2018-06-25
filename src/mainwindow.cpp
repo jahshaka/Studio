@@ -1585,12 +1585,12 @@ void MainWindow::addPrimitiveObject(const QString &text)
 
 void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position, const QString &guid, const QString &assetName)
 {
-    auto document = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
+    auto document = QJsonDocument::fromBinaryData(db->fetchAssetData(guid)).object();
 
     auto reader = new SceneReader;
     reader->setBaseDirectory(Globals::project->getProjectFolder());
     this->sceneView->makeCurrent();
-    iris::SceneNodePtr node = reader->readSceneNode(document.object());
+    iris::SceneNodePtr node = reader->readSceneNode(document);
     this->sceneView->doneCurrent();
     delete reader;
 

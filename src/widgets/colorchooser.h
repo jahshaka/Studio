@@ -36,8 +36,8 @@ class CustomBackground : public QWidget
 public:
 	bool isExpanded = false;
 
-	CustomBackground( QWidget *parent = Q_NULLPTR, Qt::WindowFlags f = Qt::WindowFlags()) {
-		QWidget::QWidget(parent);
+    CustomBackground( QWidget *parent = Q_NULLPTR, Qt::WindowFlags f = Qt::WindowFlags()) :QWidget(parent){
+
 		setWindowFlags(Qt::FramelessWindowHint | Qt::X11BypassWindowManagerHint | Qt::WindowStaysOnTopHint);
 		setWindowFlag(Qt::SubWindow);
 		setGeometry(QApplication::desktop()->screenGeometry().width() / 2, QApplication::desktop()->screenGeometry().height() / 2, 1, 1);
@@ -146,7 +146,7 @@ private:
 	bool fromHexEdit = true;
 
 	QGroupBox* groupBox;
-	CustomSlider *alphaSlider, *redSlider, *greenSlider, *blueSlider, *hueSlider, *saturationSlider, *valueSlider, *adjustSlider;
+    QSlider *alphaSlider, *redSlider, *greenSlider, *blueSlider, *hueSlider, *saturationSlider, *valueSlider, *adjustSlider;
 	QStackedWidget *stackHolder;
 	QPushButton *cancel, *select, *picker, *rgbBtn, *hsv, *hex;
 	QWidget *colorDisplay, *rgbHolder, *hsvHolder, *hexHolder;
@@ -157,40 +157,4 @@ private:
 	QDoubleSpinBox *alphaSpin;
 };
 
-class CustomSlider : public QSlider
-{
-	Q_OBJECT
-public:
-
-	QString minLabel;
-	QString maxLabel;
-
-	void setMinAndMaxLabels(QString min, QString max) {
-		setMinLabel(min);
-		setMaxLabel(max);
-	}
-
-	void setMaxLabel(QString string) {
-		maxLabel = string;
-		repaint();
-	}
-
-	void setMinLabel(QString string) {
-		minLabel = string;
-	}
-
-	CustomSlider(QWidget *parent = Q_NULLPTR) {
-		QSlider::QSlider(parent);
-		QSlider::setStyle(new SliderMoveToMouseClickPositionStyle(this->style()));
-	}
-
-	CustomSlider(Qt::Orientation orientation, QWidget *parent = Q_NULLPTR) {
-		CustomSlider::CustomSlider(parent);
-		QSlider::setOrientation(orientation);
-	}
-
-private:
-	QColor color;
-	bool isColorSlider;
-};
 #endif // COLORCHOOSER_H
