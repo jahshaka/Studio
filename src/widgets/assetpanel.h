@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QApplication>
 #include <QStyledItemDelegate>
 
+#include "core/project.h"
 #include "core/database/database.h"
 #include "mainwindow.h"
 
@@ -191,11 +192,18 @@ public:
 
     ~AssetPanel() {}
 
+    void populateFavorites() {
+        favoriteAssets = handle->fetchFavorites();
+    }
+
     virtual void setMainWindow(MainWindow *window) = 0;
     virtual void setDatabaseHandle(Database *handle) = 0;
     virtual void addNewItem(QListWidgetItem *item) = 0;
+    virtual void removeFavorite(const QString &guid) = 0;
+    virtual void addFavorites() = 0;
 
 protected:
+    QVector<AssetRecord> favoriteAssets;
     QListWidget *listView;
     MainWindow *mainWindow;
     Database *handle;

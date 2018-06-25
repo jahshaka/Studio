@@ -45,6 +45,8 @@ public:
 
     void addDefaultItem(const AssetRecord &asset);
     void addNewItem(QListWidgetItem *item);
+    void removeFavorite(const QString &guid);
+    void addFavorites();
 
     bool eventFilter(QObject *watched, QEvent *event);
 

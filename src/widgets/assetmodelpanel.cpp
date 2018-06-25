@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QFileInfoList>
 #include <QPointer>
+#include <QMessageBox>
 
 #include "irisgl/src/core/irisutils.h"
 
@@ -54,6 +55,7 @@ AssetModelPanel::AssetModelPanel(QWidget *parent) : AssetPanel(parent)
     );
 
     addDefaultItems();
+    addFavorites();
 }
 
 AssetModelPanel::~AssetModelPanel()
@@ -153,7 +155,37 @@ void AssetModelPanel::addNewItem(QListWidgetItem *itemInc)
     listView->addItem(item);
 
     // add this asset to the assets table and set the VIEW so we know where it belongs
-    // handle->addFavorite(itemInc->data(MODEL_GUID_ROLE).toString());
+    handle->addFavorite(itemInc->data(MODEL_GUID_ROLE).toString());
+}
+
+void AssetModelPanel::addFavorites()
+{
+    populateFavorites();
+
+    for (const auto &asset : favoriteAssets) {
+        if (asset.type == static_cast<int>(ModelTypes::Object)) {
+            auto item = new QListWidgetItem;
+            item->setData(Qt::DisplayRole, asset.name);
+            item->setData(Qt::UserRole, asset.name);
+
+            item->setData(MODEL_TYPE_ROLE, asset.type);
+            if (asset.type == static_cast<int>(ModelTypes::Object)) {
+                QString meshGuid = handle->fetchObjectMesh(asset.guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
+                item->setData(MODEL_MESH_ROLE, meshGuid);
+            }
+            item->setData(MODEL_GUID_ROLE, asset.guid);
+
+            QPixmap thumbnail;
+            if (thumbnail.loadFromData(asset.thumbnail, "PNG")) {
+                item->setIcon(QIcon(thumbnail));
+            }
+            else {
+                item->setIcon(QIcon(":/icons/empty_object.png"));
+            }
+
+            listView->addItem(item);
+        }
+    }
 }
 
 bool AssetModelPanel::eventFilter(QObject *watched, QEvent *event)
@@ -248,6 +280,11 @@ void AssetModelPanel::addObjectToScene(QModelIndex itemIndex)
     if (text == "Steps")    mainWindow->addSteps();
 }
 
+void AssetModelPanel::removeFavorite(const QString &assetGuid)
+{
+    handle->removeFavorite(assetGuid);
+}
+
 void AssetModelPanel::showContextMenu(const QPoint &pos)
 {
     QMenu contextMenu;
@@ -262,9 +299,18 @@ void AssetModelPanel::showContextMenu(const QPoint &pos)
     connect(&action, &QAction::triggered, this, [this, pos]() {
         QModelIndex index = listView->indexAt(pos);
         if (!index.isValid()) return;
-        auto item = listView->itemAt(pos);
-        listView->removeItemWidget(item);
-        delete item;
+
+        auto option = QMessageBox::question(this,
+            "Deleting Favorite",
+            "Are you sure you want to delete this favorite?",
+            QMessageBox::Yes | QMessageBox::Cancel);
+
+        if (option == QMessageBox::Yes) {
+            auto item = listView->itemAt(pos);
+            removeFavorite(item->data(MODEL_GUID_ROLE).toString());
+            listView->removeItemWidget(item);
+            delete item;
+        }
     });
 
     contextMenu.addAction(&action);

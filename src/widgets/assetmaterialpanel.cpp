@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QFileInfoList>
 #include <QPointer>
+#include <QMessageBox>
 
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/materials/custommaterial.h"
@@ -114,9 +115,34 @@ void AssetMaterialPanel::addNewItem(QListWidgetItem *itemInc)
 
     listView->addItem(item);
     
-    
     // add this asset to the assets table and set the VIEW so we know where it belongs
-    // handle->addFavorite(itemInc->data(MODEL_GUID_ROLE).toString());
+    handle->addFavorite(itemInc->data(MODEL_GUID_ROLE).toString());
+}
+
+void AssetMaterialPanel::addFavorites()
+{
+    populateFavorites();
+
+    for (const auto &asset : favoriteAssets) {
+        if (asset.type == static_cast<int>(ModelTypes::Material)) {
+            auto item = new QListWidgetItem;
+            item->setData(Qt::DisplayRole, asset.name);
+            item->setData(Qt::UserRole, asset.name);
+
+            item->setData(MODEL_TYPE_ROLE, asset.type);
+            item->setData(MODEL_GUID_ROLE, asset.guid);
+
+            QPixmap thumbnail;
+            if (thumbnail.loadFromData(asset.thumbnail, "PNG")) {
+                item->setIcon(QIcon(thumbnail));
+            }
+            else {
+                item->setIcon(QIcon(":/icons/empty_object.png"));
+            }
+
+            listView->addItem(item);
+        }
+    }
 }
 
 bool AssetMaterialPanel::eventFilter(QObject *watched, QEvent *event)
@@ -205,13 +231,27 @@ void AssetMaterialPanel::showContextMenu(const QPoint &pos)
     connect(&action, &QAction::triggered, this, [this, pos]() {
         QModelIndex index = listView->indexAt(pos);
         if (!index.isValid()) return;
-        auto item = listView->itemAt(pos);
-        listView->removeItemWidget(item);
-        delete item;
+
+        auto option = QMessageBox::question(this,
+            "Deleting Favorite",
+            "Are you sure you want to delete this favorite?",
+            QMessageBox::Yes | QMessageBox::Cancel);
+
+        if (option == QMessageBox::Yes) {
+            auto item = listView->itemAt(pos);
+            removeFavorite(item->data(MODEL_GUID_ROLE).toString());
+            listView->removeItemWidget(item);
+            delete item;
+        }
     });
 
     contextMenu.addAction(&action);
     contextMenu.exec(mapToGlobal(pos));
+}
+
+void AssetMaterialPanel::removeFavorite(const QString &assetGuid)
+{
+    handle->removeFavorite(assetGuid);
 }
 
 void AssetMaterialPanel::applyMaterialPreset(QListWidgetItem *item)

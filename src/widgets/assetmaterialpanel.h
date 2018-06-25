@@ -44,7 +44,9 @@ public:
 
     // Add the default starter primitives
     void addDefaultItems();
+    void removeFavorite(const QString &guid);
     void addNewItem(QListWidgetItem *item);
+    void addFavorites();
 
     bool eventFilter(QObject *watched, QEvent *event);
     QVector<MaterialPreset> getDefaultMaterials() {
