@@ -181,7 +181,7 @@ void Scene::rayCast(const QSharedPointer<iris::SceneNode>& sceneNode,
             auto b = invTransform * segEnd;
 
 			// ray-sphere intersection first
-			auto& mesh = meshNode->getMesh();
+			auto mesh = meshNode->getMesh();
 			auto sphere = mesh->getBoundingSphere();
 			float t;
 			QVector3D hitPoint;
