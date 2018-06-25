@@ -1,5 +1,5 @@
 {
-    "name"              : "Grass 2",
+    "name"              : "Patchy Grass",
     "material_type"     : "Default",
     "icon"              : "../../materials/patchy_grass.png",
     "diffuseTexture"    : "presets/patchy_grass/patchygrass_1_COLOR.png",

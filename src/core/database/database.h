@@ -105,7 +105,7 @@ public:
     // FETCH ================================================================================
     AssetRecord fetchAsset(const QString &guid);
     QVector<AssetRecord> fetchAssets();
-    QVector<AssetRecord> fetchChildAssets(const QString &parent, bool showDependencies = true);
+    QVector<AssetRecord> fetchChildAssets(const QString &parent, int filter = -1, bool showDependencies = true);
     QVector<AssetRecord> fetchAssetsFromParent(const QString &guid);
     QVector<AssetRecord> fetchAssetsByCollection(const int &collection_id);
     QVector<AssetRecord> fetchAssetsByType(const int &type);

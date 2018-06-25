@@ -131,6 +131,8 @@ private:
 
 	void hideItemAndChildren(QTreeWidgetItem* item);
 	void showItemAndChildren(QTreeWidgetItem* item);
+	void lockItemAndChildren(QTreeWidgetItem* item);
+	void releaseItemAndChildren(QTreeWidgetItem* item);
 
 	// attachment
 
@@ -152,6 +154,8 @@ private:
 
 	QIcon *visibleIcon;
 	QIcon *hiddenIcon;
+	QIcon *pickableIcon;
+	QIcon *disabledIcon;
 
 signals:
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);

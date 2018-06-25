@@ -24,14 +24,12 @@ class MaterialPreset;
 /**
  * This class parses material definitions from json files
  */
-class MaterialPresetReader:public AssetIOBase
+class MaterialPresetReader : public AssetIOBase
 {
 public:
-    MaterialPresetReader();
-
+    MaterialPresetReader() = default;
     QJsonObject getMatPreset(const QString &filename);
-
-    MaterialPreset* readMaterialPreset(QString filename);
+    MaterialPreset readMaterialPreset(QString filename);
 };
 
 #endif // MATERIALREADER_H

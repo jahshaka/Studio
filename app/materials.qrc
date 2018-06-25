@@ -1,17 +1,12 @@
 <RCC>
     <qresource prefix="/">
         <file>materials/brick_ground.png</file>
-        <file>materials/carpet.png</file>
-        <file>materials/gold.png</file>
         <file>materials/grass.png</file>
         <file>materials/leather.png</file>
         <file>materials/marble_tile.png</file>
         <file>materials/old_painted_metal.png</file>
-        <file>materials/oldtile.png</file>
         <file>materials/patchy_grass.png</file>
         <file>materials/sand.png</file>
-        <file>materials/shiny_red.png</file>
-        <file>materials/silver.png</file>
         <file>materials/stone.png</file>
         <file>materials/wood.png</file>
     </qresource>

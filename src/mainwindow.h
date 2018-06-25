@@ -84,6 +84,8 @@ class AssetWidget;
 // class SceneNodePropertiesWidget;
 
 class AssetFavorites;
+class AssetModelPanel;
+class AssetMaterialPanel;
 
 #include "widgets/scenenodepropertieswidget.h"
 
@@ -153,9 +155,10 @@ public:
      * Applies material preset to active scene node and refreshes material property widget
      * @param preset
      */
-    void applyMaterialPreset(MaterialPreset* preset);
+    void applyMaterialPreset(QString guid);
+    void applyMaterialPreset(MaterialPreset preset);
 
-    void favoriteItem(const QListWidgetItem *item);
+    void favoriteItem(QListWidgetItem *item);
 
     /**
      * Returns absolute path of file copied as an asset
@@ -290,6 +293,7 @@ public slots:
     void addViewer();
 	void addGrabHand();
     void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
+    void addPrimitiveObject(const QString &guid);
 	void addMaterialMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D(), const QString &guid = QString(), const QString &name = QString());
     void addAssetParticleSystem(bool ignore, QVector3D position, QString guid, QString assetName);
     void addDragPlaceholder();
@@ -473,6 +477,8 @@ private:
     QAction *actionScale;
 
     AssetFavorites *assetFavorites;
+    AssetModelPanel *assetModelPanel;
+    AssetMaterialPanel *assetMaterialPanel;
 };
 
 #endif // MAINWINDOW_H

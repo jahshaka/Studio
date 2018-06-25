@@ -122,6 +122,11 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
 public:
     iris::CameraNodePtr editorCam;
 
+    MainWindow *mainWindow;
+    void setMainWindow(MainWindow *window) {
+        mainWindow = window;
+    }
+
     btRigidBody *activeRigidBody;
 
     //testing
@@ -330,6 +335,7 @@ private:
 	SettingsManager* settings;
 
 signals:
+    void addPrimitive(QString guid);
     void addDroppedMesh(QString path, bool ignore, QVector3D position, QString guid, QString assetName);
     void addDroppedParticleSystem(bool ignore, QVector3D position, QString guid, QString assetName);
     void initializeGraphics(SceneViewWidget* widget,

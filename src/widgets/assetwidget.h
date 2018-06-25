@@ -227,7 +227,7 @@ public:
 	void addItem(const FolderRecord &folderData);
 	void addItem(const AssetRecord &assetData);
 	void addCrumbs(const QVector<FolderRecord> &folderData);
-    void updateAssetView(const QString &path, bool showDependencies = false);
+    void updateAssetView(const QString &path, int filter = -1, bool showDependencies = false);
     void updateAssetContentsView(const QString &guid);
     void trigger();
     void refresh();
@@ -308,6 +308,9 @@ private:
     QString currentPath;
 
 	QHBoxLayout *breadCrumbLayout;
+
+    QHBoxLayout *filterGroupLayout;
+    QComboBox *assetFilterCombo;
 
 	QButtonGroup *assetViewToggleButtonGroup;
 	QPushButton *toggleIconView;

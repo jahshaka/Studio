@@ -100,10 +100,6 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
     QMap<int, QVariant> roleDataMap;
     while (!stream.atEnd()) stream >> roleDataMap;
 
- /*   if (roleDataMap.value(0).toInt() != static_cast<int>(ModelTypes::Texture)) {
-        savedActiveNode = doActiveObjectPicking(event->posF());
-    }*/
-
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Material)) {
 		auto node = doActiveObjectPicking(event->posF());
 
@@ -146,9 +142,7 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
 				wasHit = false;
 			}
 		}
-	}
-
-    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
+	} else if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
         // If we drag unto another object
         if (doActiveObjectPicking(event->posF())) {
             //activeSceneNode->pos = sceneView->hit;
@@ -188,18 +182,23 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
             true, ppos, roleDataMap.value(3).toString(), roleDataMap.value(1).toString()
         );
     }
-
-    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
+    else if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
+        // if builtin asset
+        if (Constants::Reserved::DefaultPrimitives.contains(roleDataMap.value(3).toString())) {
+            emit addPrimitive(Constants::Reserved::DefaultPrimitives.value(roleDataMap.value(3).toString()));
+            return;
+        }
+        
         auto ppos = dragScenePos;
         emit addDroppedMesh(
             QDir(Globals::project->getProjectFolder()).filePath(roleDataMap.value(2).toString()),
             true, ppos, roleDataMap.value(3).toString(), roleDataMap.value(1).toString()
         );
     }
-
-	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Material)) {
+    else if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Material)) {
 		if (!!savedActiveNode) {
 			iris::CustomMaterialPtr material;
+
 			QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
 			while (iterator != AssetManager::getAssets().constEnd()) {
 				if ((*iterator)->assetGuid == roleDataMap.value(3).toString()) {
@@ -209,6 +208,8 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 			}
 
             //if (!!material) savedActiveNode.staticCast<iris::MeshNode>()->setMaterial(material); ???
+            // apply 
+            mainWindow->applyMaterialPreset(roleDataMap.value(3).toString());
 		}
 		else {
 			qDebug() << "Empty";
@@ -218,8 +219,7 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
         originalMaterial.reset();
         wasHit = false;
 	}
-
-    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
+    else if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
         auto node = doActiveObjectPicking(event->posF());
         if (!!node) {
             auto meshNode = node.staticCast<iris::MeshNode>();
@@ -1277,12 +1277,12 @@ void SceneViewWidget::doLightPicking(const QVector3D& segStart,
     QVector3D hitPoint;
     float t;
 
-    for (auto light: scene->lights) {
+    for (auto light : scene->lights) {
         if (iris::IntersectionHelper::raySphereIntersects(segStart,
                                                           rayDir,
                                                           light->getLocalPos(),
                                                           lightRadius,
-                                                          t, hitPoint))
+                                                          t, hitPoint) && light->isPickable())
         {
             PickingResult pick;
             pick.hitNode = light.staticCast<iris::SceneNode>();

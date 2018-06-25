@@ -49,10 +49,13 @@ For more information see the LICENSE file
 #include "core/settingsmanager.h"
 #include "core/thumbnailmanager.h"
 #include "editor/thumbnailgenerator.h"
-#include "io/assethelper.h"
+#include "core/assethelper.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 #include "widgets/sceneviewwidget.h"
+
+#include "core/materialpreset.h"
+#include "io/materialpresetreader.h"
 
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
@@ -90,7 +93,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 	connect(ui->hideDeps, &QCheckBox::toggled, [this](bool state) {
 		hideDependencies = !state;
-		updateAssetView(assetItem.selectedGuid, !state);
+		updateAssetView(assetItem.selectedGuid, -1, !state);
 	});
 
     ui->assetView->setItemDelegate(new ListViewDelegate());
@@ -163,7 +166,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
     });
 
     connect(goUpOneControl, &QPushButton::pressed, [this]() {
-        updateAssetView(db->fetchAsset(assetItem.selectedGuid).parent, false);
+        updateAssetView(db->fetchAsset(assetItem.selectedGuid).parent, -1, false);
     });
 
 	setMouseTracking(true);
@@ -196,6 +199,41 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->switcher->setLayout(toggleLayout);
 	ui->switcher->setObjectName("Switcher");
 
+    filterGroupLayout = new QHBoxLayout;
+    filterGroupLayout->setMargin(0);
+    filterGroupLayout->setSpacing(0);
+    ui->filterWidget->setObjectName(QStringLiteral("FilterWidget"));
+    ui->filterWidget->setLayout(filterGroupLayout);
+
+    assetFilterCombo = new QComboBox;
+    assetFilterCombo->addItem("All Assets", QVariant::fromValue(static_cast<int>(-1)));
+    assetFilterCombo->addItem("Objects", QVariant::fromValue(static_cast<int>(ModelTypes::Object)));
+    assetFilterCombo->addItem("Materials", QVariant::fromValue(static_cast<int>(ModelTypes::Material)));
+    assetFilterCombo->addItem("Particle Systems", QVariant::fromValue(static_cast<int>(ModelTypes::ParticleSystem)));
+    assetFilterCombo->addItem("Shaders", QVariant::fromValue(static_cast<int>(ModelTypes::Shader)));
+    assetFilterCombo->addItem("Textures", QVariant::fromValue(static_cast<int>(ModelTypes::Texture)));
+    assetFilterCombo->addItem("Files", QVariant::fromValue(static_cast<int>(ModelTypes::File)));
+
+    filterGroupLayout->addWidget(new QLabel("Filter Assets:"));
+    filterGroupLayout->addWidget(assetFilterCombo);
+
+    connect<void(QComboBox::*)(int)>(assetFilterCombo, &QComboBox::currentIndexChanged, this, [&](int index) {
+        updateAssetView(assetItem.selectedGuid, assetFilterCombo->itemData(index).toInt());
+    });
+
+    ui->filterWidget->setStyleSheet(
+        "#filterPane { background: #1E1E1E; border-bottom: 1px solid #111; }"
+        "QLabel { font-size: 12px; margin-right: 8px; }"
+        "QPushButton[accessibleName=\"filterObj\"] { border-radius: 0; padding: 10px 8px; }"
+        "QComboBox { background: #222; border-radius: 1px; color: #BBB; padding: 0 12px; min-height: 24px; min-width: 64px; border: 1px solid #111;}"
+        "QComboBox::drop-down { border: 0; margin: 0; padding: 0; min-height: 20px; }"
+        "QComboBox::down-arrow { image: url(:/icons/down_arrow_check.png); width: 18px; height: 14px; }"
+        "QComboBox::down-arrow:!enabled { image: url(:/icons/down_arrow_check_disabled.png); width: 18px; height: 14px; }"
+        "QComboBox QAbstractItemView::item { min-height: 28px; selection-background-color: #404040; color: #cecece; }"
+        "QComboBox QAbstractItemView { background-color: #1A1A1A; selection-background-color: #404040; border: 0; outline: none; }"
+        "QComboBox QAbstractItemView::item:selected { background: #404040; }"
+    );
+
 	ui->searchBar->setPlaceholderText(tr("Type to search for assets..."));
 
 	progressDialog = new ProgressDialog;
@@ -211,6 +249,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		"QWidget#BreadCrumb QPushButton { background: transparent; padding: 4px 16px;"
 		"									border-right: 1px solid black; color: #999; }"
 		"QWidget#BreadCrumb QPushButton:checked { color: white; border-right: 1px solid black; }"
+        "QWidget#FilterWidget QPushButton:checked { color: white; background: #2980b9; }"
 		"QWidget#assetTree { background: #202020; border: 0; }"
 		"QWidget#assetView { background: #202020; border: 0; outline: 0; padding: 0; margin: 0; }"
 		"QSplitter::handle { width: 1px; background: #151515; }"
@@ -241,6 +280,41 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 void AssetWidget::trigger()
 {
+    auto dir = QDir(IrisUtils::getAbsoluteAssetPath("app/content/materials"));
+    auto files = dir.entryInfoList(QStringList(), QDir::Files);
+
+    auto reader = new MaterialPresetReader();
+
+    // needs opengl context so we have to call this after the window is shown...
+    sceneView->makeCurrent();
+    for (const auto &file : files) {
+        auto preset = reader->readMaterialPreset(file.absoluteFilePath());
+
+        auto m = iris::CustomMaterial::create();
+        m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
+
+        m->setValue("diffuseTexture", preset.diffuseTexture);
+        m->setValue("specularTexture", preset.specularTexture);
+        m->setValue("normalTexture", preset.normalTexture);
+        m->setValue("reflectionTexture", preset.reflectionTexture);
+
+        m->setValue("ambientColor", preset.ambientColor);
+        m->setValue("diffuseColor", preset.diffuseColor);
+        m->setValue("specularColor", preset.specularColor);
+
+        m->setValue("shininess", preset.shininess);
+        m->setValue("normalIntensity", preset.normalIntensity);
+        m->setValue("reflectionInfluence", preset.reflectionInfluence);
+        m->setValue("textureScale", preset.textureScale);
+
+        auto assetMat = new AssetMaterial;
+        assetMat->fileName = preset.name;
+        assetMat->assetGuid = Constants::Reserved::DefaultMaterials.key(preset.name);
+        assetMat->setValue(QVariant::fromValue(m));
+        AssetManager::addAsset(assetMat);
+    }
+    sceneView->doneCurrent();
+
 	// It's important that this gets called after a project has been loaded (iKlsR)
 	populateAssetTree(true);
 
@@ -544,13 +618,18 @@ void AssetWidget::addCrumbs(const QVector<FolderRecord> &folderData)
 	}
 }
 
-void AssetWidget::updateAssetView(const QString &path, bool showDependencies)
+void AssetWidget::updateAssetView(const QString &path, int filter, bool showDependencies)
 {
 	ui->assetView->clear();
 
-	for (const auto &folder : db->fetchChildFolders(path)) addItem(folder);
-	for (const auto &asset : db->fetchChildAssets(path, showDependencies)) addItem(asset);  /* TODO : irk this out */
-	addCrumbs(db->fetchCrumbTrail(path));
+    if (filter > 0) {
+        for (const auto &asset : db->fetchChildAssets(path, filter, showDependencies)) addItem(asset);
+    }
+    else {
+        for (const auto &folder : db->fetchChildFolders(path)) addItem(folder);
+        for (const auto &asset : db->fetchChildAssets(path, filter, showDependencies)) addItem(asset);  /* TODO : irk this out */
+        addCrumbs(db->fetchCrumbTrail(path));
+    }
 
     goUpOneControl->setEnabled(false);
 }
@@ -609,8 +688,7 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
                                 mimeData->setData(QString("application/x-qabstractitemmodeldatalist"), mdata);
                                 drag->setMimeData(mimeData);
 
-                                // only hide for object models
-                                //drag->setPixmap(QPixmap());
+                                drag->setPixmap(item->icon().pixmap(64, 64));
                                 drag->exec();
                             }
                         }
@@ -729,7 +807,7 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 		connect(action, SIGNAL(triggered()), this, SLOT(renameViewItem()));
 		menu.addAction(action);
 
-        action = new QAction(QIcon(), "Add to Favorites", this);
+        action = new QAction(QIcon(), "Favorite Asset", this);
         connect(action, SIGNAL(triggered()), this, SLOT(favoriteItem()));
         menu.addAction(action);
 

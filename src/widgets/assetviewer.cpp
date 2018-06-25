@@ -19,7 +19,7 @@ For more information see the LICENSE file
 #include "sceneviewwidget.h"
 #include "core/keyboardstate.h"
 #include "core/project.h"
-#include "io/assethelper.h"
+#include "core/assethelper.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 #include "io/scenereader.h"

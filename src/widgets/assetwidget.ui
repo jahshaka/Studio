@@ -60,7 +60,7 @@
        <widget class="QLineEdit" name="searchBar"/>
       </item>
       <item>
-       <spacer name="horizontalSpacer">
+       <spacer name="horizontalSpacer_2">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
@@ -71,6 +71,9 @@
          </size>
         </property>
        </spacer>
+      </item>
+      <item>
+       <widget class="QWidget" name="filterWidget" native="true"/>
       </item>
       <item>
        <widget class="QCheckBox" name="hideDeps">
