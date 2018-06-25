@@ -49,6 +49,9 @@ public:
     iris::SceneNodePtr leftPickedNode;
     iris::SceneNodePtr rightPickedNode;
 
+	iris::SceneNodePtr leftHoveredNode;
+	iris::SceneNodePtr rightHoveredNode;
+
     // These are the offsets from the controllers to the
     // selected object
     QMatrix4x4 leftNodeOffset;
@@ -56,6 +59,8 @@ public:
 
     //iris::SceneNodePtr tracker;
     iris::ScenePtr scene;
+
+	iris::MaterialPtr fresnelMat;
 
 	EditorVrController(iris::ContentManagerPtr content);
 
@@ -73,6 +78,11 @@ private:
     bool rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResult& result);
 
 	iris::SceneNodePtr getObjectRoot(iris::SceneNodePtr node);
+
+	void submitHoveredNodes();
+	void submitHoveredNode(iris::SceneNodePtr node);
+
+	iris::GrabNodePtr findGrabNode(iris::SceneNodePtr node);
 };
 
 #endif // EDITORVRCONTROLLER_H
