@@ -79,8 +79,6 @@ btRigidBody *PhysicsHelper::createPhysicsBody(const iris::SceneNodePtr sceneNode
             shape = new btEmptyShape();
             motionState = new btDefaultMotionState(transform);
             
-            if (mass != 0.0) shape->calculateLocalInertia(mass, inertia);
-            
             btRigidBody::btRigidBodyConstructionInfo info(mass, motionState, shape);
             body = new btRigidBody(info);
             body->setCenterOfMassTransform(transform);

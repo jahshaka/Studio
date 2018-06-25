@@ -7,10 +7,14 @@
 namespace iris
 {
 
+class ModelLoader;
+
 // this class is in charge of loading and caching all assets
 class ContentManager
 {
     GraphicsDevicePtr graphics;
+
+	ModelLoader* modelLoader;
 
     ContentManager(GraphicsDevicePtr graphics);
 public:
@@ -19,6 +23,7 @@ public:
     FontPtr loadDefaultFont(int size = 15);
     FontPtr loadFont(QString fontPath, int size = 15);
     ShaderPtr loadShader(QString vertexShaderPath, QString fragmentShaderPath);
+	ModelPtr loadModel(QString modelPath);
 
     static ContentManagerPtr create(GraphicsDevicePtr graphics);
 };

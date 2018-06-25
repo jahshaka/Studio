@@ -18,7 +18,7 @@ include(BuildType)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
 
- #set(CMAKE_AUTOMOC ON)
+ # set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -30,12 +30,12 @@ set(SRCS
     src/mainwindow.cpp 
     src/widgets/colorvaluewidget.cpp 
     src/widgets/colorpickerwidget.cpp 
-	src/widgets/colorchooser.cpp
-	src/widgets/colorcircle.cpp
     src/dialogs/preferencesdialog.cpp 
     src/dialogs/aboutdialog.cpp 
     src/dialogs/preferences/worldsettings.cpp 
     src/dialogs/loadmeshdialog.cpp 
+	src/widgets/colorchooser.cpp 
+	src/widgets/colorcircle.cpp 
     src/widgets/animationwidget.cpp 
     src/widgets/keyframelabelwidget.cpp 
     src/widgets/keyframewidget.cpp 
@@ -49,8 +49,9 @@ set(SRCS
     src/dialogs/infodialog.cpp 
     src/globals.cpp 
     src/widgets/sceneviewwidget.cpp 
-    src/widgets/materialsets.cpp 
-    src/widgets/modelpresets.cpp 
+    src/widgets/assetfavorites.cpp 
+    src/widgets/assetmodelpanel.cpp 
+    src/widgets/assetmaterialpanel.cpp 
     src/widgets/accordianbladewidget.cpp 
     src/widgets/transformeditor.cpp 
     src/widgets/scenehierarchywidget.cpp 
@@ -128,19 +129,19 @@ set(SRCS
     src/constants.cpp
 	src/misc/updatechecker.cpp
 	src/dialogs/softwareupdatedialog.cpp
-    src/io/assethelper.cpp
+    src/core/assethelper.cpp
+    src/core/scenenodehelper.cpp
     src/misc/upgrader.cpp
     src/misc/QtAwesome.cpp
     src/misc/QtAwesomeAnim.cpp
     src/dialogs/toast.cpp
+	src/helpers/tooltip.cpp
 )
 
 set(HEADERS
     src/mainwindow.h 
     src/widgets/colorvaluewidget.h 
     src/widgets/colorpickerwidget.h 
-	src/widgets/colorchooser.h
-	src/widgets/colorcircle.h
     src/helpers/settingshelper.h 
     src/dialogs/preferencesdialog.h 
     src/dialogs/aboutdialog.h 
@@ -148,6 +149,8 @@ set(HEADERS
     src/helpers/collisionhelper.h 
     src/dialogs/infodialog.h 
     src/dialogs/loadmeshdialog.h 
+	src/widgets/colorchooser.h 
+	src/widgets/colorcircle.h 
     src/widgets/animationwidget.h 
     src/widgets/keyframelabelwidget.h 
     src/widgets/keyframewidget.h 
@@ -164,8 +167,10 @@ set(HEADERS
     src/editor/editorcameracontroller.h 
     src/globals.h 
     src/widgets/sceneviewwidget.h 
-    src/widgets/materialsets.h 
-    src/widgets/modelpresets.h 
+    src/widgets/assetfavorites.h 
+    src/widgets/assetpanel.h 
+    src/widgets/assetmodelpanel.h 
+    src/widgets/assetmaterialpanel.h 
     src/widgets/accordianbladewidget.h 
     src/widgets/transformeditor.h 
     src/widgets/scenehierarchywidget.h 
@@ -255,11 +260,14 @@ set(HEADERS
     src/misc/updatechecker.h
     src/dialogs/softwareupdatedialog.h
     src/editor/animationpath.h
-    src/io/assethelper.h
+    src/core/assethelper.h
+    src/core/scenenodehelper.h
     src/misc/upgrader.h
     src/misc/QtAwesome.h
     src/misc/QtAwesomeAnim.h 
     src/dialogs/toast.h
+	src/helpers/tooltip.h
+
 )
 
 # Todo - trim these down to nothing eventually
@@ -273,14 +281,12 @@ set(FORMS
     src/dialogs/loadmeshdialog.ui 
     src/widgets/animationwidget.ui 
     src/widgets/maintimelinewidget.ui 
-    src/widgets/materialsets.ui 
     src/widgets/accordianbladewidget.ui 
     src/widgets/transformeditor.ui 
     src/widgets/scenehierarchywidget.ui 
     src/widgets/skypresets.ui 
     src/widgets/keyframelabelwidget.ui 
     src/widgets/keyframelabeltreewidget.ui 
-    src/widgets/modelpresets.ui 
     src/mainwindow.ui 
     src/widgets/labelwidget.ui 
     src/widgets/checkboxwidget.ui 

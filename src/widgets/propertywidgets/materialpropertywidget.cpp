@@ -129,14 +129,29 @@ void MaterialPropertyWidget::materialChanged(int index)
 
     QJsonObject node;
     SceneWriter::writeSceneNode(node, meshNode, false);
+
     db->updateAssetAsset(meshNode->getGUID(), QJsonDocument(node).toBinaryData());
     db->removeDependenciesByType(meshNode->getGUID(), ModelTypes::Shader);
-    db->createDependency(
-        static_cast<int>(ModelTypes::Object),
-        static_cast<int>(ModelTypes::Shader),
-        meshNodeGuid, materialSelector->getCurrentItemData(),
-        Globals::project->getProjectGuid()
-    );
+
+    bool usesDefaultShader = false;
+    QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+    while (it.hasNext()) {
+        it.next();
+        if (it.key() == materialSelector->getCurrentItemData()) {
+            usesDefaultShader = true;
+            break;
+        }
+    }
+
+    // Don't create dependencies to builtin shaders
+    if (!usesDefaultShader) {
+        db->createDependency(
+            static_cast<int>(ModelTypes::Object),
+            static_cast<int>(ModelTypes::Shader),
+            meshNodeGuid, materialSelector->getCurrentItemData(),
+            Globals::project->getProjectGuid()
+        );
+    }
 }
 
 void MaterialPropertyWidget::setupShaderSelector()

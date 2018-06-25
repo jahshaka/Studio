@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "irisgl/src/scenegraph/viewernode.h"
 #include "irisgl/src/scenegraph/particlesystemnode.h"
 #include "irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/src/scenegraph/grabnode.h"
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/materials/custommaterial.h"
 #include "irisgl/src/graphics/forwardrenderer.h"
@@ -40,10 +41,12 @@ For more information see the LICENSE file
 #include "irisgl/src/animation/animation.h"
 #include "irisgl/src/graphics/postprocessmanager.h"
 #include "irisgl/src/core/logger.h"
+
 #include "core/guidmanager.h"
 #include "core/thumbnailmanager.h"
-#include "src/dialogs/donatedialog.h"
-#include "src/io/assethelper.h"
+#include "dialogs/donatedialog.h"
+#include "core/assethelper.h"
+#include "core/scenenodehelper.h"
 
 #include <QFontDatabase>
 #include <QOpenGLContext>
@@ -118,9 +121,11 @@ For more information see the LICENSE file
 #include "../src/widgets/scenehierarchywidget.h"
 #include "../src/widgets/scenenodepropertieswidget.h"
 
-#include "../src/widgets/materialsets.h"
-#include "../src/widgets/modelpresets.h"
 #include "../src/widgets/skypresets.h"
+
+#include "widgets/assetfavorites.h"
+#include "widgets/assetmodelpanel.h"
+#include "widgets/assetmaterialpanel.h"
 
 #include "../src/widgets/assetview.h"
 #include "dialogs/toast.h"
@@ -141,7 +146,7 @@ enum class VRButtonMode : int
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-
+	
 	settings = SettingsManager::getDefaultManager();
 
     UiManager::mainWindow = this;
@@ -172,7 +177,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     setupFileMenu();
 
-	fontIcons.initFontAwesome();
+	Globals::fontIcons->initFontAwesome();
 #ifdef USE_MINER
 	configureMiner();
 #endif
@@ -866,7 +871,19 @@ void MainWindow::closeProject()
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
-void MainWindow::applyMaterialPreset(MaterialPreset *preset)
+void MainWindow::applyMaterialPreset(QString guid)
+{
+    auto preset = Constants::Reserved::DefaultMaterials.value(guid);
+    auto defaultMats = assetMaterialPanel->getDefaultMaterials();
+    for (const auto &material : defaultMats) {
+        if (material.name == preset) {
+            applyMaterialPreset(material);
+            break;
+        }
+    }
+}
+
+void MainWindow::applyMaterialPreset(MaterialPreset preset)
 {
     if (!activeSceneNode || activeSceneNode->sceneNodeType != iris::SceneNodeType::Mesh) return;
 
@@ -877,19 +894,19 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
 
-    m->setValue("diffuseTexture", preset->diffuseTexture);
-    m->setValue("specularTexture", preset->specularTexture);
-    m->setValue("normalTexture", preset->normalTexture);
-    m->setValue("reflectionTexture", preset->reflectionTexture);
+    m->setValue("diffuseTexture", preset.diffuseTexture);
+    m->setValue("specularTexture", preset.specularTexture);
+    m->setValue("normalTexture", preset.normalTexture);
+    m->setValue("reflectionTexture", preset.reflectionTexture);
 
-    m->setValue("ambientColor", preset->ambientColor);
-    m->setValue("diffuseColor", preset->diffuseColor);
-    m->setValue("specularColor", preset->specularColor);
+    m->setValue("ambientColor", preset.ambientColor);
+    m->setValue("diffuseColor", preset.diffuseColor);
+    m->setValue("specularColor", preset.specularColor);
 
-    m->setValue("shininess", preset->shininess);
-    m->setValue("normalIntensity", preset->normalIntensity);
-    m->setValue("reflectionInfluence", preset->reflectionInfluence);
-    m->setValue("textureScale", preset->textureScale);
+    m->setValue("shininess", preset.shininess);
+    m->setValue("normalIntensity", preset.normalIntensity);
+    m->setValue("reflectionInfluence", preset.reflectionInfluence);
+    m->setValue("textureScale", preset.textureScale);
 
     meshNode->setMaterial(m);
 
@@ -916,7 +933,7 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
 
     QString guid = db->createAssetEntry(
         GUIDManager::generateGUID(),
-        preset->name,
+        preset.name,
         static_cast<int>(ModelTypes::Material),
         fguid,
         QString(),
@@ -972,7 +989,19 @@ void MainWindow::applyMaterialPreset(MaterialPreset *preset)
     );
 
     // TODO: update node's material without updating the whole ui
-    this->sceneNodePropertiesWidget->refreshMaterial(preset->type);
+    this->sceneNodePropertiesWidget->refreshMaterial(preset.type);
+}
+
+void MainWindow::favoriteItem(QListWidgetItem *item)
+{
+    if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Material)) {
+        assetMaterialPanel->addNewItem(item);
+        presetsTabWidget->setCurrentIndex(1);
+    }
+    else if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Object)) {
+        assetModelPanel->addNewItem(item);
+        presetsTabWidget->setCurrentIndex(0);
+    }
 }
 
 void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
@@ -1033,13 +1062,12 @@ void MainWindow::setSceneAnimTime(float time)
 void MainWindow::addPlane()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/plane.obj");
-    node->setFaceCullingMode(iris::FaceCullingMode::None);
-    node->setName("Plane");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/plane.obj",
+        "Plane",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1059,13 +1087,12 @@ void MainWindow::addPlane()
 void MainWindow::addGround()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/models/ground.obj");
-    node->setFaceCullingMode(iris::FaceCullingMode::None);
-    node->setName("Ground");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/models/ground.obj",
+        "Ground",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1085,12 +1112,12 @@ void MainWindow::addGround()
 void MainWindow::addCone()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/cone.obj");
-    node->setName("Cone");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/cone.obj",
+        "Cone",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1110,12 +1137,12 @@ void MainWindow::addCone()
 void MainWindow::addCapsule()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/capsule.obj");
-    node->setName("Capsule");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/capsule.obj",
+        "Plane",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1135,12 +1162,12 @@ void MainWindow::addCapsule()
 void MainWindow::addCube()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/cube.obj");
-    node->setName("Cube");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/cube.obj",
+        "Cube",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1160,12 +1187,12 @@ void MainWindow::addCube()
 void MainWindow::addTorus()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/torus.obj");
-    node->setName("Torus");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/torus.obj",
+        "Torus",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1185,12 +1212,12 @@ void MainWindow::addTorus()
 void MainWindow::addSphere()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/sphere.obj");
-    node->setName("Sphere");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/sphere.obj",
+        "Sphere",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1210,12 +1237,12 @@ void MainWindow::addSphere()
 void MainWindow::addCylinder()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/cylinder.obj");
-    node->setName("Cylinder");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/cylinder.obj",
+        "Cylinder",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1235,12 +1262,12 @@ void MainWindow::addCylinder()
 void MainWindow::addPyramid()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/pyramid.obj");
-    node->setName("Pyramid");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/pyramid.obj",
+        "Pyramid",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1260,12 +1287,12 @@ void MainWindow::addPyramid()
 void MainWindow::addSponge()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/sponge.obj");
-    node->setName("Sponge");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/sponge.obj",
+        "Sponge",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1285,12 +1312,12 @@ void MainWindow::addSponge()
 void MainWindow::addTeapot()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/teapot.obj");
-    node->setName("Teapot");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/teapot.obj",
+        "Teapot",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1310,12 +1337,12 @@ void MainWindow::addTeapot()
 void MainWindow::addSteps()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/steps.obj");
-    node->setName("Steps");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/steps.obj",
+        "Steps",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1335,12 +1362,12 @@ void MainWindow::addSteps()
 void MainWindow::addGear()
 {
     this->sceneView->makeCurrent();
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/content/primitives/gear.obj");
-    node->setName("Gear");
-    node->isBuiltIn = true;
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
+    const QString nodeGuid = GUIDManager::generateGUID();
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/gear.obj",
+        "Gear",
+        nodeGuid
+    );
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -1407,11 +1434,80 @@ void MainWindow::addViewer()
     addNodeToScene(node);
 }
 
+void MainWindow::addGrabHand()
+{
+	this->sceneView->makeCurrent();
+	auto node = iris::GrabNode::create();
+	node->setName("Hand");
+	addNodeToScene(node);
+}
+
 void MainWindow::addParticleSystem()
 {
     this->sceneView->makeCurrent();
     auto node = iris::ParticleSystemNode::create();
     node->setName("Particle System");
+
+    auto fguid = GUIDManager::generateGUID();
+    if (!db->checkIfRecordExists("name", "Systems", "folders")) {
+        if (!db->createFolder("Systems", Globals::project->getProjectGuid(), fguid, false)) return;
+    }
+
+    auto nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    QJsonObject props;
+    db->createAssetEntry(
+        nodeGuid, node->getName(),
+        static_cast<int>(ModelTypes::ParticleSystem),
+        fguid,
+        QString(),
+        QString(),
+        QByteArray(),
+        QJsonDocument(props).toBinaryData(),
+        QByteArray(),
+        QByteArray()
+    );
+
+    // if we reached this far, the project dir has already been created
+    // we can copy some default assets to each project here
+    QFile::copy(IrisUtils::getAbsoluteAssetPath("app/images/default_particle.jpg"),
+        QDir(Globals::project->getProjectFolder()).filePath("Glowing Particle.jpg"));
+
+    auto thumb = ThumbnailManager::createThumbnail(
+        IrisUtils::getAbsoluteAssetPath("app/images/default_particle.jpg"), 72, 72);
+
+    QByteArray thumbnailBytes;
+    QBuffer buffer(&thumbnailBytes);
+    buffer.open(QIODevice::WriteOnly);
+    QPixmap::fromImage(*thumb->thumb).save(&buffer, "PNG");
+
+    const QString tileGuid = GUIDManager::generateGUID();
+    const QString assetGuid = db->createAssetEntry(tileGuid,
+        "Glowing Particle.jpg",
+        static_cast<int>(ModelTypes::Texture),
+        Globals::project->getProjectGuid(),
+        QString(),
+        QString(),
+        thumbnailBytes);
+
+    db->createDependency(
+        static_cast<int>(ModelTypes::ParticleSystem),
+        static_cast<int>(ModelTypes::Texture),
+        nodeGuid, assetGuid,
+        Globals::project->getProjectGuid()
+    );
+
+    {
+        QString texPath = QDir(Globals::project->getProjectFolder()).filePath("Glowing Particle.jpg");
+        node->setTexture(iris::Texture2D::load(texPath));
+    }
+
+    auto assetTexture = new AssetTexture;
+    assetTexture->fileName = "Glowing Particle.jpg";
+    assetTexture->assetGuid = assetGuid;
+    assetTexture->path = QDir(Globals::project->getProjectFolder()).filePath("Glowing Particle.jpg");
+    AssetManager::addAsset(assetTexture);
+
     addNodeToScene(node);
 }
 
@@ -1471,60 +1567,85 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
     addNodeToScene(node, ignore);
 }
 
+void MainWindow::addPrimitiveObject(const QString &text)
+{
+    if (text == "Plane")    addPlane();
+    if (text == "Cone")     addCone();
+    if (text == "Cube")     addCube();
+    if (text == "Cylinder") addCylinder();
+    if (text == "Sphere")   addSphere();
+    if (text == "Torus")    addTorus();
+    if (text == "Capsule")  addCapsule();
+    if (text == "Gear")     addGear();
+    if (text == "Pyramid")  addPyramid();
+    if (text == "Teapot")   addTeapot();
+    if (text == "Sponge")   addSponge();
+    if (text == "Steps")    addSteps();
+}
+
 void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position, const QString &guid, const QString &assetName)
 {
-	this->sceneView->makeCurrent();
+    auto document = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
 
-	iris::SceneNodePtr node;
-
-	QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
-
-	QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
-	while (iterator != AssetManager::getAssets().constEnd()) {
-		if ((*iterator)->assetGuid == guid) node = (*iterator)->getValue().value<iris::SceneNodePtr>()->duplicate();
-		++iterator;
-	}
-
-    if (!node) return;
-
-	std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
-		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-			auto n = node.staticCast<iris::MeshNode>();
-			n->meshPath = meshGuid;
-			n->setGUID(guid);
-			auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-			for (auto prop : mat->properties) {
-				if (prop->type == iris::PropertyType::Texture) {
-					if (!prop->getValue().toString().isEmpty()) {
-						mat->setValue(prop->name,
-							IrisUtils::join(
-                                Globals::project->getProjectFolder(),
-								db->fetchAsset(prop->getValue().toString()).name
-                            )
-                        );
-					}
-				}
-			}
-		}
-
-		if (node->hasChildren()) {
-			for (auto &child : node->children) {
-				updateNodeValues(child);
-			}
-		}
-	};
-
-	updateNodeValues(node);
+    auto reader = new SceneReader;
+    reader->setBaseDirectory(Globals::project->getProjectFolder());
+    this->sceneView->makeCurrent();
+    iris::SceneNodePtr node = reader->readSceneNode(document.object());
+    this->sceneView->doneCurrent();
+    delete reader;
 
 	// rename animation sources to relative paths
+	QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
 	auto relPath = QDir(Globals::project->folderPath).relativeFilePath(db->fetchAsset(meshGuid).name);
 	for (auto anim : node->getAnimations()) if (!!anim->skeletalAnimation) anim->skeletalAnimation->source = relPath;
 
-	node->setGUID(guid);
-    node->setName(assetName);
-	node->setLocalPos(position);
-
 	addNodeToScene(node, ignore);
+}
+
+void MainWindow::addAssetParticleSystem(bool ignore, QVector3D position, QString guid, QString assetName)
+{
+    this->sceneView->makeCurrent();
+
+    QJsonObject pDefs;
+    QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
+    while (iterator != AssetManager::getAssets().constEnd()) {
+        if ((*iterator)->assetGuid == guid) pDefs = (*iterator)->getValue().toJsonObject();
+        ++iterator;
+    }
+
+    //if (!node) return; 
+
+    auto particleNode = iris::ParticleSystemNode::create();
+
+    particleNode->setGUID(pDefs["guid"].toString());
+    particleNode->setPPS((float) pDefs["particlesPerSecond"].toDouble(1.0f));
+    particleNode->setParticleScale((float) pDefs["particleScale"].toDouble(1.0f));
+    particleNode->setDissipation(pDefs["dissipate"].toBool());
+    particleNode->setDissipationInv(pDefs["dissipateInv"].toBool());
+    particleNode->setRandomRotation(pDefs["randomRotation"].toBool());
+    particleNode->setGravity((float) pDefs["gravityComplement"].toDouble(1.0f));
+    particleNode->setBlendMode(pDefs["blendMode"].toBool());
+    particleNode->setLife((float) pDefs["lifeLength"].toDouble(1.0f));
+    particleNode->setName(pDefs["name"].toString());
+    particleNode->setSpeed((float) pDefs["speed"].toDouble(1.0f));
+    {
+        auto textureGuid = pDefs["texture"].toString();
+        auto texPath = IrisUtils::join(
+            Globals::project->getProjectFolder(),
+            db->fetchAsset(textureGuid).name
+        );
+        particleNode->setTexture(iris::Texture2D::load(texPath));
+    }
+    particleNode->setVisible(pDefs["visible"].toBool(true));
+
+    //return particleNode; 
+
+    particleNode->setPickable(true);
+    particleNode->setGUID(guid);
+    particleNode->setName(assetName);
+    particleNode->setLocalPos(position);
+
+    addNodeToScene(particleNode, ignore);
 }
 
 void MainWindow::addDragPlaceholder()
@@ -1767,6 +1888,109 @@ void MainWindow::createMaterial()
     }
 }
 
+void MainWindow::exportParticleSystem(const iris::SceneNodePtr &node)
+{
+    if (!!activeSceneNode) {
+        QJsonObject particleDef;
+        SceneWriter::writeParticleData(
+            particleDef,
+            activeSceneNode.staticCast<iris::ParticleSystemNode>()
+        );
+
+        auto textureGuid = db->fetchAssetGUIDByName(particleDef.value("texture").toString());
+        if (!textureGuid.isEmpty()) particleDef["texture"] = textureGuid;
+
+        QByteArray binaryDef = QJsonDocument(particleDef).toBinaryData();
+
+        db->updateAssetAsset(node->getGUID(), binaryDef);
+
+        const QString assetGuid = GUIDManager::generateGUID();
+
+        // get the export file path from a save dialog 
+        auto filePath = QFileDialog::getSaveFileName(
+            this,
+            "Choose export path",
+            QString("%1_export").arg(node->getName()),
+            "Supported Export Formats (*.jaf)"
+        );
+
+        if (filePath.isEmpty() || filePath.isNull()) return;
+
+        QTemporaryDir temporaryDir;
+        if (!temporaryDir.isValid()) return;
+
+        const QString writePath = temporaryDir.path();
+        const QString guid = node->getGUID();
+
+        db->createExportNode(ModelTypes::ParticleSystem, guid, QDir(writePath).filePath("asset.db"));
+
+        QDir tempDir(writePath);
+        tempDir.mkpath("assets");
+
+        QFile manifest(QDir(writePath).filePath(".manifest"));
+        if (manifest.open(QIODevice::ReadWrite)) {
+            QTextStream stream(&manifest);
+            stream << "particle_system";
+        }
+        manifest.close();
+
+        for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
+            auto asset = db->fetchAsset(assetGuid);
+            auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+            QFileInfo assetInfo(assetPath);
+            if (assetInfo.exists()) {
+                QFile::copy(
+                    IrisUtils::join(assetPath),
+                    IrisUtils::join(writePath, "assets", assetInfo.fileName())
+                );
+            }
+        }
+
+        // get all the files and directories in the project working directory 
+        QDir workingProjectDirectory(writePath);
+        QDirIterator projectDirIterator(writePath,
+            QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
+            QDirIterator::Subdirectories);
+
+        QVector<QString> fileNames;
+        while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
+
+        // open a basic zip file for writing, maybe change compression level later (iKlsR) 
+        struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
+
+        for (int i = 0; i < fileNames.count(); i++) {
+            QFileInfo fInfo(fileNames[i]);
+
+            // we need to pay special attention to directories since we want to write empty ones as well 
+            if (fInfo.isDir()) {
+                zip_entry_open(
+                    zip,
+                    /* will only create directory if / is appended */
+                    QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
+                );
+                zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+            }
+            else {
+                zip_entry_open(
+                    zip,
+                    workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
+                );
+                zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+            }
+
+            // we close each entry after a successful write 
+            zip_entry_close(zip);
+        }
+
+        // close our now exported file 
+        zip_close(zip);
+    }
+    else {
+        qDebug() << "Need an active scenenode!";
+        return;
+    }
+}
+
 void MainWindow::exportNode(const iris::SceneNodePtr &node)
 {
 	// get the export file path from a save dialog
@@ -1849,13 +2073,15 @@ void MainWindow::exportNode(const iris::SceneNodePtr &node)
     zip_close(zip);
 }
 
-void MainWindow::exportNodes(const QStringList &assetGuids)
+void MainWindow::exportNodes(iris::SceneNodePtr node, const QStringList &assetGuids)
 {
+    QDateTime currentDateTime = QDateTime::currentDateTimeUtc();
+
 	// get the export file path from a save dialog
 	auto filePath = QFileDialog::getSaveFileName(
 		this,
 		"Choose export path",
-		"export",
+		QString("%1_%2").arg(node->getName(), QString::number(currentDateTime.toTime_t())),
 		"Supported Export Formats (*.jaf)"
 	);
 
@@ -1866,7 +2092,7 @@ void MainWindow::exportNodes(const QStringList &assetGuids)
 
 	const QString writePath = temporaryDir.path();
 
-	db->createExportNodes(ModelTypes::Object, assetGuids, QDir(writePath).filePath("asset.db"));
+	db->createExportNodes(ModelTypes::Object, node, assetGuids, QDir(writePath).filePath("asset.db"));
 
 	QDir tempDir(writePath);
 	tempDir.mkpath("assets");
@@ -1879,18 +2105,23 @@ void MainWindow::exportNodes(const QStringList &assetGuids)
 	manifest.close();
 
 	for (const auto &guid : assetGuids) {
-		for (const auto &asset : db->fetchAssetAndDependencies(guid)) {
-			QFile::copy(
-				IrisUtils::join(Globals::project->getProjectFolder(), asset),
-				IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
-			);
-		}
+        for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
+            auto asset = db->fetchAsset(assetGuid);
+            auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+            QFileInfo assetInfo(assetPath);
+            if (assetInfo.exists()) {
+                QFile::copy(
+                    IrisUtils::join(assetPath),
+                    IrisUtils::join(writePath, "assets", assetInfo.fileName())
+                );
+            }
+        }
 	}
 
 	// get all the files and directories in the project working directory
 	QDir workingProjectDirectory(writePath);
 	QDirIterator projectDirIterator(writePath,
-		QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
+		QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs | QDir::Hidden,
 		QDirIterator::Subdirectories);
 
 	QVector<QString> fileNames;
@@ -2114,19 +2345,28 @@ void MainWindow::setupDockWidgets()
 
     QWidget *presetDockContents = new QWidget;
     presetDockContents->setStyleSheet( "QWidget { background-color: #151515; }");
-    MaterialSets *materialPresets = new MaterialSets;
-    materialPresets->setMainWindow(this);
     SkyPresets *skyPresets = new SkyPresets;
     skyPresets->setMainWindow(this);
-    ModelPresets *modelPresets = new ModelPresets;
-    modelPresets->setMainWindow(this);
+
+    assetFavorites = new AssetFavorites;
+    assetFavorites->setMainWindow(this);
+    assetFavorites->setHandle(db);
+
+    assetModelPanel = new AssetModelPanel;
+    assetModelPanel->setMainWindow(this);
+    assetModelPanel->setDatabaseHandle(db);
+
+    assetMaterialPanel = new AssetMaterialPanel;
+    assetMaterialPanel->setMainWindow(this);
+    assetMaterialPanel->setDatabaseHandle(db);
 
     presetsTabWidget = new QTabWidget;
     presetsTabWidget->setObjectName("PresetsTabWidget");
     presetsTabWidget->setMinimumWidth(396);
-    presetsTabWidget->addTab(modelPresets, "Primitives");
-    presetsTabWidget->addTab(materialPresets, "Materials");
+    presetsTabWidget->addTab(assetModelPanel, "Models");
+    presetsTabWidget->addTab(assetMaterialPanel, "Materials");
     presetsTabWidget->addTab(skyPresets, "Skyboxes");
+    presetsTabWidget->addTab(assetFavorites, "Favorites");
     presetDockContents->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
 
     QGridLayout *presetsLayout = new QGridLayout(presetDockContents);
@@ -2138,6 +2378,7 @@ void MainWindow::setupDockWidgets()
     assetDock = new QDockWidget("Asset Browser", viewPort);
     assetDock->setObjectName(QStringLiteral("assetDock"));
     assetWidget = new AssetWidget(db, viewPort);
+    assetWidget->setMainWindow(this);
     assetWidget->setAcceptDrops(true);
     assetWidget->installEventFilter(this);
 
@@ -2173,6 +2414,15 @@ void MainWindow::setupDockWidgets()
     viewPort->addDockWidget(Qt::BottomDockWidgetArea, animationDock);
     viewPort->addDockWidget(Qt::BottomDockWidgetArea, presetsDock);
     viewPort->tabifyDockWidget(animationDock, assetDock);
+
+	viewPort->setStyleSheet(
+		"QMenu{	background: rgba(26,26,26,.9); color: rgba(250,250, 250,.9);}"
+		"QMenu::item{padding: 2px 5px 2px 20px;	}"
+		"QMenu::item:hover{	background: rgba(40,128, 185,.9);}"
+		"QMenu::item:selected{	background: rgba(40,128, 185,.9);}"
+	//	"QMenu::indicator{ width : 13; height : 10; border-radius: 3px; background: rgba(53,53,53,.9);}"
+		//"QMenu::indicator:checked{background: rgba(40,128, 185,.9);}"
+	);
 }
 
 void MainWindow::setupViewPort()
@@ -2225,7 +2475,7 @@ void MainWindow::setupViewPort()
 	help = new QPushButton;
 	help->setObjectName("helpButton");
 	help->setText(QChar(fa::questioncircle));
-	help->setFont(fontIcons.font(28));
+	help->setFont(Globals::fontIcons->font(28));
 	help->setCursor(Qt::PointingHandCursor);
 
 	help->setStyleSheet(
@@ -2246,7 +2496,7 @@ void MainWindow::setupViewPort()
 	prefs->setObjectName("prefsButton");
 
 	prefs->setText(QChar(fa::cog));
-	prefs->setFont(fontIcons.font(28));
+	prefs->setFont(Globals::fontIcons->font(28));
 	prefs->setCursor(Qt::PointingHandCursor);
 
 	prefs->setStyleSheet(
@@ -2307,6 +2557,10 @@ void MainWindow::setupViewPort()
         "padding: 0 8px 0 0; margin: 0"
     );
     wireFramesMenu = new QMenu;
+	wireFramesMenu->setStyleSheet("QMenu{	background: rgba(26,26,26,.9); color: rgba(250,250, 250,.9);}"
+		"QMenu::item{padding: 2px 5px 2px 20px;	}"
+		"QMenu::item:hover{	background: rgba(40,128, 185,.9);}"
+		"QMenu::item:selected{	background: rgba(40,128, 185,.9);}");
 
     wireCheckAction = new QAction(QIcon(), "Light Bounds");
     wireCheckAction->setCheckable(true);
@@ -2327,17 +2581,17 @@ void MainWindow::setupViewPort()
     QVariantMap options;
     
     auto controlBarLayout = new QHBoxLayout;
-    playSceneBtn = new QPushButton(fontIcons.icon(fa::play), "Play scene");
+    playSceneBtn = new QPushButton(Globals::fontIcons->icon(fa::play), "Play scene");
     playSceneBtn->setToolTip("Play all animations in the scene");
     playSceneBtn->setStyleSheet("background: transparent");
 
     options.insert("color", QColor(52, 152, 219));
     options.insert("color-active", QColor(52, 152, 219));
-	playSimBtn = new QPushButton(fontIcons.icon(fa::play, options), "Simulate physics");
+	playSimBtn = new QPushButton(Globals::fontIcons->icon(fa::play, options), "Simulate physics");
 	playSimBtn->setToolTip("Simulate physics only");
 	playSimBtn->setStyleSheet("background: transparent");
 
-    restartSimBtn = new QPushButton(fontIcons.icon(fa::undo, options), "Restart Physics");
+    restartSimBtn = new QPushButton(Globals::fontIcons->icon(fa::undo, options), "Restart Physics");
     restartSimBtn->setToolTip("Restart physics simulation");
     restartSimBtn->setStyleSheet("background: transparent");
 
@@ -2422,7 +2676,7 @@ void MainWindow::setupViewPort()
 
 		if (UiManager::isSimulationRunning) {
 			UiManager::startPhysicsSimulation();
-            playSimBtn->setText("Pause Simulation");
+            playSimBtn->setText("Stop Simulation");
 			playSimBtn->setToolTip("Pause physics simulation");
 
             options.insert("color", QColor(241, 196, 15));
@@ -2463,6 +2717,7 @@ void MainWindow::setupViewPort()
     sceneView->setParent(viewPort);
     sceneView->setFocusPolicy(Qt::ClickFocus);
     sceneView->setFocus();
+    sceneView->setMainWindow(this);
     Globals::sceneViewWidget = sceneView;
     UiManager::setSceneViewWidget(sceneView);
 
@@ -2475,6 +2730,14 @@ void MainWindow::setupViewPort()
 
     connect(sceneView, &SceneViewWidget::addDroppedMesh, [this](QString path, bool v, QVector3D pos, QString guid, QString name) {
         addMaterialMesh(path, v, pos, guid, name);
+    });
+
+    connect(sceneView, &SceneViewWidget::addPrimitive, [this](QString guid) {
+        addPrimitiveObject(guid);
+    });
+
+    connect(sceneView, &SceneViewWidget::addDroppedParticleSystem, [this](bool v, QVector3D pos, QString guid, QString name) {
+        addAssetParticleSystem(v, pos, guid, name);
     });
 
     connect(sceneView,  SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),
@@ -2517,20 +2780,23 @@ void MainWindow::setupDesktop()
 
 void MainWindow::setupToolBar()
 {
+	QVariantMap options;
+	options.insert("color", QColor(255, 255, 255));
+	options.insert("color-active", QColor(255, 255, 255));
+
     toolBar = new QToolBar;
-	toolBar->setIconSize(QSize(14, 14));
+	toolBar->setIconSize(QSize(16, 16));
+
 	QAction *actionUndo = new QAction;
-	actionUndo->setToolTip("Undo last action");
+	actionUndo->setToolTip("Undo | Undo last action");
 	actionUndo->setObjectName(QStringLiteral("actionUndo"));
-	actionUndo->setText(QChar(fa::reply));
-	actionUndo->setFont(fontIcons.font(16)); 
+	actionUndo->setIcon(Globals::fontIcons->icon(fa::reply, options));
 	toolBar->addAction(actionUndo);
 
 	QAction *actionRedo = new QAction;
-	actionRedo->setToolTip("Redo last action");
+	actionRedo->setToolTip("Redo | Redo last action");
 	actionRedo->setObjectName(QStringLiteral("actionRedo"));
-	actionRedo->setText(QChar(fa::share));
-	actionRedo->setFont(fontIcons.font(16));
+	actionRedo->setIcon(Globals::fontIcons->icon(fa::share, options));
 	toolBar->addAction(actionRedo);
 
 	toolBar->addSeparator();
@@ -2538,28 +2804,25 @@ void MainWindow::setupToolBar()
 	connect(actionUndo, SIGNAL(triggered(bool)), SLOT(undo()));
 	connect(actionRedo, SIGNAL(triggered(bool)), SLOT(redo()));
 
-    QAction *actionTranslate = new QAction;
+    actionTranslate = new QAction;
     actionTranslate->setObjectName(QStringLiteral("actionTranslate"));
     actionTranslate->setCheckable(true);
-	actionTranslate->setToolTip("Manipulator for translating objects");
-	actionTranslate->setText(QChar(fa::arrows));
-	actionTranslate->setFont(fontIcons.font(16));
+	actionTranslate->setToolTip("Translate | Manipulator for translating objects | Translates the object along a given axis");
+	actionTranslate->setIcon(Globals::fontIcons->icon(fa::arrows, options));
 	toolBar->addAction(actionTranslate);
 
-    QAction *actionRotate = new QAction;
+    actionRotate = new QAction;
     actionRotate->setObjectName(QStringLiteral("actionRotate"));
     actionRotate->setCheckable(true);
-	actionRotate->setToolTip("Manipulator for rotating objects");
-	actionRotate->setText(QChar(fa::rotateright));
-	actionRotate->setFont(fontIcons.font(16));
+	actionRotate->setToolTip("Rptate | Manipulator for rotating objects | Rotates the object along a given axis");
+	actionRotate->setIcon(Globals::fontIcons->icon(fa::rotateright, options));
 	toolBar->addAction(actionRotate);
 
-    QAction *actionScale = new QAction;
+    actionScale = new QAction;
     actionScale->setObjectName(QStringLiteral("actionScale"));
     actionScale->setCheckable(true);
-	actionScale->setToolTip("Manipulator for scaling objects");
-	actionScale->setText(QChar(fa::expand));
-	actionScale->setFont(fontIcons.font(16));
+	actionScale->setToolTip("Scale | Manipulator for scaling objects | Scales the object along a given axis");
+	actionScale->setIcon(Globals::fontIcons->icon(fa::expand, options));
 	toolBar->addAction(actionScale);
 
     toolBar->addSeparator();
@@ -2567,17 +2830,15 @@ void MainWindow::setupToolBar()
     QAction *actionGlobalSpace = new QAction;
     actionGlobalSpace->setObjectName(QStringLiteral("actionGlobalSpace"));
     actionGlobalSpace->setCheckable(true);
-	actionGlobalSpace->setToolTip("Move objects relative to the global world");
-	actionGlobalSpace->setText(QChar(fa::globe));
-	actionGlobalSpace->setFont(fontIcons.font(16));
+	actionGlobalSpace->setToolTip("Global Space | Move objects relative to the global world");
+	actionGlobalSpace->setIcon(Globals::fontIcons->icon(fa::globe, options));
 	toolBar->addAction(actionGlobalSpace);
 
     QAction *actionLocalSpace = new QAction;
     actionLocalSpace->setObjectName(QStringLiteral("actionLocalSpace"));
     actionLocalSpace->setCheckable(true);
-	actionLocalSpace->setToolTip("Move objects relative to their transform");
-	actionLocalSpace->setText(QChar(fa::cube));
-	actionLocalSpace->setFont(fontIcons.font(16));
+	actionLocalSpace->setToolTip("Local Space | Move objects relative to their transform");
+	actionLocalSpace->setIcon(Globals::fontIcons->icon(fa::cube, options));
 	toolBar->addAction(actionLocalSpace);
 
     toolBar->addSeparator();
@@ -2585,17 +2846,15 @@ void MainWindow::setupToolBar()
     QAction *actionFreeCamera = new QAction;
     actionFreeCamera->setObjectName(QStringLiteral("actionFreeCamera"));
     actionFreeCamera->setCheckable(true);
-	actionFreeCamera->setToolTip("Freely move and orient the camera");
-	actionFreeCamera->setText(QChar(fa::eye));
-	actionFreeCamera->setFont(fontIcons.font(16));
+	actionFreeCamera->setToolTip("Free Camera | Freely move and orient the camera");
+	actionFreeCamera->setIcon(Globals::fontIcons->icon(fa::eye, options));
 	toolBar->addAction(actionFreeCamera);
 
     QAction *actionArcballCam = new QAction;
     actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
     actionArcballCam->setCheckable(true);
-	actionArcballCam->setToolTip("Move and orient the camera around a fixed point");
-	actionArcballCam->setText(QChar(fa::dotcircleo));
-	actionArcballCam->setFont(fontIcons.font(16));
+	actionArcballCam->setToolTip("Arc Ball Camera | Move and orient the camera around a fixed point | With this button selected, you are now able to move around a fixed point.");
+	actionArcballCam->setIcon(Globals::fontIcons->icon(fa::dotcircleo, options));
 	toolBar->addAction(actionArcballCam);
 
     connect(actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
@@ -2606,6 +2865,7 @@ void MainWindow::setupToolBar()
     transformGroup->addAction(actionTranslate);
     transformGroup->addAction(actionRotate);
     transformGroup->addAction(actionScale);
+    actionTranslate->setChecked(true);
 
     connect(actionGlobalSpace,  SIGNAL(triggered(bool)), SLOT(useGlobalTransform()));
     connect(actionLocalSpace,   SIGNAL(triggered(bool)), SLOT(useLocalTransform()));
@@ -2613,7 +2873,7 @@ void MainWindow::setupToolBar()
     transformSpaceGroup = new QActionGroup(viewPort);
     transformSpaceGroup->addAction(actionGlobalSpace);
     transformSpaceGroup->addAction(actionLocalSpace);
-    ui->actionGlobalSpace->setChecked(true);
+    actionGlobalSpace->setChecked(true);
 
     connect(actionFreeCamera,   SIGNAL(triggered(bool)), SLOT(useFreeCamera()));
     connect(actionArcballCam,   SIGNAL(triggered(bool)), SLOT(useArcballCam()));
@@ -2631,26 +2891,23 @@ void MainWindow::setupToolBar()
 	QAction *actionExport = new QAction;
 	actionExport->setObjectName(QStringLiteral("actionExport"));
 	actionExport->setCheckable(false);
-	actionExport->setToolTip("Export the current scene");
-	actionExport->setText(QChar(fa::upload));
-	actionExport->setFont(fontIcons.font(16)); 
+	actionExport->setToolTip("Export | Export the current scene");
+	actionExport->setIcon(Globals::fontIcons->icon(fa::upload, options));
 	toolBar->addAction(actionExport);
 
 	actionSaveScene = new QAction;
 	actionSaveScene->setObjectName(QStringLiteral("actionSaveScene"));
 	actionSaveScene->setVisible(!settings->getValue("auto_save", true).toBool());
 	actionSaveScene->setCheckable(false);
-	actionSaveScene->setToolTip("Save the current scene");
-	actionSaveScene->setText(QChar(fa::floppyo));
-	actionSaveScene->setFont(fontIcons.font(16));
+	actionSaveScene->setToolTip("Save | Save the current scene");
+	actionSaveScene->setIcon(Globals::fontIcons->icon(fa::floppyo, options));
 	toolBar->addAction(actionSaveScene);
 
 	QAction *viewDocks = new QAction;
 	viewDocks->setObjectName(QStringLiteral("viewDocks"));
 	viewDocks->setCheckable(false);
-	viewDocks->setToolTip("Toggle Widgets");
-	viewDocks->setText(QChar(fa::listalt));
-	viewDocks->setFont(fontIcons.font(16));
+	viewDocks->setToolTip("Toggle Widgets | Toggle the dock widgets");
+	viewDocks->setIcon(Globals::fontIcons->icon(fa::listalt, options));
 	toolBar->addAction(viewDocks);
 
 	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
@@ -2695,6 +2952,7 @@ void MainWindow::toggleDockWidgets()
 		"QPushButton { padding: 8px 24px; border-radius: 1px; }"
 		"QPushButton[accessibleName=\"toggleAbles\"]:checked { background: #1E1E1E; }"
 		"QPushButton[accessibleName=\"toggleAbles\"] { background: #3E3E3E; }"
+		
 	);
 
 	QVBoxLayout *dl = new QVBoxLayout;
@@ -2963,16 +3221,19 @@ void MainWindow::useGlobalTransform()
 void MainWindow::translateGizmo()
 {
     sceneView->setGizmoLoc();
+    actionTranslate->setChecked(true);
 }
 
 void MainWindow::rotateGizmo()
 {
     sceneView->setGizmoRot();
+    actionRotate->setChecked(true);
 }
 
 void MainWindow::scaleGizmo()
 {
     sceneView->setGizmoScale();
+    actionScale->setChecked(true);
 }
 
 void MainWindow::onPlaySceneButton()

@@ -13,18 +13,20 @@ For more information see the LICENSE file
 #define COLORPICKERWIDGET_H
 
 #include <QWidget>
+//#include <QColorDialog>
 
 namespace Ui {
 class ColorPickerWidget;
 }
-
 class ColorChooser;
+class QColorDialog;
 class ColorPickerWidget : public QWidget
 {
     Q_OBJECT
 
     QColor color;
-    ColorChooser* chooser;
+	ColorChooser* chooser;
+    QColorDialog* dialog;
 
 public:
     int index;

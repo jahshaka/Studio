@@ -24,6 +24,8 @@ namespace iris {
     class DefaultMaterial;
 }
 
+class Database;
+
 namespace Ui {
     class EmitterPropertyWidget;
 }
@@ -35,6 +37,10 @@ class EmitterPropertyWidget : public AccordianBladeWidget
 public:
     EmitterPropertyWidget();
     ~EmitterPropertyWidget();
+
+    void setDatabase(Database *db) {
+        this->db = db;
+    }
 
     void setSceneNode(iris::SceneNodePtr sceneNode);
 
@@ -73,6 +79,8 @@ private:
     CheckBoxWidget* dissipateInv;
     CheckBoxWidget* useAdditive;
     ComboBoxWidget* blendMode;
+
+    Database *db;
 };
 
 #endif // EMITTERPROPERTYWIDGET_H

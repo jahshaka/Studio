@@ -130,9 +130,23 @@ void Material::createProgramFromShaderSource(QString vsFile, QString fsFile)
 	shader = Shader::load(vsFile, fsFile);
 }
 
+static MaterialPtr fromShader(ShaderPtr shader)
+{
+	Material* mat = new Material();
+	mat->setShader(shader);
+
+	return MaterialPtr(mat);
+}
+
 void Material::setTextureCount(int count)
 {
     numTextures = count;
+}
+
+void Material::setShader(ShaderPtr shader)
+{
+	this->shader = shader;
+	this->numTextures = shader->samplers.count();
 }
 
 QOpenGLShaderProgram* Material::getProgram()

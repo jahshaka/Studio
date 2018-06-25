@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "skeleton.h"
 #include "graphicshelper.h"
 #include "renderdata.h"
+#include "shader.h"
 #include "material.h"
 #include "renderitem.h"
 #include "shadowmap.h"
@@ -100,6 +101,8 @@ ForwardRenderer::ForwardRenderer(bool supportsVr, bool physicsEnabled)
     perfTimer = new PerformanceTimer();
 
     renderLightBillboards = true;
+	generateLightUnformNames();
+
 }
 
 void ForwardRenderer::generateShadowBuffer(GLuint size)
@@ -475,6 +478,13 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
 
     for (int eye = 0; eye < 2; ++eye)
     {
+		// states need to be reset before the framebuffer it set and cleared
+		// glClear adheres to states that prevent writing to certain buffers
+		// like glDepthMask or glColorMask
+		graphics->setBlendState(BlendState::Opaque);
+		graphics->setDepthState(DepthState::Default);
+		graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
+
         vrDevice->beginEye(eye);
 
         auto view = vrDevice->getEyeViewMatrix(eye, viewerPos, viewTransform);
@@ -517,7 +527,7 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
 
    vrDevice->bindMirrorTextureId();
    //vrDevice->bindEyeTexture(0);
-   fsQuad->draw(graphics);
+   fsQuad->draw(graphics, true);
    gl->glBindTexture(GL_TEXTURE_2D,0);
 
    scene->geometryRenderList->clear();
@@ -627,29 +637,30 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
             if ( item->renderStates.receiveLighting ) {
                 for (int i=0;i<lightCount;i++)
                 {
-                    QString lightPrefix = QString("u_lights[%0].").arg(i);
+					auto& lightNames = this->lightUniformNames[i];
+                    //QString lightPrefix = QString("u_lights[%0].").arg(i);
 
                     auto light = renderData->scene->lights[i];
                     if(!light->isVisible())
                     {
                         //quick hack for now
-						graphics->setShaderUniform(lightPrefix+"color", QColor(0,0,0));
+						graphics->setShaderUniform(lightNames.color.c_str(), QColor(0,0,0));
                         continue;
                     }
 
-					graphics->setShaderUniform(lightPrefix+"type", (int)light->lightType);
-					graphics->setShaderUniform(lightPrefix+"position", light->globalTransform.column(3).toVector3D());
+					graphics->setShaderUniform(lightNames.type.c_str(), (int)light->lightType);
+					graphics->setShaderUniform(lightNames.position.c_str(), light->globalTransform.column(3).toVector3D());
                     //mat->setUniformValue(lightPrefix+"direction", light->getDirection());
-					graphics->setShaderUniform(lightPrefix+"distance", light->distance);
-					graphics->setShaderUniform(lightPrefix+"direction", light->getLightDir());
-					graphics->setShaderUniform(lightPrefix+"cutOffAngle", light->spotCutOff);
-					graphics->setShaderUniform(lightPrefix+"cutOffSoftness", light->spotCutOffSoftness);
-					graphics->setShaderUniform(lightPrefix+"intensity", light->intensity);
-					graphics->setShaderUniform(lightPrefix+"color", light->color);
+					graphics->setShaderUniform(lightNames.distance.c_str(), light->distance);
+					graphics->setShaderUniform(lightNames.direction.c_str(), light->getLightDir());
+					graphics->setShaderUniform(lightNames.cutOffAngle.c_str(), light->spotCutOff);
+					graphics->setShaderUniform(lightNames.cutOffSoftness.c_str(), light->spotCutOffSoftness);
+					graphics->setShaderUniform(lightNames.intensity.c_str(), light->intensity);
+					graphics->setShaderUniform(lightNames.color.c_str(), light->color);
 
-					graphics->setShaderUniform(lightPrefix+"constantAtten", 1.0f);
-					graphics->setShaderUniform(lightPrefix+"linearAtten", 0.0f);
-					graphics->setShaderUniform(lightPrefix+"quadtraticAtten", 1.0f);
+					graphics->setShaderUniform(lightNames.constantAtten.c_str(), 1.0f);
+					graphics->setShaderUniform(lightNames.linearAtten.c_str(), 0.0f);
+					graphics->setShaderUniform(lightNames.quadAtten.c_str(), 1.0f);
 
                     // shadow data
 //                    mat->setUniformValue(lightPrefix+"shadowEnabled",
@@ -657,16 +668,16 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 //                                         scene->shadowEnabled &&
 //                                         light->lightType != iris::LightType::Point);
 					if (!scene->shadowEnabled) {
-						graphics->setShaderUniform(lightPrefix + "shadowType", (int)iris::ShadowMapType::None);
+						graphics->setShaderUniform(lightNames.shadowType.c_str(), (int)iris::ShadowMapType::None);
 					}
 					else {
-						graphics->setShaderUniform(lightPrefix + "shadowMap", shadowIndex);
+						graphics->setShaderUniform(lightNames.shadowMap.c_str(), shadowIndex);
 						//mat->setUniformValue(QString("shadowMaps[%0].").arg(i), 8);
-						graphics->setShaderUniform(lightPrefix + "shadowMatrix", light->shadowMap->shadowMatrix);
+						graphics->setShaderUniform(lightNames.shadowMatrix.c_str(), light->shadowMap->shadowMatrix);
 						if (light->lightType == iris::LightType::Point)
-							graphics->setShaderUniform(lightPrefix + "shadowType", (int)iris::ShadowMapType::None);
+							graphics->setShaderUniform(lightNames.shadowType.c_str(), (int)iris::ShadowMapType::None);
 						else
-							graphics->setShaderUniform(lightPrefix + "shadowType", (int)light->shadowMap->shadowType);
+							graphics->setShaderUniform(lightNames.shadowType.c_str(), (int)light->shadowMap->shadowType);
 
 
 						graphics->setTexture(shadowIndex, light->shadowMap->shadowTexture);
@@ -885,6 +896,7 @@ void ForwardRenderer::createShadowShader()
 
 void ForwardRenderer::createParticleShader()
 {
+	/*
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
     vshader->compileSourceFile(":/assets/shaders/particle.vert");
 
@@ -898,12 +910,37 @@ void ForwardRenderer::createParticleShader()
     particleShader->link();
 
     particleShader->bind();
+	*/
+	particleShader = Shader::load(":/assets/shaders/particle.vert", ":/assets/shaders/particle.frag");
 }
 
 void ForwardRenderer::createEmitterShader()
 {
     emitterShader = GraphicsHelper::loadShader(":/assets/shaders/emitter.vert",
                                                ":/assets/shaders/emitter.frag");
+}
+
+void ForwardRenderer::generateLightUnformNames()
+{
+	for (int i = 0; i < 16; i++) {
+		LightUniformNames names;
+		QString lightPrefix = QString("u_lights[%0].").arg(i);
+		names.color = (lightPrefix + "color").toStdString();
+		names.type = (lightPrefix + "type").toStdString();
+		names.position = (lightPrefix + "position").toStdString();
+		names.distance = (lightPrefix + "distance").toStdString();
+		names.direction = (lightPrefix + "direction").toStdString();
+		names.cutOffAngle = (lightPrefix + "cutOffAngle").toStdString();
+		names.cutOffSoftness = (lightPrefix + "cutOffSoftness").toStdString();
+		names.intensity = (lightPrefix + "intensity").toStdString();
+		names.constantAtten = (lightPrefix + "constantAtten").toStdString();
+		names.linearAtten = (lightPrefix + "linearAtten").toStdString();
+		names.quadAtten = (lightPrefix + "quadtraticAtten").toStdString();
+		names.shadowType = (lightPrefix + "shadowType").toStdString();
+		names.shadowMap = (lightPrefix + "shadowMap").toStdString();
+		names.shadowMatrix = (lightPrefix + "shadowMatrix").toStdString();
+		lightUniformNames.append(names);
+	}
 }
 
 ForwardRenderer::~ForwardRenderer()

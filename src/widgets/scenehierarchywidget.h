@@ -113,6 +113,9 @@ protected slots:
 	void createMaterial();
 	void exportParticleSystem(const iris::SceneNodePtr &node);
 
+	void attachAllChildren();
+	void detachFromParent();
+
 private:
 	void showHideNode(QTreeWidgetItem* item, bool show);
     void repopulateTree();
@@ -128,6 +131,20 @@ private:
 
 	void hideItemAndChildren(QTreeWidgetItem* item);
 	void showItemAndChildren(QTreeWidgetItem* item);
+	void lockItemAndChildren(QTreeWidgetItem* item);
+	void releaseItemAndChildren(QTreeWidgetItem* item);
+
+	// attachment
+
+	// sets the `attached` property of all children nodes to true
+	// updates the ui accordingly
+	void attachAllChildren(iris::SceneNodePtr node);
+	void _attachAllChildren(iris::SceneNodePtr node);
+
+	// detach a node from its parent and update the treenode ui
+	void detachFromParent(iris::SceneNodePtr node);
+
+	void refreshAttachmentColors(iris::SceneNodePtr node);
 
 private:
     Ui::SceneHierarchyWidget *ui;
@@ -137,6 +154,8 @@ private:
 
 	QIcon *visibleIcon;
 	QIcon *hiddenIcon;
+	QIcon *pickableIcon;
+	QIcon *disabledIcon;
 
 signals:
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);

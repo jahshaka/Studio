@@ -95,12 +95,14 @@ void ParticleSystemNode::setBillboardScale(float scale)
 
 void ParticleSystemNode::submitRenderItems()
 {
-    renderItem->sceneNode = sharedFromThis().staticCast<SceneNode>();
-    renderItem->worldMatrix = this->globalTransform;
-    renderItem->renderLayer = (int)RenderLayer::Transparent;
+	if (this->visible) {
+		renderItem->sceneNode = sharedFromThis().staticCast<SceneNode>();
+		renderItem->worldMatrix = this->globalTransform;
+		renderItem->renderLayer = (int)RenderLayer::Transparent;
 
-    this->scene->geometryRenderList->add(renderItem);
-    this->scene->geometryRenderList->add(boundsRenderItem);
+		this->scene->geometryRenderList->add(renderItem);
+		this->scene->geometryRenderList->add(boundsRenderItem);
+	}
 }
 
 void ParticleSystemNode::generateParticles(float delta) {
@@ -196,7 +198,7 @@ void ParticleSystemNode::update(float delta) {
     }
 }
 
-void ParticleSystemNode::renderParticles(GraphicsDevicePtr device, RenderData* renderData, QOpenGLShaderProgram* shader)
+void ParticleSystemNode::renderParticles(GraphicsDevicePtr device, RenderData* renderData, ShaderPtr shader)
 {
     renderer->icon = texture;
     renderer->render(device, shader, renderData, this->particles);

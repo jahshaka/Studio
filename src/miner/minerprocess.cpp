@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #include <CL/cl.h>
 #include <QTimer>
 #include <QJsonDocument>
@@ -184,25 +195,36 @@ void MinerProcess::startMining()
 	else
 		args << "--noAMD";
 	args << "--noCPU";
+	args << "--noUAC";
 	args << "--gpuIndex" << QString("%1").arg(gpu.index);
 
 	data.clear();
 
+	//todo: stop outputting from miner
 	QObject::connect(process, &QProcess::readyReadStandardOutput, [this]()
 	{
-		qDebug().noquote() << QString(process->readAllStandardOutput());
+		//qDebug().noquote() << QString(process->readAllStandardOutput());
 	});
 	QObject::connect(process, &QProcess::readyReadStandardError, [this]()
 	{
-		qDebug().noquote() << QString(process->readAllStandardError());
+		//qDebug().noquote() << QString(process->readAllStandardError());
 	});
 
 	QObject::connect(process, &QProcess::errorOccurred, [this](QProcess::ProcessError error)
 	{
-		qDebug() << "error ocurred";
+		qDebug() << "Miner Process Error: " << error;
+		qDebug() << process->readAllStandardOutput();
 
-		//todo: stop mining
-		this->stopMining();
+		if (_isMining && retries < 3) {
+			//todo: stop mining
+			this->stopMining();
+			this->startMining();
+			qDebug() << "restarting miner";
+			retries++;
+		}
+		else {
+			this->stopMining();
+		}
 	});
 
 	process->setProcessChannelMode(QProcess::MergedChannels);
@@ -212,10 +234,18 @@ void MinerProcess::startMining()
 	timer = new QTimer();
 	timer->setInterval(1000);
 	timer->start();
+	sentRequests = 0;
 	QObject::connect(timer, &QTimer::timeout, [this]()
 	{
+		// limit to 5 requests waiting
+		if (sentRequests > 5)
+			return;
+
+		sentRequests += 1;
 		this->networkRequest(this->networkUrl, [this](QString result)
 		{
+			sentRequests -= 1;
+
 			QJsonParseError error;
 			auto doc = QJsonDocument::fromJson(result.toUtf8(), &error);
 
@@ -230,34 +260,23 @@ void MinerProcess::startMining()
 				auto uptime = conObj["uptime"].toInt();
 				auto pool = conObj["pool"].toString();
 				bool poolConnected = pool == "not connected" ? false : true;
-				//auto t = hashArray[0].toDouble(0);
 
 				// hps
 				auto hashObj = obj["hashrate"].toObject();
 				auto hashArray = hashObj["total"].toArray();
 				auto hps = (float)hashArray[0].toDouble(0);
 
-				//qDebug() << "uptime: " < uptime;
-				//data.append({ uptime, hps });
-				//if (uptime > 0) {
-					/*
-					minerChart->data.append({ uptime, hps });
-					if (minerChart->data.size() > 100) {
-						minerChart->data.removeFirst();
-					}
-					*/
-
-					emit onMinerChartData({ poolConnected,uptime, hps });
-				//}
-
-				//minerChart->repaint();
+				// emit status changed
+				emit onMinerChartData({ poolConnected,uptime, hps });
 			}
-			//QJsonObject res = doc.object();
-			//qDebug() << result;
+		}, [this](QNetworkReply::NetworkError error)
+		{
+			this->sentRequests -= 1;
 		});
 	});
 
 	_isMining = true;
+	retries = 0;
 }
 
 void MinerProcess::stopMining()
@@ -272,17 +291,28 @@ void MinerProcess::stopMining()
 	}
 
 	_isMining = false;
+	retries = 0;
 }
 
-void MinerProcess::networkRequest(QString url, std::function<void(QString)> callback)
+void MinerProcess::networkRequest(QString url, std::function<void(QString)> successCallback, std::function<void(QNetworkReply::NetworkError)> errorCallback)
 {
-	//qDebug() << networkUrl;
 	auto reply = netMan->get(QNetworkRequest(QUrl(networkUrl)));
 	
-	QObject::connect(reply, &QNetworkReply::readyRead, [reply, callback]()
+	QObject::connect(reply, &QNetworkReply::readyRead, [reply, successCallback]()
 	{
 		auto data = QString(reply->readAll());
-		//qDebug() << data;
-		callback(data);
+		successCallback(data);
 	});
+
+	QObject::connect(reply, QOverload<QNetworkReply::NetworkError>::of(&QNetworkReply::error), [this, errorCallback](QNetworkReply::NetworkError error)
+	{
+		//this->sentRequests -= 1;
+		errorCallback(error);
+	});
+}
+
+void MinerProcess::_setMinerStatus(MinerStatus status)
+{
+	this->status = status;
+	emit minerStatusChanged(status);
 }

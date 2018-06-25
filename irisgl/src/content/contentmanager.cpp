@@ -5,12 +5,16 @@
 #include "../graphics/font.h"
 #include "../graphics/shader.h"
 
+#include "modelloader.h"
+
 namespace iris
 {
 
 ContentManager::ContentManager(GraphicsDevicePtr graphics)
 {
     this->graphics = graphics;
+
+	modelLoader = new ModelLoader(graphics);
 }
 
 MeshPtr ContentManager::loadMesh(QString meshPath)
@@ -36,6 +40,11 @@ FontPtr ContentManager::loadFont(QString fontName, int size)
 ShaderPtr ContentManager::loadShader(QString vertexShaderPath, QString fragmentShaderPath)
 {
     return Shader::load(vertexShaderPath, fragmentShaderPath);
+}
+
+ModelPtr ContentManager::loadModel(QString modelPath)
+{
+	return modelLoader->load(modelPath);
 }
 
 ContentManagerPtr ContentManager::create(GraphicsDevicePtr graphics)

@@ -176,7 +176,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     sceneNodeObj["name"] = sceneNode->getName();
     sceneNodeObj["attached"] = sceneNode->isAttached();
     sceneNodeObj["type"] = getSceneNodeTypeName(sceneNode->sceneNodeType);
-
+    sceneNodeObj["pickable"] = sceneNode->isPickable();
     sceneNodeObj["pos"] = jsonVector3(sceneNode->getLocalPos());
     auto rot = sceneNode->getLocalRot().toEulerAngles();
     sceneNodeObj["rot"] = jsonVector3(rot);
@@ -301,7 +301,6 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
 	sceneNodeObject["mesh"]          = meshNode->meshPath;
 	sceneNodeObject["guid"]          = meshNode->getGUID();
     sceneNodeObject["meshIndex"]     = meshNode->meshIndex;
-    sceneNodeObject["pickable"]      = meshNode->pickable;
     sceneNodeObject["physicsObject"] = meshNode->isPhysicsBody;
 
     if (meshNode->isPhysicsBody) {
@@ -364,6 +363,7 @@ void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodeP
 
 void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node)
 {
+    sceneNodeObject["guid"]                 = node->getGUID();
     sceneNodeObject["particlesPerSecond"]   = node->particlesPerSecond;
     sceneNodeObject["particleScale"]        = node->particleScale;
     sceneNodeObject["dissipate"]            = node->dissipate;
@@ -373,8 +373,8 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["blendMode"]            = node->useAdditive;
     sceneNodeObject["lifeLength"]           = node->lifeLength;
     sceneNodeObject["speed"]                = node->speed;
-    sceneNodeObject["texture"]              = getRelativePath(node->texture->getSource());
 	sceneNodeObject["visible"]				= node->isVisible();
+    sceneNodeObject["texture"]              = handle->fetchAssetGUIDByName(QFileInfo(node->texture->getSource()).fileName());
 }
 
 void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat, bool relative)

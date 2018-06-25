@@ -2,6 +2,13 @@ set (USE_MINER OFF CACHE BOOL "Enable Mining (OpenCL required)")
 if(USE_MINER)
     #add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/cuda_gpu_list)
 
+    #XMR-STAK
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/xmr-stak)
+    set_target_properties(xmr-stak PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/xmr-stak)
+    set_target_properties(xmr-stak PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/xmr-stak)
+    set_target_properties(xmr-stak PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/xmr-stak)
+
+
 	find_package(OpenCL REQUIRED)
 	#enable_language("CUDA")
 	add_definitions("-DUSE_MINER")
@@ -10,13 +17,15 @@ if(USE_MINER)
 				src/miner/minerprocess.h
 				src/miner/cuda_gpu_list.h
 				src/miner/minerchart.h
-				src/miner/minerUI.h
-				src/miner/MSwitch.h
+				src/miner/minerui.h
+				src/miner/mswitch.h
+				src/miner/autominer.h
 				)
 
 	set(SRCS 	${SRCS}
 				src/miner/minerprocess.cpp
-				src/miner/minerUI.cpp
+				src/miner/minerui.cpp
+				src/miner/autominer.cpp
 				)
 
     # add cuda lib

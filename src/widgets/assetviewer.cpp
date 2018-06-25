@@ -1,19 +1,34 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #include "assetviewer.h"
 
 #include "irisgl/src/graphics/rasterizerstate.h"
+#include "irisgl/src/scenegraph/particlesystemnode.h" 
 
 #include "constants.h"
 #include "globals.h"
 #include "sceneviewwidget.h"
 #include "core/keyboardstate.h"
 #include "core/project.h"
-#include "io/assethelper.h"
+#include "core/assethelper.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
+#include "io/scenereader.h"
 
 #include <QApplication>
 #include <QFileDialog>
 #include <QStandardPaths>
+
+#include <QPointer>
 
 AssetViewer::AssetViewer(QWidget *parent) : QOpenGLWidget(parent)
 {
@@ -29,7 +44,6 @@ AssetViewer::AssetViewer(QWidget *parent) : QOpenGLWidget(parent)
     //QTimer *timer = new QTimer(this);
     //connect(timer, SIGNAL(timeout()), this, SLOT(update()));
     //timer->start(1000.f / 60.f);
-    //
     //connect(this, SIGNAL(frameSwapped()), this, SLOT(update()));
 
     viewport = new iris::Viewport();
@@ -51,26 +65,14 @@ void AssetViewer::paintGL()
 {
     makeCurrent();
 
-    //if (render) {
-        // glViewport(0, 0, this->width() * devicePixelRatio(), this->height() * devicePixelRatio());
-		//auto color = scene->skyColor;
-        //glClearColor(0.1f, 0.1f, 0.1f, 0.0f);
-        //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    float dt = elapsedTimer.nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
+    elapsedTimer.restart();
 
-        float dt = elapsedTimer.nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
-        elapsedTimer.restart();
-
-        if (!!renderer && !!scene) {
-            camController->update(dt);
-            scene->update(dt);
-            renderer->renderScene(dt, viewport);
-        }
-	//}
-	//else {
-		// glClearColor(0.18, 0.18, 0.18, 1);
-		// show default dark until rendering kicks in
-		//glClearColor(0.1f, 0.1f, 0.1f, 0.0f);
-	//}
+    if (!!renderer && !!scene) {
+        camController->update(dt);
+        scene->update(dt);
+        renderer->renderScene(dt, viewport);
+    }
 
     doneCurrent();
 }
@@ -118,16 +120,6 @@ void AssetViewer::initializeGL()
     plight->setShadowMapType(iris::ShadowMapType::Soft);
     plight->setShadowMapResolution(2048);
     scene->rootNode->addChild(plight);
-
- //   auto blight = iris::LightNode::create();
- //   blight->setLightType(iris::LightType::Point);
-	//blight->setName("Fill Light");
- //   blight->setLocalPos(QVector3D(2, 2, 2));
- //   blight->color = QColor(255, 255, 238);
- //   blight->intensity = 0.43;
- //   blight->setShadowMapType(iris::ShadowMapType::None);
- //   blight->shadowMap->shadowType = iris::ShadowMapType::None;
- //   scene->rootNode->addChild(blight);
 
     auto node = iris::MeshNode::create();
     node->setMesh(":/models/ground.obj");
@@ -209,8 +201,8 @@ void AssetViewer::mousePressEvent(QMouseEvent *e)
     prevMousePos = e->localPos();
 
     if (camController != nullptr) {
-        if (e->button() != Qt::MiddleButton)
-            camController->onMouseDown(e->button());
+        //if (e->button() != Qt::MiddleButton) // disable MMB
+        camController->onMouseDown(e->button());
     }
 }
 
@@ -286,15 +278,14 @@ void AssetViewer::loadJafModel(QString str, QString guid, bool firstAdd, bool ca
     pdialog->show();
     QApplication::processEvents();
     makeCurrent();
+
     addJafMesh(str, guid, firstAdd, cache);
-    if (firstLoad) {
-        resetViewerCamera();
-    }
-    else {
-        resetViewerCameraAfter();
-    }
+    if (firstLoad) resetViewerCamera();
+    else resetViewerCameraAfter();
+    
     renderObject();
     doneCurrent();
+
     pdialog->close();
 }
 
@@ -443,96 +434,22 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
 
 void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firstAdd, bool cache, QVector3D position)
 {
-    // if model
-    auto ssource = new iris::SceneSource();
-    // load mesh as scene
-    auto node = iris::MeshNode::loadAsSceneFragment(
-        path,
-        [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
-    {
-        auto mat = iris::CustomMaterial::create();
+    QJsonDocument document = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
+    QJsonObject objectHierarchy = document.object();
 
-        if (mesh->hasSkeleton())
-            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
-        else {
-            auto materialObj = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
-            QJsonObject matObject = materialObj.object().value("material").toObject();
+    SceneReader *reader = new SceneReader;
+    reader->setBaseDirectory(IrisUtils::join(
+        QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+        Constants::ASSET_FOLDER, guid)
+    );
 
-            QFileInfo shaderFile;
-            QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
-            while (it.hasNext()) {
-                it.next();
-                if (it.key() == matObject["guid"].toString()) {
-                    shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
-                    break;
-                }
-            }
-
-            if (shaderFile.exists()) {
-                mat->generate(shaderFile.absoluteFilePath());
-            }
-            else {
-                QString assetPath = IrisUtils::join(
-                    QStandardPaths::writableLocation(QStandardPaths::DataLocation),
-                    Constants::ASSET_FOLDER, guid
-                );
-
-                auto oguid = QJsonDocument::fromBinaryData(db->fetchAssetData(guid)).object();
-                auto shader = db->fetchAssetData(oguid["material"].toObject()["guid"].toString());
-                QJsonObject shaderDefinition = QJsonDocument::fromBinaryData(shader).object();
-
-                auto vAsset = db->fetchAsset(shaderDefinition["vertex_shader"].toString());
-                auto fAsset = db->fetchAsset(shaderDefinition["fragment_shader"].toString());
-
-                if (!vAsset.name.isEmpty()) {
-                    shaderDefinition["vertex_shader"] = QDir(assetPath).filePath(vAsset.name);
-                }
-
-                if (!fAsset.name.isEmpty()) {
-                    shaderDefinition["fragment_shader"] = QDir(assetPath).filePath(fAsset.name);
-                }
-
-                mat->generate(shaderDefinition);
-            }
-        }
-
-        return mat;
-    }, ssource);
-
-    // model file may be invalid so null gets returned
-    if (!node) return;
-
-    auto materialObj = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
-    AssetHelper::updateNodeMaterial(node, materialObj.object());
-
-    std::function<void(iris::SceneNodePtr&)> updateNodeValues = [&](iris::SceneNodePtr &node) -> void {
-        if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            auto n = node.staticCast<iris::MeshNode>();
-            auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-            for (auto prop : mat->properties) {
-                if (prop->type == iris::PropertyType::Texture) {
-                    if (!prop->getValue().toString().isEmpty()) {
-                        mat->setValue(prop->name,
-                            IrisUtils::join(QFileInfo(path).absolutePath(), db->fetchAsset(prop->getValue().toString()).name));
-                    }
-                }
-            }
-        }
-
-        if (node->hasChildren()) {
-            for (auto &child : node->children) {
-                updateNodeValues(child);
-            }
-        }
-    };
-
-    updateNodeValues(node);
+    iris::SceneNodePtr node = reader->readSceneNode(objectHierarchy);
+    delete reader;
 
     // rename animation sources to relative paths
-    auto relPath = QDir(Globals::project->folderPath).relativeFilePath(path);
+    auto relativePath = QDir(Globals::project->folderPath).relativeFilePath(path);
     for (auto anim : node->getAnimations()) {
-        if (!!anim->skeletalAnimation)
-            anim->skeletalAnimation->source = relPath;
+        if (!!anim->skeletalAnimation) anim->skeletalAnimation->source = relativePath;
     }
 
     node->setLocalPos(position);
@@ -688,6 +605,7 @@ void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QStr
 	}
 
 	auto aabb = getNodeBoundingBox(sceneNode);
+    // change position for materials here
 	sceneNode->setLocalPos(QVector3D(0, -aabb.getMin().y() -5, 0));
 
 	// apply default material to mesh nodes if they have none
@@ -733,7 +651,7 @@ void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QStr
 
 	if (!viewed) {
 		lookAt = bound.pos;
-		localPos = QVector3D(0, bound.pos.y(), dist);
+		localPos = QVector3D(0, bound.pos.y(), 12);
 	}
 
 	this->distanceFromPivot = dist;

@@ -54,8 +54,11 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 
 	ui->sceneTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
 	ui->sceneTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+	ui->sceneTree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     ui->sceneTree->viewport()->installEventFilter(this);
     ui->sceneTree->setItemDelegate(new TreeItemDelegate(this));
+
+    ui->sceneTree->setAlternatingRowColors(true);
 
     connect(ui->sceneTree->itemDelegate(), &QAbstractItemDelegate::commitData, this, &SceneHierarchyWidget::OnLstItemsCommitData);
 
@@ -87,15 +90,24 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48-dim.png"), QIcon::Normal);
 	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48-dim.png"), QIcon::Selected);
 
+    pickableIcon = new QIcon;
+    pickableIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cursor-filled-50.png"), QIcon::Normal);
+    pickableIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cursor-filled-50.png"), QIcon::Selected);
+
+    disabledIcon = new QIcon;
+    disabledIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cursor-filled-50-dim.png"), QIcon::Normal);
+    disabledIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cursor-filled-50-dim.png"), QIcon::Selected);
+
 	ui->sceneTree->setStyleSheet(
-		"QTreeView, QTreeWidget { show-decoration-selected: 1; }"
+		"QTreeView, QTreeWidget { show-decoration-selected: 1; paint-alternating-row-colors-for-empty-area: 1; }"
 		"QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; }"
-		"QTreeWidget::branch { background-color: #202020; }"
+		//"QTreeWidget::branch { background-color: #202020; }"
 		"QTreeWidget::branch:hover { background-color: #303030; }"
         "QTreeView::branch:open { image: url(:/icons/expand_arrow_open.png); }"
         "QTreeView::branch:closed:has-children { image: url(:/icons/expand_arrow_closed.png); }"
 		"QTreeWidget::branch:selected { background-color: #404040; }"
 		"QTreeWidget::item:selected { selection-background-color: #404040; background: #404040; outline: none; padding: 5px 0; }"
+        "QTreeView, QTreeWidget { show-decoration-selected: 1; border: 0; outline: none; selection-background-color: #404040; color: #EEE; background: #202020; alternate-background-color: #222; }"
 		/* Important, this is set for when the widget loses focus to fill the left gap */
 		"QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }"
 		"QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }"
@@ -178,6 +190,12 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
     addMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addParticleSystem()));
 
+	// Hands
+	auto handMenu = addMenu->addMenu("Hands");
+	action = new QAction("Grab", this);
+	handMenu->addAction(action);
+	connect(action, SIGNAL(triggered()), mainWindow, SLOT(addGrabHand()));
+
     ui->addBtn->setMenu(addMenu);
     ui->addBtn->setPopupMode(QToolButton::InstantPopup);
 
@@ -236,13 +254,13 @@ void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem *item, int column)
 {
 	// Our icons are in the second column
 	if (column == 1) {
-		if (item->data(1, Qt::UserRole).toBool()) {
-			hideItemAndChildren(item);
-		}
-		else {
-			showItemAndChildren(item);
-		}
+		if (item->data(1, Qt::UserRole).toBool()) hideItemAndChildren(item);
+		else showItemAndChildren(item);
 	}
+    else if (column == 2) {
+        if (item->data(2, Qt::UserRole).toBool()) lockItemAndChildren(item);
+        else releaseItemAndChildren(item);
+    }
 	else {
 		long nodeId = item->data(0, Qt::UserRole).toLongLong();
 		selectedNode = nodeList[nodeId];
@@ -357,20 +375,25 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 			}
 		};
 
-		if (node->getSceneNodeType() == iris::SceneNodeType::Empty) {
-			QAction *exportAsset = subMenu->addAction("Export Object");
+		//if (node->getSceneNodeType() == iris::SceneNodeType::Empty) {
+		//	QAction *exportAsset = subMenu->addAction("Export Object");
 
-			QStringList assetGuids;
-			getChildGuids(node, assetGuids);
-			connect(exportAsset, &QAction::triggered, this, [assetGuids, this]() { mainWindow->exportNodes(assetGuids); });
-		}
+		//	QStringList assetGuids;
+		//	getChildGuids(node, assetGuids);
+		//	connect(exportAsset, &QAction::triggered, this, [assetGuids, this]() { mainWindow->exportNodes(assetGuids); });
+		//}
 
-		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh ||
+            node->getSceneNodeType() == iris::SceneNodeType::Empty)
+        {
             if (!node->isBuiltIn) {
                 QAction *exportAsset = subMenu->addAction("Export Object");
-                connect(exportAsset, &QAction::triggered, this, [this, node]() {
-                    exportNode(node);
-                });
+                //connect(exportAsset, &QAction::triggered, this, [this, node]() {
+                //    exportNode(node);
+                //});
+                QStringList assetGuids;
+                getChildGuids(node, assetGuids);
+                connect(exportAsset, &QAction::triggered, this, [assetGuids, node, this]() { mainWindow->exportNodes(node, assetGuids); });
             }
 
 			QAction *exportMat = subMenu->addAction("Create Material");
@@ -382,9 +405,24 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 			QAction *exportPSystem = subMenu->addAction("Export Particle System");
 
 			connect(exportPSystem, &QAction::triggered, this, [this, node]() {
-				exportParticleSystem(node);
+                mainWindow->exportParticleSystem(node);
 			});
 		}
+	}
+
+	// attchment
+	if (node->scene->getRootNode() != node) {
+		QMenu *attachMenu = menu.addMenu("Attach..");
+
+		QAction* attachChildrenMenu = attachMenu->addAction("Attach All Children");
+		connect(attachChildrenMenu, &QAction::triggered, this, [this, node]() {
+			this->attachAllChildren(node);
+		});
+
+		QAction* detachChildrenMenu = attachMenu->addAction("Detach From Parent");
+		connect(detachChildrenMenu, &QAction::triggered, this, [this, node]() {
+			this->detachFromParent(node);
+		});
 	}
 
     menu.exec(ui->sceneTree->mapToGlobal(pos));
@@ -483,6 +521,16 @@ void SceneHierarchyWidget::exportParticleSystem(const iris::SceneNodePtr &node)
 	mainWindow->exportNode(node);
 }
 
+void SceneHierarchyWidget::attachAllChildren()
+{
+	attachAllChildren(selectedNode);
+}
+
+void SceneHierarchyWidget::detachFromParent()
+{
+	detachFromParent(selectedNode);
+}
+
 void SceneHierarchyWidget::showHideNode(QTreeWidgetItem* item, bool show)
 {
 	long nodeId = item->data(1,Qt::UserRole).toLongLong();
@@ -537,6 +585,8 @@ void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
         treeItemList.insert(childNode->getNodeId(), childTreeItem);
         populateTree(childTreeItem, childNode);
     }
+
+	this->refreshAttachmentColors(sceneNode);
 }
 
 QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
@@ -546,6 +596,7 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
     childTreeItem->setText(0, node->getName());
     childTreeItem->setData(0, Qt::UserRole, QVariant::fromValue(node->getNodeId()));
 	childTreeItem->setData(1, Qt::UserRole, QVariant::fromValue(node->isVisible()));
+	childTreeItem->setData(2, Qt::UserRole, QVariant::fromValue(node->isPickable()));
 
 	QIcon *nodeIcon = new QIcon;
 	
@@ -577,6 +628,7 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 	childTreeItem->setIcon(0, *nodeIcon);
 	
 	node->isVisible() ? childTreeItem->setIcon(1, *visibleIcon) : childTreeItem->setIcon(1, *hiddenIcon);
+	node->isPickable() ? childTreeItem->setIcon(2, *pickableIcon) : childTreeItem->setIcon(2, *disabledIcon);
 
     return childTreeItem;
 }
@@ -603,6 +655,76 @@ void SceneHierarchyWidget::showItemAndChildren(QTreeWidgetItem * item)
 	for (int i = 0; i < item->childCount(); i++) {
 		showItemAndChildren(item->child(i));
 	}
+}
+
+//todo : attach physics objects
+void SceneHierarchyWidget::attachAllChildren(iris::SceneNodePtr node)
+{
+	_attachAllChildren(node);
+	refreshAttachmentColors(node);
+}
+
+void SceneHierarchyWidget::_attachAllChildren(iris::SceneNodePtr node)
+{
+	for (auto child : node->children) {
+		child->setAttached(true);
+		attachAllChildren(child);
+	}
+}
+
+
+void SceneHierarchyWidget::detachFromParent(iris::SceneNodePtr node)
+{
+	node->setAttached(false);
+	refreshAttachmentColors(node);
+}
+
+void SceneHierarchyWidget::refreshAttachmentColors(iris::SceneNodePtr node)
+{
+	auto rootNode = node->scene->getRootNode();
+	auto treeNode = treeItemList[node->getNodeId()];
+	treeNode->setTextColor(0, QColor(255, 255, 255, 255));
+	if (node->isAttached() &&
+		node->parent != rootNode) {
+		treeNode->setTextColor(0, QColor(255, 255, 255, 150));
+	}
+
+	for (int i = 0; i < treeNode->childCount(); i++) {
+		/*
+		if (node->parent == rootNode) {
+			treeNode->setTextColor(0, QColor(255, 255, 255, 255));
+		}
+		*/
+
+		auto childTreeNode = treeNode->child(i);
+		long nodeId = childTreeNode->data(0, Qt::UserRole).toLongLong();
+		auto childNode = nodeList[nodeId];
+		refreshAttachmentColors(childNode);
+	}
+}
+
+void SceneHierarchyWidget::lockItemAndChildren(QTreeWidgetItem *item)
+{
+    long nodeId = item->data(0, Qt::UserRole).toLongLong();
+    item->setIcon(2, *disabledIcon);
+    nodeList[nodeId]->setPickable(false);
+    item->setData(2, Qt::UserRole, QVariant::fromValue(false));
+
+    for (int i = 0; i < item->childCount(); i++) {
+        lockItemAndChildren(item->child(i));
+    }
+}
+
+void SceneHierarchyWidget::releaseItemAndChildren(QTreeWidgetItem *item)
+{
+    long nodeId = item->data(0, Qt::UserRole).toLongLong();
+    item->setIcon(2, *pickableIcon);
+    nodeList[nodeId]->setPickable(true);
+    item->setData(2, Qt::UserRole, QVariant::fromValue(true));
+
+    for (int i = 0; i < item->childCount(); i++) {
+        releaseItemAndChildren(item->child(i));
+    }
 }
 
 void SceneHierarchyWidget::insertChild(iris::SceneNodePtr childNode)

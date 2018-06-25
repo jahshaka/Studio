@@ -200,7 +200,7 @@ QTreeWidget::item:hover {
       <bool>true</bool>
      </property>
      <property name="columnCount">
-      <number>2</number>
+      <number>3</number>
      </property>
      <attribute name="headerVisible">
       <bool>false</bool>
@@ -219,6 +219,11 @@ QTreeWidget::item:hover {
      <column>
       <property name="text">
        <string notr="true">2</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string notr="true">3</string>
       </property>
      </column>
     </widget>

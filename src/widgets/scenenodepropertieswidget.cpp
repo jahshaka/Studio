@@ -64,6 +64,7 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 
     emitterPropView = new EmitterPropertyWidget();
     emitterPropView->setPanelTitle("Emitter");
+    emitterPropView->setDatabase(db);
     emitterPropView->expand();
 
     shaderPropView = new ShaderPropertyWidget();

@@ -8,5 +8,6 @@
         <file>images/question.png</file>
         <file>images/question_hover.png</file>
         <file>images/bg.png</file>
+        <file>images/default_particle.jpg</file>
     </qresource>
 </RCC>

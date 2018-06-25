@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #include "assetview.h"
 #include "core/settingsmanager.h"
 #include "dialogs/preferencesdialog.h"
@@ -44,7 +55,7 @@
 #include "assetviewgrid.h"
 #include "assetgriditem.h"
 #include "assetviewer.h"
-#include "io/assethelper.h"
+#include "core/assethelper.h"
 #include "io/assetmanager.h"
 
 #include "../core/guidmanager.h"
@@ -731,7 +742,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 				cached = true;
 			}
 
-            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Object)) {
+            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Object) || 
+                gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::ParticleSystem)) {
                 viewers->setCurrentIndex(0);
 
                 QString path;
@@ -983,7 +995,9 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
         "#assetDropPad, #MetadataPane QPushButton	{ padding: 8px 12px; }"
 		"QLineEdit					{ border: 1px solid #1E1E1E; border-radius: 2px; background: #3B3B3B; }"
 		"#assetDropPad QLabel		{}"
-        "QTreeView, QTreeWidget { show-decoration-selected: 1; border: 0; outline: none; selection-background-color: #404040; color: #EEE; background: #202020; alternate-background-color: #252525; }"
+        "QTreeView, QTreeWidget { show-decoration-selected: 1; border: 0; alternate-background-color: #252525;"
+        "                         selection-background-color: #404040; color: #EEE; background: #202020;"
+        "                         paint-alternating-row-colors-for-empty-area: 1; outline: none; }"
 		//"QTreeWidget::branch { background-color: #202020; }"
         "QTreeView::branch:open { image: url(:/icons/expand_arrow_open.png); }"
         "QTreeView::branch:closed:has-children { image: url(:/icons/expand_arrow_closed.png); }"
@@ -1046,6 +1060,11 @@ void AssetView::importJahModel(const QString &fileName)
 
         ModelTypes jafType = ModelTypes::Undefined;
 
+        if (jafString == "bundle") {
+            importJahBundle(fileName);
+            return;
+        }
+
         if (jafString == "object") {
             jafType = ModelTypes::Object;
         }
@@ -1057,6 +1076,9 @@ void AssetView::importJahModel(const QString &fileName)
         }
         else if (jafString == "shader") {
             jafType = ModelTypes::Shader;
+        }
+        else if (jafString == "particle_system") {
+            jafType = ModelTypes::ParticleSystem;
         }
 
         QVector<AssetRecord> records;
@@ -1140,6 +1162,90 @@ void AssetView::importJahModel(const QString &fileName)
     }
 }
 
+void AssetView::importJahBundle(const QString &fileName)
+{
+    QFileInfo entryInfo(fileName);
+
+    auto assetPath = IrisUtils::join(
+        QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+        "AssetStore"
+    );
+
+    // create a temporary directory and extract our project into it
+    // we need a sure way to get the project name, so we have to extract it first and check the blob
+    QTemporaryDir temporaryDir;
+    temporaryDir.setAutoRemove(false);
+    if (temporaryDir.isValid()) {
+        zip_extract(entryInfo.absoluteFilePath().toStdString().c_str(),
+            temporaryDir.path().toStdString().c_str(),
+            Q_NULLPTR, Q_NULLPTR
+        );
+
+        QFile f(QDir(temporaryDir.path()).filePath(".manifest"));
+
+        if (!f.exists()) {
+            QMessageBox::warning(
+                this,
+                "Incompatible Asset format",
+                "This asset was made with a deprecated version of Jahshaka\n"
+                "You can extract the contents manually and try importing as regular assets.",
+                QMessageBox::Ok
+            );
+
+            return;
+        }
+
+        QStringList lines;
+        if (!f.open(QFile::ReadOnly | QFile::Text)) return;
+        QTextStream in(&f);
+
+        while (!in.atEnd()) {
+            QString line = in.readLine();
+            lines << line;
+        }
+        f.close();
+
+        const QString jafString = lines.first();
+        lines.pop_front();
+
+        QVector<AssetRecord> records;
+
+        QMap<QString, QString> guidCompareMap;
+        QString guid = db->importAssetBundle(
+            QDir(temporaryDir.path()).filePath("asset.db"),
+            QMap<QString, QString>(),
+            guidCompareMap,
+            records
+        );
+
+        QMap<QString, QString> guidsToReplace;
+
+        QMap<QString, QString>::const_iterator ptIter;
+        for (ptIter = guidCompareMap.constBegin(); ptIter != guidCompareMap.constEnd(); ++ptIter) {
+            if (lines.contains(ptIter.key())) {
+                guidsToReplace.insert(ptIter.key(), ptIter.value());
+            }
+        }
+
+        for (ptIter = guidsToReplace.constBegin(); ptIter != guidsToReplace.constEnd(); ++ptIter) {
+            QString assetsDir = QDir(QDir(temporaryDir.path()).filePath("assets")).filePath(ptIter.key());
+            QDirIterator projectDirIterator(assetsDir, QDir::NoDotAndDotDot | QDir::Files | QDir::Hidden);
+
+            QStringList fileNames;
+            while (projectDirIterator.hasNext()) fileNames << projectDirIterator.next();
+
+            const QString assetFolder = QDir(assetPath).filePath(ptIter.value());
+            QDir().mkpath(assetFolder);
+
+            for (const auto &file : fileNames) {
+                QFileInfo fileInfo(file);
+                QString fileToCopyTo = IrisUtils::join(assetFolder, fileInfo.fileName());
+                bool copyFile = QFile::copy(fileInfo.absoluteFilePath(), fileToCopyTo);
+            }
+        }
+    }
+}
+
 void AssetView::importModel(const QString &filename, bool jfx)
 {
 	if (!filename.isEmpty()) {
@@ -1175,6 +1281,10 @@ void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool
 
     if (object["type"].toInt() == static_cast<int>(ModelTypes::Shader)) {
         thumbnail = QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-72.png"));
+    }
+
+    if (object["type"].toInt() == static_cast<int>(ModelTypes::ParticleSystem)) {
+        thumbnail = QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-ps.png"));
     }
 
     object["guid"] = guid;
@@ -1555,6 +1665,9 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
     else if (aType == static_cast<int>(ModelTypes::Shader)) {
         jafType = ModelTypes::Shader;
     }
+    else if (aType == static_cast<int>(ModelTypes::ParticleSystem)) {
+        jafType = ModelTypes::ParticleSystem;
+    }
     else {
         // Default to files since we know what archives can contain
         jafType = ModelTypes::File;
@@ -1608,6 +1721,17 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
                 AssetManager::addAsset(assetShader);
             }
         }
+    }
+
+    if (jafType == ModelTypes::ParticleSystem) {
+        QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
+        QJsonObject shaderDefinition = matDoc.object();
+
+        auto assetShader = new AssetParticleSystem;
+        assetShader->assetGuid = guidReturned;
+        assetShader->fileName = db->fetchAsset(guidReturned).name;
+        assetShader->setValue(QVariant::fromValue(shaderDefinition));
+        AssetManager::addAsset(assetShader);
     }
 
     if (jafType == ModelTypes::Object) {

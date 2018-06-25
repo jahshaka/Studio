@@ -60,6 +60,7 @@ public:
     QList<MeshNodePtr> meshes;
     QList<ParticleSystemNodePtr> particleSystems;
     QList<ViewerNodePtr> viewers;
+	QList<GrabNodePtr> grabbers;
 
     QColor clearColor;
     bool renderSky;

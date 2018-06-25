@@ -17,6 +17,8 @@ class SceneViewWidget;
 
 #include <QMap>
 #include <QString>
+#include "src/misc/QtAwesome.h"
+#include "src/misc/QtAwesomeAnim.h"
 
 class Globals
 {
@@ -26,6 +28,7 @@ public:
     static Project* project;
     static SceneViewWidget* sceneViewWidget;
     static QMap<QString, QString> assetNames;
+	static QtAwesome *fontIcons;
 };
 
 #endif // GLOBALS_H

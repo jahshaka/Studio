@@ -17,10 +17,17 @@ For more information see the LICENSE file
 #include "../checkboxwidget.h"
 #include "../comboboxwidget.h"
 
-#include "../../irisgl/src/graphics/texture2d.h"
-#include "../../irisgl/src/scenegraph/meshnode.h"
-#include "../../irisgl/src/scenegraph/particlesystemnode.h"
-#include "../../irisgl/src/materials/defaultmaterial.h"
+#include "irisgl/src/graphics/texture2d.h" 
+#include "irisgl/src/scenegraph/meshnode.h" 
+#include "irisgl/src/scenegraph/particlesystemnode.h" 
+#include "irisgl/src/materials/defaultmaterial.h" 
+
+#include "core/database/database.h" 
+
+#include <QJsonObject> 
+
+#include "globals.h" 
+#include "io/scenewriter.h" 
 
 EmitterPropertyWidget::EmitterPropertyWidget()
 {
@@ -80,6 +87,23 @@ void EmitterPropertyWidget::onBillboardImageChanged(QString image)
 {
     if (!image.isEmpty() || !image.isNull()) {
         ps->texture = iris::Texture2D::load(image);
+
+        QJsonObject particleDef;
+        SceneWriter::writeParticleData(particleDef, ps);
+
+        auto textureGuid = particleDef.value("texture").toString();
+        if (!textureGuid.isEmpty()) {
+            particleDef["texture"] = textureGuid;
+
+            db->updateAssetAsset(ps->getGUID(), QJsonDocument(particleDef).toBinaryData());
+            db->removeDependenciesByType(ps->getGUID(), ModelTypes::Texture);
+            db->createDependency(
+                static_cast<int>(ModelTypes::ParticleSystem),
+                static_cast<int>(ModelTypes::Texture),
+                ps->getGUID(), textureGuid,
+                Globals::project->getProjectGuid()
+            );
+        }
     }
 }
 

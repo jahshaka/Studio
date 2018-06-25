@@ -36,7 +36,8 @@ class CustomBackground : public QWidget
 public:
 	bool isExpanded = false;
 
-	CustomBackground( QWidget *parent = Q_NULLPTR, Qt::WindowFlags f = Qt::WindowFlags()) : QWidget(parent) {
+	CustomBackground( QWidget *parent = Q_NULLPTR, Qt::WindowFlags f = Qt::WindowFlags()) {
+		QWidget::QWidget(parent);
 		setWindowFlags(Qt::FramelessWindowHint | Qt::X11BypassWindowManagerHint | Qt::WindowStaysOnTopHint);
 		setWindowFlag(Qt::SubWindow);
 		setGeometry(QApplication::desktop()->screenGeometry().width() / 2, QApplication::desktop()->screenGeometry().height() / 2, 1, 1);
@@ -44,6 +45,7 @@ public:
 	}
 
 	void drawPixmap(QPixmap pm) {
+		//this->parentWidget()->setWindowModality(Qt::NonModal);
 		setGeometry(0, 0, QApplication::desktop()->screenGeometry().width(), QApplication::desktop()->screenGeometry().height());
 		pixmap = &pm;
 		image = pixmap->toImage();
@@ -55,6 +57,7 @@ public:
 	void shrink() {
 		setGeometry(QApplication::desktop()->screenGeometry().width() / 2, QApplication::desktop()->screenGeometry().height() / 2, 1, 1);
 		isExpanded = false;
+		//this->parentWidget()->setWindowModality(Qt::ApplicationModal);
 		emit finished(isExpanded);
 	}
 
@@ -91,6 +94,7 @@ signals:
 	void shouldHide(bool b);
 };
 
+class CustomSlider;
 class CustomBackground;
 class ColorChooser : public QWidget
 {
@@ -106,18 +110,23 @@ public:
 	void changeBackgroundColorOfDisplayWidgetRgb();
 	void configureDisplay();
 	void pickerMode(bool ye);
+
+
 signals:
 	void onColorChanged(QColor c);
+
 private:
 	void setConnections();
 	void setColorBackground();
 	void setStyleForApplication();
 	void exitPickerMode();
 	void enterPickerMode();
+
 protected:
 	void mousePressEvent(QMouseEvent *event) override;
 	void paintEvent(QPaintEvent *event);
 	void leaveEvent(QEvent *event);
+
 private slots:
 	void setSliders(QColor color);
 	void setRgbSliders(QColor color);
@@ -125,6 +134,7 @@ private slots:
 	void setColorFromHex();
 	void setSliderLabels();
 	void setValueInColor();
+
 private:
 	QDesktopWidget * desktop;
 	QPixmap pixmap;
@@ -136,7 +146,7 @@ private:
 	bool fromHexEdit = true;
 
 	QGroupBox* groupBox;
-	QSlider *alphaSlider, *redSlider, *greenSlider, *blueSlider, *hueSlider, *saturationSlider, *valueSlider, *adjustSlider;
+	CustomSlider *alphaSlider, *redSlider, *greenSlider, *blueSlider, *hueSlider, *saturationSlider, *valueSlider, *adjustSlider;
 	QStackedWidget *stackHolder;
 	QPushButton *cancel, *select, *picker, *rgbBtn, *hsv, *hex;
 	QWidget *colorDisplay, *rgbHolder, *hsvHolder, *hexHolder;
@@ -147,4 +157,40 @@ private:
 	QDoubleSpinBox *alphaSpin;
 };
 
+class CustomSlider : public QSlider
+{
+	Q_OBJECT
+public:
+
+	QString minLabel;
+	QString maxLabel;
+
+	void setMinAndMaxLabels(QString min, QString max) {
+		setMinLabel(min);
+		setMaxLabel(max);
+	}
+
+	void setMaxLabel(QString string) {
+		maxLabel = string;
+		repaint();
+	}
+
+	void setMinLabel(QString string) {
+		minLabel = string;
+	}
+
+	CustomSlider(QWidget *parent = Q_NULLPTR) {
+		QSlider::QSlider(parent);
+		QSlider::setStyle(new SliderMoveToMouseClickPositionStyle(this->style()));
+	}
+
+	CustomSlider(Qt::Orientation orientation, QWidget *parent = Q_NULLPTR) {
+		CustomSlider::CustomSlider(parent);
+		QSlider::setOrientation(orientation);
+	}
+
+private:
+	QColor color;
+	bool isColorSlider;
+};
 #endif // COLORCHOOSER_H
