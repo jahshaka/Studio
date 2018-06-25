@@ -310,14 +310,7 @@ private:
 	QHBoxLayout *breadCrumbLayout;
 
     QHBoxLayout *filterGroupLayout;
-	QButtonGroup *assetFilterToggleButtonGroup;
-    QPushButton *assetsShowAll;
-    QPushButton *assetsShowObjects;
-    QPushButton *assetsShowMaterials;
-    QPushButton *assetsShowParticleSystems;
-    QPushButton *assetsShowTextures;
-    QPushButton *assetsShowShaders;
-    QPushButton *assetsShowFiles;
+    QComboBox *assetFilterCombo;
 
 	QButtonGroup *assetViewToggleButtonGroup;
 	QPushButton *toggleIconView;

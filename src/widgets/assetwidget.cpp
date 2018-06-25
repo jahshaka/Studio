@@ -199,72 +199,40 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->switcher->setLayout(toggleLayout);
 	ui->switcher->setObjectName("Switcher");
 
-    assetFilterToggleButtonGroup = new QButtonGroup;
     filterGroupLayout = new QHBoxLayout;
     filterGroupLayout->setMargin(0);
     filterGroupLayout->setSpacing(0);
     ui->filterWidget->setObjectName(QStringLiteral("FilterWidget"));
     ui->filterWidget->setLayout(filterGroupLayout);
 
-    assetsShowAll = new QPushButton(tr("A"));
-    assetsShowAll->setCheckable(true);
-    assetsShowAll->setChecked(true);
-    assetsShowAll->setProperty("data", QVariant::fromValue(static_cast<int>(-1)));
-    assetsShowAll->setToolTip("Show all assets");
+    assetFilterCombo = new QComboBox;
+    assetFilterCombo->addItem("All Assets", QVariant::fromValue(static_cast<int>(-1)));
+    assetFilterCombo->addItem("Objects", QVariant::fromValue(static_cast<int>(ModelTypes::Object)));
+    assetFilterCombo->addItem("Materials", QVariant::fromValue(static_cast<int>(ModelTypes::Material)));
+    assetFilterCombo->addItem("Particle Systems", QVariant::fromValue(static_cast<int>(ModelTypes::ParticleSystem)));
+    assetFilterCombo->addItem("Shaders", QVariant::fromValue(static_cast<int>(ModelTypes::Shader)));
+    assetFilterCombo->addItem("Textures", QVariant::fromValue(static_cast<int>(ModelTypes::Texture)));
+    assetFilterCombo->addItem("Files", QVariant::fromValue(static_cast<int>(ModelTypes::File)));
 
-    assetsShowObjects = new QPushButton(tr("O"));
-    assetsShowObjects->setCheckable(true);
-    assetsShowObjects->setProperty("data", QVariant::fromValue(static_cast<int>(ModelTypes::Object)));
-    assetsShowObjects->setToolTip("Show only objects");
+    filterGroupLayout->addWidget(new QLabel("Filter Assets:"));
+    filterGroupLayout->addWidget(assetFilterCombo);
 
-    assetsShowMaterials = new QPushButton(tr("M"));
-    assetsShowMaterials->setCheckable(true);
-    assetsShowMaterials->setProperty("data", QVariant::fromValue(static_cast<int>(ModelTypes::Material)));
-    assetsShowMaterials->setToolTip("Show only materials");
-
-    assetsShowParticleSystems = new QPushButton(tr("P"));
-    assetsShowParticleSystems->setCheckable(true);
-    assetsShowParticleSystems->setProperty("data", QVariant::fromValue(static_cast<int>(ModelTypes::ParticleSystem)));
-    assetsShowParticleSystems->setToolTip("Show only particle systems");
-
-    assetsShowTextures = new QPushButton(tr("T"));
-    assetsShowTextures->setCheckable(true);
-    assetsShowTextures->setProperty("data", QVariant::fromValue(static_cast<int>(ModelTypes::Texture)));
-    assetsShowTextures->setToolTip("Show only textures");
-
-    assetsShowShaders = new QPushButton(tr("S"));
-    assetsShowShaders->setCheckable(true);
-    assetsShowShaders->setProperty("data", QVariant::fromValue(static_cast<int>(ModelTypes::Shader)));
-    assetsShowShaders->setToolTip("Show only shaders");
-
-    assetsShowFiles = new QPushButton(tr("F"));
-    assetsShowFiles->setCheckable(true);
-    assetsShowFiles->setProperty("data", QVariant::fromValue(static_cast<int>(ModelTypes::File)));
-    assetsShowFiles->setToolTip("Show only files");
-
-    assetFilterToggleButtonGroup->addButton(assetsShowAll);
-    assetFilterToggleButtonGroup->addButton(assetsShowObjects);
-    assetFilterToggleButtonGroup->addButton(assetsShowMaterials);
-    assetFilterToggleButtonGroup->addButton(assetsShowParticleSystems);
-    assetFilterToggleButtonGroup->addButton(assetsShowTextures);
-    assetFilterToggleButtonGroup->addButton(assetsShowShaders);
-    assetFilterToggleButtonGroup->addButton(assetsShowFiles);
-
-    filterGroupLayout->addWidget(assetsShowAll);
-    filterGroupLayout->addWidget(assetsShowObjects);
-    filterGroupLayout->addWidget(assetsShowMaterials);
-    filterGroupLayout->addWidget(assetsShowParticleSystems);
-    filterGroupLayout->addWidget(assetsShowTextures);
-    filterGroupLayout->addWidget(assetsShowShaders);
-    filterGroupLayout->addWidget(assetsShowFiles);
-
-    connect(assetFilterToggleButtonGroup,
-        static_cast<void(QButtonGroup::*)(QAbstractButton*)>(&QButtonGroup::buttonPressed),
-        [this](QAbstractButton *button)
-    {
-        qDebug() << button->property("data").toInt();
-        updateAssetView(assetItem.selectedGuid, button->property("data").toInt()); // todo - remember show deps
+    connect<void(QComboBox::*)(int)>(assetFilterCombo, &QComboBox::currentIndexChanged, this, [&](int index) {
+        updateAssetView(assetItem.selectedGuid, assetFilterCombo->itemData(index).toInt());
     });
+
+    ui->filterWidget->setStyleSheet(
+        "#filterPane { background: #1E1E1E; border-bottom: 1px solid #111; }"
+        "QLabel { font-size: 12px; margin-right: 8px; }"
+        "QPushButton[accessibleName=\"filterObj\"] { border-radius: 0; padding: 10px 8px; }"
+        "QComboBox { background: #222; border-radius: 1px; color: #BBB; padding: 0 12px; min-height: 24px; min-width: 64px; border: 1px solid #111;}"
+        "QComboBox::drop-down { border: 0; margin: 0; padding: 0; min-height: 20px; }"
+        "QComboBox::down-arrow { image: url(:/icons/down_arrow_check.png); width: 18px; height: 14px; }"
+        "QComboBox::down-arrow:!enabled { image: url(:/icons/down_arrow_check_disabled.png); width: 18px; height: 14px; }"
+        "QComboBox QAbstractItemView::item { min-height: 28px; selection-background-color: #404040; color: #cecece; }"
+        "QComboBox QAbstractItemView { background-color: #1A1A1A; selection-background-color: #404040; border: 0; outline: none; }"
+        "QComboBox QAbstractItemView::item:selected { background: #404040; }"
+    );
 
 	ui->searchBar->setPlaceholderText(tr("Type to search for assets..."));
 
