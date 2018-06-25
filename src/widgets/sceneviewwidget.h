@@ -42,6 +42,7 @@ namespace iris
     class Scene;
     class SceneNode;
     class Viewport;
+	class ContentManager;
 }
 
 class CameraControllerBase;
@@ -83,7 +84,9 @@ struct PickingResult
 
 class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
 {
-    Q_OBJECT
+	Q_OBJECT
+
+	iris::ContentManagerPtr content;
 
     CameraControllerBase* prevCamController;
     CameraControllerBase* camController;

@@ -16,9 +16,20 @@ For more information see the LICENSE file
 #include "cameracontrollerbase.h"
 #include <QMatrix4x4>
 
+class VrHand
+{
+public:
+	iris::ModelPtr handModel;
+	QVector3D pos, scale;
+	QQuaternion rot;
+};
+
 class EditorVrController : public CameraControllerBase
 {
 public:
+	iris::ModelPtr leftHandModel;
+	iris::ModelPtr rightHandModel;
+
     iris::MeshPtr leftHandMesh;
     iris::MeshPtr rightHandMesh;
 
@@ -31,10 +42,15 @@ public:
 
     iris::VrDevice* vrDevice;
 
+	iris::ContentManagerPtr content;
+
 	QVector3D leftPos, leftScale, rightPos, rightScale;
 	QQuaternion leftRot, rightRot;
     iris::SceneNodePtr leftPickedNode;
     iris::SceneNodePtr rightPickedNode;
+
+	iris::SceneNodePtr leftHoveredNode;
+	iris::SceneNodePtr rightHoveredNode;
 
     // These are the offsets from the controllers to the
     // selected object
@@ -44,7 +60,9 @@ public:
     //iris::SceneNodePtr tracker;
     iris::ScenePtr scene;
 
-    EditorVrController();
+	iris::MaterialPtr fresnelMat;
+
+	EditorVrController(iris::ContentManagerPtr content);
 
     void setScene(iris::ScenePtr scene);
 
@@ -58,6 +76,14 @@ private:
      * Returns nearest object hit in the raycast
      */
     bool rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResult& result);
+
+	iris::SceneNodePtr getObjectRoot(iris::SceneNodePtr node);
+
+	void submitHoveredNodes();
+	void submitHoveredNode(iris::SceneNodePtr node);
+
+	// for now this finds the first grab node
+	iris::GrabNodePtr findGrabNode(iris::SceneNodePtr node);
 };
 
 #endif // EDITORVRCONTROLLER_H

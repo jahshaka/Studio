@@ -46,6 +46,7 @@ add_subdirectory(src/bullet3)
 
 set(SRCS
     src/graphics/mesh.cpp
+    src/graphics/model.cpp
     src/materials/defaultmaterial.cpp
     src/scenegraph/meshnode.cpp
     src/graphics/forwardrenderer.cpp
@@ -68,6 +69,7 @@ set(SRCS
     src/scenegraph/viewernode.cpp
     src/scenegraph/particlesystemnode.cpp
     src/vr/vrmanager.cpp
+    src/vr/handpose.cpp
     src/math/mathhelper.cpp
     src/materials/custommaterial.cpp
     src/graphics/rendertarget.cpp
@@ -103,12 +105,14 @@ set(SRCS
     src/graphics/depthstate.cpp
     src/graphics/rasterizerstate.cpp
     src/content/contentmanager.cpp
+    src/content/modelloader.cpp
     src/libovr/Src/OVR_CAPI_Util.cpp
     src/libovr/Src/OVR_StereoProjection.cpp
     src/libovr/Src/OVR_CAPIShim.c
     src/zip/zip.c
     src/physics/environment.cpp
     src/physics/physicshelper.cpp
+	src/scenegraph/grabnode.cpp
 )
 
 set (HEADERS
@@ -119,6 +123,7 @@ set (HEADERS
     src/graphics/texture.h
     src/graphics/shadowmap.h
     src/graphics/mesh.h
+    src/graphics/model.h
     src/graphics/material.h
     src/scenegraph/cameranode.h
     src/scenegraph/meshnode.h
@@ -135,6 +140,7 @@ set (HEADERS
     src/core/meshmanager.h
     src/graphics/utils/fullscreenquad.h
     src/vr/vrdevice.h
+    src/vr/handpose.h
     src/math/mathhelper.h
     src/irisglfwd.h
     src/graphics/shader.h
@@ -194,6 +200,7 @@ set (HEADERS
     src/graphics/depthstate.h
     src/graphics/rasterizerstate.h
     src/content/contentmanager.h
+	src/content/modelloader.h
     src/libovr/Include/OVR_CAPI.h
     src/libovr/Include/OVR_CAPI_Audio.h
     src/libovr/Include/OVR_CAPI_D3D.h
@@ -210,6 +217,7 @@ set (HEADERS
     src/physics/environment.h
     src/physics/physicshelper.h
     src/physics/physicsproperties.h
+	src/scenegraph/grabnode.h
 )
 
 qt5_wrap_cpp(HEADERS_moc ${HEADERS})

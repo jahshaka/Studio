@@ -1,6 +1,7 @@
 #include "../../src/graphics/graphicsdevice.h"
 #include "../../src/graphics/forwardrenderer.h"
 #include "../../src/graphics/mesh.h"
+#include "../../src/graphics/model.h"
 #include "../../src/graphics/vertexlayout.h"
 #include "../../src/graphics/texture.h"
 #include "../../src/graphics/texture2d.h"

@@ -10,29 +10,71 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "editorvrcontroller.h"
+#include "../irisgl/src/graphics/graphicsdevice.h"
 #include "../irisgl/src/graphics/renderitem.h"
 #include "../irisgl/src/graphics/material.h"
 #include "../irisgl/src/graphics/mesh.h"
+#include "../irisgl/src/graphics/model.h"
+#include "../irisgl/src/graphics/shader.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/vr/vrdevice.h"
 #include "../irisgl/src/vr/vrmanager.h"
 #include "../irisgl/src/scenegraph/scene.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
+#include "../irisgl/src/scenegraph/meshnode.h"
+#include "../irisgl/src/scenegraph/grabnode.h"
 #include "../irisgl/src/core/irisutils.h"
 #include "../irisgl/src/math/mathhelper.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
 #include "../core/keyboardstate.h"
 #include "../irisgl/src/graphics/renderlist.h"
+#include "../irisgl/src/content/contentmanager.h"
 #include "../commands/transfrormscenenodecommand.h"
 #include "../uimanager.h"
 #include "irisgl\extras\Materials.h"
 #include <QtMath>
 
 
-EditorVrController::EditorVrController()
+class FresnelMaterial : public iris::Material
 {
+	
+public:
+	QColor color;
+	float fresnelPow;
+
+	FresnelMaterial()
+	{
+		auto shader = iris::Shader::load(
+			IrisUtils::getAbsoluteAssetPath("app/shaders/fresnel.vert"),
+			IrisUtils::getAbsoluteAssetPath("app/shaders/fresnel.frag"));
+		this->setShader(shader);
+
+		this->renderLayer = (int)iris::RenderLayer::Transparent;
+		this->renderStates.blendState = iris::BlendState::createAlphaBlend();
+		//this->renderStates.rasterState.depthBias = 1;// this ensures it's always on top
+		//this->renderStates.rasterState.depthScaleBias = 1;// this ensures it's always on top
+
+		color = QColor(255, 0, 0); 
+		fresnelPow = 5;
+	}
+
+	void begin(iris::GraphicsDevicePtr device, iris::ScenePtr scene) override
+	{
+		iris::Material::begin(device, scene);
+		///device->setBlendState(this->renderStates.blendState);
+
+		device->setShaderUniform("u_color", color);
+		device->setShaderUniform("u_fresnelPow", fresnelPow);
+	}
+};
+
+
+EditorVrController::EditorVrController(iris::ContentManagerPtr content)
+{
+	this->content = content;
+
     //auto cube = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/cube.obj"));
-    auto leftHandModel = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_left.obj"));
+    auto leftHandMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_left.obj"));
 
 	auto mat = iris::DefaultMaterial::create();
 
@@ -43,13 +85,13 @@ EditorVrController::EditorVrController()
     leftHandRenderItem = new iris::RenderItem();
     leftHandRenderItem->type = iris::RenderItemType::Mesh;
     leftHandRenderItem->material = mat;
-    leftHandRenderItem->mesh = leftHandModel;
+    leftHandRenderItem->mesh = leftHandMesh;
 
-    auto rightHandModel = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_right.obj"));
+    auto rightHandMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_right.obj"));
     rightHandRenderItem = new iris::RenderItem();
     rightHandRenderItem->type = iris::RenderItemType::Mesh;
     rightHandRenderItem->material = mat;
-    rightHandRenderItem->mesh = rightHandModel;
+    rightHandRenderItem->mesh = rightHandMesh;
 
     beamMesh = iris::Mesh::loadMesh(
                 IrisUtils::getAbsoluteAssetPath("app/content/models/beam.obj"));
@@ -66,6 +108,12 @@ EditorVrController::EditorVrController()
     rightBeamRenderItem->type = iris::RenderItemType::Mesh;
     rightBeamRenderItem->material = beamMat;
     rightBeamRenderItem->mesh = beamMesh;
+
+	// load models
+	leftHandModel = content->loadModel("app/content/models/left_hand.dae");
+	rightHandModel = content->loadModel("app/content/models/right_hand.dae");
+
+	fresnelMat = QSharedPointer<FresnelMaterial>(new FresnelMaterial());
 }
 
 void EditorVrController::setScene(iris::ScenePtr scene)
@@ -153,11 +201,12 @@ void EditorVrController::update(float dt)
             auto dist = qSqrt(pick.distanceFromStartSqrd);
             //qDebug() << "hit at dist: " << dist;
             leftBeamRenderItem->worldMatrix.scale(1, 1, dist /* * (1.0f / 0.55f )*/);// todo: remove magic 0.55
+			leftHoveredNode = getObjectRoot(pick.hitNode);
 
             // Pick a node if the trigger is down
             if (leftTouch->getIndexTrigger() > 0.1f && !leftPickedNode)
             {
-				leftPickedNode = pick.hitNode;
+				leftPickedNode = leftHoveredNode;
 				leftPos = leftPickedNode->getLocalPos();
 				leftRot = leftPickedNode->getLocalRot();
 				leftScale = leftPickedNode->getLocalScale();
@@ -171,6 +220,7 @@ void EditorVrController::update(float dt)
         else
         {
             leftBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f ));
+			leftHoveredNode.clear();
         }
 
         if(leftTouch->getIndexTrigger() < 0.1f && !!leftPickedNode)
@@ -253,11 +303,11 @@ void EditorVrController::update(float dt)
 			auto dist = qSqrt(pick.distanceFromStartSqrd);
 			//qDebug() << "hit at dist: " << dist;
 			rightBeamRenderItem->worldMatrix.scale(1, 1, dist /* * (1.0f / 0.55f )*/);// todo: remove magic 0.55
-
+			rightHoveredNode = getObjectRoot(pick.hitNode);
 																					 // Pick a node if the trigger is down
 			if (rightTouch->getIndexTrigger() > 0.1f && !rightPickedNode)
 			{
-				rightPickedNode = pick.hitNode;
+				rightPickedNode = rightHoveredNode;
 				rightPos = rightPickedNode->getLocalPos();
 				rightRot = rightPickedNode->getLocalRot();
 				rightScale = rightPickedNode->getLocalScale();
@@ -271,8 +321,10 @@ void EditorVrController::update(float dt)
 		else
 		{
 			rightBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f));
+			rightHoveredNode.clear();
 		}
 
+		// trigger released
 		if (rightTouch->getIndexTrigger() < 0.1f && !!rightPickedNode)
 		{
 			// add to undo
@@ -284,13 +336,13 @@ void EditorVrController::update(float dt)
 
 			// release node
 			rightPickedNode.clear();
-			leftNodeOffset.setToIdentity(); // why bother?
+			rightNodeOffset.setToIdentity(); // why bother?
 		}
 
 		// update picked node
 		if (!!rightPickedNode) {
 			// calculate the global position
-			auto nodeGlobal = rightHandRenderItem->worldMatrix * leftNodeOffset;
+			auto nodeGlobal = rightHandRenderItem->worldMatrix * rightNodeOffset;
 
 			// calculate position relative to parent
 			auto localTransform = rightPickedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
@@ -313,11 +365,12 @@ void EditorVrController::update(float dt)
 			// leftPickedNode->update(0);// bad!
 			// it wil be updated a frame later, no need to stress over this
 		}
-
+		/*
 		if (rayCastToScene(rightBeamRenderItem->worldMatrix, pick)) {
 			auto dist = qSqrt(pick.distanceFromStartSqrd);
-			rightBeamRenderItem->worldMatrix.scale(1, 1, (dist /*  * (1.0f / 0.55f )*/));// todo: remove magic 0.55
+			rightBeamRenderItem->worldMatrix.scale(1, 1, (dist);// todo: remove magic 0.55
 		}
+		*/
 
 		scene->geometryRenderList->add(rightBeamRenderItem);
 		scene->geometryRenderList->add(rightHandRenderItem);
@@ -329,6 +382,8 @@ void EditorVrController::update(float dt)
         scene->geometryRenderList->add(rightBeamRenderItem);
     }
 	*/
+
+	submitHoveredNodes();
 }
 
 bool EditorVrController::rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResult& result)
@@ -350,4 +405,49 @@ bool EditorVrController::rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResu
     return true;
 }
 
+iris::SceneNodePtr EditorVrController::getObjectRoot(iris::SceneNodePtr node)
+{
+	if (node->isAttached() && scene->getRootNode() != node->getParent())
+		return getObjectRoot(node->getParent());
 
+	return node;
+}
+
+void EditorVrController::submitHoveredNodes()
+{
+	if (!rightPickedNode && !!rightHoveredNode) {
+		submitHoveredNode(rightHoveredNode);
+	}
+
+	if (!leftPickedNode && !!leftHoveredNode) {
+		submitHoveredNode(leftHoveredNode);
+	}
+}
+
+void EditorVrController::submitHoveredNode(iris::SceneNodePtr node)
+{
+	if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
+		auto mesh = node.staticCast<iris::MeshNode>()->getMesh();
+
+		scene->geometryRenderList->submitMesh(mesh, fresnelMat, node->getGlobalTransform());
+	}
+
+	for (auto child : node->children) {
+		submitHoveredNode(child);
+	}
+}
+
+iris::GrabNodePtr EditorVrController::findGrabNode(iris::SceneNodePtr node)
+{
+	if (node->sceneNodeType == iris::SceneNodeType::Grab)
+		return node.staticCast<iris::GrabNode>();
+
+	for (auto child : node->children) {
+		auto result = findGrabNode(child);
+		if (result)
+			return result;
+	}
+
+	// none found
+	return iris::GrabNodePtr();
+}

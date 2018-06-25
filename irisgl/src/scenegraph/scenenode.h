@@ -29,7 +29,8 @@ enum class SceneNodeType {
     Mesh,
     Light,
     Camera,
-    Viewer
+    Viewer,
+	Grab
 };
 
 class PhysicsProperty;
@@ -146,6 +147,11 @@ public:
 
     bool isAttached();
     void setAttached(bool attached);
+
+	SceneNodePtr getParent()
+	{
+		return parent;
+	}
 
     void addAnimation(AnimationPtr anim);
     QList<AnimationPtr> getAnimations();
