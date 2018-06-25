@@ -2573,7 +2573,7 @@ void MainWindow::setupViewPort()
     wireFramesMenu->addAction(physicsCheckAction);
 
     wireFramesButton->setMenu(wireFramesMenu);
-    wireFramesButton->setText("Wireframes ");
+    wireFramesButton->setText("View Options ");
     wireFramesButton->setPopupMode(QToolButton::InstantPopup);
 
     connect(screenShotBtn, SIGNAL(pressed()), this, SLOT(takeScreenshot()));
@@ -2780,12 +2780,13 @@ void MainWindow::setupDesktop()
 
 void MainWindow::setupToolBar()
 {
+
 	QVariantMap options;
 	options.insert("color", QColor(255, 255, 255));
 	options.insert("color-active", QColor(255, 255, 255));
-
-    toolBar = new QToolBar;
-	toolBar->setIconSize(QSize(16, 16));
+  
+    toolBar = new QToolBar("Tool Bar");
+	toolBar->setIconSize(QSize(14, 14));
 
 	QAction *actionUndo = new QAction;
 	actionUndo->setToolTip("Undo | Undo last action");
@@ -2859,34 +2860,6 @@ void MainWindow::setupToolBar()
 
 	toolBar->addSeparator();
 
-	QAction *changeCamera = new QAction;
-	changeCamera->setObjectName(QStringLiteral("cameraMode"));
-	changeCamera->setCheckable(true);
-	changeCamera->setChecked(sceneView->editorCam->isPerspective);
-	changeCamera->setToolTip("Viewport Projection Mode | Switch between orthogonal and perspective view | Toggle to switch the camera between orthagonal view and perspective view.");
-	changeCamera->setText(sceneView->editorCam->isPerspective? "P":"O");
-	//changeCamera->setFont(fontIcons.font(16));
-	toolBar->addAction(changeCamera);
-
-	connect(sceneView, &SceneViewWidget::updateToolbarButton, [=]() {
-		changeCamera->setChecked(sceneView->editorCam->isPerspective);
-		changeCamera->setText(sceneView->editorCam->isPerspective ? "P" : "O");
-	});
-
-	connect(changeCamera, &QAction::changed, [=]() {
-		auto val = changeCamera->isChecked();
-		if (val) {
-			changeCamera->setText("P");
-			sceneView->getScene()->camera->setProjection(iris::CameraProjection::Perspective);
-		}
-		else {
-			changeCamera->setText("O");
-			sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthogonal);
-
-		}
-	});
-
-	
     connect(actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
     connect(actionRotate,       SIGNAL(triggered(bool)), SLOT(rotateGizmo()));
     connect(actionScale,        SIGNAL(triggered(bool)), SLOT(scaleGizmo()));
@@ -2940,8 +2913,30 @@ void MainWindow::setupToolBar()
 	viewDocks->setIcon(Globals::fontIcons->icon(fa::listalt, options));
 	toolBar->addAction(viewDocks);
 
-	
+	auto cameraView = new QMenu("Camera View");
+	cameraView->setStyleSheet(wireFramesMenu->styleSheet());
+	auto perspectiveView = new QAction(QIcon(), "Perspective View");
+	perspectiveView->setCheckable(true);
+	auto orthogonalView = new QAction(QIcon(), "Orthogonal View");
+	orthogonalView->setCheckable(true);
+	cameraView->addAction(perspectiveView);
+	cameraView->addAction(orthogonalView);
+	wireFramesMenu->addMenu(cameraView);
 
+	connect(perspectiveView, &QAction::triggered, [=]() {
+		orthogonalView->setChecked(false);
+		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Perspective);
+	});
+	connect(orthogonalView, &QAction::triggered, [=]() {
+		perspectiveView->setChecked(false);
+		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthogonal);
+	});
+
+	connect(sceneView, &SceneViewWidget::updateToolbarButton, [=]() {
+		perspectiveView->setChecked(sceneView->editorCam->isPerspective);
+		orthogonalView->setChecked(!sceneView->editorCam->isPerspective);
+	});
+	
 	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
 	connect(viewDocks,			SIGNAL(triggered(bool)), SLOT(toggleDockWidgets()));
 	connect(actionSaveScene,	SIGNAL(triggered(bool)), SLOT(saveScene()));
