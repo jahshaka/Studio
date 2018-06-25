@@ -82,6 +82,7 @@ private:
 	void submitHoveredNodes();
 	void submitHoveredNode(iris::SceneNodePtr node);
 
+	// for now this finds the first grab node
 	iris::GrabNodePtr findGrabNode(iris::SceneNodePtr node);
 };
 

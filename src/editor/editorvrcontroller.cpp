@@ -435,3 +435,18 @@ void EditorVrController::submitHoveredNode(iris::SceneNodePtr node)
 		submitHoveredNode(child);
 	}
 }
+
+iris::GrabNodePtr EditorVrController::findGrabNode(iris::SceneNodePtr node)
+{
+	if (node->sceneNodeType == iris::SceneNodeType::Grab)
+		return node;
+
+	for (auto child : node->children) {
+		auto result = findGrabNode(child);
+		if (result)
+			return result;
+	}
+
+	// none found
+	return iris::GrabNodePtr();
+}
