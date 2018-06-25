@@ -122,6 +122,11 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
 public:
     iris::CameraNodePtr editorCam;
 
+    MainWindow *mainWindow;
+    void setMainWindow(MainWindow *window) {
+        mainWindow = window;
+    }
+
     btRigidBody *activeRigidBody;
 
     //testing

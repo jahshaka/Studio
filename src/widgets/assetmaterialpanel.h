@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "assetpanel.h"
 #include "core/project.h"
 #include "core/database/database.h"
+#include "core/materialpreset.h"
 
 class MainWindow;
 class MaterialPreset;
@@ -46,7 +47,9 @@ public:
     void addNewItem(QListWidgetItem *item);
 
     bool eventFilter(QObject *watched, QEvent *event);
-
+    QVector<MaterialPreset> getDefaultMaterials() {
+        return defaultMaterials;
+    }
 public slots:
     void showContextMenu(const QPoint &pos);
     void applyMaterialPreset(QListWidgetItem *item);

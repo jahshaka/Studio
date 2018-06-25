@@ -871,6 +871,18 @@ void MainWindow::closeProject()
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
+void MainWindow::applyMaterialPreset(QString guid)
+{
+    auto preset = Constants::Reserved::DefaultMaterials.value(guid);
+    auto defaultMats = assetMaterialPanel->getDefaultMaterials();
+    for (const auto &material : defaultMats) {
+        if (material.name == preset) {
+            applyMaterialPreset(material);
+            break;
+        }
+    }
+}
+
 void MainWindow::applyMaterialPreset(MaterialPreset preset)
 {
     if (!activeSceneNode || activeSceneNode->sceneNodeType != iris::SceneNodeType::Mesh) return;
@@ -2705,6 +2717,7 @@ void MainWindow::setupViewPort()
     sceneView->setParent(viewPort);
     sceneView->setFocusPolicy(Qt::ClickFocus);
     sceneView->setFocus();
+    sceneView->setMainWindow(this);
     Globals::sceneViewWidget = sceneView;
     UiManager::setSceneViewWidget(sceneView);
 

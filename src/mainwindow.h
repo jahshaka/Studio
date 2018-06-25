@@ -155,6 +155,7 @@ public:
      * Applies material preset to active scene node and refreshes material property widget
      * @param preset
      */
+    void applyMaterialPreset(QString guid);
     void applyMaterialPreset(MaterialPreset preset);
 
     void favoriteItem(QListWidgetItem *item);

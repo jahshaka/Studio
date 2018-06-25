@@ -21,7 +21,6 @@ For more information see the LICENSE file
 #include "irisgl/src/materials/custommaterial.h"
 
 #include "constants.h"
-#include "core/materialpreset.h"
 #include "core/guidmanager.h"
 #include "io/materialpresetreader.h"
 #include "io/assetmanager.h"

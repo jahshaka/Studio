@@ -208,6 +208,8 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 			}
 
             //if (!!material) savedActiveNode.staticCast<iris::MeshNode>()->setMaterial(material); ???
+            // apply 
+            mainWindow->applyMaterialPreset(roleDataMap.value(3).toString());
 		}
 		else {
 			qDebug() << "Empty";
