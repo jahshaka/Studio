@@ -9,4 +9,4 @@
 	url = https://github.com/bulletphysics/bullet3.git
 [submodule "thirdparty/xmr-stak"]
 	path = thirdparty/xmr-stak
-	url = git@github.com:jahshaka/xmr-stak.git
+	url = https://github.com/jahshaka/xmr-stak.git
