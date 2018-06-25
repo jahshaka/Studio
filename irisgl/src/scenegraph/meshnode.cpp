@@ -341,6 +341,8 @@ MeshNode::loadAsSceneFragment(
 	std::function<MaterialPtr(MeshPtr mesh, MeshMaterialData& data)> createMaterialFunc)
 {
 	const aiScene *scene = scene_;
+	if (scene==nullptr)
+		return iris::SceneNodePtr(nullptr);
 
 	if (scene->mNumMeshes == 0) return QSharedPointer<iris::MeshNode>(nullptr);
 	if (scene->mNumMeshes == 1) {
