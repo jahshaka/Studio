@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/scene.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
+#include "../irisgl/src/scenegraph/grabnode.h"
 #include "../irisgl/src/core/irisutils.h"
 #include "../irisgl/src/math/mathhelper.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
@@ -439,7 +440,7 @@ void EditorVrController::submitHoveredNode(iris::SceneNodePtr node)
 iris::GrabNodePtr EditorVrController::findGrabNode(iris::SceneNodePtr node)
 {
 	if (node->sceneNodeType == iris::SceneNodeType::Grab)
-		return node;
+		return node.staticCast<iris::GrabNode>();
 
 	for (auto child : node->children) {
 		auto result = findGrabNode(child);
