@@ -477,7 +477,7 @@ QComboBox::down-arrow:!enabled {
           </widget>
          </item>
          <item>
-          <widget class="QCheckBox" name="checkBox">
+          <widget class="QCheckBox" name="showPL">
            <property name="enabled">
             <bool>true</bool>
            </property>

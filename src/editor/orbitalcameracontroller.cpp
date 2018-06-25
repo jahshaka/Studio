@@ -104,19 +104,9 @@ void OrbitalCameraController::onMouseMove(int x,int y)
         pivot += dir;
     }
 
-	if (targetYaw != 0 && !camera->isPerspective || targetYaw != 90 && !camera->isPerspective)
+	/*if (targetYaw != 0 && !camera->isPerspective || targetYaw != 90 && !camera->isPerspective)
 		camera->setProjection(iris::CameraProjection::Orthogonal);
-	else 		camera->setProjection(iris::CameraProjection::Perspective);
-
-	/*
-	if (targetYaw == 0 && targetPitch == -90)
-		camera->setProjection(iris::CameraProjection::Orthogonal_top);
-	if (targetYaw == 90 && targetPitch == 0)
-		camera->setProjection(iris::CameraProjection::Orthogonal_right);
-	if (targetYaw == 0 && targetPitch == 0)
-		camera->setProjection(iris::CameraProjection::Orthogonal_front);
-		*/
-	
+	else 		camera->setProjection(iris::CameraProjection::Perspective);*/
 
     updateCameraRot();
 }

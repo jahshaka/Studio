@@ -49,12 +49,14 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
     connect(ui->editorPath,     SIGNAL(textChanged(QString)),   SLOT(editorPathChanged(QString)));
     connect(ui->outlineWidth,   SIGNAL(valueChanged(double)),   SLOT(outlineWidthChanged(double)));
     connect(ui->outlineColor,   SIGNAL(onColorChanged(QColor)), SLOT(outlineColorChanged(QColor)));
-    connect(ui->showFPS,        SIGNAL(toggled(bool)),          SLOT(showFpsChanged(bool)));
+	connect(ui->showFPS,		SIGNAL(toggled(bool)),			SLOT(showFpsChanged(bool)));
+	connect(ui->showPL,			SIGNAL(toggled(bool)),			SLOT(setShowPerspectiveLabel(bool)));
 	connect(ui->autoSave,       SIGNAL(toggled(bool)),          SLOT(enableAutoSave(bool)));
 	connect(ui->openInPlayer,   SIGNAL(toggled(bool)),          SLOT(enableOpenInPlayer(bool)));
 	connect(ui->mouseControls,	SIGNAL(currentTextChanged(const QString&)),	SLOT(mouseControlChanged(const QString&)));
 
 	QButtonGroup *buttonGroup = new QButtonGroup;
+	ui->showPL->setChecked(SettingsManager::getDefaultManager()->getValue("show_PL", true).toBool());
 
 	buttonGroup->addButton(ui->viewport_2);
 	buttonGroup->addButton(ui->editor_2);
@@ -155,6 +157,11 @@ void WorldSettings::showFpsChanged(bool show)
 {
     showFps = show;
     if (UiManager::sceneViewWidget) UiManager::sceneViewWidget->setShowFps(show);
+}
+
+void WorldSettings::setShowPerspectiveLabel(bool show)
+{
+	if (UiManager::sceneViewWidget) UiManager::sceneViewWidget->setShowPerspeciveLabel(show);
 }
 
 void WorldSettings::enableAutoSave(bool state)

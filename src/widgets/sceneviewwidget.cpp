@@ -92,6 +92,12 @@ void SceneViewWidget::cleanup()
 	renderer->setSelectedSceneNode(iris::SceneNodePtr());
 }
 
+void SceneViewWidget::setShowPerspeciveLabel(bool val)
+{
+	showPerspevtiveLabel = val;
+	SettingsManager::getDefaultManager()->setValue("show_PL", val);
+}
+
 void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
 {
     QByteArray encoded = event->mimeData()->data("application/x-qabstractitemmodeldatalist");
@@ -293,7 +299,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     fontSize = 20;
     showFps = SettingsManager::getDefaultManager()->getValue("show_fps", false).toBool();
-
+	showPerspevtiveLabel = SettingsManager::getDefaultManager()->getValue("show_PL", true).toBool();
 	settings = SettingsManager::getDefaultManager();
 
     m_pickedConstraint = nullptr;
@@ -726,6 +732,13 @@ void SceneViewWidget::renderScene()
 
 void SceneViewWidget::renderCameraUi(iris::SpriteBatchPtr batch)
 {
+	//qDebug() << showPerspevtiveLabel;
+
+
+	if (!showPerspevtiveLabel) {
+		spriteBatch->drawString(font, "", QVector2D(8, height() - 25), QColor(255, 255, 255, 150));
+		return;
+	}
 
 	auto dist = [](float a, float b, float closest = 2){
 		if (fabs(b - a) < closest)

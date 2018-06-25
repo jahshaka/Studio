@@ -239,7 +239,8 @@ public:
 	void setSceneMode(SceneMode sceneMode);
 
     void cleanup();
-
+	void setShowPerspeciveLabel(bool val);
+	
 protected:
     void initializeGL();
 	void initializeOpenGLDebugger();
@@ -334,6 +335,8 @@ private:
 
 	AnimationPath* animPath;
 	SettingsManager* settings;
+
+	bool showPerspevtiveLabel;
 
 signals:
     void addPrimitive(QString guid);
