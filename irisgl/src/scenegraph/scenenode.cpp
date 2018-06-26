@@ -251,7 +251,7 @@ void SceneNode::insertChild(int position, SceneNodePtr node, bool keepTransform)
 
         auto pos = diff.column(3).toVector3D();
         node->pos = pos;
-        node->rot = QQuaternion::fromRotationMatrix(diff.normalMatrix());
+        node->rot = QQuaternion::fromRotationMatrix(diff.normalMatrix()).normalized();
 
         auto data = diff.data();
 
