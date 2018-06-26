@@ -337,6 +337,10 @@ private:
 	SettingsManager* settings;
 
 	bool showPerspevtiveLabel;
+	iris::FontPtr orientationTextFont;
+	QString cameraView;
+	QString cameraOrientation;
+	QString checkView();
 
 signals:
     void addPrimitive(QString guid);

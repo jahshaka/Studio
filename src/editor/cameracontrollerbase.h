@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #ifndef ICAMERACONTROLLER_H
 #define ICAMERACONTROLLER_H
-
+#include <QKeyEvent>
 #include <Qt>
 #include <QSharedPointer>
 #include "irisglfwd.h"
@@ -35,6 +35,7 @@ public:
     virtual void onMouseWheel(int val);
 	virtual void onKeyPressed(Qt::Key key);
 	virtual void onKeyReleased(Qt::Key key);
+	virtual void keyReleaseEvent(QKeyEvent *event);
 
     virtual void start();
     virtual void update(float dt);

@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QPoint>
 #include <QVector3D>
 #include <QSharedPointer>
+#include <QKeyEvent>
 //#include "../irisgl/src/core/scenenode.h"
 //#include "../irisgl/src/scenegraph/cameranode.h"
 #include "cameracontrollerbase.h"
@@ -62,6 +63,7 @@ public:
 
 	void onKeyPressed(Qt::Key key);
 	void onKeyReleased(Qt::Key key);
+	
 
 	void update(float dt) override;
 
@@ -70,6 +72,8 @@ public:
     void updateCameraRot();
 
 	bool canLeftMouseDrag();
+protected:
+	virtual void keyReleaseEvent(QKeyEvent *event);
 };
 
 #endif // ORBITALCAMERACONTROLLER_H

@@ -549,6 +549,7 @@ void SceneViewWidget::initializeGL()
 	content = iris::ContentManager::create(renderer->getGraphicsDevice());
     spriteBatch = iris::SpriteBatch::create(renderer->getGraphicsDevice());
     font = iris::Font::create(renderer->getGraphicsDevice(), fontSize);
+	orientationTextFont = iris::Font::create(renderer->getGraphicsDevice(), 14);
 
     initialize();
     fsQuad = new iris::FullScreenQuad();
@@ -730,41 +731,49 @@ void SceneViewWidget::renderScene()
 
 }
 
-void SceneViewWidget::renderCameraUi(iris::SpriteBatchPtr batch)
+QString SceneViewWidget::checkView() 
 {
-	//qDebug() << showPerspevtiveLabel;
+	cameraView = "";
+	float yaw, pitch, roll;
+	editorCam->getLocalRot().getEulerAngles(&pitch, &yaw, &roll);
 
-
-	if (!showPerspevtiveLabel) {
-		spriteBatch->drawString(font, "", QVector2D(8, height() - 25), QColor(255, 255, 255, 150));
-		return;
-	}
-
-	auto dist = [](float a, float b, float closest = 2){
+	auto dist = [](float a, float b, float closest = 4) {
 		if (fabs(b - a) < closest)
 			return true;
 		return false;
 	};
 
-	float yaw, pitch, roll;
-	editorCam->getLocalRot().getEulerAngles(&pitch, &yaw, &roll);
+	if (dist(yaw, 0) && dist(pitch, -90))
+		cameraView = "- top";
+	if (dist(yaw, 90) && dist(pitch, 0))
+		cameraView = "- left";
+	if (dist(yaw, 0) && dist(pitch, 0))
+		cameraView = "- front";
+	if (dist(yaw, 0) && dist(pitch, 90))
+		cameraView = "- bottom";
+	if (dist(yaw, -90) && dist(pitch, 0))
+		cameraView = "- right";
+	if (dist(yaw, -180) && dist(pitch, 0))
+		cameraView = "- back";
+	return cameraView;
+}
 
-	QString text = "";
+void SceneViewWidget::renderCameraUi(iris::SpriteBatchPtr batch)
+{
+	if (!showPerspevtiveLabel) {
+		spriteBatch->drawString(font, "", QVector2D(8, height() - 25), QColor(255, 255, 255, 150));
+		return;
+	}
 
 	if (editorCam->getProjection() == iris::CameraProjection::Perspective)
-		text = "perspective";
+		cameraOrientation = "perspective";
 	else 
-		text = "orthogonal";
+		cameraOrientation = "orthogonal";
 
-	if (dist(yaw,0) && dist(pitch, -90))
-		text += " (top)";
-	if (dist(yaw, 90) && dist(pitch, 0))
-		text += " (side)";
-	if (dist(yaw, 0) && dist(pitch, 0))
-		text += " (front)";
+	checkView();
 	
-	auto fnt = iris::Font::create(renderer->getGraphicsDevice(), 12);	
-	spriteBatch->drawString(fnt, text, QVector2D(8, height() - 25), QColor(255, 255, 255, 150));
+
+	spriteBatch->drawString(orientationTextFont, QString("%1 %2").arg(cameraOrientation).arg(cameraView), QVector2D(8, height() - 25), QColor(255, 255, 255, 200));
 }
 
 void SceneViewWidget::resizeGL(int width, int height)
@@ -1001,7 +1010,8 @@ void SceneViewWidget::keyPressEvent(QKeyEvent *event)
 void SceneViewWidget::keyReleaseEvent(QKeyEvent *event)
 {
     KeyboardState::keyStates[event->key()] = false;
-	camController->onKeyReleased((Qt::Key)event->key());
+//	camController->onKeyReleased((Qt::Key)event->key());
+	camController->keyReleaseEvent(event);
 }
 
 void SceneViewWidget::focusOutEvent(QFocusEvent* event)

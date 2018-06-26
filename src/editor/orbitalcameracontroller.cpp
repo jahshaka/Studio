@@ -104,10 +104,6 @@ void OrbitalCameraController::onMouseMove(int x,int y)
         pivot += dir;
     }
 
-	/*if (targetYaw != 0 && !camera->isPerspective || targetYaw != 90 && !camera->isPerspective)
-		camera->setProjection(iris::CameraProjection::Orthogonal);
-	else 		camera->setProjection(iris::CameraProjection::Perspective);*/
-
     updateCameraRot();
 }
 
@@ -162,25 +158,59 @@ void OrbitalCameraController::update(float dt)
 
 void OrbitalCameraController::onKeyPressed(Qt::Key key)
 {
-
+	
 }
 
 void OrbitalCameraController::onKeyReleased(Qt::Key key)
-{	//top
-	if (key == Qt::Key_Y) {
-		targetYaw = 0;
-		targetPitch = -90;
+{
+
+}
+
+void OrbitalCameraController::keyReleaseEvent(QKeyEvent *event)
+{
+	// checks if crtl is being pressed
+	if (event->modifiers() == Qt::ControlModifier)
+	{
+		// gets the key being pressed
+		switch (event->key())
+		{
+		case Qt::Key_X: // right?
+			targetYaw = -90;
+			targetPitch = 0;
+			return;
+
+		case Qt::Key_Y: // bottom
+			targetYaw = 0;
+			targetPitch = 90;
+			return;
+
+		case Qt::Key_Z: // back
+			targetYaw = -180;
+			targetPitch = 0;
+			return;
+		}
 	}
-	//side
-	if (key == Qt::Key_X) {
+	// gets the key being pressed
+	switch (event->key())
+	{
+	case Qt::Key_X: // left?
 		targetYaw = 90;
 		targetPitch = 0;
-	}
-	//front
-	if (key == Qt::Key_Z) {
+		return;
+
+	case Qt::Key_Y: // top
+		targetYaw = 0;
+		targetPitch = -90;
+		return;
+
+	case Qt::Key_Z: // front
 		targetYaw = 0;
 		targetPitch = 0;
+		return;
+
 	}
+
+	onKeyReleased((Qt::Key)event->key());
 }
 
 void OrbitalCameraController::focusOnNode(iris::SceneNodePtr sceneNode)

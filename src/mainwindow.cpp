@@ -2786,7 +2786,7 @@ void MainWindow::setupToolBar()
 	options.insert("color-active", QColor(255, 255, 255));
   
     toolBar = new QToolBar("Tool Bar");
-	toolBar->setIconSize(QSize(14, 14));
+	toolBar->setIconSize(QSize(16, 16));
 
 	QAction *actionUndo = new QAction;
 	actionUndo->setToolTip("Undo | Undo last action");
