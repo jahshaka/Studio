@@ -359,7 +359,7 @@ void SceneReader::readSceneNodeTransform(QJsonObject& nodeObj,iris::SceneNodePtr
     auto rot = nodeObj["rot"].toObject();
     if (!rot.isEmpty()) {
         //the rotation is stored as euler angles
-        sceneNode->setLocalRot(QQuaternion::fromEulerAngles(readVector3(rot)));
+        sceneNode->setLocalRot(QQuaternion::fromEulerAngles(readVector3(rot)).normalized());
     }
 
     auto scale = nodeObj["scale"].toObject();
