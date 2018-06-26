@@ -178,7 +178,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     sceneNodeObj["type"] = getSceneNodeTypeName(sceneNode->sceneNodeType);
     sceneNodeObj["pickable"] = sceneNode->isPickable();
     sceneNodeObj["pos"] = jsonVector3(sceneNode->getLocalPos());
-    auto rot = sceneNode->getLocalRot().toEulerAngles();
+    auto rot = sceneNode->getLocalRot().normalized().toEulerAngles();
     sceneNodeObj["rot"] = jsonVector3(rot);
     sceneNodeObj["scale"] = jsonVector3(sceneNode->getLocalScale());
 	sceneNodeObj["visible"] = sceneNode->isVisible();
