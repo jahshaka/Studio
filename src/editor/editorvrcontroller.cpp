@@ -195,6 +195,7 @@ void EditorVrController::update(float dt)
         rightBeamRenderItem->worldMatrix = rightHandRenderItem->worldMatrix;
 
 
+
         // Handle picking and movement of picked objects
         iris::PickingResult pick;
         if (rayCastToScene(leftHandRenderItem->worldMatrix, pick)) {

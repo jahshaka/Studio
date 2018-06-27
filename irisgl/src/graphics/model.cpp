@@ -87,7 +87,15 @@ void Model::updateAnimation(float dt)
 		float time = animTime;
 		skeleton->applyAnimation(activeAnimation, time);
 
-		//todo: apply to children nodes
+		for (auto mesh : meshes) {
+			// apply animations
+			if (mesh->hasSkeleton()) {
+				auto skel = mesh->getSkeleton();
+
+				// should fail, calculate the transforms manually
+				skel->applyAnimation(activeAnimation, time);
+			}
+		}
 	}
 }
 
