@@ -192,6 +192,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,
     // if this node only has one child then make sceneNode a meshnode and add mesh to it
     if (node->mNumMeshes == 1) {
         auto meshNode = iris::MeshNode::create();
+		meshNode->name = QString(node->mName.C_Str());
         auto mesh = scene->mMeshes[node->mMeshes[0]];
 
         // objects like Bezier curves have no vertex positions in the aiMesh
@@ -202,7 +203,7 @@ QSharedPointer<iris::SceneNode> _buildScene(const aiScene* scene,
             meshObj->setSkeleton(skel);
 
             meshNode->setMesh(meshObj);
-            meshNode->name = QString(mesh->mName.C_Str());
+            //meshNode->name = QString(mesh->mName.C_Str());
             meshNode->meshPath = filePath;
             meshNode->meshIndex = node->mMeshes[0];
 
@@ -284,7 +285,7 @@ MeshNode::loadAsSceneFragment(QString filePath,
     const aiScene *scene = scene_->importer.ReadFile(filePath.toStdString().c_str(), aiProcessPreset_TargetRealtime_Quality);
 
     if (scene->mNumMeshes == 0) return QSharedPointer<iris::MeshNode>(nullptr);
-    if (scene->mNumMeshes == 1) {
+    if (scene->mNumMeshes == 1 && scene->mNumAnimations == 0) {
         auto mesh = scene->mMeshes[0];
         auto node = iris::MeshNode::create();
 
@@ -345,7 +346,8 @@ MeshNode::loadAsSceneFragment(
 		return iris::SceneNodePtr(nullptr);
 
 	if (scene->mNumMeshes == 0) return QSharedPointer<iris::MeshNode>(nullptr);
-	if (scene->mNumMeshes == 1) {
+	// if scene only has one mesh and no animation then it's safe to load it as a static mesh
+	if (scene->mNumMeshes == 1 && scene->mNumAnimations == 0) {
 		auto mesh = scene->mMeshes[0];
 		auto node = iris::MeshNode::create();
 
