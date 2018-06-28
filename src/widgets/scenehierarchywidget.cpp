@@ -364,36 +364,12 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	if (node->isExportable()) {
 		QMenu *subMenu = menu.addMenu("Export");
 
-		std::function<void(const iris::SceneNodePtr&, QStringList&)> getChildGuids =
-			[&](const iris::SceneNodePtr &node, QStringList &items) -> void
-		{
-			if (!node->getGUID().isEmpty() && !items.contains(node->getGUID())) items.append(node->getGUID());
-			if (node->hasChildren()) {
-				for (const auto &child : node->children) {
-					getChildGuids(child, items);
-				}
-			}
-		};
-
-		//if (node->getSceneNodeType() == iris::SceneNodeType::Empty) {
-		//	QAction *exportAsset = subMenu->addAction("Export Object");
-
-		//	QStringList assetGuids;
-		//	getChildGuids(node, assetGuids);
-		//	connect(exportAsset, &QAction::triggered, this, [assetGuids, this]() { mainWindow->exportNodes(assetGuids); });
-		//}
-
 		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh ||
             node->getSceneNodeType() == iris::SceneNodeType::Empty)
         {
             if (!node->isBuiltIn) {
                 QAction *exportAsset = subMenu->addAction("Export Object");
-                //connect(exportAsset, &QAction::triggered, this, [this, node]() {
-                //    exportNode(node);
-                //});
-                QStringList assetGuids;
-                getChildGuids(node, assetGuids);
-                connect(exportAsset, &QAction::triggered, this, [assetGuids, node, this]() { mainWindow->exportNodes(node, assetGuids); });
+                connect(exportAsset, &QAction::triggered, this, [node, this]() { mainWindow->exportNode(node, ModelTypes::Object); });
             }
 
 			QAction *exportMat = subMenu->addAction("Create Material");
@@ -506,9 +482,9 @@ void SceneHierarchyWidget::focusOnNode()
 	UiManager::sceneViewWidget->focusOnNode(selectedNode);
 }
 
-void SceneHierarchyWidget::exportNode(const iris::SceneNodePtr &node)
+void SceneHierarchyWidget::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType)
 {
-	mainWindow->exportNode(node);
+	mainWindow->exportNode(node, modelType);
 }
 
 void SceneHierarchyWidget::createMaterial()
@@ -518,7 +494,7 @@ void SceneHierarchyWidget::createMaterial()
 
 void SceneHierarchyWidget::exportParticleSystem(const iris::SceneNodePtr &node)
 {
-	mainWindow->exportNode(node);
+	mainWindow->exportNode(node, ModelTypes::ParticleSystem);
 }
 
 void SceneHierarchyWidget::attachAllChildren()

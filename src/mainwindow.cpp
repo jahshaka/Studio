@@ -1991,120 +1991,48 @@ void MainWindow::exportParticleSystem(const iris::SceneNodePtr &node)
     }
 }
 
-void MainWindow::exportNode(const iris::SceneNodePtr &node)
+void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType)
 {
-	// get the export file path from a save dialog
-	auto filePath = QFileDialog::getSaveFileName(
-		this,
-		"Choose export path",
-		QString("%1_export").arg(node->getName()),
-		"Supported Export Formats (*.jaf)"
-	);
+    if (!node) return;
 
-	if (filePath.isEmpty() || filePath.isNull()) return;
+    QDateTime currentDateTime = QDateTime::currentDateTimeUtc();
 
-	QTemporaryDir temporaryDir;
-	if (!temporaryDir.isValid()) return;
+    // The export is titled the name of the node + the current date time in UTC
+    auto filePath = QFileDialog::getSaveFileName(
+        this,
+        "Choose export path",
+        QString("%1_%2").arg(node->getName(), QString::number(currentDateTime.toTime_t())),
+        "Supported Export Formats (*.jaf)"
+    );
+
+    if (filePath.isEmpty() || filePath.isNull()) return;
+
+    // Construct a temporary dir to place all the files that will be packaged
+    QTemporaryDir temporaryDir;
+    if (!temporaryDir.isValid()) return;
 
     const QString writePath = temporaryDir.path();
-    const QString guid = node->getGUID();
 
-    db->createExportNode(ModelTypes::Object, guid, QDir(writePath).filePath("asset.db"));
+    // Create a blob containing the necessary tables and rows that are needed to recreate the asset
+    // Assets are exported AS IS with their guids, these are changed when being reimported 
+    db->createBlobFromNode(node, QDir(writePath).filePath("asset.db"));
 
     QDir tempDir(writePath);
     tempDir.mkpath("assets");
 
+    // The manifest contains a single string telling the asset type
+    // This helps with some preliminary checks to avoid reading the db and encountering blobs etc
     QFile manifest(QDir(writePath).filePath(".manifest"));
     if (manifest.open(QIODevice::ReadWrite)) {
         QTextStream stream(&manifest);
-        stream << "object";
+        stream << Project::ModelTypesAsString[static_cast<int>(modelType)];
     }
     manifest.close();
 
-	for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
-        auto asset = db->fetchAsset(assetGuid);
-        auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
-        QFileInfo assetInfo(assetPath);
-        if (assetInfo.exists()) {
-            QFile::copy(
-                IrisUtils::join(assetPath),
-                IrisUtils::join(writePath, "assets", assetInfo.fileName())
-            );
-        }
-	}
+    // Collect all assets that will be exported and copy these to the temporary directory
+    QStringList assetGuids = AssetHelper::getChildGuids(node);
 
-    // get all the files and directories in the project working directory
-    QDir workingProjectDirectory(writePath);
-    QDirIterator projectDirIterator(writePath,
-                                    QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
-                                    QDirIterator::Subdirectories);
-
-    QVector<QString> fileNames;
-    while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
-
-    // open a basic zip file for writing, maybe change compression level later (iKlsR)
-    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
-
-    for (int i = 0; i < fileNames.count(); i++) {
-		QFileInfo fInfo(fileNames[i]);
-
-		// we need to pay special attention to directories since we want to write empty ones as well
-		if (fInfo.isDir()) {
-			zip_entry_open(
-				zip,
-				/* will only create directory if / is appended */
-				QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
-			);
-			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-		}
-		else {
-			zip_entry_open(
-				zip,
-				workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
-			);
-			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-		}
-
-		// we close each entry after a successful write
-		zip_entry_close(zip);
-	}
-
-    // close our now exported file
-    zip_close(zip);
-}
-
-void MainWindow::exportNodes(iris::SceneNodePtr node, const QStringList &assetGuids)
-{
-    QDateTime currentDateTime = QDateTime::currentDateTimeUtc();
-
-	// get the export file path from a save dialog
-	auto filePath = QFileDialog::getSaveFileName(
-		this,
-		"Choose export path",
-		QString("%1_%2").arg(node->getName(), QString::number(currentDateTime.toTime_t())),
-		"Supported Export Formats (*.jaf)"
-	);
-
-	if (filePath.isEmpty() || filePath.isNull()) return;
-
-	QTemporaryDir temporaryDir;
-	if (!temporaryDir.isValid()) return;
-
-	const QString writePath = temporaryDir.path();
-
-	db->createExportNodes(ModelTypes::Object, node, assetGuids, QDir(writePath).filePath("asset.db"));
-
-	QDir tempDir(writePath);
-	tempDir.mkpath("assets");
-
-	QFile manifest(QDir(writePath).filePath(".manifest"));
-	if (manifest.open(QIODevice::ReadWrite)) {
-		QTextStream stream(&manifest);
-		stream << "object";
-	}
-	manifest.close();
-
-	for (const auto &guid : assetGuids) {
+    for (const auto &guid : assetGuids) {
         for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
             auto asset = db->fetchAsset(assetGuid);
             auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
@@ -2116,46 +2044,52 @@ void MainWindow::exportNodes(iris::SceneNodePtr node, const QStringList &assetGu
                 );
             }
         }
-	}
+    }
 
-	// get all the files and directories in the project working directory
-	QDir workingProjectDirectory(writePath);
-	QDirIterator projectDirIterator(writePath,
-		QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs | QDir::Hidden,
-		QDirIterator::Subdirectories);
+    // Get all the files and directories in the temporary directory
+    QDir workingProjectDirectory(writePath);
+    QDirIterator projectDirIterator(
+        writePath,
+        QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs | QDir::Hidden,
+        QDirIterator::Subdirectories
+    );
 
-	QVector<QString> fileNames;
-	while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
+    // Create a zipped archive containing
+    // - A manifest (might be hidden when extracted on some platforms)
+    // - A sqlite blob
+    // - An assets folder containing textures, models, files etc
+    QVector<QString> fileNames;
+    while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
 
-	// open a basic zip file for writing, maybe change compression level later (iKlsR)
-	struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
+    // open a basic zip file for writing, maybe change compression level later (iKlsR)
+    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
 
-	for (int i = 0; i < fileNames.count(); i++) {
-		QFileInfo fInfo(fileNames[i]);
+    for (int i = 0; i < fileNames.count(); i++) {
+        QFileInfo fInfo(fileNames[i]);
 
-		// we need to pay special attention to directories since we want to write empty ones as well
-		if (fInfo.isDir()) {
-			zip_entry_open(
-				zip,
-				/* will only create directory if / is appended */
-				QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
-			);
-			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-		}
-		else {
-			zip_entry_open(
-				zip,
-				workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
-			);
-			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-		}
+        // we need to pay special attention to directories since we want to write empty ones as well
+        if (fInfo.isDir()) {
+            zip_entry_open(
+                zip,
+                /* will only create directory if / is appended */
+                QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
+            );
+            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+        }
+        else {
+            zip_entry_open(
+                zip,
+                workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
+            );
+            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+        }
 
-		// we close each entry after a successful write
-		zip_entry_close(zip);
-	}
+        // we close each entry after a successful write
+        zip_entry_close(zip);
+    }
 
-	// close our now exported file
-	zip_close(zip);
+    // close our now exported file
+    zip_close(zip);
 }
 
 void MainWindow::deleteNode()

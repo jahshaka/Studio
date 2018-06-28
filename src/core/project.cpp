@@ -13,6 +13,22 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QDir>
 
+const QStringList Project::ModelTypesAsString = {
+    "undefined",
+    "material",
+    "texture",
+    "video",
+    "cubemap",
+    "object",
+    "mesh",
+    "sound_effect",
+    "music",
+    "shader",
+    "variant",
+    "file",
+    "particle_system"
+};
+
 Project::Project()
 {
     _saved = false;

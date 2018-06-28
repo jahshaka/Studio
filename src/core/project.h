@@ -35,6 +35,8 @@ public:
     QString getProjectGuid();
 
     static Project *createNew();
+
+    static const QStringList ModelTypesAsString;
 };
 
 struct ProjectTileData {

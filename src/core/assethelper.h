@@ -26,6 +26,7 @@ public:
     static void updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject definition);
     static QByteArray makeBlobFromPixmap(const QPixmap &pixmap);
     static QStringList fetchAssetAndAllDependencies(const QString &guid, Database *db);
+    static QStringList getChildGuids(const iris::SceneNodePtr &node);
     static ModelTypes getAssetTypeFromExtension(const QString &fileSuffix);
     static iris::SceneNodePtr extractTexturesAndMaterialFromMesh(const QString &filePath,
                                                                  QStringList &textureList);
