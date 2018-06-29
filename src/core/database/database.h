@@ -159,9 +159,9 @@ public:
 
     // EXPORT ===============================================================================
     bool createBlobFromNode(const iris::SceneNodePtr &node, const QString &writePath);
-    
+    bool createBlobFromAsset(const QString &guid, const QString &writePath);
+
     void createExportScene(const QString& outTempFilePath);
-    void createExportNode(const ModelTypes &type, const QString& objectGuid, const QString& outTempFilePath);
     void createExportBundle(const QStringList& objectGuids, const QString& outTempFilePath);
 
     int getTableCount();

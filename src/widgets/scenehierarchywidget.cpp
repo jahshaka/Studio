@@ -28,22 +28,6 @@ For more information see the LICENSE file
 #include "irisgl/src/physics/environment.h"
 #include "bullet3/src/Bullet3Common/b3Logging.h"
 
-//#include <QProxyStyle>
-//
-//class MyProxyStyle : public QProxyStyle
-//{
-//public:
-//	virtual void drawPrimitive(PrimitiveElement element, const QStyleOption * option,
-//		QPainter * painter, const QWidget * widget = 0) const
-//	{
-//		if (PE_FrameFocusRect == element) {
-//			// do not draw focus rectangle
-//		} else {
-//			QProxyStyle::drawPrimitive(element, option, painter, widget);
-//		}
-//	}
-//};
-
 SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::SceneHierarchyWidget)
@@ -369,7 +353,9 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
         {
             if (!node->isBuiltIn) {
                 QAction *exportAsset = subMenu->addAction("Export Object");
-                connect(exportAsset, &QAction::triggered, this, [node, this]() { mainWindow->exportNode(node, ModelTypes::Object); });
+                connect(exportAsset, &QAction::triggered, this, [this, node]() {
+                    mainWindow->exportNode(node, ModelTypes::Object);
+                });
             }
 
 			QAction *exportMat = subMenu->addAction("Create Material");
@@ -379,9 +365,8 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 		}
 		else if (node->getSceneNodeType() == iris::SceneNodeType::ParticleSystem) {
 			QAction *exportPSystem = subMenu->addAction("Export Particle System");
-
 			connect(exportPSystem, &QAction::triggered, this, [this, node]() {
-                mainWindow->exportParticleSystem(node);
+                mainWindow->exportNode(node, ModelTypes::ParticleSystem);
 			});
 		}
 	}

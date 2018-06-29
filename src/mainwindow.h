@@ -303,7 +303,6 @@ public slots:
     void duplicateNode();
 	void createMaterial();
 	void exportNode(const iris::SceneNodePtr &node, ModelTypes modelType);
-    void exportParticleSystem(const iris::SceneNodePtr &node);
     void deleteNode();
 
     void addPointLight();
