@@ -53,8 +53,8 @@ public:
         gl->glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
         gl->glEnableVertexAttribArray(0);
         gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), nullptr);
-        gl->glEnableVertexAttribArray(1);
-        gl->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE,
+        gl->glEnableVertexAttribArray(2);
+        gl->glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE,
                                   5 * sizeof(GLfloat),
                                   (GLvoid*) (3 * sizeof(GLfloat)));
         gl->glBindVertexArray(0);
