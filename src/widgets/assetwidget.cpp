@@ -649,6 +649,7 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
                     QModelIndex index = ui->assetView->indexAt(evt->pos());
                     if (index.isValid()) draggingItem = true;
                 }
+
 			    AssetWidget::mousePressEvent(evt);
 			    break;
 		    }
