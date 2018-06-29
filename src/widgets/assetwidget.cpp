@@ -587,9 +587,7 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
 
 	// Hide meshes for now, we work with objects which are parents for meshes, materials etc
-	if (assetData.type != static_cast<int>(ModelTypes::Mesh)) {
-		ui->assetView->addItem(item);
-	}
+	ui->assetView->addItem(item);
 }
 
 void AssetWidget::addCrumbs(const QVector<FolderRecord> &folderData)
@@ -651,6 +649,7 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
                     QModelIndex index = ui->assetView->indexAt(evt->pos());
                     if (index.isValid()) draggingItem = true;
                 }
+
 			    AssetWidget::mousePressEvent(evt);
 			    break;
 		    }
@@ -1008,7 +1007,7 @@ void AssetWidget::exportTexture()
 
     const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
 
-    db->createExportNode(ModelTypes::Material, guid, QDir(writePath).filePath("asset.db"));
+    db->createBlobFromAsset(guid, QDir(writePath).filePath("asset.db"));
 
     QDir tempDir(writePath);
     tempDir.mkpath("assets");
@@ -1106,7 +1105,7 @@ void AssetWidget::exportMaterial()
 	const QString writePath = temporaryDir.path();
 	const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
 
-	db->createExportNode(ModelTypes::Material, guid, QDir(writePath).filePath("asset.db"));
+	db->createBlobFromAsset(guid, QDir(writePath).filePath("asset.db"));
 
 	QDir tempDir(writePath);
 	tempDir.mkpath("assets");
@@ -1240,7 +1239,7 @@ void AssetWidget::exportShader()
 
     const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
 
-    db->createExportNode(ModelTypes::Shader, guid, QDir(writePath).filePath("asset.db"));
+    db->createBlobFromAsset(guid, QDir(writePath).filePath("asset.db"));
 
     QDir tempDir(writePath);
     tempDir.mkpath("assets");
@@ -1252,27 +1251,27 @@ void AssetWidget::exportShader()
     }
     manifest.close();
 
-    for (const auto &asset : db->fetchAssetAndDependencies(guid)) {
-        QFile::copy(
-            IrisUtils::join(Globals::project->getProjectFolder(), asset),
-            IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
-        );
+    for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
+        auto asset = db->fetchAsset(assetGuid);
+        auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+        QFileInfo assetInfo(assetPath);
+        if (assetInfo.exists()) {
+            QFile::copy(
+                IrisUtils::join(assetPath),
+                IrisUtils::join(writePath, "assets", assetInfo.fileName())
+            );
+        }
     }
 
     // get all the files and directories in the project working directory
     QDir workingProjectDirectory(writePath);
-    QDirIterator projectDirIterator(writePath, QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs, QDirIterator::Subdirectories);
+    QDirIterator projectDirIterator(
+        writePath,
+        QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs | QDir::Hidden, QDirIterator::Subdirectories
+    );
 
     QVector<QString> fileNames;
     while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
-
-    //ZipWrapper exportNode("path", "read / write", "folder / file list");
-    //exportNode.setOutputPath();
-    //exportNode.setMode();
-    //exportNode.setCompressionLevel();
-    //exportNode.setFolder();
-    //exportNode.setFileList();
-    //exportNode.createArchive();
 
     // open a basic zip file for writing, maybe change compression level later (iKlsR)
     struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');

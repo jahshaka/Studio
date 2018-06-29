@@ -28,22 +28,6 @@ For more information see the LICENSE file
 #include "irisgl/src/physics/environment.h"
 #include "bullet3/src/Bullet3Common/b3Logging.h"
 
-//#include <QProxyStyle>
-//
-//class MyProxyStyle : public QProxyStyle
-//{
-//public:
-//	virtual void drawPrimitive(PrimitiveElement element, const QStyleOption * option,
-//		QPainter * painter, const QWidget * widget = 0) const
-//	{
-//		if (PE_FrameFocusRect == element) {
-//			// do not draw focus rectangle
-//		} else {
-//			QProxyStyle::drawPrimitive(element, option, painter, widget);
-//		}
-//	}
-//};
-
 SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::SceneHierarchyWidget)
@@ -364,36 +348,14 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	if (node->isExportable()) {
 		QMenu *subMenu = menu.addMenu("Export");
 
-		std::function<void(const iris::SceneNodePtr&, QStringList&)> getChildGuids =
-			[&](const iris::SceneNodePtr &node, QStringList &items) -> void
-		{
-			if (!node->getGUID().isEmpty() && !items.contains(node->getGUID())) items.append(node->getGUID());
-			if (node->hasChildren()) {
-				for (const auto &child : node->children) {
-					getChildGuids(child, items);
-				}
-			}
-		};
-
-		//if (node->getSceneNodeType() == iris::SceneNodeType::Empty) {
-		//	QAction *exportAsset = subMenu->addAction("Export Object");
-
-		//	QStringList assetGuids;
-		//	getChildGuids(node, assetGuids);
-		//	connect(exportAsset, &QAction::triggered, this, [assetGuids, this]() { mainWindow->exportNodes(assetGuids); });
-		//}
-
 		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh ||
             node->getSceneNodeType() == iris::SceneNodeType::Empty)
         {
             if (!node->isBuiltIn) {
                 QAction *exportAsset = subMenu->addAction("Export Object");
-                //connect(exportAsset, &QAction::triggered, this, [this, node]() {
-                //    exportNode(node);
-                //});
-                QStringList assetGuids;
-                getChildGuids(node, assetGuids);
-                connect(exportAsset, &QAction::triggered, this, [assetGuids, node, this]() { mainWindow->exportNodes(node, assetGuids); });
+                connect(exportAsset, &QAction::triggered, this, [this, node]() {
+                    mainWindow->exportNode(node, ModelTypes::Object);
+                });
             }
 
 			QAction *exportMat = subMenu->addAction("Create Material");
@@ -403,9 +365,8 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 		}
 		else if (node->getSceneNodeType() == iris::SceneNodeType::ParticleSystem) {
 			QAction *exportPSystem = subMenu->addAction("Export Particle System");
-
 			connect(exportPSystem, &QAction::triggered, this, [this, node]() {
-                mainWindow->exportParticleSystem(node);
+                mainWindow->exportNode(node, ModelTypes::ParticleSystem);
 			});
 		}
 	}
@@ -506,9 +467,9 @@ void SceneHierarchyWidget::focusOnNode()
 	UiManager::sceneViewWidget->focusOnNode(selectedNode);
 }
 
-void SceneHierarchyWidget::exportNode(const iris::SceneNodePtr &node)
+void SceneHierarchyWidget::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType)
 {
-	mainWindow->exportNode(node);
+	mainWindow->exportNode(node, modelType);
 }
 
 void SceneHierarchyWidget::createMaterial()
@@ -518,7 +479,7 @@ void SceneHierarchyWidget::createMaterial()
 
 void SceneHierarchyWidget::exportParticleSystem(const iris::SceneNodePtr &node)
 {
-	mainWindow->exportNode(node);
+	mainWindow->exportNode(node, ModelTypes::ParticleSystem);
 }
 
 void SceneHierarchyWidget::attachAllChildren()

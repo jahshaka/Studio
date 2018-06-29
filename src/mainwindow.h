@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "misc/QtAwesome.h"
 #include "misc/QtAwesomeAnim.h"
 #include "miner/minerui.h"
+#include "core/project.h"
 
 namespace Ui {
     class MainWindow;
@@ -301,9 +302,7 @@ public slots:
     //context menu functions
     void duplicateNode();
 	void createMaterial();
-	void exportNode(const iris::SceneNodePtr &node);
-	void exportNodes(iris::SceneNodePtr node, const QStringList &assetGuids);
-    void exportParticleSystem(const iris::SceneNodePtr &node);
+	void exportNode(const iris::SceneNodePtr &node, ModelTypes modelType);
     void deleteNode();
 
     void addPointLight();

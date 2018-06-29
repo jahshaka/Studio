@@ -127,6 +127,27 @@ QStringList AssetHelper::fetchAssetAndAllDependencies(const QString &guid, Datab
     return assetAndDependencies;
 }
 
+// Allows us to get all the child guids from the node being exported as dependencies
+QStringList AssetHelper::getChildGuids(const iris::SceneNodePtr &node)
+{
+    // Allows us to get all the child guids from the node being exported as dependencies
+    std::function<void(const iris::SceneNodePtr&, QStringList&)> getChildGuids =
+        [&](const iris::SceneNodePtr &node, QStringList &items) -> void
+    {
+        if (!node->getGUID().isEmpty() && !items.contains(node->getGUID())) items.append(node->getGUID());
+        if (node->hasChildren()) {
+            for (const auto &child : node->children) {
+                getChildGuids(child, items);
+            }
+        }
+    };
+
+    QStringList assetGuids;
+    getChildGuids(node, assetGuids);
+
+    return assetGuids;
+}
+
 ModelTypes AssetHelper::getAssetTypeFromExtension(const QString &fileSuffix)
 {
     if (Constants::IMAGE_EXTS.contains(fileSuffix)) {
