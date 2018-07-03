@@ -357,6 +357,9 @@ public slots:
     void toggleDebugDrawer(bool state);
     void showProjectManagerInternal();
 
+signals:
+	void projectionChangeRequested(bool val);
+
 private slots:
     void translateGizmo();
     void rotateGizmo();
@@ -365,6 +368,8 @@ private slots:
     void onPlaySceneButton();
     void enterEditMode();
     void enterPlayMode();
+
+	void changeProjection(bool val);
 
 private:
     Ui::MainWindow *ui;

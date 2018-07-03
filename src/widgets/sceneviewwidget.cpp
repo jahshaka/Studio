@@ -759,7 +759,6 @@ QString SceneViewWidget::checkView()
 	if (dist(yaw, 180) && dist(pitch, 2))
 		cameraView = "- back";
 
-	qDebug() << yaw, pitch;
 	return cameraView;
 }
 
