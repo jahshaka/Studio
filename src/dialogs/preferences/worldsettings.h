@@ -48,6 +48,7 @@ private slots:
     void outlineWidthChanged(double width);
     void outlineColorChanged(QColor color);
     void showFpsChanged(bool show);
+	void setShowPerspectiveLabel(bool show);
 	void enableAutoSave(bool state);
 	void enableOpenInPlayer(bool state);
     void changeDefaultDirectory();

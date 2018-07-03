@@ -106,6 +106,8 @@
         <file>icons/p_play.svg</file>
         <file>icons/p_stop.svg</file>
         <file>icons/icons8-cursor-filled-50.png</file>
-        <file>icons/icons8-cursor-filled-50-dim.png</file>
+      <file>icons/icons8-cursor-filled-50-dim.png</file>
+      <file>icons/orthogonal-view-80.png</file>
+      <file>icons/perspective-view-80.png</file>
     </qresource>
 </RCC>
