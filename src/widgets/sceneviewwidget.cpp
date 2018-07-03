@@ -830,6 +830,32 @@ QVector3D SceneViewWidget::calculateMouseRay(const QPointF& pos)
     return final_ray_coords.normalized();
 }
 
+QVector3D SceneViewWidget::screenSpaceToWoldSpace(const QPointF& pos, float depth)
+{
+	float x = pos.x();
+	float y = pos.y();
+
+	// viewport -> NDC
+	float mousex = (2.0f * x) / this->viewport->width - 1.0f;
+	float mousey = (2.0f * y) / this->viewport->height - 1.0f;
+	QVector2D NDC = QVector2D(mousex, -mousey);
+
+	// NDC -> HCC
+	QVector4D HCC = QVector4D(NDC, depth, 1.0f);
+
+	// HCC -> View Space
+	QMatrix4x4 projection_matrix_inverse = this->editorCam->projMatrix.inverted();
+	QVector4D eye_coords = projection_matrix_inverse * HCC;
+	//QVector4D ray_eye = QVector4D(eye_coords.x(), eye_coords.y(), eye_coords.z(), 0.0f);
+
+	// View Space -> World Space
+	QMatrix4x4 view_matrix_inverse = this->editorCam->viewMatrix.inverted();
+	QVector4D world_coords = view_matrix_inverse * eye_coords;
+	
+
+	return world_coords.toVector3D() / world_coords.w();
+}
+
 bool SceneViewWidget::updateRPI(QVector3D pos, QVector3D r) {
     float t;
     QVector3D q;
@@ -1043,9 +1069,8 @@ void SceneViewWidget::doObjectPicking(
 {
     editorCam->updateCameraMatrices();
 
-    auto segStart = this->editorCam->getLocalPos();
-    auto rayDir = this->calculateMouseRay(point) * 1024;
-    auto segEnd = segStart + rayDir;
+	auto segStart = screenSpaceToWoldSpace(point, -1.0f);
+	auto segEnd = screenSpaceToWoldSpace(point, 1.0f);
 
     QList<PickingResult> hitList;
     doScenePicking(scene->getRootNode(), segStart, segEnd, hitList);
@@ -1161,8 +1186,11 @@ void SceneViewWidget::doObjectPicking(
     }
 
     // save this data for future reference
-    btVector3 rayFromWorld = iris::PhysicsHelper::btVector3FromQVector3D(editorCam->getGlobalPosition());
-    btVector3 rayToWorld = iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(point) * 1024);
+    //btVector3 rayFromWorld = iris::PhysicsHelper::btVector3FromQVector3D(editorCam->getGlobalPosition());
+    //btVector3 rayToWorld = iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(point) * 1024);
+
+	btVector3 rayFromWorld = iris::PhysicsHelper::btVector3FromQVector3D(segStart);
+	btVector3 rayToWorld = iris::PhysicsHelper::btVector3FromQVector3D(segEnd);
 
     m_oldPickingPos = rayToWorld;
     m_hitPos = iris::PhysicsHelper::btVector3FromQVector3D(hitList.last().hitPoint);
@@ -1207,8 +1235,10 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
 {
     editorCam->updateCameraMatrices();
 
-    auto segStart = this->editorCam->getLocalPos();
-    auto rayDir = this->calculateMouseRay(point).normalized();// * 1024;
+    //auto segStart = this->editorCam->getLocalPos();
+    //auto rayDir = this->calculateMouseRay(point).normalized();// * 1024;
+	QVector3D segStart, rayDir;
+	this->getMousePosAndRay(point, segStart, rayDir);
 
     if (!!selectedNode) {
         gizmo->setSelectedNode(selectedNode);
@@ -1251,8 +1281,12 @@ void SceneViewWidget::getMousePosAndRay(const QPointF& point, QVector3D &rayPos,
 {
     editorCam->updateCameraMatrices();
 
-    rayPos = this->editorCam->getLocalPos();
-    rayDir = this->calculateMouseRay(point).normalized();// * 1024;
+	auto segStart = screenSpaceToWoldSpace(point, -1.0f);
+	auto segEnd = screenSpaceToWoldSpace(point, 1.0f);
+	rayPos = segStart;
+	rayDir = (segEnd-segStart).normalized();
+    //rayPos = this->editorCam->getLocalPos();
+    //rayDir = this->calculateMouseRay(point).normalized();// * 1024;
 }
 
 void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,

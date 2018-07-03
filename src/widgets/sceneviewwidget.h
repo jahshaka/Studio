@@ -199,6 +199,8 @@ public:
     iris::ForwardRendererPtr getRenderer() const;
 
     QVector3D calculateMouseRay(const QPointF& pos);
+	QVector3D screenSpaceToWoldSpace(const QPointF& pos, float depth);
+
     void mousePressEvent(QMouseEvent* evt);
     void mouseMoveEvent(QMouseEvent* evt);
 	void mouseDoubleClickEvent(QMouseEvent* evt);
