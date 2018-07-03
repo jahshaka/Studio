@@ -479,6 +479,8 @@ private:
     AssetFavorites *assetFavorites;
     AssetModelPanel *assetModelPanel;
     AssetMaterialPanel *assetMaterialPanel;
+
+	QPushButton *cameraView;
 };
 
 #endif // MAINWINDOW_H

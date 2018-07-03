@@ -341,6 +341,7 @@ private:
 	QString cameraView;
 	QString cameraOrientation;
 	QString checkView();
+	int offset;
 
 signals:
     void addPrimitive(QString guid);

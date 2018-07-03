@@ -94,7 +94,7 @@ public:
 		if ((projMode == CameraProjection::Perspective))
 			projMatrix.perspective(angle, aspectRatio, nearClip, farClip);
 		else
-			projMatrix.ortho(-orthoSize *aspectRatio, orthoSize*aspectRatio,-orthoSize, orthoSize, nearClip, farClip);
+			projMatrix.ortho(-orthoSize *aspectRatio, orthoSize*aspectRatio,-orthoSize, orthoSize, nearClip*.01f, farClip);
 
         vrViewScale = 5.0f;
     }

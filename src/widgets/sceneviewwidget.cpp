@@ -545,11 +545,12 @@ void SceneViewWidget::initializeGL()
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
 
-    renderer = iris::ForwardRenderer::create(true, true);
+    renderer = iris::ForwardRenderer::create(true, true); 
 	content = iris::ContentManager::create(renderer->getGraphicsDevice());
     spriteBatch = iris::SpriteBatch::create(renderer->getGraphicsDevice());
     font = iris::Font::create(renderer->getGraphicsDevice(), fontSize);
-	orientationTextFont = iris::Font::create(renderer->getGraphicsDevice(), 14);
+	orientationTextFont = iris::Font::create(renderer->getGraphicsDevice(), 14 * devicePixelRatioF());
+
 
     initialize();
     fsQuad = new iris::FullScreenQuad();
@@ -753,8 +754,12 @@ QString SceneViewWidget::checkView()
 		cameraView = "- bottom";
 	if (dist(yaw, -90) && dist(pitch, 0))
 		cameraView = "- right";
-	if (dist(yaw, -180) && dist(pitch, 0))
+	if (dist(yaw, -180) && dist(pitch, 2))
 		cameraView = "- back";
+	if (dist(yaw, 180) && dist(pitch, 2))
+		cameraView = "- back";
+
+	qDebug() << yaw, pitch;
 	return cameraView;
 }
 
@@ -772,8 +777,12 @@ void SceneViewWidget::renderCameraUi(iris::SpriteBatchPtr batch)
 
 	checkView();
 	
-
-	spriteBatch->drawString(orientationTextFont, QString("%1 %2").arg(cameraOrientation).arg(cameraView), QVector2D(8, height() - 25), QColor(255, 255, 255, 200));
+	auto height = this->height() * devicePixelRatioF();
+	if (devicePixelRatioF() <= 1.0f)
+		offset = 35 * devicePixelRatioF();
+	if (devicePixelRatioF() > 1.0f)
+		offset = 25 * devicePixelRatioF();
+	spriteBatch->drawString(orientationTextFont, QString("%1 %2").arg(cameraOrientation).arg(cameraView), QVector2D(8, height - offset), QColor(255, 255, 255, 200));
 }
 
 void SceneViewWidget::resizeGL(int width, int height)

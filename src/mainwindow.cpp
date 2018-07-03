@@ -2578,6 +2578,7 @@ void MainWindow::setupViewPort()
 
     connect(screenShotBtn, SIGNAL(pressed()), this, SLOT(takeScreenshot()));
 
+
     QVariantMap options;
     
     auto controlBarLayout = new QHBoxLayout;
@@ -2595,8 +2596,12 @@ void MainWindow::setupViewPort()
     restartSimBtn->setToolTip("Restart physics simulation");
     restartSimBtn->setStyleSheet("background: transparent");
 
+	cameraView = new QPushButton;
+	
+
     controlBarLayout->setSpacing(8);
     controlBarLayout->addWidget(screenShotBtn);
+	controlBarLayout->addWidget(cameraView);
     controlBarLayout->addWidget(wireFramesButton);
     controlBarLayout->addStretch();
     controlBarLayout->addWidget(playSceneBtn);
@@ -2913,7 +2918,7 @@ void MainWindow::setupToolBar()
 	viewDocks->setIcon(Globals::fontIcons->icon(fa::listalt, options));
 	toolBar->addAction(viewDocks);
 
-	auto cameraView = new QMenu("Camera View");
+	/*auto cameraView = new QMenu("Camera View");
 	cameraView->setStyleSheet(wireFramesMenu->styleSheet());
 	auto perspectiveView = new QAction(QIcon(), "Perspective View");
 	perspectiveView->setCheckable(true);
@@ -2921,21 +2926,44 @@ void MainWindow::setupToolBar()
 	orthogonalView->setCheckable(true);
 	cameraView->addAction(perspectiveView);
 	cameraView->addAction(orthogonalView);
-	wireFramesMenu->addMenu(cameraView);
+	wireFramesMenu->addMenu(cameraView);*/
 
-	connect(perspectiveView, &QAction::triggered, [=]() {
-		orthogonalView->setChecked(false);
-		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Perspective);
+
+	if (sceneView->editorCam->isPerspective) {
+		cameraView->setIcon(QIcon(":/icons/perspective-view-80.png"));
+	}
+	else {
+		cameraView->setIcon(QIcon(":/icons/orthogonal-view-80.png"));
+	}
+	cameraView->setIconSize(QSize(20, 20));
+
+	connect(cameraView, &QPushButton::clicked, [=]() {
+		qDebug() << "clicked";
+		if (sceneView->editorCam->isPerspective) {
+			sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthogonal);
+			cameraView->setIcon(QIcon(":/icons/orthogonal-view-80.png"));
+		}
+		else {
+			sceneView->getScene()->camera->setProjection(iris::CameraProjection::Perspective);
+			cameraView->setIcon(QIcon(":/icons/perspective-view-80.png"));
+		}
 	});
-	connect(orthogonalView, &QAction::triggered, [=]() {
-		perspectiveView->setChecked(false);
-		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthogonal);
+	
+	connect(cameraView, &QPushButton::toggled, [=](bool val) {
+		//orthogonalView->setChecked(false);
+		
+		//sceneView->getScene()->camera->setProjection(iris::CameraProjection::Perspective);
 	});
+	/*connect(orthogonalView, &QAction::triggered, [=]() {
+	perspectiveView->setChecked(false);
+	sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthogonal);
+	});*/
 
 	connect(sceneView, &SceneViewWidget::updateToolbarButton, [=]() {
-		perspectiveView->setChecked(sceneView->editorCam->isPerspective);
-		orthogonalView->setChecked(!sceneView->editorCam->isPerspective);
+		/*perspectiveView->setChecked(sceneView->editorCam->isPerspective);
+		orthogonalView->setChecked(!sceneView->editorCam->isPerspective);*/
 	});
+
 	
 	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
 	connect(viewDocks,			SIGNAL(triggered(bool)), SLOT(toggleDockWidgets()));
@@ -2965,8 +2993,20 @@ void MainWindow::setupShortcuts()
     connect(shortcut, SIGNAL(activated()), this, SLOT(scaleGizmo()));
 
     // Save
-    shortcut = new QShortcut(QKeySequence("ctrl+s"),sceneView);
-    connect(shortcut, SIGNAL(activated()), this, SLOT(saveScene()));
+	shortcut = new QShortcut(QKeySequence("ctrl+s"), sceneView);
+	connect(shortcut, SIGNAL(activated()), this, SLOT(saveScene()));
+
+	shortcut = new QShortcut(QKeySequence("o"), sceneView);
+	connect(shortcut, &QShortcut::activated, [=]() {
+		//orthogonalView->setChecked(false);
+		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthogonal);
+	});
+
+	shortcut = new QShortcut(QKeySequence("p"), sceneView);
+	connect(shortcut, &QShortcut::activated, [=]() {
+		//orthogonalView->setChecked(false);
+		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Perspective);
+	});
 }
 
 void MainWindow::toggleDockWidgets()
