@@ -50,6 +50,7 @@ For more information see the LICENSE file
 #include "dialogs/newprojectdialog.h"
 #include "dialogs/progressdialog.h"
 #include "io/assetmanager.h"
+#include "dialogs/loader.h"
 
 ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::ProjectManager)
 {
@@ -63,11 +64,11 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
 	futureWatcher = QPointer<QFutureWatcher<QVector<ModelData>>>(new QFutureWatcher<QVector<ModelData>>());
 	progressDialog = QPointer<ProgressDialog>(new ProgressDialog());
-
+	
 	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::finished, [&]() {
 		progressDialog->setRange(0, 0);
 		progressDialog->setLabelText(tr("Caching assets..."));
-
+		
 		// Meshes
 		// Note - this would be the perfect place to attach materials as well but we can't access the opengl context
 		for (const auto &item : futureWatcher->result()) {
@@ -184,6 +185,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
 
 		progressDialog->setLabelText(tr("Opening scene..."));
+
 		emit fileToOpen(openInPlayMode);
 		progressDialog->close();
 	});

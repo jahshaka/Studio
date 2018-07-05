@@ -16,7 +16,7 @@ For more information see the LICENSE file
 
 ProgressDialog::ProgressDialog(QDialog *parent) : QDialog(parent), ui(new Ui::ProgressDialog)
 {
-    ui->setupUi(this);
+	ui->setupUi(this);
     this->setWindowFlags(Qt::FramelessWindowHint);
 	setWindowModality(Qt::WindowModal);
 }
@@ -34,7 +34,7 @@ void ProgressDialog::setLabelText(const QString &text)
 
 void ProgressDialog::reset()
 {
-    ui->progressBar->reset();
+   ui->progressBar->reset();
 }
 
 void ProgressDialog::setRange(int min, int max)

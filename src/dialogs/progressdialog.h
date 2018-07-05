@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define PROGRESSDIALOG_H
 
 #include <QDialog>
+#include "dialogs/loader.h"
 
 namespace Ui {
     class ProgressDialog;
@@ -34,6 +35,7 @@ public slots:
 
 private:
     Ui::ProgressDialog *ui;
+	Loader *loader;
 };
 
 #endif // PROGRESSDIALOG_H
