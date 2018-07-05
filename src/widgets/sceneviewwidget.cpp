@@ -549,7 +549,6 @@ void SceneViewWidget::initializeGL()
 	content = iris::ContentManager::create(renderer->getGraphicsDevice());
     spriteBatch = iris::SpriteBatch::create(renderer->getGraphicsDevice());
     font = iris::Font::create(renderer->getGraphicsDevice(), fontSize);
-	orientationTextFont = iris::Font::create(renderer->getGraphicsDevice(), 14 * devicePixelRatioF());
 
 
     initialize();
@@ -759,21 +758,20 @@ QString SceneViewWidget::checkView()
 	if (dist(yaw, 180) && dist(pitch, 2))
 		cameraView = "- back";
 
-	qDebug() << yaw, pitch;
 	return cameraView;
 }
 
 void SceneViewWidget::renderCameraUi(iris::SpriteBatchPtr batch)
 {
 	if (!showPerspevtiveLabel) {
-		spriteBatch->drawString(font, "", QVector2D(8, height() - 25), QColor(255, 255, 255, 150));
+		spriteBatch->drawString(font, "", QVector2D(8, height() - 25), QColor(255, 255, 255, 0));
 		return;
 	}
 
 	if (editorCam->getProjection() == iris::CameraProjection::Perspective)
-		cameraOrientation = "perspective";
+		cameraOrientation = "Perspective";
 	else 
-		cameraOrientation = "orthogonal";
+		cameraOrientation = "Orthogonal";
 
 	checkView();
 	
@@ -782,7 +780,7 @@ void SceneViewWidget::renderCameraUi(iris::SpriteBatchPtr batch)
 		offset = 35 * devicePixelRatioF();
 	if (devicePixelRatioF() > 1.0f)
 		offset = 25 * devicePixelRatioF();
-	spriteBatch->drawString(orientationTextFont, QString("%1 %2").arg(cameraOrientation).arg(cameraView), QVector2D(8, height - offset), QColor(255, 255, 255, 200));
+	spriteBatch->drawString(font, QString("%1 %2").arg(cameraOrientation).arg(cameraView), QVector2D(8, height - offset), QColor(255, 255, 255, 180));
 }
 
 void SceneViewWidget::resizeGL(int width, int height)

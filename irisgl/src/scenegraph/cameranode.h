@@ -27,7 +27,7 @@ enum class CameraProjection {
 class CameraNode:public SceneNode
 {
 public:
-    float fov;//radians
+    float fov;//radians 
     float aspectRatio;
     float angle;//in degrees
     float nearClip;
@@ -94,7 +94,7 @@ public:
 		if ((projMode == CameraProjection::Perspective))
 			projMatrix.perspective(angle, aspectRatio, nearClip, farClip);
 		else
-			projMatrix.ortho(-orthoSize *aspectRatio, orthoSize*aspectRatio,-orthoSize, orthoSize, nearClip*.01f, farClip);
+			projMatrix.ortho(-orthoSize *aspectRatio, orthoSize*aspectRatio,-orthoSize, orthoSize, -farClip, farClip);
 
         vrViewScale = 5.0f;
     }
@@ -129,7 +129,7 @@ private:
     {
         angle = 45;
         nearClip = 0.1f;
-        farClip = 1000.0f;
+        farClip = 500.0f;
         aspectRatio = 1.0f;//assumes a square viewport by default
 		orthoSize = 10.0f;
         exportable = false;

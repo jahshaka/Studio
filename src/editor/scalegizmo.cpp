@@ -66,7 +66,7 @@ bool ScaleHandle::isHit(QVector3D rayPos, QVector3D rayDir)
 	auto q1 = gizmoTrans * (handleExtent * handleLength * gizmo->getGizmoScale() * handleScale);
 
 	auto p2 = rayPos;
-	auto q2 = rayPos + rayDir * 1000;
+	auto q2 = rayPos + rayDir * 100000;
 
 	float s, t;
 	QVector3D c1, c2;

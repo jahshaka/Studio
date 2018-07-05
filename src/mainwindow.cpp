@@ -2550,7 +2550,8 @@ void MainWindow::setupViewPort()
     screenShotBtn->setToolTip("Take a screenshot of the scene");
     screenShotBtn->setToolTipDuration(-1);
     screenShotBtn->setStyleSheet("background: transparent");
-    screenShotBtn->setIcon(QIcon(":/icons/camera.svg"));
+    screenShotBtn->setIcon(QIcon(":/icons/icons8-camera-48.png"));
+	screenShotBtn->setIconSize(QSize(20, 20));
 
     wireFramesButton = new QToolButton;
     wireFramesButton->setStyleSheet(
@@ -2578,7 +2579,6 @@ void MainWindow::setupViewPort()
 
     connect(screenShotBtn, SIGNAL(pressed()), this, SLOT(takeScreenshot()));
 
-
     QVariantMap options;
     
     auto controlBarLayout = new QHBoxLayout;
@@ -2597,7 +2597,7 @@ void MainWindow::setupViewPort()
     restartSimBtn->setStyleSheet("background: transparent");
 
 	cameraView = new QPushButton;
-	
+	cameraView->setStyleSheet("QPushButton{background:rgba(0,0,0,0);}");	
 
     controlBarLayout->setSpacing(8);
     controlBarLayout->addWidget(screenShotBtn);
@@ -2918,52 +2918,16 @@ void MainWindow::setupToolBar()
 	viewDocks->setIcon(Globals::fontIcons->icon(fa::listalt, options));
 	toolBar->addAction(viewDocks);
 
-	/*auto cameraView = new QMenu("Camera View");
-	cameraView->setStyleSheet(wireFramesMenu->styleSheet());
-	auto perspectiveView = new QAction(QIcon(), "Perspective View");
-	perspectiveView->setCheckable(true);
-	auto orthogonalView = new QAction(QIcon(), "Orthogonal View");
-	orthogonalView->setCheckable(true);
-	cameraView->addAction(perspectiveView);
-	cameraView->addAction(orthogonalView);
-	wireFramesMenu->addMenu(cameraView);*/
+	cameraView->setIconSize(QSize(17, 17));
 
+	connect(cameraView, &QPushButton::clicked, [=](){ emit projectionChangeRequested(!sceneView->editorCam->isPerspective); });
 
-	if (sceneView->editorCam->isPerspective) {
-		cameraView->setIcon(QIcon(":/icons/perspective-view-80.png"));
-	}
-	else {
-		cameraView->setIcon(QIcon(":/icons/orthogonal-view-80.png"));
-	}
-	cameraView->setIconSize(QSize(20, 20));
-
-	connect(cameraView, &QPushButton::clicked, [=]() {
-		qDebug() << "clicked";
-		if (sceneView->editorCam->isPerspective) {
-			sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthogonal);
-			cameraView->setIcon(QIcon(":/icons/orthogonal-view-80.png"));
-		}
-		else {
-			sceneView->getScene()->camera->setProjection(iris::CameraProjection::Perspective);
-			cameraView->setIcon(QIcon(":/icons/perspective-view-80.png"));
-		}
-	});
-	
-	connect(cameraView, &QPushButton::toggled, [=](bool val) {
-		//orthogonalView->setChecked(false);
-		
-		//sceneView->getScene()->camera->setProjection(iris::CameraProjection::Perspective);
-	});
-	/*connect(orthogonalView, &QAction::triggered, [=]() {
-	perspectiveView->setChecked(false);
-	sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthogonal);
-	});*/
+	connect(this, SIGNAL(projectionChangeRequested(bool)), this, SLOT(changeProjection(bool)));	
 
 	connect(sceneView, &SceneViewWidget::updateToolbarButton, [=]() {
-		/*perspectiveView->setChecked(sceneView->editorCam->isPerspective);
-		orthogonalView->setChecked(!sceneView->editorCam->isPerspective);*/
+		if (sceneView->editorCam->isPerspective) projectionChangeRequested(true);
+		else projectionChangeRequested(false);
 	});
-
 	
 	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
 	connect(viewDocks,			SIGNAL(triggered(bool)), SLOT(toggleDockWidgets()));
@@ -2998,14 +2962,12 @@ void MainWindow::setupShortcuts()
 
 	shortcut = new QShortcut(QKeySequence("o"), sceneView);
 	connect(shortcut, &QShortcut::activated, [=]() {
-		//orthogonalView->setChecked(false);
-		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthogonal);
+		emit projectionChangeRequested(false);
 	});
 
 	shortcut = new QShortcut(QKeySequence("p"), sceneView);
 	connect(shortcut, &QShortcut::activated, [=]() {
-		//orthogonalView->setChecked(false);
-		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Perspective);
+		emit projectionChangeRequested(true);
 	});
 }
 
@@ -3340,4 +3302,18 @@ void MainWindow::enterPlayMode()
     options.insert("color", QColor(231, 76, 60));
     options.insert("color-active", QColor(231, 76, 60));
     playSceneBtn->setIcon(fontIcons.icon(fa::stop, options));
+}
+
+void MainWindow::changeProjection(bool val)
+{
+	if (!val) {
+		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthogonal);
+		cameraView->setIcon(QIcon(":/icons/orthogonal-view-80.png"));
+		cameraView->setToolTip(tr("Orthogonal view | Toggle to switch to perspective view"));		
+	}
+	else {
+		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Perspective);
+		cameraView->setIcon(QIcon(":/icons/perspective-view-80.png"));
+		cameraView->setToolTip(tr("Perspective view | Toggle to switch to orthogonal view"));
+	}
 }
