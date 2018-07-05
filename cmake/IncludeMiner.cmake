@@ -1,5 +1,5 @@
-set (USE_MINER OFF CACHE BOOL "Enable Mining (OpenCL required)")
-if(USE_MINER)
+set (MINER_ENABLED OFF CACHE BOOL "Enable Mining (OpenCL required)")
+if(MINER_ENABLED)
     #add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/cuda_gpu_list)
 
     #XMR-STAK
@@ -11,7 +11,7 @@ if(USE_MINER)
 
 	find_package(OpenCL REQUIRED)
 	#enable_language("CUDA")
-	add_definitions("-DUSE_MINER")
+	add_definitions("-DMINER_ENABLED")
 
 	set(HEADERS ${HEADERS}
 				src/miner/minerprocess.h
