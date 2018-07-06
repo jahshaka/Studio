@@ -839,6 +839,10 @@ void MainWindow::openProject(bool playMode)
     UiManager::playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
 
 	undoStackCount = 0;
+	actionTranslate->setChecked(true);
+	actionFreeCamera->setChecked(true);
+	actionGlobalSpace->setChecked(true);
+	
 }
 
 void MainWindow::closeProject()
@@ -2383,7 +2387,8 @@ void MainWindow::setupViewPort()
     screenShotBtn->setStyleSheet("background: transparent");
     //reenShotBtn->setIcon(QIcon(":/icons/camera.svg"));
 	screenShotBtn->setText(QChar(fa::camera));
-	screenShotBtn->setFont(awesome->font(16));
+	screenShotBtn->setFont(Globals::fontIcons->font(15));
+
 
 
     wireFramesButton = new QToolButton;
@@ -2410,11 +2415,17 @@ void MainWindow::setupViewPort()
     wireFramesButton->setText("Wireframes ");
     wireFramesButton->setPopupMode(QToolButton::InstantPopup);
 
+    wireCheckBtn = new QCheckBox("Viewport Wireframes");
+    wireCheckBtn->setCheckable(true);
+	wireCheckBtn->setStyleSheet("padding: -2px;padding-right: 2px; padding-left:2px; margin 0px; ");
+
+
     connect(screenShotBtn, SIGNAL(pressed()), this, SLOT(takeScreenshot()));
 
     QVariantMap options;
     
     auto controlBarLayout = new QHBoxLayout;
+
     playSceneBtn = new QPushButton(Globals::fontIcons->icon(fa::play), "Play scene");
     playSceneBtn->setToolTip("Play all animations in the scene");
     playSceneBtn->setStyleSheet("background: transparent");
@@ -2429,53 +2440,52 @@ void MainWindow::setupViewPort()
     restartSimBtn->setToolTip("Restart physics simulation");
     restartSimBtn->setStyleSheet("background: transparent");
 
-	QWidget *middleContainer = new QWidget();
-	middleContainer->setStyleSheet("QWidget{ margin:0px; padding:0px;}");
-	QHBoxLayout *middle = new QHBoxLayout;
-	middleContainer->setLayout(middle);
-	middle->setSpacing(0);
-	middle->setMargin(0);
 
-	view = new QLabel(tr("Views   "));
-	view->setStyleSheet("QLabel{ font-style:Bold; font-weight: 500; font-size: 12px; }");
+	middleContainer = new QWidget();
+	middleContainer->setStyleSheet(" margin-top:-2px; padding: 0px; background: rgba(10,10,10,0); ");
+	auto middleContainerLayout = new QHBoxLayout;
+	middleContainer->setLayout(middleContainerLayout);
+	middleContainerLayout->setSpacing(0);
+	middleContainerLayout->setMargin(0);	
 
+	view = new QLabel(tr("Camera Position   "));
+	view->setStyleSheet("QLabel{ font-style:Bold; font-weight: 500; font-size: 12px; padding -2px; padding-right:2px; margin:0px;  }");
 
 	topBtn = new QPushButton(QChar(fa::arrowup));
-	topBtn->setFont(awesome->font(12));
+	topBtn->setFont(Globals::fontIcons->font(10));
 	topBtn->setCursor(Qt::PointingHandCursor);
-	topBtn->setStyleSheet("QPushButton{background: rgba(48,48,48,1); border: 1px solid rgba(42,42,42,1); border-right-width: .5px; border-top-left-radius: 3px;"
-		"border-bottom-left-radius: 3px; padding: 8px; padding-top:2px; padding-bottom:2px; margin:0px; color:#eee;} QPushButton:hover{ color: #2980B9; }");
+	topBtn->setStyleSheet("QPushButton{background: rgba(48,48,48,1); border: 1px solid rgba(42,42,42,0); border-right-width: .5px; border-top-left-radius: 3px;"
+		"border-bottom-left-radius: 3px; padding: 8px; padding-top:2px; padding-bottom:1px; margin:0px; color:#eee;} QPushButton:hover{ color: #2980B9; }");
 
 	bottomBtn = new QPushButton(QChar(fa::arrowdown));
-	bottomBtn->setFont(awesome->font(12));
+	bottomBtn->setFont(Globals::fontIcons->font(10));
 	bottomBtn->setCursor(Qt::PointingHandCursor);
-	bottomBtn->setStyleSheet("QPushButton{ background: rgba(48,48,48,1); border: 1px solid rgba(42,42,42,1); border-left-width: .5px; border-right-width: .5px;"
-		"padding: 8px; padding-top:2px; padding-bottom:2px; margin:0px; color:#eee;} QPushButton:hover{ color: #2980B9; }");
+	bottomBtn->setStyleSheet("QPushButton{ background: rgba(48,48,48,1); border: 1px solid rgba(42,42,42,0); border-left-width: .5px; border-right-width: .5px;"
+		"padding: 8px; padding-top:2px; padding-bottom:1px; margin:0px; color:#eee;} QPushButton:hover{ color: #2980B9; }");
 
 	leftSideBtn = new QPushButton(QChar(fa::arrowleft));
-	leftSideBtn->setFont(awesome->font(12));
+	leftSideBtn->setFont(Globals::fontIcons->font(10));
 	leftSideBtn->setCursor(Qt::PointingHandCursor);
-	leftSideBtn->setStyleSheet("QPushButton{background: rgba(48,48,48,1); border: 1px solid rgba(42,42,42,1); border-left-width: .5px; border-right-width: .5px;"
-		" padding: 8px; padding-top:2px; padding-bottom:2px; margin:0px; color:#eee;} QPushButton:hover{ color: #2980B9; }");
+	leftSideBtn->setStyleSheet("QPushButton{background: rgba(48,48,48,1); border: 1px solid rgba(42,42,42,0); border-left-width: .5px; border-right-width: .5px;"
+		" padding: 8px; padding-top:2px; padding-bottom:1px; margin:0px; color:#eee;} QPushButton:hover{ color: #2980B9; }");
 
 	rightSideBtn = new QPushButton(QChar(fa::arrowright));
-	rightSideBtn->setFont(awesome->font(12));
+	rightSideBtn->setFont(Globals::fontIcons->font(10));
 	rightSideBtn->setCursor(Qt::PointingHandCursor);
-	rightSideBtn->setStyleSheet("QPushButton{background: rgba(48,48,48,1); border: 1px solid rgba(42,42,42,1); border-left-width: .5px; border-top-right-radius: 3px;"
-		" border-bottom-right-radius: 3px; padding: 8px; padding-top:2px; padding-bottom:2px; margin:0px; color:#eee;}"
+	rightSideBtn->setStyleSheet("QPushButton{background: rgba(48,48,48,1); border: 1px solid rgba(42,42,42,0); border-left-width: .5px; border-top-right-radius: 3px;"
+		" border-bottom-right-radius: 3px; padding: 8px; padding-top:2px; padding-bottom:1px; margin:0px; color:#eee;}"
 		"QPushButton:hover{color: #2980B9;}");
 
-	middle->addWidget(view);
-	middle->addWidget(topBtn);
-	middle->addWidget(bottomBtn);
-	middle->addWidget(leftSideBtn);
-	middle->addWidget(rightSideBtn);
+	middleContainerLayout->addWidget(view);
+	middleContainerLayout->addWidget(topBtn);
+	middleContainerLayout->addWidget(bottomBtn);
+	middleContainerLayout->addWidget(leftSideBtn);
+	middleContainerLayout->addWidget(rightSideBtn);
 
 	connect(topBtn, &QPushButton::pressed, [this]() {});
 	connect(bottomBtn, &QPushButton::pressed, [this]() {});
 	connect(leftSideBtn, &QPushButton::pressed, [this]() {});
 	connect(rightSideBtn, &QPushButton::pressed, [this]() {});
-
 
     controlBarLayout->setSpacing(8);
     controlBarLayout->addWidget(screenShotBtn);
@@ -2484,10 +2494,13 @@ void MainWindow::setupViewPort()
 	controlBarLayout->addWidget(middleContainer);
 	controlBarLayout->addStretch();
     controlBarLayout->addWidget(playSceneBtn);
+
     controlBarLayout->addSpacing(2);
 	controlBarLayout->addWidget(playSimBtn);
     controlBarLayout->addSpacing(2);
 	controlBarLayout->addWidget(restartSimBtn);
+
+	middleContainer->hide();
 
     controlBar->setLayout(controlBarLayout);
     controlBar->setStyleSheet("#controlBar {  background: #1E1E1E; border-bottom: 1px solid black; }");
@@ -2565,7 +2578,7 @@ void MainWindow::setupViewPort()
 
             options.insert("color", QColor(241, 196, 15));
             options.insert("color-active", QColor(241, 196, 15));
-            playSimBtn->setIcon(fontIcons.icon(fa::pause, options));
+            playSimBtn->setIcon(Globals::fontIcons->icon(fa::pause, options));
 		}
 		else {
 			UiManager::stopPhysicsSimulation();
@@ -2574,7 +2587,7 @@ void MainWindow::setupViewPort()
 
             options.insert("color", QColor(52, 152, 219));
             options.insert("color-active", QColor(52, 152, 219));
-            playSimBtn->setIcon(fontIcons.icon(fa::play, options));
+            playSimBtn->setIcon(Globals::fontIcons->icon(fa::play, options));
 		}
 	});
 
@@ -2590,6 +2603,7 @@ void MainWindow::setupViewPort()
     containerLayout->addWidget(controlBar);
     containerLayout->addWidget(sceneContainer);
     containerLayout->addWidget(playerControls);
+	
 
     container->setLayout(containerLayout);
 
@@ -2669,16 +2683,16 @@ void MainWindow::setupToolBar()
 	options.insert("color-active", QColor(255, 255, 255));
 
     toolBar = new QToolBar;
-	toolBar->setIconSize(QSize(16, 16));
 
-	QAction *actionUndo = new QAction;
-	actionUndo->setToolTip("Undo | Undo last action");
+	toolBar->setIconSize(QSize(16, 16));
+	actionUndo = new QAction;
+	actionUndo->setToolTip("Undo | Undo last action");	
 	actionUndo->setObjectName(QStringLiteral("actionUndo"));
 	actionUndo->setIcon(Globals::fontIcons->icon(fa::reply, options));
 	toolBar->addAction(actionUndo);
 
-	QAction *actionRedo = new QAction;
-	actionRedo->setToolTip("Redo | Redo last action");
+	actionRedo = new QAction;
+	actionRedo->setToolTip("Redo | Redo last action");	
 	actionRedo->setObjectName(QStringLiteral("actionRedo"));
 	actionRedo->setIcon(Globals::fontIcons->icon(fa::share, options));
 	toolBar->addAction(actionRedo);
@@ -2711,14 +2725,14 @@ void MainWindow::setupToolBar()
 
     toolBar->addSeparator();
 
-    QAction *actionGlobalSpace = new QAction;
+    actionGlobalSpace = new QAction;
     actionGlobalSpace->setObjectName(QStringLiteral("actionGlobalSpace"));
     actionGlobalSpace->setCheckable(true);
 	actionGlobalSpace->setToolTip("Global Space | Move objects relative to the global world");
 	actionGlobalSpace->setIcon(Globals::fontIcons->icon(fa::globe, options));
 	toolBar->addAction(actionGlobalSpace);
 
-    QAction *actionLocalSpace = new QAction;
+    actionLocalSpace = new QAction;
     actionLocalSpace->setObjectName(QStringLiteral("actionLocalSpace"));
     actionLocalSpace->setCheckable(true);
 	actionLocalSpace->setToolTip("Local Space | Move objects relative to their transform");
@@ -2727,14 +2741,14 @@ void MainWindow::setupToolBar()
 
     toolBar->addSeparator();
 
-    QAction *actionFreeCamera = new QAction;
+    actionFreeCamera = new QAction;
     actionFreeCamera->setObjectName(QStringLiteral("actionFreeCamera"));
     actionFreeCamera->setCheckable(true);
 	actionFreeCamera->setToolTip("Free Camera | Freely move and orient the camera");
 	actionFreeCamera->setIcon(Globals::fontIcons->icon(fa::eye, options));
 	toolBar->addAction(actionFreeCamera);
 
-    QAction *actionArcballCam = new QAction;
+    actionArcballCam = new QAction;
     actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
     actionArcballCam->setCheckable(true);
 	actionArcballCam->setToolTip("Arc Ball Camera | Move and orient the camera around a fixed point | With this button selected, you are now able to move around a fixed point.");
@@ -2772,7 +2786,7 @@ void MainWindow::setupToolBar()
     empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     toolBar->addWidget(empty);
 
-	QAction *actionExport = new QAction;
+	actionExport = new QAction;
 	actionExport->setObjectName(QStringLiteral("actionExport"));
 	actionExport->setCheckable(false);
 	actionExport->setToolTip("Export | Export the current scene");
@@ -2787,7 +2801,7 @@ void MainWindow::setupToolBar()
 	actionSaveScene->setIcon(Globals::fontIcons->icon(fa::floppyo, options));
 	toolBar->addAction(actionSaveScene);
 
-	QAction *viewDocks = new QAction;
+	viewDocks = new QAction;
 	viewDocks->setObjectName(QStringLiteral("viewDocks"));
 	viewDocks->setCheckable(false);
 	viewDocks->setToolTip("Toggle Widgets | Toggle the dock widgets");
@@ -3085,11 +3099,13 @@ MainWindow::~MainWindow()
 void MainWindow::useFreeCamera()
 {
     sceneView->setFreeCameraMode();
+	middleContainer->hide();
 }
 
 void MainWindow::useArcballCam()
 {
     sceneView->setArcBallCameraMode();
+	middleContainer->show();
 }
 
 void MainWindow::useLocalTransform()
@@ -3141,7 +3157,7 @@ void MainWindow::enterEditMode()
     QVariantMap options;
     options.insert("color", QColor(46, 204, 113));
     options.insert("color-active", QColor(46, 204, 113));
-    playSceneBtn->setIcon(fontIcons.icon(fa::play, options));
+    playSceneBtn->setIcon(Globals::fontIcons->icon(fa::play, options));
 }
 
 void MainWindow::enterPlayMode()
@@ -3156,5 +3172,5 @@ void MainWindow::enterPlayMode()
     QVariantMap options;
     options.insert("color", QColor(231, 76, 60));
     options.insert("color-active", QColor(231, 76, 60));
-    playSceneBtn->setIcon(fontIcons.icon(fa::stop, options));
+    playSceneBtn->setIcon(Globals::fontIcons->icon(fa::stop, options));
 }

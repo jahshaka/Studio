@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include "miner/minerui.h"
 #include "core/project.h"
 
+
 namespace Ui {
     class MainWindow;
 }
@@ -466,6 +467,7 @@ private:
 
     WindowSpaces currentSpace;
 
+
 	MinerUI *miner;
 	QPushButton *playSimBtn;
 	QPushButton *restartSimBtn;
@@ -479,12 +481,24 @@ private:
     AssetMaterialPanel *assetMaterialPanel;
 
 
+
+	QWidget *middleContainer;
 	QPushButton *topBtn;
 	QPushButton *bottomBtn;
 	QPushButton *leftSideBtn;
 	QPushButton *rightSideBtn;
 
 	QLabel *view;
+
+	QAction *actionUndo;
+	QAction *actionRedo;
+	QAction *actionGlobalSpace;
+	QAction *actionLocalSpace;
+	QAction *actionFreeCamera;
+	QAction *actionArcballCam;
+	QAction *actionExport;
+	QAction *viewDocks;
+
 };
 
 #endif // MAINWINDOW_H
