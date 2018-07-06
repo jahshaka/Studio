@@ -136,6 +136,7 @@ set(SRCS
     src/misc/QtAwesomeAnim.cpp
     src/dialogs/toast.cpp
 	src/helpers/tooltip.cpp
+	src/subclass/progressbar.cpp
 )
 
 set(HEADERS
@@ -267,7 +268,7 @@ set(HEADERS
     src/misc/QtAwesomeAnim.h 
     src/dialogs/toast.h
 	src/helpers/tooltip.h
-
+	src/subclass/progressbar.h
 )
 
 # Todo - trim these down to nothing eventually

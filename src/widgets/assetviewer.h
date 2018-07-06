@@ -48,6 +48,7 @@ For more information see the LICENSE file
 #include "dialogs/progressdialog.h"
 
 #include "irisgl/src/graphics/shadowmap.h"
+#include "src/subclass/progressbar.h"
 
 class AssetViewer : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core, iris::IModelReadProgress
 {
