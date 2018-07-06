@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include "miner/minerui.h"
 #include "core/project.h"
 
+
 namespace Ui {
     class MainWindow;
 }
@@ -465,7 +466,7 @@ private:
 	QVector<bool> widgetStates;	// use the order in the enum
 
     WindowSpaces currentSpace;
-	QtAwesome fontIcons;
+
 
 	MinerUI *miner;
 	QPushButton *playSimBtn;
@@ -478,6 +479,26 @@ private:
     AssetFavorites *assetFavorites;
     AssetModelPanel *assetModelPanel;
     AssetMaterialPanel *assetMaterialPanel;
+
+
+
+	QWidget *middleContainer;
+	QPushButton *topBtn;
+	QPushButton *bottomBtn;
+	QPushButton *leftSideBtn;
+	QPushButton *rightSideBtn;
+
+	QLabel *view;
+
+	QAction *actionUndo;
+	QAction *actionRedo;
+	QAction *actionGlobalSpace;
+	QAction *actionLocalSpace;
+	QAction *actionFreeCamera;
+	QAction *actionArcballCam;
+	QAction *actionExport;
+	QAction *viewDocks;
+
 };
 
 #endif // MAINWINDOW_H
