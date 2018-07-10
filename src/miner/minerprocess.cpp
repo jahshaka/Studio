@@ -15,6 +15,9 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QJsonArray>
+#include <QDir>
+#include <QApplication>
+#include <QMessageBox>
 
 #include "minerprocess.h"
 #include "cuda_gpu_list.h"
@@ -174,8 +177,20 @@ void MinerProcess::setNetworkPort(int portNum)
 
 void MinerProcess::startMining()
 {
-	process = new QProcess();
+	QDir basePath = QDir(QCoreApplication::applicationDirPath());
+	auto xmrPath = QDir::cleanPath(basePath.absolutePath() + QDir::separator() + "xmr-stak/xmr-stak.exe");
+	if (!QFile::exists(xmrPath)) {
 
+#if defined QT_DEBUG
+		QMessageBox::warning(nullptr, "xmrstak not found!", "xmrstak is missing or hasnt been compiled.");
+#else
+		QMessageBox::warning(nullptr, "xmrstak not found!", "xmrstak is missing");
+#endif	
+		return;
+	}
+
+
+	process = new QProcess();
 	QStringList args;
 	/*
 	args << "--currency" << "monero7";
@@ -200,16 +215,16 @@ void MinerProcess::startMining()
 
 	data.clear();
 
-	//todo: stop outputting from miner
+#ifdef QT_DEBUG
 	QObject::connect(process, &QProcess::readyReadStandardOutput, [this]()
 	{
-		//qDebug().noquote() << QString(process->readAllStandardOutput());
+		qDebug().noquote() << QString(process->readAllStandardOutput());
 	});
 	QObject::connect(process, &QProcess::readyReadStandardError, [this]()
 	{
 		//qDebug().noquote() << QString(process->readAllStandardError());
 	});
-
+#endif
 	QObject::connect(process, &QProcess::errorOccurred, [this](QProcess::ProcessError error)
 	{
 		qDebug() << "Miner Process Error: " << error;
@@ -228,7 +243,7 @@ void MinerProcess::startMining()
 	});
 
 	process->setProcessChannelMode(QProcess::MergedChannels);
-	process->start("xmr-stak/xmr-stak.exe", args);
+	process->start(xmrPath, args);
 
 	// start listening over the network
 	timer = new QTimer();

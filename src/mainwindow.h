@@ -228,7 +228,7 @@ public:
 
 private:
 	//set up miner
-#ifdef USE_MINER
+#ifdef MINER_ENABLED
 	void configureMiner();
 #endif
 
