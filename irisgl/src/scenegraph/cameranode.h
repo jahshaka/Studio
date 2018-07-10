@@ -19,20 +19,33 @@ For more information see the LICENSE file
 namespace iris
 {
 
+enum class CameraProjection {
+	Orthogonal,
+	Perspective
+};
 
 class CameraNode:public SceneNode
 {
 public:
-    float fov;//radians
+    float fov;//radians 
     float aspectRatio;
     float angle;//in degrees
     float nearClip;
     float farClip;
-
     float vrViewScale;
+	float orthoSize;
+	bool isPerspective;
+
+	CameraProjection projMode;
 
     QMatrix4x4 viewMatrix;
     QMatrix4x4 projMatrix;
+
+	void setProjection(CameraProjection view);
+	CameraProjection getProjection()
+	{
+		return projMode;
+	}
 
     float getVrViewScale()
     {
@@ -41,7 +54,9 @@ public:
 
     void setVrViewScale(float viewScale)
     {
-        vrViewScale = viewScale;
+		
+			 vrViewScale = viewScale;
+		
     }
 
     void setAspectRatio(float aspect)
@@ -70,13 +85,21 @@ public:
         QVector3D pos = globalTransform.column(3).toVector3D();
         QVector3D dir = (globalTransform * QVector4D(0,0,-1,1)).toVector3D();
         QVector3D up = (globalTransform * QVector4D(0,1,0,0)).toVector3D();
+
+
         viewMatrix.lookAt(pos, dir, up);
 
         projMatrix.setToIdentity();
-        projMatrix.perspective(angle, aspectRatio, nearClip, farClip);
+
+		if ((projMode == CameraProjection::Perspective))
+			projMatrix.perspective(angle, aspectRatio, nearClip, farClip);
+		else
+			projMatrix.ortho(-orthoSize *aspectRatio, orthoSize*aspectRatio,-orthoSize, orthoSize, -farClip, farClip);
 
         vrViewScale = 5.0f;
     }
+
+	void setOrthagonalZoom(float size);
 
     void update(float dt) override
     {
@@ -106,11 +129,11 @@ private:
     {
         angle = 45;
         nearClip = 0.1f;
-        farClip = 1000.0f;
+        farClip = 500.0f;
         aspectRatio = 1.0f;//assumes a square viewport by default
-
+		orthoSize = 10.0f;
         exportable = false;
-
+		projMode = CameraProjection::Perspective;
         updateCameraMatrices();
     }
 

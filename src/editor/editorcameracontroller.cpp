@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include "../widgets/sceneviewwidget.h"
 #include "../editor/gizmo.h"
 
+
+#include <QDEBUG>
 using namespace iris;
 
 EditorCameraController::EditorCameraController(SceneViewWidget* sceneWidget):
@@ -30,7 +32,7 @@ EditorCameraController::EditorCameraController(SceneViewWidget* sceneWidget):
 
     yaw = 0;
     pitch = 0;
-
+	orthoZoom = 0;
 	this->sceneWidget = sceneWidget;
 }
 
@@ -46,6 +48,8 @@ CameraNodePtr EditorCameraController::getCamera()
 void EditorCameraController::setCamera(CameraNodePtr cam)
 {
     this->camera = cam;
+
+	orthoZoom = camera->orthoSize;
 
     auto viewVec = cam->getLocalRot().rotatedVector(QVector3D(0,0,-1));//default forward is -z
     viewVec.normalize();
@@ -172,7 +176,13 @@ void EditorCameraController::onMouseWheel(int delta)
     auto zoomSpeed = 0.01f;
     auto forward = camera->getLocalRot().rotatedVector(QVector3D(0,0,-1));
     auto movement = camera->getLocalPos() + forward*zoomSpeed*delta;
-    camera->setLocalPos(movement);
+	if (camera->projMode == iris::CameraProjection::Perspective)
+		camera->setLocalPos(movement);
+	else {	
+		orthoZoom -= delta/120;
+		if (orthoZoom <= 0.1f) orthoZoom = 0.1f;
+		camera->setOrthagonalZoom(orthoZoom);
+	}
 }
 
 void EditorCameraController::onKeyPressed(Qt::Key key)

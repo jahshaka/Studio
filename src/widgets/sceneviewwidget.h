@@ -199,6 +199,8 @@ public:
     iris::ForwardRendererPtr getRenderer() const;
 
     QVector3D calculateMouseRay(const QPointF& pos);
+	QVector3D screenSpaceToWoldSpace(const QPointF& pos, float depth);
+
     void mousePressEvent(QMouseEvent* evt);
     void mouseMoveEvent(QMouseEvent* evt);
 	void mouseDoubleClickEvent(QMouseEvent* evt);
@@ -239,7 +241,8 @@ public:
 	void setSceneMode(SceneMode sceneMode);
 
     void cleanup();
-
+	void setShowPerspeciveLabel(bool val);
+	
 protected:
     void initializeGL();
 	void initializeOpenGLDebugger();
@@ -286,6 +289,7 @@ private:
 
     void makeObject();
     void renderScene();
+	void renderCameraUi(iris::SpriteBatchPtr batch);
 
 
     iris::ScenePtr scene;
@@ -334,6 +338,12 @@ private:
 	AnimationPath* animPath;
 	SettingsManager* settings;
 
+	bool showPerspevtiveLabel;
+	QString cameraView;
+	QString cameraOrientation;
+	QString checkView();
+	int offset;
+
 signals:
     void addPrimitive(QString guid);
     void addDroppedMesh(QString path, bool ignore, QVector3D position, QString guid, QString assetName);
@@ -341,6 +351,7 @@ signals:
     void initializeGraphics(SceneViewWidget* widget,
                             QOpenGLFunctions_3_2_Core* gl);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
+	void updateToolbarButton();
 
 };
 

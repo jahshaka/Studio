@@ -117,7 +117,7 @@ void Scene::update(float dt)
     // cameras aren't always a part of the scene hierarchy, so their matrices are updated here
     if (!!camera) {
         camera->update(dt);
-        camera->updateCameraMatrices();
+		camera->updateCameraMatrices();
     }
 
     // advance simulation

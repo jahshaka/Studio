@@ -30,8 +30,14 @@ Gizmo::Gizmo()
 void Gizmo::updateSize(iris::CameraNodePtr camera)
 { 
 	if (!!selectedNode) {
-		float distToCam = (selectedNode->getGlobalPosition() - camera->getGlobalPosition()).length();
-		gizmoScale = distToCam / (qTan(camera->angle / 2.0f));
+		if (camera->getProjection() == iris::CameraProjection::Perspective) {
+			float distToCam = (selectedNode->getGlobalPosition() - camera->getGlobalPosition()).length();
+			gizmoScale = distToCam / (qTan(camera->angle / 2.0f));
+		}
+		else {
+			//camera->orthoSize
+			gizmoScale = camera->orthoSize * 5.0;
+		}
 	}
 }
 

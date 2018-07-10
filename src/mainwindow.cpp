@@ -2381,7 +2381,8 @@ void MainWindow::setupViewPort()
     screenShotBtn->setToolTip("Take a screenshot of the scene");
     screenShotBtn->setToolTipDuration(-1);
     screenShotBtn->setStyleSheet("background: transparent");
-    screenShotBtn->setIcon(QIcon(":/icons/camera.svg"));
+    screenShotBtn->setIcon(QIcon(":/icons/icons8-camera-48.png"));
+	screenShotBtn->setIconSize(QSize(20, 20));
 
     wireFramesButton = new QToolButton;
     wireFramesButton->setStyleSheet(
@@ -2404,7 +2405,7 @@ void MainWindow::setupViewPort()
     wireFramesMenu->addAction(physicsCheckAction);
 
     wireFramesButton->setMenu(wireFramesMenu);
-    wireFramesButton->setText("Wireframes ");
+    wireFramesButton->setText("View Options ");
     wireFramesButton->setPopupMode(QToolButton::InstantPopup);
 
     connect(screenShotBtn, SIGNAL(pressed()), this, SLOT(takeScreenshot()));
@@ -2426,8 +2427,12 @@ void MainWindow::setupViewPort()
     restartSimBtn->setToolTip("Restart physics simulation");
     restartSimBtn->setStyleSheet("background: transparent");
 
+	cameraView = new QPushButton;
+	cameraView->setStyleSheet("QPushButton{background:rgba(0,0,0,0);}");	
+
     controlBarLayout->setSpacing(8);
     controlBarLayout->addWidget(screenShotBtn);
+	controlBarLayout->addWidget(cameraView);
     controlBarLayout->addWidget(wireFramesButton);
     controlBarLayout->addStretch();
     controlBarLayout->addWidget(playSceneBtn);
@@ -2611,11 +2616,12 @@ void MainWindow::setupDesktop()
 
 void MainWindow::setupToolBar()
 {
+
 	QVariantMap options;
 	options.insert("color", QColor(255, 255, 255));
 	options.insert("color-active", QColor(255, 255, 255));
-
-    toolBar = new QToolBar;
+  
+    toolBar = new QToolBar("Tool Bar");
 	toolBar->setIconSize(QSize(16, 16));
 
 	QAction *actionUndo = new QAction;
@@ -2681,12 +2687,14 @@ void MainWindow::setupToolBar()
 	actionFreeCamera->setIcon(Globals::fontIcons->icon(fa::eye, options));
 	toolBar->addAction(actionFreeCamera);
 
-    QAction *actionArcballCam = new QAction;
-    actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
-    actionArcballCam->setCheckable(true);
+	QAction *actionArcballCam = new QAction;
+	actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
+	actionArcballCam->setCheckable(true);
 	actionArcballCam->setToolTip("Arc Ball Camera | Move and orient the camera around a fixed point | With this button selected, you are now able to move around a fixed point.");
 	actionArcballCam->setIcon(Globals::fontIcons->icon(fa::dotcircleo, options));
 	toolBar->addAction(actionArcballCam);
+
+	toolBar->addSeparator();
 
     connect(actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
     connect(actionRotate,       SIGNAL(triggered(bool)), SLOT(rotateGizmo()));
@@ -2741,6 +2749,17 @@ void MainWindow::setupToolBar()
 	viewDocks->setIcon(Globals::fontIcons->icon(fa::listalt, options));
 	toolBar->addAction(viewDocks);
 
+	cameraView->setIconSize(QSize(17, 17));
+
+	connect(cameraView, &QPushButton::clicked, [=](){ emit projectionChangeRequested(!sceneView->editorCam->isPerspective); });
+
+	connect(this, SIGNAL(projectionChangeRequested(bool)), this, SLOT(changeProjection(bool)));	
+
+	connect(sceneView, &SceneViewWidget::updateToolbarButton, [=]() {
+		if (sceneView->editorCam->isPerspective) projectionChangeRequested(true);
+		else projectionChangeRequested(false);
+	});
+	
 	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
 	connect(viewDocks,			SIGNAL(triggered(bool)), SLOT(toggleDockWidgets()));
 	connect(actionSaveScene,	SIGNAL(triggered(bool)), SLOT(saveScene()));
@@ -2769,8 +2788,18 @@ void MainWindow::setupShortcuts()
     connect(shortcut, SIGNAL(activated()), this, SLOT(scaleGizmo()));
 
     // Save
-    shortcut = new QShortcut(QKeySequence("ctrl+s"),sceneView);
-    connect(shortcut, SIGNAL(activated()), this, SLOT(saveScene()));
+	shortcut = new QShortcut(QKeySequence("ctrl+s"), sceneView);
+	connect(shortcut, SIGNAL(activated()), this, SLOT(saveScene()));
+
+	shortcut = new QShortcut(QKeySequence("o"), sceneView);
+	connect(shortcut, &QShortcut::activated, [=]() {
+		emit projectionChangeRequested(false);
+	});
+
+	shortcut = new QShortcut(QKeySequence("p"), sceneView);
+	connect(shortcut, &QShortcut::activated, [=]() {
+		emit projectionChangeRequested(true);
+	});
 }
 
 void MainWindow::toggleDockWidgets()
@@ -3104,4 +3133,18 @@ void MainWindow::enterPlayMode()
     options.insert("color", QColor(231, 76, 60));
     options.insert("color-active", QColor(231, 76, 60));
     playSceneBtn->setIcon(fontIcons.icon(fa::stop, options));
+}
+
+void MainWindow::changeProjection(bool val)
+{
+	if (!val) {
+		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Orthogonal);
+		cameraView->setIcon(QIcon(":/icons/orthogonal-view-80.png"));
+		cameraView->setToolTip(tr("Orthogonal view | Toggle to switch to perspective view"));		
+	}
+	else {
+		sceneView->getScene()->camera->setProjection(iris::CameraProjection::Perspective);
+		cameraView->setIcon(QIcon(":/icons/perspective-view-80.png"));
+		cameraView->setToolTip(tr("Perspective view | Toggle to switch to orthogonal view"));
+	}
 }
