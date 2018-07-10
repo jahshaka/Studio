@@ -108,7 +108,7 @@ void MinerUI::configureUI()
 	advance = new QAction("advance");
 	advance->setText(QChar(fa::sliders));
 	advance->setFont(fontIcon.font(15));
-	advance->hide();
+	//advance->hide();
 	close = new QAction("X");
 	close->setText(QChar(fa::times));
 	close->setFont(fontIcon.font(15));
@@ -116,7 +116,7 @@ void MinerUI::configureUI()
 	auto minerLabel = new QLabel("Miner");
 	
 	toolbar->addAction(settings);
-	toolbar->addAction(advance);
+	//toolbar->addAction(advance);
 	auto empty = new QWidget();
 	empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	toolbar->addWidget(empty);
@@ -186,7 +186,7 @@ void MinerUI::configureUI()
 	bottomLayout->addSpacing(10);
 	bottomLayout->addWidget(startBtn);
 	bottomLayout->addSpacing(23);
-	bottomLayout->addWidget(coinType);
+	//bottomLayout->addWidget(coinType);
 	bottomLayout->addStretch();
 	bottomLayout->addLayout(autoLayout);
 	bottomLayout->addSpacing(10);
