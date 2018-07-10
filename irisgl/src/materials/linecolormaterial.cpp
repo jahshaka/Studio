@@ -1,4 +1,4 @@
-#include "LineColorMaterial.h"
+#include "linecolormaterial.h"
 #include "../graphics/material.h"
 #include "../graphics/shader.h"
 #include "../graphics/graphicsdevice.h"
