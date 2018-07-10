@@ -769,9 +769,9 @@ void SceneViewWidget::renderCameraUi(iris::SpriteBatchPtr batch)
 	}
 
 	if (editorCam->getProjection() == iris::CameraProjection::Perspective)
-		cameraOrientation = "Perspective";
+		cameraOrientation = "perspective";
 	else 
-		cameraOrientation = "Orthogonal";
+		cameraOrientation = "orthogonal";
 
 	checkView();
 	

@@ -180,6 +180,7 @@ void EditorCameraController::onMouseWheel(int delta)
 		camera->setLocalPos(movement);
 	else {	
 		orthoZoom -= delta/120;
+		if (orthoZoom <= 0.1f) orthoZoom = 0.1f;
 		camera->setOrthagonalZoom(orthoZoom);
 	}
 }
