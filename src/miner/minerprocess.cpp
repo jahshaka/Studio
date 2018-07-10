@@ -215,16 +215,16 @@ void MinerProcess::startMining()
 
 	data.clear();
 
-	//todo: stop outputting from miner
+#ifdef QT_DEBUG
 	QObject::connect(process, &QProcess::readyReadStandardOutput, [this]()
 	{
-		//qDebug().noquote() << QString(process->readAllStandardOutput());
+		qDebug().noquote() << QString(process->readAllStandardOutput());
 	});
 	QObject::connect(process, &QProcess::readyReadStandardError, [this]()
 	{
 		//qDebug().noquote() << QString(process->readAllStandardError());
 	});
-
+#endif
 	QObject::connect(process, &QProcess::errorOccurred, [this](QProcess::ProcessError error)
 	{
 		qDebug() << "Miner Process Error: " << error;
