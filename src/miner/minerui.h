@@ -414,8 +414,18 @@ public:
 	MinerUI(QWidget *parent = 0);
 	~MinerUI();
 	GraphicsCardUI* addGraphicsCard(QString string);
-	bool setToStartAutomatically() {
+	void setToStartAutomatically(bool shouldAuto) {
+		startAutomatically = shouldAuto;
+	}
+
+	bool shouldAutoMine()
+	{
 		return startAutomatically;
+	}
+
+	bool isMining()
+	{
+		return mining;
 	}
 private slots:
 	void switchToAdvanceMode();
@@ -475,6 +485,7 @@ protected:
 	void saveAndApplySettings();
 	void restoreSettings();
 
+public:
 	void restartMining();
 	void startMining();
 	void stopMining();
