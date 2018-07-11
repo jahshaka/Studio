@@ -65,6 +65,10 @@ QLineEdit {
    </property>
    <item row="0" column="0">
     <widget class="QWidget" name="widget" native="true">
+     <property name="styleSheet">
+      <string notr="true">background:rgba(20,20,20,1);
+color:rgba(255,255,255,.95);</string>
+     </property>
      <layout class="QVBoxLayout" name="verticalLayout">
       <item>
        <widget class="QLabel" name="label">
@@ -75,6 +79,9 @@ QLineEdit {
       </item>
       <item>
        <widget class="QTextEdit" name="textEdit">
+        <property name="styleSheet">
+         <string notr="true">background:rgba(35,35,35,1);</string>
+        </property>
         <property name="readOnly">
          <bool>true</bool>
         </property>
@@ -120,6 +127,18 @@ QLineEdit {
          </item>
          <item>
           <widget class="QPushButton" name="pushButton_2">
+           <property name="styleSheet">
+            <string notr="true">QPushButton{
+	padding: 5px 15px;
+background:rgba(50,50,50,1);
+border: 1px solid rgba(0,0,0,.1);
+}
+
+QPushButton:hover{
+	background: rgba(40,128, 185,.9);
+
+}</string>
+           </property>
            <property name="text">
             <string>Close</string>
            </property>
@@ -127,6 +146,18 @@ QLineEdit {
          </item>
          <item>
           <widget class="QPushButton" name="pushButton">
+           <property name="styleSheet">
+            <string notr="true">QPushButton{
+	padding: 5px 15px;
+background:rgba(50,50,50,1);
+border: 1px solid rgba(0,0,0,.1);
+}
+
+QPushButton:hover{
+	background: rgba(40,128, 185,.9);
+
+}</string>
+           </property>
            <property name="text">
             <string>Download</string>
            </property>
