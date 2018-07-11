@@ -59,6 +59,7 @@ GraphicsCardUI* MinerUI::addGraphicsCard(QString string)
 	GraphicsCardUI *card = new GraphicsCardUI();
 	card->setCardName(string);
 	card->setObjectName(QStringLiteral("card"));
+	card->setMinimumHeight(150);
 	list.append(card);
 	cardHolderLayout->addWidget(card);
 	return card;
@@ -67,6 +68,8 @@ GraphicsCardUI* MinerUI::addGraphicsCard(QString string)
 void MinerUI::configureUI()
 {
 	setContentsMargins(20, 20, 20, 20);
+	//setMinimumSize(450, 250);
+	setMinimumWidth(800);
 
 	QGraphicsDropShadowEffect *effect = new QGraphicsDropShadowEffect;
 	effect->setBlurRadius(20);

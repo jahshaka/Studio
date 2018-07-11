@@ -230,6 +230,9 @@ private:
 	}
 
 	void configureCard() {
+
+		
+
 		// QVBoxLayout *cardLayout = new QVBoxLayout;
 		QHBoxLayout *mainLayout = new QHBoxLayout;
 		QHBoxLayout *sliderLayout = new QHBoxLayout;
@@ -252,7 +255,7 @@ private:
 		logo = new QPushButton();
 		logo->setObjectName(QStringLiteral("logo"));
 		logo->setLayout(logoLayout);
-		logo->setFixedSize(150, 98);
+		logo->setFixedSize(150, 118);
 		//logo->setCheckable(true);
 		//logo->setCursor(Qt::PointingHandCursor);
 		logo->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
@@ -272,6 +275,7 @@ private:
 		cardName = new QLabel("AMD A9");
 		cardName->setAlignment(Qt::AlignHCenter);
 		cardName->setWordWrap(true);
+		cardName->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
 		QFont font = cardName->font();
 		font.setStyleStrategy(QFont::PreferAntialias);
@@ -288,6 +292,7 @@ private:
 		sliderLayout->addStretch();
 		sliderLayout->addWidget(switchBtn);
 		sliderLayout->addStretch();
+
 
 		//logoLayout->addStretch();
 		logoLayout->addWidget(cardName);
@@ -308,7 +313,7 @@ private:
 		additional->setMinimumHeight(80);
 		additional->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-		displayLabel = new QLabel("GPU is not set to mined");
+		displayLabel = new QLabel("GPU is not set to mine");
 		displayLabel->setAlignment(Qt::AlignHCenter);
 		displayLabel->setObjectName(QStringLiteral("gpuLabel"));
 		font.setBold(true);
@@ -331,8 +336,11 @@ private:
 		cardLayout->setContentsMargins(2, 1, 3, 2);
 		setLayout(mainLayout);
 		mainLayout->addWidget(card);
+		
+		card->setMinimumHeight(150);
+		card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-		qDebug() << card->geometry();
+		//qDebug() << card->geometry();
 		setStyleSheet(" * {color: white; }"
 			"QWidget#logo, QWidget#info,QWidget#additional  { background:rgba(17,17,17,0); border : 0px solid rgba(00,00,00,.2); border-radius: 1px; margin: 0px;  }"
 			//"QWidget#logo:hover, QWidget#info:hover,QWidget#additional:hover{border : 1px solid rgba(40,128,185,.01); }"
