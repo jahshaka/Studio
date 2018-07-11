@@ -39,6 +39,7 @@ public:
     void setCurrentText(const QString&);
     void setCurrentItemData(const QString&);
     void setCurrentIndex(const int&);
+    void clear();
 
     QComboBox *getWidget() const;
 
