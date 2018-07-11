@@ -2,7 +2,7 @@
 
 #include <QPainter>
 #include <QVector2D>
-#include <QMath.h>
+#include <QtMath>
 #include <QMouseEvent>
 #include <QStyleOption>
 

@@ -5,7 +5,7 @@
 #include <QDesktopWidget>
 #include <QGroupBox>
 #include <QLabel>
-#include <QlineEdit>
+#include <QLineEdit>
 #include <QPainter>
 #include <QProxyStyle>
 #include <QPushButton>

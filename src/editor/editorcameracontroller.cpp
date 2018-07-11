@@ -20,8 +20,7 @@ For more information see the LICENSE file
 #include "../widgets/sceneviewwidget.h"
 #include "../editor/gizmo.h"
 
-
-#include <QDEBUG>
+#include <QDebug>
 using namespace iris;
 
 EditorCameraController::EditorCameraController(SceneViewWidget* sceneWidget):

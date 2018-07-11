@@ -17,6 +17,12 @@ For more information see the LICENSE file
 #include <QFontDatabase>
 #include <QtConcurrent>
 
+// needs to be included near the top before
+// anything includes inttypes before it
+#ifdef USE_BREAKPAD
+#include "breakpad/breakpad.h"
+#endif
+
 #include "mainwindow.h"
 #include "dialogs/infodialog.h"
 #include "core/settingsmanager.h"
@@ -26,9 +32,7 @@ For more information see the LICENSE file
 #include "misc/upgrader.h"
 #include "dialogs/softwareupdatedialog.h"
 #include "helpers/tooltip.h"
-#ifdef USE_BREAKPAD
-#include "breakpad/breakpad.h"
-#endif
+
 
 // Hints that a dedicated GPU should be used whenever possible
 // https://stackoverflow.com/a/39047129/991834
