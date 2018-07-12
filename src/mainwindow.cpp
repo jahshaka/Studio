@@ -2280,8 +2280,10 @@ void MainWindow::setupViewPort()
 	hl->setSpacing(12);
 	hl->addWidget(worlds_menu);
 	hl->addWidget(player_menu);
+#ifndef BUILD_PLAYER_ONLY
 	hl->addWidget(editor_menu);
 	hl->addWidget(assets_menu);
+#endif
 
 	assets_panel->setLayout(hl);
 

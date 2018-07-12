@@ -338,6 +338,9 @@ if(MSVC)
     # set(CMAKE_SUPPRESS_REGENERATION true)
 endif()
 
+set (BUILD_PLAYER_ONLY OFF CACHE BOOL "Build an adhoc version of Jahshaka with only the player")
+add_definitions("-DBUILD_PLAYER_ONLY")
+
 if(WIN32 AND CMAKE_BUILD_TYPE STREQUAL Release)
     set(CMAKE_WIN32_EXECUTABLE ON)
 endif()

@@ -106,6 +106,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
+#ifndef BUILD_PLAYER_ONLY
     QSplashScreen splash;
     splash.setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnBottomHint);
     auto pixmap = QPixmap(":/images/splashv3.png");
@@ -117,6 +118,7 @@ int main(int argc, char *argv[])
 #endif // GIT_COMMIT_HASH
 #endif // QT_DEBUG
     splash.show();
+#endif
 
     Globals::appWorkingDir = QApplication::applicationDirPath();
     app.processEvents();
@@ -136,7 +138,9 @@ int main(int argc, char *argv[])
     window.setAttribute(Qt::WA_DontShowOnScreen, false);
     window.goToDesktop();
 
+#ifndef BUILD_PLAYER_ONLY
     splash.finish(&window);
+#endif
 
 #ifndef QT_DEBUG
 	UpdateChecker updateChecker;

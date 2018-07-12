@@ -99,8 +99,14 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 
 	autoSave = settings->getValue("auto_save", true).toBool();
 	ui->autoSave->setChecked(autoSave);
-
+#ifdef BUILD_PLAYER_ONLY
+	openInPlayer = true;
+    ui->openInPlayer->setChecked(true);
+    ui->openInPlayer->setEnabled(false);
+#else
 	openInPlayer = settings->getValue("open_in_player", false).toBool();
+#endif
+
 
 	autoUpdate = settings->getValue("automatic_updates", true).toBool();
 	ui->checkUpdates->setChecked(autoUpdate);
