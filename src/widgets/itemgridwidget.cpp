@@ -182,6 +182,10 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     olayout->addWidget(spacer);
     olayout->addWidget(editContainer);
     olayout->addWidget(closeContainer);
+#ifdef BUILD_PLAYER_ONLY
+    editContainer->setVisible(false);
+#endif // !BUILD_PLAYER_ONLY
+
 
     controls = new QWidget();
     controls->setObjectName("fresh");
@@ -294,7 +298,13 @@ void ItemGridWidget::removeHighlight()
 
     playContainer->setVisible(true);
     spacer->setVisible(true);
+
+#ifdef BUILD_PLAYER_ONLY
+    editContainer->setVisible(false);
+#else
     editContainer->setVisible(true);
+#endif // !BUILD_PLAYER_ONLY
+
     closeContainer->setVisible(false);
 }
 
