@@ -30,7 +30,6 @@ For more information see the LICENSE file
 ShaderPropertyWidget::ShaderPropertyWidget()
 {
     allowBuiltinShaders = addCheckBox("Allow Builtin Shaders");
-    autoReloadOnChange  = addCheckBox("Automatically Reload");
 	vertexShaderCombo   = addComboBox("Vertex Shader");
 	fragmentShaderCombo = addComboBox("Fragment Shader");
 
@@ -40,16 +39,11 @@ ShaderPropertyWidget::ShaderPropertyWidget()
     while (it.hasNext()) builtinShaders.append(it.next());
     builtinShaders.sort();
 
-    onAllowBuiltinShaders(false);
-
     connect(vertexShaderCombo,	    SIGNAL(currentIndexChanged(int)),
             this,                   SLOT(onShaderFileChanged(int)));
 
     connect(fragmentShaderCombo,    SIGNAL(currentIndexChanged(int)),
 			this,                   SLOT(onShaderFileChanged(int)));
-
-    connect(allowBuiltinShaders,    SIGNAL(valueChanged(bool)),
-            this,                   SLOT(onAllowBuiltinShaders(bool)));
 }
 
 ShaderPropertyWidget::~ShaderPropertyWidget()
@@ -67,6 +61,7 @@ void ShaderPropertyWidget::onShaderFileChanged(int index)
             auto shaderObject = asset->getValue().toJsonObject();
             shaderObject["vertex_shader"] = vertexShader;
             shaderObject["fragment_shader"] = fragmentShader;
+
             asset->setValue(QVariant::fromValue(shaderObject));
 
             if (!vertexShader.isEmpty() || !fragmentShader.isEmpty()) {
@@ -172,14 +167,20 @@ void ShaderPropertyWidget::onFragmentShaderFileChanged(int index)
     }
 }
 
-void ShaderPropertyWidget::onAllowBuiltinShaders(const bool toggle)
+void ShaderPropertyWidget::setShaderGuid(const QString &guid)
 {
-    if (toggle) {
-        for (const auto &shader : builtinShaders) {
-            auto shaderInfo = QFileInfo(shader);
-            if (shaderInfo.suffix() == "vert") vertexShaderCombo->addItem(shaderInfo.baseName(), shader);
-            if (shaderInfo.suffix() == "frag") fragmentShaderCombo->addItem(shaderInfo.baseName(), shader);
-        }
+    shaderGuid = guid;
+
+    vertexShaderCombo->getWidget()->blockSignals(true);
+    fragmentShaderCombo->getWidget()->blockSignals(true);
+
+    vertexShaderCombo->clear();
+    fragmentShaderCombo->clear();
+
+    for (const auto &shader : builtinShaders) {
+        auto shaderInfo = QFileInfo(shader);
+        if (shaderInfo.suffix() == "vert") vertexShaderCombo->addItem(shaderInfo.baseName(), shader);
+        if (shaderInfo.suffix() == "frag") fragmentShaderCombo->addItem(shaderInfo.baseName(), shader);
     }
 
     for (auto asset : AssetManager::getAssets()) {
@@ -189,11 +190,9 @@ void ShaderPropertyWidget::onAllowBuiltinShaders(const bool toggle)
             if (shaderInfo.suffix() == "frag") fragmentShaderCombo->addItem(shaderInfo.baseName(), asset->assetGuid);
         }
     }
-}
 
-void ShaderPropertyWidget::setShaderGuid(const QString &guid)
-{
-    shaderGuid = guid;
+    vertexShaderCombo->getWidget()->blockSignals(false);
+    fragmentShaderCombo->getWidget()->blockSignals(false);
 
     for (auto asset : AssetManager::getAssets()) {
         if (asset->assetGuid == guid && asset->type == ModelTypes::Shader) {
@@ -201,22 +200,22 @@ void ShaderPropertyWidget::setShaderGuid(const QString &guid)
             auto vShader = shaderObject["vertex_shader"].toString();
             auto fShader = shaderObject["fragment_shader"].toString();
 
-            bool usesBuiltinAsset = false;
-            for (const auto &asset : builtinShaders) {
-                if (vShader == asset || fShader == asset) {
-                    usesBuiltinAsset = true;
-                    break;
-                }
-            }
+            //bool usesBuiltinAsset = false;
+            //for (const auto &asset : builtinShaders) {
+            //    if (vShader == asset || fShader == asset) {
+            //        usesBuiltinAsset = true;
+            //        break;
+            //    }
+            //}
 
-            if (usesBuiltinAsset) {
-                allowBuiltinShaders->setValue(true);
-                for (const auto &shader : builtinShaders) {
-                    auto shaderInfo = QFileInfo(shader);
-                    if (shaderInfo.suffix() == "vert") vertexShaderCombo->addItem(shaderInfo.baseName(), shader);
-                    if (shaderInfo.suffix() == "frag") fragmentShaderCombo->addItem(shaderInfo.baseName(), shader);
-                }
-            }
+            //if (usesBuiltinAsset) {
+            //    allowBuiltinShaders->setValue(true);
+            //    for (const auto &shader : builtinShaders) {
+            //        auto shaderInfo = QFileInfo(shader);
+            //        if (shaderInfo.suffix() == "vert") vertexShaderCombo->addItem(shaderInfo.baseName(), shader);
+            //        if (shaderInfo.suffix() == "frag") fragmentShaderCombo->addItem(shaderInfo.baseName(), shader);
+            //    }
+            //}
 
             int vindex = vertexShaderCombo->findData(vShader);
             if (vindex) vertexShaderCombo->setCurrentIndex(vindex);

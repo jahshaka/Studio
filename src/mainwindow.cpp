@@ -530,14 +530,14 @@ void MainWindow::closeEvent(QCloseEvent *event)
 		}
 	}
 
-//#ifndef QT_DEBUG
+#ifndef BUILD_PLAYER_ONLY
     if (closing) {
         if (!getSettingsManager()->getValue("ddialog_seen", "false").toBool()) {
             DonateDialog dialog;
             dialog.exec();
         }
     }
-//#endif
+#endif // !BUILD_PLAYER_ONLY
 
 	settings->setValue("geometry", saveGeometry());
 
@@ -2278,8 +2278,8 @@ void MainWindow::setupViewPort()
 	auto hl = new QHBoxLayout;
 	hl->setMargin(0);
 	hl->setSpacing(12);
-	hl->addWidget(worlds_menu);
-	hl->addWidget(player_menu);
+    hl->addWidget(worlds_menu);
+    hl->addWidget(player_menu);
 #ifndef BUILD_PLAYER_ONLY
 	hl->addWidget(editor_menu);
 	hl->addWidget(assets_menu);
@@ -2291,7 +2291,12 @@ void MainWindow::setupViewPort()
 #ifdef QT_DEBUG
     jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/header_dev.png"));
 #else
+#ifdef BUILD_PLAYER_ONLY
+    jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/header_player.png"));
+#else
     jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/header.png"));
+#endif // BUILD_PLAYER_ONLY
+
 #endif
 
 #ifdef MINER_ENABLED

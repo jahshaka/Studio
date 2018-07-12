@@ -84,6 +84,11 @@ void ComboBoxWidget::setCurrentIndex(const int &index)
     ui->comboBox->blockSignals(false);
 }
 
+void ComboBoxWidget::clear()
+{
+    ui->comboBox->clear();
+}
+
 void ComboBoxWidget::setCurrentText(const QString &text)
 {
     ui->comboBox->blockSignals(true);
