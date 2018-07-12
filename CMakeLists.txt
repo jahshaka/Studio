@@ -18,7 +18,7 @@ include(BuildType)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
 
- # set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -317,8 +317,9 @@ set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OP
 include(IncludeBreakpad)
 include(IncludeMiner)
 
-qt5_wrap_cpp(HEADERS_moc ${HEADERS})
-qt5_wrap_ui(UI_moc ${FORMS})
+# these macros are deprecated
+#qt5_wrap_cpp(HEADERS_moc ${HEADERS})
+#qt5_wrap_ui(UI_moc ${FORMS})
 
 # Todo - trim these down to nothing eventually
 qt5_add_resources(QRCS
