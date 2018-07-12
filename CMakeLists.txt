@@ -338,8 +338,7 @@ if(MSVC)
     # set(CMAKE_SUPPRESS_REGENERATION true)
 endif()
 
-set (BUILD_PLAYER_ONLY OFF CACHE BOOL "Build an adhoc version of Jahshaka with only the player")
-add_definitions("-DBUILD_PLAYER_ONLY")
+option (BUILD_PLAYER_ONLY "Build an adhoc version of Jahshaka with only the player" OFF)
 
 if(WIN32 AND CMAKE_BUILD_TYPE STREQUAL Release)
     set(CMAKE_WIN32_EXECUTABLE ON)
@@ -399,6 +398,10 @@ target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
                             irisgl/src/bullet3/src/
                             thirdparty/breakpad/breakpad/src)
    
+if (BUILD_PLAYER_ONLY)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DBUILD_PLAYER_ONLY=1)
+endif(BUILD_PLAYER_ONLY)
+
 if(USE_BREAKPAD)
     set(LIBS ${LIBS} breakpad)
 endif(USE_BREAKPAD)
