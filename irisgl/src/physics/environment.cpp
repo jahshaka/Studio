@@ -20,14 +20,12 @@ Environment::~Environment()
     destroyPhysicsWorld();
 }
 
-void Environment::addBodyToWorld(btRigidBody *body, const QString &guid) 
+void Environment::addBodyToWorld(btRigidBody *body, const iris::SceneNodePtr &node) 
 { 
     world->addRigidBody(body); 
-    //bodies.push_back(body); 
-    hashBodies.insert(guid, body);
 
-    qDebug() << "BODY ADDED TO WORLD " << guid;
-    qDebug() << "There are " << hashBodies.size() << " bodies ";
+    hashBodies.insert(node->getGUID(), body);
+    nodeTransforms.insert(node->getGUID(), node->getGlobalTransform());
 } 
 
 void Environment::removeBodyFromWorld(btRigidBody *body)
@@ -35,10 +33,8 @@ void Environment::removeBodyFromWorld(btRigidBody *body)
     if (!hashBodies.contains(hashBodies.key(body))) return;
 
     world->removeRigidBody(body);
-    hashBodies.remove(hashBodies.key(body)); // ???
-
-    qDebug() << "BODY REMOVED FROM WORLD " ;
-    qDebug() << "There are " << hashBodies.size() << " bodies ";
+    hashBodies.remove(hashBodies.key(body));
+    nodeTransforms.remove(hashBodies.key(body));
 }
 
 void Environment::removeBodyFromWorld(const QString &guid)
@@ -47,9 +43,7 @@ void Environment::removeBodyFromWorld(const QString &guid)
 
     world->removeRigidBody(hashBodies.value(guid));
     hashBodies.remove(guid);
-
-    qDebug() << "BODY REMOVED FROM WORLD ";
-    qDebug() << "There are " << hashBodies.size() << " bodies ";
+    nodeTransforms.remove(guid);
 }
 
 void Environment::storeCollisionShape(btCollisionShape *shape)
@@ -98,6 +92,11 @@ void Environment::stopPhysics()
 	simulating = false;
 }
 
+void Environment::stopSimulation()
+{
+    simulationStarted = false;
+}
+
 void Environment::stepSimulation(float delta)
 {
     iris::LineMeshBuilder builder; // *must* go out of scope...
@@ -133,6 +132,7 @@ void Environment::toggleDebugDrawFlags(bool state)
 
 void Environment::restartPhysics()
 {
+    // node transforms are reset inside button caller
     destroyPhysicsWorld();
     createPhysicsWorld();
 }
@@ -145,8 +145,8 @@ void Environment::createPhysicsWorld()
     solver = new btSequentialImpulseConstraintSolver();
     world = new btDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfig);
 
-    bodies.reserve(512); // for now
-    hashBodies.reserve(512); // also for now
+    hashBodies.reserve(512);
+    nodeTransforms.reserve(512);
 
     world->setGravity(btVector3(0, -10.f, 0));
 
@@ -207,8 +207,8 @@ void Environment::destroyPhysicsWorld()
     delete collisionConfig;
     collisionConfig = 0;
 
-    bodies.clear();
-    hashBodies.clear();
+    hashBodies.squeeze();
+    nodeTransforms.squeeze();
 }
 
 }

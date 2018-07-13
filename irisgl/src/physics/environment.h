@@ -76,8 +76,9 @@ public:
     ~Environment();
 
     QHash<QString, btRigidBody*> hashBodies;
+    QHash<QString, QMatrix4x4> nodeTransforms;
 
-	void addBodyToWorld(btRigidBody *body, const QString &guid);
+	void addBodyToWorld(btRigidBody *body, const iris::SceneNodePtr &node);
 	void removeBodyFromWorld(btRigidBody *body);
 	void removeBodyFromWorld(const QString &guid);
 
@@ -92,6 +93,7 @@ public:
 	void simulatePhysics();
 	bool isSimulating();
 	void stopPhysics();
+	void stopSimulation();
 	void stepSimulation(float delta);
     void toggleDebugDrawFlags(bool state = false);
 
@@ -106,7 +108,6 @@ private:
     btConstraintSolver          *solver;
     btDynamicsWorld             *world;
 
-    QVector<btRigidBody*> bodies;
     QVector<btTypedConstraint*> constraints;
     btAlignedObjectArray<btCollisionShape*>	collisionShapes;
 
