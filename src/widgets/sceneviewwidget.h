@@ -173,7 +173,7 @@ public:
     void setGizmoTransformToLocal();
     void setGizmoTransformToGlobal();
 
-    void addBodyToWorld(btRigidBody *body, const QString &guid);
+    void addBodyToWorld(btRigidBody *body, const iris::SceneNodePtr &node);
     void removeBodyFromWorld(btRigidBody *body);
     void removeBodyFromWorld(const QString &guid);
 

@@ -1479,9 +1479,9 @@ void SceneViewWidget::setGizmoTransformToGlobal()
 	scaleGizmo->setTransformSpace(GizmoTransformSpace::Local);
 }
 
-void SceneViewWidget::addBodyToWorld(btRigidBody *body, const QString &guid)
+void SceneViewWidget::addBodyToWorld(btRigidBody *body, const iris::SceneNodePtr &node)
 {
-    scene->getPhysicsEnvironment()->addBodyToWorld(body, guid);
+    scene->getPhysicsEnvironment()->addBodyToWorld(body, node);
 }
 
 void SceneViewWidget::removeBodyFromWorld(btRigidBody *body)

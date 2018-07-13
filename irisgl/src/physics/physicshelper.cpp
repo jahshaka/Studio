@@ -48,7 +48,7 @@ btVector3 PhysicsHelper::btVector3FromQVector3D(QVector3D vector)
 btRigidBody *PhysicsHelper::createPhysicsBody(const iris::SceneNodePtr sceneNode, const iris::PhysicsProperty &props)
 {
     btVector3 pos(sceneNode->getLocalPos().x(), sceneNode->getLocalPos().y(), sceneNode->getLocalPos().z());
-    btRigidBody *body = Q_NULLPTR;
+    btRigidBody *body = nullptr;
 
     btTransform transform;
     transform.setIdentity();
@@ -66,9 +66,9 @@ btRigidBody *PhysicsHelper::createPhysicsBody(const iris::SceneNodePtr sceneNode
     auto bounciness = props.objectRestitution;
     auto margin = props.objectCollisionMargin;
 
-    btCollisionShape *shape = Q_NULLPTR;
+    btCollisionShape *shape = nullptr;
     btVector3 inertia(0, 0, 0);
-    btMotionState *motionState = Q_NULLPTR;
+    btMotionState *motionState = nullptr;
 
     switch (static_cast<int>(props.shape)) {
         case static_cast<int>(PhysicsCollisionShape::None): {
@@ -117,6 +117,8 @@ btRigidBody *PhysicsHelper::createPhysicsBody(const iris::SceneNodePtr sceneNode
             shape = new btStaticPlaneShape(btVector3(0, 1, 0), 0.f);
             shape->setMargin(margin);
             motionState = new btDefaultMotionState(transform);
+
+            if (mass != 0.0) shape->calculateLocalInertia(mass, inertia);
 
             btRigidBody::btRigidBodyConstructionInfo info(mass, motionState, shape);
 

@@ -571,6 +571,7 @@ void ProjectManager::openSampleBrowser()
     samples.insert("preview/particles.png", "Particles");
     samples.insert("preview/skeletal.png",  "Skeletal Animation");
     samples.insert("preview/world.png",     "World Background");
+    samples.insert("preview/physics.png",   "Physics");
 
     QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
 

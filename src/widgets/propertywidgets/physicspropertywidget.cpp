@@ -147,7 +147,7 @@ void PhysicsPropertyWidget::onPhysicsShapeChanged(int index)
     this->sceneNode->isPhysicsBody = true;
 
     sceneView->removeBodyFromWorld(sceneNode->getGUID());
-    sceneView->addBodyToWorld(body, sceneNode->getGUID());
+    sceneView->addBodyToWorld(body, sceneNode);
 }
 
 void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
@@ -192,7 +192,7 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
     };
 
     sceneView->removeBodyFromWorld(sceneNode->getGUID());
-    this->sceneView->addBodyToWorld(body, sceneNode->getGUID());
+    this->sceneView->addBodyToWorld(body, sceneNode);
 
     //if (sceneNode) {
     //    float mass = 0.0;
