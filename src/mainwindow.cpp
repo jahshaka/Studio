@@ -2260,7 +2260,7 @@ void MainWindow::setupViewPort()
 {
 	// ui->MenuBar->setVisible(false);
 
-	worlds_menu = new QPushButton("Worlds");
+	worlds_menu = new QPushButton("Scenes");
 	worlds_menu->setObjectName("worlds_menu");
 	worlds_menu->setCursor(Qt::PointingHandCursor);
 	player_menu = new QPushButton("Player");
