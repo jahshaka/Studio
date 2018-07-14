@@ -18,6 +18,8 @@ For more information see the LICENSE file
 #include <QSizeGrip>
 #include <QStyledItemDelegate>
 #include <QStandardPaths>
+#include <QMessageBox>
+#include <QApplication>
 #include "minerprocess.h"
 #include "../core/settingsmanager.h"
 #include "../constants.h"
@@ -150,7 +152,7 @@ void MinerUI::configureUI()
 	for (auto process : minerMan->processes) {
 		auto card = this->addGraphicsCard(process->gpu.name);
 		card->setMinerProcess(process);
-		card->startMining();
+		//card->startMining();
 	}
 
 	cardHolder->setLayout(cardHolderLayout);
@@ -376,6 +378,17 @@ void MinerUI::configureConnections()
 
 	connect(startBtn, &QPushButton::clicked, [this]() {
 		if (!mining) {
+			QDir basePath = QDir(QCoreApplication::applicationDirPath());
+			auto xmrPath = QDir::cleanPath(basePath.absolutePath() + QDir::separator() + "xmr-stak/xmr-stak.exe");
+			if (!QFile::exists(xmrPath)) {
+
+#if defined QT_DEBUG
+				QMessageBox::warning(this, "xmrstak not found!", "xmrstak is missing or hasnt been compiled.");
+#else
+				QMessageBox::warning(this, "xmrstak not found!", "xmrstak is missing");
+#endif	
+				return;
+			}
 			startMining();
 		}
 		else {

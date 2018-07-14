@@ -113,6 +113,7 @@ public:
 	}
 
 	void setStarted(bool val) {
+
 		if (armed && val)
 		{
 			mining = val;
