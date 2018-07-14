@@ -172,9 +172,9 @@ void MinerUI::configureUI()
 	//autostart->setFont(font);
 
 
-	autoStartSwitch = new MSwitch();
+	autoStartSwitch = new Switch();
 	autoStartSwitch->setColor(QColor(40, 128, 185));
-	autoStartSwitch->setSizeOfSwitch(20);
+	autoStartSwitch->setSize(20);
 	autoStartSwitch->setChecked(settingsMan->getValue("miner_auto_start", false).toBool());
 	auto switchLayout = new QHBoxLayout;
 	//switchLayout->addStretch();
@@ -383,7 +383,7 @@ void MinerUI::configureConnections()
 
 	});
 
-	connect(autoStartSwitch, &MSwitch::switchPressed, [this](bool val) {
+	connect(autoStartSwitch, &Switch::onChanged, [this](bool val) {
 		startAutomatically = val;
 		this->settingsMan->setValue("miner_auto_start", val);
 	});
