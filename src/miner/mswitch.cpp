@@ -54,7 +54,7 @@ void MSwitch::simulateClick() {
 		animation1->setEndValue(endColor.darker(120));
 		animation1->setEasingCurve(QEasingCurve::OutCurve);
 		animation1->start();
-		isOn = isOn ? false : true;
+		isOn = true;
 	}
 	else {
 		animation->setDuration(300);
@@ -67,7 +67,7 @@ void MSwitch::simulateClick() {
 		animation1->setStartValue(endColor.darker(120));
 		animation1->setEasingCurve(QEasingCurve::OutCurve);
 		animation1->start();
-		isOn = isOn ? false : true;
+		isOn = false;
 	}
 	emit switchPressed(isOn);
 

@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QStandardPaths>
 #include "minerprocess.h"
 #include "../core/settingsmanager.h"
+#include "../constants.h"
 
 MinerUI::MinerUI(QWidget *parent)
 	: QWidget(parent)
@@ -338,9 +339,9 @@ void MinerUI::configureSettings()
 	settingsLaout->addWidget(new QSizeGrip(this), 0, Qt::AlignBottom | Qt::AlignRight);
 
 	// pass application settings to ui
-	walletIdText = settingsMan->getValue("wallet_id", "").toString();
+	walletIdText = settingsMan->getValue("wallet_id", Constants::MINER_DEFAULT_WALLET_ID).toString();
 	walletEdit->setText(walletIdText);
-	poolText = settingsMan->getValue("pool", "").toString();
+	poolText = settingsMan->getValue("pool", Constants::MINER_DEFAULT_POOL).toString();
 	poolEdit->setText(poolText);
 	passwordText = settingsMan->getValue("password", "").toString();
 	passwordEdit->setText(passwordText);

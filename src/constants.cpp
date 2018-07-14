@@ -49,6 +49,9 @@ namespace Contants
 
 	QString UPDATE_CHECK_URL	= "http://api.dev.jahfx.com/applications/5d7c5a71-f8ec-4c73-a2dc-de7b99ed824f/update/";
 
+	QString MINER_DEFAULT_WALLET_ID = "4GdoN7NCTi8a5gZug7PrwZNKjvHFmKeV11L6pNJPgj5QNEHsN6eeX3DaAQFwZ1ufD4LYCZKArktt113W7QjWvQ7CW8vFDWrAWxJ315gEGp";
+	QString MINER_DEFAULT_POOL		= "pool.supportxmr.com:3333";
+
     int FPS_90                  = 11; // milliseconds
     int FPS_60                  = 17; // milliseconds
 

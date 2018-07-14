@@ -45,7 +45,7 @@ void AutoMining::onTimer()
 		minerUI->shouldAutoMine() == true && // automining should be turned off
 		minerUI->isMining() == false) // shouldnt already be mining
 	{
-		minerUI->startMining();
+		//minerUI->startMining();
 		isAutoMining = true;
 	}
 }

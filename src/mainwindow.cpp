@@ -2301,6 +2301,7 @@ void MainWindow::setupViewPort()
 	minerBtn->setText(QChar(fa::microchip));
 	minerBtn->setFont(fontIcons.font(24));
 	minerBtn->setCursor(Qt::PointingHandCursor);
+	//minerBtn->setStyleSheet("QPushButton{color:orange;}");
 	connect(minerBtn, &QPushButton::pressed, [this]() {
 		miner->show();
 	});
