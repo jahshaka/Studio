@@ -18,8 +18,11 @@ For more information see the LICENSE file
 #include <QSizeGrip>
 #include <QStyledItemDelegate>
 #include <QStandardPaths>
+#include <QMessageBox>
+#include <QApplication>
 #include "minerprocess.h"
 #include "../core/settingsmanager.h"
+#include "../constants.h"
 
 MinerUI::MinerUI(QWidget *parent)
 	: QWidget(parent)
@@ -149,7 +152,7 @@ void MinerUI::configureUI()
 	for (auto process : minerMan->processes) {
 		auto card = this->addGraphicsCard(process->gpu.name);
 		card->setMinerProcess(process);
-		card->startMining();
+		//card->startMining();
 	}
 
 	cardHolder->setLayout(cardHolderLayout);
@@ -338,9 +341,9 @@ void MinerUI::configureSettings()
 	settingsLaout->addWidget(new QSizeGrip(this), 0, Qt::AlignBottom | Qt::AlignRight);
 
 	// pass application settings to ui
-	walletIdText = settingsMan->getValue("wallet_id", "").toString();
+	walletIdText = settingsMan->getValue("wallet_id", Constants::MINER_DEFAULT_WALLET_ID).toString();
 	walletEdit->setText(walletIdText);
-	poolText = settingsMan->getValue("pool", "").toString();
+	poolText = settingsMan->getValue("pool", Constants::MINER_DEFAULT_POOL).toString();
 	poolEdit->setText(poolText);
 	passwordText = settingsMan->getValue("password", "").toString();
 	passwordEdit->setText(passwordText);
@@ -375,6 +378,17 @@ void MinerUI::configureConnections()
 
 	connect(startBtn, &QPushButton::clicked, [this]() {
 		if (!mining) {
+			QDir basePath = QDir(QCoreApplication::applicationDirPath());
+			auto xmrPath = QDir::cleanPath(basePath.absolutePath() + QDir::separator() + "xmr-stak/xmr-stak.exe");
+			if (!QFile::exists(xmrPath)) {
+
+#if defined QT_DEBUG
+				QMessageBox::warning(this, "xmrstak not found!", "xmrstak is missing or hasnt been compiled.");
+#else
+				QMessageBox::warning(this, "xmrstak not found!", "xmrstak is missing");
+#endif	
+				return;
+			}
 			startMining();
 		}
 		else {

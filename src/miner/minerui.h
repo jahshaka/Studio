@@ -113,6 +113,7 @@ public:
 	}
 
 	void setStarted(bool val) {
+
 		if (armed && val)
 		{
 			mining = val;
@@ -372,7 +373,7 @@ private:
 			emit switchIsOn(val);
 			armed = val;
 		//	logo->setChecked(val);
-			displayLabel->setText(val ? "GPU set to mined" : "GPU is not set to mine");
+			displayLabel->setText(val ? "GPU set to mine" : "GPU is not set to mine");
 			oldString = displayLabel->text();
 		});
 
