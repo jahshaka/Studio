@@ -2315,8 +2315,11 @@ void MainWindow::setupViewPort()
 #ifdef MINER_ENABLED
 	auto minerBtn = new QPushButton;
 	minerBtn->setObjectName("miner");
-	minerBtn->setText(QChar(fa::microchip));
-	minerBtn->setFont(fontIcons.font(24));
+	minerBtn->setIcon(QIcon(":/icons/mining.png"));
+	minerBtn->setIconSize(QSize(26,26));
+	minerBtn->setStyleSheet("background:transparent;");
+	/*minerBtn->setText(QChar(fa::microchip));
+	minerBtn->setFont(fontIcons.font(24));*/
 	minerBtn->setCursor(Qt::PointingHandCursor);
 	//minerBtn->setStyleSheet("QPushButton{color:orange;}");
 	connect(minerBtn, &QPushButton::pressed, [this]() {
