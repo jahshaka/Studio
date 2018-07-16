@@ -16,6 +16,8 @@ For more information see the LICENSE file
 
 #include "sceneviewwidget.h"
 
+#include "uimanager.h"
+
 #include "accordianbladewidget.h"
 #include "scenenodepropertieswidget.h"
 #include "transformeditor.h"
@@ -125,13 +127,15 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                     physicsPropView->setParent(this);
                     meshPropView->setParent(this);
                     materialPropView->setParent(this);
-
                     physicsPropView->setSceneNode(sceneNode);
                     physicsPropView->setSceneView(sceneView);
                     meshPropView->setSceneNode(sceneNode);
                     materialPropView->setSceneNode(sceneNode);
 
-                    widgetPropertyLayout->addWidget(physicsPropView);
+                    if (!UiManager::isSimulationRunning) {
+                        widgetPropertyLayout->addWidget(physicsPropView);
+                    }
+
                     widgetPropertyLayout->addWidget(meshPropView);
                     widgetPropertyLayout->addWidget(materialPropView);
                     break;

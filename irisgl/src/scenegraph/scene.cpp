@@ -123,11 +123,11 @@ void Scene::update(float dt)
     // advance simulation
     environment->stepSimulation(dt);
 
-    for (const auto &node : rootNode->children) {
+    if (environment->isSimulating() && !environment->hashBodies.isEmpty()) {
+        for (const auto &node : rootNode->children) {
         // Override the mesh's transform if it's a physics body
         // Not the end place since we need to transform empties as well
         // Iterate through the entire scene and change physics object transforms as per NN
-        if (environment->isSimulating()) {
             if (node->isPhysicsBody) {
                 btTransform trans;
                 float matrix[16];

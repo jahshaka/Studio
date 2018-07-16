@@ -505,7 +505,8 @@ void SceneViewWidget::renderGizmos(bool once)
 		return;
 	
     auto gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
-	if (!!selectedNode && !selectedNode->isPhysicsBody) {
+	//if (!!selectedNode && !selectedNode->isPhysicsBody) {
+	if (!!selectedNode && !UiManager::isSimulationRunning) {
 		gizmo->updateSize(editorCam);
 
 		QVector3D rayPos, rayDir;
@@ -894,27 +895,13 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     QPointF dir = localPos - prevMousePos;
 
     if (e->buttons() == Qt::LeftButton && !!selectedNode) {
-        if (selectedNode->isPhysicsBody) {
-            if (activeRigidBody && m_pickedConstraint)
-            {
-                //btPoint2PointConstraint* pickCon = static_cast<btPoint2PointConstraint*>(m_pickedConstraint);
-                //if (pickCon)
-                //{
-                //    //keep it at the same picking distance
-
-                //    btVector3 newPivotB;
-
-                //    btVector3 rayFromWorld = iris::PhysicsHelper::btVector3FromQVector3D(editorCam->getGlobalPosition());
-                //    btVector3 rayToWorld = iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(localPos) * 1024);
-
-                //    btVector3 dir = rayToWorld - rayFromWorld;
-                //    dir.normalize();
-                //    dir *= m_oldPickingDist;
-
-                //    newPivotB = rayFromWorld + dir;
-                //    pickCon->setPivotB(newPivotB);
-                //}
-
+        if (selectedNode->isPhysicsBody && gizmo->isDragging()) {
+            QVector3D rayPos, rayDir;
+            this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
+            gizmo->drag(rayPos, rayDir);
+        }
+        else if (selectedNode->isPhysicsBody) {
+            if (activeRigidBody && m_pickedConstraint) {
                 btGeneric6DofConstraint* pickCon = static_cast<btGeneric6DofConstraint*>(m_pickedConstraint);
                 if (pickCon)
                 {
@@ -929,7 +916,6 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
                     pickCon->getFrameOffsetA().setOrigin(newPivot);
                 }
             }
-
         } else if (gizmo->isDragging()) {
 			QVector3D rayPos, rayDir;
 			this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
@@ -1135,7 +1121,7 @@ void SceneViewWidget::doObjectPicking(
     //m_hitPos = iris::PhysicsHelper::btVector3FromQVector3D(hitList.last().hitPoint);
     //m_oldPickingDist = (iris::PhysicsHelper::btVector3FromQVector3D(hitList.last().hitPoint) - rayFromWorld).length();
 
-    if (pickedNode->isPhysicsBody) {
+    if (pickedNode->isPhysicsBody && UiManager::isSimulationRunning) {
         // Fetch our rigid body from the list stored in the world by guid
         activeRigidBody = scene->getPhysicsEnvironment()->hashBodies.value(pickedNode->getGUID());
         // prevent the picked object from falling asleep
