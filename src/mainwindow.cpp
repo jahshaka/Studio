@@ -633,7 +633,7 @@ void MainWindow::switchSpace(WindowSpaces space)
         case WindowSpaces::DESKTOP: {
 			if (UiManager::isSceneOpen) {
 				//if (settings->getValue("auto_save", true).toBool()) saveScene();
-				saveScene();
+				//saveScene();
 				pmContainer->populateDesktop(true);
 			}
 			
@@ -833,18 +833,37 @@ void MainWindow::openProject(bool playMode)
 
 void MainWindow::closeProject()
 {
-	if (UiManager::isSceneOpen) {
-		//if (settings->getValue("auto_save", true).toBool()) saveScene();
-        saveScene();
-	}
+    {
+        scene->getPhysicsEnvironment()->stopPhysics();
+        scene->getPhysicsEnvironment()->stopSimulation();
+
+        if (!scene->getPhysicsEnvironment()->nodeTransforms.isEmpty()) {
+            for (const auto &node : scene->getRootNode()->children) {
+                if (node->isPhysicsBody) {
+                    node->setGlobalTransform(scene->getPhysicsEnvironment()->nodeTransforms.value(node->getGUID()));
+                }
+            }
+        }
+
+        if (UiManager::isSceneOpen) {
+            if (settings->getValue("auto_save", true).toBool()) saveScene();
+        }
+
+        scene->getPhysicsEnvironment()->destroyPhysicsWorld();
+
+        //UiManager::stopPhysicsSimulation();
+        playSimBtn->setText("Simulate Physics");
+        playSimBtn->setToolTip("Simulate physics only");
+
+        QVariantMap options;
+        options.insert("color", QColor(52, 152, 219));
+        options.insert("color-active", QColor(52, 152, 219));
+        playSimBtn->setIcon(fontIcons.icon(fa::play, options));
+    }
 
     UiManager::isSceneOpen = false;
     UiManager::isScenePlaying = false;
     ui->actionClose->setDisabled(false);
-
-    scene->getPhysicsEnvironment()->stopPhysics();
-    scene->getPhysicsEnvironment()->stopSimulation();
-    scene->getPhysicsEnvironment()->destroyPhysicsWorld();
 
     UiManager::clearUndoStack();
     AssetManager::clearAssetList();
