@@ -126,11 +126,11 @@ void PhysicsPropertyWidget::onPhysicsShapeChanged(int index)
 
     this->sceneNode->physicsProperty.shape = static_cast<iris::PhysicsCollisionShape>(shape);
 
-    btRigidBody *body = iris::PhysicsHelper::createPhysicsBody(sceneNode, physicsProperties);
-    if (!body) {
-        qWarning("Failed to create a rigid body from object");
-        return;
-    };
+    //btRigidBody *body = iris::PhysicsHelper::createPhysicsBody(sceneNode, physicsProperties);
+    //if (!body) {
+    //    qWarning("Failed to create a rigid body from object");
+    //    return;
+    //};
 
     // Can I change shape of a rigid body after it created in Bullet3D?
     // https://gamedev.stackexchange.com/a/11956/16598
@@ -146,8 +146,8 @@ void PhysicsPropertyWidget::onPhysicsShapeChanged(int index)
 
     this->sceneNode->isPhysicsBody = true;
 
-    sceneView->removeBodyFromWorld(sceneNode->getGUID());
-    sceneView->addBodyToWorld(body, sceneNode);
+ /*   sceneView->removeBodyFromWorld(sceneNode->getGUID());
+    sceneView->addBodyToWorld(body, sceneNode);*/
 }
 
 void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
@@ -185,56 +185,16 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
 
     this->sceneNode->isPhysicsBody = true;
 
-    btRigidBody *body = iris::PhysicsHelper::createPhysicsBody(sceneNode, physicsProperties);
-    if (!body) {
-        qWarning("Failed to create a rigid body from object");
-        return;
-    };
+    this->sceneNode->physicsProperty = physicsProperties;
 
-    sceneView->removeBodyFromWorld(sceneNode->getGUID());
-    this->sceneView->addBodyToWorld(body, sceneNode);
+    //btRigidBody *body = iris::PhysicsHelper::createPhysicsBody(sceneNode, physicsProperties);
+    //if (!body) {
+    //    qWarning("Failed to create a rigid body from object");
+    //    return;
+    //};
 
-    //if (sceneNode) {
-    //    float mass = 0.0;
-
-    //    if (type == static_cast<int>(iris::PhysicsType::None)) {
-    //        this->sceneNode->isPhysicsBody = false;
-    //        this->sceneNode->physicsProperty.type = PhysicsType::None;
-    //        return;
-    //    }
-
-    //    btTransform transform;
-    //    transform.setIdentity();
-    //    transform.setFromOpenGLMatrix(sceneNode->getLocalTransform().constData());
-    //    btVector3 pos(sceneNode->getLocalPos().x(), sceneNode->getLocalPos().y(), sceneNode->getLocalPos().z());
-    //    transform.setOrigin(pos);
-
-    //    this->sceneNode->isPhysicsBody = true;
-
-    //    if (type == static_cast<int>(iris::PhysicsType::Static)) {
-    //        mass = .0f;
-    //        massValue->setValue(mass);
-    //        this->sceneNode->physicsProperty.type = PhysicsType::Static;
-    //    }
-
-    //    btCollisionShape *shape = new btEmptyShape();
-    //    btVector3 inertia(0, 0, 0);
-
-    //    if (type == static_cast<int>(iris::PhysicsType::RigidBody)) {
-    //        mass = massValue->getValue(); // default?
-    //        shape->calculateLocalInertia(mass, inertia);
-    //        this->sceneNode->physicsProperty.type = PhysicsType::RigidBody;
-    //    }
-
-    //    btMotionState *motion = new btDefaultMotionState(transform);
-
-    //    btRigidBody::btRigidBodyConstructionInfo info(mass, motion, shape, inertia);
-    //    btRigidBody *body = new btRigidBody(info);
-    //    body->setCenterOfMassTransform(transform);
-
-    //    sceneView->removeBodyFromWorld(sceneNode->getGUID());
-    //    this->sceneView->addBodyToWorld(body, sceneNode->getGUID());
-    //}
+ /*   sceneView->removeBodyFromWorld(sceneNode->getGUID());
+    this->sceneView->addBodyToWorld(body, sceneNode);*/
 }
 
 void PhysicsPropertyWidget::onVisibilityChanged(bool value)

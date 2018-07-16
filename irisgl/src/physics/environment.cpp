@@ -133,6 +133,9 @@ void Environment::toggleDebugDrawFlags(bool state)
 void Environment::restartPhysics()
 {
     // node transforms are reset inside button caller
+    stopPhysics();
+    stopSimulation();
+
     destroyPhysicsWorld();
     createPhysicsWorld();
 }

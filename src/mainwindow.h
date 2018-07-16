@@ -474,7 +474,6 @@ private:
 
 	MinerUI *miner;
 	QPushButton *playSimBtn;
-	QPushButton *restartSimBtn;
 
     QAction *actionTranslate;
     QAction *actionRotate;
