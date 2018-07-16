@@ -41,6 +41,9 @@ Jahshaka brings you the future of immersive digital content creation with the le
 #### Shader format
 ![](https://i.imgur.com/sgaQpC8.png)
 
+#### Monero Miner
+![](https://i.imgur.com/aCY90YE.gifv)
+
 ## Building From Source
 
 ### Requirements
