@@ -44,7 +44,7 @@ Jahshaka brings you the future of immersive digital content creation with the le
 ![](https://i.imgur.com/sgaQpC8.png)
 
 #### Monero Miner
-![](https://i.imgur.com/aCY90YE.gifv)
+![](https://i.imgur.com/aCY90YE.gif)
 
 ## Building From Source
 
