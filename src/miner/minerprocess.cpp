@@ -161,8 +161,9 @@ bool MinerManager::initialize()
 	for (auto gpu : list) {
 		auto proc = new MinerProcess(this);
 		proc->setGpu(gpu);
-		proc->setNetworkPort(portNum++);
+		proc->setNetworkPort(portNum);
 		processes.append(proc);
+		portNum += 1;
 	}
 
 	return true;
