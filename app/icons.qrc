@@ -109,5 +109,6 @@
       <file>icons/icons8-cursor-filled-50-dim.png</file>
       <file>icons/orthogonal-view-80.png</file>
       <file>icons/perspective-view-80.png</file>
+      <file>icons/mining.png</file>
     </qresource>
 </RCC>
