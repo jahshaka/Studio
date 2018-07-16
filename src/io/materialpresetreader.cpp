@@ -9,17 +9,12 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "../irisgl/src/materials/defaultmaterial.h"
+#include "irisgl/src/materials/defaultmaterial.h"
 #include "materialpresetreader.h"
-#include "../core/materialpreset.h"
+#include "core/materialpreset.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
-
-MaterialPresetReader::MaterialPresetReader()
-{
-
-}
 
 QJsonObject MaterialPresetReader::getMatPreset(const QString &filename)
 {
@@ -34,7 +29,7 @@ QJsonObject MaterialPresetReader::getMatPreset(const QString &filename)
     return doc.object();
 }
 
-MaterialPreset* MaterialPresetReader::readMaterialPreset(QString filename)
+MaterialPreset MaterialPresetReader::readMaterialPreset(QString filename)
 {
     this->setAssetPath(filename);
 
@@ -46,49 +41,44 @@ MaterialPreset* MaterialPresetReader::readMaterialPreset(QString filename)
 
     auto matObj = doc.object();
 
-    auto material = new MaterialPreset();
+    MaterialPreset material;
 
-    material->name = matObj["name"].toString("");
+    material.name = matObj["name"].toString("");
 
     auto icon = matObj["icon"].toString("");
-    if(!icon.isEmpty())
-        material->icon = getAbsolutePath(icon);
+    if (!icon.isEmpty()) material.icon = getAbsolutePath(icon);
 
-    material->type = matObj["material_type"].toString();
+    material.type = matObj["material_type"].toString();
 
     auto colObj = matObj["ambientColor"].toString();
     QColor col;
     col.setNamedColor(colObj);
-    material->ambientColor = col;
+    material.ambientColor = col;
 
     colObj = matObj["diffuseColor"].toString();
     col.setNamedColor(colObj);
-    material->diffuseColor = col;
+    material.diffuseColor = col;
 
     auto tex = matObj["diffuseTexture"].toString("");
-    if(!tex.isEmpty())
-        material->diffuseTexture = getAbsolutePath(tex);
+    if (!tex.isEmpty()) material.diffuseTexture = getAbsolutePath(tex);
 
     colObj = matObj["specularColor"].toString();
     col.setNamedColor(colObj);
-    material->specularColor = col;
-    material->shininess = (float)matObj["shininess"].toDouble(0.0f);
+    material.specularColor = col;
+    material.shininess = (float)matObj["shininess"].toDouble(0.0f);
 
     tex = matObj["specularTexture"].toString("");
-    if(!tex.isEmpty())
-        material->specularTexture = getAbsolutePath(tex);
+    if (!tex.isEmpty())  material.specularTexture = getAbsolutePath(tex);
 
     tex = matObj["normalTexture"].toString("");
-    if(!tex.isEmpty())
-        material->normalTexture = getAbsolutePath(tex);
-    material->normalIntensity = (float)matObj["normalIntensity"].toDouble(0.0f);
+    if (!tex.isEmpty()) material.normalTexture = getAbsolutePath(tex);
+    material.normalIntensity = (float)matObj["normalIntensity"].toDouble(0.0f);
 
     tex = matObj["reflectionTexture"].toString("");
-    if(!tex.isEmpty())
-        material->reflectionTexture = getAbsolutePath(tex);
-    material->reflectionInfluence = (float)matObj["reflectionInfluence"].toDouble(0.0f);
+    if (!tex.isEmpty()) material.reflectionTexture = getAbsolutePath(tex);
+    material.reflectionInfluence = (float)matObj["reflectionInfluence"].toDouble(0.0f);
 
-    material->textureScale = (float)matObj["textureScale"].toDouble(1.0f);
+    material.textureScale = (float)matObj["textureScale"].toDouble(1.0f);
 
     return material;
 }

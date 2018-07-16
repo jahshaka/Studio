@@ -150,11 +150,13 @@ PropertyWidget *AccordianBladeWidget::addPropertyWidget()
 HFloatSliderWidget* AccordianBladeWidget::addFloatValueSlider(
         const QString& name,
         float start,
-        float end)
+        float end,
+        float value)
 {
     auto slider = new HFloatSliderWidget();
     slider->ui->label->setText(name);
     slider->setRange(start, end);
+    slider->setValue(value);
 
     minimum_height += slider->height() + stretch;
 

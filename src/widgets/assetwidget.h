@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef ASSETWIDGET_H
 #define ASSETWIDGET_H
 
@@ -34,41 +45,41 @@ struct AssetItem {
 #include <QStyledItemDelegate>
 #include <QPainter>
 
+class MainWindow;
+
 class ListViewDelegate : public QStyledItemDelegate
 {
 protected:
 	void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const
 	{
-
-
-		//        painter->save();
+		// painter->save();
 		QPalette::ColorRole textRole = QPalette::NoRole;
 
-		if (option.state & QStyle::State_Selected) {
-			textRole = QPalette::HighlightedText;
-			painter->fillRect(option.rect, QColor(70, 70, 70, 255));
-		}
-
-		if (option.state & QStyle::State_MouseOver) {
-			painter->fillRect(option.rect, QColor(64, 64, 64));
-		}
-
-		// handle selection
-		//if (option.state & QStyle::State_Selected) {
-		//	//          painter->save();
-		//	textRole = QPalette::Mid;
-		//	//          QBrush selectionBrush(QColor(128, 128, 128, 128));
-		//	//          painter->setBrush(selectionBrush);
-		//	//          painter->drawRect(r.adjusted(1, 1,-1,-1));
-		//	//          painter->restore();
-		//}
-
 		painter->setRenderHint(QPainter::Antialiasing);
-
 
 		auto opt = option;
 		initStyleOption(&opt, index);
 		QRect r = opt.rect;
+
+        QPen thickPen;
+        thickPen.setColor(QColor(170, 169, 178, 142));
+        thickPen.setWidth(3);
+        painter->setPen(thickPen);
+
+        if (option.state & QStyle::State_Selected) {
+            painter->save();
+            textRole = QPalette::HighlightedText;
+            //painter->drawRect(r);
+            painter->fillRect(r, QColor(76, 74, 72, 200));
+            painter->restore();
+        }
+        
+        if (option.state & QStyle::State_MouseOver) {
+            painter->save();
+            painter->drawRect(r);
+            painter->fillRect(r, QColor(95, 93, 91, 128));
+            painter->restore();
+        }
 
         QFontMetrics metrix(painter->font());
         int width = r.width() - 8;
@@ -78,15 +89,11 @@ protected:
 		//        QString description = index.data(Qt::UserRole + 1).toString();
 
 		QPalette::ColorGroup cg = opt.state & QStyle::State_Enabled ? QPalette::Normal : QPalette::Disabled;
-		if (cg == QPalette::Normal && !(opt.state & QStyle::State_Active))
-			cg = QPalette::Inactive;
+		if (cg == QPalette::Normal && !(opt.state & QStyle::State_Active)) cg = QPalette::Inactive;
 
 		// set pen color
-		if (opt.state & QStyle::State_Selected)
-			painter->setPen(opt.palette.color(cg, QPalette::HighlightedText));
-		else
-			painter->setPen(opt.palette.color(cg, QPalette::Text));
-
+		if (opt.state & QStyle::State_Selected) painter->setPen(opt.palette.color(cg, QPalette::HighlightedText));
+		else painter->setPen(opt.palette.color(cg, QPalette::Text));
 
 		QStyle *style = opt.widget ? opt.widget->style() : QApplication::style();
 		//        style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
@@ -98,9 +105,11 @@ protected:
 		//r = option.rect.adjusted(50, 0, 0, -50);
 		//        painter->drawText(r.left(), r.top(), r.width(), r.height(),
 		//                          Qt::AlignBottom|Qt::AlignCenter|Qt::TextWordWrap, title, &r);
-		style->drawItemText(painter, opt.rect, Qt::AlignBottom | Qt::AlignCenter | Qt::TextSingleLine,
-			opt.palette, true, title, textRole);
-
+		style->drawItemText(
+            painter, opt.rect.adjusted(0, 0, 0, -2),
+            Qt::AlignBottom | Qt::AlignCenter | Qt::TextSingleLine,
+			opt.palette, true, title, textRole
+        );
 
 		//        painter->restore();
 		//r = option.rect.adjusted(50, 50, 0, 0);
@@ -214,7 +223,8 @@ public:
 	void addItem(const FolderRecord &folderData);
 	void addItem(const AssetRecord &assetData);
 	void addCrumbs(const QVector<FolderRecord> &folderData);
-    void updateAssetView(const QString &path, bool showDependencies = false);
+    void updateAssetView(const QString &path, int filter = -1, bool showDependencies = false);
+    void updateAssetContentsView(const QString &guid);
     void trigger();
     void refresh();
 
@@ -229,6 +239,12 @@ public:
 		QStringList &textureList,
 		QJsonObject &material
 	);
+
+    void setMainWindow(MainWindow* mainWindow) {
+        this->mainWindow = mainWindow;
+    }
+
+    MainWindow *mainWindow;
 
 	SceneViewWidget *sceneView;
 
@@ -254,11 +270,14 @@ protected slots:
 
     void renameTreeItem();
     void renameViewItem();
+    void favoriteItem();
 
 	void editFileExternally();
 	void exportTexture();
 	void exportMaterial();
+	void exportMaterialPreview();
 	void exportShader();
+	void exportAssetPack();
 
     void searchAssets(QString);
     void OnLstItemsCommitData(QWidget*);
@@ -286,13 +305,21 @@ private:
 
 	QHBoxLayout *breadCrumbLayout;
 
+    QHBoxLayout *filterGroupLayout;
+    QComboBox *assetFilterCombo;
+
 	QButtonGroup *assetViewToggleButtonGroup;
 	QPushButton *toggleIconView;
 	QPushButton *toggleListView;
 
+	QPushButton *goBackOneControl;  // goes to previous dir
+	QPushButton *goUpOneControl;    // goes to parent dir
+
 	QSize iconSize;
 	QSize listSize;
 	QSize currentSize;
+
+    bool draggingItem;
 };
 
 #endif // ASSETWIDGET_H

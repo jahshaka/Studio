@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef DATABASE_H
 #define DATABASE_H
 
@@ -9,6 +20,8 @@
 #include <QCryptographicHash>
 
 #include "../project.h"
+
+#include "irisglfwd.h"
 
 // Note that some functions that operate with projects don't accept anything, this is because
 // they use the globally available getProjectGuid() which is always set to the current project
@@ -36,6 +49,7 @@ public:
     bool createAuthorTable();
     bool createFoldersTable();
     bool createMetadataTable();
+    bool createFavoritesTable();
     void createAllTables();
 
     // INSERT ===============================================================================
@@ -59,6 +73,9 @@ public:
                           const QString &depender,
                           const QString &dependee,
                           const QString &projectGuid = QString());
+
+    bool addFavorite(const QString &guid);
+    bool removeFavorite(const QString &guid);
 
     // DELETE ===============================================================================
     bool deleteProject();
@@ -88,11 +105,13 @@ public:
     // FETCH ================================================================================
     AssetRecord fetchAsset(const QString &guid);
     QVector<AssetRecord> fetchAssets();
-    QVector<AssetRecord> fetchChildAssets(const QString &parent, bool showDependencies = true);
+    QVector<AssetRecord> fetchChildAssets(const QString &parent, int filter = -1, bool showDependencies = true);
+    QVector<AssetRecord> fetchAssetsFromParent(const QString &guid);
     QVector<AssetRecord> fetchAssetsByCollection(const int &collection_id);
     QVector<AssetRecord> fetchAssetsByType(const int &type);
     QVector<AssetRecord> fetchFilteredAssets(const QString &guid, const int &type);
     QVector<AssetRecord> fetchThumbnails();
+    QVector<AssetRecord> fetchFavorites();
     QVector<CollectionRecord> fetchCollections();
     QVector<ProjectTileData> fetchProjects();
     QVector<FolderRecord> fetchChildFolders(const QString &parent);
@@ -106,6 +125,7 @@ public:
     QStringList fetchFolderAndChildFolders(const QString &guid);
     QStringList fetchChildFolderAssets(const QString &guid);
     QStringList fetchAssetGUIDAndDependencies(const QString &guid, bool appendSelf = true);
+    QStringList fetchAssetAndAllDependencies(const QString &guid);
     QVector<DependencyRecord> fetchAssetDependencies(const AssetRecord &record);
     QStringList fetchAssetDependenciesByType(const QString &guid, const ModelTypes&);
     QStringList fetchAssetAndDependencies(const QString &guid);
@@ -125,6 +145,12 @@ public:
                         QVector<AssetRecord> &assetRecords,
                         const QString &parent = QString());
 
+    QString importAssetBundle(const QString &pathToDb,
+                             const QMap<QString, QString> &newNames,
+                             QMap<QString, QString> &outGuids,
+                             QVector<AssetRecord> &assetRecords,
+                             const QString &parent = QString());
+
     QString copyAsset(const ModelTypes &jafType,
                       const QString &guid,
                       const QMap<QString, QString> &newNames,
@@ -132,9 +158,11 @@ public:
                       const QString &parent);
 
     // EXPORT ===============================================================================
+    bool createBlobFromNode(const iris::SceneNodePtr &node, const QString &writePath);
+    bool createBlobFromAsset(const QString &guid, const QString &writePath);
+
     void createExportScene(const QString& outTempFilePath);
-    void createExportNode(const ModelTypes &type, const QString& objectGuid, const QString& outTempFilePath);
-    void createExportNodes(const ModelTypes &type, const QStringList& objectGuids, const QString& outTempFilePath);
+    void createExportBundle(const QStringList& objectGuids, const QString& outTempFilePath);
 
     int getTableCount();
     bool checkIfTableExists(const QString &tableName);
@@ -173,6 +201,7 @@ private:
     QString authorTableSchema;
     QString foldersTableSchema;
     QString metadataTableSchema;
+    QString favoritesTableSchema;
 
     QSqlDatabase db;
 };

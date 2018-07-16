@@ -1,6 +1,18 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #include "assetwidget.h"
 #include "ui_assetwidget.h"
 
+#include <QDate>
 #include <QAbstractItemModel>
 #include <QBuffer>
 #include <QDebug>
@@ -21,6 +33,8 @@
 
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/materials/custommaterial.h"
+#include "irisgl/src/scenegraph/particlesystemnode.h" 
+#include "irisgl/src/scenegraph/scene.h" 
 #include "irisgl/src/zip/zip.h"
 
 #include "assetview.h"
@@ -28,16 +42,20 @@
 #include "globals.h"
 #include "uimanager.h"
 
+#include "mainwindow.h"
 #include "core/database/database.h"
 #include "core/guidmanager.h"
 #include "core/project.h"
 #include "core/settingsmanager.h"
 #include "core/thumbnailmanager.h"
 #include "editor/thumbnailgenerator.h"
-#include "io/assethelper.h"
+#include "core/assethelper.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 #include "widgets/sceneviewwidget.h"
+
+#include "core/materialpreset.h"
+#include "io/materialpresetreader.h"
 
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
@@ -66,15 +84,16 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->assetView->setContextMenuPolicy(Qt::CustomContextMenu);
 	ui->assetView->setResizeMode(QListWidget::Adjust);
 	ui->assetView->setMovement(QListView::Static);
-	ui->assetView->setSelectionBehavior(QAbstractItemView::SelectItems);
-	ui->assetView->setSelectionMode(QAbstractItemView::SingleSelection);
+    ui->assetView->setSelectionBehavior(QAbstractItemView::SelectItems);
+	ui->assetView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    ui->assetView->setSelectionRectVisible(false);
 
 	ui->assetView->setDragEnabled(true);
 	ui->assetView->setDragDropMode(QAbstractItemView::DragDrop);
 
 	connect(ui->hideDeps, &QCheckBox::toggled, [this](bool state) {
 		hideDependencies = !state;
-		updateAssetView(assetItem.selectedGuid, !state);
+		updateAssetView(assetItem.selectedGuid, -1, !state);
 	});
 
     ui->assetView->setItemDelegate(new ListViewDelegate());
@@ -129,6 +148,27 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	listSize = QSize(32, 32);
 	currentSize = iconSize;
 
+    goBackOneControl = new QPushButton(tr("<"));
+    goUpOneControl = new QPushButton(tr("Go Up"));
+    goUpOneControl->setEnabled(false);
+
+    QHBoxLayout *dirControlLayout = new QHBoxLayout;
+    dirControlLayout->setSpacing(0);
+    dirControlLayout->setSizeConstraint(QLayout::SetFixedSize);
+    //dirControlLayout->addWidget(goBackOneControl);
+    dirControlLayout->addWidget(goUpOneControl);
+
+    ui->dirControls->setLayout(dirControlLayout);
+    ui->dirControls->setObjectName("DirControl");
+
+    connect(goBackOneControl, &QPushButton::pressed, [this]() {
+        //updateAssetView(assetItem.selectedGuid);
+    });
+
+    connect(goUpOneControl, &QPushButton::pressed, [this]() {
+        updateAssetView(db->fetchAsset(assetItem.selectedGuid).parent, -1, false);
+    });
+
 	setMouseTracking(true);
 	ui->assetView->setMouseTracking(true);
 
@@ -159,6 +199,41 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->switcher->setLayout(toggleLayout);
 	ui->switcher->setObjectName("Switcher");
 
+    filterGroupLayout = new QHBoxLayout;
+    filterGroupLayout->setMargin(0);
+    filterGroupLayout->setSpacing(0);
+    ui->filterWidget->setObjectName(QStringLiteral("FilterWidget"));
+    ui->filterWidget->setLayout(filterGroupLayout);
+
+    assetFilterCombo = new QComboBox;
+    assetFilterCombo->addItem("All Assets", QVariant::fromValue(static_cast<int>(-1)));
+    assetFilterCombo->addItem("Objects", QVariant::fromValue(static_cast<int>(ModelTypes::Object)));
+    assetFilterCombo->addItem("Materials", QVariant::fromValue(static_cast<int>(ModelTypes::Material)));
+    assetFilterCombo->addItem("Particle Systems", QVariant::fromValue(static_cast<int>(ModelTypes::ParticleSystem)));
+    assetFilterCombo->addItem("Shaders", QVariant::fromValue(static_cast<int>(ModelTypes::Shader)));
+    assetFilterCombo->addItem("Textures", QVariant::fromValue(static_cast<int>(ModelTypes::Texture)));
+    assetFilterCombo->addItem("Files", QVariant::fromValue(static_cast<int>(ModelTypes::File)));
+
+    filterGroupLayout->addWidget(new QLabel("Filter Assets:"));
+    filterGroupLayout->addWidget(assetFilterCombo);
+
+    connect<void(QComboBox::*)(int)>(assetFilterCombo, &QComboBox::currentIndexChanged, this, [&](int index) {
+        updateAssetView(assetItem.selectedGuid, assetFilterCombo->itemData(index).toInt());
+    });
+
+    ui->filterWidget->setStyleSheet(
+        "#filterPane { background: #1E1E1E; border-bottom: 1px solid #111; }"
+        "QLabel { font-size: 12px; margin-right: 8px; }"
+        "QPushButton[accessibleName=\"filterObj\"] { border-radius: 0; padding: 10px 8px; }"
+        "QComboBox { background: #222; border-radius: 1px; color: #BBB; padding: 0 12px; min-height: 24px; min-width: 64px; border: 1px solid #111;}"
+        "QComboBox::drop-down { border: 0; margin: 0; padding: 0; min-height: 20px; }"
+        "QComboBox::down-arrow { image: url(:/icons/down_arrow_check.png); width: 18px; height: 14px; }"
+        "QComboBox::down-arrow:!enabled { image: url(:/icons/down_arrow_check_disabled.png); width: 18px; height: 14px; }"
+        "QComboBox QAbstractItemView::item { min-height: 28px; selection-background-color: #404040; color: #cecece; }"
+        "QComboBox QAbstractItemView { background-color: #1A1A1A; selection-background-color: #404040; border: 0; outline: none; }"
+        "QComboBox QAbstractItemView::item:selected { background: #404040; }"
+    );
+
 	ui->searchBar->setPlaceholderText(tr("Type to search for assets..."));
 
 	progressDialog = new ProgressDialog;
@@ -168,11 +243,13 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		"QWidget#headerTEMP { background: #1A1A1A;}"
 		"QWidget#Switcher { background: #1A1A1A; border-top: 1px solid #151515; border-bottom: 1px solid #151515; }"
 		"QWidget#Switcher QPushButton { background-color: #333; padding: 4px 16px; }"
+        "QWidget#DirControl { background: #1A1A1A; }"
 		"QWidget#Switcher QPushButton:checked { background: #2980b9; }"
 		"QWidget#BreadCrumb { background: #1A1A1A; border-top: 1px solid #151515; border-bottom: 1px solid #151515; }"
 		"QWidget#BreadCrumb QPushButton { background: transparent; padding: 4px 16px;"
 		"									border-right: 1px solid black; color: #999; }"
 		"QWidget#BreadCrumb QPushButton:checked { color: white; border-right: 1px solid black; }"
+        "QWidget#FilterWidget QPushButton:checked { color: white; background: #2980b9; }"
 		"QWidget#assetTree { background: #202020; border: 0; }"
 		"QWidget#assetView { background: #202020; border: 0; outline: 0; padding: 0; margin: 0; }"
 		"QSplitter::handle { width: 1px; background: #151515; }"
@@ -197,11 +274,47 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		"QPushButton{ background-color: #333; color: #DEDEDE; border : 0; padding: 4px 16px; }"
 		"QPushButton:hover{ background-color: #555; }"
 		"QPushButton:pressed{ background-color: #444; }"
+        "QPushButton:disabled{ color: #444; }"
 	);
 }
 
 void AssetWidget::trigger()
 {
+    auto dir = QDir(IrisUtils::getAbsoluteAssetPath("app/content/materials"));
+    auto files = dir.entryInfoList(QStringList(), QDir::Files);
+
+    auto reader = new MaterialPresetReader();
+
+    // needs opengl context so we have to call this after the window is shown...
+    sceneView->makeCurrent();
+    for (const auto &file : files) {
+        auto preset = reader->readMaterialPreset(file.absoluteFilePath());
+
+        auto m = iris::CustomMaterial::create();
+        m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
+
+        m->setValue("diffuseTexture", preset.diffuseTexture);
+        m->setValue("specularTexture", preset.specularTexture);
+        m->setValue("normalTexture", preset.normalTexture);
+        m->setValue("reflectionTexture", preset.reflectionTexture);
+
+        m->setValue("ambientColor", preset.ambientColor);
+        m->setValue("diffuseColor", preset.diffuseColor);
+        m->setValue("specularColor", preset.specularColor);
+
+        m->setValue("shininess", preset.shininess);
+        m->setValue("normalIntensity", preset.normalIntensity);
+        m->setValue("reflectionInfluence", preset.reflectionInfluence);
+        m->setValue("textureScale", preset.textureScale);
+
+        auto assetMat = new AssetMaterial;
+        assetMat->fileName = preset.name;
+        assetMat->assetGuid = Constants::Reserved::DefaultMaterials.key(preset.name);
+        assetMat->setValue(QVariant::fromValue(m));
+        AssetManager::addAsset(assetMat);
+    }
+    sceneView->doneCurrent();
+
 	// It's important that this gets called after a project has been loaded (iKlsR)
 	populateAssetTree(true);
 
@@ -446,6 +559,11 @@ void AssetWidget::addItem(const AssetRecord &assetData)
         item->setIcon(QIcon(":/icons/icons8-file-72.png"));
     }
 
+    if (assetData.type == static_cast<int>(ModelTypes::ParticleSystem)) {
+        item->setData(MODEL_TYPE_ROLE, assetData.type);
+        item->setIcon(QIcon(":/icons/icons8-file-72-ps.png"));
+    }
+
     if (assetData.type == static_cast<int>(ModelTypes::File)) {
         item->setData(MODEL_TYPE_ROLE, assetData.type);
         // TODO - make this some generic value all assets can use
@@ -469,9 +587,7 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
 
 	// Hide meshes for now, we work with objects which are parents for meshes, materials etc
-	if (assetData.type != static_cast<int>(ModelTypes::Mesh)) {
-		ui->assetView->addItem(item);
-	}
+	ui->assetView->addItem(item);
 }
 
 void AssetWidget::addCrumbs(const QVector<FolderRecord> &folderData)
@@ -500,75 +616,89 @@ void AssetWidget::addCrumbs(const QVector<FolderRecord> &folderData)
 	}
 }
 
-void AssetWidget::updateAssetView(const QString &path, bool showDependencies)
+void AssetWidget::updateAssetView(const QString &path, int filter, bool showDependencies)
 {
 	ui->assetView->clear();
 
-	for (const auto &folder : db->fetchChildFolders(path)) addItem(folder);
-	for (const auto &asset : db->fetchChildAssets(path, showDependencies)) addItem(asset);  /* TODO : irk this out */
-	addCrumbs(db->fetchCrumbTrail(path));
+    if (filter > 0) {
+        for (const auto &asset : db->fetchChildAssets(path, filter, showDependencies)) addItem(asset);
+    }
+    else {
+        for (const auto &folder : db->fetchChildFolders(path)) addItem(folder);
+        for (const auto &asset : db->fetchChildAssets(path, filter, showDependencies)) addItem(asset);  /* TODO : irk this out */
+        addCrumbs(db->fetchCrumbTrail(path));
+    }
+
+    goUpOneControl->setEnabled(false);
+}
+
+void AssetWidget::updateAssetContentsView(const QString &guid)
+{
+    ui->assetView->clear();
+    for (const auto &asset : db->fetchAssetsFromParent(guid)) addItem(asset);
 }
 
 bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 {
 	if (watched == ui->assetView->viewport()) {
 		switch (event->type()) {
-		case QEvent::MouseButtonPress: {
-			auto evt = static_cast<QMouseEvent*>(event);
-			if (evt->button() == Qt::LeftButton) {
-				startPos = evt->pos();
-			}
+		    case QEvent::MouseButtonPress: {
+			    auto evt = static_cast<QMouseEvent*>(event);
+                if (evt->button() == Qt::LeftButton) {
+                    startPos = evt->pos();
+                    QModelIndex index = ui->assetView->indexAt(evt->pos());
+                    if (index.isValid()) draggingItem = true;
+                }
 
-			ui->assetView->clearSelection();
+			    AssetWidget::mousePressEvent(evt);
+			    break;
+		    }
 
-			AssetWidget::mousePressEvent(evt);
-			break;
-		}
+		    case QEvent::MouseButtonRelease: {
+			    auto evt = static_cast<QMouseEvent*>(event);
+                draggingItem = false;
+			    AssetWidget::mouseReleaseEvent(evt);
+			    break;
+		    }
 
-		case QEvent::MouseButtonRelease: {
-			auto evt = static_cast<QMouseEvent*>(event);
-			AssetWidget::mouseReleaseEvent(evt);
-			break;
-		}
+		    case QEvent::MouseMove: {
+			    auto evt = static_cast<QMouseEvent*>(event);
+			    if (evt->buttons() & Qt::LeftButton) {
+                    if (draggingItem) {
+                        int distance = (evt->pos() - startPos).manhattanLength();
+                        if (distance >= QApplication::startDragDistance()) {
+                            auto item = ui->assetView->currentItem();
 
-		case QEvent::MouseMove: {
-			auto evt = static_cast<QMouseEvent*>(event);
-			if (evt->buttons() & Qt::LeftButton) {
-				int distance = (evt->pos() - startPos).manhattanLength();
-				if (distance >= QApplication::startDragDistance()) {
-					auto item = ui->assetView->currentItem();
-					auto drag = QPointer<QDrag>(new QDrag(this));
-					auto mimeData = QPointer<QMimeData>(new QMimeData);
+                            if (item) {
+                                auto drag = QPointer<QDrag>(new QDrag(this));
+                                auto mimeData = QPointer<QMimeData>(new QMimeData);
 
-					ui->assetView->clearSelection();
+                                QByteArray mdata;
+                                QDataStream stream(&mdata, QIODevice::WriteOnly);
+                                QMap<int, QVariant> roleDataMap;
 
-					if (item) {
-						QByteArray mdata;
-						QDataStream stream(&mdata, QIODevice::WriteOnly);
-						QMap<int, QVariant> roleDataMap;
+                                roleDataMap[0] = QVariant(item->data(MODEL_TYPE_ROLE).toInt());
+                                roleDataMap[1] = QVariant(item->data(Qt::UserRole).toString());
+                                roleDataMap[2] = QVariant(item->data(MODEL_MESH_ROLE).toString());
+                                roleDataMap[3] = QVariant(item->data(MODEL_GUID_ROLE).toString());
 
-						roleDataMap[0] = QVariant(item->data(MODEL_TYPE_ROLE).toInt());
-						roleDataMap[1] = QVariant(item->data(Qt::UserRole).toString());
-						roleDataMap[2] = QVariant(item->data(MODEL_MESH_ROLE).toString());
-						roleDataMap[3] = QVariant(item->data(MODEL_GUID_ROLE).toString());
+                                stream << roleDataMap;
 
-						stream << roleDataMap;
+                                mimeData->setData(QString("application/x-qabstractitemmodeldatalist"), mdata);
+                                drag->setMimeData(mimeData);
 
-						mimeData->setData(QString("application/x-qabstractitemmodeldatalist"), mdata);
-						drag->setMimeData(mimeData);
+                                drag->setPixmap(item->icon().pixmap(64, 64));
+                                drag->exec();
+                            }
+                        }
+                    }
+			    }
 
-						// only hide for object models
-						//drag->setPixmap(QPixmap());
-						drag->exec();
-					}
-				}
-			}
+			    AssetWidget::mouseMoveEvent(evt);
+			    break;
+		    }
 
-			AssetWidget::mouseMoveEvent(evt);
-			break;
-		}
-
-		default: break;
+		    default: break;
 		}
 	}
 
@@ -676,6 +806,16 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 		connect(action, SIGNAL(triggered()), this, SLOT(renameViewItem()));
 		menu.addAction(action);
 
+        action = new QAction(QIcon(), "Favorite Asset", this);
+        connect(action, SIGNAL(triggered()), this, SLOT(favoriteItem()));
+        menu.addAction(action);
+
+        if (ui->assetView->selectedItems().count() > 1) {
+            action = new QAction(QIcon(), "Export Asset Pack", this);
+            connect(action, SIGNAL(triggered()), this, SLOT(exportAssetPack()));
+            menu.addAction(action);
+        }
+
         if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Texture)) {
             action = new QAction(QIcon(), "Export Texture", this);
             connect(action, SIGNAL(triggered()), this, SLOT(exportTexture()));
@@ -686,13 +826,23 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 			action = new QAction(QIcon(), "Export Material", this);
 			connect(action, SIGNAL(triggered()), this, SLOT(exportMaterial()));
 			menu.addAction(action);
+
+            if (QGuiApplication::queryKeyboardModifiers() == Qt::ShiftModifier) {
+                action = new QAction(QIcon(), "Save Material Preview", this);
+                connect(action, SIGNAL(triggered()), this, SLOT(exportMaterialPreview()));
+                menu.addAction(action);
+            }
 		}
 
-		if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Shader)) {
-			action = new QAction(QIcon(), "Edit", this);
-			connect(action, SIGNAL(triggered()), this, SLOT(editFileExternally()));
-			menu.addAction(action);
+        if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Shader) ||
+            item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::File))
+        {
+            action = new QAction(QIcon(), "Edit", this);
+            connect(action, SIGNAL(triggered()), this, SLOT(editFileExternally()));
+            menu.addAction(action);
+        }
 
+		if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Shader)) {
             action = new QAction(QIcon(), "Export Shader", this);
             connect(action, SIGNAL(triggered()), this, SLOT(exportShader()));
             menu.addAction(action);
@@ -751,9 +901,9 @@ void AssetWidget::syncTreeAndView(const QString &path)
 void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
 {
     if (item->data(MODEL_ITEM_TYPE) == MODEL_ASSET) {
-        if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Shader)) {
-            editFileExternally();
-        }
+        //if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Shader)) {
+        //    editFileExternally();
+        //}
 
         //if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::File)) {
         //    editFileExternally();
@@ -768,9 +918,15 @@ void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
         //        )
         //    ));
         //}
-    }
-    
-    if (item->data(MODEL_ITEM_TYPE) == MODEL_FOLDER) {
+
+        // If item has dependencies
+        const QString guid = item->data(MODEL_GUID_ROLE).toString();
+        if (!db->hasDependencies(guid)) return;
+        assetItem.selectedGuid = guid;
+        updateAssetContentsView(guid);
+        goUpOneControl->setEnabled(true);
+        //syncTreeAndView(guid);
+    } else if (item->data(MODEL_ITEM_TYPE) == MODEL_FOLDER) {
         const QString guid = item->data(MODEL_GUID_ROLE).toString();
         assetItem.selectedGuid = guid;
         updateAssetView(guid);
@@ -793,24 +949,43 @@ void AssetWidget::renameViewItem()
 	ui->assetView->editItem(assetItem.wItem);
 }
 
+void AssetWidget::favoriteItem()
+{
+    mainWindow->favoriteItem(assetItem.wItem);
+}
+
 void AssetWidget::editFileExternally()
 {
-	for (auto asset : AssetManager::getAssets()) {
-		if (asset->type == ModelTypes::Shader) {
-			if (asset->fileName == assetItem.wItem->text()) {
-                auto editor = SettingsManager::getDefaultManager()->getValue("editor_path", "");
-                if (!editor.toString().isEmpty()) {
-                    QProcess *process = new QProcess(this);
-                    QStringList argument;
-                    argument << asset->path;
-                    process->start(editor.toString(), argument);
-                }
-                else {
-                    QDesktopServices::openUrl(QUrl(asset->path));
-                }
-			}
-		}
-	}
+	//for (auto asset : AssetManager::getAssets()) {
+ //       if (asset->type == ModelTypes::File) {
+ //           if (asset->fileName == assetItem.wItem->text()) {
+ //               auto editor = SettingsManager::getDefaultManager()->getValue("editor_path", "");
+ //               if (!editor.toString().isEmpty()) {
+ //                   QProcess *process = new QProcess(this);
+ //                   QStringList argument;
+ //                   argument << asset->path;
+ //                   process->start(editor.toString(), argument);
+ //               }
+ //               else {
+ //                   QDesktopServices::openUrl(QUrl(asset->path));
+ //               }
+ //           }
+ //       }
+	//	else if (asset->type == ModelTypes::Shader) {
+			//if (asset->fileName == assetItem.wItem->text()) {
+   //             auto editor = SettingsManager::getDefaultManager()->getValue("editor_path", "");
+   //             if (!editor.toString().isEmpty()) {
+   //                 QProcess *process = new QProcess(this);
+   //                 QStringList argument;
+   //                 argument << asset->path;
+   //                 process->start(editor.toString(), argument);
+   //             }
+   //             else {
+   //                 QDesktopServices::openUrl(QUrl(asset->path));
+   //             }
+			//}
+	//	}
+	//}
 }
 
 void AssetWidget::exportTexture()
@@ -832,7 +1007,7 @@ void AssetWidget::exportTexture()
 
     const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
 
-    db->createExportNode(ModelTypes::Material, guid, QDir(writePath).filePath("asset.db"));
+    db->createBlobFromAsset(guid, QDir(writePath).filePath("asset.db"));
 
     QDir tempDir(writePath);
     tempDir.mkpath("assets");
@@ -930,7 +1105,7 @@ void AssetWidget::exportMaterial()
 	const QString writePath = temporaryDir.path();
 	const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
 
-	db->createExportNode(ModelTypes::Material, guid, QDir(writePath).filePath("asset.db"));
+	db->createBlobFromAsset(guid, QDir(writePath).filePath("asset.db"));
 
 	QDir tempDir(writePath);
 	tempDir.mkpath("assets");
@@ -1010,6 +1185,41 @@ void AssetWidget::exportMaterial()
 	zip_close(zip);
 }
 
+void AssetWidget::exportMaterialPreview()
+{
+    auto assetGuid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
+    auto materialDef = QJsonDocument::fromBinaryData(db->fetchAssetData(assetGuid)).object();
+
+    QString jsonMaterialString = QJsonDocument(materialDef).toJson();
+
+    for (const auto &value : materialDef) {
+        if (value.isString() &&
+            !db->fetchAsset(value.toString()).name.isEmpty() &&
+            value.toString() != materialDef["guid"].toString())
+        {
+            jsonMaterialString.replace(value.toString(), QString(db->fetchAsset(value.toString()).name));
+        }
+    }
+
+    QJsonDocument saveDoc = QJsonDocument::fromJson(jsonMaterialString.toUtf8());
+
+    QString fileName = IrisUtils::join(
+        Globals::project->getProjectFolder(),
+        IrisUtils::buildFileName(db->fetchAsset(assetGuid).name, "material")
+    );
+
+    QFile file(fileName);
+    file.open(QFile::WriteOnly);
+    file.write(saveDoc.toJson());
+    file.close();
+
+    ThumbnailGenerator::getSingleton()->requestThumbnail(
+        ThumbnailRequestType::Material, fileName, assetGuid, true
+    );
+
+    //QFile::remove(fileName);
+}
+
 void AssetWidget::exportShader()
 {
     // get the export file path from a save dialog
@@ -1029,7 +1239,7 @@ void AssetWidget::exportShader()
 
     const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
 
-    db->createExportNode(ModelTypes::Shader, guid, QDir(writePath).filePath("asset.db"));
+    db->createBlobFromAsset(guid, QDir(writePath).filePath("asset.db"));
 
     QDir tempDir(writePath);
     tempDir.mkpath("assets");
@@ -1041,27 +1251,122 @@ void AssetWidget::exportShader()
     }
     manifest.close();
 
-    for (const auto &asset : db->fetchAssetAndDependencies(guid)) {
-        QFile::copy(
-            IrisUtils::join(Globals::project->getProjectFolder(), asset),
-            IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
-        );
+    for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
+        auto asset = db->fetchAsset(assetGuid);
+        auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+        QFileInfo assetInfo(assetPath);
+        if (assetInfo.exists()) {
+            QFile::copy(
+                IrisUtils::join(assetPath),
+                IrisUtils::join(writePath, "assets", assetInfo.fileName())
+            );
+        }
     }
 
     // get all the files and directories in the project working directory
     QDir workingProjectDirectory(writePath);
-    QDirIterator projectDirIterator(writePath, QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs, QDirIterator::Subdirectories);
+    QDirIterator projectDirIterator(
+        writePath,
+        QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs | QDir::Hidden, QDirIterator::Subdirectories
+    );
 
     QVector<QString> fileNames;
     while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
 
-    //ZipWrapper exportNode("path", "read / write", "folder / file list");
-    //exportNode.setOutputPath();
-    //exportNode.setMode();
-    //exportNode.setCompressionLevel();
-    //exportNode.setFolder();
-    //exportNode.setFileList();
-    //exportNode.createArchive();
+    // open a basic zip file for writing, maybe change compression level later (iKlsR)
+    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
+
+    for (int i = 0; i < fileNames.count(); i++) {
+        QFileInfo fInfo(fileNames[i]);
+
+        // we need to pay special attention to directories since we want to write empty ones as well
+        if (fInfo.isDir()) {
+            zip_entry_open(
+                zip,
+                /* will only create directory if / is appended */
+                QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
+            );
+            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+        }
+        else {
+            zip_entry_open(
+                zip,
+                workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
+            );
+            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+        }
+
+        // we close each entry after a successful write
+        zip_entry_close(zip);
+    }
+
+    // close our now exported file
+    zip_close(zip);
+}
+
+void AssetWidget::exportAssetPack()
+{
+    QDateTime currentDateTime = QDateTime::currentDateTimeUtc();
+     // get the export file path from a save dialog
+    auto filePath = QFileDialog::getSaveFileName(
+        this,
+        "Choose export path",
+        QString("AssetBundle_%1").arg(QString::number(currentDateTime.toTime_t())),
+        "Supported Export Formats (*.jaf)"
+    );
+
+    if (filePath.isEmpty() || filePath.isNull()) return;
+
+    QTemporaryDir temporaryDir;
+    if (!temporaryDir.isValid()) return;
+
+    const QString writePath = temporaryDir.path();
+
+    QStringList assetGuids;
+    for (const auto &item : ui->assetView->selectedItems()) {
+        assetGuids << item->data(MODEL_GUID_ROLE).toString();
+    }
+
+    db->createExportBundle(assetGuids, QDir(writePath).filePath("asset.db"));
+
+    QDir tempDir(writePath);
+    tempDir.mkpath("assets");
+
+    QFile manifest(QDir(writePath).filePath(".manifest"));
+    if (manifest.open(QIODevice::ReadWrite)) {
+        QTextStream stream(&manifest);
+        stream << "bundle" << endl;
+        for (const auto &item : assetGuids) stream << item << endl;
+    }
+    manifest.close();
+
+    for (const auto &guid : assetGuids) {
+        QDir assetDir(QDir(writePath).filePath("assets"));
+        assetDir.mkpath(guid);
+
+        for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
+            auto asset = db->fetchAsset(assetGuid);
+            auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+            QFileInfo assetInfo(assetPath);
+
+            if (assetInfo.exists()) {
+                QFile::copy(
+                    IrisUtils::join(assetPath),
+                    IrisUtils::join(assetDir.absolutePath(), guid, assetInfo.fileName())
+                );
+            }
+        }
+    }
+
+    // get all the files and directories in the project working directory
+    QDir workingProjectDirectory(writePath);
+    QDirIterator projectDirIterator(writePath,
+        QDir::NoDotAndDotDot | QDir::Files |
+        QDir::Dirs | QDir::Hidden,
+        QDirIterator::Subdirectories);
+
+    QVector<QString> fileNames;
+    while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
 
     // open a basic zip file for writing, maybe change compression level later (iKlsR)
     struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
@@ -1651,6 +1956,9 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             else if (jafString == "shader") {
                 jafType = ModelTypes::Shader;
             }
+            else if (jafString == "particle_system") {
+                jafType = ModelTypes::ParticleSystem;
+            }
             else {
                 // Default to files since we know what archives can contain
                 jafType = ModelTypes::File;
@@ -1771,6 +2079,16 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                 assetMat->assetGuid = guidReturned;
                 assetMat->setValue(QVariant::fromValue(material));
                 AssetManager::addAsset(assetMat);
+            }
+
+            if (jafType == ModelTypes::ParticleSystem) {
+                QJsonDocument particleDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
+                QJsonObject particleObject = particleDoc.object();
+
+                auto assetPS = new AssetParticleSystem;
+                assetPS->assetGuid = guidReturned;
+                assetPS->setValue(QVariant::fromValue(particleObject));
+                AssetManager::addAsset(assetPS);
             }
 
             if (jafType == ModelTypes::Object) {
@@ -2161,18 +2479,35 @@ void AssetWidget::onThumbnailResult(ThumbnailResult *result)
 	QByteArray bytes;
 	QBuffer buffer(&bytes);
 	buffer.open(QIODevice::WriteOnly);
-	auto thumbnail = QPixmap::fromImage(result->thumbnail).scaledToHeight(iconSize.height(), Qt::SmoothTransformation);
-	thumbnail.save(&buffer, "PNG");
 
-	db->updateAssetThumbnail(result->id, bytes);
+    if (!result->preview) {
+        auto thumbnail = QPixmap::fromImage(result->thumbnail).scaledToHeight(iconSize.height(), Qt::SmoothTransformation);
+        thumbnail.save(&buffer, "PNG");
 
-	// Refresh the view if we're still there
-	for (int i = 0; i < ui->assetView->count(); i++) {
-		QListWidgetItem* item = ui->assetView->item(i);
-		if (item->data(MODEL_GUID_ROLE).toString() == result->id) {
-			updateAssetView(assetItem.selectedGuid);
-		}
-	}
+        db->updateAssetThumbnail(result->id, bytes);
+
+        // Refresh the view if we're still there
+        for (int i = 0; i < ui->assetView->count(); i++) {
+            QListWidgetItem* item = ui->assetView->item(i);
+            if (item->data(MODEL_GUID_ROLE).toString() == result->id) {
+                updateAssetView(assetItem.selectedGuid);
+            }
+        }
+    }
+    else {
+        auto thumbnail = QPixmap::fromImage(result->thumbnail).scaledToHeight(512, Qt::SmoothTransformation);
+        thumbnail.save(&buffer, "PNG");
+
+        auto filePath = QFileDialog::getSaveFileName(
+            this,
+            "Choose image path",
+            QString("%1_preview.png").arg(QFileInfo(result->path).baseName()),
+            "Supported Image Formats (*.jpg, *.png)"
+        );
+
+        if (filePath.isEmpty() || filePath.isNull()) return;
+        thumbnail.save(filePath);
+    }
 
 	delete result;
 }

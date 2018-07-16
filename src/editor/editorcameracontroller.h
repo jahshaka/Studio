@@ -33,6 +33,8 @@ class EditorCameraController : public CameraControllerBase
     float yaw;
     float pitch;
 
+	float orthoZoom;
+
 	SceneViewWidget* sceneWidget;
 
 public:

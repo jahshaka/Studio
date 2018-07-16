@@ -42,6 +42,24 @@ class PostProcessManager;
 class PostProcessContext;
 class PerformanceTimer;
 
+struct LightUniformNames
+{
+	std::string color;
+	std::string type;
+	std::string position;
+	std::string distance;
+	std::string direction;
+	std::string cutOffAngle;
+	std::string cutOffSoftness;
+	std::string intensity;
+	std::string constantAtten;
+	std::string linearAtten;
+	std::string quadAtten;
+	std::string shadowType;
+	std::string shadowMap;
+	std::string shadowMatrix;
+};
+
 /**
  * This is a basic forward renderer.
  * It currently has features specific for the editor which will be taken out in a future version.
@@ -67,7 +85,7 @@ class ForwardRenderer
     QOpenGLShaderProgram* skinnedLineShader;
     QOpenGLShaderProgram* shadowShader;
     QOpenGLShaderProgram* skinnedShadowShader;
-    QOpenGLShaderProgram* particleShader;
+    ShaderPtr particleShader;
     QOpenGLShaderProgram* emitterShader;
 
     PostProcessManagerPtr postMan;
@@ -81,6 +99,7 @@ class ForwardRenderer
     Texture2DPtr finalRenderTexture;
 
     PerformanceTimer* perfTimer;
+	QVector<LightUniformNames> lightUniformNames;
 
 public:
 
@@ -110,14 +129,14 @@ public:
 
     PostProcessManagerPtr getPostProcessManager();
 
-    static ForwardRendererPtr create(bool useVr = true);
+    static ForwardRendererPtr create(bool useVr = true, bool physicsEnabled = false);
 
     bool isVrSupported();
 
     ~ForwardRenderer();
 
 private:
-    ForwardRenderer(bool supportsVr = true);
+    ForwardRenderer(bool supportsVr = true, bool physicsEnabled = false);
 
     void renderNode(RenderData* renderData, ScenePtr node);
     void renderSky(RenderData* renderData);
@@ -139,6 +158,8 @@ private:
     void renderDirectionalShadow(LightNodePtr lightNode,ScenePtr node);
     void renderSpotlightShadow(LightNodePtr lightNode,ScenePtr node);
     void generateShadowBuffer(GLuint size = 1024);
+
+	void generateLightUnformNames();
 
     //editor-specific
     iris::Billboard* billboard;

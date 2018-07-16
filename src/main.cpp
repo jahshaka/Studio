@@ -17,6 +17,12 @@ For more information see the LICENSE file
 #include <QFontDatabase>
 #include <QtConcurrent>
 
+// needs to be included near the top before
+// anything includes inttypes before it
+#ifdef USE_BREAKPAD
+#include "breakpad/breakpad.h"
+#endif
+
 #include "mainwindow.h"
 #include "dialogs/infodialog.h"
 #include "core/settingsmanager.h"
@@ -25,9 +31,8 @@ For more information see the LICENSE file
 #include "misc/updatechecker.h"
 #include "misc/upgrader.h"
 #include "dialogs/softwareupdatedialog.h"
-#ifdef USE_BREAKPAD
-#include "breakpad/breakpad.h"
-#endif
+#include "helpers/tooltip.h"
+
 
 // Hints that a dedicated GPU should be used whenever possible
 // https://stackoverflow.com/a/39047129/991834
@@ -59,7 +64,7 @@ int main(int argc, char *argv[])
     format.setProfile(QSurfaceFormat::CoreProfile);
     QSurfaceFormat::setDefaultFormat(format);
 #endif
-
+	QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
     QApplication::setAttribute(Qt::AA_UseDesktopOpenGL);
@@ -80,7 +85,12 @@ int main(int argc, char *argv[])
 	upgrader.checkIfDeprecatedVersion();
 
     app.setWindowIcon(QIcon(":/images/icon.ico"));
+#ifdef BUILD_PLAYER_ONLY
+    app.setApplicationName("JahPlayer");
+#else
     app.setApplicationName("Jahshaka");
+#endif // BUILD_PLAYER_ONLY
+
 
     auto dataPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
     QDir dataDir(dataPath);
@@ -101,6 +111,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
+#ifndef BUILD_PLAYER_ONLY
     QSplashScreen splash;
     splash.setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnBottomHint);
     auto pixmap = QPixmap(":/images/splashv3.png");
@@ -112,6 +123,7 @@ int main(int argc, char *argv[])
 #endif // GIT_COMMIT_HASH
 #endif // QT_DEBUG
     splash.show();
+#endif
 
     Globals::appWorkingDir = QApplication::applicationDirPath();
     app.processEvents();
@@ -131,8 +143,11 @@ int main(int argc, char *argv[])
     window.setAttribute(Qt::WA_DontShowOnScreen, false);
     window.goToDesktop();
 
+#ifndef BUILD_PLAYER_ONLY
     splash.finish(&window);
+#endif
 
+#ifndef QT_DEBUG
 	UpdateChecker updateChecker;
 	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded,
         [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)
@@ -147,6 +162,8 @@ int main(int argc, char *argv[])
     if (SettingsManager::getDefaultManager()->getValue("automatic_updates", true).toBool()) {
 		updateChecker.checkForUpdate();
     }
+#endif // QT_DEBUG
 
+	app.installEventFilter(new ToolTipHelper());
     return app.exec();
 }

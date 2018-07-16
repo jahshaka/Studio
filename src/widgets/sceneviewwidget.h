@@ -20,8 +20,11 @@ For more information see the LICENSE file
 #include <QOpenGLWidget>
 #include <QSharedPointer>
 
+#include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h" 
+
 #include "irisgl/src/irisglfwd.h"
 #include "irisgl/src/math/intersectionhelper.h"
+#include "irisgl/src/physics/physicsproperties.h"
 
 #include "mainwindow.h"
 #include "uimanager.h"
@@ -39,6 +42,7 @@ namespace iris
     class Scene;
     class SceneNode;
     class Viewport;
+	class ContentManager;
 }
 
 class CameraControllerBase;
@@ -61,6 +65,8 @@ class TranslationGizmo;
 class ViewerCameraController;
 class ViewportGizmo;
 
+class btRigidBody;
+
 enum class ViewportMode
 {
     Editor,
@@ -78,7 +84,9 @@ struct PickingResult
 
 class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
 {
-    Q_OBJECT
+	Q_OBJECT
+
+	iris::ContentManagerPtr content;
 
     CameraControllerBase* prevCamController;
     CameraControllerBase* camController;
@@ -114,6 +122,21 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
 public:
     iris::CameraNodePtr editorCam;
 
+    MainWindow *mainWindow;
+    void setMainWindow(MainWindow *window) {
+        mainWindow = window;
+    }
+
+    btRigidBody *activeRigidBody;
+
+    //testing
+    //class btTypedConstraint* m_pickedConstraint;
+    class btGeneric6DofConstraint* m_pickedConstraint;
+    int	m_savedState;
+    btVector3 m_oldPickingPos;
+    btVector3 m_hitPos;
+    btScalar m_oldPickingDist;
+
     ThumbnailGenerator* thumbGen;
 	QOpenGLDebugLogger* glDebugger;
 
@@ -124,6 +147,7 @@ public:
     explicit SceneViewWidget(QWidget *parent = Q_NULLPTR);
 
     void setScene(iris::ScenePtr scene);
+    iris::ScenePtr getScene();
     void setSelectedNode(iris::SceneNodePtr sceneNode);
     void clearSelectedNode();
 
@@ -149,6 +173,12 @@ public:
     void setGizmoTransformToLocal();
     void setGizmoTransformToGlobal();
 
+    void addBodyToWorld(btRigidBody *body, const iris::SceneNodePtr &node);
+    void removeBodyFromWorld(btRigidBody *body);
+    void removeBodyFromWorld(const QString &guid);
+
+    void addConstraintToWorldFromProperty(const iris::ConstraintProperty &prop);
+
     void setGizmoLoc();
     void setGizmoRot();
     void setGizmoScale();
@@ -169,6 +199,8 @@ public:
     iris::ForwardRendererPtr getRenderer() const;
 
     QVector3D calculateMouseRay(const QPointF& pos);
+	QVector3D screenSpaceToWoldSpace(const QPointF& pos, float depth);
+
     void mousePressEvent(QMouseEvent* evt);
     void mouseMoveEvent(QMouseEvent* evt);
 	void mouseDoubleClickEvent(QMouseEvent* evt);
@@ -197,6 +229,11 @@ public:
     QImage takeScreenshot(int width=1920, int height=1080);
     bool getShowLightWires() const;
     void setShowLightWires(bool value);
+    void toggleDebugDrawFlags(bool value);
+
+	void startPhysicsSimulation();
+	void restartPhysicsSimulation();
+	void stopPhysicsSimulation();
 
     void setShowFps(bool value);
 	void renderSelectedNode(iris::SceneNodePtr selectedNode);
@@ -204,7 +241,8 @@ public:
 	void setSceneMode(SceneMode sceneMode);
 
     void cleanup();
-
+	void setShowPerspeciveLabel(bool val);
+	
 protected:
     void initializeGL();
 	void initializeOpenGLDebugger();
@@ -251,6 +289,7 @@ private:
 
     void makeObject();
     void renderScene();
+	void renderCameraUi(iris::SpriteBatchPtr batch);
 
 
     iris::ScenePtr scene;
@@ -299,11 +338,20 @@ private:
 	AnimationPath* animPath;
 	SettingsManager* settings;
 
+	bool showPerspevtiveLabel;
+	QString cameraView;
+	QString cameraOrientation;
+	QString checkView();
+	int offset;
+
 signals:
-    void addDroppedMesh(QString, bool, QVector3D, QString, QString);
+    void addPrimitive(QString guid);
+    void addDroppedMesh(QString path, bool ignore, QVector3D position, QString guid, QString assetName);
+    void addDroppedParticleSystem(bool ignore, QVector3D position, QString guid, QString assetName);
     void initializeGraphics(SceneViewWidget* widget,
                             QOpenGLFunctions_3_2_Core* gl);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
+	void updateToolbarButton();
 
 };
 

@@ -113,7 +113,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
 //    }
 
     sceneObj["skyBox"] = skyTexture;
-
+    sceneObj["gravity"] = scene->gravity;
     sceneObj["skyColor"] = jsonColor(scene->skyColor);
     sceneObj["ambientColor"] = jsonColor(scene->ambientColor);
 
@@ -122,6 +122,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["fogEnd"] = scene->fogEnd;
     sceneObj["fogEnabled"] = scene->fogEnabled;
     sceneObj["shadowEnabled"] = scene->shadowEnabled;
+	
 
 
     QJsonObject rootNodeObj;
@@ -166,6 +167,8 @@ void SceneWriter::writeEditorData(QJsonObject& projectObj,EditorData* editorData
     cameraObj["farClip"] = cam->farClip;
     cameraObj["pos"] = jsonVector3(editorData->editorCamera->getLocalPos());
     cameraObj["rot"] = jsonVector3(editorData->editorCamera->getLocalRot().toEulerAngles());
+	cameraObj["orthogonalSize"] = cam->orthoSize;
+	cameraObj["projectionMode"] = cam->projMode == iris::CameraProjection::Perspective ? "perspective" : "orthogonal";
 
     editorObj["camera"] = cameraObj;
     projectObj["editor"] = editorObj;
@@ -176,9 +179,9 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     sceneNodeObj["name"] = sceneNode->getName();
     sceneNodeObj["attached"] = sceneNode->isAttached();
     sceneNodeObj["type"] = getSceneNodeTypeName(sceneNode->sceneNodeType);
-
+    sceneNodeObj["pickable"] = sceneNode->isPickable();
     sceneNodeObj["pos"] = jsonVector3(sceneNode->getLocalPos());
-    auto rot = sceneNode->getLocalRot().toEulerAngles();
+    auto rot = sceneNode->getLocalRot().normalized().toEulerAngles();
     sceneNodeObj["rot"] = jsonVector3(rot);
     sceneNodeObj["scale"] = jsonVector3(sceneNode->getLocalScale());
 	sceneNodeObj["visible"] = sceneNode->isVisible();
@@ -298,10 +301,39 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
 void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode, bool relative)
 {
     // It's a safe assumption that the filename is safe to use here in queries if need be
-	sceneNodeObject["mesh"]         = meshNode->meshPath;
-	sceneNodeObject["guid"]         = meshNode->getGUID();
-    sceneNodeObject["meshIndex"]    = meshNode->meshIndex;
-    sceneNodeObject["pickable"]     = meshNode->pickable;
+	sceneNodeObject["mesh"]          = meshNode->meshPath;
+	sceneNodeObject["guid"]          = meshNode->getGUID();
+    sceneNodeObject["meshIndex"]     = meshNode->meshIndex;
+    sceneNodeObject["physicsObject"] = meshNode->isPhysicsBody;
+
+    if (meshNode->isPhysicsBody) {
+        QJsonObject physicsProperties;
+
+        physicsProperties.insert("centerOfMass", jsonVector3(meshNode->physicsProperty.centerOfMass));
+        physicsProperties.insert("pivot", jsonVector3(meshNode->physicsProperty.pivotPoint));
+        physicsProperties.insert("static", meshNode->physicsProperty.isStatic);
+        physicsProperties.insert("collisionMargin", meshNode->physicsProperty.objectCollisionMargin);
+        physicsProperties.insert("damping", meshNode->physicsProperty.objectDamping);
+        physicsProperties.insert("mass", meshNode->physicsProperty.objectMass);
+        physicsProperties.insert("bounciness", meshNode->physicsProperty.objectRestitution);
+        physicsProperties.insert("shape", static_cast<int>(meshNode->physicsProperty.shape));
+        physicsProperties.insert("type", static_cast<int>(meshNode->physicsProperty.type));
+
+        QJsonArray constraintProperties;
+        
+        for (const auto &constraint : meshNode->physicsProperty.constraints) {
+            QJsonObject constraintProp;
+            constraintProp.insert("constraintFrom", constraint.constraintFrom);
+            constraintProp.insert("constraintTo", constraint.constraintTo);
+            constraintProp.insert("constraintType", static_cast<int>(constraint.constraintType));
+
+            constraintProperties.append(constraintProp);
+        }
+
+        physicsProperties["constraints"] = constraintProperties;
+
+        sceneNodeObject["physicsProperties"] = physicsProperties;
+    }
 
     auto cullMode = meshNode->getFaceCullingMode();
     switch (cullMode) {
@@ -334,6 +366,7 @@ void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodeP
 
 void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node)
 {
+    sceneNodeObject["guid"]                 = node->getGUID();
     sceneNodeObject["particlesPerSecond"]   = node->particlesPerSecond;
     sceneNodeObject["particleScale"]        = node->particleScale;
     sceneNodeObject["dissipate"]            = node->dissipate;
@@ -343,8 +376,8 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["blendMode"]            = node->useAdditive;
     sceneNodeObject["lifeLength"]           = node->lifeLength;
     sceneNodeObject["speed"]                = node->speed;
-    sceneNodeObject["texture"]              = getRelativePath(node->texture->getSource());
 	sceneNodeObject["visible"]				= node->isVisible();
+    sceneNodeObject["texture"]              = handle->fetchAssetGUIDByName(QFileInfo(node->texture->getSource()).fileName());
 }
 
 void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat, bool relative)

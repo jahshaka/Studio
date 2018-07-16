@@ -18,16 +18,23 @@ struct RasterizerState
     CullMode cullMode;
     GLenum fillMode;
 
+	float depthScaleBias;
+	float depthBias;
+
     RasterizerState()
     {
         cullMode= CullMode::CullCounterClockwise;
         fillMode = GL_FILL;
+		depthScaleBias = 0;
+		depthBias = 0;
     }
 
     RasterizerState(CullMode cullMode, GLenum fillMode):
         cullMode(cullMode),
         fillMode(fillMode)
     {
+		depthScaleBias = 0;
+		depthBias = 0;
     }
 
     static RasterizerState CullCounterClockwise;

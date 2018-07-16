@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #include "thumbnailgenerator.h"
 
 #include <QJsonDocument>
@@ -65,6 +76,7 @@ void RenderThread::run()
             result->id			= request.id;
             result->type		= request.type;
             result->path		= request.path;
+            result->preview     = request.preview;
             result->thumbnail	= img;
 
             emit thumbnailComplete(result);
@@ -358,12 +370,13 @@ ThumbnailGenerator *ThumbnailGenerator::getSingleton()
     return instance;
 }
 
-void ThumbnailGenerator::requestThumbnail(ThumbnailRequestType type, QString path, QString id)
+void ThumbnailGenerator::requestThumbnail(ThumbnailRequestType type, QString path, QString id, bool preview)
 {
     ThumbnailRequest req;
     req.type	= type;
     req.path	= path;
     req.id		= id;
+    req.preview = preview;
     renderThread->requestThumbnail(req);
 }
 

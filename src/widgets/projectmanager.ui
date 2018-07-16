@@ -302,14 +302,14 @@ QComboBox::down-arrow:!enabled {
       <item>
        <widget class="QPushButton" name="importWorld">
         <property name="text">
-         <string>Import World</string>
+         <string>Import Scene</string>
         </property>
        </widget>
       </item>
       <item>
        <widget class="QPushButton" name="downloadWorlds">
         <property name="text">
-         <string>Download Worlds</string>
+         <string>Download Scenes</string>
         </property>
        </widget>
       </item>
@@ -423,7 +423,7 @@ QComboBox::down-arrow:!enabled {
            </size>
           </property>
           <property name="placeholderText">
-           <string>Search recent worlds...</string>
+           <string>Search recent scenes...</string>
           </property>
          </widget>
         </item>
@@ -448,7 +448,7 @@ QComboBox::down-arrow:!enabled {
          <string notr="true"/>
         </property>
         <property name="text">
-         <string>+ Sample World</string>
+         <string>+ Sample Scenes</string>
         </property>
         <property name="flat">
          <bool>false</bool>
@@ -458,7 +458,7 @@ QComboBox::down-arrow:!enabled {
       <item>
        <widget class="QPushButton" name="newProject">
         <property name="text">
-         <string>+ New World</string>
+         <string>+ New Scene</string>
         </property>
        </widget>
       </item>

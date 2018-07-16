@@ -92,6 +92,11 @@ void CameraControllerBase::onKeyReleased(Qt::Key key)
 
 }
 
+void CameraControllerBase::keyReleaseEvent(QKeyEvent * event)
+{
+	onKeyReleased((Qt::Key)event->key());
+}
+
 void CameraControllerBase::start()
 {
     resetMouseStates();

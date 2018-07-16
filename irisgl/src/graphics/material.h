@@ -64,6 +64,8 @@ public:
         this->renderLayer = layer;
     }
 
+	void setShader(ShaderPtr shader);
+
     /**
      * Called at the beginning of rendering a primitive
      * This function is used by subclasses to bind the shader pass parameters,
@@ -118,6 +120,8 @@ public:
 		return MaterialPtr(new Material());
 	}
 
+	static MaterialPtr fromShader(ShaderPtr shader);
+
 protected:
     /**
      * Sets the amount of textures your shader uses
@@ -127,6 +131,8 @@ protected:
      * @param count
      */
     void setTextureCount(int count);
+
+	
 
 	QOpenGLShaderProgram* getProgram();
 };

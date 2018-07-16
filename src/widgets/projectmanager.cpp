@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #include "projectmanager.h"
 #include "ui_projectmanager.h"
 
@@ -92,6 +103,17 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
             assetShader->fileName = QFileInfo(asset.name).baseName();
             assetShader->setValue(QVariant::fromValue(shaderObject));
             AssetManager::addAsset(assetShader);
+        }
+
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::ParticleSystem))) {
+            QJsonDocument particleDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(asset.guid));
+            QJsonObject particleObject = particleDefinition.object();
+
+            auto assetPS = new AssetParticleSystem;
+            assetPS->assetGuid = asset.guid;
+            assetPS->fileName = QFileInfo(asset.name).baseName();
+            assetPS->setValue(QVariant::fromValue(particleObject));
+            AssetManager::addAsset(assetPS);
         }
 
 		// Materials
@@ -206,7 +228,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     });
 
 	connect(ui->downloadWorlds, &QPushButton::pressed, []() {
-		QDesktopServices::openUrl(QUrl("http://www.jahfx.com/downloads/worlds/"));
+		QDesktopServices::openUrl(QUrl("https://www.jahfx.com/downloads/worlds/"));
 	});
 
     populateDesktop();
@@ -549,6 +571,7 @@ void ProjectManager::openSampleBrowser()
     samples.insert("preview/particles.png", "Particles");
     samples.insert("preview/skeletal.png",  "Skeletal Animation");
     samples.insert("preview/world.png",     "World Background");
+    samples.insert("preview/physics.png",   "Physics");
 
     QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
 

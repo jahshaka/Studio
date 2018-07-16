@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #ifndef THUMBNAILGENERATOR_H
 #define THUMBNAILGENERATOR_H
 
@@ -26,11 +37,13 @@ struct ThumbnailRequest
     ThumbnailRequestType type;
     QString path;
     QString id;
+    bool preview;
 };
 
 struct ThumbnailResult
 {
     ThumbnailRequestType type;
+    bool preview;
     QString path;
     QString id;
     QImage thumbnail;
@@ -85,7 +98,7 @@ class ThumbnailGenerator
 public:
     RenderThread* renderThread;
     static ThumbnailGenerator* getSingleton();
-    void requestThumbnail(ThumbnailRequestType type, QString path, QString id = "");
+    void requestThumbnail(ThumbnailRequestType type, QString path, QString id = "", bool preview = false);
 
     // must be called to properly shutdown ui components
     void shutdown();

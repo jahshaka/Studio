@@ -37,7 +37,6 @@ protected slots:
     void onShaderFileChanged(int);
     void onVertexShaderFileChanged(int);
     void onFragmentShaderFileChanged(int);
-    void onAllowBuiltinShaders(const bool);
 
 private:
     QStringList vertexShaders;
@@ -45,7 +44,6 @@ private:
     iris::ShaderPtr shader;
 
     CheckBoxWidget *allowBuiltinShaders;
-    CheckBoxWidget *autoReloadOnChange;
 	ComboBoxWidget *vertexShaderCombo;
     ComboBoxWidget *fragmentShaderCombo;
 

@@ -23,6 +23,9 @@ For more information see the LICENSE file
 #include "../core/irisutils.h"
 #include "../graphics/renderlist.h"
 
+#include "physics/environment.h"
+#include "math/intersectionhelper.h"
+
 namespace iris
 {
 
@@ -69,6 +72,8 @@ Scene::Scene()
     gizmoRenderList = new RenderList();
 
 	time = 0;
+
+    environment = QSharedPointer<Environment>(new Environment(geometryRenderList));
 }
 
 void Scene::setSkyTexture(Texture2DPtr tex)
@@ -112,7 +117,25 @@ void Scene::update(float dt)
     // cameras aren't always a part of the scene hierarchy, so their matrices are updated here
     if (!!camera) {
         camera->update(dt);
-        camera->updateCameraMatrices();
+		camera->updateCameraMatrices();
+    }
+
+    // advance simulation
+    environment->stepSimulation(dt);
+
+    if (environment->isSimulating() && !environment->hashBodies.isEmpty()) {
+        for (const auto &node : rootNode->children) {
+        // Override the mesh's transform if it's a physics body
+        // Not the end place since we need to transform empties as well
+        // Iterate through the entire scene and change physics object transforms as per NN
+            if (node->isPhysicsBody) {
+                btTransform trans;
+                float matrix[16];
+                environment->hashBodies.value(node->getGUID())->getMotionState()->getWorldTransform(trans);
+                trans.getOpenGLMatrix(matrix);
+                node->setGlobalTransform(QMatrix4x4(matrix).transposed());
+            }
+        }
     }
 
     // add items to renderlist
@@ -151,27 +174,35 @@ void Scene::rayCast(const QSharedPointer<iris::SceneNode>& sceneNode,
         auto mesh = meshNode->getMesh();
         if(mesh != nullptr)
         {
-            auto triMesh = meshNode->getMesh()->getTriMesh();
-
+            
             // transform segment to local space
             auto invTransform = meshNode->globalTransform.inverted();
             auto a = invTransform * segStart;
             auto b = invTransform * segEnd;
 
-            QList<iris::TriangleIntersectionResult> results;
-            if (int resultCount = triMesh->getSegmentIntersections(a, b, results)) {
-                for (auto triResult : results) {
-                    // convert hit to world space
-                    auto hitPoint = meshNode->globalTransform * triResult.hitPoint;
+			// ray-sphere intersection first
+			auto mesh = meshNode->getMesh();
+			auto sphere = mesh->getBoundingSphere();
+			float t;
+			QVector3D hitPoint;
+			if (IntersectionHelper::raySphereIntersects(a, (b - a).normalized(), sphere.pos, sphere.radius, t, hitPoint)) {
+				auto triMesh = meshNode->getMesh()->getTriMesh();
 
-                    PickingResult pick;
-                    pick.hitNode = sceneNode;
-                    pick.hitPoint = hitPoint;
-                    pick.distanceFromStartSqrd = (hitPoint - segStart).lengthSquared();
+				QList<iris::TriangleIntersectionResult> results;
+				if (int resultCount = triMesh->getSegmentIntersections(a, b, results)) {
+					for (auto triResult : results) {
+						// convert hit to world space
+						auto hitPoint = meshNode->globalTransform * triResult.hitPoint;
 
-                    hitList.append(pick);
-                }
-            }
+						PickingResult pick;
+						pick.hitNode = sceneNode;
+						pick.hitPoint = hitPoint;
+						pick.distanceFromStartSqrd = (hitPoint - segStart).lengthSquared();
+
+						hitList.append(pick);
+					}
+				}
+			}
         }
     }
 

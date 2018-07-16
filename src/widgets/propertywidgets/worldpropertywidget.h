@@ -37,6 +37,7 @@ public:
     void setupViewSelector();
 
 protected slots:
+    void onGravityChanged(float value);
     void onSkyTextureChanged(QString texPath);
     void onSkyColorChanged(QColor color);
     void onAmbientColorChanged(QColor color);
@@ -49,6 +50,7 @@ private:
     TexturePickerWidget *skyTexture;
     ColorValueWidget *skyColor;
     ColorValueWidget *ambientColor;
+    HFloatSliderWidget *worldGravity;
 
     QString skyBoxTextures[6];
 };

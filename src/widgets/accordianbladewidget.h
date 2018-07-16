@@ -44,7 +44,7 @@ public:
 
     ColorValueWidget*       addColorPicker(const QString&);
     TexturePickerWidget*    addTexturePicker(const QString&);
-    HFloatSliderWidget*     addFloatValueSlider(const QString&, float start, float end);
+    HFloatSliderWidget*     addFloatValueSlider(const QString&, float start, float end, float value = 0.f);
     CheckBoxWidget*         addCheckBox(const QString&, bool value = false);
     ComboBoxWidget*         addComboBox(const QString&);
     TextInputWidget*        addTextInput(const QString&);

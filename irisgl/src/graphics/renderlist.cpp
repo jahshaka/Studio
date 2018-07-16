@@ -33,6 +33,7 @@ RenderItem *RenderList::submitMesh(MeshPtr mesh, MaterialPtr mat, QMatrix4x4 wor
     item->mesh = mesh;
     item->material = mat;
     item->worldMatrix = worldMatrix;
+	item->renderStates = mat->renderStates;
 
     renderList.append(item);
 	return item;

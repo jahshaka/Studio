@@ -23,6 +23,7 @@ namespace iris
 
 class RenderItem;
 class RenderList;
+class Environment;
 
 enum class SceneRenderFlags : int
 {
@@ -39,9 +40,15 @@ struct PickingResult
 
 class Scene: public QEnableSharedFromThis<Scene>
 {
+    QSharedPointer<Environment> environment;
+
 public:
     CameraNodePtr camera;
     SceneNodePtr rootNode;
+
+    QSharedPointer<Environment> getPhysicsEnvironment() {
+        return environment;
+    }
 
     /*
      * This is the default viewer that the scene
@@ -53,6 +60,7 @@ public:
     QList<MeshNodePtr> meshes;
     QList<ParticleSystemNodePtr> particleSystems;
     QList<ViewerNodePtr> viewers;
+	QList<GrabNodePtr> grabbers;
 
     QColor clearColor;
     bool renderSky;
@@ -69,6 +77,7 @@ public:
     float fogEnd;
     bool fogEnabled;
 
+    float gravity;
     bool shadowEnabled;
 
     RenderList* geometryRenderList;

@@ -35,6 +35,8 @@ public:
     QString getProjectGuid();
 
     static Project *createNew();
+
+    static const QStringList ModelTypesAsString;
 };
 
 struct ProjectTileData {
@@ -106,7 +108,8 @@ enum class ModelTypes {
 	Music,
 	Shader,         // Supported
 	Variant,
-	File            // Supported
+	File,           // Supported
+	ParticleSystem  // Supported
 };
 
 #define	MODEL_GUID_ROLE		0x0113

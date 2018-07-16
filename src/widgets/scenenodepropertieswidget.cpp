@@ -14,6 +14,10 @@ For more information see the LICENSE file
 
 #include "irisgl/src/scenegraph/scenenode.h"
 
+#include "sceneviewwidget.h"
+
+#include "uimanager.h"
+
 #include "accordianbladewidget.h"
 #include "scenenodepropertieswidget.h"
 #include "transformeditor.h"
@@ -28,21 +32,49 @@ For more information see the LICENSE file
 #include "propertywidgets/nodepropertywidget.h"
 #include "propertywidgets/shaderpropertywidget.h"
 #include "propertywidgets/worldpropertywidget.h"
+#include "propertywidgets/physicspropertywidget.h"
 
 SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(parent)
 {
-	transformPropView = nullptr;
-	transformWidget = nullptr;
+    widgetPropertyLayout = new QVBoxLayout(this);
+    widgetPropertyLayout->setMargin(0);
 
-	materialPropView = nullptr;
-	emitterPropView = nullptr;
+    fogPropView = new FogPropertyWidget();
+    fogPropView->setPanelTitle("Fog");
+    fogPropView->expand();
 
-	lightPropView = nullptr;
-	worldPropView = nullptr;
-	fogPropView = nullptr;
-	meshPropView = nullptr;
-	demoPane = nullptr;
-    shaderPropView = nullptr;
+    worldPropView = new WorldPropertyWidget();
+    worldPropView->setPanelTitle("World");
+    worldPropView->expand();
+
+    transformPropView = new AccordianBladeWidget();
+    transformPropView->setPanelTitle("Transformation");
+    transformWidget = transformPropView->addTransformControls();
+    transformPropView->expand();
+
+    physicsPropView = new PhysicsPropertyWidget();
+    physicsPropView->setPanelTitle("Physics Properties");
+    physicsPropView->expand();
+
+    meshPropView = new MeshPropertyWidget();
+    meshPropView->setPanelTitle("Mesh Properties");
+    meshPropView->expand();
+
+    lightPropView = new LightPropertyWidget();
+    lightPropView->setPanelTitle("Light");
+    lightPropView->expand();
+
+    emitterPropView = new EmitterPropertyWidget();
+    emitterPropView->setPanelTitle("Emitter");
+    emitterPropView->setDatabase(db);
+    emitterPropView->expand();
+
+    shaderPropView = new ShaderPropertyWidget();
+    shaderPropView->setPanelTitle("Shader Definitions");
+    shaderPropView->setDatabase(db);
+    shaderPropView->expand();
+
+    setLayout(widgetPropertyLayout);
 }
 
 /**
@@ -52,106 +84,78 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
     if (!!sceneNode) {
+        this->sceneNode = sceneNode;
+
+        widgetPropertyLayout->setMargin(0);
+        clearLayout(this->layout());
+
         if (sceneNode->isRootNode()) {
-            /* remember this is used to test new widgets. Do NOT push to master enabled! */
-            // demoPane = new DemoPane();
-            // demoPane->setPanelTitle("Demo Pane");
-            // demoPane->expand();
-			clearLayout(this->layout());
-
-            fogPropView = new FogPropertyWidget();
-            fogPropView->setPanelTitle("Fog");
+            fogPropView->setParent(this);
             fogPropView->setScene(sceneNode->scene);
-            fogPropView->expand();
-
-            worldPropView = new WorldPropertyWidget();
-            worldPropView->setPanelTitle("World");
+            worldPropView->setParent(this);
             worldPropView->setScene(sceneNode->scene);
-            worldPropView->expand();
-
-            auto layout = new QVBoxLayout();
-            // layout->addWidget(demoPane);
-            layout->addWidget(fogPropView);
-            layout->addWidget(worldPropView);
-
-            layout->addStretch();
-            layout->setMargin(0);
-
-            
-            this->setLayout(layout);
-        } else {
-			clearLayout(this->layout());
-
-            this->sceneNode = sceneNode;
-
-            transformPropView = new AccordianBladeWidget();
-            transformPropView->setPanelTitle("Transformation");
-            transformWidget = transformPropView->addTransformControls();
+            widgetPropertyLayout->addWidget(fogPropView);
+            widgetPropertyLayout->addWidget(worldPropView);
+        }
+        else {
+            transformPropView->setParent(this);
             transformWidget->setSceneNode(sceneNode);
-
-            meshPropView = new MeshPropertyWidget();
-            meshPropView->setPanelTitle("Mesh Properties");
-            meshPropView->setSceneNode(sceneNode);
-
-            // nodePropView = new NodePropertyWidget();
-            // nodePropView->setPanelTitle("Node Properties");
-            // nodePropView->setSceneNode(sceneNode);
-
-            lightPropView = new LightPropertyWidget();
-            lightPropView->setPanelTitle("Light");
-            lightPropView->setSceneNode(sceneNode);
-
-            // try to move back mat prop here
-
-            emitterPropView = new EmitterPropertyWidget();
-            emitterPropView->setPanelTitle("Emitter");
-            emitterPropView->setSceneNode(sceneNode);
-
-            auto layout = new QVBoxLayout();
-            layout->addWidget(transformPropView);
-            transformPropView->expand();
+            widgetPropertyLayout->addWidget(transformPropView);
 
             switch (sceneNode->getSceneNodeType()) {
                 case iris::SceneNodeType::Light: {
-                    layout->addWidget(lightPropView);
-                    lightPropView->expand();
+                    lightPropView->setParent(this);
+                    lightPropView->setSceneNode(sceneNode);
+                    widgetPropertyLayout->addWidget(lightPropView);
+                    break;
+                }
+
+                case iris::SceneNodeType::Empty: {
+                    physicsPropView->setParent(this);
+                    physicsPropView->setSceneNode(sceneNode);
+                    physicsPropView->setSceneView(sceneView);
+                    widgetPropertyLayout->addWidget(physicsPropView);
                     break;
                 }
 
                 case iris::SceneNodeType::Mesh: {
                     materialPropView = new MaterialPropertyWidget();
                     materialPropView->setPanelTitle("Material");
-                    materialPropView->setSceneNode(sceneNode);
                     materialPropView->setDatabase(db);
-
-                    layout->addWidget(meshPropView);
-                    // layout->addWidget(nodePropView);
-                    layout->addWidget(materialPropView);
-                    meshPropView->expand();
                     materialPropView->expand();
-                    // nodePropView->expand();
+
+                    physicsPropView->setParent(this);
+                    meshPropView->setParent(this);
+                    materialPropView->setParent(this);
+                    physicsPropView->setSceneNode(sceneNode);
+                    physicsPropView->setSceneView(sceneView);
+                    meshPropView->setSceneNode(sceneNode);
+                    materialPropView->setSceneNode(sceneNode);
+
+                    if (!UiManager::isSimulationRunning) {
+                        widgetPropertyLayout->addWidget(physicsPropView);
+                    }
+
+                    widgetPropertyLayout->addWidget(meshPropView);
+                    widgetPropertyLayout->addWidget(materialPropView);
                     break;
                 }
 
                 case iris::SceneNodeType::ParticleSystem: {
-                    layout->addWidget(emitterPropView);
-                    emitterPropView->expand();
+                    emitterPropView->setParent(this);
+                    emitterPropView->setSceneNode(sceneNode);
+                    widgetPropertyLayout->addWidget(emitterPropView);
                     break;
                 }
 
                 default: break;
             }
-
-            layout->addStretch();
-            layout->setMargin(0);
-
-            
-            this->setLayout(layout);
         }
+
+        widgetPropertyLayout->addStretch();
     }
     else {
         clearLayout(this->layout());
-        this->setLayout(new QVBoxLayout());
     }
 }
 
@@ -159,24 +163,13 @@ void SceneNodePropertiesWidget::setAssetItem(QListWidgetItem *item)
 {
     if (item) {
 		clearLayout(this->layout());
-
-        shaderPropView = new ShaderPropertyWidget();
-        shaderPropView->setPanelTitle("Shader Definitions");
+        shaderPropView->setParent(this);
         shaderPropView->setShaderGuid(item->data(MODEL_GUID_ROLE).toString());
-        shaderPropView->setDatabase(db);
-        shaderPropView->expand();
-
-        auto layout = new QVBoxLayout();
-        layout->addWidget(shaderPropView);
-
-        layout->addStretch();
-        layout->setMargin(0);
-
-        this->setLayout(layout);
+        widgetPropertyLayout->addWidget(shaderPropView);
+        widgetPropertyLayout->addStretch();
     }
     else {
         clearLayout(this->layout());
-        this->setLayout(new QVBoxLayout());
     }
 }
 
@@ -194,6 +187,11 @@ void SceneNodePropertiesWidget::refreshTransform()
 	}
 }
 
+void SceneNodePropertiesWidget::setSceneView(SceneViewWidget *sceneView)
+{
+    this->sceneView = sceneView;
+}
+
 void SceneNodePropertiesWidget::setDatabase(Database *db)
 {
     this->db = db;
@@ -207,26 +205,15 @@ void SceneNodePropertiesWidget::clearLayout(QLayout *layout)
 {
     if (layout == nullptr) return;
 
-#define NULLIFY(obj) if (obj) { obj = nullptr; }
-	NULLIFY(transformPropView);
-	NULLIFY(transformWidget);
-
-	NULLIFY(materialPropView);
-	NULLIFY(emitterPropView);
-
-	NULLIFY(lightPropView);
-	NULLIFY(worldPropView);
-	NULLIFY(fogPropView);
-	NULLIFY(meshPropView);
-	NULLIFY(demoPane);
-    NULLIFY(shaderPropView);
-#undef NULLIFY
-
     while (auto item = layout->takeAt(0)) {
-        if (auto widget = item->widget()) delete widget;
+        if (auto widget = item->widget()) {
+            //delete widget;
+            widget->setParent(0);
+        }
+
         if (auto childLayout = item->layout()) this->clearLayout(childLayout);
         delete item;
     }
 
-    delete layout;
+    //delete layout;
 }

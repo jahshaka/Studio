@@ -18,7 +18,7 @@ include(BuildType)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
 
-# set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -34,6 +34,8 @@ set(SRCS
     src/dialogs/aboutdialog.cpp 
     src/dialogs/preferences/worldsettings.cpp 
     src/dialogs/loadmeshdialog.cpp 
+	src/widgets/colorchooser.cpp 
+	src/widgets/colorcircle.cpp 
     src/widgets/animationwidget.cpp 
     src/widgets/keyframelabelwidget.cpp 
     src/widgets/keyframewidget.cpp 
@@ -46,10 +48,10 @@ set(SRCS
     src/editor/editorcameracontroller.cpp 
     src/dialogs/infodialog.cpp 
     src/globals.cpp 
-    src/dialogs/renamelayerdialog.cpp 
     src/widgets/sceneviewwidget.cpp 
-    src/widgets/materialsets.cpp 
-    src/widgets/modelpresets.cpp 
+    src/widgets/assetfavorites.cpp 
+    src/widgets/assetmodelpanel.cpp 
+    src/widgets/assetmaterialpanel.cpp 
     src/widgets/accordianbladewidget.cpp 
     src/widgets/transformeditor.cpp 
     src/widgets/scenehierarchywidget.cpp 
@@ -64,6 +66,7 @@ set(SRCS
     src/widgets/propertywidgets/lightpropertywidget.cpp 
     src/widgets/propertywidgets/materialpropertywidget.cpp 
     src/widgets/propertywidgets/worldpropertywidget.cpp 
+    src/widgets/propertywidgets/physicspropertywidget.cpp 
     src/io/scenewriter.cpp 
     src/core/thumbnailmanager.cpp 
     src/widgets/propertywidgets/fogpropertywidget.cpp 
@@ -126,16 +129,18 @@ set(SRCS
     src/constants.cpp
 	src/misc/updatechecker.cpp
 	src/dialogs/softwareupdatedialog.cpp
-    src/io/assethelper.cpp
+    src/core/assethelper.cpp
+    src/core/scenenodehelper.cpp
     src/misc/upgrader.cpp
     src/misc/QtAwesome.cpp
     src/misc/QtAwesomeAnim.cpp
     src/dialogs/toast.cpp
+	src/helpers/tooltip.cpp
+	src/subclass/switch.cpp
 )
 
 set(HEADERS
     src/mainwindow.h 
-    src/dialogs/renamelayerdialog.h 
     src/widgets/colorvaluewidget.h 
     src/widgets/colorpickerwidget.h 
     src/helpers/settingshelper.h 
@@ -145,6 +150,8 @@ set(HEADERS
     src/helpers/collisionhelper.h 
     src/dialogs/infodialog.h 
     src/dialogs/loadmeshdialog.h 
+	src/widgets/colorchooser.h 
+	src/widgets/colorcircle.h 
     src/widgets/animationwidget.h 
     src/widgets/keyframelabelwidget.h 
     src/widgets/keyframewidget.h 
@@ -161,8 +168,10 @@ set(HEADERS
     src/editor/editorcameracontroller.h 
     src/globals.h 
     src/widgets/sceneviewwidget.h 
-    src/widgets/materialsets.h 
-    src/widgets/modelpresets.h 
+    src/widgets/assetfavorites.h 
+    src/widgets/assetpanel.h 
+    src/widgets/assetmodelpanel.h 
+    src/widgets/assetmaterialpanel.h 
     src/widgets/accordianbladewidget.h 
     src/widgets/transformeditor.h 
     src/widgets/scenehierarchywidget.h 
@@ -174,6 +183,7 @@ set(HEADERS
     src/widgets/propertywidgets/materialpropertywidget.h 
     src/widgets/scenenodepropertieswidget.h 
     src/widgets/propertywidgets/worldpropertywidget.h 
+    src/widgets/propertywidgets/physicspropertywidget.h 
     src/io/scenewriter.h 
     src/io/scenereader.h 
     src/widgets/propertywidgets/scenepropertywidget.h 
@@ -251,16 +261,19 @@ set(HEADERS
     src/misc/updatechecker.h
     src/dialogs/softwareupdatedialog.h
     src/editor/animationpath.h
-    src/io/assethelper.h
+    src/core/assethelper.h
+    src/core/scenenodehelper.h
     src/misc/upgrader.h
     src/misc/QtAwesome.h
-    src/misc/QtAwesomeAnim.h    
+    src/misc/QtAwesomeAnim.h 
     src/dialogs/toast.h
+	src/helpers/tooltip.h
+	src/subclass/switch.h
+
 )
 
 # Todo - trim these down to nothing eventually
 set(FORMS
-    src/dialogs/renamelayerdialog.ui 
     src/widgets/colorvaluewidget.ui 
     src/widgets/colorpickerwidget.ui 
     src/dialogs/preferencesdialog.ui 
@@ -270,14 +283,12 @@ set(FORMS
     src/dialogs/loadmeshdialog.ui 
     src/widgets/animationwidget.ui 
     src/widgets/maintimelinewidget.ui 
-    src/widgets/materialsets.ui 
     src/widgets/accordianbladewidget.ui 
     src/widgets/transformeditor.ui 
     src/widgets/scenehierarchywidget.ui 
     src/widgets/skypresets.ui 
     src/widgets/keyframelabelwidget.ui 
     src/widgets/keyframelabeltreewidget.ui 
-    src/widgets/modelpresets.ui 
     src/mainwindow.ui 
     src/widgets/labelwidget.ui 
     src/widgets/checkboxwidget.ui 
@@ -306,9 +317,11 @@ set(FORMS
 set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
+include(IncludeMiner)
 
-qt5_wrap_cpp(HEADERS_moc ${HEADERS})
-qt5_wrap_ui(UI_moc ${FORMS})
+# these macros are deprecated
+#qt5_wrap_cpp(HEADERS_moc ${HEADERS})
+#qt5_wrap_ui(UI_moc ${FORMS})
 
 # Todo - trim these down to nothing eventually
 qt5_add_resources(QRCS
@@ -326,6 +339,8 @@ if(MSVC)
     # Disable ZERO_CHECK if need be
     # set(CMAKE_SUPPRESS_REGENERATION true)
 endif()
+
+option (BUILD_PLAYER_ONLY "Build an adhoc version of Jahshaka with only the player" OFF)
 
 if(WIN32 AND CMAKE_BUILD_TYPE STREQUAL Release)
     set(CMAKE_WIN32_EXECUTABLE ON)
@@ -359,6 +374,7 @@ add_definitions("-DGIT_COMMIT_DATE=\"${GIT_COMMIT_DATE}\"")
 # Also note MSVC build path is different from GNU in that it containts the build type
 set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+#set_target_properties(cuda_gpu_list PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -374,14 +390,20 @@ set_source_files_properties(${BUNDLE_ICON} PROPERTIES
 # https://stackoverflow.com/a/37211780/996468
 source_group(moc FILES ${HEADERS_moc} ${QRCS})
 add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp.rc ${BUNDLE_ICON})
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Jahshaka)
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 							src
 							irisgl/include
 							irisgl/src
 							irisgl/src/assimp/include
                             irisgl/src/libovr/Include
+                            irisgl/src/bullet3/src/
                             thirdparty/breakpad/breakpad/src)
    
+if (BUILD_PLAYER_ONLY)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DBUILD_PLAYER_ONLY=1)
+endif(BUILD_PLAYER_ONLY)
+
 if(USE_BREAKPAD)
     set(LIBS ${LIBS} breakpad)
 endif(USE_BREAKPAD)

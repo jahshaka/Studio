@@ -1,3 +1,14 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016  GPLv3 Jahshaka LLC <coders@jahshaka.com>
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the GPLv3 License
+
+For more information see the LICENSE file
+*************************************************************************/
+
 #include "gizmo.h"
 
 #include "irisgl/src/irisgl.h"
@@ -19,8 +30,14 @@ Gizmo::Gizmo()
 void Gizmo::updateSize(iris::CameraNodePtr camera)
 { 
 	if (!!selectedNode) {
-		float distToCam = (selectedNode->getGlobalPosition() - camera->getGlobalPosition()).length();
-		gizmoScale = distToCam / (qTan(camera->angle / 2.0f));
+		if (camera->getProjection() == iris::CameraProjection::Perspective) {
+			float distToCam = (selectedNode->getGlobalPosition() - camera->getGlobalPosition()).length();
+			gizmoScale = distToCam / (qTan(camera->angle / 2.0f));
+		}
+		else {
+			//camera->orthoSize
+			gizmoScale = camera->orthoSize * 5.0;
+		}
 	}
 }
 

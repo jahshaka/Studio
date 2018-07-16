@@ -53,8 +53,8 @@ public:
         gl->glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
         gl->glEnableVertexAttribArray(0);
         gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), nullptr);
-        gl->glEnableVertexAttribArray(1);
-        gl->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE,
+        gl->glEnableVertexAttribArray(2);
+        gl->glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE,
                                   5 * sizeof(GLfloat),
                                   (GLvoid*) (3 * sizeof(GLfloat)));
         gl->glBindVertexArray(0);
@@ -63,7 +63,8 @@ public:
 		depthState = DepthState(true, false);
     }
 
-    void updateModelViewMatrix(QOpenGLShaderProgram *shader,
+    void updateModelViewMatrix(GraphicsDevicePtr device,
+							   ShaderPtr shader,
                                QVector3D pos,
                                float rot,
                                float scale,
@@ -88,7 +89,8 @@ public:
         modelMatrix.scale(scale, scale, scale);
 
         QMatrix4x4 modelViewMatrix = viewMatrix * modelMatrix;
-        shader->setUniformValue("modelViewMatrix", modelViewMatrix);
+		//shader->setUniformValue("modelViewMatrix", modelViewMatrix);
+		device->setShaderUniform("modelViewMatrix", modelViewMatrix);
     }
 
     void setIcon(QSharedPointer<iris::Texture2D> icon) {
@@ -96,32 +98,29 @@ public:
     }
 
     void render(GraphicsDevicePtr device,
-				QOpenGLShaderProgram *shader,
+				ShaderPtr shader,
                 iris::RenderData* renderData,
                 std::vector<Particle*>& particles)
     {
-        shader->bind();
+		device->setShader(shader, true);
 
-        shader->setUniformValue("projectionMatrix", renderData->projMatrix);
+		device->setShaderUniform("projectionMatrix", renderData->projMatrix);
         QMatrix4x4 viewMatrix = renderData->viewMatrix;
 
         gl->glBindVertexArray(quadVAO);
-        //gl->glEnable(GL_BLEND);
 		
 
         if (useAdditive) {
-            //gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-            device->setBlendState(BlendState(GL_SRC_ALPHA, GL_ONE));
+            device->setBlendState(BlendState(GL_SRC_ALPHA, GL_ONE), true);
         } else {
-            //gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-			device->setBlendState(BlendState::createAlphaBlend());
+			device->setBlendState(BlendState::createAlphaBlend(), true);
         }
 
-        //gl->glDepthMask(GL_FALSE);
-		device->setDepthState(depthState);
+		device->setDepthState(depthState, true);
 
         for (auto particle : particles) {
             updateModelViewMatrix(
+						device,
                         shader,
                         particle->getPosition(),
                         particle->getRotation(),
@@ -136,11 +135,8 @@ public:
             gl->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         }
 
-        //gl->glDepthMask(GL_TRUE);
-        //gl->glDisable(GL_BLEND);
         gl->glBindVertexArray(0);
 
-        shader->release();
     }
 };
 

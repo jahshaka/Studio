@@ -14,12 +14,20 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QMap>
+#include <QHash>
 #include <QIcon>
 #include <QEvent>
-#include "../irisgl/src/irisglfwd.h"
+#include <QLineEdit>
+#include <QStyledItemDelegate>
+
+#include <qcombobox.h>
+#include "irisgl/src/irisglfwd.h"
+#include "irisgl/src/scenegraph/scenenode.h"
+
+#include "core/project.h"
 
 namespace Ui {
-class SceneHierarchyWidget;
+    class SceneHierarchyWidget;
 }
 
 namespace iris
@@ -30,6 +38,29 @@ namespace iris
 
 class QTreeWidgetItem;
 class MainWindow;
+
+class TreeItemDelegate : public QStyledItemDelegate
+{
+public:
+    TreeItemDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
+    void setModelData(QWidget *editor, QAbstractItemModel *model,
+        const QModelIndex &index) const
+    {
+        QLineEdit *lineEdit = qobject_cast<QLineEdit *>(editor);
+        if (!lineEdit->isModified()) {
+            return;
+        }
+        QString text = lineEdit->text();
+        text = text.trimmed();
+        if (text.isEmpty()) {
+            // If text is empty, do nothing - preserve the old value.
+            return;
+        }
+        else {
+            QStyledItemDelegate::setModelData(editor, model, index);
+        }
+    }
+};
 
 class SceneHierarchyWidget : public QWidget
 {
@@ -65,6 +96,9 @@ public:
      */
     void removeChild(iris::SceneNodePtr childNode);
 
+    void OnLstItemsCommitData(QWidget *listItem);
+    QComboBox *box;
+
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
 
@@ -72,13 +106,17 @@ protected slots:
     void treeItemSelected(QTreeWidgetItem *item, int column);
     void sceneTreeCustomContextMenu(const QPoint &);
 
-    void renameNode();
+    void constraintsPicked(int index, iris::PhysicsConstraintType type);
+
     void deleteNode();
 	void duplicateNode();
 	void focusOnNode();
-	void exportNode(const iris::SceneNodePtr &node);
+	void exportNode(const iris::SceneNodePtr &node, ModelTypes modelType);
 	void createMaterial();
 	void exportParticleSystem(const iris::SceneNodePtr &node);
+
+	void attachAllChildren();
+	void detachFromParent();
 
 private:
 	void showHideNode(QTreeWidgetItem* item, bool show);
@@ -95,6 +133,20 @@ private:
 
 	void hideItemAndChildren(QTreeWidgetItem* item);
 	void showItemAndChildren(QTreeWidgetItem* item);
+	void lockItemAndChildren(QTreeWidgetItem* item);
+	void releaseItemAndChildren(QTreeWidgetItem* item);
+
+	// attachment
+
+	// sets the `attached` property of all children nodes to true
+	// updates the ui accordingly
+	void attachAllChildren(iris::SceneNodePtr node);
+	void _attachAllChildren(iris::SceneNodePtr node);
+
+	// detach a node from its parent and update the treenode ui
+	void detachFromParent(iris::SceneNodePtr node);
+
+	void refreshAttachmentColors(iris::SceneNodePtr node);
 
 private:
     Ui::SceneHierarchyWidget *ui;
@@ -104,6 +156,8 @@ private:
 
 	QIcon *visibleIcon;
 	QIcon *hiddenIcon;
+	QIcon *pickableIcon;
+	QIcon *disabledIcon;
 
 signals:
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);

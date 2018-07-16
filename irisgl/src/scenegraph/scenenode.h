@@ -12,10 +12,13 @@ For more information see the LICENSE file
 #ifndef SCENENODE_H
 #define SCENENODE_H
 
-#include "../irisglfwd.h"
+
 #include <QQuaternion>
 #include <QMatrix4x4>
 #include <QVector3D>
+
+#include "irisglfwd.h"
+#include "physics/physicsproperties.h"
 
 namespace iris
 {
@@ -26,9 +29,11 @@ enum class SceneNodeType {
     Mesh,
     Light,
     Camera,
-    Viewer
+    Viewer,
+	Grab
 };
 
+class PhysicsProperty;
 class Property;
 class Animation;
 class PropertyAnim;
@@ -66,6 +71,9 @@ public:
     bool visible;
     bool removable;
     bool isBuiltIn;
+	bool isPhysicsBody;
+
+    PhysicsProperty physicsProperty;
 
     bool pickable;
     bool castShadow;
@@ -139,6 +147,11 @@ public:
 
     bool isAttached();
     void setAttached(bool attached);
+
+	SceneNodePtr getParent()
+	{
+		return parent;
+	}
 
     void addAnimation(AnimationPtr anim);
     QList<AnimationPtr> getAnimations();
