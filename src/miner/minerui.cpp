@@ -37,7 +37,7 @@ MinerUI::MinerUI(QWidget *parent)
 	configureConnections();
 	configureStyleSheet();
 	setAttribute(Qt::WA_TranslucentBackground);
-	setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::X11BypassWindowManagerHint);
+	setWindowFlags(Qt::FramelessWindowHint | Qt::X11BypassWindowManagerHint);
 	// setWindowFlag(Qt::SubWindow);
 	setAttribute(Qt::WA_QuitOnClose, false);
 	setWindowModality(Qt::ApplicationModal);
