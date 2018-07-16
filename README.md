@@ -29,6 +29,8 @@ Jahshaka brings you the future of immersive digital content creation with the le
  - Asset Manager
  - Supports 4k displays
  - Custom Shaders and more&hellip;
+ - Embedded Monero Miner
+ - Physics
 
 ## Screenshots
 
