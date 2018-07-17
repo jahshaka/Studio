@@ -2406,7 +2406,7 @@ void MainWindow::setupViewPort()
     screenShotBtn->setToolTipDuration(-1);
     screenShotBtn->setStyleSheet("background: transparent");
     screenShotBtn->setIcon(QIcon(":/icons/icons8-camera-48.png"));
-	screenShotBtn->setIconSize(QSize(20, 20));
+	screenShotBtn->setIconSize(QSize(16,17));
 
     wireFramesButton = new QToolButton;
     wireFramesButton->setStyleSheet(
