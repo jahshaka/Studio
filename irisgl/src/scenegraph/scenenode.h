@@ -251,6 +251,7 @@ public:
     virtual void updateAnimation(float time);
     void applyDefaultPose();
     void applyAnimationPose(SceneNodePtr node, QMap<QString, QMatrix4x4> skeletonSpaceMatrices);
+	void applyAnimationPose(SceneNodePtr node, SkeletonPtr skeleton);
 
     /*
      * This is the function used to add render items

@@ -5,6 +5,10 @@
 
 namespace iris
 {
+bool Skeleton::hasBone(QString name)
+{
+	return boneMap.contains(name);
+}
 
 BonePtr Skeleton::getBone(QString name)
 {
@@ -77,6 +81,8 @@ void Skeleton::applyAnimation(iris::SkeletalAnimationPtr anim, float time)
 }
 
 // https://github.com/acgessler/open3mod/blob/master/open3mod/SceneAnimator.cs#L338
+// `inverseMeshMatrix` makes the skin transform local to the meshnode that owns the mesh/skeleton
+// the problem with this function is that it doesnt calculate the other bone transforms
 void Skeleton::applyAnimation(QMatrix4x4 inverseMeshMatrix, QMap<QString, QMatrix4x4> skeletonSpaceMatrices)
 {
     for (auto i = 0; i < bones.size(); i++) {

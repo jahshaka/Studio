@@ -109,6 +109,13 @@ Mesh::Mesh(aiMesh* mesh)
         for (unsigned i = 0;i<mesh->mNumBones; i++) {
             auto bone = mesh->mBones[i];
 
+			// get bone name and set skin matrix to identity
+			boneNames.append(QString(bone->mName.C_Str()));
+			QMatrix4x4 matrix;
+			matrix.setToIdentity();
+			skinMatrices.append(matrix);
+
+			// extract weights
             for (unsigned j = 0;j<bone->mNumWeights ; j++) {
                 auto weight = bone->mWeights[j];
                 auto baseIndex = weight.mVertexId * MAX_BONE_INDICES;
@@ -494,6 +501,40 @@ BoundingSphere Mesh::calculateBoundingSphere(const aiMesh *mesh)
     sphere.pos = QVector3D(averagePos.x, averagePos.y, averagePos.x);
     sphere.radius = qSqrt(maxDistSqrd);
     return sphere;
+}
+
+
+void Mesh::applySkeleton(SkeletonPtr skeleton, QMatrix4x4 globalToLocal)
+{
+	for (int i = 0; i < boneNames.size(); i++) {
+		auto bone = skeleton->getBone(boneNames[i]);
+
+		if (!!bone) {
+			bone->skinMatrix = globalToLocal * bone->transformMatrix * bone->inversePoseMatrix;
+		}
+		else {
+			skinMatrices[i].setToIdentity();
+		}
+	}
+}
+
+void Mesh::applySkeleton(SkeletonPtr skeleton)
+{
+	QMatrix4x4 identity;
+	identity.setToIdentity();
+	applySkeleton(skeleton, identity);
+}
+
+void Mesh::setSkinningMatrices(QMap<QString, QMatrix4x4> skeletonSpaceMatrices, QMatrix4x4 globalToLocal)
+{
+	for (int i = 0; i < boneNames.size(); i++) {
+		if (skeletonSpaceMatrices.contains(boneNames[i])) {
+			skinMatrices[i] = globalToLocal * skeletonSpaceMatrices[boneNames[i]];
+		}
+		else {
+			skinMatrices[i].setToIdentity();
+		}
+	}
 }
 
 }
