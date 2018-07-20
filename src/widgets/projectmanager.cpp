@@ -246,6 +246,12 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 		"background-repeat: no-repeat;"
 	);
     ui->pmContainer->setLayout(layout);
+	
+#ifdef BUILD_PLAYER_ONLY
+	// hide these buttons in player mode
+	ui->newProject->hide();
+	ui->browseProjects->hide();
+#endif
 }
 
 ProjectManager::~ProjectManager()

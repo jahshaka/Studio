@@ -2364,6 +2364,9 @@ void MainWindow::setupViewPort()
 	);
 
 	connect(prefs, &QPushButton::pressed, [this]() { showPreferences(); });
+#ifdef BUILD_PLAYER_ONLY
+	prefs->hide();
+#endif
 
 	QWidget *buttons = new QWidget;
 	QHBoxLayout *bl = new QHBoxLayout;
