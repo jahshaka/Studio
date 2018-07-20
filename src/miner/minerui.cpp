@@ -244,6 +244,9 @@ void MinerUI::configureSettings()
 	settingsClose->setObjectName(QStringLiteral("back"));
 
 	connect(settingsClose, SIGNAL(triggered()), close, SLOT(trigger()));
+	connect(settingsClose, &QAction::triggered, [this]() {
+		hide();
+	});
 
 	auto confirm = new QPushButton("Confirm");
 	auto CancelBtn = new QPushButton("Cancel");
@@ -380,9 +383,11 @@ void MinerUI::configureConnections()
 	connect(close, &QAction::triggered, [this]() {
 		hide();
 	});
+	/*
 	connect(settingsClose, &QAction::triggered, [this]() {
 		hide();
 	});
+	*/
 
 	connect(startBtn, &QPushButton::clicked, [this]() {
 		if (!mining) {
