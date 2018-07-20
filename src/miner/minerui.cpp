@@ -111,6 +111,7 @@ void MinerUI::configureUI()
 	settings = new QAction("settings");
 	settings->setText(QChar(fa::cog));
 	settings->setFont(fontIcon.font(15));
+	settings->setToolTip(tr("Click to show settings"));
 	advance = new QAction("advance");
 	advance->setText(QChar(fa::sliders));
 	advance->setFont(fontIcon.font(15));
@@ -118,6 +119,7 @@ void MinerUI::configureUI()
 	close = new QAction("X");
 	close->setText(QChar(fa::times));
 	close->setFont(fontIcon.font(15));
+	close->setToolTip(tr("close button"));
 
 	auto minerLabel = new QLabel("Miner");
 	
@@ -162,6 +164,7 @@ void MinerUI::configureUI()
 	scrollArea->setWidget(cardHolder);
 
 	startBtn = new QPushButton("Start", this);
+	startBtn->setToolTip(tr("Click to start mining"));
 	coinType = new QLabel("JFX: 0.00123");
 	autostart = new QLabel("auto start");
 	autostart->setAlignment(Qt::AlignHCenter);
@@ -258,6 +261,7 @@ void MinerUI::configureSettings()
 
 
 	toolbar->addAction(back);
+	back->setToolTip(tr("Click to show details"));
 	auto empty = new QWidget();
 	empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	toolbar->addWidget(empty);	
@@ -266,6 +270,7 @@ void MinerUI::configureSettings()
 	empty1->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	toolbar->addWidget(empty1);
 	toolbar->addAction(settingsClose);
+	settingsClose->setToolTip(tr("Click to close"));
 
 
 	auto walletLabel = new QLabel("Wallet Id ");
@@ -373,6 +378,9 @@ void MinerUI::configureConnections()
 
 	connect(advance, SIGNAL(triggered(bool)), this, SLOT(switchToAdvanceMode()));
 	connect(close, &QAction::triggered, [this]() {
+		hide();
+	});
+	connect(settingsClose, &QAction::triggered, [this]() {
 		hide();
 	});
 
