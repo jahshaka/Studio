@@ -65,6 +65,7 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 	buttonGroup->addButton(ui->help);
 	buttonGroup->addButton(ui->donate);
 	buttonGroup->addButton(ui->about);
+	buttonGroup->addButton(ui->shortcutss);
 
 	// hide these for now
 	ui->mining_2->hide();
@@ -88,7 +89,8 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 	connect(ui->content_2,  &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(2); });
 	connect(ui->mining_2,   &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(3); });
 	connect(ui->help,       &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(4); });
-	connect(ui->about,      &QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(5); });
+	connect(ui->about,		&QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(5); });
+	connect(ui->shortcutss,	&QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(6); });
 
     setupDirectoryDefaults();
     setupOutline();
@@ -110,6 +112,7 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
 
 	autoUpdate = settings->getValue("automatic_updates", true).toBool();
 	ui->checkUpdates->setChecked(autoUpdate);
+	ui->stackedWidget->setCurrentIndex(0);
 }
 
 void WorldSettings::setupOutline()
