@@ -189,6 +189,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	setupUndoRedo();
 
 	restoreGeometry(settings->getValue("geometry", "").toByteArray());
+	if (geometry().y() <= 35)	setGeometry(geometry().x(), 35, geometry().width(), geometry().height());
+
 	//restoreState(settings->getValue("windowState", "").toByteArray());
 
 	undoStackCount = 0;
