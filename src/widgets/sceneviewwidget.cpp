@@ -978,6 +978,11 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 				}
             }
         }
+        else if (UiManager::sceneMode == SceneMode::PlayMode) {
+            if (settings->getValue("mouse_controls", "jahshaka").toString() == "default") {
+                this->doObjectPicking(e->localPos(), lastSelected);
+            }
+        }
     }
 
     if (camController != nullptr) {
