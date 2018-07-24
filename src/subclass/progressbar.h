@@ -28,6 +28,7 @@ public:
 
 	void clearButtonConnection();
 private:
+	int _width = 360 * logicalDpiX()/100;
 	Mode mode;
 	QLabel *title;
 	QWidget *content;
@@ -43,8 +44,8 @@ private:
 
 	bool animating;
 	bool showingCancelDialog;
-	int confirmationSize = 180;
-	int regularHeight = 100;
+	int confirmationSize = 180 * logicalDpiY() /100;
+	int regularHeight = 100 * logicalDpiY() / 100;
 
 
 	void ConfigureUI();

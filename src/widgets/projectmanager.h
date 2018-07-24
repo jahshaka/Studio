@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
 #include "assimp/postprocess.h"
+#include "subclass/progressbar.h"
 
 class aiScene;
 
@@ -107,6 +108,7 @@ private:
 
     QPointer<QFutureWatcher<QVector<ModelData>>> futureWatcher;
 	QPointer<ProgressDialog> progressDialog;
+	QPointer<ProgressBar> progressBar;
 
     bool isNewProject;
     bool isMainWindowActive;

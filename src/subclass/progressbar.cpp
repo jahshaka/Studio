@@ -15,7 +15,7 @@ ProgressBar::ProgressBar(QWidget *parent)
 {
 	ConfigureUI();
 	configureConnection();
-	show();
+	//show();
 	QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 	connect(window()->windowHandle(), SIGNAL(screenChanged(QScreen*)), this, SLOT(screenChanged()));
 }
@@ -287,15 +287,16 @@ void ProgressBar::setTitle(QString string)
 
 void ProgressBar::screenChanged()
 {
-	qDebug() << devicePixelRatio();
-	qDebug() << QApplication::desktop()->screen()->geometry();
+	/*qDebug() << devicePixelRatio();
+	qDebug() << QApplication::desktop()->screen()->geometry();*/
+	resize(_width * logicalDpiX() / 100, regularHeight * logicalDpiY() / 100);
 }
 
 void ProgressBar::close()
 {
 	hide();
-	proPainter->deleteLater();
-	deleteLater();
+	/*proPainter->deleteLater();
+	deleteLater();*/
 }
 
 ///////////////////////////////////////////////////////////////////////
