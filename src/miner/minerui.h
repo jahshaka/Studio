@@ -67,11 +67,18 @@ class GraphicsCardUI : public QWidget
 {
 	Q_OBJECT
 public:
+	enum class MinerConnection {
+		Connected = 1,
+		Connecting = 2,
+		Notconnected = 3,
+		Inactive = 4
+	};
+
 	GraphicsCardUI(QWidget *parent = Q_NULLPTR) : QWidget(parent) {
 
 		configureCard();
 		configureConnections();
-		setColor((int)Connection::NOTCONNECTED);
+		setColor(MinerConnection::Notconnected);
 		contract();
 		switchBtn->simulateClick();
 
@@ -99,7 +106,7 @@ public:
 		this->armed = armed;
 	}
 
-	void setDotColor(int con) {
+	void setDotColor(MinerConnection con) {
 		setColor(con);
 		dot->setColor(color);
 	}
@@ -151,9 +158,9 @@ public:
 				// if hps is 0 then it must be connecting
 				// set pool color to orange
 				if (data.connected)
-					this->setDotColor((int)Connection::CONNECTED);
+					this->setDotColor(MinerConnection::Connected);
 				else
-					this->setDotColor((int)Connection::CONNECTING);
+					this->setDotColor(MinerConnection::Connecting);
 
 				if (data.hps != 0) {
 					if (this->info->data.size() > 100)
@@ -168,16 +175,16 @@ public:
 				switch (status)
 				{
 				case MinerStatus::Idle:
-					this->setDotColor((int)Connection::INACTIVE);
+					this->setDotColor(MinerConnection::Inactive);
 					break;
 				case MinerStatus::Starting:
-					this->setDotColor((int)Connection::CONNECTING);
+					this->setDotColor(MinerConnection::Connecting);
 					break;
 				case MinerStatus::Mining:
-					this->setDotColor((int)Connection::CONNECTED);
+					this->setDotColor(MinerConnection::Connected);
 					break;
 				case MinerStatus::Stopping:
-					this->setDotColor((int)Connection::NOTCONNECTED);
+					this->setDotColor(MinerConnection::Notconnected);
 					break;
 				}
 			});
@@ -196,6 +203,23 @@ public:
 		process->stopMining();
 	}
 
+	void setColor(MinerConnection status) {
+		switch (status) {
+		case MinerConnection::Connected:
+			color.setRgb(0, 120, 0, 255);
+			break;
+		case MinerConnection::Connecting:
+			color.setRgb(255, 120, 70, 255);
+			break;
+		case MinerConnection::Notconnected:
+			color.setRgb(170, 1, 2, 255);
+			break;
+		case MinerConnection::Inactive:
+			color.setRgb(240, 240, 240, 255);
+			break;
+		}
+
+	}
 
 private:
 	MinerChart * info;
@@ -209,30 +233,7 @@ private:
 	bool armed=false, mining=false;
 	MinerProcess* process;
 
-	enum class Connection {
-		CONNECTED = 1,
-		CONNECTING = 2,
-		NOTCONNECTED = 3,
-		INACTIVE = 4
-	};
-
-	void setColor(int num) {
-		switch (num) {
-		case 1:
-			color.setRgb(0, 120, 0, 255);
-			break;
-		case 2:
-			color.setRgb(255, 120, 70, 255);
-			break;
-		case 3:
-			color.setRgb(170, 1, 2, 255);
-			break;
-		case 4:
-			color.setRgb(240, 240, 240, 255);
-			break;
-		}
-
-	}
+	
 
 	void configureCard() {
 
@@ -273,7 +274,7 @@ private:
 		poolDotLayout->addWidget(pool);
 		poolDotLayout->addWidget(dot);
 		poolDotLayout->setSpacing(2);
-		setDotColor((int)Connection::CONNECTED);
+		setDotColor(MinerConnection::Notconnected);
 
 		speed = new QLabel("Speed: ");
 		speed->setAlignment(Qt::AlignLeft);
@@ -365,6 +366,7 @@ private:
 		//  card->setGraphicsEffect(effect);
 		//additional->setGraphicsEffect(effect);
 		//logo->setGraphicsEffect(effect);
+		setDotColor(MinerConnection::Inactive);
 	}
 
 	void configureConnections() {
