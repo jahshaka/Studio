@@ -84,7 +84,6 @@ class MaterialPreset;
 class AssetWidget;
 // class SceneNodePropertiesWidget;
 
-class AssetFavorites;
 class AssetModelPanel;
 class AssetMaterialPanel;
 
@@ -160,6 +159,7 @@ public:
     void applyMaterialPreset(MaterialPreset preset);
 
     void favoriteItem(QListWidgetItem *item);
+    void refreshThumbnail(QListWidgetItem *item);
 
     /**
      * Returns absolute path of file copied as an asset
@@ -479,7 +479,6 @@ private:
     QAction *actionRotate;
     QAction *actionScale;
 
-    AssetFavorites *assetFavorites;
     AssetModelPanel *assetModelPanel;
     AssetMaterialPanel *assetMaterialPanel;
 

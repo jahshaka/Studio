@@ -123,7 +123,6 @@ For more information see the LICENSE file
 
 #include "../src/widgets/skypresets.h"
 
-#include "widgets/assetfavorites.h"
 #include "widgets/assetmodelpanel.h"
 #include "widgets/assetmaterialpanel.h"
 
@@ -1020,6 +1019,23 @@ void MainWindow::favoriteItem(QListWidgetItem *item)
     else if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Object)) {
         assetModelPanel->addNewItem(item);
         presetsTabWidget->setCurrentIndex(0);
+    }
+}
+
+void MainWindow::refreshThumbnail(QListWidgetItem *item)
+{
+    if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Object)) {
+
+        QString itemGuid = item->data(MODEL_GUID_ROLE).toString();
+        QString meshGuid = db->fetchObjectMesh(itemGuid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
+
+        auto assetName = db->fetchAsset(meshGuid).name;
+
+        ThumbnailGenerator::getSingleton()->requestThumbnail(
+            ThumbnailRequestType::ImportedMesh,
+            QDir(Globals::project->getProjectFolder()).filePath(assetName),
+            item->data(MODEL_GUID_ROLE).toString()
+        );
     }
 }
 
@@ -2198,10 +2214,6 @@ void MainWindow::setupDockWidgets()
     SkyPresets *skyPresets = new SkyPresets;
     skyPresets->setMainWindow(this);
 
-    assetFavorites = new AssetFavorites;
-    assetFavorites->setMainWindow(this);
-    assetFavorites->setHandle(db);
-
     assetModelPanel = new AssetModelPanel;
     assetModelPanel->setMainWindow(this);
     assetModelPanel->setDatabaseHandle(db);
@@ -2216,7 +2228,6 @@ void MainWindow::setupDockWidgets()
     presetsTabWidget->addTab(assetModelPanel, "Models");
     presetsTabWidget->addTab(assetMaterialPanel, "Materials");
     presetsTabWidget->addTab(skyPresets, "Skyboxes");
-    presetsTabWidget->addTab(assetFavorites, "Favorites");
     presetDockContents->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
 
     QGridLayout *presetsLayout = new QGridLayout(presetDockContents);
@@ -2590,6 +2601,7 @@ void MainWindow::setupViewPort()
     sceneView->setFocusPolicy(Qt::ClickFocus);
     sceneView->setFocus();
     sceneView->setMainWindow(this);
+    sceneView->setDatabase(db);
     Globals::sceneViewWidget = sceneView;
     UiManager::setSceneViewWidget(sceneView);
 

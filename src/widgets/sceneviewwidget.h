@@ -127,6 +127,11 @@ public:
         mainWindow = window;
     }
 
+    Database *database;
+    void setDatabase(Database *window) {
+        database = database;
+    }
+
     btRigidBody *activeRigidBody;
 
     //testing

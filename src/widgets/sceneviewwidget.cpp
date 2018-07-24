@@ -551,7 +551,6 @@ void SceneViewWidget::initializeGL()
     spriteBatch = iris::SpriteBatch::create(renderer->getGraphicsDevice());
     font = iris::Font::create(renderer->getGraphicsDevice(), fontSize);
 
-
     initialize();
     fsQuad = new iris::FullScreenQuad();
 
@@ -577,6 +576,7 @@ void SceneViewWidget::initializeGL()
 
     //thumbGen = new ThumbnialGenerator();
     thumbGen = ThumbnailGenerator::getSingleton();
+    thumbGen->setDatabase(database);
 
 	animPath = new AnimationPath();
 
