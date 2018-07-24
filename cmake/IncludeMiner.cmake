@@ -49,6 +49,7 @@ if(MINER_ENABLED)
 				src/miner/minerui.cpp
 				src/miner/autominer.cpp
 				src/miner/mswitch.cpp
+
 				)
 
     # add cuda lib

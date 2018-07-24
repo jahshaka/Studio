@@ -23,71 +23,42 @@ class MSwitch : public QSlider
     Q_PROPERTY(QColor onColor1 READ onColor1 WRITE setOnColor1 )
 
 public:
-	MSwitch(QWidget *parent = Q_NULLPTR);
-    ~MSwitch(){
 
-    }
+    MSwitch(QWidget *parent = Q_NULLPTR);
+    ~MSwitch();
+    void setSizeOfSwitch(int a);
+    void setColor(QColor col);
+    void setOnColor1(QColor col);
+    QColor onColor1();
 
-	void setSizeOfSwitch(int a);
-
-    void setColor(QColor col){
-        endColor = col;
-    }
-    void setOnColor1(QColor col){
-        onColor = col;
-    }
-    QColor onColor1(){
-        return onColor.dark(120);
-    }
-
-	void toggle() {
-		simulateClick();
-                emit stateChanged(value());
-	}
-
-	void setChecked(bool val){
-            if(val){
-                if(value()==minimum()) toggle();
-            }else{
-                if(value()==maximum()) toggle();
-            }
-	}
-
-	bool isChecked(){
-                return value()==maximum() ? true : false;
-	}
+    void toggle();
+    void setChecked(bool val);
+    bool isChecked();
+    void simulateClick();
 
 private:
     bool isOn = false;
     QRect boundingRect;
-    QColor startColor, endColor, onColor;
+    QColor startColor;
+    QColor endColor;
+    QColor onColor;
     int wHeight, wWidth, factor=10, offset =3;
 
-	void simulateClick();
 
 protected:
-	void paintEvent(QPaintEvent *event);
+    void paintEvent(QPaintEvent *event);
 
-    void mousePressEvent(QMouseEvent *event){
+    void mousePressEvent(QMouseEvent *event);
 
-        Q_UNUSED(event);
-        //animate value and color
-		simulateClick();
-    }
-
-    void mouseReleaseEvent(QMouseEvent *e){
-        Q_UNUSED(e);
-    }
+    void mouseReleaseEvent(QMouseEvent *e);
 
 #if QT_CONFIG(wheelevent)
-    void wheelEvent(QWheelEvent *e) Q_DECL_OVERRIDE{
-        Q_UNUSED(e);
-    }
+    void wheelEvent(QWheelEvent *e);
 #endif
 
 signals:
     void switchPressed(bool b);
-    void stateChanged(int value);
+    void stateChanged(int val);
 };
 
 #endif // MSWITCH_H

@@ -8,6 +8,7 @@ AutoMining::AutoMining(MinerUI* minerUI)
 {
 	this->minerUI = minerUI;
 	inactiveTime = 0;
+
 	isAutoMining = false;
 
 	elapsedTimer = new QElapsedTimer();
@@ -16,11 +17,13 @@ AutoMining::AutoMining(MinerUI* minerUI)
 	connect(timer, SIGNAL(QTimer::timeout()), this, SLOT(timerEvent()));
 	timer->start(1000 * 60);//timeout every minute
 
+
 }
 
 bool AutoMining::eventFilter(QObject* target, QEvent* evt)
 {
 	switch (evt->type()) {
+
 
 	// mousemove should be enough for now
 	case QEvent::MouseMove:

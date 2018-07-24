@@ -206,10 +206,11 @@ void MinerProcess::startMining()
 
 	data.clear();
 
+
 #ifdef QT_DEBUG
 	QObject::connect(process, &QProcess::readyReadStandardOutput, [this]()
 	{
-		qDebug().noquote() << QString(process->readAllStandardOutput());
+		//qDebug().noquote() << QString(process->readAllStandardOutput());
 	});
 	QObject::connect(process, &QProcess::readyReadStandardError, [this]()
 	{
