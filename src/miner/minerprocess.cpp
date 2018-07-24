@@ -206,11 +206,8 @@ void MinerProcess::startMining()
 
 	data.clear();
 
-<<<<<<< HEAD
+
 #ifdef QT_DEBUG
-=======
-	//todo: stop outputting from miner
->>>>>>> Fixed crashing by throttling api requests and doing retries
 	QObject::connect(process, &QProcess::readyReadStandardOutput, [this]()
 	{
 		//qDebug().noquote() << QString(process->readAllStandardOutput());

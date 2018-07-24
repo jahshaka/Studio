@@ -48,10 +48,8 @@ if(MINER_ENABLED)
 				src/miner/minerprocess.cpp
 				src/miner/minerui.cpp
 				src/miner/autominer.cpp
-<<<<<<< HEAD
 				src/miner/mswitch.cpp
-=======
->>>>>>> Added class for handling automatic mining
+
 				)
 
     # add cuda lib
