@@ -159,6 +159,7 @@ public:
     void applyMaterialPreset(MaterialPreset preset);
 
     void favoriteItem(QListWidgetItem *item);
+    void refreshThumbnail(const QString &guid);
     void refreshThumbnail(QListWidgetItem *item);
 
     /**

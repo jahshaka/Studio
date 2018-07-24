@@ -1022,10 +1022,21 @@ void MainWindow::favoriteItem(QListWidgetItem *item)
     }
 }
 
+void MainWindow::refreshThumbnail(const QString &guid)
+{
+    QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
+    auto assetName = db->fetchAsset(meshGuid).name;
+
+    ThumbnailGenerator::getSingleton()->requestThumbnail(
+        ThumbnailRequestType::ImportedMesh,
+        QDir(Globals::project->getProjectFolder()).filePath(assetName),
+        guid
+    );
+}
+
 void MainWindow::refreshThumbnail(QListWidgetItem *item)
 {
     if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Object)) {
-
         QString itemGuid = item->data(MODEL_GUID_ROLE).toString();
         QString meshGuid = db->fetchObjectMesh(itemGuid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
 
@@ -1926,6 +1937,11 @@ void MainWindow::createMaterial()
 void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType)
 {
     if (!node) return;
+
+    // Dispatch a thumbnail request regardless of what happens,
+    // This should finish in the time it takes to spawn a dialog and save
+    // Since the object is already loaded in memory
+    refreshThumbnail(node->getGUID());
 
     QDateTime currentDateTime = QDateTime::currentDateTimeUtc();
 
