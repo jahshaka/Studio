@@ -271,6 +271,9 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 		return;
 	}
 
+    // If we're opening a new scene, close the old one first
+    if (UiManager::isSceneOpen) mainWindow->closeProject();
+
 	auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
 	auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
 
