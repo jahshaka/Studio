@@ -1301,7 +1301,7 @@ QVector<AssetRecord> Database::fetchFavorites()
         "SELECT F.asset_guid, F.name, F.date_created, A.type, F.thumbnail FROM favorites F "
         "LEFT JOIN assets A ON A.guid = F.asset_guid"
     );
-    executeAndCheckQuery(query, "fetchThumbnails");
+    executeAndCheckQuery(query, "fetchFavorites");
 
     QVector<AssetRecord> tileData;
     while (query.next()) {

@@ -262,7 +262,12 @@ ProjectManager::~ProjectManager()
 void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
 {
 	if (Globals::project->getProjectGuid() == widget->tileData.guid) {
-		mainWindow->switchSpace(WindowSpaces::EDITOR);
+        #ifdef BUILD_PLAYER_ONLY
+		    mainWindow->switchSpace(WindowSpaces::PLAYER);
+        #else
+		    mainWindow->switchSpace(WindowSpaces::EDITOR);
+        #endif
+
 		return;
 	}
 

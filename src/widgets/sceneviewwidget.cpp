@@ -895,12 +895,7 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     QPointF dir = localPos - prevMousePos;
 
     if (e->buttons() == Qt::LeftButton && !!selectedNode) {
-        if (selectedNode->isPhysicsBody && gizmo->isDragging()) {
-            QVector3D rayPos, rayDir;
-            this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
-            gizmo->drag(rayPos, rayDir);
-        }
-        else if (selectedNode->isPhysicsBody) {
+        if (selectedNode->isPhysicsBody) {
             if (activeRigidBody && m_pickedConstraint) {
                 btGeneric6DofConstraint* pickCon = static_cast<btGeneric6DofConstraint*>(m_pickedConstraint);
                 if (pickCon)

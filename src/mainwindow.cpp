@@ -157,15 +157,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 #ifdef QT_DEBUG
     iris::Logger::getSingleton()->init(IrisUtils::getAbsoluteAssetPath("jahshaka.log"));
-	
-#ifdef BUILD_PLAYER_ONLY
-	setWindowTitle(QString("Jahshaka Player %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
+    #ifdef BUILD_PLAYER_ONLY
+	    setWindowTitle(QString("Jahshaka Player %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
+    #else
+        setWindowTitle(QString("Jahshaka Studio %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
+    #endif
 #else
-    setWindowTitle(QString("Jahshaka Studio %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
-#endif
-
-#else
-	setWindowTitle(QString("Jahshaka %1").arg(Constants::CONTENT_VERSION));
+    #ifdef BUILD_PLAYER_ONLY
+	    setWindowTitle(QString("Jahshaka Player %1").arg(Constants::CONTENT_VERSION));
+    #else
+	    setWindowTitle(QString("Jahshaka Studio %1").arg(Constants::CONTENT_VERSION));
+    #endif
     iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/jahshaka.log");
 #endif
 
