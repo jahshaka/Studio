@@ -822,6 +822,15 @@ bool Database::updateAssetAsset(const QString &guid, const QByteArray &asset)
 	return executeAndCheckQuery(query, "UpdateAssetAsset");
 }
 
+bool Database::updateSceneThumbnail(const QString & guid, const QByteArray &thumbnail)
+{
+    QSqlQuery query;
+    query.prepare("UPDATE projects SET thumbnail = ? WHERE guid = ?");
+    query.addBindValue(thumbnail);
+    query.addBindValue(Globals::project->getProjectGuid());
+    return executeAndCheckQuery(query, "updateSceneThumbnail");
+}
+
 bool Database::updateAssetMetadata(const QString &guid, const QString &name, const QByteArray &tags)
 {
     QSqlQuery query;

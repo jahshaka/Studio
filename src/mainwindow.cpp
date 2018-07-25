@@ -641,6 +641,7 @@ void MainWindow::switchSpace(WindowSpaces space)
 			if (UiManager::isSceneOpen) {
 				//if (settings->getValue("auto_save", true).toBool()) saveScene();
 				//saveScene();
+                updateCurrentSceneThumbnail();
 				pmContainer->populateDesktop(true);
 			}
 			
@@ -2076,6 +2077,18 @@ void MainWindow::dropEvent(QDropEvent* event)
 void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
 {
     event->accept();
+}
+
+void MainWindow::updateCurrentSceneThumbnail()
+{
+    auto img = sceneView->takeScreenshot(Constants::TILE_SIZE * 2);
+    QByteArray thumb;
+    QBuffer buffer(&thumb);
+    buffer.open(QIODevice::WriteOnly);
+    img.save(&buffer, "PNG");
+
+    db->updateSceneThumbnail(Globals::project->getProjectGuid(), thumb);
+    pmContainer->updateTile(Globals::project->getProjectGuid(), thumb);
 }
 
 /*
