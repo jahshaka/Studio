@@ -806,9 +806,17 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 		connect(action, SIGNAL(triggered()), this, SLOT(renameViewItem()));
 		menu.addAction(action);
 
-        action = new QAction(QIcon(), "Favorite Asset", this);
-        connect(action, SIGNAL(triggered()), this, SLOT(favoriteItem()));
-        menu.addAction(action);
+        if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Object) ||
+            item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Material))
+        {
+            action = new QAction(QIcon(), "Favorite Asset", this);
+            connect(action, SIGNAL(triggered()), this, SLOT(favoriteItem()));
+            menu.addAction(action);
+
+            action = new QAction(QIcon(), "Refresh Thumbnail", this);
+            connect(action, SIGNAL(triggered()), this, SLOT(refreshThumbnail()));
+            menu.addAction(action);
+        }
 
         if (ui->assetView->selectedItems().count() > 1) {
             action = new QAction(QIcon(), "Export Asset Pack", this);
@@ -952,6 +960,11 @@ void AssetWidget::renameViewItem()
 void AssetWidget::favoriteItem()
 {
     mainWindow->favoriteItem(assetItem.wItem);
+}
+
+void AssetWidget::refreshThumbnail()
+{
+    mainWindow->refreshThumbnail(assetItem.wItem);
 }
 
 void AssetWidget::editFileExternally()

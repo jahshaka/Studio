@@ -382,14 +382,26 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # osx icon
 # https://stackoverflow.com/questions/22745728/cmake-set-icon-for-a-mac-osx-app
-set(MACOSX_BUNDLE_ICON_FILE icon.icns)
-set(BUNDLE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/app/icons/icon.icns)
-set_source_files_properties(${BUNDLE_ICON} PROPERTIES
-       MACOSX_PACKAGE_LOCATION "Resources")
+
+if (BUILD_PLAYER_ONLY)
+    set(MACOSX_BUNDLE_ICON_FILE iconp.icns)
+    set(BUNDLE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/app/icons/iconp.icns)
+else()
+    set(MACOSX_BUNDLE_ICON_FILE icon.icns)
+    set(BUNDLE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/app/icons/icon.icns)
+endif(BUILD_PLAYER_ONLY)
+
+set_source_files_properties(${BUNDLE_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 
 # https://stackoverflow.com/a/37211780/996468
 source_group(moc FILES ${HEADERS_moc} ${QRCS})
-add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp.rc ${BUNDLE_ICON})
+
+if (BUILD_PLAYER_ONLY)
+    add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp_player.rc ${BUNDLE_ICON})
+else()
+    add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp.rc ${BUNDLE_ICON})
+endif(BUILD_PLAYER_ONLY)
+
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Jahshaka)
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 							src

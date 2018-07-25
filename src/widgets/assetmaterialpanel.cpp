@@ -59,6 +59,7 @@ AssetMaterialPanel::AssetMaterialPanel(QWidget *parent) : AssetPanel(parent)
     );
 
     addDefaultItems();
+    addFavorites();
 }
 
 AssetMaterialPanel::~AssetMaterialPanel()
@@ -97,7 +98,7 @@ void AssetMaterialPanel::addNewItem(QListWidgetItem *itemInc)
     auto asset = handle->fetchAsset(itemInc->data(MODEL_GUID_ROLE).toString());
 
     auto item = new QListWidgetItem;
-    item->setData(Qt::DisplayRole, asset.name);
+    item->setData(Qt::DisplayRole, QFileInfo(asset.name).baseName());
     item->setData(Qt::UserRole, asset.name);
 
     item->setData(MODEL_TYPE_ROLE, itemInc->data(MODEL_TYPE_ROLE).toInt());
@@ -126,7 +127,8 @@ void AssetMaterialPanel::addFavorites()
     for (const auto &asset : favoriteAssets) {
         if (asset.type == static_cast<int>(ModelTypes::Material)) {
             auto item = new QListWidgetItem;
-            item->setData(Qt::DisplayRole, asset.name);
+
+            item->setData(Qt::DisplayRole, QFileInfo(asset.name).baseName());
             item->setData(Qt::UserRole, asset.name);
 
             item->setData(MODEL_TYPE_ROLE, asset.type);

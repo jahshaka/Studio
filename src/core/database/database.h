@@ -99,6 +99,7 @@ public:
     bool updateProject(const QByteArray &sceneBlob, const QByteArray &thumbnail);
     bool updateAssetThumbnail(const QString &guid, const QByteArray &thumbnail);
     bool updateAssetAsset(const QString &guid, const QByteArray &asset);
+    bool updateSceneThumbnail(const QString &guid, const QByteArray &asset);
     bool updateAssetMetadata(const QString &guid, const QString &name, const QByteArray &tags);
     bool updateAssetProperties(const QString &guid, const QByteArray &asset);
 

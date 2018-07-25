@@ -84,7 +84,6 @@ class MaterialPreset;
 class AssetWidget;
 // class SceneNodePropertiesWidget;
 
-class AssetFavorites;
 class AssetModelPanel;
 class AssetMaterialPanel;
 
@@ -160,6 +159,8 @@ public:
     void applyMaterialPreset(MaterialPreset preset);
 
     void favoriteItem(QListWidgetItem *item);
+    void refreshThumbnail(const QString &guid);
+    void refreshThumbnail(QListWidgetItem *item);
 
     /**
      * Returns absolute path of file copied as an asset
@@ -263,6 +264,8 @@ private:
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
     void dragLeaveEvent(QDragLeaveEvent* event) override;
+
+    void updateCurrentSceneThumbnail();
 
     // determines if file extension is that of a model (obj, fbx, 3ds)
     // bool isModelExtension(QString extension);
@@ -479,7 +482,6 @@ private:
     QAction *actionRotate;
     QAction *actionScale;
 
-    AssetFavorites *assetFavorites;
     AssetModelPanel *assetModelPanel;
     AssetMaterialPanel *assetMaterialPanel;
 
