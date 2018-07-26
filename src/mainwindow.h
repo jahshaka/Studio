@@ -28,7 +28,8 @@ For more information see the LICENSE file
 #include "irisglfwd.h"
 #include "misc/QtAwesome.h"
 #include "misc/QtAwesomeAnim.h"
-#include "miner/minerui.h"
+//#include "miner/minerui.h"
+#include "miner_standalone/minerui.h"
 #include "core/project.h"
 
 namespace Ui {

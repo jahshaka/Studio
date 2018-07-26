@@ -24,6 +24,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/miner_standalone)
 
 set(SRCS
     src/main.cpp
@@ -399,7 +400,9 @@ source_group(moc FILES ${HEADERS_moc} ${QRCS})
 if (BUILD_PLAYER_ONLY)
     add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp_player.rc ${BUNDLE_ICON})
 else()
-    add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp.rc ${BUNDLE_ICON})
+
+        add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp.rc ${BUNDLE_ICON})
+
 endif(BUILD_PLAYER_ONLY)
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Jahshaka)
@@ -410,7 +413,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 							irisgl/src/assimp/include
                             irisgl/src/libovr/Include
                             irisgl/src/bullet3/src/
-                            thirdparty/breakpad/breakpad/src)
+                            thirdparty/breakpad/breakpad/src
+							miner_standalone)
    
 if (BUILD_PLAYER_ONLY)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DBUILD_PLAYER_ONLY=1)
