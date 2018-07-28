@@ -16,7 +16,7 @@ For more information see the LICENSE file
 #include <QVariant>
 #include <QDir>
 #include <QStandardPaths>
-
+#include <QApplication>
 #include "../globals.h"
 
 class SettingsManager
@@ -40,10 +40,21 @@ public:
     SettingsManager(QString fileName = "jahsettings.ini") {
         recentlyOpenedFilesSize = 9;
 #ifdef QT_DEBUG
-        loadSettings(QDir(Globals::appWorkingDir).filePath(fileName));
+
+#ifdef BUILD_AS_LIB 
+		loadSettings(QDir(QApplication::applicationDirPath()).filePath(fileName));
 #else
-        loadSettings(QDir(QStandardPaths::writableLocation(QStandardPaths::DataLocation))
-                     .filePath(fileName));
+		loadSettings(QDir(Globals::appWorkingDir).filePath(fileName));
+#endif
+
+#else
+#ifdef BUILD_AS_LIB 
+		loadSettings(QDir(QStandardPaths::writableLocation(QStandardPaths::DataLocation))
+			.filePath(fileName));
+#else
+		loadSettings(QDir(QStandardPaths::writableLocation(QStandardPaths::DataLocation))
+			.filePath(fileName));
+#endif
 #endif
     }
 

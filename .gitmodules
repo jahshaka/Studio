@@ -10,3 +10,6 @@
 [submodule "thirdparty/xmr-stak"]
 	path = thirdparty/xmr-stak
 	url = https://github.com/jahshaka/xmr-stak.git
+[submodule "thirdparty/miner"]
+	path = thirdparty/miner
+	url = https://github.com/jahshaka/Miner

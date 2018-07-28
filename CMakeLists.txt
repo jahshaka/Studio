@@ -24,7 +24,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/miner_standalone)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/miner)
 
 set(SRCS
     src/main.cpp
@@ -318,7 +318,7 @@ set(FORMS
 set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
-include(IncludeMiner)
+#include(IncludeMiner)
 
 # these macros are deprecated
 #qt5_wrap_cpp(HEADERS_moc ${HEADERS})
@@ -375,6 +375,9 @@ add_definitions("-DGIT_COMMIT_DATE=\"${GIT_COMMIT_DATE}\"")
 # Also note MSVC build path is different from GNU in that it containts the build type
 set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+if (MINER_ENABLED)
+    set_target_properties(JahMiner PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+endif()
 #set_target_properties(cuda_gpu_list PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -414,11 +417,17 @@ target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
                             irisgl/src/libovr/Include
                             irisgl/src/bullet3/src/
                             thirdparty/breakpad/breakpad/src
-							miner_standalone)
+							thirdparty/miner)
    
 if (BUILD_PLAYER_ONLY)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DBUILD_PLAYER_ONLY=1)
 endif(BUILD_PLAYER_ONLY)
+
+if(MINER_ENABLED)
+add_definitions("-DMINER_ENABLED")
+add_definitions("-DBUILD_AS_LIB")
+set(LIBS ${LIBS} JahMiner)
+endif(MINER_ENABLED)
 
 if(USE_BREAKPAD)
     set(LIBS ${LIBS} breakpad)

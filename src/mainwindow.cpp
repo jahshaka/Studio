@@ -215,8 +215,8 @@ void MainWindow::goToDesktop()
 #ifdef MINER_ENABLED
 void MainWindow::configureMiner()
 {
-	miner = new MinerUI;
-	miner->hide();
+	miner = new MinerUI();
+	//miner->hide();
 }
 #endif
 
@@ -2372,6 +2372,7 @@ void MainWindow::setupViewPort()
 	//minerBtn->setStyleSheet("QPushButton{color:orange;}");
 	connect(minerBtn, &QPushButton::pressed, [this]() {
 		miner->show();
+		qDebug() << miner->geometry();
 	});
 #endif
 
