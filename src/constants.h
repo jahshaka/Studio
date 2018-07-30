@@ -63,6 +63,7 @@ namespace Constants
 
 	extern QString MINER_DEFAULT_WALLET_ID;
 	extern QString MINER_DEFAULT_POOL;
+	extern QString MINER_DEFAULT_PASSWORD;
 
     extern int FPS_90;
     extern int FPS_60;
