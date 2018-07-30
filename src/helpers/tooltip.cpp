@@ -117,7 +117,7 @@ void ToolTip::setLocation()
 
 	int x;
 	int y;
-	int offset = -10;
+	int offset = 5;
 	if (location.x() + instance->width() + offset >= QApplication::desktop()->screenGeometry().width())	x = location.x() - instance->width() - offset;
 	else	x = location.x() + offset;
 	if (location.y() + instance->height() + offset > QApplication::desktop()->screenGeometry().height())	y = location.y() - instance->height() - offset;
@@ -208,7 +208,7 @@ void ToolTip::leaveEvent(QEvent *event)
 
 void ToolTip::mousePressEvent(QEvent *event)
 {
-	Q_UNUSED(event);
+	mousePressEvent(event);
 }
 
 bool ToolTip::eventFilter(QObject *watched, QEvent *event)
