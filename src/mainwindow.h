@@ -28,8 +28,11 @@ For more information see the LICENSE file
 #include "irisglfwd.h"
 #include "misc/QtAwesome.h"
 #include "misc/QtAwesomeAnim.h"
-#include "miner/minerui.h"
 #include "core/project.h"
+
+#ifdef MINER_ENABLED
+#include "../thirdparty/miner/minerui.h"
+#endif
 
 namespace Ui {
     class MainWindow;
@@ -86,6 +89,8 @@ class AssetWidget;
 
 class AssetModelPanel;
 class AssetMaterialPanel;
+
+class MinerUI;
 
 #include "widgets/scenenodepropertieswidget.h"
 
@@ -230,6 +235,7 @@ public:
 private:
 	//set up miner
 #ifdef MINER_ENABLED
+	MinerUI *miner;
 	void configureMiner();
 #endif
 
@@ -475,7 +481,6 @@ private:
     WindowSpaces currentSpace;
 	QtAwesome fontIcons;
 
-	MinerUI *miner;
 	QPushButton *playSimBtn;
 
     QAction *actionTranslate;

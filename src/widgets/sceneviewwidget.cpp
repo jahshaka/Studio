@@ -57,6 +57,7 @@ For more information see the LICENSE file
 #include "keyframecurvewidget.h"
 #include "mainwindow.h"
 #include "uimanager.h"
+#include "globals.h"
 
 #include "core/keyboardstate.h"
 #include "core/settingsmanager.h"

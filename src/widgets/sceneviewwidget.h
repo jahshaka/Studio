@@ -64,7 +64,7 @@ class AnimationPath;
 class TranslationGizmo;
 class ViewerCameraController;
 class ViewportGizmo;
-
+class Globals;
 class btRigidBody;
 
 enum class ViewportMode
