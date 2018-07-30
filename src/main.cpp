@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
     splash.finish(&window);
 #endif
 
-#ifndef QT_DEBUG
+#if !defined(QT_DEBUG) && !defined(BUILD_PLAYER_ONLY)
 	UpdateChecker updateChecker;
 	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded,
         [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)
