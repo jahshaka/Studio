@@ -24,7 +24,9 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/miner)
+if(MINER_ENABLED)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/miner)
+endif()
 
 set(SRCS
     src/main.cpp
