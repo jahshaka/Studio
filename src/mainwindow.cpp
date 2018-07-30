@@ -3028,6 +3028,8 @@ void MainWindow::showPreferences()
 
 void MainWindow::exitApp()
 {
+	if (miner && miner->isMining())
+		miner->stopMining();
     QApplication::exit();
 }
 
@@ -3133,6 +3135,9 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
 MainWindow::~MainWindow()
 {
+	if (miner && miner->isMining())
+		miner->stopMining();
+
     this->db->closeDatabase();
     delete ui;
 }

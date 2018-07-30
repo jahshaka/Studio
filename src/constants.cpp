@@ -16,7 +16,7 @@ extern "C"
 #endif
 namespace Contants 
 {
-    QString CONTENT_VERSION   = "0.7.0";
+    QString CONTENT_VERSION   = "0.7.1";
     QString PROJ_EXT          = ".jah";
 	QString META_EXT		  = "meta";
     QStringList PROJECT_DIRS  = { "Textures", "Shaders", "Materials", "Models", "Files" };
