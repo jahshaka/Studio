@@ -117,13 +117,14 @@ int main(int argc, char *argv[])
     auto pixmap = QPixmap(":/images/splashv3.png");
     splash.setPixmap(pixmap.scaled(900, 506, Qt::KeepAspectRatio, Qt::SmoothTransformation));
 #ifdef QT_DEBUG
-#ifdef GIT_COMMIT_HASH != "0000"
-    splash.showMessage(QString("Revision - %1 %2").arg(GIT_COMMIT_HASH).arg(GIT_COMMIT_DATE),
-                       Qt::AlignBottom | Qt::AlignLeft, QColor(255, 255, 255));
+#ifdef GIT_COMMIT_HASH
+    if (GIT_COMMIT_HASH != "0000")
+        splash.showMessage(QString("Revision - %1 %2").arg(GIT_COMMIT_HASH).arg(GIT_COMMIT_DATE),
+                           Qt::AlignBottom | Qt::AlignLeft, QColor(255, 255, 255));
 #endif // GIT_COMMIT_HASH
 #endif // QT_DEBUG
     splash.show();
-#endif
+#endif // BUILD_PLAYER_ONLY
 
     Globals::appWorkingDir = QApplication::applicationDirPath();
     app.processEvents();
@@ -147,7 +148,7 @@ int main(int argc, char *argv[])
     splash.finish(&window);
 #endif
 
-#ifndef QT_DEBUG
+#if !defined(QT_DEBUG) && !defined(BUILD_PLAYER_ONLY)
 	UpdateChecker updateChecker;
 	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded,
         [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)

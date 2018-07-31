@@ -88,12 +88,13 @@ btRigidBody *PhysicsHelper::createPhysicsBody(const iris::SceneNodePtr sceneNode
 
         case static_cast<int>(PhysicsCollisionShape::Sphere) : {
 
-            transform.setOrigin(pos);
             transform.setRotation(quat);
+            transform.setOrigin(pos);
 
             float rad = 1.0;
-            
+
             shape = new btSphereShape(rad);
+            shape->setLocalScaling(iris::PhysicsHelper::btVector3FromQVector3D(meshNode->getLocalScale()));
             shape->setMargin(margin);
             motionState = new btDefaultMotionState(transform);
 
@@ -115,6 +116,7 @@ btRigidBody *PhysicsHelper::createPhysicsBody(const iris::SceneNodePtr sceneNode
             transform.setRotation(quat);
 
             shape = new btStaticPlaneShape(btVector3(0, 1, 0), 0.f);
+            shape->setLocalScaling(iris::PhysicsHelper::btVector3FromQVector3D(meshNode->getLocalScale()));
             shape->setMargin(margin);
             motionState = new btDefaultMotionState(transform);
 
@@ -135,6 +137,7 @@ btRigidBody *PhysicsHelper::createPhysicsBody(const iris::SceneNodePtr sceneNode
             transform.setRotation(quat);
 
             shape = new btBoxShape(btVector3(1, 1, 1));
+            shape->setLocalScaling(iris::PhysicsHelper::btVector3FromQVector3D(meshNode->getLocalScale()));
             shape->setMargin(margin);
             motionState = new btDefaultMotionState(transform);
 
@@ -176,6 +179,8 @@ btRigidBody *PhysicsHelper::createPhysicsBody(const iris::SceneNodePtr sceneNode
             delete hull;
             delete tmpShape;
 
+            shape->setLocalScaling(iris::PhysicsHelper::btVector3FromQVector3D(meshNode->getLocalScale()));
+
             motionState = new btDefaultMotionState(transform);
 
             if (mass != 0.0) shape->calculateLocalInertia(mass, inertia);
@@ -199,6 +204,7 @@ btRigidBody *PhysicsHelper::createPhysicsBody(const iris::SceneNodePtr sceneNode
             auto triMesh = iris::PhysicsHelper::btTriangleMeshShapeFromMesh(meshNode->getMesh());
 
             shape = new btConvexTriangleMeshShape(triMesh, true);
+            shape->setLocalScaling(iris::PhysicsHelper::btVector3FromQVector3D(meshNode->getLocalScale()));
             shape->setMargin(margin);
             motionState = new btDefaultMotionState(transform);
 

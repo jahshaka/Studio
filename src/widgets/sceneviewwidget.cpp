@@ -57,6 +57,7 @@ For more information see the LICENSE file
 #include "keyframecurvewidget.h"
 #include "mainwindow.h"
 #include "uimanager.h"
+#include "globals.h"
 
 #include "core/keyboardstate.h"
 #include "core/settingsmanager.h"
@@ -551,7 +552,6 @@ void SceneViewWidget::initializeGL()
     spriteBatch = iris::SpriteBatch::create(renderer->getGraphicsDevice());
     font = iris::Font::create(renderer->getGraphicsDevice(), fontSize);
 
-
     initialize();
     fsQuad = new iris::FullScreenQuad();
 
@@ -577,6 +577,7 @@ void SceneViewWidget::initializeGL()
 
     //thumbGen = new ThumbnialGenerator();
     thumbGen = ThumbnailGenerator::getSingleton();
+    thumbGen->setDatabase(database);
 
 	animPath = new AnimationPath();
 
@@ -895,12 +896,7 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     QPointF dir = localPos - prevMousePos;
 
     if (e->buttons() == Qt::LeftButton && !!selectedNode) {
-        if (selectedNode->isPhysicsBody && gizmo->isDragging()) {
-            QVector3D rayPos, rayDir;
-            this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
-            gizmo->drag(rayPos, rayDir);
-        }
-        else if (selectedNode->isPhysicsBody) {
+        if (selectedNode->isPhysicsBody) {
             if (activeRigidBody && m_pickedConstraint) {
                 btGeneric6DofConstraint* pickCon = static_cast<btGeneric6DofConstraint*>(m_pickedConstraint);
                 if (pickCon)
@@ -976,6 +972,11 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 				if (settings->getValue("mouse_controls", "jahshaka").toString() == "default") {
 					this->doObjectPicking(e->localPos(), lastSelected);
 				}
+            }
+        }
+        else if (UiManager::sceneMode == SceneMode::PlayMode) {
+            if (settings->getValue("mouse_controls", "jahshaka").toString() == "default") {
+                this->doObjectPicking(e->localPos(), lastSelected);
             }
         }
     }

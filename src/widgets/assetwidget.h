@@ -271,6 +271,7 @@ protected slots:
     void renameTreeItem();
     void renameViewItem();
     void favoriteItem();
+    void refreshThumbnail();
 
 	void editFileExternally();
 	void exportTexture();

@@ -133,7 +133,12 @@ void Scene::update(float dt)
                 float matrix[16];
                 environment->hashBodies.value(node->getGUID())->getMotionState()->getWorldTransform(trans);
                 trans.getOpenGLMatrix(matrix);
-                node->setGlobalTransform(QMatrix4x4(matrix).transposed());
+
+                // Since the physics is detached from the engine rendering, this is important to retain object scale
+                auto mat = QMatrix4x4(matrix).transposed();
+                mat.scale(node->getLocalScale());
+
+                node->setGlobalTransform(mat);
             }
         }
     }
