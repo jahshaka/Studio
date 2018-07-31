@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QMutexLocker>
 #include <QOpenGLFunctions_3_2_Core>
 #include <QtMath>
+#include <QStandardPaths>
 
 #include "irisgl/src/graphics/forwardrenderer.h"
 #include "irisgl/src/graphics/mesh.h"
@@ -28,6 +29,7 @@ For more information see the LICENSE file
 
 #include "constants.h"
 #include "io/assetmanager.h"
+#include "io/scenereader.h"
 
 ThumbnailGenerator* ThumbnailGenerator::instance = nullptr;
 
@@ -150,7 +152,50 @@ void RenderThread::initScene()
 
 void RenderThread::prepareScene(const ThumbnailRequest &request)
 {
-    if (request.type == ThumbnailRequestType::Mesh)
+    auto guid = request.id;
+
+    if (request.type == ThumbnailRequestType::ImportedMesh) {
+        QJsonDocument document = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
+        QJsonObject objectHierarchy = document.object();
+
+        SceneReader *reader = new SceneReader;
+        reader->setBaseDirectory(IrisUtils::join(
+            Globals::project->getProjectFolder())
+        );
+
+        sceneNode = reader->readSceneNode(objectHierarchy);
+        delete reader;
+
+        if (!sceneNode) return;
+
+        materialNode->hide();
+        scene->rootNode->addChild(sceneNode);
+
+        // fit object in view
+        QList<iris::BoundingSphere> spheres;
+        getBoundingSpheres(sceneNode, spheres);
+        iris::BoundingSphere bound;
+
+        //merge bounding spheres
+        if (spheres.count() == 0) {
+            bound.pos = QVector3D(0, 0, 0);
+            bound.radius = 1;
+        }
+        else if (spheres.count() == 1) {
+            bound = spheres[0];
+        }
+        else {
+            bound.pos = QVector3D(0, 0, 0);
+            bound.radius = 1;
+            for (auto &sphere : spheres) bound = iris::BoundingSphere::merge(bound, sphere);
+        }
+
+        float dist = (bound.radius * 1.2) / qTan(qDegreesToRadians(cam->angle / 2.0f));
+        cam->setLocalPos(QVector3D(0, bound.pos.y(), dist));
+        cam->lookAt(bound.pos);
+        cam->update(0);
+    }
+    else if (request.type == ThumbnailRequestType::Mesh)
     {
 		ssource = new iris::SceneSource();
         // load mesh as scene
@@ -338,6 +383,7 @@ void RenderThread::createMaterial(QJsonObject &matObj, iris::CustomMaterialPtr m
 ThumbnailGenerator::ThumbnailGenerator()
 {
     renderThread = new RenderThread();
+    renderThread->setDatabase(db);
 
     auto curCtx = QOpenGLContext::currentContext();
     if (curCtx != Q_NULLPTR) curCtx->doneCurrent();

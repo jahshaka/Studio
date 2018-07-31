@@ -73,7 +73,6 @@ void DynamicGrid::addToGridView(ProjectTileData tileData, int count)
     connect(gameGridItem,   SIGNAL(exportFromWidget(ItemGridWidget*)),
             parent,         SLOT(exportProjectFromWidget(ItemGridWidget*)));
 
-    // lambdas! we can do this instead of using classic syntax & forcing dblClick to accept 2 args
     connect(gameGridItem,   &ItemGridWidget::doubleClicked, parent, [this](ItemGridWidget *item) {
         static_cast<ProjectManager*>(parent)->openProjectFromWidget(item, false);
     });

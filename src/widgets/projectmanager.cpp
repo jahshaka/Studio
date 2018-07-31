@@ -246,6 +246,12 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 		"background-repeat: no-repeat;"
 	);
     ui->pmContainer->setLayout(layout);
+	
+#ifdef BUILD_PLAYER_ONLY
+	// hide these buttons in player mode
+	ui->newProject->hide();
+	ui->browseProjects->hide();
+#endif
 }
 
 ProjectManager::~ProjectManager()
@@ -256,9 +262,17 @@ ProjectManager::~ProjectManager()
 void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
 {
 	if (Globals::project->getProjectGuid() == widget->tileData.guid) {
-		mainWindow->switchSpace(WindowSpaces::EDITOR);
+        #ifdef BUILD_PLAYER_ONLY
+		    mainWindow->switchSpace(WindowSpaces::PLAYER);
+        #else
+		    mainWindow->switchSpace(WindowSpaces::EDITOR);
+        #endif
+
 		return;
 	}
+
+    // If we're opening a new scene, close the old one first
+    if (UiManager::isSceneOpen) mainWindow->closeProject();
 
 	auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
 	auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();

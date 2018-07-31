@@ -64,7 +64,7 @@ class AnimationPath;
 class TranslationGizmo;
 class ViewerCameraController;
 class ViewportGizmo;
-
+class Globals;
 class btRigidBody;
 
 enum class ViewportMode
@@ -125,6 +125,11 @@ public:
     MainWindow *mainWindow;
     void setMainWindow(MainWindow *window) {
         mainWindow = window;
+    }
+
+    Database *database;
+    void setDatabase(Database *window) {
+        database = database;
     }
 
     btRigidBody *activeRigidBody;

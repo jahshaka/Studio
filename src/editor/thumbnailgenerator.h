@@ -12,10 +12,10 @@ For more information see the LICENSE file
 #ifndef THUMBNAILGENERATOR_H
 #define THUMBNAILGENERATOR_H
 
-#include "../irisgl/src/irisglfwd.h"
-#include "../irisgl/src/scenegraph/meshnode.h"
-#include "../irisgl/src/materials/custommaterial.h"
-#include "../irisgl/src/materials/defaultmaterial.h"
+#include "irisgl/src/irisglfwd.h"
+#include "irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/src/materials/custommaterial.h"
+#include "irisgl/src/materials/defaultmaterial.h"
 
 #include <QThread>
 #include <QOffscreenSurface>
@@ -26,10 +26,13 @@ For more information see the LICENSE file
 #include <QImage>
 #include <QJsonObject>
 
+#include "core/database/database.h"
+
 enum class ThumbnailRequestType
 {
     Material,
-    Mesh
+    Mesh,
+    ImportedMesh // Stuff that's already in the app to refresh previews
 };
 
 struct ThumbnailRequest
@@ -84,6 +87,11 @@ public:
 
 	void createMaterial(QJsonObject &matObj, iris::CustomMaterialPtr mat);
 
+    Database *db;
+    void setDatabase(Database *db) {
+        this->db = db;
+    }
+
 signals:
     void thumbnailComplete(ThumbnailResult* result);
 
@@ -102,6 +110,11 @@ public:
 
     // must be called to properly shutdown ui components
     void shutdown();
+
+    Database *db;
+    void setDatabase(Database *db) {
+        this->db = db;
+    }
 
 private:
 	static ThumbnailGenerator* instance;

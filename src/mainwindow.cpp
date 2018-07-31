@@ -123,7 +123,6 @@ For more information see the LICENSE file
 
 #include "../src/widgets/skypresets.h"
 
-#include "widgets/assetfavorites.h"
 #include "widgets/assetmodelpanel.h"
 #include "widgets/assetmaterialpanel.h"
 
@@ -158,9 +157,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 #ifdef QT_DEBUG
     iris::Logger::getSingleton()->init(IrisUtils::getAbsoluteAssetPath("jahshaka.log"));
-    setWindowTitle(QString("Jahshaka %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
+    #ifdef BUILD_PLAYER_ONLY
+	    setWindowTitle(QString("Jahshaka Player %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
+    #else
+        setWindowTitle(QString("Jahshaka Studio %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
+    #endif
 #else
-	setWindowTitle(QString("Jahshaka %1").arg(Constants::CONTENT_VERSION));
+    #ifdef BUILD_PLAYER_ONLY
+	    setWindowTitle(QString("Jahshaka Player %1").arg(Constants::CONTENT_VERSION));
+    #else
+	    setWindowTitle(QString("Jahshaka Studio %1").arg(Constants::CONTENT_VERSION));
+    #endif
     iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/jahshaka.log");
 #endif
 
@@ -208,8 +215,8 @@ void MainWindow::goToDesktop()
 #ifdef MINER_ENABLED
 void MainWindow::configureMiner()
 {
-	miner = new MinerUI;
-	miner->hide();
+	miner = new MinerUI();
+	//miner->hide();
 }
 #endif
 
@@ -634,6 +641,7 @@ void MainWindow::switchSpace(WindowSpaces space)
 			if (UiManager::isSceneOpen) {
 				//if (settings->getValue("auto_save", true).toBool()) saveScene();
 				//saveScene();
+                updateCurrentSceneThumbnail();
 				pmContainer->populateDesktop(true);
 			}
 			
@@ -1014,6 +1022,34 @@ void MainWindow::favoriteItem(QListWidgetItem *item)
     else if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Object)) {
         assetModelPanel->addNewItem(item);
         presetsTabWidget->setCurrentIndex(0);
+    }
+}
+
+void MainWindow::refreshThumbnail(const QString &guid)
+{
+    QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
+    auto assetName = db->fetchAsset(meshGuid).name;
+
+    ThumbnailGenerator::getSingleton()->requestThumbnail(
+        ThumbnailRequestType::ImportedMesh,
+        QDir(Globals::project->getProjectFolder()).filePath(assetName),
+        guid
+    );
+}
+
+void MainWindow::refreshThumbnail(QListWidgetItem *item)
+{
+    if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Object)) {
+        QString itemGuid = item->data(MODEL_GUID_ROLE).toString();
+        QString meshGuid = db->fetchObjectMesh(itemGuid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
+
+        auto assetName = db->fetchAsset(meshGuid).name;
+
+        ThumbnailGenerator::getSingleton()->requestThumbnail(
+            ThumbnailRequestType::ImportedMesh,
+            QDir(Globals::project->getProjectFolder()).filePath(assetName),
+            item->data(MODEL_GUID_ROLE).toString()
+        );
     }
 }
 
@@ -1905,6 +1941,11 @@ void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType
 {
     if (!node) return;
 
+    // Dispatch a thumbnail request regardless of what happens,
+    // This should finish in the time it takes to spawn a dialog and save
+    // Since the object is already loaded in memory
+    refreshThumbnail(node->getGUID());
+
     QDateTime currentDateTime = QDateTime::currentDateTimeUtc();
 
     // The export is titled the name of the node + the current date time in UTC
@@ -2036,6 +2077,18 @@ void MainWindow::dropEvent(QDropEvent* event)
 void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
 {
     event->accept();
+}
+
+void MainWindow::updateCurrentSceneThumbnail()
+{
+    auto img = sceneView->takeScreenshot(Constants::TILE_SIZE * 2);
+    QByteArray thumb;
+    QBuffer buffer(&thumb);
+    buffer.open(QIODevice::WriteOnly);
+    img.save(&buffer, "PNG");
+
+    db->updateSceneThumbnail(Globals::project->getProjectGuid(), thumb);
+    pmContainer->updateTile(Globals::project->getProjectGuid(), thumb);
 }
 
 /*
@@ -2192,10 +2245,6 @@ void MainWindow::setupDockWidgets()
     SkyPresets *skyPresets = new SkyPresets;
     skyPresets->setMainWindow(this);
 
-    assetFavorites = new AssetFavorites;
-    assetFavorites->setMainWindow(this);
-    assetFavorites->setHandle(db);
-
     assetModelPanel = new AssetModelPanel;
     assetModelPanel->setMainWindow(this);
     assetModelPanel->setDatabaseHandle(db);
@@ -2210,7 +2259,6 @@ void MainWindow::setupDockWidgets()
     presetsTabWidget->addTab(assetModelPanel, "Models");
     presetsTabWidget->addTab(assetMaterialPanel, "Materials");
     presetsTabWidget->addTab(skyPresets, "Skyboxes");
-    presetsTabWidget->addTab(assetFavorites, "Favorites");
     presetDockContents->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
 
     QGridLayout *presetsLayout = new QGridLayout(presetDockContents);
@@ -2324,6 +2372,7 @@ void MainWindow::setupViewPort()
 	//minerBtn->setStyleSheet("QPushButton{color:orange;}");
 	connect(minerBtn, &QPushButton::pressed, [this]() {
 		miner->show();
+		qDebug() << miner->geometry();
 	});
 #endif
 
@@ -2364,6 +2413,9 @@ void MainWindow::setupViewPort()
 	);
 
 	connect(prefs, &QPushButton::pressed, [this]() { showPreferences(); });
+#ifdef BUILD_PLAYER_ONLY
+	prefs->hide();
+#endif
 
 	QWidget *buttons = new QWidget;
 	QHBoxLayout *bl = new QHBoxLayout;
@@ -2406,7 +2458,7 @@ void MainWindow::setupViewPort()
     screenShotBtn->setToolTipDuration(-1);
     screenShotBtn->setStyleSheet("background: transparent");
     screenShotBtn->setIcon(QIcon(":/icons/icons8-camera-48.png"));
-	screenShotBtn->setIconSize(QSize(20, 20));
+	screenShotBtn->setIconSize(QSize(16,17));
 
     wireFramesButton = new QToolButton;
     wireFramesButton->setStyleSheet(
@@ -2581,6 +2633,7 @@ void MainWindow::setupViewPort()
     sceneView->setFocusPolicy(Qt::ClickFocus);
     sceneView->setFocus();
     sceneView->setMainWindow(this);
+    sceneView->setDatabase(db);
     Globals::sceneViewWidget = sceneView;
     UiManager::setSceneViewWidget(sceneView);
 
@@ -3080,6 +3133,11 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
 MainWindow::~MainWindow()
 {
+#ifdef MINER_ENABLED
+	if (miner && miner->isMining())
+		miner->stopMining();
+#endif
+
     this->db->closeDatabase();
     delete ui;
 }

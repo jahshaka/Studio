@@ -28,8 +28,11 @@ For more information see the LICENSE file
 #include "irisglfwd.h"
 #include "misc/QtAwesome.h"
 #include "misc/QtAwesomeAnim.h"
-#include "miner/minerui.h"
 #include "core/project.h"
+
+#ifdef MINER_ENABLED
+#include "../thirdparty/miner/minerui.h"
+#endif
 
 namespace Ui {
     class MainWindow;
@@ -84,9 +87,10 @@ class MaterialPreset;
 class AssetWidget;
 // class SceneNodePropertiesWidget;
 
-class AssetFavorites;
 class AssetModelPanel;
 class AssetMaterialPanel;
+
+class MinerUI;
 
 #include "widgets/scenenodepropertieswidget.h"
 
@@ -160,6 +164,8 @@ public:
     void applyMaterialPreset(MaterialPreset preset);
 
     void favoriteItem(QListWidgetItem *item);
+    void refreshThumbnail(const QString &guid);
+    void refreshThumbnail(QListWidgetItem *item);
 
     /**
      * Returns absolute path of file copied as an asset
@@ -229,6 +235,7 @@ public:
 private:
 	//set up miner
 #ifdef MINER_ENABLED
+	MinerUI *miner;
 	void configureMiner();
 #endif
 
@@ -263,6 +270,8 @@ private:
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
     void dragLeaveEvent(QDragLeaveEvent* event) override;
+
+    void updateCurrentSceneThumbnail();
 
     // determines if file extension is that of a model (obj, fbx, 3ds)
     // bool isModelExtension(QString extension);
@@ -472,14 +481,12 @@ private:
     WindowSpaces currentSpace;
 	QtAwesome fontIcons;
 
-	MinerUI *miner;
 	QPushButton *playSimBtn;
 
     QAction *actionTranslate;
     QAction *actionRotate;
     QAction *actionScale;
 
-    AssetFavorites *assetFavorites;
     AssetModelPanel *assetModelPanel;
     AssetMaterialPanel *assetMaterialPanel;
 

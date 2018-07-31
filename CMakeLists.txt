@@ -25,6 +25,12 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
 
+set (MINER_ENABLED OFF CACHE BOOL "Enable Mining (OpenCL required)")
+if(MINER_ENABLED)
+	set(BUILD_MINER_AS_LIB ON)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/miner)
+endif()
+
 set(SRCS
     src/main.cpp
     src/mainwindow.cpp 
@@ -317,7 +323,7 @@ set(FORMS
 set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
-include(IncludeMiner)
+#include(IncludeMiner)
 
 # these macros are deprecated
 #qt5_wrap_cpp(HEADERS_moc ${HEADERS})
@@ -374,6 +380,9 @@ add_definitions("-DGIT_COMMIT_DATE=\"${GIT_COMMIT_DATE}\"")
 # Also note MSVC build path is different from GNU in that it containts the build type
 set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+if (MINER_ENABLED)
+    set_target_properties(JahMiner PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+endif()
 #set_target_properties(cuda_gpu_list PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -382,14 +391,28 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # osx icon
 # https://stackoverflow.com/questions/22745728/cmake-set-icon-for-a-mac-osx-app
-set(MACOSX_BUNDLE_ICON_FILE icon.icns)
-set(BUNDLE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/app/icons/icon.icns)
-set_source_files_properties(${BUNDLE_ICON} PROPERTIES
-       MACOSX_PACKAGE_LOCATION "Resources")
+
+if (BUILD_PLAYER_ONLY)
+    set(MACOSX_BUNDLE_ICON_FILE iconp.icns)
+    set(BUNDLE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/app/icons/iconp.icns)
+else()
+    set(MACOSX_BUNDLE_ICON_FILE icon.icns)
+    set(BUNDLE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/app/icons/icon.icns)
+endif(BUILD_PLAYER_ONLY)
+
+set_source_files_properties(${BUNDLE_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 
 # https://stackoverflow.com/a/37211780/996468
 source_group(moc FILES ${HEADERS_moc} ${QRCS})
-add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp.rc ${BUNDLE_ICON})
+
+if (BUILD_PLAYER_ONLY)
+    add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp_player.rc ${BUNDLE_ICON})
+else()
+
+        add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp.rc ${BUNDLE_ICON})
+
+endif(BUILD_PLAYER_ONLY)
+
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Jahshaka)
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 							src
@@ -398,11 +421,18 @@ target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 							irisgl/src/assimp/include
                             irisgl/src/libovr/Include
                             irisgl/src/bullet3/src/
-                            thirdparty/breakpad/breakpad/src)
+                            thirdparty/breakpad/breakpad/src
+							thirdparty/miner)
    
 if (BUILD_PLAYER_ONLY)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DBUILD_PLAYER_ONLY=1)
 endif(BUILD_PLAYER_ONLY)
+
+if(MINER_ENABLED)
+add_definitions("-DMINER_ENABLED")
+add_definitions("-DBUILD_AS_LIB")
+set(LIBS ${LIBS} JahMiner)
+endif(MINER_ENABLED)
 
 if(USE_BREAKPAD)
     set(LIBS ${LIBS} breakpad)

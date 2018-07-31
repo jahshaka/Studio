@@ -822,6 +822,15 @@ bool Database::updateAssetAsset(const QString &guid, const QByteArray &asset)
 	return executeAndCheckQuery(query, "UpdateAssetAsset");
 }
 
+bool Database::updateSceneThumbnail(const QString & guid, const QByteArray &thumbnail)
+{
+    QSqlQuery query;
+    query.prepare("UPDATE projects SET thumbnail = ? WHERE guid = ?");
+    query.addBindValue(thumbnail);
+    query.addBindValue(Globals::project->getProjectGuid());
+    return executeAndCheckQuery(query, "updateSceneThumbnail");
+}
+
 bool Database::updateAssetMetadata(const QString &guid, const QString &name, const QByteArray &tags)
 {
     QSqlQuery query;
@@ -1301,7 +1310,7 @@ QVector<AssetRecord> Database::fetchFavorites()
         "SELECT F.asset_guid, F.name, F.date_created, A.type, F.thumbnail FROM favorites F "
         "LEFT JOIN assets A ON A.guid = F.asset_guid"
     );
-    executeAndCheckQuery(query, "fetchThumbnails");
+    executeAndCheckQuery(query, "fetchFavorites");
 
     QVector<AssetRecord> tileData;
     while (query.next()) {
