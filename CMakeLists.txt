@@ -24,7 +24,10 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
+
+set (MINER_ENABLED OFF CACHE BOOL "Enable Mining (OpenCL required)")
 if(MINER_ENABLED)
+	set(BUILD_MINER_AS_LIB ON)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/miner)
 endif()
 
