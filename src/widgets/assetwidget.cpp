@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include <QProgressDialog>
 #include <QProcess>
 #include <QTemporaryDir>
+#include <QComboBox>
 
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/materials/custommaterial.h"
