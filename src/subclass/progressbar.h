@@ -22,7 +22,7 @@ public:
 	ProgressBar(QWidget *parent = Q_NULLPTR);
 	~ProgressBar();
 	QPushButton *confirmButton();
-	QPushButton *cancleButton();
+	QPushButton *cancelButton();
 	QPushButton *confirm;
 	QPushButton *cancel;
 
@@ -48,7 +48,7 @@ private:
 	int regularHeight = 100 * logicalDpiY() / 100;
 
 
-	void ConfigureUI();
+	void configureUI();
 	void configureConnection();
 	void updateMode();
 

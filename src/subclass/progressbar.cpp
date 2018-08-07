@@ -7,16 +7,14 @@
 #include <QTime>
 #include <QScreen>
 #include <QDesktopWidget>
-#include <QDebug>
 #include <QWindow>
 
 ProgressBar::ProgressBar(QWidget *parent)
 	: QProgressBar(parent)
 {
-	ConfigureUI();
+	configureUI();
 	configureConnection();
 	//show();
-	QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 	connect(window()->windowHandle(), SIGNAL(screenChanged(QScreen*)), this, SLOT(screenChanged()));
 }
 
@@ -32,7 +30,7 @@ QPushButton * ProgressBar::confirmButton()
 	return nullptr;
 }
 
-QPushButton * ProgressBar::cancleButton()
+QPushButton * ProgressBar::cancelButton()
 {
 	if (cancel) return cancel;
 	return nullptr;
@@ -44,7 +42,7 @@ void ProgressBar::clearButtonConnection()
 	disconnect(cancel);
 }
 
-void ProgressBar::ConfigureUI()
+void ProgressBar::configureUI()
 {
 	setFixedSize(QSize(360, regularHeight));
 	setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::X11BypassWindowManagerHint);
@@ -59,7 +57,7 @@ void ProgressBar::ConfigureUI()
 	confirm = new QPushButton;
 	cancel = new QPushButton;
 	showingCancelDialog = false;
-	confirmationText = "would you like to close the dialog?";
+	confirmationText = tr("would you like to close the dialog?");
 	opacity = new QGraphicsOpacityEffect;
 
 	setLayout(layout);
@@ -71,7 +69,7 @@ void ProgressBar::ConfigureUI()
 	content->setLayout(contentLayout);
 	content->setStyleSheet("background:rgba(30,30,30,1);");
 
-	title->setText("hi");
+	title->setText(tr("hi"));
 	title->setStyleSheet("color: rgba(255,255,255,1); padding: 5px;");
 	title->setAlignment(Qt::AlignVCenter);
 	title->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -81,8 +79,6 @@ void ProgressBar::ConfigureUI()
 	font.setWeight(60);
 	font.setPixelSize(15);
 	title->setFont(font);
-	// opacity->setOpacity(1.0);
-	// title->setGraphicsEffect(opacity);
 
 	contentLayout->setContentsMargins(0, 0, 0, 0);
 	contentLayout->setSpacing(0);
@@ -121,7 +117,6 @@ void ProgressBar::ConfigureUI()
 	cancel->setText("No");
 	cancel->setStyleSheet(confirm->styleSheet());
 
-
 	auto effect = new QGraphicsDropShadowEffect(content);
 	effect->setBlurRadius(10);
 	effect->setOffset(0);
@@ -136,8 +131,6 @@ void ProgressBar::configureConnection()
 		proPainter->setThisValue(text().split('%')[0].toInt());
 		proPainter->setText(text());
 	});
-
-	/*connect(window()->windowHandle(), &QWindow::)*/
 
 	auto shorty = new QShortcut(QKeySequence("s"), this);
 	connect(shorty, &QShortcut::activated, [=]() {
@@ -231,15 +224,11 @@ void ProgressBar::showConfirmationDialog()
 
 	connect(confirm, &QPushButton::clicked, [=]() {
 		this->hide();
-		// deleteLater();
 	});
 
 	connect(cancel, &QPushButton::clicked, [=]() {
 		widget->hide();
 		setFixedHeight(regularHeight);
-		//  resize(360,regularHeight);
-		//  update();
-		//  widget->deleteLater();
 		showingCancelDialog = false;
 	});
 }
@@ -287,16 +276,12 @@ void ProgressBar::setTitle(QString string)
 
 void ProgressBar::screenChanged()
 {
-	/*qDebug() << devicePixelRatio();
-	qDebug() << QApplication::desktop()->screen()->geometry();*/
 	resize(_width * logicalDpiX() / 100, regularHeight * logicalDpiY() / 100);
 }
 
 void ProgressBar::close()
 {
 	hide();
-	/*proPainter->deleteLater();
-	deleteLater();*/
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -306,7 +291,6 @@ ProgressPainter::ProgressPainter(QWidget *parent)
 	textValue->setStyleSheet("background: rgba(0,0,0,0); color: rgba(255,255,255,1);");
 	textValue->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	textValue->setAlignment(Qt::AlignCenter);
-
 
 	auto layout = new QVBoxLayout;
 	setLayout(layout);
@@ -338,22 +322,8 @@ void ProgressPainter::setText(QString text)
 
 void ProgressPainter::setThisValue(qreal val)
 {
-	qDebug() << val;
 	setSize(val);
 	update();
-	/* auto anim = new QPropertyAnimation(this,"size");
-	anim->setStartValue(value());
-	anim->setEndValue(val);
-	anim->setDuration(400);
-	anim->setEasingCurve(QEasingCurve::Linear);
-	anim->start();
-	connect(anim,&QPropertyAnimation::finished,[=](){
-	setValue(val);
-	});
-	connect(anim,&QPropertyAnimation::valueChanged,[=](){
-	update();
-	});*/
-	//textValue->setText(QString::number(value())+"%");
 }
 
 void ProgressPainter::animate(bool val)
