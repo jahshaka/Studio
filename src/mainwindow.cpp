@@ -197,7 +197,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 	restoreGeometry(settings->getValue("geometry", "").toByteArray());
 	//restoreState(settings->getValue("windowState", "").toByteArray());
-
+	int height = this->style()->pixelMetric(QStyle::PM_TitleBarHeight);
+	if (geometry().y() < 20) move(geometry().x(), height);
 	undoStackCount = 0;
 }
 
