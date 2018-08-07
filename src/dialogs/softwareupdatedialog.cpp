@@ -15,20 +15,24 @@ For more information see the LICENSE file
 #include <QDesktopServices>
 #include <QDebug>
 #include "core/settingsmanager.h"
+#include <QProcess>
 
 
 SoftwareUpdateDialog::SoftwareUpdateDialog(QDialog *parent) : QDialog(parent), ui(new Ui::SoftwareUpdateDialog)
 {
-	ui->setupUi(this);
+	ui->setupUi(this); 
 	setWindowTitle("Software Update");
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
-	connect(ui->pushButton, &QPushButton::clicked, [this]() {
+	connect(ui->download, &QPushButton::clicked, [this]() {
 		qDebug() << downloadUrl;
-		QDesktopServices::openUrl(downloadUrl);
+		//QDesktopServices::openUrl(downloadUrl);
+		QProcess *process = new QProcess(this);
+		QString file = QDir::currentPath() + "/downloader/Debug/downloader.exe";
+		process->start(file, QStringList("http://ipv4.download.thinkbroadband.com:8080/50MB.zip"));
 	});
 
-	connect(ui->pushButton_2, &QPushButton::clicked, [this]() {
+	connect(ui->close, &QPushButton::clicked, [this]() {
 		this->close();
 	});
 

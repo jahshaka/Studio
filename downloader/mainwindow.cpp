@@ -1,22 +1,22 @@
 #include "mainwindow.h"
-#include "ui_mainwindow.h"
-
+#include <QCoreApplication>
 #include <QtNetwork/QNetworkRequest>
 #include <QtNetwork/QNetworkReply>
 #include <QFile>
 #include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent) :
-    QMainWindow(parent),
-    ui(new Ui::MainWindow)
-{
-    ui->setupUi(this);
+    QMainWindow(parent){
 
     file = new QFile("file.download");
     file->open(QFile::ReadWrite);
+	progressBar = new ProgressBar;
+	progressBar->show();
+	progressBar->setTitle("Downloading update...");
+	progressBar->setMode(ProgressBar::Mode::Indefinite);
 
-    //auto url = "https://github.com/jahshaka/VR/releases/download/v0.6.1-alpha/jahshaka-win-0.6.1-alpha.exe";
-    auto url = "http://localhost/download/genius.mkv";
+    auto url = "https://github.com/jahshaka/VR/releases/download/v0.6.1-alpha/jahshaka-win-0.6.1-alpha.exe";
+    //auto url = "http://localhost/download/genius.mkv";
     //auto url = "https://www.jahfx.com/download/skull-island/?wpdmdl=730&refresh=5b21810ea6a311528922382";
     doDownload(url);
 
@@ -45,14 +45,19 @@ void MainWindow::doDownload(QString url)
     connect(reply, &QNetworkReply::downloadProgress,[&](qint64 bytesReceived, qint64 bytesTotal)
     {
         qDebug()<<bytesReceived << "/" << bytesTotal;
-        ui->progressBar->setMaximum(bytesTotal);
-        ui->progressBar->setValue(bytesReceived);
+		if (bytesTotal <= 0) return;
+		progressBar->setMaximum(bytesTotal);
+		progressBar->setValue(bytesReceived);
     });
 
     connect(reply, QOverload<QNetworkReply::NetworkError>::of(&QNetworkReply::error),[&](QNetworkReply::NetworkError error)
     {
         qDebug()<<"error: "<<error;
-        QMessageBox::warning(this, "Error","Error downloading update");
+        //QMessageBox::warning(this, "Error","Error downloading update");
+		progressBar->setTitle("Error downloading update");
+		progressBar->setConfirmationText("there was an error downloading this update");
+		progressBar->setConfirmationButtons("ok","",true,false);
+		progressBar->showConfirmationDialog();
     });
 
     connect(reply, &QNetworkReply::finished,[&, reply]()
