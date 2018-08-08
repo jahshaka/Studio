@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QHash>
 #include <QIcon>
 #include <QEvent>
+#include <QTreeWidget>
 #include <QLineEdit>
 #include <QStyledItemDelegate>
 
@@ -98,6 +99,8 @@ public:
 
     void OnLstItemsCommitData(QWidget *listItem);
     QComboBox *box;
+
+    QTreeWidget *getWidget();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);

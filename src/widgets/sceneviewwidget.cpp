@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QOpenGLShaderProgram>
 #include <QOpenGLTexture>
 #include <QtMath>
+#include <QTreeWidget>
 #include <QTimer>
 
 #include "irisgl/src/graphics/font.h"
@@ -75,6 +76,7 @@ For more information see the LICENSE file
 #include "editor/translationgizmo.h"
 #include "editor/viewercontroller.h"
 #include "editor/viewermaterial.h"
+#include "scenehierarchywidget.h"
 
 void SceneViewWidget::setShowFps(bool value)
 {
@@ -243,7 +245,12 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 
 void SceneViewWidget::dragEnterEvent(QDragEnterEvent *event)
 {
-	if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist")) {
+    if (event->source() == UiManager::sceneHierarchyWidget->getWidget()) {
+        event->ignore();
+        return;
+    }
+	
+    if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist")) {
         event->acceptProposedAction();
 	}
 }
@@ -803,7 +810,7 @@ void SceneViewWidget::onAnimationKeyChanged(iris::FloatKey* key)
 
 bool SceneViewWidget::eventFilter(QObject *obj, QEvent *event)
 {
-    return QWidget::eventFilter(obj, event);
+    return QObject::eventFilter(obj, event);
 }
 
 QVector3D SceneViewWidget::calculateMouseRay(const QPointF& pos)
