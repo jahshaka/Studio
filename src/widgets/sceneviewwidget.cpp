@@ -217,6 +217,7 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
             //if (!!material) savedActiveNode.staticCast<iris::MeshNode>()->setMaterial(material); ???
             // apply 
             mainWindow->applyMaterialPreset(roleDataMap.value(3).toString());
+            mainWindow->sceneNodeSelected(savedActiveNode);
 		}
 		else {
 			qDebug() << "Empty";
@@ -234,6 +235,7 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 
             if (!mat->firstTextureSlot().isEmpty()) {
                 mat->setValue(mat->firstTextureSlot(), QDir(Globals::project->getProjectFolder()).filePath(roleDataMap.value(1).toString()));
+                mainWindow->sceneNodeSelected(node);
             }
         }
     }
