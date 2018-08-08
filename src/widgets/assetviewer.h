@@ -85,7 +85,7 @@ public:
 	void addJafShader(const QString &guid, QMap<QString, QString> &outGuids, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addJafMesh(const QString &path, const QString &guid, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addMesh(const QString &path = QString(), bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
-	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid = "", bool viewed = false, bool cache = false);
+	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid = "", bool viewed = false, bool cache = false, bool isOnGround = true);
 	QImage takeScreenshot(int width, int height);
 
     float onProgress(float percentage) {
