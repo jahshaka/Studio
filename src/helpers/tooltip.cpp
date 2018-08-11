@@ -208,7 +208,8 @@ void ToolTip::leaveEvent(QEvent *event)
 
 void ToolTip::mousePressEvent(QEvent *event)
 {
-	mousePressEvent(event);
+	//mousePressEvent(event);
+    Q_UNUSED(event);
 }
 
 bool ToolTip::eventFilter(QObject *watched, QEvent *event)

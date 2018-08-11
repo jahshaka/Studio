@@ -1,24 +1,30 @@
 #include "mainwindow.h"
-#include "ui_mainwindow.h"
-
+#include <QCoreApplication>
 #include <QtNetwork/QNetworkRequest>
 #include <QtNetwork/QNetworkReply>
 #include <QFile>
+#include <QFileInfo>
 #include <QMessageBox>
+#include <QProcess>
+#include <qstandardpaths.h>
+#include <QThread>
 
 MainWindow::MainWindow(QWidget *parent) :
-    QMainWindow(parent),
-    ui(new Ui::MainWindow)
-{
-    ui->setupUi(this);
+    QMainWindow(parent){
 
-    file = new QFile("file.download");
-    file->open(QFile::ReadWrite);
+	progressBar = new ProgressBar;
+	//progressBar->show();
+	//progressBar->adjustSize();
+	progressBar->setTitle("Downloading update...");
+	progressBar->setMode(ProgressBar::Mode::Indefinite);
+	hasError = false;
 
-    //auto url = "https://github.com/jahshaka/VR/releases/download/v0.6.1-alpha/jahshaka-win-0.6.1-alpha.exe";
-    auto url = "http://localhost/download/genius.mkv";
-    //auto url = "https://www.jahfx.com/download/skull-island/?wpdmdl=730&refresh=5b21810ea6a311528922382";
-    doDownload(url);
+	appName = +"/"+ QUrl(QCoreApplication::arguments()[1]).fileName();
+        qDebug() << appName;
+	doDownload(QCoreApplication::arguments()[1]);
+        
+	/*appName = "/cop.exe";
+	doDownload(url);*/
 
 #if QT_CONFIG(ssl)
     qDebug()<<"using ssl";
@@ -29,13 +35,32 @@ MainWindow::MainWindow(QWidget *parent) :
 
 MainWindow::~MainWindow()
 {
-    delete ui;
+   
 }
 
 void MainWindow::doDownload(QString url)
 {
     QNetworkRequest request(url);
     QNetworkReply *reply = manager.get(request);
+    QString filePath = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + appName;
+	file = new QFile(filePath);
+	file->open(QFile::ReadWrite);
+
+	QProcess *process = new QProcess(this);
+	QObject::connect(process, &QProcess::readyReadStandardOutput, [this, process]()
+	{
+		qDebug().noquote() << QString(process->readAllStandardOutput());
+	});
+	QObject::connect(process, &QProcess::readyReadStandardError, [this, process]()
+	{
+		qDebug().noquote() << QString(process->readAllStandardError());
+	});
+	QObject::connect(process, &QProcess::errorOccurred, [this, process](QProcess::ProcessError error)
+	{
+		qDebug() << "Process Error: " << error;
+		qDebug() << process->readAllStandardOutput();
+
+	});
 
     connect(reply, &QNetworkReply::readyRead,[&, reply]()
     {
@@ -44,33 +69,63 @@ void MainWindow::doDownload(QString url)
 
     connect(reply, &QNetworkReply::downloadProgress,[&](qint64 bytesReceived, qint64 bytesTotal)
     {
-        qDebug()<<bytesReceived << "/" << bytesTotal;
-        ui->progressBar->setMaximum(bytesTotal);
-        ui->progressBar->setValue(bytesReceived);
+        //qDebug()<<bytesReceived << "/" << bytesTotal;
+		if (bytesTotal <= 0) return;
+		progressBar->setMaximum(bytesTotal);
+		progressBar->setValue(bytesReceived);
     });
 
     connect(reply, QOverload<QNetworkReply::NetworkError>::of(&QNetworkReply::error),[&](QNetworkReply::NetworkError error)
     {
-        qDebug()<<"error: "<<error;
-        QMessageBox::warning(this, "Error","Error downloading update");
+
+		progressBar->setTitle("Error downloading update");
+		progressBar->setConfirmationText("there was an error downloading this update");
+		progressBar->setConfirmationButtons("ok", "", true, false);
+		progressBar->showConfirmationDialog();
+		progressBar->clearButtonConnection();
+		connect(progressBar->confirmButton(), &QPushButton::clicked, [=]() {
+			progressBar->close();
+		});
+		hasError = true;
     });
 
-    connect(reply, &QNetworkReply::finished,[&, reply]()
-    {
-        qDebug()<<"Download complete";
-        qDebug()<<reply->readAll();
-        if (isHttpRedirect(reply)) {
-            // follow download
-            qDebug()<<"redirect";
-            ///Ddebug()<<reply->header(QNetworkRequest::RedirectPolicyAttribute)
-            ///
-            for (auto pair : reply->rawHeaderPairs()) {
-                qDebug()<<pair;
-            }
-        }
+	connect(reply, &QNetworkReply::finished, [&, filePath, reply]()
+	{
+		file->close();
 
-        file->close();
-    });
+		if (isHttpRedirect(reply)) {
+			// follow download
+			for (auto pair : reply->rawHeaderPairs()) {
+				if (pair.first == "Location") {
+					doDownload(pair.second);
+				}
+			}
+		}
+		else {
+			if (!hasError) {
+				progressBar->setTitle("Download complete");
+				progressBar->setConfirmationText("Would you like to execute the file?");
+				progressBar->setConfirmationButtons("yes", "later", true, true);
+				progressBar->showConfirmationDialog();
+				progressBar->clearButtonConnection();
+
+				connect(progressBar->confirmButton(), &QPushButton::clicked, [=]() {
+#ifdef Q_OS_MACOS
+                     process->startDetached("hdiutil", QStringList({"attach",file->fileName()}));
+#elif defined Q_OS_WIN
+					QProcess::startDetached(filePath);
+#endif
+				});
+
+				connect(progressBar->cancelButton(), &QPushButton::clicked, [=]() {
+					progressBar->hideConfirmationDialog();
+					progressBar->close();
+				});
+			}
+
+			//file not beind executed
+		}
+	});
 }
 
 void MainWindow::startDownload()

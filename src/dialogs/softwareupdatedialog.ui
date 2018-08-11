@@ -126,7 +126,7 @@ color:rgba(255,255,255,.95);</string>
           </spacer>
          </item>
          <item>
-          <widget class="QPushButton" name="pushButton_2">
+          <widget class="QPushButton" name="close">
            <property name="styleSheet">
             <string notr="true">QPushButton{
 	padding: 5px 15px;
@@ -145,7 +145,7 @@ QPushButton:hover{
           </widget>
          </item>
          <item>
-          <widget class="QPushButton" name="pushButton">
+          <widget class="QPushButton" name="download">
            <property name="styleSheet">
             <string notr="true">QPushButton{
 	padding: 5px 15px;

@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QObject>
 #include <QNetworkAccessManager>
+#include <QUrl>
 
 class UpdateChecker : public QObject
 {
@@ -24,6 +25,12 @@ class UpdateChecker : public QObject
 public:
 	UpdateChecker();
 	void checkForUpdate();
+    void checkForPlayerUpdate();
+    void checkForAppUpdate();
+    void checkForMinerUpdate();
+private :
+    QUrl url;    
+	QString type;
 
 signals:
 	void updateNeeded(QString newVersion, QString notes, QString downloadLink);

@@ -24,6 +24,8 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/downloader)
+set(downloaderProject downloader)
 
 set (MINER_ENABLED OFF CACHE BOOL "Enable Mining (OpenCL required)")
 if(MINER_ENABLED)
@@ -380,6 +382,7 @@ add_definitions("-DGIT_COMMIT_DATE=\"${GIT_COMMIT_DATE}\"")
 # Also note MSVC build path is different from GNU in that it containts the build type
 set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_target_properties(downloader PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 if (MINER_ENABLED)
     set_target_properties(JahMiner PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 endif()
@@ -422,7 +425,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
                             irisgl/src/libovr/Include
                             irisgl/src/bullet3/src/
                             thirdparty/breakpad/breakpad/src
-							thirdparty/miner)
+							thirdparty/miner
+                            downloader )
    
 if (BUILD_PLAYER_ONLY)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DBUILD_PLAYER_ONLY=1)
@@ -433,6 +437,9 @@ add_definitions("-DMINER_ENABLED")
 add_definitions("-DBUILD_AS_LIB")
 set(LIBS ${LIBS} JahMiner)
 endif(MINER_ENABLED)
+
+#force build downloader
+add_dependencies(${PROJECT_NAME} ${downloaderProject})
 
 if(USE_BREAKPAD)
     set(LIBS ${LIBS} breakpad)

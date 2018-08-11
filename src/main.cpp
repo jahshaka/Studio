@@ -148,7 +148,8 @@ int main(int argc, char *argv[])
     splash.finish(&window);
 #endif
 
-#if !defined(QT_DEBUG) && !defined(BUILD_PLAYER_ONLY)
+
+//#if !defined(QT_DEBUG) && !defined(BUILD_PLAYER_ONLY)
 	UpdateChecker updateChecker;
 	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded,
         [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)
@@ -160,10 +161,18 @@ int main(int argc, char *argv[])
 		dialog->show();
 	});
 
-    if (SettingsManager::getDefaultManager()->getValue("automatic_updates", true).toBool()) {
-		updateChecker.checkForUpdate();
-    }
-#endif // QT_DEBUG
+   // if (SettingsManager::getDefaultManager()->getValue("automatic_updates", true).toBool()) {
+    
+#ifdef BUILD_PLAYER_ONLY
+    updateChecker.checkForPlayerUpdate();
+#endif
+    
+    updateChecker.checkForAppUpdate();
+    
+    
+//		updateChecker.checkForUpdate();
+    //}
+//#endif // QT_DEBUG
 
 	app.installEventFilter(new ToolTipHelper());
     return app.exec();
