@@ -40,6 +40,6 @@ if (APPLE)
     add_custom_command(
         TARGET Jahshaka POST_BUILD
         COMMAND cp -r -v
-            ${DestDir}/Debug/downloader.app
-            ${DestDir}/Debug/${PROJECT_NAME}.app/Contents/MacOS)
+            ${DestDir}/${CMAKE_BUILD_TYPE}/downloader.app
+            ${DestDir}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.app/Contents/MacOS)
 endif()
