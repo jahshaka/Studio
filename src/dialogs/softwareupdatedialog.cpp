@@ -31,7 +31,7 @@ SoftwareUpdateDialog::SoftwareUpdateDialog(QDialog *parent) : QDialog(parent), u
         QStringList args;
         args << downloadUrl;
 #ifdef WIN32
-		QString file = QDir::currentPath() + "/bin/Debug/downloader.exe";
+		QString file = QCoreApplication::applicationDirPath() + QDir::separator() + "downloader.exe";
         process->start(file, args);
 #else
         QString file = QDir::currentPath() + "/downloader.app";
