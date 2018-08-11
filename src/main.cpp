@@ -167,10 +167,6 @@ int main(int argc, char *argv[])
     updateChecker.checkForPlayerUpdate();
 #endif
     
-#ifdef ENABLE_MINER
-    updateChecker.checkForMinerUpdate();
-#endif
-    
     updateChecker.checkForAppUpdate();
     
     
