@@ -1,257 +1,385 @@
 #include "progressbar.h"
-
+#include <QApplication>
+#include <QGraphicsDropShadowEffect>
 #include <QPainter>
 #include <QPropertyAnimation>
-#include <QVBoxlayout>
+#include <QShortcut>
+#include <QTime>
+#include <QScreen>
+#include <QDesktopWidget>
+#include <QWindow>
 #include <QDebug>
 
-ProgressBar::ProgressBar(QWidget *parent) : QProgressBar(parent)
-{
-    setTextVisible(false);
-    configureProgressBar(parent);
-    configureConnections();
 
+ProgressBar::ProgressBar(QWidget *parent)
+	: QProgressBar(parent)
+{
+	configureUI();
+	configureConnection();
+	//show();
 }
+
 
 ProgressBar::~ProgressBar()
 {
-
+	proPainter = Q_NULLPTR;
+	proPainter->deleteLater();
 }
 
-QPoint ProgressBar::startPoint()
+
+QPushButton * ProgressBar::confirmButton()
 {
-    return _startPoint;
+	if (confirm) return confirm;
+	return nullptr;
 }
 
-void ProgressBar::setStartPoint(QPoint point)
+
+QPushButton * ProgressBar::cancelButton()
 {
-    _startPoint = point;
+	if (cancel) return cancel;
+	return nullptr;
 }
 
-void ProgressBar::setMode(Mode mode)
+
+void ProgressBar::clearButtonConnection()
 {
-    this->mode = mode;
-    emit modeChanged(mode);
-    updateMode();
+	disconnect(confirm);
+	disconnect(cancel);
 }
 
-void ProgressBar::setTitle(QString string)
+
+void ProgressBar::configureUI()
 {
-    auto faded = new QPropertyAnimation(opacity, "opacity");
-    faded->setDuration(600);
-    faded->setKeyValueAt(0.0,1.0);
-    faded->setKeyValueAt(0.5,0.0);
-    faded->setKeyValueAt(1.0,1.0);
-    faded->setEasingCurve(QEasingCurve::Linear);
-    faded->start(QAbstractAnimation::DeleteWhenStopped);
-    connect(faded,&QPropertyAnimation::valueChanged,[=](QVariant value){
-        if(value.toDouble() <=0.02) title->setText(string);
-    });
+    setMinimumWidth(360);
+	//setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::X11BypassWindowManagerHint);
+	//setAttribute(Qt::WA_TranslucentBackground);
+
+	title = new QLabel(this);
+	content = new QWidget;
+	proPainter = new ProgressPainter;
+	contentLayout = new QVBoxLayout;
+	layout = new QVBoxLayout;
+	closeBtn = new QPushButton(this);
+	confirm = new QPushButton;
+	cancel = new QPushButton;
+	showingCancelDialog = false;
+	confirmationText = tr("would you like to close the dialog?");
+	opacity = new QGraphicsOpacityEffect;
+
+	setLayout(layout);
+	layout->setContentsMargins(0, 0, 0, 0);
+	layout->setSpacing(0);
+	layout->addWidget(content);
+
+    content->setMinimumWidth(360);
+	content->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+	content->setLayout(contentLayout);
+	content->setStyleSheet("background:rgba(30,30,30,1);");
+
+	title->setText(tr("hi"));
+	title->setStyleSheet("color: rgba(255,255,255,1); padding: 5px;");
+	title->setAlignment(Qt::AlignVCenter);
+	title->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+	title->move(0, 0);
+	QFont font = title->font();
+	font.setStyleStrategy(QFont::PreferAntialias);
+	font.setWeight(60);
+	font.setPixelSize(15);
+	title->setFont(font);
+
+	contentLayout->setContentsMargins(10, 10, 10, 10);
+	contentLayout->setSpacing(0);
+	contentLayout->addWidget(title);
+	contentLayout->addWidget(proPainter);
+
+	int buttonSize = 25;
+	font.setBold(true);
+	font.setPixelSize(12);
+	font.setStretch(120);
+	closeBtn->setFont(font);
+	closeBtn->setText("X");
+	closeBtn->setFixedSize(buttonSize, buttonSize);
+	closeBtn->move(320, 10);
+	closeBtn->raise();
+	closeBtn->setStyleSheet("QPushButton{color: rgb(0,0,0); background:rgba(230,230,230,.0); border: 1px solid transparent; border-radius:13px;}"
+		"QPushButton:hover{color: rgba(200,30,60,1)}");
+	
+
+	font.setPointSize(10);
+	font.setStretch(100);
+	font.setBold(false);
+
+	confirm->setFont(font);
+	confirm->setText("Yes");
+    confirm->setStyleSheet("QPushButton{color: rgba(255, 255, 255, 1); background:rgba(81,81,81,1); border: 1px solid rgba(0,0,0,0); padding: 6px;}"
+                           "QPushButton:hover{color: rgba(255,255,255,1); background:rgba(52, 152, 219); }");
+	cancel->setFont(font);
+	cancel->setText("No");
+	cancel->setStyleSheet(confirm->styleSheet());
+
+	auto effect = new QGraphicsDropShadowEffect(content);
+	effect->setBlurRadius(10);
+	effect->setOffset(0);
+	effect->setColor(QColor(0, 0, 0, 200));
+	content->setGraphicsEffect(effect);    
+    layout->setSizeConstraint(QLayout::SetFixedSize);
+	show();
+
+	//adjustSize();
 }
 
-void ProgressBar::configureProgressBar(QWidget *parent)
+
+void ProgressBar::configureConnection()
 {
-
-
-    _height = 90;
-    titleSize = 45;
-    confirmationSize = 160;
-    title = new QLabel(this);
-    text = new QLabel(this);
-    close = new QPushButton(this);
-    animator = new QPropertyAnimation(this, "startPoint");
-    mode = Mode::Definite;
-    animating = false;
-    showingCancelDialog = false;
-
-    setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::X11BypassWindowManagerHint);
-    setAttribute(Qt::WA_TranslucentBackground);
-    setFixedHeight(_height);
-    setMinimumWidth(350);
-    setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Minimum);
-
-    auto layout = new QVBoxLayout;
-    auto hLayout = new QHBoxLayout;
-    this->setLayout(layout);
-
-   // hLayout->addWidget(title);
-    hLayout->addStretch(300);
-    hLayout->setSpacing(0);
-    this->setContentsMargins(0,0,0,0);
-    layout->setContentsMargins(0,0,0,0);
-    hLayout->setContentsMargins(0,0,0,0);
-
-
-
-    layout->addLayout(hLayout);
-    layout->addSpacing(30);
-    layout->addWidget(text);
-
-    QFont font = title->font();
-    font.setPixelSize(14);
-    font.setStyleStrategy(QFont::PreferAntialias);
-
-
-    title->setText("hello");
-    opacity = new QGraphicsOpacityEffect(title);
-    title->setGraphicsEffect(opacity);
-    //title->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Preferred);
-    title->setAlignment(Qt::AlignLeft);
-    title->setStyleSheet("color:rgba(250,250,250,1);");
-    title->setFont(font);
-    title->setMinimumSize(minimumSize());
-    title->move(5,5);
-
-
-    font.setPixelSize(12);
-    text->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding);
-    text->setAlignment(Qt::AlignHCenter);
-    text->setText("hello");
-    text->setStyleSheet("color:rgba(250,250,250,1);");
-    text->setFont(font);
-
-    int buttonSize = 25;
-    font.setBold(true);
-    font.setStretch(120);
-    close->setFont(font);
-    close->setText("X");
-    close->setFixedSize(buttonSize,buttonSize);
-    close->setStyleSheet("QPushButton{color: rgb(0,0,0); background:rgba(230,230,230,.0); border: 1px solid transparent; border-radius:13px;}"
-                         "QPushButton:hover{color: rgba(200,30,60,1)}");
-    hLayout->addWidget(close);
-
-    qDebug() << width();
-
-
-    _startPoint = QPoint(0,_height - titleSize);
-
-
-
-}
-
-void ProgressBar::configureConnections()
-{
-    connect(this,&ProgressBar::valueChanged,[=](){
-        if(animating) text->setText("");
-        else text->setText(QString::number(value())+"%");
-    });
-
-    connect(close, &QPushButton::clicked,[=](){
+    connect(closeBtn, &QPushButton::clicked, [=]() {
+        clearButtonConnection();
+        if(showingCancelDialog) this->hideConfirmationDialog();
+        setConfirmationButtons("yes", "no");
+        setConfirmationText("would you like to close the dialog?");
         showConfirmationDialog();
+        connect(cancel, &QPushButton::clicked, [=]() {
+            widget->setVisible(false);
+        });
+        connect(confirm, &QPushButton::clicked, [=]() { close(); });
     });
+
+    
+	connect(this, &ProgressBar::valueChanged, [=](int value) {
+		if (mode == Mode::Indefinite) setMode(Mode::Definite);
+		proPainter->setThisValue(text().split('%')[0].toInt());
+		proPainter->setText(text());
+	});
+
+
+	auto shorty = new QShortcut(QKeySequence("s"), this);
+	connect(shorty, &QShortcut::activated, [=]() {
+		qsrand(static_cast<quint64>(QTime::currentTime().msecsSinceStartOfDay()));
+	//	setValue(qrand() % 100);
+	});
+
+
+	shorty = new QShortcut(QKeySequence("d"), this);
+	connect(shorty, &QShortcut::activated, [=]() {
+	//	setMode(Mode::Definite);
+	});
+
+
+	shorty = new QShortcut(QKeySequence("i"), this);
+	connect(shorty, &QShortcut::activated, [=]() {
+	//	setMode(Mode::Indefinite);
+	});
+
+	
 }
+
 
 void ProgressBar::updateMode()
 {
-    if(mode ==Mode::Indefinite){
-            animate();
-            animator->start();
-            animating = true;
-        }
-
-    if(mode == Mode::Definite){
-        animator->stop();
-        setStartPoint(QPoint( 0, minimumHeight()/2));
-        update();
-        animating = false;
-    }
-     emit modeChanged(mode);
+	if (mode == Mode::Definite) {
+		proPainter->animate(false);
+		proPainter->setThisValue(value());
+	}
+	if (mode == Mode::Indefinite) {
+		proPainter->animate(true);
+	}
 }
 
-void ProgressBar::animate()
-{
-    qreal point = 40*width()/maximum();
-    setValue(40);
-    animator->setDuration(2000);
-    animator->setStartValue(QPoint( -point, _height - titleSize));
-    animator->setEndValue(QPoint( width(), _height - titleSize));
-    animator->setEasingCurve(QEasingCurve::Linear);
-    animator->setLoopCount(-1);
-
-    connect(animator,&QPropertyAnimation::valueChanged,[=](){
-        update();
-    });
-}
-
-void ProgressBar::showConfirmationDialog()
-{
-    if(showingCancelDialog) return;
-    showingCancelDialog = true;
-        auto layout = new QVBoxLayout;
-        auto widgetlayout = new QVBoxLayout;
-        auto buttonLayout = new QHBoxLayout;
-        auto widget = new QWidget;
-//        widget->setFixedSize( 300, minimumHeight());
-//        setLayout(layout);
- //       layout->setContentsMargins(0,0,0,0);
-//        setFixedSize(300,140);
-//        layout->addSpacing(height());
-//        layout->addWidget(widget);
-        setFixedHeight(confirmationSize);
-
-        this->layout()->addWidget(widget);
-
-        auto questionLabel = new QLabel("Are you sure you want to cancel operations?");
-        auto confirm = new QPushButton("Yes");
-        auto cancel = new QPushButton("No");
-
-        widget->setLayout(widgetlayout);
-        widgetlayout->addWidget(questionLabel);
-        widgetlayout->addLayout(buttonLayout);
-        buttonLayout->addWidget(confirm);
-        buttonLayout->addWidget(cancel);
-
-        widget->setStyleSheet("QWidget{background:rgba(25,25,25,1); color:rgb(250,250,250)}"
-                              "QPushButton{background:rgba(50,50,50,0); border: 1px solid rgba(52, 152, 219); padding: 3px;  }"
-                              "QPushButton:hover{background:rgba(52, 152, 219);}"
-                              "");
-
-        widget->show();
-//        auto effect = new QGraphicsDropShadowEffect(widget);
-//        effect->setOffset(0,0);
-//        effect->setBlurRadius( 30);
-//        effect->setColor(QColor(25,25,25));
-//        widget->setGraphicsEffect(effect);
-
-        connect(confirm, &QPushButton::clicked,[=](){
-
-            emit cancelOperations();
-            emit finished();
-            this->hide();
-            deleteLater();
-        });
-
-        connect(cancel, &QPushButton::clicked,[=](){
-            widget->hide();
-          //  setFixedSize(300,70);
-            setFixedHeight(_height);
-            widget->deleteLater();
-            showingCancelDialog = false;
-        });
-}
 
 void ProgressBar::paintEvent(QPaintEvent *event)
 {
-    QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing);
-    //paint background
-    painter.fillRect(0,0,width(),height(),QColor(25,25,25));
-    //paint value
-    painter.fillRect( startPoint().x(), _height - titleSize, value()*width()/maximum(), _height - titleSize, QColor(52, 152, 219));
-    Q_UNUSED(event);
+	Q_UNUSED(event);
 }
 
-void ProgressBar::setValue(int val)
+
+void ProgressBar::mousePressEvent(QMouseEvent *event)
 {
-    if(animating) setMode(Mode::Definite);
-    auto anim = new QPropertyAnimation( this, "value");
-        anim->setStartValue(value());
-        anim->setEndValue(val);
-        anim->setDuration(600);
-        anim->setEasingCurve(QEasingCurve::Linear);
-        anim->start();
-        connect(anim,&QPropertyAnimation::finished,[=](){
-
-        });
+	oldPos = event->globalPos();
+	Q_UNUSED(event);
 }
 
+
+void ProgressBar::mouseMoveEvent(QMouseEvent *event)
+{
+	//QPoint delta = event->globalPos() - oldPos;
+	//move(x() + delta.x(), y() + delta.y());
+	//oldPos = event->globalPos();
+	Q_UNUSED(event);
+}
+
+
+void ProgressBar::mouseDoubleClickEvent(QMouseEvent *event)
+{
+	Q_UNUSED(event);
+}
+
+void ProgressBar::closeEvent(QCloseEvent * event)
+{
+	qDebug() << "close";
+}
+
+
+void ProgressBar::showConfirmationDialog()
+{
+	if (showingCancelDialog) return;
+	showingCancelDialog = true;
+
+
+	auto widgetlayout = new QVBoxLayout;
+	auto buttonLayout = new QHBoxLayout;
+	widget = new QWidget;
+
+	contentLayout->addWidget(widget);
+
+	auto questionLabel = new QLabel(confirmationText);
+	QFont font = questionLabel->font();
+	font.setPixelSize(14);
+	questionLabel->setFont(font);
+
+	widget->setLayout(widgetlayout);
+	widgetlayout->addWidget(questionLabel);
+	widgetlayout->addLayout(buttonLayout);
+	buttonLayout->addWidget(confirm);
+	buttonLayout->addWidget(cancel);
+
+	widget->setStyleSheet("QWidget{background:rgba(25,25,25,1); color:rgb(255,255,255)}"
+		"QPushButton{background:rgba(50,50,50,0); border: 1px solid rgba(52, 152, 219); padding: 3px;  }"
+		"QPushButton:hover{background:rgba(52, 152, 219);}"
+		"");
+
+	widget->show();
+
+
+	connect(confirm, &QPushButton::clicked, [=]() {
+		this->close();
+	});
+
+
+	connect(cancel, &QPushButton::clicked, [=]() {
+		widget->hide();
+		showingCancelDialog = false;
+	});
+}
+
+
+void ProgressBar::hideConfirmationDialog()
+{
+	widget->hide();
+	showingCancelDialog = false;
+}
+
+
+void ProgressBar::setConfirmationText(QString string)
+{
+	confirmationText = string;
+}
+
+
+void ProgressBar::setConfirmationButtons(QString confirm, QString cancel, bool showConfirm, bool showCancel)
+{
+	this->confirm->setText(confirm);
+	this->cancel->setText(cancel);
+	showConfirmButton(showConfirm);
+	showCancelButton(showCancel);
+}
+
+
+void ProgressBar::showConfirmButton(bool showConfirm)
+{
+	confirm->setVisible(showConfirm);
+}
+
+
+void ProgressBar::showCancelButton(bool showCancel)
+{
+	cancel->setVisible(showCancel);
+}
+
+
+void ProgressBar::setMode(ProgressBar::Mode mode)
+{
+	this->mode = mode;
+	updateMode();
+}
+
+
+void ProgressBar::setTitle(QString string)
+{
+	title->setText(string);
+}
+
+void ProgressBar::close()
+{
+	qApp->quit();
+}
+
+
+///////////////////////////////////////////////////////////////////////
+ProgressPainter::ProgressPainter(QWidget *parent)
+{
+	textValue = new QLabel;
+	textValue->setStyleSheet("background: rgba(0,0,0,0); color: rgba(255,255,255,1);");
+	textValue->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+	textValue->setAlignment(Qt::AlignCenter);
+
+	auto layout = new QVBoxLayout;
+	setLayout(layout);
+	layout->addWidget(textValue);
+
+	setBackgroundColor(QColor(52, 152, 219));
+	animator = new QPropertyAnimation(this, "startPoint");
+	animator->setDuration(2000);
+	animator->setStartValue(0);
+	animator->setEndValue(width());
+	animator->setEasingCurve(QEasingCurve::Linear);
+	animator->setLoopCount(-1);
+
+	connect(animator, &QPropertyAnimation::valueChanged, [=]() {
+		if (animator) update();
+	});
+}
+
+
+ProgressPainter::~ProgressPainter()
+{
+	animator->stop();
+	animator = Q_NULLPTR;
+}
+
+
+void ProgressPainter::setText(QString text)
+{
+	textValue->setText(text);
+}
+
+
+void ProgressPainter::setThisValue(qreal val)
+{
+	setSize(val);
+	update();
+}
+
+
+void ProgressPainter::animate(bool val)
+{
+	if (val) {
+		setSize(40);
+		textValue->setText("");
+		animator->setStartValue(-size());
+		animator->setEndValue(width());
+		animator->start();
+	}
+	else {
+		textValue->setText(QString::number(value()) + "%");
+		animator->stop();
+		setStartPoint(0);
+		update();
+	}
+}
+
+
+void ProgressPainter::paintEvent(QPaintEvent *event)
+{
+	QPainter painter(this);
+	painter.fillRect(startPoint(), 0, size(), height(), backgroundColor());
+	Q_UNUSED(event);
+}

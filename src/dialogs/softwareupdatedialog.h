@@ -26,12 +26,14 @@ public:
 	explicit SoftwareUpdateDialog(QDialog *parent = Q_NULLPTR);
 	void setVersionNotes(QString nodes);
 	void setDownloadUrl(QString url);
+	void setType(QString string);
 
 	~SoftwareUpdateDialog();
 
 private:
 	Ui::SoftwareUpdateDialog *ui;
 	QString downloadUrl;
+	QString type;
 };
 
 #endif //SOFTWAREUPDATEDIALOG_H

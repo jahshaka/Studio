@@ -34,3 +34,12 @@ else()
 				${DestDir}/${dir})
 endif()
 endforeach()
+
+#change path base on ide. current pathe is xcode
+if (APPLE)
+    add_custom_command(
+        TARGET Jahshaka POST_BUILD
+        COMMAND cp -r -v
+            ${DestDir}/Debug/downloader.app
+            ${DestDir}/Debug/${PROJECT_NAME}.app/Contents/MacOS)
+endif()

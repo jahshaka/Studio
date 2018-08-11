@@ -25,11 +25,24 @@ SoftwareUpdateDialog::SoftwareUpdateDialog(QDialog *parent) : QDialog(parent), u
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
 	connect(ui->download, &QPushButton::clicked, [this]() {
-		qDebug() << downloadUrl;
+		//qDebug() << QDir::currentPath();
 		//QDesktopServices::openUrl(downloadUrl);
 		QProcess *process = new QProcess(this);
-		QString file = QDir::currentPath() + "/downloader/Debug/downloader.exe";
-		process->start(file, QStringList("http://ipv4.download.thinkbroadband.com:8080/50MB.zip"));
+        QStringList args;
+        args << downloadUrl;
+#ifdef WIN32
+		QString file = QDir::currentPath() + "/bin/Debug/downloader.exe";
+        process->start(file, args);
+#else
+        QString file = QDir::currentPath() + "/downloader.app";
+        process->setProgram(file);
+        process->setArguments(args);
+        process->start(file, args);
+     //   qDebug() << process->readAllStandardError();
+     //   qDebug() << process->waitForStarted();        
+#endif
+		QStringList cmdline_args = QCoreApplication::arguments();
+		this->close();
 	});
 
 	connect(ui->close, &QPushButton::clicked, [this]() {
@@ -52,6 +65,11 @@ void SoftwareUpdateDialog::setVersionNotes(QString notes)
 void SoftwareUpdateDialog::setDownloadUrl(QString url)
 {
 	this->downloadUrl = url;
+}
+
+void SoftwareUpdateDialog::setType(QString string)
+{
+	type = string;
 }
 
 SoftwareUpdateDialog::~SoftwareUpdateDialog()

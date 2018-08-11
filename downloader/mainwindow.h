@@ -3,7 +3,7 @@
 
 #include <QMainWindow>
 #include <QNetworkAccessManager>
-#include "../../src/subclass/progressbar.h"
+#include "progressbar.h"
 
 namespace Ui {
 class MainWindow;
@@ -33,6 +33,8 @@ public:
 
 private:
     Ui::MainWindow *ui;
+	bool hasError;
+	QString appName;
 };
 
 #endif // MAINWINDOW_H
