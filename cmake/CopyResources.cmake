@@ -34,3 +34,12 @@ else()
 				${DestDir}/${dir})
 endif()
 endforeach()
+
+#change path base on ide. current pathe is xcode
+if (APPLE)
+    add_custom_command(
+        TARGET Jahshaka POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${DestDir}/downloader.app
+            ${DestDir}/${PROJECT_NAME}.app/Contents/MacOS/downloader.app)
+endif()

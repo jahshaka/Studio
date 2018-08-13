@@ -196,7 +196,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	setupUndoRedo();
 
 	restoreGeometry(settings->getValue("geometry", "").toByteArray());
-	//restoreState(settings->getValue("windowState", "").toByteArray());
+	restoreState(settings->getValue("windowState", "").toByteArray());
 
 	undoStackCount = 0;
 }
@@ -539,6 +539,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 #endif // !BUILD_PLAYER_ONLY
 
 	settings->setValue("geometry", saveGeometry());
+	settings->setValue("windowState", saveState());
 
     ThumbnailGenerator::getSingleton()->shutdown();
 }

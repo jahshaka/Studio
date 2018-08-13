@@ -24,6 +24,7 @@ class Database;
 #include <QFileDialog>
 #include <QLineEdit>
 #include <QHBoxLayout>
+#include <QComboBox>
 
 #include "../io/assetmanager.h"
 #include "../dialogs/progressdialog.h"
