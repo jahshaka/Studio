@@ -16,7 +16,7 @@
 
 Jahshaka brings you the future of immersive digital content creation with the leading free and open source digital content creation suite.
 
-![](https://i.imgur.com/BYt24c1.jpg)
+![](https://i.imgur.com/Z7VZhGy.jpg)
 
 ## Features:
  - View scenes in virtual reality via the Oculus Rift
@@ -42,6 +42,9 @@ Jahshaka brings you the future of immersive digital content creation with the le
 
 #### Shader format
 ![](https://i.imgur.com/sgaQpC8.png)
+
+### Bullet Physics
+![](https://giant.gfycat.com/TemptingRingedAsianwaterbuffalo.gif)
 
 #### Monero Miner
 ![](https://i.imgur.com/aCY90YE.gif)

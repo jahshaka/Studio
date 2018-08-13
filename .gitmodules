@@ -7,9 +7,6 @@
 [submodule "irisgl/src/bullet3"]
 	path = irisgl/src/bullet3
 	url = https://github.com/bulletphysics/bullet3.git
-[submodule "thirdparty/xmr-stak"]
-	path = thirdparty/xmr-stak
-	url = https://github.com/jahshaka/xmr-stak.git
 [submodule "thirdparty/miner"]
 	path = thirdparty/miner
 	url = https://github.com/jahshaka/Miner

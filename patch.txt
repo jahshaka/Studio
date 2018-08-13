@@ -1,0 +1,56 @@
+diff --git a/downloader/mainwindow.cpp b/downloader/mainwindow.cpp
+index 71765b4..4daa9d9 100644
+--- a/downloader/mainwindow.cpp
++++ b/downloader/mainwindow.cpp
+@@ -3,6 +3,7 @@
+ #include <QtNetwork/QNetworkRequest>
+ #include <QtNetwork/QNetworkReply>
+ #include <QFile>
++#include <QFileInfo>
+ #include <QMessageBox>
+ #include <QProcess>
+ #include <qstandardpaths.h>
+@@ -19,6 +20,7 @@ MainWindow::MainWindow(QWidget *parent) :
+ 	hasError = false;
+ 
+ 	appName = +"/"+ QUrl(QCoreApplication::arguments()[1]).fileName();
++        qDebug() << appName;
+ 	doDownload(QCoreApplication::arguments()[1]);
+         
+ 	/*appName = "/cop.exe";
+@@ -38,9 +40,10 @@ MainWindow::~MainWindow()
+ 
+ void MainWindow::doDownload(QString url)
+ {
+-    QNetworkRequest request(url+"!");
++    QNetworkRequest request(url);
+     QNetworkReply *reply = manager.get(request);
+-	file = new QFile(QStandardPaths::writableLocation(QStandardPaths::TempLocation) + appName);
++    QString filePath = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + appName;
++	file = new QFile(filePath);
+ 	file->open(QFile::ReadWrite);
+ 
+     connect(reply, &QNetworkReply::readyRead,[&, reply]()
+@@ -88,7 +91,8 @@ void MainWindow::doDownload(QString url)
+ 			// request it be executed
+ 			file->close();
+ 
+-			qDebug() << file->fileName();
++            qDebug() << file->fileName();
++            qDebug() << "finished";
+ 			QProcess *process = new QProcess(this);
+ 			QThread::sleep(3);
+ 
+@@ -100,7 +104,12 @@ void MainWindow::doDownload(QString url)
+ 				progressBar->clearButtonConnection();
+ 
+ 				connect(progressBar->confirmButton(), &QPushButton::clicked, [=]() {
++#ifdef Q_OS_MACOS
++                     process->startDetached("hdiutil", QStringList({"attach",file->fileName()}));
++#endif
++#ifdef Q_OS_WIN
+ 					process->startDetached(file->fileName());
++#endif
+ 				});
+ 
+ 				connect(progressBar->cancelButton(), &QPushButton::clicked, [=]() {

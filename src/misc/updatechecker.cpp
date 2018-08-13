@@ -24,10 +24,22 @@ UpdateChecker::UpdateChecker()
 {
 	
 }
+void UpdateChecker::checkForPlayerUpdate(){
+    url = Constants::PLAYER_CHECK_URL + Constants::CONTENT_VERSION;
+    checkForUpdate();
+}
+void UpdateChecker::checkForAppUpdate(){
+    url = Constants::UPDATE_CHECK_URL + Constants::CONTENT_VERSION;
+	checkForUpdate();
+}
+void UpdateChecker::checkForMinerUpdate(){
+    url = Constants::MINER_CHECK_URL + Constants::CONTENT_VERSION;
+	checkForUpdate();
+}
 
 void UpdateChecker::checkForUpdate()
 {
-	auto reply = manager.get(QNetworkRequest(QUrl(Constants::UPDATE_CHECK_URL + Constants::CONTENT_VERSION)));
+	auto reply = manager.get(QNetworkRequest(url));
 	if (reply) {
 		connect(reply, &QNetworkReply::finished, [this, reply]() {
 			QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
@@ -38,7 +50,15 @@ void UpdateChecker::checkForUpdate()
 
 			auto nextVersion = obj.value("id").toString();
 			auto versionNotes = obj.value("notes").toString();
-			auto downloadLink = obj.value("download_url").toString();
+
+#ifdef Q_OS_WIN 
+			auto downloadLink = obj.value("windows_url").toString();
+#elif defined Q_OS_MACOS
+			auto downloadLink = obj.value("mac_url").toString();
+#else Q_OS_LINUX
+			auto downloadLink = obj.value("linux_url").toString();
+#endif
+
 
 			emit updateNeeded(nextVersion, versionNotes, downloadLink);
 		});

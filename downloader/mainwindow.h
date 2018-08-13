@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include <QNetworkAccessManager>
+#include "progressbar.h"
 
 namespace Ui {
 class MainWindow;
@@ -27,11 +28,13 @@ public:
     void doDownload(QString url);
     void startDownload();
     bool isHttpRedirect(QNetworkReply *reply);
-
+	ProgressBar *progressBar;
     QFile* file;
 
 private:
     Ui::MainWindow *ui;
+	bool hasError;
+	QString appName;
 };
 
 #endif // MAINWINDOW_H

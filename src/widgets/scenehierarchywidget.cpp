@@ -719,6 +719,11 @@ void SceneHierarchyWidget::OnLstItemsCommitData(QWidget *listItem)
     if (!newName.isEmpty() && selectedNode) selectedNode->setName(newName);
 }
 
+QTreeWidget * SceneHierarchyWidget::getWidget()
+{
+    return ui->sceneTree;
+}
+
 SceneHierarchyWidget::~SceneHierarchyWidget()
 {
     delete ui;
