@@ -16,7 +16,7 @@ ProgressBar::ProgressBar(QWidget *parent)
 {
 	configureUI();
 	configureConnection();
-	//show();
+    adjustSize();
 }
 
 
@@ -43,8 +43,8 @@ QPushButton * ProgressBar::cancelButton()
 
 void ProgressBar::clearButtonConnection()
 {
-	disconnect(confirm);
-	disconnect(cancel);
+    confirm->disconnect();
+    cancel->disconnect();
 }
 
 void ProgressBar::setBackgroundColor(QColor color){
@@ -59,7 +59,7 @@ void ProgressBar::setCloseable(bool value){
 void ProgressBar::configureUI()
 {
     setMinimumWidth(360);
-	//setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::X11BypassWindowManagerHint);
+    setWindowFlags(Qt::CustomizeWindowHint | Qt::WindowCloseButtonHint);
 	setAttribute(Qt::WA_TranslucentBackground);
 
 	title = new QLabel(this);
@@ -135,7 +135,7 @@ void ProgressBar::configureUI()
 	content->setGraphicsEffect(effect);    
 	show();
 
-	//adjustSize();
+	adjustSize();
 }
 
 
@@ -259,6 +259,7 @@ void ProgressBar::showConfirmationDialog()
 		"");
 
 	widget->show();
+    clearButtonConnection();
 
 	connect(confirm, &QPushButton::clicked, [=]() {
 		this->close();
@@ -320,7 +321,6 @@ void ProgressBar::close()
 {
 	qApp->quit();
 }
-
 
 ///////////////////////////////////////////////////////////////////////
 ProgressPainter::ProgressPainter(QWidget *parent)
