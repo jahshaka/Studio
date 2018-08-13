@@ -68,6 +68,7 @@ public slots:
 	void setTitle(QString string);
 	void close();
     void setCloseable(bool value);
+	void screenChanged();
 protected:
 	void paintEvent(QPaintEvent *event);
 	void mousePressEvent(QMouseEvent *event);

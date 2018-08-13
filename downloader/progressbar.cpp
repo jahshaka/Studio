@@ -55,6 +55,11 @@ void ProgressBar::setCloseable(bool value){
     canClose = value;
 }
 
+void ProgressBar::screenChanged()
+{
+	resize(width(), height());
+}
+
 
 void ProgressBar::configureUI()
 {
@@ -97,7 +102,7 @@ void ProgressBar::configureUI()
 	font.setPixelSize(15);
 	title->setFont(font);
 
-	contentLayout->setContentsMargins(5, 5, 5, 5);
+	contentLayout->setContentsMargins(0,0,0,0);
 	contentLayout->setSpacing(0);
 	contentLayout->addWidget(title);
 	contentLayout->addWidget(proPainter);
@@ -160,6 +165,7 @@ void ProgressBar::configureConnection()
 		proPainter->setText(text());
 	});
 
+	connect(window()->windowHandle(), SIGNAL(screenChanged(QScreen*)), this, SLOT(screenChanged()));
 
 	auto shorty = new QShortcut(QKeySequence("s"), this);
 	connect(shorty, &QShortcut::activated, [=]() {
