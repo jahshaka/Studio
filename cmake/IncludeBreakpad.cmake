@@ -7,7 +7,7 @@ endif()
 
 if(USE_BREAKPAD)
 	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/breakpad)
-	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/crash_handler)
+	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/extras/crash_handler)
 
 	set(HEADERS ${HEADERS} src/breakpad/breakpad.h)
 
