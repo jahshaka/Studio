@@ -165,9 +165,9 @@ int main(int argc, char *argv[])
     
 #ifdef BUILD_PLAYER_ONLY
     updateChecker.checkForPlayerUpdate();
-#endif
-    
+#else
     updateChecker.checkForAppUpdate();
+#endif
     
     
 //		updateChecker.checkForUpdate();
