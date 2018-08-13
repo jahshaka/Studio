@@ -47,12 +47,20 @@ void ProgressBar::clearButtonConnection()
 	disconnect(cancel);
 }
 
+void ProgressBar::setBackgroundColor(QColor color){
+    proPainter->setBackgroundColor(color);
+}
+
+void ProgressBar::setCloseable(bool value){
+    canClose = value;
+}
+
 
 void ProgressBar::configureUI()
 {
     setMinimumWidth(360);
 	//setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::X11BypassWindowManagerHint);
-	//setAttribute(Qt::WA_TranslucentBackground);
+	setAttribute(Qt::WA_TranslucentBackground);
 
 	title = new QLabel(this);
 	content = new QWidget;
@@ -65,7 +73,9 @@ void ProgressBar::configureUI()
 	showingCancelDialog = false;
 	confirmationText = tr("would you like to close the dialog?");
 	opacity = new QGraphicsOpacityEffect;
-
+    canClose = true;
+    
+    layout->setSizeConstraint(QLayout::SetFixedSize);
 	setLayout(layout);
 	layout->setContentsMargins(0, 0, 0, 0);
 	layout->setSpacing(0);
@@ -87,7 +97,7 @@ void ProgressBar::configureUI()
 	font.setPixelSize(15);
 	title->setFont(font);
 
-	contentLayout->setContentsMargins(10, 10, 10, 10);
+	contentLayout->setContentsMargins(5, 5, 5, 5);
 	contentLayout->setSpacing(0);
 	contentLayout->addWidget(title);
 	contentLayout->addWidget(proPainter);
@@ -96,6 +106,7 @@ void ProgressBar::configureUI()
 	font.setBold(true);
 	font.setPixelSize(12);
 	font.setStretch(120);
+    closeBtn->setVisible(false);
 	closeBtn->setFont(font);
 	closeBtn->setText("X");
 	closeBtn->setFixedSize(buttonSize, buttonSize);
@@ -122,7 +133,6 @@ void ProgressBar::configureUI()
 	effect->setOffset(0);
 	effect->setColor(QColor(0, 0, 0, 200));
 	content->setGraphicsEffect(effect);    
-    layout->setSizeConstraint(QLayout::SetFixedSize);
 	show();
 
 	//adjustSize();
@@ -214,7 +224,9 @@ void ProgressBar::mouseDoubleClickEvent(QMouseEvent *event)
 
 void ProgressBar::closeEvent(QCloseEvent * event)
 {
-	qDebug() << "close";
+    if(!canClose) return;
+    event->ignore();
+    closeBtn->click();
 }
 
 
@@ -228,7 +240,7 @@ void ProgressBar::showConfirmationDialog()
 	auto buttonLayout = new QHBoxLayout;
 	widget = new QWidget;
 
-	contentLayout->addWidget(widget);
+	layout->addWidget(widget);
 
 	auto questionLabel = new QLabel(confirmationText);
 	QFont font = questionLabel->font();
@@ -248,15 +260,12 @@ void ProgressBar::showConfirmationDialog()
 
 	widget->show();
 
-
 	connect(confirm, &QPushButton::clicked, [=]() {
 		this->close();
 	});
 
-
 	connect(cancel, &QPushButton::clicked, [=]() {
-		widget->hide();
-		showingCancelDialog = false;
+        hideConfirmationDialog();
 	});
 }
 

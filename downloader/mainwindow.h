@@ -26,7 +26,6 @@ public:
     ~MainWindow();
 
     void doDownload(QString url);
-    void startDownload();
     bool isHttpRedirect(QNetworkReply *reply);
 	ProgressBar *progressBar;
     QFile* file;

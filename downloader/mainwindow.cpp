@@ -20,7 +20,6 @@ MainWindow::MainWindow(QWidget *parent) :
 	hasError = false;
 
 	appName = +"/"+ QUrl(QCoreApplication::arguments()[1]).fileName();
-        qDebug() << appName;
 	doDownload(QCoreApplication::arguments()[1]);
         
 	/*appName = "/cop.exe";
@@ -45,6 +44,8 @@ void MainWindow::doDownload(QString url)
     QString filePath = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + appName;
 	file = new QFile(filePath);
 	file->open(QFile::ReadWrite);
+    progressBar->setTitle("Downloading update...");
+
 
 	QProcess *process = new QProcess(this);
 	QObject::connect(process, &QProcess::readyReadStandardOutput, [this, process]()
@@ -69,7 +70,6 @@ void MainWindow::doDownload(QString url)
 
     connect(reply, &QNetworkReply::downloadProgress,[&](qint64 bytesReceived, qint64 bytesTotal)
     {
-        //qDebug()<<bytesReceived << "/" << bytesTotal;
 		if (bytesTotal <= 0) return;
 		progressBar->setMaximum(bytesTotal);
 		progressBar->setValue(bytesReceived);
@@ -95,6 +95,7 @@ void MainWindow::doDownload(QString url)
 
 		if (isHttpRedirect(reply)) {
 			// follow download
+            progressBar->setTitle(tr("Redirectting.."));
 			for (auto pair : reply->rawHeaderPairs()) {
 				if (pair.first == "Location") {
 					doDownload(pair.second);
@@ -128,30 +129,9 @@ void MainWindow::doDownload(QString url)
 	});
 }
 
-void MainWindow::startDownload()
-{
-    QStringList args = QCoreApplication::instance()->arguments();
-    args.takeFirst();           // skip the first argument, which is the program's name
-    if (args.isEmpty()) {
-        printf("Qt Download example - downloads all URLs in parallel\n"
-               "Usage: download url1 [url2... urlN]\n"
-               "\n"
-               "Downloads the URLs passed in the command-line to the local directory\n"
-               "If the target file already exists, a .0, .1, .2, etc. is appended to\n"
-               "differentiate.\n");
-        QCoreApplication::instance()->quit();
-        return;
-    }
-
-    //auto url = args[0];
-    auto url = "http://github.com/jahshaka/VR/releases/download/v0.6.1-alpha/jahshaka-win-0.6.1-alpha.exe";
-    doDownload(url);
-}
-
 bool MainWindow::isHttpRedirect(QNetworkReply *reply)
 {
     int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    qDebug()<<statusCode;
     return statusCode == 301 || statusCode == 302 || statusCode == 303
            || statusCode == 305 || statusCode == 307 || statusCode == 308;
 }
