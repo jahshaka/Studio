@@ -13,23 +13,20 @@ MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent){
 
 	progressBar = new ProgressBar;
-	//progressBar->show();
-	//progressBar->adjustSize();
+	progressBar->adjustSize();
 	progressBar->setTitle("Downloading update...");
 	progressBar->setMode(ProgressBar::Mode::Indefinite);
 	hasError = false;
 
 	appName = +"/"+ QUrl(QCoreApplication::arguments()[1]).fileName();
 	doDownload(QCoreApplication::arguments()[1]);
+    
         
-	/*appName = "/cop.exe";
-	doDownload(url);*/
-
-#if QT_CONFIG(ssl)
-    qDebug()<<"using ssl";
-#else
-    qDebug()<<"not using ssl";
-#endif
+//#if QT_CONFIG(ssl)
+//    qDebug()<<"using ssl";
+//#else
+//    qDebug()<<"not using ssl";
+//#endif
 }
 
 MainWindow::~MainWindow()
@@ -46,22 +43,7 @@ void MainWindow::doDownload(QString url)
 	file->open(QFile::ReadWrite);
     progressBar->setTitle("Downloading update...");
 
-
 	QProcess *process = new QProcess(this);
-	QObject::connect(process, &QProcess::readyReadStandardOutput, [this, process]()
-	{
-		qDebug().noquote() << QString(process->readAllStandardOutput());
-	});
-	QObject::connect(process, &QProcess::readyReadStandardError, [this, process]()
-	{
-		qDebug().noquote() << QString(process->readAllStandardError());
-	});
-	QObject::connect(process, &QProcess::errorOccurred, [this, process](QProcess::ProcessError error)
-	{
-		qDebug() << "Process Error: " << error;
-		qDebug() << process->readAllStandardOutput();
-
-	});
 
     connect(reply, &QNetworkReply::readyRead,[&, reply]()
     {
@@ -77,7 +59,6 @@ void MainWindow::doDownload(QString url)
 
     connect(reply, QOverload<QNetworkReply::NetworkError>::of(&QNetworkReply::error),[&](QNetworkReply::NetworkError error)
     {
-
 		progressBar->setTitle("Error downloading update");
 		progressBar->setConfirmationText("there was an error downloading this update");
 		progressBar->setConfirmationButtons("ok", "", true, false);
@@ -95,7 +76,7 @@ void MainWindow::doDownload(QString url)
 
 		if (isHttpRedirect(reply)) {
 			// follow download
-            progressBar->setTitle(tr("Redirectting.."));
+            progressBar->setTitle(tr("Redirectting..."));
 			for (auto pair : reply->rawHeaderPairs()) {
 				if (pair.first == "Location") {
 					doDownload(pair.second);

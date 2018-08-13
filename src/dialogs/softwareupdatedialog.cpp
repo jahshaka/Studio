@@ -13,7 +13,6 @@ For more information see the LICENSE file
 #include "ui_softwareupdatedialog.h"
 
 #include <QDesktopServices>
-#include <QDebug>
 #include "core/settingsmanager.h"
 #include <QProcess>
 
@@ -38,8 +37,6 @@ SoftwareUpdateDialog::SoftwareUpdateDialog(QDialog *parent) : QDialog(parent), u
         process->setProgram(file);
         process->setArguments(args);
         process->start(file, args);
-     //   qDebug() << process->readAllStandardError();
-     //   qDebug() << process->waitForStarted();        
 #endif
 		QStringList cmdline_args = QCoreApplication::arguments();
 		this->close();
