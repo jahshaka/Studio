@@ -39,7 +39,7 @@ endforeach()
 if (APPLE)
     add_custom_command(
         TARGET Jahshaka POST_BUILD
-        COMMAND cp -r -v
-            ${DestDir}/${CMAKE_BUILD_TYPE}/downloader.app
-            ${DestDir}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}.app/Contents/MacOS)
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${DestDir}/downloader.app
+            ${DestDir}/${PROJECT_NAME}.app/Contents/MacOS/downloader.app)
 endif()

@@ -49,7 +49,7 @@ private:
 
 	bool animating;
 	bool showingCancelDialog;
-
+    bool canClose;
 	void configureUI();
 	void configureConnection();
 	void updateMode();
@@ -57,6 +57,7 @@ signals:
 	void confirmButtonClicked();
 	void cancelButtonClicked();
 public slots:
+    void setBackgroundColor(QColor color);
 	void showConfirmationDialog();
 	void hideConfirmationDialog();
 	void setConfirmationText(QString string);
@@ -66,6 +67,8 @@ public slots:
 	void setMode(ProgressBar::Mode mode);
 	void setTitle(QString string);
 	void close();
+    void setCloseable(bool value);
+	void screenChanged();
 protected:
 	void paintEvent(QPaintEvent *event);
 	void mousePressEvent(QMouseEvent *event);

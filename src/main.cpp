@@ -169,9 +169,7 @@ int main(int argc, char *argv[])
     updateChecker.checkForAppUpdate();
 #endif
     
-    
-//		updateChecker.checkForUpdate();
-    //}
+//}
 //#endif // QT_DEBUG
 
 	app.installEventFilter(new ToolTipHelper());
