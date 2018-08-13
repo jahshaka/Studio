@@ -104,8 +104,8 @@ void MainWindow::doDownload(QString url)
 		else {
 			if (!hasError) {
 				progressBar->setTitle("Download complete");
-				progressBar->setConfirmationText("Would you like to execute the file?");
-				progressBar->setConfirmationButtons("yes", "later", true, true);
+				progressBar->setConfirmationText("Would you like to run the installer?");
+				progressBar->setConfirmationButtons("yes", "no", true, true);
 				progressBar->showConfirmationDialog();
 				progressBar->clearButtonConnection();
 
