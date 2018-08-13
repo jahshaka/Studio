@@ -63,10 +63,11 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
 	futureWatcher = QPointer<QFutureWatcher<QVector<ModelData>>>(new QFutureWatcher<QVector<ModelData>>());
 	progressDialog = QPointer<ProgressDialog>(new ProgressDialog());
+	progressBar = QPointer<ProgressBar>(new ProgressBar());
 
 	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::finished, [&]() {
-		progressDialog->setRange(0, 0);
-		progressDialog->setLabelText(tr("Caching assets..."));
+		progressBar->setRange(0, 0);
+		progressBar->setTitle(tr("Caching assets..."));
 
 		// Meshes
 		// Note - this would be the perfect place to attach materials as well but we can't access the opengl context
@@ -183,16 +184,16 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 		}
 
 
-		progressDialog->setLabelText(tr("Opening scene..."));
+		progressBar->setTitle(tr("Opening scene..."));
 		emit fileToOpen(openInPlayMode);
-		progressDialog->close();
+		progressBar->close();
 	});
 
 
 	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressRangeChanged,
-		progressDialog.data(), &ProgressDialog::setRange);
+		progressBar.data(), &ProgressBar::setRange);
 	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressValueChanged,
-		progressDialog.data(), &ProgressDialog::setValue);
+		progressBar.data(), &ProgressBar::setValue);
 
     dynamicGrid = new DynamicGrid(this);
 
@@ -549,7 +550,7 @@ void ProjectManager::finalizeProjectAssetLoad()
 void ProjectManager::finishedFutureWatcher()
 {
     emit fileToOpen(settings->getValue("open_in_player", QVariant::fromValue(false)).toBool());
-    progressDialog->close();
+	progressBar->close();
 }
 
 void ProjectManager::openSampleBrowser()
@@ -623,7 +624,7 @@ void ProjectManager::loadProjectAssets()
     // As the project scope expands and projects get larger, it will be expanded for more (large) assets
     QVector<AssetList> assetsToLoad;
 
-	progressDialog->setLabelText(tr("Collecting assets..."));
+	progressBar->setTitle(tr("Collecting assets..."));
 
 	// TODO - if we are only loading a couple assets, just do it sequentially
 	for (const auto &asset : db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Mesh))) {
@@ -633,7 +634,7 @@ void ProjectManager::loadProjectAssets()
 		);
 	}
 
-    progressDialog->setLabelText(tr("Loading assets..."));
+	progressBar->setTitle(tr("Loading assets..."));
 
     AssetWidgetConcurrentWrapper aiSceneFromModelMapper(this);
     auto aiSceneFromModelReducer = [](QVector<ModelData> &accum, const ModelData &interm) {
@@ -645,7 +646,7 @@ void ProjectManager::loadProjectAssets()
 																  aiSceneFromModelReducer,
 																  QtConcurrent::OrderedReduce);
     futureWatcher->setFuture(future);
-    progressDialog->exec();
+	progressBar->show();
     futureWatcher->waitForFinished();
 }
 
