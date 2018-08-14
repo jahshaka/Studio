@@ -41,5 +41,19 @@ if (APPLE)
         TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${DestDir}/downloader.app
-            ${DestDir}/${APP_OUTPUT_NAME}.app/Contents/MacOS/downloader.app)
+            ${DestDir}/${PROJECT_NAME}.app/Contents/MacOS/downloader.app)
+
+    if(BUILD_PLAYER_ONLY)
+        add_custom_command(
+        TARGET Jahshaka POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove_directory
+            ${DestDir}/${PROJECT_NAME}.app/Contents/MacOS/app/materials )
+        add_custom_command(
+        TARGET Jahshaka POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove_directory
+            ${DestDir}/${PROJECT_NAME}.app/Contents/MacOS/app/content/materials )
+
+        
+    endif()
+
 endif()
