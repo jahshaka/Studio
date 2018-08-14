@@ -5,7 +5,12 @@ foreach(p CMP0071) # 3.10: Let AUTOMOC and AUTOUIC process GENERATED files
         cmake_policy(SET ${p} NEW)
     endif()
 endforeach()
-project(Jahshaka)
+
+if(BUILD_PLAYER_ONLY)
+    project(Jahplayer)
+else()
+    project(Jahshaka)
+endif()
 
 set(APP_OUTPUT_NAME "Jahshaka")
 
