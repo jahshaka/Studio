@@ -167,24 +167,6 @@ void ProgressBar::configureConnection()
     });
 
     connect(window()->windowHandle(), SIGNAL(screenChanged(QScreen*)), this, SLOT(screenChanged()));
-
-    auto shorty = new QShortcut(QKeySequence("s"), this);
-    connect(shorty, &QShortcut::activated, [=]() {
-        qsrand(static_cast<quint64>(QTime::currentTime().msecsSinceStartOfDay()));
-    //	setValue(qrand() % 100);
-    });
-
-
-    shorty = new QShortcut(QKeySequence("d"), this);
-    connect(shorty, &QShortcut::activated, [=]() {
-    //	setMode(Mode::Definite);
-    });
-
-
-    shorty = new QShortcut(QKeySequence("i"), this);
-    connect(shorty, &QShortcut::activated, [=]() {
-    //	setMode(Mode::Indefinite);
-    });
 }
 
 
@@ -194,14 +176,14 @@ void ProgressBar::updateMode()
         proPainter->animate(false);
         proPainter->setThisValue(value());
     }
-    if (mode == Mode::Indefinite) {
-        proPainter->animate(true);
-    }
+	else    proPainter->animate(true);
+    
 }
 
 
 void ProgressBar::paintEvent(QPaintEvent *event)
 {
+	//called so it does not paint the QProgressbar
     Q_UNUSED(event);
 }
 
@@ -209,22 +191,17 @@ void ProgressBar::paintEvent(QPaintEvent *event)
 void ProgressBar::mousePressEvent(QMouseEvent *event)
 {
     oldPos = event->globalPos();
-    Q_UNUSED(event);
+	QProgressBar::mousePressEvent(event);
 }
 
 
 void ProgressBar::mouseMoveEvent(QMouseEvent *event)
 {
-    //QPoint delta = event->globalPos() - oldPos;
-    //move(x() + delta.x(), y() + delta.y());
-    //oldPos = event->globalPos();
-    Q_UNUSED(event);
-}
-
-
-void ProgressBar::mouseDoubleClickEvent(QMouseEvent *event)
-{
-    Q_UNUSED(event);
+	/* may reimplement drag feature in the future 
+    QPoint delta = event->globalPos() - oldPos;
+    move(x() + delta.x(), y() + delta.y());
+    oldPos = event->globalPos();*/
+	QProgressBar::mouseMoveEvent(event);
 }
 
 void ProgressBar::closeEvent(QCloseEvent * event)
