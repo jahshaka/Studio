@@ -59,6 +59,9 @@ QProgressBar {
      <property name="value">
       <number>0</number>
      </property>
+     <property name="textVisible">
+      <bool>false</bool>
+     </property>
     </widget>
    </item>
   </layout>

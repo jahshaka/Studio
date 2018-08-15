@@ -50,13 +50,13 @@ WorldSettings::WorldSettings(Database *handle, SettingsManager* settings) :
     connect(ui->outlineWidth,   SIGNAL(valueChanged(double)),   SLOT(outlineWidthChanged(double)));
     connect(ui->outlineColor,   SIGNAL(onColorChanged(QColor)), SLOT(outlineColorChanged(QColor)));
 	connect(ui->showFPS,		SIGNAL(toggled(bool)),			SLOT(showFpsChanged(bool)));
-	connect(ui->showPL,			SIGNAL(toggled(bool)),			SLOT(setShowPerspectiveLabel(bool)));
+	//connect(ui->showPL,			SIGNAL(toggled(bool)),			SLOT(setShowPerspectiveLabel(bool)));
 	connect(ui->autoSave,       SIGNAL(toggled(bool)),          SLOT(enableAutoSave(bool)));
 	connect(ui->openInPlayer,   SIGNAL(toggled(bool)),          SLOT(enableOpenInPlayer(bool)));
 	connect(ui->mouseControls,	SIGNAL(currentTextChanged(const QString&)),	SLOT(mouseControlChanged(const QString&)));
 
 	QButtonGroup *buttonGroup = new QButtonGroup;
-	ui->showPL->setChecked(SettingsManager::getDefaultManager()->getValue("show_PL", true).toBool());
+	//ui->showPL->setChecked(SettingsManager::getDefaultManager()->getValue("show_PL", true).toBool());
 
 	buttonGroup->addButton(ui->viewport_2);
 	buttonGroup->addButton(ui->editor_2);

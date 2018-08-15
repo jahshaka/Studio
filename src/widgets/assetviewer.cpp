@@ -428,7 +428,7 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
     matball->setMaterial(material);
     matball->setLocalPos(position);
 
-    addNodeToScene(matball, guid, false, true);
+    addNodeToScene(matball, guid, false, true, false);
     lastNode = matball->getName();
 }
 
@@ -597,7 +597,7 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 * applied default material to mesh if one isnt present
 * ignore set to false means we only add it visually, usually to discard it afterw
 */
-void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid, bool viewed, bool cache)
+void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid, bool viewed, bool cache, bool isOnGround)
 {
 	if (!scene) {
 		// @TODO: set alert that a scene needs to be set before this can be done
@@ -606,7 +606,7 @@ void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QStr
 
 	auto aabb = getNodeBoundingBox(sceneNode);
     // change position for materials here
-	sceneNode->setLocalPos(QVector3D(0, -aabb.getMin().y() -5, 0));
+	if (isOnGround) sceneNode->setLocalPos(QVector3D(0, -aabb.getMin().y() -5, 0));
 
 	// apply default material to mesh nodes if they have none
 	if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {

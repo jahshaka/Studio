@@ -13,22 +13,36 @@ For more information see the LICENSE file
 #include "ui_softwareupdatedialog.h"
 
 #include <QDesktopServices>
-#include <QDebug>
 #include "core/settingsmanager.h"
+#include <QProcess>
 
 
 SoftwareUpdateDialog::SoftwareUpdateDialog(QDialog *parent) : QDialog(parent), ui(new Ui::SoftwareUpdateDialog)
 {
-	ui->setupUi(this);
+	ui->setupUi(this); 
 	setWindowTitle("Software Update");
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
-	connect(ui->pushButton, &QPushButton::clicked, [this]() {
-		qDebug() << downloadUrl;
-		QDesktopServices::openUrl(downloadUrl);
+	connect(ui->download, &QPushButton::clicked, [this]() {
+		//qDebug() << QDir::currentPath();
+		//QDesktopServices::openUrl(downloadUrl);
+		QProcess *process = new QProcess(this);
+        QStringList args;
+        args << downloadUrl;
+#ifdef WIN32
+		QString file = QCoreApplication::applicationDirPath() + QDir::separator() + "downloader.exe";
+        process->start(file, args);
+#else
+        QString file = QDir::currentPath() + "/downloader.app";
+        process->setProgram(file);
+        process->setArguments(args);
+        process->start(file, args);
+#endif
+		QStringList cmdline_args = QCoreApplication::arguments();
+		this->close();
 	});
 
-	connect(ui->pushButton_2, &QPushButton::clicked, [this]() {
+	connect(ui->close, &QPushButton::clicked, [this]() {
 		this->close();
 	});
 
@@ -48,6 +62,11 @@ void SoftwareUpdateDialog::setVersionNotes(QString notes)
 void SoftwareUpdateDialog::setDownloadUrl(QString url)
 {
 	this->downloadUrl = url;
+}
+
+void SoftwareUpdateDialog::setType(QString string)
+{
+	type = string;
 }
 
 SoftwareUpdateDialog::~SoftwareUpdateDialog()
