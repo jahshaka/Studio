@@ -455,3 +455,6 @@ target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBS})
 
 include(CopyResources)
 include(CopyDependencies)
+if(CMAKE_BUILD_TYPE STREQUAL Release)
+    include(ReleaseProcess)
+endif()
