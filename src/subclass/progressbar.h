@@ -30,8 +30,10 @@ public:
 
 
     void clearButtonConnection();
+    void close(int val);
+    void exec();
+
 private:
-    int _width = 360 * logicalDpiX() / 100;
     Mode mode;
     QLabel *title;
     QWidget *content;
@@ -42,10 +44,8 @@ private:
     QPoint oldPos;
     QPushButton *closeBtn;
 
-
     QString confirmationText;
     QGraphicsOpacityEffect *opacity;
-
 
     bool animating;
     bool showingCancelDialog;
@@ -66,15 +66,14 @@ public slots:
     void showCancelButton(bool showCancel);
     void setMode(ProgressBar::Mode mode);
     void setLabelText(QString string);
-    void close(int val);
     void setCloseable(bool value);
     void screenChanged();
+
 protected:
     void paintEvent(QPaintEvent *event);
     void mousePressEvent(QMouseEvent *event);
     void mouseMoveEvent(QMouseEvent *event);
     void closeEvent(QCloseEvent *event);
-    void exec();
 };
 
 class ProgressPainter : public QWidget
