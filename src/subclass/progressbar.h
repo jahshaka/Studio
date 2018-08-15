@@ -65,8 +65,8 @@ public slots:
     void showConfirmButton(bool showConfirm);
     void showCancelButton(bool showCancel);
     void setMode(ProgressBar::Mode mode);
-    void setTitle(QString string);
-    void close();
+    void setLabelText(QString string);
+    void close(int val);
     void setCloseable(bool value);
     void screenChanged();
 protected:
@@ -74,6 +74,7 @@ protected:
     void mousePressEvent(QMouseEvent *event);
     void mouseMoveEvent(QMouseEvent *event);
     void closeEvent(QCloseEvent *event);
+    void exec();
 };
 
 class ProgressPainter : public QWidget

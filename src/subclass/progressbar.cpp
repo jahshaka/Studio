@@ -8,8 +8,6 @@
 #include <QScreen>
 #include <QDesktopWidget>
 #include <QWindow>
-#include <QDebug>
-
 
 ProgressBar::ProgressBar(QWidget *parent)
     : QProgressBar(parent)
@@ -92,7 +90,7 @@ void ProgressBar::configureUI()
     content->setLayout(contentLayout);
     content->setStyleSheet("background:rgba(30,30,30,1);");
 
-    title->setText(tr("hi"));
+    title->setText(tr(""));
     title->setStyleSheet("color: rgba(255,255,255,1); padding: 5px;");
     title->setAlignment(Qt::AlignVCenter);
     title->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -133,14 +131,6 @@ void ProgressBar::configureUI()
     cancel->setFont(font);
     cancel->setText("No");
     cancel->setStyleSheet(confirm->styleSheet());
-
-//    auto effect = new QGraphicsDropShadowEffect(content);
-//    effect->setBlurRadius(10);
-//    effect->setOffset(0);
-//    effect->setColor(QColor(0, 0, 0, 200));
-//   // content->setGraphicsEffect(effect);
-    show();
-
     adjustSize();
 }
 
@@ -156,7 +146,7 @@ void ProgressBar::configureConnection()
         connect(cancel, &QPushButton::clicked, [=]() {
             widget->setVisible(false);
         });
-        connect(confirm, &QPushButton::clicked, [=]() { close(); });
+        connect(confirm, &QPushButton::clicked, [=]() { close(1); });
     });
 
 
@@ -217,7 +207,6 @@ void ProgressBar::showConfirmationDialog()
     if (showingCancelDialog) return;
     showingCancelDialog = true;
 
-
     auto widgetlayout = new QVBoxLayout;
     auto buttonLayout = new QHBoxLayout;
     widget = new QWidget;
@@ -244,7 +233,7 @@ void ProgressBar::showConfirmationDialog()
     clearButtonConnection();
 
     connect(confirm, &QPushButton::clicked, [=]() {
-        this->close();
+        this->close(1);
     });
 
     connect(cancel, &QPushButton::clicked, [=]() {
@@ -294,15 +283,30 @@ void ProgressBar::setMode(ProgressBar::Mode mode)
 }
 
 
-void ProgressBar::setTitle(QString string)
+void ProgressBar::setLabelText(QString string)
 {
     title->setText(string);
 }
 
-void ProgressBar::close()
+void ProgressBar::close(int val)
 {
-    qApp->quit();
+    switch (val) {
+        case 0:
+            qApp->quit();
+            break;
+        case 1:
+            this->hide();
+            break;
+        default:
+            break;
+    }
 }
+
+void ProgressBar::exec(){
+    this->setWindowModality(Qt::ApplicationModal);
+    this->show();
+}
+
 
 ///////////////////////////////////////////////////////////////////////
 ProgressPainter::ProgressPainter(QWidget *parent)
