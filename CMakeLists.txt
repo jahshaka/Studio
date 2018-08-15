@@ -439,6 +439,8 @@ set(LIBS ${LIBS} JahMiner)
 endif(MINER_ENABLED)
 
 #force build downloader
+#luckily, the jahshaka project has all the dependencies of the downloader project
+#so we dont need to run windeployqt or macdeployqt on the downloader specifically
 add_dependencies(${PROJECT_NAME} ${downloaderProject})
 
 if(USE_BREAKPAD)
