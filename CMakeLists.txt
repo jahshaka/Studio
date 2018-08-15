@@ -145,6 +145,8 @@ set(SRCS
     src/dialogs/toast.cpp
 	src/helpers/tooltip.cpp
 	src/subclass/switch.cpp
+	src/subclass/progressbar.cpp
+
 )
 
 set(HEADERS
@@ -277,6 +279,7 @@ set(HEADERS
     src/dialogs/toast.h
 	src/helpers/tooltip.h
 	src/subclass/switch.h
+	src/subclass/progressbar.h
 
 )
 
