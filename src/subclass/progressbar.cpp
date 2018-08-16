@@ -63,7 +63,7 @@ void ProgressBar::configureUI()
 {
     setMinimumWidth(360);
     setMinimumHeight(100);
-    setWindowFlags(Qt::CustomizeWindowHint | Qt::WindowCloseButtonHint);
+    setWindowFlags( Qt::WindowCloseButtonHint | Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground);
 
     title = new QLabel(this);

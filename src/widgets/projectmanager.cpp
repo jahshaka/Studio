@@ -62,7 +62,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 #endif
 
 	futureWatcher = QPointer<QFutureWatcher<QVector<ModelData>>>(new QFutureWatcher<QVector<ModelData>>());
-	progressDialog = QPointer<ProgressDialog>(new ProgressDialog());
+	progressDialog = QPointer<ProgressBar>(new ProgressBar());
 
 	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::finished, [&]() {
 		progressDialog->setRange(0, 0);
@@ -185,14 +185,23 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
 		progressDialog->setLabelText(tr("Opening scene..."));
 		emit fileToOpen(openInPlayMode);
-		progressDialog->close();
+		progressDialog->close(1);
 	});
 
 
-	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressRangeChanged,
-		progressDialog.data(), &ProgressDialog::setRange);
-	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressValueChanged,
-		progressDialog.data(), &ProgressDialog::setValue);
+//	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressRangeChanged,
+//		progressDialog.data(), &ProgressDialog::setRange);
+//	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressValueChanged,
+//		progressDialog.data(), &ProgressDialog::setValue);
+    
+    QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressRangeChanged,
+                     [=](int min, int max){
+                         progressDialog->setRange(min, max);
+                     });
+    QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressValueChanged,
+                     [=](int val){
+                         progressDialog->setValue(val);
+                     });
 
     dynamicGrid = new DynamicGrid(this);
 
@@ -549,7 +558,7 @@ void ProjectManager::finalizeProjectAssetLoad()
 void ProjectManager::finishedFutureWatcher()
 {
     emit fileToOpen(settings->getValue("open_in_player", QVariant::fromValue(false)).toBool());
-    progressDialog->close();
+    progressDialog->close(1);
 }
 
 void ProjectManager::openSampleBrowser()
