@@ -53,6 +53,7 @@ public:
     QMap<QString, int> boneMap;
     QList<BonePtr> bones;
 
+	bool hasBone(QString name);
     BonePtr getBone(QString name);
     QVector<QMatrix4x4> boneTransforms;
 
@@ -86,6 +87,9 @@ public:
     void applyAnimation(SkeletalAnimationPtr anim, float time);
 
     void applyAnimation(QMatrix4x4 inverseMeshMatrix, QMap<QString, QMatrix4x4> skeletonSpaceMatrices);
+
+	// copies transforms from another skeleton
+	void copyTransforms(SkeletonPtr skeleton);
 
     static SkeletonPtr create()
     {

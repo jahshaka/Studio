@@ -85,9 +85,24 @@ void Model::updateAnimation(float dt)
 	if (!!activeAnimation && !!skeleton) {
 		animTime += dt;
 		float time = animTime;
+
+		// apply animation to base skeleton
 		skeleton->applyAnimation(activeAnimation, time);
 
-		//todo: apply to children nodes
+		// gather transforms in list
+		QMap<QString, QMatrix4x4> skeletonSpaceMatrices;
+		auto root = skeleton->getRootBone();
+
+
+		for (auto mesh : meshes) {
+			// apply animations
+			if (mesh->hasSkeleton()) {
+				auto skel = mesh->getSkeleton();
+
+				// should fail, calculate the transforms manually
+				skel->applyAnimation(activeAnimation, time);
+			}
+		}
 	}
 }
 

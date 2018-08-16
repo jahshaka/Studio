@@ -195,6 +195,7 @@ void EditorVrController::update(float dt)
         rightBeamRenderItem->worldMatrix = rightHandRenderItem->worldMatrix;
 
 
+
         // Handle picking and movement of picked objects
         iris::PickingResult pick;
         if (rayCastToScene(leftHandRenderItem->worldMatrix, pick)) {
@@ -212,8 +213,19 @@ void EditorVrController::update(float dt)
 				leftScale = leftPickedNode->getLocalScale();
 
                 //calculate offset
-                //leftNodeOffset = leftPickedNode->getGlobalTransform() * leftHandRenderItem->worldMatrix.inverted();
-                leftNodeOffset =  leftHandRenderItem->worldMatrix.inverted() * leftPickedNode->getGlobalTransform();
+				// if there is a handle, offset by handle
+				// else offset by current hand render item
+				auto grabNode = this->findGrabNode(leftPickedNode);
+				if (!!grabNode) {
+					QMatrix4x4 grabTrans;
+					grabTrans.translate(grabNode->getGlobalPosition());
+					grabTrans.rotate(grabNode->getGlobalRotation());
+					//leftNodeOffset = grabNode->getGlobalTransform().inverted() * leftPickedNode->getGlobalTransform();
+					leftNodeOffset = grabTrans.inverted() * leftPickedNode->getGlobalTransform();
+				}
+				else {
+					leftNodeOffset = leftHandRenderItem->worldMatrix.inverted() * leftPickedNode->getGlobalTransform();
+				}
             }
 
         }

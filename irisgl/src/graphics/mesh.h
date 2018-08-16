@@ -91,8 +91,13 @@ enum class PrimitiveMode
 //todo: switch to using mesh pointer
 class Mesh
 {
+	//todo: remove skeleton and animations from mesh class
+	// they should now belong to the model class
     SkeletonPtr skeleton;
     QMap<QString, SkeletalAnimationPtr> skeletalAnimations;
+
+	QVector<QString> boneNames;
+	QVector<QMatrix4x4> skinMatrices;
 
 	QList<VertexBufferPtr> vertexBuffers;
 	IndexBufferPtr idxBuffer;
@@ -218,6 +223,15 @@ public:
 
 	AABB getAABB(){return aabb;}
 	BoundingSphere getBoundingSphere() { return boundingSphere; }
+
+	// passes skinning meshes to mesh
+	// the skeleton may be a part of the scene's hierarchy
+	// globalToLocal is the inverse of the MeshNode's global transform
+	// otherwise, it can be an identity matrix
+	void applySkeleton(SkeletonPtr skeleton, QMatrix4x4 globalToLocal);
+	void applySkeleton(SkeletonPtr skeleton);
+
+	void setSkinningMatrices(QMap<QString, QMatrix4x4> skeletonSpaceMatrices, QMatrix4x4 globalToLocal);
 
 private:
     void addVertexArray(VertexAttribUsage usage,void* data,int size,GLenum type,int numComponents);

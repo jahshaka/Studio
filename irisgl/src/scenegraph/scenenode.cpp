@@ -387,6 +387,7 @@ void SceneNode::applyAnimationPose(SceneNodePtr node, QMap<QString, QMatrix4x4> 
         if (node->sceneNodeType == SceneNodeType::Mesh) {
             auto meshNode = node.staticCast<MeshNode>();
             auto mesh = meshNode->getMesh();
+
             if (mesh != nullptr && mesh->hasSkeleton()) {
                 auto inverseMeshMatrix = skeletonSpaceMatrices[node->name].inverted();
                 mesh->getSkeleton()->applyAnimation(inverseMeshMatrix, skeletonSpaceMatrices);
@@ -396,6 +397,23 @@ void SceneNode::applyAnimationPose(SceneNodePtr node, QMap<QString, QMatrix4x4> 
 
     for (auto child : node->children) {
         applyAnimationPose(child, skeletonSpaceMatrices);
+    }
+}
+
+void SceneNode::applyAnimationPose(SceneNodePtr node, SkeletonPtr skeleton)
+{
+	if (skeleton->hasBone(node->name)) {
+        if (node->sceneNodeType == SceneNodeType::Mesh) {
+            auto meshNode = node.staticCast<MeshNode>();
+            auto mesh = meshNode->getMesh();
+
+			auto inverseMeshMatrix = skeleton->getBone(node->name)->transformMatrix.inverted();
+			mesh->applySkeleton(skeleton, inverseMeshMatrix);
+        }
+    }
+
+    for (auto child : node->children) {
+        applyAnimationPose(child, skeleton);
     }
 }
 
