@@ -83,6 +83,7 @@ int main(int argc, char *argv[])
 
 	Upgrader upgrader;
 	upgrader.checkIfDeprecatedVersion();
+    upgrader.checkIfSchemaNeedsUpdating();
 
     app.setWindowIcon(QIcon(":/images/icon.ico"));
 #ifdef BUILD_PLAYER_ONLY

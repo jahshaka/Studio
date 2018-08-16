@@ -1275,6 +1275,7 @@ void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool
     }
 
     db->updateAssetProperties(guid, QJsonDocument(viewer->getSceneProperties()).toBinaryData());
+    db->updateAssetViewFilter(guid, 2);
     //db->updateAssetThumbnail(guid, bytes);
 
     object["type"] = db->fetchAsset(guid).type;
@@ -1365,7 +1366,8 @@ void AssetView::addToLibrary(bool jfx)
                        AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(assetSnapshot)),
                        QJsonDocument(viewer->getSceneProperties()).toBinaryData(),
                        tagsDoc.toBinaryData(),
-                       QJsonDocument(viewer->getMaterial()).toBinaryData()
+                       QJsonDocument(viewer->getMaterial()).toBinaryData(),
+                       2
                    );
 		}
 		else {
@@ -1379,7 +1381,8 @@ void AssetView::addToLibrary(bool jfx)
                 AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(assetSnapshot)),
                 QJsonDocument(viewer->getSceneProperties()).toBinaryData(),
                 tagsDoc.toBinaryData(),
-                QJsonDocument(viewer->getMaterial()).toBinaryData()
+                QJsonDocument(viewer->getMaterial()).toBinaryData(),
+                2
             );
 		}
 

@@ -77,7 +77,8 @@ Database::Database()
         "    thumbnail         BLOB,"
         "    asset             BLOB,"
         "    tags			   BLOB,"
-        "    properties        BLOB"
+        "    properties        BLOB,"
+        "    view_filter       INTEGER"
         ")";
 
     dependenciesTableSchema =
@@ -130,6 +131,8 @@ Database::Database()
         "    hash              VARCHAR(16),"
         "    thumbnail		   BLOB"
         ")";
+
+    version072SchemaUpdate = "ALTER TABLE assets ADD view_filter INTEGER;";
 }
 
 Database::~Database()
@@ -435,15 +438,16 @@ QString Database::createAssetEntry(
     const QByteArray &thumbnail,
     const QByteArray &properties,
     const QByteArray &tags,
-    const QByteArray &asset)
+    const QByteArray &asset,
+    const int &view_filter)
 {
     QSqlQuery query;
     query.prepare(
         "INSERT INTO assets"
         " (name, thumbnail, parent, type, project_guid, collection, version, date_created,"
-        " last_updated, guid, properties, author, asset, license, tags)"
+        " last_updated, guid, properties, author, asset, license, tags, view_filter)"
         " VALUES (:name, :thumbnail, :parent, :type, :project_guid, 0, :version, datetime(),"
-        " datetime(), :guid, :properties, :author, :asset, :license, :tags)"
+        " datetime(), :guid, :properties, :author, :asset, :license, :tags, :view_filter)"
     );
 
     query.bindValue(":name", assetName);
@@ -458,6 +462,7 @@ QString Database::createAssetEntry(
     query.bindValue(":asset", asset);
     query.bindValue(":license", license);
     query.bindValue(":tags", tags);
+    query.bindValue(":view_filter", view_filter);
 
     if (executeAndCheckQuery(query, "CreateAssetEntry")) {
         return guid;
@@ -850,6 +855,23 @@ bool Database::updateAssetProperties(const QString &guid, const QByteArray &asse
     return executeAndCheckQuery(query, "UpdateAssetProperties");
 }
 
+bool Database::updateAssetViewFilter(const QString &guid, const int &filter)
+{
+    QSqlQuery query;
+    query.prepare("UPDATE assets SET view_filter = ? WHERE guid = ?");
+    query.addBindValue(filter);
+    query.addBindValue(guid);
+    return executeAndCheckQuery(query, "UpdateAssetViewFilter");
+}
+
+void Database::updateSchema()
+{
+    // apply schema updates in order, those already applied will do nothing
+    QSqlQuery query;
+    query.prepare(version072SchemaUpdate);
+    executeAndCheckQuery(query, "072SchemaUpdate");
+}
+
 AssetRecord Database::fetchAsset(const QString &guid)
 {
     QSqlQuery query;
@@ -884,6 +906,7 @@ QVector<AssetRecord> Database::fetchAssets()
         "FROM assets A "
         "INNER JOIN collections C ON A.collection = C.collection_id "
         "WHERE A.project_guid IS NULL "
+        "AND A.view_filter = 2 "
         "AND (A.type = :m OR A.type = :o OR A.type = :t OR A.type = :s OR A.type = :p) "
         "AND A.guid NOT IN (select dependee FROM dependencies) "
         "ORDER BY A.name DESC"
@@ -2384,6 +2407,38 @@ bool Database::hasDependencies(const QString &guid)
     }
 
     return false;
+}
+
+DatabaseMetadataRecord Database::getDbMetadata()
+{
+    QSqlQuery query;
+    query.prepare("SELECT date_created, hash, version, data FROM metadata");
+
+    if (query.exec()) {
+        query.next();
+    }
+    else {
+        irisLog(
+            "There was an error fetching db metadata " + query.lastError().text()
+        );
+    }
+
+    DatabaseMetadataRecord record;
+    record.dateCreated = query.value(0).toDateTime();
+    record.hash = query.value(1).toString();
+    record.version = query.value(2).toString();
+    record.data = query.value(3).toByteArray();
+
+    auto numbers = record.version.split(".");
+    record.major = numbers[0].toInt();
+    record.minor = numbers[1].toInt();
+
+    if (numbers[2].length() > 1) numbers[2].chop(1);
+    int dbPatch = numbers[2].toInt();
+
+    record.patch = dbPatch;
+
+    return record;
 }
 
 bool Database::importProject(const QString &inFilePath, const QString &newSceneGuid, QString &worldName, QMap<QString, QString> &outGuids)

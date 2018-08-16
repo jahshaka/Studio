@@ -67,7 +67,8 @@ public:
                              const QByteArray &thumbnail = QByteArray(),
                              const QByteArray &properties = QByteArray(),
                              const QByteArray &tags = QByteArray(),
-                             const QByteArray &asset = QByteArray());
+                             const QByteArray &asset = QByteArray(),
+                             const int &view_filter = 1);
     bool createDependency(const int &dependerType,
                           const int &dependeeType,
                           const QString &depender,
@@ -102,6 +103,9 @@ public:
     bool updateSceneThumbnail(const QString &guid, const QByteArray &asset);
     bool updateAssetMetadata(const QString &guid, const QString &name, const QByteArray &tags);
     bool updateAssetProperties(const QString &guid, const QByteArray &asset);
+    bool updateAssetViewFilter(const QString &guid, const int &filter);
+
+    void updateSchema();
 
     // FETCH ================================================================================
     AssetRecord fetchAsset(const QString &guid);
@@ -136,6 +140,8 @@ public:
 
     QStringList hasMultipleDependers(const QString &guid);
     bool hasDependencies(const QString &guid);
+
+    DatabaseMetadataRecord getDbMetadata();
 
     // IMPORT ===============================================================================
     bool importProject(const QString &inFilePath, const QString &newGuid, QString &worldName, QMap<QString, QString> &assetGuids);
@@ -203,6 +209,8 @@ private:
     QString foldersTableSchema;
     QString metadataTableSchema;
     QString favoritesTableSchema;
+
+    QString version072SchemaUpdate;
 
     QSqlDatabase db;
 };

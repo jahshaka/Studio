@@ -132,3 +132,42 @@ void Upgrader::checkIfDeprecatedVersion()
 		db.closeDatabase();
 	}
 }
+
+void Upgrader::checkIfSchemaNeedsUpdating()
+{
+    const QString path = IrisUtils::join(
+        QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::JAH_DATABASE
+    );
+
+    if (!QFile(path).exists()) return;
+
+    Database db;
+    if (db.initializeDatabase(path)) {
+        auto projectDb = db.getDbMetadata();
+
+        auto numbers = Constants::CONTENT_VERSION.split(".");
+        int dbMajor = numbers[0].toInt();
+        int dbMinor = numbers[1].toInt();
+
+        if (numbers[2].length() > 1) numbers[2].chop(1);
+        int dbPatch = numbers[2].toInt();
+
+        qDebug() << "INCOMING  " << dbMajor << dbMinor << dbPatch;
+        qDebug() << "CURRENT " << projectDb.major << projectDb.minor << projectDb.patch;
+
+        bool updateSchema = false;
+        bool majorGreater = false;
+        bool minorGreater = false;
+        bool patchGreater = false;
+
+        if (dbMajor > projectDb.major) majorGreater = true;
+        if (dbMinor > projectDb.minor) minorGreater = true;
+        if (dbPatch > projectDb.patch) patchGreater = true;
+
+        if (majorGreater || minorGreater || patchGreater) updateSchema = true;
+
+        // if (updateSchema) db.updateSchema();
+    }
+
+    db.closeDatabase();
+}

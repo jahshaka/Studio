@@ -18,13 +18,6 @@ For more information see the LICENSE file
 class Project
 {
 public:
-    QString folderPath;
-    QString projectName;
-	QString projectFolderGuid;
-    QString guid;
-
-    bool _saved;
-public:
     Project();
     void setProjectPath(const QString&, const QString &);
     void setProjectGuid(const QString&);
@@ -37,6 +30,13 @@ public:
     static Project *createNew();
 
     static const QStringList ModelTypesAsString;
+
+    QString folderPath;
+    QString projectName;
+    QString projectFolderGuid;
+    QString guid;
+
+    bool _saved;
 };
 
 struct ProjectTileData {
@@ -87,6 +87,19 @@ struct FolderRecord
     QDateTime   lastUpdated;
 	int	        count;
     bool        visible;
+};
+
+struct DatabaseMetadataRecord
+{
+    QDateTime dateCreated;
+    QString hash;
+    QString version;
+    QByteArray data;
+
+    // specific version
+    int major;
+    int minor;
+    int patch;
 };
 
 struct CollectionRecord
