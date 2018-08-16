@@ -104,8 +104,6 @@ public:
 	void importJahBundle(const QString &filename);
 	void importModel(const QString &filename, bool jfx = false);
 
-    void updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject definition);
-
 signals:
     void refreshCollections();
 

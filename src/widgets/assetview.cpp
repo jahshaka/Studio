@@ -1500,40 +1500,6 @@ void AssetView::fetchMetadata(AssetGridItem *widget)
 	}
 }
 
-void AssetView::updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject definition)
-{
-    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-        auto n = node.staticCast<iris::MeshNode>();
-        //n->meshPath = meshGuid;
-        auto mat_defs = definition.value("material").toObject();
-        auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-        for (auto prop : mat->properties) {
-            if (prop->type == iris::PropertyType::Texture) {
-                if (!mat_defs.value(prop->name).toString().isEmpty()) {
-                    mat->setValue(prop->name, mat_defs.value(prop->name).toString());
-                }
-            }
-            else if (prop->type == iris::PropertyType::Color) {
-                mat->setValue(
-                    prop->name,
-                    QVariant::fromValue(mat_defs.value(prop->name).toVariant().value<QColor>())
-                );
-            }
-            else {
-                mat->setValue(prop->name, QVariant::fromValue(mat_defs.value(prop->name)));
-            }
-        }
-    }
-
-    QJsonArray children = definition["children"].toArray();
-    // These will always be in sync since the definition is derived from the mesh
-    if (node->hasChildren()) {
-        for (int i = 0; i < node->children.count(); i++) {
-            updateNodeMaterialValues(node->children[i], children[i].toObject());
-        }
-    }
-}
-
 void AssetView::addAssetItemToProject(AssetGridItem *item)
 {
 	//auto rx = _navPane->rect().x() + viewer->rect().x();
@@ -1741,7 +1707,7 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
                 auto node = asset->getValue().value<iris::SceneNodePtr>();
                 auto material = db->fetchAssetData(guidReturned);
                 auto materialObj = QJsonDocument::fromBinaryData(material);
-                updateNodeMaterialValues(node, materialObj.object());
+                AssetHelper::updateNodeMaterial(node, materialObj.object());
             }
         }
     }
