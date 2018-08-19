@@ -155,6 +155,11 @@ void EditorVrController::update(float dt)
 
     camera->setLocalPos(camPos);
 
+	// lock rot to yaw so user is always right side up
+	auto yaw = camera->getLocalRot().toEulerAngles().y();
+	auto yawRot = QQuaternion::fromEulerAngles(0, yaw, 0);
+	camera->setLocalRot(yawRot);
+
     // touch controls
 
 	// LEFT CONTROLLER
