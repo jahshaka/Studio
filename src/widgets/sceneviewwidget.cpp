@@ -1588,7 +1588,13 @@ void SceneViewWidget::stopPlayingScene()
 
 		scene->updateSceneAnimation(0.0f);
 
-		restorePreviousCameraController();
+		// quick fix for the odd case when the user switched from the
+		// player to editor while having the vr headset on
+		// and the user get stuck with the viewer cam
+		if (this->prevCamController == viewerCam)
+			this->setCameraController(defaultCam);
+		else
+			this->restorePreviousCameraController();
 	}
 }
 
