@@ -187,14 +187,6 @@ void EditorVrController::update(float dt)
         leftBeamRenderItem->worldMatrix = leftHandRenderItem->worldMatrix;
 
 
-        world.setToIdentity();
-        world.translate(device->getHandPosition(1));
-        world.rotate(device->getHandRotation(1));
-        //world.scale(0.55f);
-        rightHandRenderItem->worldMatrix = camera->globalTransform * world;
-        rightBeamRenderItem->worldMatrix = rightHandRenderItem->worldMatrix;
-
-
         // Handle picking and movement of picked objects
         iris::PickingResult pick;
         if (rayCastToScene(leftHandRenderItem->worldMatrix, pick)) {
@@ -281,14 +273,6 @@ void EditorVrController::update(float dt)
 		auto device = iris::VrManager::getDefaultDevice();
 
 		QMatrix4x4 world;
-		world.setToIdentity();
-		world.translate(device->getHandPosition(1));
-		world.rotate(device->getHandRotation(1));
-		//world.scale(0.55f);
-		rightHandRenderItem->worldMatrix = camera->globalTransform * world;
-		rightBeamRenderItem->worldMatrix = rightHandRenderItem->worldMatrix;
-
-
 		world.setToIdentity();
 		world.translate(device->getHandPosition(1));
 		world.rotate(device->getHandRotation(1));
