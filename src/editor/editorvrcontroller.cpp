@@ -171,7 +171,7 @@ void EditorVrController::update(float dt)
             camPos += QVector3D(0, -linearSpeed, 0);
 
         camera->setLocalPos(camPos);
-        camera->setLocalRot(QQuaternion());
+        //camera->setLocalRot(QQuaternion());
         camera->update(0);
 
 
