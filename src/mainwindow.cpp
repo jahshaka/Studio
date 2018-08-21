@@ -2351,12 +2351,12 @@ void MainWindow::setupViewPort()
 
 	jlogo = new QLabel;
 #ifdef QT_DEBUG
-    jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/header_dev.png"));
+    jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/jahshakastudiodevheader.png"));
 #else
 #ifdef BUILD_PLAYER_ONLY
-    jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/header_player.png"));
+    jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/jahshakaplayerheader.png"));
 #else
-    jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/header.png"));
+    jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/jahshakastudioheader.png"));
 #endif // BUILD_PLAYER_ONLY
 
 #endif
