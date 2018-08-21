@@ -228,7 +228,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     });
 
 	connect(ui->downloadWorlds, &QPushButton::pressed, []() {
-		QDesktopServices::openUrl(QUrl("https://www.jahfx.com/downloads/worlds/"));
+		QDesktopServices::openUrl(QUrl("https://www.jahfx.com/downloads/scenes/"));
 	});
 
     populateDesktop();
@@ -300,7 +300,7 @@ void ProjectManager::importProjectFromFile(const QString& file)
 {
     QString fileName;
     if (file.isEmpty()) {
-        fileName = QFileDialog::getOpenFileName(this,       "Import World",
+        fileName = QFileDialog::getOpenFileName(this,       "Import Scene",
                                                 nullptr,    "Jahshaka Project (*.zip)");
 
         if (fileName.isEmpty() || fileName.isNull()) return;
@@ -341,9 +341,9 @@ void ProjectManager::importProjectFromFile(const QString& file)
     if (!allowLoading) {
         QMessageBox::warning(
             this,
-            "Incompatible World format",
-            "This world was made with a deprecated version of Jahshaka\n"
-            "You can extract the contents manually and recreate the world.",
+            "Incompatible Scene format",
+            "This Scene was made with a deprecated version of Jahshaka\n"
+            "You can extract the contents manually and recreate the scene.",
             QMessageBox::Ok
         );
 
@@ -556,7 +556,7 @@ void ProjectManager::openSampleBrowser()
 {
     sampleDialog.setFixedSize(Constants::TILE_SIZE * 1.66);
     sampleDialog.setWindowFlags(sampleDialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
-    sampleDialog.setWindowTitle("Sample Worlds");
+    sampleDialog.setWindowTitle("Sample Scenes");
     sampleDialog.setAttribute(Qt::WA_MacShowFocusRect, false);
 
     QGridLayout *layout = new QGridLayout();
@@ -600,7 +600,7 @@ void ProjectManager::openSampleBrowser()
 
     connect(sampleList, SIGNAL(itemDoubleClicked(QListWidgetItem*)), SLOT(openSampleProject(QListWidgetItem*)));
 
-    auto instructions = new QLabel("Double click on a sample world to import it in the editor");
+    auto instructions = new QLabel("Double click on a sample scene to import it in the editor");
     instructions->setObjectName("instructions");
     instructions->setStyleSheet("#instructions { border: none; background: #1e1e1e; color: white; " \
                                 "padding: 10px; font-size: 12px }");
