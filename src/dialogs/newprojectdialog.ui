@@ -7,11 +7,11 @@
     <x>0</x>
     <y>0</y>
     <width>640</width>
-    <height>134</height>
+    <height>154</height>
    </rect>
   </property>
- <property name="sizePolicy">
-  <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
     <horstretch>0</horstretch>
     <verstretch>0</verstretch>
    </sizepolicy>
@@ -65,13 +65,13 @@ QLineEdit {
    <item row="0" column="0">
     <widget class="QWidget" name="widget" native="true">
      <layout class="QFormLayout" name="formLayout">
-     <property name="fieldGrowthPolicy">
-  <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
-  </property>
+      <property name="fieldGrowthPolicy">
+       <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
+      </property>
       <item row="0" column="0">
        <widget class="QLabel" name="pName">
         <property name="text">
-         <string>World Name</string>
+         <string>Scene Name</string>
         </property>
        </widget>
       </item>
