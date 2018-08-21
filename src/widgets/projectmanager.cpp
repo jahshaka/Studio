@@ -201,6 +201,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressValueChanged,
                      [=](int val){
                          progressDialog->setValue(val);
+                         progressDialog->update();
                      });
 
     dynamicGrid = new DynamicGrid(this);

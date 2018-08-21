@@ -298,6 +298,7 @@ void ProgressBar::close(int val)
             this->hide();
             break;
         default:
+            this->hide();
             break;
     }
 }
