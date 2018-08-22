@@ -484,6 +484,9 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->color = readColor(nodeObj["color"].toObject());
 	lightNode->setVisible(nodeObj["visible"].toBool(true));
 
+	lightNode->shadowAlpha = (float)nodeObj["shadowAlpha"].toDouble(1.0f);
+	lightNode->shadowColor = readColor(nodeObj["shadowColor"].toObject());
+
     //shadow data
     auto shadowMap = lightNode->shadowMap;
     shadowMap->bias = (float)nodeObj["shadowBias"].toDouble(0.0015f);
