@@ -164,7 +164,7 @@ void EditorVrController::update(float dt)
 
 	// LEFT CONTROLLER
     auto leftTouch = vrDevice->getTouchController(0);
-    if (leftTouch->isTracking()) {
+    if (leftTouch->isTracking() && UiManager::sceneMode != SceneMode::PlayMode) {
         auto dir = leftTouch->GetThumbstick();
         camPos += x * linearSpeed * dir.x() * 2;
         camPos += z * linearSpeed * dir.y() * 2;
@@ -176,7 +176,7 @@ void EditorVrController::update(float dt)
             camPos += QVector3D(0, -linearSpeed, 0);
 
         camera->setLocalPos(camPos);
-        //camera->setLocalRot(QQuaternion());
+        camera->setLocalRot(QQuaternion());
         camera->update(0);
 
 
@@ -273,7 +273,7 @@ void EditorVrController::update(float dt)
 
 	// RIGHT CONTROLLER
 	auto rightTouch = vrDevice->getTouchController(1);
-	if (rightTouch->isTracking()) {
+	if (rightTouch->isTracking() && UiManager::sceneMode != SceneMode::PlayMode) {
 		// Submit items to renderer
 		auto device = iris::VrManager::getDefaultDevice();
 
@@ -404,12 +404,15 @@ iris::SceneNodePtr EditorVrController::getObjectRoot(iris::SceneNodePtr node)
 
 void EditorVrController::submitHoveredNodes()
 {
-	if (!rightPickedNode && !!rightHoveredNode) {
-		submitHoveredNode(rightHoveredNode);
-	}
+	// only do this in edit mode
+	if (UiManager::sceneMode == SceneMode::PlayMode) {
+		if (!rightPickedNode && !!rightHoveredNode) {
+			submitHoveredNode(rightHoveredNode);
+		}
 
-	if (!leftPickedNode && !!leftHoveredNode) {
-		submitHoveredNode(leftHoveredNode);
+		if (!leftPickedNode && !!leftHoveredNode) {
+			submitHoveredNode(leftHoveredNode);
+		}
 	}
 }
 

@@ -437,8 +437,8 @@ QString evalShadowTypeName(iris::ShadowMapType shadowType)
         return "hard";
     case iris::ShadowMapType::Soft:
         return "soft";
-    case iris::ShadowMapType::Softer:
-        return "softer";
+    case iris::ShadowMapType::VerySoft:
+        return "verysoft";
     }
 }
 

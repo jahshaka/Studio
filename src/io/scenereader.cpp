@@ -462,8 +462,8 @@ iris::ShadowMapType evalShadowMapType(QString shadowType)
         return iris::ShadowMapType::Hard;
     if (shadowType=="soft")
         return iris::ShadowMapType::Soft;
-    if (shadowType=="softer")
-        return iris::ShadowMapType::Softer;
+    if (shadowType=="verysoft")
+        return iris::ShadowMapType::VerySoft;
 
     return iris::ShadowMapType::None;
 }
