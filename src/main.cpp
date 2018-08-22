@@ -86,9 +86,9 @@ int main(int argc, char *argv[])
 
     app.setWindowIcon(QIcon(":/images/icon.ico"));
 #ifdef BUILD_PLAYER_ONLY
-    app.setApplicationName("JahPlayer");
+    app.setApplicationName("Jahshaka Player");
 #else
-    app.setApplicationName("Jahshaka");
+    app.setApplicationName("Jahshaka Studio");
 #endif // BUILD_PLAYER_ONLY
 
 

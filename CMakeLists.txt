@@ -7,6 +7,12 @@ foreach(p CMP0071) # 3.10: Let AUTOMOC and AUTOUIC process GENERATED files
 endforeach()
 project(Jahshaka)
 
+if (BUILD_PLAYER_ONLY)
+	set(CMAKE_PROJECT_NAME "Player")
+else()
+	set(CMAKE_PROJECT_NAME "Studio")
+endif(BUILD_PLAYER_ONLY)
+
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 find_package(OpenGL REQUIRED) # is this needed?
@@ -416,7 +422,7 @@ else()
 
 endif(BUILD_PLAYER_ONLY)
 
-set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Jahshaka)
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 							src
 							irisgl/include
@@ -441,7 +447,7 @@ endif(MINER_ENABLED)
 #force build downloader
 #luckily, the jahshaka project has all the dependencies of the downloader project
 #so we dont need to run windeployqt or macdeployqt on the downloader specifically
-add_dependencies(${PROJECT_NAME} ${downloaderProject})
+add_dependencies(${CMAKE_PROJECT_NAME} ${downloaderProject})
 
 if(USE_BREAKPAD)
     set(LIBS ${LIBS} breakpad)
