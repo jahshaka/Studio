@@ -45,6 +45,8 @@ Texture2DPtr Texture2D::create(QImage image)
     auto texture = new QOpenGLTexture(image);
     //texture->generateMipMaps();
     texture->setMinMagFilters(QOpenGLTexture::LinearMipMapLinear,QOpenGLTexture::Linear);
+	//todo: allow user to set texture anisotrophy
+	texture->setMaximumAnisotropy(4); // i think 4 is a good default
 
     return QSharedPointer<Texture2D>(new Texture2D(texture));
 }
