@@ -45,6 +45,8 @@ Texture2DPtr Texture2D::create(QImage image)
     auto texture = new QOpenGLTexture(image);
     //texture->generateMipMaps();
     texture->setMinMagFilters(QOpenGLTexture::LinearMipMapLinear,QOpenGLTexture::Linear);
+	//todo: allow user to set texture anisotrophy
+	texture->setMaximumAnisotropy(4); // i think 4 is a good default
 
     return QSharedPointer<Texture2D>(new Texture2D(texture));
 }
@@ -154,9 +156,12 @@ Texture2DPtr Texture2D::createShadowDepth(int width, int height)
     texture->setSize(width, height);
     texture->setFormat(QOpenGLTexture::DepthFormat);
     texture->setMinMagFilters(QOpenGLTexture::Linear, QOpenGLTexture::Linear);
-    texture->setComparisonMode(QOpenGLTexture::CompareNone);
     texture->setWrapMode(QOpenGLTexture::ClampToEdge);
-    //texture->setBorderColor(255,255,255,255);
+
+	// http://fabiensanglard.net/shadowmappingPCF/
+	texture->setComparisonMode(QOpenGLTexture::CompareNone);
+	texture->setComparisonFunction(QOpenGLTexture::CompareLessEqual);
+
     if (!texture->create())
         qDebug() << "Error creating texture";
     texture->allocateStorage(QOpenGLTexture::Depth,QOpenGLTexture::Float32);

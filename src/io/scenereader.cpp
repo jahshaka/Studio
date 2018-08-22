@@ -462,8 +462,8 @@ iris::ShadowMapType evalShadowMapType(QString shadowType)
         return iris::ShadowMapType::Hard;
     if (shadowType=="soft")
         return iris::ShadowMapType::Soft;
-    if (shadowType=="softer")
-        return iris::ShadowMapType::Softer;
+    if (shadowType=="verysoft")
+        return iris::ShadowMapType::VerySoft;
 
     return iris::ShadowMapType::None;
 }
@@ -483,6 +483,9 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->spotCutOff = (float)nodeObj["spotCutOff"].toDouble(30.0f);
     lightNode->color = readColor(nodeObj["color"].toObject());
 	lightNode->setVisible(nodeObj["visible"].toBool(true));
+
+	lightNode->shadowAlpha = (float)nodeObj["shadowAlpha"].toDouble(1.0f);
+	lightNode->shadowColor = readColor(nodeObj["shadowColor"].toObject());
 
     //shadow data
     auto shadowMap = lightNode->shadowMap;

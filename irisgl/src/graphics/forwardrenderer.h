@@ -52,6 +52,8 @@ struct LightUniformNames
 	std::string cutOffAngle;
 	std::string cutOffSoftness;
 	std::string intensity;
+	std::string shadowColor;
+	std::string shadowAlpha;
 	std::string constantAtten;
 	std::string linearAtten;
 	std::string quadAtten;

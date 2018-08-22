@@ -22,13 +22,13 @@ set(DataDirs app assets scenes)
 foreach(dir ${DataDirs})
 if (APPLE)
 	add_custom_command(
-		TARGET Jahshaka POST_BUILD
+		TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy_directory
 				${PROJECT_SOURCE_DIR}/${dir}
 				${DestDir}/${PROJECT_NAME}.app/Contents/MacOS/${dir})
 else()
 	add_custom_command(
-		TARGET Jahshaka POST_BUILD
+		TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy_directory
 				${PROJECT_SOURCE_DIR}/${dir}
 				${DestDir}/${dir})
@@ -38,7 +38,7 @@ endforeach()
 #change path base on ide. current pathe is xcode
 if (APPLE)
     add_custom_command(
-        TARGET Jahshaka POST_BUILD
+        TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${DestDir}/downloader.app
             ${DestDir}/${PROJECT_NAME}.app/Contents/MacOS/downloader.app)

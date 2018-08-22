@@ -26,29 +26,8 @@ namespace iris
 ViewerNode::ViewerNode()
 {
     this->sceneNodeType = SceneNodeType::Viewer;
-    //this->headModel = Mesh::loadMesh(":/assets/models/head2.obj");
-    //this->material = ViewerMaterial::create();
-    //this->material->setTexture(Texture2D::load(":/assets/models/head.png"));
 
     this->setViewScale(1.0f);
-
-    renderItem = new RenderItem();
-    renderItem->type = RenderItemType::Mesh;
-    //renderItem->material = this->material;
-    //renderItem->mesh = headModel;
-
-    auto cube = Mesh::loadMesh(":/assets/models/cube.obj");
-
-    leftHandenderItem = new RenderItem();
-    leftHandenderItem->type = RenderItemType::Mesh;
-    leftHandenderItem->material = DefaultMaterial::create();
-    leftHandenderItem->mesh = cube;
-
-    rightHandRenderItem = new RenderItem();
-    rightHandRenderItem->type = RenderItemType::Mesh;
-    rightHandRenderItem->material = DefaultMaterial::create();
-    rightHandRenderItem->mesh = cube;
-
     exportable = false;
 }
 
@@ -72,29 +51,6 @@ void ViewerNode::submitRenderItems()
 {
     if( !visible)
         return;
-
-    //renderItem->worldMatrix = this->globalTransform;
-    //scene->geometryRenderList->add(renderItem);
-
-    /*
-    auto device = VrManager::getDefaultDevice();
-
-    QMatrix4x4 world;
-    world.setToIdentity();
-    world.translate(device->getHandPosition(0));
-    world.rotate(device->getHandRotation(0));
-    world.scale(0.05f);
-    leftHandenderItem->worldMatrix = this->globalTransform * world;
-
-    world.setToIdentity();
-    world.translate(device->getHandPosition(1));
-    world.rotate(device->getHandRotation(1));
-    world.scale(0.05f);
-    rightHandRenderItem->worldMatrix = this->globalTransform * world;
-
-    scene->geometryRenderList->add(leftHandenderItem);
-    scene->geometryRenderList->add(rightHandRenderItem);
-    */
 }
 
 SceneNodePtr ViewerNode::createDuplicate()
