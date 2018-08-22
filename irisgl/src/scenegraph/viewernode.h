@@ -27,9 +27,42 @@ class ViewerNode : public SceneNode
     float viewScale;
     ViewerNode();
 
+	// viewer-specific properties about how it controls in vr mode`
+	bool allowMovement;
+	bool allowPicking;
+	bool showHands;
+
 public:
-    //MeshPtr headModel;
-    //ViewerMaterialPtr material;
+
+	bool isMovementAllowed()
+	{
+		return allowMovement;
+	}
+
+	void setMovementAllowed(bool allow)
+	{
+		this->allowMovement = allow;
+	}
+
+	bool isPickingAllowed()
+	{
+		return allowPicking;
+	}
+
+	void setPickingAllowed(bool pickingAllowed)
+	{
+		this->allowPicking = pickingAllowed;
+	}
+
+	void setShowHands(bool show)
+	{
+		this->showHands = show;
+	}
+
+	bool getShowHands()
+	{
+		return this->showHands;
+	}
 
     void setViewScale(float scale);
     float getViewScale();

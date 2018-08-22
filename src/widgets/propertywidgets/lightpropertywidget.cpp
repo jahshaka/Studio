@@ -35,7 +35,8 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     shadowType = this->addComboBox("Shadow Type");
     shadowType->addItem("None");
     shadowType->addItem("Hard");
-    shadowType->addItem("Soft");
+	shadowType->addItem("Soft");
+	shadowType->addItem("Very Soft");
     //shadowType->addItem("Softer");
     shadowSize = this->addComboBox("Shadow Size");
     shadowSize->addItem("512");
@@ -156,8 +157,8 @@ QString LightPropertyWidget::evalShadowTypeName(iris::ShadowMapType shadowType)
         return "Hard";
     case iris::ShadowMapType::Soft:
         return "Soft";
-    case iris::ShadowMapType::Softer:
-        return "Softer";
+    case iris::ShadowMapType::VerySoft:
+        return "Very Soft";
     }
 
     return "None";
@@ -165,12 +166,13 @@ QString LightPropertyWidget::evalShadowTypeName(iris::ShadowMapType shadowType)
 
 iris::ShadowMapType LightPropertyWidget::evalShadowMapType(QString shadowType)
 {
+	qDebug() << shadowType;
     if (shadowType=="Hard")
         return iris::ShadowMapType::Hard;
     if (shadowType=="Soft")
         return iris::ShadowMapType::Soft;
-    if (shadowType=="Softer")
-        return iris::ShadowMapType::Softer;
+    if (shadowType=="Very Soft")
+        return iris::ShadowMapType::VerySoft;
 
     return iris::ShadowMapType::None;
 }

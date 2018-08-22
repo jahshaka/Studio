@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #define SHADOW_NONE 0
 #define SHADOW_HARD 1
 #define SHADOW_SOFT 2
+#define SHADOW_VERYSOFT 3
 
 uniform sampler2D u_diffuseTexture;
 uniform bool u_useDiffuseTex;
@@ -78,6 +79,7 @@ float SampleShadowMap(in sampler2D shadowMap, vec2 coords, float compare) {
     return step(compare, texture(shadowMap, coords.xy).r);
 }
 
+// todo: use sampler2DShadow, it does the same thing but faster
 float SampleShadowMapLinear(sampler2D shadowMap, vec2 coords, float compare, vec2 texelSize) {
     vec2 pixelPos = coords / texelSize + vec2(0.5);
     vec2 fracPart = fract(pixelPos);
@@ -110,6 +112,24 @@ float SampleShadowMapPCF(in sampler2D shadowMap, vec2 coords, float compare, vec
     return result / (NUM_SAMPLES * NUM_SAMPLES);
 }
 
+// it's technically 4x4...but it will do for now
+float SampleShadowMapPCF3x3(in sampler2D shadowMap, vec2 coords, float compare, vec2 texelSize) {
+    float result = 0;
+
+    const float NUM_SAMPLES = 3.0;
+    const float SAMPLES_START = (NUM_SAMPLES - 1.0) / 2.0;
+
+    for(float y = -SAMPLES_START; y <= SAMPLES_START; y++) {
+        for(float x = -SAMPLES_START; x <= SAMPLES_START; x++) {
+            vec2 offset = vec2(x, y) * texelSize;
+            result += SampleShadowMapLinear(shadowMap, coords + offset, compare, texelSize);
+        }
+    }
+
+    return result / (NUM_SAMPLES * NUM_SAMPLES);
+}
+
+
 float CalcShadowMap(in sampler2D shadowMap, vec4 fragPosLightSpace) {
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5;
@@ -117,9 +137,17 @@ float CalcShadowMap(in sampler2D shadowMap, vec4 fragPosLightSpace) {
     return SampleShadowMapPCF(shadowMap, projCoords.xy, projCoords.z, texelSize);
 }
 
-float calcSoftShadowMap(in Light light, in vec4 lightSpacePos)
+float calcVerySoftShadowMap(in Light light, in vec4 lightSpacePos)
 {
     return CalcShadowMap(light.shadowMap, lightSpacePos);
+}
+
+float calcSoftShadowMap(in Light light, in vec4 fragPosLightSpace)
+{
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    projCoords = projCoords * 0.5 + 0.5;
+    vec2 texelSize = 1.0 / textureSize(light.shadowMap, 0);
+    return SampleShadowMapPCF3x3(light.shadowMap, projCoords.xy, projCoords.z, texelSize);
 }
 
 float calcHardShadowMap(in Light light, in vec4 lightSpacePos)
@@ -143,6 +171,8 @@ float calculateShadowFactor(in Light light, in vec3 worldPos)
         return calcHardShadowMap(light, lightSpacePos);
     if (light.shadowType==SHADOW_SOFT)
         return calcSoftShadowMap(light, lightSpacePos);
+	if (light.shadowType==SHADOW_VERYSOFT)
+        return calcVerySoftShadowMap(light, lightSpacePos);
     return 1.0f;
 }
 
