@@ -448,7 +448,10 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     sceneNodeObject["intensity"] = lightNode->intensity;
     sceneNodeObject["distance"] = lightNode->distance;
     sceneNodeObject["spotCutOff"] = lightNode->spotCutOff;
-    sceneNodeObject["color"] = jsonColor(lightNode->color);
+	sceneNodeObject["color"] = jsonColor(lightNode->color);
+
+	sceneNodeObject["shadowAlpha"] = lightNode->shadowAlpha;
+	sceneNodeObject["shadowColor"] = jsonColor(lightNode->shadowColor);
 
     //shadow data
     auto shadowMap = lightNode->shadowMap;
