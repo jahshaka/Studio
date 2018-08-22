@@ -658,6 +658,9 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 					graphics->setShaderUniform(lightNames.intensity.c_str(), light->intensity);
 					graphics->setShaderUniform(lightNames.color.c_str(), light->color);
 
+					graphics->setShaderUniform(lightNames.shadowColor.c_str(), light->shadowColor);
+					graphics->setShaderUniform(lightNames.shadowAlpha.c_str(), light->shadowAlpha);
+
 					graphics->setShaderUniform(lightNames.constantAtten.c_str(), 1.0f);
 					graphics->setShaderUniform(lightNames.linearAtten.c_str(), 0.0f);
 					graphics->setShaderUniform(lightNames.quadAtten.c_str(), 1.0f);
@@ -933,6 +936,8 @@ void ForwardRenderer::generateLightUnformNames()
 		names.cutOffAngle = (lightPrefix + "cutOffAngle").toStdString();
 		names.cutOffSoftness = (lightPrefix + "cutOffSoftness").toStdString();
 		names.intensity = (lightPrefix + "intensity").toStdString();
+		names.shadowColor = (lightPrefix + "shadowColor").toStdString();
+		names.shadowAlpha = (lightPrefix + "shadowAlpha").toStdString();
 		names.constantAtten = (lightPrefix + "constantAtten").toStdString();
 		names.linearAtten = (lightPrefix + "linearAtten").toStdString();
 		names.quadAtten = (lightPrefix + "quadtraticAtten").toStdString();
