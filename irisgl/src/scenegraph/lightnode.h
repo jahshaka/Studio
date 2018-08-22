@@ -46,6 +46,12 @@ public:
     QColor color;
     float intensity;
 
+	/*
+	Shadow's color and trasnsparency
+	*/
+	QColor shadowColor;
+	float shadowAlpha;
+
     /**
      * Spotlight cutoff angle in degrees.
      * This parameter is only used if the light is a spotlight

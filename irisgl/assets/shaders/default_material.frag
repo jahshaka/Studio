@@ -67,6 +67,9 @@ struct Light {
     float cutOffAngle;
     float cutOffSoftness;
 
+	vec4 shadowColor;
+	float shadowAlpha;
+
     sampler2D shadowMap;
     bool shadowEnabled;
     int shadowType;
@@ -300,8 +303,12 @@ void main()
         //float shadowFactor = u_lights[i].shadowEnabled ? CalcShadowMap(u_lights[i].shadowMap,FragPosLightSpace) : 1.0;
         float shadowFactor = calculateShadowFactor(u_lights[i], v_worldPos);
 
-        diffuse += atten*ndl*u_lights[i].intensity*u_lights[i].color.rgb*shadowFactor;
-        specular += atten*spec* u_lights[i].intensity * u_lights[i].color.rgb*shadowFactor;
+		float shadow = mix(1.0, shadowFactor, u_lights[i].shadowAlpha);
+        diffuse += mix(u_lights[i].shadowColor.rgb, atten*ndl*u_lights[i].intensity*u_lights[i].color.rgb, shadow);
+        specular += mix(u_lights[i].shadowColor.rgb, atten*spec* u_lights[i].intensity * u_lights[i].color.rgb, shadow);
+
+		//diffuse += atten*ndl*u_lights[i].intensity*u_lights[i].color.rgb*shadowFactor;
+        //specular += atten*spec* u_lights[i].intensity * u_lights[i].color.rgb*shadowFactor;
     }
 
     vec3 col = u_material.diffuse;

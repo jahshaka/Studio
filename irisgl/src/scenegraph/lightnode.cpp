@@ -93,6 +93,9 @@ LightNode::LightNode()
     spotCutOff = 30.0f;
     spotCutOffSoftness = 1.0f;
 
+	shadowAlpha = 1.0f;
+	shadowColor = QColor(0,0,0);
+
     iconSize = 0.5f;
 
 	exportable = false;
@@ -111,6 +114,8 @@ SceneNodePtr LightNode::createDuplicate()
 	light->distance = this->distance;
 	light->spotCutOff = this->spotCutOff;
 	light->spotCutOffSoftness = this->spotCutOffSoftness;
+	light->shadowAlpha = this->shadowAlpha;
+	light->shadowColor = this->shadowColor;
 	light->shadowMap->bias = this->shadowMap->bias;
 	light->shadowMap->shadowType = this->shadowMap->shadowType;
 	light->shadowMap->setResolution(this->shadowMap->resolution);
