@@ -459,11 +459,12 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
     QVector3D viewerPos = scene->camera->getGlobalPosition();
     QMatrix4x4 viewTransform = scene->camera->globalTransform;
 
-
+	/*
     if(!!scene->vrViewer && useViewer) {
         viewerPos = scene->vrViewer->getGlobalPosition();
         viewTransform = scene->vrViewer->globalTransform;
     }
+	*/
 
     // reset states
     graphics->setBlendState(BlendState::Opaque);
