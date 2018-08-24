@@ -84,6 +84,8 @@ private:
 
 	// for now this finds the first grab node
 	iris::GrabNodePtr findGrabNode(iris::SceneNodePtr node);
+
+	float turnSpeed;
 };
 
 #endif // EDITORVRCONTROLLER_H

@@ -114,6 +114,8 @@ EditorVrController::EditorVrController(iris::ContentManagerPtr content)
 	rightHandModel = content->loadModel("app/content/models/right_hand.dae");
 
 	fresnelMat = QSharedPointer<FresnelMaterial>(new FresnelMaterial());
+
+	turnSpeed = 4.0f;
 }
 
 void EditorVrController::setScene(iris::ScenePtr scene)
@@ -288,6 +290,13 @@ void EditorVrController::update(float dt)
 		
 		// Submit items to renderer
 		auto device = iris::VrManager::getDefaultDevice();
+
+		// rotate camera
+		auto dir = rightTouch->GetThumbstick();
+		auto yaw = camera->getLocalRot().toEulerAngles().y();
+		yaw += -dir.x() * turnSpeed;
+		auto yawRot = QQuaternion::fromEulerAngles(0, yaw, 0);
+		camera->setLocalRot(yawRot);
 
 		QMatrix4x4 world;
 		world.setToIdentity();
