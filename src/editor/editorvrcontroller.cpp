@@ -126,11 +126,16 @@ void EditorVrController::update(float dt)
     vrDevice = iris::VrManager::getDefaultDevice();
     const float linearSpeed = 10.4f * dt;
 
+	// lock rot to yaw so user is always right side up
+	auto yaw = camera->getLocalRot().toEulerAngles().y();
+	auto yawRot = QQuaternion::fromEulerAngles(0, yaw, 0);
+	camera->setLocalRot(yawRot);
+
     // keyboard movement
     const QVector3D upVector(0, 1, 0);
     //not giving proper rotation when not in debug mode
     //apparently i need to normalize the head rotation quaternion
-    auto rot = vrDevice->getHeadRotation();
+    auto rot = yawRot * vrDevice->getHeadRotation();
     rot.normalize();
     auto forwardVector = rot.rotatedVector(QVector3D(0, 0, -1));
     auto x = QVector3D::crossProduct(forwardVector,upVector).normalized();
@@ -155,10 +160,7 @@ void EditorVrController::update(float dt)
 
     camera->setLocalPos(camPos);
 
-	// lock rot to yaw so user is always right side up
-	auto yaw = camera->getLocalRot().toEulerAngles().y();
-	auto yawRot = QQuaternion::fromEulerAngles(0, yaw, 0);
-	camera->setLocalRot(yawRot);
+	
 
     // touch controls
 
