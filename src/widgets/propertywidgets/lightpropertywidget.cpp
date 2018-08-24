@@ -35,7 +35,8 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     shadowType = this->addComboBox("Shadow Type");
     shadowType->addItem("None");
     shadowType->addItem("Hard");
-    shadowType->addItem("Soft");
+	shadowType->addItem("Soft");
+	shadowType->addItem("Very Soft");
     //shadowType->addItem("Softer");
     shadowSize = this->addComboBox("Shadow Size");
     shadowSize->addItem("512");
@@ -44,6 +45,9 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     shadowSize->addItem("4096");
     //shadowBias = this->addFloatValueSlider("Shadow Bias",0,1);
 
+	shadowAlpha = this->addFloatValueSlider("Shadow Transparency", 0, 1.f);
+	shadowColor = this->addColorPicker("Shadow Color");
+
     connect(lightColor->getPicker(),SIGNAL(onColorChanged(QColor)),this,SLOT(lightColorChanged(QColor)));
     connect(lightColor->getPicker(),SIGNAL(onSetColor(QColor)),this,SLOT(lightColorChanged(QColor)));
 
@@ -51,6 +55,10 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     connect(distance,SIGNAL(valueChanged(float)),this,SLOT(lightDistanceChanged(float)));
     connect(spotCutOff,SIGNAL(valueChanged(float)),this,SLOT(lightSpotCutoffChanged(float)));
     connect(spotCutOffSoftness,SIGNAL(valueChanged(float)),this,SLOT(lightSpotCutoffSoftnessChanged(float)));
+
+	connect(shadowAlpha, SIGNAL(valueChanged(float)), this, SLOT(shadowAlphaChanged(float)));
+	connect(shadowColor->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(shadowColorChanged(QColor)));
+	connect(shadowColor->getPicker(), SIGNAL(onSetColor(QColor)), this, SLOT(shadowColorChanged(QColor)));
 
     connect(shadowType, SIGNAL(currentIndexChanged(QString)), this, SLOT(shadowTypeChanged(QString)));
     connect(shadowSize, SIGNAL(currentIndexChanged(QString)), this, SLOT(shadowSizeChanged(QString)));
@@ -71,6 +79,9 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         spotCutOff->setValue(lightNode->spotCutOff);
         spotCutOffSoftness->setValue(lightNode->spotCutOffSoftness);
 
+		shadowColor->setColorValue(lightNode->shadowColor);
+		shadowAlpha->setValue(lightNode->shadowAlpha);
+
         if (lightNode->getLightType()==iris::LightType::Spot) {
             spotCutOff->show();
             spotCutOffSoftness->show();
@@ -87,10 +98,14 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         if (lightNode->getLightType()==iris::LightType::Point) {
             shadowSize->hide();
             shadowType->hide();
+			shadowColor->hide();
+			shadowAlpha->hide();
             //shadowBias->hide();
         } else {
             shadowSize->show();
             shadowType->show();
+			shadowColor->show();
+			shadowAlpha->show();
             //shadowBias->show();
         }
     }
@@ -147,6 +162,18 @@ void LightPropertyWidget::shadowBiasChanged(float bias)
     lightNode->shadowMap->bias = bias;
 }
 
+void LightPropertyWidget::shadowColorChanged(QColor color)
+{
+	if (!!lightNode)
+		lightNode->shadowColor = color;
+}
+
+void LightPropertyWidget::shadowAlphaChanged(float alpha)
+{
+	if (!!lightNode)
+		lightNode->shadowAlpha = alpha;
+}
+
 QString LightPropertyWidget::evalShadowTypeName(iris::ShadowMapType shadowType)
 {
     switch(shadowType){
@@ -156,8 +183,8 @@ QString LightPropertyWidget::evalShadowTypeName(iris::ShadowMapType shadowType)
         return "Hard";
     case iris::ShadowMapType::Soft:
         return "Soft";
-    case iris::ShadowMapType::Softer:
-        return "Softer";
+    case iris::ShadowMapType::VerySoft:
+        return "Very Soft";
     }
 
     return "None";
@@ -169,8 +196,8 @@ iris::ShadowMapType LightPropertyWidget::evalShadowMapType(QString shadowType)
         return iris::ShadowMapType::Hard;
     if (shadowType=="Soft")
         return iris::ShadowMapType::Soft;
-    if (shadowType=="Softer")
-        return iris::ShadowMapType::Softer;
+    if (shadowType=="Very Soft")
+        return iris::ShadowMapType::VerySoft;
 
     return iris::ShadowMapType::None;
 }

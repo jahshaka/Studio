@@ -666,7 +666,8 @@ void SceneViewWidget::renderScene()
 		//animPath->submit(scene->geometryRenderList);
 
         // insert vr head
-        if ((UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)) {
+		//if ((UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)) {
+		if (UiManager::sceneMode == SceneMode::EditMode) {
             renderer->renderLightBillboards = true;
         } else {
             renderer->renderLightBillboards = false;
@@ -688,7 +689,8 @@ void SceneViewWidget::renderScene()
             }
         }
 
-		if (UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)
+		//if (UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)
+		if (UiManager::sceneMode == SceneMode::EditMode)
 			addViewerHeadsToScene();
 
         if (viewportMode == ViewportMode::Editor) {

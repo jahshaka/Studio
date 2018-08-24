@@ -459,11 +459,12 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
     QVector3D viewerPos = scene->camera->getGlobalPosition();
     QMatrix4x4 viewTransform = scene->camera->globalTransform;
 
-
+	/*
     if(!!scene->vrViewer && useViewer) {
         viewerPos = scene->vrViewer->getGlobalPosition();
         viewTransform = scene->vrViewer->globalTransform;
     }
+	*/
 
     // reset states
     graphics->setBlendState(BlendState::Opaque);
@@ -509,6 +510,9 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
         graphics->setRasterizerState(RasterizerState::CullCounterClockwise);
 
         renderNode(renderData,scene);
+
+		//if (renderLightBillboards)
+		//	renderBillboardIcons(renderData);
 
         vrDevice->endEye(eye);
     }
@@ -658,6 +662,9 @@ void ForwardRenderer::renderNode(RenderData* renderData, ScenePtr scene)
 					graphics->setShaderUniform(lightNames.intensity.c_str(), light->intensity);
 					graphics->setShaderUniform(lightNames.color.c_str(), light->color);
 
+					graphics->setShaderUniform(lightNames.shadowColor.c_str(), light->shadowColor);
+					graphics->setShaderUniform(lightNames.shadowAlpha.c_str(), light->shadowAlpha);
+
 					graphics->setShaderUniform(lightNames.constantAtten.c_str(), 1.0f);
 					graphics->setShaderUniform(lightNames.linearAtten.c_str(), 0.0f);
 					graphics->setShaderUniform(lightNames.quadAtten.c_str(), 1.0f);
@@ -741,6 +748,7 @@ void ForwardRenderer::renderSky(RenderData* renderData)
     gl->glDepthMask(true);
 }
 
+//todo: use render states
 void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
 {
     gl->glDisable(GL_CULL_FACE);
@@ -933,6 +941,8 @@ void ForwardRenderer::generateLightUnformNames()
 		names.cutOffAngle = (lightPrefix + "cutOffAngle").toStdString();
 		names.cutOffSoftness = (lightPrefix + "cutOffSoftness").toStdString();
 		names.intensity = (lightPrefix + "intensity").toStdString();
+		names.shadowColor = (lightPrefix + "shadowColor").toStdString();
+		names.shadowAlpha = (lightPrefix + "shadowAlpha").toStdString();
 		names.constantAtten = (lightPrefix + "constantAtten").toStdString();
 		names.linearAtten = (lightPrefix + "linearAtten").toStdString();
 		names.quadAtten = (lightPrefix + "quadtraticAtten").toStdString();

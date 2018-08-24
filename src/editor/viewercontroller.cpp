@@ -33,6 +33,7 @@ void ViewerCameraController::start()
 void ViewerCameraController::end()
 {
     //clearViewer();
+	viewer->hide();
 
     // restore cam transform
     camera->setLocalPos(camPos);

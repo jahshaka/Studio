@@ -13,7 +13,7 @@ enum class ShadowMapType : int
     None = 0,
     Hard = 1,
     Soft = 2,
-    Softer = 3
+    VerySoft = 3
 };
 
 class ShadowMap

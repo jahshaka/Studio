@@ -73,7 +73,10 @@ protected slots:
 
     void shadowTypeChanged(QString name);
     void shadowSizeChanged(QString size);
-    void shadowBiasChanged(float bias);
+	void shadowBiasChanged(float bias);
+
+	void shadowColorChanged(QColor color);
+	void shadowAlphaChanged(float bias);
 
 private:
     QString evalShadowTypeName(iris::ShadowMapType shadowType);
@@ -83,12 +86,15 @@ private:
 
     QSharedPointer<iris::LightNode> lightNode;
 
-    ColorValueWidget* lightColor;
-    HFloatSliderWidget* distance;
+	ColorValueWidget* lightColor;
+	HFloatSliderWidget* distance;
     HFloatSliderWidget* spotCutOff;
     HFloatSliderWidget* spotCutOffSoftness;
     HFloatSliderWidget* intensity;
     //EnumPicker* lightTypePicker;
+
+	ColorValueWidget* shadowColor;
+	HFloatSliderWidget* shadowAlpha;
 
     ComboBoxWidget* shadowType;
     ComboBoxWidget* shadowSize;

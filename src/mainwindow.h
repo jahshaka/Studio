@@ -186,7 +186,7 @@ public:
         if (shadowType == "soft")
             return iris::ShadowMapType::Soft;
         if (shadowType == "softer")
-            return iris::ShadowMapType::Softer;
+            return iris::ShadowMapType::VerySoft;
 
         return iris::ShadowMapType::None;
     }
