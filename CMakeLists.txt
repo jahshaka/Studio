@@ -8,9 +8,9 @@ endforeach()
 project(Jahshaka)
 
 if (BUILD_PLAYER_ONLY)
-	set(CMAKE_PROJECT_NAME "Player")
+	set(APP_OUTPUT_NAME "Jahshaka Player")
 else()
-	set(CMAKE_PROJECT_NAME "Studio")
+	set(APP_OUTPUT_NAME "Jahshaka Studio")
 endif(BUILD_PLAYER_ONLY)
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
@@ -422,8 +422,10 @@ else()
 
 endif(BUILD_PLAYER_ONLY)
 
+set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${APP_OUTPUT_NAME})
+
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
-target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
+target_include_directories(${PROJECT_NAME} PUBLIC
 							src
 							irisgl/include
 							irisgl/src
