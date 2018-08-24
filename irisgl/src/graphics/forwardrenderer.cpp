@@ -511,6 +511,9 @@ void ForwardRenderer::renderSceneVr(float delta, Viewport* vp, bool useViewer)
 
         renderNode(renderData,scene);
 
+		//if (renderLightBillboards)
+		//	renderBillboardIcons(renderData);
+
         vrDevice->endEye(eye);
     }
 
@@ -745,6 +748,7 @@ void ForwardRenderer::renderSky(RenderData* renderData)
     gl->glDepthMask(true);
 }
 
+//todo: use render states
 void ForwardRenderer::renderBillboardIcons(RenderData* renderData)
 {
     gl->glDisable(GL_CULL_FACE);
