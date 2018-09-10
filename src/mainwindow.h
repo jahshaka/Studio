@@ -31,13 +31,15 @@ For more information see the LICENSE file
 #include "core/project.h"
 
 #ifdef MINER_ENABLED
-#include "../thirdparty/miner/minerui.h"
+//#include "../thirdparty/miner/minerui.h"
+#include "thirdparty/Miner/minerfrontend.h"
 #endif
 
 namespace Ui {
     class MainWindow;
 }
 
+class Literals;
 class SurfaceView;
 class AssetView;
 
@@ -235,8 +237,10 @@ public:
 private:
 	//set up miner
 #ifdef MINER_ENABLED
-	MinerUI *miner;
+	//MinerUI *miner;
+	MinerFrontend *miner;
 	void configureMiner();
+	void configMiner();
 #endif
 
     // sets up the button for vr

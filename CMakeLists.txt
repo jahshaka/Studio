@@ -16,7 +16,7 @@ endif(BUILD_PLAYER_ONLY)
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 find_package(OpenGL REQUIRED) # is this needed?
-find_package(Qt5 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg)
+find_package(Qt5 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Quick Qml)
 
 include(UseModernCpp)
 include(BuildType)
@@ -328,7 +328,7 @@ set(FORMS
     src/dialogs/softwareupdatedialog.ui
 )
 
-set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OPENGL_LIBRARIES})
+set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network Qt5::Qml Qt5::Quick IrisGL ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
 #include(IncludeMiner)
@@ -390,7 +390,8 @@ set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_
 set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(downloader PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 if (MINER_ENABLED)
-    set_target_properties(JahMiner PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+ #   set_target_properties(JahMiner PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    set_target_properties(Miner PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 endif()
 #set_target_properties(cuda_gpu_list PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
@@ -435,6 +436,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
                             thirdparty/breakpad/breakpad/src
 							thirdparty/miner
                             downloader )
+							#Miner)
    
 if (BUILD_PLAYER_ONLY)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DBUILD_PLAYER_ONLY=1)
@@ -443,7 +445,8 @@ endif(BUILD_PLAYER_ONLY)
 if(MINER_ENABLED)
 add_definitions("-DMINER_ENABLED")
 add_definitions("-DBUILD_AS_LIB")
-set(LIBS ${LIBS} JahMiner)
+#set(LIBS ${LIBS} JahMiner)
+set(LIBS ${LIBS} Miner)
 endif(MINER_ENABLED)
 
 #force build downloader

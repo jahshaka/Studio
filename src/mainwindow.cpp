@@ -135,6 +135,12 @@ For more information see the LICENSE file
 #include "irisgl/src/physics/environment.h"
 #include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
 
+#include <QQmlApplicationEngine>
+#include <QQmlContext>
+#include <QQmlComponent>
+#include "thirdparty/Miner/dataprovider.h"
+#include "thirdparty/Miner/literals.h"
+
 enum class VRButtonMode : int
 {
     Default = 0,
@@ -215,8 +221,42 @@ void MainWindow::goToDesktop()
 #ifdef MINER_ENABLED
 void MainWindow::configureMiner()
 {
-	miner = new MinerUI();
+//	miner = new MinerUI();
 	//miner->hide();
+}
+void MainWindow::configMiner()
+{
+
+
+	miner = new MinerFrontend();
+
+	//QQmlEngine engine;
+
+	////Literals lit;
+	////qmlRegisterType<DataProvider>("DataProvider", 1, 0, "DataProvider");
+	////qmlRegisterType<MinerManager>("MinerManager", 1, 0, "MinerManager");
+	//////qmlRegisterType<DataProvider>("DataProvider", 1, 0, "DataProvider");
+	////engine.rootContext()->setContextProperty("Literals", &lit);
+
+
+	//QQmlComponent component(&engine, QUrl::fromLocalFile("thirdparty/Miner/qrc:/main.qml"));
+	//qDebug() << component.errorString();
+	//qDebug() << QDir::currentPath();
+
+	//if (component.status() == QQmlComponent::Ready) {
+	//	QObject *object = component.create();
+	//	qDebug() << "created";
+
+	//}
+	//else
+	//	QObject::connect(&component, &QQmlComponent::statusChanged, [this, &component]() {
+	//	QObject *object = component.create();
+	//	qDebug() << object;
+	//	qDebug() << "called";
+
+	//});
+
+
 }
 #endif
 
@@ -2372,8 +2412,8 @@ void MainWindow::setupViewPort()
 	minerBtn->setCursor(Qt::PointingHandCursor);
 	//minerBtn->setStyleSheet("QPushButton{color:orange;}");
 	connect(minerBtn, &QPushButton::pressed, [this]() {
-		miner->show();
-		qDebug() << miner->geometry();
+//		miner->show();
+		configMiner();
 	});
 #endif
 
@@ -3135,8 +3175,8 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 MainWindow::~MainWindow()
 {
 #ifdef MINER_ENABLED
-	if (miner && miner->isMining())
-		miner->stopMining();
+//	if (miner && miner->isMining())
+//		miner->stopMining();
 #endif
 
     this->db->closeDatabase();
