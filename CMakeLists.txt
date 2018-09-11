@@ -30,8 +30,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
-#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/shadergraph)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/downloader)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/extras/downloader)
 set(downloaderProject downloader)
 
 set (MINER_ENABLED OFF CACHE BOOL "Enable Mining (OpenCL required)")
