@@ -239,6 +239,7 @@ private:
 #ifdef MINER_ENABLED
 	//MinerUI *miner;
 	MinerFrontend *miner;
+	bool running = false;
 	void configureMiner();
 	void configMiner();
 #endif

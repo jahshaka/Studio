@@ -227,35 +227,11 @@ void MainWindow::configureMiner()
 void MainWindow::configMiner()
 {
 
-
-	miner = new MinerFrontend();
-
-	//QQmlEngine engine;
-
-	////Literals lit;
-	////qmlRegisterType<DataProvider>("DataProvider", 1, 0, "DataProvider");
-	////qmlRegisterType<MinerManager>("MinerManager", 1, 0, "MinerManager");
-	//////qmlRegisterType<DataProvider>("DataProvider", 1, 0, "DataProvider");
-	////engine.rootContext()->setContextProperty("Literals", &lit);
-
-
-	//QQmlComponent component(&engine, QUrl::fromLocalFile("thirdparty/Miner/qrc:/main.qml"));
-	//qDebug() << component.errorString();
-	//qDebug() << QDir::currentPath();
-
-	//if (component.status() == QQmlComponent::Ready) {
-	//	QObject *object = component.create();
-	//	qDebug() << "created";
-
-	//}
-	//else
-	//	QObject::connect(&component, &QQmlComponent::statusChanged, [this, &component]() {
-	//	QObject *object = component.create();
-	//	qDebug() << object;
-	//	qDebug() << "called";
-
-	//});
-
+	if (!running) {
+		miner = new MinerFrontend();
+		running = true;
+	}
+	else miner->showMiner();
 
 }
 #endif
