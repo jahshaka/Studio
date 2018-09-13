@@ -392,7 +392,8 @@ set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_
 set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(downloader PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 if (MINER_ENABLED)
-    set_target_properties(JahMiner PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    set_target_properties(Miner PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+	#set_target_properties(xmr-stak PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 endif()
 #set_target_properties(cuda_gpu_list PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
@@ -447,13 +448,14 @@ endif(BUILD_PLAYER_ONLY)
 if(MINER_ENABLED)
 add_definitions("-DMINER_ENABLED")
 add_definitions("-DBUILD_AS_LIB")
-set(LIBS ${LIBS} JahMiner)
+set(LIBS ${LIBS} Miner)
 endif(MINER_ENABLED)
 
 #force build downloader
 #luckily, the jahshaka project has all the dependencies of the downloader project
 #so we dont need to run windeployqt or macdeployqt on the downloader specifically
 add_dependencies(${CMAKE_PROJECT_NAME} ${downloaderProject})
+message(${CMAKE_PROJECT_NAME} )
 
 if(USE_BREAKPAD)
     set(LIBS ${LIBS} breakpad)
