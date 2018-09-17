@@ -12,8 +12,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 find_package(Qt5 REQUIRED COMPONENTS Widgets Network)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-qt5_wrap_cpp(HEADERS_moc crashreportdialog.h)
-qt5_wrap_ui(UI_moc crashreportdialog.ui)
+# https://stackoverflow.com/a/37211780/996468
+source_group(moc FILES ${HEADERS_moc} ${QRCS})
+
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTORCC ON)
 
 add_executable(crash_handler main.cpp crashreportdialog.cpp ${HEADERS_moc} ${UI_moc})
 target_link_libraries(crash_handler Qt5::Widgets Qt5::Network breakpad)
