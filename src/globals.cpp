@@ -18,4 +18,3 @@ QString Globals::appWorkingDir = QString();
 Project* Globals::project = Project::createNew();
 SceneViewWidget* Globals::sceneViewWidget = nullptr;
 QMap<QString, QString> Globals::assetNames = QMap<QString, QString>();
-QtAwesome *Globals::fontIcons = new QtAwesome();
