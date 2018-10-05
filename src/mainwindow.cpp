@@ -183,8 +183,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     vrMode = false;
 
     setupFileMenu();
-
-	Globals::fontIcons->initFontAwesome();
+	fontIcons = new QtAwesome;
+	fontIcons->initFontAwesome();
 #ifdef MINER_ENABLED
 	configureMiner();
 #endif
@@ -867,7 +867,7 @@ void MainWindow::closeProject()
         QVariantMap options;
         options.insert("color", QColor(52, 152, 219));
         options.insert("color-active", QColor(52, 152, 219));
-        playSimBtn->setIcon(fontIcons.icon(fa::play, options));
+        playSimBtn->setIcon(fontIcons->icon(fa::play, options));
     }
 
     UiManager::isSceneOpen = false;
@@ -2368,7 +2368,7 @@ void MainWindow::setupViewPort()
 	minerBtn->setIconSize(QSize(26,26));
 	minerBtn->setStyleSheet("background:transparent;");
 	/*minerBtn->setText(QChar(fa::microchip));
-	minerBtn->setFont(fontIcons.font(24));*/
+	minerBtn->setFont(fontIcons->font(24));*/
 	minerBtn->setCursor(Qt::PointingHandCursor);
 	//minerBtn->setStyleSheet("QPushButton{color:orange;}");
 	connect(minerBtn, &QPushButton::pressed, [this]() {
@@ -2380,7 +2380,7 @@ void MainWindow::setupViewPort()
 	help = new QPushButton;
 	help->setObjectName("helpButton");
 	help->setText(QChar(fa::questioncircle));
-	help->setFont(Globals::fontIcons->font(28));
+	help->setFont(fontIcons->font(28));
 	help->setCursor(Qt::PointingHandCursor);
 
 	help->setStyleSheet(
@@ -2401,7 +2401,7 @@ void MainWindow::setupViewPort()
 	prefs->setObjectName("prefsButton");
 
 	prefs->setText(QChar(fa::cog));
-	prefs->setFont(Globals::fontIcons->font(28));
+	prefs->setFont(fontIcons->font(28));
 	prefs->setCursor(Qt::PointingHandCursor);
 
 	prefs->setStyleSheet(
@@ -2490,13 +2490,13 @@ void MainWindow::setupViewPort()
     QVariantMap options;
     
     auto controlBarLayout = new QHBoxLayout;
-    playSceneBtn = new QPushButton(Globals::fontIcons->icon(fa::play), "Play scene");
+    playSceneBtn = new QPushButton(fontIcons->icon(fa::play), "Play scene");
     playSceneBtn->setToolTip("Play all animations in the scene");
     playSceneBtn->setStyleSheet("background: transparent");
 
     options.insert("color", QColor(52, 152, 219));
     options.insert("color-active", QColor(52, 152, 219));
-	playSimBtn = new QPushButton(Globals::fontIcons->icon(fa::play, options), "Simulate physics");
+	playSimBtn = new QPushButton(fontIcons->icon(fa::play, options), "Simulate physics");
 	playSimBtn->setToolTip("Simulate physics only");
 	playSimBtn->setStyleSheet("background: transparent");
 
@@ -2590,7 +2590,7 @@ void MainWindow::setupViewPort()
 
             options.insert("color", QColor(241, 196, 15));
             options.insert("color-active", QColor(241, 196, 15));
-            playSimBtn->setIcon(fontIcons.icon(fa::stop, options));
+            playSimBtn->setIcon(fontIcons->icon(fa::stop, options));
 		}
 		else {
             UiManager::restartPhysicsSimulation();
@@ -2609,7 +2609,7 @@ void MainWindow::setupViewPort()
 
             options.insert("color", QColor(52, 152, 219));
             options.insert("color-active", QColor(52, 152, 219));
-            playSimBtn->setIcon(fontIcons.icon(fa::play, options));
+            playSimBtn->setIcon(fontIcons->icon(fa::play, options));
 		}
 
         if (!!activeSceneNode) sceneNodeSelected(activeSceneNode);
@@ -2708,13 +2708,13 @@ void MainWindow::setupToolBar()
 	QAction *actionUndo = new QAction;
 	actionUndo->setToolTip("Undo | Undo last action");
 	actionUndo->setObjectName(QStringLiteral("actionUndo"));
-	actionUndo->setIcon(Globals::fontIcons->icon(fa::reply, options));
+	actionUndo->setIcon(fontIcons->icon(fa::reply, options));
 	toolBar->addAction(actionUndo);
 
 	QAction *actionRedo = new QAction;
 	actionRedo->setToolTip("Redo | Redo last action");
 	actionRedo->setObjectName(QStringLiteral("actionRedo"));
-	actionRedo->setIcon(Globals::fontIcons->icon(fa::share, options));
+	actionRedo->setIcon(fontIcons->icon(fa::share, options));
 	toolBar->addAction(actionRedo);
 
 	toolBar->addSeparator();
@@ -2726,21 +2726,21 @@ void MainWindow::setupToolBar()
     actionTranslate->setObjectName(QStringLiteral("actionTranslate"));
     actionTranslate->setCheckable(true);
 	actionTranslate->setToolTip("Translate | Manipulator for translating objects | Translates the object along a given axis");
-	actionTranslate->setIcon(Globals::fontIcons->icon(fa::arrows, options));
+	actionTranslate->setIcon(fontIcons->icon(fa::arrows, options));
 	toolBar->addAction(actionTranslate);
 
     actionRotate = new QAction;
     actionRotate->setObjectName(QStringLiteral("actionRotate"));
     actionRotate->setCheckable(true);
 	actionRotate->setToolTip("Rptate | Manipulator for rotating objects | Rotates the object along a given axis");
-	actionRotate->setIcon(Globals::fontIcons->icon(fa::rotateright, options));
+	actionRotate->setIcon(fontIcons->icon(fa::rotateright, options));
 	toolBar->addAction(actionRotate);
 
     actionScale = new QAction;
     actionScale->setObjectName(QStringLiteral("actionScale"));
     actionScale->setCheckable(true);
 	actionScale->setToolTip("Scale | Manipulator for scaling objects | Scales the object along a given axis");
-	actionScale->setIcon(Globals::fontIcons->icon(fa::expand, options));
+	actionScale->setIcon(fontIcons->icon(fa::expand, options));
 	toolBar->addAction(actionScale);
 
     toolBar->addSeparator();
@@ -2749,14 +2749,14 @@ void MainWindow::setupToolBar()
     actionGlobalSpace->setObjectName(QStringLiteral("actionGlobalSpace"));
     actionGlobalSpace->setCheckable(true);
 	actionGlobalSpace->setToolTip("Global Space | Move objects relative to the global world");
-	actionGlobalSpace->setIcon(Globals::fontIcons->icon(fa::globe, options));
+	actionGlobalSpace->setIcon(fontIcons->icon(fa::globe, options));
 	toolBar->addAction(actionGlobalSpace);
 
     QAction *actionLocalSpace = new QAction;
     actionLocalSpace->setObjectName(QStringLiteral("actionLocalSpace"));
     actionLocalSpace->setCheckable(true);
 	actionLocalSpace->setToolTip("Local Space | Move objects relative to their transform");
-	actionLocalSpace->setIcon(Globals::fontIcons->icon(fa::cube, options));
+	actionLocalSpace->setIcon(fontIcons->icon(fa::cube, options));
 	toolBar->addAction(actionLocalSpace);
 
     toolBar->addSeparator();
@@ -2765,14 +2765,14 @@ void MainWindow::setupToolBar()
     actionFreeCamera->setObjectName(QStringLiteral("actionFreeCamera"));
     actionFreeCamera->setCheckable(true);
 	actionFreeCamera->setToolTip("Free Camera | Freely move and orient the camera");
-	actionFreeCamera->setIcon(Globals::fontIcons->icon(fa::eye, options));
+	actionFreeCamera->setIcon(fontIcons->icon(fa::eye, options));
 	toolBar->addAction(actionFreeCamera);
 
 	QAction *actionArcballCam = new QAction;
 	actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
 	actionArcballCam->setCheckable(true);
 	actionArcballCam->setToolTip("Arc Ball Camera | Move and orient the camera around a fixed point | With this button selected, you are now able to move around a fixed point.");
-	actionArcballCam->setIcon(Globals::fontIcons->icon(fa::dotcircleo, options));
+	actionArcballCam->setIcon(fontIcons->icon(fa::dotcircleo, options));
 	toolBar->addAction(actionArcballCam);
 
 	toolBar->addSeparator();
@@ -2812,7 +2812,7 @@ void MainWindow::setupToolBar()
 	actionExport->setObjectName(QStringLiteral("actionExport"));
 	actionExport->setCheckable(false);
 	actionExport->setToolTip("Export | Export the current scene");
-	actionExport->setIcon(Globals::fontIcons->icon(fa::upload, options));
+	actionExport->setIcon(fontIcons->icon(fa::upload, options));
 	toolBar->addAction(actionExport);
 
 	actionSaveScene = new QAction;
@@ -2820,14 +2820,14 @@ void MainWindow::setupToolBar()
 	actionSaveScene->setVisible(!settings->getValue("auto_save", true).toBool());
 	actionSaveScene->setCheckable(false);
 	actionSaveScene->setToolTip("Save | Save the current scene");
-	actionSaveScene->setIcon(Globals::fontIcons->icon(fa::floppyo, options));
+	actionSaveScene->setIcon(fontIcons->icon(fa::floppyo, options));
 	toolBar->addAction(actionSaveScene);
 
 	QAction *viewDocks = new QAction;
 	viewDocks->setObjectName(QStringLiteral("viewDocks"));
 	viewDocks->setCheckable(false);
 	viewDocks->setToolTip("Toggle Widgets | Toggle the dock widgets");
-	viewDocks->setIcon(Globals::fontIcons->icon(fa::listalt, options));
+	viewDocks->setIcon(fontIcons->icon(fa::listalt, options));
 	toolBar->addAction(viewDocks);
 
 	cameraView->setIconSize(QSize(17, 17));
@@ -3202,7 +3202,7 @@ void MainWindow::enterEditMode()
     QVariantMap options;
     options.insert("color", QColor(46, 204, 113));
     options.insert("color-active", QColor(46, 204, 113));
-    playSceneBtn->setIcon(fontIcons.icon(fa::play, options));
+    playSceneBtn->setIcon(fontIcons->icon(fa::play, options));
 }
 
 void MainWindow::enterPlayMode()
@@ -3217,7 +3217,7 @@ void MainWindow::enterPlayMode()
     QVariantMap options;
     options.insert("color", QColor(231, 76, 60));
     options.insert("color-active", QColor(231, 76, 60));
-    playSceneBtn->setIcon(fontIcons.icon(fa::stop, options));
+    playSceneBtn->setIcon(fontIcons->icon(fa::stop, options));
 }
 
 void MainWindow::changeProjection(bool val)

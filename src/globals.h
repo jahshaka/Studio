@@ -36,7 +36,6 @@ public:
     static Project* project;
     static SceneViewWidget* sceneViewWidget;
     static QMap<QString, QString> assetNames;
-	static QtAwesome *fontIcons;
 };
 
 #endif // GLOBALS_H
