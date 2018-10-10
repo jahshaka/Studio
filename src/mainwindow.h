@@ -479,8 +479,6 @@ private:
 	QVector<bool> widgetStates;	// use the order in the enum
 
     WindowSpaces currentSpace;
-	QtAwesome fontIcons;
-
 	QPushButton *playSimBtn;
 
     QAction *actionTranslate;
@@ -491,6 +489,7 @@ private:
     AssetMaterialPanel *assetMaterialPanel;
 
 	QPushButton *cameraView;
+	QtAwesome *fontIcons;
 };
 
 #endif // MAINWINDOW_H
