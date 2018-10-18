@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include <QListView>
 #include <QStandardPaths>
 #include <QStyledItemDelegate>
+#include <QButtonGroup>
 
 #include "core/database/database.h"
 #include "core/settingsmanager.h"
