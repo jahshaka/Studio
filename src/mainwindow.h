@@ -102,6 +102,7 @@ enum WindowSpaces {
     DESKTOP,
     PLAYER,
     EDITOR,
+	EFFECT,
     ASSETS
 };
 
@@ -431,6 +432,7 @@ private:
 	QPushButton *worlds_menu;
 	QPushButton *player_menu;
 	QPushButton *editor_menu;
+	QPushButton *effect_menu;
 	QPushButton *assets_menu;
 	QWidget *assets_panel;
 	QLabel *jlogo;

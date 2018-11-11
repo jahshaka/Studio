@@ -636,6 +636,7 @@ void MainWindow::switchSpace(WindowSpaces space)
 	const QString unselectedMenu = "border-color: #111";
 
 	assets_menu->setStyleSheet(unselectedMenu);
+	effect_menu->setStyleSheet(unselectedMenu);
 
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
@@ -748,6 +749,24 @@ void MainWindow::switchSpace(WindowSpaces space)
     		
 			break;
     	}
+
+		case WindowSpaces::EFFECT: {
+			ui->stackedWidget->setCurrentIndex(3);
+			ui->stackedWidget->currentWidget()->setFocus();
+
+			toolBar->setVisible(false);
+			if (UiManager::isSceneOpen) {
+				worlds_menu->setStyleSheet(unselectedMenu);
+				editor_menu->setStyleSheet(unselectedMenu);
+				player_menu->setStyleSheet(unselectedMenu);
+			}
+
+			worlds_menu->setStyleSheet(unselectedMenu);
+			assets_menu->setStyleSheet(unselectedMenu);
+			effect_menu->setStyleSheet(selectedMenu);
+
+			break;
+		}
 
         default: break;
     }
@@ -2331,6 +2350,9 @@ void MainWindow::setupViewPort()
 	editor_menu = new QPushButton("Editor");
 	editor_menu->setObjectName("editor_menu");
 	editor_menu->setCursor(Qt::PointingHandCursor);
+	effect_menu = new QPushButton("Effects");
+	effect_menu->setObjectName("effects_menu");
+	effect_menu->setCursor(Qt::PointingHandCursor);
 	assets_menu = new QPushButton("Assets");
 	assets_menu->setObjectName("assets_menu");
 	assets_menu->setCursor(Qt::PointingHandCursor);
@@ -2344,6 +2366,7 @@ void MainWindow::setupViewPort()
     hl->addWidget(player_menu);
 #ifndef BUILD_PLAYER_ONLY
 	hl->addWidget(editor_menu);
+	hl->addWidget(effect_menu);
 	hl->addWidget(assets_menu);
 #endif
 
@@ -2437,7 +2460,8 @@ void MainWindow::setupViewPort()
 	});
     connect(player_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::PLAYER); });
     connect(editor_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::EDITOR); });
-    connect(assets_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::ASSETS); });
+	connect(assets_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::ASSETS); });
+	connect(effect_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::EFFECT); });
 
     sceneContainer = new QWidget;
     QSizePolicy sceneContainerPolicy;
@@ -2688,6 +2712,7 @@ void MainWindow::setupDesktop()
 	ui->stackedWidget->addWidget(pmContainer);
 	ui->stackedWidget->addWidget(viewPort);
 	ui->stackedWidget->addWidget(_assetView);
+	ui->stackedWidget->addWidget(new QWidget(this));
 
 	connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));
 	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
