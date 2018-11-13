@@ -47,7 +47,7 @@ QToolButton:checked
 	border-bottom: 1px solid black;
 }
 
-#worlds_menu, #player_menu, #editor_menu, #assets_menu {
+#worlds_menu, #player_menu, #editor_menu, #assets_menu, #effects_menu {
 	font-size: 17px;
 	padding: 14px;
 	border-bottom-width: 4px;
@@ -240,11 +240,11 @@ QPushButton#vrButton {
     background-color: rgba(255, 255, 255, 0);
 }
 
-QPushButton#vrButton[vrMode="1"] {
+QPushButton#vrButton[vrMode=&quot;1&quot;] {
     background-color: #e74c3c;
 }
 
-QPushButton#vrButton[vrMode="2"] {
+QPushButton#vrButton[vrMode=&quot;2&quot;] {
     background-color: #2980b9;
 }
 
@@ -275,7 +275,7 @@ QLabel {
 }
 
 /* ====== TOOLBAR ====== */
-QToolBar > QToolButton, QWidget#vrButton, #pmButton {
+QToolBar &gt; QToolButton, QWidget#vrButton, #pmButton {
     background-color: #212121;
     border: 1px solid #1e1e1e;
     border-radius: 2px;
