@@ -759,6 +759,7 @@ void MainWindow::switchSpace(WindowSpaces space)
 				worlds_menu->setStyleSheet(unselectedMenu);
 				editor_menu->setStyleSheet(unselectedMenu);
 				player_menu->setStyleSheet(unselectedMenu);
+				assets_menu->setStyleSheet(unselectedMenu);
 			}
 
 			worlds_menu->setStyleSheet(unselectedMenu);
