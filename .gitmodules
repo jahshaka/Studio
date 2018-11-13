@@ -10,3 +10,6 @@
 [submodule "thirdparty/miner"]
 	path = thirdparty/miner
 	url = https://github.com/jahshaka/Miner
+[submodule "src/shadergraph"]
+	path = src/shadergraph
+	url = git@github.com:njbrown/nodegraphtest.git
