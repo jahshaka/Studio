@@ -135,6 +135,8 @@ For more information see the LICENSE file
 #include "irisgl/src/physics/environment.h"
 #include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
 
+#include "shadergraph/mainwindow.h"
+
 enum class VRButtonMode : int
 {
     Default = 0,
@@ -2713,7 +2715,8 @@ void MainWindow::setupDesktop()
 	ui->stackedWidget->addWidget(pmContainer);
 	ui->stackedWidget->addWidget(viewPort);
 	ui->stackedWidget->addWidget(_assetView);
-	ui->stackedWidget->addWidget(new QWidget(this));
+	//ui->stackedWidget->addWidget(new QWidget(this));
+	ui->stackedWidget->addWidget(new shadergraph::MainWindow(this));
 
 	connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));
 	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
