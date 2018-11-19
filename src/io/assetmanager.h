@@ -16,8 +16,7 @@ For more information see the LICENSE file
 #include <QImage>
 #include <QPixmap>
 
-#include "irisgl/src/graphics/graphicshelper.h"
-#include "irisgl/src/irisglfwd.h"
+#include <irisgl/Graphics.h>
 
 #include "core/project.h"
 
