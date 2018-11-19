@@ -35,13 +35,12 @@ namespace iris
 class DefaultSkyMaterial : public Material
 {
 public:
-
     void setSkyTexture(Texture2DPtr tex);
     void clearSkyTexture();
     Texture2DPtr getSkyTexture();
 
-    void setSkyColor(QColor color);
-    QColor getSkyColor();
+    //void setSkyColor(QColor color);
+    //QColor getSkyColor();
 
     void begin(GraphicsDevicePtr device, ScenePtr scene) override;
     void end(GraphicsDevicePtr device, ScenePtr scene) override;
@@ -49,6 +48,9 @@ public:
     void endCube(GraphicsDevicePtr device, ScenePtr scene) override;
 
     static DefaultSkyMaterialPtr create();
+
+    void switchSkyShader(const QString &vertexShader, const QString &fragmentShader);
+
 private:
     DefaultSkyMaterial();
 

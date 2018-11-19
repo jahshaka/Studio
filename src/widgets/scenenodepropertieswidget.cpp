@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "propertywidgets/shaderpropertywidget.h"
 #include "propertywidgets/worldpropertywidget.h"
 #include "propertywidgets/physicspropertywidget.h"
+#include "propertywidgets/skypropertywidget.h"
 
 SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(parent)
 {
@@ -46,6 +47,10 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     worldPropView = new WorldPropertyWidget();
     worldPropView->setPanelTitle("World");
     worldPropView->expand();
+
+    skyPropView = new SkyPropertyWidget();
+    skyPropView->setPanelTitle("Sky");
+    skyPropView->expand();
 
     transformPropView = new AccordianBladeWidget();
     transformPropView->setPanelTitle("Transformation");
@@ -94,6 +99,9 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             fogPropView->setScene(sceneNode->scene);
             worldPropView->setParent(this);
             worldPropView->setScene(sceneNode->scene);
+            skyPropView->setParent(this);
+            skyPropView->setScene(sceneNode->scene);
+            widgetPropertyLayout->addWidget(skyPropView);
             widgetPropertyLayout->addWidget(fogPropView);
             widgetPropertyLayout->addWidget(worldPropView);
         }

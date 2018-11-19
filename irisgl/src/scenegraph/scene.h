@@ -38,6 +38,28 @@ struct PickingResult
     float distanceFromStartSqrd;
 };
 
+enum class SkyType : int
+{
+    SINGLE_COLOR = 0,
+    CUBEMAP,
+    EQUIRECTANGULAR,
+    GRADIENT,
+    MATERIAL,
+    REALISTIC
+};
+
+struct SkyRealistic
+{
+    float luminance;
+    float reileigh;
+    float mieCoefficient;
+    float mieDirectionalG;
+    float turbidity;
+    float sunPosX;
+    float sunPosY;
+    float sunPosZ;
+};
+
 class Scene: public QEnableSharedFromThis<Scene>
 {
     QSharedPointer<Environment> environment;
@@ -80,6 +102,11 @@ public:
     float gravity;
     bool shadowEnabled;
 
+    // temp
+    SkyType skyType;
+    SkyRealistic skyRealistic;
+    // end temp
+
     RenderList* geometryRenderList;
     RenderList* shadowRenderList;
     RenderList* gizmoRenderList;// for gizmos and lines
@@ -110,6 +137,8 @@ public:
     SceneNodePtr getRootNode() {
         return rootNode;
     }
+
+    void switchSkyTexture(iris::SkyType skyType);
 
     void setSkyTexture(Texture2DPtr tex);
     void setSkyTextureSource(QString src) {

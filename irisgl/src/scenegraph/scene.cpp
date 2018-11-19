@@ -62,6 +62,20 @@ Scene::Scene()
     fogEnd = 180;
     fogEnabled = true;
 
+    // temp
+    skyType = SkyType::REALISTIC;
+
+    skyRealistic.luminance = 1.0;
+    skyRealistic.reileigh = 2.5;
+    skyRealistic.mieCoefficient = 0.053;
+    skyRealistic.mieDirectionalG = 0.75;
+    skyRealistic.turbidity = .32f;
+    skyRealistic.sunPosX = 10;
+    skyRealistic.sunPosY = 7;
+    skyRealistic.sunPosZ = 10;
+
+    // end temp
+
     ambientColor = QColor(64, 64, 64);
 
     meshes.reserve(100);
@@ -73,7 +87,51 @@ Scene::Scene()
 
 	time = 0;
 
+    switchSkyTexture(skyType);
+
     environment = QSharedPointer<Environment>(new Environment(geometryRenderList));
+}
+
+void Scene::switchSkyTexture(iris::SkyType skyType)
+{
+    switch (static_cast<int>(skyType)) {
+        case static_cast<int>(iris::SkyType::CUBEMAP): {
+            skyMaterial->createProgramFromShaderSource(":assets/shaders/defaultsky.vert",
+                                                       ":assets/shaders/cubemapsky.frag");
+            break;
+        }
+
+        case static_cast<int>(iris::SkyType::EQUIRECTANGULAR): {
+            skyMaterial->createProgramFromShaderSource(":assets/shaders/defaultsky.vert",
+                                                       ":assets/shaders/equirectangularsky.frag");
+            break;
+        }
+
+        case static_cast<int>(iris::SkyType::GRADIENT): {
+            skyMaterial->createProgramFromShaderSource(":assets/shaders/defaultsky.vert",
+                                                       ":assets/shaders/gradientsky.frag");
+            break;
+        }
+
+        case static_cast<int>(iris::SkyType::MATERIAL): {
+   /*         skyMaterial->createProgramFromShaderSource(":assets/shaders/defaultsky.vert",
+                                                       ":assets/shaders/defaultsky.frag");*/
+            break;
+        }
+
+        case static_cast<int>(iris::SkyType::REALISTIC): {
+            skyMaterial->createProgramFromShaderSource(":assets/shaders/defaultsky.vert",
+                                                       ":assets/shaders/realisticsky.frag");
+            break;
+        }
+
+        case static_cast<int>(iris::SkyType::SINGLE_COLOR): {
+            skyMaterial->createProgramFromShaderSource(":assets/shaders/defaultsky.vert",
+                                                       ":assets/shaders/flatsky.frag");
+        }
+        default:
+            break;
+    }
 }
 
 void Scene::setSkyTexture(Texture2DPtr tex)
@@ -96,7 +154,7 @@ void Scene::clearSkyTexture()
 void Scene::setSkyColor(QColor color)
 {
     this->skyColor = color;
-    skyMaterial->setSkyColor(color);
+    /*skyMaterial->setSkyColor(color);*/
 }
 
 void Scene::setAmbientColor(QColor color)

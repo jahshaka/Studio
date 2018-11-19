@@ -12,8 +12,6 @@ For more information see the LICENSE file
 #version 150 core
 
 in vec3 a_pos;
-// in vec2 a_texCoord;
-//attribute vec3 a_normal;
 
 uniform mat4 u_viewMatrix;
 uniform mat4 u_projMatrix;
@@ -21,18 +19,18 @@ uniform mat4 u_worldMatrix;
 
 out vec3 v_worldNormal;
 out vec3 v_texCoord;
+out vec3 vWorldPosition;
 
 void main()
 {
     v_worldNormal = normalize(a_pos);
 
-    vec4 finalPos = u_projMatrix * u_viewMatrix * vec4( a_pos*1000, 1.0 );
-
+    vec4 finalPos = u_projMatrix * u_viewMatrix * vec4(a_pos * 1000, 1.0);
+    vWorldPosition = (u_worldMatrix * vec4(a_pos, 1.0)).xyz;
     v_texCoord = a_pos;
-
     //rendering trick to place sky behind all other objects
     //http://www.haroldserrano.com/blog/how-to-apply-a-skybox-in-opengl
     //https://www.opengl.org/discussion_boards/showthread.php/171867-skybox-problem?p=1206427&viewfull=1#post1206427
-    finalPos.z = finalPos.w-0.1f;
+    finalPos.z = finalPos.w - 0.1;
     gl_Position = finalPos.xyzw;
 }

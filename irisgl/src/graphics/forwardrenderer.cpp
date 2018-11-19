@@ -737,6 +737,7 @@ void ForwardRenderer::renderSky(RenderData* renderData)
 	graphics->setShader(scene->skyMaterial->shader);
 	graphics->setShaderUniform("u_viewMatrix", renderData->viewMatrix);
 	graphics->setShaderUniform("u_projMatrix", renderData->projMatrix);
+	graphics->setShaderUniform("u_eyePos", renderData->eyePos);
 	QMatrix4x4 worldMatrix;
 	worldMatrix.setToIdentity();
 	graphics->setShaderUniform("u_worldMatrix", worldMatrix);

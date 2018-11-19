@@ -34,21 +34,21 @@ public:
     WorldPropertyWidget();
 
     void setScene(QSharedPointer<iris::Scene> scene);
-    void setupViewSelector();
+    //void setupViewSelector();
 
 protected slots:
     void onGravityChanged(float value);
-    void onSkyTextureChanged(QString texPath);
-    void onSkyColorChanged(QColor color);
+    //void onSkyTextureChanged(QString texPath);
+    //void onSkyColorChanged(QColor color);
     void onAmbientColorChanged(QColor color);
-    void viewTextureSlotChanged(const QString &text);
+    //void viewTextureSlotChanged(const QString &text);
 
 private:
     QSharedPointer<iris::Scene> scene;
-    ComboBoxWidget *viewSelector;
+    //ComboBoxWidget *viewSelector;
     CheckBoxWidget *flipView;
-    TexturePickerWidget *skyTexture;
-    ColorValueWidget *skyColor;
+    //TexturePickerWidget *skyTexture;
+    //ColorValueWidget *skyColor;
     ColorValueWidget *ambientColor;
     HFloatSliderWidget *worldGravity;
 

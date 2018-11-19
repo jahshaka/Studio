@@ -80,10 +80,12 @@ set(SRCS
     src/widgets/scenenodepropertieswidget.cpp 
     src/widgets/propertywidgets/lightpropertywidget.cpp 
     src/widgets/propertywidgets/materialpropertywidget.cpp 
+    src/widgets/propertywidgets/skypropertywidget.cpp 
     src/widgets/propertywidgets/worldpropertywidget.cpp 
     src/widgets/propertywidgets/physicspropertywidget.cpp 
     src/io/scenewriter.cpp 
     src/core/thumbnailmanager.cpp 
+    src/widgets/propertywidgets/fogpropertywidget.cpp 
     src/widgets/propertywidgets/fogpropertywidget.cpp 
     src/io/assetiobase.cpp 
     src/io/materialpresetreader.cpp 
@@ -196,6 +198,7 @@ set(HEADERS
     src/widgets/propertywidgets/transformpropertywidget.h 
     src/widgets/propertywidgets/lightpropertywidget.h 
     src/widgets/propertywidgets/materialpropertywidget.h 
+    src/widgets/propertywidgets/skypropertywidget.h 
     src/widgets/scenenodepropertieswidget.h 
     src/widgets/propertywidgets/worldpropertywidget.h 
     src/widgets/propertywidgets/physicspropertywidget.h 
