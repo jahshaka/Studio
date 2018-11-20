@@ -20,13 +20,6 @@ class SceneViewWidget;
 //#include "src/misc/QtAwesome.h"
 //#include "src/misc/QtAwesomeAnim.h"
 
-#ifdef BUILD_AS_LIB
-#include "../../src/misc/QtAwesome.h"
-#include "../../src/misc/QtAwesomeAnim.h"
-#else
-#include "src/misc/QtAwesome.h"
-#include "src/misc/QtAwesomeAnim.h"
-#endif
 
 class Globals
 {

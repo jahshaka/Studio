@@ -17,6 +17,7 @@ For more information see the LICENSE file
 
 #include <QUndoStack>
 #include <QUndoCommand>
+#include <QDebug>
 
 MainWindow *UiManager::mainWindow = Q_NULLPTR;
 AnimationWidget *UiManager::animationWidget = Q_NULLPTR;
@@ -78,6 +79,8 @@ void UiManager::enterEditMode()
 {
     sceneViewWidget->stopPlayingScene();
     sceneMode = SceneMode::EditMode;
+	qDebug() << "scene view is editing";
+
 }
 
 // TODO - check that the sceneMode being set here doesn't change anything anywhere else
