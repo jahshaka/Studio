@@ -705,6 +705,8 @@ void MainWindow::switchSpace(WindowSpaces space)
             UiManager::sceneMode = SceneMode::EditMode;
 
             assetWidget->refresh();
+			isSceneOpen = true;
+			qDebug() << " line 708 mainwindow.cpp - asset widget gets refreshed";
 
             break;
         }
@@ -767,6 +769,8 @@ void MainWindow::switchSpace(WindowSpaces space)
 			worlds_menu->setStyleSheet(unselectedMenu);
 			assets_menu->setStyleSheet(unselectedMenu);
 			effect_menu->setStyleSheet(selectedMenu);
+
+			shaderGraph->refreshShaderGraph();
 
 			break;
 		}
@@ -2716,7 +2720,8 @@ void MainWindow::setupDesktop()
 	ui->stackedWidget->addWidget(viewPort);
 	ui->stackedWidget->addWidget(_assetView);
 	//ui->stackedWidget->addWidget(new QWidget(this));
-	ui->stackedWidget->addWidget(new shadergraph::MainWindow(this));
+	shaderGraph = new shadergraph::MainWindow(this,db);
+	ui->stackedWidget->addWidget(shaderGraph);
 
 	connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));
 	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
@@ -3227,7 +3232,7 @@ void MainWindow::enterEditMode()
     
     playSceneBtn->setText("Play Scene");
     playSceneBtn->setToolTip("Play scene");
-
+	shaderGraph->setAssetWidgetDatabase(db);
     QVariantMap options;
     options.insert("color", QColor(46, 204, 113));
     options.insert("color-active", QColor(46, 204, 113));
