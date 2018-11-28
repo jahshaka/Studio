@@ -334,7 +334,7 @@ set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OP
 include(IncludeBreakpad)
 #include(IncludeMiner)
 include(IncludeShaderGraph)
-
+message(${SRCS})
 
 # these macros are deprecated
 #qt5_wrap_cpp(HEADERS_moc ${HEADERS})
