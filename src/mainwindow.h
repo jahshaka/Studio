@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "misc/QtAwesome.h"
 #include "misc/QtAwesomeAnim.h"
 #include "core/project.h"
+#include "shadergraph/mainwindow.h"
 
 #ifdef MINER_ENABLED
 #include "../thirdparty/miner/minerui.h"
@@ -40,6 +41,7 @@ namespace Ui {
 
 class SurfaceView;
 class AssetView;
+class ShaderGraph;
 
 class QPushButton;
 class QStandardItem;
@@ -492,6 +494,9 @@ private:
 
 	QPushButton *cameraView;
 	QtAwesome *fontIcons;
+
+	bool isSceneOpen = false;
+	shadergraph::MainWindow *shaderGraph;
 };
 
 #endif // MAINWINDOW_H

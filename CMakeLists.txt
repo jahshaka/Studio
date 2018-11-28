@@ -30,7 +30,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/shadergraph)
+#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/shadergraph)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/downloader)
 set(downloaderProject downloader)
 
@@ -329,10 +329,12 @@ set(FORMS
     src/dialogs/softwareupdatedialog.ui
 )
 
-set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL shadergraph ${OPENGL_LIBRARIES})
+set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
 #include(IncludeMiner)
+include(IncludeShaderGraph)
+message(${SRCS})
 
 # these macros are deprecated
 #qt5_wrap_cpp(HEADERS_moc ${HEADERS})
@@ -389,7 +391,6 @@ add_definitions("-DGIT_COMMIT_DATE=\"${GIT_COMMIT_DATE}\"")
 # Also note MSVC build path is different from GNU in that it containts the build type
 set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set_target_properties(shadergraph PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(downloader PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 if (MINER_ENABLED)
     set_target_properties(JahMiner PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -437,14 +438,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC
                             thirdparty/breakpad/breakpad/src
 							thirdparty/miner
                             downloader )
-   
-# shadergraph uses irisgl as a dependency
-target_include_directories(shadergraph PUBLIC
-                            irisgl/include
-                            irisgl/src
-                            irisgl/src/assimp/include
-                            "${PROJECT_BINARY_DIR}/irisgl/src/assimp/include"
-                            irisgl/src/bullet3/src/ )
 
 Message("${PROJECT_BINARY_DIR}/src/assimp/include/")
 
@@ -471,4 +464,3 @@ target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBS})
 
 include(CopyResources)
 include(CopyDependencies)
-
