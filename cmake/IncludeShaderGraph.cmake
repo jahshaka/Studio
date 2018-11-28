@@ -1,4 +1,4 @@
-project(ShaderGraph)
+#project(ShaderGraph)
 
 set (CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -13,8 +13,8 @@ find_package(Qt5 REQUIRED COMPONENTS Widgets Core )
 # set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 # set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-set(CPP
-	${CPP}
+set(SRCS
+	${SRCS}
 	#main.cpp
 	src/shadergraph/mainwindow.cpp
 	#nodegraph.cpp
@@ -50,12 +50,14 @@ set(CPP
 	src/shadergraph/generator/shadergenerator.cpp
 	src/shadergraph/generator/shadercontext.cpp
 	src/shadergraph/listwidget.cpp
+	src/shadergraph/shaderlistwidget.cpp
 	# nodes
 	src/shadergraph/nodes/test.cpp
 	src/shadergraph/nodes/libraryv1.cpp
 	src/shadergraph/nodes/math.cpp
 	src/shadergraph/nodes/utils.cpp
 	src/shadergraph/nodes/inputs.cpp
+	src/shadergraph/nodes/object.cpp
 	src/shadergraph/dialogs/createnewdialog.cpp
 	src/shadergraph/dialogs/searchdialog.cpp
 	)
@@ -95,18 +97,24 @@ set(HEADERS
 		src/shadergraph/generator/shadergenerator.h
 		src/shadergraph/generator/shadercontext.h
 		src/shadergraph/listwidget.h
+		src/shadergraph/shaderlistwidget.h
 		# nodes
 		src/shadergraph/nodes/test.h
 		src/shadergraph/nodes/libraryv1.h
 		src/shadergraph/nodes/math.h
 		src/shadergraph/nodes/utils.h
 		src/shadergraph/nodes/inputs.h
+		src/shadergraph/nodes/object.h
 		src/shadergraph/dialogs/createnewdialog.h
 		src/shadergraph/dialogs/searchdialog.h
 	)
 
 
 
-Qt5_add_resources(QRCS
-		src/shadergraph/images.qrc
-		src/shadergraph/icons.qrc)
+#Qt5_add_resources(QRCS
+#		src/shadergraph/images.qrc
+#		src/shadergraph/icons.qrc
+#		)
+
+message("Shader graph included")
+		
