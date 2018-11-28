@@ -12,4 +12,4 @@
 	url = https://github.com/jahshaka/Miner
 [submodule "src/shadergraph"]
 	path = src/shadergraph
-	url = git@github.com:njbrown/nodegraphtest.git
+	url = https://github.com/jahshaka/Effects.git
