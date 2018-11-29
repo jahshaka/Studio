@@ -68,6 +68,11 @@ public:
                              const QByteArray &properties = QByteArray(),
                              const QByteArray &tags = QByteArray(),
                              const QByteArray &asset = QByteArray());
+	QString createAssetEntry(const QString &projectGuid,
+							 const QString &guid,
+							 const QString &assetname,
+							 const int &type );
+
     bool createDependency(const int &dependerType,
                           const int &dependeeType,
                           const QString &depender,
