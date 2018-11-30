@@ -425,44 +425,79 @@ bool Database::createFolder(const QString &folderName, const QString &parentFold
 }
 
 QString Database::createAssetEntry(
-    const QString &guid,
-    const QString &assetName,
-    const int &type,
-    const QString &parentFolder,
-    const QString &license,
-    const QString &author,
-    const QByteArray &thumbnail,
-    const QByteArray &properties,
-    const QByteArray &tags,
-    const QByteArray &asset)
+	const QString &guid,
+	const QString &assetName,
+	const int &type,
+	const QString &parentFolder,
+	const QString &license,
+	const QString &author,
+	const QByteArray &thumbnail,
+	const QByteArray &properties,
+	const QByteArray &tags,
+	const QByteArray &asset)
 {
-    QSqlQuery query;
-    query.prepare(
-        "INSERT INTO assets"
-        " (name, thumbnail, parent, type, project_guid, collection, version, date_created,"
-        " last_updated, guid, properties, author, asset, license, tags)"
-        " VALUES (:name, :thumbnail, :parent, :type, :project_guid, 0, :version, datetime(),"
-        " datetime(), :guid, :properties, :author, :asset, :license, :tags)"
-    );
+	QSqlQuery query;
+	query.prepare(
+		"INSERT INTO assets"
+		" (name, thumbnail, parent, type, project_guid, collection, version, date_created,"
+		" last_updated, guid, properties, author, asset, license, tags)"
+		" VALUES (:name, :thumbnail, :parent, :type, :project_guid, 0, :version, datetime(),"
+		" datetime(), :guid, :properties, :author, :asset, :license, :tags)"
+	);
 
-    query.bindValue(":name", assetName);
-    query.bindValue(":thumbnail", thumbnail);
-    query.bindValue(":parent", parentFolder);
-    query.bindValue(":type", type);
-    query.bindValue(":project_guid", Globals::project->getProjectGuid());
-    query.bindValue(":version", Constants::CONTENT_VERSION);
-    query.bindValue(":guid", guid);
-    query.bindValue(":properties", properties);
-    query.bindValue(":author", author.isEmpty() ? getAuthorName() : author);
-    query.bindValue(":asset", asset);
-    query.bindValue(":license", license);
-    query.bindValue(":tags", tags);
+	query.bindValue(":name", assetName);
+	query.bindValue(":thumbnail", thumbnail);
+	query.bindValue(":parent", parentFolder);
+	query.bindValue(":type", type);
+	query.bindValue(":project_guid", Globals::project->getProjectGuid());
+	query.bindValue(":version", Constants::CONTENT_VERSION);
+	query.bindValue(":guid", guid);
+	query.bindValue(":properties", properties);
+	query.bindValue(":author", author.isEmpty() ? getAuthorName() : author);
+	query.bindValue(":asset", asset);
+	query.bindValue(":license", license);
+	query.bindValue(":tags", tags);
 
-    if (executeAndCheckQuery(query, "CreateAssetEntry")) {
-        return guid;
-    }
-    
-    return QString();
+	if (executeAndCheckQuery(query, "CreateAssetEntry")) {
+		return guid;
+	}
+
+	return QString();
+}
+
+QString Database::createAssetEntry(
+	const QString &projectGuid,
+	const QString &guid,
+	const QString &assetName,
+	const int &type)
+{
+	QSqlQuery query;
+	query.prepare(
+		"INSERT INTO assets"
+		" (name, thumbnail, parent, type, project_guid, collection, version, date_created,"
+		" last_updated, guid, properties, author, asset, license, tags)"
+		" VALUES (:name, :thumbnail, :parent, :type, :project_guid, 0, :version, datetime(),"
+		" datetime(), :guid, :properties, :author, :asset, :license, :tags)"
+	);
+
+	query.bindValue(":name", assetName);
+	query.bindValue(":thumbnail", QByteArray());
+	query.bindValue(":parent", QString());
+	query.bindValue(":type", type);
+	query.bindValue(":project_guid", projectGuid);
+	query.bindValue(":version", Constants::CONTENT_VERSION);
+	query.bindValue(":guid", guid);
+	query.bindValue(":properties", QByteArray());
+	query.bindValue(":author", QString());
+	query.bindValue(":asset", QByteArray());
+	query.bindValue(":license", QString());
+	query.bindValue(":tags", QByteArray());
+
+	if (executeAndCheckQuery(query, "CreateAssetEntry")) {
+		return guid;
+	}
+
+	return QString();
 }
 
 bool Database::createDependency(

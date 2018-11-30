@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 find_package(Qt5 REQUIRED COMPONENTS Widgets Core )
+add_definitions(-DEFFECT_BUILD_AS_LIB )
 
 #add_subdirectory(irisgl)
 # set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -60,6 +61,8 @@ set(SRCS
 	src/shadergraph/nodes/object.cpp
 	src/shadergraph/dialogs/createnewdialog.cpp
 	src/shadergraph/dialogs/searchdialog.cpp
+	src/shadergraph/nodes/vector.cpp
+	src/shadergraph/nodes/texture.cpp
 	)
 
 set(HEADERS
@@ -105,6 +108,9 @@ set(HEADERS
 		src/shadergraph/nodes/utils.h
 		src/shadergraph/nodes/inputs.h
 		src/shadergraph/nodes/object.h
+		src/shadergraph/nodes/vector.h
+		src/shadergraph/nodes/texture.h
+
 		src/shadergraph/dialogs/createnewdialog.h
 		src/shadergraph/dialogs/searchdialog.h
 	)
