@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 find_package(Qt5 REQUIRED COMPONENTS Widgets Core )
+add_definitions(-DEFFECT_BUILD_AS_LIB )
 
 #add_subdirectory(irisgl)
 # set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
