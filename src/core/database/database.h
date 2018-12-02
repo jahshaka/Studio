@@ -71,7 +71,8 @@ public:
 	QString createAssetEntry(const QString &projectGuid,
 							 const QString &guid,
 							 const QString &assetname,
-							 const int &type );
+							 const int &type,
+							 const QByteArray &asset = QByteArray());
 
     bool createDependency(const int &dependerType,
                           const int &dependeeType,
