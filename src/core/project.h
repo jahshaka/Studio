@@ -122,4 +122,6 @@ enum class ModelTypes {
 #define MODEL_FOLDER		0x0871
 #define MODEL_ASSET			0x0421
 
+#define MODEL_GRAPH			0x0321
+
 #endif // PROJECT_H

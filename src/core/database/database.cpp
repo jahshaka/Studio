@@ -469,7 +469,7 @@ QString Database::createAssetEntry(
 	const QString &projectGuid,
 	const QString &guid,
 	const QString &assetName,
-	const int &type)
+	const int &type, const QByteArray &asset)
 {
 	QSqlQuery query;
 	query.prepare(
@@ -489,7 +489,7 @@ QString Database::createAssetEntry(
 	query.bindValue(":guid", guid);
 	query.bindValue(":properties", QByteArray());
 	query.bindValue(":author", QString());
-	query.bindValue(":asset", QByteArray());
+	query.bindValue(":asset", asset);
 	query.bindValue(":license", QString());
 	query.bindValue(":tags", QByteArray());
 
@@ -914,7 +914,7 @@ QVector<AssetRecord> Database::fetchAssets()
     QSqlQuery query;
     query.prepare(
         "SELECT A.name, A.thumbnail, A.guid, C.collection_id, A.type, A.collection, A.properties, "
-        "A.author, A.license, A.tags, A.project_guid "
+        "A.author, A.license, A.tags, A.project_guid, A.asset "
         "FROM assets A "
         "INNER JOIN collections C ON A.collection = C.collection_id "
         "WHERE A.project_guid IS NULL "
@@ -944,6 +944,7 @@ QVector<AssetRecord> Database::fetchAssets()
             data.author = record.value(7).toString();
             data.license = record.value(8).toString();
             data.tags = record.value(9).toByteArray();
+			data.asset = record.value(11).toByteArray();
         }
 
         Globals::assetNames.insert(data.guid, data.name);
