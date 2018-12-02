@@ -79,8 +79,6 @@ void UiManager::enterEditMode()
 {
     sceneViewWidget->stopPlayingScene();
     sceneMode = SceneMode::EditMode;
-	qDebug() << "scene view is editing";
-
 }
 
 // TODO - check that the sceneMode being set here doesn't change anything anywhere else

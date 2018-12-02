@@ -958,11 +958,11 @@ QVector<AssetRecord> Database::fetchAssets()
 QVector<AssetRecord> Database::fetchChildAssets(const QString &parent, int filter, bool showDependencies)
 {
     QString dependentQuery =
-        "SELECT name, thumbnail, guid, parent, type, properties "
+        "SELECT name, thumbnail, guid, parent, type, properties, asset "
         "FROM assets A WHERE parent = ? AND project_guid = ? ";
 
     QString nonDependentQuery =
-        "SELECT name, thumbnail, guid, parent, type, properties "
+        "SELECT name, thumbnail, guid, parent, type, properties, asset "
         "FROM assets A WHERE parent = ? AND project_guid = ? "
         "AND A.guid NOT IN (SELECT dependee FROM dependencies) ";
 
@@ -998,6 +998,7 @@ QVector<AssetRecord> Database::fetchChildAssets(const QString &parent, int filte
             data.parent = record.value(3).toString();
             data.type = record.value(4).toInt();
             data.properties = record.value(5).toByteArray();
+			data.asset = record.value(6).toByteArray();
         }
 
         tileData.push_back(data);
