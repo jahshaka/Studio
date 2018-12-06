@@ -288,6 +288,7 @@ protected slots:
     void deleteItem();
     void openAtFolder();
 	void createShader();
+	void createCubeMap();
     void createFolder();
     void importAssetB();
     void importAsset(const QStringList &path);

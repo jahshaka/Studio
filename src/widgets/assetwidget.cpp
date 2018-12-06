@@ -658,6 +658,7 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 		    case QEvent::MouseButtonRelease: {
 			    auto evt = static_cast<QMouseEvent*>(event);
                 draggingItem = false;
+                emit assetItemSelected(nullptr); // lust
 			    AssetWidget::mouseReleaseEvent(evt);
 			    break;
 		    }
@@ -759,9 +760,14 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	QAction *action;
 
 	QMenu *createMenu = menu.addMenu("Create");
+
 	action = new QAction(QIcon(), "Shader", this);
 	connect(action, SIGNAL(triggered()), this, SLOT(createShader()));
 	createMenu->addAction(action);
+
+    action = new QAction(QIcon(), "CubeMap", this);
+    connect(action, SIGNAL(triggered()), this, SLOT(createCubeMap()));
+    createMenu->addAction(action);
 
 	action = new QAction(QIcon(), "New Folder", this);
 	connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
@@ -863,9 +869,15 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 	}
 	else {
 		QMenu *createMenu = menu.addMenu("Create");
+
 		action = new QAction(QIcon(), "Shader", this);
 		connect(action, SIGNAL(triggered()), this, SLOT(createShader()));
 		createMenu->addAction(action);
+
+        action = new QAction(QIcon(), "CubeMap", this);
+        connect(action, SIGNAL(triggered()), this, SLOT(createCubeMap()));
+        createMenu->addAction(action);
+
 		action = new QAction(QIcon(), "New Folder", this);
 		connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
 		createMenu->addAction(action);
@@ -884,11 +896,8 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 
 void AssetWidget::assetViewClicked(QListWidgetItem *item)
 {
-	assetItem.wItem = item;
-
-    if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Shader)) {
-        emit assetItemSelected(item);
-    }
+    assetItem.wItem = item;
+    emit assetItemSelected(item);
 }
 
 void AssetWidget::syncTreeAndView(const QString &path)
@@ -1730,6 +1739,47 @@ void AssetWidget::createShader()
     db->updateAssetAsset(assetGuid, QJsonDocument(shaderDefinition).toBinaryData());
 
     AssetManager::addAsset(assetShader);
+}
+
+void AssetWidget::createCubeMap()
+{
+    QListWidgetItem *item = new QListWidgetItem;
+    item->setFlags(item->flags() | Qt::ItemIsEditable);
+    item->setSizeHint(currentSize);
+    item->setTextAlignment(Qt::AlignCenter);
+    item->setIcon(QIcon(":/icons/icons8-folder-72.png"));
+
+    const QString assetGuid = GUIDManager::generateGUID();
+
+    item->setData(MODEL_GUID_ROLE, assetGuid);
+    item->setData(MODEL_PARENT_ROLE, assetItem.selectedGuid);
+    item->setData(MODEL_ITEM_TYPE, MODEL_ASSET);
+    item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::CubeMap));
+
+    // code goes here
+    db->createAssetEntry(assetGuid,
+                         "CubeMap",
+                         static_cast<int>(ModelTypes::CubeMap),
+                         assetItem.selectedGuid,
+                         QByteArray());
+
+    auto assetShader = new AssetCubeMap;
+    assetShader->fileName = "CubeMap";
+    assetShader->assetGuid = assetGuid;
+    //assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), IrisUtils::buildFileName(shaderName, "shader"));
+
+    QJsonObject mapDefinition;
+    mapDefinition["front"] = "";
+    mapDefinition["back"] = "";
+    mapDefinition["left"] = "";
+    mapDefinition["right"] = "";
+    mapDefinition["top"] = "";
+    mapDefinition["down"] = "";
+    
+    assetShader->setValue(QVariant::fromValue(mapDefinition));
+
+    item->setText("CubeMap");
+    ui->assetView->addItem(item);
 }
 
 void AssetWidget::createFolder()

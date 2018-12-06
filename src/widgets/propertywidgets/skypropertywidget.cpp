@@ -60,50 +60,14 @@ void SkyPropertyWidget::skyTypeChanged(int index)
     else if (index == static_cast<int>(iris::SkyType::CUBEMAP))
     {
         scene->skyType = iris::SkyType::CUBEMAP;
-        
-        cubemapFront = this->addTexturePicker("Front");
-        cubemapBack = this->addTexturePicker("Back");
-        cubemapLeft = this->addTexturePicker("Left");
-        cubemapRight = this->addTexturePicker("Right");
-        cubemapTop = this->addTexturePicker("Top");
-        cubemapBottom = this->addTexturePicker("Bottom");
 
-        // remember the image on the tiles... TODO
-        auto changeFunc = [this](QString value) {
-            // Use the metadata from any valid image
-            if (value.isEmpty()) return;
-            scene->setSkyTexture(iris::Texture2D::createCubeMap(cubemapFront->filePath,
-                                                                cubemapBack->filePath,
-                                                                cubemapTop->filePath,
-                                                                cubemapBottom->filePath,
-                                                                cubemapLeft->filePath,
-                                                                cubemapRight->filePath,
-                                                                new QImage(value)));
-        };
+        cubeSelector = this->addComboBox("CubeMap");
 
-        connect(cubemapFront, &TexturePickerWidget::valueChanged, [=](QString value) {
-            changeFunc(value);
-        });
-
-        connect(cubemapBack, &TexturePickerWidget::valueChanged, this, [=](QString value) {
-            changeFunc(value);
-        });
-
-        connect(cubemapLeft, &TexturePickerWidget::valueChanged, this, [=](QString value) {
-            changeFunc(value);
-        });
-
-        connect(cubemapRight, &TexturePickerWidget::valueChanged, this, [=](QString value) {
-            changeFunc(value);
-        });
-
-        connect(cubemapTop, &TexturePickerWidget::valueChanged, this, [=](QString value) {
-            changeFunc(value);
-        });
-
-        connect(cubemapBottom, &TexturePickerWidget::valueChanged, this, [=](QString value) {
-            changeFunc(value);
-        });
+        for (const auto cubemap : AssetManager::getAssets()) {
+            if (cubemap->type == ModelTypes::CubeMap) {
+                cubeSelector->addItem(cubemap->fileName);
+            }
+        }
     }
     else if (index == static_cast<int>(iris::SkyType::EQUIRECTANGULAR)) {
         scene->skyType = iris::SkyType::EQUIRECTANGULAR;
@@ -128,7 +92,9 @@ void SkyPropertyWidget::skyTypeChanged(int index)
         shaderSelector = this->addComboBox("Material");
 
         for (const auto material : AssetManager::getAssets()) {
-            shaderSelector->addItem(material->fileName);
+            if (material->type == ModelTypes::Material) {
+                shaderSelector->addItem(material->fileName);
+            }
         }
     }
     else if (index == static_cast<int>(iris::SkyType::REALISTIC)) {

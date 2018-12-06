@@ -1085,6 +1085,7 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
     this->scene = scene;
     this->sceneView->setScene(scene);
     this->sceneHierarchyWidget->setScene(scene);
+    this->sceneNodePropertiesWidget->setScene(scene);
 
     // interim...
     updateSceneSettings();
@@ -1093,6 +1094,7 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 void MainWindow::removeScene()
 {
     sceneView->cleanup();
+    sceneNodePropertiesWidget->setScene(iris::ScenePtr());
     sceneNodePropertiesWidget->setSceneNode(iris::SceneNodePtr());
 }
 

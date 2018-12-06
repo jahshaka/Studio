@@ -106,6 +106,7 @@ set(SRCS
     src/widgets/filepickerwidget.cpp 
     src/widgets/propertywidgets/meshpropertywidget.cpp
     src/widgets/propertywidgets/shaderpropertywidget.cpp 
+    src/widgets/propertywidgets/cubemappropertywidget.cpp 
     src/widgets/propertywidget.cpp 
     src/widgets/propertywidgets/postprocesspropertywidget.cpp 
     src/widgets/postprocesseswidget.cpp 
@@ -234,6 +235,7 @@ set(HEADERS
     src/widgets/filepickerwidget.h 
     src/widgets/propertywidgets/meshpropertywidget.h 
     src/widgets/propertywidgets/shaderpropertywidget.h 
+    src/widgets/propertywidgets/cubemappropertywidget.h 
     src/widgets/propertywidget.h 
     src/widgets/basewidget.h 
     src/widgets/propertywidgets/postprocesspropertywidget.h 

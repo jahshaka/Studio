@@ -63,12 +63,7 @@ private:
 
     ColorValueWidget *singleColor;
 
-    TexturePickerWidget *cubemapFront;
-    TexturePickerWidget *cubemapBack;
-    TexturePickerWidget *cubemapLeft;
-    TexturePickerWidget *cubemapRight;
-    TexturePickerWidget *cubemapTop;
-    TexturePickerWidget *cubemapBottom;
+    ComboBoxWidget *cubeSelector;
 
     TexturePickerWidget *equiTexture;
 

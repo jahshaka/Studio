@@ -101,7 +101,7 @@ enum class ModelTypes {
 	Material,       // Supported
 	Texture,        // Supported
 	Video,
-	Cubemap,
+	CubeMap,        // Supported
 	Object,         // Supported
 	Mesh,           // Supported
 	SoundEffect,
