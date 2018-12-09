@@ -837,6 +837,12 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
             menu.addAction(action);
         }
 
+        if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::CubeMap)) {
+            action = new QAction(QIcon(), "Export CubeMap", this);
+            connect(action, SIGNAL(triggered()), this, SLOT(exportCubeMap()));
+            menu.addAction(action);
+        }
+
 		if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Material)) {
 			action = new QAction(QIcon(), "Export Material", this);
 			connect(action, SIGNAL(triggered()), this, SLOT(exportMaterial()));
@@ -1078,6 +1084,90 @@ void AssetWidget::exportTexture()
     //exportNode.setFolder();
     //exportNode.setFileList();
     //exportNode.createArchive();
+
+    // open a basic zip file for writing, maybe change compression level later (iKlsR)
+    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
+
+    for (int i = 0; i < fileNames.count(); i++) {
+        QFileInfo fInfo(fileNames[i]);
+
+        // we need to pay special attention to directories since we want to write empty ones as well
+        if (fInfo.isDir()) {
+            zip_entry_open(
+                zip,
+                /* will only create directory if / is appended */
+                QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
+            );
+            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+        }
+        else {
+            zip_entry_open(
+                zip,
+                workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
+            );
+            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+        }
+
+        // we close each entry after a successful write
+        zip_entry_close(zip);
+    }
+
+    // close our now exported file
+    zip_close(zip);
+}
+
+void AssetWidget::exportCubeMap()
+{
+    // get the export file path from a save dialog
+    auto filePath = QFileDialog::getSaveFileName(
+        this,
+        "Choose export path",
+        assetItem.wItem->data(Qt::DisplayRole).toString(),
+        "Supported Export Formats (*.jaf)"
+    );
+
+    if (filePath.isEmpty() || filePath.isNull()) return;
+
+    QTemporaryDir temporaryDir;
+    if (!temporaryDir.isValid()) return;
+
+    const QString writePath = temporaryDir.path();
+
+    const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
+
+    db->createBlobFromAsset(guid, QDir(writePath).filePath("asset.db"));
+
+    QDir tempDir(writePath);
+    tempDir.mkpath("assets");
+
+    QFile manifest(QDir(writePath).filePath(".manifest"));
+    if (manifest.open(QIODevice::ReadWrite)) {
+        QTextStream stream(&manifest);
+        stream << "cubemap";
+    }
+    manifest.close();
+
+    for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
+        auto asset = db->fetchAsset(assetGuid);
+        auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+        QFileInfo assetInfo(assetPath);
+        if (assetInfo.exists()) {
+            QFile::copy(
+                IrisUtils::join(assetPath),
+                IrisUtils::join(writePath, "assets", assetInfo.fileName())
+            );
+        }
+    }
+
+    // get all the files and directories in the project working directory
+    QDir workingProjectDirectory(writePath);
+    QDirIterator projectDirIterator(
+        writePath,
+        QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs | QDir::Hidden, QDirIterator::Subdirectories
+    );
+
+    QVector<QString> fileNames;
+    while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
 
     // open a basic zip file for writing, maybe change compression level later (iKlsR)
     struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
@@ -2020,6 +2110,9 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             else if (jafString == "shader") {
                 jafType = ModelTypes::Shader;
             }
+            else if (jafString == "cubemap") {
+                jafType = ModelTypes::CubeMap;
+            }
             else if (jafString == "particle_system") {
                 jafType = ModelTypes::ParticleSystem;
             }
@@ -2081,6 +2174,17 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                         AssetManager::addAsset(assetShader);
                     }
                 }
+            }
+
+            if (jafType == ModelTypes::CubeMap) {
+                QJsonDocument cubeDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
+                QJsonObject mapDefinition = cubeDoc.object();
+
+                auto assetCubeMap = new AssetCubeMap;
+                assetCubeMap->assetGuid = guidReturned;
+                assetCubeMap->fileName = db->fetchAsset(guidReturned).name;
+                assetCubeMap->setValue(QVariant::fromValue(mapDefinition));
+                AssetManager::addAsset(assetCubeMap);
             }
 
             if (jafType == ModelTypes::Material) {

@@ -276,6 +276,7 @@ protected slots:
 
 	void editFileExternally();
 	void exportTexture();
+	void exportCubeMap();
 	void exportMaterial();
 	void exportMaterialPreview();
 	void exportShader();
