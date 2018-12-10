@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "skypropertywidget.h"
 #include "../texturepickerwidget.h"
-#include "../../irisgl/src/materials/defaultskymaterial.h"
+#include "irisgl/src/materials/defaultskymaterial.h"
 
 #include "../colorvaluewidget.h"
 #include "../colorpickerwidget.h"
@@ -19,8 +19,12 @@ For more information see the LICENSE file
 #include "../comboboxwidget.h"
 
 #include "../checkboxwidget.h"
+#include "cubemappropertywidget.h"
 
 #include "io/assetmanager.h"
+#include "core/database/database.h"
+
+#include "globals.h"
 
 SkyPropertyWidget::SkyPropertyWidget()
 {
@@ -65,14 +69,23 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
         for (const auto cubemap : AssetManager::getAssets()) {
             if (cubemap->type == ModelTypes::CubeMap) {
-                cubeSelector->addItem(cubemap->fileName);
+                cubeSelector->addItem(cubemap->fileName, cubemap->assetGuid);
             }
         }
+
+        setSkyMap(cubeSelector->getCurrentItemData());
+
+        connect(cubeSelector, SIGNAL(currentIndexChanged(int)), this, SLOT(onSkyCubeMapChanged(int)));
     }
     else if (index == static_cast<int>(iris::SkyType::EQUIRECTANGULAR)) {
         scene->skyType = iris::SkyType::EQUIRECTANGULAR;
         // one string
         equiTexture = this->addTexturePicker("Equi Map");
+
+        connect(equiTexture, &TexturePickerWidget::valueChanged, this, [this](QString value) {
+            Q_UNUSED(value);
+            onEquiTextureChanged(equiTexture->textureGuid);
+        });
     }
     else if (index == static_cast<int>(iris::SkyType::GRADIENT)) {
         scene->skyType = iris::SkyType::GRADIENT;
@@ -93,7 +106,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
         for (const auto material : AssetManager::getAssets()) {
             if (material->type == ModelTypes::Material) {
-                shaderSelector->addItem(material->fileName);
+                shaderSelector->addItem(material->fileName, material->assetGuid);
             }
         }
     }
@@ -149,6 +162,25 @@ void SkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 
             case iris::SkyType::SINGLE_COLOR: {
                 singleColor->setColorValue(scene->skyColor);
+                break;
+            }
+
+            case iris::SkyType::CUBEMAP: {
+                if (!scene->cubeMapGuid.isEmpty()) {
+                    cubeSelector->setCurrentItemData(scene->cubeMapGuid);
+                    setSkyMap(scene->cubeMapGuid);
+                }
+                break;
+            }
+
+            case iris::SkyType::MATERIAL: {
+                shaderSelector->setCurrentItemData(scene->materialGuid);
+                break;
+            }
+
+            case iris::SkyType::EQUIRECTANGULAR: {
+                setEquiMap(scene->equiTextureGuid);
+                break;
             }
 
             default:
@@ -160,9 +192,82 @@ void SkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
     }
 }
 
+void SkyPropertyWidget::setDatabase(Database *db)
+{
+    this->db = db;
+}
+
+void SkyPropertyWidget::setEquiMap(const QString &guid)
+{
+    if (!guid.isEmpty()) {
+        bool found = false;
+
+        for (auto asset : AssetManager::getAssets()) {
+            if (found) break;
+
+            if (asset->assetGuid == guid && asset->type == ModelTypes::Texture) {
+                found = true;
+                auto image = IrisUtils::join(Globals::project->getProjectFolder(), asset->fileName);
+                equiTexture->setTexture(QFileInfo(image).isFile() ? image : "");
+                scene->setSkyTexture(iris::Texture2D::load(image, false));
+                scene->equiTextureGuid = guid;
+            }
+        }
+    }
+}
+
+void SkyPropertyWidget::setSkyMap(const QString &guid)
+{
+    if (!guid.isEmpty()) {
+        bool found = false;
+
+        for (auto asset : AssetManager::getAssets()) {
+            if (found) break;
+
+            if (asset->assetGuid == guid && asset->type == ModelTypes::CubeMap) {
+                found = true;
+
+                auto mapObject = asset->getValue().toJsonObject();
+
+                auto front = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(mapObject["front"].toString()).name);
+                auto back = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(mapObject["back"].toString()).name);
+                auto left = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(mapObject["left"].toString()).name);
+                auto right = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(mapObject["right"].toString()).name);
+                auto top = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(mapObject["top"].toString()).name);
+                auto bottom = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(mapObject["bottom"].toString()).name);
+
+                QString sides[6] = { front, back, top, bottom, left, right };
+
+                QImage *info;
+                bool useTex = false;
+                for (int i = 0; i < 6; i++) {
+                    if (!sides[i].isEmpty()) {
+                        info = new QImage(sides[i]);
+                        useTex = true;
+                        break;
+                    }
+                }
+
+                if (useTex) scene->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
+            }
+        }
+    }
+}
+
 void SkyPropertyWidget::onSingleSkyColorChanged(QColor color)
 {
     if (!!scene) scene->skyColor = color;
+}
+
+void SkyPropertyWidget::onSkyCubeMapChanged(int index)
+{
+    Q_UNUSED(index);
+    if (!!scene) setSkyMap(cubeSelector->getCurrentItemData());
+}
+
+void SkyPropertyWidget::onEquiTextureChanged(QString tex)
+{
+    if (!!scene) setEquiMap(tex);
 }
 
 void SkyPropertyWidget::onReileighChanged(float val)

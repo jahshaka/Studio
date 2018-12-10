@@ -217,13 +217,19 @@ void CubeMapPropertyWidget::onSlotChanged(QString value, int index)
     db->updateAssetAsset(guid, QJsonDocument(mapDefinition).toBinaryData());
 
     // check if cubemap is the selected one
-    scene->setSkyTexture(iris::Texture2D::createCubeMap(cubemapFront->filePath,
-                                                        cubemapBack->filePath,
-                                                        cubemapTop->filePath,
-                                                        cubemapBottom->filePath,
-                                                        cubemapLeft->filePath,
-                                                        cubemapRight->filePath,
-                                                        new QImage(value)));
+
+    if (!!scene) {
+        if (guid == scene->cubeMapGuid) {
+            // bypasses the assetmanager but shouldn't matter...
+            //scene->setSkyTexture(iris::Texture2D::createCubeMap(cubemapFront->filePath,
+            //                                                    cubemapBack->filePath,
+            //                                                    cubemapTop->filePath,
+            //                                                    cubemapBottom->filePath,
+            //                                                    cubemapLeft->filePath,
+            //                                                    cubemapRight->filePath,
+            //                                                    new QImage(value)));
+        }
+    }
 }
 
 void CubeMapPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)

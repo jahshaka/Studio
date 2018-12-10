@@ -28,6 +28,8 @@ namespace iris {
     class LightNode;
 }
 
+class Database;
+
 class SkyPropertyWidget: public AccordianBladeWidget
 {
     Q_OBJECT
@@ -35,11 +37,18 @@ class SkyPropertyWidget: public AccordianBladeWidget
 public:
     SkyPropertyWidget();
     void setScene(QSharedPointer<iris::Scene> scene);
+    void setDatabase(Database*);
 
 protected slots:
+    void setEquiMap(const QString &guid);
+    void setSkyMap(const QString &guid);
     void skyTypeChanged(int index);
 
     void onSingleSkyColorChanged(QColor color);
+
+    void onSkyCubeMapChanged(int index);
+
+    void onEquiTextureChanged(QString tex);
 
     void onReileighChanged(float val);
     void onLuminanceChanged(float val);
@@ -51,6 +60,7 @@ protected slots:
     void onSunPosZChanged(float val);
 
 private:
+    Database *db;
     QSharedPointer<iris::Scene> scene;
     iris::SkyType currentSky;
 
