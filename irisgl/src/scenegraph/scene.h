@@ -105,6 +105,9 @@ public:
     // temp
     SkyType skyType;
     SkyRealistic skyRealistic;
+    QString cubeMapGuid;
+    QString materialGuid;
+    QString equiTextureGuid;
     // end temp
 
     RenderList* geometryRenderList;

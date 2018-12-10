@@ -98,6 +98,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
 
     //scene properties
 
+    // deprecated
     QJsonObject skyTexture;
     skyTexture["front"] = getRelativePath(scene->skyBoxTextures[0]);
     skyTexture["back"] = getRelativePath(scene->skyBoxTextures[1]);
@@ -105,6 +106,10 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     skyTexture["bottom"] = getRelativePath(scene->skyBoxTextures[3]);
     skyTexture["left"] = getRelativePath(scene->skyBoxTextures[4]);
     skyTexture["right"] = getRelativePath(scene->skyBoxTextures[5]);
+
+    sceneObj["cubeMapGuid"] = scene->cubeMapGuid;
+    sceneObj["materialSkyGuid"] = scene->materialGuid;
+    sceneObj["equiSkyGuid"] = scene->equiTextureGuid;
 
 //    if (!!scene->skyTexture) {
 //        sceneObj["skyTexture"] = getRelativePath(scene->skyTexture->getSource());//);
