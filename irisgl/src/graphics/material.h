@@ -47,6 +47,11 @@ public:
     int renderLayer;
     //QOpenGLShaderProgram* program;
 	ShaderPtr shader;
+
+	// if not null, this will be used to render the shadow instead
+	// of the renderer's default shadow shader
+	ShaderPtr shadowShader;
+
     QMap<QString, Texture2DPtr> textures;
 
     bool acceptsLighting;

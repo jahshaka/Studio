@@ -51,8 +51,21 @@ QJsonObject MaterialReader::getParsedShader()
 
 iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Database* db)
 {
-	iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
+	auto version = getMaterialVersion(matObject);
+	if (version == 1)
+		return loadMaterialV1(matObject, db);
 
+	return loadMaterial(matObject, db);
+}
+
+iris::CustomMaterialPtr MaterialReader::loadMaterial(QJsonObject matObject, Database* db)
+{
+	return iris::CustomMaterialPtr();
+}
+
+iris::CustomMaterialPtr MaterialReader::loadMaterialV1(QJsonObject matObject, Database* db)
+{
+	iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 	QFileInfo shaderFile;
 
 	QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
@@ -106,4 +119,14 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 	}
 
 	return material;
+}
+
+// if version code is present then return version
+// otherwise return version 1.0
+int MaterialReader::getMaterialVersion(QJsonObject matObj)
+{
+	if (matObj.contains("version"))
+		return matObj["version"].toInt();
+
+	return 1;
 }
