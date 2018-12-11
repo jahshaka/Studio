@@ -23,7 +23,9 @@ For more information see the LICENSE file
 
 #include "../irisgl/src/irisglfwd.h"
 #include "assetiobase.h"
+#include "irisglfwd.h"
 
+class Database;
 class MaterialReader : public AssetIOBase
 {
 public:
@@ -31,6 +33,8 @@ public:
 
     void readJahShader(const QString &filePath);
     QJsonObject getParsedShader();
+
+	iris::CustomMaterialPtr parseMaterial(QJsonObject materialObj, Database* handle);
 
 private:
     QJsonObject parsedShader;
