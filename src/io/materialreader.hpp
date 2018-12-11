@@ -34,10 +34,14 @@ public:
     void readJahShader(const QString &filePath);
     QJsonObject getParsedShader();
 
-	iris::CustomMaterialPtr parseMaterial(QJsonObject materialObj, Database* handle);
+	iris::CustomMaterialPtr parseMaterial(QJsonObject matObject, Database* handle);
+	iris::CustomMaterialPtr loadMaterial(QJsonObject matObject, Database* handle);
+	iris::CustomMaterialPtr loadMaterialV1(QJsonObject matObject, Database* handle);
 
 private:
     QJsonObject parsedShader;
+
+	int getMaterialVersion(QJsonObject matObj);
 };
 
 #endif // MATERIALREADER_HPP
