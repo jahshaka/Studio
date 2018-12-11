@@ -122,6 +122,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 		{
 			QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(asset.guid));
 			QJsonObject matObject = matDoc.object();
+			qDebug() << matObject;
 			iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 
             QFileInfo shaderFile;
