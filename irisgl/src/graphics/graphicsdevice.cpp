@@ -233,8 +233,15 @@ void GraphicsDevice::setShader(ShaderPtr shader, bool force)
 	if (!!activeShader) {
 		if (activeShader->isDirty)
 			compileShader(activeShader);
-		shader->program->bind();
-		activeProgram = shader->program;
+
+		if (!activeShader->hasErrors) {
+			activeShader->program->bind();
+			activeProgram = activeShader->program;
+		}
+		else {
+			activeProgram = nullptr;
+			gl->glUseProgram(0);
+		}
 	}
 	else {
 		activeProgram = nullptr;
@@ -256,12 +263,41 @@ void GraphicsDevice::setShader(ShaderPtr shader, bool force)
 
 void GraphicsDevice::compileShader(iris::ShaderPtr shader)
 {
+	bool hasErrors = false;
+
 	QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
-	vshader->compileSourceCode(shader->vertexShader);
+	QString vSource = addShaderFlagsToShaderSource(shader->vertexShader, shader->flags);
+	qDebug() << vSource;
+	if (!vshader->compileSourceCode(vSource)) {
+		hasErrors = true;
+		shader->hasErrors = hasErrors;
+
+		qDebug() << "VERTEX SHADER ERROR";
+		qDebug() << vshader->log();
+
+		// prevent shader from being recompiled with same error
+		shader->isDirty = false;
+		
+		return;
+	}
 
 	QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment);
-	fshader->compileSourceCode(shader->fragmentShader);
+	QString fSource = addShaderFlagsToShaderSource(shader->fragmentShader, shader->flags);
+	if (!fshader->compileSourceCode(fSource)) {
+		hasErrors = true;
+		shader->hasErrors = hasErrors;
 
+		qDebug() << "FRAGMENT SHADER ERROR";
+		qDebug() << fshader->log();
+
+		// prevent shader from being recompiled with same error
+		shader->isDirty = false;
+
+		return;
+	}
+		
+
+	// todo: cleanup existing shader
 	if (!shader->program)
 		shader->program = new QOpenGLShaderProgram;
 
@@ -285,6 +321,7 @@ void GraphicsDevice::compileShader(iris::ShaderPtr shader)
 	program->link();
 
 	//todo: check for errors
+	//if (program->err)
 
 	//get attribs, uniforms and samplers
 	//http://stackoverflow.com/questions/440144/in-opengl-is-there-a-way-to-get-a-list-of-all-uniforms-attribs-used-by-a-shade
@@ -339,6 +376,31 @@ void GraphicsDevice::compileShader(iris::ShaderPtr shader)
 	}
 
 	shader->isDirty = false;
+}
+
+QString GraphicsDevice::addShaderFlagsToShaderSource(QString shaderSource, QSet<QString> shaderFlags)
+{
+	auto lines = shaderSource.split("\n");
+	int insertLocation = 0;
+	
+	int i = 0;
+	for (auto line : lines) {
+		if (line.startsWith("#version")) {
+			insertLocation = i + 1;
+		}
+		
+		i++;
+	}
+
+	QString defines = "";
+	for (auto flag : shaderFlags) {
+		defines += "#define " + flag + "\n";
+	}
+	defines += "#line 1\n";
+
+	lines.insert(insertLocation, defines);
+
+	return lines.join("");
 }
 
 void GraphicsDevice::setTexture(int target, Texture2DPtr texture)

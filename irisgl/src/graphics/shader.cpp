@@ -53,6 +53,23 @@ void Shader::setFragmentShader(QString fragmentShader)
 	_setDirty();
 }
 
+bool Shader::isFlagEnabled(QString flag)
+{
+	return flags.contains(flag);
+}
+
+void Shader::enableFlag(QString flag)
+{
+	flags.insert(flag);
+	_setDirty();
+}
+
+void Shader::disableFlag(QString flag)
+{
+	flags.remove(flag);
+	_setDirty();
+}
+
 ShaderPtr Shader::load(QString vertexShaderFile,QString fragmentShaderFile)
 {
 	QString vertexShader = GraphicsHelper::loadAndProcessShader(vertexShaderFile);
@@ -78,6 +95,7 @@ Shader::Shader()
 {
 	isDirty = true;
 	program = nullptr;
+	hasErrors = false;
 
     shaderId = generateNodeId();
 }
