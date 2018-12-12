@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "../irisglfwd.h"
 #include <QVariant>
 #include <qopengl.h>
+#include <QSet>
 
 class QOpenGLShaderProgram;
 class QOpenGLFunctions_3_2_Core;
@@ -78,6 +79,10 @@ public:
 	void setVertexShader(QString vertexShader);
 	void setFragmentShader(QString fragmentShader);
 
+	bool isFlagEnabled(QString flag);
+	void enableFlag(QString flag);
+	void disableFlag(QString flag);
+
 	void _setDirty();
 
 private:
@@ -110,8 +115,6 @@ private:
 
 	bool isDirty;
 
-	void compileShader();
-
     static long generateNodeId();
     static long nextId;
 
@@ -123,6 +126,8 @@ protected:
     QList<ShaderValue*> updatedUniforms;
 
 	QString vertexShader, fragmentShader;
+	QSet<QString> flags;
+	bool hasErrors;
 };
 
 }

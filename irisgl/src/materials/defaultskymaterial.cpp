@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "defaultskymaterial.h"
 #include "../core/irisutils.h"
 #include "../graphics/renderitem.h"
+#include "../graphics/graphicsdevice.h"
 
 namespace iris
 {
@@ -69,9 +70,9 @@ void DefaultSkyMaterial::begin(GraphicsDevicePtr device,ScenePtr scene)
 void DefaultSkyMaterial::beginCube(GraphicsDevicePtr device,ScenePtr scene)
 {
     Material::beginCube(device,scene);
-    this->setUniformValue("color", color);
-    if (!!texture)  this->setUniformValue("useTexture", true);
-    else            this->setUniformValue("useTexture", false);
+    device->setShaderUniform("color", color);
+    if (!!texture)  device->setShaderUniform("useTexture", true);
+    else            device->setShaderUniform("useTexture", false);
 }
 
 void DefaultSkyMaterial::end(GraphicsDevicePtr device,ScenePtr scene)

@@ -166,6 +166,7 @@ public:
     void setTexture(int target, Texture2DPtr texture);
     void clearTexture(int target);
 	void compileShader(iris::ShaderPtr shader);
+	QString addShaderFlagsToShaderSource(QString shaderSource, QSet<QString> shaderFlags);
 
     void setVertexBuffer(VertexBufferPtr vertexBuffer);
     void setVertexBuffers(QList<VertexBufferPtr> vertexBuffers);
