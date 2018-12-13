@@ -329,11 +329,7 @@ void AssetWidget::trigger()
 				[&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
 			{
 				auto mat = iris::CustomMaterial::create();
-
-				if (mesh->hasSkeleton())
-					mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
-				else
-					mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+				mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
 				return mat;
 			});
@@ -1926,10 +1922,7 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                         [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
                     {
                         auto mat = iris::CustomMaterial::create();
-                        if (mesh->hasSkeleton())
-                            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
-                        else
-                            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+                        mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
                         return mat;
                     }, ssource);
                     this->sceneView->doneCurrent();
