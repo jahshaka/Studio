@@ -100,6 +100,13 @@ void MeshNode::setMaterial(MaterialPtr material)
     this->material = material;
     renderItem->material = material;
     renderItem->renderStates = material->renderStates;
+
+	if (this->mesh->hasSkeleton()) {
+		material->enableFlag("SKINNING_ENABLED");
+	}
+	else {
+		material->disableFlag("SKINNING_ENABLED");
+	}
 }
 
 void MeshNode::submitRenderItems()
