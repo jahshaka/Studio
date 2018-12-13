@@ -267,7 +267,7 @@ void GraphicsDevice::compileShader(iris::ShaderPtr shader)
 
 	QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex);
 	QString vSource = addShaderFlagsToShaderSource(shader->vertexShader, shader->flags);
-	qDebug() << vSource;
+	//qDebug() << vSource;
 	if (!vshader->compileSourceCode(vSource)) {
 		hasErrors = true;
 		shader->hasErrors = hasErrors;
@@ -400,7 +400,8 @@ QString GraphicsDevice::addShaderFlagsToShaderSource(QString shaderSource, QSet<
 
 	lines.insert(insertLocation, defines);
 
-	return lines.join("");
+	auto code = lines.join("\n");
+	return code;
 }
 
 void GraphicsDevice::setTexture(int target, Texture2DPtr texture)

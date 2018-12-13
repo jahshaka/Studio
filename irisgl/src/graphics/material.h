@@ -70,6 +70,11 @@ public:
     }
 
 	void setShader(ShaderPtr shader);
+	void setShadowShader(ShaderPtr shader);
+
+	bool isFlagEnabled(QString flag);
+	void enableFlag(QString flag);
+	void disableFlag(QString flag);
 
     /**
      * Called at the beginning of rendering a primitive
@@ -137,7 +142,7 @@ protected:
      */
     void setTextureCount(int count);
 
-	
+	QSet<QString> flags;
 
 	QOpenGLShaderProgram* getProgram();
 };

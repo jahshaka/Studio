@@ -16,6 +16,13 @@ in vec2 a_texCoord;
 in vec3 a_normal;
 in vec3 a_tangent;
 
+#ifdef SKINNING_ENABLED
+const int MAX_BONES = 100;
+uniform mat4 u_bones[MAX_BONES];
+in vec4 a_boneWeights;
+in vec4 a_boneIndices;
+#endif
+
 uniform mat4 matrix;
 uniform mat4 u_viewMatrix;
 uniform mat4 u_projMatrix;
@@ -33,26 +40,38 @@ out mat3 v_tanToWorld;//transforms from tangent space to world space
 
 void main()
 {
+#ifdef SKINNING_ENABLED
+    mat4 boneMatrix = u_bones[int(a_boneIndices[0])] * a_boneWeights[0];
+    boneMatrix += u_bones[int(a_boneIndices[1])] * a_boneWeights[1];
+    boneMatrix += u_bones[int(a_boneIndices[2])] * a_boneWeights[2];
+    boneMatrix += u_bones[int(a_boneIndices[3])] * a_boneWeights[3];
+
+    v_worldPos = (u_worldMatrix*boneMatrix*vec4(a_pos,1.0)).xyz;
+    gl_Position = u_projMatrix*u_viewMatrix*u_worldMatrix*boneMatrix*vec4(a_pos,1.0);
+
+    v_texCoord = a_texCoord*u_textureScale;
+
+    vec3 skinnedNormal = (boneMatrix * vec4(a_normal,0)).xyz;
+    v_normal = normalize((u_normalMatrix*skinnedNormal));
+    vec3 v_tangent = normalize((u_normalMatrix*a_tangent));
+    vec3 v_bitangent = cross(v_tangent,v_normal);
+
+    FragPosLightSpace = u_lightSpaceMatrix * vec4(v_worldPos, 1.0);
+
+    v_tanToWorld = mat3(v_tangent,v_bitangent,v_normal);
+
+#else
+
     v_worldPos = (u_worldMatrix*vec4(a_pos,1.0)).xyz;
-    //gl_Position = matrix*vec4(a_pos,1.0);
     gl_Position = u_projMatrix*u_viewMatrix*u_worldMatrix*vec4(a_pos,1.0);
 
     v_texCoord = a_texCoord*u_textureScale;
-    //v_texCoord = a_texCoord*2;
 
     v_normal = normalize((u_normalMatrix*a_normal));
     vec3 v_tangent = normalize((u_normalMatrix*a_tangent));
-    //vec3 v_bitangent = cross(v_normal,v_tangent);
     vec3 v_bitangent = cross(v_tangent,v_normal);
 
-    //FragPosLightSpace = u_lightSpaceMatrix * vec4(v_worldPos, 1.0);
-
-    /*
-      //actual world to tangent space
-    v_tanToWorld = mat3(v_tangent[0],v_bitangent[0],v_normal[0],
-                        v_tangent[1],v_bitangent[1],v_normal[1],
-                        v_tangent[2],v_bitangent[2],v_normal[2]);
-                        */
-
     v_tanToWorld = mat3(v_tangent,v_bitangent,v_normal);
+    
+#endif
 }

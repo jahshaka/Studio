@@ -135,9 +135,28 @@ void Material::unbindTextures(GraphicsDevicePtr device)
     }
 }
 
+bool Material::isFlagEnabled(QString flag)
+{
+	return flags.contains(flag);
+}
+
+void Material::enableFlag(QString flag)
+{
+	flags.insert(flag);
+	if (!!shader) shader->enableFlag(flag);
+	if (!!shadowShader) shadowShader->enableFlag(flag);
+}
+
+void Material::disableFlag(QString flag)
+{
+	flags.remove(flag);
+	if (!!shader) shader->disableFlag(flag);
+	if (!!shadowShader) shadowShader->disableFlag(flag);
+}
+
 void Material::createProgramFromShaderSource(QString vsFile, QString fsFile)
 {
-	shader = Shader::load(vsFile, fsFile);
+	setShader(Shader::load(vsFile, fsFile));
 }
 
 static MaterialPtr fromShader(ShaderPtr shader)
@@ -156,7 +175,29 @@ void Material::setTextureCount(int count)
 void Material::setShader(ShaderPtr shader)
 {
 	this->shader = shader;
-	this->numTextures = shader->samplers.count();
+	if (!!shader) {
+		this->numTextures = shader->samplers.count();
+
+		for (auto flag : flags)
+			shader->enableFlag(flag);
+	}
+	else {
+		this->numTextures = 0;
+	}
+}
+
+void Material::setShadowShader(ShaderPtr shader)
+{
+	this->shadowShader = shader;
+	if (!!shader) {
+		this->numTextures = shader->samplers.count();
+
+		for (auto flag : flags)
+			shader->enableFlag(flag);
+	}
+	else {
+		this->numTextures = 0;
+	}
 }
 
 QOpenGLShaderProgram* Material::getProgram()
