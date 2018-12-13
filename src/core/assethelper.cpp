@@ -181,10 +181,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
     {
         auto mat = iris::CustomMaterial::create();
 
-        if (mesh->hasSkeleton())
-            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
-        else
-            mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+        mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
         mat->setValue("diffuseColor", data.diffuseColor);
         mat->setValue("specularColor", data.specularColor);

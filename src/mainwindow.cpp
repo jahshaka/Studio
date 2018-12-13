@@ -1604,9 +1604,7 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
     auto node = iris::MeshNode::loadAsSceneFragment(filename, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
         auto mat = iris::CustomMaterial::create();
-        //MaterialReader *materialReader = new MaterialReader();
-        if (mesh->hasSkeleton()) mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/DefaultAnimated.shader"));
-        else mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+        mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
         mat->setValue("diffuseColor", data.diffuseColor);
         mat->setValue("specularColor", data.specularColor);
