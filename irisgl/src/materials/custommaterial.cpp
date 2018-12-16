@@ -148,6 +148,11 @@ void CustomMaterial::generate(const QJsonObject &object)
     auto vertPath = object["vertex_shader"].toString();
     auto fragPath = object["fragment_shader"].toString();
 
+	if (vertPath == "") {
+		vertPath = object["vertexShaderSource"].toString();
+		fragPath = object["fragmentShaderSource"].toString();
+	}
+
     setBaseMaterialProperties(object);
 
     createProgramFromShaderSource(vertPath, fragPath);
@@ -290,6 +295,7 @@ MaterialPtr CustomMaterial::duplicate()
 		mat->generate(materialPath, true);
 	}
 	else {
+		mat->setMaterialDefinition(materialDefinitions);
 		mat->generate(materialDefinitions);
 	}
 
@@ -300,12 +306,10 @@ MaterialPtr CustomMaterial::duplicate()
 	return mat;
 }
 
-// incomplete!!
 CustomMaterialPtr CustomMaterial::createFromShader(iris::ShaderPtr shader)
 {
 	auto mat = CustomMaterial::create();
-	// todo: set shader
-	mat->shader = shader;
+	mat->setShader(shader);
 	return mat;
 }
 

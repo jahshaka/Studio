@@ -211,7 +211,10 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 			QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
 			while (iterator != AssetManager::getAssets().constEnd()) {
 				if ((*iterator)->assetGuid == roleDataMap.value(3).toString()) {
-					material = (*iterator)->getValue().value<iris::CustomMaterialPtr>()->duplicate().staticCast<iris::CustomMaterial>();
+					auto val = (*iterator)->getValue();
+					auto mat = val.value<iris::CustomMaterialPtr>();
+					auto matDup = mat->duplicate();
+					material = matDup.staticCast<iris::CustomMaterial>();
 				}
 				++iterator;
 			}
