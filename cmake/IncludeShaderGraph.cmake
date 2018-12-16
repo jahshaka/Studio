@@ -37,6 +37,7 @@ set(SRCS
 	src/shadergraph/graphnode.cpp
 	src/shadergraph/graphnodescene.cpp
 	src/shadergraph/shaderassetwidget.cpp
+	src/shadergraph/core/materialhelper.cpp
     #graphtest.cpp
 	# graph
 	src/shadergraph/graph/nodegraph.cpp
@@ -86,6 +87,7 @@ set(HEADERS
 		src/shadergraph/graphnode.h
 		src/shadergraph/graphnodescene.h
 		src/shadergraph/shaderassetwidget.h
+		src/shadergraph/core/materialhelper.h
         #graphtest.h
 		#graph
 		src/shadergraph/graph/nodegraph.h

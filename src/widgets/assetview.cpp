@@ -57,6 +57,7 @@ For more information see the LICENSE file
 #include "assetviewer.h"
 #include "core/assethelper.h"
 #include "io/assetmanager.h"
+#include "io/materialreader.hpp"
 
 #include "../core/guidmanager.h"
 
@@ -1712,61 +1713,10 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
     if (jafType == ModelTypes::Material) {
         QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
         QJsonObject matObject = matDoc.object();
-        iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
+        //iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 
-        QFileInfo shaderFile;
-
-        QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
-        while (it.hasNext()) {
-            it.next();
-            if (it.key() == matObject["guid"].toString()) {
-                shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
-                break;
-            }
-        }
-
-        if (shaderFile.exists()) {
-            material->generate(shaderFile.absoluteFilePath());
-        }
-        else {
-            for (auto asset : AssetManager::getAssets()) {
-                if (asset->type == ModelTypes::Shader) {
-                    if (asset->assetGuid == matObject["guid"].toString()) {
-                        auto def = asset->getValue().toJsonObject();
-                        auto vertexShader = def["vertex_shader"].toString();
-                        auto fragmentShader = def["fragment_shader"].toString();
-                        for (auto asset : AssetManager::getAssets()) {
-                            if (asset->type == ModelTypes::File) {
-                                if (vertexShader == asset->assetGuid) vertexShader = asset->path;
-                                if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
-                            }
-                        }
-                        def["vertex_shader"] = vertexShader;
-                        def["fragment_shader"] = fragmentShader;
-						material->setMaterialDefinition(def);
-                        material->generate(def);
-                    }
-                }
-            }
-        }
-
-        for (const auto &prop : material->properties) {
-            if (prop->type == iris::PropertyType::Color) {
-                QColor col;
-                col.setNamedColor(matObject.value(prop->name).toString());
-                material->setValue(prop->name, col);
-            }
-            else if (prop->type == iris::PropertyType::Texture) {
-                QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
-                QString textureStr = IrisUtils::join(
-                    Globals::project->getProjectFolder(), materialName
-                );
-                material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
-            }
-            else {
-                material->setValue(prop->name, QVariant::fromValue(matObject.value(prop->name)));
-            }
-        }
+		MaterialReader reader;
+		iris::CustomMaterialPtr material = reader.parseMaterial(matObject, db);
 
         auto assetMat = new AssetMaterial;
         assetMat->assetGuid = guidReturned;
