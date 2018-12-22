@@ -5,6 +5,7 @@
 #include <QColor>
 #include <QVector2D>
 #include <QVector3D>
+#include <QVector4D>
 
 namespace iris
 {
@@ -16,7 +17,8 @@ enum class PropertyType
     Int,
     Float,
     Vec2,
-    Vec3,
+	Vec3,
+	Vec4,
     Color,
     Texture,
     File,
@@ -207,6 +209,23 @@ struct Vec3Property : public Property
     void setValue(QVariant val) {
         value = val.value<QVector3D>();
     }
+};
+
+struct Vec4Property : public Property
+{
+	QVector4D value;
+
+	Vec4Property() {
+		type = PropertyType::Vec4;
+	}
+
+	QVariant getValue() {
+		return value;
+	}
+
+	void setValue(QVariant val) {
+		value = val.value<QVector3D>();
+	}
 };
 
 }

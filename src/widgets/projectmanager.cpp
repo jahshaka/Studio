@@ -126,7 +126,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
 			MaterialReader reader;
 			iris::CustomMaterialPtr material = reader.parseMaterial(matObject, db);
-			qDebug() << matObject;
+			//qDebug() << matObject;
 			//iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 
 			auto assetMat = new AssetMaterial;

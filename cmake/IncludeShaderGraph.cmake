@@ -18,6 +18,7 @@ set(SRCS
 	${SRCS}
 	#main.cpp
 	src/shadergraph/mainwindow.cpp
+	src/shadergraph/shadergraph.cpp
 	#nodegraph.cpp
     #nodemodel.cpp
     src/shadergraph/scenewidget.cpp
@@ -69,6 +70,7 @@ set(SRCS
 set(HEADERS
 	${HEADERS}
 	src/shadergraph/mainwindow.h
+	src/shadergraph/shadergraph.h
         src/shadergraph/properties.h
 	#nodegraph.h
         src/shadergraph/scenewidget.h

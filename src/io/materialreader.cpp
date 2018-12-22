@@ -24,6 +24,7 @@ For more information see the LICENSE file
 // iris includes
 #include "irisgl/src/materials/custommaterial.h"
 //#include "irisgl/src/core/property.h"
+#include "shadergraph/core/materialhelper.h"
 
 
 MaterialReader::MaterialReader()
@@ -60,7 +61,8 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 
 iris::CustomMaterialPtr MaterialReader::loadMaterial(QJsonObject matObject, Database* db)
 {
-	return iris::CustomMaterialPtr();
+	return MaterialHelper::generateMaterialFromMaterialDefinition(matObject, true);
+	//return iris::CustomMaterialPtr();
 }
 
 iris::CustomMaterialPtr MaterialReader::loadMaterialV1(QJsonObject matObject, Database* db)
