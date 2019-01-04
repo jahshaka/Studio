@@ -137,7 +137,7 @@ void CustomMaterial::generate(const QString &fileName, bool project)
     if (!fragPath.startsWith(":")) fragPath = IrisUtils::getAbsoluteAssetPath(fragPath);
 
     createProgramFromShaderSource(vertPath, fragPath);
-    createWidgets(jahShader["uniforms"].toArray());
+	parseProperties(jahShader["uniforms"].toArray());
 }
 
 void CustomMaterial::generate(const QJsonObject &object)
@@ -156,10 +156,10 @@ void CustomMaterial::generate(const QJsonObject &object)
     setBaseMaterialProperties(object);
 
     createProgramFromShaderSource(vertPath, fragPath);
-    createWidgets(object["uniforms"].toArray());
+	parseProperties(object["uniforms"].toArray());
 }
 
-void CustomMaterial::createWidgets(const QJsonArray &widgetProps)
+void CustomMaterial::parseProperties(const QJsonArray &widgetProps)
 {
     for (int i = 0; i < widgetProps.size(); i++) {
         auto prop           = widgetProps[i].toObject();
@@ -289,32 +289,45 @@ void CustomMaterial::setBaseMaterialProperties(const QJsonObject &jahShader)
 
 MaterialPtr CustomMaterial::duplicate()
 {
-	qDebug() << "duplicating";
-	qDebug() << materialDefinitions;
+	//qDebug() << "duplicating";
+	//qDebug() << materialDefinitions;
 
-	auto mat = CustomMaterial::create();
+	//auto mat = CustomMaterial::create();
+	iris::CustomMaterialPtr mat;
 	if (materialDefinitions.isEmpty()) {
-		mat->generate(materialPath, true);
+		//mat->generate(materialPath, true);
+		// old style
+		mat = iris::CustomMaterial::createFromShaderPath(materialPath);
 	}
 	else {
 		if (version == 1) {
 			// v1 material spec
-			mat->generate(materialDefinitions);
+			//mat->generate(materialDefinitions);
+			mat = iris::CustomMaterial::createFromShaderJson(materialDefinitions);
 		}
 		else {
 			// v2 material spec
-			auto vertPath = materialDefinitions["vertexShaderSource"].toString();
-			auto fragPath = materialDefinitions["fragmentShaderSource"].toString();
-			auto shader = iris::Shader::create(vertPath, fragPath);
+			// todo: user materialhelper to generate this instead
+			auto vertSource = materialDefinitions["vertexShaderSource"].toString();
+			auto fragSource = materialDefinitions["fragmentShaderSource"].toString();
+			auto shader = iris::Shader::create(vertSource, fragSource);
+
+			mat = CustomMaterial::create();
 			mat->setShader(shader);
 			mat->renderStates = this->renderStates;
 			mat->renderLayer = this->renderLayer;
+			mat->setName(this->getName());
+			mat->setGuid(this->getGuid());
+			mat->setVersion(this->getVersion());
+
+			// should theoretically still work
+			mat->parseProperties(materialDefinitions["properties"].toArray());
 
 		}
 		mat->setMaterialDefinition(materialDefinitions);
-		
 	}
 
+	// pass values to newly created shader
 	for (auto prop : this->properties) {
 		mat->setValue(prop->name, prop->getValue());
 	}
@@ -326,6 +339,36 @@ CustomMaterialPtr CustomMaterial::createFromShader(iris::ShaderPtr shader)
 {
 	auto mat = CustomMaterial::create();
 	mat->setShader(shader);
+	return mat;
+}
+
+CustomMaterialPtr CustomMaterial::createFromShaderPath(const QString& shaderPath)
+{
+	auto data = QFile(shaderPath).readAll();
+	auto shaderObject = QJsonDocument::fromJson(data).object();
+	return createFromShaderJson(shaderObject);
+}
+
+CustomMaterialPtr CustomMaterial::createFromShaderJson(const QJsonObject &object)
+{
+	auto mat = CustomMaterial::create();
+	mat->setName(object["name"].toString());
+	mat->setGuid(object["guid"].toString());
+
+	auto vertPath = object["vertex_shader"].toString();
+	auto fragPath = object["fragment_shader"].toString();
+
+	if (vertPath == "") {
+		vertPath = object["vertexShaderSource"].toString();
+		fragPath = object["fragmentShaderSource"].toString();
+	}
+
+	auto shader = iris::Shader::load(vertPath, fragPath);
+	mat->setShader(shader);
+
+	mat->setBaseMaterialProperties(object);
+	mat->parseProperties(object["uniforms"].toArray());
+
 	return mat;
 }
 
