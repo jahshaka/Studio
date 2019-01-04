@@ -25,7 +25,10 @@ namespace iris
 
 class CustomMaterial : public Material
 {
+	int version = 1;
 public:
+	int getVersion() { return version; }
+	void setVersion(int version) { this->version = version; }
     QList<Property*> properties;
 
     void begin(GraphicsDevicePtr device, ScenePtr scene) override;

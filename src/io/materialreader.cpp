@@ -56,10 +56,10 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 	if (version == 1)
 		return loadMaterialV1(matObject, db);
 
-	return loadMaterial(matObject, db);
+	return loadMaterialV2(matObject, db);
 }
 
-iris::CustomMaterialPtr MaterialReader::loadMaterial(QJsonObject matObject, Database* db)
+iris::CustomMaterialPtr MaterialReader::loadMaterialV2(QJsonObject matObject, Database* db)
 {
 	return MaterialHelper::generateMaterialFromMaterialDefinition(matObject, true);
 	//return iris::CustomMaterialPtr();

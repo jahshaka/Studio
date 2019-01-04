@@ -56,7 +56,7 @@ void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
     setupShaderSelector();
 
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-        
+        /*
 		// TODO - properly update only when requested, and cache these?
         QFileInfo shaderFile;
 
@@ -91,7 +91,7 @@ void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
                 }
             }
         }
-		
+		*/
         setWidgetProperties();
     }
 

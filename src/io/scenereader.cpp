@@ -62,6 +62,8 @@ For more information see the LICENSE file
 #include "irisgl/src/physics/physicsproperties.h"
 #include "irisgl/src/physics/physicshelper.h"
 
+#include "materialreader.hpp"
+
 iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
                                       iris::PostProcessManagerPtr postMan,
@@ -579,9 +581,14 @@ iris::HandleMode SceneReader::getHandleModeFromName(QString handleMode)
  */
 iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 {
+	MaterialReader reader;
     if (nodeObj["material"].isNull()) return iris::CustomMaterial::create();
 
-    auto mat = nodeObj["material"].toObject();
+	auto mat = nodeObj["material"].toObject();
+	if (reader.getMaterialVersion(mat) >= 2)
+		return reader.parseMaterial(mat, nullptr);
+
+    
     auto m = iris::CustomMaterial::create();
     auto shaderGuid = mat["guid"].toString();
 
