@@ -35,13 +35,13 @@ public:
     QJsonObject getParsedShader();
 
 	iris::CustomMaterialPtr parseMaterial(QJsonObject matObject, Database* handle);
-	iris::CustomMaterialPtr loadMaterial(QJsonObject matObject, Database* handle);
+	iris::CustomMaterialPtr loadMaterialV2(QJsonObject matObject, Database* handle);
 	iris::CustomMaterialPtr loadMaterialV1(QJsonObject matObject, Database* handle);
+
+	int getMaterialVersion(QJsonObject matObj);
 
 private:
     QJsonObject parsedShader;
-
-	int getMaterialVersion(QJsonObject matObj);
 };
 
 #endif // MATERIALREADER_HPP

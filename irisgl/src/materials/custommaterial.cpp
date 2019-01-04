@@ -289,14 +289,30 @@ void CustomMaterial::setBaseMaterialProperties(const QJsonObject &jahShader)
 
 MaterialPtr CustomMaterial::duplicate()
 {
+	qDebug() << "duplicating";
 	qDebug() << materialDefinitions;
+
 	auto mat = CustomMaterial::create();
 	if (materialDefinitions.isEmpty()) {
 		mat->generate(materialPath, true);
 	}
 	else {
+		if (version == 1) {
+			// v1 material spec
+			mat->generate(materialDefinitions);
+		}
+		else {
+			// v2 material spec
+			auto vertPath = materialDefinitions["vertexShaderSource"].toString();
+			auto fragPath = materialDefinitions["fragmentShaderSource"].toString();
+			auto shader = iris::Shader::create(vertPath, fragPath);
+			mat->setShader(shader);
+			mat->renderStates = this->renderStates;
+			mat->renderLayer = this->renderLayer;
+
+		}
 		mat->setMaterialDefinition(materialDefinitions);
-		mat->generate(materialDefinitions);
+		
 	}
 
 	for (auto prop : this->properties) {

@@ -355,7 +355,10 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
     // todo: check if material actually exists
     QJsonObject matObj;
     writeSceneNodeMaterial(matObj, meshNode->getMaterial().staticCast<iris::CustomMaterial>(), relative);
-    sceneNodeObject["material"] = matObj;
+	//sceneNodeObject["material"] = matObj;
+	auto matDef = meshNode->getMaterial().staticCast<iris::CustomMaterial>()->materialDefinitions;
+	qDebug() << QJsonDocument(matDef).toJson(QJsonDocument::Indented);
+	sceneNodeObject["material"] = meshNode->getMaterial().staticCast<iris::CustomMaterial>()->materialDefinitions;
 }
 
 void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode)
