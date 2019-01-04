@@ -57,7 +57,7 @@ public:
     QString getName();
     QString getGuid();
     QString firstTextureSlot() const;
-    int getCalculatedPropHeight() const;
+    //int getCalculatedPropHeight() const;
 
     static CustomMaterialPtr create();
 	// called when the material's value is changed
@@ -70,6 +70,8 @@ public:
 	MaterialPtr duplicate() override;
 
 	static CustomMaterialPtr createFromShader(iris::ShaderPtr shader);
+	static CustomMaterialPtr createFromShaderPath(const QString& shaderPath);
+	static CustomMaterialPtr createFromShaderJson(const QJsonObject& shaderObj);
 
     CustomMaterial() = default;
     QString materialName;
@@ -77,7 +79,7 @@ public:
 	QString materialPath;
 
     QJsonObject loadShaderFromDisk(const QString &);
-    void createWidgets(const QJsonArray&);
+    void parseProperties(const QJsonArray&);
 
 	QJsonObject materialDefinitions;
 };
