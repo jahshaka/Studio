@@ -27,7 +27,7 @@ public:
 		this->setName("DefaultMaterial");
 		auto file = QFileInfo(IrisUtils::getAbsoluteAssetPath(
 			Constants::SHADER_DEFS + "DefaultMaterial.shader"));
-		this->generate(file.absoluteFilePath());
+		//this->generate(file.absoluteFilePath());
 	}
 
 	virtual bool onValueChange(const QString &name, const QVariant &value)

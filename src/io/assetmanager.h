@@ -177,6 +177,7 @@ public:
     static QVector<Asset*>& getAssets();
     static void addAsset(Asset* asset);
 	static void clearAssetList();
+	static Asset* getAssedByGuid(QString guid);
 };
 
 #endif // ASSETMANAGER_H
