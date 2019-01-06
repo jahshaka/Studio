@@ -28,3 +28,14 @@ void AssetManager::clearAssetList()
     assets.clear();
     assets.squeeze();
 }
+
+Asset* AssetManager::getAssedByGuid(QString guid)
+{
+	for (auto asset : AssetManager::getAssets()) {
+		if (asset->assetGuid == guid) {
+			return asset;
+		}
+	}
+
+	return nullptr;
+}

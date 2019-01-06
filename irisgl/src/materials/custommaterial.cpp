@@ -117,6 +117,7 @@ void CustomMaterial::end(GraphicsDevicePtr device, ScenePtr scene)
     Material::end(device, scene);
 }
 
+
 void CustomMaterial::generate(const QString &fileName, bool project)
 {
 	materialPath = fileName;

@@ -61,7 +61,7 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 
 iris::CustomMaterialPtr MaterialReader::loadMaterialV2(QJsonObject matObject, Database* db)
 {
-	return MaterialHelper::generateMaterialFromMaterialDefinition(matObject, true);
+	return MaterialHelper::generateMaterialFromMaterialDefinition(matObject, false);
 	//return iris::CustomMaterialPtr();
 }
 
@@ -104,6 +104,7 @@ iris::CustomMaterialPtr MaterialReader::loadMaterialV1(QJsonObject matObject, Da
 		}
 	}
 
+	// loads from db
 	for (const auto &prop : material->properties) {
 		if (prop->type == iris::PropertyType::Color) {
 			QColor col;
