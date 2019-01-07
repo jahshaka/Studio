@@ -1,0 +1,114 @@
+{
+    "name": "",
+    "properties": [
+        {
+            "displayName": "Texture property",
+            "id": "{25e83490-6dc2-43f0-9595-69c7e35d36c6}",
+            "name": "property0",
+            "type": "texture",
+            "value": "eb6d2c21-2ece-4d0a-9d2f-3964263ab735"
+        },
+        {
+            "displayName": "Vector 3 property",
+            "id": "{905d2dfd-a108-4592-88c5-b47987db3201}",
+            "name": "property1",
+            "type": "vec3",
+            "value": {
+                "x": null,
+                "y": null,
+                "z": 1
+            }
+        }
+    ],
+    "shaderGuid": "",
+    "shadergraph": {
+        "connections": [
+            {
+                "id": "5fcb3ed6-ec50-469b-813a-0c54b0eaba41",
+                "leftNodeId": "b9458ce9-d71f-4c35-b8d1-76d13274fdfa",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "6c43f7ce-3267-455f-a119-02ab2e20c3ff",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "614aa4eb-1529-40dc-a777-aa7dd9bdb8c0",
+                "leftNodeId": "a6930378-0779-4a06-9f71-10c7a486030d",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "b9458ce9-d71f-4c35-b8d1-76d13274fdfa",
+                "rightNodeSocketIndex": 1
+            },
+            {
+                "id": "d6cf4039-370d-43ae-b89a-bffe63e4e0be",
+                "leftNodeId": "f09d1168-f1dd-42b8-a513-3e76f1a51e9e",
+                "leftNodeSocketIndex": 1,
+                "rightNodeId": "b9458ce9-d71f-4c35-b8d1-76d13274fdfa",
+                "rightNodeSocketIndex": 0
+            }
+        ],
+        "masternode": "6c43f7ce-3267-455f-a119-02ab2e20c3ff",
+        "nodes": [
+            {
+                "id": "6c43f7ce-3267-455f-a119-02ab2e20c3ff",
+                "type": "Material",
+                "value": "",
+                "x": 379,
+                "y": -4
+            },
+            {
+                "id": "a6930378-0779-4a06-9f71-10c7a486030d",
+                "type": "property",
+                "value": "{905d2dfd-a108-4592-88c5-b47987db3201}",
+                "x": -237,
+                "y": 186
+            },
+            {
+                "id": "b9458ce9-d71f-4c35-b8d1-76d13274fdfa",
+                "type": "multiply",
+                "value": "",
+                "x": 68,
+                "y": 53
+            },
+            {
+                "id": "f09d1168-f1dd-42b8-a513-3e76f1a51e9e",
+                "type": "property",
+                "value": "25e83490-6dc2-43f0-9595-69c7e35d36c6",
+                "x": -232,
+                "y": -59
+            }
+        ],
+        "properties": [
+            {
+                "displayName": "Texture property",
+                "id": "25e83490-6dc2-43f0-9595-69c7e35d36c6",
+                "name": "property0",
+                "type": "texture",
+                "value": "eb6d2c21-2ece-4d0a-9d2f-3964263ab735"
+            },
+            {
+                "displayName": "Vector 3 property",
+                "id": "905d2dfd-a108-4592-88c5-b47987db3201",
+                "name": "property1",
+                "type": "vec3",
+                "value": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            }
+        ],
+        "settings": {
+            "acceptLighting": true,
+            "blendMode": "Opaque",
+            "castShadow": true,
+            "cullMode": "Back",
+            "depthTest": true,
+            "fog": true,
+            "name": "",
+            "receiveShadow": true,
+            "renderLayer": "Opaque",
+            "zWrite": true
+        }
+    },
+    "type": "effect",
+    "version": 2,
+}

@@ -1,0 +1,72 @@
+{
+    "name": "Next Texture",
+    "properties": [
+        {
+            "displayName": "Vector 3 property",
+            "id": "{112083ee-9bad-4197-a030-f6b99fd05cdf}",
+            "name": "property0",
+            "type": "vec3",
+            "value": {
+                "x": 0,
+                "y": 1,
+                "z": 0
+            }
+        }
+    ],
+    "shaderGuid": "",
+    "shadergraph": {
+        "connections": [
+            {
+                "id": "3b1204a0-11be-4cad-b5a7-8fcb245aea3c",
+                "leftNodeId": "af7a89a6-24f3-4351-a438-80fbd51d702d",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "50aedc23-3ef8-44c8-b362-f09a4964e554",
+                "rightNodeSocketIndex": 0
+            }
+        ],
+        "masternode": "50aedc23-3ef8-44c8-b362-f09a4964e554",
+        "nodes": [
+            {
+                "id": "50aedc23-3ef8-44c8-b362-f09a4964e554",
+                "type": "Material",
+                "value": "",
+                "x": -46,
+                "y": 12
+            },
+            {
+                "id": "af7a89a6-24f3-4351-a438-80fbd51d702d",
+                "type": "property",
+                "value": "{112083ee-9bad-4197-a030-f6b99fd05cdf}",
+                "x": -372,
+                "y": 105
+            }
+        ],
+        "properties": [
+            {
+                "displayName": "Vector 3 property",
+                "id": "{112083ee-9bad-4197-a030-f6b99fd05cdf}",
+                "name": "property0",
+                "type": "vec3",
+                "value": {
+                    "x": 0,
+                    "y": 1,
+                    "z": 0
+                }
+            }
+        ],
+        "settings": {
+            "acceptLighting": true,
+            "blendMode": "Opaque",
+            "castShadow": true,
+            "cullMode": "Back",
+            "depthTest": true,
+            "fog": true,
+            "name": "Next Texture",
+            "receiveShadow": true,
+            "renderLayer": "Opaque",
+            "zWrite": true
+        }
+    },
+    "type": "effect",
+    "version": 2
+}
