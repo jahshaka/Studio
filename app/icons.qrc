@@ -111,5 +111,9 @@
         <file>icons/perspective-view-80.png</file>
         <file>icons/mining.png</file>
         <file>icons/icons8-empty-box-50.png</file>
+        <file>icons/checked.png</file>
+        <file>icons/contract.png</file>
+        <file>icons/delete-26.png</file>
+        <file>icons/expand.png</file>
     </qresource>
 </RCC>
