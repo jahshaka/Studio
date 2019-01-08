@@ -18,7 +18,7 @@ endforeach()
 endmacro()
 
 # Copy Jahshaka data folders after a successful build
-set(DataDirs app assets scenes)
+set(DataDirs app scenes)
 foreach(dir ${DataDirs})
 if (APPLE)
 	add_custom_command(
