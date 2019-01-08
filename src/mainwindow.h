@@ -29,7 +29,7 @@ For more information see the LICENSE file
 #include "misc/QtAwesome.h"
 #include "misc/QtAwesomeAnim.h"
 #include "core/project.h"
-#include "shadergraph/mainwindow.h"
+#include "shadergraph/shadergraphmainwindow.h"
 
 #ifdef MINER_ENABLED
 #include "../thirdparty/miner/minerui.h"

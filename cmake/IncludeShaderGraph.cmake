@@ -17,7 +17,7 @@ add_definitions(-DEFFECT_BUILD_AS_LIB )
 set(SRCS
 	${SRCS}
 	#main.cpp
-	src/shadergraph/mainwindow.cpp
+	src/shadergraph/shadergraphmainwindow.cpp
 	src/shadergraph/shadergraph.cpp
 	#nodegraph.cpp
     #nodemodel.cpp
@@ -69,7 +69,7 @@ set(SRCS
 
 set(HEADERS
 	${HEADERS}
-	src/shadergraph/mainwindow.h
+	src/shadergraph/shadergraphmainwindow.h
 	src/shadergraph/shadergraph.h
         src/shadergraph/properties.h
 	#nodegraph.h

@@ -135,7 +135,7 @@ For more information see the LICENSE file
 #include "irisgl/src/physics/environment.h"
 #include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
 
-#include "shadergraph/mainwindow.h"
+#include "shadergraph/shadergraphmainwindow.h"
 
 enum class VRButtonMode : int
 {
