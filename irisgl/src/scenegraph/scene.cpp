@@ -87,7 +87,7 @@ Scene::Scene()
 
 	time = 0;
 
-    switchSkyTexture(skyType);
+    //switchSkyTexture(skyType);
 
     environment = QSharedPointer<Environment>(new Environment(geometryRenderList));
 }

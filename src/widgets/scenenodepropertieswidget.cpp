@@ -90,7 +90,10 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 
 void SceneNodePropertiesWidget::setScene(QSharedPointer<iris::Scene> scene)
 {
-    if (!!scene) this->scene = scene;
+    if (!!scene) {
+        this->scene = scene;
+        skyPropView->setScene(this->scene);
+    }
 }
 
 /**
@@ -112,7 +115,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             worldPropView->setScene(sceneNode->scene);
             skyPropView->setParent(this);
             skyPropView->setDatabase(db);
-            skyPropView->setScene(sceneNode->scene);
+            
             widgetPropertyLayout->addWidget(skyPropView);
             widgetPropertyLayout->addWidget(fogPropView);
             widgetPropertyLayout->addWidget(worldPropView);

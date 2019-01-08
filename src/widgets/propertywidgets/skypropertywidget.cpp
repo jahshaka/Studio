@@ -33,9 +33,9 @@ SkyPropertyWidget::SkyPropertyWidget()
 void SkyPropertyWidget::skyTypeChanged(int index)
 {
     // Decide whether of not to update the panel
-    if (index == static_cast<int>(currentSky)) {
-        return;
-    } else {
+    //if (index == static_cast<int>(currentSky)) {
+    //    return;
+    //} else {
         clearPanel(this->layout());
 
         skySelector = this->addComboBox("Sky Type");
@@ -48,7 +48,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
         skySelector->setCurrentIndex(index);
 
         connect(skySelector, SIGNAL(currentIndexChanged(int)), this, SLOT(skyTypeChanged(int)));
-    }
+    //}
 
     // Draw the widgets depending on the sky type
     if (index == static_cast<int>(iris::SkyType::SINGLE_COLOR))
@@ -70,6 +70,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
         for (const auto cubemap : AssetManager::getAssets()) {
             if (cubemap->type == ModelTypes::CubeMap) {
                 cubeSelector->addItem(cubemap->fileName, cubemap->assetGuid);
+                break;
             }
         }
 
