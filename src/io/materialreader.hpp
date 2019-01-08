@@ -37,11 +37,31 @@ public:
 	iris::CustomMaterialPtr parseMaterial(QJsonObject matObject, Database* handle);
 	iris::CustomMaterialPtr loadMaterialV2(QJsonObject matObject, Database* handle);
 	iris::CustomMaterialPtr loadMaterialV1(QJsonObject matObject, Database* handle);
+	QJsonObject convertV1MaterialToV2(QJsonObject mat);
 
-	int getMaterialVersion(QJsonObject matObj);
+	int getMaterialVersion(QJsonObject oldMatObj);
 
 private:
     QJsonObject parsedShader;
+};
+
+// used by material reader to create a material from a shader
+class ShaderHandler : public AssetIOBase
+{
+public:
+	ShaderHandler();
+
+	void readJahShader(const QString &filePath);
+	QJsonObject getParsedShader();
+
+	iris::CustomMaterialPtr loadMaterialFromShader(QJsonObject shaderObject, Database* handle);
+	iris::CustomMaterialPtr loadMaterialFromShaderV2(QJsonObject matObject, Database* handle);
+	iris::CustomMaterialPtr loadMaterialFromShaderV1(QJsonObject matObject, Database* handle);
+
+	int getShaderVersion(QJsonObject matObj);
+
+private:
+	QJsonObject parsedShader;
 };
 
 #endif // MATERIALREADER_HPP
