@@ -26,6 +26,32 @@ For more information see the LICENSE file
 //#include "irisgl/src/core/property.h"
 #include "shadergraph/core/materialhelper.h"
 
+/*
+V1 Material Spec:
+{
+	"name":"Material", // material name
+	"id":"12b12bbcf33g4", // shader asset guid
+
+	// everything else are parameters
+	"alpha":1.0,
+	...
+}
+
+V2 Material Spec:
+{
+	"name":"Material", // material name
+	"shaderGuid":"12b12bbcf33g4", // shader asset guid
+	"version":2,
+
+	// a dicionary is used because the value names should be unique
+	values:{
+		"alpha":1.0,
+		...
+	}
+}
+
+*/
+
 
 MaterialReader::MaterialReader()
 {
@@ -54,14 +80,34 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 {
 	auto version = getMaterialVersion(matObject);
 	if (version == 1)
-		return loadMaterialV1(matObject, db);
+		matObject = convertV1MaterialToV2(matObject);
 
 	return loadMaterialV2(matObject, db);
 }
 
 iris::CustomMaterialPtr MaterialReader::loadMaterialV2(QJsonObject matObject, Database* db)
 {
-	return MaterialHelper::generateMaterialFromMaterialDefinition(matObject, false);
+	ShaderHandler shaderHandler;
+	auto material = shaderHandler.loadMaterialFromShader(matObject, db);
+
+	// assign values
+	for (const auto &prop : material->properties) {
+		if (prop->type == iris::PropertyType::Color) {
+			QColor col;
+			col.setNamedColor(matObject.value(prop->name).toString());
+			material->setValue(prop->name, col);
+		}
+		else if (prop->type == iris::PropertyType::Texture) {
+			QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
+			QString textureStr = IrisUtils::join(Globals::project->getProjectFolder(), materialName);
+			material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
+		}
+		else {
+			material->setValue(prop->name, QVariant::fromValue(matObject.value(prop->name)));
+		}
+	}
+
+	//return MaterialHelper::generateMaterialFromMaterialDefinition(matObject, false);
 	//return iris::CustomMaterialPtr();
 }
 
@@ -122,6 +168,24 @@ iris::CustomMaterialPtr MaterialReader::loadMaterialV1(QJsonObject matObject, Da
 	}
 
 	return material;
+}
+
+QJsonObject MaterialReader::convertV1MaterialToV2(QJsonObject oldMatObj)
+{
+	QJsonObject newMatObj;
+	newMatObj["name"] = oldMatObj["name"];
+	newMatObj["shaderGuid"] = oldMatObj["guid"];
+	newMatObj["version"] = 2;
+
+	QJsonObject values;
+	for (auto key : oldMatObj.keys()) {
+		if (key != "name" || key != "guid") {
+			values[key] = oldMatObj[key];
+		}
+	}
+
+	return newMatObj;
+
 }
 
 // if version code is present then return version
