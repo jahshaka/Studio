@@ -5,6 +5,7 @@
 #include "../../src/graphics/vertexlayout.h"
 #include "../../src/graphics/texture.h"
 #include "../../src/graphics/texture2d.h"
+#include "../../src/graphics/rendertarget.h"
 #include "../../src/graphics/shader.h"
 #include "../../src/graphics/spritebatch.h"
 #include "../../src/graphics/blendstate.h"

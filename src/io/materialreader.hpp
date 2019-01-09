@@ -35,6 +35,7 @@ public:
     QJsonObject getParsedShader();
 
 	iris::CustomMaterialPtr parseMaterial(QJsonObject matObject, Database* handle);
+	QJsonObject getShaderObjectFromId(QString shaderGuid);
 	iris::CustomMaterialPtr loadMaterialV2(QJsonObject matObject, Database* handle);
 	iris::CustomMaterialPtr loadMaterialV1(QJsonObject matObject, Database* handle);
 	QJsonObject convertV1MaterialToV2(QJsonObject mat);
@@ -51,14 +52,11 @@ class ShaderHandler : public AssetIOBase
 public:
 	ShaderHandler();
 
-	void readJahShader(const QString &filePath);
-	QJsonObject getParsedShader();
-
 	iris::CustomMaterialPtr loadMaterialFromShader(QJsonObject shaderObject, Database* handle);
-	iris::CustomMaterialPtr loadMaterialFromShaderV2(QJsonObject matObject, Database* handle);
-	iris::CustomMaterialPtr loadMaterialFromShaderV1(QJsonObject matObject, Database* handle);
+	iris::CustomMaterialPtr loadMaterialFromShaderV2(QJsonObject shaderObject, Database* handle);
+	iris::CustomMaterialPtr loadMaterialFromShaderV1(QJsonObject shaderObject, Database* handle);
 
-	int getShaderVersion(QJsonObject matObj);
+	int getShaderVersion(QJsonObject shaderObj);
 
 private:
 	QJsonObject parsedShader;
