@@ -82,75 +82,12 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 	if (version == 1)
 		matObject = convertV1MaterialToV2(matObject);
 
-	return loadMaterialV2(matObject, db);
-}
+	// get shader object
+	auto shaderObject = getShaderObjectFromId(matObject["shaderGuid"].toString());
 
-iris::CustomMaterialPtr MaterialReader::loadMaterialV2(QJsonObject matObject, Database* db)
-{
-	ShaderHandler shaderHandler;
-	auto material = shaderHandler.loadMaterialFromShader(matObject, db);
+	ShaderHandler handler;
+	auto material = handler.loadMaterialFromShader(matObject, db);
 
-	// assign values
-	for (const auto &prop : material->properties) {
-		if (prop->type == iris::PropertyType::Color) {
-			QColor col;
-			col.setNamedColor(matObject.value(prop->name).toString());
-			material->setValue(prop->name, col);
-		}
-		else if (prop->type == iris::PropertyType::Texture) {
-			QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
-			QString textureStr = IrisUtils::join(Globals::project->getProjectFolder(), materialName);
-			material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
-		}
-		else {
-			material->setValue(prop->name, QVariant::fromValue(matObject.value(prop->name)));
-		}
-	}
-
-	//return MaterialHelper::generateMaterialFromMaterialDefinition(matObject, false);
-	//return iris::CustomMaterialPtr();
-}
-
-iris::CustomMaterialPtr MaterialReader::loadMaterialV1(QJsonObject matObject, Database* db)
-{
-	iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
-	QFileInfo shaderFile;
-
-	QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
-	while (it.hasNext()) {
-		it.next();
-		if (it.key() == matObject["guid"].toString()) {
-			shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
-			break;
-		}
-	}
-
-	if (shaderFile.exists()) {
-		material->generate(shaderFile.absoluteFilePath());
-	}
-	else {
-		for (auto asset : AssetManager::getAssets()) {
-			if (asset->type == ModelTypes::Shader) {
-				if (asset->assetGuid == matObject["guid"].toString()) {
-					auto def = asset->getValue().toJsonObject();
-					auto vertexShader = def["vertex_shader"].toString();
-					auto fragmentShader = def["fragment_shader"].toString();
-					for (auto asset : AssetManager::getAssets()) {
-						if (asset->type == ModelTypes::File) {
-							if (vertexShader == asset->assetGuid) vertexShader = asset->path;
-							if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
-						}
-					}
-					def["vertex_shader"] = vertexShader;
-					def["fragment_shader"] = fragmentShader;
-					material->setMaterialDefinition(def);
-					material->generate(def);
-				}
-			}
-		}
-	}
-
-	// loads from db
 	for (const auto &prop : material->properties) {
 		if (prop->type == iris::PropertyType::Color) {
 			QColor col;
@@ -168,6 +105,34 @@ iris::CustomMaterialPtr MaterialReader::loadMaterialV1(QJsonObject matObject, Da
 	}
 
 	return material;
+}
+
+QJsonObject MaterialReader::getShaderObjectFromId(QString shaderGuid)
+{
+	QFileInfo shaderFile;
+
+	if (Constants::Reserved::BuiltinShaders.contains(shaderGuid))
+		shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(Constants::Reserved::BuiltinShaders[shaderGuid]));
+
+	if (shaderFile.exists()) {
+		QFile file(shaderFile.absoluteFilePath());
+		auto data = file.readAll();
+		return QJsonDocument::fromJson(data).object();
+	}
+	else {
+		for (auto asset : AssetManager::getAssets()) {
+			if (asset->type == ModelTypes::Shader) {
+				if (asset->assetGuid == shaderGuid) {
+					auto def = asset->getValue().toJsonObject();
+					return def;
+				}
+			}
+		}
+	}
+
+	return QJsonObject();
+
+	
 }
 
 QJsonObject MaterialReader::convertV1MaterialToV2(QJsonObject oldMatObj)
@@ -194,6 +159,82 @@ int MaterialReader::getMaterialVersion(QJsonObject matObj)
 {
 	if (matObj.contains("version"))
 		return matObj["version"].toInt();
+
+	return 1;
+}
+
+ShaderHandler::ShaderHandler()
+{
+
+}
+
+iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShader(QJsonObject shaderObject, Database* handle)
+{
+	auto vertexShader = def["vertex_shader"].toString();
+	auto fragmentShader = def["fragment_shader"].toString();
+	for (auto asset : AssetManager::getAssets()) {
+		if (asset->type == ModelTypes::File) {
+			if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+			if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+		}
+	}
+	def["vertex_shader"] = vertexShader;
+	def["fragment_shader"] = fragmentShader;
+	material->setMaterialDefinition(def);
+	material->generate(def);
+}
+
+iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShaderV2(QJsonObject shaderObject, Database* db)
+{
+	MaterialHelper::generateMaterialFromMaterialDefinition(shaderObject, false);
+}
+
+iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShaderV1(QJsonObject shaderObject, Database* db)
+{
+	iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
+	QFileInfo shaderFile;
+
+	QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
+	while (it.hasNext()) {
+		it.next();
+		if (it.key() == shaderObject["guid"].toString()) {
+			shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
+			break;
+		}
+	}
+
+	if (shaderFile.exists()) {
+		material->generate(shaderFile.absoluteFilePath());
+	}
+	else {
+		for (auto asset : AssetManager::getAssets()) {
+			if (asset->type == ModelTypes::Shader) {
+				if (asset->assetGuid == shaderObject["guid"].toString()) {
+					auto def = asset->getValue().toJsonObject();
+					auto vertexShader = def["vertex_shader"].toString();
+					auto fragmentShader = def["fragment_shader"].toString();
+					for (auto asset : AssetManager::getAssets()) {
+						if (asset->type == ModelTypes::File) {
+							if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+							if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+						}
+					}
+					def["vertex_shader"] = vertexShader;
+					def["fragment_shader"] = fragmentShader;
+					material->setMaterialDefinition(def);
+					material->generate(def);
+				}
+			}
+		}
+	}
+
+	return material;
+}
+
+int ShaderHandler::getShaderVersion(QJsonObject shaderObj)
+{
+	if (shaderObj.contains("version"))
+		return shaderObj["version"].toInt();
 
 	return 1;
 }
