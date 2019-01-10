@@ -34,7 +34,10 @@ public:
     void readJahShader(const QString &filePath);
     QJsonObject getParsedShader();
 
-	iris::CustomMaterialPtr parseMaterial(QJsonObject matObject, Database* handle);
+	// if handle is null then it will try to fetch the assets
+	// from the asset manager
+	iris::CustomMaterialPtr parseMaterial(QJsonObject matObject, Database* handle, bool loadTextures = true);
+	iris::CustomMaterialPtr createMaterialFromShaderGuid(QString shaderGuid);
 	QJsonObject getShaderObjectFromId(QString shaderGuid);
 	iris::CustomMaterialPtr loadMaterialV2(QJsonObject matObject, Database* handle);
 	iris::CustomMaterialPtr loadMaterialV1(QJsonObject matObject, Database* handle);

@@ -406,9 +406,10 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMateri
 
         if (prop->type == iris::PropertyType::Texture) {
 			//matObj[prop->name] = relative ? getRelativePath(prop->getValue().toString()) : QFileInfo(prop->getValue().toString()).fileName();
-			valuesObj[prop->name] = relative
-									? handle->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName())
-									: getRelativePath(prop->getValue().toString());
+			auto id = relative
+				? handle->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName())
+				: getRelativePath(prop->getValue().toString());
+			valuesObj[prop->name] = id;
         }
 
 		// add vector properties
