@@ -301,6 +301,7 @@ MaterialPtr CustomMaterial::duplicate()
 		mat = iris::CustomMaterial::createFromShaderPath(materialPath);
 	}
 	else {
+		// this should be the shader's version instead
 		if (version == 1) {
 			// v1 material spec
 			//mat->generate(materialDefinitions);

@@ -83,10 +83,12 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 		matObject = convertV1MaterialToV2(matObject);
 
 	// get shader object
+	auto shaderGuid = matObject["shaderGuid"].toString();
 	auto shaderObject = getShaderObjectFromId(matObject["shaderGuid"].toString());
 
 	ShaderHandler handler;
 	auto material = handler.loadMaterialFromShader(shaderObject, db);
+	material->setGuid(shaderGuid);
 
 	// apply values
 	auto valuesObj = matObject["values"].toObject();
@@ -107,7 +109,7 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 		}
 	}
 
-	material->setMaterialDefinition(matObject);
+	//material->setMaterialDefinition(matObject);
 
 	return material;
 }
@@ -208,10 +210,11 @@ iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShaderV1(QJsonObject shad
 	}
 	shaderObject["vertex_shader"] = vertexShader;
 	shaderObject["fragment_shader"] = fragmentShader;
-	qDebug() << "shader vertex file: " << vertexShader;
-	qDebug() << "shader fragment file: " << fragmentShader;
-	//material->setMaterialDefinition(def);
+	//qDebug() << "shader vertex file: " << vertexShader;
+	//qDebug() << "shader fragment file: " << fragmentShader;
+	material->setMaterialDefinition(shaderObject);
 	material->generate(shaderObject);
+	material->setVersion(1);
 
 	return material;
 }
