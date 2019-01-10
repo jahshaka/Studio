@@ -76,7 +76,18 @@ QJsonObject MaterialReader::getParsedShader()
     return parsedShader;
 }
 
-iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Database* db)
+iris::CustomMaterialPtr MaterialReader::createMaterialFromShaderGuid(QString shaderGuid)
+{
+	auto shaderObject = getShaderObjectFromId(shaderGuid);
+
+	ShaderHandler handler;
+	auto material = handler.loadMaterialFromShader(shaderObject, nullptr);
+	material->setGuid(shaderGuid);
+
+	return material;
+}
+
+iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Database* db, bool loadTextures)
 {
 	auto version = getMaterialVersion(matObject);
 	if (version == 1)
@@ -86,9 +97,7 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 	auto shaderGuid = matObject["shaderGuid"].toString();
 	auto shaderObject = getShaderObjectFromId(matObject["shaderGuid"].toString());
 
-	ShaderHandler handler;
-	auto material = handler.loadMaterialFromShader(shaderObject, db);
-	material->setGuid(shaderGuid);
+	auto material = createMaterialFromShaderGuid(shaderGuid);
 
 	// apply values
 	auto valuesObj = matObject["values"].toObject();
@@ -99,10 +108,15 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 			col.setNamedColor(valuesObj.value(prop->name).toString());
 			material->setValue(prop->name, col);
 		}
-		else if (prop->type == iris::PropertyType::Texture) {
-			QString materialName = db->fetchAsset(valuesObj.value(prop->name).toString()).name;
-			QString textureStr = IrisUtils::join(Globals::project->getProjectFolder(), materialName);
-			material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
+		else if (prop->type == iris::PropertyType::Texture && loadTextures) {
+			if (db != nullptr) {
+				QString materialName = db->fetchAsset(valuesObj.value(prop->name).toString()).name;
+				QString textureStr = IrisUtils::join(Globals::project->getProjectFolder(), materialName);
+				material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
+			}
+			else {
+				// todo: resolve textures from assets instead
+			}
 		}
 		else {
 			material->setValue(prop->name, QVariant::fromValue(valuesObj.value(prop->name)));
@@ -114,6 +128,7 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 	return material;
 }
 
+//todo : use db when possible
 QJsonObject MaterialReader::getShaderObjectFromId(QString shaderGuid)
 {
 	QFileInfo shaderFile;

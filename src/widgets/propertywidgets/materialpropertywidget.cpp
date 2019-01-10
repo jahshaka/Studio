@@ -38,6 +38,7 @@ For more information see the LICENSE file
 
 #include "globals.h"
 #include "core/database/database.h"
+#include "io/materialreader.hpp"
 
 void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 {
@@ -124,9 +125,16 @@ void MaterialPropertyWidget::materialChanged(int index)
     Q_UNUSED(index);
     material->purge();
     clearPanel(this->layout());
+
+	MaterialReader reader;
+	material = reader.createMaterialFromShaderGuid(materialSelector->getCurrentItemData());
     material->setName(materialSelector->getCurrentItem());
     material->setGuid(materialSelector->getCurrentItemData());
-    setSceneNode(meshNode);
+	meshNode->setMaterial(material);
+	setupShaderSelector();
+	setWidgetProperties();
+    //setSceneNode(meshNode);
+
 
     QJsonObject node;
     SceneWriter::writeSceneNode(node, meshNode, false);
