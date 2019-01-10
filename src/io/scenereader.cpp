@@ -585,8 +585,8 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
     if (nodeObj["material"].isNull()) return iris::CustomMaterial::create();
 
 	auto mat = nodeObj["material"].toObject();
-	if (reader.getMaterialVersion(mat) >= 2)
-		return reader.parseMaterial(mat, nullptr);
+	//if (reader.getMaterialVersion(mat) >= 2)
+	return reader.parseMaterial(mat, nullptr);
 
     
     auto m = iris::CustomMaterial::create();

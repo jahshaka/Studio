@@ -355,10 +355,10 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
     // todo: check if material actually exists
     QJsonObject matObj;
     writeSceneNodeMaterial(matObj, meshNode->getMaterial().staticCast<iris::CustomMaterial>(), relative);
-	//sceneNodeObject["material"] = matObj;
-	auto matDef = meshNode->getMaterial().staticCast<iris::CustomMaterial>()->materialDefinitions;
-	qDebug() << QJsonDocument(matDef).toJson(QJsonDocument::Indented);
-	sceneNodeObject["material"] = meshNode->getMaterial().staticCast<iris::CustomMaterial>()->materialDefinitions;
+	sceneNodeObject["material"] = matObj;
+	//auto matDef = meshNode->getMaterial().staticCast<iris::CustomMaterial>()->materialDefinitions;
+	//qDebug() << QJsonDocument(matDef).toJson(QJsonDocument::Indented);
+	//sceneNodeObject["material"] = meshNode->getMaterial().staticCast<iris::CustomMaterial>()->materialDefinitions;
 }
 
 void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode)
@@ -386,28 +386,35 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
 void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat, bool relative)
 {
     matObj["name"] = mat->getName();
-    matObj["guid"] = mat->getGuid();
+	//matObj["guid"] = mat->getGuid();
+	matObj["shaderGuid"] = mat->getGuid();
+	matObj["version"] = 2;
 
+	QJsonObject valuesObj;
     for (auto prop : mat->properties) {
         if (prop->type == iris::PropertyType::Bool) {
-            matObj[prop->name] = prop->getValue().toBool();
+			valuesObj[prop->name] = prop->getValue().toBool();
         }
 
         if (prop->type == iris::PropertyType::Float) {
-            matObj[prop->name] = prop->getValue().toFloat();
+			valuesObj[prop->name] = prop->getValue().toFloat();
         }
 
         if (prop->type == iris::PropertyType::Color) {
-            matObj[prop->name] = prop->getValue().value<QColor>().name();
+			valuesObj[prop->name] = prop->getValue().value<QColor>().name();
         }
 
         if (prop->type == iris::PropertyType::Texture) {
 			//matObj[prop->name] = relative ? getRelativePath(prop->getValue().toString()) : QFileInfo(prop->getValue().toString()).fileName();
-			matObj[prop->name] = relative
+			valuesObj[prop->name] = relative
 									? handle->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName())
 									: getRelativePath(prop->getValue().toString());
         }
+
+		// add vector properties
     }
+
+	matObj["values"] = valuesObj;
 }
 
 QJsonObject SceneWriter::jsonColor(QColor color)
