@@ -318,7 +318,16 @@ void GraphicsDevice::compileShader(iris::ShaderPtr shader)
 	program->bindAttributeLocation("a_boneIndices", (int)VertexAttribUsage::BoneIndices);
 	program->bindAttributeLocation("a_boneWeights", (int)VertexAttribUsage::BoneWeights);
 
-	program->link();
+	if (!program->link()) {
+		shader->hasErrors = true;
+
+		qDebug() << "SHADER LINK ERROR";
+		qDebug() << vshader->log();
+
+		// prevent shader from being recompiled with same error
+		shader->isDirty = false;
+		return;
+	}
 
 	//todo: check for errors
 	//if (program->err)
