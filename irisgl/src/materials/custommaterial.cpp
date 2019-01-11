@@ -61,19 +61,32 @@ void CustomMaterial::setUniformValues(GraphicsDevicePtr device, Property *prop)
 {
 	auto program = getProgram();
     if (prop->type == PropertyType::Bool) {
-		device->setShaderUniform(prop->uniform.toStdString().c_str(), prop->getValue().toBool());
+		auto propVal = static_cast<BoolProperty*>(prop)->value;
+		device->setShaderUniform(prop->uniform.toStdString().c_str(),
+			propVal);
     }
 
+	if (prop->type == PropertyType::Int) {
+		auto propVal = static_cast<IntProperty*>(prop)->value;
+		device->setShaderUniform(prop->uniform.toStdString().c_str(),
+			propVal);
+	}
+
     if (prop->type == PropertyType::Float) {
-		device->setShaderUniform(prop->uniform.toStdString().c_str(), prop->getValue().toFloat());
+		auto propVal = static_cast<FloatProperty*>(prop)->value;
+		device->setShaderUniform(prop->uniform.toStdString().c_str(),
+			propVal);
     }
 
     // TODO, figure out a way for the default material to mix values... the ambient for one
     if (prop->type == PropertyType::Color) {
+		auto propVal = static_cast<ColorProperty*>(prop)->value;
 		device->setShaderUniform(prop->uniform.toStdString().c_str(),
-                                 QVector3D(prop->getValue().value<QColor>().redF(),
-                                           prop->getValue().value<QColor>().greenF(),
-                                           prop->getValue().value<QColor>().blueF()));
+			propVal);
+		device->setShaderUniform(prop->uniform.toStdString().c_str(),
+                                 QVector3D(propVal.redF(),
+                                           propVal.greenF(),
+                                           propVal.blueF()));
     }
 
     if (prop->type == iris::PropertyType::Texture) {
@@ -81,6 +94,24 @@ void CustomMaterial::setUniformValues(GraphicsDevicePtr device, Property *prop)
 		device->setShaderUniform(tprop->toggleValue.toStdString().c_str(), tprop->toggle);
 		//device->setShaderUniform(tprop->toggleValue.toStdString().c_str(), true);
     }
+
+	if (prop->type == PropertyType::Vec2) {
+		auto propVal = static_cast<Vec2Property*>(prop)->value;
+		device->setShaderUniform(prop->uniform.toStdString().c_str(),
+			propVal);
+	}
+
+	if (prop->type == PropertyType::Vec3) {
+		auto propVal = static_cast<Vec3Property*>(prop)->value;
+		device->setShaderUniform(prop->uniform.toStdString().c_str(),
+			propVal);
+	}
+
+	if (prop->type == PropertyType::Vec4) {
+		auto propVal = static_cast<Vec4Property*>(prop)->value;
+		device->setShaderUniform(prop->uniform.toStdString().c_str(),
+			propVal);
+	}
 }
 
 QString CustomMaterial::firstTextureSlot() const

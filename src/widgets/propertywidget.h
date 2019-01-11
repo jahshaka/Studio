@@ -49,6 +49,7 @@ public:
 	Widget2D*			addVector2Widget(const QString&, float xValue, float yValue);
 	Widget3D*			addVector3Widget(const QString&, float xValue, float yValue, float zValue);
 	Widget4D*			addVector4Widget(const QString&, float xValue, float yValue, float zValue, float wValue);
+	QWidget*			addWidgetHolder(QString title, QWidget *widget);
 
     void addFloatProperty(iris::Property*);
     void addIntProperty(iris::Property*);
