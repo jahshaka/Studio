@@ -29,6 +29,7 @@ class LabelWidget;
 class FilePickerWidget;
 // class PropertyWidget;
 #include "propertywidget.h"
+#include "src/shadergraph//propertywidgets/propertywidgetbase.h"
 
 #include <QLayout>
 
@@ -50,6 +51,9 @@ public:
     TextInputWidget*        addTextInput(const QString&);
     LabelWidget*            addLabel(const QString&, const QString&);
     FilePickerWidget*       addFilePicker(const QString&);
+	Widget2D*				addVector2Widget(const QString&, float xValue, float yValue);
+	Widget3D*				addVector3Widget(const QString&, float xValue, float yValue, float zValue);
+	Widget4D*				addVector4Widget(const QString&, float xValue, float yValue, float zValue, float wValue);
 
     PropertyWidget*         addPropertyWidget();
 
