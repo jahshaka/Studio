@@ -1821,25 +1821,31 @@ void MainWindow::createMaterial()
 {
 	if (!!activeSceneNode) {
         QJsonObject materialDef;
+		// (nick) the material version gets updated during writing so
+		// it's safe to assume we're working the v2 material structure
 		SceneWriter::writeSceneNodeMaterial(
 			materialDef,
 			activeSceneNode.staticCast<iris::MeshNode>()->getMaterial().staticCast<iris::CustomMaterial>()
 		);
 
-		QByteArray binaryMat = QJsonDocument(materialDef).toBinaryData();
+		// materialDef will be mutated
+		auto materialDefOriginal = materialDef;
 
-        QString jsonMaterialString = QJsonDocument(materialDef).toJson();
-
-        for (const auto &value : materialDef) {
-			if (value.isString() &&
-                !db->fetchAsset(value.toString()).name.isEmpty() &&
-                value.toString() != materialDef["guid"].toString())
+		// replace material guid with texture name
+		auto materialValues = materialDef["values"].toObject();
+        for (const auto &key : materialValues.keys()) {
+			if (materialValues[key].isString())
             {
-                jsonMaterialString.replace(value.toString(), QString(db->fetchAsset(value.toString()).name));
+				auto texName = db->fetchAsset(materialValues[key].toString()).name;
+				if (texName.isEmpty())
+					continue;
+				materialValues[key] = texName;
 			}
 		}
+		materialDef["values"] = materialValues;
 
-        QJsonDocument saveDoc = QJsonDocument::fromJson(jsonMaterialString.toUtf8());
+		QJsonDocument saveDoc;
+		saveDoc.setObject(materialDef);
 
         QString fileName = IrisUtils::join(
             Globals::project->getProjectFolder(),
@@ -1851,8 +1857,9 @@ void MainWindow::createMaterial()
         file.write(saveDoc.toJson());
         file.close();
 
+		// WRITE TO D
 		const QString assetGuid = GUIDManager::generateGUID();
-
+		QByteArray binaryMat = QJsonDocument(materialDefOriginal).toBinaryData();
 		db->createAssetEntry(
             assetGuid,
 			QFileInfo(fileName).fileName(),
@@ -1872,80 +1879,29 @@ void MainWindow::createMaterial()
 
 		assetWidget->updateAssetView(assetWidget->assetItem.selectedGuid);
 
-		QJsonObject matObject = QJsonDocument::fromBinaryData(binaryMat).object();
 
-		auto material = iris::CustomMaterial::create();
-		const QJsonObject materialDefinition = matObject;
-		auto shaderGuid = materialDefinition["guid"].toString();
-		material->setName(materialDefinition["name"].toString());
-		material->setGuid(shaderGuid);
+		MaterialReader reader;
+		auto material = reader.parseMaterial(materialDef, db);
 
-		QFileInfo shaderFile;
+		// Actually create the material and add shader as it's dependency
+		db->createDependency(
+			static_cast<int>(ModelTypes::Material),
+			static_cast<int>(ModelTypes::Shader),
+			assetGuid, material->getGuid(),
+			Globals::project->getProjectGuid());
 
-		QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
-		while (it.hasNext()) {
-			it.next();
-			if (it.key() == shaderGuid) {
-				shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
-				break;
-			}
-		}
-
-		if (shaderFile.exists()) {
-			material->generate(shaderFile.absoluteFilePath());
-		}
-		else {
-			// Reading is thread safe...
-			for (auto asset : AssetManager::getAssets()) {
-				if (asset->type == ModelTypes::Shader) {
-					if (asset->assetGuid == material->getGuid()) {
-						auto def = asset->getValue().toJsonObject();
-						auto vertexShader = def["vertex_shader"].toString();
-						auto fragmentShader = def["fragment_shader"].toString();
-						for (auto asset : AssetManager::getAssets()) {
-							if (asset->type == ModelTypes::File) {
-								if (vertexShader == asset->assetGuid) vertexShader = asset->path;
-								if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
-							}
-						}
-						def["vertex_shader"] = vertexShader;
-						def["fragment_shader"] = fragmentShader;
-						material->setMaterialDefinition(def);
-						material->generate(def);
-
-						db->createDependency(
-							static_cast<int>(ModelTypes::Material),
-							static_cast<int>(ModelTypes::Shader),
-							assetGuid, material->getGuid(),
-							Globals::project->getProjectGuid()
-						);
-					}
-				}
-			}
-		}
-
+		// Add all its textures as dependencies too
+		auto values = materialDefOriginal["values"].toObject();
 		for (const auto &prop : material->properties) {
-			if (prop->type == iris::PropertyType::Color) {
-				QColor col;
-				col.setNamedColor(matObject.value(prop->name).toString());
-				material->setValue(prop->name, col);
-			}
-			else if (prop->type == iris::PropertyType::Texture) {
-				if (!matObject.value(prop->name).toString().isEmpty()) {
+			if (prop->type == iris::PropertyType::Texture) {
+				if (!values.value(prop->name).toString().isEmpty()) {
 					db->createDependency(
 						static_cast<int>(ModelTypes::Material),
 						static_cast<int>(ModelTypes::Texture),
-						assetGuid, matObject.value(prop->name).toString(),
+						assetGuid, values.value(prop->name).toString(),
 						Globals::project->getProjectGuid()
 					);
 				}
-
-				QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
-				QString textureStr = IrisUtils::join(Globals::project->getProjectFolder(), materialName);
-				material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
-			}
-			else {
-				material->setValue(prop->name, QVariant::fromValue(matObject.value(prop->name)));
 			}
 		}
 
