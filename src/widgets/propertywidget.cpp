@@ -220,6 +220,84 @@ void PropertyWidget::addFileProperty(iris::Property *prop)
     });
 }
 
+void PropertyWidget::addVector2Property(iris::Property *prop)
+{
+	auto vecProp = static_cast<iris::Vec2Property*>(prop);
+	auto widget = addVector2Widget(vecProp->displayName, vecProp->value.x(), vecProp->value.y());
+	ui->contentpane->layout()->addWidget(widget);
+	properties.append(vecProp);
+
+	connect(widget, &Widget2D::valueChanged, [=](QVector2D value) {
+		vecProp->value = value;
+		if (listener) listener->onPropertyChanged(vecProp);
+		emit onPropertyChanged(vecProp);
+	});
+
+}
+
+void PropertyWidget::addVector3Property(iris::Property *prop)
+{
+	auto vecProp = static_cast<iris::Vec3Property*>(prop);
+	auto widget = addVector3Widget(vecProp->displayName, vecProp->value.x(), vecProp->value.y(), vecProp->value.z());
+	ui->contentpane->layout()->addWidget(widget);
+	properties.append(vecProp);
+
+	connect(widget, &Widget3D::valueChanged, [=](QVector3D value) {
+		vecProp->value = value;
+		if (listener) listener->onPropertyChanged(vecProp);
+		emit onPropertyChanged(vecProp);
+	});
+
+}
+
+void PropertyWidget::addVector4Property(iris::Property *prop)
+{
+	auto vecProp = static_cast<iris::Vec4Property*>(prop);
+	auto widget = addVector4Widget(vecProp->displayName, vecProp->value.x(), vecProp->value.y(), vecProp->value.z(), vecProp->value.w());
+	ui->contentpane->layout()->addWidget(widget);
+	properties.append(vecProp);
+
+	connect(widget, &Widget4D::valueChanged, [=](QVector4D value) {
+		vecProp->value = value;
+		if (listener) listener->onPropertyChanged(vecProp);
+		emit onPropertyChanged(vecProp);
+	});
+
+}
+
+Widget2D * PropertyWidget::addVector2Widget(const QString &, float xValue, float yValue)
+{
+	auto widget = new Widget2D;
+	widget->setValues(xValue, yValue);
+	ui->contentpane->layout()->addWidget(widget);
+	progressiveHeight += widget->height() + stretch;
+
+	return widget;
+}
+
+Widget3D * PropertyWidget::addVector3Widget(const QString &, float xValue, float yValue, float zValue)
+{
+	auto widget = new Widget3D;
+	widget->setValues(xValue, yValue, zValue);
+	ui->contentpane->layout()->addWidget(widget);
+	progressiveHeight += widget->height() + stretch;
+
+	return widget;
+}
+
+Widget4D * PropertyWidget::addVector4Widget(const QString &, float xValue, float yValue, float zValue, float wValue)
+{
+	auto widget = new Widget4D;
+	widget->setValues(xValue, yValue, zValue, wValue);
+	ui->contentpane->layout()->addWidget(widget);
+	progressiveHeight += widget->height() + stretch;
+
+	return widget;
+}
+
+
+
+
 void PropertyWidget::setListener(iris::PropertyListener *listener)
 {
     this->listener = listener;
@@ -262,10 +340,15 @@ void PropertyWidget::setProperties(QList<iris::Property*> properties)
             break;
 
             case iris::PropertyType::Vec2:
+				addVector2Property(prop);
             break;
 
-            case iris::PropertyType::Vec3:
-            break;
+			case iris::PropertyType::Vec3:
+				addVector3Property(prop);
+			break;
+			case iris::PropertyType::Vec4:
+				addVector4Property(prop);
+			break;
 
             case iris::PropertyType::None:
             default: break;

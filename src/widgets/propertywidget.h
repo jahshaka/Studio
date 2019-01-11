@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include "irisgl/src/core/property.h"
+#include "src/shadergraph//propertywidgets/propertywidgetbase.h"
 
 namespace Ui {
     class PropertyWidget;
@@ -45,6 +46,9 @@ public:
     CheckBoxWidget      *addCheckBox(const QString&);
     TexturePickerWidget *addTexturePicker(const QString&);
     FilePickerWidget    *addFilePicker(const QString &name, const QString &suffix);
+	Widget2D*			addVector2Widget(const QString&, float xValue, float yValue);
+	Widget3D*			addVector3Widget(const QString&, float xValue, float yValue, float zValue);
+	Widget4D*			addVector4Widget(const QString&, float xValue, float yValue, float zValue, float wValue);
 
     void addFloatProperty(iris::Property*);
     void addIntProperty(iris::Property*);
@@ -52,6 +56,10 @@ public:
     void addBoolProperty(iris::Property*);
     void addTextureProperty(iris::Property*);
     void addFileProperty(iris::Property*);
+
+	void addVector2Property(iris::Property*);
+	void addVector3Property(iris::Property*);
+	void addVector4Property(iris::Property*);
 
     void setListener(iris::PropertyListener*);
 
