@@ -224,7 +224,8 @@ void PropertyWidget::addVector2Property(iris::Property *prop)
 {
 	auto vecProp = static_cast<iris::Vec2Property*>(prop);
 	auto widget = addVector2Widget(vecProp->displayName, vecProp->value.x(), vecProp->value.y());
-	ui->contentpane->layout()->addWidget(widget);
+	auto holder = addWidgetHolder(vecProp->displayName, widget);
+	ui->contentpane->layout()->addWidget(holder);
 	properties.append(vecProp);
 
 	connect(widget, &Widget2D::valueChanged, [=](QVector2D value) {
@@ -239,7 +240,8 @@ void PropertyWidget::addVector3Property(iris::Property *prop)
 {
 	auto vecProp = static_cast<iris::Vec3Property*>(prop);
 	auto widget = addVector3Widget(vecProp->displayName, vecProp->value.x(), vecProp->value.y(), vecProp->value.z());
-	ui->contentpane->layout()->addWidget(widget);
+	auto holder = addWidgetHolder(vecProp->displayName, widget);
+	ui->contentpane->layout()->addWidget(holder);
 	properties.append(vecProp);
 
 	connect(widget, &Widget3D::valueChanged, [=](QVector3D value) {
@@ -254,7 +256,8 @@ void PropertyWidget::addVector4Property(iris::Property *prop)
 {
 	auto vecProp = static_cast<iris::Vec4Property*>(prop);
 	auto widget = addVector4Widget(vecProp->displayName, vecProp->value.x(), vecProp->value.y(), vecProp->value.z(), vecProp->value.w());
-	ui->contentpane->layout()->addWidget(widget);
+	auto holder = addWidgetHolder(vecProp->displayName, widget);
+	ui->contentpane->layout()->addWidget(holder);
 	properties.append(vecProp);
 
 	connect(widget, &Widget4D::valueChanged, [=](QVector4D value) {
@@ -293,6 +296,24 @@ Widget4D * PropertyWidget::addVector4Widget(const QString &, float xValue, float
 	progressiveHeight += widget->height() + stretch;
 
 	return widget;
+}
+
+QWidget * PropertyWidget::addWidgetHolder(QString title, QWidget* widget)
+{
+
+	auto holder = new QWidget;
+	auto layout = new QHBoxLayout;
+	holder->setLayout(layout);
+
+	layout->addWidget(new QLabel(title, holder));
+	layout->addStretch();
+	layout->addWidget(widget);
+	layout->setContentsMargins(0, 0, 0, 0);
+
+	holder->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+	widget->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+
+	return holder;
 }
 
 
