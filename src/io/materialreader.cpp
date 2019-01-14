@@ -101,7 +101,7 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 
 	// apply values
 	auto valuesObj = matObject["values"].toObject();
-	//qDebug() << valuesObj;
+	qDebug() << valuesObj;
 	for (const auto &prop : material->properties) {
 		if (prop->type == iris::PropertyType::Color) {
 			QColor col;
@@ -110,6 +110,7 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 		}
 		else if (prop->type == iris::PropertyType::Texture && loadTextures) {
 			if (db != nullptr) {
+				
 				QString materialName = db->fetchAsset(valuesObj.value(prop->name).toString()).name;
 				QString textureStr = IrisUtils::join(Globals::project->getProjectFolder(), materialName);
 				material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());

@@ -1830,6 +1830,7 @@ void MainWindow::createMaterial()
 
 		// materialDef will be mutated
 		auto materialDefOriginal = materialDef;
+		qDebug() << materialDefOriginal;
 
 		// replace material guid with texture name
 		auto materialValues = materialDef["values"].toObject();
@@ -1857,7 +1858,7 @@ void MainWindow::createMaterial()
         file.write(saveDoc.toJson());
         file.close();
 
-		// WRITE TO D
+		// WRITE TO DATABASE
 		const QString assetGuid = GUIDManager::generateGUID();
 		QByteArray binaryMat = QJsonDocument(materialDefOriginal).toBinaryData();
 		db->createAssetEntry(
@@ -1881,7 +1882,7 @@ void MainWindow::createMaterial()
 
 
 		MaterialReader reader;
-		auto material = reader.parseMaterial(materialDef, db);
+		auto material = reader.parseMaterial(materialDefOriginal, db);
 
 		// Actually create the material and add shader as it's dependency
 		db->createDependency(
