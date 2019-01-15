@@ -412,6 +412,18 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMateri
 			valuesObj[prop->name] = id;
         }
 
+		if (prop->type == iris::PropertyType::Vec2) {
+			valuesObj[prop->name] = jsonVector2(prop->getValue().value<QVector2D>());
+		}
+
+		if (prop->type == iris::PropertyType::Vec3) {
+			valuesObj[prop->name] = jsonVector3(prop->getValue().value<QVector3D>());
+		}
+
+		if (prop->type == iris::PropertyType::Vec4) {
+			valuesObj[prop->name] = jsonVector4(prop->getValue().value<QVector4D>());
+		}
+
 		// add vector properties
     }
 
@@ -429,15 +441,36 @@ QJsonObject SceneWriter::jsonColor(QColor color)
     return colObj;
 }
 
-QJsonObject SceneWriter::jsonVector3(QVector3D vec)
+QJsonObject SceneWriter::jsonVector2(QVector2D vec)
 {
     QJsonObject obj;
     obj["x"] = vec.x();
     obj["y"] = vec.y();
-    obj["z"] = vec.z();
 
     return obj;
 }
+
+QJsonObject SceneWriter::jsonVector3(QVector3D vec)
+{
+	QJsonObject obj;
+	obj["x"] = vec.x();
+	obj["y"] = vec.y();
+	obj["z"] = vec.z();
+
+	return obj;
+}
+
+QJsonObject SceneWriter::jsonVector4(QVector4D vec)
+{
+	QJsonObject obj;
+	obj["x"] = vec.x();
+	obj["y"] = vec.y();
+	obj["z"] = vec.z();
+	obj["w"] = vec.w();
+
+	return obj;
+}
+
 
 QString evalShadowTypeName(iris::ShadowMapType shadowType)
 {

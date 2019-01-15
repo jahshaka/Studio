@@ -51,12 +51,28 @@ protected:
     QColor readColor(const QJsonObject& colorObj);
 
     /**
-     * Reads x,y and z from vector json object
-     * returns default QVector3D() if colorObj is null
+     * Reads x and y from vector json object
+     * returns default QVector2D() if vecObj is null
      * @param vecObj
      * @return
      */
-    QVector3D readVector3(const QJsonObject& vecObj);
+    QVector2D readVector2(const QJsonObject& vecObj);
+
+	/**
+	 * Reads x,y and z from vector json object
+	 * returns default QVector3D() if vecObj is null
+	 * @param vecObj
+	 * @return
+	 */
+	QVector3D readVector3(const QJsonObject& vecObj);
+
+	/**
+	 * Reads x,y,z and w from vector json object
+	 * returns default QVector4D() if vecObj is null
+	 * @param vecObj
+	 * @return
+	 */
+	QVector4D readVector4(const QJsonObject& vecObj);
 };
 
 #endif // SCENEIOBASE_H

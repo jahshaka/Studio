@@ -1829,6 +1829,7 @@ void MainWindow::createMaterial()
 		);
 
 		// materialDef will be mutated
+		// it's only used to generate a file for the thumbnail
 		auto materialDefOriginal = materialDef;
 		qDebug() << materialDefOriginal;
 
@@ -1846,7 +1847,8 @@ void MainWindow::createMaterial()
 		materialDef["values"] = materialValues;
 
 		QJsonDocument saveDoc;
-		saveDoc.setObject(materialDef);
+		//saveDoc.setObject(materialDef);
+		saveDoc.setObject(materialDefOriginal);
 
         QString fileName = IrisUtils::join(
             Globals::project->getProjectFolder(),
@@ -1911,6 +1913,8 @@ void MainWindow::createMaterial()
 		assetMat->setValue(QVariant::fromValue(material));
 		AssetManager::addAsset(assetMat);
 
+		// it's assumed that the thumbnail rendering will
+		// be finished by the time this is executed
 		QFile::remove(fileName);
     }
     else {
