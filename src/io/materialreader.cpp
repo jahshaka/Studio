@@ -108,6 +108,18 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 			col.setNamedColor(valuesObj.value(prop->name).toString());
 			material->setValue(prop->name, col);
 		}
+		else if (prop->type == iris::PropertyType::Vec2) {
+			auto vec = readVector2(valuesObj[prop->name].toObject());
+			material->setValue(prop->name, vec);
+		}
+		else if (prop->type == iris::PropertyType::Vec3) {
+			auto vec = readVector3(valuesObj[prop->name].toObject());
+			material->setValue(prop->name, vec);
+		}
+		else if (prop->type == iris::PropertyType::Vec4) {
+			auto vec = readVector4(valuesObj[prop->name].toObject());
+			material->setValue(prop->name, vec);
+		}
 		else if (prop->type == iris::PropertyType::Texture && loadTextures) {
 			if (db != nullptr) {
 				

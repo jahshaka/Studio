@@ -57,6 +57,7 @@ For more information see the LICENSE file
 
 #include "core/materialpreset.h"
 #include "io/materialpresetreader.h"
+#include "io/materialreader.hpp"
 
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
@@ -2030,6 +2031,10 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             if (jafType == ModelTypes::Material) {
                 QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
                 QJsonObject matObject = matDoc.object();
+
+				MaterialReader reader;
+				auto material = reader.parseMaterial(matObject, db);
+				/*
                 iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 
                 QFileInfo shaderFile;
@@ -2082,7 +2087,7 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                         material->setValue(prop->name, QVariant::fromValue(matObject.value(prop->name)));
                     }
                 }
-
+				*/
                 auto assetMat = new AssetMaterial;
                 assetMat->assetGuid = guidReturned;
                 assetMat->setValue(QVariant::fromValue(material));

@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include "constants.h"
 #include "io/assetmanager.h"
 #include "io/scenereader.h"
+#include "io/materialreader.hpp"
 
 ThumbnailGenerator* ThumbnailGenerator::instance = nullptr;
 
@@ -254,7 +255,10 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 		QFile *file = new QFile(request.path);
 		file->open(QIODevice::ReadOnly | QIODevice::Text);
 		QJsonDocument doc = QJsonDocument::fromJson(file->readAll());
-		
+
+		MaterialReader reader;
+		auto material = reader.parseMaterial(doc.object(), db);
+		/*
         auto material = iris::CustomMaterial::create();
 		const QJsonObject materialDefinition = doc.object();
         auto shaderGuid = materialDefinition["guid"].toString();
@@ -314,7 +318,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
 				}
 			}
 		}
-
+		*/
 		materialNode->setMaterial(material);
 		materialNode->show();
 

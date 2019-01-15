@@ -12,7 +12,9 @@ For more information see the LICENSE file
 #include <Qt>
 
 #include <QQuaternion>
+#include <QVector2D>
 #include <QVector3D>
+#include <QVector4D>
 #include <QColor>
 #include <QDir>
 #include <QFile>
@@ -71,17 +73,47 @@ QColor AssetIOBase::readColor(const QJsonObject& colorObj)
     return col;
 }
 
-QVector3D AssetIOBase::readVector3(const QJsonObject& vecObj)
+QVector2D AssetIOBase::readVector2(const QJsonObject& vecObj)
 {
     if(vecObj.isEmpty())
     {
-        return QVector3D();
+        return QVector2D();
     }
 
-    QVector3D vec;
+    QVector2D vec;
     vec.setX(vecObj["x"].toDouble(0));
     vec.setY(vecObj["y"].toDouble(0));
-    vec.setZ(vecObj["z"].toDouble(0));
 
     return vec;
+}
+
+QVector3D AssetIOBase::readVector3(const QJsonObject& vecObj)
+{
+	if (vecObj.isEmpty())
+	{
+		return QVector3D();
+	}
+
+	QVector3D vec;
+	vec.setX(vecObj["x"].toDouble(0));
+	vec.setY(vecObj["y"].toDouble(0));
+	vec.setZ(vecObj["z"].toDouble(0));
+
+	return vec;
+}
+
+QVector4D AssetIOBase::readVector4(const QJsonObject& vecObj)
+{
+	if (vecObj.isEmpty())
+	{
+		return QVector4D();
+	}
+
+	QVector4D vec;
+	vec.setX(vecObj["x"].toDouble(0));
+	vec.setY(vecObj["y"].toDouble(0));
+	vec.setZ(vecObj["z"].toDouble(0));
+	vec.setW(vecObj["w"].toDouble(0));
+
+	return vec;
 }

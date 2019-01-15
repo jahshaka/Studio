@@ -54,7 +54,9 @@ public:
     static void writeLightData(QJsonObject& sceneNodeObject, iris::LightNodePtr node);
 
 	static QJsonObject jsonColor(QColor color);
-    static QJsonObject jsonVector3(QVector3D vec);
+	static QJsonObject jsonVector2(QVector2D vec);
+	static QJsonObject jsonVector3(QVector3D vec);
+	static QJsonObject jsonVector4(QVector4D vec);
 
     static QString getSceneNodeTypeName(iris::SceneNodeType nodeType);
 	static QString getLightNodeTypeName(iris::LightType lightType);
