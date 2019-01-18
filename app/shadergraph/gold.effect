@@ -1,0 +1,81 @@
+{
+    "blendMode": "Opaque",
+    "builtin": false,
+    "castShadows": true,
+    "cullMode": "Back",
+    "depthTest": true,
+    "fog": true,
+    "fragment_shader": "shader.frag",
+    "lighting": true,
+    "name": "",
+    "receiveShadows": true,
+    "renderLayer": "Opaque",
+    "shadergraph": {
+        "connections": [
+            {
+                "id": "2f3f8993-7499-49f9-80ac-c468d78c840c",
+                "leftNodeId": "19535b10-d252-43f7-a066-caf05a1372b6",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "655749ac-f311-41d1-af00-dd5628d590b5",
+                "leftNodeId": "67a3e0de-7fc0-4e9c-a62f-417fac9915cd",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
+                "rightNodeSocketIndex": 1
+            },
+            {
+                "id": "b79c1f79-79dc-4887-82aa-38e8de32c146",
+                "leftNodeId": "67a3e0de-7fc0-4e9c-a62f-417fac9915cd",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
+                "rightNodeSocketIndex": 2
+            }
+        ],
+        "masternode": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
+        "nodes": [
+            {
+                "id": "19535b10-d252-43f7-a066-caf05a1372b6",
+                "type": "color",
+                "value": "",
+                "x": -108,
+                "y": -31.68000030517578
+            },
+            {
+                "id": "67a3e0de-7fc0-4e9c-a62f-417fac9915cd",
+                "type": "float",
+                "value": 1,
+                "x": -83.52001190185547,
+                "y": 276.4800109863281
+            },
+            {
+                "id": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
+                "type": "Material",
+                "value": "",
+                "x": 0,
+                "y": 0
+            }
+        ],
+        "properties": [
+        ],
+        "settings": {
+            "acceptLighting": true,
+            "blendMode": "Opaque",
+            "castShadow": true,
+            "cullMode": "Back",
+            "depthTest": true,
+            "fog": true,
+            "name": "",
+            "receiveShadow": true,
+            "renderLayer": "Opaque",
+            "zWrite": true
+        }
+    },
+    "type": "shadergraph",
+    "uniforms": [
+    ],
+    "vertex_shader": ":assets/shaders/surface.vert",
+    "zWrite": true
+}

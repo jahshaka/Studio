@@ -1,0 +1,68 @@
+{
+    "blendMode": "Opaque",
+    "builtin": false,
+    "castShadows": true,
+    "cullMode": "Back",
+    "depthTest": true,
+    "fog": true,
+    "fragment_shader": "shader.frag",
+    "lighting": true,
+    "name": "",
+    "receiveShadows": true,
+    "renderLayer": "Opaque",
+    "shadergraph": {
+        "connections": [
+            {
+                "id": "d964fabd-49cd-4951-ad29-c4eaa68cefb0",
+                "leftNodeId": "c2e6cc06-fe49-4b2b-8faa-835693280f87",
+                "leftNodeSocketIndex": 1,
+                "rightNodeId": "47834e57-aea5-4ce4-9ff7-5c3593525f8a",
+                "rightNodeSocketIndex": 0
+            }
+        ],
+        "masternode": "47834e57-aea5-4ce4-9ff7-5c3593525f8a",
+        "nodes": [
+            {
+                "id": "47834e57-aea5-4ce4-9ff7-5c3593525f8a",
+                "type": "Material",
+                "value": "",
+                "x": 0,
+                "y": 0
+            },
+            {
+                "id": "c2e6cc06-fe49-4b2b-8faa-835693280f87",
+                "type": "property",
+                "value": "d53408ac-d72b-4ae0-ab70-f1a8f3e95be5",
+                "x": -446,
+                "y": 66
+            }
+        ],
+        "properties": [
+            {
+                "displayName": "Texture Property",
+                "id": "d53408ac-d72b-4ae0-ab70-f1a8f3e95be5",
+                "name": "property0",
+                "type": "texture",
+                "uniform": "input_property0",
+                "value": "8fe10d32-8538-46ed-9b0c-326f00199d73"
+            }
+        ],
+        "settings": {
+            "acceptLighting": true,
+            "blendMode": "Opaque",
+            "castShadow": true,
+            "cullMode": "Back",
+            "depthTest": true,
+            "fog": true,
+            "name": "",
+            "receiveShadow": true,
+            "renderLayer": "Opaque",
+            "zWrite": true
+        }
+    },
+    "type": "shadergraph",
+    "uniforms": [
+    ],
+    "vertex_shader": ":assets/shaders/surface.vert",
+    "zWrite": true
+}
