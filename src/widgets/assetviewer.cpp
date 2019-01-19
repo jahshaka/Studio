@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
+#include "io/materialreader.hpp"
 
 #include <QApplication>
 #include <QFileDialog>
@@ -360,8 +361,13 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
 {
     QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
     QJsonObject matObject = matDoc.object();
-    iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
+    //iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 
+	MaterialReader reader(TextureSource::GlobalAssets);
+	qDebug() << matDoc.toJson(QJsonDocument::Indented);
+	auto material = reader.parseMaterial(matObject, db);
+
+	/*
 	auto shaderGuid = matObject["guid"].toString();
 
     QFileInfo shaderFile;
@@ -400,6 +406,7 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
 		material->generate(shaderDefinition);
     }
 
+	
     for (const auto &prop : material->properties) {
         if (prop->type == iris::PropertyType::Color) {
             QColor col;
@@ -417,7 +424,7 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
             material->setValue(prop->name, QVariant::fromValue(matObject.value(prop->name)));
         }
     }
-
+	*/
     auto matball = iris::MeshNode::create();
     matball->setMesh(":/content/primitives/hp_sphere.obj");
     matball->setLocalPos(QVector3D(0, 0, 0)); // prevent z-fighting with the default plane reset (iKlsR)
@@ -495,9 +502,10 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 
 	int iteration = 0;
 	auto node = iris::MeshNode::loadAsSceneFragment(filename, [&, this](iris::MeshPtr mesh, iris::MeshMaterialData& data) {
-		auto mat = iris::CustomMaterial::create();
-
-		mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+		//auto mat = iris::CustomMaterial::create();
+		//mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
+		MaterialReader reader;
+		auto mat = reader.createMaterialFromShaderFile(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"), db);
 
 		if (firstAdd) {
 			mat->setValue("diffuseColor",	data.diffuseColor);
