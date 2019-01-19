@@ -1,0 +1,72 @@
+{
+    "blendMode": "Opaque",
+    "builtin": false,
+    "castShadows": true,
+    "cullMode": "Back",
+    "depthTest": true,
+    "fog": true,
+    "fragment_shader": "shader.frag",
+    "lighting": true,
+    "name": "Basic",
+    "receiveShadows": true,
+    "renderLayer": "Opaque",
+    "shadergraph": {
+        "connections": [
+            {
+                "id": "eb0a9baf-2879-4408-bf3d-cb1cd3a11f19",
+                "leftNodeId": "af7a89a6-24f3-4351-a438-80fbd51d702d",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "50aedc23-3ef8-44c8-b362-f09a4964e554",
+                "rightNodeSocketIndex": 0
+            }
+        ],
+        "masternode": "50aedc23-3ef8-44c8-b362-f09a4964e554",
+        "nodes": [
+            {
+                "id": "50aedc23-3ef8-44c8-b362-f09a4964e554",
+                "type": "Material",
+                "value": "",
+                "x": 0,
+                "y": 0
+            },
+            {
+                "id": "af7a89a6-24f3-4351-a438-80fbd51d702d",
+                "type": "property",
+                "value": "112083ee-9bad-4197-a030-f6b99fd05cdf",
+                "x": 0,
+                "y": 0
+            }
+        ],
+        "properties": [
+            {
+                "displayName": "Vector 3 property",
+                "id": "112083ee-9bad-4197-a030-f6b99fd05cdf",
+                "name": "property0",
+                "type": "vec3",
+                "uniform": "input_property0",
+                "value": {
+                    "x": 0,
+                    "y": 1,
+                    "z": 0
+                }
+            }
+        ],
+        "settings": {
+            "acceptLighting": true,
+            "blendMode": "Opaque",
+            "castShadow": true,
+            "cullMode": "Back",
+            "depthTest": true,
+            "fog": true,
+            "name": "Basic",
+            "receiveShadow": true,
+            "renderLayer": "Opaque",
+            "zWrite": true
+        }
+    },
+    "type": "shadergraph",
+    "uniforms": [
+    ],
+    "vertex_shader": ":assets/shaders/surface.vert",
+    "zWrite": true
+}
