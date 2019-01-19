@@ -53,9 +53,9 @@ V2 Material Spec:
 */
 
 
-MaterialReader::MaterialReader()
+MaterialReader::MaterialReader(TextureSource texSrc)
 {
-
+	this->textureSource = texSrc;
 }
 
 void MaterialReader::readJahShader(const QString &filePath)
@@ -87,6 +87,19 @@ iris::CustomMaterialPtr MaterialReader::createMaterialFromShaderGuid(QString sha
 	return material;
 }
 
+iris::CustomMaterialPtr MaterialReader::createMaterialFromShaderFile(QString shaderPath, Database* db)
+{
+	QFile file(shaderPath);
+	file.open(QIODevice::ReadOnly);
+	auto data = file.readAll();
+	auto shaderObj = QJsonDocument::fromJson(data).object();
+
+	ShaderHandler handler;
+	auto mat = handler.loadMaterialFromShader(shaderObj, db);
+
+	return mat;
+}
+
 iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Database* db, bool loadTextures)
 {
 	auto version = getMaterialVersion(matObject);
@@ -96,7 +109,7 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 	// get shader object
 	auto shaderGuid = matObject["shaderGuid"].toString();
 	auto shaderObject = getShaderObjectFromId(matObject["shaderGuid"].toString());
-
+	qDebug() << shaderObject;
 	auto material = createMaterialFromShaderGuid(shaderGuid);
 
 	// apply values
@@ -122,9 +135,20 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 		}
 		else if (prop->type == iris::PropertyType::Texture && loadTextures) {
 			if (db != nullptr) {
-				
-				QString materialName = db->fetchAsset(valuesObj.value(prop->name).toString()).name;
-				QString textureStr = IrisUtils::join(Globals::project->getProjectFolder(), materialName);
+				auto texGuid = valuesObj.value(prop->name).toString();
+				QString materialName = db->fetchAsset(texGuid).name;
+				QString textureStr = "";
+
+				if (textureSource == TextureSource::Project) {
+					material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
+				}
+				else {
+					
+					QString textureStr = IrisUtils::join(
+						QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::ASSET_FOLDER, texGuid, materialName
+					);
+				}
+
 				material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
 			}
 			else {
@@ -132,6 +156,7 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 			}
 		}
 		else {
+			// float, int, bool
 			material->setValue(prop->name, QVariant::fromValue(valuesObj.value(prop->name)));
 		}
 	}

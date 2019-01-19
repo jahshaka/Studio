@@ -26,10 +26,17 @@ For more information see the LICENSE file
 #include "irisglfwd.h"
 
 class Database;
+enum class TextureSource
+{
+	Project,
+	GlobalAssets
+};
+
 class MaterialReader : public AssetIOBase
 {
+	TextureSource textureSource;
 public:
-    MaterialReader();
+    MaterialReader(TextureSource texSrc = TextureSource::Project);
 
     void readJahShader(const QString &filePath);
     QJsonObject getParsedShader();
@@ -38,6 +45,7 @@ public:
 	// from the asset manager
 	iris::CustomMaterialPtr parseMaterial(QJsonObject matObject, Database* handle, bool loadTextures = true);
 	iris::CustomMaterialPtr createMaterialFromShaderGuid(QString shaderGuid);
+	iris::CustomMaterialPtr createMaterialFromShaderFile(QString shaderPath, Database* db);
 	QJsonObject getShaderObjectFromId(QString shaderGuid);
 	iris::CustomMaterialPtr loadMaterialV2(QJsonObject matObject, Database* handle);
 	iris::CustomMaterialPtr loadMaterialV1(QJsonObject matObject, Database* handle);
