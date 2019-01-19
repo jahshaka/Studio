@@ -140,7 +140,8 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 				QString textureStr = "";
 
 				if (textureSource == TextureSource::Project) {
-					material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
+					//material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
+					textureStr = IrisUtils::join(Globals::project->getProjectFolder(), materialName);
 				}
 				else {
 					
