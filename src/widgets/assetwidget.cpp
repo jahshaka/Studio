@@ -553,7 +553,8 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 
     if (assetData.type == static_cast<int>(ModelTypes::Shader)) {
         item->setData(MODEL_TYPE_ROLE, assetData.type);
-        item->setIcon(QIcon(":/icons/icons8-file-72.png"));
+		if(thumbnail.loadFromData(assetData.thumbnail, "PNG"))   item->setIcon(QIcon(thumbnail));
+		else item->setIcon(QIcon(":/icons/icons8-file-72.png"));
     }
 
     if (assetData.type == static_cast<int>(ModelTypes::ParticleSystem)) {
