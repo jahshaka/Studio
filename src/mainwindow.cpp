@@ -706,8 +706,6 @@ void MainWindow::switchSpace(WindowSpaces space)
 
             assetWidget->refresh();
 			isSceneOpen = true;
-			qDebug() << " line 708 mainwindow.cpp - asset widget gets refreshed";
-
             break;
         }
 

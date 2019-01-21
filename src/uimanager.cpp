@@ -79,7 +79,6 @@ void UiManager::enterEditMode()
 {
     sceneViewWidget->stopPlayingScene();
     sceneMode = SceneMode::EditMode;
-	qDebug() << "scene view is editing";
 
 }
 
