@@ -3,6 +3,8 @@
 
 #include <QPushButton>
 #include <QWidget>
+#include <QLayout>
+#include <QLabel>
 
 class ColorCircle : public QWidget
 {
@@ -35,6 +37,8 @@ private:
     void drawCircleColorBackground();
     void configureResetButton();
     QColor getCurrentColorFromPosition();
+    QVBoxLayout *layout;
+    QLabel *label;
 
 public slots:
     void setOpacity(int a);
