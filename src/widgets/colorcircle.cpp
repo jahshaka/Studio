@@ -1,6 +1,7 @@
 #include "colorcircle.h"
 
 #include <QPainter>
+#include <QPixmap>
 #include <QVector2D>
 #include <QtMath>
 #include <QMouseEvent>
@@ -13,12 +14,14 @@ ColorCircle::ColorCircle(QWidget *parent, QColor ic) : QWidget(parent)
 	centerPoint.setX(radius + offset);
 	centerPoint.setY(radius + offset);
 	colorValue = 255;
-	drawCircleColorBackground();
+    drawCircleColorBackground();
 	repaint();
 
 	configureResetButton();
 	setInitialColor(ic);
-	this->setStyleSheet("background-image:url(:/images/bg.png); ");
+	this->setStyleSheet("background-image:url(:/images/bg.png); "
+	);
+
 
 }
 
@@ -28,7 +31,6 @@ void ColorCircle::drawSmallCircle(QColor color)
 	auto sat = color.hsvSaturation() / 255.0f * radius;
 	qreal x = sat * qCos(theta) + centerPoint.x();
 	qreal y = sat * qSin(theta) + centerPoint.y();
-	QPoint vector(x, y);
 	pos = QPoint(x, y);
 	this->colorValue = color.value();
 	repaint();
@@ -58,9 +60,12 @@ void ColorCircle::paintEvent(QPaintEvent *event)
 	painter.setRenderHint(QPainter::Antialiasing, true);
 	painter.setRenderHint(QPainter::HighQualityAntialiasing, true);
 	style()->drawPrimitive(QStyle::PE_Widget, &opt, &painter, this);
+
 	painter.drawImage(0, 0, *image);
+
+	//draw outline around color circle
 	QColor color1(240, 240, 240);
-	QPen pen(color1, 2);
+	QPen pen(QColor(240,240,240), 2);
 	painter.setPen(pen);
 	painter.drawEllipse(4, 4, width() - 8, height() - 8);
 
@@ -76,12 +81,6 @@ void ColorCircle::paintEvent(QPaintEvent *event)
 	painter.setPen(pen);
 	painter.drawEllipse(resetButton->geometry());
 
-	//draw circle around initial color 
-	pen.setColor(QColor(250, 250, 250));
-	pen.setWidth(2);
-	painter.setPen(pen);
-	painter.drawEllipse(resetButton->geometry().x() - 4, resetButton->geometry().y() - 4, resetButton->geometry().width() + 8, resetButton->geometry().height() + 8);
-
 	//draw current color
 	pen.setColor(currentColor);
 	pen.setWidth(8);
@@ -94,8 +93,8 @@ void ColorCircle::paintEvent(QPaintEvent *event)
 	painter.setPen(pen);
 	painter.drawEllipse(3, height() - 19, 16, 16);
 
+    QWidget::paintEvent(event);
 
-	QWidget::paintEvent(event);
 
 }
 
@@ -112,8 +111,7 @@ void ColorCircle::mousePressEvent(QMouseEvent *event)
 
 void ColorCircle::setCirclePosition(QMouseEvent * event)
 {
-	QPoint mousePoint = event->pos();
-	QVector2D mousePos(mousePoint.x(), mousePoint.y());
+	QVector2D mousePos(event->pos().x(), event->pos().y());
 	auto centerPos = QVector2D(centerPoint.x(), centerPoint.y());
 	auto diff = mousePos - centerPos;
 	if (diff.length() > radius) 	diff = diff.normalized() * radius;
@@ -128,8 +126,8 @@ void ColorCircle::drawCircleColorBackground()
 {
 
 	image = new QImage(width(), height(), QImage::Format_ARGB32_Premultiplied);
-	color.setRgb(50, 0, 0);
-	color.setAlpha(0);
+	//color.setRgb(50, 0, 0);
+	//color.setAlpha(0);
 
 	//draw color circle image
 	for (int i = 0; i < width(); i++) {
@@ -152,6 +150,7 @@ void ColorCircle::drawCircleColorBackground()
 			}
 		}
 	}
+
 }
 
 void ColorCircle::configureResetButton()
