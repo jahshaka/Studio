@@ -46,3 +46,6 @@ CmakeSettings.json
 build/
 
 \.DS_Store
+
+#intellij
+.idea*
