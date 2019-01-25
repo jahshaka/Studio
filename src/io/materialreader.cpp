@@ -53,9 +53,10 @@ V2 Material Spec:
 */
 
 
-MaterialReader::MaterialReader(TextureSource texSrc)
+MaterialReader::MaterialReader(TextureSource texSrc, QString globalSourceFolder)
 {
 	this->textureSource = texSrc;
+	this->globalSourceFolder = globalSourceFolder;
 }
 
 void MaterialReader::readJahShader(const QString &filePath)
@@ -76,11 +77,11 @@ QJsonObject MaterialReader::getParsedShader()
     return parsedShader;
 }
 
-iris::CustomMaterialPtr MaterialReader::createMaterialFromShaderGuid(QString shaderGuid)
+iris::CustomMaterialPtr MaterialReader::createMaterialFromShaderGuid(QString shaderGuid, Database* db)
 {
-	auto shaderObject = getShaderObjectFromId(shaderGuid);
+	auto shaderObject = getShaderObjectFromId(shaderGuid, db);
 
-	ShaderHandler handler;
+	ShaderHandler handler(textureSource, globalSourceFolder);
 	auto material = handler.loadMaterialFromShader(shaderObject, nullptr);
 	material->setGuid(shaderGuid);
 
@@ -94,7 +95,7 @@ iris::CustomMaterialPtr MaterialReader::createMaterialFromShaderFile(QString sha
 	auto data = file.readAll();
 	auto shaderObj = QJsonDocument::fromJson(data).object();
 
-	ShaderHandler handler;
+	ShaderHandler handler(textureSource, globalSourceFolder);
 	auto mat = handler.loadMaterialFromShader(shaderObj, db);
 
 	return mat;
@@ -102,19 +103,20 @@ iris::CustomMaterialPtr MaterialReader::createMaterialFromShaderFile(QString sha
 
 iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Database* db, bool loadTextures)
 {
+	qDebug() << matObject;
 	auto version = getMaterialVersion(matObject);
 	if (version == 1)
 		matObject = convertV1MaterialToV2(matObject);
 
 	// get shader object
 	auto shaderGuid = matObject["shaderGuid"].toString();
-	auto shaderObject = getShaderObjectFromId(matObject["shaderGuid"].toString());
+	auto shaderObject = getShaderObjectFromId(matObject["shaderGuid"].toString(), db);
 	qDebug() << shaderObject;
-	auto material = createMaterialFromShaderGuid(shaderGuid);
+	auto material = createMaterialFromShaderGuid(shaderGuid, db);
 
 	// apply values
 	auto valuesObj = matObject["values"].toObject();
-	qDebug() << valuesObj;
+	//qDebug() << valuesObj;
 	for (const auto &prop : material->properties) {
 		if (prop->type == iris::PropertyType::Color) {
 			QColor col;
@@ -168,7 +170,7 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 }
 
 //todo : use db when possible
-QJsonObject MaterialReader::getShaderObjectFromId(QString shaderGuid)
+QJsonObject MaterialReader::getShaderObjectFromId(QString shaderGuid, Database* db)
 {
 	QFileInfo shaderFile;
 
@@ -184,6 +186,7 @@ QJsonObject MaterialReader::getShaderObjectFromId(QString shaderGuid)
 		return QJsonDocument::fromJson(data).object();
 	}
 	else {
+		/*
 		for (auto asset : AssetManager::getAssets()) {
 			if (asset->type == ModelTypes::Shader) {
 				if (asset->assetGuid == shaderGuid) {
@@ -192,6 +195,11 @@ QJsonObject MaterialReader::getShaderObjectFromId(QString shaderGuid)
 				}
 			}
 		}
+		*/
+
+		QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(shaderGuid));
+		QJsonObject matObject = matDoc.object();
+		return matObject;
 	}
 
 	return QJsonObject();
@@ -231,9 +239,10 @@ int MaterialReader::getMaterialVersion(QJsonObject matObj)
 	return 1;
 }
 
-ShaderHandler::ShaderHandler()
+ShaderHandler::ShaderHandler(TextureSource texSrc, QString globalSourceFolder)
 {
-
+	this->textureSource = texSrc;
+	this->globalSourceFolder = globalSourceFolder;
 }
 
 iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShader(QJsonObject shaderObject, Database* db)
@@ -256,14 +265,35 @@ iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShaderV1(QJsonObject shad
 
 	auto vertexShader = shaderObject["vertex_shader"].toString();
 	auto fragmentShader = shaderObject["fragment_shader"].toString();
-	for (auto asset : AssetManager::getAssets()) {
-		if (asset->type == ModelTypes::File) {
-			if (vertexShader == asset->assetGuid) vertexShader = asset->path;
-			if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+	if (textureSource == TextureSource::GlobalAssets) {
+		QString assetPath = IrisUtils::join(
+			QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::ASSET_FOLDER, globalSourceFolder
+		);
+
+		auto vAsset = db->fetchAsset(vertexShader);
+		auto fAsset = db->fetchAsset(fragmentShader);
+
+		if (!vAsset.name.isEmpty()) {
+			shaderObject["vertex_shader"] = QDir(assetPath).filePath(vAsset.name);
+		}
+
+		if (!fAsset.name.isEmpty()) {
+			shaderObject["fragment_shader"] = QDir(assetPath).filePath(fAsset.name);
 		}
 	}
-	shaderObject["vertex_shader"] = vertexShader;
-	shaderObject["fragment_shader"] = fragmentShader;
+	else {
+		for (auto asset : AssetManager::getAssets()) {
+			if (asset->type == ModelTypes::File) {
+				if (vertexShader == asset->assetGuid) vertexShader = asset->path;
+				if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
+			}
+		}
+
+		shaderObject["vertex_shader"] = vertexShader;
+		shaderObject["fragment_shader"] = fragmentShader;
+	}
+	
+	
 	//qDebug() << "shader vertex file: " << vertexShader;
 	//qDebug() << "shader fragment file: " << fragmentShader;
 	material->setMaterialDefinition(shaderObject);
