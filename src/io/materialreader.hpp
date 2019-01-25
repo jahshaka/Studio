@@ -35,8 +35,9 @@ enum class TextureSource
 class MaterialReader : public AssetIOBase
 {
 	TextureSource textureSource;
+	QString globalSourceFolder;
 public:
-    MaterialReader(TextureSource texSrc = TextureSource::Project);
+    MaterialReader(TextureSource texSrc = TextureSource::Project, QString globalSourceFolder = "");
 
     void readJahShader(const QString &filePath);
     QJsonObject getParsedShader();
@@ -44,9 +45,9 @@ public:
 	// if handle is null then it will try to fetch the assets
 	// from the asset manager
 	iris::CustomMaterialPtr parseMaterial(QJsonObject matObject, Database* handle, bool loadTextures = true);
-	iris::CustomMaterialPtr createMaterialFromShaderGuid(QString shaderGuid);
+	iris::CustomMaterialPtr createMaterialFromShaderGuid(QString shaderGuid, Database* db);
 	iris::CustomMaterialPtr createMaterialFromShaderFile(QString shaderPath, Database* db);
-	QJsonObject getShaderObjectFromId(QString shaderGuid);
+	QJsonObject getShaderObjectFromId(QString shaderGuid, Database* db);
 	iris::CustomMaterialPtr loadMaterialV2(QJsonObject matObject, Database* handle);
 	iris::CustomMaterialPtr loadMaterialV1(QJsonObject matObject, Database* handle);
 	QJsonObject convertV1MaterialToV2(QJsonObject mat);
@@ -60,8 +61,10 @@ private:
 // used by material reader to create a material from a shader
 class ShaderHandler : public AssetIOBase
 {
+	TextureSource textureSource;
+	QString globalSourceFolder;
 public:
-	ShaderHandler();
+	ShaderHandler(TextureSource texSrc = TextureSource::Project, QString globalSourceFolder = "");
 
 	iris::CustomMaterialPtr loadMaterialFromShader(QJsonObject shaderObject, Database* handle);
 	iris::CustomMaterialPtr loadMaterialFromShaderV2(QJsonObject shaderObject, Database* handle);

@@ -127,7 +127,7 @@ void MaterialPropertyWidget::materialChanged(int index)
     clearPanel(this->layout());
 
 	MaterialReader reader;
-	material = reader.createMaterialFromShaderGuid(materialSelector->getCurrentItemData());
+	material = reader.createMaterialFromShaderGuid(materialSelector->getCurrentItemData(), db);
     material->setName(materialSelector->getCurrentItem());
     material->setGuid(materialSelector->getCurrentItemData());
 	meshNode->setMaterial(material);
