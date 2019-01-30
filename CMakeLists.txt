@@ -148,6 +148,8 @@ set(SRCS
 	src/helpers/tooltip.cpp
 	src/subclass/switch.cpp
 	src/editor/handgizmo.cpp
+	# player
+	src/player/playerwidget.cpp
 )
 
 set(HEADERS
@@ -282,6 +284,9 @@ set(HEADERS
     src/dialogs/toast.h
 	src/helpers/tooltip.h
 	src/editor/handgizmo.h
+
+	# player
+	src/player/playerwidget.h
 
 )
 

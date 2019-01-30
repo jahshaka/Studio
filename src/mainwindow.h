@@ -73,6 +73,7 @@ class TransformWidget;
 
 class SceneViewWidget;
 class SceneHierarchyWidget;
+class PlayerWidget;
 
 class EditorCameraController;
 class SettingsManager;
@@ -381,6 +382,7 @@ private:
     Ui::MainWindow *ui;
     SurfaceView* surface;
     SceneViewWidget* sceneView;
+	PlayerWidget* playerView;
 
     QStandardItemModel* treeModel;
     QWidget *container;
