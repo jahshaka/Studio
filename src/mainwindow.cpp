@@ -137,6 +137,7 @@ For more information see the LICENSE file
 #include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
 
 #include "shadergraph/shadergraphmainwindow.h"
+#include "player/playerwidget.h"
 
 enum class VRButtonMode : int
 {
@@ -196,7 +197,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 void MainWindow::grabOpenGLContextHack()
 {
-    switchSpace(WindowSpaces::PLAYER);
+    //switchSpace(WindowSpaces::PLAYER);
 }
 
 void MainWindow::goToDesktop()
@@ -697,7 +698,7 @@ void MainWindow::switchSpace(WindowSpaces space)
         }
 
         case WindowSpaces::PLAYER: {
-            ui->stackedWidget->setCurrentIndex(1);
+            ui->stackedWidget->setCurrentIndex(4);
             toggleWidgets(false);
             toolBar->setVisible(false);
             worlds_menu->setStyleSheet(unselectedMenu);
@@ -707,9 +708,6 @@ void MainWindow::switchSpace(WindowSpaces space)
             player_menu->setStyleSheet(selectedMenu);
             player_menu->setDisabled(false);
             player_menu->setCursor(Qt::PointingHandCursor);
-            //ui->assets_menu->setStyleSheet(unselectedMenu);
-            //ui->assets_menu->setDisabled(false);
-            //ui->assets_menu->setCursor(Qt::PointingHandCursor);
 
 			this->sceneView->setWindowSpace(space);
             UiManager::sceneMode = SceneMode::PlayMode;
@@ -805,7 +803,9 @@ void MainWindow::saveScene()
 
 void MainWindow::openProject(bool playMode)
 {
-    removeScene();
+	UiManager::playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+    
+	removeScene();
     sceneView->makeCurrent();
 
     std::unique_ptr<SceneReader> reader(new SceneReader);
@@ -846,7 +846,7 @@ void MainWindow::openProject(bool playMode)
         onPlaySceneButton();
     }
 
-    UiManager::playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+    
 
 	undoStackCount = 0;
 }
@@ -2607,6 +2607,9 @@ void MainWindow::setupViewPort()
     Globals::sceneViewWidget = sceneView;
     UiManager::setSceneViewWidget(sceneView);
 
+	playerView = new PlayerWidget(viewPort);
+
+
     wireCheckAction->setChecked(sceneView->getShowLightWires());
 
     QGridLayout* layout = new QGridLayout;
@@ -2655,11 +2658,13 @@ void MainWindow::setupDesktop()
 	_assetView->installEventFilter(this);
 
 	ui->stackedWidget->addWidget(pmContainer);
+	
 	ui->stackedWidget->addWidget(viewPort);
 	ui->stackedWidget->addWidget(_assetView);
 	//ui->stackedWidget->addWidget(new QWidget(this));
 	shaderGraph = new shadergraph::MainWindow(this,db);
 	ui->stackedWidget->addWidget(shaderGraph);
+	ui->stackedWidget->addWidget(playerView);
 
 	connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));
 	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));

@@ -130,13 +130,13 @@ int main(int argc, char *argv[])
     // This is all to make SceneViewWidget's initializeGL trigger OR a way to force the UI to
     // update when hidden, either way we want the Desktop to be the opening widget (iKlsR)
     MainWindow window;
-    window.setAttribute(Qt::WA_DontShowOnScreen);
-    window.show();
-    window.grabOpenGLContextHack();
-    window.hide();
+    //window.setAttribute(Qt::WA_DontShowOnScreen);
+    //window.show();
+    //window.grabOpenGLContextHack();
+    //window.hide();
 
     // Make our window render as normal going forward
-    window.setAttribute(Qt::WA_DontShowOnScreen, false);
+    //window.setAttribute(Qt::WA_DontShowOnScreen, false);
     window.goToDesktop();
 
     splash.finish(&window);
