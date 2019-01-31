@@ -623,12 +623,7 @@ void MainWindow::deselectViewports()
 
 void MainWindow::switchSpace(WindowSpaces space)
 {
-	const QString disabledMenu   = "color: #444; border-color: #111";
-	const QString selectedMenu   = "border-color: #3498db";
-	const QString unselectedMenu = "border-color: #111";
-
-	assets_menu->setStyleSheet(unselectedMenu);
-	effect_menu->setStyleSheet(unselectedMenu);
+	updateTopMenuStates(space);
 
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
@@ -642,28 +637,7 @@ void MainWindow::switchSpace(WindowSpaces space)
 			ui->stackedWidget->setCurrentIndex(0);
 
             toggleWidgets(false);
-
-            worlds_menu->setStyleSheet(selectedMenu);
             ui->actionClose->setDisabled(true);
-
-            if (UiManager::isSceneOpen) {
-                editor_menu->setStyleSheet(unselectedMenu);
-                editor_menu->setDisabled(false);
-                player_menu->setStyleSheet(unselectedMenu);
-                player_menu->setDisabled(false);
-                //ui->assets_menu->setStyleSheet(unselectedMenu);
-                //ui->assets_menu->setDisabled(false);
-            } else {
-                editor_menu->setStyleSheet(disabledMenu);
-                editor_menu->setDisabled(true);
-                editor_menu->setCursor(Qt::ArrowCursor);
-                player_menu->setStyleSheet(disabledMenu);
-                player_menu->setDisabled(true);
-                player_menu->setCursor(Qt::ArrowCursor);
-                //ui->assets_menu->setStyleSheet(disabledMenu);
-                //ui->assets_menu->setDisabled(true);
-                //ui->assets_menu->setCursor(Qt::ArrowCursor);
-            }
             break;
         }
 
@@ -676,18 +650,6 @@ void MainWindow::switchSpace(WindowSpaces space)
 			assetDock->setVisible(widgetStates[(int)Widget::ASSETS]);
 			animationDock->setVisible(widgetStates[(int)Widget::TIMELINE]);
 			playerControls->setVisible(false);
-
-            toolBar->setVisible(true);
-            worlds_menu->setStyleSheet(unselectedMenu);
-            editor_menu->setStyleSheet(selectedMenu);
-            editor_menu->setDisabled(false);
-            editor_menu->setCursor(Qt::PointingHandCursor);
-            player_menu->setStyleSheet(unselectedMenu);
-            player_menu->setDisabled(false);
-            player_menu->setCursor(Qt::PointingHandCursor);
-            //ui->assets_menu->setStyleSheet(unselectedMenu);
-            //ui->assets_menu->setDisabled(false);
-            //ui->assets_menu->setCursor(Qt::PointingHandCursor);
 
 			this->sceneView->setWindowSpace(space);
             playSceneBtn->show();
@@ -703,13 +665,6 @@ void MainWindow::switchSpace(WindowSpaces space)
             ui->stackedWidget->setCurrentIndex(4);
             toggleWidgets(false);
             toolBar->setVisible(false);
-            worlds_menu->setStyleSheet(unselectedMenu);
-            editor_menu->setStyleSheet(unselectedMenu);
-            editor_menu->setDisabled(false);
-            editor_menu->setCursor(Qt::PointingHandCursor);
-            player_menu->setStyleSheet(selectedMenu);
-            player_menu->setDisabled(false);
-            player_menu->setCursor(Qt::PointingHandCursor);
 
 			this->sceneView->setWindowSpace(space);
             UiManager::sceneMode = SceneMode::PlayMode;
@@ -725,16 +680,8 @@ void MainWindow::switchSpace(WindowSpaces space)
     		toggleWidgets(false);
     		toolBar->setVisible(false);
 			if (UiManager::isSceneOpen) {
-				worlds_menu->setStyleSheet(unselectedMenu);
-				editor_menu->setStyleSheet(unselectedMenu);
-				player_menu->setStyleSheet(unselectedMenu);
-				//ui->assets_menu->setDisabled(false);
-				//ui->assets_menu->setCursor(Qt::PointingHandCursor);
 				playSceneBtn->hide();
 			}
-
-			worlds_menu->setStyleSheet(unselectedMenu);
-			assets_menu->setStyleSheet(selectedMenu);
     		
 			break;
     	}
@@ -744,16 +691,6 @@ void MainWindow::switchSpace(WindowSpaces space)
 			ui->stackedWidget->currentWidget()->setFocus();
 
 			toolBar->setVisible(false);
-			if (UiManager::isSceneOpen) {
-				worlds_menu->setStyleSheet(unselectedMenu);
-				editor_menu->setStyleSheet(unselectedMenu);
-				player_menu->setStyleSheet(unselectedMenu);
-				assets_menu->setStyleSheet(unselectedMenu);
-			}
-
-			worlds_menu->setStyleSheet(unselectedMenu);
-			assets_menu->setStyleSheet(unselectedMenu);
-			effect_menu->setStyleSheet(selectedMenu);
 
 			shaderGraph->refreshShaderGraph();
 
@@ -762,6 +699,46 @@ void MainWindow::switchSpace(WindowSpaces space)
 
         default: break;
     }
+}
+
+void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
+{
+	const QString disabledMenu = "color: #444; border-color: #111";
+	const QString selectedMenu = "border-color: #3498db";
+	const QString unselectedMenu = "border-color: #111";
+
+	if (activeSpace == WindowSpaces::EDITOR)
+		toolBar->setVisible(true);
+	else
+		toolBar->setVisible(false);
+
+	worlds_menu->setStyleSheet(activeSpace==WindowSpaces::DESKTOP? selectedMenu:unselectedMenu);
+	worlds_menu->setCursor(Qt::PointingHandCursor);
+
+	assets_menu->setStyleSheet(activeSpace == WindowSpaces::ASSETS ? selectedMenu : unselectedMenu);
+	assets_menu->setCursor(Qt::PointingHandCursor);
+
+	effect_menu->setStyleSheet(activeSpace == WindowSpaces::EFFECT ? selectedMenu : unselectedMenu);
+	effect_menu->setCursor(Qt::PointingHandCursor);
+
+	editor_menu->setStyleSheet(activeSpace == WindowSpaces::EDITOR ? selectedMenu : unselectedMenu);
+	player_menu->setStyleSheet(activeSpace == WindowSpaces::PLAYER ? selectedMenu : unselectedMenu);
+
+	if (UiManager::isSceneOpen) {
+		editor_menu->setEnabled(true);
+		editor_menu->setCursor(Qt::PointingHandCursor);
+		player_menu->setEnabled(true);
+		player_menu->setCursor(Qt::PointingHandCursor);
+	}
+	else {
+		editor_menu->setEnabled(false);
+		editor_menu->setCursor(Qt::ArrowCursor);
+		player_menu->setEnabled(false);
+		player_menu->setCursor(Qt::ArrowCursor);
+		editor_menu->setStyleSheet(disabledMenu);
+		player_menu->setStyleSheet(disabledMenu);
+
+	}
 }
 
 void MainWindow::saveScene(const QString &filename, const QString &projectPath)
