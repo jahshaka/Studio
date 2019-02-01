@@ -1,8 +1,8 @@
 #pragma include <surface.frag>
 
 uniform sampler2D input_property0;
-vec4 temp1;
 vec3 temp2;
+vec4 temp1;
 void surface(inout Material material){
 // Texture Property - 189672d2-87b0-4061-b303-cdb198909845
 temp1 = texture(input_property0,v_texCoord);

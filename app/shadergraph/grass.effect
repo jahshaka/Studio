@@ -7,13 +7,13 @@
     "fog": true,
     "fragment_shader": "shader.frag",
     "lighting": true,
-    "name": "",
+    "name": "Grass",
     "receiveShadows": true,
     "renderLayer": "Opaque",
     "shadergraph": {
         "connections": [
             {
-                "id": "500ad029-dcad-4709-9d1c-0f7e3c2ba638",
+                "id": "c07ce3ae-79e4-4cdf-be3d-f4c0ae9ed666",
                 "leftNodeId": "189672d2-87b0-4061-b303-cdb198909845",
                 "leftNodeSocketIndex": 1,
                 "rightNodeId": "7cf4d9d3-5d33-4168-9251-a92f73bf9e49",
@@ -26,15 +26,15 @@
                 "id": "189672d2-87b0-4061-b303-cdb198909845",
                 "type": "property",
                 "value": "096e6ee7-4f52-40ab-baff-53f702241491",
-                "x": 0,
-                "y": 0
+                "x": -399,
+                "y": 33
             },
             {
                 "id": "7cf4d9d3-5d33-4168-9251-a92f73bf9e49",
                 "type": "Material",
                 "value": "",
-                "x": 0,
-                "y": 0
+                "x": 141,
+                "y": -87
             }
         ],
         "properties": [
@@ -44,7 +44,7 @@
                 "name": "property0",
                 "type": "texture",
                 "uniform": "input_property0",
-                "value": "6dd9d83e-045d-4ce1-a73c-5a843b365388"
+                "value": "f6985f08-207c-4c5d-92a5-5d4800cc39d7"
             }
         ],
         "settings": {
@@ -54,7 +54,7 @@
             "cullMode": "Back",
             "depthTest": true,
             "fog": true,
-            "name": "",
+            "name": "Grass",
             "receiveShadow": true,
             "renderLayer": "Opaque",
             "zWrite": true
