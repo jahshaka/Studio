@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include "io/materialpresetreader.h"
 #include "io/assetmanager.h"
 #include "mainwindow.h"
+#include "../src/shadergraph/core/materialhelper.h"
 
 #include "io/scenewriter.h"
 
@@ -77,8 +78,8 @@ void AssetMaterialPanel::addDefaultItems()
         auto preset = reader->readMaterialPreset(file.absoluteFilePath());
         defaultMaterials.append(preset);
     }
-
-    for (int i = 0; i < defaultMaterials.count(); ++i) {
+	int i;
+    for (i = 0; i < defaultMaterials.count(); ++i) {
         auto item = new QListWidgetItem;
         item->setData(Qt::DisplayRole, defaultMaterials[i].name);
         item->setData(Qt::UserRole, defaultMaterials[i].name);
@@ -91,6 +92,18 @@ void AssetMaterialPanel::addDefaultItems()
 
         listView->addItem(item);
     }
+
+	for ( auto presets : CreateNewDialog::getPresetList()) {
+		auto item = new QListWidgetItem;
+		item->setData(Qt::DisplayRole, presets.name);
+		item->setData(Qt::UserRole, presets.name);
+		item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Shader));
+		item->setIcon(QIcon(MaterialHelper::assetPath(presets.iconPath)));
+		i++;
+		item->setData(0x32, i); // used to get item index
+		listView->addItem(item);
+
+	}
 }
 
 void AssetMaterialPanel::addNewItem(QListWidgetItem *itemInc)
