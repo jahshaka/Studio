@@ -149,6 +149,7 @@ set(SRCS
 	src/editor/handgizmo.cpp
 	# player
 	src/player/playerwidget.cpp
+	src/player/playerview.cpp
 )
 
 set(HEADERS
@@ -284,8 +285,10 @@ set(HEADERS
 	src/editor/handgizmo.h
 
 	# player
+	src/subclass/switch.h
 	src/player/playerwidget.h
-
+	src/player/playerview.h
+	src/player/sceneplayer.h
 )
 
 # Todo - trim these down to nothing eventually

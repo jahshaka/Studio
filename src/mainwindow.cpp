@@ -137,7 +137,7 @@ For more information see the LICENSE file
 #include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
 
 #include "shadergraph/shadergraphmainwindow.h"
-#include "player/playerwidget.h"
+#include "../src/player/playerwidget.h"
 
 enum class VRButtonMode : int
 {
@@ -2584,6 +2584,7 @@ void MainWindow::setupViewPort()
     Globals::sceneViewWidget = sceneView;
     UiManager::setSceneViewWidget(sceneView);
 
+	//playerView = new QWidget(viewPort);
 	playerView = new PlayerWidget(viewPort);
 
 
