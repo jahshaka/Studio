@@ -7,6 +7,7 @@
 #include <QVBoxLayout>
 #include "playerwidget.h"
 #include "playerview.h"
+#include "irisgl/IrisGL.h"
 
 
 PlayerWidget::PlayerWidget(QWidget* parent) :
@@ -92,4 +93,9 @@ void PlayerWidget::createUI()
 	mainLayout->addWidget(playerControls, 0);
 
 	this->setLayout(mainLayout);
+}
+
+void PlayerWidget::setScene(iris::ScenePtr scene)
+{
+	this->playerView->setScene(scene);
 }
