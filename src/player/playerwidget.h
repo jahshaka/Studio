@@ -3,6 +3,7 @@
 
 #include <QWidget>
 #include <QObject>
+#include "irisglfwd.h"
 
 class PlayerView;
 
@@ -15,6 +16,8 @@ public:
 	explicit PlayerWidget(QWidget* parent = nullptr);
 	~PlayerWidget() {}
 	void createUI();
+
+	void setScene(iris::ScenePtr scene);
 };
 
 #endif PLAYERWIDGET_H
