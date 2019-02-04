@@ -623,8 +623,6 @@ void MainWindow::deselectViewports()
 
 void MainWindow::switchSpace(WindowSpaces space)
 {
-	updateTopMenuStates(space);
-
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
 			if (UiManager::isSceneOpen) {
@@ -699,6 +697,8 @@ void MainWindow::switchSpace(WindowSpaces space)
 
         default: break;
     }
+
+	updateTopMenuStates(space);
 }
 
 void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
@@ -828,6 +828,7 @@ void MainWindow::openProject(bool playMode)
     
 
 	undoStackCount = 0;
+	updateTopMenuStates(UiManager::playMode ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
 }
 
 void MainWindow::closeProject()
@@ -1048,6 +1049,7 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 {
     this->scene = scene;
     this->sceneView->setScene(scene);
+	this->playerView->setScene(scene);
     this->sceneHierarchyWidget->setScene(scene);
 
     // interim...

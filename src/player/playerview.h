@@ -52,7 +52,7 @@ public:
 
 	void initializeGL();
 
-	void painGL();
+	void paintGL();
 	void renderScene();
 
 	~PlayerView();

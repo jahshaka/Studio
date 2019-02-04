@@ -10,7 +10,21 @@
 PlayerView::PlayerView(QWidget* parent) :
 	QOpenGLWidget(parent)
 {
+	QSurfaceFormat format;
+	format.setDepthBufferSize(32);
+	format.setMajorVersion(3);
+	format.setMinorVersion(2);
+	format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
+	format.setProfile(QSurfaceFormat::CoreProfile);
+	format.setSamples(1);
+	format.setSwapInterval(0);
+#ifdef QT_DEBUG
+	format.setOption(QSurfaceFormat::DebugContext);
+#endif
+	setFormat(format);
 
+	// needed in order to get mouse events
+	setMouseTracking(true);
 }
 
 void PlayerView::initializeGL()
@@ -21,20 +35,24 @@ void PlayerView::initializeGL()
 
 
 	updateTimer = new QTimer(this);
-	connect(updateTimer, SIGNAL(timeout()), this, SLOT(update()));
+	connect(updateTimer, &QTimer::timeout, [=]() {
+		update();
+	});
 	updateTimer->start(Constants::FPS_60);
 
 	fpsTimer = new QElapsedTimer();
 	fpsTimer->start();
 }
 
-void PlayerView::painGL()
+void PlayerView::paintGL()
 {
 	renderScene();
 }
 
 void PlayerView::renderScene()
 {
+	makeCurrent();
+
 	float dt = fpsTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
 	fpsTimer->restart();
 
