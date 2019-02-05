@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "materialpropertywidget.h"
 
 #include <QJsonObject>
+#include <QDirIterator>
 
 #include "../accordianbladewidget.h"
 #include "../hfloatsliderwidget.h"
@@ -161,6 +162,19 @@ void MaterialPropertyWidget::materialChanged(int index)
             Globals::project->getProjectGuid()
         );
     }
+
+	
+	for (auto prop : material->properties) {
+		if (prop->type == (iris::PropertyType::Texture)) {
+			auto guid = prop->getValue().toString();
+
+			auto asset = db->fetchAsset(guid).name;
+			auto path = QDir(Globals::project->getProjectFolder()).filePath(asset);
+
+			if(QFile::exists(path))		material->setTextureWithUniform(prop->uniform, path);
+
+		}
+	}
 }
 
 void MaterialPropertyWidget::setupShaderSelector()
