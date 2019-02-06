@@ -33,6 +33,8 @@ void PlayerView::initializeGL()
 	makeCurrent();
 	initializeOpenGLFunctions();
 
+	renderer = iris::ForwardRenderer::create();
+	renderer->setScene(scene);
 
 	updateTimer = new QTimer(this);
 	connect(updateTimer, &QTimer::timeout, [=]() {
@@ -42,6 +44,13 @@ void PlayerView::initializeGL()
 
 	fpsTimer = new QElapsedTimer();
 	fpsTimer->start();
+}
+
+void PlayerView::setScene(iris::ScenePtr scene)
+{
+	this->scene = scene;
+	if (renderer)
+		renderer->setScene(scene);
 }
 
 void PlayerView::paintGL()
