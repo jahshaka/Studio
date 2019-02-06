@@ -2321,7 +2321,18 @@ void MainWindow::setupViewPort()
     jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/jahshakastudiodevheader.png"));
 #else
 	jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/jahshakastudioheader.png"));
+
 #endif
+
+
+	auto minerBtn = new QPushButton;
+	minerBtn->setObjectName("miner");
+	minerBtn->setIcon(QIcon(":/icons/mining.png"));
+	minerBtn->setIconSize(QSize(26, 26));
+	minerBtn->setStyleSheet("background:transparent;");
+	minerBtn->setCursor(Qt::PointingHandCursor);
+	connect(minerBtn, &QPushButton::pressed, [this]() {
+	});
 
 	help = new QPushButton;
 	help->setObjectName("helpButton");

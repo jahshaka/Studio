@@ -115,5 +115,15 @@
         <file>icons/contract.png</file>
         <file>icons/delete-26.png</file>
         <file>icons/expand.png</file>
+        <file>icons/input.png</file>
+        <file>icons/math.png</file>
+        <file>icons/constant.png</file>
+        <file>icons/texture.png</file>
+        <file>icons/texture2.png</file>
+        <file>icons/texture3.png</file>
+        <file>icons/texture4.png</file>
+        <file>icons/vertex.png</file>
+        <file>icons/vector.png</file>
+        <file>icons/object.png</file>
     </qresource>
 </RCC>
