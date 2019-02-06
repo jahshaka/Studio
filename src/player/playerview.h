@@ -43,7 +43,7 @@ class PlayerView : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
 public:
 	explicit PlayerView(QWidget* parent = nullptr);
 
-	void setScene(iris::ScenePtr scene) { this->scene = scene; }
+	void setScene(iris::ScenePtr scene);
 
 	// called when the menu item is selected
 	void enter() {}
