@@ -1,8 +1,0 @@
-#include "../../src/scenegraph/scene.h"
-#include "../../src/scenegraph/scenenode.h"
-#include "../../src/scenegraph/cameranode.h"
-#include "../../src/scenegraph/lightnode.h"
-#include "../../src/scenegraph/meshnode.h"
-#include "../../src/scenegraph/particlesystemnode.h"
-#include "../../src/scenegraph/viewernode.h"
-#include "../../src/scenegraph/grabnode.h"
