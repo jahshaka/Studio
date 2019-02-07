@@ -364,7 +364,7 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
     //iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 
 	MaterialReader reader(TextureSource::GlobalAssets, guid);
-	qDebug() << matDoc.toJson(QJsonDocument::Indented);
+	matDoc.toJson(QJsonDocument::Indented);
 	auto material = reader.parseMaterial(matObject, db);
 
 	/*

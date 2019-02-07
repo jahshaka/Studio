@@ -491,7 +491,6 @@ iris::FloatKey* KeyFrameCurveWidget::getKeyAt(int x, int y)
     int widgetHeight = this->geometry().height();
 
     auto mousePos = QVector2D(x, y);
-    //qDebug() << mousePos;
 
     for (auto keyFrame : keyFrames) {
         for( unsigned i = 0; i<keyFrame->keys.size(); i++) {

@@ -125,5 +125,6 @@
         <file>icons/vertex.png</file>
         <file>icons/vector.png</file>
         <file>icons/object.png</file>
+        <file>icons/utility.png</file>
     </qresource>
 </RCC>

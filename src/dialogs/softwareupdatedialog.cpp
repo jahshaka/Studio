@@ -24,8 +24,6 @@ SoftwareUpdateDialog::SoftwareUpdateDialog(QDialog *parent) : QDialog(parent), u
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
 	connect(ui->download, &QPushButton::clicked, [this]() {
-		//qDebug() << QDir::currentPath();
-		//QDesktopServices::openUrl(downloadUrl);
 		QProcess *process = new QProcess(this);
         QStringList args;
         args << downloadUrl;
