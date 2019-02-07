@@ -1811,7 +1811,6 @@ void MainWindow::createMaterial()
 		// materialDef will be mutated
 		// it's only used to generate a file for the thumbnail
 		auto materialDefOriginal = materialDef;
-		qDebug() << materialDefOriginal;
 
 		// replace material guid with texture name
 		auto materialValues = materialDef["values"].toObject();

@@ -1713,8 +1713,6 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
     if (jafType == ModelTypes::Material) {
         QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
         QJsonObject matObject = matDoc.object();
-		qDebug() << matObject["guid"];
-        //iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 
 		MaterialReader reader;
 		iris::CustomMaterialPtr material = reader.parseMaterial(matObject, db);
