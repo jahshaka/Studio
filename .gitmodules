@@ -1,15 +1,12 @@
-[submodule "irisgl/src/assimp"]
-	path = irisgl/src/assimp
-	url = https://github.com/assimp/assimp.git
 [submodule "thirdparty/breakpad/breakpad"]
 	path = thirdparty/breakpad/breakpad
 	url = https://github.com/jahshaka/breakpad.git
-[submodule "irisgl/src/bullet3"]
-	path = irisgl/src/bullet3
-	url = https://github.com/bulletphysics/bullet3.git
 [submodule "thirdparty/miner"]
 	path = thirdparty/miner
 	url = https://github.com/jahshaka/Miner
 [submodule "src/shadergraph"]
 	path = src/shadergraph
 	url = https://github.com/jahshaka/Effects.git
+[submodule "irisgl"]
+	path = irisgl
+	url = https://github.com/jahshaka/IrisGL.git
