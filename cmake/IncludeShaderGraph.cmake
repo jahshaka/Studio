@@ -67,6 +67,7 @@ set(SRCS
 	src/shadergraph/dialogs/searchdialog.cpp
 	src/shadergraph/nodes/vector.cpp
 	src/shadergraph/nodes/texture.cpp
+	src/shadergraph/widgets/treewidget.cpp
 	)
 
 set(HEADERS
@@ -121,6 +122,7 @@ set(HEADERS
 
 		src/shadergraph/dialogs/createnewdialog.h
 		src/shadergraph/dialogs/searchdialog.h
+		src/shadergraph/widgets/treewidget.h
 	)
 
 
