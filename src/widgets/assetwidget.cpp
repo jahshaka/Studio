@@ -73,7 +73,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->assetView->viewport()->installEventFilter(this);
 	ui->assetTree->viewport()->installEventFilter(this);
 	ui->assetTree->setContextMenuPolicy(Qt::CustomContextMenu);
-
+	
 	connect(ui->assetTree, SIGNAL(itemClicked(QTreeWidgetItem*, int)),
 		this, SLOT(treeItemSelected(QTreeWidgetItem*)));
 
