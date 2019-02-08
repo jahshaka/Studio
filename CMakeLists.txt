@@ -37,12 +37,6 @@ add_subdirectory_with_folder("Extras" ${CMAKE_CURRENT_SOURCE_DIR}/extras/downloa
 
 set(downloaderProject downloader)
 
-set (MINER_ENABLED OFF CACHE BOOL "Enable Mining (OpenCL required)")
-if(MINER_ENABLED)
-	set(BUILD_MINER_AS_LIB ON)
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/miner)
-endif()
-
 set(SRCS
     src/main.cpp
     src/mainwindow.cpp 
@@ -336,7 +330,6 @@ set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OP
 
 include(IncludeBreakpad)
 include(IncludeShaderGraph)
-#include(IncludeMiner)
 
 set (QRCS
     ${CMAKE_SOURCE_DIR}/app/fonts.qrc
@@ -389,10 +382,6 @@ add_definitions("-DGIT_COMMIT_DATE=\"${GIT_COMMIT_DATE}\"")
 set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(downloader PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-if (MINER_ENABLED)
-    set_target_properties(JahMiner PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-endif()
-#set_target_properties(cuda_gpu_list PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -428,18 +417,11 @@ target_include_directories(${PROJECT_NAME} PUBLIC
                             irisgl/include
                             irisgl/src
                             thirdparty/breakpad/breakpad/src
-							thirdparty/miner
                             downloader)
    
 if (BUILD_PLAYER_ONLY)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DBUILD_PLAYER_ONLY=1)
 endif(BUILD_PLAYER_ONLY)
-
-if(MINER_ENABLED)
-add_definitions("-DMINER_ENABLED")
-add_definitions("-DBUILD_AS_LIB")
-set(LIBS ${LIBS} JahMiner)
-endif(MINER_ENABLED)
 
 #force build downloader
 #luckily, the jahshaka project has all the dependencies of the downloader project

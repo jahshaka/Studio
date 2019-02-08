@@ -236,11 +236,6 @@ public:
     }
 
 private:
-	//set up miner
-#ifdef MINER_ENABLED
-	MinerUI *miner;
-	void configureMiner();
-#endif
 
     // sets up the button for vr
     void setupVrUi();

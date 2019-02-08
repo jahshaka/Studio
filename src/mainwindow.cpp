@@ -187,9 +187,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupFileMenu();
 	fontIcons = new QtAwesome;
 	fontIcons->initFontAwesome();
-#ifdef MINER_ENABLED
-	configureMiner();
-#endif
+
     setupViewPort();
     setupDesktop();
     setupToolBar();
@@ -213,14 +211,6 @@ void MainWindow::goToDesktop()
     show();
     switchSpace(WindowSpaces::DESKTOP);
 }
-
-#ifdef MINER_ENABLED
-void MainWindow::configureMiner()
-{
-	miner = new MinerUI();
-	//miner->hide();
-}
-#endif
 
 void MainWindow::setupVrUi()
 {
@@ -2348,22 +2338,6 @@ void MainWindow::setupViewPort()
 
 #endif
 
-#ifdef MINER_ENABLED
-	auto minerBtn = new QPushButton;
-	minerBtn->setObjectName("miner");
-	minerBtn->setIcon(QIcon(":/icons/mining.png"));
-	minerBtn->setIconSize(QSize(26,26));
-	minerBtn->setStyleSheet("background:transparent;");
-	/*minerBtn->setText(QChar(fa::microchip));
-	minerBtn->setFont(fontIcons->font(24));*/
-	minerBtn->setCursor(Qt::PointingHandCursor);
-	//minerBtn->setStyleSheet("QPushButton{color:orange;}");
-	connect(minerBtn, &QPushButton::pressed, [this]() {
-		miner->show();
-		qDebug() << miner->geometry();
-	});
-#endif
-
 	help = new QPushButton;
 	help->setObjectName("helpButton");
 	help->setText(QChar(fa::questioncircle));
@@ -2409,9 +2383,6 @@ void MainWindow::setupViewPort()
 	QHBoxLayout *bl = new QHBoxLayout;
 	buttons->setLayout(bl);
 	bl->setSpacing(20);
-#ifdef MINER_ENABLED
-	bl->addWidget(minerBtn);
-#endif
 	bl->addWidget(help);
 	bl->addWidget(prefs);
 
@@ -3125,11 +3096,6 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
 MainWindow::~MainWindow()
 {
-#ifdef MINER_ENABLED
-	if (miner && miner->isMining())
-		miner->stopMining();
-#endif
-
     this->db->closeDatabase();
     delete ui;
 }
