@@ -159,17 +159,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 #ifdef QT_DEBUG
     iris::Logger::getSingleton()->init(IrisUtils::getAbsoluteAssetPath("jahshaka.log"));
-    #ifdef BUILD_PLAYER_ONLY
-	    setWindowTitle(QString("Jahshaka Player %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
-    #else
-        setWindowTitle(QString("Jahshaka Studio %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
-    #endif
+    setWindowTitle(QString("Jahshaka Studio %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
 #else
-    #ifdef BUILD_PLAYER_ONLY
-	    setWindowTitle(QString("Jahshaka Player %1").arg(Constants::CONTENT_VERSION));
-    #else
-	    setWindowTitle(QString("Jahshaka Studio %1").arg(Constants::CONTENT_VERSION));
-    #endif
+	setWindowTitle(QString("Jahshaka Studio %1").arg(Constants::CONTENT_VERSION));
     iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/jahshaka.log");
 #endif
 
@@ -2318,11 +2310,9 @@ void MainWindow::setupViewPort()
 	hl->setSpacing(12);
     hl->addWidget(worlds_menu);
     hl->addWidget(player_menu);
-#ifndef BUILD_PLAYER_ONLY
 	hl->addWidget(editor_menu);
 	hl->addWidget(effect_menu);
 	hl->addWidget(assets_menu);
-#endif
 
 	assets_panel->setLayout(hl);
 
@@ -2330,12 +2320,7 @@ void MainWindow::setupViewPort()
 #ifdef QT_DEBUG
     jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/jahshakastudiodevheader.png"));
 #else
-#ifdef BUILD_PLAYER_ONLY
-    jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/jahshakaplayerheader.png"));
-#else
-    jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/jahshakastudioheader.png"));
-#endif // BUILD_PLAYER_ONLY
-
+	jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/jahshakastudioheader.png"));
 #endif
 
 	help = new QPushButton;
@@ -2375,9 +2360,6 @@ void MainWindow::setupViewPort()
 	);
 
 	connect(prefs, &QPushButton::pressed, [this]() { showPreferences(); });
-#ifdef BUILD_PLAYER_ONLY
-	prefs->hide();
-#endif
 
 	QWidget *buttons = new QWidget;
 	QHBoxLayout *bl = new QHBoxLayout;
