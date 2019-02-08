@@ -199,12 +199,6 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 		"background-repeat: no-repeat;"
 	);
     ui->pmContainer->setLayout(layout);
-	
-#ifdef BUILD_PLAYER_ONLY
-	// hide these buttons in player mode
-	ui->newProject->hide();
-	ui->browseProjects->hide();
-#endif
 }
 
 ProjectManager::~ProjectManager()
@@ -215,11 +209,7 @@ ProjectManager::~ProjectManager()
 void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
 {
 	if (Globals::project->getProjectGuid() == widget->tileData.guid) {
-        #ifdef BUILD_PLAYER_ONLY
-		    mainWindow->switchSpace(WindowSpaces::PLAYER);
-        #else
 		    mainWindow->switchSpace(WindowSpaces::EDITOR);
-        #endif
 
 		return;
 	}

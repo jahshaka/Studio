@@ -86,11 +86,7 @@ int main(int argc, char *argv[])
 	upgrader.checkIfDeprecatedVersion();
 
     app.setWindowIcon(QIcon(":/images/icon.ico"));
-#ifdef BUILD_PLAYER_ONLY
     app.setApplicationName("Jahshaka Player");
-#else
-    app.setApplicationName("Jahshaka Studio");
-#endif // BUILD_PLAYER_ONLY
 
 
     auto dataPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
@@ -112,7 +108,6 @@ int main(int argc, char *argv[])
     }
 #endif
 
-#ifndef BUILD_PLAYER_ONLY
     QSplashScreen splash;
     splash.setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnBottomHint);
     auto pixmap = QPixmap(":/images/splashv3.png");
@@ -125,7 +120,6 @@ int main(int argc, char *argv[])
 #endif // GIT_COMMIT_HASH
 #endif // QT_DEBUG
     splash.show();
-#endif // BUILD_PLAYER_ONLY
 
     Globals::appWorkingDir = QApplication::applicationDirPath();
     app.processEvents();
@@ -145,12 +139,8 @@ int main(int argc, char *argv[])
     window.setAttribute(Qt::WA_DontShowOnScreen, false);
     window.goToDesktop();
 
-#ifndef BUILD_PLAYER_ONLY
     splash.finish(&window);
-#endif
 
-
-//#if !defined(QT_DEBUG) && !defined(BUILD_PLAYER_ONLY)
 	UpdateChecker updateChecker;
 	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded,
         [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)
@@ -162,16 +152,8 @@ int main(int argc, char *argv[])
 		dialog->show();
 	});
 
-   // if (SettingsManager::getDefaultManager()->getValue("automatic_updates", true).toBool()) {
     
-#ifdef BUILD_PLAYER_ONLY
-    updateChecker.checkForPlayerUpdate();
-#else
     updateChecker.checkForAppUpdate();
-#endif
-    
-//}
-//#endif // QT_DEBUG
 
 	app.installEventFilter(new ToolTipHelper());
     return app.exec();
