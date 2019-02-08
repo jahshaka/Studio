@@ -16,7 +16,7 @@ For more information see the LICENSE file
 
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/graphics/mesh.h"
-#include "irisgl/src/zip/zip.h"
+#include "zip.h"
 
 #include <QStackedLayout>
 #include <QDirIterator>

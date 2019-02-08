@@ -33,7 +33,7 @@ For more information see the LICENSE file
 #include "irisgl/src/assimp/include/assimp/Importer.hpp"
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/materials/custommaterial.h"
-#include "irisgl/src/zip/zip.h"
+#include "zip.h"
 
 #include "constants.h"
 #include "dynamicgrid.h"

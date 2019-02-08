@@ -36,7 +36,7 @@ For more information see the LICENSE file
 #include "irisgl/src/materials/custommaterial.h"
 #include "irisgl/src/scenegraph/particlesystemnode.h" 
 #include "irisgl/src/scenegraph/scene.h" 
-#include "irisgl/src/zip/zip.h"
+#include "zip.h"
 
 #include "assetview.h"
 #include "constants.h"

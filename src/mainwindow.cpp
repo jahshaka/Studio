@@ -129,7 +129,7 @@ For more information see the LICENSE file
 #include "../src/widgets/assetview.h"
 #include "dialogs/toast.h"
 
-#include "irisgl/src/zip/zip.h"
+#include "zip.h"
 
 #include "irisgl/src/scenegraph/scene.h"
 #include "irisgl/src/physics/environment.h"
