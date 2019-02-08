@@ -9,8 +9,8 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#ifndef SCENEPROPERTYWIDGET_H
-#define SCENEPROPERTYWIDGET_H
+#ifndef WORLDPROPERTYWIDGET_H
+#define WORLDPROPERTYWIDGET_H
 
 #include <QWidget>
 #include <QSharedPointer>
@@ -55,4 +55,4 @@ private:
     QString skyBoxTextures[6];
 };
 
-#endif // SCENEPROPERTYWIDGET_H
+#endif // WORLDPROPERTYWIDGET_H
