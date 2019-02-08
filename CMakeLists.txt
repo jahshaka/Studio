@@ -403,10 +403,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC
                             irisgl/src
                             thirdparty/breakpad/breakpad/src
                             downloader)
-   
-if (BUILD_PLAYER_ONLY)
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DBUILD_PLAYER_ONLY=1)
-endif(BUILD_PLAYER_ONLY)
 
 #force build downloader
 #luckily, the jahshaka project has all the dependencies of the downloader project
