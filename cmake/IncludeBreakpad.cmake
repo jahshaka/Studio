@@ -5,9 +5,10 @@ if(WIN32 OR (UNIX AND NOT APPLE))
 	set(USE_BREAKPAD TRUE)
 endif()
 
+# Finds the function from an earlier include
 if(USE_BREAKPAD)
-	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/breakpad)
-	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/extras/crash_handler)
+	add_subdirectory_with_folder("Extras" ${CMAKE_CURRENT_SOURCE_DIR}/extras/crash_handler)
+	add_subdirectory_with_folder("Extras" ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/breakpad)
 
 	set(HEADERS ${HEADERS} src/breakpad/breakpad.h)
 

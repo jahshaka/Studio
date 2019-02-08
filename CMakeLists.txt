@@ -19,18 +19,22 @@ find_package(OpenGL REQUIRED) # is this needed?
 find_package(Qt5 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg)
 
 include(UseModernCpp)
+include(AddExternalSubdirectories)
 include(BuildType)
 
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
+set_property(GLOBAL PROPERTY USE_FOLDERS TRUE)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
+set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/extras/downloader)
+
+add_subdirectory_with_folder("Extras" ${CMAKE_CURRENT_SOURCE_DIR}/extras/downloader)
+
 set(downloaderProject downloader)
 
 set (MINER_ENABLED OFF CACHE BOOL "Enable Mining (OpenCL required)")
@@ -40,7 +44,7 @@ if(MINER_ENABLED)
 endif()
 
 set(SRCS
-#    src/main.cpp
+    src/main.cpp
     src/mainwindow.cpp 
     src/widgets/colorvaluewidget.cpp 
     src/widgets/colorpickerwidget.cpp 
@@ -287,7 +291,8 @@ set(HEADERS
 )
 
 # Todo - trim these down to nothing eventually
-set(FORMS
+set(WIDGETS
+    src/mainwindow.ui 
     src/widgets/colorvaluewidget.ui 
     src/widgets/colorpickerwidget.ui 
     src/dialogs/preferencesdialog.ui 
@@ -303,7 +308,6 @@ set(FORMS
     src/widgets/skypresets.ui 
     src/widgets/keyframelabelwidget.ui 
     src/widgets/keyframelabeltreewidget.ui 
-    src/mainwindow.ui 
     src/widgets/labelwidget.ui 
     src/widgets/checkboxwidget.ui 
     src/widgets/textinputwidget.ui 
@@ -331,16 +335,10 @@ set(FORMS
 set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network IrisGL ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
-#include(IncludeMiner)
 include(IncludeShaderGraph)
-message(${SRCS})
+#include(IncludeMiner)
 
-# these macros are deprecated
-#qt5_wrap_cpp(HEADERS_moc ${HEADERS})
-#qt5_wrap_ui(UI_moc ${FORMS})
-
-# Todo - trim these down to nothing eventually
-qt5_add_resources(QRCS
+set (QRCS
     ${CMAKE_SOURCE_DIR}/app/fonts.qrc
     ${CMAKE_SOURCE_DIR}/app/icons.qrc
     ${CMAKE_SOURCE_DIR}/app/images.qrc
@@ -392,8 +390,7 @@ set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_
 set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(downloader PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 if (MINER_ENABLED)
-    set_target_properties(Miner PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-	#set_target_properties(xmr-stak PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    set_target_properties(JahMiner PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 endif()
 #set_target_properties(cuda_gpu_list PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
@@ -415,32 +412,25 @@ endif(BUILD_PLAYER_ONLY)
 set_source_files_properties(${BUNDLE_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 
 # https://stackoverflow.com/a/37211780/996468
-source_group(moc FILES ${HEADERS_moc} ${QRCS})
+source_group("Resources" FILES ${QRCS} ${WIDGETS} ${BUNDLE_ICON})
 
 if (BUILD_PLAYER_ONLY)
-    add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp_player.rc ${BUNDLE_ICON})
+    add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS} ${QRCS} ${WIDGETS} app/winapp_player.rc ${BUNDLE_ICON})
 else()
-
-        add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS_moc} ${QRCS} app/winapp.rc ${BUNDLE_ICON})
-
+    add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS} ${QRCS} ${WIDGETS} app/winapp.rc ${BUNDLE_ICON})
 endif(BUILD_PLAYER_ONLY)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${APP_OUTPUT_NAME})
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
 target_include_directories(${PROJECT_NAME} PUBLIC
-							src
-							irisgl/include
-							irisgl/src
-							irisgl/src/assimp/include
-                            irisgl/src/libovr/Include
-                            irisgl/src/bullet3/src/
+                            src
+                            irisgl/include
+                            irisgl/src
                             thirdparty/breakpad/breakpad/src
 							thirdparty/miner
-                            downloader )
-
-Message("${PROJECT_BINARY_DIR}/src/assimp/include/")
-
+                            downloader)
+   
 if (BUILD_PLAYER_ONLY)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DBUILD_PLAYER_ONLY=1)
 endif(BUILD_PLAYER_ONLY)
@@ -448,14 +438,13 @@ endif(BUILD_PLAYER_ONLY)
 if(MINER_ENABLED)
 add_definitions("-DMINER_ENABLED")
 add_definitions("-DBUILD_AS_LIB")
-set(LIBS ${LIBS} Miner)
+set(LIBS ${LIBS} JahMiner)
 endif(MINER_ENABLED)
 
 #force build downloader
 #luckily, the jahshaka project has all the dependencies of the downloader project
 #so we dont need to run windeployqt or macdeployqt on the downloader specifically
 add_dependencies(${CMAKE_PROJECT_NAME} ${downloaderProject})
-message(${CMAKE_PROJECT_NAME} )
 
 if(USE_BREAKPAD)
     set(LIBS ${LIBS} breakpad)
