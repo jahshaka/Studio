@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #ifndef ANIMATIONPATH_H
 #define ANIMATIONPATH_H
 
-#include "../../irisgl/src/irisglfwd.h"
+#include "irisglfwd.h"
 
 class AnimationPath
 {
