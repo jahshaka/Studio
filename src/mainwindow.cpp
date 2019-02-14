@@ -666,6 +666,7 @@ void MainWindow::switchSpace(WindowSpaces space)
             UiManager::sceneMode = SceneMode::PlayMode;
             playSceneBtn->hide();
             this->enterPlayMode();
+			playerView->begin();
             break;
         }
 

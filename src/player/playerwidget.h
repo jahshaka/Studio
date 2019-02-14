@@ -18,6 +18,9 @@ public:
 	void createUI();
 
 	void setScene(iris::ScenePtr scene);
+
+	void begin();
+	void end();
 };
 
 #endif PLAYERWIDGET_H
