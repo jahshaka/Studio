@@ -241,6 +241,9 @@ public:
 
     void cleanup();
 	void setShowPerspeciveLabel(bool val);
+
+	void begin();
+	void end();
 	
 protected:
     void initializeGL();

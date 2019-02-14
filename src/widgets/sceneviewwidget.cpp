@@ -104,6 +104,15 @@ void SceneViewWidget::setShowPerspeciveLabel(bool val)
 	SettingsManager::getDefaultManager()->setValue("show_PL", val);
 }
 
+void SceneViewWidget::begin()
+{
+	renderer->regenerateSwapChain();
+}
+
+void SceneViewWidget::end()
+{
+}
+
 void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
 {
     QByteArray encoded = event->mimeData()->data("application/x-qabstractitemmodeldatalist");
