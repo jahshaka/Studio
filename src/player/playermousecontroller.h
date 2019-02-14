@@ -31,6 +31,7 @@ class PlayerMouseController : public CameraControllerBase
 public:
 
 	PlayerMouseController();
+	void setCamera(iris::CameraNodePtr  cam);
 
     void update(float dt) override;
     void onMouseMove(int dx,int dy) override;
