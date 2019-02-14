@@ -6,6 +6,10 @@
 #include "widgets/sceneviewwidget.h"
 #include "irisgl/Graphics.h"
 #include "irisgl/SceneGraph.h"
+#include "irisgl/Vr.h"
+#include "irisgl/Content.h"
+#include "playervrcontroller.h"
+#include "playermousecontroller.h"
 
 PlayerView::PlayerView(QWidget* parent) :
 	QOpenGLWidget(parent)
@@ -23,17 +27,22 @@ PlayerView::PlayerView(QWidget* parent) :
 #endif
 	setFormat(format);
 
+	camController = nullptr;
+	vrController = new PlayerVrController();
+	mouseController = new PlayerMouseController();
+
+	//camera = iris::CameraNode::create();
+
 	// needed in order to get mouse events
 	setMouseTracking(true);
-}
-
+}                                                       
 void PlayerView::initializeGL()
 {
 	QOpenGLWidget::initializeGL();
 	makeCurrent();
 	initializeOpenGLFunctions();
 
-	renderer = iris::ForwardRenderer::create();
+	renderer = iris::ForwardRenderer::create(true, true);
 	renderer->setScene(scene);
 
 	updateTimer = new QTimer(this);
@@ -44,6 +53,9 @@ void PlayerView::initializeGL()
 
 	fpsTimer = new QElapsedTimer();
 	fpsTimer->start();
+
+	auto content = iris::ContentManager::create(renderer->getGraphicsDevice());
+	vrController->loadAssets(content);
 }
 
 void PlayerView::setScene(iris::ScenePtr scene)
@@ -51,11 +63,50 @@ void PlayerView::setScene(iris::ScenePtr scene)
 	this->scene = scene;
 	if (renderer)
 		renderer->setScene(scene);
+	
+	vrController->setScene(scene);
+	vrController->setCamera(scene->getCamera());
+	mouseController->setCamera(scene->getCamera());
+}
+
+void PlayerView::setController(CameraControllerBase * controller)
+{
+	if (controller != camController) {
+		// end old one and begin new one
+		if (camController)
+			camController->end();
+
+		controller->setCamera(scene->getCamera());
+
+		controller->start();
+
+		camController = controller;
+	}
+}
+
+void PlayerView::start()
+{
+	//camera = scene->camera;
+	//camController->setCamera(scene->getCamera());
+	setController(mouseController);
 }
 
 void PlayerView::end()
+{
+}
+
 void PlayerView::paintGL()
 {
+	// swap between controllers here
+	//auto vrDevice = iris::VrManager::getDefaultDevice();
+	auto vrDevice = renderer->getVrDevice();
+	if (vrDevice->isHeadMounted()) {
+		setController(vrController);
+	}
+	else {
+		setController(mouseController);
+	}
+
 	renderScene();
 }
 
@@ -66,14 +117,68 @@ void PlayerView::renderScene()
 	float dt = fpsTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
 	fpsTimer->restart();
 
+	camController->update(dt);
+
 	auto scene = UiManager::sceneViewWidget->getScene();
-	auto renderer = UiManager::sceneViewWidget->getRenderer();
+	//auto renderer = UiManager::sceneViewWidget->getRenderer();
 
 	auto vp = iris::Viewport();
 	vp.width = width();
 	vp.height = height();
 	scene->update(dt);
-	renderer->renderScene(dt, &vp);
+
+	//auto vrDevice = iris::VrManager::getDefaultDevice();
+	auto vrDevice = renderer->getVrDevice();
+
+	glClearColor(.1f, .1f, .1f, .4f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	if (vrDevice->isHeadMounted()) {
+		renderer->renderSceneVr(dt, &vp, false);
+	}
+	else {
+		renderer->renderScene(dt, &vp);
+	}
+	//renderer->renderScene(dt, &vp);
+}
+
+void PlayerView::mousePressEvent(QMouseEvent * evt)
+{
+	prevMousePos = evt->localPos();
+
+	if (camController != nullptr) {
+		camController->onMouseDown(evt->button());
+	}
+}
+
+void PlayerView::mouseMoveEvent(QMouseEvent * evt)
+{
+	QPointF localPos = evt->localPos();
+	QPointF dir = localPos - prevMousePos;
+
+	if (camController != nullptr) {
+		camController->onMouseMove(-dir.x(), -dir.y());
+	}
+
+	prevMousePos = localPos;
+}
+
+void PlayerView::mouseDoubleClickEvent(QMouseEvent * evt)
+{
+}
+
+void PlayerView::mouseReleaseEvent(QMouseEvent *e)
+{
+	if (camController != nullptr) {
+		camController->onMouseUp(e->button());
+	}
+}
+
+void PlayerView::wheelEvent(QWheelEvent *event)
+{
+	if (camController != nullptr) {
+		camController->onMouseWheel(event->delta());
+	}
 }
 
 PlayerView::~PlayerView()
