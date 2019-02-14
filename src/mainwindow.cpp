@@ -623,6 +623,19 @@ void MainWindow::deselectViewports()
 
 void MainWindow::switchSpace(WindowSpaces space)
 {
+	if (currentSpace == space)
+		return;
+
+	// properly shutdown previous space
+	switch (currentSpace) {
+	case WindowSpaces::PLAYER:
+		playerView->end();
+		break;
+	case WindowSpaces::EDITOR:
+		sceneView->end();
+		break;
+	}
+
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
 			if (UiManager::isSceneOpen) {
@@ -656,6 +669,8 @@ void MainWindow::switchSpace(WindowSpaces space)
 
             assetWidget->refresh();
 			isSceneOpen = true;
+
+			sceneView->begin();
             break;
         }
 
