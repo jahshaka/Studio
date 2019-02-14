@@ -2,6 +2,7 @@
 #define PLAYERVIEW_H
 
 #include <QObject>
+#include <QPointF>
 #include <QOpenGLFunctions>
 #include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLWidget>
@@ -23,7 +24,9 @@ namespace iris
 	class ContentManager;
 }
 
-class ViewerCameraController;
+class CameraControllerBase;
+class PlayerVrController;
+class PlayerMouseController;
 class QElapsedTimer;
 class QTimer;
 
@@ -31,29 +34,39 @@ class PlayerView : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
 {
 	Q_OBJECT
 
-	iris::CameraNodePtr editorCam;
-	ViewerCameraController* viewerCam;
+	//iris::CameraNodePtr camera;
+	CameraControllerBase* camController;
+	PlayerVrController* vrController;
+	PlayerMouseController* mouseController;
 
 	iris::ForwardRendererPtr renderer;
 	iris::ScenePtr scene;
 
 	QTimer* updateTimer;
 	QElapsedTimer* fpsTimer;
+	QPointF prevMousePos;
 
 public:
 	explicit PlayerView(QWidget* parent = nullptr);
 
 	void setScene(iris::ScenePtr scene);
+	void setController(CameraControllerBase* controller);
 
 	// called when the menu item is selected
-	void enter() {}
+	void start();
 	// called when the menu item is deselected
-	void exit() {}
+	void end();
 
 	void initializeGL();
 
 	void paintGL();
 	void renderScene();
+
+	void mousePressEvent(QMouseEvent* evt);
+	void mouseMoveEvent(QMouseEvent* evt);
+	void mouseDoubleClickEvent(QMouseEvent* evt);
+	void mouseReleaseEvent(QMouseEvent* event);
+	void wheelEvent(QWheelEvent *event);
 
 	~PlayerView();
 
