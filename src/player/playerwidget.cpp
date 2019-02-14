@@ -99,3 +99,13 @@ void PlayerWidget::setScene(iris::ScenePtr scene)
 {
 	this->playerView->setScene(scene);
 }
+
+void PlayerWidget::begin()
+{
+	playerView->start();
+}
+
+void PlayerWidget::end()
+{
+	playerView->end();
+}

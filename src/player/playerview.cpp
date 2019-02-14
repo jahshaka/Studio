@@ -53,6 +53,7 @@ void PlayerView::setScene(iris::ScenePtr scene)
 		renderer->setScene(scene);
 }
 
+void PlayerView::end()
 void PlayerView::paintGL()
 {
 	renderScene();
