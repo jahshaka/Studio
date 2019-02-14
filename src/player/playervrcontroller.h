@@ -62,7 +62,9 @@ public:
 
 	iris::MaterialPtr fresnelMat;
 
-	PlayerVrController(iris::ContentManagerPtr content);
+	PlayerVrController();
+
+	void loadAssets(iris::ContentManagerPtr content);
 
     void setScene(iris::ScenePtr scene);
 
