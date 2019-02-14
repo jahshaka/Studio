@@ -86,9 +86,11 @@ void PlayerView::setController(CameraControllerBase * controller)
 
 void PlayerView::start()
 {
+	makeCurrent();
 	//camera = scene->camera;
 	//camController->setCamera(scene->getCamera());
 	setController(mouseController);
+	renderer->regenerateSwapChain();
 }
 
 void PlayerView::end()
