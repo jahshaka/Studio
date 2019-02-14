@@ -69,45 +69,50 @@ public:
 };
 
 
-PlayerVrController::PlayerVrController(iris::ContentManagerPtr content)
+PlayerVrController::PlayerVrController()
+{
+	
+}
+
+void PlayerVrController::loadAssets(iris::ContentManagerPtr content)
 {
 	this->content = content;
 
-    //auto cube = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/cube.obj"));
-    auto leftHandMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_left.obj"));
+	//auto cube = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/cube.obj"));
+	auto leftHandMesh = content->loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_left.obj"));
 
 	auto mat = iris::DefaultMaterial::create();
 
-    mat->setDiffuseTexture(
-                iris::Texture2D::load(
-                    IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_col.png")));
+	mat->setDiffuseTexture(
+		content->loadTexture(
+			IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_col.png")));
 
-    leftHandRenderItem = new iris::RenderItem();
-    leftHandRenderItem->type = iris::RenderItemType::Mesh;
-    leftHandRenderItem->material = mat;
-    leftHandRenderItem->mesh = leftHandMesh;
+	leftHandRenderItem = new iris::RenderItem();
+	leftHandRenderItem->type = iris::RenderItemType::Mesh;
+	leftHandRenderItem->material = mat;
+	leftHandRenderItem->mesh = leftHandMesh;
 
-    auto rightHandMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_right.obj"));
-    rightHandRenderItem = new iris::RenderItem();
-    rightHandRenderItem->type = iris::RenderItemType::Mesh;
-    rightHandRenderItem->material = mat;
-    rightHandRenderItem->mesh = rightHandMesh;
+	auto rightHandMesh = content->loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_right.obj"));
+	rightHandRenderItem = new iris::RenderItem();
+	rightHandRenderItem->type = iris::RenderItemType::Mesh;
+	rightHandRenderItem->material = mat;
+	rightHandRenderItem->mesh = rightHandMesh;
 
-    beamMesh = iris::Mesh::loadMesh(
-                IrisUtils::getAbsoluteAssetPath("app/content/models/beam.obj"));
-    auto beamMat = iris::ColorMaterial::create();
+	beamMesh = content->loadMesh(
+		IrisUtils::getAbsoluteAssetPath("app/content/models/beam.obj"));
+	auto beamMat = iris::ColorMaterial::create();
 	beamMat->setColor(QColor(255, 100, 100));
-    //beamMat->setDiffuseColor(QColor(255,100,100));
+	//beamMat->setDiffuseColor(QColor(255,100,100));
 
-    leftBeamRenderItem = new iris::RenderItem();
-    leftBeamRenderItem->type = iris::RenderItemType::Mesh;
-    leftBeamRenderItem->material = beamMat;
-    leftBeamRenderItem->mesh = beamMesh;
+	leftBeamRenderItem = new iris::RenderItem();
+	leftBeamRenderItem->type = iris::RenderItemType::Mesh;
+	leftBeamRenderItem->material = beamMat;
+	leftBeamRenderItem->mesh = beamMesh;
 
-    rightBeamRenderItem = new iris::RenderItem();
-    rightBeamRenderItem->type = iris::RenderItemType::Mesh;
-    rightBeamRenderItem->material = beamMat;
-    rightBeamRenderItem->mesh = beamMesh;
+	rightBeamRenderItem = new iris::RenderItem();
+	rightBeamRenderItem->type = iris::RenderItemType::Mesh;
+	rightBeamRenderItem->material = beamMat;
+	rightBeamRenderItem->mesh = beamMesh;
 
 	// load models
 	leftHandModel = content->loadModel("app/content/models/left_hand.dae");
@@ -163,6 +168,7 @@ void PlayerVrController::update(float dt)
     camera->setLocalPos(camPos);
 
 	
+	return;
 
     // touch controls
 
