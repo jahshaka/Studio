@@ -21,7 +21,8 @@ void PlayerMouseController::setViewer(iris::ViewerNodePtr &value)
 
 void PlayerMouseController::start()
 {
-    viewer->hide();
+	if (!!viewer)
+		viewer->hide();
 
     // capture cam transform
     camPos = camera->getLocalPos();
@@ -31,7 +32,8 @@ void PlayerMouseController::start()
 void PlayerMouseController::end()
 {
     //clearViewer();
-	viewer->hide();
+	if (!!viewer)
+		viewer->show();
 
     // restore cam transform
     camera->setLocalPos(camPos);
@@ -61,12 +63,16 @@ void PlayerMouseController::onMouseWheel(int delta)
 
 void PlayerMouseController::updateCameraTransform()
 {
-    camera->setLocalPos(viewer->getGlobalPosition());
-
-    auto viewMat = viewer->getGlobalTransform().normalMatrix();
-    QQuaternion rot = QQuaternion::fromRotationMatrix(viewMat);
-    camera->setLocalRot(rot * QQuaternion::fromEulerAngles(pitch,yaw,0));
-    //camera->setLocalRot(QQuaternion::fromEulerAngles(pitch,yaw,0));
+	if (!!viewer) {
+		camera->setLocalPos(viewer->getGlobalPosition());
+		auto viewMat = viewer->getGlobalTransform().normalMatrix();
+		QQuaternion rot = QQuaternion::fromRotationMatrix(viewMat);
+		camera->setLocalRot(rot * QQuaternion::fromEulerAngles(pitch, yaw, 0));
+		//camera->setLocalRot(QQuaternion::fromEulerAngles(pitch,yaw,0));
+	}
+	else {
+		camera->setLocalRot(QQuaternion::fromEulerAngles(pitch, yaw, 0));
+	}
     camera->update(0);
 }
 
@@ -74,6 +80,11 @@ PlayerMouseController::PlayerMouseController()
 {
     yaw = 0;
     pitch = 0;
+}
+
+void PlayerMouseController::setCamera(iris::CameraNodePtr cam)
+{
+	camera = cam;
 }
 
 void PlayerMouseController::update(float dt)
