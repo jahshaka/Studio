@@ -367,8 +367,9 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
 
 void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode)
 {
-    sceneNodeObject["viewScale"] = viewerNode->getViewScale();
-	sceneNodeObject["visible"] = viewerNode->isVisible();
+    sceneNodeObject.insert("viewScale", viewerNode->getViewScale());
+	sceneNodeObject.insert("visible", viewerNode->isVisible());
+	sceneNodeObject.insert("activeCharacterController", viewerNode->isActiveCharacterController());
 }
 
 void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node)

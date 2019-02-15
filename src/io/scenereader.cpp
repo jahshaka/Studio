@@ -518,6 +518,7 @@ iris::ViewerNodePtr SceneReader::createViewer(QJsonObject& nodeObj)
     auto viewerNode = iris::ViewerNode::create();
     viewerNode->setViewScale((float)nodeObj["viewScale"].toDouble(1.0f));
 	viewerNode->setVisible(nodeObj["visible"].toBool(true));
+	viewerNode->setActiveCharacterController(nodeObj["activeCharacterController"].toBool(false));
 
     return viewerNode;
 }
