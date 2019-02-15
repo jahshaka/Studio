@@ -133,6 +133,7 @@ For more information see the LICENSE file
 
 #include "irisgl/src/scenegraph/scene.h"
 #include "irisgl/src/physics/environment.h"
+#include "irisgl/src/physics/charactercontroller.h"
 #include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
 
 #include "shadergraph/shadergraphmainwindow.h"
@@ -2836,7 +2837,7 @@ void MainWindow::setupShortcuts()
     shortcut = new QShortcut(QKeySequence("r"),sceneView);
     connect(shortcut, SIGNAL(activated()), this, SLOT(rotateGizmo()));
 
-    shortcut = new QShortcut(QKeySequence("s"),sceneView);
+    shortcut = new QShortcut(QKeySequence("alt+s"),sceneView);
     connect(shortcut, SIGNAL(activated()), this, SLOT(scaleGizmo()));
 
     // Save
