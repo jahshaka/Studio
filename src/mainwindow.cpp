@@ -390,6 +390,10 @@ void MainWindow::initializePhysicsWorld()
             auto body = iris::PhysicsHelper::createPhysicsBody(node, node->physicsProperty);
             if (body) sceneView->addBodyToWorld(body, node);
         }
+
+		if (node.staticCast<iris::ViewerNode>()->isActiveCharacterController()) {
+			scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(node);
+		}
     }
 
     // now add constraints
@@ -1488,6 +1492,14 @@ void MainWindow::addViewer()
     auto node = iris::ViewerNode::create();
     node->setName("Viewer");
     addNodeToScene(node);
+
+	for (auto node : scene->getRootNode()->children) {
+		if (node->getSceneNodeType() == iris::SceneNodeType::Viewer) {
+			node.staticCast<iris::ViewerNode>()->setActiveCharacterController(false);
+		}
+	}
+
+	scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(node);
 }
 
 void MainWindow::addGrabHand()
@@ -2015,6 +2027,11 @@ void MainWindow::deleteNode()
         // TODO - gray/disable delete button if a node isn't removable
         if (activeSceneNode->isRootNode() || !activeSceneNode->isRemovable()) return;
         if (activeSceneNode->isBuiltIn) db->deleteAsset(activeSceneNode->getGUID());
+
+		if (activeSceneNode->sceneNodeType == iris::SceneNodeType::Viewer) {
+			scene->getPhysicsEnvironment()->removeCharacterControllerFromWorld(activeSceneNode->getGUID());
+		}
+
         auto cmd = new DeleteSceneNodeCommand(activeSceneNode->parent, activeSceneNode);
         UiManager::pushUndoStack(cmd);
     }
