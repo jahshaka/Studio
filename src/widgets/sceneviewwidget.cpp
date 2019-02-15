@@ -53,6 +53,7 @@ For more information see the LICENSE file
 #include "irisgl/src/physics/physicshelper.h"
 #include "irisgl/src/content/contentmanager.h"
 #include "irisgl/src/content/modelloader.h"
+#include "irisgl/src/physics/charactercontroller.h"
 
 #include "animationwidget.h"
 #include "constants.h"
@@ -677,26 +678,28 @@ void SceneViewWidget::renderScene()
     float dt = elapsedTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
     elapsedTimer->restart();
 
-    if (!!renderer && !!scene) {
-        this->camController->update(dt);
+	if (!!renderer && !!scene) {
+		this->camController->update(dt);
 
-        if (playScene) {
-            animTime += dt;
-            scene->updateSceneAnimation(animTime);
-        }
+		if (playScene) {
+			animTime += dt;
+			scene->updateSceneAnimation(animTime);
+		}
 
-        // hide viewer so it doesnt show up in rt
-        bool viewerVisible = true;
-/*
-        if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
-            viewerVisible = selectedNode->isVisible();
-            selectedNode->hide();
-        } else {
-            viewerVisible = false;    
-        }
-		*/
-        scene->update(dt);
+		// hide viewer so it doesnt show up in rt
+		bool viewerVisible = true;
+
+		scene->update(dt);
 		//animPath->submit(scene->geometryRenderList);
+
+		if (UiManager::isSimulationRunning) {
+			for (auto node : scene->rootNode->children) {
+				if (node->getSceneNodeType() == iris::SceneNodeType::Viewer && node.staticCast<iris::ViewerNode>()->isActiveCharacterController()) {
+					node->setGlobalTransform(scene->getPhysicsEnvironment()->getActiveCharacterController()->getTransform());
+					break;
+				}
+			}
+		}
 
         // insert vr head
 		//if ((UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)) {
@@ -949,6 +952,11 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
 			QVector3D rayPos, rayDir;
 			this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
 			gizmo->drag(rayPos, rayDir);
+
+			// If we're dragging viewers, send the transform to the environment so we can manipulate the body
+			if (selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
+				scene->getPhysicsEnvironment()->updateCharacterTransformFromSceneNode(selectedNode);
+			}
 		}
     }
 
@@ -1051,6 +1059,13 @@ void SceneViewWidget::keyPressEvent(QKeyEvent *event)
 {
     KeyboardState::keyStates[event->key()] = true;
 	camController->onKeyPressed((Qt::Key)event->key());
+
+	//scene->getPhysicsEnvironment()->onKeyPressed((Qt::Key)event->key());
+	if (KeyboardState::isKeyDown(Qt::Key_W)) { scene->getPhysicsEnvironment()->walkForward = 1; }
+	if (KeyboardState::isKeyDown(Qt::Key_S)) { scene->getPhysicsEnvironment()->walkBackward = 1; }
+	if (KeyboardState::isKeyDown(Qt::Key_A)) { scene->getPhysicsEnvironment()->walkLeft = 1; }
+	if (KeyboardState::isKeyDown(Qt::Key_D)) { scene->getPhysicsEnvironment()->walkRight = 1; }
+	if (KeyboardState::isKeyDown(Qt::Key_Space)) { scene->getPhysicsEnvironment()->jump = 1; }
 }
 
 void SceneViewWidget::keyReleaseEvent(QKeyEvent *event)
@@ -1058,6 +1073,13 @@ void SceneViewWidget::keyReleaseEvent(QKeyEvent *event)
     KeyboardState::keyStates[event->key()] = false;
 //	camController->onKeyReleased((Qt::Key)event->key());
 	camController->keyReleaseEvent(event);
+
+	//scene->getPhysicsEnvironment()->keyReleaseEvent((Qt::Key)event->key());
+	if (KeyboardState::isKeyUp(Qt::Key_W)) { scene->getPhysicsEnvironment()->walkForward = 0; }
+	if (KeyboardState::isKeyUp(Qt::Key_S)) { scene->getPhysicsEnvironment()->walkBackward = 0; }
+	if (KeyboardState::isKeyUp(Qt::Key_A)) { scene->getPhysicsEnvironment()->walkLeft = 0; }
+	if (KeyboardState::isKeyUp(Qt::Key_D)) { scene->getPhysicsEnvironment()->walkRight = 0; }
+	if (KeyboardState::isKeyUp(Qt::Key_Space)) { scene->getPhysicsEnvironment()->jump = 0; }
 }
 
 void SceneViewWidget::focusOutEvent(QFocusEvent* event)

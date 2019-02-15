@@ -17,6 +17,7 @@ For more information see the LICENSE file
 
 #include "irisgl/src/scenegraph/scene.h"
 #include "irisgl/src/scenegraph/scenenode.h"
+#include "irisgl/src/scenegraph/viewernode.h"
 #include "irisgl/src/core/irisutils.h"
 #include "mainwindow.h"
 #include "uimanager.h"
@@ -290,6 +291,21 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	action = new QAction(QIcon(), "Focus Camera", this);
 	connect(action, SIGNAL(triggered()), this, SLOT(focusOnNode()));
 	menu.addAction(action);
+
+	if (node->getSceneNodeType() == iris::SceneNodeType::Viewer) {
+		action = new QAction(QIcon(), "Make Active Character Controller", this);
+		connect(action, &QAction::triggered, this, [&]() {
+			// Set all other nodes to false, can we remove this for loop eventually?
+			for (auto node : scene->getRootNode()->children) {
+				if (node->getSceneNodeType() == iris::SceneNodeType::Viewer) {
+					node.staticCast<iris::ViewerNode>()->setActiveCharacterController(false);
+				}
+			}
+
+			node.staticCast<iris::ViewerNode>()->setActiveCharacterController(true);
+		});
+		menu.addAction(action);
+	}
 
     if (node->isPhysicsBody) {
         QMenu *physicsMenu = menu.addMenu("Physics");
