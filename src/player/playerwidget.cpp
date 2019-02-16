@@ -60,6 +60,8 @@ void PlayerWidget::createUI()
 		playBtn->setToolTip("Pause the scene");
 		playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
 		//UiManager::restartScene();
+
+		
 	});
 
 	connect(playBtn, &QPushButton::pressed, [playBtn, this]() {
@@ -79,9 +81,11 @@ void PlayerWidget::createUI()
 		playerView->play();
 	});
 
-	connect(stopBtn, &QPushButton::pressed, [playBtn]() {
+	connect(stopBtn, &QPushButton::pressed, [playBtn, this]() {
 		playBtn->setToolTip("Play the scene");
 		playBtn->setIcon(QIcon(":/icons/g_play.svg"));
+
+		playerView->stop();
 	});
 
 	playerControls->setLayout(playerControlsLayout);
