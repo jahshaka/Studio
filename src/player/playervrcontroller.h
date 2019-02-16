@@ -12,9 +12,14 @@ For more information see the LICENSE file
 #ifndef PLAYERVRCONTROLLER_H
 #define PLAYERVRCONTROLLER_H
 
+#include <QMatrix4x4>
 #include "../irisgl/src/irisglfwd.h"
 #include "../editor/cameracontrollerbase.h"
-#include <QMatrix4x4>
+#include "irisgl/src/physics/environment.h"
+#include "irisgl/src/physics/physicshelper.h"
+
+#include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
+#include "hand.h"
 
 class VrHand
 {
@@ -88,6 +93,21 @@ private:
 	iris::GrabNodePtr findGrabNode(iris::SceneNodePtr node);
 
 	float turnSpeed;
+
+	Hand* leftHand;
+	Hand* rightHand;
+
+	// PHYSICS STUFF
+	btRigidBody *activeRigidBody;
+
+	//testing
+	//class btTypedConstraint* m_pickedConstraint;
+	class btGeneric6DofConstraint* m_pickedConstraint;
+	int	m_savedState;
+	btVector3 m_oldPickingPos;
+	btVector3 m_hitPos;
+	btScalar m_oldPickingDist;
+	QVector3D rightHandPickOffset;
 };
 
 #endif // EDITORVRCONTROLLER_H
