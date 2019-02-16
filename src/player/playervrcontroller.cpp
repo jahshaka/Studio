@@ -71,7 +71,8 @@ public:
 
 PlayerVrController::PlayerVrController()
 {
-	
+	leftHand = new LeftHand();
+	rightHand = new RightHand();
 }
 
 void PlayerVrController::loadAssets(iris::ContentManagerPtr content)
@@ -121,6 +122,9 @@ void PlayerVrController::loadAssets(iris::ContentManagerPtr content)
 	fresnelMat = QSharedPointer<FresnelMaterial>(new FresnelMaterial());
 
 	turnSpeed = 4.0f;
+
+	leftHand->loadAssets();
+	rightHand->loadAssets();
 }
 
 void PlayerVrController::setScene(iris::ScenePtr scene)
@@ -149,28 +153,6 @@ void PlayerVrController::update(float dt)
     auto z = QVector3D::crossProduct(upVector,x).normalized();
 
     auto camPos = camera->getLocalPos();
-    // left
-    if(KeyboardState::isKeyDown(Qt::Key_Left))
-        camPos -= x * linearSpeed;
-
-    // right
-    if(KeyboardState::isKeyDown(Qt::Key_Right))
-        camPos += x * linearSpeed;
-
-    // up
-    if(KeyboardState::isKeyDown(Qt::Key_Up))
-        camPos += z * linearSpeed;
-
-    // down
-    if(KeyboardState::isKeyDown(Qt::Key_Down))
-        camPos -= z * linearSpeed;
-
-    camera->setLocalPos(camPos);
-
-	
-	return;
-
-    // touch controls
 
 	// LEFT CONTROLLER
     auto leftTouch = vrDevice->getTouchController(0);
@@ -289,11 +271,11 @@ void PlayerVrController::update(float dt)
 		}
     }
 
-
+	//rightHand->update(dt);
 	// RIGHT CONTROLLER
 	auto rightTouch = vrDevice->getTouchController(1);
 	if (rightTouch->isTracking()) {
-		
+
 		// Submit items to renderer
 		auto device = iris::VrManager::getDefaultDevice();
 
