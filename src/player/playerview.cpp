@@ -188,6 +188,18 @@ PlayerView::~PlayerView()
 
 }
 
-void PlayerView::play() {}
+void PlayerView::play()
+{
+	scene->getPhysicsEnvironment()->simulatePhysics();
+
+	// capture states of all nodes
+}
+
+
 void PlayerView::pause() {}
-void PlayerView::stop() {}
+void PlayerView::stop()
+{
+	scene->getPhysicsEnvironment()->stopPhysics();
+
+	// reset object positions and states
+}
