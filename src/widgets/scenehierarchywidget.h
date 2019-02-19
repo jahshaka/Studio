@@ -109,7 +109,7 @@ protected slots:
     void treeItemSelected(QTreeWidgetItem *item, int column);
     void sceneTreeCustomContextMenu(const QPoint &);
 
-    void constraintsPicked(int index, iris::PhysicsConstraintType type);
+    void constraintsPicked(int constraintGuidToIndex, iris::PhysicsConstraintType type);
 
     void deleteNode();
 	void duplicateNode();
