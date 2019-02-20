@@ -44,12 +44,15 @@ For more information see the LICENSE file
 #include "irisgl/src/scenegraph/cameranode.h"
 #include "irisgl/src/scenegraph/lightnode.h"
 #include "irisgl/src/scenegraph/viewernode.h"
+#include "irisgl/src/scenegraph/grabnode.h"
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/content/contentmanager.h"
 #include "irisgl/src/vr/vrdevice.h"
 #include "irisgl/src/vr/vrmanager.h"
 #include "irisgl/src/physics/environment.h"
 #include "irisgl/src/physics/physicshelper.h"
+#include "irisgl/src/content/contentmanager.h"
+#include "irisgl/src/content/modelloader.h"
 
 #include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
 
@@ -453,6 +456,25 @@ void SceneViewWidget::addViewerHeadsToScene()
 	}
 }
 
+void SceneViewWidget::addGrabGizmosToScene()
+{
+	QMatrix4x4 scale;
+	scale.setToIdentity();
+	scale.scale(1.0f);// scale by 1/100;
+	for (auto grabber : scene->grabbers) {
+		// set appropriate animation
+
+		// set time based on factor
+
+		// update animation
+		for (auto& modelMesh : handGizmoModel->modelMeshes) {
+			scene->geometryRenderList->submitMesh(modelMesh.mesh, handGizmoMaterial, grabber->getGlobalTransform() * modelMesh.transform * scale);
+		}
+		
+	}
+	
+}
+
 void SceneViewWidget::setScene(iris::ScenePtr scene)
 {
     this->scene = scene;
@@ -585,6 +607,11 @@ void SceneViewWidget::initializeGL()
 	outliner = new OutlinerRenderer();
 	outliner->loadAssets();
 
+	auto modelLoader = new iris::ModelLoader(renderer->getGraphicsDevice());
+	handGizmoModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/right_hand_anims.fbx"));
+	handGizmoMaterial = iris::DefaultMaterial::create();
+	handGizmoMaterial->setDiffuseColor(Qt::white);
+
     emit initializeGraphics(this, this);
 
     //thumbGen = new ThumbnialGenerator();
@@ -693,8 +720,10 @@ void SceneViewWidget::renderScene()
         }
 
 		//if (UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)
-		if (UiManager::sceneMode == SceneMode::EditMode)
+		if (UiManager::sceneMode == SceneMode::EditMode) {
 			addViewerHeadsToScene();
+			addGrabGizmosToScene();
+		}
 
         if (viewportMode == ViewportMode::Editor) {
             renderer->renderScene(dt, viewport);

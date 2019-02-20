@@ -119,6 +119,9 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
 	// vr viewer representation
 	iris::MaterialPtr viewerMat;
 	iris::MeshPtr viewerMesh;
+
+	iris::ModelPtr handGizmoModel;
+	iris::DefaultMaterialPtr handGizmoMaterial;
 public:
     iris::CameraNodePtr editorCam;
 
@@ -334,6 +337,7 @@ private:
     void addLightShapesToScene();
 
 	void addViewerHeadsToScene();
+	void addGrabGizmosToScene();
 
 	WindowSpaces windowSpace;
 	bool displayGizmos;
