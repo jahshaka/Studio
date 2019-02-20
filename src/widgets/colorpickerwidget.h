@@ -20,12 +20,14 @@ class ColorPickerWidget;
 }
 class ColorChooser;
 class QColorDialog;
+class ColorView;
 class ColorPickerWidget : public QWidget
 {
     Q_OBJECT
 
     QColor color;
 	ColorChooser* chooser;
+	ColorView *view;
     QColorDialog* dialog;
 
 public:

@@ -42,8 +42,8 @@ set(SRCS
     src/dialogs/aboutdialog.cpp 
     src/dialogs/preferences/worldsettings.cpp 
     src/dialogs/loadmeshdialog.cpp 
-	src/widgets/colorchooser.cpp 
-	src/widgets/colorcircle.cpp 
+	#src/widgets/colorchooser.cpp 
+	#src/widgets/colorcircle.cpp 
     src/widgets/animationwidget.cpp 
     src/widgets/keyframelabelwidget.cpp 
     src/widgets/keyframewidget.cpp 
@@ -142,6 +142,8 @@ set(SRCS
     src/misc/upgrader.cpp
     src/misc/QtAwesome.cpp
     src/misc/QtAwesomeAnim.cpp
+	src/misc/ss.cpp
+	src/Widgets/colorview.cpp
     src/dialogs/toast.cpp
 	src/helpers/tooltip.cpp
 	src/subclass/switch.cpp
@@ -158,8 +160,8 @@ set(HEADERS
     src/helpers/collisionhelper.h 
     src/dialogs/infodialog.h 
     src/dialogs/loadmeshdialog.h 
-	src/widgets/colorchooser.h 
-	src/widgets/colorcircle.h 
+	#src/widgets/colorchooser.h 
+	#src/widgets/colorcircle.h 
     src/widgets/animationwidget.h 
     src/widgets/keyframelabelwidget.h 
     src/widgets/keyframewidget.h 
@@ -274,6 +276,8 @@ set(HEADERS
     src/misc/upgrader.h
     src/misc/QtAwesome.h
     src/misc/QtAwesomeAnim.h 
+	src/misc/ss.h
+	src/Widgets/colorview.h
     src/dialogs/toast.h
 	src/helpers/tooltip.h
 	src/subclass/switch.h
