@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/viewernode.h"
 #include "../irisgl/src/scenegraph/lightnode.h"
 #include "../irisgl/src/scenegraph/particlesystemnode.h"
+#include "../irisgl/src/scenegraph/grabnode.h"
 #include "../irisgl/src/materials/defaultmaterial.h"
 #include "../irisgl/src/materials/custommaterial.h"
 #include "../irisgl/src/core/property.h"
@@ -249,7 +250,10 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
         sceneNode = createViewer(nodeObj).staticCast<iris::SceneNode>();
     } else if (nodeType == "particle system") {
         sceneNode = createParticleSystem(nodeObj).staticCast<iris::SceneNode>();
-    } else {
+    } else if (nodeType == "grab") {
+		sceneNode = createGrab(nodeObj).staticCast<iris::SceneNode>();
+	}
+	else {
         sceneNode = iris::SceneNode::create();
     }
 
@@ -540,6 +544,23 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
 	particleNode->setVisible(nodeObj["visible"].toBool(true));
 
     return particleNode;
+}
+
+iris::GrabNodePtr SceneReader::createGrab(QJsonObject & nodeObj)
+{
+	iris::HandPoseType poseType;
+	auto poseName = nodeObj["poseType"].toString();
+	if (poseName == "grab")
+		poseType = iris::HandPoseType::Grab;
+	else if (poseName == "pinch")
+		poseType = iris::HandPoseType::Pinch;
+
+	auto grabNode = iris::GrabNode::create();
+	grabNode->setGUID(nodeObj["guid"].toString());
+	grabNode->setPose(poseType);
+	grabNode->poseFactor = (float)nodeObj["poseFactor"].toDouble();
+
+	return grabNode;
 }
 
 iris::LightType SceneReader::getLightTypeFromName(QString lightType)
