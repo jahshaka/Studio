@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/lightnode.h"
 #include "../irisgl/src/scenegraph/viewernode.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
+#include "../irisgl/src/scenegraph/grabnode.h"
 #include "../irisgl/src/scenegraph/particlesystemnode.h"
 #include "../irisgl/src/materials/custommaterial.h"
 #include "../irisgl/src/core/property.h"
@@ -200,6 +201,9 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
         case iris::SceneNodeType::ParticleSystem:
             writeParticleData(sceneNodeObj, sceneNode.staticCast<iris::ParticleSystemNode>());
         break;
+		case iris::SceneNodeType::Grab:
+			writeGrabNodeData(sceneNodeObj, sceneNode.staticCast<iris::GrabNode>());
+		break;
         default: break;
     }
 
@@ -383,6 +387,23 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["texture"]              = handle->fetchAssetGUIDByName(QFileInfo(node->texture->getSource()).fileName());
 }
 
+void SceneWriter::writeGrabNodeData(QJsonObject & sceneNodeObject, iris::GrabNodePtr node)
+{
+	sceneNodeObject["guid"] = node->getGUID();
+	switch (node->handPose->getPoseType()) {
+	case iris::HandPoseType::Grab:
+		sceneNodeObject["poseType"] = "grab";
+		break;
+	case iris::HandPoseType::Pinch:
+		sceneNodeObject["poseType"] = "pinch";
+		break;
+	default:
+		sceneNodeObject["poseType"] = "grab";
+		break;
+	}
+	sceneNodeObject["poseFactor"] = node->poseFactor;
+}
+
 void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat, bool relative)
 {
     matObj["name"] = mat->getName();
@@ -518,6 +539,8 @@ QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)
             return "viewer";
         case iris::SceneNodeType::ParticleSystem:
             return "particle system";
+		case iris::SceneNodeType::Grab:
+			return "grab";
         default:
             return "empty";
     }
