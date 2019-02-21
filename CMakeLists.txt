@@ -42,8 +42,6 @@ set(SRCS
     src/dialogs/aboutdialog.cpp 
     src/dialogs/preferences/worldsettings.cpp 
     src/dialogs/loadmeshdialog.cpp 
-	#src/widgets/colorchooser.cpp 
-	#src/widgets/colorcircle.cpp 
     src/widgets/animationwidget.cpp 
     src/widgets/keyframelabelwidget.cpp 
     src/widgets/keyframewidget.cpp 
@@ -162,8 +160,6 @@ set(HEADERS
     src/helpers/collisionhelper.h 
     src/dialogs/infodialog.h 
     src/dialogs/loadmeshdialog.h 
-	#src/widgets/colorchooser.h 
-	#src/widgets/colorcircle.h 
     src/widgets/animationwidget.h 
     src/widgets/keyframelabelwidget.h 
     src/widgets/keyframewidget.h 
