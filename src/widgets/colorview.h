@@ -15,7 +15,7 @@
 #include <QWidget>
 #include <QLinearGradient>
 #include <qwindowdefs_win.h>
-#include "../misc/ss.h"
+#include "../misc/stylesheet.h"
 
 class ValueSlider : public QSlider
 {

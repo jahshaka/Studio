@@ -143,7 +143,7 @@ set(SRCS
     src/misc/upgrader.cpp
     src/misc/QtAwesome.cpp
     src/misc/QtAwesomeAnim.cpp
-	src/misc/ss.cpp
+	src/misc/stylesheet.cpp
 	src/Widgets/colorview.cpp
     src/dialogs/toast.cpp
 	src/helpers/tooltip.cpp
@@ -279,7 +279,7 @@ set(HEADERS
     src/misc/upgrader.h
     src/misc/QtAwesome.h
     src/misc/QtAwesomeAnim.h 
-	src/misc/ss.h
+	src/misc/stylesheet.h
 	src/Widgets/colorview.h
     src/dialogs/toast.h
 	src/helpers/tooltip.h

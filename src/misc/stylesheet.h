@@ -7,7 +7,7 @@
 
 #include <QWidget>
 
-class SS : public QObject
+class StyleSheet : public QObject
 {
 public:
     static QString QPushButtonInvisible();
