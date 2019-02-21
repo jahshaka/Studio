@@ -54,7 +54,6 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 
     physicsPropView = new PhysicsPropertyWidget();
     physicsPropView->setPanelTitle("Physics Properties");
-    physicsPropView->expand();
 
     meshPropView = new MeshPropertyWidget();
     meshPropView->setPanelTitle("Mesh Properties");

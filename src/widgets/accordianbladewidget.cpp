@@ -48,10 +48,8 @@ AccordianBladeWidget::AccordianBladeWidget(QWidget* parent) :
 
     connect(ui->toggle, SIGNAL(toggled(bool)), SLOT(onPanelToggled()));
 
-    // Most panels are by default set to expand so safe to assume dropdown state (iKlsR)
-    ui->toggle->setIcon(QIcon(":/icons/chevron-arrow-down.svg"));
     ui->toggle->setIconSize(QSize(24, 24));
-    ui->contentpane->setVisible(false);
+	collapse();
 }
 
 AccordianBladeWidget::~AccordianBladeWidget()
@@ -77,11 +75,8 @@ void AccordianBladeWidget::clearPanel(QLayout *layout)
 void AccordianBladeWidget::onPanelToggled()
 {
     if (ui->contentpane->isVisible()) {
-        ui->toggle->setIcon(QIcon(":/icons/right-chevron.svg"));
-        ui->contentpane->setVisible(false);
-        this->setMinimumHeight(ui->bg->height());
+		collapse();
     } else {
-        ui->toggle->setIcon(QIcon(":/icons/chevron-arrow-down.svg"));
         expand();
     }
 }
@@ -236,6 +231,13 @@ LabelWidget* AccordianBladeWidget::addLabel(const QString& title, const QString&
     return label;
 }
 
+void AccordianBladeWidget::collapse()
+{
+	ui->toggle->setIcon(QIcon(":/icons/right-chevron.svg"));
+	ui->contentpane->setVisible(false);
+	this->setMinimumHeight(ui->bg->height());
+}
+
 void AccordianBladeWidget::expand()
 {
     // this is a tad bit hacky and there is definitely a better way to do this automatically
@@ -248,7 +250,7 @@ void AccordianBladeWidget::expand()
 
     this->setMinimumHeight(0);
     // this->setMaximumHeight(finalHeight);
-
+	ui->toggle->setIcon(QIcon(":/icons/chevron-arrow-down.svg"));
     ui->contentpane->setVisible(true);
 }
 

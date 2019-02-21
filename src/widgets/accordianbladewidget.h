@@ -58,6 +58,7 @@ public:
     PropertyWidget*         addPropertyWidget();
 
     void setPanelTitle(const QString&);
+    void collapse();
     void expand();
 
     void clearPanel(QLayout *layout);
