@@ -64,6 +64,8 @@ class TranslationGizmo;
 class ViewerCameraController;
 class ViewportGizmo;
 class Globals;
+class btRigidBody;
+class HandGizmoHandler;
 
 enum class ViewportMode
 {
@@ -120,6 +122,7 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
 
 	iris::ModelPtr handGizmoModel;
 	iris::DefaultMaterialPtr handGizmoMaterial;
+	HandGizmoHandler* handGizmoHandler;
 public:
     iris::CameraNodePtr editorCam;
 

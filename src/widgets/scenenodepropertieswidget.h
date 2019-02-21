@@ -31,6 +31,7 @@ class EmitterPropertyWidget;
 class NodePropertyWidget;
 class MeshPropertyWidget;
 class PhysicsPropertyWidget;
+class HandPropertyWidget;
 class DemoPane;
 class SceneViewWidget;
 class Database;
@@ -80,7 +81,8 @@ private:
     LightPropertyWidget* lightPropView;
     WorldPropertyWidget* worldPropView;
     FogPropertyWidget*  fogPropView;
-    MeshPropertyWidget* meshPropView;
+	MeshPropertyWidget* meshPropView;
+	HandPropertyWidget* handPropView;
     PhysicsPropertyWidget *physicsPropView;
     DemoPane* demoPane;
 
