@@ -5,17 +5,17 @@
 //  Created by will on 2/3/19.
 //
 
-#include "ss.h"
+#include "stylesheet.h"
 
 
 
-QString SS::QPushButtonInvisible() {
+QString StyleSheet::QPushButtonInvisible() {
     return {
         "QPushButton{background : rgba(0,0,0,0); border : 0px; }"
     };
 }
 
-QString SS::QSpinBox() {
+QString StyleSheet::QSpinBox() {
     return {
         "QAbstractSpinBox { padding-right: 0px;    background: #292929; margin-right: -6px; }"
         "QAbstractSpinBox, QLabel { color:rgba(255,255,255,.8); padding: 3px } QAbstractSpinBox::down-button, QAbstractSpinBox::up-button { background: rgba(0,0,0,0); border : 1px solid rgba(0,0,0,0); }"
@@ -23,7 +23,7 @@ QString SS::QSpinBox() {
     };
 }
 
-QString SS::QSlider() {
+QString StyleSheet::QSlider() {
     return {
         "QSlider::sub-page {    border: 0px solid transparent;    height: 2px;    background: #3498db;    margin: 2px 0;}"
         "QSlider::groove:horizontal { border: 0px solid transparent; height: 4px; background: #1e1e1e;   margin: 1px 0; border-radius: .5px; }"
@@ -37,14 +37,14 @@ QString SS::QSlider() {
     };
 }
 
-QString SS::QLineEdit() {
+QString StyleSheet::QLineEdit() {
     return {
         "QLineEdit { color: rgba(255,255,255,.9); background: rgba(51,51,51,0.5); border: 1px solid rgba(0,0,0,.4); selection-background-color: #808080; padding : 5px;}"
 
     };
 }
 
-QString SS::QPushButtonGreyscale() {
+QString StyleSheet::QPushButtonGreyscale() {
     return{
         "QPushButton{ background-color: #333; color: #DEDEDE; border : 0; padding: 4px 16px; }"
         "QPushButton:hover{ background-color: #555; }"
@@ -53,20 +53,20 @@ QString SS::QPushButtonGreyscale() {
     };
 }
 
-QString SS::QWidgetDark() {
+QString StyleSheet::QWidgetDark() {
     return {
         "QWidget{ background: rgba(26,26,26,1);border: 1px solid rgba(0,0,0,0); padding:0px; spacing : 0px;}"
 
     };
 }
 
-QString SS::QLabelWhite() {
+QString StyleSheet::QLabelWhite() {
     return {
         "QLabel{ color : rgba(255, 255,255, .9); }"
     };
 }
 
-QString SS::QComboBox() {
+QString StyleSheet::QComboBox() {
     return {
         "QComboBox{background: rgba(0,0,0,0); border :0px; border-bottom: 1px solid black; padding: 5px; margin-left : 5px; color : rgba(255,255,255,.9);} "
         "QComboBox:drop-down {   border :0px solid black;}"
@@ -75,13 +75,13 @@ QString SS::QComboBox() {
     };
 }
 
-QString SS::QPushButtonRounded(int size) {
+QString StyleSheet::QPushButtonRounded(int size) {
     return {
         "QPushButton{border : 0px; radius : "+QString::number(size/2)+" }"
     };
 }
 
-QString SS::QPushButtonGrouped() {
+QString StyleSheet::QPushButtonGrouped() {
     return QString(
     "QPushButton{ background:rgba(51,51,51,.5); color: rgba(190,190,190,1); border : 1px solid rgba(20,20,20,.4); padding: 5px 16px;} "
     "QPushButton:checked{ color : rgba(50,150,250,1);}"

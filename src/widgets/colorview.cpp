@@ -21,7 +21,7 @@ ColorView::ColorView(QColor color, QWidget *parent ) : QWidget(parent)
 void ColorView::configureView()
 {
     setAttribute(Qt::WA_MacShowFocusRect, false);
-    setStyleSheet(SS::QWidgetDark());
+    setStyleSheet(StyleSheet::QWidgetDark());
     
 	setWindowFlags(windowFlags() | Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint );
 	setAttribute(Qt::WA_TranslucentBackground);
@@ -76,13 +76,13 @@ void ColorView::configureView()
     vSlider = new QSlider(Qt::Horizontal, this);
     aSlider = new QSlider(Qt::Horizontal, this);
     
-    rSlider->setStyleSheet(SS::QSlider());
-    gSlider->setStyleSheet(SS::QSlider());
-    bSlider->setStyleSheet(SS::QSlider());
-    hSlider->setStyleSheet(SS::QSlider());
-    sSlider->setStyleSheet(SS::QSlider());
-    vSlider->setStyleSheet(SS::QSlider());
-    aSlider->setStyleSheet(SS::QSlider());
+    rSlider->setStyleSheet(StyleSheet::QSlider());
+    gSlider->setStyleSheet(StyleSheet::QSlider());
+    bSlider->setStyleSheet(StyleSheet::QSlider());
+    hSlider->setStyleSheet(StyleSheet::QSlider());
+    sSlider->setStyleSheet(StyleSheet::QSlider());
+    vSlider->setStyleSheet(StyleSheet::QSlider());
+    aSlider->setStyleSheet(StyleSheet::QSlider());
 
     rBox = new QSpinBox(this);
     gBox = new QSpinBox(this);
@@ -92,13 +92,13 @@ void ColorView::configureView()
     vBox = new QSpinBox(this);
     aBox = new QSpinBox(this);
     
-    rBox->setStyleSheet(SS::QSpinBox());
-    gBox->setStyleSheet(SS::QSpinBox());
-    bBox->setStyleSheet(SS::QSpinBox());
-    hBox->setStyleSheet(SS::QSpinBox());
-    sBox->setStyleSheet(SS::QSpinBox());
-    vBox->setStyleSheet(SS::QSpinBox());
-    aBox->setStyleSheet(SS::QSpinBox());
+    rBox->setStyleSheet(StyleSheet::QSpinBox());
+    gBox->setStyleSheet(StyleSheet::QSpinBox());
+    bBox->setStyleSheet(StyleSheet::QSpinBox());
+    hBox->setStyleSheet(StyleSheet::QSpinBox());
+    sBox->setStyleSheet(StyleSheet::QSpinBox());
+    vBox->setStyleSheet(StyleSheet::QSpinBox());
+    aBox->setStyleSheet(StyleSheet::QSpinBox());
 
     auto rLabel = new QLabel("R");
     auto gLabel = new QLabel("G");
@@ -110,14 +110,14 @@ void ColorView::configureView()
     auto format = new QLabel("Format:");
     format->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     
-    rLabel->setStyleSheet(SS::QLabelWhite());
-    gLabel->setStyleSheet(SS::QLabelWhite());
-    bLabel->setStyleSheet(SS::QLabelWhite());
-    hLabel->setStyleSheet(SS::QLabelWhite());
-    sLabel->setStyleSheet(SS::QLabelWhite());
-    vLabel->setStyleSheet(SS::QLabelWhite());
-    aLabel->setStyleSheet(SS::QLabelWhite());
-    format->setStyleSheet(SS::QLabelWhite());
+    rLabel->setStyleSheet(StyleSheet::QLabelWhite());
+    gLabel->setStyleSheet(StyleSheet::QLabelWhite());
+    bLabel->setStyleSheet(StyleSheet::QLabelWhite());
+    hLabel->setStyleSheet(StyleSheet::QLabelWhite());
+    sLabel->setStyleSheet(StyleSheet::QLabelWhite());
+    vLabel->setStyleSheet(StyleSheet::QLabelWhite());
+    aLabel->setStyleSheet(StyleSheet::QLabelWhite());
+    format->setStyleSheet(StyleSheet::QLabelWhite());
 
     lineEditor = new QLineEdit(this);
     lineEditor->setEnabled(false);
@@ -134,9 +134,9 @@ void ColorView::configureView()
     grp.setExclusive(true);
     rgb->setChecked(true);
     
-    rgb->setStyleSheet(SS::QPushButtonGrouped());
-    hsv->setStyleSheet(SS::QPushButtonGrouped());
-    hex->setStyleSheet(SS::QPushButtonGrouped());
+    rgb->setStyleSheet(StyleSheet::QPushButtonGrouped());
+    hsv->setStyleSheet(StyleSheet::QPushButtonGrouped());
+    hex->setStyleSheet(StyleSheet::QPushButtonGrouped());
 
     auto buttonWidget = new QWidget;
     auto buttonWidgetLayout = new QHBoxLayout;
@@ -149,13 +149,13 @@ void ColorView::configureView()
     buttonWidgetLayout->setSpacing(0);
     buttonWidgetLayout->setContentsMargins(0, 10, 0, 10);
 
-    lineEditor->setStyleSheet(SS::QLineEdit());
+    lineEditor->setStyleSheet(StyleSheet::QLineEdit());
     confirm = new QPushButton("confirm", this);
     reset = new QPushButton("reset", this);
     cancel = new QPushButton("cancel", this);
-    confirm->setStyleSheet(SS::QPushButtonGreyscale());
-    reset->setStyleSheet(SS::QPushButtonGreyscale());
-    cancel->setStyleSheet(SS::QPushButtonGreyscale());
+    confirm->setStyleSheet(StyleSheet::QPushButtonGreyscale());
+    reset->setStyleSheet(StyleSheet::QPushButtonGreyscale());
+    cancel->setStyleSheet(StyleSheet::QPushButtonGreyscale());
 
     display = new ColorDisplay;
     circle = new ColorCircle();
@@ -817,7 +817,7 @@ ColorDisplay::ColorDisplay(QWidget *parent) : QWidget(parent) {
         emit pick();
     });
    
-    button->setStyleSheet(SS::QPushButtonInvisible());
+    button->setStyleSheet(StyleSheet::QPushButtonInvisible());
 }
 
 void ColorDisplay::paintEvent(QPaintEvent *) {
