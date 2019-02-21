@@ -20,11 +20,10 @@ For more information see the LICENSE file
 #include <QOpenGLWidget>
 #include <QSharedPointer>
 
-#include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h" 
-
 #include "irisgl/src/irisglfwd.h"
 #include "irisgl/src/math/intersectionhelper.h"
-#include "irisgl/src/physics/physicsproperties.h"
+
+#include "irisgl/src/physics/environment.h"
 
 #include "mainwindow.h"
 #include "uimanager.h"
@@ -65,7 +64,6 @@ class TranslationGizmo;
 class ViewerCameraController;
 class ViewportGizmo;
 class Globals;
-class btRigidBody;
 
 enum class ViewportMode
 {
@@ -131,16 +129,6 @@ public:
     void setDatabase(Database *window) {
         database = database;
     }
-
-    btRigidBody *activeRigidBody;
-
-    //testing
-    //class btTypedConstraint* m_pickedConstraint;
-    class btGeneric6DofConstraint* m_pickedConstraint;
-    int	m_savedState;
-    btVector3 m_oldPickingPos;
-    btVector3 m_hitPos;
-    btScalar m_oldPickingDist;
 
     ThumbnailGenerator* thumbGen;
 	QOpenGLDebugLogger* glDebugger;
