@@ -78,6 +78,7 @@ For more information see the LICENSE file
 #include "editor/viewercontroller.h"
 #include "editor/viewermaterial.h"
 #include "scenehierarchywidget.h"
+#include "editor/handgizmo.h" 
 
 void SceneViewWidget::setShowFps(bool value)
 {
@@ -315,6 +316,9 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     showFps = SettingsManager::getDefaultManager()->getValue("show_fps", false).toBool();
 	showPerspevtiveLabel = SettingsManager::getDefaultManager()->getValue("show_PL", true).toBool();
 	settings = SettingsManager::getDefaultManager();
+
+    m_pickedConstraint = nullptr;
+	handGizmoHandler = new HandGizmoHandler();
 }
 
 void SceneViewWidget::resetEditorCam()
@@ -454,6 +458,7 @@ void SceneViewWidget::addViewerHeadsToScene()
 
 void SceneViewWidget::addGrabGizmosToScene()
 {
+	/*
 	QMatrix4x4 scale;
 	scale.setToIdentity();
 	scale.scale(1.0f);// scale by 1/100;
@@ -468,7 +473,8 @@ void SceneViewWidget::addGrabGizmosToScene()
 		}
 		
 	}
-	
+	*/
+	handGizmoHandler->submitHandToScene(scene);
 }
 
 void SceneViewWidget::setScene(iris::ScenePtr scene)
@@ -603,10 +609,11 @@ void SceneViewWidget::initializeGL()
 	outliner = new OutlinerRenderer();
 	outliner->loadAssets();
 
-	auto modelLoader = new iris::ModelLoader(renderer->getGraphicsDevice());
 	handGizmoModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/right_hand_anims.fbx"));
 	handGizmoMaterial = iris::DefaultMaterial::create();
 	handGizmoMaterial->setDiffuseColor(Qt::white);
+
+	handGizmoHandler->loadAssets(content);
 
     emit initializeGraphics(this, this);
 

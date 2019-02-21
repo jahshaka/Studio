@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "propertywidgets/shaderpropertywidget.h"
 #include "propertywidgets/worldpropertywidget.h"
 #include "propertywidgets/physicspropertywidget.h"
+#include "propertywidgets/handpropertywidget.h"
 
 SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(parent)
 {
@@ -72,6 +73,11 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     shaderPropView->setPanelTitle("Shader Definitions");
     shaderPropView->setDatabase(db);
     shaderPropView->expand();
+
+	handPropView = new HandPropertyWidget();
+	handPropView->setPanelTitle("Hand");
+	//handPropView->setDatabase(db);
+	handPropView->expand();
 
     setLayout(widgetPropertyLayout);
 }
@@ -146,6 +152,12 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                     widgetPropertyLayout->addWidget(emitterPropView);
                     break;
                 }
+				
+				case iris::SceneNodeType::Grab:
+					handPropView->setParent(this);
+					handPropView->setSceneNode(sceneNode);
+					widgetPropertyLayout->addWidget(handPropView);
+					break;
 
                 default: break;
             }
