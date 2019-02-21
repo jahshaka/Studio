@@ -11,7 +11,6 @@ For more information see the LICENSE file
 
 #include "colorpickerwidget.h"
 #include "ui_colorpickerwidget.h"
-#include "colorchooser.h" 
 #include "colorview.h"
 #include <QColorDialog>
 #include <QPainter>
@@ -22,8 +21,6 @@ ColorPickerWidget::ColorPickerWidget(QWidget *parent) :
     ui(new Ui::ColorPickerWidget)
 {
     ui->setupUi(this);
-	/*chooser = new ColorChooser(this);
-	connect(chooser, SIGNAL(onColorChanged(QColor)), this, SLOT(colorChanged(QColor)));*/
     color = QColor::fromRgb(255,255,255);
 
 	view = new ColorView;
@@ -67,7 +64,6 @@ void ColorPickerWidget::colorChanged(QColor col)
 
 void ColorPickerWidget::mouseReleaseEvent(QMouseEvent* event)
 {
-	//chooser->showWithColor(color, event, objectName());
 	view->showAtPosition(event, color);
     this->repaint();
 }

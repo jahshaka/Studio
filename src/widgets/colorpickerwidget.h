@@ -18,7 +18,6 @@ For more information see the LICENSE file
 namespace Ui {
 class ColorPickerWidget;
 }
-class ColorChooser;
 class QColorDialog;
 class ColorView;
 class ColorPickerWidget : public QWidget
@@ -26,7 +25,6 @@ class ColorPickerWidget : public QWidget
     Q_OBJECT
 
     QColor color;
-	ColorChooser* chooser;
 	ColorView *view;
     QColorDialog* dialog;
 
