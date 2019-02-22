@@ -317,7 +317,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 	showPerspevtiveLabel = SettingsManager::getDefaultManager()->getValue("show_PL", true).toBool();
 	settings = SettingsManager::getDefaultManager();
 
-    m_pickedConstraint = nullptr;
+    //m_pickedConstraint = nullptr;
 	handGizmoHandler = new HandGizmoHandler();
 }
 
