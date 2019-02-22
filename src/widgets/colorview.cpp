@@ -20,6 +20,9 @@ For more information see the LICENSE file
 #include <QMouseEvent>
 #include <QWindow>
 
+ColorView* ColorView::instance = 0;
+
+
 ColorView::ColorView(QColor color, QWidget *parent ) : QWidget(parent)
 {
     this->initialColor = color;
@@ -361,6 +364,7 @@ void ColorView::configureConnections()
     
     connect(confirm, &QPushButton::clicked, [=](){
         hide();
+		emit exiting();
     });
     connect(reset, &QPushButton::clicked, [=](){
         inputCircle->setColor(inputCircle->getInitialColor());
@@ -368,6 +372,7 @@ void ColorView::configureConnections()
     connect(cancel, &QPushButton::clicked, [=](){
 		inputCircle->setColor(inputCircle->getInitialColor());
         hide();
+		emit exiting();
     });
     
     connect(rgb, &QPushButton::clicked, [=](){
@@ -463,6 +468,14 @@ void ColorView::showAtPosition(QMouseEvent *event, QColor color)
 	if (geometry().y() < 0) move(geometry().x(), 10);
 }
 
+ColorView * ColorView::getSingleston()
+{
+	if (instance == nullptr)
+		instance = new ColorView();
+
+	return instance;
+}
+
 QString ColorView::colorNameFromSpac(QColor col) {
     QString name;
     switch (spec)
@@ -519,7 +532,10 @@ void ColorView::createOverlay() {
 }
 
 void ColorView::leaveEvent(QEvent *) {
-    if(!picking)    this->hide();
+	if (!picking) {
+		this->hide();
+		emit exiting();
+	}
 }
 
 void ColorView::enterEvent(QEvent *)

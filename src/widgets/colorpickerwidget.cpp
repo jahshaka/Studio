@@ -23,8 +23,6 @@ ColorPickerWidget::ColorPickerWidget(QWidget *parent) :
     ui->setupUi(this);
     color = QColor::fromRgb(255,255,255);
 
-	view = new ColorView;
-	connect(view, SIGNAL(onColorChanged(QColor)), this, SLOT(colorChanged(QColor)));
 }
 
 ColorPickerWidget::~ColorPickerWidget()
@@ -64,6 +62,11 @@ void ColorPickerWidget::colorChanged(QColor col)
 
 void ColorPickerWidget::mouseReleaseEvent(QMouseEvent* event)
 {
+	view = ColorView::getSingleston();
+	connect(view, SIGNAL(onColorChanged(QColor)), this, SLOT(colorChanged(QColor)));
+	connect(view, &ColorView::exiting, [=]() {
+		view->disconnect();
+	});
 	view->showAtPosition(event, color);
     this->repaint();
 }
