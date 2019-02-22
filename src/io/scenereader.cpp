@@ -23,34 +23,19 @@ For more information see the LICENSE file
 #include "scenereader.h"
 #include "assetmanager.h"
 
-#include "../globals.h"
-#include "../constants.h"
-#include "../core/database/database.h"
+#include "globals.h"
+#include "constants.h"
+#include "core/database/database.h"
 
-#include "../editor/editordata.h"
-#include "../materials/jahdefaultmaterial.h"
+#include "editor/editordata.h"
+#include "materials/jahdefaultmaterial.h"
 
-#include "../irisgl/src/scenegraph/scene.h"
-#include "../irisgl/src/scenegraph/scenenode.h"
-#include "../irisgl/src/core/irisutils.h"
-#include "../irisgl/src/scenegraph/meshnode.h"
-#include "../irisgl/src/scenegraph/cameranode.h"
-#include "../irisgl/src/scenegraph/viewernode.h"
-#include "../irisgl/src/scenegraph/lightnode.h"
-#include "../irisgl/src/scenegraph/particlesystemnode.h"
-#include "../irisgl/src/scenegraph/grabnode.h"
-#include "../irisgl/src/materials/defaultmaterial.h"
-#include "../irisgl/src/materials/custommaterial.h"
-#include "../irisgl/src/core/property.h"
-#include "../irisgl/src/graphics/texture2d.h"
-#include "../irisgl/src/graphics/graphicshelper.h"
-#include "../irisgl/src/graphics/mesh.h"
-#include "../irisgl/src/animation/animation.h"
-#include "../irisgl/src/animation/keyframeanimation.h"
-#include "../irisgl/src/animation/keyframeset.h"
-#include "../irisgl/src/animation/propertyanim.h"
-#include "../irisgl/src/graphics/postprocess.h"
-#include "../irisgl/src/graphics/postprocessmanager.h"
+#include "irisgl/Graphics.h"
+#include "irisgl/Animation.h"
+#include "irisgl/SceneGraph.h"
+
+#include "irisgl/src/graphics/postprocess.h"
+#include "irisgl/src/graphics/postprocessmanager.h"
 
 #include "../irisgl/src/postprocesses/bloompostprocess.h"
 #include "../irisgl/src/postprocesses/coloroverlaypostprocess.h"
@@ -264,6 +249,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 
     //read name
     sceneNode->name = nodeObj["name"].toString("");
+	sceneNode->setGUID(nodeObj["guid"].toString(IrisUtils::generateGUID()));
     sceneNode->setAttached(nodeObj["attached"].toBool());
     sceneNode->setPickable(nodeObj["pickable"].toBool(true));
 
