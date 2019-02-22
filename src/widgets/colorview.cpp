@@ -188,7 +188,7 @@ void ColorView::configureView()
     aLayout->addWidget(aLabel,3,0, 1, 1);
     aLayout->addWidget(aSlider,3,1, 1, 1);
     aLayout->addWidget(aBox,3,2, 1, 1);
-    aLayout->setContentsMargins(12, 0, 12, 0);
+    aLayout->setContentsMargins(7, 0, 7, 0);
     
     hlayoutWidget->addWidget(circle, 0, 0);
     hlayoutWidget->addWidget(display, 2, 0);
@@ -365,6 +365,7 @@ void ColorView::configureConnections()
         inputCircle->setColor(inputCircle->getInitialColor());
     });
     connect(cancel, &QPushButton::clicked, [=](){
+		inputCircle->setColor(inputCircle->getInitialColor());
         hide();
     });
     
@@ -457,6 +458,8 @@ void ColorView::showAtPosition(QMouseEvent *event, QColor color)
 	setGeometry(x, y, width(), height());
 	setMaximumHeight(height());
 	show();
+
+	if (geometry().y() < 0) move(geometry().x(), 10);
 }
 
 QString ColorView::colorNameFromSpac(QColor col) {
