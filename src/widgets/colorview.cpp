@@ -26,6 +26,7 @@ ColorView::ColorView(QColor color, QWidget *parent ) : QWidget(parent)
     configureView();
     configureConnections();
     inputCircle->setInitialColor(color);
+
 }
 
 void ColorView::configureView()
@@ -77,7 +78,8 @@ void ColorView::configureView()
     aWidget->setLayout(aLayout);
 
     stackWidget = new QStackedWidget(this);
-    
+	setStyle(new SliderMoveToMouseClickPositionStyle(this->style()));
+
     rSlider = new QSlider(Qt::Horizontal, this);
     gSlider = new QSlider(Qt::Horizontal, this);
     bSlider = new QSlider(Qt::Horizontal, this);
@@ -233,7 +235,6 @@ void ColorView::configureView()
 }
 
 void ColorView::configureStylesheet() {
-
     setStyleSheet(
             "background: rgba(25,25,25,1);;"
             );

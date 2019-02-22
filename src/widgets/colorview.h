@@ -24,8 +24,26 @@ For more information see the LICENSE file
 #include <QStackedWidget>
 #include <QWidget>
 #include <QLinearGradient>
+#include <QProxyStyle>
 #include <qwindowdefs_win.h>
 #include "../misc/stylesheet.h"
+
+
+class SliderMoveToMouseClickPositionStyle : public QProxyStyle
+{
+public:
+	using QProxyStyle::QProxyStyle;
+
+	int styleHint(QStyle::StyleHint hint,
+		const QStyleOption* option = 0,
+		const QWidget* widget = 0,
+		QStyleHintReturn* returnData = 0) const
+	{
+		if (hint == QStyle::SH_Slider_AbsoluteSetButtons) 	return (Qt::LeftButton | Qt::MidButton | Qt::RightButton);
+		return QProxyStyle::styleHint(hint, option, widget, returnData);
+	}
+};
+
 
 class ValueSlider : public QSlider
 {
