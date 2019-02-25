@@ -29,7 +29,8 @@ ColorView::ColorView(QColor color, QWidget *parent ) : QWidget(parent)
     configureView();
     configureConnections();
     inputCircle->setInitialColor(color);
-
+	layout()->update();
+	layout()->activate();
 }
 
 void ColorView::configureView()
@@ -205,7 +206,6 @@ void ColorView::configureView()
     hlayoutSliders->addWidget(rLabel, 0, 0);
     hlayoutSliders->addWidget(gLabel, 1, 0);
     hlayoutSliders->addWidget(bLabel, 2, 0);
-//    hlayoutSliders->addWidget(aLabel, 3, 0);
     hsvlayoutSliders->addWidget(hLabel,0,0);
     hsvlayoutSliders->addWidget(sLabel,1,0);
     hsvlayoutSliders->addWidget(vLabel,2,0);
@@ -213,7 +213,6 @@ void ColorView::configureView()
     hlayoutSliders->addWidget(rSlider, 0, 1);
     hlayoutSliders->addWidget(gSlider, 1, 1);
     hlayoutSliders->addWidget(bSlider, 2, 1);
-//    hlayoutSliders->addWidget(aSlider, 3, 1);
     hsvlayoutSliders->addWidget(hSlider,0,1);
     hsvlayoutSliders->addWidget(sSlider,1,1);
     hsvlayoutSliders->addWidget(vSlider,2,1);
@@ -221,7 +220,6 @@ void ColorView::configureView()
     hlayoutSliders->addWidget(rBox, 0, 2);
     hlayoutSliders->addWidget(gBox, 1, 2);
     hlayoutSliders->addWidget(bBox, 2, 2);
-//    hlayoutSliders->addWidget(aBox, 3, 2);
     hsvlayoutSliders->addWidget(hBox,0,2);
     hsvlayoutSliders->addWidget(sBox,1,2);
     hsvlayoutSliders->addWidget(vBox,2,2);
@@ -456,16 +454,17 @@ void ColorView::showAtPosition(QMouseEvent *event, QColor color)
 	int factor = 3;
 	int screenX = event->screenPos().x();
 	int screenY = event->screenPos().y();
+	y = screenY - 40;
 	if (screenX + width() + offset >= QApplication::desktop()->screenGeometry().width())	x = screenX - width() - offset* factor;
-	else	x = screenX + offset* factor;
-	if (screenY + height() + offset > QApplication::desktop()->screenGeometry().height())	y = screenY - height() - offset* factor;
-	else	y = screenY + offset * factor;
+	else	x = (screenX + offset) * factor;
+	if (screenY + height() + offset > geom.height())	y = screenY - height() - offset* factor;
+	if (geometry().y() < 0) y = 10;
 
 	setGeometry(x, y, width(), height());
 	setMaximumHeight(height());
 	show();
 
-	if (geometry().y() < 0) move(geometry().x(), 10);
+	if (geometry().y() < 0) move(geometry().x(), 10); // if too high
 }
 
 ColorView * ColorView::getSingleston()
@@ -579,7 +578,7 @@ void ColorView::setColorFromHex() {
 
 ColorCircle::ColorCircle(QWidget *parent) : QWidget(parent)
 {
-    squareSize = 250;
+    squareSize = 200;
     radius = squareSize / 2 ;
     centerPoint.setX(radius );
     centerPoint.setY(radius );
@@ -691,7 +690,6 @@ void InputCircle::setCirclePosition(QMouseEvent *event) {
     color = getCurrentColorFromPosition();
     emit positionChanged(color);
     emit updateColorText(color);
-//    emit updateValue(color.value());
 }
 
 QColor InputCircle::getCurrentColorFromPosition() {
@@ -865,7 +863,6 @@ Overlay::Overlay(QRect sg, int screenNumber, QWidget *parent) : QWidget(parent) 
 
     setMouseTracking(true);
     setAttribute(Qt::WA_QuitOnClose, false);
-   // setAttribute(Qt::WA_TranslucentBackground);
 
     qreal overlayOpacity = 0.01f;
     setWindowOpacity(overlayOpacity);
@@ -887,15 +884,6 @@ void Overlay::mousePressEvent(QMouseEvent *event) {
 }
 
 void Overlay::mouseMoveEvent(QMouseEvent *eve) {
-    
-    //int mouseScreen = qApp->desktop()->screenNumber(QCursor::pos());
-    //auto point = QCursor::pos() - QPoint(10,10);
-    //auto p = QGuiApplication::screens().at(mouseScreen)->grabWindow(winId(),point.x(), point.y(),20,20);
-    //auto col = p.toImage().pixelColor(10,10);
-
-
-	//pixmap = QGuiApplication::screens().at(screenNum)->grabWindow(QApplication::desktop()->winId());
-	//pixmap = this->grab();
 
 	auto screen = QGuiApplication::screens().at(screenNum);
 	auto geom = screen->geometry();
