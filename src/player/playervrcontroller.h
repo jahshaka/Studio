@@ -31,6 +31,7 @@ public:
 
 class PlayerVrController : public CameraControllerBase
 {
+	friend class Hand;
 public:
 	iris::ModelPtr leftHandModel;
 	iris::ModelPtr rightHandModel;
@@ -69,6 +70,8 @@ public:
 
 	PlayerVrController();
 
+	void setCamera(iris::CameraNodePtr cam);
+
 	void loadAssets(iris::ContentManagerPtr content);
 
     void setScene(iris::ScenePtr scene);
@@ -77,7 +80,7 @@ public:
 
     void update(float dt);
 
-private:
+
     /*
      * Does a ray cast to the scene
      * Returns nearest object hit in the raycast
@@ -85,7 +88,7 @@ private:
     bool rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResult& result);
 
 	iris::SceneNodePtr getObjectRoot(iris::SceneNodePtr node);
-
+private:
 	void submitHoveredNodes();
 	void submitHoveredNode(iris::SceneNodePtr node);
 
