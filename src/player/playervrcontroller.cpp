@@ -71,8 +71,15 @@ public:
 
 PlayerVrController::PlayerVrController()
 {
-	leftHand = new LeftHand();
-	rightHand = new RightHand();
+	leftHand = new LeftHand(this);
+	rightHand = new RightHand(this);
+}
+
+void PlayerVrController::setCamera(iris::CameraNodePtr cam)
+{
+	this->camera = cam;
+	leftHand->setCamera(cam);
+	rightHand->setCamera(cam);
 }
 
 void PlayerVrController::loadAssets(iris::ContentManagerPtr content)
@@ -123,13 +130,16 @@ void PlayerVrController::loadAssets(iris::ContentManagerPtr content)
 
 	turnSpeed = 4.0f;
 
-	leftHand->loadAssets();
-	rightHand->loadAssets();
+	leftHand->loadAssets(content);
+	rightHand->loadAssets(content);
 }
 
 void PlayerVrController::setScene(iris::ScenePtr scene)
 {
     this->scene = scene;
+	auto activeViewer = scene->getActiveVrViewer();
+	this->leftHand->init(scene, scene->camera, activeViewer);
+	this->rightHand->init(scene, scene->camera, activeViewer);
 }
 
 void PlayerVrController::update(float dt)
@@ -271,7 +281,8 @@ void PlayerVrController::update(float dt)
 		}
     }
 
-	//rightHand->update(dt);
+	rightHand->update(dt);
+	/*
 	// RIGHT CONTROLLER
 	auto rightTouch = vrDevice->getTouchController(1);
 	if (rightTouch->isTracking()) {
@@ -301,7 +312,8 @@ void PlayerVrController::update(float dt)
 			if (rayCastToScene(rightHandRenderItem->worldMatrix, pick)) {
 				auto dist = qSqrt(pick.distanceFromStartSqrd);
 				//qDebug() << "hit at dist: " << dist;
-				rightBeamRenderItem->worldMatrix.scale(1, 1, dist /* * (1.0f / 0.55f )*/);// todo: remove magic 0.55
+				rightBeamRenderItem->worldMatrix.scale(1, 1, dist);// todo: remove magic 0.55
+				rightBeamRenderItem->worldMatrix.scale(1, 1, dist * (1.0f / 0.55f ));// todo: remove magic 0.55
 				rightHoveredNode = getObjectRoot(pick.hitNode);
 				// Pick a node if the trigger is down
 				if (rightTouch->getIndexTrigger() > 0.1f && !rightPickedNode)
@@ -462,7 +474,7 @@ void PlayerVrController::update(float dt)
 		}
 
 	}
-
+	*/
 	submitHoveredNodes();
 }
 

@@ -125,8 +125,8 @@ void PlayerView::renderScene()
 	//auto renderer = UiManager::sceneViewWidget->getRenderer();
 
 	auto vp = iris::Viewport();
-	vp.width = width();
-	vp.height = height();
+	vp.width = width() * devicePixelRatioF();
+	vp.height = height() * devicePixelRatioF();
 	scene->update(dt);
 
 	//auto vrDevice = iris::VrManager::getDefaultDevice();

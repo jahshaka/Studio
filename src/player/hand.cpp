@@ -24,12 +24,10 @@
 #include <QtMath>
 #include "hand.h"
 
-RightHand::RightHand()
-{
-}
-
 void RightHand::update(float dt)
-{/*
+{
+	auto turnSpeed = 4.0f;
+	hoverDist = 1000;
 	// RIGHT CONTROLLER
 	auto rightTouch = iris::VrManager::getDefaultDevice()->getTouchController(1);
 	if (rightTouch->isTracking()) {
@@ -49,33 +47,38 @@ void RightHand::update(float dt)
 		world.translate(device->getHandPosition(1));
 		world.rotate(device->getHandRotation(1));
 		//world.scale(0.55f);
-		rightHandRenderItem->worldMatrix = camera->globalTransform * world;
-		rightBeamRenderItem->worldMatrix = rightHandRenderItem->worldMatrix;
+		//rightHandRenderItem->worldMatrix = camera->globalTransform * world;
+		//rightBeamRenderItem->worldMatrix = rightHandRenderItem->worldMatrix;
+		rightHandMatrix = camera->globalTransform * world;
 
-		//if (UiManager::sceneMode == SceneMode::EditMode)
 		{
 			// Handle picking and movement of picked objects
 			iris::PickingResult pick;
-			if (rayCastToScene(rightHandRenderItem->worldMatrix, pick)) {
+			QMatrix4x4 beamOffset;
+			beamOffset.setToIdentity();
+			beamOffset.translate(0.0, -0.05f, 0.0);
+			if (controller->rayCastToScene(rightHandMatrix * beamOffset, pick)) {
 				auto dist = qSqrt(pick.distanceFromStartSqrd);
+				hoverDist = dist;
+
 				//qDebug() << "hit at dist: " << dist;
 				//rightBeamRenderItem->worldMatrix.scale(1, 1, dist * (1.0f / 0.55f ));// todo: remove magic 0.55
-				rightBeamRenderItem->worldMatrix.scale(1, 1, dist);// todo: remove magic 0.55
-				rightHoveredNode = getObjectRoot(pick.hitNode);
+				//rightBeamRenderItem->worldMatrix.scale(1, 1, dist);// todo: remove magic 0.55
+				hoveredNode = controller->getObjectRoot(pick.hitNode);
 				// Pick a node if the trigger is down
-				if (rightTouch->getIndexTrigger() > 0.1f && !rightPickedNode)
+				if (rightTouch->getIndexTrigger() > 0.1f && !grabbedNode)
 				{
-					rightPickedNode = rightHoveredNode;
-					rightPos = rightPickedNode->getLocalPos();
-					rightRot = rightPickedNode->getLocalRot();
-					rightScale = rightPickedNode->getLocalScale();
+					grabbedNode = hoveredNode;
+					rightPos = grabbedNode->getLocalPos();
+					rightRot = grabbedNode->getLocalRot();
+					rightScale = grabbedNode->getLocalScale();
 
 					//calculate offset
-					rightNodeOffset = rightHandRenderItem->worldMatrix.inverted() * rightPickedNode->getGlobalTransform();
+					rightNodeOffset = rightHandMatrix.inverted() * grabbedNode->getGlobalTransform();
 
 					// should accept hit point
 					{
-						auto pickedNode = rightPickedNode;
+						auto pickedNode = grabbedNode;
 
 						if (pickedNode->isPhysicsBody && UiManager::isSimulationRunning) {
 							// Fetch our rigid body from the list stored in the world by guid
@@ -129,8 +132,8 @@ void RightHand::update(float dt)
 						//btVector3 rayFromWorld = iris::PhysicsHelper::btVector3FromQVector3D(editorCam->getGlobalPosition());
 						//btVector3 rayToWorld = iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(point) * 1024);
 
-						auto segStart = rightHandRenderItem->worldMatrix * QVector3D(0, 0, 0);
-						auto segEnd = rightHandRenderItem->worldMatrix * QVector3D(0, 0, -100);
+						auto segStart = rightHandMatrix * QVector3D(0, 0, 0);
+						auto segEnd = rightHandMatrix * QVector3D(0, 0, -100);
 						btVector3 rayFromWorld = iris::PhysicsHelper::btVector3FromQVector3D(segStart);
 						btVector3 rayToWorld = iris::PhysicsHelper::btVector3FromQVector3D(segEnd);
 
@@ -138,29 +141,22 @@ void RightHand::update(float dt)
 						m_hitPos = iris::PhysicsHelper::btVector3FromQVector3D(pick.hitPoint);
 						m_oldPickingDist = (iris::PhysicsHelper::btVector3FromQVector3D(pick.hitPoint) - rayFromWorld).length();
 
-						rightHandPickOffset = rightHandRenderItem->worldMatrix.inverted() * pick.hitPoint;
+						rightHandPickOffset = rightHandMatrix.inverted() * pick.hitPoint;
 					}
 				}
 
 			}
 			else
 			{
-				rightBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f));
-				rightHoveredNode.clear();
+				//rightBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f));
+				hoveredNode.clear();
 			}
 
 			// trigger released
-			if (rightTouch->getIndexTrigger() < 0.1f && !!rightPickedNode)
+			if (rightTouch->getIndexTrigger() < 0.1f && !!grabbedNode)
 			{
-				// add to undo
-				auto newPos = rightPickedNode->getLocalPos();
-				auto cmd = new TransformSceneNodeCommand(rightPickedNode,
-					leftPos, leftRot, leftScale,
-					rightPickedNode->getLocalPos(), rightPickedNode->getLocalRot(), rightPickedNode->getLocalScale());
-				UiManager::pushUndoStack(cmd);
-
 				// release node
-				rightPickedNode.clear();
+				grabbedNode.clear();
 				rightNodeOffset.setToIdentity(); // why bother?
 
 				// clear physics
@@ -175,15 +171,15 @@ void RightHand::update(float dt)
 			}
 
 			// update picked node
-			if (!!rightPickedNode) {
+			if (!!grabbedNode) {
 
 				// LAZLO's CODE
-				if (rightPickedNode->isPhysicsBody) {
+				if (grabbedNode->isPhysicsBody) {
 					if (activeRigidBody && m_pickedConstraint) {
 						btGeneric6DofConstraint* pickCon = static_cast<btGeneric6DofConstraint*>(m_pickedConstraint);
 						if (pickCon)
 						{
-							QVector3D newPivotVec = rightHandRenderItem->worldMatrix * rightHandPickOffset;
+							QVector3D newPivotVec = rightHandMatrix * rightHandPickOffset;
 							btVector3 newPivot = iris::PhysicsHelper::btVector3FromQVector3D(newPivotVec);
 							pickCon->getFrameOffsetA().setOrigin(newPivot);
 						}
@@ -191,10 +187,10 @@ void RightHand::update(float dt)
 				}
 				else {
 					// calculate the global position
-					auto nodeGlobal = rightHandRenderItem->worldMatrix * rightNodeOffset;
+					auto nodeGlobal = rightHandMatrix * rightNodeOffset;
 
 					// calculate position relative to parent
-					auto localTransform = rightPickedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
+					auto localTransform = grabbedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
 
 					QVector3D pos, scale;
 					QQuaternion rot;
@@ -204,23 +200,85 @@ void RightHand::update(float dt)
 						rot,
 						scale);
 
-					rightPickedNode->setLocalPos(pos);
+					grabbedNode->setLocalPos(pos);
 					rot.normalize();
-					rightPickedNode->setLocalRot(rot);
-					rightPickedNode->setLocalScale(scale);
+					grabbedNode->setLocalRot(rot);
+					grabbedNode->setLocalScale(scale);
 
 				}
 			}
 
-			scene->geometryRenderList->add(rightBeamRenderItem);
-			scene->geometryRenderList->add(rightHandRenderItem);
-			scene->geometryRenderlist->submitItem(handMesh, handMaterial);
+			//scene->geometryRenderList->add(rightBeamRenderItem);
+			//scene->geometryRenderList->add(rightHandRenderItem);
+			//scene->geometryRenderList->submitMesh(handMesh, handMaterial, rightHandMatrix);
 		}
 
+		submitItemsToScene();
 	}
-	*/
 }
 
-void RightHand::loadAssets()
+void RightHand::loadAssets(iris::ContentManagerPtr content)
 {
+	handModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/right_hand_anims.fbx"));
+	auto mat = iris::DefaultMaterial::create();
+	mat->setDiffuseColor(Qt::white);
+	handMaterial = mat;
+
+
+	beamMesh = content->loadMesh(
+		IrisUtils::getAbsoluteAssetPath("app/content/models/beam.obj"));
+	sphereMesh = content->loadMesh(
+		IrisUtils::getAbsoluteAssetPath("app/content/primitives/sphere.obj"));
+	auto colorMat = iris::ColorMaterial::create();
+	colorMat->setColor(QColor(255, 100, 100));
+	beamMaterial = colorMat;
+}
+
+void RightHand::submitItemsToScene()
+{
+	QMatrix4x4 scale;
+	scale.setToIdentity();
+	
+	scale.rotate(180, 0.0, 1.0, 0.0);
+	scale.rotate(90, 0.0, 0.0, 1.0);
+	scale.scale(0.1f, 0.1f, 0.1f);
+	scene->geometryRenderList->submitModel(handModel, handMaterial, rightHandMatrix * scale);
+
+	// beam
+	if (!grabbedNode) {
+		QMatrix4x4 beamMatrix;
+		beamMatrix.setToIdentity();
+		beamMatrix.translate(0.0, -0.05f, 0.0);
+		beamMatrix.scale(0.4f, 0.4f, hoverDist);
+		scene->geometryRenderList->submitMesh(beamMesh, beamMaterial, rightHandMatrix * beamMatrix);
+
+		QMatrix4x4 sphereMatrix;
+		sphereMatrix.setToIdentity();
+		sphereMatrix.translate(0.0, -0.05f, 0.0);
+		sphereMatrix.scale(0.02f);
+		scene->geometryRenderList->submitMesh(sphereMesh, beamMaterial, rightHandMatrix * sphereMatrix);
+
+
+		QMatrix4x4 tipMatrix;
+		tipMatrix.setToIdentity();
+		tipMatrix.translate(0.0, -0.05f, -hoverDist);
+		tipMatrix.scale(0.02f);
+		scene->geometryRenderList->submitMesh(sphereMesh, beamMaterial, rightHandMatrix * tipMatrix);
+
+	}
+	else {
+
+	}
+}
+
+void Hand::init(iris::ScenePtr scene, iris::CameraNodePtr cam, iris::ViewerNodePtr viewer)
+{
+	this->scene = scene;
+	this->camera = cam;
+	this->viewer = viewer;
+}
+
+void Hand::setCamera(iris::CameraNodePtr camera)
+{
+	this->camera = camera;
 }
