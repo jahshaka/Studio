@@ -32,7 +32,6 @@ void RightHand::update(float dt)
 	auto rightTouch = iris::VrManager::getDefaultDevice()->getTouchController(1);
 	if (rightTouch->isTracking()) {
 
-		// Submit items to renderer
 		auto device = iris::VrManager::getDefaultDevice();
 
 		// rotate camera
@@ -75,6 +74,12 @@ void RightHand::update(float dt)
 
 					//calculate offset
 					rightNodeOffset = rightHandMatrix.inverted() * grabbedNode->getGlobalTransform();
+
+					auto handleNode = controller->findGrabNode(grabbedNode);
+					if (!!handleNode) {
+						//rightNodeOffset = grabbedNode->getGlobalTransform().inverted() * handleNode->getGlobalTransform();
+						rightNodeOffset = handleNode->getGlobalTransform().inverted() * grabbedNode->getGlobalTransform();
+					}
 
 					// should accept hit point
 					{
@@ -222,6 +227,7 @@ void RightHand::loadAssets(iris::ContentManagerPtr content)
 	handModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/right_hand_anims.fbx"));
 	auto mat = iris::DefaultMaterial::create();
 	mat->setDiffuseColor(Qt::white);
+	mat->enableFlag("SKINNING_ENABLED");
 	handMaterial = mat;
 
 
