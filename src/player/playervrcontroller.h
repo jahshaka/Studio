@@ -88,12 +88,15 @@ public:
     bool rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResult& result);
 
 	iris::SceneNodePtr getObjectRoot(iris::SceneNodePtr node);
+
+	// for now this finds the first grab node
+	iris::GrabNodePtr findGrabNode(iris::SceneNodePtr node);
+
 private:
 	void submitHoveredNodes();
 	void submitHoveredNode(iris::SceneNodePtr node);
 
-	// for now this finds the first grab node
-	iris::GrabNodePtr findGrabNode(iris::SceneNodePtr node);
+	
 
 	float turnSpeed;
 
