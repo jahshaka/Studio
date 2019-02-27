@@ -45,6 +45,7 @@ For more information see the LICENSE file
 #include "core/guidmanager.h"
 #include "core/thumbnailmanager.h"
 #include "dialogs/donatedialog.h"
+#include "dialogs/custompopup.h"
 #include "core/assethelper.h"
 #include "core/scenenodehelper.h"
 
@@ -2333,6 +2334,11 @@ void MainWindow::setupViewPort()
 	minerBtn->setStyleSheet("background:transparent;");
 	minerBtn->setCursor(Qt::PointingHandCursor);
 	connect(minerBtn, &QPushButton::pressed, [this]() {
+		auto popup = new CustomPopup(QCursor::pos());
+		popup->addConfirmAndCancelButtons("visit","close");
+		popup->addMessage("The miner has been moved to out of the application, press visit to download");
+		popup->addTitle("Attention");
+		popup->exec();
 	});
 
 	help = new QPushButton;
@@ -2377,6 +2383,7 @@ void MainWindow::setupViewPort()
 	QHBoxLayout *bl = new QHBoxLayout;
 	buttons->setLayout(bl);
 	bl->setSpacing(20);
+	bl->addWidget(minerBtn);
 	bl->addWidget(help);
 	bl->addWidget(prefs);
 

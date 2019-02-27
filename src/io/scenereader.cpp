@@ -50,6 +50,7 @@ For more information see the LICENSE file
 #include "irisgl/src/physics/physicshelper.h"
 
 #include "materialreader.hpp"
+#include "../core/guidmanager.h"
 
 iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,

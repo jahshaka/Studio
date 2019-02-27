@@ -42,6 +42,8 @@ set(SRCS
     src/dialogs/aboutdialog.cpp 
     src/dialogs/preferences/worldsettings.cpp 
     src/dialogs/preferences/worldsettingswidget.cpp 
+	src/dialogs/customdialog.cpp
+	src/dialogs/custompopup.cpp
     src/dialogs/loadmeshdialog.cpp 
     src/widgets/animationwidget.cpp 
     src/widgets/keyframelabelwidget.cpp 
@@ -165,6 +167,8 @@ set(HEADERS
     src/dialogs/aboutdialog.h 
     src/dialogs/preferences/worldsettings.h 
     src/dialogs/preferences/worldsettingswidget.h 
+	src/dialogs/customdialog.h
+	src/dialogs/custompopup.h
     src/helpers/collisionhelper.h 
     src/dialogs/infodialog.h 
     src/dialogs/loadmeshdialog.h 

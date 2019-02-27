@@ -14,6 +14,7 @@ For more information see the LICENSE file
 class StyleSheet : public QObject
 {
 public:
+	static const QString QPushButtonBlue();
     static const QString QPushButtonInvisible();
     static const QString QPushButtonGreyscale();
 	static const QString QPushButtonGrouped();
