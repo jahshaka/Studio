@@ -78,6 +78,7 @@ PlayerVrController::PlayerVrController()
 void PlayerVrController::setCamera(iris::CameraNodePtr cam)
 {
 	this->camera = cam;
+	//camera->setLocalScale(QVector3D(2, 2, 2));
 	leftHand->setCamera(cam);
 	rightHand->setCamera(cam);
 }
