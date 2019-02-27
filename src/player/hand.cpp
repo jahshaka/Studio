@@ -62,7 +62,7 @@ void RightHand::update(float dt)
 		world.translate(device->getHandPosition(1));
 		world.rotate(device->getHandRotation(1));
 		//camera->setLocalScale(QVector3D(2,2,2));
-		rightHandMatrix = camera->getGlobalTransform() * world;
+		//rightHandMatrix = camera->getGlobalTransform() * world;
 		rightHandMatrix = calculateHandMatrix(device);
 
 		{
