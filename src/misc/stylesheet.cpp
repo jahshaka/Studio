@@ -13,6 +13,16 @@ For more information see the LICENSE file
 
 
 
+const QString StyleSheet::QPushButtonBlue()
+{
+	return QString(
+		"QPushButton{ background : rgba(50,148,213,0.9); color: #DEDEDE; border : 0; padding: 4px 16px; }"
+		"QPushButton:hover{ background-color: rgba(60,158,223,0.9); }"
+		"QPushButton:pressed{ background-color: rgba(40,138,203,0.9); }"
+		"QPushButton:checked{border: 0px solid rgba(0,0,0,.3); background: rgba(50,148,213,0.9); color: rgba(255,255,255,.9); }"
+	);
+}
+
 const QString StyleSheet::QPushButtonInvisible() {
     return QString(
         "QPushButton{background : rgba(0,0,0,0); border : 0px; }"

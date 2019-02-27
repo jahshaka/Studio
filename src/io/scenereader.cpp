@@ -49,6 +49,7 @@ For more information see the LICENSE file
 #include "irisgl/src/physics/physicshelper.h"
 
 #include "materialreader.hpp"
+#include "../core/guidmanager.h"
 
 iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
@@ -249,7 +250,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 
     //read name
     sceneNode->name = nodeObj["name"].toString("");
-	sceneNode->setGUID(nodeObj["guid"].toString(IrisUtils::generateGUID()));
+	sceneNode->setGUID(nodeObj["guid"].toString(GUIDManager::generateGUID()));
     sceneNode->setAttached(nodeObj["attached"].toBool());
     sceneNode->setPickable(nodeObj["pickable"].toBool(true));
 
