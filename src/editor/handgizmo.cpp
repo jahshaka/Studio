@@ -42,7 +42,8 @@ HandGizmoHandler::HandGizmoHandler()
 
 void HandGizmoHandler::loadAssets(const iris::ContentManagerPtr& content)
 {
-	handModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/right_hand_anims.fbx"));
+	//handModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/right_hand_anims.fbx"));
+	handModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/Righthand_seperate_anims.fbx"));
 	handMaterial = QSharedPointer<iris::Material>(new HandGizmoMaterial());
 }
 
@@ -66,11 +67,12 @@ void HandGizmoHandler::submitHandToScene(const iris::ScenePtr & scene)
 	for (auto grabber : scene->grabbers) {
 		// set appropriate animation
 		if (grabber->handPose->getPoseType() == iris::HandPoseType::Grab) {
-			handModel->setActiveAnimation("RightHand_rig.001|handFistMove");
+			//handModel->setActiveAnimation("RightHand_rig.001|handFistMove");
+			handModel->setActiveAnimation("RightHand_rig|grab");
 		}
 
 		// set time based on factor
-		handModel->applyAnimation(grabber->poseFactor*3);
+		handModel->applyAnimation(grabber->poseFactor*24);
 
 		// update animation
 		submitHandToScene(scene, grabber, grabber->getGlobalTransform() * scale);

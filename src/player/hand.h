@@ -53,6 +53,9 @@ public:
 	{
 	}
 
+	// calculates global rot and scale of hand matrix
+	// while removing the scale part
+	QMatrix4x4 calculateHandMatrix(iris::VrDevice* device);
 	void update(float dt);
 	void loadAssets(iris::ContentManagerPtr content);
 	void submitItemsToScene();

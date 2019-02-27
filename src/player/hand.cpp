@@ -24,6 +24,22 @@
 #include <QtMath>
 #include "hand.h"
 
+QMatrix4x4 RightHand::calculateHandMatrix(iris::VrDevice* device)
+{
+	// cameras arent parented to anything
+	// so local transform == global transform
+	auto trans = camera->getLocalTransform();
+	trans.scale(camera->getVrViewScale());
+	auto globalPos = trans * device->getHandPosition(1);
+	auto globalRot = camera->getLocalRot() * device->getHandRotation(1);
+
+	QMatrix4x4 world;
+	world.setToIdentity();
+	world.translate(globalPos);
+	world.rotate(globalRot);
+	return world;
+}
+
 void RightHand::update(float dt)
 {
 	auto turnSpeed = 4.0f;
@@ -47,6 +63,7 @@ void RightHand::update(float dt)
 		world.rotate(device->getHandRotation(1));
 		//camera->setLocalScale(QVector3D(2,2,2));
 		rightHandMatrix = camera->getGlobalTransform() * world;
+		rightHandMatrix = calculateHandMatrix(device);
 
 		{
 			// Handle picking and movement of picked objects
@@ -175,7 +192,7 @@ void RightHand::submitItemsToScene()
 	
 	scale.rotate(180, 0.0, 1.0, 0.0);
 	scale.rotate(90, 0.0, 0.0, 1.0);
-	scale.scale(0.1f, 0.1f, 0.1f);
+	scale.scale(QVector3D(0.1f, 0.1f, 0.1f) * camera->getVrViewScale());
 	scene->geometryRenderList->submitModel(handModel, handMaterial, rightHandMatrix * scale);
 
 	// beam
