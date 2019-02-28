@@ -143,6 +143,13 @@ void PlayerVrController::setScene(iris::ScenePtr scene)
 	this->rightHand->init(scene, scene->camera, activeViewer);
 }
 
+void PlayerVrController::start()
+{
+	auto activeViewer = scene->getActiveVrViewer();
+	this->leftHand->init(scene, scene->camera, activeViewer);
+	this->rightHand->init(scene, scene->camera, activeViewer);
+}
+
 void PlayerVrController::update(float dt)
 {
     vrDevice = iris::VrManager::getDefaultDevice();
