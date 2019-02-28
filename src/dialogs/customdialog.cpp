@@ -43,7 +43,8 @@ CustomDialog::CustomDialog(Qt::Orientation ori) : QDialog()
 void CustomDialog::addConfirmButton(QString text)
 {
     okBtn = new QPushButton(text, this);
-    okBtn->setStyleSheet(StyleSheet::QPushButtonGreyscale());
+	okBtn->setCursor(Qt::PointingHandCursor);
+    okBtn->setStyleSheet(StyleSheet::QPushButtonGreyscaleBig());
     if(!buttonHolder->children().contains(okBtn)) buttonHolder->addWidget(okBtn);
     configureConnections();
 }
@@ -52,7 +53,8 @@ void CustomDialog::addConfirmButton(QString text)
 void CustomDialog::addCancelButton(QString text)
 {
     cancelBtn = new QPushButton(text, this);
-    cancelBtn->setStyleSheet(StyleSheet::QPushButtonGreyscale());
+	cancelBtn->setCursor(Qt::PointingHandCursor);
+    cancelBtn->setStyleSheet(StyleSheet::QPushButtonGreyscaleBig());
     if(!buttonHolder->children().contains(cancelBtn)) buttonHolder->addWidget(cancelBtn);
     configureConnections();
 }

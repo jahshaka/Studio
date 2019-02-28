@@ -35,6 +35,16 @@ const QString StyleSheet::QPushButtonBlue()
 	);
 }
 
+const QString StyleSheet::QPushButtonBlueBig()
+{
+	return QString(
+		"QPushButton{ background : rgba(50,148,213,0.9); color: #DEDEDE; border : 0; padding: 8px 22px; }"
+		"QPushButton:hover{ background-color: rgba(60,158,223,0.9); }"
+		"QPushButton:pressed{ background-color: rgba(40,138,203,0.9); }"
+		"QPushButton:checked{border: 0px solid rgba(0,0,0,.3); background: rgba(50,148,213,0.9); color: rgba(255,255,255,.9); }"
+	);
+}
+
 const QString StyleSheet::QPushButtonInvisible() {
     return QString(
         "QPushButton{background : rgba(0,0,0,0); border : 0px; }"
@@ -77,6 +87,16 @@ const QString StyleSheet::QPushButtonGreyscale() {
         "QPushButton:pressed{ background-color: #444; }"
         "QPushButton:checked{border: 0px solid rgba(0,0,0,.3); background: rgba(50,148,213,0.9); color: rgba(255,255,255,.9); }"
     );
+}
+
+const QString StyleSheet::QPushButtonGreyscaleBig()
+{
+	return QString(
+		"QPushButton{ background-color: #333; color: #DEDEDE; border : 0; padding: 8px 22px; }"
+		"QPushButton:hover{ background-color: #555; }"
+		"QPushButton:pressed{ background-color: #444; }"
+		"QPushButton:checked{border: 0px solid rgba(0,0,0,.3); background: rgba(50,148,213,0.9); color: rgba(255,255,255,.9); }"
+	);
 }
 
 const QString StyleSheet::QWidgetDark() {

@@ -37,7 +37,7 @@ CustomPopup::~CustomPopup()
 void CustomPopup::addConfirmButton(QString text)
 {
 	CustomDialog::addConfirmButton(text);
-	okBtn->setStyleSheet(StyleSheet::QPushButtonBlue());
+	okBtn->setStyleSheet(StyleSheet::QPushButtonBlueBig());
 }
 
 void CustomPopup::addCancelButton(QString text)

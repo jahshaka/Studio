@@ -8,7 +8,7 @@ public:
 	Triangle(QPoint point, QWidget *parent = Q_NULLPTR);
 private:
 	QPoint points[3];
-	int dist = 30;
+	int dist = 20;
 protected:
 	void paintEvent(QPaintEvent *event) override;
 };
