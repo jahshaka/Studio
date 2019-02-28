@@ -7,7 +7,7 @@
 CustomPopup::CustomPopup(QPoint point, Qt::Edge ori) : CustomDialog(Qt::Vertical)
 {
 	
-	holder->setFixedSize(180, 230);
+	holder->setFixedSize(200, 240);
 	calculatePoints(ori);
 
 	int x = holder->width() / 2;

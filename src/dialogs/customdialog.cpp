@@ -27,7 +27,7 @@ CustomDialog::CustomDialog(Qt::Orientation ori) : QDialog()
     holder->setStyleSheet(StyleSheet::QWidgetDark());
     holder->setGraphicsEffect(effect);
     holder->setFixedSize(300,200);
-    holderLayout->addStretch();
+	holderLayout->addStretch();
 
     buttonWidget = new QWidget; 
 	setButtonOrientations(ori);
@@ -66,6 +66,7 @@ void CustomDialog::addMessage(QString msg)
 	label->setWordWrap(true);
 	label->setIndent(10);
 	insertWidget(label);
+	holderLayout->insertStretch(index + 1);
 }
 
 void CustomDialog::addTitle(QString title)
@@ -101,7 +102,7 @@ void CustomDialog::insertWidget(QWidget *widget, int index)
 {
 	if(index == -1)		holderLayout->insertWidget(this->index, widget);
 	else				holderLayout->insertWidget(index, widget);
-	holderLayout->addSpacing(10);
+	//holderLayout->addSpacing(10);
 }
 
 //should be called after buttons added
