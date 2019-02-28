@@ -2355,6 +2355,8 @@ void MainWindow::setupViewPort()
 		popup->addMessage("The miner has been moved to out of the application, press visit to download");
 		popup->addTitle("Attention");
 		popup->exec();
+
+		if (popup->result() == QDialog::Accepted)  QDesktopServices::openUrl(QUrl("https://www.jahshaka.com/download/"));
 	});
 
 	help = new QPushButton;

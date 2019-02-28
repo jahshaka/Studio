@@ -108,11 +108,13 @@ void CustomDialog::configureConnections()
     if(buttonWidget->children().contains(okBtn))
     connect(okBtn, &QPushButton::clicked,[=](){
         emit accepted();
+		setResult(QDialog::Accepted);
         close();
     });
     if(buttonWidget->children().contains(cancelBtn))
     connect(cancelBtn, &QPushButton::clicked,[=](){
         emit rejected();
+		setResult(QDialog::Rejected);
         close();
     });
 
