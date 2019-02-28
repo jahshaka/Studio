@@ -82,22 +82,23 @@ void PostProcessesWidget::clear()
 void PostProcessesWidget::setPostProcessMgr(const iris::PostProcessManagerPtr &postMan)
 {
     clear();
+	if (!!postMan) {
+		postProcessMgr = postMan;
 
-    postProcessMgr = postMan;
+		int i = 0;
+		for (auto process : postMan->getPostProcesses()) {
+			auto widget = new PostProcessPropertyWidget();
+			widget->expand();
 
-    int i = 0;
-    for (auto process : postMan->getPostProcesses()) {
-        auto widget = new PostProcessPropertyWidget();
-        widget->expand();
+			postProcesses.append(process);
+			widget->setPostProcess(process);
+			widget->setPanelTitle(process->getDisplayName());
 
-        postProcesses.append(process);
-        widget->setPostProcess(process);
-        widget->setPanelTitle(process->getDisplayName());
+			((QVBoxLayout*)ui->content->layout())->insertWidget(i, widget);
 
-        ((QVBoxLayout*)ui->content->layout())->insertWidget(i, widget);
-
-        i++;
-    }
+			i++;
+		}
+	}
 }
 
 void PostProcessesWidget::addPostProcess(QAction* action)

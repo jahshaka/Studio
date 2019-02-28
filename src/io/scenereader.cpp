@@ -63,7 +63,8 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
     auto scene = readScene(projectObj);
 
     if (editorData) *editorData = readEditorData(projectObj);
-    readPostProcessData(projectObj, postMan);
+	if (!!postMan)
+		readPostProcessData(projectObj, postMan);
 
     for (auto node : scene->rootNode->children) {
         node->applyDefaultPose();
