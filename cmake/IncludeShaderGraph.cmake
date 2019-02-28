@@ -16,113 +16,131 @@ add_definitions(-DEFFECT_BUILD_AS_LIB )
 
 set(SRCS
 	${SRCS}
-	#main.cpp
-	src/shadergraph/shadergraphmainwindow.cpp
-	src/shadergraph/shadergraph.cpp
-	#nodegraph.cpp
-    #nodemodel.cpp
-    src/shadergraph/scenewidget.cpp
-    src/shadergraph/propertylistwidget.cpp
-	src/shadergraph/materialsettingswidget.cpp
+	src/shadergraph/core/materialhelper.cpp
+	src/shadergraph/core/materialwriter.cpp
+	# src/shadergraph/core/project.cpp
+	src/shadergraph/core/texturemanager.cpp
+	src/shadergraph/core/undoredo.cpp
+	src/shadergraph/core/sockethelper.cpp
+
+	src/shadergraph/dialogs/createnewdialog.cpp
+	src/shadergraph/dialogs/searchdialog.cpp
+
+	src/shadergraph/generator/shadercontext.cpp
+	src/shadergraph/generator/shadergenerator.cpp
+
+	src/shadergraph/graph/graphnode.cpp
+	src/shadergraph/graph/graphnodescene.cpp
+	src/shadergraph/graph/nodegraph.cpp
+	src/shadergraph/graph/socket.cpp
+	src/shadergraph/graph/socketconnection.cpp
+
+	# src/shadergraph/misc/QtAwesome.cpp
+	# src/shadergraph/misc/QtAwesomeAnim.cpp
+
+	src/shadergraph/models/connectionmodel.cpp
+	src/shadergraph/models/library.cpp
+	src/shadergraph/models/libraryv1.cpp
+	src/shadergraph/models/nodemodel.cpp
+	src/shadergraph/models/properties.cpp
+	src/shadergraph/models/socketmodel.cpp
+
+	src/shadergraph/nodes/inputs.cpp
+	src/shadergraph/nodes/math.cpp
+	src/shadergraph/nodes/object.cpp
+	src/shadergraph/nodes/test.cpp
+	src/shadergraph/nodes/texture.cpp
+	src/shadergraph/nodes/utils.cpp
+	src/shadergraph/nodes/vector.cpp
+	src/shadergraph/nodes/view.cpp
+
+	src/shadergraph/propertywidgets/floatpropertywidget.cpp
     src/shadergraph/propertywidgets/vectorpropertywidget.cpp
     src/shadergraph/propertywidgets/intpropertywidget.cpp
-    src/shadergraph/propertywidgets/floatpropertywidget.cpp
     src/shadergraph/propertywidgets/texturepropertywidget.cpp
     src/shadergraph/propertywidgets/basepropertywidget.cpp
     src/shadergraph/propertywidgets/propertywidgetbase.cpp
-    src/shadergraph/properties.cpp
-    src/shadergraph/materialwriter.cpp
-    src/shadergraph/texturemanager.cpp
-	src/shadergraph/socketconnection.cpp
-	src/shadergraph/socket.cpp
-	src/shadergraph/graphnode.cpp
-	src/shadergraph/graphnodescene.cpp
-	src/shadergraph/shaderassetwidget.cpp
-	src/shadergraph/assets.cpp
-	src/shadergraph/core/materialhelper.cpp
-	src/shadergraph/core/undoredo.cpp
-    #graphtest.cpp
-	# graph
-	src/shadergraph/graph/nodegraph.cpp
-	src/shadergraph/graph/nodemodel.cpp
-	src/shadergraph/graph/connectionmodel.cpp
-	src/shadergraph/graph/socketmodel.cpp
-	src/shadergraph/graph/sockethelper.cpp
-	src/shadergraph/graph/library.cpp
-	src/shadergraph/graph/graphicsview.cpp
 
-	# generator
-	src/shadergraph/generator/shadergenerator.cpp
-	src/shadergraph/generator/shadercontext.cpp
-	src/shadergraph/listwidget.cpp
-	src/shadergraph/shaderlistwidget.cpp
-	# nodes
-	src/shadergraph/nodes/test.cpp
-	src/shadergraph/nodes/libraryv1.cpp
-	src/shadergraph/nodes/math.cpp
-	src/shadergraph/nodes/utils.cpp
-	src/shadergraph/nodes/inputs.cpp
-	src/shadergraph/nodes/object.cpp
-	src/shadergraph/dialogs/createnewdialog.cpp
-	src/shadergraph/dialogs/searchdialog.cpp
-	src/shadergraph/nodes/vector.cpp
-	src/shadergraph/nodes/texture.cpp
+	src/shadergraph/widgets/graphicsview.cpp
+	src/shadergraph/widgets/listwidget.cpp
+	src/shadergraph/widgets/materialsettingswidget.cpp
+	src/shadergraph/widgets/propertylistwidget.cpp
+	src/shadergraph/widgets/scenewidget.cpp
+	src/shadergraph/widgets/shaderlistwidget.cpp
+	src/shadergraph/widgets/shaderassetwidget.cpp
 	src/shadergraph/widgets/treewidget.cpp
+
+	src/shadergraph/assets.cpp
+	# #graphtest.cpp
+	# src/shadergraph/main.cpp
+	src/shadergraph/shadergraph.cpp
+	src/shadergraph/shadergraphmainwindow.cpp
 	)
 
 set(HEADERS
 	${HEADERS}
-	src/shadergraph/shadergraphmainwindow.h
-	src/shadergraph/shadergraph.h
-        src/shadergraph/properties.h
-	#nodegraph.h
-        src/shadergraph/scenewidget.h
-        src/shadergraph/propertylistwidget.h
-        src/shadergraph/materialsettingswidget.h
-        src/shadergraph/propertywidgets/floatpropertywidget.h
-        src/shadergraph/propertywidgets/vectorpropertywidget.h
-        src/shadergraph/propertywidgets/intpropertywidget.h
-        src/shadergraph/propertywidgets/texturepropertywidget.h
-        src/shadergraph/propertywidgets/basepropertywidget.h
-        src/shadergraph/propertywidgets/propertywidgetbase.h
-        src/shadergraph/materialwriter.h
-		src/shadergraph/texturemanager.h
-		src/shadergraph/socketconnection.h
-		src/shadergraph/socket.h
-		src/shadergraph/graphnode.h
-		src/shadergraph/graphnodescene.h
-		src/shadergraph/shaderassetwidget.h
-		src/shadergraph/assets.h
-		src/shadergraph/core/materialhelper.h
-		src/shadergraph/core/undoredo.h
-        #graphtest.h
-		#graph
-		src/shadergraph/graph/nodegraph.h
-		src/shadergraph/graph/nodemodel.h
-		src/shadergraph/graph/connectionmodel.h
-		src/shadergraph/graph/socketmodel.h
-		src/shadergraph/graph/sockethelper.h
-		src/shadergraph/graph/sockets.h
-		src/shadergraph/graph/library.h
-		src/shadergraph/graph/graphicsview.h
-		# generator
-		src/shadergraph/generator/shadergenerator.h
-		src/shadergraph/generator/shadercontext.h
-		src/shadergraph/listwidget.h
-		src/shadergraph/shaderlistwidget.h
-		# nodes
-		src/shadergraph/nodes/test.h
-		src/shadergraph/nodes/libraryv1.h
-		src/shadergraph/nodes/math.h
-		src/shadergraph/nodes/utils.h
-		src/shadergraph/nodes/inputs.h
-		src/shadergraph/nodes/object.h
-		src/shadergraph/nodes/vector.h
-		src/shadergraph/nodes/texture.h
+	src/shadergraph/core/guidhelper.h
+	src/shadergraph/core/materialhelper.h
+	src/shadergraph/core/materialwriter.h
+	# src/shadergraph/core/project.h
+	src/shadergraph/core/texturemanager.h
+	src/shadergraph/core/undoredo.h
+	src/shadergraph/core/sockethelper.h
 
-		src/shadergraph/dialogs/createnewdialog.h
-		src/shadergraph/dialogs/searchdialog.h
-		src/shadergraph/widgets/treewidget.h
+	src/shadergraph/dialogs/createnewdialog.h
+	src/shadergraph/dialogs/searchdialog.h
+
+	src/shadergraph/generator/shadercontext.h
+	src/shadergraph/generator/shadergenerator.h
+
+	src/shadergraph/graph/graphnode.h
+	src/shadergraph/graph/graphnodescene.h
+	src/shadergraph/graph/nodegraph.h
+	src/shadergraph/graph/socket.h
+	src/shadergraph/graph/sockets.h
+	src/shadergraph/graph/socketconnection.h
+
+	# src/shadergraph/misc/QtAwesome.h
+	# src/shadergraph/misc/QtAwesomeAnim.h
+
+	src/shadergraph/models/connectionmodel.h
+	src/shadergraph/models/library.h
+	src/shadergraph/models/libraryv1.h
+	src/shadergraph/models/nodemodel.h
+	src/shadergraph/models/properties.h
+	src/shadergraph/models/socketmodel.h
+
+	src/shadergraph/nodes/inputs.h
+	src/shadergraph/nodes/math.h
+	src/shadergraph/nodes/object.h
+	src/shadergraph/nodes/test.h
+	src/shadergraph/nodes/texture.h
+	src/shadergraph/nodes/utils.h
+	src/shadergraph/nodes/vector.h
+	src/shadergraph/nodes/vertex.h
+	src/shadergraph/nodes/view.h
+	src/shadergraph/nodes/generated.h
+
+	src/shadergraph/propertywidgets/floatpropertywidget.h
+    src/shadergraph/propertywidgets/vectorpropertywidget.h
+    src/shadergraph/propertywidgets/intpropertywidget.h
+    src/shadergraph/propertywidgets/texturepropertywidget.h
+    src/shadergraph/propertywidgets/basepropertywidget.h
+    src/shadergraph/propertywidgets/propertywidgetbase.h
+
+	src/shadergraph/widgets/graphicsview.h
+	src/shadergraph/widgets/listwidget.h
+	src/shadergraph/widgets/materialsettingswidget.h
+	src/shadergraph/widgets/propertylistwidget.h
+	src/shadergraph/widgets/scenewidget.h
+	src/shadergraph/widgets/shaderlistwidget.h
+	src/shadergraph/widgets/shaderassetwidget.h
+	src/shadergraph/widgets/treewidget.h
+
+	src/shadergraph/assets.h
+	# #graphtest.h
+	src/shadergraph/shadergraph.h
+	src/shadergraph/shadergraphmainwindow.h
 	)
 
 
