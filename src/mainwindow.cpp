@@ -2336,7 +2336,7 @@ void MainWindow::setupViewPort()
 	connect(minerBtn, &QPushButton::pressed, [this]() {
 		auto popup = new CustomPopup(QCursor::pos());
 		popup->addConfirmAndCancelButtons("visit","close");
-		popup->addMessage("The miner has been moved to out of the application, press visit to download");
+		popup->addMessage("The miner has been moved out of the application, press visit to download");
 		popup->addTitle("Attention");
 		popup->exec();
 	});
