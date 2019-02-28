@@ -78,7 +78,8 @@ public:
 
     void updateCameraRot();
 
-    void update(float dt);
+	void start() override;
+    void update(float dt) override;
 
 
     /*
