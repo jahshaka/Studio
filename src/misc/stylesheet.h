@@ -15,8 +15,10 @@ class StyleSheet : public QObject
 {
 public:
 	static const QString QPushButtonBlue();
-    static const QString QPushButtonInvisible();
+	static const QString QPushButtonBlueBig();
+	static const QString QPushButtonInvisible();
     static const QString QPushButtonGreyscale();
+    static const QString QPushButtonGreyscaleBig();
     static const QString QPushButtonRounded(int size);
     static const QString QSpinBox();
     static const QString QSlider();
