@@ -796,9 +796,15 @@ void MainWindow::saveScene()
 
 void MainWindow::openProject(bool playMode)
 {
-	UiManager::playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+	//UiManager::playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+	//playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+	// switch to editor so sceneView can initialize
+	// if playMode == true then it'll switch to the player afterwards
+	// none of this switching will show during the loading process (nick)
+	switchSpace(WindowSpaces::EDITOR);
     
-	removeScene();
+	if(!!scene)
+		removeScene();
     sceneView->makeCurrent();
 
     std::unique_ptr<SceneReader> reader(new SceneReader);
@@ -807,9 +813,10 @@ void MainWindow::openProject(bool playMode)
     EditorData* editorData = Q_NULLPTR;
     UiManager::updateWindowTitle();
 
-    auto postMan = sceneView->getRenderer()->getPostProcessManager();
-    postMan->clearPostProcesses();
+    //auto postMan = sceneView->getRenderer()->getPostProcessManager();
+    //postMan->clearPostProcesses();
 
+	auto postMan = iris::PostProcessManagerPtr();
     auto scene = reader->readScene(Globals::project->getProjectFolder(),
                                    db->getSceneBlobGlobal(),
                                    postMan,
@@ -842,6 +849,7 @@ void MainWindow::openProject(bool playMode)
     
 
 	undoStackCount = 0;
+	playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
 	updateTopMenuStates(UiManager::playMode ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
 }
 
