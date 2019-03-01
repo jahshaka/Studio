@@ -10,6 +10,7 @@
 #include "irisgl/Content.h"
 #include "playervrcontroller.h"
 #include "playermousecontroller.h"
+#include "src/core/keyboardstate.h"
 
 PlayerView::PlayerView(QWidget* parent) :
 	QOpenGLWidget(parent)
@@ -49,7 +50,7 @@ void PlayerView::initializeGL()
 	connect(updateTimer, &QTimer::timeout, [=]() {
 		update();
 	});
-	updateTimer->start(Constants::FPS_60);
+	updateTimer->start(Constants::FPS_90);
 
 	fpsTimer = new QElapsedTimer();
 	fpsTimer->start();
@@ -202,4 +203,32 @@ void PlayerView::stop()
 	scene->getPhysicsEnvironment()->stopPhysics();
 
 	// reset object positions and states
+}
+
+
+void PlayerView::keyPressEvent(QKeyEvent *event)
+{
+	KeyboardState::keyStates[event->key()] = true;
+	camController->onKeyPressed((Qt::Key)event->key());
+
+	//scene->getPhysicsEnvironment()->onKeyPressed((Qt::Key)event->key());
+	if (KeyboardState::isKeyDown(Qt::Key_W)) { scene->getPhysicsEnvironment()->walkForward = 1; }
+	if (KeyboardState::isKeyDown(Qt::Key_S)) { scene->getPhysicsEnvironment()->walkBackward = 1; }
+	if (KeyboardState::isKeyDown(Qt::Key_A)) { scene->getPhysicsEnvironment()->walkLeft = 1; }
+	if (KeyboardState::isKeyDown(Qt::Key_D)) { scene->getPhysicsEnvironment()->walkRight = 1; }
+	if (KeyboardState::isKeyDown(Qt::Key_Space)) { scene->getPhysicsEnvironment()->jump = 1; }
+}
+
+void PlayerView::keyReleaseEvent(QKeyEvent *event)
+{
+	KeyboardState::keyStates[event->key()] = false;
+	//	camController->onKeyReleased((Qt::Key)event->key());
+	camController->keyReleaseEvent(event);
+
+	//scene->getPhysicsEnvironment()->keyReleaseEvent((Qt::Key)event->key());
+	if (KeyboardState::isKeyUp(Qt::Key_W)) { scene->getPhysicsEnvironment()->walkForward = 0; }
+	if (KeyboardState::isKeyUp(Qt::Key_S)) { scene->getPhysicsEnvironment()->walkBackward = 0; }
+	if (KeyboardState::isKeyUp(Qt::Key_A)) { scene->getPhysicsEnvironment()->walkLeft = 0; }
+	if (KeyboardState::isKeyUp(Qt::Key_D)) { scene->getPhysicsEnvironment()->walkRight = 0; }
+	if (KeyboardState::isKeyUp(Qt::Key_Space)) { scene->getPhysicsEnvironment()->jump = 0; }
 }
