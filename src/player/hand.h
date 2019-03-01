@@ -28,6 +28,10 @@ protected:
 	btVector3 m_hitPos;
 	btScalar m_oldPickingDist;
 	QVector3D rightHandPickOffset;
+
+	// calculates global rot and scale of hand matrix
+	// while removing the scale part
+	QMatrix4x4 calculateHandMatrix(iris::VrDevice* device, int handIndex);
 public:
 	Hand(PlayerVrController* controller) { this->controller = controller; }
 	virtual void update(float dt) {}
@@ -43,6 +47,20 @@ public:
 		Hand(controller)
 	{
 	}
+
+	void update(float dt);
+	void loadAssets(iris::ContentManagerPtr content);
+	void submitItemsToScene();
+
+	float hoverDist;
+	iris::MeshPtr sphereMesh;
+	iris::MeshPtr beamMesh;
+	iris::MaterialPtr beamMaterial;
+	iris::MeshPtr handMesh;
+	iris::ModelPtr handModel;
+	iris::MaterialPtr handMaterial;
+	iris::SceneNodePtr hoveredNode;
+	iris::SceneNodePtr grabbedNode;
 };
 
 class RightHand : public Hand
@@ -52,10 +70,7 @@ public:
 		Hand(controller)
 	{
 	}
-
-	// calculates global rot and scale of hand matrix
-	// while removing the scale part
-	QMatrix4x4 calculateHandMatrix(iris::VrDevice* device);
+	
 	void update(float dt);
 	void loadAssets(iris::ContentManagerPtr content);
 	void submitItemsToScene();
