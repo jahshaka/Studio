@@ -172,6 +172,7 @@ void PlayerVrController::update(float dt)
 
     auto camPos = camera->getLocalPos();
 
+	/*
 	// LEFT CONTROLLER
     auto leftTouch = vrDevice->getTouchController(0);
     if (leftTouch->isTracking()) {
@@ -210,7 +211,7 @@ void PlayerVrController::update(float dt)
 			if (rayCastToScene(leftHandRenderItem->worldMatrix, pick)) {
 				auto dist = qSqrt(pick.distanceFromStartSqrd);
 				//qDebug() << "hit at dist: " << dist;
-				leftBeamRenderItem->worldMatrix.scale(1, 1, dist /* * (1.0f / 0.55f )*/);// todo: remove magic 0.55
+				leftBeamRenderItem->worldMatrix.scale(1, 1, dist);// todo: remove magic 0.55
 				leftHoveredNode = getObjectRoot(pick.hitNode);
 
 				// Pick a node if the trigger is down
@@ -276,7 +277,7 @@ void PlayerVrController::update(float dt)
 
 			if (rayCastToScene(rightBeamRenderItem->worldMatrix, pick)) {
 				auto dist = qSqrt(pick.distanceFromStartSqrd);
-				rightBeamRenderItem->worldMatrix.scale(1, 1, (dist /*  * (1.0f / 0.55f )*/));// todo: remove magic 0.55
+				rightBeamRenderItem->worldMatrix.scale(1, 1, (dist ));// todo: remove magic 0.55
 			}
 
 			scene->geometryRenderList->add(leftHandRenderItem);
@@ -288,7 +289,9 @@ void PlayerVrController::update(float dt)
 			scene->geometryRenderList->add(leftHandRenderItem);
 		}
     }
+	*/
 
+	leftHand->update(dt);
 	rightHand->update(dt);
 	/*
 	// RIGHT CONTROLLER
