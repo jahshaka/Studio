@@ -167,6 +167,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/jahshaka.log");
 #endif
 
+	currentSpace = WindowSpaces::DESKTOP;
 	originalTitle = windowTitle();
 
 	setupProjectDB();
@@ -188,6 +189,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupDockWidgets();
     setupShortcuts();
 	setupUndoRedo();
+	updateTopMenuStates(currentSpace);
 
 	restoreGeometry(settings->getValue("geometry", "").toByteArray());
 	restoreState(settings->getValue("windowState", "").toByteArray());
