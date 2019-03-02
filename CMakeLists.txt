@@ -142,7 +142,7 @@ set(SRCS
     src/misc/QtAwesome.cpp
     src/misc/QtAwesomeAnim.cpp
 	src/misc/stylesheet.cpp
-	src/Widgets/colorview.cpp
+	src/widgets/colorview.cpp
     src/dialogs/toast.cpp
 	src/helpers/tooltip.cpp
 	src/subclass/switch.cpp
@@ -276,7 +276,7 @@ set(HEADERS
     src/misc/QtAwesome.h
     src/misc/QtAwesomeAnim.h 
 	src/misc/stylesheet.h
-	src/Widgets/colorview.h
+	src/widgets/colorview.h
     src/dialogs/toast.h
 	src/helpers/tooltip.h
 	src/editor/handgizmo.h
