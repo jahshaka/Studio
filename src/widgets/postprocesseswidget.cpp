@@ -104,7 +104,7 @@ void PostProcessesWidget::setPostProcessMgr(const iris::PostProcessManagerPtr &p
 void PostProcessesWidget::addPostProcess(QAction* action)
 {
     iris::PostProcessPtr process;
-
+	/*
     if (action->text()=="Bloom") {
         process = iris::BloomPostProcess::create();
     } else if (action->text()=="Radial Blur") {
@@ -116,7 +116,7 @@ void PostProcessesWidget::addPostProcess(QAction* action)
     } else if (action->text()=="SSAO") {
         process = iris::SSAOPostProcess::create();
     }
-
+	*/
     if (!!process) {
         auto widget = new PostProcessPropertyWidget();
         widget->expand();
