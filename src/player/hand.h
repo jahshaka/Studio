@@ -75,6 +75,9 @@ public:
 	void loadAssets(iris::ContentManagerPtr content);
 	void submitItemsToScene();
 
+	// returns origin and orientation of hand beam given its index
+	QMatrix4x4 getBeamOffset(int handIndex);
+
 	float hoverDist;
 	iris::MeshPtr sphereMesh;
 	iris::MeshPtr beamMesh;
