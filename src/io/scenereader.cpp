@@ -101,7 +101,7 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
 
 void SceneReader::readPostProcessData(QJsonObject &projectObj, iris::PostProcessManagerPtr postMan)
 {
-
+	/*
     if (projectObj.contains("postprocesses")) {
         auto processListObj = projectObj["postprocesses"].toArray();
 
@@ -142,6 +142,7 @@ void SceneReader::readPostProcessData(QJsonObject &projectObj, iris::PostProcess
             postMan->addPostProcess(process);
         }
     }
+	*/
 }
 
 iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
