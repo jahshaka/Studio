@@ -16,6 +16,7 @@ For more information see the LICENSE file
 
 #include <QFileDialog>
 #include <QListView>
+#include <QLabel>
 #include <QStandardPaths>
 #include <QStyledItemDelegate>
 #include <QButtonGroup>
@@ -27,6 +28,7 @@ For more information see the LICENSE file
 #include "constants.h"
 #include "globals.h"
 #include "uimanager.h"
+#include "../../misc/stylesheet.h"
 
 WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* settings) :
     QWidget(nullptr)
@@ -51,6 +53,17 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	shortcuts = new QPushButton("Shortcuts");
 	database = new QPushButton("Database");
 
+	auto buttonGroup = new QButtonGroup;
+	buttonGroup->addButton(viewport);
+	buttonGroup->addButton(editor);
+	buttonGroup->addButton(content);
+	buttonGroup->addButton(mining);
+	buttonGroup->addButton(help);
+	buttonGroup->addButton(about);
+	buttonGroup->addButton(shortcuts);
+	buttonGroup->addButton(database);
+	buttonGroup->setExclusive(true);
+
 	viewportWidget	= new QWidget;
 	editorWidget 	= new QWidget;
 	contentWidget	= new QWidget;
@@ -59,6 +72,11 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	aboutWidget		= new QWidget;
 	shortcutsWidget	= new QWidget;
 	databaseWidget	= new QWidget;
+
+	StyleSheet::setStyle(buttonGroup);
+
+	//StyleSheet::setStyle({viewport,editor,content,mining,help,about,shortcuts,database});
+
 
 	stack = new QStackedWidget;
 
@@ -275,7 +293,7 @@ WorldSettingsWidget::~WorldSettingsWidget()
 
 void WorldSettingsWidget::configureViewport()
 {
-	auto layout = new QVBoxLayout;
+	auto layout = new QGridLayout;
 	viewportWidget->setLayout(layout);
 
 	auto selectionOutlineWidth = new QLabel("Selection Outline Width :");
@@ -290,23 +308,16 @@ void WorldSettingsWidget::configureViewport()
 	auto colorPicker = new ColorPickerWidget;
 	auto checkbox = new QCheckBox;
 
-	auto h1 = new QHBoxLayout;
-	auto h2 = new QHBoxLayout;
-	auto h3 = new QHBoxLayout;
+	StyleSheet::setStyle({ selectionOutlineColor,selectionOutlineWidth,enableAutoSave,spinbox,checkbox });
 
-	h1->addWidget(selectionOutlineWidth);
-	h1->addWidget(spinbox);
+	layout->addWidget(selectionOutlineWidth, 0, 0);
+	layout->addWidget(spinbox, 0, 1);
+	layout->addWidget(selectionOutlineColor, 1, 0);
+	layout->addWidget(colorPicker, 1, 1);
+	layout->addWidget(enableAutoSave, 2, 0);
+	layout->addWidget(checkbox, 2, 1);
 
-	h2->addWidget(selectionOutlineColor);
-	h2->addWidget(colorPicker);
-
-	h3->addWidget(enableAutoSave);
-	h3->addWidget(checkbox);
-
-	layout->addLayout(h1);
-	layout->addLayout(h2);
-	layout->addLayout(h3);
-	layout->addStretch();
+	layout->setRowStretch(layout->rowCount() + 1, 100);
 
 	spinbox->setValue(settings->getValue("outline_width", 6).toInt());
 	colorPicker->setColor(settings->getValue("outline_color", "#3498db").toString());
@@ -320,14 +331,16 @@ void WorldSettingsWidget::configureViewport()
 
 void WorldSettingsWidget::configureEditor()
 {
-	auto layout = new QVBoxLayout;
+	auto layout = new QGridLayout;
 	editorWidget->setLayout(layout);
 
 	auto showFPS = new QLabel("Show FPS :");
 	auto showViewportProjection = new QLabel("Show Viewport Projection:");
 	auto openImportedWorldsInPlayer = new QLabel("Open Imported Worlds In Player :");
 	auto autoCheckUpdates = new QLabel("Automatically Check For Updates :");
-	auto mouseControls = new QLabel("EMouse Controls :");
+	auto mouseControls = new QLabel("Mouse Controls :");
+
+	StyleSheet::setStyle({ showFPS, showViewportProjection, openImportedWorldsInPlayer,autoCheckUpdates, mouseControls });
 
 	setSizePolicyForWidgets(showFPS);
 	setSizePolicyForWidgets(showViewportProjection);
@@ -341,28 +354,20 @@ void WorldSettingsWidget::configureEditor()
 	auto autoUpdates = new QCheckBox;
 	auto mouseCon = new QComboBox;
 
-	auto h1 = new QHBoxLayout;
-	auto h2 = new QHBoxLayout;
-	auto h3 = new QHBoxLayout;
-	auto h4 = new QHBoxLayout;
-	auto h5 = new QHBoxLayout;
+	StyleSheet::setStyle({ fps,viewportProjection,openInPlayer,autoUpdates, mouseCon });
 
-	h1->addWidget(showFPS);
-	h1->addWidget(fps);
-	h2->addWidget(showViewportProjection);
-	h2->addWidget(viewportProjection);
-	h3->addWidget(openImportedWorldsInPlayer);
-	h3->addWidget(openInPlayer);
-	h4->addWidget(autoCheckUpdates);
-	h4->addWidget(autoUpdates);
-	h5->addWidget(mouseControls);
-	h5->addWidget(mouseCon);
+	layout->addWidget(showFPS, 0, 0);
+	layout->addWidget(fps, 0, 1);
+	layout->addWidget(showViewportProjection, 1, 0);
+	layout->addWidget(viewportProjection, 1, 1);
+	layout->addWidget(openImportedWorldsInPlayer, 2, 0);
+	layout->addWidget(openInPlayer, 2, 1);
+	layout->addWidget(autoCheckUpdates, 3, 0);
+	layout->addWidget(autoUpdates, 3, 1);
+	layout->addWidget(mouseControls, 4, 0);
+	layout->addWidget(mouseCon, 4, 1);
+	layout->setRowStretch(layout->rowCount() + 1, 100);
 
-	layout->addLayout(h1);
-	layout->addLayout(h2);
-	layout->addLayout(h3);
-	layout->addLayout(h4);
-	layout->addLayout(h5);
 
 	fps->setChecked(settings->getValue("show_fps", false).toBool());
 	openInPlayer->setChecked(settings->getValue("open_in_player", false).toBool());
@@ -388,10 +393,10 @@ void WorldSettingsWidget::configureEditor()
 
 void WorldSettingsWidget::configureContent()
 {
-	auto layout = new QVBoxLayout;
+	auto layout = new QGridLayout;
 	contentWidget->setLayout(layout);
 
-	auto l1 = new QLabel("Default Project Directory");
+	auto l1 = new QLabel("Default Project Directory     ");
 	auto l2 = new QLabel("Preferred Text Editor");
 	auto l3 = new QLabel("Author");
 	auto l4 = new QLabel("Default License");
@@ -400,6 +405,8 @@ void WorldSettingsWidget::configureContent()
 	auto textEdit = new QLineEdit;
 	auto author = new QLineEdit;
 	auto license = new QComboBox;
+
+	StyleSheet::setStyle({ projectDir, textEdit, author, license, l1,l2,l3,l4 });
 
 	setSizePolicyForWidgets(l1);
 	setSizePolicyForWidgets(l2);
@@ -413,29 +420,21 @@ void WorldSettingsWidget::configureContent()
 	auto browse1 = new QPushButton("...");
 	auto browse2 = new QPushButton("...");
 
-	auto h1 = new QHBoxLayout;
-	auto h2 = new QHBoxLayout;
-	auto h3 = new QHBoxLayout;
-	auto h4 = new QHBoxLayout;
+	layout->addWidget(l1, 0, 0, 1, 2);
+	layout->addWidget(l2, 1, 0, 1, 2);
+	layout->addWidget(l3, 2, 0, 1, 2);
+	layout->addWidget(l4, 3, 0, 1, 2);
+	
+	layout->addWidget(projectDir, 0, 2, 1, 1);
+	layout->addWidget(textEdit, 1, 2, 1, 1);
+	layout->addWidget(author, 2, 2, 1, 2);
+	layout->addWidget(license, 3, 2, 1, 2);
 
-	h1->addWidget(l1);
-	h1->addWidget(projectDir);
-	h1->addWidget(browse1);
+	layout->addWidget(browse1, 0, 3, 1, 1);
+	layout->addWidget(browse2, 1, 3, 1, 1);
+	layout->setRowStretch(layout->rowCount() + 1, 100);
 
-	h2->addWidget(l2);
-	h2->addWidget(textEdit);
-	h2->addWidget(browse2);
-
-	h3->addWidget(l3);
-	h3->addWidget(author);
-
-	h4->addWidget(l4);
-	h4->addWidget(license);
-
-	layout->addLayout(h1);
-	layout->addLayout(h2);
-	layout->addLayout(h3);
-	layout->addLayout(h4);
+	
 
 	// set default directory 
 	auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
@@ -540,6 +539,8 @@ void WorldSettingsWidget::configureShortcuts()
 	layout->addWidget(v11, 10, 1);
 
 	layout->setRowStretch(11, 100);
+
+	StyleSheet::setStyle({k1,v1,k2,v2,k3,v3,k4,v4,k5,v5,k6,v6,k7,v7,k8,v8,k9,v9,k10,v10,k11,v11});
 }
 
 void WorldSettingsWidget::configureDatabaseWidget()

@@ -24,6 +24,10 @@ public:
     static const QString QLabelWhite();
     static const QString QComboBox();
     static const QString QPushButtonGrouped();
+	static const QString QCheckBox();
+	static void setStyle(QWidget *);
+	static void setStyle(QObject *);
+	static void setStyle(QList<QWidget *>);
 };
 
 

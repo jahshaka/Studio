@@ -10,7 +10,9 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "stylesheet.h"
-
+#include <QDebug>
+#include <QButtonGroup>
+#include <QAbstractButton>
 
 
 const QString StyleSheet::QPushButtonInvisible() {
@@ -72,11 +74,19 @@ const QString StyleSheet::QLabelWhite() {
 
 const QString StyleSheet::QComboBox() {
     return QString(
-        "QComboBox{background: rgba(0,0,0,0); border :0px; border-bottom: 1px solid black; padding: 5px; margin-left : 5px; color : rgba(255,255,255,.9);} "
-        "QComboBox:drop-down {   border :0px solid black;}"
-        "QComboBox QAbstractItemView { background-color: rgba(33,33,33,1);  border :0px; border-bottom: 1px solid black;padding: 5px; padding-left: 1px; margin-left : 0px; outline: 0px; selection-background-color: rgba(40,128, 185,0); }"
-        "QComboBox QAbstractItemView::item:hover { background-color: red; border :0px solid rgba(0,0,0,0);}"
-    );
+		"QComboBox:editable {}"
+		"QComboBox QAbstractItemView::item {    show-decoration-selected: 1;}"
+		"QComboBox QAbstractItemView::item {    padding: 6px;}"
+		"QComboBox  {    background-color: #1A1A1A;   border: 0;    outline: none; padding: 3px 10px; }"
+		"QComboBox:!editable, QComboBox::drop-down:editable {     background: #1A1A1A;}"
+		"QComboBox:!editable:on, QComboBox::drop-down:editable:on {    background: #1A1A1A;}"
+		"QComboBox QAbstractItemView {    background-color: #1A1A1A;    selection-background-color: #404040;    border: 0;    outline: none; padding: 4px 10px; }"
+		"QComboBox QAbstractItemView::item {    border: none; padding: 4px 10px;}"
+		"QComboBox QAbstractItemView::item:selected {    background: #404040;    padding-left: 5px;}"
+		"QComboBox::drop-down {    subcontrol-origin: padding;    subcontrol-position: top right;    width: 18px;    border-left-width: 1px;}"
+		"QComboBox::down-arrow {    image: url(:/icons/down_arrow_check.png);	width: 18px;	height: 14px;} "
+		"QComboBox::down-arrow:!enabled {    image: url(:/icons/down_arrow_check_disabled.png);    width: 18px;    height: 14px;}"
+	);
 }
 
 const QString StyleSheet::QPushButtonRounded(int size) {
@@ -85,13 +95,55 @@ const QString StyleSheet::QPushButtonRounded(int size) {
     );
 }
 
+
 const QString StyleSheet::QPushButtonGrouped() {
     return QString(
-    "QPushButton{ background:rgba(51,51,51,.5); color: rgba(190,190,190,1); border : 1px solid rgba(20,20,20,.4); padding: 5px 16px;} "
-    "QPushButton:checked{ color : rgba(50,150,250,1);}"
-    "QPushButton:hover{background: rgba(50,50,50,1);}"
-    "QPushButton:pressed{background:rgba(61,61,61,.9);}"
+    "QAbstractButton{ background:rgba(51,51,51,.5); color: rgba(190,190,190,1); border : 1px solid rgba(20,20,20,.4); padding: 9px 16px;} "
+    "QAbstractButton:checked{ background : rgba(50,150,250,1);}"
+    "QAbstractButton:hover{background: rgba(50,50,50,1);}"
+    "QAbstractButton:pressed{background:rgba(61,61,61,.9);}"
     );
+}
+
+const QString StyleSheet::QCheckBox()
+{
+	return QString(
+		"QCheckBox {   spacing: 2px 5px; width: 12px; height :12px;}"
+		"QCheckBox::indicator {   width: 18px;   height: 18px; }"
+		"QCheckBox::indicator::unchecked {	image: url(:/icons/check-unchecked.png);}"
+		"QCheckBox::indicator::checked {		image: url(:/icons/check-checked.png);}"
+	);
+}
+
+void StyleSheet::setStyle(QWidget *widget)
+{
+	auto name = widget->metaObject()->className();
+
+	if (std::strcmp(name, "QPushButton") == 0) widget->setStyleSheet(QPushButtonGreyscale());
+	if (std::strcmp(name, "QLineEdit") == 0) widget->setStyleSheet(QLineEdit());
+	if (std::strcmp(name, "QLabel") == 0) widget->setStyleSheet(QLabelWhite());
+	if (std::strcmp(name, "QComboBox") == 0) widget->setStyleSheet(QComboBox());
+	if (std::strcmp(name, "QCheckBox") == 0) widget->setStyleSheet(QCheckBox());
+
+
+	
+}
+
+void StyleSheet::setStyle(QObject *obj)
+{
+	auto name = obj->metaObject()->className();
+	if (std::strcmp(name,"QButtonGroup")==0) {
+		auto bg = static_cast<QButtonGroup*>(obj);
+		for (auto btn : bg->buttons()) {
+			btn->setCheckable(true);
+			btn->setStyleSheet(QPushButtonGrouped());
+		}
+	}
+}
+
+void StyleSheet::setStyle(QList<QWidget*> list)
+{
+	for (auto wid : list) setStyle(wid);
 }
 
 
