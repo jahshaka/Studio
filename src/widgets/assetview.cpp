@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "core/settingsmanager.h"
 #include "dialogs/preferencesdialog.h"
 #include "dialogs/preferences/worldsettings.h"
+#include "dialogs/preferences/worldsettingswidget.h"
 
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/graphics/mesh.h"

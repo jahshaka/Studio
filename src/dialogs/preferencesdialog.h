@@ -23,6 +23,7 @@ namespace Ui {
 class QListWidgetItem;
 class SettingsManager;
 class WorldSettings;
+class WorldSettingsWidget;
 class Database;
 
 class PreferencesDialog : public QDialog
@@ -43,7 +44,8 @@ public:
     explicit PreferencesDialog(QWidget* parent, Database *db, SettingsManager* settings);
     ~PreferencesDialog();
 
-    WorldSettings* worldSettings;
+	//WorldSettings* worldSettings;
+	WorldSettingsWidget* worldSettings;
 	Database *db;
 
 protected:

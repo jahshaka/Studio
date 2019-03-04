@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "materialreader.hpp"
 #include "scenereader.h"
 #include "assetmanager.h"
+#include "core/guidmanager.h"
 
 #include "globals.h"
 #include "constants.h"
@@ -249,7 +250,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 
     //read name
     sceneNode->name = nodeObj["name"].toString("");
-	sceneNode->setGUID(nodeObj["guid"].toString(IrisUtils::generateGUID()));
+	sceneNode->setGUID(nodeObj["guid"].toString(GUIDManager::generateGUID()));
     sceneNode->setAttached(nodeObj["attached"].toBool());
     sceneNode->setPickable(nodeObj["pickable"].toBool(true));
 
