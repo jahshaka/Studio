@@ -77,7 +77,7 @@ const QString StyleSheet::QComboBox() {
 		"QComboBox:editable {}"
 		"QComboBox QAbstractItemView::item {    show-decoration-selected: 1;}"
 		"QComboBox QAbstractItemView::item {    padding: 6px;}"
-		"QComboBox  {    background-color: #1A1A1A;   border: 0;    outline: none; padding: 3px 10px; }"
+		"QComboBox  {    background-color: #1A1A1A;   border: 0;    outline: none; padding: 3px 10px; color: rgba(255,255,255,.9); }"
 		"QComboBox:!editable, QComboBox::drop-down:editable {     background: #1A1A1A;}"
 		"QComboBox:!editable:on, QComboBox::drop-down:editable:on {    background: #1A1A1A;}"
 		"QComboBox QAbstractItemView {    background-color: #1A1A1A;    selection-background-color: #404040;    border: 0;    outline: none; padding: 4px 10px; }"
@@ -98,20 +98,34 @@ const QString StyleSheet::QPushButtonRounded(int size) {
 
 const QString StyleSheet::QPushButtonGrouped() {
     return QString(
-    "QAbstractButton{ background:rgba(51,51,51,.5); color: rgba(190,190,190,1); border : 1px solid rgba(20,20,20,.4); padding: 9px 16px;} "
+    "QAbstractButton{ background:rgba(51,51,51,.5); color: rgba(190,190,190,1); border : 0 ; padding: 9px 16px;} "
     "QAbstractButton:checked{ background : rgba(50,150,250,1);}"
     "QAbstractButton:hover{background: rgba(50,50,50,1);}"
     "QAbstractButton:pressed{background:rgba(61,61,61,.9);}"
     );
 }
 
+const QString StyleSheet::QPushButtonDanger()
+{
+	return QPushButtonGrouped() + QString(
+		"QAbstractButton{background : rgba(200,40,40,1);}"
+	);
+}
+
 const QString StyleSheet::QCheckBox()
 {
 	return QString(
-		"QCheckBox {   spacing: 2px 5px; width: 12px; height :12px;}"
+		//"QCheckBox {   spacing: 2px 5px; width: 18px; height :18px; }"
 		"QCheckBox::indicator {   width: 18px;   height: 18px; }"
 		"QCheckBox::indicator::unchecked {	image: url(:/icons/check-unchecked.png);}"
 		"QCheckBox::indicator::checked {		image: url(:/icons/check-checked.png);}"
+	);
+}
+
+const QString StyleSheet::QSplitter()
+{
+	return QString(
+	"QSplitter::handle:horizontal{}"
 	);
 }
 
@@ -124,6 +138,8 @@ void StyleSheet::setStyle(QWidget *widget)
 	if (std::strcmp(name, "QLabel") == 0) widget->setStyleSheet(QLabelWhite());
 	if (std::strcmp(name, "QComboBox") == 0) widget->setStyleSheet(QComboBox());
 	if (std::strcmp(name, "QCheckBox") == 0) widget->setStyleSheet(QCheckBox());
+	if (std::strcmp(name, "QSpinBox") == 0 || std::strcmp(name, "QDoubleSpinBox") == 0) widget->setStyleSheet(QSpinBox());
+	if (std::strcmp(name, "QSplitter")==0) widget->setStyleSheet(QSpinBox());
 
 
 	
