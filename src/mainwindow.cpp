@@ -3101,7 +3101,9 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 {
     if (UiManager::isSceneOpen) closeProject();
 
+	// this is to ensure the editor's context is created
 	switchSpace(WindowSpaces::EDITOR);
+
     newScene();
     UiManager::isSceneOpen = true;
     ui->actionClose->setDisabled(false);
@@ -3112,6 +3114,7 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
     UiManager::clearUndoStack();
     UiManager::updateWindowTitle();
+	switchSpace(WindowSpaces::EDITOR);
 }
 
 MainWindow::~MainWindow()
