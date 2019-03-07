@@ -1867,6 +1867,7 @@ void AssetWidget::createCubeMap()
     mapDefinition["down"] = "";
 
     assetShader->setValue(QVariant::fromValue(mapDefinition));
+    AssetManager::addAsset(assetShader);
 
     item->setText("CubeMap");
     ui->assetView->addItem(item);

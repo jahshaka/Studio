@@ -199,12 +199,35 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         scene->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
     }
 
-    scene->cubeMapGuid = sceneObj["cubeMapGuid"].toString();
-    scene->materialGuid = sceneObj["materialSkyGuid"].toString();
-    scene->equiTextureGuid = sceneObj["equiSkyGuid"].toString();
+    scene->cubeMapGuid = sceneObj["cubeMapGuid"].toString();      // cubemap
+    scene->materialGuid = sceneObj["materialSkyGuid"].toString(); // shader
+    scene->equiTextureGuid = sceneObj["equiSkyGuid"].toString();  // image
+
+    auto realisticSkyProps = sceneObj["realisticSky"].toObject();
+
+    scene->skyRealistic.luminance = realisticSkyProps["luminance"].toDouble(1.0);
+    scene->skyRealistic.reileigh = realisticSkyProps["reileigh"].toDouble(2.5);
+    scene->skyRealistic.mieCoefficient = realisticSkyProps["mieCoefficient"].toDouble(0.053);
+    scene->skyRealistic.mieDirectionalG = realisticSkyProps["mieDirectionalG"].toDouble(0.75);
+    scene->skyRealistic.turbidity = realisticSkyProps["turbidity"].toDouble(.32f);
+    scene->skyRealistic.sunPosX = realisticSkyProps["sunPosX"].toDouble(10);
+    scene->skyRealistic.sunPosY = realisticSkyProps["sunPosY"].toDouble(7);
+    scene->skyRealistic.sunPosZ = realisticSkyProps["sunPosZ"].toDouble(10);
 
     scene->setSkyColor(this->readColor(sceneObj["skyColor"].toObject()));
     scene->setAmbientColor(this->readColor(sceneObj["ambientColor"].toObject()));
+
+    switch (sceneObj["skyType"].toInt()) {
+        case (int) iris::SkyType::SINGLE_COLOR: { scene->skyType = iris::SkyType::SINGLE_COLOR; break; }
+        case (int) iris::SkyType::CUBEMAP: { scene->skyType = iris::SkyType::CUBEMAP; break; }
+        case (int) iris::SkyType::EQUIRECTANGULAR: { scene->skyType = iris::SkyType::EQUIRECTANGULAR; break; }
+        case (int) iris::SkyType::GRADIENT: { scene->skyType = iris::SkyType::GRADIENT; break; }
+        case (int) iris::SkyType::MATERIAL: { scene->skyType = iris::SkyType::MATERIAL; break; }
+        case (int) iris::SkyType::REALISTIC: { scene->skyType = iris::SkyType::REALISTIC; break; }
+        default: break;
+    }
+
+    //scene->switchSkyTexture(scene->skyType);
 
     scene->fogColor = this->readColor(sceneObj["fogColor"].toObject());
     scene->fogStart = sceneObj["fogStart"].toDouble(100);

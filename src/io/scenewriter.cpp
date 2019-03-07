@@ -97,13 +97,36 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     skyTexture["left"] = getRelativePath(scene->skyBoxTextures[4]);
     skyTexture["right"] = getRelativePath(scene->skyBoxTextures[5]);
 
+    switch (scene->skyType) {
+        case iris::SkyType::SINGLE_COLOR: { sceneObj["skyType"] = (int) iris::SkyType::SINGLE_COLOR; break; }
+        case iris::SkyType::CUBEMAP: { sceneObj["skyType"] = (int) iris::SkyType::CUBEMAP; break; }
+        case iris::SkyType::EQUIRECTANGULAR: { sceneObj["skyType"] = (int) iris::SkyType::EQUIRECTANGULAR; break; }
+        case iris::SkyType::GRADIENT: { sceneObj["skyType"] = (int) iris::SkyType::GRADIENT; break; }
+        case iris::SkyType::MATERIAL: { sceneObj["skyType"] = (int) iris::SkyType::MATERIAL; break; }
+        case iris::SkyType::REALISTIC: { sceneObj["skyType"] = (int) iris::SkyType::REALISTIC; break; }
+        default: break;
+    }
+
     sceneObj["cubeMapGuid"] = scene->cubeMapGuid;
     sceneObj["materialSkyGuid"] = scene->materialGuid;
     sceneObj["equiSkyGuid"] = scene->equiTextureGuid;
+    sceneObj["skyColor"] = jsonColor(scene->skyColor);
+
+    QJsonObject realisticSky;
+    realisticSky["luminance"] = scene->skyRealistic.luminance;
+    realisticSky["reileigh"] = scene->skyRealistic.reileigh;
+    realisticSky["mieCoefficient"] = scene->skyRealistic.mieCoefficient;
+    realisticSky["mieDirectionalG"] = scene->skyRealistic.mieDirectionalG;
+    realisticSky["turbidity"] = scene->skyRealistic.turbidity;
+    realisticSky["sunPosX"] = scene->skyRealistic.sunPosX;
+    realisticSky["sunPosY"] = scene->skyRealistic.sunPosY;
+    realisticSky["sunPosZ"] = scene->skyRealistic.sunPosZ;
+
+    sceneObj["realisticSky"] = realisticSky;
 
     sceneObj["skyBox"] = skyTexture;
     sceneObj["gravity"] = scene->gravity;
-    sceneObj["skyColor"] = jsonColor(scene->skyColor);
+    // sceneObj["skyColor"] = jsonColor(scene->skyColor);
     sceneObj["ambientColor"] = jsonColor(scene->ambientColor);
 
     sceneObj["fogColor"] = jsonColor(scene->fogColor);
