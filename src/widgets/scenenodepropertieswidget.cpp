@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include "propertywidgets/meshpropertywidget.h"
 #include "propertywidgets/nodepropertywidget.h"
 #include "propertywidgets/shaderpropertywidget.h"
+#include "propertywidgets/cubemappropertywidget.h"
 #include "propertywidgets/worldpropertywidget.h"
 #include "propertywidgets/physicspropertywidget.h"
 #include "propertywidgets/handpropertywidget.h"
@@ -74,12 +75,22 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     shaderPropView->setDatabase(db);
     shaderPropView->expand();
 
-	handPropView = new HandPropertyWidget();
+    cubeMapPropView = new CubeMapPropertyWidget();
+    cubeMapPropView->setPanelTitle("CubeMap Images");
+    cubeMapPropView->setDatabase(db);
+    cubeMapPropView->expand();
+
+    handPropView = new HandPropertyWidget();
 	handPropView->setPanelTitle("Hand");
 	//handPropView->setDatabase(db);
 	handPropView->expand();
 
     setLayout(widgetPropertyLayout);
+}
+
+void SceneNodePropertiesWidget::setScene(QSharedPointer<iris::Scene> scene)
+{
+    if (!!scene) this->scene = scene;
 }
 
 /**
@@ -172,15 +183,23 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 
 void SceneNodePropertiesWidget::setAssetItem(QListWidgetItem *item)
 {
-    if (item) {
-		clearLayout(this->layout());
+    if (!item) return;
+
+    if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Shader)) {
+        clearLayout(this->layout());
         shaderPropView->setParent(this);
         shaderPropView->setShaderGuid(item->data(MODEL_GUID_ROLE).toString());
         widgetPropertyLayout->addWidget(shaderPropView);
         widgetPropertyLayout->addStretch();
     }
-    else {
+    else if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::CubeMap))
+    {
         clearLayout(this->layout());
+        cubeMapPropView->setParent(this);
+        cubeMapPropView->setScene(scene); // ???
+        cubeMapPropView->setCubeMapGuid(item->data(MODEL_GUID_ROLE).toString());
+        widgetPropertyLayout->addWidget(cubeMapPropView);
+        widgetPropertyLayout->addStretch();
     }
 }
 

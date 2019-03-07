@@ -169,6 +169,23 @@ struct AssetParticleSystem : public Asset
     }
 };
 
+struct AssetCubeMap : public Asset
+{
+    AssetCubeMap()
+    {
+        type = ModelTypes::CubeMap;
+    }
+
+    virtual QVariant getValue()
+    {
+        return value;
+    }
+
+    virtual void setValue(QVariant val)
+    {
+        value = val;
+    }
+};
 
 class AssetManager
 {

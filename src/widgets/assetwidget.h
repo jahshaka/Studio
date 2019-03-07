@@ -276,7 +276,8 @@ protected slots:
 
 	void editFileExternally();
 	void exportTexture();
-	void exportMaterial();
+    void exportCubeMap();
+    void exportMaterial();
 	void exportMaterialPreview();
 	void exportShader();
 	void exportAssetPack();
@@ -288,6 +289,7 @@ protected slots:
     void deleteItem();
     void openAtFolder();
 	void createShader();
+    void createCubeMap();
     void createFolder();
     void importAssetB();
     void importAsset(const QStringList &path);
