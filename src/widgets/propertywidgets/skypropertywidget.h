@@ -18,6 +18,8 @@ For more information see the LICENSE file
 
 #include "irisgl/src/scenegraph/scene.h"
 
+class Database;
+
 class ColorValueWidget;
 class ColorPickerWidget;
 class TexturePicker;
@@ -35,11 +37,16 @@ class SkyPropertyWidget: public AccordianBladeWidget
 public:
     SkyPropertyWidget();
     void setScene(QSharedPointer<iris::Scene> scene);
+    void setDatabase(Database *);
 
 protected slots:
+    void setEquiMap(const QString &guid);
+    void setSkyMap(const QString &guid);
     void skyTypeChanged(int index);
 
     void onSingleSkyColorChanged(QColor color);
+    void onSkyCubeMapChanged(int index);
+    void onEquiTextureChanged(QString tex);
 
     void onReileighChanged(float val);
     void onLuminanceChanged(float val);
@@ -51,6 +58,7 @@ protected slots:
     void onSunPosZChanged(float val);
 
 private:
+    Database *db;
     QSharedPointer<iris::Scene> scene;
     iris::SkyType currentSky;
 
