@@ -170,7 +170,8 @@ void LeftHand::update(float dt)
 
 void LeftHand::loadAssets(iris::ContentManagerPtr content)
 {
-	handModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/LeftHand_anims.fbx"));
+	//handModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/LeftHand_anims.fbx"));
+	handModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/left_hand_anims.fbx"));
 	auto mat = iris::DefaultMaterial::create();
 	mat->setDiffuseColor(Qt::white);
 	mat->enableFlag("SKINNING_ENABLED");
