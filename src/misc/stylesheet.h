@@ -17,6 +17,7 @@ public:
     static const QString QPushButtonInvisible();
     static const QString QPushButtonGreyscale();
 	static const QString QPushButtonGrouped();
+	static const QString QPushButtonGroupedBig();
 	static const QString QPushButtonDanger();
     static const QString QPushButtonRounded(int size);
     static const QString QSpinBox();

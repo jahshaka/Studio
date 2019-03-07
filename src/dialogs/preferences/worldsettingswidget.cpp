@@ -55,6 +55,15 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	shortcuts = new QPushButton("Shortcuts");
 	database = new QPushButton("Database");
 
+	viewport->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
+	editor->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
+	content->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
+	mining->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
+	help->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
+	about->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
+	shortcuts->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
+	database->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
+
 	auto buttonGroup = new QButtonGroup;
 	buttonGroup->addButton(viewport);
 	buttonGroup->addButton(editor);
@@ -65,6 +74,7 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	buttonGroup->addButton(shortcuts);
 	buttonGroup->addButton(database);
 	buttonGroup->setExclusive(true);
+	for (auto btn : buttonGroup->buttons()) btn->setCheckable(true);
 
 	viewportWidget	= new QWidget;
 	editorWidget 	= new QWidget;
@@ -75,7 +85,7 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	shortcutsWidget	= new QWidget;
 	databaseWidget	= new QWidget;
 
-	StyleSheet::setStyle(buttonGroup);
+	//StyleSheet::setStyle(buttonGroup);
 
 	stack = new QStackedWidget;
 
@@ -309,15 +319,21 @@ void WorldSettingsWidget::configureViewport()
 	auto colorPicker = new ColorPickerWidget;
 	auto checkbox = new QCheckBox;
 
+	auto checkboxLayout = new QHBoxLayout;
+	checkboxLayout->setContentsMargins(0, 0, 0, 0);
+	checkboxLayout->addStretch();
+	checkboxLayout->addWidget(checkbox);
+
 	StyleSheet::setStyle({ selectionOutlineColor,selectionOutlineWidth,enableAutoSave,spinbox,checkbox });
 
 	layout->addWidget(selectionOutlineWidth, 0, 0);
-	layout->addWidget(spinbox, 0, 1);
+	layout->addWidget(spinbox, 0, 2);
 	layout->addWidget(selectionOutlineColor, 1, 0);
-	layout->addWidget(colorPicker, 1, 1);
+	layout->addWidget(colorPicker, 1, 2);
 	layout->addWidget(enableAutoSave, 2, 0);
-	layout->addWidget(checkbox, 2, 1);
+	layout->addLayout(checkboxLayout, 2, 2);
 
+	layout->setColumnStretch(1, 50);
 	layout->setRowStretch(layout->rowCount() + 1, 100);
 
 	spinbox->setValue(settings->getValue("outline_width", 6).toInt());
@@ -605,7 +621,7 @@ void WorldSettingsWidget::configureDatabaseWidget()
 		if (option == QMessageBox::Yes) {
 			UiManager::isSceneOpen ? UiManager::mainWindow->closeProject() : false ;
 			db->wipeDatabase();
-			QMessageBox::information(this, "Restart", "Jahshaka will now restart!", QMessageBox::Ok);
+			QMessageBox::information(this, "Restart", "Database cleared, Jahshaka will now restart!", QMessageBox::Ok);
 			qApp->quit();
 			QProcess::startDetached(qApp->arguments()[0], qApp->arguments());
 		}

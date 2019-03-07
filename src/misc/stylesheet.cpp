@@ -23,7 +23,7 @@ const QString StyleSheet::QPushButtonInvisible() {
 
 const QString StyleSheet::QSpinBox() {
     return QString(
-        "QAbstractSpinBox {  color:rgba(255,255,255,.8); padding: 3px; padding-right: 0px;    background: #292929; margin-right: -6px; }"
+		"QAbstractSpinBox { background: rgba(21,21,21,1); color:rgba(255,255,255,.8); padding: 4px; padding-right: 0px; margin-right: 0px; border : 0; }"
 		"QAbstractSpinBox::down-button, QAbstractSpinBox::up-button { background: rgba(0,0,0,0); border : 1px solid rgba(0,0,0,0); }"
         
     );
@@ -74,13 +74,12 @@ const QString StyleSheet::QLabelWhite() {
 
 const QString StyleSheet::QComboBox() {
     return QString(
-		"QComboBox:editable {}"
-		"QComboBox QAbstractItemView::item {    show-decoration-selected: 1;}"
-		"QComboBox QAbstractItemView::item {    padding: 6px;}"
 		"QComboBox  {    background-color: #1A1A1A;   border: 0;    outline: none; padding: 3px 10px; color: rgba(255,255,255,.9); }"
+		"QComboBox:editable {}"
+		"QComboBox QAbstractItemView::item {    show-decoration-selected: 1;  padding: 6px; }"
 		"QComboBox:!editable, QComboBox::drop-down:editable {     background: #1A1A1A;}"
 		"QComboBox:!editable:on, QComboBox::drop-down:editable:on {    background: #1A1A1A;}"
-		"QComboBox QAbstractItemView {    background-color: #1A1A1A;    selection-background-color: #404040;    border: 0;    outline: none; padding: 4px 10px; }"
+		"QComboBox QAbstractItemView {    background-color: #1A1A1A; color: rgba(255,255,255,.9);    selection-background-color: #404040;    border: 0;    outline: none; padding: 4px 10px; }"
 		"QComboBox QAbstractItemView::item {    border: none; padding: 4px 10px;}"
 		"QComboBox QAbstractItemView::item:selected {    background: #404040;    padding-left: 5px;}"
 		"QComboBox::drop-down {    subcontrol-origin: padding;    subcontrol-position: top right;    width: 18px;    border-left-width: 1px;}"
@@ -97,12 +96,21 @@ const QString StyleSheet::QPushButtonRounded(int size) {
 
 
 const QString StyleSheet::QPushButtonGrouped() {
-    return QString(
-    "QAbstractButton{ background:rgba(51,51,51,.5); color: rgba(190,190,190,1); border : 0 ; padding: 9px 16px;} "
-    "QAbstractButton:checked{ background : rgba(50,150,250,1);}"
-    "QAbstractButton:hover{background: rgba(50,50,50,1);}"
-    "QAbstractButton:pressed{background:rgba(61,61,61,.9);}"
-    );
+	return QString(
+		"QAbstractButton{ background:rgba(51,51,51,.5); color: rgba(190,190,190,1); border : 0 ; padding: 4px 16px;} "
+		"QAbstractButton:checked{ background : rgba(50,150,250,1);}"
+		"QAbstractButton:hover{background: rgba(50,50,50,1);}"
+		"QAbstractButton:pressed{background:rgba(61,61,61,.9);}"
+	);
+}
+
+const QString StyleSheet::QPushButtonGroupedBig() {
+	return QString(
+		"QAbstractButton{ background:rgba(51,51,51,.5); color: rgba(190,190,190,1); border : 0 ; padding: 12px 30px;} "
+		"QAbstractButton:checked{ background : rgba(50,150,250,1);}"
+		"QAbstractButton:hover{background: rgba(50,50,50,1);}"
+		"QAbstractButton:pressed{background:rgba(61,61,61,.9);}"
+	);
 }
 
 const QString StyleSheet::QPushButtonDanger()
@@ -115,10 +123,10 @@ const QString StyleSheet::QPushButtonDanger()
 const QString StyleSheet::QCheckBox()
 {
 	return QString(
-		"QCheckBox {   spacing: 2px 5px; width: 18px; height :18px; }"
-		"QCheckBox::indicator {   width: 18px;   height: 18px; }"
+		//"QCheckBox { width: 16px; height :16px; }"
+		"QCheckBox::indicator {   width: 18px;   height: 18px; margin : 0px; padding :0px; right : -5px; }"
 		"QCheckBox::indicator::unchecked {	image: url(:/icons/check-unchecked.png);}"
-		"QCheckBox::indicator::checked {		image: url(:/icons/check-checked.png);}"
+		"QCheckBox::indicator::checked {image: url(:/icons/check-checked.png);}"
 	);
 }
 
@@ -132,11 +140,17 @@ const QString StyleSheet::QSplitter()
 const QString StyleSheet::QAbstractScrollArea()
 {
 	return QString(
-		"QAbstractScrollArea{ background : rgba(51,51,51,.5); color : rgba(255,255,255,.9);}"
-		"QScrollBar:vertical {border : 0px solid black;	background: rgba(132, 132, 132, 0);width: 24px; padding: 4px;}"
-		"QScrollBar::handle{ background: rgba(72, 72, 72, 1);	border-radius: 8px; width: 14px; }"
+		"QAbstractScrollArea{ background : rgba(51,51,51,.5); color : rgba(255,255,255,.9); border : 0; padding : 0px 12px;  }"
+		"QScrollBar:vertical {border : 0px solid black;	background: rgba(132, 132, 132, 0);width: 16px; padding: 4px;}"
+		"QScrollBar::handle:vertical{ background: rgba(72, 72, 72, 1);	border-radius : 4px; width: 10px; }"
 		"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {	background: rgba(200, 200, 200, 0);}"
 		"QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {	background: rgba(0, 0, 0, 0);border: 0px solid white;}"
+		
+		"QScrollBar:horizontal {border : 0px solid black;	background: rgba(132, 132, 132, 0);width: 24px; padding: 4px;}"
+		"QScrollBar::handle:horizontal{ background: rgba(72, 72, 72, 1);	border-radius: 8px; height: 10px; }"
+		"QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {	background: rgba(200, 200, 200, 0);}"
+		"QScrollBar::up-arrow:horizontal, QScrollBar::down-arrow:horizontal {	background: rgba(0, 0, 0, 0);border: 0px solid white;}"
+		
 		"QScrollBar::sub-line, QScrollBar::add-line {	background: rgba(10, 0, 0, .0);}"
 	);
 }
