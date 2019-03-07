@@ -100,7 +100,7 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	buttonLayout->addWidget(database);
 	buttonLayout->addStretch();
 	leftWidget->setLayout(buttonLayout);
-	buttonLayout->setSpacing(0.5);
+	buttonLayout->setSpacing(1);
 	buttonLayout->setContentsMargins(0, 0, 0, 0);
 	viewport->setChecked(true);
 
@@ -391,6 +391,7 @@ void WorldSettingsWidget::configureEditor()
 	layout->setRowStretch(layout->rowCount() + 1, 100);
 
 
+
 	fps->setChecked(settings->getValue("show_fps", false).toBool());
 	openInPlayer->setChecked(settings->getValue("open_in_player", false).toBool());
 	autoUpdates->setChecked(settings->getValue("automatic_updates", true).toBool());
@@ -455,9 +456,7 @@ void WorldSettingsWidget::configureContent()
 	layout->addWidget(browse1, 0, 3, 1, 1);
 	layout->addWidget(browse2, 1, 3, 1, 1);
 	layout->setRowStretch(layout->rowCount() + 1, 100);
-
-
-
+	layout->setHorizontalSpacing(0);
 	
 	author->setText(db->getAuthorName());
 
@@ -499,39 +498,22 @@ void WorldSettingsWidget::configureAbout()
 	aboutWidget->setLayout(layout);
 
 	auto view = new QTextBrowser;
-	view->setHtml(QString("<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.0//EN' 'http://www.w3.org/TR/REC-html40/strict.dtd'>\n<html><head><meta name = 'qrichtext' content = '1'"
-		"/ ><style type = 'text/css'>\np, li{ white - space: pre - wrap; }\n< / style>< / head><body style = ' font-family:'MS Shell Dlg 2'; font-size:12pt; font-weight:400; "
-		"font-style:normal;'>\n<p style = ' margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;'><span style = ' "
-		"font-size:8.25pt;'>Jahshaka is bringing you the future of immersive digital content creation.It delivers a media management and playback platform the is accentuated "
-		"by compositing, editing and effects modules.Jahshaka is free software, developed as an open source project under the GPL licence, and is"
-		" designed to be compiled for Windows, OsX and many distributions of Linux.< / span>< / p>\n<p style = '-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px;"
-		" margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-size:8.25pt;'><br / >< / p>\n<p style = '-qt-paragraph-type:empty; margin-top:0px; margin-"
-		"bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-size:8.25pt;'><br / >< / p>\n<p style = ' margin-top:0px; margin"
-		"-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;'><span style = ' font-weight:600;'>Core Jahshaka Features< / span>< "
-		"/ p>\n<p style = '-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; fon"
-		"t-size:8.25pt;'><br / >< / p>\n<p style = ' margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;'> < span s"
-		"tyle = ' font-size:8.25pt;'>2D and 3D animation &amp; compositing< / span>< / p>\n<p style = ' margin-top:0px; margin-bottom:0px; margin-left:0px; margin-r"
-		"ight:0px; -qt-block-indent:0; text-indent:0px;'><span style = ' font-size:8.25pt;'>Media and asset management< / span>< / p>\n<p style = ' margin-top:0px; marg"
-		"in-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;'> < span style = ' font-size:8.25pt;'>2D and 3D playback< / span>< / p>\n"
-		"<p style = ' margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;'><span style = ' font-size:8.25pt;'>Colour "
-		"Correction< / span>< / p>\n<p style = ' margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;'><span style = '"
-		" font-size:8.25pt;'>Editing &amp; Effects< / span>< / p>\n<p style = '-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-rig"
-		"ht:0px; -qt-block-indent:0; text-indent:0px; font-size:8.25pt;'><br / >< / p>\n<p style = '-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margi"
-		"n-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-size:8.25pt;'><br / >< / p>\n<p style = ' margin-top:0px; margin-bottom:0px; margin-left"
-		":0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;'><span style = ' font-weight:600;'>Support Jahshaka< / span>< / p>\n<p style = '-qt-paragraph-type:e"
-		"mpty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-size:8.25pt;'><br / >< / p>\n<p style = ' margi"
-		"n-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;'><span style = ' font-size:8.25pt;'>There are many ways you"
-		" can support Jahshaka, the main thing is to just get involved.You can follow us on twitter for news and updates and join our community at facebook.< / sp"
-		"an>< / p>\n<p style = '-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; fo"
-		"nt-size:8.25pt;'><br / >< / p>\n<p style = '-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-ind"
-		"ent:0; text-indent:0px; font-size:8.25pt;'><br / >< / p>\n<p style = '-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; marg"
-		"in-right:0px; -qt-block-indent:0; text-indent:0px; font-size:8.25pt;'><br / >< / p>\n<p style = '-qt-paragraph-type:empty; margin-top:0px; margin-bot"
-		"tom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-size:8.25pt;'><br / >< / p>\n<p style = ' margin-top:0px; margin-bott"
-		"om:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;'><span style = ' font-weight:600;'>Jahshaka is, and will always remain, fr"
-		"ee!< / span>< / p>\n<p style = '-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-ind"
-		"ent:0px; font-size:8.25pt;'><br / >< / p>\n<p style = ' margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-inde"
-		"nt:0px;'><span style = ' font-size:8.25pt;'>Jahshaka, the industrys leading free, open source digital content creation platform, is back!Stay tuned for news, up"
-		"dates, a new jahshaka site and a powerful new release!< / span>< / p>< / body>< / html>"));
+	auto text = "Jahshaka is bringing you the future of immersive digital content creation. It delivers a media management and playback platform the is accentuated by compositing, editing and effects modules. Jahshaka is free software, developed as an open source project under the GPL licence, and is designed to be compiled for Windows, OsX and many distributions of Linux."
+		"\n\n<h1> Core Jahshaka Features</h1>"
+		"\n\n2D and 3D animation & compositing"
+		"\nMedia and asset management"
+		"\n2D and 3D playback"
+		"\nColro Correction"
+		"\nEditing & Effects"
+			"\n\n<h1>Support Jahshaka</h1>"
+		"\n\nThere are many ways you can support Jahshaka, the main thing is to just get involved. You can follow us on twitter for news and updates and join our community at facebook."
+		"\n\n\n\n<h1>Jahshaka is, and will always remain, free!</h1>"
+		"\n\nJahshaka, the industrys leading free, open source digital content creation platform, is back! Stay tuned for news, updates, a new jahshaka site and a powerful new release!"
+		"\n\n\n\n\n\n\n\n";
+
+	view->setHtml(text);
+	StyleSheet::setStyle(view);
+
 	setSizePolicyForWidgets(view);
 
 	layout->addWidget(view);

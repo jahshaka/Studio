@@ -27,6 +27,7 @@ public:
     static const QString QComboBox();
 	static const QString QCheckBox();
 	static const QString QSplitter();
+	static const QString QAbstractScrollArea();
 	static void setStyle(QWidget *);
 	static void setStyle(QObject *);
 	static void setStyle(QList<QWidget *>);

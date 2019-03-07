@@ -45,7 +45,7 @@ const QString StyleSheet::QSlider() {
 
 const QString StyleSheet::QLineEdit() {
     return QString(
-        "QLineEdit { color: rgba(255,255,255,.9); background: rgba(51,51,51,0.5); border: 1px solid rgba(0,0,0,.4); selection-background-color: #808080; padding : 5px;}"
+        "QLineEdit { color: rgba(255,255,255,.9); background: rgba(51,51,51,0.5); border: 0px solid rgba(0,0,0,0); selection-background-color: #808080; padding : 5px;}"
 
     );
 }
@@ -115,7 +115,7 @@ const QString StyleSheet::QPushButtonDanger()
 const QString StyleSheet::QCheckBox()
 {
 	return QString(
-		//"QCheckBox {   spacing: 2px 5px; width: 18px; height :18px; }"
+		"QCheckBox {   spacing: 2px 5px; width: 18px; height :18px; }"
 		"QCheckBox::indicator {   width: 18px;   height: 18px; }"
 		"QCheckBox::indicator::unchecked {	image: url(:/icons/check-unchecked.png);}"
 		"QCheckBox::indicator::checked {		image: url(:/icons/check-checked.png);}"
@@ -126,6 +126,18 @@ const QString StyleSheet::QSplitter()
 {
 	return QString(
 	"QSplitter::handle:horizontal{}"
+	);
+}
+
+const QString StyleSheet::QAbstractScrollArea()
+{
+	return QString(
+		"QAbstractScrollArea{ background : rgba(51,51,51,.5); color : rgba(255,255,255,.9);}"
+		"QScrollBar:vertical {border : 0px solid black;	background: rgba(132, 132, 132, 0);width: 24px; padding: 4px;}"
+		"QScrollBar::handle{ background: rgba(72, 72, 72, 1);	border-radius: 8px; width: 14px; }"
+		"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {	background: rgba(200, 200, 200, 0);}"
+		"QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {	background: rgba(0, 0, 0, 0);border: 0px solid white;}"
+		"QScrollBar::sub-line, QScrollBar::add-line {	background: rgba(10, 0, 0, .0);}"
 	);
 }
 
@@ -140,9 +152,7 @@ void StyleSheet::setStyle(QWidget *widget)
 	if (std::strcmp(name, "QCheckBox") == 0) widget->setStyleSheet(QCheckBox());
 	if (std::strcmp(name, "QSpinBox") == 0 || std::strcmp(name, "QDoubleSpinBox") == 0) widget->setStyleSheet(QSpinBox());
 	if (std::strcmp(name, "QSplitter")==0) widget->setStyleSheet(QSpinBox());
-
-
-	
+	if (std::strcmp(name, "QTextBrowser")==0) widget->setStyleSheet(QAbstractScrollArea());
 }
 
 void StyleSheet::setStyle(QObject *obj)
