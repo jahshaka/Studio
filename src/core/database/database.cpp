@@ -758,7 +758,7 @@ bool Database::deleteFolder(const QString &guid)
 bool Database::deleteDependency(const QString &dependee)
 {
     QSqlQuery query;
-    query.prepare("DELETE FROM dependencies dependee = ?");
+    query.prepare("DELETE FROM dependencies WHERE dependee = ?");
     query.addBindValue(dependee);
     return executeAndCheckQuery(query, "deleteDependency");
 }
