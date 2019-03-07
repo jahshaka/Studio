@@ -67,8 +67,10 @@ void TexturePickerWidget::dropEvent(QDropEvent *event)
 	QMap<int, QVariant> roleDataMap;
 	while (!stream.atEnd()) stream >> roleDataMap;
 
-	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
-		changeMap(IrisUtils::join(Globals::project->getProjectFolder(), roleDataMap.value(1).toString()));
+    // extend getting guid to filepicker dialog...
+    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
+        textureGuid = roleDataMap.value(3).toString();
+        changeMap(IrisUtils::join(Globals::project->getProjectFolder(), roleDataMap.value(1).toString()));
 	}
 
     event->acceptProposedAction();
@@ -118,6 +120,7 @@ void TexturePickerWidget::clear()
 {
     ui->texture->clear();
     filePath.clear();
+    textureGuid.clear();
     emit valueChanged(QString::null);
 }
 
@@ -135,5 +138,7 @@ void TexturePickerWidget::setTexture(QString path)
 {
     if (!path.isEmpty()) {
         setLabelImage(ui->texture, path, false);
+    } else {
+        ui->texture->clear();
     }
 }

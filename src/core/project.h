@@ -96,20 +96,21 @@ struct CollectionRecord
     int         id;
 };
 
-enum class ModelTypes {
-    Undefined,      // Used
-	Material,       // Supported
-	Texture,        // Supported
-	Video,
-	Cubemap,
-	Object,         // Supported
-	Mesh,           // Supported
-	SoundEffect,
-	Music,
-	Shader,         // Supported
-	Variant,
-	File,           // Supported
-	ParticleSystem  // Supported
+enum class ModelTypes
+{
+    Undefined, // Used
+    Material,  // Supported
+    Texture,   // Supported
+    Video,
+    CubeMap, // Supported
+    Object,  // Supported
+    Mesh,    // Supported
+    SoundEffect,
+    Music,
+    Shader, // Supported
+    Variant,
+    File,          // Supported
+    ParticleSystem // Supported
 };
 
 #define	MODEL_GUID_ROLE		0x0113
