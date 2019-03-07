@@ -20,11 +20,11 @@ class OutlinerRenderer
 public:
 	//QOpenGLFunctions_3_2_Core * gl;
 	iris::SceneNodePtr selectedNode;
-	QOpenGLShaderProgram* meshShader;
-	QOpenGLShaderProgram* skinnedShader;
-	QOpenGLShaderProgram* particleShader;
+	iris::ShaderPtr meshShader;
+	iris::ShaderPtr skinnedShader;
+	iris::ShaderPtr particleShader;
 
-	QOpenGLShaderProgram* outlineShader;
+	iris::ShaderPtr outlineShader;
 
 	// rtt used to render the selected objects texture
 	iris::Texture2DPtr objectTexture;
