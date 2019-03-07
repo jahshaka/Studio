@@ -22,7 +22,7 @@ For more information see the LICENSE file
 #include "irisgl/src/scenegraph/cameranode.h"
 #include "irisgl/src/scenegraph/particlesystemnode.h"
 
-#include <QOpenGLShaderProgram>
+#include "irisgl/src/graphics/shader.h"
 
 OutlinerRenderer::OutlinerRenderer()
 {
@@ -31,23 +31,23 @@ OutlinerRenderer::OutlinerRenderer()
 
 void OutlinerRenderer::loadAssets()
 {
-	particleShader = iris::GraphicsHelper::loadShader(":/assets/shaders/particle.vert",
+	particleShader = iris::Shader::load(":/assets/shaders/particle.vert",
 		":/assets/shaders/particle.frag");
 
-	meshShader = iris::GraphicsHelper::loadShader(":assets/shaders/color.vert",
+	meshShader = iris::Shader::load(":assets/shaders/color.vert",
 		":assets/shaders/color.frag");
 
-	meshShader->bind();
-	meshShader->setUniformValue("color", QColor(255, 255, 255, 255));
+	//meshShader->bind();
+	//meshShader->setUniformValue("color", QColor(255, 255, 255, 255));
 
-	skinnedShader = iris::GraphicsHelper::loadShader(":assets/shaders/skinned_color.vert",
+	skinnedShader = iris::Shader::load(":assets/shaders/skinned_color.vert",
 		":assets/shaders/color.frag");
 
-	skinnedShader->bind();
-	skinnedShader->setUniformValue("color", QColor(255, 255, 255, 255));
-	skinnedShader->release();
+	//skinnedShader->bind();
+	//skinnedShader->setUniformValue("color", QColor(255, 255, 255, 255));
+	//skinnedShader->release();
 
-	outlineShader = iris::GraphicsHelper::loadShader(":shaders/outlinepp.vert",
+	outlineShader = iris::Shader::load(":shaders/outlinepp.vert",
 //		":assets/shaders/fullscreen.frag");
 	":shaders/outlinepp.frag");
 
@@ -80,17 +80,18 @@ void OutlinerRenderer::renderOutline(iris::GraphicsDevicePtr device,
 
 	device->setRenderTarget(outlineTexture);
 	device->setViewport(vp);
-	device->clear(QColor(0, 0, 0, 0));
-	device->setTexture(0, objectTexture);
+	//device->clear(QColor(0, 0, 0, 0));
 
-	outlineShader->bind();
-	outlineShader->setUniformValue("u_sceneTex", 0);
-	outlineShader->setUniformValue("u_lineWidth", lineWidth);
-	outlineShader->setUniformValue("u_color", QVector3D(color.redF(), color.greenF(), color.blueF()));
+	device->setShader(outlineShader);
+	device->setShaderUniform("u_sceneTex", 0);
+	device->setShaderUniform("u_lineWidth", lineWidth);
+	device->setShaderUniform("u_color", QVector3D(color.redF(), color.greenF(), color.blueF()));
+	device->setTexture(0, objectTexture);
 	fsQuad->draw(device, outlineShader);
 	//fsQuad->draw();
 	device->clearRenderTarget();
 
+	device->setShader(fsQuad->shader);
 	device->setBlendState(iris::BlendState::createAlphaBlend());
 	device->setTexture(0, outlineTexture);
 	//device->setTexture(0, objectTexture);
@@ -102,28 +103,29 @@ void OutlinerRenderer::renderNode(iris::GraphicsDevicePtr device,
 	iris::SceneNodePtr node,
 	iris::CameraNodePtr cam)
 {
-	QOpenGLShaderProgram* shader;
+	//iris::ShaderPtr shader;
 
 	if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
 		auto meshNode = node.staticCast<iris::MeshNode>();
 
 		if (meshNode->mesh != nullptr) {
-			QOpenGLShaderProgram* shader;
+			//QOpenGLShaderProgram* shader;
 			if (meshNode->mesh->hasSkeleton())
-				shader = skinnedShader;
+				device->setShader(skinnedShader);
 			else
-				shader = meshShader;
+				device->setShader(meshShader);
 
-			shader->bind();
+			//shader->bind();
 
-			shader->setUniformValue("u_worldMatrix", node->globalTransform);
-			shader->setUniformValue("u_viewMatrix", cam->viewMatrix);
-			shader->setUniformValue("u_projMatrix", cam->projMatrix);
-			shader->setUniformValue("u_normalMatrix", node->globalTransform.normalMatrix());
+			device->setShaderUniform("color", QColor(255, 255, 255, 255));
+			device->setShaderUniform("u_worldMatrix", node->globalTransform);
+			device->setShaderUniform("u_viewMatrix", cam->viewMatrix);
+			device->setShaderUniform("u_projMatrix", cam->projMatrix);
+			device->setShaderUniform("u_normalMatrix", node->globalTransform.normalMatrix());
 
 			if (meshNode->mesh->hasSkeleton()) {
 				auto boneTransforms = meshNode->mesh->getSkeleton()->boneTransforms;
-				shader->setUniformValueArray("u_bones", boneTransforms.data(), boneTransforms.size());
+				device->setShaderUniformArray("u_bones", boneTransforms.data(), boneTransforms.size());
 			}
 
 			meshNode->mesh->draw(device);
