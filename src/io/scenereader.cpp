@@ -189,6 +189,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         }
     }
 
+    // deprecated
     if (useTex) {
         scene->skyBoxTextures[0] = front;
         scene->skyBoxTextures[1] = back;
@@ -198,6 +199,10 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         scene->skyBoxTextures[5] = right;
         scene->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
     }
+
+    scene->cubeMapGuid = sceneObj["cubeMapGuid"].toString();
+    scene->materialGuid = sceneObj["materialSkyGuid"].toString();
+    scene->equiTextureGuid = sceneObj["equiSkyGuid"].toString();
 
     scene->setSkyColor(this->readColor(sceneObj["skyColor"].toObject()));
     scene->setAmbientColor(this->readColor(sceneObj["ambientColor"].toObject()));

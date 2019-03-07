@@ -110,6 +110,10 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             fogPropView->setScene(sceneNode->scene);
             worldPropView->setParent(this);
             worldPropView->setScene(sceneNode->scene);
+            skyPropView->setParent(this);
+            skyPropView->setDatabase(db);
+            skyPropView->setScene(sceneNode->scene);
+            widgetPropertyLayout->addWidget(skyPropView);
             widgetPropertyLayout->addWidget(fogPropView);
             widgetPropertyLayout->addWidget(worldPropView);
         }
