@@ -74,10 +74,7 @@ void LeftHand::update(float dt)
 		{
 			// Handle picking and movement of picked objects
 			iris::PickingResult pick;
-			QMatrix4x4 beamOffset;
-			beamOffset.setToIdentity();
-			beamOffset.translate(0.0, -0.05f, 0.0);
-
+			auto beamOffset = getBeamOffset(0);
 			if (controller->rayCastToScene(rightHandMatrix * beamOffset, pick)) {
 				auto dist = qSqrt(pick.distanceFromStartSqrd);
 				hoverDist = dist;
@@ -199,22 +196,17 @@ void LeftHand::submitItemsToScene()
 
 	// beam
 	if (!grabbedNode) {
-		QMatrix4x4 beamMatrix;
-		beamMatrix.setToIdentity();
-		beamMatrix.translate(0.0, -0.05f, 0.0);
+		QMatrix4x4 beamMatrix = getBeamOffset(0);
 		beamMatrix.scale(0.4f, 0.4f, hoverDist);
 		scene->geometryRenderList->submitMesh(beamMesh, beamMaterial, rightHandMatrix * beamMatrix);
 
-		QMatrix4x4 sphereMatrix;
-		sphereMatrix.setToIdentity();
-		sphereMatrix.translate(0.0, -0.05f, 0.0);
+		QMatrix4x4 sphereMatrix = getBeamOffset(0);
 		sphereMatrix.scale(0.02f);
 		scene->geometryRenderList->submitMesh(sphereMesh, beamMaterial, rightHandMatrix * sphereMatrix);
 
 
-		QMatrix4x4 tipMatrix;
-		tipMatrix.setToIdentity();
-		tipMatrix.translate(0.0, -0.05f, -hoverDist);
+		QMatrix4x4 tipMatrix = getBeamOffset(0);
+		tipMatrix.translate(0.0, 0.0, -hoverDist);
 		tipMatrix.scale(0.02f);
 		scene->geometryRenderList->submitMesh(sphereMesh, beamMaterial, rightHandMatrix * tipMatrix);
 
@@ -222,6 +214,15 @@ void LeftHand::submitItemsToScene()
 	else {
 
 	}
+}
+
+QMatrix4x4 LeftHand::getBeamOffset(int handIndex)
+{
+	QMatrix4x4 beamMatrix;
+	beamMatrix.setToIdentity();
+	beamMatrix.translate(0.0, -0.08f, 0.0);
+	beamMatrix.rotate(QQuaternion::fromEulerAngles(-15, -22, 0));
+	return beamMatrix;
 }
 
 void RightHand::update(float dt)
@@ -409,9 +410,9 @@ QMatrix4x4 RightHand::getBeamOffset(int handIndex)
 {
 	QMatrix4x4 beamMatrix;
 	beamMatrix.setToIdentity();
-	beamMatrix.translate(0.0, -0.05f, 0.0);
-	beamMatrix.rotate(QQuaternion::fromEulerAngles(90, 45, 45));
-	return QMatrix4x4();
+	beamMatrix.translate(0.0, -0.08f, 0.0);
+	beamMatrix.rotate(QQuaternion::fromEulerAngles(-15, 22, 0));
+	return beamMatrix;
 }
 
 void Hand::init(iris::ScenePtr scene, iris::CameraNodePtr cam, iris::ViewerNodePtr viewer)

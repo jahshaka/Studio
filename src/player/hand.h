@@ -29,6 +29,9 @@ protected:
 	btScalar m_oldPickingDist;
 	QVector3D rightHandPickOffset;
 
+	// returns origin and orientation of hand beam given its index
+	virtual QMatrix4x4 getBeamOffset(int handIndex) { return QMatrix4x4(); }
+
 	// calculates global rot and scale of hand matrix
 	// while removing the scale part
 	QMatrix4x4 calculateHandMatrix(iris::VrDevice* device, int handIndex);
@@ -51,6 +54,9 @@ public:
 	void update(float dt);
 	void loadAssets(iris::ContentManagerPtr content);
 	void submitItemsToScene();
+
+	// returns origin and orientation of hand beam given its index
+	QMatrix4x4 getBeamOffset(int handIndex) override;
 
 	float hoverDist;
 	iris::MeshPtr sphereMesh;
@@ -76,7 +82,7 @@ public:
 	void submitItemsToScene();
 
 	// returns origin and orientation of hand beam given its index
-	QMatrix4x4 getBeamOffset(int handIndex);
+	QMatrix4x4 getBeamOffset(int handIndex) override;
 
 	float hoverDist;
 	iris::MeshPtr sphereMesh;
