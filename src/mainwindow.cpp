@@ -3114,7 +3114,7 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
     UiManager::clearUndoStack();
     UiManager::updateWindowTitle();
-	switchSpace(WindowSpaces::EDITOR);
+	updateTopMenuStates(WindowSpaces::EDITOR);
 }
 
 MainWindow::~MainWindow()
