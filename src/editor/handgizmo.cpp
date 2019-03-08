@@ -57,12 +57,13 @@ bool HandGizmoHandler::doHandPicking(const iris::ScenePtr& scene,
 
 void HandGizmoHandler::submitHandToScene(const iris::ScenePtr & scene)
 {
+	const float handScale = 2.0;
 	QMatrix4x4 scale;
 	scale.setToIdentity();
 
 	scale.rotate(180, 0.0, 1.0, 0.0);
 	scale.rotate(90, 0.0, 0.0, 1.0);
-	scale.scale(0.1f, 0.1f, 0.1f);
+	scale.scale(0.1f * handScale, 0.1f * handScale, 0.1f * handScale);
 
 	for (auto grabber : scene->grabbers) {
 		// set appropriate animation
