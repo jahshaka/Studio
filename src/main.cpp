@@ -86,8 +86,6 @@ int main(int argc, char *argv[])
 	upgrader.checkIfDeprecatedVersion();
 
     app.setWindowIcon(QIcon(":/images/icon.ico"));
-    app.setApplicationName("Jahshaka Player");
-
 
     auto dataPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
     QDir dataDir(dataPath);
