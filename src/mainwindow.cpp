@@ -1501,12 +1501,14 @@ void MainWindow::addViewer()
     node->setName("Viewer");
     addNodeToScene(node);
 
+	// Set all other controllers to false
 	for (auto node : scene->getRootNode()->children) {
 		if (node->getSceneNodeType() == iris::SceneNodeType::Viewer) {
 			node.staticCast<iris::ViewerNode>()->setActiveCharacterController(false);
 		}
 	}
 
+	node->setActiveCharacterController(true);
 	scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(node);
 }
 
