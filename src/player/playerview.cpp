@@ -6,6 +6,7 @@
 #include "widgets/sceneviewwidget.h"
 #include "irisgl/Graphics.h"
 #include "irisgl/SceneGraph.h"
+#include "irisgl/Physics.h"
 #include "irisgl/Vr.h"
 #include "irisgl/Content.h"
 #include "playervrcontroller.h"
@@ -121,6 +122,11 @@ void PlayerView::renderScene()
 	fpsTimer->restart();
 
 	camController->update(dt);
+
+	auto activeViewer = scene->getActiveVrViewer();
+	if (activeViewer->isActiveCharacterController()) {
+		activeViewer->setGlobalTransform(scene->getPhysicsEnvironment()->getActiveCharacterController()->getTransform());
+	}
 
 	auto scene = UiManager::sceneViewWidget->getScene();
 	//auto renderer = UiManager::sceneViewWidget->getRenderer();
