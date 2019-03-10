@@ -49,6 +49,7 @@ void LeftHand::update(float dt)
 
 	auto camPos = camera->getLocalPos();
 
+	//scene->getPhysicsEnvironment()->setDirection(QVector2D(0, 0));
 	auto leftTouch = vrDevice->getTouchController(0);
 	if (leftTouch->isTracking()) {
 
@@ -57,6 +58,13 @@ void LeftHand::update(float dt)
 		auto dir = leftTouch->GetThumbstick();
 		camPos += x * linearSpeed * dir.x() * 2;
 		camPos += z * linearSpeed * dir.y() * 2;
+
+		//qDebug()<<dir;
+		dir.setY(-dir.y());
+		auto newDir = rot.rotatedVector(QVector3D(dir.x(), 0, dir.y()));
+		scene->getPhysicsEnvironment()->setDirection(QVector2D(newDir.x(), newDir.z()));
+		//auto controller = scene->getPhysicsEnvironment()->getActiveCharacterController();
+		//controller->setDirection(dir);
 
 
 		if (leftTouch->isButtonDown(iris::VrTouchInput::Y))
@@ -359,7 +367,6 @@ void RightHand::update(float dt)
 void RightHand::loadAssets(iris::ContentManagerPtr content)
 {
 	handModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/right_hand_anims.fbx"));
-	qDebug() << handModel->getSkeletalAnimations().keys();
 	auto mat = iris::DefaultMaterial::create();
 	mat->setDiffuseColor(Qt::white);
 	mat->enableFlag("SKINNING_ENABLED");
