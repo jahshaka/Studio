@@ -10,7 +10,7 @@ uniform mat4 u_viewMatrix;
 uniform mat4 u_projMatrix;
 uniform mat4 u_worldMatrix;
 uniform mat3 u_normalMatrix;
-uniform float u_textureScale;
+uniform float u_textureScale = 1.0;
 
 uniform vec3 u_eyePos;
 uniform vec3 u_sceneAmbient;
