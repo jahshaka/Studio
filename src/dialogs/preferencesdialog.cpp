@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "ui_preferencesdialog.h"
 #include <QListWidgetItem>
 #include "preferences/worldsettings.h"
+#include "preferences/worldsettingsWidget.h"
 #include "../core/settingsmanager.h"
 #include "../core/database/database.h"
 #include "aboutdialog.h"
@@ -39,7 +40,7 @@ PreferencesDialog::PreferencesDialog(QWidget* parent, Database *handle, Settings
 void PreferencesDialog::setupPages()
 {
     // can we elimate this to be more permanent? why (was/is) this dynamic really?
-    worldSettings = new WorldSettings(db, settings);
+    worldSettings = new WorldSettingsWidget(db, settings);
     ui->worldLayout->addWidget(worldSettings);
 }
 

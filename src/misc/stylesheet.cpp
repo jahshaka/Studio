@@ -10,7 +10,9 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "stylesheet.h"
-
+#include <QDebug>
+#include <QButtonGroup>
+#include <QAbstractButton>
 
 
 const QString StyleSheet::QPushButtonInvisible() {
@@ -21,7 +23,7 @@ const QString StyleSheet::QPushButtonInvisible() {
 
 const QString StyleSheet::QSpinBox() {
     return QString(
-        "QAbstractSpinBox {  color:rgba(255,255,255,.8); padding: 3px; padding-right: 0px;    background: #292929; margin-right: -6px; }"
+		"QAbstractSpinBox { background: rgba(21,21,21,1); color:rgba(255,255,255,.8); padding: 4px; padding-right: 0px; margin-right: 0px; border : 0; }"
 		"QAbstractSpinBox::down-button, QAbstractSpinBox::up-button { background: rgba(0,0,0,0); border : 1px solid rgba(0,0,0,0); }"
         
     );
@@ -43,7 +45,7 @@ const QString StyleSheet::QSlider() {
 
 const QString StyleSheet::QLineEdit() {
     return QString(
-        "QLineEdit { color: rgba(255,255,255,.9); background: rgba(51,51,51,0.5); border: 1px solid rgba(0,0,0,.4); selection-background-color: #808080; padding : 5px;}"
+        "QLineEdit { color: rgba(255,255,255,.9); background: rgba(51,51,51,0.5); border: 0px solid rgba(0,0,0,0); selection-background-color: #808080; padding : 5px;}"
 
     );
 }
@@ -72,11 +74,18 @@ const QString StyleSheet::QLabelWhite() {
 
 const QString StyleSheet::QComboBox() {
     return QString(
-        "QComboBox{background: rgba(0,0,0,0); border :0px; border-bottom: 1px solid black; padding: 5px; margin-left : 5px; color : rgba(255,255,255,.9);} "
-        "QComboBox:drop-down {   border :0px solid black;}"
-        "QComboBox QAbstractItemView { background-color: rgba(33,33,33,1);  border :0px; border-bottom: 1px solid black;padding: 5px; padding-left: 1px; margin-left : 0px; outline: 0px; selection-background-color: rgba(40,128, 185,0); }"
-        "QComboBox QAbstractItemView::item:hover { background-color: red; border :0px solid rgba(0,0,0,0);}"
-    );
+		"QComboBox  {    background-color: #1A1A1A;   border: 0;    outline: none; padding: 3px 10px; color: rgba(255,255,255,.9); }"
+		"QComboBox:editable {}"
+		"QComboBox QAbstractItemView::item {    show-decoration-selected: 1;  padding: 6px; }"
+		"QComboBox:!editable, QComboBox::drop-down:editable {     background: #1A1A1A;}"
+		"QComboBox:!editable:on, QComboBox::drop-down:editable:on {    background: #1A1A1A;}"
+		"QComboBox QAbstractItemView {    background-color: #1A1A1A; color: rgba(255,255,255,.9);    selection-background-color: #404040;    border: 0;    outline: none; padding: 4px 10px; }"
+		"QComboBox QAbstractItemView::item {    border: none; padding: 4px 10px;}"
+		"QComboBox QAbstractItemView::item:selected {    background: #404040;    padding-left: 5px;}"
+		"QComboBox::drop-down {    subcontrol-origin: padding;    subcontrol-position: top right;    width: 18px;    border-left-width: 1px;}"
+		"QComboBox::down-arrow {    image: url(:/icons/down_arrow_check.png);	width: 18px;	height: 14px;} "
+		"QComboBox::down-arrow:!enabled {    image: url(:/icons/down_arrow_check_disabled.png);    width: 18px;    height: 14px;}"
+	);
 }
 
 const QString StyleSheet::QPushButtonRounded(int size) {
@@ -85,13 +94,96 @@ const QString StyleSheet::QPushButtonRounded(int size) {
     );
 }
 
+
 const QString StyleSheet::QPushButtonGrouped() {
-    return QString(
-    "QPushButton{ background:rgba(51,51,51,.5); color: rgba(190,190,190,1); border : 1px solid rgba(20,20,20,.4); padding: 5px 16px;} "
-    "QPushButton:checked{ color : rgba(50,150,250,1);}"
-    "QPushButton:hover{background: rgba(50,50,50,1);}"
-    "QPushButton:pressed{background:rgba(61,61,61,.9);}"
-    );
+	return QString(
+		"QAbstractButton{ background:rgba(51,51,51,.5); color: rgba(190,190,190,1); border : 0 ; padding: 4px 16px;} "
+		"QAbstractButton:checked{ background : rgba(50,150,250,1);}"
+		"QAbstractButton:hover{background: rgba(50,50,50,1);}"
+		"QAbstractButton:pressed{background:rgba(61,61,61,.9);}"
+	);
+}
+
+const QString StyleSheet::QPushButtonGroupedBig() {
+	return QString(
+		"QAbstractButton{ background:rgba(51,51,51,.5); color: rgba(190,190,190,1); border : 0 ; padding: 12px 30px;} "
+		"QAbstractButton:checked{ background : rgba(50,150,250,1);}"
+		"QAbstractButton:hover{background: rgba(50,50,50,1);}"
+		"QAbstractButton:pressed{background:rgba(61,61,61,.9);}"
+	);
+}
+
+const QString StyleSheet::QPushButtonDanger()
+{
+	return QPushButtonGrouped() + QString(
+		"QAbstractButton{background : rgba(200,40,40,1);}"
+	);
+}
+
+const QString StyleSheet::QCheckBox()
+{
+	return QString(
+		//"QCheckBox { width: 16px; height :16px; }"
+		"QCheckBox::indicator {   width: 18px;   height: 18px; margin : 0px; padding :0px; right : -5px; }"
+		"QCheckBox::indicator::unchecked {	image: url(:/icons/check-unchecked.png);}"
+		"QCheckBox::indicator::checked {image: url(:/icons/check-checked.png);}"
+	);
+}
+
+const QString StyleSheet::QSplitter()
+{
+	return QString(
+	"QSplitter::handle:horizontal{}"
+	);
+}
+
+const QString StyleSheet::QAbstractScrollArea()
+{
+	return QString(
+		"QAbstractScrollArea{ background : rgba(51,51,51,.5); color : rgba(255,255,255,.9); border : 0; padding : 0px 12px;  }"
+		"QScrollBar:vertical {border : 0px solid black;	background: rgba(132, 132, 132, 0);width: 16px; padding: 4px;}"
+		"QScrollBar::handle:vertical{ background: rgba(72, 72, 72, 1);	border-radius : 4px; width: 10px; }"
+		"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {	background: rgba(200, 200, 200, 0);}"
+		"QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {	background: rgba(0, 0, 0, 0);border: 0px solid white;}"
+		
+		"QScrollBar:horizontal {border : 0px solid black;	background: rgba(132, 132, 132, 0);width: 24px; padding: 4px;}"
+		"QScrollBar::handle:horizontal{ background: rgba(72, 72, 72, 1);	border-radius: 8px; height: 10px; }"
+		"QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {	background: rgba(200, 200, 200, 0);}"
+		"QScrollBar::up-arrow:horizontal, QScrollBar::down-arrow:horizontal {	background: rgba(0, 0, 0, 0);border: 0px solid white;}"
+		
+		"QScrollBar::sub-line, QScrollBar::add-line {	background: rgba(10, 0, 0, .0);}"
+	);
+}
+
+void StyleSheet::setStyle(QWidget *widget)
+{
+	auto name = widget->metaObject()->className();
+
+	if (std::strcmp(name, "QPushButton") == 0) widget->setStyleSheet(QPushButtonGreyscale());
+	if (std::strcmp(name, "QLineEdit") == 0) widget->setStyleSheet(QLineEdit());
+	if (std::strcmp(name, "QLabel") == 0) widget->setStyleSheet(QLabelWhite());
+	if (std::strcmp(name, "QComboBox") == 0) widget->setStyleSheet(QComboBox());
+	if (std::strcmp(name, "QCheckBox") == 0) widget->setStyleSheet(QCheckBox());
+	if (std::strcmp(name, "QSpinBox") == 0 || std::strcmp(name, "QDoubleSpinBox") == 0) widget->setStyleSheet(QSpinBox());
+	if (std::strcmp(name, "QSplitter")==0) widget->setStyleSheet(QSpinBox());
+	if (std::strcmp(name, "QTextBrowser")==0) widget->setStyleSheet(QAbstractScrollArea());
+}
+
+void StyleSheet::setStyle(QObject *obj)
+{
+	auto name = obj->metaObject()->className();
+	if (std::strcmp(name,"QButtonGroup")==0) {
+		auto bg = static_cast<QButtonGroup*>(obj);
+		for (auto btn : bg->buttons()) {
+			btn->setCheckable(true);
+			btn->setStyleSheet(QPushButtonGrouped());
+		}
+	}
+}
+
+void StyleSheet::setStyle(QList<QWidget*> list)
+{
+	for (auto wid : list) setStyle(wid);
 }
 
 

@@ -16,6 +16,9 @@ class StyleSheet : public QObject
 public:
     static const QString QPushButtonInvisible();
     static const QString QPushButtonGreyscale();
+	static const QString QPushButtonGrouped();
+	static const QString QPushButtonGroupedBig();
+	static const QString QPushButtonDanger();
     static const QString QPushButtonRounded(int size);
     static const QString QSpinBox();
     static const QString QSlider();
@@ -23,7 +26,12 @@ public:
     static const QString QWidgetDark();
     static const QString QLabelWhite();
     static const QString QComboBox();
-    static const QString QPushButtonGrouped();
+	static const QString QCheckBox();
+	static const QString QSplitter();
+	static const QString QAbstractScrollArea();
+	static void setStyle(QWidget *);
+	static void setStyle(QObject *);
+	static void setStyle(QList<QWidget *>);
 };
 
 

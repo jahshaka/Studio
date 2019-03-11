@@ -114,7 +114,6 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
     iris::SpriteBatchPtr spriteBatch;
     iris::FontPtr font;
     float fontSize;
-    bool showFps;
 
 	// vr viewer representation
 	iris::MaterialPtr viewerMat;
@@ -124,6 +123,8 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
 	iris::DefaultMaterialPtr handGizmoMaterial;
 	HandGizmoHandler* handGizmoHandler;
 public:
+	bool showFps;
+
     iris::CameraNodePtr editorCam;
 
     MainWindow *mainWindow;
