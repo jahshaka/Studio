@@ -619,7 +619,7 @@ void WorldSettingsWidget::configureDatabaseWidget()
 		);
 
 		if (option == QMessageBox::Yes) {
-			UiManager::isSceneOpen ? UiManager::mainWindow->closeProject() : false ;
+			if (UiManager::isSceneOpen) UiManager::mainWindow->closeProject();
 			db->wipeDatabase();
 			QMessageBox::information(this, "Restart", "Database cleared, Jahshaka will now restart!", QMessageBox::Ok);
 			qApp->quit();
