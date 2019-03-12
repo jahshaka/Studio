@@ -341,7 +341,7 @@ void WorldSettingsWidget::configureViewport()
 	checkbox->setChecked(settings->getValue("auto_save", true).toBool());
 
 	connect(spinbox, SIGNAL(valueChanged(double)), this, SLOT(outlineWidthChanged(double)));
-	connect(colorPicker, SIGNAL(onColorChanged(QColor)), this, SLOT(outlineColorChanged(QCOlor)));
+	connect(colorPicker, SIGNAL(onColorChanged(QColor)), this, SLOT(outlineColorChanged(QColor)));
 	connect(checkbox, SIGNAL(toggled(bool)), this, SLOT(enableAutoSave(bool)));
 
 }
