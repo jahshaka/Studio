@@ -159,20 +159,20 @@ void StyleSheet::setStyle(QWidget *widget)
 {
 	auto name = widget->metaObject()->className();
 
-	if (std::strcmp(name, "QPushButton") == 0) widget->setStyleSheet(QPushButtonGreyscale());
-	if (std::strcmp(name, "QLineEdit") == 0) widget->setStyleSheet(QLineEdit());
-	if (std::strcmp(name, "QLabel") == 0) widget->setStyleSheet(QLabelWhite());
-	if (std::strcmp(name, "QComboBox") == 0) widget->setStyleSheet(QComboBox());
-	if (std::strcmp(name, "QCheckBox") == 0) widget->setStyleSheet(QCheckBox());
-	if (std::strcmp(name, "QSpinBox") == 0 || std::strcmp(name, "QDoubleSpinBox") == 0) widget->setStyleSheet(QSpinBox());
-	if (std::strcmp(name, "QSplitter")==0) widget->setStyleSheet(QSpinBox());
-	if (std::strcmp(name, "QTextBrowser")==0) widget->setStyleSheet(QAbstractScrollArea());
+	if (name == QStringLiteral("QPushButton")) widget->setStyleSheet(QPushButtonGreyscale());
+	if (name == QStringLiteral( "QLineEdit")) widget->setStyleSheet(QLineEdit());
+	if (name == QStringLiteral( "QLabel")) widget->setStyleSheet(QLabelWhite());
+	if (name == QStringLiteral( "QComboBox")) widget->setStyleSheet(QComboBox());
+	if (name == QStringLiteral( "QCheckBox")) widget->setStyleSheet(QCheckBox());
+	if (name == QStringLiteral( "QSpinBox") || name == QStringLiteral("QDoubleSpinBox")) widget->setStyleSheet(QSpinBox());
+	if (name == QStringLiteral( "QSplitter")) widget->setStyleSheet(QSpinBox());
+	if (name == QStringLiteral( "QTextBrowser")) widget->setStyleSheet(QAbstractScrollArea());
 }
 
 void StyleSheet::setStyle(QObject *obj)
 {
 	auto name = obj->metaObject()->className();
-	if (std::strcmp(name,"QButtonGroup")==0) {
+	if (name == QStringLiteral("QButtonGroup")) {
 		auto bg = static_cast<QButtonGroup*>(obj);
 		for (auto btn : bg->buttons()) {
 			btn->setCheckable(true);

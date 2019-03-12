@@ -13,7 +13,7 @@
     "shadergraph": {
         "connections": [
             {
-                "id": "eb0a9baf-2879-4408-bf3d-cb1cd3a11f19",
+                "id": "08c9f9e4-ff80-4ea0-a09a-bd69e312de5d",
                 "leftNodeId": "af7a89a6-24f3-4351-a438-80fbd51d702d",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "50aedc23-3ef8-44c8-b362-f09a4964e554",
@@ -33,8 +33,8 @@
                 "id": "af7a89a6-24f3-4351-a438-80fbd51d702d",
                 "type": "property",
                 "value": "112083ee-9bad-4197-a030-f6b99fd05cdf",
-                "x": 0,
-                "y": 0
+                "x": -342,
+                "y": 109
             }
         ],
         "properties": [

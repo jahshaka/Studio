@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #include "ui_preferencesdialog.h"
 #include <QListWidgetItem>
 #include "preferences/worldsettings.h"
-#include "preferences/worldsettingsWidget.h"
+#include "preferences/worldsettingswidget.h"
 #include "../core/settingsmanager.h"
 #include "../core/database/database.h"
 #include "aboutdialog.h"
