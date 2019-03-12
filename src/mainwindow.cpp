@@ -571,6 +571,7 @@ void MainWindow::setupProjectDB()
 	if (db->initializeDatabase(path)) {
 		db->createAllTables();
 	}
+	Globals::db = db;
 }
 
 void MainWindow::setupUndoRedo()

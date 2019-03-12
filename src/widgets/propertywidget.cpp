@@ -21,6 +21,9 @@ For more information see the LICENSE file
 #include "ui_texturepickerwidget.h"
 #include "filepickerwidget.h"
 #include "ui_filepickerwidget.h"
+#include "globals.h"
+#include <QDir>
+#include "core/database/database.h"
 
 PropertyWidget::PropertyWidget(QWidget *parent) : QWidget(parent), ui(new Ui::PropertyWidget)
 {
@@ -182,7 +185,12 @@ void PropertyWidget::addTextureProperty(iris::Property *prop)
     auto textureWidget = addTexturePicker(textureProp->displayName);
 
     textureWidget->index = prop->id;
-    textureWidget->setTexture(textureProp->getValue().toString());
+
+	auto guid = prop->getValue().toString();
+	auto asset = Globals::db->fetchAsset(guid).name;
+	auto texturePath = QDir(Globals::project->getProjectFolder()).filePath(asset);
+
+    textureWidget->setTexture(texturePath);
     ui->contentpane->layout()->addWidget(textureWidget);
     properties.append(prop);
 

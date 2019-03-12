@@ -20,13 +20,14 @@ class SceneViewWidget;
 //#include "src/misc/QtAwesome.h"
 //#include "src/misc/QtAwesomeAnim.h"
 
-
+class Database;
 class Globals
 {
 public:
     static float animFrameTime;//maybe this needs to go
     static QString appWorkingDir;
     static Project* project;
+	static Database* db;
     static SceneViewWidget* sceneViewWidget;
     static QMap<QString, QString> assetNames;
 };

@@ -133,7 +133,7 @@ void MaterialPropertyWidget::materialChanged(int index)
     material->setGuid(materialSelector->getCurrentItemData());
 	meshNode->setMaterial(material);
 	setupShaderSelector();
-	setWidgetProperties();
+	
     //setSceneNode(meshNode);
 
 
@@ -172,6 +172,8 @@ void MaterialPropertyWidget::materialChanged(int index)
 			if(QFile::exists(path))		material->setTextureWithUniform(prop->uniform, path);
 		}
 	}
+
+	setWidgetProperties();
 }
 
 void MaterialPropertyWidget::setupShaderSelector()
