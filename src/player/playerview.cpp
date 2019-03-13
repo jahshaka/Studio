@@ -124,10 +124,8 @@ void PlayerView::renderScene()
 	camController->update(dt);
 
 	auto activeViewer = scene->getActiveVrViewer();
-	if (!!activeViewer) {
-		if (activeViewer->isActiveCharacterController()) {
-			activeViewer->setGlobalTransform(scene->getPhysicsEnvironment()->getActiveCharacterController()->getTransform());
-		}
+	if (!!activeViewer && activeViewer->isActiveCharacterController()) {
+		activeViewer->setGlobalTransform(scene->getPhysicsEnvironment()->getActiveCharacterController()->getTransform());
 	}
 
 	auto scene = UiManager::sceneViewWidget->getScene();

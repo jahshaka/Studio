@@ -386,32 +386,6 @@ void MainWindow::initializeGraphics(SceneViewWidget *widget, QOpenGLFunctions_3_
     setupVrUi();
 }
 
-void MainWindow::initializePhysicsWorld()
-{
-    // add bodies to world first
-    for (const auto &node : scene->getRootNode()->children) {
-        if (node->isPhysicsBody) {
-            auto body = iris::PhysicsHelper::createPhysicsBody(node, node->physicsProperty);
-            if (body) sceneView->addBodyToWorld(body, node);
-        }
-
-		if (node.staticCast<iris::ViewerNode>()->isActiveCharacterController()) {
-			scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(node);
-		}
-    }
-
-    // now add constraints
-    // TODO - avoid looping like this, get constraint list -- list and then use that
-    // TODO - handle children of children?
-    for (const auto &node : scene->getRootNode()->children) {
-        if (node->isPhysicsBody) {
-            for (const auto &constraint : node->physicsProperty.constraints) {
-                sceneView->addConstraintToWorldFromProperty(constraint);
-            }
-        }
-    }
-}
-
 void MainWindow::setSettingsManager(SettingsManager* settings)
 {
     this->settings = settings;
@@ -837,6 +811,8 @@ void MainWindow::openProject(bool playMode)
     if (editorData != Q_NULLPTR) {
         sceneView->setEditorData(editorData);
         wireCheckAction->setChecked(editorData->showLightWires);
+		physicsCheckAction->setChecked(editorData->showDebugDrawFlags);
+		scene->getPhysicsEnvironment()->toggleDebugDrawFlags(editorData->showDebugDrawFlags);
     }
 
     assetWidget->trigger();
@@ -2486,7 +2462,9 @@ void MainWindow::setupViewPort()
     controlBarLayout->addStretch();
     controlBarLayout->addWidget(playSceneBtn);
     controlBarLayout->addSpacing(2);
+#ifdef QT_DEBUG
 	controlBarLayout->addWidget(playSimBtn);
+#endif // QT_DEBUG
 
     controlBar->setLayout(controlBarLayout);
     controlBar->setStyleSheet("#controlBar {  background: #1E1E1E; border-bottom: 1px solid black; }");
@@ -2558,7 +2536,6 @@ void MainWindow::setupViewPort()
         QVariantMap options;
 
 		if (UiManager::isSimulationRunning) {
-            initializePhysicsWorld();
 			UiManager::startPhysicsSimulation();
 
             playSimBtn->setText("Stop Simulation");
@@ -2571,15 +2548,6 @@ void MainWindow::setupViewPort()
 		else {
             UiManager::restartPhysicsSimulation();
 
-            if (!scene->getPhysicsEnvironment()->nodeTransforms.isEmpty()) {
-                for (const auto &node : scene->getRootNode()->children) {
-                    if (node->isPhysicsBody) {
-                        node->setGlobalTransform(scene->getPhysicsEnvironment()->nodeTransforms.value(node->getGUID()));
-                    }
-                }
-            }
-
-			//UiManager::stopPhysicsSimulation();
             playSimBtn->setText("Simulate Physics");
 			playSimBtn->setToolTip("Simulate physics only");
 
@@ -2619,6 +2587,7 @@ void MainWindow::setupViewPort()
 
 
     wireCheckAction->setChecked(sceneView->getShowLightWires());
+	physicsCheckAction->setChecked(sceneView->getShowDebugLines());
 
     QGridLayout* layout = new QGridLayout;
     layout->addWidget(sceneView);
@@ -3055,7 +3024,7 @@ void MainWindow::toggleLightWires(bool state)
 
 void MainWindow::toggleDebugDrawer(bool state)
 {
-    sceneView->toggleDebugDrawFlags(state);
+	sceneView->setShowDebugLines(state);
 }
 
 void MainWindow::toggleWidgets(bool state)
@@ -3165,12 +3134,18 @@ void MainWindow::scaleGizmo()
 
 void MainWindow::onPlaySceneButton()
 {
+	UiManager::isSimulationRunning = !UiManager::isSimulationRunning;
+
     if (UiManager::isScenePlaying) {
         enterEditMode();
+		UiManager::restartPhysicsSimulation();
     }
     else {
         enterPlayMode();
+		UiManager::startPhysicsSimulation();
     }
+
+	if (!!activeSceneNode) sceneNodeSelected(activeSceneNode);
 }
 
 void MainWindow::enterEditMode()
