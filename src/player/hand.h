@@ -51,6 +51,7 @@ public:
 	{
 	}
 
+	void updateMovement(float dt);
 	void update(float dt);
 	void loadAssets(iris::ContentManagerPtr content);
 	void submitItemsToScene();
