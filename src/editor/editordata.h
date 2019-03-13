@@ -20,6 +20,7 @@ public:
     iris::CameraNodePtr editorCamera;
     float distFromPivot;
     bool showLightWires;
+	bool showDebugDrawFlags;
 };
 
 #endif // EDITORDATA_H

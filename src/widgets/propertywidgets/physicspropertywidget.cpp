@@ -38,6 +38,7 @@ PhysicsPropertyWidget::PhysicsPropertyWidget()
     physicsTypes.insert(static_cast<int>(PhysicsType::SoftBody), "Soft Body");
 
     physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::None), "None");
+    physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::Compound), "Compound");
     physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::Plane), "Plane");
     physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::Sphere), "Sphere");
     physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::Cube), "Cube");
@@ -85,6 +86,9 @@ void PhysicsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
         QStandardItemModel *model = qobject_cast<QStandardItemModel*>(physicsShapeSelector->getWidget()->model());
 
         if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Empty) {
+            disabledItems.append(static_cast<int>(PhysicsCollisionShape::Cube));
+            disabledItems.append(static_cast<int>(PhysicsCollisionShape::Sphere));
+            disabledItems.append(static_cast<int>(PhysicsCollisionShape::Plane));
             disabledItems.append(static_cast<int>(PhysicsCollisionShape::ConvexHull));
             disabledItems.append(static_cast<int>(PhysicsCollisionShape::TriangleMesh));
         }
@@ -126,12 +130,6 @@ void PhysicsPropertyWidget::onPhysicsShapeChanged(int index)
 
     this->sceneNode->physicsProperty.shape = static_cast<iris::PhysicsCollisionShape>(shape);
 
-    //btRigidBody *body = iris::PhysicsHelper::createPhysicsBody(sceneNode, physicsProperties);
-    //if (!body) {
-    //    qWarning("Failed to create a rigid body from object");
-    //    return;
-    //};
-
     // Can I change shape of a rigid body after it created in Bullet3D?
     // https://gamedev.stackexchange.com/a/11956/16598
     //if (currentBody) {
@@ -145,9 +143,6 @@ void PhysicsPropertyWidget::onPhysicsShapeChanged(int index)
     //}
 
     this->sceneNode->isPhysicsBody = true;
-
- /*   sceneView->removeBodyFromWorld(sceneNode->getGUID());
-    sceneView->addBodyToWorld(body, sceneNode);*/
 }
 
 void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
