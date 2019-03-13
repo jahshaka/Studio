@@ -12,6 +12,7 @@
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/scenegraph/grabnode.h"
+#include "../irisgl/src/scenegraph/viewernode.h"
 #include "../irisgl/src/core/irisutils.h"
 #include "../irisgl/src/math/mathhelper.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
@@ -24,34 +25,34 @@
 #include <QtMath>
 #include "hand.h"
 
-void LeftHand::update(float dt)
+void LeftHand::updateMovement(float dt)
 {
-	auto vrDevice = iris::VrManager::getDefaultDevice();
-
-	const float linearSpeed = 10.4f *dt;
+	const float linearSpeed = 10.4f * dt;
 	auto turnSpeed = 4.0f;
 	hoverDist = 1000;
 
-	// lock rot to yaw so user is always right side up
-	auto yaw = camera->getLocalRot().toEulerAngles().y();
-	auto yawRot = QQuaternion::fromEulerAngles(0, yaw, 0);
-	camera->setLocalRot(yawRot);
-
-	// keyboard movement
-	const QVector3D upVector(0, 1, 0);
-	//not giving proper rotation when not in debug mode
-	//apparently i need to normalize the head rotation quaternion
-	auto rot = yawRot * vrDevice->getHeadRotation();
-	rot.normalize();
-	auto forwardVector = rot.rotatedVector(QVector3D(0, 0, -1));
-	auto x = QVector3D::crossProduct(forwardVector, upVector).normalized();
-	auto z = QVector3D::crossProduct(upVector, x).normalized();
-
-	auto camPos = camera->getLocalPos();
-
-	//scene->getPhysicsEnvironment()->setDirection(QVector2D(0, 0));
+	auto vrDevice = iris::VrManager::getDefaultDevice();
 	auto leftTouch = vrDevice->getTouchController(0);
-	if (leftTouch->isTracking()) {
+	if (!leftTouch->isTracking())
+		return;
+
+	if (!viewer) {
+		// lock rot to yaw so user is always right side up
+		auto yaw = camera->getLocalRot().toEulerAngles().y();
+		auto yawRot = QQuaternion::fromEulerAngles(0, yaw, 0);
+		camera->setLocalRot(yawRot);
+
+		// keyboard movement
+		const QVector3D upVector(0, 1, 0);
+		//not giving proper rotation when not in debug mode
+		//apparently i need to normalize the head rotation quaternion
+		auto rot = yawRot * vrDevice->getHeadRotation();
+		rot.normalize();
+		auto forwardVector = rot.rotatedVector(QVector3D(0, 0, -1));
+		auto x = QVector3D::crossProduct(forwardVector, upVector).normalized();
+		auto z = QVector3D::crossProduct(upVector, x).normalized();
+
+		auto camPos = camera->getLocalPos();
 
 		auto device = iris::VrManager::getDefaultDevice();
 
@@ -75,7 +76,46 @@ void LeftHand::update(float dt)
 		camera->setLocalPos(camPos);
 		//camera->setLocalRot(QQuaternion());
 		camera->update(0);
+	}
+	else {
+		// lock rot to yaw so user is always right side up
+		auto yaw = viewer->getLocalRot().toEulerAngles().y();
+		auto yawRot = QQuaternion::fromEulerAngles(0, yaw, 0);
+		viewer->setLocalRot(yawRot);
 
+		// keyboard movement
+		const QVector3D upVector(0, 1, 0);
+		//not giving proper rotation when not in debug mode
+		//apparently i need to normalize the head rotation quaternion
+		auto rot = yawRot * vrDevice->getHeadRotation();
+		rot.normalize();
+		auto forwardVector = rot.rotatedVector(QVector3D(0, 0, -1));
+		auto x = QVector3D::crossProduct(forwardVector, upVector).normalized();
+		auto z = QVector3D::crossProduct(upVector, x).normalized();
+
+		auto camPos = viewer->getLocalPos();
+
+		auto dir = leftTouch->GetThumbstick();
+		camPos += x * linearSpeed * dir.x() * 2;
+		camPos += z * linearSpeed * dir.y() * 2;
+
+		//qDebug()<<dir;
+		dir.setY(-dir.y());
+		auto newDir = rot.rotatedVector(QVector3D(dir.x(), 0, dir.y())) * 5;
+		scene->getPhysicsEnvironment()->setDirection(QVector2D(newDir.x(), newDir.z()));
+		//auto controller = scene->getPhysicsEnvironment()->getActiveCharacterController();
+		//controller->setDirection(dir);
+	}
+	
+}
+
+void LeftHand::update(float dt)
+{
+	auto device = iris::VrManager::getDefaultDevice();
+	auto leftTouch = device->getTouchController(0);
+
+	updateMovement(dt);
+	if (leftTouch->isTracking()) {
 
 		rightHandMatrix = calculateHandMatrix(device, 0);
 
@@ -441,16 +481,33 @@ void Hand::setCamera(iris::CameraNodePtr camera)
 
 QMatrix4x4 Hand::calculateHandMatrix(iris::VrDevice* device, int handIndex)
 {
-	// cameras arent parented to anything
-	// so local transform == global transform
-	auto trans = camera->getLocalTransform();
-	trans.scale(camera->getVrViewScale());
-	auto globalPos = trans * device->getHandPosition(handIndex);
-	auto globalRot = camera->getLocalRot() * device->getHandRotation(handIndex);
+	if (!!viewer) {
+		// cameras arent parented to anything
+		// so local transform == global transform
+		auto trans = viewer->getLocalTransform();
+		trans.scale(viewer->getViewScale());
+		auto globalPos = trans * device->getHandPosition(handIndex);
+		auto globalRot = viewer->getLocalRot() * device->getHandRotation(handIndex);
 
-	QMatrix4x4 world;
-	world.setToIdentity();
-	world.translate(globalPos);
-	world.rotate(globalRot);
-	return world;
+		QMatrix4x4 world;
+		world.setToIdentity();
+		world.translate(globalPos);
+		world.rotate(globalRot);
+		return world;
+	}
+	else {
+		// cameras arent parented to anything
+		// so local transform == global transform
+		auto trans = camera->getLocalTransform();
+		trans.scale(camera->getVrViewScale());
+		auto globalPos = trans * device->getHandPosition(handIndex);
+		auto globalRot = camera->getLocalRot() * device->getHandRotation(handIndex);
+
+		QMatrix4x4 world;
+		world.setToIdentity();
+		world.translate(globalPos);
+		world.rotate(globalRot);
+		return world;
+	}
+	
 }
