@@ -346,8 +346,6 @@ public slots:
     iris::ScenePtr createDefaultScene();
     void initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*);
 
-    void initializePhysicsWorld();
-
     void useFreeCamera();
     void useArcballCam();
 

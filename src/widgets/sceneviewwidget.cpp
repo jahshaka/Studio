@@ -370,19 +370,32 @@ void SceneViewWidget::setShowLightWires(bool value)
     showLightWires = value;
 }
 
+bool SceneViewWidget::getShowDebugLines() const
+{
+	return showDebugLines;
+}
+
+void SceneViewWidget::setShowDebugLines(bool value)
+{
+	showDebugLines = value;
+	toggleDebugDrawFlags(value);
+}
+
 void SceneViewWidget::toggleDebugDrawFlags(bool value)
 {
-    scene->getPhysicsEnvironment()->toggleDebugDrawFlags(value);
+	if (!!scene) scene->getPhysicsEnvironment()->toggleDebugDrawFlags(value);
 }
 
 void SceneViewWidget::startPhysicsSimulation()
 {
+	scene->getPhysicsEnvironment()->initializePhysicsWorldFromScene(scene->getRootNode());
     scene->getPhysicsEnvironment()->simulatePhysics();
 }
 
 void SceneViewWidget::restartPhysicsSimulation()
 {
     scene->getPhysicsEnvironment()->restartPhysics();
+	scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
 }
 
 void SceneViewWidget::stopPhysicsSimulation()
@@ -954,7 +967,7 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     QPointF dir = localPos - prevMousePos;
 
     if (e->buttons() == Qt::LeftButton && !!selectedNode) {
-        if (selectedNode->isPhysicsBody) {
+		if (selectedNode->isPhysicsBody && UiManager::isSimulationRunning) {
 			scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(localPos) * 1024),
 																	iris::PhysicsHelper::btVector3FromQVector3D(editorCam->getGlobalPosition()));
         } else if (gizmo->isDragging()) {
@@ -1459,12 +1472,6 @@ void SceneViewWidget::removeBodyFromWorld(btRigidBody *body)
 void SceneViewWidget::removeBodyFromWorld(const QString &guid)
 {
     scene->getPhysicsEnvironment()->removeBodyFromWorld(guid);
-}
-
-void SceneViewWidget::addConstraintToWorldFromProperty(const iris::ConstraintProperty &prop)
-{
-    auto constraint = iris::PhysicsHelper::createConstraintFromProperty(scene->getPhysicsEnvironment(), prop);
-    scene->getPhysicsEnvironment()->addConstraintToWorld(constraint);
 }
 
 void SceneViewWidget::setGizmoLoc()

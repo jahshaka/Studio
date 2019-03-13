@@ -60,8 +60,9 @@ namespace Contants
 	QString MINER_DEFAULT_POOL		= "pool.supportxmr.com:3333";
 	QString MINER_DEFAULT_PASSWORD	= "jahminer";
 
-    int FPS_90                  = 11; // milliseconds
-    int FPS_60                  = 17; // milliseconds
+    int FPS_90                  = 11;	// milliseconds
+    int FPS_60                  = 17;	// milliseconds
+	float GRAVITY				= 10.f;	// this is flipped for bullet
 
     namespace Reserved
     {
