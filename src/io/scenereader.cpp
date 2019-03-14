@@ -95,7 +95,7 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     editorData->editorCamera = camera;
     editorData->distFromPivot = (float)camObj["distanceFromPivot"].toDouble(5.0f);
     editorData->showLightWires = editorObj["showLightWires"].toBool();
-	editorData->showDebugDrawFlags = editorObj["showDebugDrawFlags"].toBool(false);
+	editorData->showDebugDrawFlags = editorObj["showDebugDrawFlags"].toBool();
 
     return editorData;
 }
@@ -264,6 +264,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 		sceneNode->physicsProperty.objectCollisionMargin = physicsDef["collisionMargin"].toDouble();
 		sceneNode->physicsProperty.objectDamping = physicsDef["damping"].toDouble();
 		sceneNode->physicsProperty.objectMass = physicsDef["mass"].toDouble();
+		sceneNode->physicsProperty.objectFriction = physicsDef["friction"].toDouble(.5f);
 		sceneNode->physicsProperty.objectRestitution = physicsDef["bounciness"].toDouble();
 		sceneNode->physicsProperty.pivotPoint = readVector3(physicsDef["pivot"].toObject());
 		sceneNode->physicsProperty.shape = static_cast<iris::PhysicsCollisionShape>(physicsDef["shape"].toInt());

@@ -227,8 +227,8 @@ public:
     QImage takeScreenshot(int width=1920, int height=1080);
     bool getShowLightWires() const;
     void setShowLightWires(bool value);
-	bool getShowDebugLines() const;
-	void setShowDebugLines(bool value);
+	bool getShowDebugDrawFlags() const;
+	void setShowDebugDrawFlags(bool value);
     void toggleDebugDrawFlags(bool value);
 
 	void startPhysicsSimulation();
@@ -326,7 +326,7 @@ private:
     iris::MaterialPtr lineMat;
 
     bool showLightWires;
-	bool showDebugLines;
+	bool showDebugDrawFlags;
 
     void initLightAssets();
     iris::MeshPtr createDirLightMesh(float radius = 1.0);
