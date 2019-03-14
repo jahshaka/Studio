@@ -145,11 +145,11 @@ void SceneWriter::writePostProcessData(QJsonObject &projectObj, iris::PostProces
     projectObj["postprocesses"] = processesObj;
 }
 
-void SceneWriter::writeEditorData(QJsonObject& projectObj,EditorData* editorData)
+void SceneWriter::writeEditorData(QJsonObject& projectObj, EditorData* editorData)
 {
     QJsonObject editorObj;
     editorObj["showLightWires"] = editorData->showLightWires;
-	editorObj["showDebugDrawFlags"] = editorData->showLightWires;
+	editorObj["showDebugDrawFlags"] = editorData->showDebugDrawFlags;
 
     QJsonObject cameraObj;
     auto cam = editorData->editorCamera;
@@ -211,6 +211,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
 		physicsProperties.insert("collisionMargin", sceneNode->physicsProperty.objectCollisionMargin);
 		physicsProperties.insert("damping", sceneNode->physicsProperty.objectDamping);
 		physicsProperties.insert("mass", sceneNode->physicsProperty.objectMass);
+		physicsProperties.insert("friction", sceneNode->physicsProperty.objectFriction);
 		physicsProperties.insert("bounciness", sceneNode->physicsProperty.objectRestitution);
 		physicsProperties.insert("shape", static_cast<int>(sceneNode->physicsProperty.shape));
 		physicsProperties.insert("type", static_cast<int>(sceneNode->physicsProperty.type));

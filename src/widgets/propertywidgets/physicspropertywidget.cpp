@@ -59,12 +59,14 @@ PhysicsPropertyWidget::PhysicsPropertyWidget()
 
     isVisible = this->addCheckBox("Visible", true);
     massValue = this->addFloatValueSlider("Object Mass", 0.f, 100.f, 1.f);
+    frictionValue = this->addFloatValueSlider("Object Friction", 0.f, 1.f, .5f);
     marginValue = this->addFloatValueSlider("Collision Margin", .01f, 1.f, .1f);
     bouncinessValue = this->addFloatValueSlider("Bounciness", 0.f, 1.f, .1f);
 
     connect(isVisible, &CheckBoxWidget::valueChanged, this, &PhysicsPropertyWidget::onVisibilityChanged);
     connect(massValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onMassChanged);
     connect(marginValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onMarginChanged);
+    connect(frictionValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onFrictionChanged);
     connect(bouncinessValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onBouncinessChanged);
     connect(physicsShapeSelector, static_cast<void (ComboBoxWidget::*)(int)>(&ComboBoxWidget::currentIndexChanged),
         this, &PhysicsPropertyWidget::onPhysicsShapeChanged);
@@ -91,7 +93,7 @@ void PhysicsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
             disabledItems.append(static_cast<int>(PhysicsCollisionShape::Plane));
             disabledItems.append(static_cast<int>(PhysicsCollisionShape::ConvexHull));
             disabledItems.append(static_cast<int>(PhysicsCollisionShape::TriangleMesh));
-        }
+		}
 
         for (int index = 0; index < physicsShapeSelector->getWidget()->count(); ++index) {
             model->item(index)->setEnabled(!disabledItems.contains(index));
@@ -99,6 +101,7 @@ void PhysicsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 
         isVisible->setValue(sceneNode->physicsProperty.isVisible);
         massValue->setValue(sceneNode->physicsProperty.objectMass);
+		frictionValue->setValue(sceneNode->physicsProperty.objectFriction);
         marginValue->setValue(sceneNode->physicsProperty.objectCollisionMargin);
         bouncinessValue->setValue(sceneNode->physicsProperty.objectRestitution);
         
@@ -125,6 +128,7 @@ void PhysicsPropertyWidget::onPhysicsShapeChanged(int index)
     physicsProperties.isStatic = (massValue->getValue() == 0) ? true : false;
     physicsProperties.objectCollisionMargin = marginValue->getValue();
     physicsProperties.objectMass = massValue->getValue();
+    physicsProperties.objectFriction = frictionValue->getValue();
     physicsProperties.objectRestitution = bouncinessValue->getValue();
     physicsProperties.shape = static_cast<iris::PhysicsCollisionShape>(shape);
 
@@ -205,6 +209,11 @@ void PhysicsPropertyWidget::onMassChanged(float value)
 void PhysicsPropertyWidget::onMarginChanged(float value)
 {
     if (sceneNode) marginValue->setValue(sceneNode->physicsProperty.objectCollisionMargin = value);
+}
+
+void PhysicsPropertyWidget::onFrictionChanged(float value)
+{
+	if (sceneNode) frictionValue->setValue(sceneNode->physicsProperty.objectFriction = value);
 }
 
 void PhysicsPropertyWidget::onBouncinessChanged(float value)
