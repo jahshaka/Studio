@@ -812,7 +812,6 @@ void MainWindow::openProject(bool playMode)
         sceneView->setEditorData(editorData);
         wireCheckAction->setChecked(editorData->showLightWires);
 		physicsCheckAction->setChecked(editorData->showDebugDrawFlags);
-		scene->getPhysicsEnvironment()->toggleDebugDrawFlags(editorData->showDebugDrawFlags);
     }
 
     assetWidget->trigger();
@@ -2428,7 +2427,7 @@ void MainWindow::setupViewPort()
     connect(wireCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleLightWires(bool)));
     wireFramesMenu->addAction(wireCheckAction);
 
-    physicsCheckAction = new QAction(QIcon(), "Physics Debug Info");
+    physicsCheckAction = new QAction(QIcon(), "Physics Debug Overlay");
     physicsCheckAction->setCheckable(true);
     connect(physicsCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleDebugDrawer(bool)));
     wireFramesMenu->addAction(physicsCheckAction);
@@ -2582,12 +2581,10 @@ void MainWindow::setupViewPort()
     Globals::sceneViewWidget = sceneView;
     UiManager::setSceneViewWidget(sceneView);
 
-	//playerView = new QWidget(viewPort);
 	playerView = new PlayerWidget(viewPort);
 
-
     wireCheckAction->setChecked(sceneView->getShowLightWires());
-	physicsCheckAction->setChecked(sceneView->getShowDebugLines());
+	physicsCheckAction->setChecked(sceneView->getShowDebugDrawFlags());
 
     QGridLayout* layout = new QGridLayout;
     layout->addWidget(sceneView);
@@ -3024,7 +3021,7 @@ void MainWindow::toggleLightWires(bool state)
 
 void MainWindow::toggleDebugDrawer(bool state)
 {
-	sceneView->setShowDebugLines(state);
+	sceneView->setShowDebugDrawFlags(state);
 }
 
 void MainWindow::toggleWidgets(bool state)

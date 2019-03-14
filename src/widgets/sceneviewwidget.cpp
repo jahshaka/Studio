@@ -314,6 +314,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     dragging = false;
     showLightWires = false;
+	showDebugDrawFlags = false;
 
     sceneFloor = iris::IntersectionHelper::computePlaneND(QVector3D( 100, 0,  100),
                                                           QVector3D(-100, 0,  100),
@@ -370,20 +371,19 @@ void SceneViewWidget::setShowLightWires(bool value)
     showLightWires = value;
 }
 
-bool SceneViewWidget::getShowDebugLines() const
+bool SceneViewWidget::getShowDebugDrawFlags() const
 {
-	return showDebugLines;
+	return showDebugDrawFlags;
 }
 
-void SceneViewWidget::setShowDebugLines(bool value)
+void SceneViewWidget::setShowDebugDrawFlags(bool value)
 {
-	showDebugLines = value;
-	toggleDebugDrawFlags(value);
+	showDebugDrawFlags = value;
 }
 
 void SceneViewWidget::toggleDebugDrawFlags(bool value)
 {
-	if (!!scene) scene->getPhysicsEnvironment()->toggleDebugDrawFlags(value);
+	if (!!scene) scene->getPhysicsEnvironment()->setDebugDrawFlags(value);
 }
 
 void SceneViewWidget::startPhysicsSimulation()
@@ -732,7 +732,10 @@ void SceneViewWidget::renderScene()
         }
 
         // TODO: ensure it doesnt display these shapes in play mode (Nick)
-        if (UiManager::sceneMode != SceneMode::PlayMode && showLightWires) addLightShapesToScene();
+		if (UiManager::sceneMode != SceneMode::PlayMode) {
+			if (showLightWires) addLightShapesToScene();
+			toggleDebugDrawFlags(showDebugDrawFlags);
+		}
 
         // render thumbnail to texture
         if (!playScene && !!selectedNode) {
@@ -1502,6 +1505,7 @@ void SceneViewWidget::setEditorData(EditorData* data)
     scene->setCamera(editorCam);
     camController->setCamera(editorCam);
     showLightWires = data->showLightWires;
+	showDebugDrawFlags = data->showDebugDrawFlags;
 	emit updateToolbarButton();
 }
 
@@ -1511,7 +1515,7 @@ EditorData* SceneViewWidget::getEditorData()
     data->editorCamera = editorCam;
     data->distFromPivot = orbitalCam->distFromPivot;
     data->showLightWires = showLightWires;
-
+    data->showDebugDrawFlags = showDebugDrawFlags;
     return data;
 }
 

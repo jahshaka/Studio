@@ -62,7 +62,7 @@ namespace Contants
 
     int FPS_90                  = 11;	// milliseconds
     int FPS_60                  = 17;	// milliseconds
-	float GRAVITY				= 10.f;	// this is flipped for bullet
+	float GRAVITY				= 15;	// this is flipped for bullet
 
     namespace Reserved
     {
