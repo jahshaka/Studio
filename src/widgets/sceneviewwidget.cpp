@@ -111,6 +111,12 @@ void SceneViewWidget::begin()
 
 void SceneViewWidget::end()
 {
+	if (UiManager::isScenePlaying) {
+		mainWindow->enterEditMode();
+		this->restartPhysicsSimulation();
+		if (UiManager::isSimulationRunning)
+			UiManager::isSimulationRunning = !UiManager::isSimulationRunning;
+	}
 }
 
 void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)

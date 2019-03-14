@@ -127,6 +127,8 @@ enum class Widget
 class Database;
 class MainWindow : public QMainWindow
 {
+	friend class SceneViewWidget;
+
     Q_OBJECT
 
 public:
