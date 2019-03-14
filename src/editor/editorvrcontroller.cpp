@@ -75,6 +75,10 @@ EditorVrController::EditorVrController(iris::ContentManagerPtr content)
 
     //auto cube = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/cube.obj"));
     auto leftHandMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_left.obj"));
+	beamMesh = iris::Mesh::loadMesh(
+		IrisUtils::getAbsoluteAssetPath("app/content/models/beam.obj"));
+	sphereMesh = iris::Mesh::loadMesh(
+		IrisUtils::getAbsoluteAssetPath("app/content/primitives/sphere.obj"));
 
 	auto mat = iris::DefaultMaterial::create();
 
@@ -97,6 +101,7 @@ EditorVrController::EditorVrController(iris::ContentManagerPtr content)
                 IrisUtils::getAbsoluteAssetPath("app/content/models/beam.obj"));
     auto beamMat = iris::ColorMaterial::create();
 	beamMat->setColor(QColor(255, 100, 100));
+	beamMaterial = beamMat;
     //beamMat->setDiffuseColor(QColor(255,100,100));
 
     leftBeamRenderItem = new iris::RenderItem();
@@ -193,18 +198,23 @@ void EditorVrController::update(float dt)
 		world.translate(device->getHandPosition(0));
 		world.rotate(device->getHandRotation(0));
 		//world.scale(0.55f);
-		leftHandRenderItem->worldMatrix = camera->globalTransform * world;
-		leftBeamRenderItem->worldMatrix = leftHandRenderItem->worldMatrix;
 
+		auto leftHandMatrix = calculateHandMatrix(device, 0);
+		leftHandRenderItem->worldMatrix = leftHandMatrix;
+
+		auto leftBeamMatrix = leftHandMatrix * getBeamOffset();
+		leftBeamRenderItem->worldMatrix = leftBeamMatrix;
+
+		float pickDist = 1000.0f;
 
 		if (UiManager::sceneMode == SceneMode::EditMode) {
 
 			// Handle picking and movement of picked objects
 			iris::PickingResult pick;
-			if (rayCastToScene(leftHandRenderItem->worldMatrix, pick)) {
-				auto dist = qSqrt(pick.distanceFromStartSqrd);
+			if (rayCastToScene(leftBeamMatrix, pick)) {
+				pickDist = qSqrt(pick.distanceFromStartSqrd);
 				//qDebug() << "hit at dist: " << dist;
-				leftBeamRenderItem->worldMatrix.scale(1, 1, dist /* * (1.0f / 0.55f )*/);// todo: remove magic 0.55
+				//leftBeamRenderItem->worldMatrix.scale(1, 1, pickDist /* * (1.0f / 0.55f )*/);// todo: remove magic 0.55
 				leftHoveredNode = getObjectRoot(pick.hitNode);
 
 				// Pick a node if the trigger is down
@@ -217,13 +227,13 @@ void EditorVrController::update(float dt)
 
 					//calculate offset
 					//leftNodeOffset = leftPickedNode->getGlobalTransform() * leftHandRenderItem->worldMatrix.inverted();
-					leftNodeOffset = leftHandRenderItem->worldMatrix.inverted() * leftPickedNode->getGlobalTransform();
+					leftNodeOffset = leftBeamMatrix.inverted() * leftPickedNode->getGlobalTransform();
 				}
 
 			}
 			else
 			{
-				leftBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f));
+				//leftBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f));
 				leftHoveredNode.clear();
 			}
 
@@ -244,7 +254,7 @@ void EditorVrController::update(float dt)
 			// update picked node
 			if (!!leftPickedNode) {
 				// calculate the global position
-				auto nodeGlobal = leftHandRenderItem->worldMatrix * leftNodeOffset;
+				auto nodeGlobal = leftBeamMatrix * leftNodeOffset;
 
 				// calculate position relative to parent
 				auto localTransform = leftPickedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
@@ -267,14 +277,33 @@ void EditorVrController::update(float dt)
 				// leftPickedNode->update(0);// bad!
 				// it wil be updated a frame later, no need to stress over this
 			}
-
-			if (rayCastToScene(rightBeamRenderItem->worldMatrix, pick)) {
-				auto dist = qSqrt(pick.distanceFromStartSqrd);
-				rightBeamRenderItem->worldMatrix.scale(1, 1, (dist /*  * (1.0f / 0.55f )*/));// todo: remove magic 0.55
+			/*
+			float pickDist = 1000;
+			if (rayCastToScene(leftBeamRenderItem->worldMatrix, pick)) {
+				pickDist = qSqrt(pick.distanceFromStartSqrd);
+				//leftBeamRenderItem->worldMatrix.scale(1, 1, (pickDist));// todo: remove magic 0.55
 			}
+			*/
 
 			scene->geometryRenderList->add(leftHandRenderItem);
-			scene->geometryRenderList->add(leftBeamRenderItem);
+			//scene->geometryRenderList->add(leftBeamRenderItem);
+
+			// beam
+			QMatrix4x4 beamMatrix = getBeamOffset();
+			beamMatrix.scale(1.0f, 1.0f, pickDist);
+			scene->geometryRenderList->submitMesh(beamMesh, beamMaterial, leftHandMatrix * beamMatrix);
+
+			// first sphere
+			QMatrix4x4 tip;
+			tip.translate(0, 0, -pickDist);
+			tip.scale(0.03f);
+			scene->geometryRenderList->submitMesh(sphereMesh, beamMaterial, leftBeamMatrix * tip);
+
+			// end sphere
+			QMatrix4x4 end;
+			end.translate(0, 0, 0);
+			end.scale(0.03f);
+			scene->geometryRenderList->submitMesh(sphereMesh, beamMaterial, leftBeamMatrix * end);
 		}
 		else
 		{
@@ -303,16 +332,21 @@ void EditorVrController::update(float dt)
 		world.translate(device->getHandPosition(1));
 		world.rotate(device->getHandRotation(1));
 		//world.scale(0.55f);
-		rightHandRenderItem->worldMatrix = camera->globalTransform * world;
-		rightBeamRenderItem->worldMatrix = rightHandRenderItem->worldMatrix;
+		auto rightHandMatrix = calculateHandMatrix(device, 1);
+		rightHandRenderItem->worldMatrix = rightHandMatrix;
+
+		auto rightBeamMatrix = rightHandMatrix * getBeamOffset();
+		rightBeamRenderItem->worldMatrix = rightBeamMatrix;
+
+		float pickDist = 1000.0f;
 
 		if (UiManager::sceneMode == SceneMode::EditMode) {
 			// Handle picking and movement of picked objects
 			iris::PickingResult pick;
-			if (rayCastToScene(rightHandRenderItem->worldMatrix, pick)) {
-				auto dist = qSqrt(pick.distanceFromStartSqrd);
+			if (rayCastToScene(rightBeamMatrix, pick)) {
+				pickDist = qSqrt(pick.distanceFromStartSqrd);
 				//qDebug() << "hit at dist: " << dist;
-				rightBeamRenderItem->worldMatrix.scale(1, 1, dist /* * (1.0f / 0.55f )*/);// todo: remove magic 0.55
+				//rightBeamRenderItem->worldMatrix.scale(1, 1, pickDist /* * (1.0f / 0.55f )*/);// todo: remove magic 0.55
 				rightHoveredNode = getObjectRoot(pick.hitNode);
 				// Pick a node if the trigger is down
 				if (rightTouch->getIndexTrigger() > 0.1f && !rightPickedNode)
@@ -324,13 +358,13 @@ void EditorVrController::update(float dt)
 
 					//calculate offset
 					//leftNodeOffset = leftPickedNode->getGlobalTransform() * leftHandRenderItem->worldMatrix.inverted();
-					rightNodeOffset = rightHandRenderItem->worldMatrix.inverted() * rightPickedNode->getGlobalTransform();
+					rightNodeOffset = rightBeamMatrix.inverted() * rightPickedNode->getGlobalTransform();
 				}
 
 			}
 			else
 			{
-				rightBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f));
+				//rightBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f));
 				rightHoveredNode.clear();
 			}
 
@@ -352,7 +386,7 @@ void EditorVrController::update(float dt)
 			// update picked node
 			if (!!rightPickedNode) {
 				// calculate the global position
-				auto nodeGlobal = rightHandRenderItem->worldMatrix * rightNodeOffset;
+				auto nodeGlobal = rightBeamMatrix * rightNodeOffset;
 
 				// calculate position relative to parent
 				auto localTransform = rightPickedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
@@ -382,8 +416,25 @@ void EditorVrController::update(float dt)
 			}
 			*/
 
-			scene->geometryRenderList->add(rightBeamRenderItem);
+			//scene->geometryRenderList->add(rightBeamRenderItem);
 			scene->geometryRenderList->add(rightHandRenderItem);
+
+			// beam
+			QMatrix4x4 beamMatrix = getBeamOffset();
+			beamMatrix.scale(1.0f, 1.0f, pickDist);
+			scene->geometryRenderList->submitMesh(beamMesh, beamMaterial, rightHandMatrix * beamMatrix);
+
+			// first sphere
+			QMatrix4x4 tip;
+			tip.translate(0, 0, -pickDist);
+			tip.scale(0.03f);
+			scene->geometryRenderList->submitMesh(sphereMesh, beamMaterial, rightBeamMatrix * tip);
+
+			// end sphere
+			QMatrix4x4 end;
+			end.translate(0, 0, 0);
+			end.scale(0.03f);
+			scene->geometryRenderList->submitMesh(sphereMesh, beamMaterial, rightBeamMatrix * end);
 		}
 		/*
 		auto rightTouch = vrDevice->getTouchController(1);
@@ -470,4 +521,29 @@ iris::GrabNodePtr EditorVrController::findGrabNode(iris::SceneNodePtr node)
 
 	// none found
 	return iris::GrabNodePtr();
+}
+
+QMatrix4x4 EditorVrController::calculateHandMatrix(iris::VrDevice* device, int handIndex)
+{
+	// cameras arent parented to anything
+	// so local transform == global transform
+	auto trans = camera->getLocalTransform();
+	trans.scale(camera->getVrViewScale());
+	auto globalPos = trans * device->getHandPosition(handIndex);
+	auto globalRot = camera->getLocalRot() * device->getHandRotation(handIndex);
+
+	QMatrix4x4 world;
+	world.setToIdentity();
+	world.translate(globalPos);
+	world.rotate(globalRot);
+	return world;
+}
+
+QMatrix4x4 EditorVrController::getBeamOffset()
+{
+	QMatrix4x4 offset;
+	offset.setToIdentity();
+	offset.translate(QVector3D(0,0,-0.15f));
+
+	return offset;
 }
