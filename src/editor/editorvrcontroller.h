@@ -27,11 +27,15 @@ public:
 class EditorVrController : public CameraControllerBase
 {
 public:
+	iris::MaterialPtr beamMaterial;
+
 	iris::ModelPtr leftHandModel;
 	iris::ModelPtr rightHandModel;
 
     iris::MeshPtr leftHandMesh;
     iris::MeshPtr rightHandMesh;
+
+	iris::MeshPtr sphereMesh;
 
     iris::RenderItem* leftHandRenderItem;
     iris::RenderItem* rightHandRenderItem;
@@ -85,6 +89,9 @@ private:
 	// for now this finds the first grab node
 	iris::GrabNodePtr findGrabNode(iris::SceneNodePtr node);
 
+	QMatrix4x4 calculateHandMatrix(iris::VrDevice* device, int handIndex);
+
+	QMatrix4x4 getBeamOffset();
 	float turnSpeed;
 };
 
