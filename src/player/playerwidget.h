@@ -12,6 +12,7 @@ class PlayerWidget : public QWidget
 	Q_OBJECT
 
 	PlayerView* playerView;
+	QIcon playIcon, stopIcon;
 public:
 	explicit PlayerWidget(QWidget* parent = nullptr);
 	~PlayerWidget() {}

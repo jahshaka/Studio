@@ -32,14 +32,17 @@ void PlayerWidget::createUI()
 	restartBtn->setIconSize(QSize(16, 16));
 	*/
 
+	playIcon = QIcon(":/icons/g_play.svg");
+	stopIcon = QIcon(":/icons/g_stop.svg");
+
 	auto playBtn = new QPushButton(playerControls);
 	playBtn->setCursor(Qt::PointingHandCursor);
 	playBtn->setToolTip("Play the scene");
 	playBtn->setToolTipDuration(-1);
 	playBtn->setStyleSheet("background: transparent");
-	playBtn->setIcon(QIcon(":/icons/g_play.svg"));
+	playBtn->setIcon(playIcon);
 	playBtn->setIconSize(QSize(24, 24));
-
+	/*
 	auto stopBtn = new QPushButton(playerControls);
 	stopBtn->setCursor(Qt::PointingHandCursor);
 	stopBtn->setToolTip("Stop playback");
@@ -47,13 +50,14 @@ void PlayerWidget::createUI()
 	stopBtn->setStyleSheet("background: transparent");
 	stopBtn->setIcon(QIcon(":/icons/g_stop.svg"));
 	stopBtn->setIconSize(QSize(16, 16));
+	*/
 
 	playerControlsLayout->setSpacing(12);
 	playerControlsLayout->setMargin(6);
 	playerControlsLayout->addStretch();
 	//playerControlsLayout->addWidget(restartBtn);
 	playerControlsLayout->addWidget(playBtn);
-	playerControlsLayout->addWidget(stopBtn);
+	//playerControlsLayout->addWidget(stopBtn);
 	playerControlsLayout->addStretch();
 
 	/*
@@ -65,29 +69,20 @@ void PlayerWidget::createUI()
 	*/
 
 	connect(playBtn, &QPushButton::pressed, [playBtn, this]() {
-		/*
-		if (UiManager::isScenePlaying) {
-			playBtn->setToolTip("Play the scene");
-			playBtn->setIcon(QIcon(":/icons/g_play.svg"));
-			UiManager::pauseScene();
+		if (playerView->isScenePlaying()) {
+			playerView->stopScene();
+			playBtn->setIcon(stopIcon);
 		}
 		else {
-			playBtn->setToolTip("Pause the scene");
-			playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
-			UiManager::playScene();
+			playerView->playScene();
+			playBtn->setIcon(playIcon);
 		}
-		*/
-
-		playerView->playScene();
 	});
-
+	/*
 	connect(stopBtn, &QPushButton::pressed, [playBtn, this]() {
-		//playBtn->setToolTip("Play the scene");
-		//playBtn->setIcon(QIcon(":/icons/g_play.svg"));
-
 		playerView->stopScene();
 	});
-
+	*/
 	playerControls->setLayout(playerControlsLayout);
 
 	playerView = new PlayerView(this);

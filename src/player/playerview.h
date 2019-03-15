@@ -75,6 +75,7 @@ public:
 
 	~PlayerView();
 
+	bool isScenePlaying() { return _isPlaying; }
 public slots:
 	void playScene();
 	void pause();
