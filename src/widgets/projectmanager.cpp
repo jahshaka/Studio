@@ -66,7 +66,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 	progressDialog = QPointer<ProgressDialog>(new ProgressDialog());
 
 	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::finished, [&]() {
-		progressDialog->setRange(0, 0);
+		progressDialog->setRange(0, 10);
 		progressDialog->setLabelText(tr("Caching assets..."));
 
 		// Meshes
@@ -79,6 +79,8 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 			AssetManager::addAsset(model);
 		}
 
+		progressDialog->setValue(4);
+
         for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File))) {
             auto assetFile = new AssetFile;
             assetFile->fileName = asset.name;
@@ -87,6 +89,8 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
             AssetManager::addAsset(assetFile);
         }
 
+		progressDialog->setValue(5);
+
         for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture))) {
             auto assetTexture = new AssetTexture;
             assetTexture->fileName = asset.name;
@@ -94,6 +98,8 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
             assetTexture->path = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
             AssetManager::addAsset(assetTexture);
         }
+
+		progressDialog->setValue(6);
 
         for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader))) {
             QJsonDocument shaderDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(asset.guid));
@@ -106,6 +112,8 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
             AssetManager::addAsset(assetShader);
         }
 
+		progressDialog->setValue(7);
+
         for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::ParticleSystem))) {
             QJsonDocument particleDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(asset.guid));
             QJsonObject particleObject = particleDefinition.object();
@@ -116,6 +124,8 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
             assetPS->setValue(QVariant::fromValue(particleObject));
             AssetManager::addAsset(assetPS);
         }
+
+		progressDialog->setValue(8);
 
 		// Materials
 		for (const auto &asset :
@@ -135,17 +145,17 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 			AssetManager::addAsset(assetMat);
 		}
 
-
 		progressDialog->setLabelText(tr("Opening scene..."));
+		progressDialog->setValue(10);
 		emit fileToOpen(openInPlayMode);
 		progressDialog->close();
 	});
 
 
-	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressRangeChanged,
-		progressDialog.data(), &ProgressDialog::setRange);
-	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressValueChanged,
-		progressDialog.data(), &ProgressDialog::setValue);
+	//QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressRangeChanged,
+	//	progressDialog.data(), &ProgressDialog::setRange);
+	//QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressValueChanged,
+	//	progressDialog.data(), &ProgressDialog::setValue);
 
     dynamicGrid = new DynamicGrid(this);
 
