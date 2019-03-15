@@ -57,6 +57,7 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       EditorData **editorData)
 {
     dir = projectPath;
+	useAlternativeLocation = false;
     auto doc = QJsonDocument::fromBinaryData(sceneBlob);
     auto projectObj = doc.object();
 
@@ -593,14 +594,14 @@ iris::HandleMode SceneReader::getHandleModeFromName(QString handleMode)
 iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 {
 	MaterialReader reader;
+	if (useAlternativeLocation) reader.setSource(TextureSource::GlobalAssets, assetDirectory);
     if (nodeObj["material"].isNull()) return iris::CustomMaterial::create();
 
 	auto mat = nodeObj["material"].toObject();
-	//if (reader.getMaterialVersion(mat) >= 2)
-	return reader.parseMaterial(mat, handle);
-
-    
-    auto m = iris::CustomMaterial::create();
+	return reader.parseMaterial(mat, handle, true);
+   
+/*
+	auto m = iris::CustomMaterial::create();
     auto shaderGuid = mat["guid"].toString();
 
     m->setName(mat["name"].toString());
@@ -674,6 +675,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
     }
 
     return m;
+	*/
 }
 
 void SceneReader::extractAssetsFromAssimpScene(QString filePath)
