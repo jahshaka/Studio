@@ -46,6 +46,8 @@ class PlayerView : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
 	QElapsedTimer* fpsTimer;
 	QPointF prevMousePos;
 
+	bool _isPlaying = false;
+
 public:
 	explicit PlayerView(QWidget* parent = nullptr);
 
@@ -74,9 +76,9 @@ public:
 	~PlayerView();
 
 public slots:
-	void play();
+	void playScene();
 	void pause();
-	void stop();
+	void stopScene();
 };
 
 #endif PLAYERVIEW_H
