@@ -148,7 +148,7 @@ void LeftHand::update(float dt)
 					// should accept hit point
 					{
 
-						if (grabbedNode->isPhysicsBody && UiManager::isSimulationRunning) {
+						if (grabbedNode->isPhysicsBody) {
 							scene->getPhysicsEnvironment()->createPickingConstraint(
 								grabbedNode->getGUID(),
 								iris::PhysicsHelper::btVector3FromQVector3D(grabbedNode->getGlobalPosition()),
@@ -336,7 +336,7 @@ void RightHand::update(float dt)
 					// should accept hit point
 					{
 
-						if (grabbedNode->isPhysicsBody && UiManager::isSimulationRunning) {
+						if (grabbedNode->isPhysicsBody) {
 							scene->getPhysicsEnvironment()->createPickingConstraint(
 								grabbedNode->getGUID(),
 								iris::PhysicsHelper::btVector3FromQVector3D(grabbedNode->getGlobalPosition()),
