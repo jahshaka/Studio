@@ -19,17 +19,16 @@
 }
 
 QProgressBar {
-     border: 1px solid black;
-     background-color: #DEDEDE;
- }
-
- QProgressBar::chunk {
-     background-color: #3498db;
- }
+	color: #EEE;
+}
 
 #ProgressDialog {
 	background: #222;
 	border: 1px solid black;
+}
+
+#progressBar {
+	/*color: #DEDEDE;*/
 }</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
