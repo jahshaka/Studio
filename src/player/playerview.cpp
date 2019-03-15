@@ -201,6 +201,7 @@ PlayerView::~PlayerView()
 void PlayerView::playScene()
 {
 	_isPlaying = true;
+	vrController->setPlayState(_isPlaying);
 	scene->getPhysicsEnvironment()->initializePhysicsWorldFromScene(scene->getRootNode());
 	scene->getPhysicsEnvironment()->simulatePhysics();
 }
@@ -210,6 +211,7 @@ void PlayerView::pause() {}
 void PlayerView::stopScene()
 {
 	_isPlaying = false;
+	vrController->setPlayState(false);
 	scene->getPhysicsEnvironment()->restartPhysics();
 	scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
 }
