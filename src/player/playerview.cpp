@@ -97,6 +97,9 @@ void PlayerView::start()
 
 void PlayerView::end()
 {
+	if (_isPlaying) {
+		stopScene();
+	}
 }
 
 void PlayerView::paintGL()
@@ -195,20 +198,20 @@ PlayerView::~PlayerView()
 
 }
 
-void PlayerView::play()
+void PlayerView::playScene()
 {
+	_isPlaying = true;
+	scene->getPhysicsEnvironment()->initializePhysicsWorldFromScene(scene->getRootNode());
 	scene->getPhysicsEnvironment()->simulatePhysics();
-
-	// capture states of all nodes
 }
 
 
 void PlayerView::pause() {}
-void PlayerView::stop()
+void PlayerView::stopScene()
 {
-	scene->getPhysicsEnvironment()->stopPhysics();
-
-	// reset object positions and states
+	_isPlaying = false;
+	scene->getPhysicsEnvironment()->restartPhysics();
+	scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
 }
 
 

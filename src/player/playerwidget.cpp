@@ -78,14 +78,14 @@ void PlayerWidget::createUI()
 		}
 		*/
 
-		playerView->play();
+		playerView->playScene();
 	});
 
 	connect(stopBtn, &QPushButton::pressed, [playBtn, this]() {
 		playBtn->setToolTip("Play the scene");
 		playBtn->setIcon(QIcon(":/icons/g_play.svg"));
 
-		playerView->stop();
+		playerView->stopScene();
 	});
 
 	playerControls->setLayout(playerControlsLayout);
