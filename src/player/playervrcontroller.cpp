@@ -152,7 +152,10 @@ void PlayerVrController::start()
 
 void PlayerVrController::update(float dt)
 {
-    vrDevice = iris::VrManager::getDefaultDevice();
+	if (!_isPlaying)
+		return;
+
+	vrDevice = iris::VrManager::getDefaultDevice();
     const float linearSpeed = 10.4f * dt;
 
 	// lock rot to yaw so user is always right side up

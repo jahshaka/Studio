@@ -32,6 +32,8 @@ public:
 class PlayerVrController : public CameraControllerBase
 {
 	friend class Hand;
+
+	bool _isPlaying;
 public:
 	iris::ModelPtr leftHandModel;
 	iris::ModelPtr rightHandModel;
@@ -81,6 +83,7 @@ public:
 	void start() override;
     void update(float dt) override;
 
+	void setPlayState(bool playState) { _isPlaying = playState; }
 
     /*
      * Does a ray cast to the scene
