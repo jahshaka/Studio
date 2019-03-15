@@ -103,7 +103,6 @@ iris::CustomMaterialPtr MaterialReader::createMaterialFromShaderFile(QString sha
 
 iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Database* db, bool loadTextures)
 {
-	qDebug() << matObject;
 	auto version = getMaterialVersion(matObject);
 	if (version == 1)
 		matObject = convertV1MaterialToV2(matObject);
@@ -111,7 +110,6 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 	// get shader object
 	auto shaderGuid = matObject["shaderGuid"].toString();
 	auto shaderObject = getShaderObjectFromId(matObject["shaderGuid"].toString(), db);
-	qDebug() << shaderObject;
 	auto material = createMaterialFromShaderGuid(shaderGuid, db);
 
 	// apply values
