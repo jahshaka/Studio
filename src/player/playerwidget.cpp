@@ -22,7 +22,7 @@ void PlayerWidget::createUI()
 	playerControls->setStyleSheet("background: #1A1A1A");
 
 	auto playerControlsLayout = new QHBoxLayout;
-
+	/*
 	auto restartBtn = new QPushButton(playerControls);
 	restartBtn->setCursor(Qt::PointingHandCursor);
 	restartBtn->setToolTip("Restart playback");
@@ -30,6 +30,7 @@ void PlayerWidget::createUI()
 	restartBtn->setStyleSheet("background: transparent");
 	restartBtn->setIcon(QIcon(":/icons/rotate-to-right.svg"));
 	restartBtn->setIconSize(QSize(16, 16));
+	*/
 
 	auto playBtn = new QPushButton(playerControls);
 	playBtn->setCursor(Qt::PointingHandCursor);
@@ -50,19 +51,18 @@ void PlayerWidget::createUI()
 	playerControlsLayout->setSpacing(12);
 	playerControlsLayout->setMargin(6);
 	playerControlsLayout->addStretch();
-	playerControlsLayout->addWidget(restartBtn);
+	//playerControlsLayout->addWidget(restartBtn);
 	playerControlsLayout->addWidget(playBtn);
 	playerControlsLayout->addWidget(stopBtn);
 	playerControlsLayout->addStretch();
 
-	
+	/*
 	connect(restartBtn, &QPushButton::pressed, [playBtn]() {
 		playBtn->setToolTip("Pause the scene");
 		playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
 		//UiManager::restartScene();
-
-		
 	});
+	*/
 
 	connect(playBtn, &QPushButton::pressed, [playBtn, this]() {
 		/*
@@ -82,8 +82,8 @@ void PlayerWidget::createUI()
 	});
 
 	connect(stopBtn, &QPushButton::pressed, [playBtn, this]() {
-		playBtn->setToolTip("Play the scene");
-		playBtn->setIcon(QIcon(":/icons/g_play.svg"));
+		//playBtn->setToolTip("Play the scene");
+		//playBtn->setIcon(QIcon(":/icons/g_play.svg"));
 
 		playerView->stopScene();
 	});
