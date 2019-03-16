@@ -150,6 +150,7 @@ void LeftHand::update(float dt)
 
 						if (grabbedNode->isPhysicsBody) {
 							scene->getPhysicsEnvironment()->createPickingConstraint(
+								iris::PickingHandleType::LeftHand,
 								grabbedNode->getGUID(),
 								iris::PhysicsHelper::btVector3FromQVector3D(grabbedNode->getGlobalPosition()),
 								QVector3D(),
@@ -172,7 +173,7 @@ void LeftHand::update(float dt)
 				grabbedNode.clear();
 				rightNodeOffset.setToIdentity(); // why bother?
 
-				scene->getPhysicsEnvironment()->cleanupPickingConstraint();
+				scene->getPhysicsEnvironment()->cleanupPickingConstraint(iris::PickingHandleType::LeftHand);
 			}
 
 			// update picked node
@@ -183,7 +184,9 @@ void LeftHand::update(float dt)
 
 				// LAZLO's CODE
 				if (grabbedNode->isPhysicsBody) {
-					scene->getPhysicsEnvironment()->updatePickingConstraint(nodeGlobal);
+					scene->getPhysicsEnvironment()->updatePickingConstraint(
+						iris::PickingHandleType::LeftHand,
+						nodeGlobal);
 				}
 				else {
 
@@ -338,6 +341,7 @@ void RightHand::update(float dt)
 
 						if (grabbedNode->isPhysicsBody) {
 							scene->getPhysicsEnvironment()->createPickingConstraint(
+								iris::PickingHandleType::RightHand,
 								grabbedNode->getGUID(),
 								iris::PhysicsHelper::btVector3FromQVector3D(grabbedNode->getGlobalPosition()),
 								QVector3D(),
@@ -360,7 +364,7 @@ void RightHand::update(float dt)
 				grabbedNode.clear();
 				rightNodeOffset.setToIdentity(); // why bother?
 
-				scene->getPhysicsEnvironment()->cleanupPickingConstraint();
+				scene->getPhysicsEnvironment()->cleanupPickingConstraint(iris::PickingHandleType::RightHand);
 			}
 
 			// update picked node
@@ -371,7 +375,7 @@ void RightHand::update(float dt)
 
 				// LAZLO's CODE
 				if (grabbedNode->isPhysicsBody) {
-					scene->getPhysicsEnvironment()->updatePickingConstraint(nodeGlobal);
+					scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::RightHand, nodeGlobal);
 				}
 				else {
 					
