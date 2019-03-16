@@ -71,11 +71,11 @@ void PlayerWidget::createUI()
 	connect(playBtn, &QPushButton::pressed, [playBtn, this]() {
 		if (playerView->isScenePlaying()) {
 			playerView->stopScene();
-			playBtn->setIcon(stopIcon);
+			playBtn->setIcon(playIcon);
 		}
 		else {
 			playerView->playScene();
-			playBtn->setIcon(playIcon);
+			playBtn->setIcon(stopIcon);
 		}
 	});
 	/*
