@@ -977,7 +977,7 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
 
     if (e->buttons() == Qt::LeftButton && !!selectedNode) {
 		if (selectedNode->isPhysicsBody && UiManager::isSimulationRunning) {
-			scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(localPos) * 1024),
+			scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::MouseButton, iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(localPos) * 1024),
 																	iris::PhysicsHelper::btVector3FromQVector3D(editorCam->getGlobalPosition()));
         } else if (gizmo->isDragging()) {
 			QVector3D rayPos, rayDir;
@@ -1069,7 +1069,7 @@ void SceneViewWidget::mouseReleaseEvent(QMouseEvent *e)
         if (gizmo->isDragging())
             gizmo->endDragging();
 
-		scene->getPhysicsEnvironment()->cleanupPickingConstraint();
+		scene->getPhysicsEnvironment()->cleanupPickingConstraint(iris::PickingHandleType::MouseButton);
     }
 
     if (camController != nullptr) {
@@ -1177,7 +1177,8 @@ void SceneViewWidget::doObjectPicking(
     }
 
 	if (pickedNode->isPhysicsBody && UiManager::isSimulationRunning) {
-		scene->getPhysicsEnvironment()->createPickingConstraint(pickedNode->getGUID(),
+		scene->getPhysicsEnvironment()->createPickingConstraint(iris::PickingHandleType::MouseButton,
+																pickedNode->getGUID(),
 																iris::PhysicsHelper::btVector3FromQVector3D(hitList.last().hitPoint),
 																segStart,
 																segEnd);
