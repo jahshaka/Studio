@@ -40,13 +40,16 @@ WorldPropertyWidget::WorldPropertyWidget()
 {
     this->setPanelTitle("World Settings");
 
-    worldGravity = this->addFloatValueSlider("Gravity", 0.f, 32.f);
+	worldGravity = this->addFloatValueSlider("Gravity", 0.f, 48.f);
     skyColor = this->addColorPicker("Sky Color");
     ambientColor = this->addColorPicker("Ambient Color");
 
     setupViewSelector();
 
     skyTexture = this->addTexturePicker("Skybox Texture");
+
+	connect(worldGravity,				SIGNAL(valueChanged(float)),
+			this,						SLOT(onGravityChanged(float)));
 
     connect(skyTexture,                 SIGNAL(valueChanged(QString)),
             this,                       SLOT(onSkyTextureChanged(QString)));
@@ -103,6 +106,7 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 
         skyColor->setColorValue(scene->skyColor);
         ambientColor->setColorValue(scene->ambientColor);
+		worldGravity->setValue(scene->gravity);
     } else {
         this->scene.clear();
     }
@@ -110,7 +114,7 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 
 void WorldPropertyWidget::onGravityChanged(float value)
 {
-    scene->gravity = value;
+	scene->setWorldGravity(value);
 }
 
 void WorldPropertyWidget::onSkyTextureChanged(QString texPath)

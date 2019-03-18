@@ -71,13 +71,13 @@ void UiManager::setAnimationWidget(AnimationWidget *value)
 
 void UiManager::enterPlayMode()
 {
-    sceneViewWidget->startPlayingScene();
+    //sceneViewWidget->startPlayingScene();
     sceneMode = SceneMode::PlayMode;
 }
 
 void UiManager::enterEditMode()
 {
-    sceneViewWidget->stopPlayingScene();
+    //sceneViewWidget->stopPlayingScene();
     sceneMode = SceneMode::EditMode;
 
 }

@@ -9,12 +9,17 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#ifndef EDITORVRCONTROLLER_H
-#define EDITORVRCONTROLLER_H
+#ifndef PLAYERVRCONTROLLER_H
+#define PLAYERVRCONTROLLER_H
 
-#include "../irisgl/src/irisglfwd.h"
-#include "cameracontrollerbase.h"
 #include <QMatrix4x4>
+#include "../irisgl/src/irisglfwd.h"
+#include "../editor/cameracontrollerbase.h"
+#include "irisgl/src/physics/environment.h"
+#include "irisgl/src/physics/physicshelper.h"
+
+#include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
+#include "hand.h"
 
 class VrHand
 {
@@ -24,18 +29,17 @@ public:
 	QQuaternion rot;
 };
 
-class EditorVrController : public CameraControllerBase
+class PlayerVrController : public CameraControllerBase
 {
-public:
-	iris::MaterialPtr beamMaterial;
+	friend class Hand;
 
+	bool _isPlaying;
+public:
 	iris::ModelPtr leftHandModel;
 	iris::ModelPtr rightHandModel;
 
     iris::MeshPtr leftHandMesh;
     iris::MeshPtr rightHandMesh;
-
-	iris::MeshPtr sphereMesh;
 
     iris::RenderItem* leftHandRenderItem;
     iris::RenderItem* rightHandRenderItem;
@@ -66,15 +70,22 @@ public:
 
 	iris::MaterialPtr fresnelMat;
 
-	EditorVrController(iris::ContentManagerPtr content);
+	PlayerVrController();
+
+	void setCamera(iris::CameraNodePtr cam);
+
+	void loadAssets(iris::ContentManagerPtr content);
 
     void setScene(iris::ScenePtr scene);
 
     void updateCameraRot();
 
-    void update(float dt);
+	void start() override;
+	void update(float dt) override;
+	void postUpdate(float dt) override;
 
-private:
+	void setPlayState(bool playState) { _isPlaying = playState; }
+
     /*
      * Does a ray cast to the scene
      * Returns nearest object hit in the raycast
@@ -83,16 +94,31 @@ private:
 
 	iris::SceneNodePtr getObjectRoot(iris::SceneNodePtr node);
 
-	void submitHoveredNodes();
-	void submitHoveredNode(iris::SceneNodePtr node);
-
 	// for now this finds the first grab node
 	iris::GrabNodePtr findGrabNode(iris::SceneNodePtr node);
 
-	QMatrix4x4 calculateHandMatrix(iris::VrDevice* device, int handIndex);
+private:
+	void submitHoveredNodes();
+	void submitHoveredNode(iris::SceneNodePtr node);
 
-	QMatrix4x4 getBeamOffset();
+	
+
 	float turnSpeed;
+
+	Hand* leftHand;
+	Hand* rightHand;
+
+	// PHYSICS STUFF
+	btRigidBody *activeRigidBody;
+
+	//testing
+	//class btTypedConstraint* m_pickedConstraint;
+	class btGeneric6DofConstraint* m_pickedConstraint;
+	int	m_savedState;
+	btVector3 m_oldPickingPos;
+	btVector3 m_hitPos;
+	btScalar m_oldPickingDist;
+	QVector3D rightHandPickOffset;
 };
 
 #endif // EDITORVRCONTROLLER_H

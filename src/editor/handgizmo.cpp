@@ -42,7 +42,8 @@ HandGizmoHandler::HandGizmoHandler()
 
 void HandGizmoHandler::loadAssets(const iris::ContentManagerPtr& content)
 {
-	handModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/right_hand_anims.fbx"));
+	//handModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/right_hand_anims.fbx"));
+	handModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/Righthand_seperate_anims.fbx"));
 	handMaterial = QSharedPointer<iris::Material>(new HandGizmoMaterial());
 }
 
@@ -56,17 +57,26 @@ bool HandGizmoHandler::doHandPicking(const iris::ScenePtr& scene,
 
 void HandGizmoHandler::submitHandToScene(const iris::ScenePtr & scene)
 {
+	const float handScale = 2.0;
+	QMatrix4x4 scale;
+	scale.setToIdentity();
+
+	scale.rotate(180, 0.0, 1.0, 0.0);
+	scale.rotate(90, 0.0, 0.0, 1.0);
+	scale.scale(0.1f * handScale, 0.1f * handScale, 0.1f * handScale);
+
 	for (auto grabber : scene->grabbers) {
 		// set appropriate animation
 		if (grabber->handPose->getPoseType() == iris::HandPoseType::Grab) {
-			handModel->setActiveAnimation("RightHand_rig.001|handFistMove");
+			//handModel->setActiveAnimation("RightHand_rig.001|handFistMove");
+			handModel->setActiveAnimation("RightHand_rig|grab");
 		}
 
 		// set time based on factor
-		handModel->applyAnimation(grabber->poseFactor*3);
+		handModel->applyAnimation(grabber->poseFactor*24);
 
 		// update animation
-		submitHandToScene(scene, grabber, grabber->getGlobalTransform());
+		submitHandToScene(scene, grabber, grabber->getGlobalTransform() * scale);
 	}
 }
 

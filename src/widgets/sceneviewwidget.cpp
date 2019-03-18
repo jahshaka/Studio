@@ -104,6 +104,21 @@ void SceneViewWidget::setShowPerspeciveLabel(bool val)
 	SettingsManager::getDefaultManager()->setValue("show_PL", val);
 }
 
+void SceneViewWidget::begin()
+{
+	renderer->regenerateSwapChain();
+}
+
+void SceneViewWidget::end()
+{
+	if (UiManager::isScenePlaying) {
+		mainWindow->enterEditMode();
+		this->restartPhysicsSimulation();
+		if (UiManager::isSimulationRunning)
+			UiManager::isSimulationRunning = !UiManager::isSimulationRunning;
+	}
+}
+
 void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
 {
     QByteArray encoded = event->mimeData()->data("application/x-qabstractitemmodeldatalist");
@@ -305,6 +320,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     dragging = false;
     showLightWires = false;
+	showDebugDrawFlags = false;
 
     sceneFloor = iris::IntersectionHelper::computePlaneND(QVector3D( 100, 0,  100),
                                                           QVector3D(-100, 0,  100),
@@ -361,19 +377,31 @@ void SceneViewWidget::setShowLightWires(bool value)
     showLightWires = value;
 }
 
+bool SceneViewWidget::getShowDebugDrawFlags() const
+{
+	return showDebugDrawFlags;
+}
+
+void SceneViewWidget::setShowDebugDrawFlags(bool value)
+{
+	showDebugDrawFlags = value;
+}
+
 void SceneViewWidget::toggleDebugDrawFlags(bool value)
 {
-    scene->getPhysicsEnvironment()->toggleDebugDrawFlags(value);
+	if (!!scene) scene->getPhysicsEnvironment()->setDebugDrawFlags(value);
 }
 
 void SceneViewWidget::startPhysicsSimulation()
 {
+	scene->getPhysicsEnvironment()->initializePhysicsWorldFromScene(scene->getRootNode());
     scene->getPhysicsEnvironment()->simulatePhysics();
 }
 
 void SceneViewWidget::restartPhysicsSimulation()
 {
     scene->getPhysicsEnvironment()->restartPhysics();
+	scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
 }
 
 void SceneViewWidget::stopPhysicsSimulation()
@@ -710,7 +738,10 @@ void SceneViewWidget::renderScene()
         }
 
         // TODO: ensure it doesnt display these shapes in play mode (Nick)
-        if (UiManager::sceneMode != SceneMode::PlayMode && showLightWires) addLightShapesToScene();
+		if (UiManager::sceneMode != SceneMode::PlayMode) {
+			if (showLightWires) addLightShapesToScene();
+			toggleDebugDrawFlags(showDebugDrawFlags);
+		}
 
         // render thumbnail to texture
         if (!playScene && !!selectedNode) {
@@ -945,8 +976,8 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
     QPointF dir = localPos - prevMousePos;
 
     if (e->buttons() == Qt::LeftButton && !!selectedNode) {
-        if (selectedNode->isPhysicsBody) {
-			scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(localPos) * 1024),
+		if (selectedNode->isPhysicsBody && UiManager::isSimulationRunning) {
+			scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::MouseButton, iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(localPos) * 1024),
 																	iris::PhysicsHelper::btVector3FromQVector3D(editorCam->getGlobalPosition()));
         } else if (gizmo->isDragging()) {
 			QVector3D rayPos, rayDir;
@@ -1038,7 +1069,7 @@ void SceneViewWidget::mouseReleaseEvent(QMouseEvent *e)
         if (gizmo->isDragging())
             gizmo->endDragging();
 
-		scene->getPhysicsEnvironment()->cleanupPickingConstraint();
+		scene->getPhysicsEnvironment()->cleanupPickingConstraint(iris::PickingHandleType::MouseButton);
     }
 
     if (camController != nullptr) {
@@ -1146,7 +1177,8 @@ void SceneViewWidget::doObjectPicking(
     }
 
 	if (pickedNode->isPhysicsBody && UiManager::isSimulationRunning) {
-		scene->getPhysicsEnvironment()->createPickingConstraint(pickedNode->getGUID(),
+		scene->getPhysicsEnvironment()->createPickingConstraint(iris::PickingHandleType::MouseButton,
+																pickedNode->getGUID(),
 																iris::PhysicsHelper::btVector3FromQVector3D(hitList.last().hitPoint),
 																segStart,
 																segEnd);
@@ -1452,12 +1484,6 @@ void SceneViewWidget::removeBodyFromWorld(const QString &guid)
     scene->getPhysicsEnvironment()->removeBodyFromWorld(guid);
 }
 
-void SceneViewWidget::addConstraintToWorldFromProperty(const iris::ConstraintProperty &prop)
-{
-    auto constraint = iris::PhysicsHelper::createConstraintFromProperty(scene->getPhysicsEnvironment(), prop);
-    scene->getPhysicsEnvironment()->addConstraintToWorld(constraint);
-}
-
 void SceneViewWidget::setGizmoLoc()
 {
     editorCam->updateCameraMatrices();
@@ -1486,6 +1512,7 @@ void SceneViewWidget::setEditorData(EditorData* data)
     scene->setCamera(editorCam);
     camController->setCamera(editorCam);
     showLightWires = data->showLightWires;
+	showDebugDrawFlags = data->showDebugDrawFlags;
 	emit updateToolbarButton();
 }
 
@@ -1495,7 +1522,7 @@ EditorData* SceneViewWidget::getEditorData()
     data->editorCamera = editorCam;
     data->distFromPivot = orbitalCam->distFromPivot;
     data->showLightWires = showLightWires;
-
+    data->showDebugDrawFlags = showDebugDrawFlags;
     return data;
 }
 

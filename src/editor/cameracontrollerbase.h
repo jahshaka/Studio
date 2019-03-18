@@ -27,7 +27,7 @@ class CameraControllerBase
 public:
 	CameraControllerBase();
 
-    virtual void setCamera(QSharedPointer<iris::CameraNode>  cam);
+    virtual void setCamera(iris::CameraNodePtr  cam);
 
     virtual void onMouseDown(Qt::MouseButton button);
     virtual void onMouseUp(Qt::MouseButton button);
@@ -40,6 +40,8 @@ public:
     virtual void start();
     virtual void update(float dt);
     virtual void end();
+
+	virtual void postUpdate(float dt){}
 
 	virtual void renderUi(iris::GraphicsDevicePtr device, iris::SpriteBatchPtr batch) {}
 

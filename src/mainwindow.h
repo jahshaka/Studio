@@ -73,6 +73,7 @@ class TransformWidget;
 
 class SceneViewWidget;
 class SceneHierarchyWidget;
+class PlayerWidget;
 
 class EditorCameraController;
 class SettingsManager;
@@ -126,6 +127,8 @@ enum class Widget
 class Database;
 class MainWindow : public QMainWindow
 {
+	friend class SceneViewWidget;
+
     Q_OBJECT
 
 public:
@@ -143,6 +146,7 @@ public:
 	WindowSpaces getWindowSpace();
 	void deselectViewports();
     void switchSpace(WindowSpaces space);
+	void updateTopMenuStates(WindowSpaces activeSpace);
 
     bool handleMousePress(QMouseEvent *event);
     bool handleMouseRelease(QMouseEvent *event);
@@ -344,8 +348,6 @@ public slots:
     iris::ScenePtr createDefaultScene();
     void initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*);
 
-    void initializePhysicsWorld();
-
     void useFreeCamera();
     void useArcballCam();
 
@@ -381,6 +383,7 @@ private:
     Ui::MainWindow *ui;
     SurfaceView* surface;
     SceneViewWidget* sceneView;
+	PlayerWidget* playerView;
 
     QStandardItemModel* treeModel;
     QWidget *container;
