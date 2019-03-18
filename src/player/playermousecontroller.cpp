@@ -11,7 +11,10 @@ For more information see the LICENSE file
 
 #include "playermousecontroller.h"
 #include "../editor/animationpath.h"
+#include "../core/keyboardstate.h"
 #include <irisgl/SceneGraph.h>
+#include <irisgl/Vr.h>
+#include <irisgl/Physics.h>
 
 
 void PlayerMouseController::setViewer(iris::ViewerNodePtr &value)
@@ -87,8 +90,89 @@ void PlayerMouseController::setCamera(iris::CameraNodePtr cam)
 	camera = cam;
 }
 
-void PlayerMouseController::update(float dt)
+void PlayerMouseController::setScene(iris::ScenePtr scene)
 {
-    updateCameraTransform();
+	this->scene = scene;
+	viewer = scene->getActiveVrViewer();
 }
 
+void PlayerMouseController::update(float dt)
+{
+	auto linearSpeed = 10 * dt;
+	if (!_isPlaying)
+		return;
+
+	const QVector3D upVector(0, 1, 0);
+	auto forwardVector = camera->getLocalRot().rotatedVector(QVector3D(0, 0, -1));
+	auto x = QVector3D::crossProduct(forwardVector, upVector).normalized();
+	auto z = QVector3D::crossProduct(upVector, x).normalized();
+
+	if (!viewer) {
+		auto camPos = camera->getLocalPos();
+		// left
+		if (KeyboardState::isKeyDown(Qt::Key_Left))
+			camPos -= x * linearSpeed;
+
+		// right
+		if (KeyboardState::isKeyDown(Qt::Key_Right))
+			camPos += x * linearSpeed;
+
+		// up
+		if (KeyboardState::isKeyDown(Qt::Key_Up))
+			camPos += z * linearSpeed;
+
+		// down
+		if (KeyboardState::isKeyDown(Qt::Key_Down))
+			camPos -= z * linearSpeed;
+
+		camera->setLocalPos(camPos);
+
+		updateCameraTransform();
+	}
+	else {
+		//auto vrDevice = iris::VrManager::getDefaultDevice();
+
+		float dirX = 0;
+		float dirY = 0;
+		if (KeyboardState::isKeyDown(Qt::Key_Left))
+			dirX -= linearSpeed;
+
+		// right
+		if (KeyboardState::isKeyDown(Qt::Key_Right))
+			dirX += linearSpeed;
+
+		// up
+		if (KeyboardState::isKeyDown(Qt::Key_Up))
+			dirY -= linearSpeed;
+
+		// down
+		if (KeyboardState::isKeyDown(Qt::Key_Down))
+			dirY += linearSpeed;
+
+
+		// lock rot to yaw so user is always right side up
+		auto yawRot = QQuaternion::fromEulerAngles(0, yaw, 0);
+		viewer->setLocalRot(yawRot);
+
+		// keyboard movement
+		const QVector3D upVector(0, 1, 0);
+		//not giving proper rotation when not in debug mode
+		//apparently i need to normalize the head rotation quaternion
+		auto rot = yawRot;
+		rot.normalize();
+		auto forwardVector = rot.rotatedVector(QVector3D(0, 0, -1));
+		auto x = QVector3D::crossProduct(forwardVector, upVector).normalized();
+		auto z = QVector3D::crossProduct(upVector, x).normalized();
+
+		auto newDir = rot.rotatedVector(QVector3D(dirX, 0, dirY)) * 10;
+		scene->getPhysicsEnvironment()->setDirection(QVector2D(newDir.x(), newDir.z()));
+	}
+}
+
+void PlayerMouseController::postUpdate(float dt)
+{
+	if (!!viewer) {
+		updateCameraTransform();
+		//camera->setLocalTransform(viewer->getGlobalTransform());
+	}
+}
