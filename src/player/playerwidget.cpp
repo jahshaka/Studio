@@ -76,6 +76,7 @@ void PlayerWidget::createUI()
 		else {
 			playerView->playScene();
 			playBtn->setIcon(stopIcon);
+			playerView->setFocus();
 		}
 	});
 	/*
