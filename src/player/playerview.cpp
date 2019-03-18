@@ -71,6 +71,7 @@ void PlayerView::setScene(iris::ScenePtr scene)
 	
 	vrController->setScene(scene);
 	vrController->setCamera(scene->getCamera());
+	mouseController->setScene(scene);
 	mouseController->setCamera(scene->getCamera());
 }
 
@@ -91,6 +92,7 @@ void PlayerView::setController(CameraControllerBase * controller)
 
 void PlayerView::start()
 {
+	this->setFocus();
 	makeCurrent();
 	//camera = scene->camera;
 	//camController->setCamera(scene->getCamera());
@@ -130,8 +132,10 @@ void PlayerView::renderScene()
 	camController->update(dt);
 
 	auto activeViewer = scene->getActiveVrViewer();
-	if (!!activeViewer && activeViewer->isActiveCharacterController()) {
-		activeViewer->setGlobalTransform(scene->getPhysicsEnvironment()->getActiveCharacterController()->getTransform());
+	if (_isPlaying) {
+		if (!!activeViewer && activeViewer->isActiveCharacterController()) {
+			activeViewer->setGlobalTransform(scene->getPhysicsEnvironment()->getActiveCharacterController()->getTransform());
+		}
 	}
 
 	auto scene = UiManager::sceneViewWidget->getScene();
@@ -141,6 +145,8 @@ void PlayerView::renderScene()
 	vp.width = width() * devicePixelRatioF();
 	vp.height = height() * devicePixelRatioF();
 	scene->update(dt);
+
+	camController->postUpdate(dt);
 
 	//auto vrDevice = iris::VrManager::getDefaultDevice();
 	auto vrDevice = renderer->getVrDevice();
@@ -205,6 +211,7 @@ void PlayerView::playScene()
 {
 	_isPlaying = true;
 	vrController->setPlayState(_isPlaying);
+	mouseController->setPlayState(_isPlaying);
 	scene->getPhysicsEnvironment()->initializePhysicsWorldFromScene(scene->getRootNode());
 	scene->getPhysicsEnvironment()->simulatePhysics();
 }
@@ -214,7 +221,8 @@ void PlayerView::pause() {}
 void PlayerView::stopScene()
 {
 	_isPlaying = false;
-	vrController->setPlayState(false);
+	vrController->setPlayState(_isPlaying);
+	mouseController->setPlayState(_isPlaying);
 	scene->getPhysicsEnvironment()->restartPhysics();
 	scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
 }
@@ -245,4 +253,9 @@ void PlayerView::keyReleaseEvent(QKeyEvent *event)
 	if (KeyboardState::isKeyUp(Qt::Key_A)) { scene->getPhysicsEnvironment()->walkLeft = 0; }
 	if (KeyboardState::isKeyUp(Qt::Key_D)) { scene->getPhysicsEnvironment()->walkRight = 0; }
 	if (KeyboardState::isKeyUp(Qt::Key_Space)) { scene->getPhysicsEnvironment()->jump = 0; }
+}
+
+void PlayerView::focusOutEvent(QFocusEvent * event)
+{
+	KeyboardState::reset();
 }
