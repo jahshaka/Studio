@@ -101,7 +101,7 @@ void LeftHand::updateMovement(float dt)
 
 		//qDebug()<<dir;
 		dir.setY(-dir.y());
-		auto newDir = rot.rotatedVector(QVector3D(dir.x(), 0, dir.y())) * 5;
+		auto newDir = rot.rotatedVector(QVector3D(dir.x(), 0, dir.y())) * 7;
 		scene->getPhysicsEnvironment()->setDirection(QVector2D(newDir.x(), newDir.z()));
 		//auto controller = scene->getPhysicsEnvironment()->getActiveCharacterController();
 		//controller->setDirection(dir);
