@@ -81,7 +81,8 @@ public:
     void updateCameraRot();
 
 	void start() override;
-    void update(float dt) override;
+	void update(float dt) override;
+	void postUpdate(float dt) override;
 
 	void setPlayState(bool playState) { _isPlaying = playState; }
 
