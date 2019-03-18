@@ -19,7 +19,10 @@ For more information see the LICENSE file
 
 class PlayerMouseController : public CameraControllerBase
 {
-    iris::ViewerNodePtr viewer;
+	iris::ScenePtr scene;
+	iris::CameraNodePtr camera;
+	iris::ViewerNodePtr viewer;
+
     float pitch;
     float yaw;
 
@@ -27,13 +30,17 @@ class PlayerMouseController : public CameraControllerBase
     // to this controller
     QQuaternion camRot;
     QVector3D camPos;
+	bool _isPlaying = false;
 
 public:
+	void setPlayState(bool playState) { _isPlaying = playState; }
 
 	PlayerMouseController();
 	void setCamera(iris::CameraNodePtr  cam);
+	void setScene(iris::ScenePtr scene);
 
-    void update(float dt) override;
+	void update(float dt) override;
+	void postUpdate(float dt) override;
     void onMouseMove(int dx,int dy) override;
     void onMouseWheel(int delta) override;
 

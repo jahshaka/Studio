@@ -492,6 +492,11 @@ void PlayerVrController::update(float dt)
 	submitHoveredNodes();
 }
 
+void PlayerVrController::postUpdate(float dt)
+{
+
+}
+
 bool PlayerVrController::rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResult& result)
 {
     QList<iris::PickingResult> hits;
