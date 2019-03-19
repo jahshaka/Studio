@@ -70,6 +70,7 @@ namespace Constants
 
     extern int FPS_90;
     extern int FPS_60;
+	extern float GRAVITY;
 
     namespace Reserved
     {

@@ -145,10 +145,11 @@ void SceneWriter::writePostProcessData(QJsonObject &projectObj, iris::PostProces
     projectObj["postprocesses"] = processesObj;
 }
 
-void SceneWriter::writeEditorData(QJsonObject& projectObj,EditorData* editorData)
+void SceneWriter::writeEditorData(QJsonObject& projectObj, EditorData* editorData)
 {
     QJsonObject editorObj;
     editorObj["showLightWires"] = editorData->showLightWires;
+	editorObj["showDebugDrawFlags"] = editorData->showDebugDrawFlags;
 
     QJsonObject cameraObj;
     auto cam = editorData->editorCamera;
@@ -197,7 +198,39 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
         default: break;
     }
 
-    writeAnimationData(sceneNodeObj,sceneNode);
+    writeAnimationData(sceneNodeObj, sceneNode);
+
+	sceneNodeObj["physicsObject"] = sceneNode->isPhysicsBody;
+
+	if (sceneNode->isPhysicsBody) {
+		QJsonObject physicsProperties;
+
+		physicsProperties.insert("centerOfMass", jsonVector3(sceneNode->physicsProperty.centerOfMass));
+		physicsProperties.insert("pivot", jsonVector3(sceneNode->physicsProperty.pivotPoint));
+		physicsProperties.insert("static", sceneNode->physicsProperty.isStatic);
+		physicsProperties.insert("collisionMargin", sceneNode->physicsProperty.objectCollisionMargin);
+		physicsProperties.insert("damping", sceneNode->physicsProperty.objectDamping);
+		physicsProperties.insert("mass", sceneNode->physicsProperty.objectMass);
+		physicsProperties.insert("friction", sceneNode->physicsProperty.objectFriction);
+		physicsProperties.insert("bounciness", sceneNode->physicsProperty.objectRestitution);
+		physicsProperties.insert("shape", static_cast<int>(sceneNode->physicsProperty.shape));
+		physicsProperties.insert("type", static_cast<int>(sceneNode->physicsProperty.type));
+
+		QJsonArray constraintProperties;
+
+		for (const auto &constraint : sceneNode->physicsProperty.constraints) {
+			QJsonObject constraintProp;
+			constraintProp.insert("constraintFrom", constraint.constraintFrom);
+			constraintProp.insert("constraintTo", constraint.constraintTo);
+			constraintProp.insert("constraintType", static_cast<int>(constraint.constraintType));
+
+			constraintProperties.append(constraintProp);
+		}
+
+		physicsProperties["constraints"] = constraintProperties;
+
+		sceneNodeObj["physicsProperties"] = physicsProperties;
+	}
 
     QJsonArray childrenArray;
     for (auto childNode : sceneNode->children) {
@@ -298,36 +331,6 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
 	sceneNodeObject["mesh"]          = meshNode->meshPath;
 	sceneNodeObject["guid"]          = meshNode->getGUID();
     sceneNodeObject["meshIndex"]     = meshNode->meshIndex;
-    sceneNodeObject["physicsObject"] = meshNode->isPhysicsBody;
-
-    if (meshNode->isPhysicsBody) {
-        QJsonObject physicsProperties;
-
-        physicsProperties.insert("centerOfMass", jsonVector3(meshNode->physicsProperty.centerOfMass));
-        physicsProperties.insert("pivot", jsonVector3(meshNode->physicsProperty.pivotPoint));
-        physicsProperties.insert("static", meshNode->physicsProperty.isStatic);
-        physicsProperties.insert("collisionMargin", meshNode->physicsProperty.objectCollisionMargin);
-        physicsProperties.insert("damping", meshNode->physicsProperty.objectDamping);
-        physicsProperties.insert("mass", meshNode->physicsProperty.objectMass);
-        physicsProperties.insert("bounciness", meshNode->physicsProperty.objectRestitution);
-        physicsProperties.insert("shape", static_cast<int>(meshNode->physicsProperty.shape));
-        physicsProperties.insert("type", static_cast<int>(meshNode->physicsProperty.type));
-
-        QJsonArray constraintProperties;
-        
-        for (const auto &constraint : meshNode->physicsProperty.constraints) {
-            QJsonObject constraintProp;
-            constraintProp.insert("constraintFrom", constraint.constraintFrom);
-            constraintProp.insert("constraintTo", constraint.constraintTo);
-            constraintProp.insert("constraintType", static_cast<int>(constraint.constraintType));
-
-            constraintProperties.append(constraintProp);
-        }
-
-        physicsProperties["constraints"] = constraintProperties;
-
-        sceneNodeObject["physicsProperties"] = physicsProperties;
-    }
 
     auto cullMode = meshNode->getFaceCullingMode();
     switch (cullMode) {

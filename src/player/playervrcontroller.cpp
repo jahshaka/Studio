@@ -9,7 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "editorvrcontroller.h"
+#include "playervrcontroller.h"
 #include "../irisgl/src/graphics/graphicsdevice.h"
 #include "../irisgl/src/graphics/renderitem.h"
 #include "../irisgl/src/graphics/material.h"
@@ -69,50 +69,59 @@ public:
 };
 
 
-EditorVrController::EditorVrController(iris::ContentManagerPtr content)
+PlayerVrController::PlayerVrController()
+{
+	leftHand = new LeftHand(this);
+	rightHand = new RightHand(this);
+}
+
+void PlayerVrController::setCamera(iris::CameraNodePtr cam)
+{
+	this->camera = cam;
+	//camera->setLocalScale(QVector3D(2, 2, 2));
+	leftHand->setCamera(cam);
+	rightHand->setCamera(cam);
+}
+
+void PlayerVrController::loadAssets(iris::ContentManagerPtr content)
 {
 	this->content = content;
 
-    //auto cube = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/cube.obj"));
-    auto leftHandMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_left.obj"));
-	beamMesh = iris::Mesh::loadMesh(
-		IrisUtils::getAbsoluteAssetPath("app/content/models/beam.obj"));
-	sphereMesh = iris::Mesh::loadMesh(
-		IrisUtils::getAbsoluteAssetPath("app/content/primitives/sphere.obj"));
+	//auto cube = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/cube.obj"));
+	auto leftHandMesh = content->loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_left.obj"));
 
 	auto mat = iris::DefaultMaterial::create();
 
-    mat->setDiffuseTexture(
-                iris::Texture2D::load(
-                    IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_col.png")));
+	mat->setDiffuseTexture(
+		content->loadTexture(
+			IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_col.png")));
 
-    leftHandRenderItem = new iris::RenderItem();
-    leftHandRenderItem->type = iris::RenderItemType::Mesh;
-    leftHandRenderItem->material = mat;
-    leftHandRenderItem->mesh = leftHandMesh;
+	leftHandRenderItem = new iris::RenderItem();
+	leftHandRenderItem->type = iris::RenderItemType::Mesh;
+	leftHandRenderItem->material = mat;
+	leftHandRenderItem->mesh = leftHandMesh;
 
-    auto rightHandMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_right.obj"));
-    rightHandRenderItem = new iris::RenderItem();
-    rightHandRenderItem->type = iris::RenderItemType::Mesh;
-    rightHandRenderItem->material = mat;
-    rightHandRenderItem->mesh = rightHandMesh;
+	auto rightHandMesh = content->loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/models/external_controller01_right.obj"));
+	rightHandRenderItem = new iris::RenderItem();
+	rightHandRenderItem->type = iris::RenderItemType::Mesh;
+	rightHandRenderItem->material = mat;
+	rightHandRenderItem->mesh = rightHandMesh;
 
-    beamMesh = iris::Mesh::loadMesh(
-                IrisUtils::getAbsoluteAssetPath("app/content/models/beam.obj"));
-    auto beamMat = iris::ColorMaterial::create();
+	beamMesh = content->loadMesh(
+		IrisUtils::getAbsoluteAssetPath("app/content/models/beam.obj"));
+	auto beamMat = iris::ColorMaterial::create();
 	beamMat->setColor(QColor(255, 100, 100));
-	beamMaterial = beamMat;
-    //beamMat->setDiffuseColor(QColor(255,100,100));
+	//beamMat->setDiffuseColor(QColor(255,100,100));
 
-    leftBeamRenderItem = new iris::RenderItem();
-    leftBeamRenderItem->type = iris::RenderItemType::Mesh;
-    leftBeamRenderItem->material = beamMat;
-    leftBeamRenderItem->mesh = beamMesh;
+	leftBeamRenderItem = new iris::RenderItem();
+	leftBeamRenderItem->type = iris::RenderItemType::Mesh;
+	leftBeamRenderItem->material = beamMat;
+	leftBeamRenderItem->mesh = beamMesh;
 
-    rightBeamRenderItem = new iris::RenderItem();
-    rightBeamRenderItem->type = iris::RenderItemType::Mesh;
-    rightBeamRenderItem->material = beamMat;
-    rightBeamRenderItem->mesh = beamMesh;
+	rightBeamRenderItem = new iris::RenderItem();
+	rightBeamRenderItem->type = iris::RenderItemType::Mesh;
+	rightBeamRenderItem->material = beamMat;
+	rightBeamRenderItem->mesh = beamMesh;
 
 	// load models
 	leftHandModel = content->loadModel("app/content/models/left_hand.dae");
@@ -121,16 +130,32 @@ EditorVrController::EditorVrController(iris::ContentManagerPtr content)
 	fresnelMat = QSharedPointer<FresnelMaterial>(new FresnelMaterial());
 
 	turnSpeed = 4.0f;
+
+	leftHand->loadAssets(content);
+	rightHand->loadAssets(content);
 }
 
-void EditorVrController::setScene(iris::ScenePtr scene)
+void PlayerVrController::setScene(iris::ScenePtr scene)
 {
     this->scene = scene;
+	auto activeViewer = scene->getActiveVrViewer();
+	this->leftHand->init(scene, scene->camera, activeViewer);
+	this->rightHand->init(scene, scene->camera, activeViewer);
 }
 
-void EditorVrController::update(float dt)
+void PlayerVrController::start()
 {
-    vrDevice = iris::VrManager::getDefaultDevice();
+	auto activeViewer = scene->getActiveVrViewer();
+	this->leftHand->init(scene, scene->camera, activeViewer);
+	this->rightHand->init(scene, scene->camera, activeViewer);
+}
+
+void PlayerVrController::update(float dt)
+{
+	if (!_isPlaying)
+		return;
+
+	vrDevice = iris::VrManager::getDefaultDevice();
     const float linearSpeed = 10.4f * dt;
 
 	// lock rot to yaw so user is always right side up
@@ -149,28 +174,8 @@ void EditorVrController::update(float dt)
     auto z = QVector3D::crossProduct(upVector,x).normalized();
 
     auto camPos = camera->getLocalPos();
-    // left
-    if(KeyboardState::isKeyDown(Qt::Key_Left))
-        camPos -= x * linearSpeed;
 
-    // right
-    if(KeyboardState::isKeyDown(Qt::Key_Right))
-        camPos += x * linearSpeed;
-
-    // up
-    if(KeyboardState::isKeyDown(Qt::Key_Up))
-        camPos += z * linearSpeed;
-
-    // down
-    if(KeyboardState::isKeyDown(Qt::Key_Down))
-        camPos -= z * linearSpeed;
-
-    camera->setLocalPos(camPos);
-
-	
-
-    // touch controls
-
+	/*
 	// LEFT CONTROLLER
     auto leftTouch = vrDevice->getTouchController(0);
     if (leftTouch->isTracking()) {
@@ -198,23 +203,18 @@ void EditorVrController::update(float dt)
 		world.translate(device->getHandPosition(0));
 		world.rotate(device->getHandRotation(0));
 		//world.scale(0.55f);
+		leftHandRenderItem->worldMatrix = camera->globalTransform * world;
+		leftBeamRenderItem->worldMatrix = leftHandRenderItem->worldMatrix;
 
-		auto leftHandMatrix = calculateHandMatrix(device, 0);
-		leftHandRenderItem->worldMatrix = leftHandMatrix;
-
-		auto leftBeamMatrix = leftHandMatrix * getBeamOffset();
-		leftBeamRenderItem->worldMatrix = leftBeamMatrix;
-
-		float pickDist = 1000.0f;
 
 		if (UiManager::sceneMode == SceneMode::EditMode) {
 
 			// Handle picking and movement of picked objects
 			iris::PickingResult pick;
-			if (rayCastToScene(leftBeamMatrix, pick)) {
-				pickDist = qSqrt(pick.distanceFromStartSqrd);
+			if (rayCastToScene(leftHandRenderItem->worldMatrix, pick)) {
+				auto dist = qSqrt(pick.distanceFromStartSqrd);
 				//qDebug() << "hit at dist: " << dist;
-				//leftBeamRenderItem->worldMatrix.scale(1, 1, pickDist /* * (1.0f / 0.55f )*/);// todo: remove magic 0.55
+				leftBeamRenderItem->worldMatrix.scale(1, 1, dist);// todo: remove magic 0.55
 				leftHoveredNode = getObjectRoot(pick.hitNode);
 
 				// Pick a node if the trigger is down
@@ -227,13 +227,13 @@ void EditorVrController::update(float dt)
 
 					//calculate offset
 					//leftNodeOffset = leftPickedNode->getGlobalTransform() * leftHandRenderItem->worldMatrix.inverted();
-					leftNodeOffset = leftBeamMatrix.inverted() * leftPickedNode->getGlobalTransform();
+					leftNodeOffset = leftHandRenderItem->worldMatrix.inverted() * leftPickedNode->getGlobalTransform();
 				}
 
 			}
 			else
 			{
-				//leftBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f));
+				leftBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f));
 				leftHoveredNode.clear();
 			}
 
@@ -254,7 +254,7 @@ void EditorVrController::update(float dt)
 			// update picked node
 			if (!!leftPickedNode) {
 				// calculate the global position
-				auto nodeGlobal = leftBeamMatrix * leftNodeOffset;
+				auto nodeGlobal = leftHandRenderItem->worldMatrix * leftNodeOffset;
 
 				// calculate position relative to parent
 				auto localTransform = leftPickedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
@@ -277,33 +277,14 @@ void EditorVrController::update(float dt)
 				// leftPickedNode->update(0);// bad!
 				// it wil be updated a frame later, no need to stress over this
 			}
-			/*
-			float pickDist = 1000;
-			if (rayCastToScene(leftBeamRenderItem->worldMatrix, pick)) {
-				pickDist = qSqrt(pick.distanceFromStartSqrd);
-				//leftBeamRenderItem->worldMatrix.scale(1, 1, (pickDist));// todo: remove magic 0.55
+
+			if (rayCastToScene(rightBeamRenderItem->worldMatrix, pick)) {
+				auto dist = qSqrt(pick.distanceFromStartSqrd);
+				rightBeamRenderItem->worldMatrix.scale(1, 1, (dist ));// todo: remove magic 0.55
 			}
-			*/
 
 			scene->geometryRenderList->add(leftHandRenderItem);
-			//scene->geometryRenderList->add(leftBeamRenderItem);
-
-			// beam
-			QMatrix4x4 beamMatrix = getBeamOffset();
-			beamMatrix.scale(1.0f, 1.0f, pickDist);
-			scene->geometryRenderList->submitMesh(beamMesh, beamMaterial, leftHandMatrix * beamMatrix);
-
-			// first sphere
-			QMatrix4x4 tip;
-			tip.translate(0, 0, -pickDist);
-			tip.scale(0.03f);
-			scene->geometryRenderList->submitMesh(sphereMesh, beamMaterial, leftBeamMatrix * tip);
-
-			// end sphere
-			QMatrix4x4 end;
-			end.translate(0, 0, 0);
-			end.scale(0.03f);
-			scene->geometryRenderList->submitMesh(sphereMesh, beamMaterial, leftBeamMatrix * end);
+			scene->geometryRenderList->add(leftBeamRenderItem);
 		}
 		else
 		{
@@ -311,12 +292,15 @@ void EditorVrController::update(float dt)
 			scene->geometryRenderList->add(leftHandRenderItem);
 		}
     }
+	*/
 
-
+	leftHand->update(dt);
+	rightHand->update(dt);
+	/*
 	// RIGHT CONTROLLER
 	auto rightTouch = vrDevice->getTouchController(1);
 	if (rightTouch->isTracking()) {
-		
+
 		// Submit items to renderer
 		auto device = iris::VrManager::getDefaultDevice();
 
@@ -332,21 +316,18 @@ void EditorVrController::update(float dt)
 		world.translate(device->getHandPosition(1));
 		world.rotate(device->getHandRotation(1));
 		//world.scale(0.55f);
-		auto rightHandMatrix = calculateHandMatrix(device, 1);
-		rightHandRenderItem->worldMatrix = rightHandMatrix;
+		rightHandRenderItem->worldMatrix = camera->globalTransform * world;
+		rightBeamRenderItem->worldMatrix = rightHandRenderItem->worldMatrix;
 
-		auto rightBeamMatrix = rightHandMatrix * getBeamOffset();
-		rightBeamRenderItem->worldMatrix = rightBeamMatrix;
-
-		float pickDist = 1000.0f;
-
-		if (UiManager::sceneMode == SceneMode::EditMode) {
+		//if (UiManager::sceneMode == SceneMode::EditMode)
+		{
 			// Handle picking and movement of picked objects
 			iris::PickingResult pick;
-			if (rayCastToScene(rightBeamMatrix, pick)) {
-				pickDist = qSqrt(pick.distanceFromStartSqrd);
+			if (rayCastToScene(rightHandRenderItem->worldMatrix, pick)) {
+				auto dist = qSqrt(pick.distanceFromStartSqrd);
 				//qDebug() << "hit at dist: " << dist;
-				//rightBeamRenderItem->worldMatrix.scale(1, 1, pickDist /* * (1.0f / 0.55f )*/);// todo: remove magic 0.55
+				rightBeamRenderItem->worldMatrix.scale(1, 1, dist);// todo: remove magic 0.55
+				rightBeamRenderItem->worldMatrix.scale(1, 1, dist * (1.0f / 0.55f ));// todo: remove magic 0.55
 				rightHoveredNode = getObjectRoot(pick.hitNode);
 				// Pick a node if the trigger is down
 				if (rightTouch->getIndexTrigger() > 0.1f && !rightPickedNode)
@@ -357,14 +338,81 @@ void EditorVrController::update(float dt)
 					rightScale = rightPickedNode->getLocalScale();
 
 					//calculate offset
-					//leftNodeOffset = leftPickedNode->getGlobalTransform() * leftHandRenderItem->worldMatrix.inverted();
-					rightNodeOffset = rightBeamMatrix.inverted() * rightPickedNode->getGlobalTransform();
+					rightNodeOffset = rightHandRenderItem->worldMatrix.inverted() * rightPickedNode->getGlobalTransform();
+
+					// should accept hit point
+					{
+						auto pickedNode = rightPickedNode;
+
+						if (pickedNode->isPhysicsBody && UiManager::isSimulationRunning) {
+							// Fetch our rigid body from the list stored in the world by guid
+							activeRigidBody = scene->getPhysicsEnvironment()->hashBodies.value(pickedNode->getGUID());
+							// prevent the picked object from falling asleep
+							activeRigidBody->setActivationState(DISABLE_DEACTIVATION);
+							// get the hit position relative to the body we hit 
+							// constraints MUST be defined in local space coords
+							btVector3 localPivot = activeRigidBody->getCenterOfMassTransform().inverse()
+								* iris::PhysicsHelper::btVector3FromQVector3D(pick.hitPoint);
+
+							// create a transform for the pivot point
+							btTransform pivot;
+							pivot.setIdentity();
+							pivot.setOrigin(localPivot);
+
+							// create our constraint object
+							auto dof6 = new btGeneric6DofConstraint(*activeRigidBody, pivot, true);
+							bool bLimitAngularMotion = true;
+							if (bLimitAngularMotion) {
+								dof6->setAngularLowerLimit(btVector3(0, 0, 0));
+								dof6->setAngularUpperLimit(btVector3(0, 0, 0));
+							}
+
+							// add the constraint to the world
+							scene->getPhysicsEnvironment()->addConstraintToWorld(dof6, false);
+
+							// store a pointer to our constraint
+							m_pickedConstraint = dof6;
+
+							// define the 'strength' of our constraint (each axis)
+							float cfm = 0.9f;
+							dof6->setParam(BT_CONSTRAINT_STOP_CFM, cfm, 0);
+							dof6->setParam(BT_CONSTRAINT_STOP_CFM, cfm, 1);
+							dof6->setParam(BT_CONSTRAINT_STOP_CFM, cfm, 2);
+							dof6->setParam(BT_CONSTRAINT_STOP_CFM, cfm, 3);
+							dof6->setParam(BT_CONSTRAINT_STOP_CFM, cfm, 4);
+							dof6->setParam(BT_CONSTRAINT_STOP_CFM, cfm, 5);
+
+							// define the 'error reduction' of our constraint (each axis)
+							float erp = 0.5f;
+							dof6->setParam(BT_CONSTRAINT_STOP_ERP, erp, 0);
+							dof6->setParam(BT_CONSTRAINT_STOP_ERP, erp, 1);
+							dof6->setParam(BT_CONSTRAINT_STOP_ERP, erp, 2);
+							dof6->setParam(BT_CONSTRAINT_STOP_ERP, erp, 3);
+							dof6->setParam(BT_CONSTRAINT_STOP_ERP, erp, 4);
+							dof6->setParam(BT_CONSTRAINT_STOP_ERP, erp, 5);
+						}
+
+						// save this data for future reference
+						//btVector3 rayFromWorld = iris::PhysicsHelper::btVector3FromQVector3D(editorCam->getGlobalPosition());
+						//btVector3 rayToWorld = iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(point) * 1024);
+
+						auto segStart = rightHandRenderItem->worldMatrix * QVector3D(0, 0, 0);
+						auto segEnd = rightHandRenderItem->worldMatrix * QVector3D(0, 0, -100);
+						btVector3 rayFromWorld = iris::PhysicsHelper::btVector3FromQVector3D(segStart);
+						btVector3 rayToWorld = iris::PhysicsHelper::btVector3FromQVector3D(segEnd);
+
+						m_oldPickingPos = rayToWorld;
+						m_hitPos = iris::PhysicsHelper::btVector3FromQVector3D(pick.hitPoint);
+						m_oldPickingDist = (iris::PhysicsHelper::btVector3FromQVector3D(pick.hitPoint) - rayFromWorld).length();
+
+						rightHandPickOffset = rightHandRenderItem->worldMatrix.inverted() * pick.hitPoint;
+					}
 				}
 
 			}
 			else
 			{
-				//rightBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f));
+				rightBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f));
 				rightHoveredNode.clear();
 			}
 
@@ -381,80 +429,75 @@ void EditorVrController::update(float dt)
 				// release node
 				rightPickedNode.clear();
 				rightNodeOffset.setToIdentity(); // why bother?
+
+				// clear physics
+				if (m_pickedConstraint) {
+					activeRigidBody->forceActivationState(m_savedState);
+					activeRigidBody->activate();
+					scene->getPhysicsEnvironment()->removeConstraintFromWorld(m_pickedConstraint);
+					delete m_pickedConstraint;
+					m_pickedConstraint = 0;
+					activeRigidBody = 0;
+				}
 			}
 
 			// update picked node
 			if (!!rightPickedNode) {
-				// calculate the global position
-				auto nodeGlobal = rightBeamMatrix * rightNodeOffset;
 
-				// calculate position relative to parent
-				auto localTransform = rightPickedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
+				// LAZLO's CODE
+				if (rightPickedNode->isPhysicsBody) {
+					if (activeRigidBody && m_pickedConstraint) {
+						btGeneric6DofConstraint* pickCon = static_cast<btGeneric6DofConstraint*>(m_pickedConstraint);
+						if (pickCon)
+						{
+							QVector3D newPivotVec = rightHandRenderItem->worldMatrix * rightHandPickOffset;
+							btVector3 newPivot = iris::PhysicsHelper::btVector3FromQVector3D(newPivotVec);
+							pickCon->getFrameOffsetA().setOrigin(newPivot);
+						}
+					}
+				}
+				else {
+					// calculate the global position
+					auto nodeGlobal = rightHandRenderItem->worldMatrix * rightNodeOffset;
 
-				QVector3D pos, scale;
-				QQuaternion rot;
-				// decompose matrix to assign pos, rot and scale
-				iris::MathHelper::decomposeMatrix(localTransform,
-					pos,
-					rot,
-					scale);
+					// calculate position relative to parent
+					auto localTransform = rightPickedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
 
-				rightPickedNode->setLocalPos(pos);
-				rot.normalize();
-				rightPickedNode->setLocalRot(rot);
-				rightPickedNode->setLocalScale(scale);
+					QVector3D pos, scale;
+					QQuaternion rot;
+					// decompose matrix to assign pos, rot and scale
+					iris::MathHelper::decomposeMatrix(localTransform,
+						pos,
+						rot,
+						scale);
+
+					rightPickedNode->setLocalPos(pos);
+					rot.normalize();
+					rightPickedNode->setLocalRot(rot);
+					rightPickedNode->setLocalScale(scale);
 
 
-				// @todo: force recalculatioin of global transform
-				// leftPickedNode->update(0);// bad!
-				// it wil be updated a frame later, no need to stress over this
+					// @todo: force recalculatioin of global transform
+					// leftPickedNode->update(0);// bad!
+					// it wil be updated a frame later, no need to stress over this
+				}
 			}
-			/*
-			if (rayCastToScene(rightBeamRenderItem->worldMatrix, pick)) {
-				auto dist = qSqrt(pick.distanceFromStartSqrd);
-				rightBeamRenderItem->worldMatrix.scale(1, 1, (dist);// todo: remove magic 0.55
-			}
-			*/
 
-			//scene->geometryRenderList->add(rightBeamRenderItem);
-			scene->geometryRenderList->add(rightHandRenderItem);
-
-			// beam
-			QMatrix4x4 beamMatrix = getBeamOffset();
-			beamMatrix.scale(1.0f, 1.0f, pickDist);
-			scene->geometryRenderList->submitMesh(beamMesh, beamMaterial, rightHandMatrix * beamMatrix);
-
-			// first sphere
-			QMatrix4x4 tip;
-			tip.translate(0, 0, -pickDist);
-			tip.scale(0.03f);
-			scene->geometryRenderList->submitMesh(sphereMesh, beamMaterial, rightBeamMatrix * tip);
-
-			// end sphere
-			QMatrix4x4 end;
-			end.translate(0, 0, 0);
-			end.scale(0.03f);
-			scene->geometryRenderList->submitMesh(sphereMesh, beamMaterial, rightBeamMatrix * end);
-		}
-		/*
-		auto rightTouch = vrDevice->getTouchController(1);
-		if (rightTouch->isTracking()) {
-			scene->geometryRenderList->add(leftBeamRenderItem);
 			scene->geometryRenderList->add(rightBeamRenderItem);
-		}
-		*/
-
-		else {
-			// submit only the right hand in render mode
 			scene->geometryRenderList->add(rightHandRenderItem);
 		}
-	}
-	
 
+	}
+	*/
 	submitHoveredNodes();
 }
 
-bool EditorVrController::rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResult& result)
+void PlayerVrController::postUpdate(float dt)
+{
+
+}
+
+bool PlayerVrController::rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResult& result)
 {
     QList<iris::PickingResult> hits;
 
@@ -473,7 +516,7 @@ bool EditorVrController::rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResu
     return true;
 }
 
-iris::SceneNodePtr EditorVrController::getObjectRoot(iris::SceneNodePtr node)
+iris::SceneNodePtr PlayerVrController::getObjectRoot(iris::SceneNodePtr node)
 {
 	if (node->isAttached() && scene->getRootNode() != node->getParent())
 		return getObjectRoot(node->getParent());
@@ -481,7 +524,7 @@ iris::SceneNodePtr EditorVrController::getObjectRoot(iris::SceneNodePtr node)
 	return node;
 }
 
-void EditorVrController::submitHoveredNodes()
+void PlayerVrController::submitHoveredNodes()
 {
 	// only do this in edit mode
 	if (UiManager::sceneMode == SceneMode::EditMode) {
@@ -495,7 +538,7 @@ void EditorVrController::submitHoveredNodes()
 	}
 }
 
-void EditorVrController::submitHoveredNode(iris::SceneNodePtr node)
+void PlayerVrController::submitHoveredNode(iris::SceneNodePtr node)
 {
 	if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
 		auto mesh = node.staticCast<iris::MeshNode>()->getMesh();
@@ -508,7 +551,7 @@ void EditorVrController::submitHoveredNode(iris::SceneNodePtr node)
 	}
 }
 
-iris::GrabNodePtr EditorVrController::findGrabNode(iris::SceneNodePtr node)
+iris::GrabNodePtr PlayerVrController::findGrabNode(iris::SceneNodePtr node)
 {
 	if (node->sceneNodeType == iris::SceneNodeType::Grab)
 		return node.staticCast<iris::GrabNode>();
@@ -521,29 +564,4 @@ iris::GrabNodePtr EditorVrController::findGrabNode(iris::SceneNodePtr node)
 
 	// none found
 	return iris::GrabNodePtr();
-}
-
-QMatrix4x4 EditorVrController::calculateHandMatrix(iris::VrDevice* device, int handIndex)
-{
-	// cameras arent parented to anything
-	// so local transform == global transform
-	auto trans = camera->getLocalTransform();
-	trans.scale(camera->getVrViewScale());
-	auto globalPos = trans * device->getHandPosition(handIndex);
-	auto globalRot = camera->getLocalRot() * device->getHandRotation(handIndex);
-
-	QMatrix4x4 world;
-	world.setToIdentity();
-	world.translate(globalPos);
-	world.rotate(globalRot);
-	return world;
-}
-
-QMatrix4x4 EditorVrController::getBeamOffset()
-{
-	QMatrix4x4 offset;
-	offset.setToIdentity();
-	offset.translate(QVector3D(0,0,-0.15f));
-
-	return offset;
 }

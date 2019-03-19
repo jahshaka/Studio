@@ -51,7 +51,7 @@ public:
 	}
 
     QString assetDirectory = Globals::project->getProjectFolder();
-    bool useAlternativeLocation = false;
+    bool useAlternativeLocation;
     void setBaseDirectory(const QString &location) {
         assetDirectory = location;
         useAlternativeLocation = true;

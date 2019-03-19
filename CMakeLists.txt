@@ -42,6 +42,8 @@ set(SRCS
     src/dialogs/aboutdialog.cpp 
     src/dialogs/preferences/worldsettings.cpp 
     src/dialogs/preferences/worldsettingswidget.cpp 
+	src/dialogs/customdialog.cpp
+	src/dialogs/custompopup.cpp
     src/dialogs/loadmeshdialog.cpp 
     src/widgets/animationwidget.cpp 
     src/widgets/keyframelabelwidget.cpp 
@@ -148,6 +150,12 @@ set(SRCS
 	src/helpers/tooltip.cpp
 	src/subclass/switch.cpp
 	src/editor/handgizmo.cpp
+	# player
+	src/player/playerwidget.cpp
+	src/player/playerview.cpp
+	src/player/playervrcontroller.cpp
+	src/player/playermousecontroller.cpp
+	src/player/hand.cpp
 )
 
 set(HEADERS
@@ -159,6 +167,9 @@ set(HEADERS
     src/dialogs/aboutdialog.h 
     src/dialogs/preferences/worldsettings.h 
     src/dialogs/preferences/worldsettingswidget.h 
+	src/dialogs/customdialog.h
+	src/dialogs/custompopup.h
+
     src/helpers/collisionhelper.h 
     src/dialogs/infodialog.h 
     src/dialogs/loadmeshdialog.h 
@@ -283,6 +294,14 @@ set(HEADERS
 	src/helpers/tooltip.h
 	src/editor/handgizmo.h
 
+	# player
+	src/subclass/switch.h
+	src/player/playerwidget.h
+	src/player/playerview.h
+	src/player/sceneplayer.h
+	src/player/playervrcontroller.h
+	src/player/playermousecontroller.h
+	src/player/hand.h
 )
 
 # Todo - trim these down to nothing eventually

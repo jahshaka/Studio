@@ -38,6 +38,7 @@ protected slots:
     void onVisibilityChanged(bool);
     void onMassChanged(float);
     void onMarginChanged(float);
+    void onFrictionChanged(float);
     void onBouncinessChanged(float);
 
 private:
@@ -47,6 +48,7 @@ private:
 
     CheckBoxWidget* isVisible;
     HFloatSliderWidget *massValue;
+    HFloatSliderWidget *frictionValue;
     HFloatSliderWidget *bouncinessValue;
     HFloatSliderWidget *marginValue;
     ComboBoxWidget *physicsTypeSelector;

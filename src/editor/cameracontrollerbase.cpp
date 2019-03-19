@@ -19,7 +19,7 @@ CameraControllerBase::CameraControllerBase()
 	settings = SettingsManager::getDefaultManager();
 }
 
-void CameraControllerBase::setCamera(QSharedPointer<iris::CameraNode>  cam)
+void CameraControllerBase::setCamera(iris::CameraNodePtr cam)
 {
     this->camera = cam;
 }

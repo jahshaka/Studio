@@ -45,6 +45,7 @@ For more information see the LICENSE file
 #include "core/guidmanager.h"
 #include "core/thumbnailmanager.h"
 #include "dialogs/donatedialog.h"
+#include "dialogs/custompopup.h"
 #include "core/assethelper.h"
 #include "core/scenenodehelper.h"
 
@@ -138,6 +139,7 @@ For more information see the LICENSE file
 #include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
 
 #include "shadergraph/shadergraphmainwindow.h"
+#include "../src/player/playerwidget.h"
 
 enum class VRButtonMode : int
 {
@@ -167,6 +169,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/jahshaka.log");
 #endif
 
+	currentSpace = WindowSpaces::DESKTOP;
 	originalTitle = windowTitle();
 
 	setupProjectDB();
@@ -188,6 +191,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupDockWidgets();
     setupShortcuts();
 	setupUndoRedo();
+	updateTopMenuStates(currentSpace);
 
 	restoreGeometry(settings->getValue("geometry", "").toByteArray());
 	restoreState(settings->getValue("windowState", "").toByteArray());
@@ -197,7 +201,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 void MainWindow::grabOpenGLContextHack()
 {
-    switchSpace(WindowSpaces::PLAYER);
+    //switchSpace(WindowSpaces::PLAYER);
 }
 
 void MainWindow::goToDesktop()
@@ -382,32 +386,6 @@ void MainWindow::initializeGraphics(SceneViewWidget *widget, QOpenGLFunctions_3_
     Q_UNUSED(gl);
     postProcessWidget->setPostProcessMgr(widget->getRenderer()->getPostProcessManager());
     setupVrUi();
-}
-
-void MainWindow::initializePhysicsWorld()
-{
-    // add bodies to world first
-    for (const auto &node : scene->getRootNode()->children) {
-        if (node->isPhysicsBody) {
-            auto body = iris::PhysicsHelper::createPhysicsBody(node, node->physicsProperty);
-            if (body) sceneView->addBodyToWorld(body, node);
-        }
-
-		if (node.staticCast<iris::ViewerNode>()->isActiveCharacterController()) {
-			scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(node);
-		}
-    }
-
-    // now add constraints
-    // TODO - avoid looping like this, get constraint list -- list and then use that
-    // TODO - handle children of children?
-    for (const auto &node : scene->getRootNode()->children) {
-        if (node->isPhysicsBody) {
-            for (const auto &constraint : node->physicsProperty.constraints) {
-                sceneView->addConstraintToWorldFromProperty(constraint);
-            }
-        }
-    }
 }
 
 void MainWindow::setSettingsManager(SettingsManager* settings)
@@ -621,12 +599,18 @@ void MainWindow::deselectViewports()
 
 void MainWindow::switchSpace(WindowSpaces space)
 {
-	const QString disabledMenu   = "color: #444; border-color: #111";
-	const QString selectedMenu   = "border-color: #3498db";
-	const QString unselectedMenu = "border-color: #111";
+	if (currentSpace == space)
+		return;
 
-	assets_menu->setStyleSheet(unselectedMenu);
-	effect_menu->setStyleSheet(unselectedMenu);
+	// properly shutdown previous space
+	switch (currentSpace) {
+	case WindowSpaces::PLAYER:
+		playerView->end();
+		break;
+	case WindowSpaces::EDITOR:
+		sceneView->end();
+		break;
+	}
 
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
@@ -640,28 +624,7 @@ void MainWindow::switchSpace(WindowSpaces space)
 			ui->stackedWidget->setCurrentIndex(0);
 
             toggleWidgets(false);
-
-            worlds_menu->setStyleSheet(selectedMenu);
             ui->actionClose->setDisabled(true);
-
-            if (UiManager::isSceneOpen) {
-                editor_menu->setStyleSheet(unselectedMenu);
-                editor_menu->setDisabled(false);
-                player_menu->setStyleSheet(unselectedMenu);
-                player_menu->setDisabled(false);
-                //ui->assets_menu->setStyleSheet(unselectedMenu);
-                //ui->assets_menu->setDisabled(false);
-            } else {
-                editor_menu->setStyleSheet(disabledMenu);
-                editor_menu->setDisabled(true);
-                editor_menu->setCursor(Qt::ArrowCursor);
-                player_menu->setStyleSheet(disabledMenu);
-                player_menu->setDisabled(true);
-                player_menu->setCursor(Qt::ArrowCursor);
-                //ui->assets_menu->setStyleSheet(disabledMenu);
-                //ui->assets_menu->setDisabled(true);
-                //ui->assets_menu->setCursor(Qt::ArrowCursor);
-            }
             break;
         }
 
@@ -675,18 +638,6 @@ void MainWindow::switchSpace(WindowSpaces space)
 			animationDock->setVisible(widgetStates[(int)Widget::TIMELINE]);
 			playerControls->setVisible(false);
 
-            toolBar->setVisible(true);
-            worlds_menu->setStyleSheet(unselectedMenu);
-            editor_menu->setStyleSheet(selectedMenu);
-            editor_menu->setDisabled(false);
-            editor_menu->setCursor(Qt::PointingHandCursor);
-            player_menu->setStyleSheet(unselectedMenu);
-            player_menu->setDisabled(false);
-            player_menu->setCursor(Qt::PointingHandCursor);
-            //ui->assets_menu->setStyleSheet(unselectedMenu);
-            //ui->assets_menu->setDisabled(false);
-            //ui->assets_menu->setCursor(Qt::PointingHandCursor);
-
 			this->sceneView->setWindowSpace(space);
             playSceneBtn->show();
             this->enterEditMode();
@@ -694,28 +645,21 @@ void MainWindow::switchSpace(WindowSpaces space)
 
             assetWidget->refresh();
 			isSceneOpen = true;
+
+			sceneView->begin();
             break;
         }
 
         case WindowSpaces::PLAYER: {
-            ui->stackedWidget->setCurrentIndex(1);
+            ui->stackedWidget->setCurrentIndex(4);
             toggleWidgets(false);
             toolBar->setVisible(false);
-            worlds_menu->setStyleSheet(unselectedMenu);
-            editor_menu->setStyleSheet(unselectedMenu);
-            editor_menu->setDisabled(false);
-            editor_menu->setCursor(Qt::PointingHandCursor);
-            player_menu->setStyleSheet(selectedMenu);
-            player_menu->setDisabled(false);
-            player_menu->setCursor(Qt::PointingHandCursor);
-            //ui->assets_menu->setStyleSheet(unselectedMenu);
-            //ui->assets_menu->setDisabled(false);
-            //ui->assets_menu->setCursor(Qt::PointingHandCursor);
 
 			this->sceneView->setWindowSpace(space);
             UiManager::sceneMode = SceneMode::PlayMode;
             playSceneBtn->hide();
             this->enterPlayMode();
+			playerView->begin();
             break;
         }
 
@@ -726,16 +670,8 @@ void MainWindow::switchSpace(WindowSpaces space)
     		toggleWidgets(false);
     		toolBar->setVisible(false);
 			if (UiManager::isSceneOpen) {
-				worlds_menu->setStyleSheet(unselectedMenu);
-				editor_menu->setStyleSheet(unselectedMenu);
-				player_menu->setStyleSheet(unselectedMenu);
-				//ui->assets_menu->setDisabled(false);
-				//ui->assets_menu->setCursor(Qt::PointingHandCursor);
 				playSceneBtn->hide();
 			}
-
-			worlds_menu->setStyleSheet(unselectedMenu);
-			assets_menu->setStyleSheet(selectedMenu);
     		
 			break;
     	}
@@ -745,16 +681,6 @@ void MainWindow::switchSpace(WindowSpaces space)
 			ui->stackedWidget->currentWidget()->setFocus();
 
 			toolBar->setVisible(false);
-			if (UiManager::isSceneOpen) {
-				worlds_menu->setStyleSheet(unselectedMenu);
-				editor_menu->setStyleSheet(unselectedMenu);
-				player_menu->setStyleSheet(unselectedMenu);
-				assets_menu->setStyleSheet(unselectedMenu);
-			}
-
-			worlds_menu->setStyleSheet(unselectedMenu);
-			assets_menu->setStyleSheet(unselectedMenu);
-			effect_menu->setStyleSheet(selectedMenu);
 
 			shaderGraph->refreshShaderGraph();
 
@@ -763,6 +689,48 @@ void MainWindow::switchSpace(WindowSpaces space)
 
         default: break;
     }
+
+	updateTopMenuStates(space);
+}
+
+void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
+{
+	const QString disabledMenu = "color: #444; border-color: #111";
+	const QString selectedMenu = "border-color: #3498db";
+	const QString unselectedMenu = "border-color: #111";
+
+	if (activeSpace == WindowSpaces::EDITOR)
+		toolBar->setVisible(true);
+	else
+		toolBar->setVisible(false);
+
+	worlds_menu->setStyleSheet(activeSpace==WindowSpaces::DESKTOP? selectedMenu:unselectedMenu);
+	worlds_menu->setCursor(Qt::PointingHandCursor);
+
+	assets_menu->setStyleSheet(activeSpace == WindowSpaces::ASSETS ? selectedMenu : unselectedMenu);
+	assets_menu->setCursor(Qt::PointingHandCursor);
+
+	effect_menu->setStyleSheet(activeSpace == WindowSpaces::EFFECT ? selectedMenu : unselectedMenu);
+	effect_menu->setCursor(Qt::PointingHandCursor);
+
+	editor_menu->setStyleSheet(activeSpace == WindowSpaces::EDITOR ? selectedMenu : unselectedMenu);
+	player_menu->setStyleSheet(activeSpace == WindowSpaces::PLAYER ? selectedMenu : unselectedMenu);
+
+	if (UiManager::isSceneOpen) {
+		editor_menu->setEnabled(true);
+		editor_menu->setCursor(Qt::PointingHandCursor);
+		player_menu->setEnabled(true);
+		player_menu->setCursor(Qt::PointingHandCursor);
+	}
+	else {
+		editor_menu->setEnabled(false);
+		editor_menu->setCursor(Qt::ArrowCursor);
+		player_menu->setEnabled(false);
+		player_menu->setCursor(Qt::ArrowCursor);
+		editor_menu->setStyleSheet(disabledMenu);
+		player_menu->setStyleSheet(disabledMenu);
+
+	}
 }
 
 void MainWindow::saveScene(const QString &filename, const QString &projectPath)
@@ -806,7 +774,15 @@ void MainWindow::saveScene()
 
 void MainWindow::openProject(bool playMode)
 {
-    removeScene();
+	//UiManager::playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+	//playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+	// switch to editor so sceneView can initialize
+	// if playMode == true then it'll switch to the player afterwards
+	// none of this switching will show during the loading process (nick)
+	switchSpace(WindowSpaces::EDITOR);
+    
+	if(!!scene)
+		removeScene();
     sceneView->makeCurrent();
 
     std::unique_ptr<SceneReader> reader(new SceneReader);
@@ -815,9 +791,10 @@ void MainWindow::openProject(bool playMode)
     EditorData* editorData = Q_NULLPTR;
     UiManager::updateWindowTitle();
 
-    auto postMan = sceneView->getRenderer()->getPostProcessManager();
-    postMan->clearPostProcesses();
+    //auto postMan = sceneView->getRenderer()->getPostProcessManager();
+    //postMan->clearPostProcesses();
 
+	auto postMan = iris::PostProcessManagerPtr();
     auto scene = reader->readScene(Globals::project->getProjectFolder(),
                                    db->getSceneBlobGlobal(),
                                    postMan,
@@ -836,6 +813,7 @@ void MainWindow::openProject(bool playMode)
     if (editorData != Q_NULLPTR) {
         sceneView->setEditorData(editorData);
         wireCheckAction->setChecked(editorData->showLightWires);
+		physicsCheckAction->setChecked(editorData->showDebugDrawFlags);
     }
 
     assetWidget->trigger();
@@ -847,9 +825,11 @@ void MainWindow::openProject(bool playMode)
         onPlaySceneButton();
     }
 
-    UiManager::playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+    
 
 	undoStackCount = 0;
+	playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+	updateTopMenuStates(UiManager::playMode ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
 }
 
 void MainWindow::closeProject()
@@ -1070,6 +1050,7 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 {
     this->scene = scene;
     this->sceneView->setScene(scene);
+	this->playerView->setScene(scene);
     this->sceneHierarchyWidget->setScene(scene);
 
     // interim...
@@ -1495,12 +1476,14 @@ void MainWindow::addViewer()
     node->setName("Viewer");
     addNodeToScene(node);
 
+	// Set all other controllers to false
 	for (auto node : scene->getRootNode()->children) {
 		if (node->getSceneNodeType() == iris::SceneNodeType::Viewer) {
 			node.staticCast<iris::ViewerNode>()->setActiveCharacterController(false);
 		}
 	}
 
+	node->setActiveCharacterController(true);
 	scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(node);
 }
 
@@ -2350,6 +2333,13 @@ void MainWindow::setupViewPort()
 	minerBtn->setStyleSheet("background:transparent;");
 	minerBtn->setCursor(Qt::PointingHandCursor);
 	connect(minerBtn, &QPushButton::pressed, [this]() {
+		auto popup = new CustomPopup(QCursor::pos());
+		popup->addConfirmAndCancelButtons("visit","close");
+		popup->addMessage("The miner has been moved out of the application, press visit to download");
+		popup->addTitle("Attention");
+		popup->exec();
+
+		if (popup->result() == QDialog::Accepted)  QDesktopServices::openUrl(QUrl("https://www.jahshaka.com/download/"));
 	});
 
 	help = new QPushButton;
@@ -2394,6 +2384,7 @@ void MainWindow::setupViewPort()
 	QHBoxLayout *bl = new QHBoxLayout;
 	buttons->setLayout(bl);
 	bl->setSpacing(20);
+	bl->addWidget(minerBtn);
 	bl->addWidget(help);
 	bl->addWidget(prefs);
 
@@ -2446,7 +2437,7 @@ void MainWindow::setupViewPort()
     connect(wireCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleLightWires(bool)));
     wireFramesMenu->addAction(wireCheckAction);
 
-    physicsCheckAction = new QAction(QIcon(), "Physics Debug Info");
+    physicsCheckAction = new QAction(QIcon(), "Physics Debug Overlay");
     physicsCheckAction->setCheckable(true);
     connect(physicsCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleDebugDrawer(bool)));
     wireFramesMenu->addAction(physicsCheckAction);
@@ -2480,7 +2471,9 @@ void MainWindow::setupViewPort()
     controlBarLayout->addStretch();
     controlBarLayout->addWidget(playSceneBtn);
     controlBarLayout->addSpacing(2);
+#ifdef QT_DEBUG
 	controlBarLayout->addWidget(playSimBtn);
+#endif // QT_DEBUG
 
     controlBar->setLayout(controlBarLayout);
     controlBar->setStyleSheet("#controlBar {  background: #1E1E1E; border-bottom: 1px solid black; }");
@@ -2552,7 +2545,6 @@ void MainWindow::setupViewPort()
         QVariantMap options;
 
 		if (UiManager::isSimulationRunning) {
-            initializePhysicsWorld();
 			UiManager::startPhysicsSimulation();
 
             playSimBtn->setText("Stop Simulation");
@@ -2565,15 +2557,6 @@ void MainWindow::setupViewPort()
 		else {
             UiManager::restartPhysicsSimulation();
 
-            if (!scene->getPhysicsEnvironment()->nodeTransforms.isEmpty()) {
-                for (const auto &node : scene->getRootNode()->children) {
-                    if (node->isPhysicsBody) {
-                        node->setGlobalTransform(scene->getPhysicsEnvironment()->nodeTransforms.value(node->getGUID()));
-                    }
-                }
-            }
-
-			//UiManager::stopPhysicsSimulation();
             playSimBtn->setText("Simulate Physics");
 			playSimBtn->setToolTip("Simulate physics only");
 
@@ -2608,7 +2591,10 @@ void MainWindow::setupViewPort()
     Globals::sceneViewWidget = sceneView;
     UiManager::setSceneViewWidget(sceneView);
 
+	playerView = new PlayerWidget(viewPort);
+
     wireCheckAction->setChecked(sceneView->getShowLightWires());
+	physicsCheckAction->setChecked(sceneView->getShowDebugDrawFlags());
 
     QGridLayout* layout = new QGridLayout;
     layout->addWidget(sceneView);
@@ -2656,11 +2642,13 @@ void MainWindow::setupDesktop()
 	_assetView->installEventFilter(this);
 
 	ui->stackedWidget->addWidget(pmContainer);
+	
 	ui->stackedWidget->addWidget(viewPort);
 	ui->stackedWidget->addWidget(_assetView);
 	//ui->stackedWidget->addWidget(new QWidget(this));
 	shaderGraph = new shadergraph::MainWindow(this,db);
 	ui->stackedWidget->addWidget(shaderGraph);
+	ui->stackedWidget->addWidget(playerView);
 
 	connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));
 	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
@@ -3043,7 +3031,7 @@ void MainWindow::toggleLightWires(bool state)
 
 void MainWindow::toggleDebugDrawer(bool state)
 {
-    sceneView->toggleDebugDrawFlags(state);
+	sceneView->setShowDebugDrawFlags(state);
 }
 
 void MainWindow::toggleWidgets(bool state)
@@ -3091,6 +3079,9 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 {
     if (UiManager::isSceneOpen) closeProject();
 
+	// this is to ensure the editor's context is created
+	switchSpace(WindowSpaces::EDITOR);
+
     newScene();
     UiManager::isSceneOpen = true;
     ui->actionClose->setDisabled(false);
@@ -3101,8 +3092,7 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
     UiManager::clearUndoStack();
     UiManager::updateWindowTitle();
-
-    switchSpace(WindowSpaces::EDITOR);
+	updateTopMenuStates(WindowSpaces::EDITOR);
 }
 
 MainWindow::~MainWindow()
@@ -3151,12 +3141,18 @@ void MainWindow::scaleGizmo()
 
 void MainWindow::onPlaySceneButton()
 {
+	UiManager::isSimulationRunning = !UiManager::isSimulationRunning;
+
     if (UiManager::isScenePlaying) {
         enterEditMode();
+		UiManager::restartPhysicsSimulation();
     }
     else {
         enterPlayMode();
+		UiManager::startPhysicsSimulation();
     }
+
+	if (!!activeSceneNode) sceneNodeSelected(activeSceneNode);
 }
 
 void MainWindow::enterEditMode()
