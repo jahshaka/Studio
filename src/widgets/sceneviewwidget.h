@@ -177,8 +177,6 @@ public:
     void removeBodyFromWorld(btRigidBody *body);
     void removeBodyFromWorld(const QString &guid);
 
-    void addConstraintToWorldFromProperty(const iris::ConstraintProperty &prop);
-
     void setGizmoLoc();
     void setGizmoRot();
     void setGizmoScale();
@@ -229,6 +227,8 @@ public:
     QImage takeScreenshot(int width=1920, int height=1080);
     bool getShowLightWires() const;
     void setShowLightWires(bool value);
+	bool getShowDebugDrawFlags() const;
+	void setShowDebugDrawFlags(bool value);
     void toggleDebugDrawFlags(bool value);
 
 	void startPhysicsSimulation();
@@ -242,6 +242,9 @@ public:
 
     void cleanup();
 	void setShowPerspeciveLabel(bool val);
+
+	void begin();
+	void end();
 	
 protected:
     void initializeGL();
@@ -323,6 +326,7 @@ private:
     iris::MaterialPtr lineMat;
 
     bool showLightWires;
+	bool showDebugDrawFlags;
 
     void initLightAssets();
     iris::MeshPtr createDirLightMesh(float radius = 1.0);

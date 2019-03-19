@@ -57,13 +57,15 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       EditorData **editorData)
 {
     dir = projectPath;
+	useAlternativeLocation = false;
     auto doc = QJsonDocument::fromBinaryData(sceneBlob);
     auto projectObj = doc.object();
 
     auto scene = readScene(projectObj);
 
     if (editorData) *editorData = readEditorData(projectObj);
-    readPostProcessData(projectObj, postMan);
+	if (!!postMan)
+		readPostProcessData(projectObj, postMan);
 
     for (auto node : scene->rootNode->children) {
         node->applyDefaultPose();
@@ -94,13 +96,14 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     editorData->editorCamera = camera;
     editorData->distFromPivot = (float)camObj["distanceFromPivot"].toDouble(5.0f);
     editorData->showLightWires = editorObj["showLightWires"].toBool();
+	editorData->showDebugDrawFlags = editorObj["showDebugDrawFlags"].toBool();
 
     return editorData;
 }
 
 void SceneReader::readPostProcessData(QJsonObject &projectObj, iris::PostProcessManagerPtr postMan)
 {
-
+	/*
     if (projectObj.contains("postprocesses")) {
         auto processListObj = projectObj["postprocesses"].toArray();
 
@@ -141,6 +144,7 @@ void SceneReader::readPostProcessData(QJsonObject &projectObj, iris::PostProcess
             postMan->addPostProcess(process);
         }
     }
+	*/
 }
 
 iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
@@ -202,14 +206,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->fogEnd = sceneObj["fogEnd"].toDouble(120);
     scene->fogEnabled = sceneObj["fogEnabled"].toBool(true);
     scene->shadowEnabled = sceneObj["shadowEnabled"].toBool(true);
-
-    scene->gravity = sceneObj["gravity"].toDouble(9.8);
+	scene->setWorldGravity(sceneObj["gravity"].toDouble(Constants::GRAVITY));
 
     auto rootNode = sceneObj["rootNode"].toObject();
     QJsonArray children = rootNode["children"].toArray();
 
-    for(auto childObj:children)
-    {
+    for (const auto childObj : children) {
         auto sceneNodeObj = childObj.toObject();
         auto childNode = readSceneNode(sceneNodeObj);
         scene->getRootNode()->addChild(childNode);
@@ -253,6 +255,34 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 	sceneNode->setGUID(nodeObj["guid"].toString(GUIDManager::generateGUID()));
     sceneNode->setAttached(nodeObj["attached"].toBool());
     sceneNode->setPickable(nodeObj["pickable"].toBool(true));
+
+	sceneNode->isPhysicsBody = nodeObj["physicsObject"].toBool();
+
+	if (sceneNode->isPhysicsBody) {
+		QJsonObject physicsDef = nodeObj["physicsProperties"].toObject();
+		sceneNode->physicsProperty.centerOfMass = readVector3(physicsDef["centerOfMass"].toObject());
+		sceneNode->physicsProperty.isStatic = physicsDef["static"].toBool();
+		sceneNode->physicsProperty.objectCollisionMargin = physicsDef["collisionMargin"].toDouble();
+		sceneNode->physicsProperty.objectDamping = physicsDef["damping"].toDouble();
+		sceneNode->physicsProperty.objectMass = physicsDef["mass"].toDouble();
+		sceneNode->physicsProperty.objectFriction = physicsDef["friction"].toDouble(.5f);
+		sceneNode->physicsProperty.objectRestitution = physicsDef["bounciness"].toDouble();
+		sceneNode->physicsProperty.pivotPoint = readVector3(physicsDef["pivot"].toObject());
+		sceneNode->physicsProperty.shape = static_cast<iris::PhysicsCollisionShape>(physicsDef["shape"].toInt());
+		sceneNode->physicsProperty.type = static_cast<iris::PhysicsType>(physicsDef["type"].toInt());
+
+		QJsonArray constraints = physicsDef["constraints"].toArray();
+		for (const auto &constraint : constraints) {
+			QJsonObject constraintObject = constraint.toObject();
+
+			iris::ConstraintProperty constraintProp;
+			constraintProp.constraintFrom = constraintObject.value("constraintFrom").toString();
+			constraintProp.constraintTo = constraintObject.value("constraintTo").toString();
+			constraintProp.constraintType = static_cast<iris::PhysicsConstraintType>(constraintObject.value("constraintType").toInt());
+
+			sceneNode->physicsProperty.constraints.append(constraintProp);
+		}
+	}
 
     QJsonArray children = nodeObj["children"].toArray();
     for (auto childObj : children) {
@@ -419,33 +449,6 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 
     meshNode->applyDefaultPose();
 
-    meshNode->isPhysicsBody = nodeObj["physicsObject"].toBool();
-
-    if (meshNode->isPhysicsBody) {
-        QJsonObject physicsDef = nodeObj["physicsProperties"].toObject();
-        meshNode->physicsProperty.centerOfMass          = readVector3(physicsDef["centerOfMass"].toObject());
-        meshNode->physicsProperty.isStatic              = physicsDef["static"].toBool();
-        meshNode->physicsProperty.objectCollisionMargin = physicsDef["collisionMargin"].toDouble();
-        meshNode->physicsProperty.objectDamping         = physicsDef["damping"].toDouble();
-        meshNode->physicsProperty.objectMass            = physicsDef["mass"].toDouble();
-        meshNode->physicsProperty.objectRestitution     = physicsDef["bounciness"].toDouble();
-        meshNode->physicsProperty.pivotPoint            = readVector3(physicsDef["pivot"].toObject());
-        meshNode->physicsProperty.shape                 = static_cast<iris::PhysicsCollisionShape>(physicsDef["shape"].toInt());
-        meshNode->physicsProperty.type                  = static_cast<iris::PhysicsType>(physicsDef["type"].toInt());
-
-        QJsonArray constraints = physicsDef["constraints"].toArray();
-        for (const auto &constraint : constraints) {
-            QJsonObject constraintObject = constraint.toObject();
-
-            iris::ConstraintProperty constraintProp;
-            constraintProp.constraintFrom = constraintObject.value("constraintFrom").toString();
-            constraintProp.constraintTo = constraintObject.value("constraintTo").toString();
-            constraintProp.constraintType = static_cast<iris::PhysicsConstraintType>(constraintObject.value("constraintType").toInt());
-            
-            meshNode->physicsProperty.constraints.append(constraintProp);
-        }
-    }
-
     return meshNode;
 }
 
@@ -591,14 +594,14 @@ iris::HandleMode SceneReader::getHandleModeFromName(QString handleMode)
 iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 {
 	MaterialReader reader;
+	if (useAlternativeLocation) reader.setSource(TextureSource::GlobalAssets, assetDirectory);
     if (nodeObj["material"].isNull()) return iris::CustomMaterial::create();
 
 	auto mat = nodeObj["material"].toObject();
-	//if (reader.getMaterialVersion(mat) >= 2)
-	return reader.parseMaterial(mat, handle);
-
-    
-    auto m = iris::CustomMaterial::create();
+	return reader.parseMaterial(mat, handle, true);
+   
+/*
+	auto m = iris::CustomMaterial::create();
     auto shaderGuid = mat["guid"].toString();
 
     m->setName(mat["name"].toString());
@@ -672,6 +675,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
     }
 
     return m;
+	*/
 }
 
 void SceneReader::extractAssetsFromAssimpScene(QString filePath)

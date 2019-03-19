@@ -52,11 +52,16 @@ V2 Material Spec:
 
 */
 
-
-MaterialReader::MaterialReader(TextureSource texSrc, QString globalSourceFolder)
+MaterialReader::MaterialReader(TextureSource texSrc, QString globalSrcFolder)
 {
-	this->textureSource = texSrc;
-	this->globalSourceFolder = globalSourceFolder;
+	textureSource = texSrc;
+	globalSourceFolder = globalSrcFolder;
+}
+
+void MaterialReader::setSource(TextureSource texSrc, QString globalSrcFolder)
+{
+	textureSource = texSrc;
+	globalSourceFolder = globalSrcFolder;
 }
 
 void MaterialReader::readJahShader(const QString &filePath)
@@ -103,21 +108,18 @@ iris::CustomMaterialPtr MaterialReader::createMaterialFromShaderFile(QString sha
 
 iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Database* db, bool loadTextures)
 {
-	qDebug() << matObject;
 	auto version = getMaterialVersion(matObject);
-	if (version == 1)
-		matObject = convertV1MaterialToV2(matObject);
+	if (version == 1) matObject = convertV1MaterialToV2(matObject);
 
 	// get shader object
 	auto shaderGuid = matObject["shaderGuid"].toString();
-	auto shaderObject = getShaderObjectFromId(matObject["shaderGuid"].toString(), db);
-	qDebug() << shaderObject;
+	auto shaderObject = getShaderObjectFromId(shaderGuid, db);
 	auto material = createMaterialFromShaderGuid(shaderGuid, db);
 
 	// apply values
 	auto valuesObj = matObject["values"].toObject();
-	//qDebug() << valuesObj;
-	for (const auto &prop : material->properties) {
+
+	for (const auto prop : material->properties) {
 		if (prop->type == iris::PropertyType::Color) {
 			QColor col;
 			col.setNamedColor(valuesObj.value(prop->name).toString());
@@ -139,18 +141,10 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 			if (db != nullptr) {
 				auto texGuid = valuesObj.value(prop->name).toString();
 				QString materialName = db->fetchAsset(texGuid).name;
-				QString textureStr = "";
+				QString textureStr;
 
-				if (textureSource == TextureSource::Project) {
-					//material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
-					textureStr = IrisUtils::join(Globals::project->getProjectFolder(), materialName);
-				}
-				else {
-					
-					QString textureStr = IrisUtils::join(
-						QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::ASSET_FOLDER, texGuid, materialName
-					);
-				}
+				if (textureSource == TextureSource::Project) textureStr = IrisUtils::join(Globals::project->getProjectFolder(), materialName);
+				else textureStr = IrisUtils::join(globalSourceFolder, materialName);
 
 				material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
 			}
@@ -186,32 +180,29 @@ QJsonObject MaterialReader::getShaderObjectFromId(QString shaderGuid, Database* 
 		return QJsonDocument::fromJson(data).object();
 	}
 	else {
-		/*
-		for (auto asset : AssetManager::getAssets()) {
-			if (asset->type == ModelTypes::Shader) {
-				if (asset->assetGuid == shaderGuid) {
-					auto def = asset->getValue().toJsonObject();
-					return def;
-				}
-			}
-		}
-		*/
+		// Stop using asset manager... (iKlsR)
+		// TODO remove all usage of such
+		auto shader = db->fetchAssetData(shaderGuid);
+		QJsonObject shaderDefinition = QJsonDocument::fromBinaryData(shader).object();
 
-		QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(shaderGuid));
-		QJsonObject matObject = matDoc.object();
-		return matObject;
+		if (textureSource == TextureSource::Project) globalSourceFolder = Globals::project->getProjectFolder();
+
+		if (!shaderDefinition.isEmpty()) {
+			auto vAsset = db->fetchAsset(shaderDefinition["vertex_shader"].toString());
+			auto fAsset = db->fetchAsset(shaderDefinition["fragment_shader"].toString());
+
+			if (!vAsset.name.isEmpty()) shaderDefinition["vertex_shader"] = QDir(globalSourceFolder).filePath(vAsset.name);
+			if (!fAsset.name.isEmpty()) shaderDefinition["fragment_shader"] = QDir(globalSourceFolder).filePath(fAsset.name);
+
+			return shaderDefinition;
+		}
 	}
 
 	return QJsonObject();
-
-	
 }
 
 QJsonObject MaterialReader::convertV1MaterialToV2(QJsonObject oldMatObj)
 {
-	//qDebug() << oldMatObj;
-	//qDebug() << oldMatObj["guid"].toString();
-
 	QJsonObject newMatObj;
 	newMatObj["name"] = oldMatObj["name"];
 	newMatObj["shaderGuid"] = oldMatObj["guid"];
@@ -223,34 +214,29 @@ QJsonObject MaterialReader::convertV1MaterialToV2(QJsonObject oldMatObj)
 			values[key] = oldMatObj[key];
 		}
 	}
+
 	newMatObj["values"] = values;
 
 	return newMatObj;
-
 }
 
 // if version code is present then return version
 // otherwise return version 1.0
 int MaterialReader::getMaterialVersion(QJsonObject matObj)
 {
-	if (matObj.contains("version"))
-		return matObj["version"].toInt();
-
+	if (matObj.contains("version")) return matObj["version"].toInt();
 	return 1;
 }
 
-ShaderHandler::ShaderHandler(TextureSource texSrc, QString globalSourceFolder)
+ShaderHandler::ShaderHandler(TextureSource texSrc, QString globalSrcFolder)
 {
-	this->textureSource = texSrc;
-	this->globalSourceFolder = globalSourceFolder;
+	textureSource = texSrc;
+	globalSourceFolder = globalSrcFolder;
 }
 
 iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShader(QJsonObject shaderObject, Database* db)
 {
-	//qDebug() << QJsonDocument(shaderObject).toJson(QJsonDocument::Indented);
-	if (getShaderVersion(shaderObject) == 1)
-		return loadMaterialFromShaderV1(shaderObject, db);
-
+	if (getShaderVersion(shaderObject) == 1) return loadMaterialFromShaderV1(shaderObject, db);
 	return loadMaterialFromShaderV2(shaderObject, db);
 }
 
@@ -265,6 +251,7 @@ iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShaderV1(QJsonObject shad
 
 	auto vertexShader = shaderObject["vertex_shader"].toString();
 	auto fragmentShader = shaderObject["fragment_shader"].toString();
+
 	if (textureSource == TextureSource::GlobalAssets) {
 		QString assetPath = IrisUtils::join(
 			QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::ASSET_FOLDER, globalSourceFolder
@@ -273,13 +260,8 @@ iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShaderV1(QJsonObject shad
 		auto vAsset = db->fetchAsset(vertexShader);
 		auto fAsset = db->fetchAsset(fragmentShader);
 
-		if (!vAsset.name.isEmpty()) {
-			shaderObject["vertex_shader"] = QDir(assetPath).filePath(vAsset.name);
-		}
-
-		if (!fAsset.name.isEmpty()) {
-			shaderObject["fragment_shader"] = QDir(assetPath).filePath(fAsset.name);
-		}
+		if (!vAsset.name.isEmpty()) shaderObject["vertex_shader"] = QDir(assetPath).filePath(vAsset.name);
+		if (!fAsset.name.isEmpty()) shaderObject["fragment_shader"] = QDir(assetPath).filePath(fAsset.name);
 	}
 	else {
 		for (auto asset : AssetManager::getAssets()) {

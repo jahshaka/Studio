@@ -38,6 +38,7 @@ class MaterialReader : public AssetIOBase
 	QString globalSourceFolder;
 public:
     MaterialReader(TextureSource texSrc = TextureSource::Project, QString globalSourceFolder = "");
+	void setSource(TextureSource texSrc, QString globalSrcFolder);
 
     void readJahShader(const QString &filePath);
     QJsonObject getParsedShader();
