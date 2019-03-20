@@ -98,6 +98,7 @@ void PlayerView::start()
 	//camController->setCamera(scene->getCamera());
 	setController(mouseController);
 	renderer->regenerateSwapChain();
+	savedCameraMatrix = scene->getCamera()->getLocalTransform();
 }
 
 void PlayerView::end()
@@ -105,6 +106,7 @@ void PlayerView::end()
 	if (_isPlaying) {
 		stopScene();
 	}
+	scene->getCamera()->setLocalTransform(savedCameraMatrix);
 }
 
 void PlayerView::paintGL()

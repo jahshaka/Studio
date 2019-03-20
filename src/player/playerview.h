@@ -7,6 +7,7 @@
 #include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLWidget>
 #include <QSharedPointer>
+#include <QMatrix4x4>
 
 #include "irisgl/src/irisglfwd.h"
 
@@ -35,6 +36,7 @@ class PlayerView : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
 	Q_OBJECT
 
 	//iris::CameraNodePtr camera;
+	QMatrix4x4 savedCameraMatrix;
 	CameraControllerBase* camController;
 	PlayerVrController* vrController;
 	PlayerMouseController* mouseController;
