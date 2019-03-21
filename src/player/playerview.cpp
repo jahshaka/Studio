@@ -133,13 +133,6 @@ void PlayerView::renderScene()
 
 	camController->update(dt);
 
-	auto activeViewer = scene->getActiveVrViewer();
-	if (_isPlaying) {
-		if (!!activeViewer && activeViewer->isActiveCharacterController()) {
-			activeViewer->setGlobalTransform(scene->getPhysicsEnvironment()->getActiveCharacterController()->getTransform());
-		}
-	}
-
 	auto scene = UiManager::sceneViewWidget->getScene();
 	//auto renderer = UiManager::sceneViewWidget->getRenderer();
 
@@ -147,6 +140,13 @@ void PlayerView::renderScene()
 	vp.width = width() * devicePixelRatioF();
 	vp.height = height() * devicePixelRatioF();
 	scene->update(dt);
+
+	auto activeViewer = scene->getActiveVrViewer();
+	if (_isPlaying) {
+		if (!!activeViewer && activeViewer->isActiveCharacterController()) {
+			activeViewer->setGlobalTransform(scene->getPhysicsEnvironment()->getActiveCharacterController()->getTransform());
+		}
+	}
 
 	camController->postUpdate(dt);
 
