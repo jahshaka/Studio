@@ -774,8 +774,6 @@ bool Database::deleteDependency(const QString &depender, const QString &dependee
 
 bool Database::removeDependenciesByType(const QString &depender, const ModelTypes &type)
 {
-    qDebug() << "ME " << depender << static_cast<int>(type);
-
     QSqlQuery query;
     query.prepare("DELETE FROM dependencies WHERE depender = ? AND dependee_type = ?");
     query.addBindValue(depender);
