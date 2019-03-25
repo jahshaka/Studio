@@ -602,6 +602,7 @@ void MainWindow::switchSpace(WindowSpaces space)
 {
 	if (currentSpace == space)
 		return;
+	ListWidget::stopHighlightedNode();
 
 	// properly shutdown previous space
 	switch (currentSpace) {
