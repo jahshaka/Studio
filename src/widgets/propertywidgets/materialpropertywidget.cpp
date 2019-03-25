@@ -169,7 +169,8 @@ void MaterialPropertyWidget::materialChanged(int index)
 			auto guid = prop->getValue().toString();
 			auto asset = db->fetchAsset(guid).name;
 			auto path = QDir(Globals::project->getProjectFolder()).filePath(asset);
-			if(QFile::exists(path))		material->setTextureWithUniform(prop->uniform, path);
+			if(QFile::exists(path))
+				material->setValue(prop->name, path);
 		}
 	}
 
