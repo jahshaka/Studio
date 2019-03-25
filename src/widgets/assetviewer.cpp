@@ -363,7 +363,8 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
     QJsonObject matObject = matDoc.object();
     //iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 
-	MaterialReader reader(TextureSource::GlobalAssets, guid);
+	auto matFolder = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::ASSET_FOLDER, guid);
+	MaterialReader reader(TextureSource::GlobalAssets, matFolder);
 	matDoc.toJson(QJsonDocument::Indented);
 	auto material = reader.parseMaterial(matObject, db);
 
