@@ -239,6 +239,7 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 	this->openInPlayMode = playMode;
 
     assetGuids.clear();
+	mainWindow->switchSpace(WindowSpaces::EDITOR);
 	loadProjectAssets();
 }
 
