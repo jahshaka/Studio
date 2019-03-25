@@ -42,16 +42,4 @@ if (APPLE)
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${DestDir}/downloader.app
             ${DestDir}/${APP_OUTPUT_NAME}.app/Contents/MacOS/downloader.app)
-
-	add_custom_command(
-        TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${PROJECT_SOURCE_DIR}/src/shadergraph/assets
-            ${DestDir}/${APP_OUTPUT_NAME}.app/Contents/MacOS/app/shadergraph)
-else()
-	add_custom_command(
-		TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_directory
-				${PROJECT_SOURCE_DIR}/src/shadergraph/assets
-				${DestDir}/app/shadergraph)
 endif()
