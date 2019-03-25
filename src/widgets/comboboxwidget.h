@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QComboBox>
 #include <QVariant>
+#include <QJsonObject>
 #include <QWidget>
 
 namespace Ui {
@@ -42,6 +43,7 @@ public:
     void clear();
 
     QComboBox *getWidget() const;
+	QJsonObject valuesToJson() const;
 
 signals:
     void currentIndexChanged(const QString&);

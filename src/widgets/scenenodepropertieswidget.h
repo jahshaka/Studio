@@ -38,6 +38,7 @@ class Database;
 
 // These are special and a kind of hack since this widget was never really designed to work with non scenenode types
 class ShaderPropertyWidget;
+class SkyPropertyWidget;
 
 /**
  * This class shows the properties of selected nodes in the scene
@@ -53,6 +54,7 @@ public:
      * @param sceneNode
      */
 
+    void setScene(QSharedPointer<iris::Scene> scene);
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
     void setAssetItem(QListWidgetItem *item);
 	void setSceneView(SceneViewWidget *sceneView);
@@ -81,10 +83,13 @@ private:
     LightPropertyWidget* lightPropView;
     WorldPropertyWidget* worldPropView;
     FogPropertyWidget*  fogPropView;
+	SkyPropertyWidget *skyPropView;
 	MeshPropertyWidget* meshPropView;
 	HandPropertyWidget* handPropView;
     PhysicsPropertyWidget *physicsPropView;
     DemoPane* demoPane;
+
+    QSharedPointer<iris::Scene> scene;
 
     Database *db;
 	ShaderPropertyWidget *shaderPropView;

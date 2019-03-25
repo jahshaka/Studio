@@ -169,6 +169,23 @@ struct AssetParticleSystem : public Asset
     }
 };
 
+struct AssetSky : public Asset
+{
+	AssetSky()
+    {
+        type = ModelTypes::Sky;
+    }
+
+    virtual QVariant getValue()
+    {
+        return value;
+    }
+
+    virtual void setValue(QVariant val)
+    {
+        value = val;
+    }
+};
 
 class AssetManager
 {

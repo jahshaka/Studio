@@ -269,9 +269,6 @@ iris::ScenePtr MainWindow::createDefaultScene()
 {
     auto scene = iris::Scene::create();
 
-    scene->setSkyColor(QColor(72, 72, 72));
-    scene->setAmbientColor(QColor(96, 96, 96));
-
     // second node
     auto node = iris::MeshNode::create();
     node->setMesh(":/models/ground.obj");
@@ -353,6 +350,37 @@ iris::ScenePtr MainWindow::createDefaultScene()
     node->setMaterial(m);
 
     scene->rootNode->addChild(node);
+
+	QString skyGuid = GUIDManager::generateGUID();
+
+	QJsonObject properties;
+	QJsonObject skyProps;
+	skyProps.insert("type", static_cast<int>(iris::SkyType::SINGLE_COLOR));
+	properties.insert("sky", skyProps);
+
+	QJsonObject skyDescription;
+	skyDescription.insert("guid", skyGuid);
+	skyDescription.insert("skyColor", SceneWriter::jsonColor(QColor(72, 72, 72)));
+
+	// code goes here
+	db->createAssetEntry(
+		skyGuid,
+		"Default Sky",
+		static_cast<int>(ModelTypes::Sky),
+		Globals::project->getProjectGuid(),
+		QString(),
+		QString(),
+		QByteArray(),
+		QJsonDocument(properties).toBinaryData(),
+		QByteArray(),
+		QJsonDocument(skyDescription).toBinaryData()
+	);
+
+	scene->skyGuid = skyGuid;
+
+	// Keep this hardcoded for new scenes
+	scene->setSkyColor(QColor(72, 72, 72));
+	scene->setAmbientColor(QColor(96, 96, 96));
 
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
@@ -1054,6 +1082,7 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
     this->sceneView->setScene(scene);
 	this->playerView->setScene(scene);
     this->sceneHierarchyWidget->setScene(scene);
+    this->sceneNodePropertiesWidget->setScene(scene);
 
     // interim...
     updateSceneSettings();
@@ -1062,6 +1091,7 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 void MainWindow::removeScene()
 {
     sceneView->cleanup();
+    sceneNodePropertiesWidget->setScene(iris::ScenePtr());
     sceneNodePropertiesWidget->setSceneNode(iris::SceneNodePtr());
 }
 

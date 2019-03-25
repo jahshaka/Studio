@@ -91,7 +91,17 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
             AssetManager::addAsset(assetFile);
         }
 
-		progressDialog->setValue(50);
+        //for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::CubeMap))) {
+        //    QJsonDocument mapDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(asset.guid));
+        //    QJsonObject mapObject = mapDefinition.object();
+
+        //    auto assetCubeMap = new AssetCubeMap;
+        //    assetCubeMap->fileName = asset.name;
+        //    assetCubeMap->assetGuid = asset.guid;
+        //    // assetFile->path = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
+        //    assetCubeMap->setValue(mapObject);
+        //    AssetManager::addAsset(assetCubeMap);
+        //}
 
         for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture))) {
             auto assetTexture = new AssetTexture;

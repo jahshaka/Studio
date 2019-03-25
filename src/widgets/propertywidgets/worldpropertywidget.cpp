@@ -15,6 +15,9 @@ For more information see the LICENSE file
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/materials/defaultskymaterial.h"
 
+#include "core/project.h"
+#include "core/database/database.h"
+
 #include "../texturepickerwidget.h"
 #include "../colorvaluewidget.h"
 #include "../colorpickerwidget.h"
@@ -22,19 +25,11 @@ For more information see the LICENSE file
 #include "../checkboxwidget.h"
 #include "../comboboxwidget.h"
 
-void WorldPropertyWidget::setupViewSelector()
-{
-    viewSelector = this->addComboBox("Skybox View");
-    viewSelector->addItem("Front");
-    viewSelector->addItem("Back");
-    viewSelector->addItem("Top");
-    viewSelector->addItem("Bottom");
-    viewSelector->addItem("Left");
-    viewSelector->addItem("Right");
+#include <QJsonDocument>
+#include <QJsonObject>
 
-    connect(viewSelector,               SIGNAL(currentIndexChanged(QString)),
-            this,                       SLOT(viewTextureSlotChanged(QString)));
-}
+#include "globals.h"
+#include "io/scenereader.h"
 
 WorldPropertyWidget::WorldPropertyWidget()
 {
@@ -44,15 +39,13 @@ WorldPropertyWidget::WorldPropertyWidget()
     skyColor = this->addColorPicker("Sky Color");
     ambientColor = this->addColorPicker("Ambient Color");
 
-    setupViewSelector();
+	skySelector = this->addComboBox("Sky");
 
-    skyTexture = this->addTexturePicker("Skybox Texture");
+	connect(skySelector,				SIGNAL(currentIndexChanged(int)),
+			this,						SLOT(onSkyChanged(int)));
 
 	connect(worldGravity,				SIGNAL(valueChanged(float)),
 			this,						SLOT(onGravityChanged(float)));
-
-    connect(skyTexture,                 SIGNAL(valueChanged(QString)),
-            this,                       SLOT(onSkyTextureChanged(QString)));
 
     connect(skyColor->getPicker(),      SIGNAL(onColorChanged(QColor)),
             this,                       SLOT(onSkyColorChanged(QColor)));
@@ -61,33 +54,9 @@ WorldPropertyWidget::WorldPropertyWidget()
             this,                       SLOT(onAmbientColorChanged(QColor)));
 }
 
-void WorldPropertyWidget::viewTextureSlotChanged(const QString &text)
+void WorldPropertyWidget::setDatabase(Database *db)
 {
-    if (text == "Front") {
-        skyTexture->setTexture(scene->skyBoxTextures[0].isEmpty()
-                ? QString()
-                : scene->skyBoxTextures[0]);
-    } else if (text == "Back") {
-        skyTexture->setTexture(scene->skyBoxTextures[1].isEmpty()
-                ? QString()
-                : scene->skyBoxTextures[1]);
-    } else if (text == "Top") {
-        skyTexture->setTexture(scene->skyBoxTextures[2].isEmpty()
-                ? QString()
-                : scene->skyBoxTextures[2]);
-    } else if (text == "Bottom") {
-        skyTexture->setTexture(scene->skyBoxTextures[3].isEmpty()
-                ? QString()
-                : scene->skyBoxTextures[3]);
-    } else if (text == "Left") {
-        skyTexture->setTexture(scene->skyBoxTextures[4].isEmpty()
-                ? QString()
-                : scene->skyBoxTextures[4]);
-    } else if (text == "Right") {
-        skyTexture->setTexture(scene->skyBoxTextures[5].isEmpty()
-                ? QString()
-                : scene->skyBoxTextures[5]);
-    }
+	this->db = db;
 }
 
 void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
@@ -95,19 +64,21 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
     if (!!scene) {
         this->scene = scene;
 
-        for (int i = 0; i < 6; i++) {
-            skyBoxTextures[i] = scene->skyBoxTextures[i];
-        }
-
-        // always set the first one - hack
-        skyTexture->setTexture(scene->skyBoxTextures[0].isEmpty()
-                ? QString()
-                : scene->skyBoxTextures[0]);
-
         skyColor->setColorValue(scene->skyColor);
         ambientColor->setColorValue(scene->ambientColor);
 		worldGravity->setValue(scene->gravity);
-    } else {
+
+		auto skiesAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Sky));
+		skySelector->getWidget()->blockSignals(true);	// don't register initial signals
+		skySelector->clear();
+		for (const auto sky : skiesAvailableFromDatabase) skySelector->addItem(sky.name, sky.guid);
+		skySelector->getWidget()->blockSignals(false);
+		// If we have a current sky set that as the current item
+		skySelector->setCurrentItemData(scene->skyGuid);
+		// If we only have one sky, we need to trigger the update function
+		if (skiesAvailableFromDatabase.count() == 1) onSkyChanged(0);
+    }
+	else {
         this->scene.clear();
     }
 }
@@ -117,37 +88,88 @@ void WorldPropertyWidget::onGravityChanged(float value)
 	scene->setWorldGravity(value);
 }
 
-void WorldPropertyWidget::onSkyTextureChanged(QString texPath)
+void WorldPropertyWidget::onSkyChanged(int index)
 {
-    if (viewSelector->getCurrentItem() == "Front") {
-        scene->skyBoxTextures[0] = texPath;
-    } else if (viewSelector->getCurrentItem() == "Back") {
-        scene->skyBoxTextures[1] = texPath;
-    } else if (viewSelector->getCurrentItem() == "Top") {
-        scene->skyBoxTextures[2] = texPath;
-    } else if (viewSelector->getCurrentItem() == "Bottom") {
-        scene->skyBoxTextures[3] = texPath;
-    } else if (viewSelector->getCurrentItem() == "Left") {
-        scene->skyBoxTextures[4] = texPath;
-    } else if (viewSelector->getCurrentItem() == "Right") {
-        scene->skyBoxTextures[5] = texPath;
-    }
+	Q_UNUSED(index)
 
-    QImage *info;
-    for (int i = 0; i < 6; i++) {
-        if (!scene->skyBoxTextures[i].isEmpty()) {
-            info = new QImage(scene->skyBoxTextures[i]);
-            break;
-        }
-    }
+	scene->skyGuid = skySelector->getCurrentItemData();
+	QJsonDocument skyProperties = QJsonDocument::fromBinaryData(db->fetchAsset(scene->skyGuid).properties);
+	QJsonDocument skyData = QJsonDocument::fromBinaryData(db->fetchAssetData(scene->skyGuid));
+	QJsonObject skyPropertiesDefinition = skyProperties.object().value("sky").toObject();
+	QJsonObject skyDataDefinition = skyData.object();
+	scene->skyType = static_cast<iris::SkyType>(skyPropertiesDefinition.value("type").toInt());
 
-    scene->setSkyTexture(iris::Texture2D::createCubeMap(scene->skyBoxTextures[0],
-                                                        scene->skyBoxTextures[1],
-                                                        scene->skyBoxTextures[2],
-                                                        scene->skyBoxTextures[3],
-                                                        scene->skyBoxTextures[4],
-                                                        scene->skyBoxTextures[5],
-                                                        info));
+	if (scene->skyType == iris::SkyType::SINGLE_COLOR) {
+		scene->skyColor = SceneReader::readColor(skyDataDefinition.value("skyColor").toObject());
+	}
+	else if (scene->skyType == iris::SkyType::REALISTIC) {
+		scene->skyRealistic.luminance = skyDataDefinition["luminance"].toDouble();
+		scene->skyRealistic.reileigh = skyDataDefinition["reileigh"].toDouble();
+		scene->skyRealistic.mieCoefficient = skyDataDefinition["mieCoefficient"].toDouble();
+		scene->skyRealistic.mieDirectionalG = skyDataDefinition["mieDirectionalG"].toDouble();
+		scene->skyRealistic.turbidity = skyDataDefinition["turbidity"].toDouble();
+		scene->skyRealistic.sunPosX = skyDataDefinition["sunPosX"].toDouble();
+		scene->skyRealistic.sunPosY = skyDataDefinition["sunPosY"].toDouble();
+		scene->skyRealistic.sunPosZ = skyDataDefinition["sunPosZ"].toDouble();
+	}
+	else if (scene->skyType == iris::SkyType::EQUIRECTANGULAR) {
+		QStringList dependency = db->fetchAssetDependeesByType(scene->skyGuid, ModelTypes::Texture);
+		if (!dependency.isEmpty()) {
+			auto image = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(dependency.first()).name);
+			if (QFileInfo(image).isFile()) scene->setSkyTexture(iris::Texture2D::load(image, false));
+		}
+	}
+	else if (scene->skyType == iris::SkyType::CUBEMAP) {
+		auto front = db->fetchAsset(skyDataDefinition["front"].toString()).name;
+		auto back = db->fetchAsset(skyDataDefinition["back"].toString()).name;
+		auto left = db->fetchAsset(skyDataDefinition["left"].toString()).name;
+		auto right = db->fetchAsset(skyDataDefinition["right"].toString()).name;
+		auto top = db->fetchAsset(skyDataDefinition["top"].toString()).name;
+		auto bottom = db->fetchAsset(skyDataDefinition["bottom"].toString()).name;
+
+		QVector<QString> sides = { front, back, top, bottom, left, right };
+		for (int i = 0; i < sides.count(); ++i) {
+			QString path = IrisUtils::join(Globals::project->getProjectFolder(), sides[i]);
+			if (QFileInfo(path).isFile()) {
+				sides[i] = path;
+			}
+			else {
+				sides[i] = QString();
+			}
+		}
+
+		// We need at least one valid image to get some metadata from
+		QImage* info;
+		bool useTex = false;
+		for (const auto image : sides) {
+			if (!image.isEmpty()) {
+				info = new QImage(image);
+				useTex = true;
+				break;
+			}
+		}
+
+		if (useTex) {
+			scene->setSkyTexture(iris::Texture2D::createCubeMap(sides[0], sides[1], sides[2], sides[3], sides[4], sides[5], info));
+		}
+	}
+	else if (scene->skyType == iris::SkyType::MATERIAL) {
+		auto vert = skyDataDefinition.value("vertexShader").toString();
+		auto frag = skyDataDefinition.value("fragmentShader").toString();
+
+		auto vPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(vert).name);
+		auto fPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(frag).name);
+
+		scene->skyMaterial->createProgramFromShaderSource(vPath, fPath);
+	}
+	else if (scene->skyType == iris::SkyType::GRADIENT) {
+		scene->gradientTop = SceneReader::readColor(skyDataDefinition.value("gradientTop").toObject());
+		scene->gradientMid = SceneReader::readColor(skyDataDefinition.value("gradientMid").toObject());
+		scene->gradientBot = SceneReader::readColor(skyDataDefinition.value("gradientBot").toObject());
+		scene->gradientOffset = skyDataDefinition.value("gradientOffset").toDouble();
+	}
+
+	scene->switchSkyTexture(scene->skyType);
 }
 
 void WorldPropertyWidget::onSkyColorChanged(QColor color)

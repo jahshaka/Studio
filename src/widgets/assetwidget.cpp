@@ -54,7 +54,7 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 #include "widgets/sceneviewwidget.h"
-
+#include "core/subscriber.h"
 #include "core/materialpreset.h"
 #include "io/materialpresetreader.h"
 #include "io/materialreader.hpp"
@@ -119,6 +119,9 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	// The signal will be emitted from another thread (Nick)
 	connect(ThumbnailGenerator::getSingleton()->renderThread,   SIGNAL(thumbnailComplete(ThumbnailResult*)),
 		    this,                                               SLOT(onThumbnailResult(ThumbnailResult*)));
+
+	connect(Globals::eventSubscriber,	&Subscriber::updateAssetSkyItemFromSkyPropertyWidget,
+			this,						&AssetWidget::updateAssetSkyItemFromSkyPropertyWidget);
 
 	breadCrumbLayout = new QHBoxLayout;
 	breadCrumbLayout->setSpacing(0);
@@ -552,6 +555,12 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 
 	}
 
+	if (assetData.type == static_cast<int>(ModelTypes::Sky)) {
+		int skyType = prop.value("sky").toObject().value("type").toInt();
+		item->setData(SKY_TYPE_ROLE, skyType);
+		item->setData(MODEL_TYPE_ROLE, assetData.type);
+	}
+
     if (assetData.type == static_cast<int>(ModelTypes::Shader)) {
         item->setData(MODEL_TYPE_ROLE, assetData.type);
 		if(thumbnail.loadFromData(assetData.thumbnail, "PNG"))   item->setIcon(QIcon(thumbnail));
@@ -656,7 +665,8 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 		    case QEvent::MouseButtonRelease: {
 			    auto evt = static_cast<QMouseEvent*>(event);
                 draggingItem = false;
-			    AssetWidget::mouseReleaseEvent(evt);
+                emit assetItemSelected(nullptr);
+                AssetWidget::mouseReleaseEvent(evt);
 			    break;
 		    }
 
@@ -737,6 +747,17 @@ void AssetWidget::treeItemChanged(QTreeWidgetItem *item, int column)
 
 }
 
+void AssetWidget::updateAssetSkyItemFromSkyPropertyWidget(const QString &guid, iris::SkyType skyType)
+{
+	for (int i = 0; i < ui->assetView->count(); i++) {
+		QListWidgetItem* item = ui->assetView->item(i);
+		if (item->data(MODEL_GUID_ROLE).toString() == guid) {
+			item->setData(SKY_TYPE_ROLE, static_cast<int>(skyType));
+			return;
+		}
+	}
+}
+
 void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 {
 	QModelIndex index = ui->assetTree->indexAt(pos);
@@ -761,7 +782,11 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	connect(action, SIGNAL(triggered()), this, SLOT(createShader()));
 	createMenu->addAction(action);
 
-	action = new QAction(QIcon(), "New Folder", this);
+    action = new QAction(QIcon(), "Sky", this);
+    connect(action, SIGNAL(triggered()), this, SLOT(createSky()));
+    createMenu->addAction(action);
+
+    action = new QAction(QIcon(), "New Folder", this);
 	connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
 	createMenu->addAction(action);
 
@@ -782,6 +807,94 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	menu.addAction(action);
 
 	menu.exec(ui->assetTree->mapToGlobal(pos));
+}
+
+void AssetWidget::exportSky()
+{
+    // get the export file path from a save dialog
+    auto filePath = QFileDialog::getSaveFileName(
+        this,
+        "Choose export path",
+        assetItem.wItem->data(Qt::DisplayRole).toString(),
+        "Supported Export Formats (*.jaf)");
+
+    if (filePath.isEmpty() || filePath.isNull())
+        return;
+
+    QTemporaryDir temporaryDir;
+    if (!temporaryDir.isValid())
+        return;
+
+    const QString writePath = temporaryDir.path();
+
+    const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
+
+    db->createBlobFromAsset(guid, QDir(writePath).filePath("asset.db"));
+
+    QDir tempDir(writePath);
+    tempDir.mkpath("assets");
+
+    QFile manifest(QDir(writePath).filePath(".manifest"));
+    if (manifest.open(QIODevice::ReadWrite))
+    {
+        QTextStream stream(&manifest);
+        stream << "cubemap";
+    }
+    manifest.close();
+
+    for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db))
+    {
+        auto asset = db->fetchAsset(assetGuid);
+        auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+        QFileInfo assetInfo(assetPath);
+        if (assetInfo.exists())
+        {
+            QFile::copy(
+                IrisUtils::join(assetPath),
+                IrisUtils::join(writePath, "assets", assetInfo.fileName()));
+        }
+    }
+
+    // get all the files and directories in the project working directory
+    QDir workingProjectDirectory(writePath);
+    QDirIterator projectDirIterator(
+        writePath,
+        QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs | QDir::Hidden, QDirIterator::Subdirectories);
+
+    QVector<QString> fileNames;
+    while (projectDirIterator.hasNext())
+        fileNames.push_back(projectDirIterator.next());
+
+    // open a basic zip file for writing, maybe change compression level later (iKlsR)
+    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
+
+    for (int i = 0; i < fileNames.count(); i++)
+    {
+        QFileInfo fInfo(fileNames[i]);
+
+        // we need to pay special attention to directories since we want to write empty ones as well
+        if (fInfo.isDir())
+        {
+            zip_entry_open(
+                zip,
+                /* will only create directory if / is appended */
+                QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str());
+            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+        }
+        else
+        {
+            zip_entry_open(
+                zip,
+                workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str());
+            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
+        }
+
+        // we close each entry after a successful write
+        zip_entry_close(zip);
+    }
+
+    // close our now exported file
+    zip_close(zip);
 }
 
 void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
@@ -829,6 +942,12 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
             menu.addAction(action);
         }
 
+        if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Sky)) {
+            action = new QAction(QIcon(), "Export CubeMap", this);
+            connect(action, SIGNAL(triggered()), this, SLOT(exportSky()));
+            menu.addAction(action);
+        }
+
 		if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Material)) {
 			action = new QAction(QIcon(), "Export Material", this);
 			connect(action, SIGNAL(triggered()), this, SLOT(exportMaterial()));
@@ -864,7 +983,12 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 		action = new QAction(QIcon(), "Shader", this);
 		connect(action, SIGNAL(triggered()), this, SLOT(createShader()));
 		createMenu->addAction(action);
-		action = new QAction(QIcon(), "New Folder", this);
+
+        action = new QAction(QIcon(), "Sky", this);
+        connect(action, SIGNAL(triggered()), this, SLOT(createSky()));
+        createMenu->addAction(action);
+
+        action = new QAction(QIcon(), "New Folder", this);
 		connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
 		createMenu->addAction(action);
 
@@ -882,11 +1006,8 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 
 void AssetWidget::assetViewClicked(QListWidgetItem *item)
 {
-	assetItem.wItem = item;
-
-    if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Shader)) {
-        emit assetItemSelected(item);
-    }
+    assetItem.wItem = item;
+    emit assetItemSelected(item);
 }
 
 void AssetWidget::syncTreeAndView(const QString &path)
@@ -1730,6 +1851,65 @@ void AssetWidget::createShader()
     AssetManager::addAsset(assetShader);
 }
 
+void AssetWidget::createSky()
+{
+    QListWidgetItem *item = new QListWidgetItem;
+    item->setFlags(item->flags() | Qt::ItemIsEditable);
+    item->setSizeHint(currentSize);
+    item->setTextAlignment(Qt::AlignCenter);
+    item->setIcon(QIcon(":/icons/icons8-folder-72.png"));
+
+    const QString assetGuid = GUIDManager::generateGUID();
+
+    item->setData(MODEL_GUID_ROLE, assetGuid);
+    item->setData(MODEL_PARENT_ROLE, assetItem.selectedGuid);
+    item->setData(MODEL_ITEM_TYPE, MODEL_ASSET);
+    item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Sky));
+    item->setData(SKY_TYPE_ROLE, static_cast<int>(iris::SkyType::SINGLE_COLOR));
+
+	QJsonObject properties;
+	QJsonObject skyProps;
+	skyProps.insert("type", item->data(SKY_TYPE_ROLE).toInt());
+	properties.insert("sky", skyProps);
+
+	QJsonObject skyDescription;
+	skyDescription.insert("guid", assetGuid);
+	skyDescription.insert("skyColor", SceneWriter::jsonColor(QColor(255, 255, 255, 255)));
+
+    // code goes here
+	db->createAssetEntry(
+		assetGuid,
+		"Sky",
+		static_cast<int>(ModelTypes::Sky),
+		Globals::project->getProjectGuid(),
+		QString(),
+		QString(),
+		QByteArray(),
+		QJsonDocument(properties).toBinaryData(),
+		QByteArray(),
+		QJsonDocument(skyDescription).toBinaryData()
+	);
+
+    //auto assetShader = new AssetCubeMap;
+    //assetShader->fileName = "Sky";
+    //assetShader->assetGuid = assetGuid;
+    ////assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), IrisUtils::buildFileName(shaderName, "shader"));
+
+    //QJsonObject mapDefinition;
+    //mapDefinition["front"] = "";
+    //mapDefinition["back"] = "";
+    //mapDefinition["left"] = "";
+    //mapDefinition["right"] = "";
+    //mapDefinition["top"] = "";
+    //mapDefinition["down"] = "";
+
+    //assetShader->setValue(QVariant::fromValue(mapDefinition));
+    //AssetManager::addAsset(assetShader);
+
+    item->setText("Sky");
+    ui->assetView->addItem(item);
+}
+
 void AssetWidget::createFolder()
 {
 	const QString newFolder = "New Folder";
@@ -1965,6 +2145,9 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             else if (jafString == "shader") {
                 jafType = ModelTypes::Shader;
             }
+   /*         else if (jafString == "cubemap") {
+                jafType = ModelTypes::CubeMap;
+            }*/
             else if (jafString == "particle_system") {
                 jafType = ModelTypes::ParticleSystem;
             }
@@ -2027,6 +2210,17 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                     }
                 }
             }
+
+            //if (jafType == ModelTypes::CubeMap) {
+            //    QJsonDocument cubeDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
+            //    QJsonObject mapDefinition = cubeDoc.object();
+
+            //     auto assetCubeMap = new AssetCubeMap;
+            //    assetCubeMap->assetGuid = guidReturned;
+            //    assetCubeMap->fileName = db->fetchAsset(guidReturned).name;
+            //    assetCubeMap->setValue(QVariant::fromValue(mapDefinition));
+            //    AssetManager::addAsset(assetCubeMap);
+            //}
 
             if (jafType == ModelTypes::Material) {
                 QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
