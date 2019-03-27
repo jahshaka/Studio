@@ -170,8 +170,8 @@ void PlayBack::keyPressEvent(QKeyEvent *event)
 void PlayBack::keyReleaseEvent(QKeyEvent *event)
 {
 	KeyboardState::keyStates[event->key()] = false;
-	//	camController->onKeyReleased((Qt::Key)event->key());
-	camController->keyReleaseEvent(event);
+	camController->onKeyReleased((Qt::Key)event->key());
+	//camController->keyReleaseEvent(event);
 
 	//scene->getPhysicsEnvironment()->keyReleaseEvent((Qt::Key)event->key());
 	if (KeyboardState::isKeyUp(Qt::Key_W)) { scene->getPhysicsEnvironment()->walkForward = 0; }

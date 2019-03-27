@@ -3175,11 +3175,13 @@ void MainWindow::onPlaySceneButton()
 
     if (UiManager::isScenePlaying) {
         enterEditMode();
-		UiManager::restartPhysicsSimulation();
+		//UiManager::restartPhysicsSimulation();
+		sceneView->stopPlayingScene();
     }
     else {
         enterPlayMode();
-		UiManager::startPhysicsSimulation();
+		//UiManager::startPhysicsSimulation();
+		sceneView->startPlayingScene();
     }
 
 	if (!!activeSceneNode) sceneNodeSelected(activeSceneNode);
