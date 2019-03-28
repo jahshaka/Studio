@@ -52,6 +52,7 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 
 	skyPropView = new SkyPropertyWidget();
 	skyPropView->setPanelTitle("Sky");
+	skyPropView->setDatabase(db);
 	skyPropView->expand();
 
     transformPropView = new AccordianBladeWidget();
@@ -118,10 +119,6 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             fogPropView->setScene(sceneNode->scene);
             worldPropView->setParent(this);
             worldPropView->setScene(sceneNode->scene);
-            skyPropView->setParent(this);
-            skyPropView->setDatabase(db);
-            // skyPropView->setScene(sceneNode->scene);
-            widgetPropertyLayout->addWidget(skyPropView);
             widgetPropertyLayout->addWidget(fogPropView);
             widgetPropertyLayout->addWidget(worldPropView);
         }
@@ -204,14 +201,14 @@ void SceneNodePropertiesWidget::setAssetItem(QListWidgetItem *item)
         widgetPropertyLayout->addWidget(shaderPropView);
         widgetPropertyLayout->addStretch();
     }
-    else if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::CubeMap))
+    else if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Sky))
     {
         clearLayout(this->layout());
-        cubeMapPropView->setParent(this);
-        cubeMapPropView->setScene(scene); // ???
-        cubeMapPropView->setCubeMapGuid(item->data(MODEL_GUID_ROLE).toString());
-        widgetPropertyLayout->addWidget(cubeMapPropView);
-        widgetPropertyLayout->addStretch();
+		skyPropView->setParent(this);
+		skyPropView->setSky(item->data(MODEL_GUID_ROLE).toString(), static_cast<iris::SkyType>(item->data(MODEL_GUID_ROLE).toInt()));
+		// skyPropView->setScene(sceneNode->scene);
+		widgetPropertyLayout->addWidget(skyPropView);
+		widgetPropertyLayout->addStretch();
     }
 }
 

@@ -31,7 +31,6 @@ class EmitterPropertyWidget;
 class NodePropertyWidget;
 class MeshPropertyWidget;
 class PhysicsPropertyWidget;
-class SkyPropertyWidget;
 class HandPropertyWidget;
 class DemoPane;
 class SceneViewWidget;
@@ -40,6 +39,7 @@ class Database;
 // These are special and a kind of hack since this widget was never really designed to work with non scenenode types
 class ShaderPropertyWidget;
 class CubeMapPropertyWidget;
+class SkyPropertyWidget;
 
 /**
  * This class shows the properties of selected nodes in the scene

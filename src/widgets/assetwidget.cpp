@@ -762,8 +762,8 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	connect(action, SIGNAL(triggered()), this, SLOT(createShader()));
 	createMenu->addAction(action);
 
-    action = new QAction(QIcon(), "CubeMap", this);
-    connect(action, SIGNAL(triggered()), this, SLOT(createCubeMap()));
+    action = new QAction(QIcon(), "Sky", this);
+    connect(action, SIGNAL(triggered()), this, SLOT(createSky()));
     createMenu->addAction(action);
 
     action = new QAction(QIcon(), "New Folder", this);
@@ -789,7 +789,7 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	menu.exec(ui->assetTree->mapToGlobal(pos));
 }
 
-void AssetWidget::exportCubeMap()
+void AssetWidget::exportSky()
 {
     // get the export file path from a save dialog
     auto filePath = QFileDialog::getSaveFileName(
@@ -922,9 +922,9 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
             menu.addAction(action);
         }
 
-        if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::CubeMap)) {
+        if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Sky)) {
             action = new QAction(QIcon(), "Export CubeMap", this);
-            connect(action, SIGNAL(triggered()), this, SLOT(exportCubeMap()));
+            connect(action, SIGNAL(triggered()), this, SLOT(exportSky()));
             menu.addAction(action);
         }
 
@@ -964,8 +964,8 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 		connect(action, SIGNAL(triggered()), this, SLOT(createShader()));
 		createMenu->addAction(action);
 
-        action = new QAction(QIcon(), "CubeMap", this);
-        connect(action, SIGNAL(triggered()), this, SLOT(createCubeMap()));
+        action = new QAction(QIcon(), "Sky", this);
+        connect(action, SIGNAL(triggered()), this, SLOT(createSky()));
         createMenu->addAction(action);
 
         action = new QAction(QIcon(), "New Folder", this);
@@ -1831,7 +1831,7 @@ void AssetWidget::createShader()
     AssetManager::addAsset(assetShader);
 }
 
-void AssetWidget::createCubeMap()
+void AssetWidget::createSky()
 {
     QListWidgetItem *item = new QListWidgetItem;
     item->setFlags(item->flags() | Qt::ItemIsEditable);
@@ -1844,32 +1844,33 @@ void AssetWidget::createCubeMap()
     item->setData(MODEL_GUID_ROLE, assetGuid);
     item->setData(MODEL_PARENT_ROLE, assetItem.selectedGuid);
     item->setData(MODEL_ITEM_TYPE, MODEL_ASSET);
-    item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::CubeMap));
+    item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Sky));
+    item->setData(SKY_TYPE_ROLE, static_cast<int>(iris::SkyType::SINGLE_COLOR));
 
     // code goes here
     db->createAssetEntry(assetGuid,
-                         "CubeMap",
-                         static_cast<int>(ModelTypes::CubeMap),
+                         "Sky",
+                         static_cast<int>(ModelTypes::Sky),
                          assetItem.selectedGuid,
                          QByteArray());
 
-    auto assetShader = new AssetCubeMap;
-    assetShader->fileName = "CubeMap";
-    assetShader->assetGuid = assetGuid;
-    //assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), IrisUtils::buildFileName(shaderName, "shader"));
+    //auto assetShader = new AssetCubeMap;
+    //assetShader->fileName = "Sky";
+    //assetShader->assetGuid = assetGuid;
+    ////assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), IrisUtils::buildFileName(shaderName, "shader"));
 
-    QJsonObject mapDefinition;
-    mapDefinition["front"] = "";
-    mapDefinition["back"] = "";
-    mapDefinition["left"] = "";
-    mapDefinition["right"] = "";
-    mapDefinition["top"] = "";
-    mapDefinition["down"] = "";
+    //QJsonObject mapDefinition;
+    //mapDefinition["front"] = "";
+    //mapDefinition["back"] = "";
+    //mapDefinition["left"] = "";
+    //mapDefinition["right"] = "";
+    //mapDefinition["top"] = "";
+    //mapDefinition["down"] = "";
 
-    assetShader->setValue(QVariant::fromValue(mapDefinition));
-    AssetManager::addAsset(assetShader);
+    //assetShader->setValue(QVariant::fromValue(mapDefinition));
+    //AssetManager::addAsset(assetShader);
 
-    item->setText("CubeMap");
+    item->setText("Sky");
     ui->assetView->addItem(item);
 }
 
@@ -2108,9 +2109,9 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             else if (jafString == "shader") {
                 jafType = ModelTypes::Shader;
             }
-            else if (jafString == "cubemap") {
+   /*         else if (jafString == "cubemap") {
                 jafType = ModelTypes::CubeMap;
-            }
+            }*/
             else if (jafString == "particle_system") {
                 jafType = ModelTypes::ParticleSystem;
             }
@@ -2174,16 +2175,16 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                 }
             }
 
-            if (jafType == ModelTypes::CubeMap) {
-                QJsonDocument cubeDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
-                QJsonObject mapDefinition = cubeDoc.object();
+            //if (jafType == ModelTypes::CubeMap) {
+            //    QJsonDocument cubeDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
+            //    QJsonObject mapDefinition = cubeDoc.object();
 
-                 auto assetCubeMap = new AssetCubeMap;
-                assetCubeMap->assetGuid = guidReturned;
-                assetCubeMap->fileName = db->fetchAsset(guidReturned).name;
-                assetCubeMap->setValue(QVariant::fromValue(mapDefinition));
-                AssetManager::addAsset(assetCubeMap);
-            }
+            //     auto assetCubeMap = new AssetCubeMap;
+            //    assetCubeMap->assetGuid = guidReturned;
+            //    assetCubeMap->fileName = db->fetchAsset(guidReturned).name;
+            //    assetCubeMap->setValue(QVariant::fromValue(mapDefinition));
+            //    AssetManager::addAsset(assetCubeMap);
+            //}
 
             if (jafType == ModelTypes::Material) {
                 QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));

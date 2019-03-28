@@ -39,6 +39,8 @@ public:
     void setScene(QSharedPointer<iris::Scene> scene);
     void setDatabase(Database *);
 
+	void setSky(const QString &guid, iris::SkyType skyType);
+
 protected slots:
     void setEquiMap(const QString &guid);
     void setSkyMap(const QString &guid);
@@ -61,6 +63,7 @@ private:
     Database *db;
     QSharedPointer<iris::Scene> scene;
     iris::SkyType currentSky;
+	QString skyGuid;
 
     ComboBoxWidget *skySelector;
 

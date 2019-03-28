@@ -23,6 +23,8 @@ namespace iris {
     class LightNode;
 }
 
+class Database;
+
 /**
  * This widget displays the properties of the scene.
  */
@@ -35,10 +37,12 @@ public:
 
     void setScene(QSharedPointer<iris::Scene> scene);
     void setupViewSelector();
+	void setDatabase(Database*);
 
 protected slots:
     void onGravityChanged(float value);
     void onSkyTextureChanged(QString texPath);
+    void onSkyChanged(int index);
     void onSkyColorChanged(QColor color);
     void onAmbientColorChanged(QColor color);
     void viewTextureSlotChanged(const QString &text);
@@ -53,6 +57,10 @@ private:
     HFloatSliderWidget *worldGravity;
 
     QString skyBoxTextures[6];
+
+	ComboBoxWidget *skySelector;
+
+	Database *db;
 };
 
 #endif // WORLDPROPERTYWIDGET_H
