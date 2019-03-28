@@ -169,11 +169,11 @@ struct AssetParticleSystem : public Asset
     }
 };
 
-struct AssetCubeMap : public Asset
+struct AssetSky : public Asset
 {
-    AssetCubeMap()
+	AssetSky()
     {
-        type = ModelTypes::CubeMap;
+        type = ModelTypes::Sky;
     }
 
     virtual QVariant getValue()

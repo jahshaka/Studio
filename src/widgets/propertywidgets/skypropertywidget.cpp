@@ -35,18 +35,18 @@ void SkyPropertyWidget::skyTypeChanged(int index)
     // if (index == static_cast<int>(currentSky)) {
     //     return;
     // } else {
-        clearPanel(this->layout());
+	clearPanel(this->layout());
 
-        skySelector = this->addComboBox("Sky Type");
-        skySelector->addItem("Single Color");
-        skySelector->addItem("Cubemap");
-        skySelector->addItem("Equirectangular");
-        skySelector->addItem("Gradient");
-        skySelector->addItem("Material");
-        skySelector->addItem("Realistic");
-        skySelector->setCurrentIndex(index);
+	skySelector = this->addComboBox("Sky Type");
+	skySelector->addItem("Single Color");
+	skySelector->addItem("Cubemap");
+	skySelector->addItem("Equirectangular");
+	skySelector->addItem("Gradient");
+	skySelector->addItem("Material");
+	skySelector->addItem("Realistic");
+	skySelector->setCurrentIndex(index);
 
-        connect(skySelector, SIGNAL(currentIndexChanged(int)), this, SLOT(skyTypeChanged(int)));
+	connect(skySelector, SIGNAL(currentIndexChanged(int)), this, SLOT(skyTypeChanged(int)));
     // }
 
     // Draw the widgets depending on the sky type
@@ -191,6 +191,14 @@ void SkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 void SkyPropertyWidget::setDatabase(Database *db)
 {
     this->db = db;
+}
+
+void SkyPropertyWidget::setSky(const QString &guid, iris::SkyType skyType)
+{
+	skyGuid = guid;
+	skyTypeChanged(static_cast<int>(skyType));
+
+	emit assetSky(guid, skyType);
 }
 
 void SkyPropertyWidget::setEquiMap(const QString &guid)

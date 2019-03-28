@@ -15,6 +15,9 @@ For more information see the LICENSE file
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/materials/defaultskymaterial.h"
 
+#include "core/project.h"
+#include "core/database/database.h"
+
 #include "../texturepickerwidget.h"
 #include "../colorvaluewidget.h"
 #include "../colorpickerwidget.h"
@@ -45,6 +48,11 @@ WorldPropertyWidget::WorldPropertyWidget()
     ambientColor = this->addColorPicker("Ambient Color");
 
     setupViewSelector();
+
+	skySelector = this->addComboBox("Sky");
+
+	connect(skySelector,				SIGNAL(currentIndexChanged(int)),
+			this,						SLOT(onSkyChanged(int)));
 
     skyTexture = this->addTexturePicker("Skybox Texture");
 
@@ -90,6 +98,11 @@ void WorldPropertyWidget::viewTextureSlotChanged(const QString &text)
     }
 }
 
+void WorldPropertyWidget::setDatabase(Database *db)
+{
+	this->db = db;
+}
+
 void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 {
     if (!!scene) {
@@ -107,7 +120,15 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
         skyColor->setColorValue(scene->skyColor);
         ambientColor->setColorValue(scene->ambientColor);
 		worldGravity->setValue(scene->gravity);
-    } else {
+
+		auto skiesAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Sky));
+		skySelector->getWidget()->blockSignals(true);	// don't register initial signals
+		skySelector->clear();
+		for (const auto sky : skiesAvailableFromDatabase) skySelector->addItem(sky.name, sky.guid);
+		skySelector->getWidget()->blockSignals(false);
+		// If we have a current sky set that as the current item
+    }
+	else {
         this->scene.clear();
     }
 }
@@ -115,6 +136,12 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 void WorldPropertyWidget::onGravityChanged(float value)
 {
 	scene->setWorldGravity(value);
+}
+
+void WorldPropertyWidget::onSkyChanged(int index)
+{
+	auto skyGuid = skySelector->getCurrentItemData();
+	qDebug() << skyGuid;
 }
 
 void WorldPropertyWidget::onSkyTextureChanged(QString texPath)
