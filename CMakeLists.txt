@@ -142,6 +142,7 @@ set(SRCS
 	src/misc/updatechecker.cpp
 	src/dialogs/softwareupdatedialog.cpp
     src/core/assethelper.cpp
+    src/core/subscriber.cpp
     src/core/scenenodehelper.cpp
     src/misc/upgrader.cpp
     src/misc/QtAwesome.cpp
@@ -287,6 +288,7 @@ set(HEADERS
     src/dialogs/softwareupdatedialog.h
     src/editor/animationpath.h
     src/core/assethelper.h
+    src/core/subscriber.h
     src/core/scenenodehelper.h
     src/misc/upgrader.h
     src/misc/QtAwesome.h

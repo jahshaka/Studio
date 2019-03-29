@@ -469,7 +469,9 @@ QString Database::createAssetEntry(
 	const QString &projectGuid,
 	const QString &guid,
 	const QString &assetName,
-	const int &type, const QByteArray &asset)
+	const int &type,
+	const QByteArray &asset,
+	const QByteArray &properties)
 {
 	QSqlQuery query;
 	query.prepare(
@@ -487,7 +489,7 @@ QString Database::createAssetEntry(
 	query.bindValue(":project_guid", projectGuid);
 	query.bindValue(":version", Constants::CONTENT_VERSION);
 	query.bindValue(":guid", guid);
-	query.bindValue(":properties", QByteArray());
+	query.bindValue(":properties", properties);
 	query.bindValue(":author", QString());
 	query.bindValue(":asset", asset);
 	query.bindValue(":license", QString());

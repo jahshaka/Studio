@@ -260,7 +260,7 @@ protected:
 protected slots:
     void treeItemSelected(QTreeWidgetItem* item);
     void treeItemChanged(QTreeWidgetItem* item,int index);
-
+	void updateAssetSkyItemFromSkyPropertyWidget(const QString &guid, iris::SkyType skyType);
 
     void sceneTreeCustomContextMenu(const QPoint &);
     void sceneViewCustomContextMenu(const QPoint &);

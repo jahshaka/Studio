@@ -54,7 +54,7 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 #include "widgets/sceneviewwidget.h"
-
+#include "core/subscriber.h"
 #include "core/materialpreset.h"
 #include "io/materialpresetreader.h"
 #include "io/materialreader.hpp"
@@ -119,6 +119,9 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	// The signal will be emitted from another thread (Nick)
 	connect(ThumbnailGenerator::getSingleton()->renderThread,   SIGNAL(thumbnailComplete(ThumbnailResult*)),
 		    this,                                               SLOT(onThumbnailResult(ThumbnailResult*)));
+
+	connect(Globals::eventSubscriber,	&Subscriber::updateAssetSkyItemFromSkyPropertyWidget,
+			this,						&AssetWidget::updateAssetSkyItemFromSkyPropertyWidget);
 
 	breadCrumbLayout = new QHBoxLayout;
 	breadCrumbLayout->setSpacing(0);
@@ -552,6 +555,11 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 
 	}
 
+	if (assetData.type == static_cast<int>(ModelTypes::Sky)) {
+		int skyType = prop.value("sky").toObject().value("type").toInt();
+		item->setData(SKY_TYPE_ROLE, skyType);
+	}
+
     if (assetData.type == static_cast<int>(ModelTypes::Shader)) {
         item->setData(MODEL_TYPE_ROLE, assetData.type);
 		if(thumbnail.loadFromData(assetData.thumbnail, "PNG"))   item->setIcon(QIcon(thumbnail));
@@ -736,6 +744,24 @@ void AssetWidget::treeItemSelected(QTreeWidgetItem *item)
 void AssetWidget::treeItemChanged(QTreeWidgetItem *item, int column)
 {
 
+}
+
+void AssetWidget::updateAssetSkyItemFromSkyPropertyWidget(const QString &guid, iris::SkyType skyType)
+{
+	QJsonObject properties;
+	QJsonObject skyProps;
+	skyProps["type"] = static_cast<int>(skyType);
+	properties["sky"] = skyProps;
+
+	db->updateAssetProperties(guid, QJsonDocument(properties).toBinaryData());
+
+	for (int i = 0; i < ui->assetView->count(); i++) {
+		QListWidgetItem* item = ui->assetView->item(i);
+		if (item->data(MODEL_GUID_ROLE).toString() == guid) {
+			item->setData(SKY_TYPE_ROLE, static_cast<int>(skyType));
+			return;
+		}
+	}
 }
 
 void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
@@ -1847,12 +1873,17 @@ void AssetWidget::createSky()
     item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Sky));
     item->setData(SKY_TYPE_ROLE, static_cast<int>(iris::SkyType::SINGLE_COLOR));
 
+	QJsonObject properties;
+	QJsonObject skyProps;
+	skyProps["type"] = static_cast<int>(iris::SkyType::SINGLE_COLOR);
+	properties["sky"] = skyProps;
+
     // code goes here
     db->createAssetEntry(assetGuid,
                          "Sky",
                          static_cast<int>(ModelTypes::Sky),
                          assetItem.selectedGuid,
-                         QByteArray());
+						 QJsonDocument(properties).toBinaryData());
 
     //auto assetShader = new AssetCubeMap;
     //assetShader->fileName = "Sky";

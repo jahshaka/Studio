@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "../checkboxwidget.h"
 #include "cubemappropertywidget.h"
 #include "core/database/database.h"
+#include "core/subscriber.h"
 #include "globals.h"
 
 #include "io/assetmanager.h"
@@ -134,6 +135,8 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
     scene->skyType = currentSky;
     scene->switchSkyTexture(currentSky);
+
+	emit Globals::eventSubscriber->updateAssetSkyItemFromSkyPropertyWidget(skyGuid, currentSky);
 }
 
 void SkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
@@ -197,8 +200,6 @@ void SkyPropertyWidget::setSky(const QString &guid, iris::SkyType skyType)
 {
 	skyGuid = guid;
 	skyTypeChanged(static_cast<int>(skyType));
-
-	emit assetSky(guid, skyType);
 }
 
 void SkyPropertyWidget::setEquiMap(const QString &guid)
