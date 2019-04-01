@@ -114,25 +114,24 @@ void SkyPropertyWidget::skyTypeChanged(int index)
     }
     else if (index == static_cast<int>(iris::SkyType::REALISTIC)) {
         scene->skyType = iris::SkyType::REALISTIC;
-        // floats
-        // height
-        luminance = this->addFloatValueSlider("Luminance", 0.01, 1.f);
-        reileigh = this->addFloatValueSlider("Reileigh", 0, 10.f);
-        mieCoefficient = this->addFloatValueSlider("Mie Coeff", 0, 100.f);
-        mieDirectionalG = this->addFloatValueSlider("Mie Dir.", 0, 100.f);
-        turbidity = this->addFloatValueSlider("Turbidity", 0, 1.f);
-        sunPosX = this->addFloatValueSlider("X", 0, 10.f);
-        sunPosY = this->addFloatValueSlider("Y", 0, 10.f);
-        sunPosZ = this->addFloatValueSlider("Z", 0, 10.f);
 
-        connect(luminance, SIGNAL(valueChanged(float)), SLOT(onLuminanceChanged(float)));
-        connect(reileigh, SIGNAL(valueChanged(float)), SLOT(onReileighChanged(float)));
-        connect(mieCoefficient, SIGNAL(valueChanged(float)), SLOT(onMieCoeffGChanged(float)));
-        connect(mieDirectionalG, SIGNAL(valueChanged(float)), SLOT(onMieDireChanged(float)));
-        connect(turbidity, SIGNAL(valueChanged(float)), SLOT(onTurbidityChanged(float)));
-        connect(sunPosX, SIGNAL(valueChanged(float)), SLOT(onSunPosXChanged(float)));
-        connect(sunPosY, SIGNAL(valueChanged(float)), SLOT(onSunPosYChanged(float)));
-        connect(sunPosZ, SIGNAL(valueChanged(float)), SLOT(onSunPosZChanged(float)));
+        luminance		= this->addFloatValueSlider("Luminance", 0.01, 1.f, 1.f);
+        reileigh		= this->addFloatValueSlider("Reileigh", 0, 10.f, 2.5f);
+        mieCoefficient	= this->addFloatValueSlider("Mie Coeff", 0, 100.f, .053f);
+        mieDirectionalG = this->addFloatValueSlider("Mie Dir.", 0, 100.f, .75f);
+        turbidity		= this->addFloatValueSlider("Turbidity", 0, 1.f, .32f);
+        sunPosX			= this->addFloatValueSlider("X", 0, 10.f, 10.f);
+        sunPosY			= this->addFloatValueSlider("Y", 0, 10.f, 7.f);
+        sunPosZ			= this->addFloatValueSlider("Z", 0, 10.f, 10.f);
+
+        connect(luminance,			SIGNAL(valueChanged(float)), SLOT(onLuminanceChanged(float)));
+        connect(reileigh,			SIGNAL(valueChanged(float)), SLOT(onReileighChanged(float)));
+        connect(mieCoefficient,		SIGNAL(valueChanged(float)), SLOT(onMieCoeffGChanged(float)));
+        connect(mieDirectionalG,	SIGNAL(valueChanged(float)), SLOT(onMieDireChanged(float)));
+        connect(turbidity,			SIGNAL(valueChanged(float)), SLOT(onTurbidityChanged(float)));
+        connect(sunPosX,			SIGNAL(valueChanged(float)), SLOT(onSunPosXChanged(float)));
+        connect(sunPosY,			SIGNAL(valueChanged(float)), SLOT(onSunPosYChanged(float)));
+        connect(sunPosZ,			SIGNAL(valueChanged(float)), SLOT(onSunPosZChanged(float)));
     }
 
     currentSky = static_cast<iris::SkyType>(index);
@@ -220,7 +219,6 @@ void SkyPropertyWidget::setSky(const QString &guid, iris::SkyType skyType)
 		}
 
 		case iris::SkyType::SINGLE_COLOR: {
-			qDebug() << "reading " << skyDefinition.value("skyColor").toObject();
 			singleColor->setColorValue(SceneReader::readColor(skyDefinition.value("skyColor").toObject()));
 			break;
 		}

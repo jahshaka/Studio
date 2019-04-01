@@ -89,42 +89,44 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     //scene properties
 
     // deprecated
-    QJsonObject skyTexture;
-    skyTexture["front"] = getRelativePath(scene->skyBoxTextures[0]);
-    skyTexture["back"] = getRelativePath(scene->skyBoxTextures[1]);
-    skyTexture["top"] = getRelativePath(scene->skyBoxTextures[2]);
-    skyTexture["bottom"] = getRelativePath(scene->skyBoxTextures[3]);
-    skyTexture["left"] = getRelativePath(scene->skyBoxTextures[4]);
-    skyTexture["right"] = getRelativePath(scene->skyBoxTextures[5]);
+    //QJsonObject skyTexture;
+    //skyTexture["front"] = getRelativePath(scene->skyBoxTextures[0]);
+    //skyTexture["back"] = getRelativePath(scene->skyBoxTextures[1]);
+    //skyTexture["top"] = getRelativePath(scene->skyBoxTextures[2]);
+    //skyTexture["bottom"] = getRelativePath(scene->skyBoxTextures[3]);
+    //skyTexture["left"] = getRelativePath(scene->skyBoxTextures[4]);
+    //skyTexture["right"] = getRelativePath(scene->skyBoxTextures[5]);
 
     switch (scene->skyType) {
-        case iris::SkyType::SINGLE_COLOR: { sceneObj["skyType"] = (int) iris::SkyType::SINGLE_COLOR; break; }
-        case iris::SkyType::CUBEMAP: { sceneObj["skyType"] = (int) iris::SkyType::CUBEMAP; break; }
-        case iris::SkyType::EQUIRECTANGULAR: { sceneObj["skyType"] = (int) iris::SkyType::EQUIRECTANGULAR; break; }
-        case iris::SkyType::GRADIENT: { sceneObj["skyType"] = (int) iris::SkyType::GRADIENT; break; }
-        case iris::SkyType::MATERIAL: { sceneObj["skyType"] = (int) iris::SkyType::MATERIAL; break; }
-        case iris::SkyType::REALISTIC: { sceneObj["skyType"] = (int) iris::SkyType::REALISTIC; break; }
+        case iris::SkyType::SINGLE_COLOR:		{ sceneObj["skyType"] = (int) iris::SkyType::SINGLE_COLOR; break;		}
+        case iris::SkyType::CUBEMAP:			{ sceneObj["skyType"] = (int) iris::SkyType::CUBEMAP; break;			}
+        case iris::SkyType::EQUIRECTANGULAR:	{ sceneObj["skyType"] = (int) iris::SkyType::EQUIRECTANGULAR; break;	}
+        case iris::SkyType::GRADIENT:			{ sceneObj["skyType"] = (int) iris::SkyType::GRADIENT; break;			}
+        case iris::SkyType::MATERIAL:			{ sceneObj["skyType"] = (int) iris::SkyType::MATERIAL; break;			}
+        case iris::SkyType::REALISTIC:			{ sceneObj["skyType"] = (int) iris::SkyType::REALISTIC; break;			}
         default: break;
     }
 
-    sceneObj["cubeMapGuid"] = scene->cubeMapGuid;
-    sceneObj["materialSkyGuid"] = scene->materialGuid;
-    sceneObj["equiSkyGuid"] = scene->equiTextureGuid;
-    sceneObj["skyColor"] = jsonColor(scene->skyColor);
+    //sceneObj["cubeMapGuid"] = scene->cubeMapGuid;
+    //sceneObj["materialSkyGuid"] = scene->materialGuid;
+    //sceneObj["equiSkyGuid"] = scene->equiTextureGuid;
+    //sceneObj["skyColor"] = jsonColor(scene->skyColor);
 
-    QJsonObject realisticSky;
-    realisticSky["luminance"] = scene->skyRealistic.luminance;
-    realisticSky["reileigh"] = scene->skyRealistic.reileigh;
-    realisticSky["mieCoefficient"] = scene->skyRealistic.mieCoefficient;
-    realisticSky["mieDirectionalG"] = scene->skyRealistic.mieDirectionalG;
-    realisticSky["turbidity"] = scene->skyRealistic.turbidity;
-    realisticSky["sunPosX"] = scene->skyRealistic.sunPosX;
-    realisticSky["sunPosY"] = scene->skyRealistic.sunPosY;
-    realisticSky["sunPosZ"] = scene->skyRealistic.sunPosZ;
+    sceneObj["skyGuid"] = scene->skyGuid;
 
-    sceneObj["realisticSky"] = realisticSky;
+    //QJsonObject realisticSky;
+    //realisticSky["luminance"] = scene->skyRealistic.luminance;
+    //realisticSky["reileigh"] = scene->skyRealistic.reileigh;
+    //realisticSky["mieCoefficient"] = scene->skyRealistic.mieCoefficient;
+    //realisticSky["mieDirectionalG"] = scene->skyRealistic.mieDirectionalG;
+    //realisticSky["turbidity"] = scene->skyRealistic.turbidity;
+    //realisticSky["sunPosX"] = scene->skyRealistic.sunPosX;
+    //realisticSky["sunPosY"] = scene->skyRealistic.sunPosY;
+    //realisticSky["sunPosZ"] = scene->skyRealistic.sunPosZ;
 
-    sceneObj["skyBox"] = skyTexture;
+    //sceneObj["realisticSky"] = realisticSky;
+
+    //sceneObj["skyBox"] = skyTexture;
     sceneObj["gravity"] = scene->gravity;
     // sceneObj["skyColor"] = jsonColor(scene->skyColor);
     sceneObj["ambientColor"] = jsonColor(scene->ambientColor);

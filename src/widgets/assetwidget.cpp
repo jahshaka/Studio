@@ -557,7 +557,9 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 
 	if (assetData.type == static_cast<int>(ModelTypes::Sky)) {
 		int skyType = prop.value("sky").toObject().value("type").toInt();
+		qDebug() << "justice" << prop << assetData.type;
 		item->setData(SKY_TYPE_ROLE, skyType);
+		item->setData(MODEL_TYPE_ROLE, assetData.type);
 	}
 
     if (assetData.type == static_cast<int>(ModelTypes::Shader)) {
@@ -1876,12 +1878,18 @@ void AssetWidget::createSky()
 	skyDescription.insert("skyColor", SceneWriter::jsonColor(QColor(255, 255, 255, 255)));
 
     // code goes here
-    db->createAssetEntry(assetGuid,
-                         "Sky",
-                         static_cast<int>(ModelTypes::Sky),
-                         assetItem.selectedGuid,
-						 QJsonDocument(skyDescription).toBinaryData(),
-						 QJsonDocument(properties).toBinaryData());
+	db->createAssetEntry(
+		assetGuid,
+		"Sky",
+		static_cast<int>(ModelTypes::Sky),
+		Globals::project->getProjectGuid(),
+		QString(),
+		QString(),
+		QByteArray(),
+		QJsonDocument(properties).toBinaryData(),
+		QByteArray(),
+		QJsonDocument(skyDescription).toBinaryData()
+	);
 
     //auto assetShader = new AssetCubeMap;
     //assetShader->fileName = "Sky";

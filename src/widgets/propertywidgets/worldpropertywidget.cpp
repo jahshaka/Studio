@@ -140,9 +140,7 @@ void WorldPropertyWidget::onGravityChanged(float value)
 
 void WorldPropertyWidget::onSkyChanged(int index)
 {
-	auto skyGuid = skySelector->getCurrentItemData();
-	qDebug() << "Set sky guid to " << skyGuid;
-	scene->skyGuid = skyGuid;
+	scene->skyGuid = skySelector->getCurrentItemData();
 }
 
 void WorldPropertyWidget::onSkyTextureChanged(QString texPath)
