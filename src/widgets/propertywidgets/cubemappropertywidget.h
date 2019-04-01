@@ -13,6 +13,9 @@ For more information see the LICENSE file
 #define CUBEMAPPROPERTY_H
 
 #include <QWidget>
+#include <QJsonDocument>
+#include <QJsonObject>
+
 #include <QSharedPointer>
 
 #include "irisgl/src/irisglfwd.h"
@@ -37,6 +40,8 @@ public:
     void removeDependency(QString);
 
     void leaveEvent(QEvent*) override;
+
+	QJsonObject valuesAsJson() const;
 
 public slots:
     void onSlotChanged(QString value, int index);

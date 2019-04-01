@@ -23,7 +23,8 @@ For more information see the LICENSE file
 #include "core/database/database.h"
 #include "core/subscriber.h"
 #include "globals.h"
-
+#include "io/scenewriter.h"
+#include "io/scenereader.h"
 #include "io/assetmanager.h"
 
 SkyPropertyWidget::SkyPropertyWidget()
@@ -38,6 +39,8 @@ void SkyPropertyWidget::skyTypeChanged(int index)
     // } else {
 	clearPanel(this->layout());
 
+	setMouseTracking(true);
+
 	skySelector = this->addComboBox("Sky Type");
 	skySelector->addItem("Single Color");
 	skySelector->addItem("Cubemap");
@@ -50,12 +53,13 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 	connect(skySelector, SIGNAL(currentIndexChanged(int)), this, SLOT(skyTypeChanged(int)));
     // }
 
+
     // Draw the widgets depending on the sky type
     if (index == static_cast<int>(iris::SkyType::SINGLE_COLOR)) {
         scene->skyType = iris::SkyType::SINGLE_COLOR;
 
         singleColor = this->addColorPicker("Sky Color");
-        singleColor->setColor(scene->skyColor);
+        //singleColor->setColor(scene->skyColor);
 
         connect(singleColor->getPicker(), SIGNAL(onColorChanged(QColor)),
             this, SLOT(onSingleSkyColorChanged(QColor)));
@@ -135,8 +139,6 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
     scene->skyType = currentSky;
     scene->switchSkyTexture(currentSky);
-
-	emit Globals::eventSubscriber->updateAssetSkyItemFromSkyPropertyWidget(skyGuid, currentSky);
 }
 
 void SkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
@@ -146,7 +148,7 @@ void SkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 
         skyTypeChanged(static_cast<int>(scene->skyType));
 
-        switch (scene->skyType)  {
+        /*switch (scene->skyType)  {
             case iris::SkyType::REALISTIC: {
                 reileigh->setValue(scene->skyRealistic.reileigh);
                 luminance->setValue(scene->skyRealistic.luminance);
@@ -184,7 +186,7 @@ void SkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
             }
 
             default: break;
-        }
+        }*/
 
     } else {
         this->scene.clear();
@@ -200,6 +202,119 @@ void SkyPropertyWidget::setSky(const QString &guid, iris::SkyType skyType)
 {
 	skyGuid = guid;
 	skyTypeChanged(static_cast<int>(skyType));
+
+	QJsonDocument propDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
+	QJsonObject skyDefinition = propDoc.object();
+
+	switch (skyType) {
+		case iris::SkyType::REALISTIC: {
+			reileigh->setValue(skyDefinition.value("reileigh").toDouble());
+			luminance->setValue(skyDefinition.value("luminance").toDouble());
+			mieCoefficient->setValue(skyDefinition.value("mieCoefficient").toDouble());
+			mieDirectionalG->setValue(skyDefinition.value("mieDirectionalG").toDouble());
+			turbidity->setValue(skyDefinition.value("turbidity").toDouble());
+			sunPosX->setValue(skyDefinition.value("sunPosX").toInt());
+			sunPosY->setValue(skyDefinition.value("sunPosY").toInt());
+			sunPosZ->setValue(skyDefinition.value("sunPosZ").toInt());
+			break;
+		}
+
+		case iris::SkyType::SINGLE_COLOR: {
+			qDebug() << "reading " << skyDefinition.value("skyColor").toObject();
+			singleColor->setColorValue(SceneReader::readColor(skyDefinition.value("skyColor").toObject()));
+			break;
+		}
+
+		case iris::SkyType::CUBEMAP: {
+			if (!scene->cubeMapGuid.isEmpty()) {
+				cubeSelector->setCurrentItemData(scene->cubeMapGuid);
+				setSkyMap(scene->cubeMapGuid);
+			}
+			break;
+		}
+
+		case iris::SkyType::MATERIAL: {
+			shaderSelector->setCurrentItemData(scene->materialGuid);
+			break;
+		}
+
+		case iris::SkyType::GRADIENT: {
+			shaderSelector->setCurrentItemData(scene->materialGuid);
+			break;
+		}
+
+		case iris::SkyType::EQUIRECTANGULAR: {
+			setEquiMap(scene->equiTextureGuid);
+			break;
+		}
+
+		default: break;
+	}
+}
+
+// Let's hijack this event and use it to update the asset in the db
+void SkyPropertyWidget::hideEvent(QHideEvent *event)
+{
+	QJsonObject properties;
+	QJsonObject skyProps;
+	skyProps.insert("type", static_cast<int>(currentSky));
+	properties.insert("sky", skyProps);
+
+	skyProperties = QJsonObject();
+	skyProperties.insert("guid", skyGuid);
+
+	switch (static_cast<int>(currentSky)) {
+		case static_cast<int>(iris::SkyType::SINGLE_COLOR) : {
+			for (const QString& key : singleColorDefinition.keys()) {
+				skyProperties.insert(key, singleColorDefinition.value(key));
+			}
+			break;
+		}
+
+		case static_cast<int>(iris::SkyType::CUBEMAP) : {
+			for (const QString& key : cubeMapDefinition.keys()) {
+				skyProperties.insert(key, cubeMapDefinition.value(key));
+			}
+			break;
+		}
+
+		case static_cast<int>(iris::SkyType::EQUIRECTANGULAR) : {
+			for (const QString& key : equiSkyDefinition.keys()) {
+				skyProperties.insert(key, equiSkyDefinition.value(key));
+			}
+			break;
+		}
+
+		case static_cast<int>(iris::SkyType::MATERIAL) : {
+			for (const QString& key : materialDefinition.keys()) {
+				skyProperties.insert(key, materialDefinition.value(key));
+			}
+			break;
+		}
+
+		case static_cast<int>(iris::SkyType::GRADIENT) : {
+			for (const QString& key : gradientDefinition.keys()) {
+				skyProperties.insert(key, gradientDefinition.value(key));
+			}
+			break;
+		}
+
+		case static_cast<int>(iris::SkyType::REALISTIC) : {
+			for (const QString& key : realisticDefinition.keys()) {
+				skyProperties.insert(key, realisticDefinition.value(key));
+			}
+			break;
+		}
+	}
+
+	qDebug() << skyProperties;
+
+	db->updateAssetAsset(skyGuid, QJsonDocument(skyProperties).toBinaryData());
+	db->updateAssetProperties(skyGuid, QJsonDocument(properties).toBinaryData());
+
+	emit Globals::eventSubscriber->updateAssetSkyItemFromSkyPropertyWidget(skyGuid, currentSky);
+
+	return;
 }
 
 void SkyPropertyWidget::setEquiMap(const QString &guid)
@@ -262,57 +377,79 @@ void SkyPropertyWidget::setSkyMap(const QString &guid)
 
 void SkyPropertyWidget::onSingleSkyColorChanged(QColor color)
 {
-    if (!!scene) scene->skyColor = color;
+	singleColorDefinition.insert("skyColor", SceneWriter::jsonColor(color));
+
+	if (!!scene) {
+		if (scene->skyGuid == skyGuid) scene->skyColor = color;
+	}
 }
 
 void SkyPropertyWidget::onSkyCubeMapChanged(int index)
 {
     Q_UNUSED(index);
-    if (!!scene) setSkyMap(cubeSelector->getCurrentItemData());
+	if (!!scene) {
+		setSkyMap(cubeSelector->getCurrentItemData());
+	}
 }
 
 void SkyPropertyWidget::onEquiTextureChanged(QString tex)
 {
-    if (!!scene) setEquiMap(tex);
+	equiSkyDefinition.insert("equiSkyGuid", tex);
+
+	if (!!scene) {
+		if (scene->skyGuid == skyGuid) setEquiMap(tex);
+	}
 }
 
 void SkyPropertyWidget::onReileighChanged(float val)
 {
-    if (!!scene) scene->skyRealistic.reileigh = val;
+	realisticDefinition.insert("reileigh", val);
+	if (!!scene) {
+		if (scene->skyGuid == skyGuid) scene->skyRealistic.reileigh = val;
+	}
 }
 
 void SkyPropertyWidget::onLuminanceChanged(float val)
 {
-    if (!!scene) scene->skyRealistic.luminance = val;
+	realisticDefinition.insert("luminance", val);
+	if (!!scene) {
+		if (scene->skyGuid == skyGuid) scene->skyRealistic.luminance = val;
+	}
 }
 
 void SkyPropertyWidget::onTurbidityChanged(float val)
 {
+	realisticDefinition.insert("turbidity", val);
     if (!!scene) scene->skyRealistic.turbidity = val;
 }
 
 void SkyPropertyWidget::onMieCoeffGChanged(float val)
 {
+	realisticDefinition.insert("mieCoefficient", val);
     if (!!scene) scene->skyRealistic.mieCoefficient = val;
 }
 
 void SkyPropertyWidget::onMieDireChanged(float val)
 {
+	realisticDefinition.insert("mieDirectionalG", val);
     if (!!scene) scene->skyRealistic.mieDirectionalG = val;
 }
 
 void SkyPropertyWidget::onSunPosXChanged(float val)
 {
+	realisticDefinition.insert("sunPosX", val);
     if (!!scene)  scene->skyRealistic.sunPosX = val;
 }
 
 void SkyPropertyWidget::onSunPosYChanged(float val)
 {
+	realisticDefinition.insert("sunPosY", val);
     if (!!scene) scene->skyRealistic.sunPosY = val;
 }
 
 void SkyPropertyWidget::onSunPosZChanged(float val)
 {
+	realisticDefinition.insert("sunPosZ", val);
     if (!!scene) scene->skyRealistic.sunPosZ = val;
 }
 

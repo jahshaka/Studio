@@ -12,8 +12,6 @@ For more information see the LICENSE file
 #include "cubemappropertywidget.h"
 
 #include <QDirIterator>
-#include <QJsonDocument>
-#include <QJsonObject>
 
 #include "irisgl/src/graphics/shader.h"
 #include "irisgl/src/scenegraph/meshnode.h"
@@ -248,4 +246,17 @@ void CubeMapPropertyWidget::removeDependency(QString)
 void CubeMapPropertyWidget::leaveEvent(QEvent *event)
 {
     QWidget::leaveEvent(event);
+}
+
+QJsonObject CubeMapPropertyWidget::valuesAsJson() const
+{
+	QJsonObject mapDefinition;
+	mapDefinition["front"]	= cubemapFront->textureGuid;
+	mapDefinition["back"]	= cubemapBack->textureGuid;
+	mapDefinition["left"]	= cubemapLeft->textureGuid;
+	mapDefinition["right"]	= cubemapRight->textureGuid;
+	mapDefinition["top"]	= cubemapTop->textureGuid;
+	mapDefinition["bottom"] = cubemapBottom->textureGuid;
+
+	return mapDefinition;
 }

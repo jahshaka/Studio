@@ -207,7 +207,6 @@ void SceneNodePropertiesWidget::setAssetItem(QListWidgetItem *item)
 		skyPropView->setParent(this);
 		skyPropView->setSky(item->data(MODEL_GUID_ROLE).toString(),
 							static_cast<iris::SkyType>(item->data(SKY_TYPE_ROLE).toInt()));
-		// skyPropView->setScene(sceneNode->scene);
 		widgetPropertyLayout->addWidget(skyPropView);
 		widgetPropertyLayout->addStretch();
     }

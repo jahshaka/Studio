@@ -748,13 +748,6 @@ void AssetWidget::treeItemChanged(QTreeWidgetItem *item, int column)
 
 void AssetWidget::updateAssetSkyItemFromSkyPropertyWidget(const QString &guid, iris::SkyType skyType)
 {
-	QJsonObject properties;
-	QJsonObject skyProps;
-	skyProps["type"] = static_cast<int>(skyType);
-	properties["sky"] = skyProps;
-
-	db->updateAssetProperties(guid, QJsonDocument(properties).toBinaryData());
-
 	for (int i = 0; i < ui->assetView->count(); i++) {
 		QListWidgetItem* item = ui->assetView->item(i);
 		if (item->data(MODEL_GUID_ROLE).toString() == guid) {
@@ -1875,14 +1868,19 @@ void AssetWidget::createSky()
 
 	QJsonObject properties;
 	QJsonObject skyProps;
-	skyProps["type"] = static_cast<int>(iris::SkyType::SINGLE_COLOR);
-	properties["sky"] = skyProps;
+	skyProps.insert("type", item->data(SKY_TYPE_ROLE).toInt());
+	properties.insert("sky", skyProps);
+
+	QJsonObject skyDescription;
+	skyDescription.insert("guid", assetGuid);
+	skyDescription.insert("skyColor", SceneWriter::jsonColor(QColor(255, 255, 255, 255)));
 
     // code goes here
     db->createAssetEntry(assetGuid,
                          "Sky",
                          static_cast<int>(ModelTypes::Sky),
                          assetItem.selectedGuid,
+						 QJsonDocument(skyDescription).toBinaryData(),
 						 QJsonDocument(properties).toBinaryData());
 
     //auto assetShader = new AssetCubeMap;

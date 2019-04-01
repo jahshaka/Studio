@@ -18,6 +18,10 @@ For more information see the LICENSE file
 
 #include "irisgl/src/scenegraph/scene.h"
 
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QHideEvent>
+
 class Database;
 
 class ColorValueWidget;
@@ -40,6 +44,8 @@ public:
     void setDatabase(Database *);
 
 	void setSky(const QString &guid, iris::SkyType skyType);
+
+	void hideEvent(QHideEvent *event);
 
 protected slots:
     void setEquiMap(const QString &guid);
@@ -65,6 +71,8 @@ private:
     iris::SkyType currentSky;
 	QString skyGuid;
 
+	QJsonObject skyProperties;
+
     ComboBoxWidget *skySelector;
 
     ColorValueWidget *singleColor;
@@ -89,6 +97,13 @@ private:
     HFloatSliderWidget *sunPosX;
     HFloatSliderWidget *sunPosY;
     HFloatSliderWidget *sunPosZ;
+
+	QJsonObject singleColorDefinition;
+	QJsonObject cubeMapDefinition;
+	QJsonObject equiSkyDefinition;
+	QJsonObject gradientDefinition;
+	QJsonObject materialDefinition;
+	QJsonObject realisticDefinition;
 };
 
 #endif // SKYPROPERTYWIDGET_H

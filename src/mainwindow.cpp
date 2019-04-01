@@ -354,6 +354,25 @@ iris::ScenePtr MainWindow::createDefaultScene()
 
     scene->rootNode->addChild(node);
 
+	QString skyGuid = GUIDManager::generateGUID();
+
+	QJsonObject properties;
+	QJsonObject skyProps;
+	skyProps.insert("type", static_cast<int>(SKY_TYPE_ROLE));
+	properties.insert("sky", skyProps);
+
+	QJsonObject skyDescription;
+	skyDescription.insert("guid", skyGuid);
+	skyDescription.insert("skyColor", SceneWriter::jsonColor(QColor(255, 255, 255, 255)));
+
+	// code goes here
+	db->createAssetEntry(skyGuid,
+		"Default Sky",
+		static_cast<int>(ModelTypes::Sky),
+		Globals::project->getProjectGuid(),
+		QJsonDocument(skyDescription).toBinaryData(),
+		QJsonDocument(properties).toBinaryData());
+
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
