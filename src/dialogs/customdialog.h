@@ -27,7 +27,8 @@ public:
 	void addTitle(QString title);
     void addConfirmAndCancelButtons(QString confirmButtonText = "ok", QString cancelButtonText = "cancel");
 	void setButtonOrientations(Qt::Orientation orientation);
-
+	void setHolderWidth(int width);
+	void sendAcceptSignal(bool accept);
 
     void insertWidget(QWidget *widget, int index = -1);
 	int index = 1;// level at which new widgets are inserted
