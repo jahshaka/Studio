@@ -2072,7 +2072,9 @@ bool Database::checkIfRecordExists(const QString & record, const QVariant &value
 bool Database::checkIfDependencyExists(const QString& depender, const QString& dependee)
 {
 	QSqlQuery query;
-	query.prepare(QString("SELECT * from dependencies WHERE depender = '%1' and dependee = '%2'").arg(depender).arg(dependee));
+	query.prepare(QString("SELECT 1 from dependencies WHERE depender = ? and dependee = ?"));
+	query.addBindValue(depender);
+	query.addBindValue(dependee);
 	if (query.exec()) {
 		if (query.first()) return query.value(0).toBool();
 	}
