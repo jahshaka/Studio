@@ -198,7 +198,7 @@ public:
 
 	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table);
     bool checkIfDependencyExists(const QString &depender, const ModelTypes &type);
-
+	bool checkIfDependencyExists(const QString& depender, const QString& dependee);
     QSqlDatabase getDb() { return db; }
 
 private:

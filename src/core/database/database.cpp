@@ -2069,6 +2069,19 @@ bool Database::checkIfRecordExists(const QString & record, const QVariant &value
 	return false;
 }
 
+bool Database::checkIfDependencyExists(const QString& depender, const QString& dependee)
+{
+	QSqlQuery query;
+	query.prepare(QString("SELECT * from dependencies WHERE depender = '%1' and dependee = '%2'").arg(depender).arg(dependee));
+	if (query.exec()) {
+		if (query.first()) return query.value(0).toBool();
+	}
+	else {
+			irisLog("There was an error fetching a record " + query.lastError().text());
+	}
+	return false;
+}
+
 QStringList Database::fetchFolderNameByParent(const QString &guid)
 {
 	QSqlQuery query;
