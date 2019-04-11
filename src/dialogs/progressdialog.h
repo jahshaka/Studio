@@ -30,6 +30,7 @@ public slots:
     void setLabelText(const QString&);
     void setRange(int, int);
     void setValue(int);
+	void setValueAndText(int value, QString text);
     void reset();
 
 private:

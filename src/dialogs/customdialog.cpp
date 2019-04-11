@@ -54,7 +54,8 @@ void CustomDialog::addConfirmButton(QString text)
 {
     okBtn = new QPushButton(text, this);
 	okBtn->setCursor(Qt::PointingHandCursor);
-    okBtn->setStyleSheet(StyleSheet::QPushButtonGreyscaleBig());
+ //   okBtn->setStyleSheet(StyleSheet::QPushButtonGreyscaleBig());
+	okBtn->setStyleSheet(StyleSheet::QPushButtonBlueBig());
     if(!buttonHolder->children().contains(okBtn)) buttonHolder->addWidget(okBtn);
     configureConnections();
 }
@@ -82,15 +83,22 @@ void CustomDialog::addMessage(QString msg)
 void CustomDialog::addTitle(QString title)
 {
 	auto label = new QLabel(title, this);
+	auto wid = new QWidget;
+	auto layout = new QVBoxLayout;
+	wid->setLayout(layout);
+	layout->addSpacing(10);
+	layout->addWidget(label);
+
 	label->setStyleSheet(StyleSheet::QLabelWhite());
 	label->setWordWrap(true);
-	label->setIndent(10);
+	label->setAlignment(Qt::AlignCenter);
+	//label->setIndent(10);
 	QFont f = label->font();
 	f.setWeight(65);
 	f.setPixelSize(20);
 	label->setFont(f);
 	index++;
-	insertWidget(label, 0);
+	insertWidget(wid, 0);
 }
 
 void CustomDialog::addConfirmAndCancelButtons(QString confirmButtonText, QString cancelButtonText)
@@ -104,6 +112,17 @@ void CustomDialog::setButtonOrientations(Qt::Orientation orientation)
 {
 	if (orientation == Qt::Horizontal)	buttonHolder = new QHBoxLayout;
 	else	buttonHolder = new QVBoxLayout;
+}
+
+void CustomDialog::setHolderWidth(int width)
+{
+	holder->setMinimumWidth(width);
+}
+
+void CustomDialog::sendAcceptSignal(bool accept)
+{
+	if (accept) okBtn->click();
+	else cancelBtn->click();
 }
 
 
@@ -121,11 +140,13 @@ void CustomDialog::configureConnections()
     if(buttonWidget->children().contains(okBtn))
     connect(okBtn, &QPushButton::clicked,[=](){
         emit accepted();
+		this->accept();
         close();
     });
     if(buttonWidget->children().contains(cancelBtn))
     connect(cancelBtn, &QPushButton::clicked,[=](){
         emit rejected();
+		this->reject();
         close();
     });
 

@@ -47,3 +47,10 @@ void ProgressDialog::setValue(int val)
     ui->progressBar->setValue(val);
 	QApplication::processEvents();
 }
+
+void ProgressDialog::setValueAndText(int value, QString text)
+{
+	setValue(value);
+	setLabelText(text);
+}
+

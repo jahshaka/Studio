@@ -456,7 +456,7 @@ void ColorView::showAtPosition(QMouseEvent *event, QColor color)
 	int screenY = event->screenPos().y();
 	y = screenY - 40;
 	if (screenX + width() + offset >= QApplication::desktop()->screenGeometry().width())	x = screenX - width() - offset* factor;
-	else	x = (screenX + offset) * factor;
+	else	x = (screenX + offset * factor);
 	if (screenY + height() + offset > geom.height())	y = screenY - height() - offset* factor;
 	if (geometry().y() < 0) y = 10;
 
@@ -826,7 +826,7 @@ QPoint InputCircle::getGlobalPositionFromIndicatorCircle() {
 
 
 ColorDisplay::ColorDisplay(QWidget *parent) : QWidget(parent) {
-    int heightForDisplay = 50;
+    int heightForDisplay = 50/2;
     setMinimumHeight(heightForDisplay);
     auto layout = new QHBoxLayout;
     setLayout(layout);
@@ -853,7 +853,7 @@ void ColorDisplay::paintEvent(QPaintEvent *) {
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setBrush(color);
     //draw entire display
-    painter.drawRoundedRect(QRect(0,0,width(),height()), 25, 25);
+    painter.drawRoundedRect(QRect(0,0,width(),height()), 25/2, 25/2);
 }
 
 

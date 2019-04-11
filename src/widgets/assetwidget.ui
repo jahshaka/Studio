@@ -78,7 +78,7 @@
       <item>
        <widget class="QCheckBox" name="hideDeps">
         <property name="text">
-         <string>Hide dependencies</string>
+         <string>  Hide dependencies</string>
         </property>
         <property name="checked">
          <bool>true</bool>
