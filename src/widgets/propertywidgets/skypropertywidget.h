@@ -43,18 +43,18 @@ public:
     void setScene(QSharedPointer<iris::Scene> scene);
     void setDatabase(Database *);
 
-	void setSky(const QString &guid, iris::SkyType skyType);
+	void setSkyAlongWithProperties(const QString &guid, iris::SkyType skyType);
 
 	void hideEvent(QHideEvent *event);
 
 protected slots:
     void setEquiMap(const QString &guid);
-    void setSkyMap(const QString &guid);
+    void setSkyMap(const QJsonObject& definition);
     void skyTypeChanged(int index);
+	void onSlotChanged(QString value, QString guid, int index);
 
     void onSingleSkyColorChanged(QColor color);
-    void onSkyCubeMapChanged(int index);
-    void onEquiTextureChanged(QString tex);
+    void onEquiTextureChanged(QString guid);
 
     void onReileighChanged(float val);
     void onLuminanceChanged(float val);
@@ -104,6 +104,13 @@ private:
 	QJsonObject gradientDefinition;
 	QJsonObject materialDefinition;
 	QJsonObject realisticDefinition;
+
+	TexturePickerWidget* cubemapFront;
+	TexturePickerWidget* cubemapBack;
+	TexturePickerWidget* cubemapLeft;
+	TexturePickerWidget* cubemapRight;
+	TexturePickerWidget* cubemapTop;
+	TexturePickerWidget* cubemapBottom;
 };
 
 #endif // SKYPROPERTYWIDGET_H

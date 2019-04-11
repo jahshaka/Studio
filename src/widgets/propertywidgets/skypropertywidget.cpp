@@ -19,7 +19,6 @@ For more information see the LICENSE file
 #include "../comboboxwidget.h"
 
 #include "../checkboxwidget.h"
-#include "cubemappropertywidget.h"
 #include "core/database/database.h"
 #include "core/subscriber.h"
 #include "globals.h"
@@ -53,44 +52,100 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 	connect(skySelector, SIGNAL(currentIndexChanged(int)), this, SLOT(skyTypeChanged(int)));
     // }
 
-
     // Draw the widgets depending on the sky type
     if (index == static_cast<int>(iris::SkyType::SINGLE_COLOR)) {
-        scene->skyType = iris::SkyType::SINGLE_COLOR;
-
         singleColor = this->addColorPicker("Sky Color");
-        //singleColor->setColor(scene->skyColor);
+		// This should be revisited, some differences between scene color and our default
+		singleColorDefinition.insert("skyColor", SceneWriter::jsonColor(QColor(255, 118, 117)));
+        
+		connect(singleColor->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onSingleSkyColorChanged(QColor)));
+    }
+	else if (index == static_cast<int>(iris::SkyType::REALISTIC)) {
+		luminance			= addFloatValueSlider("Luminance",	.01f,	1.f,	1.f);
+		reileigh			= addFloatValueSlider("Reileigh",	0,		10.f,	2.5f);
+		mieCoefficient		= addFloatValueSlider("Mie Coeff",	0,		100.f,	.053f);
+		mieDirectionalG		= addFloatValueSlider("Mie Dir.",	0,		100.f,	.75f);
+		turbidity			= addFloatValueSlider("Turbidity",	0,		1.f,	.32f);
+		sunPosX				= addFloatValueSlider("X",			0,		10.f,	10.f);
+		sunPosY				= addFloatValueSlider("Y",			0,		10.f,	7.f);
+		sunPosZ				= addFloatValueSlider("Z",			0,		10.f,	10.f);
 
-        connect(singleColor->getPicker(), SIGNAL(onColorChanged(QColor)),
-            this, SLOT(onSingleSkyColorChanged(QColor)));
+		realisticDefinition.insert("luminance", luminance->getValue());
+		realisticDefinition.insert("reileigh", reileigh->getValue());
+		realisticDefinition.insert("mieCoefficient", mieCoefficient->getValue());
+		realisticDefinition.insert("mieDirectionalG", mieDirectionalG->getValue());
+		realisticDefinition.insert("turbidity", turbidity->getValue());
+		realisticDefinition.insert("sunPosX", sunPosX->getValue());
+		realisticDefinition.insert("sunPosY", sunPosY->getValue());
+		realisticDefinition.insert("sunPosZ", sunPosZ->getValue());
+
+		connect(luminance,			&HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onLuminanceChanged);
+		connect(reileigh,			&HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onReileighChanged);
+		connect(mieCoefficient,		SIGNAL(valueChanged(float)), SLOT(onMieCoeffGChanged(float)));
+		connect(mieDirectionalG,	SIGNAL(valueChanged(float)), SLOT(onMieDireChanged(float)));
+		connect(turbidity,			SIGNAL(valueChanged(float)), SLOT(onTurbidityChanged(float)));
+		connect(sunPosX,			SIGNAL(valueChanged(float)), SLOT(onSunPosXChanged(float)));
+		connect(sunPosY,			SIGNAL(valueChanged(float)), SLOT(onSunPosYChanged(float)));
+		connect(sunPosZ,			SIGNAL(valueChanged(float)), SLOT(onSunPosZChanged(float)));
+	}
+    else if (index == static_cast<int>(iris::SkyType::EQUIRECTANGULAR)) {
+        equiTexture = this->addTexturePicker("Equi Map");
+
+		// There are no default values, this definition gets set whenever we change the texture
+
+		connect(equiTexture, &TexturePickerWidget::valueChanged, this, [this](QString value) {
+			// Remember that asset names are unique (auto incremented) so this is fine
+			QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName());
+			db->removeDependenciesByType(skyGuid, ModelTypes::Texture);
+			if (!assetGuid.isEmpty()) {
+				db->createDependency(
+					static_cast<int>(ModelTypes::Sky),
+					static_cast<int>(ModelTypes::Texture),
+					skyGuid, assetGuid,
+					Globals::project->getProjectGuid()
+				);
+
+				onEquiTextureChanged(assetGuid);
+			}
+        });
     }
     else if (index == static_cast<int>(iris::SkyType::CUBEMAP))
     {
-        scene->skyType = iris::SkyType::CUBEMAP;
-        cubeSelector = this->addComboBox("CubeMap");
+		cubemapFront = this->addTexturePicker("Front");
+		cubemapBack = this->addTexturePicker("Back");
+		cubemapLeft = this->addTexturePicker("Left");
+		cubemapRight = this->addTexturePicker("Right");
+		cubemapTop = this->addTexturePicker("Top");
+		cubemapBottom = this->addTexturePicker("Bottom");
 
-        for (const auto cubemap : AssetManager::getAssets()) {
-            if (cubemap->type == ModelTypes::CubeMap)  {
-                cubeSelector->addItem(cubemap->fileName, cubemap->assetGuid);
-                break;
-            }
-        }
+		// remember the image on the tiles... TODO
+		connect(cubemapFront, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
+			onSlotChanged(value, guid, 0);
+		});
 
-        setSkyMap(cubeSelector->getCurrentItemData());
-        connect(cubeSelector, SIGNAL(currentIndexChanged(int)), this, SLOT(onSkyCubeMapChanged(int)));
-    }
-    else if (index == static_cast<int>(iris::SkyType::EQUIRECTANGULAR)) {
-        scene->skyType = iris::SkyType::EQUIRECTANGULAR;
-        // one string
-        equiTexture = this->addTexturePicker("Equi Map");
+		connect(cubemapBack, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
+			onSlotChanged(value, guid, 1);
+		});
 
-        connect(equiTexture, &TexturePickerWidget::valueChanged, this, [this](QString value) {
-            Q_UNUSED(value);
-            onEquiTextureChanged(equiTexture->textureGuid);
-        });
+		connect(cubemapLeft, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
+			onSlotChanged(value, guid, 2);
+		});
+
+		connect(cubemapRight, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
+			onSlotChanged(value, guid, 3);
+		});
+
+		connect(cubemapTop, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
+			onSlotChanged(value, guid, 4);
+		});
+
+		connect(cubemapBottom, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
+			onSlotChanged(value, guid, 5);
+		});
+
     }
     else if (index == static_cast<int>(iris::SkyType::GRADIENT)) {
-        scene->skyType = iris::SkyType::GRADIENT;
+        //scene->skyType = iris::SkyType::GRADIENT;
         // two strings
         // one float
         gradientType = this->addComboBox("Type");
@@ -102,7 +157,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
         angle = this->addFloatValueSlider("Angle", -360.f, 360.f);
     }
     else if (index == static_cast<int>(iris::SkyType::MATERIAL)) {
-        scene->skyType = iris::SkyType::MATERIAL;
+        //scene->skyType = iris::SkyType::MATERIAL;
         // material asset
         shaderSelector = this->addComboBox("Material");
 
@@ -112,81 +167,47 @@ void SkyPropertyWidget::skyTypeChanged(int index)
             }
         }
     }
-    else if (index == static_cast<int>(iris::SkyType::REALISTIC)) {
-        scene->skyType = iris::SkyType::REALISTIC;
 
-        luminance		= this->addFloatValueSlider("Luminance", 0.01, 1.f, 1.f);
-        reileigh		= this->addFloatValueSlider("Reileigh", 0, 10.f, 2.5f);
-        mieCoefficient	= this->addFloatValueSlider("Mie Coeff", 0, 100.f, .053f);
-        mieDirectionalG = this->addFloatValueSlider("Mie Dir.", 0, 100.f, .75f);
-        turbidity		= this->addFloatValueSlider("Turbidity", 0, 1.f, .32f);
-        sunPosX			= this->addFloatValueSlider("X", 0, 10.f, 10.f);
-        sunPosY			= this->addFloatValueSlider("Y", 0, 10.f, 7.f);
-        sunPosZ			= this->addFloatValueSlider("Z", 0, 10.f, 10.f);
+	// This is a bug, the world property widget should get and set the current sky type, not this widget
+	currentSky = static_cast<iris::SkyType>(index);
+}
 
-        connect(luminance,			SIGNAL(valueChanged(float)), SLOT(onLuminanceChanged(float)));
-        connect(reileigh,			SIGNAL(valueChanged(float)), SLOT(onReileighChanged(float)));
-        connect(mieCoefficient,		SIGNAL(valueChanged(float)), SLOT(onMieCoeffGChanged(float)));
-        connect(mieDirectionalG,	SIGNAL(valueChanged(float)), SLOT(onMieDireChanged(float)));
-        connect(turbidity,			SIGNAL(valueChanged(float)), SLOT(onTurbidityChanged(float)));
-        connect(sunPosX,			SIGNAL(valueChanged(float)), SLOT(onSunPosXChanged(float)));
-        connect(sunPosY,			SIGNAL(valueChanged(float)), SLOT(onSunPosYChanged(float)));
-        connect(sunPosZ,			SIGNAL(valueChanged(float)), SLOT(onSunPosZChanged(float)));
-    }
+void SkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
+{
+	// Normally there'd be a check for if value is empty here but in that case we can clear the guid
+	QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName());
+	db->deleteDependency(skyGuid, guid);
+	// Remember that asset names are unique (auto incremented) so this is fine
+	if (!assetGuid.isEmpty()) {
+		db->createDependency(
+			static_cast<int>(ModelTypes::Sky),
+			static_cast<int>(ModelTypes::Texture),
+			skyGuid,
+			assetGuid,
+			Globals::project->getProjectGuid()
+		);
+	}
 
-    currentSky = static_cast<iris::SkyType>(index);
+	switch (index) {
+		case 0: { cubeMapDefinition.insert("front", !assetGuid.isEmpty() ? assetGuid : QString()); break; }
+		case 1: { cubeMapDefinition.insert("back",	!assetGuid.isEmpty() ? assetGuid : QString()); break; }
+		case 2: { cubeMapDefinition.insert("left",	!assetGuid.isEmpty() ? assetGuid : QString()); break; }
+		case 3: { cubeMapDefinition.insert("right",	!assetGuid.isEmpty() ? assetGuid : QString()); break; }
+		case 4: { cubeMapDefinition.insert("top",	!assetGuid.isEmpty() ? assetGuid : QString()); break; }
+		case 5: { cubeMapDefinition.insert("bottom",!assetGuid.isEmpty() ? assetGuid : QString()); break; }
+		default: break;
+	}
 
-    scene->skyType = currentSky;
-    scene->switchSkyTexture(currentSky);
+	if (!!scene) {
+		if (scene->skyGuid == skyGuid) setSkyMap(cubeMapDefinition);
+	}
 }
 
 void SkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
-
         skyTypeChanged(static_cast<int>(scene->skyType));
-
-        /*switch (scene->skyType)  {
-            case iris::SkyType::REALISTIC: {
-                reileigh->setValue(scene->skyRealistic.reileigh);
-                luminance->setValue(scene->skyRealistic.luminance);
-                mieCoefficient->setValue(scene->skyRealistic.mieCoefficient);
-                mieDirectionalG->setValue(scene->skyRealistic.mieDirectionalG);
-                turbidity->setValue(scene->skyRealistic.turbidity);
-                sunPosX->setValue(scene->skyRealistic.sunPosX);
-                sunPosY->setValue(scene->skyRealistic.sunPosY);
-                sunPosZ->setValue(scene->skyRealistic.sunPosZ);
-                break;
-            }
-
-            case iris::SkyType::SINGLE_COLOR: {
-                singleColor->setColorValue(scene->skyColor);
-                singleColor->setColorValue(scene->skyColor);
-                break;
-            }
-
-            case iris::SkyType::CUBEMAP: {
-                if (!scene->cubeMapGuid.isEmpty()) {
-                    cubeSelector->setCurrentItemData(scene->cubeMapGuid);
-                    setSkyMap(scene->cubeMapGuid);
-                }
-                break;
-            }
-
-            case iris::SkyType::MATERIAL: {
-                shaderSelector->setCurrentItemData(scene->materialGuid);
-                break;
-            }
-
-            case iris::SkyType::EQUIRECTANGULAR: {
-                setEquiMap(scene->equiTextureGuid);
-                break;
-            }
-
-            default: break;
-        }*/
-
     } else {
         this->scene.clear();
     }
@@ -197,7 +218,7 @@ void SkyPropertyWidget::setDatabase(Database *db)
     this->db = db;
 }
 
-void SkyPropertyWidget::setSky(const QString &guid, iris::SkyType skyType)
+void SkyPropertyWidget::setSkyAlongWithProperties(const QString &guid, iris::SkyType skyType)
 {
 	skyGuid = guid;
 	skyTypeChanged(static_cast<int>(skyType));
@@ -212,9 +233,9 @@ void SkyPropertyWidget::setSky(const QString &guid, iris::SkyType skyType)
 			mieCoefficient->setValue(skyDefinition.value("mieCoefficient").toDouble());
 			mieDirectionalG->setValue(skyDefinition.value("mieDirectionalG").toDouble());
 			turbidity->setValue(skyDefinition.value("turbidity").toDouble());
-			sunPosX->setValue(skyDefinition.value("sunPosX").toInt());
-			sunPosY->setValue(skyDefinition.value("sunPosY").toInt());
-			sunPosZ->setValue(skyDefinition.value("sunPosZ").toInt());
+			sunPosX->setValue(skyDefinition.value("sunPosX").toDouble());
+			sunPosY->setValue(skyDefinition.value("sunPosY").toDouble());
+			sunPosZ->setValue(skyDefinition.value("sunPosZ").toDouble());
 			break;
 		}
 
@@ -223,11 +244,13 @@ void SkyPropertyWidget::setSky(const QString &guid, iris::SkyType skyType)
 			break;
 		}
 
+		case iris::SkyType::EQUIRECTANGULAR: {
+			setEquiMap(skyDefinition.value("equiSkyGuid").toString());
+			break;
+		}
+
 		case iris::SkyType::CUBEMAP: {
-			if (!scene->cubeMapGuid.isEmpty()) {
-				cubeSelector->setCurrentItemData(scene->cubeMapGuid);
-				setSkyMap(scene->cubeMapGuid);
-			}
+			setSkyMap(skyDefinition);
 			break;
 		}
 
@@ -237,12 +260,7 @@ void SkyPropertyWidget::setSky(const QString &guid, iris::SkyType skyType)
 		}
 
 		case iris::SkyType::GRADIENT: {
-			shaderSelector->setCurrentItemData(scene->materialGuid);
-			break;
-		}
-
-		case iris::SkyType::EQUIRECTANGULAR: {
-			setEquiMap(scene->equiTextureGuid);
+			//shaderSelector->setCurrentItemData(scene->materialGuid);
 			break;
 		}
 
@@ -250,7 +268,7 @@ void SkyPropertyWidget::setSky(const QString &guid, iris::SkyType skyType)
 	}
 }
 
-// Let's hijack this event and use it to update the asset in the db
+// Let's hijack this event and use it to update the asset in the db (iKlsR)
 void SkyPropertyWidget::hideEvent(QHideEvent *event)
 {
 	QJsonObject properties;
@@ -268,17 +286,24 @@ void SkyPropertyWidget::hideEvent(QHideEvent *event)
 			}
 			break;
 		}
-
-		case static_cast<int>(iris::SkyType::CUBEMAP) : {
-			for (const QString& key : cubeMapDefinition.keys()) {
-				skyProperties.insert(key, cubeMapDefinition.value(key));
+		
+		case static_cast<int>(iris::SkyType::REALISTIC) : {
+			for (const QString& key : realisticDefinition.keys()) {
+				skyProperties.insert(key, realisticDefinition.value(key));
 			}
 			break;
 		}
 
-		case static_cast<int>(iris::SkyType::EQUIRECTANGULAR) : {
+		case static_cast<int>(iris::SkyType::EQUIRECTANGULAR): {
 			for (const QString& key : equiSkyDefinition.keys()) {
 				skyProperties.insert(key, equiSkyDefinition.value(key));
+			}
+			break;
+		}
+
+		case static_cast<int>(iris::SkyType::CUBEMAP) : {
+			for (const QString& key : cubeMapDefinition.keys()) {
+				skyProperties.insert(key, cubeMapDefinition.value(key));
 			}
 			break;
 		}
@@ -296,20 +321,11 @@ void SkyPropertyWidget::hideEvent(QHideEvent *event)
 			}
 			break;
 		}
-
-		case static_cast<int>(iris::SkyType::REALISTIC) : {
-			for (const QString& key : realisticDefinition.keys()) {
-				skyProperties.insert(key, realisticDefinition.value(key));
-			}
-			break;
-		}
 	}
-
-	qDebug() << skyProperties;
 
 	db->updateAssetAsset(skyGuid, QJsonDocument(skyProperties).toBinaryData());
 	db->updateAssetProperties(skyGuid, QJsonDocument(properties).toBinaryData());
-
+	// Not really used but keep around for now, the intent is clear (iKlsR)
 	emit Globals::eventSubscriber->updateAssetSkyItemFromSkyPropertyWidget(skyGuid, currentSky);
 
 	return;
@@ -318,59 +334,53 @@ void SkyPropertyWidget::hideEvent(QHideEvent *event)
 void SkyPropertyWidget::setEquiMap(const QString &guid)
 {
     if (!guid.isEmpty()) {
-        bool found = false;
-
-        for (auto asset : AssetManager::getAssets()) {
-            if (found) break;
-
-            if (asset->assetGuid == guid && asset->type == ModelTypes::Texture) {
-                found = true;
-                auto image = IrisUtils::join(Globals::project->getProjectFolder(), asset->fileName);
-                equiTexture->setTexture(QFileInfo(image).isFile() ? image : "");
-                scene->setSkyTexture(iris::Texture2D::load(image, false));
-                scene->equiTextureGuid = guid;
-            }
-        }
+        auto image = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(guid).name);
+        equiTexture->setTexture(QFileInfo(image).isFile() ? image : QString());
+        scene->setSkyTexture(iris::Texture2D::load(image, false));
     }
 }
 
-void SkyPropertyWidget::setSkyMap(const QString &guid)
+void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 {
-    if (!guid.isEmpty()) {
-        bool found = false;
+	auto front = db->fetchAsset(skyDataDefinition["front"].toString()).name;
+	auto back = db->fetchAsset(skyDataDefinition["back"].toString()).name;
+	auto left = db->fetchAsset(skyDataDefinition["left"].toString()).name;
+	auto right = db->fetchAsset(skyDataDefinition["right"].toString()).name;
+	auto top = db->fetchAsset(skyDataDefinition["top"].toString()).name;
+	auto bottom = db->fetchAsset(skyDataDefinition["bottom"].toString()).name;
 
-        for (auto asset : AssetManager::getAssets()) {
-            if (found) break;
+	QVector<QString> sides = { front, back, top, bottom, left, right };
+	for (int i = 0; i < sides.count(); ++i) {
+		QString path = IrisUtils::join(Globals::project->getProjectFolder(), sides[i]);
+		if (QFileInfo(path).isFile()) {
+			sides[i] = path;
+		}
+		else {
+			sides[i] = QString();
+		}
+	}
 
-            if (asset->assetGuid == guid && asset->type == ModelTypes::CubeMap) {
-                found = true;
+	cubemapFront->setTexture(sides[0]);
+	cubemapBack->setTexture(sides[1]);
+	cubemapTop->setTexture(sides[2]);
+	cubemapBottom->setTexture(sides[3]);
+	cubemapLeft->setTexture(sides[4]);
+	cubemapRight->setTexture(sides[5]);
 
-                auto mapObject = asset->getValue().toJsonObject();
+	// We need at least one valid image to get some metadata from
+	QImage *info;
+	bool useTex = false;
+	for (const auto image : sides) {
+		if (!image.isEmpty()) {
+			info = new QImage(image);
+			useTex = true;
+			break;
+		}
+	}
 
-                auto front = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(mapObject["front"].toString()).name);
-                auto back = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(mapObject["back"].toString()).name);
-                auto left = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(mapObject["left"].toString()).name);
-                auto right = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(mapObject["right"].toString()).name);
-                auto top = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(mapObject["top"].toString()).name);
-                auto bottom = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(mapObject["bottom"].toString()).name);
-
-                QString sides[6] = {front, back, top, bottom, left, right};
-
-                QImage *info;
-                bool useTex = false;
-                for (int i = 0; i < 6; i++) {
-                    if (!sides[i].isEmpty()) {
-                        info = new QImage(sides[i]);
-                        useTex = true;
-                        break;
-                    }
-                }
-
-                if (useTex)
-                    scene->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
-            }
-        }
-    }
+	if (useTex) {
+		scene->setSkyTexture(iris::Texture2D::createCubeMap(sides[0], sides[1], sides[2], sides[3], sides[4], sides[5], info));
+	}
 }
 
 void SkyPropertyWidget::onSingleSkyColorChanged(QColor color)
@@ -382,20 +392,12 @@ void SkyPropertyWidget::onSingleSkyColorChanged(QColor color)
 	}
 }
 
-void SkyPropertyWidget::onSkyCubeMapChanged(int index)
+void SkyPropertyWidget::onEquiTextureChanged(QString guid)
 {
-    Q_UNUSED(index);
-	if (!!scene) {
-		setSkyMap(cubeSelector->getCurrentItemData());
-	}
-}
-
-void SkyPropertyWidget::onEquiTextureChanged(QString tex)
-{
-	equiSkyDefinition.insert("equiSkyGuid", tex);
+	equiSkyDefinition.insert("equiSkyGuid", guid);
 
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) setEquiMap(tex);
+		if (scene->skyGuid == skyGuid) setEquiMap(guid);
 	}
 }
 
@@ -418,36 +420,48 @@ void SkyPropertyWidget::onLuminanceChanged(float val)
 void SkyPropertyWidget::onTurbidityChanged(float val)
 {
 	realisticDefinition.insert("turbidity", val);
-    if (!!scene) scene->skyRealistic.turbidity = val;
+	if (!!scene) {
+		if (scene->skyGuid == skyGuid) scene->skyRealistic.turbidity = val;
+	}
 }
 
 void SkyPropertyWidget::onMieCoeffGChanged(float val)
 {
 	realisticDefinition.insert("mieCoefficient", val);
-    if (!!scene) scene->skyRealistic.mieCoefficient = val;
+	if (!!scene) {
+		if (scene->skyGuid == skyGuid) scene->skyRealistic.mieCoefficient = val;
+	}
 }
 
 void SkyPropertyWidget::onMieDireChanged(float val)
 {
 	realisticDefinition.insert("mieDirectionalG", val);
-    if (!!scene) scene->skyRealistic.mieDirectionalG = val;
+	if (!!scene) {
+		if (scene->skyGuid == skyGuid) scene->skyRealistic.mieDirectionalG = val;
+	}
 }
 
 void SkyPropertyWidget::onSunPosXChanged(float val)
 {
 	realisticDefinition.insert("sunPosX", val);
-    if (!!scene)  scene->skyRealistic.sunPosX = val;
+	if (!!scene) {
+		if (scene->skyGuid == skyGuid) scene->skyRealistic.sunPosX = val;
+	}
 }
 
 void SkyPropertyWidget::onSunPosYChanged(float val)
 {
 	realisticDefinition.insert("sunPosY", val);
-    if (!!scene) scene->skyRealistic.sunPosY = val;
+	if (!!scene) {
+		if (scene->skyGuid == skyGuid) scene->skyRealistic.sunPosY = val;
+	}
 }
 
 void SkyPropertyWidget::onSunPosZChanged(float val)
 {
 	realisticDefinition.insert("sunPosZ", val);
-    if (!!scene) scene->skyRealistic.sunPosZ = val;
+	if (!!scene) {
+		if (scene->skyGuid == skyGuid) scene->skyRealistic.sunPosZ = val;
+	}
 }
 

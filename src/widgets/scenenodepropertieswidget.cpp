@@ -31,7 +31,6 @@ For more information see the LICENSE file
 #include "propertywidgets/meshpropertywidget.h"
 #include "propertywidgets/nodepropertywidget.h"
 #include "propertywidgets/shaderpropertywidget.h"
-#include "propertywidgets/cubemappropertywidget.h"
 #include "propertywidgets/worldpropertywidget.h"
 #include "propertywidgets/physicspropertywidget.h"
 #include "propertywidgets/handpropertywidget.h"
@@ -80,11 +79,6 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     shaderPropView->setPanelTitle("Shader Definitions");
     shaderPropView->setDatabase(db);
     shaderPropView->expand();
-
-    cubeMapPropView = new CubeMapPropertyWidget();
-    cubeMapPropView->setPanelTitle("CubeMap Images");
-    cubeMapPropView->setDatabase(db);
-    cubeMapPropView->expand();
 
     handPropView = new HandPropertyWidget();
 	handPropView->setPanelTitle("Hand");
@@ -205,8 +199,8 @@ void SceneNodePropertiesWidget::setAssetItem(QListWidgetItem *item)
     {
         clearLayout(this->layout());
 		skyPropView->setParent(this);
-		skyPropView->setSky(item->data(MODEL_GUID_ROLE).toString(),
-							static_cast<iris::SkyType>(item->data(SKY_TYPE_ROLE).toInt()));
+		skyPropView->setSkyAlongWithProperties(item->data(MODEL_GUID_ROLE).toString(),
+											   static_cast<iris::SkyType>(item->data(SKY_TYPE_ROLE).toInt()));
 		widgetPropertyLayout->addWidget(skyPropView);
 		widgetPropertyLayout->addStretch();
     }

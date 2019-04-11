@@ -51,7 +51,8 @@ public:
     void dropEvent(QDropEvent*);
 
 signals:
-    void valueChanged( QString value);
+    void valueChanged(QString value);
+    void valuesChanged(QString value, QString guid);
 
 private:
     QString loadTexture();

@@ -136,7 +136,7 @@ public:
     QStringList fetchAssetGUIDAndDependencies(const QString &guid, bool appendSelf = true);
     QStringList fetchAssetAndAllDependencies(const QString &guid);
     QVector<DependencyRecord> fetchAssetDependencies(const AssetRecord &record);
-    QStringList fetchAssetDependenciesByType(const QString &guid, const ModelTypes&);
+    QStringList fetchAssetDependeesByType(const QString &guid, const ModelTypes&);
     QStringList fetchAssetAndDependencies(const QString &guid);
     QString fetchAssetGUIDByName(const QString &name);
     QString fetchObjectMesh(const QString &guid, const int ertype, const int eetype);

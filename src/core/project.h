@@ -110,8 +110,7 @@ enum class ModelTypes
     Shader,			// Supported
     Variant,
     File,			// Supported
-    ParticleSystem, // Supported
-	CubeMap
+    ParticleSystem	// Supported
 };
 
 #define	MODEL_GUID_ROLE		0x0113

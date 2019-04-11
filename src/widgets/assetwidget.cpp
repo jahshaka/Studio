@@ -557,7 +557,6 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 
 	if (assetData.type == static_cast<int>(ModelTypes::Sky)) {
 		int skyType = prop.value("sky").toObject().value("type").toInt();
-		qDebug() << "justice" << prop << assetData.type;
 		item->setData(SKY_TYPE_ROLE, skyType);
 		item->setData(MODEL_TYPE_ROLE, assetData.type);
 	}
