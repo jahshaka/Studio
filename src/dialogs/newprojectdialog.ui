@@ -2,12 +2,15 @@
 <ui version="4.0">
  <class>NewProjectDialog</class>
  <widget class="QDialog" name="NewProjectDialog">
+  <property name="enabled">
+   <bool>true</bool>
+  </property>
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>640</width>
-    <height>154</height>
+    <width>512</width>
+    <height>153</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -16,14 +19,19 @@
     <verstretch>0</verstretch>
    </sizepolicy>
   </property>
+  <property name="maximumSize">
+   <size>
+    <width>16777215</width>
+    <height>16777215</height>
+   </size>
+  </property>
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">
-QWidget#NewProjectDialog {
-  background: #222;
-  color: #EEE;
+   <string notr="true">QWidget#NewProjectDialog {
+  	background: #1E1E1E;
+	border: 1px solid black;
 }
 
 #createProject {
@@ -36,14 +44,14 @@ QWidget#NewProjectDialog {
 
 QLabel {
 	margin-right: 12px;
-  color: #EEE;
+  	color: #EEE;
 }
 
 QPushButton, QToolButton {
 	border: 0;
 	padding: 5px;
 	background: #444;
-  color: #EEE;
+  	color: #EEE;
 }
 
 QPushButton::hover {
@@ -57,42 +65,78 @@ QToolButton::hover {
 QLineEdit {
 	background: #404040;
 	padding: 5px;
-  border: 0;
-  color: #EEE;
+  	border: 0;
+	color: #EEE;
 }</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
+   <property name="rightMargin">
+    <number>9</number>
+   </property>
+   <property name="bottomMargin">
+    <number>9</number>
+   </property>
    <item row="0" column="0">
     <widget class="QWidget" name="widget" native="true">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>139</height>
+      </size>
+     </property>
      <layout class="QFormLayout" name="formLayout">
+      <property name="sizeConstraint">
+       <enum>QLayout::SetMinimumSize</enum>
+      </property>
       <property name="fieldGrowthPolicy">
        <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
       </property>
-      <item row="0" column="0">
+      <property name="formAlignment">
+       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+      </property>
+      <property name="leftMargin">
+       <number>6</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>9</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item row="2" column="0">
        <widget class="QLabel" name="pName">
         <property name="text">
          <string>Scene Name</string>
         </property>
        </widget>
       </item>
-      <item row="0" column="1">
+      <item row="2" column="1">
        <widget class="QLineEdit" name="projectName"/>
       </item>
-      <item row="1" column="0">
+      <item row="3" column="0">
        <widget class="QLabel" name="lName">
         <property name="text">
          <string>Location</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="1">
+      <item row="3" column="1">
        <layout class="QHBoxLayout" name="loc_layout">
         <item>
          <widget class="QLineEdit" name="projectPath"/>
         </item>
        </layout>
       </item>
-      <item row="2" column="1">
+      <item row="4" column="1">
        <layout class="QHBoxLayout" name="horizontalLayout_3">
         <item>
          <widget class="QPushButton" name="cancel">

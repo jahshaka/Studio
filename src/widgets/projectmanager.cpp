@@ -451,81 +451,30 @@ void ProjectManager::openSampleProject(QListWidgetItem *item)
 
 void ProjectManager::newProject()
 {
-    //NewProjectDialog dialog;
-    //dialog.exec();
+	NewProjectDialog dialog;
+	dialog.exec();
 
-    //auto projectName = dialog.getProjectInfo().projectName;
-    //auto projectPath = dialog.getProjectInfo().projectPath;
-    auto projectGuid = GUIDManager::generateGUID();
+	auto projectName = dialog.getProjectInfo().projectName;
+	auto projectPath = dialog.getProjectInfo().projectPath;
+	auto projectGuid = GUIDManager::generateGUID();
 
-	auto dia = new CustomDialog;
-	auto holder = new QWidget;
-	auto layout = new QGridLayout;
-	holder->setLayout(layout);
-	dia->setHolderWidth(450);
+	if (!projectName.isEmpty() || !projectName.isNull()) {
+		auto fullProjectPath = QDir(QDir(projectPath).filePath("Projects")).filePath(projectGuid);
 
-	auto sceneLabel = new QLabel("Scene Name");
-	auto location = new QLabel("Location");
-	auto sceneEdit = new QLineEdit;
-	auto locationEdit = new QLineEdit;
-	auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
-		+ Constants::PROJECT_FOLDER;
-	auto path1 = SettingsManager::getDefaultManager()->getValue("default_directory", path).toString();
-	locationEdit->setText(path1);
-	StyleSheet::setStyle({ sceneEdit,sceneLabel, location, locationEdit });
+		Globals::project->setProjectPath(fullProjectPath, projectName);
+		Globals::project->setProjectGuid(projectGuid);
 
-	connect(sceneEdit, &QLineEdit::returnPressed, [=]() {
-		dia->sendAcceptSignal(true);
-	});
+		// make a dir and the default subfolders
+		QDir projectDir(fullProjectPath);
+		if (!projectDir.exists()) projectDir.mkpath(".");
 
-	layout->addWidget(sceneLabel, 0, 0);
-	layout->addWidget(location, 1, 0);
-	layout->addWidget(sceneEdit, 0, 1);
-	layout->addWidget(locationEdit, 1, 1);
+		// Insert an empty scene to get access to the project guid... 
+		if (!db->createProject(projectGuid, projectName)) return;
 
-	dia->insertWidget(holder);
-	dia->addConfirmAndCancelButtons("Create", "Cancel");
-	dia->addTitle("New World");
-	dia->exec();
+		emit fileToCreate(projectName, fullProjectPath);
 
-	if (dia->result() == QDialog::Accepted) {
-		if (sceneEdit->text() != "" || locationEdit->text() != "") {
-			auto fullProjectPath = QDir(QDir(locationEdit->text()).filePath("Projects")).filePath(projectGuid);
-
-			      Globals::project->setProjectPath(fullProjectPath, sceneEdit->text());
-			      Globals::project->setProjectGuid(projectGuid);
-
-			      // make a dir and the default subfolders
-			      QDir projectDir(fullProjectPath);
-			      if (!projectDir.exists()) projectDir.mkpath(".");
-
-			// Insert an empty scene to get access to the project guid... 
-			      if (!db->createProject(projectGuid, sceneEdit->text())) return;
-
-			      emit fileToCreate(sceneEdit->text(), fullProjectPath);
-
-			      this->hide();
-		}
+		this->hide();
 	}
-
-
-  //  if (!projectName.isEmpty() || !projectName.isNull()) {
-  //      auto fullProjectPath = QDir(QDir(projectPath).filePath("Projects")).filePath(projectGuid);
-
-  //      Globals::project->setProjectPath(fullProjectPath, projectName);
-  //      Globals::project->setProjectGuid(projectGuid);
-
-  //      // make a dir and the default subfolders
-  //      QDir projectDir(fullProjectPath);
-  //      if (!projectDir.exists()) projectDir.mkpath(".");
-
-		//// Insert an empty scene to get access to the project guid... 
-  //      if (!db->createProject(projectGuid, projectName)) return;
-
-  //      emit fileToCreate(projectName, fullProjectPath);
-
-  //      this->hide();
-  //  }
 }
 
 void ProjectManager::changePreviewSize(QString scale)
