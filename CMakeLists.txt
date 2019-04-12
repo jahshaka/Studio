@@ -7,7 +7,7 @@ foreach(p CMP0071) # 3.10: Let AUTOMOC and AUTOUIC process GENERATED files
 endforeach()
 project(Jahshaka)
 
-set(APP_OUTPUT_NAME "Jahshaka Studio")
+set(APP_OUTPUT_NAME "Jahshaka")
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 

@@ -163,9 +163,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 #ifdef QT_DEBUG
     iris::Logger::getSingleton()->init(IrisUtils::getAbsoluteAssetPath("jahshaka.log"));
-    setWindowTitle(QString("Jahshaka Studio %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
+    setWindowTitle(QString("Jahshaka %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
 #else
-	setWindowTitle(QString("Jahshaka Studio %1").arg(Constants::CONTENT_VERSION));
+	setWindowTitle(QString("Jahshaka %1").arg(Constants::CONTENT_VERSION));
     iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/jahshaka.log");
 #endif
 
