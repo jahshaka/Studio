@@ -207,6 +207,7 @@ QString AssetView::getAssetType(int id)
 		case static_cast<int>(ModelTypes::Material):	return "Material";		break;
 		case static_cast<int>(ModelTypes::Texture):		return "Texture";		break;
 		case static_cast<int>(ModelTypes::Object):		return "Object";		break;
+		case static_cast<int>(ModelTypes::Sky):			return "Sky";		break;
 		default: return "Undefined"; break;
 	}
 }
@@ -794,6 +795,11 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
                 }
             }
 
+			if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Sky)) {
+				viewers->setCurrentIndex(0);
+				viewer->loadJafSky(gridItem->metadata["guid"].toString());
+			}
+
             if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Texture)) {
                 viewers->setCurrentIndex(1);
                 auto assetPath = IrisUtils::join(
@@ -1079,6 +1085,9 @@ void AssetView::importJahModel(const QString &fileName)
         else if (jafString == "shader") {
             jafType = ModelTypes::Shader;
         }
+		else if (jafString == "sky") {
+			jafType = ModelTypes::Sky;
+		}
         else if (jafString == "particle_system") {
             jafType = ModelTypes::ParticleSystem;
         }
@@ -1124,6 +1133,13 @@ void AssetView::importJahModel(const QString &fileName)
             viewer->loadJafShader(guid, guidCompareMap);
             addToJahLibrary(filename, guid, true);
         }
+
+		if (jafString == "sky") {
+			viewers->setCurrentIndex(0);
+			renameModelField->setText(QFileInfo(filename).baseName());
+			viewer->loadJafSky(guid);
+			addToJahLibrary(filename, guid, true);
+		}
 
         if (jafString == "texture") {
             renameModelField->setText(QFileInfo(filename).baseName());
@@ -1276,14 +1292,22 @@ void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool
         //db->updateAssetThumbnail(guid, bytes);
     }
 
-    db->updateAssetProperties(guid, QJsonDocument(viewer->getSceneProperties()).toBinaryData());
+
     //db->updateAssetThumbnail(guid, bytes);
 
     object["type"] = db->fetchAsset(guid).type;
 
+	if (object["type"].toInt() != static_cast<int>(ModelTypes::Sky)) {
+		db->updateAssetProperties(guid, QJsonDocument(viewer->getSceneProperties()).toBinaryData());
+	}
+
     if (object["type"].toInt() == static_cast<int>(ModelTypes::Shader)) {
         thumbnail = QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-72.png"));
     }
+
+	if (object["type"].toInt() == static_cast<int>(ModelTypes::Sky)) {
+		thumbnail = QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-sky.png"));
+	}
 
     if (object["type"].toInt() == static_cast<int>(ModelTypes::ParticleSystem)) {
         thumbnail = QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-ps.png"));
@@ -1630,6 +1654,9 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
     else if (aType == static_cast<int>(ModelTypes::Shader)) {
         jafType = ModelTypes::Shader;
     }
+	else if (aType == static_cast<int>(ModelTypes::Sky)) {
+		jafType = ModelTypes::Sky;
+	}
     else if (aType == static_cast<int>(ModelTypes::ParticleSystem)) {
         jafType = ModelTypes::ParticleSystem;
     }

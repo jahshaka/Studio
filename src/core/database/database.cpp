@@ -919,7 +919,7 @@ QVector<AssetRecord> Database::fetchAssets()
         "FROM assets A "
         "INNER JOIN collections C ON A.collection = C.collection_id "
         "WHERE A.project_guid IS NULL "
-        "AND (A.type = :m OR A.type = :o OR A.type = :t OR A.type = :s OR A.type = :p) "
+        "AND (A.type = :m OR A.type = :o OR A.type = :t OR A.type = :s OR A.type = :sk OR A.type = :p) "
         "AND A.guid NOT IN (select dependee FROM dependencies) "
         "ORDER BY A.name DESC"
     );
@@ -927,6 +927,7 @@ QVector<AssetRecord> Database::fetchAssets()
     query.bindValue(":o", static_cast<int>(ModelTypes::Material));
     query.bindValue(":t", static_cast<int>(ModelTypes::Texture));
     query.bindValue(":s", static_cast<int>(ModelTypes::Shader));
+    query.bindValue(":sk", static_cast<int>(ModelTypes::Sky));
     query.bindValue(":p", static_cast<int>(ModelTypes::ParticleSystem));
     executeAndCheckQuery(query, "FetchAssets");
 
@@ -2751,6 +2752,7 @@ QString Database::importAsset(
     for (auto &asset : assetsToImport) {
         if (asset.type == static_cast<int>(ModelTypes::Shader)   ||
             asset.type == static_cast<int>(ModelTypes::Material) ||
+            asset.type == static_cast<int>(ModelTypes::Sky) ||
             asset.type == static_cast<int>(ModelTypes::Object))
         {
             auto doc = QJsonDocument::fromBinaryData(asset.asset);

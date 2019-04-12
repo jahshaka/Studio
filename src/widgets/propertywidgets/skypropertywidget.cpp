@@ -70,14 +70,14 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 		}
 
 		case iris::SkyType::REALISTIC: {
-			luminance = addFloatValueSlider("Luminance", .01f, 1.f, 1.f);
-			reileigh = addFloatValueSlider("Reileigh", 0, 10.f, 2.5f);
-			mieCoefficient = addFloatValueSlider("Mie Coeff", 0, 100.f, .053f);
-			mieDirectionalG = addFloatValueSlider("Mie Dir.", 0, 100.f, .75f);
+			luminance = addFloatValueSlider("Intensity", .01f, 1.f, 1.f);
+			reileigh = addFloatValueSlider("Light Scattering", 0, 10.f, 2.5f);
+			mieCoefficient = addFloatValueSlider("Sun Glow", 0, 1.f, .053f);
+			mieDirectionalG = addFloatValueSlider("Sun Glare", 0, 1.f, .75f);
 			turbidity = addFloatValueSlider("Turbidity", 0, 1.f, .32f);
-			sunPosX = addFloatValueSlider("X", 0, 10.f, 10.f);
-			sunPosY = addFloatValueSlider("Y", 0, 10.f, 7.f);
-			sunPosZ = addFloatValueSlider("Z", 0, 10.f, 10.f);
+			sunPosY = addFloatValueSlider("Sun Height", -0.99f, 10.f, 7.f);
+			sunPosX = addFloatValueSlider("Strafe X", 0, 1.f, 10.f);
+			sunPosZ = addFloatValueSlider("Strafe Z", 0, 1.f, 10.f);
 
 			connect(luminance, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onLuminanceChanged);
 			connect(reileigh, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onReileighChanged);

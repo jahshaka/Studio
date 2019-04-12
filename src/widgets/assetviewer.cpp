@@ -152,7 +152,7 @@ void AssetViewer::initializeGL()
     scene->setAmbientColor(QColor(190, 190, 190));
 
     scene->fogColor = QColor(25, 25, 25);
-    scene->fogEnabled = true;
+    scene->fogEnabled = false;
     scene->shadowEnabled = true;
 
     camera->update(0);
@@ -290,6 +290,23 @@ void AssetViewer::loadJafModel(QString str, QString guid, bool firstAdd, bool ca
     pdialog->close();
 }
 
+void AssetViewer::loadJafSky(QString guid, bool firstAdd, bool cache, bool firstLoad)
+{
+	pdialog->setLabelText(tr("Loading asset preview..."));
+	pdialog->show();
+	QApplication::processEvents();
+	makeCurrent();
+
+	addJafSky(guid, firstAdd, cache);
+	if (firstLoad) resetViewerCamera();
+	else resetViewerCameraAfter();
+
+	renderObject();
+	doneCurrent();
+
+	pdialog->close();
+}
+
 void AssetViewer::loadModel(QString str, bool firstAdd, bool cache, bool firstLoad) {
     pdialog->setLabelText(tr("Loading asset preview..."));
     pdialog->show();
@@ -322,6 +339,8 @@ void AssetViewer::resizeGL(int width, int height)
 
 void AssetViewer::addJafShader(const QString &guid, QMap<QString, QString> &guidCompareMap, bool firstAdd, bool cache, QVector3D position)
 {
+	scene->setSkyColor(QColor(25, 25, 25));
+
     QString assetPath = IrisUtils::join(
         QStandardPaths::writableLocation(QStandardPaths::DataLocation),
         Constants::ASSET_FOLDER, guid
@@ -359,6 +378,8 @@ void AssetViewer::addJafShader(const QString &guid, QMap<QString, QString> &guid
 
 void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache, QVector3D position)
 {
+	scene->setSkyColor(QColor(25, 25, 25));
+
     QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
     QJsonObject matObject = matDoc.object();
     //iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
@@ -440,8 +461,97 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
     lastNode = matball->getName();
 }
 
+void AssetViewer::addJafSky(const QString& guid, bool firstAdd, bool cache)
+{
+	scene->skyGuid = guid;
+	QJsonDocument skyProperties = QJsonDocument::fromBinaryData(db->fetchAsset(scene->skyGuid).properties);
+	QJsonDocument skyData = QJsonDocument::fromBinaryData(db->fetchAssetData(scene->skyGuid));
+	QJsonObject skyPropertiesDefinition = skyProperties.object().value("sky").toObject();
+	QJsonObject skyDataDefinition = skyData.object();
+	scene->skyType = static_cast<iris::SkyType>(skyPropertiesDefinition.value("type").toInt());
+
+	QString assetPath = IrisUtils::join(
+		QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+		Constants::ASSET_FOLDER, guid
+	);
+
+	if (scene->skyType == iris::SkyType::SINGLE_COLOR) {
+		scene->skyColor = SceneReader::readColor(skyDataDefinition.value("skyColor").toObject());
+	}
+	else if (scene->skyType == iris::SkyType::REALISTIC) {
+		scene->skyRealistic.luminance = skyDataDefinition["luminance"].toDouble();
+		scene->skyRealistic.reileigh = skyDataDefinition["reileigh"].toDouble();
+		scene->skyRealistic.mieCoefficient = skyDataDefinition["mieCoefficient"].toDouble();
+		scene->skyRealistic.mieDirectionalG = skyDataDefinition["mieDirectionalG"].toDouble();
+		scene->skyRealistic.turbidity = skyDataDefinition["turbidity"].toDouble();
+		scene->skyRealistic.sunPosX = skyDataDefinition["sunPosX"].toDouble();
+		scene->skyRealistic.sunPosY = skyDataDefinition["sunPosY"].toDouble();
+		scene->skyRealistic.sunPosZ = skyDataDefinition["sunPosZ"].toDouble();
+	}
+	else if (scene->skyType == iris::SkyType::EQUIRECTANGULAR) {
+		QStringList dependency = db->fetchAssetDependeesByType(scene->skyGuid, ModelTypes::Texture);
+		if (!dependency.isEmpty()) {
+			auto image = IrisUtils::join(assetPath, db->fetchAsset(dependency.first()).name);
+			if (QFileInfo(image).isFile()) scene->setSkyTexture(iris::Texture2D::load(image, false));
+		}
+	}
+	else if (scene->skyType == iris::SkyType::CUBEMAP) {
+		auto front = db->fetchAsset(skyDataDefinition["front"].toString()).name;
+		auto back = db->fetchAsset(skyDataDefinition["back"].toString()).name;
+		auto left = db->fetchAsset(skyDataDefinition["left"].toString()).name;
+		auto right = db->fetchAsset(skyDataDefinition["right"].toString()).name;
+		auto top = db->fetchAsset(skyDataDefinition["top"].toString()).name;
+		auto bottom = db->fetchAsset(skyDataDefinition["bottom"].toString()).name;
+
+		QVector<QString> sides = { front, back, top, bottom, left, right };
+		for (int i = 0; i < sides.count(); ++i) {
+			QString path = IrisUtils::join(assetPath, sides[i]);
+			if (QFileInfo(path).isFile()) {
+				sides[i] = path;
+			}
+			else {
+				sides[i] = QString();
+			}
+		}
+
+		// We need at least one valid image to get some metadata from
+		QImage* info;
+		bool useTex = false;
+		for (const auto image : sides) {
+			if (!image.isEmpty()) {
+				info = new QImage(image);
+				useTex = true;
+				break;
+			}
+		}
+
+		if (useTex) {
+			scene->setSkyTexture(iris::Texture2D::createCubeMap(sides[0], sides[1], sides[2], sides[3], sides[4], sides[5], info));
+		}
+	}
+	else if (scene->skyType == iris::SkyType::MATERIAL) {
+		auto vert = skyDataDefinition.value("vertexShader").toString();
+		auto frag = skyDataDefinition.value("fragmentShader").toString();
+
+		auto vPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(vert).name);
+		auto fPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(frag).name);
+
+		scene->skyMaterial->createProgramFromShaderSource(vPath, fPath);
+	}
+	else if (scene->skyType == iris::SkyType::GRADIENT) {
+		scene->gradientTop = SceneReader::readColor(skyDataDefinition.value("gradientTop").toObject());
+		scene->gradientMid = SceneReader::readColor(skyDataDefinition.value("gradientMid").toObject());
+		scene->gradientBot = SceneReader::readColor(skyDataDefinition.value("gradientBot").toObject());
+		scene->gradientOffset = skyDataDefinition.value("gradientOffset").toDouble();
+	}
+
+	scene->switchSkyTexture(scene->skyType);
+}
+
 void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firstAdd, bool cache, QVector3D position)
 {
+	scene->setSkyColor(QColor(25, 25, 25));
+
     QJsonDocument document = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
     QJsonObject objectHierarchy = document.object();
 

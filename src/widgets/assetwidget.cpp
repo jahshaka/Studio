@@ -838,7 +838,7 @@ void AssetWidget::exportSky()
     if (manifest.open(QIODevice::ReadWrite))
     {
         QTextStream stream(&manifest);
-        stream << "cubemap";
+        stream << "sky";
     }
     manifest.close();
 
@@ -943,7 +943,7 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
         }
 
         if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Sky)) {
-            action = new QAction(QIcon(), "Export CubeMap", this);
+            action = new QAction(QIcon(), "Export Sky", this);
             connect(action, SIGNAL(triggered()), this, SLOT(exportSky()));
             menu.addAction(action);
         }
@@ -1884,7 +1884,7 @@ void AssetWidget::createSky()
 		Globals::project->getProjectGuid(),
 		QString(),
 		QString(),
-		QByteArray(),
+		AssetHelper::makeBlobFromPixmap(QPixmap(":/icons/icons8-file-sky.png")),
 		QJsonDocument(properties).toBinaryData(),
 		QByteArray(),
 		QJsonDocument(skyDescription).toBinaryData()
@@ -2129,9 +2129,9 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             else if (jafString == "shader") {
                 jafType = ModelTypes::Shader;
             }
-   /*         else if (jafString == "cubemap") {
-                jafType = ModelTypes::CubeMap;
-            }*/
+			else if (jafString == "sky") {
+                jafType = ModelTypes::Sky;
+            }
             else if (jafString == "particle_system") {
                 jafType = ModelTypes::ParticleSystem;
             }
@@ -2195,16 +2195,9 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                 }
             }
 
-            //if (jafType == ModelTypes::CubeMap) {
-            //    QJsonDocument cubeDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
-            //    QJsonObject mapDefinition = cubeDoc.object();
-
-            //     auto assetCubeMap = new AssetCubeMap;
-            //    assetCubeMap->assetGuid = guidReturned;
-            //    assetCubeMap->fileName = db->fetchAsset(guidReturned).name;
-            //    assetCubeMap->setValue(QVariant::fromValue(mapDefinition));
-            //    AssetManager::addAsset(assetCubeMap);
-            //}
+            if (jafType == ModelTypes::Sky) {
+				// No need to do anything really
+            }
 
             if (jafType == ModelTypes::Material) {
                 QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
@@ -2609,8 +2602,9 @@ void AssetWidget::importAsset(const QStringList &fileNames)
 	// 2. Materials
 	// 3. Shaders
 	// 4. Meshes
-	// 5. Asset files (these contain their own assets)
-    // 6. Regular files
+	// 5. Skies
+	// 6. Asset files (these contain their own assets)
+    // 7. Regular files
 
 	// Path, GUID, Parent
 	QList<directory_tuple> finalImportList;
