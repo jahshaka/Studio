@@ -213,6 +213,10 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 				gradientDefinition.insert("gradientMid", SceneWriter::jsonColor(QColor("white")));
 				gradientDefinition.insert("gradientBot", SceneWriter::jsonColor(QColor(64, 128, 255)));
 				gradientDefinition.insert("gradientOffset", .73f);
+
+				colorTop->setColorValue(QColor(255, 146, 138));
+				colorMid->setColorValue(QColor("white"));
+				colorBot->setColorValue(QColor(64, 128, 255));
 			}
 			else {
 				colorTop->setColorValue(SceneReader::readColor(skyDefinition.value("gradientTop").toObject()));
@@ -264,7 +268,7 @@ void SkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
-        skyTypeChanged(static_cast<int>(scene->skyType));
+        //skyTypeChanged(static_cast<int>(scene->skyType));
     } else {
         this->scene.clear();
     }

@@ -155,6 +155,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     //scene already contains root node, so just add children
     auto sceneObj = projectObj["scene"].toObject();
 	scene->skyGuid = sceneObj["skyGuid"].toString();
+	scene->setSkyColor(this->readColor(sceneObj["skyColor"].toObject()));
 	scene->skyType = static_cast<iris::SkyType>(sceneObj["skyType"].toInt());
     scene->setAmbientColor(this->readColor(sceneObj["ambientColor"].toObject()));
 
@@ -195,8 +196,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 			auto right = handle->fetchAsset(skyDefinition["right"].toString()).name;
 			auto top = handle->fetchAsset(skyDefinition["top"].toString()).name;
 			auto bottom = handle->fetchAsset(skyDefinition["bottom"].toString()).name;
-
-			qDebug() << skyDefinition;
 
 			QVector<QString> sides = { front, back, top, bottom, left, right };
 			for (int i = 0; i < sides.count(); ++i) {

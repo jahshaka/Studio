@@ -64,11 +64,22 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
     if (!!scene) {
         this->scene = scene;
 
-        skyColor->setColorValue(scene->skyColor);
         ambientColor->setColorValue(scene->ambientColor);
 		worldGravity->setValue(scene->gravity);
 
 		auto skiesAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Sky));
+
+		if (skiesAvailableFromDatabase.isEmpty()) {
+			skyColor->setColorValue(scene->skyColor);
+			skySelector->hide();
+			skyColor->show();
+		}
+		// If we don't have any skies in the scene, fallback to a single color
+		else {
+			skySelector->show();
+			skyColor->hide();
+		}
+
 		skySelector->getWidget()->blockSignals(true);	// don't register initial signals
 		skySelector->clear();
 		for (const auto sky : skiesAvailableFromDatabase) skySelector->addItem(sky.name, sky.guid);

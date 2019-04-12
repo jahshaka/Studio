@@ -1857,7 +1857,7 @@ void AssetWidget::createSky()
     item->setFlags(item->flags() | Qt::ItemIsEditable);
     item->setSizeHint(currentSize);
     item->setTextAlignment(Qt::AlignCenter);
-    item->setIcon(QIcon(":/icons/icons8-folder-72.png"));
+    item->setIcon(QIcon(":/icons/icons8-file-sky.png"));
 
     const QString assetGuid = GUIDManager::generateGUID();
 
@@ -1873,10 +1873,10 @@ void AssetWidget::createSky()
 	properties.insert("sky", skyProps);
 
 	QJsonObject skyDescription;
-	skyDescription.insert("guid", assetGuid);
-	skyDescription.insert("skyColor", SceneWriter::jsonColor(QColor(255, 255, 255, 255)));
+	// Need to leave the defaut sky properties empty, the widget will set it
+	//skyDescription.insert("guid", assetGuid);
+	//skyDescription.insert("skyColor", SceneWriter::jsonColor(QColor(255, 255, 255, 255)));
 
-    // code goes here
 	db->createAssetEntry(
 		assetGuid,
 		"Sky",
@@ -1889,22 +1889,6 @@ void AssetWidget::createSky()
 		QByteArray(),
 		QJsonDocument(skyDescription).toBinaryData()
 	);
-
-    //auto assetShader = new AssetCubeMap;
-    //assetShader->fileName = "Sky";
-    //assetShader->assetGuid = assetGuid;
-    ////assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), IrisUtils::buildFileName(shaderName, "shader"));
-
-    //QJsonObject mapDefinition;
-    //mapDefinition["front"] = "";
-    //mapDefinition["back"] = "";
-    //mapDefinition["left"] = "";
-    //mapDefinition["right"] = "";
-    //mapDefinition["top"] = "";
-    //mapDefinition["down"] = "";
-
-    //assetShader->setValue(QVariant::fromValue(mapDefinition));
-    //AssetManager::addAsset(assetShader);
 
     item->setText("Sky");
     ui->assetView->addItem(item);
