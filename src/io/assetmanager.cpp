@@ -23,6 +23,17 @@ void AssetManager::addAsset(Asset *asset)
     assets.append(asset);
 }
 
+void AssetManager::replaceAsses(QString oldAssetGuid, Asset* asset)
+{
+	auto assetOld = getAssedByGuid(oldAssetGuid);
+	if (!assetOld) return;
+
+	assets.removeOne(assetOld);
+	assets.append(asset);
+}
+
+
+
 void AssetManager::clearAssetList()
 {
     assets.clear();

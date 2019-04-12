@@ -193,6 +193,7 @@ public:
     static QVector<Asset*> assets;
     static QVector<Asset*>& getAssets();
     static void addAsset(Asset* asset);
+	static void replaceAsses(QString oldAssetGuid, Asset* asset);
 	static void clearAssetList();
 	static Asset* getAssedByGuid(QString guid);
 };
