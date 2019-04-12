@@ -10,18 +10,19 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "skypropertywidget.h"
-#include "../texturepickerwidget.h"
+
 #include "irisgl/src/materials/defaultskymaterial.h"
 
 #include "../colorvaluewidget.h"
 #include "../colorpickerwidget.h"
+#include "../texturepickerwidget.h"
 #include "../hfloatsliderwidget.h"
 #include "../comboboxwidget.h"
-
 #include "../checkboxwidget.h"
+
+#include "globals.h"
 #include "core/database/database.h"
 #include "core/subscriber.h"
-#include "globals.h"
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
 #include "io/assetmanager.h"
@@ -32,10 +33,10 @@ SkyPropertyWidget::SkyPropertyWidget()
 
 void SkyPropertyWidget::skyTypeChanged(int index)
 {
-    // Decide whether of not to update the panel
-    // if (index == static_cast<int>(currentSky)) {
-    //     return;
-    // } else {
+	if (skyGuid.isEmpty()) return;
+
+	const QJsonObject skyDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(skyGuid)).object();
+
 	clearPanel(this->layout());
 
 	setMouseTracking(true);
@@ -50,131 +51,179 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 	skySelector->setCurrentIndex(index);
 
 	connect(skySelector, SIGNAL(currentIndexChanged(int)), this, SLOT(skyTypeChanged(int)));
-    // }
 
-    // Draw the widgets depending on the sky type
-    if (index == static_cast<int>(iris::SkyType::SINGLE_COLOR)) {
-        singleColor = this->addColorPicker("Sky Color");
-		// This should be revisited, some differences between scene color and our default
-		singleColorDefinition.insert("skyColor", SceneWriter::jsonColor(QColor(255, 118, 117)));
-        
-		connect(singleColor->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onSingleSkyColorChanged(QColor)));
-    }
-	else if (index == static_cast<int>(iris::SkyType::REALISTIC)) {
-		luminance			= addFloatValueSlider("Luminance",	.01f,	1.f,	1.f);
-		reileigh			= addFloatValueSlider("Reileigh",	0,		10.f,	2.5f);
-		mieCoefficient		= addFloatValueSlider("Mie Coeff",	0,		100.f,	.053f);
-		mieDirectionalG		= addFloatValueSlider("Mie Dir.",	0,		100.f,	.75f);
-		turbidity			= addFloatValueSlider("Turbidity",	0,		1.f,	.32f);
-		sunPosX				= addFloatValueSlider("X",			0,		10.f,	10.f);
-		sunPosY				= addFloatValueSlider("Y",			0,		10.f,	7.f);
-		sunPosZ				= addFloatValueSlider("Z",			0,		10.f,	10.f);
+	switch (static_cast<iris::SkyType>(index)) {
+		case iris::SkyType::SINGLE_COLOR: {
+			singleColor = this->addColorPicker("Sky Color");
+			connect(singleColor->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onSingleSkyColorChanged(QColor)));
 
-		realisticDefinition.insert("luminance", luminance->getValue());
-		realisticDefinition.insert("reileigh", reileigh->getValue());
-		realisticDefinition.insert("mieCoefficient", mieCoefficient->getValue());
-		realisticDefinition.insert("mieDirectionalG", mieDirectionalG->getValue());
-		realisticDefinition.insert("turbidity", turbidity->getValue());
-		realisticDefinition.insert("sunPosX", sunPosX->getValue());
-		realisticDefinition.insert("sunPosY", sunPosY->getValue());
-		realisticDefinition.insert("sunPosZ", sunPosZ->getValue());
-
-		connect(luminance,			&HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onLuminanceChanged);
-		connect(reileigh,			&HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onReileighChanged);
-		connect(mieCoefficient,		SIGNAL(valueChanged(float)), SLOT(onMieCoeffGChanged(float)));
-		connect(mieDirectionalG,	SIGNAL(valueChanged(float)), SLOT(onMieDireChanged(float)));
-		connect(turbidity,			SIGNAL(valueChanged(float)), SLOT(onTurbidityChanged(float)));
-		connect(sunPosX,			SIGNAL(valueChanged(float)), SLOT(onSunPosXChanged(float)));
-		connect(sunPosY,			SIGNAL(valueChanged(float)), SLOT(onSunPosYChanged(float)));
-		connect(sunPosZ,			SIGNAL(valueChanged(float)), SLOT(onSunPosZChanged(float)));
-	}
-    else if (index == static_cast<int>(iris::SkyType::EQUIRECTANGULAR)) {
-        equiTexture = this->addTexturePicker("Equi Map");
-
-		// There are no default values, this definition gets set whenever we change the texture
-
-		connect(equiTexture, &TexturePickerWidget::valueChanged, this, [this](QString value) {
-			// Remember that asset names are unique (auto incremented) so this is fine
-			QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName());
-			db->removeDependenciesByType(skyGuid, ModelTypes::Texture);
-			if (!assetGuid.isEmpty()) {
-				db->createDependency(
-					static_cast<int>(ModelTypes::Sky),
-					static_cast<int>(ModelTypes::Texture),
-					skyGuid, assetGuid,
-					Globals::project->getProjectGuid()
-				);
-
-				onEquiTextureChanged(assetGuid);
+			// This should be revisited, some differences between scene color and our default
+			if (skyDefinition.isEmpty()) {
+				singleColorDefinition.insert("skyColor", SceneWriter::jsonColor(QColor(72, 72, 72)));
 			}
-        });
-    }
-    else if (index == static_cast<int>(iris::SkyType::CUBEMAP))
-    {
-		cubemapFront = this->addTexturePicker("Front");
-		cubemapBack = this->addTexturePicker("Back");
-		cubemapLeft = this->addTexturePicker("Left");
-		cubemapRight = this->addTexturePicker("Right");
-		cubemapTop = this->addTexturePicker("Top");
-		cubemapBottom = this->addTexturePicker("Bottom");
+			else {
+				singleColor->setColorValue(SceneReader::readColor(skyDefinition.value("skyColor").toObject()));
+				onSingleSkyColorChanged(SceneReader::readColor(skyDefinition.value("skyColor").toObject()));
+			}
 
-		// remember the image on the tiles... TODO
-		connect(cubemapFront, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-			onSlotChanged(value, guid, 0);
-		});
-
-		connect(cubemapBack, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-			onSlotChanged(value, guid, 1);
-		});
-
-		connect(cubemapLeft, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-			onSlotChanged(value, guid, 2);
-		});
-
-		connect(cubemapRight, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-			onSlotChanged(value, guid, 3);
-		});
-
-		connect(cubemapTop, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-			onSlotChanged(value, guid, 4);
-		});
-
-		connect(cubemapBottom, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-			onSlotChanged(value, guid, 5);
-		});
-
-    }
-	else if (index == static_cast<int>(iris::SkyType::MATERIAL)) {
-		shaderSelector = this->addComboBox("Material");
-
-		auto materialsAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader));
-		shaderSelector->getWidget()->blockSignals(true);	// don't register initial signals
-		shaderSelector->clear();
-		for (const auto shader : materialsAvailableFromDatabase) {
-			shaderSelector->addItem(QFileInfo(shader.name).baseName(), shader.guid);
+			break;
 		}
-		shaderSelector->getWidget()->blockSignals(false);
-		//If we only have one shader, we need to trigger the update function
-		if (materialsAvailableFromDatabase.count() == 1) onMaterialChanged(0);
-		
-		connect(shaderSelector, SIGNAL(currentIndexChanged(int)), this, SLOT(onMaterialChanged(int)));
+
+		case iris::SkyType::REALISTIC: {
+			luminance = addFloatValueSlider("Luminance", .01f, 1.f, 1.f);
+			reileigh = addFloatValueSlider("Reileigh", 0, 10.f, 2.5f);
+			mieCoefficient = addFloatValueSlider("Mie Coeff", 0, 100.f, .053f);
+			mieDirectionalG = addFloatValueSlider("Mie Dir.", 0, 100.f, .75f);
+			turbidity = addFloatValueSlider("Turbidity", 0, 1.f, .32f);
+			sunPosX = addFloatValueSlider("X", 0, 10.f, 10.f);
+			sunPosY = addFloatValueSlider("Y", 0, 10.f, 7.f);
+			sunPosZ = addFloatValueSlider("Z", 0, 10.f, 10.f);
+
+			connect(luminance, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onLuminanceChanged);
+			connect(reileigh, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onReileighChanged);
+			connect(mieCoefficient, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onMieCoeffGChanged);
+			connect(mieDirectionalG, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onMieDireChanged);
+			connect(turbidity, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onTurbidityChanged);
+			connect(sunPosX, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunPosXChanged);
+			connect(sunPosY, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunPosYChanged);
+			connect(sunPosZ, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunPosZChanged);
+
+			if (skyDefinition.isEmpty()) {
+				realisticDefinition.insert("luminance", luminance->getValue());
+				realisticDefinition.insert("reileigh", reileigh->getValue());
+				realisticDefinition.insert("mieCoefficient", mieCoefficient->getValue());
+				realisticDefinition.insert("mieDirectionalG", mieDirectionalG->getValue());
+				realisticDefinition.insert("turbidity", turbidity->getValue());
+				realisticDefinition.insert("sunPosX", sunPosX->getValue());
+				realisticDefinition.insert("sunPosY", sunPosY->getValue());
+				realisticDefinition.insert("sunPosZ", sunPosZ->getValue());
+			}
+			else {
+				reileigh->setValue(skyDefinition.value("reileigh").toDouble());
+				luminance->setValue(skyDefinition.value("luminance").toDouble());
+				mieCoefficient->setValue(skyDefinition.value("mieCoefficient").toDouble());
+				mieDirectionalG->setValue(skyDefinition.value("mieDirectionalG").toDouble());
+				turbidity->setValue(skyDefinition.value("turbidity").toDouble());
+				sunPosX->setValue(skyDefinition.value("sunPosX").toDouble());
+				sunPosY->setValue(skyDefinition.value("sunPosY").toDouble());
+				sunPosZ->setValue(skyDefinition.value("sunPosZ").toDouble());
+			}
+
+			break;
+		}
+
+		case iris::SkyType::EQUIRECTANGULAR: {
+			equiTexture = this->addTexturePicker("Equi Map");
+
+			// There are no default values, this definition gets set whenever we change the texture
+			setEquiMap(skyDefinition.value("equiSkyGuid").toString());
+
+			connect(equiTexture, &TexturePickerWidget::valueChanged, this, [this](QString value) {
+				// Remember that asset names are unique (auto incremented) so this is fine
+				QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName());
+				db->removeDependenciesByType(skyGuid, ModelTypes::Texture);
+				if (!assetGuid.isEmpty()) {
+					db->createDependency(
+						static_cast<int>(ModelTypes::Sky),
+						static_cast<int>(ModelTypes::Texture),
+						skyGuid, assetGuid,
+						Globals::project->getProjectGuid()
+					);
+
+					onEquiTextureChanged(assetGuid);
+				}
+			});
+
+			break;
+		}
+
+		case iris::SkyType::CUBEMAP: {
+			cubemapFront = this->addTexturePicker("Front");
+			cubemapBack = this->addTexturePicker("Back");
+			cubemapLeft = this->addTexturePicker("Left");
+			cubemapRight = this->addTexturePicker("Right");
+			cubemapTop = this->addTexturePicker("Top");
+			cubemapBottom = this->addTexturePicker("Bottom");
+
+			// remember the image on the tiles... TODO
+			connect(cubemapFront, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
+				onSlotChanged(value, guid, 0);
+			});
+
+			connect(cubemapBack, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
+				onSlotChanged(value, guid, 1);
+			});
+
+			connect(cubemapLeft, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
+				onSlotChanged(value, guid, 2);
+			});
+
+			connect(cubemapRight, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
+				onSlotChanged(value, guid, 3);
+			});
+
+			connect(cubemapTop, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
+				onSlotChanged(value, guid, 4);
+			});
+
+			connect(cubemapBottom, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
+				onSlotChanged(value, guid, 5);
+			});
+
+			setSkyMap(skyDefinition);
+
+			break;
+		}
+
+		case iris::SkyType::MATERIAL: {
+			shaderSelector = this->addComboBox("Material");
+
+			auto materialsAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader));
+			shaderSelector->getWidget()->blockSignals(true);	// don't register initial signals
+			shaderSelector->clear();
+			for (const auto shader : materialsAvailableFromDatabase) {
+				shaderSelector->addItem(QFileInfo(shader.name).baseName(), shader.guid);
+			}
+			shaderSelector->getWidget()->blockSignals(false);
+			//If we only have one shader, we need to trigger the update function
+			if (materialsAvailableFromDatabase.count() == 1) onMaterialChanged(0);
+
+			// BROKEN!
+			//shaderSelector->setCurrentItemData(skyDefinition.value("materialGuid").toString());
+			//setSkyFromCustomMaterial(skyDefinition);
+
+			connect(shaderSelector, SIGNAL(currentIndexChanged(int)), this, SLOT(onMaterialChanged(int)));
+
+			break;
+		}
+
+		case iris::SkyType::GRADIENT: {
+			colorTop = this->addColorPicker("Top Color");
+			colorMid = this->addColorPicker("Middle Color");
+			colorBot = this->addColorPicker("Bottom Color");
+			offset = this->addFloatValueSlider("Offset", 0.01, .9f, .73f);
+
+			connect(colorTop->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onGradientTopColorChanged(QColor)));
+			connect(colorMid->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onGradientMidColorChanged(QColor)));
+			connect(colorBot->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onGradientBotColorChanged(QColor)));
+			connect(offset, SIGNAL(valueChanged(float)), SLOT(onGradientOffsetChanged(float)));
+
+			if (skyDefinition.isEmpty()) {
+				gradientDefinition.insert("gradientTop", SceneWriter::jsonColor(QColor(255, 146, 138)));
+				gradientDefinition.insert("gradientMid", SceneWriter::jsonColor(QColor("white")));
+				gradientDefinition.insert("gradientBot", SceneWriter::jsonColor(QColor(64, 128, 255)));
+				gradientDefinition.insert("gradientOffset", .73f);
+			}
+			else {
+				colorTop->setColorValue(SceneReader::readColor(skyDefinition.value("gradientTop").toObject()));
+				colorMid->setColorValue(SceneReader::readColor(skyDefinition.value("gradientMid").toObject()));
+				colorBot->setColorValue(SceneReader::readColor(skyDefinition.value("gradientBot").toObject()));
+				offset->setValue(skyDefinition.value("gradientOffset").toDouble());
+			}
+
+			break;
+		}
 	}
-    else if (index == static_cast<int>(iris::SkyType::GRADIENT)) {
-        colorTop = this->addColorPicker("Top Color");
-		colorMid = this->addColorPicker("Middle Color");
-		colorBot = this->addColorPicker("Bottom Color");
-        offset = this->addFloatValueSlider("Offset", 0.01, .9f, .73f);
-
-		gradientDefinition.insert("gradientTop", SceneWriter::jsonColor(QColor(255, 146, 138)));
-		gradientDefinition.insert("gradientMid", SceneWriter::jsonColor(QColor("white")));
-		gradientDefinition.insert("gradientBot", SceneWriter::jsonColor(QColor(64, 128, 255)));
-		gradientDefinition.insert("gradientOffset", .73f);
-
-		connect(colorTop->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onGradientTopColorChanged(QColor)));
-		connect(colorMid->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onGradientMidColorChanged(QColor)));
-		connect(colorBot->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onGradientBotColorChanged(QColor)));
-		connect(offset, SIGNAL(valueChanged(float)), SLOT(onGradientOffsetChanged(float)));
-    }
 
 	// This is a bug, the world property widget should get and set the current sky type, not this widget
 	currentSky = static_cast<iris::SkyType>(index);
@@ -230,55 +279,6 @@ void SkyPropertyWidget::setSkyAlongWithProperties(const QString &guid, iris::Sky
 {
 	skyGuid = guid;
 	skyTypeChanged(static_cast<int>(skyType));
-
-	QJsonDocument propDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
-	QJsonObject skyDefinition = propDoc.object();
-
-	switch (skyType) {
-		case iris::SkyType::REALISTIC: {
-			reileigh->setValue(skyDefinition.value("reileigh").toDouble());
-			luminance->setValue(skyDefinition.value("luminance").toDouble());
-			mieCoefficient->setValue(skyDefinition.value("mieCoefficient").toDouble());
-			mieDirectionalG->setValue(skyDefinition.value("mieDirectionalG").toDouble());
-			turbidity->setValue(skyDefinition.value("turbidity").toDouble());
-			sunPosX->setValue(skyDefinition.value("sunPosX").toDouble());
-			sunPosY->setValue(skyDefinition.value("sunPosY").toDouble());
-			sunPosZ->setValue(skyDefinition.value("sunPosZ").toDouble());
-			break;
-		}
-
-		case iris::SkyType::SINGLE_COLOR: {
-			singleColor->setColorValue(SceneReader::readColor(skyDefinition.value("skyColor").toObject()));
-			break;
-		}
-
-		case iris::SkyType::EQUIRECTANGULAR: {
-			setEquiMap(skyDefinition.value("equiSkyGuid").toString());
-			break;
-		}
-
-		case iris::SkyType::CUBEMAP: {
-			setSkyMap(skyDefinition);
-			break;
-		}
-
-		case iris::SkyType::MATERIAL: {
-			// If we have a current sky set that as the current item
-			shaderSelector->setCurrentItemData(skyDefinition.value("materialGuid").toString());
-			setSkyFromCustomMaterial(skyDefinition);
-			break;
-		}
-
-		case iris::SkyType::GRADIENT: {
-			colorTop->setColorValue(SceneReader::readColor(skyDefinition.value("gradientTop").toObject()));
-			colorMid->setColorValue(SceneReader::readColor(skyDefinition.value("gradientMid").toObject()));
-			colorBot->setColorValue(SceneReader::readColor(skyDefinition.value("gradientBot").toObject()));
-			offset->setValue(skyDefinition.value("gradientOffset").toDouble());
-			break;
-		}
-
-		default: break;
-	}
 }
 
 // Let's hijack this event and use it to update the asset in the db (iKlsR)
@@ -292,43 +292,43 @@ void SkyPropertyWidget::hideEvent(QHideEvent *event)
 	skyProperties = QJsonObject();
 	skyProperties.insert("guid", skyGuid);
 
-	switch (static_cast<int>(currentSky)) {
-		case static_cast<int>(iris::SkyType::SINGLE_COLOR) : {
+	switch (currentSky) {
+		case iris::SkyType::SINGLE_COLOR: {
 			for (const QString& key : singleColorDefinition.keys()) {
 				skyProperties.insert(key, singleColorDefinition.value(key));
 			}
 			break;
 		}
 		
-		case static_cast<int>(iris::SkyType::REALISTIC) : {
+		case iris::SkyType::REALISTIC: {
 			for (const QString& key : realisticDefinition.keys()) {
 				skyProperties.insert(key, realisticDefinition.value(key));
 			}
 			break;
 		}
 
-		case static_cast<int>(iris::SkyType::EQUIRECTANGULAR): {
+		case iris::SkyType::EQUIRECTANGULAR: {
 			for (const QString& key : equiSkyDefinition.keys()) {
 				skyProperties.insert(key, equiSkyDefinition.value(key));
 			}
 			break;
 		}
 
-		case static_cast<int>(iris::SkyType::CUBEMAP) : {
+		case iris::SkyType::CUBEMAP: {
 			for (const QString& key : cubeMapDefinition.keys()) {
 				skyProperties.insert(key, cubeMapDefinition.value(key));
 			}
 			break;
 		}
 
-		case static_cast<int>(iris::SkyType::MATERIAL) : {
+		case iris::SkyType::MATERIAL: {
 			for (const QString& key : materialDefinition.keys()) {
 				skyProperties.insert(key, materialDefinition.value(key));
 			}
 			break;
 		}
 
-		case static_cast<int>(iris::SkyType::GRADIENT) : {
+		case iris::SkyType::GRADIENT: {
 			for (const QString& key : gradientDefinition.keys()) {
 				skyProperties.insert(key, gradientDefinition.value(key));
 			}
@@ -347,6 +347,7 @@ void SkyPropertyWidget::hideEvent(QHideEvent *event)
 void SkyPropertyWidget::setEquiMap(const QString &guid)
 {
     if (!guid.isEmpty()) {
+		equiSkyDefinition.insert("equiSkyGuid", guid);
         auto image = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(guid).name);
         equiTexture->setTexture(QFileInfo(image).isFile() ? image : QString());
         scene->setSkyTexture(iris::Texture2D::load(image, false));
@@ -355,36 +356,33 @@ void SkyPropertyWidget::setEquiMap(const QString &guid)
 
 void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 {
-	auto front = db->fetchAsset(skyDataDefinition["front"].toString()).name;
-	auto back = db->fetchAsset(skyDataDefinition["back"].toString()).name;
-	auto left = db->fetchAsset(skyDataDefinition["left"].toString()).name;
-	auto right = db->fetchAsset(skyDataDefinition["right"].toString()).name;
-	auto top = db->fetchAsset(skyDataDefinition["top"].toString()).name;
-	auto bottom = db->fetchAsset(skyDataDefinition["bottom"].toString()).name;
+	auto front = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(skyDataDefinition["front"].toString()).name);
+	auto back = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(skyDataDefinition["back"].toString()).name);
+	auto left = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(skyDataDefinition["left"].toString()).name);
+	auto right = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(skyDataDefinition["right"].toString()).name);
+	auto top = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(skyDataDefinition["top"].toString()).name);
+	auto bottom = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(skyDataDefinition["bottom"].toString()).name);
 
-	QVector<QString> sides = { front, back, top, bottom, left, right };
-	for (int i = 0; i < sides.count(); ++i) {
-		QString path = IrisUtils::join(Globals::project->getProjectFolder(), sides[i]);
-		if (QFileInfo(path).isFile()) {
-			sides[i] = path;
-		}
-		else {
-			sides[i] = QString();
-		}
-	}
+	cubeMapDefinition.insert("front", skyDataDefinition["front"].toString());
+	cubeMapDefinition.insert("back", skyDataDefinition["back"].toString());
+	cubeMapDefinition.insert("left", skyDataDefinition["left"].toString());
+	cubeMapDefinition.insert("right", skyDataDefinition["right"].toString());
+	cubeMapDefinition.insert("top", skyDataDefinition["top"].toString());
+	cubeMapDefinition.insert("bottom", skyDataDefinition["bottom"].toString());
 
-	cubemapFront->setTexture(sides[0]);
-	cubemapBack->setTexture(sides[1]);
-	cubemapTop->setTexture(sides[2]);
-	cubemapBottom->setTexture(sides[3]);
-	cubemapLeft->setTexture(sides[4]);
-	cubemapRight->setTexture(sides[5]);
+	cubemapFront->setTexture(front);
+	cubemapBack->setTexture(back);
+	cubemapTop->setTexture(top);
+	cubemapBottom->setTexture(bottom);
+	cubemapLeft->setTexture(left);
+	cubemapRight->setTexture(right);
 
 	// We need at least one valid image to get some metadata from
 	QImage *info;
 	bool useTex = false;
+	QVector<QString> sides = { front, back, left, right, top, bottom };
 	for (const auto image : sides) {
-		if (!image.isEmpty()) {
+		if (!image.isEmpty() && QFileInfo(image).isFile()) {
 			info = new QImage(image);
 			useTex = true;
 			break;
@@ -392,7 +390,7 @@ void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 	}
 
 	if (useTex) {
-		scene->setSkyTexture(iris::Texture2D::createCubeMap(sides[0], sides[1], sides[2], sides[3], sides[4], sides[5], info));
+		scene->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
 	}
 }
 

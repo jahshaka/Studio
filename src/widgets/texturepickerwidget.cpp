@@ -141,7 +141,7 @@ void TexturePickerWidget::changeMap(const QString &texturePath)
 
 void TexturePickerWidget::setTexture(QString path)
 {
-    if (!path.isEmpty()) {
+    if (!path.isEmpty() && QFileInfo(path).isFile()) {
         setLabelImage(ui->texture, path, false);
     } else {
         ui->texture->clear();
