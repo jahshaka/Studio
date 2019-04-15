@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include "../comboboxwidget.h"
 #include "../checkboxwidget.h"
 
+#include "widgets/propertywidgets/worldpropertywidget.h"
+
 #include "globals.h"
 #include "core/database/database.h"
 #include "core/subscriber.h"
@@ -35,7 +37,13 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 {
 	if (skyGuid.isEmpty()) return;
 
-	const QJsonObject skyDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(skyGuid)).object();
+	//QJsonDocument skyProperties = QJsonDocument::fromBinaryData(db->fetchAsset(scene->skyGuid).properties);
+	//QJsonObject skyPropertiesDefinition = skyProperties.object().value("sky").toObject();
+	//auto switchedIndex = static_cast<iris::SkyType>(skyPropertiesDefinition.value("type").toInt());
+
+	const QJsonObject skyDefinition = static_cast<int>(scene->skyType) == index
+										? QJsonDocument::fromBinaryData(db->fetchAssetData(skyGuid)).object()
+										: QJsonObject();
 
 	clearPanel(this->layout());
 
@@ -60,6 +68,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			// This should be revisited, some differences between scene color and our default
 			if (skyDefinition.isEmpty()) {
 				singleColorDefinition.insert("skyColor", SceneWriter::jsonColor(QColor(72, 72, 72)));
+				singleColor->setColorValue(QColor(72, 72, 72));
 			}
 			else {
 				singleColor->setColorValue(SceneReader::readColor(skyDefinition.value("skyColor").toObject()));
@@ -178,21 +187,21 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 		case iris::SkyType::MATERIAL: {
 			shaderSelector = this->addComboBox("Material");
 
-			auto materialsAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader));
-			shaderSelector->getWidget()->blockSignals(true);	// don't register initial signals
-			shaderSelector->clear();
-			for (const auto shader : materialsAvailableFromDatabase) {
-				shaderSelector->addItem(QFileInfo(shader.name).baseName(), shader.guid);
-			}
-			shaderSelector->getWidget()->blockSignals(false);
-			//If we only have one shader, we need to trigger the update function
-			if (materialsAvailableFromDatabase.count() == 1) onMaterialChanged(0);
+			//auto materialsAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader));
+			//shaderSelector->getWidget()->blockSignals(true);	// don't register initial signals
+			//shaderSelector->clear();
+			//for (const auto shader : materialsAvailableFromDatabase) {
+			//	shaderSelector->addItem(QFileInfo(shader.name).baseName(), shader.guid);
+			//}
+			//shaderSelector->getWidget()->blockSignals(false);
+			////If we only have one shader, we need to trigger the update function
+			//if (materialsAvailableFromDatabase.count() == 1) onMaterialChanged(0);
 
 			// BROKEN!
 			//shaderSelector->setCurrentItemData(skyDefinition.value("materialGuid").toString());
 			//setSkyFromCustomMaterial(skyDefinition);
 
-			connect(shaderSelector, SIGNAL(currentIndexChanged(int)), this, SLOT(onMaterialChanged(int)));
+			//connect(shaderSelector, SIGNAL(currentIndexChanged(int)), this, SLOT(onMaterialChanged(int)));
 
 			break;
 		}
@@ -231,6 +240,12 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
 	// This is a bug, the world property widget should get and set the current sky type, not this widget
 	currentSky = static_cast<iris::SkyType>(index);
+
+	if (skyDefinition.isEmpty()) {
+		updateAssetAndKeys();
+		worldPropWidget->setScene(scene);
+		worldPropWidget->onSkyChanged(index);
+	}
 }
 
 void SkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
@@ -288,6 +303,15 @@ void SkyPropertyWidget::setSkyAlongWithProperties(const QString &guid, iris::Sky
 // Let's hijack this event and use it to update the asset in the db (iKlsR)
 void SkyPropertyWidget::hideEvent(QHideEvent *event)
 {
+	Q_UNUSED(event)
+
+	updateAssetAndKeys();
+
+	return;
+}
+
+void SkyPropertyWidget::updateAssetAndKeys()
+{
 	QJsonObject properties;
 	QJsonObject skyProps;
 	skyProps.insert("type", static_cast<int>(currentSky));
@@ -297,55 +321,53 @@ void SkyPropertyWidget::hideEvent(QHideEvent *event)
 	skyProperties.insert("guid", skyGuid);
 
 	switch (currentSky) {
-		case iris::SkyType::SINGLE_COLOR: {
-			for (const QString& key : singleColorDefinition.keys()) {
-				skyProperties.insert(key, singleColorDefinition.value(key));
-			}
-			break;
+	case iris::SkyType::SINGLE_COLOR: {
+		for (const QString& key : singleColorDefinition.keys()) {
+			skyProperties.insert(key, singleColorDefinition.value(key));
 		}
-		
-		case iris::SkyType::REALISTIC: {
-			for (const QString& key : realisticDefinition.keys()) {
-				skyProperties.insert(key, realisticDefinition.value(key));
-			}
-			break;
-		}
+		break;
+	}
 
-		case iris::SkyType::EQUIRECTANGULAR: {
-			for (const QString& key : equiSkyDefinition.keys()) {
-				skyProperties.insert(key, equiSkyDefinition.value(key));
-			}
-			break;
+	case iris::SkyType::REALISTIC: {
+		for (const QString& key : realisticDefinition.keys()) {
+			skyProperties.insert(key, realisticDefinition.value(key));
 		}
+		break;
+	}
 
-		case iris::SkyType::CUBEMAP: {
-			for (const QString& key : cubeMapDefinition.keys()) {
-				skyProperties.insert(key, cubeMapDefinition.value(key));
-			}
-			break;
+	case iris::SkyType::EQUIRECTANGULAR: {
+		for (const QString& key : equiSkyDefinition.keys()) {
+			skyProperties.insert(key, equiSkyDefinition.value(key));
 		}
+		break;
+	}
 
-		case iris::SkyType::MATERIAL: {
-			for (const QString& key : materialDefinition.keys()) {
-				skyProperties.insert(key, materialDefinition.value(key));
-			}
-			break;
+	case iris::SkyType::CUBEMAP: {
+		for (const QString& key : cubeMapDefinition.keys()) {
+			skyProperties.insert(key, cubeMapDefinition.value(key));
 		}
+		break;
+	}
 
-		case iris::SkyType::GRADIENT: {
-			for (const QString& key : gradientDefinition.keys()) {
-				skyProperties.insert(key, gradientDefinition.value(key));
-			}
-			break;
+	case iris::SkyType::MATERIAL: {
+		for (const QString& key : materialDefinition.keys()) {
+			skyProperties.insert(key, materialDefinition.value(key));
 		}
+		break;
+	}
+
+	case iris::SkyType::GRADIENT: {
+		for (const QString& key : gradientDefinition.keys()) {
+			skyProperties.insert(key, gradientDefinition.value(key));
+		}
+		break;
+	}
 	}
 
 	db->updateAssetAsset(skyGuid, QJsonDocument(skyProperties).toBinaryData());
 	db->updateAssetProperties(skyGuid, QJsonDocument(properties).toBinaryData());
 	// Not really used but keep around for now, the intent is clear (iKlsR)
 	emit Globals::eventSubscriber->updateAssetSkyItemFromSkyPropertyWidget(skyGuid, currentSky);
-
-	return;
 }
 
 void SkyPropertyWidget::setEquiMap(const QString &guid)

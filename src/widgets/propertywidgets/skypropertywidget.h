@@ -24,6 +24,7 @@ For more information see the LICENSE file
 
 class Database;
 
+class WorldPropertyWidget;
 class ColorValueWidget;
 class ColorPickerWidget;
 class TexturePicker;
@@ -46,6 +47,7 @@ public:
 	void setSkyAlongWithProperties(const QString &guid, iris::SkyType skyType);
 
 	void hideEvent(QHideEvent *event);
+	WorldPropertyWidget* worldPropWidget;
 
 protected slots:
     void setEquiMap(const QString &guid);
@@ -76,6 +78,8 @@ private:
     QSharedPointer<iris::Scene> scene;
     iris::SkyType currentSky;
 	QString skyGuid;
+
+	void updateAssetAndKeys();
 
 	QJsonObject skyProperties;
 

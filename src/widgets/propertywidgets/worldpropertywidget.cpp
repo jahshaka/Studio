@@ -165,13 +165,13 @@ void WorldPropertyWidget::onSkyChanged(int index)
 		}
 	}
 	else if (scene->skyType == iris::SkyType::MATERIAL) {
-		auto vert = skyDataDefinition.value("vertexShader").toString();
-		auto frag = skyDataDefinition.value("fragmentShader").toString();
+		//auto vert = skyDataDefinition.value("vertexShader").toString();
+		//auto frag = skyDataDefinition.value("fragmentShader").toString();
 
-		auto vPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(vert).name);
-		auto fPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(frag).name);
+		//auto vPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(vert).name);
+		//auto fPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(frag).name);
 
-		scene->skyMaterial->createProgramFromShaderSource(vPath, fPath);
+		//scene->skyMaterial->createProgramFromShaderSource(vPath, fPath);
 	}
 	else if (scene->skyType == iris::SkyType::GRADIENT) {
 		scene->gradientTop = SceneReader::readColor(skyDataDefinition.value("gradientTop").toObject());

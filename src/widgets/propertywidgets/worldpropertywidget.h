@@ -38,7 +38,7 @@ public:
     void setScene(QSharedPointer<iris::Scene> scene);
 	void setDatabase(Database*);
 
-protected slots:
+public slots:
     void onGravityChanged(float value);
     void onSkyChanged(int index);
     void onSkyColorChanged(QColor color);
