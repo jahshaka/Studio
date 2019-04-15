@@ -371,6 +371,7 @@ void RightHand::update(float dt)
 			if (rightTouch->getHandTrigger() < 0.1f && !!grabbedNode)
 			{
 				// release node
+				grabbedNode->disablePhysicsTransform = false;
 				grabbedNode.clear();
 				rightNodeOffset.setToIdentity(); // why bother?
 
@@ -379,6 +380,8 @@ void RightHand::update(float dt)
 
 			// update picked node
 			if (!!grabbedNode) {
+				// disbale physics visual update
+				grabbedNode->disablePhysicsTransform = true;
 
 				// calculate the global position
 				auto nodeGlobal = rightHandMatrix * rightNodeOffset;
@@ -387,7 +390,7 @@ void RightHand::update(float dt)
 				if (grabbedNode->isPhysicsBody) {
 					scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::RightHand, nodeGlobal);
 				}
-				else {
+				//else {
 					
 
 					// calculate position relative to parent
@@ -406,7 +409,7 @@ void RightHand::update(float dt)
 					grabbedNode->setLocalRot(rot);
 					grabbedNode->setLocalScale(scale);
 
-				}
+				//}
 			}
 
 			//scene->geometryRenderList->add(rightBeamRenderItem);
