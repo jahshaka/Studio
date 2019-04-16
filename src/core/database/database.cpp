@@ -469,7 +469,9 @@ QString Database::createAssetEntry(
 	const QString &projectGuid,
 	const QString &guid,
 	const QString &assetName,
-	const int &type, const QByteArray &asset)
+	const int &type,
+	const QByteArray &asset,
+	const QByteArray &properties)
 {
 	QSqlQuery query;
 	query.prepare(
@@ -487,7 +489,7 @@ QString Database::createAssetEntry(
 	query.bindValue(":project_guid", projectGuid);
 	query.bindValue(":version", Constants::CONTENT_VERSION);
 	query.bindValue(":guid", guid);
-	query.bindValue(":properties", QByteArray());
+	query.bindValue(":properties", properties);
 	query.bindValue(":author", QString());
 	query.bindValue(":asset", asset);
 	query.bindValue(":license", QString());
@@ -758,7 +760,7 @@ bool Database::deleteFolder(const QString &guid)
 bool Database::deleteDependency(const QString &dependee)
 {
     QSqlQuery query;
-    query.prepare("DELETE FROM dependencies dependee = ?");
+    query.prepare("DELETE FROM dependencies WHERE dependee = ?");
     query.addBindValue(dependee);
     return executeAndCheckQuery(query, "deleteDependency");
 }
@@ -885,7 +887,7 @@ bool Database::updateAssetProperties(const QString &guid, const QByteArray &asse
 AssetRecord Database::fetchAsset(const QString &guid)
 {
     QSqlQuery query;
-    query.prepare("SELECT name, thumbnail, guid, parent, type FROM assets WHERE guid = ? ");
+    query.prepare("SELECT name, thumbnail, guid, parent, type, properties FROM assets WHERE guid = ? ");
     query.addBindValue(guid);
     executeAndCheckQuery(query, "fetchAsset");
 
@@ -897,6 +899,7 @@ AssetRecord Database::fetchAsset(const QString &guid)
             data.guid = query.value(2).toString();
             data.parent = query.value(3).toString();
             data.type = query.value(4).toInt();
+            data.properties = query.value(5).toByteArray();
             return data;
         }
     }
@@ -916,7 +919,7 @@ QVector<AssetRecord> Database::fetchAssets()
         "FROM assets A "
         "INNER JOIN collections C ON A.collection = C.collection_id "
         "WHERE A.project_guid IS NULL "
-        "AND (A.type = :m OR A.type = :o OR A.type = :t OR A.type = :s OR A.type = :p) "
+        "AND (A.type = :m OR A.type = :o OR A.type = :t OR A.type = :s OR A.type = :sk OR A.type = :p) "
         "AND A.guid NOT IN (select dependee FROM dependencies) "
         "ORDER BY A.name DESC"
     );
@@ -924,6 +927,7 @@ QVector<AssetRecord> Database::fetchAssets()
     query.bindValue(":o", static_cast<int>(ModelTypes::Material));
     query.bindValue(":t", static_cast<int>(ModelTypes::Texture));
     query.bindValue(":s", static_cast<int>(ModelTypes::Shader));
+    query.bindValue(":sk", static_cast<int>(ModelTypes::Sky));
     query.bindValue(":p", static_cast<int>(ModelTypes::ParticleSystem));
     executeAndCheckQuery(query, "FetchAssets");
 
@@ -2143,16 +2147,16 @@ QStringList Database::fetchChildFolderAssets(const QString &guid)
 	return assets;
 }
 
-QStringList Database::fetchAssetDependenciesByType(const QString & guid, const ModelTypes &type)
+QStringList Database::fetchAssetDependeesByType(const QString & guid, const ModelTypes &type)
 {
     QSqlQuery query;
     query.prepare(
         "SELECT assets.guid FROM dependencies "
         "INNER JOIN assets ON dependencies.dependee = assets.guid "
-        "WHERE depender = ? AND depender_type = ?");
+        "WHERE depender = ? AND dependee_type = ?");
     query.addBindValue(guid);
     query.addBindValue(static_cast<int>(type));
-    executeAndCheckQuery(query, "fetchAssetDependenciesByType");
+    executeAndCheckQuery(query, "fetchAssetDependeesByType");
 
     QStringList dependencies;
     while (query.next()) {
@@ -2748,6 +2752,7 @@ QString Database::importAsset(
     for (auto &asset : assetsToImport) {
         if (asset.type == static_cast<int>(ModelTypes::Shader)   ||
             asset.type == static_cast<int>(ModelTypes::Material) ||
+            asset.type == static_cast<int>(ModelTypes::Sky) ||
             asset.type == static_cast<int>(ModelTypes::Object))
         {
             auto doc = QJsonDocument::fromBinaryData(asset.asset);

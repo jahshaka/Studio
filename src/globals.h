@@ -16,9 +16,9 @@ class Project;
 class SceneViewWidget;
 
 #include <QMap>
+#include <QPointer>
 #include <QString>
-//#include "src/misc/QtAwesome.h"
-//#include "src/misc/QtAwesomeAnim.h"
+#include "src/core/subscriber.h"
 
 class Database;
 class Globals
@@ -30,6 +30,8 @@ public:
 	static Database* db;
     static SceneViewWidget* sceneViewWidget;
     static QMap<QString, QString> assetNames;
+
+	static QPointer<Subscriber> eventSubscriber;
 };
 
 #endif // GLOBALS_H

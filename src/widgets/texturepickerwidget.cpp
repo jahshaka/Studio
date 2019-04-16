@@ -33,6 +33,7 @@ TexturePickerWidget::TexturePickerWidget(QWidget* parent) :
 
     connect(ui->clear, &QPushButton::pressed, this, &TexturePickerWidget::clear);
     connect(ui->load, &QPushButton::pressed, this, &TexturePickerWidget::changeTextureMap);
+	ui->load->hide(); // hide this till new widget
 
     ui->clear->setIcon(QIcon(":/icons/icons8-synchronize-26.png"));
 
@@ -67,8 +68,10 @@ void TexturePickerWidget::dropEvent(QDropEvent *event)
 	QMap<int, QVariant> roleDataMap;
 	while (!stream.atEnd()) stream >> roleDataMap;
 
-	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
-		changeMap(IrisUtils::join(Globals::project->getProjectFolder(), roleDataMap.value(1).toString()));
+    // extend getting guid to filepicker dialog...
+    if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
+        textureGuid = roleDataMap.value(3).toString();
+        changeMap(IrisUtils::join(Globals::project->getProjectFolder(), roleDataMap.value(1).toString()));
 	}
 
     event->acceptProposedAction();
@@ -105,7 +108,10 @@ void TexturePickerWidget::setLabelImage(QLabel* label, QString file, bool emitSi
         filePath = file;
     }
 
-    if (emitSignal) emit valueChanged(file);
+	if (emitSignal) {
+		emit valueChanged(file);
+		emit valuesChanged(file, textureGuid);
+	}
 }
 
 bool TexturePickerWidget::eventFilter(QObject *object, QEvent *ev)
@@ -118,7 +124,9 @@ void TexturePickerWidget::clear()
 {
     ui->texture->clear();
     filePath.clear();
+    textureGuid.clear();
     emit valueChanged(QString::null);
+    emit valuesChanged(QString(), QString());
 }
 
 void TexturePickerWidget::changeMap(QListWidgetItem *item)
@@ -133,7 +141,9 @@ void TexturePickerWidget::changeMap(const QString &texturePath)
 
 void TexturePickerWidget::setTexture(QString path)
 {
-    if (!path.isEmpty()) {
+    if (!path.isEmpty() && QFileInfo(path).isFile()) {
         setLabelImage(ui->texture, path, false);
+    } else {
+        ui->texture->clear();
     }
 }

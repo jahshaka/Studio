@@ -35,7 +35,7 @@ private slots:
 
 public:
     int index;
-    QString filename, filePath;
+    QString filename, filePath, textureGuid;
 
     explicit TexturePickerWidget(QWidget *parent = 0);
     ~TexturePickerWidget();
@@ -51,7 +51,8 @@ public:
     void dropEvent(QDropEvent*);
 
 signals:
-    void valueChanged( QString value);
+    void valueChanged(QString value);
+    void valuesChanged(QString value, QString guid);
 
 private:
     QString loadTexture();

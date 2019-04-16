@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include "propertywidgets/worldpropertywidget.h"
 #include "propertywidgets/physicspropertywidget.h"
 #include "propertywidgets/handpropertywidget.h"
+#include "propertywidgets/skypropertywidget.h"
 
 SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(parent)
 {
@@ -47,6 +48,12 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     worldPropView = new WorldPropertyWidget();
     worldPropView->setPanelTitle("World");
     worldPropView->expand();
+
+	skyPropView = new SkyPropertyWidget();
+	skyPropView->setPanelTitle("Sky");
+	skyPropView->setDatabase(db);
+	skyPropView->worldPropWidget = worldPropView;
+	skyPropView->expand();
 
     transformPropView = new AccordianBladeWidget();
     transformPropView->setPanelTitle("Transformation");
@@ -74,12 +81,20 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     shaderPropView->setDatabase(db);
     shaderPropView->expand();
 
-	handPropView = new HandPropertyWidget();
+    handPropView = new HandPropertyWidget();
 	handPropView->setPanelTitle("Hand");
 	//handPropView->setDatabase(db);
 	handPropView->expand();
 
     setLayout(widgetPropertyLayout);
+}
+
+void SceneNodePropertiesWidget::setScene(QSharedPointer<iris::Scene> scene)
+{
+    if (!!scene) {
+        this->scene = scene;
+        skyPropView->setScene(this->scene);
+    }
 }
 
 /**
@@ -172,15 +187,23 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 
 void SceneNodePropertiesWidget::setAssetItem(QListWidgetItem *item)
 {
-    if (item) {
-		clearLayout(this->layout());
+    if (!item) return;
+
+    if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Shader)) {
+        clearLayout(this->layout());
         shaderPropView->setParent(this);
         shaderPropView->setShaderGuid(item->data(MODEL_GUID_ROLE).toString());
         widgetPropertyLayout->addWidget(shaderPropView);
         widgetPropertyLayout->addStretch();
     }
-    else {
+    else if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Sky))
+    {
         clearLayout(this->layout());
+		skyPropView->setParent(this);
+		skyPropView->setSkyAlongWithProperties(item->data(MODEL_GUID_ROLE).toString(),
+											   static_cast<iris::SkyType>(item->data(SKY_TYPE_ROLE).toInt()));
+		widgetPropertyLayout->addWidget(skyPropView);
+		widgetPropertyLayout->addStretch();
     }
 }
 

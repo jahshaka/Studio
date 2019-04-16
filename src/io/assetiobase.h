@@ -41,15 +41,6 @@ protected:
     //returns null string if path doesnt exist
     QString getAbsolutePath(QString filename);
 
-
-    /**
-     * Reads r,g,b and a from color json object
-     * returns default QColor() if colorObj is null
-     * @param colorObj
-     * @return
-     */
-    QColor readColor(const QJsonObject& colorObj);
-
     /**
      * Reads x and y from vector json object
      * returns default QVector2D() if vecObj is null
@@ -73,6 +64,15 @@ protected:
 	 * @return
 	 */
 	QVector4D readVector4(const QJsonObject& vecObj);
+
+public:
+	/**
+	 * Reads r,g,b and a from color json object
+	 * returns default QColor() if colorObj is null
+	 * @param colorObj
+	 * @return
+	 */
+	static QColor readColor(const QJsonObject& colorObj);
 };
 
 #endif // SCENEIOBASE_H

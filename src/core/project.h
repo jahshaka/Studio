@@ -96,20 +96,21 @@ struct CollectionRecord
     int         id;
 };
 
-enum class ModelTypes {
-    Undefined,      // Used
-	Material,       // Supported
-	Texture,        // Supported
-	Video,
-	Cubemap,
-	Object,         // Supported
-	Mesh,           // Supported
-	SoundEffect,
-	Music,
-	Shader,         // Supported
-	Variant,
-	File,           // Supported
-	ParticleSystem  // Supported
+enum class ModelTypes
+{
+    Undefined,		// Used
+    Material,		// Supported
+    Texture,		// Supported
+    Video,
+    Sky,			// Supported
+    Object,			// Supported
+    Mesh,			// Supported
+    SoundEffect,
+    Music,
+    Shader,			// Supported
+    Variant,
+    File,			// Supported
+    ParticleSystem	// Supported
 };
 
 #define	MODEL_GUID_ROLE		0x0113
@@ -117,6 +118,7 @@ enum class ModelTypes {
 #define	MODEL_EXT_ROLE		0x0133
 #define	MODEL_TYPE_ROLE		0x0123
 #define	MODEL_MESH_ROLE		0x0173
+#define SKY_TYPE_ROLE		0x0179
 
 #define MODEL_ITEM_TYPE		0x0981
 #define MODEL_FOLDER		0x0871

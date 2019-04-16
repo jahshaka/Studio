@@ -101,6 +101,15 @@ QComboBox *ComboBoxWidget::getWidget() const
     return ui->comboBox;
 }
 
+QJsonObject ComboBoxWidget::valuesToJson() const
+{
+	QJsonObject properties;
+	for (int index = 0; index < ui->comboBox->count(); index++) {
+		properties.insert(ui->comboBox->itemText(index), ui->comboBox->itemData(index).toString());
+	}
+	return properties;
+}
+
 void ComboBoxWidget::onDropDownTextChanged(const QString &text)
 {
     emit currentIndexChanged(text);

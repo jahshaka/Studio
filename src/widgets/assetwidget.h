@@ -260,7 +260,7 @@ protected:
 protected slots:
     void treeItemSelected(QTreeWidgetItem* item);
     void treeItemChanged(QTreeWidgetItem* item,int index);
-
+	void updateAssetSkyItemFromSkyPropertyWidget(const QString &guid, iris::SkyType skyType);
 
     void sceneTreeCustomContextMenu(const QPoint &);
     void sceneViewCustomContextMenu(const QPoint &);
@@ -276,7 +276,8 @@ protected slots:
 
 	void editFileExternally();
 	void exportTexture();
-	void exportMaterial();
+    void exportSky();
+    void exportMaterial();
 	void exportMaterialPreview();
 	void exportShader();
 	void exportAssetPack();
@@ -288,6 +289,7 @@ protected slots:
     void deleteItem();
     void openAtFolder();
 	void createShader();
+    void createSky();
     void createFolder();
     void importAssetB();
     void importAsset(const QStringList &path);

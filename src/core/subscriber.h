@@ -9,14 +9,23 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "globals.h"
-#include "core/project.h"
-#include "widgets/sceneviewwidget.h"
+#ifndef SUBSCRIBER_H
+#define SUBSCRIBER_H
 
-float					Globals::animFrameTime =	0;
-QString					Globals::appWorkingDir =	QString();
-Project*				Globals::project =			Project::createNew();
-Database*				Globals::db =				nullptr;
-SceneViewWidget*		Globals::sceneViewWidget =	nullptr;
-QMap<QString, QString>	Globals::assetNames =		QMap<QString, QString>();
-QPointer<Subscriber>    Globals::eventSubscriber =  QPointer<Subscriber>(new Subscriber);
+#include "irisgl/src/scenegraph/scene.h"
+#include "core/project.h"
+
+#include <QObject>
+
+class Subscriber : public QObject
+{
+	Q_OBJECT
+
+public:
+	Subscriber() = default;
+
+signals:
+	void updateAssetSkyItemFromSkyPropertyWidget(const QString &guid, iris::SkyType skyType);
+};
+
+#endif // SUBSCRIBER_H

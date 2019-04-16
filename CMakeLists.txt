@@ -74,6 +74,7 @@ set(SRCS
     src/widgets/scenenodepropertieswidget.cpp 
     src/widgets/propertywidgets/lightpropertywidget.cpp 
     src/widgets/propertywidgets/materialpropertywidget.cpp 
+    src/widgets/propertywidgets/skypropertywidget.cpp 
     src/widgets/propertywidgets/worldpropertywidget.cpp 
     src/widgets/propertywidgets/physicspropertywidget.cpp 
     src/io/scenewriter.cpp 
@@ -140,6 +141,7 @@ set(SRCS
 	src/misc/updatechecker.cpp
 	src/dialogs/softwareupdatedialog.cpp
     src/core/assethelper.cpp
+    src/core/subscriber.cpp
     src/core/scenenodehelper.cpp
     src/misc/upgrader.cpp
     src/misc/QtAwesome.cpp
@@ -201,6 +203,7 @@ set(HEADERS
     src/widgets/propertywidgets/transformpropertywidget.h 
     src/widgets/propertywidgets/lightpropertywidget.h 
     src/widgets/propertywidgets/materialpropertywidget.h 
+    src/widgets/propertywidgets/skypropertywidget.h 
     src/widgets/scenenodepropertieswidget.h 
     src/widgets/propertywidgets/worldpropertywidget.h 
     src/widgets/propertywidgets/physicspropertywidget.h 
@@ -283,6 +286,7 @@ set(HEADERS
     src/dialogs/softwareupdatedialog.h
     src/editor/animationpath.h
     src/core/assethelper.h
+    src/core/subscriber.h
     src/core/scenenodehelper.h
     src/misc/upgrader.h
     src/misc/QtAwesome.h
