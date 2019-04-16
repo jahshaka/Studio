@@ -16,6 +16,17 @@ For more information see the LICENSE file
 #include <QPushButton>
 #include <QLabel>
 #include <QGridLayout>
+
+enum class CubeMapPosition {
+	top = 0,
+	left = 1,
+	front = 2,
+	right = 3,
+	back = 4,
+	bottom = 5
+};
+
+class SkyMapWidget;
 class CubeMapButton : public QPushButton {
 
 	enum class Rotation {
@@ -27,8 +38,19 @@ class CubeMapButton : public QPushButton {
 	};
 
 public:
-	CubeMapButton(QString imagePath);
+	CubeMapButton(QString imagePath, SkyMapWidget* parent);
 	void setStringPosition(QString string);
+	void setPosition(CubeMapPosition pos);
+	void setImage(QString path);
+
+	void selectImage();
+	void clearImage();
+	void rotateImage(int degrees);
+	void flipImage(Qt::Orientation orientation);
+
+
+	QString path;
+	CubeMapPosition position;
 
 	QVBoxLayout* layout;
 	QImage image;
@@ -41,7 +63,7 @@ public:
 	QPushButton* clear;
 
 
-	bool drawPositionString = false;
+	SkyMapWidget* parent;
 private:
 	void configureConnections();
 	void configureUi();
@@ -52,7 +74,7 @@ protected:
 };
 
 class SkyMapWidget : public QWidget {
-
+	Q_OBJECT
 public:
 	SkyMapWidget();
 
@@ -65,8 +87,17 @@ public:
 	void addBackImage(QString backImagePath);
 	void addCubeMapImages(QString top, QString bottom, QString left, QString front, QString right, QString back);
 	void addCubeMapImages(QStringList list);
+	void removeCubeMapImageIfPresent(CubeMapButton* btn);
+
+	
 
 	CubeMapButton * top, * left, * front, * right, * back, * bottom;
+
+signals:
+	void valueChanged(QString value, CubeMapPosition pos);
+	void valuesChanged(QString value, QString guid, CubeMapPosition pos);
+	void rotateImageToDegrees(int degree, CubeMapPosition pos);
+	void flipImageAboutAxis(Qt::Orientation orientation, CubeMapPosition pos);
 };
 
 

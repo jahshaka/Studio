@@ -31,66 +31,53 @@ SkyMapWidget::SkyMapWidget() : QWidget()
 
 void SkyMapWidget::addTopImage(QString topImagePath)
 {
-	if (top != nullptr) {
-		layout->removeWidget(top);
-		delete top;
-	}
-	top = new CubeMapButton(topImagePath);
+	removeCubeMapImageIfPresent(top);
+
+	top = new CubeMapButton(topImagePath, this);
 	top->setStringPosition("top");
 	layout->addWidget(top, 0, 1,1,1);
 }
 
 void SkyMapWidget::addBottomImage(QString bottomImagePath)
 {
-	if (bottom != nullptr) {
-		layout->removeWidget(bottom);
-		delete bottom;
-	}
-	bottom = new CubeMapButton(bottomImagePath);
+	removeCubeMapImageIfPresent(bottom);
+
+	bottom = new CubeMapButton(bottomImagePath, this);
 	bottom->setStringPosition("bottom");
 	layout->addWidget(bottom, 3, 1,1,1);
 }
 
 void SkyMapWidget::addLeftImage(QString leftImagePath)
 {
-	if (left != nullptr) {
-		layout->removeWidget(left);
-		delete left;
-	}
-	left = new CubeMapButton(leftImagePath);
+	removeCubeMapImageIfPresent(left);
+
+	left = new CubeMapButton(leftImagePath, this);
 	left->setStringPosition("left");
 	layout->addWidget(left, 1, 0,1,1);
 }
 
 void SkyMapWidget::addRightImage(QString rightImagePath)
 {
-	if (right != nullptr) {
-		layout->removeWidget(right);
-		delete right;
-	}
-	right = new CubeMapButton(rightImagePath);
+	removeCubeMapImageIfPresent(right);
+
+	right = new CubeMapButton(rightImagePath, this);
 	right->setStringPosition("right");
 	layout->addWidget(right, 1, 2,1,1);
 }
 
 void SkyMapWidget::addFrontImage(QString frontImagePath)
 {
-	if (front != nullptr) {
-		layout->removeWidget(front);
-		delete front;
-	}
-	front = new CubeMapButton(frontImagePath);
+	removeCubeMapImageIfPresent(front);
+
+	front = new CubeMapButton(frontImagePath, this);
 	front->setStringPosition("front");
 	layout->addWidget(front, 1, 1,1,1);
 }
 
 void SkyMapWidget::addBackImage(QString backImagePath)
 {
-	if (back != nullptr) {
-		layout->removeWidget(back);
-		delete back;
-	}
-	back = new CubeMapButton(backImagePath);
+	removeCubeMapImageIfPresent(back);
+	back = new CubeMapButton(backImagePath, this);
 	back->setStringPosition("back");
 	layout->addWidget(back, 1, 3,1,1);
 }
@@ -111,10 +98,24 @@ void SkyMapWidget::addCubeMapImages(QStringList list)
 	addCubeMapImages(list[0], list[1], list[2], list[3], list[4], list[5]);
 }
 
-CubeMapButton::CubeMapButton(QString imagePath) : QPushButton()
+void SkyMapWidget::removeCubeMapImageIfPresent(CubeMapButton* btn)
 {
-	auto thumb = ThumbnailManager::createThumbnail(imagePath, 60, height());
-	pixmap = QPixmap::fromImage(*thumb->thumb).scaled(QSize(28, 28));
+	if (btn != nullptr) {
+		layout->removeWidget(btn);
+		delete btn;
+	}
+
+}
+
+
+
+CubeMapButton::CubeMapButton(QString imagePath, SkyMapWidget* parent) : QPushButton()
+{
+	path = imagePath;
+	this->parent = parent;
+	setImage(imagePath);
+
+	
 	configureUi();
 	configureConnections();
 	setMinimumHeight(60);
@@ -125,11 +126,52 @@ void CubeMapButton::setStringPosition(QString string)
 	positionLabel->setText(string);
 }
 
+void CubeMapButton::setPosition(CubeMapPosition pos)
+{
+	position = pos;
+	switch (pos) {
+	case CubeMapPosition::top:
+		setStringPosition("top");
+		break;
+	case CubeMapPosition::left:
+		setStringPosition("left");
+		break;
+	case CubeMapPosition::front:
+		setStringPosition("front");
+		break;
+	case CubeMapPosition::right:
+		setStringPosition("right");
+		break;
+	case CubeMapPosition::back:
+		setStringPosition("back");
+	case CubeMapPosition::bottom:
+		setStringPosition("bottom");
+		break;
+	}
+}
+
+void CubeMapButton::setImage(QString path)
+{
+	if (path.isNull() || path.isEmpty()) {
+		pixmap = QPixmap();
+	}
+	else {
+		auto thumb = ThumbnailManager::createThumbnail(path, 60, height());
+		pixmap = QPixmap::fromImage(*thumb->thumb).scaled(QSize(28, 28));
+	}
+	this->path = path;
+
+	emit parent->valueChanged(path, position);
+}
+
 void CubeMapButton::configureConnections()
 {
+	
+
 	connect(this, &CubeMapButton::clicked, [=]() {
 		//create menu
 
+		
 		auto select = new QAction("Select");
 		auto clear = new QAction("Clear");
 
@@ -137,15 +179,15 @@ void CubeMapButton::configureConnections()
 		auto rotate90 = new QAction("Roate image to 90 degrees");
 		auto rotate180 = new QAction("Roate image to 180 degrees");
 		auto rotate270 = new QAction("Roate image to 270 degrees");
-		
+
 		auto flipHorizontal = new QAction("Flip Horizontally");
 		auto flipVertical = new QAction("Flip Vertically");
 
 		auto rotate = new QMenu("Rotate");
 		auto flip = new QMenu("Flip");
-		
 		rotate->addActions({ rotate90, rotate180, rotate270, rotate360 });
 		flip->addActions({ flipHorizontal, flipVertical });
+		
 
 		auto menu = new QMenu();
 		menu->addActions({ select, clear });
@@ -155,17 +197,17 @@ void CubeMapButton::configureConnections()
 		flip->setStyleSheet(StyleSheet::QMenu());
 		rotate->setStyleSheet(StyleSheet::QMenu());
 
+		connect(select, &QAction::triggered, [=]() {
+			selectImage();
+			});
+		connect(clear, &QAction::triggered, [=]() {
+			clearImage();
+			});
+
 		menu->exec(mapToGlobal(QPoint(0,0)));
 
+		
 
-
-
-
-		/*auto widget = new AssetPickerWidget(ModelTypes::Texture);
-		connect(widget, &AssetPickerWidget::itemDoubleClicked, [=](QListWidgetItem * item) {
-			auto thumb = ThumbnailManager::createThumbnail(item->data(Qt::UserRole).toString(), 60, height());
-			pixmap = QPixmap::fromImage(*thumb->thumb).scaled(QSize(28, 28));
-			});*/
 	});
 
 	
@@ -220,6 +262,9 @@ void CubeMapButton::paintEvent(QPaintEvent* event)
 	if (!pixmap.isNull()) {
 		painter.drawPixmap(0, 0, width(), height(), pixmap);
 	}
+	else {
+		painter.fillRect(0, 0, width(), height(), QColor(0, 0, 0, 0));
+	}
 	if (container->isVisible()) {
 		painter.setPen(QPen(QColor(20,20,20, 40), 2));
 		painter.drawRect(0, 0, width(), height());
@@ -236,4 +281,27 @@ void CubeMapButton::leaveEvent(QEvent* event)
 {
 	QPushButton::leaveEvent(event);
 	container->setVisible(false);
+}
+
+void CubeMapButton::selectImage()
+{
+	auto widget = new AssetPickerWidget(ModelTypes::Texture);
+	connect(widget, &AssetPickerWidget::itemDoubleClicked, [=](QListWidgetItem * item) {
+		setImage(item->data(Qt::UserRole).toString());
+		}); 
+}
+
+void CubeMapButton::clearImage()
+{
+	path.clear();
+	pixmap = QPixmap();
+	emit parent->valueChanged(path, position);
+}
+
+void CubeMapButton::rotateImage(int degrees)
+{
+}
+
+void CubeMapButton::flipImage(Qt::Orientation orientation)
+{
 }
