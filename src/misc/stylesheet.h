@@ -27,11 +27,14 @@ public:
     static const QString QSlider();
     static const QString QLineEdit();
     static const QString QWidgetDark();
+    static const QString QWidgetTransparent();
     static const QString QLabelWhite();
+    static const QString QLabelBlack();
     static const QString QComboBox();
 	static const QString QCheckBox();
 	static const QString QSplitter();
 	static const QString QAbstractScrollArea();
+	static const QString QMenu();
 	static void setStyle(QWidget *);
 	static void setStyle(QObject *);
 	static void setStyle(QList<QWidget *>);

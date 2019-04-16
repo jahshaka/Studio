@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QPushButton>
+#include <QLabel>
 #include <QGridLayout>
 class CubeMapButton : public QPushButton {
 
@@ -27,13 +28,27 @@ class CubeMapButton : public QPushButton {
 
 public:
 	CubeMapButton(QString imagePath);
-	QHBoxLayout* layout;
+	void setStringPosition(QString string);
+
+	QVBoxLayout* layout;
 	QImage image;
 	QPixmap pixmap;
 	Rotation rotation;
+	QLabel* positionLabel;
+	QWidget* container;
 
+	QPushButton* select;
+	QPushButton* clear;
+
+
+	bool drawPositionString = false;
+private:
+	void configureConnections();
+	void configureUi();
 protected:
 	void paintEvent(QPaintEvent* event) override;
+	virtual void enterEvent(QEvent* event) override;
+	virtual void leaveEvent(QEvent* event) override;
 };
 
 class SkyMapWidget : public QWidget {
