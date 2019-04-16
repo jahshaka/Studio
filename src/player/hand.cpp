@@ -255,6 +255,7 @@ void LeftHand::submitItemsToScene()
 	scale.scale(QVector3D(0.001f, 0.001f, 0.001f) * camera->getVrViewScale());
 	scene->geometryRenderList->submitModel(handModel, handMaterial, rightHandMatrix * scale);
 
+#ifdef Q_DEBUG
 	// beam
 	if (!grabbedNode) {
 		QMatrix4x4 beamMatrix = getBeamOffset(0);
@@ -275,6 +276,7 @@ void LeftHand::submitItemsToScene()
 	else {
 
 	}
+#endif
 }
 
 QMatrix4x4 LeftHand::getBeamOffset(int handIndex)
@@ -453,6 +455,7 @@ void RightHand::submitItemsToScene()
 	scale.scale(QVector3D(0.1f, 0.1f, 0.1f) * camera->getVrViewScale());
 	scene->geometryRenderList->submitModel(handModel, handMaterial, rightHandMatrix * scale);
 
+#ifdef Q_DEBUG
 	// beam
 	if (!grabbedNode) {
 		QMatrix4x4 beamMatrix = getBeamOffset(0);
@@ -473,6 +476,7 @@ void RightHand::submitItemsToScene()
 	else {
 
 	}
+#endif
 }
 
 QMatrix4x4 RightHand::getBeamOffset(int handIndex)
