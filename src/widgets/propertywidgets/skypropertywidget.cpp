@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "../hfloatsliderwidget.h"
 #include "../comboboxwidget.h"
 #include "../checkboxwidget.h"
+#include "src/widgets/propertywidgets/skymapwidget.h"
 
 #include "widgets/propertywidgets/worldpropertywidget.h"
 
@@ -147,6 +148,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 		}
 
 		case iris::SkyType::CUBEMAP: {
+			skyMapWidget = this->addSkyMapWidget();
 			cubemapFront = this->addTexturePicker("Front");
 			cubemapBack = this->addTexturePicker("Back");
 			cubemapLeft = this->addTexturePicker("Left");
@@ -395,6 +397,8 @@ void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 	cubeMapDefinition.insert("right", skyDataDefinition["right"].toString());
 	cubeMapDefinition.insert("top", skyDataDefinition["top"].toString());
 	cubeMapDefinition.insert("bottom", skyDataDefinition["bottom"].toString());
+
+	skyMapWidget->addCubeMapImages(top, bottom, left, front, right, back);
 
 	cubemapFront->setTexture(front);
 	cubemapBack->setTexture(back);
