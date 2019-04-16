@@ -15,7 +15,26 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QPushButton>
 #include <QGridLayout>
+class CubeMapButton : public QPushButton {
 
+	enum class Rotation {
+		zero = 0,
+		ninety = 90,
+		OneEighty = 180,
+		TwoSeventy = 270,
+		ThreeSixty = 0
+	};
+
+public:
+	CubeMapButton(QString imagePath);
+	QHBoxLayout* layout;
+	QImage image;
+	QPixmap pixmap;
+	Rotation rotation;
+
+protected:
+	void paintEvent(QPaintEvent* event) override;
+};
 
 class SkyMapWidget : public QWidget {
 
@@ -31,25 +50,9 @@ public:
 	void addBackImage(QString backImagePath);
 	void addCubeMapImages(QString top, QString bottom, QString left, QString front, QString right, QString back);
 	void addCubeMapImages(QStringList list);
+
+	CubeMapButton * top, * left, * front, * right, * back, * bottom;
 };
 
-class CubeMapButton : public QPushButton {
 
-	enum class Rotation {
-		zero = 0,
-		ninety = 90,
-		OneEighty = 180,
-		TwoSeventy = 270,
-		ThreeSixty = 0
-	};
-
-public:
-	CubeMapButton(QString imagePath);
-	QHBoxLayout* layout;
-	QImage* image;
-	Rotation rotation;
-
-protected:
-	void paintEvent(QPaintEvent* event) override;
-};
 #endif

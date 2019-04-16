@@ -10,67 +10,84 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "skymapwidget.h"
+#include "src/core/thumbnailmanager.h"
 #include <QPainter>
 
 SkyMapWidget::SkyMapWidget() : QWidget()
 {
 	layout = new QGridLayout;
 	setLayout(layout);
+	top = bottom = left = right = front = back = nullptr;
+	setMinimumHeight(180);
+
+	layout->setVerticalSpacing(0);
+	layout->setHorizontalSpacing(0);
 }
 
 void SkyMapWidget::addTopImage(QString topImagePath)
 {
-	auto btn = layout->takeAt(1);
-	if (btn != 0) delete btn;
-	auto top = new CubeMapButton(topImagePath);
-	layout->addWidget(top, 0, 1);
+	if (top != nullptr) {
+		layout->removeWidget(top);
+		delete top;
+	}
+	top = new CubeMapButton(topImagePath);
+	layout->addWidget(top, 0, 1,1,1);
 }
 
 void SkyMapWidget::addBottomImage(QString bottomImagePath)
 {
-	auto btn = layout->takeAt(9);
-	if (btn != 0) delete btn;
-	auto bottom = new CubeMapButton(bottomImagePath);
-	layout->addWidget(bottom, 2, 1);
+	if (bottom != nullptr) {
+		layout->removeWidget(bottom);
+		delete bottom;
+	}
+	bottom = new CubeMapButton(bottomImagePath);
+	layout->addWidget(bottom, 3, 1,1,1);
 }
 
 void SkyMapWidget::addLeftImage(QString leftImagePath)
 {
-	auto btn = layout->takeAt(4);
-	if (btn != 0) delete btn;
-	auto left = new CubeMapButton(leftImagePath);
-	layout->addWidget(left, 1, 0);
+	if (left != nullptr) {
+		layout->removeWidget(left);
+		delete left;
+	}
+	left = new CubeMapButton(leftImagePath);
+	layout->addWidget(left, 1, 0,1,1);
 }
 
 void SkyMapWidget::addRightImage(QString rightImagePath)
 {
-	auto btn = layout->takeAt(6);
-	if (btn != 0) delete btn;
-	auto right = new CubeMapButton(rightImagePath);
-	layout->addWidget(right, 1, 2);
+	if (right != nullptr) {
+		layout->removeWidget(right);
+		delete right;
+	}
+	right = new CubeMapButton(rightImagePath);
+	layout->addWidget(right, 1, 2,1,1);
 }
 
 void SkyMapWidget::addFrontImage(QString frontImagePath)
 {
-	auto btn = layout->takeAt(5);
-	if (btn != 0) delete btn;
-
-	auto front = new CubeMapButton(frontImagePath);
-	layout->addWidget(front, 1, 1);
+	if (front != nullptr) {
+		layout->removeWidget(front);
+		delete front;
+	}
+	front = new CubeMapButton(frontImagePath);
+	layout->addWidget(front, 1, 1,1,1);
 }
 
 void SkyMapWidget::addBackImage(QString backImagePath)
 {
-	auto btn = layout->takeAt(7);
-	if (btn != 0) delete btn;
-	auto back = new CubeMapButton(backImagePath);
-	layout->addWidget(back, 1, 3);
+	if (back != nullptr) {
+		layout->removeWidget(back);
+		delete back;
+	}
+	back = new CubeMapButton(backImagePath);
+	layout->addWidget(back, 1, 3,1,1);
 }
 
 void SkyMapWidget::addCubeMapImages(QString top, QString bottom, QString left, QString front, QString right, QString back)
 {
 	addTopImage(top);
-	addBackImage(bottom);
+	addBottomImage(bottom);
 	addLeftImage(left);
 	addFrontImage(front);
 	addRightImage(right);
@@ -85,17 +102,19 @@ void SkyMapWidget::addCubeMapImages(QStringList list)
 
 CubeMapButton::CubeMapButton(QString imagePath) : QPushButton()
 {
-	image = new QImage(imagePath);
+	auto thumb = ThumbnailManager::createThumbnail(imagePath, 60, height());
+	pixmap = QPixmap::fromImage(*thumb->thumb).scaled(QSize(28, 28));
+
+	setMinimumHeight(60);
 }
 
 void CubeMapButton::paintEvent(QPaintEvent* event)
 {
 	QPushButton::paintEvent(event);
 
-	if (image)
-	{
+	if (!pixmap.isNull()) {
 		QPainter painter(this);
 		painter.setRenderHint(QPainter::Antialiasing);
-		painter.drawImage(0, 0, *image);
+		painter.drawPixmap(0, 0, width(), height(), pixmap);
 	}
 }
