@@ -180,6 +180,7 @@ void LeftHand::update(float dt)
 			if (leftTouch->getHandTrigger() < 0.1f && !!grabbedNode)
 			{
 				// release node
+				grabbedNode->disablePhysicsTransform = false;
 				grabbedNode.clear();
 				rightNodeOffset.setToIdentity(); // why bother?
 
@@ -188,6 +189,8 @@ void LeftHand::update(float dt)
 
 			// update picked node
 			if (!!grabbedNode) {
+				// disable physics visual update
+				grabbedNode->disablePhysicsTransform = true;
 
 				// calculate the global position
 				auto nodeGlobal = rightHandMatrix * rightNodeOffset;
@@ -198,26 +201,24 @@ void LeftHand::update(float dt)
 						iris::PickingHandleType::LeftHand,
 						nodeGlobal);
 				}
-				else {
 
 
-					// calculate position relative to parent
-					auto localTransform = grabbedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
+				// calculate position relative to parent
+				auto localTransform = grabbedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
 
-					QVector3D pos, scale;
-					QQuaternion rot;
-					// decompose matrix to assign pos, rot and scale
-					iris::MathHelper::decomposeMatrix(localTransform,
-						pos,
-						rot,
-						scale);
+				QVector3D pos, scale;
+				QQuaternion rot;
+				// decompose matrix to assign pos, rot and scale
+				iris::MathHelper::decomposeMatrix(localTransform,
+					pos,
+					rot,
+					scale);
 
-					grabbedNode->setLocalPos(pos);
-					rot.normalize();
-					grabbedNode->setLocalRot(rot);
-					grabbedNode->setLocalScale(scale);
+				grabbedNode->setLocalPos(pos);
+				rot.normalize();
+				grabbedNode->setLocalRot(rot);
+				grabbedNode->setLocalScale(scale);
 
-				}
 			}
 
 		}
@@ -382,7 +383,7 @@ void RightHand::update(float dt)
 
 			// update picked node
 			if (!!grabbedNode) {
-				// disbale physics visual update
+				// disable physics visual update
 				grabbedNode->disablePhysicsTransform = true;
 
 				// calculate the global position
