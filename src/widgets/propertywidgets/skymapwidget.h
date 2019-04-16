@@ -30,8 +30,8 @@ class SkyMapWidget;
 class CubeMapButton : public QPushButton {
 
 	enum class Rotation {
-		zero = 0,
-		ninety = 90,
+		Zero = 0,
+		Ninety = 90,
 		OneEighty = 180,
 		TwoSeventy = 270,
 		ThreeSixty = 0

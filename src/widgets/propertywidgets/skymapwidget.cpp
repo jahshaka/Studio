@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "widgets/assetpickerwidget.h"
 #include "misc/stylesheet.h"
 #include <QPainter>
+#include <QSharedPointer>
 #include <QGraphicsEffect>
 #include <QAction>
 #include <QMenu>
@@ -153,11 +154,12 @@ void CubeMapButton::setPosition(CubeMapPosition pos)
 void CubeMapButton::setImage(QString path)
 {
 	if (path.isNull() || path.isEmpty()) {
-		pixmap = QPixmap();
+		image = QImage();
 	}
 	else {
 		auto thumb = ThumbnailManager::createThumbnail(path, 60, height());
-		pixmap = QPixmap::fromImage(*thumb->thumb).scaled(QSize(28, 28));
+		image = *thumb->thumb;
+		image = image.scaled(QSize(28, 28));
 	}
 	this->path = path;
 
@@ -203,6 +205,25 @@ void CubeMapButton::configureConnections()
 		connect(clear, &QAction::triggered, [=]() {
 			clearImage();
 			});
+		connect(rotate360, &QAction::triggered, [=]() {
+			rotateImage(360);
+			});
+		connect(rotate90, &QAction::triggered, [=]() {
+			rotateImage(90);
+			});
+		connect(rotate180, &QAction::triggered, [=]() {
+			rotateImage(180);
+			});
+		connect(rotate270, &QAction::triggered, [=]() {
+			rotateImage(270);
+			});
+		connect(flipHorizontal, &QAction::triggered, [=]() {
+			flipImage(Qt::Orientation::Horizontal);
+			});
+		connect(flipVertical, &QAction::triggered, [=]() {
+			flipImage(Qt::Orientation::Vertical);
+			});
+
 
 		menu->exec(mapToGlobal(QPoint(0,0)));
 
@@ -259,8 +280,10 @@ void CubeMapButton::paintEvent(QPaintEvent* event)
 	QPainter painter(this);
 	painter.setRenderHint(QPainter::Antialiasing);
 
-	if (!pixmap.isNull()) {
-		painter.drawPixmap(0, 0, width(), height(), pixmap);
+	if (!image.isNull()) {
+		
+		//painter.drawPixmap(0, 0, width(), height(), pixmap);
+		painter.drawImage(QRect(0, 0, width(), height()), image);
 	}
 	else {
 		painter.fillRect(0, 0, width(), height(), QColor(0, 0, 0, 0));
@@ -295,11 +318,29 @@ void CubeMapButton::clearImage()
 {
 	path.clear();
 	pixmap = QPixmap();
+	image = QImage();
 	emit parent->valueChanged(path, position);
 }
 
 void CubeMapButton::rotateImage(int degrees)
 {
+	switch (degrees) {
+		case static_cast<int>(Rotation::Ninety) :
+			rotation = Rotation::Ninety;
+			break;
+		case static_cast<int>(Rotation::OneEighty):
+			rotation = Rotation::OneEighty;
+			break;
+		case static_cast<int>(Rotation::TwoSeventy) :
+			rotation = Rotation::TwoSeventy;
+			break;
+		case static_cast<int>(Rotation::ThreeSixty) :
+			rotation = Rotation::ThreeSixty;
+			break;
+		default:
+			rotation = Rotation::Zero;
+			break;
+	}
 }
 
 void CubeMapButton::flipImage(Qt::Orientation orientation)
