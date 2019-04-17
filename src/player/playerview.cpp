@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "playervrcontroller.h"
 #include "playermousecontroller.h"
 #include "src/core/keyboardstate.h"
+#include "playback.h"
 
 PlayerView::PlayerView(QWidget* parent) :
 	QOpenGLWidget(parent)
@@ -39,11 +40,7 @@ PlayerView::PlayerView(QWidget* parent) :
 #endif
 	setFormat(format);
 
-	camController = nullptr;
-	vrController = new PlayerVrController();
-	mouseController = new PlayerMouseController();
-
-	//camera = iris::CameraNode::create();
+	playback = new PlayBack();
 
 	// needed in order to get mouse events
 	setMouseTracking(true);
@@ -69,51 +66,27 @@ void PlayerView::initializeGL()
 	fpsTimer = new QElapsedTimer();
 	fpsTimer->start();
 
-	auto content = iris::ContentManager::create(renderer->getGraphicsDevice());
-	vrController->loadAssets(content);
+	playback->init(renderer);
 }
 
 void PlayerView::setScene(iris::ScenePtr scene)
 {
 	this->scene = scene;
-	if (renderer)
-		renderer->setScene(scene);
-	
-	vrController->setScene(scene);
-	vrController->setCamera(scene->getCamera());
-	mouseController->setScene(scene);
-	mouseController->setCamera(scene->getCamera());
-}
-
-void PlayerView::setController(CameraControllerBase * controller)
-{
-	if (controller != camController) {
-		// end old one and begin new one
-		if (camController)
-			camController->end();
-
-		controller->setCamera(scene->getCamera());
-
-		controller->start();
-
-		camController = controller;
-	}
+	playback->setScene(scene);
 }
 
 void PlayerView::start()
 {
 	this->setFocus();
 	makeCurrent();
-	//camera = scene->camera;
-	//camController->setCamera(scene->getCamera());
-	setController(mouseController);
+
 	renderer->regenerateSwapChain();
 	savedCameraMatrix = scene->getCamera()->getLocalTransform();
 }
 
 void PlayerView::end()
 {
-	if (_isPlaying) {
+	if (playback->isScenePlaying()) {
 		stopScene();
 	}
 	scene->getCamera()->setLocalTransform(savedCameraMatrix);
@@ -121,97 +94,43 @@ void PlayerView::end()
 
 void PlayerView::paintGL()
 {
-	// swap between controllers here
-	//auto vrDevice = iris::VrManager::getDefaultDevice();
-	auto vrDevice = renderer->getVrDevice();
-	if (vrDevice->isHeadMounted()) {
-		setController(vrController);
-	}
-	else {
-		setController(mouseController);
-	}
-
 	renderScene();
 }
 
 void PlayerView::renderScene()
 {
-	makeCurrent();
-
 	float dt = fpsTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
 	fpsTimer->restart();
-
-	camController->update(dt);
-
-	auto scene = UiManager::sceneViewWidget->getScene();
-	//auto renderer = UiManager::sceneViewWidget->getRenderer();
 
 	auto vp = iris::Viewport();
 	vp.width = width() * devicePixelRatioF();
 	vp.height = height() * devicePixelRatioF();
-	scene->update(dt);
-
-	auto activeViewer = scene->getActiveVrViewer();
-	if (_isPlaying) {
-		if (!!activeViewer && activeViewer->isActiveCharacterController()) {
-			activeViewer->setGlobalTransform(scene->getPhysicsEnvironment()->getActiveCharacterController()->getTransform());
-		}
-	}
-
-	camController->postUpdate(dt);
-
-	//auto vrDevice = iris::VrManager::getDefaultDevice();
-	auto vrDevice = renderer->getVrDevice();
-
-	glClearColor(.1f, .1f, .1f, .4f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	if (vrDevice->isHeadMounted()) {
-		renderer->renderSceneVr(dt, &vp, false);
-	}
-	else {
-		renderer->renderScene(dt, &vp);
-	}
-	//renderer->renderScene(dt, &vp);
+	
+	playback->renderScene(vp, dt);
 }
 
 void PlayerView::mousePressEvent(QMouseEvent * evt)
 {
-	prevMousePos = evt->localPos();
-
-	if (camController != nullptr) {
-		camController->onMouseDown(evt->button());
-	}
+	playback->mousePressEvent(evt);
 }
 
 void PlayerView::mouseMoveEvent(QMouseEvent * evt)
 {
-	QPointF localPos = evt->localPos();
-	QPointF dir = localPos - prevMousePos;
-
-	if (camController != nullptr) {
-		camController->onMouseMove(-dir.x(), -dir.y());
-	}
-
-	prevMousePos = localPos;
+	playback->mouseMoveEvent(evt);
 }
 
 void PlayerView::mouseDoubleClickEvent(QMouseEvent * evt)
 {
 }
 
-void PlayerView::mouseReleaseEvent(QMouseEvent *e)
+void PlayerView::mouseReleaseEvent(QMouseEvent *evt)
 {
-	if (camController != nullptr) {
-		camController->onMouseUp(e->button());
-	}
+	playback->mouseReleaseEvent(evt);
 }
 
 void PlayerView::wheelEvent(QWheelEvent *event)
 {
-	if (camController != nullptr) {
-		camController->onMouseWheel(event->delta());
-	}
+	playback->wheelEvent(event);
 }
 
 PlayerView::~PlayerView()
@@ -219,52 +138,36 @@ PlayerView::~PlayerView()
 
 }
 
+bool PlayerView::isScenePlaying()
+{
+	return playback->isScenePlaying();
+}
+
 void PlayerView::playScene()
 {
-	_isPlaying = true;
-	vrController->setPlayState(_isPlaying);
-	mouseController->setPlayState(_isPlaying);
-	scene->getPhysicsEnvironment()->initializePhysicsWorldFromScene(scene->getRootNode());
-	scene->getPhysicsEnvironment()->simulatePhysics();
+	if (!playback->isScenePlaying())
+		playback->playScene();
 }
 
 
 void PlayerView::pause() {}
 void PlayerView::stopScene()
 {
-	_isPlaying = false;
-	vrController->setPlayState(_isPlaying);
-	mouseController->setPlayState(_isPlaying);
-	scene->getPhysicsEnvironment()->restartPhysics();
-	scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
+	if (playback->isScenePlaying())
+		playback->stopScene();
 }
 
 
 void PlayerView::keyPressEvent(QKeyEvent *event)
 {
 	KeyboardState::keyStates[event->key()] = true;
-	camController->onKeyPressed((Qt::Key)event->key());
-
-	//scene->getPhysicsEnvironment()->onKeyPressed((Qt::Key)event->key());
-	if (KeyboardState::isKeyDown(Qt::Key_W)) { scene->getPhysicsEnvironment()->walkForward = 1; }
-	if (KeyboardState::isKeyDown(Qt::Key_S)) { scene->getPhysicsEnvironment()->walkBackward = 1; }
-	if (KeyboardState::isKeyDown(Qt::Key_A)) { scene->getPhysicsEnvironment()->walkLeft = 1; }
-	if (KeyboardState::isKeyDown(Qt::Key_D)) { scene->getPhysicsEnvironment()->walkRight = 1; }
-	if (KeyboardState::isKeyDown(Qt::Key_Space)) { scene->getPhysicsEnvironment()->jump = 1; }
+	playback->keyPressEvent(event);
 }
 
 void PlayerView::keyReleaseEvent(QKeyEvent *event)
 {
 	KeyboardState::keyStates[event->key()] = false;
-	//	camController->onKeyReleased((Qt::Key)event->key());
-	camController->keyReleaseEvent(event);
-
-	//scene->getPhysicsEnvironment()->keyReleaseEvent((Qt::Key)event->key());
-	if (KeyboardState::isKeyUp(Qt::Key_W)) { scene->getPhysicsEnvironment()->walkForward = 0; }
-	if (KeyboardState::isKeyUp(Qt::Key_S)) { scene->getPhysicsEnvironment()->walkBackward = 0; }
-	if (KeyboardState::isKeyUp(Qt::Key_A)) { scene->getPhysicsEnvironment()->walkLeft = 0; }
-	if (KeyboardState::isKeyUp(Qt::Key_D)) { scene->getPhysicsEnvironment()->walkRight = 0; }
-	if (KeyboardState::isKeyUp(Qt::Key_Space)) { scene->getPhysicsEnvironment()->jump = 0; }
+	playback->keyReleaseEvent(event);
 }
 
 void PlayerView::focusOutEvent(QFocusEvent * event)

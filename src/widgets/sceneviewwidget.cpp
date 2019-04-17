@@ -79,7 +79,9 @@ For more information see the LICENSE file
 #include "editor/viewercontroller.h"
 #include "editor/viewermaterial.h"
 #include "scenehierarchywidget.h"
-#include "editor/handgizmo.h" 
+#include "editor/handgizmo.h"
+
+#include "player/playback.h"
 
 void SceneViewWidget::setShowFps(bool value)
 {
@@ -336,6 +338,8 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     //m_pickedConstraint = nullptr;
 	handGizmoHandler = new HandGizmoHandler();
+
+	playback = new PlayBack();
 }
 
 void SceneViewWidget::resetEditorCam()
@@ -513,11 +517,13 @@ void SceneViewWidget::setScene(iris::ScenePtr scene)
     renderer->setScene(scene);
     vrCam->setScene(scene);
 
+	playback->setScene(scene);
+
     // remove selected scenenode
     selectedNode.reset();
 }
 
-iris::ScenePtr SceneViewWidget::getScene()
+iris::ScenePtr SceneViewWidget::getScene()                                         
 {
     return scene;
 }
@@ -616,6 +622,7 @@ void SceneViewWidget::initializeGL()
 	content = iris::ContentManager::create(renderer->getGraphicsDevice());
     spriteBatch = iris::SpriteBatch::create(renderer->getGraphicsDevice());
     font = iris::Font::create(renderer->getGraphicsDevice(), fontSize);
+	playback->init(renderer);
 
     initialize();
     fsQuad = new iris::FullScreenQuad();
@@ -694,17 +701,23 @@ void SceneViewWidget::paintGL()
         timer->setInterval(Constants::FPS_60); // 60 for regular
     }
 
-    renderScene();
+	renderScene();
 
 }
 
 void SceneViewWidget::renderScene()
 {
+	float dt = elapsedTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
+	elapsedTimer->restart();
+
+	if (playScene) {
+		playback->renderScene(*viewport, dt);
+		return;
+	}
+
     glClearColor(.1f, .1f, .1f, .4f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    float dt = elapsedTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
-    elapsedTimer->restart();
+    
 
 	if (!!renderer && !!scene) {
 		this->camController->update(dt);
@@ -971,6 +984,11 @@ iris::SceneNodePtr SceneViewWidget::doActiveObjectPicking(const QPointF &point)
 
 void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
 {
+	if (playback->isScenePlaying()) {
+		playback->mouseMoveEvent(e);
+		return;
+	}
+
     // @ISSUE - only fired when mouse is dragged
     QPointF localPos = e->localPos();
     QPointF dir = localPos - prevMousePos;
@@ -1002,6 +1020,11 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
 
 void SceneViewWidget::mouseDoubleClickEvent(QMouseEvent * e)
 {
+	if (playback->isScenePlaying()) {
+		playback->mouseDoubleClickEvent(e);
+		return;
+	}
+
 	auto lastSelected = selectedNode;
 
 	if (e->button() == Qt::LeftButton) {
@@ -1020,6 +1043,11 @@ void SceneViewWidget::mouseDoubleClickEvent(QMouseEvent * e)
 
 void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 {
+	if (playback->isScenePlaying()) {
+		playback->mousePressEvent(e);
+		return;
+	}
+
     auto lastSelected = selectedNode;
     prevMousePos = e->localPos();
 
@@ -1060,6 +1088,11 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 
 void SceneViewWidget::mouseReleaseEvent(QMouseEvent *e)
 {
+	if (playback->isScenePlaying()) {
+		playback->mouseReleaseEvent(e);
+		return;
+	}
+
     if (e->button() == Qt::RightButton) {
         dragging = false;
     }
@@ -1079,6 +1112,11 @@ void SceneViewWidget::mouseReleaseEvent(QMouseEvent *e)
 
 void SceneViewWidget::wheelEvent(QWheelEvent *event)
 {
+	if (playback->isScenePlaying()) {
+		playback->wheelEvent(event);
+		return;
+	}
+
     if (camController != nullptr) {
         camController->onMouseWheel(event->delta());
     }
@@ -1089,6 +1127,12 @@ void SceneViewWidget::wheelEvent(QWheelEvent *event)
 void SceneViewWidget::keyPressEvent(QKeyEvent *event)
 {
     KeyboardState::keyStates[event->key()] = true;
+
+	if (playback->isScenePlaying()) {
+		playback->keyPressEvent(event);
+		return;
+	}
+
 	camController->onKeyPressed((Qt::Key)event->key());
 
 	//scene->getPhysicsEnvironment()->onKeyPressed((Qt::Key)event->key());
@@ -1102,7 +1146,12 @@ void SceneViewWidget::keyPressEvent(QKeyEvent *event)
 void SceneViewWidget::keyReleaseEvent(QKeyEvent *event)
 {
     KeyboardState::keyStates[event->key()] = false;
-//	camController->onKeyReleased((Qt::Key)event->key());
+
+	if (playback->isScenePlaying()) {
+		playback->keyReleaseEvent(event);
+		return;
+	}
+
 	camController->keyReleaseEvent(event);
 
 	//scene->getPhysicsEnvironment()->keyReleaseEvent((Qt::Key)event->key());
@@ -1551,11 +1600,12 @@ void SceneViewWidget::startPlayingScene()
         return;
 
     // switch controllers
-    if (scene->viewers.count() > 0) {
-        viewerCam->setViewer(scene->viewers[0]);
-        setCameraController(viewerCam);
-    }
+    //if (scene->viewers.count() > 0) {
+    //    viewerCam->setViewer(scene->viewers[0]);
+    //    setCameraController(viewerCam);
+    //}
 
+	playback->playScene();
 
     playScene = true;
 }
@@ -1580,10 +1630,16 @@ void SceneViewWidget::stopPlayingScene()
 		// quick fix for the odd case when the user switched from the
 		// player to editor while having the vr headset on
 		// and the user get stuck with the viewer cam
-		if (this->prevCamController == viewerCam)
-			this->setCameraController(defaultCam);
-		else
-			this->restorePreviousCameraController();
+		//if (this->prevCamController == viewerCam)
+		//	this->setCameraController(defaultCam);
+		//else
+		//	this->restorePreviousCameraController();
+
+		playback->stopScene();
+		
+		// this sets the appropriate camera controller
+		//this->setCameraController(camController);
+		
 	}
 }
 

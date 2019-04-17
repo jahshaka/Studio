@@ -158,6 +158,7 @@ set(SRCS
 	src/player/playervrcontroller.cpp
 	src/player/playermousecontroller.cpp
 	src/player/hand.cpp
+	src/player/playback.cpp
 )
 
 set(HEADERS
@@ -305,6 +306,7 @@ set(HEADERS
 	src/player/playervrcontroller.h
 	src/player/playermousecontroller.h
 	src/player/hand.h
+	src/player/playback.h
 )
 
 # Todo - trim these down to nothing eventually

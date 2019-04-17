@@ -180,6 +180,7 @@ void LeftHand::update(float dt)
 			if (leftTouch->getHandTrigger() < 0.1f && !!grabbedNode)
 			{
 				// release node
+				grabbedNode->disablePhysicsTransform = false;
 				grabbedNode.clear();
 				rightNodeOffset.setToIdentity(); // why bother?
 
@@ -188,6 +189,8 @@ void LeftHand::update(float dt)
 
 			// update picked node
 			if (!!grabbedNode) {
+				// disable physics visual update
+				grabbedNode->disablePhysicsTransform = true;
 
 				// calculate the global position
 				auto nodeGlobal = rightHandMatrix * rightNodeOffset;
@@ -198,26 +201,24 @@ void LeftHand::update(float dt)
 						iris::PickingHandleType::LeftHand,
 						nodeGlobal);
 				}
-				else {
 
 
-					// calculate position relative to parent
-					auto localTransform = grabbedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
+				// calculate position relative to parent
+				auto localTransform = grabbedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
 
-					QVector3D pos, scale;
-					QQuaternion rot;
-					// decompose matrix to assign pos, rot and scale
-					iris::MathHelper::decomposeMatrix(localTransform,
-						pos,
-						rot,
-						scale);
+				QVector3D pos, scale;
+				QQuaternion rot;
+				// decompose matrix to assign pos, rot and scale
+				iris::MathHelper::decomposeMatrix(localTransform,
+					pos,
+					rot,
+					scale);
 
-					grabbedNode->setLocalPos(pos);
-					rot.normalize();
-					grabbedNode->setLocalRot(rot);
-					grabbedNode->setLocalScale(scale);
+				grabbedNode->setLocalPos(pos);
+				rot.normalize();
+				grabbedNode->setLocalRot(rot);
+				grabbedNode->setLocalScale(scale);
 
-				}
 			}
 
 		}
@@ -255,6 +256,7 @@ void LeftHand::submitItemsToScene()
 	scale.scale(QVector3D(0.001f, 0.001f, 0.001f) * camera->getVrViewScale());
 	scene->geometryRenderList->submitModel(handModel, handMaterial, rightHandMatrix * scale);
 
+#ifdef Q_DEBUG
 	// beam
 	if (!grabbedNode) {
 		QMatrix4x4 beamMatrix = getBeamOffset(0);
@@ -275,6 +277,7 @@ void LeftHand::submitItemsToScene()
 	else {
 
 	}
+#endif
 }
 
 QMatrix4x4 LeftHand::getBeamOffset(int handIndex)
@@ -371,6 +374,7 @@ void RightHand::update(float dt)
 			if (rightTouch->getHandTrigger() < 0.1f && !!grabbedNode)
 			{
 				// release node
+				grabbedNode->disablePhysicsTransform = false;
 				grabbedNode.clear();
 				rightNodeOffset.setToIdentity(); // why bother?
 
@@ -379,6 +383,8 @@ void RightHand::update(float dt)
 
 			// update picked node
 			if (!!grabbedNode) {
+				// disable physics visual update
+				grabbedNode->disablePhysicsTransform = true;
 
 				// calculate the global position
 				auto nodeGlobal = rightHandMatrix * rightNodeOffset;
@@ -387,7 +393,7 @@ void RightHand::update(float dt)
 				if (grabbedNode->isPhysicsBody) {
 					scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::RightHand, nodeGlobal);
 				}
-				else {
+				//else {
 					
 
 					// calculate position relative to parent
@@ -406,7 +412,7 @@ void RightHand::update(float dt)
 					grabbedNode->setLocalRot(rot);
 					grabbedNode->setLocalScale(scale);
 
-				}
+				//}
 			}
 
 			//scene->geometryRenderList->add(rightBeamRenderItem);
@@ -450,6 +456,7 @@ void RightHand::submitItemsToScene()
 	scale.scale(QVector3D(0.1f, 0.1f, 0.1f) * camera->getVrViewScale());
 	scene->geometryRenderList->submitModel(handModel, handMaterial, rightHandMatrix * scale);
 
+#ifdef Q_DEBUG
 	// beam
 	if (!grabbedNode) {
 		QMatrix4x4 beamMatrix = getBeamOffset(0);
@@ -470,6 +477,7 @@ void RightHand::submitItemsToScene()
 	else {
 
 	}
+#endif
 }
 
 QMatrix4x4 RightHand::getBeamOffset(int handIndex)

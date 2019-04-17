@@ -67,6 +67,8 @@ class Globals;
 class btRigidBody;
 class HandGizmoHandler;
 
+class PlayBack;
+
 enum class ViewportMode
 {
     Editor,
@@ -122,6 +124,8 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
 	iris::ModelPtr handGizmoModel;
 	iris::DefaultMaterialPtr handGizmoMaterial;
 	HandGizmoHandler* handGizmoHandler;
+
+	PlayBack* playback;
 public:
 	bool showFps;
 

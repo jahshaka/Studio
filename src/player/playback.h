@@ -1,5 +1,5 @@
-#ifndef PLAYERVIEW_H
-#define PLAYERVIEW_H
+#ifndef PLAYBACK_H
+#define PLAYBACK_H
 
 #include <QObject>
 #include <QPointF>
@@ -30,38 +30,41 @@ class PlayerVrController;
 class PlayerMouseController;
 class QElapsedTimer;
 class QTimer;
-class PlayBack;
 
-class PlayerView : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
+class PlayBack
 {
-	Q_OBJECT
-
 	QMatrix4x4 savedCameraMatrix;
+	CameraControllerBase* camController;
+	PlayerVrController* vrController;
+	PlayerMouseController* mouseController;
 
 	iris::ForwardRendererPtr renderer;
 	iris::ScenePtr scene;
 
 	QTimer* updateTimer;
 	QElapsedTimer* fpsTimer;
+	QPointF prevMousePos;
 
-	PlayBack* playback;
-
+	bool _isPlaying = false;
 public:
-	explicit PlayerView(QWidget* parent = nullptr);
+	bool isScenePlaying() { return _isPlaying; }
+
+	PlayBack();
+	void init(iris::ForwardRendererPtr renderer);
 
 	void setScene(iris::ScenePtr scene);
 	void setController(CameraControllerBase* controller);
 
-	// called when the menu item is selected
-	void start();
-	// called when the menu item is deselected
-	void end();
+	void renderScene(iris::Viewport& viewport, float dt);
 
-	void initializeGL();
+	void playScene();
+	void pause();
+	void stopScene();
 
-	void paintGL();
-	void renderScene();
+	iris::ForwardRendererPtr getRenderer() { return renderer; }
 
+
+	// callbacks from ui
 	void mousePressEvent(QMouseEvent* evt);
 	void mouseMoveEvent(QMouseEvent* evt);
 	void mouseDoubleClickEvent(QMouseEvent* evt);
@@ -70,16 +73,6 @@ public:
 
 	void keyPressEvent(QKeyEvent *event);
 	void keyReleaseEvent(QKeyEvent *event);
-
-	void focusOutEvent(QFocusEvent *event);
-
-	~PlayerView();
-
-	bool isScenePlaying();
-public slots:
-	void playScene();
-	void pause();
-	void stopScene();
 };
 
-#endif PLAYERVIEW_H
+#endif //PLAYBACK_H
