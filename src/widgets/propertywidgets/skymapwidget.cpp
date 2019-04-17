@@ -33,7 +33,7 @@ void SkyMapWidget::addTopImage(QString topImagePath)
 {
 	removeCubeMapImageIfPresent(top);
 	top = new CubeMapButton(topImagePath, this);
-	top->setStringPosition("top");
+	top->setPosition(CubeMapPosition::top);
 	layout->addWidget(top, 0, 1,1,1);
 }
 
@@ -41,7 +41,7 @@ void SkyMapWidget::addBottomImage(QString bottomImagePath)
 {
 	removeCubeMapImageIfPresent(bottom);
 	bottom = new CubeMapButton(bottomImagePath, this);
-	bottom->setStringPosition("bottom");
+	bottom->setPosition(CubeMapPosition::bottom);
 	layout->addWidget(bottom, 3, 1,1,1);
 }
 
@@ -49,7 +49,7 @@ void SkyMapWidget::addLeftImage(QString leftImagePath)
 {
 	removeCubeMapImageIfPresent(left);
 	left = new CubeMapButton(leftImagePath, this);
-	left->setStringPosition("left");
+	left->setPosition(CubeMapPosition::left);
 	layout->addWidget(left, 1, 0,1,1);
 }
 
@@ -57,7 +57,7 @@ void SkyMapWidget::addRightImage(QString rightImagePath)
 {
 	removeCubeMapImageIfPresent(right);
 	right = new CubeMapButton(rightImagePath, this);
-	right->setStringPosition("right");
+	right->setPosition(CubeMapPosition::right);
 	layout->addWidget(right, 1, 2,1,1);
 }
 
@@ -65,7 +65,7 @@ void SkyMapWidget::addFrontImage(QString frontImagePath)
 {
 	removeCubeMapImageIfPresent(front);
 	front = new CubeMapButton(frontImagePath, this);
-	front->setStringPosition("front");
+	front->setPosition(CubeMapPosition::front);
 	layout->addWidget(front, 1, 1,1,1);
 }
 
@@ -73,7 +73,7 @@ void SkyMapWidget::addBackImage(QString backImagePath)
 {
 	removeCubeMapImageIfPresent(back);
 	back = new CubeMapButton(backImagePath, this);
-	back->setStringPosition("back");
+	back->setPosition(CubeMapPosition::back);
 	layout->addWidget(back, 1, 3,1,1);
 }
 
@@ -136,6 +136,7 @@ void CubeMapButton::setPosition(CubeMapPosition pos)
 		break;
 	case CubeMapPosition::back:
 		setStringPosition("back");
+		break;
 	case CubeMapPosition::bottom:
 		setStringPosition("bottom");
 		break;
@@ -155,6 +156,7 @@ void CubeMapButton::setImage(QString path)
 	this->path = path;
 
 	emit parent->valueChanged(path, position);
+	emit parent->valuesChanged(path, textureGuid, position);
 }
 
 void CubeMapButton::configureConnections()
@@ -307,6 +309,7 @@ void CubeMapButton::clearImage()
 	pixmap = QPixmap();
 	image = QImage();
 	emit parent->valueChanged(path, position);
+	emit parent->valuesChanged(path, textureGuid, position);
 }
 
 void CubeMapButton::rotateImage(int degrees)

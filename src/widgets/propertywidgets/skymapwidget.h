@@ -18,11 +18,11 @@ For more information see the LICENSE file
 #include <QGridLayout>
 
 enum class CubeMapPosition {
-	top = 0,
-	left = 1,
-	front = 2,
+	top = 4,
+	left = 2,
+	front = 0,
 	right = 3,
-	back = 4,
+	back = 1,
 	bottom = 5
 };
 
@@ -51,6 +51,7 @@ public:
 	bool flipedHorizontal = false;
 	bool flipedVertical = false;
 
+	QString textureGuid;
 	QString path;
 	CubeMapPosition position;
 	QVBoxLayout* layout;
