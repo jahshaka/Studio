@@ -25,7 +25,6 @@ SkyMapWidget::SkyMapWidget() : QWidget()
 	setLayout(layout);
 	top = bottom = left = right = front = back = nullptr;
 	setMinimumHeight(180);
-
 	layout->setVerticalSpacing(0);
 	layout->setHorizontalSpacing(0);
 }
@@ -33,7 +32,6 @@ SkyMapWidget::SkyMapWidget() : QWidget()
 void SkyMapWidget::addTopImage(QString topImagePath)
 {
 	removeCubeMapImageIfPresent(top);
-
 	top = new CubeMapButton(topImagePath, this);
 	top->setStringPosition("top");
 	layout->addWidget(top, 0, 1,1,1);
@@ -42,7 +40,6 @@ void SkyMapWidget::addTopImage(QString topImagePath)
 void SkyMapWidget::addBottomImage(QString bottomImagePath)
 {
 	removeCubeMapImageIfPresent(bottom);
-
 	bottom = new CubeMapButton(bottomImagePath, this);
 	bottom->setStringPosition("bottom");
 	layout->addWidget(bottom, 3, 1,1,1);
@@ -51,7 +48,6 @@ void SkyMapWidget::addBottomImage(QString bottomImagePath)
 void SkyMapWidget::addLeftImage(QString leftImagePath)
 {
 	removeCubeMapImageIfPresent(left);
-
 	left = new CubeMapButton(leftImagePath, this);
 	left->setStringPosition("left");
 	layout->addWidget(left, 1, 0,1,1);
@@ -60,7 +56,6 @@ void SkyMapWidget::addLeftImage(QString leftImagePath)
 void SkyMapWidget::addRightImage(QString rightImagePath)
 {
 	removeCubeMapImageIfPresent(right);
-
 	right = new CubeMapButton(rightImagePath, this);
 	right->setStringPosition("right");
 	layout->addWidget(right, 1, 2,1,1);
@@ -69,7 +64,6 @@ void SkyMapWidget::addRightImage(QString rightImagePath)
 void SkyMapWidget::addFrontImage(QString frontImagePath)
 {
 	removeCubeMapImageIfPresent(front);
-
 	front = new CubeMapButton(frontImagePath, this);
 	front->setStringPosition("front");
 	layout->addWidget(front, 1, 1,1,1);
@@ -105,7 +99,6 @@ void SkyMapWidget::removeCubeMapImageIfPresent(CubeMapButton* btn)
 		layout->removeWidget(btn);
 		delete btn;
 	}
-
 }
 
 
@@ -115,8 +108,6 @@ CubeMapButton::CubeMapButton(QString imagePath, SkyMapWidget* parent) : QPushBut
 	path = imagePath;
 	this->parent = parent;
 	setImage(imagePath);
-
-	
 	configureUi();
 	configureConnections();
 	setMinimumHeight(60);
@@ -168,12 +159,8 @@ void CubeMapButton::setImage(QString path)
 
 void CubeMapButton::configureConnections()
 {
-	
-
 	connect(this, &CubeMapButton::clicked, [=]() {
 		//create menu
-
-		
 		auto select = new QAction("Select");
 		auto clear = new QAction("Clear");
 
@@ -189,7 +176,6 @@ void CubeMapButton::configureConnections()
 		auto flip = new QMenu("Flip");
 		rotate->addActions({ rotate90, rotate180, rotate270, rotate360 });
 		flip->addActions({ flipHorizontal, flipVertical });
-		
 
 		auto menu = new QMenu();
 		menu->addActions({ select, clear });
@@ -223,12 +209,7 @@ void CubeMapButton::configureConnections()
 		connect(flipVertical, &QAction::triggered, [=]() {
 			flipImage(Qt::Orientation::Vertical);
 			});
-
-
 		menu->exec(mapToGlobal(QPoint(0,0)));
-
-		
-
 	});
 
 	
@@ -236,7 +217,6 @@ void CubeMapButton::configureConnections()
 
 void CubeMapButton::configureUi()
 {
-	
 	layout = new QVBoxLayout;
 	positionLabel = new QLabel();
 	container = new QWidget;
@@ -246,9 +226,8 @@ void CubeMapButton::configureUi()
 	container->setLayout(containerLayout);
 
 	containerLayout->addWidget(positionLabel);
-	
-
 	layout->addWidget(container);
+
 	container->setVisible(false);
 	setCursor(Qt::PointingHandCursor);
 	setLayout(layout);
@@ -281,9 +260,17 @@ void CubeMapButton::paintEvent(QPaintEvent* event)
 	painter.setRenderHint(QPainter::Antialiasing);
 
 	if (!image.isNull()) {
-		
-		//painter.drawPixmap(0, 0, width(), height(), pixmap);
-		painter.drawImage(QRect(0, 0, width(), height()), image);
+		//rotate image and then draw it 
+		QPoint center = image.rect().center();
+		QMatrix matrix;
+		matrix.translate(center.x(), center.y());
+		matrix.rotate((int)this->rotation);
+		auto intermedaryImage = image.transformed(matrix);
+
+		if (flipedHorizontal) intermedaryImage = intermedaryImage.mirrored(true, false);
+		if (flipedVertical) intermedaryImage = intermedaryImage.mirrored(false, true);
+	
+		painter.drawImage(QRect(0, 0, width(), height()), intermedaryImage);
 	}
 	else {
 		painter.fillRect(0, 0, width(), height(), QColor(0, 0, 0, 0));
@@ -341,8 +328,17 @@ void CubeMapButton::rotateImage(int degrees)
 			rotation = Rotation::Zero;
 			break;
 	}
+	emit parent->rotationChanged((int)rotation, position);
 }
 
 void CubeMapButton::flipImage(Qt::Orientation orientation)
 {
+	if (orientation == Qt::Orientation::Horizontal) {
+		flipedHorizontal = !flipedHorizontal;
+		emit parent->orientationFlipChanged(orientation, position);
+	}
+	if (orientation == Qt::Orientation::Vertical) {
+		flipedVertical = !flipedVertical;
+		emit parent->orientationFlipChanged(orientation, position);
+	}
 }

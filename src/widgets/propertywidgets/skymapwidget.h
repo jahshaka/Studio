@@ -48,21 +48,19 @@ public:
 	void rotateImage(int degrees);
 	void flipImage(Qt::Orientation orientation);
 
+	bool flipedHorizontal = false;
+	bool flipedVertical = false;
 
 	QString path;
 	CubeMapPosition position;
-
 	QVBoxLayout* layout;
 	QImage image;
 	QPixmap pixmap;
-	Rotation rotation;
+	Rotation rotation = Rotation::Zero;
 	QLabel* positionLabel;
 	QWidget* container;
-
 	QPushButton* select;
 	QPushButton* clear;
-
-
 	SkyMapWidget* parent;
 private:
 	void configureConnections();
@@ -77,7 +75,6 @@ class SkyMapWidget : public QWidget {
 	Q_OBJECT
 public:
 	SkyMapWidget();
-
 	QGridLayout* layout;
 	void addTopImage(QString topImagePath);
 	void addBottomImage(QString bottomImagePath);
@@ -89,15 +86,13 @@ public:
 	void addCubeMapImages(QStringList list);
 	void removeCubeMapImageIfPresent(CubeMapButton* btn);
 
-	
-
 	CubeMapButton * top, * left, * front, * right, * back, * bottom;
 
 signals:
 	void valueChanged(QString value, CubeMapPosition pos);
 	void valuesChanged(QString value, QString guid, CubeMapPosition pos);
-	void rotateImageToDegrees(int degree, CubeMapPosition pos);
-	void flipImageAboutAxis(Qt::Orientation orientation, CubeMapPosition pos);
+	void rotationChanged(int degree, CubeMapPosition pos);
+	void orientationFlipChanged(Qt::Orientation orientation, CubeMapPosition pos);
 };
 
 
