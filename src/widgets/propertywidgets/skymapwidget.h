@@ -16,7 +16,8 @@ For more information see the LICENSE file
 #include <QPushButton>
 #include <QLabel>
 #include <QGridLayout>
-
+#include <QDragEnterEvent>
+#include <QDropEvent>
 enum class CubeMapPosition {
 	top = 4,
 	left = 2,
@@ -71,6 +72,8 @@ protected:
 	void paintEvent(QPaintEvent* event) override;
 	virtual void enterEvent(QEvent* event) override;
 	virtual void leaveEvent(QEvent* event) override;
+	void dragEnterEvent(QDragEnterEvent* event) override;
+	void dropEvent(QDropEvent* event) override;
 };
 
 class SkyMapWidget : public QWidget {

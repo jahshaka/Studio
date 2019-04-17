@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "widgets/assetpickerwidget.h"
 #include "misc/stylesheet.h"
 #include <QPainter>
+#include <QMimeData>
 #include <QSharedPointer>
 #include <QGraphicsEffect>
 #include <QAction>
@@ -113,6 +114,7 @@ CubeMapButton::CubeMapButton(QString imagePath, SkyMapWidget* parent) : QPushBut
 	configureConnections();
 	setMinimumHeight(60);
 	shouldEmit = true;
+	setAcceptDrops(true);
 }
 
 void CubeMapButton::setStringPosition(QString string)
@@ -297,6 +299,34 @@ void CubeMapButton::leaveEvent(QEvent* event)
 {
 	QPushButton::leaveEvent(event);
 	container->setVisible(false);
+}
+
+void CubeMapButton::dragEnterEvent(QDragEnterEvent* event)
+{
+	if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist")) {
+		event->acceptProposedAction();
+	}
+	else {
+		event->ignore();
+	}
+}
+
+void CubeMapButton::dropEvent(QDropEvent* event)
+{
+	// http://stackoverflow.com/a/2747369/996468
+	QByteArray encoded = event->mimeData()->data("application/x-qabstractitemmodeldatalist");
+	QDataStream stream(&encoded, QIODevice::ReadOnly);
+	QMap<int, QVariant> roleDataMap;
+	while (!stream.atEnd()) stream >> roleDataMap;
+
+	// extend getting guid to filepicker dialog...
+	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
+		textureGuid = roleDataMap.value(3).toString();
+		//changeMap(IrisUtils::join(Globals::project->getProjectFolder(), roleDataMap.value(1).toString()));
+		setImage(roleDataMap.value(1).toString());
+	}
+
+	event->acceptProposedAction();
 }
 
 void CubeMapButton::selectImage()
